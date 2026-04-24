@@ -250,7 +250,7 @@
     if (tab) tab.innerHTML = '<div style="text-align:center;padding:40px;color:#999;font-size:0.9rem;">Loading channels...</div>';
 
     MastDB.get('admin/channels').then(function(snapVal) {
-      channelsData = snap.val() || {};
+      channelsData = snapVal || {};
       channelsLoaded = true;
       // Phase 2c — keep the product-editor cache aligned with the latest read.
       window.__mastChannelsCache = channelsData;
@@ -266,7 +266,7 @@
   function loadProducts() {
     if (productsLoaded) return Promise.resolve();
     return MastDB.get('public/products').then(function(snapVal) {
-      productsData = snap.val() || {};
+      productsData = snapVal || {};
       productsLoaded = true;
     }).catch(function(err) {
       console.error('Error loading products:', err);
@@ -287,7 +287,7 @@
     if (salesEventsLoaded) return Promise.resolve();
     return Promise.all([
       MastDB.get('admin/salesEvents').then(function(snapVal) {
-        salesEventsData = snap.val() || {};
+        salesEventsData = snapVal || {};
       }).catch(function(err) {
         console.error('Error loading sales events:', err);
         salesEventsData = {};
@@ -1117,7 +1117,7 @@
     var el = document.getElementById('channelLiveSessions');
     if (el) el.innerHTML = '<div style="font-size:0.85rem;color:#999;text-align:center;padding:12px;">Loading session data\u2026</div>';
     MastDB.get('admin/liveSessions').then(function(snapVal) {
-      liveSessionsData = snap.val() || {};
+      liveSessionsData = snapVal || {};
       liveSessionsLoaded = true;
       renderPreservingEdits();
     }).catch(function(err) {
@@ -2194,7 +2194,7 @@
     if (!el) return;
 
     MastDB.get('admin/inventorySync/lastSync').then(function(snapVal) {
-      var data = snap.val();
+      var data = snapVal;
       if (!data) {
         el.innerHTML = 'No sync history yet. Click &ldquo;Sync Now&rdquo; to push inventory to marketplace.';
         return;
@@ -2286,7 +2286,7 @@
         salesData = snap.val() || {};
       }).catch(function() { salesData = {}; }),
       MastDB.get('admin/consignments').then(function(snapVal) {
-        consignmentsData = snap.val() || {};
+        consignmentsData = snapVal || {};
       }).catch(function() { consignmentsData = {}; })
     ]);
   }

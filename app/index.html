@@ -10005,7 +10005,8 @@ MastDB.trips = {
   set: function(uid, tripId, data) { return MastDB.set('trips/' + uid + '/' + tripId, data); },
   update: function(uid, tripId, data) { return MastDB.update('trips/' + uid + '/' + tripId, data); },
   push: function(uid, data) { return MastDB.push('trips/' + uid, data); },
-  allDrivers: function() { return MastDB.list('trips'); }
+  allDrivers: function() { return MastDB.list('trips'); },
+  ref: function(subpath) { return _makeRefCompat('trips' + (subpath ? '/' + subpath : '')); }
 };
 
 MastDB.tripLocations = {
@@ -10013,13 +10014,15 @@ MastDB.tripLocations = {
   list: function() { return MastDB.list('tripLocations'); },
   set: function(id, data) { return MastDB.set('tripLocations/' + id, data); },
   setAll: function(data) { return MastDB.set('tripLocations', data); },
-  remove: function(id) { return MastDB.remove('tripLocations/' + id); }
+  remove: function(id) { return MastDB.remove('tripLocations/' + id); },
+  ref: function(subpath) { return _makeRefCompat('tripLocations' + (subpath ? '/' + subpath : '')); }
 };
 
 MastDB.tripSettings = {
   PATH: 'settings/trips',
   get: function() { return MastDB.get('settings/trips'); },
   set: function(data) { return MastDB.set('settings/trips', data); },
+  ref: function(subpath) { return _makeRefCompat('settings/trips' + (subpath ? '/' + subpath : '')); },
   sub: function() { return 'settings/trips/' + Array.from(arguments).join('/'); },
   subRef: function() { return _makeRefCompat('settings/trips/' + Array.from(arguments).join('/')); }
 };

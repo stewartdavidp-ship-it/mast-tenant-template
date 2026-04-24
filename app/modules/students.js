@@ -190,21 +190,21 @@
         MastDB.get('settings/waiverTemplates'),
       ]);
 
-      var stuVal = results[0].val() || {};
+      var stuVal = results[0] || {};
       studentsData = Object.entries(stuVal).map(function(entry) {
         var stu = entry[1];
         stu._key = entry[0];
         return stu;
       });
 
-      var ctVal = results[1].val() || {};
+      var ctVal = results[1] || {};
       clearanceTypes = Object.entries(ctVal).map(function(entry) {
         var ct = entry[1];
         ct._key = entry[0];
         return ct;
       });
 
-      var docsVal = results[2].val() || {};
+      var docsVal = results[2] || {};
       tenantDocs = Object.entries(docsVal).map(function(entry) {
         var doc = entry[1];
         doc._key = entry[0];
