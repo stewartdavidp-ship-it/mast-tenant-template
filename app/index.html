@@ -5344,6 +5344,20 @@
       <div id="activeTripBanner" style="display:none;"></div>
       <!-- Import Status Banner -->
       <div id="importStatusBanner" style="display:none;"></div>
+      <!-- Renewal-seed Dashboard Banner (Phase 2 PA-9) — shown when compliance has items but no active renewals and not yet dismissed. Shares `renewalSeedDismissedAt` with the Settings > Compliance banner (PA-5); dismissing either hides both. -->
+      <div id="dashRenewalSeedBanner" style="display:none;background:rgba(42,157,143,0.1);border:1px solid rgba(42,157,143,0.3);border-radius:8px;padding:14px 18px;margin-bottom:16px;">
+        <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;">
+          <div style="flex:1;min-width:220px;">
+            <div style="font-weight:600;margin-bottom:4px;">Create renewal reminders from your compliance items</div>
+            <div style="font-size:0.85rem;color:var(--warm-gray);">You&rsquo;ve tracked licenses, insurance, or certifications. We can turn those expiry dates into reminders you&rsquo;ll see in Advisor and receive by email.</div>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button class="btn btn-primary" onclick="seedRenewalsFromComplianceBanner()">Preview reminders</button>
+            <button class="btn btn-secondary" onclick="dismissComplianceSeedBanner()">Dismiss</button>
+          </div>
+        </div>
+        <div id="dashRenewalSeedStatus" style="margin-top:8px;font-size:0.82rem;"></div>
+      </div>
       <!-- Dashboard Todos (above cards, extensible nudge system) -->
       <div id="dashboardTodos" style="display:none;"></div>
       <!-- Dashboard Cards -->
@@ -15175,11 +15189,43 @@ async function _updateComplianceSeedBanner(ent) {
   banner.style.display = '';
 }
 
+// Phase 2 PA-9 — Dashboard-surface variant of the compliance seed banner.
+// Same visibility rules as `_updateComplianceSeedBanner` (shared
+// `renewalSeedDismissedAt` flag — dismissing either hides both). Rendered
+// once per dashboard load via `renderAllDashboardCards`.
+async function renderDashRenewalSeedBanner() {
+  var banner = document.getElementById('dashRenewalSeedBanner');
+  if (!banner) return;
+  try {
+    var res = await MastDB.businessEntity.get('all');
+    var ent = (res && res.data) || {};
+    var compliance = ent.compliance || {};
+    var totalItems = (Array.isArray(compliance.licenses) ? compliance.licenses.length : 0)
+      + (Array.isArray(compliance.insurance) ? compliance.insurance.length : 0)
+      + (Array.isArray(compliance.certifications) ? compliance.certifications.length : 0)
+      + (Array.isArray(compliance.taxJurisdictions) ? compliance.taxJurisdictions.length : 0);
+    var dismissedAt = ent.ui && ent.ui.renewalSeedDismissedAt;
+    if (totalItems === 0 || dismissedAt) { banner.style.display = 'none'; return; }
+    var items = await MastDB.businessEntity.renewals.listItems({ activeOnly: true });
+    if (items && items.length > 0) { banner.style.display = 'none'; return; }
+    banner.style.display = '';
+  } catch (err) {
+    banner.style.display = 'none';
+  }
+}
+
+function _hideSeedBanners() {
+  var ids = ['complianceSeedBanner', 'dashRenewalSeedBanner'];
+  ids.forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.style.display = 'none';
+  });
+}
+
 window.dismissComplianceSeedBanner = async function() {
   try {
     await MastDB.businessEntity.update('ui', { renewalSeedDismissedAt: new Date().toISOString() });
-    var banner = document.getElementById('complianceSeedBanner');
-    if (banner) banner.style.display = 'none';
+    _hideSeedBanners();
     if (window.showToast) showToast('Banner dismissed');
   } catch (err) {
     if (window.mastAlert) mastAlert('Could not dismiss: ' + (err.message || 'unknown'));
@@ -15187,7 +15233,10 @@ window.dismissComplianceSeedBanner = async function() {
 };
 
 window.seedRenewalsFromComplianceBanner = async function() {
-  var statusEl = document.getElementById('complianceSeedStatus');
+  // Status ID depends on which banner the click originated from; fall back to
+  // whichever exists so both surfaces get feedback.
+  var statusEl = document.getElementById('complianceSeedStatus')
+    || document.getElementById('dashRenewalSeedStatus');
   if (statusEl) { statusEl.textContent = 'Computing preview…'; statusEl.style.color = 'var(--warm-gray)'; }
   try {
     var dry = await MastDB.businessEntity.renewals.seedFromCompliance(true);
@@ -15204,8 +15253,7 @@ window.seedRenewalsFromComplianceBanner = async function() {
     if (res && res.success) {
       if (statusEl) { statusEl.textContent = 'Created ' + (res.createdCount || res.proposedCount || proposed) + ' reminder(s).'; statusEl.style.color = 'var(--success,#22c55e)'; }
       if (window.showToast) showToast('Renewal reminders created');
-      var banner = document.getElementById('complianceSeedBanner');
-      if (banner) banner.style.display = 'none';
+      _hideSeedBanners();
       setTimeout(function() { switchSettingsSubView('notifications'); }, 400);
     } else {
       if (statusEl) { statusEl.textContent = 'Seed failed: ' + ((res && res.error) || 'unknown'); statusEl.style.color = 'var(--danger,#ef4444)'; }
@@ -35068,6 +35116,8 @@ async function renderAllDashboardCards() {
   renderDashboardTodos();
   // Import status banner
   renderImportStatusBanner();
+  // PA-9 — Renewal-seed banner (legacy cohort: compliance present, no renewals, not dismissed)
+  renderDashRenewalSeedBanner();
 }
 
 // ─── Import Status Banner ──────────────────────────
