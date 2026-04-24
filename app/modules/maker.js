@@ -58,10 +58,9 @@
         MastDB.get('admin/priceLocks'),
         MastDB.get('admin/spotPrices/current')
       ]);
-      var t = snaps[0].val();
-      if (typeof t === 'number') repricingThresholdPct = t;
-      priceLocksData = snaps[1].val() || {};
-      spotPricesCurrent = snaps[2].val() || null;
+      if (typeof snaps[0] === 'number') repricingThresholdPct = snaps[0];
+      priceLocksData = snaps[1] || {};
+      spotPricesCurrent = snaps[2] || null;
       // Re-render whichever maker tab is currently visible so the lock table
       // and drift badges pick up the freshly-loaded data.
       if (document.getElementById('materialsTab') && materialsLoaded) renderMaterials();

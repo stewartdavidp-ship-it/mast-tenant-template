@@ -9524,6 +9524,17 @@ function _makeRefCompat(basePath) {
   r.once = function() { return MastDB.get(basePath); };
   r.on = function(event, cb) { return MastDB.subscribe(basePath, cb); };
   r.off = function() {}; // no-op for compat
+  // Backward-compat: Firebase RTDB transaction(fn). Non-atomic read-modify-write
+  // — acceptable for low-contention per-tenant counters.
+  r.transaction = function(fn) {
+    return MastDB.get(basePath).then(function(current) {
+      var next = fn(current);
+      if (next === undefined) return { committed: false, snapshot: { val: function() { return current; } } };
+      return MastDB.set(basePath, next).then(function() {
+        return { committed: true, snapshot: { val: function() { return next; } } };
+      });
+    });
+  };
   // Query methods — return MastDB query builder
   r.orderByChild = function(f) { return MastDB.query(basePath).orderByChild(f); };
   r.orderByKey = function() { return MastDB.query(basePath).orderByKey(); };
@@ -9831,81 +9842,40 @@ MastDB.studioLocations = {
   newKey: function() { return MastDB.newKey('config/studioLocations'); }
 };
 
-MastDB.newsletter = {
-  issues: {
-    PATH: 'newsletter/issues',
-    list: function(limit) {
-      return MastDB.query('newsletter/issues').orderByChild('issueNumber').limitToLast(limit || 50).once();
-    },
-    get: function(id) { return MastDB.get('newsletter/issues/' + id); },
-    set: function(id, data) { return MastDB.set('newsletter/issues/' + id, data); },
-    update: function(id, data) { return MastDB.update('newsletter/issues/' + id, data); },
-    newKey: function() { return MastDB.newKey('newsletter/issues'); },
-    query: function() { return MastDB.query('newsletter/issues'); },
-    updateSection: function(issueId, secId, data) {
-      return MastDB.update('newsletter/issues/' + issueId + '/sections/' + secId, data);
-    },
-    setSection: function(issueId, secId, data) {
-      return MastDB.set('newsletter/issues/' + issueId + '/sections/' + secId, data);
-    },
-    setSectionField: function(issueId, secId, field, value) {
-      return MastDB.set('newsletter/issues/' + issueId + '/sections/' + secId + '/' + field, value);
+MastDB.newsletter = (function() {
+  var issues = _makeEntity('newsletter/issues', 50);
+  issues.section = function(issueId, secId) { return _makeRefCompat('newsletter/issues/' + issueId + '/sections/' + secId); };
+  issues.sectionField = function(issueId, secId, field) { return _makeRefCompat('newsletter/issues/' + issueId + '/sections/' + secId + '/' + field); };
+  issues.updateSection = function(issueId, secId, data) { return MastDB.update('newsletter/issues/' + issueId + '/sections/' + secId, data); };
+  issues.setSection = function(issueId, secId, data) { return MastDB.set('newsletter/issues/' + issueId + '/sections/' + secId, data); };
+  issues.setSectionField = function(issueId, secId, field, value) { return MastDB.set('newsletter/issues/' + issueId + '/sections/' + secId + '/' + field, value); };
+  return {
+    issues: issues,
+    subscribers: _makeEntity('newsletter/subscribers', 200),
+    published: _makeEntity('newsletter/published'),
+    meta: {
+      PATH: 'newsletter/meta',
+      issueCounterPath: 'newsletter/meta/issueCounter',
+      issueCounter: function() { return _makeRefCompat('newsletter/meta/issueCounter'); }
     }
-  },
-  subscribers: {
-    PATH: 'newsletter/subscribers',
-    list: function(limit) {
-      return MastDB.query('newsletter/subscribers').orderByChild('subscribedAt').limitToLast(limit || 200).once();
-    },
-    get: function(id) { return MastDB.get('newsletter/subscribers/' + id); },
-    set: function(id, data) { return MastDB.set('newsletter/subscribers/' + id, data); },
-    update: function(id, data) { return MastDB.update('newsletter/subscribers/' + id, data); },
-    newKey: function() { return MastDB.newKey('newsletter/subscribers'); },
-    query: function() { return MastDB.query('newsletter/subscribers'); }
-  },
-  published: {
-    PATH: 'newsletter/published',
-    set: function(id, data) { return MastDB.set('newsletter/published/' + id, data); },
-    remove: function(id) { return MastDB.remove('newsletter/published/' + id); }
-  },
-  meta: {
-    PATH: 'newsletter/meta',
-    issueCounterPath: 'newsletter/meta/issueCounter'
-  }
-};
+  };
+})();
 
-MastDB.blog = {
-  posts: {
-    PATH: 'blog/posts',
-    list: function(limit) {
-      return MastDB.query('blog/posts').orderByChild('createdAt').limitToLast(limit || 100).once();
-    },
-    get: function(id) { return MastDB.get('blog/posts/' + id); },
-    set: function(id, data) { return MastDB.set('blog/posts/' + id, data); },
-    update: function(id, data) { return MastDB.update('blog/posts/' + id, data); },
-    remove: function(id) { return MastDB.remove('blog/posts/' + id); },
-    query: function() { return MastDB.query('blog/posts'); },
-    setField: function(id, field, value) { return MastDB.set('blog/posts/' + id + '/' + field, value); }
-  },
-  ideas: {
-    PATH: 'blog/ideas',
-    list: function(limit) {
-      return MastDB.query('blog/ideas').orderByChild('createdAt').limitToLast(limit || 50).once();
-    },
-    get: function(id) { return MastDB.get('blog/ideas/' + id); },
-    set: function(id, data) { return MastDB.set('blog/ideas/' + id, data); },
-    remove: function(id) { return MastDB.remove('blog/ideas/' + id); }
-  },
-  published: {
-    PATH: 'blog/published',
-    set: function(id, data) { return MastDB.set('blog/published/' + id, data); },
-    remove: function(id) { return MastDB.remove('blog/published/' + id); }
-  },
-  meta: {
-    PATH: 'blog/meta',
-    postCounterPath: 'blog/meta/postCounter'
-  }
-};
+MastDB.blog = (function() {
+  var posts = _makeEntity('blog/posts', 100);
+  posts.fieldRef = function(id, field) { return _makeRefCompat('blog/posts/' + id + '/' + field); };
+  posts.setField = function(id, field, value) { return MastDB.set('blog/posts/' + id + '/' + field, value); };
+  return {
+    posts: posts,
+    ideas: _makeEntity('blog/ideas', 50),
+    published: _makeEntity('blog/published'),
+    meta: {
+      PATH: 'blog/meta',
+      postCounterPath: 'blog/meta/postCounter',
+      postCounter: function() { return _makeRefCompat('blog/meta/postCounter'); }
+    }
+  };
+})();
 
 MastDB.market = {
   pendingClips: {

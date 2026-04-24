@@ -156,8 +156,9 @@ async function revokeWholesaleUser(key) {
 
 function updateWholesaleRequestBadge() {
   MastDB.query('admin/wholesaleRequests').orderByChild('status').equalTo('pending')
-    .once('value').then(function(snap) {
-      var count = snap.numChildren();
+    .once().then(function(snap) {
+      var data = snap.val() || {};
+      var count = Object.keys(data).length;
       var badge = document.getElementById('wsRequestBadge');
       if (badge) {
         badge.textContent = count > 0 ? '(' + count + ')' : '';
