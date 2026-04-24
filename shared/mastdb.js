@@ -923,7 +923,10 @@ var MastDB = (function() {
         { section: 'operations', path: 'localization.fiscalYearStartMonth', label: 'operations.localization.fiscalYearStartMonth' }
       ];
 
-      var UPDATABLE_SECTIONS = { identity: 1, presence: 1, operations: 1, people: 1, engagement: 1 };
+      // Phase 2 PA-5: compliance + ui are now first-class updatable sections.
+      // compliance holds licenses/insurance/certifications/taxJurisdictions
+      // arrays. ui holds small UI-state flags like renewalSeedDismissedAt.
+      var UPDATABLE_SECTIONS = { identity: 1, presence: 1, operations: 1, people: 1, engagement: 1, compliance: 1, ui: 1 };
 
       function _dig(obj, dotted) {
         if (!obj) return undefined;
@@ -986,19 +989,18 @@ var MastDB = (function() {
             var visual = results[1] || null;
             var discovery = results[2];
             if (req === 'all') {
-              // Strip compliance; overlay visual+discovery.
+              // Phase 2 PA-5: compliance is now first-class; return it alongside
+              // visual + discovery. entityStatus is hoisted to a top-level field
+              // so callers don't need to reach into the subsection map.
               var out = {};
-              for (var k in ent) if (Object.prototype.hasOwnProperty.call(ent, k) && k !== 'compliance') out[k] = ent[k];
+              for (var k in ent) if (Object.prototype.hasOwnProperty.call(ent, k)) out[k] = ent[k];
               out.entityStatus = ent.entityStatus || 'none';
               out.visual = visual;
               out.discovery = discovery;
-              out.compliance = null;
-              out._note = 'compliance is schema-only in Phase 1.';
               return out;
             }
             if (req === 'visual') return { entityStatus: ent.entityStatus || 'none', section: 'visual', data: visual, _note: 'pointer to config/brand' };
             if (req === 'discovery') return { entityStatus: ent.entityStatus || 'none', section: 'discovery', data: discovery, _note: 'synthesized from latest webPresence/importJobs' };
-            if (req === 'compliance') return { entityStatus: ent.entityStatus || 'none', section: 'compliance', data: null, _note: 'Phase 2 — schema-only in Phase 1' };
             return { entityStatus: ent.entityStatus || 'none', section: req, data: ent[req] || null };
           });
         },
