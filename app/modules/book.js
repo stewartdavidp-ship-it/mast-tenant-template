@@ -3174,7 +3174,7 @@
         var cls = classes[s.classId] || {};
         var className = cls.name || s.classId || '(unknown class)';
         var daysLate = Math.round((new Date(todayStr) - new Date(s.date)) / 86400000);
-        html += '<div style="display:flex;justify-content:space-between;align-items:center;background:#fff;border:1px solid var(--cream-dark,#E8E0D4);border-radius:6px;padding:10px 12px;">';
+        html += '<div style="display:flex;justify-content:space-between;align-items:center;background:var(--surface-card,#fff);border:1px solid var(--border,#E8E0D4);border-radius:6px;padding:10px 12px;color:var(--text);">';
         html += '<div style="min-width:0;">';
         html += '<div style="font-weight:600;font-size:0.9rem;">' + esc(className) + '</div>';
         html += '<div style="font-size:0.78rem;color:var(--warm-gray);">' + esc(s.date) + (s.startTime ? ' &middot; ' + esc(s.startTime) : '') + ' &middot; ' + daysLate + ' day' + (daysLate === 1 ? '' : 's') + ' overdue</div>';
