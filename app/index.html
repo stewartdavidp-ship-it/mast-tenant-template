@@ -8510,12 +8510,12 @@
           <div id="engagementModulesStatus" style="margin-top:8px;font-size:0.85rem;"></div>
         </div>
       </div>
-      <!-- Channels Settings (S3 — Entity Phase 1) -->
+      <!-- Channels Settings (S3 — Entity Phase 1 + Phase 2 P2B PB-3 Shopify card) -->
       <div id="settingsSubChannels" style="display:none;max-width:640px;">
         <div class="form-group">
           <label style="font-size:1.15rem;font-weight:600;">External Channels</label>
           <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:16px;">
-            Where else do you sell? This is a light declaration of your presence &mdash; connecting Etsy/Shopify/Square accounts with real sync happens in a separate flow.
+            Where else do you sell? The list below is a light declaration of your presence. Connected integrations (with real two-way sync) appear under the platform cards.
           </p>
         </div>
 
@@ -8535,6 +8535,39 @@
             <button class="btn btn-primary" onclick="saveDeclaredChannels()" id="channelsSaveBtn">Save channels</button>
           </div>
           <div id="channelsSaveStatus" style="margin-top:8px;font-size:0.85rem;"></div>
+        </div>
+
+        <!-- Connected Integrations — Phase 2 P2B PB-3 -->
+        <div class="form-group" style="margin-top:32px;border-top:1px solid rgba(255,255,255,0.08);padding-top:24px;">
+          <label style="font-size:1.05rem;font-weight:600;">Connected integrations</label>
+          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:16px;">
+            OAuth-authenticated channels with live token + webhook subscriptions. Shopify lands in this session (P2B PB-3); Etsy + Square arrive in follow-up sessions.
+          </p>
+
+          <!-- Shopify card -->
+          <div id="shopifyConnectCard" style="background:var(--bg-secondary,#232323);border-radius:10px;padding:16px;margin-bottom:12px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+              <div style="display:flex;align-items:center;gap:12px;min-width:0;">
+                <span style="font-size:1.4rem;">&#128722;</span>
+                <div style="min-width:0;">
+                  <div style="font-weight:600;">Shopify</div>
+                  <div id="shopifyConnectStatus" style="font-size:0.78rem;color:var(--warm-gray);margin-top:2px;">Loading&hellip;</div>
+                </div>
+              </div>
+              <div id="shopifyConnectActions" style="display:flex;gap:8px;flex-wrap:wrap;">
+                <!-- populated by loadShopifyCard() -->
+              </div>
+            </div>
+            <div id="shopifyConnectDetail" style="margin-top:10px;font-size:0.78rem;color:var(--warm-gray-light,#666);display:none;"></div>
+            <div id="shopifyConnectNote" style="margin-top:10px;font-size:0.78rem;color:var(--danger,#ef4444);display:none;"></div>
+          </div>
+
+          <div style="background:rgba(255,255,255,0.03);border:1px dashed rgba(255,255,255,0.15);border-radius:10px;padding:14px;margin-bottom:8px;font-size:0.85rem;color:var(--warm-gray-light,#666);">
+            <strong>Etsy</strong> &mdash; connect flow lands in P2B&#8209;S3 (PB&#8209;4).
+          </div>
+          <div style="background:rgba(255,255,255,0.03);border:1px dashed rgba(255,255,255,0.15);border-radius:10px;padding:14px;font-size:0.85rem;color:var(--warm-gray-light,#666);">
+            <strong>Square</strong> &mdash; connect flow lands in P2B&#8209;S4 (PB&#8209;5).
+          </div>
         </div>
       </div>
     </div>
@@ -14250,7 +14283,7 @@ function switchSettingsSubView(view) {
   if (view === 'engagement') loadEngagementSettings();
   if (view === 'tax') loadTaxLegalSettings();
   if (view === 'compliance') loadComplianceSettings();
-  if (view === 'channels') loadChannelsSettings();
+  if (view === 'channels') { loadChannelsSettings(); loadShopifyCard(); }
 }
 
 // ============================================================
@@ -14666,6 +14699,129 @@ async function saveDeclaredChannels() {
     if (statusEl) { statusEl.textContent = 'Save failed: ' + (err.message || 'unknown error'); statusEl.style.color = 'var(--danger,#ef4444)'; }
   } finally {
     if (btn) btn.disabled = false;
+  }
+}
+
+// ============================================================
+// Shopify Connect Card (Phase 2 P2B PB-3)
+// ============================================================
+//
+// Renders the admin/businessEntity/channels/shopify record in Settings >
+// Channels. Reads via MastDB.businessEntity.channels.getHealth('shopify').
+// Initiates OAuth via the existing shopifyOAuthStart CF. Disconnects via
+// the disconnect_channel MCP tool (wired through a thin adminMcp() bridge
+// if present; otherwise falls back to a manual reconnect prompt).
+// ============================================================
+async function loadShopifyCard() {
+  var statusEl = document.getElementById('shopifyConnectStatus');
+  var actionsEl = document.getElementById('shopifyConnectActions');
+  var detailEl = document.getElementById('shopifyConnectDetail');
+  var noteEl = document.getElementById('shopifyConnectNote');
+  if (!statusEl || !actionsEl) return;
+
+  var health = null;
+  try {
+    health = await MastDB.businessEntity.channels.getHealth('shopify');
+  } catch (err) {
+    statusEl.textContent = 'Unable to load status (' + (err && err.message ? err.message : 'unknown') + ')';
+    statusEl.style.color = 'var(--warm-gray)';
+    actionsEl.innerHTML = '';
+    return;
+  }
+
+  var status = (health && health.status) || 'not-connected';
+  if (detailEl) { detailEl.style.display = 'none'; detailEl.textContent = ''; }
+  if (noteEl) { noteEl.style.display = 'none'; noteEl.textContent = ''; }
+
+  if (status === 'connected') {
+    statusEl.textContent = 'Connected';
+    statusEl.style.color = 'var(--success,#22c55e)';
+    if (detailEl) {
+      var parts = [];
+      if (health.connectedAt) parts.push('Connected: ' + new Date(health.connectedAt).toLocaleDateString());
+      if (typeof health.webhookSubscriptionCount === 'number') parts.push(health.webhookSubscriptionCount + ' webhook subscription' + (health.webhookSubscriptionCount === 1 ? '' : 's'));
+      if (health.lastSyncAt) parts.push('Last sync: ' + new Date(health.lastSyncAt).toLocaleString()); else parts.push('No manual sync yet');
+      detailEl.textContent = parts.join(' \u2022 ');
+      detailEl.style.display = '';
+    }
+    actionsEl.innerHTML =
+      '<button class="btn btn-secondary btn-small" onclick="reconnectShopify()">Reconnect</button>' +
+      '<button class="btn btn-danger btn-small" onclick="disconnectShopify()">Disconnect</button>';
+  } else if (status === 'expired') {
+    statusEl.textContent = 'Access token expired';
+    statusEl.style.color = 'var(--warning,#f59e0b)';
+    actionsEl.innerHTML = '<button class="btn btn-primary btn-small" onclick="reconnectShopify()">Reconnect</button>';
+  } else if (status === 'revoked') {
+    statusEl.textContent = 'Disconnected';
+    statusEl.style.color = 'var(--warm-gray)';
+    actionsEl.innerHTML = '<button class="btn btn-primary btn-small" onclick="connectShopify()">Reconnect</button>';
+  } else if (status === 'error') {
+    statusEl.textContent = 'Connection error';
+    statusEl.style.color = 'var(--danger,#ef4444)';
+    if (noteEl && health.lastErrorMessage) { noteEl.textContent = health.lastErrorMessage; noteEl.style.display = ''; }
+    actionsEl.innerHTML = '<button class="btn btn-primary btn-small" onclick="reconnectShopify()">Reconnect</button>';
+  } else {
+    statusEl.textContent = 'Not connected';
+    statusEl.style.color = 'var(--warm-gray)';
+    actionsEl.innerHTML = '<button class="btn btn-primary btn-small" onclick="connectShopify()">Connect Shopify</button>';
+  }
+}
+
+async function connectShopify() {
+  var shopDomain = prompt('Enter your Shopify store sub-domain (the part before .myshopify.com):');
+  if (!shopDomain) return;
+  shopDomain = shopDomain.trim().toLowerCase().replace(/\.myshopify\.com\/?$/, '');
+  if (!/^[a-z0-9][a-z0-9-]*[a-z0-9]$/.test(shopDomain)) {
+    alert('Invalid shop domain. Use letters, digits, and dashes only (e.g. "my-store").');
+    return;
+  }
+  var noteEl = document.getElementById('shopifyConnectNote');
+  try {
+    var fn = firebase.functions().httpsCallable('shopifyOAuthStart');
+    var result = await fn({ shopDomain: shopDomain });
+    var data = (result && result.data) || {};
+    if (!data.authUrl) throw new Error('shopifyOAuthStart returned no authUrl');
+    // Open in a new window so the admin page isn't replaced.
+    window.open(data.authUrl, '_blank', 'noopener');
+    if (noteEl) {
+      noteEl.textContent = 'Approve the install in the new tab. When it completes, come back to this page and press Reload.';
+      noteEl.style.color = 'var(--warm-gray)';
+      noteEl.style.display = '';
+    }
+  } catch (err) {
+    if (noteEl) { noteEl.textContent = 'Connect failed: ' + (err.message || err); noteEl.style.color = 'var(--danger,#ef4444)'; noteEl.style.display = ''; }
+  }
+}
+
+async function reconnectShopify() {
+  // Reconnect = same install flow; callback overwrites the existing record.
+  return connectShopify();
+}
+
+async function disconnectShopify() {
+  if (!confirm('Disconnect Shopify? Tokens will be revoked and webhook subscriptions removed. You can reconnect later.')) return;
+  var noteEl = document.getElementById('shopifyConnectNote');
+  try {
+    // Prefer MCP bridge if present (admin.html may wire it); otherwise fall
+    // back to a direct Firestore status flip for optimistic UI + leave
+    // server-side cleanup to the app/uninstalled webhook.
+    if (window.adminMcp && typeof window.adminMcp.runTool === 'function') {
+      await window.adminMcp.runTool('disconnect_channel', { channelId: 'shopify' });
+    } else {
+      // Optimistic local flip — server-side revoke happens when the
+      // tenant re-opens Settings after app uninstallation in Shopify
+      // admin (app/uninstalled webhook flips status → revoked via
+      // channelWebhookProcessor).
+      await MastDB.businessEntity.update('channels/shopify', { status: 'revoked', updatedAt: new Date().toISOString() });
+      if (noteEl) {
+        noteEl.textContent = 'Disconnected locally. For a full revoke, uninstall the Mast app from your Shopify admin.';
+        noteEl.style.color = 'var(--warm-gray)';
+        noteEl.style.display = '';
+      }
+    }
+    loadShopifyCard();
+  } catch (err) {
+    if (noteEl) { noteEl.textContent = 'Disconnect failed: ' + (err.message || err); noteEl.style.color = 'var(--danger,#ef4444)'; noteEl.style.display = ''; }
   }
 }
 
@@ -29459,7 +29615,7 @@ document.addEventListener('keydown', function(e) {
 var auditEntries = [];
 var auditLoaded = false;
 var auditPageSize = 50;
-var auditLastKey = null;
+var auditLastTime = null;
 var auditHasMore = false;
 var auditKnownActors = {};
 
@@ -29473,6 +29629,17 @@ var ENTITY_LABELS = {
   users: 'Users', roles: 'Roles'
 };
 
+// Normalize audit `time` (Firestore Timestamp, ISO string, or millis) to millis for sorting.
+function _auditTimeMs(entry) {
+  if (!entry || entry.time == null) return 0;
+  var t = entry.time;
+  if (typeof t === 'number') return t;
+  if (typeof t === 'string') return new Date(t).getTime() || 0;
+  if (typeof t.toMillis === 'function') return t.toMillis();
+  if (t.seconds != null) return t.seconds * 1000 + Math.floor((t.nanoseconds || 0) / 1e6);
+  return 0;
+}
+
 function loadAuditLog() {
   if (!hasPermission('auditLog', 'read')) {
     document.getElementById('auditEmpty').style.display = '';
@@ -29481,12 +29648,16 @@ function loadAuditLog() {
   }
   if (auditLoaded) { renderAuditLog(); return; }
   document.getElementById('auditLoading').style.display = '';
-  var ref = MastDB.auditLog.ref().orderByKey().limitToLast(auditPageSize + 1);
+  var ref = MastDB.auditLog.ref().orderByChild('time').limitToLast(auditPageSize + 1);
   ref.once('value').then(function(snap) {
     auditEntries = [];
     auditKnownActors = {};
     var rows = snap || {};
-    Object.keys(rows).forEach(function(childKey) {
+    // Firestore auto IDs aren't time-ordered — sort by `time` DESC for newest-first display.
+    var keys = Object.keys(rows).sort(function(a, b) {
+      return _auditTimeMs(rows[b]) - _auditTimeMs(rows[a]);
+    });
+    keys.forEach(function(childKey) {
       var entry = rows[childKey];
       entry._key = childKey;
       auditEntries.push(entry);
@@ -29494,10 +29665,10 @@ function loadAuditLog() {
         auditKnownActors[entry.actor.uid] = entry.actor.displayName;
       }
     });
-    auditEntries.reverse(); // newest first
     if (auditEntries.length > auditPageSize) {
       auditHasMore = true;
-      auditLastKey = auditEntries[auditEntries.length - 1]._key;
+      var oldest = auditEntries[auditEntries.length - 1];
+      auditLastTime = (oldest && oldest.time) || null;
       auditEntries.pop();
     } else {
       auditHasMore = false;
@@ -29515,12 +29686,15 @@ function loadAuditLog() {
 }
 
 function loadMoreAuditEntries() {
-  if (!auditLastKey) return;
-  var ref = MastDB.auditLog.ref().orderByKey().endBefore(auditLastKey).limitToLast(auditPageSize + 1);
+  if (!auditLastTime) return;
+  var ref = MastDB.auditLog.ref().orderByChild('time').endBefore(auditLastTime).limitToLast(auditPageSize + 1);
   ref.once('value').then(function(snap) {
     var newEntries = [];
     var rows = snap || {};
-    Object.keys(rows).forEach(function(childKey) {
+    var keys = Object.keys(rows).sort(function(a, b) {
+      return _auditTimeMs(rows[b]) - _auditTimeMs(rows[a]);
+    });
+    keys.forEach(function(childKey) {
       var entry = rows[childKey];
       entry._key = childKey;
       newEntries.push(entry);
@@ -29528,14 +29702,14 @@ function loadMoreAuditEntries() {
         auditKnownActors[entry.actor.uid] = entry.actor.displayName;
       }
     });
-    newEntries.reverse();
     if (newEntries.length > auditPageSize) {
       auditHasMore = true;
-      auditLastKey = newEntries[newEntries.length - 1]._key;
+      var oldest = newEntries[newEntries.length - 1];
+      auditLastTime = (oldest && oldest.time) || null;
       newEntries.pop();
     } else {
       auditHasMore = false;
-      auditLastKey = null;
+      auditLastTime = null;
     }
     auditEntries = auditEntries.concat(newEntries);
     populateActorFilter();
@@ -29660,7 +29834,7 @@ async function renderRecordHistory(entity, entityId) {
   if (!hasPermission('auditLog', 'read') || !entityId) return '';
   try {
     var snap = await MastDB.auditIndex.ref(entity, entityId)
-      .orderByKey().limitToLast(20).once('value');
+      .orderByChild('time').limitToLast(20).once('value');
     var rows = snap || {};
     var keys = Object.keys(rows);
     if (keys.length === 0) return '';
@@ -29670,7 +29844,10 @@ async function renderRecordHistory(entity, entityId) {
       e._key = childKey;
       entries.push(e);
     });
-    entries.reverse();
+    // Firestore auto IDs aren't time-ordered — sort by `time` DESC for newest-first display.
+    entries.sort(function(a, b) {
+      return _auditTimeMs(b) - _auditTimeMs(a);
+    });
     var html = '<div class="record-history">' +
       '<div class="record-history-title">Change History</div>';
     entries.forEach(function(e) {

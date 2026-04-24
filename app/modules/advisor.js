@@ -11,6 +11,12 @@
   // B7 (Entity Phase 1): cached entity read-view + subscription handle.
   var entityData = null;
   var entitySubscription = null;
+  // PA-7 (Entity Phase 2): renewals + pending-docs caches + subscription handles.
+  var renewalsData = [];
+  var renewalsSubscription = null;
+  var documentsData = [];
+  var documentsSubscription = null;
+  var channelsSubscription = null;
 
   // --- CSS (injected once) ---
   var cssInjected = false;
@@ -79,6 +85,18 @@
       '.advisor-entity-cta { background:rgba(42,157,143,0.1);border:1px solid rgba(42,157,143,0.3);border-radius:10px;padding:16px 20px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap; }',
       '.advisor-entity-subbanner { background:rgba(234,179,8,0.08);border:1px solid rgba(234,179,8,0.2);border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:0.85rem;color:var(--text,#fff); }',
       '.advisor-entity-edit-input { width:100%;padding:6px 8px;background:var(--bg-primary,var(--charcoal));color:var(--text,#fff);border:1px solid var(--teal,#2a9d8f);border-radius:6px;font-size:0.9rem;font-family:inherit; }',
+      // PA-7 (Entity Phase 2): renewals + pending-docs card styling
+      '.advisor-renewal-card, .advisor-pdoc-card { background:var(--bg-secondary,#232323);border-radius:10px;padding:12px 14px;margin-bottom:10px;display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap; }',
+      '.advisor-renewal-card .title, .advisor-pdoc-card .title { font-size:0.9rem;font-weight:600;margin-bottom:2px; }',
+      '.advisor-renewal-card .meta, .advisor-pdoc-card .meta { font-size:0.78rem;color:var(--warm-gray,#888); }',
+      '.advisor-renewal-pill { display:inline-block;padding:2px 8px;border-radius:12px;font-size:0.72rem;font-weight:600;text-transform:uppercase; }',
+      '.advisor-renewal-pill.active  { background:rgba(42,157,143,0.15);color:var(--teal,#2a9d8f); }',
+      '.advisor-renewal-pill.warning { background:rgba(234,179,8,0.15);color:#eab308; }',
+      '.advisor-renewal-pill.expired { background:rgba(239,68,68,0.15);color:#ef4444; }',
+      '.advisor-renewal-actions, .advisor-pdoc-actions { display:flex;gap:6px;flex-wrap:wrap;align-items:center; }',
+      '.advisor-renewal-actions button, .advisor-pdoc-actions button, .advisor-pdoc-actions select { font-size:0.72rem;padding:4px 8px; }',
+      '.advisor-renewal-card .inline-date { font-size:0.78rem;padding:4px 6px;background:var(--bg-primary,var(--charcoal));color:var(--text,#fff);border:1px solid var(--teal,#2a9d8f);border-radius:4px; }',
+      '.advisor-pdoc-card select { background:var(--bg-primary,var(--charcoal));color:var(--text,#fff);border:1px solid rgba(255,255,255,0.2);border-radius:4px;padding:4px 6px; }',
     ].join('\n');
     document.head.appendChild(style);
   }
@@ -159,6 +177,9 @@
           entitySubscription = MastDB.businessEntity.subscribe(function(ent) {
             entityData = ent;
             rerenderEntitySection();
+            // Pending-docs card references compliance arrays to populate the
+            // Link-to dropdown — re-render when entity data changes.
+            rerenderPendingDocsSection();
           });
         } catch (subErr) {
           console.warn('[advisor] entity subscribe failed, falling back to get():', subErr && subErr.message);
@@ -166,6 +187,46 @@
         }
       } else if (!entityData && window.MastDB && MastDB.businessEntity) {
         try { entityData = await MastDB.businessEntity.get(); } catch (_) { entityData = null; }
+      }
+
+      // PA-7 (Entity Phase 2): single subscription per stream; mirror B7 cost
+      // discipline — constant reads per tab click, no per-render `.get()`.
+      if (!renewalsSubscription && window.MastDB && MastDB.businessEntity && MastDB.businessEntity.renewals) {
+        try {
+          renewalsSubscription = MastDB.businessEntity.renewals.subscribeItems(function(items) {
+            renewalsData = Array.isArray(items) ? items : [];
+            rerenderRenewalsSection();
+          });
+        } catch (subErr) {
+          console.warn('[advisor] renewals subscribe failed:', subErr && subErr.message);
+        }
+      }
+      if (!documentsSubscription && window.MastDB && MastDB.businessEntity && MastDB.businessEntity.documents) {
+        try {
+          documentsSubscription = MastDB.businessEntity.documents.subscribe(function(docs) {
+            documentsData = Array.isArray(docs) ? docs : [];
+            rerenderPendingDocsSection();
+          });
+        } catch (subErr) {
+          console.warn('[advisor] documents subscribe failed:', subErr && subErr.message);
+        }
+      }
+
+      // PB-3 (Phase 2 P2B): channels-oauth live subscription. `.list()` returns
+      // masked records; the card reflects status + shop + webhook count.
+      if (!channelsSubscription && window.MastDB && MastDB.businessEntity && MastDB.businessEntity.channels && MastDB.businessEntity.channels.subscribe) {
+        try {
+          channelsSubscription = MastDB.businessEntity.channels.subscribe(function(items) {
+            _channelsCache = Array.isArray(items) ? items : [];
+            rerenderChannelsSection();
+          });
+        } catch (subErr) {
+          console.warn('[advisor] channels subscribe failed:', subErr && subErr.message);
+          // Fall through to a one-shot list() so the card isn't permanently empty.
+          loadChannelsForAdvisor();
+        }
+      } else {
+        loadChannelsForAdvisor();
       }
 
       if (planData.planStatus === 'none' && (!entityData || entityData.entityStatus === 'none' || !entityData.entityStatus)) {
@@ -210,6 +271,17 @@
     // and Health Score per plan Build B7. Wrapped in an id'd div so the
     // subscription callback can target its innerHTML without full re-render.
     h += '<div id="advisorEntityRoot">' + renderEntitySection() + '</div>';
+
+    // PA-7 (Entity Phase 2): renewals + pending-docs cards between About Your
+    // Business and Health Score. Each wrapped in its own id'd root so the
+    // corresponding subscription can target innerHTML.
+    h += '<div id="advisorRenewalsRoot">' + renderRenewalsSection() + '</div>';
+    h += '<div id="advisorPendingDocsRoot">' + renderPendingDocsSection() + '</div>';
+
+    // PB-3 (Phase 2 P2B): OAuth channel connection health (Shopify for now;
+    // Etsy/Square land in PB-4/5). Wrapped in its own root so the channels
+    // subscription can target innerHTML without full re-render.
+    h += '<div id="advisorChannelsRoot">' + renderChannelsHealthSection() + '</div>';
 
     // Section A: Health Score
     h += renderHealthSection();
@@ -532,6 +604,71 @@
   }
 
   // --- Section A: Health Score ---
+  // --- Section: Connected Channels (Phase 2 P2B PB-3) ---
+  // Caches MastDB.businessEntity.channels.list() so re-render is cheap.
+  var _channelsCache = null;
+
+  function renderChannelsHealthSection() {
+    var items = Array.isArray(_channelsCache) ? _channelsCache : [];
+    // Only show once we have data OR a pending load has returned an empty list.
+    // Start lean: hide until first load attempt completes.
+    if (_channelsCache === null) {
+      return ''; // nothing until first load
+    }
+    if (items.length === 0) {
+      return ''; // no connected integrations → do not occupy space
+    }
+    var h = '<div class="advisor-section">';
+    h += '<div class="advisor-section-title">&#128279; Connected Channels</div>';
+    h += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;margin-top:12px;">';
+    for (var i = 0; i < items.length; i++) {
+      var c = items[i];
+      var platform = c.platform || c.channelId;
+      var status = c.status || 'unknown';
+      var statusColor = status === 'connected' ? 'var(--success,#22c55e)'
+        : status === 'expired' ? 'var(--warning,#f59e0b)'
+        : status === 'error' || status === 'revoked' ? 'var(--danger,#ef4444)'
+        : 'var(--warm-gray)';
+      var icon = platform === 'shopify' ? '&#128722;' : platform === 'etsy' ? '&#127970;' : platform === 'square' ? '&#9633;' : '&#128279;';
+      var sub = '';
+      if (status === 'connected') {
+        var parts = [];
+        if (c.shopDomain || c.shopId) parts.push(esc(c.shopDomain || c.shopId));
+        if (typeof c.webhookSubscriptionCount === 'number') parts.push(c.webhookSubscriptionCount + ' hook' + (c.webhookSubscriptionCount === 1 ? '' : 's'));
+        if (c.lastSyncAt) parts.push('Synced ' + timeAgo(c.lastSyncAt));
+        sub = parts.join(' \u2022 ');
+      } else if (c.lastErrorMessage) {
+        sub = esc(c.lastErrorMessage);
+      }
+      h += '<div class="advisor-dim-card" style="text-align:left;">';
+      h += '<div style="display:flex;align-items:center;gap:8px;">';
+      h += '<span style="font-size:1.1rem;">' + icon + '</span>';
+      h += '<div style="font-weight:600;text-transform:capitalize;">' + esc(platform) + '</div>';
+      h += '<div style="margin-left:auto;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.5px;color:' + statusColor + ';">' + esc(status) + '</div>';
+      h += '</div>';
+      if (sub) h += '<div style="font-size:0.72rem;color:var(--warm-gray-light,#666);margin-top:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + sub + '</div>';
+      h += '</div>';
+    }
+    h += '</div></div>';
+    return h;
+  }
+
+  function rerenderChannelsSection() {
+    var root = document.getElementById('advisorChannelsRoot');
+    if (root) root.innerHTML = renderChannelsHealthSection();
+  }
+
+  async function loadChannelsForAdvisor() {
+    if (!window.MastDB || !MastDB.businessEntity || !MastDB.businessEntity.channels) return;
+    try {
+      _channelsCache = await MastDB.businessEntity.channels.list();
+    } catch (err) {
+      console.warn('[advisor] channels.list failed:', err && err.message);
+      _channelsCache = [];
+    }
+    rerenderChannelsSection();
+  }
+
   function renderHealthSection() {
     var h = '<div class="advisor-section">';
     h += '<div class="advisor-section-title">&#128200; Business Health</div>';
