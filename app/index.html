@@ -15193,19 +15193,23 @@ async function _updateComplianceSeedBanner(ent) {
 // Same visibility rules as `_updateComplianceSeedBanner` (shared
 // `renewalSeedDismissedAt` flag — dismissing either hides both). Rendered
 // once per dashboard load via `renderAllDashboardCards`.
+//
+// Reads `compliance` + `ui` via section-scoped get() (each returns
+// `{ section, data, entityStatus }`) — NOT get('all'), which returns a flat
+// ent snapshot shaped differently.
 async function renderDashRenewalSeedBanner() {
   var banner = document.getElementById('dashRenewalSeedBanner');
   if (!banner) return;
   try {
-    var res = await MastDB.businessEntity.get('all');
-    var ent = (res && res.data) || {};
-    var compliance = ent.compliance || {};
+    var comRes = await MastDB.businessEntity.get('compliance');
+    var uiRes = await MastDB.businessEntity.get('ui');
+    var compliance = (comRes && comRes.data) || {};
+    var ui = (uiRes && uiRes.data) || {};
     var totalItems = (Array.isArray(compliance.licenses) ? compliance.licenses.length : 0)
       + (Array.isArray(compliance.insurance) ? compliance.insurance.length : 0)
       + (Array.isArray(compliance.certifications) ? compliance.certifications.length : 0)
       + (Array.isArray(compliance.taxJurisdictions) ? compliance.taxJurisdictions.length : 0);
-    var dismissedAt = ent.ui && ent.ui.renewalSeedDismissedAt;
-    if (totalItems === 0 || dismissedAt) { banner.style.display = 'none'; return; }
+    if (totalItems === 0 || ui.renewalSeedDismissedAt) { banner.style.display = 'none'; return; }
     var items = await MastDB.businessEntity.renewals.listItems({ activeOnly: true });
     if (items && items.length > 0) { banner.style.display = 'none'; return; }
     banner.style.display = '';
