@@ -1041,6 +1041,232 @@
     return h;
   }
 
+  // --- Section: Renewals (PA-7 — Entity Phase 2) ---
+  function rerenderRenewalsSection() {
+    var root = document.getElementById('advisorRenewalsRoot');
+    if (!root) return;
+    root.innerHTML = renderRenewalsSection();
+  }
+
+  function formatDaysUntil(expiresAt) {
+    if (!expiresAt) return '';
+    var ms = Date.parse(expiresAt);
+    if (!isFinite(ms)) return '';
+    var days = Math.round((ms - Date.now()) / 86400000);
+    if (days === 0) return 'today';
+    if (days > 0) return 'in ' + days + ' day' + (days === 1 ? '' : 's');
+    var n = -days;
+    return n + ' day' + (n === 1 ? '' : 's') + ' overdue';
+  }
+
+  function _formatExpiresDate(expiresAt) {
+    if (!expiresAt) return '';
+    var d = new Date(expiresAt);
+    if (isNaN(d.getTime())) return '';
+    return d.toLocaleDateString();
+  }
+
+  function renderRenewalsSection() {
+    var nowIso = new Date().toISOString();
+    var actionable = renewalsData.filter(function(it) {
+      if (!it) return false;
+      if (it.archived === true) return false;
+      if (it.status === 'archived' || it.status === 'completed') return false;
+      if (it.snoozeUntil && it.snoozeUntil > nowIso) return false;
+      return it.status === 'warning' || it.status === 'expired';
+    });
+    if (actionable.length === 0) return '';
+    actionable.sort(function(a, b) {
+      var ea = String(a.expiresAt || '');
+      var eb = String(b.expiresAt || '');
+      return ea < eb ? -1 : ea > eb ? 1 : 0;
+    });
+    var h = '<div class="advisor-section">';
+    h += '<div class="advisor-section-title">&#128197; Upcoming Renewals</div>';
+    actionable.forEach(function(it) {
+      var pillClass = it.status === 'expired' ? 'expired' : (it.status === 'warning' ? 'warning' : 'active');
+      h += '<div class="advisor-renewal-card" id="advRenewal-' + escText(it.id) + '">';
+      h += '<div style="flex:1;min-width:220px;">';
+      h += '<div class="title">' + escText(it.title || '(untitled)') + '</div>';
+      h += '<div class="meta">Expires ' + escText(_formatExpiresDate(it.expiresAt)) + ' &middot; ' + escText(formatDaysUntil(it.expiresAt));
+      if (it.sourceType) h += ' &middot; ' + escText(it.sourceType);
+      h += '</div>';
+      h += '<div style="margin-top:6px;"><span class="advisor-renewal-pill ' + pillClass + '">' + escText(it.status || 'active') + '</span></div>';
+      h += '</div>';
+      h += '<div class="advisor-renewal-actions">';
+      h += '<button class="btn btn-small btn-primary" onclick="advisorMarkRenewed(\'' + escText(it.id) + '\')">Mark renewed</button>';
+      h += '<button class="btn btn-small" onclick="advisorSnoozeRenewal(\'' + escText(it.id) + '\',7)">+1w</button>';
+      h += '<button class="btn btn-small" onclick="advisorSnoozeRenewal(\'' + escText(it.id) + '\',30)">+1m</button>';
+      h += '<button class="btn btn-small btn-secondary" onclick="advisorArchiveRenewal(\'' + escText(it.id) + '\')">Archive</button>';
+      h += '</div>';
+      h += '</div>';
+    });
+    h += '</div>';
+    return h;
+  }
+
+  function _advisorRenewalById(id) {
+    for (var i = 0; i < renewalsData.length; i++) if (renewalsData[i] && renewalsData[i].id === id) return renewalsData[i];
+    return null;
+  }
+
+  async function advisorMarkRenewed(itemId) {
+    var it = _advisorRenewalById(itemId);
+    if (!it) return;
+    var suggested = '';
+    if (it.expiresAt) {
+      var d = new Date(it.expiresAt);
+      if (!isNaN(d.getTime())) { d.setFullYear(d.getFullYear() + 1); suggested = d.toISOString().slice(0, 10); }
+    }
+    if (!suggested) { var tmp = new Date(); tmp.setFullYear(tmp.getFullYear() + 1); suggested = tmp.toISOString().slice(0, 10); }
+    var newDate = null;
+    if (typeof window.mastPrompt === 'function') {
+      newDate = await window.mastPrompt('Enter the new expiration date (YYYY-MM-DD) for this renewal:', { title: 'Mark ' + (it.title || '') + ' renewed', defaultValue: suggested, confirmLabel: 'Save' });
+    } else {
+      newDate = window.prompt('New expiration date (YYYY-MM-DD):', suggested);
+    }
+    if (!newDate) return;
+    var iso = /^\d{4}-\d{2}-\d{2}$/.test(newDate) ? newDate + 'T23:59:59.000Z' : newDate;
+    if (!isFinite(Date.parse(iso))) {
+      if (window.showToast) showToast('Invalid date — use YYYY-MM-DD', true);
+      return;
+    }
+    try {
+      await MastDB.businessEntity.renewals.markComplete(itemId, iso);
+      await MastDB.businessEntity.renewals.create(it.sourceType || 'other', it.title || 'Renewal', iso, it.cadence || null, it.sourceRef || null);
+      if (window.showToast) showToast('Marked renewed — next cycle scheduled');
+    } catch (err) {
+      if (window.showToast) showToast('Could not mark renewed: ' + (err.message || 'unknown'), true);
+    }
+  }
+
+  async function advisorSnoozeRenewal(itemId, days) {
+    if (!days || days <= 0) return;
+    var until = new Date(Date.now() + days * 86400000).toISOString();
+    try {
+      await MastDB.businessEntity.renewals.snooze(itemId, until);
+      if (window.showToast) showToast('Snoozed ' + days + ' day' + (days === 1 ? '' : 's'));
+    } catch (err) {
+      if (window.showToast) showToast('Could not snooze: ' + (err.message || 'unknown'), true);
+    }
+  }
+
+  async function advisorArchiveRenewal(itemId) {
+    var ok = typeof window.mastConfirm === 'function'
+      ? await window.mastConfirm('Archive this renewal reminder? You can recreate it from Settings > Compliance if needed.', { title: 'Archive reminder?', confirmLabel: 'Archive', cancelLabel: 'Keep' })
+      : window.confirm('Archive this renewal reminder?');
+    if (!ok) return;
+    try {
+      await MastDB.businessEntity.renewals.archive(itemId);
+      if (window.showToast) showToast('Archived');
+    } catch (err) {
+      if (window.showToast) showToast('Could not archive: ' + (err.message || 'unknown'), true);
+    }
+  }
+
+  // --- Section: Pending docs (PA-7 — Entity Phase 2) ---
+  function rerenderPendingDocsSection() {
+    var root = document.getElementById('advisorPendingDocsRoot');
+    if (!root) return;
+    root.innerHTML = renderPendingDocsSection();
+  }
+
+  var _PDOC_COMPLIANCE_SECTIONS = ['licenses', 'insurance', 'certifications', 'taxJurisdictions'];
+
+  function _pdocItemLabel(item, sectionKey) {
+    if (!item) return '(unknown)';
+    if (sectionKey === 'licenses') return item.type || item.number || '(license)';
+    if (sectionKey === 'insurance') return item.carrier || item.policyNumber || '(insurance)';
+    if (sectionKey === 'certifications') return item.name || item.issuer || '(certification)';
+    if (sectionKey === 'taxJurisdictions') return (item.state || '') + (item.registrationId ? ' #' + item.registrationId : '') || '(jurisdiction)';
+    return '(item)';
+  }
+
+  function _pdocLinkOptions() {
+    var compliance = (entityData && entityData.compliance) || {};
+    var opts = [];
+    _PDOC_COMPLIANCE_SECTIONS.forEach(function(section) {
+      var arr = Array.isArray(compliance[section]) ? compliance[section] : [];
+      arr.forEach(function(item, idx) {
+        opts.push({
+          value: section + ':' + idx,
+          label: section.charAt(0).toUpperCase() + section.slice(1) + ' — ' + _pdocItemLabel(item, section)
+        });
+      });
+    });
+    return opts;
+  }
+
+  function renderPendingDocsSection() {
+    var pending = documentsData.filter(function(d) {
+      if (!d) return false;
+      if (d.status === 'redacted' || d.status === 'deleted-pending-purge' || d.status === 'quarantined') return false;
+      if (d.status === 'uploaded-pending') return true;
+      if (d.status === 'uploaded' && !d.linkedTo) return true;
+      return false;
+    });
+    if (pending.length === 0) return '';
+    var linkOpts = _pdocLinkOptions();
+    var h = '<div class="advisor-section">';
+    h += '<div class="advisor-section-title">&#128196; Documents awaiting action</div>';
+    pending.forEach(function(d) {
+      var selectId = 'advPdocLink-' + escText(d.id || '');
+      h += '<div class="advisor-pdoc-card" id="advPdoc-' + escText(d.id || '') + '">';
+      h += '<div style="flex:1;min-width:220px;">';
+      h += '<div class="title">' + escText(d.filename || '(unnamed)') + '</div>';
+      h += '<div class="meta">' + escText(d.purpose || '(no purpose)') + (d.createdAt ? ' &middot; uploaded ' + escText(timeAgo(d.createdAt)) : '') + '</div>';
+      h += '</div>';
+      h += '<div class="advisor-pdoc-actions">';
+      if (linkOpts.length === 0) {
+        h += '<span style="font-size:0.78rem;color:var(--warm-gray);">Add a compliance item first, then come back to link.</span>';
+      } else {
+        h += '<select id="' + selectId + '"><option value="">Link to…</option>';
+        linkOpts.forEach(function(o) { h += '<option value="' + escText(o.value) + '">' + escText(o.label) + '</option>'; });
+        h += '</select>';
+        h += '<button class="btn btn-small btn-primary" onclick="advisorLinkPendingDoc(\'' + escText(d.id || '') + '\',\'' + selectId + '\')">Link</button>';
+      }
+      h += '<button class="btn btn-small btn-secondary" onclick="advisorDeletePendingDoc(\'' + escText(d.id || '') + '\')">Delete</button>';
+      h += '</div>';
+      h += '</div>';
+    });
+    h += '</div>';
+    return h;
+  }
+
+  async function advisorLinkPendingDoc(documentId, selectId) {
+    var sel = document.getElementById(selectId);
+    if (!sel || !sel.value) return;
+    var parts = sel.value.split(':');
+    var section = parts[0];
+    var idx = parseInt(parts[1], 10);
+    if (_PDOC_COMPLIANCE_SECTIONS.indexOf(section) === -1 || !isFinite(idx)) return;
+    try {
+      await MastDB.businessEntity.documents.link(documentId, 'compliance.' + section, idx, 'documentId');
+      if (window.showToast) showToast('Document linked');
+    } catch (err) {
+      if (window.showToast) showToast('Could not link: ' + (err.message || 'unknown'), true);
+    }
+  }
+
+  async function advisorDeletePendingDoc(documentId) {
+    var ok = typeof window.mastConfirm === 'function'
+      ? await window.mastConfirm('Delete this uploaded document? It will be purged within 6 hours.', { title: 'Delete document?', confirmLabel: 'Delete', cancelLabel: 'Keep' })
+      : window.confirm('Delete this uploaded document?');
+    if (!ok) return;
+    try {
+      await MastDB.businessEntity.documents.delete(documentId);
+      if (window.showToast) showToast('Document scheduled for purge');
+    } catch (err) {
+      if (window.showToast) showToast('Could not delete: ' + (err.message || 'unknown'), true);
+    }
+  }
+
+  window.advisorMarkRenewed = advisorMarkRenewed;
+  window.advisorSnoozeRenewal = advisorSnoozeRenewal;
+  window.advisorArchiveRenewal = advisorArchiveRenewal;
+  window.advisorLinkPendingDoc = advisorLinkPendingDoc;
+  window.advisorDeletePendingDoc = advisorDeletePendingDoc;
+
   // --- Window exports ---
   window.loadAdvisor = loadAdvisor;
   window.switchAdvisorPeriod = function(period) {
@@ -1078,6 +1304,17 @@
       }
       entitySubscription = null;
       entityData = null;
+      // PA-7 (Entity Phase 2): tear down renewals + documents subscriptions.
+      if (renewalsSubscription && typeof renewalsSubscription === 'function') {
+        try { renewalsSubscription(); } catch (_) {}
+      }
+      renewalsSubscription = null;
+      renewalsData = [];
+      if (documentsSubscription && typeof documentsSubscription === 'function') {
+        try { documentsSubscription(); } catch (_) {}
+      }
+      documentsSubscription = null;
+      documentsData = [];
     }
   });
 })();
