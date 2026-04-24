@@ -17,6 +17,9 @@
   var documentsData = [];
   var documentsSubscription = null;
   var channelsSubscription = null;
+  // P2D-S1 (Entity Phase 2): pending-review conversational captures.
+  var capturesData = [];
+  var capturesSubscription = null;
 
   // --- CSS (injected once) ---
   var cssInjected = false;
@@ -97,6 +100,38 @@
       '.advisor-renewal-actions button, .advisor-pdoc-actions button, .advisor-pdoc-actions select { font-size:0.72rem;padding:4px 8px; }',
       '.advisor-renewal-card .inline-date { font-size:0.78rem;padding:4px 6px;background:var(--bg-primary,var(--charcoal));color:var(--text,#fff);border:1px solid var(--teal,#2a9d8f);border-radius:4px; }',
       '.advisor-pdoc-card select { background:var(--bg-primary,var(--charcoal));color:var(--text,#fff);border:1px solid rgba(255,255,255,0.2);border-radius:4px;padding:4px 6px; }',
+      // P2D-S1 (Entity Phase 2): conversational capture pending-review cards
+      '.advisor-capture-card { background:var(--bg-secondary,#232323);border:1px solid rgba(129,140,248,0.25);border-radius:10px;padding:12px 14px;margin-bottom:10px;display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap; }',
+      '.advisor-capture-card .title { font-size:0.9rem;font-weight:600;margin-bottom:2px; }',
+      '.advisor-capture-card .meta { font-size:0.78rem;color:var(--warm-gray,#888); }',
+      '.advisor-capture-pill { display:inline-block;padding:2px 8px;border-radius:12px;font-size:0.72rem;font-weight:600;text-transform:uppercase;background:rgba(129,140,248,0.15);color:#818cf8; }',
+      '.advisor-capture-pill.low-confidence { background:rgba(239,68,68,0.15);color:#ef4444; }',
+      '.advisor-capture-actions { display:flex;gap:6px;flex-wrap:wrap;align-items:center; }',
+      '.advisor-capture-actions button { font-size:0.72rem;padding:4px 8px; }',
+      // Diff-review modal (opens when user clicks Review)
+      '.capture-modal-backdrop { position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9000;display:flex;align-items:center;justify-content:center;padding:20px; }',
+      '.capture-modal { background:var(--bg-primary,#1a1a1a);border:1px solid rgba(255,255,255,0.1);border-radius:14px;max-width:720px;width:100%;max-height:85vh;overflow:auto;padding:24px;color:var(--text,#fff);box-shadow:0 20px 60px rgba(0,0,0,0.5); }',
+      '.capture-modal h2 { margin:0 0 4px 0;font-size:1.2rem;display:flex;align-items:center;gap:8px; }',
+      '.capture-modal .modal-sub { font-size:0.82rem;color:var(--warm-gray,#888);margin-bottom:16px; }',
+      '.capture-modal .modal-escape { margin-bottom:16px;padding:10px 12px;background:rgba(234,179,8,0.08);border:1px solid rgba(234,179,8,0.25);border-radius:8px;font-size:0.82rem;display:flex;justify-content:space-between;align-items:center;gap:12px; }',
+      '.capture-modal .modal-escape a { color:#eab308;text-decoration:underline;cursor:pointer; }',
+      '.capture-modal .diff-row { border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:12px;margin-bottom:10px;background:var(--bg-secondary,#232323); }',
+      '.capture-modal .diff-row.unknown { opacity:0.55; }',
+      '.capture-modal .diff-row-header { display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:8px; }',
+      '.capture-modal .diff-row-field { font-family:var(--mono, monospace);font-size:0.82rem;font-weight:600;color:var(--teal,#2a9d8f); }',
+      '.capture-modal .diff-row-checkbox { display:flex;align-items:center;gap:6px;font-size:0.78rem;color:var(--warm-gray,#888);cursor:pointer; }',
+      '.capture-modal .diff-row-checkbox input[type="checkbox"] { width:16px;height:16px;cursor:pointer; }',
+      '.capture-modal .diff-pair { display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:0.85rem; }',
+      '.capture-modal .diff-pane { background:var(--bg-primary,var(--charcoal));border-radius:6px;padding:8px 10px;min-height:40px;font-family:var(--mono, monospace);font-size:0.78rem;overflow-wrap:break-word;white-space:pre-wrap; }',
+      '.capture-modal .diff-pane.current { color:var(--warm-gray,#888); }',
+      '.capture-modal .diff-pane.proposed { color:var(--text,#fff);border:1px solid rgba(42,157,143,0.4); }',
+      '.capture-modal .diff-pane.proposed.removed { border-color:rgba(239,68,68,0.4);color:#ef4444; }',
+      '.capture-modal .diff-pane.unknown-sentinel { color:#eab308;font-style:italic; }',
+      '.capture-modal .diff-label { font-size:0.68rem;text-transform:uppercase;letter-spacing:0.5px;color:var(--warm-gray-light,#666);margin-bottom:4px; }',
+      '.capture-modal .modal-toggles { display:flex;gap:8px;margin-bottom:14px; }',
+      '.capture-modal .modal-actions { display:flex;justify-content:flex-end;gap:10px;margin-top:20px;padding-top:16px;border-top:1px solid rgba(255,255,255,0.06); }',
+      '.capture-modal .modal-reject-reason { width:100%;box-sizing:border-box;background:var(--bg-primary,var(--charcoal));color:var(--text,#fff);border:1px solid rgba(255,255,255,0.15);border-radius:6px;padding:6px 8px;font-size:0.82rem;font-family:inherit;margin-top:8px;display:none; }',
+      '.capture-modal .modal-reject-reason.open { display:block; }',
     ].join('\n');
     document.head.appendChild(style);
   }
@@ -212,6 +247,20 @@
         }
       }
 
+      // P2D-S1 (Phase 2 P2D): pending-review conversational captures. Single
+      // subscription per stream. Renders a Review CTA per capture; click opens
+      // the diff-review modal. Mirrors PA-7's constant-cost pattern.
+      if (!capturesSubscription && window.MastDB && MastDB.businessEntity && MastDB.businessEntity.capture && MastDB.businessEntity.capture.subscribe) {
+        try {
+          capturesSubscription = MastDB.businessEntity.capture.subscribe(function(items) {
+            capturesData = Array.isArray(items) ? items : [];
+            rerenderCapturesSection();
+          });
+        } catch (subErr) {
+          console.warn('[advisor] captures subscribe failed:', subErr && subErr.message);
+        }
+      }
+
       // PB-3 (Phase 2 P2B): channels-oauth live subscription. `.list()` returns
       // masked records; the card reflects status + shop + webhook count.
       if (!channelsSubscription && window.MastDB && MastDB.businessEntity && MastDB.businessEntity.channels && MastDB.businessEntity.channels.subscribe) {
@@ -271,6 +320,12 @@
     // and Health Score per plan Build B7. Wrapped in an id'd div so the
     // subscription callback can target its innerHTML without full re-render.
     h += '<div id="advisorEntityRoot">' + renderEntitySection() + '</div>';
+
+    // P2D-S1 (Entity Phase 2): pending-review conversational captures surface
+    // above renewals since ratification is a blocking decision — the user
+    // should see these before working on other entity chores. High visual
+    // priority matches Intercom Fin's unresolved-cluster pattern (research §5.2).
+    h += '<div id="advisorCapturesRoot">' + renderCapturesSection() + '</div>';
 
     // PA-7 (Entity Phase 2): renewals + pending-docs cards between About Your
     // Business and Health Score. Each wrapped in its own id'd root so the
@@ -1267,6 +1322,310 @@
   window.advisorLinkPendingDoc = advisorLinkPendingDoc;
   window.advisorDeletePendingDoc = advisorDeletePendingDoc;
 
+  // ──────────────────────────────────────────────────────────
+  // Section: Pending Captures (P2D-S1 — Entity Phase 2)
+  //
+  // Surfaces capture.pending/* items awaiting user ratification. Each card
+  // shows the target section + skill name + confidence + time-ago. Clicking
+  // "Review" opens the diff-review modal (proposed vs current, per-field
+  // accept/reject, always-visible Switch-to-Form escape hatch). Clicking
+  // "Dismiss" calls reject without a reason.
+  //
+  // The capture stream writes are MCP-only — skills submit via
+  // capture_conversational and land in admin/businessEntity_capturePending
+  // with status='pending-review'. The advisor surfaces those for user
+  // ratification. Once ratified, MastDB.businessEntity.capture.ratify()
+  // delegates to MastDB.businessEntity.update for the actual entity write.
+  // ──────────────────────────────────────────────────────────
+  var _CAPTURE_SECTION_ICONS = {
+    identity: '\u{1F3E2}',     // office building
+    presence: '\u{1F310}',     // globe
+    operations: '\u2699\uFE0F', // gear
+    people: '\u{1F464}',       // bust
+    compliance: '\u2705',       // check
+    engagement: '\u{1F4CD}'    // pin
+  };
+
+  function _captureSectionIcon(section) {
+    return _CAPTURE_SECTION_ICONS[section] || '\u{1F4DD}';
+  }
+
+  function _captureSectionLabel(section) {
+    if (!section) return '';
+    return section.charAt(0).toUpperCase() + section.slice(1);
+  }
+
+  function rerenderCapturesSection() {
+    var root = document.getElementById('advisorCapturesRoot');
+    if (!root) return;
+    root.innerHTML = renderCapturesSection();
+  }
+
+  function renderCapturesSection() {
+    var pending = (capturesData || []).filter(function(c) { return c && c.status === 'pending-review'; });
+    if (pending.length === 0) return '';
+    var h = '<div class="advisor-section">';
+    h += '<div class="advisor-section-title">\u{1F4AC} Pending Reviews <span style="font-weight:400;color:var(--warm-gray-light);font-size:0.82rem;margin-left:4px;">(' + pending.length + ')</span></div>';
+    pending.forEach(function(cap) {
+      var isLowConf = typeof cap.confidence === 'number' && cap.confidence < 0.6;
+      var pillClass = isLowConf ? 'advisor-capture-pill low-confidence' : 'advisor-capture-pill';
+      var confStr = (typeof cap.confidence === 'number') ? (' \u2022 ' + Math.round(cap.confidence * 100) + '% confidence') : '';
+      var expiresStr = cap.expiresAt ? ' \u2022 expires ' + escText(timeAgo(cap.expiresAt).replace(/^-\s*/, '')) : '';
+      h += '<div class="advisor-capture-card" id="advCapture-' + escText(cap.id) + '">';
+      h += '<div style="flex:1;min-width:220px;">';
+      h += '<div class="title">' + escText(_captureSectionIcon(cap.targetSection)) + ' Review ' + escText(_captureSectionLabel(cap.targetSection)) + ' capture</div>';
+      h += '<div class="meta">via ' + escText(cap.skillName || 'unknown-skill') + ' \u2022 captured ' + escText(timeAgo(cap.createdAt)) + confStr + expiresStr + '</div>';
+      h += '<div style="margin-top:6px;"><span class="' + pillClass + '">' + (isLowConf ? 'please double-check' : 'pending review') + '</span></div>';
+      h += '</div>';
+      h += '<div class="advisor-capture-actions">';
+      h += '<button class="btn btn-small btn-primary" onclick="advisorReviewCapture(\'' + escText(cap.id) + '\')">Review</button>';
+      h += '<button class="btn btn-small btn-secondary" onclick="advisorDismissCapture(\'' + escText(cap.id) + '\')">Dismiss</button>';
+      h += '</div>';
+      h += '</div>';
+    });
+    h += '</div>';
+    return h;
+  }
+
+  function _captureById(id) {
+    for (var i = 0; i < capturesData.length; i++) if (capturesData[i] && capturesData[i].id === id) return capturesData[i];
+    return null;
+  }
+
+  // Section-name → route target in Settings. Used by Switch-to-Form.
+  var _CAPTURE_TO_SETTINGS_VIEW = {
+    identity: 'identity',
+    presence: 'presence',
+    operations: 'operations',
+    people: 'people',
+    compliance: 'compliance',
+    engagement: 'engagement'
+  };
+
+  // Deep-equality check for diff display. Handles primitives + arrays + objects.
+  function _deepEqual(a, b) {
+    if (a === b) return true;
+    if (a === null || a === undefined || b === null || b === undefined) return a === b;
+    if (typeof a !== typeof b) return false;
+    if (Array.isArray(a) && Array.isArray(b)) {
+      if (a.length !== b.length) return false;
+      for (var i = 0; i < a.length; i++) if (!_deepEqual(a[i], b[i])) return false;
+      return true;
+    }
+    if (typeof a === 'object' && typeof b === 'object') {
+      var ak = Object.keys(a), bk = Object.keys(b);
+      if (ak.length !== bk.length) return false;
+      for (var j = 0; j < ak.length; j++) {
+        if (!Object.prototype.hasOwnProperty.call(b, ak[j])) return false;
+        if (!_deepEqual(a[ak[j]], b[ak[j]])) return false;
+      }
+      return true;
+    }
+    return false;
+  }
+
+  function _formatDiffValue(v) {
+    if (v === undefined || v === null) return '(not set)';
+    if (v === 'unknown') return '(user deferred — will be skipped)';
+    if (typeof v === 'string') return v;
+    if (typeof v === 'number' || typeof v === 'boolean') return String(v);
+    try { return JSON.stringify(v, null, 2); }
+    catch (e) { return String(v); }
+  }
+
+  function _openCaptureModal(cap) {
+    // Guard against duplicate modals.
+    var existing = document.getElementById('captureDiffModalBackdrop');
+    if (existing) existing.parentNode.removeChild(existing);
+
+    var currentEntity = (entityData && entityData[cap.targetSection]) || {};
+    var proposed = cap.proposedData || {};
+    var fieldKeys = Object.keys(proposed);
+    var icon = _captureSectionIcon(cap.targetSection);
+    var label = _captureSectionLabel(cap.targetSection);
+    var skill = cap.skillName || 'unknown-skill';
+    var confPct = (typeof cap.confidence === 'number') ? Math.round(cap.confidence * 100) + '%' : 'not reported';
+
+    var bodyRows = fieldKeys.map(function(key, i) {
+      var propVal = proposed[key];
+      var curVal = currentEntity[key];
+      var isUnknown = propVal === 'unknown';
+      var isUnchanged = _deepEqual(propVal, curVal);
+      var proposedClasses = ['diff-pane', 'proposed'];
+      if (isUnknown) proposedClasses.push('unknown-sentinel');
+      var rowClasses = ['diff-row'];
+      if (isUnknown) rowClasses.push('unknown');
+      var checkedAttr = (isUnknown || isUnchanged) ? '' : ' checked';
+      var disabledAttr = isUnknown ? ' disabled' : '';
+      return '<div class="' + rowClasses.join(' ') + '" data-field="' + escText(key) + '">' +
+        '<div class="diff-row-header">' +
+          '<span class="diff-row-field">' + escText(key) + '</span>' +
+          '<label class="diff-row-checkbox">' +
+            '<input type="checkbox" class="capture-field-check"' + checkedAttr + disabledAttr + ' data-field="' + escText(key) + '" />' +
+            (isUnknown ? 'skip (unknown)' : (isUnchanged ? 'no change' : 'accept')) +
+          '</label>' +
+        '</div>' +
+        '<div class="diff-pair">' +
+          '<div>' +
+            '<div class="diff-label">Current</div>' +
+            '<div class="diff-pane current">' + escText(_formatDiffValue(curVal)) + '</div>' +
+          '</div>' +
+          '<div>' +
+            '<div class="diff-label">Proposed</div>' +
+            '<div class="' + proposedClasses.join(' ') + '">' + escText(_formatDiffValue(propVal)) + '</div>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+
+    var settingsTarget = _CAPTURE_TO_SETTINGS_VIEW[cap.targetSection] || 'identity';
+
+    var html = '<div id="captureDiffModalBackdrop" class="capture-modal-backdrop" onclick="if(event.target===this) advisorCloseCaptureModal();">' +
+      '<div class="capture-modal" role="dialog" aria-label="Review capture">' +
+        '<h2>' + escText(icon) + ' Review ' + escText(label) + ' capture</h2>' +
+        '<div class="modal-sub">via ' + escText(skill) + ' \u2022 captured ' + escText(timeAgo(cap.createdAt)) + ' \u2022 confidence ' + escText(confPct) + '</div>' +
+        '<div class="modal-escape">' +
+          '<span>Prefer a form? Switch to Settings \u203A ' + escText(label) + ' — we\'ll save this proposal for later.</span>' +
+          '<a onclick="advisorCaptureSwitchToForm(\'' + escText(cap.id) + '\', \'' + escText(settingsTarget) + '\')">Switch to form \u2192</a>' +
+        '</div>' +
+        '<div class="modal-toggles">' +
+          '<button class="btn btn-small btn-secondary" onclick="advisorCaptureAcceptAll()">Accept all</button>' +
+          '<button class="btn btn-small btn-secondary" onclick="advisorCaptureRejectAll()">Reject all fields</button>' +
+        '</div>' +
+        '<div id="captureDiffRows">' + bodyRows + '</div>' +
+        '<textarea id="captureRejectReason" class="modal-reject-reason" placeholder="Why are you rejecting? (optional — helps improve the skill)"></textarea>' +
+        '<div class="modal-actions">' +
+          '<button class="btn btn-secondary" onclick="advisorCloseCaptureModal()">Cancel</button>' +
+          '<button class="btn" style="background:rgba(239,68,68,0.15);color:#ef4444;border:1px solid rgba(239,68,68,0.35);" onclick="advisorCaptureReject(\'' + escText(cap.id) + '\')">Reject</button>' +
+          '<button class="btn btn-primary" onclick="advisorCaptureRatify(\'' + escText(cap.id) + '\')">Accept selected</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+
+    var container = document.createElement('div');
+    container.innerHTML = html;
+    document.body.appendChild(container.firstChild);
+  }
+
+  async function advisorReviewCapture(captureId) {
+    var cap = _captureById(captureId);
+    if (!cap) {
+      // Might not be in cache yet — try a direct fetch.
+      try { cap = await MastDB.businessEntity.capture.get(captureId); }
+      catch (e) {
+        if (window.showToast) showToast('Could not load capture: ' + (e.message || 'unknown'), true);
+        return;
+      }
+    }
+    if (!cap) return;
+    // Ensure current entityData is loaded — modal reads from it for the diff.
+    if (!entityData && MastDB && MastDB.businessEntity && MastDB.businessEntity.get) {
+      try { entityData = await MastDB.businessEntity.get(); } catch (_) { entityData = null; }
+    }
+    _openCaptureModal(cap);
+  }
+
+  async function advisorDismissCapture(captureId) {
+    var ok = typeof window.mastConfirm === 'function'
+      ? await window.mastConfirm('Dismiss this capture without reviewing? You can always re-run the skill later.', { title: 'Dismiss capture?', confirmLabel: 'Dismiss', cancelLabel: 'Keep' })
+      : window.confirm('Dismiss this capture?');
+    if (!ok) return;
+    try {
+      await MastDB.businessEntity.capture.reject(captureId, null);
+      if (window.showToast) showToast('Capture dismissed');
+    } catch (err) {
+      if (window.showToast) showToast('Could not dismiss: ' + (err.message || 'unknown'), true);
+    }
+  }
+
+  function advisorCloseCaptureModal() {
+    var el = document.getElementById('captureDiffModalBackdrop');
+    if (el && el.parentNode) el.parentNode.removeChild(el);
+  }
+
+  function advisorCaptureAcceptAll() {
+    var boxes = document.querySelectorAll('#captureDiffRows .capture-field-check');
+    for (var i = 0; i < boxes.length; i++) {
+      if (!boxes[i].disabled) boxes[i].checked = true;
+    }
+  }
+
+  function advisorCaptureRejectAll() {
+    var boxes = document.querySelectorAll('#captureDiffRows .capture-field-check');
+    for (var i = 0; i < boxes.length; i++) boxes[i].checked = false;
+  }
+
+  async function advisorCaptureRatify(captureId) {
+    var boxes = document.querySelectorAll('#captureDiffRows .capture-field-check');
+    var accepted = [];
+    for (var i = 0; i < boxes.length; i++) {
+      if (boxes[i].checked && !boxes[i].disabled) {
+        var f = boxes[i].getAttribute('data-field');
+        if (f) accepted.push(f);
+      }
+    }
+    try {
+      var res = await MastDB.businessEntity.capture.ratify(captureId, accepted);
+      advisorCloseCaptureModal();
+      if (window.showToast) {
+        if (res && res.entityWriteSkipped) {
+          showToast('Capture ratified (no fields were written).');
+        } else if (res && res.writtenFields && res.writtenFields.length) {
+          showToast('Accepted: ' + res.writtenFields.join(', '));
+        } else {
+          showToast('Capture ratified.');
+        }
+      }
+    } catch (err) {
+      if (window.showToast) showToast('Could not ratify: ' + (err.message || 'unknown'), true);
+    }
+  }
+
+  async function advisorCaptureReject(captureId) {
+    var reasonEl = document.getElementById('captureRejectReason');
+    // Surface the reason textarea if hidden and user hasn't typed yet.
+    if (reasonEl && !reasonEl.classList.contains('open')) {
+      reasonEl.classList.add('open');
+      reasonEl.focus();
+      if (window.showToast) showToast('Add a reason (optional) and click Reject again to confirm.');
+      return;
+    }
+    var reason = reasonEl ? reasonEl.value.trim() : '';
+    try {
+      await MastDB.businessEntity.capture.reject(captureId, reason || null);
+      advisorCloseCaptureModal();
+      if (window.showToast) showToast('Capture rejected.');
+    } catch (err) {
+      if (window.showToast) showToast('Could not reject: ' + (err.message || 'unknown'), true);
+    }
+  }
+
+  async function advisorCaptureSwitchToForm(captureId, settingsView) {
+    // Leave the capture in pending-review so user can come back and ratify
+    // from Settings if the skill already collected useful data. Route to the
+    // relevant Settings > <section> view. Per spec §4.4: escape hatch always
+    // visible + preserves in-progress capture.
+    advisorCloseCaptureModal();
+    if (typeof window.navigateTo === 'function') {
+      window.navigateTo('settings');
+      setTimeout(function() {
+        if (typeof window.switchSettingsSubView === 'function' && settingsView) {
+          try { window.switchSettingsSubView(settingsView); } catch (_) {}
+        }
+      }, 80);
+    }
+    if (window.showToast) showToast('Switched to form. Capture still in pending review.');
+  }
+
+  window.advisorReviewCapture = advisorReviewCapture;
+  window.advisorDismissCapture = advisorDismissCapture;
+  window.advisorCloseCaptureModal = advisorCloseCaptureModal;
+  window.advisorCaptureAcceptAll = advisorCaptureAcceptAll;
+  window.advisorCaptureRejectAll = advisorCaptureRejectAll;
+  window.advisorCaptureRatify = advisorCaptureRatify;
+  window.advisorCaptureReject = advisorCaptureReject;
+  window.advisorCaptureSwitchToForm = advisorCaptureSwitchToForm;
+
   // --- Window exports ---
   window.loadAdvisor = loadAdvisor;
   window.switchAdvisorPeriod = function(period) {
@@ -1315,6 +1674,12 @@
       }
       documentsSubscription = null;
       documentsData = [];
+      // P2D-S1 (Entity Phase 2): tear down captures subscription.
+      if (capturesSubscription && typeof capturesSubscription === 'function') {
+        try { capturesSubscription(); } catch (_) {}
+      }
+      capturesSubscription = null;
+      capturesData = [];
     }
   });
 })();

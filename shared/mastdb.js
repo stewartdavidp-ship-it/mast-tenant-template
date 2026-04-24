@@ -1716,6 +1716,222 @@ var MastDB = (function() {
               });
             }
           };
+        })(),
+
+        // ──────────────────────────────────────────────────────────
+        // Phase 2 P2D-S1 — conversational capture sub-namespace.
+        //
+        // Collection: admin/businessEntity_capturePending/{captureId}
+        //             → Firestore collection admin_businessEntity_capturePending.
+        //
+        // Pending-review workflow (per spec §3.4):
+        //   pending-review --ratify--> ratified  (entity write fires here)
+        //   pending-review --reject--> rejected
+        //
+        // CC's core RULE: "Claude proposes, CC captures, user ratifies."
+        // Conversational skills (via tenant MCP) write ONLY to pending-review
+        // state. User ratifies via the advisor diff-review modal, which calls
+        // ratify() here — that's the single entry point that triggers the
+        // actual entity write (through MastDB.businessEntity.update).
+        //
+        // Direct-write vs CF-mediated:
+        //   - list / subscribe: direct Firestore reads (admin-only rules)
+        //   - ratify: direct read of pending doc + direct call to
+        //     MastDB.businessEntity.update(targetSection, filtered) + direct
+        //     update of pending doc status. No CF wrapper — the browser is
+        //     already admin-authenticated; entity writes go through the same
+        //     PA-3 server-side validator that powers Settings.
+        //   - reject: direct Firestore update of pending doc status.
+        //
+        // 'unknown' sentinel: the conversational AI writes literal string
+        // 'unknown' for fields the user deferred. ratify() strips these
+        // before the entity write so the sentinel doesn't pollute
+        // identity/people/etc. Null is disallowed because null can't be
+        // distinguished from "user never saw the prompt."
+        // ──────────────────────────────────────────────────────────
+        capture: (function() {
+          var COLLECTION_PATH = 'admin/businessEntity_capturePending';
+          var UNKNOWN_SENTINEL = 'unknown';
+          var VALID_STATUSES = ['pending-review', 'ratified', 'rejected', 'expired'];
+          // Mirror of UPDATABLE_ENTITY_SECTIONS in the tenant MCP entity.ts.
+          var CAPTURE_TARGET_SECTIONS = ['identity', 'presence', 'operations', 'people', 'compliance', 'engagement'];
+
+          // Recursively drop fields equal to the 'unknown' sentinel. Arrays
+          // filter out sentinels (keep other items). Mirrors the tenant MCP
+          // capture.ts stripUnknown helper.
+          function _stripUnknown(data) {
+            if (data === UNKNOWN_SENTINEL) return undefined;
+            if (Array.isArray(data)) {
+              var out = [];
+              for (var i = 0; i < data.length; i++) {
+                var v = _stripUnknown(data[i]);
+                if (v !== undefined) out.push(v);
+              }
+              return out;
+            }
+            if (data !== null && typeof data === 'object') {
+              var result = {};
+              for (var k in data) {
+                if (!Object.prototype.hasOwnProperty.call(data, k)) continue;
+                var sv = _stripUnknown(data[k]);
+                if (sv !== undefined) result[k] = sv;
+              }
+              return result;
+            }
+            return data;
+          }
+
+          function _filterAcceptedFields(proposedData, acceptedFields) {
+            if (!acceptedFields || !acceptedFields.length) return proposedData;
+            var allowed = {};
+            for (var i = 0; i < acceptedFields.length; i++) allowed[acceptedFields[i]] = true;
+            var out = {};
+            for (var k in proposedData) {
+              if (!Object.prototype.hasOwnProperty.call(proposedData, k)) continue;
+              if (allowed[k]) out[k] = proposedData[k];
+            }
+            return out;
+          }
+
+          function _sortByCreatedAtDesc(items) {
+            items.sort(function(a, b) {
+              var ta = (a && a.createdAt) || '';
+              var tb = (b && b.createdAt) || '';
+              return tb < ta ? -1 : tb > ta ? 1 : 0;
+            });
+          }
+
+          return {
+            list: function(filter) {
+              return tenantStore.list(COLLECTION_PATH).then(function(items) {
+                var out = [];
+                var effStatus = (filter && filter.status) || 'pending-review';
+                for (var id in items) {
+                  if (!Object.prototype.hasOwnProperty.call(items, id)) continue;
+                  var it = items[id];
+                  if (!it) continue;
+                  if (it.status !== effStatus) continue;
+                  if (filter && filter.section && it.targetSection !== filter.section) continue;
+                  out.push(it);
+                }
+                _sortByCreatedAtDesc(out);
+                return out;
+              });
+            },
+
+            get: function(captureId) {
+              if (!captureId) return Promise.reject(new Error('captureId is required'));
+              return tenantStore.get(COLLECTION_PATH + '/' + captureId);
+            },
+
+            // Ratify: user accepted the proposed capture via the diff-review
+            // modal. Filter to acceptedFields[], strip 'unknown' sentinels,
+            // delegate the surviving fields to MastDB.businessEntity.update.
+            // If nothing remains after filtering, mark ratified but skip the
+            // entity write (matches tenant MCP ratify_capture's
+            // entityWriteSkipped path).
+            ratify: function(captureId, acceptedFields) {
+              if (!captureId) return Promise.reject(new Error('captureId is required'));
+              if (acceptedFields !== undefined && !Array.isArray(acceptedFields)) {
+                return Promise.reject(new Error('acceptedFields must be an array of top-level field names (or omit)'));
+              }
+              var docPath = COLLECTION_PATH + '/' + captureId;
+              return tenantStore.get(docPath).then(function(cap) {
+                if (!cap) throw new Error('Capture ' + captureId + ' not found');
+                if (cap.status !== 'pending-review') {
+                  throw new Error('Capture ' + captureId + ' is ' + cap.status + ' (only pending-review captures can be ratified)');
+                }
+                if (CAPTURE_TARGET_SECTIONS.indexOf(cap.targetSection) === -1) {
+                  throw new Error("Refusing to ratify: invalid targetSection '" + cap.targetSection + "' on capture doc");
+                }
+
+                var filtered = _filterAcceptedFields(cap.proposedData || {}, acceptedFields);
+                var writeData = _stripUnknown(filtered);
+                var now = new Date().toISOString();
+
+                if (!writeData || typeof writeData !== 'object' || !Object.keys(writeData).length) {
+                  // Empty after filtering (all fields unknown or none accepted).
+                  return tenantStore.update(docPath, {
+                    status: 'ratified',
+                    ratifiedAt: now,
+                    ratifiedFields: [],
+                    updatedAt: now
+                  }).then(function() {
+                    return { success: true, captureId: captureId, status: 'ratified', entityWriteSkipped: true };
+                  });
+                }
+
+                // Delegate the entity write to the parent namespace's update().
+                // window.MastDB is fully initialized by the time ratify is
+                // invoked (user-triggered UI action post page-load).
+                var parent = (typeof window !== 'undefined' && window.MastDB) ? window.MastDB.businessEntity : null;
+                if (!parent || typeof parent.update !== 'function') {
+                  throw new Error('MastDB.businessEntity.update is not available');
+                }
+                return parent.update(cap.targetSection, writeData).then(function(res) {
+                  if (!res || !res.success) {
+                    throw new Error('Entity write failed during ratification: ' + (res && res.error ? res.error : 'unknown'));
+                  }
+                  return tenantStore.update(docPath, {
+                    status: 'ratified',
+                    ratifiedAt: now,
+                    ratifiedFields: Object.keys(writeData),
+                    updatedAt: now
+                  }).then(function() {
+                    return {
+                      success: true,
+                      captureId: captureId,
+                      status: 'ratified',
+                      targetSection: cap.targetSection,
+                      writtenFields: Object.keys(writeData)
+                    };
+                  });
+                });
+              });
+            },
+
+            // Reject: user declined the proposed capture. No entity write.
+            // Optional free-text reason helps skill improvement; not surfaced
+            // to other users.
+            reject: function(captureId, reason) {
+              if (!captureId) return Promise.reject(new Error('captureId is required'));
+              var docPath = COLLECTION_PATH + '/' + captureId;
+              return tenantStore.get(docPath).then(function(cap) {
+                if (!cap) throw new Error('Capture ' + captureId + ' not found');
+                if (cap.status !== 'pending-review') {
+                  throw new Error('Capture ' + captureId + ' is ' + cap.status + ' (only pending-review captures can be rejected)');
+                }
+                var normalizedReason = (typeof reason === 'string' && reason.trim().length > 0) ? reason.trim() : null;
+                var now = new Date().toISOString();
+                return tenantStore.update(docPath, {
+                  status: 'rejected',
+                  rejectedAt: now,
+                  rejectedReason: normalizedReason,
+                  updatedAt: now
+                }).then(function() {
+                  return { success: true, captureId: captureId, status: 'rejected', rejectedReason: normalizedReason };
+                });
+              });
+            },
+
+            subscribe: function(cb) {
+              return tenantStore.subscribe(COLLECTION_PATH, function(snap) {
+                var data = snap && typeof snap.val === 'function' ? snap.val() : snap;
+                if (!data) { cb([]); return; }
+                var list = [];
+                for (var id in data) if (Object.prototype.hasOwnProperty.call(data, id)) {
+                  var it = data[id];
+                  if (it && it.status === 'pending-review') list.push(it);
+                }
+                _sortByCreatedAtDesc(list);
+                cb(list);
+              });
+            },
+
+            UNKNOWN_SENTINEL: UNKNOWN_SENTINEL,
+            VALID_STATUSES: VALID_STATUSES,
+            TARGET_SECTIONS: CAPTURE_TARGET_SECTIONS
+          };
         })()
       };
     })(),
