@@ -7518,11 +7518,23 @@
           <div id="operationsServiceAreaTaxHint" style="display:none;margin-top:14px;padding:10px 12px;background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.25);border-radius:8px;font-size:0.82rem;color:var(--warm-gray);line-height:1.5;"></div>
         </div>
 
-        <!-- Localization pointer (operations.localization is captured via the wizard / capture-operations skill) -->
+        <!-- Timezone editor (Phase 3 — timezone is editable; currency/language/fiscal-year remain wizard-managed) -->
+        <div class="form-group" style="margin-top:8px;padding-top:18px;border-top:1px solid rgba(255,255,255,0.06);margin-bottom:24px;">
+          <label style="font-size:1.15rem;font-weight:600;">Timezone</label>
+          <p id="operationsTimezoneDetectedHint" style="font-size:0.82rem;color:var(--warm-gray);margin-top:4px;margin-bottom:10px;line-height:1.5;">Loading&hellip;</p>
+          <select id="operationsTimezoneSelect" onchange="onOperationsTimezoneChange()" style="width:100%;max-width:420px;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;box-sizing:border-box;background:var(--bg-primary,var(--charcoal));color:var(--text,#fff);"></select>
+          <p style="font-size:0.78rem;color:var(--warm-gray);margin-top:8px;">Affects scheduled renewal reminders and ICS feed timestamps.</p>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">
+            <button class="btn btn-primary" onclick="saveOperationsTimezone()">Save Timezone</button>
+          </div>
+          <div id="operationsTimezoneStatus" style="margin-top:8px;font-size:0.82rem;"></div>
+        </div>
+
+        <!-- Localization summary (currency / language / fiscal-year — wizard-managed; timezone is editable above) -->
         <div class="form-group" style="margin-top:8px;padding-top:18px;border-top:1px solid rgba(255,255,255,0.06);">
-          <label style="font-size:0.95rem;font-weight:600;">Localization (currency, timezone, language, fiscal year)</label>
-          <p id="operationsLocalizationSummary" style="font-size:0.82rem;color:var(--warm-gray);margin-top:4px;line-height:1.5;">Loading…</p>
-          <p style="font-size:0.78rem;color:var(--warm-gray);margin-top:4px;">Set during onboarding. To change, talk to the Advisor or edit via the wizard.</p>
+          <label style="font-size:0.95rem;font-weight:600;">Localization (currency, language, fiscal year)</label>
+          <p id="operationsLocalizationSummary" style="font-size:0.82rem;color:var(--warm-gray);margin-top:4px;line-height:1.5;">Loading&hellip;</p>
+          <p style="font-size:0.78rem;color:var(--warm-gray);margin-top:4px;">Currency, language, and fiscal-year are set during onboarding. To change those, talk to the Advisor or edit via the wizard. Timezone is editable above.</p>
         </div>
       </div>
       <div id="settingsSubEmail" style="display:none;max-width:700px;">
@@ -15554,6 +15566,7 @@ async function loadOperationsSettings() {
   _renderFulfillmentModesList();
   _renderServiceAreaType();
   _renderServiceAreaBody();
+  _renderOperationsTimezoneEditor(ops.localization || {});
   _renderOperationsLocalizationSummary(ops.localization || {});
   _updateServiceAreaTaxHint(ops);
 
@@ -15913,6 +15926,103 @@ function _renderOperationsLocalizationSummary(loc) {
   if (loc.fiscalYearStartMonth) parts.push('Fiscal-year start month <strong>' + esc(String(loc.fiscalYearStartMonth)) + '</strong>');
   el.innerHTML = parts.length === 0 ? 'No localization captured yet.' : parts.join(' &middot; ');
 }
+
+// ---- Timezone editor (Phase 3 — browser-detect default; currency/language/fiscal-year remain wizard-managed) ----
+
+var _OPERATIONS_TIMEZONE_OPTIONS = [
+  'America/New_York', 'America/Chicago', 'America/Denver', 'America/Phoenix',
+  'America/Los_Angeles', 'America/Anchorage', 'Pacific/Honolulu',
+  'America/Toronto', 'America/Vancouver', 'America/Mexico_City',
+  'Europe/London', 'Europe/Paris', 'Europe/Berlin', 'Europe/Amsterdam',
+  'Europe/Madrid', 'Europe/Rome', 'Europe/Stockholm', 'Europe/Zurich',
+  'Asia/Tokyo', 'Asia/Singapore', 'Asia/Hong_Kong', 'Asia/Dubai', 'Asia/Kolkata',
+  'Australia/Sydney', 'Australia/Melbourne', 'Pacific/Auckland'
+];
+
+function _detectBrowserTimezone() {
+  try {
+    var resolved = Intl.DateTimeFormat().resolvedOptions();
+    if (resolved && resolved.timeZone) return resolved.timeZone;
+  } catch (e) { /* fall through */ }
+  return 'America/New_York';
+}
+
+function _renderOperationsTimezoneEditor(loc) {
+  var sel = document.getElementById('operationsTimezoneSelect');
+  var hint = document.getElementById('operationsTimezoneDetectedHint');
+  if (!sel || !hint) return;
+  var detected = _detectBrowserTimezone();
+  var saved = (loc && loc.timezone) || '';
+  var current = saved || detected;
+
+  var options = _OPERATIONS_TIMEZONE_OPTIONS.slice();
+  // Dynamic insertion: if detected or saved is not in the standard list, prepend.
+  [saved, detected].forEach(function(tz) {
+    if (tz && options.indexOf(tz) === -1) options.unshift(tz);
+  });
+
+  sel.innerHTML = options.map(function(tz) {
+    return '<option value="' + esc(tz) + '"' + (tz === current ? ' selected' : '') + '>' + esc(tz) + '</option>';
+  }).join('');
+
+  var hintHtml = '&#128205; Detected from your browser: <strong>' + esc(detected) + '</strong>';
+  // [Use detected] affordance: shown only when a saved value exists and differs from detected.
+  if (saved && saved !== detected) {
+    hintHtml += ' &nbsp; <a href="javascript:void(0)" id="operationsTimezoneUseDetected" onclick="useDetectedTimezone()" style="color:var(--teal);text-decoration:underline;">[Use detected]</a>';
+  }
+  hint.innerHTML = hintHtml;
+}
+
+window.onOperationsTimezoneChange = function() {
+  var statusEl = document.getElementById('operationsTimezoneStatus');
+  if (statusEl) statusEl.textContent = '';
+};
+
+window.useDetectedTimezone = function() {
+  var sel = document.getElementById('operationsTimezoneSelect');
+  if (!sel) return;
+  var detected = _detectBrowserTimezone();
+  // Ensure detected is an option (may have been pruned by saved-only render path).
+  var hasOption = false;
+  for (var i = 0; i < sel.options.length; i++) {
+    if (sel.options[i].value === detected) { hasOption = true; break; }
+  }
+  if (!hasOption) {
+    var opt = document.createElement('option');
+    opt.value = detected;
+    opt.textContent = detected;
+    sel.insertBefore(opt, sel.firstChild);
+  }
+  sel.value = detected;
+  var statusEl = document.getElementById('operationsTimezoneStatus');
+  if (statusEl) statusEl.textContent = '';
+};
+
+window.saveOperationsTimezone = async function() {
+  var sel = document.getElementById('operationsTimezoneSelect');
+  var statusEl = document.getElementById('operationsTimezoneStatus');
+  if (!sel) return;
+  var tz = sel.value || '';
+  if (!tz) {
+    if (statusEl) { statusEl.textContent = 'Pick a timezone before saving.'; statusEl.style.color = 'var(--danger,#ef4444)'; }
+    return;
+  }
+  if (statusEl) { statusEl.textContent = 'Saving…'; statusEl.style.color = 'var(--warm-gray)'; }
+  try {
+    await MastDB.businessEntity.update('operations', { localization: { timezone: tz } });
+    if (statusEl) { statusEl.textContent = 'Saved.'; statusEl.style.color = 'var(--success,#22c55e)'; }
+    if (window.showToast) showToast('Timezone saved');
+    // Re-render hint + summary so [Use detected] affordance + summary line reflect the new saved value.
+    try {
+      var ent = await MastDB.businessEntity.get('operations');
+      var loc = (ent && ent.data && ent.data.localization) || {};
+      _renderOperationsTimezoneEditor(loc);
+      _renderOperationsLocalizationSummary(loc);
+    } catch (_) {}
+  } catch (err) {
+    if (statusEl) { statusEl.textContent = 'Save failed: ' + (err.message || 'unknown'); statusEl.style.color = 'var(--danger,#ef4444)'; }
+  }
+};
 
 // Tax-jurisdiction hint: if serviceArea.type is subdivisions and any of those
 // subdivisions are not yet registered in compliance.taxJurisdictions[].state,
@@ -37228,7 +37338,8 @@ async function renderDashboardTodos() {
     var modes = Array.isArray(o.fulfillmentModes) ? o.fulfillmentModes : [];
     h += row('Fulfillment modes', modes.length ? modes.map(function(m){ return '<span class="bz-chip">' + esc(m) + '</span>'; }).join('') : '');
     h += row('Currency', esc(loc.currency || ''));
-    h += row('Timezone', esc(loc.timezone || ''));
+    h += row('Timezone', (loc.timezone ? esc(loc.timezone) : '') +
+      ' <button type="button" class="bz-link" onclick="window.bizNavToSettings(\'operations\')" style="margin-left:8px;">Edit timezone in Settings &rarr;</button>');
     h += row('Language', esc(loc.language || ''));
     h += row('Fiscal year start month', loc.fiscalYearStartMonth != null ? esc(String(loc.fiscalYearStartMonth)) : '');
     if (o.serviceArea) {
