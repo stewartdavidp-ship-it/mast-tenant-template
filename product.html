@@ -934,7 +934,7 @@
       var p = results[0];
       var salesData = results[1];
 
-      if (!p) {
+      if (!p || (p.status && p.status !== 'active')) {
         document.getElementById('productLoading').style.display = 'none';
         document.getElementById('productNotFound').style.display = '';
         return;
@@ -1802,7 +1802,7 @@
       var products = [];
       Object.keys(val || {}).forEach(function(key) {
         var p = val[key];
-        if (p && p.name && p.images && p.images.length) {
+        if (p && p.name && p.images && p.images.length && (p.status === 'active' || !p.status)) {
           var firstImg = typeof p.images[0] === 'string' ? p.images[0] : (p.images[0].url || '');
           products.push({ pid: p.pid || key, name: p.name, image: firstImg, businessLine: p.businessLine || 'production' });
         }

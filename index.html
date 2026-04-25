@@ -2000,7 +2000,7 @@ window.TENANT_READY.then(function() {
       var products = Object.entries(data).map(function(entry) {
         var p = entry[1]; p.pid = p.pid || entry[0]; return p;
       }).filter(function(p) {
-        return p.visible !== false && p.status !== 'draft' && p.priceCents;
+        return p.visible !== false && (p.status === 'active' || !p.status) && p.priceCents;
       });
 
       // Sort by createdAt descending (newest first), then by featured flag
