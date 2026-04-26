@@ -12095,7 +12095,7 @@ async function writeAudit(action, entity, entityId) {
         displayName: currentUser ? (currentUser.displayName || currentUser.email || 'Unknown') : 'Unknown',
         role: currentUserRole || 'unknown'
       },
-      time: MastDB.serverTimestamp(),
+      time: Date.now(),
       context: {
         gpsMode: activeEventId ? 'fair' : 'studio',
         eventId: activeEventId || null
