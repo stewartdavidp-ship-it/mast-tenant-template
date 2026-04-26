@@ -833,11 +833,32 @@
       var container = document.getElementById(containerId);
       if (!container) return;
       var emails = [];
-      snap.forEach(function(child) {
-        var e = child.val();
-        e._key = child.key;
-        emails.push(e);
-      });
+      // Accept Firestore-shape map ({docId: emailData}, MastDB current),
+      // legacy RTDB DataSnapshot (snap.forEach(child => child.val()/child.key)),
+      // or array fallback. Mirrors the notes shape-fix pattern (PR #4).
+      if (snap && typeof snap.forEach === 'function' && typeof snap.val === 'function' && !Array.isArray(snap)) {
+        // Legacy Firebase RTDB DataSnapshot
+        snap.forEach(function(child) {
+          var e = child.val() || {};
+          e._key = child.key;
+          emails.push(e);
+        });
+      } else if (Array.isArray(snap)) {
+        snap.forEach(function(e, i) {
+          if (e && typeof e === 'object') {
+            if (!e._key) e._key = 'idx_' + i;
+            emails.push(e);
+          }
+        });
+      } else if (snap && typeof snap === 'object') {
+        Object.keys(snap).forEach(function(key) {
+          var e = snap[key];
+          if (e && typeof e === 'object') {
+            e._key = key;
+            emails.push(e);
+          }
+        });
+      }
       emails.sort(function(a, b) { return (b.createdAt || '').localeCompare(a.createdAt || ''); });
 
       if (emails.length === 0) {
