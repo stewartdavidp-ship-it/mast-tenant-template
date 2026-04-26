@@ -672,21 +672,21 @@ async function saveEvent() {
   try {
     var now = new Date().toISOString();
     if (editingEventId) {
-      await MastDB.salesEvents.ref(editingEventId).update({
+      await MastDB.salesEvents.update(editingEventId, {
         name: name, date: date, location: location || null, notes: notes || null, updatedAt: now
       });
       await writeAudit('update', 'salesEvents', editingEventId);
       showToast('Event updated.');
     } else {
-      var newRef = MastDB.salesEvents.ref().push();
-      await newRef.set({
-        eventId: newRef.key, name: name, date: date, location: location || null,
+      var newKey = MastDB.newKey('admin/salesEvents');
+      await MastDB.salesEvents.set(newKey, {
+        eventId: newKey, name: name, date: date, location: location || null,
         status: 'planning', allocations: null,
         createdAt: now, updatedAt: now, closedAt: null, notes: notes || null
       });
-      await writeAudit('create', 'salesEvents', newRef.key);
+      await writeAudit('create', 'salesEvents', newKey);
       // Auto-create an inventory location for this event
-      createEventLocation(newRef.key, name);
+      createEventLocation(newKey, name);
       showToast('Event created!');
     }
     closeCreateEventModal();
@@ -876,7 +876,7 @@ function closeSalesEventDetail() {
 async function startFairMode(eventId) {
   if (!await mastConfirm('Start fair mode? The PoS will link sales to this event.', { title: 'Start Fair Mode' })) return;
   try {
-    await MastDB.salesEvents.ref(eventId).update({
+    await MastDB.salesEvents.update(eventId, {
       status: 'active', updatedAt: new Date().toISOString()
     });
     await writeAudit('update', 'salesEvents', eventId);
@@ -890,7 +890,7 @@ async function startFairMode(eventId) {
 
 async function revertToPlanningStatus(eventId) {
   try {
-    await MastDB.salesEvents.ref(eventId).update({
+    await MastDB.salesEvents.update(eventId, {
       status: 'planning', updatedAt: new Date().toISOString()
     });
     await writeAudit('update', 'salesEvents', eventId);
@@ -998,11 +998,10 @@ async function applyEventReconciliation(eventId) {
 
       // Move damaged to damaged position
       if (damaged > 0) {
-        var dmgRef = MastDB.inventory.ref(pid + '/stock/_default/damaged');
-        await dmgRef.transaction(function(current) { return (current || 0) + damaged; });
+        await MastDB.transaction('admin/inventory/' + pid + '/stock/_default/damaged', function(current) { return (current || 0) + damaged; });
         // Decrement onHand for damaged (they're no longer sellable)
         await MastDB.transaction(MastDB.inventory.stockOnHandPath(pid), function(current) { return Math.max(0, (current || 0) - damaged); });
-        await MastDB.inventory.ref(pid + '/history').push({
+        await MastDB.push('admin/inventory/' + pid + '/history', {
           action: 'adjusted', reason: 'event_reconciled', qty: -damaged,
           note: 'Damaged at event: ' + (ev.name || eventId),
           actor: 'maker', actorType: 'maker', timestamp: now
@@ -1011,7 +1010,7 @@ async function applyEventReconciliation(eventId) {
 
       // Log unaccounted as adjustment
       if (unaccounted !== 0) {
-        await MastDB.inventory.ref(pid + '/history').push({
+        await MastDB.push('admin/inventory/' + pid + '/history', {
           action: 'adjusted', reason: 'event_reconciled', qty: -Math.abs(unaccounted),
           note: 'Unaccounted at event: ' + (ev.name || eventId) + ' (' + unaccounted + ' units)',
           actor: 'maker', actorType: 'maker', timestamp: now
@@ -1026,7 +1025,7 @@ async function applyEventReconciliation(eventId) {
     }
 
     // Close the event
-    await MastDB.salesEvents.ref(eventId).update({
+    await MastDB.salesEvents.update(eventId, {
       status: 'closed', closedAt: now, updatedAt: now,
       reconciliation: { totalReturned: totalReturned, totalDamaged: totalDamaged, totalUnaccounted: totalUnaccounted, reconciledAt: now }
     });
@@ -1240,7 +1239,7 @@ async function deleteEvent(eventId) {
   if (!await mastConfirm('Delete this event? This cannot be undone.', { title: 'Delete Event', danger: true })) return;
   try {
     await writeAudit('delete', 'salesEvents', eventId);
-    await MastDB.salesEvents.ref(eventId).remove();
+    await MastDB.salesEvents.remove(eventId);
     showToast('Event deleted.');
     closeSalesEventDetail();
   } catch (err) {
@@ -1524,7 +1523,7 @@ async function exitPackingMode() {
       var stats = getEventAllocationsStats(ev);
       if (stats.totalPacked > 0) {
         if (await mastConfirm('Mark event as packed? (' + stats.totalPacked + ' items, ' + stats.productCount + ' products)', { title: 'Pack Event' })) {
-          await MastDB.salesEvents.ref(packingEventId).update({
+          await MastDB.salesEvents.update(packingEventId, {
             status: 'packed', updatedAt: new Date().toISOString()
           });
           await writeAudit('update', 'salesEvents', packingEventId);

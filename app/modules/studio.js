@@ -323,14 +323,14 @@
       if (editingEquipmentId) {
         await MastDB.lpe.equipment.update(editingEquipmentId, fields);
         var gaps = computeLocalGaps(fields);
-        await MastDB.lpe.equipment.ref(editingEquipmentId).child('gaps').set(gaps);
+        await MastDB.set('admin/lpe/equipment/' + editingEquipmentId + '/gaps', gaps);
         showToast('Equipment saved');
       } else {
         var newId = 'equip_' + Date.now();
         fields.createdAt = new Date().toISOString();
         await MastDB.lpe.equipment.set(newId, fields);
         var gaps = computeLocalGaps(fields);
-        await MastDB.lpe.equipment.ref(newId).child('gaps').set(gaps);
+        await MastDB.set('admin/lpe/equipment/' + newId + '/gaps', gaps);
         showToast('Equipment created');
       }
       editingEquipmentId = null;

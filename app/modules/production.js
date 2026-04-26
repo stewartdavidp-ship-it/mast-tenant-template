@@ -775,9 +775,8 @@ async function transitionProductionJob(jobId, newStatus) {
         var li = lineItems[liKey];
         if (!li.productId || !(li.targetQuantity > 0)) continue;
         try {
-          var incomingRef = MastDB.inventory.stockIncoming(li.productId);
-          await incomingRef.transaction(function(current) { return (current || 0) + (li.targetQuantity || 0); });
-          await MastDB.inventory.ref(li.productId + '/history').push({
+          await MastDB.transaction(MastDB.inventory.stockIncomingPath(li.productId), function(current) { return (current || 0) + (li.targetQuantity || 0); });
+          await MastDB.push('admin/inventory/' + li.productId + '/history', {
             action: 'incoming', reason: 'production_started', qty: li.targetQuantity,
             jobId: jobId, actor: 'maker', actorType: 'maker', timestamp: now
           });
@@ -810,12 +809,11 @@ async function transitionProductionJob(jobId, newStatus) {
             // Channel-First Phase 1d (D42) — push to per-variant stock when line targets a variant
             var liVariantKey = li.variantId || null; // stockOnHand defaults to '_default' when null
             // Decrement incoming by target quantity (what was planned)
-            var incomingRef = MastDB.inventory.stockIncoming(li.productId, liVariantKey);
-            await incomingRef.transaction(function(current) { return Math.max(0, (current || 0) - (li.targetQuantity || 0)); });
+            await MastDB.transaction(MastDB.inventory.stockIncomingPath(li.productId, liVariantKey), function(current) { return Math.max(0, (current || 0) - (li.targetQuantity || 0)); });
             // Increment onHand by actual completed (minus loss)
             if (qty > 0) {
               await MastDB.transaction(MastDB.inventory.stockOnHandPath(li.productId, liVariantKey), function(current) { return (current || 0) + qty; });
-              await MastDB.inventory.ref(li.productId + '/history').push({
+              await MastDB.push('admin/inventory/' + li.productId + '/history', {
                 action: 'adjusted', reason: 'production_completed', qty: qty,
                 variantId: liVariantKey,
                 jobId: jobId, actor: 'maker', actorType: 'maker', timestamp: now
@@ -824,7 +822,7 @@ async function transitionProductionJob(jobId, newStatus) {
             }
             // Log loss separately if any
             if ((li.lossQuantity || 0) > 0) {
-              await MastDB.inventory.ref(li.productId + '/history').push({
+              await MastDB.push('admin/inventory/' + li.productId + '/history', {
                 action: 'adjusted', reason: 'production_loss', qty: -(li.lossQuantity),
                 jobId: jobId, actor: 'maker', actorType: 'maker', timestamp: now
               });
@@ -843,9 +841,8 @@ async function transitionProductionJob(jobId, newStatus) {
           var li = lineItems[liKey];
           if (!li.productId || !(li.targetQuantity > 0)) continue;
           try {
-            var incomingRef = MastDB.inventory.stockIncoming(li.productId);
-            await incomingRef.transaction(function(current) { return Math.max(0, (current || 0) - (li.targetQuantity || 0)); });
-            await MastDB.inventory.ref(li.productId + '/history').push({
+            await MastDB.transaction(MastDB.inventory.stockIncomingPath(li.productId), function(current) { return Math.max(0, (current || 0) - (li.targetQuantity || 0)); });
+            await MastDB.push('admin/inventory/' + li.productId + '/history', {
               action: 'adjusted', reason: 'production_cancelled', qty: -(li.targetQuantity),
               jobId: jobId, actor: 'maker', actorType: 'maker', timestamp: now
             });
@@ -1880,7 +1877,7 @@ async function uploadBuildPhoto(file, jobId, buildId) {
     });
 
     var url = await uploadTask.snapshot.ref.getDownloadURL();
-    await MastDB.buildMedia.ref(buildId, mediaId).set({
+    await MastDB.buildMedia.set(buildId, mediaId, {
       type: 'photo',
       url: url,
       caption: '',
@@ -1920,8 +1917,7 @@ function getActiveOperatorName() {
 
 async function loadBuildMedia(buildId) {
   try {
-    var snap = await MastDB.buildMedia.ref(buildId).once('value');
-    var media = snap.val() || {};
+    var media = (await MastDB.buildMedia.get(buildId)) || {};
     currentBuildMedia = media;
     renderBuildMediaGallery(buildId, media);
   } catch (err) {
@@ -1950,8 +1946,8 @@ function renderBuildMediaGallery(buildId, media) {
 }
 
 function updateBuildMediaCount(buildId) {
-  MastDB.buildMedia.ref(buildId).once('value').then(function(snap) {
-    var count = snap.numChildren();
+  MastDB.buildMedia.get(buildId).then(function(media) {
+    var count = media ? Object.keys(media).length : 0;
     var badge = document.getElementById('buildMediaBadge_' + buildId);
     if (badge) {
       badge.textContent = '📷 ' + count;
@@ -1965,7 +1961,7 @@ async function deleteBuildMedia(buildId, mediaId) {
   try {
     await writeAudit('update', 'jobs', selectedProductionJobId || buildId);
     await storage.ref(MastDB.storagePath('builds/' + buildId + '/' + mediaId + '.jpg')).delete();
-    await MastDB.buildMedia.ref(buildId, mediaId).remove();
+    await MastDB.buildMedia.remove(buildId, mediaId);
     showToast('Photo deleted');
     loadBuildMedia(buildId);
   } catch (err) {
@@ -1983,8 +1979,8 @@ function previewPhoto(url) {
 
 async function loadBuildMediaBadge(buildId) {
   try {
-    var snap = await MastDB.buildMedia.ref(buildId).once('value');
-    var count = snap.numChildren();
+    var media = (await MastDB.buildMedia.get(buildId)) || {};
+    var count = Object.keys(media).length;
     var badge = document.getElementById('buildMediaBadge_' + buildId);
     if (badge && count > 0) {
       badge.textContent = '📷 ' + count;
@@ -1992,7 +1988,6 @@ async function loadBuildMediaBadge(buildId) {
       // Also make build card clickable to expand photos
       var thumbs = document.getElementById('buildMediaThumbs_' + buildId);
       if (thumbs) {
-        var media = snap.val() || {};
         var mKeys = Object.keys(media).sort(function(a, b) {
           return (media[a].uploadedAt || '').localeCompare(media[b].uploadedAt || '');
         });
@@ -2569,8 +2564,7 @@ async function openStoryCuration(jobId) {
   for (var i = 0; i < buildKeys.length; i++) {
     var bk = buildKeys[i];
     try {
-      var snap = await MastDB.buildMedia.ref(bk).once('value');
-      var media = snap.val();
+      var media = await MastDB.buildMedia.get(bk);
       if (media) allMedia[bk] = media;
     } catch (e) { /* skip */ }
   }
