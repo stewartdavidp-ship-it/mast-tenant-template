@@ -678,8 +678,17 @@
       '</div>';
     }
 
-    // Notes
-    var notesArr = o.notes || [];
+    // Notes — accept legacy array shape or tenant-MCP map shape ({noteId: {text, by, at}})
+    var rawNotes = o.notes;
+    var notesArr = Array.isArray(rawNotes)
+      ? rawNotes.slice()
+      : (rawNotes && typeof rawNotes === 'object'
+        ? Object.keys(rawNotes).map(function(k) {
+            var n = rawNotes[k] || {};
+            return { id: k, text: n.text, at: n.at, by: n.by };
+          })
+        : []);
+    notesArr.sort(function(a, b) { return (a.at || '').localeCompare(b.at || ''); });
     var notesListHtml = '';
     notesArr.forEach(function(n) {
       notesListHtml += '<div class="order-note">' +
@@ -2238,9 +2247,17 @@
 
     try {
       var o = orders[orderId];
-      var notes = o && o.notes ? o.notes.slice() : [];
-      notes.push({ text: text, at: new Date().toISOString(), by: 'admin' });
-      await MastDB.orders.subRef(orderId, 'notes').set(notes);
+      var rawNotes = o && o.notes;
+      var newNote = { text: text, at: new Date().toISOString(), by: 'admin' };
+      if (rawNotes && !Array.isArray(rawNotes) && typeof rawNotes === 'object') {
+        // Map shape (tenant-MCP) — append a new map entry, preserve shape
+        var noteId = 'n' + Date.now() + Math.random().toString(36).slice(2, 6);
+        await MastDB.orders.subRef(orderId, 'notes', noteId).set(newNote);
+      } else {
+        var notes = Array.isArray(rawNotes) ? rawNotes.slice() : [];
+        notes.push(newNote);
+        await MastDB.orders.subRef(orderId, 'notes').set(notes);
+      }
       await writeAudit('update', 'orders', orderId);
       input.value = '';
       showToast('Note added');
