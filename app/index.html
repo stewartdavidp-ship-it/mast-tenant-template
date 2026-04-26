@@ -4339,7 +4339,10 @@
     }
     .role-badge.admin { background: rgba(123,31,162,0.2); color: #CE93D8; border: 1px solid rgba(123,31,162,0.35); }
     .role-badge.user { background: rgba(21,101,192,0.2); color: #64B5F6; border: 1px solid rgba(21,101,192,0.35); }
+    .role-badge.staff { background: rgba(46,125,50,0.2); color: #81C784; border: 1px solid rgba(46,125,50,0.35); }
     .role-badge.guest { background: rgba(245,127,23,0.2); color: #FFD54F; border: 1px solid rgba(245,127,23,0.35); }
+    .role-badge.unknown { background: rgba(198,40,40,0.2); color: #EF9A9A; border: 1px solid rgba(198,40,40,0.5); }
+    .user-role-select.unknown-role { border-color: #C62828; background: rgba(198,40,40,0.08); }
 
     /* emp-sub-nav replaced by .view-tabs */
 
@@ -4372,7 +4375,10 @@
     body.dark-mode .user-role-select { background: #2a2a2a; color: #ccc; border-color: #444; }
     body.dark-mode .role-badge.admin { background: #2a1a3a; color: #CE93D8; }
     body.dark-mode .role-badge.user { background: #1a2a3a; color: #64B5F6; }
+    body.dark-mode .role-badge.staff { background: #1a2e1a; color: #81C784; }
     body.dark-mode .role-badge.guest { background: #3a2e1a; color: #FFD54F; }
+    body.dark-mode .role-badge.unknown { background: #3a1a1a; color: #EF9A9A; }
+    body.dark-mode .user-role-select.unknown-role { border-color: #EF5350; background: rgba(198,40,40,0.18); }
     /* emp-sub-nav dark mode replaced by .view-tabs */
     body.dark-mode .record-history { border-top-color: #333; }
     body.dark-mode .record-history-item { border-bottom-color: #333; }
@@ -11530,8 +11536,13 @@ var googleOAuthTokens = {}; // In-memory only — Google API access tokens, keye
 // ============================================================
 // RBAC — Roles & Permissions (Phase E1)
 // ============================================================
-var ROLE_DISPLAY_NAMES = { admin: 'Owner', user: 'Manager', guest: 'Staff' };
-var currentUserRole = null;   // 'admin' | 'user' | 'guest' | null
+// Canonical role enum — MUST match AII tenant-MCP `mast_users` role enum
+// (mast-mcp-server/src/shared/tools/users.ts → VALID_ROLES). Order here
+// drives sort order and dropdown order in the admin UI.
+var CANONICAL_ROLES = ['admin', 'staff', 'user', 'guest'];
+var ROLE_DISPLAY_NAMES = { admin: 'Owner', staff: 'Staff', user: 'Manager', guest: 'Guest' };
+function isKnownRole(r) { return CANONICAL_ROLES.indexOf(r) !== -1; }
+var currentUserRole = null;   // 'admin' | 'staff' | 'user' | 'guest' | null
 var currentRoleConfig = null; // Full role record with permissions map
 var rbacReady = false;        // True once role + permissions loaded
 
@@ -11589,9 +11600,35 @@ var DEFAULT_ROLES = {
       forecast:     { create: false, read: true, update: false, delete: false }
     }
   },
-  guest: {
+  staff: {
     name: 'Staff',
-    description: 'Basic access — POS, inventory, and fulfillment.',
+    description: 'Basic operational access — POS, inventory, and fulfillment.',
+    isDefault: true,
+    permissions: {
+      orders:       { create: false, read: true, update: false, delete: false },
+      products:     { create: false, read: true, update: false, delete: false },
+      inventory:    { create: false, read: false, update: false, delete: false },
+      jobs:         { create: false, read: false, update: false, delete: false },
+      buildJobs:    { create: false, read: false, update: false, delete: false },
+      salesEvents:  { create: false, read: false, update: false, delete: false },
+      shows:        { create: false, read: true, update: false, delete: false },
+      gallery:      { create: false, read: false, update: false, delete: false },
+      schedule:     { create: false, read: true, update: false, delete: false },
+      locations:    { create: false, read: false, update: false, delete: false },
+      coupons:      { create: false, read: false, update: false, delete: false },
+      settings:     { create: false, read: false, update: false, delete: false },
+      users:        { create: false, read: false, update: false, delete: false },
+      roles:        { create: false, read: false, update: false, delete: false },
+      auditLog:     { create: false, read: false, update: false, delete: false },
+      pos:          { create: false, read: false, update: false, delete: false },
+      receipts:     { create: false, read: false, update: false, delete: false },
+      contacts:     { create: false, read: false, update: false, delete: false },
+      forecast:     { create: false, read: false, update: false, delete: false }
+    }
+  },
+  guest: {
+    name: 'Guest',
+    description: 'Read-only guest access. Limited visibility into orders and schedule.',
     isDefault: true,
     permissions: {
       orders:       { create: false, read: true, update: false, delete: false },
@@ -30853,10 +30890,10 @@ function renderUsersList() {
   var tbody = document.getElementById('usersTableBody');
   var emptyEl = document.getElementById('usersEmpty');
   var tableEl = document.getElementById('usersTableWrap');
+  var roleOrder = { admin: 0, staff: 1, user: 2, guest: 3 };
   var users = Object.entries(adminUsers).sort(function(a, b) {
-    var roleOrder = { admin: 0, user: 1, guest: 2 };
-    var ra = roleOrder[a[1].role] !== undefined ? roleOrder[a[1].role] : 3;
-    var rb = roleOrder[b[1].role] !== undefined ? roleOrder[b[1].role] : 3;
+    var ra = roleOrder[a[1].role] !== undefined ? roleOrder[a[1].role] : 99;
+    var rb = roleOrder[b[1].role] !== undefined ? roleOrder[b[1].role] : 99;
     if (ra !== rb) return ra - rb;
     return (a[1].displayName || '').localeCompare(b[1].displayName || '');
   });
@@ -30869,16 +30906,27 @@ function renderUsersList() {
   emptyEl.style.display = 'none';
   tableEl.style.display = '';
 
-  // Build role options from available roles
-  var roleKeys = Object.keys(rolesData).length > 0 ? Object.keys(rolesData) : Object.keys(DEFAULT_ROLES);
+  // Dropdown options always come from the canonical AII enum so the UI cannot
+  // silently drop a role it doesn't recognize. Custom roles in rolesData
+  // (beyond the canonical set) are appended after.
+  var canonicalKeys = CANONICAL_ROLES.slice();
+  var extraKeys = Object.keys(rolesData).filter(function(rk) {
+    return canonicalKeys.indexOf(rk) === -1;
+  });
+  var roleKeys = canonicalKeys.concat(extraKeys);
 
   tbody.innerHTML = '';
   users.forEach(function(pair) {
     var uid = pair[0];
     var u = pair[1];
     var lastLogin = u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleDateString() : 'Never';
+    // Preserve the raw role value — never coerce. An empty/missing role is
+    // treated as 'guest' (lowest privilege) by the underlying access checks,
+    // but for display we surface unknown values explicitly so the operator
+    // sees them and the dropdown cannot silently promote them.
     var role = u.role || 'guest';
-    var roleBadgeClass = role === 'admin' ? 'admin' : role === 'user' ? 'user' : 'guest';
+    var known = isKnownRole(role) || (rolesData && rolesData[role]);
+    var roleBadgeClass = known ? (role === 'admin' || role === 'staff' || role === 'user' || role === 'guest' ? role : 'unknown') : 'unknown';
     var isSelf = currentUser && uid === currentUser.uid;
 
     var avatar = u.photoURL
@@ -30888,14 +30936,29 @@ function renderUsersList() {
     var roleCell;
     if (hasPermission('users', 'update') && !isSelf) {
       var opts = '';
+      var selectClass = 'user-role-select';
+      // Finding A fix: if the stored role is not in the canonical/known set,
+      // prepend an explicit "Unknown role: <value>" option pre-selected so the
+      // operator sees the real value and Save cannot silently coerce to admin.
+      if (!known) {
+        opts += '<option value="' + esc(role) + '" selected disabled>Unknown role: ' + esc(role) + '</option>';
+        selectClass += ' unknown-role';
+      }
       roleKeys.forEach(function(rk) {
-        var selected = rk === role ? ' selected' : '';
-        var rName = rolesData[rk] ? rolesData[rk].name : rk;
+        var selected = (known && rk === role) ? ' selected' : '';
+        var rName = ROLE_DISPLAY_NAMES[rk] || (rolesData[rk] ? rolesData[rk].name : rk);
         opts += '<option value="' + rk + '"' + selected + '>' + rName + '</option>';
       });
-      roleCell = '<select class="user-role-select" onchange="changeUserRole(\'' + uid + '\', this.value)">' + opts + '</select>';
+      var titleAttr = known ? '' : ' title="This user has a role value not recognized by the UI. Pick a known role to normalize, or leave alone."';
+      roleCell = '<select class="' + selectClass + '" onchange="changeUserRole(\'' + uid + '\', this.value)"' + titleAttr + '>' + opts + '</select>';
+      if (!known) {
+        roleCell += ' <span style="font-size:0.72rem;color:#C62828;">&#9888; unknown</span>';
+      }
     } else {
-      roleCell = '<span class="status-badge role-badge ' + roleBadgeClass + '">' + (rolesData[role] ? rolesData[role].name : role) + '</span>' +
+      var displayLabel = known
+        ? (ROLE_DISPLAY_NAMES[role] || (rolesData[role] ? rolesData[role].name : role))
+        : ('Unknown: ' + role);
+      roleCell = '<span class="status-badge role-badge ' + roleBadgeClass + '">' + esc(displayLabel) + '</span>' +
         (isSelf ? ' <span style="font-size:0.72rem;color:var(--warm-gray);">(you)</span>' : '');
     }
 
@@ -30936,6 +30999,13 @@ async function changeUserRole(uid, newRole) {
   if (!user) return;
   var oldRole = user.role;
   if (oldRole === newRole) return;
+  // Belt-and-suspenders Finding A defense: refuse to write a role the UI
+  // doesn't recognize as canonical or as a configured custom role.
+  if (!isKnownRole(newRole) && !(rolesData && rolesData[newRole])) {
+    showToast('Refusing to assign unrecognized role "' + newRole + '".', true);
+    renderUsersList();
+    return;
+  }
 
   // Warn if changing another admin's role
   if (oldRole === 'admin') {
@@ -30998,17 +31068,19 @@ function showInviteUserModal() {
     showToast('You do not have permission to add users.', true);
     return;
   }
-  var roleKeys = Object.keys(rolesData).length > 0 ? Object.keys(rolesData) : Object.keys(DEFAULT_ROLES);
+  // Build invite-role options from canonical AII enum (admin/staff/user/guest),
+  // plus any custom roles defined in rolesData. Default selection is Manager.
+  var canonicalKeys = CANONICAL_ROLES.slice();
+  var extraKeys = Object.keys(rolesData).filter(function(rk) {
+    return canonicalKeys.indexOf(rk) === -1;
+  });
+  var roleKeys = canonicalKeys.concat(extraKeys);
   var roleOpts = '';
   roleKeys.forEach(function(rk) {
-    if (rk === 'guest') return; // Skip staff/guest as default — select manager
     var rName = ROLE_DISPLAY_NAMES[rk] || (rolesData[rk] ? rolesData[rk].name : rk);
     var selected = rk === 'user' ? ' selected' : '';
     roleOpts += '<option value="' + rk + '"' + selected + '>' + rName + '</option>';
   });
-  // Add staff option last
-  var staffName = ROLE_DISPLAY_NAMES['guest'] || 'Staff';
-  roleOpts += '<option value="guest">' + staffName + '</option>';
 
   var html = '<div class="modal-header">' +
     '<h3>Invite User</h3>' +
@@ -31116,13 +31188,18 @@ function populateRoleSelector() {
   var sel = document.getElementById('roleSelector');
   if (!sel) return;
   var current = sel.value;
-  var roleKeys = Object.keys(rolesData).length > 0 ? Object.keys(rolesData) : Object.keys(DEFAULT_ROLES);
+  // Show canonical AII roles first, then any extra custom roles in rolesData.
+  var canonicalKeys = CANONICAL_ROLES.slice();
+  var extraKeys = Object.keys(rolesData).filter(function(rk) {
+    return canonicalKeys.indexOf(rk) === -1;
+  });
+  var roleKeys = canonicalKeys.concat(extraKeys);
   sel.innerHTML = '';
   roleKeys.forEach(function(rk) {
-    var rName = rolesData[rk] ? rolesData[rk].name : rk;
+    var rName = ROLE_DISPLAY_NAMES[rk] || (rolesData[rk] ? rolesData[rk].name : (DEFAULT_ROLES[rk] ? DEFAULT_ROLES[rk].name : rk));
     sel.innerHTML += '<option value="' + rk + '">' + rName + '</option>';
   });
-  if (current && roleKeys.includes(current)) sel.value = current;
+  if (current && roleKeys.indexOf(current) !== -1) sel.value = current;
   renderPermissionMatrix();
 }
 
