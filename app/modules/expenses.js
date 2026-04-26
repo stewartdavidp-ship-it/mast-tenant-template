@@ -324,17 +324,17 @@ async function loadExpenses() {
     var categoryFilter = document.getElementById('expFilterCategory').value;
     var accountFilter = document.getElementById('expFilterAccount') ? document.getElementById('expFilterAccount').value : '';
 
-    var ref = MastDB.expenses.ref();
+    var q = MastDB.expenses.query();
     var snap;
     if (statusFilter === 'unreviewed') {
-      snap = await ref.orderByChild('reviewed').equalTo(false).limitToLast(100).once('value');
+      snap = await q.orderByChild('reviewed').equalTo(false).limitToLast(100).once();
     } else if (statusFilter === 'reviewed') {
-      snap = await ref.orderByChild('reviewed').equalTo(true).limitToLast(100).once('value');
+      snap = await q.orderByChild('reviewed').equalTo(true).limitToLast(100).once();
     } else {
-      snap = await ref.orderByChild('date').limitToLast(100).once('value');
+      snap = await q.orderByChild('date').limitToLast(100).once();
     }
 
-    var data = snap.val() || {};
+    var data = snap || {};
     var expenses = Object.entries(data).map(function(entry) {
       return Object.assign({ _key: entry[0] }, entry[1]);
     });
@@ -498,13 +498,11 @@ async function showExpenseDetail(expenseId) {
   detailContent.innerHTML = '<div class="loading">Loading expense\u2026</div>';
 
   try {
-    var snap = await MastDB.expenses.get(expenseId);
-    if (!(snap != null)) {
+    var exp = await MastDB.expenses.get(expenseId);
+    if (!exp) {
       detailContent.innerHTML = '<div style="color:var(--danger, var(--danger));">Expense not found.</div>';
       return;
     }
-
-    var exp = snap.val();
     var amountStr = (exp.amount >= 0 ? '' : '-') + '$' + (Math.abs(exp.amount) / 100).toFixed(2);
     var amountColor = exp.amount >= 0 ? 'inherit' : '#16a34a';
     var sourceLabel = exp.source === 'plaid' ? 'Plaid' : exp.source === 'csv_import' ? 'CSV Import' : 'Manual';

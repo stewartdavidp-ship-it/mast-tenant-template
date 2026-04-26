@@ -675,11 +675,11 @@
     DB.shows.remove(showId).then(function() {
       var promises = [];
       if (show && show.slug) promises.push(DB.showsBySlug.remove(show.slug));
-      promises.push(DB.booths.ref(showId).remove());
+      promises.push(MastDB.remove('events/booths/' + showId));
       promises.push(DB.boothPins.remove(showId));
-      promises.push(DB.vendors.ref(showId).remove());
-      promises.push(DB.submissions.ref(showId).remove());
-      promises.push(DB.announcements.ref(showId).remove());
+      promises.push(MastDB.remove('events/vendors/' + showId));
+      promises.push(MastDB.remove('events/submissions/' + showId));
+      promises.push(MastDB.remove('events/announcements/' + showId));
       return Promise.all(promises);
     }).then(function() {
       showToast('Show deleted');
@@ -886,7 +886,7 @@
       var bid = DB.booths.newKey(showId);
       updates[bid] = { showId: showId, name: prefix + (i + 1), size: size, type: type, location: '', price: price, provided: [], required: [], notes: '', status: 'open', vendorId: null, assignedAt: null, createdAt: now };
     }
-    DB.booths.ref(showId).update(updates).then(function() {
+    MastDB.update('events/booths/' + showId, updates).then(function() {
       showToast(count + ' booths added!');
       evCloseModal('evBoothModal');
     }).catch(function(err) { showToast('Error: ' + err.message, true); });

@@ -1352,7 +1352,7 @@
       }
       await MastDB.update('admin/inventory/' + pid + '/stock', updates);
       await writeAudit('update', 'inventory', pid);
-      await MastDB.inventory.ref(pid + '/history').push({
+      await MastDB.push('admin/inventory/' + pid + '/history', {
         action: 'committed', reason: 'order_placed', qty: qty, comboKey: ck || '_default',
         orderId: orderId || null, actor: 'maker', actorType: 'maker',
         timestamp: new Date().toISOString()
@@ -1373,7 +1373,7 @@
       }
       await MastDB.update('admin/inventory/' + pid + '/stock', updates);
       await writeAudit('update', 'inventory', pid);
-      await MastDB.inventory.ref(pid + '/history').push({
+      await MastDB.push('admin/inventory/' + pid + '/history', {
         action: 'released', reason: 'order_cancelled', qty: qty, comboKey: ck || '_default',
         orderId: orderId || null, actor: 'maker', actorType: 'maker',
         timestamp: new Date().toISOString()
@@ -1396,7 +1396,7 @@
       }
       await MastDB.update('admin/inventory/' + pid + '/stock', updates);
       await writeAudit('update', 'inventory', pid);
-      await MastDB.inventory.ref(pid + '/history').push({
+      await MastDB.push('admin/inventory/' + pid + '/history', {
         action: 'shipped', reason: 'order_shipped', qty: -qty, comboKey: ck || '_default',
         orderId: orderId || null, actor: 'maker', actorType: 'maker',
         timestamp: new Date().toISOString()
@@ -2840,8 +2840,7 @@
     errorEl.style.display = 'none';
 
     try {
-      var commRef = MastDB.commissions.ref();
-      var commId = commRef.push().key;
+      var commId = MastDB.newKey('admin/commissions');
 
       // Build inspiration list
       var inspirationPieces = [];
@@ -2861,7 +2860,7 @@
         createdAt: new Date().toISOString()
       };
 
-      await commRef.child(commId).set(record);
+      await MastDB.commissions.set(commId, record);
       await writeAudit('create', 'commission', commId);
 
       // Update local data

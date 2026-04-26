@@ -420,7 +420,7 @@
     } else {
       // Unmarking — clear the flag (keep description for if they re-mark later)
       try {
-        await MastDB.images.ref(id + '/applicationPhoto').set(null);
+        await MastDB.set('images/' + id + '/applicationPhoto', null);
         img.applicationPhoto = false;
         renderGallery(document.getElementById('slContent'));
         showToast('Unmarked.');
@@ -473,7 +473,7 @@
     try {
       var updates = { applicationPhoto: true };
       if (desc) updates.applicationDescription = desc;
-      await MastDB.images.ref(imgId).update(updates);
+      await MastDB.update('images/' + imgId, updates);
       img.applicationPhoto = true;
       if (desc) img.applicationDescription = desc;
       closeModal();
@@ -584,7 +584,7 @@
     };
 
     try {
-      await MastDB.showLight.shows.ref(key).set(data);
+      await MastDB.set('showLight/shows/' + key, data);
       slShows[key] = data;
       showToast('Show added.');
       closeModal();
@@ -645,7 +645,7 @@
       updatedAt: new Date().toISOString()
     };
     try {
-      await MastDB.showLight.shows.ref(id).update(data);
+      await MastDB.update('showLight/shows/' + id, data);
       Object.assign(slShows[id], data);
       showToast('Show updated.');
       closeModal();
@@ -658,7 +658,7 @@
   async function slDeleteShow(id) {
     if (!await mastConfirm('Delete this show?', { title: 'Delete Show', danger: true })) return;
     try {
-      await MastDB.showLight.shows.ref(id).remove();
+      await MastDB.remove('showLight/shows/' + id);
       delete slShows[id];
       showToast('Show deleted.');
       closeModal();
@@ -1367,7 +1367,7 @@
         }
         if (desc) {
           img.applicationDescription = desc;
-          MastDB.images.ref(imageId + '/applicationDescription').set(desc).catch(function() {});
+          MastDB.set('images/' + imageId + '/applicationDescription', desc).catch(function() {});
         }
       }
     } else {
@@ -1383,11 +1383,11 @@
     if (!img) return;
     value = (value || '').trim();
     try {
-      await MastDB.images.ref(imgId + '/applicationDescription').set(value || null);
+      await MastDB.set('images/' + imgId + '/applicationDescription', value || null);
       img.applicationDescription = value || '';
       // Also mark as application photo if not already
       if (value && !img.applicationPhoto) {
-        await MastDB.images.ref(imgId + '/applicationPhoto').set(true);
+        await MastDB.set('images/' + imgId + '/applicationPhoto', true);
         img.applicationPhoto = true;
       }
     } catch (err) {
@@ -1406,7 +1406,7 @@
     try {
       if (pid && product) {
         // Link image to product
-        await MastDB.images.ref(imgId).update({
+        await MastDB.update('images/' + imgId, {
           productId: pid,
           productName: product.name || ''
         });
@@ -1421,9 +1421,9 @@
           if (desc) {
             if (textarea) textarea.value = desc;
             img.applicationDescription = desc;
-            await MastDB.images.ref(imgId + '/applicationDescription').set(desc);
+            await MastDB.set('images/' + imgId + '/applicationDescription', desc);
             if (!img.applicationPhoto) {
-              await MastDB.images.ref(imgId + '/applicationPhoto').set(true);
+              await MastDB.set('images/' + imgId + '/applicationPhoto', true);
               img.applicationPhoto = true;
             }
           }
@@ -1431,8 +1431,8 @@
         showToast('Linked to ' + product.name);
       } else {
         // Unlink
-        await MastDB.images.ref(imgId + '/productId').set(null);
-        await MastDB.images.ref(imgId + '/productName').set(null);
+        await MastDB.set('images/' + imgId + '/productId', null);
+        await MastDB.set('images/' + imgId + '/productName', null);
         delete img.productId;
         delete img.productName;
       }
@@ -1659,10 +1659,10 @@
       var key;
       if (slCurrentApplication && slCurrentApplication.id) {
         key = slCurrentApplication.id;
-        await MastDB.showLight.applications.ref(key).update(appData);
+        await MastDB.update('showLight/applications/' + key, appData);
       } else {
         key = MastDB.showLight.applications.newKey();
-        await MastDB.showLight.applications.ref(key).set(appData);
+        await MastDB.set('showLight/applications/' + key, appData);
       }
       slApplications[key] = appData;
       slCurrentApplication = Object.assign({ id: key }, appData);
