@@ -16,7 +16,7 @@
   var emailFilter = 'all'; // all, sent, failed
   var emailTypeFilter = 'all';
   var emailPageSize = 50;
-  var emailLastKey = null;
+  var emailLastCreatedAt = null;
   var hasMoreEmails = false;
 
   // ============================================================
@@ -63,14 +63,21 @@
 
   function loadEmails(append) {
     var ref = MastDB.query('emails');
-    var query = ref.orderByKey().limitToLast(emailPageSize + 1);
-    if (append && emailLastKey) {
-      query = ref.orderByKey().endAt(emailLastKey).limitToLast(emailPageSize + 1);
+    var query = ref.orderByChild('createdAt').limitToLast(emailPageSize + 1);
+    if (append && emailLastCreatedAt) {
+      query = ref.orderByChild('createdAt').endAt(emailLastCreatedAt).limitToLast(emailPageSize + 1);
     }
 
     query.once('value').then(function(snap) {
       var val = snap.val() || {};
-      var keys = Object.keys(val).sort().reverse();
+      // Firestore auto IDs aren't time-ordered, so sort docs by createdAt DESC for newest-first display.
+      var keys = Object.keys(val).sort(function(a, b) {
+        var ca = (val[a] && val[a].createdAt) || '';
+        var cb = (val[b] && val[b].createdAt) || '';
+        if (cb < ca) return -1;
+        if (cb > ca) return 1;
+        return 0;
+      });
 
       // Check if there are more pages
       if (keys.length > emailPageSize) {
@@ -81,11 +88,8 @@
       }
 
       if (keys.length > 0) {
-        emailLastKey = keys[keys.length - 1];
-        // On the next page request, we need to go before this key
-        // Adjust: endAt returns inclusive, so subtract to avoid dupe
-        var nextEndKey = keys[keys.length - 1];
-        // We'll store the raw key and handle dupe in next fetch
+        var oldest = val[keys[keys.length - 1]];
+        emailLastCreatedAt = (oldest && oldest.createdAt) || null;
       }
 
       var newItems = keys.map(function(k) {
@@ -312,7 +316,7 @@
 
   function refreshEmails() {
     emailsData = [];
-    emailLastKey = null;
+    emailLastCreatedAt = null;
     hasMoreEmails = false;
     selectedEmailId = null;
     loadEmails(false);
@@ -364,7 +368,7 @@
       emailsData = [];
       emailsLoaded = false;
       selectedEmailId = null;
-      emailLastKey = null;
+      emailLastCreatedAt = null;
       hasMoreEmails = false;
     }
   });

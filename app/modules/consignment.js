@@ -8,6 +8,10 @@
 (function() {
   'use strict';
 
+  var formatCurrency = typeof formatPriceCents === 'function'
+    ? formatPriceCents
+    : function(c) { return '$' + ((c || 0) / 100).toFixed(2); };
+
   // ============================================================
   // Module-private state
   // ============================================================

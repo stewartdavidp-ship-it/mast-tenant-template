@@ -101,19 +101,16 @@
     galleryData = (await MastDB.gallery.list(500)) || {};
 
     // Load webPresence/config (section content fields)
-    var wpSnap = await MastDB.get('webPresence/config');
-    websiteConfig = wpSnap.val() || {};
+    websiteConfig = (await MastDB.get('webPresence/config')) || {};
 
     // Load theme config — try shared data first, then load independently
     themeConfig = MastAdmin.getData('themeConfig');
     if (!themeConfig) {
-      var themeSnap = await MastDB.get('public/config/theme');
-      themeConfig = themeSnap.val() || {};
+      themeConfig = (await MastDB.get('public/config/theme')) || {};
     }
 
     // Load nav sections (enabled states)
-    var navSnap = await MastDB.get('public/config/nav/sections');
-    navSections = navSnap.val() || {};
+    navSections = (await MastDB.get('public/config/nav/sections')) || {};
 
     // Load template manifest — try shared data first, then load independently
     templateManifest = MastAdmin.getData('templateManifest');

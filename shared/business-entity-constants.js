@@ -78,6 +78,18 @@
     'e.g., \u201CGetting my Etsy and shows in one place is eating my weekends.\u201D ' +
     'Avoid including personal identifiers like SSN, passwords, or account numbers.';
 
+  // DO NOT EDIT without counsel approval.
+  // Source: Phase 2 spec §4.1 D8 SSN-prohibition + §6.3 MA WISP-avoidance posture.
+  // Renders on every compliance document upload entry point to keep Mast out of
+  // MA 201 CMR 17 WISP scope (attaches the moment Mast stores a MA resident
+  // SSN/DL/financial account number). Counsel marker #2 (CT SB 1295 incidental
+  // exposure) is unresolved — if CT threshold attaches, guidance may need to
+  // become technical enforcement.
+  var DOCUMENT_UPLOAD_SSN_WARNING = {
+    headline: '\uD83D\uDEE1\uFE0F Do not upload documents containing Social Security Numbers.',
+    body: 'Mast does not need SSN. For W-9 forms, redact the SSN before uploading. For photo ID (driver\u2019s license), only upload if the state ID serves as a compliance requirement; otherwise, skip.'
+  };
+
   // Revenue bracket options (spec §8.1 calibration).
   var REVENUE_BRACKETS = [
     { value: 'under-10k', label: 'Under $10K / year' },
@@ -212,6 +224,7 @@
     DPA_COPY: DPA_COPY,
     NOTICE_AT_COLLECTION_COPY: NOTICE_AT_COLLECTION_COPY,
     WISH_STATEMENT_PLACEHOLDER: WISH_STATEMENT_PLACEHOLDER,
+    DOCUMENT_UPLOAD_SSN_WARNING: DOCUMENT_UPLOAD_SSN_WARNING,
     REVENUE_BRACKETS: REVENUE_BRACKETS,
     PRIMARY_CONTACT_ROLES: PRIMARY_CONTACT_ROLES,
     TEAM_SIZE_BANDS: TEAM_SIZE_BANDS,

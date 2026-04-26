@@ -923,7 +923,10 @@ var MastDB = (function() {
         { section: 'operations', path: 'localization.fiscalYearStartMonth', label: 'operations.localization.fiscalYearStartMonth' }
       ];
 
-      var UPDATABLE_SECTIONS = { identity: 1, presence: 1, operations: 1, people: 1, engagement: 1 };
+      // Phase 2 PA-5: compliance + ui are now first-class updatable sections.
+      // compliance holds licenses/insurance/certifications/taxJurisdictions
+      // arrays. ui holds small UI-state flags like renewalSeedDismissedAt.
+      var UPDATABLE_SECTIONS = { identity: 1, presence: 1, operations: 1, people: 1, engagement: 1, compliance: 1, ui: 1 };
 
       function _dig(obj, dotted) {
         if (!obj) return undefined;
@@ -986,19 +989,18 @@ var MastDB = (function() {
             var visual = results[1] || null;
             var discovery = results[2];
             if (req === 'all') {
-              // Strip compliance; overlay visual+discovery.
+              // Phase 2 PA-5: compliance is now first-class; return it alongside
+              // visual + discovery. entityStatus is hoisted to a top-level field
+              // so callers don't need to reach into the subsection map.
               var out = {};
-              for (var k in ent) if (Object.prototype.hasOwnProperty.call(ent, k) && k !== 'compliance') out[k] = ent[k];
+              for (var k in ent) if (Object.prototype.hasOwnProperty.call(ent, k)) out[k] = ent[k];
               out.entityStatus = ent.entityStatus || 'none';
               out.visual = visual;
               out.discovery = discovery;
-              out.compliance = null;
-              out._note = 'compliance is schema-only in Phase 1.';
               return out;
             }
             if (req === 'visual') return { entityStatus: ent.entityStatus || 'none', section: 'visual', data: visual, _note: 'pointer to config/brand' };
             if (req === 'discovery') return { entityStatus: ent.entityStatus || 'none', section: 'discovery', data: discovery, _note: 'synthesized from latest webPresence/importJobs' };
-            if (req === 'compliance') return { entityStatus: ent.entityStatus || 'none', section: 'compliance', data: null, _note: 'Phase 2 — schema-only in Phase 1' };
             return { entityStatus: ent.entityStatus || 'none', section: req, data: ent[req] || null };
           });
         },
@@ -1224,6 +1226,711 @@ var MastDB = (function() {
                 });
               });
             }
+          };
+        })(),
+
+        // ──────────────────────────────────────────────────────────
+        // Phase 2 PA-4 — documents sub-namespace.
+        //
+        // Metadata lives at admin/businessEntity_documents/{id} which the
+        // namespace translator routes to collection admin_businessEntity_documents.
+        // Blob lives at gs://mast-platform-prod.firebasestorage.app/{tenantId}/
+        // compliance-documents/{id}/{filename}. Upload orchestrates a three-step
+        // flow through Cloud Functions so the browser never holds raw admin
+        // credentials.
+        //
+        // Spec references:
+        //   - admin/businessEntity_documents path: spec §4.1 D8 + tenant MCP
+        //     documents.ts storage layout
+        //   - upload + finalize orchestration: PA-3 issueDocumentUploadUrl +
+        //     finalizeDocumentUpload CFs
+        //   - Signed URL TTL: 5 min for PUT, 30 sec for GET (spec §4.1 D8)
+        //
+        // What's direct-write vs. CF-mediated:
+        //   - list/get/subscribe: direct Firestore reads
+        //   - upload: CF issueDocumentUploadUrl → fetch PUT → CF
+        //     finalizeDocumentUpload (admin SDK required for signed URL +
+        //     blob verification)
+        //   - link: direct Firestore write (mirrors Phase 1 A1 "direct-write
+        //     fallback"; server-validation path is the tenant MCP
+        //     link_document_to_entity tool for AI-assistant callers)
+        //   - delete: direct Firestore write flipping status to
+        //     deleted-pending-purge; PA-3 redactDocumentScheduled CF
+        //     eventually purges the blob and flips status to redacted
+        // ──────────────────────────────────────────────────────────
+        documents: (function() {
+          var COLLECTION_PATH = 'admin/businessEntity_documents';
+          var VALID_SECTIONS = {
+            'compliance.licenses': 1,
+            'compliance.insurance': 1,
+            'compliance.certifications': 1,
+            'compliance.taxJurisdictions': 1
+          };
+
+          return {
+            list: function(filter) {
+              return tenantStore.list(COLLECTION_PATH).then(function(docs) {
+                var out = [];
+                for (var id in docs) {
+                  if (!Object.prototype.hasOwnProperty.call(docs, id)) continue;
+                  var d = docs[id];
+                  if (!d) continue;
+                  if (filter) {
+                    if (filter.purpose && d.purpose !== filter.purpose) continue;
+                    if (filter.status && d.status !== filter.status) continue;
+                    if (filter.linkedSection) {
+                      var ln = d.linkedTo;
+                      if (!ln || ln.section !== filter.linkedSection) continue;
+                    }
+                    if (filter.unlinked === true && d.linkedTo) continue;
+                  }
+                  out.push(d);
+                }
+                out.sort(function(a, b) {
+                  var ta = a.createdAt || '';
+                  var tb = b.createdAt || '';
+                  return tb < ta ? -1 : tb > ta ? 1 : 0;
+                });
+                return out;
+              });
+            },
+
+            // Returns { metadata, signedGetUrl, _note }. signedGetUrl is null
+            // in S2 — a browser-callable getDocument CF is deferred to PA-5.
+            get: function(documentId) {
+              if (!documentId || typeof documentId !== 'string') {
+                return Promise.reject(new Error('documentId is required'));
+              }
+              return tenantStore.get(COLLECTION_PATH + '/' + documentId).then(function(meta) {
+                if (!meta) return null;
+                return { metadata: meta, signedGetUrl: null, _note: 'signedGetUrl unavailable in S2; PA-5 will add a getDocument CF.' };
+              });
+            },
+
+            // Orchestrated upload.
+            //   1. CF issueDocumentUploadUrl → {documentId, signedPutUrl}
+            //   2. PUT blob to signedPutUrl (5-min TTL)
+            //   3. CF finalizeDocumentUpload → flip status to 'uploaded'
+            // Returns { success, documentId, status, sizeBytes } or
+            // { success: false, step, error } indicating which step broke.
+            upload: function(file, purpose) {
+              if (!file || !(file instanceof File || file instanceof Blob)) {
+                return Promise.reject(new Error('file must be a File or Blob instance'));
+              }
+              if (!purpose || typeof purpose !== 'string') {
+                return Promise.reject(new Error('purpose is required'));
+              }
+              var filename = file.name || ('upload-' + Date.now());
+              var mimeType = file.type || 'application/octet-stream';
+              var sizeBytes = file.size;
+
+              var issue = firebase.functions().httpsCallable('issueDocumentUploadUrl');
+              return issue({
+                tenantId: _tenantId,
+                purpose: purpose,
+                filename: filename,
+                mimeType: mimeType,
+                sizeBytes: sizeBytes
+              }).then(function(res) {
+                var d = (res && res.data) || {};
+                if (!d.success || !d.documentId || !d.signedPutUrl) {
+                  throw Object.assign(new Error('issueDocumentUploadUrl returned no URL'), { step: 'issue', cfResult: d });
+                }
+                return fetch(d.signedPutUrl, {
+                  method: 'PUT',
+                  headers: { 'Content-Type': mimeType },
+                  body: file
+                }).then(function(putRes) {
+                  if (!putRes.ok) {
+                    return putRes.text().then(function(body) {
+                      throw Object.assign(new Error('PUT to signed URL failed: ' + putRes.status), { step: 'put', status: putRes.status, body: body && body.slice(0, 200) });
+                    });
+                  }
+                  var finalize = firebase.functions().httpsCallable('finalizeDocumentUpload');
+                  return finalize({ tenantId: _tenantId, documentId: d.documentId }).then(function(finRes) {
+                    var f = (finRes && finRes.data) || {};
+                    if (!f.success) {
+                      throw Object.assign(new Error('finalizeDocumentUpload returned no success'), { step: 'finalize', cfResult: f });
+                    }
+                    return { success: true, documentId: d.documentId, status: f.status, sizeBytes: f.sizeBytes };
+                  });
+                });
+              }).catch(function(err) {
+                var step = err && err.step ? err.step : 'unknown';
+                console.warn('[MastDB.businessEntity.documents.upload] step=' + step + ':', err && err.message);
+                return { success: false, step: step, error: err && err.message };
+              });
+            },
+
+            // Link a document to a compliance section item. Two-write sequence
+            // (entity compliance array + document metadata); a partial write
+            // can be recovered by re-running link.
+            link: function(documentId, section, arrayIndex, field) {
+              if (!documentId || typeof documentId !== 'string') return Promise.reject(new Error('documentId is required'));
+              if (!VALID_SECTIONS[section]) return Promise.reject(new Error("Invalid section '" + section + "'. Allowed: " + Object.keys(VALID_SECTIONS).join(', ')));
+              if (field !== 'documentId') return Promise.reject(new Error("field must be 'documentId'"));
+              if (typeof arrayIndex !== 'number' || arrayIndex < 0 || !isFinite(arrayIndex)) return Promise.reject(new Error('arrayIndex must be a non-negative integer'));
+
+              return tenantStore.get(COLLECTION_PATH + '/' + documentId).then(function(meta) {
+                if (!meta) throw new Error('Document ' + documentId + ' not found');
+                if (meta.linkedTo) throw new Error('Document already linked to ' + meta.linkedTo.section + '[' + meta.linkedTo.arrayIndex + '].' + meta.linkedTo.field);
+                if (meta.status === 'redacted' || meta.status === 'deleted-pending-purge') {
+                  throw new Error('Cannot link ' + meta.status + ' document');
+                }
+
+                var arrayField = section.split('.')[1];
+                var compliancePath = 'admin/businessEntity/compliance';
+                return tenantStore.get(compliancePath).then(function(comp) {
+                  comp = comp || {};
+                  var arr = Array.isArray(comp[arrayField]) ? comp[arrayField].slice() : [];
+                  if (arrayIndex >= arr.length) throw new Error('arrayIndex ' + arrayIndex + ' out of bounds (' + arrayField + ' has ' + arr.length + ' items)');
+                  arr[arrayIndex] = Object.assign({}, arr[arrayIndex], { documentId: documentId });
+                  var now = new Date().toISOString();
+                  var patch = {};
+                  patch[arrayField] = arr;
+                  patch.updatedAt = now;
+
+                  return tenantStore.update(compliancePath, patch).then(function() {
+                    var newStatus = meta.status === 'uploaded-pending' ? 'uploaded' : meta.status;
+                    return tenantStore.update(COLLECTION_PATH + '/' + documentId, {
+                      linkedTo: { section: section, arrayIndex: arrayIndex, field: field },
+                      status: newStatus,
+                      updatedAt: now
+                    }).then(function() {
+                      return { success: true, documentId: documentId, linkedTo: { section: section, arrayIndex: arrayIndex, field: field }, status: newStatus };
+                    });
+                  });
+                });
+              });
+            },
+
+            // Soft-delete: flips status to deleted-pending-purge. PA-3
+            // redactDocumentScheduled runs every 6h, purges the blob, and
+            // flips status to 'redacted'. Tombstone metadata stays for audit.
+            delete: function(documentId) {
+              if (!documentId || typeof documentId !== 'string') return Promise.reject(new Error('documentId is required'));
+              return tenantStore.get(COLLECTION_PATH + '/' + documentId).then(function(meta) {
+                if (!meta) throw new Error('Document ' + documentId + ' not found');
+                if (meta.status === 'redacted') throw new Error('Document already redacted');
+                if (meta.retentionPolicy === 'federal-floor') {
+                  var createdAtMs = meta.createdAt ? Date.parse(meta.createdAt) : Date.now();
+                  var earliestDelete = createdAtMs + 7 * 365 * 24 * 60 * 60 * 1000;
+                  if (Date.now() < earliestDelete) {
+                    var err = new Error('Document is under federal-floor retention until ' + new Date(earliestDelete).toISOString());
+                    err.retentionPolicy = 'federal-floor';
+                    err.earliestDeleteAt = new Date(earliestDelete).toISOString();
+                    throw err;
+                  }
+                }
+                var now = new Date().toISOString();
+                return tenantStore.update(COLLECTION_PATH + '/' + documentId, {
+                  status: 'deleted-pending-purge',
+                  redactionRequestedAt: now,
+                  updatedAt: now
+                }).then(function() {
+                  return { success: true, documentId: documentId, status: 'deleted-pending-purge' };
+                });
+              });
+            },
+
+            // Collection-level subscription. Fires on every document change
+            // with the full sorted list. Consumers (Settings > Compliance,
+            // advisor pending-doc card) should tear down via the returned
+            // unsubscribe function to avoid read-cost amplification.
+            subscribe: function(cb) {
+              return tenantStore.subscribe(COLLECTION_PATH, function(snap) {
+                var data = snap && typeof snap.val === 'function' ? snap.val() : snap;
+                if (!data) { cb([]); return; }
+                var list = [];
+                for (var id in data) if (Object.prototype.hasOwnProperty.call(data, id)) list.push(data[id]);
+                list.sort(function(a, b) {
+                  var ta = (a && a.createdAt) || '';
+                  var tb = (b && b.createdAt) || '';
+                  return tb < ta ? -1 : tb > ta ? 1 : 0;
+                });
+                cb(list);
+              });
+            }
+          };
+        })(),
+
+        // ──────────────────────────────────────────────────────────
+        // Phase 2 PA-4 — renewals sub-namespace.
+        //
+        // Items: admin/businessEntity_renewalItems/{id} → collection
+        //        admin_businessEntity_renewalItems.
+        // Settings: admin/businessEntity/renewals → document in
+        //           admin_businessEntity alongside identity/people/engagement.
+        //
+        // SMS is explicitly absent. spec-bugs 6b ratified 2026-04-23: email +
+        // in-app only. No acceptSmsConsent method, no SMS-settings field in
+        // updateSettings payload. Defense-in-depth: updateSettings and update
+        // strip any legacy sms payload with a console warning.
+        //
+        // What's direct-write vs. CF-mediated:
+        //   - listItems / getSettings / subscribeItems / subscribeSettings:
+        //     direct Firestore reads
+        //   - create / update / snooze / archive / markComplete: direct
+        //     Firestore writes (Phase 1 A1 direct-write pattern — server
+        //     validator lives in tenant MCP renewals.ts for AI-callers)
+        //   - updateSettings / resetIcsFeedToken: direct Firestore writes
+        //     (reset_ics_feed_token tenant MCP tool is parity path for AI)
+        //   - seedFromCompliance: PA-3 seedRenewalsFromCompliance CF
+        //     (admin-SDK-mediated so sourceRef idempotency is reliable)
+        // ──────────────────────────────────────────────────────────
+        renewals: (function() {
+          var ITEMS_PATH = 'admin/businessEntity_renewalItems';
+          var SETTINGS_PATH = 'admin/businessEntity/renewals';
+          var VALID_SOURCE_TYPES = ['license','insurance','certification','tax-filing','domain','channel-token','other'];
+          var VALID_CADENCES = ['short-fuse','long-fuse'];
+
+          var DEFAULT_CADENCE_BY_SOURCE = {
+            'domain': 'short-fuse',
+            'tax-filing': 'short-fuse',
+            'channel-token': 'short-fuse',
+            'license': 'long-fuse',
+            'insurance': 'long-fuse',
+            'certification': 'long-fuse',
+            'other': 'long-fuse'
+          };
+
+          // Mirrors RENEWAL_DEFAULT_TICKS in tenant MCP renewals.ts and
+          // DEFAULT_TICKS in PA-3 renewals-scheduler.js. Keep in lockstep.
+          var DEFAULT_TICKS = {
+            shortFuse: [30, 14, 7, 1],
+            longFuse: [60, 30, 14, 7, 1]
+          };
+
+          function _uuid() {
+            if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
+            return 'r-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
+          }
+
+          function _computeInitialNextReminderAt(cadence, expiresAt) {
+            var ticks = cadence === 'short-fuse' ? DEFAULT_TICKS.shortFuse : DEFAULT_TICKS.longFuse;
+            var maxTick = Math.max.apply(null, ticks);
+            var expiresMs = Date.parse(expiresAt);
+            if (!isFinite(expiresMs)) return null;
+            var reminderMs = expiresMs - maxTick * 24 * 60 * 60 * 1000;
+            return new Date(Math.max(reminderMs, Date.now())).toISOString();
+          }
+
+          return {
+            listItems: function(filter) {
+              return tenantStore.list(ITEMS_PATH).then(function(items) {
+                var out = [];
+                for (var id in items) {
+                  if (!Object.prototype.hasOwnProperty.call(items, id)) continue;
+                  var it = items[id];
+                  if (!it) continue;
+                  if (filter) {
+                    if (filter.status && it.status !== filter.status) continue;
+                    if (filter.sourceType && it.sourceType !== filter.sourceType) continue;
+                    if (filter.activeOnly && (it.archived === true || it.status === 'archived' || it.status === 'completed')) continue;
+                  }
+                  out.push(it);
+                }
+                out.sort(function(a, b) {
+                  var ea = a.expiresAt || '';
+                  var eb = b.expiresAt || '';
+                  return ea < eb ? -1 : ea > eb ? 1 : 0;
+                });
+                return out;
+              });
+            },
+
+            create: function(sourceType, title, expiresAt, cadence, sourceRef) {
+              if (VALID_SOURCE_TYPES.indexOf(sourceType) === -1) {
+                return Promise.reject(new Error("Invalid sourceType '" + sourceType + "'. Valid: " + VALID_SOURCE_TYPES.join(', ')));
+              }
+              if (typeof title !== 'string' || title.trim().length === 0) {
+                return Promise.reject(new Error('title is required'));
+              }
+              if (!expiresAt || !isFinite(Date.parse(expiresAt))) {
+                return Promise.reject(new Error('expiresAt must be an ISO 8601 timestamp'));
+              }
+              if (cadence !== undefined && cadence !== null && VALID_CADENCES.indexOf(cadence) === -1) {
+                return Promise.reject(new Error("Invalid cadence '" + cadence + "'. Valid: " + VALID_CADENCES.join(', ')));
+              }
+              var resolvedCadence = cadence || DEFAULT_CADENCE_BY_SOURCE[sourceType] || 'long-fuse';
+              var itemId = _uuid();
+              var now = new Date().toISOString();
+              var nextReminderAt = _computeInitialNextReminderAt(resolvedCadence, expiresAt);
+
+              var record = {
+                id: itemId,
+                sourceType: sourceType,
+                title: title.trim(),
+                expiresAt: expiresAt,
+                cadence: resolvedCadence,
+                sourceRef: sourceRef || null,
+                status: 'active',
+                snoozeUntil: null,
+                nextReminderAt: nextReminderAt,
+                lastReminderFiredAt: null,
+                deliveryErrors: [],
+                reminderChannelOverride: null,
+                createdAt: now,
+                updatedAt: now
+              };
+              return tenantStore.set(ITEMS_PATH + '/' + itemId, record).then(function() {
+                return { success: true, itemId: itemId, sourceType: sourceType, cadence: resolvedCadence, nextReminderAt: nextReminderAt };
+              });
+            },
+
+            update: function(itemId, data) {
+              if (!itemId || typeof itemId !== 'string') return Promise.reject(new Error('itemId is required'));
+              if (!data || typeof data !== 'object') return Promise.reject(new Error('data must be an object'));
+              var ALLOWED = { title: 1, expiresAt: 1, cadence: 1, sourceRef: 1, reminderChannelOverride: 1 };
+              var patch = { updatedAt: new Date().toISOString() };
+              for (var k in data) {
+                if (!Object.prototype.hasOwnProperty.call(data, k)) continue;
+                if (!ALLOWED[k]) continue;
+                // Defense in depth for spec-bugs 6b.
+                if (k === 'reminderChannelOverride') {
+                  var v = data[k];
+                  if (v === 'sms' || (Array.isArray(v) && v.indexOf('sms') !== -1)) {
+                    console.warn('[MastDB.businessEntity.renewals.update] dropping sms channel override (spec-bugs 6b)');
+                    continue;
+                  }
+                }
+                patch[k] = data[k];
+              }
+              return tenantStore.update(ITEMS_PATH + '/' + itemId, patch).then(function() {
+                return { success: true, itemId: itemId, updatedFields: Object.keys(patch).filter(function(x){return x!=='updatedAt';}) };
+              });
+            },
+
+            snooze: function(itemId, snoozeUntil) {
+              if (!itemId || typeof itemId !== 'string') return Promise.reject(new Error('itemId is required'));
+              if (!snoozeUntil || !isFinite(Date.parse(snoozeUntil))) return Promise.reject(new Error('snoozeUntil must be an ISO 8601 timestamp'));
+              var now = new Date().toISOString();
+              return tenantStore.update(ITEMS_PATH + '/' + itemId, {
+                snoozeUntil: snoozeUntil,
+                status: 'snoozed',
+                nextReminderAt: snoozeUntil,
+                updatedAt: now
+              }).then(function() {
+                return { success: true, itemId: itemId, snoozeUntil: snoozeUntil };
+              });
+            },
+
+            archive: function(itemId) {
+              if (!itemId || typeof itemId !== 'string') return Promise.reject(new Error('itemId is required'));
+              var now = new Date().toISOString();
+              return tenantStore.update(ITEMS_PATH + '/' + itemId, {
+                status: 'archived',
+                archived: true,
+                nextReminderAt: null,
+                updatedAt: now
+              }).then(function() {
+                return { success: true, itemId: itemId, status: 'archived' };
+              });
+            },
+
+            markComplete: function(itemId, newExpiresAt) {
+              if (!itemId || typeof itemId !== 'string') return Promise.reject(new Error('itemId is required'));
+              if (newExpiresAt !== undefined && newExpiresAt !== null && !isFinite(Date.parse(newExpiresAt))) {
+                return Promise.reject(new Error('newExpiresAt must be an ISO 8601 timestamp'));
+              }
+              var now = new Date().toISOString();
+              return tenantStore.update(ITEMS_PATH + '/' + itemId, {
+                status: 'completed',
+                completedAt: now,
+                nextReminderAt: null,
+                updatedAt: now
+              }).then(function() {
+                return { success: true, itemId: itemId, status: 'completed', completedAt: now, _note: newExpiresAt ? 'Call create() for the new cycle using newExpiresAt' : null };
+              });
+            },
+
+            getSettings: function() {
+              return tenantStore.get(SETTINGS_PATH).then(function(s) { return s || {}; });
+            },
+
+            updateSettings: function(data) {
+              if (!data || typeof data !== 'object') return Promise.reject(new Error('data must be an object'));
+              var patch = Object.assign({}, data);
+              // spec-bugs 6b: drop any SMS-related settings at write.
+              if (patch.defaultChannels && typeof patch.defaultChannels === 'object') {
+                if ('sms' in patch.defaultChannels) {
+                  console.warn('[MastDB.businessEntity.renewals.updateSettings] dropping defaultChannels.sms (spec-bugs 6b)');
+                  delete patch.defaultChannels.sms;
+                }
+              }
+              if (patch.smsConsent) {
+                console.warn('[MastDB.businessEntity.renewals.updateSettings] dropping smsConsent payload (spec-bugs 6b)');
+                delete patch.smsConsent;
+              }
+              patch.updatedAt = new Date().toISOString();
+              return tenantStore.update(SETTINGS_PATH, patch).then(function() {
+                return { success: true, updatedFields: Object.keys(patch).filter(function(x){return x!=='updatedAt';}) };
+              });
+            },
+
+            resetIcsFeedToken: function() {
+              var now = new Date().toISOString();
+              var newToken = _uuid().replace(/-/g, '');
+              return tenantStore.get(SETTINGS_PATH).then(function(s) {
+                s = s || {};
+                var newIcsFeed = {
+                  token: newToken,
+                  enabledAt: (s.icsFeed && s.icsFeed.enabledAt) || now,
+                  rotatedAt: now
+                };
+                return tenantStore.update(SETTINGS_PATH, {
+                  icsFeed: newIcsFeed,
+                  updatedAt: now
+                }).then(function() {
+                  return { success: true, token: newToken, rotatedAt: now };
+                });
+              });
+            },
+
+            seedFromCompliance: function(dryRun) {
+              var fn = firebase.functions().httpsCallable('seedRenewalsFromCompliance');
+              return fn({ tenantId: _tenantId, dryRun: dryRun !== false }).then(function(res) {
+                return (res && res.data) || {};
+              });
+            },
+
+            subscribeItems: function(cb) {
+              return tenantStore.subscribe(ITEMS_PATH, function(snap) {
+                var data = snap && typeof snap.val === 'function' ? snap.val() : snap;
+                if (!data) { cb([]); return; }
+                var list = [];
+                for (var id in data) if (Object.prototype.hasOwnProperty.call(data, id)) list.push(data[id]);
+                list.sort(function(a, b) {
+                  var ea = (a && a.expiresAt) || '';
+                  var eb = (b && b.expiresAt) || '';
+                  return ea < eb ? -1 : ea > eb ? 1 : 0;
+                });
+                cb(list);
+              });
+            },
+
+            subscribeSettings: function(cb) {
+              return tenantStore.subscribe(SETTINGS_PATH, function(snap) {
+                var data = snap && typeof snap.val === 'function' ? snap.val() : snap;
+                cb(data || {});
+              });
+            }
+          };
+        })(),
+
+        // ──────────────────────────────────────────────────────────
+        // Phase 2 P2D-S1 — conversational capture sub-namespace.
+        //
+        // Collection: admin/businessEntity_capturePending/{captureId}
+        //             → Firestore collection admin_businessEntity_capturePending.
+        //
+        // Pending-review workflow (per spec §3.4):
+        //   pending-review --ratify--> ratified  (entity write fires here)
+        //   pending-review --reject--> rejected
+        //
+        // CC's core RULE: "Claude proposes, CC captures, user ratifies."
+        // Conversational skills (via tenant MCP) write ONLY to pending-review
+        // state. User ratifies via the advisor diff-review modal, which calls
+        // ratify() here — that's the single entry point that triggers the
+        // actual entity write (through MastDB.businessEntity.update).
+        //
+        // Direct-write vs CF-mediated:
+        //   - list / subscribe: direct Firestore reads (admin-only rules)
+        //   - ratify: direct read of pending doc + direct call to
+        //     MastDB.businessEntity.update(targetSection, filtered) + direct
+        //     update of pending doc status. No CF wrapper — the browser is
+        //     already admin-authenticated; entity writes go through the same
+        //     PA-3 server-side validator that powers Settings.
+        //   - reject: direct Firestore update of pending doc status.
+        //
+        // 'unknown' sentinel: the conversational AI writes literal string
+        // 'unknown' for fields the user deferred. ratify() strips these
+        // before the entity write so the sentinel doesn't pollute
+        // identity/people/etc. Null is disallowed because null can't be
+        // distinguished from "user never saw the prompt."
+        // ──────────────────────────────────────────────────────────
+        capture: (function() {
+          var COLLECTION_PATH = 'admin/businessEntity_capturePending';
+          var UNKNOWN_SENTINEL = 'unknown';
+          var VALID_STATUSES = ['pending-review', 'ratified', 'rejected', 'expired'];
+          // Mirror of UPDATABLE_ENTITY_SECTIONS in the tenant MCP entity.ts.
+          var CAPTURE_TARGET_SECTIONS = ['identity', 'presence', 'operations', 'people', 'compliance', 'engagement'];
+
+          // Recursively drop fields equal to the 'unknown' sentinel. Arrays
+          // filter out sentinels (keep other items). Mirrors the tenant MCP
+          // capture.ts stripUnknown helper.
+          function _stripUnknown(data) {
+            if (data === UNKNOWN_SENTINEL) return undefined;
+            if (Array.isArray(data)) {
+              var out = [];
+              for (var i = 0; i < data.length; i++) {
+                var v = _stripUnknown(data[i]);
+                if (v !== undefined) out.push(v);
+              }
+              return out;
+            }
+            if (data !== null && typeof data === 'object') {
+              var result = {};
+              for (var k in data) {
+                if (!Object.prototype.hasOwnProperty.call(data, k)) continue;
+                var sv = _stripUnknown(data[k]);
+                if (sv !== undefined) result[k] = sv;
+              }
+              return result;
+            }
+            return data;
+          }
+
+          function _filterAcceptedFields(proposedData, acceptedFields) {
+            if (!acceptedFields || !acceptedFields.length) return proposedData;
+            var allowed = {};
+            for (var i = 0; i < acceptedFields.length; i++) allowed[acceptedFields[i]] = true;
+            var out = {};
+            for (var k in proposedData) {
+              if (!Object.prototype.hasOwnProperty.call(proposedData, k)) continue;
+              if (allowed[k]) out[k] = proposedData[k];
+            }
+            return out;
+          }
+
+          function _sortByCreatedAtDesc(items) {
+            items.sort(function(a, b) {
+              var ta = (a && a.createdAt) || '';
+              var tb = (b && b.createdAt) || '';
+              return tb < ta ? -1 : tb > ta ? 1 : 0;
+            });
+          }
+
+          return {
+            list: function(filter) {
+              return tenantStore.list(COLLECTION_PATH).then(function(items) {
+                var out = [];
+                var effStatus = (filter && filter.status) || 'pending-review';
+                for (var id in items) {
+                  if (!Object.prototype.hasOwnProperty.call(items, id)) continue;
+                  var it = items[id];
+                  if (!it) continue;
+                  if (it.status !== effStatus) continue;
+                  if (filter && filter.section && it.targetSection !== filter.section) continue;
+                  out.push(it);
+                }
+                _sortByCreatedAtDesc(out);
+                return out;
+              });
+            },
+
+            get: function(captureId) {
+              if (!captureId) return Promise.reject(new Error('captureId is required'));
+              return tenantStore.get(COLLECTION_PATH + '/' + captureId);
+            },
+
+            // Ratify: user accepted the proposed capture via the diff-review
+            // modal. Filter to acceptedFields[], strip 'unknown' sentinels,
+            // delegate the surviving fields to MastDB.businessEntity.update.
+            // If nothing remains after filtering, mark ratified but skip the
+            // entity write (matches tenant MCP ratify_capture's
+            // entityWriteSkipped path).
+            ratify: function(captureId, acceptedFields) {
+              if (!captureId) return Promise.reject(new Error('captureId is required'));
+              if (acceptedFields !== undefined && !Array.isArray(acceptedFields)) {
+                return Promise.reject(new Error('acceptedFields must be an array of top-level field names (or omit)'));
+              }
+              var docPath = COLLECTION_PATH + '/' + captureId;
+              return tenantStore.get(docPath).then(function(cap) {
+                if (!cap) throw new Error('Capture ' + captureId + ' not found');
+                if (cap.status !== 'pending-review') {
+                  throw new Error('Capture ' + captureId + ' is ' + cap.status + ' (only pending-review captures can be ratified)');
+                }
+                if (CAPTURE_TARGET_SECTIONS.indexOf(cap.targetSection) === -1) {
+                  throw new Error("Refusing to ratify: invalid targetSection '" + cap.targetSection + "' on capture doc");
+                }
+
+                var filtered = _filterAcceptedFields(cap.proposedData || {}, acceptedFields);
+                var writeData = _stripUnknown(filtered);
+                var now = new Date().toISOString();
+
+                if (!writeData || typeof writeData !== 'object' || !Object.keys(writeData).length) {
+                  // Empty after filtering (all fields unknown or none accepted).
+                  return tenantStore.update(docPath, {
+                    status: 'ratified',
+                    ratifiedAt: now,
+                    ratifiedFields: [],
+                    updatedAt: now
+                  }).then(function() {
+                    return { success: true, captureId: captureId, status: 'ratified', entityWriteSkipped: true };
+                  });
+                }
+
+                // Delegate the entity write to the parent namespace's update().
+                // window.MastDB is fully initialized by the time ratify is
+                // invoked (user-triggered UI action post page-load).
+                var parent = (typeof window !== 'undefined' && window.MastDB) ? window.MastDB.businessEntity : null;
+                if (!parent || typeof parent.update !== 'function') {
+                  throw new Error('MastDB.businessEntity.update is not available');
+                }
+                return parent.update(cap.targetSection, writeData).then(function(res) {
+                  if (!res || !res.success) {
+                    throw new Error('Entity write failed during ratification: ' + (res && res.error ? res.error : 'unknown'));
+                  }
+                  return tenantStore.update(docPath, {
+                    status: 'ratified',
+                    ratifiedAt: now,
+                    ratifiedFields: Object.keys(writeData),
+                    updatedAt: now
+                  }).then(function() {
+                    return {
+                      success: true,
+                      captureId: captureId,
+                      status: 'ratified',
+                      targetSection: cap.targetSection,
+                      writtenFields: Object.keys(writeData)
+                    };
+                  });
+                });
+              });
+            },
+
+            // Reject: user declined the proposed capture. No entity write.
+            // Optional free-text reason helps skill improvement; not surfaced
+            // to other users.
+            reject: function(captureId, reason) {
+              if (!captureId) return Promise.reject(new Error('captureId is required'));
+              var docPath = COLLECTION_PATH + '/' + captureId;
+              return tenantStore.get(docPath).then(function(cap) {
+                if (!cap) throw new Error('Capture ' + captureId + ' not found');
+                if (cap.status !== 'pending-review') {
+                  throw new Error('Capture ' + captureId + ' is ' + cap.status + ' (only pending-review captures can be rejected)');
+                }
+                var normalizedReason = (typeof reason === 'string' && reason.trim().length > 0) ? reason.trim() : null;
+                var now = new Date().toISOString();
+                return tenantStore.update(docPath, {
+                  status: 'rejected',
+                  rejectedAt: now,
+                  rejectedReason: normalizedReason,
+                  updatedAt: now
+                }).then(function() {
+                  return { success: true, captureId: captureId, status: 'rejected', rejectedReason: normalizedReason };
+                });
+              });
+            },
+
+            subscribe: function(cb) {
+              return tenantStore.subscribe(COLLECTION_PATH, function(snap) {
+                var data = snap && typeof snap.val === 'function' ? snap.val() : snap;
+                if (!data) { cb([]); return; }
+                var list = [];
+                for (var id in data) if (Object.prototype.hasOwnProperty.call(data, id)) {
+                  var it = data[id];
+                  if (it && it.status === 'pending-review') list.push(it);
+                }
+                _sortByCreatedAtDesc(list);
+                cb(list);
+              });
+            },
+
+            UNKNOWN_SENTINEL: UNKNOWN_SENTINEL,
+            VALID_STATUSES: VALID_STATUSES,
+            TARGET_SECTIONS: CAPTURE_TARGET_SECTIONS
           };
         })()
       };

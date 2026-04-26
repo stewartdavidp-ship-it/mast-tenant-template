@@ -11,6 +11,15 @@
   // B7 (Entity Phase 1): cached entity read-view + subscription handle.
   var entityData = null;
   var entitySubscription = null;
+  // PA-7 (Entity Phase 2): renewals + pending-docs caches + subscription handles.
+  var renewalsData = [];
+  var renewalsSubscription = null;
+  var documentsData = [];
+  var documentsSubscription = null;
+  var channelsSubscription = null;
+  // P2D-S1 (Entity Phase 2): pending-review conversational captures.
+  var capturesData = [];
+  var capturesSubscription = null;
 
   // --- CSS (injected once) ---
   var cssInjected = false;
@@ -65,20 +74,50 @@
       '.advisor-empty-icon { font-size:1.6rem;margin-bottom:16px; }',
       '.advisor-section { margin-bottom:28px; }',
       '.advisor-section-title { font-size:1rem;font-weight:600;color:var(--text,#fff);margin-bottom:12px;display:flex;align-items:center;gap:8px; }',
-      // B7 (Entity Phase 1): About Your Business section styling
-      '.advisor-entity-grid { display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px; }',
-      '.advisor-entity-card { background:var(--bg-secondary,#232323);border-radius:10px;padding:14px; }',
-      '.advisor-entity-card-title { font-size:0.72rem;color:var(--warm-gray,#888);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px; }',
-      '.advisor-entity-field { display:flex;align-items:center;gap:6px;margin-bottom:6px;font-size:0.9rem;color:var(--text,#fff); }',
-      '.advisor-entity-field .label { color:var(--warm-gray,#888);font-size:0.78rem;min-width:90px; }',
-      '.advisor-entity-field .val { flex:1;word-break:break-word; }',
-      '.advisor-entity-field .pencil { opacity:0.4;cursor:pointer;font-size:0.78rem;padding:2px 6px;border-radius:4px;transition:opacity 0.15s, background 0.15s; }',
-      '.advisor-entity-field .pencil:hover { opacity:1;background:rgba(255,255,255,0.06); }',
-      '.advisor-entity-chip { display:inline-block;padding:2px 8px;border-radius:12px;background:rgba(42,157,143,0.15);color:var(--teal,#2a9d8f);font-size:0.78rem;margin-right:4px;margin-bottom:4px; }',
-      '.advisor-entity-empty { color:var(--warm-gray-light,#666);font-style:italic;font-size:0.85rem; }',
-      '.advisor-entity-cta { background:rgba(42,157,143,0.1);border:1px solid rgba(42,157,143,0.3);border-radius:10px;padding:16px 20px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap; }',
-      '.advisor-entity-subbanner { background:rgba(234,179,8,0.08);border:1px solid rgba(234,179,8,0.2);border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:0.85rem;color:var(--text,#fff); }',
-      '.advisor-entity-edit-input { width:100%;padding:6px 8px;background:var(--bg-primary,var(--charcoal));color:var(--text,#fff);border:1px solid var(--teal,#2a9d8f);border-radius:6px;font-size:0.9rem;font-family:inherit; }',
+      // PA-7 (Entity Phase 2): renewals + pending-docs card styling
+      '.advisor-renewal-card, .advisor-pdoc-card { background:var(--bg-secondary,#232323);border-radius:10px;padding:12px 14px;margin-bottom:10px;display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap; }',
+      '.advisor-renewal-card .title, .advisor-pdoc-card .title { font-size:0.9rem;font-weight:600;margin-bottom:2px; }',
+      '.advisor-renewal-card .meta, .advisor-pdoc-card .meta { font-size:0.78rem;color:var(--warm-gray,#888); }',
+      '.advisor-renewal-pill { display:inline-block;padding:2px 8px;border-radius:12px;font-size:0.72rem;font-weight:600;text-transform:uppercase; }',
+      '.advisor-renewal-pill.active  { background:rgba(42,157,143,0.15);color:var(--teal,#2a9d8f); }',
+      '.advisor-renewal-pill.warning { background:rgba(234,179,8,0.15);color:#eab308; }',
+      '.advisor-renewal-pill.expired { background:rgba(239,68,68,0.15);color:#ef4444; }',
+      '.advisor-renewal-actions, .advisor-pdoc-actions { display:flex;gap:6px;flex-wrap:wrap;align-items:center; }',
+      '.advisor-renewal-actions button, .advisor-pdoc-actions button, .advisor-pdoc-actions select { font-size:0.72rem;padding:4px 8px; }',
+      '.advisor-renewal-card .inline-date { font-size:0.78rem;padding:4px 6px;background:var(--bg-primary,var(--charcoal));color:var(--text,#fff);border:1px solid var(--teal,#2a9d8f);border-radius:4px; }',
+      '.advisor-pdoc-card select { background:var(--bg-primary,var(--charcoal));color:var(--text,#fff);border:1px solid rgba(255,255,255,0.2);border-radius:4px;padding:4px 6px; }',
+      // P2D-S1 (Entity Phase 2): conversational capture pending-review cards
+      '.advisor-capture-card { background:var(--bg-secondary,#232323);border:1px solid rgba(129,140,248,0.25);border-radius:10px;padding:12px 14px;margin-bottom:10px;display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap; }',
+      '.advisor-capture-card .title { font-size:0.9rem;font-weight:600;margin-bottom:2px; }',
+      '.advisor-capture-card .meta { font-size:0.78rem;color:var(--warm-gray,#888); }',
+      '.advisor-capture-pill { display:inline-block;padding:2px 8px;border-radius:12px;font-size:0.72rem;font-weight:600;text-transform:uppercase;background:rgba(129,140,248,0.15);color:#818cf8; }',
+      '.advisor-capture-pill.low-confidence { background:rgba(239,68,68,0.15);color:#ef4444; }',
+      '.advisor-capture-actions { display:flex;gap:6px;flex-wrap:wrap;align-items:center; }',
+      '.advisor-capture-actions button { font-size:0.72rem;padding:4px 8px; }',
+      // Diff-review modal (opens when user clicks Review)
+      '.capture-modal-backdrop { position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9000;display:flex;align-items:center;justify-content:center;padding:20px; }',
+      '.capture-modal { background:var(--bg-primary,#1a1a1a);border:1px solid rgba(255,255,255,0.1);border-radius:14px;max-width:720px;width:100%;max-height:85vh;overflow:auto;padding:24px;color:var(--text,#fff);box-shadow:0 20px 60px rgba(0,0,0,0.5); }',
+      '.capture-modal h2 { margin:0 0 4px 0;font-size:1.2rem;display:flex;align-items:center;gap:8px; }',
+      '.capture-modal .modal-sub { font-size:0.82rem;color:var(--warm-gray,#888);margin-bottom:16px; }',
+      '.capture-modal .modal-escape { margin-bottom:16px;padding:10px 12px;background:rgba(234,179,8,0.08);border:1px solid rgba(234,179,8,0.25);border-radius:8px;font-size:0.82rem;display:flex;justify-content:space-between;align-items:center;gap:12px; }',
+      '.capture-modal .modal-escape a { color:#eab308;text-decoration:underline;cursor:pointer; }',
+      '.capture-modal .diff-row { border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:12px;margin-bottom:10px;background:var(--bg-secondary,#232323); }',
+      '.capture-modal .diff-row.unknown { opacity:0.55; }',
+      '.capture-modal .diff-row-header { display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:8px; }',
+      '.capture-modal .diff-row-field { font-family:var(--mono, monospace);font-size:0.82rem;font-weight:600;color:var(--teal,#2a9d8f); }',
+      '.capture-modal .diff-row-checkbox { display:flex;align-items:center;gap:6px;font-size:0.78rem;color:var(--warm-gray,#888);cursor:pointer; }',
+      '.capture-modal .diff-row-checkbox input[type="checkbox"] { width:16px;height:16px;cursor:pointer; }',
+      '.capture-modal .diff-pair { display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:0.85rem; }',
+      '.capture-modal .diff-pane { background:var(--bg-primary,var(--charcoal));border-radius:6px;padding:8px 10px;min-height:40px;font-family:var(--mono, monospace);font-size:0.78rem;overflow-wrap:break-word;white-space:pre-wrap; }',
+      '.capture-modal .diff-pane.current { color:var(--warm-gray,#888); }',
+      '.capture-modal .diff-pane.proposed { color:var(--text,#fff);border:1px solid rgba(42,157,143,0.4); }',
+      '.capture-modal .diff-pane.proposed.removed { border-color:rgba(239,68,68,0.4);color:#ef4444; }',
+      '.capture-modal .diff-pane.unknown-sentinel { color:#eab308;font-style:italic; }',
+      '.capture-modal .diff-label { font-size:0.68rem;text-transform:uppercase;letter-spacing:0.5px;color:var(--warm-gray-light,#666);margin-bottom:4px; }',
+      '.capture-modal .modal-toggles { display:flex;gap:8px;margin-bottom:14px; }',
+      '.capture-modal .modal-actions { display:flex;justify-content:flex-end;gap:10px;margin-top:20px;padding-top:16px;border-top:1px solid rgba(255,255,255,0.06); }',
+      '.capture-modal .modal-reject-reason { width:100%;box-sizing:border-box;background:var(--bg-primary,var(--charcoal));color:var(--text,#fff);border:1px solid rgba(255,255,255,0.15);border-radius:6px;padding:6px 8px;font-size:0.82rem;font-family:inherit;margin-top:8px;display:none; }',
+      '.capture-modal .modal-reject-reason.open { display:block; }',
     ].join('\n');
     document.head.appendChild(style);
   }
@@ -158,7 +197,9 @@
         try {
           entitySubscription = MastDB.businessEntity.subscribe(function(ent) {
             entityData = ent;
-            rerenderEntitySection();
+            // Pending-docs card references compliance arrays to populate the
+            // Link-to dropdown — re-render when entity data changes.
+            rerenderPendingDocsSection();
           });
         } catch (subErr) {
           console.warn('[advisor] entity subscribe failed, falling back to get():', subErr && subErr.message);
@@ -166,6 +207,60 @@
         }
       } else if (!entityData && window.MastDB && MastDB.businessEntity) {
         try { entityData = await MastDB.businessEntity.get(); } catch (_) { entityData = null; }
+      }
+
+      // PA-7 (Entity Phase 2): single subscription per stream; mirror B7 cost
+      // discipline — constant reads per tab click, no per-render `.get()`.
+      if (!renewalsSubscription && window.MastDB && MastDB.businessEntity && MastDB.businessEntity.renewals) {
+        try {
+          renewalsSubscription = MastDB.businessEntity.renewals.subscribeItems(function(items) {
+            renewalsData = Array.isArray(items) ? items : [];
+            rerenderRenewalsSection();
+          });
+        } catch (subErr) {
+          console.warn('[advisor] renewals subscribe failed:', subErr && subErr.message);
+        }
+      }
+      if (!documentsSubscription && window.MastDB && MastDB.businessEntity && MastDB.businessEntity.documents) {
+        try {
+          documentsSubscription = MastDB.businessEntity.documents.subscribe(function(docs) {
+            documentsData = Array.isArray(docs) ? docs : [];
+            rerenderPendingDocsSection();
+          });
+        } catch (subErr) {
+          console.warn('[advisor] documents subscribe failed:', subErr && subErr.message);
+        }
+      }
+
+      // P2D-S1 (Phase 2 P2D): pending-review conversational captures. Single
+      // subscription per stream. Renders a Review CTA per capture; click opens
+      // the diff-review modal. Mirrors PA-7's constant-cost pattern.
+      if (!capturesSubscription && window.MastDB && MastDB.businessEntity && MastDB.businessEntity.capture && MastDB.businessEntity.capture.subscribe) {
+        try {
+          capturesSubscription = MastDB.businessEntity.capture.subscribe(function(items) {
+            capturesData = Array.isArray(items) ? items : [];
+            rerenderCapturesSection();
+          });
+        } catch (subErr) {
+          console.warn('[advisor] captures subscribe failed:', subErr && subErr.message);
+        }
+      }
+
+      // PB-3 (Phase 2 P2B): channels-oauth live subscription. `.list()` returns
+      // masked records; the card reflects status + shop + webhook count.
+      if (!channelsSubscription && window.MastDB && MastDB.businessEntity && MastDB.businessEntity.channels && MastDB.businessEntity.channels.subscribe) {
+        try {
+          channelsSubscription = MastDB.businessEntity.channels.subscribe(function(items) {
+            _channelsCache = Array.isArray(items) ? items : [];
+            rerenderChannelsSection();
+          });
+        } catch (subErr) {
+          console.warn('[advisor] channels subscribe failed:', subErr && subErr.message);
+          // Fall through to a one-shot list() so the card isn't permanently empty.
+          loadChannelsForAdvisor();
+        }
+      } else {
+        loadChannelsForAdvisor();
       }
 
       if (planData.planStatus === 'none' && (!entityData || entityData.entityStatus === 'none' || !entityData.entityStatus)) {
@@ -206,10 +301,32 @@
       '</div>';
     }
 
-    // B7 (Entity Phase 1): About Your Business — injected between draft banner
-    // and Health Score per plan Build B7. Wrapped in an id'd div so the
-    // subscription callback can target its innerHTML without full re-render.
-    h += '<div id="advisorEntityRoot">' + renderEntitySection() + '</div>';
+    // D-22: About Your Business block superseded by unified Business page.
+    // Keep a compact link-out so the advisor still points at entity context.
+    h += '<div class="advisor-section" style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 16px;background:var(--bg-secondary,#232323);border-radius:10px;margin-bottom:20px;">' +
+      '<div>' +
+        '<div style="font-weight:600;margin-bottom:2px;">&#127970; Your business at a glance</div>' +
+        '<div style="font-size:0.82rem;color:var(--warm-gray,#888);">Identity, channels, compliance, renewals, people, and more \u2014 all in one place.</div>' +
+      '</div>' +
+      '<button class="btn btn-primary btn-small" onclick="navigateTo(\'business\')">View full Business profile &rarr;</button>' +
+    '</div>';
+
+    // P2D-S1 (Entity Phase 2): pending-review conversational captures surface
+    // above renewals since ratification is a blocking decision — the user
+    // should see these before working on other entity chores. High visual
+    // priority matches Intercom Fin's unresolved-cluster pattern (research §5.2).
+    h += '<div id="advisorCapturesRoot">' + renderCapturesSection() + '</div>';
+
+    // PA-7 (Entity Phase 2): renewals + pending-docs cards between About Your
+    // Business and Health Score. Each wrapped in its own id'd root so the
+    // corresponding subscription can target innerHTML.
+    h += '<div id="advisorRenewalsRoot">' + renderRenewalsSection() + '</div>';
+    h += '<div id="advisorPendingDocsRoot">' + renderPendingDocsSection() + '</div>';
+
+    // PB-3 (Phase 2 P2B): OAuth channel connection health (Shopify for now;
+    // Etsy/Square land in PB-4/5). Wrapped in its own root so the channels
+    // subscription can target innerHTML without full re-render.
+    h += '<div id="advisorChannelsRoot">' + renderChannelsHealthSection() + '</div>';
 
     // Section A: Health Score
     h += renderHealthSection();
@@ -229,16 +346,10 @@
     await loadAndRenderActuals('month');
   }
 
-  // --- Section: About Your Business (B7 — Entity Phase 1) ---
+  // --- Shared helpers (previously under About Your Business section) ---
   function escText(s) {
     if (s === null || s === undefined) return '';
     return String(s).replace(/[&<>"']/g, function(c) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; });
-  }
-
-  function rerenderEntitySection() {
-    var root = document.getElementById('advisorEntityRoot');
-    if (!root) return;
-    root.innerHTML = renderEntitySection();
   }
 
   function archetypeLabel(val) {
@@ -264,274 +375,73 @@
     return m ? m.title : (val || '');
   }
 
-  function renderEntitySection() {
-    var h = '<div class="advisor-section">';
-    h += '<div class="advisor-section-title">&#127970; About Your Business</div>';
-
-    var status = (entityData && entityData.entityStatus) || 'none';
-
-    // Empty-state — spec §3
-    if (status === 'none' || !entityData) {
-      h += '<div class="advisor-entity-cta">' +
-        '<div><div style="font-weight:600;margin-bottom:4px;">Let\'s set up your business</div>' +
-        '<div style="font-size:0.85rem;color:var(--warm-gray);">Takes about 2 minutes. We\'ll tailor Mast to how you actually work.</div></div>' +
-        '<button class="btn btn-primary" onclick="navigateTo(\'wizard\')">Start setup</button>' +
-      '</div>';
-      h += '</div>';
-      return h;
-    }
-
-    // Draft sub-banner — spec §3
-    if (status === 'draft') {
-      h += '<div class="advisor-entity-subbanner">' +
-        '<strong>&#9999;&#65039; Setup in progress.</strong> ' +
-        '<a href="#" onclick="event.preventDefault(); navigateTo(\'settings\'); setTimeout(function(){ switchSettingsSubView(\'engagement\'); }, 80); return false;" style="color:var(--teal,#2a9d8f);">Complete your business setup in Settings</a>' +
-      '</div>';
-    }
-
-    var identity = entityData.identity || {};
-    var engagement = entityData.engagement || {};
-    var presence = entityData.presence || {};
-    var operations = entityData.operations || {};
-    var discovery = entityData.discovery || {};
-
-    h += '<div class="advisor-entity-grid">';
-
-    // Identity card
-    h += '<div class="advisor-entity-card">';
-    h += '<div class="advisor-entity-card-title">Identity</div>';
-    h += entityField('businessName', 'Business', identity.businessName || '', {editable: true, type: 'text'});
-    h += entityField('archetype', 'Archetype', archetypeLabel(identity.archetype) || '', {editable: true, type: 'archetype', rawValue: identity.archetype || ''});
-    h += entityField('yearsInBusiness', 'Years', identity.yearsInBusiness != null ? String(identity.yearsInBusiness) : '', {editable: true, type: 'number'});
-    h += '</div>';
-
-    // Engagement card
-    h += '<div class="advisor-entity-card">';
-    h += '<div class="advisor-entity-card-title">Engagement</div>';
-    var modeSurface = engagement.mode ? (modeLabel(engagement.mode) + (engagement.surface ? ' \u00b7 ' + engagement.surface : '')) : '';
-    h += entityField('mode', 'Mode', modeSurface, {editable: false});
-    h += '<div class="advisor-entity-field"><span class="label">Goals</span><span class="val">';
-    var goals = Array.isArray(engagement.goals) ? engagement.goals : [];
-    if (goals.length === 0) {
-      h += '<span class="advisor-entity-empty">Not set \u2014 <a href="#" onclick="event.preventDefault(); window.advisorStartEditEntity(\'goals\'); return false;" style="color:var(--teal,#2a9d8f);">add goals</a></span>';
-    } else {
-      goals.forEach(function(g) { h += '<span class="advisor-entity-chip">' + escText(goalLabel(g)) + '</span>'; });
-    }
-    h += '</span>';
-    h += '<span class="pencil" onclick="window.advisorStartEditEntity(\'goals\')" title="Edit goals">&#9998;</span>';
-    h += '</div>';
-    if (engagement.calibration) {
-      if (engagement.calibration.revenueBracket) {
-        h += entityField('revenueBracket', 'Revenue', engagement.calibration.revenueBracket, {editable: false});
-      }
-      if (engagement.calibration.wishStatement) {
-        var wish = engagement.calibration.wishStatement;
-        if (wish.length > 80) wish = wish.substring(0, 77) + '...';
-        h += entityField('wishStatement', 'Wish', wish, {editable: false});
-      }
-    }
-    h += '</div>';
-
-    // Reach card
-    h += '<div class="advisor-entity-card">';
-    h += '<div class="advisor-entity-card-title">Reach</div>';
-    h += '<div class="advisor-entity-field"><span class="label">Channels</span><span class="val">';
-    var channels = Array.isArray(presence.declaredChannels) ? presence.declaredChannels : [];
-    if (channels.length === 0) {
-      h += '<span class="advisor-entity-empty">None declared</span>';
-    } else {
-      channels.forEach(function(c) { h += '<span class="advisor-entity-chip">' + escText(channelLabel(c)) + '</span>'; });
-    }
-    h += '</span>';
-    h += '<span class="pencil" onclick="window.advisorStartEditEntity(\'declaredChannels\')" title="Edit channels">&#9998;</span>';
-    h += '</div>';
-    if (presence.primaryDomain) {
-      h += entityField('primaryDomain', 'Domain', presence.primaryDomain, {editable: false});
-    }
-    h += '</div>';
-
-    // Operations card
-    h += '<div class="advisor-entity-card">';
-    h += '<div class="advisor-entity-card-title">Operations</div>';
-    var loc = operations.localization || {};
-    var locParts = [];
-    if (loc.currency) locParts.push(loc.currency);
-    if (loc.timezone) locParts.push(loc.timezone);
-    if (loc.language) locParts.push(loc.language);
-    if (loc.fiscalYearStartMonth) locParts.push('FY ' + loc.fiscalYearStartMonth);
-    h += entityField('localization', 'Locale', locParts.join(' \u00b7 '), {editable: false});
-    if (operations.businessModel) {
-      h += entityField('businessModel', 'Model', operations.businessModel, {editable: false});
-    } else {
-      h += '<div class="advisor-entity-field"><span class="label">Model</span><span class="val advisor-entity-empty">Not set</span></div>';
-    }
-    h += '</div>';
-
-    h += '</div>'; // grid
-
-    if (discovery && discovery.lastScrapeAt) {
-      h += '<div style="font-size:0.72rem;color:var(--warm-gray-light,#666);margin-top:10px;">Last site scrape: ' + escText(timeAgo(discovery.lastScrapeAt)) + (discovery.scrapeUrl ? ' \u2014 ' + escText(discovery.scrapeUrl) : '') + '</div>';
-    }
-
-    h += '</div>'; // advisor-section
-    return h;
-  }
-
-  function entityField(key, label, value, opts) {
-    opts = opts || {};
-    var displayVal = value || '';
-    var h = '<div class="advisor-entity-field" data-entity-field="' + escText(key) + '">';
-    h += '<span class="label">' + escText(label) + '</span>';
-    h += '<span class="val">' + (displayVal === '' ? '<span class="advisor-entity-empty">Not set</span>' : escText(displayVal)) + '</span>';
-    if (opts.editable) {
-      h += '<span class="pencil" onclick="window.advisorStartEditEntity(\'' + escText(key) + '\')" title="Edit ' + escText(label) + '">&#9998;</span>';
-    }
-    h += '</div>';
-    return h;
-  }
-
-  // Map field key → {section, path on entity, input type, label}
-  var ENTITY_EDITABLE = {
-    businessName:     { section: 'identity',   path: 'businessName',             type: 'text',       label: 'Business name' },
-    archetype:        { section: 'identity',   path: 'archetype',                type: 'archetype',  label: 'Archetype' },
-    yearsInBusiness:  { section: 'identity',   path: 'yearsInBusiness',          type: 'number',     label: 'Years in business' },
-    goals:            { section: 'engagement', path: 'goals',                    type: 'goals',      label: 'Goals' },
-    declaredChannels: { section: 'presence',   path: 'declaredChannels',         type: 'channels',   label: 'Channels' }
-  };
-
-  function currentEntityValue(key) {
-    if (!entityData) return null;
-    if (key === 'businessName') return (entityData.identity && entityData.identity.businessName) || '';
-    if (key === 'archetype') return (entityData.identity && entityData.identity.archetype) || '';
-    if (key === 'yearsInBusiness') return (entityData.identity && entityData.identity.yearsInBusiness != null) ? entityData.identity.yearsInBusiness : '';
-    if (key === 'goals') return (entityData.engagement && Array.isArray(entityData.engagement.goals)) ? entityData.engagement.goals : [];
-    if (key === 'declaredChannels') return (entityData.presence && Array.isArray(entityData.presence.declaredChannels)) ? entityData.presence.declaredChannels : [];
-    return null;
-  }
-
-  function startEditEntity(key) {
-    var cfg = ENTITY_EDITABLE[key];
-    if (!cfg) return;
-    var fieldEl = document.querySelector('.advisor-entity-field[data-entity-field="' + key + '"]');
-    if (!fieldEl) return;
-    if (fieldEl.dataset.editing === '1') return;
-    fieldEl.dataset.editing = '1';
-    var valEl = fieldEl.querySelector('.val');
-    var pencil = fieldEl.querySelector('.pencil');
-    if (pencil) pencil.style.display = 'none';
-    var current = currentEntityValue(key);
-
-    if (cfg.type === 'text' || cfg.type === 'number') {
-      var inputType = cfg.type === 'number' ? 'number' : 'text';
-      valEl.innerHTML = '<input type="' + inputType + '" class="advisor-entity-edit-input" value="' + escText(current) + '" data-entity-edit-input>';
-      var inputEl = valEl.querySelector('input');
-      inputEl.focus();
-      inputEl.select && inputEl.select();
-      var commit = function() {
-        var v = inputEl.value;
-        if (cfg.type === 'number') {
-          v = v === '' ? null : Number(v);
-          if (v !== null && (isNaN(v) || v < 0)) { cancelEditEntity(key); return; }
-        }
-        saveEntityEdit(key, v);
-      };
-      inputEl.addEventListener('blur', commit);
-      inputEl.addEventListener('keydown', function(e) {
-        if (e.key === 'Enter') { inputEl.blur(); }
-        else if (e.key === 'Escape') { inputEl.removeEventListener('blur', commit); cancelEditEntity(key); }
-      });
-    } else if (cfg.type === 'archetype') {
-      var archetypes = (window.BusinessEntityConstants && BusinessEntityConstants.ARCHETYPES) || [];
-      var opts = archetypes.map(function(a) {
-        return '<option value="' + escText(a.value) + '"' + (a.value === current ? ' selected' : '') + '>' + escText(a.label) + '</option>';
-      }).join('');
-      valEl.innerHTML = '<select class="advisor-entity-edit-input"><option value="">(pick one)</option>' + opts + '</select>';
-      var sel = valEl.querySelector('select');
-      sel.focus();
-      sel.addEventListener('change', function() {
-        var newVal = sel.value;
-        if (!newVal || newVal === current) { cancelEditEntity(key); return; }
-        if (!confirm('Changing your archetype will reset module recommendations and goal defaults. Continue?')) {
-          cancelEditEntity(key);
-          return;
-        }
-        saveEntityEdit(key, newVal);
-      });
-      sel.addEventListener('blur', function() {
-        // If user tabs out without picking a different value, restore
-        setTimeout(function() {
-          if (fieldEl.dataset.editing === '1') cancelEditEntity(key);
-        }, 100);
-      });
-    } else if (cfg.type === 'goals' || cfg.type === 'channels') {
-      // Multi-select checkbox list.
-      var source, labelFn;
-      if (cfg.type === 'goals') {
-        var arch = (entityData.identity && entityData.identity.archetype) || null;
-        var defaults = arch && MastDB.businessEntity.archetypeDefaults && MastDB.businessEntity.archetypeDefaults(arch);
-        var available = (defaults && Array.isArray(defaults.goalsAvailable)) ? defaults.goalsAvailable : Object.keys((window.BusinessEntityConstants && BusinessEntityConstants.GOAL_LABELS) || {});
-        source = available;
-        labelFn = goalLabel;
-      } else {
-        source = ((window.BusinessEntityConstants && BusinessEntityConstants.DECLARED_CHANNELS) || []).map(function(c) { return c.value; });
-        labelFn = channelLabel;
-      }
-      var currentArr = Array.isArray(current) ? current : [];
-      // Union so pre-existing values not in the source set are still editable
-      source = source.concat(currentArr.filter(function(v) { return source.indexOf(v) === -1; }));
-      var checks = source.map(function(v) {
-        var isChecked = currentArr.indexOf(v) !== -1;
-        return '<label style="display:inline-flex;align-items:center;gap:4px;margin:2px 6px 2px 0;font-size:0.85rem;">' +
-          '<input type="checkbox" value="' + escText(v) + '" ' + (isChecked ? 'checked' : '') + '>' +
-          '<span>' + escText(labelFn(v)) + '</span>' +
-          '</label>';
-      }).join('');
-      valEl.innerHTML = '<div>' + checks + '<div style="margin-top:6px;"><button class="btn btn-primary btn-small" type="button" data-entity-save>Save</button> <button class="btn btn-secondary btn-small" type="button" data-entity-cancel>Cancel</button></div></div>';
-      valEl.querySelector('[data-entity-save]').addEventListener('click', function() {
-        var picked = [];
-        valEl.querySelectorAll('input[type="checkbox"]').forEach(function(c) { if (c.checked) picked.push(c.value); });
-        saveEntityEdit(key, picked);
-      });
-      valEl.querySelector('[data-entity-cancel]').addEventListener('click', function() { cancelEditEntity(key); });
-    }
-  }
-
-  function cancelEditEntity(key) {
-    var fieldEl = document.querySelector('.advisor-entity-field[data-entity-field="' + key + '"]');
-    if (!fieldEl) return;
-    delete fieldEl.dataset.editing;
-    rerenderEntitySection();
-  }
-
-  async function saveEntityEdit(key, newValue) {
-    var cfg = ENTITY_EDITABLE[key];
-    if (!cfg) return;
-    var fieldEl = document.querySelector('.advisor-entity-field[data-entity-field="' + key + '"]');
-    if (fieldEl) {
-      var valEl = fieldEl.querySelector('.val');
-      if (valEl) valEl.innerHTML = '<span class="advisor-entity-empty">Saving...</span>';
-    }
-    try {
-      var payload = {};
-      payload[cfg.path] = newValue;
-      await MastDB.businessEntity.update(cfg.section, payload);
-      // Subscribe will fire and rerender. Belt + suspenders: refetch + rerender
-      // if subscribe didn't fire within a tick.
-      setTimeout(async function() {
-        if (entitySubscription) return; // subscribe path already handled
-        try {
-          entityData = await MastDB.businessEntity.get();
-          rerenderEntitySection();
-        } catch (_) { /* noop */ }
-      }, 400);
-    } catch (err) {
-      console.error('[advisor entity edit] save failed:', err);
-      alert('Couldn\'t save: ' + (err && err.message ? err.message : 'unknown error'));
-      rerenderEntitySection();
-    }
-  }
 
   // --- Section A: Health Score ---
+  // --- Section: Connected Channels (Phase 2 P2B PB-3) ---
+  // Caches MastDB.businessEntity.channels.list() so re-render is cheap.
+  var _channelsCache = null;
+
+  function renderChannelsHealthSection() {
+    var items = Array.isArray(_channelsCache) ? _channelsCache : [];
+    // Only show once we have data OR a pending load has returned an empty list.
+    // Start lean: hide until first load attempt completes.
+    if (_channelsCache === null) {
+      return ''; // nothing until first load
+    }
+    if (items.length === 0) {
+      return ''; // no connected integrations → do not occupy space
+    }
+    var h = '<div class="advisor-section">';
+    h += '<div class="advisor-section-title">&#128279; Connected Channels</div>';
+    h += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;margin-top:12px;">';
+    for (var i = 0; i < items.length; i++) {
+      var c = items[i];
+      var platform = c.platform || c.channelId;
+      var status = c.status || 'unknown';
+      var statusColor = status === 'connected' ? 'var(--success,#22c55e)'
+        : status === 'expired' ? 'var(--warning,#f59e0b)'
+        : status === 'error' || status === 'revoked' ? 'var(--danger,#ef4444)'
+        : 'var(--warm-gray)';
+      var icon = platform === 'shopify' ? '&#128722;' : platform === 'etsy' ? '&#127970;' : platform === 'square' ? '&#9633;' : '&#128279;';
+      var sub = '';
+      if (status === 'connected') {
+        var parts = [];
+        if (c.shopDomain || c.shopId) parts.push(esc(c.shopDomain || c.shopId));
+        if (typeof c.webhookSubscriptionCount === 'number') parts.push(c.webhookSubscriptionCount + ' hook' + (c.webhookSubscriptionCount === 1 ? '' : 's'));
+        if (c.lastSyncAt) parts.push('Synced ' + timeAgo(c.lastSyncAt));
+        sub = parts.join(' \u2022 ');
+      } else if (c.lastErrorMessage) {
+        sub = esc(c.lastErrorMessage);
+      }
+      h += '<div class="advisor-dim-card" style="text-align:left;">';
+      h += '<div style="display:flex;align-items:center;gap:8px;">';
+      h += '<span style="font-size:1.1rem;">' + icon + '</span>';
+      h += '<div style="font-weight:600;text-transform:capitalize;">' + esc(platform) + '</div>';
+      h += '<div style="margin-left:auto;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.5px;color:' + statusColor + ';">' + esc(status) + '</div>';
+      h += '</div>';
+      if (sub) h += '<div style="font-size:0.72rem;color:var(--warm-gray-light,#666);margin-top:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + sub + '</div>';
+      h += '</div>';
+    }
+    h += '</div></div>';
+    return h;
+  }
+
+  function rerenderChannelsSection() {
+    var root = document.getElementById('advisorChannelsRoot');
+    if (root) root.innerHTML = renderChannelsHealthSection();
+  }
+
+  async function loadChannelsForAdvisor() {
+    if (!window.MastDB || !MastDB.businessEntity || !MastDB.businessEntity.channels) return;
+    try {
+      _channelsCache = await MastDB.businessEntity.channels.list();
+    } catch (err) {
+      console.warn('[advisor] channels.list failed:', err && err.message);
+      _channelsCache = [];
+    }
+    rerenderChannelsSection();
+  }
+
   function renderHealthSection() {
     var h = '<div class="advisor-section">';
     h += '<div class="advisor-section-title">&#128200; Business Health</div>';
@@ -904,6 +814,536 @@
     return h;
   }
 
+  // --- Section: Renewals (PA-7 — Entity Phase 2) ---
+  function rerenderRenewalsSection() {
+    var root = document.getElementById('advisorRenewalsRoot');
+    if (!root) return;
+    root.innerHTML = renderRenewalsSection();
+  }
+
+  function formatDaysUntil(expiresAt) {
+    if (!expiresAt) return '';
+    var ms = Date.parse(expiresAt);
+    if (!isFinite(ms)) return '';
+    var days = Math.round((ms - Date.now()) / 86400000);
+    if (days === 0) return 'today';
+    if (days > 0) return 'in ' + days + ' day' + (days === 1 ? '' : 's');
+    var n = -days;
+    return n + ' day' + (n === 1 ? '' : 's') + ' overdue';
+  }
+
+  function _formatExpiresDate(expiresAt) {
+    if (!expiresAt) return '';
+    var d = new Date(expiresAt);
+    if (isNaN(d.getTime())) return '';
+    return d.toLocaleDateString();
+  }
+
+  function renderRenewalsSection() {
+    var nowIso = new Date().toISOString();
+    var actionable = renewalsData.filter(function(it) {
+      if (!it) return false;
+      if (it.archived === true) return false;
+      if (it.status === 'archived' || it.status === 'completed') return false;
+      if (it.snoozeUntil && it.snoozeUntil > nowIso) return false;
+      return it.status === 'warning' || it.status === 'expired';
+    });
+    if (actionable.length === 0) return '';
+    actionable.sort(function(a, b) {
+      var ea = String(a.expiresAt || '');
+      var eb = String(b.expiresAt || '');
+      return ea < eb ? -1 : ea > eb ? 1 : 0;
+    });
+    var h = '<div class="advisor-section">';
+    h += '<div class="advisor-section-title">&#128197; Upcoming Renewals</div>';
+    actionable.forEach(function(it) {
+      var pillClass = it.status === 'expired' ? 'expired' : (it.status === 'warning' ? 'warning' : 'active');
+      h += '<div class="advisor-renewal-card" id="advRenewal-' + escText(it.id) + '">';
+      h += '<div style="flex:1;min-width:220px;">';
+      h += '<div class="title">' + escText(it.title || '(untitled)') + '</div>';
+      h += '<div class="meta">Expires ' + escText(_formatExpiresDate(it.expiresAt)) + ' &middot; ' + escText(formatDaysUntil(it.expiresAt));
+      if (it.sourceType) h += ' &middot; ' + escText(it.sourceType);
+      h += '</div>';
+      h += '<div style="margin-top:6px;"><span class="advisor-renewal-pill ' + pillClass + '">' + escText(it.status || 'active') + '</span></div>';
+      h += '</div>';
+      h += '<div class="advisor-renewal-actions">';
+      h += '<button class="btn btn-small btn-primary" onclick="advisorMarkRenewed(\'' + escText(it.id) + '\')">Mark renewed</button>';
+      h += '<button class="btn btn-small" onclick="advisorSnoozeRenewal(\'' + escText(it.id) + '\',7)">+1w</button>';
+      h += '<button class="btn btn-small" onclick="advisorSnoozeRenewal(\'' + escText(it.id) + '\',30)">+1m</button>';
+      h += '<button class="btn btn-small btn-secondary" onclick="advisorArchiveRenewal(\'' + escText(it.id) + '\')">Archive</button>';
+      h += '</div>';
+      h += '</div>';
+    });
+    h += '</div>';
+    return h;
+  }
+
+  function _advisorRenewalById(id) {
+    for (var i = 0; i < renewalsData.length; i++) if (renewalsData[i] && renewalsData[i].id === id) return renewalsData[i];
+    return null;
+  }
+
+  async function advisorMarkRenewed(itemId) {
+    var it = _advisorRenewalById(itemId);
+    if (!it) return;
+    var suggested = '';
+    if (it.expiresAt) {
+      var d = new Date(it.expiresAt);
+      if (!isNaN(d.getTime())) { d.setFullYear(d.getFullYear() + 1); suggested = d.toISOString().slice(0, 10); }
+    }
+    if (!suggested) { var tmp = new Date(); tmp.setFullYear(tmp.getFullYear() + 1); suggested = tmp.toISOString().slice(0, 10); }
+    var newDate = null;
+    if (typeof window.mastPrompt === 'function') {
+      newDate = await window.mastPrompt('Enter the new expiration date (YYYY-MM-DD) for this renewal:', { title: 'Mark ' + (it.title || '') + ' renewed', defaultValue: suggested, confirmLabel: 'Save' });
+    } else {
+      newDate = window.prompt('New expiration date (YYYY-MM-DD):', suggested);
+    }
+    if (!newDate) return;
+    var iso = /^\d{4}-\d{2}-\d{2}$/.test(newDate) ? newDate + 'T23:59:59.000Z' : newDate;
+    if (!isFinite(Date.parse(iso))) {
+      if (window.showToast) showToast('Invalid date — use YYYY-MM-DD', true);
+      return;
+    }
+    try {
+      await MastDB.businessEntity.renewals.markComplete(itemId, iso);
+      await MastDB.businessEntity.renewals.create(it.sourceType || 'other', it.title || 'Renewal', iso, it.cadence || null, it.sourceRef || null);
+      if (window.showToast) showToast('Marked renewed — next cycle scheduled');
+    } catch (err) {
+      if (window.showToast) showToast('Could not mark renewed: ' + (err.message || 'unknown'), true);
+    }
+  }
+
+  async function advisorSnoozeRenewal(itemId, days) {
+    if (!days || days <= 0) return;
+    var until = new Date(Date.now() + days * 86400000).toISOString();
+    try {
+      await MastDB.businessEntity.renewals.snooze(itemId, until);
+      if (window.showToast) showToast('Snoozed ' + days + ' day' + (days === 1 ? '' : 's'));
+    } catch (err) {
+      if (window.showToast) showToast('Could not snooze: ' + (err.message || 'unknown'), true);
+    }
+  }
+
+  async function advisorArchiveRenewal(itemId) {
+    var ok = typeof window.mastConfirm === 'function'
+      ? await window.mastConfirm('Archive this renewal reminder? You can recreate it from Settings > Compliance if needed.', { title: 'Archive reminder?', confirmLabel: 'Archive', cancelLabel: 'Keep' })
+      : window.confirm('Archive this renewal reminder?');
+    if (!ok) return;
+    try {
+      await MastDB.businessEntity.renewals.archive(itemId);
+      if (window.showToast) showToast('Archived');
+    } catch (err) {
+      if (window.showToast) showToast('Could not archive: ' + (err.message || 'unknown'), true);
+    }
+  }
+
+  // --- Section: Pending docs (PA-7 — Entity Phase 2) ---
+  function rerenderPendingDocsSection() {
+    var root = document.getElementById('advisorPendingDocsRoot');
+    if (!root) return;
+    root.innerHTML = renderPendingDocsSection();
+  }
+
+  var _PDOC_COMPLIANCE_SECTIONS = ['licenses', 'insurance', 'certifications', 'taxJurisdictions'];
+
+  function _pdocItemLabel(item, sectionKey) {
+    if (!item) return '(unknown)';
+    if (sectionKey === 'licenses') return item.type || item.number || '(license)';
+    if (sectionKey === 'insurance') return item.carrier || item.policyNumber || '(insurance)';
+    if (sectionKey === 'certifications') return item.name || item.issuer || '(certification)';
+    if (sectionKey === 'taxJurisdictions') return (item.state || '') + (item.registrationId ? ' #' + item.registrationId : '') || '(jurisdiction)';
+    return '(item)';
+  }
+
+  function _pdocLinkOptions() {
+    var compliance = (entityData && entityData.compliance) || {};
+    var opts = [];
+    _PDOC_COMPLIANCE_SECTIONS.forEach(function(section) {
+      var arr = Array.isArray(compliance[section]) ? compliance[section] : [];
+      arr.forEach(function(item, idx) {
+        opts.push({
+          value: section + ':' + idx,
+          label: section.charAt(0).toUpperCase() + section.slice(1) + ' — ' + _pdocItemLabel(item, section)
+        });
+      });
+    });
+    return opts;
+  }
+
+  function renderPendingDocsSection() {
+    var pending = documentsData.filter(function(d) {
+      if (!d) return false;
+      if (d.status === 'redacted' || d.status === 'deleted-pending-purge' || d.status === 'quarantined') return false;
+      if (d.status === 'uploaded-pending') return true;
+      if (d.status === 'uploaded' && !d.linkedTo) return true;
+      return false;
+    });
+    if (pending.length === 0) return '';
+    var linkOpts = _pdocLinkOptions();
+    var h = '<div class="advisor-section">';
+    h += '<div class="advisor-section-title">&#128196; Documents awaiting action</div>';
+    pending.forEach(function(d) {
+      var selectId = 'advPdocLink-' + escText(d.id || '');
+      h += '<div class="advisor-pdoc-card" id="advPdoc-' + escText(d.id || '') + '">';
+      h += '<div style="flex:1;min-width:220px;">';
+      h += '<div class="title">' + escText(d.filename || '(unnamed)') + '</div>';
+      h += '<div class="meta">' + escText(d.purpose || '(no purpose)') + (d.createdAt ? ' &middot; uploaded ' + escText(timeAgo(d.createdAt)) : '') + '</div>';
+      h += '</div>';
+      h += '<div class="advisor-pdoc-actions">';
+      if (linkOpts.length === 0) {
+        h += '<span style="font-size:0.78rem;color:var(--warm-gray);">Add a compliance item first, then come back to link.</span>';
+      } else {
+        h += '<select id="' + selectId + '"><option value="">Link to…</option>';
+        linkOpts.forEach(function(o) { h += '<option value="' + escText(o.value) + '">' + escText(o.label) + '</option>'; });
+        h += '</select>';
+        h += '<button class="btn btn-small btn-primary" onclick="advisorLinkPendingDoc(\'' + escText(d.id || '') + '\',\'' + selectId + '\')">Link</button>';
+      }
+      h += '<button class="btn btn-small btn-secondary" onclick="advisorDeletePendingDoc(\'' + escText(d.id || '') + '\')">Delete</button>';
+      h += '</div>';
+      h += '</div>';
+    });
+    h += '</div>';
+    return h;
+  }
+
+  async function advisorLinkPendingDoc(documentId, selectId) {
+    var sel = document.getElementById(selectId);
+    if (!sel || !sel.value) return;
+    var parts = sel.value.split(':');
+    var section = parts[0];
+    var idx = parseInt(parts[1], 10);
+    if (_PDOC_COMPLIANCE_SECTIONS.indexOf(section) === -1 || !isFinite(idx)) return;
+    try {
+      await MastDB.businessEntity.documents.link(documentId, 'compliance.' + section, idx, 'documentId');
+      if (window.showToast) showToast('Document linked');
+    } catch (err) {
+      if (window.showToast) showToast('Could not link: ' + (err.message || 'unknown'), true);
+    }
+  }
+
+  async function advisorDeletePendingDoc(documentId) {
+    var ok = typeof window.mastConfirm === 'function'
+      ? await window.mastConfirm('Delete this uploaded document? It will be purged within 6 hours.', { title: 'Delete document?', confirmLabel: 'Delete', cancelLabel: 'Keep' })
+      : window.confirm('Delete this uploaded document?');
+    if (!ok) return;
+    try {
+      await MastDB.businessEntity.documents.delete(documentId);
+      if (window.showToast) showToast('Document scheduled for purge');
+    } catch (err) {
+      if (window.showToast) showToast('Could not delete: ' + (err.message || 'unknown'), true);
+    }
+  }
+
+  window.advisorMarkRenewed = advisorMarkRenewed;
+  window.advisorSnoozeRenewal = advisorSnoozeRenewal;
+  window.advisorArchiveRenewal = advisorArchiveRenewal;
+  window.advisorLinkPendingDoc = advisorLinkPendingDoc;
+  window.advisorDeletePendingDoc = advisorDeletePendingDoc;
+
+  // ──────────────────────────────────────────────────────────
+  // Section: Pending Captures (P2D-S1 — Entity Phase 2)
+  //
+  // Surfaces capture.pending/* items awaiting user ratification. Each card
+  // shows the target section + skill name + confidence + time-ago. Clicking
+  // "Review" opens the diff-review modal (proposed vs current, per-field
+  // accept/reject, always-visible Switch-to-Form escape hatch). Clicking
+  // "Dismiss" calls reject without a reason.
+  //
+  // The capture stream writes are MCP-only — skills submit via
+  // capture_conversational and land in admin/businessEntity_capturePending
+  // with status='pending-review'. The advisor surfaces those for user
+  // ratification. Once ratified, MastDB.businessEntity.capture.ratify()
+  // delegates to MastDB.businessEntity.update for the actual entity write.
+  // ──────────────────────────────────────────────────────────
+  var _CAPTURE_SECTION_ICONS = {
+    identity: '\u{1F3E2}',     // office building
+    presence: '\u{1F310}',     // globe
+    operations: '\u2699\uFE0F', // gear
+    people: '\u{1F464}',       // bust
+    compliance: '\u2705',       // check
+    engagement: '\u{1F4CD}'    // pin
+  };
+
+  function _captureSectionIcon(section) {
+    return _CAPTURE_SECTION_ICONS[section] || '\u{1F4DD}';
+  }
+
+  function _captureSectionLabel(section) {
+    if (!section) return '';
+    return section.charAt(0).toUpperCase() + section.slice(1);
+  }
+
+  function rerenderCapturesSection() {
+    var root = document.getElementById('advisorCapturesRoot');
+    if (!root) return;
+    root.innerHTML = renderCapturesSection();
+  }
+
+  function renderCapturesSection() {
+    var pending = (capturesData || []).filter(function(c) { return c && c.status === 'pending-review'; });
+    if (pending.length === 0) return '';
+    var h = '<div class="advisor-section">';
+    h += '<div class="advisor-section-title">\u{1F4AC} Pending Reviews <span style="font-weight:400;color:var(--warm-gray-light);font-size:0.82rem;margin-left:4px;">(' + pending.length + ')</span></div>';
+    pending.forEach(function(cap) {
+      var isLowConf = typeof cap.confidence === 'number' && cap.confidence < 0.6;
+      var pillClass = isLowConf ? 'advisor-capture-pill low-confidence' : 'advisor-capture-pill';
+      var confStr = (typeof cap.confidence === 'number') ? (' \u2022 ' + Math.round(cap.confidence * 100) + '% confidence') : '';
+      var expiresStr = cap.expiresAt ? ' \u2022 expires ' + escText(timeAgo(cap.expiresAt).replace(/^-\s*/, '')) : '';
+      h += '<div class="advisor-capture-card" id="advCapture-' + escText(cap.id) + '">';
+      h += '<div style="flex:1;min-width:220px;">';
+      h += '<div class="title">' + escText(_captureSectionIcon(cap.targetSection)) + ' Review ' + escText(_captureSectionLabel(cap.targetSection)) + ' capture</div>';
+      h += '<div class="meta">via ' + escText(cap.skillName || 'unknown-skill') + ' \u2022 captured ' + escText(timeAgo(cap.createdAt)) + confStr + expiresStr + '</div>';
+      h += '<div style="margin-top:6px;"><span class="' + pillClass + '">' + (isLowConf ? 'please double-check' : 'pending review') + '</span></div>';
+      h += '</div>';
+      h += '<div class="advisor-capture-actions">';
+      h += '<button class="btn btn-small btn-primary" onclick="advisorReviewCapture(\'' + escText(cap.id) + '\')">Review</button>';
+      h += '<button class="btn btn-small btn-secondary" onclick="advisorDismissCapture(\'' + escText(cap.id) + '\')">Dismiss</button>';
+      h += '</div>';
+      h += '</div>';
+    });
+    h += '</div>';
+    return h;
+  }
+
+  function _captureById(id) {
+    for (var i = 0; i < capturesData.length; i++) if (capturesData[i] && capturesData[i].id === id) return capturesData[i];
+    return null;
+  }
+
+  // Section-name → route target in Settings. Used by Switch-to-Form.
+  var _CAPTURE_TO_SETTINGS_VIEW = {
+    identity: 'identity',
+    presence: 'presence',
+    operations: 'operations',
+    people: 'people',
+    compliance: 'compliance',
+    engagement: 'engagement'
+  };
+
+  // Deep-equality check for diff display. Handles primitives + arrays + objects.
+  function _deepEqual(a, b) {
+    if (a === b) return true;
+    if (a === null || a === undefined || b === null || b === undefined) return a === b;
+    if (typeof a !== typeof b) return false;
+    if (Array.isArray(a) && Array.isArray(b)) {
+      if (a.length !== b.length) return false;
+      for (var i = 0; i < a.length; i++) if (!_deepEqual(a[i], b[i])) return false;
+      return true;
+    }
+    if (typeof a === 'object' && typeof b === 'object') {
+      var ak = Object.keys(a), bk = Object.keys(b);
+      if (ak.length !== bk.length) return false;
+      for (var j = 0; j < ak.length; j++) {
+        if (!Object.prototype.hasOwnProperty.call(b, ak[j])) return false;
+        if (!_deepEqual(a[ak[j]], b[ak[j]])) return false;
+      }
+      return true;
+    }
+    return false;
+  }
+
+  function _formatDiffValue(v) {
+    if (v === undefined || v === null) return '(not set)';
+    if (v === 'unknown') return '(user deferred — will be skipped)';
+    if (typeof v === 'string') return v;
+    if (typeof v === 'number' || typeof v === 'boolean') return String(v);
+    try { return JSON.stringify(v, null, 2); }
+    catch (e) { return String(v); }
+  }
+
+  function _openCaptureModal(cap) {
+    // Guard against duplicate modals.
+    var existing = document.getElementById('captureDiffModalBackdrop');
+    if (existing) existing.parentNode.removeChild(existing);
+
+    var currentEntity = (entityData && entityData[cap.targetSection]) || {};
+    var proposed = cap.proposedData || {};
+    var fieldKeys = Object.keys(proposed);
+    var icon = _captureSectionIcon(cap.targetSection);
+    var label = _captureSectionLabel(cap.targetSection);
+    var skill = cap.skillName || 'unknown-skill';
+    var confPct = (typeof cap.confidence === 'number') ? Math.round(cap.confidence * 100) + '%' : 'not reported';
+
+    var bodyRows = fieldKeys.map(function(key, i) {
+      var propVal = proposed[key];
+      var curVal = currentEntity[key];
+      var isUnknown = propVal === 'unknown';
+      var isUnchanged = _deepEqual(propVal, curVal);
+      var proposedClasses = ['diff-pane', 'proposed'];
+      if (isUnknown) proposedClasses.push('unknown-sentinel');
+      var rowClasses = ['diff-row'];
+      if (isUnknown) rowClasses.push('unknown');
+      var checkedAttr = (isUnknown || isUnchanged) ? '' : ' checked';
+      var disabledAttr = isUnknown ? ' disabled' : '';
+      return '<div class="' + rowClasses.join(' ') + '" data-field="' + escText(key) + '">' +
+        '<div class="diff-row-header">' +
+          '<span class="diff-row-field">' + escText(key) + '</span>' +
+          '<label class="diff-row-checkbox">' +
+            '<input type="checkbox" class="capture-field-check"' + checkedAttr + disabledAttr + ' data-field="' + escText(key) + '" />' +
+            (isUnknown ? 'skip (unknown)' : (isUnchanged ? 'no change' : 'accept')) +
+          '</label>' +
+        '</div>' +
+        '<div class="diff-pair">' +
+          '<div>' +
+            '<div class="diff-label">Current</div>' +
+            '<div class="diff-pane current">' + escText(_formatDiffValue(curVal)) + '</div>' +
+          '</div>' +
+          '<div>' +
+            '<div class="diff-label">Proposed</div>' +
+            '<div class="' + proposedClasses.join(' ') + '">' + escText(_formatDiffValue(propVal)) + '</div>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+
+    var settingsTarget = _CAPTURE_TO_SETTINGS_VIEW[cap.targetSection] || 'identity';
+
+    var html = '<div id="captureDiffModalBackdrop" class="capture-modal-backdrop" onclick="if(event.target===this) advisorCloseCaptureModal();">' +
+      '<div class="capture-modal" role="dialog" aria-label="Review capture">' +
+        '<h2>' + escText(icon) + ' Review ' + escText(label) + ' capture</h2>' +
+        '<div class="modal-sub">via ' + escText(skill) + ' \u2022 captured ' + escText(timeAgo(cap.createdAt)) + ' \u2022 confidence ' + escText(confPct) + '</div>' +
+        '<div class="modal-escape">' +
+          '<span>Prefer a form? Switch to Settings \u203A ' + escText(label) + ' — we\'ll save this proposal for later.</span>' +
+          '<a onclick="advisorCaptureSwitchToForm(\'' + escText(cap.id) + '\', \'' + escText(settingsTarget) + '\')">Switch to form \u2192</a>' +
+        '</div>' +
+        '<div class="modal-toggles">' +
+          '<button class="btn btn-small btn-secondary" onclick="advisorCaptureAcceptAll()">Accept all</button>' +
+          '<button class="btn btn-small btn-secondary" onclick="advisorCaptureRejectAll()">Reject all fields</button>' +
+        '</div>' +
+        '<div id="captureDiffRows">' + bodyRows + '</div>' +
+        '<textarea id="captureRejectReason" class="modal-reject-reason" placeholder="Why are you rejecting? (optional — helps improve the skill)"></textarea>' +
+        '<div class="modal-actions">' +
+          '<button class="btn btn-secondary" onclick="advisorCloseCaptureModal()">Cancel</button>' +
+          '<button class="btn" style="background:rgba(239,68,68,0.15);color:#ef4444;border:1px solid rgba(239,68,68,0.35);" onclick="advisorCaptureReject(\'' + escText(cap.id) + '\')">Reject</button>' +
+          '<button class="btn btn-primary" onclick="advisorCaptureRatify(\'' + escText(cap.id) + '\')">Accept selected</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+
+    var container = document.createElement('div');
+    container.innerHTML = html;
+    document.body.appendChild(container.firstChild);
+  }
+
+  async function advisorReviewCapture(captureId) {
+    var cap = _captureById(captureId);
+    if (!cap) {
+      // Might not be in cache yet — try a direct fetch.
+      try { cap = await MastDB.businessEntity.capture.get(captureId); }
+      catch (e) {
+        if (window.showToast) showToast('Could not load capture: ' + (e.message || 'unknown'), true);
+        return;
+      }
+    }
+    if (!cap) return;
+    // Ensure current entityData is loaded — modal reads from it for the diff.
+    if (!entityData && MastDB && MastDB.businessEntity && MastDB.businessEntity.get) {
+      try { entityData = await MastDB.businessEntity.get(); } catch (_) { entityData = null; }
+    }
+    _openCaptureModal(cap);
+  }
+
+  async function advisorDismissCapture(captureId) {
+    var ok = typeof window.mastConfirm === 'function'
+      ? await window.mastConfirm('Dismiss this capture without reviewing? You can always re-run the skill later.', { title: 'Dismiss capture?', confirmLabel: 'Dismiss', cancelLabel: 'Keep' })
+      : window.confirm('Dismiss this capture?');
+    if (!ok) return;
+    try {
+      await MastDB.businessEntity.capture.reject(captureId, null);
+      if (window.showToast) showToast('Capture dismissed');
+    } catch (err) {
+      if (window.showToast) showToast('Could not dismiss: ' + (err.message || 'unknown'), true);
+    }
+  }
+
+  function advisorCloseCaptureModal() {
+    var el = document.getElementById('captureDiffModalBackdrop');
+    if (el && el.parentNode) el.parentNode.removeChild(el);
+  }
+
+  function advisorCaptureAcceptAll() {
+    var boxes = document.querySelectorAll('#captureDiffRows .capture-field-check');
+    for (var i = 0; i < boxes.length; i++) {
+      if (!boxes[i].disabled) boxes[i].checked = true;
+    }
+  }
+
+  function advisorCaptureRejectAll() {
+    var boxes = document.querySelectorAll('#captureDiffRows .capture-field-check');
+    for (var i = 0; i < boxes.length; i++) boxes[i].checked = false;
+  }
+
+  async function advisorCaptureRatify(captureId) {
+    var boxes = document.querySelectorAll('#captureDiffRows .capture-field-check');
+    var accepted = [];
+    for (var i = 0; i < boxes.length; i++) {
+      if (boxes[i].checked && !boxes[i].disabled) {
+        var f = boxes[i].getAttribute('data-field');
+        if (f) accepted.push(f);
+      }
+    }
+    try {
+      var res = await MastDB.businessEntity.capture.ratify(captureId, accepted);
+      advisorCloseCaptureModal();
+      if (window.showToast) {
+        if (res && res.entityWriteSkipped) {
+          showToast('Capture ratified (no fields were written).');
+        } else if (res && res.writtenFields && res.writtenFields.length) {
+          showToast('Accepted: ' + res.writtenFields.join(', '));
+        } else {
+          showToast('Capture ratified.');
+        }
+      }
+    } catch (err) {
+      if (window.showToast) showToast('Could not ratify: ' + (err.message || 'unknown'), true);
+    }
+  }
+
+  async function advisorCaptureReject(captureId) {
+    var reasonEl = document.getElementById('captureRejectReason');
+    // Surface the reason textarea if hidden and user hasn't typed yet.
+    if (reasonEl && !reasonEl.classList.contains('open')) {
+      reasonEl.classList.add('open');
+      reasonEl.focus();
+      if (window.showToast) showToast('Add a reason (optional) and click Reject again to confirm.');
+      return;
+    }
+    var reason = reasonEl ? reasonEl.value.trim() : '';
+    try {
+      await MastDB.businessEntity.capture.reject(captureId, reason || null);
+      advisorCloseCaptureModal();
+      if (window.showToast) showToast('Capture rejected.');
+    } catch (err) {
+      if (window.showToast) showToast('Could not reject: ' + (err.message || 'unknown'), true);
+    }
+  }
+
+  async function advisorCaptureSwitchToForm(captureId, settingsView) {
+    // Leave the capture in pending-review so user can come back and ratify
+    // from Settings if the skill already collected useful data. Route to the
+    // relevant Settings > <section> view. Per spec §4.4: escape hatch always
+    // visible + preserves in-progress capture.
+    advisorCloseCaptureModal();
+    if (typeof window.navigateTo === 'function') {
+      window.navigateTo('settings');
+      setTimeout(function() {
+        if (typeof window.switchSettingsSubView === 'function' && settingsView) {
+          try { window.switchSettingsSubView(settingsView); } catch (_) {}
+        }
+      }, 80);
+    }
+    if (window.showToast) showToast('Switched to form. Capture still in pending review.');
+  }
+
+  window.advisorReviewCapture = advisorReviewCapture;
+  window.advisorDismissCapture = advisorDismissCapture;
+  window.advisorCloseCaptureModal = advisorCloseCaptureModal;
+  window.advisorCaptureAcceptAll = advisorCaptureAcceptAll;
+  window.advisorCaptureRejectAll = advisorCaptureRejectAll;
+  window.advisorCaptureRatify = advisorCaptureRatify;
+  window.advisorCaptureReject = advisorCaptureReject;
+  window.advisorCaptureSwitchToForm = advisorCaptureSwitchToForm;
+
   // --- Window exports ---
   window.loadAdvisor = loadAdvisor;
   window.switchAdvisorPeriod = function(period) {
@@ -918,8 +1358,6 @@
     var el = document.getElementById('advisorReview' + idx);
     if (el) el.classList.toggle('open');
   };
-  window.advisorStartEditEntity = startEditEntity;
-
   // Register module
   MastAdmin.registerModule('advisor', {
     routes: {
@@ -941,6 +1379,23 @@
       }
       entitySubscription = null;
       entityData = null;
+      // PA-7 (Entity Phase 2): tear down renewals + documents subscriptions.
+      if (renewalsSubscription && typeof renewalsSubscription === 'function') {
+        try { renewalsSubscription(); } catch (_) {}
+      }
+      renewalsSubscription = null;
+      renewalsData = [];
+      if (documentsSubscription && typeof documentsSubscription === 'function') {
+        try { documentsSubscription(); } catch (_) {}
+      }
+      documentsSubscription = null;
+      documentsData = [];
+      // P2D-S1 (Entity Phase 2): tear down captures subscription.
+      if (capturesSubscription && typeof capturesSubscription === 'function') {
+        try { capturesSubscription(); } catch (_) {}
+      }
+      capturesSubscription = null;
+      capturesData = [];
     }
   });
 })();

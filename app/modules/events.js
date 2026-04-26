@@ -1837,12 +1837,12 @@
   function detectPaymentProcessor() {
     var el = document.getElementById('evPaymentProcessorStatus');
     if (!el) return;
-    DB.ref('config/paymentProcessor').once('value').then(function(processor) {
-      if (processor) { renderProcessorBadge(el, processor); return; }
-      return DB.ref('config/square/environment').once('value');
-    }).then(function(sqSnap) {
-      if (!sqSnap) return;
-      renderProcessorBadge(el, sqSnap.val() ? 'square' : null);
+    MastDB.get('config/paymentProcessor').then(function(processor) {
+      if (processor) { renderProcessorBadge(el, processor); return null; }
+      return MastDB.get('config/square/environment');
+    }).then(function(sqEnv) {
+      if (sqEnv == null) return;
+      renderProcessorBadge(el, sqEnv ? 'square' : null);
     }).catch(function() { renderProcessorBadge(el, null); });
   }
 
