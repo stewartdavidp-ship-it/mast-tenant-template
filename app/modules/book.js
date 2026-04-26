@@ -759,8 +759,12 @@
       if (isNew) {
         classId = MastDB.classes.newKey();
         data.createdAt = data.updatedAt;
+        await MastDB.classes.set(classId, data);
+      } else {
+        // PATCH-style write: only fields the form owns. Preserves server-only
+        // fields (createdAt, publishedAt, etc.) that this form does not render.
+        await MastDB.classes.update(classId, data);
       }
-      await MastDB.classes.set(classId, data);
       MastAdmin.showToast(isNew ? 'Class created!' : 'Class updated!');
 
       // Auto-generate sessions
