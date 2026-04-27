@@ -72,7 +72,22 @@
   }
 
   function deleteDocument(id) {
-    return MastDB.lookbooks.remove(id).then(function() {
+    // Cascade-delete the generated PDF from Storage before removing the doc.
+    // Without this, the public PDF (Finding M, public:true) lives forever as an
+    // orphan after the Firestore delete — wholesale-pricing data-leak hazard.
+    // CC OPEN -OrDxUfm7rUT3QViMcz8 (Findings P + M).
+    var pdfPath = MastDB.storagePath('lookbooks/' + id + '.pdf');
+    return storage.ref(pdfPath).delete().catch(function(err) {
+      // 404 / object-not-found is expected when the doc was never generated.
+      // Anything else (permissions, transient) we log and continue — losing
+      // the doc record without deleting the PDF is the worse outcome here
+      // (admin would have no way to find the orphan), so we proceed to delete
+      // the doc only after attempting the Storage cascade.
+      var notFound = err && (err.code === 'storage/object-not-found' || /not.?found/i.test(err.message || ''));
+      if (!notFound) console.warn('lbDeleteDoc: PDF cascade-delete failed for ' + pdfPath + ':', err);
+    }).then(function() {
+      return MastDB.lookbooks.remove(id);
+    }).then(function() {
       showToast('Document deleted');
     });
   }
