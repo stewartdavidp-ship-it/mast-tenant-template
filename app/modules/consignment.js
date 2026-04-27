@@ -311,11 +311,11 @@
         '</div>' +
       '</div>';
 
-    var payouts = (p.payouts && typeof p.payouts === 'object') ? p.payouts : {};
-    var totalPayouts = Object.values(payouts).reduce(function(sum, py) {
-      return sum + (py && Number(py.amountCents)) / 100 || 0;
+    var settlements = (p.settlements && typeof p.settlements === 'object') ? p.settlements : {};
+    var totalSettledCents = Object.values(settlements).reduce(function(sum, s) {
+      return sum + (s && Number(s.amountReceivedCents) || 0);
     }, 0);
-    var outstanding = Math.max(0, totals.makerEarnings - totalPayouts);
+    var outstanding = Math.max(0, totals.makerEarnings - totalSettledCents);
 
     // Earnings summary panel — the emotional core
     html +=
@@ -341,7 +341,7 @@
         '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:16px;padding-top:12px;border-top:1px solid var(--cream-dark);">' +
           '<div>' +
             '<div class="consignment-stat-label">Payouts Received</div>' +
-            '<div style="font-size:1rem;font-weight:600;">' + formatCurrency(totalPayouts) +
+            '<div style="font-size:1rem;font-weight:600;">' + formatCurrency(totalSettledCents) +
               ' · <span style="color:var(--warm-gray);">Outstanding: ' + formatCurrency(outstanding) + '</span></div>' +
           '</div>' +
           '<button class="btn btn-outline btn-small" onclick="consignmentRecordPayout(\'' + esc(placementId) + '\')">+ Record Payout</button>' +
@@ -552,7 +552,7 @@
       var qtyInput = row.querySelector('input[type="number"][id$="_qty"]');
       var priceInput = row.querySelector('input[type="number"][id$="_price"]');
       var qty = qtyInput ? parseInt(qtyInput.value) || 0 : 0;
-      var retailPrice = priceInput ? parseFloat(priceInput.value) || 0 : 0;
+      var retailPrice = priceInput ? Math.round((parseFloat(priceInput.value) || 0) * 100) : 0;
 
       if (qty <= 0) continue;
 
@@ -707,21 +707,21 @@
     var p = placementsData[placementId];
     if (!p) { showToast('Placement not found', 'error'); return; }
     var totals = calculatePlacementTotals(p);
-    var payouts = (p.payouts && typeof p.payouts === 'object') ? p.payouts : {};
-    var already = Object.values(payouts).reduce(function(sum, py) {
-      return sum + (py && Number(py.amountCents) || 0);
-    }, 0) / 100;
-    var outstanding = Math.max(0, totals.makerEarnings - already);
+    var settlements = (p.settlements && typeof p.settlements === 'object') ? p.settlements : {};
+    var alreadyCents = Object.values(settlements).reduce(function(sum, s) {
+      return sum + (s && Number(s.amountReceivedCents) || 0);
+    }, 0);
+    var outstandingCents = Math.max(0, totals.makerEarnings - alreadyCents);
     var today = new Date().toISOString().split('T')[0];
 
     var html =
       '<h3 style="font-size:1.15rem;font-weight:500;margin:0 0 4px;">Record Payout from ' + esc(p.locationName) + '</h3>' +
       '<div style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:16px;">' +
-        'Outstanding earnings: <strong>' + formatCurrency(outstanding) + '</strong>' +
+        'Outstanding earnings: <strong>' + formatCurrency(outstandingCents) + '</strong>' +
       '</div>' +
       '<div class="form-group" style="margin-bottom:12px;">' +
         '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Amount Received ($)</label>' +
-        '<input type="number" id="payoutAmount" step="0.01" min="0" max="100000" value="' + outstanding.toFixed(2) + '" style="width:160px;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.9rem;">' +
+        '<input type="number" id="payoutAmount" step="0.01" min="0" max="100000" value="' + (outstandingCents / 100).toFixed(2) + '" style="width:160px;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.9rem;">' +
       '</div>' +
       '<div class="form-group" style="margin-bottom:12px;">' +
         '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Received Date</label>' +
@@ -757,27 +757,45 @@
     }
 
     var amountCents = Math.round(amountDollars * 100);
-    var payoutId = MastDB.consignments.newKey();
+    var settlementId = MastDB.consignments.newKey();
     var receivedAtIso = receivedDate + 'T12:00:00.000Z';
     var now = new Date().toISOString();
 
-    var payoutRecord = {
-      payoutId: payoutId,
-      amountCents: amountCents,
-      receivedAt: receivedAtIso,
+    var p = placementsData[placementId];
+    var totals = p ? calculatePlacementTotals(p) : { makerEarnings: 0 };
+    var existingSettlements = (p && p.settlements && typeof p.settlements === 'object') ? p.settlements : {};
+    var totalPreviouslySettledCents = Object.values(existingSettlements).reduce(function(sum, s) {
+      return sum + (s && Number(s.amountReceivedCents) || 0);
+    }, 0);
+    var expectedAmountCents = Math.max(0, totals.makerEarnings - totalPreviouslySettledCents);
+
+    var settlementRecord = {
+      settlementId: settlementId,
+      date: receivedDate,
+      amountReceivedCents: amountCents,
+      expectedAmountCents: expectedAmountCents,
+      method: null,
+      referenceNumber: null,
       notes: notes || null,
-      recordedAt: now,
-      recordedBy: (window.currentUser && window.currentUser.uid) || 'admin'
+      createdAt: now,
+      createdBy: (window.currentUser && window.currentUser.uid) || 'admin'
     };
 
     try {
-      await MastDB.consignments.setField(placementId, 'payouts/' + payoutId, payoutRecord);
+      await MastDB.consignments.setField(placementId, 'settlements/' + settlementId, settlementRecord);
+
+      var newTotalSettledCents = totalPreviouslySettledCents + amountCents;
+      await MastDB.consignments.update(placementId, {
+        totalSettled: newTotalSettledCents,
+        lastSettlementDate: receivedDate,
+        updatedAt: now
+      });
 
       try {
         await firebase.functions().httpsCallable('recordTenantRevenue')({
           tenantId: (MastDB && MastDB.tenantId && MastDB.tenantId()) || undefined,
           channelKey: 'consignment',
-          sourceId: placementId + ':' + payoutId,
+          sourceId: placementId + ':' + settlementId,
           receivedAt: receivedAtIso,
           grossCents: amountCents,
           salesTaxCents: 0,
@@ -791,7 +809,7 @@
       }
 
       closeModal();
-      showToast('Payout of ' + formatCurrency(amountDollars) + ' recorded');
+      showToast('Payout of ' + formatCurrency(amountCents) + ' recorded');
       renderPlacementDetail(placementId);
     } catch (err) {
       console.error('Consignment payout error:', err);
@@ -856,7 +874,7 @@
     var productName = opt ? opt.getAttribute('data-name') : '';
     var qty = qtyEl ? parseInt(qtyEl.value) || 0 : 0;
     if (qty <= 0) { showToast('Quantity must be at least 1', 'error'); return; }
-    var retailPrice = priceEl ? parseFloat(priceEl.value) || 0 : 0;
+    var retailPrice = priceEl ? Math.round((parseFloat(priceEl.value) || 0) * 100) : 0;
 
     var liKey = MastDB.consignments.newKey();
     var lineItem = {
