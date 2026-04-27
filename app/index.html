@@ -23746,7 +23746,7 @@ async function saveCardStockAdjust(pid) {
     var curStock = (inv && inv.stock) ? inv.stock : {};
     var curOnHand = (curStock._default) ? (curStock._default.onHand || 0) : 0;
     var updates = {
-      'stock/_default/onHand': curOnHand + addQty,
+      'stock._default.onHand': curOnHand + addQty,
       'updatedAt': new Date().toISOString()
     };
     if (!inv.stockType || inv.stockType === 'made-to-order' || inv.stockType === 'build-to-order') {
@@ -24957,21 +24957,21 @@ async function saveInlineAdjust(pid) {
         var inputVal = parseInt(input.value) || 0;
         var curVal = (curStock[key]) ? (curStock[key].onHand || 0) : 0;
         var onHand = adjMode === 'add' ? curVal + inputVal : inputVal;
-        updates['stock/' + key + '/onHand'] = Math.max(0, onHand);
+        updates['stock.' + key + '.onHand'] = Math.max(0, onHand);
         totalOnHand += Math.max(0, onHand);
       });
-      updates['stock/_default/onHand'] = totalOnHand;
+      updates['stock._default.onHand'] = totalOnHand;
     } else {
       var inputVal = parseInt((document.getElementById('inlineAdjDefault') || {}).value) || 0;
       var curVal = (curStock._default) ? (curStock._default.onHand || 0) : 0;
       var onHand = adjMode === 'add' ? curVal + inputVal : inputVal;
-      updates['stock/_default/onHand'] = Math.max(0, onHand);
+      updates['stock._default.onHand'] = Math.max(0, onHand);
     }
     updates['updatedAt'] = new Date().toISOString();
 
     // Auto-set stockType to 'strict' when stock is added to a build-to-order product
     if (!inv.stockType || inv.stockType === 'made-to-order' || inv.stockType === 'build-to-order') {
-      var totalSet = updates['stock/_default/onHand'] || 0;
+      var totalSet = updates['stock._default.onHand'] || 0;
       if (totalSet > 0) updates['stockType'] = 'strict';
     }
 
@@ -29785,10 +29785,10 @@ async function saveAdjustStock(pid) {
           var curVal = (curStock[key]) ? (curStock[key].onHand || 0) : 0;
           onHand = curVal + inputVal;
         }
-        updates['stock/' + key + '/onHand'] = Math.max(0, onHand);
+        updates['stock.' + key + '.onHand'] = Math.max(0, onHand);
         totalOnHand += Math.max(0, onHand);
       });
-      updates['stock/_default/onHand'] = totalOnHand;
+      updates['stock._default.onHand'] = totalOnHand;
     } else {
       var inputVal = parseInt(document.getElementById('adjDefaultAvail').value) || 0;
       var onHand = inputVal;
@@ -29796,14 +29796,14 @@ async function saveAdjustStock(pid) {
         var curVal = (curStock._default) ? (curStock._default.onHand || 0) : 0;
         onHand = curVal + inputVal;
       }
-      updates['stock/_default/onHand'] = Math.max(0, onHand);
+      updates['stock._default.onHand'] = Math.max(0, onHand);
     }
     updates['updatedAt'] = new Date().toISOString();
 
     // Sculpture qty cap enforcement
     var isSculptureAdj = (document.getElementById('adjIsSculpture') || {}).value === '1';
     if (isSculptureAdj) {
-      var newOnHand = updates['stock/_default/onHand'] || 0;
+      var newOnHand = updates['stock._default.onHand'] || 0;
       if (newOnHand > 1) {
         showToast('Sculptures are limited to 1 unit in stock', true);
         return;
@@ -29812,7 +29812,7 @@ async function saveAdjustStock(pid) {
 
     // Auto-set stockType to 'strict' when stock is added to a build-to-order product
     if (!inv.stockType || inv.stockType === 'made-to-order' || inv.stockType === 'build-to-order') {
-      var totalSet = updates['stock/_default/onHand'] || 0;
+      var totalSet = updates['stock._default.onHand'] || 0;
       if (totalSet > 0) {
         updates['stockType'] = 'strict';
       }
@@ -29834,7 +29834,7 @@ async function saveAdjustStock(pid) {
 
     // Auto-set sold status when sculpture stock reaches 0
     if (isSculptureAdj) {
-      var finalOnHand = updates['stock/_default/onHand'] || 0;
+      var finalOnHand = updates['stock._default.onHand'] || 0;
       if (finalOnHand <= 0) {
         await MastDB.products.statusRef(pid).set('sold');
         writeAudit('update', 'products', pid);
@@ -36394,7 +36394,7 @@ async function saveDashInlineAdjust(pid) {
     var curStock = (inv && inv.stock) ? inv.stock : {};
     var curOnHand = (curStock._default) ? (curStock._default.onHand || 0) : 0;
     var updates = {
-      'stock/_default/onHand': curOnHand + addQty,
+      'stock._default.onHand': curOnHand + addQty,
       'updatedAt': new Date().toISOString()
     };
 
