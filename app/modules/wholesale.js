@@ -67,7 +67,7 @@ function renderWholesaleUsers() {
   container.innerHTML = '<div style="color:var(--warm-gray);padding:40px 0;text-align:center;">Loading authorized users...</div>';
 
   MastDB.get('admin/wholesaleAuthorized').then(function(snapVal) {
-    wholesaleAuthorizedData = snap.val() || {};
+    wholesaleAuthorizedData = snapVal || {};
     var users = Object.keys(wholesaleAuthorizedData).map(function(k) {
       var u = wholesaleAuthorizedData[k];
       u._key = k;
@@ -127,7 +127,7 @@ async function addWholesaleUser() {
   var email = await mastPrompt('Enter the buyer\'s Google email address:', { title: 'Add Wholesale User' });
   if (!email) return;
   email = email.trim().toLowerCase();
-  if (!email.includes('@')) { showToast('Invalid email address', true); return; }
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { showToast('Invalid email address', true); return; }
 
   var key = wsEmailToKey(email);
   var data = {
@@ -175,7 +175,7 @@ function renderWholesaleRequests() {
   container.innerHTML = '<div style="color:var(--warm-gray);padding:40px 0;text-align:center;">Loading requests...</div>';
 
   MastDB.get('admin/wholesaleRequests').then(function(snapVal) {
-    wholesaleRequestsData = snap.val() || {};
+    wholesaleRequestsData = snapVal || {};
     var requests = Object.keys(wholesaleRequestsData).map(function(k) {
       var r = wholesaleRequestsData[k];
       r._id = k;
@@ -355,7 +355,7 @@ function uploadWholesalePDF() {
 
 function checkWholesalePdfStatus() {
   MastDB.get('admin/wholesaleConfig/pdfUrl').then(function(snapVal) {
-    var url = snap.val();
+    var url = snapVal;
     var statusEl = document.getElementById('wholesalePdfStatus');
     var qrEl = document.getElementById('wholesalePdfQR');
     if (url) {
