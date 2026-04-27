@@ -34776,12 +34776,12 @@ async function saveCoupon(existingCode) {
     description: description || null,
     minOrder: minOrder,
     excludeSaleItems: excludeSaleItems,
-    updatedAt: MastDB.serverTimestamp()
+    updatedAt: new Date().toISOString()
   };
 
   if (!isEdit) {
     data.claimedCount = 0;
-    data.createdAt = MastDB.serverTimestamp();
+    data.createdAt = new Date().toISOString();
   }
 
   try {
