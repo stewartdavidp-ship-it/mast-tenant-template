@@ -35157,9 +35157,12 @@ function toggleTestingModeVisibility() {
 // Testing Mode
 // ============================================================
 function escapeHtml(str) {
-  var div = document.createElement('div');
-  div.textContent = str;
-  return div.innerHTML;
+  return String(str == null ? '' : str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 // ===== Testing Mode — Data-Driven Missions with Event-Based Auto-Detection =====
 
