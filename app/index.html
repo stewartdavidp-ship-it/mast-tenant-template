@@ -19713,7 +19713,7 @@ async function sendTestEmailFromSettings() {
   var statusEl = document.getElementById('emailTestStatus');
   if (statusEl) statusEl.innerHTML = '<span style="color:var(--warm-gray);">Sending test email...</span>';
   try {
-    var result = await firebase.functions().httpsCallable('sendTestEmail')({ toEmail: toEmail });
+    var result = await firebase.functions().httpsCallable('sendTestEmail')({ tenantId: MastDB.tenantId(), toEmail: toEmail });
     if (statusEl) statusEl.innerHTML = '<span style="color:var(--teal);">&#10003; Test email sent to ' + esc(result.data.sentTo) + '</span>';
     showToast('Test email sent to ' + result.data.sentTo);
   } catch (err) {
