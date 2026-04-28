@@ -7156,6 +7156,17 @@
           <div id="publicFeedbackStatus" style="margin-top:8px;font-size:0.85rem;"></div>
         </div>
         <div class="form-group" style="margin-top:24px;">
+          <label>Automatic Error Reporting</label>
+          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:8px;">
+            Automatically report detected JS errors, failed loads, and spinner timeouts. No manual action required.
+          </p>
+          <label style="display:flex;align-items:center;gap:10px;cursor:pointer;">
+            <input type="checkbox" id="autoReportToggle" onchange="toggleAutoReport()"
+              style="width:18px;height:18px;cursor:pointer;">
+            <span>Automatically report detected errors</span>
+          </label>
+        </div>
+        <div class="form-group" style="margin-top:24px;">
           <label>Testing Mode</label>
           <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:8px;">
             Show the Testing Mode panel in the sidebar. Useful for QA testing with guided missions.
@@ -12690,6 +12701,7 @@ auth.onAuthStateChanged(async function(user) {
   loadTokenWallet(); // Start listening for token balance (non-blocking)
   initAlertBadgeListener(); // Start listening for unread alerts (non-blocking)
   initNotificationListener(); // Start listening for admin notifications (non-blocking)
+  installAutoDetection();    // Start auto error detection (non-blocking)
   // --- End Tenant Resolution ---
 
   var role = _roleResult[3];
@@ -17568,6 +17580,243 @@ function renderMyFeedbackTab() {
 }
 
 // ============================================================
+// Auto Error Detection
+// Captures unhandled JS errors, promise rejections, stalled spinners,
+// and network/console bursts — submits as source:'auto' feedback reports.
+// Opt-out: localStorage 'mast_auto_report_disabled' = '1'.
+// First-run: prompts user before first auto-report fires.
+// ============================================================
+
+var _autoReportSeen = new Set();  // dedup fingerprints per session
+var _autoReportCount = 0;         // hard cap: max 5 per session
+var _AUTO_REPORT_CAP = 5;
+var _AUTO_REPORT_DISABLED_KEY = 'mast_auto_report_disabled';
+var _AUTO_REPORT_CONSENTED_KEY = 'mast_auto_report_consented';
+var _spinnerTimers = {};           // element key → timeout ID
+var _burstLastNetworkReport = 0;
+var _burstLastConsoleReport = 0;
+
+var _AUTO_IGNORE = [
+  'RBAC seed skipped',
+  'MastDB: path requires doc ID: admin_roles',
+  'Script error.',
+  'ResizeObserver loop',
+];
+
+function _autoReportEnabled() {
+  try { return localStorage.getItem(_AUTO_REPORT_DISABLED_KEY) !== '1'; } catch(e) { return true; }
+}
+
+function _autoReportConsented() {
+  try { return !!localStorage.getItem(_AUTO_REPORT_CONSENTED_KEY); } catch(e) { return false; }
+}
+
+function _autoIgnore(msg) {
+  if (!msg) return false;
+  var s = String(msg);
+  return _AUTO_IGNORE.some(function(p) { return s.indexOf(p) !== -1; });
+}
+
+function _autoFingerprint(screen, type, msg) {
+  return screen + '|' + type + '|' + String(msg || '').slice(0, 60);
+}
+
+function _submitAutoReport(type, message) {
+  if (!_autoReportEnabled()) return;
+  if (_autoReportCount >= _AUTO_REPORT_CAP) return;
+  if (_autoIgnore(message)) return;
+
+  var screen = currentRoute || 'unknown';
+  var fp = _autoFingerprint(screen, type, message);
+  if (_autoReportSeen.has(fp)) return;
+  _autoReportSeen.add(fp);
+  _autoReportCount++;
+
+  var now = Date.now();
+  var cutoff = now - 60000;
+  var report = {
+    appId: MastDB.tenantId(),
+    source: 'auto',
+    screen: screen,
+    screenLabel: (typeof getScreenLabel === 'function') ? getScreenLabel() : screen,
+    type: 'bug',
+    severity: 'medium',
+    description: '[Auto-detected] ' + type + ' on ' + screen + ' screen\nError: ' + String(message || '').slice(0, 200),
+    email: null,
+    userId: currentUser ? currentUser.uid : null,
+    userName: currentUser ? (currentUser.displayName || currentUser.email || '') : null,
+    tenantPlan: window.MAST_TENANT_PLAN || null,
+    consoleBuffer: window._consoleBuffer ? window._consoleBuffer.filter(function(e) { return e.t >= cutoff; }) : [],
+    toastBuffer: window._toastBuffer ? window._toastBuffer.filter(function(e) { return e.t >= cutoff; }) : [],
+    networkErrors: window._networkErrors ? window._networkErrors.filter(function(e) { return e.t >= cutoff; }) : [],
+    deviceInfo: { userAgent: navigator.userAgent, viewport: { width: window.innerWidth, height: window.innerHeight } },
+    appVersion: window.MAST_VERSION || null,
+    timestamp: new Date().toISOString(),
+    status: 'open',
+    jobId: null,
+    createdAt: MastDB.serverTimestamp()
+  };
+
+  MastDB.feedback.ref().push(report).then(function() {
+    showToast('An issue was automatically detected and reported.');
+  }).catch(function(e) {
+    console.warn('[autoReport] submit failed:', e);
+  });
+}
+
+function fireAutoReport(type, message) {
+  if (!_autoReportEnabled()) return;
+  if (_autoIgnore(message)) return;
+
+  if (!_autoReportConsented()) {
+    // First-run: show confirmation dialog before submitting
+    _showAutoReportConsent(type, message);
+  } else {
+    _submitAutoReport(type, message);
+  }
+}
+
+function _showAutoReportConsent(pendingType, pendingMessage) {
+  if (document.getElementById('autoReportConsentOverlay')) return; // already showing
+  var overlay = document.createElement('div');
+  overlay.id = 'autoReportConsentOverlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:10001;display:flex;align-items:center;justify-content:center;';
+  overlay.innerHTML = '<div style="background:var(--surface-card,#2a2a2a);border-radius:12px;padding:28px 32px;max-width:440px;width:90%;box-shadow:0 8px 40px rgba(0,0,0,0.4);">' +
+    '<h3 style="margin:0 0 10px;font-size:1.1rem;font-weight:600;">Automatic Error Reporting</h3>' +
+    '<p style="font-size:0.88rem;color:var(--warm-gray-light,#aaa);margin:0 0 18px;line-height:1.5;">' +
+      'An issue was detected on this screen. Mast can automatically send reports like this to help identify bugs — no action required from you.' +
+    '</p>' +
+    '<p style="font-size:0.88rem;color:var(--warm-gray-light,#aaa);margin:0 0 24px;line-height:1.5;">' +
+      'You can change this any time in Settings → General.' +
+    '</p>' +
+    '<div style="display:flex;gap:10px;justify-content:flex-end;">' +
+      '<button onclick="_disableAutoReport()" style="background:none;border:1px solid rgba(255,255,255,0.2);color:var(--warm-gray-light,#aaa);padding:8px 16px;border-radius:6px;cursor:pointer;font-family:inherit;font-size:0.88rem;">Don\'t report automatically</button>' +
+      '<button onclick="_confirmAutoReport()" style="background:var(--amber,#F59E0B);color:#000;border:none;padding:8px 18px;border-radius:6px;cursor:pointer;font-weight:600;font-family:inherit;font-size:0.88rem;">Enable &amp; Report</button>' +
+    '</div>' +
+  '</div>';
+  document.body.appendChild(overlay);
+
+  window._pendingAutoType = pendingType;
+  window._pendingAutoMsg = pendingMessage;
+}
+
+function _confirmAutoReport() {
+  try { localStorage.setItem(_AUTO_REPORT_CONSENTED_KEY, '1'); } catch(e) {}
+  var overlay = document.getElementById('autoReportConsentOverlay');
+  if (overlay) overlay.parentNode.removeChild(overlay);
+  _submitAutoReport(window._pendingAutoType, window._pendingAutoMsg);
+  var toggle = document.getElementById('autoReportToggle');
+  if (toggle) toggle.checked = true;
+}
+
+function _disableAutoReport() {
+  try {
+    localStorage.setItem(_AUTO_REPORT_DISABLED_KEY, '1');
+    localStorage.setItem(_AUTO_REPORT_CONSENTED_KEY, '1');
+  } catch(e) {}
+  var overlay = document.getElementById('autoReportConsentOverlay');
+  if (overlay) overlay.parentNode.removeChild(overlay);
+  var toggle = document.getElementById('autoReportToggle');
+  if (toggle) toggle.checked = false;
+}
+
+function toggleAutoReport() {
+  var toggle = document.getElementById('autoReportToggle');
+  if (!toggle) return;
+  try {
+    if (toggle.checked) {
+      localStorage.removeItem(_AUTO_REPORT_DISABLED_KEY);
+      localStorage.setItem(_AUTO_REPORT_CONSENTED_KEY, '1');
+    } else {
+      localStorage.setItem(_AUTO_REPORT_DISABLED_KEY, '1');
+    }
+  } catch(e) {}
+}
+
+// Install detection listeners — called once after MastDB is ready
+function installAutoDetection() {
+  // 1. Unhandled JS exceptions
+  var _prevOnError = window.onerror;
+  window.onerror = function(msg, src, line, col, err) {
+    fireAutoReport('unhandled-error', msg);
+    return _prevOnError ? _prevOnError.apply(this, arguments) : false;
+  };
+
+  // 2. Unhandled promise rejections
+  window.addEventListener('unhandledrejection', function(e) {
+    var msg = (e.reason && (e.reason.message || String(e.reason))) || 'Unhandled promise rejection';
+    fireAutoReport('unhandled-rejection', msg);
+  });
+
+  // 3. Stalled spinner detection — watch for .loading elements visible > 8s
+  if (typeof MutationObserver !== 'undefined') {
+    var SPINNER_TIMEOUT = 8000;
+    function _spinnerKey(el) {
+      return el.id || (el.className + ':' + (el.parentElement && el.parentElement.id));
+    }
+    function _onSpinnerVisible(el) {
+      var key = _spinnerKey(el);
+      if (_spinnerTimers[key]) return;
+      _spinnerTimers[key] = setTimeout(function() {
+        if (document.body.contains(el) && el.offsetParent !== null) {
+          var screen = currentRoute || 'unknown';
+          fireAutoReport('spinner-timeout', 'Spinner on ' + screen + ' did not resolve within 8s');
+        }
+        delete _spinnerTimers[key];
+      }, SPINNER_TIMEOUT);
+    }
+    function _onSpinnerHidden(el) {
+      var key = _spinnerKey(el);
+      if (_spinnerTimers[key]) { clearTimeout(_spinnerTimers[key]); delete _spinnerTimers[key]; }
+    }
+    var spinnerObserver = new MutationObserver(function(mutations) {
+      mutations.forEach(function(m) {
+        m.addedNodes.forEach(function(node) {
+          if (node.nodeType !== 1) return;
+          if (node.classList && node.classList.contains('loading')) _onSpinnerVisible(node);
+          var nested = node.querySelectorAll && node.querySelectorAll('.loading');
+          if (nested) nested.forEach(_onSpinnerVisible);
+        });
+        m.removedNodes.forEach(function(node) {
+          if (node.nodeType !== 1) return;
+          if (node.classList && node.classList.contains('loading')) _onSpinnerHidden(node);
+          var nested = node.querySelectorAll && node.querySelectorAll('.loading');
+          if (nested) nested.forEach(_onSpinnerHidden);
+        });
+      });
+    });
+    spinnerObserver.observe(document.body, { childList: true, subtree: true });
+
+    // Also check spinners already in DOM at init (e.g. page loaded with loading state)
+    document.querySelectorAll('.loading').forEach(function(el) {
+      if (el.offsetParent !== null) _onSpinnerVisible(el);
+    });
+  }
+
+  // 4. Network error burst — 3+ failures within 30s
+  setInterval(function() {
+    if (!_autoReportEnabled()) return;
+    var now = Date.now();
+    var recent = (window._networkErrors || []).filter(function(e) { return e.t >= now - 30000; });
+    if (recent.length >= 3 && now - _burstLastNetworkReport > 60000) {
+      _burstLastNetworkReport = now;
+      fireAutoReport('network-burst', recent.length + ' network errors in 30s: ' + recent.map(function(e) { return e.url; }).join(', ').slice(0, 150));
+    }
+  }, 15000);
+
+  // 5. Console error burst — 3+ errors within 10s
+  setInterval(function() {
+    if (!_autoReportEnabled()) return;
+    var now = Date.now();
+    var recent = (window._consoleBuffer || []).filter(function(e) { return e.t >= now - 10000 && e.level === 'error'; });
+    if (recent.length >= 3 && now - _burstLastConsoleReport > 60000) {
+      _burstLastConsoleReport = now;
+      fireAutoReport('console-burst', recent.length + ' console errors in 10s: ' + recent.map(function(e) { return e.msg; }).join(' | ').slice(0, 150));
+    }
+  }, 10000);
+}
+
+// ============================================================
 // Subscription Settings (Module Selection entry point)
 // ============================================================
 
@@ -18792,6 +19041,9 @@ function loadSettings() {
     document.body.classList.toggle('dark-mode', !!darkPref);
     var toggle = document.getElementById('darkModeToggle');
     if (toggle) toggle.checked = !!darkPref;
+    // Auto-report toggle — driven by localStorage, not Firebase
+    var autoToggle = document.getElementById('autoReportToggle');
+    if (autoToggle) autoToggle.checked = _autoReportEnabled();
   });
   loadPaymentProcessor();
   loadShippingConfig();
