@@ -283,6 +283,18 @@
       transition: color 0.15s;
     }
     #notificationPanel .notif-dismiss:hover { color: white; }
+    #notificationPanel .notif-footer {
+      padding: 10px 16px;
+      border-top: 1px solid rgba(255,255,255,0.1);
+      text-align: center;
+    }
+    #notificationPanel .notif-footer a {
+      color: #a78bfa;
+      font-size: 12px;
+      text-decoration: none;
+      cursor: pointer;
+    }
+    #notificationPanel .notif-footer a:hover { text-decoration: underline; }
 
     /* ========== SIDEBAR NAVIGATION ========== */
     .sidebar {
@@ -5222,6 +5234,7 @@
       <button onclick="toggleNotificationPanel()" aria-label="Close notifications">✕</button>
     </div>
     <div id="notificationList"><div class="notif-empty">No new notifications</div></div>
+    <div class="notif-footer"><a onclick="toggleNotificationPanel(); navigateTo('my-feedback');">View all my submissions →</a></div>
   </div>
 
   <!-- ===== SIDEBAR NAVIGATION ===== -->
@@ -5925,6 +5938,14 @@
     <div id="lookbooksTab" style="display:none;"></div>
 
     <div id="placeholderTab" style="display:none;"></div>
+
+    <!-- My Feedback Tab -->
+    <div id="myFeedbackTab" style="display:none;">
+      <div class="section-header">
+        <h2>My Submissions</h2>
+      </div>
+      <div id="myFeedbackContent" style="padding:0 24px 24px;"></div>
+    </div>
 
     <!-- ===== PULSING TRIP INDICATOR ===== -->
     <div id="tripPulsingIndicator" onclick="openEndTripSheet()" style="display:none;position:fixed;bottom:20px;right:20px;z-index:999;background:#f59e0b;color:#fff;padding:10px 18px;border-radius:24px;font-size:0.85rem;font-weight:600;cursor:pointer;box-shadow:0 4px 12px rgba(245,158,11,0.4);animation:tripPulse 2s infinite;font-family:'DM Sans',sans-serif;">
@@ -14034,7 +14055,8 @@ var ROUTE_MAP = {
   'migration-confirm': { tab: 'migrationConfirmTab', setup: function() { renderMigrationConfirmation(); } },
   'migration-plan':   { tab: 'migrationPlanTab', setup: function() { renderMigrationPlan(); } },
   'migration-import': { tab: 'migrationImportTab', setup: function() { renderMigrationImport(); } },
-  'historical-orders': { tab: 'historicalOrdersTab', setup: function() { renderHistoricalOrders(); } }
+  'historical-orders': { tab: 'historicalOrdersTab', setup: function() { renderHistoricalOrders(); } },
+  'my-feedback':       { tab: 'myFeedbackTab', setup: function() { renderMyFeedbackTab(); } }
 };
 
 // Section → which routes belong to it (for auto-expanding)
@@ -14054,7 +14076,7 @@ var SECTION_ROUTES = {
   'migration': ['migration', 'migration-confirm', 'migration-plan', 'migration-import', 'historical-orders']
 };
 
-var ALL_TAB_IDS = ['scheduleTab', 'galleryTab', 'homepageTab', 'brandTab', 'productsTab', 'ordersTab', 'salesTab', 'salesEventsTab', 'productionTab', 'forecastTab', 'couponsTab', 'analyticsTab', 'settingsTab', 'imagesTab', 'auditLogTab', 'employeesTab', 'contactsTab', 'customersTab', 'packTab', 'shipTab', 'commissionsTab', 'rmaTab', 'socialMediaTab', 'blogTab', 'newsletterTab', 'placeholderTab', 'inventoryTab', 'storiesTab', 'dashboardTab', 'tripsTab', 'wholesaleTab', 'showTab', 'financialsTab', 'eventsAdminTab', 'websiteTab', 'showLightTab', 'emailLogTab', 'materialsTab', 'piecesTab', 'galleriesTab', 'lookbooksTab', 'promotionsTab', 'expensesTab', 'bookTab', 'subscriptionTab', 'aboutTab', 'walletTab', 'giftCardsTab', 'loyaltyTab', 'membershipTab', 'termsTab', 'advisorTab', 'studioTab', 'teamTab', 'studentsTab', 'migrationDashTab', 'migrationConfirmTab', 'migrationPlanTab', 'migrationImportTab', 'historicalOrdersTab', 'channelsTab', 'businessTab'];
+var ALL_TAB_IDS = ['scheduleTab', 'galleryTab', 'homepageTab', 'brandTab', 'productsTab', 'ordersTab', 'salesTab', 'salesEventsTab', 'productionTab', 'forecastTab', 'couponsTab', 'analyticsTab', 'settingsTab', 'imagesTab', 'auditLogTab', 'employeesTab', 'contactsTab', 'customersTab', 'packTab', 'shipTab', 'commissionsTab', 'rmaTab', 'socialMediaTab', 'blogTab', 'newsletterTab', 'placeholderTab', 'inventoryTab', 'storiesTab', 'dashboardTab', 'tripsTab', 'wholesaleTab', 'showTab', 'financialsTab', 'eventsAdminTab', 'websiteTab', 'showLightTab', 'emailLogTab', 'materialsTab', 'piecesTab', 'galleriesTab', 'lookbooksTab', 'promotionsTab', 'expensesTab', 'bookTab', 'subscriptionTab', 'aboutTab', 'walletTab', 'giftCardsTab', 'loyaltyTab', 'membershipTab', 'termsTab', 'advisorTab', 'studioTab', 'teamTab', 'studentsTab', 'migrationDashTab', 'migrationConfirmTab', 'migrationPlanTab', 'migrationImportTab', 'historicalOrdersTab', 'channelsTab', 'businessTab', 'myFeedbackTab'];
 
 var currentRoute = 'dashboard';
 
@@ -17447,6 +17469,79 @@ function formatNotifTime(iso) {
 function escapeHtml(str) {
   if (!str) return '';
   return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ============================================================
+// My Feedback — submission history for the current user
+// ============================================================
+
+function renderMyFeedbackTab() {
+  var el = document.getElementById('myFeedbackContent');
+  if (!el) return;
+  el.innerHTML = '<p style="color:var(--warm-gray-light);font-size:0.9rem;">Loading…</p>';
+
+  var uid = currentUser && currentUser.uid;
+  if (!uid) {
+    el.innerHTML = '<p style="color:var(--warm-gray-light);">Not signed in.</p>';
+    return;
+  }
+
+  MastDB.query('feedbackReports').limitToLast(200).once().then(function(reports) {
+    var all = [];
+    if (reports) {
+      Object.entries(reports).forEach(function(entry) {
+        var id = entry[0], r = entry[1];
+        if (r.userId === uid) all.push(Object.assign({ _id: id }, r));
+      });
+    }
+    all.sort(function(a, b) {
+      return ((b.timestamp || b.createdAt) || '').localeCompare((a.timestamp || a.createdAt) || '');
+    });
+
+    if (all.length === 0) {
+      el.innerHTML = '<p style="color:var(--warm-gray-light);font-size:0.9rem;margin-top:16px;">No submissions yet.</p>';
+      return;
+    }
+
+    var open = all.filter(function(r) { return r.status !== 'closed'; });
+    var closed = all.filter(function(r) { return r.status === 'closed'; });
+
+    function feedbackCard(r) {
+      var statusColor = r.status === 'closed' ? 'background:#d1fae5;color:#065f46' : 'background:#fef3c7;color:#92400e';
+      var dateStr = r.timestamp || r.createdAt || '';
+      var dateLabel = dateStr ? formatNotifTime(dateStr) : '';
+      var resolvedHtml = r.resolvedNote
+        ? '<div style="margin-top:8px;padding:8px 10px;background:var(--cream);border-radius:6px;font-size:0.82rem;color:var(--warm-gray-light);">Resolution: <em>' + escapeHtml(r.resolvedNote) + '</em></div>'
+        : '';
+      return '<div class="order-detail-section">' +
+        '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">' +
+          '<div style="flex:1;min-width:0;">' +
+            '<div style="font-size:0.85rem;font-weight:600;margin-bottom:4px;">' + escapeHtml(r.description || '(no description)') + '</div>' +
+            '<div style="font-size:0.78rem;color:var(--warm-gray-light);">' +
+              escapeHtml(r.screenLabel || r.screen || '') +
+              (dateLabel ? ' · ' + dateLabel : '') +
+            '</div>' +
+            resolvedHtml +
+          '</div>' +
+          '<span class="status-badge pill" style="' + statusColor + ';flex-shrink:0;">' + escapeHtml(r.status || 'open') + '</span>' +
+        '</div>' +
+      '</div>';
+    }
+
+    var html = '';
+    if (open.length > 0) {
+      html += '<div class="order-detail-section-title" style="margin-top:8px;">Open (' + open.length + ')</div>';
+      html += open.map(feedbackCard).join('');
+    }
+    if (closed.length > 0) {
+      html += '<div class="order-detail-section-title" style="margin-top:' + (open.length > 0 ? '20px' : '8px') + ';">Resolved (' + closed.length + ')</div>';
+      html += closed.map(feedbackCard).join('');
+    }
+    el.innerHTML = html;
+  }).catch(function(e) {
+    el.innerHTML = '<p style="color:var(--warm-gray-light);font-size:0.9rem;">Failed to load submissions.</p>';
+    console.error('[myFeedback] load error:', e);
+  });
 }
 
 // ============================================================
