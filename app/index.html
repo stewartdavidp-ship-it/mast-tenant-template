@@ -17417,13 +17417,13 @@ function renderNotificationPanel() {
     var label = n.screenLabel || n.screen || 'Unknown screen';
     var time = n.resolvedAt ? formatNotifTime(n.resolvedAt) : '';
     var note = n.resolvedNote ? ('<div class="notif-note">“' + escapeHtml(n.resolvedNote) + '”</div>') : '';
-    return '<div class="notif-item" onclick="handleNotifClick(' + JSON.stringify(n._id) + ',' + JSON.stringify(n.screen || '') + ')">' +
+    return '<div class="notif-item" data-notif-id="' + n._id + '" data-notif-screen="' + escapeHtml(n.screen || '') + '" onclick="handleNotifClick(this.dataset.notifId,this.dataset.notifScreen)">' +
       '<div class="notif-body">' +
         '<div class="notif-title">🔔 Your report on <strong>' + escapeHtml(label) + '</strong> was resolved</div>' +
         note +
         '<div class="notif-time">' + time + '</div>' +
       '</div>' +
-      '<button class="notif-dismiss" onclick="dismissNotif(event,' + JSON.stringify(n._id) + ')" aria-label="Dismiss">×</button>' +
+      '<button class="notif-dismiss" data-notif-id="' + n._id + '" onclick="dismissNotif(event,this.dataset.notifId)" aria-label="Dismiss">×</button>' +
     '</div>';
   }).join('');
 }
