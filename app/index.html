@@ -17617,6 +17617,8 @@ var _autoReportCount = 0; // session cap: max 5 per page load
 var _AUTO_IGNORE = [
   'RBAC seed skipped',
   'MastDB: path requires doc ID: admin_roles',
+  'MastDB: path requires doc ID: trip_locations', // known bug, already tracked
+  'activeTripData.id = key',                       // known bug, already tracked
   'Script error.',
   'ResizeObserver loop',
   '/templates/',        // manifest/template 404s — expected on test sites
@@ -17767,50 +17769,32 @@ function installAutoDetection() {
     fireAutoReport('unhandled-rejection', msg);
   });
 
-  // 3. Stalled spinner detection — watch for .loading elements visible > 8s
-  if (typeof MutationObserver !== 'undefined') {
-    var SPINNER_TIMEOUT = 8000;
-    function _spinnerKey(el) {
-      return el.id || (el.className + ':' + (el.parentElement && el.parentElement.id));
-    }
-    function _onSpinnerVisible(el) {
-      var key = _spinnerKey(el);
-      if (_spinnerTimers[key]) return;
-      _spinnerTimers[key] = setTimeout(function() {
-        if (document.body.contains(el) && el.offsetParent !== null) {
-          var screen = currentRoute || 'unknown';
-          fireAutoReport('spinner-timeout', 'Spinner on ' + screen + ' did not resolve within 8s');
-        }
-        delete _spinnerTimers[key];
-      }, SPINNER_TIMEOUT);
-    }
-    function _onSpinnerHidden(el) {
-      var key = _spinnerKey(el);
-      if (_spinnerTimers[key]) { clearTimeout(_spinnerTimers[key]); delete _spinnerTimers[key]; }
-    }
-    var spinnerObserver = new MutationObserver(function(mutations) {
-      mutations.forEach(function(m) {
-        m.addedNodes.forEach(function(node) {
-          if (node.nodeType !== 1) return;
-          if (node.classList && node.classList.contains('loading')) _onSpinnerVisible(node);
-          var nested = node.querySelectorAll && node.querySelectorAll('.loading');
-          if (nested) nested.forEach(_onSpinnerVisible);
-        });
-        m.removedNodes.forEach(function(node) {
-          if (node.nodeType !== 1) return;
-          if (node.classList && node.classList.contains('loading')) _onSpinnerHidden(node);
-          var nested = node.querySelectorAll && node.querySelectorAll('.loading');
-          if (nested) nested.forEach(_onSpinnerHidden);
-        });
-      });
-    });
-    spinnerObserver.observe(document.body, { childList: true, subtree: true });
+  // 3. Stalled spinner detection — poll every 2s for visible .loading elements.
+  // MutationObserver childList misses elements already in the static DOM that
+  // are shown/hidden via display:none toggling (POS, RMA, Membership spinners).
+  // A poll catches both static and dynamically-added spinners.
+  var SPINNER_TIMEOUT_MS = 8000;
+  var _spinnerFirstSeen = {}; // key → timestamp first seen visible
 
-    // Also check spinners already in DOM at init (e.g. page loaded with loading state)
-    document.querySelectorAll('.loading').forEach(function(el) {
-      if (el.offsetParent !== null) _onSpinnerVisible(el);
+  setInterval(function() {
+    var els = document.querySelectorAll('.loading');
+    var now = Date.now();
+    els.forEach(function(el) {
+      var visible = el.offsetParent !== null && el.style.display !== 'none' &&
+                    getComputedStyle(el).display !== 'none';
+      var key = el.id || ('loading:' + (el.parentElement && el.parentElement.id));
+      if (visible) {
+        if (!_spinnerFirstSeen[key]) _spinnerFirstSeen[key] = now;
+        else if (now - _spinnerFirstSeen[key] >= SPINNER_TIMEOUT_MS) {
+          var screen = currentRoute || 'unknown';
+          fireAutoReport('spinner-timeout', 'Spinner on ' + screen + ' did not resolve within 8s (element: ' + key + ')');
+          delete _spinnerFirstSeen[key]; // prevent re-firing same spinner
+        }
+      } else {
+        delete _spinnerFirstSeen[key]; // spinner cleared, reset
+      }
     });
-  }
+  }, 2000);
 
   // 4. Network error burst — 3+ failures within 30s
   setInterval(function() {
