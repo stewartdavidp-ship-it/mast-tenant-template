@@ -17451,10 +17451,11 @@ function dismissNotif(event, notifId) {
     .catch(function(e) { console.warn('[notifications] dismiss failed:', e); });
 }
 
+var _myFeedbackFrom = null;
+
 function goToMyFeedback() {
-  if (typeof currentRoute !== 'undefined' && currentRoute && currentRoute !== 'my-feedback') {
-    MastNavStack.push({ route: currentRoute, label: currentRoute });
-  }
+  _myFeedbackFrom = (typeof currentRoute !== 'undefined' && currentRoute && currentRoute !== 'my-feedback')
+    ? currentRoute : null;
   navigateTo('my-feedback');
 }
 
@@ -17492,6 +17493,10 @@ function renderMyFeedbackTab() {
 
   var backEl = document.getElementById('myFeedbackBack');
   if (backEl) {
+    if (_myFeedbackFrom) {
+      MastNavStack.push({ route: _myFeedbackFrom, label: _myFeedbackFrom });
+      _myFeedbackFrom = null;
+    }
     var prev = MastNavStack.peek();
     backEl.innerHTML = prev
       ? '<button class="detail-back" onclick="MastNavStack.popAndReturn()">&#8592; Back to ' + escapeHtml(prev.label || prev.route) + '</button>'
