@@ -333,6 +333,7 @@
   };
 
   window._gcIssueCard = async function() {
+    if (!isAdmin()) { showToast('Admin access required.', true); return; }
     var amountVal = parseFloat(document.getElementById('gcIssueAmount').value);
     if (!amountVal || amountVal <= 0) {
       showToast('Enter a valid amount.', true);
@@ -424,6 +425,7 @@
   };
 
   window._gcIssuePromo = async function() {
+    if (!isAdmin()) { showToast('Admin access required.', true); return; }
     var amountVal = parseFloat(document.getElementById('gcPromoAmount').value);
     if (!amountVal || amountVal <= 0) {
       showToast('Enter a valid amount.', true);
@@ -747,7 +749,7 @@
     MastDB.get('admin/membership/config').then(function(cfg) {
       membershipConfig = cfg || {};
       // Try loading members but don't block render on it
-      return MastDB.query('customers').orderByChild('membership.status').limitToLast(200).once().then(function(custData) {
+      return MastDB.query('customers').limitToLast(200).once().then(function(custData) {
         custData = custData || {};
         membershipMembers = [];
         Object.keys(custData).forEach(function(uid) {

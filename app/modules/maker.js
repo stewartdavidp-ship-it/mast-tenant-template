@@ -1680,7 +1680,7 @@
 
     var html = '';
     html += '<div id="materialModalOverlay" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:10000;display:flex;align-items:center;justify-content:center;" onclick="makerCloseMaterialModal(event)">';
-    html += '<div style="background:var(--cream);border-radius:10px;max-width:560px;width:90%;max-height:85vh;overflow-y:auto;box-shadow:0 8px 30px rgba(0,0,0,0.2);padding:20px 24px;" onclick="event.stopPropagation()">';
+    html += '<div style="background:var(--cream);border-radius:10px;max-width:560px;width:90%;max-height:85vh;overflow-y:auto;box-shadow:0 8px 30px rgba(0,0,0,0.2);padding:20px 24px;" onclick="event.stopPropagation()" onmousedown="event.stopPropagation()">';
 
     // Header
     html += '<h3 style="font-family:\'Cormorant Garamond\',serif;font-size:1.15rem;font-weight:500;margin:0 0 16px;">' + (isEdit ? 'Edit Material' : 'New Material') + '</h3>';
@@ -3779,6 +3779,7 @@
       // hardening pass. For now, the daily cron + tenant MCP refresh tool
       // are the only paths. Surface the current snapshot from RTDB.
       var current = await MastDB.get('admin/spotPrices/current');
+      spotPricesCurrent = current || null;
       var statusEl = document.getElementById('spotPriceStatusText');
       if (statusEl) {
         if (current && current.fetchedAt) {

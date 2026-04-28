@@ -9813,7 +9813,8 @@ MastDB.products = {
   setBuildIds: function(id, buildIds) { return MastDB.set('public/products/' + id + '/buildIds', buildIds); },
   setStoryId: function(id, storyId) { return MastDB.set('public/products/' + id + '/storyId', storyId); },
   removeStoryId: function(id) { return MastDB.remove('public/products/' + id + '/storyId'); },
-  setField: function(id, field, value) { return MastDB.set('public/products/' + id + '/' + field, value); }
+  setField: function(id, field, value) { return MastDB.set('public/products/' + id + '/' + field, value); },
+  fieldRef: function(id, field) { return _makeRefCompat('public/products/' + id + '/' + field); }
 };
 
 MastDB.inventory = {
@@ -12331,6 +12332,14 @@ function showToast(message, isError) {
   var prefs = window.MastToastPrefs || { position: 'bottom-center', duration: 'normal', size: 'comfortable' };
   container.setAttribute('data-position', prefs.position);
 
+  // Remove existing auto-dismiss (non-persistent) toasts before adding a new one
+  // to prevent stacking when operations complete in quick succession.
+  if (!isError) {
+    container.querySelectorAll('.toast:not(.persistent)').forEach(function(t) {
+      if (t.parentNode) t.parentNode.removeChild(t);
+    });
+  }
+
   var toast = document.createElement('div');
   toast.className = 'toast' + (isError ? ' error' : '');
   toast.setAttribute('data-size', prefs.size);
@@ -14519,7 +14528,7 @@ var MODULE_MANIFEST = {
   production: { src: 'modules/production.js', routes: ['jobs', 'production', 'stories', 'forecast'] },
   contacts: { src: 'modules/contacts.js', routes: ['contacts'] },
   customers: { src: 'modules/customers.js', routes: ['customers'] },
-  orders: { src: 'modules/orders.js', routes: ['orders', 'commissions'] },
+  orders: { src: 'modules/orders.js', routes: ['orders', 'commissions', 'rma'] },
   sales: { src: 'modules/sales.js', routes: ['pos', 'receipts', 'events', 'salesEvents', 'terms'] },
   fulfillment: { src: 'modules/fulfillment.js', routes: ['pack', 'ship', 'fulfillment'] },
   eventsAdmin: { src: 'modules/events.js', routes: ['events-shows', 'events-settings'] },
@@ -25038,6 +25047,15 @@ function openForecastJobModal(pid, suggestedQty) {
       '<label class="field-required">Job Name</label>' +
       '<input type="text" id="newJobName" value="Build ' + esc(name) + ' (' + suggestedQty + ' pcs)">' +
     '</div>' +
+    '<div class="form-group">' +
+      '<label>Work Type</label>' +
+      '<select id="forecastJobWorkType" style="width:100%;">' +
+        '<option value="flameshop">Flameshop</option>' +
+        '<option value="hotshop">Hotshop</option>' +
+        '<option value="hybrid">Hybrid</option>' +
+        '<option value="other">Other</option>' +
+      '</select>' +
+    '</div>' +
     '<div style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:12px;">Suggested: ' + suggestedQty + ' pieces of ' + esc(name) + '</div>' +
     '<div class="form-group">' +
       '<label>Purpose</label>' +
@@ -25061,6 +25079,8 @@ async function doCreateForecastJob(pid, suggestedQty, purpose) {
     showToast('Enter a job name', true); return;
   }
   try {
+    var workTypeEl = document.getElementById('forecastJobWorkType');
+    var workType = workTypeEl ? workTypeEl.value : 'flameshop';
     var product = productsData.find(function(p) { return p.pid === pid; });
     var jobId = MastDB.productionJobs.newKey();
     var lineItemId = MastDB.productionJobs.newLineItemKey(jobId);
@@ -25068,7 +25088,7 @@ async function doCreateForecastJob(pid, suggestedQty, purpose) {
       name: name,
       description: 'Auto-suggested from Forecast view',
       purpose: purpose,
-      workType: 'flameshop',
+      workType: workType,
       priority: 'medium',
       status: 'definition',
       deadline: null,
@@ -34325,11 +34345,11 @@ async function addToLocation(pid, variantKey, locationId, qty) {
   var current = (await MastDB.get(locPath)) || 0;
 
   var updates = {};
-  updates[key + '/locations/' + locationId] = current + qty;
+  updates[key + '.locations.' + locationId] = current + qty;
 
   // Increment variant onHand
   var onHandCurrent = (await MastDB.get(MastDB.inventory.stockOnHandPath(pid, key))) || 0;
-  updates[key + '/onHand'] = onHandCurrent + qty;
+  updates[key + '.onHand'] = onHandCurrent + qty;
 
   // Recompute _default.onHand as sum of all variant onHand
   if (key !== '_default') {
@@ -34340,7 +34360,7 @@ async function addToLocation(pid, variantKey, locationId, qty) {
         total += (k === key) ? (onHandCurrent + qty) : stockData[k].onHand;
       }
     });
-    updates['_default/onHand'] = total;
+    updates['_default.onHand'] = total;
   }
 
   await MastDB.update(stockPath, updates);

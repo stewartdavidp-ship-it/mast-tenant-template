@@ -94,7 +94,7 @@
       var status = o.status || 'placed';
       var itemNames = (o.items || []).map(function(it) { return it.name + ' x' + (it.qty || 1); }).join(', ');
       var custName = o.shipping ? esc(o.shipping.name || '') : '';
-      html += '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:12px 16px;margin-bottom:8px;">' +
+      html += '<div data-order-key="' + esc(key) + '" style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:12px 16px;margin-bottom:8px;cursor:pointer;" onclick="if(!event.defaultPrevented)viewOrder(this.dataset.orderKey)">' +
         '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">' +
           '<div>' +
             '<div style="font-weight:600;font-family:monospace;">' + num + ' <span class="status-badge pill" style="' + orderStatusBadgeStyle(status) + '">' + status.replace(/_/g, ' ') + '</span></div>' +
