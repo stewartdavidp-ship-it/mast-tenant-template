@@ -172,6 +172,118 @@
       border-color: white;
     }
 
+    /* ========== NOTIFICATION BELL ========== */
+    .header-notif-btn {
+      position: relative;
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 1.2rem;
+      line-height: 1;
+      padding: 4px;
+      color: var(--warm-gray-light);
+      transition: color 0.2s;
+    }
+    .header-notif-btn:hover { color: white; }
+    .header-notif-badge {
+      position: absolute;
+      top: -2px;
+      right: -2px;
+      background: #e53e3e;
+      color: white;
+      font-size: 0.6rem;
+      font-weight: 700;
+      min-width: 16px;
+      height: 16px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 3px;
+      pointer-events: none;
+    }
+    #notificationPanel {
+      display: none;
+      position: fixed;
+      top: 60px;
+      right: 12px;
+      width: 320px;
+      max-height: 480px;
+      overflow-y: auto;
+      background: var(--surface-dark, #1a1a1a);
+      border: 1px solid var(--warm-gray, #555);
+      border-radius: 8px;
+      z-index: 9999;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+    }
+    #notificationPanel .notif-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--warm-gray, #555);
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--warm-gray-light, #ccc);
+    }
+    #notificationPanel .notif-header button {
+      background: none;
+      border: none;
+      color: var(--warm-gray-light, #ccc);
+      cursor: pointer;
+      font-size: 1rem;
+      line-height: 1;
+      padding: 2px 4px;
+    }
+    #notificationPanel .notif-empty {
+      padding: 20px 16px;
+      text-align: center;
+      color: var(--warm-gray, #888);
+      font-size: 0.82rem;
+    }
+    #notificationPanel .notif-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 12px 16px;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    #notificationPanel .notif-item:hover { background: rgba(255,255,255,0.05); }
+    #notificationPanel .notif-item:last-child { border-bottom: none; }
+    #notificationPanel .notif-body { flex: 1; min-width: 0; }
+    #notificationPanel .notif-title {
+      font-size: 0.82rem;
+      color: #f0ebe0;
+      margin-bottom: 3px;
+    }
+    #notificationPanel .notif-note {
+      font-size: 0.77rem;
+      color: var(--warm-gray-light, #ccc);
+      font-style: italic;
+      margin-bottom: 3px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    #notificationPanel .notif-time {
+      font-size: 0.73rem;
+      color: var(--warm-gray, #888);
+    }
+    #notificationPanel .notif-dismiss {
+      background: none;
+      border: none;
+      color: var(--warm-gray, #888);
+      cursor: pointer;
+      font-size: 0.9rem;
+      line-height: 1;
+      padding: 2px 4px;
+      flex-shrink: 0;
+      transition: color 0.15s;
+    }
+    #notificationPanel .notif-dismiss:hover { color: white; }
+
     /* ========== SIDEBAR NAVIGATION ========== */
     .sidebar {
       position: fixed;
@@ -1645,36 +1757,31 @@
       margin-bottom: 16px;
       display: inline-block;
     }
-    .feedback-segmented {
+    .feedback-chips {
       display: flex;
-      gap: 0;
-      border: 1px solid var(--cream-dark, #ddd);
-      border-radius: 6px;
-      overflow: hidden;
+      flex-wrap: wrap;
+      gap: 6px;
       margin-bottom: 14px;
     }
-    .feedback-segmented label {
-      flex: 1;
-      text-align: center;
-      padding: 7px 4px;
-      font-size: 0.85rem;
+    .feedback-chip {
+      padding: 5px 13px;
+      border-radius: 20px;
+      font-size: 0.82rem;
       font-weight: 500;
       cursor: pointer;
-      background: var(--cream, white);
-      color: inherit;
-      transition: background 0.15s, color 0.15s;
-      border-right: 1px solid var(--cream-dark, #ddd);
-      margin: 0;
+      border: 1.5px solid var(--border, #444);
+      background: transparent;
+      color: var(--text-muted, #888);
+      transition: background 0.15s, color 0.15s, border-color 0.15s;
+      line-height: 1.4;
     }
-    .feedback-segmented label:last-child { border-right: none; }
-    .feedback-segmented input { display: none; }
-    .feedback-segmented input:checked + span {
-      background: var(--teal);
-      color: white;
+    .feedback-chip:hover {
+      border-color: var(--text-muted, #888);
+      color: var(--text, #ccc);
     }
-    .feedback-segmented label:has(input:checked) {
-      background: var(--teal);
-      color: white;
+    .feedback-chip.selected {
+      border-color: transparent;
+      color: #fff;
     }
     .feedback-dialog textarea {
       width: 100%;
@@ -1715,6 +1822,49 @@
       font-weight: 600;
       margin-bottom: 5px;
       color: var(--charcoal);
+    }
+
+    .feedback-debug-panel {
+      border: 1px solid var(--border, #374151);
+      border-radius: 6px;
+      background: var(--surface-card);
+      margin-top: 8px;
+      overflow: hidden;
+    }
+    .feedback-debug-toggle {
+      width: 100%;
+      background: none;
+      border: none;
+      padding: 8px 12px;
+      text-align: left;
+      cursor: pointer;
+      font-size: 0.8rem;
+      color: var(--text-muted, #9ca3af);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .feedback-debug-toggle:hover { color: var(--charcoal); }
+    .feedback-debug-rows {
+      padding: 4px 12px 10px;
+      border-top: 1px solid var(--border, #374151);
+    }
+    .feedback-debug-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 4px 0;
+      font-size: 0.8rem;
+    }
+    .feedback-debug-row-left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--charcoal);
+    }
+    .feedback-debug-row-right {
+      color: var(--text-muted, #9ca3af);
+      font-size: 0.75rem;
     }
 
     /* ========== TESTING MODE ========== */
@@ -5056,10 +5206,23 @@
     </div>
     <div class="header-user">
       <div id="tokenBalanceIndicator" style="display:none;"></div>
+      <button class="header-notif-btn" id="notificationBell" onclick="toggleNotificationPanel()" aria-label="Notifications" style="display:none;">
+        🔔
+        <span class="header-notif-badge" id="notificationBadge" style="display:none;"></span>
+      </button>
       <img class="header-avatar" id="userAvatar" src="" alt="User">
       <button class="header-signout" onclick="signOut()">Sign Out</button>
     </div>
   </header>
+
+  <!-- ===== NOTIFICATION PANEL ===== -->
+  <div id="notificationPanel">
+    <div class="notif-header">
+      <span>Notifications</span>
+      <button onclick="toggleNotificationPanel()" aria-label="Close notifications">✕</button>
+    </div>
+    <div id="notificationList"><div class="notif-empty">No new notifications</div></div>
+  </div>
 
   <!-- ===== SIDEBAR NAVIGATION ===== -->
   <nav class="sidebar" id="sidebar">
@@ -12123,6 +12286,11 @@ function saveMastToastPrefs(next) {
 }
 
 function showToast(message, isError) {
+  if (isError) {
+    if (!window._toastBuffer) window._toastBuffer = [];
+    window._toastBuffer.push({ msg: message, t: Date.now() });
+    if (window._toastBuffer.length > 5) window._toastBuffer.shift();
+  }
   var container = document.getElementById('toastContainer');
   if (!container) return;
   var prefs = window.MastToastPrefs || { position: 'bottom-center', duration: 'normal', size: 'comfortable' };
@@ -12497,6 +12665,7 @@ auth.onAuthStateChanged(async function(user) {
   ]);
   loadTokenWallet(); // Start listening for token balance (non-blocking)
   initAlertBadgeListener(); // Start listening for unread alerts (non-blocking)
+  initNotificationListener(); // Start listening for admin notifications (non-blocking)
   // --- End Tenant Resolution ---
 
   var role = _roleResult[3];
@@ -16657,6 +16826,9 @@ function renderAboutSettings() {
 var _notificationsLoaded = false;
 var _alertHistoryListener = null;
 var _unreadAlertCount = 0;
+var _notificationUnsub = null;
+var _unreadNotifCount = 0;
+var _adminNotifications = [];
 
 function switchNotifInnerTab(tab) {
   var alertsEl = document.getElementById('notifInnerAlerts');
@@ -17161,6 +17333,116 @@ function updateAlertBadge() {
       sidebarBadge.style.display = 'none';
     }
   }
+}
+
+// ============================================================
+// Admin Notification Panel
+// ============================================================
+
+function initNotificationListener() {
+  if (_notificationUnsub) return;
+  var uid = currentUser && currentUser.uid;
+  var tenantId = MastDB.tenantId();
+  if (!uid || !tenantId) return;
+
+  var col = firebase.firestore()
+    .collection('tenants').doc(tenantId)
+    .collection('adminNotifications').doc(uid)
+    .collection('items');
+
+  _notificationUnsub = col.onSnapshot(function(snap) {
+    var items = [];
+    snap.forEach(function(doc) {
+      var d = doc.data();
+      if (!d.read) items.push(Object.assign({ _id: doc.id }, d));
+    });
+    items.sort(function(a, b) { return (b.createdAt || '').localeCompare(a.createdAt || ''); });
+    _adminNotifications = items;
+    _unreadNotifCount = items.length;
+    updateNotificationBadge();
+    renderNotificationPanel();
+  }, function(err) {
+    console.warn('[notifications] Listener error:', err);
+  });
+
+  // Show the bell now that we have a listener
+  var bell = document.getElementById('notificationBell');
+  if (bell) bell.style.display = '';
+}
+
+function updateNotificationBadge() {
+  var badge = document.getElementById('notificationBadge');
+  if (!badge) return;
+  if (_unreadNotifCount > 0) {
+    badge.textContent = _unreadNotifCount > 9 ? '9+' : String(_unreadNotifCount);
+    badge.style.display = 'flex';
+  } else {
+    badge.style.display = 'none';
+  }
+}
+
+function renderNotificationPanel() {
+  var list = document.getElementById('notificationList');
+  if (!list) return;
+  if (_adminNotifications.length === 0) {
+    list.innerHTML = '<div class="notif-empty">No new notifications</div>';
+    return;
+  }
+  list.innerHTML = _adminNotifications.map(function(n) {
+    var label = n.screenLabel || n.screen || 'Unknown screen';
+    var time = n.resolvedAt ? formatNotifTime(n.resolvedAt) : '';
+    var note = n.resolvedNote ? ('<div class="notif-note">“' + escapeHtml(n.resolvedNote) + '”</div>') : '';
+    return '<div class="notif-item" onclick="handleNotifClick(' + JSON.stringify(n._id) + ',' + JSON.stringify(n.screen || '') + ')">' +
+      '<div class="notif-body">' +
+        '<div class="notif-title">🔔 Your report on <strong>' + escapeHtml(label) + '</strong> was resolved</div>' +
+        note +
+        '<div class="notif-time">' + time + '</div>' +
+      '</div>' +
+      '<button class="notif-dismiss" onclick="dismissNotif(event,' + JSON.stringify(n._id) + ')" aria-label="Dismiss">×</button>' +
+    '</div>';
+  }).join('');
+}
+
+function handleNotifClick(notifId, screen) {
+  dismissNotif(null, notifId);
+  if (screen) navigateTo(screen);
+  document.getElementById('notificationPanel').style.display = 'none';
+}
+
+function dismissNotif(event, notifId) {
+  if (event) event.stopPropagation();
+  var uid = currentUser && currentUser.uid;
+  var tenantId = MastDB.tenantId();
+  if (!uid || !tenantId) return;
+  firebase.firestore()
+    .collection('tenants').doc(tenantId)
+    .collection('adminNotifications').doc(uid)
+    .collection('items').doc(notifId)
+    .update({ read: true })
+    .catch(function(e) { console.warn('[notifications] dismiss failed:', e); });
+}
+
+function toggleNotificationPanel() {
+  var panel = document.getElementById('notificationPanel');
+  if (!panel) return;
+  panel.style.display = panel.style.display === 'none' || !panel.style.display ? 'block' : 'none';
+}
+
+function formatNotifTime(iso) {
+  if (!iso) return '';
+  try {
+    var d = new Date(iso);
+    var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    var h = d.getHours(), m = d.getMinutes();
+    var ampm = h >= 12 ? 'pm' : 'am';
+    h = h % 12 || 12;
+    return months[d.getMonth()] + ' ' + d.getDate() + ' · ' + h + ':' + (m < 10 ? '0' : '') + m + ampm;
+  } catch(e) { return ''; }
+}
+
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
 // ============================================================
@@ -30206,6 +30488,17 @@ function detachListeners() {
   inventory = {};
   squarePayments = {};
   squarePaymentsLoaded = false;
+  if (_notificationUnsub) {
+    _notificationUnsub();
+    _notificationUnsub = null;
+  }
+  _adminNotifications = [];
+  _unreadNotifCount = 0;
+  updateNotificationBadge();
+  var bell = document.getElementById('notificationBell');
+  if (bell) bell.style.display = 'none';
+  var panel = document.getElementById('notificationPanel');
+  if (panel) panel.style.display = 'none';
 }
 
 // ============================================================
@@ -34895,6 +35188,55 @@ function validateRequired(fields) {
     if (window._consoleBuffer.length > 20) window._consoleBuffer.shift();
     _origWarn.apply(console, args);
   };
+
+  // Toast buffer — rolling last 5 error toasts (populated by showToast)
+  window._toastBuffer = [];
+
+  // Network errors buffer — rolling last 10 failures
+  window._networkErrors = [];
+  if (!window._mastFetchPatched) {
+    window._mastFetchPatched = true;
+    var _origFetch = window.fetch;
+    window.fetch = function(input, init) {
+      var method = (init && init.method) ? init.method.toUpperCase() : 'GET';
+      var url = (typeof input === 'string') ? input : (input && input.url) || String(input);
+      return _origFetch.apply(this, arguments).then(function(response) {
+        if (!response.ok) {
+          window._networkErrors.push({ url: url, status: response.status, method: method, t: Date.now() });
+          if (window._networkErrors.length > 10) window._networkErrors.shift();
+        }
+        return response;
+      }, function(err) {
+        window._networkErrors.push({ url: url, status: 0, method: method, t: Date.now() });
+        if (window._networkErrors.length > 10) window._networkErrors.shift();
+        throw err;
+      });
+    };
+  }
+  if (!window._mastXhrPatched) {
+    window._mastXhrPatched = true;
+    var _origOpen = XMLHttpRequest.prototype.open;
+    XMLHttpRequest.prototype.open = function(method, url) {
+      this._mastMethod = method ? method.toUpperCase() : 'GET';
+      this._mastUrl = url || '';
+      return _origOpen.apply(this, arguments);
+    };
+    var _origSend = XMLHttpRequest.prototype.send;
+    XMLHttpRequest.prototype.send = function() {
+      var xhr = this;
+      xhr.addEventListener('loadend', function() {
+        if (xhr.status >= 400 || xhr.status === 0) {
+          window._networkErrors.push({ url: xhr._mastUrl || '', status: xhr.status, method: xhr._mastMethod || 'GET', t: Date.now() });
+          if (window._networkErrors.length > 10) window._networkErrors.shift();
+        }
+      });
+      xhr.addEventListener('error', function() {
+        window._networkErrors.push({ url: xhr._mastUrl || '', status: 0, method: xhr._mastMethod || 'GET', t: Date.now() });
+        if (window._networkErrors.length > 10) window._networkErrors.shift();
+      });
+      return _origSend.apply(this, arguments);
+    };
+  }
 })();
 
 // Route → human-readable label
@@ -34932,23 +35274,55 @@ function openFeedbackDialog() {
     '<div class="feedback-screen-badge">\uD83D\uDCCD You\'re on: ' + screenLabel + '</div>' +
     '<div class="feedback-form-group">' +
       '<label class="feedback-label">Type</label>' +
-      '<div class="feedback-segmented">' +
-        '<label><input type="radio" name="fbType" value="bug" checked><span>Bug</span></label>' +
-        '<label><input type="radio" name="fbType" value="enhancement"><span>Enhancement</span></label>' +
-        '<label><input type="radio" name="fbType" value="question"><span>Question</span></label>' +
+      '<input type="hidden" name="fbType" id="fbTypeVal" value="bug">' +
+      '<div class="feedback-chips">' +
+        '<button type="button" class="feedback-chip selected" data-group="fbType" data-value="bug" data-color="#dc2626" style="background:#dc2626;border-color:transparent;color:#fff;" onclick="selectFbChip(this)">Bug</button>' +
+        '<button type="button" class="feedback-chip" data-group="fbType" data-value="enhancement" data-color="#2563eb" onclick="selectFbChip(this)">Enhancement</button>' +
+        '<button type="button" class="feedback-chip" data-group="fbType" data-value="question" data-color="#0d9488" onclick="selectFbChip(this)">Question</button>' +
+        '<button type="button" class="feedback-chip" data-group="fbType" data-value="suggestion" data-color="#7c3aed" onclick="selectFbChip(this)">Suggestion</button>' +
       '</div>' +
     '</div>' +
     '<div class="feedback-form-group">' +
       '<label class="feedback-label">Severity</label>' +
-      '<div class="feedback-segmented">' +
-        '<label><input type="radio" name="fbSeverity" value="low"><span>Low</span></label>' +
-        '<label><input type="radio" name="fbSeverity" value="medium" checked><span>Medium</span></label>' +
-        '<label><input type="radio" name="fbSeverity" value="high"><span>High</span></label>' +
+      '<input type="hidden" name="fbSeverity" id="fbSeverityVal" value="medium">' +
+      '<div class="feedback-chips">' +
+        '<button type="button" class="feedback-chip" data-group="fbSeverity" data-value="low" data-color="#16a34a" onclick="selectFbChip(this)">Low</button>' +
+        '<button type="button" class="feedback-chip selected" data-group="fbSeverity" data-value="medium" data-color="#d97706" style="background:#d97706;border-color:transparent;color:#fff;" onclick="selectFbChip(this)">Medium</button>' +
+        '<button type="button" class="feedback-chip" data-group="fbSeverity" data-value="high" data-color="#dc2626" onclick="selectFbChip(this)">High</button>' +
       '</div>' +
     '</div>' +
     '<div class="feedback-form-group">' +
       '<label class="feedback-label">Description</label>' +
       '<textarea id="fbDescription" placeholder="What\'s wrong or what do you need?" oninput="updateFbSubmitState()"></textarea>' +
+    '</div>' +
+    '<div id="fbDebugPanel" style="display:none;">' +
+      '<div class="feedback-debug-panel">' +
+        '<button type="button" class="feedback-debug-toggle" id="fbDebugToggle" onclick="toggleFbDebugPanel()">' +
+          '<span>Debug info will be attached</span><span id="fbDebugArrow">▾</span>' +
+        '</button>' +
+        '<div id="fbDebugRows" style="display:none;" class="feedback-debug-rows">' +
+          '<div class="feedback-debug-row">' +
+            '<label class="feedback-debug-row-left"><input type="checkbox" id="fbDbgConsole" checked> Console errors (last 60s)</label>' +
+            '<span class="feedback-debug-row-right" id="fbDbgConsoleCount"></span>' +
+          '</div>' +
+          '<div class="feedback-debug-row">' +
+            '<label class="feedback-debug-row-left"><input type="checkbox" id="fbDbgToasts" checked> Recent toasts</label>' +
+            '<span class="feedback-debug-row-right" id="fbDbgToastsCount"></span>' +
+          '</div>' +
+          '<div class="feedback-debug-row">' +
+            '<label class="feedback-debug-row-left"><input type="checkbox" id="fbDbgNetwork" checked> Network errors</label>' +
+            '<span class="feedback-debug-row-right" id="fbDbgNetworkCount"></span>' +
+          '</div>' +
+          '<div class="feedback-debug-row">' +
+            '<label class="feedback-debug-row-left"><input type="checkbox" id="fbDbgDevice" checked> Device info</label>' +
+            '<span class="feedback-debug-row-right" id="fbDbgDeviceVal"></span>' +
+          '</div>' +
+          '<div class="feedback-debug-row">' +
+            '<label class="feedback-debug-row-left"><input type="checkbox" id="fbDbgVersion" checked> App version</label>' +
+            '<span class="feedback-debug-row-right" id="fbDbgVersionVal"></span>' +
+          '</div>' +
+        '</div>' +
+      '</div>' +
     '</div>' +
   '</div>' +
   '<div class="feedback-dialog-footer">' +
@@ -34979,30 +35353,107 @@ function updateFbSubmitState() {
   if (btn) btn.disabled = !(desc && desc.value.trim());
 }
 
+function selectFbChip(chip) {
+  var group = chip.dataset.group;
+  var color = chip.dataset.color;
+  document.querySelectorAll('.feedback-chip[data-group="' + group + '"]').forEach(function(c) {
+    c.classList.remove('selected');
+    c.style.background = '';
+    c.style.borderColor = '';
+    c.style.color = '';
+  });
+  chip.classList.add('selected');
+  chip.style.background = color;
+  chip.style.borderColor = 'transparent';
+  chip.style.color = '#fff';
+  var hidden = document.getElementById(group + 'Val');
+  if (hidden) hidden.value = chip.dataset.value;
+  if (group === 'fbType') {
+    var panel = document.getElementById('fbDebugPanel');
+    if (panel) {
+      if (chip.dataset.value === 'bug') {
+        panel.style.display = '';
+        refreshFbDebugCounts();
+      } else {
+        panel.style.display = 'none';
+      }
+    }
+  }
+}
+
+function refreshFbDebugCounts() {
+  var now = Date.now();
+  var cutoff = now - 60000;
+  var consoleCount = (window._consoleBuffer || []).filter(function(e) { return e.t >= cutoff; }).length;
+  var toastCount = (window._toastBuffer || []).length;
+  var netCount = (window._networkErrors || []).length;
+  var browser = (navigator.userAgent.match(/(Chrome|Safari|Firefox|Edge)\/[\d.]+/) || ['Browser'])[0];
+  var deviceStr = browser + ' · ' + window.innerWidth + '×' + window.innerHeight;
+  var version = window.MAST_VERSION || 'unknown';
+  var c = document.getElementById('fbDbgConsoleCount'); if (c) c.textContent = consoleCount + ' entries';
+  var t = document.getElementById('fbDbgToastsCount'); if (t) t.textContent = toastCount + ' entries';
+  var n = document.getElementById('fbDbgNetworkCount'); if (n) n.textContent = netCount + ' entries';
+  var d = document.getElementById('fbDbgDeviceVal'); if (d) d.textContent = deviceStr;
+  var v = document.getElementById('fbDbgVersionVal'); if (v) v.textContent = version;
+}
+
+function toggleFbDebugPanel() {
+  var rows = document.getElementById('fbDebugRows');
+  var arrow = document.getElementById('fbDebugArrow');
+  if (!rows) return;
+  var open = rows.style.display !== 'none';
+  rows.style.display = open ? 'none' : '';
+  if (arrow) arrow.textContent = open ? '▾' : '▴';
+}
+
 async function submitFeedback() {
   var desc = document.getElementById('fbDescription');
   if (!desc || !desc.value.trim()) return;
 
-  var type = document.querySelector('input[name="fbType"]:checked');
-  var severity = document.querySelector('input[name="fbSeverity"]:checked');
+  var type = document.getElementById('fbTypeVal');
+  var severity = document.getElementById('fbSeverityVal');
+
+  var now = Date.now();
+  var cutoff = now - 60000;
+  var fbType = type ? type.value : 'bug';
 
   var report = {
     appId: MastDB.tenantId(),
     source: 'internal',
     screen: currentRoute || 'unknown',
     screenLabel: getScreenLabel(),
-    type: type ? type.value : 'bug',
+    type: fbType,
     severity: severity ? severity.value : 'medium',
     description: desc.value.trim(),
     email: null,
     userId: currentUser ? currentUser.uid : null,
     userName: currentUser ? (currentUser.displayName || currentUser.email || '') : null,
+    tenantPlan: window.MAST_TENANT_PLAN || null,
+    consoleBuffer: window._consoleBuffer ? window._consoleBuffer.filter(function(e) { return e.t >= cutoff; }) : [],
+    toastBuffer: window._toastBuffer ? window._toastBuffer.filter(function(e) { return e.t >= cutoff; }) : [],
+    deviceInfo: {
+      userAgent: navigator.userAgent,
+      viewport: { width: window.innerWidth, height: window.innerHeight }
+    },
+    appVersion: window.MAST_VERSION || null,
     timestamp: new Date().toISOString(),
-    consoleBuffer: window._consoleBuffer ? window._consoleBuffer.slice() : [],
     status: 'open',
     jobId: null,
     createdAt: MastDB.serverTimestamp()
   };
+  if (fbType === 'bug') {
+    report.networkErrors = window._networkErrors ? window._networkErrors.filter(function(e) { return e.t >= cutoff; }) : [];
+    var dbgConsole = document.getElementById('fbDbgConsole');
+    var dbgToasts = document.getElementById('fbDbgToasts');
+    var dbgNetwork = document.getElementById('fbDbgNetwork');
+    var dbgDevice = document.getElementById('fbDbgDevice');
+    var dbgVersion = document.getElementById('fbDbgVersion');
+    if (dbgConsole && !dbgConsole.checked) report.consoleBuffer = null;
+    if (dbgToasts && !dbgToasts.checked) report.toastBuffer = null;
+    if (dbgNetwork && !dbgNetwork.checked) report.networkErrors = null;
+    if (dbgDevice && !dbgDevice.checked) report.deviceInfo = null;
+    if (dbgVersion && !dbgVersion.checked) report.appVersion = null;
+  }
 
   try {
     var btn = document.getElementById('fbSubmitBtn');
