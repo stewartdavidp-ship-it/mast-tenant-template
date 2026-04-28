@@ -17411,6 +17411,10 @@ function handleNotifClick(notifId, screen) {
 
 function dismissNotif(event, notifId) {
   if (event) event.stopPropagation();
+  _adminNotifications = _adminNotifications.filter(function(n) { return n._id !== notifId; });
+  _unreadNotifCount = _adminNotifications.length;
+  updateNotificationBadge();
+  renderNotificationPanel();
   var uid = currentUser && currentUser.uid;
   var tenantId = MastDB.tenantId();
   if (!uid || !tenantId) return;
@@ -35331,6 +35335,8 @@ function openFeedbackDialog() {
   '</div>';
   document.getElementById('feedbackDialog').innerHTML = html;
   document.getElementById('feedbackOverlay').classList.add('open');
+  var panel = document.getElementById('fbDebugPanel');
+  if (panel) { panel.style.display = ''; refreshFbDebugCounts(); }
   setTimeout(function() {
     var ta = document.getElementById('fbDescription');
     if (ta) ta.focus();
