@@ -22,8 +22,14 @@ function renderWholesaleAdmin() {
   if (!el) return;
 
   var html = '<div style="max-width:1100px;margin:0 auto;padding:24px;">' +
-    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">' +
+    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">' +
       '<h2 style="font-size:1.6rem;font-weight:700;color:var(--charcoal);">Wholesale</h2>' +
+    '</div>' +
+    '<div style="background:rgba(42,124,111,0.08);border:1px solid rgba(42,124,111,0.2);border-radius:8px;padding:14px 16px;margin-bottom:20px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;">' +
+      '<div style="font-weight:600;font-size:0.85rem;">PDF Catalog</div>' +
+      '<button class="btn-small" onclick="uploadWholesalePDF()" style="background:var(--amber);color:#fff;border:none;padding:7px 14px;border-radius:4px;cursor:pointer;font-size:0.78rem;">Upload PDF</button>' +
+      '<span id="wholesalePdfStatus" style="font-size:0.78rem;color:var(--warm-gray);">Checking...</span>' +
+      '<div id="wholesalePdfQR"></div>' +
     '</div>' +
     '<div class="view-tabs" style="margin-bottom:20px;">' +
       '<div class="view-tab' + (wholesaleSubView === 'orders' ? ' active' : '') + '" onclick="switchWholesaleView(\'orders\')">Orders</div>' +
@@ -34,6 +40,9 @@ function renderWholesaleAdmin() {
   '</div>';
 
   el.innerHTML = html;
+
+  // Check PDF status now that the element is in the DOM
+  checkWholesalePdfStatus();
 
   // Update request count badge
   updateWholesaleRequestBadge();
@@ -79,17 +88,6 @@ function renderWholesaleUsers() {
       '<div style="font-size:0.85rem;color:var(--warm-gray);">' + users.length + ' authorized user' + (users.length !== 1 ? 's' : '') + '</div>' +
       '<button class="btn-small" onclick="addWholesaleUser()" style="background:var(--teal);color:#fff;border:none;padding:8px 16px;border-radius:4px;cursor:pointer;font-size:0.78rem;">+ New User</button>' +
     '</div>';
-
-    // PDF catalog link section
-    html += '<div style="background:rgba(42,124,111,0.08);border:1px solid rgba(42,124,111,0.2);border-radius:8px;padding:16px;margin-bottom:20px;">' +
-      '<div style="font-weight:600;font-size:0.85rem;margin-bottom:8px;">PDF Catalog</div>' +
-      '<div style="display:flex;gap:12px;align-items:center;">' +
-        '<button class="btn-small" onclick="uploadWholesalePDF()" style="background:var(--amber);color:#fff;border:none;padding:8px 16px;border-radius:4px;cursor:pointer;font-size:0.78rem;">Upload PDF</button>' +
-        '<span id="wholesalePdfStatus" style="font-size:0.78rem;color:var(--warm-gray);">Checking...</span>' +
-      '</div>' +
-      '<div id="wholesalePdfQR" style="margin-top:12px;"></div>' +
-    '</div>';
-    checkWholesalePdfStatus();
 
     if (users.length === 0) {
       html += '<div style="text-align:center;padding:60px 20px;color:var(--warm-gray);">' +

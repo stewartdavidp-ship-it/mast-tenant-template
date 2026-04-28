@@ -1275,7 +1275,7 @@ function startBuild(jobId) {
       '<input type="checkbox" class="buildOperatorCheck" value="' + esc(name) + '" style="width:20px;height:20px;cursor:pointer;"> ' +
       esc(name) + '</label>';
   }).join('');
-  var html = '<div style="max-width:400px;">' +
+  var html = '<div style="max-width:400px;padding:24px;">' +
     '<h3>Start Build Session</h3>' +
     '<div class="form-group">' +
       '<label>Operators</label>' +

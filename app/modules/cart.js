@@ -233,7 +233,8 @@
     var config = giftCardConfig || {};
     var denoms = (config.giftCardDenominations || []).map(function(c) { return (c / 100).toFixed(2); }).join(', ');
 
-    var html = '<h3 style="margin-top:0;">Gift Card Settings</h3>' +
+    var html = '<div style="padding:24px;">' +
+      '<h3 style="margin-top:0;">Gift Card Settings</h3>' +
       '<div style="margin-bottom:16px;">' +
         '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.9rem;">' +
           '<input type="checkbox" id="gcConfigEnabled" ' + (config.giftCardsEnabled ? 'checked' : '') + '>' +
@@ -251,7 +252,7 @@
           'Allow custom amount' +
         '</label>' +
       '</div>' +
-      '<div style="display:flex;gap:12px;margin-bottom:16px;">' +
+      '<div style="display:flex;gap:12px;margin-bottom:20px;">' +
         '<div style="flex:1;">' +
           '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Min ($)</label>' +
           '<input type="number" id="gcConfigMin" value="' + ((config.giftCardCustomMin || 500) / 100).toFixed(2) + '" min="1" step="0.01" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);font-family:\'DM Sans\';font-size:0.9rem;">' +
@@ -261,9 +262,10 @@
           '<input type="number" id="gcConfigMax" value="' + ((config.giftCardCustomMax || 50000) / 100).toFixed(2) + '" min="1" step="0.01" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);font-family:\'DM Sans\';font-size:0.9rem;">' +
         '</div>' +
       '</div>' +
-      '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:20px;">' +
+      '<div style="display:flex;justify-content:flex-end;gap:8px;">' +
         '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
         '<button class="btn btn-primary" onclick="window._gcSaveConfig()">Save</button>' +
+      '</div>' +
       '</div>';
 
     openModal(html);
