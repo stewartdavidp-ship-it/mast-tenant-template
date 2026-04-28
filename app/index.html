@@ -5234,7 +5234,7 @@
       <button onclick="toggleNotificationPanel()" aria-label="Close notifications">✕</button>
     </div>
     <div id="notificationList"><div class="notif-empty">No new notifications</div></div>
-    <div class="notif-footer"><a onclick="toggleNotificationPanel(); navigateTo('my-feedback');">View all my submissions →</a></div>
+    <div class="notif-footer"><a onclick="toggleNotificationPanel(); goToMyFeedback();">View all my submissions →</a></div>
   </div>
 
   <!-- ===== SIDEBAR NAVIGATION ===== -->
@@ -5942,6 +5942,7 @@
     <!-- My Feedback Tab -->
     <div id="myFeedbackTab" style="display:none;">
       <div class="section-header">
+        <div id="myFeedbackBack"></div>
         <h2>My Submissions</h2>
       </div>
       <div id="myFeedbackContent" style="padding:0 24px 24px;"></div>
@@ -17448,6 +17449,13 @@ function dismissNotif(event, notifId) {
     .catch(function(e) { console.warn('[notifications] dismiss failed:', e); });
 }
 
+function goToMyFeedback() {
+  if (typeof currentRoute !== 'undefined' && currentRoute && currentRoute !== 'my-feedback') {
+    MastNavStack.push({ route: currentRoute, label: currentRoute });
+  }
+  navigateTo('my-feedback');
+}
+
 function toggleNotificationPanel() {
   var panel = document.getElementById('notificationPanel');
   if (!panel) return;
@@ -17479,6 +17487,14 @@ function renderMyFeedbackTab() {
   var el = document.getElementById('myFeedbackContent');
   if (!el) return;
   el.innerHTML = '<p style="color:var(--warm-gray-light);font-size:0.9rem;">Loading…</p>';
+
+  var backEl = document.getElementById('myFeedbackBack');
+  if (backEl) {
+    var prev = MastNavStack.peek();
+    backEl.innerHTML = prev
+      ? '<button class="detail-back" onclick="MastNavStack.popAndReturn()">&#8592; Back to ' + escapeHtml(prev.label || prev.route) + '</button>'
+      : '';
+  }
 
   var uid = currentUser && currentUser.uid;
   if (!uid) {
