@@ -17422,7 +17422,7 @@ function dismissNotif(event, notifId) {
     .collection('tenants').doc(tenantId)
     .collection('adminNotifications').doc(uid)
     .collection('items').doc(notifId)
-    .update({ read: true })
+    .delete()
     .catch(function(e) { console.warn('[notifications] dismiss failed:', e); });
 }
 
