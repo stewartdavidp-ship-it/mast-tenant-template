@@ -17587,20 +17587,39 @@ function renderMyFeedbackTab() {
 // First-run: prompts user before first auto-report fires.
 // ============================================================
 
-var _autoReportSeen = new Set();  // dedup fingerprints per session
-var _autoReportCount = 0;         // hard cap: max 5 per session
 var _AUTO_REPORT_CAP = 5;
 var _AUTO_REPORT_DISABLED_KEY = 'mast_auto_report_disabled';
 var _AUTO_REPORT_CONSENTED_KEY = 'mast_auto_report_consented';
-var _spinnerTimers = {};           // element key → timeout ID
+var _AUTO_REPORT_SEEN_KEY = 'mast_auto_report_seen'; // persistent dedup, 30-day TTL
+var _spinnerTimers = {};
 var _burstLastNetworkReport = 0;
 var _burstLastConsoleReport = 0;
+
+// Load persisted seen fingerprints (stored as {fp: expiryTimestamp})
+var _autoReportSeen = (function() {
+  try {
+    var raw = localStorage.getItem(_AUTO_REPORT_SEEN_KEY);
+    var stored = raw ? JSON.parse(raw) : {};
+    var now = Date.now();
+    // Prune expired entries (older than 30 days)
+    Object.keys(stored).forEach(function(k) { if (stored[k] < now) delete stored[k]; });
+    return stored;
+  } catch(e) { return {}; }
+})();
+
+function _autoReportSeenAdd(fp) {
+  _autoReportSeen[fp] = Date.now() + 30 * 24 * 60 * 60 * 1000; // 30 days
+  try { localStorage.setItem(_AUTO_REPORT_SEEN_KEY, JSON.stringify(_autoReportSeen)); } catch(e) {}
+}
+
+var _autoReportCount = 0; // session cap: max 5 per page load
 
 var _AUTO_IGNORE = [
   'RBAC seed skipped',
   'MastDB: path requires doc ID: admin_roles',
   'Script error.',
   'ResizeObserver loop',
+  '/templates/',        // manifest/template 404s — expected on test sites
 ];
 
 function _autoReportEnabled() {
@@ -17628,8 +17647,8 @@ function _submitAutoReport(type, message) {
 
   var screen = currentRoute || 'unknown';
   var fp = _autoFingerprint(screen, type, message);
-  if (_autoReportSeen.has(fp)) return;
-  _autoReportSeen.add(fp);
+  if (_autoReportSeen[fp] && _autoReportSeen[fp] > Date.now()) return;
+  _autoReportSeenAdd(fp);
   _autoReportCount++;
 
   var now = Date.now();
