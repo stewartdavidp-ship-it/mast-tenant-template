@@ -5962,9 +5962,9 @@
         <p id="startTripGpsStatus" style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:16px;">📡 Getting your location...</p>
         <div class="form-group" style="margin-bottom:14px;">
           <label style="font-size:0.85rem;font-weight:600;">Origin</label>
-          <select id="startTripOrigin" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;background:white;">
-            <option value="">Detecting location...</option>
-          </select>
+          <input type="text" id="startTripOrigin" list="originList" placeholder="Type or select origin..."
+            style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;box-sizing:border-box;">
+          <datalist id="originList"></datalist>
         </div>
         <div class="form-group" style="margin-bottom:14px;">
           <label style="font-size:0.85rem;font-weight:600;">Destination</label>
@@ -9302,7 +9302,10 @@
       <!-- Reports View -->
       <div id="bookReportsView" style="display:none;">
         <div class="section-header">
-          <h2>Reports</h2>
+          <div style="display:flex;align-items:center;gap:12px;">
+            <button class="btn btn-secondary btn-back" onclick="window._bookSubTab('classes')" style="padding:6px 14px;font-size:0.82rem;">&#8592; Classes</button>
+            <h2 style="margin:0;">Class Reports</h2>
+          </div>
           <div style="display:flex;gap:8px;align-items:center;">
             <select id="reportDateRange" onchange="window._reportRangeChange()" style="padding:6px 10px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:0.85rem;">
               <option value="7">Last 7 Days</option>
@@ -10002,6 +10005,7 @@ MastDB.expenses = {
   update: function(id, data) { return MastDB.update('admin/expenses/' + id, data); },
   remove: function(id) { return MastDB.remove('admin/expenses/' + id); },
   query: function() { return MastDB.query('admin/expenses'); },
+  ref: function(subpath) { return _makeRefCompat('admin/expenses' + (subpath ? '/' + subpath : '')); },
   summary: function(month) { return MastDB.get('admin/expenseSummary/byMonth/' + month); }
 };
 
@@ -10471,6 +10475,9 @@ MastDB.sessionLogs = {
   setStartup: function(sessionId, data) { return MastDB.set('admin/sessionLogs/' + sessionId + '/startup', data); },
   getCompletion: function(sessionId) { return MastDB.get('admin/sessionLogs/' + sessionId + '/completion'); },
   setCompletion: function(sessionId, data) { return MastDB.set('admin/sessionLogs/' + sessionId + '/completion', data); },
+  // Aliases used by book-reports for snap.val() compat
+  completion: function(sessionId) { return MastDB.get('admin/sessionLogs/' + sessionId + '/completion'); },
+  incidents: function(sessionId) { return MastDB.query('admin/sessionLogs/' + sessionId + '/incidents').limitToLast(100); },
   pushIncident: function(sessionId, data) { return MastDB.push('admin/sessionLogs/' + sessionId + '/incidents', data); },
   newIncidentKey: function(sessionId) { return MastDB.newKey('admin/sessionLogs/' + sessionId + '/incidents'); }
 };
@@ -12144,8 +12151,10 @@ async function seedRolesAndAdminUser() {
       return false;
     }
 
-    // Seed all three default roles
-    await MastDB.roles.set(DEFAULT_ROLES);
+    // Seed all three default roles — must set each doc individually (Firestore doesn't support collection-level set)
+    await Promise.all(Object.keys(DEFAULT_ROLES).map(function(k) {
+      return MastDB.roles.set(k, DEFAULT_ROLES[k]);
+    }));
 
     // Create admin user record for current user (must be the original admin)
     if (currentUser && currentUser.uid) {
@@ -26193,7 +26202,7 @@ function toggleMetalPurity() {
 }
 function checkMakerAttributesVisibility() {
   MastDB.config.makerSettings().once('value').then(function(snap) {
-    var settings = snap.val();
+    var settings = snap && snap.val ? snap.val() : null;
     if (settings && settings.craftProfile === 'jewelry') {
       var editSection = document.getElementById('pdMakerAttributesSection');
       if (editSection) editSection.style.display = '';
@@ -37719,7 +37728,7 @@ async function renderDashboardTodos() {
       '#businessTab .bz-rail a.active { color:var(--amber,#c4853c); font-weight:600; border-left:2px solid var(--amber,#c4853c); padding-left:8px; }',
       '#businessTab .bz-mobile-nav { display:none; width:100%; padding:8px 10px; margin-bottom:14px; background:var(--bg-secondary,#232323); color:var(--text,#fff); border:1px solid rgba(255,255,255,0.1); border-radius:6px; font-size:0.85rem; font-family:inherit; }',
       '@media (max-width:767px) { #businessTab .bz-mobile-nav { display:block; } }',
-      '#businessTab .bz-content { scroll-padding-top:80px; padding-bottom:100vh; }',
+      '#businessTab .bz-content { scroll-padding-top:80px; padding-bottom:30vh; }',
       '#businessTab .bz-section { scroll-margin-top:80px; margin-bottom:24px; }',
       '#businessTab .bz-section-header { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:10px; }',
       '#businessTab .bz-section-title  { font-size:1.15rem; font-weight:600; color:var(--text,#fff); display:flex; align-items:center; gap:8px; margin:0; }',

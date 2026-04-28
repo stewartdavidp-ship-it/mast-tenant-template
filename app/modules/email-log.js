@@ -227,6 +227,10 @@
   function renderEmailDetail(email) {
     var h = '';
     h += '<div style="padding:16px 24px;background:rgba(255,255,255,0.02);border-top:1px solid rgba(255,255,255,0.04);">';
+    h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">';
+    h += '<span style="font-size:0.78rem;font-weight:600;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.04em;">Email Detail</span>';
+    h += '<button onclick="event.stopPropagation();window._emailLogSelect(\'' + email._key + '\')" style="background:none;border:1px solid rgba(255,255,255,0.15);color:var(--warm-gray);padding:3px 10px;border-radius:4px;cursor:pointer;font-size:0.78rem;">&#x2715; Close</button>';
+    h += '</div>';
 
     // Meta info
     h += '<div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(200px, 1fr));gap:12px;margin-bottom:16px;">';
@@ -245,10 +249,10 @@
     // HTML preview (sandboxed iframe)
     if (email.htmlSnapshot) {
       h += '<div style="margin-bottom:12px;">';
-      h += '<span style="font-size:0.78rem;color:var(--warm-gray);display:block;margin-bottom:6px;">Email Preview</span>';
+      h += '<span style="font-size:0.78rem;color:var(--warm-gray);display:block;margin-bottom:6px;">Email Preview <span style="font-weight:400;opacity:0.6;">(light theme — emails are designed for email client display)</span></span>';
       h += '<div style="background:white;border-radius:6px;overflow:hidden;max-height:400px;">';
       // Use srcdoc for sandboxed preview — no scripts, no navigation
-      h += '<iframe sandbox="" srcdoc="' + escAttr(email.htmlSnapshot) + '" style="width:100%;min-height:250px;max-height:400px;border:none;display:block;" onload="this.style.height=Math.min(this.contentDocument.body.scrollHeight+20,400)+\'px\'"></iframe>';
+      h += '<iframe sandbox="" srcdoc="' + escAttr(email.htmlSnapshot) + '" style="width:100%;min-height:250px;max-height:400px;border:none;display:block;" onload="try{if(this.contentDocument&&this.contentDocument.body)this.style.height=Math.min(this.contentDocument.body.scrollHeight+20,400)+\'px\';}catch(e){}"></iframe>';
       h += '</div>';
       h += '</div>';
     }
