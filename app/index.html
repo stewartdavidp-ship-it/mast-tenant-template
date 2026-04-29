@@ -29504,9 +29504,8 @@ function renderCoreProductSection(product) {
   return html;
 }
 
-// Variants section — table-style rows, one per variant. Click row to expand.
-// Each row shows: combo, cost, retail price, channel chips. Expanded shows
-// recipe summary, full pricing tiers, channel toggles, inventory note.
+// Variants section — master-detail. List of variants on top, detail panel
+// with tabs below for the selected variant. Default selects the first.
 function renderVariantsSection(product) {
   var pid = product.pid || '';
   var variants = getProductVariantsForRender(product);
@@ -29514,28 +29513,317 @@ function renderVariantsSection(product) {
   var recipe = (product.recipeId && allRecipes[product.recipeId] && allRecipes[product.recipeId].status !== 'archived')
     ? allRecipes[product.recipeId] : null;
 
+  // Selected variant — defaults to first; user click changes selection.
+  var selectedId = null;
+  try { selectedId = sessionStorage.getItem('mastSelectedVariant_' + pid); } catch (e) {}
+  if (!selectedId || !variants.some(function(v) { return v.id === selectedId; })) {
+    selectedId = variants.length ? variants[0].id : null;
+  }
+  var selectedVariant = variants.find(function(v) { return v.id === selectedId; });
+
   var html = '<div style="' + _PD_STYLES.card + '">';
   html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;">';
   html += '<h3 style="' + _PD_STYLES.sectionTitle + '">Variants ' +
     '<span style="font-family:\'DM Sans\',sans-serif;font-size:0.85rem;color:var(--warm-gray,#888);font-weight:400;margin-left:4px;">' + variants.length + '</span>' +
     '</h3>';
-  html += '<div style="display:flex;gap:6px;">';
   html += '<button class="btn btn-secondary btn-small" onclick="openAddVariantDialog(\'' + esc(pid) + '\')">+ Add Variant</button>';
-  if (recipe) {
-    html += '<button class="btn btn-secondary btn-small" onclick="window.makerOpenRecipeBuilder && window.makerOpenRecipeBuilder(\'' + esc(recipe.recipeId) + '\')">Open Recipe →</button>';
-  } else {
-    html += '<button class="btn btn-secondary btn-small" onclick="openLinkRecipeDialog(\'' + esc(pid) + '\')">Link recipe…</button>';
-    html += '<button class="btn btn-primary btn-small" onclick="addRecipeForProduct(\'' + esc(pid) + '\')">+ Create Recipe</button>';
-  }
-  html += '</div>';
   html += '</div>';
 
-  // Variant rows
-  html += '<div style="border:1px solid var(--cream-dark,#e8e0d4);border-radius:10px;overflow:hidden;background:var(--surface-card,#fff);">';
+  // Variant list — collapsed rows, selected row highlighted
+  html += '<div style="border:1px solid var(--cream-dark,#e8e0d4);border-radius:10px;overflow:hidden;background:var(--surface-card,#fff);margin-bottom:18px;">';
   variants.forEach(function(variant, idx) {
-    html += renderVariantRow(product, variant, recipe, idx);
+    html += renderVariantListRow(product, variant, recipe, idx, variant.id === selectedId, variants.length);
   });
   html += '</div>';
+
+  // Detail panel — tabs for the selected variant
+  if (selectedVariant) {
+    html += renderVariantDetailPanel(product, selectedVariant, recipe);
+  }
+
+  html += '</div>';
+  return html;
+}
+
+// Compact list row: combo · cost · retail · channels · selected ring.
+function renderVariantListRow(product, variant, recipe, idx, isSelected, totalCount) {
+  var pid = product.pid || '';
+  var label = variantComboLabel(variant);
+  var pricing = variantCostAndPrice(product, variant, recipe);
+  var channels = variantChannelNames(product, variant);
+
+  var costTxt = pricing.cost != null ? '$' + pricing.cost.toFixed(2) : '—';
+  var retailTxt = pricing.retail != null ? '$' + pricing.retail.toFixed(2) : '—';
+  var channelsTxt = channels.length
+    ? channels.map(function(n) { return '<span style="background:rgba(42,124,111,0.12);color:var(--teal,#2a7c6f);padding:2px 8px;border-radius:10px;font-size:0.7rem;font-weight:500;margin-right:4px;">' + esc(n) + '</span>'; }).join('')
+    : '<span style="color:var(--warm-gray-light,#aaa);font-size:0.78rem;font-style:italic;">No channels</span>';
+
+  var bg = isSelected ? 'rgba(42,124,111,0.08)' : (idx % 2 === 0 ? 'transparent' : 'rgba(0,0,0,0.015)');
+  var leftBar = isSelected ? '4px solid var(--teal,#2a7c6f)' : '4px solid transparent';
+  var html = '<div style="border-left:' + leftBar + ';' + (idx < totalCount - 1 ? 'border-bottom:1px solid var(--cream-dark,#e8e0d4);' : '') + '">' +
+    '<div style="display:grid;grid-template-columns:1.5fr 1fr 1fr 1.5fr;gap:16px;align-items:center;padding:12px 16px;cursor:pointer;background:' + bg + ';transition:background 0.15s;" ' +
+      'onmouseover="if(!' + (isSelected ? 'true' : 'false') + ')this.style.background=\'rgba(42,124,111,0.04)\'" onmouseout="this.style.background=\'' + bg + '\'" ' +
+      'onclick="selectProductVariant(\'' + esc(pid) + '\',\'' + esc(variant.id) + '\')">';
+  html += '<span style="font-weight:' + (isSelected ? '600' : '500') + ';color:var(--text,#2a2a2a);">' + esc(label) + '</span>';
+  html += '<span style="font-size:0.85rem;"><span style="color:var(--warm-gray,#888);">Cost</span> <span style="font-family:monospace;color:var(--text,#2a2a2a);">' + costTxt + '</span></span>';
+  html += '<span style="font-size:0.85rem;"><span style="color:var(--warm-gray,#888);">Retail</span> <span style="font-family:monospace;font-weight:600;color:var(--text,#2a2a2a);">' + retailTxt + '</span></span>';
+  html += '<span style="text-align:right;">' + channelsTxt + '</span>';
+  html += '</div></div>';
+  return html;
+}
+
+// Detail panel with tabs for the selected variant. Tabs filter by section.
+function renderVariantDetailPanel(product, variant, recipe) {
+  var pid = product.pid || '';
+  var section = (typeof productSection === 'string') ? productSection : 'catalog';
+
+  // Build tab list per section. Order matters — leftmost is the default if
+  // nothing else is selected.
+  var tabs = [];
+  if (section === 'develop') {
+    tabs = [
+      { id: 'pricing', label: 'Pricing' },
+      { id: 'recipe',  label: 'Recipe' },
+      { id: 'image',   label: 'Image' }
+    ];
+  } else if (section === 'sell') {
+    tabs = [
+      { id: 'pricing',   label: 'Pricing' },
+      { id: 'channels',  label: 'Channels' },
+      { id: 'inventory', label: 'Inventory' },
+      { id: 'image',     label: 'Image' },
+      { id: 'recipe',    label: 'Recipe' }
+    ];
+  } else {
+    // catalog — full
+    tabs = [
+      { id: 'pricing',   label: 'Pricing' },
+      { id: 'recipe',    label: 'Recipe' },
+      { id: 'channels',  label: 'Channels' },
+      { id: 'inventory', label: 'Inventory' },
+      { id: 'image',     label: 'Image' }
+    ];
+  }
+
+  // Active tab — sticky per-pid, validated against current section's tabs.
+  var activeTab = null;
+  try { activeTab = sessionStorage.getItem('mastVariantTab_' + pid); } catch (e) {}
+  if (!activeTab || !tabs.some(function(t) { return t.id === activeTab; })) {
+    activeTab = tabs[0].id;
+  }
+
+  var html = '<div style="border:1px solid var(--cream-dark,#e8e0d4);border-radius:10px;overflow:hidden;background:var(--surface-card,#fff);">';
+  // Tab bar
+  html += '<div style="display:flex;border-bottom:1px solid var(--cream-dark,#e8e0d4);background:rgba(42,124,111,0.03);">';
+  tabs.forEach(function(t) {
+    var on = t.id === activeTab;
+    html += '<button onclick="setVariantTab(\'' + esc(pid) + '\',\'' + t.id + '\')" ' +
+      'style="padding:12px 20px;border:none;background:' + (on ? 'var(--surface-card,#fff)' : 'transparent') +
+      ';color:' + (on ? 'var(--teal,#2a7c6f)' : 'var(--warm-gray,#888)') +
+      ';font-size:0.85rem;font-weight:' + (on ? '600' : '500') + ';cursor:pointer;border-bottom:2px solid ' +
+      (on ? 'var(--teal,#2a7c6f)' : 'transparent') + ';margin-bottom:-1px;font-family:\'DM Sans\',sans-serif;">' +
+      esc(t.label) + '</button>';
+  });
+  html += '</div>';
+  // Tab body
+  html += '<div style="padding:20px 24px;">';
+  html += renderVariantTabContent(product, variant, recipe, activeTab);
+  html += '</div>';
+  html += '</div>';
+  return html;
+}
+
+function selectProductVariant(pid, variantId) {
+  try { sessionStorage.setItem('mastSelectedVariant_' + pid, variantId); } catch (e) {}
+  if (typeof renderProductDetail === 'function') renderProductDetail(pid);
+}
+
+function setVariantTab(pid, tabId) {
+  try { sessionStorage.setItem('mastVariantTab_' + pid, tabId); } catch (e) {}
+  if (typeof renderProductDetail === 'function') renderProductDetail(pid);
+}
+
+// Render a single tab's content for the selected variant. Reuses the same
+// per-section building blocks as the previous inline-expand layout.
+function renderVariantTabContent(product, variant, recipe, tabId) {
+  var pid = product.pid || '';
+  var pricing = variantCostAndPrice(product, variant, recipe);
+  var channels = variantChannelNames(product, variant);
+
+  if (tabId === 'pricing') return renderVariantPricingTab(product, variant, recipe, pricing);
+  if (tabId === 'recipe')  return renderVariantRecipeTab(product, variant, recipe);
+  if (tabId === 'channels') return renderVariantChannelsTab(product, variant, channels);
+  if (tabId === 'inventory') return renderVariantInventoryTab(product, variant);
+  if (tabId === 'image') return renderVariantImageTab(product, variant);
+  return '';
+}
+
+function renderVariantPricingTab(product, variant, recipe, pricing) {
+  var pid = product.pid || '';
+  var isEditingPricing = window.__editingVariantPricing &&
+    window.__editingVariantPricing.pid === pid &&
+    window.__editingVariantPricing.variantId === variant.id;
+  var hasMultipleVariants = Array.isArray(product.variants) && product.variants.length > 1;
+  var html = '';
+
+  if (isEditingPricing) {
+    function _val(v) { return (v != null) ? v.toFixed(2) : ''; }
+    html += '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:12px;">';
+    html += '<label style="display:flex;flex-direction:column;gap:4px;">' +
+      '<span style="font-size:0.72rem;color:var(--warm-gray);font-weight:600;letter-spacing:0.04em;text-transform:uppercase;">Wholesale ($)</span>' +
+      '<input type="text" id="vp_wholesale_' + esc(variant.id) + '" value="' + _val(pricing.wholesale) + '" placeholder="0.00" style="padding:8px 10px;border:1px solid var(--cream-dark,#e8e0d4);border-radius:6px;font-family:monospace;font-size:0.95rem;">' +
+      '</label>';
+    html += '<label style="display:flex;flex-direction:column;gap:4px;">' +
+      '<span style="font-size:0.72rem;color:var(--warm-gray);font-weight:600;letter-spacing:0.04em;text-transform:uppercase;">Direct ($)</span>' +
+      '<input type="text" id="vp_direct_' + esc(variant.id) + '" value="' + _val(pricing.direct) + '" placeholder="0.00" style="padding:8px 10px;border:1px solid var(--cream-dark,#e8e0d4);border-radius:6px;font-family:monospace;font-size:0.95rem;">' +
+      '</label>';
+    html += '<label style="display:flex;flex-direction:column;gap:4px;">' +
+      '<span style="font-size:0.72rem;color:var(--warm-gray);font-weight:600;letter-spacing:0.04em;text-transform:uppercase;">Retail ($)</span>' +
+      '<input type="text" id="vp_retail_' + esc(variant.id) + '" value="' + _val(pricing.retail) + '" placeholder="0.00" style="padding:8px 10px;border:1px solid var(--cream-dark,#e8e0d4);border-radius:6px;font-family:monospace;font-size:0.95rem;">' +
+      '</label>';
+    html += '</div>';
+    if (hasMultipleVariants) {
+      html += '<div style="margin-bottom:12px;font-size:0.85rem;">';
+      html += '<span style="color:var(--warm-gray);margin-right:12px;">Apply to:</span>';
+      html += '<label style="margin-right:16px;cursor:pointer;"><input type="radio" name="vpScope_' + esc(variant.id) + '" value="this" checked> This variant only</label>';
+      html += '<label style="cursor:pointer;"><input type="radio" name="vpScope_' + esc(variant.id) + '" value="all"> All variants</label>';
+      html += '</div>';
+    }
+    html += '<div style="display:flex;gap:8px;">';
+    html += '<button class="btn btn-primary btn-small" onclick="saveVariantPricing(\'' + esc(pid) + '\',\'' + esc(variant.id) + '\')">Save</button>';
+    html += '<button class="btn btn-secondary btn-small" onclick="cancelEditVariantPricing()">Cancel</button>';
+    html += '</div>';
+  } else {
+    html += '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:14px;">';
+    html += '<div></div>';
+    html += '<button class="btn btn-secondary btn-small" onclick="startEditVariantPricing(\'' + esc(pid) + '\',\'' + esc(variant.id) + '\')">Edit Pricing</button>';
+    html += '</div>';
+    function tier(label, value, isActive) {
+      var v = (value != null) ? '$' + value.toFixed(2) : '—';
+      var bg = isActive ? 'background:rgba(42,124,111,0.10);border:1px solid rgba(42,124,111,0.25);' : 'background:transparent;border:1px solid var(--cream-dark,#e8e0d4);';
+      var lc = isActive ? 'var(--teal,#2a7c6f)' : 'var(--warm-gray,#888)';
+      var vc = isActive ? 'var(--teal,#2a7c6f)' : 'var(--text,#2a2a2a)';
+      var w = isActive ? '700' : '500';
+      return '<div style="flex:1;min-width:140px;padding:12px 16px;border-radius:8px;' + bg + '">' +
+        '<div style="font-size:0.72rem;color:' + lc + ';text-transform:uppercase;letter-spacing:0.06em;font-weight:600;margin-bottom:6px;">' + label + (isActive ? ' · Active' : '') + '</div>' +
+        '<div style="font-family:monospace;font-size:1.2rem;font-weight:' + w + ';color:' + vc + ';">' + v + '</div>' +
+      '</div>';
+    }
+    html += '<div style="display:flex;gap:10px;flex-wrap:wrap;">';
+    html += tier('Wholesale', pricing.wholesale, pricing.activeTier === 'wholesale');
+    html += tier('Direct',    pricing.direct,    pricing.activeTier === 'direct');
+    html += tier('Retail',    pricing.retail,    pricing.activeTier === 'retail');
+    html += '</div>';
+  }
+  return html;
+}
+
+function renderVariantRecipeTab(product, variant, recipe) {
+  var html = '';
+  if (!recipe) {
+    var pid = product.pid || '';
+    html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">';
+    html += '<span style="color:var(--warm-gray-light,#aaa);font-style:italic;">No recipe linked to this product yet.</span>';
+    html += '<div style="display:flex;gap:6px;">';
+    html += '<button class="btn btn-secondary btn-small" onclick="openLinkRecipeDialog(\'' + esc(pid) + '\')">Link existing recipe…</button>';
+    html += '<button class="btn btn-primary btn-small" onclick="addRecipeForProduct(\'' + esc(pid) + '\')">+ Create Recipe</button>';
+    html += '</div></div>';
+    return html;
+  }
+  var override = recipe.variants && recipe.variants[variant.id];
+  var sourceTxt = override ? 'variant override' : 'inherits base recipe';
+  html += '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;">';
+  html += '<div>';
+  html += '<div style="font-size:1.05rem;font-weight:500;color:var(--text,#2a2a2a);margin-bottom:4px;">' + esc(recipe.name || recipe.recipeId) + '</div>';
+  html += '<div style="font-size:0.82rem;color:var(--warm-gray,#888);">' + sourceTxt + '</div>';
+  if (recipe.costsDirty) {
+    html += '<div style="margin-top:10px;color:#b45309;background:rgba(245,158,11,0.12);padding:6px 12px;border-radius:8px;font-size:0.82rem;font-weight:500;display:inline-block;">⚠ recalc needed</div>';
+  }
+  if (typeof recipe.totalCost === 'number') {
+    html += '<div style="margin-top:12px;font-size:0.92rem;color:var(--text,#2a2a2a);"><span style="color:var(--warm-gray);">Total Cost</span> <span style="font-family:monospace;font-weight:600;margin-left:8px;">$' + recipe.totalCost.toFixed(2) + '</span></div>';
+  }
+  html += '</div>';
+  html += '<button class="btn btn-primary btn-small" onclick="window.makerOpenRecipeBuilder && window.makerOpenRecipeBuilder(\'' + esc(recipe.recipeId) + '\',\'' + esc(variant.id) + '\')">Open Recipe →</button>';
+  html += '</div>';
+  return html;
+}
+
+function renderVariantChannelsTab(product, variant, channels) {
+  var html = '';
+  if (channels.length) {
+    html += '<div style="display:flex;gap:8px;flex-wrap:wrap;">';
+    channels.forEach(function(n) {
+      html += '<span style="background:rgba(42,124,111,0.12);color:var(--teal,#2a7c6f);padding:6px 14px;border-radius:14px;font-size:0.85rem;font-weight:500;">' + esc(n) + '</span>';
+    });
+    html += '</div>';
+  } else {
+    html += '<div style="color:var(--warm-gray-light,#aaa);font-style:italic;">Not published on any channel.</div>';
+  }
+  return html;
+}
+
+function renderVariantInventoryTab(product, variant) {
+  var pid = product.pid || '';
+  var inv = inventory[pid] || {};
+  var stockType = (inv && inv.stockType) ? inv.stockType : 'made-to-order';
+  var html = '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:14px;">';
+  html += '<div></div>';
+  html += '<button class="btn btn-secondary btn-small" onclick="openAdjustStockModal(\'' + esc(pid) + '\')">Adjust Stock</button>';
+  html += '</div>';
+  if (stockType === 'build-to-order' || stockType === 'made-to-order') {
+    html += '<div style="font-size:1rem;color:var(--text,#2a2a2a);">Build to order</div>';
+    return html;
+  }
+  var stockKey = variant._isSynthetic ? '_default' : variant.id;
+  var entry = (inv.stock && typeof inv.stock === 'object') ? inv.stock[stockKey] : null;
+  if (!entry && variant._isSynthetic && typeof inv.stock === 'number') {
+    entry = { onHand: inv.stock, committed: 0, held: 0, damaged: 0 };
+  }
+  var onH = (entry && entry.onHand) || 0;
+  var com = (entry && entry.committed) || 0;
+  var hel = (entry && entry.held) || 0;
+  var dam = (entry && entry.damaged) || 0;
+  var avail = Math.max(0, onH - com - hel - dam);
+  var availColor = avail <= 0 ? 'var(--danger,#dc2626)' : 'var(--text,#2a2a2a)';
+  function _stat(label, value, color) {
+    return '<div style="flex:1;min-width:110px;padding:12px 16px;border-radius:8px;border:1px solid var(--cream-dark,#e8e0d4);">' +
+      '<div style="font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.06em;font-weight:600;margin-bottom:6px;">' + label + '</div>' +
+      '<div style="font-family:monospace;font-size:1.2rem;font-weight:600;color:' + (color || 'var(--text,#2a2a2a)') + ';">' + value + '</div>' +
+    '</div>';
+  }
+  html += '<div style="display:flex;gap:10px;flex-wrap:wrap;">';
+  html += _stat('On Hand', onH);
+  html += _stat('Available', avail, availColor);
+  if (com > 0) html += _stat('Committed', com, 'var(--warm-gray,#888)');
+  if (hel > 0) html += _stat('Held', hel, '#b45309');
+  if (dam > 0) html += _stat('Damaged', dam, 'var(--danger,#dc2626)');
+  html += '</div>';
+  return html;
+}
+
+function renderVariantImageTab(product, variant) {
+  var pid = product.pid || '';
+  var productImages = Array.isArray(product.images) ? product.images : [];
+  var resolveImg = function(img) { return (typeof img === 'string') ? img : (img && img.url) || ''; };
+  var currentImageIdx = (typeof variant.imageIndex === 'number' && variant.imageIndex >= 0 && variant.imageIndex < productImages.length)
+    ? variant.imageIndex : -1;
+  if (productImages.length === 0) {
+    return '<div style="color:var(--warm-gray-light,#aaa);font-style:italic;">No product images yet — upload some via Manage Images above to bind a variant image.</div>';
+  }
+  var html = '<div style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:12px;">Pick the image that represents this variant. The storefront will swap to it when shoppers select this variant.</div>';
+  html += '<div style="display:flex;gap:10px;flex-wrap:wrap;">';
+  var noneSel = currentImageIdx === -1;
+  html += '<button onclick="bindVariantImage(\'' + esc(pid) + '\',\'' + esc(variant.id) + '\',-1)" ' +
+    'style="width:88px;height:88px;border-radius:10px;border:2px solid ' + (noneSel ? 'var(--teal,#2a7c6f)' : 'var(--cream-dark,#e8e0d4)') + ';background:var(--cream-dark,#e8e0d4);display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--warm-gray,#888);font-size:0.78rem;font-weight:500;">none</button>';
+  productImages.forEach(function(img, i) {
+    var url = resolveImg(img);
+    if (!url) return;
+    var sel = i === currentImageIdx;
+    html += '<button onclick="bindVariantImage(\'' + esc(pid) + '\',\'' + esc(variant.id) + '\',' + i + ')" ' +
+      'style="width:88px;height:88px;border-radius:10px;overflow:hidden;border:2px solid ' + (sel ? 'var(--teal,#2a7c6f)' : 'var(--cream-dark,#e8e0d4)') + ';padding:0;cursor:pointer;background:none;">' +
+      '<img src="' + esc(url) + '" alt="" style="width:100%;height:100%;object-fit:cover;display:block;">' +
+      '</button>';
+  });
   html += '</div>';
   return html;
 }
@@ -29816,6 +30104,57 @@ async function bindVariantImage(pid, variantId, imageIndex) {
   } catch (err) {
     showToast('Failed to bind image: ' + (err && err.message ? err.message : err), true);
   }
+}
+
+// Inline product image manager — replaces the Images tab. Renders the
+// product's image library with set-primary / remove / upload + library
+// pickers, all in one expandable panel under the hero.
+function toggleProductImagesPanel(pid) {
+  var key = 'mastImgPanel_' + pid;
+  try {
+    var cur = sessionStorage.getItem(key);
+    if (cur === '1') sessionStorage.removeItem(key);
+    else sessionStorage.setItem(key, '1');
+  } catch (e) {}
+  if (typeof renderProductDetail === 'function') renderProductDetail(pid);
+}
+
+function renderInlineImagesPanel(product) {
+  if (!product) return '';
+  var pid = product.pid || '';
+  var productImages = Array.isArray(product.images) ? product.images : [];
+  var resolveImg = function(img) { return (typeof img === 'string') ? img : (img && img.url) || ''; };
+
+  var html = '<div style="' + _PD_STYLES.card + '">';
+  html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;">';
+  html += '<h3 style="' + _PD_STYLES.sectionTitle + '">Images <span style="font-family:\'DM Sans\',sans-serif;font-size:0.85rem;color:var(--warm-gray,#888);font-weight:400;margin-left:4px;">' + productImages.length + '</span></h3>';
+  html += '<div style="display:flex;gap:6px;">';
+  html += '<button class="btn btn-secondary btn-small" onclick="selectProductImageFromLibrary(\'' + esc(pid) + '\')">Select from Library</button>';
+  html += '<label class="btn btn-primary btn-small" style="cursor:pointer;margin:0;">' +
+    '<input type="file" accept="image/*" style="display:none;" onchange="uploadProductImage(\'' + esc(pid) + '\', this)">' +
+    'Upload New' +
+    '</label>';
+  html += '</div></div>';
+
+  if (productImages.length === 0) {
+    html += '<div style="text-align:center;padding:32px 16px;color:var(--warm-gray,#888);font-size:0.92rem;">' +
+      'No images yet. Upload a new image or pick one from your library.' +
+      '</div>';
+  } else {
+    html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;">';
+    productImages.forEach(function(img, idx) {
+      var url = resolveImg(img);
+      if (!url) return;
+      html += '<div style="position:relative;border-radius:10px;overflow:hidden;aspect-ratio:1;background:var(--cream-dark,#e8e0d4);border:1px solid var(--cream-dark,#e8e0d4);">' +
+        '<img src="' + esc(url) + '" alt="" style="width:100%;height:100%;object-fit:cover;display:block;">' +
+        (idx === 0 ? '<span style="position:absolute;top:6px;left:6px;background:var(--teal,#2a7c6f);color:white;font-size:0.68rem;font-weight:600;padding:3px 8px;border-radius:6px;letter-spacing:0.04em;">PRIMARY</span>' : '') +
+        '</div>';
+    });
+    html += '</div>';
+  }
+
+  html += '</div>';
+  return html;
 }
 
 function toggleVariantExpanded(pid, variantId) {
@@ -30100,19 +30439,43 @@ function renderProductDetail(pid) {
         '</div>' +
       '</div>';
   }
-  var headerHtml = '<div class="product-detail-header">' +
-    (imgSrc ? '<img class="product-detail-img" src="' + esc(imgSrc) + '" alt="' + esc(product.name || 'New Product') + '">' : '') +
-    '<div style="flex:1;">' +
-      '<h2 class="product-detail-name">' + esc(product.name || 'New Product') + ' ' +
-        statusBadgeRender +
-      '</h2>' +
-      (lensToggleHtml ? '<div style="margin:2px 0 6px;">' + lensToggleHtml + '</div>' : '') +
-      renderChannelSyncBadges(product, { size: 'normal' }) +
-      (product.priceCents ? '<div class="product-detail-price">' + formatPriceCents(product.priceCents) + '</div>' :
-       '<div style="color:var(--warm-gray);font-style:italic;margin-bottom:8px;">Price on request</div>') +
-      (product.availability === 'discontinued' ? '<span class="status-badge stock-badge out-of-stock">Discontinued</span>' : '') +
-    '</div>' +
-    (!isCreate && !isEditing ? '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">' +
+  // Core product info inlined into the header: image left, name/desc/category
+  // beside it, manage-images button under the image. This replaces the
+  // separate Core Product card and the Details/Images tab bar.
+  var _coreImgCount = (typeof productImageCount === 'function') ? productImageCount(product) : ((product.images || []).length);
+  var _coreInv = inventory[pid] || {};
+  var _coreStockType = (_coreInv && _coreInv.stockType) ? _coreInv.stockType : 'made-to-order';
+  var _coreProduction = (_coreStockType === 'build-to-order' || _coreStockType === 'made-to-order')
+    ? 'Build to order'
+    : (_coreStockType === 'stock-to-build' ? 'Stock to build' : 'Strict stock');
+  if (product.processingDays && (product.processingDays.min || product.processingDays.max)) {
+    var _pd = product.processingDays;
+    _coreProduction += ' · ' + (_pd.min || 0) + (_pd.max && _pd.max !== _pd.min ? '–' + _pd.max : '') + ' day lead';
+  }
+  var _categoryText = (product.categories && product.categories.length) ? product.categories.join(', ') : '';
+  var _imgPanelOpen = false;
+  try { _imgPanelOpen = sessionStorage.getItem('mastImgPanel_' + pid) === '1'; } catch (e) {}
+
+  var headerHtml = '<div style="display:grid;grid-template-columns:240px 1fr;gap:24px;margin-bottom:24px;align-items:start;">';
+  // ── Left column: hero + Manage Images
+  headerHtml += '<div>';
+  headerHtml += imgSrc
+    ? '<img src="' + esc(imgSrc) + '" alt="' + esc(product.name || '') + '" style="width:240px;height:240px;object-fit:cover;border-radius:12px;display:block;border:1px solid var(--cream-dark,#e8e0d4);">'
+    : '<div style="width:240px;height:240px;border-radius:12px;background:var(--cream-dark,#e8e0d4);display:flex;align-items:center;justify-content:center;font-size:2rem;color:var(--warm-gray,#888);">📦</div>';
+  if (!isCreate && pid) {
+    headerHtml += '<button class="btn btn-secondary btn-small" style="margin-top:10px;width:240px;" onclick="toggleProductImagesPanel(\'' + esc(pid) + '\')">' +
+      (_imgPanelOpen ? '▲ Hide images' : '📷 Manage images (' + _coreImgCount + ')') +
+      '</button>';
+  }
+  headerHtml += '</div>';
+
+  // ── Right column: name, status, view-as toggle, action bar, then core fields
+  headerHtml += '<div style="min-width:0;">';
+  headerHtml += '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:8px;">';
+  headerHtml += '<h2 class="product-detail-name" style="margin:0;flex:1;min-width:200px;">' +
+    esc(product.name || 'New Product') + ' ' + statusBadgeRender + '</h2>';
+  // Action bar inline at top right
+  headerHtml += (!isCreate && !isEditing ? '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">' +
       // Section-aware action bar. Section is preset by sidebar entry point
       // (Develop/Manage/Sell/Inventory) and drives which actions surface here.
       (function() {
@@ -30162,8 +30525,49 @@ function renderProductDetail(pid) {
     '</div>' : '') +
     (isEditing && !isCreate ? '<div style="display:flex;align-items:center;gap:8px;">' +
       '<span style="font-size:0.72rem;color:var(--amber);font-weight:600;text-transform:uppercase;letter-spacing:0.04em;">Editing</span>' +
-    '</div>' : '') +
-  '</div>';
+    '</div>' : '');
+  headerHtml += '</div>'; // close top row (name + actions)
+
+  // View-as toggle below name/actions row
+  if (lensToggleHtml) {
+    headerHtml += '<div style="margin:0 0 14px 0;">' + lensToggleHtml + '</div>';
+  }
+
+  // Core product fields — description, category, production
+  if (product.description) {
+    headerHtml += '<div style="font-size:0.95rem;color:var(--text,#2a2a2a);line-height:1.55;margin-bottom:14px;">' +
+      esc(product.description) + '</div>';
+  }
+  headerHtml += '<dl style="display:grid;grid-template-columns:120px 1fr;gap:10px 20px;margin:0;font-size:0.88rem;">';
+  function _coreRow(label, value) {
+    return '<dt style="font-size:0.72rem;color:var(--warm-gray,#888);font-weight:600;letter-spacing:0.06em;text-transform:uppercase;">' + label + '</dt>' +
+      '<dd style="margin:0;color:var(--text,#2a2a2a);">' + value + '</dd>';
+  }
+  headerHtml += _coreRow('Category', _categoryText ? esc(_categoryText) : '<span style="color:var(--warm-gray-light,#aaa);">—</span>');
+  headerHtml += _coreRow('Production', esc(_coreProduction));
+  if (product.businessLine === 'sculpture') {
+    headerHtml += _coreRow('Business Line', '<span style="display:inline-block;background:var(--teal,#2a7c6f);color:white;font-size:0.72rem;padding:3px 10px;border-radius:10px;">Sculpture</span>');
+  }
+  headerHtml += '</dl>';
+  headerHtml += '</div>'; // close right column
+  headerHtml += '</div>'; // close header grid
+
+  // Inline images panel — visible when toggled. Replaces the Images tab.
+  if (!isCreate && pid && _imgPanelOpen) {
+    headerHtml += '<div id="productImagesPanel" style="margin-bottom:24px;">' +
+      renderInlineImagesPanel(product) +
+      '</div>';
+  }
+
+  // Channel sync badges (small status pills) below header.
+  var _syncBadges = renderChannelSyncBadges(product, { size: 'normal' });
+  if (_syncBadges) {
+    headerHtml += '<div style="margin-bottom:16px;">' + _syncBadges + '</div>';
+  }
+  // Discontinued banner
+  if (product.availability === 'discontinued') {
+    headerHtml += '<div style="margin-bottom:16px;"><span class="status-badge stock-badge out-of-stock">Discontinued</span></div>';
+  }
 
   // Channel-First Phase 2d (D24) — Recipe Publish handshake banner.
   // Renders only when recipe.version > product.recipeVersion.
@@ -30320,8 +30724,8 @@ function renderProductDetail(pid) {
         '</div>' +
       '</div>';
   } else {
-    // ─── Variant-centric Details (Phase 2a, read-only) ───
-    detailsHtml += renderCoreProductSection(product);
+    // ─── Variant-centric Details ───
+    // Core Product info is in the header; just render variants here.
     detailsHtml += renderVariantsSection(product);
   }
   detailsHtml += '</div>';
