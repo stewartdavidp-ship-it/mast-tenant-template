@@ -30403,7 +30403,10 @@ function renderProductDetail(pid) {
   // Core product info inlined into the header: image left, name/desc/category
   // beside it, manage-images button under the image. This replaces the
   // separate Core Product card and the Details/Images tab bar.
-  var _coreImgCount = (typeof productImageCount === 'function') ? productImageCount(product) : ((product.images || []).length);
+  // Show the count of inline product images to match what the Manage Images
+  // panel renders (it iterates product.images[]). Library reverse-linked
+  // images are not included here to avoid the count/render mismatch.
+  var _coreImgCount = Array.isArray(product.images) ? product.images.length : 0;
   var _coreInv = inventory[pid] || {};
   var _coreStockType = (_coreInv && _coreInv.stockType) ? _coreInv.stockType : 'made-to-order';
   var _coreProduction = (_coreStockType === 'build-to-order' || _coreStockType === 'made-to-order')
@@ -30548,28 +30551,15 @@ function renderProductDetail(pid) {
   var hasVariants = product.options && product.options.length > 0;
   var hasProduction = product.buildTime || product.costToBuild || (product.materials && product.materials.length) ||
     product.shippingCategory || product.weightOz || product.dimensions;
-  // View mode has no top-level tabs — the header carries Core Product info,
-  // the Manage Images button toggles the inline image panel, and per-variant
-  // data lives in the variant detail panel's own tab strip below the list.
-  // Editing mode still exposes the legacy Variants/Production/Inventory
-  // tabs for the existing forms until those move inline too.
+  // No top-level tabs at all. View mode shows the variant-centric layout
+  // (header + variants + variant detail panel with its own tab strip).
+  // Edit Info opens just the Core Product fields — everything else is
+  // edited inline at the variant level (prices, channels, inventory, image
+  // binding) or via the Manage Images panel (product image library).
   var tabs = [{ id: 'details', label: 'Details' }];
-  if (isEditing) {
-    tabs.push({ id: 'variants', label: 'Variants' });
-    tabs.push({ id: 'images', label: 'Images' });
-    tabs.push({ id: 'production', label: 'Production' });
-    if (!isCreate) tabs.push({ id: 'inventory', label: 'Inventory' });
-  }
-
+  // Force the active tab to 'details' in editing mode so the form renders.
+  if (isEditing) tab = 'details';
   var tabBarHtml = '';
-  if (isEditing) {
-    tabBarHtml = '<div class="view-tabs" style="margin:16px 0 0 0;">';
-    tabs.forEach(function(t) {
-      var active = t.id === tab;
-      tabBarHtml += '<button class="view-tab pd-tab-btn' + (active ? ' active' : '') + '" data-tab="' + t.id + '" onclick="switchProductTab(\'' + t.id + '\')">' + t.label + '</button>';
-    });
-    tabBarHtml += '</div>';
-  }
 
   // ---- Details Tab ----
   var catOptions = CATEGORIES.length > 0 ? CATEGORIES : ['other'];
