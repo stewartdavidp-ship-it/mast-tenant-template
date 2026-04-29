@@ -1835,6 +1835,20 @@
       margin-bottom: 5px;
       color: var(--charcoal);
     }
+    .feedback-screenshot-label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.85rem;
+      color: var(--text-secondary);
+      cursor: pointer;
+    }
+    .feedback-screenshot-label input[type="checkbox"] {
+      cursor: pointer;
+      width: 15px;
+      height: 15px;
+      flex-shrink: 0;
+    }
 
     .feedback-debug-panel {
       border: 1px solid var(--border, #374151);
@@ -35706,6 +35720,12 @@ function openFeedbackDialog() {
       '<label class="feedback-label">Description</label>' +
       '<textarea id="fbDescription" placeholder="What\'s wrong or what do you need?" oninput="updateFbSubmitState()"></textarea>' +
     '</div>' +
+    '<div class="feedback-form-group">' +
+      '<label class="feedback-screenshot-label">' +
+        '<input type="checkbox" id="fbScreenshot">' +
+        'Attach a screenshot of this screen' +
+      '</label>' +
+    '</div>' +
     '<div id="fbDebugPanel" style="display:none;">' +
       '<div class="feedback-debug-panel">' +
         '<button type="button" class="feedback-debug-toggle" id="fbDebugToggle" onclick="toggleFbDebugPanel()">' +
@@ -35825,10 +35845,44 @@ async function submitFeedback() {
 
   var type = document.getElementById('fbTypeVal');
   var severity = document.getElementById('fbSeverityVal');
+  var wantScreenshot = !!(document.getElementById('fbScreenshot') && document.getElementById('fbScreenshot').checked);
 
+  var btn = document.getElementById('fbSubmitBtn');
+  if (btn) { btn.disabled = true; btn.textContent = wantScreenshot ? 'Capturing...' : 'Sending...'; }
+
+  // Collect all form values before potentially closing the dialog
+  var descValue = desc.value.trim();
+  var fbType = type ? type.value : 'bug';
+  var fbSeverity = severity ? severity.value : 'medium';
   var now = Date.now();
   var cutoff = now - 60000;
-  var fbType = type ? type.value : 'bug';
+
+  // Debug panel toggle state \u2014 read before dialog closes
+  var dbgConsole = document.getElementById('fbDbgConsole');
+  var dbgToasts = document.getElementById('fbDbgToasts');
+  var dbgNetwork = document.getElementById('fbDbgNetwork');
+  var dbgDevice = document.getElementById('fbDbgDevice');
+  var dbgVersion = document.getElementById('fbDbgVersion');
+  var inclConsole = !dbgConsole || dbgConsole.checked;
+  var inclToasts = !dbgToasts || dbgToasts.checked;
+  var inclNetwork = !dbgNetwork || dbgNetwork.checked;
+  var inclDevice = !dbgDevice || dbgDevice.checked;
+  var inclVersion = !dbgVersion || dbgVersion.checked;
+
+  var screenshotUrl = null;
+  var screenshotStoragePath = null;
+
+  if (wantScreenshot) {
+    closeFeedbackDialog();
+    await new Promise(function(r) { setTimeout(r, 350); });
+    try {
+      var result = await captureFeedbackScreenshot();
+      screenshotUrl = result.url;
+      screenshotStoragePath = result.storagePath;
+    } catch (e) {
+      console.warn('[feedback] Screenshot capture failed:', e);
+    }
+  }
 
   var report = {
     appId: MastDB.tenantId(),
@@ -35836,48 +35890,68 @@ async function submitFeedback() {
     screen: currentRoute || 'unknown',
     screenLabel: getScreenLabel(),
     type: fbType,
-    severity: severity ? severity.value : 'medium',
-    description: desc.value.trim(),
+    severity: fbSeverity,
+    description: descValue,
     email: null,
     userId: currentUser ? currentUser.uid : null,
     userName: currentUser ? (currentUser.displayName || currentUser.email || '') : null,
     tenantPlan: window.MAST_TENANT_PLAN || null,
-    consoleBuffer: window._consoleBuffer ? window._consoleBuffer.filter(function(e) { return e.t >= cutoff; }) : [],
-    toastBuffer: window._toastBuffer ? window._toastBuffer.filter(function(e) { return e.t >= cutoff; }) : [],
-    deviceInfo: {
-      userAgent: navigator.userAgent,
-      viewport: { width: window.innerWidth, height: window.innerHeight }
-    },
-    appVersion: window.MAST_VERSION || null,
+    consoleBuffer: inclConsole && window._consoleBuffer ? window._consoleBuffer.filter(function(e) { return e.t >= cutoff; }) : null,
+    toastBuffer: inclToasts && window._toastBuffer ? window._toastBuffer.filter(function(e) { return e.t >= cutoff; }) : null,
+    deviceInfo: inclDevice ? { userAgent: navigator.userAgent, viewport: { width: window.innerWidth, height: window.innerHeight } } : null,
+    appVersion: inclVersion ? (window.MAST_VERSION || null) : null,
+    screenshotUrl: screenshotUrl,
+    screenshotStoragePath: screenshotStoragePath,
     timestamp: new Date().toISOString(),
     status: 'open',
     jobId: null,
     createdAt: MastDB.serverTimestamp()
   };
-  if (fbType === 'bug') {
+  if (fbType === 'bug' && inclNetwork) {
     report.networkErrors = window._networkErrors ? window._networkErrors.filter(function(e) { return e.t >= cutoff; }) : [];
-    var dbgConsole = document.getElementById('fbDbgConsole');
-    var dbgToasts = document.getElementById('fbDbgToasts');
-    var dbgNetwork = document.getElementById('fbDbgNetwork');
-    var dbgDevice = document.getElementById('fbDbgDevice');
-    var dbgVersion = document.getElementById('fbDbgVersion');
-    if (dbgConsole && !dbgConsole.checked) report.consoleBuffer = null;
-    if (dbgToasts && !dbgToasts.checked) report.toastBuffer = null;
-    if (dbgNetwork && !dbgNetwork.checked) report.networkErrors = null;
-    if (dbgDevice && !dbgDevice.checked) report.deviceInfo = null;
-    if (dbgVersion && !dbgVersion.checked) report.appVersion = null;
   }
 
   try {
-    var btn = document.getElementById('fbSubmitBtn');
-    if (btn) { btn.disabled = true; btn.textContent = 'Sending...'; }
     await MastDB.feedback.ref().push(report);
-    closeFeedbackDialog();
+    if (!wantScreenshot) closeFeedbackDialog();
     showToast('Feedback submitted \u2014 thanks!');
   } catch (err) {
     showToast('Error submitting feedback: ' + err.message, true);
     if (btn) { btn.disabled = false; btn.textContent = 'Submit'; }
   }
+}
+
+async function captureFeedbackScreenshot() {
+  if (!window.html2canvas) {
+    await new Promise(function(resolve, reject) {
+      var s = document.createElement('script');
+      s.src = 'https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js';
+      s.onload = resolve;
+      s.onerror = reject;
+      document.head.appendChild(s);
+    });
+  }
+  var canvas = await window.html2canvas(document.body, {
+    scale: 0.75,
+    useCORS: true,
+    logging: false,
+    allowTaint: false
+  });
+  return new Promise(function(resolve, reject) {
+    canvas.toBlob(async function(blob) {
+      try {
+        var tenantId = MastDB.tenantId();
+        var suffix = Math.random().toString(36).slice(2, 8);
+        var storagePath = tenantId + '/feedback-screenshots/' + Date.now() + '-' + suffix + '.jpg';
+        var ref = storage.ref(storagePath);
+        await ref.put(blob, { contentType: 'image/jpeg' });
+        var url = await ref.getDownloadURL();
+        resolve({ url: url, storagePath: storagePath });
+      } catch (e) {
+        reject(e);
+      }
+    }, 'image/jpeg', 0.65);
+  });
 }
 
 // Public feedback toggle
