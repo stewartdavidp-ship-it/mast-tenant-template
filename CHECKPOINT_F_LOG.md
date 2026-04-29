@@ -134,7 +134,25 @@ Single consolidated Checkpoint F commit. The new logic in `maker.js` lives in on
 ## Deploy
 
 - **2026-04-28** — `mast_hosting deploy` to sgtest15.
-- See "Deploy + Verification" appended after commit + push.
+- Site: `https://mast-sgtest15.web.app`
+- Version: `sites/mast-sgtest15/versions/5519203d47502dbf` (FINALIZED).
+- Branch: `develop/F-rework`.
+- 160 files total, 4 uploaded, 156 cached.
+
+### Post-deploy probes
+
+- `https://mast-sgtest15.web.app/app/modules/maker.js` returns 200 (322,080 bytes) and contains 27 occurrences of the new Checkpoint F symbols (`makerEnterRevisionMode`, `makerApplyPendingChanges`, `makerCloneForRedesign`, `cloneProductForRedesign`, `stagePendingChanges`, `renderRevisionBanner`, `renderVersionLinkBanner`, `NON_REVISIONABLE_FIELDS`).
+- `https://mast-sgtest15.web.app/app/` returns 200 (1,853,493 bytes) and contains 11 occurrences of the F integration hooks (`makerRenderActiveProductActionBar`, `makerRenderRevisionBanner`, `makerRenderVersionLinkBanner`, `makerEnterRevisionMode`, `makerStagePendingChanges`, `inRevisionMode`) — matching the local `app/index.html` integration footprint.
+
+## Verification
+
+- Deployed `app/modules/maker.js` and `app/index.html` reachable via tenant URL with all expected F symbols.
+- `node --check` clean before push; all 15 inline `<script>` blocks in `index.html` parse cleanly via `new Function(code)`.
+- Chrome MCP UI verification deferred to control session per spawn discipline. Entry path:
+  - Develop → Pieces → take a product through Draft → Ready → Active → Detail screen shows new Active action bar (`Edit (creates revision)`, `Clone for redesign`).
+  - Edit → unlocks form, banner appears → Save → toast "Staged N changes" → banner shows itemized diffs.
+  - Apply → confirmation modal → live fields update.
+  - Clone for redesign → new v2 Draft created → cross-link banners on both records.
 
 ## Ready for Checkpoint G
 
