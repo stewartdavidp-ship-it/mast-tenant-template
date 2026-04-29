@@ -24587,6 +24587,7 @@ function renderDevelopOrphanRecipesPanel() {
   Object.keys(recipes).forEach(function(rid) {
     var r = recipes[rid];
     if (!r) return;
+    if (r.status === 'archived') return; // archived recipes aren't orphans
     if (!r.productId || !validPids[r.productId]) {
       orphans.push({ rid: rid, recipe: r });
     }
