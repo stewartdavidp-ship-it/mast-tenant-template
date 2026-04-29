@@ -2150,7 +2150,7 @@
     // Header
     html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">';
     html += '<div>';
-    html += '<h2 style="font-family:\'Cormorant Garamond\',serif;font-size:1.6rem;font-weight:500;margin:0;">Pieces</h2>';
+    html += '<h2 style="font-family:\'Cormorant Garamond\',serif;font-size:1.6rem;font-weight:500;margin:0;">Products in Development</h2>';
     // Checkpoint G — Develop list shows the Develop-lens slice:
     //   draft, ready, active+pendingRevision, archived (discontinuing or selling-through).
     var filteredProducts = products.filter(function(p) {
@@ -2225,6 +2225,7 @@
 
     // Table
     html += '<div class="data-table"><table><thead><tr>';
+    html += '<th style="width:44px;padding:6px 4px;"></th>';
     html += '<th>Product</th>';
     html += '<th>Status</th>';
     html += '<th>Category</th>';
@@ -2275,6 +2276,12 @@
       var pendingBadge = p.hasPendingRevision
         ? ' <span class="status-badge" style="background:rgba(217,119,6,0.18);color:#b45309;font-size:0.68rem;padding:2px 6px;" title="Pending revision">⚠ pending</span>'
         : '';
+      var _thumbSrc = (typeof window.firstProductImage === 'function') ? window.firstProductImage(p) : '';
+      html += '<td style="padding:4px 4px;width:44px;vertical-align:middle;">' +
+        (_thumbSrc
+          ? '<img src="' + esc(_thumbSrc) + '" alt="" style="width:36px;height:36px;object-fit:cover;border-radius:4px;display:block;">'
+          : '<div style="width:36px;height:36px;border-radius:4px;background:var(--cream-dark,#e8e0d8);display:flex;align-items:center;justify-content:center;font-size:1rem;">📦</div>') +
+        '</td>';
       html += '<td style="font-weight:500;">' + expandToggle + esc(p.name || '') + variantCountBadge + versionBadge + pendingBadge + '</td>';
       html += '<td>' + productStatusBadgeHtml(p.status) + (p.status === 'archived' && p.archivedSubState ? archiveSubStateBadgeHtml(p.archivedSubState) : '') + '</td>';
       html += '<td>' + esc((p.categories || []).join(', ')) + '</td>';
@@ -2345,6 +2352,7 @@
             ? 'makerOpenRecipeBuilder(\'' + esc(recipe.recipeId) + '\', \'' + esc(pv.id) + '\')'
             : 'makerCreateRecipeForProduct(this.dataset.pid, this.dataset.name)';
           html += '<tr style="cursor:pointer;background:rgba(0,0,0,0.015);" data-pid="' + esc(pid) + '" data-name="' + esc(p.name || '') + '" onclick="' + vRowClick + '">';
+          html += '<td></td>'; // thumbnail (blank for variant sub-rows)
           html += '<td style="padding-left:28px;font-size:0.85rem;color:var(--warm-gray);">↳ ' + esc(vName) + '</td>';
           html += '<td></td>'; // status (variant inherits from parent)
           html += '<td></td>';
