@@ -172,6 +172,130 @@
       border-color: white;
     }
 
+    /* ========== NOTIFICATION BELL ========== */
+    .header-notif-btn {
+      position: relative;
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 1.2rem;
+      line-height: 1;
+      padding: 4px;
+      color: var(--warm-gray-light);
+      transition: color 0.2s;
+    }
+    .header-notif-btn:hover { color: white; }
+    .header-notif-badge {
+      position: absolute;
+      top: -2px;
+      right: -2px;
+      background: #e53e3e;
+      color: white;
+      font-size: 0.6rem;
+      font-weight: 700;
+      min-width: 16px;
+      height: 16px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 3px;
+      pointer-events: none;
+    }
+    #notificationPanel {
+      display: none;
+      position: fixed;
+      top: 60px;
+      right: 12px;
+      width: 320px;
+      max-height: 480px;
+      overflow-y: auto;
+      background: var(--surface-dark, #1a1a1a);
+      border: 1px solid var(--warm-gray, #555);
+      border-radius: 8px;
+      z-index: 9999;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+    }
+    #notificationPanel .notif-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--warm-gray, #555);
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--warm-gray-light, #ccc);
+    }
+    #notificationPanel .notif-header button {
+      background: none;
+      border: none;
+      color: var(--warm-gray-light, #ccc);
+      cursor: pointer;
+      font-size: 1rem;
+      line-height: 1;
+      padding: 2px 4px;
+    }
+    #notificationPanel .notif-empty {
+      padding: 20px 16px;
+      text-align: center;
+      color: var(--warm-gray, #888);
+      font-size: 0.82rem;
+    }
+    #notificationPanel .notif-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 12px 16px;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    #notificationPanel .notif-item:hover { background: rgba(255,255,255,0.05); }
+    #notificationPanel .notif-item:last-child { border-bottom: none; }
+    #notificationPanel .notif-body { flex: 1; min-width: 0; }
+    #notificationPanel .notif-title {
+      font-size: 0.82rem;
+      color: #f0ebe0;
+      margin-bottom: 3px;
+    }
+    #notificationPanel .notif-note {
+      font-size: 0.77rem;
+      color: var(--warm-gray-light, #ccc);
+      font-style: italic;
+      margin-bottom: 3px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    #notificationPanel .notif-time {
+      font-size: 0.73rem;
+      color: var(--warm-gray, #888);
+    }
+    #notificationPanel .notif-dismiss {
+      background: none;
+      border: none;
+      color: var(--warm-gray, #888);
+      cursor: pointer;
+      font-size: 0.9rem;
+      line-height: 1;
+      padding: 2px 4px;
+      flex-shrink: 0;
+      transition: color 0.15s;
+    }
+    #notificationPanel .notif-dismiss:hover { color: white; }
+    #notificationPanel .notif-footer {
+      padding: 10px 16px;
+      border-top: 1px solid rgba(255,255,255,0.1);
+      text-align: center;
+    }
+    #notificationPanel .notif-footer a {
+      color: #a78bfa;
+      font-size: 12px;
+      text-decoration: none;
+      cursor: pointer;
+    }
+    #notificationPanel .notif-footer a:hover { text-decoration: underline; }
+
     /* ========== SIDEBAR NAVIGATION ========== */
     .sidebar {
       position: fixed;
@@ -1645,36 +1769,31 @@
       margin-bottom: 16px;
       display: inline-block;
     }
-    .feedback-segmented {
+    .feedback-chips {
       display: flex;
-      gap: 0;
-      border: 1px solid var(--cream-dark, #ddd);
-      border-radius: 6px;
-      overflow: hidden;
+      flex-wrap: wrap;
+      gap: 6px;
       margin-bottom: 14px;
     }
-    .feedback-segmented label {
-      flex: 1;
-      text-align: center;
-      padding: 7px 4px;
-      font-size: 0.85rem;
+    .feedback-chip {
+      padding: 5px 13px;
+      border-radius: 20px;
+      font-size: 0.82rem;
       font-weight: 500;
       cursor: pointer;
-      background: var(--cream, white);
-      color: inherit;
-      transition: background 0.15s, color 0.15s;
-      border-right: 1px solid var(--cream-dark, #ddd);
-      margin: 0;
+      border: 1.5px solid var(--border, #444);
+      background: transparent;
+      color: var(--text-muted, #888);
+      transition: background 0.15s, color 0.15s, border-color 0.15s;
+      line-height: 1.4;
     }
-    .feedback-segmented label:last-child { border-right: none; }
-    .feedback-segmented input { display: none; }
-    .feedback-segmented input:checked + span {
-      background: var(--teal);
-      color: white;
+    .feedback-chip:hover {
+      border-color: var(--text-muted, #888);
+      color: var(--text, #ccc);
     }
-    .feedback-segmented label:has(input:checked) {
-      background: var(--teal);
-      color: white;
+    .feedback-chip.selected {
+      border-color: transparent;
+      color: #fff;
     }
     .feedback-dialog textarea {
       width: 100%;
@@ -1715,6 +1834,63 @@
       font-weight: 600;
       margin-bottom: 5px;
       color: var(--charcoal);
+    }
+    .feedback-screenshot-label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.85rem;
+      color: var(--text-secondary);
+      cursor: pointer;
+    }
+    .feedback-screenshot-label input[type="checkbox"] {
+      cursor: pointer;
+      width: 15px;
+      height: 15px;
+      flex-shrink: 0;
+    }
+
+    .feedback-debug-panel {
+      border: 1px solid var(--border, #374151);
+      border-radius: 6px;
+      background: var(--surface-card);
+      margin-top: 8px;
+      overflow: hidden;
+    }
+    .feedback-debug-toggle {
+      width: 100%;
+      background: none;
+      border: none;
+      padding: 8px 12px;
+      text-align: left;
+      cursor: pointer;
+      font-size: 0.8rem;
+      color: var(--text-muted, #9ca3af);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .feedback-debug-toggle:hover { color: var(--charcoal); }
+    .feedback-debug-rows {
+      padding: 4px 12px 10px;
+      border-top: 1px solid var(--border, #374151);
+    }
+    .feedback-debug-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 4px 0;
+      font-size: 0.8rem;
+    }
+    .feedback-debug-row-left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--charcoal);
+    }
+    .feedback-debug-row-right {
+      color: var(--text-muted, #9ca3af);
+      font-size: 0.75rem;
     }
 
     /* ========== TESTING MODE ========== */
@@ -5062,10 +5238,24 @@
     </div>
     <div class="header-user">
       <div id="tokenBalanceIndicator" style="display:none;"></div>
+      <button class="header-notif-btn" id="notificationBell" onclick="toggleNotificationPanel()" aria-label="Notifications" style="display:none;">
+        🔔
+        <span class="header-notif-badge" id="notificationBadge" style="display:none;"></span>
+      </button>
       <img class="header-avatar" id="userAvatar" src="" alt="User">
       <button class="header-signout" onclick="signOut()">Sign Out</button>
     </div>
   </header>
+
+  <!-- ===== NOTIFICATION PANEL ===== -->
+  <div id="notificationPanel">
+    <div class="notif-header">
+      <span>Notifications</span>
+      <button onclick="toggleNotificationPanel()" aria-label="Close notifications">✕</button>
+    </div>
+    <div id="notificationList"><div class="notif-empty">No new notifications</div></div>
+    <div class="notif-footer"><a onclick="toggleNotificationPanel(); goToMyFeedback();">View all my submissions →</a></div>
+  </div>
 
   <!-- ===== SIDEBAR NAVIGATION ===== -->
   <nav class="sidebar" id="sidebar">
@@ -5556,7 +5746,7 @@
       <div id="showDetailView" style="display:none;"></div>
       <!-- Create/Edit show modal -->
       <div id="createShowModal" class="modal-overlay" style="display:none;">
-        <div class="modal-content" style="max-width:600px;">
+        <div class="modal" style="max-width:600px;">
           <div class="modal-header">
             <h3 id="showModalTitle">New Show</h3>
             <button class="modal-close" onclick="closeCreateShowModal()">&times;</button>
@@ -5769,8 +5959,19 @@
 
     <div id="placeholderTab" style="display:none;"></div>
 
+    <!-- My Feedback Tab -->
+    <div id="myFeedbackTab" style="display:none;">
+      <div style="padding:24px 24px 0;">
+        <div id="myFeedbackBack"></div>
+        <div class="section-header" style="margin-top:0;">
+          <h2>My Submissions</h2>
+        </div>
+      </div>
+      <div id="myFeedbackContent" style="padding:0 24px 24px;"></div>
+    </div>
+
     <!-- ===== PULSING TRIP INDICATOR ===== -->
-    <div id="tripPulsingIndicator" onclick="openEndTripSheet()" style="display:none;position:fixed;bottom:20px;right:20px;z-index:999;background:#f59e0b;color:#fff;padding:10px 18px;border-radius:24px;font-size:0.85rem;font-weight:600;cursor:pointer;box-shadow:0 4px 12px rgba(245,158,11,0.4);animation:tripPulse 2s infinite;font-family:'DM Sans',sans-serif;">
+    <div id="tripPulsingIndicator" onclick="openEndTripSheet()" style="display:none;position:fixed;bottom:84px;right:20px;z-index:999;background:#f59e0b;color:#fff;padding:10px 18px;border-radius:24px;font-size:0.85rem;font-weight:600;cursor:pointer;box-shadow:0 4px 12px rgba(245,158,11,0.4);animation:tripPulse 2s infinite;font-family:'DM Sans',sans-serif;">
       🚗 <span id="tripPulseLabel">Trip in progress</span>
     </div>
 
@@ -5781,9 +5982,9 @@
         <p id="startTripGpsStatus" style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:16px;">📡 Getting your location...</p>
         <div class="form-group" style="margin-bottom:14px;">
           <label style="font-size:0.85rem;font-weight:600;">Origin</label>
-          <select id="startTripOrigin" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;background:white;">
-            <option value="">Detecting location...</option>
-          </select>
+          <input type="text" id="startTripOrigin" list="originList" placeholder="Type or select origin..."
+            style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;box-sizing:border-box;">
+          <datalist id="originList"></datalist>
         </div>
         <div class="form-group" style="margin-bottom:14px;">
           <label style="font-size:0.85rem;font-weight:600;">Destination</label>
@@ -6520,7 +6721,7 @@
 
         <!-- Live Session Modal (channel picker / end summary) -->
         <div id="liveSessionModal" class="modal-overlay" style="display:none;">
-          <div class="modal-content" style="max-width:420px;" id="liveSessionModalInner"></div>
+          <div class="modal" style="max-width:420px;" id="liveSessionModalInner"></div>
         </div>
 
         <!-- Daily Summary -->
@@ -6973,6 +7174,17 @@
             <span>Enable public feedback button</span>
           </label>
           <div id="publicFeedbackStatus" style="margin-top:8px;font-size:0.85rem;"></div>
+        </div>
+        <div class="form-group" style="margin-top:24px;">
+          <label>Automatic Error Reporting</label>
+          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:8px;">
+            Automatically report detected JS errors, failed loads, and spinner timeouts. No manual action required.
+          </p>
+          <label style="display:flex;align-items:center;gap:10px;cursor:pointer;">
+            <input type="checkbox" id="autoReportToggle" onchange="toggleAutoReport()"
+              style="width:18px;height:18px;cursor:pointer;">
+            <span>Automatically report detected errors</span>
+          </label>
         </div>
         <div class="form-group" style="margin-top:24px;">
           <label>Testing Mode</label>
@@ -9110,7 +9322,10 @@
       <!-- Reports View -->
       <div id="bookReportsView" style="display:none;">
         <div class="section-header">
-          <h2>Reports</h2>
+          <div style="display:flex;align-items:center;gap:12px;">
+            <button class="btn btn-secondary btn-back" onclick="window._bookSubTab('classes')" style="padding:6px 14px;font-size:0.82rem;">&#8592; Classes</button>
+            <h2 style="margin:0;">Class Reports</h2>
+          </div>
           <div style="display:flex;gap:8px;align-items:center;">
             <select id="reportDateRange" onchange="window._reportRangeChange()" style="padding:6px 10px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:0.85rem;">
               <option value="7">Last 7 Days</option>
@@ -9621,7 +9836,8 @@ MastDB.products = {
   setBuildIds: function(id, buildIds) { return MastDB.set('public/products/' + id + '/buildIds', buildIds); },
   setStoryId: function(id, storyId) { return MastDB.set('public/products/' + id + '/storyId', storyId); },
   removeStoryId: function(id) { return MastDB.remove('public/products/' + id + '/storyId'); },
-  setField: function(id, field, value) { return MastDB.set('public/products/' + id + '/' + field, value); }
+  setField: function(id, field, value) { return MastDB.set('public/products/' + id + '/' + field, value); },
+  fieldRef: function(id, field) { return _makeRefCompat('public/products/' + id + '/' + field); }
 };
 
 MastDB.inventory = {
@@ -9809,6 +10025,7 @@ MastDB.expenses = {
   update: function(id, data) { return MastDB.update('admin/expenses/' + id, data); },
   remove: function(id) { return MastDB.remove('admin/expenses/' + id); },
   query: function() { return MastDB.query('admin/expenses'); },
+  ref: function(subpath) { return _makeRefCompat('admin/expenses' + (subpath ? '/' + subpath : '')); },
   summary: function(month) { return MastDB.get('admin/expenseSummary/byMonth/' + month); }
 };
 
@@ -10278,6 +10495,9 @@ MastDB.sessionLogs = {
   setStartup: function(sessionId, data) { return MastDB.set('admin/sessionLogs/' + sessionId + '/startup', data); },
   getCompletion: function(sessionId) { return MastDB.get('admin/sessionLogs/' + sessionId + '/completion'); },
   setCompletion: function(sessionId, data) { return MastDB.set('admin/sessionLogs/' + sessionId + '/completion', data); },
+  // Aliases used by book-reports for snap.val() compat
+  completion: function(sessionId) { return MastDB.get('admin/sessionLogs/' + sessionId + '/completion'); },
+  incidents: function(sessionId) { return MastDB.query('admin/sessionLogs/' + sessionId + '/incidents').limitToLast(100); },
   pushIncident: function(sessionId, data) { return MastDB.push('admin/sessionLogs/' + sessionId + '/incidents', data); },
   newIncidentKey: function(sessionId) { return MastDB.newKey('admin/sessionLogs/' + sessionId + '/incidents'); }
 };
@@ -11982,8 +12202,10 @@ async function seedRolesAndAdminUser() {
       return false;
     }
 
-    // Seed all three default roles
-    await MastDB.roles.set(DEFAULT_ROLES);
+    // Seed all three default roles — must set each doc individually (Firestore doesn't support collection-level set)
+    await Promise.all(Object.keys(DEFAULT_ROLES).map(function(k) {
+      return MastDB.roles.set(k, DEFAULT_ROLES[k]);
+    }));
 
     // Create admin user record for current user (must be the original admin)
     if (currentUser && currentUser.uid) {
@@ -12160,10 +12382,28 @@ function saveMastToastPrefs(next) {
 }
 
 function showToast(message, isError) {
+  if (isError) {
+    if (!window._toastBuffer) window._toastBuffer = [];
+    window._toastBuffer.push({ msg: message, t: Date.now() });
+    if (window._toastBuffer.length > 5) window._toastBuffer.shift();
+  }
   var container = document.getElementById('toastContainer');
   if (!container) return;
   var prefs = window.MastToastPrefs || { position: 'bottom-center', duration: 'normal', size: 'comfortable' };
   container.setAttribute('data-position', prefs.position);
+
+  // Remove existing toasts before adding a new one to prevent stacking.
+  // Non-errors: clear any previous non-persistent toast.
+  // Errors: clear previous error/persistent toasts (new error replaces old).
+  if (isError) {
+    container.querySelectorAll('.toast.error, .toast.persistent').forEach(function(t) {
+      if (t.parentNode) t.parentNode.removeChild(t);
+    });
+  } else {
+    container.querySelectorAll('.toast:not(.persistent)').forEach(function(t) {
+      if (t.parentNode) t.parentNode.removeChild(t);
+    });
+  }
 
   var toast = document.createElement('div');
   toast.className = 'toast' + (isError ? ' error' : '');
@@ -12534,6 +12774,8 @@ auth.onAuthStateChanged(async function(user) {
   ]);
   loadTokenWallet(); // Start listening for token balance (non-blocking)
   initAlertBadgeListener(); // Start listening for unread alerts (non-blocking)
+  initNotificationListener(); // Start listening for admin notifications (non-blocking)
+  installAutoDetection();    // Start auto error detection (non-blocking)
   // --- End Tenant Resolution ---
 
   var role = _roleResult[3];
@@ -13902,7 +14144,8 @@ var ROUTE_MAP = {
   'migration-confirm': { tab: 'migrationConfirmTab', setup: function() { renderMigrationConfirmation(); } },
   'migration-plan':   { tab: 'migrationPlanTab', setup: function() { renderMigrationPlan(); } },
   'migration-import': { tab: 'migrationImportTab', setup: function() { renderMigrationImport(); } },
-  'historical-orders': { tab: 'historicalOrdersTab', setup: function() { renderHistoricalOrders(); } }
+  'historical-orders': { tab: 'historicalOrdersTab', setup: function() { renderHistoricalOrders(); } },
+  'my-feedback':       { tab: 'myFeedbackTab', setup: function() { renderMyFeedbackTab(); } }
 };
 
 // Section → which routes belong to it (for auto-expanding)
@@ -13922,7 +14165,7 @@ var SECTION_ROUTES = {
   'migration': ['migration', 'migration-confirm', 'migration-plan', 'migration-import', 'historical-orders']
 };
 
-var ALL_TAB_IDS = ['scheduleTab', 'galleryTab', 'homepageTab', 'brandTab', 'productsTab', 'ordersTab', 'salesTab', 'salesEventsTab', 'productionTab', 'forecastTab', 'couponsTab', 'analyticsTab', 'settingsTab', 'imagesTab', 'auditLogTab', 'employeesTab', 'contactsTab', 'customersTab', 'packTab', 'shipTab', 'commissionsTab', 'rmaTab', 'socialMediaTab', 'blogTab', 'newsletterTab', 'placeholderTab', 'inventoryTab', 'storiesTab', 'dashboardTab', 'tripsTab', 'wholesaleTab', 'showTab', 'financialsTab', 'eventsAdminTab', 'websiteTab', 'showLightTab', 'emailLogTab', 'materialsTab', 'piecesTab', 'galleriesTab', 'lookbooksTab', 'promotionsTab', 'expensesTab', 'bookTab', 'subscriptionTab', 'aboutTab', 'walletTab', 'giftCardsTab', 'loyaltyTab', 'membershipTab', 'termsTab', 'advisorTab', 'studioTab', 'teamTab', 'studentsTab', 'migrationDashTab', 'migrationConfirmTab', 'migrationPlanTab', 'migrationImportTab', 'historicalOrdersTab', 'channelsTab', 'businessTab'];
+var ALL_TAB_IDS = ['scheduleTab', 'galleryTab', 'homepageTab', 'brandTab', 'productsTab', 'ordersTab', 'salesTab', 'salesEventsTab', 'productionTab', 'forecastTab', 'couponsTab', 'analyticsTab', 'settingsTab', 'imagesTab', 'auditLogTab', 'employeesTab', 'contactsTab', 'customersTab', 'packTab', 'shipTab', 'commissionsTab', 'rmaTab', 'socialMediaTab', 'blogTab', 'newsletterTab', 'placeholderTab', 'inventoryTab', 'storiesTab', 'dashboardTab', 'tripsTab', 'wholesaleTab', 'showTab', 'financialsTab', 'eventsAdminTab', 'websiteTab', 'showLightTab', 'emailLogTab', 'materialsTab', 'piecesTab', 'galleriesTab', 'lookbooksTab', 'promotionsTab', 'expensesTab', 'bookTab', 'subscriptionTab', 'aboutTab', 'walletTab', 'giftCardsTab', 'loyaltyTab', 'membershipTab', 'termsTab', 'advisorTab', 'studioTab', 'teamTab', 'studentsTab', 'migrationDashTab', 'migrationConfirmTab', 'migrationPlanTab', 'migrationImportTab', 'historicalOrdersTab', 'channelsTab', 'businessTab', 'myFeedbackTab'];
 
 var currentRoute = 'dashboard';
 
@@ -14350,7 +14593,7 @@ var MODULE_MANIFEST = {
   production: { src: 'modules/production.js', routes: ['jobs', 'production', 'stories', 'forecast'] },
   contacts: { src: 'modules/contacts.js', routes: ['contacts'] },
   customers: { src: 'modules/customers.js', routes: ['customers'] },
-  orders: { src: 'modules/orders.js', routes: ['orders', 'commissions'] },
+  orders: { src: 'modules/orders.js', routes: ['orders', 'commissions', 'rma'] },
   sales: { src: 'modules/sales.js', routes: ['pos', 'receipts', 'events', 'salesEvents', 'terms'] },
   fulfillment: { src: 'modules/fulfillment.js', routes: ['pack', 'ship', 'fulfillment'] },
   eventsAdmin: { src: 'modules/events.js', routes: ['events-shows', 'events-settings'] },
@@ -16694,6 +16937,9 @@ function renderAboutSettings() {
 var _notificationsLoaded = false;
 var _alertHistoryListener = null;
 var _unreadAlertCount = 0;
+var _notificationUnsub = null;
+var _unreadNotifCount = 0;
+var _adminNotifications = [];
 
 function switchNotifInnerTab(tab) {
   var alertsEl = document.getElementById('notifInnerAlerts');
@@ -17198,6 +17444,453 @@ function updateAlertBadge() {
       sidebarBadge.style.display = 'none';
     }
   }
+}
+
+// ============================================================
+// Admin Notification Panel
+// ============================================================
+
+function initNotificationListener() {
+  if (_notificationUnsub) return;
+  var uid = currentUser && currentUser.uid;
+  var tenantId = MastDB.tenantId();
+  if (!uid || !tenantId) return;
+
+  var col = firebase.firestore()
+    .collection('tenants').doc(tenantId)
+    .collection('adminNotifications').doc(uid)
+    .collection('items');
+
+  _notificationUnsub = col.onSnapshot(function(snap) {
+    var items = [];
+    snap.forEach(function(doc) {
+      var d = doc.data();
+      if (!d.read) items.push(Object.assign({ _id: doc.id }, d));
+    });
+    items.sort(function(a, b) { return (b.createdAt || '').localeCompare(a.createdAt || ''); });
+    _adminNotifications = items;
+    _unreadNotifCount = items.length;
+    updateNotificationBadge();
+    renderNotificationPanel();
+  }, function(err) {
+    console.warn('[notifications] Listener error:', err);
+  });
+
+  // Show the bell now that we have a listener
+  var bell = document.getElementById('notificationBell');
+  if (bell) bell.style.display = '';
+}
+
+function updateNotificationBadge() {
+  var badge = document.getElementById('notificationBadge');
+  if (!badge) return;
+  if (_unreadNotifCount > 0) {
+    badge.textContent = _unreadNotifCount > 9 ? '9+' : String(_unreadNotifCount);
+    badge.style.display = 'flex';
+  } else {
+    badge.style.display = 'none';
+  }
+}
+
+function renderNotificationPanel() {
+  var list = document.getElementById('notificationList');
+  if (!list) return;
+  if (_adminNotifications.length === 0) {
+    list.innerHTML = '<div class="notif-empty">No new notifications</div>';
+    return;
+  }
+  list.innerHTML = _adminNotifications.map(function(n) {
+    var label = n.screenLabel || n.screen || 'Unknown screen';
+    var time = n.resolvedAt ? formatNotifTime(n.resolvedAt) : '';
+    var note = n.resolvedNote ? ('<div class="notif-note">“' + escapeHtml(n.resolvedNote) + '”</div>') : '';
+    return '<div class="notif-item" data-notif-id="' + n._id + '" data-notif-screen="' + escapeHtml(n.screen || '') + '" onclick="handleNotifClick(this.dataset.notifId,this.dataset.notifScreen)">' +
+      '<div class="notif-body">' +
+        '<div class="notif-title">🔔 Your report on <strong>' + escapeHtml(label) + '</strong> was resolved</div>' +
+        note +
+        '<div class="notif-time">' + time + '</div>' +
+      '</div>' +
+      '<button class="notif-dismiss" data-notif-id="' + n._id + '" onclick="dismissNotif(event,this.dataset.notifId)" aria-label="Dismiss">×</button>' +
+    '</div>';
+  }).join('');
+}
+
+function handleNotifClick(notifId, screen) {
+  dismissNotif(null, notifId);
+  if (screen) navigateTo(screen);
+  document.getElementById('notificationPanel').style.display = 'none';
+}
+
+function dismissNotif(event, notifId) {
+  if (event) event.stopPropagation();
+  _adminNotifications = _adminNotifications.filter(function(n) { return n._id !== notifId; });
+  _unreadNotifCount = _adminNotifications.length;
+  updateNotificationBadge();
+  renderNotificationPanel();
+  var uid = currentUser && currentUser.uid;
+  var tenantId = MastDB.tenantId();
+  if (!uid || !tenantId) return;
+  firebase.firestore()
+    .collection('tenants').doc(tenantId)
+    .collection('adminNotifications').doc(uid)
+    .collection('items').doc(notifId)
+    .delete()
+    .catch(function(e) { console.warn('[notifications] dismiss failed:', e); });
+}
+
+var _myFeedbackFrom = null;
+
+function goToMyFeedback() {
+  _myFeedbackFrom = (typeof currentRoute !== 'undefined' && currentRoute && currentRoute !== 'my-feedback')
+    ? currentRoute : null;
+  navigateTo('my-feedback');
+}
+
+function toggleNotificationPanel() {
+  var panel = document.getElementById('notificationPanel');
+  if (!panel) return;
+  panel.style.display = panel.style.display === 'none' || !panel.style.display ? 'block' : 'none';
+}
+
+function formatNotifTime(iso) {
+  if (!iso) return '';
+  try {
+    var d = new Date(iso);
+    var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    var h = d.getHours(), m = d.getMinutes();
+    var ampm = h >= 12 ? 'pm' : 'am';
+    h = h % 12 || 12;
+    return months[d.getMonth()] + ' ' + d.getDate() + ' · ' + h + ':' + (m < 10 ? '0' : '') + m + ampm;
+  } catch(e) { return ''; }
+}
+
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ============================================================
+// My Feedback — submission history for the current user
+// ============================================================
+
+function renderMyFeedbackTab() {
+  var el = document.getElementById('myFeedbackContent');
+  if (!el) return;
+  el.innerHTML = '<p style="color:var(--warm-gray-light);font-size:0.9rem;">Loading…</p>';
+
+  var backEl = document.getElementById('myFeedbackBack');
+  if (backEl) {
+    if (_myFeedbackFrom) {
+      MastNavStack.push({ route: _myFeedbackFrom, label: _myFeedbackFrom });
+      _myFeedbackFrom = null;
+    }
+    var prev = MastNavStack.peek();
+    backEl.innerHTML = prev
+      ? '<button class="detail-back" onclick="MastNavStack.popAndReturn()">&#8592; Back to ' + escapeHtml(prev.label || prev.route) + '</button>'
+      : '';
+  }
+
+  var uid = currentUser && currentUser.uid;
+  if (!uid) {
+    el.innerHTML = '<p style="color:var(--warm-gray-light);">Not signed in.</p>';
+    return;
+  }
+
+  MastDB.query('feedbackReports').limitToLast(200).once().then(function(reports) {
+    var all = [];
+    if (reports) {
+      Object.entries(reports).forEach(function(entry) {
+        var id = entry[0], r = entry[1];
+        if (r.userId === uid) all.push(Object.assign({ _id: id }, r));
+      });
+    }
+    all.sort(function(a, b) {
+      return ((b.timestamp || b.createdAt) || '').localeCompare((a.timestamp || a.createdAt) || '');
+    });
+
+    if (all.length === 0) {
+      el.innerHTML = '<p style="color:var(--warm-gray-light);font-size:0.9rem;margin-top:16px;">No submissions yet.</p>';
+      return;
+    }
+
+    var open = all.filter(function(r) { return r.status !== 'closed'; });
+    var closed = all.filter(function(r) { return r.status === 'closed'; });
+
+    function feedbackCard(r) {
+      var statusColor = r.status === 'closed' ? 'background:#d1fae5;color:#065f46' : 'background:#fef3c7;color:#92400e';
+      var dateStr = r.timestamp || r.createdAt || '';
+      var dateLabel = dateStr ? formatNotifTime(dateStr) : '';
+      var resolvedHtml = r.resolvedNote
+        ? '<div style="margin-top:8px;padding:8px 10px;background:var(--cream);border-radius:6px;font-size:0.82rem;color:var(--warm-gray-light);">Resolution: <em>' + escapeHtml(r.resolvedNote) + '</em></div>'
+        : '';
+      return '<div class="order-detail-section">' +
+        '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">' +
+          '<div style="flex:1;min-width:0;">' +
+            '<div style="font-size:0.85rem;font-weight:600;margin-bottom:4px;">' + escapeHtml(r.description || '(no description)') + '</div>' +
+            '<div style="font-size:0.78rem;color:var(--warm-gray-light);">' +
+              escapeHtml(r.screenLabel || r.screen || '') +
+              (dateLabel ? ' · ' + dateLabel : '') +
+            '</div>' +
+            resolvedHtml +
+          '</div>' +
+          '<span class="status-badge pill" style="' + statusColor + ';flex-shrink:0;">' + escapeHtml(r.status || 'open') + '</span>' +
+        '</div>' +
+      '</div>';
+    }
+
+    var html = '';
+    if (open.length > 0) {
+      html += '<div class="order-detail-section-title" style="margin-top:8px;">Open (' + open.length + ')</div>';
+      html += open.map(feedbackCard).join('');
+    }
+    if (closed.length > 0) {
+      html += '<div class="order-detail-section-title" style="margin-top:' + (open.length > 0 ? '20px' : '8px') + ';">Resolved (' + closed.length + ')</div>';
+      html += closed.map(feedbackCard).join('');
+    }
+    el.innerHTML = html;
+  }).catch(function(e) {
+    el.innerHTML = '<p style="color:var(--warm-gray-light);font-size:0.9rem;">Failed to load submissions.</p>';
+    console.error('[myFeedback] load error:', e);
+  });
+}
+
+// ============================================================
+// Auto Error Detection
+// Captures unhandled JS errors, promise rejections, stalled spinners,
+// and network/console bursts — submits as source:'auto' feedback reports.
+// Opt-out: localStorage 'mast_auto_report_disabled' = '1'.
+// First-run: prompts user before first auto-report fires.
+// ============================================================
+
+var _AUTO_REPORT_CAP = 5;
+var _AUTO_REPORT_DISABLED_KEY = 'mast_auto_report_disabled';
+var _AUTO_REPORT_CONSENTED_KEY = 'mast_auto_report_consented';
+var _AUTO_REPORT_SEEN_KEY = 'mast_auto_report_seen'; // persistent dedup, 30-day TTL
+var _spinnerTimers = {};
+var _burstLastNetworkReport = 0;
+var _burstLastConsoleReport = 0;
+
+// Load persisted seen fingerprints (stored as {fp: expiryTimestamp})
+var _autoReportSeen = (function() {
+  try {
+    var raw = localStorage.getItem(_AUTO_REPORT_SEEN_KEY);
+    var stored = raw ? JSON.parse(raw) : {};
+    var now = Date.now();
+    // Prune expired entries (older than 30 days)
+    Object.keys(stored).forEach(function(k) { if (stored[k] < now) delete stored[k]; });
+    return stored;
+  } catch(e) { return {}; }
+})();
+
+function _autoReportSeenAdd(fp) {
+  _autoReportSeen[fp] = Date.now() + 30 * 24 * 60 * 60 * 1000; // 30 days
+  try { localStorage.setItem(_AUTO_REPORT_SEEN_KEY, JSON.stringify(_autoReportSeen)); } catch(e) {}
+}
+
+var _autoReportCount = 0; // session cap: max 5 per page load
+
+var _AUTO_IGNORE = [
+  'RBAC seed skipped',
+  'MastDB: path requires doc ID: admin_roles',
+  'MastDB: path requires doc ID: trip_locations', // known bug, already tracked
+  'activeTripData.id = key',                       // known bug, already tracked
+  'Script error.',
+  'ResizeObserver loop',
+  '/templates/',        // manifest/template 404s — expected on test sites
+];
+
+function _autoReportEnabled() {
+  try { return localStorage.getItem(_AUTO_REPORT_DISABLED_KEY) !== '1'; } catch(e) { return true; }
+}
+
+function _autoReportConsented() {
+  try { return !!localStorage.getItem(_AUTO_REPORT_CONSENTED_KEY); } catch(e) { return false; }
+}
+
+function _autoIgnore(msg) {
+  if (!msg) return false;
+  var s = String(msg);
+  return _AUTO_IGNORE.some(function(p) { return s.indexOf(p) !== -1; });
+}
+
+function _autoFingerprint(screen, type, msg) {
+  return screen + '|' + type + '|' + String(msg || '').slice(0, 60);
+}
+
+function _submitAutoReport(type, message) {
+  if (!_autoReportEnabled()) return;
+  if (_autoReportCount >= _AUTO_REPORT_CAP) return;
+  if (_autoIgnore(message)) return;
+
+  var screen = currentRoute || 'unknown';
+  var fp = _autoFingerprint(screen, type, message);
+  if (_autoReportSeen[fp] && _autoReportSeen[fp] > Date.now()) return;
+  _autoReportSeenAdd(fp);
+  _autoReportCount++;
+
+  var now = Date.now();
+  var cutoff = now - 60000;
+  var report = {
+    appId: MastDB.tenantId(),
+    source: 'auto',
+    screen: screen,
+    screenLabel: (typeof getScreenLabel === 'function') ? getScreenLabel() : screen,
+    type: 'bug',
+    severity: 'medium',
+    description: '[Auto-detected] ' + type + ' on ' + screen + ' screen\nError: ' + String(message || '').slice(0, 200),
+    email: null,
+    userId: currentUser ? currentUser.uid : null,
+    userName: currentUser ? (currentUser.displayName || currentUser.email || '') : null,
+    tenantPlan: window.MAST_TENANT_PLAN || null,
+    consoleBuffer: window._consoleBuffer ? window._consoleBuffer.filter(function(e) { return e.t >= cutoff; }) : [],
+    toastBuffer: window._toastBuffer ? window._toastBuffer.filter(function(e) { return e.t >= cutoff; }) : [],
+    networkErrors: window._networkErrors ? window._networkErrors.filter(function(e) { return e.t >= cutoff; }) : [],
+    deviceInfo: { userAgent: navigator.userAgent, viewport: { width: window.innerWidth, height: window.innerHeight } },
+    appVersion: window.MAST_VERSION || null,
+    timestamp: new Date().toISOString(),
+    status: 'open',
+    jobId: null,
+    createdAt: MastDB.serverTimestamp()
+  };
+
+  MastDB.feedback.ref().push(report).then(function() {
+    showToast('An issue was automatically detected and reported.');
+  }).catch(function(e) {
+    console.warn('[autoReport] submit failed:', e);
+  });
+}
+
+function fireAutoReport(type, message) {
+  if (!_autoReportEnabled()) return;
+  if (_autoIgnore(message)) return;
+
+  if (!_autoReportConsented()) {
+    // First-run: show confirmation dialog before submitting
+    _showAutoReportConsent(type, message);
+  } else {
+    _submitAutoReport(type, message);
+  }
+}
+
+function _showAutoReportConsent(pendingType, pendingMessage) {
+  if (document.getElementById('autoReportConsentOverlay')) return; // already showing
+  var overlay = document.createElement('div');
+  overlay.id = 'autoReportConsentOverlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:10001;display:flex;align-items:center;justify-content:center;';
+  overlay.innerHTML = '<div style="background:var(--surface-card,#2a2a2a);border-radius:12px;padding:28px 32px;max-width:440px;width:90%;box-shadow:0 8px 40px rgba(0,0,0,0.4);">' +
+    '<h3 style="margin:0 0 10px;font-size:1.1rem;font-weight:600;">Automatic Error Reporting</h3>' +
+    '<p style="font-size:0.88rem;color:var(--warm-gray-light,#aaa);margin:0 0 18px;line-height:1.5;">' +
+      'An issue was detected on this screen. Mast can automatically send reports like this to help identify bugs — no action required from you.' +
+    '</p>' +
+    '<p style="font-size:0.88rem;color:var(--warm-gray-light,#aaa);margin:0 0 24px;line-height:1.5;">' +
+      'You can change this any time in Settings → General.' +
+    '</p>' +
+    '<div style="display:flex;gap:10px;justify-content:flex-end;">' +
+      '<button onclick="_disableAutoReport()" style="background:none;border:1px solid rgba(255,255,255,0.2);color:var(--warm-gray-light,#aaa);padding:8px 16px;border-radius:6px;cursor:pointer;font-family:inherit;font-size:0.88rem;">Don\'t report automatically</button>' +
+      '<button onclick="_confirmAutoReport()" style="background:var(--amber,#F59E0B);color:#000;border:none;padding:8px 18px;border-radius:6px;cursor:pointer;font-weight:600;font-family:inherit;font-size:0.88rem;">Enable &amp; Report</button>' +
+    '</div>' +
+  '</div>';
+  document.body.appendChild(overlay);
+
+  window._pendingAutoType = pendingType;
+  window._pendingAutoMsg = pendingMessage;
+}
+
+function _confirmAutoReport() {
+  try { localStorage.setItem(_AUTO_REPORT_CONSENTED_KEY, '1'); } catch(e) {}
+  var overlay = document.getElementById('autoReportConsentOverlay');
+  if (overlay) overlay.parentNode.removeChild(overlay);
+  _submitAutoReport(window._pendingAutoType, window._pendingAutoMsg);
+  var toggle = document.getElementById('autoReportToggle');
+  if (toggle) toggle.checked = true;
+}
+
+function _disableAutoReport() {
+  try {
+    localStorage.setItem(_AUTO_REPORT_DISABLED_KEY, '1');
+    localStorage.setItem(_AUTO_REPORT_CONSENTED_KEY, '1');
+  } catch(e) {}
+  var overlay = document.getElementById('autoReportConsentOverlay');
+  if (overlay) overlay.parentNode.removeChild(overlay);
+  var toggle = document.getElementById('autoReportToggle');
+  if (toggle) toggle.checked = false;
+}
+
+function toggleAutoReport() {
+  var toggle = document.getElementById('autoReportToggle');
+  if (!toggle) return;
+  try {
+    if (toggle.checked) {
+      localStorage.removeItem(_AUTO_REPORT_DISABLED_KEY);
+      localStorage.setItem(_AUTO_REPORT_CONSENTED_KEY, '1');
+    } else {
+      localStorage.setItem(_AUTO_REPORT_DISABLED_KEY, '1');
+    }
+  } catch(e) {}
+}
+
+// Install detection listeners — called once after MastDB is ready
+function installAutoDetection() {
+  // 1. Unhandled JS exceptions
+  var _prevOnError = window.onerror;
+  window.onerror = function(msg, src, line, col, err) {
+    fireAutoReport('unhandled-error', msg);
+    return _prevOnError ? _prevOnError.apply(this, arguments) : false;
+  };
+
+  // 2. Unhandled promise rejections
+  window.addEventListener('unhandledrejection', function(e) {
+    var msg = (e.reason && (e.reason.message || String(e.reason))) || 'Unhandled promise rejection';
+    fireAutoReport('unhandled-rejection', msg);
+  });
+
+  // 3. Stalled spinner detection — poll every 2s for visible .loading elements.
+  // MutationObserver childList misses elements already in the static DOM that
+  // are shown/hidden via display:none toggling (POS, RMA, Membership spinners).
+  // A poll catches both static and dynamically-added spinners.
+  var SPINNER_TIMEOUT_MS = 8000;
+  var _spinnerFirstSeen = {}; // key → timestamp first seen visible
+
+  setInterval(function() {
+    var els = document.querySelectorAll('.loading');
+    var now = Date.now();
+    els.forEach(function(el) {
+      var visible = el.offsetParent !== null && el.style.display !== 'none' &&
+                    getComputedStyle(el).display !== 'none';
+      var key = el.id || ('loading:' + (el.parentElement && el.parentElement.id));
+      if (visible) {
+        if (!_spinnerFirstSeen[key]) _spinnerFirstSeen[key] = now;
+        else if (now - _spinnerFirstSeen[key] >= SPINNER_TIMEOUT_MS) {
+          var screen = currentRoute || 'unknown';
+          fireAutoReport('spinner-timeout', 'Spinner on ' + screen + ' did not resolve within 8s (element: ' + key + ')');
+          delete _spinnerFirstSeen[key]; // prevent re-firing same spinner
+        }
+      } else {
+        delete _spinnerFirstSeen[key]; // spinner cleared, reset
+      }
+    });
+  }, 2000);
+
+  // 4. Network error burst — 3+ failures within 30s
+  setInterval(function() {
+    if (!_autoReportEnabled()) return;
+    var now = Date.now();
+    var recent = (window._networkErrors || []).filter(function(e) { return e.t >= now - 30000; });
+    if (recent.length >= 3 && now - _burstLastNetworkReport > 60000) {
+      _burstLastNetworkReport = now;
+      fireAutoReport('network-burst', recent.length + ' network errors in 30s: ' + recent.map(function(e) { return e.url; }).join(', ').slice(0, 150));
+    }
+  }, 15000);
+
+  // 5. Console error burst — 3+ errors within 10s
+  setInterval(function() {
+    if (!_autoReportEnabled()) return;
+    var now = Date.now();
+    var recent = (window._consoleBuffer || []).filter(function(e) { return e.t >= now - 10000 && e.level === 'error'; });
+    if (recent.length >= 3 && now - _burstLastConsoleReport > 60000) {
+      _burstLastConsoleReport = now;
+      fireAutoReport('console-burst', recent.length + ' console errors in 10s: ' + recent.map(function(e) { return e.msg; }).join(' | ').slice(0, 150));
+    }
+  }, 10000);
 }
 
 // ============================================================
@@ -18425,6 +19118,9 @@ function loadSettings() {
     document.body.classList.toggle('dark-mode', !!darkPref);
     var toggle = document.getElementById('darkModeToggle');
     if (toggle) toggle.checked = !!darkPref;
+    // Auto-report toggle — driven by localStorage, not Firebase
+    var autoToggle = document.getElementById('autoReportToggle');
+    if (autoToggle) autoToggle.checked = _autoReportEnabled();
   });
   loadPaymentProcessor();
   loadShippingConfig();
@@ -24416,6 +25112,15 @@ function openForecastJobModal(pid, suggestedQty) {
       '<label class="field-required">Job Name</label>' +
       '<input type="text" id="newJobName" value="Build ' + esc(name) + ' (' + suggestedQty + ' pcs)">' +
     '</div>' +
+    '<div class="form-group">' +
+      '<label>Work Type</label>' +
+      '<select id="forecastJobWorkType" style="width:100%;">' +
+        '<option value="flameshop">Flameshop</option>' +
+        '<option value="hotshop">Hotshop</option>' +
+        '<option value="hybrid">Hybrid</option>' +
+        '<option value="other">Other</option>' +
+      '</select>' +
+    '</div>' +
     '<div style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:12px;">Suggested: ' + suggestedQty + ' pieces of ' + esc(name) + '</div>' +
     '<div class="form-group">' +
       '<label>Purpose</label>' +
@@ -24439,6 +25144,8 @@ async function doCreateForecastJob(pid, suggestedQty, purpose) {
     showToast('Enter a job name', true); return;
   }
   try {
+    var workTypeEl = document.getElementById('forecastJobWorkType');
+    var workType = workTypeEl ? workTypeEl.value : 'flameshop';
     var product = productsData.find(function(p) { return p.pid === pid; });
     var jobId = MastDB.productionJobs.newKey();
     var lineItemId = MastDB.productionJobs.newLineItemKey(jobId);
@@ -24446,7 +25153,7 @@ async function doCreateForecastJob(pid, suggestedQty, purpose) {
       name: name,
       description: 'Auto-suggested from Forecast view',
       purpose: purpose,
-      workType: 'flameshop',
+      workType: workType,
       priority: 'medium',
       status: 'definition',
       deadline: null,
@@ -25551,7 +26258,7 @@ function toggleMetalPurity() {
 }
 function checkMakerAttributesVisibility() {
   MastDB.config.makerSettings().once('value').then(function(snap) {
-    var settings = snap.val();
+    var settings = snap && snap.val ? snap.val() : null;
     if (settings && settings.craftProfile === 'jewelry') {
       var editSection = document.getElementById('pdMakerAttributesSection');
       if (editSection) editSection.style.display = '';
@@ -30243,6 +30950,17 @@ function detachListeners() {
   inventory = {};
   squarePayments = {};
   squarePaymentsLoaded = false;
+  if (_notificationUnsub) {
+    _notificationUnsub();
+    _notificationUnsub = null;
+  }
+  _adminNotifications = [];
+  _unreadNotifCount = 0;
+  updateNotificationBadge();
+  var bell = document.getElementById('notificationBell');
+  if (bell) bell.style.display = 'none';
+  var panel = document.getElementById('notificationPanel');
+  if (panel) panel.style.display = 'none';
 }
 
 // ============================================================
@@ -33732,11 +34450,11 @@ async function addToLocation(pid, variantKey, locationId, qty) {
   var current = (await MastDB.get(locPath)) || 0;
 
   var updates = {};
-  updates[key + '/locations/' + locationId] = current + qty;
+  updates[key + '.locations.' + locationId] = current + qty;
 
   // Increment variant onHand
   var onHandCurrent = (await MastDB.get(MastDB.inventory.stockOnHandPath(pid, key))) || 0;
-  updates[key + '/onHand'] = onHandCurrent + qty;
+  updates[key + '.onHand'] = onHandCurrent + qty;
 
   // Recompute _default.onHand as sum of all variant onHand
   if (key !== '_default') {
@@ -33747,7 +34465,7 @@ async function addToLocation(pid, variantKey, locationId, qty) {
         total += (k === key) ? (onHandCurrent + qty) : stockData[k].onHand;
       }
     });
-    updates['_default/onHand'] = total;
+    updates['_default.onHand'] = total;
   }
 
   await MastDB.update(stockPath, updates);
@@ -34972,6 +35690,55 @@ function validateRequired(fields) {
     if (window._consoleBuffer.length > 20) window._consoleBuffer.shift();
     _origWarn.apply(console, args);
   };
+
+  // Toast buffer — rolling last 5 error toasts (populated by showToast)
+  window._toastBuffer = [];
+
+  // Network errors buffer — rolling last 10 failures
+  window._networkErrors = [];
+  if (!window._mastFetchPatched) {
+    window._mastFetchPatched = true;
+    var _origFetch = window.fetch;
+    window.fetch = function(input, init) {
+      var method = (init && init.method) ? init.method.toUpperCase() : 'GET';
+      var url = (typeof input === 'string') ? input : (input && input.url) || String(input);
+      return _origFetch.apply(this, arguments).then(function(response) {
+        if (!response.ok) {
+          window._networkErrors.push({ url: url, status: response.status, method: method, t: Date.now() });
+          if (window._networkErrors.length > 10) window._networkErrors.shift();
+        }
+        return response;
+      }, function(err) {
+        window._networkErrors.push({ url: url, status: 0, method: method, t: Date.now() });
+        if (window._networkErrors.length > 10) window._networkErrors.shift();
+        throw err;
+      });
+    };
+  }
+  if (!window._mastXhrPatched) {
+    window._mastXhrPatched = true;
+    var _origOpen = XMLHttpRequest.prototype.open;
+    XMLHttpRequest.prototype.open = function(method, url) {
+      this._mastMethod = method ? method.toUpperCase() : 'GET';
+      this._mastUrl = url || '';
+      return _origOpen.apply(this, arguments);
+    };
+    var _origSend = XMLHttpRequest.prototype.send;
+    XMLHttpRequest.prototype.send = function() {
+      var xhr = this;
+      xhr.addEventListener('loadend', function() {
+        if (xhr.status >= 400 || xhr.status === 0) {
+          window._networkErrors.push({ url: xhr._mastUrl || '', status: xhr.status, method: xhr._mastMethod || 'GET', t: Date.now() });
+          if (window._networkErrors.length > 10) window._networkErrors.shift();
+        }
+      });
+      xhr.addEventListener('error', function() {
+        window._networkErrors.push({ url: xhr._mastUrl || '', status: 0, method: xhr._mastMethod || 'GET', t: Date.now() });
+        if (window._networkErrors.length > 10) window._networkErrors.shift();
+      });
+      return _origSend.apply(this, arguments);
+    };
+  }
 })();
 
 // Route → human-readable label
@@ -35009,23 +35776,61 @@ function openFeedbackDialog() {
     '<div class="feedback-screen-badge">\uD83D\uDCCD You\'re on: ' + screenLabel + '</div>' +
     '<div class="feedback-form-group">' +
       '<label class="feedback-label">Type</label>' +
-      '<div class="feedback-segmented">' +
-        '<label><input type="radio" name="fbType" value="bug" checked><span>Bug</span></label>' +
-        '<label><input type="radio" name="fbType" value="enhancement"><span>Enhancement</span></label>' +
-        '<label><input type="radio" name="fbType" value="question"><span>Question</span></label>' +
+      '<input type="hidden" name="fbType" id="fbTypeVal" value="bug">' +
+      '<div class="feedback-chips">' +
+        '<button type="button" class="feedback-chip selected" data-group="fbType" data-value="bug" data-color="#dc2626" style="background:#dc2626;border-color:transparent;color:#fff;" onclick="selectFbChip(this)">Bug</button>' +
+        '<button type="button" class="feedback-chip" data-group="fbType" data-value="enhancement" data-color="#2563eb" onclick="selectFbChip(this)">Enhancement</button>' +
+        '<button type="button" class="feedback-chip" data-group="fbType" data-value="question" data-color="#0d9488" onclick="selectFbChip(this)">Question</button>' +
+        '<button type="button" class="feedback-chip" data-group="fbType" data-value="suggestion" data-color="#7c3aed" onclick="selectFbChip(this)">Suggestion</button>' +
       '</div>' +
     '</div>' +
     '<div class="feedback-form-group">' +
       '<label class="feedback-label">Severity</label>' +
-      '<div class="feedback-segmented">' +
-        '<label><input type="radio" name="fbSeverity" value="low"><span>Low</span></label>' +
-        '<label><input type="radio" name="fbSeverity" value="medium" checked><span>Medium</span></label>' +
-        '<label><input type="radio" name="fbSeverity" value="high"><span>High</span></label>' +
+      '<input type="hidden" name="fbSeverity" id="fbSeverityVal" value="medium">' +
+      '<div class="feedback-chips">' +
+        '<button type="button" class="feedback-chip" data-group="fbSeverity" data-value="low" data-color="#16a34a" onclick="selectFbChip(this)">Low</button>' +
+        '<button type="button" class="feedback-chip selected" data-group="fbSeverity" data-value="medium" data-color="#d97706" style="background:#d97706;border-color:transparent;color:#fff;" onclick="selectFbChip(this)">Medium</button>' +
+        '<button type="button" class="feedback-chip" data-group="fbSeverity" data-value="high" data-color="#dc2626" onclick="selectFbChip(this)">High</button>' +
       '</div>' +
     '</div>' +
     '<div class="feedback-form-group">' +
       '<label class="feedback-label">Description</label>' +
       '<textarea id="fbDescription" placeholder="What\'s wrong or what do you need?" oninput="updateFbSubmitState()"></textarea>' +
+    '</div>' +
+    '<div class="feedback-form-group">' +
+      '<label class="feedback-screenshot-label">' +
+        '<input type="checkbox" id="fbScreenshot">' +
+        'Attach a screenshot of this screen' +
+      '</label>' +
+    '</div>' +
+    '<div id="fbDebugPanel" style="display:none;">' +
+      '<div class="feedback-debug-panel">' +
+        '<button type="button" class="feedback-debug-toggle" id="fbDebugToggle" onclick="toggleFbDebugPanel()">' +
+          '<span>Debug info will be attached</span><span id="fbDebugArrow">▾</span>' +
+        '</button>' +
+        '<div id="fbDebugRows" style="display:none;" class="feedback-debug-rows">' +
+          '<div class="feedback-debug-row">' +
+            '<label class="feedback-debug-row-left"><input type="checkbox" id="fbDbgConsole" checked> Console errors (last 60s)</label>' +
+            '<span class="feedback-debug-row-right" id="fbDbgConsoleCount"></span>' +
+          '</div>' +
+          '<div class="feedback-debug-row">' +
+            '<label class="feedback-debug-row-left"><input type="checkbox" id="fbDbgToasts" checked> Recent toasts</label>' +
+            '<span class="feedback-debug-row-right" id="fbDbgToastsCount"></span>' +
+          '</div>' +
+          '<div class="feedback-debug-row">' +
+            '<label class="feedback-debug-row-left"><input type="checkbox" id="fbDbgNetwork" checked> Network errors</label>' +
+            '<span class="feedback-debug-row-right" id="fbDbgNetworkCount"></span>' +
+          '</div>' +
+          '<div class="feedback-debug-row">' +
+            '<label class="feedback-debug-row-left"><input type="checkbox" id="fbDbgDevice" checked> Device info</label>' +
+            '<span class="feedback-debug-row-right" id="fbDbgDeviceVal"></span>' +
+          '</div>' +
+          '<div class="feedback-debug-row">' +
+            '<label class="feedback-debug-row-left"><input type="checkbox" id="fbDbgVersion" checked> App version</label>' +
+            '<span class="feedback-debug-row-right" id="fbDbgVersionVal"></span>' +
+          '</div>' +
+        '</div>' +
+      '</div>' +
     '</div>' +
   '</div>' +
   '<div class="feedback-dialog-footer">' +
@@ -35034,6 +35839,8 @@ function openFeedbackDialog() {
   '</div>';
   document.getElementById('feedbackDialog').innerHTML = html;
   document.getElementById('feedbackOverlay').classList.add('open');
+  var panel = document.getElementById('fbDebugPanel');
+  if (panel) { panel.style.display = ''; refreshFbDebugCounts(); }
   setTimeout(function() {
     var ta = document.getElementById('fbDescription');
     if (ta) ta.focus();
@@ -35056,41 +35863,203 @@ function updateFbSubmitState() {
   if (btn) btn.disabled = !(desc && desc.value.trim());
 }
 
+function selectFbChip(chip) {
+  var group = chip.dataset.group;
+  var color = chip.dataset.color;
+  document.querySelectorAll('.feedback-chip[data-group="' + group + '"]').forEach(function(c) {
+    c.classList.remove('selected');
+    c.style.background = '';
+    c.style.borderColor = '';
+    c.style.color = '';
+  });
+  chip.classList.add('selected');
+  chip.style.background = color;
+  chip.style.borderColor = 'transparent';
+  chip.style.color = '#fff';
+  var hidden = document.getElementById(group + 'Val');
+  if (hidden) hidden.value = chip.dataset.value;
+  if (group === 'fbType') {
+    var panel = document.getElementById('fbDebugPanel');
+    if (panel) {
+      if (chip.dataset.value === 'bug') {
+        panel.style.display = '';
+        refreshFbDebugCounts();
+      } else {
+        panel.style.display = 'none';
+      }
+    }
+  }
+}
+
+function refreshFbDebugCounts() {
+  var now = Date.now();
+  var cutoff = now - 60000;
+  var consoleCount = (window._consoleBuffer || []).filter(function(e) { return e.t >= cutoff; }).length;
+  var toastCount = (window._toastBuffer || []).length;
+  var netCount = (window._networkErrors || []).length;
+  var browser = (navigator.userAgent.match(/(Chrome|Safari|Firefox|Edge)\/[\d.]+/) || ['Browser'])[0];
+  var deviceStr = browser + ' · ' + window.innerWidth + '×' + window.innerHeight;
+  var version = window.MAST_VERSION || 'unknown';
+  var c = document.getElementById('fbDbgConsoleCount'); if (c) c.textContent = consoleCount + ' entries';
+  var t = document.getElementById('fbDbgToastsCount'); if (t) t.textContent = toastCount + ' entries';
+  var n = document.getElementById('fbDbgNetworkCount'); if (n) n.textContent = netCount + ' entries';
+  var d = document.getElementById('fbDbgDeviceVal'); if (d) d.textContent = deviceStr;
+  var v = document.getElementById('fbDbgVersionVal'); if (v) v.textContent = version;
+}
+
+function toggleFbDebugPanel() {
+  var rows = document.getElementById('fbDebugRows');
+  var arrow = document.getElementById('fbDebugArrow');
+  if (!rows) return;
+  var open = rows.style.display !== 'none';
+  rows.style.display = open ? 'none' : '';
+  if (arrow) arrow.textContent = open ? '▾' : '▴';
+}
+
 async function submitFeedback() {
   var desc = document.getElementById('fbDescription');
   if (!desc || !desc.value.trim()) return;
 
-  var type = document.querySelector('input[name="fbType"]:checked');
-  var severity = document.querySelector('input[name="fbSeverity"]:checked');
+  var type = document.getElementById('fbTypeVal');
+  var severity = document.getElementById('fbSeverityVal');
+  var wantScreenshot = !!(document.getElementById('fbScreenshot') && document.getElementById('fbScreenshot').checked);
+
+  var btn = document.getElementById('fbSubmitBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Sending...'; }
+
+  // Collect all form values before closing the dialog
+  var descValue = desc.value.trim();
+  var fbType = type ? type.value : 'bug';
+  var fbSeverity = severity ? severity.value : 'medium';
+  var now = Date.now();
+  var cutoff = now - 60000;
+
+  // Debug panel toggle state \u2014 read before dialog closes
+  var dbgConsole = document.getElementById('fbDbgConsole');
+  var dbgToasts = document.getElementById('fbDbgToasts');
+  var dbgNetwork = document.getElementById('fbDbgNetwork');
+  var dbgDevice = document.getElementById('fbDbgDevice');
+  var dbgVersion = document.getElementById('fbDbgVersion');
+  var inclConsole = !dbgConsole || dbgConsole.checked;
+  var inclToasts = !dbgToasts || dbgToasts.checked;
+  var inclNetwork = !dbgNetwork || dbgNetwork.checked;
+  var inclDevice = !dbgDevice || dbgDevice.checked;
+  var inclVersion = !dbgVersion || dbgVersion.checked;
+
+  // Close dialog first so the full UI is visible for any screenshot capture
+  closeFeedbackDialog();
 
   var report = {
     appId: MastDB.tenantId(),
     source: 'internal',
     screen: currentRoute || 'unknown',
     screenLabel: getScreenLabel(),
-    type: type ? type.value : 'bug',
-    severity: severity ? severity.value : 'medium',
-    description: desc.value.trim(),
+    type: fbType,
+    severity: fbSeverity,
+    description: descValue,
     email: null,
     userId: currentUser ? currentUser.uid : null,
     userName: currentUser ? (currentUser.displayName || currentUser.email || '') : null,
+    tenantPlan: window.MAST_TENANT_PLAN || null,
+    consoleBuffer: inclConsole && window._consoleBuffer ? window._consoleBuffer.filter(function(e) { return e.t >= cutoff; }) : null,
+    toastBuffer: inclToasts && window._toastBuffer ? window._toastBuffer.filter(function(e) { return e.t >= cutoff; }) : null,
+    deviceInfo: inclDevice ? { userAgent: navigator.userAgent, viewport: { width: window.innerWidth, height: window.innerHeight } } : null,
+    appVersion: inclVersion ? (window.MAST_VERSION || null) : null,
+    screenshotUrl: null,
+    screenshotStoragePath: null,
     timestamp: new Date().toISOString(),
-    consoleBuffer: window._consoleBuffer ? window._consoleBuffer.slice() : [],
     status: 'open',
     jobId: null,
     createdAt: MastDB.serverTimestamp()
   };
+  if (fbType === 'bug' && inclNetwork) {
+    report.networkErrors = window._networkErrors ? window._networkErrors.filter(function(e) { return e.t >= cutoff; }) : [];
+  }
 
   try {
-    var btn = document.getElementById('fbSubmitBtn');
-    if (btn) { btn.disabled = true; btn.textContent = 'Sending...'; }
-    await MastDB.feedback.ref().push(report);
-    closeFeedbackDialog();
+    var pushResult = await MastDB.feedback.ref().push(report);
     showToast('Feedback submitted \u2014 thanks!');
+
+    // Capture screenshot in background after submission confirmed (non-blocking)
+    if (wantScreenshot && pushResult && pushResult.key) {
+      var reportId = pushResult.key;
+      setTimeout(function() {
+        (async function() {
+          try {
+            var captureTimeout = new Promise(function(_, reject) {
+              setTimeout(function() { reject(new Error('screenshot timeout')); }, 8000);
+            });
+            var result = await Promise.race([captureFeedbackScreenshot(), captureTimeout]);
+            await MastDB.feedback.ref(reportId).update({
+              screenshotUrl: result.url,
+              screenshotStoragePath: result.storagePath
+            });
+          } catch (e) {
+            console.warn('[feedback] Screenshot attach failed:', e);
+          }
+        })();
+      }, 350);
+    }
   } catch (err) {
     showToast('Error submitting feedback: ' + err.message, true);
     if (btn) { btn.disabled = false; btn.textContent = 'Submit'; }
   }
+}
+
+async function captureFeedbackScreenshot() {
+  if (!window.html2canvas) {
+    await new Promise(function(resolve, reject) {
+      var s = document.createElement('script');
+      s.src = 'https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js';
+      s.onload = resolve;
+      s.onerror = reject;
+      document.head.appendChild(s);
+    });
+  }
+  // Capture only the visible viewport. Skip cross-origin images (avatars,
+  // external CDN) — they hang html2canvas indefinitely on Safari even with
+  // imageTimeout. We replace them with a 1x1 transparent placeholder during
+  // capture so the layout doesn't shift.
+  var canvas = await window.html2canvas(document.body, {
+    scale: 0.75,
+    useCORS: true,
+    logging: false,
+    allowTaint: false,
+    imageTimeout: 2000,
+    foreignObjectRendering: false,
+    width: window.innerWidth,
+    height: window.innerHeight,
+    x: window.scrollX || window.pageXOffset,
+    y: window.scrollY || window.pageYOffset,
+    ignoreElements: function(el) {
+      // Skip <img> elements with cross-origin sources that don't allow CORS.
+      if (el.tagName === 'IMG' && el.src) {
+        try {
+          var imgOrigin = new URL(el.src, location.href).origin;
+          if (imgOrigin !== location.origin && !el.crossOrigin) return true;
+        } catch (e) { /* ignore */ }
+      }
+      // Skip iframes — they can never be captured cross-origin
+      if (el.tagName === 'IFRAME') return true;
+      return false;
+    }
+  });
+  return new Promise(function(resolve, reject) {
+    canvas.toBlob(async function(blob) {
+      if (!blob) { reject(new Error('toBlob returned null')); return; }
+      try {
+        var tenantId = MastDB.tenantId();
+        var suffix = Math.random().toString(36).slice(2, 8);
+        var storagePath = tenantId + '/feedback-screenshots/' + Date.now() + '-' + suffix + '.jpg';
+        var ref = storage.ref(storagePath);
+        await ref.put(blob, { contentType: 'image/jpeg' });
+        var url = await ref.getDownloadURL();
+        resolve({ url: url, storagePath: storagePath });
+      } catch (e) {
+        reject(e);
+      }
+    }, 'image/jpeg', 0.65);
+  });
 }
 
 // Public feedback toggle
@@ -36949,7 +37918,7 @@ async function renderDashboardTodos() {
       '#businessTab .bz-rail a.active { color:var(--amber,#c4853c); font-weight:600; border-left:2px solid var(--amber,#c4853c); padding-left:8px; }',
       '#businessTab .bz-mobile-nav { display:none; width:100%; padding:8px 10px; margin-bottom:14px; background:var(--bg-secondary,#232323); color:var(--text,#fff); border:1px solid rgba(255,255,255,0.1); border-radius:6px; font-size:0.85rem; font-family:inherit; }',
       '@media (max-width:767px) { #businessTab .bz-mobile-nav { display:block; } }',
-      '#businessTab .bz-content { scroll-padding-top:80px; padding-bottom:100vh; }',
+      '#businessTab .bz-content { scroll-padding-top:80px; padding-bottom:30vh; }',
       '#businessTab .bz-section { scroll-margin-top:80px; margin-bottom:24px; }',
       '#businessTab .bz-section-header { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:10px; }',
       '#businessTab .bz-section-title  { font-size:1.15rem; font-weight:600; color:var(--text,#fff); display:flex; align-items:center; gap:8px; margin:0; }',

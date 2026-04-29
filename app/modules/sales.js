@@ -302,7 +302,8 @@ function toggleSquarePayments() {
     listView.style.display = 'none';
     sqView.style.display = '';
     toggleBtn.textContent = '\u2190 Back to Sales';
-    toggleBtn.style.background = 'var(--warm-gray)';
+    toggleBtn.className = 'detail-back';
+    toggleBtn.style.background = '';
     filterControls.style.display = 'none';
     titleEl.textContent = 'Square Payments';
     countEl.textContent = '';
@@ -311,7 +312,8 @@ function toggleSquarePayments() {
     listView.style.display = '';
     sqView.style.display = 'none';
     toggleBtn.textContent = '\uD83D\uDCB3 Square Payments';
-    toggleBtn.style.background = 'var(--teal)';
+    toggleBtn.className = 'btn btn-secondary';
+    toggleBtn.style.background = '';
     filterControls.style.display = 'flex';
     titleEl.textContent = 'Sales';
     renderSales();
@@ -1996,6 +1998,13 @@ async function exitPackingMode() {
         '<div style="font-size:0.9rem;white-space:pre-wrap;">' + esc(tc.loyaltyTerms) + '</div></div>';
     }
 
+    // Additional Terms
+    if (tc.additionalTerms) {
+      html += '<div style="background:var(--cream);border-radius:10px;padding:20px;">' +
+        '<h3 style="margin:0 0 8px;font-size:1rem;font-weight:600;">Additional Terms</h3>' +
+        '<div style="font-size:0.9rem;white-space:pre-wrap;">' + esc(tc.additionalTerms) + '</div></div>';
+    }
+
     // Last published
     if (tc.lastPublishedAt) {
       html += '<div style="font-size:0.78rem;color:var(--warm-gray);text-align:right;">Last published: ' + esc(new Date(tc.lastPublishedAt).toLocaleString()) + '</div>';
@@ -2107,6 +2116,12 @@ async function exitPackingMode() {
             '<textarea id="tcLoyalty" rows="3" placeholder="e.g. Points expire after 12 months of inactivity." style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:6px;font-family:\'DM Sans\',sans-serif;resize:vertical;">' + esc(tc.loyaltyTerms || '') + '</textarea>' +
           '</div>' +
 
+          // Additional terms (free text)
+          '<div>' +
+            '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Additional Terms <span style="font-weight:400;color:var(--warm-gray);">(optional)</span></label>' +
+            '<textarea id="tcAdditional" rows="5" placeholder="Any additional terms, disclaimers, or policies not covered above..." style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:6px;font-family:\'DM Sans\',sans-serif;resize:vertical;">' + esc(tc.additionalTerms || '') + '</textarea>' +
+          '</div>' +
+
         '</div>' +
         '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:20px;">' +
           '<button class="btn btn-secondary" onclick="document.getElementById(\'termsEditorModal\').remove()">Cancel</button>' +
@@ -2156,6 +2171,7 @@ async function exitPackingMode() {
     var shippingPolicy = document.getElementById('tcShippingPolicy').value;
     var giftCardTerms = document.getElementById('tcGiftCard').value.trim();
     var loyaltyTerms = document.getElementById('tcLoyalty').value.trim();
+    var additionalTerms = document.getElementById('tcAdditional').value.trim();
 
     // Validate
     if (isNaN(returnDays) || returnDays < 0 || returnDays > 365) {
@@ -2193,6 +2209,7 @@ async function exitPackingMode() {
       categoryRules: catRules,
       giftCardTerms: giftCardTerms || null,
       loyaltyTerms: loyaltyTerms || null,
+      additionalTerms: additionalTerms || null,
       updatedAt: new Date().toISOString()
     };
 

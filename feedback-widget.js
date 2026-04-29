@@ -43,6 +43,61 @@
     _origWarn.apply(console, args);
   };
 
+  // Toast buffer — rolling last 5 error toasts
+  if (!window._toastBuffer) window._toastBuffer = [];
+
+  // Network errors buffer — rolling last 10 failures
+  if (!window._networkErrors) {
+    window._networkErrors = [];
+    // Patch fetch
+    if (!window._mastFetchPatched) {
+      window._mastFetchPatched = true;
+      var _origFetch = window.fetch;
+      window.fetch = function(input, init) {
+        var method = (init && init.method) ? init.method.toUpperCase() : 'GET';
+        var url = (typeof input === 'string') ? input : (input && input.url) || String(input);
+        return _origFetch.apply(this, arguments).then(function(response) {
+          if (!response.ok) {
+            window._networkErrors.push({ url: url, status: response.status, method: method, t: Date.now() });
+            if (window._networkErrors.length > 10) window._networkErrors.shift();
+          }
+          return response;
+        }, function(err) {
+          window._networkErrors.push({ url: url, status: 0, method: method, t: Date.now() });
+          if (window._networkErrors.length > 10) window._networkErrors.shift();
+          throw err;
+        });
+      };
+    }
+    // Patch XHR
+    if (!window._mastXhrPatched) {
+      window._mastXhrPatched = true;
+      var _origOpen = XMLHttpRequest.prototype.open;
+      XMLHttpRequest.prototype.open = function(method, url) {
+        this._mastMethod = method ? method.toUpperCase() : 'GET';
+        this._mastUrl = url || '';
+        return _origOpen.apply(this, arguments);
+      };
+      var _origSend = XMLHttpRequest.prototype.send;
+      XMLHttpRequest.prototype.send = function() {
+        var xhr = this;
+        var _origOnloadend = xhr.onloadend;
+        var _origOnerror = xhr.onerror;
+        xhr.addEventListener('loadend', function() {
+          if (xhr.status >= 400 || xhr.status === 0) {
+            window._networkErrors.push({ url: xhr._mastUrl || '', status: xhr.status, method: xhr._mastMethod || 'GET', t: Date.now() });
+            if (window._networkErrors.length > 10) window._networkErrors.shift();
+          }
+        });
+        xhr.addEventListener('error', function() {
+          window._networkErrors.push({ url: xhr._mastUrl || '', status: 0, method: xhr._mastMethod || 'GET', t: Date.now() });
+          if (window._networkErrors.length > 10) window._networkErrors.shift();
+        });
+        return _origSend.apply(this, arguments);
+      };
+    }
+  }
+
   // Rate limiting — one submission per 30 seconds
   function canSubmit() {
     try {
@@ -203,23 +258,44 @@
     var severity = document.querySelector('input[name="sgFbSeverity"]:checked');
     var screen = dialog ? dialog.getAttribute('data-screen') : 'unknown';
 
+    var now = Date.now();
+    var cutoff = now - 60000;
+    var fbType = type ? type.value : 'bug';
+
+    var currentUser = null;
+    try {
+      if (window.MastCart && typeof MastCart.getCurrentUser === 'function') {
+        currentUser = MastCart.getCurrentUser();
+      }
+    } catch (e) {}
+
     var report = {
       appId: APP_ID,
       source: 'public',
       screen: screen,
       screenLabel: null,
-      type: type ? type.value : 'bug',
+      type: fbType,
       severity: severity ? severity.value : 'medium',
-      consoleBuffer: _consoleBuffer.slice(),
+      consoleBuffer: _consoleBuffer.filter(function(e) { return e.t >= cutoff; }),
+      toastBuffer: (window._toastBuffer || []).filter(function(e) { return e.t >= cutoff; }),
       description: desc.value.trim(),
       email: (email && email.value.trim()) || null,
-      userId: null,
-      userName: null,
+      userId: currentUser ? (currentUser.uid || null) : null,
+      userName: currentUser ? (currentUser.displayName || currentUser.email || null) : null,
+      membershipTier: window.MAST_MEMBERSHIP_TIER || null,
+      deviceInfo: {
+        userAgent: navigator.userAgent,
+        viewport: { width: window.innerWidth, height: window.innerHeight }
+      },
+      appVersion: window.MAST_VERSION || null,
       timestamp: new Date().toISOString(),
       status: 'open',
       jobId: null,
       createdAt: MastDB.serverTimestamp()
     };
+    if (fbType === 'bug') {
+      report.networkErrors = (window._networkErrors || []).filter(function(e) { return e.t >= cutoff; });
+    }
 
     if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Sending...'; }
 
@@ -235,7 +311,13 @@
       });
   }
 
-  function showFbToast(msg) {
+  function showFbToast(msg, isError) {
+    // Capture error-like toasts to buffer
+    if (isError || /error|fail|sorry/i.test(msg)) {
+      if (!window._toastBuffer) window._toastBuffer = [];
+      window._toastBuffer.push({ msg: msg, t: Date.now() });
+      if (window._toastBuffer.length > 5) window._toastBuffer.shift();
+    }
     var toast = document.createElement('div');
     toast.className = 'sg-fb-toast';
     toast.textContent = msg;

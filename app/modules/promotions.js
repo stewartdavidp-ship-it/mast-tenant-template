@@ -11,6 +11,7 @@
   var promotionsLoaded = false;
   var currentFilter = 'active';
   var productsCache = null;
+  var _promoAllProducts = [];
 
   var STATUS_COLORS = {
     active: '#16a34a',
@@ -222,6 +223,17 @@
 
     loadProductsCache().then(function(allProducts) {
       var existingPids = sale ? extractPids(sale.products || []) : [];
+      _promoAllProducts = allProducts;
+
+      // Build category options
+      var catSet = {};
+      allProducts.forEach(function(p) {
+        (p.categories || []).forEach(function(c) { if (c) catSet[c] = true; });
+      });
+      var catOptions = '<option value="">All Categories</option>' +
+        Object.keys(catSet).sort().map(function(c) {
+          return '<option value="' + esc(c) + '">' + esc(c) + '</option>';
+        }).join('');
 
       var html = '<div class="modal-header"><h3>' + (isEdit ? 'Edit Sale' : 'Create Sale') + '</h3>' +
         '<button class="modal-close" onclick="closeModal()">\u2716</button></div>' +
@@ -246,9 +258,16 @@
           '<div class="form-group"><label style="display:flex;align-items:center;gap:8px;cursor:pointer;">' +
             '<input type="checkbox" id="promoKeepAfterEnd"' + (sale && sale.keepAfterEnd ? ' checked' : '') + ' /> Keep after end (prevent auto-archiving)</label></div>' +
           '<div class="form-group"><label>Products</label>' +
-            '<div id="promoProductPicker" style="max-height:250px;overflow-y:auto;border:1px solid var(--border,#ddd);border-radius:8px;padding:8px;">';
+            '<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap;">' +
+              '<input type="text" id="promoProductSearch" placeholder="Search products..." oninput="promoFilterProducts()" style="flex:1;min-width:120px;padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.85rem;background:var(--cream);color:var(--charcoal);">' +
+              '<select id="promoProductCategory" onchange="promoFilterProducts()" style="padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.85rem;background:var(--cream);color:var(--charcoal);">' + catOptions + '</select>' +
+              '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:0.85rem;white-space:nowrap;">' +
+                '<input type="checkbox" id="promoSelectAll" onchange="promoSelectAllToggle()" /> Select All' +
+              '</label>' +
+            '</div>' +
+            '<div id="promoProductPicker" style="max-height:220px;overflow-y:auto;border:1px solid var(--border,#ddd);border-radius:8px;padding:8px;">';
 
-      // Product checkboxes
+      // Product checkboxes (initial render)
       for (var i = 0; i < allProducts.length; i++) {
         var p = allProducts[i];
         var isChecked = existingPids.indexOf(p.pid) !== -1;
@@ -275,6 +294,50 @@
     var type = document.getElementById('promoDiscountType').value;
     var valInput = document.getElementById('promoDiscountValue');
     if (valInput) valInput.placeholder = type === 'fixed' ? 'Amount in cents (e.g., 500 = $5)' : '0-100';
+  };
+
+  window.promoFilterProducts = function() {
+    var search = (document.getElementById('promoProductSearch').value || '').toLowerCase();
+    var cat = (document.getElementById('promoProductCategory').value || '');
+    var picker = document.getElementById('promoProductPicker');
+    if (!picker) return;
+
+    // Collect currently checked pids before re-render
+    var checkedPids = {};
+    picker.querySelectorAll('.promo-product-cb:checked').forEach(function(cb) {
+      checkedPids[cb.getAttribute('data-pid')] = true;
+    });
+
+    var html = '';
+    var visible = 0;
+    for (var i = 0; i < _promoAllProducts.length; i++) {
+      var p = _promoAllProducts[i];
+      if (search && p.name.toLowerCase().indexOf(search) === -1) continue;
+      if (cat && (p.categories || []).indexOf(cat) === -1) continue;
+      var isChecked = !!checkedPids[p.pid];
+      var priceStr = p.priceCents ? formatCents(p.priceCents) : '';
+      html += '<label style="display:flex;align-items:center;gap:8px;padding:6px 4px;cursor:pointer;border-bottom:1px solid var(--border-light,#eee);">' +
+        '<input type="checkbox" class="promo-product-cb" data-pid="' + esc(p.pid) + '"' + (isChecked ? ' checked' : '') + ' />' +
+        '<span style="flex:1;">' + esc(p.name) + '</span>' +
+        (priceStr ? '<span style="color:var(--warm-gray);font-size:0.85em;">' + priceStr + '</span>' : '') +
+      '</label>';
+      visible++;
+    }
+    if (visible === 0) html = '<div style="padding:12px;color:var(--warm-gray);font-size:0.85rem;">No products match.</div>';
+    picker.innerHTML = html;
+
+    // Update select-all state
+    var allCbs = picker.querySelectorAll('.promo-product-cb');
+    var allChecked = allCbs.length > 0 && Array.from(allCbs).every(function(cb) { return cb.checked; });
+    var selAllEl = document.getElementById('promoSelectAll');
+    if (selAllEl) selAllEl.checked = allChecked;
+  };
+
+  window.promoSelectAllToggle = function() {
+    var checked = document.getElementById('promoSelectAll').checked;
+    var picker = document.getElementById('promoProductPicker');
+    if (!picker) return;
+    picker.querySelectorAll('.promo-product-cb').forEach(function(cb) { cb.checked = checked; });
   };
 
   // ── Save ──

@@ -1272,7 +1272,7 @@ function startBuild(jobId) {
       '<input type="checkbox" class="buildOperatorCheck" value="' + esc(name) + '" style="width:20px;height:20px;cursor:pointer;"> ' +
       esc(name) + '</label>';
   }).join('');
-  var html = '<div style="max-width:400px;">' +
+  var html = '<div style="max-width:400px;padding:24px;">' +
     '<h3>Start Build Session</h3>' +
     '<div class="form-group">' +
       '<label>Operators</label>' +
@@ -1313,9 +1313,7 @@ async function doStartBuild(jobId) {
   var now = new Date();
 
   try {
-    var buildRef = MastDB.productionJobs.builds(jobId).push();
-    var buildId = buildRef.key;
-    await buildRef.set({
+    var pushResult = await MastDB.productionJobs.pushBuild(jobId, {
       buildNumber: buildNumber,
       sessionDate: now.toISOString().split('T')[0],
       startTime: now.toISOString(),
@@ -1328,6 +1326,7 @@ async function doStartBuild(jobId) {
       createdAt: now.toISOString(),
       completedAt: null
     });
+    var buildId = pushResult.key;
     await writeAudit('update', 'jobs', jobId);
 
     // Auto-transition job to in-progress if still in definition
@@ -1538,7 +1537,7 @@ async function doCompleteBuild(jobId, buildId) {
 
   try {
     // Update build
-    await MastDB.productionJobs.builds(jobId, buildId).update({
+    await MastDB.productionJobs.updateBuild(jobId, buildId, {
       status: 'completed',
       endTime: now.toISOString(),
       durationMinutes: durationMinutes,
@@ -2196,6 +2195,11 @@ function viewStoryDetail(storyId) {
 
 function backToStoriesList() {
   selectedStoryId = null;
+  // If we were pushed here from another route (e.g., a job), pop back to it
+  if (window.MastNavStack && MastNavStack.size() > 0) {
+    MastNavStack.popAndReturn();
+    return;
+  }
   var listView = document.getElementById('storiesListView');
   var detailView = document.getElementById('storyDetailView');
   if (detailView) detailView.style.display = 'none';
@@ -2595,8 +2599,16 @@ async function openStoryCuration(jobId) {
     if (detailView) detailView.style.display = '';
     if (detailContent) detailContent.innerHTML = html;
   } else {
-    // Navigate to stories tab and render inline there
-    navigateTo('stories');
+    // Push origin context so back button can return to the job that triggered curation
+    if (window.MastNavStack && typeof currentRoute !== 'undefined' && currentRoute && currentRoute !== 'stories') {
+      var _fromRoute = currentRoute;
+      var _fromLabel = _fromRoute === 'jobs' ? 'Job' : _fromRoute;
+      // Navigate first (which clears the stack), then push the origin
+      navigateTo('stories');
+      MastNavStack.push({ route: _fromRoute, label: _fromLabel });
+    } else {
+      navigateTo('stories');
+    }
     // Small delay to let the tab render
     await new Promise(function(r) { setTimeout(r, 50); });
     selectedStoryId = existingStoryId;

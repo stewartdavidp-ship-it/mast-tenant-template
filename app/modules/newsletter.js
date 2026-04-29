@@ -1337,16 +1337,22 @@
       ' &bull; <a href="https://' + esc(_ec.domain) + '/newsletter/preferences" style="color:rgba(245,240,235,0.35);font-size:10px;text-decoration:underline;">Manage Preferences</a></p>' +
       '</td></tr></table></td></tr></table></body></html>';
 
-    var blob = new Blob([emailHtml], { type: 'text/html' });
-    var url = URL.createObjectURL(blob);
-    var a = document.createElement('a');
-    a.href = url;
-    a.download = ((TENANT_CONFIG && TENANT_CONFIG.brand.newsletterDownloadPrefix) || 'newsletter') + '-' + nlCurrentIssue.issueNumber + '-' + (nlCurrentIssue.slug || 'newsletter') + '.html';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    showToast('HTML email exported! 📥');
+    var filename = ((TENANT_CONFIG && TENANT_CONFIG.brand.newsletterDownloadPrefix) || 'newsletter') + '-' + nlCurrentIssue.issueNumber + '-' + (nlCurrentIssue.slug || 'newsletter') + '.html';
+
+    var modalHtml =
+      '<div style="padding:24px;">' +
+      '<h3 style="margin:0 0 4px;font-size:1.1rem;font-weight:500;">Export HTML Email</h3>' +
+      '<p style="font-size:0.82rem;color:var(--warm-gray);margin:0 0 14px;">Copy the HTML below to paste into your email platform, or download the file.</p>' +
+      '<textarea id="nlExportTextarea" readonly style="width:100%;height:200px;font-family:monospace;font-size:0.72rem;padding:10px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);resize:vertical;box-sizing:border-box;"></textarea>' +
+      '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;">' +
+        '<button class="btn btn-secondary" onclick="closeModal()">Close</button>' +
+        '<button class="btn btn-secondary" onclick="(function(){var b=new Blob([document.getElementById(\'nlExportTextarea\').value],{type:\'text/html\'});var u=URL.createObjectURL(b);var a=document.createElement(\'a\');a.href=u;a.download=\'' + filename.replace(/'/g, "\\'") + '\';document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(u);showToast(\'Downloaded!\');})()" >&#x2193; Download</button>' +
+        '<button class="btn btn-primary" onclick="(function(){var ta=document.getElementById(\'nlExportTextarea\');ta.select();try{navigator.clipboard.writeText(ta.value).then(function(){showToast(\'Copied to clipboard! \u{1F4CB}\');});}catch(e){document.execCommand(\'copy\');showToast(\'Copied! \u{1F4CB}\');}})()">Copy to Clipboard</button>' +
+      '</div>' +
+      '</div>';
+    openModal(modalHtml);
+    var ta = document.getElementById('nlExportTextarea');
+    if (ta) ta.value = emailHtml;
   }
 
   // ===== PUBLISH TO WEBSITE =====
