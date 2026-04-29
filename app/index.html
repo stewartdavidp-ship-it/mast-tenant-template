@@ -29624,15 +29624,30 @@ function renderVariantExpanded(product, variant, recipe, pricing, channels) {
   }
   html += '</div>';
 
-  // Inventory note
+  // Inventory — per-variant. Schema already supports inv.stock[variantId];
+  // _default is the legacy single-variant key.
   var inv = inventory[pid] || {};
   var stockType = (inv && inv.stockType) ? inv.stockType : 'made-to-order';
   var invNote;
   if (stockType === 'build-to-order' || stockType === 'made-to-order') {
     invNote = 'Build to order';
   } else {
-    var totals = (typeof getInventoryTotals === 'function') ? getInventoryTotals(inv) : { onHand: 0, available: 0 };
-    invNote = totals.onHand + ' on hand · ' + totals.available + ' available';
+    // Look up the variant's stock entry. For the synthetic 'default' variant
+    // (single-variant products) fall back to _default.
+    var stockKey = variant._isSynthetic ? '_default' : variant.id;
+    var entry = (inv.stock && typeof inv.stock === 'object') ? inv.stock[stockKey] : null;
+    if (!entry && variant._isSynthetic && typeof inv.stock === 'number') {
+      entry = { onHand: inv.stock, committed: 0, held: 0, damaged: 0 };
+    }
+    if (entry) {
+      var onHand = entry.onHand || 0;
+      var committed = entry.committed || 0;
+      var available = Math.max(0, onHand - committed - (entry.held || 0) - (entry.damaged || 0));
+      invNote = onHand + ' on hand · ' + available + ' available';
+      if (committed > 0) invNote += ' · ' + committed + ' committed';
+    } else {
+      invNote = 'No stock recorded for this variant';
+    }
   }
   html += '<div>';
   html += '<div style="font-weight:600;color:var(--warm-gray);margin-bottom:4px;">Inventory</div>';
