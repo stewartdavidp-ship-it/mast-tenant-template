@@ -29296,7 +29296,13 @@ function renderProductDetail(pid) {
         : (product.status === 'archived' && typeof window.makerRenderArchivedProductActionBar === 'function'
           ? window.makerRenderArchivedProductActionBar(product)
           : '<button class="btn btn-secondary btn-small" onclick="editProduct(\'' + esc(pid) + '\')">Edit</button>' +
-            '<button class="btn btn-secondary btn-small" onclick="openCloneDialog(\'' + esc(pid) + '\')">Duplicate</button>')) +
+            '<button class="btn btn-secondary btn-small" onclick="openCloneDialog(\'' + esc(pid) + '\')">Duplicate</button>' +
+            // Develop lens — prominent Edit Recipe entry point in the header.
+            ((typeof window.makerGetProductDetailLens === 'function' && window.makerGetProductDetailLens(pid) === 'develop')
+              ? (product.recipeId
+                  ? '<button class="btn btn-primary btn-small" onclick="window.makerOpenRecipeBuilder && window.makerOpenRecipeBuilder(\'' + esc(product.recipeId) + '\')">Edit Recipe →</button>'
+                  : '<button class="btn btn-primary btn-small" onclick="addRecipeForProduct(\'' + esc(pid) + '\')">+ Create Recipe</button>')
+              : ''))) +
     '</div>' : '') +
     (isEditing && !isCreate ? '<div style="display:flex;align-items:center;gap:8px;">' +
       '<span style="font-size:0.72rem;color:var(--amber);font-weight:600;text-transform:uppercase;letter-spacing:0.04em;">Editing</span>' +
