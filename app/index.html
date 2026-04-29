@@ -35848,9 +35848,9 @@ async function submitFeedback() {
   var wantScreenshot = !!(document.getElementById('fbScreenshot') && document.getElementById('fbScreenshot').checked);
 
   var btn = document.getElementById('fbSubmitBtn');
-  if (btn) { btn.disabled = true; btn.textContent = wantScreenshot ? 'Capturing...' : 'Sending...'; }
+  if (btn) { btn.disabled = true; btn.textContent = 'Sending...'; }
 
-  // Collect all form values before potentially closing the dialog
+  // Collect all form values before closing the dialog
   var descValue = desc.value.trim();
   var fbType = type ? type.value : 'bug';
   var fbSeverity = severity ? severity.value : 'medium';
@@ -35869,24 +35869,8 @@ async function submitFeedback() {
   var inclDevice = !dbgDevice || dbgDevice.checked;
   var inclVersion = !dbgVersion || dbgVersion.checked;
 
-  var screenshotUrl = null;
-  var screenshotStoragePath = null;
-
-  if (wantScreenshot) {
-    closeFeedbackDialog();
-    await new Promise(function(r) { setTimeout(r, 350); });
-    showToast('Taking screenshot…');
-    try {
-      var captureTimeout = new Promise(function(_, reject) {
-        setTimeout(function() { reject(new Error('screenshot timeout')); }, 10000);
-      });
-      var result = await Promise.race([captureFeedbackScreenshot(), captureTimeout]);
-      screenshotUrl = result.url;
-      screenshotStoragePath = result.storagePath;
-    } catch (e) {
-      console.warn('[feedback] Screenshot capture failed:', e);
-    }
-  }
+  // Close dialog first so the full UI is visible for any screenshot capture
+  closeFeedbackDialog();
 
   var report = {
     appId: MastDB.tenantId(),
@@ -35904,8 +35888,8 @@ async function submitFeedback() {
     toastBuffer: inclToasts && window._toastBuffer ? window._toastBuffer.filter(function(e) { return e.t >= cutoff; }) : null,
     deviceInfo: inclDevice ? { userAgent: navigator.userAgent, viewport: { width: window.innerWidth, height: window.innerHeight } } : null,
     appVersion: inclVersion ? (window.MAST_VERSION || null) : null,
-    screenshotUrl: screenshotUrl,
-    screenshotStoragePath: screenshotStoragePath,
+    screenshotUrl: null,
+    screenshotStoragePath: null,
     timestamp: new Date().toISOString(),
     status: 'open',
     jobId: null,
@@ -35916,9 +35900,29 @@ async function submitFeedback() {
   }
 
   try {
-    await MastDB.feedback.ref().push(report);
-    if (!wantScreenshot) closeFeedbackDialog();
+    var pushResult = await MastDB.feedback.ref().push(report);
     showToast('Feedback submitted \u2014 thanks!');
+
+    // Capture screenshot in background after submission confirmed (non-blocking)
+    if (wantScreenshot && pushResult && pushResult.key) {
+      var reportId = pushResult.key;
+      setTimeout(function() {
+        (async function() {
+          try {
+            var captureTimeout = new Promise(function(_, reject) {
+              setTimeout(function() { reject(new Error('screenshot timeout')); }, 8000);
+            });
+            var result = await Promise.race([captureFeedbackScreenshot(), captureTimeout]);
+            await MastDB.feedback.ref(reportId).update({
+              screenshotUrl: result.url,
+              screenshotStoragePath: result.storagePath
+            });
+          } catch (e) {
+            console.warn('[feedback] Screenshot attach failed:', e);
+          }
+        })();
+      }, 350);
+    }
   } catch (err) {
     showToast('Error submitting feedback: ' + err.message, true);
     if (btn) { btn.disabled = false; btn.textContent = 'Submit'; }
