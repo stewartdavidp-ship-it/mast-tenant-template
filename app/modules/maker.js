@@ -2206,7 +2206,7 @@
       html += '</select>';
     }
 
-    html += '<button class="btn btn-primary btn-small" onclick="makerCreateNewPiece()">+ New Piece</button>';
+    html += '<button class="btn btn-primary btn-small" onclick="makerCreateNewPiece()">+ New Product</button>';
     html += '<button class="btn btn-secondary btn-small" onclick="makerOpenWhatIfSimulator()" title="Simulate metals price shifts across all recipes">📊 What-if</button>';
     html += '<button class="btn btn-secondary btn-small" onclick="makerOpenChannelsManager()" title="Manage sales channel fee profiles">Channels</button>';
     html += '<button class="btn btn-secondary btn-small" onclick="makerOpenImport(\'products\')">Import CSV</button>';
@@ -4656,19 +4656,30 @@
     container.id = 'newPieceModalContainer';
     var html = '';
     html += '<div id="newPieceOverlay" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:10000;display:flex;align-items:center;justify-content:center;" onclick="makerCloseNewPieceModal(event)">';
-    html += '<div style="background:var(--cream);border-radius:10px;max-width:480px;width:90%;max-height:85vh;overflow-y:auto;box-shadow:0 8px 30px rgba(0,0,0,0.2);padding:20px 24px;" onclick="event.stopPropagation()">';
+    html += '<div style="background:var(--cream);border-radius:10px;max-width:520px;width:90%;max-height:85vh;overflow-y:auto;box-shadow:0 8px 30px rgba(0,0,0,0.2);padding:20px 24px;" onclick="event.stopPropagation()">';
     html += '<h3 style="font-family:\'Cormorant Garamond\',serif;font-size:1.15rem;font-weight:500;margin:0 0 16px;">New Product</h3>';
 
-    // Acquisition mode picker (Checkpoint D)
-    html += '<div style="margin-bottom:16px;">';
+    // Step 1 — Acquisition mode picker (Build / VAR / Resell)
+    html += '<div style="margin-bottom:18px;">';
     html += '<label style="display:block;font-size:0.85rem;font-weight:600;margin-bottom:6px;">Acquisition mode *</label>';
-    html += '<div style="display:flex;flex-direction:column;gap:6px;">';
-    html += '<label style="display:flex;gap:8px;align-items:flex-start;cursor:pointer;font-size:0.85rem;"><input type="radio" name="newPieceAcqType" value="build" checked style="margin-top:3px;"><span><strong>Build</strong> — recipe / BOM with materials and labor</span></label>';
-    html += '<label style="display:flex;gap:8px;align-items:flex-start;cursor:pointer;font-size:0.85rem;"><input type="radio" name="newPieceAcqType" value="var" style="margin-top:3px;"><span><strong>VAR</strong> — components + value-add steps</span></label>';
-    html += '<label style="display:flex;gap:8px;align-items:flex-start;cursor:pointer;font-size:0.85rem;"><input type="radio" name="newPieceAcqType" value="resell" style="margin-top:3px;"><span><strong>Resell</strong> — sourced supplier + landed cost</span></label>';
-    html += '</div></div>';
+    var modes = [
+      { id: 'build',  label: 'Build',  desc: 'Produce in-house. Define materials, labor, and costs.' },
+      { id: 'var',    label: 'VAR',    desc: 'Source components and add value (assembly, branding, packaging).' },
+      { id: 'resell', label: 'Resell', desc: 'Source from a supplier and apply markup.' }
+    ];
+    modes.forEach(function(m, i) {
+      var checked = i === 0 ? ' checked' : '';
+      html += '<label style="display:flex;gap:10px;align-items:flex-start;padding:9px 10px;border:1px solid #ddd;border-radius:6px;margin-bottom:6px;cursor:pointer;background:rgba(255,255,255,0.5);">';
+      html += '<input type="radio" name="newPieceAcquisitionType" value="' + m.id + '"' + checked + ' style="margin-top:3px;flex:0 0 auto;">';
+      html += '<span style="display:flex;flex-direction:column;gap:2px;">';
+      html += '<span style="font-weight:600;font-size:0.88rem;">' + m.label + '</span>';
+      html += '<span style="font-size:0.78rem;color:var(--warm-gray);line-height:1.35;">' + m.desc + '</span>';
+      html += '</span>';
+      html += '</label>';
+    });
+    html += '</div>';
 
-    // Name
+    // Step 2 — Name
     html += '<div style="margin-bottom:16px;">';
     html += '<label style="display:block;font-size:0.85rem;font-weight:600;margin-bottom:4px;">Name *</label>';
     html += '<input id="newPieceName" type="text" autofocus style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.9rem;box-sizing:border-box;" placeholder="e.g. Cobalt Pendant">';
@@ -4687,7 +4698,7 @@
     // Buttons
     html += '<div style="display:flex;gap:8px;justify-content:flex-end;">';
     html += '<button class="btn btn-secondary" onclick="makerCloseNewPieceModal()">Cancel</button>';
-    html += '<button class="btn btn-primary" onclick="makerSubmitNewPiece()">Create Piece</button>';
+    html += '<button class="btn btn-primary" onclick="makerSubmitNewPiece()">Create Product</button>';
     html += '</div>';
 
     html += '</div></div>';
@@ -4755,13 +4766,13 @@
       category = sel.value || 'other';
     }
 
-    // Acquisition mode (Checkpoint D)
-    var acqRadios = document.querySelectorAll('input[name="newPieceAcqType"]');
+    // Acquisition mode (Checkpoint C picker name; consumed by Checkpoint D Define dispatch).
     var acqType = 'build';
-    for (var ai = 0; ai < acqRadios.length; ai++) {
-      if (acqRadios[ai].checked) { acqType = acqRadios[ai].value; break; }
+    var checkedRadio = document.querySelector('input[name="newPieceAcquisitionType"]:checked');
+    if (checkedRadio && (checkedRadio.value === 'build' || checkedRadio.value === 'var' || checkedRadio.value === 'resell')) {
+      acqType = checkedRadio.value;
     }
-    if (acqType !== 'build' && acqType !== 'var' && acqType !== 'resell') acqType = 'build';
+    var acquisitionType = acqType;
 
     closeNewPieceModal();
 
@@ -4769,6 +4780,7 @@
       var pid = 'p' + Date.now().toString(36);
       var slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
       var now = new Date().toISOString();
+      // Checkpoint D — initialize defineSpec scaffolding for VAR/Resell.
       var defineSpec = {};
       if (acqType === 'var') {
         defineSpec.var = { components: [], valueAddSteps: [] };
@@ -4779,15 +4791,23 @@
           leadTimeDays: 0
         };
       }
+      var emptyChecklist = { defined: false, costed: false, channeled: false, capacityPlanned: false, listingReady: false };
       var newProduct = {
         pid: pid,
         name: name,
         slug: slug,
         categories: [category],
         status: 'draft',
+        // Checkpoint A/C — Lifecycle fields
+        acquisitionType: acquisitionType,
+        version: 1,
+        parentProductId: null,
+        readinessChecklist: emptyChecklist,
+        hasPendingRevision: false,
+        pendingChanges: null,
         availability: 'available',
         businessLine: 'production',
-        acquisitionType: acqType,
+        // Checkpoint D — Define spec + uniform cost shape
         defineSpec: defineSpec,
         materialCost: 0,
         laborCost: 0,
@@ -4806,10 +4826,11 @@
         window.productsData.push(newProduct);
       }
 
+      // Checkpoint D — dispatch by acquisition mode.
+      // Build → Recipe Builder. VAR/Resell → Define view (no recipe needed).
       if (acqType === 'build') {
         await createRecipeForProduct(pid, name);
       } else {
-        // VAR or Resell — open the Define view directly
         await openDefineForProduct(pid);
       }
     } catch (err) {
@@ -4820,6 +4841,19 @@
   function renderRecipeBuilder() {
     var tab = document.getElementById('piecesTab');
     if (!tab || !builderState) return;
+    // Checkpoint C: Recipe Builder DOM lives on piecesTab, but the Develop-side route
+    // (develop-products / pieces) now lands on productsTab. Hide siblings so the builder
+    // is visible regardless of how the user got here.
+    try {
+      var allTabIds = window.ALL_TAB_IDS;
+      if (allTabIds && allTabIds.forEach) {
+        allTabIds.forEach(function(id) {
+          var el = document.getElementById(id);
+          if (el && id !== 'piecesTab') el.style.display = 'none';
+        });
+      }
+      tab.style.display = '';
+    } catch (e) { /* non-fatal */ }
     var esc = MastAdmin.esc;
     var bs = builderState;
 
@@ -4872,7 +4906,19 @@
     var html = '';
 
     // Back button
-    html += '<button class="detail-back" onclick="makerCloseRecipeBuilder()">← Back to Pieces</button>';
+    html += '<button class="detail-back" onclick="makerCloseRecipeBuilder()">← Back to Products</button>';
+
+    // Checkpoint C interim banner — VAR/Resell modes get a placeholder until Checkpoint D ships
+    // their dedicated Define UIs. For now, all modes use the Recipe Builder so cost data is captured.
+    if (bs.productId) {
+      var linkedProd = (window.productsData || []).find(function(p) { return p && p.pid === bs.productId; });
+      if (linkedProd && (linkedProd.acquisitionType === 'var' || linkedProd.acquisitionType === 'resell')) {
+        var modeLabel = linkedProd.acquisitionType === 'var' ? 'VAR' : 'Resell';
+        html += '<div style="background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.3);border-radius:8px;padding:10px 14px;margin-bottom:14px;">';
+        html += '<span style="font-size:0.82rem;color:#1d4ed8;">' + modeLabel + '-specific Define UI ships in the next release. For now, use the Recipe Builder to capture your costs.</span>';
+        html += '</div>';
+      }
+    }
 
     // Checkpoint E — readiness checklist for Build mode (recipe builder is the Define view)
     var __linkedProduct = bs.productId ? (window.productsData || []).find(function(pp){ return pp.pid === bs.productId; }) : null;
@@ -5579,7 +5625,12 @@
     piecesView = 'list';
     editingRecipeId = null;
     builderState = null;
-    renderPiecesList();
+    // Checkpoint C: Pieces list view is retired — return to the Develop-side Products list.
+    if (typeof window.navigateTo === 'function') {
+      window.navigateTo('develop-products');
+    } else {
+      renderPiecesList();
+    }
   }
 
   // Phase 2C.2: inline SVG sparkline of marginPct over time
@@ -6214,6 +6265,8 @@
   window.makerCloseRecipeBuilder = closeRecipeBuilder;
   window.makerCreateRecipeForProduct = createRecipeForProduct;
   window.makerCreateNewPiece = createNewPiece;
+  // Checkpoint C — expose recipes map for the develop-products orphan panel (read-only snapshot).
+  window.makerListRecipes = function() { return recipesData || {}; };
   window.makerCloseNewPieceModal = closeNewPieceModal;
   window.makerNewPieceCategoryChange = newPieceCategoryChange;
   window.makerSubmitNewPiece = submitNewPiece;
@@ -6832,13 +6885,25 @@
         loadMaterials();
         checkMakerOnboarding();
       } },
-      'pieces': { tab: 'piecesTab', setup: function() {
-        loadMaterials(); // needed for recipe builder
+      // Checkpoint C: pieces & develop-products both render the Develop-side products list
+      // (productsTab in core) with status filter applied. Recipe Builder still uses piecesTab DOM
+      // when opened via openRecipeBuilder. We hand back to the core route, but ensure recipes/materials
+      // are loaded so the orphan-recipes panel and any subsequent recipe-builder navigation works.
+      'develop-products': { tab: 'productsTab', setup: function() {
+        loadMaterials();
         loadRecipes();
-        // Ensure products are loaded (global from core)
         if (!window.productsLoaded && typeof window.loadProducts === 'function') {
           window.loadProducts();
         }
+        if (typeof window.setProductsViewMode === 'function') window.setProductsViewMode('develop');
+      } },
+      'pieces': { tab: 'productsTab', setup: function() {
+        loadMaterials();
+        loadRecipes();
+        if (!window.productsLoaded && typeof window.loadProducts === 'function') {
+          window.loadProducts();
+        }
+        if (typeof window.setProductsViewMode === 'function') window.setProductsViewMode('develop');
       } }
     },
     detachListeners: function() {

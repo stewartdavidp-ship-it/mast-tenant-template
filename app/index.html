@@ -5087,7 +5087,7 @@
         <div class="sidebar-item" data-route="jobs" onclick="navigateTo('jobs')">Jobs</div>
         <div class="sidebar-item" data-route="forecast" onclick="navigateTo('forecast')">Forecast</div>
         <div class="sidebar-item" data-route="materials" onclick="navigateTo('materials')">Materials</div>
-        <div class="sidebar-item" data-route="pieces" onclick="navigateTo('pieces')">Pieces</div>
+        <div class="sidebar-item" data-route="develop-products" onclick="navigateTo('develop-products')">Products</div>
         <div class="sidebar-item" data-route="lookbooks" onclick="navigateTo('lookbooks')">Look Books</div>
         <div class="sidebar-item muted" data-route="procurement" onclick="navigateTo('procurement')">Procurement <span class="sidebar-badge new">New</span></div>
       </div>
@@ -13872,7 +13872,11 @@ var ROUTE_MAP = {
   // newsletter route handled by newsletter module (lazy-loaded)
   // stories route handled by production module (lazy-loaded)
   // website route handled by website module (lazy-loaded)
-  'products':    { tab: 'productsTab' },
+  'products':    { tab: 'productsTab', setup: function() { setProductsViewMode('catalog'); } },
+  // Develop-side Products list — same tab, status filter pre-applied to {draft, ready}.
+  // Backward compat: legacy 'pieces' route aliases to this.
+  'develop-products': { tab: 'productsTab', setup: function() { setProductsViewMode('develop'); } },
+  'pieces':       { tab: 'productsTab', setup: function() { setProductsViewMode('develop'); } },
   'inventory':   { tab: 'inventoryTab', setup: function() { renderInventoryOverview(); } },
   'forecast':    { tab: 'forecastTab', setup: function() { loadAndRenderForecast(); } },
   'customers':   { tab: null, placeholder: { name: 'Customers', desc: 'Contacts, collectors, purchase history.', badge: 'new' } },
@@ -13909,7 +13913,7 @@ var ROUTE_MAP = {
 
 // Section → which routes belong to it (for auto-expanding)
 var SECTION_ROUTES = {
-  'make':   ['jobs', 'production', 'procurement'],
+  'make':   ['jobs', 'production', 'procurement', 'develop-products', 'pieces', 'materials', 'lookbooks', 'forecast'],
   'market': ['social', 'blog', 'newsletter', 'stories'],
   'sell':   ['pos', 'orders', 'commissions', 'rma', 'wholesale', 'galleries', 'receipts', 'terms'],
   'cart':   ['wallet', 'gift-cards', 'coupons', 'loyalty', 'membership', 'promotions'],
@@ -14033,6 +14037,7 @@ function lazyLoadForRoute(route) {
   if (route === 'settings') { updateGitHubTokenStatus(); updateLkApiKeyStatus(); loadOperators(); loadStorageInfo(); loadStudioLocations(); loadLocations(); loadPublicFeedbackSetting(); loadEmailConfig(); loadEmailDomainSection(); applySettingsGating(); loadSiteVisibility(); }
   if (route === 'analytics' && !analyticsLoaded) loadAnalytics();
   if (route === 'products') loadProducts();
+  if (route === 'develop-products' || route === 'pieces') loadProducts();
   // orders lazy-load handled by orders module
   // pos/receipts/sales lazy-load handled by sales module
   // events/salesEvents lazy-load handled by sales module
@@ -14360,7 +14365,7 @@ var MODULE_MANIFEST = {
 homepage: { src: 'modules/homepage.js', routes: ['homepage'] },
   showLight: { src: 'modules/show-light.js', routes: ['show-light-profile', 'show-light-gallery', 'show-light-shows', 'show-light-apply'] },
   emailLog: { src: 'modules/email-log.js', routes: ['email-log'] },
-  maker: { src: 'modules/maker.js', routes: ['materials', 'pieces'] },
+  maker: { src: 'modules/maker.js', routes: ['materials', 'pieces', 'develop-products'] },
   consignment: { src: 'modules/consignment.js', routes: ['galleries'] },
   lookbooks: { src: 'modules/lookbooks.js', routes: ['lookbooks'] },
   brand: { src: 'modules/brand.js', routes: ['brand'] },
@@ -23788,6 +23793,137 @@ function setCatalogStatusFilter(v) {
 function setCatalogSubStateFilter(v) { window.catalogSubStateFilter = v || 'all'; renderProducts(); }
 function toggleCatalogShowDrafts() { window.catalogShowDrafts = !window.catalogShowDrafts; renderProducts(); }
 
+// Checkpoint C — Products view mode: 'catalog' (top-level Sell-side, all products)
+// or 'develop' (Develop-side, drafts+ready). Set via setProductsViewMode() on route entry.
+// Note: When productsViewMode === 'develop', maker.js's renderPiecesList renders the
+// Develop list in productsTab; this top-level renderProducts then short-circuits to
+// drafts/ready only as a defensive filter for any direct render that bypasses maker.
+var productsViewMode = 'catalog';
+
+function setProductsViewMode(mode) {
+  productsViewMode = mode === 'develop' ? 'develop' : 'catalog';
+  // Update section header title + new-button label per mode
+  var headerH2 = document.querySelector('#productsTab .section-header h2');
+  if (headerH2) headerH2.textContent = productsViewMode === 'develop' ? 'Products in Development' : 'Product Catalog';
+  // Toggle the "+ New Product" button behavior — Develop side opens acquisition-mode picker
+  var newBtn = document.querySelector('#productsTab .section-header .btn-primary');
+  if (newBtn) {
+    newBtn.setAttribute('onclick', productsViewMode === 'develop'
+      ? 'developCreateNewProduct()'
+      : 'createNewProduct()');
+  }
+  // Re-render if list is visible
+  if (typeof productsLoaded !== 'undefined' && productsLoaded) {
+    renderProducts();
+    renderDevelopOrphanRecipesPanel();
+  } else {
+    // Render the orphan panel on first paint as empty (will repaint after products load)
+    renderDevelopOrphanRecipesPanel();
+  }
+}
+
+// Surface orphan recipes (no productId, or productId pointing to a deleted product).
+// Per plan OPEN O5 — UI-only surface, no auto-fix. Hidden when zero orphans or when not in develop view.
+function renderDevelopOrphanRecipesPanel() {
+  var grid = document.getElementById('productsGrid');
+  if (!grid) return;
+  // Remove any prior panel
+  var prior = document.getElementById('developOrphanRecipesPanel');
+  if (prior) prior.remove();
+  if (productsViewMode !== 'develop') return;
+  // Only render if maker module exposed recipes to us
+  var recipes = (window.makerListRecipes && typeof window.makerListRecipes === 'function')
+    ? window.makerListRecipes()
+    : null;
+  if (!recipes) return;
+  var validPids = {};
+  (window.productsData || []).forEach(function(p) { if (p && p.pid) validPids[p.pid] = true; });
+  var orphans = [];
+  Object.keys(recipes).forEach(function(rid) {
+    var r = recipes[rid];
+    if (!r) return;
+    if (!r.productId || !validPids[r.productId]) {
+      orphans.push({ rid: rid, recipe: r });
+    }
+  });
+  if (!orphans.length) return; // hidden when zero
+
+  var panel = document.createElement('div');
+  panel.id = 'developOrphanRecipesPanel';
+  panel.style.cssText = 'background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.3);border-radius:8px;padding:12px 16px;margin:0 0 16px 0;';
+  var html = '<div style="display:flex;align-items:center;gap:10px;cursor:pointer;" onclick="toggleDevelopOrphansBody()">';
+  html += '<span style="font-size:0.95rem;font-weight:600;color:#b45309;">Unlinked Recipes (' + orphans.length + ')</span>';
+  html += '<span id="developOrphansChevron" style="font-size:0.85rem;color:var(--warm-gray);">▸</span>';
+  html += '<span style="font-size:0.78rem;color:var(--warm-gray);">Recipes without a linked Product. Click a row to create a stub product.</span>';
+  html += '</div>';
+  html += '<div id="developOrphansBody" style="display:none;margin-top:10px;">';
+  orphans.forEach(function(o) {
+    var name = (o.recipe.name || o.rid).replace(/[<>&"]/g, '');
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-top:1px solid rgba(0,0,0,0.06);">';
+    html += '<span style="font-size:0.85rem;">' + name + ' <span style="color:var(--warm-gray);font-size:0.75rem;">(' + o.rid + ')</span></span>';
+    html += '<button class="btn btn-secondary btn-small" data-rid="' + o.rid + '" onclick="developCreateProductFromOrphan(this.dataset.rid)" style="font-size:0.78rem;padding:4px 10px;">Create product from this recipe</button>';
+    html += '</div>';
+  });
+  html += '</div>';
+  panel.innerHTML = html;
+  grid.parentNode.insertBefore(panel, grid);
+}
+
+function toggleDevelopOrphansBody() {
+  var body = document.getElementById('developOrphansBody');
+  var chev = document.getElementById('developOrphansChevron');
+  if (!body) return;
+  var open = body.style.display !== 'none';
+  body.style.display = open ? 'none' : 'block';
+  if (chev) chev.textContent = open ? '▸' : '▾';
+}
+
+async function developCreateProductFromOrphan(rid) {
+  if (!rid) return;
+  var name = window.prompt('Name for the new (Build) product to link to recipe ' + rid + '?', rid);
+  if (!name) return;
+  name = name.trim();
+  if (!name) return;
+  try {
+    var pid = 'p' + Date.now().toString(36);
+    var slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    var now = new Date().toISOString();
+    await MastDB.set('public/products/' + pid, {
+      pid: pid, name: name, slug: slug, categories: ['other'],
+      status: 'draft', acquisitionType: 'build', version: 1, parentProductId: null,
+      readinessChecklist: { defined: false, costed: false, channeled: false, capacityPlanned: false, listingReady: false },
+      hasPendingRevision: false, pendingChanges: null,
+      availability: 'available', businessLine: 'production',
+      priceCents: null, images: [], imageIds: [],
+      createdAt: now, updatedAt: now
+    });
+    if (window.MastDB && MastDB.recipes && MastDB.recipes.update) {
+      try { await MastDB.recipes.update(rid, { productId: pid, updatedAt: now }); } catch (e) { /* recipe API may differ; non-fatal */ }
+    }
+    showToast('Created stub product "' + name + '" linked to recipe ' + rid);
+    if (typeof window.loadProducts === 'function') await window.loadProducts();
+    renderProducts();
+    renderDevelopOrphanRecipesPanel();
+  } catch (err) {
+    showToast('Error creating product: ' + (err && err.message ? err.message : err), true);
+  }
+}
+
+// Develop-side "+ New Product" — wraps the maker module's modal which now includes the
+// acquisition-mode picker (Build / VAR / Resell). Falls back to plain createNewProduct on miss.
+function developCreateNewProduct() {
+  if (typeof window.makerCreateNewPiece === 'function') {
+    window.makerCreateNewPiece();
+  } else if (typeof MastAdmin !== 'undefined' && typeof MastAdmin.loadModule === 'function') {
+    MastAdmin.loadModule('maker').then(function() {
+      if (typeof window.makerCreateNewPiece === 'function') window.makerCreateNewPiece();
+      else createNewProduct();
+    });
+  } else {
+    createNewProduct();
+  }
+}
+
 function renderProducts() {
   var cat = document.getElementById('productsCategory').value;
   var searchInput = document.getElementById('productsSearchInput');
@@ -23806,13 +23942,21 @@ function renderProducts() {
         return st === 'active' || st === 'archived';
       };
   var filtered = productsData.filter(function(p) {
-    // Catalog membership gate
-    var keep = inCatalog(p, { includeDrafts: includeDrafts, archivedSubStateFilter: subStateFilter });
-    if (!keep) return false;
-    // Apply primary status filter pill
-    var pst = (p && p.status) || 'draft';
-    if (statusFilter === 'active' && pst !== 'active' && !(includeDrafts && (pst === 'draft' || pst === 'ready'))) return false;
-    if (statusFilter === 'archived' && pst !== 'archived') return false;
+    // Checkpoint C — Develop view defensive filter: drafts/ready only.
+    // (Develop list is normally rendered by maker.js renderPiecesList; this branch
+    // covers any direct call to renderProducts while productsViewMode === 'develop'.)
+    if (productsViewMode === 'develop') {
+      var s = p && p.status;
+      // Backward compat: legacy products without `status` treated as Catalog-only.
+      if (s !== 'draft' && s !== 'ready') return false;
+    } else {
+      // Checkpoint G — Catalog membership gate + status filter pill.
+      var keep = inCatalog(p, { includeDrafts: includeDrafts, archivedSubStateFilter: subStateFilter });
+      if (!keep) return false;
+      var pst = (p && p.status) || 'draft';
+      if (statusFilter === 'active' && pst !== 'active' && !(includeDrafts && (pst === 'draft' || pst === 'ready'))) return false;
+      if (statusFilter === 'archived' && pst !== 'archived') return false;
+    }
     if (cat !== 'all' && (!p.categories || p.categories.indexOf(cat) === -1)) return false;
     if (searchTerm) {
       var name = (p.name || '').toLowerCase();
@@ -23822,7 +23966,13 @@ function renderProducts() {
     return true;
   });
 
-  document.getElementById('productsCount').textContent = filtered.length + ' of ' + productsData.length + ' products';
+  // Re-render orphan panel each pass (cheap; reflects latest products/recipes)
+  renderDevelopOrphanRecipesPanel();
+
+  var totalLabel = productsViewMode === 'develop'
+    ? filtered.length + ' in development'
+    : filtered.length + ' of ' + productsData.length + ' products';
+  document.getElementById('productsCount').textContent = totalLabel;
 
   // Checkpoint G — Render Catalog chip bar (status pill + sub-state chips when archived).
   var chipBar = document.getElementById('catalogStatusBar');
@@ -23963,7 +24113,10 @@ function renderProducts() {
       + '</div></div>';
   });
 
-  document.getElementById('productsGrid').innerHTML = html || '<div class="empty-state"><div class="empty-icon">&#127912;</div><p>No products found.</p></div>';
+  var emptyHtml = productsViewMode === 'develop'
+    ? '<div class="empty-state"><div class="empty-icon">&#128736;&#65039;</div><p>No products in development.</p><p style="font-size:0.85rem;color:var(--warm-gray);">Click <strong>+ New Product</strong> to start one.</p></div>'
+    : '<div class="empty-state"><div class="empty-icon">&#127912;</div><p>No products found.</p></div>';
+  document.getElementById('productsGrid').innerHTML = html || emptyHtml;
 
   // Inventory summary bar
   var summaryBar = document.getElementById('inventorySummaryBar');
@@ -26009,10 +26162,10 @@ async function addRecipeForProduct(pid) {
     });
     // Link recipe back to product
     await MastDB.products.update(pid, { recipeId: recipe.recipeId, updatedAt: new Date().toISOString() });
-    showToast('Recipe created — opening in Maker');
-    // Navigate to maker piece editor for this recipe
+    showToast('Recipe created — opening in Develop');
+    // Navigate to Develop-side products view; recipe builder is opened directly below.
     if (typeof window.navigateTo === 'function') {
-      window.navigateTo('pieces');
+      window.navigateTo('develop-products');
       setTimeout(function() {
         if (typeof window.makerOpenRecipeBuilder === 'function') window.makerOpenRecipeBuilder(recipe.recipeId);
       }, 300);
