@@ -30548,22 +30548,28 @@ function renderProductDetail(pid) {
   var hasVariants = product.options && product.options.length > 0;
   var hasProduction = product.buildTime || product.costToBuild || (product.materials && product.materials.length) ||
     product.shippingCategory || product.weightOz || product.dimensions;
-  // Phase 2c — Variants, Production, and Inventory are folded into the
-  // Details tab as sections inside each variant row. View-mode tabs only
-  // show Details / Images. Editing mode still exposes Variants/Production
-  // /Inventory tabs for the legacy form until inline-edit lands for those.
+  // View mode has no top-level tabs — the header carries Core Product info,
+  // the Manage Images button toggles the inline image panel, and per-variant
+  // data lives in the variant detail panel's own tab strip below the list.
+  // Editing mode still exposes the legacy Variants/Production/Inventory
+  // tabs for the existing forms until those move inline too.
   var tabs = [{ id: 'details', label: 'Details' }];
-  if (isEditing) tabs.push({ id: 'variants', label: 'Variants' });
-  tabs.push({ id: 'images', label: 'Images' });
-  if (isEditing) tabs.push({ id: 'production', label: 'Production' });
-  if (isEditing && !isCreate) tabs.push({ id: 'inventory', label: 'Inventory' });
+  if (isEditing) {
+    tabs.push({ id: 'variants', label: 'Variants' });
+    tabs.push({ id: 'images', label: 'Images' });
+    tabs.push({ id: 'production', label: 'Production' });
+    if (!isCreate) tabs.push({ id: 'inventory', label: 'Inventory' });
+  }
 
-  var tabBarHtml = '<div class="view-tabs" style="margin:16px 0 0 0;">';
-  tabs.forEach(function(t) {
-    var active = t.id === tab;
-    tabBarHtml += '<button class="view-tab pd-tab-btn' + (active ? ' active' : '') + '" data-tab="' + t.id + '" onclick="switchProductTab(\'' + t.id + '\')">' + t.label + '</button>';
-  });
-  tabBarHtml += '</div>';
+  var tabBarHtml = '';
+  if (isEditing) {
+    tabBarHtml = '<div class="view-tabs" style="margin:16px 0 0 0;">';
+    tabs.forEach(function(t) {
+      var active = t.id === tab;
+      tabBarHtml += '<button class="view-tab pd-tab-btn' + (active ? ' active' : '') + '" data-tab="' + t.id + '" onclick="switchProductTab(\'' + t.id + '\')">' + t.label + '</button>';
+    });
+    tabBarHtml += '</div>';
+  }
 
   // ---- Details Tab ----
   var catOptions = CATEGORIES.length > 0 ? CATEGORIES : ['other'];
