@@ -29657,39 +29657,122 @@ function renderVariantExpanded(product, variant, recipe, pricing, channels) {
   }
   html += '</div>';
 
-  // Inventory — per-variant. Schema already supports inv.stock[variantId];
-  // _default is the legacy single-variant key.
+  // ── Variant Image binding ─────────────────────────────
+  var productImages = Array.isArray(product.images) ? product.images : [];
+  var resolveImg = function(img) { return (typeof img === 'string') ? img : (img && img.url) || ''; };
+  var currentImageIdx = (typeof variant.imageIndex === 'number' && variant.imageIndex >= 0 && variant.imageIndex < productImages.length)
+    ? variant.imageIndex : -1;
+  html += '<div style="margin-bottom:18px;">';
+  html += _label('Image', productImages.length > 0
+    ? '<span style="font-size:0.78rem;color:var(--warm-gray);">Pick from product images</span>'
+    : '<a href="#" onclick="event.preventDefault();event.stopPropagation();switchProductTab(\'images\');" style="color:var(--teal,#2a7c6f);font-size:0.82rem;text-decoration:none;font-weight:500;">Upload images →</a>');
+  if (productImages.length === 0) {
+    html += '<div style="font-size:0.92rem;color:var(--warm-gray-light,#aaa);font-style:italic;">No product images yet — upload some first to bind a variant image.</div>';
+  } else {
+    html += '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">';
+    // "None" option
+    var noneSel = currentImageIdx === -1;
+    html += '<button onclick="event.stopPropagation();bindVariantImage(\'' + esc(pid) + '\',\'' + esc(variant.id) + '\',-1)" ' +
+      'title="No specific image" ' +
+      'style="width:64px;height:64px;border-radius:8px;border:2px solid ' + (noneSel ? 'var(--teal,#2a7c6f)' : 'var(--cream-dark,#e8e0d4)') + ';background:var(--cream-dark,#e8e0d4);display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--warm-gray,#888);font-size:0.72rem;font-weight:500;">none</button>';
+    productImages.forEach(function(img, i) {
+      var url = resolveImg(img);
+      if (!url) return;
+      var sel = i === currentImageIdx;
+      html += '<button onclick="event.stopPropagation();bindVariantImage(\'' + esc(pid) + '\',\'' + esc(variant.id) + '\',' + i + ')" ' +
+        'title="Bind image #' + (i + 1) + '" ' +
+        'style="width:64px;height:64px;border-radius:8px;overflow:hidden;border:2px solid ' + (sel ? 'var(--teal,#2a7c6f)' : 'var(--cream-dark,#e8e0d4)') + ';padding:0;cursor:pointer;background:none;">' +
+        '<img src="' + esc(url) + '" alt="" style="width:100%;height:100%;object-fit:cover;display:block;">' +
+        '</button>';
+    });
+    html += '</div>';
+  }
+  html += '</div>';
+
+  // ── Inventory ─────────────────────────────────────────
+  // Per-variant. Schema already supports inv.stock[variantId]; _default is
+  // the legacy single-variant key.
   var inv = inventory[pid] || {};
   var stockType = (inv && inv.stockType) ? inv.stockType : 'made-to-order';
-  var invNote;
-  if (stockType === 'build-to-order' || stockType === 'made-to-order') {
-    invNote = 'Build to order';
-  } else {
-    // Look up the variant's stock entry. For the synthetic 'default' variant
-    // (single-variant products) fall back to _default.
-    var stockKey = variant._isSynthetic ? '_default' : variant.id;
-    var entry = (inv.stock && typeof inv.stock === 'object') ? inv.stock[stockKey] : null;
-    if (!entry && variant._isSynthetic && typeof inv.stock === 'number') {
-      entry = { onHand: inv.stock, committed: 0, held: 0, damaged: 0 };
-    }
-    if (entry) {
-      var onHand = entry.onHand || 0;
-      var committed = entry.committed || 0;
-      var available = Math.max(0, onHand - committed - (entry.held || 0) - (entry.damaged || 0));
-      invNote = onHand + ' on hand · ' + available + ' available';
-      if (committed > 0) invNote += ' · ' + committed + ' committed';
-    } else {
-      invNote = 'No stock recorded for this variant';
-    }
+  var stockKey = variant._isSynthetic ? '_default' : variant.id;
+  var entry = (inv.stock && typeof inv.stock === 'object') ? inv.stock[stockKey] : null;
+  if (!entry && variant._isSynthetic && typeof inv.stock === 'number') {
+    entry = { onHand: inv.stock, committed: 0, held: 0, damaged: 0 };
   }
-  var invAdjust = '<a href="#" onclick="event.preventDefault();event.stopPropagation();switchProductTab(\'inventory\');" style="color:var(--teal,#2a7c6f);font-size:0.82rem;text-decoration:none;font-weight:500;">Adjust →</a>';
+  var invAdjust = '<button class="btn btn-secondary btn-small" onclick="event.stopPropagation();openAdjustStockModal(\'' + esc(pid) + '\')">Adjust →</button>';
   html += '<div>';
   html += _label('Inventory', invAdjust);
-  html += '<div style="font-size:0.92rem;color:var(--text,#2a2a2a);">' + esc(invNote) + '</div>';
+  if (stockType === 'build-to-order' || stockType === 'made-to-order') {
+    html += '<div style="font-size:0.92rem;color:var(--text,#2a2a2a);">Build to order</div>';
+  } else {
+    var onH = (entry && entry.onHand) || 0;
+    var com = (entry && entry.committed) || 0;
+    var hel = (entry && entry.held) || 0;
+    var dam = (entry && entry.damaged) || 0;
+    var avail = Math.max(0, onH - com - hel - dam);
+    var availColor = avail <= 0 ? 'var(--danger,#dc2626)' : 'var(--text,#2a2a2a)';
+    function _stat(label, value, color) {
+      return '<div style="flex:1;min-width:100px;padding:10px 14px;border-radius:8px;border:1px solid var(--cream-dark,#e8e0d4);">' +
+        '<div style="font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.06em;font-weight:600;margin-bottom:4px;">' + label + '</div>' +
+        '<div style="font-family:monospace;font-size:1.05rem;font-weight:600;color:' + (color || 'var(--text,#2a2a2a)') + ';">' + value + '</div>' +
+      '</div>';
+    }
+    html += '<div style="display:flex;gap:10px;flex-wrap:wrap;">';
+    html += _stat('On Hand', onH);
+    html += _stat('Available', avail, availColor);
+    if (com > 0) html += _stat('Committed', com, 'var(--warm-gray,#888)');
+    if (hel > 0) html += _stat('Held', hel, '#b45309');
+    if (dam > 0) html += _stat('Damaged', dam, 'var(--danger,#dc2626)');
+    html += '</div>';
+  }
   html += '</div>';
 
   html += '</div>';
   return html;
+}
+
+// Bind a variant to a specific image from the product's images[].
+// imageIndex = -1 means "no specific image" (variant uses the product hero).
+async function bindVariantImage(pid, variantId, imageIndex) {
+  if (!hasPermission('products', 'update')) { showToast('You do not have permission to update products.', true); return; }
+  var product = (window.productsData || []).find(function(p) { return p.pid === pid; });
+  if (!product) { showToast('Product not found', true); return; }
+  var canon = (typeof getProductVariantsForRender === 'function') ? getProductVariantsForRender(product) : [];
+  var idx = canon.findIndex(function(v) { return v.id === variantId; });
+  if (idx === -1) { showToast('Variant not found', true); return; }
+
+  var pVariants = (product.variants || []).slice();
+  var newIdx = (typeof imageIndex === 'number' && imageIndex >= 0) ? imageIndex : null;
+
+  if (pVariants.length === 0) {
+    // Single-variant product without a variants[] yet — materialize it.
+    pVariants = canon.map(function(v) {
+      var entry = { id: v.id, combo: v.combo || {} };
+      if (typeof product.priceCents === 'number') entry.priceCents = product.priceCents;
+      return entry;
+    });
+  }
+
+  // Find the array slot. The canon list is in the same order as product.variants[]
+  // for non-synthetic; for synthetic single-default we just use position 0.
+  var targetSlot = canon[idx]._isSynthetic ? 0 : idx;
+  if (targetSlot >= pVariants.length) targetSlot = pVariants.length - 1;
+  pVariants[targetSlot] = Object.assign({}, pVariants[targetSlot]);
+  if (newIdx == null) {
+    delete pVariants[targetSlot].imageIndex;
+  } else {
+    pVariants[targetSlot].imageIndex = newIdx;
+  }
+
+  try {
+    await MastDB.products.update(pid, { variants: pVariants, updatedAt: new Date().toISOString() });
+    var local = productsData.find(function(p) { return p.pid === pid; });
+    if (local) local.variants = pVariants;
+    showToast(newIdx == null ? 'Variant image cleared' : 'Variant image bound');
+    if (typeof renderProductDetail === 'function') renderProductDetail(pid);
+  } catch (err) {
+    showToast('Failed to bind image: ' + (err && err.message ? err.message : err), true);
+  }
 }
 
 function toggleVariantExpanded(pid, variantId) {
@@ -30057,15 +30140,15 @@ function renderProductDetail(pid) {
   var hasVariants = product.options && product.options.length > 0;
   var hasProduction = product.buildTime || product.costToBuild || (product.materials && product.materials.length) ||
     product.shippingCategory || product.weightOz || product.dimensions;
-  // Phase 2a — Variants and Production are folded into the Details tab as
-  // sections (Core Product + Variants). Tabs only show Details / Images /
-  // Inventory in view mode. Editing mode still exposes Variants/Production
-  // tabs for the legacy form until Phase 2b inline-editing lands.
+  // Phase 2c — Variants, Production, and Inventory are folded into the
+  // Details tab as sections inside each variant row. View-mode tabs only
+  // show Details / Images. Editing mode still exposes Variants/Production
+  // /Inventory tabs for the legacy form until inline-edit lands for those.
   var tabs = [{ id: 'details', label: 'Details' }];
-  if (isEditing && (hasVariants || true)) tabs.push({ id: 'variants', label: 'Variants' });
+  if (isEditing) tabs.push({ id: 'variants', label: 'Variants' });
   tabs.push({ id: 'images', label: 'Images' });
-  if (isEditing && (hasProduction || true)) tabs.push({ id: 'production', label: 'Production' });
-  if (!isCreate) tabs.push({ id: 'inventory', label: 'Inventory' });
+  if (isEditing) tabs.push({ id: 'production', label: 'Production' });
+  if (isEditing && !isCreate) tabs.push({ id: 'inventory', label: 'Inventory' });
 
   var tabBarHtml = '<div class="view-tabs" style="margin:16px 0 0 0;">';
   tabs.forEach(function(t) {
