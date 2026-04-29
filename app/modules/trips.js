@@ -119,13 +119,18 @@
     var user = auth.currentUser;
     if (!user) return;
     MastDB.trips.ref(user.uid).orderByChild('status').equalTo('open').limitToLast(1).once('value').then(function(snap) {
-      var val = snap.val();
-      if (val) {
-        var key = Object.keys(val)[0];
+      var val = snap.val() || {};
+      var keys = Object.keys(val);
+      if (keys.length > 0) {
+        var key = keys[0];
         activeTripData = val[key] || null;
-        if (activeTripData) activeTripData.id = key;
-        showTripPulsingIndicator();
-        renderActiveTripBanner();
+        if (activeTripData) {
+          activeTripData.id = key;
+          showTripPulsingIndicator();
+          renderActiveTripBanner();
+        } else {
+          hideTripPulsingIndicator();
+        }
       } else {
         activeTripData = null;
         hideTripPulsingIndicator();
