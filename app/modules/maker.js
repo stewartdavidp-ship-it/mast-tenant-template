@@ -2151,9 +2151,15 @@
     html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">';
     html += '<div>';
     html += '<h2 style="font-family:\'Cormorant Garamond\',serif;font-size:1.6rem;font-weight:500;margin:0;">Pieces</h2>';
-    var filteredProducts = piecesCategoryFilter
-      ? products.filter(function(p) { return (p.categories || []).indexOf(piecesCategoryFilter) >= 0; })
-      : products;
+    // Checkpoint G — Develop list shows the Develop-lens slice:
+    //   draft, ready, active+pendingRevision, archived (discontinuing or selling-through).
+    var filteredProducts = products.filter(function(p) {
+      if (typeof isProductInDevelopView === 'function') {
+        if (!isProductInDevelopView(p)) return false;
+      }
+      if (piecesCategoryFilter && (p.categories || []).indexOf(piecesCategoryFilter) < 0) return false;
+      return true;
+    });
     var filteredWithRecipes = filteredProducts.filter(function(p){ return !!recipeByProduct[p.pid]; }).length;
     html += '<span style="font-size:0.85rem;color:var(--warm-gray);">' + filteredProducts.length + ' product' + (filteredProducts.length === 1 ? '' : 's') + (piecesCategoryFilter ? ' in ' + esc(piecesCategoryFilter) : '') + ', ' + filteredWithRecipes + ' with recipes</span>';
     html += '</div>';
@@ -2270,7 +2276,7 @@
         ? ' <span class="status-badge" style="background:rgba(217,119,6,0.18);color:#b45309;font-size:0.68rem;padding:2px 6px;" title="Pending revision">⚠ pending</span>'
         : '';
       html += '<td style="font-weight:500;">' + expandToggle + esc(p.name || '') + variantCountBadge + versionBadge + pendingBadge + '</td>';
-      html += '<td>' + productStatusBadgeHtml(p.status) + '</td>';
+      html += '<td>' + productStatusBadgeHtml(p.status) + (p.status === 'archived' && p.archivedSubState ? archiveSubStateBadgeHtml(p.archivedSubState) : '') + '</td>';
       html += '<td>' + esc((p.categories || []).join(', ')) + '</td>';
 
       // Mode badge for VAR/Resell — render before the recipe column
@@ -4076,6 +4082,507 @@
   // ============================================================
 
   // ============================================================
+  // Checkpoint G — Archive sub-states + two-view (lens) UI
+  // ----------------------------------------------------------------
+  // - Archive sub-states: discontinuing → selling-through → returns-only → retired
+  //   (forward-only; revival = Pattern 2 Clone-to-v2).
+  // - Channel sync per sub-state. Returns-only delists; others stay live with
+  //   appropriate flags (last-chance / clearance).
+  // - Lens toggle on detail screen: Develop vs Catalog (default tab + emphasis).
+  // - Develop list and Catalog list filter to disjoint slices of the same record set.
+  // ============================================================
+
+  var DEFAULT_RETURNS_WINDOW_DAYS = 90;
+
+  var ARCHIVE_SUB_STATES = {
+    'discontinuing': {
+      label: 'Discontinuing',
+      summary: 'Stay on channels, no new production. Last-chance flag optional.',
+      badgeColor: '#c2410c',
+      badgeBg: 'rgba(234,88,12,0.15)',
+      onChannels: true,
+      flag: 'last-chance'
+    },
+    'selling-through': {
+      label: 'Selling-through',
+      summary: 'Stay on channels with clearance pricing. Sell remaining inventory only.',
+      badgeColor: '#a16207',
+      badgeBg: 'rgba(234,179,8,0.18)',
+      onChannels: true,
+      flag: 'clearance'
+    },
+    'returns-only': {
+      label: 'Returns-only',
+      summary: 'Delist from channels. Accept returns until cutoff date.',
+      badgeColor: '#525252',
+      badgeBg: 'rgba(120,120,120,0.18)',
+      onChannels: false,
+      flag: null
+    },
+    'retired': {
+      label: 'Retired',
+      summary: 'Fully retired. Delisted, no returns, no reorders.',
+      badgeColor: '#1f2937',
+      badgeBg: 'rgba(31,41,55,0.18)',
+      onChannels: false,
+      flag: null
+    }
+  };
+
+  function archiveSubStateLabel(s) {
+    var meta = ARCHIVE_SUB_STATES[s];
+    return meta ? meta.label : (s || '');
+  }
+
+  function archiveSubStateBadgeHtml(subState) {
+    var meta = ARCHIVE_SUB_STATES[subState];
+    if (!meta) return '';
+    return '<span class="status-badge product-archived-substate-' + subState +
+      '" style="background:' + meta.badgeBg + ';color:' + meta.badgeColor +
+      ';font-size:0.68rem;padding:2px 6px;border-radius:8px;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;margin-left:4px;">' +
+      MastAdmin.esc(meta.label) + '</span>';
+  }
+
+  function defaultReturnsCutoffIso() {
+    var d = new Date(Date.now() + DEFAULT_RETURNS_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+    return d.toISOString();
+  }
+
+  function isoToDateInput(iso) {
+    if (!iso) return '';
+    try { return new Date(iso).toISOString().slice(0, 10); } catch (e) { return ''; }
+  }
+
+  /**
+   * Channel sync for an archive sub-state transition. Best-effort, logged-only.
+   * - discontinuing / selling-through: stay listed (re-publish with flag).
+   * - returns-only: invoke unpublish if available, else record intent.
+   * - retired: ensure delisted (no-op if already returns-only).
+   */
+  async function triggerChannelSyncForArchiveSubState(product, oldSubState, newSubState) {
+    if (!product) return;
+    var meta = ARCHIVE_SUB_STATES[newSubState];
+    if (!meta) return;
+    window.__mastChannelSyncIntents = window.__mastChannelSyncIntents || [];
+    var nowIso = new Date().toISOString();
+    var hasShopify = !!(product.externalRefs && product.externalRefs.shopify);
+
+    if (meta.onChannels) {
+      // discontinuing / selling-through — stay listed, re-publish with flag.
+      if (hasShopify && typeof firebase !== 'undefined' && firebase.functions) {
+        try {
+          var callable = firebase.functions().httpsCallable('publishProductToShopify');
+          await callable({
+            tenantId: MastDB.tenantId(),
+            pid: product.pid,
+            trigger: 'archive-substate',
+            flag: meta.flag || null,
+            archivedSubState: newSubState
+          });
+          console.log('[checkpoint-G] Shopify republish (' + newSubState + ') fired for', product.pid);
+        } catch (err) {
+          console.warn('[checkpoint-G] Shopify republish failed for', product.pid, err && err.message);
+        }
+      }
+      window.__mastChannelSyncIntents.push({
+        pid: product.pid,
+        op: 'republish-with-flag',
+        flag: meta.flag,
+        archivedSubState: newSubState,
+        at: nowIso
+      });
+    } else {
+      // returns-only / retired — delist. Today there's no standardized
+      // unpublish callable, so we record intent and TODO it.
+      // TODO Checkpoint G O-G1: wire unpublishProductFromShopify when adapter ships.
+      window.__mastChannelSyncIntents.push({
+        pid: product.pid,
+        op: 'unpublish',
+        reason: 'archive-substate:' + newSubState,
+        oldSubState: oldSubState || null,
+        archivedSubState: newSubState,
+        at: nowIso
+      });
+      console.log('[checkpoint-G] recorded unpublish intent for', product.pid, '(' + newSubState + ')');
+    }
+  }
+
+  /**
+   * Open the archive modal: lets the user pick a sub-state and (when relevant)
+   * a returns cutoff date, then writes the archive transition.
+   */
+  function openArchiveModal(pid) {
+    var p = findProduct(pid);
+    if (!p) { MastAdmin.showToast('Product not found', true); return; }
+    if (p.status !== 'active') {
+      MastAdmin.showToast('Only Active products can be archived (current: ' + (p.status || 'unset') + ')', true);
+      return;
+    }
+    var defaultCutoff = isoToDateInput(defaultReturnsCutoffIso());
+
+    var html = '';
+    html += '<div style="font-size:0.85rem;line-height:1.5;color:var(--charcoal);">';
+    html += '<p style="margin:0 0 12px;">Choose how this product winds down. Forward-only — to revive, clone for redesign.</p>';
+
+    [['discontinuing', true], ['selling-through', false], ['returns-only', false]].forEach(function(pair) {
+      var key = pair[0];
+      var defaultChecked = pair[1];
+      var meta = ARCHIVE_SUB_STATES[key];
+      html += '<label style="display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border:1px solid var(--cream-dark,#e5e1d8);border-radius:8px;margin-bottom:8px;cursor:pointer;">';
+      html += '<input type="radio" name="archiveSubState" value="' + key + '"' + (defaultChecked ? ' checked' : '') + ' onchange="makerArchiveModalOnSubStateChange(this.value)" style="margin-top:3px;">';
+      html += '<div style="flex:1;"><div style="font-weight:600;">' + MastAdmin.esc(meta.label) + '</div>';
+      html += '<div style="font-size:0.78rem;color:var(--warm-gray,#777);margin-top:2px;">' + MastAdmin.esc(meta.summary) + '</div></div>';
+      html += '</label>';
+    });
+
+    html += '<div id="archiveCutoffWrap" style="display:none;padding:10px 12px;background:var(--cream,#faf8f3);border-radius:8px;margin-top:4px;">';
+    html += '<label style="font-size:0.78rem;font-weight:600;display:block;margin-bottom:4px;">Returns accepted until</label>';
+    html += '<input type="date" id="archiveCutoffInput" value="' + defaultCutoff + '" style="padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:0.85rem;">';
+    html += '<div style="font-size:0.72rem;color:var(--warm-gray,#777);margin-top:4px;">After this date, the product auto-flips to Retired.</div>';
+    html += '</div>';
+    html += '</div>';
+
+    var modal = document.createElement('div');
+    modal.className = 'mast-modal-overlay';
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.4);display:flex;align-items:center;justify-content:center;z-index:9000;';
+    modal.innerHTML =
+      '<div class="mast-modal" style="background:var(--surface-card,#fff);border-radius:12px;max-width:520px;width:92%;padding:20px 22px;box-shadow:0 20px 50px rgba(0,0,0,0.25);">' +
+        '<h3 style="margin:0 0 12px;font-family:\'Cormorant Garamond\',serif;font-weight:500;font-size:1.4rem;">Archive product</h3>' +
+        '<div id="archiveModalBody">' + html + '</div>' +
+        '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px;">' +
+          '<button class="btn btn-secondary btn-small" onclick="makerArchiveModalCancel()">Cancel</button>' +
+          '<button class="btn btn-primary btn-small" onclick="makerArchiveModalConfirm(\'' + MastAdmin.esc(pid) + '\')">Archive</button>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(modal);
+    window.__mastArchiveModalEl = modal;
+  }
+
+  function archiveModalOnSubStateChange(value) {
+    var wrap = document.getElementById('archiveCutoffWrap');
+    if (!wrap) return;
+    wrap.style.display = (value === 'returns-only') ? 'block' : 'none';
+  }
+
+  function archiveModalCancel() {
+    if (window.__mastArchiveModalEl && window.__mastArchiveModalEl.parentNode) {
+      window.__mastArchiveModalEl.parentNode.removeChild(window.__mastArchiveModalEl);
+    }
+    window.__mastArchiveModalEl = null;
+  }
+
+  async function archiveModalConfirm(pid) {
+    var modal = window.__mastArchiveModalEl;
+    if (!modal) return;
+    var radios = modal.querySelectorAll('input[name="archiveSubState"]');
+    var subState = 'discontinuing';
+    radios.forEach(function(r) { if (r.checked) subState = r.value; });
+    var cutoffInput = document.getElementById('archiveCutoffInput');
+    var cutoffIso = null;
+    if (subState === 'returns-only') {
+      var raw = cutoffInput && cutoffInput.value ? cutoffInput.value : '';
+      if (raw) {
+        var d = new Date(raw + 'T23:59:59');
+        if (!isNaN(d.getTime())) cutoffIso = d.toISOString();
+      }
+      if (!cutoffIso) cutoffIso = defaultReturnsCutoffIso();
+    }
+    archiveModalCancel();
+    await archiveProductWithSubState(pid, subState, cutoffIso);
+  }
+
+  /**
+   * Apply the archive transition: status → archived, archivedSubState set,
+   * archivedAt stamped, returnsAcceptedUntil set when returns-only, and
+   * channel sync hook fired.
+   */
+  async function archiveProductWithSubState(pid, subState, returnsCutoffIso) {
+    var p = findProduct(pid);
+    if (!p) { MastAdmin.showToast('Product not found', true); return; }
+    if (!ARCHIVE_SUB_STATES[subState]) { MastAdmin.showToast('Unknown sub-state: ' + subState, true); return; }
+    var nowIso = new Date().toISOString();
+    var oldStatus = p.status;
+    var oldSubState = p.archivedSubState || null;
+    try {
+      var path = 'public/products/' + pid + '/';
+      await MastDB.set(path + 'status', 'archived');
+      await MastDB.set(path + 'archivedSubState', subState);
+      await MastDB.set(path + 'archivedAt', p.archivedAt || nowIso);
+      await MastDB.set(path + 'updatedAt', nowIso);
+      if (subState === 'returns-only') {
+        await MastDB.set(path + 'returnsAcceptedUntil', returnsCutoffIso || defaultReturnsCutoffIso());
+      }
+      if (subState === 'retired') {
+        await MastDB.set(path + 'retiredAt', nowIso);
+      }
+      p.status = 'archived';
+      p.archivedSubState = subState;
+      p.archivedAt = p.archivedAt || nowIso;
+      p.updatedAt = nowIso;
+      if (subState === 'returns-only') p.returnsAcceptedUntil = returnsCutoffIso || defaultReturnsCutoffIso();
+      if (subState === 'retired') p.retiredAt = nowIso;
+
+      MastAdmin.writeAudit('archive_substate_' + subState, 'products', pid);
+      MastAdmin.showToast('Archived: ' + archiveSubStateLabel(subState));
+
+      // Re-render
+      if (typeof window.renderProductDetail === 'function' && window.selectedProductPid === pid) {
+        window.renderProductDetail(pid);
+      }
+      if (piecesView === 'list') renderPiecesList();
+      if (typeof window.renderProducts === 'function') window.renderProducts();
+
+      try { await triggerChannelSyncForArchiveSubState(p, oldSubState, subState); } catch (e) {}
+    } catch (err) {
+      MastAdmin.showToast('Archive failed: ' + (err && err.message), true);
+    }
+  }
+
+  /**
+   * Forward-only sub-state transition for already-archived products.
+   * Allowed transitions:
+   *   discontinuing → selling-through, returns-only
+   *   selling-through → returns-only
+   *   returns-only → retired
+   */
+  var ALLOWED_SUB_STATE_TRANSITIONS = {
+    'discontinuing': ['selling-through', 'returns-only'],
+    'selling-through': ['returns-only'],
+    'returns-only': ['retired'],
+    'retired': []
+  };
+
+  function isValidSubStateTransition(from, to) {
+    var allowed = ALLOWED_SUB_STATE_TRANSITIONS[from] || [];
+    return allowed.indexOf(to) >= 0;
+  }
+
+  async function transitionArchiveSubState(pid, targetSubState) {
+    var p = findProduct(pid);
+    if (!p) { MastAdmin.showToast('Product not found', true); return; }
+    if (p.status !== 'archived') {
+      MastAdmin.showToast('Product is not archived', true);
+      return;
+    }
+    var current = p.archivedSubState || 'discontinuing';
+    if (!isValidSubStateTransition(current, targetSubState)) {
+      MastAdmin.showToast('Cannot move from ' + current + ' to ' + targetSubState + ' (forward-only)', true);
+      return;
+    }
+
+    var msgIntro = 'Move from ' + archiveSubStateLabel(current) + ' to ' + archiveSubStateLabel(targetSubState) + '?';
+    var detail = ARCHIVE_SUB_STATES[targetSubState].summary;
+    var returnsCutoffIso = null;
+    if (targetSubState === 'returns-only') {
+      returnsCutoffIso = defaultReturnsCutoffIso();
+      detail += ' Returns accepted until ' + returnsCutoffIso.slice(0, 10) + '.';
+    }
+    var ok = await window.mastConfirm(msgIntro + '\n\n' + detail, {
+      title: 'Sub-state transition',
+      confirmLabel: 'Move to ' + archiveSubStateLabel(targetSubState)
+    });
+    if (!ok) return;
+
+    var nowIso = new Date().toISOString();
+    try {
+      var path = 'public/products/' + pid + '/';
+      await MastDB.set(path + 'archivedSubState', targetSubState);
+      await MastDB.set(path + 'updatedAt', nowIso);
+      if (targetSubState === 'returns-only') {
+        await MastDB.set(path + 'returnsAcceptedUntil', returnsCutoffIso);
+        p.returnsAcceptedUntil = returnsCutoffIso;
+      }
+      if (targetSubState === 'retired') {
+        await MastDB.set(path + 'retiredAt', nowIso);
+        p.retiredAt = nowIso;
+      }
+      var oldSubState = p.archivedSubState;
+      p.archivedSubState = targetSubState;
+      p.updatedAt = nowIso;
+
+      MastAdmin.writeAudit('substate_to_' + targetSubState, 'products', pid);
+      MastAdmin.showToast('Moved to ' + archiveSubStateLabel(targetSubState));
+
+      if (typeof window.renderProductDetail === 'function' && window.selectedProductPid === pid) {
+        window.renderProductDetail(pid);
+      }
+      if (piecesView === 'list') renderPiecesList();
+      if (typeof window.renderProducts === 'function') window.renderProducts();
+
+      try { await triggerChannelSyncForArchiveSubState(p, oldSubState, targetSubState); } catch (e) {}
+    } catch (err) {
+      MastAdmin.showToast('Transition failed: ' + (err && err.message), true);
+    }
+  }
+
+  /**
+   * Render the action bar for archived products. Forward-only transition
+   * buttons + a read-only banner explaining the sub-state policy. Does NOT
+   * include un-archive — revival is via Pattern 2 Clone-to-v2.
+   */
+  function renderArchivedProductActionBar(product) {
+    if (!product || product.status !== 'archived') return '';
+    var pid = MastAdmin.esc(product.pid);
+    var sub = product.archivedSubState || 'discontinuing';
+    var allowed = ALLOWED_SUB_STATE_TRANSITIONS[sub] || [];
+    var html = '<div class="mast-archived-action-bar" style="display:flex;gap:6px;flex-wrap:wrap;">';
+    allowed.forEach(function(t) {
+      var label = (t === 'retired') ? 'Retire' : 'Move to ' + archiveSubStateLabel(t);
+      html += '<button class="btn btn-secondary btn-small" onclick="makerTransitionArchiveSubState(\'' + pid + '\',\'' + t + '\')">' + MastAdmin.esc(label) + '</button>';
+    });
+    html += '<button class="btn btn-secondary btn-small" onclick="makerCloneForRedesign(\'' + pid + '\')" title="Revive via clone-to-v2">Clone for redesign</button>';
+    html += '</div>';
+    return html;
+  }
+
+  /**
+   * Read-only banner shown on archived product detail screens.
+   */
+  function renderArchivedProductBanner(product) {
+    if (!product || product.status !== 'archived') return '';
+    var sub = product.archivedSubState || 'discontinuing';
+    var meta = ARCHIVE_SUB_STATES[sub] || ARCHIVE_SUB_STATES['discontinuing'];
+    var html = '';
+    html += '<div class="mast-archived-banner" style="background:' + meta.badgeBg + ';border:1px solid ' + meta.badgeColor + ';border-radius:8px;padding:10px 14px;margin:8px 0;font-size:0.85rem;color:' + meta.badgeColor + ';">';
+    html += '<strong>' + MastAdmin.esc(meta.label) + ':</strong> ' + MastAdmin.esc(meta.summary);
+    if (sub === 'returns-only' && product.returnsAcceptedUntil) {
+      html += ' <span style="color:var(--warm-gray,#777);">(Returns until ' + MastAdmin.esc(String(product.returnsAcceptedUntil).slice(0, 10)) + ')</span>';
+    }
+    if (sub === 'retired' && product.retiredAt) {
+      html += ' <span style="color:var(--warm-gray,#777);">(Retired ' + MastAdmin.esc(String(product.retiredAt).slice(0, 10)) + ')</span>';
+    }
+    html += '</div>';
+    return html;
+  }
+
+  // ----- Two-view filter logic ---------------------------------------------
+
+  /**
+   * True if the product belongs in the Develop view list:
+   *   - status: draft or ready
+   *   - status: active AND hasPendingRevision (in-progress rework)
+   *   - status: archived AND archivedSubState ∈ {discontinuing, selling-through}
+   */
+  function isProductInDevelopView(p) {
+    if (!p) return false;
+    var st = p.status || 'draft';
+    if (st === 'draft' || st === 'ready') return true;
+    if (st === 'active' && p.hasPendingRevision) return true;
+    if (st === 'archived') {
+      var sub = p.archivedSubState || 'discontinuing';
+      if (sub === 'discontinuing' || sub === 'selling-through') return true;
+    }
+    return false;
+  }
+
+  /**
+   * True if the product belongs in the Catalog view list:
+   *   - status: active
+   *   - status: archived (all sub-states) — UI provides chip filter.
+   *   - status: draft / ready when "Show drafts" toggle is on.
+   */
+  function isProductInCatalogView(p, opts) {
+    if (!p) return false;
+    var st = p.status || 'draft';
+    var includeDrafts = !!(opts && opts.includeDrafts);
+    if (st === 'active') return true;
+    if (st === 'archived') {
+      if (opts && opts.archivedSubStateFilter && opts.archivedSubStateFilter !== 'all') {
+        return (p.archivedSubState || 'discontinuing') === opts.archivedSubStateFilter;
+      }
+      return true;
+    }
+    if ((st === 'draft' || st === 'ready') && includeDrafts) return true;
+    return false;
+  }
+
+  // ----- Lens toggle (Develop / Catalog) on detail screen ------------------
+
+  /**
+   * Per-pid lens preference. Default lens depends on entry point:
+   *   - opened from Develop list → 'develop'
+   *   - opened from Catalog list → 'catalog'
+   * Persisted in sessionStorage so it survives within a tab.
+   */
+  function getProductDetailLens(pid) {
+    if (!pid) return 'catalog';
+    try {
+      var key = 'mastProductLens_' + pid;
+      var v = sessionStorage.getItem(key);
+      if (v === 'develop' || v === 'catalog') return v;
+    } catch (e) {}
+    if (window.productsViewMode === 'develop') return 'develop';
+    return 'catalog';
+  }
+
+  function setProductDetailLens(pid, lens) {
+    if (!pid || (lens !== 'develop' && lens !== 'catalog')) return;
+    try { sessionStorage.setItem('mastProductLens_' + pid, lens); } catch (e) {}
+    // Re-render whichever surface is showing this pid.
+    if (typeof window.renderProductDetail === 'function' && window.selectedProductPid === pid) {
+      // Pick the right default tab for the new lens.
+      window.productEditTab = pickDefaultTabForLens(findProduct(pid), lens);
+      window.renderProductDetail(pid);
+    }
+  }
+
+  /**
+   * Status-aware default tab routing.
+   *   draft / ready (any lens)         → details (Define for Develop module)
+   *   active + Develop lens            → details / define
+   *   active + Catalog lens            → details (listing)
+   *   archived (any lens)              → details (listing) with read-only banner
+   * The product detail screen in index.html uses 'details' as the listing tab.
+   */
+  function pickDefaultTabForLens(product, lens) {
+    if (!product) return 'details';
+    var st = product.status || 'draft';
+    if (st === 'archived') return 'details';
+    if (st === 'draft' || st === 'ready') return 'details';
+    // active
+    if (lens === 'catalog') return 'details';
+    return 'details';
+  }
+
+  function renderLensToggle(product) {
+    if (!product || !product.pid) return '';
+    var pid = MastAdmin.esc(product.pid);
+    var current = getProductDetailLens(product.pid);
+    function pill(value, label) {
+      var active = current === value;
+      return '<button onclick="makerSetProductDetailLens(\'' + pid + '\',\'' + value + '\')" ' +
+        'style="padding:4px 10px;border:1px solid ' + (active ? 'var(--teal,#2a7c6f)' : 'rgba(0,0,0,0.15)') + ';' +
+        'border-radius:14px;background:' + (active ? 'rgba(42,124,111,0.12)' : 'transparent') + ';' +
+        'color:' + (active ? 'var(--teal,#2a7c6f)' : 'var(--warm-gray,#777)') + ';' +
+        'font-size:0.72rem;font-weight:600;cursor:pointer;text-transform:uppercase;letter-spacing:0.04em;">' + label + '</button>';
+    }
+    var html = '';
+    html += '<div class="mast-lens-toggle" style="display:inline-flex;gap:4px;align-items:center;font-size:0.7rem;color:var(--warm-gray,#777);">';
+    html += '<span style="margin-right:4px;">Viewing as:</span>';
+    html += pill('develop', 'Develop');
+    html += pill('catalog', 'Catalog');
+    html += '</div>';
+    return html;
+  }
+
+  /**
+   * Composite status badge: base status + sub-state chip if archived.
+   * Used by callers that want a single HTML fragment.
+   */
+  function productStatusBadgeWithSubStateHtml(product) {
+    if (!product) return '';
+    var base = (typeof productStatusBadgeHtml === 'function') ? productStatusBadgeHtml(product.status) : '';
+    if (product.status === 'archived' && product.archivedSubState) {
+      base += archiveSubStateBadgeHtml(product.archivedSubState);
+    }
+    return base;
+  }
+
+  // ============================================================
+  // End Checkpoint G
+  // ============================================================
+
+  // ============================================================
   // Recipe Builder — "The Money Screen"
   // ============================================================
 
@@ -5686,6 +6193,24 @@
   window.makerRenderRevisionBanner = renderRevisionBanner;
   window.makerRenderVersionLinkBanner = renderVersionLinkBanner;
   window.makerOpenProductDetail = openProductDetail;
+  // Checkpoint G — Archive sub-states + lens toggle
+  window.makerOpenArchiveModal = openArchiveModal;
+  window.makerArchiveModalOnSubStateChange = archiveModalOnSubStateChange;
+  window.makerArchiveModalCancel = archiveModalCancel;
+  window.makerArchiveModalConfirm = archiveModalConfirm;
+  window.makerArchiveProductWithSubState = archiveProductWithSubState;
+  window.makerTransitionArchiveSubState = transitionArchiveSubState;
+  window.makerRenderArchivedProductActionBar = renderArchivedProductActionBar;
+  window.makerRenderArchivedProductBanner = renderArchivedProductBanner;
+  window.makerArchiveSubStateBadgeHtml = archiveSubStateBadgeHtml;
+  window.makerProductStatusBadgeWithSubStateHtml = productStatusBadgeWithSubStateHtml;
+  window.makerIsProductInDevelopView = isProductInDevelopView;
+  window.makerIsProductInCatalogView = isProductInCatalogView;
+  window.makerGetProductDetailLens = getProductDetailLens;
+  window.makerSetProductDetailLens = setProductDetailLens;
+  window.makerPickDefaultTabForLens = pickDefaultTabForLens;
+  window.makerRenderLensToggle = renderLensToggle;
+  window.makerArchiveSubStates = ARCHIVE_SUB_STATES;
   window.makerCloseRecipeBuilder = closeRecipeBuilder;
   window.makerCreateRecipeForProduct = createRecipeForProduct;
   window.makerCreateNewPiece = createNewPiece;

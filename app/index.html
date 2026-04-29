@@ -6224,6 +6224,8 @@
         </div>
       </div>
       <div id="productsLoading" class="loading" style="display:none;padding:40px;text-align:center;">Loading products...</div>
+      <!-- Checkpoint G — Catalog status / sub-state chip bar -->
+      <div id="catalogStatusBar" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:8px 0;font-size:0.78rem;"></div>
       <div id="inventorySummaryBar" class="inventory-summary-bar" style="display:none;"></div>
       <div id="productsGrid" class="products-grid"></div>
       <div id="productDetailView" style="display:none;"></div>
@@ -23772,11 +23774,45 @@ async function saveCardStockAdjust(pid) {
   }
 }
 
+// Checkpoint G — Catalog view filter state. Lives on window so the chip UI
+// in productsTab can mutate it via setCatalogStatusFilter / setCatalogSubStateFilter.
+window.catalogStatusFilter = window.catalogStatusFilter || 'active'; // 'active' | 'archived'
+window.catalogSubStateFilter = window.catalogSubStateFilter || 'all'; // 'all' | sub-state key
+window.catalogShowDrafts = !!window.catalogShowDrafts;
+
+function setCatalogStatusFilter(v) {
+  window.catalogStatusFilter = v || 'active';
+  if (v !== 'archived') window.catalogSubStateFilter = 'all';
+  renderProducts();
+}
+function setCatalogSubStateFilter(v) { window.catalogSubStateFilter = v || 'all'; renderProducts(); }
+function toggleCatalogShowDrafts() { window.catalogShowDrafts = !window.catalogShowDrafts; renderProducts(); }
+
 function renderProducts() {
   var cat = document.getElementById('productsCategory').value;
   var searchInput = document.getElementById('productsSearchInput');
   var searchTerm = (searchInput ? searchInput.value : '').toLowerCase().trim();
+  // Checkpoint G — Catalog/Develop lens filtering.
+  // Develop list is rendered by maker.js renderPiecesList in the develop-products
+  // route. This top-level Catalog renderProducts uses Catalog filters below.
+  var statusFilter = window.catalogStatusFilter || 'active';
+  var subStateFilter = window.catalogSubStateFilter || 'all';
+  var includeDrafts = !!window.catalogShowDrafts;
+  var inCatalog = (typeof window.makerIsProductInCatalogView === 'function')
+    ? window.makerIsProductInCatalogView
+    : function(p, opts) {
+        var st = (p && p.status) || 'draft';
+        if (opts && opts.includeDrafts && (st === 'draft' || st === 'ready')) return true;
+        return st === 'active' || st === 'archived';
+      };
   var filtered = productsData.filter(function(p) {
+    // Catalog membership gate
+    var keep = inCatalog(p, { includeDrafts: includeDrafts, archivedSubStateFilter: subStateFilter });
+    if (!keep) return false;
+    // Apply primary status filter pill
+    var pst = (p && p.status) || 'draft';
+    if (statusFilter === 'active' && pst !== 'active' && !(includeDrafts && (pst === 'draft' || pst === 'ready'))) return false;
+    if (statusFilter === 'archived' && pst !== 'archived') return false;
     if (cat !== 'all' && (!p.categories || p.categories.indexOf(cat) === -1)) return false;
     if (searchTerm) {
       var name = (p.name || '').toLowerCase();
@@ -23787,6 +23823,35 @@ function renderProducts() {
   });
 
   document.getElementById('productsCount').textContent = filtered.length + ' of ' + productsData.length + ' products';
+
+  // Checkpoint G — Render Catalog chip bar (status pill + sub-state chips when archived).
+  var chipBar = document.getElementById('catalogStatusBar');
+  if (chipBar) {
+    function chip(label, active, onclick, color) {
+      var bg = active ? (color || 'rgba(42,124,111,0.15)') : 'transparent';
+      var fg = active ? 'var(--teal,#2a7c6f)' : 'var(--warm-gray,#777)';
+      var bd = active ? 'var(--teal,#2a7c6f)' : 'rgba(0,0,0,0.15)';
+      return '<button onclick="' + onclick + '" style="padding:4px 10px;border:1px solid ' + bd + ';border-radius:14px;background:' + bg + ';color:' + fg + ';font-size:0.75rem;cursor:pointer;font-weight:600;">' + label + '</button>';
+    }
+    var s = window.catalogStatusFilter || 'active';
+    var sub = window.catalogSubStateFilter || 'all';
+    var html = '';
+    html += chip('Active', s === 'active', "setCatalogStatusFilter('active')");
+    html += chip('Archived', s === 'archived', "setCatalogStatusFilter('archived')");
+    if (s === 'archived') {
+      html += '<span style="margin-left:8px;color:var(--warm-gray,#777);font-size:0.72rem;">Sub-state:</span>';
+      html += chip('All', sub === 'all', "setCatalogSubStateFilter('all')");
+      html += chip('Discontinuing', sub === 'discontinuing', "setCatalogSubStateFilter('discontinuing')", 'rgba(234,88,12,0.15)');
+      html += chip('Selling-through', sub === 'selling-through', "setCatalogSubStateFilter('selling-through')", 'rgba(234,179,8,0.18)');
+      html += chip('Returns-only', sub === 'returns-only', "setCatalogSubStateFilter('returns-only')", 'rgba(120,120,120,0.18)');
+      html += chip('Retired', sub === 'retired', "setCatalogSubStateFilter('retired')", 'rgba(31,41,55,0.18)');
+    }
+    html += '<span style="margin-left:auto;"></span>';
+    html += '<label style="display:inline-flex;align-items:center;gap:6px;font-size:0.75rem;color:var(--warm-gray,#777);cursor:pointer;">';
+    html += '<input type="checkbox"' + (window.catalogShowDrafts ? ' checked' : '') + ' onchange="toggleCatalogShowDrafts()"> Show drafts';
+    html += '</label>';
+    chipBar.innerHTML = html;
+  }
 
   var html = '';
   filtered.forEach(function(p) {
@@ -28206,12 +28271,20 @@ function renderProductDetail(pid) {
 
   // Header with name and edit toggle
   var imgSrc = firstProductImage(product);
+  // Checkpoint G — composite status badge (base + archive sub-state)
+  var statusBadgeRender = (typeof window.makerProductStatusBadgeWithSubStateHtml === 'function')
+    ? window.makerProductStatusBadgeWithSubStateHtml(product)
+    : (typeof window.productStatusBadgeHtml === 'function' ? window.productStatusBadgeHtml(product.status) : '');
+  // Checkpoint G — lens toggle pill (Develop / Catalog)
+  var lensToggleHtml = (!isCreate && pid && typeof window.makerRenderLensToggle === 'function')
+    ? window.makerRenderLensToggle(product) : '';
   var headerHtml = '<div class="product-detail-header">' +
     (imgSrc ? '<img class="product-detail-img" src="' + esc(imgSrc) + '" alt="' + esc(product.name || 'New Product') + '">' : '') +
     '<div style="flex:1;">' +
       '<h2 class="product-detail-name">' + esc(product.name || 'New Product') + ' ' +
-        (typeof window.productStatusBadgeHtml === 'function' ? window.productStatusBadgeHtml(product.status) : '') +
+        statusBadgeRender +
       '</h2>' +
+      (lensToggleHtml ? '<div style="margin:2px 0 6px;">' + lensToggleHtml + '</div>' : '') +
       renderChannelSyncBadges(product, { size: 'normal' }) +
       (product.priceCents ? '<div class="product-detail-price">' + formatPriceCents(product.priceCents) + '</div>' :
        '<div style="color:var(--warm-gray);font-style:italic;margin-bottom:8px;">Price on request</div>') +
@@ -28221,15 +28294,20 @@ function renderProductDetail(pid) {
       (pid && product.availability !== 'discontinued' ? '<a href="' + window.location.origin + '/product.html?id=' + encodeURIComponent(pid) + '" target="_blank" rel="noopener" class="btn btn-secondary btn-small" style="text-decoration:none;font-size:0.78rem;">View on site &#8599;</a>' : '') +
       // Checkpoint F — Active products use a revision-aware action bar
       // (Edit-creates-revision, Apply, Discard, Clone-for-redesign).
+      // Checkpoint G — Active also gets an "Archive" button.
+      // Archived products get the sub-state forward-transition action bar.
       // Non-Active products keep the legacy Edit + Duplicate + Add-to-Sale row.
       (product.status === 'active' && typeof window.makerRenderActiveProductActionBar === 'function'
         ? window.makerRenderActiveProductActionBar(product) +
+          '<button class="btn btn-secondary btn-small" onclick="window.makerOpenArchiveModal && window.makerOpenArchiveModal(\'' + esc(pid) + '\')">Archive</button>' +
           '<button class="btn btn-secondary btn-small" onclick="openAddToSaleDialog(\'' + esc(pid) + '\')">Add to Sale</button>' +
           renderPublishToShopifyButton(product)
-        : '<button class="btn btn-secondary btn-small" onclick="editProduct(\'' + esc(pid) + '\')">Edit</button>' +
-          '<button class="btn btn-secondary btn-small" onclick="openCloneDialog(\'' + esc(pid) + '\')">Duplicate</button>' +
-          '<button class="btn btn-secondary btn-small" onclick="openAddToSaleDialog(\'' + esc(pid) + '\')">Add to Sale</button>' +
-          renderPublishToShopifyButton(product)) +
+        : (product.status === 'archived' && typeof window.makerRenderArchivedProductActionBar === 'function'
+          ? window.makerRenderArchivedProductActionBar(product)
+          : '<button class="btn btn-secondary btn-small" onclick="editProduct(\'' + esc(pid) + '\')">Edit</button>' +
+            '<button class="btn btn-secondary btn-small" onclick="openCloneDialog(\'' + esc(pid) + '\')">Duplicate</button>' +
+            '<button class="btn btn-secondary btn-small" onclick="openAddToSaleDialog(\'' + esc(pid) + '\')">Add to Sale</button>' +
+            renderPublishToShopifyButton(product))) +
     '</div>' : '') +
     (isEditing && !isCreate ? '<div style="display:flex;align-items:center;gap:8px;">' +
       '<span style="font-size:0.72rem;color:var(--amber);font-weight:600;text-transform:uppercase;letter-spacing:0.04em;">Editing</span>' +
@@ -28246,6 +28324,9 @@ function renderProductDetail(pid) {
     ? window.makerRenderRevisionBanner(product) : '';
   var versionLinkBannerHtml = (!isCreate && typeof window.makerRenderVersionLinkBanner === 'function')
     ? window.makerRenderVersionLinkBanner(product) : '';
+  // Checkpoint G — read-only sub-state banner shown on archived products.
+  var archivedBannerHtml = (!isCreate && product && product.status === 'archived' && typeof window.makerRenderArchivedProductBanner === 'function')
+    ? window.makerRenderArchivedProductBanner(product) : '';
 
   // Tab bar — hide irrelevant tabs unless editing (so user can add data)
   var hasVariants = product.options && product.options.length > 0;
@@ -28799,7 +28880,7 @@ function renderProductDetail(pid) {
   var publishUndoHtml = (!isCreate && pid) ? renderPublishUndoBanner(pid) : '';
   var driftAlertHtml = (!isCreate && pid) ? renderDriftAlertBanner(pid) : '';
   el.innerHTML = '<button class="detail-back" onclick="backToProducts()">&larr; ' + backLabel + '</button>' +
-    publishUndoHtml + driftAlertHtml + recipeReadyHtml + headerHtml + versionLinkBannerHtml + revisionBannerHtml + tabBarHtml + detailsHtml + variantsHtml + imagesHtml + prodHtml + invTabHtml + actionHtml;
+    publishUndoHtml + driftAlertHtml + recipeReadyHtml + headerHtml + versionLinkBannerHtml + revisionBannerHtml + archivedBannerHtml + tabBarHtml + detailsHtml + variantsHtml + imagesHtml + prodHtml + invTabHtml + actionHtml;
 
   // Channel-First Phase 2d (D24) — async-load recipe meta when product has a
   // linked recipe but we haven't read it yet. Re-render to paint the banner.
