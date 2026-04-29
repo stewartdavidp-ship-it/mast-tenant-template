@@ -2150,7 +2150,7 @@
     // Header
     html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">';
     html += '<div>';
-    html += '<h2 style="font-family:\'Cormorant Garamond\',serif;font-size:1.6rem;font-weight:500;margin:0;">Products in Development</h2>';
+    html += '<h2 style="font-family:\'Cormorant Garamond\',serif;font-size:1.6rem;font-weight:500;margin:0;">Products</h2>';
     // Checkpoint G — Develop list shows the Develop-lens slice:
     //   draft, ready, active+pendingRevision, archived (discontinuing or selling-through).
     var filteredProducts = products.filter(function(p) {

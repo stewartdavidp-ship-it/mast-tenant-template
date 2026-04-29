@@ -24805,7 +24805,7 @@ function renderProducts() {
   html += '</tbody></table></div>';
 
   var emptyHtml = (statusFilter === 'developing')
-    ? '<div class="empty-state"><div class="empty-icon">&#128736;&#65039;</div><p>No products in development.</p><p style="font-size:0.85rem;color:var(--warm-gray);">Click <strong>+ New Product</strong> to start one.</p></div>'
+    ? '<div class="empty-state"><div class="empty-icon">&#128736;&#65039;</div><p>No draft or ready products.</p><p style="font-size:0.85rem;color:var(--warm-gray);">Switch the status filter or click <strong>+ New Product</strong>.</p></div>'
     : (statusFilter === 'archived')
       ? '<div class="empty-state"><div class="empty-icon">&#128230;</div><p>No archived products.</p></div>'
       : '<div class="empty-state"><div class="empty-icon">&#127912;</div><p>No active products.</p></div>';
