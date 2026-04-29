@@ -67,6 +67,7 @@
       // Check for active trip
       activeTripData = tripsData.find(function(t) { return t.status === 'open'; }) || null;
       if (activeTripData) showTripPulsingIndicator();
+      else hideTripPulsingIndicator();
       renderTripsHistory();
       if (loading) loading.style.display = 'none';
     }).catch(function(err) {
