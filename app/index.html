@@ -29572,38 +29572,18 @@ function renderVariantListRow(product, variant, recipe, idx, isSelected, totalCo
   return html;
 }
 
-// Detail panel with tabs for the selected variant. Tabs filter by section.
+// Detail panel with tabs for the selected variant. Always shows all tabs —
+// the user is on a single product's detail page, so there's no value in
+// hiding categories. Order: Pricing → Recipe → Channels → Inventory → Image.
 function renderVariantDetailPanel(product, variant, recipe) {
   var pid = product.pid || '';
-  var section = (typeof productSection === 'string') ? productSection : 'catalog';
-
-  // Build tab list per section. Order matters — leftmost is the default if
-  // nothing else is selected.
-  var tabs = [];
-  if (section === 'develop') {
-    tabs = [
-      { id: 'pricing', label: 'Pricing' },
-      { id: 'recipe',  label: 'Recipe' },
-      { id: 'image',   label: 'Image' }
-    ];
-  } else if (section === 'sell') {
-    tabs = [
-      { id: 'pricing',   label: 'Pricing' },
-      { id: 'channels',  label: 'Channels' },
-      { id: 'inventory', label: 'Inventory' },
-      { id: 'image',     label: 'Image' },
-      { id: 'recipe',    label: 'Recipe' }
-    ];
-  } else {
-    // catalog — full
-    tabs = [
-      { id: 'pricing',   label: 'Pricing' },
-      { id: 'recipe',    label: 'Recipe' },
-      { id: 'channels',  label: 'Channels' },
-      { id: 'inventory', label: 'Inventory' },
-      { id: 'image',     label: 'Image' }
-    ];
-  }
+  var tabs = [
+    { id: 'pricing',   label: 'Pricing' },
+    { id: 'recipe',    label: 'Recipe' },
+    { id: 'channels',  label: 'Channels' },
+    { id: 'inventory', label: 'Inventory' },
+    { id: 'image',     label: 'Image' }
+  ];
 
   // Active tab — sticky per-pid, validated against current section's tabs.
   var activeTab = null;
@@ -30414,31 +30394,12 @@ function renderProductDetail(pid) {
     ? window.makerProductStatusBadgeWithSubStateHtml(product)
     : (typeof window.productStatusBadgeHtml === 'function' ? window.productStatusBadgeHtml(product.status) : '');
   // Checkpoint G — lens toggle pill (Develop / Catalog)
-  // Section toggle — defaults from sidebar entry, user can flip in place.
-  // Drives which actions surface in the action bar below.
+  // The View-as toggle is gone from product detail — that decision lives
+  // on the list page (filter pills). On a single product, you're past the
+  // "what am I looking at" question, so the detail shows everything.
+  // productSection still drives the action bar via the sidebar entry point,
+  // but it's invisible context now, not a user-facing toggle.
   var lensToggleHtml = '';
-  if (!isCreate && pid) {
-    var _curSection = (typeof productSection === 'string') ? productSection : 'catalog';
-    function _segPill(value, label) {
-      var on = _curSection === value;
-      var bg = on ? 'rgba(42,124,111,0.15)' : 'transparent';
-      var fg = on ? 'var(--teal,#2a7c6f)' : 'var(--warm-gray,#777)';
-      var bd = on ? 'var(--teal,#2a7c6f)' : 'rgba(0,0,0,0.18)';
-      return '<button onclick="setProductSection(\'' + value + '\')" ' +
-        'style="padding:3px 10px;border:1px solid ' + bd + ';background:' + bg + ';color:' + fg +
-        ';font-size:0.72rem;cursor:pointer;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;">' +
-        label + '</button>';
-    }
-    lensToggleHtml =
-      '<div style="display:inline-flex;align-items:center;gap:0;border-radius:14px;overflow:hidden;font-size:0.72rem;">' +
-        '<span style="margin-right:8px;color:var(--warm-gray,#777);">View as:</span>' +
-        '<div style="display:inline-flex;border-radius:14px;overflow:hidden;">' +
-          _segPill('develop', 'Develop') +
-          _segPill('catalog', 'Catalog') +
-          _segPill('sell', 'Sell') +
-        '</div>' +
-      '</div>';
-  }
   // Core product info inlined into the header: image left, name/desc/category
   // beside it, manage-images button under the image. This replaces the
   // separate Core Product card and the Details/Images tab bar.
