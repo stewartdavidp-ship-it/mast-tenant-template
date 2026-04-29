@@ -119,7 +119,9 @@
   // ============================================================
 
   function callEventsFunction(fnName, body) {
-    return window.currentUser.getIdToken().then(function(token) {
+    var u = firebase.auth().currentUser;
+    if (!u) return Promise.reject(new Error('Not signed in'));
+    return u.getIdToken().then(function(token) {
       return window.callCF('/' + fnName, {
         method: 'POST',
         headers: {
@@ -499,7 +501,7 @@
     var slug = generateSlug(name);
     var now = nowISO();
     var data = {
-      createdBy: window.currentUser.uid, name: name,
+      createdBy: (firebase.auth().currentUser && firebase.auth().currentUser.uid) || 'unknown', name: name,
       description: document.getElementById('evsf_desc').value.trim(),
       venue: document.getElementById('evsf_venue').value.trim(),
       address: document.getElementById('evsf_address').value.trim(),
@@ -1318,7 +1320,7 @@
       status: 'reviewed',
       reviewDecision: decision,
       reviewedAt: nowISO(),
-      reviewedBy: window.currentUser.uid,
+      reviewedBy: (firebase.auth().currentUser && firebase.auth().currentUser.uid) || 'unknown',
       reviewNotes: notes,
       updatedAt: nowISO()
     }).then(function() {
@@ -1616,7 +1618,7 @@
       var vendorCount = Object.keys(vendorsData).length;
       DB.announcements.set(showId, annId, {
         showId: showId, subject: subject, body: body,
-        sentAt: nowISO(), sentBy: window.currentUser.uid, recipientCount: vendorCount,
+        sentAt: nowISO(), sentBy: (firebase.auth().currentUser && firebase.auth().currentUser.uid) || 'unknown', recipientCount: vendorCount,
         note: 'Saved locally — email delivery failed: ' + err.message
       }).then(function() {
         showToast('Saved locally (email failed: ' + err.message + ')', true);
