@@ -60,6 +60,7 @@
       footerText: data.footerText || '',
       generatedAt: data.generatedAt || null,
       generatedUrl: data.generatedUrl || null,
+      urlExpiresAt: data.urlExpiresAt || null,
       status: data.status || 'draft',
       updatedAt: now
     };
@@ -123,10 +124,11 @@
     }).then(function(result) {
       if (!result.success) throw new Error(result.error || 'Generation failed');
       showToast('PDF generated');
-      // Update doc record with generated URL
+      // Update doc record with generated URL + expiry stamp from CF
       return MastDB.lookbooks.update(docId, {
         generatedAt: new Date().toISOString(),
         generatedUrl: result.url,
+        urlExpiresAt: result.urlExpiresAt || null,
         status: 'generated',
         updatedAt: new Date().toISOString()
       });
@@ -194,6 +196,10 @@
         : '<span class="status-badge" style="background:rgba(196,133,60,0.15);color:var(--amber);">DRAFT</span>';
       var tierLabel = (doc.priceTier || 'wholesale').charAt(0).toUpperCase() + (doc.priceTier || 'wholesale').slice(1);
       var genDate = doc.generatedAt ? formatDate(doc.generatedAt) : '—';
+      // Signed-URL expiry indicator. Links over their TTL (default 30d) will 403 — admin
+      // re-issues by clicking Regenerate. Pre-migration docs lack urlExpiresAt; show '—'.
+      var expDate = doc.urlExpiresAt ? formatDate(doc.urlExpiresAt) : null;
+      var expExpired = doc.urlExpiresAt && (new Date(doc.urlExpiresAt).getTime() < Date.now());
 
       html +=
         '<div class="lb-doc-card" onclick="lbEditDoc(\'' + esc(doc.documentId) + '\')">' +
@@ -206,16 +212,20 @@
               '</div>' +
             '</div>' +
             '<div style="display:flex;gap:6px;align-items:center;" onclick="event.stopPropagation();">' +
-              (doc.generatedUrl
+              (doc.generatedUrl && !expExpired
                 ? '<a href="' + esc(doc.generatedUrl) + '" target="_blank" class="btn btn-outline btn-small" style="font-size:0.72rem;" onclick="event.stopPropagation();">Download</a>'
                 : '') +
               '<button class="btn btn-small" style="font-size:0.72rem;" onclick="event.stopPropagation();lbGenerate(\'' + esc(doc.documentId) + '\')">' +
-                (doc.generatedUrl ? 'Regenerate' : 'Generate') +
+                (doc.generatedUrl ? (expExpired ? 'Re-issue link' : 'Regenerate') : 'Generate') +
               '</button>' +
             '</div>' +
           '</div>' +
           '<div style="font-size:0.78rem;color:var(--warm-gray-light);margin-top:8px;">' +
             'Last generated: ' + genDate +
+            (expDate
+              ? ' · <span style="color:' + (expExpired ? 'var(--error,#dc2626)' : 'var(--warm-gray-light)') + ';">'
+                + (expExpired ? 'Link expired ' : 'Link expires ') + expDate + '</span>'
+              : '') +
           '</div>' +
           '<div id="lbGenerating_' + esc(doc.documentId) + '" style="display:none;"></div>' +
         '</div>';
