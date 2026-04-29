@@ -24761,8 +24761,10 @@ function renderProducts() {
       var tier = recipe.activePriceTier || 'direct';
       var px = recipe[tier + 'Price'] || 0;
       if (px > 0) priceTxt = '$' + px.toFixed(2);
-    } else if (p.priceCents) {
-      priceTxt = formatPriceCents(p.priceCents);
+    } else {
+      var displayCents = (typeof getProductDisplayPriceCents === 'function')
+        ? getProductDisplayPriceCents(p) : p.priceCents;
+      if (displayCents) priceTxt = formatPriceCents(displayCents);
     }
 
     var statusBadge = (typeof window.productStatusBadgeHtml === 'function')
@@ -29317,7 +29319,43 @@ function renderSyncRules() {
 // Variant-centric product detail (Phase 2a — read-only layout)
 // A product always renders as: Core Product section + Variants section.
 // If product has no options/variants, a single "Default" row is shown.
+//
+// Phase 2c.1 — variant.priceCents is the source of truth.
+// product.priceCents is a derived mirror = min(variants[].priceCents),
+// kept in sync on every variant write so legacy storefront reads keep
+// working until storefront is updated to read variant prices directly.
 // ============================================================
+
+// Lowest non-null priceCents across variants. Returns product.priceCents
+// as fallback (legacy single-variant products without a variants[] array).
+function getProductDisplayPriceCents(product) {
+  if (!product) return null;
+  if (Array.isArray(product.variants) && product.variants.length > 0) {
+    var min = null;
+    product.variants.forEach(function(v) {
+      var pc = v && typeof v.priceCents === 'number' ? v.priceCents : null;
+      if (pc != null && (min == null || pc < min)) min = pc;
+    });
+    if (min != null) return min;
+  }
+  return (product.priceCents != null) ? product.priceCents : null;
+}
+
+// Recompute product.priceCents from variants[] and persist if changed.
+// Called after any variant-level price write.
+async function syncProductMirrorPrice(pid) {
+  var product = (window.productsData || []).find(function(p) { return p.pid === pid; });
+  if (!product) return;
+  var newPrice = getProductDisplayPriceCents(product);
+  if (newPrice == null) return;
+  if (product.priceCents !== newPrice) {
+    try {
+      await MastDB.products.update(pid, { priceCents: newPrice, updatedAt: new Date().toISOString() });
+      product.priceCents = newPrice;
+    } catch (e) { /* non-fatal — mirror just lags one render */ }
+  }
+}
+
 
 // Build the canonical variant list. Always returns at least one entry —
 // when the product has no options, a synthetic "default" variant is returned
@@ -29793,33 +29831,34 @@ async function saveVariantPricing(pid, variantId) {
       }
     }
 
-    // Mirror retail price onto product.variants[].priceCents so storefront sees it.
+    // variant.priceCents is the source of truth (Phase 2c.1). Always write to
+    // the variants[] array, materializing a default variant for products that
+    // don't have one yet.
     if (r != null) {
       var pVariants = (product.variants || []).slice();
-      var hasArr = pVariants.length > 0;
-      if (hasArr) {
-        var dirty = false;
-        var canon2 = getProductVariantsForRender(product);
-        var idMap = {};
-        canon2.forEach(function(v, i) { idMap[v.id] = i; });
-        var targetIds = (scope === 'all') ? canon2.map(function(v) { return v.id; }) : [variantId];
+      var canon2 = getProductVariantsForRender(product);
+      var idMap = {};
+      canon2.forEach(function(v, i) { idMap[v.id] = i; });
+      var targetIds = (scope === 'all') ? canon2.map(function(v) { return v.id; }) : [variantId];
+      var newCents = Math.round(r * 100);
+
+      if (pVariants.length === 0) {
+        // No variants[] yet — materialize the default and write it.
+        pVariants = canon2.map(function(v) {
+          return { id: v.id, combo: v.combo || {}, priceCents: targetIds.indexOf(v.id) >= 0 ? newCents : (product.priceCents || 0) };
+        });
+      } else {
         targetIds.forEach(function(id) {
           var i = idMap[id];
           if (i == null || i < 0 || i >= pVariants.length) return;
-          pVariants[i] = Object.assign({}, pVariants[i], { priceCents: Math.round(r * 100) });
-          dirty = true;
+          pVariants[i] = Object.assign({}, pVariants[i], { priceCents: newCents });
         });
-        if (dirty) {
-          await MastDB.products.update(pid, { variants: pVariants, updatedAt: now });
-          var local = productsData.find(function(p) { return p.pid === pid; });
-          if (local) local.variants = pVariants;
-        }
-      } else {
-        // Single-variant (default) — store on product.priceCents until per-variant inventory model lands.
-        await MastDB.products.update(pid, { priceCents: Math.round(r * 100), updatedAt: now });
-        var local2 = productsData.find(function(p) { return p.pid === pid; });
-        if (local2) local2.priceCents = Math.round(r * 100);
       }
+      await MastDB.products.update(pid, { variants: pVariants, updatedAt: now });
+      var local = productsData.find(function(p) { return p.pid === pid; });
+      if (local) local.variants = pVariants;
+      // Mirror lowest variant price onto product.priceCents for legacy storefront readers.
+      await syncProductMirrorPrice(pid);
     }
 
     showToast(scope === 'all' ? 'Prices applied to all variants' : 'Variant prices saved');
