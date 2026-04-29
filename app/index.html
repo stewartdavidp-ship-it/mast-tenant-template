@@ -24772,7 +24772,7 @@ function renderProducts() {
       }).join('');
     }
 
-    var imgCount = ((p.images && p.images.length) ? p.images.length : 0) + ((p.imageIds && p.imageIds.length) ? p.imageIds.length : 0);
+    var imgCount = productImageCount(p);
 
     // Availability badge (click to toggle status)
     var availBadge = '';
@@ -31519,20 +31519,52 @@ function resolveImageUrl(img) {
   return typeof img === 'string' ? img : (img.url || '');
 }
 
-/** Get the first product image URL. Checks images[] first, then falls back to imageIds[] resolved via imageLibrary. */
+/** Get the first product image URL. Checks: 1) p.images[0], 2) p.imageIds[0] in imageLibrary,
+ *  3) any imageLibrary entry whose productId equals p.pid or whose tags include p.pid. */
 function firstProductImage(p) {
   if (!p) return '';
   if (p.images && p.images.length) {
     var url = resolveImageUrl(p.images[0]);
     if (url) return url;
   }
-  if (p.imageIds && p.imageIds.length && typeof imageLibrary !== 'undefined') {
-    for (var i = 0; i < p.imageIds.length; i++) {
-      var lib = imageLibrary[p.imageIds[i]];
-      if (lib && lib.url) return lib.url;
+  if (typeof imageLibrary !== 'undefined' && imageLibrary) {
+    if (p.imageIds && p.imageIds.length) {
+      for (var i = 0; i < p.imageIds.length; i++) {
+        var libRef = imageLibrary[p.imageIds[i]];
+        if (libRef && libRef.url) return libRef.url;
+      }
+    }
+    if (p.pid) {
+      var ids = Object.keys(imageLibrary);
+      for (var j = 0; j < ids.length; j++) {
+        var lib = imageLibrary[ids[j]];
+        if (!lib || !lib.url) continue;
+        if (lib.productId === p.pid) return lib.url;
+        if (lib.tags && Array.isArray(lib.tags) && lib.tags.indexOf(p.pid) >= 0) return lib.url;
+      }
     }
   }
   return '';
+}
+
+/** Count all images associated with this product (inline + library refs + reverse-linked library entries). */
+function productImageCount(p) {
+  if (!p) return 0;
+  var n = 0;
+  if (p.images && p.images.length) n += p.images.length;
+  if (p.imageIds && p.imageIds.length) n += p.imageIds.length;
+  if (p.pid && typeof imageLibrary !== 'undefined' && imageLibrary) {
+    var seen = {};
+    if (p.imageIds) p.imageIds.forEach(function(id) { seen[id] = true; });
+    Object.keys(imageLibrary).forEach(function(id) {
+      if (seen[id]) return;
+      var lib = imageLibrary[id];
+      if (!lib) return;
+      if (lib.productId === p.pid) n++;
+      else if (lib.tags && Array.isArray(lib.tags) && lib.tags.indexOf(p.pid) >= 0) n++;
+    });
+  }
+  return n;
 }
 
 // ============================================================
