@@ -104,12 +104,21 @@ Functional smoke (sgtest15 — see Deploy + Verification below):
 
 ## Commits
 
-- `<sha-1>` — Checkpoint E — Readiness checklist, markup config (VAR/Resell), status transitions, channel sync hook, status badges
+- `222a411` — Checkpoint E — Readiness checklist, markup config (VAR/Resell), status transitions, channel sync hook, status badges
   - Single consolidated commit. All admin-side logic in `app/modules/maker.js` (one cohesive Checkpoint E section + edits to `renderVarDefineView`, `renderResellDefineView`, `renderPiecesList`, `renderRecipeBuilder`, `saveDefineView`, `recalcCostShape`, `recalculateRecipe`, plus window exports). Two small touch-points in `app/index.html` (status badge in catalog card + product detail header). Plus `CHECKPOINT_E_LOG.md`. The internal commit boundaries (data model, markup config, transitions, sync hook, badges) are not separable in source — each layer is referenced by the next within the same IIFE — so commit splitting would only churn the diff.
 
 ## Deploy
 
-- `<deploy version line filled in after `mast_hosting deploy`>`
+- **2026-04-28** — `mast_hosting deploy` to sgtest15.
+- Site: `https://mast-sgtest15.web.app`
+- Version: `sites/mast-sgtest15/versions/036204f362d3768d` (FINALIZED).
+- Branch: `develop/E-readiness`.
+- 159 files total, 4 uploaded, 155 cached.
+
+### Post-deploy probes
+
+- `https://mast-sgtest15.web.app/app/modules/maker.js` returns 200 and contains 38 occurrences of the new Checkpoint E symbols (`computeReadinessChecklist`, `productStatusBadgeHtml`, `promoteToReady`, `launchToActive`, `renderReadinessChecklistPanel`, `markupConfig`, `triggerChannelSyncForStatus`).
+- `https://mast-sgtest15.web.app/app/` returns 200 and contains 3 occurrences of `productStatusBadgeHtml` (matching the local `app/index.html`).
 
 ## Verification
 
