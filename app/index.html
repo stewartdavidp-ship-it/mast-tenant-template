@@ -29313,6 +29313,267 @@ function renderSyncRules() {
   return renderSyncRulesLegacy();
 }
 
+// ============================================================
+// Variant-centric product detail (Phase 2a — read-only layout)
+// A product always renders as: Core Product section + Variants section.
+// If product has no options/variants, a single "Default" row is shown.
+// ============================================================
+
+// Build the canonical variant list. Always returns at least one entry —
+// when the product has no options, a synthetic "default" variant is returned
+// so callers can iterate uniformly.
+function getProductVariantsForRender(product) {
+  if (!product) return [];
+  if (Array.isArray(product.variants) && product.variants.length > 0) {
+    return product.variants.map(function(v, i) {
+      var id = v.id || (typeof productVariantKey === 'function' ? productVariantKey(v) : null) || ('v' + i);
+      return Object.assign({ id: id, _isSynthetic: false }, v);
+    });
+  }
+  return [{
+    id: 'default',
+    combo: {},
+    priceCents: product.priceCents != null ? product.priceCents : null,
+    _isSynthetic: true
+  }];
+}
+
+// Human label for a variant ("Silver / 16\"") — combo entries joined by "/"
+function variantComboLabel(variant) {
+  if (!variant) return '';
+  if (variant._isSynthetic) return 'Default';
+  var combo = variant.combo || {};
+  var parts = Object.keys(combo).map(function(k) { return combo[k]; }).filter(Boolean);
+  return parts.length ? parts.join(' / ') : 'Default';
+}
+
+// Per-variant cost / price lookup — variant override on the recipe wins,
+// else the recipe's base values, else product-level fallback.
+function variantCostAndPrice(product, variant, recipe) {
+  var out = { cost: null, wholesale: null, direct: null, retail: null, activeTier: null };
+  if (!variant) return out;
+  var override = recipe && recipe.variants && recipe.variants[variant.id];
+  if (override) {
+    out.cost = (typeof override.totalCost === 'number') ? override.totalCost : null;
+    out.wholesale = (typeof override.wholesalePrice === 'number') ? override.wholesalePrice : null;
+    out.direct    = (typeof override.directPrice === 'number') ? override.directPrice : null;
+    out.retail    = (typeof override.retailPrice === 'number') ? override.retailPrice : null;
+  }
+  if (recipe) {
+    if (out.cost == null && typeof recipe.totalCost === 'number') out.cost = recipe.totalCost;
+    if (out.wholesale == null && typeof recipe.wholesalePrice === 'number') out.wholesale = recipe.wholesalePrice;
+    if (out.direct == null && typeof recipe.directPrice === 'number') out.direct = recipe.directPrice;
+    if (out.retail == null && typeof recipe.retailPrice === 'number') out.retail = recipe.retailPrice;
+    out.activeTier = recipe.activePriceTier || null;
+  }
+  // Final fallback for retail if variant has its own priceCents
+  if (out.retail == null && typeof variant.priceCents === 'number') out.retail = variant.priceCents / 100;
+  return out;
+}
+
+// Channel names this variant is published on (active product channel bindings
+// minus any variant exclusions). Returns an array of display names.
+function variantChannelNames(product, variant) {
+  var bindings = (typeof getProductChannelBindings === 'function')
+    ? getProductChannelBindings(product) : [];
+  if (!bindings || !bindings.length) return [];
+  var cache = window.__mastChannelsCache || {};
+  var names = [];
+  bindings.forEach(function(b) {
+    if (!b || !b.channelId) return;
+    if (Array.isArray(b.excludedVariantIds) && b.excludedVariantIds.indexOf(variant.id) !== -1) return;
+    var ch = cache[b.channelId];
+    if (!ch) return;
+    names.push(ch.name || ch.label || b.channelId);
+  });
+  return names;
+}
+
+// Top-of-detail Core Product section. Read-only summary of common fields.
+// Edit goes through the existing editProduct() flow (legacy form for now).
+function renderCoreProductSection(product) {
+  var pid = product.pid || '';
+  var inv = inventory[pid] || {};
+  var stockType = (inv && inv.stockType) ? inv.stockType : 'made-to-order';
+  var production;
+  if (stockType === 'build-to-order' || stockType === 'made-to-order') {
+    production = 'Build to order';
+  } else if (stockType === 'stock-to-build') {
+    production = 'Stock to build';
+  } else {
+    production = 'Strict stock';
+  }
+  if (product.processingDays && (product.processingDays.min || product.processingDays.max)) {
+    var pd = product.processingDays;
+    production += ' · ' + (pd.min || 0) + (pd.max && pd.max !== pd.min ? '–' + pd.max : '') + ' day lead';
+  }
+  var imgCount = (typeof productImageCount === 'function') ? productImageCount(product) : ((product.images || []).length);
+
+  var html = '<div class="product-detail-section">';
+  html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">';
+  html += '<div class="product-detail-section-title" style="margin:0;">Core Product</div>';
+  html += '<button class="btn btn-secondary btn-small" onclick="editProduct(\'' + esc(pid) + '\')">Edit Info</button>';
+  html += '</div>';
+  html += '<div style="display:grid;grid-template-columns:140px 1fr;gap:8px 16px;font-size:0.85rem;">';
+  html += '<span style="color:var(--warm-gray);">Name</span><span>' + esc(product.name || '') + '</span>';
+  html += '<span style="color:var(--warm-gray);">Description</span><span>' + esc(product.description || '—') + '</span>';
+  html += '<span style="color:var(--warm-gray);">Category</span><span>' + esc((product.categories || []).join(', ') || '—') + '</span>';
+  html += '<span style="color:var(--warm-gray);">Images</span><span>' + imgCount + ' photo' + (imgCount === 1 ? '' : 's') +
+    ' <a href="#" onclick="event.preventDefault();switchProductTab(\'images\');" style="color:var(--teal);font-size:0.78rem;margin-left:6px;">Manage…</a></span>';
+  html += '<span style="color:var(--warm-gray);">Production</span><span>' + esc(production) + '</span>';
+  if (product.businessLine === 'sculpture') {
+    html += '<span style="color:var(--warm-gray);">Business Line</span><span><span class="status-badge" style="background:var(--teal);color:white;font-size:0.72rem;">Sculpture</span></span>';
+  }
+  html += '</div>';
+  html += '</div>';
+  return html;
+}
+
+// Variants section — table-style rows, one per variant. Click row to expand.
+// Each row shows: combo, cost, retail price, channel chips. Expanded shows
+// recipe summary, full pricing tiers, channel toggles, inventory note.
+function renderVariantsSection(product) {
+  var pid = product.pid || '';
+  var variants = getProductVariantsForRender(product);
+  var allRecipes = (typeof window.makerListRecipes === 'function') ? window.makerListRecipes() : {};
+  var recipe = (product.recipeId && allRecipes[product.recipeId] && allRecipes[product.recipeId].status !== 'archived')
+    ? allRecipes[product.recipeId] : null;
+
+  var html = '<div class="product-detail-section" style="margin-top:16px;">';
+  html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">';
+  html += '<div class="product-detail-section-title" style="margin:0;">Variants <span style="color:var(--warm-gray);font-weight:400;font-size:0.85rem;">(' + variants.length + ')</span></div>';
+  html += '<div style="display:flex;gap:6px;">';
+  if (recipe) {
+    html += '<button class="btn btn-secondary btn-small" onclick="window.makerOpenRecipeBuilder && window.makerOpenRecipeBuilder(\'' + esc(recipe.recipeId) + '\')">Open Recipe →</button>';
+  } else {
+    html += '<button class="btn btn-secondary btn-small" onclick="openLinkRecipeDialog(\'' + esc(pid) + '\')">Link recipe…</button>';
+    html += '<button class="btn btn-primary btn-small" onclick="addRecipeForProduct(\'' + esc(pid) + '\')">+ Create Recipe</button>';
+  }
+  html += '</div>';
+  html += '</div>';
+
+  // Variant rows
+  html += '<div style="border:1px solid var(--cream-dark,#e8e0d4);border-radius:8px;overflow:hidden;">';
+  variants.forEach(function(variant, idx) {
+    html += renderVariantRow(product, variant, recipe, idx);
+  });
+  html += '</div>';
+  html += '</div>';
+  return html;
+}
+
+function _expandedVariantKey(pid, variantId) { return 'mastVariantExpanded_' + pid + '_' + variantId; }
+
+function renderVariantRow(product, variant, recipe, idx) {
+  var pid = product.pid || '';
+  var label = variantComboLabel(variant);
+  var pricing = variantCostAndPrice(product, variant, recipe);
+  var channels = variantChannelNames(product, variant);
+  var isExpanded = false;
+  try { isExpanded = sessionStorage.getItem(_expandedVariantKey(pid, variant.id)) === '1'; } catch (e) {}
+
+  var costTxt = pricing.cost != null ? '$' + pricing.cost.toFixed(2) : '—';
+  var retailTxt = pricing.retail != null ? '$' + pricing.retail.toFixed(2) : '—';
+  var channelsTxt = channels.length
+    ? channels.map(function(n) { return '<span style="background:rgba(42,124,111,0.10);color:var(--teal,#2a7c6f);padding:1px 8px;border-radius:10px;font-size:0.72rem;margin-right:4px;">' + esc(n) + '</span>'; }).join('')
+    : '<span style="color:var(--warm-gray-light);font-size:0.78rem;">—</span>';
+
+  var rowBg = idx % 2 === 0 ? 'transparent' : 'rgba(0,0,0,0.015)';
+  var html = '';
+  html += '<div style="background:' + rowBg + ';border-bottom:1px solid var(--cream-dark,#e8e0d4);">';
+  html += '<div style="display:grid;grid-template-columns:24px 1.5fr 1fr 1fr 1.5fr;gap:12px;align-items:center;padding:10px 14px;cursor:pointer;font-size:0.85rem;" ' +
+    'onclick="toggleVariantExpanded(\'' + esc(pid) + '\',\'' + esc(variant.id) + '\')">';
+  html += '<span style="color:var(--warm-gray);user-select:none;">' + (isExpanded ? '▾' : '▸') + '</span>';
+  html += '<span style="font-weight:500;">' + esc(label) + '</span>';
+  html += '<span style="font-family:monospace;color:var(--warm-gray);">Cost ' + costTxt + '</span>';
+  html += '<span style="font-family:monospace;font-weight:500;">Retail ' + retailTxt + '</span>';
+  html += '<span>' + channelsTxt + '</span>';
+  html += '</div>';
+  if (isExpanded) {
+    html += renderVariantExpanded(product, variant, recipe, pricing, channels);
+  }
+  html += '</div>';
+  return html;
+}
+
+function renderVariantExpanded(product, variant, recipe, pricing, channels) {
+  var pid = product.pid || '';
+  var html = '<div style="padding:12px 18px 16px 42px;background:rgba(0,0,0,0.02);font-size:0.85rem;">';
+
+  // Recipe section
+  html += '<div style="margin-bottom:12px;">';
+  html += '<div style="font-weight:600;color:var(--warm-gray);margin-bottom:4px;">Recipe</div>';
+  if (recipe) {
+    var override = recipe.variants && recipe.variants[variant.id];
+    var sourceTxt = override ? 'variant override' : 'inherits base recipe';
+    html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">';
+    html += '<div>' +
+      esc(recipe.name || recipe.recipeId) +
+      ' <span style="color:var(--warm-gray-light);font-size:0.78rem;">· ' + sourceTxt + '</span>' +
+      (recipe.costsDirty ? ' <span style="color:#f59e0b;font-size:0.78rem;">⚠ recalc needed</span>' : '') +
+      '</div>';
+    html += '<button class="btn btn-secondary btn-small" onclick="event.stopPropagation();window.makerOpenRecipeBuilder && window.makerOpenRecipeBuilder(\'' + esc(recipe.recipeId) + '\',\'' + esc(variant.id) + '\')">Open Recipe →</button>';
+    html += '</div>';
+  } else {
+    html += '<span style="color:var(--warm-gray-light);">No recipe linked to this product.</span>';
+  }
+  html += '</div>';
+
+  // Pricing
+  html += '<div style="margin-bottom:12px;">';
+  html += '<div style="font-weight:600;color:var(--warm-gray);margin-bottom:4px;">Pricing</div>';
+  function tier(label, value, isActive) {
+    var v = (value != null) ? '$' + value.toFixed(2) : '—';
+    var style = isActive ? 'font-weight:600;color:var(--teal,#2a7c6f);' : 'color:var(--warm-gray);';
+    return '<div style="' + style + '">' + label + ' ' + v + (isActive ? ' (active)' : '') + '</div>';
+  }
+  html += '<div style="display:flex;gap:24px;flex-wrap:wrap;font-family:monospace;">';
+  html += tier('Wholesale', pricing.wholesale, pricing.activeTier === 'wholesale');
+  html += tier('Direct',    pricing.direct,    pricing.activeTier === 'direct');
+  html += tier('Retail',    pricing.retail,    pricing.activeTier === 'retail');
+  html += '</div>';
+  html += '</div>';
+
+  // Channels
+  html += '<div style="margin-bottom:12px;">';
+  html += '<div style="font-weight:600;color:var(--warm-gray);margin-bottom:4px;">Channels</div>';
+  if (channels.length) {
+    html += channels.map(function(n) { return '<span style="background:rgba(42,124,111,0.12);color:var(--teal,#2a7c6f);padding:2px 10px;border-radius:12px;font-size:0.78rem;margin-right:6px;">' + esc(n) + '</span>'; }).join('');
+  } else {
+    html += '<span style="color:var(--warm-gray-light);">Not on any channel.</span>';
+  }
+  html += '</div>';
+
+  // Inventory note
+  var inv = inventory[pid] || {};
+  var stockType = (inv && inv.stockType) ? inv.stockType : 'made-to-order';
+  var invNote;
+  if (stockType === 'build-to-order' || stockType === 'made-to-order') {
+    invNote = 'Build to order';
+  } else {
+    var totals = (typeof getInventoryTotals === 'function') ? getInventoryTotals(inv) : { onHand: 0, available: 0 };
+    invNote = totals.onHand + ' on hand · ' + totals.available + ' available';
+  }
+  html += '<div>';
+  html += '<div style="font-weight:600;color:var(--warm-gray);margin-bottom:4px;">Inventory</div>';
+  html += '<span style="color:var(--warm-gray);">' + esc(invNote) + '</span>';
+  html += ' <a href="#" onclick="event.preventDefault();event.stopPropagation();switchProductTab(\'inventory\');" style="color:var(--teal);font-size:0.78rem;margin-left:6px;">Adjust →</a>';
+  html += '</div>';
+
+  html += '</div>';
+  return html;
+}
+
+function toggleVariantExpanded(pid, variantId) {
+  var key = _expandedVariantKey(pid, variantId);
+  try {
+    var cur = sessionStorage.getItem(key);
+    if (cur === '1') sessionStorage.removeItem(key);
+    else sessionStorage.setItem(key, '1');
+  } catch (e) {}
+  renderProductDetail(pid);
+}
+
 function renderProductDetail(pid) {
   var el = document.getElementById('productDetailView');
   var product = pid ? productsData.find(function(p) { return p.pid === pid; }) : null;
@@ -29453,12 +29714,14 @@ function renderProductDetail(pid) {
   var hasVariants = product.options && product.options.length > 0;
   var hasProduction = product.buildTime || product.costToBuild || (product.materials && product.materials.length) ||
     product.shippingCategory || product.weightOz || product.dimensions;
-  var tabs = [
-    { id: 'details', label: 'Details' }
-  ];
-  if (hasVariants || isEditing) tabs.push({ id: 'variants', label: 'Variants' });
+  // Phase 2a — Variants and Production are folded into the Details tab as
+  // sections (Core Product + Variants). Tabs only show Details / Images /
+  // Inventory in view mode. Editing mode still exposes Variants/Production
+  // tabs for the legacy form until Phase 2b inline-editing lands.
+  var tabs = [{ id: 'details', label: 'Details' }];
+  if (isEditing && (hasVariants || true)) tabs.push({ id: 'variants', label: 'Variants' });
   tabs.push({ id: 'images', label: 'Images' });
-  if (hasProduction || isEditing) tabs.push({ id: 'production', label: 'Production' });
+  if (isEditing && (hasProduction || true)) tabs.push({ id: 'production', label: 'Production' });
   if (!isCreate) tabs.push({ id: 'inventory', label: 'Inventory' });
 
   var tabBarHtml = '<div class="view-tabs" style="margin:16px 0 0 0;">';
@@ -29588,76 +29851,9 @@ function renderProductDetail(pid) {
         '</div>' +
       '</div>';
   } else {
-    detailsHtml +=
-      '<div class="product-detail-section"><div class="product-detail-section-title">Product Info</div>' +
-      '<div style="display:grid;grid-template-columns:160px 1fr;gap:8px 16px;font-size:0.85rem;">' +
-        '<span style="color:var(--warm-gray);">Name</span><span>' + esc(product.name) + '</span>' +
-        '<span style="color:var(--warm-gray);">Description</span><span>' + esc(product.description || '—') + '</span>' +
-        '<span style="color:var(--warm-gray);">Category</span><span>' + (product.categories || []).join(', ') + '</span>' +
-        '<span style="color:var(--warm-gray);">Slug</span><span>' + esc(product.slug || '—') + '</span>' +
-        '<span style="color:var(--warm-gray);">Availability</span><span>' + esc(product.availability || 'available') + '</span>' +
-        '<span style="color:var(--warm-gray);">Business Line</span><span>' + (product.businessLine === 'sculpture' ? '<span class="status-badge" style="background:var(--teal);color:white;font-size:0.72rem;">Sculpture</span>' : 'Production') + '</span>' +
-        '<span style="color:var(--warm-gray);">Sort Order</span><span>' + (product.sortOrder !== null && product.sortOrder !== undefined ? product.sortOrder : 'auto') + '</span>' +
-        '<span style="color:var(--warm-gray);">Etsy ID</span><span>' + esc(product.etsyListingId || '—') + '</span>' +
-        '<span style="color:var(--warm-gray);">Introduced</span><span>' + esc(product.introducedAt || '—') + '</span>' +
-      '</div></div>';
-    // Inventory summary on Details tab
-    var pdInv = inventory[pid] || {};
-    var pdTotals = getInventoryTotals(pdInv);
-    var invColor = pdTotals.available <= 0 ? 'var(--danger)' : 'var(--teal)';
-    detailsHtml += '<div class="product-detail-section" style="margin-top:16px;">' +
-      '<div class="product-detail-section-title">Inventory Summary</div>' +
-      '<div style="display:flex;gap:24px;flex-wrap:wrap;font-size:0.85rem;">' +
-        '<div><span style="color:var(--warm-gray);">On Hand</span> <strong style="color:' + invColor + ';">' + pdTotals.onHand + '</strong></div>' +
-        '<div><span style="color:var(--warm-gray);">Available</span> <strong>' + pdTotals.available + '</strong></div>' +
-        (pdTotals.committed > 0 ? '<div><span style="color:var(--warm-gray);">Committed</span> <strong>' + pdTotals.committed + '</strong></div>' : '') +
-        '<div style="font-size:0.78rem;"><a href="#" onclick="event.preventDefault();switchProductTab(\'inventory\');" style="color:var(--teal);text-decoration:none;">View full inventory →</a></div>' +
-      '</div>' +
-    '</div>';
-    // Channel-First Phase 2c (D26) — read-only summary in non-edit mode
-    detailsHtml += renderProductChannelBindings(product, false, isCreate);
-
-    // Develop lens — recipe card (visible only when viewing from Develop context)
-    var _devLens = (!isCreate && pid && typeof window.makerGetProductDetailLens === 'function')
-      ? window.makerGetProductDetailLens(pid) : 'catalog';
-    if (_devLens === 'develop') {
-      var _allRecipes = (typeof window.makerListRecipes === 'function') ? window.makerListRecipes() : {};
-      var _recipe = (product.recipeId && _allRecipes) ? _allRecipes[product.recipeId] : null;
-      detailsHtml += '<div class="product-detail-section" style="margin-top:16px;">' +
-        '<div class="product-detail-section-title">Recipe</div>';
-      if (_recipe && _recipe.status !== 'archived') {
-        var _totalCost = (_recipe.totalCost || 0).toFixed(2);
-        var _activeTier = _recipe.activePriceTier || 'direct';
-        var _activePrice = 0;
-        if (_recipe.isVariantEnabled && _recipe.variants) {
-          _activePrice = (typeof window.makerGetFirstVariantTierPrice === 'function')
-            ? window.makerGetFirstVariantTierPrice(_activeTier, _recipe)
-            : 0;
-        } else {
-          _activePrice = (_recipe[_activeTier + 'Price'] || 0);
-        }
-        detailsHtml +=
-          '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">' +
-            '<div style="display:flex;gap:24px;flex-wrap:wrap;font-size:0.85rem;">' +
-              '<div><span style="color:var(--warm-gray);">Total Cost</span> <strong style="font-family:monospace;">$' + esc(_totalCost) + '</strong></div>' +
-              '<div><span style="color:var(--warm-gray);">Active Tier</span> <span class="status-badge pill" style="background:rgba(42,124,111,0.12);color:var(--teal);border:1px solid rgba(42,124,111,0.25);">' + esc(_activeTier) + '</span></div>' +
-              '<div><span style="color:var(--warm-gray);">Price</span> <strong style="font-family:monospace;">$' + _activePrice.toFixed(2) + '</strong></div>' +
-              (_recipe.costsDirty ? '<div><span style="color:#f59e0b;font-size:0.78rem;">⚠ Costs changed — recalc needed</span></div>' : '') +
-            '</div>' +
-            '<button class="btn btn-secondary btn-small" onclick="window.makerOpenRecipeBuilder && window.makerOpenRecipeBuilder(\'' + esc(_recipe.recipeId) + '\')">Open Recipe →</button>' +
-          '</div>';
-      } else {
-        detailsHtml +=
-          '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">' +
-            '<span style="font-size:0.85rem;color:var(--warm-gray-light);">No recipe linked to this product yet.</span>' +
-            '<div style="display:flex;gap:6px;flex-wrap:wrap;">' +
-              '<button class="btn btn-secondary btn-small" onclick="openLinkRecipeDialog(\'' + esc(pid) + '\')">Link existing recipe…</button>' +
-              '<button class="btn btn-primary btn-small" onclick="addRecipeForProduct(\'' + esc(pid) + '\')">+ Create Recipe</button>' +
-            '</div>' +
-          '</div>';
-      }
-      detailsHtml += '</div>';
-    }
+    // ─── Variant-centric Details (Phase 2a, read-only) ───
+    detailsHtml += renderCoreProductSection(product);
+    detailsHtml += renderVariantsSection(product);
   }
   detailsHtml += '</div>';
 
