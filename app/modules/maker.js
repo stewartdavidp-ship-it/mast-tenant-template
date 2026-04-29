@@ -669,6 +669,21 @@
     // Use explicit publishRecipe(recipeId) action instead. activePriceTier remains
     // as a display preference but no longer triggers a Product price write.
 
+    // Checkpoint D — keep the linked Product's uniform costShape in sync for Build mode.
+    if (recipe.productId) {
+      try {
+        var freshRecipe = Object.assign({}, recipe, updates);
+        var prodRow = (window.productsData || []).find(function(pp) { return pp.pid === recipe.productId; });
+        var prodForShape = prodRow || { acquisitionType: 'build' };
+        if (!prodForShape.acquisitionType || prodForShape.acquisitionType === 'build') {
+          var cs = computeCostShape(prodForShape, freshRecipe);
+          await persistCostShape(recipe.productId, cs);
+        }
+      } catch (e) {
+        console.warn('costShape sync (build mode) failed', e);
+      }
+    }
+
     MastAdmin.writeAudit('recalculate', 'recipe', recipeId);
     return updates;
   }
@@ -2097,6 +2112,10 @@
       renderRecipeBuilder();
       return;
     }
+    if (piecesView === 'define' && defineState && defineMode) {
+      renderDefineView();
+      return;
+    }
     renderPiecesList();
   }
 
@@ -2218,10 +2237,17 @@
       }).filter(Boolean) : [];
       var hasVariants = prodVariants.length > 0;
 
-      // Whole-row click dispatches to the default action (Edit or + Add Recipe).
-      var rowClick = hasRecipe
-        ? 'makerOpenRecipeBuilder(\'' + esc(recipe.recipeId) + '\')'
-        : 'makerCreateRecipeForProduct(this.dataset.pid, this.dataset.name)';
+      // Whole-row click dispatches by acquisitionType:
+      // 'build' → recipe builder (legacy); 'var' / 'resell' → Define view.
+      var atype = p.acquisitionType || 'build';
+      var rowClick;
+      if (atype === 'build') {
+        rowClick = hasRecipe
+          ? 'makerOpenRecipeBuilder(\'' + esc(recipe.recipeId) + '\')'
+          : 'makerCreateRecipeForProduct(this.dataset.pid, this.dataset.name)';
+      } else {
+        rowClick = 'makerOpenDefineForProduct(this.dataset.pid)';
+      }
       html += '<tr style="cursor:pointer;" data-pid="' + esc(pid) + '" data-name="' + esc(p.name || '') + '" onclick="' + rowClick + '">';
       var isExpanded = !!piecesExpandedPids[pid];
       var expandToggle = hasVariants
@@ -2231,9 +2257,16 @@
       html += '<td style="font-weight:500;">' + expandToggle + esc(p.name || '') + variantCountBadge + '</td>';
       html += '<td>' + esc((p.categories || []).join(', ')) + '</td>';
 
+      // Mode badge for VAR/Resell — render before the recipe column
+      var modeBadgeHtml = '';
+      if (atype === 'var') {
+        modeBadgeHtml = ' <span class="status-badge" style="background:rgba(196,133,60,0.15);color:var(--amber);font-size:0.68rem;padding:2px 6px;">VAR</span>';
+      } else if (atype === 'resell') {
+        modeBadgeHtml = ' <span class="status-badge" style="background:rgba(42,124,111,0.15);color:var(--teal);font-size:0.68rem;padding:2px 6px;">Resell</span>';
+      }
       if (hasRecipe) {
         var dirtyIcon = recipe.costsDirty ? ' <span title="Costs changed" style="color:#f59e0b;">⚠</span>' : '';
-        html += '<td><span class="status-badge" style="' + materialStatusBadgeStyle('active') + '">has recipe</span>' + dirtyIcon + '</td>';
+        html += '<td><span class="status-badge" style="' + materialStatusBadgeStyle('active') + '">has recipe</span>' + dirtyIcon + modeBadgeHtml + '</td>';
         html += '<td style="text-align:right;font-family:monospace;">$' + (recipe.totalCost || 0).toFixed(2) + '</td>';
         var etsyIcon = p.etsyListingId ? (recipe.lastEtsySyncAt ? ' <span title="Synced to Etsy" style="font-size:0.78rem;">🔗</span>' : ' <span title="Etsy listing linked" style="font-size:0.78rem;opacity:0.5;">🔗</span>') : '';
         var variantBadge = recipe.isVariantEnabled && recipe.variants ? ' <span class="status-badge" style="background:rgba(196,133,60,0.15);color:var(--amber);font-size:0.72rem;">' + Object.keys(recipe.variants).length + ' variants</span>' : '';
@@ -2246,15 +2279,28 @@
         }
         html += '<td style="text-align:right;font-family:monospace;font-weight:600;">$' + activePrice.toFixed(2) + '</td>';
         html += '<td style="text-align:right;">';
-        html += '<button style="background:none;border:none;color:var(--teal);cursor:pointer;font-size:0.85rem;font-family:\'DM Sans\';" onclick="event.stopPropagation();makerOpenRecipeBuilder(\'' + esc(recipe.recipeId) + '\')">Edit Recipe</button>';
+        if (atype === 'build') {
+          html += '<button style="background:none;border:none;color:var(--teal);cursor:pointer;font-size:0.85rem;font-family:\'DM Sans\';" onclick="event.stopPropagation();makerOpenRecipeBuilder(\'' + esc(recipe.recipeId) + '\')">Edit Recipe</button>';
+        } else {
+          html += '<button style="background:none;border:none;color:var(--teal);cursor:pointer;font-size:0.85rem;font-family:\'DM Sans\';" data-pid="' + esc(pid) + '" onclick="event.stopPropagation();makerOpenDefineForProduct(this.dataset.pid)">Edit Define</button>';
+        }
         html += '</td>';
       } else {
-        html += '<td><span style="color:var(--warm-gray-light);font-size:0.85rem;">no recipe</span></td>';
-        html += '<td style="text-align:right;">—</td>';
+        if (atype === 'build') {
+          html += '<td><span style="color:var(--warm-gray-light);font-size:0.85rem;">no recipe</span>' + modeBadgeHtml + '</td>';
+        } else {
+          html += '<td><span style="color:var(--warm-gray-light);font-size:0.85rem;">define ' + atype + '</span>' + modeBadgeHtml + '</td>';
+        }
+        var totalCostDollars = (p.totalCost || 0) / 100;
+        html += '<td style="text-align:right;font-family:monospace;">' + (atype === 'build' ? '—' : ('$' + totalCostDollars.toFixed(2))) + '</td>';
         html += '<td>—</td>';
         html += '<td style="text-align:right;font-family:monospace;">$' + (p.priceCents ? (p.priceCents / 100).toFixed(2) : '0.00') + '</td>';
         html += '<td style="text-align:right;">';
-        html += '<button class="btn btn-outline btn-small" data-pid="' + esc(pid) + '" data-name="' + esc(p.name || '') + '" onclick="event.stopPropagation();makerCreateRecipeForProduct(this.dataset.pid, this.dataset.name)">+ Add Recipe</button>';
+        if (atype === 'build') {
+          html += '<button class="btn btn-outline btn-small" data-pid="' + esc(pid) + '" data-name="' + esc(p.name || '') + '" onclick="event.stopPropagation();makerCreateRecipeForProduct(this.dataset.pid, this.dataset.name)">+ Add Recipe</button>';
+        } else {
+          html += '<button class="btn btn-outline btn-small" data-pid="' + esc(pid) + '" onclick="event.stopPropagation();makerOpenDefineForProduct(this.dataset.pid)">' + (atype === 'var' ? 'Define VAR' : 'Define Resell') + '</button>';
+        }
         html += '</td>';
       }
 
@@ -2303,6 +2349,546 @@
     html += '</tbody></table></div>';
     tab.innerHTML = html;
   }
+
+  // ============================================================
+  // Checkpoint D — Acquisition Mode Branching
+  // ----------------------------------------------------------------
+  // Three Define-tab variants: Build (existing Recipe Builder), VAR
+  // (Components + Value-Add Steps), Resell (Supplier + Landed Cost).
+  // All three modes write a uniform costShape to the Product record so
+  // the downstream Costs / Channels / Capacity tabs are mode-agnostic.
+  // ============================================================
+
+  // Per-product define state for VAR/Resell modes (mirrors builderState)
+  var defineState = null;       // working copy of the product being defined
+  var defineMode = null;        // 'var' | 'resell' | null
+  var defineProductId = null;
+
+  /**
+   * computeCostShape — uniform downstream interface.
+   * Returns { materialCost, laborCost, otherCost, totalCost } in CENTS.
+   * Reads from the right slice of defineSpec based on acquisitionType.
+   * For Build mode, falls back to the linked recipe's totalCost decomposition.
+   */
+  function computeCostShape(product, recipe) {
+    product = product || {};
+    var atype = product.acquisitionType || 'build';
+    var laborRate = (window.makerLaborRate ? window.makerLaborRate() : null);
+    if (typeof laborRate !== 'number') {
+      // Fall back to recipe.laborRatePerHour or 0
+      laborRate = (recipe && recipe.laborRatePerHour) || 0;
+    }
+
+    if (atype === 'build') {
+      // Build: read decomposition from the linked recipe
+      if (!recipe) return { materialCost: 0, laborCost: 0, otherCost: 0, totalCost: 0 };
+      var totalDollars = recipe.totalCost || 0;
+      var matDollars = recipe.totalMaterialCost || 0;
+      var labDollars = recipe.laborCost || 0;
+      var setupDollars = recipe.perUnitSetup || 0;
+      var otherDollars = (totalDollars - matDollars - labDollars - setupDollars);
+      if (otherDollars < 0) otherDollars = 0;
+      return {
+        materialCost: Math.round(matDollars * 100),
+        laborCost: Math.round(labDollars * 100),
+        otherCost: Math.round((otherDollars + setupDollars) * 100),
+        totalCost: Math.round(totalDollars * 100)
+      };
+    }
+
+    var spec = (product.defineSpec || {})[atype] || {};
+
+    if (atype === 'var') {
+      // Components → materialCost. Value-add steps minutes → laborCost; otherCost → otherCost.
+      var matCents = 0;
+      var components = Array.isArray(spec.components) ? spec.components : [];
+      components.forEach(function(c) {
+        var qty = Number(c.quantity) || 0;
+        var scrap = Number(c.scrapPercent) || 0;
+        var unit = Number(c.unitCost) || 0; // dollars
+        var effQty = qty * (1 + scrap / 100);
+        matCents += Math.round(effQty * unit * 100);
+      });
+      var labMinutes = 0;
+      var otherCents = 0;
+      var steps = Array.isArray(spec.valueAddSteps) ? spec.valueAddSteps : [];
+      steps.forEach(function(s) {
+        labMinutes += Number(s.laborMinutes) || 0;
+        otherCents += Math.round((Number(s.otherCost) || 0) * 100);
+      });
+      var labCents = Math.round((labMinutes / 60) * laborRate * 100);
+      return {
+        materialCost: matCents,
+        laborCost: labCents,
+        otherCost: otherCents,
+        totalCost: matCents + labCents + otherCents
+      };
+    }
+
+    if (atype === 'resell') {
+      // materialCost = unitCost; laborCost = 0; otherCost = sum of landed cost components
+      var supplier = spec.supplier || {};
+      var landed = spec.landedCost || {};
+      var unitCostCents = Math.round((Number(supplier.unitCost) || 0) * 100);
+      var freightCents = Math.round((Number(landed.freight) || 0) * 100);
+      var storageCents = Math.round((Number(landed.storage) || 0) * 100);
+      var otherCents2 = Math.round((Number(landed.other) || 0) * 100);
+      // Duty: percent of unitCost OR per-unit dollars (if dutyMode === 'percent', treat as %)
+      var dutyCents = 0;
+      if (landed.dutyMode === 'percent') {
+        var dutyPct = Number(landed.duty) || 0;
+        dutyCents = Math.round(unitCostCents * (dutyPct / 100));
+      } else {
+        dutyCents = Math.round((Number(landed.duty) || 0) * 100);
+      }
+      var totalOther = freightCents + dutyCents + storageCents + otherCents2;
+      return {
+        materialCost: unitCostCents,
+        laborCost: 0,
+        otherCost: totalOther,
+        totalCost: unitCostCents + totalOther
+      };
+    }
+
+    return { materialCost: 0, laborCost: 0, otherCost: 0, totalCost: 0 };
+  }
+
+  // Read the tenant's labor rate from admin config (mirrors what recipe builder uses).
+  // Falls back to 0 if unavailable. This is intentionally synchronous-safe; the
+  // recipe path passes its own rate, so this only matters for VAR.
+  window.makerLaborRate = window.makerLaborRate || function() {
+    // Look up the most-recent recipe to infer the labor rate (cheap fallback).
+    var rates = [];
+    try {
+      Object.keys(recipesData).forEach(function(rid) {
+        var r = recipesData[rid];
+        if (r && typeof r.laborRatePerHour === 'number') rates.push(r.laborRatePerHour);
+      });
+    } catch (e) {}
+    if (rates.length) return rates[0];
+    return 0;
+  };
+
+  /**
+   * Persist the costShape onto the Product record.
+   * Writes materialCost / laborCost / otherCost / totalCost (cents) so the
+   * Costs tab and pricing logic can read uniformly regardless of mode.
+   */
+  async function persistCostShape(productId, costShape) {
+    if (!productId || !costShape) return;
+    var path = 'public/products/' + productId + '/';
+    var updates = {};
+    updates[path + 'materialCost'] = costShape.materialCost;
+    updates[path + 'laborCost'] = costShape.laborCost;
+    updates[path + 'otherCost'] = costShape.otherCost;
+    updates[path + 'totalCost'] = costShape.totalCost;
+    updates[path + 'costShapeUpdatedAt'] = new Date().toISOString();
+    if (typeof MastDB.update === 'function') {
+      // MastDB.update expects a path + value pair; do per-field writes
+      for (var p in updates) {
+        if (Object.prototype.hasOwnProperty.call(updates, p)) {
+          await MastDB.set(p, updates[p]);
+        }
+      }
+    }
+    // Refresh in-memory product
+    if (window.productsData) {
+      var prod = window.productsData.find(function(p) { return p.pid === productId; });
+      if (prod) {
+        prod.materialCost = costShape.materialCost;
+        prod.laborCost = costShape.laborCost;
+        prod.otherCost = costShape.otherCost;
+        prod.totalCost = costShape.totalCost;
+        prod.costShapeUpdatedAt = updates[path + 'costShapeUpdatedAt'];
+      }
+    }
+  }
+
+  /**
+   * Open the Define view for a product, dispatching by acquisitionType.
+   * - 'build' → existing recipe builder (creates a recipe if needed)
+   * - 'var' / 'resell' → render the alternate Define view
+   */
+  async function openDefineForProduct(pid) {
+    var products = window.productsData || [];
+    var product = products.find(function(p) { return p.pid === pid; });
+    if (!product) {
+      MastAdmin.showToast('Product not found', true);
+      return;
+    }
+    var atype = product.acquisitionType || 'build';
+
+    if (atype === 'build') {
+      // Find or create a recipe and open the recipe builder
+      var existing = null;
+      Object.values(recipesData).forEach(function(r) {
+        if (r.status !== 'archived' && r.productId === pid) existing = r;
+      });
+      if (existing) {
+        return openRecipeBuilder(existing.recipeId);
+      }
+      return createRecipeForProduct(pid, product.name || '');
+    }
+
+    // VAR or Resell — open Define view
+    defineProductId = pid;
+    defineMode = atype;
+    // Deep-copy product slice so user can edit without committing
+    defineState = JSON.parse(JSON.stringify(product));
+    if (!defineState.defineSpec) defineState.defineSpec = {};
+    if (!defineState.defineSpec[atype]) {
+      if (atype === 'var') {
+        defineState.defineSpec.var = { components: [], valueAddSteps: [] };
+      } else if (atype === 'resell') {
+        defineState.defineSpec.resell = {
+          supplier: { supplierName: '', supplierSku: '', unitCost: 0, moq: 1 },
+          landedCost: { freight: 0, duty: 0, dutyMode: 'per-unit', storage: 0, other: 0 },
+          leadTimeDays: 0
+        };
+      }
+    }
+    piecesView = 'define';
+    renderDefineView();
+  }
+
+  function closeDefineView() {
+    defineState = null;
+    defineMode = null;
+    defineProductId = null;
+    piecesView = 'list';
+    renderPiecesList();
+  }
+
+  function renderDefineView() {
+    var tab = document.getElementById('piecesTab');
+    if (!tab || !defineState || !defineMode) return;
+    if (defineMode === 'var') return renderVarDefineView(tab);
+    if (defineMode === 'resell') return renderResellDefineView(tab);
+    tab.innerHTML = '<div class="loading">Unknown mode: ' + defineMode + '</div>';
+  }
+
+  // ----- VAR Define view ------------------------------------------------------
+
+  function renderVarDefineView(tab) {
+    var esc = MastAdmin.esc;
+    var p = defineState;
+    var spec = p.defineSpec.var || { components: [], valueAddSteps: [] };
+    var components = Array.isArray(spec.components) ? spec.components : [];
+    var steps = Array.isArray(spec.valueAddSteps) ? spec.valueAddSteps : [];
+    var costShape = computeCostShape(p, null);
+    var matLabels = Object.keys(materialsData).map(function(mid) {
+      var m = materialsData[mid];
+      return { id: mid, name: m && m.name ? m.name : mid, unitCost: (m && m.unitCost) || 0 };
+    });
+
+    var html = '';
+    html += '<button class="detail-back" onclick="makerCloseDefineView()">← Back to Pieces</button>';
+    html += '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;">';
+    html += '<div><h3 style="font-family:\'Cormorant Garamond\',serif;font-size:1.6rem;font-weight:500;margin:0;">' + esc(p.name || 'Untitled') + '</h3>';
+    html += '<span class="status-badge" style="background:rgba(196,133,60,0.15);color:var(--amber);font-size:0.78rem;margin-top:6px;display:inline-block;">VAR (Value-Added Reseller)</span></div>';
+    html += '<div style="display:flex;gap:8px;">';
+    html += '<button class="btn btn-secondary btn-small" onclick="makerSaveDefineView()">Save</button>';
+    html += '<button class="btn btn-primary btn-small" onclick="makerRecalcCostShape()">Recalculate Cost</button>';
+    html += '</div></div>';
+
+    // Cost summary (uniform costShape readout)
+    html += renderCostShapeSummary(costShape);
+
+    // Components section
+    html += '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:16px;margin-bottom:16px;">';
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">';
+    html += '<h4 style="margin:0;font-size:1.05rem;">Components</h4>';
+    html += '<button class="btn btn-secondary btn-small" onclick="makerVarAddComponent()">+ Add component</button>';
+    html += '</div>';
+    if (components.length === 0) {
+      html += '<p style="color:var(--warm-gray);font-size:0.85rem;margin:0;">No components yet. Add sourced items that go into this product.</p>';
+    } else {
+      html += '<table style="width:100%;font-size:0.85rem;border-collapse:collapse;"><thead><tr style="text-align:left;border-bottom:1px solid var(--cream-dark);">';
+      html += '<th style="padding:6px 4px;">Source</th><th>Name</th><th style="text-align:right;">Unit cost ($)</th><th style="text-align:right;">Qty</th><th style="text-align:right;">Scrap %</th><th style="text-align:right;">Subtotal</th><th></th></tr></thead><tbody>';
+      components.forEach(function(c, i) {
+        var qty = Number(c.quantity) || 0;
+        var scrap = Number(c.scrapPercent) || 0;
+        var unit = Number(c.unitCost) || 0;
+        var sub = qty * (1 + scrap / 100) * unit;
+        html += '<tr style="border-bottom:1px solid var(--cream-dark);">';
+        html += '<td style="padding:6px 4px;"><select onchange="makerVarSetComponentField(' + i + ',\'sourceType\',this.value)" style="font-size:0.78rem;padding:3px 6px;">';
+        html += '<option value="material"' + (c.sourceType === 'material' ? ' selected' : '') + '>Material</option>';
+        html += '<option value="free-text"' + (c.sourceType !== 'material' ? ' selected' : '') + '>Free text</option>';
+        html += '</select></td>';
+        if (c.sourceType === 'material') {
+          html += '<td><select onchange="makerVarLinkMaterial(' + i + ',this.value)" style="font-size:0.85rem;padding:4px 6px;width:100%;">';
+          html += '<option value="">— pick material —</option>';
+          matLabels.forEach(function(m) {
+            html += '<option value="' + esc(m.id) + '"' + (c.materialId === m.id ? ' selected' : '') + '>' + esc(m.name) + '</option>';
+          });
+          html += '</select></td>';
+        } else {
+          html += '<td><input type="text" value="' + esc(c.name || '') + '" oninput="makerVarSetComponentField(' + i + ',\'name\',this.value)" style="width:100%;padding:4px 6px;font-size:0.85rem;"></td>';
+        }
+        html += '<td style="text-align:right;"><input type="number" step="0.01" min="0" value="' + unit + '" oninput="makerVarSetComponentField(' + i + ',\'unitCost\',this.value)" style="width:90px;text-align:right;padding:4px 6px;font-size:0.85rem;"></td>';
+        html += '<td style="text-align:right;"><input type="number" step="0.01" min="0" value="' + qty + '" oninput="makerVarSetComponentField(' + i + ',\'quantity\',this.value)" style="width:80px;text-align:right;padding:4px 6px;font-size:0.85rem;"></td>';
+        html += '<td style="text-align:right;"><input type="number" step="0.1" min="0" value="' + scrap + '" oninput="makerVarSetComponentField(' + i + ',\'scrapPercent\',this.value)" style="width:70px;text-align:right;padding:4px 6px;font-size:0.85rem;"></td>';
+        html += '<td style="text-align:right;font-family:monospace;">$' + sub.toFixed(2) + '</td>';
+        html += '<td style="text-align:right;"><button class="btn btn-danger btn-small" onclick="makerVarRemoveComponent(' + i + ')" style="font-size:0.72rem;">Remove</button></td>';
+        html += '</tr>';
+      });
+      html += '</tbody></table>';
+    }
+    html += '</div>';
+
+    // Value-Add Steps section
+    html += '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:16px;margin-bottom:16px;">';
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">';
+    html += '<h4 style="margin:0;font-size:1.05rem;">Value-Add Steps</h4>';
+    html += '<button class="btn btn-secondary btn-small" onclick="makerVarAddStep()">+ Add step</button>';
+    html += '</div>';
+    if (steps.length === 0) {
+      html += '<p style="color:var(--warm-gray);font-size:0.85rem;margin:0;">No value-add steps yet. Add assembly, branding, packaging, etc.</p>';
+    } else {
+      html += '<table style="width:100%;font-size:0.85rem;border-collapse:collapse;"><thead><tr style="text-align:left;border-bottom:1px solid var(--cream-dark);">';
+      html += '<th style="padding:6px 4px;">Description</th><th style="text-align:right;">Labor min</th><th style="text-align:right;">Other cost ($)</th><th></th></tr></thead><tbody>';
+      steps.forEach(function(s, i) {
+        html += '<tr style="border-bottom:1px solid var(--cream-dark);">';
+        html += '<td style="padding:6px 4px;"><input type="text" value="' + esc(s.description || '') + '" oninput="makerVarSetStepField(' + i + ',\'description\',this.value)" style="width:100%;padding:4px 6px;font-size:0.85rem;"></td>';
+        html += '<td style="text-align:right;"><input type="number" step="1" min="0" value="' + (Number(s.laborMinutes) || 0) + '" oninput="makerVarSetStepField(' + i + ',\'laborMinutes\',this.value)" style="width:80px;text-align:right;padding:4px 6px;font-size:0.85rem;"></td>';
+        html += '<td style="text-align:right;"><input type="number" step="0.01" min="0" value="' + (Number(s.otherCost) || 0) + '" oninput="makerVarSetStepField(' + i + ',\'otherCost\',this.value)" style="width:90px;text-align:right;padding:4px 6px;font-size:0.85rem;"></td>';
+        html += '<td style="text-align:right;"><button class="btn btn-danger btn-small" onclick="makerVarRemoveStep(' + i + ')" style="font-size:0.72rem;">Remove</button></td>';
+        html += '</tr>';
+      });
+      html += '</tbody></table>';
+    }
+    html += '</div>';
+
+    tab.innerHTML = html;
+  }
+
+  // ----- Resell Define view ---------------------------------------------------
+
+  function renderResellDefineView(tab) {
+    var esc = MastAdmin.esc;
+    var p = defineState;
+    var spec = p.defineSpec.resell || {};
+    var supplier = spec.supplier || {};
+    var landed = spec.landedCost || {};
+    var leadTimeDays = Number(spec.leadTimeDays) || 0;
+    var costShape = computeCostShape(p, null);
+
+    var html = '';
+    html += '<button class="detail-back" onclick="makerCloseDefineView()">← Back to Pieces</button>';
+    html += '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;">';
+    html += '<div><h3 style="font-family:\'Cormorant Garamond\',serif;font-size:1.6rem;font-weight:500;margin:0;">' + esc(p.name || 'Untitled') + '</h3>';
+    html += '<span class="status-badge" style="background:rgba(42,124,111,0.15);color:var(--teal);font-size:0.78rem;margin-top:6px;display:inline-block;">Resell</span></div>';
+    html += '<div style="display:flex;gap:8px;">';
+    html += '<button class="btn btn-secondary btn-small" onclick="makerSaveDefineView()">Save</button>';
+    html += '<button class="btn btn-primary btn-small" onclick="makerRecalcCostShape()">Recalculate Cost</button>';
+    html += '</div></div>';
+
+    html += renderCostShapeSummary(costShape);
+
+    // Supplier
+    html += '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:16px;margin-bottom:16px;">';
+    html += '<h4 style="margin:0 0 12px;font-size:1.05rem;">Supplier</h4>';
+    html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">';
+    html += resellField('Supplier name', 'text', supplier.supplierName || '', 'supplier.supplierName');
+    html += resellField('Supplier SKU', 'text', supplier.supplierSku || '', 'supplier.supplierSku');
+    html += resellField('Unit cost ($)', 'number', supplier.unitCost || 0, 'supplier.unitCost', 0.01);
+    html += resellField('Minimum order qty (MOQ)', 'number', supplier.moq || 1, 'supplier.moq', 1);
+    html += '</div></div>';
+
+    // Landed cost
+    html += '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:16px;margin-bottom:16px;">';
+    html += '<h4 style="margin:0 0 12px;font-size:1.05rem;">Landed cost (per unit)</h4>';
+    html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">';
+    html += resellField('Freight ($)', 'number', landed.freight || 0, 'landedCost.freight', 0.01);
+    // Duty with mode picker
+    html += '<div><label style="display:block;font-size:0.78rem;font-weight:600;margin-bottom:4px;">Duty</label>';
+    html += '<div style="display:flex;gap:6px;">';
+    html += '<input type="number" step="0.01" min="0" value="' + (landed.duty || 0) + '" oninput="makerResellSet(\'landedCost.duty\',this.value)" style="flex:1;padding:6px 8px;font-size:0.85rem;">';
+    html += '<select onchange="makerResellSet(\'landedCost.dutyMode\',this.value)" style="padding:6px 8px;font-size:0.85rem;">';
+    html += '<option value="per-unit"' + ((landed.dutyMode || 'per-unit') === 'per-unit' ? ' selected' : '') + '>$ / unit</option>';
+    html += '<option value="percent"' + (landed.dutyMode === 'percent' ? ' selected' : '') + '>% of unit cost</option>';
+    html += '</select></div></div>';
+    html += resellField('Storage ($/unit)', 'number', landed.storage || 0, 'landedCost.storage', 0.01);
+    html += resellField('Other ($/unit)', 'number', landed.other || 0, 'landedCost.other', 0.01);
+    html += '</div></div>';
+
+    // Lead time
+    html += '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:16px;margin-bottom:16px;">';
+    html += '<h4 style="margin:0 0 12px;font-size:1.05rem;">Lead time</h4>';
+    html += '<div style="max-width:240px;">';
+    html += '<label style="display:block;font-size:0.78rem;font-weight:600;margin-bottom:4px;">Lead time (days)</label>';
+    html += '<input type="number" step="1" min="0" value="' + leadTimeDays + '" oninput="makerResellSet(\'leadTimeDays\',this.value)" style="width:100%;padding:6px 8px;font-size:0.85rem;">';
+    html += '</div></div>';
+
+    tab.innerHTML = html;
+  }
+
+  function resellField(label, type, value, path, step) {
+    var esc = MastAdmin.esc;
+    var s = (typeof step === 'number') ? step : 1;
+    var html = '<div><label style="display:block;font-size:0.78rem;font-weight:600;margin-bottom:4px;">' + esc(label) + '</label>';
+    if (type === 'number') {
+      html += '<input type="number" step="' + s + '" min="0" value="' + value + '" oninput="makerResellSet(\'' + path + '\',this.value)" style="width:100%;padding:6px 8px;font-size:0.85rem;">';
+    } else {
+      html += '<input type="text" value="' + esc(value) + '" oninput="makerResellSet(\'' + path + '\',this.value)" style="width:100%;padding:6px 8px;font-size:0.85rem;">';
+    }
+    html += '</div>';
+    return html;
+  }
+
+  function renderCostShapeSummary(costShape) {
+    function fmt(c) { return '$' + ((c || 0) / 100).toFixed(2); }
+    var html = '';
+    html += '<div style="background:rgba(42,124,111,0.06);border:1px solid rgba(42,124,111,0.2);border-radius:8px;padding:14px 16px;margin-bottom:16px;">';
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">';
+    html += '<div style="font-size:0.78rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.05em;">Cost shape (downstream uniform)</div>';
+    html += '<div style="display:flex;gap:18px;font-size:0.85rem;font-family:monospace;">';
+    html += '<span>Material: <strong>' + fmt(costShape.materialCost) + '</strong></span>';
+    html += '<span>Labor: <strong>' + fmt(costShape.laborCost) + '</strong></span>';
+    html += '<span>Other: <strong>' + fmt(costShape.otherCost) + '</strong></span>';
+    html += '<span style="color:var(--teal);">Total: <strong>' + fmt(costShape.totalCost) + '</strong></span>';
+    html += '</div></div></div>';
+    return html;
+  }
+
+  // ----- VAR mutation handlers ----------------------------------------------
+
+  function ensureVarSpec() {
+    if (!defineState.defineSpec) defineState.defineSpec = {};
+    if (!defineState.defineSpec.var) defineState.defineSpec.var = { components: [], valueAddSteps: [] };
+    if (!Array.isArray(defineState.defineSpec.var.components)) defineState.defineSpec.var.components = [];
+    if (!Array.isArray(defineState.defineSpec.var.valueAddSteps)) defineState.defineSpec.var.valueAddSteps = [];
+    return defineState.defineSpec.var;
+  }
+
+  function varAddComponent() {
+    var spec = ensureVarSpec();
+    spec.components.push({ sourceType: 'free-text', name: '', unitCost: 0, quantity: 1, scrapPercent: 0, materialId: null });
+    renderDefineView();
+  }
+  function varRemoveComponent(idx) {
+    var spec = ensureVarSpec();
+    spec.components.splice(idx, 1);
+    renderDefineView();
+  }
+  function varSetComponentField(idx, field, value) {
+    var spec = ensureVarSpec();
+    if (!spec.components[idx]) return;
+    if (field === 'unitCost' || field === 'quantity' || field === 'scrapPercent') {
+      spec.components[idx][field] = Number(value) || 0;
+    } else {
+      spec.components[idx][field] = value;
+    }
+    // Don't re-render on every keystroke for text fields — only on numeric
+    if (field === 'unitCost' || field === 'quantity' || field === 'scrapPercent' || field === 'sourceType') {
+      renderDefineView();
+    }
+  }
+  function varLinkMaterial(idx, materialId) {
+    var spec = ensureVarSpec();
+    if (!spec.components[idx]) return;
+    spec.components[idx].materialId = materialId;
+    var m = materialsData[materialId];
+    if (m) {
+      spec.components[idx].name = m.name || '';
+      spec.components[idx].unitCost = m.unitCost || 0;
+    }
+    renderDefineView();
+  }
+  function varAddStep() {
+    var spec = ensureVarSpec();
+    spec.valueAddSteps.push({ description: '', laborMinutes: 0, otherCost: 0 });
+    renderDefineView();
+  }
+  function varRemoveStep(idx) {
+    var spec = ensureVarSpec();
+    spec.valueAddSteps.splice(idx, 1);
+    renderDefineView();
+  }
+  function varSetStepField(idx, field, value) {
+    var spec = ensureVarSpec();
+    if (!spec.valueAddSteps[idx]) return;
+    if (field === 'laborMinutes' || field === 'otherCost') {
+      spec.valueAddSteps[idx][field] = Number(value) || 0;
+    } else {
+      spec.valueAddSteps[idx][field] = value;
+    }
+  }
+
+  // ----- Resell mutation handlers --------------------------------------------
+
+  function ensureResellSpec() {
+    if (!defineState.defineSpec) defineState.defineSpec = {};
+    if (!defineState.defineSpec.resell) {
+      defineState.defineSpec.resell = {
+        supplier: { supplierName: '', supplierSku: '', unitCost: 0, moq: 1 },
+        landedCost: { freight: 0, duty: 0, dutyMode: 'per-unit', storage: 0, other: 0 },
+        leadTimeDays: 0
+      };
+    }
+    if (!defineState.defineSpec.resell.supplier) defineState.defineSpec.resell.supplier = {};
+    if (!defineState.defineSpec.resell.landedCost) defineState.defineSpec.resell.landedCost = {};
+    return defineState.defineSpec.resell;
+  }
+
+  function resellSet(path, value) {
+    var spec = ensureResellSpec();
+    var parts = path.split('.');
+    var numericFields = { unitCost: true, moq: true, freight: true, duty: true, storage: true, other: true, leadTimeDays: true };
+    var leaf = parts[parts.length - 1];
+    var coerced = numericFields[leaf] ? (Number(value) || 0) : value;
+    if (parts.length === 1) {
+      spec[parts[0]] = coerced;
+    } else if (parts.length === 2) {
+      if (!spec[parts[0]]) spec[parts[0]] = {};
+      spec[parts[0]][parts[1]] = coerced;
+    }
+    if (leaf === 'dutyMode') {
+      // Force re-render to redraw duty input semantics
+      renderDefineView();
+    }
+  }
+
+  // ----- Save / Recalc ---------------------------------------------------------
+
+  async function saveDefineView() {
+    if (!defineState || !defineProductId) return;
+    try {
+      var atype = defineState.acquisitionType || defineMode;
+      var path = 'public/products/' + defineProductId + '/';
+      // Persist defineSpec slice
+      await MastDB.set(path + 'defineSpec', defineState.defineSpec || {});
+      await MastDB.set(path + 'updatedAt', new Date().toISOString());
+      // Recompute and persist costShape too
+      var costShape = computeCostShape(defineState, null);
+      await persistCostShape(defineProductId, costShape);
+      // Update in-memory product
+      if (window.productsData) {
+        var prod = window.productsData.find(function(p) { return p.pid === defineProductId; });
+        if (prod) {
+          prod.defineSpec = defineState.defineSpec;
+        }
+      }
+      MastAdmin.showToast('Saved');
+      renderDefineView();
+    } catch (err) {
+      MastAdmin.showToast('Save failed: ' + err.message, true);
+    }
+  }
+
+  async function recalcCostShape() {
+    if (!defineState || !defineProductId) return;
+    var costShape = computeCostShape(defineState, null);
+    try {
+      await persistCostShape(defineProductId, costShape);
+      MastAdmin.showToast('Cost recalculated: $' + (costShape.totalCost / 100).toFixed(2));
+      renderDefineView();
+    } catch (err) {
+      MastAdmin.showToast('Recalc failed: ' + err.message, true);
+    }
+  }
+
+  // (renderPieces dispatcher updated above to route to renderDefineView)
 
   // ============================================================
   // Recipe Builder — "The Money Screen"
@@ -2379,7 +2965,16 @@
     var html = '';
     html += '<div id="newPieceOverlay" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:10000;display:flex;align-items:center;justify-content:center;" onclick="makerCloseNewPieceModal(event)">';
     html += '<div style="background:var(--cream);border-radius:10px;max-width:480px;width:90%;max-height:85vh;overflow-y:auto;box-shadow:0 8px 30px rgba(0,0,0,0.2);padding:20px 24px;" onclick="event.stopPropagation()">';
-    html += '<h3 style="font-family:\'Cormorant Garamond\',serif;font-size:1.15rem;font-weight:500;margin:0 0 16px;">New Piece</h3>';
+    html += '<h3 style="font-family:\'Cormorant Garamond\',serif;font-size:1.15rem;font-weight:500;margin:0 0 16px;">New Product</h3>';
+
+    // Acquisition mode picker (Checkpoint D)
+    html += '<div style="margin-bottom:16px;">';
+    html += '<label style="display:block;font-size:0.85rem;font-weight:600;margin-bottom:6px;">Acquisition mode *</label>';
+    html += '<div style="display:flex;flex-direction:column;gap:6px;">';
+    html += '<label style="display:flex;gap:8px;align-items:flex-start;cursor:pointer;font-size:0.85rem;"><input type="radio" name="newPieceAcqType" value="build" checked style="margin-top:3px;"><span><strong>Build</strong> — recipe / BOM with materials and labor</span></label>';
+    html += '<label style="display:flex;gap:8px;align-items:flex-start;cursor:pointer;font-size:0.85rem;"><input type="radio" name="newPieceAcqType" value="var" style="margin-top:3px;"><span><strong>VAR</strong> — components + value-add steps</span></label>';
+    html += '<label style="display:flex;gap:8px;align-items:flex-start;cursor:pointer;font-size:0.85rem;"><input type="radio" name="newPieceAcqType" value="resell" style="margin-top:3px;"><span><strong>Resell</strong> — sourced supplier + landed cost</span></label>';
+    html += '</div></div>';
 
     // Name
     html += '<div style="margin-bottom:16px;">';
@@ -2468,13 +3063,31 @@
       category = sel.value || 'other';
     }
 
+    // Acquisition mode (Checkpoint D)
+    var acqRadios = document.querySelectorAll('input[name="newPieceAcqType"]');
+    var acqType = 'build';
+    for (var ai = 0; ai < acqRadios.length; ai++) {
+      if (acqRadios[ai].checked) { acqType = acqRadios[ai].value; break; }
+    }
+    if (acqType !== 'build' && acqType !== 'var' && acqType !== 'resell') acqType = 'build';
+
     closeNewPieceModal();
 
     try {
       var pid = 'p' + Date.now().toString(36);
       var slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
       var now = new Date().toISOString();
-      await MastDB.set('public/products/' + pid, {
+      var defineSpec = {};
+      if (acqType === 'var') {
+        defineSpec.var = { components: [], valueAddSteps: [] };
+      } else if (acqType === 'resell') {
+        defineSpec.resell = {
+          supplier: { supplierName: '', supplierSku: '', unitCost: 0, moq: 1 },
+          landedCost: { freight: 0, duty: 0, dutyMode: 'per-unit', storage: 0, other: 0 },
+          leadTimeDays: 0
+        };
+      }
+      var newProduct = {
         pid: pid,
         name: name,
         slug: slug,
@@ -2482,21 +3095,33 @@
         status: 'draft',
         availability: 'available',
         businessLine: 'production',
+        acquisitionType: acqType,
+        defineSpec: defineSpec,
+        materialCost: 0,
+        laborCost: 0,
+        otherCost: 0,
+        totalCost: 0,
         priceCents: null,
         images: [],
         imageIds: [],
         createdAt: now,
         updatedAt: now
-      });
+      };
+      await MastDB.set('public/products/' + pid, newProduct);
       MastAdmin.writeAudit('create', 'products', pid);
 
       if (window.productsData) {
-        window.productsData.push({ pid: pid, name: name, slug: slug, categories: [category], status: 'draft', availability: 'available', businessLine: 'production', priceCents: null, images: [], imageIds: [] });
+        window.productsData.push(newProduct);
       }
 
-      await createRecipeForProduct(pid, name);
+      if (acqType === 'build') {
+        await createRecipeForProduct(pid, name);
+      } else {
+        // VAR or Resell — open the Define view directly
+        await openDefineForProduct(pid);
+      }
     } catch (err) {
-      MastAdmin.showToast('Error creating piece: ' + err.message, true);
+      MastAdmin.showToast('Error creating product: ' + err.message, true);
     }
   }
 
@@ -3829,6 +4454,20 @@
 
   // Pieces list & Recipe Builder UI
   window.makerOpenRecipeBuilder = openRecipeBuilder;
+  // Checkpoint D — Define mode dispatch + VAR/Resell handlers
+  window.makerOpenDefineForProduct = openDefineForProduct;
+  window.makerCloseDefineView = closeDefineView;
+  window.makerSaveDefineView = saveDefineView;
+  window.makerRecalcCostShape = recalcCostShape;
+  window.makerComputeCostShape = computeCostShape;
+  window.makerVarAddComponent = varAddComponent;
+  window.makerVarRemoveComponent = varRemoveComponent;
+  window.makerVarSetComponentField = varSetComponentField;
+  window.makerVarLinkMaterial = varLinkMaterial;
+  window.makerVarAddStep = varAddStep;
+  window.makerVarRemoveStep = varRemoveStep;
+  window.makerVarSetStepField = varSetStepField;
+  window.makerResellSet = resellSet;
   window.makerCloseRecipeBuilder = closeRecipeBuilder;
   window.makerCreateRecipeForProduct = createRecipeForProduct;
   window.makerCreateNewPiece = createNewPiece;
