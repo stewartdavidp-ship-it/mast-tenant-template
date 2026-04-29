@@ -5076,11 +5076,11 @@
         <span class="sidebar-section-label">Dashboard</span>
       </div>
     </div>
-    <!-- Make -->
+    <!-- Develop -->
     <div class="sidebar-section" data-section="make">
       <div class="sidebar-section-header" onclick="toggleSection('make')">
         <span class="sidebar-section-icon">&#128293;</span>
-        <span class="sidebar-section-label">Make</span>
+        <span class="sidebar-section-label">Develop</span>
         <span class="sidebar-section-arrow">&#9654;</span>
       </div>
       <div class="sidebar-items">
@@ -6908,7 +6908,7 @@
         <button class="view-tab" onclick="switchSettingsSubView('channels')">Channels</button>
         <button class="view-tab" onclick="switchSettingsSubView('notifications')">Notifications <span id="settingsNotifBadge" class="sidebar-badge alert" style="display:none;margin-left:4px;"></span></button>
         <button class="view-tab" onclick="switchSettingsSubView('pim')">PIM</button>
-        <button class="view-tab" onclick="switchSettingsSubView('maker')">Maker</button>
+        <button class="view-tab" onclick="switchSettingsSubView('maker')">Develop</button>
       </div>
       <div id="settingsSubGeneral" style="max-width:500px;">
         <div id="githubPatSection" class="form-group" style="display:none;">
@@ -8195,10 +8195,10 @@
         </div>
 
       </div>
-      <!-- Phase 6b.1 — Maker Settings (cost tracking, drift severity, repricing threshold) -->
+      <!-- Phase 6b.1 — Develop Settings (cost tracking, drift severity, repricing threshold) -->
       <div id="settingsSubMaker" style="display:none;max-width:720px;">
         <div style="margin-bottom:20px;">
-          <div style="font-size:1.15rem;font-weight:600;margin-bottom:4px;">Maker Settings</div>
+          <div style="font-size:1.15rem;font-weight:600;margin-bottom:4px;">Develop Settings</div>
           <p style="font-size:0.85rem;color:var(--warm-gray);margin:0;">Recipe feedback, drift severity, and repricing thresholds. Toggle and dropdown changes save immediately.</p>
         </div>
 
@@ -10430,9 +10430,9 @@ MastDB.passDefinitions = _makeEntity('admin/passDefinitions', 100);
 
 // Canonical module definitions. Single source of truth for nav, gating, and locked UX.
 // Web is the base module (always included, not purchasable). All others are purchasable.
-// Grid layout: Row1: Make, Market, Sell | Row2: Ship, Run, Web | Row3: Show, Show Light, Events | Row4: Book
+// Grid layout: Row1: Develop, Market, Sell | Row2: Ship, Run, Web | Row3: Show, Show Light, Events | Row4: Book
 var MODULE_REGISTRY = {
-  make:   { id: 'make',   name: 'Make',   icon: '\uD83D\uDD25', description: 'Production jobs, build tracking, materials, pricing.', section: 'make', navPosition: 1, purchasable: true, routes: ['jobs', 'production', 'procurement', 'materials', 'pieces', 'lookbooks'], manageSettings: [], synergies: ['sell', 'market'], status: 'active' },
+  make:   { id: 'make',   name: 'Develop', icon: '\uD83D\uDD25', description: 'Product lifecycle: production, sourcing, materials, pricing, and catalog development.', section: 'make', navPosition: 1, purchasable: true, routes: ['jobs', 'production', 'procurement', 'materials', 'pieces', 'lookbooks'], manageSettings: [], synergies: ['sell', 'market'], status: 'active' },
   market: { id: 'market', name: 'Market', icon: '\uD83D\uDCE3', description: 'Social media, blog, newsletter, stories.', section: 'market', navPosition: 2, purchasable: true, routes: ['social', 'blog', 'newsletter', 'stories'], manageSettings: ['newsletter', 'email'], synergies: ['sell', 'show'], status: 'active' },
   sell:   { id: 'sell',   name: 'Sell',   icon: '\uD83D\uDCB0', description: 'Point of sale, orders, commissions, wholesale.', section: 'sell', navPosition: 3, purchasable: true, routes: ['pos', 'orders', 'commissions', 'rma', 'wholesale', 'galleries', 'receipts', 'coupons', 'promotions'], manageSettings: ['square'], synergies: ['ship', 'make'], status: 'active' },
   ship:   { id: 'ship',   name: 'Ship',   icon: '\uD83D\uDCE6', description: 'Pack orders, ship deliveries, track fulfillment.', section: 'ship', navPosition: 4, purchasable: true, routes: ['pack', 'ship'], manageSettings: ['shippingRates'], synergies: ['sell', 'show'], status: 'active' },
@@ -26150,7 +26150,7 @@ function showBulkPublishButton() {
 // Channel-First Phase 1c (D38) — Create a new recipe linked to a product, then jump to maker.
 async function addRecipeForProduct(pid) {
   if (!hasPermission('products', 'update')) { showToast('You do not have permission to update products.', true); return; }
-  if (typeof window.makerCreateRecipe !== 'function') { showToast('Maker module not loaded — open the Make tab first, then try again.', true); return; }
+  if (typeof window.makerCreateRecipe !== 'function') { showToast('Develop module not loaded — open the Develop tab first, then try again.', true); return; }
   var product = (window.productsData || []).find(function(p) { return p.pid === pid; });
   if (!product) { showToast('Product not found', true); return; }
   if (product.recipeId) { showToast('Product already has a linked recipe', true); return; }
@@ -26468,11 +26468,11 @@ async function acceptRecipeForProduct(pid) {
     try {
       await MastAdmin.loadModule('maker');
     } catch (loadErr) {
-      showToast('Failed to load Maker module: ' + (loadErr.message || loadErr), true);
+      showToast('Failed to load Develop module: ' + (loadErr.message || loadErr), true);
       return;
     }
     if (typeof window.makerApplyRecipeToProduct !== 'function') {
-      showToast('Maker module loaded but Apply function unavailable', true);
+      showToast('Develop module loaded but Apply function unavailable', true);
       return;
     }
   }

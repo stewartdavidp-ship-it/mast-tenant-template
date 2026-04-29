@@ -661,7 +661,7 @@ Retains: all CSS (~4.3K lines), HTML skeleton (sidebar, tab containers, modals),
 | Fulfillment | `fulfillment.js` | ~1,030 | `pack`, `ship`, `fulfillment` |
 | Events (Organizer) | `events.js` | ~1,900 | `events-shows`, `events-settings` |
 | Website | `website.js` | ~1,330 | `website` |
-| Maker | `maker.js` | ~2,100 | `materials`, `pieces` |
+| Develop (file: `maker.js`) | `maker.js` | ~2,100 | `materials`, `pieces` |
 | Consignment | `consignment.js` | ~570 | `galleries` |
 | Look Books | `lookbooks.js` | ~400 | `lookbooks` |
 
@@ -682,9 +682,9 @@ Retains: all CSS (~4.3K lines), HTML skeleton (sidebar, tab containers, modals),
 - **Firebase listeners stay in core** — `attachListeners()` owns all listeners, callbacks guarded with `typeof` checks (e.g., `if (typeof renderOrders === 'function') renderOrders()`)
 - **Cross-module data** — `MastAdmin.getData(key)` / `MastAdmin.setData(key, value)` for shared state (e.g., orders data, products data)
 
-### Maker Module Architecture
+### Develop Module Architecture
 
-The Maker Module (`maker.js`, `consignment.js`, `lookbooks.js`) provides materials management, BOM/recipe pricing, consignment tracking, and catalog generation. Three modules, two Cloud Functions.
+The Develop Module (formerly "Maker"; file still `maker.js` for stability — see Checkpoint B rename log) along with `consignment.js` and `lookbooks.js` provides materials management, BOM/recipe pricing, consignment tracking, and catalog generation. Three modules, two Cloud Functions.
 
 #### Data Model Relationships
 
