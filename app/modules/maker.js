@@ -669,6 +669,23 @@
     // Use explicit publishRecipe(recipeId) action instead. activePriceTier remains
     // as a display preference but no longer triggers a Product price write.
 
+    // Checkpoint D — keep the linked Product's uniform costShape in sync for Build mode.
+    if (recipe.productId) {
+      try {
+        var freshRecipe = Object.assign({}, recipe, updates);
+        var prodRow = (window.productsData || []).find(function(pp) { return pp.pid === recipe.productId; });
+        var prodForShape = prodRow || { acquisitionType: 'build' };
+        if (!prodForShape.acquisitionType || prodForShape.acquisitionType === 'build') {
+          var cs = computeCostShape(prodForShape, freshRecipe);
+          await persistCostShape(recipe.productId, cs);
+          // Checkpoint E — recompute readiness on cost change
+          try { await recomputeAndPersistReadiness(recipe.productId); } catch (e2) {}
+        }
+      } catch (e) {
+        console.warn('costShape sync (build mode) failed', e);
+      }
+    }
+
     MastAdmin.writeAudit('recalculate', 'recipe', recipeId);
     return updates;
   }
@@ -2097,6 +2114,10 @@
       renderRecipeBuilder();
       return;
     }
+    if (piecesView === 'define' && defineState && defineMode) {
+      renderDefineView();
+      return;
+    }
     renderPiecesList();
   }
 
@@ -2130,9 +2151,15 @@
     html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">';
     html += '<div>';
     html += '<h2 style="font-family:\'Cormorant Garamond\',serif;font-size:1.6rem;font-weight:500;margin:0;">Pieces</h2>';
-    var filteredProducts = piecesCategoryFilter
-      ? products.filter(function(p) { return (p.categories || []).indexOf(piecesCategoryFilter) >= 0; })
-      : products;
+    // Checkpoint G — Develop list shows the Develop-lens slice:
+    //   draft, ready, active+pendingRevision, archived (discontinuing or selling-through).
+    var filteredProducts = products.filter(function(p) {
+      if (typeof isProductInDevelopView === 'function') {
+        if (!isProductInDevelopView(p)) return false;
+      }
+      if (piecesCategoryFilter && (p.categories || []).indexOf(piecesCategoryFilter) < 0) return false;
+      return true;
+    });
     var filteredWithRecipes = filteredProducts.filter(function(p){ return !!recipeByProduct[p.pid]; }).length;
     html += '<span style="font-size:0.85rem;color:var(--warm-gray);">' + filteredProducts.length + ' product' + (filteredProducts.length === 1 ? '' : 's') + (piecesCategoryFilter ? ' in ' + esc(piecesCategoryFilter) : '') + ', ' + filteredWithRecipes + ' with recipes</span>';
     html += '</div>';
@@ -2199,6 +2226,7 @@
     // Table
     html += '<div class="data-table"><table><thead><tr>';
     html += '<th>Product</th>';
+    html += '<th>Status</th>';
     html += '<th>Category</th>';
     html += '<th>Recipe</th>';
     html += '<th style="text-align:right;">Total Cost</th>';
@@ -2218,22 +2246,49 @@
       }).filter(Boolean) : [];
       var hasVariants = prodVariants.length > 0;
 
-      // Whole-row click dispatches to the default action (Edit or + Add Recipe).
-      var rowClick = hasRecipe
-        ? 'makerOpenRecipeBuilder(\'' + esc(recipe.recipeId) + '\')'
-        : 'makerCreateRecipeForProduct(this.dataset.pid, this.dataset.name)';
+      // Whole-row click dispatches by acquisitionType:
+      // 'build' → recipe builder (legacy); 'var' / 'resell' → Define view.
+      var atype = p.acquisitionType || 'build';
+      var rowClick;
+      if (atype === 'build') {
+        rowClick = hasRecipe
+          ? 'makerOpenRecipeBuilder(\'' + esc(recipe.recipeId) + '\')'
+          : 'makerCreateRecipeForProduct(this.dataset.pid, this.dataset.name)';
+      } else {
+        rowClick = 'makerOpenDefineForProduct(this.dataset.pid)';
+      }
       html += '<tr style="cursor:pointer;" data-pid="' + esc(pid) + '" data-name="' + esc(p.name || '') + '" onclick="' + rowClick + '">';
       var isExpanded = !!piecesExpandedPids[pid];
       var expandToggle = hasVariants
         ? '<span onclick="event.stopPropagation();makerTogglePieceVariants(\'' + esc(pid) + '\')" style="display:inline-block;width:16px;text-align:center;cursor:pointer;color:var(--warm-gray);margin-right:6px;user-select:none;" title="' + (isExpanded ? 'Collapse' : 'Expand') + ' variants">' + (isExpanded ? '▾' : '▸') + '</span>'
         : '<span style="display:inline-block;width:16px;margin-right:6px;"></span>';
       var variantCountBadge = hasVariants ? ' <span style="font-size:0.72rem;color:var(--warm-gray-light);font-weight:400;">(' + prodVariants.length + ' variants)</span>' : '';
-      html += '<td style="font-weight:500;">' + expandToggle + esc(p.name || '') + variantCountBadge + '</td>';
+      // Checkpoint F — version badge for v2+ or products with a child Draft
+      var versionBadge = '';
+      var pVer = Number(p.version) || 1;
+      var pHasChild = !!findChildVersion(pid);
+      if (pVer >= 2) {
+        versionBadge = ' <span class="status-badge" style="background:rgba(217,119,6,0.15);color:#b45309;font-size:0.68rem;padding:2px 6px;">v' + pVer + '</span>';
+      } else if (pHasChild) {
+        versionBadge = ' <span class="status-badge" style="background:rgba(217,119,6,0.10);color:#b45309;font-size:0.68rem;padding:2px 6px;" title="A v2 Draft exists for this product">v1 · v2 in dev</span>';
+      }
+      var pendingBadge = p.hasPendingRevision
+        ? ' <span class="status-badge" style="background:rgba(217,119,6,0.18);color:#b45309;font-size:0.68rem;padding:2px 6px;" title="Pending revision">⚠ pending</span>'
+        : '';
+      html += '<td style="font-weight:500;">' + expandToggle + esc(p.name || '') + variantCountBadge + versionBadge + pendingBadge + '</td>';
+      html += '<td>' + productStatusBadgeHtml(p.status) + (p.status === 'archived' && p.archivedSubState ? archiveSubStateBadgeHtml(p.archivedSubState) : '') + '</td>';
       html += '<td>' + esc((p.categories || []).join(', ')) + '</td>';
 
+      // Mode badge for VAR/Resell — render before the recipe column
+      var modeBadgeHtml = '';
+      if (atype === 'var') {
+        modeBadgeHtml = ' <span class="status-badge" style="background:rgba(196,133,60,0.15);color:var(--amber);font-size:0.68rem;padding:2px 6px;">VAR</span>';
+      } else if (atype === 'resell') {
+        modeBadgeHtml = ' <span class="status-badge" style="background:rgba(42,124,111,0.15);color:var(--teal);font-size:0.68rem;padding:2px 6px;">Resell</span>';
+      }
       if (hasRecipe) {
         var dirtyIcon = recipe.costsDirty ? ' <span title="Costs changed" style="color:#f59e0b;">⚠</span>' : '';
-        html += '<td><span class="status-badge" style="' + materialStatusBadgeStyle('active') + '">has recipe</span>' + dirtyIcon + '</td>';
+        html += '<td><span class="status-badge" style="' + materialStatusBadgeStyle('active') + '">has recipe</span>' + dirtyIcon + modeBadgeHtml + '</td>';
         html += '<td style="text-align:right;font-family:monospace;">$' + (recipe.totalCost || 0).toFixed(2) + '</td>';
         var etsyIcon = p.etsyListingId ? (recipe.lastEtsySyncAt ? ' <span title="Synced to Etsy" style="font-size:0.78rem;">🔗</span>' : ' <span title="Etsy listing linked" style="font-size:0.78rem;opacity:0.5;">🔗</span>') : '';
         var variantBadge = recipe.isVariantEnabled && recipe.variants ? ' <span class="status-badge" style="background:rgba(196,133,60,0.15);color:var(--amber);font-size:0.72rem;">' + Object.keys(recipe.variants).length + ' variants</span>' : '';
@@ -2246,15 +2301,28 @@
         }
         html += '<td style="text-align:right;font-family:monospace;font-weight:600;">$' + activePrice.toFixed(2) + '</td>';
         html += '<td style="text-align:right;">';
-        html += '<button style="background:none;border:none;color:var(--teal);cursor:pointer;font-size:0.85rem;font-family:\'DM Sans\';" onclick="event.stopPropagation();makerOpenRecipeBuilder(\'' + esc(recipe.recipeId) + '\')">Edit Recipe</button>';
+        if (atype === 'build') {
+          html += '<button style="background:none;border:none;color:var(--teal);cursor:pointer;font-size:0.85rem;font-family:\'DM Sans\';" onclick="event.stopPropagation();makerOpenRecipeBuilder(\'' + esc(recipe.recipeId) + '\')">Edit Recipe</button>';
+        } else {
+          html += '<button style="background:none;border:none;color:var(--teal);cursor:pointer;font-size:0.85rem;font-family:\'DM Sans\';" data-pid="' + esc(pid) + '" onclick="event.stopPropagation();makerOpenDefineForProduct(this.dataset.pid)">Edit Define</button>';
+        }
         html += '</td>';
       } else {
-        html += '<td><span style="color:var(--warm-gray-light);font-size:0.85rem;">no recipe</span></td>';
-        html += '<td style="text-align:right;">—</td>';
+        if (atype === 'build') {
+          html += '<td><span style="color:var(--warm-gray-light);font-size:0.85rem;">no recipe</span>' + modeBadgeHtml + '</td>';
+        } else {
+          html += '<td><span style="color:var(--warm-gray-light);font-size:0.85rem;">define ' + atype + '</span>' + modeBadgeHtml + '</td>';
+        }
+        var totalCostDollars = (p.totalCost || 0) / 100;
+        html += '<td style="text-align:right;font-family:monospace;">' + (atype === 'build' ? '—' : ('$' + totalCostDollars.toFixed(2))) + '</td>';
         html += '<td>—</td>';
         html += '<td style="text-align:right;font-family:monospace;">$' + (p.priceCents ? (p.priceCents / 100).toFixed(2) : '0.00') + '</td>';
         html += '<td style="text-align:right;">';
-        html += '<button class="btn btn-outline btn-small" data-pid="' + esc(pid) + '" data-name="' + esc(p.name || '') + '" onclick="event.stopPropagation();makerCreateRecipeForProduct(this.dataset.pid, this.dataset.name)">+ Add Recipe</button>';
+        if (atype === 'build') {
+          html += '<button class="btn btn-outline btn-small" data-pid="' + esc(pid) + '" data-name="' + esc(p.name || '') + '" onclick="event.stopPropagation();makerCreateRecipeForProduct(this.dataset.pid, this.dataset.name)">+ Add Recipe</button>';
+        } else {
+          html += '<button class="btn btn-outline btn-small" data-pid="' + esc(pid) + '" onclick="event.stopPropagation();makerOpenDefineForProduct(this.dataset.pid)">' + (atype === 'var' ? 'Define VAR' : 'Define Resell') + '</button>';
+        }
         html += '</td>';
       }
 
@@ -2278,6 +2346,7 @@
             : 'makerCreateRecipeForProduct(this.dataset.pid, this.dataset.name)';
           html += '<tr style="cursor:pointer;background:rgba(0,0,0,0.015);" data-pid="' + esc(pid) + '" data-name="' + esc(p.name || '') + '" onclick="' + vRowClick + '">';
           html += '<td style="padding-left:28px;font-size:0.85rem;color:var(--warm-gray);">↳ ' + esc(vName) + '</td>';
+          html += '<td></td>'; // status (variant inherits from parent)
           html += '<td></td>';
           if (hasRecipe) {
             var overrideBadge = rvOverride
@@ -2303,6 +2372,2215 @@
     html += '</tbody></table></div>';
     tab.innerHTML = html;
   }
+
+  // ============================================================
+  // Checkpoint D — Acquisition Mode Branching
+  // ----------------------------------------------------------------
+  // Three Define-tab variants: Build (existing Recipe Builder), VAR
+  // (Components + Value-Add Steps), Resell (Supplier + Landed Cost).
+  // All three modes write a uniform costShape to the Product record so
+  // the downstream Costs / Channels / Capacity tabs are mode-agnostic.
+  // ============================================================
+
+  // Per-product define state for VAR/Resell modes (mirrors builderState)
+  var defineState = null;       // working copy of the product being defined
+  var defineMode = null;        // 'var' | 'resell' | null
+  var defineProductId = null;
+
+  /**
+   * computeCostShape — uniform downstream interface.
+   * Returns { materialCost, laborCost, otherCost, totalCost } in CENTS.
+   * Reads from the right slice of defineSpec based on acquisitionType.
+   * For Build mode, falls back to the linked recipe's totalCost decomposition.
+   */
+  function computeCostShape(product, recipe) {
+    product = product || {};
+    var atype = product.acquisitionType || 'build';
+    var laborRate = (window.makerLaborRate ? window.makerLaborRate() : null);
+    if (typeof laborRate !== 'number') {
+      // Fall back to recipe.laborRatePerHour or 0
+      laborRate = (recipe && recipe.laborRatePerHour) || 0;
+    }
+
+    if (atype === 'build') {
+      // Build: read decomposition from the linked recipe
+      if (!recipe) return { materialCost: 0, laborCost: 0, otherCost: 0, totalCost: 0 };
+      var totalDollars = recipe.totalCost || 0;
+      var matDollars = recipe.totalMaterialCost || 0;
+      var labDollars = recipe.laborCost || 0;
+      var setupDollars = recipe.perUnitSetup || 0;
+      var otherDollars = (totalDollars - matDollars - labDollars - setupDollars);
+      if (otherDollars < 0) otherDollars = 0;
+      return {
+        materialCost: Math.round(matDollars * 100),
+        laborCost: Math.round(labDollars * 100),
+        otherCost: Math.round((otherDollars + setupDollars) * 100),
+        totalCost: Math.round(totalDollars * 100)
+      };
+    }
+
+    var spec = (product.defineSpec || {})[atype] || {};
+
+    if (atype === 'var') {
+      // Components → materialCost. Value-add steps minutes → laborCost; otherCost → otherCost.
+      var matCents = 0;
+      var components = Array.isArray(spec.components) ? spec.components : [];
+      components.forEach(function(c) {
+        var qty = Number(c.quantity) || 0;
+        var scrap = Number(c.scrapPercent) || 0;
+        var unit = Number(c.unitCost) || 0; // dollars
+        var effQty = qty * (1 + scrap / 100);
+        matCents += Math.round(effQty * unit * 100);
+      });
+      var labMinutes = 0;
+      var otherCents = 0;
+      var steps = Array.isArray(spec.valueAddSteps) ? spec.valueAddSteps : [];
+      steps.forEach(function(s) {
+        labMinutes += Number(s.laborMinutes) || 0;
+        otherCents += Math.round((Number(s.otherCost) || 0) * 100);
+      });
+      var labCents = Math.round((labMinutes / 60) * laborRate * 100);
+      return {
+        materialCost: matCents,
+        laborCost: labCents,
+        otherCost: otherCents,
+        totalCost: matCents + labCents + otherCents
+      };
+    }
+
+    if (atype === 'resell') {
+      // materialCost = unitCost; laborCost = 0; otherCost = sum of landed cost components
+      var supplier = spec.supplier || {};
+      var landed = spec.landedCost || {};
+      var unitCostCents = Math.round((Number(supplier.unitCost) || 0) * 100);
+      var freightCents = Math.round((Number(landed.freight) || 0) * 100);
+      var storageCents = Math.round((Number(landed.storage) || 0) * 100);
+      var otherCents2 = Math.round((Number(landed.other) || 0) * 100);
+      // Duty: percent of unitCost OR per-unit dollars (if dutyMode === 'percent', treat as %)
+      var dutyCents = 0;
+      if (landed.dutyMode === 'percent') {
+        var dutyPct = Number(landed.duty) || 0;
+        dutyCents = Math.round(unitCostCents * (dutyPct / 100));
+      } else {
+        dutyCents = Math.round((Number(landed.duty) || 0) * 100);
+      }
+      var totalOther = freightCents + dutyCents + storageCents + otherCents2;
+      return {
+        materialCost: unitCostCents,
+        laborCost: 0,
+        otherCost: totalOther,
+        totalCost: unitCostCents + totalOther
+      };
+    }
+
+    return { materialCost: 0, laborCost: 0, otherCost: 0, totalCost: 0 };
+  }
+
+  // Read the tenant's labor rate from admin config (mirrors what recipe builder uses).
+  // Falls back to 0 if unavailable. This is intentionally synchronous-safe; the
+  // recipe path passes its own rate, so this only matters for VAR.
+  window.makerLaborRate = window.makerLaborRate || function() {
+    // Look up the most-recent recipe to infer the labor rate (cheap fallback).
+    var rates = [];
+    try {
+      Object.keys(recipesData).forEach(function(rid) {
+        var r = recipesData[rid];
+        if (r && typeof r.laborRatePerHour === 'number') rates.push(r.laborRatePerHour);
+      });
+    } catch (e) {}
+    if (rates.length) return rates[0];
+    return 0;
+  };
+
+  /**
+   * Persist the costShape onto the Product record.
+   * Writes materialCost / laborCost / otherCost / totalCost (cents) so the
+   * Costs tab and pricing logic can read uniformly regardless of mode.
+   */
+  async function persistCostShape(productId, costShape) {
+    if (!productId || !costShape) return;
+    var path = 'public/products/' + productId + '/';
+    var updates = {};
+    updates[path + 'materialCost'] = costShape.materialCost;
+    updates[path + 'laborCost'] = costShape.laborCost;
+    updates[path + 'otherCost'] = costShape.otherCost;
+    updates[path + 'totalCost'] = costShape.totalCost;
+    updates[path + 'costShapeUpdatedAt'] = new Date().toISOString();
+    if (typeof MastDB.update === 'function') {
+      // MastDB.update expects a path + value pair; do per-field writes
+      for (var p in updates) {
+        if (Object.prototype.hasOwnProperty.call(updates, p)) {
+          await MastDB.set(p, updates[p]);
+        }
+      }
+    }
+    // Refresh in-memory product
+    if (window.productsData) {
+      var prod = window.productsData.find(function(p) { return p.pid === productId; });
+      if (prod) {
+        prod.materialCost = costShape.materialCost;
+        prod.laborCost = costShape.laborCost;
+        prod.otherCost = costShape.otherCost;
+        prod.totalCost = costShape.totalCost;
+        prod.costShapeUpdatedAt = updates[path + 'costShapeUpdatedAt'];
+      }
+    }
+  }
+
+  /**
+   * Open the Define view for a product, dispatching by acquisitionType.
+   * - 'build' → existing recipe builder (creates a recipe if needed)
+   * - 'var' / 'resell' → render the alternate Define view
+   */
+  async function openDefineForProduct(pid) {
+    var products = window.productsData || [];
+    var product = products.find(function(p) { return p.pid === pid; });
+    if (!product) {
+      MastAdmin.showToast('Product not found', true);
+      return;
+    }
+    var atype = product.acquisitionType || 'build';
+
+    if (atype === 'build') {
+      // Find or create a recipe and open the recipe builder
+      var existing = null;
+      Object.values(recipesData).forEach(function(r) {
+        if (r.status !== 'archived' && r.productId === pid) existing = r;
+      });
+      if (existing) {
+        return openRecipeBuilder(existing.recipeId);
+      }
+      return createRecipeForProduct(pid, product.name || '');
+    }
+
+    // VAR or Resell — open Define view
+    defineProductId = pid;
+    defineMode = atype;
+    // Deep-copy product slice so user can edit without committing
+    defineState = JSON.parse(JSON.stringify(product));
+    if (!defineState.defineSpec) defineState.defineSpec = {};
+    if (!defineState.defineSpec[atype]) {
+      if (atype === 'var') {
+        defineState.defineSpec.var = { components: [], valueAddSteps: [] };
+      } else if (atype === 'resell') {
+        defineState.defineSpec.resell = {
+          supplier: { supplierName: '', supplierSku: '', unitCost: 0, moq: 1 },
+          landedCost: { freight: 0, duty: 0, dutyMode: 'per-unit', storage: 0, other: 0 },
+          leadTimeDays: 0
+        };
+      }
+    }
+    piecesView = 'define';
+    renderDefineView();
+  }
+
+  function closeDefineView() {
+    defineState = null;
+    defineMode = null;
+    defineProductId = null;
+    piecesView = 'list';
+    renderPiecesList();
+  }
+
+  function renderDefineView() {
+    var tab = document.getElementById('piecesTab');
+    if (!tab || !defineState || !defineMode) return;
+    if (defineMode === 'var') return renderVarDefineView(tab);
+    if (defineMode === 'resell') return renderResellDefineView(tab);
+    tab.innerHTML = '<div class="loading">Unknown mode: ' + defineMode + '</div>';
+  }
+
+  // ----- VAR Define view ------------------------------------------------------
+
+  function renderVarDefineView(tab) {
+    var esc = MastAdmin.esc;
+    var p = defineState;
+    var spec = p.defineSpec.var || { components: [], valueAddSteps: [] };
+    var components = Array.isArray(spec.components) ? spec.components : [];
+    var steps = Array.isArray(spec.valueAddSteps) ? spec.valueAddSteps : [];
+    var costShape = computeCostShape(p, null);
+    var matLabels = Object.keys(materialsData).map(function(mid) {
+      var m = materialsData[mid];
+      return { id: mid, name: m && m.name ? m.name : mid, unitCost: (m && m.unitCost) || 0 };
+    });
+
+    var html = '';
+    html += '<button class="detail-back" onclick="makerCloseDefineView()">← Back to Pieces</button>';
+    html += '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;">';
+    html += '<div><h3 style="font-family:\'Cormorant Garamond\',serif;font-size:1.6rem;font-weight:500;margin:0;">' + esc(p.name || 'Untitled') + ' ' + productStatusBadgeHtml(p.status) + '</h3>';
+    html += '<span class="status-badge" style="background:rgba(196,133,60,0.15);color:var(--amber);font-size:0.78rem;margin-top:6px;display:inline-block;">VAR (Value-Added Reseller)</span></div>';
+    html += '<div style="display:flex;gap:8px;">';
+    html += '<button class="btn btn-secondary btn-small" onclick="makerSaveDefineView()">Save & Continue</button>';
+    html += '<button class="btn btn-primary btn-small" onclick="makerRecalcCostShape()">Recalculate Cost</button>';
+    html += '</div></div>';
+
+    // Readiness checklist (Checkpoint E)
+    html += renderReadinessChecklistPanel(p);
+    // Checkpoint F — version-link + revision banners
+    html += renderVersionLinkBanner(p);
+    html += renderRevisionBanner(p);
+
+    // Cost summary (uniform costShape readout)
+    html += renderCostShapeSummary(costShape);
+
+    // Markup config (Checkpoint E — resolves D's O-D2)
+    html += renderMarkupConfigSection(p);
+
+    // Components section
+    html += '<div data-readiness-section="define-section" style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:16px;margin-bottom:16px;">';
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">';
+    html += '<h4 style="margin:0;font-size:1.05rem;">Components</h4>';
+    html += '<button class="btn btn-secondary btn-small" onclick="makerVarAddComponent()">+ Add component</button>';
+    html += '</div>';
+    if (components.length === 0) {
+      html += '<p style="color:var(--warm-gray);font-size:0.85rem;margin:0;">No components yet. Add sourced items that go into this product.</p>';
+    } else {
+      html += '<table style="width:100%;font-size:0.85rem;border-collapse:collapse;"><thead><tr style="text-align:left;border-bottom:1px solid var(--cream-dark);">';
+      html += '<th style="padding:6px 4px;">Source</th><th>Name</th><th style="text-align:right;">Unit cost ($)</th><th style="text-align:right;">Qty</th><th style="text-align:right;">Scrap %</th><th style="text-align:right;">Subtotal</th><th></th></tr></thead><tbody>';
+      components.forEach(function(c, i) {
+        var qty = Number(c.quantity) || 0;
+        var scrap = Number(c.scrapPercent) || 0;
+        var unit = Number(c.unitCost) || 0;
+        var sub = qty * (1 + scrap / 100) * unit;
+        html += '<tr style="border-bottom:1px solid var(--cream-dark);">';
+        html += '<td style="padding:6px 4px;"><select onchange="makerVarSetComponentField(' + i + ',\'sourceType\',this.value)" style="font-size:0.78rem;padding:3px 6px;">';
+        html += '<option value="material"' + (c.sourceType === 'material' ? ' selected' : '') + '>Material</option>';
+        html += '<option value="free-text"' + (c.sourceType !== 'material' ? ' selected' : '') + '>Free text</option>';
+        html += '</select></td>';
+        if (c.sourceType === 'material') {
+          html += '<td><select onchange="makerVarLinkMaterial(' + i + ',this.value)" style="font-size:0.85rem;padding:4px 6px;width:100%;">';
+          html += '<option value="">— pick material —</option>';
+          matLabels.forEach(function(m) {
+            html += '<option value="' + esc(m.id) + '"' + (c.materialId === m.id ? ' selected' : '') + '>' + esc(m.name) + '</option>';
+          });
+          html += '</select></td>';
+        } else {
+          html += '<td><input type="text" value="' + esc(c.name || '') + '" oninput="makerVarSetComponentField(' + i + ',\'name\',this.value)" style="width:100%;padding:4px 6px;font-size:0.85rem;"></td>';
+        }
+        html += '<td style="text-align:right;"><input type="number" step="0.01" min="0" value="' + unit + '" oninput="makerVarSetComponentField(' + i + ',\'unitCost\',this.value)" style="width:90px;text-align:right;padding:4px 6px;font-size:0.85rem;"></td>';
+        html += '<td style="text-align:right;"><input type="number" step="0.01" min="0" value="' + qty + '" oninput="makerVarSetComponentField(' + i + ',\'quantity\',this.value)" style="width:80px;text-align:right;padding:4px 6px;font-size:0.85rem;"></td>';
+        html += '<td style="text-align:right;"><input type="number" step="0.1" min="0" value="' + scrap + '" oninput="makerVarSetComponentField(' + i + ',\'scrapPercent\',this.value)" style="width:70px;text-align:right;padding:4px 6px;font-size:0.85rem;"></td>';
+        html += '<td style="text-align:right;font-family:monospace;">$' + sub.toFixed(2) + '</td>';
+        html += '<td style="text-align:right;"><button class="btn btn-danger btn-small" onclick="makerVarRemoveComponent(' + i + ')" style="font-size:0.72rem;">Remove</button></td>';
+        html += '</tr>';
+      });
+      html += '</tbody></table>';
+    }
+    html += '</div>';
+
+    // Value-Add Steps section
+    html += '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:16px;margin-bottom:16px;">';
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">';
+    html += '<h4 style="margin:0;font-size:1.05rem;">Value-Add Steps</h4>';
+    html += '<button class="btn btn-secondary btn-small" onclick="makerVarAddStep()">+ Add step</button>';
+    html += '</div>';
+    if (steps.length === 0) {
+      html += '<p style="color:var(--warm-gray);font-size:0.85rem;margin:0;">No value-add steps yet. Add assembly, branding, packaging, etc.</p>';
+    } else {
+      html += '<table style="width:100%;font-size:0.85rem;border-collapse:collapse;"><thead><tr style="text-align:left;border-bottom:1px solid var(--cream-dark);">';
+      html += '<th style="padding:6px 4px;">Description</th><th style="text-align:right;">Labor min</th><th style="text-align:right;">Other cost ($)</th><th></th></tr></thead><tbody>';
+      steps.forEach(function(s, i) {
+        html += '<tr style="border-bottom:1px solid var(--cream-dark);">';
+        html += '<td style="padding:6px 4px;"><input type="text" value="' + esc(s.description || '') + '" oninput="makerVarSetStepField(' + i + ',\'description\',this.value)" style="width:100%;padding:4px 6px;font-size:0.85rem;"></td>';
+        html += '<td style="text-align:right;"><input type="number" step="1" min="0" value="' + (Number(s.laborMinutes) || 0) + '" oninput="makerVarSetStepField(' + i + ',\'laborMinutes\',this.value)" style="width:80px;text-align:right;padding:4px 6px;font-size:0.85rem;"></td>';
+        html += '<td style="text-align:right;"><input type="number" step="0.01" min="0" value="' + (Number(s.otherCost) || 0) + '" oninput="makerVarSetStepField(' + i + ',\'otherCost\',this.value)" style="width:90px;text-align:right;padding:4px 6px;font-size:0.85rem;"></td>';
+        html += '<td style="text-align:right;"><button class="btn btn-danger btn-small" onclick="makerVarRemoveStep(' + i + ')" style="font-size:0.72rem;">Remove</button></td>';
+        html += '</tr>';
+      });
+      html += '</tbody></table>';
+    }
+    html += '</div>';
+
+    tab.innerHTML = html;
+  }
+
+  // ----- Resell Define view ---------------------------------------------------
+
+  function renderResellDefineView(tab) {
+    var esc = MastAdmin.esc;
+    var p = defineState;
+    var spec = p.defineSpec.resell || {};
+    var supplier = spec.supplier || {};
+    var landed = spec.landedCost || {};
+    var leadTimeDays = Number(spec.leadTimeDays) || 0;
+    var costShape = computeCostShape(p, null);
+
+    var html = '';
+    html += '<button class="detail-back" onclick="makerCloseDefineView()">← Back to Pieces</button>';
+    html += '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;">';
+    html += '<div><h3 style="font-family:\'Cormorant Garamond\',serif;font-size:1.6rem;font-weight:500;margin:0;">' + esc(p.name || 'Untitled') + ' ' + productStatusBadgeHtml(p.status) + '</h3>';
+    html += '<span class="status-badge" style="background:rgba(42,124,111,0.15);color:var(--teal);font-size:0.78rem;margin-top:6px;display:inline-block;">Resell</span></div>';
+    html += '<div style="display:flex;gap:8px;">';
+    html += '<button class="btn btn-secondary btn-small" onclick="makerSaveDefineView()">Save & Continue</button>';
+    html += '<button class="btn btn-primary btn-small" onclick="makerRecalcCostShape()">Recalculate Cost</button>';
+    html += '</div></div>';
+
+    // Readiness checklist (Checkpoint E)
+    html += renderReadinessChecklistPanel(p);
+    // Checkpoint F — version-link + revision banners
+    html += renderVersionLinkBanner(p);
+    html += renderRevisionBanner(p);
+
+    html += renderCostShapeSummary(costShape);
+
+    // Markup config (Checkpoint E)
+    html += renderMarkupConfigSection(p);
+
+    // Supplier
+    html += '<div data-readiness-section="define-section" style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:16px;margin-bottom:16px;">';
+    html += '<h4 style="margin:0 0 12px;font-size:1.05rem;">Supplier</h4>';
+    html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">';
+    html += resellField('Supplier name', 'text', supplier.supplierName || '', 'supplier.supplierName');
+    html += resellField('Supplier SKU', 'text', supplier.supplierSku || '', 'supplier.supplierSku');
+    html += resellField('Unit cost ($)', 'number', supplier.unitCost || 0, 'supplier.unitCost', 0.01);
+    html += resellField('Minimum order qty (MOQ)', 'number', supplier.moq || 1, 'supplier.moq', 1);
+    html += '</div></div>';
+
+    // Landed cost
+    html += '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:16px;margin-bottom:16px;">';
+    html += '<h4 style="margin:0 0 12px;font-size:1.05rem;">Landed cost (per unit)</h4>';
+    html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">';
+    html += resellField('Freight ($)', 'number', landed.freight || 0, 'landedCost.freight', 0.01);
+    // Duty with mode picker
+    html += '<div><label style="display:block;font-size:0.78rem;font-weight:600;margin-bottom:4px;">Duty</label>';
+    html += '<div style="display:flex;gap:6px;">';
+    html += '<input type="number" step="0.01" min="0" value="' + (landed.duty || 0) + '" oninput="makerResellSet(\'landedCost.duty\',this.value)" style="flex:1;padding:6px 8px;font-size:0.85rem;">';
+    html += '<select onchange="makerResellSet(\'landedCost.dutyMode\',this.value)" style="padding:6px 8px;font-size:0.85rem;">';
+    html += '<option value="per-unit"' + ((landed.dutyMode || 'per-unit') === 'per-unit' ? ' selected' : '') + '>$ / unit</option>';
+    html += '<option value="percent"' + (landed.dutyMode === 'percent' ? ' selected' : '') + '>% of unit cost</option>';
+    html += '</select></div></div>';
+    html += resellField('Storage ($/unit)', 'number', landed.storage || 0, 'landedCost.storage', 0.01);
+    html += resellField('Other ($/unit)', 'number', landed.other || 0, 'landedCost.other', 0.01);
+    html += '</div></div>';
+
+    // Lead time
+    html += '<div data-readiness-section="capacity-section" style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:16px;margin-bottom:16px;">';
+    html += '<h4 style="margin:0 0 12px;font-size:1.05rem;">Lead time</h4>';
+    html += '<div style="max-width:240px;">';
+    html += '<label style="display:block;font-size:0.78rem;font-weight:600;margin-bottom:4px;">Lead time (days)</label>';
+    html += '<input type="number" step="1" min="0" value="' + leadTimeDays + '" oninput="makerResellSet(\'leadTimeDays\',this.value)" style="width:100%;padding:6px 8px;font-size:0.85rem;">';
+    html += '</div></div>';
+
+    tab.innerHTML = html;
+  }
+
+  function resellField(label, type, value, path, step) {
+    var esc = MastAdmin.esc;
+    var s = (typeof step === 'number') ? step : 1;
+    var html = '<div><label style="display:block;font-size:0.78rem;font-weight:600;margin-bottom:4px;">' + esc(label) + '</label>';
+    if (type === 'number') {
+      html += '<input type="number" step="' + s + '" min="0" value="' + value + '" oninput="makerResellSet(\'' + path + '\',this.value)" style="width:100%;padding:6px 8px;font-size:0.85rem;">';
+    } else {
+      html += '<input type="text" value="' + esc(value) + '" oninput="makerResellSet(\'' + path + '\',this.value)" style="width:100%;padding:6px 8px;font-size:0.85rem;">';
+    }
+    html += '</div>';
+    return html;
+  }
+
+  function renderCostShapeSummary(costShape) {
+    function fmt(c) { return '$' + ((c || 0) / 100).toFixed(2); }
+    var html = '';
+    html += '<div style="background:rgba(42,124,111,0.06);border:1px solid rgba(42,124,111,0.2);border-radius:8px;padding:14px 16px;margin-bottom:16px;">';
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">';
+    html += '<div style="font-size:0.78rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.05em;">Cost shape (downstream uniform)</div>';
+    html += '<div style="display:flex;gap:18px;font-size:0.85rem;font-family:monospace;">';
+    html += '<span>Material: <strong>' + fmt(costShape.materialCost) + '</strong></span>';
+    html += '<span>Labor: <strong>' + fmt(costShape.laborCost) + '</strong></span>';
+    html += '<span>Other: <strong>' + fmt(costShape.otherCost) + '</strong></span>';
+    html += '<span style="color:var(--teal);">Total: <strong>' + fmt(costShape.totalCost) + '</strong></span>';
+    html += '</div></div></div>';
+    return html;
+  }
+
+  // ----- VAR mutation handlers ----------------------------------------------
+
+  function ensureVarSpec() {
+    if (!defineState.defineSpec) defineState.defineSpec = {};
+    if (!defineState.defineSpec.var) defineState.defineSpec.var = { components: [], valueAddSteps: [] };
+    if (!Array.isArray(defineState.defineSpec.var.components)) defineState.defineSpec.var.components = [];
+    if (!Array.isArray(defineState.defineSpec.var.valueAddSteps)) defineState.defineSpec.var.valueAddSteps = [];
+    return defineState.defineSpec.var;
+  }
+
+  function varAddComponent() {
+    var spec = ensureVarSpec();
+    spec.components.push({ sourceType: 'free-text', name: '', unitCost: 0, quantity: 1, scrapPercent: 0, materialId: null });
+    renderDefineView();
+  }
+  function varRemoveComponent(idx) {
+    var spec = ensureVarSpec();
+    spec.components.splice(idx, 1);
+    renderDefineView();
+  }
+  function varSetComponentField(idx, field, value) {
+    var spec = ensureVarSpec();
+    if (!spec.components[idx]) return;
+    if (field === 'unitCost' || field === 'quantity' || field === 'scrapPercent') {
+      spec.components[idx][field] = Number(value) || 0;
+    } else {
+      spec.components[idx][field] = value;
+    }
+    // Don't re-render on every keystroke for text fields — only on numeric
+    if (field === 'unitCost' || field === 'quantity' || field === 'scrapPercent' || field === 'sourceType') {
+      renderDefineView();
+    }
+  }
+  function varLinkMaterial(idx, materialId) {
+    var spec = ensureVarSpec();
+    if (!spec.components[idx]) return;
+    spec.components[idx].materialId = materialId;
+    var m = materialsData[materialId];
+    if (m) {
+      spec.components[idx].name = m.name || '';
+      spec.components[idx].unitCost = m.unitCost || 0;
+    }
+    renderDefineView();
+  }
+  function varAddStep() {
+    var spec = ensureVarSpec();
+    spec.valueAddSteps.push({ description: '', laborMinutes: 0, otherCost: 0 });
+    renderDefineView();
+  }
+  function varRemoveStep(idx) {
+    var spec = ensureVarSpec();
+    spec.valueAddSteps.splice(idx, 1);
+    renderDefineView();
+  }
+  function varSetStepField(idx, field, value) {
+    var spec = ensureVarSpec();
+    if (!spec.valueAddSteps[idx]) return;
+    if (field === 'laborMinutes' || field === 'otherCost') {
+      spec.valueAddSteps[idx][field] = Number(value) || 0;
+    } else {
+      spec.valueAddSteps[idx][field] = value;
+    }
+  }
+
+  // ----- Resell mutation handlers --------------------------------------------
+
+  function ensureResellSpec() {
+    if (!defineState.defineSpec) defineState.defineSpec = {};
+    if (!defineState.defineSpec.resell) {
+      defineState.defineSpec.resell = {
+        supplier: { supplierName: '', supplierSku: '', unitCost: 0, moq: 1 },
+        landedCost: { freight: 0, duty: 0, dutyMode: 'per-unit', storage: 0, other: 0 },
+        leadTimeDays: 0
+      };
+    }
+    if (!defineState.defineSpec.resell.supplier) defineState.defineSpec.resell.supplier = {};
+    if (!defineState.defineSpec.resell.landedCost) defineState.defineSpec.resell.landedCost = {};
+    return defineState.defineSpec.resell;
+  }
+
+  function resellSet(path, value) {
+    var spec = ensureResellSpec();
+    var parts = path.split('.');
+    var numericFields = { unitCost: true, moq: true, freight: true, duty: true, storage: true, other: true, leadTimeDays: true };
+    var leaf = parts[parts.length - 1];
+    var coerced = numericFields[leaf] ? (Number(value) || 0) : value;
+    if (parts.length === 1) {
+      spec[parts[0]] = coerced;
+    } else if (parts.length === 2) {
+      if (!spec[parts[0]]) spec[parts[0]] = {};
+      spec[parts[0]][parts[1]] = coerced;
+    }
+    if (leaf === 'dutyMode') {
+      // Force re-render to redraw duty input semantics
+      renderDefineView();
+    }
+  }
+
+  // ----- Save / Recalc ---------------------------------------------------------
+
+  async function saveDefineView() {
+    if (!defineState || !defineProductId) return;
+    try {
+      var atype = defineState.acquisitionType || defineMode;
+      var path = 'public/products/' + defineProductId + '/';
+
+      // Checkpoint F — if the product is Active and in revision mode,
+      // stage defineSpec + markupConfig as pending changes instead of
+      // writing live. costShape continues to be recomputed live (it's
+      // derived; no need to pend it).
+      var liveProduct = findProduct(defineProductId);
+      var inRevMode = liveProduct && liveProduct.status === 'active' && liveProduct.hasPendingRevision;
+      var costShape = computeCostShape(defineState, null);
+
+      if (inRevMode && typeof stagePendingChanges === 'function') {
+        var pending = {};
+        if (JSON.stringify(defineState.defineSpec || {}) !== JSON.stringify(liveProduct.defineSpec || {})) {
+          pending.defineSpec = defineState.defineSpec || {};
+        }
+        if (atype === 'var' || atype === 'resell') {
+          var defaultsR = await loadTenantDefaultMarkups();
+          var mcR = Object.assign({}, defineState.markupConfig || {});
+          if (!(Number(mcR.wholesaleMarkup) > 0)) mcR.wholesaleMarkup = defaultsR.wholesaleMarkup;
+          if (!(Number(mcR.directMarkup) > 0))    mcR.directMarkup    = defaultsR.directMarkup;
+          if (!(Number(mcR.retailMarkup) > 0))    mcR.retailMarkup    = defaultsR.retailMarkup;
+          defineState.markupConfig = mcR;
+          if (JSON.stringify(mcR) !== JSON.stringify(liveProduct.markupConfig || {})) {
+            pending.markupConfig = mcR;
+          }
+        }
+        if (Object.keys(pending).length > 0) {
+          await stagePendingChanges(defineProductId, pending);
+        }
+        // costShape recompute is non-revisionable bookkeeping — write live
+        await persistCostShape(defineProductId, costShape);
+        try { await recomputeAndPersistReadiness(defineProductId); } catch (e) {}
+        MastAdmin.showToast('Staged ' + Object.keys(pending).length + ' change' + (Object.keys(pending).length === 1 ? '' : 's') + ' (Apply to go live)');
+        renderDefineView();
+        return;
+      }
+
+      // Persist defineSpec slice (live, non-revision-mode path)
+      await MastDB.set(path + 'defineSpec', defineState.defineSpec || {});
+
+      // Checkpoint E — markupConfig (VAR/Resell). Auto-fill defaults if blank.
+      if (atype === 'var' || atype === 'resell') {
+        var defaults = await loadTenantDefaultMarkups();
+        var mc = Object.assign({}, defineState.markupConfig || {});
+        if (!(Number(mc.wholesaleMarkup) > 0)) mc.wholesaleMarkup = defaults.wholesaleMarkup;
+        if (!(Number(mc.directMarkup) > 0))    mc.directMarkup    = defaults.directMarkup;
+        if (!(Number(mc.retailMarkup) > 0))    mc.retailMarkup    = defaults.retailMarkup;
+        defineState.markupConfig = mc;
+        await MastDB.set(path + 'markupConfig', mc);
+      }
+
+      await MastDB.set(path + 'updatedAt', new Date().toISOString());
+      // Recompute and persist costShape too
+      var costShape = computeCostShape(defineState, null);
+      await persistCostShape(defineProductId, costShape);
+      // Update in-memory product
+      if (window.productsData) {
+        var prod = window.productsData.find(function(p) { return p.pid === defineProductId; });
+        if (prod) {
+          prod.defineSpec = defineState.defineSpec;
+          if (defineState.markupConfig) prod.markupConfig = defineState.markupConfig;
+        }
+      }
+      // Checkpoint E — recompute readiness checklist on every save.
+      try { await recomputeAndPersistReadiness(defineProductId); } catch (e) {}
+      MastAdmin.showToast('Saved');
+      renderDefineView();
+    } catch (err) {
+      MastAdmin.showToast('Save failed: ' + err.message, true);
+    }
+  }
+
+  async function recalcCostShape() {
+    if (!defineState || !defineProductId) return;
+    var costShape = computeCostShape(defineState, null);
+    try {
+      await persistCostShape(defineProductId, costShape);
+      try { await recomputeAndPersistReadiness(defineProductId); } catch (e) {}
+      MastAdmin.showToast('Cost recalculated: $' + (costShape.totalCost / 100).toFixed(2));
+      renderDefineView();
+    } catch (err) {
+      MastAdmin.showToast('Recalc failed: ' + err.message, true);
+    }
+  }
+
+  // (renderPieces dispatcher updated above to route to renderDefineView)
+
+  // ============================================================
+  // Checkpoint E — Readiness Checklist + State Transitions
+  // ----------------------------------------------------------------
+  // - computeReadinessChecklist(product, recipe?) → derived flags
+  // - persistReadinessChecklist(pid, checklist)
+  // - productMarkupConfig(product, recipe?) → wholesale/direct/retail
+  // - renderReadinessChecklistPanel(product) → sticky checklist HTML
+  // - renderMarkupConfigSection(product) → markup inputs for VAR/Resell
+  // - promoteToReady(pid) / launchToActive(pid) state transitions
+  // - triggerChannelSyncForStatus → best-effort channel hook (opt-in)
+  // - productStatusBadgeHtml(status) shared status badge renderer
+  // ============================================================
+
+  var DEFAULT_MARKUPS = { wholesaleMarkup: 1.4, directMarkup: 1.6, retailMarkup: 2.0 };
+  var tenantDefaultMarkups = null; // populated lazily from admin/config/defaults/markups
+  var tenantSettingsCache = null;  // populated lazily from admin/config/settings
+
+  async function loadTenantDefaultMarkups() {
+    if (tenantDefaultMarkups) return tenantDefaultMarkups;
+    try {
+      var cfg = await MastDB.get('admin/config/defaults/markups');
+      if (cfg && typeof cfg === 'object') {
+        tenantDefaultMarkups = {
+          wholesaleMarkup: Number(cfg.wholesaleMarkup) || DEFAULT_MARKUPS.wholesaleMarkup,
+          directMarkup: Number(cfg.directMarkup) || DEFAULT_MARKUPS.directMarkup,
+          retailMarkup: Number(cfg.retailMarkup) || DEFAULT_MARKUPS.retailMarkup
+        };
+      } else {
+        tenantDefaultMarkups = Object.assign({}, DEFAULT_MARKUPS);
+      }
+    } catch (e) {
+      tenantDefaultMarkups = Object.assign({}, DEFAULT_MARKUPS);
+    }
+    return tenantDefaultMarkups;
+  }
+
+  async function loadTenantSettings() {
+    if (tenantSettingsCache) return tenantSettingsCache;
+    try {
+      tenantSettingsCache = (await MastDB.get('admin/config/settings')) || {};
+    } catch (e) {
+      tenantSettingsCache = {};
+    }
+    return tenantSettingsCache;
+  }
+
+  /**
+   * Resolve the markup config for a product. Build mode reads from the linked
+   * recipe (legacy source-of-truth). VAR/Resell read from product.markupConfig
+   * (new in Checkpoint E — resolves D's O-D2). Returns null if unknown.
+   */
+  function productMarkupConfig(product, recipe) {
+    if (!product) return null;
+    var atype = product.acquisitionType || 'build';
+    if (atype === 'build') {
+      var r = recipe || (function() {
+        var found = null;
+        Object.values(recipesData).forEach(function(rr) {
+          if (rr && rr.productId === product.pid && rr.status !== 'archived') found = rr;
+        });
+        return found;
+      })();
+      if (r && (r.wholesaleMarkup || r.directMarkup || r.retailMarkup)) {
+        return {
+          wholesaleMarkup: Number(r.wholesaleMarkup) || 0,
+          directMarkup: Number(r.directMarkup) || 0,
+          retailMarkup: Number(r.retailMarkup) || 0
+        };
+      }
+      return null;
+    }
+    var m = product.markupConfig;
+    if (m && (m.wholesaleMarkup || m.directMarkup || m.retailMarkup)) {
+      return {
+        wholesaleMarkup: Number(m.wholesaleMarkup) || 0,
+        directMarkup: Number(m.directMarkup) || 0,
+        retailMarkup: Number(m.retailMarkup) || 0
+      };
+    }
+    return null;
+  }
+
+  /**
+   * Compute the readiness checklist flags for a product. Pure function.
+   * Returns { defined, costed, channeled, capacityPlanned, listingReady }.
+   */
+  function computeReadinessChecklist(product, recipe) {
+    if (!product) {
+      return { defined: false, costed: false, channeled: false, capacityPlanned: false, listingReady: false };
+    }
+    var atype = product.acquisitionType || 'build';
+    var r = recipe || (function() {
+      var found = null;
+      Object.values(recipesData).forEach(function(rr) {
+        if (rr && rr.productId === product.pid && rr.status !== 'archived') found = rr;
+      });
+      return found;
+    })();
+
+    // defined — mode-specific definition has at least one component/material/supplier
+    var defined = false;
+    if (atype === 'build') {
+      defined = !!(r && r.lineItems && Object.keys(r.lineItems).length > 0);
+    } else if (atype === 'var') {
+      var spec = (product.defineSpec || {}).var || {};
+      defined = (Array.isArray(spec.components) && spec.components.length > 0) ||
+                (Array.isArray(spec.valueAddSteps) && spec.valueAddSteps.length > 0);
+    } else if (atype === 'resell') {
+      var rspec = (product.defineSpec || {}).resell || {};
+      var supp = rspec.supplier || {};
+      defined = !!(supp.supplierName && (Number(supp.unitCost) || 0) > 0);
+    }
+
+    // costed — totalCost > 0 AND markup config present
+    var totalCents = Number(product.totalCost) || 0;
+    var markup = productMarkupConfig(product, r);
+    var costed = totalCents > 0 && !!markup;
+
+    // channeled — at least one channel mapping
+    var channeled = false;
+    if (product.externalRefs) {
+      ['shopify', 'etsy', 'square'].forEach(function(ch) {
+        var ref = product.externalRefs[ch];
+        if (ref && (ref.externalId || ref.syncEnabled)) channeled = true;
+      });
+    }
+    if (!channeled && product.internalStorefrontOnly) channeled = true;
+    if (!channeled && product.channelSyncEnabled) channeled = true;
+
+    // capacityPlanned — lead time / batch size set, or explicitly skipped
+    var capacityPlanned = false;
+    if (product.capacitySkipped) capacityPlanned = true;
+    if (!capacityPlanned && (Number(product.leadTimeDays) || 0) > 0) capacityPlanned = true;
+    if (!capacityPlanned && atype === 'resell') {
+      var rspec2 = (product.defineSpec || {}).resell || {};
+      if ((Number(rspec2.leadTimeDays) || 0) > 0) capacityPlanned = true;
+    }
+    if (!capacityPlanned && r && (Number(r.batchSize) || 0) > 0) capacityPlanned = true;
+    if (!capacityPlanned && (Number(product.batchSize) || 0) > 0) capacityPlanned = true;
+
+    // listingReady — name + at least one image + description
+    var hasName = !!(product.name && String(product.name).trim());
+    var hasImage = !!(product.images && product.images.length) ||
+                   !!(product.imageIds && product.imageIds.length);
+    var hasDescription = !!(product.description && String(product.description).trim()) ||
+                         !!(product.shortDescription && String(product.shortDescription).trim());
+    var listingReady = hasName && hasImage && hasDescription;
+
+    return {
+      defined: !!defined,
+      costed: !!costed,
+      channeled: !!channeled,
+      capacityPlanned: !!capacityPlanned,
+      listingReady: !!listingReady
+    };
+  }
+
+  /**
+   * Persist the derived readinessChecklist onto the product, but only when it
+   * changed (avoids redundant writes). Returns the new checklist.
+   */
+  async function persistReadinessChecklist(productId, checklist) {
+    if (!productId || !checklist) return checklist;
+    var path = 'public/products/' + productId + '/readinessChecklist';
+    try {
+      await MastDB.set(path, checklist);
+      if (window.productsData) {
+        var prod = window.productsData.find(function(p) { return p.pid === productId; });
+        if (prod) prod.readinessChecklist = checklist;
+      }
+    } catch (e) {
+      console.warn('persistReadinessChecklist failed', e);
+    }
+    return checklist;
+  }
+
+  /**
+   * Recompute + persist if changed. Convenience for save / recalc / transition flows.
+   */
+  async function recomputeAndPersistReadiness(productId) {
+    var products = window.productsData || [];
+    var p = products.find(function(pp) { return pp.pid === productId; });
+    if (!p) return null;
+    var fresh = computeReadinessChecklist(p, null);
+    var prior = p.readinessChecklist || {};
+    var changed = ['defined','costed','channeled','capacityPlanned','listingReady'].some(function(k) {
+      return !!prior[k] !== !!fresh[k];
+    });
+    if (!changed) return prior;
+    return await persistReadinessChecklist(productId, fresh);
+  }
+
+  /**
+   * Best-effort channel sync hook for status transitions.
+   * - * → active: invoke publishProductToShopify if Shopify externalId or syncEnabled
+   * - active → archived/anything: best-effort unpublish hook (currently a TODO —
+   *   a dedicated `unpublishProductFromShopify` callable does not exist in the
+   *   Cloud Functions surface today; we record the intent in __mastChannelSyncIntents
+   *   so a follow-up checkpoint can flush it).
+   *
+   * Gated by tenant settings flag `autoSyncOnStatusChange` (default true).
+   * All errors logged, never thrown — status transitions never block on sync.
+   */
+  async function triggerChannelSyncForStatus(product, oldStatus, newStatus) {
+    if (!product) return;
+    try {
+      var settings = await loadTenantSettings();
+      var auto = (settings && typeof settings.autoSyncOnStatusChange === 'boolean')
+        ? settings.autoSyncOnStatusChange : true;
+      if (!auto) {
+        console.log('[checkpoint-E] auto channel sync disabled by tenant settings — skipping');
+        return;
+      }
+    } catch (e) { /* fall through, default true */ }
+
+    var hasShopify = !!(product.externalRefs && product.externalRefs.shopify);
+    var shopifySync = hasShopify || !!(product.channelSyncEnabled && product.channelSyncEnabled.shopify);
+
+    if (newStatus === 'active') {
+      if (shopifySync && typeof firebase !== 'undefined' && firebase.functions) {
+        try {
+          var callable = firebase.functions().httpsCallable('publishProductToShopify');
+          await callable({ tenantId: MastDB.tenantId(), pid: product.pid, trigger: 'status-transition' });
+          console.log('[checkpoint-E] Shopify publish fired for', product.pid);
+        } catch (err) {
+          console.warn('[checkpoint-E] Shopify publish failed for', product.pid, err && err.message);
+        }
+      }
+      // Etsy / Square: TODO — publishToEtsy / publishToSquare callables
+      // aren't standardized yet. Logged so a follow-up can wire them.
+      window.__mastChannelSyncIntents = window.__mastChannelSyncIntents || [];
+      window.__mastChannelSyncIntents.push({
+        pid: product.pid, op: 'publish', at: new Date().toISOString(),
+        oldStatus: oldStatus, newStatus: newStatus
+      });
+    } else if (oldStatus === 'active' && newStatus !== 'active') {
+      // active → not-active: record intent. No standardized unpublish callable today.
+      // TODO Checkpoint G: wire delist hooks per archive sub-state.
+      window.__mastChannelSyncIntents = window.__mastChannelSyncIntents || [];
+      window.__mastChannelSyncIntents.push({
+        pid: product.pid, op: 'unpublish', at: new Date().toISOString(),
+        oldStatus: oldStatus, newStatus: newStatus
+      });
+      console.log('[checkpoint-E] recorded unpublish intent for', product.pid, '(unpublish hook TODO)');
+    }
+  }
+
+  /**
+   * Promote a Draft → Ready. Recomputes the checklist first; blocks on hard
+   * gates (defined, costed, listingReady). Channeled + capacityPlanned warn but do
+   * not block. Sets promotedToReadyAt.
+   */
+  async function promoteToReady(pid) {
+    var products = window.productsData || [];
+    var p = products.find(function(pp) { return pp.pid === pid; });
+    if (!p) { MastAdmin.showToast('Product not found', true); return; }
+    if (p.status === 'ready' || p.status === 'active') {
+      MastAdmin.showToast('Already ' + p.status, true);
+      return;
+    }
+    var checklist = computeReadinessChecklist(p, null);
+    await persistReadinessChecklist(pid, checklist);
+    var hardGates = ['defined','costed','listingReady'];
+    var failedHard = hardGates.filter(function(k) { return !checklist[k]; });
+    if (failedHard.length) {
+      MastAdmin.showToast('Cannot promote — missing: ' + failedHard.join(', '), true);
+      return;
+    }
+    var softGates = ['channeled','capacityPlanned'].filter(function(k) { return !checklist[k]; });
+    var msg = 'Promote to Ready? This means the product is ready for launch review. You can still edit anything.';
+    if (softGates.length) {
+      msg += '\n\n(Recommended but not required: ' + softGates.join(', ') + ' — proceed anyway?)';
+    }
+    var ok = await window.mastConfirm(msg, { title: 'Promote to Ready', confirmLabel: 'Promote' });
+    if (!ok) return;
+
+    var now = new Date().toISOString();
+    var oldStatus = p.status;
+    try {
+      await MastDB.set('public/products/' + pid + '/status', 'ready');
+      await MastDB.set('public/products/' + pid + '/promotedToReadyAt', now);
+      await MastDB.set('public/products/' + pid + '/updatedAt', now);
+      p.status = 'ready';
+      p.promotedToReadyAt = now;
+      p.updatedAt = now;
+      MastAdmin.writeAudit('promote_to_ready', 'products', pid);
+      MastAdmin.showToast('Promoted to Ready ✓');
+      // Re-render whichever surface is visible
+      if (piecesView === 'define') renderDefineView();
+      else if (piecesView === 'list') renderPiecesList();
+      // Channel sync: ready is not yet active — no publish; just record state.
+      try { await triggerChannelSyncForStatus(p, oldStatus, 'ready'); } catch (e) {}
+    } catch (err) {
+      MastAdmin.showToast('Promote failed: ' + (err && err.message), true);
+    }
+  }
+
+  /**
+   * Launch a Ready → Active. Verifies channel mapping or made-to-order flag,
+   * then transitions and triggers channel sync.
+   */
+  async function launchToActive(pid) {
+    var products = window.productsData || [];
+    var p = products.find(function(pp) { return pp.pid === pid; });
+    if (!p) { MastAdmin.showToast('Product not found', true); return; }
+    if (p.status !== 'ready') {
+      MastAdmin.showToast('Product must be Ready before launching (current: ' + (p.status || 'unset') + ')', true);
+      return;
+    }
+    var checklist = computeReadinessChecklist(p, null);
+    if (!checklist.channeled && !p.internalStorefrontOnly) {
+      // Nudge but allow (channel sync hook will simply no-op)
+      var proceed = await window.mastConfirm(
+        'No channel mapping is enabled for this product. Launch anyway? It will be Active in your storefront only.',
+        { title: 'No channels enabled', confirmLabel: 'Launch anyway' }
+      );
+      if (!proceed) return;
+    }
+
+    // Inventory or made-to-order check
+    var inv = (window.inventory || {})[pid];
+    var totals = (typeof window.getInventoryTotals === 'function') ? window.getInventoryTotals(inv) : null;
+    var hasInv = totals && (totals.onHand > 0 || (inv && inv.stockType && /order|build/.test(inv.stockType)));
+    if (!hasInv && !(inv && /order|build/.test(inv.stockType || '')) && !p.madeToOrder) {
+      var proceedInv = await window.mastConfirm(
+        'No inventory is set up and product is not flagged made-to-order. Launch anyway?',
+        { title: 'Inventory not configured', confirmLabel: 'Launch anyway' }
+      );
+      if (!proceedInv) return;
+    }
+
+    var ok = await window.mastConfirm(
+      'Launch this product to Active? It will be eligible for channel sync (Shopify, Etsy, Square) per your tenant settings.',
+      { title: 'Launch to Active', confirmLabel: 'Launch' }
+    );
+    if (!ok) return;
+
+    var now = new Date().toISOString();
+    var oldStatus = p.status;
+    try {
+      await MastDB.set('public/products/' + pid + '/status', 'active');
+      await MastDB.set('public/products/' + pid + '/promotedToActiveAt', now);
+      await MastDB.set('public/products/' + pid + '/updatedAt', now);
+      p.status = 'active';
+      p.promotedToActiveAt = now;
+      p.updatedAt = now;
+      MastAdmin.writeAudit('launch_to_active', 'products', pid);
+      MastAdmin.showToast('Launched ✓');
+      if (piecesView === 'define') renderDefineView();
+      else if (piecesView === 'list') renderPiecesList();
+      try { await triggerChannelSyncForStatus(p, oldStatus, 'active'); } catch (e) {}
+    } catch (err) {
+      MastAdmin.showToast('Launch failed: ' + (err && err.message), true);
+    }
+  }
+
+  // ----- Status badge -------------------------------------------------------
+
+  function productStatusBadgeHtml(status) {
+    var s = (status || 'draft').toLowerCase();
+    var styles = {
+      draft:    { bg: 'rgba(120,120,120,0.15)', color: '#525252', label: 'Draft' },
+      ready:    { bg: 'rgba(217,119,6,0.15)',   color: '#b45309', label: 'Ready' },
+      active:   { bg: 'rgba(42,124,111,0.15)',  color: 'var(--teal,#2a7c6f)', label: 'Active' },
+      archived: { bg: 'rgba(180,83,9,0.18)',    color: '#9a3412', label: 'Archived' }
+    };
+    var st = styles[s] || styles.draft;
+    return '<span class="status-badge product-status-badge product-status-' + s +
+      '" style="background:' + st.bg + ';color:' + st.color +
+      ';font-size:0.72rem;padding:3px 8px;border-radius:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;">' +
+      st.label + '</span>';
+  }
+
+  // ----- Readiness Checklist UI panel --------------------------------------
+
+  function readinessIcon(state) {
+    // ✅ pass, ⚠ optional-fail, ⏳ pending
+    if (state === 'pass') return '<span style="color:#2a7c6f;font-size:1.05rem;">✅</span>';
+    if (state === 'warn') return '<span style="color:#b45309;font-size:1.05rem;">⚠️</span>';
+    return '<span style="color:#9ca3af;font-size:1.05rem;">⏳</span>';
+  }
+
+  function renderReadinessChecklistPanel(product) {
+    if (!product) return '';
+    var checklist = computeReadinessChecklist(product, null);
+    var items = [
+      { key: 'defined',         label: 'Defined',         hint: 'Mode-specific definition (recipe / components / supplier)', required: true,  scrollTo: 'define-section' },
+      { key: 'costed',          label: 'Costed',          hint: 'Total cost > 0 and markup config present',                  required: true,  scrollTo: 'markup-section' },
+      { key: 'channeled',       label: 'Channeled',       hint: 'At least one channel mapping (Shopify / Etsy / Square)',    required: false, scrollTo: 'channels-section' },
+      { key: 'capacityPlanned', label: 'Capacity planned',hint: 'Lead time, batch size, or explicitly skipped',              required: false, scrollTo: 'capacity-section' },
+      { key: 'listingReady',    label: 'Listing ready',   hint: 'Name + image + description',                                required: true,  scrollTo: 'listing-section' }
+    ];
+    var pid = product.pid;
+    var status = product.status || 'draft';
+    var hardPass = items.filter(function(it){ return it.required; }).every(function(it){ return checklist[it.key]; });
+    var allPass = items.every(function(it) { return checklist[it.key]; });
+
+    var html = '';
+    html += '<div class="mast-readiness-panel" style="position:sticky;top:0;z-index:5;background:var(--surface-card,#fff);border:1px solid var(--cream-dark,#e5e1d8);border-radius:8px;padding:14px 16px;margin-bottom:16px;box-shadow:0 1px 2px rgba(0,0,0,0.04);">';
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px;">';
+    html += '<div style="display:flex;align-items:center;gap:10px;">';
+    html += '<strong style="font-size:0.9rem;">Readiness checklist</strong>';
+    html += productStatusBadgeHtml(status);
+    if (allPass) html += '<span style="font-size:0.78rem;color:#2a7c6f;">All items complete</span>';
+    else if (hardPass) html += '<span style="font-size:0.78rem;color:#b45309;">Required items complete · optional items pending</span>';
+    else html += '<span style="font-size:0.78rem;color:#9a3412;">Required items incomplete</span>';
+    html += '</div>';
+    html += '<div style="display:flex;gap:8px;">';
+    if (status === 'draft') {
+      var disabled = !hardPass ? ' disabled style="opacity:0.5;cursor:not-allowed;"' : '';
+      html += '<button class="btn btn-primary btn-small"' + disabled + ' onclick="makerPromoteToReady(\'' + MastAdmin.esc(pid) + '\')">Promote to Ready →</button>';
+    } else if (status === 'ready') {
+      html += '<button class="btn btn-primary btn-small" onclick="makerLaunchToActive(\'' + MastAdmin.esc(pid) + '\')">Launch to Active →</button>';
+    }
+    html += '</div></div>';
+
+    html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;">';
+    items.forEach(function(it) {
+      var pass = !!checklist[it.key];
+      var state = pass ? 'pass' : (it.required ? 'pending' : 'warn');
+      html += '<div role="button" tabindex="0" onclick="makerScrollToReadinessSection(\'' + it.scrollTo + '\')" style="display:flex;align-items:flex-start;gap:8px;padding:8px 10px;border:1px solid ' + (pass ? 'rgba(42,124,111,0.25)' : 'rgba(0,0,0,0.08)') + ';border-radius:6px;background:' + (pass ? 'rgba(42,124,111,0.04)' : 'rgba(0,0,0,0.02)') + ';cursor:pointer;">';
+      html += '<div>' + readinessIcon(state) + '</div>';
+      html += '<div style="flex:1;min-width:0;"><div style="font-weight:600;font-size:0.82rem;">' + MastAdmin.esc(it.label) + (it.required ? '' : ' <span style="font-weight:400;color:var(--warm-gray,#777);font-size:0.7rem;">(optional)</span>') + '</div>';
+      html += '<div style="font-size:0.72rem;color:var(--warm-gray,#777);">' + MastAdmin.esc(it.hint) + '</div></div>';
+      html += '</div>';
+    });
+    html += '</div>';
+    html += '</div>';
+    return html;
+  }
+
+  function scrollToReadinessSection(anchor) {
+    if (!anchor) return;
+    var el = document.querySelector('[data-readiness-section="' + anchor + '"]');
+    if (el && el.scrollIntoView) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  // ----- Markup config UI (VAR/Resell) -------------------------------------
+
+  function renderMarkupConfigSection(product) {
+    if (!product) return '';
+    var atype = product.acquisitionType || 'build';
+    if (atype === 'build') return ''; // Build reads markup from recipe
+    var mc = product.markupConfig || {};
+    var w = (mc.wholesaleMarkup != null ? mc.wholesaleMarkup : '');
+    var d = (mc.directMarkup != null ? mc.directMarkup : '');
+    var r = (mc.retailMarkup != null ? mc.retailMarkup : '');
+    var hint = '';
+    if (w === '' && d === '' && r === '') {
+      hint = '<span style="font-size:0.72rem;color:var(--warm-gray,#777);">Defaults will be applied on first save (' +
+        DEFAULT_MARKUPS.wholesaleMarkup + ' / ' + DEFAULT_MARKUPS.directMarkup + ' / ' + DEFAULT_MARKUPS.retailMarkup + ')</span>';
+    }
+    var html = '';
+    html += '<div data-readiness-section="markup-section" style="background:var(--cream,#faf7f0);border:1px solid var(--cream-dark,#e5e1d8);border-radius:8px;padding:16px;margin-bottom:16px;">';
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">';
+    html += '<h4 style="margin:0;font-size:1.05rem;">Markup config</h4>' + hint + '</div>';
+    html += '<div style="display:grid;grid-template-columns:repeat(3,minmax(120px,1fr));gap:12px;">';
+    html += '<div><label style="display:block;font-size:0.78rem;font-weight:600;margin-bottom:4px;">Wholesale markup ×</label>';
+    html += '<input type="number" step="0.05" min="0" value="' + w + '" oninput="makerSetMarkup(\'wholesaleMarkup\',this.value)" style="width:100%;padding:6px 8px;font-size:0.85rem;" placeholder="' + DEFAULT_MARKUPS.wholesaleMarkup + '"></div>';
+    html += '<div><label style="display:block;font-size:0.78rem;font-weight:600;margin-bottom:4px;">Direct markup ×</label>';
+    html += '<input type="number" step="0.05" min="0" value="' + d + '" oninput="makerSetMarkup(\'directMarkup\',this.value)" style="width:100%;padding:6px 8px;font-size:0.85rem;" placeholder="' + DEFAULT_MARKUPS.directMarkup + '"></div>';
+    html += '<div><label style="display:block;font-size:0.78rem;font-weight:600;margin-bottom:4px;">Retail markup ×</label>';
+    html += '<input type="number" step="0.05" min="0" value="' + r + '" oninput="makerSetMarkup(\'retailMarkup\',this.value)" style="width:100%;padding:6px 8px;font-size:0.85rem;" placeholder="' + DEFAULT_MARKUPS.retailMarkup + '"></div>';
+    html += '</div></div>';
+    return html;
+  }
+
+  function setMarkup(field, value) {
+    if (!defineState) return;
+    if (!defineState.markupConfig) defineState.markupConfig = {};
+    var v = Number(value);
+    if (!isFinite(v) || v < 0) v = 0;
+    defineState.markupConfig[field] = v;
+    // No re-render on every keystroke; saved with Save & Continue
+  }
+
+  // ============================================================
+  // End Checkpoint E
+  // ============================================================
+
+  // ============================================================
+  // Checkpoint F — Rework Patterns (in-place revisions + clone-to-v2)
+  // ----------------------------------------------------------------
+  // Pattern 1: Active product edits go to product.pendingChanges blob until
+  //   user clicks Apply. Live fields are guarded.
+  // Pattern 2: Clone-to-v2 creates a new Draft Product with parentProductId
+  //   and version+1. Original stays Active.
+  // Both flows preserve continuity of the live SKU.
+  // ============================================================
+
+  // Fields that should never be revisioned — even on Active products,
+  // these write directly through to live fields. Keep this list narrow.
+  var NON_REVISIONABLE_FIELDS = {
+    status: true,
+    promotedToReadyAt: true,
+    promotedToActiveAt: true,
+    archivedAt: true,
+    archivedSubState: true,
+    returnsAcceptedUntil: true,
+    retiredAt: true,
+    'externalRefs': true,         // sync metadata
+    'channelBindings': true,      // sync metadata
+    'channelIds': true,           // sync metadata
+    'salesCount': true,
+    'lastSoldAt': true,
+    'recipeVersion': true,        // recipe handshake
+    'hasPendingRevision': true,
+    'pendingChanges': true,
+    'pendingChangesUpdatedAt': true,
+    'pendingChangesAppliedAt': true,
+    'parentProductId': true,
+    'version': true,
+    'updatedAt': true             // bookkeeping
+  };
+
+  /**
+   * Whether a field write must be routed through pendingChanges when the
+   * product is Active. Fields under NON_REVISIONABLE_FIELDS still write live.
+   */
+  function isFieldRevisionable(fieldPath) {
+    if (!fieldPath) return false;
+    var top = String(fieldPath).split('.')[0];
+    return !NON_REVISIONABLE_FIELDS[fieldPath] && !NON_REVISIONABLE_FIELDS[top];
+  }
+
+  /**
+   * Active products are guarded — direct edits to revisionable fields require
+   * entering revision mode (which initializes pendingChanges).
+   */
+  function isProductGuarded(product) {
+    if (!product) return false;
+    return product.status === 'active';
+  }
+
+  function findProduct(pid) {
+    var products = window.productsData || [];
+    return products.find(function(p) { return p && p.pid === pid; });
+  }
+
+  /**
+   * Enter revision mode on an Active product. Initializes pendingChanges blob
+   * and sets hasPendingRevision so the form unlocks. No-op for non-Active.
+   */
+  async function enterRevisionMode(pid) {
+    var p = findProduct(pid);
+    if (!p) { MastAdmin.showToast('Product not found', true); return false; }
+    if (p.status !== 'active') {
+      MastAdmin.showToast('Revision mode only applies to Active products', true);
+      return false;
+    }
+    if (p.hasPendingRevision) return true; // already in revision mode
+    var now = new Date().toISOString();
+    try {
+      var path = 'public/products/' + pid + '/';
+      await MastDB.set(path + 'hasPendingRevision', true);
+      await MastDB.set(path + 'pendingChanges', {});
+      await MastDB.set(path + 'pendingChangesUpdatedAt', now);
+      p.hasPendingRevision = true;
+      p.pendingChanges = {};
+      p.pendingChangesUpdatedAt = now;
+      MastAdmin.writeAudit('enter_revision_mode', 'products', pid);
+      MastAdmin.showToast('Revision mode on — edits stage until you Apply');
+      return true;
+    } catch (err) {
+      MastAdmin.showToast('Could not enter revision mode: ' + (err && err.message), true);
+      return false;
+    }
+  }
+
+  /**
+   * Stage a single field's pending value. Works only when product is in
+   * revision mode (hasPendingRevision === true). Persists to
+   * product.pendingChanges[fieldPath].
+   */
+  async function setPendingFieldValue(pid, fieldPath, value) {
+    var p = findProduct(pid);
+    if (!p) return false;
+    if (!p.hasPendingRevision) {
+      console.warn('[checkpoint-F] setPendingFieldValue called outside revision mode', pid, fieldPath);
+      return false;
+    }
+    if (!isFieldRevisionable(fieldPath)) {
+      // Non-revisionable: write live directly.
+      try {
+        await MastDB.set('public/products/' + pid + '/' + fieldPath, value);
+        if (p) {
+          // best-effort in-memory mirror
+          p[fieldPath.split('.')[0]] = p[fieldPath.split('.')[0]];
+        }
+      } catch (e) { console.warn('non-revisionable write failed', e); }
+      return true;
+    }
+    p.pendingChanges = p.pendingChanges || {};
+    p.pendingChanges[fieldPath] = value;
+    p.pendingChangesUpdatedAt = new Date().toISOString();
+    try {
+      await MastDB.set('public/products/' + pid + '/pendingChanges/' + fieldPath.replace(/\//g, '__'), value);
+      await MastDB.set('public/products/' + pid + '/pendingChangesUpdatedAt', p.pendingChangesUpdatedAt);
+    } catch (err) {
+      console.warn('[checkpoint-F] setPendingFieldValue persist failed', err);
+    }
+    return true;
+  }
+
+  /**
+   * Bulk-stage pending changes from an object map { fieldPath: value, ... }.
+   * Convenience for save-form flows.
+   */
+  async function stagePendingChanges(pid, changes) {
+    var p = findProduct(pid);
+    if (!p) return false;
+    if (!p.hasPendingRevision) {
+      console.warn('[checkpoint-F] stagePendingChanges: not in revision mode for', pid);
+      return false;
+    }
+    var nextPending = Object.assign({}, p.pendingChanges || {});
+    Object.keys(changes || {}).forEach(function(k) {
+      if (isFieldRevisionable(k)) nextPending[k] = changes[k];
+    });
+    p.pendingChanges = nextPending;
+    p.pendingChangesUpdatedAt = new Date().toISOString();
+    try {
+      await MastDB.set('public/products/' + pid + '/pendingChanges', nextPending);
+      await MastDB.set('public/products/' + pid + '/pendingChangesUpdatedAt', p.pendingChangesUpdatedAt);
+    } catch (err) {
+      console.warn('[checkpoint-F] stagePendingChanges persist failed', err);
+    }
+    return true;
+  }
+
+  /**
+   * Format a pending-change value for human display in the apply-confirmation list.
+   */
+  function fmtPendingValue(v) {
+    if (v == null) return '—';
+    if (typeof v === 'number') return String(v);
+    if (typeof v === 'string') return v.length > 60 ? v.slice(0, 57) + '…' : v;
+    if (Array.isArray(v)) return '[' + v.length + ' items]';
+    if (typeof v === 'object') return '{' + Object.keys(v).length + ' fields}';
+    return String(v);
+  }
+
+  /**
+   * Apply pendingChanges to live fields. Confirmation modal lists the diffs.
+   * On confirm: copies each pendingChanges entry to the live path, clears the
+   * pendingChanges blob, sets pendingChangesAppliedAt, optionally fires
+   * channel re-sync, writes audit log.
+   */
+  async function applyPendingChanges(pid) {
+    var p = findProduct(pid);
+    if (!p) { MastAdmin.showToast('Product not found', true); return; }
+    var changes = p.pendingChanges || {};
+    var keys = Object.keys(changes);
+    if (keys.length === 0) {
+      MastAdmin.showToast('No pending changes to apply');
+      return;
+    }
+    var diffLines = keys.map(function(k) {
+      var live = readNestedField(p, k);
+      return k + ': ' + fmtPendingValue(live) + ' → ' + fmtPendingValue(changes[k]);
+    });
+    var msg = 'Apply ' + keys.length + ' change' + (keys.length === 1 ? '' : 's') + ' to this live product?\n\n' + diffLines.join('\n');
+    var ok = await window.mastConfirm(msg, { title: 'Apply Pending Changes', confirmLabel: 'Apply' });
+    if (!ok) return;
+
+    var path = 'public/products/' + pid + '/';
+    var now = new Date().toISOString();
+    try {
+      // Write each change to the live path
+      for (var i = 0; i < keys.length; i++) {
+        var fp = keys[i];
+        await MastDB.set(path + fp.replace(/\./g, '/'), changes[fp]);
+        // Mirror to in-memory product
+        writeNestedField(p, fp, changes[fp]);
+      }
+      // Clear pending
+      await MastDB.set(path + 'pendingChanges', null);
+      await MastDB.set(path + 'hasPendingRevision', false);
+      await MastDB.set(path + 'pendingChangesAppliedAt', now);
+      await MastDB.set(path + 'updatedAt', now);
+      p.pendingChanges = null;
+      p.hasPendingRevision = false;
+      p.pendingChangesAppliedAt = now;
+      p.updatedAt = now;
+      MastAdmin.writeAudit('apply_pending_changes', 'products', pid);
+
+      // Channel re-sync if applicable
+      try {
+        var settings = await loadTenantSettings();
+        var auto = (settings && typeof settings.autoSyncOnStatusChange === 'boolean')
+          ? settings.autoSyncOnStatusChange : true;
+        if (auto) {
+          var hasShopify = !!(p.externalRefs && p.externalRefs.shopify);
+          if (hasShopify && typeof firebase !== 'undefined' && firebase.functions) {
+            try {
+              var callable = firebase.functions().httpsCallable('publishProductToShopify');
+              await callable({ tenantId: MastDB.tenantId(), pid: pid, trigger: 'apply-pending-changes' });
+              console.log('[checkpoint-F] Shopify re-sync fired for', pid);
+            } catch (err) {
+              console.warn('[checkpoint-F] Shopify re-sync failed for', pid, err && err.message);
+            }
+          }
+          window.__mastChannelSyncIntents = window.__mastChannelSyncIntents || [];
+          window.__mastChannelSyncIntents.push({
+            pid: pid, op: 'republish', at: now, trigger: 'apply-pending-changes',
+            fields: keys
+          });
+        }
+      } catch (e) { /* sync errors never block apply */ }
+
+      // Recompute readiness — applied changes may flip listingReady, costed, etc.
+      try { await recomputeAndPersistReadiness(pid); } catch (e) {}
+
+      MastAdmin.showToast('Applied ' + keys.length + ' change' + (keys.length === 1 ? '' : 's') + ' ✓');
+      // Re-render whichever surface is open
+      if (typeof window.renderProductDetail === 'function' && window.selectedProductPid === pid) {
+        window.renderProductDetail(pid);
+      } else if (piecesView === 'define') {
+        renderDefineView();
+      } else if (piecesView === 'list') {
+        renderPiecesList();
+      }
+    } catch (err) {
+      MastAdmin.showToast('Apply failed: ' + (err && err.message), true);
+    }
+  }
+
+  /**
+   * Discard pendingChanges. Confirmation modal lists what will be discarded.
+   */
+  async function discardPendingChanges(pid) {
+    var p = findProduct(pid);
+    if (!p) { MastAdmin.showToast('Product not found', true); return; }
+    var changes = p.pendingChanges || {};
+    var keys = Object.keys(changes);
+    if (keys.length === 0) {
+      // Just exit revision mode
+      try {
+        await MastDB.set('public/products/' + pid + '/hasPendingRevision', false);
+        p.hasPendingRevision = false;
+        if (typeof window.renderProductDetail === 'function' && window.selectedProductPid === pid) {
+          window.renderProductDetail(pid);
+        }
+      } catch (e) {}
+      return;
+    }
+    var diffLines = keys.map(function(k) { return k + ': → ' + fmtPendingValue(changes[k]); });
+    var msg = 'Discard ' + keys.length + ' pending change' + (keys.length === 1 ? '' : 's') + '?\n\n' + diffLines.join('\n');
+    var ok = await window.mastConfirm(msg, { title: 'Discard Pending Changes', confirmLabel: 'Discard' });
+    if (!ok) return;
+
+    var path = 'public/products/' + pid + '/';
+    try {
+      await MastDB.set(path + 'pendingChanges', null);
+      await MastDB.set(path + 'hasPendingRevision', false);
+      p.pendingChanges = null;
+      p.hasPendingRevision = false;
+      MastAdmin.writeAudit('discard_pending_changes', 'products', pid);
+      MastAdmin.showToast('Discarded ' + keys.length + ' change' + (keys.length === 1 ? '' : 's'));
+      if (typeof window.renderProductDetail === 'function' && window.selectedProductPid === pid) {
+        window.renderProductDetail(pid);
+      } else if (piecesView === 'define') {
+        renderDefineView();
+      } else if (piecesView === 'list') {
+        renderPiecesList();
+      }
+    } catch (err) {
+      MastAdmin.showToast('Discard failed: ' + (err && err.message), true);
+    }
+  }
+
+  // ----- Helpers: read/write nested field paths -----------------------------
+  function readNestedField(obj, path) {
+    if (!obj || !path) return undefined;
+    var parts = path.split('.');
+    var cur = obj;
+    for (var i = 0; i < parts.length; i++) {
+      if (cur == null) return undefined;
+      cur = cur[parts[i]];
+    }
+    return cur;
+  }
+  function writeNestedField(obj, path, value) {
+    if (!obj || !path) return;
+    var parts = path.split('.');
+    var cur = obj;
+    for (var i = 0; i < parts.length - 1; i++) {
+      if (cur[parts[i]] == null || typeof cur[parts[i]] !== 'object') cur[parts[i]] = {};
+      cur = cur[parts[i]];
+    }
+    cur[parts[parts.length - 1]] = value;
+  }
+
+  // ----- Pattern 2: Clone-to-v2 ---------------------------------------------
+
+  /**
+   * Find a Draft child of the given product (any product whose parentProductId
+   * matches this pid and status is draft|ready). Returns the first match or null.
+   */
+  function findChildVersion(pid) {
+    var products = window.productsData || [];
+    for (var i = 0; i < products.length; i++) {
+      var p = products[i];
+      if (p && p.parentProductId === pid && p.status !== 'active' && p.status !== 'archived') return p;
+    }
+    return null;
+  }
+
+  /**
+   * Clone an Active product into a fresh Draft v(N+1). Original stays Active.
+   * - Generates new pid
+   * - Copies scalar fields, categories, acquisitionType, markupConfig, defineSpec
+   * - Sets parentProductId, increments version
+   * - Status: draft, clears readinessChecklist, no pending revision
+   * - Does NOT copy images, variants, listings (channelBindings/externalRefs),
+   *   inventory, or sales history. New SKU implies fresh listings.
+   * - For Build mode: creates a new recipe via duplicateRecipe and links it.
+   */
+  async function cloneProductForRedesign(sourcePid) {
+    var src = findProduct(sourcePid);
+    if (!src) { MastAdmin.showToast('Product not found', true); return; }
+    if (src.status !== 'active') {
+      MastAdmin.showToast('Clone for redesign is only available on Active products', true);
+      return;
+    }
+    var existingChild = findChildVersion(sourcePid);
+    var msg = 'Clone this product for a redesign? A new Draft product will be created. The original stays Active.';
+    if (existingChild) {
+      msg = 'A v' + (existingChild.version || 2) + ' Draft already exists for this product (' +
+        (existingChild.name || existingChild.pid) + '). Create another clone anyway?';
+    }
+    var ok = await window.mastConfirm(msg, { title: 'Clone for Redesign', confirmLabel: 'Clone to v' + (((src.version || 1) + 1)) });
+    if (!ok) return;
+
+    var newPid = 'p' + Date.now().toString(36) + '_v' + (((src.version || 1) + 1));
+    var now = new Date().toISOString();
+    var nextVersion = (Number(src.version) || 1) + 1;
+
+    // Deep-copy the scalar slice we want carried over.
+    var clone = {
+      pid: newPid,
+      name: (src.name || 'Untitled') + ' (v' + nextVersion + ')',
+      description: src.description || '',
+      shortDescription: src.shortDescription || '',
+      categories: Array.isArray(src.categories) ? src.categories.slice() : [],
+      slug: (src.slug ? src.slug + '-v' + nextVersion : ''),
+      acquisitionType: src.acquisitionType || 'build',
+      defineSpec: src.defineSpec ? JSON.parse(JSON.stringify(src.defineSpec)) : {},
+      markupConfig: src.markupConfig ? Object.assign({}, src.markupConfig) : null,
+      // Cost shape: copy as starting point — recalc happens on first edit
+      materialCost: src.materialCost || 0,
+      laborCost: src.laborCost || 0,
+      otherCost: src.otherCost || 0,
+      totalCost: src.totalCost || 0,
+      // Pricing: carry forward as starting point (user can change before launch)
+      priceCents: src.priceCents != null ? src.priceCents : null,
+      retailPriceCents: src.retailPriceCents != null ? src.retailPriceCents : null,
+      directPriceCents: src.directPriceCents != null ? src.directPriceCents : null,
+      // Production attributes
+      buildTime: src.buildTime != null ? src.buildTime : null,
+      processingDays: src.processingDays ? Object.assign({}, src.processingDays) : null,
+      sku: null, // new SKU expected
+      businessLine: src.businessLine || 'production',
+      makerAttributes: src.makerAttributes ? Object.assign({}, src.makerAttributes) : null,
+      // Lifecycle
+      status: 'draft',
+      availability: 'available',
+      hasPendingRevision: false,
+      pendingChanges: null,
+      readinessChecklist: { defined: false, costed: false, channeled: false, capacityPlanned: false, listingReady: false },
+      promotedToReadyAt: null,
+      promotedToActiveAt: null,
+      archivedAt: null,
+      // Lineage
+      parentProductId: sourcePid,
+      version: nextVersion,
+      // Bookkeeping
+      images: [],
+      imageIds: [],
+      variants: null,
+      options: src.options ? JSON.parse(JSON.stringify(src.options)) : [],
+      // Listings + inventory deliberately NOT copied — fresh mappings expected
+      externalRefs: null,
+      channelBindings: null,
+      channelIds: null,
+      createdAt: now,
+      updatedAt: now,
+      priceHistory: [], buildTimeHistory: [], costToBuildHistory: []
+    };
+
+    try {
+      // Build mode: duplicate the linked recipe and relink
+      if (clone.acquisitionType === 'build' && src.recipeId && typeof duplicateRecipe === 'function') {
+        try {
+          var newRecipe = await duplicateRecipe(src.recipeId);
+          if (newRecipe && newRecipe.recipeId) {
+            // Relink: point the cloned recipe at the new product
+            await MastDB.set('admin/recipes/' + newRecipe.recipeId + '/productId', newPid);
+            await MastDB.set('admin/recipes/' + newRecipe.recipeId + '/name', clone.name);
+            if (recipesData[newRecipe.recipeId]) {
+              recipesData[newRecipe.recipeId].productId = newPid;
+              recipesData[newRecipe.recipeId].name = clone.name;
+            }
+            clone.recipeId = newRecipe.recipeId;
+          }
+        } catch (recipeErr) {
+          console.warn('[checkpoint-F] recipe clone failed for', sourcePid, recipeErr && recipeErr.message);
+          // proceed without recipe — user can add one manually
+        }
+      }
+
+      await MastDB.set('public/products/' + newPid, clone);
+      MastAdmin.writeAudit('clone_for_redesign', 'products', newPid);
+      MastAdmin.writeAudit('clone_source', 'products', sourcePid);
+
+      if (window.productsData) {
+        window.productsData.push(clone);
+      }
+
+      MastAdmin.showToast('Cloned to v' + nextVersion + ' (Draft) ✓');
+
+      // Navigate to the new draft. Prefer the maker Define view for VAR/Resell
+      // and recipe builder for Build (matching the existing new-product flow).
+      try {
+        if (clone.acquisitionType === 'build' && clone.recipeId) {
+          if (typeof window.makerOpenRecipeBuilder === 'function') {
+            window.makerOpenRecipeBuilder(clone.recipeId);
+          }
+        } else if (clone.acquisitionType === 'var' || clone.acquisitionType === 'resell') {
+          await openDefineForProduct(newPid);
+        } else {
+          // Build with no recipe — re-render pieces list so user can see the new draft
+          if (piecesView === 'list') renderPiecesList();
+        }
+      } catch (navErr) { /* navigation is best-effort */ }
+    } catch (err) {
+      MastAdmin.showToast('Clone failed: ' + (err && err.message), true);
+    }
+  }
+
+  // ----- UI: Status indicators + revision/clone banners ---------------------
+
+  /**
+   * Build a status-line string for a product detail header. Combines status,
+   * pending-revision count, and v2-in-development presence.
+   * Returns a plain string (caller wraps as needed).
+   */
+  function productHeaderStatusLine(product) {
+    if (!product) return '';
+    var status = product.status || 'draft';
+    var parts = [statusLabel(status)];
+    if (product.parentProductId) {
+      parts.push('Cloned from ' + (parentLinkLabel(product.parentProductId)));
+    }
+    if (status === 'active') {
+      var child = findChildVersion(product.pid);
+      if (child) {
+        parts.push('v' + (child.version || 2) + ' in development');
+      }
+      var pendingCount = product.pendingChanges ? Object.keys(product.pendingChanges).length : 0;
+      if (product.hasPendingRevision) {
+        parts.push(pendingCount > 0
+          ? (pendingCount + ' pending change' + (pendingCount === 1 ? '' : 's'))
+          : 'revision mode (no edits yet)');
+      }
+    }
+    return parts.join(' · ');
+  }
+
+  function statusLabel(s) {
+    s = (s || 'draft').toLowerCase();
+    if (s === 'active') return 'Active';
+    if (s === 'ready') return 'Ready';
+    if (s === 'archived') return 'Archived';
+    return 'Draft';
+  }
+  function parentLinkLabel(parentPid) {
+    var parent = findProduct(parentPid);
+    var label = (parent && parent.name) ? parent.name : parentPid;
+    return '<a href="#" onclick="event.preventDefault();makerOpenProductDetail(\'' + MastAdmin.esc(parentPid) + '\')" style="color:inherit;text-decoration:underline;">' + MastAdmin.esc(label) + '</a>';
+  }
+
+  /**
+   * Render the active-product action bar. Returns HTML for:
+   *   - "Edit (creates revision)" button (when not in revision mode)
+   *   - "Apply" + "Discard" buttons (when in revision mode)
+   *   - "Clone for redesign" button (always for Active)
+   * Designed to be injected into the product detail header on Active products.
+   */
+  function renderActiveProductActionBar(product) {
+    if (!product || product.status !== 'active') return '';
+    var pid = MastAdmin.esc(product.pid);
+    var html = '';
+    html += '<div class="mast-active-action-bar" style="display:flex;gap:6px;flex-wrap:wrap;">';
+    if (product.hasPendingRevision) {
+      var count = product.pendingChanges ? Object.keys(product.pendingChanges).length : 0;
+      html += '<button class="btn btn-primary btn-small" onclick="makerApplyPendingChanges(\'' + pid + '\')"' + (count === 0 ? ' disabled style="opacity:0.5;cursor:not-allowed;"' : '') + '>Apply' + (count > 0 ? ' (' + count + ')' : '') + '</button>';
+      html += '<button class="btn btn-secondary btn-small" onclick="makerDiscardPendingChanges(\'' + pid + '\')">Discard</button>';
+    } else {
+      html += '<button class="btn btn-secondary btn-small" onclick="makerEnterRevisionMode(\'' + pid + '\')" title="Edits will be staged and only go live after Apply">Edit (creates revision)</button>';
+    }
+    html += '<button class="btn btn-secondary btn-small" onclick="makerCloneForRedesign(\'' + pid + '\')" title="Create a v2 Draft for a redesign">Clone for redesign</button>';
+    html += '</div>';
+    return html;
+  }
+
+  /**
+   * Render the "you are in revision mode" banner. Lists pending changes.
+   */
+  function renderRevisionBanner(product) {
+    if (!product || !product.hasPendingRevision) return '';
+    var pid = MastAdmin.esc(product.pid);
+    var changes = product.pendingChanges || {};
+    var keys = Object.keys(changes);
+    var html = '';
+    html += '<div class="mast-revision-banner" style="background:rgba(217,119,6,0.08);border:1px solid rgba(217,119,6,0.3);border-radius:8px;padding:12px 16px;margin:12px 0;">';
+    html += '<div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;">';
+    html += '<div><strong style="color:#b45309;">Editing draft revision</strong>';
+    html += '<div style="font-size:0.78rem;color:#b45309;margin-top:2px;">Changes are NOT live until you Apply.</div></div>';
+    html += '<div style="display:flex;gap:6px;">';
+    html += '<button class="btn btn-primary btn-small" onclick="makerApplyPendingChanges(\'' + pid + '\')"' + (keys.length === 0 ? ' disabled style="opacity:0.5;cursor:not-allowed;"' : '') + '>Apply' + (keys.length > 0 ? ' (' + keys.length + ')' : '') + '</button>';
+    html += '<button class="btn btn-secondary btn-small" onclick="makerDiscardPendingChanges(\'' + pid + '\')">Discard</button>';
+    html += '</div></div>';
+    if (keys.length > 0) {
+      html += '<ul style="margin:8px 0 0;padding-left:20px;font-size:0.82rem;color:#92400e;">';
+      keys.forEach(function(k) {
+        var live = readNestedField(product, k);
+        html += '<li><code>' + MastAdmin.esc(k) + '</code>: <span style="color:#9ca3af;text-decoration:line-through;">' + MastAdmin.esc(fmtPendingValue(live)) + '</span> → <span style="color:#b45309;font-weight:600;">' + MastAdmin.esc(fmtPendingValue(changes[k])) + '</span> <span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#d97706;margin-left:4px;" title="pending"></span></li>';
+      });
+      html += '</ul>';
+    }
+    html += '</div>';
+    return html;
+  }
+
+  /**
+   * Render cross-link banners — "Cloned from <parent>" on child Drafts and
+   * "v2 in development: <child>" on parent Active products.
+   */
+  function renderVersionLinkBanner(product) {
+    if (!product) return '';
+    var html = '';
+    // Child → parent
+    if (product.parentProductId) {
+      var parent = findProduct(product.parentProductId);
+      var parentName = parent ? (parent.name || product.parentProductId) : product.parentProductId;
+      html += '<div class="mast-version-link-banner" style="background:rgba(42,124,111,0.06);border:1px solid rgba(42,124,111,0.25);border-radius:8px;padding:10px 14px;margin:8px 0;font-size:0.85rem;">';
+      html += '<span style="color:var(--warm-gray,#777);">Cloned from:</span> ';
+      html += '<a href="#" onclick="event.preventDefault();makerOpenProductDetail(\'' + MastAdmin.esc(product.parentProductId) + '\')" style="color:var(--teal,#2a7c6f);font-weight:600;">' + MastAdmin.esc(parentName) + '</a>';
+      if (parent) html += ' <span style="color:var(--warm-gray);">(v' + (parent.version || 1) + ' · ' + statusLabel(parent.status) + ')</span>';
+      html += '</div>';
+    }
+    // Parent → child
+    if (product.status === 'active') {
+      var child = findChildVersion(product.pid);
+      if (child) {
+        html += '<div class="mast-version-link-banner" style="background:rgba(217,119,6,0.06);border:1px solid rgba(217,119,6,0.25);border-radius:8px;padding:10px 14px;margin:8px 0;font-size:0.85rem;">';
+        html += '<strong style="color:#b45309;">v' + (child.version || 2) + ' in development:</strong> ';
+        html += '<a href="#" onclick="event.preventDefault();makerOpenProductDetail(\'' + MastAdmin.esc(child.pid) + '\')" style="color:var(--teal,#2a7c6f);font-weight:600;">' + MastAdmin.esc(child.name || child.pid) + '</a>';
+        html += ' <span style="color:var(--warm-gray);">(' + statusLabel(child.status) + ')</span>';
+        html += '</div>';
+      }
+      // Parallel-active warning: a v2 sibling with same parentProductId that's also Active
+      var products = window.productsData || [];
+      var parallel = products.filter(function(pp) {
+        return pp && pp.pid !== product.pid && pp.parentProductId === product.pid && pp.status === 'active';
+      });
+      if (parallel.length > 0) {
+        html += '<div class="mast-version-link-banner" style="background:rgba(180,83,9,0.08);border:1px solid rgba(180,83,9,0.3);border-radius:8px;padding:10px 14px;margin:8px 0;font-size:0.85rem;color:#9a3412;">';
+        html += '⚠ Both v' + (product.version || 1) + ' and v' + (parallel[0].version || 2) + ' are Active — consider archiving v' + (product.version || 1) + '.';
+        html += '</div>';
+      }
+    }
+    return html;
+  }
+
+  /**
+   * Open the product detail screen for a given pid. Used by cross-link
+   * navigation. Routes to the Catalog product detail when available.
+   */
+  function openProductDetail(pid) {
+    if (typeof window.viewProduct === 'function') {
+      window.viewProduct(pid);
+      return;
+    }
+    if (typeof window.renderProductDetail === 'function') {
+      window.selectedProductPid = pid;
+      window.renderProductDetail(pid);
+      return;
+    }
+    // Fallback — open define view
+    openDefineForProduct(pid).catch(function() {});
+  }
+
+  // ============================================================
+  // End Checkpoint F
+  // ============================================================
+
+  // ============================================================
+  // Checkpoint G — Archive sub-states + two-view (lens) UI
+  // ----------------------------------------------------------------
+  // - Archive sub-states: discontinuing → selling-through → returns-only → retired
+  //   (forward-only; revival = Pattern 2 Clone-to-v2).
+  // - Channel sync per sub-state. Returns-only delists; others stay live with
+  //   appropriate flags (last-chance / clearance).
+  // - Lens toggle on detail screen: Develop vs Catalog (default tab + emphasis).
+  // - Develop list and Catalog list filter to disjoint slices of the same record set.
+  // ============================================================
+
+  var DEFAULT_RETURNS_WINDOW_DAYS = 90;
+
+  var ARCHIVE_SUB_STATES = {
+    'discontinuing': {
+      label: 'Discontinuing',
+      summary: 'Stay on channels, no new production. Last-chance flag optional.',
+      badgeColor: '#c2410c',
+      badgeBg: 'rgba(234,88,12,0.15)',
+      onChannels: true,
+      flag: 'last-chance'
+    },
+    'selling-through': {
+      label: 'Selling-through',
+      summary: 'Stay on channels with clearance pricing. Sell remaining inventory only.',
+      badgeColor: '#a16207',
+      badgeBg: 'rgba(234,179,8,0.18)',
+      onChannels: true,
+      flag: 'clearance'
+    },
+    'returns-only': {
+      label: 'Returns-only',
+      summary: 'Delist from channels. Accept returns until cutoff date.',
+      badgeColor: '#525252',
+      badgeBg: 'rgba(120,120,120,0.18)',
+      onChannels: false,
+      flag: null
+    },
+    'retired': {
+      label: 'Retired',
+      summary: 'Fully retired. Delisted, no returns, no reorders.',
+      badgeColor: '#1f2937',
+      badgeBg: 'rgba(31,41,55,0.18)',
+      onChannels: false,
+      flag: null
+    }
+  };
+
+  function archiveSubStateLabel(s) {
+    var meta = ARCHIVE_SUB_STATES[s];
+    return meta ? meta.label : (s || '');
+  }
+
+  function archiveSubStateBadgeHtml(subState) {
+    var meta = ARCHIVE_SUB_STATES[subState];
+    if (!meta) return '';
+    return '<span class="status-badge product-archived-substate-' + subState +
+      '" style="background:' + meta.badgeBg + ';color:' + meta.badgeColor +
+      ';font-size:0.68rem;padding:2px 6px;border-radius:8px;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;margin-left:4px;">' +
+      MastAdmin.esc(meta.label) + '</span>';
+  }
+
+  function defaultReturnsCutoffIso() {
+    var d = new Date(Date.now() + DEFAULT_RETURNS_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+    return d.toISOString();
+  }
+
+  function isoToDateInput(iso) {
+    if (!iso) return '';
+    try { return new Date(iso).toISOString().slice(0, 10); } catch (e) { return ''; }
+  }
+
+  /**
+   * Channel sync for an archive sub-state transition. Best-effort, logged-only.
+   * - discontinuing / selling-through: stay listed (re-publish with flag).
+   * - returns-only: invoke unpublish if available, else record intent.
+   * - retired: ensure delisted (no-op if already returns-only).
+   */
+  async function triggerChannelSyncForArchiveSubState(product, oldSubState, newSubState) {
+    if (!product) return;
+    var meta = ARCHIVE_SUB_STATES[newSubState];
+    if (!meta) return;
+    window.__mastChannelSyncIntents = window.__mastChannelSyncIntents || [];
+    var nowIso = new Date().toISOString();
+    var hasShopify = !!(product.externalRefs && product.externalRefs.shopify);
+
+    if (meta.onChannels) {
+      // discontinuing / selling-through — stay listed, re-publish with flag.
+      if (hasShopify && typeof firebase !== 'undefined' && firebase.functions) {
+        try {
+          var callable = firebase.functions().httpsCallable('publishProductToShopify');
+          await callable({
+            tenantId: MastDB.tenantId(),
+            pid: product.pid,
+            trigger: 'archive-substate',
+            flag: meta.flag || null,
+            archivedSubState: newSubState
+          });
+          console.log('[checkpoint-G] Shopify republish (' + newSubState + ') fired for', product.pid);
+        } catch (err) {
+          console.warn('[checkpoint-G] Shopify republish failed for', product.pid, err && err.message);
+        }
+      }
+      window.__mastChannelSyncIntents.push({
+        pid: product.pid,
+        op: 'republish-with-flag',
+        flag: meta.flag,
+        archivedSubState: newSubState,
+        at: nowIso
+      });
+    } else {
+      // returns-only / retired — delist. Today there's no standardized
+      // unpublish callable, so we record intent and TODO it.
+      // TODO Checkpoint G O-G1: wire unpublishProductFromShopify when adapter ships.
+      window.__mastChannelSyncIntents.push({
+        pid: product.pid,
+        op: 'unpublish',
+        reason: 'archive-substate:' + newSubState,
+        oldSubState: oldSubState || null,
+        archivedSubState: newSubState,
+        at: nowIso
+      });
+      console.log('[checkpoint-G] recorded unpublish intent for', product.pid, '(' + newSubState + ')');
+    }
+  }
+
+  /**
+   * Open the archive modal: lets the user pick a sub-state and (when relevant)
+   * a returns cutoff date, then writes the archive transition.
+   */
+  function openArchiveModal(pid) {
+    var p = findProduct(pid);
+    if (!p) { MastAdmin.showToast('Product not found', true); return; }
+    if (p.status !== 'active') {
+      MastAdmin.showToast('Only Active products can be archived (current: ' + (p.status || 'unset') + ')', true);
+      return;
+    }
+    var defaultCutoff = isoToDateInput(defaultReturnsCutoffIso());
+
+    var html = '';
+    html += '<div style="font-size:0.85rem;line-height:1.5;color:var(--charcoal);">';
+    html += '<p style="margin:0 0 12px;">Choose how this product winds down. Forward-only — to revive, clone for redesign.</p>';
+
+    [['discontinuing', true], ['selling-through', false], ['returns-only', false]].forEach(function(pair) {
+      var key = pair[0];
+      var defaultChecked = pair[1];
+      var meta = ARCHIVE_SUB_STATES[key];
+      html += '<label style="display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border:1px solid var(--cream-dark,#e5e1d8);border-radius:8px;margin-bottom:8px;cursor:pointer;">';
+      html += '<input type="radio" name="archiveSubState" value="' + key + '"' + (defaultChecked ? ' checked' : '') + ' onchange="makerArchiveModalOnSubStateChange(this.value)" style="margin-top:3px;">';
+      html += '<div style="flex:1;"><div style="font-weight:600;">' + MastAdmin.esc(meta.label) + '</div>';
+      html += '<div style="font-size:0.78rem;color:var(--warm-gray,#777);margin-top:2px;">' + MastAdmin.esc(meta.summary) + '</div></div>';
+      html += '</label>';
+    });
+
+    html += '<div id="archiveCutoffWrap" style="display:none;padding:10px 12px;background:var(--cream,#faf8f3);border-radius:8px;margin-top:4px;">';
+    html += '<label style="font-size:0.78rem;font-weight:600;display:block;margin-bottom:4px;">Returns accepted until</label>';
+    html += '<input type="date" id="archiveCutoffInput" value="' + defaultCutoff + '" style="padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:0.85rem;">';
+    html += '<div style="font-size:0.72rem;color:var(--warm-gray,#777);margin-top:4px;">After this date, the product auto-flips to Retired.</div>';
+    html += '</div>';
+    html += '</div>';
+
+    var modal = document.createElement('div');
+    modal.className = 'mast-modal-overlay';
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.4);display:flex;align-items:center;justify-content:center;z-index:9000;';
+    modal.innerHTML =
+      '<div class="mast-modal" style="background:var(--surface-card,#fff);border-radius:12px;max-width:520px;width:92%;padding:20px 22px;box-shadow:0 20px 50px rgba(0,0,0,0.25);">' +
+        '<h3 style="margin:0 0 12px;font-family:\'Cormorant Garamond\',serif;font-weight:500;font-size:1.4rem;">Archive product</h3>' +
+        '<div id="archiveModalBody">' + html + '</div>' +
+        '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px;">' +
+          '<button class="btn btn-secondary btn-small" onclick="makerArchiveModalCancel()">Cancel</button>' +
+          '<button class="btn btn-primary btn-small" onclick="makerArchiveModalConfirm(\'' + MastAdmin.esc(pid) + '\')">Archive</button>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(modal);
+    window.__mastArchiveModalEl = modal;
+  }
+
+  function archiveModalOnSubStateChange(value) {
+    var wrap = document.getElementById('archiveCutoffWrap');
+    if (!wrap) return;
+    wrap.style.display = (value === 'returns-only') ? 'block' : 'none';
+  }
+
+  function archiveModalCancel() {
+    if (window.__mastArchiveModalEl && window.__mastArchiveModalEl.parentNode) {
+      window.__mastArchiveModalEl.parentNode.removeChild(window.__mastArchiveModalEl);
+    }
+    window.__mastArchiveModalEl = null;
+  }
+
+  async function archiveModalConfirm(pid) {
+    var modal = window.__mastArchiveModalEl;
+    if (!modal) return;
+    var radios = modal.querySelectorAll('input[name="archiveSubState"]');
+    var subState = 'discontinuing';
+    radios.forEach(function(r) { if (r.checked) subState = r.value; });
+    var cutoffInput = document.getElementById('archiveCutoffInput');
+    var cutoffIso = null;
+    if (subState === 'returns-only') {
+      var raw = cutoffInput && cutoffInput.value ? cutoffInput.value : '';
+      if (raw) {
+        var d = new Date(raw + 'T23:59:59');
+        if (!isNaN(d.getTime())) cutoffIso = d.toISOString();
+      }
+      if (!cutoffIso) cutoffIso = defaultReturnsCutoffIso();
+    }
+    archiveModalCancel();
+    await archiveProductWithSubState(pid, subState, cutoffIso);
+  }
+
+  /**
+   * Apply the archive transition: status → archived, archivedSubState set,
+   * archivedAt stamped, returnsAcceptedUntil set when returns-only, and
+   * channel sync hook fired.
+   */
+  async function archiveProductWithSubState(pid, subState, returnsCutoffIso) {
+    var p = findProduct(pid);
+    if (!p) { MastAdmin.showToast('Product not found', true); return; }
+    if (!ARCHIVE_SUB_STATES[subState]) { MastAdmin.showToast('Unknown sub-state: ' + subState, true); return; }
+    var nowIso = new Date().toISOString();
+    var oldStatus = p.status;
+    var oldSubState = p.archivedSubState || null;
+    try {
+      var path = 'public/products/' + pid + '/';
+      await MastDB.set(path + 'status', 'archived');
+      await MastDB.set(path + 'archivedSubState', subState);
+      await MastDB.set(path + 'archivedAt', p.archivedAt || nowIso);
+      await MastDB.set(path + 'updatedAt', nowIso);
+      if (subState === 'returns-only') {
+        await MastDB.set(path + 'returnsAcceptedUntil', returnsCutoffIso || defaultReturnsCutoffIso());
+      }
+      if (subState === 'retired') {
+        await MastDB.set(path + 'retiredAt', nowIso);
+      }
+      p.status = 'archived';
+      p.archivedSubState = subState;
+      p.archivedAt = p.archivedAt || nowIso;
+      p.updatedAt = nowIso;
+      if (subState === 'returns-only') p.returnsAcceptedUntil = returnsCutoffIso || defaultReturnsCutoffIso();
+      if (subState === 'retired') p.retiredAt = nowIso;
+
+      MastAdmin.writeAudit('archive_substate_' + subState, 'products', pid);
+      MastAdmin.showToast('Archived: ' + archiveSubStateLabel(subState));
+
+      // Re-render
+      if (typeof window.renderProductDetail === 'function' && window.selectedProductPid === pid) {
+        window.renderProductDetail(pid);
+      }
+      if (piecesView === 'list') renderPiecesList();
+      if (typeof window.renderProducts === 'function') window.renderProducts();
+
+      try { await triggerChannelSyncForArchiveSubState(p, oldSubState, subState); } catch (e) {}
+    } catch (err) {
+      MastAdmin.showToast('Archive failed: ' + (err && err.message), true);
+    }
+  }
+
+  /**
+   * Forward-only sub-state transition for already-archived products.
+   * Allowed transitions:
+   *   discontinuing → selling-through, returns-only
+   *   selling-through → returns-only
+   *   returns-only → retired
+   */
+  var ALLOWED_SUB_STATE_TRANSITIONS = {
+    'discontinuing': ['selling-through', 'returns-only'],
+    'selling-through': ['returns-only'],
+    'returns-only': ['retired'],
+    'retired': []
+  };
+
+  function isValidSubStateTransition(from, to) {
+    var allowed = ALLOWED_SUB_STATE_TRANSITIONS[from] || [];
+    return allowed.indexOf(to) >= 0;
+  }
+
+  async function transitionArchiveSubState(pid, targetSubState) {
+    var p = findProduct(pid);
+    if (!p) { MastAdmin.showToast('Product not found', true); return; }
+    if (p.status !== 'archived') {
+      MastAdmin.showToast('Product is not archived', true);
+      return;
+    }
+    var current = p.archivedSubState || 'discontinuing';
+    if (!isValidSubStateTransition(current, targetSubState)) {
+      MastAdmin.showToast('Cannot move from ' + current + ' to ' + targetSubState + ' (forward-only)', true);
+      return;
+    }
+
+    var msgIntro = 'Move from ' + archiveSubStateLabel(current) + ' to ' + archiveSubStateLabel(targetSubState) + '?';
+    var detail = ARCHIVE_SUB_STATES[targetSubState].summary;
+    var returnsCutoffIso = null;
+    if (targetSubState === 'returns-only') {
+      returnsCutoffIso = defaultReturnsCutoffIso();
+      detail += ' Returns accepted until ' + returnsCutoffIso.slice(0, 10) + '.';
+    }
+    var ok = await window.mastConfirm(msgIntro + '\n\n' + detail, {
+      title: 'Sub-state transition',
+      confirmLabel: 'Move to ' + archiveSubStateLabel(targetSubState)
+    });
+    if (!ok) return;
+
+    var nowIso = new Date().toISOString();
+    try {
+      var path = 'public/products/' + pid + '/';
+      await MastDB.set(path + 'archivedSubState', targetSubState);
+      await MastDB.set(path + 'updatedAt', nowIso);
+      if (targetSubState === 'returns-only') {
+        await MastDB.set(path + 'returnsAcceptedUntil', returnsCutoffIso);
+        p.returnsAcceptedUntil = returnsCutoffIso;
+      }
+      if (targetSubState === 'retired') {
+        await MastDB.set(path + 'retiredAt', nowIso);
+        p.retiredAt = nowIso;
+      }
+      var oldSubState = p.archivedSubState;
+      p.archivedSubState = targetSubState;
+      p.updatedAt = nowIso;
+
+      MastAdmin.writeAudit('substate_to_' + targetSubState, 'products', pid);
+      MastAdmin.showToast('Moved to ' + archiveSubStateLabel(targetSubState));
+
+      if (typeof window.renderProductDetail === 'function' && window.selectedProductPid === pid) {
+        window.renderProductDetail(pid);
+      }
+      if (piecesView === 'list') renderPiecesList();
+      if (typeof window.renderProducts === 'function') window.renderProducts();
+
+      try { await triggerChannelSyncForArchiveSubState(p, oldSubState, targetSubState); } catch (e) {}
+    } catch (err) {
+      MastAdmin.showToast('Transition failed: ' + (err && err.message), true);
+    }
+  }
+
+  /**
+   * Render the action bar for archived products. Forward-only transition
+   * buttons + a read-only banner explaining the sub-state policy. Does NOT
+   * include un-archive — revival is via Pattern 2 Clone-to-v2.
+   */
+  function renderArchivedProductActionBar(product) {
+    if (!product || product.status !== 'archived') return '';
+    var pid = MastAdmin.esc(product.pid);
+    var sub = product.archivedSubState || 'discontinuing';
+    var allowed = ALLOWED_SUB_STATE_TRANSITIONS[sub] || [];
+    var html = '<div class="mast-archived-action-bar" style="display:flex;gap:6px;flex-wrap:wrap;">';
+    allowed.forEach(function(t) {
+      var label = (t === 'retired') ? 'Retire' : 'Move to ' + archiveSubStateLabel(t);
+      html += '<button class="btn btn-secondary btn-small" onclick="makerTransitionArchiveSubState(\'' + pid + '\',\'' + t + '\')">' + MastAdmin.esc(label) + '</button>';
+    });
+    html += '<button class="btn btn-secondary btn-small" onclick="makerCloneForRedesign(\'' + pid + '\')" title="Revive via clone-to-v2">Clone for redesign</button>';
+    html += '</div>';
+    return html;
+  }
+
+  /**
+   * Read-only banner shown on archived product detail screens.
+   */
+  function renderArchivedProductBanner(product) {
+    if (!product || product.status !== 'archived') return '';
+    var sub = product.archivedSubState || 'discontinuing';
+    var meta = ARCHIVE_SUB_STATES[sub] || ARCHIVE_SUB_STATES['discontinuing'];
+    var html = '';
+    html += '<div class="mast-archived-banner" style="background:' + meta.badgeBg + ';border:1px solid ' + meta.badgeColor + ';border-radius:8px;padding:10px 14px;margin:8px 0;font-size:0.85rem;color:' + meta.badgeColor + ';">';
+    html += '<strong>' + MastAdmin.esc(meta.label) + ':</strong> ' + MastAdmin.esc(meta.summary);
+    if (sub === 'returns-only' && product.returnsAcceptedUntil) {
+      html += ' <span style="color:var(--warm-gray,#777);">(Returns until ' + MastAdmin.esc(String(product.returnsAcceptedUntil).slice(0, 10)) + ')</span>';
+    }
+    if (sub === 'retired' && product.retiredAt) {
+      html += ' <span style="color:var(--warm-gray,#777);">(Retired ' + MastAdmin.esc(String(product.retiredAt).slice(0, 10)) + ')</span>';
+    }
+    html += '</div>';
+    return html;
+  }
+
+  // ----- Two-view filter logic ---------------------------------------------
+
+  /**
+   * True if the product belongs in the Develop view list:
+   *   - status: draft or ready
+   *   - status: active AND hasPendingRevision (in-progress rework)
+   *   - status: archived AND archivedSubState ∈ {discontinuing, selling-through}
+   */
+  function isProductInDevelopView(p) {
+    if (!p) return false;
+    var st = p.status || 'draft';
+    if (st === 'draft' || st === 'ready') return true;
+    if (st === 'active' && p.hasPendingRevision) return true;
+    if (st === 'archived') {
+      var sub = p.archivedSubState || 'discontinuing';
+      if (sub === 'discontinuing' || sub === 'selling-through') return true;
+    }
+    return false;
+  }
+
+  /**
+   * True if the product belongs in the Catalog view list:
+   *   - status: active
+   *   - status: archived (all sub-states) — UI provides chip filter.
+   *   - status: draft / ready when "Show drafts" toggle is on.
+   */
+  function isProductInCatalogView(p, opts) {
+    if (!p) return false;
+    var st = p.status || 'draft';
+    var includeDrafts = !!(opts && opts.includeDrafts);
+    if (st === 'active') return true;
+    if (st === 'archived') {
+      if (opts && opts.archivedSubStateFilter && opts.archivedSubStateFilter !== 'all') {
+        return (p.archivedSubState || 'discontinuing') === opts.archivedSubStateFilter;
+      }
+      return true;
+    }
+    if ((st === 'draft' || st === 'ready') && includeDrafts) return true;
+    return false;
+  }
+
+  // ----- Lens toggle (Develop / Catalog) on detail screen ------------------
+
+  /**
+   * Per-pid lens preference. Default lens depends on entry point:
+   *   - opened from Develop list → 'develop'
+   *   - opened from Catalog list → 'catalog'
+   * Persisted in sessionStorage so it survives within a tab.
+   */
+  function getProductDetailLens(pid) {
+    if (!pid) return 'catalog';
+    try {
+      var key = 'mastProductLens_' + pid;
+      var v = sessionStorage.getItem(key);
+      if (v === 'develop' || v === 'catalog') return v;
+    } catch (e) {}
+    if (window.productsViewMode === 'develop') return 'develop';
+    return 'catalog';
+  }
+
+  function setProductDetailLens(pid, lens) {
+    if (!pid || (lens !== 'develop' && lens !== 'catalog')) return;
+    try { sessionStorage.setItem('mastProductLens_' + pid, lens); } catch (e) {}
+    // Re-render whichever surface is showing this pid.
+    if (typeof window.renderProductDetail === 'function' && window.selectedProductPid === pid) {
+      // Pick the right default tab for the new lens.
+      window.productEditTab = pickDefaultTabForLens(findProduct(pid), lens);
+      window.renderProductDetail(pid);
+    }
+  }
+
+  /**
+   * Status-aware default tab routing.
+   *   draft / ready (any lens)         → details (Define for Develop module)
+   *   active + Develop lens            → details / define
+   *   active + Catalog lens            → details (listing)
+   *   archived (any lens)              → details (listing) with read-only banner
+   * The product detail screen in index.html uses 'details' as the listing tab.
+   */
+  function pickDefaultTabForLens(product, lens) {
+    if (!product) return 'details';
+    var st = product.status || 'draft';
+    if (st === 'archived') return 'details';
+    if (st === 'draft' || st === 'ready') return 'details';
+    // active
+    if (lens === 'catalog') return 'details';
+    return 'details';
+  }
+
+  function renderLensToggle(product) {
+    if (!product || !product.pid) return '';
+    var pid = MastAdmin.esc(product.pid);
+    var current = getProductDetailLens(product.pid);
+    function pill(value, label) {
+      var active = current === value;
+      return '<button onclick="makerSetProductDetailLens(\'' + pid + '\',\'' + value + '\')" ' +
+        'style="padding:4px 10px;border:1px solid ' + (active ? 'var(--teal,#2a7c6f)' : 'rgba(0,0,0,0.15)') + ';' +
+        'border-radius:14px;background:' + (active ? 'rgba(42,124,111,0.12)' : 'transparent') + ';' +
+        'color:' + (active ? 'var(--teal,#2a7c6f)' : 'var(--warm-gray,#777)') + ';' +
+        'font-size:0.72rem;font-weight:600;cursor:pointer;text-transform:uppercase;letter-spacing:0.04em;">' + label + '</button>';
+    }
+    var html = '';
+    html += '<div class="mast-lens-toggle" style="display:inline-flex;gap:4px;align-items:center;font-size:0.7rem;color:var(--warm-gray,#777);">';
+    html += '<span style="margin-right:4px;">Viewing as:</span>';
+    html += pill('develop', 'Develop');
+    html += pill('catalog', 'Catalog');
+    html += '</div>';
+    return html;
+  }
+
+  /**
+   * Composite status badge: base status + sub-state chip if archived.
+   * Used by callers that want a single HTML fragment.
+   */
+  function productStatusBadgeWithSubStateHtml(product) {
+    if (!product) return '';
+    var base = (typeof productStatusBadgeHtml === 'function') ? productStatusBadgeHtml(product.status) : '';
+    if (product.status === 'archived' && product.archivedSubState) {
+      base += archiveSubStateBadgeHtml(product.archivedSubState);
+    }
+    return base;
+  }
+
+  // ============================================================
+  // End Checkpoint G
+  // ============================================================
 
   // ============================================================
   // Recipe Builder — "The Money Screen"
@@ -2379,7 +4657,16 @@
     var html = '';
     html += '<div id="newPieceOverlay" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:10000;display:flex;align-items:center;justify-content:center;" onclick="makerCloseNewPieceModal(event)">';
     html += '<div style="background:var(--cream);border-radius:10px;max-width:480px;width:90%;max-height:85vh;overflow-y:auto;box-shadow:0 8px 30px rgba(0,0,0,0.2);padding:20px 24px;" onclick="event.stopPropagation()">';
-    html += '<h3 style="font-family:\'Cormorant Garamond\',serif;font-size:1.15rem;font-weight:500;margin:0 0 16px;">New Piece</h3>';
+    html += '<h3 style="font-family:\'Cormorant Garamond\',serif;font-size:1.15rem;font-weight:500;margin:0 0 16px;">New Product</h3>';
+
+    // Acquisition mode picker (Checkpoint D)
+    html += '<div style="margin-bottom:16px;">';
+    html += '<label style="display:block;font-size:0.85rem;font-weight:600;margin-bottom:6px;">Acquisition mode *</label>';
+    html += '<div style="display:flex;flex-direction:column;gap:6px;">';
+    html += '<label style="display:flex;gap:8px;align-items:flex-start;cursor:pointer;font-size:0.85rem;"><input type="radio" name="newPieceAcqType" value="build" checked style="margin-top:3px;"><span><strong>Build</strong> — recipe / BOM with materials and labor</span></label>';
+    html += '<label style="display:flex;gap:8px;align-items:flex-start;cursor:pointer;font-size:0.85rem;"><input type="radio" name="newPieceAcqType" value="var" style="margin-top:3px;"><span><strong>VAR</strong> — components + value-add steps</span></label>';
+    html += '<label style="display:flex;gap:8px;align-items:flex-start;cursor:pointer;font-size:0.85rem;"><input type="radio" name="newPieceAcqType" value="resell" style="margin-top:3px;"><span><strong>Resell</strong> — sourced supplier + landed cost</span></label>';
+    html += '</div></div>';
 
     // Name
     html += '<div style="margin-bottom:16px;">';
@@ -2468,13 +4755,31 @@
       category = sel.value || 'other';
     }
 
+    // Acquisition mode (Checkpoint D)
+    var acqRadios = document.querySelectorAll('input[name="newPieceAcqType"]');
+    var acqType = 'build';
+    for (var ai = 0; ai < acqRadios.length; ai++) {
+      if (acqRadios[ai].checked) { acqType = acqRadios[ai].value; break; }
+    }
+    if (acqType !== 'build' && acqType !== 'var' && acqType !== 'resell') acqType = 'build';
+
     closeNewPieceModal();
 
     try {
       var pid = 'p' + Date.now().toString(36);
       var slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
       var now = new Date().toISOString();
-      await MastDB.set('public/products/' + pid, {
+      var defineSpec = {};
+      if (acqType === 'var') {
+        defineSpec.var = { components: [], valueAddSteps: [] };
+      } else if (acqType === 'resell') {
+        defineSpec.resell = {
+          supplier: { supplierName: '', supplierSku: '', unitCost: 0, moq: 1 },
+          landedCost: { freight: 0, duty: 0, dutyMode: 'per-unit', storage: 0, other: 0 },
+          leadTimeDays: 0
+        };
+      }
+      var newProduct = {
         pid: pid,
         name: name,
         slug: slug,
@@ -2482,21 +4787,33 @@
         status: 'draft',
         availability: 'available',
         businessLine: 'production',
+        acquisitionType: acqType,
+        defineSpec: defineSpec,
+        materialCost: 0,
+        laborCost: 0,
+        otherCost: 0,
+        totalCost: 0,
         priceCents: null,
         images: [],
         imageIds: [],
         createdAt: now,
         updatedAt: now
-      });
+      };
+      await MastDB.set('public/products/' + pid, newProduct);
       MastAdmin.writeAudit('create', 'products', pid);
 
       if (window.productsData) {
-        window.productsData.push({ pid: pid, name: name, slug: slug, categories: [category], status: 'draft', availability: 'available', businessLine: 'production', priceCents: null, images: [], imageIds: [] });
+        window.productsData.push(newProduct);
       }
 
-      await createRecipeForProduct(pid, name);
+      if (acqType === 'build') {
+        await createRecipeForProduct(pid, name);
+      } else {
+        // VAR or Resell — open the Define view directly
+        await openDefineForProduct(pid);
+      }
     } catch (err) {
-      MastAdmin.showToast('Error creating piece: ' + err.message, true);
+      MastAdmin.showToast('Error creating product: ' + err.message, true);
     }
   }
 
@@ -2556,6 +4873,15 @@
 
     // Back button
     html += '<button class="detail-back" onclick="makerCloseRecipeBuilder()">← Back to Pieces</button>';
+
+    // Checkpoint E — readiness checklist for Build mode (recipe builder is the Define view)
+    var __linkedProduct = bs.productId ? (window.productsData || []).find(function(pp){ return pp.pid === bs.productId; }) : null;
+    if (__linkedProduct) {
+      html += renderReadinessChecklistPanel(__linkedProduct);
+      // Checkpoint F — cross-link + revision banners on the Build view too
+      html += renderVersionLinkBanner(__linkedProduct);
+      html += renderRevisionBanner(__linkedProduct);
+    }
 
     // costsDirty banner
     if (bs.costsDirty) {
@@ -3829,6 +6155,62 @@
 
   // Pieces list & Recipe Builder UI
   window.makerOpenRecipeBuilder = openRecipeBuilder;
+  // Checkpoint D — Define mode dispatch + VAR/Resell handlers
+  window.makerOpenDefineForProduct = openDefineForProduct;
+  window.makerCloseDefineView = closeDefineView;
+  window.makerSaveDefineView = saveDefineView;
+  window.makerRecalcCostShape = recalcCostShape;
+  window.makerComputeCostShape = computeCostShape;
+  window.makerVarAddComponent = varAddComponent;
+  window.makerVarRemoveComponent = varRemoveComponent;
+  window.makerVarSetComponentField = varSetComponentField;
+  window.makerVarLinkMaterial = varLinkMaterial;
+  window.makerVarAddStep = varAddStep;
+  window.makerVarRemoveStep = varRemoveStep;
+  window.makerVarSetStepField = varSetStepField;
+  window.makerResellSet = resellSet;
+  // Checkpoint E — Readiness checklist + state transitions
+  window.makerComputeReadinessChecklist = computeReadinessChecklist;
+  window.makerProductMarkupConfig = productMarkupConfig;
+  window.makerPromoteToReady = promoteToReady;
+  window.makerLaunchToActive = launchToActive;
+  window.makerSetMarkup = setMarkup;
+  window.makerScrollToReadinessSection = scrollToReadinessSection;
+  window.productStatusBadgeHtml = productStatusBadgeHtml;
+  window.makerRecomputeReadiness = recomputeAndPersistReadiness;
+  // Checkpoint F — Rework patterns
+  window.makerEnterRevisionMode = enterRevisionMode;
+  window.makerSetPendingFieldValue = setPendingFieldValue;
+  window.makerStagePendingChanges = stagePendingChanges;
+  window.makerApplyPendingChanges = applyPendingChanges;
+  window.makerDiscardPendingChanges = discardPendingChanges;
+  window.makerCloneForRedesign = cloneProductForRedesign;
+  window.makerFindChildVersion = findChildVersion;
+  window.makerIsProductGuarded = isProductGuarded;
+  window.makerIsFieldRevisionable = isFieldRevisionable;
+  window.makerProductHeaderStatusLine = productHeaderStatusLine;
+  window.makerRenderActiveProductActionBar = renderActiveProductActionBar;
+  window.makerRenderRevisionBanner = renderRevisionBanner;
+  window.makerRenderVersionLinkBanner = renderVersionLinkBanner;
+  window.makerOpenProductDetail = openProductDetail;
+  // Checkpoint G — Archive sub-states + lens toggle
+  window.makerOpenArchiveModal = openArchiveModal;
+  window.makerArchiveModalOnSubStateChange = archiveModalOnSubStateChange;
+  window.makerArchiveModalCancel = archiveModalCancel;
+  window.makerArchiveModalConfirm = archiveModalConfirm;
+  window.makerArchiveProductWithSubState = archiveProductWithSubState;
+  window.makerTransitionArchiveSubState = transitionArchiveSubState;
+  window.makerRenderArchivedProductActionBar = renderArchivedProductActionBar;
+  window.makerRenderArchivedProductBanner = renderArchivedProductBanner;
+  window.makerArchiveSubStateBadgeHtml = archiveSubStateBadgeHtml;
+  window.makerProductStatusBadgeWithSubStateHtml = productStatusBadgeWithSubStateHtml;
+  window.makerIsProductInDevelopView = isProductInDevelopView;
+  window.makerIsProductInCatalogView = isProductInCatalogView;
+  window.makerGetProductDetailLens = getProductDetailLens;
+  window.makerSetProductDetailLens = setProductDetailLens;
+  window.makerPickDefaultTabForLens = pickDefaultTabForLens;
+  window.makerRenderLensToggle = renderLensToggle;
+  window.makerArchiveSubStates = ARCHIVE_SUB_STATES;
   window.makerCloseRecipeBuilder = closeRecipeBuilder;
   window.makerCreateRecipeForProduct = createRecipeForProduct;
   window.makerCreateNewPiece = createNewPiece;

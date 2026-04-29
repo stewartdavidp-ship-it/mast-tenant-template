@@ -445,6 +445,99 @@ Callable function. Updates an Etsy listing's price when `activePriceTier` change
 
 Called fire-and-forget from `setActivePriceTier()` in maker.js. Etsy failure does not roll back local price.
 
+## Product Lifecycle (Checkpoints A–G)
+
+The Mast Product entity has a four-state lifecycle plus four archive sub-states. State drives list filtering, channel sync, default tab on the detail screen, returns acceptance, and reorder logic.
+
+### State Machine
+
+```
+            ┌──────────┐
+            │  Draft   │
+            └────┬─────┘
+                 │ promoteToReady (gated by readinessChecklist)
+                 ▼
+            ┌──────────┐
+            │  Ready   │
+            └────┬─────┘
+                 │ launchToActive (channels + inventory check)
+                 ▼
+            ┌──────────┐
+            │  Active  │ ◄─── pendingChanges (Pattern 1, in-place revision)
+            └────┬─────┘ ◄─── child v2 Drafts (Pattern 2, clone-to-redesign)
+                 │
+                 │ openArchiveModal (sub-state picker)
+                 ▼
+            ┌────────────────────────────────┐
+            │           Archived             │
+            │ ──────────────────────────────│
+            │ discontinuing → selling-through│
+            │   ↓                ↓           │
+            │   └──→ returns-only ──→ retired│
+            │ (auto-flip via autoRetireProducts after returnsAcceptedUntil)
+            └────────────────────────────────┘
+```
+
+Forward-only sub-state transitions. Revival = Pattern 2 Clone-to-v2.
+
+### Schema Fields (`{tenantId}/public/products/{pid}`)
+
+```
+status: 'draft' | 'ready' | 'active' | 'archived'
+acquisitionType: 'build' | 'var' | 'resell'   // locked at creation
+archivedSubState: 'discontinuing' | 'selling-through' | 'returns-only' | 'retired' | null
+hasPendingRevision: boolean
+pendingChanges: { [fieldPath]: value } | null
+pendingChangesUpdatedAt: ISO
+pendingChangesAppliedAt: ISO
+parentProductId: string | null              // Pattern 2 source
+version: number                             // 1 for originals, 2+ for clones
+readinessChecklist: { defined, costed, channeled, capacityPlanned, listingReady }
+promotedToReadyAt: ISO | null
+promotedToActiveAt: ISO | null
+archivedAt: ISO | null
+returnsAcceptedUntil: ISO | null            // auto-set on returns-only entry
+retiredAt: ISO | null
+```
+
+### Archive Sub-state Policies (Checkpoint G)
+
+| Sub-state | Listings | Inventory action | Returns | Reorder | Channel flag |
+|---|---|---|---|---|---|
+| `discontinuing` | On (optional "Last chance") | No new production/sourcing | Full window | Suppressed | `last-chance` |
+| `selling-through` | On (clearance pricing optional) | Existing inventory only | Full window | Suppressed | `clearance` |
+| `returns-only` | Off (delisted) | Zero | Until cutoff date | Suppressed | — |
+| `retired` | Off | N/A | No | N/A | — |
+
+`autoRetireProducts` (Cloud Function, `every day 02:00 America/New_York`) iterates active tenants and flips returns-only products to retired when `returnsAcceptedUntil < now`.
+
+### Two-View Architecture (Lens Toggle)
+
+The same Product record renders under two lenses:
+
+- **Develop view** — at `develop-products` route. Shows the slice in-progress: `draft`, `ready`, `active+hasPendingRevision`, `archived: {discontinuing, selling-through}` (winding down). Default tab: Define.
+- **Catalog view** — at top-level Products. Shows: `active` (default), `archived` (with sub-state chip filter). "Show drafts" toggle reveals `draft+ready`. Default tab: Listing/Details.
+
+Both views are backed by the same `productsData` array; filter membership is determined by `isProductInDevelopView(p)` and `isProductInCatalogView(p, opts)` in `app/modules/maker.js`.
+
+The product detail screen has a **lens toggle pill** ("Viewing as: Develop | Catalog"). Default lens depends on entry point (Develop list → develop, Catalog list → catalog) and is persisted per-pid in `sessionStorage`. The lens controls default tab + button emphasis; both lenses show all tabs (no hiding).
+
+### Status-aware Default Tab
+
+| Status | Develop lens | Catalog lens |
+|---|---|---|
+| draft / ready | Define | Define |
+| active | Define | Listing |
+| archived | Listing (read-only banner) | Listing (read-only banner) |
+
+### Scheduled Function: autoRetireProducts
+
+- File: `mast-architecture/functions/auto-retire-products.js`
+- Trigger: `onSchedule({ schedule: 'every day 02:00', timeZone: 'America/New_York' })`
+- Behavior: For each active tenant (skips `dev`, system tenants, non-active), lists products, finds `archivedSubState === 'returns-only'` with `returnsAcceptedUntil < now`, sets `archivedSubState: 'retired'` and `retiredAt`. Writes one audit log entry per tenant per run when retirements occurred.
+- Idempotent — products already retired are skipped. Re-runs are safe.
+- Deploys to `mast-platform-prod` like other platform-level scheduled functions.
+
 ## Product Data Model
 
 Path: `{tenantId}/public/products/{pid}`
