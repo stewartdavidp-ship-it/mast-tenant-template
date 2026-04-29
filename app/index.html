@@ -24538,11 +24538,16 @@ function setCatalogStatusFilter(v) {
 function setCatalogSubStateFilter(v) { window.catalogSubStateFilter = v || 'all'; renderProducts(); }
 function toggleCatalogShowDrafts() { window.catalogShowDrafts = !window.catalogShowDrafts; renderProducts(); }
 
-// Unified products status filter — 'developing' | 'active' | 'archived'.
-// Replaces the old (catalogStatusFilter + showDrafts + productsViewMode) trio.
+// Unified products filter — 'develop' | 'catalog' | 'sell'. Each is a real
+// semantic slice rather than just a status filter:
+//   develop = draft + ready (not yet released)
+//   catalog = the entire collection across every status
+//   sell    = active products published on at least one channel
 window.productsStatusFilter = window.productsStatusFilter || null;
 function setProductsStatusFilter(v) {
-  window.productsStatusFilter = (v === 'developing' || v === 'active' || v === 'archived') ? v : 'active';
+  if (v === 'developing') v = 'develop'; // legacy
+  if (v === 'active' || v === 'archived') v = 'catalog'; // legacy
+  window.productsStatusFilter = (v === 'develop' || v === 'catalog' || v === 'sell') ? v : 'catalog';
   renderProducts();
 }
 
@@ -24555,8 +24560,10 @@ var productsViewMode = 'catalog';
 
 function setProductsViewMode(mode) {
   productsViewMode = mode === 'develop' ? 'develop' : 'catalog';
-  // Sidebar nav presets the status filter — sidebar is just a smart shortcut.
-  window.productsStatusFilter = (mode === 'develop') ? 'developing' : 'active';
+  // Sidebar nav presets the filter — Develop sidebar lands on the develop
+  // slice; Manage > Products lands on the full catalog. The user can flip
+  // pills to widen / narrow without leaving the section.
+  window.productsStatusFilter = (mode === 'develop') ? 'develop' : 'catalog';
   var headerH2 = document.querySelector('#productsTab .section-header h2');
   if (headerH2) headerH2.textContent = 'Products';
   var newBtn = document.querySelector('#productsTab .section-header .btn-primary');
@@ -24678,35 +24685,46 @@ function developCreateNewProduct() {
 
 function renderProducts() {
   var cat = document.getElementById('productsCategory').value;
-  // Unified status filter: 'developing' (draft+ready) | 'active' | 'archived'
-  // Backward-compat: derive from productsViewMode + legacy catalogStatusFilter on first call.
+  // Unified product filter: 'develop' | 'catalog' | 'sell'. Sidebar entry
+  // presets it; user can flip pills without leaving the section.
   if (!window.productsStatusFilter) {
-    if (window.productsViewMode === 'develop') window.productsStatusFilter = 'developing';
-    else window.productsStatusFilter = window.catalogStatusFilter || 'active';
+    window.productsStatusFilter = (window.productsViewMode === 'develop') ? 'develop' : 'catalog';
   }
   var statusFilter = window.productsStatusFilter;
 
   function _statusOf(p) { return (p && p.status) || 'draft'; }
-  function _matchesStatus(p, filter) {
+  function _isOnAnyChannel(p) {
+    if (!p || !p.externalRefs || typeof p.externalRefs !== 'object') return false;
+    return Object.keys(p.externalRefs).some(function(k) {
+      var e = p.externalRefs[k];
+      return e && e.externalId;
+    });
+  }
+  function _matchesFilter(p, filter) {
     var st = _statusOf(p);
-    if (filter === 'developing') return st === 'draft' || st === 'ready';
-    if (filter === 'active') return st === 'active';
-    if (filter === 'archived') return st === 'archived';
+    if (filter === 'develop')  return st === 'draft' || st === 'ready';
+    if (filter === 'sell')     return st === 'active' && _isOnAnyChannel(p);
+    // 'catalog' = the full collection (every status, including archived)
     return true;
   }
 
-  // Counts per status (respect category filter so pill counts are honest about what user will see)
-  var counts = { developing: 0, active: 0, archived: 0 };
+  // Counts per filter (respect category filter so pill counts are honest)
+  var counts = { develop: 0, catalog: 0, sell: 0 };
   productsData.forEach(function(p) {
     if (cat !== 'all' && (!p.categories || p.categories.indexOf(cat) === -1)) return;
+    counts.catalog++;
     var st = _statusOf(p);
-    if (st === 'draft' || st === 'ready') counts.developing++;
-    else if (st === 'active') counts.active++;
-    else if (st === 'archived') counts.archived++;
+    if (st === 'draft' || st === 'ready') counts.develop++;
+    if (st === 'active' && _isOnAnyChannel(p)) counts.sell++;
   });
 
+  // Map legacy filter values onto the new shape so existing entry points keep working.
+  if (statusFilter === 'developing') statusFilter = 'develop';
+  if (statusFilter === 'active' || statusFilter === 'archived') statusFilter = 'catalog';
+  window.productsStatusFilter = statusFilter;
+
   var filtered = productsData.filter(function(p) {
-    if (!_matchesStatus(p, statusFilter)) return false;
+    if (!_matchesFilter(p, statusFilter)) return false;
     if (cat !== 'all' && (!p.categories || p.categories.indexOf(cat) === -1)) return false;
     return true;
   });
@@ -24715,7 +24733,11 @@ function renderProducts() {
   var countEl = document.getElementById('productsCount');
   if (countEl) countEl.textContent = filtered.length + (filtered.length === 1 ? ' product' : ' products');
 
-  // Status pill bar — single row, three pills with counts.
+  // Three filter pills with counts. Each is a real semantic slice, not just
+  // a status filter:
+  //   Develop = status in (draft, ready) — products not yet released
+  //   Catalog = the entire collection across every status
+  //   Sell    = active products that are published on at least one channel
   var chipBar = document.getElementById('catalogStatusBar');
   if (chipBar) {
     function pill(value, label, n) {
@@ -24729,9 +24751,9 @@ function renderProducts() {
         label + ' <span style="opacity:0.7;font-weight:400;">(' + n + ')</span></button>';
     }
     chipBar.innerHTML =
-      pill('developing', 'Developing', counts.developing) +
-      pill('active',     'Active',     counts.active) +
-      pill('archived',   'Archived',   counts.archived);
+      pill('develop', 'Develop', counts.develop) +
+      pill('catalog', 'Catalog', counts.catalog) +
+      pill('sell',    'Sell',    counts.sell);
   }
 
   // List layout (replaces card grid). One row per product: thumb + name/category + status + variants + recipe + price.
@@ -29560,6 +29582,19 @@ function renderVariantExpanded(product, variant, recipe, pricing, channels) {
     window.__editingVariantPricing.variantId === variant.id;
   var hasMultipleVariants = Array.isArray(product.variants) && product.variants.length > 1;
 
+  // Variant sections are filtered by section context. Each row carries a
+  // marker — render only when the current view wants it:
+  //   develop: Recipe (primary), Pricing, Image
+  //   catalog: All sections
+  //   sell:    Pricing, Image, Channels (primary), Inventory, Recipe (link only)
+  var section = (typeof productSection === 'string') ? productSection : 'catalog';
+  var showRecipe    = section === 'develop' || section === 'catalog' || section === 'sell';
+  var recipeAsLink  = section === 'sell'; // sell view shows just the open-link, not full recipe metadata
+  var showPricing   = true;
+  var showImage     = true;
+  var showChannels  = section === 'catalog' || section === 'sell';
+  var showInventory = section === 'catalog' || section === 'sell';
+
   function _label(text, action) {
     return '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">' +
       '<div style="font-size:0.72rem;font-weight:600;color:var(--warm-gray,#888);text-transform:uppercase;letter-spacing:0.06em;">' + text + '</div>' +
@@ -29570,22 +29605,26 @@ function renderVariantExpanded(product, variant, recipe, pricing, channels) {
   var html = '<div style="padding:18px 24px 22px 56px;background:rgba(42,124,111,0.025);border-top:1px solid var(--cream-dark,#e8e0d4);">';
 
   // Recipe section
-  html += '<div style="margin-bottom:18px;">';
-  if (recipe) {
-    var override = recipe.variants && recipe.variants[variant.id];
-    var sourceTxt = override ? 'variant override' : 'inherits base';
-    var recipeAction = '<button class="btn btn-secondary btn-small" onclick="event.stopPropagation();window.makerOpenRecipeBuilder && window.makerOpenRecipeBuilder(\'' + esc(recipe.recipeId) + '\',\'' + esc(variant.id) + '\')">Open Recipe →</button>';
-    html += _label('Recipe', recipeAction);
-    html += '<div style="font-size:0.92rem;color:var(--text,#2a2a2a);">' +
-      '<span style="font-weight:500;">' + esc(recipe.name || recipe.recipeId) + '</span>' +
-      ' <span style="color:var(--warm-gray,#888);font-size:0.82rem;margin-left:6px;">· ' + sourceTxt + '</span>' +
-      (recipe.costsDirty ? ' <span style="color:#b45309;background:rgba(245,158,11,0.12);padding:2px 8px;border-radius:8px;font-size:0.72rem;font-weight:500;margin-left:6px;">⚠ recalc needed</span>' : '') +
-      '</div>';
-  } else {
-    html += _label('Recipe', '');
-    html += '<div style="font-size:0.92rem;color:var(--warm-gray-light,#aaa);font-style:italic;">No recipe linked to this product.</div>';
+  if (showRecipe) {
+    html += '<div style="margin-bottom:18px;">';
+    if (recipe) {
+      var override = recipe.variants && recipe.variants[variant.id];
+      var sourceTxt = override ? 'variant override' : 'inherits base';
+      var recipeAction = '<button class="btn btn-secondary btn-small" onclick="event.stopPropagation();window.makerOpenRecipeBuilder && window.makerOpenRecipeBuilder(\'' + esc(recipe.recipeId) + '\',\'' + esc(variant.id) + '\')">Open Recipe →</button>';
+      html += _label('Recipe', recipeAction);
+      if (!recipeAsLink) {
+        html += '<div style="font-size:0.92rem;color:var(--text,#2a2a2a);">' +
+          '<span style="font-weight:500;">' + esc(recipe.name || recipe.recipeId) + '</span>' +
+          ' <span style="color:var(--warm-gray,#888);font-size:0.82rem;margin-left:6px;">· ' + sourceTxt + '</span>' +
+          (recipe.costsDirty ? ' <span style="color:#b45309;background:rgba(245,158,11,0.12);padding:2px 8px;border-radius:8px;font-size:0.72rem;font-weight:500;margin-left:6px;">⚠ recalc needed</span>' : '') +
+          '</div>';
+      }
+    } else {
+      html += _label('Recipe', '');
+      html += '<div style="font-size:0.92rem;color:var(--warm-gray-light,#aaa);font-style:italic;">No recipe linked to this product.</div>';
+    }
+    html += '</div>';
   }
-  html += '</div>';
 
   // Pricing — inline edit when this variant is being edited.
   html += '<div style="margin-bottom:18px;">';
@@ -29644,6 +29683,7 @@ function renderVariantExpanded(product, variant, recipe, pricing, channels) {
   html += '</div>';
 
   // Channels
+  if (showChannels) {
   html += '<div style="margin-bottom:18px;">';
   html += _label('Channels', '');
   if (channels.length) {
@@ -29656,6 +29696,7 @@ function renderVariantExpanded(product, variant, recipe, pricing, channels) {
     html += '<div style="font-size:0.92rem;color:var(--warm-gray-light,#aaa);font-style:italic;">Not published on any channel</div>';
   }
   html += '</div>';
+  } // end showChannels
 
   // ── Variant Image binding ─────────────────────────────
   var productImages = Array.isArray(product.images) ? product.images : [];
@@ -29692,6 +29733,7 @@ function renderVariantExpanded(product, variant, recipe, pricing, channels) {
   // ── Inventory ─────────────────────────────────────────
   // Per-variant. Schema already supports inv.stock[variantId]; _default is
   // the legacy single-variant key.
+  if (showInventory) {
   var inv = inventory[pid] || {};
   var stockType = (inv && inv.stockType) ? inv.stockType : 'made-to-order';
   var stockKey = variant._isSynthetic ? '_default' : variant.id;
@@ -29726,6 +29768,7 @@ function renderVariantExpanded(product, variant, recipe, pricing, channels) {
     html += '</div>';
   }
   html += '</div>';
+  } // end showInventory
 
   html += '</div>';
   return html;
