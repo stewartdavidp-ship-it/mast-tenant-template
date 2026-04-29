@@ -24570,11 +24570,14 @@ function setProductsViewMode(mode) {
 // Surface orphan recipes (no productId, or productId pointing to a deleted product).
 // Per plan OPEN O5 — UI-only surface, no auto-fix. Hidden when zero orphans or when not in develop view.
 function renderDevelopOrphanRecipesPanel() {
-  var grid = document.getElementById('productsGrid');
-  if (!grid) return;
-  // Remove any prior panel
+  // Migration cleanup tool — disabled. Orphan recipes are archived during data
+  // cleanup; this panel was a one-time janitorial surface, not a normal-use UI.
   var prior = document.getElementById('developOrphanRecipesPanel');
   if (prior) prior.remove();
+  return;
+  // eslint-disable-next-line no-unreachable
+  var grid = document.getElementById('productsGrid');
+  if (!grid) return;
   if (productsViewMode !== 'develop') return;
   // Only render if maker module exposed recipes to us
   var recipes = (window.makerListRecipes && typeof window.makerListRecipes === 'function')
@@ -27244,6 +27247,10 @@ async function loadRecipeMeta(recipeId) {
 
 function renderRecipeReadyBanner(product) {
   if (!product || !product.recipeId) return '';
+  // Recipe-publish handshake is only relevant for active products (where recipe
+  // price changes flow into a customer-facing product). For drafts the user is
+  // still building — showing "v2 ready to apply" is noise.
+  if (product.status !== 'active') return '';
   var meta = window.__mastRecipeMetaCache[product.recipeId];
   if (!meta) return ''; // not yet loaded — banner will paint after async load + re-render
   // Banner shows whenever recipe.version > product.recipeVersion. A product
@@ -29267,8 +29274,8 @@ function renderProductDetail(pid) {
     ? window.makerProductStatusBadgeWithSubStateHtml(product)
     : (typeof window.productStatusBadgeHtml === 'function' ? window.productStatusBadgeHtml(product.status) : '');
   // Checkpoint G — lens toggle pill (Develop / Catalog)
-  var lensToggleHtml = (!isCreate && pid && typeof window.makerRenderLensToggle === 'function')
-    ? window.makerRenderLensToggle(product) : '';
+  // Lens toggle (DEVELOP/CATALOG pill) was a migration artifact — disabled.
+  var lensToggleHtml = '';
   var headerHtml = '<div class="product-detail-header">' +
     (imgSrc ? '<img class="product-detail-img" src="' + esc(imgSrc) + '" alt="' + esc(product.name || 'New Product') + '">' : '') +
     '<div style="flex:1;">' +
