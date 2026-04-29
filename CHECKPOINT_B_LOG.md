@@ -65,5 +65,8 @@
 
 ## Commits / deploy
 
-- Commit SHA: (filled after commit)
-- sgtest15 deploy version: (filled after deploy)
+- Commit SHA: `d2bc659` on branch `develop/B-rename` (pushed to origin)
+- sgtest15 deploy version: `sites/mast-sgtest15/versions/ff6fcbbbe2ead398` (158 files total, 3 uploaded, 155 cached)
+- Verification: `curl https://mast-sgtest15.web.app/app/` → 15 occurrences of "Develop", sidebar-section-label confirmed `<span class="sidebar-section-label">Develop</span>`
+
+## Status: READY FOR CHECKPOINT C
