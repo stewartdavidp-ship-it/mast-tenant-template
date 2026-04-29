@@ -25681,6 +25681,25 @@ function toggleProductAdvanced() {
 }
 
 function editProduct(pid) {
+  // Checkpoint F — Active products are guarded. Direct Edit is blocked;
+  // user must enter revision mode first (which initializes pendingChanges).
+  // Non-Active products edit normally.
+  var prod = pid ? productsData.find(function(p) { return p.pid === pid; }) : null;
+  if (prod && prod.status === 'active' && !prod.hasPendingRevision) {
+    if (typeof window.makerEnterRevisionMode === 'function') {
+      window.makerEnterRevisionMode(pid).then(function(ok) {
+        if (!ok) return;
+        productEditMode = true;
+        if (!productEditTab) productEditTab = 'details';
+        renderProductDetail(pid);
+        if (window.MastDirty) {
+          MastDirty.register('productEdit', _productEditIsDirty, { label: 'Product detail' });
+        }
+        _productEditCaptureBaseline();
+      });
+      return;
+    }
+  }
   productEditMode = true;
   // Preserve current tab so Edit from a specific tab (Variants, Images, etc.) stays there
   if (!productEditTab) productEditTab = 'details';
@@ -28200,10 +28219,17 @@ function renderProductDetail(pid) {
     '</div>' +
     (!isCreate && !isEditing ? '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">' +
       (pid && product.availability !== 'discontinued' ? '<a href="' + window.location.origin + '/product.html?id=' + encodeURIComponent(pid) + '" target="_blank" rel="noopener" class="btn btn-secondary btn-small" style="text-decoration:none;font-size:0.78rem;">View on site &#8599;</a>' : '') +
-      '<button class="btn btn-secondary btn-small" onclick="editProduct(\'' + esc(pid) + '\')">Edit</button>' +
-      '<button class="btn btn-secondary btn-small" onclick="openCloneDialog(\'' + esc(pid) + '\')">Duplicate</button>' +
-      '<button class="btn btn-secondary btn-small" onclick="openAddToSaleDialog(\'' + esc(pid) + '\')">Add to Sale</button>' +
-      renderPublishToShopifyButton(product) +
+      // Checkpoint F — Active products use a revision-aware action bar
+      // (Edit-creates-revision, Apply, Discard, Clone-for-redesign).
+      // Non-Active products keep the legacy Edit + Duplicate + Add-to-Sale row.
+      (product.status === 'active' && typeof window.makerRenderActiveProductActionBar === 'function'
+        ? window.makerRenderActiveProductActionBar(product) +
+          '<button class="btn btn-secondary btn-small" onclick="openAddToSaleDialog(\'' + esc(pid) + '\')">Add to Sale</button>' +
+          renderPublishToShopifyButton(product)
+        : '<button class="btn btn-secondary btn-small" onclick="editProduct(\'' + esc(pid) + '\')">Edit</button>' +
+          '<button class="btn btn-secondary btn-small" onclick="openCloneDialog(\'' + esc(pid) + '\')">Duplicate</button>' +
+          '<button class="btn btn-secondary btn-small" onclick="openAddToSaleDialog(\'' + esc(pid) + '\')">Add to Sale</button>' +
+          renderPublishToShopifyButton(product)) +
     '</div>' : '') +
     (isEditing && !isCreate ? '<div style="display:flex;align-items:center;gap:8px;">' +
       '<span style="font-size:0.72rem;color:var(--amber);font-weight:600;text-transform:uppercase;letter-spacing:0.04em;">Editing</span>' +
@@ -28213,6 +28239,13 @@ function renderProductDetail(pid) {
   // Channel-First Phase 2d (D24) — Recipe Publish handshake banner.
   // Renders only when recipe.version > product.recipeVersion.
   var recipeReadyHtml = renderRecipeReadyBanner(product);
+
+  // Checkpoint F — Revision banner (when in revision mode) + version-link banner
+  // (parent ↔ child v2 cross-link). Both render before tabs.
+  var revisionBannerHtml = (!isCreate && typeof window.makerRenderRevisionBanner === 'function')
+    ? window.makerRenderRevisionBanner(product) : '';
+  var versionLinkBannerHtml = (!isCreate && typeof window.makerRenderVersionLinkBanner === 'function')
+    ? window.makerRenderVersionLinkBanner(product) : '';
 
   // Tab bar — hide irrelevant tabs unless editing (so user can add data)
   var hasVariants = product.options && product.options.length > 0;
@@ -28766,7 +28799,7 @@ function renderProductDetail(pid) {
   var publishUndoHtml = (!isCreate && pid) ? renderPublishUndoBanner(pid) : '';
   var driftAlertHtml = (!isCreate && pid) ? renderDriftAlertBanner(pid) : '';
   el.innerHTML = '<button class="detail-back" onclick="backToProducts()">&larr; ' + backLabel + '</button>' +
-    publishUndoHtml + driftAlertHtml + recipeReadyHtml + headerHtml + tabBarHtml + detailsHtml + variantsHtml + imagesHtml + prodHtml + invTabHtml + actionHtml;
+    publishUndoHtml + driftAlertHtml + recipeReadyHtml + headerHtml + versionLinkBannerHtml + revisionBannerHtml + tabBarHtml + detailsHtml + variantsHtml + imagesHtml + prodHtml + invTabHtml + actionHtml;
 
   // Channel-First Phase 2d (D24) — async-load recipe meta when product has a
   // linked recipe but we haven't read it yet. Re-render to paint the banner.
@@ -29456,6 +29489,69 @@ async function saveProduct(pid) {
         productData.priceCents = productData.retailPriceCents;
       }
     } catch (e) { console.warn('deriveLegacyPriceCents inline failed (non-fatal):', e); }
+
+    // Checkpoint F — when editing an Active product in revision mode, save
+    // form changes to pendingChanges instead of live fields. The form-derived
+    // productData is diffed against the live (existing) record and any
+    // changed revisionable fields are staged. Non-revisionable fields
+    // (status, externalRefs, etc.) write directly even on Active.
+    var inRevisionMode = !isCreate && existing && existing.hasPendingRevision === true;
+    if (inRevisionMode && typeof window.makerStagePendingChanges === 'function' &&
+        typeof window.makerIsFieldRevisionable === 'function') {
+      var REVISIONABLE_FORM_FIELDS = [
+        'name', 'description', 'shortDescription', 'slug', 'categories',
+        'sortOrder', 'options', 'variants', 'priceType', 'priceCents',
+        'retailPriceCents', 'directPriceCents', 'isWholesale', 'wholesalePriceCents',
+        'etsyListingId', 'buildTime', 'costToBuild', 'materials', 'shippingCategory',
+        'weightOz', 'lengthIn', 'widthIn', 'heightIn', 'businessLine',
+        'introducedAt', 'sku', 'processingDays', 'personalization',
+        'seoTitle', 'seoDescription', 'makerAttributes', 'availability'
+      ];
+      var staged = {};
+      var nonRevDirect = {};
+      REVISIONABLE_FORM_FIELDS.forEach(function(fp) {
+        if (!(fp in productData)) return;
+        var newVal = productData[fp];
+        var liveVal = existing[fp];
+        // Cheap deep-eq via JSON for objects/arrays
+        var same = (typeof newVal === 'object' || typeof liveVal === 'object')
+          ? JSON.stringify(newVal) === JSON.stringify(liveVal)
+          : newVal === liveVal;
+        if (same) return;
+        if (window.makerIsFieldRevisionable(fp)) staged[fp] = newVal;
+        else nonRevDirect[fp] = newVal;
+      });
+      // Always include a few bookkeeping flags directly (history arrays, channel bindings)
+      var DIRECT_WRITE_FIELDS = ['priceHistory', 'buildTimeHistory', 'costToBuildHistory',
+                                 'channelBindings', 'channelIds', 'discontinuedAt'];
+      var directPatch = {};
+      DIRECT_WRITE_FIELDS.forEach(function(fp) {
+        if (fp in productData && JSON.stringify(productData[fp]) !== JSON.stringify(existing[fp])) {
+          directPatch[fp] = productData[fp];
+        }
+      });
+      // Stage revisionable
+      var stageOk = await window.makerStagePendingChanges(targetPid, staged);
+      // Direct writes for non-revisionable + bookkeeping (no version bump)
+      var directMerged = Object.assign({}, directPatch, nonRevDirect);
+      directMerged.updatedAt = new Date().toISOString();
+      if (Object.keys(directMerged).length > 0) {
+        await MastDB.products.update(targetPid, directMerged);
+      }
+      await writeAudit('stage_revision', 'products', targetPid);
+      // Skip the normal full save path — pending changes are the source of truth
+      // until Apply.
+      showToast('Staged ' + Object.keys(staged).length + ' change' + (Object.keys(staged).length === 1 ? '' : 's') + ' (Apply to go live)');
+      // Update in-memory product so subsequent re-renders see staged changes
+      var pdIdxR = productsData.findIndex(function(p) { return p.pid === targetPid; });
+      if (pdIdxR >= 0) {
+        // Refresh from current existing + directMerged + pendingChanges already
+        // mirrored by stagePendingChanges. Re-fetch latest in-memory ref.
+      }
+      _productEditCaptureBaseline();
+      renderProductDetail(targetPid);
+      return;
+    }
 
     // Save to Firebase
     // Phase 6a follow-on: use .update() on edits so fields not present in

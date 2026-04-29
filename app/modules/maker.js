@@ -2257,7 +2257,19 @@
         ? '<span onclick="event.stopPropagation();makerTogglePieceVariants(\'' + esc(pid) + '\')" style="display:inline-block;width:16px;text-align:center;cursor:pointer;color:var(--warm-gray);margin-right:6px;user-select:none;" title="' + (isExpanded ? 'Collapse' : 'Expand') + ' variants">' + (isExpanded ? '▾' : '▸') + '</span>'
         : '<span style="display:inline-block;width:16px;margin-right:6px;"></span>';
       var variantCountBadge = hasVariants ? ' <span style="font-size:0.72rem;color:var(--warm-gray-light);font-weight:400;">(' + prodVariants.length + ' variants)</span>' : '';
-      html += '<td style="font-weight:500;">' + expandToggle + esc(p.name || '') + variantCountBadge + '</td>';
+      // Checkpoint F — version badge for v2+ or products with a child Draft
+      var versionBadge = '';
+      var pVer = Number(p.version) || 1;
+      var pHasChild = !!findChildVersion(pid);
+      if (pVer >= 2) {
+        versionBadge = ' <span class="status-badge" style="background:rgba(217,119,6,0.15);color:#b45309;font-size:0.68rem;padding:2px 6px;">v' + pVer + '</span>';
+      } else if (pHasChild) {
+        versionBadge = ' <span class="status-badge" style="background:rgba(217,119,6,0.10);color:#b45309;font-size:0.68rem;padding:2px 6px;" title="A v2 Draft exists for this product">v1 · v2 in dev</span>';
+      }
+      var pendingBadge = p.hasPendingRevision
+        ? ' <span class="status-badge" style="background:rgba(217,119,6,0.18);color:#b45309;font-size:0.68rem;padding:2px 6px;" title="Pending revision">⚠ pending</span>'
+        : '';
+      html += '<td style="font-weight:500;">' + expandToggle + esc(p.name || '') + variantCountBadge + versionBadge + pendingBadge + '</td>';
       html += '<td>' + productStatusBadgeHtml(p.status) + '</td>';
       html += '<td>' + esc((p.categories || []).join(', ')) + '</td>';
 
@@ -2598,6 +2610,9 @@
 
     // Readiness checklist (Checkpoint E)
     html += renderReadinessChecklistPanel(p);
+    // Checkpoint F — version-link + revision banners
+    html += renderVersionLinkBanner(p);
+    html += renderRevisionBanner(p);
 
     // Cost summary (uniform costShape readout)
     html += renderCostShapeSummary(costShape);
@@ -2696,6 +2711,9 @@
 
     // Readiness checklist (Checkpoint E)
     html += renderReadinessChecklistPanel(p);
+    // Checkpoint F — version-link + revision banners
+    html += renderVersionLinkBanner(p);
+    html += renderRevisionBanner(p);
 
     html += renderCostShapeSummary(costShape);
 
@@ -2873,7 +2891,43 @@
     try {
       var atype = defineState.acquisitionType || defineMode;
       var path = 'public/products/' + defineProductId + '/';
-      // Persist defineSpec slice
+
+      // Checkpoint F — if the product is Active and in revision mode,
+      // stage defineSpec + markupConfig as pending changes instead of
+      // writing live. costShape continues to be recomputed live (it's
+      // derived; no need to pend it).
+      var liveProduct = findProduct(defineProductId);
+      var inRevMode = liveProduct && liveProduct.status === 'active' && liveProduct.hasPendingRevision;
+      var costShape = computeCostShape(defineState, null);
+
+      if (inRevMode && typeof stagePendingChanges === 'function') {
+        var pending = {};
+        if (JSON.stringify(defineState.defineSpec || {}) !== JSON.stringify(liveProduct.defineSpec || {})) {
+          pending.defineSpec = defineState.defineSpec || {};
+        }
+        if (atype === 'var' || atype === 'resell') {
+          var defaultsR = await loadTenantDefaultMarkups();
+          var mcR = Object.assign({}, defineState.markupConfig || {});
+          if (!(Number(mcR.wholesaleMarkup) > 0)) mcR.wholesaleMarkup = defaultsR.wholesaleMarkup;
+          if (!(Number(mcR.directMarkup) > 0))    mcR.directMarkup    = defaultsR.directMarkup;
+          if (!(Number(mcR.retailMarkup) > 0))    mcR.retailMarkup    = defaultsR.retailMarkup;
+          defineState.markupConfig = mcR;
+          if (JSON.stringify(mcR) !== JSON.stringify(liveProduct.markupConfig || {})) {
+            pending.markupConfig = mcR;
+          }
+        }
+        if (Object.keys(pending).length > 0) {
+          await stagePendingChanges(defineProductId, pending);
+        }
+        // costShape recompute is non-revisionable bookkeeping — write live
+        await persistCostShape(defineProductId, costShape);
+        try { await recomputeAndPersistReadiness(defineProductId); } catch (e) {}
+        MastAdmin.showToast('Staged ' + Object.keys(pending).length + ' change' + (Object.keys(pending).length === 1 ? '' : 's') + ' (Apply to go live)');
+        renderDefineView();
+        return;
+      }
+
+      // Persist defineSpec slice (live, non-revision-mode path)
       await MastDB.set(path + 'defineSpec', defineState.defineSpec || {});
 
       // Checkpoint E — markupConfig (VAR/Resell). Auto-fill defaults if blank.
@@ -3404,6 +3458,624 @@
   // ============================================================
 
   // ============================================================
+  // Checkpoint F — Rework Patterns (in-place revisions + clone-to-v2)
+  // ----------------------------------------------------------------
+  // Pattern 1: Active product edits go to product.pendingChanges blob until
+  //   user clicks Apply. Live fields are guarded.
+  // Pattern 2: Clone-to-v2 creates a new Draft Product with parentProductId
+  //   and version+1. Original stays Active.
+  // Both flows preserve continuity of the live SKU.
+  // ============================================================
+
+  // Fields that should never be revisioned — even on Active products,
+  // these write directly through to live fields. Keep this list narrow.
+  var NON_REVISIONABLE_FIELDS = {
+    status: true,
+    promotedToReadyAt: true,
+    promotedToActiveAt: true,
+    archivedAt: true,
+    archivedSubState: true,
+    returnsAcceptedUntil: true,
+    retiredAt: true,
+    'externalRefs': true,         // sync metadata
+    'channelBindings': true,      // sync metadata
+    'channelIds': true,           // sync metadata
+    'salesCount': true,
+    'lastSoldAt': true,
+    'recipeVersion': true,        // recipe handshake
+    'hasPendingRevision': true,
+    'pendingChanges': true,
+    'pendingChangesUpdatedAt': true,
+    'pendingChangesAppliedAt': true,
+    'parentProductId': true,
+    'version': true,
+    'updatedAt': true             // bookkeeping
+  };
+
+  /**
+   * Whether a field write must be routed through pendingChanges when the
+   * product is Active. Fields under NON_REVISIONABLE_FIELDS still write live.
+   */
+  function isFieldRevisionable(fieldPath) {
+    if (!fieldPath) return false;
+    var top = String(fieldPath).split('.')[0];
+    return !NON_REVISIONABLE_FIELDS[fieldPath] && !NON_REVISIONABLE_FIELDS[top];
+  }
+
+  /**
+   * Active products are guarded — direct edits to revisionable fields require
+   * entering revision mode (which initializes pendingChanges).
+   */
+  function isProductGuarded(product) {
+    if (!product) return false;
+    return product.status === 'active';
+  }
+
+  function findProduct(pid) {
+    var products = window.productsData || [];
+    return products.find(function(p) { return p && p.pid === pid; });
+  }
+
+  /**
+   * Enter revision mode on an Active product. Initializes pendingChanges blob
+   * and sets hasPendingRevision so the form unlocks. No-op for non-Active.
+   */
+  async function enterRevisionMode(pid) {
+    var p = findProduct(pid);
+    if (!p) { MastAdmin.showToast('Product not found', true); return false; }
+    if (p.status !== 'active') {
+      MastAdmin.showToast('Revision mode only applies to Active products', true);
+      return false;
+    }
+    if (p.hasPendingRevision) return true; // already in revision mode
+    var now = new Date().toISOString();
+    try {
+      var path = 'public/products/' + pid + '/';
+      await MastDB.set(path + 'hasPendingRevision', true);
+      await MastDB.set(path + 'pendingChanges', {});
+      await MastDB.set(path + 'pendingChangesUpdatedAt', now);
+      p.hasPendingRevision = true;
+      p.pendingChanges = {};
+      p.pendingChangesUpdatedAt = now;
+      MastAdmin.writeAudit('enter_revision_mode', 'products', pid);
+      MastAdmin.showToast('Revision mode on — edits stage until you Apply');
+      return true;
+    } catch (err) {
+      MastAdmin.showToast('Could not enter revision mode: ' + (err && err.message), true);
+      return false;
+    }
+  }
+
+  /**
+   * Stage a single field's pending value. Works only when product is in
+   * revision mode (hasPendingRevision === true). Persists to
+   * product.pendingChanges[fieldPath].
+   */
+  async function setPendingFieldValue(pid, fieldPath, value) {
+    var p = findProduct(pid);
+    if (!p) return false;
+    if (!p.hasPendingRevision) {
+      console.warn('[checkpoint-F] setPendingFieldValue called outside revision mode', pid, fieldPath);
+      return false;
+    }
+    if (!isFieldRevisionable(fieldPath)) {
+      // Non-revisionable: write live directly.
+      try {
+        await MastDB.set('public/products/' + pid + '/' + fieldPath, value);
+        if (p) {
+          // best-effort in-memory mirror
+          p[fieldPath.split('.')[0]] = p[fieldPath.split('.')[0]];
+        }
+      } catch (e) { console.warn('non-revisionable write failed', e); }
+      return true;
+    }
+    p.pendingChanges = p.pendingChanges || {};
+    p.pendingChanges[fieldPath] = value;
+    p.pendingChangesUpdatedAt = new Date().toISOString();
+    try {
+      await MastDB.set('public/products/' + pid + '/pendingChanges/' + fieldPath.replace(/\//g, '__'), value);
+      await MastDB.set('public/products/' + pid + '/pendingChangesUpdatedAt', p.pendingChangesUpdatedAt);
+    } catch (err) {
+      console.warn('[checkpoint-F] setPendingFieldValue persist failed', err);
+    }
+    return true;
+  }
+
+  /**
+   * Bulk-stage pending changes from an object map { fieldPath: value, ... }.
+   * Convenience for save-form flows.
+   */
+  async function stagePendingChanges(pid, changes) {
+    var p = findProduct(pid);
+    if (!p) return false;
+    if (!p.hasPendingRevision) {
+      console.warn('[checkpoint-F] stagePendingChanges: not in revision mode for', pid);
+      return false;
+    }
+    var nextPending = Object.assign({}, p.pendingChanges || {});
+    Object.keys(changes || {}).forEach(function(k) {
+      if (isFieldRevisionable(k)) nextPending[k] = changes[k];
+    });
+    p.pendingChanges = nextPending;
+    p.pendingChangesUpdatedAt = new Date().toISOString();
+    try {
+      await MastDB.set('public/products/' + pid + '/pendingChanges', nextPending);
+      await MastDB.set('public/products/' + pid + '/pendingChangesUpdatedAt', p.pendingChangesUpdatedAt);
+    } catch (err) {
+      console.warn('[checkpoint-F] stagePendingChanges persist failed', err);
+    }
+    return true;
+  }
+
+  /**
+   * Format a pending-change value for human display in the apply-confirmation list.
+   */
+  function fmtPendingValue(v) {
+    if (v == null) return '—';
+    if (typeof v === 'number') return String(v);
+    if (typeof v === 'string') return v.length > 60 ? v.slice(0, 57) + '…' : v;
+    if (Array.isArray(v)) return '[' + v.length + ' items]';
+    if (typeof v === 'object') return '{' + Object.keys(v).length + ' fields}';
+    return String(v);
+  }
+
+  /**
+   * Apply pendingChanges to live fields. Confirmation modal lists the diffs.
+   * On confirm: copies each pendingChanges entry to the live path, clears the
+   * pendingChanges blob, sets pendingChangesAppliedAt, optionally fires
+   * channel re-sync, writes audit log.
+   */
+  async function applyPendingChanges(pid) {
+    var p = findProduct(pid);
+    if (!p) { MastAdmin.showToast('Product not found', true); return; }
+    var changes = p.pendingChanges || {};
+    var keys = Object.keys(changes);
+    if (keys.length === 0) {
+      MastAdmin.showToast('No pending changes to apply');
+      return;
+    }
+    var diffLines = keys.map(function(k) {
+      var live = readNestedField(p, k);
+      return k + ': ' + fmtPendingValue(live) + ' → ' + fmtPendingValue(changes[k]);
+    });
+    var msg = 'Apply ' + keys.length + ' change' + (keys.length === 1 ? '' : 's') + ' to this live product?\n\n' + diffLines.join('\n');
+    var ok = await window.mastConfirm(msg, { title: 'Apply Pending Changes', confirmLabel: 'Apply' });
+    if (!ok) return;
+
+    var path = 'public/products/' + pid + '/';
+    var now = new Date().toISOString();
+    try {
+      // Write each change to the live path
+      for (var i = 0; i < keys.length; i++) {
+        var fp = keys[i];
+        await MastDB.set(path + fp.replace(/\./g, '/'), changes[fp]);
+        // Mirror to in-memory product
+        writeNestedField(p, fp, changes[fp]);
+      }
+      // Clear pending
+      await MastDB.set(path + 'pendingChanges', null);
+      await MastDB.set(path + 'hasPendingRevision', false);
+      await MastDB.set(path + 'pendingChangesAppliedAt', now);
+      await MastDB.set(path + 'updatedAt', now);
+      p.pendingChanges = null;
+      p.hasPendingRevision = false;
+      p.pendingChangesAppliedAt = now;
+      p.updatedAt = now;
+      MastAdmin.writeAudit('apply_pending_changes', 'products', pid);
+
+      // Channel re-sync if applicable
+      try {
+        var settings = await loadTenantSettings();
+        var auto = (settings && typeof settings.autoSyncOnStatusChange === 'boolean')
+          ? settings.autoSyncOnStatusChange : true;
+        if (auto) {
+          var hasShopify = !!(p.externalRefs && p.externalRefs.shopify);
+          if (hasShopify && typeof firebase !== 'undefined' && firebase.functions) {
+            try {
+              var callable = firebase.functions().httpsCallable('publishProductToShopify');
+              await callable({ tenantId: MastDB.tenantId(), pid: pid, trigger: 'apply-pending-changes' });
+              console.log('[checkpoint-F] Shopify re-sync fired for', pid);
+            } catch (err) {
+              console.warn('[checkpoint-F] Shopify re-sync failed for', pid, err && err.message);
+            }
+          }
+          window.__mastChannelSyncIntents = window.__mastChannelSyncIntents || [];
+          window.__mastChannelSyncIntents.push({
+            pid: pid, op: 'republish', at: now, trigger: 'apply-pending-changes',
+            fields: keys
+          });
+        }
+      } catch (e) { /* sync errors never block apply */ }
+
+      // Recompute readiness — applied changes may flip listingReady, costed, etc.
+      try { await recomputeAndPersistReadiness(pid); } catch (e) {}
+
+      MastAdmin.showToast('Applied ' + keys.length + ' change' + (keys.length === 1 ? '' : 's') + ' ✓');
+      // Re-render whichever surface is open
+      if (typeof window.renderProductDetail === 'function' && window.selectedProductPid === pid) {
+        window.renderProductDetail(pid);
+      } else if (piecesView === 'define') {
+        renderDefineView();
+      } else if (piecesView === 'list') {
+        renderPiecesList();
+      }
+    } catch (err) {
+      MastAdmin.showToast('Apply failed: ' + (err && err.message), true);
+    }
+  }
+
+  /**
+   * Discard pendingChanges. Confirmation modal lists what will be discarded.
+   */
+  async function discardPendingChanges(pid) {
+    var p = findProduct(pid);
+    if (!p) { MastAdmin.showToast('Product not found', true); return; }
+    var changes = p.pendingChanges || {};
+    var keys = Object.keys(changes);
+    if (keys.length === 0) {
+      // Just exit revision mode
+      try {
+        await MastDB.set('public/products/' + pid + '/hasPendingRevision', false);
+        p.hasPendingRevision = false;
+        if (typeof window.renderProductDetail === 'function' && window.selectedProductPid === pid) {
+          window.renderProductDetail(pid);
+        }
+      } catch (e) {}
+      return;
+    }
+    var diffLines = keys.map(function(k) { return k + ': → ' + fmtPendingValue(changes[k]); });
+    var msg = 'Discard ' + keys.length + ' pending change' + (keys.length === 1 ? '' : 's') + '?\n\n' + diffLines.join('\n');
+    var ok = await window.mastConfirm(msg, { title: 'Discard Pending Changes', confirmLabel: 'Discard' });
+    if (!ok) return;
+
+    var path = 'public/products/' + pid + '/';
+    try {
+      await MastDB.set(path + 'pendingChanges', null);
+      await MastDB.set(path + 'hasPendingRevision', false);
+      p.pendingChanges = null;
+      p.hasPendingRevision = false;
+      MastAdmin.writeAudit('discard_pending_changes', 'products', pid);
+      MastAdmin.showToast('Discarded ' + keys.length + ' change' + (keys.length === 1 ? '' : 's'));
+      if (typeof window.renderProductDetail === 'function' && window.selectedProductPid === pid) {
+        window.renderProductDetail(pid);
+      } else if (piecesView === 'define') {
+        renderDefineView();
+      } else if (piecesView === 'list') {
+        renderPiecesList();
+      }
+    } catch (err) {
+      MastAdmin.showToast('Discard failed: ' + (err && err.message), true);
+    }
+  }
+
+  // ----- Helpers: read/write nested field paths -----------------------------
+  function readNestedField(obj, path) {
+    if (!obj || !path) return undefined;
+    var parts = path.split('.');
+    var cur = obj;
+    for (var i = 0; i < parts.length; i++) {
+      if (cur == null) return undefined;
+      cur = cur[parts[i]];
+    }
+    return cur;
+  }
+  function writeNestedField(obj, path, value) {
+    if (!obj || !path) return;
+    var parts = path.split('.');
+    var cur = obj;
+    for (var i = 0; i < parts.length - 1; i++) {
+      if (cur[parts[i]] == null || typeof cur[parts[i]] !== 'object') cur[parts[i]] = {};
+      cur = cur[parts[i]];
+    }
+    cur[parts[parts.length - 1]] = value;
+  }
+
+  // ----- Pattern 2: Clone-to-v2 ---------------------------------------------
+
+  /**
+   * Find a Draft child of the given product (any product whose parentProductId
+   * matches this pid and status is draft|ready). Returns the first match or null.
+   */
+  function findChildVersion(pid) {
+    var products = window.productsData || [];
+    for (var i = 0; i < products.length; i++) {
+      var p = products[i];
+      if (p && p.parentProductId === pid && p.status !== 'active' && p.status !== 'archived') return p;
+    }
+    return null;
+  }
+
+  /**
+   * Clone an Active product into a fresh Draft v(N+1). Original stays Active.
+   * - Generates new pid
+   * - Copies scalar fields, categories, acquisitionType, markupConfig, defineSpec
+   * - Sets parentProductId, increments version
+   * - Status: draft, clears readinessChecklist, no pending revision
+   * - Does NOT copy images, variants, listings (channelBindings/externalRefs),
+   *   inventory, or sales history. New SKU implies fresh listings.
+   * - For Build mode: creates a new recipe via duplicateRecipe and links it.
+   */
+  async function cloneProductForRedesign(sourcePid) {
+    var src = findProduct(sourcePid);
+    if (!src) { MastAdmin.showToast('Product not found', true); return; }
+    if (src.status !== 'active') {
+      MastAdmin.showToast('Clone for redesign is only available on Active products', true);
+      return;
+    }
+    var existingChild = findChildVersion(sourcePid);
+    var msg = 'Clone this product for a redesign? A new Draft product will be created. The original stays Active.';
+    if (existingChild) {
+      msg = 'A v' + (existingChild.version || 2) + ' Draft already exists for this product (' +
+        (existingChild.name || existingChild.pid) + '). Create another clone anyway?';
+    }
+    var ok = await window.mastConfirm(msg, { title: 'Clone for Redesign', confirmLabel: 'Clone to v' + (((src.version || 1) + 1)) });
+    if (!ok) return;
+
+    var newPid = 'p' + Date.now().toString(36) + '_v' + (((src.version || 1) + 1));
+    var now = new Date().toISOString();
+    var nextVersion = (Number(src.version) || 1) + 1;
+
+    // Deep-copy the scalar slice we want carried over.
+    var clone = {
+      pid: newPid,
+      name: (src.name || 'Untitled') + ' (v' + nextVersion + ')',
+      description: src.description || '',
+      shortDescription: src.shortDescription || '',
+      categories: Array.isArray(src.categories) ? src.categories.slice() : [],
+      slug: (src.slug ? src.slug + '-v' + nextVersion : ''),
+      acquisitionType: src.acquisitionType || 'build',
+      defineSpec: src.defineSpec ? JSON.parse(JSON.stringify(src.defineSpec)) : {},
+      markupConfig: src.markupConfig ? Object.assign({}, src.markupConfig) : null,
+      // Cost shape: copy as starting point — recalc happens on first edit
+      materialCost: src.materialCost || 0,
+      laborCost: src.laborCost || 0,
+      otherCost: src.otherCost || 0,
+      totalCost: src.totalCost || 0,
+      // Pricing: carry forward as starting point (user can change before launch)
+      priceCents: src.priceCents != null ? src.priceCents : null,
+      retailPriceCents: src.retailPriceCents != null ? src.retailPriceCents : null,
+      directPriceCents: src.directPriceCents != null ? src.directPriceCents : null,
+      // Production attributes
+      buildTime: src.buildTime != null ? src.buildTime : null,
+      processingDays: src.processingDays ? Object.assign({}, src.processingDays) : null,
+      sku: null, // new SKU expected
+      businessLine: src.businessLine || 'production',
+      makerAttributes: src.makerAttributes ? Object.assign({}, src.makerAttributes) : null,
+      // Lifecycle
+      status: 'draft',
+      availability: 'available',
+      hasPendingRevision: false,
+      pendingChanges: null,
+      readinessChecklist: { defined: false, costed: false, channeled: false, capacityPlanned: false, listingReady: false },
+      promotedToReadyAt: null,
+      promotedToActiveAt: null,
+      archivedAt: null,
+      // Lineage
+      parentProductId: sourcePid,
+      version: nextVersion,
+      // Bookkeeping
+      images: [],
+      imageIds: [],
+      variants: null,
+      options: src.options ? JSON.parse(JSON.stringify(src.options)) : [],
+      // Listings + inventory deliberately NOT copied — fresh mappings expected
+      externalRefs: null,
+      channelBindings: null,
+      channelIds: null,
+      createdAt: now,
+      updatedAt: now,
+      priceHistory: [], buildTimeHistory: [], costToBuildHistory: []
+    };
+
+    try {
+      // Build mode: duplicate the linked recipe and relink
+      if (clone.acquisitionType === 'build' && src.recipeId && typeof duplicateRecipe === 'function') {
+        try {
+          var newRecipe = await duplicateRecipe(src.recipeId);
+          if (newRecipe && newRecipe.recipeId) {
+            // Relink: point the cloned recipe at the new product
+            await MastDB.set('admin/recipes/' + newRecipe.recipeId + '/productId', newPid);
+            await MastDB.set('admin/recipes/' + newRecipe.recipeId + '/name', clone.name);
+            if (recipesData[newRecipe.recipeId]) {
+              recipesData[newRecipe.recipeId].productId = newPid;
+              recipesData[newRecipe.recipeId].name = clone.name;
+            }
+            clone.recipeId = newRecipe.recipeId;
+          }
+        } catch (recipeErr) {
+          console.warn('[checkpoint-F] recipe clone failed for', sourcePid, recipeErr && recipeErr.message);
+          // proceed without recipe — user can add one manually
+        }
+      }
+
+      await MastDB.set('public/products/' + newPid, clone);
+      MastAdmin.writeAudit('clone_for_redesign', 'products', newPid);
+      MastAdmin.writeAudit('clone_source', 'products', sourcePid);
+
+      if (window.productsData) {
+        window.productsData.push(clone);
+      }
+
+      MastAdmin.showToast('Cloned to v' + nextVersion + ' (Draft) ✓');
+
+      // Navigate to the new draft. Prefer the maker Define view for VAR/Resell
+      // and recipe builder for Build (matching the existing new-product flow).
+      try {
+        if (clone.acquisitionType === 'build' && clone.recipeId) {
+          if (typeof window.makerOpenRecipeBuilder === 'function') {
+            window.makerOpenRecipeBuilder(clone.recipeId);
+          }
+        } else if (clone.acquisitionType === 'var' || clone.acquisitionType === 'resell') {
+          await openDefineForProduct(newPid);
+        } else {
+          // Build with no recipe — re-render pieces list so user can see the new draft
+          if (piecesView === 'list') renderPiecesList();
+        }
+      } catch (navErr) { /* navigation is best-effort */ }
+    } catch (err) {
+      MastAdmin.showToast('Clone failed: ' + (err && err.message), true);
+    }
+  }
+
+  // ----- UI: Status indicators + revision/clone banners ---------------------
+
+  /**
+   * Build a status-line string for a product detail header. Combines status,
+   * pending-revision count, and v2-in-development presence.
+   * Returns a plain string (caller wraps as needed).
+   */
+  function productHeaderStatusLine(product) {
+    if (!product) return '';
+    var status = product.status || 'draft';
+    var parts = [statusLabel(status)];
+    if (product.parentProductId) {
+      parts.push('Cloned from ' + (parentLinkLabel(product.parentProductId)));
+    }
+    if (status === 'active') {
+      var child = findChildVersion(product.pid);
+      if (child) {
+        parts.push('v' + (child.version || 2) + ' in development');
+      }
+      var pendingCount = product.pendingChanges ? Object.keys(product.pendingChanges).length : 0;
+      if (product.hasPendingRevision) {
+        parts.push(pendingCount > 0
+          ? (pendingCount + ' pending change' + (pendingCount === 1 ? '' : 's'))
+          : 'revision mode (no edits yet)');
+      }
+    }
+    return parts.join(' · ');
+  }
+
+  function statusLabel(s) {
+    s = (s || 'draft').toLowerCase();
+    if (s === 'active') return 'Active';
+    if (s === 'ready') return 'Ready';
+    if (s === 'archived') return 'Archived';
+    return 'Draft';
+  }
+  function parentLinkLabel(parentPid) {
+    var parent = findProduct(parentPid);
+    var label = (parent && parent.name) ? parent.name : parentPid;
+    return '<a href="#" onclick="event.preventDefault();makerOpenProductDetail(\'' + MastAdmin.esc(parentPid) + '\')" style="color:inherit;text-decoration:underline;">' + MastAdmin.esc(label) + '</a>';
+  }
+
+  /**
+   * Render the active-product action bar. Returns HTML for:
+   *   - "Edit (creates revision)" button (when not in revision mode)
+   *   - "Apply" + "Discard" buttons (when in revision mode)
+   *   - "Clone for redesign" button (always for Active)
+   * Designed to be injected into the product detail header on Active products.
+   */
+  function renderActiveProductActionBar(product) {
+    if (!product || product.status !== 'active') return '';
+    var pid = MastAdmin.esc(product.pid);
+    var html = '';
+    html += '<div class="mast-active-action-bar" style="display:flex;gap:6px;flex-wrap:wrap;">';
+    if (product.hasPendingRevision) {
+      var count = product.pendingChanges ? Object.keys(product.pendingChanges).length : 0;
+      html += '<button class="btn btn-primary btn-small" onclick="makerApplyPendingChanges(\'' + pid + '\')"' + (count === 0 ? ' disabled style="opacity:0.5;cursor:not-allowed;"' : '') + '>Apply' + (count > 0 ? ' (' + count + ')' : '') + '</button>';
+      html += '<button class="btn btn-secondary btn-small" onclick="makerDiscardPendingChanges(\'' + pid + '\')">Discard</button>';
+    } else {
+      html += '<button class="btn btn-secondary btn-small" onclick="makerEnterRevisionMode(\'' + pid + '\')" title="Edits will be staged and only go live after Apply">Edit (creates revision)</button>';
+    }
+    html += '<button class="btn btn-secondary btn-small" onclick="makerCloneForRedesign(\'' + pid + '\')" title="Create a v2 Draft for a redesign">Clone for redesign</button>';
+    html += '</div>';
+    return html;
+  }
+
+  /**
+   * Render the "you are in revision mode" banner. Lists pending changes.
+   */
+  function renderRevisionBanner(product) {
+    if (!product || !product.hasPendingRevision) return '';
+    var pid = MastAdmin.esc(product.pid);
+    var changes = product.pendingChanges || {};
+    var keys = Object.keys(changes);
+    var html = '';
+    html += '<div class="mast-revision-banner" style="background:rgba(217,119,6,0.08);border:1px solid rgba(217,119,6,0.3);border-radius:8px;padding:12px 16px;margin:12px 0;">';
+    html += '<div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;">';
+    html += '<div><strong style="color:#b45309;">Editing draft revision</strong>';
+    html += '<div style="font-size:0.78rem;color:#b45309;margin-top:2px;">Changes are NOT live until you Apply.</div></div>';
+    html += '<div style="display:flex;gap:6px;">';
+    html += '<button class="btn btn-primary btn-small" onclick="makerApplyPendingChanges(\'' + pid + '\')"' + (keys.length === 0 ? ' disabled style="opacity:0.5;cursor:not-allowed;"' : '') + '>Apply' + (keys.length > 0 ? ' (' + keys.length + ')' : '') + '</button>';
+    html += '<button class="btn btn-secondary btn-small" onclick="makerDiscardPendingChanges(\'' + pid + '\')">Discard</button>';
+    html += '</div></div>';
+    if (keys.length > 0) {
+      html += '<ul style="margin:8px 0 0;padding-left:20px;font-size:0.82rem;color:#92400e;">';
+      keys.forEach(function(k) {
+        var live = readNestedField(product, k);
+        html += '<li><code>' + MastAdmin.esc(k) + '</code>: <span style="color:#9ca3af;text-decoration:line-through;">' + MastAdmin.esc(fmtPendingValue(live)) + '</span> → <span style="color:#b45309;font-weight:600;">' + MastAdmin.esc(fmtPendingValue(changes[k])) + '</span> <span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#d97706;margin-left:4px;" title="pending"></span></li>';
+      });
+      html += '</ul>';
+    }
+    html += '</div>';
+    return html;
+  }
+
+  /**
+   * Render cross-link banners — "Cloned from <parent>" on child Drafts and
+   * "v2 in development: <child>" on parent Active products.
+   */
+  function renderVersionLinkBanner(product) {
+    if (!product) return '';
+    var html = '';
+    // Child → parent
+    if (product.parentProductId) {
+      var parent = findProduct(product.parentProductId);
+      var parentName = parent ? (parent.name || product.parentProductId) : product.parentProductId;
+      html += '<div class="mast-version-link-banner" style="background:rgba(42,124,111,0.06);border:1px solid rgba(42,124,111,0.25);border-radius:8px;padding:10px 14px;margin:8px 0;font-size:0.85rem;">';
+      html += '<span style="color:var(--warm-gray,#777);">Cloned from:</span> ';
+      html += '<a href="#" onclick="event.preventDefault();makerOpenProductDetail(\'' + MastAdmin.esc(product.parentProductId) + '\')" style="color:var(--teal,#2a7c6f);font-weight:600;">' + MastAdmin.esc(parentName) + '</a>';
+      if (parent) html += ' <span style="color:var(--warm-gray);">(v' + (parent.version || 1) + ' · ' + statusLabel(parent.status) + ')</span>';
+      html += '</div>';
+    }
+    // Parent → child
+    if (product.status === 'active') {
+      var child = findChildVersion(product.pid);
+      if (child) {
+        html += '<div class="mast-version-link-banner" style="background:rgba(217,119,6,0.06);border:1px solid rgba(217,119,6,0.25);border-radius:8px;padding:10px 14px;margin:8px 0;font-size:0.85rem;">';
+        html += '<strong style="color:#b45309;">v' + (child.version || 2) + ' in development:</strong> ';
+        html += '<a href="#" onclick="event.preventDefault();makerOpenProductDetail(\'' + MastAdmin.esc(child.pid) + '\')" style="color:var(--teal,#2a7c6f);font-weight:600;">' + MastAdmin.esc(child.name || child.pid) + '</a>';
+        html += ' <span style="color:var(--warm-gray);">(' + statusLabel(child.status) + ')</span>';
+        html += '</div>';
+      }
+      // Parallel-active warning: a v2 sibling with same parentProductId that's also Active
+      var products = window.productsData || [];
+      var parallel = products.filter(function(pp) {
+        return pp && pp.pid !== product.pid && pp.parentProductId === product.pid && pp.status === 'active';
+      });
+      if (parallel.length > 0) {
+        html += '<div class="mast-version-link-banner" style="background:rgba(180,83,9,0.08);border:1px solid rgba(180,83,9,0.3);border-radius:8px;padding:10px 14px;margin:8px 0;font-size:0.85rem;color:#9a3412;">';
+        html += '⚠ Both v' + (product.version || 1) + ' and v' + (parallel[0].version || 2) + ' are Active — consider archiving v' + (product.version || 1) + '.';
+        html += '</div>';
+      }
+    }
+    return html;
+  }
+
+  /**
+   * Open the product detail screen for a given pid. Used by cross-link
+   * navigation. Routes to the Catalog product detail when available.
+   */
+  function openProductDetail(pid) {
+    if (typeof window.viewProduct === 'function') {
+      window.viewProduct(pid);
+      return;
+    }
+    if (typeof window.renderProductDetail === 'function') {
+      window.selectedProductPid = pid;
+      window.renderProductDetail(pid);
+      return;
+    }
+    // Fallback — open define view
+    openDefineForProduct(pid).catch(function() {});
+  }
+
+  // ============================================================
+  // End Checkpoint F
+  // ============================================================
+
+  // ============================================================
   // Recipe Builder — "The Money Screen"
   // ============================================================
 
@@ -3699,6 +4371,9 @@
     var __linkedProduct = bs.productId ? (window.productsData || []).find(function(pp){ return pp.pid === bs.productId; }) : null;
     if (__linkedProduct) {
       html += renderReadinessChecklistPanel(__linkedProduct);
+      // Checkpoint F — cross-link + revision banners on the Build view too
+      html += renderVersionLinkBanner(__linkedProduct);
+      html += renderRevisionBanner(__linkedProduct);
     }
 
     // costsDirty banner
@@ -4996,6 +5671,21 @@
   window.makerScrollToReadinessSection = scrollToReadinessSection;
   window.productStatusBadgeHtml = productStatusBadgeHtml;
   window.makerRecomputeReadiness = recomputeAndPersistReadiness;
+  // Checkpoint F — Rework patterns
+  window.makerEnterRevisionMode = enterRevisionMode;
+  window.makerSetPendingFieldValue = setPendingFieldValue;
+  window.makerStagePendingChanges = stagePendingChanges;
+  window.makerApplyPendingChanges = applyPendingChanges;
+  window.makerDiscardPendingChanges = discardPendingChanges;
+  window.makerCloneForRedesign = cloneProductForRedesign;
+  window.makerFindChildVersion = findChildVersion;
+  window.makerIsProductGuarded = isProductGuarded;
+  window.makerIsFieldRevisionable = isFieldRevisionable;
+  window.makerProductHeaderStatusLine = productHeaderStatusLine;
+  window.makerRenderActiveProductActionBar = renderActiveProductActionBar;
+  window.makerRenderRevisionBanner = renderRevisionBanner;
+  window.makerRenderVersionLinkBanner = renderVersionLinkBanner;
+  window.makerOpenProductDetail = openProductDetail;
   window.makerCloseRecipeBuilder = closeRecipeBuilder;
   window.makerCreateRecipeForProduct = createRecipeForProduct;
   window.makerCreateNewPiece = createNewPiece;
