@@ -27084,13 +27084,96 @@ async function bulkPublishToShopify() {
 window.__mastPublishState = window.__mastPublishState || {};
 
 function renderPublishToShopifyButton(product) {
+  return renderPublishToChannelButton(product);
+}
+
+// Channel-agnostic publish CTA. Opens a dialog listing all active channels
+// with their current publish state per channel, letting the user pick.
+function renderPublishToChannelButton(product) {
   if (!product || !product.pid) return '';
-  var hasShopify = product.externalRefs && product.externalRefs.shopify && product.externalRefs.shopify.externalId;
-  var label = hasShopify ? 'Update on Shopify' : 'Publish to Shopify';
-  var title = hasShopify
-    ? 'Push the latest Mast data to the existing Shopify listing'
-    : 'Create this product on the connected Shopify store';
-  return '<button class="btn btn-secondary btn-small" title="' + esc(title) + '" onclick="publishProductToShopify(\'' + esc(product.pid) + '\')">' + esc(label) + '</button>';
+  var refs = product.externalRefs || {};
+  // Count platforms this product is already on (any externalRefs entry with externalId).
+  var publishedTo = Object.keys(refs).filter(function(k) {
+    return refs[k] && refs[k].externalId;
+  });
+  var label = publishedTo.length > 0
+    ? 'Update Channels (' + publishedTo.length + ')'
+    : 'Publish to Channel…';
+  var title = publishedTo.length > 0
+    ? 'Push latest Mast data to ' + publishedTo.length + ' connected channel' + (publishedTo.length === 1 ? '' : 's')
+    : 'Pick a connected channel to publish this product to';
+  return '<button class="btn btn-secondary btn-small" title="' + esc(title) + '" onclick="openPublishToChannelDialog(\'' + esc(product.pid) + '\')">' + esc(label) + '</button>';
+}
+
+function openPublishToChannelDialog(pid) {
+  var product = (window.productsData || []).find(function(p) { return p.pid === pid; });
+  if (!product) { showToast('Product not found', true); return; }
+
+  loadAdminChannels(function(channels) {
+    var entries = Object.keys(channels || {})
+      .map(function(id) { return Object.assign({ channelId: id }, channels[id]); })
+      .filter(function(ch) { return ch && ch.status !== 'archived' && ch.enabled !== false; });
+
+    var refs = product.externalRefs || {};
+    function platformOf(ch) { return _shimPlatform(ch) || ch.platform || ''; }
+    function publishStateFor(ch) {
+      var plat = platformOf(ch);
+      if (!plat) return null;
+      return refs[plat] && refs[plat].externalId ? refs[plat] : null;
+    }
+
+    var html = '<div class="modal-header"><h3>Publish to Channel</h3>' +
+      '<button class="modal-close" onclick="closeModal()">✖</button></div>' +
+      '<div class="modal-body">' +
+        '<p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:12px;">' +
+          'Pick a channel to publish <strong>' + esc(product.name || pid) + '</strong> to. ' +
+          'Channels are configured in Manage › Channels.' +
+        '</p>';
+
+    if (entries.length === 0) {
+      html += '<p style="color:var(--warm-gray);">No active channels. Connect one in Manage › Channels first.</p>';
+    } else {
+      html += '<div style="display:flex;flex-direction:column;gap:8px;">';
+      entries.forEach(function(ch) {
+        var plat = platformOf(ch);
+        var state = publishStateFor(ch);
+        var name = ch.name || ch.label || (plat ? plat.charAt(0).toUpperCase() + plat.slice(1) : 'Channel');
+        var actionLabel, actionFn, disabled = false, note = '';
+        if (plat === 'shopify') {
+          actionLabel = state ? 'Update' : 'Publish';
+          actionFn = "publishProductToShopify('" + esc(pid) + "');closeModal();";
+        } else if (plat === 'etsy' || plat === 'square') {
+          actionLabel = 'Coming soon';
+          disabled = true;
+          note = plat.charAt(0).toUpperCase() + plat.slice(1) + ' publishing is not yet wired up.';
+        } else {
+          actionLabel = 'Unsupported';
+          disabled = true;
+          note = 'No publish handler for "' + plat + '".';
+        }
+        html += '<div style="display:flex;align-items:center;gap:12px;padding:10px 12px;border:1px solid var(--border-light,#eee);border-radius:6px;">' +
+          '<div style="flex:1;">' +
+            '<strong>' + esc(name) + '</strong>' +
+            (plat ? ' <span style="color:var(--warm-gray);font-size:0.78rem;">· ' + esc(plat) + '</span>' : '') +
+            (state
+              ? '<div style="font-size:0.78rem;color:var(--teal);">Linked' + (state.externalUrl ? ' · <a href="' + esc(state.externalUrl) + '" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline;">view</a>' : '') + '</div>'
+              : '<div style="font-size:0.78rem;color:var(--warm-gray);">Not yet published</div>') +
+            (note ? '<div style="font-size:0.72rem;color:var(--warm-gray);">' + esc(note) + '</div>' : '') +
+          '</div>' +
+          (disabled
+            ? '<button class="btn btn-secondary btn-small" disabled style="opacity:0.5;cursor:not-allowed;">' + actionLabel + '</button>'
+            : '<button class="btn btn-primary btn-small" onclick="' + actionFn + '">' + actionLabel + '</button>') +
+        '</div>';
+      });
+      html += '</div>';
+    }
+
+    html += '</div><div class="modal-footer">' +
+      '<button class="btn btn-secondary" onclick="closeModal()">Close</button>' +
+    '</div>';
+
+    openModal(html);
+  });
 }
 
 function renderPublishUndoBanner(pid) {
