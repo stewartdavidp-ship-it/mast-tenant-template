@@ -26489,8 +26489,24 @@ function checkMakerAttributesVisibility() {
   });
 }
 
+// Product detail section context — derived from entry point (sidebar route).
+// Drives which actions appear in the detail header. NOT user-toggleable.
+//   'develop'  — sidebar Develop > Products: edit recipe, reprice, edit materials
+//   'catalog'  — sidebar Manage > Products: edit info, set status, manage categories
+//   'sell'     — sidebar Sell flow: add to sale, publish to channels
+//   'inventory'— inventory drilldown: stock adjustments, build queue
+var productSection = 'catalog';
+function _deriveProductSection() {
+  var r = (typeof currentRoute === 'string') ? currentRoute : '';
+  if (r === 'develop-products' || r === 'pieces') return 'develop';
+  if (r === 'inventory') return 'inventory';
+  // 'products' (sidebar Manage) and any other path land in catalog by default.
+  return 'catalog';
+}
+
 function viewProduct(pid) {
-  productViewOrigin = 'products';
+  productSection = _deriveProductSection();
+  productViewOrigin = (productSection === 'inventory') ? 'inventory' : 'products';
   selectedProductPid = pid;
   document.getElementById('productsGrid').style.display = 'none';
   document.getElementById('inventorySummaryBar').style.display = 'none';
@@ -29233,27 +29249,51 @@ function renderProductDetail(pid) {
       (product.availability === 'discontinued' ? '<span class="status-badge stock-badge out-of-stock">Discontinued</span>' : '') +
     '</div>' +
     (!isCreate && !isEditing ? '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">' +
-      (pid && product.status === 'active' && product.availability !== 'discontinued' ? '<a href="' + window.location.origin + '/product.html?id=' + encodeURIComponent(pid) + '" target="_blank" rel="noopener" class="btn btn-secondary btn-small" style="text-decoration:none;font-size:0.78rem;">View on site &#8599;</a>' : '') +
-      // Checkpoint F — Active products use a revision-aware action bar
-      // (Edit-creates-revision, Apply, Discard, Clone-for-redesign).
-      // Checkpoint G — Active also gets an "Archive" button.
-      // Archived products get the sub-state forward-transition action bar.
-      // Non-Active products keep the legacy Edit + Duplicate + Add-to-Sale row.
-      (product.status === 'active' && typeof window.makerRenderActiveProductActionBar === 'function'
-        ? window.makerRenderActiveProductActionBar(product) +
-          '<button class="btn btn-secondary btn-small" onclick="window.makerOpenArchiveModal && window.makerOpenArchiveModal(\'' + esc(pid) + '\')">Archive</button>' +
-          '<button class="btn btn-secondary btn-small" onclick="openAddToSaleDialog(\'' + esc(pid) + '\')">Add to Sale</button>' +
-          renderPublishToShopifyButton(product)
-        : (product.status === 'archived' && typeof window.makerRenderArchivedProductActionBar === 'function'
-          ? window.makerRenderArchivedProductActionBar(product)
-          : '<button class="btn btn-secondary btn-small" onclick="editProduct(\'' + esc(pid) + '\')">Edit</button>' +
-            '<button class="btn btn-secondary btn-small" onclick="openCloneDialog(\'' + esc(pid) + '\')">Duplicate</button>' +
-            // Develop lens — prominent Edit Recipe entry point in the header.
-            ((typeof window.makerGetProductDetailLens === 'function' && window.makerGetProductDetailLens(pid) === 'develop')
-              ? (product.recipeId
-                  ? '<button class="btn btn-primary btn-small" onclick="window.makerOpenRecipeBuilder && window.makerOpenRecipeBuilder(\'' + esc(product.recipeId) + '\')">Edit Recipe →</button>'
-                  : '<button class="btn btn-primary btn-small" onclick="addRecipeForProduct(\'' + esc(pid) + '\')">+ Create Recipe</button>')
-              : ''))) +
+      // Section-aware action bar. Section is preset by sidebar entry point
+      // (Develop/Manage/Sell/Inventory) and drives which actions surface here.
+      (function() {
+        var section = (typeof productSection === 'string') ? productSection : 'catalog';
+        var isActive = product.status === 'active';
+        var isArchived = product.status === 'archived';
+        var canViewOnSite = pid && isActive && product.availability !== 'discontinued';
+        var viewOnSiteBtn = canViewOnSite
+          ? '<a href="' + window.location.origin + '/product.html?id=' + encodeURIComponent(pid) + '" target="_blank" rel="noopener" class="btn btn-secondary btn-small" style="text-decoration:none;font-size:0.78rem;">View on site ↗</a>'
+          : '';
+        var editInfoBtn = '<button class="btn btn-secondary btn-small" onclick="editProduct(\'' + esc(pid) + '\')">Edit Info</button>';
+        var dupBtn = '<button class="btn btn-secondary btn-small" onclick="openCloneDialog(\'' + esc(pid) + '\')">Duplicate</button>';
+        var archiveBtn = isActive
+          ? '<button class="btn btn-secondary btn-small" onclick="window.makerOpenArchiveModal && window.makerOpenArchiveModal(\'' + esc(pid) + '\')">Archive</button>'
+          : '';
+        var recipeBtn = product.recipeId
+          ? '<button class="btn btn-primary btn-small" onclick="window.makerOpenRecipeBuilder && window.makerOpenRecipeBuilder(\'' + esc(product.recipeId) + '\')">Edit Recipe →</button>'
+          : '<button class="btn btn-primary btn-small" onclick="addRecipeForProduct(\'' + esc(pid) + '\')">+ Create Recipe</button>';
+        var saleBtn = isActive ? '<button class="btn btn-secondary btn-small" onclick="openAddToSaleDialog(\'' + esc(pid) + '\')">Add to Sale</button>' : '';
+        var shopifyBtn = isActive ? renderPublishToShopifyButton(product) : '';
+
+        // Archived products keep the sub-state action bar (restore / discontinue / etc.) regardless of section.
+        if (isArchived && typeof window.makerRenderArchivedProductActionBar === 'function') {
+          return window.makerRenderArchivedProductActionBar(product);
+        }
+
+        if (section === 'develop') {
+          // Develop: building/repricing focus. Recipe is primary action; product info is secondary.
+          return recipeBtn + editInfoBtn + dupBtn;
+        }
+        if (section === 'sell') {
+          // Sell: customer-facing actions (active products only meaningful here).
+          return viewOnSiteBtn + saleBtn + shopifyBtn + editInfoBtn;
+        }
+        if (section === 'inventory') {
+          // Inventory: stock-focused. Editing info is secondary.
+          return editInfoBtn + dupBtn;
+        }
+        // catalog (Manage > Products): governance — info, lifecycle, view-on-site.
+        // Active products with the revision-aware action bar use it; otherwise plain.
+        if (isActive && typeof window.makerRenderActiveProductActionBar === 'function') {
+          return viewOnSiteBtn + window.makerRenderActiveProductActionBar(product) + archiveBtn;
+        }
+        return viewOnSiteBtn + editInfoBtn + dupBtn + archiveBtn;
+      })() +
     '</div>' : '') +
     (isEditing && !isCreate ? '<div style="display:flex;align-items:center;gap:8px;">' +
       '<span style="font-size:0.72rem;color:var(--amber);font-weight:600;text-transform:uppercase;letter-spacing:0.04em;">Editing</span>' +
