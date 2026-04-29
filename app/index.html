@@ -27122,13 +27122,20 @@ function openPublishToChannelDialog(pid) {
       return refs[plat] && refs[plat].externalId ? refs[plat] : null;
     }
 
+    var notActive = product.status !== 'active';
     var html = '<div class="modal-header"><h3>Publish to Channel</h3>' +
       '<button class="modal-close" onclick="closeModal()">✖</button></div>' +
       '<div class="modal-body">' +
         '<p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:12px;">' +
           'Pick a channel to publish <strong>' + esc(product.name || pid) + '</strong> to. ' +
           'Channels are configured in Manage › Channels.' +
-        '</p>';
+        '</p>' +
+        (notActive
+          ? '<div style="margin-bottom:12px;padding:10px 12px;background:rgba(217,119,6,0.08);border:1px solid rgba(217,119,6,0.4);border-radius:6px;font-size:0.85rem;color:#b45309;">' +
+              '<strong>This product is in <code>' + esc(product.status || 'draft') + '</code>.</strong> ' +
+              'Promote it to <strong>active</strong> from the Catalog view before publishing to a customer-facing channel.' +
+            '</div>'
+          : '');
 
     if (entries.length === 0) {
       html += '<p style="color:var(--warm-gray);">No active channels. Connect one in Manage › Channels first.</p>';
@@ -27142,6 +27149,10 @@ function openPublishToChannelDialog(pid) {
         if (plat === 'shopify') {
           actionLabel = state ? 'Update' : 'Publish';
           actionFn = "publishProductToShopify('" + esc(pid) + "');closeModal();";
+          if (notActive) {
+            disabled = true;
+            note = 'Product must be Active to publish.';
+          }
         } else if (plat === 'etsy' || plat === 'square') {
           actionLabel = 'Coming soon';
           disabled = true;
@@ -29391,7 +29402,8 @@ function renderProductDetail(pid) {
           ? '<button class="btn btn-primary btn-small" onclick="window.makerOpenRecipeBuilder && window.makerOpenRecipeBuilder(\'' + esc(product.recipeId) + '\')">Edit Recipe →</button>'
           : '<button class="btn btn-primary btn-small" onclick="addRecipeForProduct(\'' + esc(pid) + '\')">+ Create Recipe</button>';
         var saleBtn = isActive ? '<button class="btn btn-secondary btn-small" onclick="openAddToSaleDialog(\'' + esc(pid) + '\')">Add to Sale</button>' : '';
-        var shopifyBtn = isActive ? renderPublishToShopifyButton(product) : '';
+        // Publish to Channel always shows in Sell view — dialog handles draft/ready guards.
+        var publishBtn = renderPublishToChannelButton(product);
 
         // Archived products keep the sub-state action bar (restore / discontinue / etc.) regardless of section.
         if (isArchived && typeof window.makerRenderArchivedProductActionBar === 'function') {
@@ -29404,7 +29416,7 @@ function renderProductDetail(pid) {
         }
         if (section === 'sell') {
           // Sell: customer-facing actions (active products only meaningful here).
-          return viewOnSiteBtn + saleBtn + shopifyBtn + editInfoBtn;
+          return viewOnSiteBtn + saleBtn + publishBtn + editInfoBtn;
         }
         if (section === 'inventory') {
           // Inventory: stock-focused. Editing info is secondary.
