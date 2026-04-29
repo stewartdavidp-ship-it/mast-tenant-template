@@ -26504,8 +26504,25 @@ function _deriveProductSection() {
   return 'catalog';
 }
 
+// User can toggle sections per-pid without leaving the page. Choice persists
+// for the session (so navigating away and back keeps your view). Sidebar
+// entry remains the *default* for the first visit to a given product.
+function setProductSection(value) {
+  if (value !== 'develop' && value !== 'catalog' && value !== 'sell' && value !== 'inventory') return;
+  productSection = value;
+  if (selectedProductPid) {
+    try { sessionStorage.setItem('mastProductSection_' + selectedProductPid, value); } catch (e) {}
+  }
+  if (typeof renderProductDetail === 'function') renderProductDetail(selectedProductPid);
+}
+
 function viewProduct(pid) {
-  productSection = _deriveProductSection();
+  // Honor a previously-chosen section for this pid, else derive from entry point.
+  var stored = null;
+  try { stored = sessionStorage.getItem('mastProductSection_' + pid); } catch (e) {}
+  productSection = (stored === 'develop' || stored === 'catalog' || stored === 'sell' || stored === 'inventory')
+    ? stored
+    : _deriveProductSection();
   productViewOrigin = (productSection === 'inventory') ? 'inventory' : 'products';
   selectedProductPid = pid;
   document.getElementById('productsGrid').style.display = 'none';
@@ -29234,8 +29251,31 @@ function renderProductDetail(pid) {
     ? window.makerProductStatusBadgeWithSubStateHtml(product)
     : (typeof window.productStatusBadgeHtml === 'function' ? window.productStatusBadgeHtml(product.status) : '');
   // Checkpoint G — lens toggle pill (Develop / Catalog)
-  // Lens toggle (DEVELOP/CATALOG pill) was a migration artifact — disabled.
+  // Section toggle — defaults from sidebar entry, user can flip in place.
+  // Drives which actions surface in the action bar below.
   var lensToggleHtml = '';
+  if (!isCreate && pid) {
+    var _curSection = (typeof productSection === 'string') ? productSection : 'catalog';
+    function _segPill(value, label) {
+      var on = _curSection === value;
+      var bg = on ? 'rgba(42,124,111,0.15)' : 'transparent';
+      var fg = on ? 'var(--teal,#2a7c6f)' : 'var(--warm-gray,#777)';
+      var bd = on ? 'var(--teal,#2a7c6f)' : 'rgba(0,0,0,0.18)';
+      return '<button onclick="setProductSection(\'' + value + '\')" ' +
+        'style="padding:3px 10px;border:1px solid ' + bd + ';background:' + bg + ';color:' + fg +
+        ';font-size:0.72rem;cursor:pointer;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;">' +
+        label + '</button>';
+    }
+    lensToggleHtml =
+      '<div style="display:inline-flex;align-items:center;gap:0;border-radius:14px;overflow:hidden;font-size:0.72rem;">' +
+        '<span style="margin-right:8px;color:var(--warm-gray,#777);">View as:</span>' +
+        '<div style="display:inline-flex;border-radius:14px;overflow:hidden;">' +
+          _segPill('develop', 'Develop') +
+          _segPill('catalog', 'Catalog') +
+          _segPill('sell', 'Sell') +
+        '</div>' +
+      '</div>';
+  }
   var headerHtml = '<div class="product-detail-header">' +
     (imgSrc ? '<img class="product-detail-img" src="' + esc(imgSrc) + '" alt="' + esc(product.name || 'New Product') + '">' : '') +
     '<div style="flex:1;">' +
