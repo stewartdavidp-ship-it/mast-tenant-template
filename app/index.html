@@ -29202,7 +29202,7 @@ function renderProductDetail(pid) {
       (product.availability === 'discontinued' ? '<span class="status-badge stock-badge out-of-stock">Discontinued</span>' : '') +
     '</div>' +
     (!isCreate && !isEditing ? '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">' +
-      (pid && product.availability !== 'discontinued' ? '<a href="' + window.location.origin + '/product.html?id=' + encodeURIComponent(pid) + '" target="_blank" rel="noopener" class="btn btn-secondary btn-small" style="text-decoration:none;font-size:0.78rem;">View on site &#8599;</a>' : '') +
+      (pid && product.status === 'active' && product.availability !== 'discontinued' ? '<a href="' + window.location.origin + '/product.html?id=' + encodeURIComponent(pid) + '" target="_blank" rel="noopener" class="btn btn-secondary btn-small" style="text-decoration:none;font-size:0.78rem;">View on site &#8599;</a>' : '') +
       // Checkpoint F — Active products use a revision-aware action bar
       // (Edit-creates-revision, Apply, Discard, Clone-for-redesign).
       // Checkpoint G — Active also gets an "Archive" button.
@@ -29216,9 +29216,7 @@ function renderProductDetail(pid) {
         : (product.status === 'archived' && typeof window.makerRenderArchivedProductActionBar === 'function'
           ? window.makerRenderArchivedProductActionBar(product)
           : '<button class="btn btn-secondary btn-small" onclick="editProduct(\'' + esc(pid) + '\')">Edit</button>' +
-            '<button class="btn btn-secondary btn-small" onclick="openCloneDialog(\'' + esc(pid) + '\')">Duplicate</button>' +
-            '<button class="btn btn-secondary btn-small" onclick="openAddToSaleDialog(\'' + esc(pid) + '\')">Add to Sale</button>' +
-            renderPublishToShopifyButton(product))) +
+            '<button class="btn btn-secondary btn-small" onclick="openCloneDialog(\'' + esc(pid) + '\')">Duplicate</button>') +
     '</div>' : '') +
     (isEditing && !isCreate ? '<div style="display:flex;align-items:center;gap:8px;">' +
       '<span style="font-size:0.72rem;color:var(--amber);font-weight:600;text-transform:uppercase;letter-spacing:0.04em;">Editing</span>' +
@@ -29406,6 +29404,44 @@ function renderProductDetail(pid) {
     '</div>';
     // Channel-First Phase 2c (D26) — read-only summary in non-edit mode
     detailsHtml += renderProductChannelBindings(product, false, isCreate);
+
+    // Develop lens — recipe card (visible only when viewing from Develop context)
+    var _devLens = (!isCreate && pid && typeof window.makerGetProductDetailLens === 'function')
+      ? window.makerGetProductDetailLens(pid) : 'catalog';
+    if (_devLens === 'develop') {
+      var _recipe = (product.recipeId && window.recipesData) ? window.recipesData[product.recipeId] : null;
+      detailsHtml += '<div class="product-detail-section" style="margin-top:16px;">' +
+        '<div class="product-detail-section-title">Recipe</div>';
+      if (_recipe && _recipe.status !== 'archived') {
+        var _totalCost = (_recipe.totalCost || 0).toFixed(2);
+        var _activeTier = _recipe.activePriceTier || 'direct';
+        var _activePrice = 0;
+        if (_recipe.isVariantEnabled && _recipe.variants) {
+          _activePrice = (typeof window.makerGetFirstVariantTierPrice === 'function')
+            ? window.makerGetFirstVariantTierPrice(_activeTier, _recipe)
+            : 0;
+        } else {
+          _activePrice = (_recipe[_activeTier + 'Price'] || 0);
+        }
+        detailsHtml +=
+          '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">' +
+            '<div style="display:flex;gap:24px;flex-wrap:wrap;font-size:0.85rem;">' +
+              '<div><span style="color:var(--warm-gray);">Total Cost</span> <strong style="font-family:monospace;">$' + esc(_totalCost) + '</strong></div>' +
+              '<div><span style="color:var(--warm-gray);">Active Tier</span> <span class="status-badge pill" style="background:rgba(42,124,111,0.12);color:var(--teal);border:1px solid rgba(42,124,111,0.25);">' + esc(_activeTier) + '</span></div>' +
+              '<div><span style="color:var(--warm-gray);">Price</span> <strong style="font-family:monospace;">$' + _activePrice.toFixed(2) + '</strong></div>' +
+              (_recipe.costsDirty ? '<div><span style="color:#f59e0b;font-size:0.78rem;">⚠ Costs changed — recalc needed</span></div>' : '') +
+            '</div>' +
+            '<button class="btn btn-secondary btn-small" onclick="window.makerOpenRecipeBuilder && window.makerOpenRecipeBuilder(\'' + esc(_recipe.recipeId) + '\')">Open Recipe →</button>' +
+          '</div>';
+      } else {
+        detailsHtml +=
+          '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">' +
+            '<span style="font-size:0.85rem;color:var(--warm-gray-light);">No recipe linked to this product yet.</span>' +
+            '<button class="btn btn-primary btn-small" onclick="addRecipeForProduct(\'' + esc(pid) + '\')">+ Create Recipe</button>' +
+          '</div>';
+      }
+      detailsHtml += '</div>';
+    }
   }
   detailsHtml += '</div>';
 
