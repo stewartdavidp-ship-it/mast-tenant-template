@@ -29427,6 +29427,16 @@ function variantChannelNames(product, variant) {
   return names;
 }
 
+// Visual styles shared across the variant-centric detail.
+var _PD_STYLES = {
+  card:       'background:var(--surface-card,#fff);border:1px solid var(--cream-dark,#e8e0d4);border-radius:12px;padding:20px 24px;margin-bottom:16px;',
+  sectionTitle:'font-family:\'Cormorant Garamond\',Georgia,serif;font-size:1.35rem;font-weight:500;color:var(--charcoal,#2a2a2a);margin:0;',
+  sectionSub:  'font-size:0.78rem;color:var(--warm-gray,#777);font-weight:400;letter-spacing:0.04em;text-transform:uppercase;margin-left:6px;',
+  label:       'font-size:0.78rem;color:var(--warm-gray,#888);font-weight:500;letter-spacing:0.02em;',
+  value:       'font-size:0.92rem;color:var(--charcoal,#2a2a2a);line-height:1.5;',
+  divider:     'border-top:1px solid var(--cream-dark,#e8e0d4);'
+};
+
 // Top-of-detail Core Product section. Read-only summary of common fields.
 // Edit goes through the existing editProduct() flow (legacy form for now).
 function renderCoreProductSection(product) {
@@ -29447,22 +29457,27 @@ function renderCoreProductSection(product) {
   }
   var imgCount = (typeof productImageCount === 'function') ? productImageCount(product) : ((product.images || []).length);
 
-  var html = '<div class="product-detail-section">';
-  html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">';
-  html += '<div class="product-detail-section-title" style="margin:0;">Core Product</div>';
+  var html = '<div style="' + _PD_STYLES.card + '">';
+  html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;">';
+  html += '<h3 style="' + _PD_STYLES.sectionTitle + '">Core Product</h3>';
   html += '<button class="btn btn-secondary btn-small" onclick="editProduct(\'' + esc(pid) + '\')">Edit Info</button>';
   html += '</div>';
-  html += '<div style="display:grid;grid-template-columns:140px 1fr;gap:8px 16px;font-size:0.85rem;">';
-  html += '<span style="color:var(--warm-gray);">Name</span><span>' + esc(product.name || '') + '</span>';
-  html += '<span style="color:var(--warm-gray);">Description</span><span>' + esc(product.description || '—') + '</span>';
-  html += '<span style="color:var(--warm-gray);">Category</span><span>' + esc((product.categories || []).join(', ') || '—') + '</span>';
-  html += '<span style="color:var(--warm-gray);">Images</span><span>' + imgCount + ' photo' + (imgCount === 1 ? '' : 's') +
-    ' <a href="#" onclick="event.preventDefault();switchProductTab(\'images\');" style="color:var(--teal);font-size:0.78rem;margin-left:6px;">Manage…</a></span>';
-  html += '<span style="color:var(--warm-gray);">Production</span><span>' + esc(production) + '</span>';
-  if (product.businessLine === 'sculpture') {
-    html += '<span style="color:var(--warm-gray);">Business Line</span><span><span class="status-badge" style="background:var(--teal);color:white;font-size:0.72rem;">Sculpture</span></span>';
+  html += '<dl style="display:grid;grid-template-columns:130px 1fr;gap:14px 24px;margin:0;">';
+  function row(label, value) {
+    return '<dt style="' + _PD_STYLES.label + '">' + label + '</dt>' +
+           '<dd style="' + _PD_STYLES.value + ';margin:0;">' + value + '</dd>';
   }
-  html += '</div>';
+  html += row('Name', '<span style="font-weight:500;">' + esc(product.name || '—') + '</span>');
+  html += row('Description', product.description ? esc(product.description) : '<span style="color:var(--warm-gray-light,#aaa);">No description</span>');
+  html += row('Category', (product.categories && product.categories.length) ? esc(product.categories.join(', ')) : '<span style="color:var(--warm-gray-light,#aaa);">—</span>');
+  html += row('Images',
+    '<span style="font-weight:500;">' + imgCount + '</span> ' + (imgCount === 1 ? 'photo' : 'photos') +
+    ' <a href="#" onclick="event.preventDefault();switchProductTab(\'images\');" style="color:var(--teal,#2a7c6f);font-size:0.82rem;margin-left:8px;text-decoration:none;font-weight:500;">Manage →</a>');
+  html += row('Production', '<span style="font-weight:500;">' + esc(production) + '</span>');
+  if (product.businessLine === 'sculpture') {
+    html += row('Business Line', '<span style="display:inline-block;background:var(--teal,#2a7c6f);color:white;font-size:0.72rem;padding:3px 10px;border-radius:10px;letter-spacing:0.04em;">Sculpture</span>');
+  }
+  html += '</dl>';
   html += '</div>';
   return html;
 }
@@ -29477,9 +29492,11 @@ function renderVariantsSection(product) {
   var recipe = (product.recipeId && allRecipes[product.recipeId] && allRecipes[product.recipeId].status !== 'archived')
     ? allRecipes[product.recipeId] : null;
 
-  var html = '<div class="product-detail-section" style="margin-top:16px;">';
-  html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">';
-  html += '<div class="product-detail-section-title" style="margin:0;">Variants <span style="color:var(--warm-gray);font-weight:400;font-size:0.85rem;">(' + variants.length + ')</span></div>';
+  var html = '<div style="' + _PD_STYLES.card + '">';
+  html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;">';
+  html += '<h3 style="' + _PD_STYLES.sectionTitle + '">Variants ' +
+    '<span style="font-family:\'DM Sans\',sans-serif;font-size:0.85rem;color:var(--warm-gray,#888);font-weight:400;margin-left:4px;">' + variants.length + '</span>' +
+    '</h3>';
   html += '<div style="display:flex;gap:6px;">';
   html += '<button class="btn btn-secondary btn-small" onclick="openAddVariantDialog(\'' + esc(pid) + '\')">+ Add Variant</button>';
   if (recipe) {
@@ -29492,7 +29509,7 @@ function renderVariantsSection(product) {
   html += '</div>';
 
   // Variant rows
-  html += '<div style="border:1px solid var(--cream-dark,#e8e0d4);border-radius:8px;overflow:hidden;">';
+  html += '<div style="border:1px solid var(--cream-dark,#e8e0d4);border-radius:10px;overflow:hidden;background:var(--surface-card,#fff);">';
   variants.forEach(function(variant, idx) {
     html += renderVariantRow(product, variant, recipe, idx);
   });
@@ -29514,19 +29531,20 @@ function renderVariantRow(product, variant, recipe, idx) {
   var costTxt = pricing.cost != null ? '$' + pricing.cost.toFixed(2) : '—';
   var retailTxt = pricing.retail != null ? '$' + pricing.retail.toFixed(2) : '—';
   var channelsTxt = channels.length
-    ? channels.map(function(n) { return '<span style="background:rgba(42,124,111,0.10);color:var(--teal,#2a7c6f);padding:1px 8px;border-radius:10px;font-size:0.72rem;margin-right:4px;">' + esc(n) + '</span>'; }).join('')
-    : '<span style="color:var(--warm-gray-light);font-size:0.78rem;">—</span>';
+    ? channels.map(function(n) { return '<span style="background:rgba(42,124,111,0.12);color:var(--teal,#2a7c6f);padding:3px 10px;border-radius:11px;font-size:0.72rem;font-weight:500;margin-right:4px;">' + esc(n) + '</span>'; }).join('')
+    : '<span style="color:var(--warm-gray-light,#aaa);font-size:0.82rem;font-style:italic;">No channels</span>';
 
-  var rowBg = idx % 2 === 0 ? 'transparent' : 'rgba(0,0,0,0.015)';
+  var isLast = idx === ((Array.isArray(product.variants) && product.variants.length) || 1) - 1;
   var html = '';
-  html += '<div style="background:' + rowBg + ';border-bottom:1px solid var(--cream-dark,#e8e0d4);">';
-  html += '<div style="display:grid;grid-template-columns:24px 1.5fr 1fr 1fr 1.5fr;gap:12px;align-items:center;padding:10px 14px;cursor:pointer;font-size:0.85rem;" ' +
+  html += '<div style="' + (isLast ? '' : 'border-bottom:1px solid var(--cream-dark,#e8e0d4);') + '">';
+  html += '<div style="display:grid;grid-template-columns:28px 1.5fr 1fr 1fr 1.5fr;gap:16px;align-items:center;padding:14px 18px;cursor:pointer;transition:background 0.15s;" ' +
+    'onmouseover="this.style.background=\'rgba(42,124,111,0.04)\'" onmouseout="this.style.background=\'transparent\'" ' +
     'onclick="toggleVariantExpanded(\'' + esc(pid) + '\',\'' + esc(variant.id) + '\')">';
-  html += '<span style="color:var(--warm-gray);user-select:none;">' + (isExpanded ? '▾' : '▸') + '</span>';
-  html += '<span style="font-weight:500;">' + esc(label) + '</span>';
-  html += '<span style="font-family:monospace;color:var(--warm-gray);">Cost ' + costTxt + '</span>';
-  html += '<span style="font-family:monospace;font-weight:500;">Retail ' + retailTxt + '</span>';
-  html += '<span>' + channelsTxt + '</span>';
+  html += '<span style="color:var(--teal,#2a7c6f);user-select:none;font-size:0.85rem;font-weight:600;">' + (isExpanded ? '▾' : '▸') + '</span>';
+  html += '<span style="font-size:0.95rem;font-weight:500;color:var(--charcoal,#2a2a2a);">' + esc(label) + '</span>';
+  html += '<span style="font-size:0.85rem;"><span style="color:var(--warm-gray,#888);">Cost</span> <span style="font-family:monospace;color:var(--charcoal,#2a2a2a);">' + costTxt + '</span></span>';
+  html += '<span style="font-size:0.85rem;"><span style="color:var(--warm-gray,#888);">Retail</span> <span style="font-family:monospace;font-weight:600;color:var(--charcoal,#2a2a2a);">' + retailTxt + '</span></span>';
+  html += '<span style="text-align:right;">' + channelsTxt + '</span>';
   html += '</div>';
   if (isExpanded) {
     html += renderVariantExpanded(product, variant, recipe, pricing, channels);
@@ -29541,35 +29559,40 @@ function renderVariantExpanded(product, variant, recipe, pricing, channels) {
     window.__editingVariantPricing.pid === pid &&
     window.__editingVariantPricing.variantId === variant.id;
   var hasMultipleVariants = Array.isArray(product.variants) && product.variants.length > 1;
-  var html = '<div style="padding:12px 18px 16px 42px;background:rgba(0,0,0,0.02);font-size:0.85rem;">';
+
+  function _label(text, action) {
+    return '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">' +
+      '<div style="font-size:0.72rem;font-weight:600;color:var(--warm-gray,#888);text-transform:uppercase;letter-spacing:0.06em;">' + text + '</div>' +
+      (action || '') +
+      '</div>';
+  }
+
+  var html = '<div style="padding:18px 24px 22px 56px;background:rgba(42,124,111,0.025);border-top:1px solid var(--cream-dark,#e8e0d4);">';
 
   // Recipe section
-  html += '<div style="margin-bottom:12px;">';
-  html += '<div style="font-weight:600;color:var(--warm-gray);margin-bottom:4px;">Recipe</div>';
+  html += '<div style="margin-bottom:18px;">';
   if (recipe) {
     var override = recipe.variants && recipe.variants[variant.id];
-    var sourceTxt = override ? 'variant override' : 'inherits base recipe';
-    html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">';
-    html += '<div>' +
-      esc(recipe.name || recipe.recipeId) +
-      ' <span style="color:var(--warm-gray-light);font-size:0.78rem;">· ' + sourceTxt + '</span>' +
-      (recipe.costsDirty ? ' <span style="color:#f59e0b;font-size:0.78rem;">⚠ recalc needed</span>' : '') +
+    var sourceTxt = override ? 'variant override' : 'inherits base';
+    var recipeAction = '<button class="btn btn-secondary btn-small" onclick="event.stopPropagation();window.makerOpenRecipeBuilder && window.makerOpenRecipeBuilder(\'' + esc(recipe.recipeId) + '\',\'' + esc(variant.id) + '\')">Open Recipe →</button>';
+    html += _label('Recipe', recipeAction);
+    html += '<div style="font-size:0.92rem;color:var(--charcoal,#2a2a2a);">' +
+      '<span style="font-weight:500;">' + esc(recipe.name || recipe.recipeId) + '</span>' +
+      ' <span style="color:var(--warm-gray,#888);font-size:0.82rem;margin-left:6px;">· ' + sourceTxt + '</span>' +
+      (recipe.costsDirty ? ' <span style="color:#b45309;background:rgba(245,158,11,0.12);padding:2px 8px;border-radius:8px;font-size:0.72rem;font-weight:500;margin-left:6px;">⚠ recalc needed</span>' : '') +
       '</div>';
-    html += '<button class="btn btn-secondary btn-small" onclick="event.stopPropagation();window.makerOpenRecipeBuilder && window.makerOpenRecipeBuilder(\'' + esc(recipe.recipeId) + '\',\'' + esc(variant.id) + '\')">Open Recipe →</button>';
-    html += '</div>';
   } else {
-    html += '<span style="color:var(--warm-gray-light);">No recipe linked to this product.</span>';
+    html += _label('Recipe', '');
+    html += '<div style="font-size:0.92rem;color:var(--warm-gray-light,#aaa);font-style:italic;">No recipe linked to this product.</div>';
   }
   html += '</div>';
 
   // Pricing — inline edit when this variant is being edited.
-  html += '<div style="margin-bottom:12px;">';
-  html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:6px;">';
-  html += '<div style="font-weight:600;color:var(--warm-gray);">Pricing</div>';
-  if (!isEditingPricing) {
-    html += '<button class="btn btn-secondary btn-small" onclick="event.stopPropagation();startEditVariantPricing(\'' + esc(pid) + '\',\'' + esc(variant.id) + '\')">Edit Pricing</button>';
-  }
-  html += '</div>';
+  html += '<div style="margin-bottom:18px;">';
+  var pricingAction = !isEditingPricing
+    ? '<button class="btn btn-secondary btn-small" onclick="event.stopPropagation();startEditVariantPricing(\'' + esc(pid) + '\',\'' + esc(variant.id) + '\')">Edit Pricing</button>'
+    : '';
+  html += _label('Pricing', pricingAction);
 
   if (isEditingPricing) {
     function _val(v) { return (v != null) ? v.toFixed(2) : ''; }
@@ -29603,10 +29626,16 @@ function renderVariantExpanded(product, variant, recipe, pricing, channels) {
   } else {
     function tier(label, value, isActive) {
       var v = (value != null) ? '$' + value.toFixed(2) : '—';
-      var style = isActive ? 'font-weight:600;color:var(--teal,#2a7c6f);' : 'color:var(--warm-gray);';
-      return '<div style="' + style + '">' + label + ' ' + v + (isActive ? ' (active)' : '') + '</div>';
+      var bg = isActive ? 'background:rgba(42,124,111,0.10);border:1px solid rgba(42,124,111,0.25);' : 'background:transparent;border:1px solid var(--cream-dark,#e8e0d4);';
+      var labelColor = isActive ? 'var(--teal,#2a7c6f)' : 'var(--warm-gray,#888)';
+      var valColor = isActive ? 'var(--teal,#2a7c6f)' : 'var(--charcoal,#2a2a2a)';
+      var weight = isActive ? '600' : '500';
+      return '<div style="flex:1;min-width:140px;padding:10px 14px;border-radius:8px;' + bg + '">' +
+        '<div style="font-size:0.72rem;color:' + labelColor + ';text-transform:uppercase;letter-spacing:0.04em;font-weight:600;margin-bottom:4px;">' + label + (isActive ? ' · Active' : '') + '</div>' +
+        '<div style="font-family:monospace;font-size:1.05rem;font-weight:' + weight + ';color:' + valColor + ';">' + v + '</div>' +
+      '</div>';
     }
-    html += '<div style="display:flex;gap:24px;flex-wrap:wrap;font-family:monospace;">';
+    html += '<div style="display:flex;gap:10px;flex-wrap:wrap;">';
     html += tier('Wholesale', pricing.wholesale, pricing.activeTier === 'wholesale');
     html += tier('Direct',    pricing.direct,    pricing.activeTier === 'direct');
     html += tier('Retail',    pricing.retail,    pricing.activeTier === 'retail');
@@ -29615,12 +29644,16 @@ function renderVariantExpanded(product, variant, recipe, pricing, channels) {
   html += '</div>';
 
   // Channels
-  html += '<div style="margin-bottom:12px;">';
-  html += '<div style="font-weight:600;color:var(--warm-gray);margin-bottom:4px;">Channels</div>';
+  html += '<div style="margin-bottom:18px;">';
+  html += _label('Channels', '');
   if (channels.length) {
-    html += channels.map(function(n) { return '<span style="background:rgba(42,124,111,0.12);color:var(--teal,#2a7c6f);padding:2px 10px;border-radius:12px;font-size:0.78rem;margin-right:6px;">' + esc(n) + '</span>'; }).join('');
+    html += '<div style="display:flex;gap:6px;flex-wrap:wrap;">' +
+      channels.map(function(n) {
+        return '<span style="background:rgba(42,124,111,0.12);color:var(--teal,#2a7c6f);padding:4px 12px;border-radius:14px;font-size:0.82rem;font-weight:500;">' + esc(n) + '</span>';
+      }).join('') +
+      '</div>';
   } else {
-    html += '<span style="color:var(--warm-gray-light);">Not on any channel.</span>';
+    html += '<div style="font-size:0.92rem;color:var(--warm-gray-light,#aaa);font-style:italic;">Not published on any channel</div>';
   }
   html += '</div>';
 
@@ -29649,10 +29682,10 @@ function renderVariantExpanded(product, variant, recipe, pricing, channels) {
       invNote = 'No stock recorded for this variant';
     }
   }
+  var invAdjust = '<a href="#" onclick="event.preventDefault();event.stopPropagation();switchProductTab(\'inventory\');" style="color:var(--teal,#2a7c6f);font-size:0.82rem;text-decoration:none;font-weight:500;">Adjust →</a>';
   html += '<div>';
-  html += '<div style="font-weight:600;color:var(--warm-gray);margin-bottom:4px;">Inventory</div>';
-  html += '<span style="color:var(--warm-gray);">' + esc(invNote) + '</span>';
-  html += ' <a href="#" onclick="event.preventDefault();event.stopPropagation();switchProductTab(\'inventory\');" style="color:var(--teal);font-size:0.78rem;margin-left:6px;">Adjust →</a>';
+  html += _label('Inventory', invAdjust);
+  html += '<div style="font-size:0.92rem;color:var(--charcoal,#2a2a2a);">' + esc(invNote) + '</div>';
   html += '</div>';
 
   html += '</div>';
