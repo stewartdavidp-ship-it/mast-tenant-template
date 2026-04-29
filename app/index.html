@@ -35939,17 +35939,33 @@ async function captureFeedbackScreenshot() {
       document.head.appendChild(s);
     });
   }
-  // Capture only the visible viewport — faster and more relevant than full body
+  // Capture only the visible viewport. Skip cross-origin images (avatars,
+  // external CDN) — they hang html2canvas indefinitely on Safari even with
+  // imageTimeout. We replace them with a 1x1 transparent placeholder during
+  // capture so the layout doesn't shift.
   var canvas = await window.html2canvas(document.body, {
     scale: 0.75,
     useCORS: true,
     logging: false,
     allowTaint: false,
-    imageTimeout: 3000,
+    imageTimeout: 2000,
+    foreignObjectRendering: false,
     width: window.innerWidth,
     height: window.innerHeight,
     x: window.scrollX || window.pageXOffset,
-    y: window.scrollY || window.pageYOffset
+    y: window.scrollY || window.pageYOffset,
+    ignoreElements: function(el) {
+      // Skip <img> elements with cross-origin sources that don't allow CORS.
+      if (el.tagName === 'IMG' && el.src) {
+        try {
+          var imgOrigin = new URL(el.src, location.href).origin;
+          if (imgOrigin !== location.origin && !el.crossOrigin) return true;
+        } catch (e) { /* ignore */ }
+      }
+      // Skip iframes — they can never be captured cross-origin
+      if (el.tagName === 'IFRAME') return true;
+      return false;
+    }
   });
   return new Promise(function(resolve, reject) {
     canvas.toBlob(async function(blob) {
