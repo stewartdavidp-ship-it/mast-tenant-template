@@ -22228,8 +22228,8 @@ async function wizardConfirmNoWebsite() {
 // Wizard event logging — writes to {tenantId}/admin/setupLog for diagnostics
 function logWizardEvent(step, event, detail) {
   try {
-    if (typeof MastDB !== 'undefined' && MastDB.admin) {
-      MastDB.admin.ref('setupLog').push().set({
+    if (typeof MastDB !== 'undefined' && MastDB.push) {
+      MastDB.push('admin/setupLog', {
         step: step, event: event, detail: detail || null,
         at: new Date().toISOString()
       });
@@ -24506,7 +24506,7 @@ async function saveCardStockAdjust(pid) {
     }
     await MastDB.inventory.update(pid, updates);
     await writeAudit('update', 'inventory', pid);
-    await MastDB.inventory.ref(pid + '/history').push({
+    await MastDB.push('admin/inventory/' + pid + '/history', {
       action: 'restocked', reason: 'stock_received', actor: 'maker', actorType: 'maker',
       detail: 'Added ' + addQty + ' via product card quick-adjust',
       timestamp: new Date().toISOString()
@@ -25957,7 +25957,7 @@ async function saveInlineAdjust(pid) {
     await writeAudit('update', 'inventory', pid);
     var adjAction = adjMode === 'add' ? 'restocked' : 'recount';
     var adjReason = adjMode === 'add' ? 'stock_received' : 'recount';
-    await MastDB.inventory.ref(pid + '/history').push({
+    await MastDB.push('admin/inventory/' + pid + '/history', {
       action: adjAction, reason: adjReason, actor: 'maker', actorType: 'maker',
       detail: adjMode === 'add' ? 'Added stock via inline adjust' : 'Stock set via inline adjust',
       timestamp: new Date().toISOString()
@@ -26341,7 +26341,7 @@ async function applyRecount() {
       await MastDB.inventory.set(stockPath + '/lastCountedAt', now);
 
       // Write audit
-      await MastDB.inventory.ref(p.pid + '/history').push({
+      await MastDB.push('admin/inventory/' + p.pid + '/history', {
         action: 'recount',
         reason: 'recount',
         previousQty: p.onHand,
@@ -26431,10 +26431,11 @@ async function applyHoldStock(pid) {
 
   try {
     var now = new Date().toISOString();
-    var heldRef = MastDB.inventory.ref(pid + '/stock/_default/held');
-    await heldRef.transaction(function(current) { return (current || 0) + qty; });
+    var heldPath = 'admin/inventory/' + pid + '/stock/_default/held';
+    var curHeld = (await MastDB.get(heldPath)) || 0;
+    await MastDB.set(heldPath, curHeld + qty);
 
-    await MastDB.inventory.ref(pid + '/history').push({
+    await MastDB.push('admin/inventory/' + pid + '/history', {
       action: 'held', reason: reason, qty: qty, note: note || null,
       actor: 'maker', actorType: 'maker', timestamp: now
     });
@@ -26484,10 +26485,11 @@ async function applyReleaseHold(pid) {
 
   try {
     var now = new Date().toISOString();
-    var heldRef = MastDB.inventory.ref(pid + '/stock/_default/held');
-    await heldRef.transaction(function(current) { return Math.max(0, (current || 0) - qty); });
+    var heldPath = 'admin/inventory/' + pid + '/stock/_default/held';
+    var curHeld = (await MastDB.get(heldPath)) || 0;
+    await MastDB.set(heldPath, Math.max(0, curHeld - qty));
 
-    await MastDB.inventory.ref(pid + '/history').push({
+    await MastDB.push('admin/inventory/' + pid + '/history', {
       action: 'released_hold', reason: 'hold_released', qty: -qty, note: note || null,
       actor: 'maker', actorType: 'maker', timestamp: now
     });
@@ -30915,7 +30917,7 @@ async function saveAdjustStock(pid) {
     // Write inventory audit trail for stock adjustments
     var adjAction = adjMode === 'add' ? 'restocked' : 'recount';
     var adjReason = adjMode === 'add' ? 'stock_received' : 'recount';
-    await MastDB.inventory.ref(pid + '/history').push({
+    await MastDB.push('admin/inventory/' + pid + '/history', {
       action: adjAction, reason: adjReason, actor: 'maker', actorType: 'maker',
       detail: adjMode === 'add' ? 'Added stock via admin' : 'Stock count adjusted via admin',
       timestamp: new Date().toISOString()
@@ -36858,7 +36860,7 @@ function handlePrePromptSubmit(missionId) {
   if (!user) return;
   if (!testingModeState.missionProgress[missionId]) testingModeState.missionProgress[missionId] = { progress: {}, reflections: {} };
   testingModeState.missionProgress[missionId].reflections.pre = value;
-  MastDB.testingMode.reflections(user.uid, missionId, 'pre').set(value);
+  MastDB.testingMode.setReflection(user.uid, missionId, 'pre', value);
   renderTestingMode();
 }
 
@@ -36869,7 +36871,7 @@ function handlePostPromptSubmit(missionId) {
   var user = auth.currentUser;
   if (!user) return;
   testingModeState.missionProgress[missionId].reflections.post = value;
-  MastDB.testingMode.reflections(user.uid, missionId, 'post').set(value);
+  MastDB.testingMode.setReflection(user.uid, missionId, 'post', value);
   showToast('Feedback saved — thank you!');
   // Expand next non-accomplished mission
   testingModeState.expandedMissionId = null;
@@ -37758,7 +37760,7 @@ async function saveDashInlineAdjust(pid) {
 
     await MastDB.inventory.update(pid, updates);
     await writeAudit('update', 'inventory', pid);
-    await MastDB.inventory.ref(pid + '/history').push({
+    await MastDB.push('admin/inventory/' + pid + '/history', {
       action: 'restocked', reason: 'stock_received', actor: 'maker', actorType: 'maker',
       detail: 'Added ' + addQty + ' via dashboard quick-adjust',
       timestamp: new Date().toISOString()
