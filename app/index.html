@@ -31549,6 +31549,44 @@ function firstProductImage(p) {
       }
     }
   }
+  // Fallback: SKU-of-parent matching. LPP/chain drafts (e.g. "Paperclip Necklace 20 inch 14K")
+  // are split SKUs of an active parent ("Paperclip Necklace"). Match by name relationship:
+  // 1) exact name match, 2) draft name starts with another product's name (parent), 3) draft
+  // name contains another product's name. Pick the longest matching parent name (most specific).
+  if (p.name && typeof productsData !== 'undefined' && Array.isArray(productsData)) {
+    var target = (p.name || '').trim().toLowerCase();
+    if (target) {
+      function _firstImg(q) {
+        if (q.images && q.images.length) {
+          var u = resolveImageUrl(q.images[0]);
+          if (u) return u;
+        }
+        if (q.imageIds && q.imageIds.length && typeof imageLibrary !== 'undefined' && imageLibrary) {
+          for (var mi = 0; mi < q.imageIds.length; mi++) {
+            var lib2 = imageLibrary[q.imageIds[mi]];
+            if (lib2 && lib2.url) return lib2.url;
+          }
+        }
+        return '';
+      }
+      var bestParent = null;
+      var bestParentLen = 0;
+      for (var k = 0; k < productsData.length; k++) {
+        var q = productsData[k];
+        if (!q || q.pid === p.pid || !q.name) continue;
+        var qn = q.name.trim().toLowerCase();
+        if (!qn) continue;
+        var img = _firstImg(q);
+        if (!img) continue;
+        if (qn === target) return img;
+        if (target.indexOf(qn) !== -1 && qn.length > bestParentLen) {
+          bestParent = img;
+          bestParentLen = qn.length;
+        }
+      }
+      if (bestParent) return bestParent;
+    }
+  }
   return '';
 }
 
