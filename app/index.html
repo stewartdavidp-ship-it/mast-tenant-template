@@ -35876,7 +35876,10 @@ async function submitFeedback() {
     closeFeedbackDialog();
     await new Promise(function(r) { setTimeout(r, 350); });
     try {
-      var result = await captureFeedbackScreenshot();
+      var captureTimeout = new Promise(function(_, reject) {
+        setTimeout(function() { reject(new Error('screenshot timeout')); }, 10000);
+      });
+      var result = await Promise.race([captureFeedbackScreenshot(), captureTimeout]);
       screenshotUrl = result.url;
       screenshotStoragePath = result.storagePath;
     } catch (e) {
@@ -35935,7 +35938,8 @@ async function captureFeedbackScreenshot() {
     scale: 0.75,
     useCORS: true,
     logging: false,
-    allowTaint: false
+    allowTaint: false,
+    imageTimeout: 5000
   });
   return new Promise(function(resolve, reject) {
     canvas.toBlob(async function(blob) {
