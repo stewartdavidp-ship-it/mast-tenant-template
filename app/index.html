@@ -23879,12 +23879,16 @@ function renderProducts() {
       invHtml = '<div class="product-inventory">' + invHtml + qtyHtml + '</div>';
     }
 
+    var statusBadgeHtml = (typeof window.productStatusBadgeHtml === 'function')
+      ? '<span style="margin-right:4px;">' + window.productStatusBadgeHtml(p.status) + '</span>'
+      : '';
     html += '<div class="product-card" style="cursor:pointer;" onclick="viewProduct(\'' + esc(p.pid) + '\')">'
       + (imgSrc ? '<img class="product-card-img" src="' + esc(imgSrc) + '" alt="' + esc(p.name) + '" loading="lazy">' : '<div class="product-card-img"></div>')
       + '<div class="product-card-body">'
       + '<div class="product-card-name">' + esc(p.name) + '</div>'
       + renderChannelSyncBadges(p, { size: 'small' })
       + priceHtml
+      + statusBadgeHtml
       + blBadge
       + availBadge
       + catsHtml
@@ -28186,7 +28190,9 @@ function renderProductDetail(pid) {
   var headerHtml = '<div class="product-detail-header">' +
     (imgSrc ? '<img class="product-detail-img" src="' + esc(imgSrc) + '" alt="' + esc(product.name || 'New Product') + '">' : '') +
     '<div style="flex:1;">' +
-      '<h2 class="product-detail-name">' + esc(product.name || 'New Product') + '</h2>' +
+      '<h2 class="product-detail-name">' + esc(product.name || 'New Product') + ' ' +
+        (typeof window.productStatusBadgeHtml === 'function' ? window.productStatusBadgeHtml(product.status) : '') +
+      '</h2>' +
       renderChannelSyncBadges(product, { size: 'normal' }) +
       (product.priceCents ? '<div class="product-detail-price">' + formatPriceCents(product.priceCents) + '</div>' :
        '<div style="color:var(--warm-gray);font-style:italic;margin-bottom:8px;">Price on request</div>') +

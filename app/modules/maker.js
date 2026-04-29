@@ -678,6 +678,8 @@
         if (!prodForShape.acquisitionType || prodForShape.acquisitionType === 'build') {
           var cs = computeCostShape(prodForShape, freshRecipe);
           await persistCostShape(recipe.productId, cs);
+          // Checkpoint E — recompute readiness on cost change
+          try { await recomputeAndPersistReadiness(recipe.productId); } catch (e2) {}
         }
       } catch (e) {
         console.warn('costShape sync (build mode) failed', e);
@@ -2218,6 +2220,7 @@
     // Table
     html += '<div class="data-table"><table><thead><tr>';
     html += '<th>Product</th>';
+    html += '<th>Status</th>';
     html += '<th>Category</th>';
     html += '<th>Recipe</th>';
     html += '<th style="text-align:right;">Total Cost</th>';
@@ -2255,6 +2258,7 @@
         : '<span style="display:inline-block;width:16px;margin-right:6px;"></span>';
       var variantCountBadge = hasVariants ? ' <span style="font-size:0.72rem;color:var(--warm-gray-light);font-weight:400;">(' + prodVariants.length + ' variants)</span>' : '';
       html += '<td style="font-weight:500;">' + expandToggle + esc(p.name || '') + variantCountBadge + '</td>';
+      html += '<td>' + productStatusBadgeHtml(p.status) + '</td>';
       html += '<td>' + esc((p.categories || []).join(', ')) + '</td>';
 
       // Mode badge for VAR/Resell — render before the recipe column
@@ -2324,6 +2328,7 @@
             : 'makerCreateRecipeForProduct(this.dataset.pid, this.dataset.name)';
           html += '<tr style="cursor:pointer;background:rgba(0,0,0,0.015);" data-pid="' + esc(pid) + '" data-name="' + esc(p.name || '') + '" onclick="' + vRowClick + '">';
           html += '<td style="padding-left:28px;font-size:0.85rem;color:var(--warm-gray);">↳ ' + esc(vName) + '</td>';
+          html += '<td></td>'; // status (variant inherits from parent)
           html += '<td></td>';
           if (hasRecipe) {
             var overrideBadge = rvOverride
@@ -2584,18 +2589,24 @@
     var html = '';
     html += '<button class="detail-back" onclick="makerCloseDefineView()">← Back to Pieces</button>';
     html += '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;">';
-    html += '<div><h3 style="font-family:\'Cormorant Garamond\',serif;font-size:1.6rem;font-weight:500;margin:0;">' + esc(p.name || 'Untitled') + '</h3>';
+    html += '<div><h3 style="font-family:\'Cormorant Garamond\',serif;font-size:1.6rem;font-weight:500;margin:0;">' + esc(p.name || 'Untitled') + ' ' + productStatusBadgeHtml(p.status) + '</h3>';
     html += '<span class="status-badge" style="background:rgba(196,133,60,0.15);color:var(--amber);font-size:0.78rem;margin-top:6px;display:inline-block;">VAR (Value-Added Reseller)</span></div>';
     html += '<div style="display:flex;gap:8px;">';
-    html += '<button class="btn btn-secondary btn-small" onclick="makerSaveDefineView()">Save</button>';
+    html += '<button class="btn btn-secondary btn-small" onclick="makerSaveDefineView()">Save & Continue</button>';
     html += '<button class="btn btn-primary btn-small" onclick="makerRecalcCostShape()">Recalculate Cost</button>';
     html += '</div></div>';
+
+    // Readiness checklist (Checkpoint E)
+    html += renderReadinessChecklistPanel(p);
 
     // Cost summary (uniform costShape readout)
     html += renderCostShapeSummary(costShape);
 
+    // Markup config (Checkpoint E — resolves D's O-D2)
+    html += renderMarkupConfigSection(p);
+
     // Components section
-    html += '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:16px;margin-bottom:16px;">';
+    html += '<div data-readiness-section="define-section" style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:16px;margin-bottom:16px;">';
     html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">';
     html += '<h4 style="margin:0;font-size:1.05rem;">Components</h4>';
     html += '<button class="btn btn-secondary btn-small" onclick="makerVarAddComponent()">+ Add component</button>';
@@ -2676,17 +2687,23 @@
     var html = '';
     html += '<button class="detail-back" onclick="makerCloseDefineView()">← Back to Pieces</button>';
     html += '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;">';
-    html += '<div><h3 style="font-family:\'Cormorant Garamond\',serif;font-size:1.6rem;font-weight:500;margin:0;">' + esc(p.name || 'Untitled') + '</h3>';
+    html += '<div><h3 style="font-family:\'Cormorant Garamond\',serif;font-size:1.6rem;font-weight:500;margin:0;">' + esc(p.name || 'Untitled') + ' ' + productStatusBadgeHtml(p.status) + '</h3>';
     html += '<span class="status-badge" style="background:rgba(42,124,111,0.15);color:var(--teal);font-size:0.78rem;margin-top:6px;display:inline-block;">Resell</span></div>';
     html += '<div style="display:flex;gap:8px;">';
-    html += '<button class="btn btn-secondary btn-small" onclick="makerSaveDefineView()">Save</button>';
+    html += '<button class="btn btn-secondary btn-small" onclick="makerSaveDefineView()">Save & Continue</button>';
     html += '<button class="btn btn-primary btn-small" onclick="makerRecalcCostShape()">Recalculate Cost</button>';
     html += '</div></div>';
 
+    // Readiness checklist (Checkpoint E)
+    html += renderReadinessChecklistPanel(p);
+
     html += renderCostShapeSummary(costShape);
 
+    // Markup config (Checkpoint E)
+    html += renderMarkupConfigSection(p);
+
     // Supplier
-    html += '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:16px;margin-bottom:16px;">';
+    html += '<div data-readiness-section="define-section" style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:16px;margin-bottom:16px;">';
     html += '<h4 style="margin:0 0 12px;font-size:1.05rem;">Supplier</h4>';
     html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">';
     html += resellField('Supplier name', 'text', supplier.supplierName || '', 'supplier.supplierName');
@@ -2713,7 +2730,7 @@
     html += '</div></div>';
 
     // Lead time
-    html += '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:16px;margin-bottom:16px;">';
+    html += '<div data-readiness-section="capacity-section" style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:16px;margin-bottom:16px;">';
     html += '<h4 style="margin:0 0 12px;font-size:1.05rem;">Lead time</h4>';
     html += '<div style="max-width:240px;">';
     html += '<label style="display:block;font-size:0.78rem;font-weight:600;margin-bottom:4px;">Lead time (days)</label>';
@@ -2858,6 +2875,18 @@
       var path = 'public/products/' + defineProductId + '/';
       // Persist defineSpec slice
       await MastDB.set(path + 'defineSpec', defineState.defineSpec || {});
+
+      // Checkpoint E — markupConfig (VAR/Resell). Auto-fill defaults if blank.
+      if (atype === 'var' || atype === 'resell') {
+        var defaults = await loadTenantDefaultMarkups();
+        var mc = Object.assign({}, defineState.markupConfig || {});
+        if (!(Number(mc.wholesaleMarkup) > 0)) mc.wholesaleMarkup = defaults.wholesaleMarkup;
+        if (!(Number(mc.directMarkup) > 0))    mc.directMarkup    = defaults.directMarkup;
+        if (!(Number(mc.retailMarkup) > 0))    mc.retailMarkup    = defaults.retailMarkup;
+        defineState.markupConfig = mc;
+        await MastDB.set(path + 'markupConfig', mc);
+      }
+
       await MastDB.set(path + 'updatedAt', new Date().toISOString());
       // Recompute and persist costShape too
       var costShape = computeCostShape(defineState, null);
@@ -2867,8 +2896,11 @@
         var prod = window.productsData.find(function(p) { return p.pid === defineProductId; });
         if (prod) {
           prod.defineSpec = defineState.defineSpec;
+          if (defineState.markupConfig) prod.markupConfig = defineState.markupConfig;
         }
       }
+      // Checkpoint E — recompute readiness checklist on every save.
+      try { await recomputeAndPersistReadiness(defineProductId); } catch (e) {}
       MastAdmin.showToast('Saved');
       renderDefineView();
     } catch (err) {
@@ -2881,6 +2913,7 @@
     var costShape = computeCostShape(defineState, null);
     try {
       await persistCostShape(defineProductId, costShape);
+      try { await recomputeAndPersistReadiness(defineProductId); } catch (e) {}
       MastAdmin.showToast('Cost recalculated: $' + (costShape.totalCost / 100).toFixed(2));
       renderDefineView();
     } catch (err) {
@@ -2889,6 +2922,486 @@
   }
 
   // (renderPieces dispatcher updated above to route to renderDefineView)
+
+  // ============================================================
+  // Checkpoint E — Readiness Checklist + State Transitions
+  // ----------------------------------------------------------------
+  // - computeReadinessChecklist(product, recipe?) → derived flags
+  // - persistReadinessChecklist(pid, checklist)
+  // - productMarkupConfig(product, recipe?) → wholesale/direct/retail
+  // - renderReadinessChecklistPanel(product) → sticky checklist HTML
+  // - renderMarkupConfigSection(product) → markup inputs for VAR/Resell
+  // - promoteToReady(pid) / launchToActive(pid) state transitions
+  // - triggerChannelSyncForStatus → best-effort channel hook (opt-in)
+  // - productStatusBadgeHtml(status) shared status badge renderer
+  // ============================================================
+
+  var DEFAULT_MARKUPS = { wholesaleMarkup: 1.4, directMarkup: 1.6, retailMarkup: 2.0 };
+  var tenantDefaultMarkups = null; // populated lazily from admin/config/defaults/markups
+  var tenantSettingsCache = null;  // populated lazily from admin/config/settings
+
+  async function loadTenantDefaultMarkups() {
+    if (tenantDefaultMarkups) return tenantDefaultMarkups;
+    try {
+      var cfg = await MastDB.get('admin/config/defaults/markups');
+      if (cfg && typeof cfg === 'object') {
+        tenantDefaultMarkups = {
+          wholesaleMarkup: Number(cfg.wholesaleMarkup) || DEFAULT_MARKUPS.wholesaleMarkup,
+          directMarkup: Number(cfg.directMarkup) || DEFAULT_MARKUPS.directMarkup,
+          retailMarkup: Number(cfg.retailMarkup) || DEFAULT_MARKUPS.retailMarkup
+        };
+      } else {
+        tenantDefaultMarkups = Object.assign({}, DEFAULT_MARKUPS);
+      }
+    } catch (e) {
+      tenantDefaultMarkups = Object.assign({}, DEFAULT_MARKUPS);
+    }
+    return tenantDefaultMarkups;
+  }
+
+  async function loadTenantSettings() {
+    if (tenantSettingsCache) return tenantSettingsCache;
+    try {
+      tenantSettingsCache = (await MastDB.get('admin/config/settings')) || {};
+    } catch (e) {
+      tenantSettingsCache = {};
+    }
+    return tenantSettingsCache;
+  }
+
+  /**
+   * Resolve the markup config for a product. Build mode reads from the linked
+   * recipe (legacy source-of-truth). VAR/Resell read from product.markupConfig
+   * (new in Checkpoint E — resolves D's O-D2). Returns null if unknown.
+   */
+  function productMarkupConfig(product, recipe) {
+    if (!product) return null;
+    var atype = product.acquisitionType || 'build';
+    if (atype === 'build') {
+      var r = recipe || (function() {
+        var found = null;
+        Object.values(recipesData).forEach(function(rr) {
+          if (rr && rr.productId === product.pid && rr.status !== 'archived') found = rr;
+        });
+        return found;
+      })();
+      if (r && (r.wholesaleMarkup || r.directMarkup || r.retailMarkup)) {
+        return {
+          wholesaleMarkup: Number(r.wholesaleMarkup) || 0,
+          directMarkup: Number(r.directMarkup) || 0,
+          retailMarkup: Number(r.retailMarkup) || 0
+        };
+      }
+      return null;
+    }
+    var m = product.markupConfig;
+    if (m && (m.wholesaleMarkup || m.directMarkup || m.retailMarkup)) {
+      return {
+        wholesaleMarkup: Number(m.wholesaleMarkup) || 0,
+        directMarkup: Number(m.directMarkup) || 0,
+        retailMarkup: Number(m.retailMarkup) || 0
+      };
+    }
+    return null;
+  }
+
+  /**
+   * Compute the readiness checklist flags for a product. Pure function.
+   * Returns { defined, costed, channeled, capacityPlanned, listingReady }.
+   */
+  function computeReadinessChecklist(product, recipe) {
+    if (!product) {
+      return { defined: false, costed: false, channeled: false, capacityPlanned: false, listingReady: false };
+    }
+    var atype = product.acquisitionType || 'build';
+    var r = recipe || (function() {
+      var found = null;
+      Object.values(recipesData).forEach(function(rr) {
+        if (rr && rr.productId === product.pid && rr.status !== 'archived') found = rr;
+      });
+      return found;
+    })();
+
+    // defined — mode-specific definition has at least one component/material/supplier
+    var defined = false;
+    if (atype === 'build') {
+      defined = !!(r && r.lineItems && Object.keys(r.lineItems).length > 0);
+    } else if (atype === 'var') {
+      var spec = (product.defineSpec || {}).var || {};
+      defined = (Array.isArray(spec.components) && spec.components.length > 0) ||
+                (Array.isArray(spec.valueAddSteps) && spec.valueAddSteps.length > 0);
+    } else if (atype === 'resell') {
+      var rspec = (product.defineSpec || {}).resell || {};
+      var supp = rspec.supplier || {};
+      defined = !!(supp.supplierName && (Number(supp.unitCost) || 0) > 0);
+    }
+
+    // costed — totalCost > 0 AND markup config present
+    var totalCents = Number(product.totalCost) || 0;
+    var markup = productMarkupConfig(product, r);
+    var costed = totalCents > 0 && !!markup;
+
+    // channeled — at least one channel mapping
+    var channeled = false;
+    if (product.externalRefs) {
+      ['shopify', 'etsy', 'square'].forEach(function(ch) {
+        var ref = product.externalRefs[ch];
+        if (ref && (ref.externalId || ref.syncEnabled)) channeled = true;
+      });
+    }
+    if (!channeled && product.internalStorefrontOnly) channeled = true;
+    if (!channeled && product.channelSyncEnabled) channeled = true;
+
+    // capacityPlanned — lead time / batch size set, or explicitly skipped
+    var capacityPlanned = false;
+    if (product.capacitySkipped) capacityPlanned = true;
+    if (!capacityPlanned && (Number(product.leadTimeDays) || 0) > 0) capacityPlanned = true;
+    if (!capacityPlanned && atype === 'resell') {
+      var rspec2 = (product.defineSpec || {}).resell || {};
+      if ((Number(rspec2.leadTimeDays) || 0) > 0) capacityPlanned = true;
+    }
+    if (!capacityPlanned && r && (Number(r.batchSize) || 0) > 0) capacityPlanned = true;
+    if (!capacityPlanned && (Number(product.batchSize) || 0) > 0) capacityPlanned = true;
+
+    // listingReady — name + at least one image + description
+    var hasName = !!(product.name && String(product.name).trim());
+    var hasImage = !!(product.images && product.images.length) ||
+                   !!(product.imageIds && product.imageIds.length);
+    var hasDescription = !!(product.description && String(product.description).trim()) ||
+                         !!(product.shortDescription && String(product.shortDescription).trim());
+    var listingReady = hasName && hasImage && hasDescription;
+
+    return {
+      defined: !!defined,
+      costed: !!costed,
+      channeled: !!channeled,
+      capacityPlanned: !!capacityPlanned,
+      listingReady: !!listingReady
+    };
+  }
+
+  /**
+   * Persist the derived readinessChecklist onto the product, but only when it
+   * changed (avoids redundant writes). Returns the new checklist.
+   */
+  async function persistReadinessChecklist(productId, checklist) {
+    if (!productId || !checklist) return checklist;
+    var path = 'public/products/' + productId + '/readinessChecklist';
+    try {
+      await MastDB.set(path, checklist);
+      if (window.productsData) {
+        var prod = window.productsData.find(function(p) { return p.pid === productId; });
+        if (prod) prod.readinessChecklist = checklist;
+      }
+    } catch (e) {
+      console.warn('persistReadinessChecklist failed', e);
+    }
+    return checklist;
+  }
+
+  /**
+   * Recompute + persist if changed. Convenience for save / recalc / transition flows.
+   */
+  async function recomputeAndPersistReadiness(productId) {
+    var products = window.productsData || [];
+    var p = products.find(function(pp) { return pp.pid === productId; });
+    if (!p) return null;
+    var fresh = computeReadinessChecklist(p, null);
+    var prior = p.readinessChecklist || {};
+    var changed = ['defined','costed','channeled','capacityPlanned','listingReady'].some(function(k) {
+      return !!prior[k] !== !!fresh[k];
+    });
+    if (!changed) return prior;
+    return await persistReadinessChecklist(productId, fresh);
+  }
+
+  /**
+   * Best-effort channel sync hook for status transitions.
+   * - * → active: invoke publishProductToShopify if Shopify externalId or syncEnabled
+   * - active → archived/anything: best-effort unpublish hook (currently a TODO —
+   *   a dedicated `unpublishProductFromShopify` callable does not exist in the
+   *   Cloud Functions surface today; we record the intent in __mastChannelSyncIntents
+   *   so a follow-up checkpoint can flush it).
+   *
+   * Gated by tenant settings flag `autoSyncOnStatusChange` (default true).
+   * All errors logged, never thrown — status transitions never block on sync.
+   */
+  async function triggerChannelSyncForStatus(product, oldStatus, newStatus) {
+    if (!product) return;
+    try {
+      var settings = await loadTenantSettings();
+      var auto = (settings && typeof settings.autoSyncOnStatusChange === 'boolean')
+        ? settings.autoSyncOnStatusChange : true;
+      if (!auto) {
+        console.log('[checkpoint-E] auto channel sync disabled by tenant settings — skipping');
+        return;
+      }
+    } catch (e) { /* fall through, default true */ }
+
+    var hasShopify = !!(product.externalRefs && product.externalRefs.shopify);
+    var shopifySync = hasShopify || !!(product.channelSyncEnabled && product.channelSyncEnabled.shopify);
+
+    if (newStatus === 'active') {
+      if (shopifySync && typeof firebase !== 'undefined' && firebase.functions) {
+        try {
+          var callable = firebase.functions().httpsCallable('publishProductToShopify');
+          await callable({ tenantId: MastDB.tenantId(), pid: product.pid, trigger: 'status-transition' });
+          console.log('[checkpoint-E] Shopify publish fired for', product.pid);
+        } catch (err) {
+          console.warn('[checkpoint-E] Shopify publish failed for', product.pid, err && err.message);
+        }
+      }
+      // Etsy / Square: TODO — publishToEtsy / publishToSquare callables
+      // aren't standardized yet. Logged so a follow-up can wire them.
+      window.__mastChannelSyncIntents = window.__mastChannelSyncIntents || [];
+      window.__mastChannelSyncIntents.push({
+        pid: product.pid, op: 'publish', at: new Date().toISOString(),
+        oldStatus: oldStatus, newStatus: newStatus
+      });
+    } else if (oldStatus === 'active' && newStatus !== 'active') {
+      // active → not-active: record intent. No standardized unpublish callable today.
+      // TODO Checkpoint G: wire delist hooks per archive sub-state.
+      window.__mastChannelSyncIntents = window.__mastChannelSyncIntents || [];
+      window.__mastChannelSyncIntents.push({
+        pid: product.pid, op: 'unpublish', at: new Date().toISOString(),
+        oldStatus: oldStatus, newStatus: newStatus
+      });
+      console.log('[checkpoint-E] recorded unpublish intent for', product.pid, '(unpublish hook TODO)');
+    }
+  }
+
+  /**
+   * Promote a Draft → Ready. Recomputes the checklist first; blocks on hard
+   * gates (defined, costed, listingReady). Channeled + capacityPlanned warn but do
+   * not block. Sets promotedToReadyAt.
+   */
+  async function promoteToReady(pid) {
+    var products = window.productsData || [];
+    var p = products.find(function(pp) { return pp.pid === pid; });
+    if (!p) { MastAdmin.showToast('Product not found', true); return; }
+    if (p.status === 'ready' || p.status === 'active') {
+      MastAdmin.showToast('Already ' + p.status, true);
+      return;
+    }
+    var checklist = computeReadinessChecklist(p, null);
+    await persistReadinessChecklist(pid, checklist);
+    var hardGates = ['defined','costed','listingReady'];
+    var failedHard = hardGates.filter(function(k) { return !checklist[k]; });
+    if (failedHard.length) {
+      MastAdmin.showToast('Cannot promote — missing: ' + failedHard.join(', '), true);
+      return;
+    }
+    var softGates = ['channeled','capacityPlanned'].filter(function(k) { return !checklist[k]; });
+    var msg = 'Promote to Ready? This means the product is ready for launch review. You can still edit anything.';
+    if (softGates.length) {
+      msg += '\n\n(Recommended but not required: ' + softGates.join(', ') + ' — proceed anyway?)';
+    }
+    var ok = await window.mastConfirm(msg, { title: 'Promote to Ready', confirmLabel: 'Promote' });
+    if (!ok) return;
+
+    var now = new Date().toISOString();
+    var oldStatus = p.status;
+    try {
+      await MastDB.set('public/products/' + pid + '/status', 'ready');
+      await MastDB.set('public/products/' + pid + '/promotedToReadyAt', now);
+      await MastDB.set('public/products/' + pid + '/updatedAt', now);
+      p.status = 'ready';
+      p.promotedToReadyAt = now;
+      p.updatedAt = now;
+      MastAdmin.writeAudit('promote_to_ready', 'products', pid);
+      MastAdmin.showToast('Promoted to Ready ✓');
+      // Re-render whichever surface is visible
+      if (piecesView === 'define') renderDefineView();
+      else if (piecesView === 'list') renderPiecesList();
+      // Channel sync: ready is not yet active — no publish; just record state.
+      try { await triggerChannelSyncForStatus(p, oldStatus, 'ready'); } catch (e) {}
+    } catch (err) {
+      MastAdmin.showToast('Promote failed: ' + (err && err.message), true);
+    }
+  }
+
+  /**
+   * Launch a Ready → Active. Verifies channel mapping or made-to-order flag,
+   * then transitions and triggers channel sync.
+   */
+  async function launchToActive(pid) {
+    var products = window.productsData || [];
+    var p = products.find(function(pp) { return pp.pid === pid; });
+    if (!p) { MastAdmin.showToast('Product not found', true); return; }
+    if (p.status !== 'ready') {
+      MastAdmin.showToast('Product must be Ready before launching (current: ' + (p.status || 'unset') + ')', true);
+      return;
+    }
+    var checklist = computeReadinessChecklist(p, null);
+    if (!checklist.channeled && !p.internalStorefrontOnly) {
+      // Nudge but allow (channel sync hook will simply no-op)
+      var proceed = await window.mastConfirm(
+        'No channel mapping is enabled for this product. Launch anyway? It will be Active in your storefront only.',
+        { title: 'No channels enabled', confirmLabel: 'Launch anyway' }
+      );
+      if (!proceed) return;
+    }
+
+    // Inventory or made-to-order check
+    var inv = (window.inventory || {})[pid];
+    var totals = (typeof window.getInventoryTotals === 'function') ? window.getInventoryTotals(inv) : null;
+    var hasInv = totals && (totals.onHand > 0 || (inv && inv.stockType && /order|build/.test(inv.stockType)));
+    if (!hasInv && !(inv && /order|build/.test(inv.stockType || '')) && !p.madeToOrder) {
+      var proceedInv = await window.mastConfirm(
+        'No inventory is set up and product is not flagged made-to-order. Launch anyway?',
+        { title: 'Inventory not configured', confirmLabel: 'Launch anyway' }
+      );
+      if (!proceedInv) return;
+    }
+
+    var ok = await window.mastConfirm(
+      'Launch this product to Active? It will be eligible for channel sync (Shopify, Etsy, Square) per your tenant settings.',
+      { title: 'Launch to Active', confirmLabel: 'Launch' }
+    );
+    if (!ok) return;
+
+    var now = new Date().toISOString();
+    var oldStatus = p.status;
+    try {
+      await MastDB.set('public/products/' + pid + '/status', 'active');
+      await MastDB.set('public/products/' + pid + '/promotedToActiveAt', now);
+      await MastDB.set('public/products/' + pid + '/updatedAt', now);
+      p.status = 'active';
+      p.promotedToActiveAt = now;
+      p.updatedAt = now;
+      MastAdmin.writeAudit('launch_to_active', 'products', pid);
+      MastAdmin.showToast('Launched ✓');
+      if (piecesView === 'define') renderDefineView();
+      else if (piecesView === 'list') renderPiecesList();
+      try { await triggerChannelSyncForStatus(p, oldStatus, 'active'); } catch (e) {}
+    } catch (err) {
+      MastAdmin.showToast('Launch failed: ' + (err && err.message), true);
+    }
+  }
+
+  // ----- Status badge -------------------------------------------------------
+
+  function productStatusBadgeHtml(status) {
+    var s = (status || 'draft').toLowerCase();
+    var styles = {
+      draft:    { bg: 'rgba(120,120,120,0.15)', color: '#525252', label: 'Draft' },
+      ready:    { bg: 'rgba(217,119,6,0.15)',   color: '#b45309', label: 'Ready' },
+      active:   { bg: 'rgba(42,124,111,0.15)',  color: 'var(--teal,#2a7c6f)', label: 'Active' },
+      archived: { bg: 'rgba(180,83,9,0.18)',    color: '#9a3412', label: 'Archived' }
+    };
+    var st = styles[s] || styles.draft;
+    return '<span class="status-badge product-status-badge product-status-' + s +
+      '" style="background:' + st.bg + ';color:' + st.color +
+      ';font-size:0.72rem;padding:3px 8px;border-radius:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;">' +
+      st.label + '</span>';
+  }
+
+  // ----- Readiness Checklist UI panel --------------------------------------
+
+  function readinessIcon(state) {
+    // ✅ pass, ⚠ optional-fail, ⏳ pending
+    if (state === 'pass') return '<span style="color:#2a7c6f;font-size:1.05rem;">✅</span>';
+    if (state === 'warn') return '<span style="color:#b45309;font-size:1.05rem;">⚠️</span>';
+    return '<span style="color:#9ca3af;font-size:1.05rem;">⏳</span>';
+  }
+
+  function renderReadinessChecklistPanel(product) {
+    if (!product) return '';
+    var checklist = computeReadinessChecklist(product, null);
+    var items = [
+      { key: 'defined',         label: 'Defined',         hint: 'Mode-specific definition (recipe / components / supplier)', required: true,  scrollTo: 'define-section' },
+      { key: 'costed',          label: 'Costed',          hint: 'Total cost > 0 and markup config present',                  required: true,  scrollTo: 'markup-section' },
+      { key: 'channeled',       label: 'Channeled',       hint: 'At least one channel mapping (Shopify / Etsy / Square)',    required: false, scrollTo: 'channels-section' },
+      { key: 'capacityPlanned', label: 'Capacity planned',hint: 'Lead time, batch size, or explicitly skipped',              required: false, scrollTo: 'capacity-section' },
+      { key: 'listingReady',    label: 'Listing ready',   hint: 'Name + image + description',                                required: true,  scrollTo: 'listing-section' }
+    ];
+    var pid = product.pid;
+    var status = product.status || 'draft';
+    var hardPass = items.filter(function(it){ return it.required; }).every(function(it){ return checklist[it.key]; });
+    var allPass = items.every(function(it) { return checklist[it.key]; });
+
+    var html = '';
+    html += '<div class="mast-readiness-panel" style="position:sticky;top:0;z-index:5;background:var(--surface-card,#fff);border:1px solid var(--cream-dark,#e5e1d8);border-radius:8px;padding:14px 16px;margin-bottom:16px;box-shadow:0 1px 2px rgba(0,0,0,0.04);">';
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px;">';
+    html += '<div style="display:flex;align-items:center;gap:10px;">';
+    html += '<strong style="font-size:0.9rem;">Readiness checklist</strong>';
+    html += productStatusBadgeHtml(status);
+    if (allPass) html += '<span style="font-size:0.78rem;color:#2a7c6f;">All items complete</span>';
+    else if (hardPass) html += '<span style="font-size:0.78rem;color:#b45309;">Required items complete · optional items pending</span>';
+    else html += '<span style="font-size:0.78rem;color:#9a3412;">Required items incomplete</span>';
+    html += '</div>';
+    html += '<div style="display:flex;gap:8px;">';
+    if (status === 'draft') {
+      var disabled = !hardPass ? ' disabled style="opacity:0.5;cursor:not-allowed;"' : '';
+      html += '<button class="btn btn-primary btn-small"' + disabled + ' onclick="makerPromoteToReady(\'' + MastAdmin.esc(pid) + '\')">Promote to Ready →</button>';
+    } else if (status === 'ready') {
+      html += '<button class="btn btn-primary btn-small" onclick="makerLaunchToActive(\'' + MastAdmin.esc(pid) + '\')">Launch to Active →</button>';
+    }
+    html += '</div></div>';
+
+    html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;">';
+    items.forEach(function(it) {
+      var pass = !!checklist[it.key];
+      var state = pass ? 'pass' : (it.required ? 'pending' : 'warn');
+      html += '<div role="button" tabindex="0" onclick="makerScrollToReadinessSection(\'' + it.scrollTo + '\')" style="display:flex;align-items:flex-start;gap:8px;padding:8px 10px;border:1px solid ' + (pass ? 'rgba(42,124,111,0.25)' : 'rgba(0,0,0,0.08)') + ';border-radius:6px;background:' + (pass ? 'rgba(42,124,111,0.04)' : 'rgba(0,0,0,0.02)') + ';cursor:pointer;">';
+      html += '<div>' + readinessIcon(state) + '</div>';
+      html += '<div style="flex:1;min-width:0;"><div style="font-weight:600;font-size:0.82rem;">' + MastAdmin.esc(it.label) + (it.required ? '' : ' <span style="font-weight:400;color:var(--warm-gray,#777);font-size:0.7rem;">(optional)</span>') + '</div>';
+      html += '<div style="font-size:0.72rem;color:var(--warm-gray,#777);">' + MastAdmin.esc(it.hint) + '</div></div>';
+      html += '</div>';
+    });
+    html += '</div>';
+    html += '</div>';
+    return html;
+  }
+
+  function scrollToReadinessSection(anchor) {
+    if (!anchor) return;
+    var el = document.querySelector('[data-readiness-section="' + anchor + '"]');
+    if (el && el.scrollIntoView) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  // ----- Markup config UI (VAR/Resell) -------------------------------------
+
+  function renderMarkupConfigSection(product) {
+    if (!product) return '';
+    var atype = product.acquisitionType || 'build';
+    if (atype === 'build') return ''; // Build reads markup from recipe
+    var mc = product.markupConfig || {};
+    var w = (mc.wholesaleMarkup != null ? mc.wholesaleMarkup : '');
+    var d = (mc.directMarkup != null ? mc.directMarkup : '');
+    var r = (mc.retailMarkup != null ? mc.retailMarkup : '');
+    var hint = '';
+    if (w === '' && d === '' && r === '') {
+      hint = '<span style="font-size:0.72rem;color:var(--warm-gray,#777);">Defaults will be applied on first save (' +
+        DEFAULT_MARKUPS.wholesaleMarkup + ' / ' + DEFAULT_MARKUPS.directMarkup + ' / ' + DEFAULT_MARKUPS.retailMarkup + ')</span>';
+    }
+    var html = '';
+    html += '<div data-readiness-section="markup-section" style="background:var(--cream,#faf7f0);border:1px solid var(--cream-dark,#e5e1d8);border-radius:8px;padding:16px;margin-bottom:16px;">';
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">';
+    html += '<h4 style="margin:0;font-size:1.05rem;">Markup config</h4>' + hint + '</div>';
+    html += '<div style="display:grid;grid-template-columns:repeat(3,minmax(120px,1fr));gap:12px;">';
+    html += '<div><label style="display:block;font-size:0.78rem;font-weight:600;margin-bottom:4px;">Wholesale markup ×</label>';
+    html += '<input type="number" step="0.05" min="0" value="' + w + '" oninput="makerSetMarkup(\'wholesaleMarkup\',this.value)" style="width:100%;padding:6px 8px;font-size:0.85rem;" placeholder="' + DEFAULT_MARKUPS.wholesaleMarkup + '"></div>';
+    html += '<div><label style="display:block;font-size:0.78rem;font-weight:600;margin-bottom:4px;">Direct markup ×</label>';
+    html += '<input type="number" step="0.05" min="0" value="' + d + '" oninput="makerSetMarkup(\'directMarkup\',this.value)" style="width:100%;padding:6px 8px;font-size:0.85rem;" placeholder="' + DEFAULT_MARKUPS.directMarkup + '"></div>';
+    html += '<div><label style="display:block;font-size:0.78rem;font-weight:600;margin-bottom:4px;">Retail markup ×</label>';
+    html += '<input type="number" step="0.05" min="0" value="' + r + '" oninput="makerSetMarkup(\'retailMarkup\',this.value)" style="width:100%;padding:6px 8px;font-size:0.85rem;" placeholder="' + DEFAULT_MARKUPS.retailMarkup + '"></div>';
+    html += '</div></div>';
+    return html;
+  }
+
+  function setMarkup(field, value) {
+    if (!defineState) return;
+    if (!defineState.markupConfig) defineState.markupConfig = {};
+    var v = Number(value);
+    if (!isFinite(v) || v < 0) v = 0;
+    defineState.markupConfig[field] = v;
+    // No re-render on every keystroke; saved with Save & Continue
+  }
+
+  // ============================================================
+  // End Checkpoint E
+  // ============================================================
 
   // ============================================================
   // Recipe Builder — "The Money Screen"
@@ -3181,6 +3694,12 @@
 
     // Back button
     html += '<button class="detail-back" onclick="makerCloseRecipeBuilder()">← Back to Pieces</button>';
+
+    // Checkpoint E — readiness checklist for Build mode (recipe builder is the Define view)
+    var __linkedProduct = bs.productId ? (window.productsData || []).find(function(pp){ return pp.pid === bs.productId; }) : null;
+    if (__linkedProduct) {
+      html += renderReadinessChecklistPanel(__linkedProduct);
+    }
 
     // costsDirty banner
     if (bs.costsDirty) {
@@ -4468,6 +4987,15 @@
   window.makerVarRemoveStep = varRemoveStep;
   window.makerVarSetStepField = varSetStepField;
   window.makerResellSet = resellSet;
+  // Checkpoint E — Readiness checklist + state transitions
+  window.makerComputeReadinessChecklist = computeReadinessChecklist;
+  window.makerProductMarkupConfig = productMarkupConfig;
+  window.makerPromoteToReady = promoteToReady;
+  window.makerLaunchToActive = launchToActive;
+  window.makerSetMarkup = setMarkup;
+  window.makerScrollToReadinessSection = scrollToReadinessSection;
+  window.productStatusBadgeHtml = productStatusBadgeHtml;
+  window.makerRecomputeReadiness = recomputeAndPersistReadiness;
   window.makerCloseRecipeBuilder = closeRecipeBuilder;
   window.makerCreateRecipeForProduct = createRecipeForProduct;
   window.makerCreateNewPiece = createNewPiece;
