@@ -2320,14 +2320,14 @@
     content.innerHTML = LOADING_HTML;
 
     try {
-      var [sessSnap, clsSnap, enrollSnap] = await Promise.all([
+      var [sessData, clsData_, enrollSnap] = await Promise.all([
         MastDB.classSessions.get(sessionId),
         MastDB.classes.get(classId),
         MastDB.enrollments.bySession(sessionId)
       ]);
 
-      var session = sessSnap.val() || {};
-      var cls = clsSnap.val() || {};
+      var session = sessData || {};
+      var cls = clsData_ || {};
       var enrollments = enrollSnap.val() || {};
 
       var students = Object.keys(enrollments).map(function(id) {
@@ -2856,9 +2856,9 @@
           MastDB.classSessions.list(2000),
           MastDB.classes.list(200)
         ]);
-        var sessData = sessSnap.val() || {};
+        var sessData = (sessSnap && typeof sessSnap.val === 'function') ? (sessSnap.val() || {}) : (sessSnap || {});
         calendarSessions = Object.keys(sessData).map(function(id) { var s = sessData[id]; s.id = id; return s; });
-        var clsData = clsSnap.val() || {};
+        var clsData = (clsSnap && typeof clsSnap.val === 'function') ? (clsSnap.val() || {}) : (clsSnap || {});
         calendarClassesMap = {};
         Object.keys(clsData).forEach(function(id) { calendarClassesMap[id] = clsData[id]; });
         calendarLoaded = true;
@@ -3033,19 +3033,19 @@
       ]);
 
       var sessions = [];
-      var sessData = sessSnap.val() || {};
+      var sessData = (sessSnap && typeof sessSnap.val === 'function') ? (sessSnap.val() || {}) : (sessSnap || {});
       Object.keys(sessData).forEach(function(id) { var s = sessData[id]; s.id = id; sessions.push(s); });
 
       var classes = {};
-      var clsData = clsSnap.val() || {};
+      var clsData = (clsSnap && typeof clsSnap.val === 'function') ? (clsSnap.val() || {}) : (clsSnap || {});
       Object.keys(clsData).forEach(function(id) { classes[id] = clsData[id]; classes[id].id = id; });
 
       var enrollments = [];
-      var enrollData = enrollSnap.val() || {};
+      var enrollData = (enrollSnap && typeof enrollSnap.val === 'function') ? (enrollSnap.val() || {}) : (enrollSnap || {});
       Object.keys(enrollData).forEach(function(id) { var e = enrollData[id]; e.id = id; enrollments.push(e); });
 
       var orders = [];
-      var ordData = ordersSnap.val() || {};
+      var ordData = (ordersSnap && typeof ordersSnap.val === 'function') ? (ordersSnap.val() || {}) : (ordersSnap || {});
       Object.keys(ordData).forEach(function(id) { var o = ordData[id]; o.id = id; orders.push(o); });
 
       // Load session logs for completed sessions (attendance data)

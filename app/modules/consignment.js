@@ -715,6 +715,7 @@
     var today = new Date().toISOString().split('T')[0];
 
     var html =
+      '<div style="padding:24px;">' +
       '<h3 style="font-size:1.15rem;font-weight:500;margin:0 0 4px;">Record Payout from ' + esc(p.locationName) + '</h3>' +
       '<div style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:16px;">' +
         'Outstanding earnings: <strong>' + formatCurrency(outstandingCents) + '</strong>' +
@@ -728,13 +729,14 @@
         '<input type="date" id="payoutDate" value="' + today + '" style="width:160px;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.9rem;">' +
         '<div style="font-size:0.72rem;color:var(--warm-gray);margin-top:4px;">Revenue is attributed to the month the payment actually arrived.</div>' +
       '</div>' +
-      '<div class="form-group" style="margin-bottom:16px;">' +
+      '<div class="form-group" style="margin-bottom:20px;">' +
         '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Notes (optional)</label>' +
         '<input type="text" id="payoutNotes" placeholder="e.g. check #4521" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.9rem;">' +
       '</div>' +
       '<div style="display:flex;justify-content:flex-end;gap:8px;">' +
         '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
         '<button class="btn btn-primary" onclick="consignmentConfirmPayout(\'' + esc(placementId) + '\')">Record Payout</button>' +
+      '</div>' +
       '</div>';
     openModal(html);
   }

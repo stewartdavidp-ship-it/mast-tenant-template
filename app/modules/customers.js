@@ -1160,10 +1160,36 @@
 
   function loadCustomerEnrollments(customerId) {
     var cache = getCache(customerId);
-    MastDB.query('admin/enrollments').orderByChild('customerId').equalTo(customerId).once('value')
-      .then(function(snap) {
-        var val = snap.val() || {};
-        cache.enrollments = Object.entries(val).map(function(e) { var en = e[1] || {}; en._id = e[0]; return en; });
+    var c = customersData.find(function(x) { return x.id === customerId; }) || {};
+    var email = (c.primaryEmail || '').toLowerCase().trim();
+
+    // Enrollments may be keyed by customerId OR by studentEmail/customerEmail —
+    // query both and merge to handle older records created before customerId was stored.
+    var queries = [
+      MastDB.query('admin/enrollments').orderByChild('customerId').equalTo(customerId).once('value')
+    ];
+    if (email) {
+      queries.push(
+        MastDB.query('admin/enrollments').orderByChild('customerEmail').equalTo(email).once('value')
+      );
+    }
+
+    Promise.all(queries)
+      .then(function(snaps) {
+        var seen = {};
+        var enrollments = [];
+        snaps.forEach(function(snap) {
+          var val = (snap && typeof snap.val === 'function') ? (snap.val() || {}) : (snap || {});
+          Object.entries(val).forEach(function(e) {
+            if (!seen[e[0]]) {
+              seen[e[0]] = true;
+              var en = e[1] || {};
+              en._id = e[0];
+              enrollments.push(en);
+            }
+          });
+        });
+        cache.enrollments = enrollments;
         cache.loaded.enrollments = true;
         if (currentView === 'detail' && selectedCustomerId === customerId &&
             (detailTab === 'classes' || detailTab === 'overview')) {
@@ -1187,8 +1213,9 @@
       var h = '';
       h += '<div style="text-align:center;padding:40px 20px;color:var(--warm-gray);">';
       h += '<p style="font-size:0.9rem;font-weight:500;margin-bottom:8px;">No linked contacts</p>';
-      h += '<p style="font-size:0.85rem;color:var(--warm-gray-light);">Interactions live on contact records. ';
-      h += '<a href="#" onclick="navigateTo(\'contacts\');return false;" style="color:var(--teal);text-decoration:underline;">Open Contacts module</a></p>';
+      h += '<p style="font-size:0.85rem;color:var(--warm-gray-light);">Interactions are manually logged touchpoints (calls, emails, meetings, notes) tracked per contact. ';
+      h += 'This customer has no linked contact records yet. ';
+      h += '<a href="#" onclick="navigateTo(\'contacts\');return false;" style="color:var(--teal);text-decoration:underline;">Open Contacts</a> to log interactions.</p>';
       h += '</div>';
       return h;
     }
@@ -1200,7 +1227,11 @@
     }
     var ix = cache.interactions;
     if (!ix.length) {
-      return '<div style="text-align:center;padding:40px 20px;color:var(--warm-gray);">No interactions recorded for any linked contact.</div>';
+      return '<div style="text-align:center;padding:40px 20px;color:var(--warm-gray);">' +
+        '<p style="font-size:0.9rem;font-weight:500;margin-bottom:8px;">No interactions recorded</p>' +
+        '<p style="font-size:0.85rem;">Interactions are manually logged touchpoints (calls, emails, notes). ' +
+        'Log them from the <a href="#" onclick="navigateTo(\'contacts\');return false;" style="color:var(--teal);text-decoration:underline;">Contacts module</a>.</p>' +
+        '</div>';
     }
 
     var h = '';

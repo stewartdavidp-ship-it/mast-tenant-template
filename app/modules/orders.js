@@ -3043,6 +3043,12 @@
       rmaLoaded = true;
       renderRma();
       updateRmaSidebarBadge();
+    }).catch(function(err) {
+      console.error('[RMA] load error:', err);
+      var loadingEl = document.getElementById('rmaLoading');
+      var emptyEl = document.getElementById('rmaEmpty');
+      if (loadingEl) loadingEl.style.display = 'none';
+      if (emptyEl) { emptyEl.style.display = ''; emptyEl.innerHTML = '<p style="color:var(--danger)">Error loading returns: ' + err.message + '</p>'; }
     });
   }
 

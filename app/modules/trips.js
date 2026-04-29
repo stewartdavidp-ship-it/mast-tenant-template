@@ -67,6 +67,7 @@
       // Check for active trip
       activeTripData = tripsData.find(function(t) { return t.status === 'open'; }) || null;
       if (activeTripData) showTripPulsingIndicator();
+      else hideTripPulsingIndicator();
       renderTripsHistory();
       if (loading) loading.style.display = 'none';
     }).catch(function(err) {
@@ -85,7 +86,9 @@
           'home-studio': { label: 'Home Studio', lat: 0, lng: 0, useCount: 0, lastUsed: new Date().toISOString() },
           'new-studio': { label: 'New Studio', lat: 0, lng: 0, useCount: 0, lastUsed: new Date().toISOString() }
         };
-        MastDB.tripLocations.ref().set(seeds).then(function() {
+        // Use individual .set(id, data) calls — collection-level .set() is not supported in Firestore
+        var seedKeys = Object.keys(seeds);
+        Promise.all(seedKeys.map(function(k) { return MastDB.tripLocations.set(k, seeds[k]); })).then(function() {
           tripLocationsData = seeds;
         }).catch(function() {});
       }
@@ -116,13 +119,18 @@
     var user = auth.currentUser;
     if (!user) return;
     MastDB.trips.ref(user.uid).orderByChild('status').equalTo('open').limitToLast(1).once('value').then(function(snap) {
-      var val = snap.val();
-      if (val) {
-        var key = Object.keys(val)[0];
-        activeTripData = val[key];
-        activeTripData.id = key;
-        showTripPulsingIndicator();
-        renderActiveTripBanner();
+      var val = snap.val() || {};
+      var keys = Object.keys(val);
+      if (keys.length > 0) {
+        var key = keys[0];
+        activeTripData = val[key] || null;
+        if (activeTripData) {
+          activeTripData.id = key;
+          showTripPulsingIndicator();
+          renderActiveTripBanner();
+        } else {
+          hideTripPulsingIndicator();
+        }
       } else {
         activeTripData = null;
         hideTripPulsingIndicator();
@@ -232,20 +240,23 @@
   }
 
   function populateOriginDropdown(gpsCoords) {
-    var select = document.getElementById('startTripOrigin');
-    var options = '<option value="">-- Select Origin --</option>';
+    var input = document.getElementById('startTripOrigin');
+    var datalist = document.getElementById('originList');
+    if (!input || !datalist) return;
+
+    var options = '';
+    var nearestLabel = null;
 
     // Find nearest location if GPS available
-    var nearestKey = null;
     if (gpsCoords && tripLocationsLoaded) {
       var minDist = Infinity;
       Object.keys(tripLocationsData).forEach(function(k) {
         var loc = tripLocationsData[k];
         if (!loc.lat || !loc.lng) return;
         var dist = haversineMeters(gpsCoords.lat, gpsCoords.lng, loc.lat, loc.lng);
-        if (dist < minDist) { minDist = dist; nearestKey = k; }
+        if (dist < minDist) { minDist = dist; nearestLabel = loc.label || k; }
       });
-      if (minDist > 500) nearestKey = null; // not close enough
+      if (minDist > 500) nearestLabel = null; // not close enough
     }
 
     // Add locations sorted by use count
@@ -255,22 +266,28 @@
     });
     locKeys.forEach(function(k) {
       var loc = tripLocationsData[k];
-      var selected = k === nearestKey ? ' selected' : '';
-      options += '<option value="' + k + '"' + selected + '>' + esc(loc.label || k) + '</option>';
+      options += '<option value="' + esc(loc.label || k) + '">';
     });
 
-    // Also check studio locations
+    // Also add studio locations not already in trip locations
     Object.keys(studioLocations).forEach(function(k) {
       var sl = studioLocations[k];
       var alreadyInTrips = locKeys.some(function(lk) {
         return tripLocationsData[lk].label === sl.name;
       });
       if (!alreadyInTrips) {
-        options += '<option value="studio_' + k + '">' + esc(sl.name) + ' (Studio)</option>';
+        options += '<option value="' + esc(sl.name) + '">';
       }
     });
 
-    select.innerHTML = options;
+    datalist.innerHTML = options;
+
+    // Pre-fill with nearest location or first option
+    if (nearestLabel) {
+      input.value = nearestLabel;
+    } else if (locKeys.length > 0) {
+      input.value = tripLocationsData[locKeys[0]].label || locKeys[0];
+    }
   }
 
   function populateDestinationList() {
@@ -297,21 +314,30 @@
     var user = auth.currentUser;
     if (!user) { showToast('Not signed in', true); return; }
 
-    var originKey = document.getElementById('startTripOrigin').value;
+    var originLabel = document.getElementById('startTripOrigin').value.trim();
     var destInput = document.getElementById('startTripDestination').value.trim();
 
-    if (!originKey) { showToast('Select an origin', true); return; }
+    if (!originLabel) { showToast('Enter an origin', true); return; }
     if (!destInput) { showToast('Enter a destination', true); return; }
 
-    // Resolve origin
-    var origin = { label: 'Unknown', lat: 0, lng: 0, geocoded: false };
-    if (originKey.startsWith('studio_')) {
-      var studioKey = originKey.replace('studio_', '');
-      var sl = studioLocations[studioKey];
-      if (sl) origin = { label: sl.name, lat: sl.lat, lng: sl.lng, geocoded: true };
-    } else if (tripLocationsData[originKey]) {
+    // Resolve origin — look up by label in known locations first
+    var origin = { label: originLabel, lat: 0, lng: 0, geocoded: false };
+    // Check trip locations
+    var originKey = Object.keys(tripLocationsData).find(function(k) {
+      return (tripLocationsData[k].label || '').toLowerCase() === originLabel.toLowerCase();
+    });
+    if (originKey) {
       var loc = tripLocationsData[originKey];
-      origin = { label: loc.label || originKey, lat: loc.lat || 0, lng: loc.lng || 0, geocoded: !!loc.lat };
+      origin = { label: loc.label || originLabel, lat: loc.lat || 0, lng: loc.lng || 0, geocoded: !!loc.lat };
+    } else if (typeof studioLocations !== 'undefined') {
+      // Check studio locations
+      var studioKey = Object.keys(studioLocations).find(function(k) {
+        return studioLocations[k].name.toLowerCase() === originLabel.toLowerCase();
+      });
+      if (studioKey) {
+        var sl = studioLocations[studioKey];
+        origin = { label: sl.name, lat: sl.lat, lng: sl.lng, geocoded: true };
+      }
     }
 
     // Resolve destination — check if it matches existing location
@@ -1144,7 +1170,38 @@
   }
 
   function printTaxReport() {
-    window.print();
+    var container = document.getElementById('taxReportContent');
+    if (!container) { window.print(); return; }
+
+    var yearEl = document.getElementById('taxReportYear');
+    var year = yearEl ? yearEl.value : new Date().getFullYear();
+    var printWin = window.open('', '_blank', 'width=800,height=600');
+    if (!printWin) { showToast('Pop-ups blocked — allow pop-ups to print', true); return; }
+
+    printWin.document.write(
+      '<!DOCTYPE html><html><head><meta charset="utf-8">' +
+      '<title>Trip Mileage Report — ' + year + '</title>' +
+      '<style>' +
+        'body{font-family:\'DM Sans\',sans-serif;font-size:13px;color:#111;margin:24px;}' +
+        'h2{margin:0 0 4px;font-size:1.1rem;}' +
+        'p{margin:0 0 16px;font-size:0.85rem;color:#666;}' +
+        'table{width:100%;border-collapse:collapse;}' +
+        'th,td{padding:6px 8px;text-align:left;border-bottom:1px solid #e0e0e0;}' +
+        'th{font-weight:700;border-bottom:2px solid #ccc;}' +
+        '.stat-row{display:flex;gap:24px;margin-bottom:20px;}' +
+        '.stat{background:#f8f8f8;border-radius:6px;padding:12px 16px;min-width:120px;}' +
+        '.stat-label{font-size:0.7rem;text-transform:uppercase;color:#666;margin-bottom:2px;}' +
+        '.stat-value{font-size:1.4rem;font-weight:700;}' +
+        '.highlight{background:#ecfdf5;}.highlight .stat-value{color:#059669;}' +
+        '@media print{body{margin:0;}}' +
+      '</style></head><body>' +
+      '<h2>Trip Mileage Tax Report — ' + year + '</h2>' +
+      '<p>Generated ' + new Date().toLocaleDateString() + '</p>' +
+      container.innerHTML +
+      '<script>window.onload=function(){window.print();}<\/script>' +
+      '</body></html>'
+    );
+    printWin.document.close();
   }
 
   // ============================================================
@@ -1430,10 +1487,9 @@
           // Start location
           '<div style="margin-bottom:12px;">' +
             '<label style="font-size:0.78rem;color:var(--warm-gray);display:block;margin-bottom:4px;">Start Location</label>' +
-            '<select id="retroOrigin" style="width:100%;padding:8px 10px;border:1px solid ' + border + ';border-radius:8px;font-size:0.9rem;' +
+            '<input type="text" id="retroOrigin" list="retroOriginList" placeholder="Type or select start location" style="width:100%;padding:8px 10px;border:1px solid ' + border + ';border-radius:8px;font-size:0.9rem;' +
               'background:' + inputBg + ';color:' + textColor + ';box-sizing:border-box;font-family:DM Sans,sans-serif;">' +
-              buildRetroOriginOptions() +
-            '</select>' +
+            '<datalist id="retroOriginList">' + buildRetroOriginDatalist() + '</datalist>' +
           '</div>' +
 
           // End location
@@ -1478,24 +1534,11 @@
 
     document.body.appendChild(overlay);
 
-    // If we have legs already, update the origin to last destination
+    // If we have legs already, pre-fill origin with last leg's destination
     if (retroModalData.legs.length > 0) {
       var lastLeg = retroModalData.legs[retroModalData.legs.length - 1];
-      var originSelect = document.getElementById('retroOrigin');
-      if (originSelect) {
-        var lastDest = lastLeg.destination.label;
-        var found = false;
-        for (var i = 0; i < originSelect.options.length; i++) {
-          if (originSelect.options[i].text === lastDest) { originSelect.selectedIndex = i; found = true; break; }
-        }
-        if (!found) {
-          var opt = document.createElement('option');
-          opt.value = 'custom_' + lastDest;
-          opt.text = lastDest;
-          opt.selected = true;
-          originSelect.appendChild(opt);
-        }
-      }
+      var originInput = document.getElementById('retroOrigin');
+      if (originInput) originInput.value = lastLeg.destination.label;
       renderRetroLegsSummary();
     }
   }
@@ -1506,21 +1549,19 @@
     retroModalData = null;
   }
 
-  function buildRetroOriginOptions() {
+  function buildRetroOriginDatalist() {
     var html = '';
     // Studio locations
     if (typeof studioLocations !== 'undefined') {
       Object.keys(studioLocations).forEach(function(k) {
-        var sl = studioLocations[k];
-        html += '<option value="studio_' + k + '">' + esc(sl.name) + '</option>';
+        html += '<option value="' + esc(studioLocations[k].name) + '">';
       });
     }
     // Trip locations (sorted by use count)
     var keys = Object.keys(tripLocationsData);
     keys.sort(function(a, b) { return (tripLocationsData[b].useCount || 0) - (tripLocationsData[a].useCount || 0); });
     keys.forEach(function(k) {
-      var loc = tripLocationsData[k];
-      html += '<option value="trip_' + k + '">' + esc(loc.label || k) + '</option>';
+      html += '<option value="' + esc(tripLocationsData[k].label || k) + '">';
     });
     return html;
   }
@@ -1696,23 +1737,28 @@
     if (currentRoute === 'dashboard') renderDashboardTodos();
   }
 
-  function resolveRetroOrigin(key) {
-    if (key && key.startsWith('studio_')) {
-      var studioKey = key.replace('studio_', '');
-      if (typeof studioLocations !== 'undefined') {
+  function resolveRetroOrigin(label) {
+    if (!label) return { label: 'Unknown', lat: 0, lng: 0, geocoded: false };
+    // Match by label in trip locations
+    var tripKey = Object.keys(tripLocationsData).find(function(k) {
+      return (tripLocationsData[k].label || '').toLowerCase() === label.toLowerCase();
+    });
+    if (tripKey) {
+      var loc = tripLocationsData[tripKey];
+      return { label: loc.label || label, lat: loc.lat || 0, lng: loc.lng || 0, geocoded: !!loc.lat };
+    }
+    // Match by name in studio locations
+    if (typeof studioLocations !== 'undefined') {
+      var studioKey = Object.keys(studioLocations).find(function(k) {
+        return studioLocations[k].name.toLowerCase() === label.toLowerCase();
+      });
+      if (studioKey) {
         var sl = studioLocations[studioKey];
-        if (sl) return { label: sl.name, lat: sl.lat, lng: sl.lng, geocoded: true };
+        return { label: sl.name, lat: sl.lat, lng: sl.lng, geocoded: true };
       }
     }
-    if (key && key.startsWith('trip_')) {
-      var tripKey = key.replace('trip_', '');
-      var loc = tripLocationsData[tripKey];
-      if (loc) return { label: loc.label || tripKey, lat: loc.lat || 0, lng: loc.lng || 0, geocoded: !!loc.lat };
-    }
-    if (key && key.startsWith('custom_')) {
-      return { label: key.replace('custom_', ''), lat: 0, lng: 0, geocoded: false };
-    }
-    return { label: 'Unknown', lat: 0, lng: 0, geocoded: false };
+    // Free text entry
+    return { label: label, lat: 0, lng: 0, geocoded: false };
   }
 
   function resolveRetroDestination(destValue) {
