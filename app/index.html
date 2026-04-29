@@ -29498,6 +29498,10 @@ function renderVariantRow(product, variant, recipe, idx) {
 
 function renderVariantExpanded(product, variant, recipe, pricing, channels) {
   var pid = product.pid || '';
+  var isEditingPricing = window.__editingVariantPricing &&
+    window.__editingVariantPricing.pid === pid &&
+    window.__editingVariantPricing.variantId === variant.id;
+  var hasMultipleVariants = Array.isArray(product.variants) && product.variants.length > 1;
   var html = '<div style="padding:12px 18px 16px 42px;background:rgba(0,0,0,0.02);font-size:0.85rem;">';
 
   // Recipe section
@@ -29519,19 +29523,56 @@ function renderVariantExpanded(product, variant, recipe, pricing, channels) {
   }
   html += '</div>';
 
-  // Pricing
+  // Pricing — inline edit when this variant is being edited.
   html += '<div style="margin-bottom:12px;">';
-  html += '<div style="font-weight:600;color:var(--warm-gray);margin-bottom:4px;">Pricing</div>';
-  function tier(label, value, isActive) {
-    var v = (value != null) ? '$' + value.toFixed(2) : '—';
-    var style = isActive ? 'font-weight:600;color:var(--teal,#2a7c6f);' : 'color:var(--warm-gray);';
-    return '<div style="' + style + '">' + label + ' ' + v + (isActive ? ' (active)' : '') + '</div>';
+  html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:6px;">';
+  html += '<div style="font-weight:600;color:var(--warm-gray);">Pricing</div>';
+  if (!isEditingPricing) {
+    html += '<button class="btn btn-secondary btn-small" onclick="event.stopPropagation();startEditVariantPricing(\'' + esc(pid) + '\',\'' + esc(variant.id) + '\')">Edit Pricing</button>';
   }
-  html += '<div style="display:flex;gap:24px;flex-wrap:wrap;font-family:monospace;">';
-  html += tier('Wholesale', pricing.wholesale, pricing.activeTier === 'wholesale');
-  html += tier('Direct',    pricing.direct,    pricing.activeTier === 'direct');
-  html += tier('Retail',    pricing.retail,    pricing.activeTier === 'retail');
   html += '</div>';
+
+  if (isEditingPricing) {
+    function _val(v) { return (v != null) ? v.toFixed(2) : ''; }
+    html += '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:8px;font-family:monospace;">';
+    html += '<label style="display:flex;flex-direction:column;gap:4px;">' +
+      '<span style="font-size:0.72rem;color:var(--warm-gray);font-family:\'DM Sans\',sans-serif;">Wholesale ($)</span>' +
+      '<input type="text" id="vp_wholesale_' + esc(variant.id) + '" value="' + _val(pricing.wholesale) + '" placeholder="0.00" onclick="event.stopPropagation()" style="padding:6px 8px;border:1px solid var(--border);border-radius:4px;font-family:monospace;">' +
+      '</label>';
+    html += '<label style="display:flex;flex-direction:column;gap:4px;">' +
+      '<span style="font-size:0.72rem;color:var(--warm-gray);font-family:\'DM Sans\',sans-serif;">Direct ($)</span>' +
+      '<input type="text" id="vp_direct_' + esc(variant.id) + '" value="' + _val(pricing.direct) + '" placeholder="0.00" onclick="event.stopPropagation()" style="padding:6px 8px;border:1px solid var(--border);border-radius:4px;font-family:monospace;">' +
+      '</label>';
+    html += '<label style="display:flex;flex-direction:column;gap:4px;">' +
+      '<span style="font-size:0.72rem;color:var(--warm-gray);font-family:\'DM Sans\',sans-serif;">Retail ($)</span>' +
+      '<input type="text" id="vp_retail_' + esc(variant.id) + '" value="' + _val(pricing.retail) + '" placeholder="0.00" onclick="event.stopPropagation()" style="padding:6px 8px;border:1px solid var(--border);border-radius:4px;font-family:monospace;">' +
+      '</label>';
+    html += '</div>';
+
+    if (hasMultipleVariants) {
+      html += '<div style="margin:8px 0;font-size:0.78rem;" onclick="event.stopPropagation()">';
+      html += '<span style="color:var(--warm-gray);margin-right:8px;">Apply to:</span>';
+      html += '<label style="margin-right:12px;cursor:pointer;"><input type="radio" name="vpScope_' + esc(variant.id) + '" value="this" checked> This variant only</label>';
+      html += '<label style="cursor:pointer;"><input type="radio" name="vpScope_' + esc(variant.id) + '" value="all"> All variants</label>';
+      html += '</div>';
+    }
+
+    html += '<div style="display:flex;gap:8px;" onclick="event.stopPropagation()">';
+    html += '<button class="btn btn-primary btn-small" onclick="saveVariantPricing(\'' + esc(pid) + '\',\'' + esc(variant.id) + '\')">Save</button>';
+    html += '<button class="btn btn-secondary btn-small" onclick="cancelEditVariantPricing()">Cancel</button>';
+    html += '</div>';
+  } else {
+    function tier(label, value, isActive) {
+      var v = (value != null) ? '$' + value.toFixed(2) : '—';
+      var style = isActive ? 'font-weight:600;color:var(--teal,#2a7c6f);' : 'color:var(--warm-gray);';
+      return '<div style="' + style + '">' + label + ' ' + v + (isActive ? ' (active)' : '') + '</div>';
+    }
+    html += '<div style="display:flex;gap:24px;flex-wrap:wrap;font-family:monospace;">';
+    html += tier('Wholesale', pricing.wholesale, pricing.activeTier === 'wholesale');
+    html += tier('Direct',    pricing.direct,    pricing.activeTier === 'direct');
+    html += tier('Retail',    pricing.retail,    pricing.activeTier === 'retail');
+    html += '</div>';
+  }
   html += '</div>';
 
   // Channels
@@ -29572,6 +29613,108 @@ function toggleVariantExpanded(pid, variantId) {
     else sessionStorage.setItem(key, '1');
   } catch (e) {}
   renderProductDetail(pid);
+}
+
+// Inline pricing editor — set window state, ensure row stays expanded, re-render.
+window.__editingVariantPricing = null;
+function startEditVariantPricing(pid, variantId) {
+  window.__editingVariantPricing = { pid: pid, variantId: variantId };
+  try { sessionStorage.setItem(_expandedVariantKey(pid, variantId), '1'); } catch (e) {}
+  renderProductDetail(pid);
+}
+function cancelEditVariantPricing() {
+  window.__editingVariantPricing = null;
+  if (typeof selectedProductPid !== 'undefined' && selectedProductPid) renderProductDetail(selectedProductPid);
+}
+
+async function saveVariantPricing(pid, variantId) {
+  if (!hasPermission('products', 'update')) { showToast('You do not have permission to update products.', true); return; }
+  function readNum(id) {
+    var el = document.getElementById(id);
+    if (!el) return null;
+    var s = (el.value || '').toString().trim();
+    if (!s) return null;
+    var n = parseFloat(s);
+    return isNaN(n) ? null : n;
+  }
+  var w = readNum('vp_wholesale_' + variantId);
+  var d = readNum('vp_direct_' + variantId);
+  var r = readNum('vp_retail_' + variantId);
+
+  // Scope: 'this' (default) or 'all'
+  var scopeEl = document.querySelector('input[name="vpScope_' + variantId + '"]:checked');
+  var scope = scopeEl ? scopeEl.value : 'this';
+
+  var product = (window.productsData || []).find(function(p) { return p.pid === pid; });
+  if (!product) { showToast('Product not found', true); return; }
+  var allRecipes = (typeof window.makerListRecipes === 'function') ? window.makerListRecipes() : {};
+  var recipe = (product.recipeId && allRecipes[product.recipeId] && allRecipes[product.recipeId].status !== 'archived')
+    ? allRecipes[product.recipeId] : null;
+
+  try {
+    var now = new Date().toISOString();
+
+    if (recipe) {
+      // Write per-variant override(s) on the recipe.
+      var variantsMap = Object.assign({}, recipe.variants || {});
+      var idsToWrite;
+      if (scope === 'all') {
+        var canon = getProductVariantsForRender(product);
+        idsToWrite = canon.map(function(v) { return v.id; });
+      } else {
+        idsToWrite = [variantId];
+      }
+      idsToWrite.forEach(function(id) {
+        var existing = variantsMap[id] || {};
+        var next = Object.assign({}, existing);
+        if (w != null) next.wholesalePrice = w;
+        if (d != null) next.directPrice = d;
+        if (r != null) next.retailPrice = r;
+        variantsMap[id] = next;
+      });
+      var update = { variants: variantsMap, isVariantEnabled: true, updatedAt: now };
+      if (typeof window.makerUpdateRecipe === 'function') {
+        await window.makerUpdateRecipe(recipe.recipeId, update);
+      } else if (MastDB.recipes && typeof MastDB.recipes.update === 'function') {
+        await MastDB.recipes.update(recipe.recipeId, update);
+      }
+    }
+
+    // Mirror retail price onto product.variants[].priceCents so storefront sees it.
+    if (r != null) {
+      var pVariants = (product.variants || []).slice();
+      var hasArr = pVariants.length > 0;
+      if (hasArr) {
+        var dirty = false;
+        var canon2 = getProductVariantsForRender(product);
+        var idMap = {};
+        canon2.forEach(function(v, i) { idMap[v.id] = i; });
+        var targetIds = (scope === 'all') ? canon2.map(function(v) { return v.id; }) : [variantId];
+        targetIds.forEach(function(id) {
+          var i = idMap[id];
+          if (i == null || i < 0 || i >= pVariants.length) return;
+          pVariants[i] = Object.assign({}, pVariants[i], { priceCents: Math.round(r * 100) });
+          dirty = true;
+        });
+        if (dirty) {
+          await MastDB.products.update(pid, { variants: pVariants, updatedAt: now });
+          var local = productsData.find(function(p) { return p.pid === pid; });
+          if (local) local.variants = pVariants;
+        }
+      } else {
+        // Single-variant (default) — store on product.priceCents until per-variant inventory model lands.
+        await MastDB.products.update(pid, { priceCents: Math.round(r * 100), updatedAt: now });
+        var local2 = productsData.find(function(p) { return p.pid === pid; });
+        if (local2) local2.priceCents = Math.round(r * 100);
+      }
+    }
+
+    showToast(scope === 'all' ? 'Prices applied to all variants' : 'Variant prices saved');
+    window.__editingVariantPricing = null;
+    renderProductDetail(pid);
+  } catch (err) {
+    showToast('Failed to save: ' + (err && err.message ? err.message : err), true);
+  }
 }
 
 function renderProductDetail(pid) {
