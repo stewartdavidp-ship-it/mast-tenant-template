@@ -108,12 +108,24 @@ Post-deploy smoke test (sgtest15) — see Verification section below.
 
 ## Commits
 
-(filled in below as each commit lands)
+- `e778129` — Checkpoint D — Acquisition mode branching (Build / VAR / Resell)
+  - Single consolidated commit — all changes in `app/modules/maker.js` (+639 LoC, 4468 → 5107) plus `CHECKPOINT_D_LOG.md`. Logical sub-units (cost-shape extraction, VAR view, Resell view, route wiring) are interdependent within a single IIFE so commit splitting would only churn the diff.
 
 ## Deploy
 
-(filled in after `mast_hosting deploy`)
+- **2026-04-29T03:15:38Z** — `mast_hosting deploy` to sgtest15.
+- Site: `https://mast-sgtest15.web.app`
+- Version: `sites/mast-sgtest15/versions/bb2d7830e54d3b24` (FINALIZED).
+- Branch: `develop/D-acquisition-modes`.
+- 158 files total, 2 uploaded, 156 cached.
 
 ## Verification
 
-(filled in after Chrome smoke)
+- Deployed `maker.js` returns 200 and contains 16 occurrences of the new symbols (`Checkpoint D` header, `computeCostShape`, `openDefineForProduct`, `renderVarDefineView`, `renderResellDefineView`).
+- App route `/app/` returns 200.
+- `node --check` clean before push.
+- Chrome MCP UI verification deferred (per spawn discipline note: control session may run interactive UI smoke separately) — entry path is: open Develop → Pieces → "+ New Product" → mode picker → choose VAR or Resell → submit → routes directly to the new Define view. Existing Build flow is unchanged for products with `acquisitionType === 'build'` or unset.
+
+## Ready for Checkpoint E
+
+Yes. No blockers. OPENs surfaced (O-D1 / O-D2 / O-D3 / O-D4) are not blocking and are the natural seams for E (Readiness Checklist) to absorb the costShape uniformly into Costs / Promote-to-Ready logic.
