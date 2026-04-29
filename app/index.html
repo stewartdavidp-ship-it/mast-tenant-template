@@ -6409,7 +6409,7 @@
       <div class="section-header">
         <h2>Product Catalog</h2>
         <div class="products-filter-bar">
-          <input type="text" id="productsSearchInput" placeholder="Search products..." oninput="debouncedProductSearch()" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.85rem;background:var(--surface-card);color:var(--text);width:180px;">
+          <input type="text" id="productsSearchInput" oninput="debouncedProductSearch()" style="display:none;">
           <select id="productsCategory" onchange="renderProducts()">
             <option value="all">All Categories</option>
             <option value="figurines">Figurines</option>
@@ -24538,6 +24538,14 @@ function setCatalogStatusFilter(v) {
 function setCatalogSubStateFilter(v) { window.catalogSubStateFilter = v || 'all'; renderProducts(); }
 function toggleCatalogShowDrafts() { window.catalogShowDrafts = !window.catalogShowDrafts; renderProducts(); }
 
+// Unified products status filter — 'developing' | 'active' | 'archived'.
+// Replaces the old (catalogStatusFilter + showDrafts + productsViewMode) trio.
+window.productsStatusFilter = window.productsStatusFilter || null;
+function setProductsStatusFilter(v) {
+  window.productsStatusFilter = (v === 'developing' || v === 'active' || v === 'archived') ? v : 'active';
+  renderProducts();
+}
+
 // Checkpoint C — Products view mode: 'catalog' (top-level Sell-side, all products)
 // or 'develop' (Develop-side, drafts+ready). Set via setProductsViewMode() on route entry.
 // Note: When productsViewMode === 'develop', maker.js's renderPiecesList renders the
@@ -24547,23 +24555,18 @@ var productsViewMode = 'catalog';
 
 function setProductsViewMode(mode) {
   productsViewMode = mode === 'develop' ? 'develop' : 'catalog';
-  // Update section header title + new-button label per mode
+  // Sidebar nav presets the status filter — sidebar is just a smart shortcut.
+  window.productsStatusFilter = (mode === 'develop') ? 'developing' : 'active';
   var headerH2 = document.querySelector('#productsTab .section-header h2');
-  if (headerH2) headerH2.textContent = productsViewMode === 'develop' ? 'Products in Development' : 'Product Catalog';
-  // Toggle the "+ New Product" button behavior — Develop side opens acquisition-mode picker
+  if (headerH2) headerH2.textContent = 'Products';
   var newBtn = document.querySelector('#productsTab .section-header .btn-primary');
   if (newBtn) {
     newBtn.setAttribute('onclick', productsViewMode === 'develop'
       ? 'developCreateNewProduct()'
       : 'createNewProduct()');
   }
-  // Re-render if list is visible
   if (typeof productsLoaded !== 'undefined' && productsLoaded) {
     renderProducts();
-    renderDevelopOrphanRecipesPanel();
-  } else {
-    // Render the orphan panel on first paint as empty (will repaint after products load)
-    renderDevelopOrphanRecipesPanel();
   }
 }
 
@@ -24675,197 +24678,138 @@ function developCreateNewProduct() {
 
 function renderProducts() {
   var cat = document.getElementById('productsCategory').value;
-  var searchInput = document.getElementById('productsSearchInput');
-  var searchTerm = (searchInput ? searchInput.value : '').toLowerCase().trim();
-  // Checkpoint G — Catalog/Develop lens filtering.
-  // Develop list is rendered by maker.js renderPiecesList in the develop-products
-  // route. This top-level Catalog renderProducts uses Catalog filters below.
-  var statusFilter = window.catalogStatusFilter || 'active';
-  var subStateFilter = window.catalogSubStateFilter || 'all';
-  var includeDrafts = !!window.catalogShowDrafts;
-  var inCatalog = (typeof window.makerIsProductInCatalogView === 'function')
-    ? window.makerIsProductInCatalogView
-    : function(p, opts) {
-        var st = (p && p.status) || 'draft';
-        if (opts && opts.includeDrafts && (st === 'draft' || st === 'ready')) return true;
-        return st === 'active' || st === 'archived';
-      };
+  // Unified status filter: 'developing' (draft+ready) | 'active' | 'archived'
+  // Backward-compat: derive from productsViewMode + legacy catalogStatusFilter on first call.
+  if (!window.productsStatusFilter) {
+    if (window.productsViewMode === 'develop') window.productsStatusFilter = 'developing';
+    else window.productsStatusFilter = window.catalogStatusFilter || 'active';
+  }
+  var statusFilter = window.productsStatusFilter;
+
+  function _statusOf(p) { return (p && p.status) || 'draft'; }
+  function _matchesStatus(p, filter) {
+    var st = _statusOf(p);
+    if (filter === 'developing') return st === 'draft' || st === 'ready';
+    if (filter === 'active') return st === 'active';
+    if (filter === 'archived') return st === 'archived';
+    return true;
+  }
+
+  // Counts per status (respect category filter so pill counts are honest about what user will see)
+  var counts = { developing: 0, active: 0, archived: 0 };
+  productsData.forEach(function(p) {
+    if (cat !== 'all' && (!p.categories || p.categories.indexOf(cat) === -1)) return;
+    var st = _statusOf(p);
+    if (st === 'draft' || st === 'ready') counts.developing++;
+    else if (st === 'active') counts.active++;
+    else if (st === 'archived') counts.archived++;
+  });
+
   var filtered = productsData.filter(function(p) {
-    // Checkpoint C — Develop view defensive filter: drafts/ready only.
-    // (Develop list is normally rendered by maker.js renderPiecesList; this branch
-    // covers any direct call to renderProducts while productsViewMode === 'develop'.)
-    if (productsViewMode === 'develop') {
-      var s = p && p.status;
-      // Backward compat: legacy products without `status` treated as Catalog-only.
-      if (s !== 'draft' && s !== 'ready') return false;
-    } else {
-      // Checkpoint G — Catalog membership gate + status filter pill.
-      var keep = inCatalog(p, { includeDrafts: includeDrafts, archivedSubStateFilter: subStateFilter });
-      if (!keep) return false;
-      var pst = (p && p.status) || 'draft';
-      if (statusFilter === 'active' && pst !== 'active' && !(includeDrafts && (pst === 'draft' || pst === 'ready'))) return false;
-      if (statusFilter === 'archived' && pst !== 'archived') return false;
-    }
+    if (!_matchesStatus(p, statusFilter)) return false;
     if (cat !== 'all' && (!p.categories || p.categories.indexOf(cat) === -1)) return false;
-    if (searchTerm) {
-      var name = (p.name || '').toLowerCase();
-      var desc = (p.description || '').toLowerCase();
-      if (name.indexOf(searchTerm) === -1 && desc.indexOf(searchTerm) === -1) return false;
-    }
     return true;
   });
 
-  // Re-render orphan panel each pass (cheap; reflects latest products/recipes)
-  renderDevelopOrphanRecipesPanel();
+  // Total / count
+  var countEl = document.getElementById('productsCount');
+  if (countEl) countEl.textContent = filtered.length + (filtered.length === 1 ? ' product' : ' products');
 
-  var totalLabel = productsViewMode === 'develop'
-    ? filtered.length + ' in development'
-    : filtered.length + ' of ' + productsData.length + ' products';
-  document.getElementById('productsCount').textContent = totalLabel;
-
-  // Checkpoint G — Render Catalog chip bar (status pill + sub-state chips when archived).
+  // Status pill bar — single row, three pills with counts.
   var chipBar = document.getElementById('catalogStatusBar');
   if (chipBar) {
-    function chip(label, active, onclick, color) {
-      var bg = active ? (color || 'rgba(42,124,111,0.15)') : 'transparent';
+    function pill(value, label, n) {
+      var active = statusFilter === value;
+      var bg = active ? 'rgba(42,124,111,0.15)' : 'transparent';
       var fg = active ? 'var(--teal,#2a7c6f)' : 'var(--warm-gray,#777)';
-      var bd = active ? 'var(--teal,#2a7c6f)' : 'rgba(0,0,0,0.15)';
-      return '<button onclick="' + onclick + '" style="padding:4px 10px;border:1px solid ' + bd + ';border-radius:14px;background:' + bg + ';color:' + fg + ';font-size:0.75rem;cursor:pointer;font-weight:600;">' + label + '</button>';
+      var bd = active ? 'var(--teal,#2a7c6f)' : 'rgba(0,0,0,0.18)';
+      return '<button onclick="setProductsStatusFilter(\'' + value + '\')" ' +
+        'style="padding:6px 14px;border:1px solid ' + bd + ';border-radius:16px;background:' + bg + ';color:' + fg +
+        ';font-size:0.82rem;cursor:pointer;font-weight:600;">' +
+        label + ' <span style="opacity:0.7;font-weight:400;">(' + n + ')</span></button>';
     }
-    var s = window.catalogStatusFilter || 'active';
-    var sub = window.catalogSubStateFilter || 'all';
-    var html = '';
-    html += chip('Active', s === 'active', "setCatalogStatusFilter('active')");
-    html += chip('Archived', s === 'archived', "setCatalogStatusFilter('archived')");
-    if (s === 'archived') {
-      html += '<span style="margin-left:8px;color:var(--warm-gray,#777);font-size:0.72rem;">Sub-state:</span>';
-      html += chip('All', sub === 'all', "setCatalogSubStateFilter('all')");
-      html += chip('Discontinuing', sub === 'discontinuing', "setCatalogSubStateFilter('discontinuing')", 'rgba(234,88,12,0.15)');
-      html += chip('Selling-through', sub === 'selling-through', "setCatalogSubStateFilter('selling-through')", 'rgba(234,179,8,0.18)');
-      html += chip('Returns-only', sub === 'returns-only', "setCatalogSubStateFilter('returns-only')", 'rgba(120,120,120,0.18)');
-      html += chip('Retired', sub === 'retired', "setCatalogSubStateFilter('retired')", 'rgba(31,41,55,0.18)');
-    }
-    html += '<span style="margin-left:auto;"></span>';
-    html += '<label style="display:inline-flex;align-items:center;gap:6px;font-size:0.75rem;color:var(--warm-gray,#777);cursor:pointer;">';
-    html += '<input type="checkbox"' + (window.catalogShowDrafts ? ' checked' : '') + ' onchange="toggleCatalogShowDrafts()"> Show drafts';
-    html += '</label>';
-    chipBar.innerHTML = html;
+    chipBar.innerHTML =
+      pill('developing', 'Developing', counts.developing) +
+      pill('active',     'Active',     counts.active) +
+      pill('archived',   'Archived',   counts.archived);
   }
 
-  var html = '';
+  // List layout (replaces card grid). One row per product: thumb + name/category + status + variants + recipe + price.
+  var allRecipes = (typeof window.makerListRecipes === 'function') ? window.makerListRecipes() : {};
+  var html = '<div class="data-table"><table style="width:100%;border-collapse:collapse;"><thead>' +
+    '<tr style="text-align:left;color:var(--warm-gray);font-size:0.78rem;">' +
+      '<th style="width:60px;padding:8px 4px;"></th>' +
+      '<th style="padding:8px;">Product</th>' +
+      '<th style="padding:8px;">Status</th>' +
+      '<th style="padding:8px;">Variants</th>' +
+      '<th style="padding:8px;">Recipe</th>' +
+      '<th style="padding:8px;text-align:right;">Price</th>' +
+      '<th style="padding:8px;text-align:right;">Inventory</th>' +
+    '</tr></thead><tbody>';
+
   filtered.forEach(function(p) {
-    var imgSrc = firstProductImage(p);
-    var priceHtml = p.priceCents
-      ? '<div class="product-card-price" style="cursor:pointer;" title="Click to edit price" data-pid="' + esc(p.pid) + '" onclick="startInlinePrice(this,this.dataset.pid,event)">' + formatPriceCents(p.priceCents) + '</div>'
-      : '<div class="product-card-price no-price" style="cursor:pointer;" title="Click to set price" data-pid="' + esc(p.pid) + '" onclick="startInlinePrice(this,this.dataset.pid,event)">Price on request</div>';
+    var thumb = firstProductImage(p);
+    var variantCount = (p.variants && p.variants.length) ? p.variants.length : 1;
+    var recipe = (p.recipeId && allRecipes[p.recipeId] && allRecipes[p.recipeId].status !== 'archived')
+      ? allRecipes[p.recipeId] : null;
+    var recipeBadge = recipe
+      ? '<span style="background:rgba(42,124,111,0.12);color:var(--teal,#2a7c6f);padding:2px 8px;border-radius:10px;font-size:0.78rem;">linked</span>'
+      : '<span style="color:var(--warm-gray-light);font-size:0.78rem;">—</span>';
 
-    var catsHtml = '';
-    if (p.categories && p.categories.length) {
-      catsHtml = '<div class="product-card-cats">' + p.categories.map(function(c) {
-        return '<span class="product-cat-tag">' + esc(c) + '</span>';
-      }).join('') + '</div>';
+    var priceTxt = '—';
+    if (recipe) {
+      var tier = recipe.activePriceTier || 'direct';
+      var px = recipe[tier + 'Price'] || 0;
+      if (px > 0) priceTxt = '$' + px.toFixed(2);
+    } else if (p.priceCents) {
+      priceTxt = formatPriceCents(p.priceCents);
     }
 
-    var optionsHtml = '';
-    if (p.options && p.options.length) {
-      optionsHtml = p.options.map(function(opt) {
-        var label = opt.label || 'Option';
-        var choices = opt.choices || [];
-        return '<div class="product-card-options"><span>' + esc(label) + ':</span> ' + choices.length + ' options</div>';
-      }).join('');
-    }
+    var statusBadge = (typeof window.productStatusBadgeHtml === 'function')
+      ? window.productStatusBadgeHtml(p.status)
+      : '<span style="font-size:0.72rem;color:var(--warm-gray);">' + esc(p.status || 'draft') + '</span>';
 
-    var imgCount = productImageCount(p);
-
-    // Availability badge (click to toggle status)
-    var availBadge = '';
-    var availClass = p.availability === 'discontinued' ? 'out-of-stock' : (p.availability === 'draft' ? 'low-stock' : '');
-    var availLabel = p.availability === 'discontinued' ? 'Discontinued' : (p.availability === 'draft' ? 'Draft' : '');
-    if (availLabel) {
-      availBadge = '<span style="position:relative;display:inline-block;" data-pid="' + esc(p.pid) + '" onclick="showStatusDropdown(this,this.dataset.pid,event)">' +
-        '<span class="status-badge stock-badge ' + availClass + '" style="font-size:0.72rem;cursor:pointer;" title="Click to change status">' + availLabel + '</span>' +
-      '</span> ';
-    } else {
-      // Active products: show a subtle status dot that's clickable
-      availBadge = '<span style="position:relative;display:inline-block;" data-pid="' + esc(p.pid) + '" onclick="showStatusDropdown(this,this.dataset.pid,event)">' +
-        '<span class="status-badge stock-badge in-stock" style="font-size:0.72rem;cursor:pointer;opacity:0.7;" title="Click to change status">Active</span>' +
-      '</span> ';
-    }
-
-    // Business line badge
-    var blBadge = '';
-    if (p.businessLine === 'sculpture') {
-      blBadge = '<span class="status-badge" style="background:var(--teal);color:white;font-size:0.72rem;margin-right:4px;">Sculpture</span>';
-      if (p.status === 'sold') {
-        blBadge += '<span class="status-badge" style="background:var(--warm-gray);color:white;font-size:0.72rem;">Sold</span> ';
-      }
-    }
-
-    // Inventory info — always show on-hand count
     var inv = inventory[p.pid];
-    var invHtml = '';
     var totals = getInventoryTotals(inv);
-    var avail = totals.available;
-    var onHand = totals.onHand;
-    var committed = totals.committed;
     var stockType = (inv && inv.stockType) ? inv.stockType : 'made-to-order';
-    var threshold = (inv && inv.lowStockThreshold) ? inv.lowStockThreshold : 2;
-
-    // Stock type badge — supports both new modes (strict/stock-to-build/build-to-order) and legacy (made-to-order/in-stock/limited)
-    var stockBadgeClass = 'status-badge stock-badge ';
+    var invTxt;
     if (stockType === 'build-to-order' || stockType === 'made-to-order') {
-      stockBadgeClass += 'made-to-order';
-      invHtml = '<span class="' + stockBadgeClass + '">Build to Order</span>';
-    } else if (stockType === 'stock-to-build' && avail <= 0) {
-      stockBadgeClass += 'made-to-order';
-      invHtml = '<span class="' + stockBadgeClass + '">Made to Order</span>';
-    } else if (avail <= 0) {
-      stockBadgeClass += 'out-of-stock';
-      invHtml = '<span class="' + stockBadgeClass + '">Out of Stock</span>';
-    } else if (avail <= threshold) {
-      stockBadgeClass += 'low-stock';
-      invHtml = '<span class="' + stockBadgeClass + '">Low Stock</span>';
+      invTxt = '<span style="color:var(--warm-gray);font-size:0.78rem;">Build to Order</span>';
+    } else if (totals.available <= 0) {
+      invTxt = '<span style="color:var(--danger,#dc2626);font-size:0.85rem;font-family:monospace;">0</span>';
     } else {
-      stockBadgeClass += 'in-stock';
-      invHtml = '<span class="' + stockBadgeClass + '">In Stock</span>';
+      invTxt = '<span style="font-size:0.85rem;font-family:monospace;">' + totals.onHand + '</span>';
     }
 
-    // On-hand count — always shown if there's any stock
-    var qtyHtml = '';
-    if (onHand > 0 || committed > 0) {
-      qtyHtml = ' <span class="stock-reserved" style="font-size:0.78rem;">' + onHand + ' on hand' +
-        (committed > 0 ? ' · ' + committed + ' committed' : '') + '</span>';
-    }
-    var isBTO = (stockType === 'build-to-order' || stockType === 'made-to-order');
-    if (!isBTO) {
-      invHtml = '<div class="product-inventory" style="position:relative;cursor:pointer;" title="Click to adjust stock" data-pid="' + esc(p.pid) + '" onclick="showCardStockAdjust(this,this.dataset.pid,event)">' + invHtml + qtyHtml + '</div>';
-    } else {
-      invHtml = '<div class="product-inventory">' + invHtml + qtyHtml + '</div>';
-    }
+    var catTxt = (p.categories && p.categories.length) ? p.categories.join(', ') : '';
 
-    var statusBadgeHtml = (typeof window.productStatusBadgeHtml === 'function')
-      ? '<span style="margin-right:4px;">' + window.productStatusBadgeHtml(p.status) + '</span>'
-      : '';
-    html += '<div class="product-card" style="cursor:pointer;" onclick="viewProduct(\'' + esc(p.pid) + '\')">'
-      + (imgSrc ? '<img class="product-card-img" src="' + esc(imgSrc) + '" alt="' + esc(p.name) + '" loading="lazy">' : '<div class="product-card-img"></div>')
-      + '<div class="product-card-body">'
-      + '<div class="product-card-name">' + esc(p.name) + '</div>'
-      + renderChannelSyncBadges(p, { size: 'small' })
-      + priceHtml
-      + statusBadgeHtml
-      + blBadge
-      + availBadge
-      + catsHtml
-      + optionsHtml
-      + invHtml
-      + '<div class="product-card-images-count">' + imgCount + ' image' + (imgCount !== 1 ? 's' : '') + '</div>'
-      + '</div></div>';
+    html += '<tr style="cursor:pointer;border-bottom:1px solid var(--cream-dark,#e8e0d4);" ' +
+      'onmouseover="this.style.background=\'rgba(0,0,0,0.02)\'" onmouseout="this.style.background=\'\'" ' +
+      'onclick="viewProduct(\'' + esc(p.pid) + '\')">';
+    html += '<td style="padding:6px 4px;">' +
+      (thumb
+        ? '<img src="' + esc(thumb) + '" alt="" style="width:48px;height:48px;object-fit:cover;border-radius:6px;display:block;">'
+        : '<div style="width:48px;height:48px;border-radius:6px;background:var(--cream-dark,#e8e0d4);display:flex;align-items:center;justify-content:center;font-size:1.1rem;">📦</div>') +
+      '</td>';
+    html += '<td style="padding:8px;">' +
+      '<div style="font-weight:500;">' + esc(p.name || '') + '</div>' +
+      (catTxt ? '<div style="font-size:0.72rem;color:var(--warm-gray);">' + esc(catTxt) + '</div>' : '') +
+      '</td>';
+    html += '<td style="padding:8px;">' + statusBadge + '</td>';
+    html += '<td style="padding:8px;font-size:0.85rem;color:var(--warm-gray);">' + variantCount + '</td>';
+    html += '<td style="padding:8px;">' + recipeBadge + '</td>';
+    html += '<td style="padding:8px;text-align:right;font-family:monospace;font-size:0.85rem;">' + priceTxt + '</td>';
+    html += '<td style="padding:8px;text-align:right;">' + invTxt + '</td>';
+    html += '</tr>';
   });
+  html += '</tbody></table></div>';
 
-  var emptyHtml = productsViewMode === 'develop'
+  var emptyHtml = (statusFilter === 'developing')
     ? '<div class="empty-state"><div class="empty-icon">&#128736;&#65039;</div><p>No products in development.</p><p style="font-size:0.85rem;color:var(--warm-gray);">Click <strong>+ New Product</strong> to start one.</p></div>'
-    : '<div class="empty-state"><div class="empty-icon">&#127912;</div><p>No products found.</p></div>';
-  document.getElementById('productsGrid').innerHTML = html || emptyHtml;
+    : (statusFilter === 'archived')
+      ? '<div class="empty-state"><div class="empty-icon">&#128230;</div><p>No archived products.</p></div>'
+      : '<div class="empty-state"><div class="empty-icon">&#127912;</div><p>No active products.</p></div>';
+  document.getElementById('productsGrid').innerHTML = filtered.length ? html : emptyHtml;
 
   // Inventory summary bar
   var summaryBar = document.getElementById('inventorySummaryBar');
