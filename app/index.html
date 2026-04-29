@@ -9609,6 +9609,35 @@ MastDB.images = {
 
 MastDB.products = {
   PATH: 'public/products',
+  // Product Lifecycle Schema (Checkpoint A — develop/A-schema)
+  // -------------------------------------------------------------------------
+  // Lifecycle fields supported on each public/products/{pid} document. These
+  // are declarative — the data layer accepts/round-trips them; full state
+  // machine validation lands in Checkpoint E. UI lands in B–G.
+  //
+  // status:               'draft' | 'ready' | 'active' | 'archived'
+  // archivedSubState:     'discontinuing' | 'selling-through' | 'returns-only' | 'retired' | null
+  // acquisitionType:      'build' | 'var' | 'resell'   (locked at creation)
+  // hasPendingRevision:   boolean                       (Pattern 1 rework)
+  // pendingChanges:       object | null                  (Pattern 1 field overrides)
+  // pendingChangesUpdatedAt: ISO timestamp | null
+  // parentProductId:      string | null                  (Pattern 2 clone source)
+  // version:              number                          (1 for originals, 2+ for clones)
+  // readinessChecklist:   { defined, costed, channeled, capacityPlanned, listingReady }
+  // promotedToReadyAt:    ISO | null
+  // promotedToActiveAt:   ISO | null
+  // archivedAt:           ISO | null
+  // returnsAcceptedUntil: ISO | null                      (auto-set on returns-only entry)
+  // retiredAt:            ISO | null
+  //
+  // See `mast-product-lifecycle-develop-plan.md` and migration script
+  // `scripts/migrate-products-to-lifecycle.py` in the mast-architecture repo.
+  LIFECYCLE_STATUSES: ['draft', 'ready', 'active', 'archived'],
+  ARCHIVED_SUB_STATES: ['discontinuing', 'selling-through', 'returns-only', 'retired'],
+  ACQUISITION_TYPES: ['build', 'var', 'resell'],
+  defaultReadinessChecklist: function() {
+    return { defined: false, costed: false, channeled: false, capacityPlanned: false, listingReady: false };
+  },
   list: function() { return MastDB.list('public/products'); },
   get: function(id) { return id ? MastDB.get('public/products/' + id) : MastDB.get('public/products'); },
   set: function(id, data) { return MastDB.set('public/products/' + id, data); },
@@ -9623,7 +9652,27 @@ MastDB.products = {
   setBuildIds: function(id, buildIds) { return MastDB.set('public/products/' + id + '/buildIds', buildIds); },
   setStoryId: function(id, storyId) { return MastDB.set('public/products/' + id + '/storyId', storyId); },
   removeStoryId: function(id) { return MastDB.remove('public/products/' + id + '/storyId'); },
-  setField: function(id, field, value) { return MastDB.set('public/products/' + id + '/' + field, value); }
+  setField: function(id, field, value) { return MastDB.set('public/products/' + id + '/' + field, value); },
+  // Lifecycle field accessors. Direct .update() with a partial object also
+  // works; these wrappers exist for clarity at call sites in B–G.
+  setLifecycleStatus: function(id, status) { return MastDB.set('public/products/' + id + '/status', status); },
+  setArchivedSubState: function(id, sub) { return MastDB.set('public/products/' + id + '/archivedSubState', sub); },
+  setAcquisitionType: function(id, t) { return MastDB.set('public/products/' + id + '/acquisitionType', t); },
+  setReadinessChecklist: function(id, cl) { return MastDB.set('public/products/' + id + '/readinessChecklist', cl); },
+  setPendingChanges: function(id, changes) {
+    return MastDB.update('public/products/' + id, {
+      pendingChanges: changes,
+      hasPendingRevision: !!changes,
+      pendingChangesUpdatedAt: new Date().toISOString()
+    });
+  },
+  clearPendingChanges: function(id) {
+    return MastDB.update('public/products/' + id, {
+      pendingChanges: null,
+      hasPendingRevision: false,
+      pendingChangesUpdatedAt: new Date().toISOString()
+    });
+  }
 };
 
 MastDB.inventory = {

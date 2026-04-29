@@ -548,6 +548,22 @@ Key shipping-related fields:
 
 These fields are editable in the admin app's product edit form (Production tab).
 
+### Product Lifecycle Schema (added 2026-04-28 — Checkpoint A of Develop Module migration)
+
+Lifecycle state machine + acquisition mode + rework + readiness fields. All declared on the same `public/products/{pid}` document; no separate Piece record. Schema lands in Checkpoint A; UI lands in Checkpoints B–G. State-machine validation lands in E.
+
+- `status: 'draft' | 'ready' | 'active' | 'archived'` — gates list filtering, channel sync, returns acceptance, default detail tab. Existing rows are backfilled to `'active'` unless they already carry a valid status (`'draft'` from `submitNewPiece` is preserved).
+- `archivedSubState: 'discontinuing' | 'selling-through' | 'returns-only' | 'retired' | null` — set only when `status === 'archived'`. Forward-only transitions; channel sync respects each value (Active + Discontinuing + Selling-through → on; Returns-only + Retired → delisted).
+- `acquisitionType: 'build' | 'var' | 'resell'` — locked at creation. Today only `'build'` is shipped; the migration script defaults all existing products to `'build'`. Mode switches require Pattern 2 clone (see below).
+- `hasPendingRevision: boolean`, `pendingChanges: object | null`, `pendingChangesUpdatedAt: ISO | null` — Pattern 1 rework. Edits to an Active product write to `pendingChanges` instead of mutating live fields. Apply commits + clears; Discard nukes.
+- `parentProductId: string | null`, `version: number` — Pattern 2 rework (clone-to-v2). Originals are `version: 1, parentProductId: null`. Clones bump `version` and reference the parent.
+- `readinessChecklist: { defined, costed, channeled, capacityPlanned, listingReady }` — gates Draft → Ready promotion. Migration derives `defined` from BOM/recipe presence, `costed` from `priceCents > 0`, `listingReady` from `images.length > 0`; `channeled` and `capacityPlanned` start `false`.
+- `promotedToReadyAt`, `promotedToActiveAt`, `archivedAt`, `returnsAcceptedUntil`, `retiredAt` — ISO timestamps stamped on each transition. `returnsAcceptedUntil` defaults to `+90d` on `returns-only` entry; a scheduled job auto-flips to `retired` after cutoff.
+
+Valid `status` values: `draft | ready | active | archived` (enum exposed as `MastDB.products.LIFECYCLE_STATUSES`). Sub-state values: `discontinuing | selling-through | returns-only | retired` (`MastDB.products.ARCHIVED_SUB_STATES`). Acquisition types: `build | var | resell` (`MastDB.products.ACQUISITION_TYPES`).
+
+Backfill via `scripts/migrate-products-to-lifecycle.py` in the `mast-architecture` repo (writes to Firestore `tenants/{tenantId}/products/*` via REST). See `~/.claude/plans/mast-product-lifecycle-develop-plan.md` for the full plan.
+
 ### PIM / Outbound Publishing Fields (added 2026-04-09 — Build 1)
 
 Canonical product shape for the Outbound PIM play (Mast as source of truth, publish to external storefronts). Both fields default to empty objects and are non-breaking for legacy products — reads treat missing fields as empty. Backfill via the `runProductSchemaBackfill` callable in `tenant-functions.js`.
