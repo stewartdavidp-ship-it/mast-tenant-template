@@ -35875,6 +35875,7 @@ async function submitFeedback() {
   if (wantScreenshot) {
     closeFeedbackDialog();
     await new Promise(function(r) { setTimeout(r, 350); });
+    showToast('Taking screenshot…');
     try {
       var captureTimeout = new Promise(function(_, reject) {
         setTimeout(function() { reject(new Error('screenshot timeout')); }, 10000);
@@ -35934,15 +35935,21 @@ async function captureFeedbackScreenshot() {
       document.head.appendChild(s);
     });
   }
+  // Capture only the visible viewport — faster and more relevant than full body
   var canvas = await window.html2canvas(document.body, {
     scale: 0.75,
     useCORS: true,
     logging: false,
     allowTaint: false,
-    imageTimeout: 5000
+    imageTimeout: 3000,
+    width: window.innerWidth,
+    height: window.innerHeight,
+    x: window.scrollX || window.pageXOffset,
+    y: window.scrollY || window.pageYOffset
   });
   return new Promise(function(resolve, reject) {
     canvas.toBlob(async function(blob) {
+      if (!blob) { reject(new Error('toBlob returned null')); return; }
       try {
         var tenantId = MastDB.tenantId();
         var suffix = Math.random().toString(36).slice(2, 8);
