@@ -2142,17 +2142,6 @@
       var history = Array.isArray(o.statusHistory) ? o.statusHistory.slice() : (o.statusHistory ? Object.values(o.statusHistory) : []);
       history.push({ status: 'shipped', at: now, by: 'admin', note: carrier + ' ' + method + ' ' + trackingNum });
 
-      // Pull committed items from stock
-      if (o && o.fulfillment) {
-        (o.items || []).forEach(function(item) {
-          var ffKey = getItemFulfillmentKey(item);
-          var ff = o.fulfillment[ffKey];
-          if (ff && ff.source === 'stock') {
-            pullFromStock(item.pid, item.qty || 1, getItemComboKey(item.pid, item.options));
-          }
-        });
-      }
-
       var trackingData = {
         carrier: carrier,
         method: method,
@@ -2168,6 +2157,11 @@
         statusHistory: history
       });
       await writeAudit('update', 'orders', orderId);
+
+      // Trigger inventory deduction + shipped email via cloud function (canonical path)
+      try {
+        await firebase.functions().httpsCallable('onOrderShipped')({ orderId: orderId, tenantId: MastDB.tenantId() });
+      } catch (shipErr) { console.error('onOrderShipped call failed:', shipErr); }
 
       closeModal();
       showToast('Order shipped — ' + carrier + ' ' + method);
