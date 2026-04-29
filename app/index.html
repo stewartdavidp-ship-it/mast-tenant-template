@@ -29443,6 +29443,7 @@ function renderVariantsSection(product) {
   html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">';
   html += '<div class="product-detail-section-title" style="margin:0;">Variants <span style="color:var(--warm-gray);font-weight:400;font-size:0.85rem;">(' + variants.length + ')</span></div>';
   html += '<div style="display:flex;gap:6px;">';
+  html += '<button class="btn btn-secondary btn-small" onclick="openAddVariantDialog(\'' + esc(pid) + '\')">+ Add Variant</button>';
   if (recipe) {
     html += '<button class="btn btn-secondary btn-small" onclick="window.makerOpenRecipeBuilder && window.makerOpenRecipeBuilder(\'' + esc(recipe.recipeId) + '\')">Open Recipe →</button>';
   } else {
@@ -29613,6 +29614,118 @@ function toggleVariantExpanded(pid, variantId) {
     else sessionStorage.setItem(key, '1');
   } catch (e) {}
   renderProductDetail(pid);
+}
+
+// Compute the combo signature used to dedupe + key variants ("metal:14K|size:16\"").
+function _comboSig(combo) {
+  if (!combo || typeof combo !== 'object') return '';
+  return Object.keys(combo).sort().map(function(k) { return k + ':' + combo[k]; }).join('|');
+}
+
+// Cartesian product of { optionLabel: [choice, choice, ...] } → array of combos.
+function _allCombos(options) {
+  if (!Array.isArray(options) || options.length === 0) return [];
+  var labels = options.map(function(o) { return o.label || ''; }).filter(Boolean);
+  var choices = options.map(function(o) { return Array.isArray(o.choices) ? o.choices : []; });
+  if (labels.length !== choices.length || choices.some(function(c) { return c.length === 0; })) return [];
+  var out = [{}];
+  labels.forEach(function(label, i) {
+    var next = [];
+    out.forEach(function(combo) {
+      choices[i].forEach(function(choice) {
+        var c = Object.assign({}, combo);
+        c[label] = choice;
+        next.push(c);
+      });
+    });
+    out = next;
+  });
+  return out;
+}
+
+function openAddVariantDialog(pid) {
+  if (!hasPermission('products', 'update')) { showToast('You do not have permission to update products.', true); return; }
+  var product = (window.productsData || []).find(function(p) { return p.pid === pid; });
+  if (!product) { showToast('Product not found', true); return; }
+  var options = Array.isArray(product.options) ? product.options : [];
+
+  var html = '<div class="modal-header"><h3>Add Variant</h3>' +
+    '<button class="modal-close" onclick="closeModal()">✖</button></div>' +
+    '<div class="modal-body">';
+
+  if (options.length === 0) {
+    html += '<p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:12px;">' +
+      'This product has no variant attributes defined yet. Add attributes ' +
+      '(e.g. <em>metal</em>, <em>size</em>) before creating variants.' +
+      '</p>' +
+      '<button class="btn btn-primary btn-small" onclick="closeModal();editProduct(\'' + esc(pid) + '\');switchProductTab(\'variants\')">Define Attributes →</button>';
+  } else {
+    var existing = {};
+    (product.variants || []).forEach(function(v) { existing[_comboSig(v.combo || {})] = true; });
+    var combos = _allCombos(options);
+    var available = combos.filter(function(c) { return !existing[_comboSig(c)]; });
+
+    if (combos.length === 0) {
+      html += '<p style="color:var(--warm-gray);">Variant attributes are incomplete — at least one option has no choices.</p>';
+    } else if (available.length === 0) {
+      html += '<p style="color:var(--warm-gray);">All possible variant combinations already exist (' + combos.length + ').</p>' +
+        '<p style="font-size:0.78rem;color:var(--warm-gray);">Add more choices to an existing attribute via Edit Info → Variants tab.</p>';
+    } else {
+      html += '<p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:12px;">' +
+        'Pick a combination to add. ' + available.length + ' of ' + combos.length + ' possible combinations are not yet variants.' +
+        '</p>';
+      html += '<div style="display:flex;flex-direction:column;gap:6px;max-height:320px;overflow-y:auto;">';
+      available.forEach(function(combo) {
+        var sig = _comboSig(combo);
+        var label = Object.keys(combo).map(function(k) { return combo[k]; }).join(' / ');
+        html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 12px;border:1px solid var(--border-light,#eee);border-radius:6px;">' +
+          '<span style="font-size:0.85rem;">' + esc(label) + '</span>' +
+          '<button class="btn btn-primary btn-small" onclick="addVariantToProduct(\'' + esc(pid) + '\',\'' + esc(sig) + '\')">Add</button>' +
+        '</div>';
+      });
+      html += '</div>';
+    }
+  }
+
+  html += '</div><div class="modal-footer">' +
+    '<button class="btn btn-secondary" onclick="closeModal()">Close</button>' +
+  '</div>';
+
+  openModal(html);
+}
+
+async function addVariantToProduct(pid, comboSig) {
+  if (!hasPermission('products', 'update')) { showToast('You do not have permission to update products.', true); return; }
+  var product = (window.productsData || []).find(function(p) { return p.pid === pid; });
+  if (!product) { showToast('Product not found', true); return; }
+
+  // Reconstruct the combo from the signature ("k:v|k:v")
+  var combo = {};
+  comboSig.split('|').forEach(function(pair) {
+    var idx = pair.indexOf(':');
+    if (idx < 0) return;
+    combo[pair.substring(0, idx)] = pair.substring(idx + 1);
+  });
+
+  var newVariant = {
+    id: 'v_' + Date.now().toString(36),
+    combo: combo,
+    priceCents: product.priceCents != null ? product.priceCents : 0
+  };
+  var variants = (product.variants || []).slice();
+  variants.push(newVariant);
+
+  try {
+    var now = new Date().toISOString();
+    await MastDB.products.update(pid, { variants: variants, updatedAt: now });
+    var local = productsData.find(function(p) { return p.pid === pid; });
+    if (local) local.variants = variants;
+    showToast('Variant added');
+    closeModal();
+    if (typeof renderProductDetail === 'function') renderProductDetail(pid);
+  } catch (err) {
+    showToast('Failed to add variant: ' + (err && err.message ? err.message : err), true);
+  }
 }
 
 // Inline pricing editor — set window state, ensure row stays expanded, re-render.
