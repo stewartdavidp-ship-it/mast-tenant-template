@@ -31323,6 +31323,11 @@ function attachListeners() {
       imageLibrary = snap.val() || {};
       imageLibraryLoaded = true;
       if (currentRoute === 'images') renderImageLibrary();
+      // Product cards resolve thumbnails via imageLibrary (reverse productId/tag link).
+      // Re-render the catalog/develop grid so first paint with an empty library can fill in.
+      if ((currentRoute === 'products' || currentRoute === 'develop-products' || currentRoute === 'pieces') && typeof renderProducts === 'function') {
+        renderProducts();
+      }
     }, function(err) {
       showToast('Error loading image library: ' + err.message, true);
     });
