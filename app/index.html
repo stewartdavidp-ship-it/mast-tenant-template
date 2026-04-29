@@ -26942,7 +26942,7 @@ function openLinkRecipeDialog(pid) {
   if (!product) { showToast('Product not found', true); return; }
   if (product.recipeId) { showToast('Product already has a linked recipe', true); return; }
 
-  var recipes = window.recipesData || {};
+  var recipes = (typeof window.makerListRecipes === 'function' ? window.makerListRecipes() : null) || {};
   var productPids = {};
   (window.productsData || []).forEach(function(p) { productPids[p.pid] = true; });
 
@@ -29495,7 +29495,8 @@ function renderProductDetail(pid) {
     var _devLens = (!isCreate && pid && typeof window.makerGetProductDetailLens === 'function')
       ? window.makerGetProductDetailLens(pid) : 'catalog';
     if (_devLens === 'develop') {
-      var _recipe = (product.recipeId && window.recipesData) ? window.recipesData[product.recipeId] : null;
+      var _allRecipes = (typeof window.makerListRecipes === 'function') ? window.makerListRecipes() : {};
+      var _recipe = (product.recipeId && _allRecipes) ? _allRecipes[product.recipeId] : null;
       detailsHtml += '<div class="product-detail-section" style="margin-top:16px;">' +
         '<div class="product-detail-section-title">Recipe</div>';
       if (_recipe && _recipe.status !== 'archived') {
