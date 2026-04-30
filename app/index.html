@@ -7156,6 +7156,7 @@
         <button class="view-tab" onclick="switchSettingsSubView('notifications')">Notifications <span id="settingsNotifBadge" class="sidebar-badge alert" style="display:none;margin-left:4px;"></span></button>
         <button class="view-tab" onclick="switchSettingsSubView('pim')">PIM</button>
         <button class="view-tab" onclick="switchSettingsSubView('maker')">Develop</button>
+        <button class="view-tab" onclick="switchSettingsSubView('product')">Product</button>
       </div>
       <div id="settingsSubGeneral" style="max-width:500px;">
         <div id="githubPatSection" class="form-group" style="display:none;">
@@ -8462,6 +8463,16 @@
 
         <div id="makerSettingsContent" aria-live="polite">
           <div class="loading">Loading maker settings…</div>
+        </div>
+      </div>
+
+      <div id="settingsSubProduct" style="display:none;max-width:700px;">
+        <div style="margin-bottom:20px;">
+          <div style="font-size:1.15rem;font-weight:600;margin-bottom:4px;">Product Settings</div>
+          <p style="font-size:0.85rem;color:var(--warm-gray);margin:0;">Pricing defaults and markup strategy applied across your catalog.</p>
+        </div>
+        <div id="productSettingsContent" aria-live="polite">
+          <div class="loading">Loading product settings…</div>
         </div>
       </div>
 
@@ -14765,7 +14776,7 @@ function getModuleForRouteManifest(route) {
 // ============================================================
 // Settings Sub-Tabs
 // ============================================================
-var settingsSubViews = ['general', 'payments', 'shipping', 'tax', 'compliance', 'operations', 'email', 'integrations', 'workshop', 'trips', 'storefront', 'dashboard', 'domains', 'ai', 'engagement', 'channels', 'notifications', 'pim', 'maker'];
+var settingsSubViews = ['general', 'payments', 'shipping', 'tax', 'compliance', 'operations', 'email', 'integrations', 'workshop', 'trips', 'storefront', 'dashboard', 'domains', 'ai', 'engagement', 'channels', 'notifications', 'pim', 'maker', 'product'];
 function switchSettingsSubView(view) {
   // Hide all sub-views
   settingsSubViews.forEach(function(v) {
@@ -14796,6 +14807,7 @@ function switchSettingsSubView(view) {
   if (view === 'domains') loadDomainSettings();
   if (view === 'ai') loadAiIntegrations();
   if (view === 'subscription') renderSubscriptionSettings();
+  if (view === 'product') loadProductSettings();
   if (view === 'about') renderAboutSettings();
   if (view === 'notifications') loadNotificationsSettings();
   if (view === 'pim') loadPimSettings();
@@ -19083,6 +19095,139 @@ function updateLkApiKeyStatus() {
       el.innerHTML = '<span style="color:var(--warm-gray-light);">No key configured. Print card feature requires a LabelKeeper API key.</span>';
     }
   });
+}
+
+// ============================================================
+// Product Settings — Pricing Defaults (Phase 3)
+// ============================================================
+
+var _pricingDefaults = null;
+
+async function loadProductSettings() {
+  var el = document.getElementById('productSettingsContent');
+  if (!el) return;
+  try {
+    var data = await MastDB.get('public/config/pricingDefaults');
+    _pricingDefaults = data || { markupStrategy: 'none', globalRetailMarkup: '', globalDirectMarkup: '', globalWholesaleMarkup: '' };
+    el.innerHTML = _renderProductSettingsContent();
+  } catch (e) {
+    el.innerHTML = '<p style="color:var(--danger);">Failed to load: ' + (e.message || e) + '</p>';
+  }
+}
+
+function _renderProductSettingsContent() {
+  var d = _pricingDefaults || {};
+  var strategy = d.markupStrategy || 'none';
+
+  var html = '';
+
+  // ── Markup Strategy ──────────────────────────────────────────
+  html += '<div class="form-group" style="margin-bottom:24px;">';
+  html += '<label style="font-size:1rem;font-weight:600;">Markup Strategy</label>';
+  html += '<p style="font-size:0.85rem;color:var(--warm-gray);margin:6px 0 12px 0;">Choose the dimension used to apply default markups to products. The product-level override always wins.</p>';
+  html += '<div style="display:flex;flex-direction:column;gap:10px;">';
+  [
+    { value: 'none',          label: 'None — use global defaults only' },
+    { value: 'business-line', label: 'By Business Line — different markup per line' },
+    { value: 'category',      label: 'By Category — different markup per category' }
+  ].forEach(function(opt) {
+    html += '<label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:0.9rem;">' +
+      '<input type="radio" name="markupStrategy" value="' + opt.value + '"' + (strategy === opt.value ? ' checked' : '') + ' onchange="onMarkupStrategyChange(this.value)">' +
+      opt.label + '</label>';
+  });
+  html += '</div></div>';
+
+  // ── Global Defaults ──────────────────────────────────────────
+  html += '<div class="form-group" style="margin-bottom:24px;">';
+  html += '<label style="font-size:1rem;font-weight:600;">Global Default Markup</label>';
+  html += '<p style="font-size:0.85rem;color:var(--warm-gray);margin:6px 0 12px 0;">Fallback when no strategy bucket applies. Expressed as a percentage of recipe cost (e.g. 250 = 2.5× cost).</p>';
+  html += _renderMarkupRow('global', d.globalRetailMarkup, d.globalDirectMarkup, d.globalWholesaleMarkup);
+  html += '<button class="btn btn-primary btn-small" onclick="saveGlobalMarkupDefaults()" style="margin-top:12px;">Save Global Defaults</button>';
+  html += '</div>';
+
+  // ── Per-bucket table ──────────────────────────────────────────
+  if (strategy === 'business-line') {
+    html += _renderBucketMarkupTable('business-line');
+  } else if (strategy === 'category') {
+    html += _renderBucketMarkupTable('category');
+  }
+
+  return html;
+}
+
+function _renderMarkupRow(prefix, retail, direct, wholesale) {
+  var fStyle = 'width:90px;padding:7px 10px;background:var(--charcoal,#252525);border:1px solid var(--charcoal-light,#333);border-radius:6px;color:var(--text-primary,#fff);font-size:0.875rem;text-align:right;';
+  return '<div style="display:flex;gap:16px;flex-wrap:wrap;align-items:center;">' +
+    '<div><label style="font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.06em;display:block;margin-bottom:4px;">Retail %</label>' +
+      '<input type="number" id="markup_' + prefix + '_retail" value="' + (retail || '') + '" min="0" max="2000" step="1" placeholder="—" style="' + fStyle + '"></div>' +
+    '<div><label style="font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.06em;display:block;margin-bottom:4px;">Direct %</label>' +
+      '<input type="number" id="markup_' + prefix + '_direct" value="' + (direct || '') + '" min="0" max="2000" step="1" placeholder="—" style="' + fStyle + '"></div>' +
+    '<div><label style="font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.06em;display:block;margin-bottom:4px;">Wholesale %</label>' +
+      '<input type="number" id="markup_' + prefix + '_wholesale" value="' + (wholesale || '') + '" min="0" max="2000" step="1" placeholder="—" style="' + fStyle + '"></div>' +
+    '</div>';
+}
+
+function _renderBucketMarkupTable(strategyType) {
+  var buckets = strategyType === 'business-line' ? BUSINESS_LINES : (CATEGORIES.map(function(c) { return { id: c, label: c.charAt(0).toUpperCase() + c.slice(1) }; }));
+  var saved = (strategyType === 'business-line' ? (_pricingDefaults.businessLineMarkups || {}) : (_pricingDefaults.categoryMarkups || {}));
+  var label = strategyType === 'business-line' ? 'Business Line' : 'Category';
+
+  if (!buckets || buckets.length === 0) {
+    return '<div style="background:var(--charcoal,#252525);border-radius:8px;padding:16px;color:var(--warm-gray);font-size:0.88rem;">No ' + label.toLowerCase() + 's configured yet. Add them first.</div>';
+  }
+
+  var html = '<div class="form-group" style="margin-bottom:24px;">';
+  html += '<label style="font-size:1rem;font-weight:600;">Markup by ' + label + '</label>';
+  html += '<p style="font-size:0.85rem;color:var(--warm-gray);margin:6px 0 12px 0;">Leave blank to inherit the global default.</p>';
+
+  buckets.forEach(function(b) {
+    var s = saved[b.id] || {};
+    html += '<div style="margin-bottom:14px;">';
+    html += '<div style="font-size:0.88rem;font-weight:600;margin-bottom:8px;">' + b.label + '</div>';
+    html += _renderMarkupRow(strategyType + '_' + b.id, s.retail, s.direct, s.wholesale);
+    html += '</div>';
+  });
+
+  html += '<button class="btn btn-primary btn-small" onclick="saveBucketMarkups(\'' + strategyType + '\')" style="margin-top:4px;">Save ' + label + ' Markups</button>';
+  html += '</div>';
+  return html;
+}
+
+function onMarkupStrategyChange(strategy) {
+  if (!_pricingDefaults) return;
+  _pricingDefaults.markupStrategy = strategy;
+  MastDB.update('public/config/pricingDefaults', { markupStrategy: strategy }).then(function() {
+    showToast('Markup strategy saved.');
+    var el = document.getElementById('productSettingsContent');
+    if (el) el.innerHTML = _renderProductSettingsContent();
+  }).catch(function(e) { showToast('Failed to save: ' + (e.message || e), true); });
+}
+
+function saveGlobalMarkupDefaults() {
+  var retail = parseFloat(document.getElementById('markup_global_retail').value) || null;
+  var direct = parseFloat(document.getElementById('markup_global_direct').value) || null;
+  var wholesale = parseFloat(document.getElementById('markup_global_wholesale').value) || null;
+  var updates = { globalRetailMarkup: retail, globalDirectMarkup: direct, globalWholesaleMarkup: wholesale };
+  Object.assign(_pricingDefaults, updates);
+  MastDB.update('public/config/pricingDefaults', updates).then(function() {
+    showToast('Global markup defaults saved.');
+  }).catch(function(e) { showToast('Failed to save: ' + (e.message || e), true); });
+}
+
+function saveBucketMarkups(strategyType) {
+  var buckets = strategyType === 'business-line' ? BUSINESS_LINES : (CATEGORIES.map(function(c) { return { id: c }; }));
+  var markups = {};
+  buckets.forEach(function(b) {
+    var retail = parseFloat((document.getElementById('markup_' + strategyType + '_' + b.id + '_retail') || {}).value) || null;
+    var direct = parseFloat((document.getElementById('markup_' + strategyType + '_' + b.id + '_direct') || {}).value) || null;
+    var wholesale = parseFloat((document.getElementById('markup_' + strategyType + '_' + b.id + '_wholesale') || {}).value) || null;
+    markups[b.id] = { retail: retail, direct: direct, wholesale: wholesale };
+  });
+  var key = strategyType === 'business-line' ? 'businessLineMarkups' : 'categoryMarkups';
+  _pricingDefaults[key] = markups;
+  MastDB.update('public/config/pricingDefaults', { [key]: markups }).then(function() {
+    showToast('Markup defaults saved.');
+  }).catch(function(e) { showToast('Failed to save: ' + (e.message || e), true); });
 }
 
 // ============================================================
