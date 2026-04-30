@@ -542,8 +542,13 @@
         return;
       }
       var material = materialsData[li.materialId];
-      // Phase 2B: pricing path uses replacementCost; falls back to unitCost.
-      var currentCost = material ? (material.replacementCost != null ? material.replacementCost : material.unitCost) : li.unitCost;
+      // Only use replacementCost for spot-linked materials. Fixed/manual materials
+      // must use unitCost — replacementCost can be stale if pricingMode was changed.
+      var currentCost = material
+        ? (material.pricingMode === 'spot-linked' && material.replacementCost != null
+            ? material.replacementCost
+            : material.unitCost)
+        : li.unitCost;
       refreshedLineItems[liId] = Object.assign({}, li, {
         unitCost: currentCost,
         materialName: material ? material.name : li.materialName
@@ -624,8 +629,11 @@
           var li = vLineItems[liId];
           if (li && li.kind === 'recipe') { vRefreshed[liId] = li; return; }
           var material = materialsData[li.materialId];
-          // Phase 2B: pricing path uses replacementCost
-          var currentCost = material ? (material.replacementCost != null ? material.replacementCost : material.unitCost) : li.unitCost;
+          var currentCost = material
+            ? (material.pricingMode === 'spot-linked' && material.replacementCost != null
+                ? material.replacementCost
+                : material.unitCost)
+            : li.unitCost;
           vRefreshed[liId] = Object.assign({}, li, {
             unitCost: currentCost,
             materialName: material ? material.name : li.materialName
@@ -4916,83 +4924,66 @@
     // Back button
     html += '<button class="detail-back" onclick="makerCloseRecipeBuilder()">← Back to Products</button>';
 
-    // Checkpoint C interim banner — VAR/Resell modes get a placeholder until Checkpoint D ships
-    // their dedicated Define UIs. For now, all modes use the Recipe Builder so cost data is captured.
-    if (bs.productId) {
-      var linkedProd = (window.productsData || []).find(function(p) { return p && p.pid === bs.productId; });
-      if (linkedProd && (linkedProd.acquisitionType === 'var' || linkedProd.acquisitionType === 'resell')) {
-        var modeLabel = linkedProd.acquisitionType === 'var' ? 'VAR' : 'Resell';
-        html += '<div style="background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.3);border-radius:8px;padding:10px 14px;margin-bottom:14px;">';
-        html += '<span style="font-size:0.82rem;color:#1d4ed8;">' + modeLabel + '-specific Define UI ships in the next release. For now, use the Recipe Builder to capture your costs.</span>';
-        html += '</div>';
-      }
-    }
+    // Recipe owns one question: "what does it cost to make this?".
+    // Lifecycle banners (readiness, revision, version), pricing tiers,
+    // staging, drift, margin floor, product image carousel — all moved to
+    // the product detail page where they actually belong.
 
-    // Checkpoint E — readiness checklist for Build mode (recipe builder is the Define view)
-    var __linkedProduct = bs.productId ? (window.productsData || []).find(function(pp){ return pp.pid === bs.productId; }) : null;
-    if (__linkedProduct) {
-      html += renderReadinessChecklistPanel(__linkedProduct);
-      // Checkpoint F — cross-link + revision banners on the Build view too
-      html += renderVersionLinkBanner(__linkedProduct);
-      html += renderRevisionBanner(__linkedProduct);
-    }
-
-    // costsDirty banner
-    if (bs.costsDirty) {
+    if (false /* costsDirty banner — gone, calc is live */) {
       html += '<div style="background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.3);border-radius:8px;padding:12px 16px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;">';
       html += '<span style="font-size:0.85rem;color:#b45309;">⚠ Material costs have changed since last calculation.</span>';
       html += '<button class="btn btn-primary btn-small" onclick="makerRecalcAndRefresh()">Recalculate</button>';
       html += '</div>';
     }
 
-    // Phase 2C+2E: drift banner + Reprice now button (when drift exceeds threshold)
-    var driftPct = typeof bs.currentDriftPct === 'number' ? bs.currentDriftPct : 0;
-    if (Math.abs(driftPct) >= repricingThresholdPct && bs.driftBaseline) {
-      var dir = driftPct > 0 ? '↑' : '↓';
-      var driftColor = driftPct > 0 ? '#b45309' : '#1d4ed8';
-      html += '<div style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.35);border-radius:8px;padding:12px 16px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;">';
-      html += '<div style="font-size:0.85rem;">';
-      html += '<strong style="color:' + driftColor + ';">' + dir + ' ' + Math.abs(driftPct).toFixed(1) + '% cost drift</strong> ';
-      html += '<span style="color:var(--warm-gray);">since last propagation ($' + (bs.driftBaseline || 0).toFixed(2) + ' → $' + (bs.totalCost || 0).toFixed(2) + '). Threshold: ' + repricingThresholdPct + '%.</span>';
-      html += '</div>';
-      html += '<button class="btn btn-primary btn-small" onclick="makerRepriceNow()" title="Recalculate + Stage all 3 tier prices on the recipe (product admin accepts via banner) + reset drift baseline">\u21bb Recalculate &amp; Stage</button>';
-      html += '</div>';
-    }
+    // Header — title + minimal actions. Calc is live, so no separate
+    // "Recalculate" or "Save & Recalculate". Save persists; Duplicate clones.
+    html += '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;flex-wrap:wrap;gap:12px;">';
+    html += '<div>';
+    html += '<h3 style="font-family:\'Cormorant Garamond\',serif;font-size:1.6rem;font-weight:500;margin:0;">' + esc(bs.name || 'Untitled Recipe') + '</h3>';
+    html += '<span style="font-size:0.85rem;color:var(--warm-gray);">Cost recipe</span>';
+    html += '</div>';
+    html += '<div style="display:flex;gap:8px;">';
+    html += '<button class="btn btn-secondary btn-small" onclick="makerOpenWhatIfSimulator()" title="Simulate metals price shifts and see how this recipe\'s cost would move">' + String.fromCharCode(0xD83D, 0xDCCA) + ' What-if</button>';
+    html += '<button class="btn btn-secondary btn-small" onclick="makerDuplicateCurrentRecipe()" title="Clone this recipe as a new draft">Duplicate</button>';
+    html += '<button class="btn btn-primary btn-small" onclick="makerSaveRecipeBuilder()">Save</button>';
+    html += '</div>';
+    html += '</div>';
 
-    // Margin floor alert (active tier below minMarginPercent)
-    if (bs.minMarginPercent != null) {
-      var activeTierKey = bs.activePriceTier || 'direct';
-      var activeMarginPct = calc[activeTierKey + 'MarginPct'] || 0;
-      if (activeMarginPct < bs.minMarginPercent) {
-        html += '<div style="background:rgba(220,38,38,0.08);border:1px solid rgba(220,38,38,0.3);border-radius:8px;padding:12px 16px;margin-bottom:16px;font-size:0.85rem;color:#991b1b;">';
-        html += '⚠ Active <strong>' + activeTierKey + '</strong> tier margin is <strong>' + activeMarginPct.toFixed(1) + '%</strong> — below your floor of <strong>' + bs.minMarginPercent + '%</strong>. Raise the markup or reduce cost.';
+    // Spot-price drift indicator — passive. Compares the spot snapshot
+    // captured at last save to the current spot prices and surfaces a
+    // one-liner if any metal moved meaningfully. The maker doesn't
+    // control this; it's just context for why cost may have shifted.
+    if (bs.spotSnapshot && spotPricesCurrent) {
+      var moves = [];
+      ['gold', 'silver', 'platinum'].forEach(function(metal) {
+        var was = bs.spotSnapshot[metal];
+        var now = spotPricesCurrent[metal];
+        if (typeof was !== 'number' || typeof now !== 'number' || was <= 0) return;
+        var pct = (now - was) / was * 100;
+        if (Math.abs(pct) >= 0.5) {
+          moves.push({ metal: metal, was: was, now: now, pct: pct });
+        }
+      });
+      if (moves.length > 0) {
+        var savedAt = bs.spotSnapshotAt ? new Date(bs.spotSnapshotAt).toLocaleDateString() : 'last save';
+        html += '<div style="background:rgba(245,158,11,0.10);border:1px solid rgba(245,158,11,0.30);border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:0.88rem;color:var(--text,#2a2a2a);display:flex;align-items:center;gap:14px;flex-wrap:wrap;">';
+        html += '<span style="font-weight:600;">Spot prices moved since ' + esc(savedAt) + ':</span>';
+        moves.forEach(function(m) {
+          var dirArrow = m.pct > 0 ? '↑' : '↓';
+          var color = m.pct > 0 ? '#b45309' : '#1d4ed8';
+          html += '<span style="color:' + color + ';font-weight:600;">' +
+            dirArrow + ' ' + m.metal.charAt(0).toUpperCase() + m.metal.slice(1) +
+            ' ' + (m.pct > 0 ? '+' : '') + m.pct.toFixed(1) + '%' +
+          '</span>' +
+          '<span style="opacity:0.7;font-family:monospace;font-size:0.82rem;">' +
+            '$' + m.was.toFixed(2) + '→$' + m.now.toFixed(2) + '/oz' +
+          '</span>';
+        });
+        html += '<span style="opacity:0.7;font-size:0.82rem;flex-basis:100%;">Material costs are recomputed live; save to acknowledge.</span>';
         html += '</div>';
       }
     }
-
-    // Header
-    html += '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;">';
-    html += '<div>';
-    html += '<h3 style="font-family:\'Cormorant Garamond\',serif;font-size:1.6rem;font-weight:500;margin:0;">' + esc(bs.name || 'Untitled Recipe') + '</h3>';
-    html += '<span style="font-size:0.85rem;color:var(--warm-gray);">Recipe for product ' + esc(bs.productId || '') + '</span>';
-    html += '</div>';
-    html += '<div style="display:flex;gap:8px;">';
-    html += '<button class="btn btn-secondary btn-small" onclick="makerDuplicateCurrentRecipe()" title="Clone this recipe as a new draft">Duplicate</button>';
-    html += '<button class="btn btn-secondary btn-small" onclick="makerSaveRecipeBuilder()">Save</button>';
-    html += '<button class="btn btn-secondary btn-small" onclick="makerSaveAndRecalcRecipe()">Save & Recalculate</button>';
-    // Channel-First Phase 2d (D24) — Publish stages a new version on the recipe.
-    // Product admin must accept it from the product detail banner. Two-step.
-    if (bs.productId) {
-      var pubTitle = bs.lastPublishedAt
-        ? 'Stage a new version for the product. Last staged: ' + new Date(bs.lastPublishedAt).toLocaleString() + ' (v' + (bs.version || 1) + '). Product admin will see a banner to accept and apply.'
-        : 'Stage prices for the product (writes Wholesale, Direct, and Retail to the recipe; product admin accepts to apply). Recipe has not been staged yet.';
-      html += '<button class="btn btn-primary btn-small" onclick="makerPublishFromBuilder()" title="' + esc(pubTitle) + '">\u2191 Stage for product</button>';
-    }
-    html += '</div>';
-    html += '</div>';
-
-    // Channel-First Phase 1c (D20) — channels[] field removed. Publish now always writes
-    // all three tier prices (wholesale/direct/retail) atomically per D35.
 
     // ---- VARIANT TABS (cost-shape model) ----
     // Always show a Default tab. If the linked product has variants, show one tab per
@@ -5031,43 +5022,10 @@
       html += '</div>';
     }
 
-    // ---- PRODUCT IMAGE SECTION (collapsible, variant-aware) ----
-    var linkedProductForImg = bs.productId ? (window.productsData || []).find(function(p){ return p.pid === bs.productId; }) : null;
-    if (linkedProductForImg) {
-      var rawImgs = Array.isArray(linkedProductForImg.images) ? linkedProductForImg.images : [];
-      var imgUrls = rawImgs.map(function(img){ return typeof img === 'string' ? img : (img && img.url ? img.url : ''); }).filter(function(u){ return !!u; });
-      if (imgUrls.length > 0) {
-        var activeImgIdx = 0;
-        if (activeKey !== 'default') {
-          var activePv = productVariants.find(function(p){ return p.id === activeKey; });
-          if (activePv && typeof activePv.imageIndex === 'number' && activePv.imageIndex >= 0 && activePv.imageIndex < imgUrls.length) {
-            activeImgIdx = activePv.imageIndex;
-          }
-        }
-        var imgLabel = activeKey === 'default' ? 'Default' : variantDisplayName(productVariants.find(function(p){ return p.id === activeKey; }));
-        html += '<details open style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:12px 16px;margin-bottom:16px;">';
-        html += '<summary style="cursor:pointer;font-size:0.9rem;font-weight:600;display:flex;justify-content:space-between;align-items:center;list-style:none;">';
-        html += '<span>Product Image <span style="font-weight:400;color:var(--warm-gray-light);font-size:0.78rem;">— ' + esc(imgLabel) + '</span></span>';
-        html += '<span style="font-size:0.78rem;color:var(--warm-gray);">' + imgUrls.length + ' image' + (imgUrls.length === 1 ? '' : 's') + '</span>';
-        html += '</summary>';
-        html += '<div style="margin-top:12px;display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap;">';
-        html += '<img src="' + esc(imgUrls[activeImgIdx]) + '" alt="' + esc(linkedProductForImg.name || '') + '" style="max-width:240px;max-height:240px;border-radius:6px;border:1px solid var(--cream-dark);object-fit:cover;background:#fff;" />';
-        if (imgUrls.length > 1) {
-          html += '<div style="display:flex;flex-wrap:wrap;gap:6px;flex:1;min-width:180px;">';
-          imgUrls.forEach(function(u, i) {
-            var isActive = i === activeImgIdx;
-            html += '<img src="' + esc(u) + '" alt="thumb ' + (i+1) + '" title="Image ' + (i+1) + '" style="width:56px;height:56px;border-radius:4px;object-fit:cover;border:2px solid ' + (isActive ? 'var(--teal)' : 'transparent') + ';opacity:' + (isActive ? '1' : '0.7') + ';" />';
-          });
-          html += '</div>';
-        }
-        html += '</div></details>';
-      }
-    }
-
-    // ---- PARTS SECTION ----
+    // ---- STEP 1: MATERIALS ----
     html += '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:16px;margin-bottom:16px;">';
     html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">';
-    html += '<h4 style="font-size:0.9rem;font-weight:600;margin:0;">Parts (Bill of Materials)</h4>';
+    html += '<h4 style="font-size:0.9rem;font-weight:600;margin:0;">Step 1 &mdash; Materials</h4>';
     html += '<button class="btn btn-outline btn-small" onclick="makerOpenAddPartModal()">+ Add Part</button>';
     html += '</div>';
 
@@ -5126,9 +5084,9 @@
     html += '<div style="text-align:right;padding:8px;font-size:0.85rem;font-weight:600;margin-top:4px;">Total Materials: <span style="font-family:monospace;">$' + calc.totalMaterialCost.toFixed(2) + '</span></div>';
     html += '</div>';
 
-    // ---- LABOR SECTION ----
+    // ---- STEP 2: LABOR ----
     html += '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:16px;margin-bottom:16px;">';
-    html += '<h4 style="font-size:0.9rem;font-weight:600;margin:0 0 12px;">Labor</h4>';
+    html += '<h4 style="font-size:0.9rem;font-weight:600;margin:0 0 12px;">Step 2 &mdash; Labor</h4>';
     html += '<div style="display:flex;gap:12px;align-items:flex-end;">';
 
     html += '<div style="flex:1;">';
@@ -5148,9 +5106,9 @@
 
     html += '</div></div>';
 
-    // ---- OTHER COSTS SECTION ----
+    // ---- STEP 3: OVERHEAD ----
     html += '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:16px;margin-bottom:16px;">';
-    html += '<h4 style="font-size:0.9rem;font-weight:600;margin:0 0 12px;">Other Costs</h4>';
+    html += '<h4 style="font-size:0.9rem;font-weight:600;margin:0 0 12px;">Step 3 &mdash; Overhead</h4>';
     html += '<div style="display:flex;gap:12px;">';
 
     html += '<div style="flex:1;">';
@@ -5181,196 +5139,24 @@
     html += '</div>';
     html += '</div></div>';
 
-    // ---- COST SUMMARY ----
-    html += '<div style="background:var(--charcoal);color:white;border-radius:8px;padding:16px;margin-bottom:16px;">';
-    html += '<div style="display:flex;justify-content:space-between;font-size:0.85rem;margin-bottom:6px;"><span>Materials</span><span style="font-family:monospace;">$' + calc.totalMaterialCost.toFixed(2) + '</span></div>';
-    html += '<div style="display:flex;justify-content:space-between;font-size:0.85rem;margin-bottom:6px;"><span>Labor</span><span style="font-family:monospace;">$' + calc.laborCost.toFixed(2) + '</span></div>';
-    if (bs.otherCost > 0) {
-      html += '<div style="display:flex;justify-content:space-between;font-size:0.85rem;margin-bottom:6px;"><span>Other</span><span style="font-family:monospace;">$' + (bs.otherCost || 0).toFixed(2) + '</span></div>';
+    // ---- TOTAL COST (the result) ----
+    html += '<div style="background:var(--charcoal);color:white;border-radius:10px;padding:22px 24px;margin-bottom:18px;">';
+    html += '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:24px;flex-wrap:wrap;">';
+    html += '<div>';
+    html += '<div style="font-size:0.78rem;text-transform:uppercase;letter-spacing:0.08em;opacity:0.7;font-weight:600;margin-bottom:4px;">Total Cost Per Unit</div>';
+    html += '<div style="font-family:monospace;font-size:2rem;font-weight:700;line-height:1;">$' + calc.totalCost.toFixed(2) + '</div>';
+    html += '</div>';
+    html += '<div style="font-size:0.85rem;opacity:0.85;display:flex;gap:16px;flex-wrap:wrap;">';
+    html += '<span>Materials <span style="font-family:monospace;font-weight:600;">$' + calc.totalMaterialCost.toFixed(2) + '</span></span>';
+    html += '<span>Labor <span style="font-family:monospace;font-weight:600;">$' + calc.laborCost.toFixed(2) + '</span></span>';
+    var overhead = (bs.otherCost || 0) + (calc.perUnitSetup || 0);
+    if (overhead > 0) {
+      html += '<span>Overhead <span style="font-family:monospace;font-weight:600;">$' + overhead.toFixed(2) + '</span></span>';
     }
-    html += '<div style="display:flex;justify-content:space-between;font-size:1.15rem;font-weight:700;padding-top:8px;border-top:1px solid rgba(255,255,255,0.2);"><span>Total Cost</span><span style="font-family:monospace;">$' + calc.totalCost.toFixed(2) + '</span></div>';
+    html += '</div>';
+    html += '</div>';
     html += '</div>';
 
-    // ---- PRICING TIERS (3 columns side-by-side) ----
-    html += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:16px;">';
-
-    var tiers = [
-      { key: 'wholesale', label: 'Wholesale', markupField: 'wholesaleMarkup', price: calc.wholesalePrice, profit: calc.wholesaleGrossProfit, marginPct: calc.wholesaleMarginPct },
-      { key: 'direct', label: 'Direct', markupField: 'directMarkup', price: calc.directPrice, profit: calc.directGrossProfit, marginPct: calc.directMarginPct },
-      { key: 'retail', label: 'Retail', markupField: 'retailMarkup', price: calc.retailPrice, profit: calc.retailGrossProfit, marginPct: calc.retailMarginPct }
-    ];
-
-    tiers.forEach(function(tier) {
-      var isActive = bs.activePriceTier === tier.key;
-      var borderColor = isActive ? 'var(--teal)' : 'var(--cream-dark)';
-      var headerBg = isActive ? 'rgba(42,124,111,0.08)' : 'transparent';
-
-      html += '<div style="background:var(--cream);border:2px solid ' + borderColor + ';border-radius:8px;padding:14px;position:relative;">';
-
-      // Active indicator
-      if (isActive) {
-        html += '<div style="position:absolute;top:-1px;right:12px;background:var(--teal);color:white;font-size:0.72rem;font-weight:700;padding:2px 8px;border-radius:0 0 4px 4px;text-transform:uppercase;letter-spacing:0.06em;">Active</div>';
-      }
-
-      // Tier header
-      html += '<div style="text-align:center;font-size:0.85rem;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--warm-gray);margin-bottom:10px;background:' + headerBg + ';padding:4px;border-radius:4px;">' + tier.label + '</div>';
-
-      // Markup input
-      html += '<div style="text-align:center;margin-bottom:8px;">';
-      html += '<label style="font-size:0.72rem;color:var(--warm-gray-light);display:block;margin-bottom:2px;">Markup</label>';
-      html += '<input type="number" step="0.1" min="1" value="' + (bs[tier.markupField] || 1) + '" style="width:70px;text-align:center;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;font-family:monospace;font-weight:600;background:var(--cream);color:var(--charcoal);" onchange="makerUpdateBuilderField(\'' + tier.markupField + '\', parseFloat(this.value) || 1)">';
-      html += '<span style="font-size:0.85rem;color:var(--warm-gray);margin-left:2px;">×</span>';
-      html += '</div>';
-
-      // Price — Channel-First Phase 1c (D33, D41): suggested price + optional override
-      var ovMap = (bs.overridePrice && typeof bs.overridePrice === 'object') ? bs.overridePrice : {};
-      var ovVal = (typeof ovMap[tier.key] === 'number' && ovMap[tier.key] > 0) ? ovMap[tier.key] : null;
-      var effPrice = ovVal != null ? ovVal : tier.price;
-      html += '<div style="text-align:center;font-size:1.15rem;font-family:monospace;font-weight:700;color:var(--charcoal);margin-bottom:4px;">';
-      html += '$' + effPrice.toFixed(2);
-      if (ovVal != null) {
-        html += ' <span style="font-size:0.72rem;color:var(--warm-gray-light);text-decoration:line-through;font-weight:400;">$' + tier.price.toFixed(2) + '</span>';
-      }
-      html += '</div>';
-      // Override input
-      html += '<div style="text-align:center;margin-top:6px;">';
-      html += '<label style="font-size:0.72rem;color:var(--warm-gray-light);display:block;margin-bottom:2px;">Override</label>';
-      html += '<input type="number" step="0.01" min="0" placeholder="—" value="' + (ovVal != null ? ovVal.toFixed(2) : '') + '" ';
-      html += 'style="width:80px;text-align:center;padding:4px 6px;border:1px solid #ddd;border-radius:4px;font-size:0.78rem;font-family:monospace;background:var(--cream);color:var(--charcoal);" ';
-      html += 'onchange="makerSetOverrideFromBuilder(\'' + tier.key + '\', this.value)" title="Set a fixed price for this tier (overrides the suggested price). Leave blank to use suggested.">';
-      html += '</div>';
-
-      // Gross profit + margin %
-      var minMargin = bs.minMarginPercent;
-      var belowMin = minMargin != null && tier.marginPct < minMargin;
-      var profitColor = tier.profit > 0 ? '#16a34a' : 'var(--danger)';
-      var marginColor = belowMin ? 'var(--danger)' : profitColor;
-      html += '<div style="text-align:center;font-size:0.78rem;color:' + profitColor + ';">Profit: $' + tier.profit.toFixed(2) + '</div>';
-      html += '<div style="text-align:center;font-size:0.85rem;font-weight:600;color:' + marginColor + ';margin-top:2px;">Margin: ' + tier.marginPct.toFixed(1) + '%' + (belowMin ? ' ⚠' : '') + '</div>';
-
-      // Etsy sync indicator + Set active button
-      if (isActive) {
-        var linkedProduct = bs.productId ? (window.productsData || []).find(function(p) { return p.pid === bs.productId; }) : null;
-        if (linkedProduct && linkedProduct.etsyListingId) {
-          html += '<div style="text-align:center;margin-top:8px;font-size:0.72rem;color:var(--teal);">Etsy listing will sync</div>';
-          if (bs.lastEtsySyncAt) {
-            html += '<div style="text-align:center;font-size:0.72rem;color:var(--warm-gray-light);">Last sync: ' + new Date(bs.lastEtsySyncAt).toLocaleDateString() + '</div>';
-          }
-        } else if (linkedProduct) {
-          html += '<div style="text-align:center;margin-top:8px;font-size:0.72rem;color:var(--warm-gray-light);">No Etsy listing</div>';
-        }
-      } else {
-        html += '<button class="btn btn-outline btn-small" style="width:100%;margin-top:10px;font-size:0.78rem;" onclick="makerSetTierFromBuilder(\'' + tier.key + '\')">Set Active</button>';
-      }
-
-      html += '</div>';
-    });
-
-    html += '</div>';
-
-    // ---- DRIFT SUMMARY (recipe vs product price divergence) ----
-    if (bs.productId && editingRecipeId) {
-      var driftData = bs.drift || null;
-      // Try loading from cache if not on builderState
-      if (!driftData && window.__mastRecipeDrift && window.__mastRecipeDrift[editingRecipeId]) {
-        driftData = window.__mastRecipeDrift[editingRecipeId];
-      }
-      if (driftData) {
-        html += '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:14px 16px;margin-bottom:16px;">';
-        html += '<h4 style="font-size:0.9rem;font-weight:600;margin:0 0 8px;">Price Drift (Recipe vs Product)</h4>';
-        html += '<div style="display:flex;gap:24px;flex-wrap:wrap;">';
-        if (driftData.retail) {
-          var rd = driftData.retail;
-          var rColor = Math.abs(rd.driftPct || 0) <= 5 ? '#16a34a' : Math.abs(rd.driftPct || 0) <= 15 ? '#b45309' : '#dc2626';
-          html += '<div><span style="font-size:0.78rem;color:var(--warm-gray);">Retail:</span> <span style="font-size:0.85rem;font-family:monospace;">$' + ((rd.recipeCents || 0) / 100).toFixed(2) + ' → $' + ((rd.productCents || 0) / 100).toFixed(2) + '</span>';
-          html += ' <span style="font-size:0.78rem;font-weight:600;color:' + rColor + ';">' + (rd.driftPct > 0 ? '+' : '') + (rd.driftPct || 0).toFixed(1) + '%</span></div>';
-        }
-        if (driftData.wholesale) {
-          var wd = driftData.wholesale;
-          var wColor = Math.abs(wd.driftPct || 0) <= 5 ? '#16a34a' : Math.abs(wd.driftPct || 0) <= 15 ? '#b45309' : '#dc2626';
-          html += '<div><span style="font-size:0.78rem;color:var(--warm-gray);">Wholesale:</span> <span style="font-size:0.85rem;font-family:monospace;">$' + ((wd.recipeCents || 0) / 100).toFixed(2) + ' → $' + ((wd.productCents || 0) / 100).toFixed(2) + '</span>';
-          html += ' <span style="font-size:0.78rem;font-weight:600;color:' + wColor + ';">' + (wd.driftPct > 0 ? '+' : '') + (wd.driftPct || 0).toFixed(1) + '%</span></div>';
-        }
-        if (driftData.lastCheckedAt) {
-          html += '<div style="flex-basis:100%;font-size:0.72rem;color:var(--warm-gray);">Last checked: ' + new Date(driftData.lastCheckedAt).toLocaleString() + '</div>';
-        }
-        html += '</div></div>';
-      } else {
-        // Trigger async load
-        if (typeof loadRecipeDrift === 'function') {
-          loadRecipeDrift(editingRecipeId).then(function(drift) {
-            if (drift) renderRecipeBuilder();
-          });
-        }
-      }
-    }
-
-    // ---- Phase 2C.2: marginHistory sparkline ----
-    var history = Array.isArray(bs.marginHistory) ? bs.marginHistory : [];
-    if (history.length >= 2) {
-      var activeTierKeyForSpark = bs.activePriceTier || 'direct';
-      var spark = makerSparklineSvg(history, activeTierKeyForSpark);
-      var oldestDate = history[0].date ? new Date(history[0].date).toLocaleDateString() : '';
-      var newestDate = history[history.length - 1].date ? new Date(history[history.length - 1].date).toLocaleDateString() : '';
-      html += '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:14px 16px;margin-bottom:16px;">';
-      html += '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;">';
-      html += '<h4 style="font-size:0.9rem;font-weight:600;margin:0;">Margin history</h4>';
-      html += '<span style="font-size:0.72rem;color:var(--warm-gray);">' + history.length + ' calc' + (history.length === 1 ? '' : 's') + ' · ' + oldestDate + ' → ' + newestDate + '</span>';
-      html += '</div>';
-      html += spark;
-      html += '</div>';
-    }
-
-    // ---- VARIANT PRICING SUMMARY (cost-shape — read computed fields written by calculate_price) ----
-    if (hasProductVariants && bs.variants && existingVariantKeys.length > 0 && bs.variantsShape === 'cost') {
-      var activeTier = bs.activePriceTier || 'direct';
-      var marginKey = activeTier + 'MarginPct';
-      var minMarginV = bs.minMarginPercent;
-      // Build display list: Default first, then each per-variant override (orphans last).
-      var rows = [{ key: 'default', label: 'Default', orphan: false }];
-      productVariants.forEach(function(pv) {
-        if (existingVariantKeys.indexOf(pv.id) >= 0) {
-          rows.push({ key: pv.id, label: variantDisplayName(pv), orphan: false });
-        }
-      });
-      orphanKeys.forEach(function(ok) {
-        rows.push({ key: ok, label: '⚠ ' + ok.substring(0, 8), orphan: true });
-      });
-
-      html += '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:16px;margin-bottom:16px;">';
-      html += '<h4 style="font-size:0.9rem;font-weight:600;margin:0 0 12px;">Variant Pricing Summary</h4>';
-      html += '<p style="font-size:0.78rem;color:var(--warm-gray);margin:0 0 8px;">Computed at last Save & Recalculate. Run again after edits to refresh.</p>';
-      html += '<table style="width:100%;border-collapse:collapse;font-size:0.85rem;">';
-      html += '<thead><tr>';
-      html += '<th style="text-align:left;padding:6px 8px;font-size:0.72rem;font-weight:600;text-transform:uppercase;color:var(--warm-gray-light);border-bottom:1px solid var(--cream-dark);">Variant</th>';
-      html += '<th style="text-align:right;padding:6px 8px;font-size:0.72rem;font-weight:600;text-transform:uppercase;color:var(--warm-gray-light);border-bottom:1px solid var(--cream-dark);">Cost</th>';
-      html += '<th style="text-align:right;padding:6px 8px;font-size:0.72rem;font-weight:600;text-transform:uppercase;color:var(--warm-gray-light);border-bottom:1px solid var(--cream-dark);">Wholesale</th>';
-      html += '<th style="text-align:right;padding:6px 8px;font-size:0.72rem;font-weight:600;text-transform:uppercase;color:var(--warm-gray-light);border-bottom:1px solid var(--cream-dark);">Direct</th>';
-      html += '<th style="text-align:right;padding:6px 8px;font-size:0.72rem;font-weight:600;text-transform:uppercase;color:var(--warm-gray-light);border-bottom:1px solid var(--cream-dark);">Retail</th>';
-      html += '<th style="text-align:right;padding:6px 8px;font-size:0.72rem;font-weight:600;text-transform:uppercase;color:var(--warm-gray-light);border-bottom:1px solid var(--cream-dark);">Margin (active)</th>';
-      html += '</tr></thead><tbody>';
-      rows.forEach(function(row) {
-        var vc = (bs.variants && bs.variants[row.key]) || {};
-        var vMargin = vc[marginKey] || 0;
-        var vBelow = minMarginV != null && vMargin < minMarginV;
-        html += '<tr>';
-        html += '<td style="padding:8px;font-weight:500;border-bottom:1px solid var(--cream-dark);' + (row.orphan ? 'color:#b45309;' : '') + '">' + esc(row.label) + '</td>';
-        html += '<td style="text-align:right;padding:8px;font-family:monospace;border-bottom:1px solid var(--cream-dark);">$' + (vc.totalCost || 0).toFixed(2) + '</td>';
-        html += '<td style="text-align:right;padding:8px;font-family:monospace;border-bottom:1px solid var(--cream-dark);">$' + (vc.wholesalePrice || 0).toFixed(2) + '</td>';
-        html += '<td style="text-align:right;padding:8px;font-family:monospace;border-bottom:1px solid var(--cream-dark);">$' + (vc.directPrice || 0).toFixed(2) + '</td>';
-        html += '<td style="text-align:right;padding:8px;font-family:monospace;border-bottom:1px solid var(--cream-dark);">$' + (vc.retailPrice || 0).toFixed(2) + '</td>';
-        html += '<td style="text-align:right;padding:8px;font-family:monospace;font-weight:600;color:' + (vBelow ? 'var(--danger)' : '#16a34a') + ';border-bottom:1px solid var(--cream-dark);">' + vMargin.toFixed(1) + '%' + (vBelow ? ' ⚠' : '') + '</td>';
-        html += '</tr>';
-      });
-      html += '</tbody></table></div>';
-    }
-
-    // ---- MIN MARGIN FLOOR ----
-    html += '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:14px 16px;margin-bottom:16px;display:flex;align-items:center;gap:12px;">';
-    html += '<label style="font-size:0.85rem;font-weight:600;flex-shrink:0;">Minimum Margin Floor (%)</label>';
-    html += '<input type="number" step="1" min="0" max="100" value="' + (bs.minMarginPercent != null ? bs.minMarginPercent : '') + '" style="width:90px;padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.85rem;font-family:monospace;background:var(--cream);color:var(--charcoal);" placeholder="off" onchange="makerUpdateBuilderField(\'minMarginPercent\', this.value === \'\' ? null : parseFloat(this.value))">';
-    html += '<span style="font-size:0.78rem;color:var(--warm-gray);">Active tier margin must stay above this; leave blank to disable.</span>';
-    html += '</div>';
 
     // ---- NOTES ----
     html += '<div style="margin-bottom:16px;">';
@@ -5442,6 +5228,10 @@
         defaultSlot.otherCost = builderState.otherCost;
       }
 
+      // Snapshot the current spot prices so the next render can compare and
+      // surface a passive "spot moved" indicator. Read-only — purely
+      // informational on the next visit.
+      var spotSnap = spotPricesCurrent ? Object.assign({}, spotPricesCurrent) : null;
       var updates = {
         laborRatePerHour: builderState.laborRatePerHour || 0,
         wholesaleMarkup: builderState.wholesaleMarkup || 1,
@@ -5453,6 +5243,8 @@
         channels: Array.isArray(builderState.channels) ? builderState.channels : ['retail'],
         minMarginPercent: builderState.minMarginPercent != null ? builderState.minMarginPercent : null,
         notes: builderState.notes || '',
+        spotSnapshot: spotSnap,
+        spotSnapshotAt: new Date().toISOString(),
         // New cost-shape model
         variantsShape: 'cost',
         variants: builderState.variants || {},
@@ -5684,7 +5476,7 @@
         var unitsPerOz = explicit > 0 ? explicit : (auto || 1);
         simulatedMatCost[mid] = roundCents(shiftedSpot * (m.purity || 0) * (1 + (m.markupOverSpot || 0) / 100) / unitsPerOz);
       } else if (m) {
-        simulatedMatCost[mid] = m.replacementCost != null ? m.replacementCost : (m.unitCost || 0);
+        simulatedMatCost[mid] = m.pricingMode === 'spot-linked' && m.replacementCost != null ? m.replacementCost : (m.unitCost || 0);
       }
     });
     var results = [];
@@ -6307,6 +6099,9 @@
   window.makerSetOverrideFromBuilder = setOverrideFromBuilder;
   window.makerEffectiveTierPrice = effectiveTierPrice;
   window.makerOpenWhatIfSimulator = openWhatIfSimulator;
+  // Sync getter so the product Pricing tab can read current spot prices for
+  // its drift indicator without re-fetching.
+  window.makerGetSpotPricesCurrent = function() { return spotPricesCurrent; };
   window.makerSetCategoryFilter = function(v) { piecesCategoryFilter = v || ''; renderPiecesList(); };
   window.makerPushVariantToAll = function() {
     if (!builderState || !currentVariantId || currentVariantId === 'default') return;
