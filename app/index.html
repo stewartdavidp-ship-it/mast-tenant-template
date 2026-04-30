@@ -29499,9 +29499,12 @@ function variantCostAndPrice(product, variant, recipe) {
   }
   if (recipe) {
     if (out.cost == null && typeof recipe.totalCost === 'number') out.cost = recipe.totalCost;
-    if (out.wholesale == null && typeof recipe.wholesalePrice === 'number') out.wholesale = recipe.wholesalePrice;
-    if (out.direct == null && typeof recipe.directPrice === 'number') out.direct = recipe.directPrice;
-    if (out.retail == null && typeof recipe.retailPrice === 'number') out.retail = recipe.retailPrice;
+    // Recipe tier prices: treat 0 as "no value" (same convention as variant
+    // tier fields) so the chain falls through to product-level when the
+    // recipe is empty.
+    if (out.wholesale == null && typeof recipe.wholesalePrice === 'number' && recipe.wholesalePrice > 0) out.wholesale = recipe.wholesalePrice;
+    if (out.direct == null && typeof recipe.directPrice === 'number' && recipe.directPrice > 0) out.direct = recipe.directPrice;
+    if (out.retail == null && typeof recipe.retailPrice === 'number' && recipe.retailPrice > 0) out.retail = recipe.retailPrice;
     out.activeTier = recipe.activePriceTier || null;
   }
   // Variant-level explicit overrides. priceCents/retailPriceCents/etc. count
@@ -30239,8 +30242,7 @@ function renderVariantImageTab(product, variant) {
   var pid = product.pid || '';
   var productImages = Array.isArray(product.images) ? product.images : [];
   var resolveImg = function(img) { return (typeof img === 'string') ? img : (img && img.url) || ''; };
-  var currentImageIdx = (typeof variant.imageIndex === 'number' && variant.imageIndex >= 0 && variant.imageIndex < productImages.length)
-    ? variant.imageIndex : -1;
+
   if (productImages.length === 0) {
     return '<div style="display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;">' +
       '<div style="font-size:0.95rem;color:var(--text,#2a2a2a);">No product images yet. Upload one via Manage Images above before binding a variant image.</div>' +
@@ -30248,53 +30250,40 @@ function renderVariantImageTab(product, variant) {
     '</div>';
   }
 
-  var html = '';
-  // Large preview of the currently-selected image — the part the user
-  // actually wants to see when they come back to the tab.
-  var selectedUrl = currentImageIdx >= 0 ? resolveImg(productImages[currentImageIdx]) : '';
-  var selectedLabel = currentImageIdx >= 0
-    ? ('Image #' + (currentImageIdx + 1) + ' of ' + productImages.length)
-    : 'No image bound';
-  var selectedNote = currentImageIdx >= 0
-    ? 'The storefront will swap to this image when shoppers select this variant.'
-    : (variant._isSynthetic
-        ? 'Default uses the product hero image (Image #1) on the storefront.'
-        : 'This variant falls back to the product hero image (Image #1) on the storefront.');
-
-  html += '<div style="display:flex;gap:18px;align-items:flex-start;flex-wrap:wrap;margin-bottom:18px;">';
-  if (selectedUrl) {
-    html += '<img src="' + esc(selectedUrl) + '" alt="" style="width:200px;height:200px;object-fit:cover;border-radius:12px;border:3px solid var(--teal,#2a7c6f);display:block;flex-shrink:0;">';
-  } else {
-    html += '<div style="width:200px;height:200px;border-radius:12px;border:2px dashed var(--cream-dark,#e8e0d4);display:flex;align-items:center;justify-content:center;color:var(--text,#2a2a2a);opacity:0.6;font-size:0.92rem;flex-shrink:0;">No image bound</div>';
+  // Synthetic Default uses the product hero (images[0]). Binding doesn't
+  // apply — to change Default's image, reorder via Manage Images.
+  if (variant._isSynthetic) {
+    var heroUrl = resolveImg(productImages[0]);
+    var html = '<div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;">';
+    html += heroUrl
+      ? '<img src="' + esc(heroUrl) + '" alt="" style="width:108px;height:108px;object-fit:cover;border-radius:10px;border:3px solid var(--teal,#2a7c6f);display:block;">'
+      : '<div style="width:108px;height:108px;border-radius:10px;border:2px dashed var(--cream-dark,#e8e0d4);"></div>';
+    html += '<div style="flex:1;min-width:200px;font-size:0.95rem;color:var(--text,#2a2a2a);line-height:1.5;">' +
+      'Default uses the product hero (Image #1). To change it, reorder images via Manage Images.' +
+    '</div>';
+    html += '<button class="btn btn-secondary btn-small" onclick="toggleProductImagesPanel(\'' + esc(pid) + '\')">Manage Images ↑</button>';
+    html += '</div>';
+    return html;
   }
-  html += '<div style="flex:1;min-width:200px;">';
-  html += '<div class="pd-tier-label" style="color:var(--teal,#2a7c6f);text-transform:uppercase;font-weight:600;margin-bottom:8px;">Currently Selected</div>';
-  html += '<div style="font-size:1.05rem;font-weight:600;color:var(--text,#2a2a2a);margin-bottom:8px;">' + esc(selectedLabel) + '</div>';
-  html += '<div style="font-size:0.92rem;color:var(--text,#2a2a2a);opacity:0.85;line-height:1.5;">' + esc(selectedNote) + '</div>';
-  if (currentImageIdx >= 0) {
-    html += '<button class="btn btn-secondary btn-small" style="margin-top:12px;" onclick="bindVariantImage(\'' + esc(pid) + '\',\'' + esc(variant.id) + '\',-1)">Clear binding</button>';
-  }
-  html += '</div>';
-  html += '</div>';
 
-  // Picker grid — bigger thumbs, clearer selected state, labeled.
-  html += '<div style="font-size:0.92rem;font-weight:600;color:var(--text,#2a2a2a);margin-bottom:10px;">Pick a different image</div>';
-  html += '<div style="display:flex;gap:12px;flex-wrap:wrap;">';
+  var currentImageIdx = (typeof variant.imageIndex === 'number' && variant.imageIndex >= 0 && variant.imageIndex < productImages.length)
+    ? variant.imageIndex : -1;
+
+  // Real variant — picker grid only. Bound thumb gets a thicker teal border.
+  // Click bound thumb to clear; click another thumb to switch.
+  var html = '<div style="display:flex;gap:12px;flex-wrap:wrap;">';
   productImages.forEach(function(img, i) {
     var url = resolveImg(img);
     if (!url) return;
     var sel = i === currentImageIdx;
-    var border = sel ? '3px solid var(--teal,#2a7c6f)' : '2px solid var(--cream-dark,#e8e0d4)';
-    var checkOverlay = sel
-      ? '<div style="position:absolute;top:6px;right:6px;background:var(--teal,#2a7c6f);color:white;width:24px;height:24px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:0.85rem;font-weight:700;box-shadow:0 1px 4px rgba(0,0,0,0.3);">✓</div>'
-      : '';
-    var labelOverlay = '<div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,0.55);color:white;font-size:0.78rem;padding:3px 6px;text-align:center;font-weight:500;">#' + (i + 1) + '</div>';
-    html += '<button onclick="bindVariantImage(\'' + esc(pid) + '\',\'' + esc(variant.id) + '\',' + i + ')" ' +
-      'title="Bind Image #' + (i + 1) + ' to this variant" ' +
-      'style="position:relative;width:108px;height:108px;border-radius:10px;overflow:hidden;border:' + border + ';padding:0;cursor:pointer;background:none;transition:transform 0.1s;" ' +
+    var border = sel ? '4px solid var(--teal,#2a7c6f)' : '2px solid var(--cream-dark,#e8e0d4)';
+    var clickIdx = sel ? -1 : i;
+    var titleTxt = sel ? 'Click to clear binding' : 'Bind Image #' + (i + 1) + ' to this variant';
+    html += '<button onclick="bindVariantImage(\'' + esc(pid) + '\',\'' + esc(variant.id) + '\',' + clickIdx + ')" ' +
+      'title="' + titleTxt + '" ' +
+      'style="position:relative;width:120px;height:120px;border-radius:10px;overflow:hidden;border:' + border + ';padding:0;cursor:pointer;background:none;transition:transform 0.1s;" ' +
       'onmouseover="this.style.transform=\'scale(1.04)\'" onmouseout="this.style.transform=\'scale(1)\'">' +
       '<img src="' + esc(url) + '" alt="" style="width:100%;height:100%;object-fit:cover;display:block;">' +
-      checkOverlay + labelOverlay +
       '</button>';
   });
   html += '</div>';
@@ -30545,22 +30534,32 @@ async function bindVariantImage(pid, variantId, imageIndex) {
   var idx = canon.findIndex(function(v) { return v.id === variantId; });
   if (idx === -1) { showToast('Variant not found', true); return; }
 
+  // Synthetic Default takes its image from the product hero (images[0]).
+  // To change the hero, the user reorders product.images via Manage Images.
+  // Block image binding on the synthetic so we don't silently write to a
+  // real variant.
+  if (canon[idx]._isSynthetic) {
+    showToast('Default uses the product hero image. Reorder via Manage Images to change.', true);
+    return;
+  }
+
   var pVariants = (product.variants || []).slice();
   var newIdx = (typeof imageIndex === 'number' && imageIndex >= 0) ? imageIndex : null;
 
   if (pVariants.length === 0) {
-    // Single-variant product without a variants[] yet — materialize it.
-    pVariants = canon.map(function(v) {
-      var entry = { id: v.id, combo: v.combo || {} };
-      if (typeof product.priceCents === 'number') entry.priceCents = product.priceCents;
-      return entry;
-    });
+    // Real variant requested but no variants[] yet — shouldn't happen in
+    // practice (real variants only exist when product has options) but guard.
+    showToast('Variant has not been materialized yet — set a price first.', true);
+    return;
   }
 
-  // Find the array slot. The canon list is in the same order as product.variants[]
-  // for non-synthetic; for synthetic single-default we just use position 0.
-  var targetSlot = canon[idx]._isSynthetic ? 0 : idx;
-  if (targetSlot >= pVariants.length) targetSlot = pVariants.length - 1;
+  // canon includes the synthetic at index 0, so the real-variant slot in
+  // pVariants is "non-synthetic entries before this one in canon".
+  var targetSlot = canon.slice(0, idx).filter(function(v) { return !v._isSynthetic; }).length;
+  if (targetSlot < 0 || targetSlot >= pVariants.length) {
+    showToast('Could not locate variant slot', true);
+    return;
+  }
   pVariants[targetSlot] = Object.assign({}, pVariants[targetSlot]);
   if (newIdx == null) {
     delete pVariants[targetSlot].imageIndex;
