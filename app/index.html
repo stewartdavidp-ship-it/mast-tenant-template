@@ -24733,6 +24733,19 @@ function developCreateNewProduct() {
   }
 }
 
+function rebuildProductCategoryFilter() {
+  var sel = document.getElementById('productsCategory');
+  if (!sel || !window.CATEGORIES || !window.CATEGORIES.length) return;
+  var current = sel.value;
+  var opts = '<option value="all">All Categories</option>';
+  window.CATEGORIES.forEach(function(c) {
+    opts += '<option value="' + c + '">' + c.charAt(0).toUpperCase() + c.slice(1) + '</option>';
+  });
+  sel.innerHTML = opts;
+  if (current && window.CATEGORIES.indexOf(current) !== -1) sel.value = current;
+  else sel.value = 'all';
+}
+
 function renderProducts() {
   var cat = document.getElementById('productsCategory').value;
   // Unified product filter: 'develop' | 'catalog' | 'sell'. Sidebar entry
@@ -24828,16 +24841,19 @@ function renderProducts() {
   }
 
   // List layout (replaces card grid). One row per product: thumb + name/category + status + variants + recipe + price.
+  rebuildProductCategoryFilter();
   var allRecipes = (typeof window.makerListRecipes === 'function') ? window.makerListRecipes() : {};
-  var html = '<div class="data-table"><table style="width:100%;border-collapse:collapse;"><thead>' +
-    '<tr style="text-align:left;color:var(--warm-gray);font-size:0.78rem;">' +
-      '<th style="width:60px;padding:8px 4px;"></th>' +
-      '<th style="padding:8px;">Product</th>' +
-      '<th style="padding:8px;">Status</th>' +
-      '<th style="padding:8px;">Variants</th>' +
-      '<th style="padding:8px;">Recipe</th>' +
-      '<th style="padding:8px;text-align:right;">Price</th>' +
-      '<th style="padding:8px;text-align:right;">Inventory</th>' +
+  var html = '<div class="data-table"><table><thead>' +
+    '<tr>' +
+      '<th style="width:68px;"></th>' +
+      '<th>Product</th>' +
+      '<th>Status</th>' +
+      '<th>Variants</th>' +
+      '<th>Recipe</th>' +
+      '<th style="text-align:right;">Price</th>' +
+      '<th style="text-align:right;">Cost</th>' +
+      '<th style="text-align:right;">Margin</th>' +
+      '<th style="text-align:right;">Inventory</th>' +
     '</tr></thead><tbody>';
 
   filtered.forEach(function(p) {
@@ -24850,15 +24866,12 @@ function renderProducts() {
       : '<span style="color:var(--warm-gray-light);font-size:0.78rem;">—</span>';
 
     var priceTxt = '—';
-    if (recipe) {
-      var tier = recipe.activePriceTier || 'direct';
-      var px = recipe[tier + 'Price'] || 0;
-      if (px > 0) priceTxt = '$' + px.toFixed(2);
-    } else {
-      var displayCents = (typeof getProductDisplayPriceCents === 'function')
-        ? getProductDisplayPriceCents(p) : p.priceCents;
-      if (displayCents) priceTxt = formatPriceCents(displayCents);
-    }
+    var _synthDefault = { _isSynthetic: true, id: 'default' };
+    var _pricing = variantCostAndPrice(p, _synthDefault, recipe);
+    var _activeTier = _pricing.activeTier || (recipe && recipe.activePriceTier) || 'retail';
+    var _activePrice = _pricing[_activeTier] != null ? _pricing[_activeTier]
+      : (_pricing.retail != null ? _pricing.retail : (_pricing.direct || _pricing.wholesale));
+    if (_activePrice != null && _activePrice > 0) priceTxt = '$' + _activePrice.toFixed(2);
 
     var statusBadge = (typeof window.productStatusBadgeHtml === 'function')
       ? window.productStatusBadgeHtml(p.status)
@@ -24878,23 +24891,30 @@ function renderProducts() {
 
     var catTxt = (p.categories && p.categories.length) ? p.categories.join(', ') : '';
 
-    html += '<tr style="cursor:pointer;border-bottom:1px solid var(--cream-dark,#e8e0d4);" ' +
-      'onmouseover="this.style.background=\'rgba(0,0,0,0.02)\'" onmouseout="this.style.background=\'\'" ' +
-      'onclick="viewProduct(\'' + esc(p.pid) + '\')">';
-    html += '<td style="padding:6px 4px;">' +
+    html += '<tr style="cursor:pointer;" onclick="viewProduct(\'' + esc(p.pid) + '\')">';
+    html += '<td>' +
       (thumb
-        ? '<img src="' + esc(thumb) + '" alt="" style="width:48px;height:48px;object-fit:cover;border-radius:6px;display:block;">'
-        : '<div style="width:48px;height:48px;border-radius:6px;background:var(--cream-dark,#e8e0d4);display:flex;align-items:center;justify-content:center;font-size:1.1rem;">📦</div>') +
+        ? '<img src="' + esc(thumb) + '" alt="" style="width:56px;height:56px;object-fit:cover;border-radius:6px;display:block;">'
+        : '<div style="width:56px;height:56px;border-radius:6px;background:var(--cream-dark,#e8e0d4);display:flex;align-items:center;justify-content:center;font-size:1.2rem;">📦</div>') +
       '</td>';
-    html += '<td style="padding:8px;">' +
-      '<div style="font-weight:500;">' + esc(p.name || '') + '</div>' +
-      (catTxt ? '<div style="font-size:0.72rem;color:var(--warm-gray);">' + esc(catTxt) + '</div>' : '') +
+    html += '<td>' +
+      '<div style="font-weight:600;color:var(--text);">' + esc(p.name || '') + '</div>' +
+      (catTxt ? '<div style="font-size:0.78rem;color:var(--warm-gray);">' + esc(catTxt) + '</div>' : '') +
       '</td>';
-    html += '<td style="padding:8px;">' + statusBadge + '</td>';
-    html += '<td style="padding:8px;font-size:0.85rem;color:var(--warm-gray);">' + variantCount + '</td>';
-    html += '<td style="padding:8px;">' + recipeBadge + '</td>';
-    html += '<td style="padding:8px;text-align:right;font-family:monospace;font-size:0.85rem;">' + priceTxt + '</td>';
-    html += '<td style="padding:8px;text-align:right;">' + invTxt + '</td>';
+    html += '<td>' + statusBadge + '</td>';
+    html += '<td>' + variantCount + '</td>';
+    html += '<td>' + recipeBadge + '</td>';
+    var costTxt = (_pricing.cost != null && _pricing.cost > 0) ? '$' + _pricing.cost.toFixed(2) : '—';
+    var marginTxt = '—';
+    if (_activePrice != null && _activePrice > 0 && _pricing.cost != null && _pricing.cost > 0) {
+      var _margin = ((_activePrice - _pricing.cost) / _activePrice) * 100;
+      var _mc = _margin < 20 ? 'var(--danger,#dc2626)' : (_margin < 40 ? 'var(--amber-light,#b45309)' : 'var(--teal,#2a7c6f)');
+      marginTxt = '<span style="color:' + _mc + ';font-weight:600;">' + _margin.toFixed(0) + '%</span>';
+    }
+    html += '<td style="text-align:right;font-family:monospace;">' + priceTxt + '</td>';
+    html += '<td style="text-align:right;font-family:monospace;">' + costTxt + '</td>';
+    html += '<td style="text-align:right;">' + marginTxt + '</td>';
+    html += '<td style="text-align:right;">' + invTxt + '</td>';
     html += '</tr>';
   });
   html += '</tbody></table></div>';
