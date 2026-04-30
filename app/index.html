@@ -31590,6 +31590,130 @@ async function saveVariantPricing(pid, variantId) {
   }
 }
 
+// ── Product Stage Panel (Phase 2) ───────────────────────────────────────────
+
+function _evaluateProductReadiness(product) {
+  var draftToReady = [
+    { label: 'Name',        met: !!(product.name && product.name.trim()) },
+    { label: 'Description', met: !!(product.description && product.description.trim()) },
+    { label: 'Image',       met: !!(product.images && product.images.length > 0) },
+    { label: 'Price',       met: !!(product.priceCents > 0 || product.recipeId) },
+    { label: 'Category',    met: !!(product.categories && product.categories.length > 0) }
+  ];
+  var readyToActive = draftToReady.slice(); // same criteria — soft-warn handles review acknowledgement
+  return { draftToReady: draftToReady, readyToActive: readyToActive };
+}
+
+function _renderProductStagePanel(product) {
+  var status = product.status || 'draft';
+  var pid = product.pid;
+
+  var STAGE_STYLE = {
+    draft:    { bg: 'rgba(37,99,235,0.18)', color: '#93c5fd', label: 'Draft' },
+    ready:    { bg: 'rgba(5,150,105,0.18)', color: '#6ee7b7', label: 'Ready' },
+    active:   { bg: '#16a34a',              color: '#fff',    label: 'Active' },
+    archived: { bg: 'rgba(107,114,128,0.3)', color: '#9ca3af', label: 'Archived' }
+  };
+  var sc = STAGE_STYLE[status] || STAGE_STYLE.draft;
+
+  var stageBadge = '<span style="background:' + sc.bg + ';color:' + sc.color + ';font-size:0.72rem;font-weight:700;padding:3px 10px;border-radius:20px;letter-spacing:0.07em;text-transform:uppercase;">' + sc.label + '</span>';
+
+  var crit = _evaluateProductReadiness(product);
+  var checklistItems = (status === 'ready') ? crit.readyToActive : crit.draftToReady;
+  var incomplete = checklistItems.filter(function(c) { return !c.met; });
+
+  var html = '<div style="background:var(--charcoal,#252525);border:1px solid var(--charcoal-light,#333);border-radius:8px;padding:10px 14px;margin-bottom:14px;">';
+  // Row 1: stage label + badge + transition button
+  html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">';
+  html += '<div style="display:flex;align-items:center;gap:10px;">' +
+    '<span style="font-size:0.7rem;color:var(--warm-gray,#888);font-weight:600;letter-spacing:0.07em;text-transform:uppercase;">Stage</span>' +
+    stageBadge +
+    '</div>';
+
+  // Transition button
+  if (status === 'draft') {
+    html += '<button class="btn btn-primary btn-small" onclick="promoteProductStage(\'' + esc(pid) + '\',\'ready\')" style="font-size:0.75rem;">Promote to Ready →</button>';
+  } else if (status === 'ready') {
+    html += '<button class="btn btn-primary btn-small" onclick="promoteProductStage(\'' + esc(pid) + '\',\'active\')" style="font-size:0.75rem;background:#16a34a;border-color:#16a34a;">Publish →</button>';
+  }
+  html += '</div>';
+
+  // Row 2: checklist chips (only for draft/ready)
+  if (status === 'draft' || status === 'ready') {
+    html += '<div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:5px;">';
+    if (incomplete.length === 0) {
+      html += '<span style="font-size:0.72rem;color:#6ee7b7;">✓ All criteria met</span>';
+    } else {
+      checklistItems.forEach(function(c) {
+        var met = c.met;
+        html += '<span style="font-size:0.7rem;padding:2px 7px;border-radius:4px;' +
+          (met ? 'background:rgba(5,150,105,0.15);color:#6ee7b7;' : 'background:rgba(245,158,11,0.12);color:#fbbf24;') + '">' +
+          (met ? '✓ ' : '✗ ') + c.label + '</span>';
+      });
+    }
+    html += '</div>';
+  }
+
+  html += '</div>';
+  return html;
+}
+
+async function promoteProductStage(pid, targetStatus) {
+  var product = productsData.find(function(p) { return p.pid === pid; });
+  if (!product) return;
+
+  var crit = _evaluateProductReadiness(product);
+  var criteria = (targetStatus === 'active') ? crit.readyToActive : crit.draftToReady;
+  var incomplete = criteria.filter(function(c) { return !c.met; });
+  var targetLabel = targetStatus === 'ready' ? 'Ready' : 'Active (Published)';
+
+  if (incomplete.length > 0) {
+    var proceed = await _showStageWarnDialog(targetLabel, incomplete);
+    if (!proceed) return;
+  }
+
+  var now = new Date().toISOString();
+  var updates = { status: targetStatus, updatedAt: now };
+  if (targetStatus === 'ready')  updates.promotedToReadyAt = now;
+  if (targetStatus === 'active') updates.promotedToActiveAt = now;
+
+  try {
+    await MastDB.update('public/products/' + pid, updates);
+    // Update local cache
+    var idx = productsData.findIndex(function(p) { return p.pid === pid; });
+    if (idx !== -1) Object.assign(productsData[idx], updates);
+    showToast(targetStatus === 'ready' ? 'Promoted to Ready.' : 'Product published.');
+    renderProductDetail(pid);
+  } catch (e) {
+    showToast('Failed to promote: ' + (e.message || e), true);
+  }
+}
+
+function _showStageWarnDialog(targetLabel, incomplete) {
+  return new Promise(function(resolve) {
+    var overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center;';
+    var dialog = document.createElement('div');
+    dialog.style.cssText = 'background:var(--bg-card,#1e1e1e);border:1px solid var(--charcoal-light,#333);border-radius:10px;padding:24px;width:90%;max-width:420px;';
+    dialog.innerHTML =
+      '<h3 style="margin:0 0 10px 0;font-size:1rem;">Incomplete before promoting to ' + targetLabel + '</h3>' +
+      '<p style="font-size:0.85rem;color:var(--warm-gray,#888);margin:0 0 14px 0;">These items are not yet complete. You can proceed anyway — they\'re warnings, not hard blocks.</p>' +
+      '<ul style="margin:0 0 20px 0;padding-left:18px;font-size:0.88rem;">' +
+        incomplete.map(function(c) { return '<li style="color:var(--amber,#fbbf24);margin-bottom:5px;">' + c.label + '</li>'; }).join('') +
+      '</ul>' +
+      '<div style="display:flex;gap:10px;justify-content:flex-end;">' +
+        '<button class="btn btn-secondary" id="_stageWarnCancel">Cancel</button>' +
+        '<button class="btn btn-primary" id="_stageWarnProceed">Proceed anyway</button>' +
+      '</div>';
+    overlay.appendChild(dialog);
+    document.body.appendChild(overlay);
+    document.getElementById('_stageWarnCancel').onclick = function() { overlay.remove(); resolve(false); };
+    document.getElementById('_stageWarnProceed').onclick = function() { overlay.remove(); resolve(true); };
+  });
+}
+
+// ── End Stage Panel ──────────────────────────────────────────────────────────
+
 function renderProductDetail(pid) {
   var el = document.getElementById('productDetailView');
   var product = pid ? productsData.find(function(p) { return p.pid === pid; }) : null;
@@ -31743,6 +31867,11 @@ function renderProductDetail(pid) {
     headerHtml += '<div style="margin:0 0 14px 0;">' + lensToggleHtml + '</div>';
   }
 
+  // Stage panel — read mode only (not editing, not creating)
+  if (!isCreate && !isEditing) {
+    headerHtml += _renderProductStagePanel(product);
+  }
+
   // Core product fields next to hero. Mirrors the Edit Info form so every
   // editable product-level value is visible on the detail page. Rows render
   // only when they have a value to keep the header tidy. Noisy fields
@@ -31777,8 +31906,10 @@ function renderProductDetail(pid) {
   if (product.availability === 'discontinued') {
     headerHtml += _coreRow('Availability', '<span style="color:var(--danger,#c2410c);font-weight:600;">Discontinued</span>');
   }
-  if (product.businessLine === 'sculpture') {
-    headerHtml += _coreRow('Business Line', '<span style="display:inline-block;background:var(--teal,#2a7c6f);color:white;font-size:0.72rem;padding:3px 10px;border-radius:10px;">Sculpture</span>');
+  if (product.businessLine) {
+    var _blEntry = BUSINESS_LINES.find(function(b) { return b.id === product.businessLine; });
+    var _blLabel = _blEntry ? _blEntry.label : product.businessLine.charAt(0).toUpperCase() + product.businessLine.slice(1);
+    headerHtml += _coreRow('Business Line', '<span style="display:inline-block;background:var(--teal,#2a7c6f);color:white;font-size:0.72rem;padding:3px 10px;border-radius:10px;">' + esc(_blLabel) + '</span>');
   }
   headerHtml += '</dl>';
 
