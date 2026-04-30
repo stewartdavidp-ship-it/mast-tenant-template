@@ -24773,15 +24773,36 @@ function renderProducts() {
   if (statusFilter === 'active' || statusFilter === 'archived') statusFilter = 'catalog';
   window.productsStatusFilter = statusFilter;
 
+  // Stock filter: 'all' (default) | 'low' | 'out'. Drives the inventory pill
+  // bar that replaces the old "N products · X low · Y out of stock" banner.
+  if (!window.productsStockFilter) window.productsStockFilter = 'all';
+  var stockFilter = window.productsStockFilter;
+  function _stockBucket(p) {
+    var inv = inventory[p.pid];
+    if (!inv) return 'untracked';
+    var st = inv.stockType;
+    if (st === 'made-to-order' || st === 'build-to-order') return 'untracked';
+    var totals = (typeof getInventoryTotals === 'function') ? getInventoryTotals(inv) : null;
+    if (!totals) return 'untracked';
+    var threshold = inv.lowStockThreshold || 2;
+    if (totals.available <= 0) return 'out';
+    if (totals.available <= threshold) return 'low';
+    return 'in';
+  }
+
   var filtered = productsData.filter(function(p) {
     if (!_matchesFilter(p, statusFilter)) return false;
     if (cat !== 'all' && (!p.categories || p.categories.indexOf(cat) === -1)) return false;
+    if (stockFilter === 'low' && _stockBucket(p) !== 'low') return false;
+    if (stockFilter === 'out' && _stockBucket(p) !== 'out') return false;
     return true;
   });
 
   // Total / count
+  // productsCount text was the old "N products" header. Now redundant with
+  // the All-products pill in the inventory summary bar; clear it.
   var countEl = document.getElementById('productsCount');
-  if (countEl) countEl.textContent = filtered.length + (filtered.length === 1 ? ' product' : ' products');
+  if (countEl) countEl.textContent = '';
 
   // Three filter pills with counts. Each is a real semantic slice, not just
   // a status filter:
@@ -24885,30 +24906,48 @@ function renderProducts() {
       : '<div class="empty-state"><div class="empty-icon">&#127912;</div><p>No active products.</p></div>';
   document.getElementById('productsGrid').innerHTML = filtered.length ? html : emptyHtml;
 
-  // Inventory summary bar
+  // Inventory pill bar — replaces the old "N products · low · out of stock"
+  // banner. Pills filter the list. Counts respect the active category +
+  // status filters so the user sees what they'll actually get.
   var summaryBar = document.getElementById('inventorySummaryBar');
   if (summaryBar) {
-    var lowCount = 0;
-    var outCount = 0;
+    var allCount = 0, lowCount = 0, outCount = 0;
     productsData.forEach(function(p) {
-      var inv = inventory[p.pid];
-      var st = inv && inv.stockType;
-      if (inv && st !== 'made-to-order' && st !== 'build-to-order') {
-        var totals = getInventoryTotals(inv);
-        var threshold = inv.lowStockThreshold || 2;
-        if (totals.available <= 0) outCount++;
-        else if (totals.available <= threshold) lowCount++;
-      }
+      if (!_matchesFilter(p, statusFilter)) return;
+      if (cat !== 'all' && (!p.categories || p.categories.indexOf(cat) === -1)) return;
+      allCount++;
+      var b = _stockBucket(p);
+      if (b === 'low') lowCount++;
+      else if (b === 'out') outCount++;
     });
-    if (lowCount > 0 || outCount > 0) {
-      summaryBar.style.display = '';
-      summaryBar.innerHTML = productsData.length + ' products' +
-        (lowCount > 0 ? ' &middot; <span class="inv-warn">' + lowCount + ' low stock</span>' : '') +
-        (outCount > 0 ? ' &middot; <span class="inv-alert">' + outCount + ' out of stock</span>' : '');
-    } else {
+    // Hide entirely when there's nothing to track (no low/out across the
+    // current view) AND filter isn't already set to a stock slice.
+    var hasInventoryAlerts = lowCount > 0 || outCount > 0;
+    if (!hasInventoryAlerts && stockFilter === 'all') {
       summaryBar.style.display = 'none';
+    } else {
+      summaryBar.style.display = '';
+      function stockPill(value, label, n, alertColor) {
+        var active = stockFilter === value;
+        var bg = active ? 'rgba(42,124,111,0.15)' : 'transparent';
+        var fg = active ? 'var(--teal)' : (alertColor || 'var(--text)');
+        var bd = active ? 'var(--teal)' : 'var(--cream-dark)';
+        return '<button onclick="setProductsStockFilter(\'' + value + '\')" ' +
+          'style="padding:6px 14px;border:1px solid ' + bd + ';border-radius:16px;background:' + bg + ';color:' + fg +
+          ';font-size:0.85rem;cursor:pointer;font-weight:' + (active ? '600' : '500') + ';margin-right:6px;font-family:\'DM Sans\',sans-serif;">' +
+          label + ' <span style="opacity:0.7;font-weight:400;">(' + n + ')</span></button>';
+      }
+      summaryBar.innerHTML =
+        stockPill('all', 'All products', allCount) +
+        stockPill('low', 'Low stock',    lowCount, 'var(--amber-light)') +
+        stockPill('out', 'Out of stock', outCount, 'var(--danger)');
     }
   }
+}
+
+function setProductsStockFilter(v) {
+  window.productsStockFilter = (v === 'low' || v === 'out') ? v : 'all';
+  renderProducts();
 }
 
 // ============================================================
