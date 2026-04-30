@@ -4936,10 +4936,46 @@
     html += '<span style="font-size:0.85rem;color:var(--warm-gray);">Cost recipe</span>';
     html += '</div>';
     html += '<div style="display:flex;gap:8px;">';
+    html += '<button class="btn btn-secondary btn-small" onclick="makerOpenWhatIfSimulator()" title="Simulate metals price shifts and see how this recipe\'s cost would move">' + String.fromCharCode(0xD83D, 0xDCCA) + ' What-if</button>';
     html += '<button class="btn btn-secondary btn-small" onclick="makerDuplicateCurrentRecipe()" title="Clone this recipe as a new draft">Duplicate</button>';
     html += '<button class="btn btn-primary btn-small" onclick="makerSaveRecipeBuilder()">Save</button>';
     html += '</div>';
     html += '</div>';
+
+    // Spot-price drift indicator — passive. Compares the spot snapshot
+    // captured at last save to the current spot prices and surfaces a
+    // one-liner if any metal moved meaningfully. The maker doesn't
+    // control this; it's just context for why cost may have shifted.
+    if (bs.spotSnapshot && spotPricesCurrent) {
+      var moves = [];
+      ['gold', 'silver', 'platinum'].forEach(function(metal) {
+        var was = bs.spotSnapshot[metal];
+        var now = spotPricesCurrent[metal];
+        if (typeof was !== 'number' || typeof now !== 'number' || was <= 0) return;
+        var pct = (now - was) / was * 100;
+        if (Math.abs(pct) >= 0.5) {
+          moves.push({ metal: metal, was: was, now: now, pct: pct });
+        }
+      });
+      if (moves.length > 0) {
+        var savedAt = bs.spotSnapshotAt ? new Date(bs.spotSnapshotAt).toLocaleDateString() : 'last save';
+        html += '<div style="background:rgba(245,158,11,0.10);border:1px solid rgba(245,158,11,0.30);border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:0.88rem;color:var(--text,#2a2a2a);display:flex;align-items:center;gap:14px;flex-wrap:wrap;">';
+        html += '<span style="font-weight:600;">Spot prices moved since ' + esc(savedAt) + ':</span>';
+        moves.forEach(function(m) {
+          var dirArrow = m.pct > 0 ? '↑' : '↓';
+          var color = m.pct > 0 ? '#b45309' : '#1d4ed8';
+          html += '<span style="color:' + color + ';font-weight:600;">' +
+            dirArrow + ' ' + m.metal.charAt(0).toUpperCase() + m.metal.slice(1) +
+            ' ' + (m.pct > 0 ? '+' : '') + m.pct.toFixed(1) + '%' +
+          '</span>' +
+          '<span style="opacity:0.7;font-family:monospace;font-size:0.82rem;">' +
+            '$' + m.was.toFixed(2) + '→$' + m.now.toFixed(2) + '/oz' +
+          '</span>';
+        });
+        html += '<span style="opacity:0.7;font-size:0.82rem;flex-basis:100%;">Material costs are recomputed live; save to acknowledge.</span>';
+        html += '</div>';
+      }
+    }
 
     // ---- VARIANT TABS (cost-shape model) ----
     // Always show a Default tab. If the linked product has variants, show one tab per
@@ -5184,6 +5220,10 @@
         defaultSlot.otherCost = builderState.otherCost;
       }
 
+      // Snapshot the current spot prices so the next render can compare and
+      // surface a passive "spot moved" indicator. Read-only — purely
+      // informational on the next visit.
+      var spotSnap = spotPricesCurrent ? Object.assign({}, spotPricesCurrent) : null;
       var updates = {
         laborRatePerHour: builderState.laborRatePerHour || 0,
         wholesaleMarkup: builderState.wholesaleMarkup || 1,
@@ -5195,6 +5235,8 @@
         channels: Array.isArray(builderState.channels) ? builderState.channels : ['retail'],
         minMarginPercent: builderState.minMarginPercent != null ? builderState.minMarginPercent : null,
         notes: builderState.notes || '',
+        spotSnapshot: spotSnap,
+        spotSnapshotAt: new Date().toISOString(),
         // New cost-shape model
         variantsShape: 'cost',
         variants: builderState.variants || {},
