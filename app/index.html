@@ -29504,8 +29504,37 @@ function variantCostAndPrice(product, variant, recipe) {
     if (out.retail == null && typeof recipe.retailPrice === 'number') out.retail = recipe.retailPrice;
     out.activeTier = recipe.activePriceTier || null;
   }
-  // Final fallback for retail if variant has its own priceCents
-  if (out.retail == null && typeof variant.priceCents === 'number') out.retail = variant.priceCents / 100;
+  // Variant-level explicit overrides. priceCents/retailPriceCents/etc. count
+  // as an override only when > 0 — the legacy variant grid wrote 0 when the
+  // input was blank, so 0 here means "no override, inherit from Default".
+  if (out.retail == null && typeof variant.retailPriceCents === 'number' && variant.retailPriceCents > 0) {
+    out.retail = variant.retailPriceCents / 100;
+  }
+  if (out.retail == null && typeof variant.priceCents === 'number' && variant.priceCents > 0) {
+    out.retail = variant.priceCents / 100;
+  }
+  if (out.direct == null && typeof variant.directPriceCents === 'number' && variant.directPriceCents > 0) {
+    out.direct = variant.directPriceCents / 100;
+  }
+  if (out.wholesale == null && typeof variant.wholesalePriceCents === 'number' && variant.wholesalePriceCents > 0) {
+    out.wholesale = variant.wholesalePriceCents / 100;
+  }
+  // Final fallback: inherit from the product-level Default values. Marks each
+  // tier with an "inherited" flag so the UI can show that the displayed value
+  // came from Default rather than a variant override.
+  if (out.retail == null) {
+    if (typeof product.retailPriceCents === 'number' && product.retailPriceCents > 0) {
+      out.retail = product.retailPriceCents / 100; out.retailInherited = true;
+    } else if (typeof product.priceCents === 'number' && product.priceCents > 0) {
+      out.retail = product.priceCents / 100; out.retailInherited = true;
+    }
+  }
+  if (out.direct == null && typeof product.directPriceCents === 'number' && product.directPriceCents > 0) {
+    out.direct = product.directPriceCents / 100; out.directInherited = true;
+  }
+  if (out.wholesale == null && typeof product.wholesalePriceCents === 'number' && product.wholesalePriceCents > 0) {
+    out.wholesale = product.wholesalePriceCents / 100; out.wholesaleInherited = true;
+  }
   return out;
 }
 
@@ -30014,27 +30043,41 @@ function renderVariantInventoryTab(product, variant) {
   var html = '';
 
   if (isEditing) {
-    var mode = window.__editingVariantInventory.mode || 'set';
-    html += '<div style="display:flex;gap:0;margin-bottom:14px;">' +
-      '<button class="btn ' + (mode === 'set' ? 'btn-primary' : 'btn-secondary') + '" style="font-size:0.85rem;padding:6px 16px;border-radius:6px 0 0 6px;" onclick="setVariantInventoryMode(\'set\')">Set Count</button>' +
-      '<button class="btn ' + (mode === 'add' ? 'btn-primary' : 'btn-secondary') + '" style="font-size:0.85rem;padding:6px 16px;border-radius:0 6px 6px 0;" onclick="setVariantInventoryMode(\'add\')">Add Pieces</button>' +
+    html += '<div class="pd-tier-label" style="color:var(--text,#2a2a2a);text-transform:uppercase;font-weight:600;margin-bottom:12px;">Stock Adjustment</div>';
+    html += '<div style="display:flex;gap:24px;align-items:flex-end;flex-wrap:wrap;margin-bottom:14px;">';
+    // Current count — read-only display.
+    html += '<div>' +
+      '<div style="font-size:0.85rem;color:var(--text,#2a2a2a);font-weight:600;margin-bottom:6px;">Current</div>' +
+      '<div style="font-family:monospace;font-size:1.3rem;font-weight:600;color:var(--text,#2a2a2a);padding:8px 12px;border:1px solid var(--cream-dark,#e8e0d4);border-radius:6px;background:rgba(255,255,255,0.02);min-width:80px;text-align:center;">' + onH + '</div>' +
     '</div>';
-    var inputLabel = (mode === 'set') ? 'On Hand' : 'Pieces to Add';
-    var inputVal = (mode === 'set') ? onH : 0;
-    html += '<div style="display:flex;gap:14px;align-items:flex-end;flex-wrap:wrap;margin-bottom:14px;">';
+    // Arrow → New count input.
+    html += '<div style="font-size:1.3rem;color:var(--text,#2a2a2a);opacity:0.6;padding-bottom:10px;">→</div>';
     html += '<label style="display:flex;flex-direction:column;gap:6px;">' +
-      '<span style="font-size:0.85rem;color:var(--text,#2a2a2a);font-weight:600;">' + inputLabel + '</span>' +
-      '<input type="number" id="vi_onhand_' + esc(variant.id) + '" min="0" value="' + inputVal + '" style="width:120px;padding:8px 10px;border:1px solid var(--cream-dark,#e8e0d4);border-radius:6px;font-family:monospace;font-size:1rem;">' +
+      '<span style="font-size:0.85rem;color:var(--text,#2a2a2a);font-weight:600;">New count</span>' +
+      '<input type="number" id="vi_onhand_' + esc(variant.id) + '" min="0" value="' + onH + '" style="width:120px;padding:8px 10px;border:1px solid var(--cream-dark,#e8e0d4);border-radius:6px;font-family:monospace;font-size:1.1rem;font-weight:600;">' +
     '</label>';
     if (com > 0) {
-      html += '<div style="font-size:0.92rem;color:var(--text,#2a2a2a);"><span style="font-weight:600;">' + com + '</span> committed</div>';
+      html += '<div style="font-size:0.92rem;color:var(--text,#2a2a2a);padding-bottom:10px;"><span style="font-weight:600;">' + com + '</span> committed</div>';
     }
     html += '</div>';
-    if (mode === 'set') {
-      html += '<div style="font-size:0.85rem;color:var(--text,#2a2a2a);margin-bottom:14px;opacity:0.8;">Replaces the current On Hand count for this variant.</div>';
-    } else {
-      html += '<div style="font-size:0.85rem;color:var(--text,#2a2a2a);margin-bottom:14px;opacity:0.8;">Adds the entered amount to the existing On Hand count.</div>';
-    }
+    // Reason dropdown.
+    html += '<label style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px;max-width:300px;">' +
+      '<span style="font-size:0.85rem;color:var(--text,#2a2a2a);font-weight:600;">Adjustment reason</span>' +
+      '<select id="vi_reason_' + esc(variant.id) + '" style="padding:8px 10px;border:1px solid var(--cream-dark,#e8e0d4);border-radius:6px;font-family:\'DM Sans\',sans-serif;font-size:0.95rem;background:var(--surface-card,#fff);color:var(--text,#2a2a2a);">' +
+        '<option value="recount">Recount</option>' +
+        '<option value="production">Increase from production</option>' +
+        '<option value="received">Stock received (purchased)</option>' +
+        '<option value="damage">Damage</option>' +
+        '<option value="loss">Loss / shrinkage</option>' +
+        '<option value="sale">Manual sale</option>' +
+        '<option value="other">Other</option>' +
+      '</select>' +
+    '</label>';
+    // Optional notes.
+    html += '<label style="display:flex;flex-direction:column;gap:6px;margin-bottom:14px;">' +
+      '<span style="font-size:0.85rem;color:var(--text,#2a2a2a);font-weight:600;">Notes <span style="font-weight:400;opacity:0.7;">(optional)</span></span>' +
+      '<input type="text" id="vi_notes_' + esc(variant.id) + '" placeholder="Anything worth recording about this adjustment" style="padding:8px 10px;border:1px solid var(--cream-dark,#e8e0d4);border-radius:6px;font-family:\'DM Sans\',sans-serif;font-size:0.95rem;background:var(--surface-card,#fff);color:var(--text,#2a2a2a);">' +
+    '</label>';
     html += '<div style="display:flex;gap:8px;">';
     html += '<button class="btn btn-primary btn-small" onclick="saveVariantInventory(\'' + esc(pid) + '\',\'' + esc(variant.id) + '\')">Save</button>';
     html += '<button class="btn btn-secondary btn-small" onclick="cancelEditVariantInventory()">Cancel</button>';
@@ -30069,19 +30112,13 @@ function renderVariantInventoryTab(product, variant) {
 }
 
 function startEditVariantInventory(pid, variantId) {
-  window.__editingVariantInventory = { pid: pid, variantId: variantId, mode: 'set' };
+  window.__editingVariantInventory = { pid: pid, variantId: variantId };
   if (typeof renderProductDetail === 'function') renderProductDetail(pid);
 }
 function cancelEditVariantInventory() {
   var pid = window.__editingVariantInventory && window.__editingVariantInventory.pid;
   window.__editingVariantInventory = null;
   if (pid && typeof renderProductDetail === 'function') renderProductDetail(pid);
-}
-function setVariantInventoryMode(mode) {
-  if (!window.__editingVariantInventory) return;
-  window.__editingVariantInventory.mode = (mode === 'add') ? 'add' : 'set';
-  var pid = window.__editingVariantInventory.pid;
-  if (typeof renderProductDetail === 'function') renderProductDetail(pid);
 }
 
 async function saveVariantInventory(pid, variantId) {
@@ -30093,17 +30130,25 @@ async function saveVariantInventory(pid, variantId) {
     var variant = canon.find(function(v) { return v.id === variantId; });
     if (!variant) { showToast('Variant not found', true); return; }
     var stockKey = variant._isSynthetic ? '_default' : variant.id;
-    var mode = (window.__editingVariantInventory && window.__editingVariantInventory.mode) || 'set';
     var input = document.getElementById('vi_onhand_' + variantId);
     if (!input) { showToast('Input missing', true); return; }
-    var inputVal = parseInt(input.value, 10);
-    if (isNaN(inputVal) || inputVal < 0) inputVal = 0;
+    var newOnHand = parseInt(input.value, 10);
+    if (isNaN(newOnHand) || newOnHand < 0) newOnHand = 0;
+
+    var reasonEl = document.getElementById('vi_reason_' + variantId);
+    var reason = reasonEl ? reasonEl.value : 'recount';
+    var notesEl = document.getElementById('vi_notes_' + variantId);
+    var notes = notesEl ? (notesEl.value || '').trim() : '';
 
     var inv = inventory[pid] || {};
     var curStock = (inv && inv.stock) ? inv.stock : {};
     var curEntry = curStock[stockKey] || {};
     var curOnHand = curEntry.onHand || 0;
-    var newOnHand = (mode === 'add') ? (curOnHand + inputVal) : inputVal;
+    var delta = newOnHand - curOnHand;
+    if (delta === 0 && !notes) {
+      showToast('No change to save', true);
+      return;
+    }
     newOnHand = Math.max(0, newOnHand);
 
     // Sculpture cap — max 1 unit on hand, regardless of variant.
@@ -30142,14 +30187,22 @@ async function saveVariantInventory(pid, variantId) {
 
     await MastDB.inventory.update(pid, updates);
     await writeAudit('update', 'inventory', pid);
-    var historyAction = (mode === 'add') ? 'restocked' : 'recount';
-    var historyReason = (mode === 'add') ? 'stock_received' : 'recount';
-    var historyDetail = (mode === 'add')
-      ? 'Added ' + inputVal + ' to ' + (variant._isSynthetic ? 'default' : variantComboLabel(variant))
-      : 'Set ' + (variant._isSynthetic ? 'default' : variantComboLabel(variant)) + ' on-hand to ' + newOnHand;
+    // Map the user-selected reason to a canonical audit action so legacy
+    // history readers (which key off action) keep working.
+    var REASON_TO_ACTION = {
+      recount: 'recount', production: 'restocked', received: 'restocked',
+      damage: 'damaged', loss: 'adjusted', sale: 'sold', other: 'adjusted'
+    };
+    var historyAction = REASON_TO_ACTION[reason] || 'adjusted';
+    var variantLabel = variant._isSynthetic ? 'default' : variantComboLabel(variant);
+    var deltaTxt = (delta > 0 ? '+' : '') + delta;
+    var detailParts = [variantLabel + ': ' + curOnHand + ' → ' + newOnHand + ' (' + deltaTxt + ')'];
+    if (notes) detailParts.push(notes);
     await MastDB.push('admin/inventory/' + pid + '/history', {
-      action: historyAction, reason: historyReason, actor: 'maker', actorType: 'maker',
-      detail: historyDetail, timestamp: new Date().toISOString()
+      action: historyAction, reason: reason, actor: 'maker', actorType: 'maker',
+      detail: detailParts.join(' — '), notes: notes || null,
+      delta: delta, beforeOnHand: curOnHand, afterOnHand: newOnHand,
+      timestamp: new Date().toISOString()
     });
     emitTestingEvent('adjustStock', {});
     await syncStockInfoToPublic(pid);
