@@ -29771,25 +29771,87 @@ function renderVariantPricingTab(product, variant, recipe, pricing) {
   var hasMultipleVariants = Array.isArray(product.variants) && product.variants.length > 1;
   var html = '';
 
+  // Cost basis — single dollar number that drives everything below.
+  var costNum = (typeof pricing.cost === 'number' && pricing.cost > 0) ? pricing.cost : null;
+  var costSource = recipe ? (recipe.name || recipe.recipeId) : null;
+  function _markup(price) {
+    return (costNum != null && price != null && price > 0) ? (price / costNum) : null;
+  }
+  function _margin(price) {
+    return (price != null && price > 0) ? ((price - (costNum || 0)) / price * 100) : null;
+  }
+
+  // Top row — cost basis + Edit button (when not editing).
+  if (!isEditingPricing) {
+    html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:14px;flex-wrap:wrap;">';
+    html += '<div style="font-size:0.92rem;color:var(--text,#2a2a2a);">';
+    if (costNum != null) {
+      html += '<span style="font-weight:600;">Cost</span> <span style="font-family:monospace;font-weight:600;">$' + costNum.toFixed(2) + '</span>';
+      if (costSource) {
+        html += ' <span style="opacity:0.7;font-size:0.85rem;">from recipe ' + esc(costSource) + '</span>';
+        html += ' <button class="btn btn-secondary btn-small" style="margin-left:8px;font-size:0.78rem;padding:3px 10px;" onclick="window.makerOpenRecipeBuilder && window.makerOpenRecipeBuilder(\'' + esc(recipe.recipeId) + '\',\'' + esc(variant.id) + '\')">Open Recipe →</button>';
+      }
+    } else if (recipe) {
+      html += '<span style="opacity:0.7;">Cost not yet computed — open the recipe to set materials and labor.</span>';
+      html += ' <button class="btn btn-secondary btn-small" style="margin-left:8px;font-size:0.78rem;padding:3px 10px;" onclick="window.makerOpenRecipeBuilder && window.makerOpenRecipeBuilder(\'' + esc(recipe.recipeId) + '\',\'' + esc(variant.id) + '\')">Open Recipe →</button>';
+    } else {
+      html += '<span style="opacity:0.7;">No recipe linked. Markups can\'t be computed without a cost basis.</span>';
+    }
+    html += '</div>';
+    html += '<button class="btn btn-secondary btn-small" onclick="startEditVariantPricing(\'' + esc(pid) + '\',\'' + esc(variant.id) + '\')">Edit Pricing</button>';
+    html += '</div>';
+  }
+
+  // Cost-changed notice — fired when the recipe's totalCost has moved away
+  // from the cost basis the current prices were computed against. The
+  // baseline lives on product.pricingCostBaseline so the user can see
+  // "your prices were set when cost was $X, cost is now $Y".
+  var baseline = (typeof product.pricingCostBaseline === 'number') ? product.pricingCostBaseline : null;
+  if (!isEditingPricing && variant._isSynthetic && costNum != null && baseline != null && Math.abs(costNum - baseline) >= 0.01) {
+    var pctDelta = baseline > 0 ? ((costNum - baseline) / baseline * 100) : 0;
+    var dirArrow = costNum > baseline ? 'up' : 'down';
+    html += '<div style="background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.35);border-radius:8px;padding:12px 14px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">';
+    html += '<div style="font-size:0.92rem;color:var(--text,#2a2a2a);">' +
+      '<strong>Cost ' + dirArrow + ' ' + Math.abs(pctDelta).toFixed(1) + '%</strong>' +
+      ' since prices were last set ($' + baseline.toFixed(2) + ' &rarr; $' + costNum.toFixed(2) + '). ' +
+      'Re-derive prices from the new cost using the current markups, or accept the drift.' +
+    '</div>';
+    html += '<div style="display:flex;gap:6px;">';
+    html += '<button class="btn btn-primary btn-small" onclick="rederivePricesFromCost(\'' + esc(pid) + '\',\'' + esc(variant.id) + '\')">Re-derive prices</button>';
+    html += '<button class="btn btn-secondary btn-small" onclick="acceptCostBaseline(\'' + esc(pid) + '\',\'' + esc(variant.id) + '\')">Accept drift</button>';
+    html += '</div>';
+    html += '</div>';
+  }
+
   if (isEditingPricing) {
     function _val(v) { return (v != null) ? v.toFixed(2) : ''; }
+    function _mval(v) { return (v != null && v > 0) ? v.toFixed(2) : ''; }
+    function _editTier(key, label, price, fallbackMarkup) {
+      var markup = _markup(price);
+      var displayMarkup = markup != null ? markup : (fallbackMarkup || null);
+      return '<div style="border:1px solid var(--cream-dark,#e8e0d4);border-radius:8px;padding:12px 14px;">' +
+        '<div class="pd-tier-label" style="color:var(--text,#2a2a2a);text-transform:uppercase;font-weight:600;margin-bottom:10px;">' + label + '</div>' +
+        '<label style="display:flex;flex-direction:column;gap:4px;margin-bottom:8px;">' +
+          '<span style="font-size:0.78rem;color:var(--text,#2a2a2a);opacity:0.8;">Price ($)</span>' +
+          '<input type="text" id="vp_' + key + '_' + esc(variant.id) + '" value="' + _val(price) + '" placeholder="0.00" oninput="syncVariantPriceMarkup(\'' + key + '\',\'' + esc(variant.id) + '\',\'price\')" style="padding:7px 10px;border:1px solid var(--cream-dark,#e8e0d4);border-radius:6px;font-family:monospace;font-size:0.95rem;">' +
+        '</label>' +
+        '<label style="display:flex;flex-direction:column;gap:4px;">' +
+          '<span style="font-size:0.78rem;color:var(--text,#2a2a2a);opacity:0.8;">Markup (× cost)</span>' +
+          '<input type="text" id="vpm_' + key + '_' + esc(variant.id) + '" value="' + _mval(displayMarkup) + '" placeholder="2.50" oninput="syncVariantPriceMarkup(\'' + key + '\',\'' + esc(variant.id) + '\',\'markup\')" style="padding:7px 10px;border:1px solid var(--cream-dark,#e8e0d4);border-radius:6px;font-family:monospace;font-size:0.95rem;">' +
+        '</label>' +
+      '</div>';
+    }
+    // Stash cost on the form so syncVariantPriceMarkup can find it.
+    html += '<input type="hidden" id="vp_cost_' + esc(variant.id) + '" value="' + (costNum != null ? costNum.toFixed(4) : '') + '">';
     html += '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:12px;">';
-    html += '<label style="display:flex;flex-direction:column;gap:4px;">' +
-      '<span style="font-size:0.72rem;color:var(--warm-gray);font-weight:600;letter-spacing:0.04em;text-transform:uppercase;">Wholesale ($)</span>' +
-      '<input type="text" id="vp_wholesale_' + esc(variant.id) + '" value="' + _val(pricing.wholesale) + '" placeholder="0.00" style="padding:8px 10px;border:1px solid var(--cream-dark,#e8e0d4);border-radius:6px;font-family:monospace;font-size:0.95rem;">' +
-      '</label>';
-    html += '<label style="display:flex;flex-direction:column;gap:4px;">' +
-      '<span style="font-size:0.72rem;color:var(--warm-gray);font-weight:600;letter-spacing:0.04em;text-transform:uppercase;">Direct ($)</span>' +
-      '<input type="text" id="vp_direct_' + esc(variant.id) + '" value="' + _val(pricing.direct) + '" placeholder="0.00" style="padding:8px 10px;border:1px solid var(--cream-dark,#e8e0d4);border-radius:6px;font-family:monospace;font-size:0.95rem;">' +
-      '</label>';
-    html += '<label style="display:flex;flex-direction:column;gap:4px;">' +
-      '<span style="font-size:0.72rem;color:var(--warm-gray);font-weight:600;letter-spacing:0.04em;text-transform:uppercase;">Retail ($)</span>' +
-      '<input type="text" id="vp_retail_' + esc(variant.id) + '" value="' + _val(pricing.retail) + '" placeholder="0.00" style="padding:8px 10px;border:1px solid var(--cream-dark,#e8e0d4);border-radius:6px;font-family:monospace;font-size:0.95rem;">' +
-      '</label>';
+    html += _editTier('wholesale', 'Wholesale', pricing.wholesale, recipe ? recipe.wholesaleMarkup : null);
+    html += _editTier('direct',    'Direct',    pricing.direct,    recipe ? recipe.directMarkup    : null);
+    html += _editTier('retail',    'Retail',    pricing.retail,    recipe ? recipe.retailMarkup    : null);
     html += '</div>';
+    html += '<div style="font-size:0.82rem;color:var(--text,#2a2a2a);opacity:0.75;margin-bottom:12px;">Edit either Price or Markup; the other recomputes from cost.</div>';
     if (hasMultipleVariants) {
       html += '<div style="margin-bottom:12px;font-size:0.85rem;">';
-      html += '<span style="color:var(--warm-gray);margin-right:12px;">Apply to:</span>';
+      html += '<span style="color:var(--text,#2a2a2a);opacity:0.8;margin-right:12px;">Apply to:</span>';
       html += '<label style="margin-right:16px;cursor:pointer;"><input type="radio" name="vpScope_' + esc(variant.id) + '" value="this" checked> This variant only</label>';
       html += '<label style="cursor:pointer;"><input type="radio" name="vpScope_' + esc(variant.id) + '" value="all"> All variants</label>';
       html += '</div>';
@@ -29799,27 +29861,56 @@ function renderVariantPricingTab(product, variant, recipe, pricing) {
     html += '<button class="btn btn-secondary btn-small" onclick="cancelEditVariantPricing()">Cancel</button>';
     html += '</div>';
   } else {
-    html += '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:14px;">';
-    html += '<div></div>';
-    html += '<button class="btn btn-secondary btn-small" onclick="startEditVariantPricing(\'' + esc(pid) + '\',\'' + esc(variant.id) + '\')">Edit Pricing</button>';
-    html += '</div>';
-    function tier(label, value, isActive) {
-      var v = (value != null) ? '$' + value.toFixed(2) : '—';
+    // View mode — three tier cards with price, markup, margin, and a
+    // Set Active radio. Active tier is the price the storefront sells at.
+    var activeTier = pricing.activeTier || (recipe && recipe.activePriceTier) || null;
+    function _viewTier(key, label, price) {
+      var isActive = activeTier === key;
       var cls = isActive ? '' : 'pd-tier-card-inactive';
       var bg = isActive ? 'background:rgba(42,124,111,0.10);border:1px solid rgba(42,124,111,0.25);' : 'background:transparent;border:1px solid var(--cream-dark,#e8e0d4);';
-      var lc = isActive ? 'var(--teal,#2a7c6f)' : 'var(--warm-gray,#888)';
+      var lc = isActive ? 'var(--teal,#2a7c6f)' : 'var(--text,#2a2a2a)';
       var vc = isActive ? 'var(--teal,#2a7c6f)' : 'var(--text,#2a2a2a)';
-      var w = isActive ? '700' : '500';
-      return '<div class="' + cls + '" style="flex:1;min-width:140px;padding:14px 18px;border-radius:8px;' + bg + '">' +
-        '<div class="pd-tier-label" style="color:' + lc + ';text-transform:uppercase;font-weight:600;margin-bottom:8px;">' + label + (isActive ? ' · Active' : '') + '</div>' +
-        '<div style="font-family:monospace;font-size:1.3rem;font-weight:' + w + ';color:' + vc + ';">' + v + '</div>' +
+      var w = isActive ? '700' : '600';
+      var priceTxt = (price != null) ? '$' + price.toFixed(2) : '—';
+      var markup = _markup(price);
+      var margin = _margin(price);
+      var markupTxt = (markup != null) ? markup.toFixed(2) + '× cost' : '—';
+      var marginTxt = (margin != null) ? margin.toFixed(1) + '% margin' : '';
+      var activeBtn = isActive
+        ? '<span style="font-size:0.78rem;color:var(--teal,#2a7c6f);font-weight:600;">Active tier</span>'
+        : '<button class="btn btn-secondary btn-small" style="font-size:0.78rem;padding:3px 10px;" onclick="setActivePricingTier(\'' + esc(pid) + '\',\'' + key + '\')">Set active</button>';
+      return '<div class="' + cls + '" style="flex:1;min-width:160px;padding:14px 18px;border-radius:8px;' + bg + '">' +
+        '<div class="pd-tier-label" style="color:' + lc + ';text-transform:uppercase;font-weight:600;margin-bottom:8px;">' + label + '</div>' +
+        '<div style="font-family:monospace;font-size:1.4rem;font-weight:' + w + ';color:' + vc + ';margin-bottom:6px;">' + priceTxt + '</div>' +
+        '<div style="font-size:0.85rem;color:var(--text,#2a2a2a);margin-bottom:2px;">' + markupTxt + '</div>' +
+        (marginTxt ? '<div style="font-size:0.82rem;color:var(--text,#2a2a2a);opacity:0.75;margin-bottom:10px;">' + marginTxt + '</div>' : '<div style="margin-bottom:10px;"></div>') +
+        '<div>' + activeBtn + '</div>' +
       '</div>';
     }
     html += '<div style="display:flex;gap:10px;flex-wrap:wrap;">';
-    html += tier('Wholesale', pricing.wholesale, pricing.activeTier === 'wholesale');
-    html += tier('Direct',    pricing.direct,    pricing.activeTier === 'direct');
-    html += tier('Retail',    pricing.retail,    pricing.activeTier === 'retail');
+    html += _viewTier('wholesale', 'Wholesale', pricing.wholesale);
+    html += _viewTier('direct',    'Direct',    pricing.direct);
+    html += _viewTier('retail',    'Retail',    pricing.retail);
     html += '</div>';
+
+    // Min margin floor — visible on synthetic Default, applies to whichever
+    // tier is active. Warns when the active tier's margin drops below it.
+    if (variant._isSynthetic) {
+      var minMarginVal = (typeof product.minMarginPercent === 'number') ? product.minMarginPercent : null;
+      var activeMargin = null;
+      if (activeTier === 'wholesale') activeMargin = _margin(pricing.wholesale);
+      else if (activeTier === 'direct') activeMargin = _margin(pricing.direct);
+      else if (activeTier === 'retail') activeMargin = _margin(pricing.retail);
+      var floorViolated = (minMarginVal != null && activeMargin != null && activeMargin < minMarginVal);
+      html += '<div style="margin-top:14px;padding:12px 14px;border:1px solid var(--cream-dark,#e8e0d4);border-radius:8px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;">';
+      html += '<label style="font-size:0.88rem;color:var(--text,#2a2a2a);font-weight:600;">Minimum margin floor</label>';
+      html += '<input type="number" min="0" max="100" step="1" value="' + (minMarginVal != null ? minMarginVal : '') + '" placeholder="off" id="vp_minmargin_' + esc(pid) + '" onchange="setMinMarginFloor(\'' + esc(pid) + '\', this.value)" style="width:90px;padding:6px 10px;border:1px solid var(--cream-dark,#e8e0d4);border-radius:6px;font-family:monospace;font-size:0.9rem;">';
+      html += '<span style="font-size:0.85rem;color:var(--text,#2a2a2a);opacity:0.75;">% — active tier margin must stay above this; leave blank to disable.</span>';
+      if (floorViolated) {
+        html += '<div style="flex-basis:100%;font-size:0.88rem;color:#b45309;font-weight:600;margin-top:6px;">Active tier margin (' + activeMargin.toFixed(1) + '%) is below the floor.</div>';
+      }
+      html += '</div>';
+    }
   }
   return html;
 }
@@ -30763,6 +30854,121 @@ function cancelEditVariantPricing() {
   if (typeof selectedProductPid !== 'undefined' && selectedProductPid) renderProductDetail(selectedProductPid);
 }
 
+// Live two-way binding between Price and Markup in the variant pricing edit
+// form. When user types in either field, recompute the other given cost.
+function syncVariantPriceMarkup(tier, variantId, source) {
+  var costEl = document.getElementById('vp_cost_' + variantId);
+  var cost = costEl && costEl.value ? parseFloat(costEl.value) : null;
+  if (cost == null || !(cost > 0)) return;
+  var priceEl = document.getElementById('vp_' + tier + '_' + variantId);
+  var markupEl = document.getElementById('vpm_' + tier + '_' + variantId);
+  if (!priceEl || !markupEl) return;
+  if (source === 'price') {
+    var p = parseFloat(priceEl.value);
+    if (!isNaN(p) && p > 0) {
+      markupEl.value = (p / cost).toFixed(2);
+    }
+  } else {
+    var m = parseFloat(markupEl.value);
+    if (!isNaN(m) && m > 0) {
+      priceEl.value = (m * cost).toFixed(2);
+    }
+  }
+}
+
+// Active tier — which price the storefront sells at. Persists on the recipe
+// (recipe.activePriceTier) since it lives across the cost+pricing model.
+async function setActivePricingTier(pid, tier) {
+  if (!hasPermission('products', 'update')) { showToast('You do not have permission.', true); return; }
+  if (tier !== 'wholesale' && tier !== 'direct' && tier !== 'retail') return;
+  try {
+    var product = productsData.find(function(p) { return p.pid === pid; });
+    if (!product || !product.recipeId) {
+      showToast('Set Active needs a linked recipe', true);
+      return;
+    }
+    if (typeof window.makerUpdateRecipe === 'function') {
+      await window.makerUpdateRecipe(product.recipeId, { activePriceTier: tier, updatedAt: new Date().toISOString() });
+    } else if (MastDB.recipes && typeof MastDB.recipes.update === 'function') {
+      await MastDB.recipes.update(product.recipeId, { activePriceTier: tier, updatedAt: new Date().toISOString() });
+    }
+    showToast('Active tier set to ' + tier);
+    if (typeof renderProductDetail === 'function') renderProductDetail(pid);
+  } catch (err) {
+    showToast('Failed to set active tier: ' + (err && err.message ? err.message : err), true);
+  }
+}
+
+// Minimum margin floor — product-level setting that the active-tier margin
+// must stay above. UI shows a warning when violated.
+async function setMinMarginFloor(pid, value) {
+  if (!hasPermission('products', 'update')) { showToast('You do not have permission.', true); return; }
+  var num = (value === '' || value == null) ? null : parseFloat(value);
+  if (num != null && (isNaN(num) || num < 0 || num > 100)) {
+    showToast('Min margin must be 0-100', true); return;
+  }
+  try {
+    await MastDB.products.update(pid, { minMarginPercent: num, updatedAt: new Date().toISOString() });
+    var local = productsData.find(function(p) { return p.pid === pid; });
+    if (local) local.minMarginPercent = num;
+    if (typeof renderProductDetail === 'function') renderProductDetail(pid);
+  } catch (err) {
+    showToast('Failed to set min margin: ' + (err && err.message ? err.message : err), true);
+  }
+}
+
+// Re-derive prices from new cost using the recipe's existing markups.
+// Replaces the recipe-side Stage flow: now it lives where the prices live.
+async function rederivePricesFromCost(pid, variantId) {
+  if (!hasPermission('products', 'update')) { showToast('You do not have permission.', true); return; }
+  try {
+    var product = productsData.find(function(p) { return p.pid === pid; });
+    if (!product || !product.recipeId) return;
+    var allRecipes = (typeof window.makerListRecipes === 'function') ? window.makerListRecipes() : {};
+    var recipe = allRecipes[product.recipeId];
+    if (!recipe || typeof recipe.totalCost !== 'number' || !(recipe.totalCost > 0)) return;
+    var cost = recipe.totalCost;
+    var ws = (typeof recipe.wholesaleMarkup === 'number') ? recipe.wholesaleMarkup : null;
+    var dr = (typeof recipe.directMarkup === 'number') ? recipe.directMarkup : null;
+    var rt = (typeof recipe.retailMarkup === 'number') ? recipe.retailMarkup : null;
+    var update = { pricingCostBaseline: cost, updatedAt: new Date().toISOString() };
+    if (rt != null) {
+      var newRetail = Math.round(cost * rt * 100);
+      update.retailPriceCents = newRetail;
+      update.priceCents = newRetail;
+    }
+    if (dr != null) update.directPriceCents = Math.round(cost * dr * 100);
+    if (ws != null) update.wholesalePriceCents = Math.round(cost * ws * 100);
+    await MastDB.products.update(pid, update);
+    var local = productsData.find(function(p) { return p.pid === pid; });
+    if (local) Object.assign(local, update);
+    showToast('Prices re-derived from cost $' + cost.toFixed(2));
+    if (typeof renderProductDetail === 'function') renderProductDetail(pid);
+  } catch (err) {
+    showToast('Failed to re-derive prices: ' + (err && err.message ? err.message : err), true);
+  }
+}
+
+// Accept the current cost as the new baseline without changing prices.
+// Dismisses the "cost changed" notice.
+async function acceptCostBaseline(pid, variantId) {
+  if (!hasPermission('products', 'update')) { showToast('You do not have permission.', true); return; }
+  try {
+    var product = productsData.find(function(p) { return p.pid === pid; });
+    if (!product || !product.recipeId) return;
+    var allRecipes = (typeof window.makerListRecipes === 'function') ? window.makerListRecipes() : {};
+    var recipe = allRecipes[product.recipeId];
+    if (!recipe || typeof recipe.totalCost !== 'number') return;
+    await MastDB.products.update(pid, { pricingCostBaseline: recipe.totalCost, updatedAt: new Date().toISOString() });
+    var local = productsData.find(function(p) { return p.pid === pid; });
+    if (local) local.pricingCostBaseline = recipe.totalCost;
+    showToast('Drift accepted');
+    if (typeof renderProductDetail === 'function') renderProductDetail(pid);
+  } catch (err) {
+    showToast('Failed to accept baseline: ' + (err && err.message ? err.message : err), true);
+  }
+}
+
 async function saveVariantPricing(pid, variantId) {
   if (!hasPermission('products', 'update')) { showToast('You do not have permission to update products.', true); return; }
   function readNum(id) {
@@ -30834,6 +31040,33 @@ async function saveVariantPricing(pid, variantId) {
         if (newRetailC != null)    { update.priceCents = newRetailC; update.retailPriceCents = newRetailC; }
         if (newDirectC != null)    update.directPriceCents = newDirectC;
         if (newWholesaleC != null) update.wholesalePriceCents = newWholesaleC;
+
+        // Stamp the cost basis the prices were just set against, so the
+        // "cost changed" notice has a reference point. Reads recipe.totalCost
+        // (live cost). If no recipe, baseline stays null and the notice
+        // never fires.
+        if (recipe && typeof recipe.totalCost === 'number' && recipe.totalCost > 0) {
+          update.pricingCostBaseline = recipe.totalCost;
+        }
+
+        // Persist tier markups on the recipe so the next time the user
+        // edits Default we have a markup to suggest. Markup-only edits
+        // (where the user typed in the markup field but the price input
+        // recomputed to the same value) also flow through here because we
+        // sync price↔markup live in the form.
+        if (recipe && typeof recipe.totalCost === 'number' && recipe.totalCost > 0) {
+          var recipeUpdate = { updatedAt: now };
+          if (newRetailC != null)    recipeUpdate.retailMarkup    = (newRetailC / 100) / recipe.totalCost;
+          if (newDirectC != null)    recipeUpdate.directMarkup    = (newDirectC / 100) / recipe.totalCost;
+          if (newWholesaleC != null) recipeUpdate.wholesaleMarkup = (newWholesaleC / 100) / recipe.totalCost;
+          if (Object.keys(recipeUpdate).length > 1) {
+            if (typeof window.makerUpdateRecipe === 'function') {
+              await window.makerUpdateRecipe(recipe.recipeId, recipeUpdate);
+            } else if (MastDB.recipes && typeof MastDB.recipes.update === 'function') {
+              await MastDB.recipes.update(recipe.recipeId, recipeUpdate);
+            }
+          }
+        }
 
         // Scope 'all' on Default: explicitly broadcast to every real variant.
         if (scope === 'all' && Array.isArray(product.variants) && product.variants.length > 0) {
