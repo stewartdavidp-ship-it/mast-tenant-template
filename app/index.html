@@ -19193,41 +19193,41 @@ function _renderBucketMarkupTable(strategyType) {
   return html;
 }
 
-function onMarkupStrategyChange(strategy) {
-  if (!_pricingDefaults) return;
-  _pricingDefaults.markupStrategy = strategy;
-  MastDB.update('public/config/pricingDefaults', { markupStrategy: strategy }).then(function() {
-    showToast('Markup strategy saved.');
-    var el = document.getElementById('productSettingsContent');
-    if (el) el.innerHTML = _renderProductSettingsContent();
+function _savePricingDefaults(successMsg) {
+  // Always set (not update) so the document is created if it doesn't exist yet
+  return MastDB.set('public/config/pricingDefaults', _pricingDefaults).then(function() {
+    if (successMsg) showToast(successMsg);
   }).catch(function(e) { showToast('Failed to save: ' + (e.message || e), true); });
 }
 
+function onMarkupStrategyChange(strategy) {
+  if (!_pricingDefaults) return;
+  _pricingDefaults.markupStrategy = strategy;
+  _savePricingDefaults('Markup strategy saved.').then(function() {
+    var el = document.getElementById('productSettingsContent');
+    if (el) el.innerHTML = _renderProductSettingsContent();
+  });
+}
+
 function saveGlobalMarkupDefaults() {
-  var retail = parseFloat(document.getElementById('markup_global_retail').value) || null;
-  var direct = parseFloat(document.getElementById('markup_global_direct').value) || null;
-  var wholesale = parseFloat(document.getElementById('markup_global_wholesale').value) || null;
-  var updates = { globalRetailMarkup: retail, globalDirectMarkup: direct, globalWholesaleMarkup: wholesale };
-  Object.assign(_pricingDefaults, updates);
-  MastDB.update('public/config/pricingDefaults', updates).then(function() {
-    showToast('Global markup defaults saved.');
-  }).catch(function(e) { showToast('Failed to save: ' + (e.message || e), true); });
+  _pricingDefaults.globalRetailMarkup = parseFloat(document.getElementById('markup_global_retail').value) || null;
+  _pricingDefaults.globalDirectMarkup = parseFloat(document.getElementById('markup_global_direct').value) || null;
+  _pricingDefaults.globalWholesaleMarkup = parseFloat(document.getElementById('markup_global_wholesale').value) || null;
+  _savePricingDefaults('Global markup defaults saved.');
 }
 
 function saveBucketMarkups(strategyType) {
   var buckets = strategyType === 'business-line' ? BUSINESS_LINES : (CATEGORIES.map(function(c) { return { id: c }; }));
   var markups = {};
   buckets.forEach(function(b) {
-    var retail = parseFloat((document.getElementById('markup_' + strategyType + '_' + b.id + '_retail') || {}).value) || null;
-    var direct = parseFloat((document.getElementById('markup_' + strategyType + '_' + b.id + '_direct') || {}).value) || null;
+    var retail    = parseFloat((document.getElementById('markup_' + strategyType + '_' + b.id + '_retail')    || {}).value) || null;
+    var direct    = parseFloat((document.getElementById('markup_' + strategyType + '_' + b.id + '_direct')    || {}).value) || null;
     var wholesale = parseFloat((document.getElementById('markup_' + strategyType + '_' + b.id + '_wholesale') || {}).value) || null;
     markups[b.id] = { retail: retail, direct: direct, wholesale: wholesale };
   });
   var key = strategyType === 'business-line' ? 'businessLineMarkups' : 'categoryMarkups';
   _pricingDefaults[key] = markups;
-  MastDB.update('public/config/pricingDefaults', { [key]: markups }).then(function() {
-    showToast('Markup defaults saved.');
-  }).catch(function(e) { showToast('Failed to save: ' + (e.message || e), true); });
+  _savePricingDefaults('Markup defaults saved.');
 }
 
 // ============================================================
