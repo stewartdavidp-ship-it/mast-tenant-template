@@ -25,11 +25,11 @@ This repo is the **Mast Tenant Template** — the master source code deployed to
 
 ## Overview
 
-The Mast Tenant Template is a multi-tenant storefront deployed to Firebase Hosting with a Firebase Realtime Database backend. The public site (product catalog, gallery, checkout) uses vanilla JS with no framework. The admin app (`/app/index.html`) is a single-file React 18 app with multi-tenant auth and RBAC.
+The Mast Tenant Template is a multi-tenant storefront deployed to Firebase Hosting with a Firebase Firestore backend (post-B.5/B.7 cutover; legacy RTDB retained for lockdown only). The public site (product catalog, gallery, checkout) uses vanilla JS with no framework. The admin app (`/app/index.html`) is a single-file React 18 app with multi-tenant auth and RBAC.
 
 **Repo:** `stewartdavidp-ship-it/mast-tenant-template`
 **GCP project (platform):** `mast-platform-prod`
-**Platform RTDB:** `https://mast-platform-prod-default-rtdb.firebaseio.com`
+**Platform Firestore:** `mast-platform-prod` (Firestore database; legacy RTDB at `https://mast-platform-prod-default-rtdb.firebaseio.com` retained for lockdown only)
 **Storage:** `gs://mast-platform-prod.firebasestorage.app` (tenant assets under `{tenantId}/`)
 **Cloud Functions:** `mast-architecture/functions/` (shared platform functions)
 
@@ -41,9 +41,9 @@ There are two distinct environments. Both serve the same code from this repo but
 
 - **GCP/Firebase project:** `mast-platform-prod` (same project as production — no cross-project IAM)
 - **Hosting site:** `mast-dev-env` → `mast-dev-env.web.app`
-- **RTDB:** `https://mast-platform-prod-default-rtdb.firebaseio.com` (tenant data under `dev/` prefix)
+- **Firestore:** `mast-platform-prod` (tenant data under `tenants/dev/...` collections)
 - **Tenant ID:** `dev`
-- **Purpose:** Development and testing. Contains Shir Glassworks test data (products, gallery, config) copied to the `dev/` path in the platform RTDB. Runs the same code and tenant resolution as production tenants.
+- **Purpose:** Development and testing. Contains Shir Glassworks test data (products, gallery, config) under tenant scope `tenants/dev/...` in the platform Firestore. Runs the same code and tenant resolution as production tenants.
 - **Deploy:** `mast_hosting(action: "deploy", tenantId: "dev")` — same as any production tenant. No Firebase CLI required.
 - **Tenant resolution:** `tenantsByDomain/mast-dev-env_web_app` → `dev` → `mast-platform/tenants/dev/publicConfig`
 - **Legacy dev site:** `shir-glassworks.web.app` (`shir-glassworks` GCP project) — deprecated, kept live as backup until Shir Glassworks production cutover. Do not use for new development.
@@ -52,7 +52,7 @@ There are two distinct environments. Both serve the same code from this repo but
 
 - **GCP/Firebase project:** `mast-platform-prod`
 - **Hosting sites:** One per tenant (e.g., `mast-shirglassworks`, `mast-meadowpottery`) → `mast-{tenantId}.web.app`
-- **RTDB:** `https://mast-platform-prod-default-rtdb.firebaseio.com`
+- **Firestore:** `mast-platform-prod` (tenant data under `tenants/{tenantId}/...` collections)
 - **Storage:** `gs://mast-platform-prod.firebasestorage.app` (tenant assets under `{tenantId}/`)
 - **Purpose:** Production tenants. Contains curated production data (subset of dev data — test data excluded).
 - **Deploy:** `mast_hosting(action: "deploy", tenantId: "{tenantId}")` via MCP tool. Downloads this repo's tarball from GitHub, uploads to the tenant's Firebase Hosting site.
@@ -74,7 +74,7 @@ Deployed programmatically via the `mast_hosting` MCP tool on the Mast MCP server
 
 - **Deploy command:** `mast_hosting(action: "deploy", tenantId: "{tenantId}")`
 - **Deploy all:** `mast_hosting(action: "deploy_all")` — deploys to all active tenants
-- **Hosting config:** `mast-platform/tenants/{tenantId}/hosting` in `mast-platform-prod` RTDB
+- **Hosting config:** `platform_tenants/{tenantId}` document → `hosting` field in `mast-platform-prod` Firestore
 - **Rewrite rule:** `/app/**` → `/app/index.html` (SPA routing for admin app)
 - Each tenant has its own Firebase Hosting site (e.g., `mast-shirglassworks.web.app`, `mast-meadowpottery.web.app`)
 
@@ -102,8 +102,8 @@ Static HTML pages. No build system, no bundler.
 |------|---------|
 | `storefront.css` | Shared CSS for all public pages. `:root` vars (generic tokens: `--primary`, `--accent`, `--bg`, etc. + semantic surface tokens: `--surface-dark`, `--surface-card`, `--on-dark`, etc.), dark mode via `@media (prefers-color-scheme: dark)` + `html.dark`, reset, nav, buttons, section labels, page header, forms, footer, newsletter bar, powered-by-mast, mobile menu, scroll animations, responsive base. Legacy aliases (`--amber: var(--primary)`, etc.) for backward compat |
 | `storefront-tenant.js` | Tenant resolution from domain. Sets global `TENANT_ID`. Loaded first on all pages |
-| `storefront-theme.js` | Reads `{TENANT_ID}/public/config/theme` from RTDB (REST API). Injects CSS custom properties on `:root`. Auto-generates color variants. Supports 6 font pair presets (classic, modern, editorial, clean, artisan, geometric). Loads template manifests, applies color schemes and homepage flow. Supports `?preview_template=` for live preview without Firebase writes. Dispatches `storefront-theme-ready` event. Exposes `MAST_THEME_READY` promise |
-| `storefront-nav.js` | Reads `{TENANT_ID}/public/config/nav` from RTDB. Builds `<nav>` and mobile menu dynamically. Supports section show/hide via `enabled` flag. Reads `promoBanner` config for data-driven promo banner. Dispatches `storefront-nav-ready` event |
+| `storefront-theme.js` | Reads `tenants/{TENANT_ID}/public/config/theme` from Firestore. Injects CSS custom properties on `:root`. Auto-generates color variants. Supports 6 font pair presets (classic, modern, editorial, clean, artisan, geometric). Loads template manifests, applies color schemes and homepage flow. Supports `?preview_template=` for live preview without Firebase writes. Dispatches `storefront-theme-ready` event. Exposes `MAST_THEME_READY` promise |
+| `storefront-nav.js` | Reads `tenants/{TENANT_ID}/public/config/nav` from Firestore. Builds `<nav>` and mobile menu dynamically. Supports section show/hide via `enabled` flag. Reads `promoBanner` config for data-driven promo banner. Dispatches `storefront-nav-ready` event |
 | `tenant-brand.js` | Brand injection via `data-tenant` attributes. Reads platform registry for business name, tagline, contact info |
 | `cart.js` | Cart drawer, toast notifications, auth (Sign In/Out via Google), shared across all public pages |
 | `cart.css` | Cart drawer and toast styles (uses CSS var tokens with fallbacks) |
@@ -156,7 +156,7 @@ Tenants can choose from multiple design templates that control homepage layout, 
 
 ### How It Works
 
-1. **Template selection:** `public/config/theme/templateId` in Firebase RTDB
+1. **Template selection:** `public/config/theme/templateId` in Firebase Firestore (under `tenants/{tenantId}/...`)
 2. **Manifest loading:** `storefront-theme.js` fetches `templates/{templateId}/manifest.json` at runtime
 3. **Color scheme:** `public/config/theme/colorSchemeId` maps to a manifest color scheme. Colors applied as CSS custom properties
 4. **Homepage flow:** `applyHomepageFlow()` reorders DOM sections, hides sections not in the flow via `data-flow-hidden`, shows flow sections via `data-flow-active`
@@ -580,9 +580,9 @@ React app with a core shell (`/app/index.html`, ~17.6K lines) and 14 lazy-loaded
 ### Authentication & Tenant Resolution
 
 1. **Google Sign-In** — `firebase.auth().signInWithPopup(GoogleAuthProvider)` via the tenant's Firebase Auth (resolved by `storefront-tenant.js`)
-2. **Tenant Resolution** — `resolveTenant(uid)` reads `mast-platform/userTenantMap/{uid}` from RTDB. Returns tenant ID (e.g., `"shirglassworks"`) or `null`
-3. **Bootstrap** — If no tenant mapping exists but user has an existing admin record in tenant data, `seedPlatformRegistry()` writes the full `mast-platform/` registry (tenants, userTenantMap, platformAdmins)
-4. **MastDB Init** — `MastDB.init({ tenantId, db })` configures all data accessors to read/write under `{tenantId}/` prefix
+2. **Tenant Resolution** — `resolveTenant(uid)` reads `platform_userTenantMap/{uid}` from Firestore. Returns tenant ID (e.g., `"shirglassworks"`) or `null`
+3. **Bootstrap** — If no tenant mapping exists but user has an existing admin record in tenant data, `seedPlatformRegistry()` writes the full platform registry (`platform_tenants`, `platform_userTenantMap`, `platform_platformAdmins`)
+4. **MastDB Init** — `MastDB.init({ tenantId, db })` configures all data accessors to read/write under tenant scope (`tenants/{tenantId}/...`)
 5. **RBAC** — `loadUserRole(uid)` reads `{tenantId}/admin/users/{uid}/role`. Roles: `admin`, `user`, `guest`. Auto-provisions new users as `guest`
 6. **Access Denied** — If no tenant membership found, shows "Access Denied" screen
 
@@ -737,7 +737,7 @@ admin/lookbooks/{documentId}
 - **Calculation engine:** `calculateRecipe()` is pure math — no Firebase calls. Takes lineItems, labor, markups → returns all costs and tier prices. `calculateAllVariants()` runs it per-variant with shared markups.
 - **Variant recipes:** `isVariantEnabled` flag (default false). Up to 3 variants with independent lineItems/labor/otherCost but shared markups at recipe level. First variant's price used for `product.priceCents` propagation.
 - **Pre-seed system:** Craft profile selection triggers `seedMaterials()` — creates draft materials with category structure and default markups. `materialsSeeded` flag prevents re-seeding.
-- **lineItems as objects:** Keyed by lineItemId, not arrays — RTDB compatibility requirement.
+- **lineItems as objects:** Keyed by lineItemId, not arrays — legacy RTDB compatibility (preserved post-Firestore cutover so the data shape stays stable).
 - **CSV Import:** Client-side parsing (PapaParse for CSV, SheetJS for XLSX). 3-step wizard: upload → column mapping with auto-detection → preview & confirm. All imports land as `status: draft` with `importedFrom: 'csv'` tag. Import history logged to `admin/importLog`.
 - **Consignment math:** Commission rate is per-placement (flat %). `onHand = qty - qtySold - qtyReturned`. Bounds-checked on sale/return. Running totals recalculated on each transaction.
 - **Look book PDFs:** Server-side Puppeteer rendering via `generateLookbook` Cloud Function. Stored in Firebase Storage as public files for sharing. Two layouts: line sheet (compact table) and look book (editorial photos).
@@ -772,9 +772,9 @@ Three public-facing event pages with JS extracted to separate files:
 
 HTML files are thin shells (CSS + HTML + `<script src="...">`). JS files use the same IIFE pattern as admin modules.
 
-## Firebase RTDB — Tenant Data Model
+## Firebase Firestore — Tenant Data Model
 
-All tenant data lives under `{tenantId}/` in the tenant's RTDB (configured via `publicConfig.databaseURL`).
+All tenant data lives under `tenants/{tenantId}/...` in the platform Firestore. The DataStore / `MastDB` adapter translates legacy-style path strings (e.g. `admin/foo/bar`) to the corresponding Firestore collection paths.
 
 ### Tenant Data (under `{tenantId}/`)
 
@@ -811,20 +811,20 @@ All tenant data lives under `{tenantId}/` in the tenant's RTDB (configured via `
 | `{tenantId}/webPresence/draftTemplates/` | Admin only | Draft template manifests generated from site analysis |
 | `{tenantId}/public/config/draftTemplate` | Anonymous read | Saved draft template override (custom homepageFlow) |
 
-### Platform Registry (under `mast-platform/`)
+### Platform Registry (Firestore collections under `mast-platform-prod`)
 
-Replicated from `mast-platform-prod` RTDB for client-side auth. Rules allow users to read their own `userTenantMap/$uid` entry.
+Stored in `mast-platform-prod` Firestore for client-side auth. Rules allow users to read their own `platform_userTenantMap/{uid}` entry.
 
-| Path | Access | Purpose |
-|------|--------|---------|
-| `mast-platform/userTenantMap/{uid}` | Own UID read/write | Tenant membership per user |
-| `mast-platform/platformAdmins/{uid}` | Own UID read | Platform admin flag |
-| `mast-platform/tenants/` | Authenticated read | Tenant registry (config, subscription, status) |
-| `mast-platform/tenantsByDomain/` | Authenticated read | Domain → tenant ID lookup |
+| Collection | Access | Purpose |
+|------------|--------|---------|
+| `platform_userTenantMap/{uid}` | Own UID read/write | Tenant membership per user |
+| `platform_platformAdmins/{uid}` | Own UID read | Platform admin flag |
+| `platform_tenants/` | Authenticated read | Tenant registry (config, subscription, status) |
+| `platform_tenantsByDomain/` | Authenticated read | Domain → tenant ID lookup |
 
-### RTDB Security Rules
+### Firestore Security Rules
 
-Rules deployed from `mast-architecture/rules/platform.rules.json` (platform RTDB) or tenant-specific rules files.
+Rules deployed from `mast-architecture/rules/firestore.rules`. Legacy RTDB rules at `mast-architecture/rules/platform.rules.json` are retained only for the locked-down legacy RTDB instance.
 
 Key sections:
 - `mast-platform/` — platform registry (per-uid reads for tenant resolution)
@@ -833,7 +833,7 @@ Key sections:
 ## Key Patterns
 
 - **No framework on public pages.** Vanilla JS, IIFE pattern, Firebase compat SDK.
-- **Dynamic tenant resolution.** `storefront-tenant.js` resolves tenant from hostname → platform RTDB. `tenant-brand.js` injects brand content. No hardcoded tenant references.
+- **Dynamic tenant resolution.** `storefront-tenant.js` resolves tenant from hostname → platform Firestore. `tenant-brand.js` injects brand content. No hardcoded tenant references.
 - **SessionStorage for redirect persistence.** Cart and order data stored in sessionStorage before Square redirect, retrieved on return.
 - **Server-side is authoritative.** Client calculates shipping/tax for display; server recalculates from source data before creating payment.
 - **Graceful degradation.** Google Places, test mode banner, and shipping config all have fallback defaults if Firebase reads fail.
@@ -849,7 +849,7 @@ Job-based polling model for importing products, images, and content from a tenan
 
 1. **Analyze** — Tenant enters URL in admin. `analyzeExistingSite` Cloud Function fetches the page, calls Claude API to extract branding (business name, colors, style, hero content, contact info, social links), classifies observed homepage sections against the 11-section catalog, and builds a **crawl manifest** (platform type, content types found, pagination style, image hosting). Also generates a **draft template manifest** from section classification, extracted colors, and font suggestions — stored at `{tenantId}/webPresence/draftTemplates/{draftId}` for admin review.
 2. **Create Job** — Admin UI creates an import job at `{tenantId}/webPresence/importJobs/{jobId}` with status `pending` and the crawl manifest.
-3. **Crawl & Extract** — `processImportJob` Cloud Function (Firebase RTDB `onCreate` trigger on `{tenantId}/webPresence/importJobs/{jobId}`) fires instantly when the job is written. Crawls product listing and category pages, discovers products, extracts data, creates products in Firebase, uploads images to Storage. Runs within a single 540-second function execution — no scheduled task needed.
+3. **Crawl & Extract** — `processImportJob` Cloud Function (Firestore document-write trigger on `tenants/{tenantId}/webPresence_importJobs/{jobId}`) fires instantly when the job is written. Crawls product listing and category pages, discovers products, extracts data, creates products in Firebase, uploads images to Storage. Runs within a single 540-second function execution — no scheduled task needed.
 4. **Cherry-pick** — Admin UI shows discovered items as a checklist. Tenant can toggle individual products on/off. Excluded URLs saved to `cherryPickExclude` on the job.
 5. **Extract** — Scheduled task picks up crawled/importing jobs, fetches each product page, extracts descriptions/images, creates products via MCP (`mast_products`), uploads images to Firebase Storage, writes image hashes for dedup. Updates job to `complete`.
 6. **Review** — Admin UI shows all imported products as drafts with Publish/Delete actions.
@@ -865,7 +865,7 @@ Any state → `failed` (on error or 2h timeout auto-fail)
 |-----------|----------|---------|
 | Website module | `app/modules/website.js` | Admin UI: 6 tabs (Overview, Template, Style, Sections, Categories, Import). Import tab shows draft template banner + review modal |
 | Import MCP tool | `mast-mcp-server/src/tools/mast-import.ts` | Job CRUD: create, claim, update, complete, fail. Auto-fails stale jobs. |
-| processImportJob | `mast-architecture/functions/tenant-functions.js` | RTDB onCreate trigger — crawls site and imports products/images instantly when job is created |
+| processImportJob | `mast-architecture/functions/tenant-functions.js` | Firestore document-write trigger — crawls site and imports products/images instantly when job is created |
 | analyzeExistingSite | `mast-architecture/functions/tenant-functions.js` | Claude API analysis + crawl manifest generation |
 | notifyImportComplete | `mast-architecture/functions/tenant-functions.js` | Email notification on import completion |
 
