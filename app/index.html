@@ -29794,10 +29794,10 @@ function renderVariantPricingTab(product, variant, recipe, pricing) {
 
 function renderVariantRecipeTab(product, variant, recipe) {
   var html = '';
+  var pid = product.pid || '';
   if (!recipe) {
-    var pid = product.pid || '';
-    html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">';
-    html += '<span style="color:var(--warm-gray-light,#aaa);font-style:italic;">No recipe linked to this product yet.</span>';
+    html += '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:14px;">';
+    html += '<div style="font-size:0.95rem;color:var(--text,#2a2a2a);">No recipe linked to this product yet. A recipe drives cost and price calculations across all variants.</div>';
     html += '<div style="display:flex;gap:6px;">';
     html += '<button class="btn btn-secondary btn-small" onclick="openLinkRecipeDialog(\'' + esc(pid) + '\')">Link existing recipe…</button>';
     html += '<button class="btn btn-primary btn-small" onclick="addRecipeForProduct(\'' + esc(pid) + '\')">+ Create Recipe</button>';
@@ -29805,35 +29805,192 @@ function renderVariantRecipeTab(product, variant, recipe) {
     return html;
   }
   var override = recipe.variants && recipe.variants[variant.id];
-  var sourceTxt = override ? 'variant override' : 'inherits base recipe';
-  html += '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;">';
-  html += '<div>';
-  html += '<div style="font-size:1.05rem;font-weight:500;color:var(--text,#2a2a2a);margin-bottom:4px;">' + esc(recipe.name || recipe.recipeId) + '</div>';
-  html += '<div style="font-size:0.82rem;color:var(--warm-gray,#888);">' + sourceTxt + '</div>';
+  var sourceTxt = variant._isSynthetic
+    ? 'Base recipe — values shared with all variants unless overridden'
+    : (override ? 'Variant override active' : 'Inherits from base recipe');
+  var sourceColor = variant._isSynthetic
+    ? 'var(--text,#2a2a2a)'
+    : (override ? 'var(--teal,#2a7c6f)' : 'var(--text,#2a2a2a)');
+
+  // Header row: name + status + Open Recipe button.
+  html += '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:16px;">';
+  html += '<div style="flex:1;min-width:200px;">';
+  html += '<div style="font-size:1.1rem;font-weight:600;color:var(--text,#2a2a2a);margin-bottom:6px;">' + esc(recipe.name || recipe.recipeId) + '</div>';
+  html += '<div style="font-size:0.92rem;color:' + sourceColor + ';">' + esc(sourceTxt) + '</div>';
   if (recipe.costsDirty) {
-    html += '<div style="margin-top:10px;color:#b45309;background:rgba(245,158,11,0.12);padding:6px 12px;border-radius:8px;font-size:0.82rem;font-weight:500;display:inline-block;">⚠ recalc needed</div>';
-  }
-  if (typeof recipe.totalCost === 'number') {
-    html += '<div style="margin-top:12px;font-size:0.92rem;color:var(--text,#2a2a2a);"><span style="color:var(--warm-gray);">Total Cost</span> <span style="font-family:monospace;font-weight:600;margin-left:8px;">$' + recipe.totalCost.toFixed(2) + '</span></div>';
+    html += '<div style="margin-top:10px;color:#b45309;background:rgba(245,158,11,0.16);padding:6px 12px;border-radius:8px;font-size:0.88rem;font-weight:500;display:inline-block;">⚠ Cost recalc needed</div>';
   }
   html += '</div>';
   html += '<button class="btn btn-primary btn-small" onclick="window.makerOpenRecipeBuilder && window.makerOpenRecipeBuilder(\'' + esc(recipe.recipeId) + '\',\'' + esc(variant.id) + '\')">Open Recipe →</button>';
   html += '</div>';
+
+  // Cost breakdown grid — pulls the raw numbers the recipe carries so the
+  // user can see WHERE the cost comes from without leaving the panel.
+  var lineItemKeys = recipe.lineItems ? Object.keys(recipe.lineItems) : [];
+  var lineItemCount = lineItemKeys.length;
+  // Materials cost = totalCost - labor - other - setup, when those are known.
+  var laborMins = (override && typeof override.laborMinutes === 'number') ? override.laborMinutes
+    : (typeof recipe.laborMinutes === 'number' ? recipe.laborMinutes : null);
+  var laborRate = (typeof recipe.laborRatePerHour === 'number') ? recipe.laborRatePerHour : null;
+  var laborCost = (laborMins != null && laborRate != null) ? (laborMins / 60) * laborRate : null;
+  var otherCost = (typeof recipe.otherCost === 'number') ? recipe.otherCost : null;
+  var setupCost = (typeof recipe.setupCost === 'number') ? recipe.setupCost : null;
+  var batchSize = (typeof recipe.batchSize === 'number' && recipe.batchSize > 0) ? recipe.batchSize : null;
+  var totalCost = (typeof recipe.totalCost === 'number') ? recipe.totalCost : null;
+
+  function _stat(label, value, sub) {
+    return '<div style="flex:1;min-width:130px;padding:12px 16px;border-radius:8px;border:1px solid var(--cream-dark,#e8e0d4);background:var(--surface-card,#fff);">' +
+      '<div class="pd-tier-label" style="color:var(--text,#2a2a2a);text-transform:uppercase;font-weight:600;margin-bottom:6px;">' + label + '</div>' +
+      '<div style="font-family:monospace;font-size:1.15rem;font-weight:600;color:var(--text,#2a2a2a);">' + value + '</div>' +
+      (sub ? '<div style="font-size:0.82rem;color:var(--text,#2a2a2a);opacity:0.7;margin-top:4px;">' + sub + '</div>' : '') +
+    '</div>';
+  }
+  html += '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;">';
+  html += _stat('Total Cost', totalCost != null ? '$' + totalCost.toFixed(2) : '—',
+    batchSize && batchSize > 1 ? 'per unit · batch of ' + batchSize : null);
+  html += _stat('Materials', lineItemCount + (lineItemCount === 1 ? ' item' : ' items'),
+    lineItemCount > 0 ? 'BOM lines on recipe' : 'No materials added');
+  if (laborMins != null) {
+    html += _stat('Labor', laborMins + ' min',
+      laborCost != null ? '$' + laborCost.toFixed(2) + (laborRate ? ' @ $' + laborRate.toFixed(2) + '/hr' : '') : null);
+  }
+  if (otherCost || setupCost) {
+    var extraVal = '$' + ((otherCost || 0) + (setupCost || 0)).toFixed(2);
+    var extraSub = [];
+    if (otherCost) extraSub.push('other $' + otherCost.toFixed(2));
+    if (setupCost) extraSub.push('setup $' + setupCost.toFixed(2));
+    html += _stat('Other', extraVal, extraSub.join(' · '));
+  }
+  html += '</div>';
+
+  // Tier markups summary — shows how cost rolls up to each price tier.
+  var ws = (typeof recipe.wholesaleMarkup === 'number') ? recipe.wholesaleMarkup : null;
+  var dr = (typeof recipe.directMarkup === 'number') ? recipe.directMarkup : null;
+  var rt = (typeof recipe.retailMarkup === 'number') ? recipe.retailMarkup : null;
+  if (ws != null || dr != null || rt != null) {
+    html += '<div style="font-size:0.92rem;color:var(--text,#2a2a2a);margin-bottom:8px;font-weight:600;">Tier markups</div>';
+    html += '<div style="display:flex;gap:14px;flex-wrap:wrap;font-size:0.92rem;color:var(--text,#2a2a2a);">';
+    if (ws != null) html += '<span><span style="opacity:0.7;">Wholesale</span> <span style="font-family:monospace;font-weight:600;">' + ws.toFixed(2) + '×</span></span>';
+    if (dr != null) html += '<span><span style="opacity:0.7;">Direct</span> <span style="font-family:monospace;font-weight:600;">' + dr.toFixed(2) + '×</span></span>';
+    if (rt != null) html += '<span><span style="opacity:0.7;">Retail</span> <span style="font-family:monospace;font-weight:600;">' + rt.toFixed(2) + '×</span></span>';
+    if (recipe.activePriceTier) {
+      html += '<span style="margin-left:auto;color:var(--teal,#2a7c6f);font-weight:600;">Active tier: ' + esc(recipe.activePriceTier) + '</span>';
+    }
+    html += '</div>';
+  }
   return html;
 }
 
 function renderVariantChannelsTab(product, variant, channels) {
+  var pid = product.pid || '';
+  var bindings = (typeof getProductChannelBindings === 'function')
+    ? getProductChannelBindings(product) : [];
+  var cache = window.__mastChannelsCache || {};
   var html = '';
-  if (channels.length) {
-    html += '<div style="display:flex;gap:8px;flex-wrap:wrap;">';
-    channels.forEach(function(n) {
-      html += '<span style="background:rgba(42,124,111,0.12);color:var(--teal,#2a7c6f);padding:6px 14px;border-radius:14px;font-size:0.85rem;font-weight:500;">' + esc(n) + '</span>';
-    });
-    html += '</div>';
-  } else {
-    html += '<div style="color:var(--warm-gray-light,#aaa);font-style:italic;">Not published on any channel.</div>';
+
+  // Top row: header + actions for jumping to product channel bindings or
+  // the global channel strategy admin.
+  html += '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:14px;">';
+  html += '<div style="font-size:0.95rem;color:var(--text,#2a2a2a);max-width:520px;line-height:1.5;">' +
+    (variant._isSynthetic
+      ? 'Channels published from this product. Variants inherit unless explicitly excluded on a channel.'
+      : 'Channels this variant is published on. A binding can exclude individual variants.') +
+    '</div>';
+  html += '<div style="display:flex;gap:6px;flex-wrap:wrap;">';
+  html += '<button class="btn btn-secondary btn-small" onclick="editProduct(\'' + esc(pid) + '\')" title="Open Edit Info to set per-product channel bindings">Manage Bindings</button>';
+  html += '<button class="btn btn-secondary btn-small" onclick="navigateTo(\'channels\')" title="Open the Channels admin to configure channel strategy globally">Channel Strategy ↗</button>';
+  html += '</div>';
+  html += '</div>';
+
+  // Per-channel rows: name + status (Live / Excluded / Not bound) + per-row
+  // action (Publish / Exclude / Include this variant).
+  if (!bindings.length) {
+    html += '<div style="padding:14px 16px;border:1px dashed var(--cream-dark,#e8e0d4);border-radius:10px;font-size:0.95rem;color:var(--text,#2a2a2a);">' +
+      '<strong>Not published on any channel.</strong> Open Edit Info to bind this product to a channel, or visit Channel Strategy to add a new channel first.' +
+    '</div>';
+    return html;
   }
+
+  html += '<div style="border:1px solid var(--cream-dark,#e8e0d4);border-radius:10px;overflow:hidden;">';
+  bindings.forEach(function(b, idx) {
+    var ch = cache[b.channelId];
+    var name = (ch && (ch.name || ch.label)) || b.channelId;
+    var excluded = Array.isArray(b.excludedVariantIds) && !variant._isSynthetic
+      && b.excludedVariantIds.indexOf(variant.id) !== -1;
+    var status, statusColor, statusBg;
+    if (variant._isSynthetic) {
+      status = 'Live';
+      statusColor = 'var(--teal,#2a7c6f)';
+      statusBg = 'rgba(42,124,111,0.16)';
+    } else if (excluded) {
+      status = 'Excluded';
+      statusColor = '#b45309';
+      statusBg = 'rgba(245,158,11,0.18)';
+    } else {
+      status = 'Live';
+      statusColor = 'var(--teal,#2a7c6f)';
+      statusBg = 'rgba(42,124,111,0.16)';
+    }
+    var rowAction = '';
+    if (!variant._isSynthetic) {
+      rowAction = excluded
+        ? '<button class="btn btn-secondary btn-small" onclick="includeVariantOnChannel(\'' + esc(pid) + '\',\'' + esc(b.channelId) + '\',\'' + esc(variant.id) + '\')">Include this variant</button>'
+        : '<button class="btn btn-secondary btn-small" onclick="excludeVariantFromChannel(\'' + esc(pid) + '\',\'' + esc(b.channelId) + '\',\'' + esc(variant.id) + '\')">Exclude this variant</button>';
+    }
+    html += '<div style="display:grid;grid-template-columns:1.5fr auto auto;gap:14px;align-items:center;padding:14px 16px;' +
+      (idx < bindings.length - 1 ? 'border-bottom:1px solid var(--cream-dark,#e8e0d4);' : '') + '">' +
+      '<div style="font-size:1rem;font-weight:600;color:var(--text,#2a2a2a);">' + esc(name) + '</div>' +
+      '<span style="background:' + statusBg + ';color:' + statusColor + ';padding:4px 12px;border-radius:12px;font-size:0.85rem;font-weight:600;">' + status + '</span>' +
+      '<div style="text-align:right;">' + rowAction + '</div>' +
+    '</div>';
+  });
+  html += '</div>';
   return html;
+}
+
+async function excludeVariantFromChannel(pid, channelId, variantId) {
+  if (!hasPermission('products', 'update')) { showToast('You do not have permission to update products.', true); return; }
+  try {
+    var product = productsData.find(function(p) { return p.pid === pid; });
+    if (!product) { showToast('Product not found', true); return; }
+    var bindings = getProductChannelBindings(product).map(function(b) {
+      if (b.channelId !== channelId) return b;
+      var excl = Array.isArray(b.excludedVariantIds) ? b.excludedVariantIds.slice() : [];
+      if (excl.indexOf(variantId) === -1) excl.push(variantId);
+      return Object.assign({}, b, { excludedVariantIds: excl });
+    });
+    var channelIds = bindings.map(function(b) { return b.channelId; });
+    await MastDB.products.update(pid, { channelBindings: bindings, channelIds: channelIds, updatedAt: new Date().toISOString() });
+    var local = productsData.find(function(p) { return p.pid === pid; });
+    if (local) { local.channelBindings = bindings; local.channelIds = channelIds; }
+    showToast('Variant excluded from channel');
+    if (typeof renderProductDetail === 'function') renderProductDetail(pid);
+  } catch (err) {
+    showToast('Failed to update channel: ' + (err && err.message ? err.message : err), true);
+  }
+}
+
+async function includeVariantOnChannel(pid, channelId, variantId) {
+  if (!hasPermission('products', 'update')) { showToast('You do not have permission to update products.', true); return; }
+  try {
+    var product = productsData.find(function(p) { return p.pid === pid; });
+    if (!product) { showToast('Product not found', true); return; }
+    var bindings = getProductChannelBindings(product).map(function(b) {
+      if (b.channelId !== channelId) return b;
+      var excl = Array.isArray(b.excludedVariantIds)
+        ? b.excludedVariantIds.filter(function(id) { return id !== variantId; })
+        : [];
+      return Object.assign({}, b, { excludedVariantIds: excl });
+    });
+    var channelIds = bindings.map(function(b) { return b.channelId; });
+    await MastDB.products.update(pid, { channelBindings: bindings, channelIds: channelIds, updatedAt: new Date().toISOString() });
+    var local = productsData.find(function(p) { return p.pid === pid; });
+    if (local) { local.channelBindings = bindings; local.channelIds = channelIds; }
+    showToast('Variant included on channel');
+    if (typeof renderProductDetail === 'function') renderProductDetail(pid);
+  } catch (err) {
+    showToast('Failed to update channel: ' + (err && err.message ? err.message : err), true);
+  }
 }
 
 function renderVariantInventoryTab(product, variant) {
@@ -30032,20 +30189,59 @@ function renderVariantImageTab(product, variant) {
   var currentImageIdx = (typeof variant.imageIndex === 'number' && variant.imageIndex >= 0 && variant.imageIndex < productImages.length)
     ? variant.imageIndex : -1;
   if (productImages.length === 0) {
-    return '<div style="color:var(--warm-gray-light,#aaa);font-style:italic;">No product images yet — upload some via Manage Images above to bind a variant image.</div>';
+    return '<div style="display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;">' +
+      '<div style="font-size:0.95rem;color:var(--text,#2a2a2a);">No product images yet. Upload one via Manage Images above before binding a variant image.</div>' +
+      '<button class="btn btn-secondary btn-small" onclick="toggleProductImagesPanel(\'' + esc(pid) + '\')">Manage Images ↑</button>' +
+    '</div>';
   }
-  var html = '<div style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:12px;">Pick the image that represents this variant. The storefront will swap to it when shoppers select this variant.</div>';
-  html += '<div style="display:flex;gap:10px;flex-wrap:wrap;">';
-  var noneSel = currentImageIdx === -1;
-  html += '<button onclick="bindVariantImage(\'' + esc(pid) + '\',\'' + esc(variant.id) + '\',-1)" ' +
-    'style="width:88px;height:88px;border-radius:10px;border:2px solid ' + (noneSel ? 'var(--teal,#2a7c6f)' : 'var(--cream-dark,#e8e0d4)') + ';background:var(--cream-dark,#e8e0d4);display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--warm-gray,#888);font-size:0.78rem;font-weight:500;">none</button>';
+
+  var html = '';
+  // Large preview of the currently-selected image — the part the user
+  // actually wants to see when they come back to the tab.
+  var selectedUrl = currentImageIdx >= 0 ? resolveImg(productImages[currentImageIdx]) : '';
+  var selectedLabel = currentImageIdx >= 0
+    ? ('Image #' + (currentImageIdx + 1) + ' of ' + productImages.length)
+    : 'No image bound';
+  var selectedNote = currentImageIdx >= 0
+    ? 'The storefront will swap to this image when shoppers select this variant.'
+    : (variant._isSynthetic
+        ? 'Default uses the product hero image (Image #1) on the storefront.'
+        : 'This variant falls back to the product hero image (Image #1) on the storefront.');
+
+  html += '<div style="display:flex;gap:18px;align-items:flex-start;flex-wrap:wrap;margin-bottom:18px;">';
+  if (selectedUrl) {
+    html += '<img src="' + esc(selectedUrl) + '" alt="" style="width:200px;height:200px;object-fit:cover;border-radius:12px;border:3px solid var(--teal,#2a7c6f);display:block;flex-shrink:0;">';
+  } else {
+    html += '<div style="width:200px;height:200px;border-radius:12px;border:2px dashed var(--cream-dark,#e8e0d4);display:flex;align-items:center;justify-content:center;color:var(--text,#2a2a2a);opacity:0.6;font-size:0.92rem;flex-shrink:0;">No image bound</div>';
+  }
+  html += '<div style="flex:1;min-width:200px;">';
+  html += '<div class="pd-tier-label" style="color:var(--teal,#2a7c6f);text-transform:uppercase;font-weight:600;margin-bottom:8px;">Currently Selected</div>';
+  html += '<div style="font-size:1.05rem;font-weight:600;color:var(--text,#2a2a2a);margin-bottom:8px;">' + esc(selectedLabel) + '</div>';
+  html += '<div style="font-size:0.92rem;color:var(--text,#2a2a2a);opacity:0.85;line-height:1.5;">' + esc(selectedNote) + '</div>';
+  if (currentImageIdx >= 0) {
+    html += '<button class="btn btn-secondary btn-small" style="margin-top:12px;" onclick="bindVariantImage(\'' + esc(pid) + '\',\'' + esc(variant.id) + '\',-1)">Clear binding</button>';
+  }
+  html += '</div>';
+  html += '</div>';
+
+  // Picker grid — bigger thumbs, clearer selected state, labeled.
+  html += '<div style="font-size:0.92rem;font-weight:600;color:var(--text,#2a2a2a);margin-bottom:10px;">Pick a different image</div>';
+  html += '<div style="display:flex;gap:12px;flex-wrap:wrap;">';
   productImages.forEach(function(img, i) {
     var url = resolveImg(img);
     if (!url) return;
     var sel = i === currentImageIdx;
+    var border = sel ? '3px solid var(--teal,#2a7c6f)' : '2px solid var(--cream-dark,#e8e0d4)';
+    var checkOverlay = sel
+      ? '<div style="position:absolute;top:6px;right:6px;background:var(--teal,#2a7c6f);color:white;width:24px;height:24px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:0.85rem;font-weight:700;box-shadow:0 1px 4px rgba(0,0,0,0.3);">✓</div>'
+      : '';
+    var labelOverlay = '<div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,0.55);color:white;font-size:0.78rem;padding:3px 6px;text-align:center;font-weight:500;">#' + (i + 1) + '</div>';
     html += '<button onclick="bindVariantImage(\'' + esc(pid) + '\',\'' + esc(variant.id) + '\',' + i + ')" ' +
-      'style="width:88px;height:88px;border-radius:10px;overflow:hidden;border:2px solid ' + (sel ? 'var(--teal,#2a7c6f)' : 'var(--cream-dark,#e8e0d4)') + ';padding:0;cursor:pointer;background:none;">' +
+      'title="Bind Image #' + (i + 1) + ' to this variant" ' +
+      'style="position:relative;width:108px;height:108px;border-radius:10px;overflow:hidden;border:' + border + ';padding:0;cursor:pointer;background:none;transition:transform 0.1s;" ' +
+      'onmouseover="this.style.transform=\'scale(1.04)\'" onmouseout="this.style.transform=\'scale(1)\'">' +
       '<img src="' + esc(url) + '" alt="" style="width:100%;height:100%;object-fit:cover;display:block;">' +
+      checkOverlay + labelOverlay +
       '</button>';
   });
   html += '</div>';
