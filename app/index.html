@@ -6456,7 +6456,7 @@
         <h2>Product Catalog</h2>
         <div class="products-filter-bar">
           <input type="text" id="productsSearchInput" oninput="debouncedProductSearch()" style="display:none;">
-          <select id="productsCategory" onchange="renderProducts()">
+          <select id="productsCategory" onchange="handleProductsCategoryChange()">
             <option value="all">All Categories</option>
             <option value="figurines">Figurines</option>
             <option value="jewelry">Jewelry</option>
@@ -11724,7 +11724,11 @@ let SHOP_SECTION_IDS = ['shop'];
 async function loadTenantCategories() {
   try {
     var catData = await MastDB.get('public/config/categories');
-    if (catData && Array.isArray(catData)) {
+    // RTDB may return a plain object with numeric keys instead of an array — normalize
+    if (catData && !Array.isArray(catData) && typeof catData === 'object') {
+      catData = Object.values(catData).filter(Boolean);
+    }
+    if (catData && Array.isArray(catData) && catData.length > 0) {
       var cats = catData.filter(function(c) { return c && c.id && c.id !== 'shop' && c.label; });
       if (cats.length > 0) {
         CATEGORIES = cats.map(function(c) { return c.id; });
@@ -11737,7 +11741,7 @@ async function loadTenantCategories() {
         // Only generic "Shop" or no categories — keep default
         CATEGORIES = catData.filter(function(c) { return c && c.id && c.label; }).map(function(c) { return c.id; });
       }
-      // Populate filter dropdown now that categories are ready (renderProducts may have run first)
+      // Populate filter dropdowns now that categories are ready (render may have run first)
       if (typeof rebuildProductCategoryFilter === 'function') rebuildProductCategoryFilter();
     }
   } catch (e) {
@@ -24743,9 +24747,28 @@ function rebuildProductCategoryFilter() {
   window.CATEGORIES.forEach(function(c) {
     opts += '<option value="' + c + '">' + c.charAt(0).toUpperCase() + c.slice(1) + '</option>';
   });
+  opts += '<option value="__manage__" style="color:var(--teal,#2a7c6f);border-top:1px solid var(--charcoal-light,#333);">⚙ Manage Categories…</option>';
   sel.innerHTML = opts;
-  if (current && window.CATEGORIES.indexOf(current) !== -1) sel.value = current;
+  if (current && current !== '__manage__' && window.CATEGORIES.indexOf(current) !== -1) sel.value = current;
   else sel.value = 'all';
+}
+
+function handleProductsCategoryChange() {
+  var sel = document.getElementById('productsCategory');
+  if (!sel) return;
+  if (sel.value === '__manage__') {
+    var prev = sel.dataset.lastValue || 'all';
+    sel.value = prev;
+    if (typeof openManageCategoriesDialog === 'function') {
+      openManageCategoriesDialog(function() {
+        rebuildProductCategoryFilter();
+        renderProducts();
+      });
+    }
+    return;
+  }
+  sel.dataset.lastValue = sel.value;
+  renderProducts();
 }
 
 function renderProducts() {
@@ -26776,6 +26799,62 @@ function toggleProductAdvanced() {
   if (chevron) chevron.textContent = isHidden ? '▼' : '▶';
   if (header) header.setAttribute('aria-expanded', String(isHidden));
   sessionStorage.setItem('productAdvancedCollapsed', isHidden ? 'false' : 'true');
+}
+
+function handlePdCategoryChange(sel) {
+  if (!sel) return;
+  if (sel.value !== '__manage__') { sel.dataset.lastValue = sel.value; return; }
+  var prev = sel.dataset.lastValue || '';
+  sel.value = prev;
+  if (typeof openManageCategoriesDialog === 'function') {
+    var pid = window.selectedProductPid;
+    openManageCategoriesDialog(function() {
+      // Refresh the product detail view so the category dropdown repopulates
+      if (typeof renderProductDetail === 'function' && pid) renderProductDetail(pid);
+    });
+  }
+}
+
+function handleImgCategoryChange(sel) {
+  if (!sel) return;
+  if (sel.value !== '__manage__') { sel.dataset.lastValue = sel.value; return; }
+  var prev = sel.dataset.lastValue || '';
+  sel.value = prev;
+  if (typeof openManageCategoriesDialog === 'function') {
+    openManageCategoriesDialog(function() {
+      // Rebuild the select with updated categories
+      var s = document.getElementById('imgCategory');
+      if (!s) return;
+      var prevVal = s.dataset.lastValue || '';
+      var newOpts = (window.CATEGORIES || []).map(function(cat) {
+        return '<option value="' + cat + '">' + cat.charAt(0).toUpperCase() + cat.slice(1) + '</option>';
+      }).join('') + '<option value="__manage__" style="color:var(--teal,#2a7c6f);border-top:1px solid var(--charcoal-light,#333);">&#9881; Manage Categories…</option>';
+      s.innerHTML = newOpts;
+      s.value = (prevVal && (window.CATEGORIES || []).indexOf(prevVal) !== -1) ? prevVal : ((window.CATEGORIES || [])[0] || '');
+      s.dataset.lastValue = s.value;
+    });
+  }
+}
+
+function handleGalCategoryChange(sel) {
+  if (!sel) return;
+  if (sel.value !== '__manage__') { sel.dataset.lastValue = sel.value; return; }
+  var prev = sel.dataset.lastValue || '';
+  sel.value = prev;
+  if (typeof openManageCategoriesDialog === 'function') {
+    openManageCategoriesDialog(function() {
+      // Rebuild the select with updated categories
+      var s = document.getElementById('galCategory');
+      if (!s) return;
+      var prevVal = s.dataset.lastValue || '';
+      var newOpts = (window.CATEGORIES || []).map(function(cat) {
+        return '<option value="' + cat + '">' + cat.charAt(0).toUpperCase() + cat.slice(1) + '</option>';
+      }).join('') + '<option value="__manage__" style="color:var(--teal,#2a7c6f);border-top:1px solid var(--charcoal-light,#333);">&#9881; Manage Categories…</option>';
+      s.innerHTML = newOpts;
+      s.value = (prevVal && (window.CATEGORIES || []).indexOf(prevVal) !== -1) ? prevVal : ((window.CATEGORIES || [])[0] || '');
+      s.dataset.lastValue = s.value;
+    });
+  }
 }
 
 function editProduct(pid) {
@@ -31590,8 +31669,9 @@ function renderProductDetail(pid) {
       '<div class="form-group"><label>Description</label><textarea id="pdDescription" rows="3">' + esc(product.description || '') + '</textarea></div>' +
       '<div class="form-group"><label>Short Description</label><input type="text" id="pdShortDesc" value="' + esc(product.shortDescription || '') + '"></div>' +
       '<div style="display:flex;gap:16px;flex-wrap:wrap;">' +
-        '<div class="form-group" style="min-width:150px;"><label>Category</label><select id="pdCategory">' +
+        '<div class="form-group" style="min-width:150px;"><label>Category</label><select id="pdCategory" onchange="handlePdCategoryChange(this)">' +
           catOptions.map(function(c) { return '<option value="' + c + '"' + (product.categories && product.categories.indexOf(c) !== -1 ? ' selected' : '') + '>' + c.charAt(0).toUpperCase() + c.slice(1) + '</option>'; }).join('') +
+          '<option value="__manage__" style="color:var(--teal,#2a7c6f);">⚙ Manage Categories…</option>' +
         '</select></div>' +
         '<div class="form-group" style="min-width:120px;"><label>Availability</label><select id="pdAvailability">' +
           '<option value="available"' + (product.availability !== 'discontinued' ? ' selected' : '') + '>Available</option>' +
@@ -35028,7 +35108,7 @@ function openImageModal(imageId, defaultSection) {
   var categoryOptions = CATEGORIES.map(function(cat) {
     var selected = (img.category === cat) ? ' selected' : '';
     return '<option value="' + cat + '"' + selected + '>' + cat.charAt(0).toUpperCase() + cat.slice(1) + '</option>';
-  }).join('');
+  }).join('') + '<option value="__manage__" style="color:var(--teal,#2a7c6f);border-top:1px solid var(--charcoal-light,#333);">&#9881; Manage Categories…</option>';
 
   var isShopSection = SHOP_SECTION_IDS.indexOf(section) !== -1;
   var showCategory = (section === 'gallery' || section === 'shop');
@@ -35135,7 +35215,7 @@ function openImageModal(imageId, defaultSection) {
       // Category (gallery + shop)
       '<div class="form-group" id="imgCategoryGroup"' + (!showCategory ? ' style="display:none;"' : '') + '>' +
         '<label for="imgCategory">Category</label>' +
-        '<select id="imgCategory">' + categoryOptions + '</select>' +
+        '<select id="imgCategory" onchange="handleImgCategoryChange(this)">' + categoryOptions + '</select>' +
       '</div>' +
       // Shop: product fields
       '<div id="imgProductFields"' + (!showProductFields ? ' style="display:none;"' : '') + '>' +
@@ -36009,7 +36089,7 @@ function openGalleryMetadataModal(sectionId, imageUrl, libraryImageId, libImg) {
 
   var categoryOptions = CATEGORIES.map(function(cat) {
     return '<option value="' + cat + '">' + cat.charAt(0).toUpperCase() + cat.slice(1) + '</option>';
-  }).join('');
+  }).join('') + '<option value="__manage__" style="color:var(--teal,#2a7c6f);border-top:1px solid var(--charcoal-light,#333);">&#9881; Manage Categories…</option>';
 
   // Preview: use <video> for videos, <img> for images
   var previewHtml;
@@ -36044,7 +36124,7 @@ function openGalleryMetadataModal(sectionId, imageUrl, libraryImageId, libImg) {
         (isVideo && libImg.duration ? '<div style="background:var(--charcoal);border-radius:6px;padding:8px 12px;margin-bottom:12px;display:flex;align-items:center;gap:8px;"><span style="font-size:1.15rem;">&#9202;</span><span style="color:var(--warm-gray-light);font-size:0.85rem;">Video duration: <strong style="color:var(--amber-light);">' + libImg.duration.toFixed(1) + 's</strong></span></div>' : '') +
         '<div style="display:flex;gap:12px;"><div class="form-group" style="flex:1;"><label for="galVideoStart">Start Time (sec)</label><input type="number" id="galVideoStart" value="0" min="0" step="0.5" placeholder="0"' + (libImg.duration ? ' max="' + libImg.duration + '"' : '') + '></div><div class="form-group" style="flex:1;"><label for="galVideoEnd">End Time (sec)</label><input type="number" id="galVideoEnd" min="0" step="0.5" placeholder="End of video"' + (libImg.duration ? ' max="' + libImg.duration + '"' : '') + '></div></div>' +
         '<p style="font-size:0.78rem;color:var(--warm-gray);margin-top:-8px;margin-bottom:12px;">Leave end time empty to play to end of video</p>' : '') +
-      (showCategory ? '<div class="form-group"><label for="galCategory">Category</label><select id="galCategory">' + categoryOptions + '</select></div>' : '') +
+      (showCategory ? '<div class="form-group"><label for="galCategory">Category</label><select id="galCategory" onchange="handleGalCategoryChange(this)">' + categoryOptions + '</select></div>' : '') +
       (isShopSection ? '<div class="form-group"><label for="galProductName">Product Name</label><input type="text" id="galProductName"></div>' +
         '<div class="form-group"><label for="galProductLink">Product Link</label><input type="text" id="galProductLink"></div>' +
         '<div class="form-group"><label for="galPrice">Price</label><input type="text" id="galPrice"></div>' : '') +
