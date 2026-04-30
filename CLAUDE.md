@@ -14,16 +14,16 @@
 
 This is the **Mast Tenant Template** (formerly "Tenant 0" / shirglassworks). It is the master development repo from which all Mast tenant sites are deployed. It is NOT a production tenant — it is the source code that `mast_hosting` deploys to every tenant's Firebase Hosting site.
 
-Features: public storefront (shop, commissions, blog), admin app (Studio Companion PWA — camera-first POS, production management, inventory, QR scanning, Market tools). Firebase RTDB + Storage + Cloud Functions. Firebase Hosting (deployed via `mast_hosting` MCP tool).
+Features: public storefront (shop, commissions, blog), admin app (Studio Companion PWA — camera-first POS, production management, inventory, QR scanning, Market tools). Firebase Firestore + Storage + Cloud Functions. Firebase Hosting (deployed via `mast_hosting` MCP tool).
 
 ## How Tenants Work
 
 - Each tenant gets their own Firebase Hosting site (e.g., `mast-shirglassworks.web.app`, `mast-meadowpottery.web.app`)
 - `mast_hosting deploy` downloads this repo's tarball from GitHub and uploads it to the tenant's site
-- `storefront-tenant.js` resolves the tenant dynamically from the hostname via platform RTDB (`tenantsByDomain` → `publicConfig`)
+- `storefront-tenant.js` resolves the tenant dynamically from the hostname via platform Firestore (`tenantsByDomain` → `publicConfig`)
 - `tenant-brand.js` injects brand-specific content (name, tagline, colors, contact info) into DOM elements via `data-tenant` attributes
 - The admin app reads `TENANT_FIREBASE_CONFIG` (set by `storefront-tenant.js`) and `TENANT_CONFIG` (from platform registry) — no hardcoded tenant references
-- All tenant data lives under `{tenantId}/` paths in RTDB. `MastDB` enforces this prefix.
+- All tenant data lives under `tenants/{tenantId}/` in Firestore (legacy-style paths like `admin/...` and `public/...` translate via `MastDB` / DataStore adapter to `tenants/{tenantId}/...` collections). `MastDB` enforces tenant scope.
 
 ## RULEs — Do not violate these.
 
@@ -40,8 +40,8 @@ Features: public storefront (shop, commissions, blog), admin app (Studio Compani
 ## CONSTRAINTs — External realities. Work within these.
 
 - Firebase Hosting — deployed via `mast_hosting` MCP tool. No GitHub Pages.
-- Firebase Realtime Database is the persistence layer. All tenant data under `{tenantId}/` paths.
-- Platform registry lives in `mast-platform-prod` RTDB under `mast-platform/`.
+- Firebase Firestore is the persistence layer. All tenant data under `tenants/{tenantId}/...` (DataStore translates legacy `{tenantId}/...` path strings).
+- Platform registry lives in `mast-platform-prod` Firestore (collections prefixed `platform_*`, e.g. `platform_tenants`, `platform_userTenantMap`).
 - Cloud Functions deployed on `mast-platform-prod`. Tenant-specific secrets in GCP Secret Manager with `{secretPrefix}_` prefix.
 - RBAC is role-level only — no row-level or attribute-level data filtering.
 - This repo is the single source of truth for all tenant UI code. Tenant-specific behavior comes from data (Firebase config, brand config, feature flags), not code branches.
