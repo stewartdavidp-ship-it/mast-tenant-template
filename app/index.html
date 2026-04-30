@@ -29436,18 +29436,23 @@ async function syncProductMirrorPrice(pid) {
 // so callers can iterate uniformly.
 function getProductVariantsForRender(product) {
   if (!product) return [];
+  // Synthetic Default — always first. Holds product-level base values; real
+  // variants without their own override inherit from this. UI-only: never
+  // persisted into product.variants[].
+  var synthetic = {
+    id: 'default',
+    combo: {},
+    _isSynthetic: true,
+    priceCents: product.priceCents != null ? product.priceCents : null
+  };
   if (Array.isArray(product.variants) && product.variants.length > 0) {
-    return product.variants.map(function(v, i) {
+    var real = product.variants.map(function(v, i) {
       var id = v.id || (typeof productVariantKey === 'function' ? productVariantKey(v) : null) || ('v' + i);
       return Object.assign({ id: id, _isSynthetic: false }, v);
     });
+    return [synthetic].concat(real);
   }
-  return [{
-    id: 'default',
-    combo: {},
-    priceCents: product.priceCents != null ? product.priceCents : null,
-    _isSynthetic: true
-  }];
+  return [synthetic];
 }
 
 // Human label for a variant ("Silver / 16\"") — combo entries joined by "/"
@@ -29464,6 +29469,27 @@ function variantComboLabel(variant) {
 function variantCostAndPrice(product, variant, recipe) {
   var out = { cost: null, wholesale: null, direct: null, retail: null, activeTier: null };
   if (!variant) return out;
+  // Synthetic Default reads product-level tier prices (priceCents +
+  // retailPriceCents/directPriceCents/wholesalePriceCents). Recipe overrides
+  // keyed 'default' still apply on top.
+  if (variant._isSynthetic) {
+    if (typeof product.wholesalePriceCents === 'number') out.wholesale = product.wholesalePriceCents / 100;
+    if (typeof product.directPriceCents === 'number') out.direct = product.directPriceCents / 100;
+    if (typeof product.retailPriceCents === 'number') out.retail = product.retailPriceCents / 100;
+    else if (typeof product.priceCents === 'number') out.retail = product.priceCents / 100;
+    var dOverride = recipe && recipe.variants && recipe.variants['default'];
+    if (dOverride) {
+      if (typeof dOverride.totalCost === 'number') out.cost = dOverride.totalCost;
+      if (typeof dOverride.wholesalePrice === 'number') out.wholesale = dOverride.wholesalePrice;
+      if (typeof dOverride.directPrice === 'number') out.direct = dOverride.directPrice;
+      if (typeof dOverride.retailPrice === 'number') out.retail = dOverride.retailPrice;
+    }
+    if (recipe) {
+      if (out.cost == null && typeof recipe.totalCost === 'number') out.cost = recipe.totalCost;
+      out.activeTier = recipe.activePriceTier || null;
+    }
+    return out;
+  }
   var override = recipe && recipe.variants && recipe.variants[variant.id];
   if (override) {
     out.cost = (typeof override.totalCost === 'number') ? override.totalCost : null;
@@ -29573,10 +29599,13 @@ function renderVariantsSection(product) {
   }
   var selectedVariant = variants.find(function(v) { return v.id === selectedId; });
 
+  var realCount = variants.filter(function(v) { return !v._isSynthetic; }).length;
   var html = '<div class="pd-variant-section" style="' + _PD_STYLES.card + '">';
   html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;">';
   html += '<h3 style="' + _PD_STYLES.sectionTitle + '">Variants ' +
-    '<span style="font-family:\'DM Sans\',sans-serif;font-size:0.92rem;color:var(--warm-gray,#888);font-weight:400;margin-left:4px;">' + variants.length + '</span>' +
+    '<span style="font-family:\'DM Sans\',sans-serif;font-size:0.92rem;color:var(--warm-gray,#888);font-weight:400;margin-left:4px;">' +
+      (realCount === 0 ? 'Default only' : realCount + ' + Default') +
+    '</span>' +
     '</h3>';
   html += '<button class="btn btn-secondary btn-small" onclick="openAddVariantDialog(\'' + esc(pid) + '\')">+ Add Variant</button>';
   html += '</div>';
@@ -29646,6 +29675,17 @@ function renderVariantDetailPanel(product, variant, recipe) {
   }
 
   var html = '<div style="border:1px solid var(--cream-dark,#e8e0d4);border-radius:10px;overflow:hidden;background:var(--surface-card,#fff);">';
+  // Caption above tabs when the synthetic Default row is selected — explains
+  // that these values are the base shared by all variants.
+  if (variant && variant._isSynthetic) {
+    var hasReal = Array.isArray(product.variants) && product.variants.length > 0;
+    html += '<div style="padding:10px 18px;background:rgba(42,124,111,0.10);border-bottom:1px solid var(--cream-dark,#e8e0d4);font-size:0.92rem;color:var(--text,#2a2a2a);">' +
+      '<strong style="font-weight:600;">Default</strong> — ' +
+      (hasReal
+        ? 'base values shared with every variant. Variants without their own override inherit from here.'
+        : 'this product has no variants yet, so Default is the only row. Edits write to product-level fields.') +
+    '</div>';
+  }
   // Tab bar
   html += '<div class="pd-tab-strip" style="display:flex;border-bottom:1px solid var(--cream-dark,#e8e0d4);background:rgba(42,124,111,0.06);">';
   tabs.forEach(function(t) {
@@ -30378,34 +30418,80 @@ async function saveVariantPricing(pid, variantId) {
       }
     }
 
-    // variant.priceCents is the source of truth (Phase 2c.1). Always write to
-    // the variants[] array, materializing a default variant for products that
-    // don't have one yet.
-    if (r != null) {
-      var pVariants = (product.variants || []).slice();
+    // Pricing writeback. Two routes depending on whether the row being saved
+    // is the synthetic Default (product-level base values) or a real variant.
+    if (r != null || w != null || d != null) {
+      var newRetailC = (r != null) ? Math.round(r * 100) : null;
+      var newDirectC = (d != null) ? Math.round(d * 100) : null;
+      var newWholesaleC = (w != null) ? Math.round(w * 100) : null;
       var canon2 = getProductVariantsForRender(product);
-      var idMap = {};
-      canon2.forEach(function(v, i) { idMap[v.id] = i; });
-      var targetIds = (scope === 'all') ? canon2.map(function(v) { return v.id; }) : [variantId];
-      var newCents = Math.round(r * 100);
+      var targetVariant = canon2.find(function(v) { return v.id === variantId; });
+      var isEditingSynthetic = !!(targetVariant && targetVariant._isSynthetic);
 
-      if (pVariants.length === 0) {
-        // No variants[] yet — materialize the default and write it.
-        pVariants = canon2.map(function(v) {
-          return { id: v.id, combo: v.combo || {}, priceCents: targetIds.indexOf(v.id) >= 0 ? newCents : (product.priceCents || 0) };
-        });
+      if (isEditingSynthetic) {
+        // Default = product-level. Write product fields directly; do NOT
+        // materialize a 'default' entry into product.variants[] — the
+        // synthetic Default is UI-only.
+        var update = { updatedAt: now };
+        if (newRetailC != null)    { update.priceCents = newRetailC; update.retailPriceCents = newRetailC; }
+        if (newDirectC != null)    update.directPriceCents = newDirectC;
+        if (newWholesaleC != null) update.wholesalePriceCents = newWholesaleC;
+
+        // Scope 'all' on Default: explicitly broadcast to every real variant.
+        if (scope === 'all' && Array.isArray(product.variants) && product.variants.length > 0) {
+          update.variants = product.variants.map(function(v) {
+            var nv = Object.assign({}, v);
+            if (newRetailC != null)    { nv.priceCents = newRetailC; nv.retailPriceCents = newRetailC; }
+            if (newDirectC != null)    nv.directPriceCents = newDirectC;
+            if (newWholesaleC != null) nv.wholesalePriceCents = newWholesaleC;
+            return nv;
+          });
+        }
+
+        await MastDB.products.update(pid, update);
+        var local = productsData.find(function(p) { return p.pid === pid; });
+        if (local) Object.assign(local, update);
       } else {
-        targetIds.forEach(function(id) {
-          var i = idMap[id];
-          if (i == null || i < 0 || i >= pVariants.length) return;
-          pVariants[i] = Object.assign({}, pVariants[i], { priceCents: newCents });
-        });
+        // Real variant edit — variant.priceCents is the source of truth.
+        var pVariants = (product.variants || []).slice();
+        var idMap = {};
+        canon2.forEach(function(v, i) { idMap[v.id] = i; });
+        var targetIds = (scope === 'all')
+          ? canon2.filter(function(v) { return !v._isSynthetic; }).map(function(v) { return v.id; })
+          : [variantId];
+
+        if (pVariants.length === 0) {
+          // No real variants yet but a variant id was passed — materialize.
+          pVariants = canon2.filter(function(v) { return !v._isSynthetic; }).map(function(v) {
+            var write = targetIds.indexOf(v.id) >= 0;
+            return {
+              id: v.id, combo: v.combo || {},
+              priceCents: write && newRetailC != null ? newRetailC : (product.priceCents || 0),
+              retailPriceCents: write && newRetailC != null ? newRetailC : undefined,
+              directPriceCents: write && newDirectC != null ? newDirectC : undefined,
+              wholesalePriceCents: write && newWholesaleC != null ? newWholesaleC : undefined
+            };
+          });
+        } else {
+          targetIds.forEach(function(id) {
+            var i = idMap[id];
+            // canon2 includes the synthetic at index 0; pVariants is real-only.
+            // Compute the real-array index by counting real entries before this one.
+            var realIdx = canon2.slice(0, i).filter(function(v) { return !v._isSynthetic; }).length;
+            if (realIdx < 0 || realIdx >= pVariants.length) return;
+            var patch = {};
+            if (newRetailC != null)    { patch.priceCents = newRetailC; patch.retailPriceCents = newRetailC; }
+            if (newDirectC != null)    patch.directPriceCents = newDirectC;
+            if (newWholesaleC != null) patch.wholesalePriceCents = newWholesaleC;
+            pVariants[realIdx] = Object.assign({}, pVariants[realIdx], patch);
+          });
+        }
+        await MastDB.products.update(pid, { variants: pVariants, updatedAt: now });
+        var local2 = productsData.find(function(p) { return p.pid === pid; });
+        if (local2) local2.variants = pVariants;
+        // Mirror lowest variant price onto product.priceCents for legacy storefront readers.
+        await syncProductMirrorPrice(pid);
       }
-      await MastDB.products.update(pid, { variants: pVariants, updatedAt: now });
-      var local = productsData.find(function(p) { return p.pid === pid; });
-      if (local) local.variants = pVariants;
-      // Mirror lowest variant price onto product.priceCents for legacy storefront readers.
-      await syncProductMirrorPrice(pid);
     }
 
     showToast(scope === 'all' ? 'Prices applied to all variants' : 'Variant prices saved');
