@@ -11709,6 +11709,8 @@ function renderDashCardWithGating(cardConfig, renderFn) {
 
 // Categories and gallery sections — loaded dynamically from Firebase via loadTenantCategories()
 let CATEGORIES = [];
+// Business lines — loaded dynamically from Firebase via loadTenantBusinessLines()
+let BUSINESS_LINES = [];
 const CORE_SECTIONS = [
   { id: 'hero', label: 'Hero', description: 'Homepage banner video & poster image' },
   { id: 'about', label: 'About', description: 'About page images' },
@@ -11748,6 +11750,23 @@ async function loadTenantCategories() {
     console.warn('[categories] Failed to load tenant categories:', e.message);
   }
 }
+// Business lines — loaded dynamically from public/config/businessLines
+async function loadTenantBusinessLines() {
+  try {
+    var data = await MastDB.get('public/config/businessLines');
+    if (data && !Array.isArray(data) && typeof data === 'object') {
+      data = Object.values(data).filter(Boolean);
+    }
+    if (data && Array.isArray(data) && data.length > 0) {
+      BUSINESS_LINES = data
+        .filter(function(b) { return b && b.id && b.label; })
+        .sort(function(a, b) { return (a.order || 0) - (b.order || 0); });
+    }
+  } catch (e) {
+    console.warn('[businessLines] Failed to load tenant business lines:', e.message);
+  }
+}
+
 // GitHub image upload
 // GitHub config — resolved from TENANT_CONFIG after auth. No hardcoded fallbacks.
 function getGithubRepo() {
@@ -12719,7 +12738,7 @@ if (TEST_MODE && new URLSearchParams(window.location.search).get('testmode') ===
   var testTenantId = new URLSearchParams(window.location.search).get('tenant') || TENANT_ID;
   MastDB.init({ tenantId: testTenantId, firestore: db }); // Test mode: override with ?tenant= param
   loadTenantConfig(testTenantId).then(function() {
-    return loadTenantCategories();
+    return Promise.all([loadTenantCategories(), loadTenantBusinessLines()]);
   }).then(function() {
     return loadTenantSubscription();
   }).then(function() {
@@ -12875,6 +12894,7 @@ auth.onAuthStateChanged(async function(user) {
   var _roleResult = await Promise.all([
     loadTenantConfig(tenantId),
     loadTenantCategories(),
+    loadTenantBusinessLines(),
     loadTenantSubscription(),
     loadUserRole(user.uid)
   ]);
@@ -12884,7 +12904,7 @@ auth.onAuthStateChanged(async function(user) {
   installAutoDetection();    // Start auto error detection (non-blocking)
   // --- End Tenant Resolution ---
 
-  var role = _roleResult[3];
+  var role = _roleResult[4];
 
   if (!role) {
     // RBAC load failed — fail closed
@@ -26877,6 +26897,171 @@ function handleGalCategoryChange(sel) {
   }
 }
 
+// ── Business Lines: handler + management modal ──────────────────────────────
+
+function handlePdBusinessLineChange(sel) {
+  if (!sel) return;
+  if (sel.value !== '__manage_bl__') { sel.dataset.lastValue = sel.value; return; }
+  var prev = sel.dataset.lastValue || (BUSINESS_LINES.length > 0 ? BUSINESS_LINES[0].id : 'production');
+  sel.value = prev;
+  var pid = window.selectedProductPid;
+  openManageBusinessLinesDialog(function() {
+    if (typeof renderProductDetail === 'function' && pid) renderProductDetail(pid);
+  });
+}
+
+var _tenantBusinessLines = null;
+var _blDialogRender = null;
+
+async function _loadBusinessLinesForEdit() {
+  var data = await MastDB.get('public/config/businessLines');
+  if (data && !Array.isArray(data) && typeof data === 'object') data = Object.values(data).filter(Boolean);
+  _tenantBusinessLines = (data && Array.isArray(data))
+    ? data.filter(function(b) { return b && b.id && b.label; }).sort(function(a, b) { return (a.order || 0) - (b.order || 0); })
+    : [];
+  return _tenantBusinessLines;
+}
+
+async function _saveBusinessLines() {
+  await MastDB.set('public/config/businessLines', _tenantBusinessLines);
+  BUSINESS_LINES = _tenantBusinessLines.slice();
+}
+
+function _rerenderBlEditor() {
+  if (typeof _blDialogRender === 'function') _blDialogRender();
+}
+
+function _renderBusinessLinesEditor() {
+  var html = '';
+  // Add row
+  html += '<div style="display:flex;gap:8px;margin-bottom:16px;">' +
+    '<input type="text" id="blNewLabel" placeholder="New business line name (e.g. Sculpture)" ' +
+      'style="flex:1;padding:8px 10px;background:var(--charcoal,#252525);border:1px solid var(--charcoal-light,#333);border-radius:6px;color:var(--text-primary,#fff);font-size:0.875rem;" ' +
+      'onkeydown="if(event.key===\'Enter\')blAdd();">' +
+    '<button class="btn btn-primary btn-small" onclick="blAdd()">Add</button>' +
+    '</div>';
+  if (!_tenantBusinessLines || _tenantBusinessLines.length === 0) {
+    html += '<p style="color:var(--warm-gray);font-size:0.85rem;text-align:center;padding:16px 0;">No business lines configured. Add one above.</p>';
+  } else {
+    _tenantBusinessLines.forEach(function(bl, idx) {
+      html += '<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--charcoal-light,#333);">';
+      // Display / edit areas
+      html += '<div style="flex:1;">' +
+        '<div id="blDisplayRow_' + bl.id + '">' +
+          '<span style="font-size:0.9rem;">' + bl.label + '</span>' +
+          '<span style="font-size:0.72rem;color:var(--warm-gray);margin-left:8px;">id: ' + bl.id + '</span>' +
+        '</div>' +
+        '<div id="blEditRow_' + bl.id + '" style="display:none;">' +
+          '<input type="text" id="blEditInput_' + bl.id + '" value="' + bl.label.replace(/"/g, '&quot;') + '" ' +
+            'style="width:100%;padding:4px 8px;background:var(--charcoal,#252525);border:1px solid var(--teal,#2a7c6f);border-radius:4px;color:var(--text-primary,#fff);font-size:0.875rem;" ' +
+            'onkeydown="if(event.key===\'Enter\')blSaveEdit(\'' + bl.id + '\');if(event.key===\'Escape\')blCancelEdit(\'' + bl.id + '\');">' +
+        '</div>' +
+      '</div>';
+      // Action buttons
+      html += '<div style="display:flex;gap:4px;flex-shrink:0;">';
+      html += '<button class="btn btn-secondary btn-small" id="blEditBtn_' + bl.id + '" onclick="blEdit(\'' + bl.id + '\')" style="font-size:0.75rem;padding:3px 8px;">Edit</button>';
+      html += '<button class="btn btn-primary btn-small" id="blSaveBtn_' + bl.id + '" onclick="blSaveEdit(\'' + bl.id + '\')" style="font-size:0.75rem;padding:3px 8px;display:none;">Save</button>';
+      html += '<button class="btn btn-secondary btn-small" id="blCancelBtn_' + bl.id + '" onclick="blCancelEdit(\'' + bl.id + '\')" style="font-size:0.75rem;padding:3px 8px;display:none;">×</button>';
+      if (idx > 0) html += '<button class="btn btn-secondary btn-small" onclick="blMove(\'' + bl.id + '\',-1)" style="font-size:0.75rem;padding:3px 8px;">↑</button>';
+      if (idx < _tenantBusinessLines.length - 1) html += '<button class="btn btn-secondary btn-small" onclick="blMove(\'' + bl.id + '\',1)" style="font-size:0.75rem;padding:3px 8px;">↓</button>';
+      html += '<button onclick="blDelete(\'' + bl.id + '\')" style="font-size:0.75rem;padding:3px 8px;background:var(--red,#c0392b);color:#fff;border:none;border-radius:4px;cursor:pointer;">×</button>';
+      html += '</div>';
+      html += '</div>';
+    });
+  }
+  return html;
+}
+
+window.blAdd = function() {
+  var input = document.getElementById('blNewLabel');
+  if (!input) return;
+  var label = (input.value || '').trim();
+  if (!label) { showToast('Enter a business line name.', true); return; }
+  var id = label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  if (_tenantBusinessLines.find(function(b) { return b.id === id; })) { showToast('A business line with that ID already exists.', true); return; }
+  _tenantBusinessLines.push({ id: id, label: label, order: _tenantBusinessLines.length });
+  _saveBusinessLines().then(function() { input.value = ''; _rerenderBlEditor(); showToast('Business line added.'); });
+};
+
+window.blEdit = function(id) {
+  var d = document.getElementById('blDisplayRow_' + id); if (d) d.style.display = 'none';
+  var e = document.getElementById('blEditRow_' + id); if (e) e.style.display = '';
+  var eb = document.getElementById('blEditBtn_' + id); if (eb) eb.style.display = 'none';
+  var sb = document.getElementById('blSaveBtn_' + id); if (sb) sb.style.display = '';
+  var cb = document.getElementById('blCancelBtn_' + id); if (cb) cb.style.display = '';
+  var inp = document.getElementById('blEditInput_' + id); if (inp) { inp.focus(); inp.select(); }
+};
+
+window.blCancelEdit = function(id) {
+  var d = document.getElementById('blDisplayRow_' + id); if (d) d.style.display = '';
+  var e = document.getElementById('blEditRow_' + id); if (e) e.style.display = 'none';
+  var eb = document.getElementById('blEditBtn_' + id); if (eb) eb.style.display = '';
+  var sb = document.getElementById('blSaveBtn_' + id); if (sb) sb.style.display = 'none';
+  var cb = document.getElementById('blCancelBtn_' + id); if (cb) cb.style.display = 'none';
+};
+
+window.blSaveEdit = function(id) {
+  var inp = document.getElementById('blEditInput_' + id);
+  var newLabel = inp ? (inp.value || '').trim() : '';
+  if (!newLabel) { showToast('Label cannot be empty.', true); return; }
+  var bl = _tenantBusinessLines.find(function(b) { return b.id === id; });
+  if (!bl) return;
+  bl.label = newLabel;
+  _saveBusinessLines().then(function() { _rerenderBlEditor(); showToast('Business line updated.'); });
+};
+
+window.blDelete = function(id) {
+  if (!confirm('Delete this business line? Products using it keep their value but it won\'t appear in dropdowns.')) return;
+  _tenantBusinessLines = _tenantBusinessLines.filter(function(b) { return b.id !== id; });
+  _tenantBusinessLines.forEach(function(b, i) { b.order = i; });
+  _saveBusinessLines().then(function() { _rerenderBlEditor(); showToast('Business line deleted.'); });
+};
+
+window.blMove = function(id, direction) {
+  var idx = _tenantBusinessLines.findIndex(function(b) { return b.id === id; });
+  if (idx === -1) return;
+  var newIdx = idx + direction;
+  if (newIdx < 0 || newIdx >= _tenantBusinessLines.length) return;
+  var tmp = _tenantBusinessLines[idx];
+  _tenantBusinessLines[idx] = _tenantBusinessLines[newIdx];
+  _tenantBusinessLines[newIdx] = tmp;
+  _tenantBusinessLines.forEach(function(b, i) { b.order = i; });
+  _saveBusinessLines().then(function() { _rerenderBlEditor(); });
+};
+
+window.openManageBusinessLinesDialog = async function(onDone) {
+  await _loadBusinessLinesForEdit();
+  var existing = document.getElementById('blMgrOverlay');
+  if (existing) existing.remove();
+  var overlay = document.createElement('div');
+  overlay.id = 'blMgrOverlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center;';
+  var dialog = document.createElement('div');
+  dialog.style.cssText = 'background:var(--bg-card,#1e1e1e);border:1px solid var(--charcoal-light,#333);border-radius:10px;padding:24px;width:90%;max-width:480px;max-height:80vh;overflow-y:auto;';
+  dialog.innerHTML =
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">' +
+      '<h3 style="margin:0;font-size:1rem;font-weight:600;">Manage Business Lines</h3>' +
+      '<button class="btn btn-secondary btn-small" onclick="closeBlMgrDialog()">Done</button>' +
+    '</div>' +
+    '<div id="blMgrBody"></div>';
+  overlay.appendChild(dialog);
+  document.body.appendChild(overlay);
+  _blDialogRender = function() {
+    var body = document.getElementById('blMgrBody');
+    if (body) body.innerHTML = _renderBusinessLinesEditor();
+  };
+  _blDialogRender();
+  window.closeBlMgrDialog = function() {
+    _blDialogRender = null;
+    overlay.remove();
+    loadTenantBusinessLines().then(function() {
+      if (typeof onDone === 'function') onDone();
+    });
+  };
+};
+
+// ── End Business Lines ───────────────────────────────────────────────────────
+
 function editProduct(pid) {
   // Checkpoint F — Active products are guarded. Direct Edit is blocked;
   // user must enter revision mode first (which initializes pendingChanges).
@@ -31697,10 +31882,17 @@ function renderProductDetail(pid) {
           '<option value="available"' + (product.availability !== 'discontinued' ? ' selected' : '') + '>Available</option>' +
           '<option value="discontinued"' + (product.availability === 'discontinued' ? ' selected' : '') + '>Discontinued</option>' +
         '</select></div>' +
-        (isStaff() ? '<div class="form-group" style="min-width:140px;"><label>Business Line</label><select id="pdBusinessLine">' +
-          '<option value="production"' + ((product.businessLine || 'production') === 'production' ? ' selected' : '') + '>Production</option>' +
-          '<option value="sculpture"' + (product.businessLine === 'sculpture' ? ' selected' : '') + '>Sculpture</option>' +
-        '</select></div>' : '') +
+        (function() {
+          var blOpts = BUSINESS_LINES.length > 0
+            ? BUSINESS_LINES.map(function(bl) {
+                return '<option value="' + bl.id + '"' + (product.businessLine === bl.id ? ' selected' : '') + '>' + bl.label + '</option>';
+              }).join('')
+            : '<option value="production"' + ((product.businessLine || 'production') === 'production' ? ' selected' : '') + '>Production</option>';
+          return '<div class="form-group" style="min-width:140px;"><label>Business Line</label><select id="pdBusinessLine" onchange="handlePdBusinessLineChange(this)">' +
+            blOpts +
+            '<option value="__manage_bl__" style="color:var(--teal,#2a7c6f);border-top:1px solid var(--charcoal-light,#333);">&#9881; Manage Business Lines…</option>' +
+          '</select></div>';
+        })() +
       '</div>';
 
     // Pricing (retail / direct / wholesale) is edited in the Variants area
