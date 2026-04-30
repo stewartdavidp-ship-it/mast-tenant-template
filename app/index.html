@@ -11778,6 +11778,39 @@ async function loadTenantBusinessLines() {
   }
 }
 
+// Pricing defaults — loaded at startup so price tab fallbacks work without opening Settings.
+async function loadPricingDefaults() {
+  try {
+    var data = await MastDB.get('public/config/pricingDefaults');
+    if (data) _pricingDefaults = data;
+    // If not set yet, leave _pricingDefaults as null — no defaults configured.
+  } catch (e) {
+    console.warn('[pricingDefaults] Failed to load:', e.message);
+  }
+}
+
+// Returns effective markup multipliers {retail, direct, wholesale} for a product
+// based on the current pricingDefaults strategy. Falls back to global defaults.
+// Multipliers are recipe-compatible (e.g. 2.5 = price is 2.5× cost).
+function _getEffectiveDefaultMarkups(product) {
+  if (!_pricingDefaults) return { retail: null, direct: null, wholesale: null };
+  var strategy = _pricingDefaults.markupStrategy || 'none';
+  var bucket = null;
+  if (strategy === 'business-line' && product && product.businessLine) {
+    bucket = (_pricingDefaults.businessLineMarkups || {})[product.businessLine] || null;
+  } else if (strategy === 'category' && product && product.category) {
+    bucket = (_pricingDefaults.categoryMarkups || {})[product.category] || null;
+  }
+  function toMult(pct) {
+    return (typeof pct === 'number' && pct > 0) ? pct / 100 : null;
+  }
+  return {
+    retail:    (bucket && bucket.retail    != null) ? toMult(bucket.retail)    : toMult(_pricingDefaults.globalRetailMarkup),
+    direct:    (bucket && bucket.direct    != null) ? toMult(bucket.direct)    : toMult(_pricingDefaults.globalDirectMarkup),
+    wholesale: (bucket && bucket.wholesale != null) ? toMult(bucket.wholesale) : toMult(_pricingDefaults.globalWholesaleMarkup),
+  };
+}
+
 // GitHub image upload
 // GitHub config — resolved from TENANT_CONFIG after auth. No hardcoded fallbacks.
 function getGithubRepo() {
@@ -12749,7 +12782,7 @@ if (TEST_MODE && new URLSearchParams(window.location.search).get('testmode') ===
   var testTenantId = new URLSearchParams(window.location.search).get('tenant') || TENANT_ID;
   MastDB.init({ tenantId: testTenantId, firestore: db }); // Test mode: override with ?tenant= param
   loadTenantConfig(testTenantId).then(function() {
-    return Promise.all([loadTenantCategories(), loadTenantBusinessLines()]);
+    return Promise.all([loadTenantCategories(), loadTenantBusinessLines(), loadPricingDefaults()]);
   }).then(function() {
     return loadTenantSubscription();
   }).then(function() {
@@ -12906,6 +12939,7 @@ auth.onAuthStateChanged(async function(user) {
     loadTenantConfig(tenantId),
     loadTenantCategories(),
     loadTenantBusinessLines(),
+    loadPricingDefaults(),
     loadTenantSubscription(),
     loadUserRole(user.uid)
   ]);
@@ -12915,7 +12949,7 @@ auth.onAuthStateChanged(async function(user) {
   installAutoDetection();    // Start auto error detection (non-blocking)
   // --- End Tenant Resolution ---
 
-  var role = _roleResult[4];
+  var role = _roleResult[5];
 
   if (!role) {
     // RBAC load failed — fail closed
@@ -30446,9 +30480,10 @@ function renderVariantPricingTab(product, variant, recipe, pricing) {
     // Stash cost on the form so syncVariantPriceMarkup can find it.
     html += '<input type="hidden" id="vp_cost_' + esc(variant.id) + '" value="' + (costNum != null ? costNum.toFixed(4) : '') + '">';
     html += '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:12px;">';
-    html += _editTier('wholesale', 'Wholesale', pricing.wholesale, recipe ? recipe.wholesaleMarkup : null);
-    html += _editTier('direct',    'Direct',    pricing.direct,    recipe ? recipe.directMarkup    : null);
-    html += _editTier('retail',    'Retail',    pricing.retail,    recipe ? recipe.retailMarkup    : null);
+    var _defMu = _getEffectiveDefaultMarkups(product);
+    html += _editTier('wholesale', 'Wholesale', pricing.wholesale, (recipe && recipe.wholesaleMarkup != null) ? recipe.wholesaleMarkup : _defMu.wholesale);
+    html += _editTier('direct',    'Direct',    pricing.direct,    (recipe && recipe.directMarkup    != null) ? recipe.directMarkup    : _defMu.direct);
+    html += _editTier('retail',    'Retail',    pricing.retail,    (recipe && recipe.retailMarkup    != null) ? recipe.retailMarkup    : _defMu.retail);
     html += '</div>';
     html += '<div style="font-size:0.82rem;color:var(--text,#2a2a2a);opacity:0.75;margin-bottom:12px;">Edit either Price or Markup; the other recomputes from cost.</div>';
     if (hasMultipleVariants) {
