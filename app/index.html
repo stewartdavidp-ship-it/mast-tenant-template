@@ -29781,31 +29781,34 @@ function renderVariantPricingTab(product, variant, recipe, pricing) {
     return (price != null && price > 0) ? ((price - (costNum || 0)) / price * 100) : null;
   }
 
-  // Top row — cost basis + Edit button (when not editing).
-  if (!isEditingPricing) {
-    html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:14px;flex-wrap:wrap;">';
-    html += '<div style="font-size:0.92rem;color:var(--text,#2a2a2a);">';
-    if (costNum != null) {
-      html += '<span style="font-weight:600;">Cost</span> <span style="font-family:monospace;font-weight:600;">$' + costNum.toFixed(2) + '</span>';
-      if (costSource) {
-        html += ' <span style="opacity:0.7;font-size:0.85rem;">from recipe ' + esc(costSource) + '</span>';
-        html += ' <button class="btn btn-secondary btn-small" style="margin-left:8px;font-size:0.78rem;padding:3px 10px;" onclick="window.makerOpenRecipeBuilder && window.makerOpenRecipeBuilder(\'' + esc(recipe.recipeId) + '\',\'' + esc(variant.id) + '\')">Open Recipe →</button>';
-      }
-    } else if (recipe) {
-      html += '<span style="opacity:0.7;">Cost not yet computed — open the recipe to set materials and labor.</span>';
+  // Top row — cost basis + Edit button. Shown in both view and edit modes
+  // so the user always sees what cost they're pricing against. Edit button
+  // hides while editing.
+  html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:14px;flex-wrap:wrap;">';
+  html += '<div style="font-size:0.92rem;color:var(--text,#2a2a2a);">';
+  if (costNum != null) {
+    html += '<span style="font-weight:600;">Cost</span> <span style="font-family:monospace;font-weight:600;">$' + costNum.toFixed(2) + '</span>';
+    if (costSource) {
+      html += ' <span style="opacity:0.7;font-size:0.85rem;">from recipe ' + esc(costSource) + '</span>';
       html += ' <button class="btn btn-secondary btn-small" style="margin-left:8px;font-size:0.78rem;padding:3px 10px;" onclick="window.makerOpenRecipeBuilder && window.makerOpenRecipeBuilder(\'' + esc(recipe.recipeId) + '\',\'' + esc(variant.id) + '\')">Open Recipe →</button>';
-    } else {
-      html += '<span style="opacity:0.7;">No recipe linked. Markups can\'t be computed without a cost basis.</span>';
     }
-    html += '</div>';
-    html += '<button class="btn btn-secondary btn-small" onclick="startEditVariantPricing(\'' + esc(pid) + '\',\'' + esc(variant.id) + '\')">Edit Pricing</button>';
-    html += '</div>';
+  } else if (recipe) {
+    html += '<span style="opacity:0.7;">Cost not yet computed — open the recipe to set materials and labor.</span>';
+    html += ' <button class="btn btn-secondary btn-small" style="margin-left:8px;font-size:0.78rem;padding:3px 10px;" onclick="window.makerOpenRecipeBuilder && window.makerOpenRecipeBuilder(\'' + esc(recipe.recipeId) + '\',\'' + esc(variant.id) + '\')">Open Recipe →</button>';
+  } else {
+    html += '<span style="opacity:0.7;">No recipe linked. Markups can\'t be computed without a cost basis.</span>';
   }
+  html += '</div>';
+  if (!isEditingPricing) {
+    html += '<button class="btn btn-secondary btn-small" onclick="startEditVariantPricing(\'' + esc(pid) + '\',\'' + esc(variant.id) + '\')">Edit Pricing</button>';
+  }
+  html += '</div>';
 
   // Cost composition — show what's driving the cost number. Mirrors the
   // recipe's Total Cost block so the connection between recipe and pricing
-  // is visible without leaving the page.
-  if (!isEditingPricing && recipe && costNum != null) {
+  // is visible without leaving the page. Visible in both modes — read-only
+  // context that doesn't conflict with the pricing form.
+  if (recipe && costNum != null) {
     var rOverride = recipe.variants && recipe.variants[variant.id];
     var laborMin = (rOverride && typeof rOverride.laborMinutes === 'number')
       ? rOverride.laborMinutes : (recipe.laborMinutes || 0);
