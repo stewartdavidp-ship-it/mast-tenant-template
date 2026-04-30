@@ -11737,6 +11737,8 @@ async function loadTenantCategories() {
         // Only generic "Shop" or no categories — keep default
         CATEGORIES = catData.filter(function(c) { return c && c.id && c.label; }).map(function(c) { return c.id; });
       }
+      // Populate filter dropdown now that categories are ready (renderProducts may have run first)
+      if (typeof rebuildProductCategoryFilter === 'function') rebuildProductCategoryFilter();
     }
   } catch (e) {
     console.warn('[categories] Failed to load tenant categories:', e.message);
