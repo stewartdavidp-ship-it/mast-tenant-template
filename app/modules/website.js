@@ -44,6 +44,12 @@
   var cherryPickSelections = {}; // jobId -> { products: {url: bool}, images: {url: bool}, ... }
   var expandedJobId = null; // for import history detail view
   var editingCategoryIdx = null; // index of category being edited inline
+  var catDialogRender = null;   // set when category editor is open as a modal; overrides renderWebsite
+
+  function onCatChanged() {
+    if (typeof catDialogRender === 'function') catDialogRender();
+    else renderWebsite();
+  }
   var showCustomColors = false; // toggled when user picks "Custom" in color scheme
   var allTemplateManifests = null; // array of loaded manifests from registry
   var pendingSwitchTemplateId = null; // template ID pending confirmation
@@ -2708,17 +2714,17 @@
     tenantCategories.push(newCat);
     await saveCategories();
     showToast('Category "' + label + '" added.');
-    renderWebsite();
+    onCatChanged();
   };
 
   window.wpCatEdit = function(idx) {
     editingCategoryIdx = idx;
-    renderWebsite();
+    onCatChanged();
   };
 
   window.wpCatCancelEdit = function() {
     editingCategoryIdx = null;
-    renderWebsite();
+    onCatChanged();
   };
 
   window.wpCatSaveEdit = async function(idx) {
@@ -2737,7 +2743,7 @@
     editingCategoryIdx = null;
     await saveCategories();
     showToast('Category updated.');
-    renderWebsite();
+    onCatChanged();
   };
 
   window.wpCatDelete = function(idx) {
@@ -2747,7 +2753,7 @@
       tenantCategories.splice(idx, 1);
       await saveCategories();
       showToast('Category "' + label + '" deleted.');
-      renderWebsite();
+      onCatChanged();
     }, { confirmLabel: 'Delete', cancelLabel: 'Cancel' });
   };
 
@@ -2761,7 +2767,58 @@
     if (editingCategoryIdx === idx) editingCategoryIdx = newIdx;
     else if (editingCategoryIdx === newIdx) editingCategoryIdx = idx;
     await saveCategories();
-    renderWebsite();
+    onCatChanged();
+  };
+
+  // Opens the category editor as a modal dialog from anywhere in the app.
+  // After the user closes, refreshes global CATEGORIES and calls onDone().
+  window.openManageCategoriesDialog = async function(onDone) {
+    if (!tenantCategories) await loadCategories();
+
+    function renderModalContent() {
+      var body = document.getElementById('catMgrBody');
+      if (!body) return;
+      body.innerHTML = renderCategoriesTab();
+    }
+
+    // Remove any existing dialog
+    var existing = document.getElementById('catMgrOverlay');
+    if (existing) existing.remove();
+
+    var overlay = document.createElement('div');
+    overlay.id = 'catMgrOverlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center;';
+
+    var dialog = document.createElement('div');
+    dialog.style.cssText = 'background:var(--surface-dark,#1a1a1a);border:1px solid var(--charcoal-light,#333);border-radius:12px;width:min(560px,95vw);max-height:80vh;display:flex;flex-direction:column;overflow:hidden;';
+
+    var header = '<div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--charcoal-light,#333);">' +
+      '<h3 style="margin:0;font-size:1rem;font-weight:600;">Manage Categories</h3>' +
+      '<button onclick="closeCatMgrDialog()" style="background:none;border:none;color:var(--warm-gray);font-size:1.2rem;cursor:pointer;padding:4px;">✕</button>' +
+      '</div>';
+    var body = '<div id="catMgrBody" style="flex:1;overflow-y:auto;padding:20px;">' + renderCategoriesTab() + '</div>';
+    var footer = '<div style="padding:12px 20px;border-top:1px solid var(--charcoal-light,#333);display:flex;justify-content:flex-end;">' +
+      '<button class="btn btn-primary" onclick="closeCatMgrDialog()">Done</button>' +
+      '</div>';
+
+    dialog.innerHTML = header + body + footer;
+    overlay.appendChild(dialog);
+    document.body.appendChild(overlay);
+
+    catDialogRender = renderModalContent;
+
+    window.closeCatMgrDialog = function() {
+      catDialogRender = null;
+      overlay.remove();
+      // Refresh global CATEGORIES so every dropdown picks up changes
+      if (typeof loadTenantCategories === 'function') {
+        loadTenantCategories().then(function() {
+          if (typeof onDone === 'function') onDone();
+        });
+      } else if (typeof onDone === 'function') {
+        onDone();
+      }
+    };
   };
 
   window.markUnpublished = function markUnpublished() {
