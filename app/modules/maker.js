@@ -6091,6 +6091,9 @@
   window.makerSetOverrideFromBuilder = setOverrideFromBuilder;
   window.makerEffectiveTierPrice = effectiveTierPrice;
   window.makerOpenWhatIfSimulator = openWhatIfSimulator;
+  // Sync getter so the product Pricing tab can read current spot prices for
+  // its drift indicator without re-fetching.
+  window.makerGetSpotPricesCurrent = function() { return spotPricesCurrent; };
   window.makerSetCategoryFilter = function(v) { piecesCategoryFilter = v || ''; renderPiecesList(); };
   window.makerPushVariantToAll = function() {
     if (!builderState || !currentVariantId || currentVariantId === 'default') return;
