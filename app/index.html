@@ -26807,12 +26807,19 @@ function handlePdCategoryChange(sel) {
   if (sel.value !== '__manage__') { sel.dataset.lastValue = sel.value; return; }
   var prev = sel.dataset.lastValue || '';
   sel.value = prev;
+  var pid = window.selectedProductPid;
+  var afterLoad = function() {
+    if (typeof openManageCategoriesDialog === 'function') {
+      openManageCategoriesDialog(function() {
+        // Refresh the product detail view so the category dropdown repopulates
+        if (typeof renderProductDetail === 'function' && pid) renderProductDetail(pid);
+      });
+    }
+  };
   if (typeof openManageCategoriesDialog === 'function') {
-    var pid = window.selectedProductPid;
-    openManageCategoriesDialog(function() {
-      // Refresh the product detail view so the category dropdown repopulates
-      if (typeof renderProductDetail === 'function' && pid) renderProductDetail(pid);
-    });
+    afterLoad();
+  } else if (typeof MastAdmin !== 'undefined' && typeof MastAdmin.loadModule === 'function') {
+    MastAdmin.loadModule('website').then(afterLoad);
   }
 }
 
@@ -26821,19 +26828,25 @@ function handleImgCategoryChange(sel) {
   if (sel.value !== '__manage__') { sel.dataset.lastValue = sel.value; return; }
   var prev = sel.dataset.lastValue || '';
   sel.value = prev;
+  var rebuildImgSelect = function() {
+    if (typeof openManageCategoriesDialog === 'function') {
+      openManageCategoriesDialog(function() {
+        var s = document.getElementById('imgCategory');
+        if (!s) return;
+        var prevVal = s.dataset.lastValue || '';
+        var newOpts = CATEGORIES.map(function(cat) {
+          return '<option value="' + cat + '">' + cat.charAt(0).toUpperCase() + cat.slice(1) + '</option>';
+        }).join('') + '<option value="__manage__" style="color:var(--teal,#2a7c6f);border-top:1px solid var(--charcoal-light,#333);">&#9881; Manage Categories…</option>';
+        s.innerHTML = newOpts;
+        s.value = (prevVal && CATEGORIES.indexOf(prevVal) !== -1) ? prevVal : (CATEGORIES[0] || '');
+        s.dataset.lastValue = s.value;
+      });
+    }
+  };
   if (typeof openManageCategoriesDialog === 'function') {
-    openManageCategoriesDialog(function() {
-      // Rebuild the select with updated categories
-      var s = document.getElementById('imgCategory');
-      if (!s) return;
-      var prevVal = s.dataset.lastValue || '';
-      var newOpts = CATEGORIES.map(function(cat) {
-        return '<option value="' + cat + '">' + cat.charAt(0).toUpperCase() + cat.slice(1) + '</option>';
-      }).join('') + '<option value="__manage__" style="color:var(--teal,#2a7c6f);border-top:1px solid var(--charcoal-light,#333);">&#9881; Manage Categories…</option>';
-      s.innerHTML = newOpts;
-      s.value = (prevVal && CATEGORIES.indexOf(prevVal) !== -1) ? prevVal : (CATEGORIES[0] || '');
-      s.dataset.lastValue = s.value;
-    });
+    rebuildImgSelect();
+  } else if (typeof MastAdmin !== 'undefined' && typeof MastAdmin.loadModule === 'function') {
+    MastAdmin.loadModule('website').then(rebuildImgSelect);
   }
 }
 
@@ -26842,19 +26855,25 @@ function handleGalCategoryChange(sel) {
   if (sel.value !== '__manage__') { sel.dataset.lastValue = sel.value; return; }
   var prev = sel.dataset.lastValue || '';
   sel.value = prev;
+  var rebuildGalSelect = function() {
+    if (typeof openManageCategoriesDialog === 'function') {
+      openManageCategoriesDialog(function() {
+        var s = document.getElementById('galCategory');
+        if (!s) return;
+        var prevVal = s.dataset.lastValue || '';
+        var newOpts = CATEGORIES.map(function(cat) {
+          return '<option value="' + cat + '">' + cat.charAt(0).toUpperCase() + cat.slice(1) + '</option>';
+        }).join('') + '<option value="__manage__" style="color:var(--teal,#2a7c6f);border-top:1px solid var(--charcoal-light,#333);">&#9881; Manage Categories…</option>';
+        s.innerHTML = newOpts;
+        s.value = (prevVal && CATEGORIES.indexOf(prevVal) !== -1) ? prevVal : (CATEGORIES[0] || '');
+        s.dataset.lastValue = s.value;
+      });
+    }
+  };
   if (typeof openManageCategoriesDialog === 'function') {
-    openManageCategoriesDialog(function() {
-      // Rebuild the select with updated categories
-      var s = document.getElementById('galCategory');
-      if (!s) return;
-      var prevVal = s.dataset.lastValue || '';
-      var newOpts = CATEGORIES.map(function(cat) {
-        return '<option value="' + cat + '">' + cat.charAt(0).toUpperCase() + cat.slice(1) + '</option>';
-      }).join('') + '<option value="__manage__" style="color:var(--teal,#2a7c6f);border-top:1px solid var(--charcoal-light,#333);">&#9881; Manage Categories…</option>';
-      s.innerHTML = newOpts;
-      s.value = (prevVal && CATEGORIES.indexOf(prevVal) !== -1) ? prevVal : (CATEGORIES[0] || '');
-      s.dataset.lastValue = s.value;
-    });
+    rebuildGalSelect();
+  } else if (typeof MastAdmin !== 'undefined' && typeof MastAdmin.loadModule === 'function') {
+    MastAdmin.loadModule('website').then(rebuildGalSelect);
   }
 }
 
