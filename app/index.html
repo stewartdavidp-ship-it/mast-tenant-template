@@ -29840,14 +29840,6 @@ function renderVariantInventoryTab(product, variant) {
   var pid = product.pid || '';
   var inv = inventory[pid] || {};
   var stockType = (inv && inv.stockType) ? inv.stockType : 'made-to-order';
-  var html = '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:14px;">';
-  html += '<div></div>';
-  html += '<button class="btn btn-secondary btn-small" onclick="openAdjustStockModal(\'' + esc(pid) + '\')">Adjust Stock</button>';
-  html += '</div>';
-  if (stockType === 'build-to-order' || stockType === 'made-to-order') {
-    html += '<div style="font-size:1rem;color:var(--text,#2a2a2a);">Build to order</div>';
-    return html;
-  }
   var stockKey = variant._isSynthetic ? '_default' : variant.id;
   var entry = (inv.stock && typeof inv.stock === 'object') ? inv.stock[stockKey] : null;
   if (!entry && variant._isSynthetic && typeof inv.stock === 'number') {
@@ -29858,11 +29850,55 @@ function renderVariantInventoryTab(product, variant) {
   var hel = (entry && entry.held) || 0;
   var dam = (entry && entry.damaged) || 0;
   var avail = Math.max(0, onH - com - hel - dam);
+
+  var isEditing = window.__editingVariantInventory &&
+    window.__editingVariantInventory.pid === pid &&
+    window.__editingVariantInventory.variantId === variant.id;
+  var html = '';
+
+  if (isEditing) {
+    var mode = window.__editingVariantInventory.mode || 'set';
+    html += '<div style="display:flex;gap:0;margin-bottom:14px;">' +
+      '<button class="btn ' + (mode === 'set' ? 'btn-primary' : 'btn-secondary') + '" style="font-size:0.85rem;padding:6px 16px;border-radius:6px 0 0 6px;" onclick="setVariantInventoryMode(\'set\')">Set Count</button>' +
+      '<button class="btn ' + (mode === 'add' ? 'btn-primary' : 'btn-secondary') + '" style="font-size:0.85rem;padding:6px 16px;border-radius:0 6px 6px 0;" onclick="setVariantInventoryMode(\'add\')">Add Pieces</button>' +
+    '</div>';
+    var inputLabel = (mode === 'set') ? 'On Hand' : 'Pieces to Add';
+    var inputVal = (mode === 'set') ? onH : 0;
+    html += '<div style="display:flex;gap:14px;align-items:flex-end;flex-wrap:wrap;margin-bottom:14px;">';
+    html += '<label style="display:flex;flex-direction:column;gap:6px;">' +
+      '<span style="font-size:0.85rem;color:var(--text,#2a2a2a);font-weight:600;">' + inputLabel + '</span>' +
+      '<input type="number" id="vi_onhand_' + esc(variant.id) + '" min="0" value="' + inputVal + '" style="width:120px;padding:8px 10px;border:1px solid var(--cream-dark,#e8e0d4);border-radius:6px;font-family:monospace;font-size:1rem;">' +
+    '</label>';
+    if (com > 0) {
+      html += '<div style="font-size:0.92rem;color:var(--text,#2a2a2a);"><span style="font-weight:600;">' + com + '</span> committed</div>';
+    }
+    html += '</div>';
+    if (mode === 'set') {
+      html += '<div style="font-size:0.85rem;color:var(--text,#2a2a2a);margin-bottom:14px;opacity:0.8;">Replaces the current On Hand count for this variant.</div>';
+    } else {
+      html += '<div style="font-size:0.85rem;color:var(--text,#2a2a2a);margin-bottom:14px;opacity:0.8;">Adds the entered amount to the existing On Hand count.</div>';
+    }
+    html += '<div style="display:flex;gap:8px;">';
+    html += '<button class="btn btn-primary btn-small" onclick="saveVariantInventory(\'' + esc(pid) + '\',\'' + esc(variant.id) + '\')">Save</button>';
+    html += '<button class="btn btn-secondary btn-small" onclick="cancelEditVariantInventory()">Cancel</button>';
+    html += '</div>';
+    return html;
+  }
+
+  // View mode — Edit button + stock tiles, matching the Pricing tab layout.
+  html += '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:14px;">';
+  html += '<div></div>';
+  html += '<button class="btn btn-secondary btn-small" onclick="startEditVariantInventory(\'' + esc(pid) + '\',\'' + esc(variant.id) + '\')">Edit Stock</button>';
+  html += '</div>';
+  if (stockType === 'build-to-order' || stockType === 'made-to-order') {
+    html += '<div style="font-size:1rem;color:var(--text,#2a2a2a);">Build to order — no stock tracked. Click Edit Stock to start tracking.</div>';
+    return html;
+  }
   var availColor = avail <= 0 ? 'var(--danger,#dc2626)' : 'var(--text,#2a2a2a)';
   function _stat(label, value, color) {
-    return '<div style="flex:1;min-width:110px;padding:12px 16px;border-radius:8px;border:1px solid var(--cream-dark,#e8e0d4);">' +
-      '<div style="font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.06em;font-weight:600;margin-bottom:6px;">' + label + '</div>' +
-      '<div style="font-family:monospace;font-size:1.2rem;font-weight:600;color:' + (color || 'var(--text,#2a2a2a)') + ';">' + value + '</div>' +
+    return '<div style="flex:1;min-width:110px;padding:14px 18px;border-radius:8px;border:1px solid var(--cream-dark,#e8e0d4);">' +
+      '<div class="pd-tier-label" style="color:var(--text,#2a2a2a);text-transform:uppercase;font-weight:600;margin-bottom:8px;">' + label + '</div>' +
+      '<div style="font-family:monospace;font-size:1.3rem;font-weight:600;color:' + (color || 'var(--text,#2a2a2a)') + ';">' + value + '</div>' +
     '</div>';
   }
   html += '<div style="display:flex;gap:10px;flex-wrap:wrap;">';
@@ -29873,6 +29909,120 @@ function renderVariantInventoryTab(product, variant) {
   if (dam > 0) html += _stat('Damaged', dam, 'var(--danger,#dc2626)');
   html += '</div>';
   return html;
+}
+
+function startEditVariantInventory(pid, variantId) {
+  window.__editingVariantInventory = { pid: pid, variantId: variantId, mode: 'set' };
+  if (typeof renderProductDetail === 'function') renderProductDetail(pid);
+}
+function cancelEditVariantInventory() {
+  var pid = window.__editingVariantInventory && window.__editingVariantInventory.pid;
+  window.__editingVariantInventory = null;
+  if (pid && typeof renderProductDetail === 'function') renderProductDetail(pid);
+}
+function setVariantInventoryMode(mode) {
+  if (!window.__editingVariantInventory) return;
+  window.__editingVariantInventory.mode = (mode === 'add') ? 'add' : 'set';
+  var pid = window.__editingVariantInventory.pid;
+  if (typeof renderProductDetail === 'function') renderProductDetail(pid);
+}
+
+async function saveVariantInventory(pid, variantId) {
+  if (!hasPermission('inventory', 'update')) { showToast('You do not have permission to update inventory.', true); return; }
+  try {
+    var product = productsData.find(function(p) { return p.pid === pid; });
+    if (!product) { showToast('Product not found', true); return; }
+    var canon = getProductVariantsForRender(product);
+    var variant = canon.find(function(v) { return v.id === variantId; });
+    if (!variant) { showToast('Variant not found', true); return; }
+    var stockKey = variant._isSynthetic ? '_default' : variant.id;
+    var mode = (window.__editingVariantInventory && window.__editingVariantInventory.mode) || 'set';
+    var input = document.getElementById('vi_onhand_' + variantId);
+    if (!input) { showToast('Input missing', true); return; }
+    var inputVal = parseInt(input.value, 10);
+    if (isNaN(inputVal) || inputVal < 0) inputVal = 0;
+
+    var inv = inventory[pid] || {};
+    var curStock = (inv && inv.stock) ? inv.stock : {};
+    var curEntry = curStock[stockKey] || {};
+    var curOnHand = curEntry.onHand || 0;
+    var newOnHand = (mode === 'add') ? (curOnHand + inputVal) : inputVal;
+    newOnHand = Math.max(0, newOnHand);
+
+    // Sculpture cap — max 1 unit on hand, regardless of variant.
+    var isSculpture = product.businessLine === 'sculpture';
+    if (isSculpture && newOnHand > 1) {
+      showToast('Sculptures are limited to 1 unit in stock', true);
+      return;
+    }
+
+    var updates = {};
+    updates['stock/' + stockKey + '/onHand'] = newOnHand;
+
+    // Recompute the _default total when editing a real variant — keeps the
+    // denormalized total in sync with per-variant stock.
+    if (!variant._isSynthetic) {
+      var realVariants = canon.filter(function(v) { return !v._isSynthetic; });
+      var totalOnHand = 0;
+      realVariants.forEach(function(v) {
+        if (v.id === variantId) {
+          totalOnHand += newOnHand;
+        } else {
+          var e = curStock[v.id];
+          totalOnHand += (e && e.onHand) || 0;
+        }
+      });
+      updates['stock/_default/onHand'] = totalOnHand;
+    }
+
+    // Auto-promote build-to-order / made-to-order → strict when stock is
+    // first added (matches the modal's behavior).
+    if ((!inv.stockType || inv.stockType === 'made-to-order' || inv.stockType === 'build-to-order') && newOnHand > 0) {
+      updates['stockType'] = 'strict';
+    }
+
+    updates['updatedAt'] = new Date().toISOString();
+
+    await MastDB.inventory.update(pid, updates);
+    await writeAudit('update', 'inventory', pid);
+    var historyAction = (mode === 'add') ? 'restocked' : 'recount';
+    var historyReason = (mode === 'add') ? 'stock_received' : 'recount';
+    var historyDetail = (mode === 'add')
+      ? 'Added ' + inputVal + ' to ' + (variant._isSynthetic ? 'default' : variantComboLabel(variant))
+      : 'Set ' + (variant._isSynthetic ? 'default' : variantComboLabel(variant)) + ' on-hand to ' + newOnHand;
+    await MastDB.push('admin/inventory/' + pid + '/history', {
+      action: historyAction, reason: historyReason, actor: 'maker', actorType: 'maker',
+      detail: historyDetail, timestamp: new Date().toISOString()
+    });
+    emitTestingEvent('adjustStock', {});
+    await syncStockInfoToPublic(pid);
+
+    // Sculpture sold-status flip — match modal behavior.
+    if (isSculpture) {
+      if (newOnHand <= 0) {
+        await MastDB.products.statusRef(pid).set('sold');
+        writeAudit('update', 'products', pid);
+        var localP = productsData.find(function(x) { return x.pid === pid; });
+        if (localP) localP.status = 'sold';
+      } else {
+        await MastDB.products.statusRef(pid).remove();
+        writeAudit('update', 'products', pid);
+        var localP2 = productsData.find(function(x) { return x.pid === pid; });
+        if (localP2) delete localP2.status;
+      }
+    }
+
+    // Refresh local cache so the panel re-renders with the new value.
+    if (!inventory[pid]) inventory[pid] = { pid: pid };
+    inventory[pid].stock = await MastDB.get('admin/inventory/' + pid + '/stock') || {};
+    if (updates['stockType']) inventory[pid].stockType = updates['stockType'];
+
+    window.__editingVariantInventory = null;
+    showToast('Stock updated');
+    if (typeof renderProductDetail === 'function') renderProductDetail(pid);
+  } catch (err) {
+    showToast('Failed to save: ' + (err && err.message ? err.message : err), true);
+  }
 }
 
 function renderVariantImageTab(product, variant) {
