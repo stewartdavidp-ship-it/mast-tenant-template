@@ -542,8 +542,13 @@
         return;
       }
       var material = materialsData[li.materialId];
-      // Phase 2B: pricing path uses replacementCost; falls back to unitCost.
-      var currentCost = material ? (material.replacementCost != null ? material.replacementCost : material.unitCost) : li.unitCost;
+      // Only use replacementCost for spot-linked materials. Fixed/manual materials
+      // must use unitCost — replacementCost can be stale if pricingMode was changed.
+      var currentCost = material
+        ? (material.pricingMode === 'spot-linked' && material.replacementCost != null
+            ? material.replacementCost
+            : material.unitCost)
+        : li.unitCost;
       refreshedLineItems[liId] = Object.assign({}, li, {
         unitCost: currentCost,
         materialName: material ? material.name : li.materialName
@@ -624,8 +629,11 @@
           var li = vLineItems[liId];
           if (li && li.kind === 'recipe') { vRefreshed[liId] = li; return; }
           var material = materialsData[li.materialId];
-          // Phase 2B: pricing path uses replacementCost
-          var currentCost = material ? (material.replacementCost != null ? material.replacementCost : material.unitCost) : li.unitCost;
+          var currentCost = material
+            ? (material.pricingMode === 'spot-linked' && material.replacementCost != null
+                ? material.replacementCost
+                : material.unitCost)
+            : li.unitCost;
           vRefreshed[liId] = Object.assign({}, li, {
             unitCost: currentCost,
             materialName: material ? material.name : li.materialName
@@ -5468,7 +5476,7 @@
         var unitsPerOz = explicit > 0 ? explicit : (auto || 1);
         simulatedMatCost[mid] = roundCents(shiftedSpot * (m.purity || 0) * (1 + (m.markupOverSpot || 0) / 100) / unitsPerOz);
       } else if (m) {
-        simulatedMatCost[mid] = m.replacementCost != null ? m.replacementCost : (m.unitCost || 0);
+        simulatedMatCost[mid] = m.pricingMode === 'spot-linked' && m.replacementCost != null ? m.replacementCost : (m.unitCost || 0);
       }
     });
     var results = [];
