@@ -2547,6 +2547,52 @@
       }
     }
 
+    /* ========= PRODUCT DETAIL — VARIANT SECTION READABILITY =========
+       Bigger fonts, full text color (no muted gray). Targets every label,
+       tab, row, and tier card inside .pd-variant-section regardless of
+       inline style overrides. */
+    .pd-variant-section { font-size: 1rem; }
+    .pd-variant-section .pd-section-label,
+    .pd-variant-section .pd-row-label,
+    .pd-variant-section .pd-tier-label {
+      font-size: 1rem !important;
+      color: var(--text, #2a2a2a) !important;
+      font-weight: 600 !important;
+      text-transform: none !important;
+      letter-spacing: 0 !important;
+    }
+    .pd-variant-section .pd-tab-btn {
+      font-size: 1.05rem !important;
+      color: var(--text, #2a2a2a) !important;
+    }
+    .pd-variant-section .pd-row-value {
+      font-size: 1.05rem !important;
+      color: var(--text, #2a2a2a) !important;
+    }
+    .pd-variant-section .pd-tier-card-inactive .pd-tier-label,
+    .pd-variant-section .pd-tier-card-inactive { color: var(--text, #2a2a2a); }
+
+    body.dark-mode .pd-variant-section .pd-section-label,
+    body.dark-mode .pd-variant-section .pd-row-label,
+    body.dark-mode .pd-variant-section .pd-tier-label,
+    body.dark-mode .pd-variant-section .pd-tab-btn,
+    body.dark-mode .pd-variant-section .pd-row-value {
+      color: var(--text, #e8e4df) !important;
+    }
+    body.dark-mode .pd-variant-section .pd-tab-strip {
+      background: rgba(42, 124, 111, 0.20) !important;
+    }
+    body.dark-mode .pd-variant-section .pd-row-selected {
+      background: rgba(42, 124, 111, 0.24) !important;
+    }
+    body.dark-mode .pd-variant-section .pd-row-zebra {
+      background: rgba(255, 255, 255, 0.03) !important;
+    }
+    body.dark-mode .pd-variant-section .pd-tier-card-inactive {
+      background: rgba(255, 255, 255, 0.05) !important;
+      border-color: #5a544f !important;
+    }
+
     /* ========= DARK MODE ========= */
     body.dark-mode {
       --cream: #2a2a2a;
@@ -26552,6 +26598,8 @@ function viewProduct(pid) {
   document.getElementById('productsGrid').style.display = 'none';
   document.getElementById('inventorySummaryBar').style.display = 'none';
   document.querySelector('#productsTab .section-header').style.display = 'none';
+  var _csb = document.getElementById('catalogStatusBar');
+  if (_csb) _csb.style.display = 'none';
   document.getElementById('productsLoading').style.display = 'none';
   var detailEl = document.getElementById('productDetailView');
   detailEl.style.display = '';
@@ -26575,6 +26623,8 @@ function viewProductFromInventory(pid) {
     document.getElementById('productsGrid').style.display = 'none';
     document.getElementById('inventorySummaryBar').style.display = 'none';
     document.querySelector('#productsTab .section-header').style.display = 'none';
+    var _csb2 = document.getElementById('catalogStatusBar');
+    if (_csb2) _csb2.style.display = 'none';
     document.getElementById('productsLoading').style.display = 'none';
     var detailEl = document.getElementById('productDetailView');
     detailEl.style.display = '';
@@ -26608,6 +26658,8 @@ function backToProducts() {
       if (grid) grid.style.display = '';
       var sh = document.querySelector('#productsTab .section-header');
       if (sh) sh.style.display = '';
+      var csbBack = document.getElementById('catalogStatusBar');
+      if (csbBack) csbBack.style.display = '';
       renderProducts();
     }
   };
@@ -29521,10 +29573,10 @@ function renderVariantsSection(product) {
   }
   var selectedVariant = variants.find(function(v) { return v.id === selectedId; });
 
-  var html = '<div style="' + _PD_STYLES.card + '">';
+  var html = '<div class="pd-variant-section" style="' + _PD_STYLES.card + '">';
   html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;">';
   html += '<h3 style="' + _PD_STYLES.sectionTitle + '">Variants ' +
-    '<span style="font-family:\'DM Sans\',sans-serif;font-size:0.85rem;color:var(--warm-gray,#888);font-weight:400;margin-left:4px;">' + variants.length + '</span>' +
+    '<span style="font-family:\'DM Sans\',sans-serif;font-size:0.92rem;color:var(--warm-gray,#888);font-weight:400;margin-left:4px;">' + variants.length + '</span>' +
     '</h3>';
   html += '<button class="btn btn-secondary btn-small" onclick="openAddVariantDialog(\'' + esc(pid) + '\')">+ Add Variant</button>';
   html += '</div>';
@@ -29555,18 +29607,19 @@ function renderVariantListRow(product, variant, recipe, idx, isSelected, totalCo
   var costTxt = pricing.cost != null ? '$' + pricing.cost.toFixed(2) : '—';
   var retailTxt = pricing.retail != null ? '$' + pricing.retail.toFixed(2) : '—';
   var channelsTxt = channels.length
-    ? channels.map(function(n) { return '<span style="background:rgba(42,124,111,0.12);color:var(--teal,#2a7c6f);padding:2px 8px;border-radius:10px;font-size:0.7rem;font-weight:500;margin-right:4px;">' + esc(n) + '</span>'; }).join('')
-    : '<span style="color:var(--warm-gray-light,#aaa);font-size:0.78rem;font-style:italic;">No channels</span>';
+    ? channels.map(function(n) { return '<span style="background:rgba(42,124,111,0.18);color:var(--teal,#2a7c6f);padding:3px 10px;border-radius:10px;font-size:0.92rem;font-weight:500;margin-right:4px;">' + esc(n) + '</span>'; }).join('')
+    : '<span class="pd-row-label" style="font-style:italic;">No channels</span>';
 
   var bg = isSelected ? 'rgba(42,124,111,0.08)' : (idx % 2 === 0 ? 'transparent' : 'rgba(0,0,0,0.015)');
   var leftBar = isSelected ? '4px solid var(--teal,#2a7c6f)' : '4px solid transparent';
+  var rowClass = isSelected ? 'pd-row-selected' : (idx % 2 === 1 ? 'pd-row-zebra' : '');
   var html = '<div style="border-left:' + leftBar + ';' + (idx < totalCount - 1 ? 'border-bottom:1px solid var(--cream-dark,#e8e0d4);' : '') + '">' +
-    '<div style="display:grid;grid-template-columns:1.5fr 1fr 1fr 1.5fr;gap:16px;align-items:center;padding:12px 16px;cursor:pointer;background:' + bg + ';transition:background 0.15s;" ' +
+    '<div class="' + rowClass + '" style="display:grid;grid-template-columns:1.5fr 1fr 1fr 1.5fr;gap:16px;align-items:center;padding:14px 16px;cursor:pointer;background:' + bg + ';transition:background 0.15s;" ' +
       'onmouseover="if(!' + (isSelected ? 'true' : 'false') + ')this.style.background=\'rgba(42,124,111,0.04)\'" onmouseout="this.style.background=\'' + bg + '\'" ' +
       'onclick="selectProductVariant(\'' + esc(pid) + '\',\'' + esc(variant.id) + '\')">';
-  html += '<span style="font-weight:' + (isSelected ? '600' : '500') + ';color:var(--text,#2a2a2a);">' + esc(label) + '</span>';
-  html += '<span style="font-size:0.85rem;"><span style="color:var(--warm-gray,#888);">Cost</span> <span style="font-family:monospace;color:var(--text,#2a2a2a);">' + costTxt + '</span></span>';
-  html += '<span style="font-size:0.85rem;"><span style="color:var(--warm-gray,#888);">Retail</span> <span style="font-family:monospace;font-weight:600;color:var(--text,#2a2a2a);">' + retailTxt + '</span></span>';
+  html += '<span class="pd-row-value" style="font-weight:' + (isSelected ? '600' : '500') + ';color:var(--text,#2a2a2a);">' + esc(label) + '</span>';
+  html += '<span><span class="pd-row-label" style="color:var(--warm-gray,#888);margin-right:6px;">Cost</span> <span class="pd-row-value" style="font-family:monospace;color:var(--text,#2a2a2a);">' + costTxt + '</span></span>';
+  html += '<span><span class="pd-row-label" style="color:var(--warm-gray,#888);margin-right:6px;">Retail</span> <span class="pd-row-value" style="font-family:monospace;font-weight:600;color:var(--text,#2a2a2a);">' + retailTxt + '</span></span>';
   html += '<span style="text-align:right;">' + channelsTxt + '</span>';
   html += '</div></div>';
   return html;
@@ -29594,13 +29647,13 @@ function renderVariantDetailPanel(product, variant, recipe) {
 
   var html = '<div style="border:1px solid var(--cream-dark,#e8e0d4);border-radius:10px;overflow:hidden;background:var(--surface-card,#fff);">';
   // Tab bar
-  html += '<div style="display:flex;border-bottom:1px solid var(--cream-dark,#e8e0d4);background:rgba(42,124,111,0.03);">';
+  html += '<div class="pd-tab-strip" style="display:flex;border-bottom:1px solid var(--cream-dark,#e8e0d4);background:rgba(42,124,111,0.06);">';
   tabs.forEach(function(t) {
     var on = t.id === activeTab;
-    html += '<button onclick="setVariantTab(\'' + esc(pid) + '\',\'' + t.id + '\')" ' +
-      'style="padding:12px 20px;border:none;background:' + (on ? 'var(--surface-card,#fff)' : 'transparent') +
-      ';color:' + (on ? 'var(--teal,#2a7c6f)' : 'var(--warm-gray,#888)') +
-      ';font-size:0.85rem;font-weight:' + (on ? '600' : '500') + ';cursor:pointer;border-bottom:2px solid ' +
+    html += '<button class="pd-tab-btn" onclick="setVariantTab(\'' + esc(pid) + '\',\'' + t.id + '\')" ' +
+      'style="padding:14px 22px;border:none;background:' + (on ? 'var(--surface-card,#fff)' : 'transparent') +
+      ';color:' + (on ? 'var(--teal,#2a7c6f)' : 'var(--text,#2a2a2a)') +
+      ';font-weight:' + (on ? '600' : '500') + ';cursor:pointer;border-bottom:2px solid ' +
       (on ? 'var(--teal,#2a7c6f)' : 'transparent') + ';margin-bottom:-1px;font-family:\'DM Sans\',sans-serif;">' +
       esc(t.label) + '</button>';
   });
@@ -29680,13 +29733,14 @@ function renderVariantPricingTab(product, variant, recipe, pricing) {
     html += '</div>';
     function tier(label, value, isActive) {
       var v = (value != null) ? '$' + value.toFixed(2) : '—';
+      var cls = isActive ? '' : 'pd-tier-card-inactive';
       var bg = isActive ? 'background:rgba(42,124,111,0.10);border:1px solid rgba(42,124,111,0.25);' : 'background:transparent;border:1px solid var(--cream-dark,#e8e0d4);';
       var lc = isActive ? 'var(--teal,#2a7c6f)' : 'var(--warm-gray,#888)';
       var vc = isActive ? 'var(--teal,#2a7c6f)' : 'var(--text,#2a2a2a)';
       var w = isActive ? '700' : '500';
-      return '<div style="flex:1;min-width:140px;padding:12px 16px;border-radius:8px;' + bg + '">' +
-        '<div style="font-size:0.72rem;color:' + lc + ';text-transform:uppercase;letter-spacing:0.06em;font-weight:600;margin-bottom:6px;">' + label + (isActive ? ' · Active' : '') + '</div>' +
-        '<div style="font-family:monospace;font-size:1.2rem;font-weight:' + w + ';color:' + vc + ';">' + v + '</div>' +
+      return '<div class="' + cls + '" style="flex:1;min-width:140px;padding:14px 18px;border-radius:8px;' + bg + '">' +
+        '<div class="pd-tier-label" style="color:' + lc + ';text-transform:uppercase;font-weight:600;margin-bottom:8px;">' + label + (isActive ? ' · Active' : '') + '</div>' +
+        '<div style="font-family:monospace;font-size:1.3rem;font-weight:' + w + ';color:' + vc + ';">' + v + '</div>' +
       '</div>';
     }
     html += '<div style="display:flex;gap:10px;flex-wrap:wrap;">';
@@ -30492,27 +30546,94 @@ function renderProductDetail(pid) {
     '</div>' : '');
   headerHtml += '</div>'; // close top row (name + actions)
 
+  // Mode selector — section context as a small dropdown below the action bar.
+  // Same four values as the sidebar slices (develop / catalog / sell / inventory),
+  // but rendered as a passive control that reflects entry point and lets the
+  // user override per-pid without leaving the page.
+  if (!isCreate && !isEditing) {
+    var _curSection = (typeof productSection === 'string') ? productSection : 'catalog';
+    headerHtml += '<div style="display:flex;justify-content:flex-end;align-items:center;gap:8px;margin:-2px 0 14px 0;font-size:0.82rem;color:var(--warm-gray,#888);">' +
+      '<label for="pdSectionSelect" style="font-weight:500;letter-spacing:0.02em;">Mode:</label>' +
+      '<select id="pdSectionSelect" onchange="setProductSection(this.value)" ' +
+        'style="padding:4px 8px;border:1px solid var(--cream-dark,#e8e0d4);border-radius:6px;background:var(--surface-card,#fff);color:var(--text,#2a2a2a);font-size:0.82rem;font-family:\'DM Sans\',sans-serif;cursor:pointer;">' +
+        '<option value="develop"' + (_curSection === 'develop' ? ' selected' : '') + '>Develop</option>' +
+        '<option value="catalog"' + (_curSection === 'catalog' ? ' selected' : '') + '>Catalog</option>' +
+        '<option value="sell"' + (_curSection === 'sell' ? ' selected' : '') + '>Sell</option>' +
+        '<option value="inventory"' + (_curSection === 'inventory' ? ' selected' : '') + '>Inventory</option>' +
+      '</select>' +
+    '</div>';
+  }
+
   // View-as toggle below name/actions row
   if (lensToggleHtml) {
     headerHtml += '<div style="margin:0 0 14px 0;">' + lensToggleHtml + '</div>';
   }
 
-  // Core product fields — description, category, production
+  // Core product fields next to hero. Mirrors the Edit Info form so every
+  // editable product-level value is visible on the detail page. Rows render
+  // only when they have a value to keep the header tidy. Noisy fields
+  // (Sort Order, Personalization, SEO) are tucked into a "More details"
+  // disclosure below the always-on rows.
   if (product.description) {
     headerHtml += '<div style="font-size:0.95rem;color:var(--text,#2a2a2a);line-height:1.55;margin-bottom:14px;">' +
       esc(product.description) + '</div>';
   }
-  headerHtml += '<dl style="display:grid;grid-template-columns:120px 1fr;gap:10px 20px;margin:0;font-size:0.88rem;">';
+  headerHtml += '<dl style="display:grid;grid-template-columns:120px 1fr;gap:8px 20px;margin:0;font-size:0.88rem;">';
   function _coreRow(label, value) {
     return '<dt style="font-size:0.72rem;color:var(--warm-gray,#888);font-weight:600;letter-spacing:0.06em;text-transform:uppercase;">' + label + '</dt>' +
       '<dd style="margin:0;color:var(--text,#2a2a2a);">' + value + '</dd>';
   }
   headerHtml += _coreRow('Category', _categoryText ? esc(_categoryText) : '<span style="color:var(--warm-gray-light,#aaa);">—</span>');
   headerHtml += _coreRow('Production', esc(_coreProduction));
+  if (product.shortDescription) {
+    headerHtml += _coreRow('Short Desc', esc(product.shortDescription));
+  }
+  if (product.sku) {
+    headerHtml += _coreRow('SKU', '<span style="font-family:monospace;">' + esc(product.sku) + '</span>');
+  }
+  if (product.slug) {
+    headerHtml += _coreRow('Slug', '<span style="font-family:monospace;">' + esc(product.slug) + '</span>');
+  }
+  if (product.etsyListingId) {
+    headerHtml += _coreRow('Etsy ID', '<span style="font-family:monospace;">' + esc(product.etsyListingId) + '</span>');
+  }
+  if (product.introducedAt) {
+    headerHtml += _coreRow('Introduced', esc(product.introducedAt));
+  }
+  if (product.availability === 'discontinued') {
+    headerHtml += _coreRow('Availability', '<span style="color:var(--danger,#c2410c);font-weight:600;">Discontinued</span>');
+  }
   if (product.businessLine === 'sculpture') {
     headerHtml += _coreRow('Business Line', '<span style="display:inline-block;background:var(--teal,#2a7c6f);color:white;font-size:0.72rem;padding:3px 10px;border-radius:10px;">Sculpture</span>');
   }
   headerHtml += '</dl>';
+
+  // "More details" disclosure — Sort Order, Personalization, SEO. These
+  // are editable in the Edit Info form but rarely consulted on the detail
+  // page, so collapse them by default.
+  var _moreParts = [];
+  if (product.sortOrder !== null && product.sortOrder !== undefined) {
+    _moreParts.push(['Sort Order', String(product.sortOrder)]);
+  }
+  if (product.personalization && product.personalization.enabled) {
+    var _pers = (product.personalization.required ? 'Required' : 'Optional');
+    if (product.personalization.instructions) _pers += ' — ' + product.personalization.instructions;
+    _moreParts.push(['Personalization', esc(_pers)]);
+  }
+  if (product.seoTitle) _moreParts.push(['SEO Title', esc(product.seoTitle)]);
+  if (product.seoDescription) _moreParts.push(['SEO Description', esc(product.seoDescription)]);
+  if (_moreParts.length) {
+    headerHtml += '<details style="margin-top:10px;font-size:0.85rem;">' +
+      '<summary style="cursor:pointer;color:var(--warm-gray,#888);font-weight:500;list-style:none;user-select:none;">More details</summary>' +
+      '<dl style="display:grid;grid-template-columns:120px 1fr;gap:6px 20px;margin:8px 0 0 0;font-size:0.85rem;">' +
+      _moreParts.map(function(r) {
+        return '<dt style="font-size:0.7rem;color:var(--warm-gray,#888);font-weight:600;letter-spacing:0.06em;text-transform:uppercase;">' + r[0] + '</dt>' +
+          '<dd style="margin:0;color:var(--text,#2a2a2a);">' + r[1] + '</dd>';
+      }).join('') +
+      '</dl>' +
+    '</details>';
+  }
+
   headerHtml += '</div>'; // close right column
   headerHtml += '</div>'; // close header grid
 
@@ -30582,16 +30703,6 @@ function renderProductDetail(pid) {
         '<div class="form-group" style="min-width:150px;"><label>Category</label><select id="pdCategory">' +
           catOptions.map(function(c) { return '<option value="' + c + '"' + (product.categories && product.categories.indexOf(c) !== -1 ? ' selected' : '') + '>' + c.charAt(0).toUpperCase() + c.slice(1) + '</option>'; }).join('') +
         '</select></div>' +
-        '<div class="form-group" style="min-width:120px;"><label>Retail Price ($)' + (function() {
-          var drift = product.recipeId ? window.__mastRecipeDrift[product.recipeId] : null;
-          if (drift && drift.retail) return renderDriftBadge(drift.retail.driftPct, drift.retail.recipeCents);
-          return '';
-        })() + '</label><input type="text" id="pdPrice" value="' + esc(currentRetailPrice || currentPrice) + '" placeholder="45.00"></div>' +
-        '<div class="form-group" style="min-width:120px;"><label>Direct Price ($)' + (function() {
-          var drift = product.recipeId ? window.__mastRecipeDrift[product.recipeId] : null;
-          if (drift && drift.direct) return renderDriftBadge(drift.direct.driftPct, drift.direct.recipeCents);
-          return '';
-        })() + '</label><input type="text" id="pdDirectPrice" value="' + esc(currentDirectPrice) + '" placeholder="optional"></div>' +
         '<div class="form-group" style="min-width:120px;"><label>Availability</label><select id="pdAvailability">' +
           '<option value="available"' + (product.availability !== 'discontinued' ? ' selected' : '') + '>Available</option>' +
           '<option value="discontinued"' + (product.availability === 'discontinued' ? ' selected' : '') + '>Discontinued</option>' +
@@ -30602,31 +30713,9 @@ function renderProductDetail(pid) {
         '</select></div>' : '') +
       '</div>';
 
-    // ── Wholesale Pricing ──
-    var wsChecked = !!product.isWholesale;
-    var currentWholesalePrice = product.wholesalePriceCents != null
-      ? (product.wholesalePriceCents / 100).toFixed(2) : '';
-    detailsHtml +=
-      '<div style="margin-top:12px;padding:12px 14px;background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;">' +
-        '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.85rem;font-weight:600;">' +
-          '<input type="checkbox" id="pdIsWholesale"' + (wsChecked ? ' checked' : '') + ' onchange="document.getElementById(\'pdWholesaleFields\').style.display=this.checked?\'\':\'none\';pdUpdateWholesaleVariantColumn(this.checked)">' +
-          'Wholesale Product' +
-        '</label>' +
-        '<div id="pdWholesaleFields" style="' + (wsChecked ? '' : 'display:none;') + 'margin-top:8px;display:' + (wsChecked ? 'flex' : 'none') + ';gap:16px;align-items:flex-end;flex-wrap:wrap;">' +
-          '<div class="form-group" style="margin:0;min-width:140px;"><label style="font-size:0.78rem;">Wholesale Price ($)' + (function() {
-            var drift = product.recipeId ? window.__mastRecipeDrift[product.recipeId] : null;
-            if (drift && drift.wholesale) return renderDriftBadge(drift.wholesale.driftPct, drift.wholesale.recipeCents);
-            return '';
-          })() + '</label>' +
-            '<input type="text" id="pdWholesalePrice" value="' + esc(currentWholesalePrice) + '" placeholder="22.00" style="font-family:monospace;"></div>' +
-          (product.recipeId
-            ? '<span style="font-size:0.72rem;color:var(--warm-gray);align-self:center;">Linked recipe: ' + esc(product.recipeId) + '</span>'
-            : (!isCreate && pid
-                // Channel-First Phase 1c (D38) — Add Recipe CTA when product has no linked recipe
-                ? '<button class="btn btn-secondary btn-small" style="align-self:center;font-size:0.78rem;" onclick="addRecipeForProduct(\'' + esc(pid) + '\')" title="Create a new recipe linked to this product">+ Add recipe</button>'
-                : '')) +
-        '</div>' +
-      '</div>';
+    // Pricing (retail / direct / wholesale) is edited in the Variants area
+    // (default variant + per-variant overrides). The Edit Info form holds
+    // product-level fields only.
 
     // ── Channel Bindings (Phase 2c — D26, D28, D29) ──
     detailsHtml += renderProductChannelBindings(product, true, isCreate);
@@ -30783,11 +30872,11 @@ function renderProductDetail(pid) {
   var prodHtml = '<div class="pd-tab-content" data-tab="production" style="' + (tab !== 'production' ? 'display:none;' : '') + 'padding:16px 0;">';
   if (isEditing) {
     var currentBuildTime = product.buildTime !== null && product.buildTime !== undefined ? product.buildTime : '';
-    var currentCostToBuild = product.costToBuild !== null && product.costToBuild !== undefined ? (product.costToBuild / 100).toFixed(2) : '';
+    // Cost to Build is edited in the Variants area (default variant pricing tab)
+    // — recipe + variant pricing is the source of truth for cost.
     prodHtml += '<div class="product-detail-section"><div class="product-detail-section-title">Production Details</div>' +
       '<div style="display:flex;gap:16px;flex-wrap:wrap;">' +
         '<div class="form-group" style="min-width:150px;"><label>Build Time (minutes)</label><input type="number" id="pdBuildTime" min="0" value="' + currentBuildTime + '" placeholder="e.g. 120"></div>' +
-        '<div class="form-group" style="min-width:150px;"><label>Cost to Build ($)</label><input type="text" id="pdCostToBuild" value="' + currentCostToBuild + '" placeholder="e.g. 15.00"></div>' +
       '</div>' +
       '<div class="form-group"><label>Materials</label>' +
         '<div id="pdMaterialsTags" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px;">' +
@@ -31466,16 +31555,33 @@ async function saveProduct(pid) {
       showToast('Product name is required', true); return;
     }
 
+    // Pricing fields no longer live in the Edit Info form — they're edited in
+    // the variant area (default + per-variant). When the form doesn't render
+    // these inputs, preserve the existing product values so the save doesn't
+    // wipe price data. Look up the existing record up front for fallback.
+    var __existingForFallback = pid ? productsData.find(function(p) { return p.pid === pid; }) : null;
+    var pdPriceEl = document.getElementById('pdPrice');
+    var pdDirectEl = document.getElementById('pdDirectPrice');
+    var pdIsWholesaleEl = document.getElementById('pdIsWholesale');
+    var pdWholesaleEl = document.getElementById('pdWholesalePrice');
+
     // Channel-First Phase 1a — primary "Price" input now represents the Retail tier;
     // Direct is captured separately. priceCents stays as legacy fallback (== retail).
-    var priceStr = document.getElementById('pdPrice').value.trim();
-    var retailPriceCents = parsePriceToCents(priceStr);
-    var priceCents = retailPriceCents;
-    var directPriceStr = ((document.getElementById('pdDirectPrice') || {}).value || '').trim();
-    var directPriceCents = directPriceStr ? parsePriceToCents(directPriceStr) : null;
-    var isWholesale = !!(document.getElementById('pdIsWholesale') || {}).checked;
-    var wholesalePriceStr = (document.getElementById('pdWholesalePrice') || {}).value || '';
-    var wholesalePriceCents = isWholesale ? parsePriceToCents(wholesalePriceStr.trim()) : null;
+    var retailPriceCents = pdPriceEl
+      ? parsePriceToCents(pdPriceEl.value.trim())
+      : (__existingForFallback ? (__existingForFallback.retailPriceCents != null ? __existingForFallback.retailPriceCents : __existingForFallback.priceCents) : null);
+    var priceCents = pdPriceEl
+      ? retailPriceCents
+      : (__existingForFallback ? __existingForFallback.priceCents : null);
+    var directPriceCents = pdDirectEl
+      ? (pdDirectEl.value.trim() ? parsePriceToCents(pdDirectEl.value.trim()) : null)
+      : (__existingForFallback ? (__existingForFallback.directPriceCents || null) : null);
+    var isWholesale = pdIsWholesaleEl
+      ? !!pdIsWholesaleEl.checked
+      : !!(__existingForFallback && __existingForFallback.isWholesale);
+    var wholesalePriceCents = pdWholesaleEl
+      ? (isWholesale ? parsePriceToCents((pdWholesaleEl.value || '').trim()) : null)
+      : (__existingForFallback ? (__existingForFallback.wholesalePriceCents || null) : null);
     var slug = document.getElementById('pdSlug').value.trim() || generateSlug(name);
     var category = document.getElementById('pdCategory').value;
     var availability = document.getElementById('pdAvailability').value;
@@ -31492,7 +31598,9 @@ async function saveProduct(pid) {
     var buildTimeEl = document.getElementById('pdBuildTime');
     var buildTime = buildTimeEl && buildTimeEl.value !== '' ? parseInt(buildTimeEl.value) : null;
     var costToBuildEl = document.getElementById('pdCostToBuild');
-    var costToBuild = costToBuildEl ? parsePriceToCents(costToBuildEl.value) : null;
+    var costToBuild = costToBuildEl
+      ? parsePriceToCents(costToBuildEl.value)
+      : (__existingForFallback ? (__existingForFallback.costToBuild != null ? __existingForFallback.costToBuild : null) : null);
     var materials = Array.from(document.querySelectorAll('#pdMaterialsTags .pd-material-tag')).map(function(tag) { return tag.textContent.replace(/\u00d7$/, '').trim(); }).filter(Boolean);
     var shippingCatEl = document.getElementById('pdShippingCategory');
     var shippingCategory = shippingCatEl && shippingCatEl.value ? shippingCatEl.value : null;
