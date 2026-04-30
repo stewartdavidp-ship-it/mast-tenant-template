@@ -24741,15 +24741,15 @@ function developCreateNewProduct() {
 
 function rebuildProductCategoryFilter() {
   var sel = document.getElementById('productsCategory');
-  if (!sel || !window.CATEGORIES || !window.CATEGORIES.length) return;
+  if (!sel || !CATEGORIES || !CATEGORIES.length) return;
   var current = sel.value;
   var opts = '<option value="all">All Categories</option>';
-  window.CATEGORIES.forEach(function(c) {
+  CATEGORIES.forEach(function(c) {
     opts += '<option value="' + c + '">' + c.charAt(0).toUpperCase() + c.slice(1) + '</option>';
   });
   opts += '<option value="__manage__" style="color:var(--teal,#2a7c6f);border-top:1px solid var(--charcoal-light,#333);">⚙ Manage Categories…</option>';
   sel.innerHTML = opts;
-  if (current && current !== '__manage__' && window.CATEGORIES.indexOf(current) !== -1) sel.value = current;
+  if (current && current !== '__manage__' && CATEGORIES.indexOf(current) !== -1) sel.value = current;
   else sel.value = 'all';
 }
 
@@ -26827,11 +26827,11 @@ function handleImgCategoryChange(sel) {
       var s = document.getElementById('imgCategory');
       if (!s) return;
       var prevVal = s.dataset.lastValue || '';
-      var newOpts = (window.CATEGORIES || []).map(function(cat) {
+      var newOpts = CATEGORIES.map(function(cat) {
         return '<option value="' + cat + '">' + cat.charAt(0).toUpperCase() + cat.slice(1) + '</option>';
       }).join('') + '<option value="__manage__" style="color:var(--teal,#2a7c6f);border-top:1px solid var(--charcoal-light,#333);">&#9881; Manage Categories…</option>';
       s.innerHTML = newOpts;
-      s.value = (prevVal && (window.CATEGORIES || []).indexOf(prevVal) !== -1) ? prevVal : ((window.CATEGORIES || [])[0] || '');
+      s.value = (prevVal && CATEGORIES.indexOf(prevVal) !== -1) ? prevVal : (CATEGORIES[0] || '');
       s.dataset.lastValue = s.value;
     });
   }
@@ -26848,11 +26848,11 @@ function handleGalCategoryChange(sel) {
       var s = document.getElementById('galCategory');
       if (!s) return;
       var prevVal = s.dataset.lastValue || '';
-      var newOpts = (window.CATEGORIES || []).map(function(cat) {
+      var newOpts = CATEGORIES.map(function(cat) {
         return '<option value="' + cat + '">' + cat.charAt(0).toUpperCase() + cat.slice(1) + '</option>';
       }).join('') + '<option value="__manage__" style="color:var(--teal,#2a7c6f);border-top:1px solid var(--charcoal-light,#333);">&#9881; Manage Categories…</option>';
       s.innerHTML = newOpts;
-      s.value = (prevVal && (window.CATEGORIES || []).indexOf(prevVal) !== -1) ? prevVal : ((window.CATEGORIES || [])[0] || '');
+      s.value = (prevVal && CATEGORIES.indexOf(prevVal) !== -1) ? prevVal : (CATEGORIES[0] || '');
       s.dataset.lastValue = s.value;
     });
   }
