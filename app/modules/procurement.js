@@ -287,7 +287,8 @@
         ';cursor:pointer;margin-right:6px;font-family:\'DM Sans\',sans-serif;">' +
         esc(label) + ' <span style="opacity:0.7;font-weight:400;">(' + n + ')</span></button>';
     }
-    html += '<div style="margin-bottom:14px;">';
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px;">';
+    html += '<div>';
     html += pill('open',               'Open',      counts.open);
     html += pill('draft',              'Draft',     counts.draft);
     html += pill('submitted',          'Submitted', counts.submitted);
@@ -295,6 +296,8 @@
     html += pill('received',           'Received',  counts.received);
     html += pill('cancelled',          'Cancelled', counts.cancelled);
     html += pill('all',                'All',       counts.all);
+    html += '</div>';
+    html += '<button class="btn btn-primary btn-small" onclick="window.procurementOpenNewPo()">+ New PO</button>';
     html += '</div>';
 
     if (filtered.length === 0) {
@@ -345,9 +348,13 @@
     if (po.dropShip) html += '<span><strong>Drop-ship</strong></span>';
     if (po.memo) html += '<span><strong>Memo</strong> (consignment-in)</span>';
     html += '</div>';
-    if (canCancel) {
-      html += '<button class="btn btn-secondary btn-small" style="color:var(--danger);" onclick="window.procurementCancelPo(\'' + esc(po.poId) + '\')">Cancel PO</button>';
-    }
+    var poLines = po.lines || [];
+    var hasOutstanding = poLines.some(function(l) { return (Number(l.qtyOrdered) || 0) > (Number(l.qtyReceived) || 0); });
+    var canReceive = (po.status === 'submitted' || po.status === 'partially_received' || po.status === 'draft') && hasOutstanding;
+    var rightActions = '';
+    if (canReceive)  rightActions += '<button class="btn btn-primary btn-small" onclick="window.procurementOpenRecordReceipt(\'' + esc(po.poId) + '\')">Record Receipt</button>';
+    if (canCancel)   rightActions += ' <button class="btn btn-secondary btn-small" style="color:var(--danger);" onclick="window.procurementCancelPo(\'' + esc(po.poId) + '\')">Cancel PO</button>';
+    html += rightActions;
     html += '</div>';
 
     var lines = po.lines || [];
@@ -383,6 +390,7 @@
         var rQty = rLines.reduce(function(s, l) { return s + (Number(l.qtyReceivedNow) || 0); }, 0);
         var rValue = rLines.reduce(function(s, l) { return s + (Number(l.qtyReceivedNow) || 0) * (Number(l.unitCostHomeCurrency) || 0); }, 0);
         var addl = (r.additionalCosts || []).reduce(function(s, c) { return s + (Number(c.amount) || 0); }, 0);
+        var canApplyLanded = addl > 0 && !r.landedCostsApplied;
         html += '<div style="padding:10px 14px;border:1px solid var(--cream-dark);border-radius:8px;background:var(--surface-card);font-size:0.85rem;color:var(--text);display:flex;justify-content:space-between;gap:14px;align-items:center;flex-wrap:wrap;">' +
           '<span>' + fmtDate(r.receivedAt) +
           (r.vendorInvoiceRef ? ' · <span style="font-family:monospace;">' + esc(r.vendorInvoiceRef) + '</span>' : '') +
@@ -390,7 +398,10 @@
           ' · ' + rQty + ' units' +
           (r.landedCostsApplied ? ' · <span style="color:var(--teal);">landed costs applied</span>' : '') +
           '</span>' +
+          '<span style="display:flex;align-items:center;gap:10px;">' +
           '<span style="font-family:monospace;">' + fmt$(rValue) + (addl > 0 ? ' <span style="opacity:0.7;">+ ' + fmt$(addl) + ' addl</span>' : '') + '</span>' +
+          (canApplyLanded ? '<button class="btn btn-secondary btn-small" onclick="window.procurementApplyLandedCosts(\'' + esc(r.receiptId) + '\')">Apply landed</button>' : '') +
+          '</span>' +
         '</div>';
       });
       html += '</div>';
@@ -968,6 +979,481 @@
   }
 
   // ============================================================
+  // Write actions — New PO + Record Receipt + Apply Landed Costs
+  // ============================================================
+  //
+  // Multi-doc writes use MastDB.multiUpdate where atomicity matters
+  // (record_receipt creates a receipt + lots + updates PO line rollup +
+  // status in one atomic write). Logic mirrors the procurement.ts MCP
+  // tool implementations — same Firebase paths, same field shape, same
+  // derived-state rules.
+
+  // ----------- + New PO -----------
+
+  // Per-modal builder state. Each "+ Add Line" appends to this and
+  // re-renders the form. Cleared when the modal closes.
+  var newPoLines = [];
+
+  function openNewPoModal() {
+    if (typeof openModal !== 'function') return;
+    newPoLines = [_blankPoLine()];
+    openModal(_renderNewPoModal());
+    setTimeout(function() { var el = document.getElementById('npVendor'); if (el) el.focus(); }, 50);
+  }
+  function _blankPoLine() {
+    return { kind: 'material', targetId: '', qtyOrdered: 1, unitCost: 0, vendorSku: '', unitOfMeasure: '' };
+  }
+  function _renderNewPoModal() {
+    var vendors = Object.values(vendorsData).filter(function(v) { return v.active !== false; });
+    vendors.sort(function(a, b) { return (a.name || '').localeCompare(b.name || ''); });
+    var html = '<div style="max-width:760px;">' +
+      '<h3 style="margin:0 0 14px 0;">New Purchase Order</h3>';
+    if (vendors.length === 0) {
+      html += '<div style="padding:16px;border:1px dashed var(--cream-dark);border-radius:8px;color:var(--text);opacity:0.8;">No vendors yet. Create one first via Vendors → + New Vendor.</div>' +
+        '<div style="display:flex;justify-content:flex-end;margin-top:14px;"><button class="btn btn-secondary" onclick="closeModal()">Close</button></div></div>';
+      return html;
+    }
+    html += '<div style="display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr;gap:10px;">' +
+      '<div class="form-group"><label for="npVendor">Vendor (required)</label>' +
+        '<select id="npVendor">' +
+          vendors.map(function(v) { return '<option value="' + esc(v.vendorId) + '">' + esc(v.name) + '</option>'; }).join('') +
+        '</select>' +
+      '</div>' +
+      '<div class="form-group"><label for="npNumber">PO #</label><input id="npNumber" type="text" placeholder="PO-2026-003"></div>' +
+      '<div class="form-group"><label for="npOrdered">Order date</label><input id="npOrdered" type="date" value="' + (new Date().toISOString().slice(0, 10)) + '"></div>' +
+      '<div class="form-group"><label for="npExpected">Expected date</label><input id="npExpected" type="date"></div>' +
+    '</div>';
+    html += '<div class="form-group"><label for="npNotes">Notes</label><input id="npNotes" type="text"></div>';
+    // Lines
+    html += '<div style="margin-top:10px;font-size:0.85rem;font-weight:600;color:var(--text);">Lines</div>';
+    html += '<div style="border:1px solid var(--cream-dark);border-radius:8px;overflow:hidden;background:var(--surface-card);margin-top:6px;">';
+    html += '<div style="display:grid;grid-template-columns:1fr 2fr 1fr 0.8fr 0.8fr 30px;gap:8px;padding:8px 12px;background:rgba(42,124,111,0.06);font-size:0.72rem;text-transform:uppercase;letter-spacing:0.05em;font-weight:600;color:var(--text);border-bottom:1px solid var(--cream-dark);">' +
+      '<span>Kind</span><span>Material/Product</span><span>Vendor SKU / UoM</span><span>Qty</span><span>Unit cost</span><span></span>' +
+    '</div>';
+    var materials = Object.entries(materialsData).filter(function(e) { return e[1].status !== 'archived'; })
+      .sort(function(a, b) { return (a[1].name || '').localeCompare(b[1].name || ''); });
+    newPoLines.forEach(function(line, idx) {
+      var matOptions = '<option value="">—</option>' + materials.map(function(e) {
+        return '<option value="' + esc(e[0]) + '"' + (line.targetId === e[0] ? ' selected' : '') + '>' + esc(e[1].name) + '</option>';
+      }).join('');
+      html += '<div style="display:grid;grid-template-columns:1fr 2fr 1fr 0.8fr 0.8fr 30px;gap:8px;padding:8px 12px;border-bottom:1px solid var(--cream-dark);align-items:center;">' +
+        '<select onchange="window.procurementUpdateNewPoLine(' + idx + ',\'kind\',this.value)">' +
+          '<option value="material"' + (line.kind === 'material' ? ' selected' : '') + '>material</option>' +
+          '<option value="product"' + (line.kind === 'product' ? ' selected' : '') + '>product</option>' +
+        '</select>' +
+        (line.kind === 'material'
+          ? '<select onchange="window.procurementUpdateNewPoLine(' + idx + ',\'targetId\',this.value)">' + matOptions + '</select>'
+          : '<input type="text" placeholder="product PID" value="' + esc(line.targetId) + '" oninput="window.procurementUpdateNewPoLine(' + idx + ',\'targetId\',this.value)">') +
+        '<input type="text" placeholder="SKU / UoM" value="' + esc(line.vendorSku || line.unitOfMeasure || '') + '" oninput="window.procurementUpdateNewPoLine(' + idx + ',\'vendorSku\',this.value)">' +
+        '<input type="number" min="0" step="0.01" value="' + (line.qtyOrdered || 0) + '" oninput="window.procurementUpdateNewPoLine(' + idx + ',\'qtyOrdered\',parseFloat(this.value)||0)">' +
+        '<input type="number" min="0" step="0.01" value="' + (line.unitCost || 0) + '" oninput="window.procurementUpdateNewPoLine(' + idx + ',\'unitCost\',parseFloat(this.value)||0)">' +
+        '<button class="btn btn-secondary btn-small" style="padding:4px 8px;" onclick="window.procurementRemoveNewPoLine(' + idx + ')" title="Remove">×</button>' +
+      '</div>';
+    });
+    html += '</div>';
+    html += '<button class="btn btn-secondary btn-small" style="margin-top:10px;" onclick="window.procurementAddNewPoLine()">+ Add line</button>';
+    html += '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;">';
+    html += '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>';
+    html += '<button class="btn btn-primary" onclick="window.procurementSaveNewPo()">Create PO</button>';
+    html += '</div></div>';
+    return html;
+  }
+  function updateNewPoLine(idx, field, value) {
+    if (!newPoLines[idx]) return;
+    newPoLines[idx][field] = value;
+  }
+  function addNewPoLine() {
+    newPoLines.push(_blankPoLine());
+    document.getElementById('modalContent').innerHTML = _renderNewPoModal();
+  }
+  function removeNewPoLine(idx) {
+    newPoLines.splice(idx, 1);
+    if (newPoLines.length === 0) newPoLines.push(_blankPoLine());
+    document.getElementById('modalContent').innerHTML = _renderNewPoModal();
+  }
+  async function saveNewPo() {
+    var vendorId = (document.getElementById('npVendor') || {}).value;
+    if (!vendorId) {
+      if (typeof showToast === 'function') showToast('Pick a vendor', true);
+      return;
+    }
+    var vendor = vendorsData[vendorId];
+    // Validate every line + ensure target exists.
+    var validLines = [];
+    for (var i = 0; i < newPoLines.length; i++) {
+      var l = newPoLines[i];
+      if (!l.targetId || !(l.qtyOrdered > 0)) continue;
+      if (l.kind === 'material' && !materialsData[l.targetId]) {
+        if (typeof showToast === 'function') showToast('Line ' + (i + 1) + ': material not found', true);
+        return;
+      }
+      validLines.push(l);
+    }
+    if (validLines.length === 0) {
+      if (typeof showToast === 'function') showToast('Add at least one line with target + qty > 0', true);
+      return;
+    }
+    var poId = MastDB.newKey('admin/purchaseOrders');
+    var now = new Date().toISOString();
+    var lines = validLines.map(function(l) {
+      var lineId = MastDB.newKey('admin/purchaseOrders');
+      var uom = null;
+      // For materials, prefer the material's declared UoM.
+      if (l.kind === 'material' && materialsData[l.targetId]) uom = materialsData[l.targetId].unitOfMeasure || null;
+      return {
+        lineId: lineId,
+        kind: l.kind,
+        targetId: l.targetId,
+        vendorSku: l.vendorSku || null,
+        descriptionSnapshot: null,
+        qtyOrdered: l.qtyOrdered,
+        unitOfMeasure: uom,
+        unitCost: l.unitCost || 0,
+        discount: null,
+        tax: null,
+        qtyReceived: 0,
+        qtyCancelled: 0,
+        expectedDate: null,
+        acquisitionTarget: l.kind === 'material' ? 'build-material' : null
+      };
+    });
+    var orderDate = (document.getElementById('npOrdered') || {}).value || null;
+    var expectedDate = (document.getElementById('npExpected') || {}).value || null;
+    var record = {
+      poId: poId,
+      poNumber: ((document.getElementById('npNumber') || {}).value || '').trim() || null,
+      vendorId: vendorId,
+      status: 'draft',
+      orderDate: orderDate,
+      expectedDate: expectedDate,
+      shipToLocationId: null,
+      currency: vendor && vendor.defaultCurrency || null,
+      fxRateAtPo: null,
+      subtotal: null, tax: null, shipping: null, total: null,
+      paymentTerms: vendor && vendor.defaultPaymentTerms || null,
+      notes: ((document.getElementById('npNotes') || {}).value || '').trim() || null,
+      vendorMessage: null, createdBy: null, approvedBy: null, incoterm: null,
+      dropShip: false, dropShipCustomerId: null, memo: false,
+      lines: lines,
+      createdAt: now,
+      updatedAt: now
+    };
+    try {
+      await MastDB.set('admin/purchaseOrders/' + poId, record);
+      purchaseOrdersData[poId] = record;
+      newPoLines = [];
+      closeModal();
+      if (typeof showToast === 'function') showToast('PO created (draft)');
+      render();
+    } catch (err) {
+      if (typeof showToast === 'function') showToast('Failed to create PO: ' + (err && err.message), true);
+    }
+  }
+
+  // ----------- Record Receipt -----------
+
+  var receiveDraft = null; // { poId, lines: [{poLineId, qtyReceivedNow, unitCostHomeCurrency, lotNumber}], invoiceRef, additionalCosts }
+
+  function openRecordReceiptModal(poId) {
+    if (typeof openModal !== 'function') return;
+    var po = purchaseOrdersData[poId];
+    if (!po) return;
+    receiveDraft = {
+      poId: poId,
+      lines: (po.lines || []).map(function(l) {
+        var outstanding = (Number(l.qtyOrdered) || 0) - (Number(l.qtyReceived) || 0);
+        return {
+          poLineId: l.lineId,
+          qtyReceivedNow: outstanding > 0 ? outstanding : 0,
+          unitCostHomeCurrency: '',
+          lotNumber: ''
+        };
+      }),
+      invoiceRef: '',
+      receivedAt: new Date().toISOString().slice(0, 10),
+      addlLabel: '',
+      addlAmount: ''
+    };
+    openModal(_renderRecordReceiptModal());
+    setTimeout(function() { var el = document.getElementById('rrInvoice'); if (el) el.focus(); }, 50);
+  }
+  function _renderRecordReceiptModal() {
+    var po = purchaseOrdersData[receiveDraft.poId];
+    var v = vendorsData[po.vendorId] || {};
+    var html = '<div style="max-width:760px;">' +
+      '<h3 style="margin:0 0 4px 0;">Record Receipt</h3>' +
+      '<div style="font-size:0.85rem;color:var(--text);opacity:0.7;margin-bottom:14px;">' + esc(po.poNumber || po.poId.slice(0, 8)) + ' · ' + esc(v.name || '—') + '</div>';
+    html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">' +
+      '<div class="form-group"><label for="rrReceived">Received date</label><input id="rrReceived" type="date" value="' + esc(receiveDraft.receivedAt) + '"></div>' +
+      '<div class="form-group"><label for="rrInvoice">Vendor invoice #</label><input id="rrInvoice" type="text"></div>' +
+    '</div>';
+    html += '<div style="margin-top:8px;font-size:0.85rem;font-weight:600;color:var(--text);">Lines</div>';
+    html += '<div style="border:1px solid var(--cream-dark);border-radius:8px;overflow:hidden;background:var(--surface-card);margin-top:6px;">';
+    html += '<div style="display:grid;grid-template-columns:2fr 0.8fr 1fr 1fr 1.2fr;gap:8px;padding:8px 12px;background:rgba(42,124,111,0.06);font-size:0.72rem;text-transform:uppercase;letter-spacing:0.05em;font-weight:600;color:var(--text);border-bottom:1px solid var(--cream-dark);">' +
+      '<span>Target</span><span>Outstanding</span><span>Receive now</span><span>Unit cost (override)</span><span>Lot #</span>' +
+    '</div>';
+    (po.lines || []).forEach(function(l, idx) {
+      var draft = receiveDraft.lines[idx];
+      var outstanding = (Number(l.qtyOrdered) || 0) - (Number(l.qtyReceived) || 0);
+      var targetLabel = l.descriptionSnapshot ||
+        (l.kind === 'material' ? (materialsData[l.targetId] && materialsData[l.targetId].name) || l.targetId : l.targetId);
+      html += '<div style="display:grid;grid-template-columns:2fr 0.8fr 1fr 1fr 1.2fr;gap:8px;padding:8px 12px;border-bottom:1px solid var(--cream-dark);align-items:center;font-size:0.85rem;">' +
+        '<span>' + esc(targetLabel) + '</span>' +
+        '<span style="font-family:monospace;">' + outstanding + (l.unitOfMeasure ? ' ' + esc(l.unitOfMeasure) : '') + '</span>' +
+        '<input type="number" min="0" max="' + outstanding + '" step="0.01" value="' + (draft.qtyReceivedNow || 0) + '" oninput="window.procurementUpdateReceiveLine(' + idx + ',\'qtyReceivedNow\',parseFloat(this.value)||0)">' +
+        '<input type="number" min="0" step="0.01" placeholder="' + (Number(l.unitCost) || 0).toFixed(2) + '" value="' + (draft.unitCostHomeCurrency || '') + '" oninput="window.procurementUpdateReceiveLine(' + idx + ',\'unitCostHomeCurrency\',this.value)">' +
+        '<input type="text" placeholder="LOT-…" value="' + esc(draft.lotNumber || '') + '" oninput="window.procurementUpdateReceiveLine(' + idx + ',\'lotNumber\',this.value)">' +
+      '</div>';
+    });
+    html += '</div>';
+    // Additional costs (single-row capture for simplicity; full multi-row UI deferred)
+    html += '<div style="margin-top:14px;font-size:0.85rem;font-weight:600;color:var(--text);">Additional costs (optional)</div>';
+    html += '<div style="display:grid;grid-template-columns:1fr 0.8fr;gap:10px;">' +
+      '<div class="form-group"><label for="rrAddlLabel">Label (e.g. freight)</label><input id="rrAddlLabel" type="text"></div>' +
+      '<div class="form-group"><label for="rrAddlAmount">Amount ($)</label><input id="rrAddlAmount" type="number" min="0" step="0.01"></div>' +
+    '</div>' +
+    '<div style="font-size:0.78rem;color:var(--text);opacity:0.65;margin-top:-4px;">Captured here; allocate via "Apply landed" once received.</div>';
+    html += '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;">';
+    html += '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>';
+    html += '<button class="btn btn-primary" onclick="window.procurementSaveReceipt()">Record</button>';
+    html += '</div></div>';
+    return html;
+  }
+  function updateReceiveLine(idx, field, value) {
+    if (!receiveDraft || !receiveDraft.lines[idx]) return;
+    receiveDraft.lines[idx][field] = value;
+  }
+  async function saveReceipt() {
+    if (!receiveDraft) return;
+    var po = purchaseOrdersData[receiveDraft.poId];
+    if (!po) return;
+    // Read DOM (single-source for invoice / receivedAt / addl)
+    var receivedAt = ((document.getElementById('rrReceived') || {}).value || receiveDraft.receivedAt) + 'T00:00:00.000Z';
+    var invoiceRef = ((document.getElementById('rrInvoice') || {}).value || '').trim() || null;
+    var addlLabel = ((document.getElementById('rrAddlLabel') || {}).value || '').trim();
+    var addlAmount = parseFloat((document.getElementById('rrAddlAmount') || {}).value || '');
+    // Collect non-zero lines
+    var receiveLines = [];
+    (po.lines || []).forEach(function(l, idx) {
+      var d = receiveDraft.lines[idx];
+      var qty = Number(d.qtyReceivedNow) || 0;
+      if (!(qty > 0)) return;
+      var unitOverride = parseFloat(d.unitCostHomeCurrency);
+      var unitCost = (!isNaN(unitOverride) && unitOverride > 0) ? unitOverride : (Number(l.unitCost) || 0);
+      receiveLines.push({
+        poLineId: l.lineId,
+        qtyReceivedNow: qty,
+        unitCostHomeCurrency: unitCost,
+        lotNumber: (d.lotNumber || '').trim() || null,
+        _line: l
+      });
+    });
+    if (receiveLines.length === 0) {
+      if (typeof showToast === 'function') showToast('Enter at least one qty > 0', true);
+      return;
+    }
+
+    var now = new Date().toISOString();
+    var receiptId = MastDB.newKey('admin/purchaseReceipts');
+    var updates = {};
+    var generatedLots = [];
+
+    // Materialize lots + record receipt lines.
+    var receiptRecordLines = receiveLines.map(function(rl) {
+      var lotPath = rl._line.kind === 'material' ? 'admin/materialLots' : 'admin/productLots';
+      var lotId = MastDB.newKey(lotPath);
+      generatedLots.push({ kind: rl._line.kind, lotId: lotId });
+      var lot = {
+        lotId: lotId,
+        kind: rl._line.kind,
+        targetId: rl._line.targetId,
+        lotNumber: rl.lotNumber,
+        vendorId: po.vendorId,
+        receiptId: receiptId,
+        qtyReceived: rl.qtyReceivedNow,
+        qtyRemaining: rl.qtyReceivedNow,
+        unitCost: rl.unitCostHomeCurrency,
+        currency: po.currency || null,
+        receivedAt: receivedAt,
+        expiresAt: null,
+        attrs: null,
+        consumptionRule: null,
+        owned: po.memo === true ? false : true,
+        ownershipDate: po.memo === true ? null : receivedAt,
+        notes: null,
+        createdAt: now,
+        updatedAt: now
+      };
+      updates[lotPath + '/' + lotId] = lot;
+      return {
+        poLineId: rl.poLineId,
+        qtyReceivedNow: rl.qtyReceivedNow,
+        unitCostHomeCurrency: rl.unitCostHomeCurrency,
+        lotId: lotId,
+        notes: null
+      };
+    });
+
+    var additionalCosts = [];
+    if (addlLabel && addlAmount > 0) {
+      additionalCosts.push({ label: addlLabel, amount: addlAmount, currency: po.currency || null, allocationMethod: 'value' });
+    }
+
+    var receipt = {
+      receiptId: receiptId,
+      poId: po.poId,
+      receivedAt: receivedAt,
+      receivedBy: null,
+      vendorInvoiceRef: invoiceRef,
+      fxRateAtReceipt: null,
+      lines: receiptRecordLines,
+      additionalCosts: additionalCosts,
+      notes: null,
+      createdAt: now
+    };
+    updates['admin/purchaseReceipts/' + receiptId] = receipt;
+
+    // Recompute PO line qtyReceived from all receipts (existing + new).
+    var allReceipts = Object.values(purchaseReceiptsData).concat([receipt]);
+    var sumByLine = {};
+    allReceipts.forEach(function(r) {
+      if (r.poId !== po.poId) return;
+      (r.lines || []).forEach(function(rl) {
+        sumByLine[rl.poLineId] = (sumByLine[rl.poLineId] || 0) + (Number(rl.qtyReceivedNow) || 0);
+      });
+    });
+    var nextLines = (po.lines || []).map(function(l) {
+      return Object.assign({}, l, { qtyReceived: sumByLine[l.lineId] || 0 });
+    });
+    var allMet = nextLines.length > 0 && nextLines.every(function(l) { return (l.qtyReceived || 0) >= (l.qtyOrdered || 0); });
+    var anyReceived = nextLines.some(function(l) { return (l.qtyReceived || 0) > 0; });
+    var nextStatus = po.status;
+    if (po.status !== 'cancelled' && po.status !== 'closed') {
+      if (allMet) nextStatus = 'received';
+      else if (anyReceived) nextStatus = 'partially_received';
+    }
+    updates['admin/purchaseOrders/' + po.poId + '/lines'] = nextLines;
+    updates['admin/purchaseOrders/' + po.poId + '/status'] = nextStatus;
+    updates['admin/purchaseOrders/' + po.poId + '/updatedAt'] = now;
+
+    // Append to ProductSupplier priceHistory for matching (vendorId, kind, targetId).
+    Object.entries(productSuppliersData).forEach(function(entry) {
+      var psId = entry[0], ps = entry[1];
+      if (ps.vendorId !== po.vendorId) return;
+      receiveLines.forEach(function(rl) {
+        if (ps.targetKind !== rl._line.kind || ps.targetId !== rl._line.targetId) return;
+        if (!(rl.unitCostHomeCurrency > 0)) return;
+        var nextHistory = (ps.priceHistory || []).concat([{
+          unitCost: rl.unitCostHomeCurrency,
+          currency: ps.currency || null,
+          recordedAt: now,
+          source: 'receipt',
+          ref: receiptId
+        }]);
+        updates['admin/productSuppliers/' + psId + '/priceHistory'] = nextHistory;
+        updates['admin/productSuppliers/' + psId + '/unitCost'] = rl.unitCostHomeCurrency;
+        updates['admin/productSuppliers/' + psId + '/updatedAt'] = now;
+      });
+    });
+
+    try {
+      await MastDB.multiUpdate(updates);
+      // Local cache refresh
+      purchaseReceiptsData[receiptId] = receipt;
+      generatedLots.forEach(function(g) {
+        var lot = updates[(g.kind === 'material' ? 'admin/materialLots' : 'admin/productLots') + '/' + g.lotId];
+        if (g.kind === 'material') materialLotsData[g.lotId] = lot;
+        else productLotsData[g.lotId] = lot;
+      });
+      po.lines = nextLines;
+      po.status = nextStatus;
+      po.updatedAt = now;
+      receiveDraft = null;
+      closeModal();
+      if (typeof showToast === 'function') showToast('Receipt recorded · ' + generatedLots.length + ' lot' + (generatedLots.length === 1 ? '' : 's') + ' created');
+      render();
+    } catch (err) {
+      if (typeof showToast === 'function') showToast('Failed to record receipt: ' + (err && err.message), true);
+    }
+  }
+
+  // ----------- Apply Landed Costs -----------
+
+  async function applyLandedCosts(receiptId) {
+    var receipt = purchaseReceiptsData[receiptId];
+    if (!receipt) return;
+    if (receipt.landedCostsApplied) {
+      if (typeof showToast === 'function') showToast('Already applied', true);
+      return;
+    }
+    if (typeof window.mastConfirm !== 'function') return;
+    var addlTotal = (receipt.additionalCosts || []).reduce(function(s, c) { return s + (Number(c.amount) || 0); }, 0);
+    if (!(addlTotal > 0)) {
+      if (typeof showToast === 'function') showToast('No additional costs on this receipt', true);
+      return;
+    }
+    var ok = await window.mastConfirm('Allocate $' + addlTotal.toFixed(2) + ' across the lots from this receipt? Each lot\'s unitCost is bumped by its share. Use Revert from the MCP if you need to redo.');
+    if (!ok) return;
+
+    // Compute value-based shares (matches the procurement.ts default).
+    var lines = receipt.lines || [];
+    var lineValues = lines.map(function(l) { return (Number(l.qtyReceivedNow) || 0) * (Number(l.unitCostHomeCurrency) || 0); });
+    var totalValue = lineValues.reduce(function(s, v) { return s + v; }, 0);
+    if (!(totalValue > 0)) {
+      if (typeof showToast === 'function') showToast('Receipt has zero value — cannot allocate by value', true);
+      return;
+    }
+
+    var po = purchaseOrdersData[receipt.poId];
+    var lineKindByLineId = {};
+    if (po && Array.isArray(po.lines)) po.lines.forEach(function(l) { lineKindByLineId[l.lineId] = l.kind; });
+
+    var updates = {};
+    var now = new Date().toISOString();
+    var perLine = lines.map(function(l, i) {
+      var alloc = (lineValues[i] / totalValue) * addlTotal;
+      var perUnit = (Number(l.qtyReceivedNow) || 0) > 0 ? alloc / Number(l.qtyReceivedNow) : 0;
+      return {
+        poLineId: l.poLineId, lotId: l.lotId,
+        unitCostBefore: Number(l.unitCostHomeCurrency) || 0,
+        totalAllocated: alloc, perUnitAllocation: perUnit,
+        unitCostAfter: (Number(l.unitCostHomeCurrency) || 0) + perUnit,
+        perCost: (receipt.additionalCosts || []).map(function(c) {
+          return { label: c.label, method: c.allocationMethod || 'value', allocated: ((lineValues[i] / totalValue) * (Number(c.amount) || 0)) };
+        })
+      };
+    });
+    perLine.forEach(function(pl) {
+      if (!pl.lotId) return;
+      var kind = lineKindByLineId[pl.poLineId];
+      if (!kind) return;
+      var lotPath = (kind === 'material' ? 'admin/materialLots' : 'admin/productLots') + '/' + pl.lotId;
+      var lot = (kind === 'material' ? materialLotsData : productLotsData)[pl.lotId];
+      if (!lot) return;
+      var unitCostOriginal = typeof lot.unitCostOriginal === 'number' ? lot.unitCostOriginal : lot.unitCost;
+      updates[lotPath + '/unitCostOriginal'] = unitCostOriginal;
+      updates[lotPath + '/unitCost'] = pl.unitCostAfter;
+      updates[lotPath + '/updatedAt'] = now;
+      // local cache
+      lot.unitCostOriginal = unitCostOriginal;
+      lot.unitCost = pl.unitCostAfter;
+      lot.updatedAt = now;
+    });
+    updates['admin/purchaseReceipts/' + receiptId + '/landedCostsApplied'] = true;
+    updates['admin/purchaseReceipts/' + receiptId + '/landedCostAllocation'] = { appliedAt: now, perLine: perLine };
+    receipt.landedCostsApplied = true;
+    receipt.landedCostAllocation = { appliedAt: now, perLine: perLine };
+
+    try {
+      await MastDB.multiUpdate(updates);
+      if (typeof showToast === 'function') showToast('Landed costs allocated across ' + perLine.length + ' lot' + (perLine.length === 1 ? '' : 's'));
+      render();
+    } catch (err) {
+      if (typeof showToast === 'function') showToast('Failed to apply: ' + (err && err.message), true);
+    }
+  }
+
+  // ============================================================
   // Public API
   // ============================================================
 
@@ -1047,6 +1533,18 @@
   window.procurementOpenNewVendor    = openNewVendorModal;
   window.procurementSaveNewVendor    = saveNewVendor;
   window.procurementCancelPo         = cancelPo;
+
+  window.procurementOpenNewPo        = openNewPoModal;
+  window.procurementUpdateNewPoLine  = updateNewPoLine;
+  window.procurementAddNewPoLine     = addNewPoLine;
+  window.procurementRemoveNewPoLine  = removeNewPoLine;
+  window.procurementSaveNewPo        = saveNewPo;
+
+  window.procurementOpenRecordReceipt = openRecordReceiptModal;
+  window.procurementUpdateReceiveLine = updateReceiveLine;
+  window.procurementSaveReceipt       = saveReceipt;
+
+  window.procurementApplyLandedCosts  = applyLandedCosts;
 
   // ============================================================
   // MastNavStack restorer + module registration
