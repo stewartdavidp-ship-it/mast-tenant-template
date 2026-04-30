@@ -29471,22 +29471,36 @@ function variantCostAndPrice(product, variant, recipe) {
   if (!variant) return out;
   // Synthetic Default reads product-level tier prices (priceCents +
   // retailPriceCents/directPriceCents/wholesalePriceCents). Recipe overrides
-  // keyed 'default' still apply on top.
+  // keyed 'default' apply on top, then recipe-base prices, then derived
+  // markup × cost, in that order.
   if (variant._isSynthetic) {
-    if (typeof product.wholesalePriceCents === 'number') out.wholesale = product.wholesalePriceCents / 100;
-    if (typeof product.directPriceCents === 'number') out.direct = product.directPriceCents / 100;
-    if (typeof product.retailPriceCents === 'number') out.retail = product.retailPriceCents / 100;
-    else if (typeof product.priceCents === 'number') out.retail = product.priceCents / 100;
+    if (typeof product.wholesalePriceCents === 'number' && product.wholesalePriceCents > 0) out.wholesale = product.wholesalePriceCents / 100;
+    if (typeof product.directPriceCents === 'number' && product.directPriceCents > 0) out.direct = product.directPriceCents / 100;
+    if (typeof product.retailPriceCents === 'number' && product.retailPriceCents > 0) out.retail = product.retailPriceCents / 100;
+    else if (typeof product.priceCents === 'number' && product.priceCents > 0) out.retail = product.priceCents / 100;
     var dOverride = recipe && recipe.variants && recipe.variants['default'];
     if (dOverride) {
       if (typeof dOverride.totalCost === 'number') out.cost = dOverride.totalCost;
-      if (typeof dOverride.wholesalePrice === 'number') out.wholesale = dOverride.wholesalePrice;
-      if (typeof dOverride.directPrice === 'number') out.direct = dOverride.directPrice;
-      if (typeof dOverride.retailPrice === 'number') out.retail = dOverride.retailPrice;
+      if (out.wholesale == null && typeof dOverride.wholesalePrice === 'number' && dOverride.wholesalePrice > 0) out.wholesale = dOverride.wholesalePrice;
+      if (out.direct    == null && typeof dOverride.directPrice    === 'number' && dOverride.directPrice    > 0) out.direct    = dOverride.directPrice;
+      if (out.retail    == null && typeof dOverride.retailPrice    === 'number' && dOverride.retailPrice    > 0) out.retail    = dOverride.retailPrice;
     }
     if (recipe) {
       if (out.cost == null && typeof recipe.totalCost === 'number') out.cost = recipe.totalCost;
       out.activeTier = recipe.activePriceTier || null;
+      // Recipe-base tier prices, when explicitly stored.
+      if (out.wholesale == null && typeof recipe.wholesalePrice === 'number' && recipe.wholesalePrice > 0) out.wholesale = recipe.wholesalePrice;
+      if (out.direct    == null && typeof recipe.directPrice    === 'number' && recipe.directPrice    > 0) out.direct    = recipe.directPrice;
+      if (out.retail    == null && typeof recipe.retailPrice    === 'number' && recipe.retailPrice    > 0) out.retail    = recipe.retailPrice;
+      // Final fallback: derived = cost × markup. Recipes don't persist tier
+      // prices in the live-calc model, so a recipe with markups but no saved
+      // price still shows a number here.
+      var rTotal = (typeof recipe.totalCost === 'number' && recipe.totalCost > 0) ? recipe.totalCost : null;
+      if (rTotal != null) {
+        if (out.wholesale == null && typeof recipe.wholesaleMarkup === 'number' && recipe.wholesaleMarkup > 0) out.wholesale = rTotal * recipe.wholesaleMarkup;
+        if (out.direct    == null && typeof recipe.directMarkup    === 'number' && recipe.directMarkup    > 0) out.direct    = rTotal * recipe.directMarkup;
+        if (out.retail    == null && typeof recipe.retailMarkup    === 'number' && recipe.retailMarkup    > 0) out.retail    = rTotal * recipe.retailMarkup;
+      }
     }
     return out;
   }
@@ -29506,6 +29520,14 @@ function variantCostAndPrice(product, variant, recipe) {
     if (out.direct == null && typeof recipe.directPrice === 'number' && recipe.directPrice > 0) out.direct = recipe.directPrice;
     if (out.retail == null && typeof recipe.retailPrice === 'number' && recipe.retailPrice > 0) out.retail = recipe.retailPrice;
     out.activeTier = recipe.activePriceTier || null;
+    // Live-calc fallback: derive from cost × markup so recipes with markups
+    // but no persisted prices still show a number.
+    var rTotalReal = (typeof recipe.totalCost === 'number' && recipe.totalCost > 0) ? recipe.totalCost : null;
+    if (rTotalReal != null) {
+      if (out.wholesale == null && typeof recipe.wholesaleMarkup === 'number' && recipe.wholesaleMarkup > 0) out.wholesale = rTotalReal * recipe.wholesaleMarkup;
+      if (out.direct    == null && typeof recipe.directMarkup    === 'number' && recipe.directMarkup    > 0) out.direct    = rTotalReal * recipe.directMarkup;
+      if (out.retail    == null && typeof recipe.retailMarkup    === 'number' && recipe.retailMarkup    > 0) out.retail    = rTotalReal * recipe.retailMarkup;
+    }
   }
   // Variant-level explicit overrides. priceCents/retailPriceCents/etc. count
   // as an override only when > 0 — the legacy variant grid wrote 0 when the
