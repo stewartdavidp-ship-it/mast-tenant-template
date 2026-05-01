@@ -486,6 +486,9 @@
   var triggerEditId = null;
   var showAddTrigger = false;
 
+  var automatedSurveysEnabled = false;
+  var automatedSurveysToggling = false;
+
   var policiesData = {};
   var policiesLoaded = false;
   var policyEditId = null;
@@ -540,7 +543,8 @@
         Object.keys(d || {}).forEach(function (k) { var s = Object.assign({}, d[k]); delete s.tokenSecret; cleaned[k] = s; });
         surveysDefData = cleaned;
       }),
-      MastDB.query('cs_survey_triggers').limitToLast(100).once().then(function (d) { triggersData = d || {}; })
+      MastDB.query('cs_survey_triggers').limitToLast(100).once().then(function (d) { triggersData = d || {}; }),
+      MastDB.get('cs_config/automatedSurveys').then(function (d) { automatedSurveysEnabled = !!(d && d.enabled); }).catch(function () { automatedSurveysEnabled = false; })
     ])
     .then(function () { surveysLoaded = true; })
     .catch(function (err) { console.warn('[cs-surveys]', err && err.message); if (typeof showToast === 'function') showToast('Failed to load survey data', true); });
@@ -633,6 +637,20 @@
     if (!surveysLoaded) { tab.innerHTML = '<div style="padding:40px;text-align:center;color:var(--warm-gray);">Loading surveys…</div>'; return; }
     var html = '<div style="padding:24px;">';
     html += '<div class="section-header" style="margin-bottom:14px;"><h2 style="margin:0;">Surveys</h2><button class="btn btn-secondary btn-small" onclick="csSurveysRefresh()">Refresh</button></div>';
+
+    // Automated Surveys opt-in toggle
+    var toggleColor = automatedSurveysEnabled ? 'var(--teal)' : 'var(--cream-dark)';
+    var toggleLabel = automatedSurveysEnabled ? 'ON' : 'OFF';
+    var toggleDisabled = automatedSurveysToggling ? ' disabled' : '';
+    html += '<div style="border:1px solid var(--cream-dark);border-radius:10px;padding:14px 18px;background:var(--surface-card);margin-bottom:18px;display:flex;align-items:center;gap:14px;">';
+    html += '<button onclick="csToggleAutomatedSurveys()"' + toggleDisabled + ' style="flex-shrink:0;width:48px;height:26px;border-radius:13px;border:none;cursor:' + (automatedSurveysToggling ? 'not-allowed' : 'pointer') + ';background:' + toggleColor + ';position:relative;transition:background 0.2s;padding:0;">';
+    html += '<span style="position:absolute;top:3px;' + (automatedSurveysEnabled ? 'right:3px' : 'left:3px') + ';width:20px;height:20px;border-radius:50%;background:#fff;display:block;transition:all 0.2s;"></span>';
+    html += '</button>';
+    html += '<div style="flex:1;">';
+    html += '<div style="font-weight:600;font-size:0.95rem;">Automated Surveys <span style="margin-left:6px;font-size:0.78rem;font-weight:700;color:' + (automatedSurveysEnabled ? 'var(--teal)' : 'var(--warm-gray)') + ';">' + toggleLabel + '</span></div>';
+    html += '<div style="font-size:0.82rem;color:var(--warm-gray);margin-top:2px;">When enabled, surveys are sent automatically based on your active trigger rules below.</div>';
+    html += '</div></div>';
+
     html += '<div class="view-tabs" style="margin-bottom:18px;">';
     [['questions','Questions'],['groups','Groups'],['surveys','Surveys'],['triggers','Triggers']].forEach(function (p) {
       html += '<button class="view-tab' + (surveysSubTab === p[0] ? ' active' : '') + '" onclick="csSurveysSwitchTab(\'' + p[0] + '\')">' + p[1] + '</button>';
@@ -990,6 +1008,24 @@
   window.csDeleteReview = deleteReview;
   window.csSurveysRefresh = function () { surveysLoaded = false; renderSurveys(); loadSurveysAll().then(renderSurveys); };
   window.csSurveysSwitchTab = function (t) { surveysSubTab = t; renderSurveys(); };
+  window.csToggleAutomatedSurveys = async function () {
+    if (automatedSurveysToggling) return;
+    automatedSurveysToggling = true;
+    renderSurveys();
+    var newEnabled = !automatedSurveysEnabled;
+    try {
+      var doc = newEnabled
+        ? { enabled: true, enabledAt: new Date().toISOString() }
+        : { enabled: false };
+      await MastDB.set('cs_config/automatedSurveys', doc);
+      automatedSurveysEnabled = newEnabled;
+      if (typeof showToast === 'function') showToast('Automated surveys ' + (newEnabled ? 'enabled' : 'disabled'));
+    } catch (err) {
+      if (typeof showToast === 'function') showToast('Failed to update setting: ' + (err && err.message), true);
+    }
+    automatedSurveysToggling = false;
+    renderSurveys();
+  };
   window.csShowAddQuestion = function () { showAddQuestion = true; questionEditId = null; renderSurveys(); };
   window.csEditQuestion = function (id) { questionEditId = id; showAddQuestion = false; renderSurveys(); };
   window.csSaveQuestion = saveQuestion;
@@ -1343,6 +1379,8 @@
       sendLinkSurveyId = null;
       triggerEditId = null;
       showAddTrigger = false;
+      automatedSurveysEnabled = false;
+      automatedSurveysToggling = false;
       policiesData = {};
       policiesLoaded = false;
       policyEditId = null;
