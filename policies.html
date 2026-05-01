@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://cdn.jsdelivr.net https://apis.google.com https://maps.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src 'self' https://us-central1-mast-platform-prod.cloudfunctions.net https://*.firebasestorage.app https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://firestore.googleapis.com https://maps.googleapis.com https://places.googleapis.com; img-src 'self' data: blob: https:; frame-src 'self' https://*.firebaseapp.com; frame-ancestors 'none';">
+<title>Policies &mdash; My Shop</title><!-- TENANT: brand -->
+<!-- Preconnect to external origins — saves ~200ms DNS+TLS per origin -->
+<link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+<!-- Early tenant prefetch — starts Firestore fetch immediately during HTML parsing,
+     before any external scripts download. storefront-tenant.js consumes the result. -->
+<script>
+(function(){
+  var B='https://firestore.googleapis.com/v1/projects/mast-platform-prod/databases/(default)/documents';
+  var h=location.hostname,C=5*60*1000;
+  if(h==='localhost'||h==='127.0.0.1')return;
+  try{var r=localStorage.getItem('mast_tenant_'+h);if(r){var c=JSON.parse(r);if(Date.now()-c.timestamp<C){window.__earlyTenant=Promise.resolve(c.data);return;}}}catch(e){}
+  var ek=h.replace(/\./g,'_');
+  function uv(v){if(v==null)return null;if('stringValue' in v)return v.stringValue;if('booleanValue' in v)return v.booleanValue;if('integerValue' in v)return Number(v.integerValue);if('doubleValue' in v)return v.doubleValue;if('nullValue' in v)return null;if('timestampValue' in v)return v.timestampValue;if('mapValue' in v){var o={};var f=v.mapValue.fields||{};for(var k in f)o[k]=uv(f[k]);return o;}if('arrayValue' in v)return(v.arrayValue.values||[]).map(uv);return null;}
+  function uf(fields){var o={};for(var k in fields)o[k]=uv(fields[k]);return o;}
+  function uw(d){if(d&&typeof d==='object'&&!Array.isArray(d)&&'_v' in d&&Object.keys(d).length===1)return d._v;return d;}
+  window.__earlyTenant=fetch(B+'/platform_tenantsByDomain/'+ek).then(function(r){return r.ok?r.json():null}).then(function(doc){
+    var tid=doc&&doc.fields?uw(uf(doc.fields)):null;
+    if(typeof tid!=='string'||!tid)return null;
+    return fetch(B+'/platform_tenantPublicConfigs/'+tid).then(function(r){return r.ok?r.json():null}).then(function(cdoc){
+      if(!cdoc||!cdoc.fields)return null;
+      var pc=uf(cdoc.fields);
+      return pc?{tenantId:tid,publicConfig:pc}:null;
+    });
+  }).catch(function(){return null;});
+})();
+</script>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@800&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="storefront.css">
+<link rel="stylesheet" href="cart.css" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="checkout.css" media="print" onload="this.media='all'">
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<script>(function(){var s=localStorage.getItem('mast-theme');var d=window.matchMedia('(prefers-color-scheme:dark)').matches;if(s==='dark'||(s!=='light'&&d))document.documentElement.classList.add('dark');else document.documentElement.classList.add('light');})();</script>
+<style>
+  /* ========= BUTTONS ========= */
+  .btn {
+    display: inline-block;
+    padding: 0.9rem 2.2rem;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.78rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    text-decoration: none;
+    border-radius: 2px;
+    transition: all 0.3s;
+    font-weight: 400;
+    cursor: pointer;
+  }
+
+  /* ========= SCROLL ANIMATIONS ========= */
+  .fade-up {
+    opacity: 0;
+    transform: translateY(40px);
+    transition: opacity 0.8s ease, transform 0.8s ease;
+  }
+
+  .fade-up.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  /* ========= PAGE HEADER ========= */
+  .page-header {
+    background: var(--surface-dark);
+    padding: 10rem 3rem 5rem;
+    text-align: center;
+  }
+
+  .page-header .section-label { color: var(--amber-light); }
+  .page-header .section-title { color: var(--on-dark); font-size: clamp(2.5rem, 5vw, 3.8rem); }
+
+  /* Powered by Mast badge */
+  .powered-by-mast {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 12px 0 0;
+    border-top: 1px solid rgba(255,255,255,0.12);
+    margin-top: 1.5rem;
+  }
+  .powered-by-mast a {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    text-decoration: none;
+    opacity: 0.9;
+    transition: opacity 0.3s;
+  }
+  .powered-by-mast a:hover { opacity: 1; }
+  .powered-by-mast svg { width: 8px; height: 16px; flex-shrink: 0; }
+  .powered-by-mast .pbm-stack { display: flex; flex-direction: column; gap: 1px; }
+  .powered-by-mast .pbm-wm {
+    font-family: 'Archivo', sans-serif;
+    font-weight: 800;
+    font-size: 14px;
+    letter-spacing: -0.025em;
+    color: #f0ebe0;
+    line-height: 1;
+  }
+  .powered-by-mast .pbm-label {
+    font-family: 'DM Sans', sans-serif;
+    font-weight: 300;
+    font-size: 9px;
+    letter-spacing: 0.03em;
+    color: #6a8aaa;
+    line-height: 1;
+  }
+
+  /* ========= POLICIES ========= */
+  .policies-section {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 5rem 3rem 7rem;
+  }
+
+  .policies-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    border-bottom: 1px solid rgba(0,0,0,0.1);
+    margin-bottom: 2.5rem;
+    gap: 0;
+  }
+
+  html.dark .policies-tabs {
+    border-bottom-color: rgba(255,255,255,0.12);
+  }
+
+  .policy-tab-btn {
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    padding: 0.75rem 1.25rem;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.75rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--warm-gray);
+    cursor: pointer;
+    transition: color 0.2s, border-color 0.2s;
+    margin-bottom: -1px;
+    white-space: nowrap;
+  }
+
+  .policy-tab-btn:hover {
+    color: var(--charcoal);
+  }
+
+  .policy-tab-btn.active {
+    color: var(--amber);
+    border-bottom-color: var(--amber);
+  }
+
+  .policy-panel {
+    display: none;
+    color: var(--text);
+    line-height: 1.8;
+    font-weight: 300;
+    font-size: 0.95rem;
+  }
+
+  .policy-panel.active {
+    display: block;
+  }
+
+  /* Prose styling for admin-written policy content */
+  .policy-panel h2,
+  .policy-panel h3,
+  .policy-panel h4 {
+    font-family: 'Cormorant Garamond', serif;
+    font-weight: 300;
+    color: var(--charcoal);
+    margin: 1.5rem 0 0.6rem;
+    line-height: 1.3;
+  }
+
+  .policy-panel h2 { font-size: 1.5rem; }
+  .policy-panel h3 { font-size: 1.25rem; }
+
+  .policy-panel p {
+    color: var(--warm-gray);
+    margin-bottom: 1rem;
+  }
+
+  .policy-panel ul,
+  .policy-panel ol {
+    padding-left: 1.5rem;
+    margin-bottom: 1rem;
+    color: var(--warm-gray);
+  }
+
+  .policy-panel li {
+    margin-bottom: 0.4rem;
+  }
+
+  .policy-panel a {
+    color: var(--primary);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  .policy-panel strong {
+    font-weight: 500;
+    color: var(--charcoal);
+  }
+
+  .policies-empty {
+    text-align: center;
+    color: var(--warm-gray);
+    font-size: 1rem;
+    padding: 5rem 0;
+    font-weight: 300;
+    font-style: italic;
+  }
+
+  .policies-loading {
+    text-align: center;
+    color: var(--warm-gray-light);
+    font-size: 0.9rem;
+    padding: 4rem 0;
+  }
+
+  /* ========= RESPONSIVE ========= */
+  @media (max-width: 768px) {
+    .page-header { padding: 7rem 1.5rem 3rem; }
+    .policies-section { padding: 3rem 1.5rem 5rem; }
+    .policy-tab-btn { padding: 0.6rem 0.9rem; font-size: 0.7rem; }
+  }
+
+</style>
+</head>
+<body>
+
+<!--
+  NAV LINK: To surface "Policies" in the storefront navigation, add an entry
+  in your tenant admin (Website → Navigation) with href: "/policies.html".
+  storefront-nav.js builds nav dynamically from tenants/{TENANT_ID}/public/config/nav —
+  no changes to storefront-nav.js are needed.
+-->
+
+<!-- ============ NAV ============ -->
+<nav id="mainNav"></nav>
+
+<div class="nav-mobile-menu" id="mobileMenu"></div>
+
+
+<!-- ============ PAGE HEADER ============ -->
+<div class="page-header">
+  <p class="section-label fade-up">Our Policies</p>
+  <h1 class="section-title fade-up">Policies &amp; FAQ</h1>
+</div>
+
+
+<!-- ============ POLICIES TABS ============ -->
+<div class="policies-section">
+  <div id="policiesContainer">
+    <div class="policies-loading">Loading policies&hellip;</div>
+  </div>
+</div>
+
+
+<footer>
+  <div class="footer-inner">
+    <div class="footer-logo">
+      <img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-tenant-alt="brand" alt="My Shop" />
+      <span data-tenant="year-brand">&copy; 2026 My Shop</span>
+    </div>
+    <ul class="footer-links">
+      <li><a href="index.html">Home</a></li>
+      <li><a href="about.html">About</a></li>
+      <li><a href="shop.html">Shop</a></li>
+      <li><a href="schedule.html">Schedule</a></li>
+      <li><a href="orders.html">Orders</a></li>
+      <li><a href="commission.html">Commissions</a></li>
+      <li><a href="https://runmast.com/privacy" target="_blank" rel="noopener">Privacy</a></li>
+      <li><a href="terms.html">Terms &amp; Conditions</a></li>
+    </ul>
+    <div class="footer-social">
+      <a href="#" target="_blank" aria-label="Instagram" data-tenant-href="instagram">
+        <svg viewBox="0 0 24 24"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg>
+      </a>
+    </div>
+  </div>
+  <div class="powered-by-mast">
+    <a href="https://runmast.com" target="_blank" rel="noopener">
+      <svg viewBox="0 0 32 64" fill="none"><rect x="14" y="0" width="3.5" height="64" rx="1.75" fill="#f0ebe0"/><path d="M17.5 3 L32 11 L17.5 20 Z" fill="#e8a84c"/><path d="M17.5 24 L28 30.5 L17.5 38 Z" fill="#f0ebe0" opacity="0.25"/></svg>
+      <div class="pbm-stack">
+        <span class="pbm-wm">Mast</span>
+        <span class="pbm-label">Powered by Mast</span>
+      </div>
+    </a>
+  </div>
+</footer>
+
+<!-- Storefront scripts first — use fetch() only, no Firebase SDK needed -->
+<script src="storefront-tenant.js"></script>
+<script src="storefront-theme.js"></script>
+<script src="storefront-nav.js"></script>
+<script src="tenant-brand.js?v=2"></script>
+<!-- Firebase SDK — loaded after storefront scripts so nav/theme render first -->
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+<script src="shared/mastdb.js?v=1"></script>
+<script>
+  // Intersection Observer for scroll animations
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) entry.target.classList.add('visible');
+    });
+  }, { threshold: 0.1, rootMargin: '0px 0px -60px 0px' });
+
+  document.querySelectorAll('.fade-up').forEach(el => observer.observe(el));
+</script>
+<script>
+  // Helper: escape text for safe innerHTML use
+  function esc(s) { if (!s) return ''; var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+  // Format a policy type string into a display label (e.g. "gift_cards" → "Gift Cards")
+  function formatPolicyType(type) {
+    if (!type) return 'Policy';
+    var map = { faq: 'FAQ', gift_cards: 'Gift Cards', returns: 'Returns', shipping: 'Shipping', terms: 'Terms & Conditions' };
+    if (map[type]) return map[type];
+    return type.charAt(0).toUpperCase() + type.slice(1).replace(/_/g, ' ');
+  }
+
+  // Switch the active policy tab (window-scoped for onclick handlers)
+  window.switchPolicyTab = function(index) {
+    var buttons = document.querySelectorAll('.policy-tab-btn');
+    var panels = document.querySelectorAll('.policy-panel');
+    buttons.forEach(function(btn, i) {
+      btn.classList.toggle('active', i === index);
+      btn.setAttribute('aria-selected', i === index ? 'true' : 'false');
+    });
+    panels.forEach(function(panel, i) {
+      panel.classList.toggle('active', i === index);
+    });
+  };
+
+  // Render policies into the tab UI
+  function renderPolicies(policies) {
+    var container = document.getElementById('policiesContainer');
+    if (!container) return;
+
+    if (!policies || policies.length === 0) {
+      container.innerHTML = '<div class="policies-empty">Policies coming soon.</div>';
+      return;
+    }
+
+    var tabsHtml = '<div class="policies-tabs" role="tablist">';
+    var panelsHtml = '<div class="policies-panels">';
+
+    policies.forEach(function(policy, i) {
+      var label = esc(policy.title || formatPolicyType(policy.type));
+      var tabId = 'policy-tab-' + i;
+      var panelId = 'policy-panel-' + i;
+      var isActive = i === 0;
+
+      tabsHtml +=
+        '<button class="policy-tab-btn' + (isActive ? ' active' : '') + '" ' +
+          'role="tab" ' +
+          'aria-selected="' + (isActive ? 'true' : 'false') + '" ' +
+          'aria-controls="' + panelId + '" ' +
+          'id="' + tabId + '" ' +
+          'onclick="switchPolicyTab(' + i + ')">' +
+          label +
+        '</button>';
+
+      // policy.body is HTML authored by tenant admins — innerHTML is intentional here.
+      // It is never written from user input; Firestore rules restrict writes to admin role.
+      panelsHtml +=
+        '<div class="policy-panel' + (isActive ? ' active' : '') + '" ' +
+          'id="' + panelId + '" ' +
+          'role="tabpanel" ' +
+          'aria-labelledby="' + tabId + '">' +
+          (policy.body || '') +
+        '</div>';
+    });
+
+    tabsHtml += '</div>';
+    panelsHtml += '</div>';
+    container.innerHTML = tabsHtml + panelsHtml;
+  }
+
+  // Load policies from Firestore after tenant resolves
+  window.TENANT_READY.then(function() {
+    var app;
+    try { app = firebase.app(); } catch (e) { app = firebase.initializeApp(TENANT_FIREBASE_CONFIG); }
+    MastDB.init({ firestore: app.firestore(), tenantId: TENANT_ID });
+
+    // Query cs_policies where storefrontEnabled == true; sort client-side by displayOrder.
+    // Client-side sort lets us apply the Infinity fallback for policies missing displayOrder,
+    // avoiding a composite Firestore index requirement.
+    app.firestore()
+      .collection('tenants/' + TENANT_ID + '/cs_policies')
+      .where('storefrontEnabled', '==', true)
+      .get()
+      .then(function(snapshot) {
+        var policies = [];
+        snapshot.forEach(function(doc) {
+          policies.push(Object.assign({ id: doc.id }, doc.data()));
+        });
+        policies.sort(function(a, b) {
+          var orderA = (a.displayOrder != null && a.displayOrder !== undefined) ? a.displayOrder : Infinity;
+          var orderB = (b.displayOrder != null && b.displayOrder !== undefined) ? b.displayOrder : Infinity;
+          return orderA - orderB;
+        });
+        renderPolicies(policies);
+      })
+      .catch(function(err) {
+        console.error('[policies] Failed to load policies:', err.message);
+        renderPolicies([]);
+      });
+
+  }).catch(function(err) { console.error('[policies] Tenant resolution failed:', err.message); });
+</script>
+
+<!-- ============ ANALYTICS TRACKING ============ -->
+<script>
+window.TENANT_READY.then(function() {
+  var HITS = 'analytics/hits';
+  var now = new Date();
+  var page = 'policies';
+  var d = now.getFullYear() + '-' +
+    String(now.getMonth() + 1).padStart(2, '0') + '-' +
+    String(now.getDate()).padStart(2, '0');
+  function track(type, action) {
+    var hit = { t: type, p: page, ts: Date.now(), d: d };
+    if (action) hit.a = action;
+    MastDB.push(HITS, hit).catch(function() {});
+  }
+  track('pv');
+}).catch(function() {});
+</script>
+<script src="cart.js"></script>
+<script src="schema-org.js"></script>
+<script>
+window.TENANT_READY.then(function() {
+  if (window.MastSchema) MastSchema.inject(MastSchema.organization());
+});
+</script>
+<script defer src="checkout.js?v=2"></script>
+
+<!-- Auth handled by cart.js (siteSignIn / siteSignOut / ensureCustomerAccount / nav UI) -->
+<script defer src="feedback-widget.js"></script>
+<script defer src="share-widget.js"></script>
+</body>
+</html>

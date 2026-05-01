@@ -1962,7 +1962,8 @@
     footer.style.display = '';
     footer.innerHTML =
       '<button class="checkout-btn-primary" data-co="place-order">' + btnLabel + '</button>' +
-      '<button class="checkout-back-link" data-co="review-back">Back to Shipping</button>';
+      '<button class="checkout-back-link" data-co="review-back">Back to Shipping</button>' +
+      '<a href="/policies.html" style="display:block;text-align:center;margin-top:10px;font-size:0.78rem;color:var(--warm-gray,#888);text-decoration:none;">View return policy &rarr;</a>';
   }
 
   // ── Place Order ──
