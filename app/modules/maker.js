@@ -3361,7 +3361,7 @@
     var s = (status || 'draft').toLowerCase();
     var styles = {
       draft:    { bg: 'rgba(120,120,120,0.15)', color: '#525252', label: 'Draft' },
-      ready:    { bg: 'rgba(217,119,6,0.15)',   color: '#b45309', label: 'Ready' },
+      ready:    { bg: 'rgba(217,119,6,0.15)',   color: '#b45309', label: 'Review' },
       active:   { bg: 'rgba(42,124,111,0.15)',  color: 'var(--teal,#2a7c6f)', label: 'Active' },
       archived: { bg: 'rgba(180,83,9,0.18)',    color: '#9a3412', label: 'Archived' }
     };
