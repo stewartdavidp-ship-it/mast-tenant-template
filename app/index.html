@@ -12867,7 +12867,13 @@ window.closeCreateShowModal = function() {
   var m = document.getElementById('createShowModal');
   if (m) m.style.display = 'none';
 };
-window.saveShow = function() {};
+window.saveShow = function() {
+  MastAdmin.loadModule('shows').then(function() {
+    if (typeof window.saveShow === 'function') window.saveShow();
+  }).catch(function() {
+    showToast('Could not load the Show module', true);
+  });
+};
 
 // ============================================================
 // Auth
