@@ -79,6 +79,20 @@
   animation: sv-pulse 1.6s ease-in-out infinite;
 }
 @keyframes sv-pulse { 0%,100%{opacity:1} 50%{opacity:0.45} }
+.sv-saving {
+  text-align: center;
+  padding: 2.5rem 1rem;
+}
+.sv-spinner {
+  width: 44px;
+  height: 44px;
+  border: 3px solid color-mix(in srgb, var(--primary) 18%, transparent);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: sv-spin 0.75s linear infinite;
+  margin: 0 auto 1.5rem;
+}
+@keyframes sv-spin { to { transform: rotate(360deg); } }
 .sv-error p,
 .sv-complete p {
   color: var(--warm-gray, #888);
@@ -494,10 +508,14 @@
       return;
     }
     var wantsFollowup = document.getElementById('svFollowup') && document.getElementById('svFollowup').checked;
-    var btns = document.querySelectorAll('.sv-btn');
-    btns.forEach(function(b) { b.disabled = true; });
-    var submitBtn = Array.from(btns).find(function(b) { return b.textContent.indexOf('Submit') >= 0; });
-    if (submitBtn) submitBtn.textContent = 'Submitting…';
+
+    // Show saving state immediately — no frozen screen while CF processes
+    document.getElementById('svContent').innerHTML =
+      '<div class="sv-saving">' +
+        '<div class="sv-spinner"></div>' +
+        '<h3 style="font-family:\'Cormorant Garamond\',serif;font-size:1.7rem;font-weight:400;color:var(--text);margin:0 0 0.5rem;">Saving your responses…</h3>' +
+        '<p style="color:var(--warm-gray,#888);font-size:0.875rem;margin:0;">Just a moment while we record your feedback.</p>' +
+      '</div>';
 
     callCF('surveySubmit', {
       token: token,
