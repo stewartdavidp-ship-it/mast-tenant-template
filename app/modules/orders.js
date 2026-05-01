@@ -2550,7 +2550,7 @@
       });
       var result = await resp.json();
       if (result.success) {
-        await MastDB.commissions.subRef(commId, 'proposalSentAt').set(new Date().toISOString());
+        await MastDB.commissions.update(commId, { proposalSentAt: new Date().toISOString() });
         commissionsData[commId].proposalSentAt = new Date().toISOString();
         showToast('Proposal sent to ' + contact);
         emitTestingEvent('sendProposal', {});
@@ -2577,7 +2577,7 @@
         createdAt: new Date().toISOString()
       };
       await MastDB.productionJobs.set(jobId, jobData);
-      await MastDB.commissions.subRef(commId, 'productionJobId').set(jobId);
+      await MastDB.commissions.update(commId, { productionJobId: jobId });
       commissionsData[commId].productionJobId = jobId;
       showToast('Production job created');
       emitTestingEvent('createCommissionJob', {});
@@ -2895,7 +2895,7 @@
 
   async function updateCommissionStatus(commId, newStatus) {
     try {
-      await MastDB.commissions.subRef(commId, 'status').set(newStatus);
+      await MastDB.commissions.update(commId, { status: newStatus });
       commissionsData[commId].status = newStatus;
       await writeAudit('update', 'commission', commId);
 
