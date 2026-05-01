@@ -35307,12 +35307,20 @@ function renderUsersList() {
         (isSelf ? ' <span style="font-size:0.72rem;color:var(--warm-gray);">(you)</span>' : '');
     }
 
+    var actionsCell = '';
+    if (!isSelf) {
+      actionsCell += '<button class="btn btn-secondary" style="font-size:0.72rem;padding:3px 8px;" onclick="viewUserAudit(\'' + uid + '\')">History</button>';
+      if (hasPermission('users', 'update')) {
+        actionsCell += ' <button class="btn btn-secondary" style="font-size:0.72rem;padding:3px 8px;" onclick="openUserPermissionsPanel(\'' + uid + '\')">Edit Permissions</button>';
+      }
+    }
+
     var tr = document.createElement('tr');
     tr.innerHTML = '<td>' + avatar + esc(u.displayName || 'Unnamed') + '</td>' +
       '<td>' + esc(u.email || '—') + '</td>' +
       '<td>' + roleCell + '</td>' +
       '<td>' + lastLogin + '</td>' +
-      '<td>' + (isSelf ? '' : '<button class="btn btn-secondary" style="font-size:0.72rem;padding:3px 8px;" onclick="viewUserAudit(\'' + uid + '\')">History</button>') + '</td>';
+      '<td>' + actionsCell + '</td>';
     tbody.appendChild(tr);
   });
 
@@ -35403,6 +35411,168 @@ function viewUserAudit(uid) {
       header.parentNode.insertBefore(backBtn, header);
     }
   }, 100);
+}
+
+// ============================================================
+// Per-User Permission Override Editor (RBAC Phase 1 — Section 2)
+// ============================================================
+function openUserPermissionsPanel(uid) {
+  if (!hasPermission('users', 'update')) {
+    showToast('You do not have permission to edit user permissions.', true);
+    return;
+  }
+  var u = adminUsers[uid];
+  if (!u) return;
+
+  var role = u.role || 'guest';
+  var roleConfig = rolesData[role] || DEFAULT_ROLES[role];
+  var overrides = u.permissionOverrides || {};
+  var effective = computeEffectivePermissions(role, roleConfig, {});
+  var isEditorAdmin = (currentUserRole === 'admin');
+
+  editingUserOverrides = {};
+  // Deep-copy current overrides into editingUserOverrides
+  Object.keys(overrides).forEach(function(entity) {
+    editingUserOverrides[entity] = Object.assign({}, overrides[entity]);
+  });
+
+  var roleName = ROLE_DISPLAY_NAMES[role] || (roleConfig ? roleConfig.name : role);
+  var entities = Object.keys(ENTITY_LABELS);
+  ['users', 'roles', 'auditLog', 'receipts'].forEach(function(extra) {
+    if (effective[extra] !== undefined && entities.indexOf(extra) === -1) entities.push(extra);
+  });
+
+  var matrixRows = '';
+  entities.forEach(function(entity) {
+    var ep = effective[entity] || { create: false, read: false, update: false, delete: false };
+    var label = ENTITY_LABELS[entity] || entity;
+    var cells = '<td style="font-size:0.85rem;">' + label + '</td>';
+    ['create', 'read', 'update', 'delete'].forEach(function(action) {
+      var overrideVal = (editingUserOverrides[entity] && editingUserOverrides[entity][action] !== undefined)
+        ? editingUserOverrides[entity][action]
+        : null;
+      var effectiveVal = overrideVal !== null ? overrideVal : ep[action];
+      var isElevation = isAdminGrantedElevation(entity, action, role, roleConfig);
+      var isReduced = !isElevation && overrideVal === false;
+      var cellStyle = '';
+      var disabledAttr = '';
+      var titleAttr = '';
+
+      if (isElevation && overrideVal === true) {
+        // Admin-granted elevation — locked for managers
+        cellStyle = 'background:rgba(245,158,11,0.12);';
+        if (!isEditorAdmin) { disabledAttr = ' disabled'; titleAttr = ' title="Owner-granted — cannot be removed by Manager"'; }
+      } else if (isElevation && !isEditorAdmin) {
+        // Role default false — managers cannot enable
+        disabledAttr = ' disabled';
+        titleAttr = ' title="Below role ceiling — only Owner can grant this"';
+      } else if (isReduced) {
+        cellStyle = 'background:rgba(239,68,68,0.12);';
+      }
+
+      cells += '<td style="text-align:center;' + cellStyle + '">' +
+        '<input type="checkbox"' + (effectiveVal ? ' checked' : '') + disabledAttr + titleAttr +
+        ' onchange="toggleUserOverride(\'' + uid + '\',\'' + entity + '\',\'' + action + '\',this.checked)">' +
+        '</td>';
+    });
+    matrixRows += '<tr>' + cells + '</tr>';
+  });
+
+  var guestExpiryField = '';
+  if (role === 'guest') {
+    var expiryVal = u.accessExpiry ? u.accessExpiry.substring(0, 10) : '';
+    guestExpiryField = '<div class="form-group" style="margin-bottom:16px;">' +
+      '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:6px;">Access Expires On</label>' +
+      '<input type="date" id="userPanelExpiry" value="' + esc(expiryVal) + '" style="padding:7px 10px;border:1px solid var(--cream-dark);border-radius:6px;font-size:0.85rem;background:var(--surface);color:var(--text);">' +
+      '<p style="font-size:0.72rem;color:var(--warm-gray);margin-top:4px;">Stored for display — enforcement is Phase 3.</p>' +
+    '</div>';
+  }
+
+  var html = '<div class="modal-header">' +
+    '<h3>Edit Permissions — ' + esc(u.displayName || u.email || 'User') + '</h3>' +
+    '<button class="modal-close" onclick="closeModal()">&times;</button>' +
+  '</div>' +
+  '<div class="modal-body" style="max-height:70vh;overflow-y:auto;">' +
+    '<div style="display:flex;gap:12px;align-items:center;margin-bottom:16px;flex-wrap:wrap;">' +
+      '<span style="font-size:0.85rem;color:var(--warm-gray);">' + esc(u.email || '') + '</span>' +
+      '<span class="status-badge role-badge ' + esc(role) + '" style="font-size:0.72rem;">' + esc(roleName) + '</span>' +
+    '</div>' +
+    guestExpiryField +
+    '<p style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:12px;">Highlighted cells differ from role defaults. ' +
+      (isEditorAdmin ? 'As Owner, you can freely elevate or reduce any permission.' : 'As Manager, you can reduce permissions from role defaults. Yellow cells are Owner-granted and cannot be changed.') + '</p>' +
+    '<div style="overflow-x:auto;">' +
+    '<table class="perm-matrix" style="width:100%;">' +
+      '<thead><tr><th>Entity</th><th>Create</th><th>Read</th><th>Update</th><th>Delete</th></tr></thead>' +
+      '<tbody>' + matrixRows + '</tbody>' +
+    '</table></div>' +
+    '<div style="margin-top:12px;display:flex;justify-content:space-between;align-items:center;">' +
+      '<button class="btn btn-secondary" style="font-size:0.78rem;" onclick="resetUserOverrides(\'' + uid + '\')">Reset to Role Defaults</button>' +
+      '<div style="display:flex;gap:8px;">' +
+        '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
+        '<button class="btn btn-primary" onclick="saveUserPermissionOverrides(\'' + uid + '\')">Save</button>' +
+      '</div>' +
+    '</div>' +
+  '</div>';
+
+  openModal(html);
+}
+
+function toggleUserOverride(uid, entity, action, value) {
+  var u = adminUsers[uid];
+  if (!u) return;
+  var role = u.role || 'guest';
+  var roleConfig = rolesData[role] || DEFAULT_ROLES[role];
+  var defaults = computeEffectivePermissions(role, roleConfig, {});
+  var defaultVal = defaults[entity] ? defaults[entity][action] : false;
+
+  if (!editingUserOverrides[entity]) editingUserOverrides[entity] = {};
+  if (value === defaultVal) {
+    // Matches default — remove the entry (no noise)
+    delete editingUserOverrides[entity][action];
+    if (Object.keys(editingUserOverrides[entity]).length === 0) delete editingUserOverrides[entity];
+  } else {
+    editingUserOverrides[entity][action] = value;
+  }
+}
+
+function resetUserOverrides(uid) {
+  editingUserOverrides = {};
+  openUserPermissionsPanel(uid);
+}
+
+async function saveUserPermissionOverrides(uid) {
+  var u = adminUsers[uid];
+  if (!u) return;
+  var role = u.role || 'guest';
+  var roleConfig = rolesData[role] || DEFAULT_ROLES[role];
+
+  // Compute minimal diff — only store entries that differ from role default
+  var minimalDiff = computePermissionDiff(role, roleConfig, editingUserOverrides);
+
+  var updateData = { permissionOverrides: minimalDiff };
+  // Capture guest expiry if present
+  var expiryInput = document.getElementById('userPanelExpiry');
+  if (expiryInput) {
+    updateData.accessExpiry = expiryInput.value ? expiryInput.value : null;
+  }
+
+  try {
+    await MastDB.adminUsers.update(uid, updateData);
+    adminUsers[uid].permissionOverrides = minimalDiff;
+    if (expiryInput) adminUsers[uid].accessExpiry = updateData.accessExpiry;
+    await writeAudit('update', 'users', uid);
+    closeModal();
+    var displayName = u.displayName || u.email || 'User';
+    var diffCount = 0;
+    Object.keys(minimalDiff).forEach(function(e) { diffCount += Object.keys(minimalDiff[e]).length; });
+    showToast(diffCount > 0
+      ? 'Permissions updated for ' + displayName + ' (' + diffCount + ' override' + (diffCount !== 1 ? 's' : '') + ').'
+      : 'Permissions reset to role defaults for ' + displayName + '.');
+    renderUsersList();
+  } catch (err) {
+    console.error('Save user overrides failed:', err);
+    showToast('Failed to save permissions.', true);
+  }
 }
 
 // ============================================================
