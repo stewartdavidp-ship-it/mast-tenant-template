@@ -2233,6 +2233,57 @@
 
       closeModal();
       showToast('Order cancelled');
+
+      // Create CS ticket for admin-initiated cancellation (non-fatal)
+      if (!o.cancellationTicketId) {
+        try {
+          var tcSnap = await MastDB.get('cs_config/ticketing');
+          var tc = (tcSnap && tcSnap.val && tcSnap.val()) || {};
+          var tcPrefix = tc.prefix || 'T';
+          var nextNum = typeof tc.nextNumber === 'number' ? tc.nextNumber : 1;
+          var ticketNumber = tcPrefix + '-' + String(nextNum).padStart(4, '0');
+          var ticketId = 'ticket_' + Date.now().toString(36);
+          var cMsgId = 'msg_' + Date.now().toString(36);
+          var orderNum = o.orderNumber || orderId;
+          var contactEmail = o.email || o.billingEmail || '';
+          var contactName = o.billingName || o.customerName || '';
+          var cancellationMsg = 'Order #' + orderNum + ' was cancelled by an admin.' + (reason ? ' Reason: ' + reason : '');
+          await MastDB.set('cs_tickets/' + ticketId, {
+            id: ticketId,
+            ticketNumber: ticketNumber,
+            subject: 'Order #' + orderNum + ' cancelled by admin',
+            status: 'open',
+            priority: 'normal',
+            source: 'inquiry',
+            contactEmail: contactEmail,
+            contactName: contactName || null,
+            orderId: orderId,
+            body: 'Admin cancelled order #' + orderNum + '.',
+            createdAt: now,
+            updatedAt: now
+          });
+          await MastDB.set('cs_tickets/' + ticketId + '/messages/' + cMsgId, {
+            id: cMsgId,
+            body: cancellationMsg,
+            direction: 'outbound',
+            isInternal: true,
+            authorName: 'System',
+            authorEmail: null,
+            createdAt: now
+          });
+          if (tcSnap && tcSnap.val && tcSnap.val()) {
+            await MastDB.update('cs_config/ticketing', { nextNumber: nextNum + 1 });
+          } else {
+            await MastDB.set('cs_config/ticketing', { prefix: tcPrefix, nextNumber: nextNum + 1 });
+          }
+          await MastDB.orders.update(orderId, {
+            cancellationTicketId: ticketId,
+            cancellationTicketNumber: ticketNumber
+          });
+        } catch (csErr) {
+          console.warn('CS ticket creation failed for cancelled order', orderId, csErr);
+        }
+      }
     } catch (err) {
       showToast('Error cancelling order: ' + err.message, true);
     }
