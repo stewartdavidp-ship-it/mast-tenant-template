@@ -222,7 +222,7 @@
   var surveyData = null;
 
   function cfBase() {
-    return (typeof TENANT_FIREBASE_CONFIG !== 'undefined' && TENANT_FIREBASE_CONFIG.cloudFunctionsBase)
+    return (TENANT_FIREBASE_CONFIG && TENANT_FIREBASE_CONFIG.cloudFunctionsBase)
       ? TENANT_FIREBASE_CONFIG.cloudFunctionsBase
       : 'https://us-central1-mast-platform-prod.cloudfunctions.net';
   }
