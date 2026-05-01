@@ -25371,9 +25371,9 @@ function renderProducts() {
         label + ' <span style="opacity:0.7;font-weight:400;">(' + n + ')</span></button>';
     }
     chipBar.innerHTML =
-      pill('develop', 'Develop', counts.develop) +
-      pill('catalog', 'Catalog', counts.catalog) +
-      pill('sell',    'Sell',    counts.sell);
+      pill('catalog', 'All Products',    counts.catalog) +
+      pill('develop', 'Pending',         counts.develop) +
+      pill('sell',    'Active Products', counts.sell);
   }
 
   // List layout (replaces card grid). One row per product: thumb + name/category + status + variants + recipe + price.
