@@ -12433,7 +12433,11 @@ async function loadUserRole(uid) {
 
     // Guests use built-in defaults — skip the Firestore roles read (isMember() blocks it).
     if (currentUserRole !== 'guest') {
-      currentRoleConfig = await MastDB.roles.get(currentUserRole);
+      try {
+        currentRoleConfig = await MastDB.roles.get(currentUserRole);
+      } catch (rolesErr) {
+        console.warn('admin_roles read failed, using defaults:', rolesErr.message);
+      }
     }
 
     // Fallback: if role config missing in Firebase, use built-in defaults
@@ -12958,6 +12962,10 @@ auth.onAuthStateChanged(async function(user) {
   // --- Tenant Resolution ---
   // Resolve tenant membership from platform registry before loading any data.
   // MastDB.init() must happen before loadUserRole() since role loading uses MastDB.
+  // Force-refresh the token so custom claims (set by syncAdminUserClaim CF) are current.
+  // Without this a stale guest claim blocks isMember() even after role is restored.
+  try { await user.getIdToken(true); } catch (e) { console.warn('Token refresh failed:', e.message); }
+
   console.log('[DEBUG] Auth UID:', user.uid, 'Email:', user.email);
   var tenantId = await resolveTenant(user.uid);
   console.log('[DEBUG] resolveTenant returned:', tenantId);
