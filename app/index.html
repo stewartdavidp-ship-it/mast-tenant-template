@@ -5505,11 +5505,11 @@
         <span class="sidebar-section-arrow">&#9654;</span>
       </div>
       <div class="sidebar-items">
-        <div class="sidebar-item" data-route="cs-inbox" onclick="navigateTo('cs-inbox')">Inbox <span class="sidebar-badge new">Soon</span></div>
-        <div class="sidebar-item" data-route="cs-tickets" onclick="navigateTo('cs-tickets')">Tickets <span class="sidebar-badge new">Soon</span></div>
-        <div class="sidebar-item" data-route="cs-surveys" onclick="navigateTo('cs-surveys')">Surveys <span class="sidebar-badge new">Soon</span></div>
-        <div class="sidebar-item" data-route="cs-reviews" onclick="navigateTo('cs-reviews')">Reviews <span class="sidebar-badge new">Soon</span></div>
-        <div class="sidebar-item" data-route="cs-faqs" onclick="navigateTo('cs-faqs')">FAQs <span class="sidebar-badge new">Soon</span></div>
+        <div class="sidebar-item" data-route="cs-inbox" onclick="navigateTo('cs-inbox')">Inbox</div>
+        <div class="sidebar-item" data-route="cs-tickets" onclick="navigateTo('cs-tickets')">Tickets</div>
+        <div class="sidebar-item" data-route="cs-surveys" onclick="navigateTo('cs-surveys')">Surveys</div>
+        <div class="sidebar-item" data-route="cs-reviews" onclick="navigateTo('cs-reviews')">Reviews</div>
+        <div class="sidebar-item" data-route="cs-faqs" onclick="navigateTo('cs-faqs')">FAQs</div>
       </div>
     </div>
     <!-- Admin -->
@@ -24893,7 +24893,7 @@ async function loadProducts() {
   try {
     var val = await MastDB.products.get();
     productsData = val ? Object.values(val) : [];
-    productsData.sort(function(a, b) { return a.name.localeCompare(b.name); });
+    productsData.sort(function(a, b) { return (a.name || '').localeCompare(b.name || ''); });
     productsLoaded = true;
     renderProducts();
     showBulkPublishButton();
@@ -26080,7 +26080,7 @@ function renderForecastDemandTable() {
   rows.sort(function(a, b) {
     var col = forecastDemandSort.col;
     var dir = forecastDemandSort.asc ? 1 : -1;
-    if (col === 'name') return dir * a.name.localeCompare(b.name);
+    if (col === 'name') return dir * (a.name || '').localeCompare(b.name || '');
     if (col === 'stock') return dir * (a.stock - b.stock);
     if (col === 'sold') {
       var aVal = forecastTimeHorizon === '30d' ? a.last30 : forecastTimeHorizon === '90d' ? a.last90 : forecastTimeHorizon === 'all' ? a.allTimeSold : a.recentSold;
@@ -40952,7 +40952,7 @@ async function ensureProductsLoaded() {
   try {
     var val = await MastDB.products.get();
     productsData = val ? Object.values(val) : [];
-    productsData.sort(function(a, b) { return a.name.localeCompare(b.name); });
+    productsData.sort(function(a, b) { return (a.name || '').localeCompare(b.name || ''); });
     productsLoaded = true;
   } catch (err) {
     console.error('Error loading products for dashboard:', err);
