@@ -864,6 +864,45 @@
     body.dark-mode .view-tab:hover { color: #ccc; }
     body.dark-mode .view-tab.active { color: var(--amber); border-bottom-color: var(--amber); }
 
+    /* Settings vertical sidebar nav */
+    .settings-sidebar-nav {
+      width: 172px;
+      flex-shrink: 0;
+      border-right: 1px solid var(--cream-dark);
+      padding-bottom: 40px;
+    }
+    .settings-nav-group-label {
+      font-size: 0.68rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      color: var(--warm-gray);
+      padding: 18px 16px 5px;
+    }
+    .settings-nav-group-label:first-child { padding-top: 2px; }
+    .settings-nav-item {
+      display: block;
+      width: 100%;
+      text-align: left;
+      padding: 7px 16px;
+      font-size: 0.875rem;
+      font-weight: 500;
+      color: var(--warm-gray);
+      background: none;
+      border: none;
+      border-left: 2px solid transparent;
+      cursor: pointer;
+      transition: color 0.12s, background 0.12s;
+      white-space: nowrap;
+    }
+    .settings-nav-item:hover { color: var(--charcoal); background: rgba(0,0,0,0.03); }
+    .settings-nav-item.active { color: var(--amber); border-left-color: var(--amber); font-weight: 600; background: rgba(245,158,11,0.05); }
+    .settings-content-area { flex: 1; min-width: 0; padding: 0 0 40px 28px; }
+    body.dark-mode .settings-sidebar-nav { border-right-color: #333; }
+    body.dark-mode .settings-nav-item { color: #888; }
+    body.dark-mode .settings-nav-item:hover { color: #ccc; background: rgba(255,255,255,0.04); }
+    body.dark-mode .settings-nav-item.active { color: var(--amber); border-left-color: var(--amber); background: rgba(245,158,11,0.07); }
+
     /* Show section dark mode — .show-sub-tab, .show-sub-nav, .show-deadline-badge removed S5 */
     body.dark-mode #showFindContent > div:first-child { background: #2a2a2a !important; }
     body.dark-mode #showFinderError { background: #3a1a1a !important; border-color: #7f1d1d !important; }
@@ -7136,29 +7175,38 @@
       <div class="section-header">
         <h2>Settings</h2>
       </div>
-      <div class="view-tabs" id="settingsSubNav">
-        <button class="view-tab active" onclick="switchSettingsSubView('general')">General</button>
-        <button class="view-tab" onclick="switchSettingsSubView('payments')">Payments</button>
-        <button class="view-tab" onclick="switchSettingsSubView('shipping')">Shipping</button>
-        <button class="view-tab" onclick="switchSettingsSubView('tax')">Tax &amp; Legal</button>
-        <button class="view-tab" onclick="switchSettingsSubView('compliance')">Compliance</button>
-        <button class="view-tab" onclick="switchSettingsSubView('operations')">Operations</button>
-        <button class="view-tab" onclick="switchSettingsSubView('email')">Email</button>
-        <button class="view-tab" onclick="switchSettingsSubView('integrations')">Integrations</button>
-        <button class="view-tab" onclick="switchSettingsSubView('workshop')">Workshop</button>
-        <button class="view-tab" onclick="switchSettingsSubView('trips')">Trips</button>
-        <button class="view-tab" onclick="switchSettingsSubView('storefront')">Storefront</button>
-        <button class="view-tab" onclick="switchSettingsSubView('dashboard')">Dashboard</button>
-        <button class="view-tab" onclick="switchSettingsSubView('domains')">Domains</button>
-        <button class="view-tab" onclick="switchSettingsSubView('ai')">AI</button>
-        <button class="view-tab" onclick="switchSettingsSubView('engagement')">Engagement</button>
-        <button class="view-tab" onclick="switchSettingsSubView('channels')">Channels</button>
-        <button class="view-tab" onclick="switchSettingsSubView('notifications')">Notifications <span id="settingsNotifBadge" class="sidebar-badge alert" style="display:none;margin-left:4px;"></span></button>
-        <button class="view-tab" onclick="switchSettingsSubView('pim')">PIM</button>
-        <button class="view-tab" onclick="switchSettingsSubView('maker')">Develop</button>
-        <button class="view-tab" onclick="switchSettingsSubView('product')">Product</button>
-      </div>
-      <div id="settingsSubGeneral" style="max-width:500px;">
+      <div style="display:flex;gap:0;align-items:flex-start;margin-top:4px;">
+        <nav id="settingsSubNav" class="settings-sidebar-nav">
+          <div class="settings-nav-group-label">Store</div>
+          <button class="settings-nav-item active" data-nav-key="general" onclick="switchSettingsSubView('general')">General</button>
+          <button class="settings-nav-item" data-nav-key="storefront" onclick="switchSettingsSubView('storefront')">Storefront</button>
+          <button class="settings-nav-item" data-nav-key="domains" onclick="switchSettingsSubView('domains')">Domains</button>
+          <button class="settings-nav-item" data-nav-key="dashboard" onclick="switchSettingsSubView('dashboard')">Dashboard</button>
+
+          <div class="settings-nav-group-label">Commerce</div>
+          <button class="settings-nav-item" data-nav-key="payments" onclick="switchSettingsSubView('payments')">Payments</button>
+          <button class="settings-nav-item" data-nav-key="shipping" onclick="switchSettingsSubView('shipping')">Shipping</button>
+          <button class="settings-nav-item" data-nav-key="tax" onclick="switchSettingsSubView('tax')">Tax &amp; Legal</button>
+          <button class="settings-nav-item" data-nav-key="compliance" onclick="switchSettingsSubView('compliance')">Compliance</button>
+          <button class="settings-nav-item" data-nav-key="operations" onclick="switchSettingsSubView('operations')">Operations</button>
+          <button class="settings-nav-item" data-nav-key="channels" onclick="switchSettingsSubView('channels')">Channels</button>
+          <button class="settings-nav-item" data-nav-key="pim" onclick="switchSettingsSubView('pim')">PIM</button>
+
+          <div class="settings-nav-group-label">Communication</div>
+          <button class="settings-nav-item" data-nav-key="email" onclick="switchSettingsSubView('email')">Email</button>
+          <button class="settings-nav-item" data-nav-key="notifications" onclick="switchSettingsSubView('notifications')">Notifications <span id="settingsNotifBadge" class="sidebar-badge alert" style="display:none;margin-left:4px;"></span></button>
+          <button class="settings-nav-item" data-nav-key="engagement" onclick="switchSettingsSubView('engagement')">Engagement</button>
+          <button class="settings-nav-item" data-nav-key="integrations" onclick="switchSettingsSubView('integrations')">Integrations</button>
+          <button class="settings-nav-item" data-nav-key="ai" onclick="switchSettingsSubView('ai')">AI</button>
+
+          <div class="settings-nav-group-label">Studio</div>
+          <button class="settings-nav-item" data-nav-key="workshop" onclick="switchSettingsSubView('workshop')">Workshop</button>
+          <button class="settings-nav-item" data-nav-key="trips" onclick="switchSettingsSubView('trips')">Trips</button>
+          <button class="settings-nav-item" data-nav-key="product" onclick="switchSettingsSubView('product')">Product</button>
+          <button class="settings-nav-item" data-nav-key="maker" onclick="switchSettingsSubView('maker')">Develop</button>
+        </nav>
+        <div class="settings-content-area">
+          <div id="settingsSubGeneral" style="max-width:500px;">
         <div id="githubPatSection" class="form-group" style="display:none;">
           <label>GitHub Personal Access Token</label>
           <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:8px;">
@@ -8945,6 +8993,8 @@
           </div>
         </div>
       </div>
+        </div><!-- end .settings-content-area -->
+      </div><!-- end settings flex wrapper -->
     </div>
 
     <!-- Square credentials modal (PB-6) -->
@@ -11654,9 +11704,9 @@ var SETTINGS_MODULE_MAP = {
 function applySettingsGating() {
   var nav = document.getElementById('settingsSubNav');
   if (!nav) return;
-  var tabs = nav.querySelectorAll('.view-tab');
+  var tabs = nav.querySelectorAll('.settings-nav-item');
   tabs.forEach(function(btn) {
-    var viewName = btn.textContent.toLowerCase().trim();
+    var viewName = btn.dataset.navKey || '';
     var owningModule = SETTINGS_MODULE_MAP[viewName];
     if (owningModule && !canAccessModule(owningModule)) {
       btn.style.opacity = '0.35';
@@ -14843,16 +14893,9 @@ function switchSettingsSubView(view) {
   // Show selected
   var target = document.getElementById('settingsSub' + view.charAt(0).toUpperCase() + view.slice(1));
   if (target) target.style.display = '';
-  // Update tab styles
-  document.querySelectorAll('#settingsSubNav .view-tab').forEach(function(btn) {
-    btn.classList.remove('active');
-  });
-  // Find the matching tab button by onclick attribute
-  document.querySelectorAll('#settingsSubNav .view-tab').forEach(function(btn) {
-    var onclick = btn.getAttribute('onclick') || '';
-    var match = onclick.match(/switchSettingsSubView\('([^']+)'\)/);
-    if (match && match[1] === view) btn.classList.add('active');
-    else if (btn.textContent.toLowerCase().trim() === view) btn.classList.add('active');
+  // Update nav active state
+  document.querySelectorAll('#settingsSubNav .settings-nav-item').forEach(function(btn) {
+    btn.classList.toggle('active', btn.dataset.navKey === view);
   });
   // Lazy loads
   if (view === 'shipping') { loadShipProviderConfig(); }
