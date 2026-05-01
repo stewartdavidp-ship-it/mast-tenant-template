@@ -501,8 +501,11 @@
     if (tab) tab.innerHTML = '<div class="loading" style="padding:40px;text-align:center;">Loading thread…</div>';
 
     try {
-      var snap = await MastDB.query('cs_tickets/' + ticketId + '/messages').limitToLast(100).once();
-      threadMessages = snap ? Object.values(snap) : [];
+      // Messages are stored as nested fields in the ticket doc (MastDB path API
+      // doesn't support subcollection queries; query() ignores docId/fieldPath).
+      var ticket = await MastDB.get('cs_tickets/' + ticketId);
+      var msgs = ticket && ticket.messages ? ticket.messages : {};
+      threadMessages = Object.values(msgs);
       threadMessages.sort(function(a, b) {
         return (a.createdAt || '').localeCompare(b.createdAt || '');
       });
