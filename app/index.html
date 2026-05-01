@@ -12409,11 +12409,14 @@ async function loadUserRole(uid) {
         });
       }
     } else {
-      // Update lastLoginAt — backfill new Phase 1 fields if not yet present
+      // Update lastLoginAt — non-fatal: guests cannot write if isMember() fails,
+      // and we never want a write error to prevent the expiry screen from showing.
       var loginUpdate = { lastLoginAt: MastDB.serverTimestamp() };
       if (userData.permissionOverrides === undefined) loginUpdate.permissionOverrides = {};
       if (userData.accessExpiry === undefined) loginUpdate.accessExpiry = null;
-      await MastDB.adminUsers.update(uid, loginUpdate);
+      MastDB.adminUsers.update(uid, loginUpdate).catch(function(e) {
+        console.warn('lastLoginAt update failed (non-blocking):', e.message);
+      });
     }
 
     currentUserRole = userData.role || 'guest';
@@ -12421,7 +12424,7 @@ async function loadUserRole(uid) {
     currentUserRecord = userData;
 
     // Check guest expiry before any RBAC read that would fail for the guest claim.
-    // Guests can read their own admin_users doc but cannot read admin_roles.
+    // Guests can read their own admin_users doc but cannot write or read admin_roles.
     if (currentUserRole === 'guest' && userData.accessExpiry && new Date(userData.accessExpiry) < new Date()) {
       showExpiredScreen(userData.accessExpiry);
       rbacReady = false;
