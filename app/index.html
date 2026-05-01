@@ -35265,6 +35265,15 @@ function renderUsersList() {
     var uid = pair[0];
     var u = pair[1];
     var lastLogin = u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleDateString() : 'Never';
+    // For guests with an expiry, replace Last Login column with expiry date
+    if (u.role === 'guest' && u.accessExpiry) {
+      var expiryDate = new Date(u.accessExpiry);
+      var now = new Date();
+      var isExpired = expiryDate < now;
+      lastLogin = (isExpired
+        ? '<span style="color:#ef4444;font-size:0.78rem;">Expired ' + expiryDate.toLocaleDateString() + '</span>'
+        : '<span style="font-size:0.78rem;">Expires ' + expiryDate.toLocaleDateString() + '</span>');
+    }
     // Preserve the raw role value — never coerce. An empty/missing role is
     // treated as 'guest' (lowest privilege) by the underlying access checks,
     // but for display we surface unknown values explicitly so the operator
@@ -35305,6 +35314,14 @@ function renderUsersList() {
         : ('Unknown: ' + role);
       roleCell = '<span class="status-badge role-badge ' + roleBadgeClass + '">' + esc(displayLabel) + '</span>' +
         (isSelf ? ' <span style="font-size:0.72rem;color:var(--warm-gray);">(you)</span>' : '');
+    }
+
+    // Customized badge: show when user has active permission overrides
+    var overrideDiff = computePermissionDiff(role, rolesData[role] || DEFAULT_ROLES[role], u.permissionOverrides || {});
+    var overrideCount = 0;
+    Object.keys(overrideDiff).forEach(function(e) { overrideCount += Object.keys(overrideDiff[e]).length; });
+    if (overrideCount > 0) {
+      roleCell += ' <span class="status-badge" style="font-size:0.72rem;background:rgba(245,158,11,0.15);color:#b45309;border:1px solid rgba(245,158,11,0.3);">customized (' + overrideCount + ')</span>';
     }
 
     var actionsCell = '';
