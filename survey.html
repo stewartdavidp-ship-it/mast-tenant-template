@@ -450,7 +450,7 @@
     html += '<div class="sv-progress-label"><span>Question ' + (idx + 1) + ' of ' + total + '</span><span>' + progress + '%</span></div>';
     html += '<div class="sv-progress-track"><div class="sv-progress-fill" style="width:' + progress + '%;"></div></div>';
     html += '<div class="sv-question" id="q_' + esc(q.id) + '">';
-    html += '<label>' + esc(q.text) + '</label>';
+    html += '<label>' + esc(q.text) + (q.required === false ? ' <span style="font-size:0.8em;font-weight:400;color:var(--warm-gray,#888);">(optional)</span>' : '') + '</label>';
     html += renderQuestionInput(q);
     html += '</div>';
     if (isLast) {
@@ -490,7 +490,7 @@
 
   window.svNext = function() {
     var q = surveyData.questions[currentQ];
-    if (answers[q.id] === undefined || answers[q.id] === '') {
+    if (q.required !== false && (answers[q.id] === undefined || answers[q.id] === '')) {
       var el = document.getElementById('svSubmitStatus');
       if (el) { el.textContent = 'Please answer this question to continue.'; el.style.display = ''; }
       return;
@@ -502,7 +502,7 @@
   window.svSubmit = function() {
     if (!surveyData) return;
     var q = surveyData.questions[currentQ];
-    if (answers[q.id] === undefined || answers[q.id] === '') {
+    if (q.required !== false && (answers[q.id] === undefined || answers[q.id] === '')) {
       var el = document.getElementById('svSubmitStatus');
       if (el) { el.textContent = 'Please answer this question before submitting.'; el.style.display = ''; }
       return;
