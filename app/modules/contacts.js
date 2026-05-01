@@ -89,6 +89,7 @@
     if (signals.hasStaleTicket)   atRisk = true;
     if (avgRating !== null && avgRating <= 2)  atRisk = true;
     if (lastNps   !== null && lastNps   <= 6)  atRisk = true;
+    if (signals.membershipPaymentFailed) atRisk = true;
     if (atRisk) return 'At Risk';
 
     // Loyal: 3+ orders in 12 months AND no urgent/stale tickets AND review avg ≥ 4 (if any) AND NPS ≥ 8 (if any)
@@ -106,6 +107,7 @@
     var reviewSnap = queryResults[2];
     var surveySnap = queryResults[3];
     var abandonSnap = queryResults[4];
+    var memberSnap = queryResults[5];
 
     var now              = Date.now();
     var ms1Day           = 86400000;
@@ -189,13 +191,23 @@
       }
     });
 
+    // ── Membership ───────────────────────────────────────────────
+    var membership = null;
+    if (memberSnap) {
+      memberSnap.forEach(function(doc) { var d = doc.data(); if (d.membership) membership = d.membership; });
+    }
+
     return {
       ltv: ltv, orderCount: orderCount, ordersLast12m: ordersLast12m,
       daysSinceLastOrder: daysSinceLastOrder,
       openTicketCount: openTicketCount, oldestOpenDays: oldestOpenDays,
       hasUrgentTicket: hasUrgentTicket, hasStaleTicket: hasStaleTicket,
       reviewCount: reviewCount, reviewAvgRating: reviewAvgRating,
-      lastNps: lastNps, cartAbandons30d: cartAbandons30d
+      lastNps: lastNps, cartAbandons30d: cartAbandons30d,
+      membershipStatus: membership ? (membership.status || null) : null,
+      membershipRenewalDate: membership ? (membership.renewalDate || membership.expiryDate || null) : null,
+      membershipPaymentFailed: membership ? (membership.paymentStatus === 'failed') : false,
+      membershipPlan: membership ? (membership.plan || null) : null
     };
   }
 
@@ -214,11 +226,26 @@
       ? (signals.daysSinceLastOrder === 0 ? 'today' : signals.daysSinceLastOrder + 'd ago')
       : '—';
     var dot = ' &nbsp;&middot;&nbsp; ';
+
+    // Membership stat label (only shown when membership exists)
+    var membershipStatStr = '';
+    if (signals.membershipStatus) {
+      if (signals.membershipStatus === 'active') {
+        membershipStatStr = 'Membership: Active';
+      } else if (signals.membershipStatus === 'cancelled') {
+        var cancelDate = signals.membershipRenewalDate ? signals.membershipRenewalDate : '';
+        membershipStatStr = 'Membership: Cancels' + (cancelDate ? ' ' + cancelDate : '');
+      } else if (signals.membershipStatus === 'expired') {
+        membershipStatStr = 'Membership: Expired';
+      }
+    }
+
     var statRow = 'LTV: ' + ltvDisplay + dot +
       'Orders: ' + signals.orderCount + dot +
       'Last order: ' + lastOrderStr + dot +
       'Open tickets: ' + signals.openTicketCount + dot +
-      'NPS: ' + (signals.lastNps !== null ? signals.lastNps : '—');
+      'NPS: ' + (signals.lastNps !== null ? signals.lastNps : '—') +
+      (membershipStatStr ? dot + membershipStatStr : '');
 
     // Full breakdown (inside collapsible)
     var ticketDetail = signals.openTicketCount > 0
@@ -260,6 +287,25 @@
             '<div>' + (signals.lastNps !== null ? signals.lastNps + ' / 10' : '—') + '</div>' +
             '<div style="color:var(--warm-gray-light);">Cart Abandons (30d)</div>' +
             '<div>' + signals.cartAbandons30d + '</div>' +
+            (signals.membershipStatus ? (
+              '<div style="color:var(--warm-gray-light);">Membership</div>' +
+              '<div>' + (function() {
+                var mStatus = signals.membershipStatus;
+                var mDate = signals.membershipRenewalDate;
+                var mPlan = signals.membershipPlan;
+                var mFailed = signals.membershipPaymentFailed;
+                var statusColor = mStatus === 'active' ? '#4DB6AC' : mStatus === 'cancelled' ? '#FFD54F' : '#EF9A9A';
+                var statusLabel = mStatus.charAt(0).toUpperCase() + mStatus.slice(1);
+                var detail = '';
+                if (mPlan) detail += '<span style="color:var(--warm-gray-light);margin-left:6px;">(' + esc(mPlan) + ')</span>';
+                if (mDate) {
+                  var dateLabel = mStatus === 'active' ? 'Renews ' : mStatus === 'cancelled' ? 'Ends ' : 'Expired ';
+                  detail += '<span style="color:var(--warm-gray-light);margin-left:6px;">' + dateLabel + esc(mDate) + '</span>';
+                }
+                if (mFailed) detail += '<span style="color:#EF9A9A;font-weight:600;margin-left:8px;">&#9888; Payment failed</span>';
+                return '<span style="color:' + statusColor + ';font-weight:600;">' + esc(statusLabel) + '</span>' + detail;
+              })() + '</div>'
+            ) : '') +
           '</div>' +
         '</div>' +
       '</div>' +
@@ -299,7 +345,8 @@
         db.collection(base + '/cs_tickets').where('contactEmail', '==', email).limit(50).get(),
         db.collection(base + '/cs_reviews').where('authorEmail', '==', email).limit(50).get(),
         db.collection(base + '/cs_survey_responses').where('contactEmail', '==', email).limit(50).get(),
-        db.collection(base + '/cs_cart_abandons').where('contactEmail', '==', email).limit(50).get()
+        db.collection(base + '/cs_cart_abandons').where('contactEmail', '==', email).limit(50).get(),
+        db.collection(base + '/customers').where('email', '==', email).limit(1).get()
       ]);
 
       var signals = processContactSignals(results);
