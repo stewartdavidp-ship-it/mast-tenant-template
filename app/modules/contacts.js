@@ -16,6 +16,8 @@
   var contactInteractionsLoaded = false;
   var contactEditMode = false;     // Paradigm A — read-only until user clicks Edit
   var contactEditBaseline = null;  // snapshot for Cancel / dirty tracking
+  var contactSignalsCache = {};    // email → signals, persists across contact-detail re-renders
+  var signalsCollapsibleOpen = false;
 
   var CONTACT_CATEGORIES = ['Supplier', 'Facilities', 'Gallery', 'Marketplace', 'Event Organizer', 'Partner', 'Student', 'Press', 'Other'];
   var INTERACTION_TYPES = ['Call', 'Email', 'Meeting', 'Site Visit', 'Payment', 'Signed Doc', 'Other'];
@@ -55,6 +57,264 @@
     var key = (type || 'other').toLowerCase().replace(/\s+/g, '-');
     var c = INTERACTION_TYPE_BADGE_COLORS[key] || { bg: 'rgba(158,158,158,0.15)', color: '#BDBDBD', border: 'rgba(158,158,158,0.25)' };
     return 'background:' + c.bg + ';color:' + c.color + ';border:1px solid ' + c.border + ';';
+  }
+
+  // ============================================================
+  // Customer Signals — health chip + CS data aggregation
+  // ============================================================
+
+  var HEALTH_CHIP_STYLES = {
+    'Loyal':   { bg: 'rgba(6,95,70,0.25)',     color: '#4DB6AC', border: 'rgba(6,95,70,0.4)' },
+    'Watch':   { bg: 'rgba(146,64,14,0.2)',    color: '#FFD54F', border: 'rgba(146,64,14,0.35)' },
+    'At Risk': { bg: 'rgba(185,28,28,0.2)',    color: '#EF9A9A', border: 'rgba(185,28,28,0.35)' },
+    'New':     { bg: 'rgba(158,158,158,0.15)', color: '#BDBDBD', border: 'rgba(158,158,158,0.25)' }
+  };
+
+  function computeHealthStatus(signals) {
+    var orderCount    = signals.orderCount || 0;
+    var ordersLast12m = signals.ordersLast12m || 0;
+    var daysSinceLast = signals.daysSinceLastOrder; // null if never ordered
+    var openTickets   = signals.openTicketCount || 0;
+    var reviewCount   = signals.reviewCount || 0;
+    var avgRating     = signals.reviewAvgRating;    // null if no approved reviews
+    var lastNps       = signals.lastNps;            // null if no NPS responses
+
+    // New: fewer than 2 lifetime orders, no tickets, no reviews
+    if (orderCount < 2 && openTickets === 0 && reviewCount === 0) return 'New';
+
+    // At Risk: any one of these is enough
+    var atRisk = false;
+    if (orderCount >= 2 && daysSinceLast !== null && daysSinceLast >= 90) atRisk = true;
+    if (signals.hasUrgentTicket)  atRisk = true;
+    if (signals.hasStaleTicket)   atRisk = true;
+    if (avgRating !== null && avgRating <= 2)  atRisk = true;
+    if (lastNps   !== null && lastNps   <= 6)  atRisk = true;
+    if (atRisk) return 'At Risk';
+
+    // Loyal: 3+ orders in 12 months AND no urgent/stale tickets AND review avg ≥ 4 (if any) AND NPS ≥ 8 (if any)
+    if (ordersLast12m >= 3 &&
+        !signals.hasUrgentTicket && !signals.hasStaleTicket &&
+        (avgRating === null || avgRating >= 4.0) &&
+        (lastNps   === null || lastNps   >= 8)) return 'Loyal';
+
+    return 'Watch';
+  }
+
+  function processContactSignals(queryResults) {
+    var orderSnap  = queryResults[0];
+    var ticketSnap = queryResults[1];
+    var reviewSnap = queryResults[2];
+    var surveySnap = queryResults[3];
+    var abandonSnap = queryResults[4];
+
+    var now              = Date.now();
+    var ms1Day           = 86400000;
+    var twelveMonthsAgo  = now - 365 * ms1Day;
+    var thirtyDaysAgo    = now - 30  * ms1Day;
+    var fourteenDaysAgo  = now - 14  * ms1Day;
+
+    // ── Orders ──────────────────────────────────────────────────
+    var ltv = 0, orderCount = 0, lastOrderMs = null, ordersLast12m = 0;
+    orderSnap.forEach(function(doc) {
+      var d = doc.data();
+      ltv += (d.total || d.paidAmount || 0);
+      orderCount++;
+      var dateStr = d.placedAt || d.createdAt;
+      if (dateStr) {
+        var ms = new Date(dateStr).getTime();
+        if (!isNaN(ms)) {
+          if (lastOrderMs === null || ms > lastOrderMs) lastOrderMs = ms;
+          if (ms >= twelveMonthsAgo) ordersLast12m++;
+        }
+      }
+    });
+    var daysSinceLastOrder = lastOrderMs !== null ? Math.floor((now - lastOrderMs) / ms1Day) : null;
+
+    // ── Tickets ──────────────────────────────────────────────────
+    var openTicketCount = 0, oldestOpenMs = null, hasUrgentTicket = false, hasStaleTicket = false;
+    ticketSnap.forEach(function(doc) {
+      var d = doc.data();
+      if (d.status !== 'closed') {
+        openTicketCount++;
+        if (d.priority === 'urgent') hasUrgentTicket = true;
+        if (d.createdAt) {
+          var ms = new Date(d.createdAt).getTime();
+          if (!isNaN(ms)) {
+            if (oldestOpenMs === null || ms < oldestOpenMs) oldestOpenMs = ms;
+            if (ms < fourteenDaysAgo) hasStaleTicket = true;
+          }
+        }
+      }
+    });
+    var oldestOpenDays = oldestOpenMs !== null ? Math.floor((now - oldestOpenMs) / ms1Day) : null;
+
+    // ── Reviews ──────────────────────────────────────────────────
+    var reviewCount = 0, ratingSum = 0;
+    reviewSnap.forEach(function(doc) {
+      var d = doc.data();
+      if (d.status === 'approved' && typeof d.rating === 'number') {
+        reviewCount++;
+        ratingSum += d.rating;
+      }
+    });
+    var reviewAvgRating = reviewCount > 0 ? ratingSum / reviewCount : null;
+
+    // ── Survey responses — find most recent NPS answer ───────────
+    var lastNps = null, lastNpsMs = null;
+    surveySnap.forEach(function(doc) {
+      var d = doc.data();
+      var answers = d.answers || [];
+      for (var i = 0; i < answers.length; i++) {
+        var a = answers[i];
+        var aType = (a.type || a.questionType || '').toLowerCase();
+        // NPS questions have type 'nps'; fallback: rating type on 0–10 scale
+        if ((aType === 'nps' || aType === 'rating') && typeof a.value === 'number' && a.value >= 0 && a.value <= 10) {
+          var ms = d.createdAt ? new Date(d.createdAt).getTime() : 0;
+          if (!isNaN(ms) && (lastNpsMs === null || ms > lastNpsMs)) {
+            lastNps = a.value;
+            lastNpsMs = ms;
+          }
+          break;
+        }
+      }
+    });
+
+    // ── Cart abandons (30d) ───────────────────────────────────────
+    var cartAbandons30d = 0;
+    abandonSnap.forEach(function(doc) {
+      var d = doc.data();
+      if (d.createdAt) {
+        var ms = new Date(d.createdAt).getTime();
+        if (!isNaN(ms) && ms >= thirtyDaysAgo) cartAbandons30d++;
+      }
+    });
+
+    return {
+      ltv: ltv, orderCount: orderCount, ordersLast12m: ordersLast12m,
+      daysSinceLastOrder: daysSinceLastOrder,
+      openTicketCount: openTicketCount, oldestOpenDays: oldestOpenDays,
+      hasUrgentTicket: hasUrgentTicket, hasStaleTicket: hasStaleTicket,
+      reviewCount: reviewCount, reviewAvgRating: reviewAvgRating,
+      lastNps: lastNps, cartAbandons30d: cartAbandons30d
+    };
+  }
+
+  function buildSignalsSectionHtml(signals) {
+    var status = computeHealthStatus(signals);
+    var hs = HEALTH_CHIP_STYLES[status];
+    var chipStyle = 'background:' + hs.bg + ';color:' + hs.color + ';border:1px solid ' + hs.border + ';' +
+      'border-radius:4px;padding:2px 10px;font-size:0.78rem;font-weight:600;letter-spacing:0.05em;' +
+      'text-transform:uppercase;display:inline-block;';
+
+    // Compact stat row
+    var ltvDisplay = typeof formatCurrency === 'function'
+      ? formatCurrency(signals.ltv)
+      : ('$' + (signals.ltv / 100).toFixed(0));
+    var lastOrderStr = signals.daysSinceLastOrder !== null
+      ? (signals.daysSinceLastOrder === 0 ? 'today' : signals.daysSinceLastOrder + 'd ago')
+      : '—';
+    var dot = ' &nbsp;&middot;&nbsp; ';
+    var statRow = 'LTV: ' + ltvDisplay + dot +
+      'Orders: ' + signals.orderCount + dot +
+      'Last order: ' + lastOrderStr + dot +
+      'Open tickets: ' + signals.openTicketCount + dot +
+      'NPS: ' + (signals.lastNps !== null ? signals.lastNps : '—');
+
+    // Full breakdown (inside collapsible)
+    var ticketDetail = signals.openTicketCount > 0
+      ? signals.openTicketCount +
+        (signals.oldestOpenDays !== null ? ' (oldest: ' + signals.oldestOpenDays + 'd)' : '') +
+        (signals.hasUrgentTicket ? ' — <span style="color:#EF9A9A;font-weight:600;">URGENT</span>'
+          : signals.hasStaleTicket ? ' — <span style="color:#FFD54F;font-weight:600;">STALE</span>' : '')
+      : '0';
+    var reviewDetail = signals.reviewCount > 0
+      ? signals.reviewCount + ' approved &middot; avg ' + signals.reviewAvgRating.toFixed(1) + ' ★'
+      : '—';
+
+    var chevron = signalsCollapsibleOpen ? '▼' : '▶';
+    var bodyDisplay = signalsCollapsibleOpen ? '' : 'none';
+
+    return '<div id="contactSignalsSection" style="margin-bottom:16px;">' +
+      '<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">' +
+        '<span style="' + chipStyle + '">' + esc(status) + '</span>' +
+      '</div>' +
+      '<div style="font-size:0.8rem;color:var(--warm-gray-light);margin-bottom:8px;">' + statRow + '</div>' +
+      '<button onclick="toggleSignalsCollapsible()" style="background:none;border:none;cursor:pointer;padding:0;' +
+        'color:var(--warm-gray);font-size:0.8rem;display:flex;align-items:center;gap:6px;font-family:inherit;">' +
+        '<span id="signalsChevron">' + chevron + '</span> Customer Signals' +
+      '</button>' +
+      '<div id="contactSignalsBody" style="display:' + bodyDisplay + ';margin-top:8px;">' +
+        '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:14px 18px;">' +
+          '<div style="display:grid;grid-template-columns:180px 1fr;gap:8px 16px;font-size:0.82rem;">' +
+            '<div style="color:var(--warm-gray-light);">Lifetime Value</div>' +
+            '<div>' + ltvDisplay + '</div>' +
+            '<div style="color:var(--warm-gray-light);">Orders</div>' +
+            '<div>' + signals.orderCount + ' total' + (signals.ordersLast12m > 0 ? ' (' + signals.ordersLast12m + ' last 12 mo)' : '') + '</div>' +
+            '<div style="color:var(--warm-gray-light);">Last Order</div>' +
+            '<div>' + (signals.daysSinceLastOrder !== null ? (signals.daysSinceLastOrder === 0 ? 'Today' : signals.daysSinceLastOrder + ' days ago') : 'Never') + '</div>' +
+            '<div style="color:var(--warm-gray-light);">Open Tickets</div>' +
+            '<div>' + ticketDetail + '</div>' +
+            '<div style="color:var(--warm-gray-light);">Reviews</div>' +
+            '<div>' + reviewDetail + '</div>' +
+            '<div style="color:var(--warm-gray-light);">Last NPS Score</div>' +
+            '<div>' + (signals.lastNps !== null ? signals.lastNps + ' / 10' : '—') + '</div>' +
+            '<div style="color:var(--warm-gray-light);">Cart Abandons (30d)</div>' +
+            '<div>' + signals.cartAbandons30d + '</div>' +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  }
+
+  function toggleSignalsCollapsible() {
+    signalsCollapsibleOpen = !signalsCollapsibleOpen;
+    var body = document.getElementById('contactSignalsBody');
+    var chevron = document.getElementById('signalsChevron');
+    if (body) body.style.display = signalsCollapsibleOpen ? '' : 'none';
+    if (chevron) chevron.textContent = signalsCollapsibleOpen ? '▼' : '▶';
+  }
+
+  async function loadAndRenderContactSignals(email) {
+    if (!email) return;
+
+    // Use cache — avoids re-fetch when entering/exiting edit mode on same contact
+    if (contactSignalsCache[email]) {
+      var cached = document.getElementById('contactSignalsSection');
+      if (!cached) return;
+      var wrapper = document.createElement('div');
+      wrapper.innerHTML = buildSignalsSectionHtml(contactSignalsCache[email]);
+      cached.parentNode.replaceChild(wrapper.firstChild, cached);
+      return;
+    }
+
+    var db = (typeof firebase !== 'undefined' && firebase.firestore) ? firebase.firestore() : null;
+    if (!db) return;
+
+    var tenantId = window.TENANT_ID || 'dev';
+    var base = 'tenants/' + tenantId;
+
+    try {
+      var results = await Promise.all([
+        db.collection(base + '/orders').where('contactEmail', '==', email).limit(50).get(),
+        db.collection(base + '/cs_tickets').where('contactEmail', '==', email).limit(50).get(),
+        db.collection(base + '/cs_reviews').where('authorEmail', '==', email).limit(50).get(),
+        db.collection(base + '/cs_survey_responses').where('contactEmail', '==', email).limit(50).get(),
+        db.collection(base + '/cs_cart_abandons').where('contactEmail', '==', email).limit(50).get()
+      ]);
+
+      var signals = processContactSignals(results);
+      contactSignalsCache[email] = signals;
+
+      var section = document.getElementById('contactSignalsSection');
+      if (!section) return; // user navigated away
+      var wrapper = document.createElement('div');
+      wrapper.innerHTML = buildSignalsSectionHtml(signals);
+      section.parentNode.replaceChild(wrapper.firstChild, section);
+    } catch (err) {
+      console.error('Contact signals load failed:', err);
+      var section = document.getElementById('contactSignalsSection');
+      if (section) section.innerHTML = '<span style="font-size:0.8rem;color:var(--warm-gray-light);">Customer signals unavailable.</span>';
+    }
   }
 
 async function loadContacts() {
@@ -505,7 +765,9 @@ async function loadContactDetail(contactId) {
     contactInteractions.sort(function(a, b) { return (b.date || '').localeCompare(a.date || ''); });
     contactInteractionsLoaded = true;
 
+    signalsCollapsibleOpen = false; // reset per-contact open state
     renderContactDetail(contact);
+    if (contact.email) loadAndRenderContactSignals(contact.email);
   } catch (err) {
     console.error('Error loading contact detail:', err);
     container.innerHTML = '<p style="color:var(--danger);">Error loading contact: ' + esc(err.message) + '</p>';
@@ -527,6 +789,23 @@ function renderContactDetail(contact) {
   var container = document.getElementById('contactDetailContent');
   var editing = !!contactEditMode;
   var inlineInputStyle = 'width:100%;padding:6px 10px;border:1px solid var(--cream-dark);border-radius:4px;background:var(--cream);font-family:DM Sans,sans-serif;font-size:0.85rem;';
+
+  // ── Customer Signals section ─────────────────────────────────
+  // Render from cache if available; otherwise show a loading placeholder
+  // that loadAndRenderContactSignals() will replace asynchronously.
+  var signalsHtml;
+  var cEmail = contact.email;
+  if (!cEmail) {
+    signalsHtml = '<div id="contactSignalsSection" style="margin-bottom:16px;">' +
+      '<span style="font-size:0.8rem;color:var(--warm-gray-light);">No email — customer signals unavailable.</span>' +
+      '</div>';
+  } else if (contactSignalsCache[cEmail]) {
+    signalsHtml = buildSignalsSectionHtml(contactSignalsCache[cEmail]);
+  } else {
+    signalsHtml = '<div id="contactSignalsSection" style="margin-bottom:16px;">' +
+      '<div style="font-size:0.8rem;color:var(--warm-gray);">Loading customer signals…</div>' +
+      '</div>';
+  }
 
   // ---- Header ----
   var headerActions = '';
@@ -677,7 +956,7 @@ function renderContactDetail(contact) {
   }
   timelineHtml += '</div>';
 
-  container.innerHTML = headerHtml + identityHtml + notesCardHtml + linksCardHtml + recordCardHtml + saveCancelHtml + timelineHtml;
+  container.innerHTML = headerHtml + signalsHtml + identityHtml + notesCardHtml + linksCardHtml + recordCardHtml + saveCancelHtml + timelineHtml;
 }
 
 function openLogInteractionModal(contactId) {
@@ -1149,6 +1428,7 @@ async function doSyncGoogleContacts() {
   window.saveContactEditMode = saveContactEditMode;
   window.openInquiryResponseModal = openInquiryResponseModal;
   window.sendInquiryResponse = sendInquiryResponse;
+  window.toggleSignalsCollapsible = toggleSignalsCollapsible;
 
   // ============================================================
   // Register with MastAdmin
@@ -1194,6 +1474,8 @@ async function doSyncGoogleContacts() {
       contactInteractionsLoaded = false;
       contactEditMode = false;
       contactEditBaseline = null;
+      contactSignalsCache = {};
+      signalsCollapsibleOpen = false;
       if (window.MastDirty) { try { MastDirty.unregister('contactEdit'); } catch (e) {} }
     }
   });
