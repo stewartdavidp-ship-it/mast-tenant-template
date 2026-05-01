@@ -220,6 +220,7 @@
 
   var token = new URLSearchParams(window.location.search).get('t') || '';
   var surveyData = null;
+  var resolvedTenantId = null;
 
   function cfBase() {
     return (TENANT_FIREBASE_CONFIG && TENANT_FIREBASE_CONFIG.cloudFunctionsBase)
@@ -405,7 +406,8 @@
       answers: Object.keys(answers).map(function(qid) {
         return { questionId: qid, answer: answers[qid] };
       }),
-      wantsFollowup: !!wantsFollowup
+      wantsFollowup: !!wantsFollowup,
+      tenantId: resolvedTenantId || undefined
     }).then(function(resp) {
       if (resp.error) { renderError(resp.error); return; }
       renderComplete(resp);
@@ -438,6 +440,7 @@
     callCF('surveyLoad', { token: token })
       .then(function(resp) {
         if (resp.error) { renderError(resp.error); return; }
+        if (resp.tenantId) resolvedTenantId = resp.tenantId;
         renderSummary(resp);
       }).catch(function() {
         renderError('Could not load survey. Please try again.');
