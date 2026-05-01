@@ -5370,11 +5370,11 @@
         <span class="sidebar-section-label">Dashboard</span>
       </div>
     </div>
-    <!-- Develop -->
-    <div class="sidebar-section" data-section="make">
-      <div class="sidebar-section-header" onclick="toggleSection('make')">
+    <!-- Products -->
+    <div class="sidebar-section" data-section="products">
+      <div class="sidebar-section-header" onclick="toggleSection('products')">
         <span class="sidebar-section-icon">&#128293;</span>
-        <span class="sidebar-section-label">Develop</span>
+        <span class="sidebar-section-label">Products</span>
         <span class="sidebar-section-arrow">&#9654;</span>
       </div>
       <div class="sidebar-items">
@@ -5383,13 +5383,35 @@
         <div class="sidebar-item" data-route="forecast" onclick="navigateTo('forecast')">Forecast</div>
         <div class="sidebar-item" data-route="jobs" onclick="navigateTo('jobs')">Jobs</div>
         <div class="sidebar-item muted" data-route="procurement" onclick="navigateTo('procurement')">Procurement <span class="sidebar-badge new">New</span></div>
+        <div class="sidebar-item" data-route="inventory" onclick="navigateTo('inventory')">Inventory</div>
       </div>
     </div>
-    <!-- Market -->
-    <div class="sidebar-section" data-section="market">
-      <div class="sidebar-section-header" onclick="toggleSection('market')">
-        <span class="sidebar-section-icon">&#128227;</span>
-        <span class="sidebar-section-label">Market</span>
+    <!-- Sales -->
+    <div class="sidebar-section" data-section="sales">
+      <div class="sidebar-section-header" onclick="toggleSection('sales')">
+        <span class="sidebar-section-icon">&#128176;</span>
+        <span class="sidebar-section-label">Sales</span>
+        <span class="sidebar-section-arrow">&#9654;</span>
+      </div>
+      <div class="sidebar-items">
+        <div class="sidebar-item" data-route="pos" onclick="navigateTo('pos')">Point of Sale</div>
+        <div class="sidebar-item" data-route="orders" onclick="navigateTo('orders')">Retail Orders <span id="sidebarOrdersBadge" class="sidebar-badge alert" style="display:none;"></span></div>
+        <div class="sidebar-item" data-route="commissions" onclick="navigateTo('commissions')">Commissions</div>
+        <div class="sidebar-item" data-route="rma" onclick="navigateTo('rma')">Returns <span id="sidebarRmaBadge" class="sidebar-badge alert" style="display:none;"></span></div>
+        <div class="sidebar-item" data-route="wholesale" onclick="navigateTo('wholesale')">Wholesale</div>
+        <div class="sidebar-item" data-route="lookbooks" onclick="navigateTo('lookbooks')">Look Books</div>
+        <div class="sidebar-item" data-route="galleries" onclick="navigateTo('galleries')">Galleries &amp; Consignment</div>
+        <div class="sidebar-item" data-route="receipts" onclick="navigateTo('receipts')">Receipts &amp; Reconciliation</div>
+        <div class="sidebar-item" data-route="terms" onclick="navigateTo('terms')">Terms &amp; Conditions</div>
+        <div class="sidebar-item" data-route="pack" onclick="navigateTo('pack')">Pack</div>
+        <div class="sidebar-item" data-route="ship" onclick="navigateTo('ship')">Ship</div>
+      </div>
+    </div>
+    <!-- Marketing -->
+    <div class="sidebar-section" data-section="marketing">
+      <div class="sidebar-section-header" onclick="toggleSection('marketing')">
+        <span class="sidebar-section-icon">&#128226;</span>
+        <span class="sidebar-section-label">Marketing</span>
         <span class="sidebar-section-arrow">&#9654;</span>
       </div>
       <div class="sidebar-items">
@@ -5397,32 +5419,17 @@
         <div class="sidebar-item" data-route="blog" onclick="navigateTo('blog')">Blog</div>
         <div class="sidebar-item" data-route="newsletter" onclick="navigateTo('newsletter')">Newsletter</div>
         <div class="sidebar-item" data-route="stories" onclick="navigateTo('stories')">Stories</div>
+        <div class="sidebar-item" data-route="website" onclick="navigateTo('website')">Website Content</div>
+        <div class="sidebar-item" data-route="brand" onclick="navigateTo('brand')">Brand</div>
+        <div class="sidebar-item" data-route="homepage" onclick="navigateTo('homepage')">Page Builder</div>
+        <div class="sidebar-item" data-route="images" onclick="navigateTo('images')">Images</div>
       </div>
     </div>
-    <!-- Sell -->
-    <div class="sidebar-section" data-section="sell">
-      <div class="sidebar-section-header" onclick="toggleSection('sell')">
-        <span class="sidebar-section-icon">&#128176;</span>
-        <span class="sidebar-section-label">Sell</span>
-        <span class="sidebar-section-arrow">&#9654;</span>
-      </div>
-      <div class="sidebar-items">
-        <div class="sidebar-item" data-route="pos" onclick="navigateTo('pos')">Point of Sale</div>
-        <div class="sidebar-item" data-route="orders" onclick="navigateTo('orders')">Retail Orders <span id="sidebarOrdersBadge" class="sidebar-badge alert" style="display:none;"></span></div>
-        <div class="sidebar-item" data-route="commissions" onclick="navigateTo('commissions')">Commissions</div>
-        <div class="sidebar-item" data-route="rma" onclick="navigateTo('rma')">Returns (RMA) <span id="sidebarRmaBadge" class="sidebar-badge alert" style="display:none;"></span></div>
-        <div class="sidebar-item" data-route="wholesale" onclick="navigateTo('wholesale')">Wholesale</div>
-        <div class="sidebar-item" data-route="lookbooks" onclick="navigateTo('lookbooks')">Look Books</div>
-        <div class="sidebar-item" data-route="galleries" onclick="navigateTo('galleries')">Galleries &amp; Consignment</div>
-        <div class="sidebar-item" data-route="receipts" onclick="navigateTo('receipts')">Receipts &amp; Reconciliation</div>
-        <div class="sidebar-item" data-route="terms" onclick="navigateTo('terms')">Terms &amp; Conditions</div>
-      </div>
-    </div>
-    <!-- Cart (Wallet & Discounts) -->
-    <div class="sidebar-section" data-section="cart">
-      <div class="sidebar-section-header" onclick="toggleSection('cart')">
-        <span class="sidebar-section-icon">&#128091;</span>
-        <span class="sidebar-section-label">Cart</span>
+    <!-- Retention -->
+    <div class="sidebar-section" data-section="retention">
+      <div class="sidebar-section-header" onclick="toggleSection('retention')">
+        <span class="sidebar-section-icon">&#127919;</span>
+        <span class="sidebar-section-label">Retention</span>
         <span class="sidebar-section-arrow">&#9654;</span>
       </div>
       <div class="sidebar-items">
@@ -5432,13 +5439,14 @@
         <div class="sidebar-item" data-route="loyalty" onclick="navigateTo('loyalty')">Loyalty</div>
         <div class="sidebar-item" data-route="membership" onclick="navigateTo('membership')">Membership</div>
         <div class="sidebar-item" data-route="promotions" onclick="navigateTo('promotions')">Sale Promotions</div>
+        <div class="sidebar-item" data-route="customers" onclick="navigateTo('customers')">Customers</div>
       </div>
     </div>
-    <!-- Show -->
-    <div class="sidebar-section" data-section="show">
-      <div class="sidebar-section-header" onclick="toggleSection('show')">
+    <!-- Events -->
+    <div class="sidebar-section" data-section="events">
+      <div class="sidebar-section-header" onclick="toggleSection('events')">
         <span class="sidebar-section-icon">&#127914;</span>
-        <span class="sidebar-section-label">Show</span>
+        <span class="sidebar-section-label">Events</span>
         <span class="sidebar-section-arrow">&#9654;</span>
       </div>
       <div class="sidebar-items">
@@ -5447,73 +5455,16 @@
         <div class="sidebar-item muted" data-route="show-prep" onclick="navigateTo('show-prep')">Prep</div>
         <div class="sidebar-item muted" data-route="show-execute" onclick="navigateTo('show-execute')">Execute</div>
         <div class="sidebar-item muted" data-route="show-history" onclick="navigateTo('show-history')">History</div>
+        <div class="sidebar-item" data-route="show-light-apply" onclick="navigateTo('show-light-apply')">Show Light</div>
+        <div class="sidebar-item" data-route="events-shows" onclick="navigateTo('events-shows')" style="display:none;">Shows</div>
+        <div class="sidebar-item" data-route="events-settings" onclick="navigateTo('events-settings')" style="display:none;">Settings</div>
       </div>
     </div>
-    <!-- Show Light — single-item section, tab UI handles sub-navigation -->
-    <div class="sidebar-section" data-section="show-light">
-      <div class="sidebar-section-header dashboard-link" onclick="navigateTo('show-light-apply')">
-        <span class="sidebar-section-icon">&#10024;</span>
-        <span class="sidebar-section-label">Show Light</span>
-      </div>
-    </div>
-    <!-- Events (Organizer Module) -->
-    <div class="sidebar-section" data-section="events">
-      <div class="sidebar-section-header" onclick="toggleSection('events')">
-        <span class="sidebar-section-icon">&#127915;</span>
-        <span class="sidebar-section-label">Events</span>
-        <span class="sidebar-section-arrow">&#9654;</span>
-      </div>
-      <div class="sidebar-items">
-        <div class="sidebar-item" data-route="events-shows" onclick="navigateTo('events-shows')">Shows</div>
-        <div class="sidebar-item" data-route="events-settings" onclick="navigateTo('events-settings')">Settings</div>
-      </div>
-    </div>
-    <!-- Ship -->
-    <div class="sidebar-section" data-section="ship">
-      <div class="sidebar-section-header" onclick="toggleSection('ship')">
-        <span class="sidebar-section-icon">&#128230;</span>
-        <span class="sidebar-section-label">Ship</span>
-        <span class="sidebar-section-arrow">&#9654;</span>
-      </div>
-      <div class="sidebar-items">
-        <div class="sidebar-item" data-route="pack" onclick="navigateTo('pack')">Pack</div>
-        <div class="sidebar-item" data-route="ship" onclick="navigateTo('ship')">Ship</div>
-      </div>
-    </div>
-    <!-- Run -->
-    <div class="sidebar-section" data-section="run">
-      <div class="sidebar-section-header" onclick="toggleSection('run')">
-        <span class="sidebar-section-icon">&#128203;</span>
-        <span class="sidebar-section-label">Run</span>
-        <span class="sidebar-section-arrow">&#9654;</span>
-      </div>
-      <div class="sidebar-items">
-        <div class="sidebar-item" data-route="trips" onclick="navigateTo('trips')">Trips</div>
-        <div class="sidebar-item" data-route="expenses" onclick="navigateTo('expenses')">Expenses</div>
-        <div class="sidebar-item muted" data-route="reports" onclick="navigateTo('reports')">Reports <span class="sidebar-badge new">New</span></div>
-        <div class="sidebar-item" data-route="financials" onclick="navigateTo('financials')">Revenue</div>
-        <div class="sidebar-item" data-route="customers" onclick="navigateTo('customers')">Customers</div>
-        <div class="sidebar-item" data-route="email-log" onclick="navigateTo('email-log')">Email Log</div>
-        <div class="sidebar-item" data-route="studio" onclick="navigateTo('studio')">Studio</div>
-        <div class="sidebar-item" data-route="team" onclick="navigateTo('team')">Team</div>
-      </div>
-    </div>
-    <!-- Advise -->
-    <div class="sidebar-section" data-section="advise">
-      <div class="sidebar-section-header" onclick="toggleSection('advise')">
-        <span class="sidebar-section-icon">&#128202;</span>
-        <span class="sidebar-section-label">Advise</span>
-        <span class="sidebar-section-arrow">&#9654;</span>
-      </div>
-      <div class="sidebar-items">
-        <div class="sidebar-item" data-route="advisor" onclick="navigateTo('advisor')">Business Plan</div>
-      </div>
-    </div>
-    <!-- Book -->
-    <div class="sidebar-section" data-section="book">
-      <div class="sidebar-section-header" onclick="toggleSection('book')">
+    <!-- Classes -->
+    <div class="sidebar-section" data-section="classes">
+      <div class="sidebar-section-header" onclick="toggleSection('classes')">
         <span class="sidebar-section-icon">&#128197;</span>
-        <span class="sidebar-section-label">Book</span>
+        <span class="sidebar-section-label">Classes</span>
         <span class="sidebar-section-arrow">&#9654;</span>
       </div>
       <div class="sidebar-items">
@@ -5527,18 +5478,57 @@
         <div class="sidebar-item" data-route="book-reports" onclick="navigateTo('book-reports')">Class Reports</div>
       </div>
     </div>
-    <!-- Web -->
-    <div class="sidebar-section" data-section="web">
-      <div class="sidebar-section-header" onclick="toggleSection('web')">
-        <span class="sidebar-section-icon">&#127760;</span>
-        <span class="sidebar-section-label">Web</span>
+    <!-- Operations -->
+    <div class="sidebar-section" data-section="operations">
+      <div class="sidebar-section-header" onclick="toggleSection('operations')">
+        <span class="sidebar-section-icon">&#128203;</span>
+        <span class="sidebar-section-label">Operations</span>
         <span class="sidebar-section-arrow">&#9654;</span>
       </div>
       <div class="sidebar-items">
-        <div class="sidebar-item" data-route="website" onclick="navigateTo('website')">Website Content</div>
-        <div class="sidebar-item" data-route="brand" onclick="navigateTo('brand')">Brand</div>
-        <div class="sidebar-item" data-route="homepage" onclick="navigateTo('homepage')">Page Builder</div>
-        <div class="sidebar-item" data-route="images" onclick="navigateTo('images')">Images</div>
+        <div class="sidebar-item" data-route="financials" onclick="navigateTo('financials')">Revenue</div>
+        <div class="sidebar-item" data-route="expenses" onclick="navigateTo('expenses')">Expenses</div>
+        <div class="sidebar-item" data-route="trips" onclick="navigateTo('trips')">Trips</div>
+        <div class="sidebar-item muted" data-route="reports" onclick="navigateTo('reports')">Reports <span class="sidebar-badge new">New</span></div>
+        <div class="sidebar-item" data-route="advisor" onclick="navigateTo('advisor')">Business Plan</div>
+        <div class="sidebar-item" data-route="studio" onclick="navigateTo('studio')">Studio</div>
+        <div class="sidebar-item" data-route="team" onclick="navigateTo('team')">Team</div>
+        <div class="sidebar-item" data-route="business" onclick="navigateTo('business')">Business</div>
+        <div class="sidebar-item" data-route="channels" onclick="navigateTo('channels')">Channels</div>
+      </div>
+    </div>
+    <!-- Customer Service -->
+    <div class="sidebar-section" data-section="customer-service">
+      <div class="sidebar-section-header" onclick="toggleSection('customer-service')">
+        <span class="sidebar-section-icon">&#128172;</span>
+        <span class="sidebar-section-label">Customer Service</span>
+        <span class="sidebar-section-arrow">&#9654;</span>
+      </div>
+      <div class="sidebar-items">
+        <div class="sidebar-item" data-route="cs-inbox" onclick="navigateTo('cs-inbox')">Inbox <span class="sidebar-badge new">Soon</span></div>
+        <div class="sidebar-item" data-route="cs-tickets" onclick="navigateTo('cs-tickets')">Tickets <span class="sidebar-badge new">Soon</span></div>
+        <div class="sidebar-item" data-route="cs-surveys" onclick="navigateTo('cs-surveys')">Surveys <span class="sidebar-badge new">Soon</span></div>
+        <div class="sidebar-item" data-route="cs-reviews" onclick="navigateTo('cs-reviews')">Reviews <span class="sidebar-badge new">Soon</span></div>
+        <div class="sidebar-item" data-route="cs-faqs" onclick="navigateTo('cs-faqs')">FAQs <span class="sidebar-badge new">Soon</span></div>
+      </div>
+    </div>
+    <!-- Admin -->
+    <div class="sidebar-section" data-section="admin">
+      <div class="sidebar-section-header" onclick="toggleSection('admin')">
+        <span class="sidebar-section-icon">&#9881;&#65039;</span>
+        <span class="sidebar-section-label">Admin</span>
+        <span class="sidebar-section-arrow">&#9654;</span>
+      </div>
+      <div class="sidebar-items">
+        <div class="sidebar-item" data-route="products" onclick="navigateTo('products')">Products</div>
+        <div class="sidebar-item" data-route="employees" onclick="navigateTo('employees')">Permissions</div>
+        <div class="sidebar-item" data-route="analytics" onclick="navigateTo('analytics')">Analytics</div>
+        <div class="sidebar-item" data-route="auditlog" onclick="navigateTo('auditlog')">Audit Log</div>
+        <div class="sidebar-item" data-route="settings" onclick="navigateTo('settings')">Settings <span id="sidebarAlertBadge" class="sidebar-badge alert" style="display:none;"></span> <span id="settingsSandboxBadge" style="display:none;background:#f59e0b;color:#fff;font-size:0.72rem;padding:2px 6px;border-radius:4px;margin-left:4px;font-weight:700;vertical-align:middle;">SANDBOX</span></div>
+        <div class="sidebar-item" data-route="subscription" onclick="navigateTo('subscription')">Subscription</div>
+        <div class="sidebar-item" data-route="about" onclick="navigateTo('about')">About</div>
+        <div class="sidebar-item" data-route="email-log" onclick="navigateTo('email-log')">Email Log</div>
+        <div class="sidebar-item" id="testingModeItem" onclick="toggleTestingMode()" style="display:none;">🧪 Testing Mode</div>
       </div>
     </div>
     <!-- Migration (hidden when no active migration) -->
@@ -5554,33 +5544,6 @@
         <div class="sidebar-item" data-route="migration-plan" onclick="navigateTo('migration-plan')">Cutover Plan</div>
         <div class="sidebar-item" data-route="migration-import" onclick="navigateTo('migration-import')">Import Data</div>
         <div class="sidebar-item" data-route="historical-orders" onclick="navigateTo('historical-orders')">Past Orders</div>
-      </div>
-    </div>
-    <!-- Business (D-22: Unified Business Entity page) -->
-    <div class="sidebar-section" data-section="business">
-      <div class="sidebar-section-header dashboard-link" onclick="navigateTo('business')">
-        <span class="sidebar-section-icon">&#127970;</span>
-        <span class="sidebar-section-label">Business</span>
-      </div>
-    </div>
-    <!-- Manage -->
-    <div class="sidebar-section" data-section="manage">
-      <div class="sidebar-section-header" onclick="toggleSection('manage')">
-        <span class="sidebar-section-icon">&#9881;&#65039;</span>
-        <span class="sidebar-section-label">Manage</span>
-        <span class="sidebar-section-arrow">&#9654;</span>
-      </div>
-      <div class="sidebar-items">
-        <div class="sidebar-item" data-route="products" onclick="navigateTo('products')">Products</div>
-        <div class="sidebar-item" data-route="channels" onclick="navigateTo('channels')">Channels</div>
-        <div class="sidebar-item" data-route="inventory" onclick="navigateTo('inventory')">Inventory</div>
-        <div class="sidebar-item" data-route="employees" onclick="navigateTo('employees')">Permissions</div>
-        <div class="sidebar-item" data-route="analytics" onclick="navigateTo('analytics')">Analytics</div>
-        <div class="sidebar-item" data-route="auditlog" onclick="navigateTo('auditlog')">Audit Log</div>
-        <div class="sidebar-item" data-route="settings" onclick="navigateTo('settings')">Settings <span id="sidebarAlertBadge" class="sidebar-badge alert" style="display:none;"></span> <span id="settingsSandboxBadge" style="display:none;background:#f59e0b;color:#fff;font-size:0.72rem;padding:2px 6px;border-radius:4px;margin-left:4px;font-weight:700;vertical-align:middle;">SANDBOX</span></div>
-        <div class="sidebar-item" data-route="subscription" onclick="navigateTo('subscription')">Subscription</div>
-        <div class="sidebar-item" data-route="about" onclick="navigateTo('about')">About</div>
-        <div class="sidebar-item" id="testingModeItem" onclick="toggleTestingMode()" style="display:none;">🧪 Testing Mode</div>
       </div>
     </div>
     <!-- Show/hide locked modules toggle -->
@@ -6062,6 +6025,43 @@
     <div id="lookbooksTab" style="display:none;"></div>
 
     <div id="placeholderTab" style="display:none;"></div>
+
+    <!-- ===== CUSTOMER SERVICE MODULE TABS ===== -->
+    <div id="csInboxTab" style="display:none;">
+      <div class="placeholder-view">
+        <span class="placeholder-badge new">New</span>
+        <div class="placeholder-title">Inbox</div>
+        <div class="placeholder-note">This feature is on the roadmap. Check back soon!</div>
+      </div>
+    </div>
+    <div id="csTicketsTab" style="display:none;">
+      <div class="placeholder-view">
+        <span class="placeholder-badge new">New</span>
+        <div class="placeholder-title">Tickets</div>
+        <div class="placeholder-note">This feature is on the roadmap. Check back soon!</div>
+      </div>
+    </div>
+    <div id="csSurveysTab" style="display:none;">
+      <div class="placeholder-view">
+        <span class="placeholder-badge new">New</span>
+        <div class="placeholder-title">Surveys</div>
+        <div class="placeholder-note">This feature is on the roadmap. Check back soon!</div>
+      </div>
+    </div>
+    <div id="csReviewsTab" style="display:none;">
+      <div class="placeholder-view">
+        <span class="placeholder-badge new">New</span>
+        <div class="placeholder-title">Reviews</div>
+        <div class="placeholder-note">This feature is on the roadmap. Check back soon!</div>
+      </div>
+    </div>
+    <div id="csFaqsTab" style="display:none;">
+      <div class="placeholder-view">
+        <span class="placeholder-badge new">New</span>
+        <div class="placeholder-title">FAQs</div>
+        <div class="placeholder-note">This feature is on the roadmap. Check back soon!</div>
+      </div>
+    </div>
 
     <!-- My Feedback Tab -->
     <div id="myFeedbackTab" style="display:none;">
@@ -10894,16 +10894,16 @@ MastDB.passDefinitions = _makeEntity('admin/passDefinitions', 100);
 // Web is the base module (always included, not purchasable). All others are purchasable.
 // Grid layout: Row1: Develop, Market, Sell | Row2: Ship, Run, Web | Row3: Show, Show Light, Events | Row4: Book
 var MODULE_REGISTRY = {
-  make:   { id: 'make',   name: 'Develop', icon: '\uD83D\uDD25', description: 'Product lifecycle: production, sourcing, materials, pricing, and catalog development.', section: 'make', navPosition: 1, purchasable: true, routes: ['jobs', 'production', 'procurement', 'materials', 'pieces', 'lookbooks'], manageSettings: [], synergies: ['sell', 'market'], status: 'active' },
-  market: { id: 'market', name: 'Market', icon: '\uD83D\uDCE3', description: 'Social media, blog, newsletter, stories.', section: 'market', navPosition: 2, purchasable: true, routes: ['social', 'blog', 'newsletter', 'stories'], manageSettings: ['newsletter', 'email'], synergies: ['sell', 'show'], status: 'active' },
-  sell:   { id: 'sell',   name: 'Sell',   icon: '\uD83D\uDCB0', description: 'Point of sale, orders, commissions, wholesale.', section: 'sell', navPosition: 3, purchasable: true, routes: ['pos', 'orders', 'commissions', 'rma', 'wholesale', 'galleries', 'receipts', 'coupons', 'promotions'], manageSettings: ['square'], synergies: ['ship', 'make'], status: 'active' },
-  ship:   { id: 'ship',   name: 'Ship',   icon: '\uD83D\uDCE6', description: 'Pack orders, ship deliveries, track fulfillment.', section: 'ship', navPosition: 4, purchasable: true, routes: ['pack', 'ship'], manageSettings: ['shippingRates'], synergies: ['sell', 'show'], status: 'active' },
-  run:    { id: 'run',    name: 'Run',    icon: '\uD83D\uDCCB', description: 'Trips, expenses, revenue, reports, contacts.', section: 'run', navPosition: 5, purchasable: true, routes: ['trips', 'expenses', 'reports', 'financials', 'contacts', 'customers'], manageSettings: [], synergies: ['sell', 'show'], status: 'active' },
-  web:    { id: 'web',    name: 'Web',    icon: '\uD83C\uDF10', description: 'Website pages and content management.', section: 'web', navPosition: 6, purchasable: false, showInGrid: true, routes: ['website', 'gallery', 'images'], manageSettings: [], synergies: ['market', 'sell'], status: 'active' },
-  show:   { id: 'show',   name: 'Show',   icon: '\uD83C\uDFAA', description: 'Find, apply, prep, and execute craft fairs and events.', section: 'show', navPosition: 7, purchasable: true, routes: ['show', 'show-find', 'show-apply', 'show-prep', 'show-execute', 'show-history'], manageSettings: [], synergies: ['sell', 'ship', 'make'], status: 'active' },
-  'show-light': { id: 'show-light', name: 'Show Light', icon: '\u2728', description: 'Vendor profile, image gallery, and AI-powered show application builder.', section: 'show-light', navPosition: 8, purchasable: false, showInGrid: true, routes: ['show-light-profile', 'show-light-gallery', 'show-light-shows', 'show-light-apply'], manageSettings: [], synergies: ['show', 'sell', 'market'], status: 'active' },
+  make:   { id: 'make',   name: 'Develop', icon: '\uD83D\uDD25', description: 'Product lifecycle: production, sourcing, materials, pricing, and catalog development.', section: 'products', navPosition: 1, purchasable: true, routes: ['jobs', 'production', 'procurement', 'materials', 'pieces', 'lookbooks'], manageSettings: [], synergies: ['sell', 'market'], status: 'active' },
+  market: { id: 'market', name: 'Market', icon: '\uD83D\uDCE3', description: 'Social media, blog, newsletter, stories.', section: 'marketing', navPosition: 2, purchasable: true, routes: ['social', 'blog', 'newsletter', 'stories'], manageSettings: ['newsletter', 'email'], synergies: ['sell', 'show'], status: 'active' },
+  sell:   { id: 'sell',   name: 'Sell',   icon: '\uD83D\uDCB0', description: 'Point of sale, orders, commissions, wholesale.', section: 'sales', navPosition: 3, purchasable: true, routes: ['pos', 'orders', 'commissions', 'rma', 'wholesale', 'galleries', 'receipts', 'coupons', 'promotions'], manageSettings: ['square'], synergies: ['ship', 'make'], status: 'active' },
+  ship:   { id: 'ship',   name: 'Ship',   icon: '\uD83D\uDCE6', description: 'Pack orders, ship deliveries, track fulfillment.', section: 'sales', navPosition: 4, purchasable: true, routes: ['pack', 'ship'], manageSettings: ['shippingRates'], synergies: ['sell', 'show'], status: 'active' },
+  run:    { id: 'run',    name: 'Run',    icon: '\uD83D\uDCCB', description: 'Trips, expenses, revenue, reports, contacts.', section: 'operations', navPosition: 5, purchasable: true, routes: ['trips', 'expenses', 'reports', 'financials', 'contacts', 'customers'], manageSettings: [], synergies: ['sell', 'show'], status: 'active' },
+  web:    { id: 'web',    name: 'Web',    icon: '\uD83C\uDF10', description: 'Website pages and content management.', section: 'marketing', navPosition: 6, purchasable: false, showInGrid: true, routes: ['website', 'gallery', 'images'], manageSettings: [], synergies: ['market', 'sell'], status: 'active' },
+  show:   { id: 'show',   name: 'Show',   icon: '\uD83C\uDFAA', description: 'Find, apply, prep, and execute craft fairs and events.', section: 'events', navPosition: 7, purchasable: true, routes: ['show', 'show-find', 'show-apply', 'show-prep', 'show-execute', 'show-history'], manageSettings: [], synergies: ['sell', 'ship', 'make'], status: 'active' },
+  'show-light': { id: 'show-light', name: 'Show Light', icon: '\u2728', description: 'Vendor profile, image gallery, and AI-powered show application builder.', section: 'events', navPosition: 8, purchasable: false, showInGrid: true, routes: ['show-light-profile', 'show-light-gallery', 'show-light-shows', 'show-light-apply'], manageSettings: [], synergies: ['show', 'sell', 'market'], status: 'active' },
   events: { id: 'events', name: 'Events', icon: '\uD83C\uDFAB', description: 'Organize shows, manage booths, vendors, and floor plans.', section: 'events', navPosition: 9, purchasable: true, routes: ['events-shows', 'events-settings'], manageSettings: [], synergies: ['show', 'sell', 'market'], status: 'active' },
-  book:   { id: 'book',   name: 'Book',   icon: '\uD83D\uDCC5', description: 'Classes, workshops, studio time, and student enrollment.', section: 'book', navPosition: 10, purchasable: true, routes: ['book', 'book-detail', 'enrollments', 'instructors', 'instructor-detail', 'resources', 'resource-detail', 'passes', 'pass-detail', 'calendar', 'book-reports', 'students'], manageSettings: [], synergies: ['sell', 'market'], status: 'active' }
+  book:   { id: 'book',   name: 'Book',   icon: '\uD83D\uDCC5', description: 'Classes, workshops, studio time, and student enrollment.', section: 'classes', navPosition: 10, purchasable: true, routes: ['book', 'book-detail', 'enrollments', 'instructors', 'instructor-detail', 'resources', 'resource-detail', 'passes', 'pass-detail', 'calendar', 'book-reports', 'students'], manageSettings: [], synergies: ['sell', 'market'], status: 'active' }
 };
 
 // Synergy messaging for locked module previews.
@@ -11456,26 +11456,12 @@ function getSynergyMessage(lockedModuleId) {
 // Subscription Enforcement & Gating UI — Session C
 // ============================================================
 
-// --- Sidebar Gating ---
-// Dynamically applies locked/unlocked state to sidebar sections based on subscription.
-// Maps sidebar data-section values to module IDs.
-var SIDEBAR_SECTION_MODULE_MAP = {
-  'make': 'make',
-  'market': 'market',
-  'sell': 'sell',
-  'show': 'show',
-  'events': 'events',
-  'ship': 'ship',
-  'run': 'run',
-  'web': 'web',
-  'show-light': 'show-light'
-};
 
 // B6 (Entity Phase 1): sidebar sections that remain visible across every
 // engagement surface. `manage` holds Settings + Subscription + About, so the
 // user can always reach the picker to flip surface back. Dashboard has no
 // data-section attribute and is always visible via its dashboard-link class.
-var ENGAGEMENT_ALWAYS_VISIBLE_SECTIONS = { manage: 1 };
+var ENGAGEMENT_ALWAYS_VISIBLE_SECTIONS = { admin: 1 };
 
 // B6 (Entity Phase 1): apply engagement-driven nav filtering on top of the
 // subscription gating. Fail-open: if _engagementSurface is missing/null (legacy
@@ -11517,83 +11503,6 @@ function applyEngagementNavFiltering() {
   }
 }
 
-function applySidebarGating() {
-  for (var section in SIDEBAR_SECTION_MODULE_MAP) {
-    var moduleId = SIDEBAR_SECTION_MODULE_MAP[section];
-    var sectionEl = document.querySelector('.sidebar-section[data-section="' + section + '"]');
-    if (!sectionEl) continue;
-
-    var mod = MODULE_REGISTRY[moduleId];
-    if (!mod) continue;
-
-    if (canAccessModule(moduleId)) {
-      // Unlock: restore normal behavior
-      sectionEl.classList.remove('locked', 'nudge-open');
-      sectionEl.style.display = ''; // Clear any inline hide from sidebar toggle
-      var header = sectionEl.querySelector('.sidebar-section-header');
-      if (header) {
-        header.setAttribute('onclick', "toggleSection('" + section + "')");
-      }
-      // Remove any lock icon or nudge we added
-      var lockIcon = sectionEl.querySelector('.sidebar-lock-icon');
-      if (lockIcon) lockIcon.remove();
-      var nudge = sectionEl.querySelector('.sidebar-upgrade-nudge');
-      if (nudge) nudge.remove();
-    } else {
-      // Lock: collapse, add lock icon, wire nudge
-      sectionEl.classList.add('locked');
-      sectionEl.classList.remove('open', 'nudge-open');
-
-      var header = sectionEl.querySelector('.sidebar-section-header');
-      if (header) {
-        header.setAttribute('onclick', "toggleLockedSidebarNudge('" + section + "')");
-
-        // Add lock icon if not already present
-        if (!sectionEl.querySelector('.sidebar-lock-icon')) {
-          var lockSpan = document.createElement('span');
-          lockSpan.className = 'sidebar-lock-icon';
-          lockSpan.innerHTML = '&#128274;';
-          header.appendChild(lockSpan);
-        }
-      }
-
-      // Add upgrade nudge if not already present
-      if (!sectionEl.querySelector('.sidebar-upgrade-nudge')) {
-        var synergy = getSynergyMessage(moduleId);
-        var nudgeDiv = document.createElement('div');
-        nudgeDiv.className = 'sidebar-upgrade-nudge';
-        var nudgeHtml = '<span class="nudge-module-name">' + esc(mod.name) + '</span>';
-        nudgeHtml += '<span class="nudge-desc">' + esc(mod.description) + '</span>';
-        if (synergy) {
-          nudgeHtml += '<span class="nudge-synergy">' + esc(synergy) + '</span>';
-        }
-        nudgeHtml += '<span class="nudge-link" onclick="event.stopPropagation(); navigateTo(\'settings\'); setTimeout(function(){ switchSettingsSubView(\'subscription\'); }, 100);">Upgrade</span>';
-        nudgeDiv.innerHTML = nudgeHtml;
-        sectionEl.appendChild(nudgeDiv);
-      }
-    }
-  }
-
-  // Show/Show Light relationship: if user has full Show, hide Show Light
-  // and replace Show's "Apply" with Show Light's apply functionality
-  var hasShow = canAccessModule('show');
-  var hasShowLight = canAccessModule('show-light');
-  var showLightSection = document.querySelector('.sidebar-section[data-section="show-light"]');
-  var showApplyItem = document.querySelector('.sidebar-item[data-route="show-apply"]');
-
-  if (hasShow && showLightSection) {
-    // Hide Show Light section entirely — Show subsumes it
-    showLightSection.style.display = 'none';
-    showLightSection.classList.add('subsumed');
-  } else if (showLightSection) {
-    // Restore Show Light visibility (if Show was removed/downgraded)
-    showLightSection.classList.remove('subsumed');
-    if (hasShowLight) showLightSection.style.display = '';
-  }
-
-  applyEngagementNavFiltering();
-  updateSidebarExpandToggle();
-}
 
 // Show/hide the expand toggle based on whether locked sections exist
 function updateSidebarExpandToggle() {
@@ -11760,8 +11669,6 @@ async function confirmModuleSelection() {
     // Hide modal
     document.getElementById('moduleSelectionOverlay').style.display = 'none';
 
-    // Refresh sidebar gating with fresh subscription data
-    applySidebarGating();
     showToast('Modules activated! Your workspace is ready.');
   } catch (err) {
     console.error('Module selection failed:', err);
@@ -12906,7 +12813,6 @@ function enterAuthorizedState() {
   document.getElementById('deniedScreen').style.display = 'none';
   document.getElementById('header').style.display = 'flex';
   showSidebar();
-  applySidebarGating();
 
   // Check if user needs to choose modules (launch/operate tier first login)
   if (needsModuleSelection()) {
@@ -13142,7 +13048,7 @@ auth.onAuthStateChanged(async function(user) {
   deniedScreen.style.display = 'none';
   header.style.display = 'flex';
   showSidebar();
-  applySidebarGating();
+  applyOrganizerMode(TENANT_CONFIG && TENANT_CONFIG.organizerMode === true);
 
   // Check if user needs to choose modules (launch/operate tier first login)
   if (needsModuleSelection()) {
@@ -13188,7 +13094,7 @@ auth.onAuthStateChanged(async function(user) {
     var upgradedPlan = upgradeParams.get('plan') || '';
     var tc = upgradedPlan && TIER_CONFIG[upgradedPlan] ? TIER_CONFIG[upgradedPlan] : null;
     showToast('Upgraded to ' + (tc ? tc.name : upgradedPlan) + '! Your new plan is active.');
-    loadTenantSubscription().then(function() { applySidebarGating(); applySettingsGating(); renderSubscriptionSettings(); });
+    loadTenantSubscription().then(function() { applySettingsGating(); renderSubscriptionSettings(); });
     navigateTo('settings');
     setTimeout(function() { switchSettingsSubView('subscription'); }, 100);
     window.history.replaceState({}, '', window.location.pathname);
@@ -14468,27 +14374,47 @@ var ROUTE_MAP = {
   'migration-plan':   { tab: 'migrationPlanTab', setup: function() { renderMigrationPlan(); } },
   'migration-import': { tab: 'migrationImportTab', setup: function() { renderMigrationImport(); } },
   'historical-orders': { tab: 'historicalOrdersTab', setup: function() { renderHistoricalOrders(); } },
-  'my-feedback':       { tab: 'myFeedbackTab', setup: function() { renderMyFeedbackTab(); } }
+  'my-feedback':       { tab: 'myFeedbackTab', setup: function() { renderMyFeedbackTab(); } },
+  'cs-inbox':          { tab: 'csInboxTab' },
+  'cs-tickets':        { tab: 'csTicketsTab' },
+  'cs-surveys':        { tab: 'csSurveysTab' },
+  'cs-reviews':        { tab: 'csReviewsTab' },
+  'cs-faqs':           { tab: 'csFaqsTab' }
 };
 
 // Section → which routes belong to it (for auto-expanding)
 var SECTION_ROUTES = {
-  'make':   ['jobs', 'production', 'procurement', 'develop-products', 'pieces', 'materials', 'lookbooks', 'forecast'],
-  'market': ['social', 'blog', 'newsletter', 'stories'],
-  'sell':   ['pos', 'orders', 'commissions', 'rma', 'wholesale', 'galleries', 'receipts', 'terms'],
-  'cart':   ['wallet', 'gift-cards', 'coupons', 'loyalty', 'membership', 'promotions'],
-  'show':   ['show', 'show-find', 'show-apply', 'show-prep', 'show-execute', 'show-history'],
-  'ship':   ['pack', 'ship'],
-  'run':    ['trips', 'expenses', 'reports', 'financials', 'contacts', 'customers', 'email-log', 'studio', 'team'],
-  'events': ['events-shows', 'events-settings'],
-  'web':    ['website', 'homepage', 'images'],
-  'manage': ['products', 'inventory', 'employees', 'analytics', 'auditlog', 'settings'],
-  'advise': ['advisor'],
-  'business': ['business'],
-  'migration': ['migration', 'migration-confirm', 'migration-plan', 'migration-import', 'historical-orders']
+  'products':          ['develop-products', 'materials', 'forecast',
+                        'jobs', 'procurement', 'inventory'],
+  'sales':             ['pos', 'orders', 'commissions', 'rma',
+                        'wholesale', 'lookbooks', 'galleries',
+                        'receipts', 'terms', 'pack', 'ship'],
+  'marketing':         ['social', 'blog', 'newsletter', 'stories',
+                        'website', 'brand', 'homepage', 'images'],
+  'retention':         ['wallet', 'gift-cards', 'coupons', 'loyalty',
+                        'membership', 'promotions', 'customers'],
+  'events':            ['show-find', 'show-apply', 'show-prep',
+                        'show-execute', 'show-history',
+                        'show-light-apply', 'show-light-profile',
+                        'show-light-gallery', 'show-light-shows',
+                        'events-shows', 'events-settings'],
+  'classes':           ['book', 'instructors', 'resources', 'passes',
+                        'enrollments', 'calendar', 'students',
+                        'book-reports'],
+  'operations':        ['financials', 'expenses', 'trips', 'reports',
+                        'advisor', 'studio', 'team', 'business',
+                        'channels'],
+  'customer-service':  ['cs-inbox', 'cs-tickets', 'cs-surveys',
+                        'cs-reviews', 'cs-faqs'],
+  'admin':             ['products', 'employees', 'analytics',
+                        'auditlog', 'settings', 'subscription',
+                        'about', 'email-log'],
+  'migration':         ['migration', 'migration-confirm',
+                        'migration-plan', 'migration-import',
+                        'historical-orders']
 };
 
-var ALL_TAB_IDS = ['scheduleTab', 'galleryTab', 'homepageTab', 'brandTab', 'productsTab', 'ordersTab', 'salesTab', 'salesEventsTab', 'productionTab', 'forecastTab', 'couponsTab', 'analyticsTab', 'settingsTab', 'imagesTab', 'auditLogTab', 'employeesTab', 'contactsTab', 'customersTab', 'packTab', 'shipTab', 'commissionsTab', 'rmaTab', 'socialMediaTab', 'blogTab', 'newsletterTab', 'placeholderTab', 'inventoryTab', 'storiesTab', 'dashboardTab', 'tripsTab', 'wholesaleTab', 'showTab', 'financialsTab', 'eventsAdminTab', 'websiteTab', 'showLightTab', 'emailLogTab', 'materialsTab', 'piecesTab', 'galleriesTab', 'lookbooksTab', 'promotionsTab', 'expensesTab', 'bookTab', 'subscriptionTab', 'aboutTab', 'walletTab', 'giftCardsTab', 'loyaltyTab', 'membershipTab', 'termsTab', 'advisorTab', 'studioTab', 'teamTab', 'studentsTab', 'migrationDashTab', 'migrationConfirmTab', 'migrationPlanTab', 'migrationImportTab', 'historicalOrdersTab', 'channelsTab', 'businessTab', 'myFeedbackTab', 'procurementTab'];
+var ALL_TAB_IDS = ['scheduleTab', 'galleryTab', 'homepageTab', 'brandTab', 'productsTab', 'ordersTab', 'salesTab', 'salesEventsTab', 'productionTab', 'forecastTab', 'couponsTab', 'analyticsTab', 'settingsTab', 'imagesTab', 'auditLogTab', 'employeesTab', 'contactsTab', 'customersTab', 'packTab', 'shipTab', 'commissionsTab', 'rmaTab', 'socialMediaTab', 'blogTab', 'newsletterTab', 'placeholderTab', 'inventoryTab', 'storiesTab', 'dashboardTab', 'tripsTab', 'wholesaleTab', 'showTab', 'financialsTab', 'eventsAdminTab', 'websiteTab', 'showLightTab', 'emailLogTab', 'materialsTab', 'piecesTab', 'galleriesTab', 'lookbooksTab', 'promotionsTab', 'expensesTab', 'bookTab', 'subscriptionTab', 'aboutTab', 'walletTab', 'giftCardsTab', 'loyaltyTab', 'membershipTab', 'termsTab', 'advisorTab', 'studioTab', 'teamTab', 'studentsTab', 'migrationDashTab', 'migrationConfirmTab', 'migrationPlanTab', 'migrationImportTab', 'historicalOrdersTab', 'channelsTab', 'businessTab', 'myFeedbackTab', 'procurementTab', 'csInboxTab', 'csTicketsTab', 'csSurveysTab', 'csReviewsTab', 'csFaqsTab'];
 
 var currentRoute = 'dashboard';
 
@@ -14637,6 +14563,14 @@ function renderPlaceholder(config) {
       (descText ? '<div class="placeholder-desc">' + descText + '</div>' : '') +
       '<div class="placeholder-note">' + noteText + '</div>' +
     '</div>';
+}
+
+function applyOrganizerMode(isOrganizer) {
+  var items = ['events-shows', 'events-settings'];
+  items.forEach(function(route) {
+    var el = document.querySelector('.sidebar-item[data-route="' + route + '"]');
+    if (el) el.style.display = isOrganizer ? '' : 'none';
+  });
 }
 
 function updateSidebarActive(route) {
@@ -15133,7 +15067,7 @@ function renderEngagementModulesCheckboxes(modulesShown) {
   var sectionNames = [];
   document.querySelectorAll('.sidebar-section[data-section]').forEach(function(el) {
     var n = el.getAttribute('data-section');
-    if (n && n !== 'manage') sectionNames.push(n);
+    if (n && n !== 'admin') sectionNames.push(n);
   });
   var universe = {};
   archetypeModules.forEach(function(m) { universe[m] = 1; });
@@ -15161,7 +15095,6 @@ async function saveEngagementSurface(surface) {
   try {
     await MastDB.businessEntity.update('engagement', { surface: surface });
     await hydrateEngagementSurface();
-    applySidebarGating();
     if (modulesGroup) modulesGroup.style.display = surface === 'ui-first' ? '' : 'none';
     if (statusEl) { statusEl.textContent = 'Saved. Sidebar updated.'; statusEl.style.color = 'var(--success,#22c55e)'; }
     // Refresh radio styling (border color) without full reload
@@ -15187,7 +15120,6 @@ async function saveEngagementModulesShown() {
   try {
     await MastDB.businessEntity.update('engagement', { modulesShown: selected });
     await hydrateEngagementSurface();
-    applySidebarGating();
     if (statusEl) { statusEl.textContent = 'Saved ' + selected.length + ' modules. Sidebar updated.'; statusEl.style.color = 'var(--success,#22c55e)'; }
   } catch (err) {
     if (statusEl) { statusEl.textContent = 'Save failed: ' + (err.message || 'unknown error'); statusEl.style.color = 'var(--danger,#ef4444)'; }
@@ -15252,7 +15184,6 @@ async function onEngagementModeChange(newMode) {
     // Re-hydrate settings UI (refresh surface radios + modules) + sidebar gating.
     await loadEngagementSettings();
     if (typeof hydrateEngagementSurface === 'function') await hydrateEngagementSurface();
-    if (typeof applySidebarGating === 'function') applySidebarGating();
   } catch (err) {
     if (statusEl) { statusEl.textContent = 'Save failed: ' + (err.message || 'unknown error'); statusEl.style.color = 'var(--danger,#ef4444)'; }
     selectEl.value = current || '';
@@ -24547,7 +24478,6 @@ async function wizardComplete() {
     document.getElementById('setupWizardScreen').style.display = 'none';
     document.getElementById('header').style.display = 'flex';
     showSidebar();
-    applySidebarGating();
 
     productsLoaded = false;
     productsData = [];
