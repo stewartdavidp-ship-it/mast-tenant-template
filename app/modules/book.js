@@ -1932,6 +1932,10 @@
       // Renumber remaining waitlisted enrollments
       await renumberWaitlist(classId, sessionId, isSeries);
 
+      // Auto-create CS ticket so the offer is tracked and the student has a reply path
+      bookCreateWaitlistTicket(enrollment, classId, isSeries, cls, sess)
+        .catch(function(e) { console.warn('[book] waitlist ticket creation failed:', e); });
+
       MastAdmin.showToast('Promoted to confirmed');
       var classFilter = (document.getElementById('enrollFilterClass') || {}).value;
       loadEnrollments(null, classFilter);
@@ -1973,6 +1977,68 @@
     } catch (err) {
       console.warn('[Book] Waitlist renumbering failed:', err);
     }
+  }
+
+  async function bookCreateWaitlistTicket(enrollment, classId, isSeries, cls, sess) {
+    var contactEmail = enrollment.studentEmail || enrollment.customerEmail;
+    if (!contactEmail) return;
+
+    var contactName = enrollment.studentName || enrollment.customerName || null;
+    var className = (allClassesMap[classId] && allClassesMap[classId].name) ||
+                    (cls && cls.name) || classId || 'class';
+
+    var rawDate = isSeries
+      ? (cls && cls.schedule && (cls.schedule.date || cls.schedule.startDate))
+      : (sess && sess.date);
+    var sessionDate = rawDate ? formatDate(rawDate) : null;
+
+    var subject = 'Waitlist spot available: ' + className + (sessionDate ? ' — ' + sessionDate : '');
+    var body = 'A waitlist spot has been offered in ' + className +
+               (sessionDate ? ' on ' + sessionDate : '') + '. ' +
+               'Contact: ' + contactEmail + '.';
+    var msgBody = 'A spot has opened in ' + className +
+                  (sessionDate ? ' on ' + sessionDate : '') +
+                  '. Please reply to this message or re-book directly within 24 hours to claim your spot.';
+
+    var config = await MastDB.get('cs_config/ticketing');
+    var prefix = (config && config.prefix) || 'T';
+    var nextNum = (config && typeof config.nextNumber === 'number') ? config.nextNumber : 1;
+    var ticketNumber = prefix + '-' + String(nextNum).padStart(4, '0');
+    var ticketId = 'ticket_' + Date.now().toString(36);
+    var msgId = 'msg_' + Date.now().toString(36);
+    var now = new Date().toISOString();
+
+    await MastDB.set('cs_tickets/' + ticketId, {
+      id: ticketId,
+      ticketNumber: ticketNumber,
+      subject: subject,
+      status: 'open',
+      priority: 'normal',
+      source: 'inquiry',
+      contactEmail: contactEmail,
+      contactName: contactName,
+      body: body,
+      createdAt: now,
+      updatedAt: now
+    });
+
+    await MastDB.set('cs_tickets/' + ticketId + '/messages/' + msgId, {
+      id: msgId,
+      body: msgBody,
+      direction: 'outbound',
+      isInternal: false,
+      authorName: 'System',
+      authorEmail: null,
+      createdAt: now
+    });
+
+    if (!config) {
+      await MastDB.set('cs_config/ticketing', { prefix: prefix, nextNumber: nextNum + 1 });
+    } else {
+      await MastDB.update('cs_config/ticketing', { nextNumber: nextNum + 1 });
+    }
+
+    console.log('[book] Waitlist ticket created:', ticketNumber, 'for', contactEmail);
   }
 
   window._enrollFilterStatus = function() { renderEnrollmentList(); };
