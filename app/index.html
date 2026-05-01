@@ -35571,22 +35571,31 @@ async function saveUserPermissionOverrides(uid) {
   // Compute minimal diff — only store entries that differ from role default
   var minimalDiff = computePermissionDiff(role, roleConfig, editingUserOverrides);
 
-  var updateData = { permissionOverrides: minimalDiff };
-  // Capture guest expiry if present
+  var accessExpiry;
   var expiryInput = document.getElementById('userPanelExpiry');
   if (expiryInput) {
-    updateData.accessExpiry = expiryInput.value ? expiryInput.value : null;
+    accessExpiry = expiryInput.value ? expiryInput.value : null;
   }
 
   try {
-    await MastDB.adminUsers.update(uid, updateData);
-    adminUsers[uid].permissionOverrides = minimalDiff;
-    if (expiryInput) adminUsers[uid].accessExpiry = updateData.accessExpiry;
-    await writeAudit('update', 'users', uid);
+    var token = await auth.currentUser.getIdToken();
+    var resp = await callCF('/updateUserPermissions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify({ targetUid: uid, overrides: minimalDiff, accessExpiry: accessExpiry })
+    });
+    var result = await resp.json();
+    if (!resp.ok) {
+      showToast((result && result.error) || 'Failed to save permissions.', true);
+      return;
+    }
+    // Update local cache with validated overrides returned from CF
+    adminUsers[uid].permissionOverrides = result.overrides || minimalDiff;
+    if (expiryInput) adminUsers[uid].accessExpiry = result.accessExpiry !== undefined ? result.accessExpiry : accessExpiry;
     closeModal();
     var displayName = u.displayName || u.email || 'User';
     var diffCount = 0;
-    Object.keys(minimalDiff).forEach(function(e) { diffCount += Object.keys(minimalDiff[e]).length; });
+    Object.keys(result.overrides || minimalDiff).forEach(function(e) { diffCount += Object.keys((result.overrides || minimalDiff)[e]).length; });
     showToast(diffCount > 0
       ? 'Permissions updated for ' + displayName + ' (' + diffCount + ' override' + (diffCount !== 1 ? 's' : '') + ').'
       : 'Permissions reset to role defaults for ' + displayName + '.');
