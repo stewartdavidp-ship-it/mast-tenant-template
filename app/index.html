@@ -14504,6 +14504,14 @@ function navigateTo(route) {
     }
     MastNavStack.clear();
   }
+  // Mid-session guest expiry — check on every navigation, no CF call needed
+  if (currentUserRole === 'guest' && currentUserRecord && currentUserRecord.accessExpiry) {
+    if (new Date(currentUserRecord.accessExpiry) < new Date()) {
+      auth.signOut();
+      showExpiredScreen(currentUserRecord.accessExpiry);
+      return;
+    }
+  }
   // Check both ROUTE_MAP (core routes) and MODULE_MANIFEST (lazy-loaded module routes)
   var isKnownRoute = !!ROUTE_MAP[route] || !!getModuleForRouteManifest(route);
   if (!isKnownRoute) route = 'dashboard';
