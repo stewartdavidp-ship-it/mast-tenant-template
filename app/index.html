@@ -14762,6 +14762,12 @@ window.addEventListener('hashchange', function() {
     hash = 'dashboard';
     location.hash = 'dashboard';
   }
+  // Role nav filter — block sections hidden for this role
+  if (!canViewSection(hash)) {
+    showToast("You don't have access to that section.", true);
+    hash = 'dashboard';
+    location.hash = 'dashboard';
+  }
   if (hash !== currentRoute) {
     // Route through navigateTo for lazy module loading.
     // navigateTo sets currentRoute before setting hash, so
