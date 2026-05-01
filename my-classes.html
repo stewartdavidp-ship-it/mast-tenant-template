@@ -353,6 +353,85 @@
   .mc-card-right { text-align: left; flex-direction: row; align-items: center; gap: 8px; flex-wrap: wrap; }
   .mc-stats { grid-template-columns: repeat(2, 1fr); }
 }
+
+/* Class review prompt */
+.mc-review-prompt {
+  margin: -10px 0 0;
+  padding: 12px 16px 14px;
+  background: var(--surface-card);
+  border: 1px solid var(--surface-card-border);
+  border-top: none;
+  border-radius: 0 0 10px 10px;
+}
+.mc-review-prompt-heading {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 6px;
+}
+.mc-review-stars {
+  display: flex;
+  gap: 2px;
+  margin-bottom: 6px;
+}
+.mc-review-star {
+  background: none;
+  border: none;
+  font-size: 1.45rem;
+  line-height: 1;
+  cursor: pointer;
+  color: var(--surface-card-border, #D8D0C4);
+  padding: 0;
+  min-width: 40px;
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.12s;
+  border-radius: 4px;
+}
+.mc-review-star:hover, .mc-review-star.selected { color: var(--primary, #C6A96C); }
+.mc-review-star:disabled { cursor: default; }
+.mc-review-body {
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 0.82rem;
+  padding: 8px 10px;
+  resize: none;
+  margin-bottom: 8px;
+  display: none;
+}
+.mc-review-footer { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.mc-review-submit {
+  padding: 7px 18px;
+  border-radius: 6px;
+  border: none;
+  background: var(--primary);
+  color: #fff;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: none;
+  transition: opacity 0.2s;
+}
+.mc-review-submit:hover { opacity: 0.85; }
+.mc-review-submit:disabled { opacity: 0.6; cursor: default; }
+.mc-review-dismiss {
+  background: none;
+  border: none;
+  font-size: 0.78rem;
+  color: var(--warm-gray, #888);
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+}
+.mc-review-dismiss:hover { color: var(--text); }
+.mc-review-thanks { font-size: 0.82rem; color: var(--accent, #7BAE8A); padding: 4px 0; }
+.mc-review-error { font-size: 0.78rem; color: #EF9A9A; margin-top: 4px; display: none; }
 </style>
 </head>
 <body>
@@ -640,7 +719,13 @@
         if (e.paymentMethod === 'pass') meta += '<br>Paid with pass';
         else if (e.pricePaid) meta += '<br>Paid: ' + formatPrice(e.pricePaid);
 
-        html += '<article class="mc-card' + (isPast ? ' past' : '') + '">' +
+        var isReviewable = (e.status === 'completed') ||
+          (e.status === 'confirmed' && e._sessionDate && e._sessionDate < today);
+
+        html += '<article class="mc-card' + (isPast ? ' past' : '') + '"' +
+          ' data-class-id="' + esc(e.classId) + '"' +
+          ' data-class-name="' + esc(cls.name || 'Class') + '"' +
+          (isReviewable ? ' data-reviewable="1"' : '') + '>' +
           '<div class="mc-card-info">' +
             '<h3><a href="class-detail.html?id=' + esc(e.classId) + '">' + esc(cls.name || 'Class') + '</a></h3>' +
             '<div class="mc-card-meta">' + meta + '</div>' +
@@ -657,7 +742,168 @@
 
     // Load wallet credits
     loadWalletCredits();
+    // Load class review prompts for completed enrollments
+    loadClassReviewPrompts();
   }
+
+  // ── Class review prompts ──
+  function loadClassReviewPrompts() {
+    if (!currentUser) return;
+    var userEmail = currentUser.email || '';
+    if (!userEmail) return;
+
+    var articles = document.querySelectorAll('#mcContent .mc-card[data-reviewable="1"]');
+    if (!articles.length) return;
+
+    var db;
+    try { db = firebase.app().firestore(); } catch (e) { return; }
+
+    var seenClassIds = {};
+    articles.forEach(function(article) {
+      var classId = article.getAttribute('data-class-id');
+      var className = article.getAttribute('data-class-name') || 'this class';
+      if (!classId || seenClassIds[classId]) return;
+      seenClassIds[classId] = true;
+
+      if (sessionStorage.getItem('mast_class_review_dismissed_' + classId)) return;
+      if (sessionStorage.getItem('mast_class_review_submitted_' + classId)) return;
+
+      db.collection('tenants/' + TENANT_ID + '/cs_reviews')
+        .where('productId', '==', classId)
+        .where('authorEmail', '==', userEmail)
+        .limit(1)
+        .get()
+        .then(function(snap) {
+          if (!snap.empty) return;
+          if (article.nextSibling && article.nextSibling.classList &&
+              article.nextSibling.classList.contains('mc-review-prompt')) return;
+          var wrapper = document.createElement('div');
+          wrapper.innerHTML = renderClassReviewPrompt(classId, className);
+          article.parentNode.insertBefore(wrapper.firstChild, article.nextSibling);
+        })
+        .catch(function() { /* silent — dedup is best-effort */ });
+    });
+  }
+
+  function renderClassReviewPrompt(classId, className) {
+    var cid = esc(classId);
+    var cn = esc(className);
+    var html = '<div class="mc-review-prompt" id="mc-review-prompt-' + cid + '" role="region" aria-label="Rate ' + cn + '">';
+    html += '<div class="mc-review-prompt-heading">How was ' + cn + '?</div>';
+    html += '<div class="mc-review-stars" id="mc-review-stars-' + cid + '">';
+    for (var s = 1; s <= 5; s++) {
+      html += '<button type="button" class="mc-review-star" data-rating="' + s + '"' +
+        ' aria-label="' + s + ' star' + (s > 1 ? 's' : '') + '"' +
+        ' onclick="window._mcRateClass(\'' + cid + '\',' + s + ')">&#9733;</button>';
+    }
+    html += '</div>';
+    html += '<textarea class="mc-review-body" id="mc-review-body-' + cid + '" rows="2"' +
+      ' placeholder="Tell us about your experience (optional)"></textarea>';
+    html += '<div class="mc-review-footer">';
+    html += '<button type="button" class="mc-review-submit" id="mc-review-submit-' + cid + '"' +
+      ' onclick="window._mcSubmitClassReview(\'' + cid + '\',\'' + cn + '\')">Submit</button>';
+    html += '<button type="button" class="mc-review-dismiss"' +
+      ' onclick="window._mcDismissClassReview(\'' + cid + '\')">No thanks</button>';
+    html += '</div>';
+    html += '<div class="mc-review-error" id="mc-review-err-' + cid + '"></div>';
+    html += '</div>';
+    return html;
+  }
+
+  window._mcRateClass = function(classId, rating) {
+    var starsEl = document.getElementById('mc-review-stars-' + classId);
+    if (!starsEl) return;
+    var stars = starsEl.querySelectorAll('.mc-review-star');
+    stars.forEach(function(star, i) { star.classList.toggle('selected', (i + 1) <= rating); });
+    starsEl.setAttribute('data-selected', rating);
+    var body = document.getElementById('mc-review-body-' + classId);
+    var submit = document.getElementById('mc-review-submit-' + classId);
+    if (body) body.style.display = '';
+    if (submit) submit.style.display = '';
+  };
+
+  window._mcSubmitClassReview = function(classId, className) {
+    var starsEl = document.getElementById('mc-review-stars-' + classId);
+    var rating = starsEl ? parseInt(starsEl.getAttribute('data-selected'), 10) : 0;
+    if (!rating) return;
+
+    var bodyEl = document.getElementById('mc-review-body-' + classId);
+    var submitBtn = document.getElementById('mc-review-submit-' + classId);
+    var errEl = document.getElementById('mc-review-err-' + classId);
+    var promptEl = document.getElementById('mc-review-prompt-' + classId);
+    var reviewBody = bodyEl ? (bodyEl.value || '').trim() : '';
+
+    if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Submitting…'; }
+    if (errEl) { errEl.textContent = ''; errEl.style.display = 'none'; }
+    if (starsEl) starsEl.querySelectorAll('.mc-review-star').forEach(function(s) { s.disabled = true; });
+
+    var authorName = (currentUser && currentUser.displayName) ? currentUser.displayName : 'Anonymous';
+    var authorEmail = (currentUser && currentUser.email) ? currentUser.email : '';
+
+    var cfUrl;
+    try {
+      var app = firebase.app();
+      var base = (typeof TENANT_FIREBASE_CONFIG !== 'undefined' && TENANT_FIREBASE_CONFIG.cloudFunctionsBase)
+        ? TENANT_FIREBASE_CONFIG.cloudFunctionsBase
+        : 'https://us-central1-' + (app.options ? app.options.projectId : 'mast-platform-prod') + '.cloudfunctions.net';
+      cfUrl = base + '/submitReview';
+    } catch (e) {
+      cfUrl = 'https://us-central1-mast-platform-prod.cloudfunctions.net/submitReview';
+    }
+
+    var getToken = currentUser ? currentUser.getIdToken() : Promise.resolve(null);
+
+    getToken.then(function(idToken) {
+      return fetch(cfUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Tenant-ID': typeof TENANT_ID !== 'undefined' ? TENANT_ID : ''
+        },
+        body: JSON.stringify({
+          productId: classId,
+          subjectType: 'class',
+          rating: rating,
+          title: '',
+          body: reviewBody,
+          authorName: authorName,
+          authorEmail: authorEmail,
+          idToken: idToken || undefined,
+          source: 'post_class_my_classes'
+        })
+      });
+    }).then(function(r) { return r.json(); })
+    .then(function() {
+      sessionStorage.setItem('mast_class_review_submitted_' + classId, '1');
+      if (promptEl) {
+        promptEl.innerHTML = '<div class="mc-review-thanks">Thanks for your feedback!</div>';
+        setTimeout(function() {
+          if (!promptEl || !promptEl.parentNode) return;
+          promptEl.style.transition = 'opacity 0.4s ease';
+          promptEl.style.opacity = '0';
+          setTimeout(function() {
+            if (promptEl && promptEl.parentNode) promptEl.parentNode.removeChild(promptEl);
+          }, 400);
+        }, 1800);
+      }
+    })
+    .catch(function() {
+      if (errEl) { errEl.textContent = 'Something went wrong. Please try again.'; errEl.style.display = ''; }
+      if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Submit'; }
+      if (starsEl) starsEl.querySelectorAll('.mc-review-star').forEach(function(s) { s.disabled = false; });
+    });
+  };
+
+  window._mcDismissClassReview = function(classId) {
+    sessionStorage.setItem('mast_class_review_dismissed_' + classId, '1');
+    var promptEl = document.getElementById('mc-review-prompt-' + classId);
+    if (!promptEl || !promptEl.parentNode) return;
+    promptEl.style.transition = 'opacity 0.3s ease';
+    promptEl.style.opacity = '0';
+    setTimeout(function() {
+      if (promptEl && promptEl.parentNode) promptEl.parentNode.removeChild(promptEl);
+    }, 300);
+  };
 
   // ── Wallet credit banner ──
   function loadWalletCredits() {
