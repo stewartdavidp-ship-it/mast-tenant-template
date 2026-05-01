@@ -12344,9 +12344,9 @@ function isAdmin() {
   return currentUserRole === 'admin';
 }
 
-/** Convenience: is current user at least a staff member (admin or user)? */
+/** Convenience: is current user at least a staff member (admin, manager, or user)? */
 function isStaff() {
-  return currentUserRole === 'admin' || currentUserRole === 'user';
+  return currentUserRole === 'admin' || currentUserRole === 'manager' || currentUserRole === 'user';
 }
 
 /**
