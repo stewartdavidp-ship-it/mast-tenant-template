@@ -5455,7 +5455,6 @@
         <div class="sidebar-item muted" data-route="show-prep" onclick="navigateTo('show-prep')">Prep</div>
         <div class="sidebar-item muted" data-route="show-execute" onclick="navigateTo('show-execute')">Execute</div>
         <div class="sidebar-item muted" data-route="show-history" onclick="navigateTo('show-history')">History</div>
-        <div class="sidebar-item" data-route="show-light-apply" onclick="navigateTo('show-light-apply')">Show Light</div>
         <div class="sidebar-item" data-route="events-shows" onclick="navigateTo('events-shows')" style="display:none;">Shows</div>
         <div class="sidebar-item" data-route="events-settings" onclick="navigateTo('events-settings')" style="display:none;">Settings</div>
       </div>
@@ -5744,32 +5743,45 @@
       </div>
       <!-- Apply sub-view (default) -->
       <div id="showApplyView">
-        <div style="display:flex;gap:12px;align-items:center;margin-bottom:16px;flex-wrap:wrap;">
-          <span class="products-stat" id="showsCount"></span>
-          <select id="showStatusFilter" onchange="renderShowsList()" style="padding:6px 10px;border:1px solid var(--border-color, #ddd);border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.85rem;background:var(--bg-primary, #fff);color:var(--text-primary, #333);">
-            <option value="all">All Statuses</option>
-            <option value="considering">Considering</option>
-            <option value="applied">Applied</option>
-            <option value="accepted">Accepted</option>
-            <option value="waitlisted">Waitlisted</option>
-            <option value="rejected">Rejected</option>
-            <option value="withdrawn">Withdrawn</option>
-          </select>
-          <select id="showTypeFilter" onchange="renderShowsList()" style="padding:6px 10px;border:1px solid var(--border-color, #ddd);border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.85rem;background:var(--bg-primary, #fff);color:var(--text-primary, #333);">
-            <option value="all">All Types</option>
-            <option value="juried">Juried</option>
-            <option value="pop-up">Pop-Up</option>
-            <option value="market">Market</option>
-            <option value="recurring">Recurring</option>
-            <option value="trade">Trade</option>
-            <option value="other">Other</option>
-          </select>
+        <!-- Mode toggle — AI Assist is default -->
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;">
+          <span style="font-size:0.78rem;color:var(--text-secondary, #888);">Mode:</span>
+          <div style="display:flex;background:var(--bg-secondary, #f5f5f5);border-radius:6px;overflow:hidden;border:1px solid var(--border-color, #ddd);">
+            <button id="showModeManualBtn" onclick="switchShowApplyMode('manual')" style="padding:5px 14px;font-size:0.8rem;border:none;cursor:pointer;font-family:'DM Sans',sans-serif;background:transparent;color:var(--text-secondary, #888);">Manual</button>
+            <button id="showModeAIBtn" onclick="switchShowApplyMode('ai')" style="padding:5px 14px;font-size:0.8rem;border:none;cursor:pointer;font-family:'DM Sans',sans-serif;background:var(--primary, var(--teal));color:white;">AI Assist ✨</button>
+          </div>
         </div>
-        <div id="showsLoading" class="loading">Loading shows...</div>
-        <div id="showsEmpty" class="empty-state" style="display:none;">
-          <p>No shows yet. Click "+ New Show" or use Find to discover shows.</p>
+        <!-- Manual: show list (hidden by default — AI Assist is default) -->
+        <div id="showApplyManualContent" style="display:none;">
+          <div style="display:flex;gap:12px;align-items:center;margin-bottom:16px;flex-wrap:wrap;">
+            <span class="products-stat" id="showsCount"></span>
+            <select id="showStatusFilter" onchange="renderShowsList()" style="padding:6px 10px;border:1px solid var(--border-color, #ddd);border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.85rem;background:var(--bg-primary, #fff);color:var(--text-primary, #333);">
+              <option value="all">All Statuses</option>
+              <option value="considering">Considering</option>
+              <option value="applied">Applied</option>
+              <option value="accepted">Accepted</option>
+              <option value="waitlisted">Waitlisted</option>
+              <option value="rejected">Rejected</option>
+              <option value="withdrawn">Withdrawn</option>
+            </select>
+            <select id="showTypeFilter" onchange="renderShowsList()" style="padding:6px 10px;border:1px solid var(--border-color, #ddd);border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.85rem;background:var(--bg-primary, #fff);color:var(--text-primary, #333);">
+              <option value="all">All Types</option>
+              <option value="juried">Juried</option>
+              <option value="pop-up">Pop-Up</option>
+              <option value="market">Market</option>
+              <option value="recurring">Recurring</option>
+              <option value="trade">Trade</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+          <div id="showsLoading" class="loading">Loading shows...</div>
+          <div id="showsEmpty" class="empty-state" style="display:none;">
+            <p>No shows yet. Click "+ New Show" or use Find to discover shows.</p>
+          </div>
+          <div class="order-cards" id="showsCards"></div>
         </div>
-        <div class="order-cards" id="showsCards"></div>
+        <!-- AI Assist: application builder (shown by default) -->
+        <div id="showAIBuilderWrap"></div>
       </div>
       <!-- Prep sub-view -->
       <div id="showPrepView" style="display:none;">
@@ -14396,8 +14408,6 @@ var SECTION_ROUTES = {
                         'membership', 'promotions', 'customers'],
   'events':            ['show-find', 'show-apply', 'show-prep',
                         'show-execute', 'show-history',
-                        'show-light-apply', 'show-light-profile',
-                        'show-light-gallery', 'show-light-shows',
                         'events-shows', 'events-settings'],
   'classes':           ['book', 'instructors', 'resources', 'passes',
                         'enrollments', 'calendar', 'students',

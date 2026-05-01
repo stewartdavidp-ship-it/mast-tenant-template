@@ -16,6 +16,21 @@ var selectedShowId = null;
 var editingShowId = null;
 var showSubView = 'apply';
 
+// AI Assist mode state
+var showsAIMode = 'ai';
+var showsAIProfileLoaded = false;
+var showsAIProfileLoading = false;
+var showsAIProfile = {};
+var showsAIApplications = {};
+var showsAIShowId = null;
+var showsAICurrentApp = null;
+var showsAIStep = 0;
+var showsAIParsed = null;
+var showsAIMapping = null;
+var showsAIGaps = null;
+var showsAIImages = {};
+var showsAICopyIdx = -1;
+
 var SHOW_STATUS_COLORS = {
   considering: '#6366f1',
   applied: '#2563eb',
@@ -119,7 +134,7 @@ function switchShowSubView(view) {
     if (el) el.style.display = id === activeId ? '' : 'none';
   });
   selectedShowId = null;
-  if (view === 'apply') renderShowsList();
+  if (view === 'apply') { renderShowsList(); switchShowApplyMode(showsAIMode); }
   if (view === 'prep') renderShowPrepView();
   if (view === 'execute') renderShowExecuteView();
   if (view === 'history') renderShowHistoryView();
@@ -2543,6 +2558,828 @@ async function runShowDeepDive(showId) {
 }
 
   // ============================================================
+  // Show Apply — AI Assist Mode (migrated from Show Light)
+  // ============================================================
+
+  function switchShowApplyMode(mode) {
+    showsAIMode = mode;
+    var manualEl = document.getElementById('showApplyManualContent');
+    var aiEl = document.getElementById('showAIBuilderWrap');
+    var manualBtn = document.getElementById('showModeManualBtn');
+    var aiBtn = document.getElementById('showModeAIBtn');
+    if (manualEl) manualEl.style.display = mode === 'manual' ? '' : 'none';
+    if (aiEl) aiEl.style.display = mode === 'ai' ? '' : 'none';
+    if (manualBtn) {
+      manualBtn.style.background = mode === 'manual' ? 'var(--primary, var(--teal))' : 'transparent';
+      manualBtn.style.color = mode === 'manual' ? 'white' : 'var(--text-secondary, #888)';
+    }
+    if (aiBtn) {
+      aiBtn.style.background = mode === 'ai' ? 'var(--primary, var(--teal))' : 'transparent';
+      aiBtn.style.color = mode === 'ai' ? 'white' : 'var(--text-secondary, #888)';
+    }
+    if (mode === 'ai') {
+      if (!showsAIProfileLoaded && !showsAIProfileLoading) {
+        loadShowsAIProfile();
+      } else if (showsAIProfileLoaded) {
+        renderShowsAIBuilder();
+      }
+    }
+  }
+
+  async function loadShowsAIProfile() {
+    showsAIProfileLoading = true;
+    var aiEl = document.getElementById('showAIBuilderWrap');
+    if (aiEl) aiEl.innerHTML = '<div style="padding:32px;text-align:center;color:var(--text-secondary,#888);">Loading...</div>';
+    try {
+      showsAIProfile = (await MastDB.showLight.profile.get()) || {};
+      showsAIApplications = (await MastDB.showLight.applications.get()) || {};
+      showsAIProfileLoaded = true;
+      showsAIProfileLoading = false;
+      renderShowsAIBuilder();
+    } catch (err) {
+      showsAIProfileLoaded = true;
+      showsAIProfileLoading = false;
+      renderShowsAIBuilder();
+    }
+  }
+
+  function renderShowsAIBuilder() {
+    if (showsAIStep === 0) renderShowsAISelectShow();
+    else renderShowsAIStepContainer();
+  }
+
+  function renderShowsAISelectShow() {
+    var el = document.getElementById('showAIBuilderWrap');
+    if (!el) return;
+    var applyable = getShowsArray().filter(function(s) {
+      return s.applicationUrl && (!s.applicationStatus || s.applicationStatus === 'considering' || s.applicationStatus === 'applied');
+    });
+    var appEntries = Object.entries(showsAIApplications);
+
+    var h = '<div style="background:var(--bg-secondary,#f9f9f9);border-radius:10px;padding:20px;margin-bottom:16px;">';
+    h += '<div style="font-weight:600;font-size:1rem;margin-bottom:4px;">Build Application Package</div>';
+    h += '<p style="font-size:0.85rem;color:var(--text-secondary,#888);margin:0 0 16px;">AI Assist parses the show\'s application form, maps your vendor profile to the fields, and builds a ready-to-submit package.</p>';
+
+    if (applyable.length === 0) {
+      h += '<div style="text-align:center;padding:20px;color:var(--text-secondary,#888);">';
+      h += '<p>No shows with application URLs in Considering or Applied status.</p>';
+      h += '<button class="btn btn-secondary btn-sm" onclick="switchShowApplyMode(\'manual\')">View shows list</button>';
+      h += '</div>';
+    } else {
+      h += '<div style="display:flex;flex-direction:column;gap:8px;">';
+      applyable.forEach(function(s) {
+        var daysUntil = s.applicationDeadline ? Math.ceil((new Date(s.applicationDeadline + 'T00:00:00') - new Date()) / 86400000) : null;
+        var deadlineTxt = '';
+        if (daysUntil !== null) {
+          if (daysUntil < 0) deadlineTxt = '<span style="color:#dc2626;font-size:0.78rem;">Past due</span>';
+          else if (daysUntil <= 14) deadlineTxt = '<span style="color:#f59e0b;font-size:0.78rem;">' + daysUntil + 'd left</span>';
+          else deadlineTxt = '<span style="color:var(--text-secondary,#888);font-size:0.78rem;">Due ' + formatShowDate(s.applicationDeadline) + '</span>';
+        }
+        h += '<div class="order-card" onclick="showsAIStartApply(\'' + esc(s._key) + '\')" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;">';
+        h += '<div><div style="font-weight:600;">' + esc(s.name || 'Unnamed Show') + '</div>';
+        if (deadlineTxt) h += '<div>' + deadlineTxt + '</div>';
+        h += '</div><span style="color:var(--primary,var(--teal));font-size:0.9rem;">→</span></div>';
+      });
+      h += '</div>';
+    }
+
+    if (appEntries.length > 0) {
+      h += '<div style="margin-top:24px;">';
+      h += '<div style="font-size:0.85rem;font-weight:600;margin-bottom:10px;">Saved Packages</div>';
+      appEntries.forEach(function(entry) {
+        var id = entry[0]; var app = entry[1];
+        var show = showsData[app.showId] || {};
+        h += '<div class="order-card" onclick="showsAIResumeApp(\'' + esc(id) + '\')" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;">';
+        h += '<div><div style="font-weight:600;">' + esc(show.name || app.showName || 'Unknown Show') + '</div>';
+        h += '<div style="font-size:0.78rem;color:var(--text-secondary,#888);">Saved ' + (app.updatedAt ? new Date(app.updatedAt).toLocaleDateString() : '') + '</div></div>';
+        h += '<span style="font-size:0.78rem;color:var(--primary,var(--teal));">' + esc(app.status || 'draft') + '</span></div>';
+      });
+      h += '</div>';
+    }
+    h += '</div>';
+    el.innerHTML = h;
+  }
+
+  function showsAIStartApply(showId) {
+    showsAIShowId = showId;
+    showsAIStep = 1;
+    showsAIParsed = null;
+    showsAIMapping = null;
+    showsAIGaps = null;
+    showsAIImages = {};
+    showsAICurrentApp = null;
+    showsAICopyIdx = -1;
+    renderShowsAIStepContainer();
+  }
+
+  function showsAIResumeApp(appId) {
+    var app = showsAIApplications[appId];
+    if (!app) return;
+    showsAIShowId = app.showId;
+    showsAICurrentApp = Object.assign({ id: appId }, app);
+    showsAIParsed = app.parsedRequirements || null;
+    showsAIMapping = app.fieldMapping || null;
+    showsAIGaps = app.gapAnalysis || null;
+    showsAIImages = app.imageAssignments || {};
+    showsAICopyIdx = -1;
+    showsAIStep = showsAIParsed ? (Object.keys(showsAIImages).length > 0 ? (showsAIMapping ? 4 : 3) : 2) : 1;
+    renderShowsAIStepContainer();
+  }
+
+  function renderShowsAIStepContainer() {
+    var el = document.getElementById('showAIBuilderWrap');
+    if (!el) return;
+    var show = showsData[showsAIShowId] || {};
+    var steps = ['Fetch & Parse', 'Images', 'Auto-Map', 'Gap Analysis', 'Preview'];
+
+    var h = '<div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">';
+    h += '<button onclick="showsAIBackToSelect()" style="background:none;border:none;cursor:pointer;font-size:1.1rem;color:var(--text-secondary,#888);" title="Back to show list">←</button>';
+    h += '<div><span style="font-weight:600;font-size:1.1rem;">' + esc(show.name || 'Show') + '</span>';
+    if (show.applicationDeadline) {
+      h += '<span style="font-size:0.78rem;color:#f59e0b;margin-left:8px;">Deadline: ' + formatShowDate(show.applicationDeadline) + '</span>';
+    }
+    h += '</div></div>';
+
+    h += '<div style="display:flex;gap:4px;margin-bottom:20px;" title="Progress">';
+    steps.forEach(function(label, i) {
+      var stepNum = i + 1;
+      var isDone = stepNum < showsAIStep;
+      var isActive = stepNum === showsAIStep;
+      var bg = (isDone || isActive) ? 'var(--primary, var(--teal))' : 'var(--border-color, #ddd)';
+      var opacity = isDone ? '1' : isActive ? '1' : '0.35';
+      h += '<div style="flex:1;height:4px;border-radius:2px;background:' + bg + ';opacity:' + opacity + ';" title="' + esc(label) + '"></div>';
+    });
+    h += '</div>';
+
+    h += '<div id="showAIStepContent"></div>';
+    el.innerHTML = h;
+
+    var contentEl = document.getElementById('showAIStepContent');
+    switch (showsAIStep) {
+      case 1: renderShowsAIFetch(contentEl, show); break;
+      case 2: renderShowsAIImages(contentEl, show); break;
+      case 3: renderShowsAIMap(contentEl, show); break;
+      case 4: renderShowsAIGaps(contentEl, show); break;
+      case 5: renderShowsAIPreview(contentEl, show); break;
+    }
+  }
+
+  // Step 1: Fetch & Parse
+  function renderShowsAIFetch(el, show) {
+    var w = typeof getTokenWallet === 'function' ? getTokenWallet() : { status: 'unknown' };
+    var costHtml = w.status === 'suspended'
+      ? '<span style="font-size:0.78rem;color:#dc2626;">⏸ AI suspended — <a onclick="openCoinPurchaseModal && openCoinPurchaseModal()" style="cursor:pointer;text-decoration:underline;">buy coins</a></span>'
+      : '<span style="font-size:0.78rem;color:var(--text-secondary,#888);">~15 tokens</span>';
+
+    var h = '<div style="background:var(--bg-secondary,#f9f9f9);border-radius:10px;padding:20px;">';
+    h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">';
+    h += '<div style="font-weight:600;font-size:0.95rem;">Step 1: Fetch &amp; Parse Application</div>';
+    h += costHtml + '</div>';
+
+    if (!show.applicationUrl) {
+      h += '<div style="color:var(--text-secondary,#888);padding:8px 0;">No application URL set. <a onclick="openCreateShowModal(\'' + esc(showsAIShowId) + '\')" style="color:var(--primary,var(--teal));cursor:pointer;">Edit this show</a> to add one.</div>';
+    } else {
+      h += '<div style="margin-bottom:12px;"><label style="font-size:0.78rem;color:var(--text-secondary,#888);display:block;margin-bottom:4px;">Application URL</label>';
+      h += '<input type="url" id="showAIFetchUrl" value="' + esc(show.applicationUrl) + '" style="width:100%;padding:8px 10px;border:1px solid var(--border-color,#ddd);border-radius:6px;font-size:0.9rem;background:var(--bg-primary,#fff);color:var(--text-primary,#333);box-sizing:border-box;"></div>';
+
+      if (showsAIParsed) {
+        var reqs = showsAIParsed;
+        h += '<div style="background:rgba(0,150,100,0.06);border:1px solid rgba(0,150,100,0.15);border-radius:8px;padding:14px;margin-bottom:12px;">';
+        h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">';
+        h += '<div style="font-weight:600;color:var(--primary,var(--teal));font-size:0.9rem;">Parsed Requirements</div>';
+        h += '<div style="display:flex;gap:8px;">';
+        h += '<a href="' + esc(show.applicationUrl) + '" target="_blank" style="color:#f59e0b;font-size:0.78rem;text-decoration:underline;">View Source</a>';
+        h += '<button onclick="showsAIParsed=null; renderShowsAIFetch(document.getElementById(\'showAIStepContent\'), showsData[showsAIShowId]||{});" style="background:none;border:none;color:var(--text-secondary,#888);font-size:0.78rem;cursor:pointer;text-decoration:underline;">Re-parse</button>';
+        h += '</div></div>';
+
+        h += '<div style="margin-bottom:10px;">';
+        h += '<div style="font-size:0.78rem;font-weight:600;margin-bottom:4px;">Fields (' + (reqs.fields || []).length + ')</div>';
+        (reqs.fields || []).forEach(function(f, idx) {
+          h += '<div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0;font-size:0.85rem;border-bottom:1px solid rgba(0,0,0,0.06);">';
+          h += '<span>' + esc(f.name) + (f.required ? ' <span style="color:#dc2626;font-size:0.72rem;">required</span>' : '') + '</span>';
+          h += '<button onclick="showsAIRemoveField(' + idx + ')" style="background:none;border:none;color:var(--text-secondary,#888);cursor:pointer;font-size:0.78rem;">&times;</button></div>';
+        });
+        h += '<button onclick="showsAIAddField()" style="background:none;border:none;color:var(--primary,var(--teal));cursor:pointer;font-size:0.78rem;margin-top:4px;">+ Add field</button>';
+        h += '</div>';
+
+        h += '<div style="margin-bottom:10px;">';
+        h += '<div style="font-size:0.78rem;font-weight:600;margin-bottom:4px;">Photo Slots (' + (reqs.photos || []).length + ')</div>';
+        (reqs.photos || []).forEach(function(p, idx) {
+          h += '<div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0;font-size:0.85rem;border-bottom:1px solid rgba(0,0,0,0.06);">';
+          h += '<span>' + esc(p.slot) + (p.dimensions ? ' <span style="color:var(--text-secondary,#888);font-size:0.78rem;">' + esc(p.dimensions) + '</span>' : '') + '</span>';
+          h += '<button onclick="showsAIRemovePhoto(' + idx + ')" style="background:none;border:none;color:var(--text-secondary,#888);cursor:pointer;font-size:0.78rem;">&times;</button></div>';
+        });
+        h += '<button onclick="showsAIAddPhoto()" style="background:none;border:none;color:var(--primary,var(--teal));cursor:pointer;font-size:0.78rem;margin-top:4px;">+ Add photo slot</button>';
+        h += '</div>';
+
+        if (reqs.fees) h += '<div style="font-size:0.85rem;margin-bottom:4px;"><strong>Fees:</strong> ' + esc(reqs.fees) + '</div>';
+        if (reqs.deadline) h += '<div style="font-size:0.85rem;margin-bottom:4px;"><strong>Deadline:</strong> ' + esc(reqs.deadline) + '</div>';
+        if (reqs.specialRequirements && reqs.specialRequirements.length > 0) {
+          h += '<div style="font-size:0.85rem;"><strong>Special:</strong> ' + reqs.specialRequirements.map(function(r) { return esc(r); }).join('; ') + '</div>';
+        }
+        h += '</div>';
+        h += '<div style="font-size:0.78rem;color:var(--text-secondary,#888);font-style:italic;margin-bottom:12px;">Review above. Remove or add items before continuing.</div>';
+        h += '<button class="btn btn-primary" onclick="showsAIGoToStep(2)">Continue to Images →</button>';
+      } else {
+        h += '<div style="display:flex;gap:8px;align-items:center;">';
+        h += '<button class="btn btn-primary" id="showAIFetchBtn" onclick="showsAIFetchAndParse()">Fetch &amp; Parse with AI</button>';
+        h += '<span id="showAIFetchStatus" style="font-size:0.85rem;color:var(--text-secondary,#888);"></span></div>';
+      }
+    }
+    h += '</div>';
+    el.innerHTML = h;
+  }
+
+  async function showsAIFetchAndParse() {
+    var url = (document.getElementById('showAIFetchUrl') || {}).value;
+    if (!url) { showToast('Enter an application URL.', true); return; }
+    var w = typeof getTokenWallet === 'function' ? getTokenWallet() : { status: 'ok' };
+    if (w.status === 'suspended') {
+      showToast('AI suspended. Purchase coins to continue.', true);
+      if (typeof openCoinPurchaseModal === 'function') openCoinPurchaseModal();
+      return;
+    }
+    var btn = document.getElementById('showAIFetchBtn');
+    var status = document.getElementById('showAIFetchStatus');
+    if (btn) { btn.disabled = true; btn.textContent = 'Fetching...'; }
+    if (status) status.textContent = 'Fetching application page...';
+    try {
+      var token = await auth.currentUser.getIdToken();
+      var resp = await callCF('/studioAssistant', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+        body: JSON.stringify({
+          question: 'Parse the following show application URL and extract the jury/application requirements. URL: ' + url + '\n\nReturn a JSON object with these fields:\n- fields: array of {name, description, required: boolean} for each required field\n- photos: array of {slot, description, dimensions} for each required photo\n- fees: string describing application/booth fees\n- deadline: string with application deadline\n- specialRequirements: array of strings for any special requirements\n- rawNotes: string with any other relevant info\n\nRespond ONLY with valid JSON, no markdown.',
+          assistantContext: 'show-apply-parse-application'
+        })
+      });
+      if (resp.status === 402) {
+        showToast('Token balance exhausted. Purchase coins to continue.', true);
+        if (typeof openCoinPurchaseModal === 'function') openCoinPurchaseModal();
+        if (btn) { btn.disabled = false; btn.textContent = 'Fetch & Parse with AI'; }
+        if (status) status.textContent = '';
+        return;
+      }
+      var data = await resp.json();
+      var answer = data.answer || '';
+      try {
+        var jsonStr = answer.replace(/```json\s*/gi, '').replace(/```\s*/gi, '').trim();
+        showsAIParsed = JSON.parse(jsonStr);
+      } catch (e) {
+        showsAIParsed = {
+          fields: [
+            { name: 'Business Name', description: '', required: true },
+            { name: 'Artist Statement', description: '', required: true },
+            { name: 'Product Description', description: '', required: true }
+          ],
+          photos: [{ slot: 'Product Photo', description: '' }, { slot: 'Booth Photo', description: '' }],
+          fees: '', deadline: '', specialRequirements: [], rawNotes: answer
+        };
+      }
+      renderShowsAIFetch(document.getElementById('showAIStepContent'), showsData[showsAIShowId] || {});
+    } catch (err) {
+      showToast('Fetch failed: ' + err.message, true);
+      if (btn) { btn.disabled = false; btn.textContent = 'Fetch & Parse with AI'; }
+      if (status) status.textContent = '';
+    }
+  }
+
+  function showsAIRemoveField(idx) {
+    if (showsAIParsed && showsAIParsed.fields) showsAIParsed.fields.splice(idx, 1);
+    renderShowsAIFetch(document.getElementById('showAIStepContent'), showsData[showsAIShowId] || {});
+  }
+
+  async function showsAIAddField() {
+    var name = await mastPrompt('Field name (e.g. "Product Description"):', { title: 'Add Field' });
+    if (!name) return;
+    if (!showsAIParsed) showsAIParsed = { fields: [], photos: [] };
+    if (!showsAIParsed.fields) showsAIParsed.fields = [];
+    showsAIParsed.fields.push({ name: name.trim(), description: '', required: true });
+    renderShowsAIFetch(document.getElementById('showAIStepContent'), showsData[showsAIShowId] || {});
+  }
+
+  function showsAIRemovePhoto(idx) {
+    if (showsAIParsed && showsAIParsed.photos) showsAIParsed.photos.splice(idx, 1);
+    renderShowsAIFetch(document.getElementById('showAIStepContent'), showsData[showsAIShowId] || {});
+  }
+
+  async function showsAIAddPhoto() {
+    var slot = await mastPrompt('Photo slot name (e.g. "Process Photo 1"):', { title: 'Add Photo Slot' });
+    if (!slot) return;
+    if (!showsAIParsed) showsAIParsed = { fields: [], photos: [] };
+    if (!showsAIParsed.photos) showsAIParsed.photos = [];
+    showsAIParsed.photos.push({ slot: slot.trim(), description: '' });
+    renderShowsAIFetch(document.getElementById('showAIStepContent'), showsData[showsAIShowId] || {});
+  }
+
+  // Step 2: Assign Images
+  function renderShowsAIImages(el, show) {
+    var reqs = showsAIParsed || {};
+    var photos = reqs.photos || [];
+    var profile = showsAIProfile || {};
+
+    // Auto-assign booth photo from profile
+    photos.forEach(function(p, idx) {
+      if (!showsAIImages[idx] && (p.slot || '').toLowerCase().indexOf('booth') >= 0 && profile.boothPhotoUrl) {
+        showsAIImages[idx] = '__profile_booth__';
+      }
+    });
+
+    var h = '<div style="background:var(--bg-secondary,#f9f9f9);border-radius:10px;padding:20px;">';
+    h += '<div style="font-weight:600;font-size:0.95rem;margin-bottom:4px;">Step 2: Assign Images</div>';
+    h += '<p style="font-size:0.85rem;color:var(--text-secondary,#888);margin:0 0 16px;">Click each slot to assign an image from your gallery.</p>';
+
+    if (photos.length === 0) {
+      h += '<div style="color:var(--text-secondary,#888);padding:8px 0;">No photo requirements detected. Continue to Auto-Map.</div>';
+    } else {
+      h += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:14px;margin-bottom:16px;">';
+      photos.forEach(function(p, idx) {
+        var assigned = showsAIImages[idx];
+        var assignedImg = null;
+        var isProfileBooth = false;
+        if (assigned === '__profile_booth__') { assignedImg = { url: profile.boothPhotoUrl }; isProfileBooth = true; }
+        else if (assigned) { assignedImg = (imageLibrary || {})[assigned]; }
+        var isFilled = !!(assignedImg && assignedImg.url);
+        h += '<div onclick="showsAIPickImage(' + idx + ')" style="border:2px dashed ' + (isFilled ? 'var(--primary,var(--teal))' : 'var(--border-color,#ddd)') + ';border-radius:8px;padding:10px;text-align:center;cursor:pointer;">';
+        if (isFilled) {
+          h += '<img src="' + esc(assignedImg.url) + '" style="width:100%;aspect-ratio:1;object-fit:cover;border-radius:6px;margin-bottom:6px;">';
+          h += '<div style="font-size:0.78rem;color:var(--primary,var(--teal));">✓ ' + esc(p.slot || 'Photo ' + (idx + 1)) + '</div>';
+          if (isProfileBooth) h += '<div style="font-size:0.72rem;color:#f59e0b;">From profile default</div>';
+        } else {
+          h += '<div style="font-size:1.4rem;color:var(--text-secondary,#ccc);margin-bottom:4px;">+</div>';
+          h += '<div style="font-size:0.78rem;color:var(--text-secondary,#888);">' + esc(p.slot || 'Photo ' + (idx + 1)) + '</div>';
+          if (p.dimensions) h += '<div style="font-size:0.72rem;color:#f59e0b;">' + esc(p.dimensions) + '</div>';
+        }
+        h += '</div>';
+      });
+      h += '</div>';
+    }
+
+    // Product description editors for assigned non-booth photos
+    photos.forEach(function(p, idx) {
+      var assigned = showsAIImages[idx];
+      if (!assigned || assigned === '__profile_booth__') return;
+      var img = (imageLibrary || {})[assigned];
+      if (!img) return;
+      var appDesc = img.applicationDescription || '';
+      var prodOptions = (window.productsData || []).filter(function(pr) { return pr.name; }).slice().sort(function(a, b) { return (a.name || '').localeCompare(b.name || ''); });
+      h += '<div style="margin-top:12px;padding:14px;background:var(--bg-primary,#fff);border:1px solid var(--border-color,#ddd);border-radius:8px;position:relative;">';
+      h += '<button onclick="showsAIAssignImage(' + idx + ', null)" style="position:absolute;top:8px;right:8px;background:none;border:none;color:var(--text-secondary,#888);font-size:1.1rem;cursor:pointer;" title="Remove image">&times;</button>';
+      h += '<div style="display:flex;gap:12px;align-items:flex-start;">';
+      h += '<img src="' + esc(img.thumbnailUrl || img.url || '') + '" style="width:72px;height:72px;object-fit:cover;border-radius:6px;flex-shrink:0;">';
+      h += '<div style="flex:1;">';
+      h += '<div style="font-size:0.85rem;font-weight:600;margin-bottom:8px;">' + esc(p.slot || 'Product Photo') + '</div>';
+      h += '<label style="font-size:0.78rem;color:var(--text-secondary,#888);display:block;margin-bottom:4px;">Link to Product</label>';
+      h += '<select id="showAIProdSel_' + idx + '" onchange="showsAILinkProduct(' + idx + ', this.value)" style="width:100%;padding:6px 8px;border:1px solid var(--border-color,#ddd);border-radius:6px;font-size:0.85rem;background:var(--bg-primary,#fff);color:var(--text-primary,#333);margin-bottom:10px;">';
+      h += '<option value="">— Select a product —</option>';
+      prodOptions.forEach(function(prod) {
+        h += '<option value="' + esc(prod.pid) + '"' + (prod.pid === img.productId ? ' selected' : '') + '>' + esc(prod.name) + '</option>';
+      });
+      h += '</select>';
+      h += '<label style="font-size:0.78rem;color:var(--text-secondary,#888);display:block;margin-bottom:4px;">Application Description</label>';
+      h += '<textarea id="showAIAppDesc_' + idx + '" rows="3" placeholder="Describe this product for show applications..." style="width:100%;padding:8px;border:1px solid var(--border-color,#ddd);border-radius:6px;font-size:0.85rem;background:var(--bg-primary,#fff);color:var(--text-primary,#333);resize:vertical;box-sizing:border-box;" onblur="showsAISaveSlotDesc(' + idx + ', this.value)">' + esc(appDesc) + '</textarea>';
+      h += '</div></div></div>';
+    });
+
+    h += '<div style="display:flex;gap:8px;margin-top:16px;">';
+    h += '<button class="btn btn-secondary" onclick="showsAIGoToStep(1)">← Back</button>';
+    h += '<button class="btn btn-primary" onclick="showsAIGoToStep(3)">Continue to Auto-Map →</button>';
+    h += '</div></div>';
+    el.innerHTML = h;
+  }
+
+  function showsAIPickImage(slotIdx) {
+    var lib = imageLibrary || {};
+    var allEntries = Object.entries(lib);
+    if (allEntries.length === 0) { showToast('No images in gallery. Upload some first.', true); return; }
+    var appEntries = allEntries.filter(function(e) { return e[1].applicationPhoto; });
+    var entries = appEntries.length > 0 ? appEntries : allEntries;
+    var showingAll = appEntries.length === 0;
+    var html = '<div class="modal-header"><h3>Select Image</h3><button class="modal-close" onclick="closeModal()">&times;</button></div>' +
+      '<div class="modal-body">' +
+      (showingAll ? '<div style="font-size:0.78rem;color:var(--text-secondary,#888);margin-bottom:8px;">No application photos marked — showing all gallery images.</div>' :
+       '<div style="font-size:0.78rem;color:#f59e0b;margin-bottom:8px;">⭐ ' + appEntries.length + ' application photo' + (appEntries.length !== 1 ? 's' : '') + '</div>') +
+      '<div class="sl-gallery-grid">';
+    entries.forEach(function(entry) {
+      var id = entry[0]; var img = entry[1];
+      html += '<div class="sl-gallery-item" onclick="showsAIAssignImage(' + slotIdx + ', \'' + esc(id) + '\'); closeModal();" style="cursor:pointer;">';
+      html += '<img src="' + esc(img.url || img.thumbnailUrl || '') + '" alt="" loading="lazy">';
+      if (img.productName) html += '<div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,0.6);color:white;font-size:0.72rem;padding:2px 4px;">' + esc(img.productName) + '</div>';
+      html += '</div>';
+    });
+    html += '</div></div><div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
+      (showsAIImages[slotIdx] ? '<button class="btn" onclick="showsAIAssignImage(' + slotIdx + ', null); closeModal();" style="background:#dc2626;color:white;border:none;border-radius:6px;padding:6px 14px;cursor:pointer;">Remove</button>' : '') +
+      '</div>';
+    openModal(html);
+  }
+
+  function showsAIAssignImage(slotIdx, imageId) {
+    if (imageId) {
+      showsAIImages[slotIdx] = imageId;
+      var img = (imageLibrary || {})[imageId];
+      if (img && !img.applicationDescription) {
+        var prodsArr = window.productsData || [];
+        var desc = '';
+        if (img.productId) { var p = prodsArr.find(function(x) { return x.pid === img.productId; }); if (p) desc = p.shortDescription || p.description || ''; }
+        if (!desc && img.productName) { var p2 = prodsArr.find(function(x) { return x.name === img.productName; }); if (p2) desc = p2.shortDescription || p2.description || ''; }
+        if (desc) { img.applicationDescription = desc; MastDB.set('images/' + imageId + '/applicationDescription', desc).catch(function() {}); }
+      }
+    } else {
+      delete showsAIImages[slotIdx];
+    }
+    renderShowsAIImages(document.getElementById('showAIStepContent'), showsData[showsAIShowId] || {});
+  }
+
+  async function showsAISaveSlotDesc(slotIdx, value) {
+    var imgId = showsAIImages[slotIdx];
+    if (!imgId || imgId === '__profile_booth__') return;
+    var img = (imageLibrary || {})[imgId];
+    if (!img) return;
+    value = (value || '').trim();
+    try {
+      await MastDB.set('images/' + imgId + '/applicationDescription', value || null);
+      img.applicationDescription = value || '';
+      if (value && !img.applicationPhoto) { await MastDB.set('images/' + imgId + '/applicationPhoto', true); img.applicationPhoto = true; }
+    } catch (err) { showToast('Failed to save description: ' + err.message, true); }
+  }
+
+  async function showsAILinkProduct(slotIdx, pid) {
+    var imgId = showsAIImages[slotIdx];
+    if (!imgId || imgId === '__profile_booth__') return;
+    var img = (imageLibrary || {})[imgId];
+    if (!img) return;
+    var product = pid ? (window.productsData || []).find(function(x) { return x.pid === pid; }) : null;
+    try {
+      if (pid && product) {
+        await MastDB.update('images/' + imgId, { productId: pid, productName: product.name || '' });
+        img.productId = pid; img.productName = product.name || '';
+        var textarea = document.getElementById('showAIAppDesc_' + slotIdx);
+        if (textarea && !textarea.value.trim()) {
+          var desc = product.shortDescription || product.description || '';
+          if (desc) { textarea.value = desc; img.applicationDescription = desc; await MastDB.set('images/' + imgId + '/applicationDescription', desc); }
+        }
+        showToast('Linked to ' + product.name);
+      } else {
+        await MastDB.set('images/' + imgId + '/productId', null);
+        await MastDB.set('images/' + imgId + '/productName', null);
+        delete img.productId; delete img.productName;
+      }
+    } catch (err) { showToast('Failed to link product: ' + err.message, true); }
+  }
+
+  // Step 3: Auto-Map Fields
+  function renderShowsAIMap(el, show) {
+    var reqs = showsAIParsed || {};
+    var fields = reqs.fields || [];
+    var profile = showsAIProfile || {};
+
+    if (!showsAIMapping) {
+      showsAIMapping = {};
+      var lib = imageLibrary || {};
+      var productDesc = '';
+      Object.values(showsAIImages).forEach(function(imgId) {
+        if (imgId === '__profile_booth__') return;
+        var img = lib[imgId];
+        if (!img) return;
+        if (img.applicationDescription && productDesc.indexOf(img.applicationDescription) < 0) productDesc += img.applicationDescription + '\n';
+      });
+      if (!productDesc) {
+        var prodsArr = window.productsData || [];
+        Object.values(showsAIImages).forEach(function(imgId) {
+          if (imgId === '__profile_booth__') return;
+          var img = lib[imgId];
+          if (!img || !img.productId) return;
+          var p = prodsArr.find(function(x) { return x.pid === img.productId; });
+          if (p && p.description && productDesc.indexOf(p.description) < 0) productDesc += (p.name ? p.name + ': ' : '') + (p.shortDescription || p.description) + '\n';
+        });
+      }
+      productDesc = productDesc.trim();
+
+      fields.forEach(function(f) {
+        var n = (f.name || '').toLowerCase();
+        var m;
+        if (n.indexOf('business') >= 0 || n.indexOf('artist name') >= 0 || n.indexOf('company') >= 0)
+          m = { source: 'profile.name', value: profile.name || '', confidence: profile.name ? 'high' : 'none' };
+        else if (n.indexOf('bio') >= 0 || n.indexOf('statement') >= 0 || n.indexOf('about') >= 0)
+          m = { source: 'profile.bio', value: profile.bio || '', confidence: profile.bio ? 'high' : 'none' };
+        else if (n.indexOf('product') >= 0 || n.indexOf('description') >= 0 || n.indexOf('what you') >= 0)
+          m = { source: 'gallery images', value: productDesc, confidence: productDesc ? 'medium' : 'none' };
+        else if (n.indexOf('material') >= 0)
+          m = { source: 'profile.materials', value: profile.materials || '', confidence: profile.materials ? 'high' : 'none' };
+        else if (n.indexOf('process') >= 0 || n.indexOf('technique') >= 0)
+          m = { source: 'profile.processDescription', value: profile.processDescription || '', confidence: profile.processDescription ? 'high' : 'none' };
+        else if (n.indexOf('categor') >= 0 || n.indexOf('medium') >= 0 || n.indexOf('craft') >= 0) {
+          var cv = profile.category || ''; if (profile.category2) cv += ', ' + profile.category2;
+          m = { source: 'profile.category', value: cv, confidence: cv ? 'high' : 'none' };
+        } else if (n.indexOf('price') >= 0 || n.indexOf('range') >= 0)
+          m = { source: 'profile.priceRange', value: profile.priceRange || '', confidence: profile.priceRange ? 'high' : 'none' };
+        else if (n.indexOf('website') >= 0 || n.indexOf('url') >= 0)
+          m = { source: 'profile.website', value: profile.website || '', confidence: profile.website ? 'high' : 'none' };
+        else if (n.indexOf('instagram') >= 0 || n.indexOf('social') >= 0)
+          m = { source: 'profile.instagram', value: profile.instagram || '', confidence: profile.instagram ? 'high' : 'none' };
+        else if (n.indexOf('email') >= 0)
+          m = { source: 'profile.email', value: profile.email || '', confidence: profile.email ? 'high' : 'none' };
+        else if (n.indexOf('phone') >= 0)
+          m = { source: 'profile.phone', value: profile.phone || '', confidence: profile.phone ? 'high' : 'none' };
+        else if (n.indexOf('location') >= 0 || n.indexOf('city') >= 0 || n.indexOf('address') >= 0)
+          m = { source: 'profile.location', value: profile.location || '', confidence: profile.location ? 'medium' : 'none' };
+        else if (n.indexOf('year') >= 0 || n.indexOf('experience') >= 0)
+          m = { source: 'profile.yearsInBusiness', value: profile.yearsInBusiness ? profile.yearsInBusiness + ' years' : '', confidence: profile.yearsInBusiness ? 'high' : 'none' };
+        else if (n.indexOf('tax') >= 0 || n.indexOf('ein') >= 0)
+          m = { source: 'profile.taxId', value: profile.taxId || '', confidence: profile.taxId ? 'high' : 'none' };
+        else if (n.indexOf('booth') >= 0 && n.indexOf('size') >= 0)
+          m = { source: 'profile.defaultBoothSize', value: profile.defaultBoothSize || '', confidence: profile.defaultBoothSize ? 'high' : 'none' };
+        else if (n.indexOf('license') >= 0)
+          m = { source: 'profile.businessLicense', value: profile.businessLicense || '', confidence: profile.businessLicense ? 'high' : 'none' };
+        else
+          m = { source: 'manual', value: '', confidence: 'none' };
+        showsAIMapping[f.name] = m;
+      });
+    }
+
+    var h = '<div style="background:var(--bg-secondary,#f9f9f9);border-radius:10px;padding:20px;">';
+    h += '<div style="font-weight:600;font-size:0.95rem;margin-bottom:4px;">Step 3: Auto-Map Fields</div>';
+    h += '<p style="font-size:0.85rem;color:var(--text-secondary,#888);margin:0 0 16px;">Review how your vendor profile maps to the application fields. Edit values as needed.</p>';
+
+    fields.forEach(function(f) {
+      var m = showsAIMapping[f.name] || { source: 'manual', value: '', confidence: 'none' };
+      var confColor = m.confidence === 'high' ? '#16a34a' : m.confidence === 'medium' ? '#f59e0b' : '#dc2626';
+      var confLabel = m.confidence === 'high' ? '✓ Auto-matched' : m.confidence === 'medium' ? '~ Partial match' : '✗ Not matched';
+      if (m.source === 'gallery images') confLabel = '~ From gallery images';
+      h += '<div style="margin-bottom:14px;">';
+      h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">';
+      h += '<label style="font-size:0.78rem;font-weight:600;color:var(--text-secondary,#888);text-transform:uppercase;">' + esc(f.name) + (f.required ? ' <span style="color:#dc2626;">*</span>' : '') + '</label>';
+      h += '<span style="font-size:0.72rem;color:' + confColor + ';">' + confLabel + '</span></div>';
+      if (f.description) h += '<div style="font-size:0.78rem;color:var(--text-secondary,#888);margin-bottom:4px;">' + esc(f.description) + '</div>';
+      h += '<textarea id="showAIMap_' + esc(f.name.replace(/\s+/g, '_')) + '" rows="2" placeholder="Enter value..." style="width:100%;padding:8px;border:1px solid var(--border-color,#ddd);border-radius:6px;font-size:0.85rem;background:var(--bg-primary,#fff);color:var(--text-primary,#333);box-sizing:border-box;">' + esc(m.value) + '</textarea>';
+      h += '</div>';
+    });
+
+    h += '<div style="display:flex;gap:8px;margin-top:16px;">';
+    h += '<button class="btn btn-secondary" onclick="showsAIGoToStep(2)">← Back</button>';
+    h += '<button class="btn btn-primary" onclick="showsAISaveMapping(); showsAIGoToStep(4)">Continue to Gap Analysis →</button>';
+    h += '</div></div>';
+    el.innerHTML = h;
+  }
+
+  function showsAISaveMapping() {
+    var fields = (showsAIParsed || {}).fields || [];
+    fields.forEach(function(f) {
+      var textarea = document.getElementById('showAIMap_' + f.name.replace(/\s+/g, '_'));
+      if (textarea && showsAIMapping[f.name]) showsAIMapping[f.name].value = textarea.value;
+    });
+  }
+
+  // Step 4: Gap Analysis
+  function renderShowsAIGaps(el, show) {
+    var reqs = showsAIParsed || {};
+    var fields = reqs.fields || [];
+    var photos = reqs.photos || [];
+    var profile = showsAIProfile || {};
+    var gaps = [];
+
+    fields.forEach(function(f) {
+      var m = showsAIMapping[f.name] || {};
+      if (f.required && !m.value) gaps.push({ type: 'field', name: f.name, description: f.description || '' });
+    });
+
+    var galleryByCategory = {};
+    Object.values((imageLibrary || {})).forEach(function(img) {
+      if (img.category) galleryByCategory[img.category] = (galleryByCategory[img.category] || 0) + 1;
+    });
+    var hasBoothPhoto = !!(profile.boothPhotoUrl) || !!galleryByCategory.booth;
+
+    photos.forEach(function(p, idx) {
+      if (showsAIImages[idx]) return;
+      var slotLower = (p.slot || '').toLowerCase();
+      if (slotLower.indexOf('booth') >= 0 && hasBoothPhoto) return;
+      if (slotLower.indexOf('product') >= 0 && galleryByCategory.product) return;
+      if (slotLower.indexOf('process') >= 0 && galleryByCategory.process) return;
+      gaps.push({ type: 'photo', name: p.slot, description: p.description || '' });
+    });
+
+    showsAIGaps = gaps;
+
+    var h = '<div style="background:var(--bg-secondary,#f9f9f9);border-radius:10px;padding:20px;">';
+    h += '<div style="font-weight:600;font-size:0.95rem;margin-bottom:12px;">Step 4: Gap Analysis</div>';
+
+    if (gaps.length === 0) {
+      h += '<div style="text-align:center;padding:20px;">';
+      h += '<div style="font-size:1.4rem;color:#16a34a;margin-bottom:6px;">✓</div>';
+      h += '<div style="font-weight:600;color:#16a34a;">All requirements met!</div>';
+      h += '<div style="font-size:0.85rem;color:var(--text-secondary,#888);margin-top:4px;">Your profile and gallery cover everything this show needs.</div>';
+      h += '</div>';
+    } else {
+      h += '<p style="font-size:0.85rem;color:var(--text-secondary,#888);margin:0 0 12px;">These items are required but missing:</p>';
+      gaps.forEach(function(g) {
+        h += '<div style="display:flex;align-items:center;gap:10px;padding:10px;background:var(--bg-primary,#fff);border:1px solid var(--border-color,#ddd);border-radius:6px;margin-bottom:8px;">';
+        h += '<span style="font-size:1rem;">' + (g.type === 'photo' ? '📷' : '📝') + '</span>';
+        h += '<div style="flex:1;"><div style="font-weight:500;font-size:0.9rem;">' + esc(g.name) + '</div>';
+        if (g.description) h += '<div style="font-size:0.78rem;color:var(--text-secondary,#888);">' + esc(g.description) + '</div>';
+        h += '</div>';
+        var fixLink = g.type === 'field'
+          ? '<a onclick="navigateTo(\'show-light-profile\')" style="color:var(--primary,var(--teal));cursor:pointer;font-size:0.78rem;white-space:nowrap;">Fix →</a>'
+          : '<a onclick="showsAIGoToStep(2)" style="color:var(--primary,var(--teal));cursor:pointer;font-size:0.78rem;white-space:nowrap;">Fix →</a>';
+        h += fixLink + '</div>';
+      });
+    }
+
+    h += '<div style="display:flex;gap:8px;margin-top:16px;">';
+    h += '<button class="btn btn-secondary" onclick="showsAIGoToStep(3)">← Back</button>';
+    h += '<button class="btn btn-primary" onclick="showsAIGoToStep(5)">Preview Package →</button>';
+    h += '</div></div>';
+    el.innerHTML = h;
+  }
+
+  // Step 5: Preview & Copy
+  function renderShowsAIPreview(el, show) {
+    var reqs = showsAIParsed || {};
+    var fields = reqs.fields || [];
+    var photos = reqs.photos || [];
+    var profile = showsAIProfile || {};
+    var appUrl = show.applicationUrl || '';
+
+    var h = '<div style="background:var(--bg-secondary,#f9f9f9);border-radius:10px;padding:20px;">';
+    h += '<div style="font-weight:600;font-size:0.95rem;margin-bottom:12px;">Step 5: Application Assistant</div>';
+
+    h += '<div style="background:var(--bg-primary,#fff);border:1px solid var(--border-color,#ddd);padding:14px;border-radius:8px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;">';
+    h += '<div><div style="font-weight:600;">' + esc(show.name || 'Show') + '</div>';
+    if (show.applicationDeadline) h += '<div style="font-size:0.85rem;color:var(--text-secondary,#888);">Deadline: ' + esc(formatShowDate(show.applicationDeadline)) + '</div>';
+    h += '</div>';
+    if (appUrl) h += '<button class="btn btn-primary btn-sm" onclick="showsAILaunchApp()">Launch Application</button>';
+    h += '</div>';
+
+    if (appUrl) h += '<p style="font-size:0.85rem;color:var(--text-secondary,#888);margin:0 0 14px;">Copy each value below and paste it into the application form.</p>';
+
+    // Fields with sequential copy buttons
+    h += '<div style="margin-bottom:20px;">';
+    h += '<div style="font-size:0.85rem;font-weight:600;margin-bottom:10px;">Application Fields</div>';
+    fields.forEach(function(f, idx) {
+      var m = showsAIMapping[f.name] || {};
+      var val = m.value || '';
+      var isCurrent = idx === showsAICopyIdx;
+      var isCopied = idx < showsAICopyIdx;
+      var borderColor = isCurrent ? '#f59e0b' : (isCopied ? '#16a34a' : 'var(--border-color,#ddd)');
+      var bgColor = isCurrent ? 'rgba(245,158,11,0.05)' : (isCopied ? 'rgba(22,163,74,0.04)' : 'var(--bg-primary,#fff)');
+      h += '<div id="showAIField_' + idx + '" style="padding:12px;border:1px solid ' + borderColor + ';border-radius:8px;margin-bottom:8px;background:' + bgColor + ';">';
+      h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">';
+      h += '<div style="display:flex;align-items:center;gap:8px;">';
+      h += (isCopied ? '<span style="color:#16a34a;font-size:0.78rem;">✓</span>' : '<span style="color:var(--text-secondary,#888);font-size:0.78rem;font-weight:600;">' + (idx + 1) + '</span>');
+      h += '<span style="font-size:0.78rem;color:var(--text-secondary,#888);text-transform:uppercase;font-weight:500;">' + esc(f.name) + '</span>';
+      if (f.required) h += '<span style="color:#dc2626;font-size:0.72rem;">required</span>';
+      h += '</div>';
+      if (val) h += '<button onclick="showsAICopyField(' + idx + ')" style="background:' + (isCurrent ? '#f59e0b' : 'var(--bg-secondary,#f5f5f5)') + ';color:' + (isCurrent ? 'white' : 'var(--text-primary,#333)') + ';border:1px solid var(--border-color,#ddd);border-radius:6px;padding:3px 12px;font-size:0.78rem;cursor:pointer;">' + (isCopied ? 'Copied' : 'Copy') + '</button>';
+      h += '</div>';
+      if (val) h += '<div style="font-size:0.9rem;color:var(--text-primary,#333);white-space:pre-wrap;line-height:1.4;">' + esc(val) + '</div>';
+      else h += '<div style="font-size:0.85rem;color:#dc2626;font-style:italic;">No value — fill in manually</div>';
+      h += '</div>';
+    });
+    h += '</div>';
+
+    if (photos.length > 0) {
+      h += '<div style="margin-bottom:20px;">';
+      h += '<div style="font-size:0.85rem;font-weight:600;margin-bottom:10px;">Photos to Upload</div>';
+      h += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;">';
+      photos.forEach(function(p, idx) {
+        var assigned = showsAIImages[idx];
+        var img = null;
+        if (assigned === '__profile_booth__') img = { url: profile.boothPhotoUrl };
+        else if (assigned) img = (imageLibrary || {})[assigned];
+        h += '<div style="text-align:center;padding:10px;background:var(--bg-primary,#fff);border:1px solid var(--border-color,#ddd);border-radius:8px;">';
+        if (img && img.url) {
+          h += '<img src="' + esc(img.url) + '" style="width:100%;aspect-ratio:1;object-fit:cover;border-radius:6px;margin-bottom:6px;">';
+          h += '<div style="font-size:0.78rem;color:var(--text-secondary,#888);margin-bottom:6px;">' + esc(p.slot || 'Photo ' + (idx + 1)) + '</div>';
+          h += '<button onclick="showsAIDownloadPhoto(\'' + esc(img.url) + '\', \'' + esc(p.slot || 'photo') + '\')" style="background:var(--bg-secondary,#f5f5f5);color:var(--text-primary,#333);border:1px solid var(--border-color,#ddd);border-radius:6px;padding:3px 10px;font-size:0.78rem;cursor:pointer;">Download</button>';
+        } else {
+          h += '<div style="aspect-ratio:1;background:var(--bg-secondary,#f5f5f5);border-radius:6px;display:flex;align-items:center;justify-content:center;color:var(--text-secondary,#888);margin-bottom:6px;">—</div>';
+          h += '<div style="font-size:0.78rem;color:#dc2626;">' + esc(p.slot || 'Photo') + ' — not assigned</div>';
+        }
+        h += '</div>';
+      });
+      h += '</div></div>';
+    }
+
+    if (reqs.specialRequirements && reqs.specialRequirements.length > 0) {
+      h += '<div style="padding:12px;background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.2);border-radius:8px;margin-bottom:14px;">';
+      h += '<div style="font-size:0.85rem;font-weight:600;margin-bottom:6px;color:#f59e0b;">Special Requirements</div>';
+      reqs.specialRequirements.forEach(function(r) { h += '<div style="font-size:0.85rem;padding:2px 0;">• ' + esc(r) + '</div>'; });
+      h += '</div>';
+    }
+    if (reqs.fees || reqs.deadline) {
+      h += '<div style="display:flex;gap:16px;margin-bottom:14px;font-size:0.85rem;">';
+      if (reqs.fees) h += '<div><span style="color:var(--text-secondary,#888);">Fees:</span> ' + esc(reqs.fees) + '</div>';
+      if (reqs.deadline) h += '<div><span style="color:var(--text-secondary,#888);">Deadline:</span> ' + esc(reqs.deadline) + '</div>';
+      h += '</div>';
+    }
+
+    h += '<div style="display:flex;gap:8px;flex-wrap:wrap;">';
+    h += '<button class="btn btn-secondary" onclick="showsAIGoToStep(4)">← Back</button>';
+    h += '<button class="btn btn-primary" onclick="showsAISaveApp()">Save Package</button>';
+    if (appUrl) h += '<button class="btn" onclick="showsAILaunchApp()" style="background:var(--primary,var(--teal));color:white;border:none;border-radius:6px;padding:8px 16px;cursor:pointer;">Launch Application</button>';
+    h += '</div></div>';
+
+    el.innerHTML = h;
+    if (showsAICopyIdx < 0) showsAICopyIdx = 0;
+  }
+
+  function showsAICopyField(idx) {
+    var fields = (showsAIParsed || {}).fields || [];
+    var f = fields[idx];
+    if (!f) return;
+    var val = (showsAIMapping[f.name] || {}).value || '';
+    if (!val) return;
+    navigator.clipboard.writeText(val).then(function() {
+      showsAICopyIdx = idx + 1;
+      showToast('Copied: ' + f.name);
+      renderShowsAIPreview(document.getElementById('showAIStepContent'), showsData[showsAIShowId] || {});
+      var nextEl = document.getElementById('showAIField_' + (idx + 1));
+      if (nextEl) nextEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }).catch(function() { showToast('Copy failed — select manually', true); });
+  }
+
+  function showsAILaunchApp() {
+    var show = showsData[showsAIShowId] || {};
+    var url = show.applicationUrl || '';
+    if (!url) { showToast('No application URL set.', true); return; }
+    var fields = (showsAIParsed || {}).fields || [];
+    var f = fields[Math.max(0, showsAICopyIdx)];
+    if (f) {
+      var val = (showsAIMapping[f.name] || {}).value || '';
+      if (val) {
+        navigator.clipboard.writeText(val).then(function() {
+          showsAICopyIdx = Math.max(0, showsAICopyIdx) + 1;
+          showToast('Copied "' + f.name + '" — paste it in the form');
+          renderShowsAIPreview(document.getElementById('showAIStepContent'), showsData[showsAIShowId] || {});
+        }).catch(function() {});
+      }
+    }
+    window.open(url, '_blank');
+  }
+
+  async function showsAIDownloadPhoto(url, slotName) {
+    try {
+      showToast('Downloading...');
+      var resp = await fetch(url);
+      var blob = await resp.blob();
+      var ext = blob.type.indexOf('png') >= 0 ? '.png' : '.jpg';
+      var filename = slotName.toLowerCase().replace(/[^a-z0-9]+/g, '-') + ext;
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(a.href);
+      showToast('Downloaded: ' + filename);
+    } catch (err) {
+      window.open(url, '_blank');
+      showToast('Opened in new tab — right-click to save');
+    }
+  }
+
+  async function showsAISaveApp() {
+    var show = showsData[showsAIShowId] || {};
+    var appData = {
+      showId: showsAIShowId,
+      showName: show.name || '',
+      parsedRequirements: showsAIParsed,
+      fieldMapping: showsAIMapping,
+      gapAnalysis: showsAIGaps,
+      imageAssignments: showsAIImages,
+      status: 'draft',
+      createdAt: showsAICurrentApp ? showsAICurrentApp.createdAt : new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    try {
+      var key;
+      if (showsAICurrentApp && showsAICurrentApp.id) {
+        key = showsAICurrentApp.id;
+        await MastDB.update('showLight/applications/' + key, appData);
+      } else {
+        key = MastDB.showLight.applications.newKey();
+        await MastDB.set('showLight/applications/' + key, appData);
+      }
+      showsAIApplications[key] = appData;
+      showsAICurrentApp = Object.assign({ id: key }, appData);
+      showToast('Application package saved.');
+      showsAIStep = 0;
+      showsAIShowId = null;
+      renderShowsAIBuilder();
+    } catch (err) { showToast('Save failed: ' + err.message, true); }
+  }
+
+  function showsAIGoToStep(step) {
+    showsAIStep = step;
+    renderShowsAIStepContainer();
+  }
+
+  function showsAIBackToSelect() {
+    showsAIStep = 0;
+    showsAIShowId = null;
+    renderShowsAIBuilder();
+  }
+
+  // ============================================================
   // Window exports (onclick handlers referenced in HTML templates)
   // ============================================================
 
@@ -2593,6 +3430,25 @@ async function runShowDeepDive(showId) {
   window.addShowToPipeline = addShowToPipeline;
   window.dismissFinderResult = dismissFinderResult;
   window.clearShowFinderResults = clearShowFinderResults;
+  window.switchShowApplyMode = switchShowApplyMode;
+  window.showsAIStartApply = showsAIStartApply;
+  window.showsAIResumeApp = showsAIResumeApp;
+  window.showsAIBackToSelect = showsAIBackToSelect;
+  window.showsAIGoToStep = showsAIGoToStep;
+  window.showsAIFetchAndParse = showsAIFetchAndParse;
+  window.showsAIRemoveField = showsAIRemoveField;
+  window.showsAIAddField = showsAIAddField;
+  window.showsAIRemovePhoto = showsAIRemovePhoto;
+  window.showsAIAddPhoto = showsAIAddPhoto;
+  window.showsAIPickImage = showsAIPickImage;
+  window.showsAIAssignImage = showsAIAssignImage;
+  window.showsAISaveSlotDesc = showsAISaveSlotDesc;
+  window.showsAILinkProduct = showsAILinkProduct;
+  window.showsAISaveMapping = showsAISaveMapping;
+  window.showsAICopyField = showsAICopyField;
+  window.showsAILaunchApp = showsAILaunchApp;
+  window.showsAIDownloadPhoto = showsAIDownloadPhoto;
+  window.showsAISaveApp = showsAISaveApp;
   // ============================================================
   // Register with MastAdmin
   // ============================================================
