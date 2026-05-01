@@ -5378,7 +5378,8 @@
         <span class="sidebar-section-arrow">&#9654;</span>
       </div>
       <div class="sidebar-items">
-        <div class="sidebar-item" data-route="develop-products" onclick="navigateTo('develop-products')">Products</div>
+        <div class="sidebar-item" data-route="products" onclick="navigateTo('products')">Catalog</div>
+        <div class="sidebar-item" data-route="develop-products" onclick="navigateTo('develop-products')">Develop</div>
         <div class="sidebar-item" data-route="materials" onclick="navigateTo('materials')">Materials</div>
         <div class="sidebar-item" data-route="forecast" onclick="navigateTo('forecast')">Forecast</div>
         <div class="sidebar-item" data-route="jobs" onclick="navigateTo('jobs')">Jobs</div>
@@ -14467,7 +14468,7 @@ var ROUTE_MAP = {
 
 // Section → which routes belong to it (for auto-expanding)
 var SECTION_ROUTES = {
-  'products':          ['develop-products', 'materials', 'forecast',
+  'products':          ['products', 'develop-products', 'materials', 'forecast',
                         'jobs', 'procurement', 'inventory'],
   'sales':             ['pos', 'orders', 'commissions', 'rma',
                         'wholesale', 'lookbooks', 'galleries',
