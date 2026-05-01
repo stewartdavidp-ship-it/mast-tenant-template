@@ -13104,18 +13104,15 @@ auth.onAuthStateChanged(async function(user) {
 
   // --- Guest expiry check — must run BEFORE the !isStaff() gate ---
   // Guests are not staff, so !isStaff() would show Access Denied before expiry is checked.
+  // No signOut here — signing out triggers onAuthStateChanged(null) which overwrites
+  // the expired screen with the login screen. Firestore rules are the real security boundary.
   if (currentUserRole === 'guest' && currentUserRecord && currentUserRecord.accessExpiry) {
     if (new Date(currentUserRecord.accessExpiry) < new Date()) {
-      try {
-        await callCF('/revokeGuestAccess', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + await user.getIdToken() },
-          body: JSON.stringify({ targetUid: user.uid })
-        });
-      } catch (e) {
-        console.warn('revokeGuestAccess CF failed:', e);
-      }
-      await auth.signOut();
+      authScreen.style.display = 'none';
+      deniedScreen.style.display = 'none';
+      header.style.display = 'none';
+      hideSidebar();
+      hideAdminTabs();
       showExpiredScreen(currentUserRecord.accessExpiry);
       return;
     }
