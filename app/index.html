@@ -11985,9 +11985,10 @@ var googleOAuthTokens = {}; // In-memory only — Google API access tokens, keye
 var CANONICAL_ROLES = ['admin', 'staff', 'user', 'guest'];
 var ROLE_DISPLAY_NAMES = { admin: 'Owner', staff: 'Staff', user: 'Manager', guest: 'Guest' };
 function isKnownRole(r) { return CANONICAL_ROLES.indexOf(r) !== -1; }
-var currentUserRole = null;   // 'admin' | 'staff' | 'user' | 'guest' | null
-var currentRoleConfig = null; // Full role record with permissions map
-var rbacReady = false;        // True once role + permissions loaded
+var currentUserRole = null;      // 'admin' | 'staff' | 'user' | 'guest' | null
+var currentRoleConfig = null;    // Full role record with permissions map
+var currentUserOverrides = {};   // permissionOverrides from current user's own record
+var rbacReady = false;           // True once role + permissions loaded
 
 // Default role definitions — seeded on first admin bootstrap
 var DEFAULT_ROLES = {
@@ -12311,7 +12312,12 @@ function hasPermission(entity, action) {
   if (!rbacReady || !currentRoleConfig || !currentRoleConfig.permissions) return false;
   var entityPerms = currentRoleConfig.permissions[entity];
   if (!entityPerms) return false;
-  return entityPerms[action] === true;
+  var base = entityPerms[action] === true;
+  // Apply per-user overrides if present (admin users have no overrides — no behaviour change)
+  if (currentUserOverrides && currentUserOverrides[entity] && currentUserOverrides[entity][action] !== undefined) {
+    return currentUserOverrides[entity][action] === true;
+  }
+  return base;
 }
 
 /** Convenience: is current user an admin? */
@@ -12342,6 +12348,7 @@ async function loadUserRole(uid) {
       // Admin status is now determined by the platform registry (mast-platform/userTenantMap),
       // not a hardcoded UID array. Existing admins already have role:'admin' in their user record.
       var initialRole = 'guest';
+      var initialExpiry = null;
 
       // Check for pending invite
       if (initialRole !== 'admin' && currentUser.email) {
@@ -12350,6 +12357,7 @@ async function loadUserRole(uid) {
           var invite = await MastDB.invites.get(inviteKey);
           if (invite && invite.status === 'pending' && invite.role && invite.invitedBy !== uid) {
             initialRole = invite.role;
+            initialExpiry = invite.accessExpiry || null;
             await MastDB.invites.update(inviteKey, {
               status: 'accepted',
               acceptedAt: new Date().toISOString(),
@@ -12367,6 +12375,8 @@ async function loadUserRole(uid) {
         email: currentUser.email || '',
         photoURL: currentUser.photoURL || '',
         role: initialRole,
+        accessExpiry: initialExpiry,
+        permissionOverrides: {},
         createdAt: MastDB.serverTimestamp(),
         lastLoginAt: MastDB.serverTimestamp()
       };
@@ -12383,6 +12393,7 @@ async function loadUserRole(uid) {
     }
 
     currentUserRole = userData.role || 'guest';
+    currentUserOverrides = userData.permissionOverrides || {};
 
     // Load role permission config
     currentRoleConfig = await MastDB.roles.get(currentUserRole);
@@ -12438,6 +12449,8 @@ async function seedRolesAndAdminUser() {
         email: currentUser.email || '',
         photoURL: currentUser.photoURL || '',
         role: 'admin',
+        accessExpiry: null,
+        permissionOverrides: {},
         createdAt: MastDB.serverTimestamp(),
         lastLoginAt: MastDB.serverTimestamp()
       });
@@ -35112,13 +35125,60 @@ async function renderRecordHistory(entity, entityId) {
 }
 
 // ============================================================
-// Employees & Permissions (Phase E3)
+// Employees & Permissions (Phase E3 + RBAC Phase 1)
 // ============================================================
 var adminUsers = {};
 var adminUsersLoaded = false;
 var rolesData = {};
 var rolesLoaded = false;
-var editingPermissions = {}; // temp state for permission matrix edits
+var editingPermissions = {};     // temp state for role matrix edits (Roles tab)
+var editingUserOverrides = {};   // temp state for per-user override editor (Section 2)
+
+// Compute the fully merged permission set: code defaults → Firebase role config → per-user overrides.
+function computeEffectivePermissions(role, roleConfig, overrides) {
+  var base = {};
+  var def = DEFAULT_ROLES[role];
+  if (def && def.permissions) {
+    Object.keys(def.permissions).forEach(function(entity) {
+      base[entity] = Object.assign({}, def.permissions[entity]);
+    });
+  }
+  if (roleConfig && roleConfig.permissions) {
+    Object.keys(roleConfig.permissions).forEach(function(entity) {
+      base[entity] = Object.assign({}, base[entity] || {}, roleConfig.permissions[entity]);
+    });
+  }
+  if (overrides) {
+    Object.keys(overrides).forEach(function(entity) {
+      base[entity] = Object.assign({}, base[entity] || {}, overrides[entity]);
+    });
+  }
+  return base;
+}
+
+// Returns only the entries in overrides that actually differ from the computed role default.
+function computePermissionDiff(role, roleConfig, overrides) {
+  if (!overrides || Object.keys(overrides).length === 0) return {};
+  var defaults = computeEffectivePermissions(role, roleConfig, {});
+  var diff = {};
+  Object.keys(overrides).forEach(function(entity) {
+    var entityOverrides = overrides[entity];
+    Object.keys(entityOverrides).forEach(function(action) {
+      var defaultVal = defaults[entity] ? defaults[entity][action] : false;
+      if (entityOverrides[action] !== defaultVal) {
+        if (!diff[entity]) diff[entity] = {};
+        diff[entity][action] = entityOverrides[action];
+      }
+    });
+  });
+  return diff;
+}
+
+// Returns true if the role default for entity+action is false — meaning only Admin could elevate it.
+function isAdminGrantedElevation(entity, action, role, roleConfig) {
+  var defaults = computeEffectivePermissions(role, roleConfig, {});
+  return !(defaults[entity] && defaults[entity][action] === true);
+}
 
 function loadAdminUsers() {
   if (adminUsersLoaded) { renderUsersList(); loadPendingInvites(); return; }
