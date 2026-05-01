@@ -5511,6 +5511,7 @@
         <div class="sidebar-item" data-route="cs-surveys" onclick="navigateTo('cs-surveys')">Surveys</div>
         <div class="sidebar-item" data-route="cs-reviews" onclick="navigateTo('cs-reviews')">Reviews</div>
         <div class="sidebar-item" data-route="cs-faqs" onclick="navigateTo('cs-faqs')">FAQs</div>
+        <div class="sidebar-item" data-route="cs-members" onclick="navigateTo('cs-members')">Members</div>
       </div>
     </div>
     <!-- Admin -->
@@ -6076,6 +6077,7 @@
         <div class="placeholder-note">This feature is on the roadmap. Check back soon!</div>
       </div>
     </div>
+    <div id="csMembersTab" style="display:none;"></div>
 
     <!-- My Feedback Tab -->
     <div id="myFeedbackTab" style="display:none;">
@@ -14480,7 +14482,8 @@ var ROUTE_MAP = {
   'cs-tickets':        { tab: 'csTicketsTab' },
   'cs-surveys':        { tab: 'csSurveysTab' },
   'cs-reviews':        { tab: 'csReviewsTab' },
-  'cs-faqs':           { tab: 'csFaqsTab' }
+  'cs-faqs':           { tab: 'csFaqsTab' },
+  'cs-members':        { tab: 'csMembersTab' }
 };
 
 // Section → which routes belong to it (for auto-expanding)
@@ -14504,7 +14507,7 @@ var SECTION_ROUTES = {
                         'advisor', 'studio', 'team', 'business',
                         'channels', 'contacts'],
   'customer-service':  ['cs-inbox', 'cs-tickets', 'cs-surveys',
-                        'cs-reviews', 'cs-faqs'],
+                        'cs-reviews', 'cs-faqs', 'cs-members'],
   'admin':             ['products', 'employees', 'analytics',
                         'auditlog', 'settings', 'subscription',
                         'about', 'email-log'],
@@ -14513,7 +14516,7 @@ var SECTION_ROUTES = {
                         'historical-orders']
 };
 
-var ALL_TAB_IDS = ['scheduleTab', 'galleryTab', 'homepageTab', 'brandTab', 'productsTab', 'ordersTab', 'salesTab', 'salesEventsTab', 'productionTab', 'forecastTab', 'couponsTab', 'analyticsTab', 'settingsTab', 'imagesTab', 'auditLogTab', 'employeesTab', 'contactsTab', 'customersTab', 'packTab', 'shipTab', 'commissionsTab', 'rmaTab', 'socialMediaTab', 'blogTab', 'newsletterTab', 'placeholderTab', 'inventoryTab', 'storiesTab', 'dashboardTab', 'tripsTab', 'wholesaleTab', 'showTab', 'financialsTab', 'eventsAdminTab', 'websiteTab', 'showLightTab', 'emailLogTab', 'materialsTab', 'piecesTab', 'galleriesTab', 'lookbooksTab', 'promotionsTab', 'expensesTab', 'bookTab', 'subscriptionTab', 'aboutTab', 'walletTab', 'giftCardsTab', 'loyaltyTab', 'membershipTab', 'termsTab', 'advisorTab', 'studioTab', 'teamTab', 'studentsTab', 'migrationDashTab', 'migrationConfirmTab', 'migrationPlanTab', 'migrationImportTab', 'historicalOrdersTab', 'channelsTab', 'businessTab', 'myFeedbackTab', 'procurementTab', 'csInboxTab', 'csTicketsTab', 'csSurveysTab', 'csReviewsTab', 'csFaqsTab'];
+var ALL_TAB_IDS = ['scheduleTab', 'galleryTab', 'homepageTab', 'brandTab', 'productsTab', 'ordersTab', 'salesTab', 'salesEventsTab', 'productionTab', 'forecastTab', 'couponsTab', 'analyticsTab', 'settingsTab', 'imagesTab', 'auditLogTab', 'employeesTab', 'contactsTab', 'customersTab', 'packTab', 'shipTab', 'commissionsTab', 'rmaTab', 'socialMediaTab', 'blogTab', 'newsletterTab', 'placeholderTab', 'inventoryTab', 'storiesTab', 'dashboardTab', 'tripsTab', 'wholesaleTab', 'showTab', 'financialsTab', 'eventsAdminTab', 'websiteTab', 'showLightTab', 'emailLogTab', 'materialsTab', 'piecesTab', 'galleriesTab', 'lookbooksTab', 'promotionsTab', 'expensesTab', 'bookTab', 'subscriptionTab', 'aboutTab', 'walletTab', 'giftCardsTab', 'loyaltyTab', 'membershipTab', 'termsTab', 'advisorTab', 'studioTab', 'teamTab', 'studentsTab', 'migrationDashTab', 'migrationConfirmTab', 'migrationPlanTab', 'migrationImportTab', 'historicalOrdersTab', 'channelsTab', 'businessTab', 'myFeedbackTab', 'procurementTab', 'csInboxTab', 'csTicketsTab', 'csSurveysTab', 'csReviewsTab', 'csFaqsTab', 'csMembersTab'];
 
 var currentRoute = 'dashboard';
 
@@ -15022,7 +15025,7 @@ homepage: { src: 'modules/homepage.js', routes: ['homepage'] },
   team: { src: 'modules/team.js', routes: ['team'] },
   students: { src: 'modules/students.js', routes: ['students'] },
   channels: { src: 'modules/channels.js', routes: ['channels'] },
-  'customer-service': { src: 'modules/customer-service.js', routes: ['cs-inbox', 'cs-tickets', 'cs-surveys', 'cs-reviews', 'cs-faqs'] }
+  'customer-service': { src: 'modules/customer-service.js', routes: ['cs-inbox', 'cs-tickets', 'cs-surveys', 'cs-reviews', 'cs-faqs', 'cs-members'] }
 };
 
 // Reverse lookup: route → moduleId (built from MODULE_MANIFEST)

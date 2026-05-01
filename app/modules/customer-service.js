@@ -17,6 +17,12 @@
   // Module-private state
   // ============================================================
 
+  // Members section state
+  var membersSubTab = 'at-risk';   // 'at-risk' | 'all-active'
+  var membersAtRiskData = null;    // null = not loaded, [] = loaded
+  var membersActiveData = null;
+  var membersLoading = false;
+
   var ticketsData = [];
   var ticketsLoaded = false;
   var loadInFlight = false;
@@ -1001,6 +1007,257 @@
     catch (err) { showToast('Failed: ' + (err && err.message), true); }
   }
 
+  // ============================================================
+  // Session F — Members
+  // ============================================================
+
+  function daysUntil(dateStr) {
+    if (!dateStr) return null;
+    var now = new Date();
+    now.setHours(0, 0, 0, 0);
+    var target = new Date(dateStr);
+    target.setHours(0, 0, 0, 0);
+    return Math.round((target - now) / (1000 * 60 * 60 * 24));
+  }
+
+  function daysRemainingHtml(dateStr) {
+    var d = daysUntil(dateStr);
+    if (d === null) return '<span style="color:var(--warm-gray);">—</span>';
+    var color = d <= 7 ? 'var(--danger)' : (d <= 30 ? 'var(--amber-light)' : 'var(--teal)');
+    var label = d < 0 ? (Math.abs(d) + 'd ago') : (d + 'd');
+    return '<span style="color:' + color + ';font-weight:600;">' + label + '</span>';
+  }
+
+  function memberPaymentBadge(paymentStatus) {
+    if (paymentStatus === 'failed') {
+      return '<span style="color:var(--danger);font-weight:600;">Failed ⚠️</span>';
+    }
+    return '<span style="color:var(--warm-gray);">Current</span>';
+  }
+
+  async function loadMembersData() {
+    if (membersLoading) return;
+    membersLoading = true;
+    var base = 'tenants/' + MastDB.tenantId() + '/customers';
+    try {
+      var db = firebase.firestore();
+
+      // At-risk: cancelled members
+      var cancelledSnap = await db.collection(base)
+        .where('membership.status', '==', 'cancelled')
+        .orderBy('membership.expiryDate', 'asc')
+        .limit(50)
+        .get();
+
+      // At-risk: failed payment members
+      var failedSnap = await db.collection(base)
+        .where('membership.paymentStatus', '==', 'failed')
+        .limit(50)
+        .get();
+
+      // Merge and deduplicate by uid
+      var merged = {};
+      cancelledSnap.forEach(function(doc) {
+        merged[doc.id] = Object.assign({ uid: doc.id }, doc.data());
+      });
+      failedSnap.forEach(function(doc) {
+        if (!merged[doc.id]) merged[doc.id] = Object.assign({ uid: doc.id }, doc.data());
+      });
+      membersAtRiskData = Object.values(merged);
+      membersAtRiskData.sort(function(a, b) {
+        var da = (a.membership && a.membership.expiryDate) || '';
+        var db2 = (b.membership && b.membership.expiryDate) || '';
+        return da < db2 ? -1 : da > db2 ? 1 : 0;
+      });
+
+      // All active members
+      var activeSnap = await db.collection(base)
+        .where('membership.status', '==', 'active')
+        .orderBy('membership.renewalDate', 'asc')
+        .limit(100)
+        .get();
+      membersActiveData = [];
+      activeSnap.forEach(function(doc) {
+        membersActiveData.push(Object.assign({ uid: doc.id }, doc.data()));
+      });
+    } catch (err) {
+      console.error('[cs-members] loadMembersData:', err);
+      if (typeof showToast === 'function') showToast('Failed to load members.', true);
+      if (!membersAtRiskData) membersAtRiskData = [];
+      if (!membersActiveData) membersActiveData = [];
+    } finally {
+      membersLoading = false;
+    }
+  }
+
+  function renderMembers() {
+    var tab = document.getElementById('csMembersTab');
+    if (!tab) return;
+
+    var loaded = membersAtRiskData !== null && membersActiveData !== null;
+
+    if (!loaded) {
+      tab.innerHTML = '<div style="padding:40px;text-align:center;color:var(--warm-gray);">Loading members…</div>';
+      return;
+    }
+
+    var html = '<div style="padding:24px;">';
+    html += '<div class="section-header" style="margin-bottom:14px;">';
+    html += '<h2 style="margin:0;">Members</h2>';
+    html += '<button class="btn btn-secondary btn-small" onclick="csMembersRefresh()">Refresh</button>';
+    html += '</div>';
+
+    // Sub-tab bar (pill style matching cs-surveys pattern)
+    html += '<div class="view-tabs" style="margin-bottom:18px;">';
+    html += '<button class="view-tab' + (membersSubTab === 'at-risk' ? ' active' : '') + '" onclick="csMembersSetTab(\'at-risk\')">At Risk</button>';
+    html += '<button class="view-tab' + (membersSubTab === 'all-active' ? ' active' : '') + '" onclick="csMembersSetTab(\'all-active\')">All Active</button>';
+    html += '</div>';
+
+    if (membersSubTab === 'at-risk') {
+      html += renderMembersAtRisk();
+    } else {
+      html += renderMembersAllActive();
+    }
+
+    html += '</div>';
+    tab.innerHTML = html;
+  }
+
+  function renderMembersAtRisk() {
+    var rows = membersAtRiskData || [];
+    if (!rows.length) {
+      return '<div style="padding:32px;text-align:center;color:var(--warm-gray);border:1px dashed var(--cream-dark);border-radius:10px;">No members found.</div>';
+    }
+
+    var thStyle = 'padding:8px 12px;text-align:left;font-size:0.78rem;color:var(--warm-gray);font-weight:600;text-transform:uppercase;letter-spacing:0.05em;border-bottom:1px solid var(--cream-dark);white-space:nowrap;';
+    var tdStyle = 'padding:9px 12px;font-size:0.87rem;border-bottom:1px solid var(--cream-dark);';
+
+    var html = '<div style="overflow-x:auto;">';
+    html += '<table style="width:100%;border-collapse:collapse;background:var(--surface-card);border-radius:10px;overflow:hidden;border:1px solid var(--cream-dark);">';
+    html += '<thead><tr>';
+    html += '<th style="' + thStyle + '">Name / Email</th>';
+    html += '<th style="' + thStyle + '">Plan</th>';
+    html += '<th style="' + thStyle + '">Status</th>';
+    html += '<th style="' + thStyle + '">Expiry Date</th>';
+    html += '<th style="' + thStyle + '">Days Remaining</th>';
+    html += '<th style="' + thStyle + '">Payment</th>';
+    html += '<th style="' + thStyle + '"></th>';
+    html += '</tr></thead>';
+    html += '<tbody>';
+
+    rows.forEach(function(r) {
+      var m = r.membership || {};
+      var name = _esc(r.displayName || r.name || '—');
+      var email = _esc(r.email || '—');
+      var plan = _esc(m.plan || '—');
+      var status = _esc(m.status || '—');
+      var expiryDate = _esc(m.expiryDate || '—');
+      var emailRaw = r.email || '';
+
+      html += '<tr>';
+      html += '<td style="' + tdStyle + '">';
+      html += '<div style="font-weight:500;">' + name + '</div>';
+      html += '<div style="font-size:0.78rem;color:var(--warm-gray);">' + email + '</div>';
+      html += '</td>';
+      html += '<td style="' + tdStyle + '">' + plan + '</td>';
+      html += '<td style="' + tdStyle + '">' + status + '</td>';
+      html += '<td style="' + tdStyle + 'font-family:monospace;">' + expiryDate + '</td>';
+      html += '<td style="' + tdStyle + '">' + daysRemainingHtml(m.expiryDate) + '</td>';
+      html += '<td style="' + tdStyle + '">' + memberPaymentBadge(m.paymentStatus) + '</td>';
+      html += '<td style="' + tdStyle + '">';
+      if (emailRaw) {
+        html += '<button class="btn btn-secondary btn-small" onclick="csMembersViewContact(' + JSON.stringify(_esc(emailRaw)) + ')">View Contact →</button>';
+      }
+      html += '</td>';
+      html += '</tr>';
+    });
+
+    html += '</tbody></table></div>';
+    return html;
+  }
+
+  function renderMembersAllActive() {
+    var rows = membersActiveData || [];
+
+    // KPI band
+    var paymentIssues = rows.filter(function(r) { return r.membership && r.membership.paymentStatus === 'failed'; }).length;
+    var today = new Date(); today.setHours(0,0,0,0);
+    var in30 = new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000);
+    var renewingSoon = rows.filter(function(r) {
+      var rd = r.membership && r.membership.renewalDate ? new Date(r.membership.renewalDate) : null;
+      return rd && rd >= today && rd <= in30;
+    }).length;
+
+    var html = '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:18px;">';
+    html += kpiCard('Active Members', String(rows.length), 'current subscriptions');
+    html += kpiCard('Payment Issues', String(paymentIssues), paymentIssues === 1 ? '1 failed' : paymentIssues + ' failed');
+    html += kpiCard('Renewing in 30d', String(renewingSoon), 'upcoming renewals');
+    html += '</div>';
+
+    if (!rows.length) {
+      html += '<div style="padding:32px;text-align:center;color:var(--warm-gray);border:1px dashed var(--cream-dark);border-radius:10px;">No members found.</div>';
+      return html;
+    }
+
+    var thStyle = 'padding:8px 12px;text-align:left;font-size:0.78rem;color:var(--warm-gray);font-weight:600;text-transform:uppercase;letter-spacing:0.05em;border-bottom:1px solid var(--cream-dark);white-space:nowrap;';
+    var tdStyle = 'padding:9px 12px;font-size:0.87rem;border-bottom:1px solid var(--cream-dark);';
+
+    html += '<div style="overflow-x:auto;">';
+    html += '<table style="width:100%;border-collapse:collapse;background:var(--surface-card);border-radius:10px;overflow:hidden;border:1px solid var(--cream-dark);">';
+    html += '<thead><tr>';
+    html += '<th style="' + thStyle + '">Name / Email</th>';
+    html += '<th style="' + thStyle + '">Plan</th>';
+    html += '<th style="' + thStyle + '">Active Since</th>';
+    html += '<th style="' + thStyle + '">Next Renewal</th>';
+    html += '<th style="' + thStyle + '">Payment</th>';
+    html += '<th style="' + thStyle + '"></th>';
+    html += '</tr></thead>';
+    html += '<tbody>';
+
+    rows.forEach(function(r) {
+      var m = r.membership || {};
+      var name = _esc(r.displayName || r.name || '—');
+      var email = _esc(r.email || '—');
+      var plan = _esc(m.plan || '—');
+      var activeSince = fmtDate(m.activeSince || r.createdAt || null);
+      var renewalDate = _esc(m.renewalDate || '—');
+      var emailRaw = r.email || '';
+
+      html += '<tr>';
+      html += '<td style="' + tdStyle + '">';
+      html += '<div style="font-weight:500;">' + name + '</div>';
+      html += '<div style="font-size:0.78rem;color:var(--warm-gray);">' + email + '</div>';
+      html += '</td>';
+      html += '<td style="' + tdStyle + '">' + plan + '</td>';
+      html += '<td style="' + tdStyle + 'font-family:monospace;">' + _esc(activeSince) + '</td>';
+      html += '<td style="' + tdStyle + 'font-family:monospace;">' + renewalDate + '</td>';
+      html += '<td style="' + tdStyle + '">' + memberPaymentBadge(m.paymentStatus) + '</td>';
+      html += '<td style="' + tdStyle + '">';
+      if (emailRaw) {
+        html += '<button class="btn btn-secondary btn-small" onclick="csMembersViewContact(' + JSON.stringify(_esc(emailRaw)) + ')">View Contact →</button>';
+      }
+      html += '</td>';
+      html += '</tr>';
+    });
+
+    html += '</tbody></table></div>';
+    return html;
+  }
+
+  window.csMembersRefresh = function() {
+    membersAtRiskData = null;
+    membersActiveData = null;
+    renderMembers();
+    loadMembersData().then(renderMembers);
+  };
+  window.csMembersSetTab = function(tab) {
+    membersSubTab = tab;
+    renderMembers();
+  };
+  window.csMembersViewContact = function(email) {
+    if (typeof navigateTo === 'function') navigateTo('contacts', { email: email });
+  };
+
   window.csReviewsRefresh = function () { reviewsLoaded = false; renderReviews(); loadReviews().then(renderReviews); };
   window.csReviewsSetFilter = function (f) { reviewsFilter = f; renderReviews(); };
   window.csApproveReview = approveReview;
@@ -1347,6 +1604,17 @@
           if (!policiesLoaded) { renderFaqs(); loadPolicies().then(renderFaqs); }
           else { renderFaqs(); }
         }
+      },
+      'cs-members': {
+        tab: 'csMembersTab',
+        setup: function() {
+          if (membersAtRiskData === null || membersActiveData === null) {
+            renderMembers();
+            loadMembersData().then(renderMembers);
+          } else {
+            renderMembers();
+          }
+        }
       }
     },
     detachListeners: function() {
@@ -1385,6 +1653,10 @@
       policiesLoaded = false;
       policyEditId = null;
       showAddPolicy = false;
+      membersSubTab = 'at-risk';
+      membersAtRiskData = null;
+      membersActiveData = null;
+      membersLoading = false;
     }
   });
 
