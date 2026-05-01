@@ -12420,8 +12420,18 @@ async function loadUserRole(uid) {
     currentUserOverrides = userData.permissionOverrides || {};
     currentUserRecord = userData;
 
-    // Load role permission config
-    currentRoleConfig = await MastDB.roles.get(currentUserRole);
+    // Check guest expiry before any RBAC read that would fail for the guest claim.
+    // Guests can read their own admin_users doc but cannot read admin_roles.
+    if (currentUserRole === 'guest' && userData.accessExpiry && new Date(userData.accessExpiry) < new Date()) {
+      showExpiredScreen(userData.accessExpiry);
+      rbacReady = false;
+      return 'guest';
+    }
+
+    // Guests use built-in defaults — skip the Firestore roles read (isMember() blocks it).
+    if (currentUserRole !== 'guest') {
+      currentRoleConfig = await MastDB.roles.get(currentUserRole);
+    }
 
     // Fallback: if role config missing in Firebase, use built-in defaults
     if (!currentRoleConfig && DEFAULT_ROLES[currentUserRole]) {
