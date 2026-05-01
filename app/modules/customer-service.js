@@ -463,15 +463,541 @@
   }
 
   // ============================================================
-  // Stub render for Session E routes
+  // Session E — Reviews, Surveys, FAQs
   // ============================================================
 
-  function renderStub(title) {
-    return '<div class="placeholder-view">' +
-      '<div class="placeholder-title">' + _esc(title) + '</div>' +
-      '<div class="placeholder-note">Admin UI coming in Session E.</div>' +
-      '</div>';
+  var reviewsData = {};
+  var reviewsLoaded = false;
+  var reviewsFilter = 'pending';
+
+  var surveysSubTab = 'questions';
+  var questionsData = {};
+  var groupsData = {};
+  var surveysDefData = {};
+  var triggersData = {};
+  var surveysLoaded = false;
+  var questionEditId = null;
+  var showAddQuestion = false;
+  var groupEditId = null;
+  var showAddGroup = false;
+  var surveyEditId = null;
+  var showAddSurvey = false;
+  var sendLinkSurveyId = null;
+  var triggerEditId = null;
+  var showAddTrigger = false;
+
+  var policiesData = {};
+  var policiesLoaded = false;
+  var policyEditId = null;
+  var showAddPolicy = false;
+
+  function nowIso() { return new Date().toISOString(); }
+
+  function starsHtml(n) {
+    var out = '';
+    for (var i = 1; i <= 5; i++) out += (i <= (n || 0) ? '★' : '☆');
+    return out;
   }
+
+  function genTokenSecret() {
+    var arr = new Uint8Array(16);
+    crypto.getRandomValues(arr);
+    return Array.from(arr).map(function (b) { return b.toString(16).padStart(2, '0'); }).join('');
+  }
+
+  function reviewBadge(s) {
+    var bg = s === 'approved' ? 'rgba(42,124,111,0.20)' : (s === 'rejected' ? 'rgba(220,38,38,0.20)' : 'rgba(196,133,60,0.25)');
+    var color = s === 'approved' ? 'var(--teal)' : (s === 'rejected' ? 'var(--danger)' : 'var(--amber-light)');
+    return '<span style="background:' + bg + ';color:' + color + ';padding:2px 10px;border-radius:12px;font-size:0.75rem;font-weight:600;">' + _esc(s || 'pending') + '</span>';
+  }
+
+  function surveyBadge(s) {
+    var bg = s === 'active' ? 'rgba(42,124,111,0.20)' : (s === 'inactive' ? 'rgba(220,38,38,0.15)' : 'rgba(0,0,0,0.10)');
+    var color = s === 'active' ? 'var(--teal)' : (s === 'inactive' ? 'var(--danger)' : 'var(--text)');
+    return '<span style="background:' + bg + ';color:' + color + ';padding:2px 10px;border-radius:12px;font-size:0.75rem;font-weight:600;">' + _esc(s || 'draft') + '</span>';
+  }
+
+  function kpiCard(label, val, sub) {
+    return '<div style="flex:1;min-width:120px;padding:12px 16px;border:1px solid var(--cream-dark);border-radius:10px;background:var(--surface-card);">' +
+      '<div style="font-size:0.75rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.05em;font-weight:600;margin-bottom:4px;">' + label + '</div>' +
+      '<div style="font-size:1.5rem;font-weight:700;font-family:monospace;color:var(--text);">' + val + '</div>' +
+      (sub ? '<div style="font-size:0.8rem;color:var(--warm-gray);margin-top:2px;">' + sub + '</div>' : '') +
+    '</div>';
+  }
+
+  function loadReviews() {
+    return MastDB.query('cs_reviews').limitToLast(100).once()
+      .then(function (d) { reviewsData = d || {}; reviewsLoaded = true; })
+      .catch(function (err) { console.warn('[cs-reviews]', err && err.message); if (typeof showToast === 'function') showToast('Failed to load reviews', true); });
+  }
+
+  function loadSurveysAll() {
+    return Promise.all([
+      MastDB.query('cs_survey_questions').limitToLast(200).once().then(function (d) { questionsData = d || {}; }),
+      MastDB.query('cs_survey_groups').limitToLast(100).once().then(function (d) { groupsData = d || {}; }),
+      MastDB.query('cs_surveys').limitToLast(100).once().then(function (d) {
+        var cleaned = {};
+        Object.keys(d || {}).forEach(function (k) { var s = Object.assign({}, d[k]); delete s.tokenSecret; cleaned[k] = s; });
+        surveysDefData = cleaned;
+      }),
+      MastDB.query('cs_survey_triggers').limitToLast(100).once().then(function (d) { triggersData = d || {}; })
+    ])
+    .then(function () { surveysLoaded = true; })
+    .catch(function (err) { console.warn('[cs-surveys]', err && err.message); if (typeof showToast === 'function') showToast('Failed to load survey data', true); });
+  }
+
+  function loadPolicies() {
+    return MastDB.query('cs_policies').limitToLast(50).once()
+      .then(function (d) { policiesData = d || {}; policiesLoaded = true; })
+      .catch(function (err) { console.warn('[cs-faqs]', err && err.message); if (typeof showToast === 'function') showToast('Failed to load policies', true); });
+  }
+
+  function renderReviews() {
+    var tab = document.getElementById('csReviewsTab');
+    if (!tab) return;
+    if (!reviewsLoaded) { tab.innerHTML = '<div style="padding:40px;text-align:center;color:var(--warm-gray);">Loading reviews…</div>'; return; }
+    var all = Object.values(reviewsData);
+    var filtered = reviewsFilter === 'all' ? all.slice() : all.filter(function (r) { return r.status === reviewsFilter; });
+    filtered.sort(function (a, b) { return (b.createdAt || '') > (a.createdAt || '') ? 1 : -1; });
+    var pending = all.filter(function (r) { return r.status === 'pending'; }).length;
+    var approved = all.filter(function (r) { return r.status === 'approved'; }).length;
+    var ratedList = all.filter(function (r) { return r.rating; });
+    var avgRating = ratedList.length ? (ratedList.reduce(function (s, r) { return s + (r.rating || 0); }, 0) / ratedList.length) : 0;
+    var html = '<div style="padding:24px;">';
+    html += '<div class="section-header" style="margin-bottom:14px;"><h2 style="margin:0;">Reviews</h2><button class="btn btn-secondary btn-small" onclick="csReviewsRefresh()">Refresh</button></div>';
+    html += '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:18px;">';
+    html += kpiCard('Pending', String(pending), 'awaiting review');
+    html += kpiCard('Approved', String(approved), 'live on site');
+    html += kpiCard('Avg Rating', ratedList.length ? avgRating.toFixed(1) + ' ★' : '—', ratedList.length + ' rated');
+    html += kpiCard('Total', String(all.length), 'all statuses');
+    html += '</div>';
+    html += '<div style="display:flex;gap:8px;margin-bottom:16px;">';
+    ['pending', 'approved', 'rejected', 'all'].forEach(function (f) {
+      html += '<button class="view-tab' + (reviewsFilter === f ? ' active' : '') + '" onclick="csReviewsSetFilter(\'' + f + '\')">' + f + '</button>';
+    });
+    html += '</div>';
+    if (!filtered.length) {
+      html += '<div style="padding:32px;text-align:center;color:var(--warm-gray);border:1px dashed var(--cream-dark);border-radius:10px;">No ' + _esc(reviewsFilter) + ' reviews.</div>';
+    } else {
+      html += '<div style="display:flex;flex-direction:column;gap:10px;">';
+      filtered.forEach(function (r) {
+        html += '<div style="border:1px solid var(--cream-dark);border-radius:10px;padding:16px;background:var(--surface-card);">';
+        html += '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px;">';
+        html += '<span style="font-weight:600;">' + _esc(r.reviewerName || 'Anonymous') + '</span>';
+        html += '<span style="color:var(--amber-light);letter-spacing:0.04em;">' + starsHtml(r.rating) + '</span>';
+        if (r.reviewerEmail) html += '<span style="font-size:0.8rem;color:var(--warm-gray);">' + _esc(r.reviewerEmail) + '</span>';
+        html += '<span style="font-size:0.78rem;color:var(--warm-gray);margin-left:auto;">' + relativeTime(r.createdAt) + '</span>';
+        html += reviewBadge(r.status) + '</div>';
+        if (r.headline || r.productId) {
+          html += '<div style="font-size:0.85rem;margin-bottom:6px;">';
+          if (r.headline) html += '<strong>' + _esc(r.headline) + '</strong> ';
+          if (r.productId) html += '<span style="color:var(--warm-gray);">Product: ' + _esc(r.productId) + '</span>';
+          html += '</div>';
+        }
+        if (r.body) html += '<div style="font-size:0.9rem;margin-bottom:10px;">' + _esc(r.body) + '</div>';
+        html += '<div style="display:flex;gap:8px;flex-wrap:wrap;">';
+        if (r.status === 'pending') {
+          html += '<button class="btn btn-primary btn-small" onclick="csApproveReview(\'' + _esc(r.id) + '\')">Approve</button>';
+          html += '<button class="btn btn-secondary btn-small" onclick="csRejectReview(\'' + _esc(r.id) + '\')">Reject</button>';
+        } else if (r.status === 'rejected') {
+          html += '<button class="btn btn-secondary btn-small" onclick="csApproveReview(\'' + _esc(r.id) + '\')">Approve</button>';
+        } else if (r.status === 'approved') {
+          html += '<button class="btn btn-secondary btn-small" onclick="csRejectReview(\'' + _esc(r.id) + '\')">Unpublish</button>';
+        }
+        html += '<button class="btn btn-danger btn-small" style="margin-left:auto;" onclick="csDeleteReview(\'' + _esc(r.id) + '\')">Delete</button>';
+        html += '</div></div>';
+      });
+      html += '</div>';
+    }
+    html += '</div>';
+    tab.innerHTML = html;
+  }
+
+  async function approveReview(id) {
+    try { await MastDB.update('cs_reviews/' + id, { status: 'approved', updatedAt: nowIso() }); if (reviewsData[id]) reviewsData[id].status = 'approved'; showToast('Review approved'); renderReviews(); }
+    catch (err) { showToast('Failed: ' + (err && err.message), true); }
+  }
+  async function rejectReview(id) {
+    try { await MastDB.update('cs_reviews/' + id, { status: 'rejected', updatedAt: nowIso() }); if (reviewsData[id]) reviewsData[id].status = 'rejected'; showToast('Review rejected'); renderReviews(); }
+    catch (err) { showToast('Failed: ' + (err && err.message), true); }
+  }
+  async function deleteReview(id) {
+    if (!confirm('Delete this review? This cannot be undone.')) return;
+    try { await MastDB.remove('cs_reviews/' + id); delete reviewsData[id]; showToast('Review deleted'); renderReviews(); }
+    catch (err) { showToast('Failed: ' + (err && err.message), true); }
+  }
+
+  function renderSurveys() {
+    var tab = document.getElementById('csSurveysTab');
+    if (!tab) return;
+    if (!surveysLoaded) { tab.innerHTML = '<div style="padding:40px;text-align:center;color:var(--warm-gray);">Loading surveys…</div>'; return; }
+    var html = '<div style="padding:24px;">';
+    html += '<div class="section-header" style="margin-bottom:14px;"><h2 style="margin:0;">Surveys</h2><button class="btn btn-secondary btn-small" onclick="csSurveysRefresh()">Refresh</button></div>';
+    html += '<div class="view-tabs" style="margin-bottom:18px;">';
+    [['questions','Questions'],['groups','Groups'],['surveys','Surveys'],['triggers','Triggers']].forEach(function (p) {
+      html += '<button class="view-tab' + (surveysSubTab === p[0] ? ' active' : '') + '" onclick="csSurveysSwitchTab(\'' + p[0] + '\')">' + p[1] + '</button>';
+    });
+    html += '</div>';
+    if (surveysSubTab === 'questions')       html += renderQuestionsTab();
+    else if (surveysSubTab === 'groups')     html += renderGroupsTab();
+    else if (surveysSubTab === 'surveys')    html += renderSurveysDefTab();
+    else if (surveysSubTab === 'triggers')   html += renderTriggersTab();
+    if (sendLinkSurveyId) {
+      var sv = surveysDefData[sendLinkSurveyId];
+      html += '<div style="position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:1000;display:flex;align-items:center;justify-content:center;">';
+      html += '<div style="background:var(--bg);border-radius:12px;padding:24px;width:min(440px,90vw);box-shadow:0 8px 32px rgba(0,0,0,0.3);">';
+      html += '<h3 style="margin:0 0 4px;">Send Survey</h3><div style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:16px;">' + _esc(sv ? sv.name : sendLinkSurveyId) + '</div>';
+      html += '<div style="margin-bottom:12px;"><label style="display:block;font-weight:600;font-size:0.9rem;margin-bottom:4px;">Contact Email *</label><input id="csSendEmail" type="email" class="form-input" style="width:100%;box-sizing:border-box;" placeholder="customer@example.com"></div>';
+      html += '<div style="margin-bottom:18px;"><label style="display:block;font-weight:600;font-size:0.9rem;margin-bottom:4px;">Contact Name</label><input id="csSendName" type="text" class="form-input" style="width:100%;box-sizing:border-box;" placeholder="Optional"></div>';
+      html += '<div style="display:flex;gap:8px;justify-content:flex-end;"><button class="btn btn-secondary" onclick="csSendLinkCancel()">Cancel</button><button class="btn btn-primary" onclick="csSendLinkSubmit()">Send Invite</button></div>';
+      html += '</div></div>';
+    }
+    html += '</div>';
+    tab.innerHTML = html;
+  }
+
+  function renderQuestionsTab() {
+    var items = Object.values(questionsData).sort(function (a, b) { return (a.createdAt || '') < (b.createdAt || '') ? -1 : 1; });
+    var html = showAddQuestion ? renderQuestionForm(null) : '<button class="btn btn-primary btn-small" onclick="csShowAddQuestion()" style="margin-bottom:14px;">+ Add Question</button>';
+    if (!items.length && !showAddQuestion) return html + '<div style="padding:24px;text-align:center;color:var(--warm-gray);border:1px dashed var(--cream-dark);border-radius:10px;">No questions yet.</div>';
+    html += '<div style="display:flex;flex-direction:column;gap:8px;">';
+    items.forEach(function (q) {
+      if (questionEditId === q.id) { html += renderQuestionForm(q); return; }
+      html += '<div style="border:1px solid var(--cream-dark);border-radius:8px;padding:12px 16px;background:var(--surface-card);display:flex;align-items:center;gap:10px;">';
+      html += '<div style="flex:1;"><span style="font-weight:600;">' + _esc(q.text) + '</span><span style="margin-left:8px;font-size:0.78rem;color:var(--warm-gray);">[' + _esc(q.type) + ']</span>';
+      if (q.isStock) html += '<span style="margin-left:8px;background:rgba(42,124,111,0.15);color:var(--teal);padding:1px 8px;border-radius:10px;font-size:0.75rem;">stock</span>';
+      if (q.type === 'multiple_choice' && q.options && q.options.length) html += '<div style="font-size:0.8rem;color:var(--warm-gray);margin-top:3px;">Options: ' + q.options.map(function (o) { return _esc(o); }).join(', ') + '</div>';
+      html += '</div><button class="btn btn-secondary btn-small" onclick="csEditQuestion(\'' + _esc(q.id) + '\')">Edit</button>';
+      html += '<button class="btn btn-danger btn-small" onclick="csDeleteQuestion(\'' + _esc(q.id) + '\')">Delete</button></div>';
+    });
+    return html + '</div>';
+  }
+
+  function renderQuestionForm(q) {
+    var isEdit = !!q, id = isEdit ? _esc(q.id) : '', typeVal = isEdit ? (q.type || 'open_text') : 'open_text';
+    var optVal = isEdit && q.options ? q.options.join(', ') : '';
+    var html = '<div style="border:2px solid var(--amber-light);border-radius:10px;padding:16px;background:var(--surface-card);margin-bottom:12px;">';
+    html += '<h4 style="margin:0 0 12px;">' + (isEdit ? 'Edit Question' : 'New Question') + '</h4>';
+    html += '<div style="margin-bottom:10px;"><label style="font-weight:600;font-size:0.88rem;display:block;margin-bottom:4px;">Question Text *</label>';
+    html += '<input id="csQText" class="form-input" style="width:100%;box-sizing:border-box;" value="' + (isEdit ? _esc(q.text || '') : '') + '" placeholder="Enter question text"></div>';
+    html += '<div style="margin-bottom:10px;"><label style="font-weight:600;font-size:0.88rem;display:block;margin-bottom:4px;">Type</label>';
+    html += '<select id="csQType" class="form-select" style="width:100%;" onchange="csQTypeChange(this.value)">';
+    ['rating','NPS','yes_no','multiple_choice','open_text'].forEach(function (t) { html += '<option value="' + t + '"' + (typeVal === t ? ' selected' : '') + '>' + t + '</option>'; });
+    html += '</select></div>';
+    html += '<div id="csQOptionsRow" style="margin-bottom:10px;' + (typeVal === 'multiple_choice' ? '' : 'display:none;') + '">';
+    html += '<label style="font-weight:600;font-size:0.88rem;display:block;margin-bottom:4px;">Options (comma-separated)</label>';
+    html += '<input id="csQOptions" class="form-input" style="width:100%;box-sizing:border-box;" value="' + _esc(optVal) + '" placeholder="Option A, Option B"></div>';
+    html += '<div style="display:flex;gap:8px;"><button class="btn btn-primary btn-small" onclick="csSaveQuestion(\'' + id + '\')">' + (isEdit ? 'Save' : 'Add') + '</button>';
+    html += '<button class="btn btn-secondary btn-small" onclick="csCancelQuestion()">Cancel</button></div></div>';
+    return html;
+  }
+
+  async function saveQuestion(id) {
+    var text = ((document.getElementById('csQText') || {}).value || '').trim();
+    var type = (document.getElementById('csQType') || {}).value || 'open_text';
+    var optRaw = (document.getElementById('csQOptions') || {}).value || '';
+    if (!text) { showToast('Question text is required', true); return; }
+    var options = type === 'multiple_choice' ? optRaw.split(',').map(function (o) { return o.trim(); }).filter(Boolean) : [];
+    try {
+      if (id) { await MastDB.update('cs_survey_questions/' + id, { text: text, type: type, options: options, updatedAt: nowIso() }); if (questionsData[id]) Object.assign(questionsData[id], { text: text, type: type, options: options }); questionEditId = null; showToast('Question updated'); }
+      else { var nk = MastDB.newKey('cs_survey_questions'); var doc = { id: nk, text: text, type: type, options: options, isStock: false, createdAt: nowIso(), updatedAt: nowIso() }; await MastDB.set('cs_survey_questions/' + nk, doc); questionsData[nk] = doc; showAddQuestion = false; showToast('Question added'); }
+      renderSurveys();
+    } catch (err) { showToast('Failed: ' + (err && err.message), true); }
+  }
+  async function deleteQuestion(id) {
+    if (!confirm('Delete this question?')) return;
+    try { await MastDB.remove('cs_survey_questions/' + id); delete questionsData[id]; showToast('Question deleted'); renderSurveys(); }
+    catch (err) { showToast('Failed: ' + (err && err.message), true); }
+  }
+
+  function renderGroupsTab() {
+    var items = Object.values(groupsData).sort(function (a, b) { return (a.createdAt || '') < (b.createdAt || '') ? -1 : 1; });
+    var html = showAddGroup ? renderGroupForm(null) : '<button class="btn btn-primary btn-small" onclick="csShowAddGroup()" style="margin-bottom:14px;">+ Add Group</button>';
+    if (!items.length && !showAddGroup) return html + '<div style="padding:24px;text-align:center;color:var(--warm-gray);border:1px dashed var(--cream-dark);border-radius:10px;">No groups yet.</div>';
+    html += '<div style="display:flex;flex-direction:column;gap:8px;">';
+    items.forEach(function (g) {
+      if (groupEditId === g.id) { html += renderGroupForm(g); return; }
+      var qc = (g.questionIds || []).length;
+      html += '<div style="border:1px solid var(--cream-dark);border-radius:8px;padding:12px 16px;background:var(--surface-card);display:flex;align-items:center;gap:10px;">';
+      html += '<div style="flex:1;"><span style="font-weight:600;">' + _esc(g.name) + '</span>';
+      if (g.eventType) html += '<span style="margin-left:8px;font-size:0.78rem;color:var(--warm-gray);">' + _esc(g.eventType) + '</span>';
+      html += '<span style="margin-left:8px;font-size:0.78rem;color:var(--warm-gray);">' + qc + ' question' + (qc !== 1 ? 's' : '') + '</span>';
+      if (g.isActive === false) html += '<span style="margin-left:8px;background:rgba(220,38,38,0.15);color:var(--danger);padding:1px 8px;border-radius:10px;font-size:0.75rem;">inactive</span>';
+      html += '</div><button class="btn btn-secondary btn-small" onclick="csEditGroup(\'' + _esc(g.id) + '\')">Edit</button>';
+      html += '<button class="btn btn-danger btn-small" onclick="csDeleteGroup(\'' + _esc(g.id) + '\')">Delete</button></div>';
+    });
+    return html + '</div>';
+  }
+
+  function renderGroupForm(g) {
+    var isEdit = !!g, id = isEdit ? _esc(g.id) : '', selectedIds = isEdit && g.questionIds ? g.questionIds : [];
+    var qItems = Object.values(questionsData);
+    var html = '<div style="border:2px solid var(--amber-light);border-radius:10px;padding:16px;background:var(--surface-card);margin-bottom:12px;">';
+    html += '<h4 style="margin:0 0 12px;">' + (isEdit ? 'Edit Group' : 'New Group') + '</h4>';
+    html += '<div style="margin-bottom:10px;"><label style="font-weight:600;font-size:0.88rem;display:block;margin-bottom:4px;">Name *</label>';
+    html += '<input id="csGName" class="form-input" style="width:100%;box-sizing:border-box;" value="' + (isEdit ? _esc(g.name || '') : '') + '" placeholder="e.g. Post-Purchase Survey"></div>';
+    html += '<div style="margin-bottom:10px;"><label style="font-weight:600;font-size:0.88rem;display:block;margin-bottom:4px;">Event Type</label>';
+    html += '<input id="csGEventType" class="form-input" style="width:100%;box-sizing:border-box;" value="' + (isEdit ? _esc(g.eventType || '') : '') + '" placeholder="e.g. order_complete"></div>';
+    html += '<div style="margin-bottom:12px;"><label style="font-weight:600;font-size:0.88rem;display:block;margin-bottom:6px;">Questions</label>';
+    html += '<div style="max-height:160px;overflow-y:auto;border:1px solid var(--cream-dark);border-radius:6px;padding:8px;background:var(--bg);">';
+    if (!qItems.length) { html += '<div style="font-size:0.85rem;color:var(--warm-gray);">No questions — add some first.</div>'; }
+    else { qItems.forEach(function (q) { html += '<label style="display:flex;align-items:center;gap:8px;padding:3px 0;font-size:0.88rem;cursor:pointer;"><input type="checkbox" name="csGQIds" value="' + _esc(q.id) + '"' + (selectedIds.indexOf(q.id) >= 0 ? ' checked' : '') + '>' + _esc(q.text) + ' <span style="color:var(--warm-gray);font-size:0.75rem;">[' + _esc(q.type) + ']</span></label>'; }); }
+    html += '</div></div>';
+    html += '<div style="display:flex;gap:8px;"><button class="btn btn-primary btn-small" onclick="csSaveGroup(\'' + id + '\')">' + (isEdit ? 'Save' : 'Add') + '</button>';
+    html += '<button class="btn btn-secondary btn-small" onclick="csCancelGroup()">Cancel</button></div></div>';
+    return html;
+  }
+
+  async function saveGroup(id) {
+    var name = ((document.getElementById('csGName') || {}).value || '').trim();
+    var et = ((document.getElementById('csGEventType') || {}).value || '').trim();
+    if (!name) { showToast('Group name is required', true); return; }
+    var qIds = []; document.querySelectorAll('input[name="csGQIds"]:checked').forEach(function (cb) { qIds.push(cb.value); });
+    try {
+      if (id) { await MastDB.update('cs_survey_groups/' + id, { name: name, eventType: et, questionIds: qIds, updatedAt: nowIso() }); if (groupsData[id]) Object.assign(groupsData[id], { name: name, eventType: et, questionIds: qIds }); groupEditId = null; showToast('Group updated'); }
+      else { var nk = MastDB.newKey('cs_survey_groups'); var doc = { id: nk, name: name, eventType: et, questionIds: qIds, isActive: true, createdAt: nowIso(), updatedAt: nowIso() }; await MastDB.set('cs_survey_groups/' + nk, doc); groupsData[nk] = doc; showAddGroup = false; showToast('Group added'); }
+      renderSurveys();
+    } catch (err) { showToast('Failed: ' + (err && err.message), true); }
+  }
+  async function deleteGroup(id) {
+    if (!confirm('Delete this group?')) return;
+    try { await MastDB.remove('cs_survey_groups/' + id); delete groupsData[id]; showToast('Group deleted'); renderSurveys(); }
+    catch (err) { showToast('Failed: ' + (err && err.message), true); }
+  }
+
+  function renderSurveysDefTab() {
+    var items = Object.values(surveysDefData).sort(function (a, b) { return (b.createdAt || '') > (a.createdAt || '') ? 1 : -1; });
+    var html = showAddSurvey ? renderSurveyForm(null) : '<button class="btn btn-primary btn-small" onclick="csShowAddSurvey()" style="margin-bottom:14px;">+ New Survey</button>';
+    if (!items.length && !showAddSurvey) return html + '<div style="padding:24px;text-align:center;color:var(--warm-gray);border:1px dashed var(--cream-dark);border-radius:10px;">No surveys yet.</div>';
+    html += '<div style="display:flex;flex-direction:column;gap:8px;">';
+    items.forEach(function (sv) {
+      if (surveyEditId === sv.id) { html += renderSurveyForm(sv); return; }
+      var grp = groupsData[sv.groupId];
+      html += '<div style="border:1px solid var(--cream-dark);border-radius:8px;padding:12px 16px;background:var(--surface-card);">';
+      html += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;"><span style="font-weight:600;">' + _esc(sv.name) + '</span>' + surveyBadge(sv.status);
+      html += '<span style="font-size:0.78rem;color:var(--warm-gray);margin-left:auto;">' + relativeTime(sv.createdAt) + '</span></div>';
+      html += '<div style="font-size:0.83rem;color:var(--warm-gray);margin-bottom:10px;">Group: ' + _esc(grp ? grp.name : (sv.groupId || 'none')) + '</div>';
+      html += '<div style="display:flex;gap:8px;flex-wrap:wrap;">';
+      html += '<button class="btn btn-primary btn-small" onclick="csSendLink(\'' + _esc(sv.id) + '\')">Send Survey</button>';
+      html += '<button class="btn btn-secondary btn-small" onclick="csEditSurvey(\'' + _esc(sv.id) + '\')">Edit</button>';
+      html += '<button class="btn btn-danger btn-small" onclick="csDeleteSurvey(\'' + _esc(sv.id) + '\')">Delete</button></div></div>';
+    });
+    return html + '</div>';
+  }
+
+  function renderSurveyForm(sv) {
+    var isEdit = !!sv, id = isEdit ? _esc(sv.id) : '', statusVal = isEdit ? (sv.status || 'draft') : 'draft';
+    var html = '<div style="border:2px solid var(--amber-light);border-radius:10px;padding:16px;background:var(--surface-card);margin-bottom:12px;">';
+    html += '<h4 style="margin:0 0 12px;">' + (isEdit ? 'Edit Survey' : 'New Survey') + '</h4>';
+    html += '<div style="margin-bottom:10px;"><label style="font-weight:600;font-size:0.88rem;display:block;margin-bottom:4px;">Name *</label>';
+    html += '<input id="csSvName" class="form-input" style="width:100%;box-sizing:border-box;" value="' + (isEdit ? _esc(sv.name || '') : '') + '" placeholder="Survey name"></div>';
+    html += '<div style="margin-bottom:10px;"><label style="font-weight:600;font-size:0.88rem;display:block;margin-bottom:4px;">Group *</label>';
+    html += '<select id="csSvGroup" class="form-select" style="width:100%;"><option value="">— select group —</option>';
+    Object.values(groupsData).forEach(function (g) { html += '<option value="' + _esc(g.id) + '"' + (isEdit && sv.groupId === g.id ? ' selected' : '') + '>' + _esc(g.name) + '</option>'; });
+    html += '</select></div>';
+    html += '<div style="margin-bottom:12px;"><label style="font-weight:600;font-size:0.88rem;display:block;margin-bottom:4px;">Status</label>';
+    html += '<select id="csSvStatus" class="form-select" style="width:100%;">';
+    ['draft','active','inactive'].forEach(function (s) { html += '<option value="' + s + '"' + (statusVal === s ? ' selected' : '') + '>' + s + '</option>'; });
+    html += '</select></div>';
+    html += '<div style="display:flex;gap:8px;"><button class="btn btn-primary btn-small" onclick="csSaveSurvey(\'' + id + '\')">' + (isEdit ? 'Save' : 'Create') + '</button>';
+    html += '<button class="btn btn-secondary btn-small" onclick="csCancelSurvey()">Cancel</button></div></div>';
+    return html;
+  }
+
+  async function saveSurvey(id) {
+    var name = ((document.getElementById('csSvName') || {}).value || '').trim();
+    var groupId = (document.getElementById('csSvGroup') || {}).value || '';
+    var status = (document.getElementById('csSvStatus') || {}).value || 'draft';
+    if (!name) { showToast('Survey name is required', true); return; }
+    if (!groupId) { showToast('Please select a group', true); return; }
+    try {
+      if (id) { await MastDB.update('cs_surveys/' + id, { name: name, groupId: groupId, status: status, updatedAt: nowIso() }); if (surveysDefData[id]) Object.assign(surveysDefData[id], { name: name, groupId: groupId, status: status }); surveyEditId = null; showToast('Survey updated'); }
+      else { var nk = MastDB.newKey('cs_surveys'); var ts = genTokenSecret(); var doc = { id: nk, name: name, groupId: groupId, status: status, tokenSecret: ts, createdAt: nowIso(), updatedAt: nowIso() }; await MastDB.set('cs_surveys/' + nk, doc); var cached = Object.assign({}, doc); delete cached.tokenSecret; surveysDefData[nk] = cached; showAddSurvey = false; showToast('Survey created'); }
+      renderSurveys();
+    } catch (err) { showToast('Failed: ' + (err && err.message), true); }
+  }
+  async function deleteSurvey(id) {
+    if (!confirm('Delete this survey? Existing responses will remain.')) return;
+    try { await MastDB.remove('cs_surveys/' + id); delete surveysDefData[id]; showToast('Survey deleted'); renderSurveys(); }
+    catch (err) { showToast('Failed: ' + (err && err.message), true); }
+  }
+  async function sendSurveyLink() {
+    var email = ((document.getElementById('csSendEmail') || {}).value || '').trim();
+    var contactName = ((document.getElementById('csSendName') || {}).value || '').trim();
+    if (!email) { showToast('Email is required', true); return; }
+    try {
+      var fn = firebase.functions().httpsCallable('generateSurveyLink');
+      await fn({ tenantId: window.TENANT_ID, surveyId: sendLinkSurveyId, contactEmail: email, contactName: contactName || null });
+      sendLinkSurveyId = null; showToast('Survey invite sent!'); renderSurveys();
+    } catch (err) { showToast('Failed to send: ' + (err && err.message), true); }
+  }
+
+  function renderTriggersTab() {
+    var items = Object.values(triggersData).sort(function (a, b) { return (a.createdAt || '') < (b.createdAt || '') ? -1 : 1; });
+    var html = showAddTrigger ? renderTriggerForm(null) : '<button class="btn btn-primary btn-small" onclick="csShowAddTrigger()" style="margin-bottom:14px;">+ Add Trigger</button>';
+    if (!items.length && !showAddTrigger) return html + '<div style="padding:24px;text-align:center;color:var(--warm-gray);border:1px dashed var(--cream-dark);border-radius:10px;">No triggers yet.</div>';
+    html += '<div style="display:flex;flex-direction:column;gap:8px;">';
+    items.forEach(function (t) {
+      if (triggerEditId === t.id) { html += renderTriggerForm(t); return; }
+      var sv = surveysDefData[t.surveyId], isActive = t.isActive !== false;
+      html += '<div style="border:1px solid var(--cream-dark);border-radius:8px;padding:12px 16px;background:var(--surface-card);display:flex;align-items:center;gap:10px;">';
+      html += '<div style="flex:1;"><span style="font-weight:600;">' + _esc(t.eventType) + '</span>';
+      html += '<span style="margin-left:8px;font-size:0.83rem;color:var(--warm-gray);">→ ' + _esc(sv ? sv.name : (t.surveyId || '—')) + '</span>';
+      if (t.delayHours) html += '<span style="margin-left:8px;font-size:0.78rem;color:var(--warm-gray);">' + _esc(String(t.delayHours)) + 'h delay</span>';
+      html += '</div>';
+      html += '<span style="background:' + (isActive ? 'rgba(42,124,111,0.15)' : 'rgba(0,0,0,0.10)') + ';color:' + (isActive ? 'var(--teal)' : 'var(--warm-gray)') + ';padding:2px 10px;border-radius:12px;font-size:0.75rem;">' + (isActive ? 'active' : 'inactive') + '</span>';
+      html += '<button class="btn btn-secondary btn-small" onclick="csEditTrigger(\'' + _esc(t.id) + '\')">Edit</button>';
+      html += '<button class="btn btn-danger btn-small" onclick="csDeleteTrigger(\'' + _esc(t.id) + '\')">Delete</button></div>';
+    });
+    return html + '</div>';
+  }
+
+  function renderTriggerForm(t) {
+    var isEdit = !!t, id = isEdit ? _esc(t.id) : '', isActive = isEdit ? (t.isActive !== false) : true;
+    var html = '<div style="border:2px solid var(--amber-light);border-radius:10px;padding:16px;background:var(--surface-card);margin-bottom:12px;">';
+    html += '<h4 style="margin:0 0 12px;">' + (isEdit ? 'Edit Trigger' : 'New Trigger') + '</h4>';
+    html += '<div style="margin-bottom:10px;"><label style="font-weight:600;font-size:0.88rem;display:block;margin-bottom:4px;">Event Type *</label>';
+    html += '<input id="csTEventType" class="form-input" style="width:100%;box-sizing:border-box;" value="' + (isEdit ? _esc(t.eventType || '') : '') + '" placeholder="e.g. order_complete"></div>';
+    html += '<div style="margin-bottom:10px;"><label style="font-weight:600;font-size:0.88rem;display:block;margin-bottom:4px;">Survey *</label>';
+    html += '<select id="csTSurveyId" class="form-select" style="width:100%;"><option value="">— select survey —</option>';
+    Object.values(surveysDefData).forEach(function (sv) { html += '<option value="' + _esc(sv.id) + '"' + (isEdit && t.surveyId === sv.id ? ' selected' : '') + '>' + _esc(sv.name) + '</option>'; });
+    html += '</select></div>';
+    html += '<div style="margin-bottom:10px;"><label style="font-weight:600;font-size:0.88rem;display:block;margin-bottom:4px;">Delay (hours)</label>';
+    html += '<input id="csTDelay" type="number" min="0" class="form-input" style="width:100%;box-sizing:border-box;" value="' + (isEdit ? _esc(String(t.delayHours || 0)) : '0') + '"></div>';
+    html += '<div style="margin-bottom:12px;display:flex;align-items:center;gap:8px;"><input type="checkbox" id="csTActive"' + (isActive ? ' checked' : '') + '><label for="csTActive" style="font-size:0.88rem;">Active</label></div>';
+    html += '<div style="display:flex;gap:8px;"><button class="btn btn-primary btn-small" onclick="csSaveTrigger(\'' + id + '\')">' + (isEdit ? 'Save' : 'Add') + '</button>';
+    html += '<button class="btn btn-secondary btn-small" onclick="csCancelTrigger()">Cancel</button></div></div>';
+    return html;
+  }
+
+  async function saveTrigger(id) {
+    var et = ((document.getElementById('csTEventType') || {}).value || '').trim();
+    var svId = (document.getElementById('csTSurveyId') || {}).value || '';
+    var delay = Number((document.getElementById('csTDelay') || {}).value) || 0;
+    var active = !!((document.getElementById('csTActive') || {}).checked);
+    if (!et) { showToast('Event type is required', true); return; }
+    if (!svId) { showToast('Please select a survey', true); return; }
+    try {
+      if (id) { await MastDB.update('cs_survey_triggers/' + id, { eventType: et, surveyId: svId, delayHours: delay, isActive: active, updatedAt: nowIso() }); if (triggersData[id]) Object.assign(triggersData[id], { eventType: et, surveyId: svId, delayHours: delay, isActive: active }); triggerEditId = null; showToast('Trigger updated'); }
+      else { var nk = MastDB.newKey('cs_survey_triggers'); var doc = { id: nk, eventType: et, surveyId: svId, delayHours: delay, isActive: active, createdAt: nowIso(), updatedAt: nowIso() }; await MastDB.set('cs_survey_triggers/' + nk, doc); triggersData[nk] = doc; showAddTrigger = false; showToast('Trigger added'); }
+      renderSurveys();
+    } catch (err) { showToast('Failed: ' + (err && err.message), true); }
+  }
+  async function deleteTrigger(id) {
+    if (!confirm('Delete this trigger?')) return;
+    try { await MastDB.remove('cs_survey_triggers/' + id); delete triggersData[id]; showToast('Trigger deleted'); renderSurveys(); }
+    catch (err) { showToast('Failed: ' + (err && err.message), true); }
+  }
+
+  function renderFaqs() {
+    var tab = document.getElementById('csFaqsTab');
+    if (!tab) return;
+    if (!policiesLoaded) { tab.innerHTML = '<div style="padding:40px;text-align:center;color:var(--warm-gray);">Loading policies…</div>'; return; }
+    var items = Object.values(policiesData).sort(function (a, b) { return (a.name || '') < (b.name || '') ? -1 : 1; });
+    var html = '<div style="padding:24px;">';
+    html += '<div class="section-header" style="margin-bottom:14px;"><h2 style="margin:0;">FAQs &amp; Policies</h2><button class="btn btn-secondary btn-small" onclick="csFaqsRefresh()">Refresh</button></div>';
+    html += showAddPolicy ? renderPolicyForm(null) : '<button class="btn btn-primary btn-small" onclick="csShowAddPolicy()" style="margin-bottom:14px;">+ New Policy</button>';
+    if (!items.length && !showAddPolicy) {
+      html += '<div style="padding:24px;text-align:center;color:var(--warm-gray);border:1px dashed var(--cream-dark);border-radius:10px;">No policies yet. Create one to show on your storefront.</div>';
+    } else {
+      html += '<div style="display:flex;flex-direction:column;gap:10px;">';
+      items.forEach(function (p) {
+        if (policyEditId === p.id) { html += renderPolicyForm(p); return; }
+        html += '<div style="border:1px solid var(--cream-dark);border-radius:10px;padding:14px 16px;background:var(--surface-card);">';
+        html += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">';
+        html += '<span style="font-weight:600;">' + _esc(p.name) + '</span>';
+        html += '<span style="font-size:0.8rem;color:var(--warm-gray);font-family:monospace;">/' + _esc(p.slug || '') + '</span>';
+        html += '<span style="margin-left:auto;background:' + (p.storefrontEnabled ? 'rgba(42,124,111,0.15)' : 'rgba(0,0,0,0.10)') + ';color:' + (p.storefrontEnabled ? 'var(--teal)' : 'var(--warm-gray)') + ';padding:2px 10px;border-radius:12px;font-size:0.75rem;">' + (p.storefrontEnabled ? 'live' : 'hidden') + '</span></div>';
+        if (p.contentHtml) { var preview = p.contentHtml.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 100); html += '<div style="font-size:0.82rem;color:var(--warm-gray);margin-bottom:10px;">' + _esc(preview) + (preview.length === 100 ? '…' : '') + '</div>'; }
+        html += '<div style="display:flex;gap:8px;flex-wrap:wrap;">';
+        html += '<button class="btn btn-secondary btn-small" onclick="csTogglePolicyStorefront(\'' + _esc(p.id) + '\',' + (p.storefrontEnabled ? 'false' : 'true') + ')">' + (p.storefrontEnabled ? 'Hide from Storefront' : 'Show on Storefront') + '</button>';
+        html += '<button class="btn btn-secondary btn-small" onclick="csEditPolicy(\'' + _esc(p.id) + '\')">Edit</button>';
+        html += '<button class="btn btn-danger btn-small" onclick="csDeletePolicy(\'' + _esc(p.id) + '\')">Delete</button></div></div>';
+      });
+      html += '</div>';
+    }
+    html += '</div>';
+    tab.innerHTML = html;
+  }
+
+  function renderPolicyForm(p) {
+    var isEdit = !!p, id = isEdit ? _esc(p.id) : '';
+    var html = '<div style="border:2px solid var(--amber-light);border-radius:10px;padding:16px;background:var(--surface-card);margin-bottom:12px;">';
+    html += '<h4 style="margin:0 0 12px;">' + (isEdit ? 'Edit Policy' : 'New Policy') + '</h4>';
+    html += '<div style="margin-bottom:10px;"><label style="font-weight:600;font-size:0.88rem;display:block;margin-bottom:4px;">Name *</label>';
+    html += '<input id="csPName" class="form-input" style="width:100%;box-sizing:border-box;" value="' + (isEdit ? _esc(p.name || '') : '') + '" placeholder="e.g. Return Policy" oninput="csAutofillPolicySlug(this.value,' + (isEdit ? 'false' : 'true') + ')"></div>';
+    html += '<div style="margin-bottom:10px;"><label style="font-weight:600;font-size:0.88rem;display:block;margin-bottom:4px;">Slug</label>';
+    html += '<input id="csPSlug" class="form-input" style="width:100%;box-sizing:border-box;" value="' + (isEdit ? _esc(p.slug || '') : '') + '" placeholder="return-policy"></div>';
+    html += '<div style="margin-bottom:10px;"><label style="font-weight:600;font-size:0.88rem;display:block;margin-bottom:4px;">Content (HTML)</label>';
+    html += '<textarea id="csPContent" class="form-input" rows="10" style="width:100%;box-sizing:border-box;font-family:monospace;font-size:0.82rem;">' + (isEdit ? _esc(p.contentHtml || '') : '') + '</textarea></div>';
+    html += '<div style="margin-bottom:14px;display:flex;align-items:center;gap:8px;"><input type="checkbox" id="csPStorefront"' + (isEdit && p.storefrontEnabled ? ' checked' : '') + '><label for="csPStorefront" style="font-size:0.88rem;cursor:pointer;">Show on storefront</label></div>';
+    html += '<div style="display:flex;gap:8px;"><button class="btn btn-primary btn-small" onclick="csSavePolicy(\'' + id + '\')">' + (isEdit ? 'Save' : 'Create') + '</button>';
+    html += '<button class="btn btn-secondary btn-small" onclick="csCancelPolicy()">Cancel</button></div></div>';
+    return html;
+  }
+
+  async function savePolicy(id) {
+    var name = ((document.getElementById('csPName') || {}).value || '').trim();
+    var slug = ((document.getElementById('csPSlug') || {}).value || '').trim();
+    var content = (document.getElementById('csPContent') || {}).value || '';
+    var sf = !!((document.getElementById('csPStorefront') || {}).checked);
+    if (!name) { showToast('Policy name is required', true); return; }
+    var slugVal = slug || name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    try {
+      if (id) { await MastDB.update('cs_policies/' + id, { name: name, slug: slugVal, contentHtml: content, storefrontEnabled: sf, updatedAt: nowIso() }); if (policiesData[id]) Object.assign(policiesData[id], { name: name, slug: slugVal, contentHtml: content, storefrontEnabled: sf }); policyEditId = null; showToast('Policy updated'); }
+      else { var nk = MastDB.newKey('cs_policies'); var doc = { id: nk, name: name, slug: slugVal, contentHtml: content, storefrontEnabled: sf, createdAt: nowIso(), updatedAt: nowIso() }; await MastDB.set('cs_policies/' + nk, doc); policiesData[nk] = doc; showAddPolicy = false; showToast('Policy created'); }
+      renderFaqs();
+    } catch (err) { showToast('Failed: ' + (err && err.message), true); }
+  }
+  async function togglePolicyStorefront(id, enabled) {
+    try { await MastDB.update('cs_policies/' + id, { storefrontEnabled: enabled, updatedAt: nowIso() }); if (policiesData[id]) policiesData[id].storefrontEnabled = enabled; showToast(enabled ? 'Policy now live on storefront' : 'Policy hidden from storefront'); renderFaqs(); }
+    catch (err) { showToast('Failed: ' + (err && err.message), true); }
+  }
+  async function deletePolicy(id) {
+    if (!confirm('Delete this policy? This cannot be undone.')) return;
+    try { await MastDB.remove('cs_policies/' + id); delete policiesData[id]; showToast('Policy deleted'); renderFaqs(); }
+    catch (err) { showToast('Failed: ' + (err && err.message), true); }
+  }
+
+  window.csReviewsRefresh = function () { reviewsLoaded = false; renderReviews(); loadReviews().then(renderReviews); };
+  window.csReviewsSetFilter = function (f) { reviewsFilter = f; renderReviews(); };
+  window.csApproveReview = approveReview;
+  window.csRejectReview = rejectReview;
+  window.csDeleteReview = deleteReview;
+  window.csSurveysRefresh = function () { surveysLoaded = false; renderSurveys(); loadSurveysAll().then(renderSurveys); };
+  window.csSurveysSwitchTab = function (t) { surveysSubTab = t; renderSurveys(); };
+  window.csShowAddQuestion = function () { showAddQuestion = true; questionEditId = null; renderSurveys(); };
+  window.csEditQuestion = function (id) { questionEditId = id; showAddQuestion = false; renderSurveys(); };
+  window.csSaveQuestion = saveQuestion;
+  window.csDeleteQuestion = deleteQuestion;
+  window.csCancelQuestion = function () { showAddQuestion = false; questionEditId = null; renderSurveys(); };
+  window.csQTypeChange = function (v) { var r = document.getElementById('csQOptionsRow'); if (r) r.style.display = v === 'multiple_choice' ? '' : 'none'; };
+  window.csShowAddGroup = function () { showAddGroup = true; groupEditId = null; renderSurveys(); };
+  window.csEditGroup = function (id) { groupEditId = id; showAddGroup = false; renderSurveys(); };
+  window.csSaveGroup = saveGroup;
+  window.csDeleteGroup = deleteGroup;
+  window.csCancelGroup = function () { showAddGroup = false; groupEditId = null; renderSurveys(); };
+  window.csShowAddSurvey = function () { showAddSurvey = true; surveyEditId = null; renderSurveys(); };
+  window.csEditSurvey = function (id) { surveyEditId = id; showAddSurvey = false; renderSurveys(); };
+  window.csSaveSurvey = saveSurvey;
+  window.csDeleteSurvey = deleteSurvey;
+  window.csCancelSurvey = function () { showAddSurvey = false; surveyEditId = null; renderSurveys(); };
+  window.csSendLink = function (id) { sendLinkSurveyId = id; renderSurveys(); };
+  window.csSendLinkCancel = function () { sendLinkSurveyId = null; renderSurveys(); };
+  window.csSendLinkSubmit = sendSurveyLink;
+  window.csShowAddTrigger = function () { showAddTrigger = true; triggerEditId = null; renderSurveys(); };
+  window.csEditTrigger = function (id) { triggerEditId = id; showAddTrigger = false; renderSurveys(); };
+  window.csSaveTrigger = saveTrigger;
+  window.csDeleteTrigger = deleteTrigger;
+  window.csCancelTrigger = function () { showAddTrigger = false; triggerEditId = null; renderSurveys(); };
+  window.csFaqsRefresh = function () { policiesLoaded = false; renderFaqs(); loadPolicies().then(renderFaqs); };
+  window.csShowAddPolicy = function () { showAddPolicy = true; policyEditId = null; renderFaqs(); };
+  window.csEditPolicy = function (id) { policyEditId = id; showAddPolicy = false; renderFaqs(); };
+  window.csSavePolicy = savePolicy;
+  window.csDeletePolicy = deletePolicy;
+  window.csCancelPolicy = function () { showAddPolicy = false; policyEditId = null; renderFaqs(); };
+  window.csTogglePolicyStorefront = togglePolicyStorefront;
+  window.csAutofillPolicySlug = function (name, doIt) { if (!doIt) return; var el = document.getElementById('csPSlug'); if (el) el.value = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''); };
 
   // ============================================================
   // Actions — data entry points
@@ -743,22 +1269,22 @@
       'cs-surveys': {
         tab: 'csSurveysTab',
         setup: function() {
-          var tab = document.getElementById('csSurveysTab');
-          if (tab) tab.innerHTML = renderStub('Surveys');
+          if (!surveysLoaded) { renderSurveys(); loadSurveysAll().then(renderSurveys); }
+          else { renderSurveys(); }
         }
       },
       'cs-reviews': {
         tab: 'csReviewsTab',
         setup: function() {
-          var tab = document.getElementById('csReviewsTab');
-          if (tab) tab.innerHTML = renderStub('Reviews');
+          if (!reviewsLoaded) { renderReviews(); loadReviews().then(renderReviews); }
+          else { renderReviews(); }
         }
       },
       'cs-faqs': {
         tab: 'csFaqsTab',
         setup: function() {
-          var tab = document.getElementById('csFaqsTab');
-          if (tab) tab.innerHTML = renderStub('FAQs');
+          if (!policiesLoaded) { renderFaqs(); loadPolicies().then(renderFaqs); }
+          else { renderFaqs(); }
         }
       }
     },
@@ -775,6 +1301,27 @@
       inboxSubTab = 'all';
       statusFilter = 'all';
       priorityFilter = 'all';
+      reviewsData = {};
+      reviewsLoaded = false;
+      reviewsFilter = 'pending';
+      questionsData = {};
+      groupsData = {};
+      surveysDefData = {};
+      triggersData = {};
+      surveysLoaded = false;
+      questionEditId = null;
+      showAddQuestion = false;
+      groupEditId = null;
+      showAddGroup = false;
+      surveyEditId = null;
+      showAddSurvey = false;
+      sendLinkSurveyId = null;
+      triggerEditId = null;
+      showAddTrigger = false;
+      policiesData = {};
+      policiesLoaded = false;
+      policyEditId = null;
+      showAddPolicy = false;
     }
   });
 
