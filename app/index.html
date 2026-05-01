@@ -4618,8 +4618,8 @@
       /* base from .status-badge */
     }
     .role-badge.admin { background: rgba(123,31,162,0.2); color: #CE93D8; border: 1px solid rgba(123,31,162,0.35); }
-    .role-badge.user { background: rgba(21,101,192,0.2); color: #64B5F6; border: 1px solid rgba(21,101,192,0.35); }
-    .role-badge.staff { background: rgba(46,125,50,0.2); color: #81C784; border: 1px solid rgba(46,125,50,0.35); }
+    .role-badge.manager { background: rgba(21,101,192,0.2); color: #64B5F6; border: 1px solid rgba(21,101,192,0.35); }
+    .role-badge.user { background: rgba(46,125,50,0.2); color: #81C784; border: 1px solid rgba(46,125,50,0.35); }
     .role-badge.guest { background: rgba(245,127,23,0.2); color: #FFD54F; border: 1px solid rgba(245,127,23,0.35); }
     .role-badge.unknown { background: rgba(198,40,40,0.2); color: #EF9A9A; border: 1px solid rgba(198,40,40,0.5); }
     .user-role-select.unknown-role { border-color: #C62828; background: rgba(198,40,40,0.08); }
@@ -4654,8 +4654,8 @@
     /* user-list-table dark mode handled by .data-table */
     body.dark-mode .user-role-select { background: #2a2a2a; color: #ccc; border-color: #444; }
     body.dark-mode .role-badge.admin { background: #2a1a3a; color: #CE93D8; }
-    body.dark-mode .role-badge.user { background: #1a2a3a; color: #64B5F6; }
-    body.dark-mode .role-badge.staff { background: #1a2e1a; color: #81C784; }
+    body.dark-mode .role-badge.manager { background: #1a2a3a; color: #64B5F6; }
+    body.dark-mode .role-badge.user { background: #1a2e1a; color: #81C784; }
     body.dark-mode .role-badge.guest { background: #3a2e1a; color: #FFD54F; }
     body.dark-mode .role-badge.unknown { background: #3a1a1a; color: #EF9A9A; }
     body.dark-mode .user-role-select.unknown-role { border-color: #EF5350; background: rgba(198,40,40,0.18); }
@@ -11989,10 +11989,10 @@ var googleOAuthTokens = {}; // In-memory only — Google API access tokens, keye
 // Canonical role enum — MUST match AII tenant-MCP `mast_users` role enum
 // (mast-mcp-server/src/shared/tools/users.ts → VALID_ROLES). Order here
 // drives sort order and dropdown order in the admin UI.
-var CANONICAL_ROLES = ['admin', 'staff', 'user', 'guest'];
-var ROLE_DISPLAY_NAMES = { admin: 'Owner', staff: 'Staff', user: 'Manager', guest: 'Guest' };
+var CANONICAL_ROLES = ['admin', 'manager', 'user', 'guest'];
+var ROLE_DISPLAY_NAMES = { admin: 'Admin', manager: 'Manager', user: 'User', guest: 'Guest' };
 function isKnownRole(r) { return CANONICAL_ROLES.indexOf(r) !== -1; }
-var currentUserRole = null;      // 'admin' | 'staff' | 'user' | 'guest' | null
+var currentUserRole = null;      // 'admin' | 'manager' | 'user' | 'guest' | null
 var currentRoleConfig = null;    // Full role record with permissions map
 var currentUserOverrides = {};   // permissionOverrides from current user's own record
 var currentUserRecord = null;    // Full admin_users record; set by loadUserRole()
@@ -12001,7 +12001,7 @@ var rbacReady = false;           // True once role + permissions loaded
 // Default role definitions — seeded on first admin bootstrap
 var DEFAULT_ROLES = {
   admin: {
-    name: 'Owner',
+    name: 'Admin',
     description: 'Full access to all system functions.',
     isDefault: true,
     permissions: {
@@ -12026,7 +12026,7 @@ var DEFAULT_ROLES = {
       forecast:     { create: false, read: true, update: false, delete: false }
     }
   },
-  user: {
+  manager: {
     name: 'Manager',
     description: 'Operational access — PoS, inventory, fulfillment. No pricing, settings, or user management.',
     isDefault: true,
@@ -12054,8 +12054,8 @@ var DEFAULT_ROLES = {
     navSections: ['products', 'sales', 'marketing', 'retention', 'events',
                   'classes', 'operations', 'customer-service', 'admin']
   },
-  staff: {
-    name: 'Staff',
+  user: {
+    name: 'User',
     description: 'Basic operational access — POS, inventory, and fulfillment.',
     isDefault: true,
     permissions: {
@@ -12110,11 +12110,11 @@ var DEFAULT_ROLES = {
   }
 };
 var DEFAULT_NAV_SECTIONS = {
-  admin: null,  // null = no filter, sees everything
-  user:  ['products', 'sales', 'marketing', 'retention', 'events',
-          'classes', 'operations', 'customer-service', 'admin'],
-  staff: ['sales', 'products', 'classes', 'customer-service'],
-  guest: ['sales', 'classes']
+  admin:   null,  // null = no filter, sees everything
+  manager: ['products', 'sales', 'marketing', 'retention', 'events',
+            'classes', 'operations', 'customer-service', 'admin'],
+  user:    ['sales', 'products', 'classes', 'customer-service'],
+  guest:   ['sales', 'classes']
 };
 var imageLibrary = {};
 var imageLibraryLoaded = false;
@@ -13008,7 +13008,7 @@ auth.onAuthStateChanged(async function(user) {
       MastDB.init({ tenantId: domainTenant, firestore: db });
       try {
         var existingUser = await MastDB.adminUsers.get(user.uid);
-        if (existingUser && (existingUser.role === 'admin' || existingUser.role === 'user')) {
+        if (existingUser && isKnownRole(existingUser.role)) {
           console.log('Bootstrap: verified existing ' + existingUser.role + ' role for UID ' + user.uid + ' in tenant "' + domainTenant + '"');
           tenantId = domainTenant;
 
@@ -35346,7 +35346,7 @@ function renderUsersList() {
   var tbody = document.getElementById('usersTableBody');
   var emptyEl = document.getElementById('usersEmpty');
   var tableEl = document.getElementById('usersTableWrap');
-  var roleOrder = { admin: 0, staff: 1, user: 2, guest: 3 };
+  var roleOrder = { admin: 0, manager: 1, user: 2, guest: 3 };
   var users = Object.entries(adminUsers).sort(function(a, b) {
     var ra = roleOrder[a[1].role] !== undefined ? roleOrder[a[1].role] : 99;
     var rb = roleOrder[b[1].role] !== undefined ? roleOrder[b[1].role] : 99;
@@ -35391,7 +35391,7 @@ function renderUsersList() {
     // sees them and the dropdown cannot silently promote them.
     var role = u.role || 'guest';
     var known = isKnownRole(role) || (rolesData && rolesData[role]);
-    var roleBadgeClass = known ? (role === 'admin' || role === 'staff' || role === 'user' || role === 'guest' ? role : 'unknown') : 'unknown';
+    var roleBadgeClass = known ? (role === 'admin' || role === 'manager' || role === 'user' || role === 'guest' ? role : 'unknown') : 'unknown';
     var isSelf = currentUser && uid === currentUser.uid;
 
     var avatar = u.photoURL
