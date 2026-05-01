@@ -2798,7 +2798,7 @@
   }
 
   function showCSVDownloadButton() {
-    var container = document.querySelector('.checkout-confirmation');
+    var container = document.querySelector('.checkout-confirmation, .payment-confirmation');
     if (!container || document.getElementById('csvDownloadBtn')) return;
 
     var wrapper = document.createElement('div');
@@ -2864,7 +2864,7 @@
   }
 
   function renderReviewPrompt(items, buyerEmail) {
-    var container = document.querySelector('.checkout-confirmation');
+    var container = document.querySelector('.checkout-confirmation, .payment-confirmation');
     if (!container || document.getElementById('reviewPromptSection')) return;
 
     var html = '<div id="reviewPromptSection" class="review-prompt">' +
