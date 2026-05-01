@@ -12388,8 +12388,11 @@ async function loadUserRole(uid) {
         });
       }
     } else {
-      // Update lastLoginAt only — don't overwrite role (may have been elevated)
-      await MastDB.adminUsers.update(uid, { lastLoginAt: MastDB.serverTimestamp() });
+      // Update lastLoginAt — backfill new Phase 1 fields if not yet present
+      var loginUpdate = { lastLoginAt: MastDB.serverTimestamp() };
+      if (userData.permissionOverrides === undefined) loginUpdate.permissionOverrides = {};
+      if (userData.accessExpiry === undefined) loginUpdate.accessExpiry = null;
+      await MastDB.adminUsers.update(uid, loginUpdate);
     }
 
     currentUserRole = userData.role || 'guest';
@@ -35187,6 +35190,8 @@ function loadAdminUsers() {
     document.getElementById('usersEmpty').innerHTML = '<p>You do not have permission to manage users.</p>';
     return;
   }
+  // Pre-load roles so openUserPermissionsPanel always has Firebase role config
+  if (!rolesLoaded && hasPermission('roles', 'read')) loadRoles();
   document.getElementById('usersLoading').style.display = '';
   MastDB.adminUsers.list().then(function(snap) {
     adminUsers = snap || {};
@@ -35823,7 +35828,7 @@ async function savePermissionMatrix() {
   if (!roleKey) return;
 
   try {
-    await MastDB.roles.permissions(roleKey).set(editingPermissions);
+    await MastDB.roles.setPermissions(roleKey, editingPermissions);
     rolesData[roleKey].permissions = editingPermissions;
     await writeAudit('update', 'roles', roleKey);
     showToast('Permissions saved for ' + (rolesData[roleKey].name || roleKey) + '.');
