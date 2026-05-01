@@ -2885,11 +2885,37 @@
     }
   }
 
+  var COMMISSION_STATUS_MESSAGES = {
+    accepted: "Great news — your commission request has been accepted and is now in our production queue. We’ll keep you updated as it progresses.",
+    in_production: "Your commission is now in production. We’ll notify you when it’s complete.",
+    ready: "Your commission is complete and ready. We’ll be in touch shortly to arrange pickup or shipment.",
+    shipped: "Your commission has been shipped. You’ll receive tracking information separately.",
+    cancelled: "Unfortunately, we need to cancel your commission request. Please reach out if you have any questions."
+  };
+
   async function updateCommissionStatus(commId, newStatus) {
     try {
       await MastDB.commissions.subRef(commId, 'status').set(newStatus);
       commissionsData[commId].status = newStatus;
       await writeAudit('update', 'commission', commId);
+
+      var ticketId = commissionsData[commId] && commissionsData[commId].ticketId;
+      if (ticketId) {
+        var msgBody = COMMISSION_STATUS_MESSAGES[newStatus] || ('Your commission status has been updated to: ' + newStatus + '.');
+        var now = new Date().toISOString();
+        var msgId = 'msg_' + Date.now().toString(36);
+        await MastDB.set('cs_tickets/' + ticketId + '/messages/' + msgId, {
+          id: msgId,
+          body: msgBody,
+          direction: 'outbound',
+          isInternal: false,
+          authorName: 'System',
+          authorEmail: null,
+          createdAt: now
+        });
+        await MastDB.update('cs_tickets/' + ticketId, { updatedAt: now });
+      }
+
       showToast('Status updated');
       emitTestingEvent('commissionStatus', { newStatus: newStatus });
       // Re-render detail to show/hide proposal and production sections
