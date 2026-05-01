@@ -142,7 +142,7 @@
   // Constants
   // ============================================================
 
-  var SHOW_STATUSES = ['draft', 'published', 'active', 'completed', 'cancelled'];
+  var SHOW_STATUSES = ['draft', 'published', 'active', 'completed', 'cancelled', 'archived'];
   var BOOTH_TYPES = [
     { value: 'standard', label: 'Standard' },
     { value: 'corner', label: 'Corner' },
