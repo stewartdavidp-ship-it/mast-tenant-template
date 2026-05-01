@@ -1083,6 +1083,91 @@
     return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
 
+  // ── Cart Abandon Detection ──
+  // Fires once per cart state when user navigates away without completing checkout.
+  // Requires a known contact email — no email means no survey to send, so we skip.
+
+  function _getAbandonEmail() {
+    if (currentUser && currentUser.email) return currentUser.email;
+    try {
+      var info = JSON.parse(localStorage.getItem('mast_checkout_info') || 'null');
+      if (info && info.email) return info.email;
+    } catch (e) {}
+    return null;
+  }
+
+  function _cartHash(items) {
+    var ids = items.map(function(i) { return i.pid; }).sort();
+    return ids.join(',');
+  }
+
+  function _shouldSkipAbandon() {
+    var path = window.location.pathname;
+    if (path.indexOf('checkout') !== -1 || path.indexOf('orders') !== -1) return true;
+    if (cart.length === 0) return true;
+    if (!_getAbandonEmail()) return true;
+    return false;
+  }
+
+  function _fireAbandon(method) {
+    if (_shouldSkipAbandon()) return;
+    var email = _getAbandonEmail();
+    var hash = _cartHash(cart);
+    var debounceKey = 'mast_abandon_fired_' + hash;
+    try {
+      if (sessionStorage.getItem(debounceKey)) return;
+      sessionStorage.setItem(debounceKey, '1');
+    } catch (e) {}
+
+    var contactName = null;
+    try {
+      var info = JSON.parse(localStorage.getItem('mast_checkout_info') || 'null');
+      if (info) contactName = info.name || null;
+    } catch (e) {}
+    if (!contactName && currentUser) contactName = currentUser.displayName || null;
+
+    var items = cart.map(function(i) {
+      return { productId: i.pid, productName: i.name, qty: i.qty, price: i.priceCents };
+    });
+    var cartTotal = cart.reduce(function(sum, i) { return sum + (i.priceCents * i.qty); }, 0);
+
+    var cfBase = (FIREBASE_CONFIG && FIREBASE_CONFIG.cloudFunctionsBase)
+      ? FIREBASE_CONFIG.cloudFunctionsBase
+      : 'https://us-central1-mast-platform-prod.cloudfunctions.net';
+
+    var payload = JSON.stringify({
+      tenantId: (typeof TENANT_ID !== 'undefined') ? TENANT_ID : '',
+      contactEmail: email,
+      contactName: contactName,
+      items: items,
+      cartTotal: cartTotal,
+      url: window.location.href
+    });
+
+    var url = cfBase + '/recordCartAbandon';
+    if (method === 'beacon' && navigator.sendBeacon) {
+      navigator.sendBeacon(url, new Blob([payload], { type: 'application/json' }));
+    } else {
+      fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: payload,
+        keepalive: true
+      }).catch(function() {});
+    }
+  }
+
+  function initAbandonDetection() {
+    window.addEventListener('beforeunload', function() {
+      _fireAbandon('beacon');
+    });
+    document.addEventListener('visibilitychange', function() {
+      if (document.visibilityState === 'hidden') {
+        _fireAbandon('fetch');
+      }
+    });
+  }
+
   // ── Initialize ──
   function init() {
     // Re-read tenant globals now that TENANT_READY has resolved
@@ -1096,6 +1181,7 @@
     injectDrawer();
     updateBadge();
     renderDrawerItems();
+    initAbandonDetection();
   }
 
   // Wait for tenant resolution then DOM ready
