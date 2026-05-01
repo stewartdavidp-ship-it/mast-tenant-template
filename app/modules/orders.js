@@ -2885,6 +2885,20 @@
     }
   }
 
+  function viewRmaTicket(ticketId) {
+    navigateTo('cs-tickets');
+    var open = function() {
+      if (typeof csOpenThread === 'function') csOpenThread(ticketId);
+    };
+    if (typeof csOpenThread === 'function') {
+      open();
+    } else if (typeof MastAdmin !== 'undefined' && typeof MastAdmin.loadModule === 'function') {
+      MastAdmin.loadModule('customer-service').then(function() {
+        setTimeout(open, 100);
+      });
+    }
+  }
+
   var COMMISSION_STATUS_MESSAGES = {
     accepted: "Great news — your commission request has been accepted and is now in our production queue. We’ll keep you updated as it progresses.",
     in_production: "Your commission is now in production. We’ll notify you when it’s complete.",
@@ -3358,6 +3372,11 @@
       });
     }
 
+    var csTicketHtml = r.ticketId ? '<div class="order-detail-section">' +
+      '<div class="order-detail-section-title">CS Ticket</div>' +
+      '<a href="#" onclick="event.preventDefault();viewRmaTicket(\'' + esc(r.ticketId) + '\')" style="color:var(--teal);font-size:0.9rem;">' + esc(r.ticketNumber || r.ticketId) + ' &rarr;</a>' +
+    '</div>' : '';
+
     detailEl.innerHTML = '<button class="detail-back" onclick="backToRmaList()">&#8592; Back to Returns</button>' +
       '<div class="order-detail-header">' +
         '<div>' +
@@ -3443,7 +3462,8 @@
         (r.disposition.notes ? '<div style="margin-top:0.5rem;font-size:0.85rem;color:var(--warm-gray);">' + esc(r.disposition.notes) + '</div>' : '') +
       '</div>' : '') +
       refundHtml +
-      orderLinkHtml;
+      orderLinkHtml +
+      csTicketHtml;
   }
 
   async function transitionRma(rmaId, actionOrStatus) {
@@ -3473,6 +3493,29 @@
         renderRmaDetail(rmaId);
         updateRmaSidebarBadge();
         showToast('RMA ' + (result.data.newStatus || action).replace(/-/g, ' '));
+        var RMA_TICKET_MESSAGES = {
+          'approved': 'Your return request has been approved. Please ship items back within 7 days.',
+          'declined': "After review, we're unable to approve this return request. Please contact us if you have questions.",
+          'received': "We've received your returned items and are inspecting them now."
+        };
+        var ticketMsg = RMA_TICKET_MESSAGES[actionOrStatus];
+        var rmaTicketId = rmaData[rmaId] && rmaData[rmaId].ticketId;
+        if (rmaTicketId && ticketMsg) {
+          try {
+            var tNow = new Date().toISOString();
+            var tMsgId = 'msg_' + Date.now().toString(36);
+            await MastDB.set('cs_tickets/' + rmaTicketId + '/messages/' + tMsgId, {
+              id: tMsgId,
+              body: ticketMsg,
+              direction: 'outbound',
+              isInternal: false,
+              authorName: 'System',
+              authorEmail: null,
+              createdAt: tNow
+            });
+            await MastDB.update('cs_tickets/' + rmaTicketId, { updatedAt: tNow });
+          } catch (e) {}
+        }
       } else {
         showToast('Failed: ' + ((result.data || {}).error || 'Unknown error'), true);
       }
@@ -3540,6 +3583,23 @@
         renderRmaDetail(rmaId);
         updateRmaSidebarBadge();
         showToast('RMA completed — refund issued');
+        var rmaTicketId = rmaData[rmaId] && rmaData[rmaId].ticketId;
+        if (rmaTicketId) {
+          try {
+            var tNow = new Date().toISOString();
+            var tMsgId = 'msg_' + Date.now().toString(36);
+            await MastDB.set('cs_tickets/' + rmaTicketId + '/messages/' + tMsgId, {
+              id: tMsgId,
+              body: 'Your return is complete. Your refund has been processed.',
+              direction: 'outbound',
+              isInternal: false,
+              authorName: 'System',
+              authorEmail: null,
+              createdAt: tNow
+            });
+            await MastDB.update('cs_tickets/' + rmaTicketId, { updatedAt: tNow });
+          } catch (e) {}
+        }
       }
     } catch (err) {
       showToast('Complete failed: ' + (err.message || err), true);
@@ -3678,6 +3738,7 @@
   window.toggleAdhocEmailForm = toggleAdhocEmailForm;
   window.sendAdhocOrderEmail = sendAdhocOrderEmail;
   window.viewCommissionTicket = viewCommissionTicket;
+  window.viewRmaTicket = viewRmaTicket;
   window.loadCommissions = loadCommissions;
   window.renderCommissions = renderCommissions;
   window.viewCommissionDetail = viewCommissionDetail;
