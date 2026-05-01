@@ -25112,8 +25112,9 @@ function toggleCatalogShowDrafts() { window.catalogShowDrafts = !window.catalogS
 window.productsStatusFilter = window.productsStatusFilter || null;
 function setProductsStatusFilter(v) {
   if (v === 'developing') v = 'develop'; // legacy
-  if (v === 'active' || v === 'archived') v = 'catalog'; // legacy
-  window.productsStatusFilter = (v === 'develop' || v === 'catalog' || v === 'sell') ? v : 'catalog';
+  if (v === 'active') v = 'catalog'; // legacy
+  var valid = { develop: 1, review: 1, catalog: 1, sell: 1, archived: 1 };
+  window.productsStatusFilter = valid[v] ? v : 'catalog';
   renderProducts();
 }
 
