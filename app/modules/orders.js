@@ -2344,6 +2344,7 @@
         '<td><span class="status-badge" style="' + (statusColors[c.status] || '') + 'font-size:0.72rem;">' + esc(statusLabel) + '</span></td>' +
         '<td style="font-size:0.85rem;">' + esc((c.channel || '').toUpperCase()) + '</td>' +
         '<td style="font-size:0.85rem;">' + esc(dateStr) + '</td>' +
+        '<td>' + (c.ticketId ? '<a href="#" onclick="event.stopPropagation();event.preventDefault();viewCommissionTicket(\'' + esc(c.ticketId) + '\')" style="color:var(--teal);font-size:0.82rem;white-space:nowrap;">View ticket →</a>' : '<span style="color:var(--warm-gray);font-size:0.82rem;">—</span>') + '</td>' +
       '</tr>';
     });
     document.getElementById('commissionsTableBody').innerHTML = html;
@@ -2477,6 +2478,7 @@
         '<span style="color:var(--warm-gray);">Date</span><span>' + esc(dateStr) + '</span>' +
         '<span style="color:var(--warm-gray);">Status</span><span>' + statusSelect + '</span>' +
         '<span style="color:var(--warm-gray);">Notes</span><span style="white-space:pre-wrap;">' + esc(c.notes || '—') + '</span>' +
+        (c.ticketId ? '<span style="color:var(--warm-gray);">CS Ticket</span><span><a href="#" onclick="event.preventDefault();viewCommissionTicket(\'' + esc(c.ticketId) + '\')" style="color:var(--teal);">' + esc(c.ticketNumber || c.ticketId) + ' →</a></span>' : '') +
         inspirationHtml +
         refImageHtml +
       '</div>' +
@@ -2867,6 +2869,20 @@
     document.getElementById('commissionDetailView').style.display = 'none';
     document.getElementById('commissionDetailView').innerHTML = '';
     document.getElementById('commissionsListView').style.display = '';
+  }
+
+  function viewCommissionTicket(ticketId) {
+    navigateTo('cs-tickets');
+    var open = function() {
+      if (typeof csOpenThread === 'function') csOpenThread(ticketId);
+    };
+    if (typeof csOpenThread === 'function') {
+      open();
+    } else if (typeof MastAdmin !== 'undefined' && typeof MastAdmin.loadModule === 'function') {
+      MastAdmin.loadModule('customer-service').then(function() {
+        setTimeout(open, 100);
+      });
+    }
   }
 
   async function updateCommissionStatus(commId, newStatus) {
@@ -3635,6 +3651,7 @@
   window.resendOrderEmail = resendOrderEmail;
   window.toggleAdhocEmailForm = toggleAdhocEmailForm;
   window.sendAdhocOrderEmail = sendAdhocOrderEmail;
+  window.viewCommissionTicket = viewCommissionTicket;
   window.loadCommissions = loadCommissions;
   window.renderCommissions = renderCommissions;
   window.viewCommissionDetail = viewCommissionDetail;

@@ -612,3 +612,109 @@
 .checkout-btn-secondary:hover {
   filter: brightness(0.85);
 }
+
+/* ── Post-Purchase Review Prompt ── */
+.review-prompt {
+  position: relative;
+  margin-top: 20px;
+  padding: 14px 16px 16px;
+  background: var(--surface-card, #FAF6F0);
+  border-radius: 10px;
+  border: 1px solid var(--surface-card-border, #E8E0D4);
+}
+
+.review-prompt-dismiss {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: none;
+  border: none;
+  font-size: 1.25rem;
+  line-height: 1;
+  color: var(--text-light, #9B958E);
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+.review-prompt-dismiss:hover {
+  color: var(--text, #3A2E1E);
+}
+
+.review-prompt-heading {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text, #3A2E1E);
+  margin-bottom: 2px;
+  padding-right: 28px;
+}
+
+.review-prompt-sub {
+  font-size: 0.75rem;
+  color: var(--text-light, #9B958E);
+  margin-bottom: 10px;
+}
+
+.review-prompt-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+  border-top: 1px solid var(--surface-card-border, #E8E0D4);
+}
+
+.review-prompt-img {
+  width: 44px;
+  height: 44px;
+  object-fit: cover;
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+
+.review-prompt-item-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.review-prompt-item-name {
+  font-size: 0.8rem;
+  color: var(--text, #3A2E1E);
+  margin-bottom: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.review-prompt-stars {
+  display: flex;
+  gap: 2px;
+}
+
+.review-prompt-star {
+  background: none;
+  border: none;
+  font-size: 1.55rem;
+  line-height: 1;
+  cursor: pointer;
+  color: var(--surface-card-border, #D8D0C4);
+  padding: 0;
+  min-width: 40px;
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.12s;
+  border-radius: 4px;
+}
+.review-prompt-star:hover,
+.review-prompt-star.selected {
+  color: var(--primary, #C6A96C);
+}
+.review-prompt-star:disabled {
+  cursor: default;
+}
+
+.review-prompt-thanks {
+  font-size: 0.78rem;
+  color: var(--accent, #7BAE8A);
+  margin-top: 3px;
+}

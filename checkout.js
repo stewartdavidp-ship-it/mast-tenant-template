@@ -2379,6 +2379,10 @@
       var upsell = document.getElementById('coMembershipUpsell');
       if (upsell) upsell.remove();
       return;
+    } else if (action === 'dismiss-reviews') {
+      var reviewSection = document.getElementById('reviewPromptSection');
+      if (reviewSection && reviewSection.parentNode) reviewSection.parentNode.removeChild(reviewSection);
+      return;
     } else if (action === 'apply-coupon') {
       applyCoupon();
     } else if (action === 'apply-wallet-coupon') {
@@ -2786,6 +2790,7 @@
 
         downloadCSV(csv, csvName);
         showCSVDownloadButton();
+        initReviewPrompt(pendingOrder);
       }
     });
     // Safety: auto-detach after 90 seconds
@@ -2804,6 +2809,197 @@
       '</button>' +
       '<div style="font-size:0.75rem;color:#9B958E;margin-top:4px;">For Pirate Ship import</div>';
     container.appendChild(wrapper);
+  }
+
+  // ── Post-Purchase Review Prompt ──
+  function initReviewPrompt(pendingOrder) {
+    if (!pendingOrder || !pendingOrder.items || !pendingOrder.items.length) return;
+
+    var buyerEmail = pendingOrder.email || '';
+
+    var app = window.MastCart && window.MastCart.getFirebaseApp();
+    if (!app || !buyerEmail) {
+      // No app or no email — show unfiltered (can't dedup without email)
+      renderReviewPrompt(pendingOrder.items, buyerEmail);
+      return;
+    }
+
+    var db = app.firestore ? app.firestore() : null;
+    if (!db) {
+      renderReviewPrompt(pendingOrder.items, buyerEmail);
+      return;
+    }
+
+    // Query this buyer's existing reviews to skip already-reviewed products
+    db.collection('tenants/' + TENANT_ID + '/cs_reviews')
+      .where('authorEmail', '==', buyerEmail)
+      .get()
+      .then(function(snap) {
+        var reviewedPids = {};
+        snap.forEach(function(doc) {
+          var d = doc.data();
+          if (d.productId) reviewedPids[d.productId] = true;
+        });
+
+        // Keep only physical products not yet reviewed (skip bookings and dupes)
+        var seen = {};
+        var unreviewed = pendingOrder.items.filter(function(item) {
+          if (!item.pid || item.bookingType || seen[item.pid] || reviewedPids[item.pid]) return false;
+          seen[item.pid] = true;
+          return true;
+        });
+
+        if (unreviewed.length > 0) renderReviewPrompt(unreviewed, buyerEmail);
+      })
+      .catch(function() {
+        // On error, show prompt anyway — dedup is best-effort
+        var seen = {};
+        var items = pendingOrder.items.filter(function(item) {
+          if (!item.pid || item.bookingType || seen[item.pid]) return false;
+          seen[item.pid] = true;
+          return true;
+        });
+        if (items.length > 0) renderReviewPrompt(items, buyerEmail);
+      });
+  }
+
+  function renderReviewPrompt(items, buyerEmail) {
+    var container = document.querySelector('.checkout-confirmation');
+    if (!container || document.getElementById('reviewPromptSection')) return;
+
+    var html = '<div id="reviewPromptSection" class="review-prompt">' +
+      '<button class="review-prompt-dismiss" data-co="dismiss-reviews" aria-label="Dismiss">&times;</button>' +
+      '<div class="review-prompt-heading">How was your experience?</div>' +
+      '<div class="review-prompt-sub">Tap a star to leave a quick review.</div>';
+
+    for (var i = 0; i < items.length; i++) {
+      var item = items[i];
+      var pid = item.pid || '';
+      var name = item.name || 'Item';
+      html += '<div class="review-prompt-item" id="review-item-' + esc(pid) + '">';
+      html += '<img class="review-prompt-img" id="review-img-' + esc(pid) + '" src="" alt="" style="display:none;" loading="lazy">';
+      html += '<div class="review-prompt-item-content">';
+      html += '<div class="review-prompt-item-name">' + esc(name) + '</div>';
+      html += '<div class="review-prompt-stars" data-pid="' + esc(pid) + '">';
+      for (var s = 1; s <= 5; s++) {
+        html += '<button type="button" class="review-prompt-star" data-rating="' + s + '" data-pid="' + esc(pid) + '" aria-label="' + s + ' star' + (s > 1 ? 's' : '') + '">&#9733;</button>';
+      }
+      html += '</div>';
+      html += '<div class="review-prompt-thanks" id="review-thanks-' + esc(pid) + '" style="display:none;">Thanks for your review!</div>';
+      html += '</div>';
+      html += '</div>';
+    }
+    html += '</div>';
+
+    var wrapper = document.createElement('div');
+    wrapper.innerHTML = html;
+    var section = wrapper.firstChild;
+    container.appendChild(section);
+
+    // Star clicks handled directly on the section (not via data-co delegation)
+    section.addEventListener('click', function(e) {
+      var btn = e.target;
+      if (!btn.classList.contains('review-prompt-star') || btn.disabled) return;
+      var rating = parseInt(btn.getAttribute('data-rating'), 10);
+      var pid = btn.getAttribute('data-pid');
+      var itemEl = document.getElementById('review-item-' + pid);
+      var nameText = itemEl ? (itemEl.querySelector('.review-prompt-item-name') || {}).textContent || '' : '';
+      submitItemReview(pid, nameText, rating, buyerEmail, section);
+    });
+
+    // Lazy-load product images from Firestore
+    if (ensureMastDB()) {
+      for (var j = 0; j < items.length; j++) {
+        (function(pid) {
+          MastDB.get('public/products/' + pid).then(function(product) {
+            if (!product) return;
+            var imgs = product.images || [];
+            var url = imgs[0] || product.imageUrl || product.image || '';
+            if (!url) return;
+            var imgEl = document.getElementById('review-img-' + pid);
+            if (imgEl) { imgEl.src = url; imgEl.alt = product.name || ''; imgEl.style.display = ''; }
+          }).catch(function() {});
+        })(items[j].pid);
+      }
+    }
+  }
+
+  function submitItemReview(pid, productName, rating, buyerEmail, sectionEl) {
+    // Highlight stars and lock row
+    var stars = sectionEl.querySelectorAll('.review-prompt-star[data-pid="' + pid + '"]');
+    for (var i = 0; i < stars.length; i++) {
+      stars[i].classList.toggle('selected', (i + 1) <= rating);
+      stars[i].disabled = true;
+    }
+
+    var app = window.MastCart && window.MastCart.getFirebaseApp();
+    var cfBase = (typeof TENANT_FIREBASE_CONFIG !== 'undefined' && TENANT_FIREBASE_CONFIG.cloudFunctionsBase)
+      ? TENANT_FIREBASE_CONFIG.cloudFunctionsBase
+      : 'https://us-central1-' + (app && app.options ? app.options.projectId : 'mast-platform-prod') + '.cloudfunctions.net';
+
+    var user = window.MastCart && window.MastCart.getCurrentUser();
+    var authorName = (user && user.displayName) ? user.displayName : 'Anonymous';
+    var authorEmail = buyerEmail || (user && user.email) || '';
+
+    if (!authorEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(authorEmail)) {
+      // Can't submit without valid email — still show thanks
+      var noEmailThanks = document.getElementById('review-thanks-' + pid);
+      if (noEmailThanks) noEmailThanks.style.display = '';
+      checkAndCollapseReviewPrompt(sectionEl);
+      return;
+    }
+
+    var getToken = (app && app.auth().currentUser)
+      ? app.auth().currentUser.getIdToken()
+      : Promise.resolve(null);
+
+    getToken.then(function(idToken) {
+      return fetch(cfBase + '/submitReview', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Tenant-ID': typeof TENANT_ID !== 'undefined' ? TENANT_ID : ''
+        },
+        body: JSON.stringify({
+          productId: pid,
+          productName: productName,
+          rating: rating,
+          body: '',
+          authorName: authorName,
+          authorEmail: authorEmail,
+          idToken: idToken || undefined,
+          source: 'post_purchase_confirmation'
+        })
+      });
+    }).then(function(r) { return r.json(); })
+    .then(function() {
+      var thanksEl = document.getElementById('review-thanks-' + pid);
+      if (thanksEl) thanksEl.style.display = '';
+      checkAndCollapseReviewPrompt(sectionEl);
+    })
+    .catch(function() {
+      // Silent failure — still show thanks and move on
+      var thanksEl = document.getElementById('review-thanks-' + pid);
+      if (thanksEl) { thanksEl.style.display = ''; thanksEl.textContent = 'Thanks!'; }
+      checkAndCollapseReviewPrompt(sectionEl);
+    });
+  }
+
+  function checkAndCollapseReviewPrompt(sectionEl) {
+    // Auto-collapse after all items are rated
+    var items = sectionEl.querySelectorAll('.review-prompt-item');
+    for (var i = 0; i < items.length; i++) {
+      var thanks = items[i].querySelector('.review-prompt-thanks');
+      if (thanks && thanks.style.display === 'none') return;
+    }
+    setTimeout(function() {
+      if (!sectionEl || !sectionEl.parentNode) return;
+      sectionEl.style.transition = 'opacity 0.4s ease';
+      sectionEl.style.opacity = '0';
+      setTimeout(function() {
+        if (sectionEl && sectionEl.parentNode) sectionEl.parentNode.removeChild(sectionEl);
+      }, 400);
+    }, 1500);
   }
 
   // ── Public API ──
