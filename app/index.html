@@ -7198,16 +7198,15 @@
       </div>
       <div style="display:flex;gap:0;align-items:flex-start;margin-top:4px;">
         <nav id="settingsSubNav" class="settings-sidebar-nav">
-          <div class="settings-nav-group" id="snGroup-store">
-            <button class="settings-nav-group-header" onclick="toggleSettingsGroup('store')">
-              <span>Store</span>
+          <div class="settings-nav-group" id="snGroup-storefront">
+            <button class="settings-nav-group-header" onclick="toggleSettingsGroup('storefront')">
+              <span>Storefront</span>
               <svg class="settings-nav-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
             </button>
             <div class="settings-nav-items">
               <button class="settings-nav-item active" data-nav-key="general" onclick="switchSettingsSubView('general')">General</button>
-              <button class="settings-nav-item" data-nav-key="storefront" onclick="switchSettingsSubView('storefront')">Storefront</button>
+              <button class="settings-nav-item" data-nav-key="storefront" onclick="switchSettingsSubView('storefront')">Display</button>
               <button class="settings-nav-item" data-nav-key="domains" onclick="switchSettingsSubView('domains')">Domains</button>
-              <button class="settings-nav-item" data-nav-key="engagement" onclick="switchSettingsSubView('engagement')">Engagement</button>
             </div>
           </div>
 
@@ -7230,8 +7229,8 @@
               <svg class="settings-nav-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
             </button>
             <div class="settings-nav-items">
-              <button class="settings-nav-item" data-nav-key="pim" onclick="switchSettingsSubView('pim')">PIM</button>
               <button class="settings-nav-item" data-nav-key="product" onclick="switchSettingsSubView('product')">Pricing Defaults</button>
+              <button class="settings-nav-item" data-nav-key="pim" onclick="switchSettingsSubView('pim')">PIM</button>
             </div>
           </div>
 
@@ -7254,6 +7253,7 @@
             <div class="settings-nav-items">
               <button class="settings-nav-item" data-nav-key="workshop" onclick="switchSettingsSubView('workshop')">Workshop</button>
               <button class="settings-nav-item" data-nav-key="trips" onclick="switchSettingsSubView('trips')">Trips</button>
+              <button class="settings-nav-item" data-nav-key="maker" onclick="switchSettingsSubView('maker')">Develop</button>
             </div>
           </div>
 
@@ -7268,16 +7268,25 @@
             </div>
           </div>
 
-          <div class="settings-nav-group" id="snGroup-platform">
-            <button class="settings-nav-group-header" onclick="toggleSettingsGroup('platform')">
-              <span>Platform</span>
+          <div class="settings-nav-group" id="snGroup-integrations">
+            <button class="settings-nav-group-header" onclick="toggleSettingsGroup('integrations')">
+              <span>Integrations</span>
               <svg class="settings-nav-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
             </button>
             <div class="settings-nav-items">
               <button class="settings-nav-item" data-nav-key="integrations" onclick="switchSettingsSubView('integrations')">Integrations</button>
               <button class="settings-nav-item" data-nav-key="ai" onclick="switchSettingsSubView('ai')">AI</button>
+            </div>
+          </div>
+
+          <div class="settings-nav-group" id="snGroup-admin">
+            <button class="settings-nav-group-header" onclick="toggleSettingsGroup('admin')">
+              <span>Admin</span>
+              <svg class="settings-nav-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+            </button>
+            <div class="settings-nav-items">
               <button class="settings-nav-item" data-nav-key="dashboard" onclick="switchSettingsSubView('dashboard')">Dashboard</button>
-              <button class="settings-nav-item" data-nav-key="maker" onclick="switchSettingsSubView('maker')">Develop</button>
+              <button class="settings-nav-item" data-nav-key="engagement" onclick="switchSettingsSubView('engagement')">Engagement</button>
             </div>
           </div>
         </nav>
@@ -14948,13 +14957,14 @@ function getModuleForRouteManifest(route) {
 var settingsSubViews = ['general', 'payments', 'shipping', 'tax', 'compliance', 'operations', 'email', 'integrations', 'workshop', 'trips', 'storefront', 'dashboard', 'domains', 'ai', 'engagement', 'channels', 'notifications', 'pim', 'maker', 'product'];
 
 var SETTINGS_VIEW_GROUP = {
-  'general': 'store', 'storefront': 'store', 'domains': 'store', 'engagement': 'store',
+  'general': 'storefront', 'storefront': 'storefront', 'domains': 'storefront',
   'payments': 'selling', 'shipping': 'selling', 'operations': 'selling', 'channels': 'selling',
-  'pim': 'products', 'product': 'products',
+  'product': 'products', 'pim': 'products',
   'tax': 'legal', 'compliance': 'legal',
-  'workshop': 'studio', 'trips': 'studio',
+  'workshop': 'studio', 'trips': 'studio', 'maker': 'studio',
   'email': 'communications', 'notifications': 'communications',
-  'integrations': 'platform', 'ai': 'platform', 'dashboard': 'platform', 'maker': 'platform'
+  'integrations': 'integrations', 'ai': 'integrations',
+  'dashboard': 'admin', 'engagement': 'admin'
 };
 
 function toggleSettingsGroup(group) {
