@@ -687,6 +687,10 @@
     html += '<div id="csQOptionsRow" style="margin-bottom:10px;' + (typeVal === 'multiple_choice' ? '' : 'display:none;') + '">';
     html += '<label style="font-weight:600;font-size:0.88rem;display:block;margin-bottom:4px;">Options (comma-separated)</label>';
     html += '<input id="csQOptions" class="form-input" style="width:100%;box-sizing:border-box;" value="' + _esc(optVal) + '" placeholder="Option A, Option B"></div>';
+    var reqChecked = isEdit ? (q.required !== false) : true;
+    html += '<div style="margin-bottom:12px;"><label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.88rem;">';
+    html += '<input type="checkbox" id="csQRequired"' + (reqChecked ? ' checked' : '') + ' style="width:15px;height:15px;accent-color:var(--amber-light);">';
+    html += '<span><strong>Required</strong> — respondent must answer before continuing</span></label></div>';
     html += '<div style="display:flex;gap:8px;"><button class="btn btn-primary btn-small" onclick="csSaveQuestion(\'' + id + '\')">' + (isEdit ? 'Save' : 'Add') + '</button>';
     html += '<button class="btn btn-secondary btn-small" onclick="csCancelQuestion()">Cancel</button></div></div>';
     return html;
@@ -696,11 +700,12 @@
     var text = ((document.getElementById('csQText') || {}).value || '').trim();
     var type = (document.getElementById('csQType') || {}).value || 'open_text';
     var optRaw = (document.getElementById('csQOptions') || {}).value || '';
+    var required = !!(document.getElementById('csQRequired') || {}).checked;
     if (!text) { showToast('Question text is required', true); return; }
     var options = type === 'multiple_choice' ? optRaw.split(',').map(function (o) { return o.trim(); }).filter(Boolean) : [];
     try {
-      if (id) { await MastDB.update('cs_survey_questions/' + id, { text: text, type: type, options: options, updatedAt: nowIso() }); if (questionsData[id]) Object.assign(questionsData[id], { text: text, type: type, options: options }); questionEditId = null; showToast('Question updated'); }
-      else { var nk = MastDB.newKey('cs_survey_questions'); var doc = { id: nk, text: text, type: type, options: options, isStock: false, createdAt: nowIso(), updatedAt: nowIso() }; await MastDB.set('cs_survey_questions/' + nk, doc); questionsData[nk] = doc; showAddQuestion = false; showToast('Question added'); }
+      if (id) { await MastDB.update('cs_survey_questions/' + id, { text: text, type: type, options: options, required: required, updatedAt: nowIso() }); if (questionsData[id]) Object.assign(questionsData[id], { text: text, type: type, options: options, required: required }); questionEditId = null; showToast('Question updated'); }
+      else { var nk = MastDB.newKey('cs_survey_questions'); var doc = { id: nk, text: text, type: type, options: options, required: required, isStock: false, createdAt: nowIso(), updatedAt: nowIso() }; await MastDB.set('cs_survey_questions/' + nk, doc); questionsData[nk] = doc; showAddQuestion = false; showToast('Question added'); }
       renderSurveys();
     } catch (err) { showToast('Failed: ' + (err && err.message), true); }
   }
