@@ -12050,7 +12050,9 @@ var DEFAULT_ROLES = {
       receipts:     { create: true, read: true, update: false, delete: false },
       contacts:     { create: true, read: true, update: true, delete: false },
       forecast:     { create: false, read: true, update: false, delete: false }
-    }
+    },
+    navSections: ['products', 'sales', 'marketing', 'retention', 'events',
+                  'classes', 'operations', 'customer-service', 'admin']
   },
   staff: {
     name: 'Staff',
@@ -12076,7 +12078,8 @@ var DEFAULT_ROLES = {
       receipts:     { create: false, read: false, update: false, delete: false },
       contacts:     { create: false, read: false, update: false, delete: false },
       forecast:     { create: false, read: false, update: false, delete: false }
-    }
+    },
+    navSections: ['sales', 'products', 'classes', 'customer-service']
   },
   guest: {
     name: 'Guest',
@@ -12102,8 +12105,16 @@ var DEFAULT_ROLES = {
       receipts:     { create: false, read: false, update: false, delete: false },
       contacts:     { create: false, read: false, update: false, delete: false },
       forecast:     { create: false, read: false, update: false, delete: false }
-    }
+    },
+    navSections: ['sales', 'classes']
   }
+};
+var DEFAULT_NAV_SECTIONS = {
+  admin: null,  // null = no filter, sees everything
+  user:  ['products', 'sales', 'marketing', 'retention', 'events',
+          'classes', 'operations', 'customer-service', 'admin'],
+  staff: ['sales', 'products', 'classes', 'customer-service'],
+  guest: ['sales', 'classes']
 };
 var imageLibrary = {};
 var imageLibraryLoaded = false;
@@ -13120,6 +13131,7 @@ auth.onAuthStateChanged(async function(user) {
   header.style.display = 'flex';
   showSidebar();
   applyOrganizerMode(TENANT_CONFIG && TENANT_CONFIG.organizerMode === true);
+  applyRoleFilter(currentUserRole, currentRoleConfig);
 
   // Check if user needs to choose modules (launch/operate tier first login)
   if (needsModuleSelection()) {
@@ -14650,6 +14662,43 @@ function applyOrganizerMode(isOrganizer) {
   });
 }
 
+function applyRoleFilter(role, roleConfig) {
+  // Owner sees everything — never filter
+  if (role === 'admin' || !role) return;
+
+  // Firebase config takes precedence over code defaults
+  var allowed = (roleConfig && roleConfig.navSections)
+    ? roleConfig.navSections
+    : (DEFAULT_NAV_SECTIONS[role] || null);
+
+  // null means no filter (fail open)
+  if (!allowed) return;
+
+  // Hide all sections not in the allowed list
+  // Leave migration alone — it has its own visibility logic
+  var allSections = ['products', 'sales', 'marketing', 'retention',
+                     'events', 'classes', 'operations', 'customer-service', 'admin'];
+  allSections.forEach(function(section) {
+    var el = document.querySelector('.sidebar-section[data-section="' + section + '"]');
+    if (!el) return;
+    el.style.display = allowed.indexOf(section) >= 0 ? '' : 'none';
+  });
+}
+
+function canViewSection(route) {
+  if (currentUserRole === 'admin' || !currentUserRole) return true;
+  var allowed = (currentRoleConfig && currentRoleConfig.navSections)
+    ? currentRoleConfig.navSections
+    : (DEFAULT_NAV_SECTIONS[currentUserRole] || null);
+  if (!allowed) return true;
+  for (var section in SECTION_ROUTES) {
+    if (SECTION_ROUTES[section].indexOf(route) >= 0) {
+      return allowed.indexOf(section) >= 0;
+    }
+  }
+  return true; // route not in any section (dashboard, etc.) — allow
+}
+
 function updateSidebarActive(route) {
   // Clear all active states
   document.querySelectorAll('.sidebar-item.active').forEach(function(el) { el.classList.remove('active'); });
@@ -14948,7 +14997,8 @@ homepage: { src: 'modules/homepage.js', routes: ['homepage'] },
   studio: { src: 'modules/studio.js', routes: ['studio'] },
   team: { src: 'modules/team.js', routes: ['team'] },
   students: { src: 'modules/students.js', routes: ['students'] },
-  channels: { src: 'modules/channels.js', routes: ['channels'] }
+  channels: { src: 'modules/channels.js', routes: ['channels'] },
+  'customer-service': { src: 'modules/customer-service.js', routes: ['cs-inbox', 'cs-tickets', 'cs-surveys', 'cs-reviews', 'cs-faqs'] }
 };
 
 // Reverse lookup: route → moduleId (built from MODULE_MANIFEST)
