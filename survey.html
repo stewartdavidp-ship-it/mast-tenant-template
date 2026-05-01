@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://cdn.jsdelivr.net https://apis.google.com https://maps.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src 'self' https://us-central1-mast-platform-prod.cloudfunctions.net https://*.firebasestorage.app https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://firestore.googleapis.com https://maps.googleapis.com https://places.googleapis.com; img-src 'self' data: blob: https:; frame-src 'self' https://*.firebaseapp.com; frame-ancestors 'none';">
+<title>Survey &mdash; My Shop</title>
+<meta property="og:type" content="website">
+<meta property="og:title" content="Share your feedback">
+<meta property="og:description" content="Help us improve by answering a short survey.">
+<link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+<script>
+(function(){
+  var B='https://firestore.googleapis.com/v1/projects/mast-platform-prod/databases/(default)/documents';
+  var h=location.hostname,C=5*60*1000;
+  if(h==='localhost'||h==='127.0.0.1')return;
+  try{var r=localStorage.getItem('mast_tenant_'+h);if(r){var c=JSON.parse(r);if(Date.now()-c.timestamp<C){window.__earlyTenant=Promise.resolve(c.data);return;}}}catch(e){}
+  var ek=h.replace(/\./g,'_');
+  function uv(v){if(v==null)return null;if('stringValue' in v)return v.stringValue;if('booleanValue' in v)return v.booleanValue;if('integerValue' in v)return Number(v.integerValue);if('doubleValue' in v)return v.doubleValue;if('nullValue' in v)return null;if('timestampValue' in v)return v.timestampValue;if('mapValue' in v){var o={};var f=v.mapValue.fields||{};for(var k in f)o[k]=uv(f[k]);return o;}if('arrayValue' in v)return(v.arrayValue.values||[]).map(uv);return null;}
+  function uf(fields){var o={};for(var k in fields)o[k]=uv(fields[k]);return o;}
+  function uw(d){if(d&&typeof d==='object'&&!Array.isArray(d)&&'_v' in d&&Object.keys(d).length===1)return d._v;return d;}
+  window.__earlyTenant=fetch(B+'/platform_tenantsByDomain/'+ek).then(function(r){return r.ok?r.json():null}).then(function(doc){
+    var tid=doc&&doc.fields?uw(uf(doc.fields)):null;
+    if(typeof tid!=='string'||!tid)return null;
+    return fetch(B+'/platform_tenantPublicConfigs/'+tid).then(function(r){return r.ok?r.json():null}).then(function(cdoc){
+      if(!cdoc||!cdoc.fields)return null;
+      var pc=uf(cdoc.fields);
+      return pc?{tenantId:tid,publicConfig:pc}:null;
+    });
+  }).catch(function(){return null;});
+})();
+</script>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@800&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="storefront.css">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<style>
+.sv-container {
+  max-width: 600px;
+  margin: 0 auto;
+  padding: 7rem 2rem 4rem;
+}
+.sv-header {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+.sv-header h1 {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 2.4rem;
+  font-weight: 400;
+  letter-spacing: 0.03em;
+  margin: 0 0 0.5rem;
+  color: var(--text);
+}
+.sv-subtitle {
+  font-size: 0.95rem;
+  color: var(--warm-gray, #888);
+}
+.sv-loading,
+.sv-error,
+.sv-complete {
+  text-align: center;
+  padding: 3rem 2rem;
+  color: var(--text);
+}
+.sv-loading {
+  color: var(--warm-gray, #888);
+}
+.sv-error p,
+.sv-complete p {
+  color: var(--warm-gray, #888);
+}
+.sv-question {
+  margin-bottom: 1.5rem;
+}
+.sv-question label {
+  display: block;
+  font-size: 0.9rem;
+  margin-bottom: 0.5rem;
+  color: var(--text);
+}
+.sv-rating {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.sv-rating button {
+  width: 32px;
+  height: 32px;
+  font-size: 1rem;
+  background: none;
+  border: 1px solid var(--border, #444);
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--text);
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.sv-rating button.active {
+  background: var(--primary);
+  color: #fff;
+  border-color: var(--primary);
+}
+.sv-rating button:hover:not(.active) {
+  background: color-mix(in srgb, var(--primary) 12%, transparent);
+  border-color: var(--primary);
+}
+.sv-input {
+  width: 100%;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--border, #444);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 0.95rem;
+  box-sizing: border-box;
+}
+.sv-textarea {
+  width: 100%;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--border, #444);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 0.95rem;
+  min-height: 100px;
+  resize: vertical;
+  box-sizing: border-box;
+  font-family: inherit;
+}
+.sv-btn {
+  display: inline-block;
+  padding: 8px 20px;
+  border-radius: 6px;
+  background: var(--primary);
+  color: #fff;
+  text-decoration: none;
+  font-size: 0.85rem;
+  border: none;
+  cursor: pointer;
+  transition: background 0.2s;
+  font-family: 'DM Sans', sans-serif;
+}
+.sv-btn:hover:not(:disabled) { background: var(--primary-light); }
+.sv-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.sv-followup {
+  margin-top: 1rem;
+}
+.sv-followup label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  color: var(--text);
+  cursor: pointer;
+}
+@media (max-width: 768px) {
+  .sv-container { padding: 6rem 1.25rem 3rem; }
+  .sv-header h1 { font-size: 1.8rem; }
+}
+</style>
+</head>
+<body>
+<nav id="mainNav"></nav>
+<div class="nav-mobile-menu" id="mobileMenu"></div>
+
+<div class="sv-container">
+  <div class="sv-header">
+    <h1 data-tenant="name">Survey</h1>
+    <p class="sv-subtitle">Share your feedback</p>
+  </div>
+  <div id="svContent">
+    <div class="sv-loading">Loading your survey...</div>
+  </div>
+</div>
+
+<footer id="siteFooter"></footer>
+
+<script src="storefront-tenant.js"></script>
+<script src="storefront-theme.js"></script>
+<script src="storefront-nav.js"></script>
+<script src="tenant-brand.js?v=2"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+
+<script>
+(function() {
+  'use strict';
+
+  function esc(s) { if (!s) return ''; var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+  /* ---- Rate Limiting ---- */
+  var RATE_KEY = 'sv_attempts';
+  var RATE_MAX = 5;
+  var RATE_WINDOW = 10 * 60 * 1000;
+
+  function checkRateLimit() {
+    try {
+      var raw = sessionStorage.getItem(RATE_KEY);
+      if (!raw) return true;
+      var attempts = JSON.parse(raw);
+      var now = Date.now();
+      attempts = attempts.filter(function(t) { return now - t < RATE_WINDOW; });
+      sessionStorage.setItem(RATE_KEY, JSON.stringify(attempts));
+      return attempts.length < RATE_MAX;
+    } catch (e) { return true; }
+  }
+
+  function recordAttempt() {
+    try {
+      var raw = sessionStorage.getItem(RATE_KEY);
+      var attempts = raw ? JSON.parse(raw) : [];
+      var now = Date.now();
+      attempts = attempts.filter(function(t) { return now - t < RATE_WINDOW; });
+      attempts.push(now);
+      sessionStorage.setItem(RATE_KEY, JSON.stringify(attempts));
+    } catch (e) { /* ignore */ }
+  }
+
+  var token = new URLSearchParams(window.location.search).get('t') || '';
+  var surveyData = null;
+
+  function cfBase() {
+    return (typeof TENANT_FIREBASE_CONFIG !== 'undefined' && TENANT_FIREBASE_CONFIG.cloudFunctionsBase)
+      ? TENANT_FIREBASE_CONFIG.cloudFunctionsBase
+      : 'https://us-central1-mast-platform-prod.cloudfunctions.net';
+  }
+
+  function callCF(name, body) {
+    return fetch(cfBase() + '/' + name, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    }).then(function(r) { return r.json(); });
+  }
+
+  var answers = {};
+
+  function renderNoToken() {
+    document.getElementById('svContent').innerHTML =
+      '<div class="sv-error">' +
+        '<div style="font-size:3rem;margin-bottom:1rem;">&#128203;</div>' +
+        '<h2 style="font-family:\'Cormorant Garamond\',serif;font-size:1.6rem;font-weight:400;color:var(--text);margin:0 0 0.5rem;">No Survey Link</h2>' +
+        '<p>This link doesn\'t contain a valid survey token.</p>' +
+        '<p><a href="/" style="color:var(--primary);">Return home</a></p>' +
+      '</div>';
+  }
+
+  function renderError(msg) {
+    document.getElementById('svContent').innerHTML =
+      '<div class="sv-error">' +
+        '<div style="font-size:3rem;margin-bottom:1rem;">&#10005;</div>' +
+        '<p>' + esc(msg || 'This survey link is invalid or has expired.') + '</p>' +
+        '<p><a href="/" style="color:var(--primary);">Return home</a></p>' +
+      '</div>';
+  }
+
+  function renderQuestions(data) {
+    surveyData = data;
+    var html = '';
+    data.questions.forEach(function(q, i) {
+      html += '<div class="sv-question" id="q_' + esc(q.id) + '">';
+      html += '<label>' + esc((i + 1) + '. ' + q.text) + '</label>';
+      if (q.type === 'rating_1_5' || q.type === 'rating_1_10') {
+        var max = q.type === 'rating_1_5' ? 5 : 10;
+        html += '<div class="sv-rating">';
+        for (var n = 1; n <= max; n++) {
+          html += '<button type="button" data-qid="' + esc(q.id) + '" data-val="' + n + '" onclick="svRate(this)">' + n + '</button>';
+        }
+        html += '</div>';
+      } else if (q.type === 'nps') {
+        html += '<div class="sv-rating">';
+        for (var n = 0; n <= 10; n++) {
+          html += '<button type="button" data-qid="' + esc(q.id) + '" data-val="' + n + '" onclick="svRate(this)">' + n + '</button>';
+        }
+        html += '<div style="display:flex;justify-content:space-between;font-size:0.75rem;color:var(--warm-gray,#888);margin-top:0.25rem;"><span>Not at all likely</span><span>Extremely likely</span></div>';
+        html += '</div>';
+      } else if (q.type === 'yes_no') {
+        html += '<div class="sv-rating">';
+        html += '<button type="button" data-qid="' + esc(q.id) + '" data-val="yes" onclick="svRate(this)">Yes</button>';
+        html += '<button type="button" data-qid="' + esc(q.id) + '" data-val="no" onclick="svRate(this)">No</button>';
+        html += '</div>';
+      } else if (q.type === 'multiple_choice' && q.options) {
+        q.options.forEach(function(opt) {
+          html += '<div><label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;">';
+          html += '<input type="radio" name="q_' + esc(q.id) + '" value="' + esc(opt) + '" onchange="svPick(\'' + esc(q.id) + '\', this.value)">';
+          html += esc(opt) + '</label></div>';
+        });
+      } else {
+        html += '<textarea class="sv-textarea" placeholder="Your answer..." oninput="svText(\'' + esc(q.id) + '\', this.value)"></textarea>';
+      }
+      html += '</div>';
+    });
+    html += '<div class="sv-followup"><label><input type="checkbox" id="svFollowup"> I\'d like someone to follow up with me about this survey.</label></div>';
+    html += '<div id="svSubmitStatus" style="color:#DC3545;margin:0.5rem 0;display:none;"></div>';
+    html += '<button class="sv-btn" onclick="svSubmit()">Submit Feedback</button>';
+    document.getElementById('svContent').innerHTML = html;
+  }
+
+  window.svRate = function(btn) {
+    var qid = btn.dataset.qid;
+    var val = isNaN(btn.dataset.val) ? btn.dataset.val : Number(btn.dataset.val);
+    answers[qid] = val;
+    var siblings = btn.parentElement.querySelectorAll('button');
+    siblings.forEach(function(b) { b.classList.remove('active'); });
+    btn.classList.add('active');
+  };
+
+  window.svPick = function(qid, val) { answers[qid] = val; };
+  window.svText = function(qid, val) { answers[qid] = val; };
+
+  window.svSubmit = function() {
+    if (!surveyData) return;
+    var unanswered = surveyData.questions.filter(function(q) {
+      return answers[q.id] === undefined || answers[q.id] === '';
+    });
+    if (unanswered.length > 0) {
+      var el = document.getElementById('svSubmitStatus');
+      el.textContent = 'Please answer all questions before submitting.';
+      el.style.display = '';
+      return;
+    }
+    var wantsFollowup = document.getElementById('svFollowup') && document.getElementById('svFollowup').checked;
+    var submitBtn = document.querySelector('.sv-btn');
+    if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Submitting...'; }
+
+    callCF('surveySubmit', {
+      token: token,
+      answers: Object.keys(answers).map(function(qid) {
+        return { questionId: qid, answer: answers[qid] };
+      }),
+      wantsFollowup: !!wantsFollowup
+    }).then(function(resp) {
+      if (resp.error) { renderError(resp.error); return; }
+      renderComplete(resp);
+    }).catch(function() {
+      renderError('Something went wrong. Please try again.');
+    });
+  };
+
+  function renderComplete(resp) {
+    var html = '<div class="sv-complete">';
+    html += '<div style="font-size:3rem;margin-bottom:1rem;">&#10003;</div>';
+    html += '<h2 style="font-family:\'Cormorant Garamond\',serif;font-size:1.8rem;font-weight:400;margin:0 0 0.75rem;">Thank you!</h2>';
+    html += '<p>' + esc(resp.message || 'Your feedback has been received.') + '</p>';
+    if (resp.couponCode) {
+      html += '<div style="margin:1.5rem auto;max-width:320px;background:var(--surface-card);border:1px solid var(--surface-card-border);border-radius:8px;padding:1.25rem;text-align:center;">';
+      html += '<p style="font-size:0.85rem;color:var(--warm-gray,#888);margin:0 0 0.5rem;">Your reward code</p>';
+      html += '<div style="font-family:\'DM Sans\',monospace;font-size:1.4rem;font-weight:700;letter-spacing:0.1em;color:var(--primary);">' + esc(resp.couponCode) + '</div>';
+      if (resp.couponDescription) html += '<p style="font-size:0.85rem;color:var(--text);margin:0.5rem 0 0;">' + esc(resp.couponDescription) + '</p>';
+      html += '</div>';
+    }
+    html += '<a href="/" class="sv-btn" style="display:inline-block;margin-top:1rem;">Return Home</a>';
+    html += '</div>';
+    document.getElementById('svContent').innerHTML = html;
+  }
+
+  function boot() {
+    if (!token) { renderNoToken(); return; }
+    if (!checkRateLimit()) { renderError('Too many attempts. Please try again later.'); return; }
+    recordAttempt();
+    callCF('surveyLoad', { token: token })
+      .then(function(resp) {
+        if (resp.error) { renderError(resp.error); return; }
+        renderQuestions(resp);
+      }).catch(function() {
+        renderError('Could not load survey. Please try again.');
+      });
+  }
+
+  if (typeof window.TENANT_READY !== 'undefined') {
+    window.TENANT_READY.then(boot);
+  } else {
+    window.addEventListener('load', boot);
+  }
+})();
+</script>
+</body>
+</html>
