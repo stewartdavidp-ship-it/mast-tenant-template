@@ -6173,6 +6173,13 @@
       <button class="btn btn-secondary" onclick="signOut()">Sign Out</button>
     </div>
 
+    <!-- Auth: Guest Access Expired -->
+    <div class="auth-screen" id="expiredScreen" style="display:none;">
+      <h2>Access Expired</h2>
+      <p id="expiredScreenMessage">Your guest access has expired. Contact the studio owner to renew.</p>
+      <button class="btn btn-secondary" onclick="signOut()">Sign Out</button>
+    </div>
+
     <!-- Module Selection Modal — shown after first login when tier requires module choice -->
     <div id="moduleSelectionOverlay" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);overflow-y:auto;">
       <div style="max-width:720px;margin:60px auto 40px;padding:0 24px;">
@@ -11988,6 +11995,7 @@ function isKnownRole(r) { return CANONICAL_ROLES.indexOf(r) !== -1; }
 var currentUserRole = null;      // 'admin' | 'staff' | 'user' | 'guest' | null
 var currentRoleConfig = null;    // Full role record with permissions map
 var currentUserOverrides = {};   // permissionOverrides from current user's own record
+var currentUserRecord = null;    // Full admin_users record; set by loadUserRole()
 var rbacReady = false;           // True once role + permissions loaded
 
 // Default role definitions — seeded on first admin bootstrap
@@ -12397,6 +12405,7 @@ async function loadUserRole(uid) {
 
     currentUserRole = userData.role || 'guest';
     currentUserOverrides = userData.permissionOverrides || {};
+    currentUserRecord = userData;
 
     // Load role permission config
     currentRoleConfig = await MastDB.roles.get(currentUserRole);
@@ -12837,6 +12846,20 @@ function signOut() {
   auth.signOut();
 }
 
+function showExpiredScreen(expiryDate) {
+  var msg = document.getElementById('expiredScreenMessage');
+  if (msg && expiryDate) {
+    msg.textContent = 'Your guest access expired on ' + new Date(expiryDate).toLocaleDateString() + '. Contact the studio owner to renew.';
+  }
+  document.getElementById('authScreen').style.display = 'none';
+  document.getElementById('deniedScreen').style.display = 'none';
+  document.getElementById('expiredScreen').style.display = '';
+  var header = document.getElementById('header');
+  if (header) header.style.display = 'none';
+  hideSidebar();
+  hideAdminTabs();
+}
+
 function enterAuthorizedState() {
   document.getElementById('authScreen').style.display = 'none';
   document.getElementById('deniedScreen').style.display = 'none';
@@ -13055,6 +13078,25 @@ auth.onAuthStateChanged(async function(user) {
     hideAdminTabs();
     detachListeners();
     return;
+  }
+
+  // --- Guest expiry check on session resume ---
+  // Client-initiated: detects expiry, calls CF to revoke tokens, then signs out.
+  if (currentUserRole === 'guest' && currentUserRecord && currentUserRecord.accessExpiry) {
+    if (new Date(currentUserRecord.accessExpiry) < new Date()) {
+      try {
+        await callCF('/revokeGuestAccess', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + await user.getIdToken() },
+          body: JSON.stringify({ targetUid: user.uid })
+        });
+      } catch (e) {
+        console.warn('revokeGuestAccess CF failed:', e);
+      }
+      await auth.signOut();
+      showExpiredScreen(currentUserRecord.accessExpiry);
+      return;
+    }
   }
 
   // --- Onboarding Check: Show setup wizard for new tenants ---
