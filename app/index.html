@@ -866,20 +866,39 @@
 
     /* Settings vertical sidebar nav */
     .settings-sidebar-nav {
-      width: 172px;
+      width: 180px;
       flex-shrink: 0;
       border-right: 1px solid var(--cream-dark);
       padding-bottom: 40px;
     }
-    .settings-nav-group-label {
+    .settings-nav-group-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+      padding: 18px 12px 5px 16px;
       font-size: 0.68rem;
       font-weight: 700;
       text-transform: uppercase;
       letter-spacing: 0.07em;
       color: var(--warm-gray);
-      padding: 18px 16px 5px;
+      background: none;
+      border: none;
+      cursor: pointer;
+      text-align: left;
+      transition: color 0.12s;
     }
-    .settings-nav-group-label:first-child { padding-top: 2px; }
+    .settings-nav-group:first-child .settings-nav-group-header { padding-top: 2px; }
+    .settings-nav-group-header:hover { color: var(--charcoal); }
+    .settings-nav-chevron {
+      width: 11px;
+      height: 11px;
+      flex-shrink: 0;
+      transition: transform 0.18s ease;
+    }
+    .settings-nav-group.collapsed .settings-nav-chevron { transform: rotate(-90deg); }
+    .settings-nav-items { overflow: hidden; }
+    .settings-nav-group.collapsed .settings-nav-items { display: none; }
     .settings-nav-item {
       display: block;
       width: 100%;
@@ -899,6 +918,8 @@
     .settings-nav-item.active { color: var(--amber); border-left-color: var(--amber); font-weight: 600; background: rgba(245,158,11,0.05); }
     .settings-content-area { flex: 1; min-width: 0; padding: 0 0 40px 28px; }
     body.dark-mode .settings-sidebar-nav { border-right-color: #333; }
+    body.dark-mode .settings-nav-group-header { color: #666; }
+    body.dark-mode .settings-nav-group-header:hover { color: #aaa; }
     body.dark-mode .settings-nav-item { color: #888; }
     body.dark-mode .settings-nav-item:hover { color: #ccc; background: rgba(255,255,255,0.04); }
     body.dark-mode .settings-nav-item.active { color: var(--amber); border-left-color: var(--amber); background: rgba(245,158,11,0.07); }
@@ -7177,33 +7198,88 @@
       </div>
       <div style="display:flex;gap:0;align-items:flex-start;margin-top:4px;">
         <nav id="settingsSubNav" class="settings-sidebar-nav">
-          <div class="settings-nav-group-label">Store</div>
-          <button class="settings-nav-item active" data-nav-key="general" onclick="switchSettingsSubView('general')">General</button>
-          <button class="settings-nav-item" data-nav-key="storefront" onclick="switchSettingsSubView('storefront')">Storefront</button>
-          <button class="settings-nav-item" data-nav-key="domains" onclick="switchSettingsSubView('domains')">Domains</button>
-          <button class="settings-nav-item" data-nav-key="dashboard" onclick="switchSettingsSubView('dashboard')">Dashboard</button>
+          <div class="settings-nav-group" id="snGroup-store">
+            <button class="settings-nav-group-header" onclick="toggleSettingsGroup('store')">
+              <span>Store</span>
+              <svg class="settings-nav-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+            </button>
+            <div class="settings-nav-items">
+              <button class="settings-nav-item active" data-nav-key="general" onclick="switchSettingsSubView('general')">General</button>
+              <button class="settings-nav-item" data-nav-key="storefront" onclick="switchSettingsSubView('storefront')">Storefront</button>
+              <button class="settings-nav-item" data-nav-key="domains" onclick="switchSettingsSubView('domains')">Domains</button>
+              <button class="settings-nav-item" data-nav-key="engagement" onclick="switchSettingsSubView('engagement')">Engagement</button>
+            </div>
+          </div>
 
-          <div class="settings-nav-group-label">Commerce</div>
-          <button class="settings-nav-item" data-nav-key="payments" onclick="switchSettingsSubView('payments')">Payments</button>
-          <button class="settings-nav-item" data-nav-key="shipping" onclick="switchSettingsSubView('shipping')">Shipping</button>
-          <button class="settings-nav-item" data-nav-key="tax" onclick="switchSettingsSubView('tax')">Tax &amp; Legal</button>
-          <button class="settings-nav-item" data-nav-key="compliance" onclick="switchSettingsSubView('compliance')">Compliance</button>
-          <button class="settings-nav-item" data-nav-key="operations" onclick="switchSettingsSubView('operations')">Operations</button>
-          <button class="settings-nav-item" data-nav-key="channels" onclick="switchSettingsSubView('channels')">Channels</button>
-          <button class="settings-nav-item" data-nav-key="pim" onclick="switchSettingsSubView('pim')">PIM</button>
+          <div class="settings-nav-group" id="snGroup-selling">
+            <button class="settings-nav-group-header" onclick="toggleSettingsGroup('selling')">
+              <span>Selling</span>
+              <svg class="settings-nav-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+            </button>
+            <div class="settings-nav-items">
+              <button class="settings-nav-item" data-nav-key="payments" onclick="switchSettingsSubView('payments')">Payments</button>
+              <button class="settings-nav-item" data-nav-key="shipping" onclick="switchSettingsSubView('shipping')">Shipping</button>
+              <button class="settings-nav-item" data-nav-key="operations" onclick="switchSettingsSubView('operations')">Operations</button>
+              <button class="settings-nav-item" data-nav-key="channels" onclick="switchSettingsSubView('channels')">Channels</button>
+            </div>
+          </div>
 
-          <div class="settings-nav-group-label">Communication</div>
-          <button class="settings-nav-item" data-nav-key="email" onclick="switchSettingsSubView('email')">Email</button>
-          <button class="settings-nav-item" data-nav-key="notifications" onclick="switchSettingsSubView('notifications')">Notifications <span id="settingsNotifBadge" class="sidebar-badge alert" style="display:none;margin-left:4px;"></span></button>
-          <button class="settings-nav-item" data-nav-key="engagement" onclick="switchSettingsSubView('engagement')">Engagement</button>
-          <button class="settings-nav-item" data-nav-key="integrations" onclick="switchSettingsSubView('integrations')">Integrations</button>
-          <button class="settings-nav-item" data-nav-key="ai" onclick="switchSettingsSubView('ai')">AI</button>
+          <div class="settings-nav-group" id="snGroup-products">
+            <button class="settings-nav-group-header" onclick="toggleSettingsGroup('products')">
+              <span>Products</span>
+              <svg class="settings-nav-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+            </button>
+            <div class="settings-nav-items">
+              <button class="settings-nav-item" data-nav-key="pim" onclick="switchSettingsSubView('pim')">PIM</button>
+              <button class="settings-nav-item" data-nav-key="product" onclick="switchSettingsSubView('product')">Pricing Defaults</button>
+            </div>
+          </div>
 
-          <div class="settings-nav-group-label">Studio</div>
-          <button class="settings-nav-item" data-nav-key="workshop" onclick="switchSettingsSubView('workshop')">Workshop</button>
-          <button class="settings-nav-item" data-nav-key="trips" onclick="switchSettingsSubView('trips')">Trips</button>
-          <button class="settings-nav-item" data-nav-key="product" onclick="switchSettingsSubView('product')">Product</button>
-          <button class="settings-nav-item" data-nav-key="maker" onclick="switchSettingsSubView('maker')">Develop</button>
+          <div class="settings-nav-group" id="snGroup-legal">
+            <button class="settings-nav-group-header" onclick="toggleSettingsGroup('legal')">
+              <span>Legal &amp; Compliance</span>
+              <svg class="settings-nav-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+            </button>
+            <div class="settings-nav-items">
+              <button class="settings-nav-item" data-nav-key="tax" onclick="switchSettingsSubView('tax')">Tax &amp; Legal</button>
+              <button class="settings-nav-item" data-nav-key="compliance" onclick="switchSettingsSubView('compliance')">Compliance</button>
+            </div>
+          </div>
+
+          <div class="settings-nav-group" id="snGroup-studio">
+            <button class="settings-nav-group-header" onclick="toggleSettingsGroup('studio')">
+              <span>Studio</span>
+              <svg class="settings-nav-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+            </button>
+            <div class="settings-nav-items">
+              <button class="settings-nav-item" data-nav-key="workshop" onclick="switchSettingsSubView('workshop')">Workshop</button>
+              <button class="settings-nav-item" data-nav-key="trips" onclick="switchSettingsSubView('trips')">Trips</button>
+            </div>
+          </div>
+
+          <div class="settings-nav-group" id="snGroup-communications">
+            <button class="settings-nav-group-header" onclick="toggleSettingsGroup('communications')">
+              <span>Communications</span>
+              <svg class="settings-nav-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+            </button>
+            <div class="settings-nav-items">
+              <button class="settings-nav-item" data-nav-key="email" onclick="switchSettingsSubView('email')">Email</button>
+              <button class="settings-nav-item" data-nav-key="notifications" onclick="switchSettingsSubView('notifications')">Notifications <span id="settingsNotifBadge" class="sidebar-badge alert" style="display:none;margin-left:4px;"></span></button>
+            </div>
+          </div>
+
+          <div class="settings-nav-group" id="snGroup-platform">
+            <button class="settings-nav-group-header" onclick="toggleSettingsGroup('platform')">
+              <span>Platform</span>
+              <svg class="settings-nav-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+            </button>
+            <div class="settings-nav-items">
+              <button class="settings-nav-item" data-nav-key="integrations" onclick="switchSettingsSubView('integrations')">Integrations</button>
+              <button class="settings-nav-item" data-nav-key="ai" onclick="switchSettingsSubView('ai')">AI</button>
+              <button class="settings-nav-item" data-nav-key="dashboard" onclick="switchSettingsSubView('dashboard')">Dashboard</button>
+              <button class="settings-nav-item" data-nav-key="maker" onclick="switchSettingsSubView('maker')">Develop</button>
+            </div>
+          </div>
         </nav>
         <div class="settings-content-area">
           <div id="settingsSubGeneral" style="max-width:500px;">
@@ -14356,7 +14432,7 @@ var ROUTE_MAP = {
   'auditlog':    { tab: 'auditLogTab' },
   // financials route handled by financials module (lazy-loaded)
   'business':    { tab: 'businessTab', setup: function() { if (typeof loadBusinessView === 'function') loadBusinessView(); } },
-  'settings':    { tab: 'settingsTab' },
+  'settings':    { tab: 'settingsTab', setup: function() { restoreSettingsGroupState(); applySettingsGating(); } },
   'subscription': { tab: 'subscriptionTab', setup: function() { renderSubscriptionSettings(); } },
   'about':        { tab: 'aboutTab', setup: function() { renderAboutSettings(); } },
   // trips route handled by trips module (lazy-loaded)
@@ -14870,6 +14946,40 @@ function getModuleForRouteManifest(route) {
 // Settings Sub-Tabs
 // ============================================================
 var settingsSubViews = ['general', 'payments', 'shipping', 'tax', 'compliance', 'operations', 'email', 'integrations', 'workshop', 'trips', 'storefront', 'dashboard', 'domains', 'ai', 'engagement', 'channels', 'notifications', 'pim', 'maker', 'product'];
+
+var SETTINGS_VIEW_GROUP = {
+  'general': 'store', 'storefront': 'store', 'domains': 'store', 'engagement': 'store',
+  'payments': 'selling', 'shipping': 'selling', 'operations': 'selling', 'channels': 'selling',
+  'pim': 'products', 'product': 'products',
+  'tax': 'legal', 'compliance': 'legal',
+  'workshop': 'studio', 'trips': 'studio',
+  'email': 'communications', 'notifications': 'communications',
+  'integrations': 'platform', 'ai': 'platform', 'dashboard': 'platform', 'maker': 'platform'
+};
+
+function toggleSettingsGroup(group) {
+  var el = document.getElementById('snGroup-' + group);
+  if (!el) return;
+  el.classList.toggle('collapsed');
+  try {
+    var state = JSON.parse(localStorage.getItem('mastSettingsGroupState') || '{}');
+    state[group] = el.classList.contains('collapsed');
+    localStorage.setItem('mastSettingsGroupState', JSON.stringify(state));
+  } catch(e) {}
+}
+
+function restoreSettingsGroupState() {
+  try {
+    var state = JSON.parse(localStorage.getItem('mastSettingsGroupState') || '{}');
+    Object.keys(state).forEach(function(group) {
+      if (state[group]) {
+        var el = document.getElementById('snGroup-' + group);
+        if (el) el.classList.add('collapsed');
+      }
+    });
+  } catch(e) {}
+}
+
 function switchSettingsSubView(view) {
   // Guard: if leaving the product settings tab with unsaved changes, prompt.
   if (view !== 'product' && _productSettingsDirty) {
@@ -14897,6 +15007,19 @@ function switchSettingsSubView(view) {
   document.querySelectorAll('#settingsSubNav .settings-nav-item').forEach(function(btn) {
     btn.classList.toggle('active', btn.dataset.navKey === view);
   });
+  // Auto-expand the group containing this view if it's collapsed
+  var group = SETTINGS_VIEW_GROUP[view];
+  if (group) {
+    var groupEl = document.getElementById('snGroup-' + group);
+    if (groupEl && groupEl.classList.contains('collapsed')) {
+      groupEl.classList.remove('collapsed');
+      try {
+        var state = JSON.parse(localStorage.getItem('mastSettingsGroupState') || '{}');
+        state[group] = false;
+        localStorage.setItem('mastSettingsGroupState', JSON.stringify(state));
+      } catch(e) {}
+    }
+  }
   // Lazy loads
   if (view === 'shipping') { loadShipProviderConfig(); }
   if (view === 'email') { loadEmailConfig(); loadEmailDomainSection(); }
