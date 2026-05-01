@@ -911,7 +911,48 @@
     .rma-modal-actions { flex-direction: column; }
     .rma-modal-actions .btn { width: 100%; text-align: center; }
   }
-  
+
+  /* ========= REVIEW CTA ========= */
+  .review-cta-all-done {
+    padding: 0.85rem 0 0.35rem;
+    border-top: 1px solid var(--cream-dark);
+    font-size: 0.78rem;
+    color: var(--teal);
+    letter-spacing: 0.04em;
+  }
+
+  .review-cta-section {
+    padding: 1rem 0 0.25rem;
+    border-top: 1px solid var(--cream-dark);
+  }
+
+  .review-item-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.3rem 0;
+    font-size: 0.88rem;
+  }
+
+  .review-item-name {
+    color: var(--text);
+    flex: 1;
+  }
+
+  .review-leave-link {
+    font-size: 0.78rem;
+    color: var(--amber);
+    text-decoration: none;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+    margin-left: 1rem;
+    transition: color 0.2s;
+  }
+
+  .review-leave-link:hover {
+    color: var(--amber-light);
+    text-decoration: underline;
+  }
 
 </style>
 </head>
@@ -1337,6 +1378,12 @@ window.TENANT_READY.then(function() {
       html += '</div></div>';
     }
 
+    // Review CTA placeholder — populated async by loadReviewCtasForOrders()
+    if (order.status === 'delivered') {
+      var oid = order.orderId || order.id || '';
+      html += '<div id="review-cta-' + esc(oid) + '"></div>';
+    }
+
     // Return / RMA section
     html += renderReturnSection(order);
 
@@ -1443,6 +1490,7 @@ window.TENANT_READY.then(function() {
         return o;
       });
       renderOrderList(orders, container);
+      loadReviewCtasForOrders(orders);
     });
   }
 
@@ -1623,6 +1671,9 @@ window.TENANT_READY.then(function() {
   // ── RMA / Returns ──
   var _termsConfig = null;
   var _termsConfigLoaded = false;
+
+  // ── Review CTA ──
+  var _reviewedProductIds = null; // null = not loaded yet, Set when loaded
 
   function loadTermsConfig() {
     if (_termsConfigLoaded) return Promise.resolve(_termsConfig);
@@ -2100,8 +2151,78 @@ window.TENANT_READY.then(function() {
     _returnModalOrder = null;
   };
 
+  // ── Review CTA helpers ──
+  function loadUserReviews(userEmail, callback) {
+    if (_reviewedProductIds !== null) {
+      callback(_reviewedProductIds);
+      return;
+    }
+    var db = firebaseApp.firestore();
+    db.collection('tenants/' + TENANT_ID + '/cs_reviews')
+      .where('authorEmail', '==', userEmail)
+      .limit(50)
+      .get()
+      .then(function(snap) {
+        var reviewed = new Set();
+        snap.forEach(function(doc) {
+          var data = doc.data();
+          if (data.productId) reviewed.add(data.productId);
+        });
+        _reviewedProductIds = reviewed;
+        callback(_reviewedProductIds);
+      })
+      .catch(function() {
+        _reviewedProductIds = new Set();
+        callback(_reviewedProductIds);
+      });
+  }
+
+  function loadReviewCtasForOrders(orders) {
+    var user = auth.currentUser;
+    if (!user || !user.email) return;
+    var deliveredOrders = orders.filter(function(o) { return o.status === 'delivered'; });
+    if (deliveredOrders.length === 0) return;
+
+    loadUserReviews(user.email, function(reviewedPids) {
+      deliveredOrders.forEach(function(order) {
+        var oid = order.orderId || order.id || '';
+        var container = document.getElementById('review-cta-' + oid);
+        if (!container) return;
+
+        var reviewableItems = (order.items || []).filter(function(item) {
+          var pid = item.productId || item.pid;
+          return pid && !item.isGiftCard && item.bookingType !== 'gift-card';
+        });
+        if (reviewableItems.length === 0) return;
+
+        var allReviewed = reviewableItems.every(function(item) {
+          return reviewedPids.has(item.productId || item.pid);
+        });
+
+        if (allReviewed) {
+          container.innerHTML = '<div class="review-cta-all-done">&#10003; All items reviewed</div>';
+        } else {
+          var html = '<div class="review-cta-section">';
+          html += '<div class="order-detail-label">Share Your Experience</div>';
+          reviewableItems.forEach(function(item) {
+            var pid = item.productId || item.pid;
+            if (reviewedPids.has(pid)) return;
+            var name = item.name || item.productName || 'Item';
+            html += '<div class="review-item-row">' +
+              '<span class="review-item-name">' + esc(name) + '</span>' +
+              '<a href="product.html?id=' + esc(pid) + '#reviews" class="review-leave-link">Leave a review &#8594;</a>' +
+            '</div>';
+          });
+          html += '</div>';
+          container.innerHTML = html;
+        }
+      });
+    });
+  }
+
   // ── Auth State (ensureCustomerAccount handled by cart.js) ──
   function handleAuthState(user) {
+    _reviewedProductIds = null; // Reset review cache on every auth state change
     var signedInSection = document.getElementById('signedInSection');
     var anonymousSection = document.getElementById('anonymousSection');
     var viewTabs = document.getElementById('ordersViewTabs');
