@@ -1035,6 +1035,18 @@
 
       await MastDB.enrollments.update(enrollmentId, updateData);
 
+      if (newStatus === 'completed' && enrollment) {
+        var contactEmail = enrollment.studentEmail || enrollment.customerEmail;
+        if (contactEmail) {
+          firebase.functions().httpsCallable('triggerSurveyOnClassAttended')({
+            classId: enrollment.classId || '',
+            className: (allClassesMap[enrollment.classId] || {}).name || enrollment.classId || '',
+            contactEmail: contactEmail,
+            contactName: enrollment.studentName || enrollment.customerName || null
+          }).catch(function(_e) { console.warn('[book] triggerSurveyOnClassAttended failed:', _e); });
+        }
+      }
+
       // Update session enrolled count
       if (enrollment && enrollment.sessionId) {
         if (newStatus === 'cancelled' && enrollment.status === 'confirmed') {
@@ -2601,6 +2613,19 @@
         status: finalStatus,
         completedAt: new Date().toISOString()
       });
+
+      if (finalStatus === 'completed' || finalStatus === 'attended-pending-waiver') {
+        var contactEmail = enrollment.studentEmail || enrollment.customerEmail;
+        if (contactEmail) {
+          firebase.functions().httpsCallable('triggerSurveyOnClassAttended')({
+            classId: opsClassId || '',
+            className: (allClassesMap[opsClassId] || {}).name || opsClassId || '',
+            contactEmail: contactEmail,
+            contactName: enrollment.studentName || enrollment.customerName || null
+          }).catch(function(_e) { console.warn('[book] triggerSurveyOnClassAttended failed:', _e); });
+        }
+      }
+
       MastAdmin.showToast(finalStatus === 'attended-pending-waiver' ? 'Closed out (pending waiver)' : 'Closed out');
       window._bookManageSession(opsSessionId, opsClassId);
     } catch (err) {
@@ -2628,6 +2653,15 @@
             status: finalStatus,
             completedAt: now
           });
+          var _coEmail = e.studentEmail || e.customerEmail;
+          if (_coEmail) {
+            firebase.functions().httpsCallable('triggerSurveyOnClassAttended')({
+              classId: opsClassId || '',
+              className: (allClassesMap[opsClassId] || {}).name || opsClassId || '',
+              contactEmail: _coEmail,
+              contactName: e.studentName || e.customerName || null
+            }).catch(function(_e) { console.warn('[book] triggerSurveyOnClassAttended failed:', _e); });
+          }
           count++;
         }
       }
@@ -2656,6 +2690,15 @@
             finalStatus = 'attended-pending-waiver';
           }
           await MastDB.enrollments.update(id, { status: finalStatus, completedAt: now });
+          var _csEmail = e.studentEmail || e.customerEmail;
+          if (_csEmail) {
+            firebase.functions().httpsCallable('triggerSurveyOnClassAttended')({
+              classId: opsClassId || '',
+              className: (allClassesMap[opsClassId] || {}).name || opsClassId || '',
+              contactEmail: _csEmail,
+              contactName: e.studentName || e.customerName || null
+            }).catch(function(_e) { console.warn('[book] triggerSurveyOnClassAttended failed:', _e); });
+          }
           autoCount++;
         }
       }
