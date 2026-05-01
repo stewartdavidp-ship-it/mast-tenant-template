@@ -238,6 +238,21 @@
   }
 
   var answers = {};
+  var currentQ = 0;
+
+  function estimateMinutes(questions) {
+    var totalSec = 0;
+    var wps = 200 / 60;
+    questions.forEach(function(q) {
+      var words = (q.text || '').split(/\s+/).filter(Boolean).length;
+      totalSec += words / wps;
+      if (q.type === 'open_text') totalSec += 30;
+      else if (q.type === 'multiple_choice') totalSec += 10;
+      else totalSec += 5;
+    });
+    var halfMins = Math.max(1, Math.ceil(totalSec / 30));
+    return halfMins * 0.5;
+  }
 
   function renderNoToken() {
     document.getElementById('svContent').innerHTML =
@@ -258,48 +273,89 @@
       '</div>';
   }
 
-  function renderQuestions(data) {
+  function renderSummary(data) {
     surveyData = data;
+    currentQ = 0;
+    var n = data.questions.length;
+    var mins = estimateMinutes(data.questions);
+    var minsLabel = mins < 1 ? 'less than 1 min' : (mins === 1 ? '1 min' : mins + ' mins');
+    var html = '<div style="text-align:center;padding:2rem 1rem;">';
+    html += '<div style="font-size:3rem;margin-bottom:1rem;">&#128203;</div>';
+    html += '<h2 style="font-family:\'Cormorant Garamond\',serif;font-size:1.8rem;font-weight:400;color:var(--text);margin:0 0 0.75rem;">' + esc(data.groupName || 'Feedback Survey') + '</h2>';
+    html += '<p style="color:var(--warm-gray,#888);margin:0 0 1.75rem;">' + n + ' question' + (n === 1 ? '' : 's') + ' &nbsp;·&nbsp; About ' + minsLabel + '</p>';
+    html += '<button class="sv-btn" onclick="svStart()">Start Survey</button>';
+    html += '</div>';
+    document.getElementById('svContent').innerHTML = html;
+  }
+
+  function renderQuestionInput(q) {
     var html = '';
-    data.questions.forEach(function(q, i) {
-      html += '<div class="sv-question" id="q_' + esc(q.id) + '">';
-      html += '<label>' + esc((i + 1) + '. ' + q.text) + '</label>';
-      if (q.type === 'rating_1_5' || q.type === 'rating_1_10') {
-        var max = q.type === 'rating_1_5' ? 5 : 10;
-        var lowLabel = q.lowLabel || 'Poor';
-        var highLabel = q.highLabel || 'Excellent';
-        html += '<div class="sv-rating">';
-        for (var n = 1; n <= max; n++) {
-          html += '<button type="button" data-qid="' + esc(q.id) + '" data-val="' + n + '" onclick="svRate(this)">' + n + '</button>';
-        }
-        html += '<div style="display:flex;justify-content:space-between;font-size:0.75rem;color:var(--warm-gray,#888);margin-top:0.25rem;"><span>1 = ' + esc(lowLabel) + '</span><span>' + max + ' = ' + esc(highLabel) + '</span></div>';
-        html += '</div>';
-      } else if (q.type === 'nps') {
-        html += '<div class="sv-rating">';
-        for (var n = 0; n <= 10; n++) {
-          html += '<button type="button" data-qid="' + esc(q.id) + '" data-val="' + n + '" onclick="svRate(this)">' + n + '</button>';
-        }
-        html += '<div style="display:flex;justify-content:space-between;font-size:0.75rem;color:var(--warm-gray,#888);margin-top:0.25rem;"><span>Not at all likely</span><span>Extremely likely</span></div>';
-        html += '</div>';
-      } else if (q.type === 'yes_no') {
-        html += '<div class="sv-rating">';
-        html += '<button type="button" data-qid="' + esc(q.id) + '" data-val="yes" onclick="svRate(this)">Yes</button>';
-        html += '<button type="button" data-qid="' + esc(q.id) + '" data-val="no" onclick="svRate(this)">No</button>';
-        html += '</div>';
-      } else if (q.type === 'multiple_choice' && q.options) {
-        q.options.forEach(function(opt) {
-          html += '<div><label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;">';
-          html += '<input type="radio" name="q_' + esc(q.id) + '" value="' + esc(opt) + '" onchange="svPick(\'' + esc(q.id) + '\', this.value)">';
-          html += esc(opt) + '</label></div>';
-        });
-      } else {
-        html += '<textarea class="sv-textarea" placeholder="Your answer..." oninput="svText(\'' + esc(q.id) + '\', this.value)"></textarea>';
+    if (q.type === 'rating_1_5' || q.type === 'rating_1_10') {
+      var max = q.type === 'rating_1_5' ? 5 : 10;
+      var lowLabel = q.lowLabel || 'Poor';
+      var highLabel = q.highLabel || 'Excellent';
+      html += '<div class="sv-rating">';
+      for (var n = 1; n <= max; n++) {
+        var active = answers[q.id] === n ? ' active' : '';
+        html += '<button type="button" class="' + active + '" data-qid="' + esc(q.id) + '" data-val="' + n + '" onclick="svRate(this)">' + n + '</button>';
       }
+      html += '<div style="display:flex;justify-content:space-between;font-size:0.75rem;color:var(--warm-gray,#888);margin-top:0.25rem;"><span>1 = ' + esc(lowLabel) + '</span><span>' + max + ' = ' + esc(highLabel) + '</span></div>';
       html += '</div>';
-    });
-    html += '<div class="sv-followup"><label><input type="checkbox" id="svFollowup"> I\'d like someone to follow up with me about this survey.</label></div>';
+    } else if (q.type === 'nps') {
+      html += '<div class="sv-rating">';
+      for (var n = 0; n <= 10; n++) {
+        var active = answers[q.id] === n ? ' active' : '';
+        html += '<button type="button" class="' + active + '" data-qid="' + esc(q.id) + '" data-val="' + n + '" onclick="svRate(this)">' + n + '</button>';
+      }
+      html += '<div style="display:flex;justify-content:space-between;font-size:0.75rem;color:var(--warm-gray,#888);margin-top:0.25rem;"><span>Not at all likely</span><span>Extremely likely</span></div>';
+      html += '</div>';
+    } else if (q.type === 'yes_no') {
+      html += '<div class="sv-rating">';
+      html += '<button type="button" ' + (answers[q.id] === 'yes' ? 'class="active"' : '') + ' data-qid="' + esc(q.id) + '" data-val="yes" onclick="svRate(this)">Yes</button>';
+      html += '<button type="button" ' + (answers[q.id] === 'no' ? 'class="active"' : '') + ' data-qid="' + esc(q.id) + '" data-val="no" onclick="svRate(this)">No</button>';
+      html += '</div>';
+    } else if (q.type === 'multiple_choice' && q.options) {
+      q.options.forEach(function(opt) {
+        html += '<div><label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;">';
+        html += '<input type="radio" name="q_' + esc(q.id) + '" value="' + esc(opt) + '"' + (answers[q.id] === opt ? ' checked' : '') + ' onchange="svPick(\'' + esc(q.id) + '\', this.value)">';
+        html += esc(opt) + '</label></div>';
+      });
+    } else {
+      html += '<textarea class="sv-textarea" placeholder="Your answer..." oninput="svText(\'' + esc(q.id) + '\', this.value)">' + esc(answers[q.id] || '') + '</textarea>';
+    }
+    return html;
+  }
+
+  function renderQuestion(idx) {
+    var q = surveyData.questions[idx];
+    var total = surveyData.questions.length;
+    var isLast = idx === total - 1;
+    var progress = Math.round(((idx + 1) / total) * 100);
+    var html = '';
+    html += '<div style="margin-bottom:1.25rem;">';
+    html += '<div style="display:flex;justify-content:space-between;font-size:0.82rem;color:var(--warm-gray,#888);margin-bottom:0.4rem;">';
+    html += '<span>Question ' + (idx + 1) + ' of ' + total + '</span></div>';
+    html += '<div style="height:4px;background:var(--cream-dark,#e5e0d8);border-radius:2px;">';
+    html += '<div style="height:4px;background:var(--primary,#c8860a);border-radius:2px;width:' + progress + '%;transition:width 0.3s;"></div>';
+    html += '</div></div>';
+    html += '<div class="sv-question" id="q_' + esc(q.id) + '">';
+    html += '<label>' + esc(q.text) + '</label>';
+    html += renderQuestionInput(q);
+    html += '</div>';
+    if (isLast) {
+      html += '<div class="sv-followup"><label><input type="checkbox" id="svFollowup"> I\'d like someone to follow up with me about this survey.</label></div>';
+    }
     html += '<div id="svSubmitStatus" style="color:#DC3545;margin:0.5rem 0;display:none;"></div>';
-    html += '<button class="sv-btn" onclick="svSubmit()">Submit Feedback</button>';
+    html += '<div style="display:flex;gap:0.75rem;justify-content:' + (idx > 0 ? 'space-between' : 'flex-end') + ';margin-top:1.5rem;">';
+    if (idx > 0) {
+      html += '<button class="sv-btn" style="background:var(--surface-card,#fff);color:var(--text);border:1px solid var(--cream-dark,#d0c9bc);" onclick="svBack()">&#8592; Back</button>';
+    }
+    if (!isLast) {
+      html += '<button class="sv-btn" onclick="svNext()">Next &#8594;</button>';
+    } else {
+      html += '<button class="sv-btn" onclick="svSubmit()">Submit Feedback</button>';
+    }
+    html += '</div>';
     document.getElementById('svContent').innerHTML = html;
   }
 
@@ -315,20 +371,36 @@
   window.svPick = function(qid, val) { answers[qid] = val; };
   window.svText = function(qid, val) { answers[qid] = val; };
 
+  window.svStart = function() { currentQ = 0; renderQuestion(0); };
+
+  window.svBack = function() {
+    if (currentQ > 0) { currentQ--; renderQuestion(currentQ); }
+  };
+
+  window.svNext = function() {
+    var q = surveyData.questions[currentQ];
+    if (answers[q.id] === undefined || answers[q.id] === '') {
+      var el = document.getElementById('svSubmitStatus');
+      if (el) { el.textContent = 'Please answer this question to continue.'; el.style.display = ''; }
+      return;
+    }
+    currentQ++;
+    renderQuestion(currentQ);
+  };
+
   window.svSubmit = function() {
     if (!surveyData) return;
-    var unanswered = surveyData.questions.filter(function(q) {
-      return answers[q.id] === undefined || answers[q.id] === '';
-    });
-    if (unanswered.length > 0) {
+    var q = surveyData.questions[currentQ];
+    if (answers[q.id] === undefined || answers[q.id] === '') {
       var el = document.getElementById('svSubmitStatus');
-      el.textContent = 'Please answer all questions before submitting.';
-      el.style.display = '';
+      if (el) { el.textContent = 'Please answer this question before submitting.'; el.style.display = ''; }
       return;
     }
     var wantsFollowup = document.getElementById('svFollowup') && document.getElementById('svFollowup').checked;
-    var submitBtn = document.querySelector('.sv-btn');
-    if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Submitting...'; }
+    var btns = document.querySelectorAll('.sv-btn');
+    btns.forEach(function(b) { b.disabled = true; });
+    var submitBtn = Array.from(btns).find(function(b) { return b.textContent.indexOf('Submit') >= 0; });
+    if (submitBtn) submitBtn.textContent = 'Submitting…';
 
     callCF('surveySubmit', {
       token: token,
@@ -368,7 +440,7 @@
     callCF('surveyLoad', { token: token })
       .then(function(resp) {
         if (resp.error) { renderError(resp.error); return; }
-        renderQuestions(resp);
+        renderSummary(resp);
       }).catch(function() {
         renderError('Could not load survey. Please try again.');
       });
