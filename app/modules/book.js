@@ -1039,7 +1039,7 @@
         var contactEmail = enrollment.studentEmail || enrollment.customerEmail;
         if (contactEmail) {
           firebase.functions().httpsCallable('triggerSurveyOnClassAttended')({
-            tenantId: TENANT_CONFIG.tenantId,
+            tenantId: TENANT_ID,
             classId: enrollment.classId || '',
             className: (allClassesMap[enrollment.classId] || {}).name || enrollment.classId || '',
             contactEmail: contactEmail,
@@ -2619,7 +2619,7 @@
         var contactEmail = enrollment.studentEmail || enrollment.customerEmail;
         if (contactEmail) {
           firebase.functions().httpsCallable('triggerSurveyOnClassAttended')({
-            tenantId: TENANT_CONFIG.tenantId,
+            tenantId: TENANT_ID,
             classId: opsClassId || '',
             className: (allClassesMap[opsClassId] || {}).name || opsClassId || '',
             contactEmail: contactEmail,
@@ -2658,7 +2658,7 @@
           var _coEmail = e.studentEmail || e.customerEmail;
           if (_coEmail) {
             firebase.functions().httpsCallable('triggerSurveyOnClassAttended')({
-              tenantId: TENANT_CONFIG.tenantId,
+              tenantId: TENANT_ID,
               classId: opsClassId || '',
               className: (allClassesMap[opsClassId] || {}).name || opsClassId || '',
               contactEmail: _coEmail,
@@ -2696,7 +2696,7 @@
           var _csEmail = e.studentEmail || e.customerEmail;
           if (_csEmail) {
             firebase.functions().httpsCallable('triggerSurveyOnClassAttended')({
-              tenantId: TENANT_CONFIG.tenantId,
+              tenantId: TENANT_ID,
               classId: opsClassId || '',
               className: (allClassesMap[opsClassId] || {}).name || opsClassId || '',
               contactEmail: _csEmail,
