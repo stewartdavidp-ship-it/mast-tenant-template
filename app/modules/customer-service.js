@@ -773,12 +773,15 @@
     items.forEach(function (sv) {
       if (surveyEditId === sv.id) { html += renderSurveyForm(sv); return; }
       var grp = groupsData[sv.groupId];
+      var isClosed = sv.closesAt && Date.now() > new Date(sv.closesAt).getTime();
       html += '<div style="border:1px solid var(--cream-dark);border-radius:8px;padding:12px 16px;background:var(--surface-card);">';
-      html += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;"><span style="font-weight:600;">' + _esc(sv.name) + '</span>' + surveyBadge(sv.status);
+      html += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;"><span style="font-weight:600;">' + _esc(sv.name) + '</span>' + surveyBadge(isClosed ? 'closed' : sv.status);
       html += '<span style="font-size:0.78rem;color:var(--warm-gray);margin-left:auto;">' + relativeTime(sv.createdAt) + '</span></div>';
-      html += '<div style="font-size:0.83rem;color:var(--warm-gray);margin-bottom:10px;">Group: ' + _esc(grp ? grp.name : (sv.groupId || 'none')) + '</div>';
+      html += '<div style="font-size:0.83rem;color:var(--warm-gray);margin-bottom:' + (sv.closesAt ? '4px' : '10px') + ';">Group: ' + _esc(grp ? grp.name : (sv.groupId || 'none')) + '</div>';
+      if (sv.closesAt) { html += '<div style="font-size:0.83rem;color:' + (isClosed ? 'var(--danger)' : 'var(--warm-gray)') + ';margin-bottom:10px;">' + (isClosed ? 'Closed ' : 'Closes ') + relativeTime(sv.closesAt) + '</div>'; }
       html += '<div style="display:flex;gap:8px;flex-wrap:wrap;">';
       html += '<button class="btn btn-primary btn-small" onclick="csSendLink(\'' + _esc(sv.id) + '\')">Send Survey</button>';
+      html += '<button class="btn btn-secondary btn-small" onclick="csPreviewSurvey(\'' + _esc(sv.id) + '\')">Preview</button>';
       html += '<button class="btn btn-secondary btn-small" onclick="csEditSurvey(\'' + _esc(sv.id) + '\')">Edit</button>';
       html += '<button class="btn btn-danger btn-small" onclick="csDeleteSurvey(\'' + _esc(sv.id) + '\')">Delete</button></div></div>';
     });
@@ -795,10 +798,13 @@
     html += '<select id="csSvGroup" class="form-select" style="width:100%;"><option value="">— select group —</option>';
     Object.values(groupsData).forEach(function (g) { html += '<option value="' + _esc(g.id) + '"' + (isEdit && sv.groupId === g.id ? ' selected' : '') + '>' + _esc(g.name) + '</option>'; });
     html += '</select></div>';
-    html += '<div style="margin-bottom:12px;"><label style="font-weight:600;font-size:0.88rem;display:block;margin-bottom:4px;">Status</label>';
+    html += '<div style="margin-bottom:10px;"><label style="font-weight:600;font-size:0.88rem;display:block;margin-bottom:4px;">Status</label>';
     html += '<select id="csSvStatus" class="form-select" style="width:100%;">';
     ['draft','active','inactive'].forEach(function (s) { html += '<option value="' + s + '"' + (statusVal === s ? ' selected' : '') + '>' + s + '</option>'; });
     html += '</select></div>';
+    var closesAtVal = isEdit && sv.closesAt ? sv.closesAt.substring(0, 16) : '';
+    html += '<div style="margin-bottom:12px;"><label style="font-weight:600;font-size:0.88rem;display:block;margin-bottom:4px;">Closes at <span style="font-weight:400;color:var(--warm-gray);">(optional)</span></label>';
+    html += '<input id="csSvClosesAt" type="datetime-local" class="form-input" style="width:100%;box-sizing:border-box;" value="' + closesAtVal + '"></div>';
     html += '<div style="display:flex;gap:8px;"><button class="btn btn-primary btn-small" onclick="csSaveSurvey(\'' + id + '\')">' + (isEdit ? 'Save' : 'Create') + '</button>';
     html += '<button class="btn btn-secondary btn-small" onclick="csCancelSurvey()">Cancel</button></div></div>';
     return html;
@@ -808,11 +814,13 @@
     var name = ((document.getElementById('csSvName') || {}).value || '').trim();
     var groupId = (document.getElementById('csSvGroup') || {}).value || '';
     var status = (document.getElementById('csSvStatus') || {}).value || 'draft';
+    var closesAtRaw = ((document.getElementById('csSvClosesAt') || {}).value || '').trim();
+    var closesAt = closesAtRaw ? new Date(closesAtRaw).toISOString() : null;
     if (!name) { showToast('Survey name is required', true); return; }
     if (!groupId) { showToast('Please select a group', true); return; }
     try {
-      if (id) { await MastDB.update('cs_surveys/' + id, { name: name, groupId: groupId, status: status, updatedAt: nowIso() }); if (surveysDefData[id]) Object.assign(surveysDefData[id], { name: name, groupId: groupId, status: status }); surveyEditId = null; showToast('Survey updated'); }
-      else { var nk = MastDB.newKey('cs_surveys'); var ts = genTokenSecret(); var doc = { id: nk, name: name, groupId: groupId, status: status, tokenSecret: ts, createdAt: nowIso(), updatedAt: nowIso() }; await MastDB.set('cs_surveys/' + nk, doc); var cached = Object.assign({}, doc); delete cached.tokenSecret; surveysDefData[nk] = cached; showAddSurvey = false; showToast('Survey created'); }
+      if (id) { await MastDB.update('cs_surveys/' + id, { name: name, groupId: groupId, status: status, closesAt: closesAt, updatedAt: nowIso() }); if (surveysDefData[id]) Object.assign(surveysDefData[id], { name: name, groupId: groupId, status: status, closesAt: closesAt }); surveyEditId = null; showToast('Survey updated'); }
+      else { var nk = MastDB.newKey('cs_surveys'); var ts = genTokenSecret(); var doc = { id: nk, name: name, groupId: groupId, status: status, closesAt: closesAt, tokenSecret: ts, createdAt: nowIso(), updatedAt: nowIso() }; await MastDB.set('cs_surveys/' + nk, doc); var cached = Object.assign({}, doc); delete cached.tokenSecret; surveysDefData[nk] = cached; showAddSurvey = false; showToast('Survey created'); }
       renderSurveys();
     } catch (err) { showToast('Failed: ' + (err && err.message), true); }
   }
@@ -830,6 +838,17 @@
       await fn({ tenantId: window.TENANT_ID, surveyId: sendLinkSurveyId, contactEmail: email, contactName: contactName || null });
       sendLinkSurveyId = null; showToast('Survey invite sent!'); renderSurveys();
     } catch (err) { showToast('Failed to send: ' + (err && err.message), true); }
+  }
+
+  async function previewSurvey(surveyId) {
+    try {
+      showToast('Generating preview…');
+      var fn = firebase.functions().httpsCallable('generateSurveyLink');
+      var result = await fn({ tenantId: window.TENANT_ID, surveyId: surveyId, preview: true });
+      var url = result && result.data && result.data.surveyUrl;
+      if (!url) { showToast('Preview failed: no URL returned', true); return; }
+      window.open(url, '_blank');
+    } catch (err) { showToast('Preview failed: ' + (err && err.message), true); }
   }
 
   function renderTriggersTab() {
@@ -985,6 +1004,7 @@
   window.csSendLink = function (id) { sendLinkSurveyId = id; renderSurveys(); };
   window.csSendLinkCancel = function () { sendLinkSurveyId = null; renderSurveys(); };
   window.csSendLinkSubmit = sendSurveyLink;
+  window.csPreviewSurvey = previewSurvey;
   window.csShowAddTrigger = function () { showAddTrigger = true; triggerEditId = null; renderSurveys(); };
   window.csEditTrigger = function (id) { triggerEditId = id; showAddTrigger = false; renderSurveys(); };
   window.csSaveTrigger = saveTrigger;
