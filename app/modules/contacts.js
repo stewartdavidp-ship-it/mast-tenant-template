@@ -295,7 +295,7 @@
 
     try {
       var results = await Promise.all([
-        db.collection(base + '/orders').where('contactEmail', '==', email).limit(50).get(),
+        db.collection(base + '/orders').where('email', '==', email).limit(50).get(),
         db.collection(base + '/cs_tickets').where('contactEmail', '==', email).limit(50).get(),
         db.collection(base + '/cs_reviews').where('authorEmail', '==', email).limit(50).get(),
         db.collection(base + '/cs_survey_responses').where('contactEmail', '==', email).limit(50).get(),
