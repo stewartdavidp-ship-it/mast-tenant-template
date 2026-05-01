@@ -266,10 +266,13 @@
       html += '<label>' + esc((i + 1) + '. ' + q.text) + '</label>';
       if (q.type === 'rating_1_5' || q.type === 'rating_1_10') {
         var max = q.type === 'rating_1_5' ? 5 : 10;
+        var lowLabel = q.lowLabel || 'Poor';
+        var highLabel = q.highLabel || 'Excellent';
         html += '<div class="sv-rating">';
         for (var n = 1; n <= max; n++) {
           html += '<button type="button" data-qid="' + esc(q.id) + '" data-val="' + n + '" onclick="svRate(this)">' + n + '</button>';
         }
+        html += '<div style="display:flex;justify-content:space-between;font-size:0.75rem;color:var(--warm-gray,#888);margin-top:0.25rem;"><span>1 = ' + esc(lowLabel) + '</span><span>' + max + ' = ' + esc(highLabel) + '</span></div>';
         html += '</div>';
       } else if (q.type === 'nps') {
         html += '<div class="sv-rating">';
