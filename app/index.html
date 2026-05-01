@@ -13102,20 +13102,8 @@ auth.onAuthStateChanged(async function(user) {
     return;
   }
 
-  if (!isStaff()) {
-    // Staff role — show denied screen for now
-    // (Staff portal UI is a future phase)
-    authScreen.style.display = 'none';
-    deniedScreen.style.display = '';
-    header.style.display = 'none';
-    hideSidebar();
-    hideAdminTabs();
-    detachListeners();
-    return;
-  }
-
-  // --- Guest expiry check on session resume ---
-  // Client-initiated: detects expiry, calls CF to revoke tokens, then signs out.
+  // --- Guest expiry check — must run BEFORE the !isStaff() gate ---
+  // Guests are not staff, so !isStaff() would show Access Denied before expiry is checked.
   if (currentUserRole === 'guest' && currentUserRecord && currentUserRecord.accessExpiry) {
     if (new Date(currentUserRecord.accessExpiry) < new Date()) {
       try {
@@ -13131,6 +13119,16 @@ auth.onAuthStateChanged(async function(user) {
       showExpiredScreen(currentUserRecord.accessExpiry);
       return;
     }
+  }
+
+  if (!isStaff()) {
+    authScreen.style.display = 'none';
+    deniedScreen.style.display = '';
+    header.style.display = 'none';
+    hideSidebar();
+    hideAdminTabs();
+    detachListeners();
+    return;
   }
 
   // --- Onboarding Check: Show setup wizard for new tenants ---
