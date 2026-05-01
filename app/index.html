@@ -12728,6 +12728,14 @@ window.mastAlert = mastAlert;
 window.mastPrompt = mastPrompt;
 window.mastCopyFallback = mastCopyFallback;
 
+// Defensive stubs for shows module functions referenced in static modal HTML.
+// shows.js overwrites these unconditionally on lazy-load.
+window.closeCreateShowModal = function() {
+  var m = document.getElementById('createShowModal');
+  if (m) m.style.display = 'none';
+};
+window.saveShow = function() {};
+
 // ============================================================
 // Auth
 // ============================================================
