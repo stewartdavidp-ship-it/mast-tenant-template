@@ -32102,13 +32102,18 @@ function _evaluateProductReadiness(product) {
     { label: 'Price',       met: !!(product.priceCents > 0 || product.recipeId) },
     { label: 'Category',    met: !!(product.categories && product.categories.length > 0) }
   ];
+  // Blockers only — things that are visibly broken if published.
+  // Channel and inventory type are guidance nudges shown in the panel, not hard stops.
   var readyToActive = [
-    { label: 'Image confirmed',       met: !!(product.images && product.images.length > 0) },
-    { label: 'Price set',             met: !!(product.priceCents > 0) },
-    { label: 'Channel assigned',      met: !!(product.externalRefs && Object.keys(product.externalRefs).some(function(k) { return product.externalRefs[k] && product.externalRefs[k].externalId; })) },
-    { label: 'Inventory type set',    met: !!(inv && inv.stockType) }
+    { label: 'Image',  met: !!(product.images && product.images.length > 0) },
+    { label: 'Price',  met: !!(product.priceCents > 0) }
   ];
-  return { draftToReady: draftToReady, readyToActive: readyToActive };
+  // Guidance nudges shown alongside the gate (amber, non-blocking)
+  var guidance = [
+    { label: 'Channel assigned',   met: !!(product.externalRefs && Object.keys(product.externalRefs).some(function(k) { return product.externalRefs[k] && product.externalRefs[k].externalId; })) },
+    { label: 'Inventory type set', met: !!(inv && inv.stockType) }
+  ];
+  return { draftToReady: draftToReady, readyToActive: readyToActive, guidance: guidance };
 }
 
 function _renderProductStagePanel(product) {
@@ -32145,20 +32150,33 @@ function _renderProductStagePanel(product) {
   }
   html += '</div>';
 
-  // Row 2: checklist chips (only for draft/ready)
+  // Row 2: gate checklist chips (blockers — draft/review only)
   if (status === 'draft' || status === 'ready') {
     html += '<div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:5px;">';
     if (incomplete.length === 0) {
-      html += '<span style="font-size:0.72rem;color:#6ee7b7;">✓ All criteria met</span>';
+      html += '<span style="font-size:0.72rem;color:#6ee7b7;">✓ Ready to ' + (status === 'draft' ? 'review' : 'publish') + '</span>';
     } else {
       checklistItems.forEach(function(c) {
         var met = c.met;
         html += '<span style="font-size:0.7rem;padding:2px 7px;border-radius:4px;' +
-          (met ? 'background:rgba(5,150,105,0.15);color:#6ee7b7;' : 'background:rgba(245,158,11,0.12);color:#fbbf24;') + '">' +
+          (met ? 'background:rgba(5,150,105,0.15);color:#6ee7b7;' : 'background:rgba(239,68,68,0.12);color:#f87171;') + '">' +
           (met ? '✓ ' : '✗ ') + c.label + '</span>';
       });
     }
     html += '</div>';
+  }
+
+  // Row 3: guidance nudges (non-blocking — amber, shown when active or review)
+  if (status === 'ready' || status === 'active') {
+    var nudges = crit.guidance.filter(function(g) { return !g.met; });
+    if (nudges.length > 0) {
+      html += '<div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:5px;align-items:center;">';
+      html += '<span style="font-size:0.68rem;color:var(--warm-gray,#888);margin-right:2px;">Suggested:</span>';
+      nudges.forEach(function(g) {
+        html += '<span style="font-size:0.7rem;padding:2px 7px;border-radius:4px;background:rgba(245,158,11,0.12);color:#fbbf24;">⚠ ' + g.label + '</span>';
+      });
+      html += '</div>';
+    }
   }
 
   html += '</div>';
