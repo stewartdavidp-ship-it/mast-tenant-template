@@ -256,19 +256,55 @@
   function renderTeam(container) {
     var h = '';
     h += '<div class="view-tabs" style="margin-bottom:20px;">';
-    h += '<button class="view-tab' + (currentView === 'roster' || currentView === 'detail' ? ' active' : '') + '" onclick="teamSwitchView(\'roster\')">People</button>';
+    h += '<button class="view-tab' + (currentView === 'roster' || currentView === 'detail' ? ' active' : '') + '" onclick="teamSwitchView(\'roster\')">Roster</button>';
+    h += '<button class="view-tab' + (currentView === 'timeclock' ? ' active' : '') + '" onclick="teamSwitchView(\'timeclock\')">Time Clock</button>';
+    h += '<button class="view-tab' + (currentView === 'pto' ? ' active' : '') + '" onclick="teamSwitchView(\'pto\')">PTO</button>';
     h += '<button class="view-tab' + (currentView === 'docs' ? ' active' : '') + '" onclick="teamSwitchView(\'docs\')">Documents</button>';
+    h += '<button class="view-tab' + (currentView === 'onboarding' ? ' active' : '') + '" onclick="teamSwitchView(\'onboarding\')">Onboarding</button>';
     h += '</div>';
 
     if (currentView === 'roster') {
       h += renderRoster();
     } else if (currentView === 'detail') {
       h += renderEmployeeDetail();
+    } else if (currentView === 'timeclock') {
+      h += renderTimeClockStub();
+    } else if (currentView === 'pto') {
+      h += renderPtoStub();
     } else if (currentView === 'docs') {
       h += renderTenantDocs();
+    } else if (currentView === 'onboarding') {
+      h += renderOnboardingStub();
     }
 
     container.innerHTML = h;
+  }
+
+  function renderTimeClockStub() {
+    return '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:300px;text-align:center;padding:40px 20px;">' +
+      '<div style="font-size:1.6rem;margin-bottom:12px;">&#9201;</div>' +
+      '<div style="font-family:\'Cormorant Garamond\',serif;font-size:1.4rem;font-weight:500;margin-bottom:8px;">Time Clock</div>' +
+      '<div style="color:var(--warm-gray);font-size:0.9rem;max-width:400px;margin-bottom:8px;">Clock in/out tracking for hourly employees. Weekly hour totals and overtime alerts per person. Export to CSV for payroll.</div>' +
+      '<div style="color:var(--warm-gray-light);font-size:0.85rem;font-style:italic;">Coming soon &mdash; hours are currently logged manually in the Roster detail view.</div>' +
+      '</div>';
+  }
+
+  function renderPtoStub() {
+    return '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:300px;text-align:center;padding:40px 20px;">' +
+      '<div style="font-size:1.6rem;margin-bottom:12px;">&#127958;</div>' +
+      '<div style="font-family:\'Cormorant Garamond\',serif;font-size:1.4rem;font-weight:500;margin-bottom:8px;">PTO</div>' +
+      '<div style="color:var(--warm-gray);font-size:0.9rem;max-width:400px;margin-bottom:8px;">Paid time off balances, accrual rules, and request tracking per employee. Manager approval flow with calendar view.</div>' +
+      '<div style="color:var(--warm-gray-light);font-size:0.85rem;font-style:italic;">Coming soon &mdash; part of the Finance / HR expansion.</div>' +
+      '</div>';
+  }
+
+  function renderOnboardingStub() {
+    return '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:300px;text-align:center;padding:40px 20px;">' +
+      '<div style="font-size:1.6rem;margin-bottom:12px;">&#9989;</div>' +
+      '<div style="font-family:\'Cormorant Garamond\',serif;font-size:1.4rem;font-weight:500;margin-bottom:8px;">Onboarding</div>' +
+      '<div style="color:var(--warm-gray);font-size:0.9rem;max-width:400px;margin-bottom:8px;">Checklists for new hires: documents to collect, accounts to provision, equipment to assign. Track completion status per employee.</div>' +
+      '<div style="color:var(--warm-gray-light);font-size:0.85rem;font-style:italic;">Coming soon &mdash; compliance checklist in Roster detail is the current equivalent.</div>' +
+      '</div>';
   }
 
   // ========================================

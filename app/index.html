@@ -5478,6 +5478,24 @@
         <div class="sidebar-item" data-route="book-reports" onclick="navigateTo('book-reports')">Class Reports</div>
       </div>
     </div>
+    <!-- Finance -->
+    <div class="sidebar-section" data-section="finance">
+      <div class="sidebar-section-header" onclick="toggleSection('finance')">
+        <span class="sidebar-section-icon">&#128200;</span>
+        <span class="sidebar-section-label">Finance</span>
+        <span class="sidebar-section-arrow">&#9654;</span>
+      </div>
+      <div class="sidebar-items">
+        <div class="sidebar-item" data-route="finance-revenue" onclick="navigateTo('finance-revenue')">Revenue</div>
+        <div class="sidebar-item" data-route="finance-expenses" onclick="navigateTo('finance-expenses')">Expenses</div>
+        <div class="sidebar-item" data-route="finance-pl" onclick="navigateTo('finance-pl')">P&amp;L</div>
+        <div class="sidebar-item" data-route="finance-cash-flow" onclick="navigateTo('finance-cash-flow')">Cash Flow</div>
+        <div class="sidebar-item" data-route="finance-ar" onclick="navigateTo('finance-ar')">AR</div>
+        <div class="sidebar-item" data-route="finance-ap" onclick="navigateTo('finance-ap')">AP</div>
+        <div class="sidebar-item" data-route="finance-tax" onclick="navigateTo('finance-tax')">Tax</div>
+        <div class="sidebar-item" data-route="finance-reports" onclick="navigateTo('finance-reports')">Reports</div>
+      </div>
+    </div>
     <!-- Operations -->
     <div class="sidebar-section" data-section="operations">
       <div class="sidebar-section-header" onclick="toggleSection('operations')">
@@ -5486,8 +5504,6 @@
         <span class="sidebar-section-arrow">&#9654;</span>
       </div>
       <div class="sidebar-items">
-        <div class="sidebar-item" data-route="financials" onclick="navigateTo('financials')">Revenue</div>
-        <div class="sidebar-item" data-route="expenses" onclick="navigateTo('expenses')">Expenses</div>
         <div class="sidebar-item" data-route="trips" onclick="navigateTo('trips')">Trips</div>
         <div class="sidebar-item" data-route="reports" onclick="navigateTo('reports')">Reports</div>
         <div class="sidebar-item" data-route="advisor" onclick="navigateTo('advisor')">Business Plan</div>
@@ -6009,6 +6025,72 @@
       <!-- Transaction Detail View -->
       <div id="expDetailView" style="display:none;">
         <div id="expDetailContent"></div>
+      </div>
+    </div>
+
+    <!-- ===== FINANCE MODULE TABS ===== -->
+    <div id="financeRevenueTab" style="display:none;">
+      <div class="placeholder-view">
+        <span class="placeholder-badge partial">Coming Soon</span>
+        <div class="placeholder-title">Revenue</div>
+        <div class="placeholder-desc">Sales sync from Square, Stripe, Etsy, and manual sources — all processors in one view with daily and period summaries.</div>
+        <div class="placeholder-note">Revenue data will be wired from the existing sync view in a future session.</div>
+      </div>
+    </div>
+    <div id="financeExpensesTab" style="display:none;">
+      <div class="placeholder-view">
+        <span class="placeholder-badge partial">Coming Soon</span>
+        <div class="placeholder-title">Expenses</div>
+        <div class="placeholder-desc">Bank-connected expense tracking via Plaid. Categorize, approve, and export transactions. Linked to your business accounts.</div>
+        <div class="placeholder-note">Expense data will be wired from the existing Plaid view in a future session.</div>
+      </div>
+    </div>
+    <div id="financePlTab" style="display:none;">
+      <div class="placeholder-view">
+        <span class="placeholder-badge future">Roadmap</span>
+        <div class="placeholder-title">P&amp;L</div>
+        <div class="placeholder-desc">Income statement assembled from your revenue, expenses, and cost of goods. Period selector with month, quarter, and year views. Export to CSV or PDF.</div>
+        <div class="placeholder-note">Requires Revenue and Expenses to be fully wired before P&amp;L can be calculated.</div>
+      </div>
+    </div>
+    <div id="financeCashFlowTab" style="display:none;">
+      <div class="placeholder-view">
+        <span class="placeholder-badge future">Roadmap</span>
+        <div class="placeholder-title">Cash Flow</div>
+        <div class="placeholder-desc">Running cash balance across all connected accounts. Shows inflows (sales, deposits) and outflows (expenses, payroll) on a rolling timeline.</div>
+        <div class="placeholder-note">Will pull from Revenue and Expenses once both are live.</div>
+      </div>
+    </div>
+    <div id="financeArTab" style="display:none;">
+      <div class="placeholder-view">
+        <span class="placeholder-badge future">Roadmap</span>
+        <div class="placeholder-title">Accounts Receivable</div>
+        <div class="placeholder-desc">Outstanding invoices, wholesale balances, and commission consignments owed to you. Aging report with 30/60/90-day buckets.</div>
+        <div class="placeholder-note">Will surface data from Orders, Wholesale, and Galleries modules.</div>
+      </div>
+    </div>
+    <div id="financeApTab" style="display:none;">
+      <div class="placeholder-view">
+        <span class="placeholder-badge future">Roadmap</span>
+        <div class="placeholder-title">Accounts Payable</div>
+        <div class="placeholder-desc">Vendor bills, materials purchases, and recurring obligations. Track what you owe and when it's due.</div>
+        <div class="placeholder-note">Will surface data from Procurement and Expenses modules.</div>
+      </div>
+    </div>
+    <div id="financeTaxTab" style="display:none;">
+      <div class="placeholder-view">
+        <span class="placeholder-badge future">Roadmap</span>
+        <div class="placeholder-title">Tax</div>
+        <div class="placeholder-desc">Quarterly estimated tax calculations based on net income. Sales tax collected by jurisdiction. Schedule C prep summary for sole proprietors.</div>
+        <div class="placeholder-note">Replaces TaxJar for sub-$2M businesses. Period selector and export coming.</div>
+      </div>
+    </div>
+    <div id="financeReportsTab" style="display:none;">
+      <div class="placeholder-view">
+        <span class="placeholder-badge future">Roadmap</span>
+        <div class="placeholder-title">Reports</div>
+        <div class="placeholder-desc">Pre-built financial reports: income statement, mileage summary, expense export by category, show-by-show profitability, and Schedule C prep package.</div>
+        <div class="placeholder-note">Reports are generated from live Finance data once Revenue and Expenses are wired.</div>
       </div>
     </div>
 
@@ -14503,7 +14585,10 @@ var SECTION_ROUTES = {
   'classes':           ['book', 'instructors', 'resources', 'passes',
                         'enrollments', 'calendar', 'students',
                         'book-reports'],
-  'operations':        ['financials', 'expenses', 'trips', 'reports',
+  'finance':           ['finance-revenue', 'finance-expenses', 'finance-pl',
+                        'finance-cash-flow', 'finance-ar', 'finance-ap',
+                        'finance-tax', 'finance-reports'],
+  'operations':        ['trips', 'reports',
                         'advisor', 'studio', 'team', 'business',
                         'channels', 'contacts'],
   'customer-service':  ['cs-inbox', 'cs-tickets', 'cs-surveys',
@@ -14516,7 +14601,7 @@ var SECTION_ROUTES = {
                         'historical-orders']
 };
 
-var ALL_TAB_IDS = ['scheduleTab', 'galleryTab', 'homepageTab', 'brandTab', 'productsTab', 'ordersTab', 'salesTab', 'salesEventsTab', 'productionTab', 'forecastTab', 'couponsTab', 'analyticsTab', 'settingsTab', 'imagesTab', 'auditLogTab', 'employeesTab', 'contactsTab', 'customersTab', 'packTab', 'shipTab', 'commissionsTab', 'rmaTab', 'socialMediaTab', 'blogTab', 'newsletterTab', 'placeholderTab', 'inventoryTab', 'storiesTab', 'dashboardTab', 'tripsTab', 'wholesaleTab', 'showTab', 'financialsTab', 'eventsAdminTab', 'websiteTab', 'showLightTab', 'emailLogTab', 'materialsTab', 'piecesTab', 'galleriesTab', 'lookbooksTab', 'promotionsTab', 'expensesTab', 'bookTab', 'subscriptionTab', 'aboutTab', 'walletTab', 'giftCardsTab', 'loyaltyTab', 'membershipTab', 'termsTab', 'advisorTab', 'studioTab', 'teamTab', 'studentsTab', 'migrationDashTab', 'migrationConfirmTab', 'migrationPlanTab', 'migrationImportTab', 'historicalOrdersTab', 'channelsTab', 'businessTab', 'myFeedbackTab', 'procurementTab', 'csInboxTab', 'csTicketsTab', 'csSurveysTab', 'csReviewsTab', 'csFaqsTab', 'csMembersTab'];
+var ALL_TAB_IDS = ['scheduleTab', 'galleryTab', 'homepageTab', 'brandTab', 'productsTab', 'ordersTab', 'salesTab', 'salesEventsTab', 'productionTab', 'forecastTab', 'couponsTab', 'analyticsTab', 'settingsTab', 'imagesTab', 'auditLogTab', 'employeesTab', 'contactsTab', 'customersTab', 'packTab', 'shipTab', 'commissionsTab', 'rmaTab', 'socialMediaTab', 'blogTab', 'newsletterTab', 'placeholderTab', 'inventoryTab', 'storiesTab', 'dashboardTab', 'tripsTab', 'wholesaleTab', 'showTab', 'financialsTab', 'eventsAdminTab', 'websiteTab', 'showLightTab', 'emailLogTab', 'materialsTab', 'piecesTab', 'galleriesTab', 'lookbooksTab', 'promotionsTab', 'expensesTab', 'bookTab', 'subscriptionTab', 'aboutTab', 'walletTab', 'giftCardsTab', 'loyaltyTab', 'membershipTab', 'termsTab', 'advisorTab', 'studioTab', 'teamTab', 'studentsTab', 'migrationDashTab', 'migrationConfirmTab', 'migrationPlanTab', 'migrationImportTab', 'historicalOrdersTab', 'channelsTab', 'businessTab', 'myFeedbackTab', 'procurementTab', 'csInboxTab', 'csTicketsTab', 'csSurveysTab', 'csReviewsTab', 'csFaqsTab', 'csMembersTab', 'financeRevenueTab', 'financeExpensesTab', 'financePlTab', 'financeCashFlowTab', 'financeArTab', 'financeApTab', 'financeTaxTab', 'financeReportsTab'];
 
 var currentRoute = 'dashboard';
 
@@ -14998,6 +15083,7 @@ var MODULE_MANIFEST = {
   social: { src: 'modules/social.js', routes: ['social'] },
   trips: { src: 'modules/trips.js', routes: ['trips'] },
   wholesale: { src: 'modules/wholesale.js', routes: ['wholesale'] },
+  finance: { src: 'modules/finance.js', routes: ['finance-revenue', 'finance-expenses', 'finance-pl', 'finance-cash-flow', 'finance-ar', 'finance-ap', 'finance-tax', 'finance-reports'] },
   financials: { src: 'modules/financials.js', routes: ['financials'] },
   expenses: { src: 'modules/expenses.js', routes: ['expenses'] },
   shows: { src: 'modules/shows.js', routes: ['show', 'show-find', 'show-apply', 'show-prep', 'show-execute', 'show-history'] },
