@@ -1645,12 +1645,13 @@
       return;
     }
     var po = purchaseOrdersData[receipt.poId];
-    if (!po || !po.vendorId || !vendorsData[po.vendorId]) {
+    var vendorId = (po && po.vendorId) || receipt.vendorId;
+    if (!vendorId || !vendorsData[vendorId]) {
       if (typeof showToast === 'function') showToast('Vendor not found for this receipt', true);
       render();
       return;
     }
-    selectedVendorId = po.vendorId;
+    selectedVendorId = vendorId;
     currentView = 'vendor-detail';
     vendorDetailTab = 'receipts';
     vendorEditMode = false;
