@@ -12165,7 +12165,8 @@ var DEFAULT_ROLES = {
       receipts:     { create: true, read: true, update: true, delete: true },
       contacts:     { create: true, read: true, update: true, delete: true },
       forecast:     { create: false, read: true, update: false, delete: false },
-      finance:      { create: true, read: true, update: true, delete: true }
+      finance:          { create: true, read: true, update: true, delete: true },
+      financeSensitive: { create: true, read: true, update: true, delete: true }
     }
   },
   manager: {
@@ -12173,26 +12174,27 @@ var DEFAULT_ROLES = {
     description: 'Operational access — PoS, inventory, fulfillment. No pricing, settings, or user management.',
     isDefault: true,
     permissions: {
-      orders:       { create: true, read: true, update: true, delete: false },
-      products:     { create: false, read: true, update: false, delete: false },
-      inventory:    { create: true, read: true, update: true, delete: false },
-      jobs:         { create: true, read: true, update: true, delete: false },
-      buildJobs:    { create: true, read: true, update: true, delete: false },
-      salesEvents:  { create: false, read: true, update: true, delete: false },
-      shows:        { create: true, read: true, update: true, delete: false },
-      gallery:      { create: false, read: true, update: false, delete: false },
-      schedule:     { create: false, read: true, update: false, delete: false },
-      locations:    { create: false, read: true, update: false, delete: false },
-      coupons:      { create: false, read: true, update: false, delete: false },
-      settings:     { create: false, read: false, update: false, delete: false },
-      users:        { create: false, read: false, update: false, delete: false },
-      roles:        { create: false, read: false, update: false, delete: false },
-      auditLog:     { create: false, read: false, update: false, delete: false },
-      pos:          { create: true, read: true, update: true, delete: false },
-      receipts:     { create: true, read: true, update: false, delete: false },
-      contacts:     { create: true, read: true, update: true, delete: false },
-      forecast:     { create: false, read: true, update: false, delete: false },
-      finance:      { create: true, read: true, update: true, delete: false }
+      orders:           { create: true, read: true, update: true, delete: false },
+      products:         { create: false, read: true, update: false, delete: false },
+      inventory:        { create: true, read: true, update: true, delete: false },
+      jobs:             { create: true, read: true, update: true, delete: false },
+      buildJobs:        { create: true, read: true, update: true, delete: false },
+      salesEvents:      { create: false, read: true, update: true, delete: false },
+      shows:            { create: true, read: true, update: true, delete: false },
+      gallery:          { create: false, read: true, update: false, delete: false },
+      schedule:         { create: false, read: true, update: false, delete: false },
+      locations:        { create: false, read: true, update: false, delete: false },
+      coupons:          { create: false, read: true, update: false, delete: false },
+      settings:         { create: false, read: false, update: false, delete: false },
+      users:            { create: false, read: false, update: false, delete: false },
+      roles:            { create: false, read: false, update: false, delete: false },
+      auditLog:         { create: false, read: false, update: false, delete: false },
+      pos:              { create: true, read: true, update: true, delete: false },
+      receipts:         { create: true, read: true, update: false, delete: false },
+      contacts:         { create: true, read: true, update: true, delete: false },
+      forecast:         { create: false, read: true, update: false, delete: false },
+      finance:          { create: false, read: true, update: false, delete: false },
+      financeSensitive: { create: false, read: false, update: false, delete: false }
     },
     navSections: ['products', 'sales', 'marketing', 'retention', 'events',
                   'classes', 'finance', 'operations', 'customer-service', 'admin']
@@ -12220,8 +12222,9 @@ var DEFAULT_ROLES = {
       pos:          { create: false, read: false, update: false, delete: false },
       receipts:     { create: false, read: false, update: false, delete: false },
       contacts:     { create: false, read: false, update: false, delete: false },
-      forecast:     { create: false, read: false, update: false, delete: false },
-      finance:      { create: false, read: false, update: false, delete: false }
+      forecast:         { create: false, read: false, update: false, delete: false },
+      finance:          { create: false, read: false, update: false, delete: false },
+      financeSensitive: { create: false, read: false, update: false, delete: false }
     },
     navSections: ['sales', 'products', 'classes', 'customer-service']
   },
@@ -12230,26 +12233,27 @@ var DEFAULT_ROLES = {
     description: 'Read-only guest access. Limited visibility into orders and schedule.',
     isDefault: true,
     permissions: {
-      orders:       { create: false, read: true, update: false, delete: false },
-      products:     { create: false, read: true, update: false, delete: false },
-      inventory:    { create: false, read: false, update: false, delete: false },
-      jobs:         { create: false, read: false, update: false, delete: false },
-      buildJobs:    { create: false, read: false, update: false, delete: false },
-      salesEvents:  { create: false, read: false, update: false, delete: false },
-      shows:        { create: false, read: true, update: false, delete: false },
-      gallery:      { create: false, read: false, update: false, delete: false },
-      schedule:     { create: false, read: true, update: false, delete: false },
-      locations:    { create: false, read: false, update: false, delete: false },
-      coupons:      { create: false, read: false, update: false, delete: false },
-      settings:     { create: false, read: false, update: false, delete: false },
-      users:        { create: false, read: false, update: false, delete: false },
-      roles:        { create: false, read: false, update: false, delete: false },
-      auditLog:     { create: false, read: false, update: false, delete: false },
-      pos:          { create: false, read: false, update: false, delete: false },
-      receipts:     { create: false, read: false, update: false, delete: false },
-      contacts:     { create: false, read: false, update: false, delete: false },
-      forecast:     { create: false, read: false, update: false, delete: false },
-      finance:      { create: false, read: false, update: false, delete: false }
+      orders:           { create: false, read: true, update: false, delete: false },
+      products:         { create: false, read: true, update: false, delete: false },
+      inventory:        { create: false, read: false, update: false, delete: false },
+      jobs:             { create: false, read: false, update: false, delete: false },
+      buildJobs:        { create: false, read: false, update: false, delete: false },
+      salesEvents:      { create: false, read: false, update: false, delete: false },
+      shows:            { create: false, read: true, update: false, delete: false },
+      gallery:          { create: false, read: false, update: false, delete: false },
+      schedule:         { create: false, read: true, update: false, delete: false },
+      locations:        { create: false, read: false, update: false, delete: false },
+      coupons:          { create: false, read: false, update: false, delete: false },
+      settings:         { create: false, read: false, update: false, delete: false },
+      users:            { create: false, read: false, update: false, delete: false },
+      roles:            { create: false, read: false, update: false, delete: false },
+      auditLog:         { create: false, read: false, update: false, delete: false },
+      pos:              { create: false, read: false, update: false, delete: false },
+      receipts:         { create: false, read: false, update: false, delete: false },
+      contacts:         { create: false, read: false, update: false, delete: false },
+      forecast:         { create: false, read: false, update: false, delete: false },
+      finance:          { create: false, read: false, update: false, delete: false },
+      financeSensitive: { create: false, read: false, update: false, delete: false }
     },
     navSections: ['sales', 'classes']
   }
@@ -14703,8 +14707,8 @@ function navigateTo(route) {
     showToast('Forecast is restricted to Owner and Manager roles.', true);
     route = 'dashboard';
   }
-  // Finance sensitive tabs (P&L, Tax, Reports) are Admin-only — manager lacks finance:delete
-  if (['finance-pl', 'finance-tax', 'finance-reports'].indexOf(route) >= 0 && !hasPermission('finance', 'delete')) {
+  // Finance sensitive tabs (P&L, Tax, Reports) are Admin-only — manager lacks financeSensitive:read
+  if (['finance-pl', 'finance-tax', 'finance-reports'].indexOf(route) >= 0 && !hasPermission('financeSensitive', 'read')) {
     showToast('This report is restricted to Admin users.', true);
     route = 'dashboard';
   }
