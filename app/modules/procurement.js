@@ -98,6 +98,36 @@
     else if (status === 'cancelled')          { bg = 'rgba(220,38,38,0.20)'; color = 'var(--danger)'; }
     return '<span class="status-badge pill" style="background:' + bg + ';color:' + color + ';">' + esc(label) + '</span>';
   }
+  function paymentBadge(r) {
+    var ps = r && r.paymentStatus;
+    if (!ps) return '';
+    var bg, color, label;
+    if (ps === 'paid')    { bg = 'rgba(42,124,111,0.20)';  color = 'var(--teal)';       label = 'paid'; }
+    else if (ps === 'partial') { bg = 'rgba(196,133,60,0.30)'; color = 'var(--amber-light)'; label = 'partial'; }
+    else                  { bg = 'rgba(220,38,38,0.20)';   color = 'var(--danger)';     label = 'unpaid'; }
+    return '<span class="status-badge pill" style="background:' + bg + ';color:' + color + ';margin-left:4px;">' + label + '</span>';
+  }
+  function paymentLine(r) {
+    var ps = r && r.paymentStatus;
+    if (!ps) return '';
+    var total = r.amountCents || 0;
+    var paid  = r.paidAmount  || 0;
+    var due   = r.dueDate ? new Date(r.dueDate).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : null;
+    var text  = '';
+    if (ps === 'paid') {
+      text = 'Paid in full';
+    } else if (ps === 'partial') {
+      text = 'Partial — ' + fmt$(paid) + ' of ' + fmt$(total) + ' paid' + (due ? ' · due ' + due : '');
+    } else {
+      text = 'Unpaid' + (due ? ' · due ' + due : '');
+    }
+    var link = (ps !== 'paid')
+      ? ' <button type="button" onclick="navigateTo(\'finance-ap\')" style="background:none;border:none;color:var(--teal);font-size:0.8rem;cursor:pointer;padding:0;font-family:inherit;text-decoration:underline;text-underline-offset:2px;">Record payment →</button>'
+      : '';
+    return '<div style="font-size:0.8rem;margin-top:4px;">' +
+      '<span style="color:' + (ps === 'paid' ? 'var(--teal)' : ps === 'partial' ? 'var(--amber-light)' : 'var(--danger)') + ';">' + text + '</span>' +
+      link + '</div>';
+  }
   function poTotal(po) {
     if (typeof po.total === 'number' && po.total > 0) return po.total;
     var sum = 0;
@@ -391,14 +421,18 @@
         var rValue = rLines.reduce(function(s, l) { return s + (Number(l.qtyReceivedNow) || 0) * (Number(l.unitCostHomeCurrency) || 0); }, 0);
         var addl = (r.additionalCosts || []).reduce(function(s, c) { return s + (Number(c.amount) || 0); }, 0);
         var canApplyLanded = addl > 0 && !r.landedCostsApplied;
-        html += '<div style="padding:10px 14px;border:1px solid var(--cream-dark);border-radius:8px;background:var(--surface-card);font-size:0.85rem;color:var(--text);display:flex;justify-content:space-between;gap:14px;align-items:center;flex-wrap:wrap;">' +
+        html += '<div style="padding:10px 14px;border:1px solid var(--cream-dark);border-radius:8px;background:var(--surface-card);font-size:0.85rem;color:var(--text);display:flex;justify-content:space-between;gap:14px;align-items:flex-start;flex-wrap:wrap;">' +
+          '<div>' +
           '<span>' + fmtDate(r.receivedAt) +
           (r.vendorInvoiceRef ? ' · <span style="font-family:monospace;">' + esc(r.vendorInvoiceRef) + '</span>' : '') +
           ' · ' + rLines.length + (rLines.length === 1 ? ' line' : ' lines') +
           ' · ' + rQty + ' units' +
           (r.landedCostsApplied ? ' · <span style="color:var(--teal);">landed costs applied</span>' : '') +
+          paymentBadge(r) +
           '</span>' +
-          '<span style="display:flex;align-items:center;gap:10px;">' +
+          paymentLine(r) +
+          '</div>' +
+          '<span style="display:flex;align-items:center;gap:10px;flex-shrink:0;">' +
           '<span style="font-family:monospace;">' + fmt$(rValue) + (addl > 0 ? ' <span style="opacity:0.7;">+ ' + fmt$(addl) + ' addl</span>' : '') + '</span>' +
           (canApplyLanded ? '<button class="btn btn-secondary btn-small" onclick="window.procurementApplyLandedCosts(\'' + esc(r.receiptId) + '\')">Apply landed</button>' : '') +
           '</span>' +
@@ -727,14 +761,18 @@
       var po = purchaseOrdersData[r.poId] || {};
       var rLines = r.lines || [];
       var rValue = rLines.reduce(function(s, l) { return s + (Number(l.qtyReceivedNow) || 0) * (Number(l.unitCostHomeCurrency) || 0); }, 0);
-      html += '<div style="padding:12px 16px;border:1px solid var(--cream-dark);border-radius:8px;background:var(--surface-card);font-size:0.85rem;color:var(--text);display:flex;justify-content:space-between;gap:14px;align-items:center;flex-wrap:wrap;">' +
+      html += '<div style="padding:12px 16px;border:1px solid var(--cream-dark);border-radius:8px;background:var(--surface-card);font-size:0.85rem;color:var(--text);display:flex;justify-content:space-between;gap:14px;align-items:flex-start;flex-wrap:wrap;">' +
+        '<div>' +
         '<span>' + fmtDate(r.receivedAt) +
         ' · <span style="font-family:monospace;">' + esc(po.poNumber || r.poId.slice(0, 8)) + '</span>' +
         (r.vendorInvoiceRef ? ' · ' + esc(r.vendorInvoiceRef) : '') +
         ' · ' + rLines.length + (rLines.length === 1 ? ' line' : ' lines') +
         (r.landedCostsApplied ? ' · <span style="color:var(--teal);">landed costs applied</span>' : '') +
+        paymentBadge(r) +
         '</span>' +
-        '<span style="font-family:monospace;">' + fmt$(rValue) + '</span>' +
+        paymentLine(r) +
+        '</div>' +
+        '<span style="font-family:monospace;flex-shrink:0;">' + fmt$(rValue) + '</span>' +
       '</div>';
     });
     html += '</div>';
@@ -1299,6 +1337,23 @@
       additionalCosts.push({ label: addlLabel, amount: addlAmount, currency: po.currency || null, allocationMethod: 'value' });
     }
 
+    // Compute Finance AP handoff fields.
+    var linesCostTotal = receiveLines.reduce(function(s, rl) { return s + (rl.qtyReceivedNow * rl.unitCostHomeCurrency); }, 0);
+    var addlCostTotal = additionalCosts.reduce(function(s, c) { return s + (Number(c.amount) || 0); }, 0);
+    var amountCents = Math.round((linesCostTotal + addlCostTotal) * 100);
+
+    var dueDateBase = new Date(receivedAt);
+    var terms = (po.paymentTerms || '').toLowerCase().replace(/-/g, '').replace(/\s+/g, '');
+    var dueDays = 30;
+    if (!terms || terms === 'due_on_receipt' || terms === 'dueonreceipt') { dueDays = 0; }
+    else if (terms === 'net15') { dueDays = 15; }
+    else if (terms === 'net30') { dueDays = 30; }
+    else if (terms === 'net45') { dueDays = 45; }
+    else if (terms === 'net60') { dueDays = 60; }
+    else { var netMatch = terms.match(/(\d+)/); if (netMatch) dueDays = parseInt(netMatch[1], 10); }
+    dueDateBase.setDate(dueDateBase.getDate() + dueDays);
+    var dueDate = dueDateBase.toISOString().slice(0, 10);
+
     var receipt = {
       receiptId: receiptId,
       poId: po.poId,
@@ -1309,7 +1364,10 @@
       lines: receiptRecordLines,
       additionalCosts: additionalCosts,
       notes: null,
-      createdAt: now
+      createdAt: now,
+      paymentStatus: 'unpaid',
+      amountCents: amountCents,
+      dueDate: dueDate
     };
     updates['admin/purchaseReceipts/' + receiptId] = receipt;
 
