@@ -1171,6 +1171,884 @@ window.finApSubmitPartial = async function(receiptId, currentPaid, totalCents) {
   }
 };
 
+// ── Tax Tab ───────────────────────────────────────────────────────────────────
+
+var _taxSection = 'sales-tax';
+var _1099Year = new Date().getFullYear();
+var _1099ContractorData = null;
+var _reportYear = new Date().getFullYear();
+var _loanReportMetrics = '';
+
+function renderTaxHeader() {
+  var tabs = [['sales-tax','Sales Tax by State'], ['nexus','Nexus Tracker'], ['1099','1099 Prep']];
+  var h = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">';
+  h += '<h2 style="margin:0;font-size:1.2rem;font-weight:700;">Tax</h2>';
+  h += '<span style="background:rgba(239,68,68,0.12);color:#ef4444;padding:3px 10px;border-radius:6px;font-size:0.75rem;font-weight:600;">Admin Only</span>';
+  h += '</div>';
+  h += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px;">';
+  tabs.forEach(function(t) {
+    var active = _taxSection === t[0];
+    h += '<button class="btn btn-' + (active?'primary':'secondary') + ' btn-small" onclick="taxSection(\'' + t[0] + '\')">' + e(t[1]) + '</button>';
+  });
+  h += '</div>';
+  return h;
+}
+
+function setupTaxTab() {
+  injectFinancePulseCSS();
+  var el = document.getElementById('financeTaxTab');
+  if (!el) return;
+  _taxSection = 'sales-tax';
+  _1099Year = new Date().getFullYear();
+  el.innerHTML = '<div style="padding:20px;max-width:1100px;">' + renderTaxHeader() +
+    '<div id="fTaxContent">' + skeletonTable(5,4) + '</div></div>';
+  loadTaxSalesTax();
+}
+
+window.taxSection = function(section) {
+  _taxSection = section;
+  var el = document.getElementById('financeTaxTab');
+  if (!el) return;
+  el.innerHTML = '<div style="padding:20px;max-width:1100px;">' + renderTaxHeader() +
+    '<div id="fTaxContent">' + skeletonTable(5,4) + '</div></div>';
+  if (section === 'sales-tax') loadTaxSalesTax();
+  else if (section === 'nexus') loadTaxNexus();
+  else if (section === '1099') loadTax1099();
+};
+
+function renderFilingDeadlineBanner() {
+  var now = new Date();
+  var year = now.getFullYear();
+  var deadlines = [
+    { q: 'Q1', d: new Date(year, 3, 15) },
+    { q: 'Q2', d: new Date(year, 6, 15) },
+    { q: 'Q3', d: new Date(year, 9, 15) },
+    { q: 'Q4', d: new Date(year + 1, 0, 15) }
+  ];
+  var upcoming = null;
+  for (var i = 0; i < deadlines.length; i++) {
+    if (deadlines[i].d >= now) { upcoming = deadlines[i]; break; }
+  }
+  if (!upcoming) upcoming = { q: 'Q4', d: new Date(year + 1, 0, 15) };
+  var daysUntil = Math.ceil((upcoming.d.getTime() - now.getTime()) / 86400000);
+  var urgencyColor = daysUntil <= 14 ? '#ef4444' : daysUntil <= 30 ? '#eab308' : '#3b82f6';
+  var label = upcoming.d.toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
+  return '<div style="background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.2);border-radius:8px;padding:10px 16px;margin-bottom:16px;display:flex;align-items:center;gap:10px;">' +
+    '<span>📅</span>' +
+    '<div><span style="font-size:0.85rem;font-weight:600;color:' + urgencyColor + ';">' + e(upcoming.q) + ' filing due ' + e(label) + '</span>' +
+    '<span style="font-size:0.8rem;color:var(--warm-gray,#888);margin-left:8px;">' + daysUntil + ' days away</span></div>' +
+    '</div>';
+}
+
+function loadTaxSalesTax() {
+  var el = document.getElementById('fTaxContent');
+  if (!el) return;
+  var start = quarterStart();
+  var end = todayStr();
+  el.innerHTML = periodPicker('fTax', start, end) +
+    '<div id="fTaxSalesContent">' + skeletonTable(5,4) + '</div>';
+  loadTaxSalesTaxData();
+}
+
+async function loadTaxSalesTaxData() {
+  var startEl = document.getElementById('fTaxS');
+  var endEl = document.getElementById('fTaxE');
+  var start = startEl ? startEl.value : quarterStart();
+  var end = endEl ? endEl.value : todayStr();
+  var el = document.getElementById('fTaxSalesContent');
+  if (!el) return;
+  el.innerHTML = skeletonTable(5,4);
+  try {
+    var [ordersRaw, nexusRaw] = await Promise.all([
+      MastDB.query('orders').orderByChild('placedAt').startAt(isoStart(start)).endAt(isoEnd(end)).limitToLast(2000).once(),
+      MastDB.get('admin/nexusRegistrations')
+    ]);
+    var orders = Object.values(ordersRaw || {});
+    var nexus = nexusRaw || {};
+    var byState = {};
+    orders.forEach(function(o) {
+      if (o.status === 'cancelled') return;
+      var state = o.taxState || o.shippingState; if (!state) return;
+      if (!byState[state]) byState[state] = { taxCollected: 0, orderCount: 0 };
+      byState[state].taxCollected += (o.taxCents || Math.round((o.tax || 0) * 100));
+      byState[state].orderCount++;
+    });
+    el.innerHTML = renderTaxSalesTax(byState, nexus, start, end);
+  } catch (err) {
+    el.innerHTML = '<div style="color:var(--danger,#dc2626);padding:12px;">' + e(err.message) + '</div>';
+    showToast('Tax load failed: ' + err.message, true);
+  }
+}
+window.loadTaxSalesTaxData = loadTaxSalesTaxData;
+
+function renderTaxSalesTax(byState, nexus, start, end) {
+  var states = Object.keys(byState).sort(function(a,b) { return byState[b].taxCollected - byState[a].taxCollected; });
+  var totalTax = states.reduce(function(sum,s) { return sum + byState[s].taxCollected; }, 0);
+  var h = renderFilingDeadlineBanner();
+
+  h += '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px;">';
+  h += statCard('Total Tax Collected', fmt$(totalTax), '#16a34a');
+  h += statCard('States with Sales', String(states.length), 'var(--text,#fff)');
+  var regCount = states.filter(function(s) { return nexus[s] && nexus[s].registered; }).length;
+  h += statCard('Registered States', String(regCount), regCount > 0 && regCount === states.length ? '#22c55e' : '#eab308');
+  h += statCard('Period', toDateShort(start) + ' – ' + toDateShort(end), 'var(--warm-gray,#888)');
+  h += '</div>';
+
+  if (states.length === 0) {
+    return h + '<div style="text-align:center;padding:48px 20px;color:var(--warm-gray,#888);">' +
+      '<div style="font-size:2rem;margin-bottom:8px;">🧾</div>' +
+      '<div style="font-size:0.95rem;font-weight:500;">No taxable orders in this period</div></div>';
+  }
+
+  h += '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:0.85rem;">';
+  h += '<thead><tr style="border-bottom:1px solid rgba(255,255,255,0.1);">';
+  ['State', 'Nexus Status', 'Tax Collected', 'Orders'].forEach(function(col) {
+    h += '<th style="text-align:left;padding:8px 10px;font-size:0.72rem;color:var(--warm-gray,#888);text-transform:uppercase;letter-spacing:0.5px;">' + col + '</th>';
+  });
+  h += '</tr></thead><tbody>';
+  states.forEach(function(state) {
+    var d = byState[state];
+    var reg = nexus[state] && nexus[state].registered;
+    var badge;
+    if (reg) {
+      badge = '<span style="background:rgba(34,197,94,0.15);color:#22c55e;padding:2px 8px;border-radius:4px;font-size:0.72rem;font-weight:600;">Registered</span>';
+    } else {
+      badge = '<span style="background:rgba(156,163,175,0.12);color:#9ca3af;padding:2px 8px;border-radius:4px;font-size:0.72rem;font-weight:600;">Not Registered</span>';
+    }
+    h += '<tr style="border-bottom:1px solid rgba(255,255,255,0.06);">';
+    h += '<td style="padding:10px;font-weight:600;">' + e(state) + '</td>';
+    h += '<td style="padding:10px;">' + badge + '</td>';
+    h += '<td style="padding:10px;font-weight:700;color:#16a34a;">' + fmt$(d.taxCollected) + '</td>';
+    h += '<td style="padding:10px;">' + d.orderCount + '</td>';
+    h += '</tr>';
+  });
+  h += '</tbody></table></div>';
+  return h;
+}
+
+async function loadTaxNexus() {
+  var el = document.getElementById('fTaxContent');
+  if (!el) return;
+  el.innerHTML = skeletonCards(3) + '<div style="margin-top:16px;">' + skeletonTable(5,5) + '</div>';
+  try {
+    var endDate = todayStr();
+    var d12 = new Date(); d12.setFullYear(d12.getFullYear() - 1);
+    var startDate = d12.getFullYear() + '-' + String(d12.getMonth()+1).padStart(2,'0') + '-01';
+
+    var [ordersRaw, nexusRaw] = await Promise.all([
+      MastDB.query('orders').orderByChild('placedAt').startAt(isoStart(startDate)).endAt(isoEnd(endDate)).limitToLast(5000).once(),
+      MastDB.get('admin/nexusRegistrations')
+    ]);
+    var orders = Object.values(ordersRaw || {});
+    var nexus = nexusRaw || {};
+    var THRESHOLD = 10000000; // $100K in cents (exclusive: > 10000000)
+    var TXN_THRESHOLD = 200;
+    var APPROACHING = 0.75;
+
+    var byState = {};
+    orders.forEach(function(o) {
+      if (o.status === 'cancelled') return;
+      var state = o.taxState || o.shippingState; if (!state) return;
+      var cents = o.totalCents || Math.round((o.total || 0) * 100);
+      if (!byState[state]) byState[state] = { revenue: 0, count: 0 };
+      byState[state].revenue += cents;
+      byState[state].count++;
+    });
+    Object.keys(nexus).forEach(function(s) { if (!byState[s]) byState[s] = { revenue: 0, count: 0 }; });
+    var states = Object.keys(byState).sort(function(a,b) { return byState[b].revenue - byState[a].revenue; });
+    el.innerHTML = renderTaxNexus(states, byState, nexus, THRESHOLD, TXN_THRESHOLD, APPROACHING, startDate, endDate);
+  } catch (err) {
+    el.innerHTML = '<div style="color:var(--danger,#dc2626);padding:12px;">' + e(err.message) + '</div>';
+    showToast('Nexus load failed: ' + err.message, true);
+  }
+}
+
+function renderTaxNexus(states, byState, nexus, threshold, txnThreshold, approachingPct, startDate, endDate) {
+  var actionRequired = [], approaching = [], registered = [], below = [];
+  states.forEach(function(state) {
+    var d = byState[state];
+    var reg = nexus[state] && nexus[state].registered;
+    var above = d.revenue > threshold || d.count > txnThreshold;
+    var near = !above && (d.revenue > threshold * approachingPct || d.count > txnThreshold * approachingPct);
+    if (above && !reg) actionRequired.push(state);
+    else if (reg) registered.push(state);
+    else if (near) approaching.push(state);
+    else below.push(state);
+  });
+
+  var h = '';
+  if (actionRequired.length > 0) {
+    h += '<div style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.25);border-radius:8px;padding:10px 16px;margin-bottom:16px;display:flex;align-items:center;gap:10px;">';
+    h += '<span>⚠️</span><span style="font-size:0.85rem;font-weight:600;color:#ef4444;">Action required — you have nexus in ';
+    h += actionRequired.length + ' state' + (actionRequired.length > 1 ? 's' : '') + ' where you are not registered: ' + e(actionRequired.join(', ')) + '</span></div>';
+  }
+
+  h += '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px;">';
+  h += statCard('Registered', String(registered.length), '#22c55e');
+  if (actionRequired.length > 0) h += statCard('Action Required', String(actionRequired.length), '#ef4444', 'above threshold, unregistered');
+  if (approaching.length > 0) h += statCard('Approaching', String(approaching.length), '#eab308', '>75% of $100K');
+  h += statCard('Trailing 12mo', toDateShort(startDate) + ' – ' + toDateShort(endDate), 'var(--warm-gray,#888)');
+  h += '</div>';
+
+  if (states.length === 0) {
+    return h + '<div style="text-align:center;padding:48px 20px;color:var(--warm-gray,#888);"><div style="font-size:0.95rem;font-weight:500;">No sales data found for trailing 12 months</div></div>';
+  }
+
+  h += '<div style="font-size:0.78rem;color:var(--warm-gray,#888);margin-bottom:10px;">$100K revenue threshold · 200 transaction threshold · Exclusive boundaries (>$100K triggers nexus)</div>';
+  h += '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:0.85rem;">';
+  h += '<thead><tr style="border-bottom:1px solid rgba(255,255,255,0.1);">';
+  ['State', 'Revenue (12mo)', 'Transactions', '% of $100K', 'Status'].forEach(function(col) {
+    h += '<th style="text-align:left;padding:8px 10px;font-size:0.72rem;color:var(--warm-gray,#888);text-transform:uppercase;letter-spacing:0.5px;">' + col + '</th>';
+  });
+  h += '</tr></thead><tbody>';
+  states.forEach(function(state) {
+    var d = byState[state];
+    var reg = nexus[state] && nexus[state].registered;
+    var above = d.revenue > threshold || d.count > txnThreshold;
+    var near = !above && (d.revenue > threshold * approachingPct || d.count > txnThreshold * approachingPct);
+    var revPct = Math.min(Math.round(d.revenue / threshold * 100), 999);
+    var barColor = reg ? '#22c55e' : above ? '#ef4444' : near ? '#eab308' : '#9ca3af';
+    var badge;
+    if (reg) badge = '<span style="background:rgba(34,197,94,0.15);color:#22c55e;padding:2px 8px;border-radius:4px;font-size:0.72rem;font-weight:600;">Registered</span>';
+    else if (above) badge = '<span style="background:rgba(239,68,68,0.15);color:#ef4444;padding:2px 8px;border-radius:4px;font-size:0.72rem;font-weight:600;">Above threshold — register now</span>';
+    else if (near) badge = '<span style="background:rgba(234,179,8,0.15);color:#eab308;padding:2px 8px;border-radius:4px;font-size:0.72rem;font-weight:600;">Approaching</span>';
+    else badge = '<span style="background:rgba(156,163,175,0.08);color:#9ca3af;padding:2px 8px;border-radius:4px;font-size:0.72rem;font-weight:600;">Below</span>';
+
+    h += '<tr style="border-bottom:1px solid rgba(255,255,255,0.06);">';
+    h += '<td style="padding:10px;font-weight:600;">' + e(state) + '</td>';
+    h += '<td style="padding:10px;font-weight:700;">' + fmt$(d.revenue) + '</td>';
+    h += '<td style="padding:10px;">' + d.count + '</td>';
+    h += '<td style="padding:10px;min-width:130px;"><div style="display:flex;align-items:center;gap:8px;">' +
+      '<div style="flex:1;height:6px;background:rgba(255,255,255,0.08);border-radius:3px;overflow:hidden;">' +
+      '<div style="height:100%;width:' + Math.min(revPct,100) + '%;background:' + barColor + ';border-radius:3px;"></div></div>' +
+      '<span style="font-size:0.75rem;color:var(--warm-gray,#888);white-space:nowrap;">' + revPct + '%</span></div></td>';
+    h += '<td style="padding:10px;">' + badge + '</td>';
+    h += '</tr>';
+  });
+  h += '</tbody></table></div>';
+  return h;
+}
+
+function loadTax1099() {
+  var el = document.getElementById('fTaxContent');
+  if (!el) return;
+  var year = _1099Year;
+  var nowYear = new Date().getFullYear();
+  var yearOpts = '';
+  for (var y = nowYear; y >= nowYear - 3; y--) {
+    yearOpts += '<option value="' + y + '"' + (y === year ? ' selected' : '') + '>' + y + '</option>';
+  }
+  var h = '<div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">';
+  h += '<span style="font-size:0.85rem;color:var(--warm-gray,#888);">Tax Year:</span>';
+  h += '<select id="f1099Year" onchange="fin1099ChangeYear(this.value)" style="background:var(--bg-secondary,#232323);border:1px solid rgba(255,255,255,0.15);border-radius:6px;color:var(--text,#fff);padding:5px 10px;font-size:0.85rem;">' + yearOpts + '</select>';
+  h += '<button class="btn btn-secondary btn-small" onclick="loadTax1099Data()">Load</button>';
+  h += '</div>';
+  h += '<div id="f1099Content">' + skeletonTable(5,4) + '</div>';
+  el.innerHTML = h;
+  loadTax1099Data();
+}
+
+window.fin1099ChangeYear = function(year) { _1099Year = parseInt(year); loadTax1099Data(); };
+
+window.loadTax1099Data = async function() {
+  var el = document.getElementById('f1099Content');
+  if (!el) return;
+  el.innerHTML = skeletonTable(5,4);
+  var year = _1099Year;
+  var startISO = year + '-01-01T00:00:00Z';
+  var endISO   = year + '-12-31T23:59:59Z';
+  try {
+    var [vendorsRaw, receiptsRaw] = await Promise.all([
+      MastDB.get('admin/vendors'),
+      MastDB.query('admin/purchaseReceipts').orderByChild('receivedAt').startAt(startISO).endAt(endISO).limitToLast(2000).once()
+    ]);
+    var vendors = vendorsRaw || {};
+    var receipts = Object.values(receiptsRaw || {});
+    var totals = {};
+    receipts.forEach(function(r) {
+      var v = vendors[r.vendorId];
+      if (!v) return;
+      var vType = v.vendorType || v.payeeType;
+      if (vType !== 'contractor') return;
+      if (r.paymentStatus !== 'paid') return;
+      if (!totals[r.vendorId]) totals[r.vendorId] = 0;
+      totals[r.vendorId] += r.amountCents || 0;
+    });
+    var contractors = [];
+    Object.keys(totals).forEach(function(vid) {
+      var total = totals[vid];
+      if (total <= 60000) return; // > $600 threshold (exclusive)
+      var v = vendors[vid];
+      var taxId = v.taxId;
+      var hasTaxId = !!(taxId && String(taxId).trim().length > 0);
+      contractors.push({
+        name: v.name || 'Unknown', taxId: taxId,
+        maskedTaxId: hasTaxId ? 'XXX-XX-' + String(taxId).replace(/[^0-9]/g,'').slice(-4) : null,
+        hasTaxId: hasTaxId, totalPaid: total
+      });
+    });
+    contractors.sort(function(a,b) { return b.totalPaid - a.totalPaid; });
+    _1099ContractorData = contractors;
+    el.innerHTML = render1099(contractors, year);
+  } catch (err) {
+    el.innerHTML = '<div style="color:var(--danger,#dc2626);padding:12px;">' + e(err.message) + '</div>';
+    showToast('1099 load failed: ' + err.message, true);
+  }
+};
+
+function render1099(contractors, year) {
+  var missingCount = contractors.filter(function(c) { return !c.hasTaxId; }).length;
+  var h = '';
+  h += '<div style="background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.2);border-radius:8px;padding:10px 16px;margin-bottom:12px;display:flex;align-items:center;gap:10px;">';
+  h += '<span>📋</span><span style="font-size:0.85rem;">1099-NEC forms must be sent to contractors by <strong>January 31, ' + (year+1) + '</strong></span></div>';
+  if (missingCount > 0) {
+    h += '<div style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.25);border-radius:8px;padding:10px 16px;margin-bottom:12px;display:flex;align-items:center;gap:10px;">';
+    h += '<span>⚠️</span><span style="font-size:0.85rem;font-weight:600;color:#ef4444;">' + missingCount + ' contractor' + (missingCount>1?'s':'') + ' missing Tax ID — request W-9 before filing</span></div>';
+  }
+  h += '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px;">';
+  var totalPaid = contractors.reduce(function(s,c) { return s+c.totalPaid; }, 0);
+  h += statCard('Contractors > $600', String(contractors.length), 'var(--text,#fff)');
+  h += statCard('Total Paid', fmt$(totalPaid), '#16a34a');
+  if (missingCount > 0) h += statCard('Missing Tax ID', String(missingCount), '#ef4444', 'action required');
+  h += '</div>';
+
+  if (contractors.length === 0) {
+    return h + '<div style="text-align:center;padding:48px 20px;color:var(--warm-gray,#888);">' +
+      '<div style="font-size:2rem;margin-bottom:8px;">✅</div>' +
+      '<div style="font-size:0.95rem;font-weight:500;">No contractors paid over $600 in ' + year + '</div>' +
+      '<div style="font-size:0.85rem;margin-top:4px;">1099-NEC threshold is $600.01 or more.</div></div>';
+  }
+
+  h += '<div style="display:flex;justify-content:flex-end;margin-bottom:10px;">';
+  h += '<button class="btn btn-secondary btn-small" onclick="fin1099Export()">Export CSV</button></div>';
+
+  h += '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:0.85rem;">';
+  h += '<thead><tr style="border-bottom:1px solid rgba(255,255,255,0.1);">';
+  ['Contractor', 'Tax ID', 'Total Paid', '1099 Required'].forEach(function(col) {
+    h += '<th style="text-align:left;padding:8px 10px;font-size:0.72rem;color:var(--warm-gray,#888);text-transform:uppercase;letter-spacing:0.5px;">' + col + '</th>';
+  });
+  h += '</tr></thead><tbody>';
+  contractors.forEach(function(c) {
+    var tidCell = c.hasTaxId
+      ? '<span style="font-family:monospace;font-size:0.8rem;">' + e(c.maskedTaxId) + '</span>'
+      : '<span style="color:#ef4444;font-size:0.8rem;font-weight:600;">Missing — action required</span>';
+    var border = c.hasTaxId ? '' : 'border-left:3px solid #ef4444;';
+    h += '<tr style="border-bottom:1px solid rgba(255,255,255,0.06);' + border + '">';
+    h += '<td style="padding:10px;font-weight:600;">' + e(c.name) + '</td>';
+    h += '<td style="padding:10px;">' + tidCell + '</td>';
+    h += '<td style="padding:10px;font-weight:700;">' + fmt$(c.totalPaid) + '</td>';
+    h += '<td style="padding:10px;"><span style="background:rgba(34,197,94,0.15);color:#22c55e;padding:2px 8px;border-radius:4px;font-size:0.72rem;font-weight:600;">Yes</span></td>';
+    h += '</tr>';
+  });
+  h += '</tbody></table></div>';
+  return h;
+}
+
+window.fin1099Export = function() {
+  if (!_1099ContractorData || _1099ContractorData.length === 0) {
+    showToast('No 1099 data to export', true); return;
+  }
+  var rows = [['Name','Tax ID','Total Paid','1099 Required']];
+  _1099ContractorData.forEach(function(c) {
+    rows.push([c.name, c.hasTaxId ? c.taxId : 'MISSING', (c.totalPaid/100).toFixed(2), 'Yes']);
+  });
+  downloadCsv(rows, '1099s_' + _1099Year + '.csv');
+  showToast('1099s.csv downloaded');
+};
+
+// ── Reports Tab ───────────────────────────────────────────────────────────────
+
+function setupReportsTab() {
+  injectFinancePulseCSS();
+  var el = document.getElementById('financeReportsTab');
+  if (!el) return;
+  _reportYear = new Date().getFullYear();
+  var nowYear = new Date().getFullYear();
+  var yearOpts = '';
+  for (var y = nowYear; y >= nowYear - 3; y--) {
+    yearOpts += '<option value="' + y + '"' + (y === nowYear ? ' selected' : '') + '>' + y + '</option>';
+  }
+  var h = '<div style="padding:20px;max-width:1100px;">';
+  h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">';
+  h += '<h2 style="margin:0;font-size:1.2rem;font-weight:700;">Reports</h2>';
+  h += '<span style="background:rgba(239,68,68,0.12);color:#ef4444;padding:3px 10px;border-radius:6px;font-size:0.75rem;font-weight:600;">Admin Only</span>';
+  h += '</div>';
+
+  // Report A card
+  h += '<div style="background:var(--bg-secondary,#232323);border-radius:12px;padding:20px;margin-bottom:16px;">';
+  h += '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;">';
+  h += '<div><div style="font-size:1rem;font-weight:700;margin-bottom:4px;">Loan / Investor Report</div>';
+  h += '<div style="font-size:0.82rem;color:var(--warm-gray,#888);">12-month financial summary formatted for a bank or investor. Print or save as PDF.</div></div>';
+  h += '<button class="btn btn-secondary btn-small" onclick="loadLoanReport()">Generate</button></div>';
+  h += '<div id="fLoanContent"></div></div>';
+
+  // Report B card
+  h += '<div style="background:var(--bg-secondary,#232323);border-radius:12px;padding:20px;">';
+  h += '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;">';
+  h += '<div><div style="font-size:1rem;font-weight:700;margin-bottom:4px;">Year-End Tax Package</div>';
+  h += '<div style="font-size:0.82rem;color:var(--warm-gray,#888);">Everything your CPA needs for Schedule C and state filings. Export CSVs or print the full package.</div></div>';
+  h += '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">';
+  h += '<select id="fReportYear" onchange="finSetReportYear(this.value)" style="background:var(--bg-primary,#1a1a1a);border:1px solid rgba(255,255,255,0.15);border-radius:6px;color:var(--text,#fff);padding:4px 8px;font-size:0.82rem;">' + yearOpts + '</select>';
+  h += '<button class="btn btn-secondary btn-small" onclick="loadYearEndReport()">Generate</button></div></div>';
+  h += '<div id="fYearEndContent"></div></div>';
+
+  h += '</div>';
+  el.innerHTML = h;
+}
+
+async function computeMonthlyBreakdown(startDate, endDate) {
+  var [ordersRaw, salesRaw, expensesRaw, jeRaw] = await Promise.all([
+    MastDB.query('orders').orderByChild('placedAt').startAt(isoStart(startDate)).endAt(isoEnd(endDate)).limitToLast(5000).once(),
+    MastDB.query('admin/sales').orderByChild('createdAt').startAt(isoStart(startDate)).endAt(isoEnd(endDate)).limitToLast(2000).once(),
+    MastDB.query('admin/expenses').orderByChild('date').startAt(startDate).endAt(endDate).limitToLast(2000).once(),
+    MastDB.query('admin/journalEntries').orderByChild('date').startAt(startDate).endAt(endDate).limitToLast(2000).once()
+  ]);
+  var monthData = {};
+  function gm(iso) { return iso ? iso.slice(0,7) : null; }
+  function em(ym) { if (!monthData[ym]) monthData[ym] = { revenue:0, cogs:0, opex:0 }; }
+  Object.values(ordersRaw||{}).forEach(function(o) {
+    if (o.status==='cancelled') return;
+    var c = Math.round((o.total||0)*100); if (c<=0) return;
+    var ym = gm(o.placedAt); if (!ym) return; em(ym);
+    monthData[ym].revenue += c;
+  });
+  Object.values(salesRaw||{}).forEach(function(s) {
+    if (s.status==='voided') return;
+    var c = Math.round((s.amount||0)*100); if (c<=0) return;
+    var ym = gm(s.createdAt); if (!ym) return; em(ym);
+    monthData[ym].revenue += c;
+  });
+  Object.values(expensesRaw||{}).forEach(function(ex) {
+    if (!ex.reviewed) return;
+    var ym = gm(ex.date); if (!ym) return; em(ym);
+    if (ex.category==='materials') monthData[ym].cogs += ex.amount||0;
+    else if (ex.category!=='personal') monthData[ym].opex += ex.amount||0;
+  });
+  Object.values(jeRaw||{}).forEach(function(j) {
+    var ym = gm(j.date); if (!ym) return; em(ym);
+    if (j.category==='cogs-adjustment') monthData[ym].cogs += j.amount||0;
+    else if (j.category!=='owner-draw') monthData[ym].opex += j.amount||0;
+  });
+  var result = [];
+  var cur = new Date(startDate.slice(0,7)+'-01');
+  var last = new Date(endDate.slice(0,7)+'-01');
+  while (cur <= last) {
+    var ym = cur.getFullYear()+'-'+String(cur.getMonth()+1).padStart(2,'0');
+    var m = monthData[ym] || { revenue:0, cogs:0, opex:0 };
+    var gp = m.revenue - m.cogs;
+    result.push({ month:ym, label:cur.toLocaleDateString('en-US',{month:'short',year:'numeric'}), revenue:m.revenue, cogs:m.cogs, opex:m.opex, grossProfit:gp, netProfit:gp-m.opex });
+    cur.setMonth(cur.getMonth()+1);
+  }
+  return result;
+}
+
+window.loadLoanReport = async function() {
+  var el = document.getElementById('fLoanContent');
+  if (!el) return;
+  el.innerHTML = skeletonCards(4) + '<div style="margin-top:16px;">' + skeletonTable(12,3) + '</div>';
+  try {
+    var endDate = todayStr();
+    var d12 = new Date(); d12.setFullYear(d12.getFullYear()-1); d12.setDate(1);
+    var startDate = d12.getFullYear()+'-'+String(d12.getMonth()+1).padStart(2,'0')+'-01';
+    var [monthly, plaidRaw] = await Promise.all([
+      computeMonthlyBreakdown(startDate, endDate),
+      MastDB.plaidItems.list().catch(function() { return {}; })
+    ]);
+    var bankTotal = 0;
+    Object.values(plaidRaw||{}).forEach(function(item) {
+      if (item.status!=='active') return;
+      (item.accounts||[]).forEach(function(a) { bankTotal += a.currentBalance||0; });
+    });
+    el.innerHTML = renderLoanReport(monthly, bankTotal, startDate, endDate);
+  } catch (err) {
+    el.innerHTML = '<div style="color:var(--danger,#dc2626);padding:12px;">' + e(err.message) + '</div>';
+    showToast('Loan report failed: ' + err.message, true);
+  }
+};
+
+function renderLoanReport(monthly, bankTotal, startDate, endDate) {
+  var tenantName = (window.TENANT_CONFIG && (TENANT_CONFIG.businessName || TENANT_CONFIG.tenantName || TENANT_CONFIG.name)) || 'Your Business';
+  var reportDate = new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
+  var totalRevenue = monthly.reduce(function(s,m){return s+m.revenue;},0);
+  var totalCogs    = monthly.reduce(function(s,m){return s+m.cogs;},0);
+  var totalOpex    = monthly.reduce(function(s,m){return s+m.opex;},0);
+  var totalGP      = totalRevenue - totalCogs;
+  var totalNP      = totalGP - totalOpex;
+  var grossMarginPct = totalRevenue>0 ? (totalGP/totalRevenue*100).toFixed(1) : null;
+  var netMarginPct   = totalRevenue>0 ? (totalNP/totalRevenue*100).toFixed(1) : null;
+  var avgMonthlyRev  = monthly.length>0 ? Math.round(totalRevenue/monthly.length) : 0;
+
+  // H2 vs H1 growth
+  var half = Math.floor(monthly.length/2);
+  var h1 = monthly.slice(0,half).reduce(function(s,m){return s+m.revenue;},0);
+  var h2 = monthly.slice(half).reduce(function(s,m){return s+m.revenue;},0);
+  var yoyPct = h1>0 ? ((h2-h1)/h1*100).toFixed(1) : null;
+
+  _loanReportMetrics = [
+    'Business: ' + tenantName,
+    'Period: ' + toDateShort(startDate) + ' – ' + toDateShort(endDate),
+    'Total Revenue: ' + fmt$(totalRevenue),
+    'Gross Margin: ' + (grossMarginPct!==null ? grossMarginPct+'%' : '—'),
+    'Net Margin: ' + (netMarginPct!==null ? netMarginPct+'%' : '—'),
+    'Avg Monthly Revenue: ' + fmt$(avgMonthlyRev),
+    'Net Profit: ' + fmt$(totalNP),
+    bankTotal>0 ? 'Cash on Hand: $'+bankTotal.toFixed(2) : null
+  ].filter(Boolean).join('\n');
+
+  var h = '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px;">';
+  h += '<button class="btn btn-primary btn-small" onclick="finPrintLoanReport()">🖨 Print / Save as PDF</button>';
+  h += '<button class="btn btn-secondary btn-small" onclick="finCopyMetrics()">Copy Key Metrics</button>';
+  h += '</div>';
+
+  h += '<div id="fLoanReportPrintable" style="background:var(--bg-primary,#1a1a1a);border-radius:10px;padding:24px;">';
+
+  // Header
+  h += '<div style="margin-bottom:20px;">';
+  h += '<div style="font-size:1.3rem;font-weight:700;">' + e(tenantName) + '</div>';
+  h += '<div style="font-size:0.85rem;color:var(--warm-gray,#888);margin-top:4px;">Financial Summary · ' + toDateShort(startDate) + ' – ' + toDateShort(endDate) + '</div>';
+  h += '<div style="font-size:0.75rem;color:var(--warm-gray,#888);margin-top:2px;">Generated ' + reportDate + '</div>';
+  h += '</div>';
+
+  // Key metrics
+  h += '<div style="margin-bottom:22px;">';
+  h += '<div style="font-size:0.8rem;font-weight:600;color:var(--warm-gray,#888);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px;">Key Metrics</div>';
+  h += '<div style="display:flex;gap:10px;flex-wrap:wrap;">';
+  h += statCard('Total Revenue', fmt$(totalRevenue), '#16a34a');
+  h += statCard('Gross Margin', grossMarginPct!==null?grossMarginPct+'%':'—', '#22c55e');
+  h += statCard('Net Margin', netMarginPct!==null?netMarginPct+'%':'—', totalNP>=0?'#22c55e':'#ef4444');
+  if (yoyPct!==null) h += statCard('H2 vs H1', (parseFloat(yoyPct)>=0?'+':'')+yoyPct+'%', parseFloat(yoyPct)>=0?'#22c55e':'#ef4444');
+  h += statCard('Avg Monthly Rev', fmt$(avgMonthlyRev), '#3b82f6');
+  if (bankTotal>0) h += statCard('Cash on Hand', '$'+bankTotal.toFixed(2), '#8b5cf6');
+  h += '</div></div>';
+
+  // 12-month revenue trend (bar table)
+  h += '<div style="margin-bottom:22px;">';
+  h += '<div style="font-size:0.8rem;font-weight:600;color:var(--warm-gray,#888);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px;">12-Month Revenue Trend</div>';
+  var maxRev = Math.max.apply(null, monthly.map(function(m){return m.revenue;}))||1;
+  h += '<div style="display:flex;flex-direction:column;gap:4px;">';
+  monthly.forEach(function(m) {
+    var w = maxRev>0?Math.round(m.revenue/maxRev*100):0;
+    h += '<div style="display:flex;align-items:center;gap:8px;">';
+    h += '<div style="width:68px;font-size:0.73rem;color:var(--warm-gray,#888);text-align:right;flex-shrink:0;">' + e(m.label) + '</div>';
+    h += '<div style="flex:1;height:16px;background:rgba(255,255,255,0.06);border-radius:3px;overflow:hidden;">';
+    if (w>0) h += '<div style="height:100%;width:'+w+'%;background:#16a34a;border-radius:3px;"></div>';
+    h += '</div>';
+    h += '<div style="width:76px;font-size:0.73rem;font-weight:600;text-align:right;flex-shrink:0;">' + fmt$(m.revenue) + '</div>';
+    h += '</div>';
+  });
+  h += '</div></div>';
+
+  // P&L Summary
+  h += '<div style="margin-bottom:22px;">';
+  h += '<div style="font-size:0.8rem;font-weight:600;color:var(--warm-gray,#888);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px;">P&L Summary</div>';
+  h += '<div style="background:var(--bg-secondary,#232323);border-radius:8px;padding:16px;">';
+  function lrRow(label, cents, bold, color) {
+    return '<div style="display:flex;justify-content:space-between;padding:4px 0' + (bold?';border-top:1px solid rgba(255,255,255,0.1);margin-top:4px;padding-top:8px;':'') + '">' +
+      '<span style="font-size:0.88rem;' + (bold?'font-weight:600;':'color:var(--warm-gray,#888);') + '">' + label + '</span>' +
+      '<span style="font-size:0.88rem;font-weight:' + (bold?'700':'400') + ';color:' + (color||'var(--text,#fff)') + ';">' + fmt$(cents) + '</span></div>';
+  }
+  h += lrRow('Total Revenue', totalRevenue, true, '#16a34a');
+  h += lrRow('Cost of Goods Sold', totalCogs, false, null);
+  h += lrRow('Gross Profit', totalGP, true, totalGP>=0?'#22c55e':'#ef4444');
+  h += lrRow('Operating Expenses', totalOpex, false, null);
+  h += lrRow('Net Profit', totalNP, true, totalNP>=0?'#22c55e':'#ef4444');
+  h += '</div></div>';
+
+  // Cash position
+  if (bankTotal > 0) {
+    h += '<div style="margin-bottom:22px;">';
+    h += '<div style="font-size:0.8rem;font-weight:600;color:var(--warm-gray,#888);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Cash Position</div>';
+    h += '<div style="font-size:1.4rem;font-weight:700;color:#22c55e;">$' + bankTotal.toFixed(2) + '</div>';
+    h += '<div style="font-size:0.75rem;color:var(--warm-gray,#888);margin-top:2px;">Current cash on hand · via connected bank accounts</div>';
+    h += '</div>';
+  }
+
+  h += '<div style="font-size:0.72rem;color:var(--warm-gray,#888);border-top:1px solid rgba(255,255,255,0.08);padding-top:10px;margin-top:8px;">Generated by Mast · ' + reportDate + '</div>';
+  h += '</div>'; // end printable
+  return h;
+}
+
+window.finPrintLoanReport = function() {
+  injectFinPrintCss('fLoanReportPrintable');
+  window.print();
+};
+
+window.finCopyMetrics = function() {
+  if (!_loanReportMetrics) { showToast('Generate the report first', true); return; }
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(_loanReportMetrics).then(function() {
+      showToast('Key metrics copied to clipboard');
+    }).catch(function() { showToast('Copy failed — select text manually', true); });
+  } else {
+    showToast('Clipboard not available in this browser', true);
+  }
+};
+
+window.finSetReportYear = function(year) { _reportYear = parseInt(year); };
+
+window.loadYearEndReport = async function() {
+  var el = document.getElementById('fYearEndContent');
+  if (!el) return;
+  var year = _reportYear;
+  el.innerHTML = skeletonCards(3) + '<div style="margin-top:16px;">' + skeletonTable(5,3) + '</div>';
+  var startDate = year+'-01-01';
+  var endDate   = year+'-12-31';
+  try {
+    var [pnlData, taxData, contractors, mileage] = await Promise.all([
+      computePnlLocal(startDate, endDate),
+      computeTaxSummaryForReport(startDate, endDate),
+      compute1099DataForYear(year),
+      computeMileageForYear(year)
+    ]);
+    window._yearEndData = { pnlData:pnlData, taxData:taxData, contractors:contractors, mileage:mileage, year:year };
+    el.innerHTML = renderYearEndReport(pnlData, taxData, contractors, mileage, year);
+  } catch (err) {
+    el.innerHTML = '<div style="color:var(--danger,#dc2626);padding:12px;">' + e(err.message) + '</div>';
+    showToast('Year-end report failed: ' + err.message, true);
+  }
+};
+
+async function computeTaxSummaryForReport(startDate, endDate) {
+  var [ordersRaw, nexusRaw] = await Promise.all([
+    MastDB.query('orders').orderByChild('placedAt').startAt(isoStart(startDate)).endAt(isoEnd(endDate)).limitToLast(5000).once(),
+    MastDB.get('admin/nexusRegistrations')
+  ]);
+  var orders = Object.values(ordersRaw||{});
+  var nexus  = nexusRaw||{};
+  var byState = {};
+  orders.forEach(function(o) {
+    if (o.status==='cancelled') return;
+    var state = o.taxState||o.shippingState; if (!state) return;
+    if (!byState[state]) byState[state] = { taxCollected:0, orderCount:0 };
+    byState[state].taxCollected += (o.taxCents||Math.round((o.tax||0)*100));
+    byState[state].orderCount++;
+  });
+  return { byState:byState, nexus:nexus };
+}
+
+async function compute1099DataForYear(year) {
+  var startISO = year+'-01-01T00:00:00Z';
+  var endISO   = year+'-12-31T23:59:59Z';
+  var [vendorsRaw, receiptsRaw] = await Promise.all([
+    MastDB.get('admin/vendors'),
+    MastDB.query('admin/purchaseReceipts').orderByChild('receivedAt').startAt(startISO).endAt(endISO).limitToLast(2000).once()
+  ]);
+  var vendors  = vendorsRaw||{};
+  var receipts = Object.values(receiptsRaw||{});
+  var totals = {};
+  receipts.forEach(function(r) {
+    var v = vendors[r.vendorId]; if (!v) return;
+    if ((v.vendorType||v.payeeType)!=='contractor') return;
+    if (r.paymentStatus!=='paid') return;
+    if (!totals[r.vendorId]) totals[r.vendorId] = { total:0, vendor:v };
+    totals[r.vendorId].total += r.amountCents||0;
+  });
+  var result = [];
+  Object.keys(totals).forEach(function(vid) {
+    var d = totals[vid]; if (d.total<=60000) return;
+    var taxId = d.vendor.taxId;
+    result.push({ name:d.vendor.name||'Unknown', taxId:taxId, hasTaxId:!!(taxId&&String(taxId).trim().length>0), totalPaid:d.total });
+  });
+  return result.sort(function(a,b){return b.totalPaid-a.totalPaid;});
+}
+
+async function computeMileageForYear(year) {
+  try {
+    var tripsRaw = await MastDB.get('admin/trips');
+    var trips = Object.values(tripsRaw||{});
+    var yearStr = String(year);
+    var yTrips = trips.filter(function(t) {
+      var d = t.date||t.tripDate||t.startDate||'';
+      return String(d).startsWith(yearStr);
+    });
+    var totalMiles = yTrips.reduce(function(s,t){return s+(t.miles||t.distanceMiles||t.totalMiles||0);},0);
+    return { totalMiles:totalMiles, tripCount:yTrips.length, hasData:yTrips.length>0 };
+  } catch(err) {
+    return { totalMiles:0, tripCount:0, hasData:false };
+  }
+}
+
+function renderYearEndReport(pnlData, taxData, contractors, mileage, year) {
+  var IRS_RATE = 0.70; // 2025/2026 standard mileage rate $/mile — verify at irs.gov
+  var h = '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px;">';
+  h += '<button class="btn btn-secondary btn-small" onclick="finExportPnlCsv()">P&L.csv</button>';
+  h += '<button class="btn btn-secondary btn-small" onclick="finExportTaxCsv()">SalesTax.csv</button>';
+  if (contractors.length>0) h += '<button class="btn btn-secondary btn-small" onclick="finExport1099Csv()">1099s.csv</button>';
+  h += '<button class="btn btn-primary btn-small" onclick="finPrintYearEnd()">🖨 Print Package</button>';
+  h += '</div>';
+
+  h += '<div id="fYearEndPrintable">';
+
+  // P&L Schedule C
+  h += '<div style="background:var(--bg-primary,#1a1a1a);border-radius:8px;padding:16px;margin-bottom:16px;">';
+  h += '<div style="font-size:0.9rem;font-weight:700;margin-bottom:10px;">P&L Summary — Schedule C · ' + year + '</div>';
+  function yeRow(label, cents, bold) {
+    return '<div style="display:flex;justify-content:space-between;padding:4px 0' + (bold?';border-top:1px solid rgba(255,255,255,0.08);margin-top:4px;padding-top:8px;':'') + '">' +
+      '<span style="font-size:0.85rem;' + (bold?'font-weight:600;':'color:var(--warm-gray,#888);') + '">' + label + '</span>' +
+      '<span style="font-size:0.85rem;font-weight:' + (bold?'600':'400') + ';">' + fmt$(cents) + '</span></div>';
+  }
+  h += yeRow('Gross Income (Revenue)', pnlData.revenue, true);
+  h += yeRow('Cost of Goods Sold', pnlData.cogs, false);
+  h += yeRow('Gross Profit', pnlData.grossProfit, true);
+  var cats = Object.keys(pnlData.opexByCategory||{}).sort(function(a,b){return (pnlData.opexByCategory[b]||0)-(pnlData.opexByCategory[a]||0);});
+  cats.forEach(function(cat) {
+    h += yeRow(cat.replace(/_/g,' ').replace(/\b\w/g,function(l){return l.toUpperCase();}), pnlData.opexByCategory[cat], false);
+  });
+  h += yeRow('Total Expenses', pnlData.opex, true);
+  h += yeRow('Net Profit', pnlData.netProfit, true);
+  h += '</div>';
+
+  // Mileage
+  if (mileage.hasData) {
+    var deductible = mileage.totalMiles * IRS_RATE;
+    h += '<div style="background:var(--bg-primary,#1a1a1a);border-radius:8px;padding:16px;margin-bottom:16px;">';
+    h += '<div style="font-size:0.9rem;font-weight:700;margin-bottom:10px;">Mileage Summary · ' + year + '</div>';
+    h += '<div style="display:flex;gap:12px;flex-wrap:wrap;">';
+    h += statCard('Total Miles', mileage.totalMiles.toFixed(1), 'var(--text,#fff)', mileage.tripCount + ' trip' + (mileage.tripCount!==1?'s':''));
+    h += statCard('IRS Rate', '$'+IRS_RATE.toFixed(2)+'/mi', 'var(--warm-gray,#888)', 'verify at irs.gov');
+    h += statCard('Deductible Amount', '$'+deductible.toFixed(2), '#16a34a');
+    h += '</div></div>';
+  }
+
+  // Sales Tax
+  var stateKeys = Object.keys(taxData.byState||{}).sort();
+  if (stateKeys.length>0) {
+    h += '<div style="background:var(--bg-primary,#1a1a1a);border-radius:8px;padding:16px;margin-bottom:16px;">';
+    h += '<div style="font-size:0.9rem;font-weight:700;margin-bottom:10px;">Sales Tax by State · ' + year + '</div>';
+    h += '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:0.82rem;">';
+    h += '<thead><tr style="border-bottom:1px solid rgba(255,255,255,0.1);">';
+    ['State','Tax Collected','Orders','Registered'].forEach(function(c) {
+      h += '<th style="text-align:left;padding:6px 10px;font-size:0.7rem;color:var(--warm-gray,#888);text-transform:uppercase;">' + c + '</th>';
+    });
+    h += '</tr></thead><tbody>';
+    stateKeys.forEach(function(state) {
+      var d = taxData.byState[state];
+      var reg = taxData.nexus[state]&&taxData.nexus[state].registered;
+      h += '<tr style="border-bottom:1px solid rgba(255,255,255,0.05);">';
+      h += '<td style="padding:7px 10px;font-weight:600;">' + e(state) + '</td>';
+      h += '<td style="padding:7px 10px;">' + fmt$(d.taxCollected) + '</td>';
+      h += '<td style="padding:7px 10px;">' + d.orderCount + '</td>';
+      h += '<td style="padding:7px 10px;color:' + (reg?'#22c55e':'#9ca3af') + ';">' + (reg?'Yes':'No') + '</td>';
+      h += '</tr>';
+    });
+    h += '</tbody></table></div></div>';
+  }
+
+  // 1099 Summary
+  if (contractors.length>0) {
+    h += '<div style="background:var(--bg-primary,#1a1a1a);border-radius:8px;padding:16px;margin-bottom:16px;">';
+    h += '<div style="font-size:0.9rem;font-weight:700;margin-bottom:10px;">1099 Summary · ' + year + '</div>';
+    h += '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:0.82rem;">';
+    h += '<thead><tr style="border-bottom:1px solid rgba(255,255,255,0.1);">';
+    ['Contractor','Tax ID','Total Paid','1099 Required'].forEach(function(c) {
+      h += '<th style="text-align:left;padding:6px 10px;font-size:0.7rem;color:var(--warm-gray,#888);text-transform:uppercase;">' + c + '</th>';
+    });
+    h += '</tr></thead><tbody>';
+    contractors.forEach(function(c) {
+      h += '<tr style="border-bottom:1px solid rgba(255,255,255,0.05);">';
+      h += '<td style="padding:7px 10px;font-weight:600;">' + e(c.name) + '</td>';
+      h += '<td style="padding:7px 10px;font-size:0.8rem;">' + (c.hasTaxId?'<span style="font-family:monospace;">XXX-XX-'+String(c.taxId||'').replace(/[^0-9]/g,'').slice(-4)+'</span>':'<span style="color:#ef4444;">Missing</span>') + '</td>';
+      h += '<td style="padding:7px 10px;font-weight:700;">' + fmt$(c.totalPaid) + '</td>';
+      h += '<td style="padding:7px 10px;color:#22c55e;">Yes</td>';
+      h += '</tr>';
+    });
+    h += '</tbody></table></div></div>';
+  }
+
+  // Compliance Checklist
+  h += '<div style="background:var(--bg-primary,#1a1a1a);border-radius:8px;padding:16px;margin-bottom:16px;">';
+  h += '<div style="font-size:0.9rem;font-weight:700;margin-bottom:10px;">Compliance Checklist — Items Your CPA Needs</div>';
+  [
+    'W-2s filed for all employees',
+    '1099-NEC sent to contractors by January 31',
+    'Sales tax filed by state (see table above)',
+    'Business bank statements for full year',
+    'Receipts for all deductible expenses',
+    'Mileage log if claiming vehicle deduction',
+    'Home office documentation if claiming home office deduction',
+    'Health insurance premiums paid (deductible for self-employed)'
+  ].forEach(function(item) {
+    h += '<label style="display:flex;align-items:flex-start;gap:10px;padding:5px 0;cursor:pointer;">';
+    h += '<input type="checkbox" style="margin-top:2px;flex-shrink:0;">';
+    h += '<span style="font-size:0.85rem;">' + e(item) + '</span></label>';
+  });
+  h += '</div>';
+
+  h += '</div>'; // end printable
+  return h;
+}
+
+function downloadCsv(rows, filename) {
+  var csv = rows.map(function(row) {
+    return row.map(function(cell) {
+      var s = String(cell==null?'':cell);
+      if (s.indexOf(',')>=0||s.indexOf('"')>=0||s.indexOf('\n')>=0) s = '"'+s.replace(/"/g,'""')+'"';
+      return s;
+    }).join(',');
+  }).join('\n');
+  var blob = new Blob([csv], { type:'text/csv;charset=utf-8;' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url; a.download = filename; a.style.display = 'none';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(function() { URL.revokeObjectURL(url); }, 1000);
+}
+
+function injectFinPrintCss(elementId) {
+  var prev = document.getElementById('finReportPrintStyle');
+  if (prev) prev.remove();
+  var s = document.createElement('style'); s.id = 'finReportPrintStyle';
+  s.textContent = '@media print{' +
+    'body *{visibility:hidden!important;}' +
+    '#'+elementId+',#'+elementId+' *{visibility:visible!important;}' +
+    '#'+elementId+'{position:absolute!important;top:0!important;left:0!important;width:100%!important;' +
+    'background:white!important;color:black!important;padding:20px!important;}' +
+    '}';
+  document.head.appendChild(s);
+}
+
+window.finPrintYearEnd = function() {
+  injectFinPrintCss('fYearEndPrintable');
+  window.print();
+};
+
+window.finExportPnlCsv = function() {
+  var d = window._yearEndData; if (!d) { showToast('Generate the report first', true); return; }
+  var pnl = d.pnlData; var year = d.year;
+  var rows = [['Category','Amount']];
+  rows.push(['Gross Income (Revenue)', (pnl.revenue/100).toFixed(2)]);
+  rows.push(['Cost of Goods Sold', (pnl.cogs/100).toFixed(2)]);
+  rows.push(['Gross Profit', (pnl.grossProfit/100).toFixed(2)]);
+  var cats = Object.keys(pnl.opexByCategory||{}).sort(function(a,b){return (pnl.opexByCategory[b]||0)-(pnl.opexByCategory[a]||0);});
+  cats.forEach(function(cat) { rows.push([cat.replace(/_/g,' '),(pnl.opexByCategory[cat]/100).toFixed(2)]); });
+  rows.push(['Total Expenses', (pnl.opex/100).toFixed(2)]);
+  rows.push(['Net Profit', (pnl.netProfit/100).toFixed(2)]);
+  downloadCsv(rows, 'PnL_'+year+'.csv');
+  showToast('P&L.csv downloaded');
+};
+
+window.finExportTaxCsv = function() {
+  var d = window._yearEndData; if (!d) { showToast('Generate the report first', true); return; }
+  var tax = d.taxData; var year = d.year;
+  var rows = [['State','Tax Collected','Order Count','Registered']];
+  Object.keys(tax.byState||{}).sort().forEach(function(state) {
+    var s = tax.byState[state]; var reg = tax.nexus[state]&&tax.nexus[state].registered;
+    rows.push([state,(s.taxCollected/100).toFixed(2),s.orderCount,reg?'Yes':'No']);
+  });
+  downloadCsv(rows, 'SalesTax_'+year+'.csv');
+  showToast('SalesTax.csv downloaded');
+};
+
+window.finExport1099Csv = function() {
+  var d = window._yearEndData; if (!d) { showToast('Generate the report first', true); return; }
+  var rows = [['Name','Tax ID','Total Paid','1099 Required']];
+  d.contractors.forEach(function(c) {
+    rows.push([c.name, c.hasTaxId?c.taxId:'MISSING', (c.totalPaid/100).toFixed(2), 'Yes']);
+  });
+  downloadCsv(rows, '1099s_'+d.year+'.csv');
+  showToast('1099s.csv downloaded');
+};
+
 // ── Period picker global handlers ─────────────────────────────────────────────
 
 window.finPeriod = function(pfx, preset) {
@@ -1189,6 +2067,7 @@ window.finLoad = function(pfx) {
   if (pfx === 'fRev') loadRevenue();
   else if (pfx === 'fExp') loadFinExpenses();
   else if (pfx === 'fPl')  loadPnl();
+  else if (pfx === 'fTax') loadTaxSalesTaxData();
 };
 
 // ── Window exports for onclick handlers ───────────────────────────────────────
@@ -1211,8 +2090,8 @@ MastAdmin.registerModule('finance', {
     'finance-cash-flow': { tab: 'financeCashFlowTab',  setup: function() { setupCashFlowTab(); } },
     'finance-ar':        { tab: 'financeArTab',        setup: function() { setupArTab(); } },
     'finance-ap':        { tab: 'financeApTab',        setup: function() { setupApTab(); } },
-    'finance-tax':       { tab: 'financeTaxTab',       setup: function() {} },
-    'finance-reports':   { tab: 'financeReportsTab',   setup: function() {} }
+    'finance-tax':       { tab: 'financeTaxTab',       setup: function() { setupTaxTab(); } },
+    'finance-reports':   { tab: 'financeReportsTab',   setup: function() { setupReportsTab(); } }
   }
 });
 
