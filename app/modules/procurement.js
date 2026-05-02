@@ -50,6 +50,9 @@
   var expandedPoId = null;
   var lotsShowEmpty = false;
 
+  // Deep-link state — consumed once on setup(), then cleared.
+  var deepLinkReceiptId = null;
+
   // Detail-view state.
   var selectedVendorId = null;
   var vendorDetailTab = 'products'; // products | pos | receipts
@@ -761,7 +764,7 @@
       var po = purchaseOrdersData[r.poId] || {};
       var rLines = r.lines || [];
       var rValue = rLines.reduce(function(s, l) { return s + (Number(l.qtyReceivedNow) || 0) * (Number(l.unitCostHomeCurrency) || 0); }, 0);
-      html += '<div style="padding:12px 16px;border:1px solid var(--cream-dark);border-radius:8px;background:var(--surface-card);font-size:0.85rem;color:var(--text);display:flex;justify-content:space-between;gap:14px;align-items:flex-start;flex-wrap:wrap;">' +
+      html += '<div id="proc-receipt-' + esc(r.receiptId) + '" style="padding:12px 16px;border:1px solid var(--cream-dark);border-radius:8px;background:var(--surface-card);font-size:0.85rem;color:var(--text);display:flex;justify-content:space-between;gap:14px;align-items:flex-start;flex-wrap:wrap;">' +
         '<div>' +
         '<span>' + fmtDate(r.receivedAt) +
         ' · <span style="font-family:monospace;">' + esc(po.poNumber || r.poId.slice(0, 8)) + '</span>' +
@@ -1632,12 +1635,56 @@
     });
   }
 
+  function _applyDeepLink() {
+    var rid = deepLinkReceiptId;
+    deepLinkReceiptId = null;
+    var receipt = purchaseReceiptsData[rid];
+    if (!receipt) {
+      if (typeof showToast === 'function') showToast('Receipt not found', true);
+      render();
+      return;
+    }
+    var po = purchaseOrdersData[receipt.poId];
+    if (!po || !po.vendorId || !vendorsData[po.vendorId]) {
+      if (typeof showToast === 'function') showToast('Vendor not found for this receipt', true);
+      render();
+      return;
+    }
+    selectedVendorId = po.vendorId;
+    currentView = 'vendor-detail';
+    vendorDetailTab = 'receipts';
+    vendorEditMode = false;
+    render();
+    setTimeout(function() {
+      var el = document.getElementById('proc-receipt-' + rid);
+      if (!el) return;
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      el.style.transition = 'background 0.3s';
+      el.style.background = 'rgba(234,179,8,0.25)';
+      setTimeout(function() {
+        el.style.background = '';
+        setTimeout(function() { el.style.transition = ''; }, 400);
+      }, 2000);
+    }, 50);
+  }
+
   function setup() {
+    try {
+      var raw = sessionStorage.getItem('procurementDeepLink');
+      if (raw) {
+        sessionStorage.removeItem('procurementDeepLink');
+        var parsed = JSON.parse(raw);
+        if (parsed && parsed.receiptId) deepLinkReceiptId = parsed.receiptId;
+      }
+    } catch (e) { deepLinkReceiptId = null; }
+
     if (!dataLoaded) {
       render();
-      loadAll().then(render);
+      loadAll().then(function() {
+        if (deepLinkReceiptId) { _applyDeepLink(); } else { render(); }
+      });
     } else {
-      render();
+      if (deepLinkReceiptId) { _applyDeepLink(); } else { render(); }
     }
   }
 

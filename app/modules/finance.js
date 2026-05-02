@@ -1115,7 +1115,7 @@ function renderApFlat(filtered) {
     h += '<td style="padding:10px;white-space:nowrap;display:flex;gap:4px;">';
     h += '<button class="btn btn-primary btn-small" data-rid="' + e(r.receiptId) + '" data-total="' + r.totalCents + '" onclick="finApMarkPaid(this.dataset.rid, parseInt(this.dataset.total))">Paid</button>';
     h += '<button class="btn btn-secondary btn-small" data-rid="' + e(r.receiptId) + '" data-paid="' + r.paidCents + '" data-total="' + r.totalCents + '" onclick="finApShowPartial(this.dataset.rid, parseInt(this.dataset.paid), parseInt(this.dataset.total))">Partial</button>';
-    h += '<button class="btn btn-secondary btn-small" onclick="navigateTo(\'procurement\')" title="View in Procurement">→</button>';
+    h += '<button class="btn btn-secondary btn-small" data-rid="' + e(r.receiptId) + '" onclick="finApOpenInProcurement(this.dataset.rid)" title="View in Procurement">→</button>';
     h += '</td></tr>';
   });
 
@@ -1189,7 +1189,7 @@ function renderApGrouped(filtered) {
         h += '<td style="padding:8px 10px;white-space:nowrap;display:flex;gap:4px;">';
         h += '<button class="btn btn-primary btn-small" data-rid="' + e(r.receiptId) + '" data-total="' + r.totalCents + '" onclick="finApMarkPaid(this.dataset.rid, parseInt(this.dataset.total))">Paid</button>';
         h += '<button class="btn btn-secondary btn-small" data-rid="' + e(r.receiptId) + '" data-paid="' + r.paidCents + '" data-total="' + r.totalCents + '" onclick="finApShowPartial(this.dataset.rid, parseInt(this.dataset.paid), parseInt(this.dataset.total))">Partial</button>';
-        h += '<button class="btn btn-secondary btn-small" onclick="navigateTo(\'procurement\')" title="View in Procurement">→</button>';
+        h += '<button class="btn btn-secondary btn-small" data-rid="' + e(r.receiptId) + '" onclick="finApOpenInProcurement(this.dataset.rid)" title="View in Procurement">→</button>';
         h += '</td></tr>';
       });
       h += '</tbody></table></div>';
@@ -1274,6 +1274,11 @@ window.finApSubmitPartial = async function(receiptId, currentPaid, totalCents) {
   } catch (err) {
     showToast('Error: ' + e(err.message), true);
   }
+};
+
+window.finApOpenInProcurement = function(receiptId) {
+  try { sessionStorage.setItem('procurementDeepLink', JSON.stringify({ receiptId: receiptId })); } catch (e) {}
+  navigateTo('procurement');
 };
 
 // ── Tax Tab ───────────────────────────────────────────────────────────────────
