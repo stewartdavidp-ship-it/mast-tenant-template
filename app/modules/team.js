@@ -10,6 +10,22 @@
   var editingDocId = null;
   var driveExplainerShown = false;
 
+  // Time Clock state
+  var tcSelectedEmployeeId = null;
+  var tcWeekOffset = 0;
+  var tcTimerInterval = null;
+
+  // PTO state
+  var ptoSelectedEmployeeId = null;
+  var ptoPolicies = {};
+
+  // Documents filter state
+  var docFilterEmployee = '';
+  var docFilterStatus = '';
+
+  // Onboarding filter state
+  var onboardingFilter = 'all';
+
   // --- Constants ---
   var COMPLIANCE_FIELDS = [
     { key: 'i9', label: 'I-9' },
@@ -218,6 +234,28 @@
     return { driveFileId: null, driveFileName: null, driveLastModified: null };
   }
 
+  // --- Time/PTO Helpers ---
+  function getWeekRange(offset) {
+    var now = new Date();
+    var startOfWeek = new Date(now);
+    startOfWeek.setDate(now.getDate() - now.getDay() + (offset * 7));
+    startOfWeek.setHours(0, 0, 0, 0);
+    var endOfWeek = new Date(startOfWeek);
+    endOfWeek.setDate(startOfWeek.getDate() + 6);
+    endOfWeek.setHours(23, 59, 59, 999);
+    return { start: startOfWeek, end: endOfWeek };
+  }
+  function formatTime(iso) {
+    if (!iso) return '—';
+    var d = new Date(iso);
+    var h = d.getHours(), m = d.getMinutes(), ampm = h >= 12 ? 'PM' : 'AM';
+    h = h % 12 || 12;
+    return h + ':' + (m < 10 ? '0' : '') + m + ' ' + ampm;
+  }
+  function fmtDateShort(d) {
+    return (d.getMonth() + 1) + '/' + d.getDate();
+  }
+
   // --- Load ---
   async function loadTeam() {
     var container = document.getElementById('teamTab');
@@ -261,16 +299,16 @@
   // --- Main Render ---
   function renderTeam(container) {
     var mgr = canManageTeam();
-    // If current view is a manager-only tab but user no longer qualifies, reset to roster
-    if (!mgr && currentView !== 'roster' && currentView !== 'detail') {
+    // Restrict manager-only tabs
+    if (!mgr && (currentView === 'docs' || currentView === 'onboarding')) {
       currentView = 'roster';
     }
     var h = '';
     h += '<div class="view-tabs" style="margin-bottom:20px;">';
     h += '<button class="view-tab' + (currentView === 'roster' || currentView === 'detail' ? ' active' : '') + '" onclick="teamSwitchView(\'roster\')">Roster</button>';
+    h += '<button class="view-tab' + (currentView === 'timeclock' ? ' active' : '') + '" onclick="teamSwitchView(\'timeclock\')">Time Clock</button>';
+    h += '<button class="view-tab' + (currentView === 'pto' ? ' active' : '') + '" onclick="teamSwitchView(\'pto\')">PTO</button>';
     if (mgr) {
-      h += '<button class="view-tab' + (currentView === 'timeclock' ? ' active' : '') + '" onclick="teamSwitchView(\'timeclock\')">Time Clock</button>';
-      h += '<button class="view-tab' + (currentView === 'pto' ? ' active' : '') + '" onclick="teamSwitchView(\'pto\')">PTO</button>';
       h += '<button class="view-tab' + (currentView === 'docs' ? ' active' : '') + '" onclick="teamSwitchView(\'docs\')">Documents</button>';
       h += '<button class="view-tab' + (currentView === 'onboarding' ? ' active' : '') + '" onclick="teamSwitchView(\'onboarding\')">Onboarding</button>';
     }
@@ -281,43 +319,616 @@
     } else if (currentView === 'detail') {
       h += renderEmployeeDetail();
     } else if (currentView === 'timeclock') {
-      h += renderTimeClockStub();
+      h += renderTimeClock();
     } else if (currentView === 'pto') {
-      h += renderPtoStub();
+      h += renderPto();
     } else if (currentView === 'docs') {
-      h += renderTenantDocs();
+      h += renderComplianceDocs();
     } else if (currentView === 'onboarding') {
-      h += renderOnboardingStub();
+      h += renderOnboarding();
     }
 
     container.innerHTML = h;
   }
 
-  function renderTimeClockStub() {
-    return '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:300px;text-align:center;padding:40px 20px;">' +
-      '<div style="font-size:1.6rem;margin-bottom:12px;">&#9201;</div>' +
-      '<div style="font-family:\'Cormorant Garamond\',serif;font-size:1.4rem;font-weight:500;margin-bottom:8px;">Time Clock</div>' +
-      '<div style="color:var(--warm-gray);font-size:0.9rem;max-width:400px;margin-bottom:8px;">Clock in/out tracking for hourly employees. Weekly hour totals and overtime alerts per person. Export to CSV for payroll.</div>' +
-      '<div style="color:var(--warm-gray-light);font-size:0.85rem;font-style:italic;">Coming soon &mdash; hours are currently logged manually in the Roster detail view.</div>' +
-      '</div>';
+  // ========================================
+  // Tab: Time Clock
+  // ========================================
+  function renderTimeClock() {
+    return canManageTeam() ? renderTimeClockManager() : renderTimeClockSelf();
   }
 
-  function renderPtoStub() {
-    return '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:300px;text-align:center;padding:40px 20px;">' +
-      '<div style="font-size:1.6rem;margin-bottom:12px;">&#127958;</div>' +
-      '<div style="font-family:\'Cormorant Garamond\',serif;font-size:1.4rem;font-weight:500;margin-bottom:8px;">PTO</div>' +
-      '<div style="color:var(--warm-gray);font-size:0.9rem;max-width:400px;margin-bottom:8px;">Paid time off balances, accrual rules, and request tracking per employee. Manager approval flow with calendar view.</div>' +
-      '<div style="color:var(--warm-gray-light);font-size:0.85rem;font-style:italic;">Coming soon &mdash; part of the Finance / HR expansion.</div>' +
-      '</div>';
+  function renderTimeClockManager() {
+    var h = '';
+    h += '<div id="tcActiveBanner" style="display:none;background:rgba(245,158,11,0.15);border:1px solid rgba(245,158,11,0.4);border-radius:6px;padding:8px 14px;margin-bottom:12px;font-size:0.85rem;color:#fbbf24;"></div>';
+    h += '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px;">';
+    h += '<select id="tcEmpFilter" onchange="teamTcSetEmployee(this.value)" style="' + INPUT_STYLE + 'width:auto;min-width:180px;">';
+    h += '<option value="">All employees</option>';
+    employeesData.filter(function(e) { return (e.status || 'active') === 'active'; }).forEach(function(emp) {
+      h += '<option value="' + esc(emp._key) + '"' + (tcSelectedEmployeeId === emp._key ? ' selected' : '') + '>' + esc(emp.fullName || '') + '</option>';
+    });
+    h += '</select>';
+    h += '<div style="display:flex;align-items:center;gap:8px;">';
+    h += '<button class="btn btn-secondary btn-small" onclick="teamTcPrevWeek()">&larr;</button>';
+    h += '<span id="tcWeekLabel" style="font-size:0.85rem;font-weight:600;min-width:140px;text-align:center;"></span>';
+    h += '<button class="btn btn-secondary btn-small" id="tcNextBtn" onclick="teamTcNextWeek()">&rarr;</button>';
+    h += '</div>';
+    h += '<button class="btn btn-primary btn-small" onclick="teamTcAddEntry()">+ Add Entry</button>';
+    h += '</div>';
+    h += '<div id="tcAddForm" style="display:none;background:var(--cream,var(--cream));border:1px solid var(--cream-dark,var(--cream-dark));border-radius:8px;padding:16px 20px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,0.08);"><div id="tcAddFormInner"></div></div>';
+    h += '<div id="tcTableWrap"><div class="loading">Loading time entries&hellip;</div></div>';
+    setTimeout(loadTcManager, 0);
+    return h;
   }
 
-  function renderOnboardingStub() {
-    return '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:300px;text-align:center;padding:40px 20px;">' +
-      '<div style="font-size:1.6rem;margin-bottom:12px;">&#9989;</div>' +
-      '<div style="font-family:\'Cormorant Garamond\',serif;font-size:1.4rem;font-weight:500;margin-bottom:8px;">Onboarding</div>' +
-      '<div style="color:var(--warm-gray);font-size:0.9rem;max-width:400px;margin-bottom:8px;">Checklists for new hires: documents to collect, accounts to provision, equipment to assign. Track completion status per employee.</div>' +
-      '<div style="color:var(--warm-gray-light);font-size:0.85rem;font-style:italic;">Coming soon &mdash; compliance checklist in Roster detail is the current equivalent.</div>' +
-      '</div>';
+  async function loadTcManager() {
+    var wrap = document.getElementById('tcTableWrap');
+    var banner = document.getElementById('tcActiveBanner');
+    if (!wrap) return;
+    try {
+      var raw = await MastDB.get('admin/timeEntries') || {};
+      var all = Object.entries(raw).map(function(e) { var v = e[1]; v._key = e[0]; return v; });
+
+      var active = all.filter(function(e) { return !e.clockOut; });
+      if (banner) {
+        if (active.length > 0) {
+          banner.style.display = '';
+          banner.innerHTML = '&#9889; <strong>' + active.length + ' employee' + (active.length !== 1 ? 's' : '') + ' currently clocked in</strong>';
+        } else {
+          banner.style.display = 'none';
+        }
+      }
+
+      var range = getWeekRange(tcWeekOffset);
+      var lbl = document.getElementById('tcWeekLabel');
+      var nxtBtn = document.getElementById('tcNextBtn');
+      if (lbl) lbl.textContent = fmtDateShort(range.start) + ' – ' + fmtDateShort(range.end);
+      if (nxtBtn) nxtBtn.disabled = tcWeekOffset >= 0;
+
+      var entries = all.filter(function(e) {
+        if (!e.clockIn) return false;
+        var d = new Date(e.clockIn);
+        return d >= range.start && d <= range.end;
+      });
+      if (tcSelectedEmployeeId) entries = entries.filter(function(e) { return e.employeeId === tcSelectedEmployeeId; });
+      entries.sort(function(a, b) { return (b.clockIn || '').localeCompare(a.clockIn || ''); });
+
+      var totalHrs = 0;
+      entries.forEach(function(e) { if (e.hoursWorked) totalHrs += e.hoursWorked; });
+
+      var h = '';
+      if (entries.length === 0) {
+        h = '<div style="text-align:center;padding:40px 20px;color:var(--warm-gray);"><div style="font-size:1.4rem;margin-bottom:8px;">&#9201;</div><p style="font-size:0.9rem;font-weight:500;">No time entries this week</p></div>';
+      } else {
+        h += '<div style="overflow-x:auto;"><table style="width:100%;font-size:0.85rem;border-collapse:collapse;">';
+        h += '<thead><tr style="border-bottom:2px solid var(--cream-dark,var(--cream-dark));text-align:left;">';
+        if (!tcSelectedEmployeeId) h += '<th style="padding:8px 10px;font-weight:600;">Employee</th>';
+        h += '<th style="padding:8px 10px;font-weight:600;">Date</th><th style="padding:8px 10px;font-weight:600;">Clock In</th><th style="padding:8px 10px;font-weight:600;">Clock Out</th><th style="padding:8px 10px;font-weight:600;text-align:right;">Hours</th><th style="padding:8px 10px;font-weight:600;">Notes</th></tr></thead><tbody>';
+        entries.forEach(function(entry) {
+          var empObj = employeesData.find(function(e) { return e._key === entry.employeeId; });
+          var isOpen = !entry.clockOut;
+          h += '<tr style="border-bottom:1px solid var(--cream-dark,var(--cream-dark));">';
+          if (!tcSelectedEmployeeId) h += '<td style="padding:8px 10px;">' + esc(empObj ? empObj.fullName : entry.employeeId || '—') + '</td>';
+          h += '<td style="padding:8px 10px;">' + esc(entry.date || '') + '</td>';
+          h += '<td style="padding:8px 10px;">' + formatTime(entry.clockIn) + '</td>';
+          h += '<td style="padding:8px 10px;">' + (isOpen ? '<span style="color:#22c55e;font-size:0.78rem;font-weight:600;">&#9679; Active</span>' : formatTime(entry.clockOut)) + '</td>';
+          h += '<td style="padding:8px 10px;text-align:right;">' + (isOpen ? '—' : (entry.hoursWorked != null ? entry.hoursWorked.toFixed(2) : '—')) + '</td>';
+          h += '<td style="padding:8px 10px;color:var(--warm-gray);">' + esc(entry.notes || '') + '</td></tr>';
+        });
+        h += '</tbody></table></div>';
+        var selEmp = tcSelectedEmployeeId ? employeesData.find(function(e) { return e._key === tcSelectedEmployeeId; }) : null;
+        h += '<div style="display:flex;justify-content:flex-end;gap:24px;padding:10px;border-top:2px solid var(--cream-dark,var(--cream-dark));font-size:0.85rem;">';
+        h += '<div>Total hours: <strong>' + totalHrs.toFixed(2) + '</strong></div>';
+        if (selEmp && selEmp.payRate) {
+          h += '<div>Labor cost: <strong>$' + (totalHrs * selEmp.payRate / 100).toFixed(2) + '</strong></div>';
+        }
+        h += '</div>';
+      }
+      wrap.innerHTML = h;
+    } catch (err) {
+      if (wrap) wrap.innerHTML = '<div style="color:var(--danger);padding:20px;">Error loading time entries.</div>';
+    }
+  }
+
+  function renderTimeClockSelf() {
+    var h = '<div id="tcSelfStatus" style="margin-bottom:16px;"><div class="loading">Loading&hellip;</div></div>';
+    h += '<div id="tcSelfTable"><div class="loading">Loading your entries&hellip;</div></div>';
+    var uid = auth && auth.currentUser ? auth.currentUser.uid : null;
+    setTimeout(function() { loadTcSelf(uid); }, 0);
+    return h;
+  }
+
+  async function loadTcSelf(uid) {
+    var statusEl = document.getElementById('tcSelfStatus');
+    var tableEl = document.getElementById('tcSelfTable');
+    if (!statusEl) return;
+    try {
+      var raw = await MastDB.get('admin/timeEntries') || {};
+      var mine = Object.entries(raw).map(function(e) { var v = e[1]; v._key = e[0]; return v; })
+        .filter(function(e) { return e.employeeId === uid || e.createdBy === uid; })
+        .sort(function(a, b) { return (b.clockIn || '').localeCompare(a.clockIn || ''); });
+      var openEntry = mine.find(function(e) { return !e.clockOut; });
+
+      var sh = '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">';
+      if (openEntry) {
+        sh += '<div style="background:rgba(34,197,94,0.15);border:1px solid rgba(34,197,94,0.4);border-radius:8px;padding:10px 16px;">';
+        sh += '<div style="font-size:0.85rem;color:#22c55e;font-weight:600;">&#9679; Clocked in since ' + formatTime(openEntry.clockIn) + '</div>';
+        sh += '<div id="tcTimer" style="font-size:1.4rem;font-weight:700;font-family:monospace;color:#22c55e;"></div></div>';
+        sh += '<button class="btn btn-primary" data-key="' + esc(openEntry._key) + '" onclick="teamTcClockOut(this.dataset.key)">Clock Out</button>';
+        startTcTimer(openEntry.clockIn);
+      } else {
+        sh += '<button class="btn btn-primary" onclick="teamTcClockIn()">Clock In</button>';
+        if (tcTimerInterval) { clearInterval(tcTimerInterval); tcTimerInterval = null; }
+      }
+      sh += '</div>';
+      statusEl.innerHTML = sh;
+
+      var th = '';
+      if (mine.length === 0) {
+        th = '<div style="text-align:center;padding:30px;color:var(--warm-gray);"><p style="font-size:0.9rem;font-weight:500;">No time entries yet</p></div>';
+      } else {
+        th += '<h4 style="font-size:0.9rem;font-weight:600;margin:16px 0 8px;">Recent Entries</h4>';
+        th += '<table style="width:100%;font-size:0.85rem;border-collapse:collapse;">';
+        th += '<thead><tr style="border-bottom:2px solid var(--cream-dark,var(--cream-dark));"><th style="padding:8px 10px;text-align:left;font-weight:600;">Date</th><th style="padding:8px 10px;text-align:left;font-weight:600;">In</th><th style="padding:8px 10px;text-align:left;font-weight:600;">Out</th><th style="padding:8px 10px;text-align:right;font-weight:600;">Hours</th></tr></thead><tbody>';
+        mine.slice(0, 20).forEach(function(e) {
+          var open = !e.clockOut;
+          th += '<tr style="border-bottom:1px solid var(--cream-dark,var(--cream-dark));">';
+          th += '<td style="padding:8px 10px;">' + esc(e.date || '') + '</td>';
+          th += '<td style="padding:8px 10px;">' + formatTime(e.clockIn) + '</td>';
+          th += '<td style="padding:8px 10px;">' + (open ? '<span style="color:#22c55e;font-size:0.78rem;">Active</span>' : formatTime(e.clockOut)) + '</td>';
+          th += '<td style="padding:8px 10px;text-align:right;">' + (open ? '—' : (e.hoursWorked != null ? e.hoursWorked.toFixed(2) : '—')) + '</td></tr>';
+        });
+        th += '</tbody></table>';
+      }
+      if (tableEl) tableEl.innerHTML = th;
+    } catch (err) {
+      if (statusEl) statusEl.innerHTML = '<div style="color:var(--danger);">Error loading time data.</div>';
+    }
+  }
+
+  function startTcTimer(clockInIso) {
+    if (tcTimerInterval) clearInterval(tcTimerInterval);
+    function tick() {
+      var el = document.getElementById('tcTimer');
+      if (!el) { clearInterval(tcTimerInterval); tcTimerInterval = null; return; }
+      var ms = Date.now() - new Date(clockInIso).getTime();
+      var h = Math.floor(ms / 3600000), m = Math.floor((ms % 3600000) / 60000), s = Math.floor((ms % 60000) / 1000);
+      el.textContent = h + ':' + (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s;
+    }
+    tick();
+    tcTimerInterval = setInterval(tick, 1000);
+  }
+
+  async function tcClockIn() {
+    var uid = auth && auth.currentUser ? auth.currentUser.uid : null;
+    var now = new Date();
+    var key = MastDB.newKey('admin/timeEntries');
+    var entry = { id: key, employeeId: uid, clockIn: now.toISOString(), clockOut: null, hoursWorked: null, date: now.toISOString().split('T')[0], status: 'active', createdBy: uid, createdAt: now.toISOString(), updatedAt: now.toISOString() };
+    try {
+      await MastDB.set('admin/timeEntries/' + key, entry);
+      showToast('Clocked in');
+      loadTcSelf(uid);
+    } catch (err) { showToast('Error: ' + esc(err.message), true); }
+  }
+
+  async function tcClockOut(entryKey) {
+    var uid = auth && auth.currentUser ? auth.currentUser.uid : null;
+    try {
+      var raw = await MastDB.get('admin/timeEntries/' + entryKey);
+      if (!raw || !raw.clockIn) { showToast('Entry not found', true); return; }
+      var now = new Date();
+      var hrs = Math.round((now.getTime() - new Date(raw.clockIn).getTime()) / 36000) / 100;
+      await MastDB.update('admin/timeEntries/' + entryKey, { clockOut: now.toISOString(), hoursWorked: hrs, status: 'complete', updatedAt: now.toISOString() });
+      showToast('Clocked out — ' + hrs.toFixed(2) + ' hrs');
+      loadTcSelf(uid);
+    } catch (err) { showToast('Error: ' + esc(err.message), true); }
+  }
+
+  function openTcAddForm() {
+    var formEl = document.getElementById('tcAddForm'), innerEl = document.getElementById('tcAddFormInner');
+    if (!formEl || !innerEl) return;
+    var today = new Date().toISOString().split('T')[0];
+    var empOpts = employeesData.filter(function(e) { return (e.status || 'active') === 'active'; }).map(function(emp) {
+      return '<option value="' + esc(emp._key) + '"' + (tcSelectedEmployeeId === emp._key ? ' selected' : '') + '>' + esc(emp.fullName || '') + '</option>';
+    }).join('');
+    var h = '<div style="font-weight:600;font-size:0.9rem;margin-bottom:12px;">New Time Entry</div>';
+    h += '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;align-items:end;">';
+    h += labelField('tcAEmp', 'Employee', '<select id="tcAEmp" style="' + INPUT_STYLE + '">' + empOpts + '</select>');
+    h += labelField('tcADate', 'Date', dateInput('tcADate', today));
+    h += labelField('tcAIn', 'Clock In', '<input id="tcAIn" type="time" style="' + INPUT_STYLE + '">');
+    h += labelField('tcAOut', 'Clock Out', '<input id="tcAOut" type="time" style="' + INPUT_STYLE + '">');
+    h += labelField('tcANotes', 'Notes', textInput('tcANotes', '', 'Optional'));
+    h += '</div>';
+    h += '<div style="display:flex;gap:8px;margin-top:10px;"><button class="btn btn-primary btn-small" onclick="teamTcSaveEntry()">Save</button><button class="btn btn-secondary btn-small" onclick="document.getElementById(\'tcAddForm\').style.display=\'none\'">Cancel</button></div>';
+    innerEl.innerHTML = h;
+    formEl.style.display = '';
+  }
+
+  async function saveTcEntry() {
+    var empId = document.getElementById('tcAEmp').value;
+    var date = document.getElementById('tcADate').value;
+    var inTime = document.getElementById('tcAIn').value;
+    var outTime = document.getElementById('tcAOut').value;
+    if (!empId || !date || !inTime) { showToast('Employee, date, and clock-in time required', true); return; }
+    var clockIn = date + 'T' + inTime + ':00', clockOut = outTime ? date + 'T' + outTime + ':00' : null;
+    var hrs = clockOut ? Math.round((new Date(clockOut).getTime() - new Date(clockIn).getTime()) / 36000) / 100 : null;
+    var key = MastDB.newKey('admin/timeEntries');
+    try {
+      await MastDB.set('admin/timeEntries/' + key, { id: key, employeeId: empId, clockIn: clockIn, clockOut: clockOut, hoursWorked: hrs, date: date, notes: document.getElementById('tcANotes').value.trim() || null, status: clockOut ? 'complete' : 'active', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
+      showToast('Entry saved');
+      document.getElementById('tcAddForm').style.display = 'none';
+      loadTcManager();
+    } catch (err) { showToast('Error: ' + esc(err.message), true); }
+  }
+
+  // ========================================
+  // Tab: PTO
+  // ========================================
+  function renderPto() {
+    return canManageTeam() ? renderPtoManager() : renderPtoSelf();
+  }
+
+  function renderPtoManager() {
+    var h = '';
+    h += '<div id="ptoPolicyForm" style="display:none;background:var(--cream,var(--cream));border:1px solid var(--cream-dark,var(--cream-dark));border-radius:8px;padding:16px 20px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,0.08);"><div id="ptoPolicyFormInner"></div></div>';
+    h += '<div id="ptoUsageForm" style="display:none;background:var(--cream,var(--cream));border:1px solid var(--cream-dark,var(--cream-dark));border-radius:8px;padding:16px 20px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,0.08);"><div id="ptoUsageFormInner"></div></div>';
+    if (ptoSelectedEmployeeId) {
+      h += '<button class="detail-back" onclick="teamPtoBack()">&larr; All Employees</button>';
+      h += '<div id="ptoDetailWrap"><div class="loading">Loading PTO&hellip;</div></div>';
+      setTimeout(function() { loadPtoDetail(ptoSelectedEmployeeId); }, 0);
+    } else {
+      h += '<div id="ptoBoardWrap"><div class="loading">Loading PTO data&hellip;</div></div>';
+      setTimeout(loadPtoBoard, 0);
+    }
+    return h;
+  }
+
+  async function loadPtoBoard() {
+    var wrap = document.getElementById('ptoBoardWrap');
+    if (!wrap) return;
+    try {
+      var rawEntries = await MastDB.get('admin/ptoEntries') || {};
+      var entries = Object.values(rawEntries);
+      var rawPolicies = await MastDB.get('admin/ptoPolicy') || {};
+      ptoPolicies = {};
+      Object.entries(rawPolicies).forEach(function(e) { var p = e[1]; p._key = e[0]; ptoPolicies[p.employeeId || e[0]] = p; });
+
+      var balMap = {}, usedYtd = {}, yr = new Date().getFullYear().toString();
+      entries.forEach(function(e) {
+        if (!e.employeeId) return;
+        if (!balMap[e.employeeId] || (e.date || '') > (balMap[e.employeeId].date || '')) balMap[e.employeeId] = e;
+        if (e.type === 'used' && (e.date || '').startsWith(yr)) usedYtd[e.employeeId] = (usedYtd[e.employeeId] || 0) + Math.abs(e.hours || 0);
+      });
+
+      var active = employeesData.filter(function(e) { return (e.status || 'active') === 'active'; });
+      var h = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;"><h2 style="margin:0;">PTO Overview</h2></div>';
+      if (active.length === 0) {
+        h += '<div style="text-align:center;padding:40px;color:var(--warm-gray);">No active employees.</div>';
+      } else {
+        h += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px;">';
+        active.forEach(function(emp) {
+          var bal = balMap[emp._key], policy = ptoPolicies[emp._key] || ptoPolicies['default'];
+          var balance = bal ? (bal.balance || 0) : 0;
+          var ytdUsed = usedYtd[emp._key] || 0;
+          var aLabel = policy ? (policy.accrualType === 'annual-grant' ? 'Annual grant' : policy.accrualType === 'hourly' ? 'Hourly accrual' : 'Manual') : 'No policy';
+          h += '<div onclick="teamPtoSelectEmp(\'' + esc(emp._key) + '\')" style="background:var(--cream,var(--cream));border:1px solid var(--cream-dark,var(--cream-dark));border-radius:8px;padding:14px 18px;box-shadow:0 1px 3px rgba(0,0,0,0.08);cursor:pointer;transition:border-color 0.15s;" onmouseover="this.style.borderColor=\'var(--amber)\'" onmouseout="this.style.borderColor=\'var(--cream-dark,var(--cream-dark))\'">';
+          h += '<div style="font-weight:600;font-size:0.9rem;margin-bottom:6px;">👤 ' + esc(emp.fullName || '') + '</div>';
+          h += '<div style="font-size:1.6rem;font-weight:700;">' + balance.toFixed(1) + ' <span style="font-size:0.85rem;font-weight:400;color:var(--warm-gray);">hrs</span></div>';
+          h += '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:4px;">' + esc(aLabel) + (ytdUsed > 0 ? ' · ' + ytdUsed.toFixed(1) + ' used YTD' : '') + '</div>';
+          h += '</div>';
+        });
+        h += '</div>';
+      }
+      wrap.innerHTML = h;
+    } catch (err) { if (wrap) wrap.innerHTML = '<div style="color:var(--danger);padding:20px;">Error loading PTO data.</div>'; }
+  }
+
+  async function loadPtoDetail(empId) {
+    var wrap = document.getElementById('ptoDetailWrap');
+    if (!wrap) return;
+    try {
+      var emp = employeesData.find(function(e) { return e._key === empId; });
+      var rawEntries = await MastDB.get('admin/ptoEntries') || {};
+      var entries = Object.entries(rawEntries).map(function(e) { var v = e[1]; v._key = e[0]; return v; })
+        .filter(function(e) { return e.employeeId === empId; })
+        .sort(function(a, b) { return (b.date || '').localeCompare(a.date || ''); });
+      var rawPolicies = await MastDB.get('admin/ptoPolicy') || {};
+      ptoPolicies = {};
+      Object.entries(rawPolicies).forEach(function(e) { var p = e[1]; p._key = e[0]; ptoPolicies[p.employeeId || e[0]] = p; });
+      var policy = ptoPolicies[empId] || ptoPolicies['default'];
+      var balance = entries[0] ? (entries[0].balance || 0) : 0;
+
+      var h = '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;">';
+      h += '<div><h3 style="margin:0;">' + esc(emp ? emp.fullName : empId) + '</h3></div>';
+      h += '<div style="display:flex;gap:8px;"><button class="btn btn-secondary btn-small" data-emp="' + esc(empId) + '" onclick="teamPtoEditPolicy(this.dataset.emp)">Edit Policy</button><button class="btn btn-primary btn-small" data-emp="' + esc(empId) + '" onclick="teamPtoRecordUsage(this.dataset.emp)">Record Usage</button></div></div>';
+      h += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-bottom:16px;">';
+      h += '<div style="background:var(--cream,var(--cream));border:1px solid var(--cream-dark,var(--cream-dark));border-radius:8px;padding:12px 16px;box-shadow:0 1px 3px rgba(0,0,0,0.08);"><div style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:4px;">Balance</div><div style="font-size:1.6rem;font-weight:700;">' + balance.toFixed(1) + '</div><div style="font-size:0.75rem;color:var(--warm-gray);">hours</div></div>';
+      if (policy) {
+        var aType = policy.accrualType === 'annual-grant' ? 'Annual Grant' : policy.accrualType === 'hourly' ? 'Hourly' : 'Manual';
+        var aDetail = policy.accrualType === 'annual-grant' && policy.accrualRate ? policy.accrualRate + ' hrs/year' : policy.accrualType === 'hourly' && policy.accrualRate ? policy.accrualRate + ' hrs/hr' : '';
+        h += '<div style="background:var(--cream,var(--cream));border:1px solid var(--cream-dark,var(--cream-dark));border-radius:8px;padding:12px 16px;box-shadow:0 1px 3px rgba(0,0,0,0.08);"><div style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:4px;">Accrual</div><div style="font-size:0.95rem;font-weight:600;">' + esc(aType) + '</div>' + (aDetail ? '<div style="font-size:0.75rem;color:var(--warm-gray);">' + esc(aDetail) + '</div>' : '') + '</div>';
+      }
+      h += '</div>';
+      h += '<h4 style="font-size:0.9rem;font-weight:600;margin-bottom:8px;">PTO History</h4>';
+      if (entries.length === 0) {
+        h += '<div style="color:var(--warm-gray);font-size:0.85rem;">No PTO history yet.</div>';
+      } else {
+        h += renderPtoTable(entries);
+      }
+      wrap.innerHTML = h;
+    } catch (err) { if (wrap) wrap.innerHTML = '<div style="color:var(--danger);padding:20px;">Error loading PTO details.</div>'; }
+  }
+
+  function renderPtoTable(entries) {
+    var h = '<div style="overflow-x:auto;"><table style="width:100%;font-size:0.85rem;border-collapse:collapse;">';
+    h += '<thead><tr style="border-bottom:2px solid var(--cream-dark,var(--cream-dark));"><th style="padding:8px 10px;text-align:left;font-weight:600;">Date</th><th style="padding:8px 10px;text-align:left;font-weight:600;">Type</th><th style="padding:8px 10px;text-align:right;font-weight:600;">Hours</th><th style="padding:8px 10px;text-align:right;font-weight:600;">Balance</th><th style="padding:8px 10px;text-align:left;font-weight:600;">Notes</th></tr></thead><tbody>';
+    entries.forEach(function(e) {
+      var c = e.type === 'used' ? 'var(--danger)' : e.type === 'accrual' ? '#16a34a' : 'var(--warm-gray)';
+      h += '<tr style="border-bottom:1px solid var(--cream-dark,var(--cream-dark));">';
+      h += '<td style="padding:8px 10px;">' + esc(e.date || '') + '</td>';
+      h += '<td style="padding:8px 10px;color:' + c + ';">' + esc(capitalize(e.type || '')) + '</td>';
+      h += '<td style="padding:8px 10px;text-align:right;color:' + c + ';">' + ((e.hours || 0) > 0 ? '+' : '') + (e.hours || 0).toFixed(1) + '</td>';
+      h += '<td style="padding:8px 10px;text-align:right;font-weight:600;">' + (e.balance || 0).toFixed(1) + '</td>';
+      h += '<td style="padding:8px 10px;color:var(--warm-gray);">' + esc(e.notes || '') + '</td></tr>';
+    });
+    return h + '</tbody></table></div>';
+  }
+
+  function renderPtoSelf() {
+    var uid = auth && auth.currentUser ? auth.currentUser.uid : null;
+    var h = '<div id="ptoSelfWrap"><div class="loading">Loading your PTO&hellip;</div></div>';
+    setTimeout(function() { loadPtoSelf(uid); }, 0);
+    return h;
+  }
+
+  async function loadPtoSelf(uid) {
+    var wrap = document.getElementById('ptoSelfWrap');
+    if (!wrap) return;
+    try {
+      var rawEntries = await MastDB.get('admin/ptoEntries') || {};
+      var mine = Object.entries(rawEntries).map(function(e) { var v = e[1]; v._key = e[0]; return v; })
+        .filter(function(e) { return e.employeeId === uid || e.createdBy === uid; })
+        .sort(function(a, b) { return (b.date || '').localeCompare(a.date || ''); });
+      var rawPolicies = await MastDB.get('admin/ptoPolicy') || {};
+      var myPolicy = null;
+      Object.values(rawPolicies).forEach(function(p) { if (p.employeeId === uid) myPolicy = p; });
+      if (!myPolicy) Object.values(rawPolicies).forEach(function(p) { if (p.employeeId === 'default') myPolicy = p; });
+      var balance = mine[0] ? (mine[0].balance || 0) : 0;
+
+      var h = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-bottom:16px;">';
+      h += '<div style="background:var(--cream,var(--cream));border:1px solid var(--cream-dark,var(--cream-dark));border-radius:8px;padding:12px 16px;box-shadow:0 1px 3px rgba(0,0,0,0.08);"><div style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:4px;">Balance</div><div style="font-size:1.6rem;font-weight:700;">' + balance.toFixed(1) + '</div><div style="font-size:0.75rem;color:var(--warm-gray);">hours</div></div>';
+      if (myPolicy) {
+        var aLabel = myPolicy.accrualType === 'annual-grant' ? 'Annual grant — ' + (myPolicy.accrualRate || 0) + ' hrs/year' : myPolicy.accrualType === 'hourly' ? 'Hourly — ' + (myPolicy.accrualRate || 0) + ' hrs/hr' : 'Manual';
+        h += '<div style="background:var(--cream,var(--cream));border:1px solid var(--cream-dark,var(--cream-dark));border-radius:8px;padding:12px 16px;box-shadow:0 1px 3px rgba(0,0,0,0.08);"><div style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:4px;">Accrual</div><div style="font-size:0.85rem;font-weight:600;">' + esc(aLabel) + '</div></div>';
+      }
+      h += '</div>';
+      h += '<div style="margin-bottom:12px;"><button class="btn btn-primary btn-small" onclick="teamPtoRequestSelf()">+ Request Time Off</button></div>';
+      h += '<div id="ptoSelfUsageForm" style="display:none;background:var(--cream,var(--cream));border:1px solid var(--cream-dark,var(--cream-dark));border-radius:8px;padding:16px 20px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,0.08);"><div id="ptoSelfUsageFormInner"></div></div>';
+      if (mine.length > 0) {
+        h += '<h4 style="font-size:0.9rem;font-weight:600;margin-bottom:8px;">Your PTO History</h4>';
+        h += renderPtoTable(mine);
+      } else {
+        h += '<div style="text-align:center;padding:30px;color:var(--warm-gray);"><p style="font-size:0.9rem;font-weight:500;">No PTO history yet</p></div>';
+      }
+      wrap.innerHTML = h;
+    } catch (err) { if (wrap) wrap.innerHTML = '<div style="color:var(--danger);padding:20px;">Error loading PTO data.</div>'; }
+  }
+
+  function openPtoPolicyForm(empId) {
+    var formEl = document.getElementById('ptoPolicyForm'), innerEl = document.getElementById('ptoPolicyFormInner');
+    if (!formEl || !innerEl) return;
+    var emp = employeesData.find(function(e) { return e._key === empId; });
+    var policy = ptoPolicies[empId] || ptoPolicies['default'] || {};
+    var h = '<div style="font-weight:600;font-size:0.9rem;margin-bottom:12px;">PTO Policy — ' + esc(emp ? emp.fullName : empId) + '</div>';
+    h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">';
+    h += labelField('ptoPType', 'Accrual type', selectInput('ptoPType', [{ value: 'annual-grant', label: 'Annual Grant' }, { value: 'hourly', label: 'Hourly Accrual' }, { value: 'manual', label: 'Manual' }, { value: 'none', label: 'No PTO' }], policy.accrualType || 'annual-grant'));
+    h += labelField('ptoPRate', 'Accrual rate (hrs)', numberInput('ptoPRate', policy.accrualRate || '', '0.5', 'e.g. 40'));
+    h += labelField('ptoPMax', 'Max balance (hrs)', numberInput('ptoPMax', policy.maxBalance || '', '1', 'e.g. 80'));
+    h += labelField('ptoPCarry', 'Carryover limit', numberInput('ptoPCarry', policy.carryoverLimit || '', '1', 'blank = unlimited'));
+    h += labelField('ptoPDate', 'Effective date', dateInput('ptoPDate', policy.effectiveDate || new Date().toISOString().split('T')[0]));
+    h += '</div>';
+    h += '<div style="display:flex;gap:8px;margin-top:12px;"><button class="btn btn-primary btn-small" data-emp="' + esc(empId) + '" onclick="teamPtoSavePolicy(this.dataset.emp)">Save Policy</button><button class="btn btn-secondary btn-small" onclick="document.getElementById(\'ptoPolicyForm\').style.display=\'none\'">Cancel</button></div>';
+    innerEl.innerHTML = h;
+    formEl.style.display = '';
+  }
+
+  async function savePtoPolicy(empId) {
+    var pol = { employeeId: empId, accrualType: document.getElementById('ptoPType').value, accrualRate: parseFloat(document.getElementById('ptoPRate').value) || 0, maxBalance: parseFloat(document.getElementById('ptoPMax').value) || 0, carryoverLimit: parseFloat(document.getElementById('ptoPCarry').value) || null, effectiveDate: document.getElementById('ptoPDate').value || null, updatedAt: new Date().toISOString() };
+    try {
+      var existing = ptoPolicies[empId];
+      if (existing && existing._key) { await MastDB.update('admin/ptoPolicy/' + existing._key, pol); }
+      else { var key = MastDB.newKey('admin/ptoPolicy'); pol.id = key; pol.createdAt = new Date().toISOString(); await MastDB.set('admin/ptoPolicy/' + key, pol); }
+      showToast('Policy saved');
+      document.getElementById('ptoPolicyForm').style.display = 'none';
+      ptoSelectedEmployeeId = empId;
+      var wrap = document.getElementById('ptoDetailWrap');
+      if (wrap) { wrap.innerHTML = '<div class="loading">Loading&hellip;</div>'; loadPtoDetail(empId); }
+    } catch (err) { showToast('Error: ' + esc(err.message), true); }
+  }
+
+  function openPtoUsageForm(empId, isSelf) {
+    var cid = isSelf ? 'ptoSelfUsageForm' : 'ptoUsageForm', iid = isSelf ? 'ptoSelfUsageFormInner' : 'ptoUsageFormInner';
+    var formEl = document.getElementById(cid), innerEl = document.getElementById(iid);
+    if (!formEl || !innerEl) return;
+    var emp = employeesData.find(function(e) { return e._key === empId; });
+    var today = new Date().toISOString().split('T')[0];
+    var typeOpts = isSelf ? [{ value: 'used', label: 'Time Off Used' }] : [{ value: 'used', label: 'Time Off Used' }, { value: 'accrual', label: 'Accrual' }, { value: 'adjustment', label: 'Adjustment' }];
+    var h = '<div style="font-weight:600;font-size:0.9rem;margin-bottom:12px;">' + (isSelf ? 'Request Time Off' : 'Record PTO — ' + esc(emp ? emp.fullName : '')) + '</div>';
+    h += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr 2fr;gap:10px;align-items:end;">';
+    h += labelField('ptoEType', 'Type', selectInput('ptoEType', typeOpts, 'used'));
+    h += labelField('ptoEDate', 'Date', dateInput('ptoEDate', today));
+    h += labelField('ptoEHours', 'Hours', numberInput('ptoEHours', '', '0.5', '8'));
+    h += labelField('ptoENotes', 'Notes', textInput('ptoENotes', '', 'Optional'));
+    h += '</div>';
+    h += '<div style="display:flex;gap:8px;margin-top:12px;"><button class="btn btn-primary btn-small" data-emp="' + esc(empId) + '" data-self="' + (isSelf ? '1' : '0') + '" onclick="teamPtoSaveEntry(this.dataset.emp, this.dataset.self)">Save</button><button class="btn btn-secondary btn-small" onclick="document.getElementById(\'' + cid + '\').style.display=\'none\'">Cancel</button></div>';
+    innerEl.innerHTML = h;
+    formEl.style.display = '';
+  }
+
+  async function savePtoEntry(empId, isSelf) {
+    var type = document.getElementById('ptoEType').value;
+    var hours = parseFloat(document.getElementById('ptoEHours').value);
+    var date = document.getElementById('ptoEDate').value;
+    if (!hours || hours <= 0) { showToast('Hours required', true); return; }
+    if (!date) { showToast('Date required', true); return; }
+    try {
+      var rawEntries = await MastDB.get('admin/ptoEntries') || {};
+      var empEntries = Object.values(rawEntries).filter(function(e) { return e.employeeId === empId; }).sort(function(a, b) { return (a.date || '').localeCompare(b.date || ''); });
+      var currentBalance = empEntries.length > 0 ? (empEntries[empEntries.length - 1].balance || 0) : 0;
+      var hoursVal = type === 'used' ? -Math.abs(hours) : Math.abs(hours);
+      var key = MastDB.newKey('admin/ptoEntries');
+      await MastDB.set('admin/ptoEntries/' + key, { id: key, employeeId: empId, type: type, hours: hoursVal, date: date, notes: document.getElementById('ptoENotes').value.trim() || null, balance: currentBalance + hoursVal, createdAt: new Date().toISOString() });
+      showToast('PTO entry saved');
+      if (isSelf === '1') {
+        document.getElementById('ptoSelfUsageForm').style.display = 'none';
+        var uid = auth && auth.currentUser ? auth.currentUser.uid : null;
+        var wrap = document.getElementById('ptoSelfWrap');
+        if (wrap) { wrap.innerHTML = '<div class="loading">Loading&hellip;</div>'; loadPtoSelf(uid); }
+      } else {
+        document.getElementById('ptoUsageForm').style.display = 'none';
+        var wrap = document.getElementById('ptoDetailWrap');
+        if (wrap) { wrap.innerHTML = '<div class="loading">Loading&hellip;</div>'; loadPtoDetail(empId); }
+      }
+    } catch (err) { showToast('Error: ' + esc(err.message), true); }
+  }
+
+  // ========================================
+  // Tab: Documents (Compliance Tracking)
+  // ========================================
+  function renderComplianceDocs() {
+    var active = employeesData.filter(function(e) { return (e.status || 'active') === 'active'; });
+    var missingCount = 0;
+    active.forEach(function(emp) {
+      var cl = emp.complianceChecklist || {};
+      COMPLIANCE_FIELDS.forEach(function(f) { if (!cl[f.key] || cl[f.key].status !== 'completed') missingCount++; });
+    });
+
+    var h = '';
+    if (missingCount > 0) {
+      h += '<div style="background:rgba(217,119,6,0.15);border:1px solid rgba(217,119,6,0.4);border-radius:6px;padding:10px 16px;margin-bottom:16px;font-size:0.85rem;color:#fbbf24;">⚠ <strong>' + missingCount + ' compliance gap' + (missingCount !== 1 ? 's' : '') + '</strong> across your team.</div>';
+    } else if (active.length > 0) {
+      h += '<div style="background:rgba(22,163,74,0.15);border:1px solid rgba(22,163,74,0.4);border-radius:6px;padding:10px 16px;margin-bottom:16px;font-size:0.85rem;color:#86efac;">✓ All employees have complete compliance documents on file.</div>';
+    }
+
+    h += '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;align-items:center;">';
+    h += '<select id="docFiltEmp" onchange="teamDocFilter()" style="' + INPUT_STYLE + 'width:auto;min-width:160px;"><option value="">All employees</option>';
+    active.forEach(function(emp) { h += '<option value="' + esc(emp._key) + '"' + (docFilterEmployee === emp._key ? ' selected' : '') + '>' + esc(emp.fullName || '') + '</option>'; });
+    h += '</select>';
+    h += '<select id="docFiltStatus" onchange="teamDocFilter()" style="' + INPUT_STYLE + 'width:auto;min-width:140px;"><option value="">All statuses</option><option value="completed"' + (docFilterStatus === 'completed' ? ' selected' : '') + '>On File</option><option value="missing"' + (docFilterStatus === 'missing' ? ' selected' : '') + '>Missing</option><option value="expired"' + (docFilterStatus === 'expired' ? ' selected' : '') + '>Expired</option></select>';
+    h += '</div>';
+    h += '<div id="docTableContainer">' + buildComplianceTable(active) + '</div>';
+    return h;
+  }
+
+  function buildComplianceTable(activeEmps) {
+    var rows = [];
+    activeEmps.forEach(function(emp) {
+      if (docFilterEmployee && emp._key !== docFilterEmployee) return;
+      var cl = emp.complianceChecklist || {};
+      COMPLIANCE_FIELDS.forEach(function(f) {
+        var item = cl[f.key] || {}, status = item.status || 'missing';
+        if (status === 'completed' && item.expiryDate && Math.floor((new Date(item.expiryDate).getTime() - Date.now()) / 86400000) <= 0) status = 'expired';
+        if (docFilterStatus && docFilterStatus !== status) return;
+        rows.push({ emp: emp, field: f, item: item, status: status });
+      });
+    });
+    if (rows.length === 0) return '<div style="text-align:center;padding:40px 20px;color:var(--warm-gray);">No documents match the current filter.</div>';
+    var h = '<div style="overflow-x:auto;"><table style="width:100%;font-size:0.85rem;border-collapse:collapse;">';
+    h += '<thead><tr style="border-bottom:2px solid var(--cream-dark,var(--cream-dark));text-align:left;"><th style="padding:8px 10px;font-weight:600;">Employee</th><th style="padding:8px 10px;font-weight:600;">Document</th><th style="padding:8px 10px;font-weight:600;">Status</th><th style="padding:8px 10px;font-weight:600;">Storage</th><th style="padding:8px 10px;font-weight:600;">Last Updated</th><th style="padding:8px 10px;font-weight:600;"></th></tr></thead><tbody>';
+    rows.forEach(function(row) {
+      var sc = row.status === 'completed' ? '#16a34a' : row.status === 'expired' ? 'var(--danger)' : '#d97706';
+      var sl = row.status === 'completed' ? '✓ On File' : row.status === 'expired' ? '⚠ Expired' : '⚠ Missing';
+      h += '<tr style="border-bottom:1px solid var(--cream-dark,var(--cream-dark));">';
+      h += '<td style="padding:8px 10px;font-weight:500;">' + esc(row.emp.fullName || '') + '</td>';
+      h += '<td style="padding:8px 10px;">' + esc(row.field.label) + '</td>';
+      h += '<td style="padding:8px 10px;"><span style="color:' + sc + ';font-weight:600;">' + sl + '</span>' + (row.item.expiryDate && row.status !== 'missing' ? '<div style="font-size:0.75rem;color:var(--warm-gray-light);">Expires ' + esc(row.item.expiryDate) + '</div>' : '') + '</td>';
+      h += '<td style="padding:8px 10px;color:var(--warm-gray);">' + (row.item.storageLocation ? esc(capitalize(row.item.storageLocation.replace('-', ' '))) : '—') + '</td>';
+      h += '<td style="padding:8px 10px;color:var(--warm-gray);">' + (row.item.updatedAt ? esc(row.item.updatedAt.split('T')[0]) : '—') + '</td>';
+      h += '<td style="padding:8px 10px;"><button class="btn btn-secondary btn-small" data-emp="' + esc(row.emp._key) + '" data-key="' + esc(row.field.key) + '" onclick="teamEditCompliance(this.dataset.emp, this.dataset.key)">' + (row.status === 'completed' ? 'Update' : 'Mark On File') + '</button></td>';
+      h += '</tr>';
+    });
+    return h + '</tbody></table></div>';
+  }
+
+  // ========================================
+  // Tab: Onboarding
+  // ========================================
+  var ONBOARDING_ITEMS = [
+    { key: 'i9',               label: 'I-9 collected',            source: 'compliance' },
+    { key: 'w4',               label: 'W-4 collected',            source: 'compliance' },
+    { key: 'stateWithholding', label: 'State withholding form',   source: 'compliance' },
+    { key: 'offerLetter',      label: 'Offer letter signed',      source: 'compliance' },
+    { key: 'workersComp',      label: "Workers' comp certificate", source: 'compliance' },
+    { key: 'addedToPayroll',   label: 'Added to payroll system',  source: 'onboarding' },
+    { key: 'emergencyContact', label: 'Emergency contact on file', source: 'onboarding' },
+  ];
+
+  function isObItemDone(emp, key, source) {
+    if (source === 'compliance') { var cl = emp.complianceChecklist || {}; return !!(cl[key] && cl[key].status === 'completed'); }
+    if (key === 'emergencyContact') return !!(emp.emergencyContact && emp.emergencyContact.name);
+    return !!((emp.onboardingChecklist || {})[key]);
+  }
+
+  function renderOnboarding() {
+    var active = employeesData.filter(function(e) { return (e.status || 'active') === 'active'; });
+    var incomplete = active.filter(function(emp) { return ONBOARDING_ITEMS.some(function(item) { return !isObItemDone(emp, item.key, item.source); }); });
+
+    var h = '';
+    if (incomplete.length > 0) {
+      h += '<div style="background:rgba(217,119,6,0.15);border:1px solid rgba(217,119,6,0.4);border-radius:6px;padding:10px 16px;margin-bottom:16px;font-size:0.85rem;color:#fbbf24;">⚠ <strong>' + incomplete.length + ' employee' + (incomplete.length !== 1 ? 's have' : ' has') + ' incomplete onboarding</strong></div>';
+    } else if (active.length > 0) {
+      h += '<div style="background:rgba(22,163,74,0.15);border:1px solid rgba(22,163,74,0.4);border-radius:6px;padding:10px 16px;margin-bottom:16px;font-size:0.85rem;color:#86efac;">✓ All employees have completed onboarding.</div>';
+    }
+
+    h += '<div style="display:flex;gap:8px;margin-bottom:16px;">';
+    h += '<button class="btn btn-secondary btn-small' + (onboardingFilter === 'all' ? ' active' : '') + '" onclick="teamObFilter(\'all\')">All</button>';
+    h += '<button class="btn btn-secondary btn-small' + (onboardingFilter === 'incomplete' ? ' active' : '') + '" onclick="teamObFilter(\'incomplete\')">Incomplete only</button>';
+    h += '</div>';
+
+    var toShow = onboardingFilter === 'incomplete' ? incomplete : active;
+    if (toShow.length === 0) {
+      h += '<div style="text-align:center;padding:40px 20px;color:var(--warm-gray);">All employees have completed onboarding.</div>';
+    } else {
+      toShow.forEach(function(emp) {
+        var done = ONBOARDING_ITEMS.filter(function(item) { return isObItemDone(emp, item.key, item.source); }).length;
+        var total = ONBOARDING_ITEMS.length, pct = Math.round(done / total * 100), allDone = done === total;
+        h += '<div style="background:var(--cream,var(--cream));border:1px solid var(--cream-dark,var(--cream-dark));border-radius:8px;padding:14px 18px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">';
+        h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">';
+        h += '<div><span style="font-weight:600;">' + esc(emp.fullName || '') + '</span>' + (emp.jobTitle ? ' <span style="color:var(--warm-gray);font-size:0.85rem;">— ' + esc(emp.jobTitle) + '</span>' : '') + (emp.startDate ? '<div style="font-size:0.78rem;color:var(--warm-gray-light);">Started ' + esc(emp.startDate) + '</div>' : '') + '</div>';
+        h += '<div style="font-size:0.85rem;font-weight:600;color:' + (allDone ? '#16a34a' : '#d97706') + ';">' + done + ' / ' + total + ' complete</div>';
+        h += '</div>';
+        h += '<div style="height:4px;background:var(--cream-dark,#ddd);border-radius:2px;margin-bottom:10px;overflow:hidden;"><div style="height:100%;width:' + pct + '%;background:' + (allDone ? '#16a34a' : '#d97706') + ';border-radius:2px;"></div></div>';
+        h += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:4px;">';
+        ONBOARDING_ITEMS.forEach(function(item) {
+          var isDone = isObItemDone(emp, item.key, item.source);
+          var isClickable = item.source === 'onboarding' && item.key !== 'emergencyContact';
+          h += '<label style="display:flex;align-items:center;gap:8px;font-size:0.85rem;padding:4px 6px;border-radius:4px;cursor:' + (isClickable ? 'pointer' : item.source === 'compliance' ? 'pointer' : 'default') + ';"';
+          if (isClickable) h += ' data-emp="' + esc(emp._key) + '" data-key="' + esc(item.key) + '" onclick="teamObToggle(this.dataset.emp, this.dataset.key)"';
+          else if (item.source === 'compliance') h += ' data-emp="' + esc(emp._key) + '" data-key="' + esc(item.key) + '" onclick="teamEditCompliance(this.dataset.emp, this.dataset.key)"';
+          h += '>';
+          h += '<span style="color:' + (isDone ? '#16a34a' : 'var(--warm-gray)') + ';font-size:1rem;">' + (isDone ? '☑' : '☐') + '</span>';
+          h += '<span style="color:' + (isDone ? '' : 'var(--warm-gray)') + ';">' + esc(item.label) + '</span>';
+          h += '</label>';
+        });
+        h += '</div></div>';
+      });
+    }
+    return h;
+  }
+
+  async function toggleObItem(empId, key) {
+    var emp = employeesData.find(function(e) { return e._key === empId; });
+    if (!emp) return;
+    var ob = emp.onboardingChecklist || {};
+    var newVal = !ob[key];
+    try {
+      var patch = {}; patch[key] = newVal;
+      await MastDB.update('admin/employees/' + empId + '/onboardingChecklist', patch);
+      emp.onboardingChecklist = emp.onboardingChecklist || {};
+      emp.onboardingChecklist[key] = newVal;
+      var container = document.getElementById('teamTab');
+      if (container) renderTeam(container);
+    } catch (err) { showToast('Error: ' + esc(err.message), true); }
   }
 
   // ========================================
@@ -1272,16 +1883,52 @@
   // ========================================
   window.loadTeam = loadTeam;
   window.teamSwitchView = function(view) {
-    var restricted = ['timeclock', 'pto', 'docs', 'onboarding'];
-    if (restricted.indexOf(view) >= 0 && !canManageTeam()) {
+    // docs and onboarding are manager-only; timeclock and pto show role-appropriate view
+    if ((view === 'docs' || view === 'onboarding') && !canManageTeam()) {
       if (typeof showToast === 'function') showToast('This tab requires Manager or Admin access.', true);
       view = 'roster';
     }
     currentView = view;
     selectedEmployeeId = null;
+    // Reset tab-specific state on switch
+    if (view === 'timeclock') { tcWeekOffset = 0; tcSelectedEmployeeId = null; }
+    if (view === 'pto') { ptoSelectedEmployeeId = null; }
+    if (view === 'docs') { docFilterEmployee = ''; docFilterStatus = ''; }
+    if (view === 'onboarding') { onboardingFilter = 'all'; }
     var container = document.getElementById('teamTab');
     if (container) renderTeam(container);
   };
+
+  // Time Clock exports
+  window.teamTcSetEmployee = function(id) { tcSelectedEmployeeId = id || null; loadTcManager(); };
+  window.teamTcPrevWeek = function() { tcWeekOffset--; loadTcManager(); };
+  window.teamTcNextWeek = function() { if (tcWeekOffset < 0) { tcWeekOffset++; loadTcManager(); } };
+  window.teamTcAddEntry = function() { openTcAddForm(); };
+  window.teamTcSaveEntry = saveTcEntry;
+  window.teamTcClockIn = tcClockIn;
+  window.teamTcClockOut = tcClockOut;
+
+  // PTO exports
+  window.teamPtoSelectEmp = function(id) { ptoSelectedEmployeeId = id; var wrap = document.getElementById('ptoBoardWrap'); if (wrap) { wrap.innerHTML = '<div class="loading">Loading&hellip;</div>'; } var container = document.getElementById('teamTab'); if (container) renderTeam(container); };
+  window.teamPtoBack = function() { ptoSelectedEmployeeId = null; var container = document.getElementById('teamTab'); if (container) renderTeam(container); };
+  window.teamPtoEditPolicy = function(empId) { openPtoPolicyForm(empId); };
+  window.teamPtoSavePolicy = savePtoPolicy;
+  window.teamPtoRecordUsage = function(empId) { openPtoUsageForm(empId, false); };
+  window.teamPtoSaveEntry = savePtoEntry;
+  window.teamPtoRequestSelf = function() { var uid = auth && auth.currentUser ? auth.currentUser.uid : null; openPtoUsageForm(uid, true); };
+
+  // Documents exports
+  window.teamDocFilter = function() {
+    docFilterEmployee = document.getElementById('docFiltEmp').value;
+    docFilterStatus = document.getElementById('docFiltStatus').value;
+    var active = employeesData.filter(function(e) { return (e.status || 'active') === 'active'; });
+    var tbl = document.getElementById('docTableContainer');
+    if (tbl) tbl.innerHTML = buildComplianceTable(active);
+  };
+
+  // Onboarding exports
+  window.teamObFilter = function(f) { onboardingFilter = f; var container = document.getElementById('teamTab'); if (container) renderTeam(container); };
+  window.teamObToggle = toggleObItem;
   window.teamViewEmployee = function(id) {
     selectedEmployeeId = id;
     currentView = 'detail';
@@ -1360,6 +2007,14 @@
       editingEmployeeId = null;
       editingDocId = null;
       editingRefId = null;
+      tcSelectedEmployeeId = null;
+      tcWeekOffset = 0;
+      if (tcTimerInterval) { clearInterval(tcTimerInterval); tcTimerInterval = null; }
+      ptoSelectedEmployeeId = null;
+      ptoPolicies = {};
+      docFilterEmployee = '';
+      docFilterStatus = '';
+      onboardingFilter = 'all';
     }
   });
 })();
