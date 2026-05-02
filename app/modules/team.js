@@ -613,7 +613,9 @@
           var aLabel = policy ? (policy.accrualType === 'annual-grant' ? 'Annual grant' : policy.accrualType === 'hourly' ? 'Hourly accrual' : 'Manual') : 'No policy';
           h += '<div onclick="teamPtoSelectEmp(\'' + esc(emp._key) + '\')" style="background:var(--cream,var(--cream));border:1px solid var(--cream-dark,var(--cream-dark));border-radius:8px;padding:14px 18px;box-shadow:0 1px 3px rgba(0,0,0,0.08);cursor:pointer;transition:border-color 0.15s;" onmouseover="this.style.borderColor=\'var(--amber)\'" onmouseout="this.style.borderColor=\'var(--cream-dark,var(--cream-dark))\'">';
           h += '<div style="font-weight:600;font-size:0.9rem;margin-bottom:6px;">👤 ' + esc(emp.fullName || '') + '</div>';
-          h += '<div style="font-size:1.6rem;font-weight:700;">' + balance.toFixed(1) + ' <span style="font-size:0.85rem;font-weight:400;color:var(--warm-gray);">hrs</span></div>';
+          var balColor = balance < 0 ? '#d97706' : 'inherit';
+          h += '<div style="font-size:1.6rem;font-weight:700;color:' + balColor + ';">' + balance.toFixed(1) + ' <span style="font-size:0.85rem;font-weight:400;color:var(--warm-gray);">hrs</span></div>';
+          if (balance < 0) h += '<div style="font-size:0.72rem;color:#d97706;margin-top:2px;">Balance below zero — review accrual policy</div>';
           h += '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:4px;">' + esc(aLabel) + (ytdUsed > 0 ? ' · ' + ytdUsed.toFixed(1) + ' used YTD' : '') + '</div>';
           h += '</div>';
         });
@@ -642,7 +644,8 @@
       h += '<div><h3 style="margin:0;">' + esc(emp ? emp.fullName : empId) + '</h3></div>';
       h += '<div style="display:flex;gap:8px;"><button class="btn btn-secondary btn-small" data-emp="' + esc(empId) + '" onclick="teamPtoEditPolicy(this.dataset.emp)">Edit Policy</button><button class="btn btn-primary btn-small" data-emp="' + esc(empId) + '" onclick="teamPtoRecordUsage(this.dataset.emp)">Record Usage</button></div></div>';
       h += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-bottom:16px;">';
-      h += '<div style="background:var(--cream,var(--cream));border:1px solid var(--cream-dark,var(--cream-dark));border-radius:8px;padding:12px 16px;box-shadow:0 1px 3px rgba(0,0,0,0.08);"><div style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:4px;">Balance</div><div style="font-size:1.6rem;font-weight:700;">' + balance.toFixed(1) + '</div><div style="font-size:0.75rem;color:var(--warm-gray);">hours</div></div>';
+      var balColor = balance < 0 ? '#d97706' : 'inherit';
+      h += '<div style="background:var(--cream,var(--cream));border:1px solid ' + (balance < 0 ? '#d97706' : 'var(--cream-dark,var(--cream-dark))') + ';border-radius:8px;padding:12px 16px;box-shadow:0 1px 3px rgba(0,0,0,0.08);"><div style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:4px;">Balance</div><div style="font-size:1.6rem;font-weight:700;color:' + balColor + ';">' + balance.toFixed(1) + '</div><div style="font-size:0.75rem;color:var(--warm-gray);">hours</div>' + (balance < 0 ? '<div style="font-size:0.72rem;color:#d97706;margin-top:4px;">Balance below zero — review accrual policy</div>' : '') + '</div>';
       if (policy) {
         var aType = policy.accrualType === 'annual-grant' ? 'Annual Grant' : policy.accrualType === 'hourly' ? 'Hourly' : 'Manual';
         var aDetail = policy.accrualType === 'annual-grant' && policy.accrualRate ? policy.accrualRate + ' hrs/year' : policy.accrualType === 'hourly' && policy.accrualRate ? policy.accrualRate + ' hrs/hr' : '';
@@ -696,7 +699,8 @@
       var balance = mine[0] ? (mine[0].balance || 0) : 0;
 
       var h = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-bottom:16px;">';
-      h += '<div style="background:var(--cream,var(--cream));border:1px solid var(--cream-dark,var(--cream-dark));border-radius:8px;padding:12px 16px;box-shadow:0 1px 3px rgba(0,0,0,0.08);"><div style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:4px;">Balance</div><div style="font-size:1.6rem;font-weight:700;">' + balance.toFixed(1) + '</div><div style="font-size:0.75rem;color:var(--warm-gray);">hours</div></div>';
+      var balColor = balance < 0 ? '#d97706' : 'inherit';
+      h += '<div style="background:var(--cream,var(--cream));border:1px solid ' + (balance < 0 ? '#d97706' : 'var(--cream-dark,var(--cream-dark))') + ';border-radius:8px;padding:12px 16px;box-shadow:0 1px 3px rgba(0,0,0,0.08);"><div style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:4px;">Balance</div><div style="font-size:1.6rem;font-weight:700;color:' + balColor + ';">' + balance.toFixed(1) + '</div><div style="font-size:0.75rem;color:var(--warm-gray);">hours</div>' + (balance < 0 ? '<div style="font-size:0.72rem;color:#d97706;margin-top:4px;">Balance below zero — review accrual policy</div>' : '') + '</div>';
       if (myPolicy) {
         var aLabel = myPolicy.accrualType === 'annual-grant' ? 'Annual grant — ' + (myPolicy.accrualRate || 0) + ' hrs/year' : myPolicy.accrualType === 'hourly' ? 'Hourly — ' + (myPolicy.accrualRate || 0) + ' hrs/hr' : 'Manual';
         h += '<div style="background:var(--cream,var(--cream));border:1px solid var(--cream-dark,var(--cream-dark));border-radius:8px;padding:12px 16px;box-shadow:0 1px 3px rgba(0,0,0,0.08);"><div style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:4px;">Accrual</div><div style="font-size:0.85rem;font-weight:600;">' + esc(aLabel) + '</div></div>';
@@ -776,8 +780,18 @@
       var empEntries = Object.values(rawEntries).filter(function(e) { return e.employeeId === empId; }).sort(function(a, b) { return (a.date || '').localeCompare(b.date || ''); });
       var currentBalance = empEntries.length > 0 ? (empEntries[empEntries.length - 1].balance || 0) : 0;
       var hoursVal = type === 'used' ? -Math.abs(hours) : Math.abs(hours);
+      var newBalance = currentBalance + hoursVal;
+      if (newBalance < 0) {
+        var emp = employeesData.find(function(e) { return e._key === empId; });
+        var empName = emp ? emp.fullName : empId;
+        var msg = 'This will bring ' + empName + '’s balance to ' + newBalance.toFixed(1) + ' hours. Proceed?';
+        var confirmed = typeof mastConfirm === 'function'
+          ? await mastConfirm(msg, { title: 'Negative balance', confirmLabel: 'Proceed' })
+          : window.confirm(msg);
+        if (!confirmed) return;
+      }
       var key = MastDB.newKey('admin/ptoEntries');
-      await MastDB.set('admin/ptoEntries/' + key, { id: key, employeeId: empId, type: type, hours: hoursVal, date: date, notes: document.getElementById('ptoENotes').value.trim() || null, balance: currentBalance + hoursVal, createdAt: new Date().toISOString() });
+      await MastDB.set('admin/ptoEntries/' + key, { id: key, employeeId: empId, type: type, hours: hoursVal, date: date, notes: document.getElementById('ptoENotes').value.trim() || null, balance: newBalance, createdAt: new Date().toISOString() });
       showToast('PTO entry saved');
       if (isSelf === '1') {
         document.getElementById('ptoSelfUsageForm').style.display = 'none';
