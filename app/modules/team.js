@@ -817,6 +817,7 @@
     h += '<select id="docFiltStatus" onchange="teamDocFilter()" style="' + INPUT_STYLE + 'width:auto;min-width:140px;"><option value="">All statuses</option><option value="completed"' + (docFilterStatus === 'completed' ? ' selected' : '') + '>On File</option><option value="missing"' + (docFilterStatus === 'missing' ? ' selected' : '') + '>Missing</option><option value="expired"' + (docFilterStatus === 'expired' ? ' selected' : '') + '>Expired</option></select>';
     h += '</div>';
     h += '<div id="docTableContainer">' + buildComplianceTable(active) + '</div>';
+    h += '<div id="teamComplianceForm" style="display:none;margin-top:16px;"></div>';
     return h;
   }
 
