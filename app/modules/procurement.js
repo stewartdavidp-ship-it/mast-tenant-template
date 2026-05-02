@@ -1357,6 +1357,7 @@
     var receipt = {
       receiptId: receiptId,
       poId: po.poId,
+      vendorId: po.vendorId,
       receivedAt: receivedAt,
       receivedBy: null,
       vendorInvoiceRef: invoiceRef,
