@@ -1123,6 +1123,33 @@
       showToast('Sending invoice ' + o.invoiceNumber + '...');
       var now = new Date().toISOString();
 
+      // Square adapter: if the tenant uses Square as payment processor, route through
+      // Square Invoices API so the customer receives a Square-hosted payment link.
+      // Falls back to Mast-native email if Square isn't configured or the call fails.
+      var processor = 'square';
+      try { processor = (await MastDB.get('config/paymentProcessor')) || 'square'; } catch (_) {}
+
+      if (processor === 'square') {
+        try {
+          var sqResult = await firebase.functions().httpsCallable('createSquareInvoice')({
+            tenantId: MastDB.tenantId(),
+            orderId: orderId
+          });
+          if (sqResult.data && sqResult.data.success) {
+            o.invoiceStatus = 'sent';
+            o.invoiceSentAt = now;
+            o.squareInvoiceId = sqResult.data.squareInvoiceId || null;
+            o.squareInvoiceUrl = sqResult.data.squareInvoiceUrl || null;
+            showToast('Invoice ' + o.invoiceNumber + ' sent via Square — customer will receive a payment link');
+            renderOrderDetail(orderId);
+            return;
+          }
+        } catch (sqErr) {
+          console.warn('Square invoice send failed, falling back to email:', sqErr.message);
+        }
+      }
+
+      // Mast-native email fallback
       if (o.email) {
         try {
           await firebase.functions().httpsCallable('testOrderEmail')({
@@ -1272,13 +1299,19 @@
       if (o.invoiceDueDate) rows += '<div style="display:flex;justify-content:space-between;padding:4px 0;"><span style="color:var(--warm-gray-light);">Due Date</span><span>' + esc(o.invoiceDueDate) + '</span></div>';
       if (o.invoicePaidAt)  rows += '<div style="display:flex;justify-content:space-between;padding:4px 0;"><span style="color:var(--warm-gray-light);">Paid</span><span style="color:#4ade80;">' + formatOrderDate(o.invoicePaidAt) + '</span></div>';
       rows += '<div style="display:flex;justify-content:space-between;padding:4px 0;"><span style="color:var(--warm-gray-light);">Amount</span><span>$' + (o.total || 0).toFixed(2) + '</span></div>';
+      if (o.squareInvoiceId) {
+        var sqLinkHtml = o.squareInvoiceUrl
+          ? '<a href="' + esc(o.squareInvoiceUrl) + '" target="_blank" rel="noopener" style="color:var(--teal);">View on Square ↗</a>'
+          : 'Square Invoice';
+        rows += '<div style="display:flex;justify-content:space-between;padding:4px 0;"><span style="color:var(--warm-gray-light);">Via Square</span><span style="font-size:0.82rem;">' + sqLinkHtml + '</span></div>';
+      }
 
       h += rows;
       h += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;">';
       if (effectiveStatus !== 'paid') {
         h += '<button class="btn btn-primary" onclick="markOrderInvoicePaid(\'' + esc(orderId) + '\')">Mark as Paid</button>';
       }
-      if (effectiveStatus === 'sent' || effectiveStatus === 'overdue') {
+      if ((effectiveStatus === 'sent' || effectiveStatus === 'overdue') && !o.squareInvoiceId) {
         h += '<button class="btn btn-secondary" onclick="resendInvoice(\'' + esc(orderId) + '\')">Resend Invoice</button>';
       }
       h += '<a class="btn btn-secondary" href="#" onclick="event.preventDefault();navigateTo(\'finance-ar\')">View in Finance AR</a>';
