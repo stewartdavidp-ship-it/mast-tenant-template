@@ -252,15 +252,28 @@
     }
   }
 
+  // Returns true if the current user has operational management access (Admin or Manager).
+  // Used to gate Team tabs that are not self-service (Time Clock, PTO, Documents, Onboarding).
+  function canManageTeam() {
+    return typeof hasPermission === 'function' ? hasPermission('jobs', 'read') : true;
+  }
+
   // --- Main Render ---
   function renderTeam(container) {
+    var mgr = canManageTeam();
+    // If current view is a manager-only tab but user no longer qualifies, reset to roster
+    if (!mgr && currentView !== 'roster' && currentView !== 'detail') {
+      currentView = 'roster';
+    }
     var h = '';
     h += '<div class="view-tabs" style="margin-bottom:20px;">';
     h += '<button class="view-tab' + (currentView === 'roster' || currentView === 'detail' ? ' active' : '') + '" onclick="teamSwitchView(\'roster\')">Roster</button>';
-    h += '<button class="view-tab' + (currentView === 'timeclock' ? ' active' : '') + '" onclick="teamSwitchView(\'timeclock\')">Time Clock</button>';
-    h += '<button class="view-tab' + (currentView === 'pto' ? ' active' : '') + '" onclick="teamSwitchView(\'pto\')">PTO</button>';
-    h += '<button class="view-tab' + (currentView === 'docs' ? ' active' : '') + '" onclick="teamSwitchView(\'docs\')">Documents</button>';
-    h += '<button class="view-tab' + (currentView === 'onboarding' ? ' active' : '') + '" onclick="teamSwitchView(\'onboarding\')">Onboarding</button>';
+    if (mgr) {
+      h += '<button class="view-tab' + (currentView === 'timeclock' ? ' active' : '') + '" onclick="teamSwitchView(\'timeclock\')">Time Clock</button>';
+      h += '<button class="view-tab' + (currentView === 'pto' ? ' active' : '') + '" onclick="teamSwitchView(\'pto\')">PTO</button>';
+      h += '<button class="view-tab' + (currentView === 'docs' ? ' active' : '') + '" onclick="teamSwitchView(\'docs\')">Documents</button>';
+      h += '<button class="view-tab' + (currentView === 'onboarding' ? ' active' : '') + '" onclick="teamSwitchView(\'onboarding\')">Onboarding</button>';
+    }
     h += '</div>';
 
     if (currentView === 'roster') {
@@ -1259,6 +1272,11 @@
   // ========================================
   window.loadTeam = loadTeam;
   window.teamSwitchView = function(view) {
+    var restricted = ['timeclock', 'pto', 'docs', 'onboarding'];
+    if (restricted.indexOf(view) >= 0 && !canManageTeam()) {
+      if (typeof showToast === 'function') showToast('This tab requires Manager or Admin access.', true);
+      view = 'roster';
+    }
     currentView = view;
     selectedEmployeeId = null;
     var container = document.getElementById('teamTab');

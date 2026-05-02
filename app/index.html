@@ -10386,6 +10386,61 @@ MastDB.plaidItems = {
   update: function(id, data) { return MastDB.update('admin/plaidItems/' + id, data); }
 };
 
+MastDB.journalEntries = {
+  PATH: 'admin/journalEntries',
+  list: function(opts) {
+    var q = MastDB.query('admin/journalEntries');
+    if (opts && opts.orderBy) q = q.orderByChild(opts.orderBy);
+    if (opts && opts.limit) q = q.limitToLast(opts.limit);
+    return q.once();
+  },
+  get: function(id) { return MastDB.get('admin/journalEntries/' + id); },
+  set: function(id, data) { return MastDB.set('admin/journalEntries/' + id, data); },
+  update: function(id, data) { return MastDB.update('admin/journalEntries/' + id, data); },
+  remove: function(id) { return MastDB.remove('admin/journalEntries/' + id); },
+  query: function() { return MastDB.query('admin/journalEntries'); }
+};
+
+MastDB.timeEntries = {
+  PATH: 'admin/timeEntries',
+  list: function(opts) {
+    var q = MastDB.query('admin/timeEntries');
+    if (opts && opts.orderBy) q = q.orderByChild(opts.orderBy);
+    if (opts && opts.limit) q = q.limitToLast(opts.limit);
+    return q.once();
+  },
+  get: function(id) { return MastDB.get('admin/timeEntries/' + id); },
+  set: function(id, data) { return MastDB.set('admin/timeEntries/' + id, data); },
+  update: function(id, data) { return MastDB.update('admin/timeEntries/' + id, data); },
+  remove: function(id) { return MastDB.remove('admin/timeEntries/' + id); },
+  query: function() { return MastDB.query('admin/timeEntries'); }
+};
+
+MastDB.ptoPolicy = {
+  PATH: 'admin/ptoPolicy',
+  list: function() { return MastDB.list('admin/ptoPolicy'); },
+  get: function(id) { return MastDB.get('admin/ptoPolicy/' + id); },
+  set: function(id, data) { return MastDB.set('admin/ptoPolicy/' + id, data); },
+  update: function(id, data) { return MastDB.update('admin/ptoPolicy/' + id, data); },
+  remove: function(id) { return MastDB.remove('admin/ptoPolicy/' + id); },
+  query: function() { return MastDB.query('admin/ptoPolicy'); }
+};
+
+MastDB.ptoEntries = {
+  PATH: 'admin/ptoEntries',
+  list: function(opts) {
+    var q = MastDB.query('admin/ptoEntries');
+    if (opts && opts.orderBy) q = q.orderByChild(opts.orderBy);
+    if (opts && opts.limit) q = q.limitToLast(opts.limit);
+    return q.once();
+  },
+  get: function(id) { return MastDB.get('admin/ptoEntries/' + id); },
+  set: function(id, data) { return MastDB.set('admin/ptoEntries/' + id, data); },
+  update: function(id, data) { return MastDB.update('admin/ptoEntries/' + id, data); },
+  remove: function(id) { return MastDB.remove('admin/ptoEntries/' + id); },
+  query: function() { return MastDB.query('admin/ptoEntries'); }
+};
+
 MastDB.lpe = {
   equipment: {
     PATH: 'admin/lpe/equipment',
@@ -12109,7 +12164,8 @@ var DEFAULT_ROLES = {
       pos:          { create: true, read: true, update: true, delete: true },
       receipts:     { create: true, read: true, update: true, delete: true },
       contacts:     { create: true, read: true, update: true, delete: true },
-      forecast:     { create: false, read: true, update: false, delete: false }
+      forecast:     { create: false, read: true, update: false, delete: false },
+      finance:      { create: true, read: true, update: true, delete: true }
     }
   },
   manager: {
@@ -12135,10 +12191,11 @@ var DEFAULT_ROLES = {
       pos:          { create: true, read: true, update: true, delete: false },
       receipts:     { create: true, read: true, update: false, delete: false },
       contacts:     { create: true, read: true, update: true, delete: false },
-      forecast:     { create: false, read: true, update: false, delete: false }
+      forecast:     { create: false, read: true, update: false, delete: false },
+      finance:      { create: true, read: true, update: true, delete: false }
     },
     navSections: ['products', 'sales', 'marketing', 'retention', 'events',
-                  'classes', 'operations', 'customer-service', 'admin']
+                  'classes', 'finance', 'operations', 'customer-service', 'admin']
   },
   user: {
     name: 'User',
@@ -12163,7 +12220,8 @@ var DEFAULT_ROLES = {
       pos:          { create: false, read: false, update: false, delete: false },
       receipts:     { create: false, read: false, update: false, delete: false },
       contacts:     { create: false, read: false, update: false, delete: false },
-      forecast:     { create: false, read: false, update: false, delete: false }
+      forecast:     { create: false, read: false, update: false, delete: false },
+      finance:      { create: false, read: false, update: false, delete: false }
     },
     navSections: ['sales', 'products', 'classes', 'customer-service']
   },
@@ -12190,7 +12248,8 @@ var DEFAULT_ROLES = {
       pos:          { create: false, read: false, update: false, delete: false },
       receipts:     { create: false, read: false, update: false, delete: false },
       contacts:     { create: false, read: false, update: false, delete: false },
-      forecast:     { create: false, read: false, update: false, delete: false }
+      forecast:     { create: false, read: false, update: false, delete: false },
+      finance:      { create: false, read: false, update: false, delete: false }
     },
     navSections: ['sales', 'classes']
   }
@@ -12198,7 +12257,7 @@ var DEFAULT_ROLES = {
 var DEFAULT_NAV_SECTIONS = {
   admin:   null,  // null = no filter, sees everything
   manager: ['products', 'sales', 'marketing', 'retention', 'events',
-            'classes', 'operations', 'customer-service', 'admin'],
+            'classes', 'finance', 'operations', 'customer-service', 'admin'],
   user:    ['sales', 'products', 'classes', 'customer-service'],
   guest:   ['sales', 'classes']
 };
@@ -14587,7 +14646,8 @@ var SECTION_ROUTES = {
                         'book-reports'],
   'finance':           ['finance-revenue', 'finance-expenses', 'finance-pl',
                         'finance-cash-flow', 'finance-ar', 'finance-ap',
-                        'finance-tax', 'finance-reports'],
+                        'finance-tax', 'finance-reports',
+                        'financials', 'expenses'],
   'operations':        ['trips', 'reports',
                         'advisor', 'studio', 'team', 'business',
                         'channels', 'contacts'],
@@ -14641,6 +14701,11 @@ function navigateTo(route) {
   // Forecast is Owner/Manager only — Staff lacks forecast:read
   if (route === 'forecast' && !hasPermission('forecast', 'read')) {
     showToast('Forecast is restricted to Owner and Manager roles.', true);
+    route = 'dashboard';
+  }
+  // Finance sensitive tabs (P&L, Tax, Reports) are Admin-only — manager lacks finance:delete
+  if (['finance-pl', 'finance-tax', 'finance-reports'].indexOf(route) >= 0 && !hasPermission('finance', 'delete')) {
+    showToast('This report is restricted to Admin users.', true);
     route = 'dashboard';
   }
   // Subscription module gating — block routes for locked modules
@@ -14783,7 +14848,7 @@ function applyRoleFilter(role, roleConfig) {
   // Hide all sections not in the allowed list
   // Leave migration alone — it has its own visibility logic
   var allSections = ['products', 'sales', 'marketing', 'retention',
-                     'events', 'classes', 'operations', 'customer-service', 'admin'];
+                     'events', 'classes', 'finance', 'operations', 'customer-service', 'admin'];
   allSections.forEach(function(section) {
     var el = document.querySelector('.sidebar-section[data-section="' + section + '"]');
     if (!el) return;
