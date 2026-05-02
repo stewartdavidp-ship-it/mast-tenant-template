@@ -242,12 +242,14 @@
       var num = esc(getOrderDisplayNumber(o));
       var status = o.status || 'placed';
       var sourceBadge = o.source === 'etsy' ? ' <span class="status-badge" style="' + etsySourceBadgeStyle() + '">Etsy</span>' : '';
+      var effInv = getEffectiveInvoiceStatus(o);
+      var invBadge = effInv ? ' <span class="status-badge" style="font-size:0.68rem;padding:1px 6px;' + invoiceStatusBadgeStyle(effInv) + '">INV:' + effInv + '</span>' : '';
       rowsHtml += '<tr onclick="viewOrder(\'' + esc(key) + '\')">' +
         '<td><span style="font-family:monospace;font-weight:600;">' + num + '</span>' + sourceBadge + '</td>' +
         '<td>' + esc(o.email || '') + '</td>' +
         '<td>' + getOrderItemsLabel(o) + '</td>' +
         '<td>$' + (o.total || 0).toFixed(2) + '</td>' +
-        '<td><span class="status-badge pill" style="' + orderStatusBadgeStyle(status) + '">' + status.replace(/_/g, ' ') + '</span></td>' +
+        '<td><span class="status-badge pill" style="' + orderStatusBadgeStyle(status) + '">' + status.replace(/_/g, ' ') + '</span>' + invBadge + '</td>' +
         '<td>' + formatOrderDate(o.placedAt || o.pendingPaymentAt) + '</td>' +
         '</tr>';
     });
@@ -260,6 +262,8 @@
       var num = esc(getOrderDisplayNumber(o));
       var status = o.status || 'placed';
       var cardSourceBadge = o.source === 'etsy' ? '<span class="status-badge" style="margin-left:8px;' + etsySourceBadgeStyle() + '">Etsy</span>' : '';
+      var cardEffInv = getEffectiveInvoiceStatus(o);
+      var cardInvBadge = cardEffInv ? '<span class="status-badge" style="margin-left:6px;font-size:0.68rem;padding:1px 6px;' + invoiceStatusBadgeStyle(cardEffInv) + '">INV:' + cardEffInv + '</span>' : '';
       var cardShippable = ['confirmed', 'building', 'pack', 'packing', 'packed', 'handed_to_carrier'].indexOf(status) !== -1;
       var cardBtns = '<div style="display:flex;gap:6px;flex-shrink:0;">';
       if (cardShippable) {
@@ -270,7 +274,7 @@
       cardHtml += '<div class="order-card" onclick="viewOrder(\'' + esc(key) + '\')">' +
         '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">' +
           '<div>' +
-            '<div style="font-weight:600;font-family:monospace;">' + num + ' <span class="status-badge pill" style="' + orderStatusBadgeStyle(status) + '">' + status.replace(/_/g, ' ') + '</span>' + cardSourceBadge + '</div>' +
+            '<div style="font-weight:600;font-family:monospace;">' + num + ' <span class="status-badge pill" style="' + orderStatusBadgeStyle(status) + '">' + status.replace(/_/g, ' ') + '</span>' + cardSourceBadge + cardInvBadge + '</div>' +
             '<div style="font-size:0.85rem;color:var(--warm-gray);">' + esc(o.email || '') + ' &mdash; ' + getOrderItemsLabel(o) + '</div>' +
           '</div>' +
           cardBtns +
@@ -425,6 +429,10 @@
     var canCancel = (ORDER_VALID_TRANSITIONS[status] || []).indexOf('cancelled') !== -1;
     if (canCancel) {
       actionsHtml += '<button class="btn btn-danger" onclick="openCancelOrderModal(\'' + esc(orderId) + '\')">Cancel Order</button>';
+    }
+    // Invoice generation (wholesale/net-terms orders without a live invoice)
+    if (isOrderInvoiceable(o)) {
+      actionsHtml += '<button class="btn btn-secondary" onclick="generateInvoice(\'' + esc(orderId) + '\')">Generate Invoice</button>';
     }
 
     // Items section
@@ -586,6 +594,9 @@
         (o.tracking.labelProvider ? '<div style="font-size:0.78rem;color:var(--warm-gray-light);margin-top:6px;">Label via ' + esc(o.tracking.labelProvider) + (o.tracking.purchasedAt ? ' on ' + formatOrderDateTime(o.tracking.purchasedAt) : '') + '</div>' : '') +
       '</div>';
     }
+
+    // Invoice
+    var invoiceHtml = buildInvoiceSection(orderId);
 
     // Fulfillment Log
     var ffLogHtml = '';
@@ -812,6 +823,7 @@
       '</div>' +
       timelineHtml +
       paymentHtml +
+      invoiceHtml +
       etsyHtml +
       trackingHtml +
       ffLogHtml +
@@ -1017,6 +1029,264 @@
     } catch (err) {
       showToast('Failed to send: ' + (err.message || err), true);
     }
+  }
+
+  // ============================================================
+  // Invoice Management
+  // ============================================================
+
+  function isOrderInvoiceable(o) {
+    var terms = (o.paymentTerms || '').toLowerCase();
+    var isNetTerms = terms === 'net15' || terms === 'net30' || terms === 'net60';
+    var isWholesale = o.isWholesale === true || o.orderType === 'wholesale';
+    var status = o.invoiceStatus;
+    var canGenerate = !status || status === 'draft';
+    return (isNetTerms || isWholesale) && canGenerate;
+  }
+
+  function getInvoiceDueDays(o) {
+    var terms = (o.paymentTerms || '').toLowerCase();
+    if (terms === 'net15') return 15;
+    if (terms === 'net60') return 60;
+    return 30;
+  }
+
+  function computeInvoiceDueDate(o) {
+    var days = getInvoiceDueDays(o);
+    var d = new Date();
+    d.setDate(d.getDate() + days);
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  }
+
+  function getEffectiveInvoiceStatus(o) {
+    var status = o.invoiceStatus;
+    if (status === 'sent' && o.invoiceDueDate) {
+      var dueMs = new Date(o.invoiceDueDate + 'T00:00:00Z').getTime();
+      if (Date.now() > dueMs) return 'overdue';
+    }
+    return status || null;
+  }
+
+  function invoiceStatusBadgeStyle(status) {
+    var m = {
+      draft:   'background:rgba(107,114,128,0.2);color:#9ca3af;border:1px solid rgba(107,114,128,0.35);',
+      sent:    'background:rgba(59,130,246,0.2);color:#60a5fa;border:1px solid rgba(59,130,246,0.35);',
+      paid:    'background:rgba(34,197,94,0.2);color:#4ade80;border:1px solid rgba(34,197,94,0.35);',
+      overdue: 'background:rgba(220,38,38,0.2);color:#f87171;border:1px solid rgba(220,38,38,0.35);'
+    };
+    return m[status] || m.draft;
+  }
+
+  async function generateInvoice(orderId) {
+    var o = orders[orderId];
+    if (!o) return;
+    try {
+      var now = new Date().toISOString();
+      var year = new Date().getFullYear();
+
+      var configRaw = await MastDB.get('admin/config/invoicing');
+      var config = (configRaw && typeof configRaw.val === 'function') ? (configRaw.val() || {}) : (configRaw || {});
+      var seq = typeof config.invoiceSequence === 'number' ? config.invoiceSequence : 0;
+      var nextSeq = seq + 1;
+      var invoiceNumber = 'INV-' + year + '-' + String(nextSeq).padStart(4, '0');
+
+      if (config && Object.keys(config).length > 0) {
+        await MastDB.update('admin/config/invoicing', { invoiceSequence: nextSeq });
+      } else {
+        await MastDB.set('admin/config/invoicing', { invoiceSequence: nextSeq });
+      }
+
+      var dueDate = computeInvoiceDueDate(o);
+      await MastDB.orders.update(orderId, {
+        invoiceStatus: 'draft',
+        invoiceNumber: invoiceNumber,
+        invoiceDueDate: dueDate,
+        invoiceIssuedAt: now,
+        updatedAt: now
+      });
+      o.invoiceStatus = 'draft';
+      o.invoiceNumber = invoiceNumber;
+      o.invoiceDueDate = dueDate;
+      o.invoiceIssuedAt = now;
+
+      showToast('Invoice ' + invoiceNumber + ' generated');
+      renderOrderDetail(orderId);
+    } catch (err) {
+      showToast('Failed to generate invoice: ' + err.message, true);
+    }
+  }
+
+  async function sendInvoice(orderId) {
+    var o = orders[orderId];
+    if (!o || !o.invoiceNumber) return;
+    try {
+      showToast('Sending invoice ' + o.invoiceNumber + '...');
+      var now = new Date().toISOString();
+
+      if (o.email) {
+        try {
+          await firebase.functions().httpsCallable('testOrderEmail')({
+            orderId: orderId,
+            emailType: 'invoice',
+            tenantId: MastDB.tenantId()
+          });
+        } catch (emailErr) {
+          console.warn('Invoice email send failed (non-fatal):', emailErr.message);
+        }
+      }
+
+      await MastDB.orders.update(orderId, {
+        invoiceStatus: 'sent',
+        invoiceSentAt: now,
+        updatedAt: now
+      });
+      o.invoiceStatus = 'sent';
+      o.invoiceSentAt = now;
+
+      showToast('Invoice ' + o.invoiceNumber + ' sent to ' + (o.email || 'customer'));
+      renderOrderDetail(orderId);
+    } catch (err) {
+      showToast('Failed to send invoice: ' + err.message, true);
+    }
+  }
+
+  async function markOrderInvoicePaid(orderId) {
+    var o = orders[orderId];
+    if (!o) return;
+    try {
+      var now = new Date().toISOString();
+      var totalCents = Math.round((o.total || 0) * 100);
+      await MastDB.orders.update(orderId, {
+        invoiceStatus: 'paid',
+        invoicePaidAt: now,
+        invoicePaidAmount: totalCents,
+        updatedAt: now
+      });
+      o.invoiceStatus = 'paid';
+      o.invoicePaidAt = now;
+      o.invoicePaidAmount = totalCents;
+      showToast('Invoice marked as paid');
+      renderOrderDetail(orderId);
+    } catch (err) {
+      showToast('Error: ' + err.message, true);
+    }
+  }
+
+  async function resendInvoice(orderId) {
+    var o = orders[orderId];
+    if (!o || !o.email || !o.invoiceNumber) return;
+    try {
+      showToast('Resending invoice ' + o.invoiceNumber + '...');
+      await firebase.functions().httpsCallable('testOrderEmail')({
+        orderId: orderId,
+        emailType: 'invoice',
+        tenantId: MastDB.tenantId()
+      });
+      showToast('Invoice ' + o.invoiceNumber + ' resent to ' + o.email);
+    } catch (err) {
+      showToast('Failed to resend: ' + err.message, true);
+    }
+  }
+
+  function buildInvoiceSection(orderId) {
+    var o = orders[orderId];
+    if (!o) return '';
+
+    var effectiveStatus = getEffectiveInvoiceStatus(o);
+
+    if (!effectiveStatus) return '';
+
+    var h = '<div class="order-detail-section">';
+    h += '<div class="order-detail-section-title">Invoice</div>';
+
+    if (effectiveStatus === 'draft') {
+      // Full preview panel
+      h += '<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:16px;margin-bottom:12px;">';
+
+      // Header row
+      h += '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;flex-wrap:wrap;gap:8px;">';
+      h += '<div>';
+      h += '<div style="font-size:1.05rem;font-weight:700;">' + esc(o.invoiceNumber || '') + '</div>';
+      h += '<div style="font-size:0.78rem;color:var(--warm-gray-light);">Issue Date: ' + formatOrderDate(o.invoiceIssuedAt || new Date().toISOString()) + '</div>';
+      h += '<div style="font-size:0.78rem;color:var(--warm-gray-light);">Due Date: ' + esc(o.invoiceDueDate || '—') + '</div>';
+      h += '</div>';
+      h += '<span class="status-badge pill" style="' + invoiceStatusBadgeStyle('draft') + '">Draft</span>';
+      h += '</div>';
+
+      // Bill To
+      var ship = o.shipping || {};
+      h += '<div style="margin-bottom:14px;">';
+      h += '<div style="font-size:0.72rem;color:var(--warm-gray-light);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Bill To</div>';
+      h += '<div style="font-size:0.85rem;">' + esc(ship.name || o.customerName || o.email || '') + '</div>';
+      if (o.email) h += '<div style="font-size:0.82rem;color:var(--warm-gray);">' + esc(o.email) + '</div>';
+      if (ship.address1) {
+        h += '<div style="font-size:0.82rem;color:var(--warm-gray);">' + esc(ship.address1) + (ship.address2 ? ', ' + esc(ship.address2) : '') + '</div>';
+        h += '<div style="font-size:0.82rem;color:var(--warm-gray);">' + esc(ship.city || '') + ', ' + esc(ship.state || '') + ' ' + esc(ship.zip || '') + '</div>';
+      }
+      h += '</div>';
+
+      // Line items
+      h += '<div style="border-top:1px solid rgba(255,255,255,0.08);padding-top:12px;margin-bottom:12px;">';
+      h += '<div style="display:flex;gap:8px;margin-bottom:6px;font-size:0.72rem;color:var(--warm-gray-light);text-transform:uppercase;letter-spacing:0.5px;">';
+      h += '<div style="flex:1;">Item</div><div style="width:50px;text-align:center;">Qty</div><div style="width:70px;text-align:right;">Unit</div><div style="width:70px;text-align:right;">Total</div>';
+      h += '</div>';
+      (o.items || []).forEach(function(item) {
+        var qty = item.qty || 1;
+        var unitCents = item.priceCents || 0;
+        var lineCents = unitCents * qty;
+        h += '<div style="display:flex;gap:8px;padding:4px 0;font-size:0.85rem;border-bottom:1px solid rgba(255,255,255,0.05);">';
+        h += '<div style="flex:1;">' + esc(item.name) + '</div>';
+        h += '<div style="width:50px;text-align:center;">' + qty + '</div>';
+        h += '<div style="width:70px;text-align:right;">$' + (unitCents / 100).toFixed(2) + '</div>';
+        h += '<div style="width:70px;text-align:right;">$' + (lineCents / 100).toFixed(2) + '</div>';
+        h += '</div>';
+      });
+      h += '</div>';
+
+      // Totals
+      h += '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px;margin-bottom:14px;">';
+      h += '<div style="font-size:0.82rem;color:var(--warm-gray);">Subtotal: $' + (o.subtotal || 0).toFixed(2) + '</div>';
+      if (o.tax) h += '<div style="font-size:0.82rem;color:var(--warm-gray);">Tax: $' + o.tax.toFixed(2) + '</div>';
+      if (o.shippingCost) h += '<div style="font-size:0.82rem;color:var(--warm-gray);">Shipping: $' + o.shippingCost.toFixed(2) + '</div>';
+      h += '<div style="font-weight:700;">Total: $' + (o.total || 0).toFixed(2) + '</div>';
+      h += '</div>';
+
+      // Payment instructions
+      h += '<div style="font-size:0.78rem;color:var(--warm-gray);border-top:1px solid rgba(255,255,255,0.08);padding-top:10px;">Payment due by ' + esc(o.invoiceDueDate || '—') + '</div>';
+
+      h += '</div>';
+
+      // Action buttons
+      h += '<div style="display:flex;gap:8px;flex-wrap:wrap;">';
+      h += '<button class="btn btn-primary" onclick="sendInvoice(\'' + esc(orderId) + '\')">Send Invoice</button>';
+      h += '<button class="btn btn-secondary" onclick="generateInvoice(\'' + esc(orderId) + '\')">Regenerate</button>';
+      h += '</div>';
+
+    } else {
+      // Summary for sent / overdue / paid
+      var rows = '';
+      rows += '<div style="display:flex;justify-content:space-between;padding:4px 0;"><span style="color:var(--warm-gray-light);">Invoice #</span><span style="font-weight:600;">' + esc(o.invoiceNumber || '—') + '</span></div>';
+      rows += '<div style="display:flex;justify-content:space-between;padding:4px 0;"><span style="color:var(--warm-gray-light);">Status</span><span class="status-badge pill" style="' + invoiceStatusBadgeStyle(effectiveStatus) + '">' + effectiveStatus + '</span></div>';
+      if (o.invoiceIssuedAt) rows += '<div style="display:flex;justify-content:space-between;padding:4px 0;"><span style="color:var(--warm-gray-light);">Issued</span><span>' + formatOrderDate(o.invoiceIssuedAt) + '</span></div>';
+      if (o.invoiceSentAt)  rows += '<div style="display:flex;justify-content:space-between;padding:4px 0;"><span style="color:var(--warm-gray-light);">Sent</span><span>' + formatOrderDate(o.invoiceSentAt) + '</span></div>';
+      if (o.invoiceDueDate) rows += '<div style="display:flex;justify-content:space-between;padding:4px 0;"><span style="color:var(--warm-gray-light);">Due Date</span><span>' + esc(o.invoiceDueDate) + '</span></div>';
+      if (o.invoicePaidAt)  rows += '<div style="display:flex;justify-content:space-between;padding:4px 0;"><span style="color:var(--warm-gray-light);">Paid</span><span style="color:#4ade80;">' + formatOrderDate(o.invoicePaidAt) + '</span></div>';
+      rows += '<div style="display:flex;justify-content:space-between;padding:4px 0;"><span style="color:var(--warm-gray-light);">Amount</span><span>$' + (o.total || 0).toFixed(2) + '</span></div>';
+
+      h += rows;
+      h += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;">';
+      if (effectiveStatus !== 'paid') {
+        h += '<button class="btn btn-primary" onclick="markOrderInvoicePaid(\'' + esc(orderId) + '\')">Mark as Paid</button>';
+      }
+      if (effectiveStatus === 'sent' || effectiveStatus === 'overdue') {
+        h += '<button class="btn btn-secondary" onclick="resendInvoice(\'' + esc(orderId) + '\')">Resend Invoice</button>';
+      }
+      h += '<a class="btn btn-secondary" href="#" onclick="event.preventDefault();navigateTo(\'finance-ar\')">View in Finance AR</a>';
+      h += '</div>';
+    }
+
+    h += '</div>';
+    return h;
   }
 
   // ============================================================
@@ -3820,6 +4090,14 @@
   window.completeRma = completeRma;
   window.overrideRmaRefund = overrideRmaRefund;
   window.rmaBadgeStyle = rmaBadgeStyle;
+  window.isOrderInvoiceable = isOrderInvoiceable;
+  window.getEffectiveInvoiceStatus = getEffectiveInvoiceStatus;
+  window.invoiceStatusBadgeStyle = invoiceStatusBadgeStyle;
+  window.generateInvoice = generateInvoice;
+  window.sendInvoice = sendInvoice;
+  window.markOrderInvoicePaid = markOrderInvoicePaid;
+  window.resendInvoice = resendInvoice;
+  window.buildInvoiceSection = buildInvoiceSection;
 
   // ============================================================
   // Register with MastAdmin

@@ -13,6 +13,8 @@ var _arData = null;
 var _apData = null;
 var _arFilter = 'all';
 var _apFilter = 'all';
+var _apGroupByVendor = false;
+var _apExpandedVendors = {};
 var _cfLoaded = false;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -1050,12 +1052,15 @@ function renderApContent() {
   });
   h += '</div>';
 
-  // Filter
-  h += '<div style="display:flex;gap:6px;margin-bottom:14px;">';
+  // Filter + group toggle
+  h += '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:14px;">';
+  h += '<div style="display:flex;gap:6px;">';
   [['all','All'], ['current','Current'], ['overdue','Overdue']].forEach(function(kl) {
     var active = _apFilter === kl[0];
     h += '<button class="btn btn-' + (active ? 'primary' : 'secondary') + ' btn-small" onclick="finApFilter(\'' + kl[0] + '\')">' + kl[1] + '</button>';
   });
+  h += '</div>';
+  h += '<button class="btn btn-' + (_apGroupByVendor ? 'primary' : 'secondary') + ' btn-small" onclick="finApToggleGroupByVendor()">' + (_apGroupByVendor ? 'Group: Vendor ✓' : 'Group by Vendor') + '</button>';
   h += '</div>';
 
   var filtered = rows.filter(function(r) {
@@ -1080,8 +1085,16 @@ function renderApContent() {
   // Partial payment modal placeholder (shown inline below a row when triggered)
   h += '<div id="fApPartialModal" style="display:none;background:var(--bg-secondary,#232323);border:1px solid rgba(255,255,255,0.1);border-radius:10px;padding:14px;margin-bottom:12px;"></div>';
 
-  // Table
-  h += '<div style="overflow-x:auto;">';
+  if (_apGroupByVendor) {
+    h += renderApGrouped(filtered);
+  } else {
+    h += renderApFlat(filtered);
+  }
+  return h;
+}
+
+function renderApFlat(filtered) {
+  var h = '<div style="overflow-x:auto;">';
   h += '<table style="width:100%;border-collapse:collapse;font-size:0.85rem;">';
   h += '<thead><tr style="border-bottom:1px solid rgba(255,255,255,0.1);">';
   ['Vendor','Ref','Total','Paid','Remaining','Due Date','Age','Status',''].forEach(function(col) {
@@ -1102,6 +1115,7 @@ function renderApContent() {
     h += '<td style="padding:10px;white-space:nowrap;display:flex;gap:4px;">';
     h += '<button class="btn btn-primary btn-small" data-rid="' + e(r.receiptId) + '" data-total="' + r.totalCents + '" onclick="finApMarkPaid(this.dataset.rid, parseInt(this.dataset.total))">Paid</button>';
     h += '<button class="btn btn-secondary btn-small" data-rid="' + e(r.receiptId) + '" data-paid="' + r.paidCents + '" data-total="' + r.totalCents + '" onclick="finApShowPartial(this.dataset.rid, parseInt(this.dataset.paid), parseInt(this.dataset.total))">Partial</button>';
+    h += '<button class="btn btn-secondary btn-small" onclick="navigateTo(\'procurement\')" title="View in Procurement">→</button>';
     h += '</td></tr>';
   });
 
@@ -1109,8 +1123,99 @@ function renderApContent() {
   return h;
 }
 
+var _bucketOrder = { current: 0, '1_to_30': 1, '31_to_60': 2, '61_to_90': 3, '90_plus': 4 };
+
+function renderApGrouped(filtered) {
+  // Build per-vendor groups
+  var groups = {};
+  filtered.forEach(function(r) {
+    var k = r.vendorName;
+    if (!groups[k]) groups[k] = { vendorName: k, rows: [], totalDue: 0, worstBucket: 'current', oldestDueDate: null };
+    var g = groups[k];
+    g.rows.push(r);
+    g.totalDue += r.amtDue;
+    if ((_bucketOrder[r.bucket] || 0) > (_bucketOrder[g.worstBucket] || 0)) g.worstBucket = r.bucket;
+    if (r.dueDate && (!g.oldestDueDate || r.dueDate < g.oldestDueDate)) g.oldestDueDate = r.dueDate;
+  });
+
+  var vendorKeys = Object.keys(groups).sort(function(a, b) {
+    return (_bucketOrder[groups[b].worstBucket] || 0) - (_bucketOrder[groups[a].worstBucket] || 0);
+  });
+
+  var h = '<div style="display:flex;flex-direction:column;gap:8px;">';
+
+  vendorKeys.forEach(function(k) {
+    var g = groups[k];
+    var isExpanded = !!_apExpandedVendors[k];
+    var worstColor = bucketColor(g.worstBucket);
+    var dueDateStr = g.oldestDueDate ? new Date(g.oldestDueDate).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : '—';
+
+    h += '<div style="border:1px solid rgba(255,255,255,0.1);border-radius:8px;overflow:hidden;">';
+
+    // Vendor summary row (clickable)
+    h += '<button type="button" onclick="finApToggleVendorExpand(' + JSON.stringify(k) + ')" ' +
+      'style="all:unset;display:block;width:100%;box-sizing:border-box;cursor:pointer;' +
+      'background:var(--bg-secondary,#232323);padding:12px 14px;">';
+    h += '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;font-size:0.85rem;">';
+    h += '<div style="display:flex;align-items:center;gap:10px;">';
+    h += '<span style="font-weight:700;">' + e(g.vendorName) + '</span>';
+    h += agingBadge(g.worstBucket === 'current' ? 0 : g.worstBucket === '1_to_30' ? 15 : g.worstBucket === '31_to_60' ? 45 : g.worstBucket === '61_to_90' ? 75 : 100);
+    h += '<span style="color:var(--warm-gray,#888);font-size:0.78rem;">' + g.rows.length + ' receipt' + (g.rows.length !== 1 ? 's' : '') + '</span>';
+    h += '</div>';
+    h += '<div style="display:flex;align-items:center;gap:16px;">';
+    h += '<span><span style="color:var(--warm-gray,#888);font-size:0.78rem;">Due</span> <span style="font-size:0.8rem;">' + e(dueDateStr) + '</span></span>';
+    h += '<span style="font-weight:700;color:' + worstColor + ';">' + fmt$(g.totalDue) + '</span>';
+    h += '<span style="color:var(--warm-gray,#888);font-size:0.85rem;">' + (isExpanded ? '▾' : '▸') + '</span>';
+    h += '</div></div></button>';
+
+    // Expanded receipt rows
+    if (isExpanded) {
+      h += '<div style="border-top:1px solid rgba(255,255,255,0.08);">';
+      h += '<table style="width:100%;border-collapse:collapse;font-size:0.82rem;">';
+      h += '<thead><tr style="background:rgba(255,255,255,0.03);">';
+      ['Ref','Total','Paid','Remaining','Due Date','Age','Status',''].forEach(function(col) {
+        h += '<th style="text-align:left;padding:7px 10px;font-size:0.7rem;color:var(--warm-gray,#888);text-transform:uppercase;letter-spacing:0.5px;white-space:nowrap;">' + col + '</th>';
+      });
+      h += '</tr></thead><tbody>';
+      g.rows.forEach(function(r) {
+        h += '<tr style="border-top:1px solid rgba(255,255,255,0.06);">';
+        h += '<td style="padding:8px 10px;color:var(--warm-gray,#888);">' + e(r.vendorInvoiceRef || r.receiptId.slice(-8)) + '</td>';
+        h += '<td style="padding:8px 10px;">' + fmt$(r.totalCents) + '</td>';
+        h += '<td style="padding:8px 10px;color:#22c55e;">' + fmt$(r.paidCents) + '</td>';
+        h += '<td style="padding:8px 10px;font-weight:700;color:' + bucketColor(r.bucket) + ';">' + fmt$(r.amtDue) + '</td>';
+        h += '<td style="padding:8px 10px;">' + e(r.dueDate ? new Date(r.dueDate).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : '—') + '</td>';
+        h += '<td style="padding:8px 10px;">' + agingBadge(r.daysOverdue) + '</td>';
+        h += '<td style="padding:8px 10px;"><span style="background:' + (r.paymentStatus === 'partial' ? 'rgba(234,179,8,0.15)' : 'rgba(239,68,68,0.12)') + ';color:' + (r.paymentStatus === 'partial' ? '#eab308' : '#ef4444') + ';padding:2px 6px;border-radius:4px;font-size:0.7rem;font-weight:600;">' + e(r.paymentStatus) + '</span></td>';
+        h += '<td style="padding:8px 10px;white-space:nowrap;display:flex;gap:4px;">';
+        h += '<button class="btn btn-primary btn-small" data-rid="' + e(r.receiptId) + '" data-total="' + r.totalCents + '" onclick="finApMarkPaid(this.dataset.rid, parseInt(this.dataset.total))">Paid</button>';
+        h += '<button class="btn btn-secondary btn-small" data-rid="' + e(r.receiptId) + '" data-paid="' + r.paidCents + '" data-total="' + r.totalCents + '" onclick="finApShowPartial(this.dataset.rid, parseInt(this.dataset.paid), parseInt(this.dataset.total))">Partial</button>';
+        h += '<button class="btn btn-secondary btn-small" onclick="navigateTo(\'procurement\')" title="View in Procurement">→</button>';
+        h += '</td></tr>';
+      });
+      h += '</tbody></table></div>';
+    }
+    h += '</div>';
+  });
+
+  h += '</div>';
+  return h;
+}
+
 window.finApFilter = function(bucket) {
   _apFilter = bucket;
+  var el = document.getElementById('fApContent');
+  if (el) el.innerHTML = renderApContent();
+};
+
+window.finApToggleGroupByVendor = function() {
+  _apGroupByVendor = !_apGroupByVendor;
+  _apExpandedVendors = {};
+  var el = document.getElementById('fApContent');
+  if (el) el.innerHTML = renderApContent();
+};
+
+window.finApToggleVendorExpand = function(vendorName) {
+  _apExpandedVendors[vendorName] = !_apExpandedVendors[vendorName];
   var el = document.getElementById('fApContent');
   if (el) el.innerHTML = renderApContent();
 };
