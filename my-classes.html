@@ -775,6 +775,7 @@
         .get()
         .then(function(snap) {
           if (!snap.empty) return;
+          if (!article.parentNode) return;
           if (article.nextSibling && article.nextSibling.classList &&
               article.nextSibling.classList.contains('mc-review-prompt')) return;
           var wrapper = document.createElement('div');
@@ -801,7 +802,7 @@
       ' placeholder="Tell us about your experience (optional)"></textarea>';
     html += '<div class="mc-review-footer">';
     html += '<button type="button" class="mc-review-submit" id="mc-review-submit-' + cid + '"' +
-      ' onclick="window._mcSubmitClassReview(\'' + cid + '\',\'' + cn + '\')">Submit</button>';
+      ' onclick="window._mcSubmitClassReview(\'' + cid + '\')">Submit</button>';
     html += '<button type="button" class="mc-review-dismiss"' +
       ' onclick="window._mcDismissClassReview(\'' + cid + '\')">No thanks</button>';
     html += '</div>';
@@ -822,7 +823,7 @@
     if (submit) submit.style.display = '';
   };
 
-  window._mcSubmitClassReview = function(classId, className) {
+  window._mcSubmitClassReview = function(classId) {
     var starsEl = document.getElementById('mc-review-stars-' + classId);
     var rating = starsEl ? parseInt(starsEl.getAttribute('data-selected'), 10) : 0;
     if (!rating) return;
