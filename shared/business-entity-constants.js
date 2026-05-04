@@ -203,18 +203,18 @@
   // New wizard constants — additive only, do not remove or rename existing constants above.
 
   var BUSINESS_TYPES = [
-    { value: 'make',   label: 'I make it',                description: 'You create the products you sell' },
-    { value: 'resell', label: 'I resell or wholesale',    description: "You source and resell others' products" },
-    { value: 'teach',  label: 'I teach or offer services', description: 'Classes, workshops, commissions, services' },
-    { value: 'mixed',  label: 'A mix',                    description: 'Combination of the above' }
+    { value: 'produce', label: 'I make or transform it',    description: 'Crafting, assembling, or adding value to raw materials or components' },
+    { value: 'resell',  label: 'I source and resell',       description: 'Buying finished goods to resell, wholesale, or distribute' },
+    { value: 'teach',   label: 'I teach or offer services', description: 'Classes, workshops, commissions, or custom services' },
+    { value: 'mixed',   label: 'A mix',                     description: 'More than one — tell us what drives most of your revenue' }
   ];
 
+  // Primary outputs — only values that add config signal beyond what businessType already captures.
+  // 'classes' and 'services' are derived from businessType='teach'; removed to avoid redundancy.
   var PRIMARY_OUTPUTS = [
-    { value: 'physical',  label: 'Physical products' },
-    { value: 'digital',   label: 'Digital products' },
-    { value: 'classes',   label: 'Classes & workshops' },
-    { value: 'services',  label: 'Services & commissions' },
-    { value: 'events',    label: 'Events & tickets' }
+    { value: 'physical', label: 'Physical products' },
+    { value: 'digital',  label: 'Digital downloads' },
+    { value: 'events',   label: 'Event tickets' }
   ];
 
   var CURRENT_TOOLS = [

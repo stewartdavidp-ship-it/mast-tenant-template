@@ -588,7 +588,7 @@
     body.dark-mode .wizard-step-line { background: #444; }
     body.dark-mode .wizard-step-line.completed { background: var(--teal); }
     body.dark-mode .wizard-feature-card { background: #2a2a2a !important; border-color: #444 !important; color: #e0e0e0 !important; }
-    body.dark-mode .wizard-feature-card[data-selected="true"] { border-color: var(--teal) !important; background: #1a3a34 !important; }
+    body.dark-mode .wizard-feature-card[data-selected="true"] { background: var(--teal) !important; border-color: var(--teal) !important; color: #fff !important; }
     body.dark-mode #wizardWebsiteChoice button { background: #2a2a2a !important; border-color: #444 !important; color: #e0e0e0 !important; }
     body.dark-mode #wizardWebsiteChoice button:hover { border-color: var(--teal) !important; }
     /* wizard-style-card styles removed — style picker replaced by discovery-first flow */
@@ -6556,13 +6556,18 @@
 
           <!-- Part A: Business type -->
           <div class="form-group" style="margin-bottom:20px;">
-            <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:8px;">Business type <span style="color:var(--danger);font-weight:400;">*</span></label>
+            <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:8px;">How do you create what you sell? <span style="color:var(--danger);font-weight:400;">*</span></label>
             <div id="wizardBusinessTypeCards" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;"></div>
+            <!-- Shown when 'mixed' is selected -->
+            <div id="wizardMixedFollowUp" style="display:none;margin-top:12px;padding:12px 14px;border-radius:8px;border:1px solid var(--border,#e4ddd4);background:var(--surface-card,#f9f6f2);">
+              <div style="font-size:0.85rem;font-weight:600;margin-bottom:8px;color:var(--text,#2a2a2a);">What drives most of your revenue?</div>
+              <div id="wizardMixedPrimaryChips" style="display:flex;flex-wrap:wrap;gap:8px;"></div>
+            </div>
           </div>
 
-          <!-- Part B: Primary output -->
-          <div class="form-group" style="margin-bottom:20px;">
-            <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:8px;">What do you primarily offer? <span style="color:var(--danger);font-weight:400;">*</span></label>
+          <!-- Part B: Supplemental outputs — only shown when relevant; not required -->
+          <div id="wizardPrimaryOutputSection" class="form-group" style="margin-bottom:20px;display:none;">
+            <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:8px;">Do you also sell any of these? <span style="color:var(--warm-gray);font-weight:400;">(optional)</span></label>
             <div id="wizardPrimaryOutputChips" style="display:flex;flex-wrap:wrap;gap:8px;"></div>
           </div>
 
@@ -23116,14 +23121,14 @@ function renderWizardEngagement() {
         wrap.className = 'wizard-feature-card';
         var selected = state.mode === card.value;
         if (selected) wrap.setAttribute('data-selected', 'true');
-        wrap.style.cssText = 'border:' + (selected ? '2px solid var(--teal)' : '1px solid var(--border,#ddd)') +
+        wrap.style.cssText = 'border:2px solid ' + (selected ? 'var(--teal)' : 'var(--border,#ddd)') +
           ';border-radius:8px;padding:14px 16px;cursor:pointer;background:' +
-          (selected ? 'rgba(42,124,111,0.1)' : 'var(--surface-card,#fff)') + ';color:var(--text,#2a2a2a);transition:border-color 0.15s,background 0.15s;';
+          (selected ? 'var(--teal)' : 'var(--surface-card,#fff)') + ';transition:all 0.15s;';
         var title = document.createElement('div');
-        title.style.cssText = 'font-weight:600;font-size:0.95rem;margin-bottom:4px;color:var(--text,#2a2a2a);';
+        title.style.cssText = 'font-weight:600;font-size:0.95rem;margin-bottom:4px;color:' + (selected ? '#fff' : 'var(--text,#2a2a2a)') + ';';
         title.textContent = card.title;
         var body = document.createElement('div');
-        body.style.cssText = 'font-size:0.85rem;color:var(--warm-gray);margin-bottom:' + (selected ? '10px' : '0') + ';';
+        body.style.cssText = 'font-size:0.85rem;color:' + (selected ? 'rgba(255,255,255,0.8)' : 'var(--warm-gray)') + ';margin-bottom:' + (selected ? '10px' : '0') + ';';
         body.textContent = card.body;
         wrap.appendChild(title);
         wrap.appendChild(body);
@@ -23139,9 +23144,9 @@ function renderWizardEngagement() {
               btn.textContent = surf.label;
               btn.title = surf.hint;
               var on = activeSurface === surf.value;
-              btn.style.cssText = 'padding:6px 10px;border-radius:999px;border:' + (on ? '2px solid var(--teal)' : '1px solid var(--border,#ccc)') +
-                ';background:' + (on ? 'rgba(42,124,111,0.12)' : 'var(--surface-card,#fff)') +
-                ';font-size:0.78rem;cursor:pointer;color:var(--text,#2a2a2a);transition:all 0.15s;';
+              btn.style.cssText = 'padding:6px 10px;border-radius:999px;border:2px solid ' + (on ? 'var(--teal)' : 'var(--border,#ccc)') +
+                ';background:' + (on ? 'var(--teal)' : 'var(--surface-card,#fff)') +
+                ';font-size:0.78rem;cursor:pointer;color:' + (on ? '#fff' : 'var(--text,#2a2a2a)') + ';font-weight:' + (on ? '600' : '400') + ';transition:all 0.15s;';
               btn.onclick = function(ev) {
                 ev.stopPropagation();
                 state.surfaceByMode[card.value] = surf.value;
@@ -23178,8 +23183,8 @@ function renderWizardEngagement() {
         var on = state.goals.indexOf(goalId) >= 0;
         chip.style.cssText = 'display:inline-flex;align-items:center;padding:6px 12px;border-radius:999px;border:' +
           (on ? '2px solid var(--teal)' : '1px solid var(--border,#ccc)') +
-          ';background:' + (on ? 'rgba(42,124,111,0.12)' : 'var(--surface-card,#fff)') +
-          ';cursor:pointer;font-size:0.82rem;color:var(--text,#2a2a2a);transition:all 0.15s;';
+          ';background:' + (on ? 'rgba(42,124,111,0.18)' : 'var(--surface-card,#fff)') +
+          ';cursor:pointer;font-size:0.82rem;color:var(--text,#2a2a2a);font-weight:' + (on ? '500' : '400') + ';transition:all 0.15s;';
         var cb = document.createElement('input');
         cb.type = 'checkbox';
         cb.checked = on;
@@ -23334,14 +23339,16 @@ function renderWizardCalibration() {
       var btn = document.createElement('button');
       btn.type = 'button';
       btn.textContent = role.label;
-      btn.style.cssText = 'padding:6px 10px;border-radius:999px;border:1px solid var(--border,#ccc);background:var(--surface-card,#fff);font-size:0.78rem;cursor:pointer;color:var(--text,#2a2a2a);transition:all 0.15s;';
+      btn.style.cssText = 'padding:6px 10px;border-radius:999px;border:2px solid var(--border,#ccc);background:var(--surface-card,#fff);font-size:0.78rem;cursor:pointer;color:var(--text,#2a2a2a);transition:all 0.15s;';
       btn.dataset.value = role.value;
       btn.onclick = function() {
         cal4State.role = role.value;
         Array.prototype.forEach.call(rolesEl.children, function(c) {
           var s = cal4State.role === c.dataset.value;
-          c.style.border = s ? '2px solid var(--teal)' : '1px solid var(--border,#ccc)';
-          c.style.background = s ? 'rgba(42,124,111,0.12)' : 'var(--surface-card,#fff)';
+          c.style.border = '2px solid ' + (s ? 'var(--teal)' : 'var(--border,#ccc)');
+          c.style.background = s ? 'var(--teal)' : 'var(--surface-card,#fff)';
+          c.style.color = s ? '#fff' : 'var(--text,#2a2a2a)';
+          c.style.fontWeight = s ? '600' : '400';
         });
       };
       rolesEl.appendChild(btn);
@@ -23354,15 +23361,17 @@ function renderWizardCalibration() {
       var btn = document.createElement('button');
       btn.type = 'button';
       btn.textContent = band.label;
-      btn.style.cssText = 'padding:6px 10px;border-radius:999px;border:1px solid var(--border,#ccc);background:var(--surface-card,#fff);font-size:0.78rem;cursor:pointer;color:var(--text,#2a2a2a);transition:all 0.15s;';
+      btn.style.cssText = 'padding:6px 10px;border-radius:999px;border:2px solid var(--border,#ccc);background:var(--surface-card,#fff);font-size:0.78rem;cursor:pointer;color:var(--text,#2a2a2a);transition:all 0.15s;';
       btn.dataset.value = band.value;
       btn.onclick = function() {
         cal4State.teamSize = band.value;
         cal4State.hasEmployees = band.value !== 'solo';
         Array.prototype.forEach.call(sizeEl.children, function(c) {
           var s = cal4State.teamSize === c.dataset.value;
-          c.style.border = s ? '2px solid var(--teal)' : '1px solid var(--border,#ccc)';
-          c.style.background = s ? 'rgba(42,124,111,0.12)' : 'var(--surface-card,#fff)';
+          c.style.border = '2px solid ' + (s ? 'var(--teal)' : 'var(--border,#ccc)');
+          c.style.background = s ? 'var(--teal)' : 'var(--surface-card,#fff)';
+          c.style.color = s ? '#fff' : 'var(--text,#2a2a2a)';
+          c.style.fontWeight = s ? '600' : '400';
         });
       };
       sizeEl.appendChild(btn);
@@ -23524,13 +23533,26 @@ function renderWizardBizIdentity() {
   var BEC = window.BusinessEntityConstants || {};
   var state = _wizardBizIdentityState = _wizardBizIdentityState || {
     businessType: null,
-    primaryOutput: null,
+    primaryType: null,  // set when businessType === 'mixed'
     channels: [],
     currentTools: []
   };
   var depth = window._wizardOnboardingDepth || 'quick';
 
-  // Part A: Business type cards
+  function solidChipCss(sel) {
+    return sel
+      ? 'padding:7px 14px;border-radius:999px;border:2px solid var(--teal);background:var(--teal);font-size:0.85rem;cursor:pointer;font-family:inherit;color:#fff;font-weight:600;transition:all 0.15s;'
+      : 'padding:7px 14px;border-radius:999px;border:1px solid var(--border,#ccc);background:var(--surface-card,#fff);font-size:0.85rem;cursor:pointer;font-family:inherit;color:var(--text,#2a2a2a);transition:all 0.15s;';
+  }
+  function multiChipCss(chkd) {
+    return 'display:inline-flex;align-items:center;padding:6px 12px;border-radius:999px;' +
+      (chkd
+        ? 'border:2px solid var(--teal);background:rgba(42,124,111,0.18);font-weight:500;'
+        : 'border:1px solid var(--border,#ccc);background:var(--surface-card,#fff);') +
+      'cursor:pointer;font-size:0.78rem;color:var(--text,#2a2a2a);transition:all 0.15s;';
+  }
+
+  // Part A: Business type cards — solid teal fill when selected
   var typeEl = document.getElementById('wizardBusinessTypeCards');
   if (typeEl) {
     typeEl.innerHTML = '';
@@ -23542,49 +23564,78 @@ function renderWizardBizIdentity() {
       if (sel) card.setAttribute('data-selected', 'true');
       card.style.cssText = 'border:' + (sel ? '2px solid var(--teal)' : '1px solid var(--border,#ddd)') +
         ';border-radius:8px;padding:12px 14px;cursor:pointer;background:' +
-        (sel ? 'rgba(42,124,111,0.1)' : 'var(--surface-card,#fff)') + ';color:var(--text,#2a2a2a);transition:border-color 0.15s,background 0.15s;';
-      card.innerHTML = '<div style="font-weight:600;font-size:0.9rem;margin-bottom:3px;color:var(--text,#2a2a2a);">' + esc(t.label) + '</div>' +
-        '<div style="font-size:0.78rem;color:var(--warm-gray);">' + esc(t.description) + '</div>';
+        (sel ? 'var(--teal)' : 'var(--surface-card,#fff)') +
+        ';transition:all 0.15s;';
+      card.innerHTML = '<div style="font-weight:600;font-size:0.9rem;margin-bottom:3px;color:' + (sel ? '#fff' : 'var(--text,#2a2a2a)') + ';">' + esc(t.label) + '</div>' +
+        '<div style="font-size:0.78rem;color:' + (sel ? 'rgba(255,255,255,0.8)' : 'var(--warm-gray)') + ';">' + esc(t.description) + '</div>';
       card.onclick = function() {
         state.businessType = t.value;
+        if (t.value !== 'mixed') state.primaryType = null;
         renderWizardBizIdentity();
       };
       typeEl.appendChild(card);
     });
   }
 
-  // Part B: Primary output chips
+  // Mixed follow-up: "What drives most of your revenue?"
+  var mixedFollowUp = document.getElementById('wizardMixedFollowUp');
+  var mixedChipsEl = document.getElementById('wizardMixedPrimaryChips');
+  if (mixedFollowUp) {
+    var isMixed = state.businessType === 'mixed';
+    mixedFollowUp.style.display = isMixed ? '' : 'none';
+    if (isMixed && mixedChipsEl) {
+      mixedChipsEl.innerHTML = '';
+      var primaryTypes = (BEC.BUSINESS_TYPES || []).filter(function(t) { return t.value !== 'mixed'; });
+      primaryTypes.forEach(function(t) {
+        var chip = document.createElement('button');
+        chip.type = 'button';
+        var sel = state.primaryType === t.value;
+        chip.style.cssText = solidChipCss(sel);
+        chip.textContent = t.label;
+        chip.onclick = function() {
+          state.primaryType = t.value;
+          renderWizardBizIdentity();
+        };
+        mixedChipsEl.appendChild(chip);
+      });
+    }
+  }
+
+  // Part B: Supplemental outputs — hidden for 'teach', shown otherwise
+  var outputSection = document.getElementById('wizardPrimaryOutputSection');
   var outputEl = document.getElementById('wizardPrimaryOutputChips');
-  if (outputEl) {
+  var hideOutput = state.businessType === 'teach' ||
+    (state.businessType === 'mixed' && state.primaryType === 'teach') ||
+    !state.businessType;
+  if (outputSection) outputSection.style.display = hideOutput ? 'none' : '';
+  if (outputEl && !hideOutput) {
     outputEl.innerHTML = '';
     var outputs = BEC.PRIMARY_OUTPUTS || [];
     outputs.forEach(function(o) {
       var chip = document.createElement('button');
       chip.type = 'button';
-      var sel = state.primaryOutput === o.value;
-      chip.style.cssText = 'padding:7px 14px;border-radius:999px;border:' + (sel ? '2px solid var(--teal)' : '1px solid var(--border,#ccc)') +
-        ';background:' + (sel ? 'rgba(42,124,111,0.12)' : 'var(--surface-card,#fff)') +
-        ';font-size:0.85rem;cursor:pointer;font-family:inherit;color:var(--text,#2a2a2a);transition:all 0.15s;';
+      var sel = (state.supplementalOutputs || []).indexOf(o.value) >= 0;
+      chip.style.cssText = multiChipCss(sel);
       chip.textContent = o.label;
       chip.onclick = function() {
-        state.primaryOutput = o.value;
+        if (!state.supplementalOutputs) state.supplementalOutputs = [];
+        var idx = state.supplementalOutputs.indexOf(o.value);
+        if (idx >= 0) state.supplementalOutputs.splice(idx, 1);
+        else state.supplementalOutputs.push(o.value);
         renderWizardBizIdentity();
       };
       outputEl.appendChild(chip);
     });
   }
 
-  // Part C: Channels
+  // Part C: Channels (multi-select, rendered once)
   var chanEl = document.getElementById('wizardBizChannels');
   if (chanEl && chanEl.childNodes.length === 0) {
     var channels = BEC.DECLARED_CHANNELS || [];
     channels.forEach(function(ch) {
       var chip = document.createElement('label');
       var chkd = state.channels.indexOf(ch.value) >= 0;
-      chip.style.cssText = 'display:inline-flex;align-items:center;padding:6px 12px;border-radius:999px;border:' +
-        (chkd ? '2px solid var(--teal)' : '1px solid var(--border,#ccc)') +
-        ';background:' + (chkd ? 'rgba(42,124,111,0.12)' : 'var(--surface-card,#fff)') +
-        ';cursor:pointer;font-size:0.78rem;color:var(--text,#2a2a2a);transition:all 0.15s;';
+      chip.style.cssText = multiChipCss(chkd);
       var cb = document.createElement('input');
       cb.type = 'checkbox';
       cb.style.cssText = 'position:absolute;opacity:0;width:0;height:0;pointer-events:none;';
@@ -23593,8 +23644,7 @@ function renderWizardBizIdentity() {
         var idx = state.channels.indexOf(ch.value);
         if (cb.checked && idx < 0) state.channels.push(ch.value);
         else if (!cb.checked && idx >= 0) state.channels.splice(idx, 1);
-        chip.style.border = cb.checked ? '2px solid var(--teal)' : '1px solid var(--border,#ccc)';
-        chip.style.background = cb.checked ? 'rgba(42,124,111,0.12)' : 'var(--surface-card,#fff)';
+        chip.style.cssText = multiChipCss(cb.checked);
       };
       var span = document.createElement('span');
       span.textContent = ch.label;
@@ -23604,7 +23654,7 @@ function renderWizardBizIdentity() {
     });
   }
 
-  // Part D: Current tools — only shown for full path
+  // Part D: Current tools — full path only
   var toolsSection = document.getElementById('wizardCurrentToolsSection');
   if (toolsSection) toolsSection.style.display = depth === 'full' ? '' : 'none';
   if (depth === 'full') {
@@ -23615,17 +23665,10 @@ function renderWizardBizIdentity() {
       var containerId = categories[tool.category] || 'wizardToolsShippingChips';
       var container = document.getElementById(containerId);
       if (!container) return;
-      // Only render each container once
-      if (!rendered[containerId]) {
-        rendered[containerId] = true;
-        container.innerHTML = '';
-      }
+      if (!rendered[containerId]) { rendered[containerId] = true; container.innerHTML = ''; }
       var chip = document.createElement('label');
       var chkd = state.currentTools.indexOf(tool.value) >= 0;
-      chip.style.cssText = 'display:inline-flex;align-items:center;padding:6px 12px;border-radius:999px;border:' +
-        (chkd ? '2px solid var(--teal)' : '1px solid var(--border,#ccc)') +
-        ';background:' + (chkd ? 'rgba(42,124,111,0.12)' : 'var(--surface-card,#fff)') +
-        ';cursor:pointer;font-size:0.78rem;color:var(--text,#2a2a2a);transition:all 0.15s;';
+      chip.style.cssText = multiChipCss(chkd);
       var cb = document.createElement('input');
       cb.type = 'checkbox';
       cb.style.cssText = 'position:absolute;opacity:0;width:0;height:0;pointer-events:none;';
@@ -23634,8 +23677,7 @@ function renderWizardBizIdentity() {
         var idx = state.currentTools.indexOf(tool.value);
         if (cb.checked && idx < 0) state.currentTools.push(tool.value);
         else if (!cb.checked && idx >= 0) state.currentTools.splice(idx, 1);
-        chip.style.border = cb.checked ? '2px solid var(--teal)' : '1px solid var(--border,#ccc)';
-        chip.style.background = cb.checked ? 'rgba(42,124,111,0.12)' : 'var(--surface-card,#fff)';
+        chip.style.cssText = multiChipCss(cb.checked);
       };
       var span = document.createElement('span');
       span.textContent = tool.label;
@@ -23645,24 +23687,44 @@ function renderWizardBizIdentity() {
     });
   }
 
-  // Enable/disable Continue
+  // Continue enabled when: business type selected AND (if mixed: primary type also selected)
   var confirmBtn = document.getElementById('wizardBizIdentityConfirmBtn');
-  if (confirmBtn) confirmBtn.disabled = !(state.businessType && state.primaryOutput);
+  if (confirmBtn) {
+    confirmBtn.disabled = !(state.businessType &&
+      (state.businessType !== 'mixed' || state.primaryType));
+  }
 }
 
 async function wizardConfirmBizIdentity() {
   var state = _wizardBizIdentityState || {};
-  if (!state.businessType || !state.primaryOutput) {
-    showToast('Please pick a business type and primary offering.', true);
+  if (!state.businessType || (state.businessType === 'mixed' && !state.primaryType)) {
+    showToast('Please select how you create what you sell.', true);
     return;
   }
+  // Derive the effective business type for configuration purposes.
+  // 'mixed' uses primaryType for module defaults; primaryType is also stored separately.
+  var effectiveType = (state.businessType === 'mixed' && state.primaryType) ? state.primaryType : state.businessType;
+  // Derive primary output from business type if not explicitly selected.
+  var derivedOutput = effectiveType === 'teach' ? 'classes' :
+                      effectiveType === 'resell' ? 'physical' : 'physical';
+  var primaryOutput = (state.supplementalOutputs && state.supplementalOutputs.length)
+    ? state.supplementalOutputs[0] : derivedOutput;
+
   var btn = document.getElementById('wizardBizIdentityConfirmBtn');
   if (btn) btn.disabled = true;
   try {
-    await MastDB.businessEntity.update('identity', {
+    var identityUpdate = {
       businessType: state.businessType,
-      primaryOutput: state.primaryOutput
-    });
+      effectiveBusinessType: effectiveType,
+      primaryOutput: primaryOutput
+    };
+    if (state.businessType === 'mixed' && state.primaryType) {
+      identityUpdate.primaryType = state.primaryType;
+    }
+    if (state.supplementalOutputs && state.supplementalOutputs.length) {
+      identityUpdate.supplementalOutputs = state.supplementalOutputs.slice();
+    }
+    await MastDB.businessEntity.update('identity', identityUpdate);
     if (state.channels.length) {
       await MastDB.businessEntity.update('presence', { declaredChannels: state.channels.slice() });
     }
@@ -23671,7 +23733,8 @@ async function wizardConfirmBizIdentity() {
     }
     logWizardEvent(2, 'biz_identity_confirmed', {
       businessType: state.businessType,
-      primaryOutput: state.primaryOutput,
+      effectiveType: effectiveType,
+      primaryOutput: primaryOutput,
       channelsCount: state.channels.length,
       toolsCount: state.currentTools.length
     });
@@ -23700,19 +23763,15 @@ function renderWizardFeaturePages() {
     var card = document.createElement('div');
     card.className = 'wizard-feature-card';
     var sel = _wizardSelectedFeaturePages.indexOf(page.value) >= 0;
-    card.style.cssText = 'border:' + (sel ? '2px solid var(--teal)' : '1px solid #ddd') +
+    if (sel) card.setAttribute('data-selected', 'true');
+    else card.removeAttribute('data-selected');
+    card.style.cssText = 'border:2px solid ' + (sel ? 'var(--teal)' : 'var(--border,#ddd)') +
       ';border-radius:8px;padding:12px 16px;cursor:pointer;background:' +
-      (sel ? 'rgba(42,124,111,0.06)' : '#fff') +
-      ';display:flex;align-items:flex-start;gap:10px;';
-    var checkbox = document.createElement('input');
-    checkbox.type = 'checkbox';
-    checkbox.checked = sel;
-    checkbox.style.cssText = 'margin-top:2px;flex-shrink:0;';
-    checkbox.onchange = function(ev) { ev.stopPropagation(); toggleFeaturePage(page.value); };
+      (sel ? 'rgba(42,124,111,0.18)' : 'var(--surface-card,#fff)') +
+      ';display:flex;align-items:flex-start;gap:10px;transition:all 0.15s;';
     var textDiv = document.createElement('div');
-    textDiv.innerHTML = '<div style="font-weight:600;font-size:0.9rem;margin-bottom:3px;">' + esc(page.label) + '</div>' +
+    textDiv.innerHTML = '<div style="font-weight:' + (sel ? '700' : '600') + ';font-size:0.9rem;margin-bottom:3px;color:var(--text,#2a2a2a);">' + esc(page.label) + '</div>' +
       '<div style="font-size:0.78rem;color:var(--warm-gray);">' + esc(page.description) + '</div>';
-    card.appendChild(checkbox);
     card.appendChild(textDiv);
     card.onclick = function() { toggleFeaturePage(page.value); };
     el.appendChild(card);
@@ -23786,8 +23845,9 @@ function _wizardModulePreselect() {
   var channels = (state.channels || []);
   var businessType = (state.businessType || '');
   var selected = always.slice();
-  if (businessType === 'teach') { ['classes','events'].forEach(function(m){ if(selected.indexOf(m)<0) selected.push(m); }); }
-  if (businessType === 'make')  { if(selected.indexOf('operations')<0) selected.push('operations'); }
+  var effectiveType = (state.businessType === 'mixed' && state.primaryType) ? state.primaryType : businessType;
+  if (effectiveType === 'teach') { ['classes','events'].forEach(function(m){ if(selected.indexOf(m)<0) selected.push(m); }); }
+  if (effectiveType === 'produce') { if(selected.indexOf('operations')<0) selected.push('operations'); }
   if (channels.indexOf('wholesale') >= 0) { if(selected.indexOf('retention')<0) selected.push('retention'); }
   if (goals.indexOf('get-online-shop') >= 0) { if(selected.indexOf('marketing')<0) selected.push('marketing'); }
   if (goals.indexOf('class-registration') >= 0) { if(selected.indexOf('classes')<0) selected.push('classes'); }
