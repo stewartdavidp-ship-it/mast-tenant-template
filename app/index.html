@@ -6495,7 +6495,7 @@
           <div id="wizardModuleGrid" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:24px;"></div>
           <div style="display:flex;justify-content:space-between;align-items:center;">
             <button class="btn btn-secondary" onclick="showWizardStep('4')">Back</button>
-            <button class="btn btn-primary" id="wizardModulesConfirmBtn" onclick="wizardConfirmModules()">Continue</button>
+            <button class="btn btn-primary" id="wizardModulesConfirmBtn" onclick="wizardConfirmModuleSelector()">Continue</button>
           </div>
           <div style="text-align:center;margin-top:12px;">
             <a href="#" onclick="event.preventDefault();wizardSkipToLaunch();" style="font-size:0.82rem;color:var(--warm-gray);text-decoration:none;">Skip remaining setup &rarr;</a>
@@ -23574,6 +23574,387 @@ async function wizardConfirmFeaturePages() {
 }
 
 // ----------------------------------------------------------------
+// Full-path steps 5-8
+// ----------------------------------------------------------------
+
+// "Skip remaining setup" — available on every full-path step (4-8).
+function wizardSkipToLaunch() {
+  logWizardEvent('full-skip', 'skip_to_launch', { fromStep: wizardCurrentStep });
+  showWizardStep('fastDpa');
+}
+
+// ---- Step 5: Module Selector ----
+
+var _wizardSelectedModulesStep5 = null; // null = not yet initialized
+
+var _wizardModuleDefs = [
+  { id: 'products',         label: 'Products',         desc: 'Catalog, develop, materials, inventory' },
+  { id: 'sales',            label: 'Sales',             desc: 'Orders, POS, returns, wholesale' },
+  { id: 'marketing',        label: 'Marketing',         desc: 'Blog, social, newsletter, brand' },
+  { id: 'retention',        label: 'Retention',         desc: 'Loyalty, gift cards, coupons, customers' },
+  { id: 'events',           label: 'Events',            desc: 'Find, apply to, and run market events' },
+  { id: 'classes',          label: 'Classes',           desc: 'Classes, instructors, booking, passes' },
+  { id: 'finance',          label: 'Finance',           desc: 'Revenue, expenses, P&L, cash flow' },
+  { id: 'operations',       label: 'Operations',        desc: 'Studio, team, trips, contacts' },
+  { id: 'customer-service', label: 'Customer Service',  desc: 'Inbox, tickets, surveys, reviews' }
+];
+
+function _wizardModulePreselect() {
+  var always = ['products', 'sales', 'finance', 'customer-service'];
+  var state = _wizardBizIdentityState || {};
+  var engagement = window._wizardEngagement || {};
+  var goals = (engagement.goals || []);
+  var channels = (state.channels || []);
+  var businessType = (state.businessType || '');
+  var selected = always.slice();
+  if (businessType === 'teach') { ['classes','events'].forEach(function(m){ if(selected.indexOf(m)<0) selected.push(m); }); }
+  if (businessType === 'make')  { if(selected.indexOf('operations')<0) selected.push('operations'); }
+  if (channels.indexOf('wholesale') >= 0) { if(selected.indexOf('retention')<0) selected.push('retention'); }
+  if (goals.indexOf('get-online-shop') >= 0) { if(selected.indexOf('marketing')<0) selected.push('marketing'); }
+  if (goals.indexOf('class-registration') >= 0) { if(selected.indexOf('classes')<0) selected.push('classes'); }
+  return selected;
+}
+
+function renderWizardModuleSelector() {
+  if (_wizardSelectedModulesStep5 === null) {
+    _wizardSelectedModulesStep5 = _wizardModulePreselect();
+  }
+  var el = document.getElementById('wizardModuleGrid');
+  if (!el) return;
+  el.innerHTML = '';
+  _wizardModuleDefs.forEach(function(mod) {
+    var sel = _wizardSelectedModulesStep5.indexOf(mod.id) >= 0;
+    var card = document.createElement('div');
+    card.style.cssText = 'border:' + (sel ? '2px solid var(--teal)' : '1px solid #ddd') +
+      ';border-radius:8px;padding:10px 12px;cursor:pointer;background:' +
+      (sel ? 'rgba(42,124,111,0.06)' : '#fff') + ';display:flex;align-items:flex-start;gap:8px;';
+    var cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.checked = sel;
+    cb.style.cssText = 'margin-top:2px;flex-shrink:0;accent-color:var(--teal);';
+    cb.onchange = function(ev) { ev.stopPropagation(); _wizardToggleModule(mod.id); };
+    var text = document.createElement('div');
+    text.innerHTML = '<div style="font-weight:600;font-size:0.85rem;margin-bottom:2px;">' + esc(mod.label) + '</div>' +
+      '<div style="font-size:0.72rem;color:var(--warm-gray);line-height:1.3;">' + esc(mod.desc) + '</div>';
+    card.appendChild(cb);
+    card.appendChild(text);
+    card.onclick = function() { _wizardToggleModule(mod.id); };
+    el.appendChild(card);
+  });
+}
+
+function _wizardToggleModule(id) {
+  if (!_wizardSelectedModulesStep5) _wizardSelectedModulesStep5 = [];
+  var idx = _wizardSelectedModulesStep5.indexOf(id);
+  if (idx >= 0) _wizardSelectedModulesStep5.splice(idx, 1);
+  else _wizardSelectedModulesStep5.push(id);
+  renderWizardModuleSelector();
+}
+
+async function wizardConfirmModuleSelector() {
+  var btn = document.getElementById('wizardModulesConfirmBtn');
+  if (btn) btn.disabled = true;
+  var selected = (_wizardSelectedModulesStep5 || _wizardModulePreselect()).slice();
+  try {
+    await MastDB.businessEntity.update('engagement', { modulesShown: selected });
+    logWizardEvent(5, 'modules_confirmed', { modules: selected, count: selected.length });
+    showWizardStep('6');
+    saveWizardProgress('6', { modulesConfirmed: true, modules: selected });
+  } catch (err) {
+    if (btn) btn.disabled = false;
+    showToast('Could not save modules: ' + esc(err.message || ''), true);
+  }
+}
+
+// ---- Step 6: Integrations ----
+
+var _wizardIntegrationState = {};
+
+var _wizardIntegrationDefs = [
+  { id: 'square',      label: 'Square',      fields: [
+      { id: 'clientId',    label: 'Client ID',   type: 'text',     placeholder: 'sq0idp-...' },
+      { id: 'apiSecret',   label: 'API Secret',  type: 'password', placeholder: 'sq0csp-...' },
+      { id: 'environment', label: 'Environment', type: 'radio',    options: ['sandbox','production'] }
+  ]},
+  { id: 'stripe',      label: 'Stripe',      fields: [
+      { id: 'secretKey',      label: 'API Key (secret)', type: 'password', placeholder: 'sk_live_...' },
+      { id: 'publishableKey', label: 'Publishable Key',  type: 'text',     placeholder: 'pk_live_...' }
+  ]},
+  { id: 'shopify',     label: 'Shopify',     fields: [
+      { id: 'shopSubdomain', label: 'Shop subdomain', type: 'text',     placeholder: 'your-shop' },
+      { id: 'clientId',      label: 'Client ID',      type: 'text',     placeholder: '' },
+      { id: 'clientSecret',  label: 'Client Secret',  type: 'password', placeholder: '' }
+  ]},
+  { id: 'etsy',        label: 'Etsy',        fields: [{ id: 'apiKey', label: 'API Key', type: 'text',     placeholder: '' }] },
+  { id: 'pirateship',  label: 'Pirate Ship', fields: [{ id: 'apiKey', label: 'API Key', type: 'password', placeholder: '' }] },
+  { id: 'shippo',      label: 'Shippo',      fields: [{ id: 'apiKey', label: 'API Key', type: 'password', placeholder: '' }] },
+  { id: 'labelkeeper', label: 'LabelKeeper', fields: [{ id: 'apiKey', label: 'API Key', type: 'password', placeholder: '' }] }
+];
+
+function renderWizardIntegrations() {
+  var el = document.getElementById('wizardIntegrationCards');
+  if (!el) return;
+  var state = _wizardBizIdentityState || {};
+  var selectedTools = state.currentTools || [];
+
+  if (selectedTools.length === 0) {
+    el.innerHTML = '<p style="color:var(--warm-gray);font-size:0.9rem;padding:16px 0;">No tools selected — connect them later in <strong>Settings → Integrations</strong>.</p>';
+    return;
+  }
+
+  el.innerHTML = '';
+  var defsMap = {};
+  _wizardIntegrationDefs.forEach(function(d) { defsMap[d.id] = d; });
+
+  selectedTools.forEach(function(toolId) {
+    var def = defsMap[toolId];
+    if (!def) return;
+    if (!_wizardIntegrationState[toolId]) _wizardIntegrationState[toolId] = { _connected: false, _skipped: false };
+    var ts = _wizardIntegrationState[toolId];
+
+    var card = document.createElement('div');
+    card.id = 'wizardIntCard_' + toolId;
+    card.style.cssText = 'border:1px solid ' + (ts._connected ? 'var(--teal)' : '#ddd') +
+      ';border-radius:8px;padding:14px 16px;margin-bottom:10px;background:' +
+      (ts._connected ? 'rgba(42,124,111,0.04)' : '#fff') + ';';
+
+    var headerMb = (ts._connected || ts._skipped) ? '0' : '12px';
+    var header = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:' + headerMb + ';">' +
+      '<strong style="font-size:0.95rem;">' + esc(def.label) + '</strong>';
+    if (ts._connected) header += '<span style="font-size:0.8rem;color:var(--teal);font-weight:600;">&#10003; Connected</span>';
+    else if (ts._skipped) header += '<span style="font-size:0.8rem;color:var(--warm-gray);">Skipped</span>';
+    header += '</div>';
+
+    var fieldsHtml = '';
+    if (!ts._connected && !ts._skipped) {
+      def.fields.forEach(function(f) {
+        fieldsHtml += '<div style="margin-bottom:10px;">';
+        fieldsHtml += '<label style="font-size:0.78rem;font-weight:600;display:block;margin-bottom:3px;">' + esc(f.label) + '</label>';
+        if (f.type === 'radio') {
+          f.options.forEach(function(opt) {
+            fieldsHtml += '<label style="display:inline-flex;align-items:center;gap:4px;margin-right:12px;font-size:0.82rem;cursor:pointer;">' +
+              '<input type="radio" name="wizardInt_' + toolId + '_' + f.id + '" value="' + esc(opt) + '"' +
+              (opt === 'sandbox' ? ' checked' : '') + ' style="accent-color:var(--teal);">' +
+              esc(opt.charAt(0).toUpperCase() + opt.slice(1)) + '</label>';
+          });
+        } else {
+          fieldsHtml += '<input type="' + (f.type === 'password' ? 'password' : 'text') + '" ' +
+            'id="wizardInt_' + toolId + '_' + f.id + '" placeholder="' + esc(f.placeholder || '') + '" ' +
+            'style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:5px;font-family:\'DM Sans\',sans-serif;font-size:0.85rem;box-sizing:border-box;" />';
+        }
+        fieldsHtml += '</div>';
+      });
+      fieldsHtml += '<div style="display:flex;gap:8px;">' +
+        '<button class="btn btn-primary btn-small" onclick="_wizardConnectTool(\'' + toolId + '\')">Connect</button>' +
+        '<button class="btn btn-secondary btn-small" onclick="_wizardSkipTool(\'' + toolId + '\')">Skip</button>' +
+        '</div>';
+    }
+    card.innerHTML = header + fieldsHtml;
+    el.appendChild(card);
+  });
+}
+
+function _wizardConnectTool(toolId) {
+  var def = _wizardIntegrationDefs.filter(function(d){ return d.id === toolId; })[0];
+  if (!def) return;
+  var creds = {};
+  def.fields.forEach(function(f) {
+    if (f.type === 'radio') {
+      var radios = document.querySelectorAll('input[name="wizardInt_' + toolId + '_' + f.id + '"]');
+      for (var r = 0; r < radios.length; r++) { if (radios[r].checked) { creds[f.id] = radios[r].value; break; } }
+    } else {
+      var inp = document.getElementById('wizardInt_' + toolId + '_' + f.id);
+      if (inp) creds[f.id] = inp.value.trim();
+    }
+  });
+  // Write only non-secret fields to Firebase.
+  var safe = {};
+  Object.keys(creds).forEach(function(k) {
+    if (k !== 'apiSecret' && k !== 'secretKey' && k !== 'clientSecret' && k !== 'apiKey') safe[k] = creds[k];
+  });
+  safe.connectedAt = new Date().toISOString();
+  MastDB.config.update('integrations/' + toolId, safe).catch(function(){});
+  _wizardIntegrationState[toolId] = { _connected: true, _skipped: false };
+  logWizardEvent(6, 'tool_connected', { tool: toolId });
+  renderWizardIntegrations();
+}
+
+function _wizardSkipTool(toolId) {
+  _wizardIntegrationState[toolId] = { _connected: false, _skipped: true };
+  logWizardEvent(6, 'tool_skipped', { tool: toolId });
+  renderWizardIntegrations();
+}
+
+function wizardStep6Continue() {
+  showWizardStep('7');
+  saveWizardProgress('7', { integrationsStepDone: true });
+}
+
+// ---- Step 7: Settings Spotlight ----
+
+function renderWizardSettingsSpotlight() {
+  var el = document.getElementById('wizardSettingsSections');
+  if (!el) return;
+  var modules = _wizardSelectedModulesStep5 || _wizardModulePreselect();
+  var engagement = window._wizardEngagement || {};
+  var showSiteVis = engagement.mode === 'storefront';
+  var showPricing = modules.indexOf('products') >= 0;
+  var html = '';
+
+  // Tax & Legal
+  html += _wizardSettingsSection('tax', 'Tax &amp; Legal', 'Business state and sales tax',
+    '<div class="form-group" style="margin-bottom:12px;">' +
+    '<label style="font-size:0.8rem;font-weight:600;display:block;margin-bottom:4px;">Business state</label>' +
+    '<select id="wizardTaxState" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:5px;font-family:\'DM Sans\',sans-serif;font-size:0.85rem;background:#fff;">' +
+    '<option value="">&#8212; Select state &#8212;</option>' +
+    (function(){
+      var states=[['AL','Alabama'],['AK','Alaska'],['AZ','Arizona'],['AR','Arkansas'],['CA','California'],['CO','Colorado'],['CT','Connecticut'],['DE','Delaware'],['FL','Florida'],['GA','Georgia'],['HI','Hawaii'],['ID','Idaho'],['IL','Illinois'],['IN','Indiana'],['IA','Iowa'],['KS','Kansas'],['KY','Kentucky'],['LA','Louisiana'],['ME','Maine'],['MD','Maryland'],['MA','Massachusetts'],['MI','Michigan'],['MN','Minnesota'],['MS','Mississippi'],['MO','Missouri'],['MT','Montana'],['NE','Nebraska'],['NV','Nevada'],['NH','New Hampshire'],['NJ','New Jersey'],['NM','New Mexico'],['NY','New York'],['NC','North Carolina'],['ND','North Dakota'],['OH','Ohio'],['OK','Oklahoma'],['OR','Oregon'],['PA','Pennsylvania'],['RI','Rhode Island'],['SC','South Carolina'],['SD','South Dakota'],['TN','Tennessee'],['TX','Texas'],['UT','Utah'],['VT','Vermont'],['VA','Virginia'],['WA','Washington'],['WV','West Virginia'],['WI','Wisconsin'],['WY','Wyoming']];
+      return states.map(function(s){ return '<option value="'+s[0]+'">'+s[1]+'</option>'; }).join('');
+    })() +
+    '</select></div>' +
+    '<div class="form-group" style="margin-bottom:4px;">' +
+    '<label style="font-size:0.8rem;font-weight:600;display:block;margin-bottom:6px;">Collect sales tax?</label>' +
+    '<label style="display:inline-flex;align-items:center;gap:6px;margin-right:16px;font-size:0.85rem;cursor:pointer;"><input type="radio" name="wizardCollectTax" value="yes" style="accent-color:var(--teal);"> Yes</label>' +
+    '<label style="display:inline-flex;align-items:center;gap:6px;font-size:0.85rem;cursor:pointer;"><input type="radio" name="wizardCollectTax" value="no" checked style="accent-color:var(--teal);"> No</label>' +
+    '</div>');
+
+  // Email
+  html += _wizardSettingsSection('email', 'Email', 'From address for outgoing emails',
+    '<div class="form-group" style="margin-bottom:12px;">' +
+    '<label style="font-size:0.8rem;font-weight:600;display:block;margin-bottom:4px;">From email</label>' +
+    '<input type="email" id="wizardEmailFrom" placeholder="hello@yourbusiness.com" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:5px;font-family:\'DM Sans\',sans-serif;font-size:0.85rem;box-sizing:border-box;">' +
+    '</div>' +
+    '<div class="form-group" style="margin-bottom:4px;">' +
+    '<label style="font-size:0.8rem;font-weight:600;display:block;margin-bottom:4px;">Reply-to</label>' +
+    '<input type="email" id="wizardEmailReplyTo" placeholder="Same as From" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:5px;font-family:\'DM Sans\',sans-serif;font-size:0.85rem;box-sizing:border-box;">' +
+    '</div>');
+
+  // Pricing Defaults
+  if (showPricing) {
+    html += _wizardSettingsSection('pricing', 'Pricing Defaults', 'Default markup applied to products',
+      '<div class="form-group" style="margin-bottom:4px;">' +
+      '<label style="font-size:0.8rem;font-weight:600;display:block;margin-bottom:4px;">Default markup %</label>' +
+      '<input type="number" id="wizardDefaultMarkup" min="0" max="999" step="1" placeholder="e.g. 100" style="width:120px;padding:8px 10px;border:1px solid #ddd;border-radius:5px;font-family:\'DM Sans\',sans-serif;font-size:0.85rem;">' +
+      '<p style="font-size:0.75rem;color:var(--warm-gray);margin:4px 0 0;">100% markup = 2× cost = 50% margin</p>' +
+      '</div>');
+  }
+
+  // Site Visibility
+  if (showSiteVis) {
+    html += _wizardSettingsSection('visibility', 'Site Visibility', 'Public or private while you set up',
+      '<label style="display:inline-flex;align-items:center;gap:6px;margin-right:16px;font-size:0.85rem;cursor:pointer;"><input type="radio" name="wizardSiteVis" value="private" checked style="accent-color:var(--teal);"> Private</label>' +
+      '<label style="display:inline-flex;align-items:center;gap:6px;font-size:0.85rem;cursor:pointer;"><input type="radio" name="wizardSiteVis" value="public" style="accent-color:var(--teal);"> Public</label>' +
+      '<p style="font-size:0.75rem;color:var(--warm-gray);margin:6px 0 0;">You can change this anytime in Settings → Website.</p>');
+  }
+
+  el.innerHTML = html;
+}
+
+function _wizardSettingsSection(key, title, subtitle, bodyHtml) {
+  var cap = key.charAt(0).toUpperCase() + key.slice(1);
+  return '<div id="wizardSettings_' + key + '" style="border:1px solid #ddd;border-radius:8px;margin-bottom:10px;overflow:hidden;">' +
+    '<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;cursor:pointer;background:var(--cream-dark);" onclick="_wizardToggleSettingsSection(\'' + key + '\')">' +
+    '<div><strong style="font-size:0.95rem;">' + title + '</strong><p style="font-size:0.78rem;color:var(--warm-gray);margin:2px 0 0;">' + subtitle + '</p></div>' +
+    '<span id="wizardSettings' + cap + 'Toggle" style="font-size:0.85rem;color:var(--teal);">&#9660;</span></div>' +
+    '<div id="wizardSettings' + cap + 'Body" style="padding:14px 16px;">' +
+    bodyHtml +
+    '<div style="text-align:right;margin-top:10px;"><button class="btn btn-secondary btn-small" onclick="_wizardCollapseSettingsSection(\'' + key + '\')">Skip</button></div>' +
+    '</div></div>';
+}
+
+function _wizardToggleSettingsSection(key) {
+  var cap = key.charAt(0).toUpperCase() + key.slice(1);
+  var body = document.getElementById('wizardSettings' + cap + 'Body');
+  var toggle = document.getElementById('wizardSettings' + cap + 'Toggle');
+  if (!body) return;
+  var collapsed = body.style.display === 'none';
+  body.style.display = collapsed ? '' : 'none';
+  if (toggle) toggle.innerHTML = collapsed ? '&#9660;' : '&#9654;';
+}
+
+function _wizardCollapseSettingsSection(key) {
+  var cap = key.charAt(0).toUpperCase() + key.slice(1);
+  var body = document.getElementById('wizardSettings' + cap + 'Body');
+  var toggle = document.getElementById('wizardSettings' + cap + 'Toggle');
+  if (body) body.style.display = 'none';
+  if (toggle) toggle.innerHTML = '&#9654;';
+}
+
+async function wizardConfirmSettings() {
+  var btn = document.getElementById('wizardSettingsConfirmBtn');
+  if (btn) btn.disabled = true;
+  var writes = [];
+
+  var taxStateEl = document.getElementById('wizardTaxState');
+  var taxState = taxStateEl ? taxStateEl.value : '';
+  var collectTaxRadios = document.querySelectorAll('input[name="wizardCollectTax"]');
+  var collectTax = false;
+  for (var ti = 0; ti < collectTaxRadios.length; ti++) {
+    if (collectTaxRadios[ti].checked) { collectTax = collectTaxRadios[ti].value === 'yes'; break; }
+  }
+  if (taxState) writes.push(MastDB.config.update('tax', { state: taxState, collectSalesTax: collectTax }).catch(function(){}));
+
+  var fromEmail = ((document.getElementById('wizardEmailFrom') || {}).value || '').trim();
+  var replyTo   = ((document.getElementById('wizardEmailReplyTo') || {}).value || '').trim();
+  if (fromEmail) {
+    var emailMeta = { fromEmail: fromEmail, updatedAt: new Date().toISOString() };
+    if (replyTo) emailMeta.replyTo = replyTo;
+    writes.push(MastDB.config.update('admin/communications', emailMeta).catch(function(){}));
+  }
+
+  var markupEl = document.getElementById('wizardDefaultMarkup');
+  var markupVal = markupEl ? parseInt(markupEl.value, 10) : NaN;
+  if (!isNaN(markupVal) && markupVal >= 0) {
+    writes.push(MastDB.config.update('pricingDefaults', { defaultMarkupPct: markupVal, updatedAt: new Date().toISOString() }).catch(function(){}));
+  }
+
+  var visRadios = document.querySelectorAll('input[name="wizardSiteVis"]');
+  var isPublic = false;
+  for (var vi = 0; vi < visRadios.length; vi++) {
+    if (visRadios[vi].checked) { isPublic = visRadios[vi].value === 'public'; break; }
+  }
+  var tenantId = MastDB.tenantId ? MastDB.tenantId() : null;
+  if (tenantId) writes.push(MastDB.platform.set('mast-platform/tenants/' + tenantId + '/publicConfig/searchable', isPublic).catch(function(){}));
+
+  try {
+    await Promise.all(writes);
+    logWizardEvent(7, 'settings_saved', { taxState: taxState || null, fromEmail: fromEmail || null, markupPct: isNaN(markupVal) ? null : markupVal });
+    showWizardStep('8');
+    saveWizardProgress('8', { settingsSaved: true });
+  } catch (err) {
+    if (btn) btn.disabled = false;
+    showToast('Could not save settings: ' + esc(err.message || ''), true);
+  }
+}
+
+// ---- Step 8: Site Migration ----
+
+async function wizardAnalyzeSiteStep8() {
+  var urlEl = document.getElementById('wizardSiteUrl8');
+  var statusEl = document.getElementById('wizardAnalysisStatus8');
+  var btn = document.getElementById('wizardMigrateBtn8');
+  var url = urlEl ? urlEl.value.trim() : '';
+  if (!url) { if (statusEl) statusEl.textContent = 'Please enter your website URL.'; return; }
+  if (!url.startsWith('http://') && !url.startsWith('https://')) { url = 'https://' + url; if (urlEl) urlEl.value = url; }
+
+  // Sync to main wizard URL field so existing wizardAnalyzeSite() logic works.
+  var mainUrlEl = document.getElementById('wizardSiteUrl');
+  if (mainUrlEl) mainUrlEl.value = url;
+
+  if (btn) btn.disabled = true;
+  if (statusEl) statusEl.innerHTML = '<span style="color:var(--warm-gray);">Analyzing your site…</span>';
+
+  // Delegate to existing wizardAnalyzeSite(). Flag tells downstream to go to fastDpa when done.
+  window._wizardStep8PostAnalyze = true;
+  if (typeof wizardAnalyzeSite === 'function') {
+    wizardAnalyzeSite();
+  } else {
+    if (statusEl) statusEl.textContent = 'Import not available. Use Website → Import after setup.';
+    if (btn) btn.disabled = false;
+  }
+}
+
+// ----------------------------------------------------------------
 // Fast-exit path
 // ----------------------------------------------------------------
 
@@ -23909,10 +24290,9 @@ async function wizardConfirmDepth() {
   saveWizardProgress('1', { onboardingDepth: depth });
 }
 
-// Step 3 back — goes to step 2 or 2b depending on depth
+// Step 3 back — always goes to step 2 (2b removed; calibration moved to step 4)
 function wizardStep3Back() {
-  var depth = window._wizardOnboardingDepth || 'quick';
-  showWizardStep(depth === 'full' ? '2b' : '2');
+  showWizardStep('2');
 }
 
 function saveWizardProgress(step, extras) {
