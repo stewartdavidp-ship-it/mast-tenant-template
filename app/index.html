@@ -6666,14 +6666,17 @@
 
         <!-- Step 6 (full-path): Integrations -->
         <div id="wizardStep6" class="wizard-step" style="display:none;">
-          <h2 style="font-size:1.6rem;margin-bottom:8px;">Connect your tools</h2>
-          <p style="color:var(--warm-gray);margin-bottom:20px;">Based on what you told us, connect the tools you're already using.</p>
+          <div id="wizardStep6Header">
+            <h2 style="font-size:1.6rem;margin-bottom:8px;">Connect your tools</h2>
+            <p style="color:var(--warm-gray);margin-bottom:20px;">You told us you're using these tools. Connect them now or skip and do it later — you can always find this in <strong>Settings → Integrations</strong>.</p>
+          </div>
           <div id="wizardIntegrationCards" style="margin-bottom:24px;"></div>
-          <div style="display:flex;justify-content:space-between;align-items:center;">
+          <div id="wizardCredentialEntryPane" style="display:none;margin-bottom:24px;"></div>
+          <div id="wizardStep6NavButtons" style="display:flex;justify-content:space-between;align-items:center;">
             <button class="btn btn-secondary" onclick="showWizardStep('5')">Back</button>
             <button class="btn btn-primary" onclick="wizardStep6Continue()">Continue</button>
           </div>
-          <div style="text-align:center;margin-top:12px;">
+          <div id="wizardStep6SkipLink" style="text-align:center;margin-top:12px;">
             <a href="#" onclick="event.preventDefault();wizardSkipToLaunch();" style="font-size:0.82rem;color:var(--warm-gray);text-decoration:none;">Skip remaining setup &rarr;</a>
           </div>
         </div>
@@ -23935,24 +23938,41 @@ async function wizardConfirmModuleSelector() {
 var _wizardIntegrationState = {};
 
 var _wizardIntegrationDefs = [
-  { id: 'square',      label: 'Square',      fields: [
-      { id: 'clientId',    label: 'Client ID',   type: 'text',     placeholder: 'sq0idp-...' },
-      { id: 'apiSecret',   label: 'API Secret',  type: 'password', placeholder: 'sq0csp-...' },
-      { id: 'environment', label: 'Environment', type: 'radio',    options: ['sandbox','production'] }
-  ]},
-  { id: 'stripe',      label: 'Stripe',      fields: [
-      { id: 'secretKey',      label: 'API Key (secret)', type: 'password', placeholder: 'sk_live_...' },
-      { id: 'publishableKey', label: 'Publishable Key',  type: 'text',     placeholder: 'pk_live_...' }
-  ]},
-  { id: 'shopify',     label: 'Shopify',     fields: [
-      { id: 'shopSubdomain', label: 'Shop subdomain', type: 'text',     placeholder: 'your-shop' },
-      { id: 'clientId',      label: 'Client ID',      type: 'text',     placeholder: '' },
-      { id: 'clientSecret',  label: 'Client Secret',  type: 'password', placeholder: '' }
-  ]},
-  { id: 'etsy',        label: 'Etsy',        fields: [{ id: 'apiKey', label: 'API Key', type: 'text',     placeholder: '' }] },
-  { id: 'pirateship',  label: 'Pirate Ship', fields: [{ id: 'apiKey', label: 'API Key', type: 'password', placeholder: '' }] },
-  { id: 'shippo',      label: 'Shippo',      fields: [{ id: 'apiKey', label: 'API Key', type: 'password', placeholder: '' }] },
-  { id: 'labelkeeper', label: 'LabelKeeper', fields: [{ id: 'apiKey', label: 'API Key', type: 'password', placeholder: '' }] }
+  { id: 'square', label: 'Square',
+    instructions: 'Go to <strong>developer.squareup.com/apps</strong> → select or create your app → click <em>Credentials</em>. Start with Sandbox while setting up; switch to Production when you’re ready to accept real payments.',
+    helpUrl: 'https://developer.squareup.com/apps',
+    fields: [
+      { id: 'clientId',    label: 'Application ID',     type: 'text',     placeholder: 'sq0idp-...' },
+      { id: 'apiSecret',   label: 'Application Secret', type: 'password', placeholder: 'sq0csp-...' },
+      { id: 'environment', label: 'Environment',        type: 'radio',    options: ['sandbox','production'] }
+    ]},
+  { id: 'stripe', label: 'Stripe',
+    instructions: 'Go to <strong>dashboard.stripe.com/apikeys</strong>. Use test keys while setting up; switch to live keys when ready to accept payments.',
+    helpUrl: 'https://dashboard.stripe.com/apikeys',
+    fields: [
+      { id: 'secretKey',      label: 'Secret key',       type: 'password', placeholder: 'sk_live_... or sk_test_...' },
+      { id: 'publishableKey', label: 'Publishable key',  type: 'text',     placeholder: 'pk_live_... or pk_test_...' }
+    ]},
+  { id: 'shopify', label: 'Shopify',
+    instructions: 'In your Shopify admin, go to <strong>Settings → Apps and sales channels → Develop apps</strong> → create a custom app. Your subdomain is the part before <em>.myshopify.com</em>.',
+    helpUrl: 'https://admin.shopify.com/settings/apps/development',
+    fields: [
+      { id: 'shopSubdomain', label: 'Shop subdomain',  type: 'text',     placeholder: 'your-shop (from your-shop.myshopify.com)' },
+      { id: 'clientId',      label: 'API key',         type: 'text',     placeholder: '' },
+      { id: 'clientSecret',  label: 'API secret key',  type: 'password', placeholder: '' }
+    ]},
+  { id: 'etsy', label: 'Etsy',
+    instructions: 'Go to <strong>etsy.com/developers/your-apps</strong> → select your app (or create one) → your API key is listed in the app details.',
+    helpUrl: 'https://www.etsy.com/developers/your-apps',
+    fields: [{ id: 'apiKey', label: 'API Key', type: 'text', placeholder: '' }]},
+  { id: 'pirateship', label: 'Pirate Ship',
+    instructions: 'Log into <strong>pirateship.com</strong> → click your name in the top right → <em>Account Settings → API</em> → reveal your key.',
+    helpUrl: 'https://www.pirateship.com/settings',
+    fields: [{ id: 'apiKey', label: 'API Key', type: 'password', placeholder: '' }]},
+  { id: 'shippo', label: 'Shippo',
+    instructions: 'Log into <strong>goshippo.com</strong> → Settings → API → copy your Live token.',
+    helpUrl: 'https://apps.goshippo.com/settings/api',
+    fields: [{ id: 'apiKey', label: 'API Token', type: 'password', placeholder: 'shippo_live_...' }]}
 ];
 
 function renderWizardIntegrations() {
@@ -23960,62 +23980,122 @@ function renderWizardIntegrations() {
   if (!el) return;
   var state = _wizardBizIdentityState || {};
   var selectedTools = state.currentTools || [];
+  var defsMap = {};
+  _wizardIntegrationDefs.forEach(function(d) { defsMap[d.id] = d; });
 
-  if (selectedTools.length === 0) {
-    el.innerHTML = '<p style="color:var(--warm-gray);font-size:0.9rem;padding:16px 0;">No tools selected — connect them later in <strong>Settings → Integrations</strong>.</p>';
+  // Filter to only tools with known defs
+  var knownTools = selectedTools.filter(function(id) { return !!defsMap[id]; });
+
+  if (knownTools.length === 0) {
+    el.innerHTML = '<p style="color:var(--warm-gray);font-size:0.9rem;padding:16px 0;">No tools selected — you can connect them later in <strong>Settings → Integrations</strong>.</p>';
     return;
   }
 
   el.innerHTML = '';
-  var defsMap = {};
-  _wizardIntegrationDefs.forEach(function(d) { defsMap[d.id] = d; });
-
-  selectedTools.forEach(function(toolId) {
+  knownTools.forEach(function(toolId) {
     var def = defsMap[toolId];
-    if (!def) return;
     if (!_wizardIntegrationState[toolId]) _wizardIntegrationState[toolId] = { _connected: false, _skipped: false };
     var ts = _wizardIntegrationState[toolId];
 
     var card = document.createElement('div');
-    card.id = 'wizardIntCard_' + toolId;
-    card.style.cssText = 'border:1px solid ' + (ts._connected ? 'var(--teal)' : 'var(--wiz-border,#ddd)') +
-      ';border-radius:8px;padding:14px 16px;margin-bottom:10px;background:' +
-      (ts._connected ? 'rgba(42,124,111,0.08)' : 'var(--wiz-bg,#fff)') + ';color:var(--wiz-text,inherit);';
+    card.style.cssText = 'display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-radius:8px;margin-bottom:8px;border:1px solid ' +
+      (ts._connected ? 'var(--teal)' : 'var(--wiz-border,#ddd)') +
+      ';background:' + (ts._connected ? 'rgba(42,124,111,0.08)' : 'var(--wiz-bg,#fff)') + ';';
 
-    var headerMb = (ts._connected || ts._skipped) ? '0' : '12px';
-    var header = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:' + headerMb + ';">' +
-      '<strong style="font-size:0.95rem;">' + esc(def.label) + '</strong>';
-    if (ts._connected) header += '<span style="font-size:0.8rem;color:var(--teal);font-weight:600;">&#10003; Connected</span>';
-    else if (ts._skipped) header += '<span style="font-size:0.8rem;color:var(--warm-gray);">Skipped</span>';
-    header += '</div>';
+    var statusLine = ts._connected
+      ? '<span style="font-size:0.78rem;color:var(--teal);font-weight:600;">&#10003; Connected</span>'
+      : ts._skipped
+        ? '<span style="font-size:0.78rem;color:var(--warm-gray);">Set up later in Settings</span>'
+        : '<span style="font-size:0.78rem;color:var(--warm-gray);">Not yet connected</span>';
 
-    var fieldsHtml = '';
-    if (!ts._connected && !ts._skipped) {
-      def.fields.forEach(function(f) {
-        fieldsHtml += '<div style="margin-bottom:10px;">';
-        fieldsHtml += '<label style="font-size:0.78rem;font-weight:600;display:block;margin-bottom:3px;">' + esc(f.label) + '</label>';
-        if (f.type === 'radio') {
-          f.options.forEach(function(opt) {
-            fieldsHtml += '<label style="display:inline-flex;align-items:center;gap:4px;margin-right:12px;font-size:0.82rem;cursor:pointer;">' +
-              '<input type="radio" name="wizardInt_' + toolId + '_' + f.id + '" value="' + esc(opt) + '"' +
-              (opt === 'sandbox' ? ' checked' : '') + ' style="accent-color:var(--teal);">' +
-              esc(opt.charAt(0).toUpperCase() + opt.slice(1)) + '</label>';
-          });
-        } else {
-          fieldsHtml += '<input type="' + (f.type === 'password' ? 'password' : 'text') + '" ' +
-            'id="wizardInt_' + toolId + '_' + f.id + '" placeholder="' + esc(f.placeholder || '') + '" ' +
-            'style="width:100%;padding:8px 10px;border:1px solid var(--wiz-border,#ddd);border-radius:5px;font-family:\'DM Sans\',sans-serif;font-size:0.85rem;box-sizing:border-box;background:var(--wiz-input,#fff);color:var(--wiz-text,inherit);" />';
-        }
-        fieldsHtml += '</div>';
-      });
-      fieldsHtml += '<div style="display:flex;gap:8px;">' +
-        '<button class="btn btn-primary btn-small" onclick="_wizardConnectTool(\'' + toolId + '\')">Connect</button>' +
-        '<button class="btn btn-secondary btn-small" onclick="_wizardSkipTool(\'' + toolId + '\')">Skip</button>' +
-        '</div>';
-    }
-    card.innerHTML = header + fieldsHtml;
+    var btns = ts._connected
+      ? '<button class="btn btn-secondary btn-small" onclick="showWizardCredentialEntry(\'' + toolId + '\')">Edit</button>'
+      : ts._skipped
+        ? '<button class="btn btn-secondary btn-small" onclick="showWizardCredentialEntry(\'' + toolId + '\')">Connect now</button>'
+        : '<button class="btn btn-primary btn-small" onclick="showWizardCredentialEntry(\'' + toolId + '\')">Connect now</button>' +
+          '<button class="btn btn-secondary btn-small" style="margin-left:6px;" onclick="_wizardSkipTool(\'' + toolId + '\')">Set up later</button>';
+
+    card.innerHTML =
+      '<div><strong style="font-size:0.95rem;color:var(--wiz-text,inherit);">' + esc(def.label) + '</strong>' +
+      '<br>' + statusLine + '</div>' +
+      '<div style="white-space:nowrap;">' + btns + '</div>';
     el.appendChild(card);
   });
+}
+
+function showWizardCredentialEntry(toolId) {
+  var def = _wizardIntegrationDefs.filter(function(d){ return d.id === toolId; })[0];
+  if (!def) return;
+
+  var cardList = document.getElementById('wizardIntegrationCards');
+  var header   = document.getElementById('wizardStep6Header');
+  var pane     = document.getElementById('wizardCredentialEntryPane');
+  var navBtns  = document.getElementById('wizardStep6NavButtons');
+  var skipLink = document.getElementById('wizardStep6SkipLink');
+  if (cardList) cardList.style.display = 'none';
+  if (header)   header.style.display   = 'none';
+  if (navBtns)  navBtns.style.display  = 'none';
+  if (skipLink) skipLink.style.display = 'none';
+  if (!pane) return;
+  pane.style.display = 'block';
+
+  var fieldsHtml = '';
+  def.fields.forEach(function(f) {
+    fieldsHtml += '<div style="margin-bottom:12px;">';
+    fieldsHtml += '<label style="font-size:0.78rem;font-weight:600;display:block;margin-bottom:3px;color:var(--wiz-text,inherit);">' + esc(f.label) + '</label>';
+    if (f.type === 'radio') {
+      f.options.forEach(function(opt) {
+        fieldsHtml += '<label style="display:inline-flex;align-items:center;gap:4px;margin-right:12px;font-size:0.82rem;cursor:pointer;color:var(--wiz-text,inherit);">' +
+          '<input type="radio" name="wizardInt_' + toolId + '_' + f.id + '" value="' + esc(opt) + '"' +
+          (opt === 'sandbox' ? ' checked' : '') + ' style="accent-color:var(--teal);">' +
+          esc(opt.charAt(0).toUpperCase() + opt.slice(1)) + '</label>';
+      });
+    } else {
+      fieldsHtml += '<input type="' + (f.type === 'password' ? 'password' : 'text') + '" ' +
+        'id="wizardInt_' + toolId + '_' + f.id + '" placeholder="' + esc(f.placeholder || '') + '" ' +
+        'style="width:100%;padding:8px 10px;border:1px solid var(--wiz-border,#ddd);border-radius:5px;' +
+        'font-family:\'DM Sans\',sans-serif;font-size:0.85rem;box-sizing:border-box;' +
+        'background:var(--wiz-input,#fff);color:var(--wiz-text,inherit);" />';
+    }
+    fieldsHtml += '</div>';
+  });
+
+  var instructionsHtml = '';
+  if (def.instructions) {
+    instructionsHtml =
+      '<div style="background:var(--wiz-input,rgba(0,0,0,0.04));border-radius:6px;padding:12px 14px;margin-bottom:18px;">' +
+      '<p style="margin:0 0 6px;font-size:0.78rem;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;opacity:0.6;color:var(--wiz-text,inherit);">Where to find your credentials</p>' +
+      '<p style="margin:0 0 8px;font-size:0.84rem;color:var(--wiz-text,inherit);line-height:1.5;">' + def.instructions + '</p>' +
+      (def.helpUrl ? '<a href="' + esc(def.helpUrl) + '" target="_blank" rel="noopener" style="font-size:0.82rem;color:var(--teal);">Open ' + esc(def.label) + ' settings &rarr;</a>' : '') +
+      '</div>';
+  }
+
+  pane.innerHTML =
+    '<div style="display:flex;align-items:center;gap:10px;margin-bottom:18px;">' +
+    '<button onclick="hideWizardCredentialEntry()" style="background:none;border:none;cursor:pointer;padding:0;font-size:1.1rem;color:var(--wiz-text,inherit);line-height:1;" title="Back">&#8592;</button>' +
+    '<h3 style="margin:0;font-size:1.15rem;color:var(--wiz-text,inherit);">' + esc(def.label) + '</h3>' +
+    '</div>' +
+    instructionsHtml +
+    fieldsHtml +
+    '<div style="display:flex;gap:8px;align-items:center;margin-top:6px;">' +
+    '<button class="btn btn-primary" onclick="_wizardConnectTool(\'' + toolId + '\')">Save &amp; connect</button>' +
+    '<button class="btn btn-secondary" onclick="_wizardSkipTool(\'' + toolId + '\')">I\'ll do this later</button>' +
+    '</div>' +
+    '<p style="margin-top:10px;font-size:0.78rem;color:var(--warm-gray);">You can always connect this in <strong>Settings → Integrations</strong>.</p>';
+}
+
+function hideWizardCredentialEntry() {
+  var cardList = document.getElementById('wizardIntegrationCards');
+  var header   = document.getElementById('wizardStep6Header');
+  var pane     = document.getElementById('wizardCredentialEntryPane');
+  var navBtns  = document.getElementById('wizardStep6NavButtons');
+  var skipLink = document.getElementById('wizardStep6SkipLink');
+  if (cardList) cardList.style.display = '';
+  if (header)   header.style.display   = '';
+  if (navBtns)  navBtns.style.display  = '';
+  if (skipLink) skipLink.style.display = '';
+  if (pane)     { pane.style.display = 'none'; pane.innerHTML = ''; }
+  renderWizardIntegrations();
 }
 
 function _wizardConnectTool(toolId) {
@@ -24031,7 +24111,7 @@ function _wizardConnectTool(toolId) {
       if (inp) creds[f.id] = inp.value.trim();
     }
   });
-  // Write only non-secret fields to Firebase.
+  // Write only non-secret fields to Firebase (secrets go server-side via Settings → Integrations).
   var safe = {};
   Object.keys(creds).forEach(function(k) {
     if (k !== 'apiSecret' && k !== 'secretKey' && k !== 'clientSecret' && k !== 'apiKey') safe[k] = creds[k];
@@ -24040,13 +24120,13 @@ function _wizardConnectTool(toolId) {
   MastDB.config.update('integrations/' + toolId, safe).catch(function(){});
   _wizardIntegrationState[toolId] = { _connected: true, _skipped: false };
   logWizardEvent(6, 'tool_connected', { tool: toolId });
-  renderWizardIntegrations();
+  hideWizardCredentialEntry();
 }
 
 function _wizardSkipTool(toolId) {
   _wizardIntegrationState[toolId] = { _connected: false, _skipped: true };
   logWizardEvent(6, 'tool_skipped', { tool: toolId });
-  renderWizardIntegrations();
+  hideWizardCredentialEntry();
 }
 
 function wizardStep6Continue() {

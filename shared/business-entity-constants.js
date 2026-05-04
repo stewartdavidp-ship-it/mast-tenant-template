@@ -223,8 +223,7 @@
     { value: 'shopify',      label: 'Shopify',      category: 'ecommerce', description: 'Online storefront' },
     { value: 'etsy',         label: 'Etsy',         category: 'ecommerce', description: 'Marketplace storefront' },
     { value: 'pirateship',   label: 'Pirate Ship',  category: 'shipping',  description: 'Discounted shipping labels' },
-    { value: 'shippo',       label: 'Shippo',       category: 'shipping',  description: 'Multi-carrier shipping' },
-    { value: 'labelkeeper',  label: 'LabelKeeper',  category: 'labels',    description: 'Product label printing' }
+    { value: 'shippo',       label: 'Shippo',       category: 'shipping',  description: 'Multi-carrier shipping' }
   ];
 
   var FEATURE_MODE_OPTIONS = [
