@@ -1048,6 +1048,10 @@ var MastDB = (function() {
               var v = _dig(sec, req.path);
               if (v === null || v === undefined || v === '') missing.push(req.label);
             }
+            // Extra guard: businessName must not be whitespace-only.
+            if (ent.identity && typeof ent.identity.businessName === 'string' && !ent.identity.businessName.trim()) {
+              if (missing.indexOf('identity.businessName') === -1) missing.push('identity.businessName');
+            }
             if (missing.length > 0) {
               var err = new Error('Cannot activate business entity — required fields missing');
               err.missingFields = missing;
@@ -1061,6 +1065,74 @@ var MastDB = (function() {
             }).then(function() {
               return { success: true, entityStatus: 'active', activatedAt: now };
             });
+          });
+        },
+
+        // Configure webPresence for features-only mode. enabledPages is an array
+        // of FEATURE_PAGE_OPTIONS values. Writes feature flags and presence metadata.
+        applyFeaturesOnlyConfig: function(tenantRef, enabledPages) {
+          if (!Array.isArray(enabledPages)) {
+            return Promise.reject(new Error('enabledPages must be an array'));
+          }
+          var now = new Date().toISOString();
+          var features = {
+            shop:        false,
+            blog:        false,
+            surveys:     enabledPages.indexOf('surveys') !== -1,
+            giftCards:   enabledPages.indexOf('gift-cards') !== -1,
+            wallet:      enabledPages.indexOf('loyalty') !== -1,
+            schedule:    enabledPages.indexOf('booking') !== -1,
+            classes:     enabledPages.indexOf('booking') !== -1,
+            commissions: enabledPages.indexOf('commissions') !== -1,
+            membership:  enabledPages.indexOf('loyalty') !== -1
+          };
+          var updates = {};
+          updates['webPresence/config/features'] = features;
+          updates['webPresence/config/updatedAt'] = now;
+          updates['admin/businessEntity/presence/featureMode'] = 'features-only';
+          updates['admin/businessEntity/presence/enabledFeaturePages'] = enabledPages;
+          updates['admin/businessEntity/presence/updatedAt'] = now;
+          updates['admin/businessEntity/updatedAt'] = now;
+          var store = tenantRef || tenantStore;
+          return store.multiUpdate(updates).then(function() {
+            return { success: true, featureMode: 'features-only', enabledFeaturePages: enabledPages, features: features };
+          });
+        },
+
+        // Set the top-level feature mode for a tenant's web presence.
+        // mode: 'full-storefront' | 'features-only' | 'none'
+        // 'full-storefront' is a no-op here — call applyStorefrontConfig for that path.
+        setFeatureMode: function(tenantRef, mode) {
+          var VALID_MODES = ['full-storefront', 'features-only', 'none'];
+          if (VALID_MODES.indexOf(mode) === -1) {
+            return Promise.reject(new Error("Invalid mode '" + mode + "'. Valid: " + VALID_MODES.join(', ')));
+          }
+          if (mode === 'full-storefront') {
+            // No-op: applyStorefrontConfig (in app/index.html) handles this path.
+            return Promise.resolve({ success: true, featureMode: 'full-storefront', _note: 'Call applyStorefrontConfig() to configure the full-storefront mode.' });
+          }
+          var now = new Date().toISOString();
+          var updates = {};
+          updates['admin/businessEntity/presence/featureMode'] = mode;
+          updates['admin/businessEntity/presence/updatedAt'] = now;
+          updates['admin/businessEntity/updatedAt'] = now;
+          if (mode === 'none') {
+            updates['webPresence/config/features'] = {
+              shop:        false,
+              blog:        false,
+              surveys:     false,
+              giftCards:   false,
+              wallet:      false,
+              schedule:    false,
+              classes:     false,
+              commissions: false,
+              membership:  false
+            };
+            updates['webPresence/config/updatedAt'] = now;
+          }
+          var store = tenantRef || tenantStore;
+          return store.multiUpdate(updates).then(function() {
+            return { success: true, featureMode: mode };
           });
         },
 

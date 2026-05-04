@@ -200,6 +200,47 @@
     { value: 'hybrid',   label: 'Hybrid',    hint: 'Both — Advisor banner + full nav.' }
   ];
 
+  // New wizard constants — additive only, do not remove or rename existing constants above.
+
+  var BUSINESS_TYPES = [
+    { value: 'make',   label: 'I make it',                description: 'You create the products you sell' },
+    { value: 'resell', label: 'I resell or wholesale',    description: "You source and resell others' products" },
+    { value: 'teach',  label: 'I teach or offer services', description: 'Classes, workshops, commissions, services' },
+    { value: 'mixed',  label: 'A mix',                    description: 'Combination of the above' }
+  ];
+
+  var PRIMARY_OUTPUTS = [
+    { value: 'physical',  label: 'Physical products' },
+    { value: 'digital',   label: 'Digital products' },
+    { value: 'classes',   label: 'Classes & workshops' },
+    { value: 'services',  label: 'Services & commissions' },
+    { value: 'events',    label: 'Events & tickets' }
+  ];
+
+  var CURRENT_TOOLS = [
+    { value: 'square',       label: 'Square',       category: 'payment',   description: 'Payment processing & POS' },
+    { value: 'stripe',       label: 'Stripe',       category: 'payment',   description: 'Online payment processing' },
+    { value: 'shopify',      label: 'Shopify',      category: 'ecommerce', description: 'Online storefront' },
+    { value: 'etsy',         label: 'Etsy',         category: 'ecommerce', description: 'Marketplace storefront' },
+    { value: 'pirateship',   label: 'Pirate Ship',  category: 'shipping',  description: 'Discounted shipping labels' },
+    { value: 'shippo',       label: 'Shippo',       category: 'shipping',  description: 'Multi-carrier shipping' },
+    { value: 'labelkeeper',  label: 'LabelKeeper',  category: 'labels',    description: 'Product label printing' }
+  ];
+
+  var FEATURE_MODE_OPTIONS = [
+    { value: 'full-storefront', label: 'Full Mast storefront',    description: 'Shop, blog, all customer pages' },
+    { value: 'features-only',   label: 'Select Mast features',    description: 'Specific pages without the shop' },
+    { value: 'none',            label: 'Back-office only',         description: 'No public Mast pages' }
+  ];
+
+  var FEATURE_PAGE_OPTIONS = [
+    { value: 'surveys',      label: 'Customer surveys',    description: 'Send post-purchase survey links via email' },
+    { value: 'gift-cards',   label: 'Gift cards',          description: 'Sell and redeem gift cards online' },
+    { value: 'loyalty',      label: 'Loyalty & wallet',    description: 'Points, store credit, passes' },
+    { value: 'booking',      label: 'Class booking',       description: 'Online class registration and schedules' },
+    { value: 'commissions',  label: 'Commission requests', description: 'Public commission request form' }
+  ];
+
   // Pure EIN validator matching the tenant MCP server-side helper. On-blur UX.
   // Returns { ok, reason }. Reason codes used by the modal.
   function validateEin(raw) {
@@ -233,6 +274,11 @@
     GOAL_LABELS: GOAL_LABELS,
     ENGAGEMENT_MODE_CARDS: ENGAGEMENT_MODE_CARDS,
     SURFACE_OPTIONS: SURFACE_OPTIONS,
+    BUSINESS_TYPES: BUSINESS_TYPES,
+    PRIMARY_OUTPUTS: PRIMARY_OUTPUTS,
+    CURRENT_TOOLS: CURRENT_TOOLS,
+    FEATURE_MODE_OPTIONS: FEATURE_MODE_OPTIONS,
+    FEATURE_PAGE_OPTIONS: FEATURE_PAGE_OPTIONS,
     validateEin: validateEin
   };
 })(typeof window !== 'undefined' ? window : this);
