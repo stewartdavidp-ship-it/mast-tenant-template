@@ -24141,7 +24141,7 @@ function renderWizardFastSummary() {
   else rows.push('Selling via: not set yet');
   if (modeLabel) rows.push('Mode: ' + modeLabel);
 
-  el.innerHTML = '<p style="font-weight:600;margin:0 0 10px;">Here's your workspace setup so far:</p>' +
+  el.innerHTML = '<p style="font-weight:600;margin:0 0 10px;">Here&#39;s your workspace setup so far:</p>' +
     '<ul style="margin:0;padding-left:18px;line-height:1.8;">' +
     rows.map(function(r) { return '<li>' + esc(r) + '</li>'; }).join('') +
     '</ul>' +
