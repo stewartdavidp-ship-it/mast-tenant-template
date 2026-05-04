@@ -333,8 +333,9 @@ var MastDB = (function() {
       limitToFirst: function(n) { return extend({ limitToFirst: n }); },
       limitToLast: function(n) { return extend({ limitToLast: n }); },
       once: function() { return _fsGet(_apply(), { source: 'server' }).then(_snapToObj).then(_wrapSnap); },
-      subscribe: function(cb) {
-        return _apply().onSnapshot(function(snap) { cb(_wrapSnap(_snapToObj(snap))); });
+      subscribe: function(cb, onErr) {
+        var errHandler = onErr || function(e) { console.warn('[MastDB.query.subscribe]:', e.message); };
+        return _apply().onSnapshot(function(snap) { cb(_wrapSnap(_snapToObj(snap))); }, errHandler);
       }
     };
   }
@@ -536,15 +537,16 @@ var MastDB = (function() {
         var parsed = _translateTenantPath(path);
         return _makeQuery(_collRef(parsed), {});
       },
-      subscribe: function(path, cb) {
+      subscribe: function(path, cb, onErr) {
         var parsed = _translateTenantPath(path);
+        var errHandler = onErr || function(e) { console.warn('[MastDB.subscribe] ' + path + ':', e.message); };
         if (!parsed.docId) {
           return _collRef(parsed).onSnapshot(function(snap) {
             if (snap.empty) { cb(_wrapSnap(null)); return; }
             var result = {};
             snap.forEach(function(doc) { result[doc.id] = _unwrapV(doc.data()); });
             cb(_wrapSnap(result));
-          });
+          }, errHandler);
         }
         return _docRef(parsed).onSnapshot(function(doc) {
           if (!doc.exists) { cb(_wrapSnap(null)); return; }
@@ -557,11 +559,12 @@ var MastDB = (function() {
           } else {
             cb(_wrapSnap(data));
           }
-        });
+        }, errHandler);
       },
       subscribeChild: function(path, event, cb) {
         var parsed = _translateTenantPath(path);
         var seen = {};
+        var errHandler = function(e) { console.warn('[MastDB.subscribeChild] ' + path + ':', e.message); };
         if (parsed.fieldPath) {
           return _docRef(parsed).onSnapshot(function(doc) {
             if (!doc.exists) return;
@@ -576,7 +579,7 @@ var MastDB = (function() {
               else if (event === 'child_changed' && seen[k]) { cb(entry, k); }
               seen[k] = true;
             });
-          });
+          }, errHandler);
         }
         return _collRef(parsed).onSnapshot(function(snap) {
           snap.forEach(function(doc) {
@@ -589,7 +592,7 @@ var MastDB = (function() {
             }
             seen[doc.id] = true;
           });
-        });
+        }, errHandler);
       },
       transaction: function(path, fn) {
         var parsed = _translateTenantPath(path);
@@ -774,15 +777,16 @@ var MastDB = (function() {
         var parsed = _translatePlatformPath(path);
         return _platformQuery(_platformCollRef(parsed), {});
       },
-      subscribe: function(path, cb) {
+      subscribe: function(path, cb, onErr) {
         var parsed = _translatePlatformPath(path);
+        var errHandler = onErr || function(e) { console.warn('[MastDB.platform.subscribe] ' + path + ':', e.message); };
         if (!parsed.docId) {
           return _platformCollRef(parsed).onSnapshot(function(snap) {
             if (snap.empty) { cb(_wrapSnap(null)); return; }
             var result = {};
             snap.forEach(function(doc) { result[doc.id] = _unwrapV(doc.data()); });
             cb(_wrapSnap(result));
-          });
+          }, errHandler);
         }
         return _platformDocRef(parsed).onSnapshot(function(doc) {
           if (!doc.exists) { cb(_wrapSnap(null)); return; }
@@ -795,7 +799,7 @@ var MastDB = (function() {
           } else {
             cb(_wrapSnap(data));
           }
-        });
+        }, errHandler);
       },
       transaction: function(path, fn) {
         var parsed = _translatePlatformPath(path);
