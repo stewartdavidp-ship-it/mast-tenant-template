@@ -22856,7 +22856,12 @@ function _wizardApplyProgress(progress) {
   if (wizardProgress._archetypeDefaults) window._wizardArchetypeDefaults = wizardProgress._archetypeDefaults;
   if (wizardProgress._siteIntent) window._wizardSiteIntent = wizardProgress._siteIntent;
   if (wizardProgress._selectedModules) window._wizardSelectedModules = wizardProgress._selectedModules;
-  showWizardStep(wizardProgress.currentStep || '0');
+  var restoredStep = wizardProgress.currentStep || '0';
+  // Remap retired step IDs to their successors so stale localStorage/Firestore
+  // saves from older wizard versions don't land on removed steps.
+  var _stepRemap = { '1a': '1_5' };
+  if (_stepRemap[restoredStep]) restoredStep = _stepRemap[restoredStep];
+  showWizardStep(restoredStep);
 }
 function initSetupWizard() {
   window._wizardOnboardingDepth = window._wizardOnboardingDepth || 'quick';

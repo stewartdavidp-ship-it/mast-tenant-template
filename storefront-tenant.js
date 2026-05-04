@@ -194,14 +194,39 @@ window.TENANT_READY = new Promise(function(resolve, reject) {
     return;
   }
 
+  // mast-{tenantId}.web.app pattern — Firebase Hosting default domain used when custom
+  // domain SSL hasn't provisioned yet. platform_tenantsByDomain only indexes custom
+  // domains, so bypass it and resolve directly from platform_tenantPublicConfigs.
+  var webAppMatch = hostname.match(/^mast-([a-z0-9-]+)\.web\.app$/);
+  function resolveWebAppTenant(tenantId) {
+    var configUrl = PLATFORM_FIRESTORE_BASE + '/platform_tenantPublicConfigs/' + tenantId;
+    return fetch(configUrl)
+      .then(function(resp) {
+        if (!resp.ok) throw new Error('Config lookup failed for ' + tenantId + ': ' + resp.status);
+        return resp.json();
+      })
+      .then(function(configDoc) {
+        var publicConfig = configDoc && configDoc.fields ? unwrapFirestoreFields(configDoc.fields) : null;
+        if (!publicConfig) throw new Error('No publicConfig for tenant: ' + tenantId);
+        return { tenantId: tenantId, publicConfig: publicConfig };
+      });
+  }
+
   // Use early prefetch from inline <head> script if available.
   // This fetch started during HTML parsing — before this script downloaded.
   var tenantPromise;
   if (window.__earlyTenant) {
     tenantPromise = window.__earlyTenant.then(function(result) {
-      if (!result) throw new Error('No tenant found for hostname: ' + hostname);
+      if (!result) {
+        // Early fetch hit tenantsByDomain and found nothing (e.g. web.app URL) — try pattern fallback.
+        if (webAppMatch) return resolveWebAppTenant(webAppMatch[1]);
+        throw new Error('No tenant found for hostname: ' + hostname);
+      }
       return result;
     });
+  } else if (webAppMatch) {
+    // Direct resolution for mast-{tenantId}.web.app — no domain registry lookup needed.
+    tenantPromise = resolveWebAppTenant(webAppMatch[1]);
   } else {
     // Fallback: fetch directly (pages without the inline prefetch)
     var escapedHost = escapeHostname(hostname);
