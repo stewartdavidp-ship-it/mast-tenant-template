@@ -596,7 +596,18 @@
     body.dark-mode #wizardSiteUrl { background: #2a2a2a !important; border-color: #444 !important; color: #e0e0e0 !important; }
 
     /* Wizard — full dark mode coverage */
-    body.dark-mode #setupWizardScreen { color: #e0e0e0; }
+    body.dark-mode #setupWizardScreen {
+      color: #e0e0e0;
+      /* Custom properties inherited by all inline-styled wizard elements */
+      --wiz-bg: #2a2a2a;
+      --wiz-border: #444;
+      --wiz-text: #e0e0e0;
+      --wiz-input: #1a1a1a;
+    }
+    body.dark-mode #wizardDpaGate,
+    body.dark-mode #wizardDpaGateFast { background: #2a2a2a !important; border-color: #444 !important; }
+    body.dark-mode #wizardDpaGate label,
+    body.dark-mode #wizardDpaGateFast label { color: #e0e0e0 !important; }
     body.dark-mode #setupWizardScreen h2,
     body.dark-mode #setupWizardScreen h3,
     body.dark-mode #setupWizardScreen strong,
@@ -13676,7 +13687,8 @@ auth.onAuthStateChanged(async function(user) {
   // --- Onboarding Check: Show setup wizard for new tenants ---
   if (TENANT_CONFIG && TENANT_CONFIG.tenantStatus === 'onboarding') {
     // Check if wizard was already completed (setupProgress.completed)
-    var setupSnap = await MastDB.config.get('setupProgress/completed');
+    var setupSnap = null;
+    try { setupSnap = await MastDB.config.get('setupProgress/completed'); } catch(e) { console.warn('setupProgress check failed:', e.message); }
     if (!setupSnap) {
       loadingScreen.style.display = 'none';
       authScreen.style.display = 'none';
@@ -13766,7 +13778,7 @@ auth.onAuthStateChanged(async function(user) {
   }
 
   // Load configChecklist for progressive feature gating
-  await loadConfigChecklist();
+  try { await loadConfigChecklist(); } catch(e) { console.warn('loadConfigChecklist failed:', e.message); }
 
   // Guided next steps (module-aware onboarding) — replaces old setup banner
   Promise.all([loadNextStepsCache(), loadDismissedSteps()]).then(function() { renderDashCardSetupShop(); });
@@ -18727,6 +18739,7 @@ var _AUTO_IGNORE = [
   'Script error.',
   'ResizeObserver loop',
   '/templates/',        // manifest/template 404s — expected on test sites
+  'Missing or insufficient permissions', // expected during boot race before claim propagates
 ];
 
 function _autoReportEnabled() {
@@ -23145,9 +23158,9 @@ function renderWizardEngagement() {
               btn.textContent = surf.label;
               btn.title = surf.hint;
               var on = activeSurface === surf.value;
-              btn.style.cssText = 'padding:6px 10px;border-radius:999px;border:2px solid ' + (on ? 'var(--teal)' : 'var(--border,#ccc)') +
-                ';background:' + (on ? 'var(--teal)' : 'var(--surface-card,#fff)') +
-                ';font-size:0.78rem;cursor:pointer;color:' + (on ? '#fff' : 'var(--text,#2a2a2a)') + ';font-weight:' + (on ? '600' : '400') + ';transition:all 0.15s;';
+              btn.style.cssText = 'padding:6px 10px;border-radius:999px;border:2px solid ' + (on ? 'var(--teal)' : 'var(--wiz-border,var(--border,#ccc))') +
+                ';background:' + (on ? 'var(--teal)' : 'var(--wiz-bg,var(--surface-card,#fff))') +
+                ';font-size:0.78rem;cursor:pointer;color:' + (on ? '#fff' : 'var(--wiz-text,var(--text,#2a2a2a))') + ';font-weight:' + (on ? '600' : '400') + ';transition:all 0.15s;';
               btn.onclick = function(ev) {
                 ev.stopPropagation();
                 state.surfaceByMode[card.value] = surf.value;
@@ -23183,9 +23196,9 @@ function renderWizardEngagement() {
         var chip = document.createElement('label');
         var on = state.goals.indexOf(goalId) >= 0;
         chip.style.cssText = 'display:inline-flex;align-items:center;padding:6px 12px;border-radius:999px;border:' +
-          (on ? '2px solid var(--teal)' : '1px solid var(--border,#ccc)') +
-          ';background:' + (on ? 'var(--teal)' : 'var(--surface-card,#fff)') +
-          ';cursor:pointer;font-size:0.82rem;color:' + (on ? '#fff' : 'var(--text,#2a2a2a)') + ';font-weight:' + (on ? '600' : '400') + ';transition:all 0.15s;';
+          (on ? '2px solid var(--teal)' : '1px solid var(--wiz-border,var(--border,#ccc))') +
+          ';background:' + (on ? 'var(--teal)' : 'var(--wiz-bg,var(--surface-card,#fff))') +
+          ';cursor:pointer;font-size:0.82rem;color:' + (on ? '#fff' : 'var(--wiz-text,var(--text,#2a2a2a))') + ';font-weight:' + (on ? '600' : '400') + ';transition:all 0.15s;';
         var cb = document.createElement('input');
         cb.type = 'checkbox';
         cb.checked = on;
@@ -23549,7 +23562,7 @@ function renderWizardBizIdentity() {
     return 'display:inline-flex;align-items:center;padding:6px 12px;border-radius:999px;' +
       (chkd
         ? 'border:2px solid var(--teal);background:var(--teal);font-weight:600;color:#fff;'
-        : 'border:1px solid var(--border,#ccc);background:var(--surface-card,#fff);color:var(--text,#2a2a2a);') +
+        : 'border:1px solid var(--wiz-border,var(--border,#ccc));background:var(--wiz-bg,var(--surface-card,#fff));color:var(--wiz-text,var(--text,#2a2a2a));') +
       'cursor:pointer;font-size:0.78rem;transition:all 0.15s;';
   }
 
@@ -23865,9 +23878,9 @@ function renderWizardModuleSelector() {
   _wizardModuleDefs.forEach(function(mod) {
     var sel = _wizardSelectedModulesStep5.indexOf(mod.id) >= 0;
     var card = document.createElement('div');
-    card.style.cssText = 'border:' + (sel ? '2px solid var(--teal)' : '1px solid #ddd') +
+    card.style.cssText = 'border:' + (sel ? '2px solid var(--teal)' : '1px solid var(--wiz-border,#ddd)') +
       ';border-radius:8px;padding:10px 12px;cursor:pointer;background:' +
-      (sel ? 'rgba(42,124,111,0.06)' : '#fff') + ';display:flex;align-items:flex-start;gap:8px;';
+      (sel ? 'rgba(42,124,111,0.12)' : 'var(--wiz-bg,#fff)') + ';display:flex;align-items:flex-start;gap:8px;color:var(--wiz-text,inherit);';
     var cb = document.createElement('input');
     cb.type = 'checkbox';
     cb.checked = sel;
@@ -23954,9 +23967,9 @@ function renderWizardIntegrations() {
 
     var card = document.createElement('div');
     card.id = 'wizardIntCard_' + toolId;
-    card.style.cssText = 'border:1px solid ' + (ts._connected ? 'var(--teal)' : '#ddd') +
+    card.style.cssText = 'border:1px solid ' + (ts._connected ? 'var(--teal)' : 'var(--wiz-border,#ddd)') +
       ';border-radius:8px;padding:14px 16px;margin-bottom:10px;background:' +
-      (ts._connected ? 'rgba(42,124,111,0.04)' : '#fff') + ';';
+      (ts._connected ? 'rgba(42,124,111,0.08)' : 'var(--wiz-bg,#fff)') + ';color:var(--wiz-text,inherit);';
 
     var headerMb = (ts._connected || ts._skipped) ? '0' : '12px';
     var header = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:' + headerMb + ';">' +
@@ -23980,7 +23993,7 @@ function renderWizardIntegrations() {
         } else {
           fieldsHtml += '<input type="' + (f.type === 'password' ? 'password' : 'text') + '" ' +
             'id="wizardInt_' + toolId + '_' + f.id + '" placeholder="' + esc(f.placeholder || '') + '" ' +
-            'style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:5px;font-family:\'DM Sans\',sans-serif;font-size:0.85rem;box-sizing:border-box;" />';
+            'style="width:100%;padding:8px 10px;border:1px solid var(--wiz-border,#ddd);border-radius:5px;font-family:\'DM Sans\',sans-serif;font-size:0.85rem;box-sizing:border-box;background:var(--wiz-input,#fff);color:var(--wiz-text,inherit);" />';
         }
         fieldsHtml += '</div>';
       });
@@ -24287,14 +24300,15 @@ function renderWizardFastSummary() {
       var btn = document.createElement('button');
       btn.type = 'button';
       btn.textContent = role.label;
-      btn.style.cssText = 'padding:6px 10px;border-radius:999px;border:1px solid #ccc;background:#fff;font-size:0.78rem;cursor:pointer;';
+      btn.style.cssText = 'padding:6px 10px;border-radius:999px;border:1px solid var(--wiz-border,#ccc);background:var(--wiz-bg,#fff);color:var(--wiz-text,inherit);font-size:0.78rem;cursor:pointer;';
       btn.dataset.value = role.value;
       btn.onclick = function() {
         fastPeopleState.role = role.value;
         Array.prototype.forEach.call(rolesElFast.children, function(c) {
           var s = fastPeopleState.role === c.dataset.value;
-          c.style.borderColor = s ? 'var(--teal)' : '#ccc';
-          c.style.background = s ? 'rgba(42,124,111,0.08)' : '#fff';
+          c.style.borderColor = s ? 'var(--teal)' : 'var(--wiz-border,#ccc)';
+          c.style.background = s ? 'var(--teal)' : 'var(--wiz-bg,#fff)';
+          c.style.color = s ? '#fff' : 'var(--wiz-text,inherit)';
         });
       };
       rolesElFast.appendChild(btn);
@@ -24307,15 +24321,16 @@ function renderWizardFastSummary() {
       var btn = document.createElement('button');
       btn.type = 'button';
       btn.textContent = band.label;
-      btn.style.cssText = 'padding:6px 10px;border-radius:999px;border:1px solid #ccc;background:#fff;font-size:0.78rem;cursor:pointer;';
+      btn.style.cssText = 'padding:6px 10px;border-radius:999px;border:1px solid var(--wiz-border,#ccc);background:var(--wiz-bg,#fff);color:var(--wiz-text,inherit);font-size:0.78rem;cursor:pointer;';
       btn.dataset.value = band.value;
       btn.onclick = function() {
         fastPeopleState.teamSize = band.value;
         fastPeopleState.hasEmployees = band.value !== 'solo';
         Array.prototype.forEach.call(sizeElFast.children, function(c) {
           var s = fastPeopleState.teamSize === c.dataset.value;
-          c.style.borderColor = s ? 'var(--teal)' : '#ccc';
-          c.style.background = s ? 'rgba(42,124,111,0.08)' : '#fff';
+          c.style.borderColor = s ? 'var(--teal)' : 'var(--wiz-border,#ccc)';
+          c.style.background = s ? 'var(--teal)' : 'var(--wiz-bg,#fff)';
+          c.style.color = s ? '#fff' : 'var(--wiz-text,inherit)';
         });
       };
       sizeElFast.appendChild(btn);
@@ -26388,14 +26403,15 @@ function renderWizardActivationGate() {
         var btn = document.createElement('button');
         btn.type = 'button';
         btn.textContent = role.label;
-        btn.style.cssText = 'padding:6px 10px;border-radius:999px;border:1px solid #ccc;background:#fff;font-size:0.78rem;cursor:pointer;';
+        btn.style.cssText = 'padding:6px 10px;border-radius:999px;border:1px solid var(--wiz-border,#ccc);background:var(--wiz-bg,#fff);color:var(--wiz-text,inherit);font-size:0.78rem;cursor:pointer;';
         btn.onclick = function() {
           state.role = role.value;
           // repaint
           Array.prototype.forEach.call(rolesEl.children, function(c) {
             var sel = state.role === c.dataset.value;
-            c.style.borderColor = sel ? 'var(--teal)' : '#ccc';
-            c.style.background = sel ? 'rgba(42,124,111,0.08)' : '#fff';
+            c.style.borderColor = sel ? 'var(--teal)' : 'var(--wiz-border,#ccc)';
+            c.style.background = sel ? 'var(--teal)' : 'var(--wiz-bg,#fff)';
+            c.style.color = sel ? '#fff' : 'var(--wiz-text,inherit)';
           });
         };
         btn.dataset.value = role.value;
@@ -26411,14 +26427,15 @@ function renderWizardActivationGate() {
         var btn = document.createElement('button');
         btn.type = 'button';
         btn.textContent = band.label;
-        btn.style.cssText = 'padding:6px 10px;border-radius:999px;border:1px solid #ccc;background:#fff;font-size:0.78rem;cursor:pointer;';
+        btn.style.cssText = 'padding:6px 10px;border-radius:999px;border:1px solid var(--wiz-border,#ccc);background:var(--wiz-bg,#fff);color:var(--wiz-text,inherit);font-size:0.78rem;cursor:pointer;';
         btn.onclick = function() {
           state.teamSize = band.value;
           state.hasEmployees = band.value !== 'solo';
           Array.prototype.forEach.call(sizeEl.children, function(c) {
             var sel = state.teamSize === c.dataset.value;
-            c.style.borderColor = sel ? 'var(--teal)' : '#ccc';
-            c.style.background = sel ? 'rgba(42,124,111,0.08)' : '#fff';
+            c.style.borderColor = sel ? 'var(--teal)' : 'var(--wiz-border,#ccc)';
+            c.style.background = sel ? 'var(--teal)' : 'var(--wiz-bg,#fff)';
+            c.style.color = sel ? '#fff' : 'var(--wiz-text,inherit)';
           });
         };
         btn.dataset.value = band.value;
