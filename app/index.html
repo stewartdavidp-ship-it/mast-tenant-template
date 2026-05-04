@@ -6573,7 +6573,8 @@
 
           <!-- Part C: Channels -->
           <div class="form-group" style="margin-bottom:20px;">
-            <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:8px;">Where do customers buy today? <span style="color:var(--warm-gray);font-weight:400;">(optional)</span></label>
+            <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Where do customers buy today? <span style="color:var(--warm-gray);font-weight:400;">(optional)</span></label>
+            <div style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:8px;">Select all that apply</div>
             <div id="wizardBizChannels" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
           </div>
 
@@ -23183,8 +23184,8 @@ function renderWizardEngagement() {
         var on = state.goals.indexOf(goalId) >= 0;
         chip.style.cssText = 'display:inline-flex;align-items:center;padding:6px 12px;border-radius:999px;border:' +
           (on ? '2px solid var(--teal)' : '1px solid var(--border,#ccc)') +
-          ';background:' + (on ? 'rgba(42,124,111,0.18)' : 'var(--surface-card,#fff)') +
-          ';cursor:pointer;font-size:0.82rem;color:var(--text,#2a2a2a);font-weight:' + (on ? '500' : '400') + ';transition:all 0.15s;';
+          ';background:' + (on ? 'var(--teal)' : 'var(--surface-card,#fff)') +
+          ';cursor:pointer;font-size:0.82rem;color:' + (on ? '#fff' : 'var(--text,#2a2a2a)') + ';font-weight:' + (on ? '600' : '400') + ';transition:all 0.15s;';
         var cb = document.createElement('input');
         cb.type = 'checkbox';
         cb.checked = on;
@@ -23547,9 +23548,9 @@ function renderWizardBizIdentity() {
   function multiChipCss(chkd) {
     return 'display:inline-flex;align-items:center;padding:6px 12px;border-radius:999px;' +
       (chkd
-        ? 'border:2px solid var(--teal);background:rgba(42,124,111,0.18);font-weight:500;'
-        : 'border:1px solid var(--border,#ccc);background:var(--surface-card,#fff);') +
-      'cursor:pointer;font-size:0.78rem;color:var(--text,#2a2a2a);transition:all 0.15s;';
+        ? 'border:2px solid var(--teal);background:var(--teal);font-weight:600;color:#fff;'
+        : 'border:1px solid var(--border,#ccc);background:var(--surface-card,#fff);color:var(--text,#2a2a2a);') +
+      'cursor:pointer;font-size:0.78rem;transition:all 0.15s;';
   }
 
   // Part A: Business type cards — solid teal fill when selected
