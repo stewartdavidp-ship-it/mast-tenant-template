@@ -6421,18 +6421,15 @@
         <div id="wizardStep0" class="wizard-step">
           <h2 style="font-size:1.6rem;margin-bottom:8px;">Welcome to Mast</h2>
           <p style="color:var(--warm-gray);margin-bottom:24px;">How do you want to get started?</p>
-          <div style="display:grid;gap:12px;margin-bottom:24px;">
-            <div id="wizardDepthQuick" class="wizard-feature-card" style="border:2px solid var(--teal);border-radius:12px;padding:20px;cursor:pointer;background:rgba(42,124,111,0.05);" onclick="wizardSelectDepth('quick')">
+          <div style="display:grid;gap:12px;">
+            <div id="wizardDepthQuick" class="wizard-feature-card" style="border:2px solid var(--teal);border-radius:12px;padding:20px;cursor:pointer;background:rgba(42,124,111,0.05);" onclick="wizardSelectDepth('quick');wizardConfirmDepth()">
               <div style="font-weight:700;font-size:1.1rem;margin-bottom:6px;">Quick Start</div>
               <div style="font-size:0.88rem;color:var(--warm-gray);">4 questions, about 60 seconds. Your dashboard setup checklist handles the rest.</div>
             </div>
-            <div id="wizardDepthFull" class="wizard-feature-card" style="border:1px solid #ddd;border-radius:12px;padding:20px;cursor:pointer;background:#fff;" onclick="wizardSelectDepth('full')">
+            <div id="wizardDepthFull" class="wizard-feature-card" style="border:1px solid #ddd;border-radius:12px;padding:20px;cursor:pointer;background:#fff;" onclick="wizardSelectDepth('full');wizardConfirmDepth()">
               <div style="font-weight:700;font-size:1.1rem;margin-bottom:6px;">Full Setup</div>
               <div style="font-size:0.88rem;color:var(--warm-gray);">8 steps, about 6 minutes. Connect your tools and configure key settings now.</div>
             </div>
-          </div>
-          <div style="display:flex;justify-content:flex-end;">
-            <button class="btn btn-primary" id="wizardDepthContinueBtn" onclick="wizardConfirmDepth()" style="font-size:1rem;padding:12px 32px;">Let's go &rarr;</button>
           </div>
         </div>
 
@@ -6447,8 +6444,11 @@
           </div>
           <div id="wizardAnalysisStatus" style="font-size:0.85rem;margin-bottom:16px;"></div>
           <div style="display:flex;justify-content:space-between;">
-            <button class="btn btn-secondary" id="wizardSkipSiteBtn" onclick="wizardSkipSite()" style="font-size:0.9rem;">I don't have a website</button>
-            <button class="btn btn-primary" id="wizardAnalyzeBtn" onclick="wizardAnalyzeSite()">Migrate My Site</button>
+            <button class="btn btn-secondary" onclick="showWizardStep('1_5')">Back</button>
+            <div style="display:flex;gap:8px;">
+              <button class="btn btn-secondary" id="wizardSkipSiteBtn" onclick="wizardSkipSite()" style="font-size:0.9rem;">Skip</button>
+              <button class="btn btn-primary" id="wizardAnalyzeBtn" onclick="wizardAnalyzeSite()">Migrate My Site</button>
+            </div>
           </div>
         </div>
 
@@ -6501,8 +6501,11 @@
             <p id="wizardArchetypeModuleHint" style="font-size:0.78rem;color:var(--teal);margin-top:4px;min-height:1em;"></p>
           </div>
           <div style="display:flex;justify-content:space-between;">
-            <button class="btn btn-secondary" onclick="wizardSkipArchetype()">Not sure, pick later</button>
-            <button class="btn btn-primary" id="wizardArchetypeConfirmBtn" onclick="wizardConfirmArchetype()">Confirm</button>
+            <button class="btn btn-secondary" onclick="showWizardStep('2')">Back</button>
+            <div style="display:flex;gap:8px;">
+              <button class="btn btn-secondary" onclick="wizardSkipArchetype()">Not sure, pick later</button>
+              <button class="btn btn-primary" id="wizardArchetypeConfirmBtn" onclick="wizardConfirmArchetype()">Confirm</button>
+            </div>
           </div>
         </div>
 
@@ -6574,7 +6577,7 @@
           </div>
 
           <div style="display:flex;justify-content:space-between;align-items:center;">
-            <button class="btn btn-secondary" onclick="showWizardStep('1_5')">Back</button>
+            <button class="btn btn-secondary" onclick="showWizardStep('0')">Back</button>
             <button class="btn btn-primary" id="wizardBizIdentityConfirmBtn" onclick="wizardConfirmBizIdentity()">Continue</button>
           </div>
           <div style="text-align:center;margin-top:12px;">
@@ -22808,8 +22811,8 @@ var _wizardSelectedModules = []; // module selections for step 2
 // quick path shows steps 0,1,1a,1_5,2,3,fastDpa
 // full path shows steps 0,1,1a,1_5,2,3,3b,4,5,6,7,8,fastDpa
 // (calibration moved from 2b to 4; steps 5-8 are new full-path-only steps)
-var _wizardStepOrder = ['0','1','1a','1_5','2','3','fastDpa'];
-var _wizardStepOrderFull = ['0','1','1a','1_5','2','3','3b','4','5','6','7','8','fastDpa'];
+var _wizardStepOrder = ['0','2','1a','1_5','1','3','fastDpa'];
+var _wizardStepOrderFull = ['0','2','1a','1_5','1','3','3b','4','5','6','7','8','fastDpa'];
 
 function _wizardGetStepOrder() {
   return (window._wizardOnboardingDepth === 'full') ? _wizardStepOrderFull : _wizardStepOrder;
@@ -22858,6 +22861,9 @@ function showWizardStep(step) {
   if (show) show.style.display = '';
   updateWizardProgress();
 
+  if (stepStr === '1a') {
+    renderArchetypeConfirm();
+  }
   if (stepStr === '4') {
     if (typeof renderWizardCalibration === 'function') renderWizardCalibration();
   }
@@ -23466,8 +23472,8 @@ async function wizardConfirmBrand() {
     }
 
     logWizardEvent(1.7, 'brand_confirmed', { hasTagline: !!tagline, hasLogo: !!(logoEl && logoEl.files && logoEl.files[0]) });
-    showWizardStep('2');
-    saveWizardProgress('2', { brandConfirmed: true, businessName: businessName });
+    showWizardStep('1');
+    saveWizardProgress('1', { brandConfirmed: true, businessName: businessName });
   } catch (err) {
     if (btn) btn.disabled = false;
     showToast('Could not save brand: ' + esc(err.message || ''), true);
@@ -23626,8 +23632,8 @@ async function wizardConfirmBizIdentity() {
       toolsCount: state.currentTools.length
     });
     // Full path no longer has a 2b step — calibration moved to step 4 after 3b.
-    showWizardStep('3');
-    saveWizardProgress('3', { bizIdentityConfirmed: true });
+    showWizardStep('1a');
+    saveWizardProgress('1a', { bizIdentityConfirmed: true });
   } catch (err) {
     if (btn) btn.disabled = false;
     showToast('Could not save: ' + esc(err.message || ''), true);
@@ -24415,13 +24421,13 @@ async function wizardConfirmDepth() {
   logWizardEvent(0, 'depth_selected', { depth: depth });
   // Hide current tools section in Step 2 for quick path
   // (will be applied when Step 2 renders)
-  showWizardStep('1');
-  saveWizardProgress('1', { onboardingDepth: depth });
+  showWizardStep('2');
+  saveWizardProgress('2', { onboardingDepth: depth });
 }
 
-// Step 3 back — always goes to step 2 (2b removed; calibration moved to step 4)
+// Step 3 back — go to site URL step if they went through it, otherwise brand step
 function wizardStep3Back() {
-  showWizardStep('2');
+  showWizardStep(window._wizardHasWebsite ? '1' : '1_5');
 }
 
 function saveWizardProgress(step, extras) {
@@ -24438,12 +24444,12 @@ function saveWizardProgress(step, extras) {
   });
 }
 
-// B9: show the no-website 5-question form instead of jumping to Step 3.
+// User has no existing site — skip URL step and go straight to engagement.
 function wizardSkipSite() {
   _wizardSiteAnalysis = null;
   window._wizardCrawlManifest = null;
   window._wizardAnalyzedUrl = null;
-  // Pre-populate client-side extracted fields so B1a falls into the blank-dropdown path.
+  window._wizardHasWebsite = false;
   window._wizardExtracted = {
     businessName: '',
     tagline: '',
@@ -24460,16 +24466,8 @@ function wizardSkipSite() {
     socialProfiles: []
   };
   window._wizardDetectedModules = [];
-  // Hide every wizard pane, then show the no-website form.
-  var allSteps = document.querySelectorAll('#setupWizardScreen .wizard-step');
-  for (var s = 0; s < allSteps.length; s++) allSteps[s].style.display = 'none';
-  // Renamed from wizardStep1b to wizardStepNoWebsite to avoid collision with new steps.
-  var pane = document.getElementById('wizardStepNoWebsite');
-  if (pane) pane.style.display = '';
-  wizardCurrentStep = '1';
-  updateWizardProgress();
-  renderWizardNoWebsite();
-  logWizardEvent(0.5, 'no_website_shown', {});
+  logWizardEvent(0.5, 'site_skipped', {});
+  showWizardStep('3');
 }
 
 // B9: lightweight keyword matcher. Maps free-text "what do you sell" to an
@@ -24762,10 +24760,10 @@ async function wizardAnalyzeSite() {
       templateConfidence: window._wizardTemplateConfidence
     });
 
-    // B1a: always route to archetype confirmation after scrape. The confidence
-    // band rendered by renderArchetypeConfirm picks the UX (auto / pre-select / blank).
-    showWizardArchetypeConfirm();
-    saveWizardProgress(1, { siteAnalyzed: true, autoApplied: _wizardAutoApplied, archetypePending: true });
+    // Archetype already confirmed in Step 1a — go straight to engagement.
+    window._wizardHasWebsite = true;
+    showWizardStep('3');
+    saveWizardProgress('3', { siteAnalyzed: true, autoApplied: _wizardAutoApplied });
     _wizardAnalyzing = false;
   } catch (err) {
     clearInterval(progressTimer);
