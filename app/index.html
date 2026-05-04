@@ -6566,7 +6566,7 @@
             <p style="font-size:0.75rem;color:var(--warm-gray);margin-top:6px;">PNG, JPG, or SVG. Square works best.</p>
           </div>
           <div style="display:flex;justify-content:space-between;align-items:center;">
-            <button class="btn btn-secondary" onclick="showWizardStep('1a')">Back</button>
+            <button class="btn btn-secondary" onclick="showWizardStep('2')">Back</button>
             <button class="btn btn-primary" id="wizardBrandConfirmBtn" onclick="wizardConfirmBrand()">Continue</button>
           </div>
         </div>
@@ -22838,8 +22838,8 @@ var _wizardSelectedModules = []; // module selections for step 2
 // quick path shows steps 0,1,1a,1_5,2,3,fastDpa
 // full path shows steps 0,1,1a,1_5,2,3,3b,4,5,6,7,8,fastDpa
 // (calibration moved from 2b to 4; steps 5-8 are new full-path-only steps)
-var _wizardStepOrder = ['0','2','1a','1_5','1','3','fastDpa'];
-var _wizardStepOrderFull = ['0','2','1a','1_5','1','3','3b','4','5','6','7','8','fastDpa'];
+var _wizardStepOrder = ['0','2','1_5','1','3','fastDpa'];
+var _wizardStepOrderFull = ['0','2','1_5','1','3','3b','4','5','6','7','8','fastDpa'];
 
 function _wizardGetStepOrder() {
   return (window._wizardOnboardingDepth === 'full') ? _wizardStepOrderFull : _wizardStepOrder;
@@ -22864,8 +22864,7 @@ function initSetupWizard() {
     if (wizardProgress.autoApplied) {
       _wizardAutoApplied = wizardProgress.autoApplied;
     }
-    // Always start at Screen 0 for fresh or in-progress sessions
-    showWizardStep('0');
+    showWizardStep(wizardProgress.currentStep || '0');
   }).catch(function() {
     showWizardStep('0');
   });
@@ -23793,9 +23792,15 @@ async function wizardConfirmBizIdentity() {
       hasStorefrontUrl: !!state.storefrontUrl,
       toolsCount: state.currentTools.length
     });
-    // Full path no longer has a 2b step — calibration moved to step 4 after 3b.
-    showWizardStep('1a');
-    saveWizardProgress('1a', { bizIdentityConfirmed: true });
+    // Archetype already collected in step 2 — skip step 1a, go straight to brand.
+    window._wizardArchetypeDefaults = MastDB.businessEntity.archetypeDefaults(state.archetype);
+    var extracted = window._wizardExtracted || {};
+    var brandNameEl = document.getElementById('wizardBrandName');
+    if (brandNameEl && !brandNameEl.value && extracted.businessName) brandNameEl.value = extracted.businessName;
+    var brandTaglineEl = document.getElementById('wizardBrandTagline');
+    if (brandTaglineEl && !brandTaglineEl.value && extracted.tagline) brandTaglineEl.value = extracted.tagline;
+    showWizardStep('1_5');
+    saveWizardProgress('1_5', { bizIdentityConfirmed: true, archetypeConfirmed: state.archetype });
   } catch (err) {
     if (btn) btn.disabled = false;
     showToast('Could not save: ' + esc(err.message || ''), true);
