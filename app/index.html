@@ -8805,21 +8805,6 @@
         <hr style="border:none;border-top:1px solid #eee;margin:24px 0;">
 
         <div class="form-group">
-          <label style="font-size:1.15rem;font-weight:600;">LabelKeeper API Key</label>
-          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:8px;">
-            API key for the LabelKeeper print card integration. Get it from the LabelKeeper project's GCP Secret Manager.
-          </p>
-          <div style="display:flex;gap:8px;">
-            <input type="password" id="lkApiKeyInput" placeholder="lk_..."
-              style="flex:1;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;box-sizing:border-box;">
-            <button class="btn btn-primary" onclick="saveLkApiKey()">Save</button>
-          </div>
-          <div id="lkApiKeyStatus" style="margin-top:8px;font-size:0.85rem;"></div>
-        </div>
-
-        <hr style="border:none;border-top:1px solid #eee;margin:24px 0;">
-
-        <div class="form-group">
           <label style="font-size:1.15rem;font-weight:600;">Shopify Integration</label>
           <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:12px;">
             Connect your Shopify store so Mast can read your catalog and publish product changes back to Shopify. Your access token is stored in encrypted secret storage — Mast staff never see it.
@@ -15211,7 +15196,7 @@ function applyRoute(route) {
 }
 
 function lazyLoadForRoute(route) {
-  if (route === 'settings') { updateGitHubTokenStatus(); updateLkApiKeyStatus(); loadOperators(); loadStorageInfo(); loadStudioLocations(); loadLocations(); loadPublicFeedbackSetting(); loadEmailConfig(); loadEmailDomainSection(); applySettingsGating(); loadSiteVisibility(); loadActiveMastPages(); }
+  if (route === 'settings') { updateGitHubTokenStatus(); loadOperators(); loadStorageInfo(); loadStudioLocations(); loadLocations(); loadPublicFeedbackSetting(); loadEmailConfig(); loadEmailDomainSection(); applySettingsGating(); loadSiteVisibility(); loadActiveMastPages(); }
   if (route === 'analytics' && !analyticsLoaded) loadAnalytics();
   if (route === 'products') loadProducts();
   if (route === 'develop-products' || route === 'pieces') loadProducts();
@@ -19938,26 +19923,6 @@ async function saveGitHubToken() {
   }
 }
 
-async function saveLkApiKey() {
-  if (!hasPermission('settings', 'update')) {
-    showToast('You do not have permission to update settings.', true);
-    return;
-  }
-  var key = document.getElementById('lkApiKeyInput').value.trim();
-  if (!key) { showToast('Please enter an API key.', true); return; }
-  if (!/^lk_[a-f0-9]{32}$/.test(key)) { showToast('Invalid LabelKeeper key format (expected lk_ + 32 hex chars).', true); return; }
-  try {
-    await MastDB.set('admin/config/labelkeeper/apiKey', key);
-    await writeAudit('update', 'settings', 'labelkeeperApiKey');
-    _lkApiKeyCache = key;
-    document.getElementById('lkApiKeyInput').value = '';
-    var st = document.getElementById('lkApiKeyStatus');
-    if (st) st.innerHTML = '<span style="color:var(--success);">&#10003; Key saved</span>';
-    showToast('LabelKeeper API key saved.');
-  } catch (err) {
-    showToast('Error saving key: ' + err.message, true);
-  }
-}
 
 async function testGitHubToken() {
   if (!githubToken) {
@@ -19987,18 +19952,6 @@ function updateGitHubTokenStatus() {
   }
 }
 
-function updateLkApiKeyStatus() {
-  var el = document.getElementById('lkApiKeyStatus');
-  if (!el) return;
-  if (typeof _getLkApiKey !== 'function') return;
-  _getLkApiKey().then(function(key) {
-    if (key) {
-      el.innerHTML = '<span style="color:var(--teal);">&#10003; Key configured</span>';
-    } else {
-      el.innerHTML = '<span style="color:var(--warm-gray-light);">No key configured. Print card feature requires a LabelKeeper API key.</span>';
-    }
-  });
-}
 
 // ============================================================
 // Product Settings — Pricing Defaults (Phase 3)
