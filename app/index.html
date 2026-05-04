@@ -20580,7 +20580,7 @@ async function generateAiApiKey() {
 
     // Reload keys list
     await loadAiIntegrations();
-    showToast('API key generated. Copy it now — it won\'t be shown again.');
+    showToast("API key generated. Copy it now — it won\'t be shown again.");
     await writeAudit('create', 'aiApiKey', data.keyId || 'new');
   } catch (err) {
     var msg = err.message || 'Unknown error';
@@ -24303,7 +24303,7 @@ async function wizardCompleteFast() {
         });
         if (!deployResp.ok) {
           logWizardEvent(4, 'auto_deploy_failed', { status: deployResp.status, path: 'fast' });
-          showToast('Your site couldn't auto-deploy. Open Settings > Hosting to retry.', true);
+          showToast("Your site couldn't auto-deploy. Open Settings > Hosting to retry.", true);
         }
       } catch (deployErr) {
         logWizardEvent(4, 'auto_deploy_error', { message: (deployErr && deployErr.message) || 'unknown', path: 'fast' });
@@ -24665,7 +24665,7 @@ async function wizardAnalyzeSite() {
       corrections.push('added dot before .' + tldMatch[3]);
     }
     var parsed = new URL(corrected);
-    if (parsed.hostname.indexOf('.') < 0) { showToast('That doesn\'t look like a valid URL. Check for typos.', true); return; }
+    if (parsed.hostname.indexOf('.') < 0) { showToast("That doesn\'t look like a valid URL. Check for typos.", true); return; }
     if (corrections.length > 0 && corrected !== url) {
       var statusEl = document.getElementById('wizardAnalysisStatus');
       statusEl.innerHTML = '<div style="background:var(--cream);border:1px solid var(--amber);border-radius:8px;padding:16px;margin-top:12px;">' +
