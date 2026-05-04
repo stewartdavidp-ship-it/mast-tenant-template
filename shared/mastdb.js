@@ -1088,6 +1088,7 @@ var MastDB = (function() {
           };
           var updates = {};
           updates['webPresence/config/features'] = features;
+          updates['webPresence/config/status'] = 'features-only';
           updates['webPresence/config/updatedAt'] = now;
           updates['admin/businessEntity/presence/featureMode'] = 'features-only';
           updates['admin/businessEntity/presence/enabledFeaturePages'] = enabledPages;

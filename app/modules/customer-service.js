@@ -644,6 +644,29 @@
     var html = '<div style="padding:24px;">';
     html += '<div class="section-header" style="margin-bottom:14px;"><h2 style="margin:0;">Surveys</h2><button class="btn btn-secondary btn-small" onclick="csSurveysRefresh()">Refresh</button></div>';
 
+    // Contextual URL hint for features-only tenants with surveys enabled
+    (function() {
+      try {
+        var BEC = window.BusinessEntityConstants || {};
+        var pageOptions = BEC.FEATURE_PAGE_OPTIONS || [];
+        // We need featureMode + enabledFeaturePages from the business entity.
+        // These are loaded async, so we read from a cached window var if available,
+        // otherwise we skip the banner (it will appear on next render after load).
+        var presence = window._cachedPresenceForBanners || {};
+        var featureMode = presence.featureMode || '';
+        var enabledPages = Array.isArray(presence.enabledFeaturePages) ? presence.enabledFeaturePages : [];
+        if (featureMode === 'features-only' && enabledPages.indexOf('surveys') !== -1) {
+          var domain = (window.TENANT_CONFIG && window.TENANT_CONFIG.domain) || window.location.hostname;
+          var surveyUrl = 'https://' + domain + '/survey';
+          html += '<div style="display:flex;align-items:flex-start;gap:10px;padding:10px 14px;background:rgba(42,124,111,0.09);border:1px solid rgba(42,124,111,0.2);border-radius:8px;margin-bottom:16px;font-size:0.83rem;">' +
+            '<span style="color:var(--teal);flex-shrink:0;margin-top:1px;">&#9432;</span>' +
+            '<span>Survey emails link to your Mast URL. Make sure this URL is accessible: ' +
+            '<a href="' + _esc(surveyUrl) + '" target="_blank" rel="noopener" style="color:var(--teal);font-family:monospace;">' + _esc(surveyUrl) + '</a></span>' +
+            '</div>';
+        }
+      } catch (e) { /* non-fatal */ }
+    }());
+
     // Automated Surveys opt-in toggle
     var toggleColor = automatedSurveysEnabled ? 'var(--teal)' : 'var(--cream-dark)';
     var toggleLabel = automatedSurveysEnabled ? 'ON' : 'OFF';

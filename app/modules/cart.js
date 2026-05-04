@@ -139,6 +139,24 @@
       '</div>' +
     '</div>';
 
+    // Contextual URL hint for features-only tenants with gift-cards enabled
+    (function() {
+      try {
+        var presence = window._cachedPresenceForBanners || {};
+        var featureMode = presence.featureMode || '';
+        var enabledPages = Array.isArray(presence.enabledFeaturePages) ? presence.enabledFeaturePages : [];
+        if (featureMode === 'features-only' && enabledPages.indexOf('gift-cards') !== -1) {
+          var domain = (window.TENANT_CONFIG && window.TENANT_CONFIG.domain) || window.location.hostname;
+          var gcUrl = 'https://' + domain + '/gift-cards';
+          html += '<div style="display:flex;align-items:flex-start;gap:10px;padding:10px 14px;background:rgba(42,124,111,0.09);border:1px solid rgba(42,124,111,0.2);border-radius:8px;margin-bottom:16px;font-size:0.83rem;">' +
+            '<span style="color:var(--teal);flex-shrink:0;margin-top:1px;">&#9432;</span>' +
+            '<span>Gift card purchases go to your Mast URL: ' +
+            '<a href="' + esc(gcUrl) + '" target="_blank" rel="noopener" style="color:var(--teal);font-family:monospace;">' + esc(gcUrl) + '</a></span>' +
+            '</div>';
+        }
+      } catch (e) { /* non-fatal */ }
+    }());
+
     // Status banner
     if (!enabled) {
       html += '<div style="padding:12px 16px;background:rgba(196,133,60,0.12);border-radius:6px;margin-bottom:16px;font-size:0.85rem;color:var(--charcoal);">' +

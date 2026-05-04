@@ -6454,9 +6454,10 @@
         </div>
 
         <!-- Step 2b (B2): Calibration — revenue bracket + "one thing you wish was easier" (full path only) -->
-        <div id="wizardStep2b" class="wizard-step" style="display:none;">
+        <!-- Step 4 (full-path): Calibration — revenue, wish statement, role, team size -->
+        <div id="wizardStep4" class="wizard-step" style="display:none;">
           <h2 style="font-size:1.6rem;margin-bottom:8px;">A quick calibration</h2>
-          <p style="color:var(--warm-gray);margin-bottom:20px;">Helps Mast tailor recommendations. Both questions are optional.</p>
+          <p style="color:var(--warm-gray);margin-bottom:20px;">Helps Mast tailor recommendations. All fields are optional.</p>
           <div class="form-group" style="margin-bottom:16px;">
             <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Roughly, your annual revenue?</label>
             <select id="wizardRevenueBracket" onchange="_wizardUpdateBracketProjection('wizardRevenueBracket','wizardRevenueBracketProjection')" style="width:100%;padding:10px 14px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.95rem;box-sizing:border-box;background:#fff;">
@@ -6466,13 +6467,85 @@
           </div>
           <div class="form-group" style="margin-bottom:16px;">
             <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">The one thing you wish was easier?</label>
-            <textarea id="wizardWishStatement" maxlength="500" rows="4" placeholder=""
+            <textarea id="wizardWishStatement" maxlength="500" rows="3" placeholder=""
               style="width:100%;padding:10px 14px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;box-sizing:border-box;resize:vertical;"></textarea>
             <p id="wizardWishCount" style="font-size:0.75rem;color:var(--warm-gray);text-align:right;margin-top:4px;">0 / 500</p>
           </div>
-          <div style="display:flex;justify-content:space-between;">
-            <button class="btn btn-secondary" onclick="showWizardStep(2)">Back</button>
-            <button class="btn btn-primary" id="wizardCalibrationConfirmBtn" onclick="wizardConfirmCalibration()">Save and continue</button>
+          <div class="form-group" style="margin-bottom:16px;">
+            <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:6px;">Your role</label>
+            <div id="wizardRoleOptions4" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
+          </div>
+          <div class="form-group" style="margin-bottom:20px;">
+            <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:6px;">Team size</label>
+            <div id="wizardTeamSizeOptions4" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <button class="btn btn-secondary" onclick="wizardStep4Back()">Back</button>
+            <button class="btn btn-primary" id="wizardCalibrationConfirmBtn" onclick="wizardConfirmCalibration()">Continue</button>
+          </div>
+          <div style="text-align:center;margin-top:12px;">
+            <a href="#" onclick="event.preventDefault();wizardSkipToLaunch();" style="font-size:0.82rem;color:var(--warm-gray);text-decoration:none;">Skip remaining setup &rarr;</a>
+          </div>
+        </div>
+
+        <!-- Step 5 (full-path): Module Selector -->
+        <div id="wizardStep5" class="wizard-step" style="display:none;">
+          <h2 style="font-size:1.6rem;margin-bottom:8px;">Which areas of Mast will you use?</h2>
+          <p style="color:var(--warm-gray);margin-bottom:20px;">We've pre-selected based on your business type. Adjust to match.</p>
+          <div id="wizardModuleGrid" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:24px;"></div>
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <button class="btn btn-secondary" onclick="showWizardStep('4')">Back</button>
+            <button class="btn btn-primary" id="wizardModulesConfirmBtn" onclick="wizardConfirmModules()">Continue</button>
+          </div>
+          <div style="text-align:center;margin-top:12px;">
+            <a href="#" onclick="event.preventDefault();wizardSkipToLaunch();" style="font-size:0.82rem;color:var(--warm-gray);text-decoration:none;">Skip remaining setup &rarr;</a>
+          </div>
+        </div>
+
+        <!-- Step 6 (full-path): Integrations -->
+        <div id="wizardStep6" class="wizard-step" style="display:none;">
+          <h2 style="font-size:1.6rem;margin-bottom:8px;">Connect your tools</h2>
+          <p style="color:var(--warm-gray);margin-bottom:20px;">Based on what you told us, connect the tools you're already using.</p>
+          <div id="wizardIntegrationCards" style="margin-bottom:24px;"></div>
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <button class="btn btn-secondary" onclick="showWizardStep('5')">Back</button>
+            <button class="btn btn-primary" onclick="wizardStep6Continue()">Continue</button>
+          </div>
+          <div style="text-align:center;margin-top:12px;">
+            <a href="#" onclick="event.preventDefault();wizardSkipToLaunch();" style="font-size:0.82rem;color:var(--warm-gray);text-decoration:none;">Skip remaining setup &rarr;</a>
+          </div>
+        </div>
+
+        <!-- Step 7 (full-path): Settings Spotlight -->
+        <div id="wizardStep7" class="wizard-step" style="display:none;">
+          <h2 style="font-size:1.6rem;margin-bottom:8px;">A few settings that matter most</h2>
+          <p style="color:var(--warm-gray);margin-bottom:20px;">These take two minutes and prevent common setup headaches.</p>
+          <div id="wizardSettingsSections" style="margin-bottom:24px;"></div>
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <button class="btn btn-secondary" onclick="showWizardStep('6')">Back</button>
+            <button class="btn btn-primary" id="wizardSettingsConfirmBtn" onclick="wizardConfirmSettings()">Continue</button>
+          </div>
+          <div style="text-align:center;margin-top:12px;">
+            <a href="#" onclick="event.preventDefault();wizardSkipToLaunch();" style="font-size:0.82rem;color:var(--warm-gray);text-decoration:none;">Skip remaining setup &rarr;</a>
+          </div>
+        </div>
+
+        <!-- Step 8 (full-path): Site Migration (optional) -->
+        <div id="wizardStep8" class="wizard-step" style="display:none;">
+          <h2 style="font-size:1.6rem;margin-bottom:8px;">Import your existing site <span style="font-weight:400;color:var(--warm-gray);">(optional)</span></h2>
+          <p style="color:var(--warm-gray);margin-bottom:20px;">If you have an existing website, we can import your products, images, and content automatically.</p>
+          <div class="form-group" style="margin-bottom:16px;">
+            <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Your website URL</label>
+            <input type="url" id="wizardSiteUrl8" placeholder="https://www.yourbusiness.com"
+              style="width:100%;padding:10px 14px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.95rem;box-sizing:border-box;" />
+          </div>
+          <div id="wizardAnalysisStatus8" style="font-size:0.85rem;margin-bottom:16px;"></div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+            <button class="btn btn-secondary" onclick="showWizardStep('7')">Back</button>
+            <button class="btn btn-primary" id="wizardMigrateBtn8" onclick="wizardAnalyzeSiteStep8()">Import My Site</button>
+          </div>
+          <div style="text-align:center;">
+            <a href="#" onclick="event.preventDefault();wizardSkipToLaunch();" style="font-size:0.9rem;color:var(--warm-gray);text-decoration:none;font-weight:500;">Skip — I'll start fresh &rarr;</a>
           </div>
         </div>
 
@@ -7568,6 +7641,26 @@
           </div>
           <div id="visibilityStatus" style="margin-top:8px;font-size:0.85rem;"></div>
         </div>
+
+        <!-- Active Mast Pages section — populated by loadActiveMastPages() -->
+        <div class="form-group" style="margin-top:24px;" id="activeMastPagesSection">
+          <label>Active Mast Pages</label>
+          <div id="activeMastPagesDisplay" style="font-size:0.85rem;color:var(--warm-gray);">Loading…</div>
+        </div>
+
+        <!-- Feature Pages toggle panel — visible for non-storefront tenants -->
+        <div class="form-group" style="margin-top:16px;display:none;" id="featurePagesTogglePanel">
+          <label style="font-size:0.9rem;font-weight:600;margin-bottom:8px;display:block;">Manage Feature Pages</label>
+          <p style="font-size:0.82rem;color:var(--warm-gray);margin-bottom:10px;">
+            Choose which Mast feature pages are active for your site. These pages are reachable at your Mast domain even without a full storefront.
+          </p>
+          <div id="featurePageToggles" style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px;"></div>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <button class="btn btn-primary" onclick="saveFeaturePageToggles()">Save</button>
+            <div id="featurePageSaveStatus" style="font-size:0.85rem;"></div>
+          </div>
+        </div>
+
         <div class="form-group" style="margin-top:24px;">
           <label>Events to Show on Homepage</label>
           <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:8px;">
@@ -13467,6 +13560,18 @@ auth.onAuthStateChanged(async function(user) {
   navigateTo(initialRoute);
   attachListeners();
 
+  // Seed presence cache early so module banners (cs-surveys, gift-cards) show
+  // featureMode hints even before the user visits Settings.
+  MastDB.businessEntity.get('presence').then(function(r) {
+    var d = (r && r.data) || {};
+    if (!window._cachedPresenceForBanners) {
+      window._cachedPresenceForBanners = {
+        featureMode: d.featureMode || '',
+        enabledFeaturePages: Array.isArray(d.enabledFeaturePages) ? d.enabledFeaturePages : []
+      };
+    }
+  }).catch(function() {});
+
   // After navigation, resume action if returning from coin purchase
   if (_coinPurchaseReturn && _coinPurchaseAction === 'connectBank') {
     // Small delay to let the module load, then switch to banks tab and auto-trigger connect
@@ -14926,7 +15031,7 @@ function applyRoute(route) {
 }
 
 function lazyLoadForRoute(route) {
-  if (route === 'settings') { updateGitHubTokenStatus(); updateLkApiKeyStatus(); loadOperators(); loadStorageInfo(); loadStudioLocations(); loadLocations(); loadPublicFeedbackSetting(); loadEmailConfig(); loadEmailDomainSection(); applySettingsGating(); loadSiteVisibility(); }
+  if (route === 'settings') { updateGitHubTokenStatus(); updateLkApiKeyStatus(); loadOperators(); loadStorageInfo(); loadStudioLocations(); loadLocations(); loadPublicFeedbackSetting(); loadEmailConfig(); loadEmailDomainSection(); applySettingsGating(); loadSiteVisibility(); loadActiveMastPages(); }
   if (route === 'analytics' && !analyticsLoaded) loadAnalytics();
   if (route === 'products') loadProducts();
   if (route === 'develop-products' || route === 'pieces') loadProducts();
@@ -20082,6 +20187,157 @@ async function toggleDarkMode() {
 }
 
 // ============================================================
+// Active Mast Pages — Settings → General
+// ============================================================
+
+// Pending selection for the feature pages toggle panel
+var _featurePagePendingSelection = null;
+
+async function loadActiveMastPages() {
+  var displayEl = document.getElementById('activeMastPagesDisplay');
+  var panelEl = document.getElementById('featurePagesTogglePanel');
+  if (!displayEl) return;
+
+  var BEC = window.BusinessEntityConstants || {};
+  var pageOptions = BEC.FEATURE_PAGE_OPTIONS || [];
+  var domain = (window.TENANT_CONFIG && window.TENANT_CONFIG.domain) || window.location.hostname;
+  var baseUrl = 'https://' + domain;
+
+  var featureMode = '';
+  var enabledPages = [];
+  try {
+    var presenceResult = await MastDB.businessEntity.get('presence');
+    var presenceData = (presenceResult && presenceResult.data) || {};
+    var engResult = await MastDB.businessEntity.get('engagement');
+    var engData = (engResult && engResult.data) || {};
+    featureMode = presenceData.featureMode || '';
+    enabledPages = Array.isArray(presenceData.enabledFeaturePages) ? presenceData.enabledFeaturePages : [];
+    // Infer featureMode from engagement.mode if not set explicitly
+    if (!featureMode) {
+      var engMode = engData.mode || '';
+      if (engMode === 'storefront') featureMode = 'full-storefront';
+      else if (engMode === 'back-office' || engMode === 'sync-channels') featureMode = 'none';
+    }
+    // Cache presence data for module banners (cs-surveys, gift-cards)
+    window._cachedPresenceForBanners = { featureMode: featureMode, enabledFeaturePages: enabledPages };
+  } catch (e) {
+    displayEl.innerHTML = '<span style="color:var(--warm-gray);">Could not load page status.</span>';
+    return;
+  }
+
+  var html = '';
+
+  if (featureMode === 'full-storefront') {
+    html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">' +
+      '<span style="color:var(--teal);font-size:1rem;">&#10003;</span>' +
+      '<span>Your full Mast storefront is active.</span>' +
+      '<a href="' + esc(baseUrl) + '" target="_blank" rel="noopener" style="margin-left:8px;font-size:0.82rem;color:var(--teal);text-decoration:none;">View site &#8599;</a>' +
+      '</div>';
+    if (panelEl) panelEl.style.display = 'none';
+
+  } else if (featureMode === 'features-only') {
+    html += '<p style="margin:0 0 10px;font-size:0.85rem;">You\'re using select Mast features:</p>';
+    html += '<div style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px;">';
+    pageOptions.forEach(function(opt) {
+      if (enabledPages.indexOf(opt.value) === -1) return;
+      var pagePath = _featurePagePath(opt.value);
+      var pageUrl = baseUrl + pagePath;
+      html += '<div style="display:flex;align-items:center;gap:10px;padding:6px 10px;background:rgba(42,124,111,0.07);border-radius:6px;border:1px solid rgba(42,124,111,0.18);">' +
+        '<span style="color:var(--teal);font-weight:700;flex-shrink:0;">&#10003;</span>' +
+        '<span style="flex:1;font-size:0.88rem;">' + esc(opt.label) + '</span>' +
+        '<span style="font-size:0.78rem;color:var(--warm-gray);font-family:monospace;">' + esc(pagePath) + '</span>' +
+        '<button class="btn btn-secondary btn-small" style="font-size:0.75rem;padding:3px 8px;" onclick="copyText(\'' + esc(pageUrl).replace(/'/g, '\\\'') + '\',this)" title="Copy URL">Copy URL</button>' +
+        '</div>';
+    });
+    html += '</div>';
+    html += '<button class="btn btn-secondary btn-small" onclick="showFeaturePageTogglePanel()">Manage feature pages</button>';
+    if (panelEl) {
+      _featurePagePendingSelection = enabledPages.slice();
+      _renderFeaturePageToggles(pageOptions, enabledPages);
+    }
+
+  } else {
+    // featureMode === 'none' or unset
+    html += '<span style="color:var(--warm-gray);font-size:0.85rem;">No public Mast pages are active.</span> ' +
+      '<button class="btn btn-secondary btn-small" style="margin-left:8px;" onclick="showFeaturePageTogglePanel()">Enable features</button>';
+    if (panelEl) {
+      _featurePagePendingSelection = [];
+      _renderFeaturePageToggles(pageOptions, []);
+    }
+  }
+
+  displayEl.innerHTML = html;
+}
+
+function _featurePagePath(value) {
+  var paths = {
+    'surveys':     '/survey',
+    'gift-cards':  '/gift-cards',
+    'loyalty':     '/my-wallet',
+    'booking':     '/classes',
+    'commissions': '/commission'
+  };
+  return paths[value] || '/' + value;
+}
+
+function _renderFeaturePageToggles(pageOptions, currentEnabled) {
+  var container = document.getElementById('featurePageToggles');
+  if (!container) return;
+  if (!_featurePagePendingSelection) _featurePagePendingSelection = currentEnabled.slice();
+  var html = '';
+  pageOptions.forEach(function(opt) {
+    var checked = _featurePagePendingSelection.indexOf(opt.value) !== -1;
+    html += '<label style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:8px 10px;border:1px solid var(--cream-dark);border-radius:6px;background:var(--surface-card);">' +
+      '<input type="checkbox" data-feature-page="' + esc(opt.value) + '" ' + (checked ? 'checked' : '') + ' onchange="toggleFeaturePageSelection(\'' + esc(opt.value) + '\')" style="width:16px;height:16px;cursor:pointer;">' +
+      '<div style="flex:1;">' +
+        '<div style="font-weight:600;font-size:0.88rem;">' + esc(opt.label) + '</div>' +
+        '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:1px;">' + esc(opt.description) + '</div>' +
+      '</div>' +
+      '</label>';
+  });
+  container.innerHTML = html;
+}
+
+function showFeaturePageTogglePanel() {
+  var panelEl = document.getElementById('featurePagesTogglePanel');
+  if (panelEl) {
+    panelEl.style.display = 'block';
+    panelEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+}
+
+function toggleFeaturePageSelection(value) {
+  if (!_featurePagePendingSelection) _featurePagePendingSelection = [];
+  var idx = _featurePagePendingSelection.indexOf(value);
+  if (idx >= 0) _featurePagePendingSelection.splice(idx, 1);
+  else _featurePagePendingSelection.push(value);
+}
+
+async function saveFeaturePageToggles() {
+  var statusEl = document.getElementById('featurePageSaveStatus');
+  if (statusEl) statusEl.innerHTML = 'Saving…';
+  var selected = (_featurePagePendingSelection || []).slice();
+  try {
+    if (selected.length > 0) {
+      await MastDB.businessEntity.applyFeaturesOnlyConfig(selected);
+    } else {
+      await MastDB.businessEntity.setFeatureMode('none');
+    }
+    await writeAudit('update', 'settings', 'featurePages');
+    showToast('Feature pages saved');
+    if (statusEl) {
+      statusEl.innerHTML = '<span style="color:var(--teal);">&#10003; Saved</span>';
+      setTimeout(function() { if (statusEl) statusEl.innerHTML = ''; }, 3000);
+    }
+    // Refresh active pages display
+    loadActiveMastPages();
+  } catch (err) {
+    showToast('Error saving feature pages: ' + (err.message || ''), true);
+    if (statusEl) statusEl.innerHTML = '<span style="color:var(--danger);">Error — try again</span>';
+  }
+}
+
+// ============================================================
 // AI Integrations Settings
 // ============================================================
 var AI_MCP_SERVER_URL = 'https://mast-tenant-mcp-server-536075659586.us-central1.run.app';
@@ -22421,9 +22677,10 @@ var _wizardSelectedModules = []; // module selections for step 2
 
 // Step ordering for progress bar. 0 = welcome screen (no progress dots shown).
 // quick path shows steps 0,1,1a,1_5,2,3,fastDpa
-// full path shows steps 0,1,1a,1_5,2,2b,3,3b,fastDpa
+// full path shows steps 0,1,1a,1_5,2,3,3b,4,5,6,7,8,fastDpa
+// (calibration moved from 2b to 4; steps 5-8 are new full-path-only steps)
 var _wizardStepOrder = ['0','1','1a','1_5','2','3','fastDpa'];
-var _wizardStepOrderFull = ['0','1','1a','1_5','2','2b','3','3b','fastDpa'];
+var _wizardStepOrderFull = ['0','1','1a','1_5','2','3','3b','4','5','6','7','8','fastDpa'];
 
 function _wizardGetStepOrder() {
   return (window._wizardOnboardingDepth === 'full') ? _wizardStepOrderFull : _wizardStepOrder;
@@ -22455,13 +22712,10 @@ function initSetupWizard() {
   });
 }
 
-// showWizardStep accepts string step IDs: '0','1','1a','1_5','2','2b','3','3b','fastDpa'
+// showWizardStep accepts string step IDs: '0','1','1a','1_5','2','3','3b','4','5','6','7','8','fastDpa'
 // Also accepts legacy numeric 1/2/3 for backward compat from deep internal callers.
 function showWizardStep(step) {
   var stepStr = String(step);
-  // Remap legacy numeric step 2 → '2b' (old calibration step) when called from
-  // old internal paths (wizardConfirmCalibration/wizardSkipCalibration advance to 3 directly)
-  // Keep 1→1, 3→3 as-is.
   wizardCurrentStep = stepStr;
   // Hide every wizard step pane
   var allSteps = document.querySelectorAll('#setupWizardScreen .wizard-step');
@@ -22469,14 +22723,13 @@ function showWizardStep(step) {
   var elId = stepStr === 'fastDpa' ? 'wizardStepFastDpa'
            : stepStr === '1a'      ? 'wizardStep1a'
            : stepStr === '1_5'     ? 'wizardStep1_5'
-           : stepStr === '2b'      ? 'wizardStep2b'
            : stepStr === '3b'      ? 'wizardStep3b'
            :                         'wizardStep' + stepStr;
   var show = document.getElementById(elId);
   if (show) show.style.display = '';
   updateWizardProgress();
 
-  if (stepStr === '2b') {
+  if (stepStr === '4') {
     if (typeof renderWizardCalibration === 'function') renderWizardCalibration();
   }
   if (stepStr === '2') {
@@ -22493,6 +22746,15 @@ function showWizardStep(step) {
   }
   if (stepStr === '3b') {
     renderWizardFeaturePages();
+  }
+  if (stepStr === '5') {
+    renderWizardModuleSelector();
+  }
+  if (stepStr === '6') {
+    renderWizardIntegrations();
+  }
+  if (stepStr === '7') {
+    renderWizardSettingsSpotlight();
   }
   if (stepStr === 'fastDpa') {
     renderWizardFastSummary();
@@ -22870,7 +23132,7 @@ async function _registerChannelSuggestionCards() {
   } catch (e) { /* non-blocking */ }
 }
 
-// B2: calibration form renderer. Populates the revenue dropdown + placeholder.
+// Step 4: calibration form renderer. Populates revenue dropdown, placeholder, role + team size buttons.
 function renderWizardCalibration() {
   var BEC = window.BusinessEntityConstants || {};
   var brackets = BEC.REVENUE_BRACKETS || [];
@@ -22893,9 +23155,65 @@ function renderWizardCalibration() {
     if (cnt) cnt.textContent = (txt.value || '').length + ' / 500';
   }
   _wizardUpdateBracketProjection('wizardRevenueBracket', 'wizardRevenueBracketProjection');
+
+  // Role buttons (step 4 — unique IDs wizardRoleOptions4, wizardTeamSizeOptions4)
+  var cal4State = window._wizardCalibrationPeopleState = window._wizardCalibrationPeopleState || {};
+  var rolesEl = document.getElementById('wizardRoleOptions4');
+  if (rolesEl && rolesEl.childNodes.length === 0) {
+    var roles = BEC.PRIMARY_CONTACT_ROLES || [];
+    roles.forEach(function(role) {
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.textContent = role.label;
+      btn.style.cssText = 'padding:6px 10px;border-radius:999px;border:1px solid #ccc;background:#fff;font-size:0.78rem;cursor:pointer;';
+      btn.dataset.value = role.value;
+      btn.onclick = function() {
+        cal4State.role = role.value;
+        Array.prototype.forEach.call(rolesEl.children, function(c) {
+          var s = cal4State.role === c.dataset.value;
+          c.style.borderColor = s ? 'var(--teal)' : '#ccc';
+          c.style.background = s ? 'rgba(42,124,111,0.08)' : '#fff';
+        });
+      };
+      rolesEl.appendChild(btn);
+    });
+  }
+  var sizeEl = document.getElementById('wizardTeamSizeOptions4');
+  if (sizeEl && sizeEl.childNodes.length === 0) {
+    var bands = BEC.TEAM_SIZE_BANDS || [];
+    bands.forEach(function(band) {
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.textContent = band.label;
+      btn.style.cssText = 'padding:6px 10px;border-radius:999px;border:1px solid #ccc;background:#fff;font-size:0.78rem;cursor:pointer;';
+      btn.dataset.value = band.value;
+      btn.onclick = function() {
+        cal4State.teamSize = band.value;
+        cal4State.hasEmployees = band.value !== 'solo';
+        Array.prototype.forEach.call(sizeEl.children, function(c) {
+          var s = cal4State.teamSize === c.dataset.value;
+          c.style.borderColor = s ? 'var(--teal)' : '#ccc';
+          c.style.background = s ? 'rgba(42,124,111,0.08)' : '#fff';
+        });
+      };
+      sizeEl.appendChild(btn);
+    });
+  }
 }
 
-// B2: write engagement.calibration, advance to B3.
+// Step 4: back button — go to 3b if full path, else 3
+function wizardStep4Back() {
+  var depth = window._wizardOnboardingDepth || 'quick';
+  if (depth === 'full') {
+    // In full path 3b comes before 4; but if storefront mode skipped 3b go to 3
+    var eng = window._wizardEngagement || {};
+    showWizardStep(eng.mode === 'storefront' ? '3' : '3b');
+  } else {
+    showWizardStep('3');
+  }
+}
+
+// Step 4: write engagement.calibration + people, advance to step 5 (full) or 3 (quick fallback).
 async function wizardConfirmCalibration() {
   var sel = document.getElementById('wizardRevenueBracket');
   var txt = document.getElementById('wizardWishStatement');
@@ -22908,21 +23226,38 @@ async function wizardConfirmCalibration() {
   if (bracket) calibration.revenueBracket = bracket;
   if (wish) calibration.wishStatement = wish;
   window._wizardRevenueBracket = bracket || '';
+
+  // Role / team size captured on step 4
+  var cal4State = window._wizardCalibrationPeopleState || {};
+
   try {
     await MastDB.businessEntity.update('engagement', { calibration: calibration });
-    logWizardEvent(2, 'calibration_saved', {
+    if (cal4State.role || cal4State.teamSize) {
+      var peoplePayload = {};
+      if (cal4State.role) peoplePayload.primaryContact = { role: cal4State.role };
+      if (cal4State.teamSize) {
+        peoplePayload.teamSize = cal4State.teamSize;
+        peoplePayload.hasEmployees = cal4State.teamSize !== 'solo';
+      }
+      await MastDB.businessEntity.update('people', peoplePayload);
+    }
+    logWizardEvent(4, 'calibration_saved', {
       revenueBracket: bracket || null,
-      wishStatementLength: wish.length
+      wishStatementLength: wish.length,
+      role: cal4State.role || null,
+      teamSize: cal4State.teamSize || null
     });
-    showWizardStep(3);
-    saveWizardProgress(3, { calibrationCaptured: true });
+    var depth = window._wizardOnboardingDepth || 'quick';
+    var nextStep = depth === 'full' ? '5' : '3';
+    showWizardStep(nextStep);
+    saveWizardProgress(nextStep, { calibrationCaptured: true });
   } catch (err) {
     if (btn) btn.disabled = false;
     showToast('Could not save calibration: ' + esc(err.message || ''), true);
   }
 }
 
-// B2: explicit skip — still records capturedAt so we know the user saw it.
+// Step 4 skip — records capturedAt and advances.
 async function wizardSkipCalibration() {
   var btn = document.getElementById('wizardCalibrationConfirmBtn');
   if (btn) btn.disabled = true;
@@ -22930,9 +23265,11 @@ async function wizardSkipCalibration() {
     await MastDB.businessEntity.update('engagement', {
       calibration: { capturedAt: new Date().toISOString() }
     });
-    logWizardEvent(2, 'calibration_skipped', {});
-    showWizardStep(3);
-    saveWizardProgress(3, { calibrationCaptured: false });
+    logWizardEvent(4, 'calibration_skipped', {});
+    var depth = window._wizardOnboardingDepth || 'quick';
+    var nextStep = depth === 'full' ? '5' : '3';
+    showWizardStep(nextStep);
+    saveWizardProgress(nextStep, { calibrationCaptured: false });
   } catch (err) {
     if (btn) btn.disabled = false;
     showToast('Could not advance: ' + esc(err.message || ''), true);
@@ -23159,10 +23496,9 @@ async function wizardConfirmBizIdentity() {
       channelsCount: state.channels.length,
       toolsCount: state.currentTools.length
     });
-    var depth = window._wizardOnboardingDepth || 'quick';
-    var nextStep = depth === 'full' ? '2b' : '3';
-    showWizardStep(nextStep);
-    saveWizardProgress(nextStep, { bizIdentityConfirmed: true });
+    // Full path no longer has a 2b step — calibration moved to step 4 after 3b.
+    showWizardStep('3');
+    saveWizardProgress('3', { bizIdentityConfirmed: true });
   } catch (err) {
     if (btn) btn.disabled = false;
     showToast('Could not save: ' + esc(err.message || ''), true);
@@ -23226,8 +23562,11 @@ async function wizardConfirmFeaturePages() {
     logWizardEvent('3b', 'feature_pages_confirmed', {
       mode: mode, selectedPages: selected, count: selected.length
     });
-    showWizardStep('fastDpa');
-    saveWizardProgress('fastDpa', { featurePagesConfirmed: true, featurePages: selected });
+    // Full path continues to step 4 (calibration); quick path goes to fastDpa.
+    var depth = window._wizardOnboardingDepth || 'quick';
+    var nextStep = depth === 'full' ? '4' : 'fastDpa';
+    showWizardStep(nextStep);
+    saveWizardProgress(nextStep, { featurePagesConfirmed: true, featurePages: selected });
   } catch (err) {
     if (btn) btn.disabled = false;
     showToast('Could not save features: ' + esc(err.message || ''), true);
@@ -24907,14 +25246,23 @@ function wizardTransitionToWalkthrough(job) {
   // Load token wallet for cost bar
   loadTokenWallet();
 
-  // Update action buttons
+  // Update action buttons — full path continues to step 4, quick path completes.
   var actions = document.getElementById('wizardStep3Actions');
   if (actions) {
+    var _depth = window._wizardOnboardingDepth || 'quick';
     var h = '<div style="display:flex;gap:12px;flex-wrap:wrap;justify-content:center;">';
-    h += '<button class="btn btn-primary" style="font-size:1rem;padding:12px 32px;" onclick="wizardComplete()">Continue to Dashboard</button>';
+    if (_depth === 'full') {
+      h += '<button class="btn btn-primary" style="font-size:1rem;padding:12px 32px;" onclick="showWizardStep(\'4\')">Continue</button>';
+    } else {
+      h += '<button class="btn btn-primary" style="font-size:1rem;padding:12px 32px;" onclick="wizardComplete()">Continue to Dashboard</button>';
+    }
     h += '</div>';
     h += '<div style="text-align:center;margin-top:8px;">';
-    h += '<a href="#" onclick="event.preventDefault(); wizardComplete();" style="font-size:0.85rem;color:var(--warm-gray);">Skip for now &mdash; I\'ll do this later</a>';
+    if (_depth === 'full') {
+      h += '<a href="#" onclick="event.preventDefault();wizardSkipToLaunch();" style="font-size:0.85rem;color:var(--warm-gray);">Skip remaining setup &rarr;</a>';
+    } else {
+      h += '<a href="#" onclick="event.preventDefault(); wizardComplete();" style="font-size:0.85rem;color:var(--warm-gray);">Skip for now &mdash; I\'ll do this later</a>';
+    }
     h += '</div>';
     actions.innerHTML = h;
   }
