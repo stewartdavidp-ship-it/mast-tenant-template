@@ -130,6 +130,19 @@
     { value: 'other',       label: 'Other' }
   ];
 
+  // Revenue channel categories for wizard step 2 — how the maker generates revenue today.
+  // Distinct from DECLARED_CHANNELS (which tracks platform integrations in Settings).
+  var REVENUE_CHANNELS = [
+    { value: 'bm-own',        label: 'Brick & mortar store I own' },
+    { value: 'bm-wholesale',  label: 'Wholesale / consignment into stores' },
+    { value: 'online-own',    label: 'Online storefront I own',              promptUrl: true },
+    { value: 'online-market', label: 'Online marketplace (Etsy, Amazon, Faire…)' },
+    { value: 'commissions',   label: 'Commissions' },
+    { value: 'events',        label: 'In-person events / pop-ups' },
+    { value: 'live-events',   label: 'Online live events (IG Live, etc.)' },
+    { value: 'other',         label: 'Other',                                promptText: true }
+  ];
+
   // Archetype enum display labels + helper descriptions (spec §4).
   // Grouped for the B1a searchable dropdown.
   var ARCHETYPES = [
@@ -209,6 +222,94 @@
     { value: 'mixed',   label: 'A mix',                     description: 'More than one — tell us what drives most of your revenue' }
   ];
 
+  // Two-tier business classification used in wizard Step 2.
+  // Each category has a derived businessType (produce/resell/teach) and a list of subtypes.
+  var BUSINESS_CATEGORIES = [
+    {
+      value: 'makers', label: 'Makers & Crafts',
+      description: 'Handmade and artisan goods',
+      businessType: 'produce',
+      subtypes: [
+        { value: 'glass-artisan',      label: 'Glass artisan' },
+        { value: 'ceramics-pottery',   label: 'Ceramics & pottery' },
+        { value: 'jewelry-maker',      label: 'Jewelry maker' },
+        { value: 'fiber-textile',      label: 'Fiber & textile' },
+        { value: 'woodworker',         label: 'Woodworker' },
+        { value: 'painter-printmaker', label: 'Painter / printmaker' },
+        { value: 'leather-metal',      label: 'Leather & metalwork' },
+        { value: 'mixed-media-artist', label: 'Mixed-media / sculpture' },
+        { value: 'other-maker',        label: 'Other maker' }
+      ]
+    },
+    {
+      value: 'food-bev', label: 'Food & Beverage',
+      description: 'Food producers, bakers, caterers',
+      businessType: 'produce',
+      subtypes: [
+        { value: 'bakery',             label: 'Bakery / pastry' },
+        { value: 'specialty-food',     label: 'Specialty food producer' },
+        { value: 'beverage',           label: 'Coffee, tea & beverages' },
+        { value: 'catering',           label: 'Caterer' },
+        { value: 'food-market-vendor', label: 'Farmers market / pop-up vendor' },
+        { value: 'other-food',         label: 'Other food & beverage' }
+      ]
+    },
+    {
+      value: 'health-beauty', label: 'Health & Beauty',
+      description: 'Salons, spas, fitness, wellness',
+      businessType: 'teach',
+      subtypes: [
+        { value: 'hair-salon',          label: 'Hair salon' },
+        { value: 'nail-salon',          label: 'Nail salon' },
+        { value: 'spa-massage',         label: 'Spa / massage' },
+        { value: 'fitness-studio',      label: 'Yoga / fitness studio' },
+        { value: 'personal-trainer',    label: 'Personal trainer / coach' },
+        { value: 'esthetician',         label: 'Esthetician / skincare' },
+        { value: 'other-health-beauty', label: 'Other health & beauty' }
+      ]
+    },
+    {
+      value: 'services', label: 'Services & Instruction',
+      description: 'Classes, coaching, commissions, custom work',
+      businessType: 'teach',
+      subtypes: [
+        { value: 'instructor-studio',     label: 'Art / craft instructor' },
+        { value: 'music-teacher',         label: 'Music teacher' },
+        { value: 'fitness-instructor',    label: 'Fitness / yoga instructor' },
+        { value: 'commissioned-services', label: 'Commissioned / custom work' },
+        { value: 'photographer',          label: 'Photographer' },
+        { value: 'graphic-designer',      label: 'Graphic designer / illustrator' },
+        { value: 'other-service',         label: 'Other service' }
+      ]
+    },
+    {
+      value: 'retail', label: 'Retail & Resale',
+      description: 'Shops, boutiques, vintage, wholesale',
+      businessType: 'resell',
+      subtypes: [
+        { value: 'boutique',              label: 'Boutique / specialty shop' },
+        { value: 'vintage-antiques',      label: 'Vintage / antiques' },
+        { value: 'gift-shop',             label: 'Gift shop' },
+        { value: 'wholesale-distributor', label: 'Wholesale distributor' },
+        { value: 'online-retailer',       label: 'Online-only retailer' },
+        { value: 'other-retail',          label: 'Other retail' }
+      ]
+    },
+    {
+      value: 'hospitality', label: 'Hospitality & Events',
+      description: 'Venues, experiences, event planning',
+      businessType: 'teach',
+      subtypes: [
+        { value: 'event-venue',       label: 'Event venue' },
+        { value: 'bed-breakfast',     label: 'Bed & breakfast / inn' },
+        { value: 'tour-experience',   label: 'Tour / experience operator' },
+        { value: 'event-planner',     label: 'Event / party planner' },
+        { value: 'popup-experience',  label: 'Pop-up experience' },
+        { value: 'other-hospitality', label: 'Other hospitality' }
+      ]
+    }
+  ];
+
   // Primary outputs — only values that add config signal beyond what businessType already captures.
   // 'classes' and 'services' are derived from businessType='teach'; removed to avoid redundancy.
   var PRIMARY_OUTPUTS = [
@@ -223,7 +324,10 @@
     { value: 'shopify',      label: 'Shopify',      category: 'ecommerce', description: 'Online storefront' },
     { value: 'etsy',         label: 'Etsy',         category: 'ecommerce', description: 'Marketplace storefront' },
     { value: 'pirateship',   label: 'Pirate Ship',  category: 'shipping',  description: 'Discounted shipping labels' },
-    { value: 'shippo',       label: 'Shippo',       category: 'shipping',  description: 'Multi-carrier shipping' }
+    { value: 'shippo',       label: 'Shippo',       category: 'shipping',  description: 'Multi-carrier shipping' },
+    { value: 'shipstation',  label: 'ShipStation',  category: 'shipping',  description: 'Shipping management & automation' },
+    { value: 'easypost',     label: 'EasyPost',     category: 'shipping',  description: 'Multi-carrier label printing' },
+    { value: 'stamps',       label: 'Stamps.com',   category: 'shipping',  description: 'USPS & UPS labels' }
   ];
 
   var FEATURE_MODE_OPTIONS = [
@@ -278,6 +382,8 @@
     CURRENT_TOOLS: CURRENT_TOOLS,
     FEATURE_MODE_OPTIONS: FEATURE_MODE_OPTIONS,
     FEATURE_PAGE_OPTIONS: FEATURE_PAGE_OPTIONS,
+    REVENUE_CHANNELS: REVENUE_CHANNELS,
+    BUSINESS_CATEGORIES: BUSINESS_CATEGORIES,
     validateEin: validateEin
   };
 })(typeof window !== 'undefined' ? window : this);

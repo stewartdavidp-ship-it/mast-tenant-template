@@ -6457,23 +6457,27 @@
           </div>
         </div>
 
-        <!-- Step 1: Migrate My Site (URL + auto-analysis + auto-apply) -->
+        <!-- Step 1: Existing Site (analyze + migrate vs integrate choice) -->
         <div id="wizardStep1" class="wizard-step" style="display:none;">
-          <h2 style="font-size:1.6rem;margin-bottom:8px;">Let's Move Your Site</h2>
-          <p style="color:var(--warm-gray);margin-bottom:24px;">Paste your website URL and we'll set everything up automatically.</p>
-          <div class="form-group" style="margin-bottom:16px;">
-            <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Your Website URL</label>
-            <input type="url" id="wizardSiteUrl" placeholder="https://www.yourbusiness.com"
-              style="width:100%;padding:10px 14px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;box-sizing:border-box;">
-          </div>
-          <div id="wizardAnalysisStatus" style="font-size:0.85rem;margin-bottom:16px;"></div>
-          <div style="display:flex;justify-content:space-between;">
-            <button class="btn btn-secondary" onclick="showWizardStep('1_5')">Back</button>
-            <div style="display:flex;gap:8px;">
-              <button class="btn btn-secondary" id="wizardSkipSiteBtn" onclick="wizardSkipSite()" style="font-size:0.9rem;">Skip</button>
-              <button class="btn btn-primary" id="wizardAnalyzeBtn" onclick="wizardAnalyzeSite()">Migrate My Site</button>
+          <h2 style="font-size:1.6rem;margin-bottom:8px;">Do you have an existing site?</h2>
+          <p style="color:var(--warm-gray);margin-bottom:24px;">Paste your URL and we'll scan it — then you can decide whether to move it to Mast or just connect it.</p>
+          <div id="wizardStep1UrlForm">
+            <div class="form-group" style="margin-bottom:16px;">
+              <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Your Website URL</label>
+              <input type="url" id="wizardSiteUrl" placeholder="https://www.yourbusiness.com"
+                style="width:100%;padding:10px 14px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;box-sizing:border-box;">
+            </div>
+            <div id="wizardAnalysisStatus" style="font-size:0.85rem;margin-bottom:16px;"></div>
+            <div style="display:flex;justify-content:space-between;">
+              <button class="btn btn-secondary" onclick="showWizardStep('1_5')">Back</button>
+              <div style="display:flex;gap:8px;">
+                <button class="btn btn-secondary" id="wizardSkipSiteBtn" onclick="wizardSkipSite()" style="font-size:0.9rem;">Skip</button>
+                <button class="btn btn-primary" id="wizardAnalyzeBtn" onclick="wizardAnalyzeSite()">Analyze My Site</button>
+              </div>
             </div>
           </div>
+          <!-- Shown after analysis: migrate vs integrate choice -->
+          <div id="wizardSitePathPicker" style="display:none;"></div>
         </div>
 
         <!-- Step 1b (B9): No-website 5-question fallback. Renamed from wizardStep1b to avoid collision. -->
@@ -6549,10 +6553,17 @@
               style="width:100%;padding:10px 14px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;box-sizing:border-box;">
           </div>
           <div class="form-group" style="margin-bottom:18px;">
-            <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Logo <span style="color:var(--warm-gray);font-weight:400;">(optional)</span></label>
-            <input type="file" id="wizardBrandLogo" accept="image/*"
-              style="width:100%;padding:8px 0;font-size:0.85rem;">
-            <p style="font-size:0.75rem;color:var(--warm-gray);margin-top:4px;">PNG, JPG, or SVG. Square works best.</p>
+            <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:6px;">Logo <span style="color:var(--warm-gray);font-weight:400;">(optional)</span></label>
+            <div style="display:flex;align-items:center;gap:12px;">
+              <label for="wizardBrandLogo" style="display:inline-block;padding:9px 18px;background:var(--wiz-input,#fff);border:1px solid var(--wiz-border,#ddd);border-radius:6px;cursor:pointer;font-size:0.88rem;font-weight:600;color:var(--wiz-text,#2a2a2a);font-family:'DM Sans',sans-serif;white-space:nowrap;flex-shrink:0;">Upload Logo</label>
+              <input type="file" id="wizardBrandLogo" accept="image/*" style="display:none;" onchange="wizardPreviewLogo(this)">
+              <span id="wizardLogoFileName" style="font-size:0.82rem;color:var(--warm-gray);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">No file chosen</span>
+            </div>
+            <div id="wizardLogoPreviewWrap" style="display:none;margin-top:10px;">
+              <img id="wizardLogoPreviewImg" src="" alt="Logo preview" style="max-height:80px;max-width:200px;border-radius:6px;border:1px solid var(--wiz-border,#ddd);object-fit:contain;background:var(--wiz-input,#fff);padding:4px;display:block;">
+              <button type="button" onclick="wizardClearLogo()" style="margin-top:6px;font-size:0.78rem;color:var(--warm-gray);background:none;border:none;cursor:pointer;padding:0;text-decoration:underline;">Remove</button>
+            </div>
+            <p style="font-size:0.75rem;color:var(--warm-gray);margin-top:6px;">PNG, JPG, or SVG. Square works best.</p>
           </div>
           <div style="display:flex;justify-content:space-between;align-items:center;">
             <button class="btn btn-secondary" onclick="showWizardStep('1a')">Back</button>
@@ -6565,14 +6576,19 @@
           <h2 style="font-size:1.6rem;margin-bottom:8px;">What are you selling and how?</h2>
           <p style="color:var(--warm-gray);margin-bottom:20px;">Helps Mast configure the right tools for you.</p>
 
-          <!-- Part A: Business type -->
+          <!-- Part A: Business category + subtype -->
           <div class="form-group" style="margin-bottom:20px;">
-            <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:8px;">How do you create what you sell? <span style="color:var(--danger);font-weight:400;">*</span></label>
-            <div id="wizardBusinessTypeCards" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;"></div>
-            <!-- Shown when 'mixed' is selected -->
-            <div id="wizardMixedFollowUp" style="display:none;margin-top:12px;padding:12px 14px;border-radius:8px;border:1px solid var(--border,#e4ddd4);background:var(--surface-card,#f9f6f2);">
-              <div style="font-size:0.85rem;font-weight:600;margin-bottom:8px;color:var(--text,#2a2a2a);">What drives most of your revenue?</div>
-              <div id="wizardMixedPrimaryChips" style="display:flex;flex-wrap:wrap;gap:8px;"></div>
+            <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:6px;">What kind of business are you? <span style="color:var(--danger);font-weight:400;">*</span></label>
+            <select id="wizardBizCategory"
+              style="width:100%;padding:9px 12px;border:1px solid var(--wiz-border,#ddd);border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;background:var(--wiz-input,#fff);color:var(--wiz-text,inherit);margin-bottom:10px;">
+              <option value="">Select a category…</option>
+            </select>
+            <div id="wizardArchetypeRow" style="display:none;">
+              <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:6px;">What best describes your business? <span style="color:var(--danger);font-weight:400;">*</span></label>
+              <select id="wizardBizArchetype"
+                style="width:100%;padding:9px 12px;border:1px solid var(--wiz-border,#ddd);border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;background:var(--wiz-input,#fff);color:var(--wiz-text,inherit);">
+                <option value="">Select a type…</option>
+              </select>
             </div>
           </div>
 
@@ -6582,11 +6598,24 @@
             <div id="wizardPrimaryOutputChips" style="display:flex;flex-wrap:wrap;gap:8px;"></div>
           </div>
 
-          <!-- Part C: Channels -->
+          <!-- Part C: Revenue channels -->
           <div class="form-group" style="margin-bottom:20px;">
-            <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Where do customers buy today? <span style="color:var(--warm-gray);font-weight:400;">(optional)</span></label>
-            <div style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:8px;">Select all that apply</div>
-            <div id="wizardBizChannels" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
+            <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">How do you sell today? <span style="color:var(--warm-gray);font-weight:400;">(optional — select all that apply)</span></label>
+            <div style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:8px;">Helps Mast set up the right features for you.</div>
+            <div id="wizardBizChannels" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;"></div>
+            <!-- Shown when "Online storefront I own" is selected -->
+            <div id="wizardStorefrontUrlRow" style="display:none;margin-top:6px;">
+              <label style="font-size:0.78rem;font-weight:600;display:block;margin-bottom:3px;color:var(--wiz-text,inherit);">Your storefront URL</label>
+              <input type="url" id="wizardStorefrontUrlInput" placeholder="https://yourshop.com"
+                style="width:100%;padding:8px 10px;border:1px solid var(--wiz-border,#ddd);border-radius:5px;font-family:'DM Sans',sans-serif;font-size:0.85rem;box-sizing:border-box;background:var(--wiz-input,#fff);color:var(--wiz-text,inherit);">
+              <div style="font-size:0.75rem;color:var(--warm-gray);margin-top:3px;">We'll import your products from it — you can also do this later.</div>
+            </div>
+            <!-- Shown when "Other" is selected -->
+            <div id="wizardOtherChannelRow" style="display:none;margin-top:6px;">
+              <label style="font-size:0.78rem;font-weight:600;display:block;margin-bottom:3px;color:var(--wiz-text,inherit);">Describe your other channel</label>
+              <input type="text" id="wizardOtherChannelInput" placeholder="e.g. Gallery representation, craft fairs…"
+                style="width:100%;padding:8px 10px;border:1px solid var(--wiz-border,#ddd);border-radius:5px;font-family:'DM Sans',sans-serif;font-size:0.85rem;box-sizing:border-box;background:var(--wiz-input,#fff);color:var(--wiz-text,inherit);">
+            </div>
           </div>
 
           <!-- Part D: Current tools (full path only) -->
@@ -6596,12 +6625,8 @@
               <div style="font-size:0.75rem;font-weight:600;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">Payment</div>
               <div style="display:flex;flex-wrap:wrap;gap:6px;" id="wizardToolsPaymentChips"></div>
             </div>
-            <div id="wizardCurrentToolsEcommerce" style="margin-bottom:10px;">
-              <div style="font-size:0.75rem;font-weight:600;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">Ecommerce</div>
-              <div style="display:flex;flex-wrap:wrap;gap:6px;" id="wizardToolsEcommerceChips"></div>
-            </div>
             <div id="wizardCurrentToolsShipping">
-              <div style="font-size:0.75rem;font-weight:600;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">Shipping &amp; Labels</div>
+              <div style="font-size:0.75rem;font-weight:600;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">Shipping</div>
               <div style="display:flex;flex-wrap:wrap;gap:6px;" id="wizardToolsShippingChips"></div>
             </div>
           </div>
@@ -23513,9 +23538,12 @@ var _wizardBizIdentityState = null;
 function renderWizardBizIdentity() {
   var BEC = window.BusinessEntityConstants || {};
   var state = _wizardBizIdentityState = _wizardBizIdentityState || {
-    businessType: null,
-    primaryType: null,  // set when businessType === 'mixed'
-    channels: [],
+    businessCategory: null,  // e.g. 'makers', 'food-bev', 'services'
+    archetype: null,          // specific subtype within category
+    businessType: null,       // derived: 'produce' | 'resell' | 'teach'
+    revenueChannels: [],
+    storefrontUrl: '',
+    otherChannelNote: '',
     currentTools: []
   };
   var depth = window._wizardOnboardingDepth || 'quick';
@@ -23533,61 +23561,76 @@ function renderWizardBizIdentity() {
       'cursor:pointer;font-size:0.78rem;transition:all 0.15s;';
   }
 
-  // Part A: Business type cards — solid teal fill when selected
-  var typeEl = document.getElementById('wizardBusinessTypeCards');
-  if (typeEl) {
-    typeEl.innerHTML = '';
-    var types = BEC.BUSINESS_TYPES || [];
-    types.forEach(function(t) {
-      var card = document.createElement('div');
-      card.className = 'wizard-feature-card';
-      var sel = state.businessType === t.value;
-      if (sel) card.setAttribute('data-selected', 'true');
-      card.style.cssText = 'border:' + (sel ? '2px solid var(--teal)' : '1px solid var(--border,#ddd)') +
-        ';border-radius:8px;padding:12px 14px;cursor:pointer;background:' +
-        (sel ? 'var(--teal)' : 'var(--surface-card,#fff)') +
-        ';transition:all 0.15s;';
-      card.innerHTML = '<div style="font-weight:600;font-size:0.9rem;margin-bottom:3px;color:' + (sel ? '#fff' : 'var(--text,#2a2a2a)') + ';">' + esc(t.label) + '</div>' +
-        '<div style="font-size:0.78rem;color:' + (sel ? 'rgba(255,255,255,0.8)' : 'var(--warm-gray)') + ';">' + esc(t.description) + '</div>';
-      card.onclick = function() {
-        state.businessType = t.value;
-        if (t.value !== 'mixed') state.primaryType = null;
-        renderWizardBizIdentity();
-      };
-      typeEl.appendChild(card);
+  // Part A: Category dropdown + archetype dropdown
+  var catEl = document.getElementById('wizardBizCategory');
+  if (catEl && catEl.options.length <= 1) {
+    var cats = BEC.BUSINESS_CATEGORIES || [];
+    cats.forEach(function(cat) {
+      var opt = document.createElement('option');
+      opt.value = cat.value;
+      opt.textContent = cat.label + ' — ' + cat.description;
+      catEl.appendChild(opt);
     });
+    catEl.value = state.businessCategory || '';
+    catEl.onchange = function() {
+      state.businessCategory = catEl.value || null;
+      state.archetype = null;
+      // Derive businessType from category
+      var cats2 = BEC.BUSINESS_CATEGORIES || [];
+      var catDef = null;
+      for (var i = 0; i < cats2.length; i++) { if (cats2[i].value === state.businessCategory) { catDef = cats2[i]; break; } }
+      state.businessType = catDef ? catDef.businessType : null;
+      // Repopulate archetype dropdown
+      var arcEl = document.getElementById('wizardBizArchetype');
+      var arcRow = document.getElementById('wizardArchetypeRow');
+      if (arcEl) {
+        arcEl.innerHTML = '<option value="">Select a type…</option>';
+        if (catDef) {
+          catDef.subtypes.forEach(function(sub) {
+            var o = document.createElement('option');
+            o.value = sub.value;
+            o.textContent = sub.label;
+            arcEl.appendChild(o);
+          });
+        }
+      }
+      if (arcRow) arcRow.style.display = catDef ? '' : 'none';
+      renderWizardBizIdentity();
+    };
+  } else if (catEl) {
+    catEl.value = state.businessCategory || '';
   }
 
-  // Mixed follow-up: "What drives most of your revenue?"
-  var mixedFollowUp = document.getElementById('wizardMixedFollowUp');
-  var mixedChipsEl = document.getElementById('wizardMixedPrimaryChips');
-  if (mixedFollowUp) {
-    var isMixed = state.businessType === 'mixed';
-    mixedFollowUp.style.display = isMixed ? '' : 'none';
-    if (isMixed && mixedChipsEl) {
-      mixedChipsEl.innerHTML = '';
-      var primaryTypes = (BEC.BUSINESS_TYPES || []).filter(function(t) { return t.value !== 'mixed'; });
-      primaryTypes.forEach(function(t) {
-        var chip = document.createElement('button');
-        chip.type = 'button';
-        var sel = state.primaryType === t.value;
-        chip.style.cssText = solidChipCss(sel);
-        chip.textContent = t.label;
-        chip.onclick = function() {
-          state.primaryType = t.value;
-          renderWizardBizIdentity();
-        };
-        mixedChipsEl.appendChild(chip);
-      });
+  // Archetype dropdown — populate if category already set but archetype row needs refresh
+  var arcRow = document.getElementById('wizardArchetypeRow');
+  var arcEl = document.getElementById('wizardBizArchetype');
+  if (arcRow) arcRow.style.display = state.businessCategory ? '' : 'none';
+  if (arcEl && state.businessCategory && arcEl.options.length <= 1) {
+    var cats3 = BEC.BUSINESS_CATEGORIES || [];
+    for (var ci = 0; ci < cats3.length; ci++) {
+      if (cats3[ci].value === state.businessCategory) {
+        cats3[ci].subtypes.forEach(function(sub) {
+          var o = document.createElement('option');
+          o.value = sub.value;
+          o.textContent = sub.label;
+          arcEl.appendChild(o);
+        });
+        break;
+      }
     }
+  }
+  if (arcEl) {
+    arcEl.value = state.archetype || '';
+    arcEl.onchange = function() {
+      state.archetype = arcEl.value || null;
+      renderWizardBizIdentity();
+    };
   }
 
   // Part B: Supplemental outputs — hidden for 'teach', shown otherwise
   var outputSection = document.getElementById('wizardPrimaryOutputSection');
   var outputEl = document.getElementById('wizardPrimaryOutputChips');
-  var hideOutput = state.businessType === 'teach' ||
-    (state.businessType === 'mixed' && state.primaryType === 'teach') ||
-    !state.businessType;
+  var hideOutput = state.businessType === 'teach' || state.businessType === 'resell' || !state.businessType;
   if (outputSection) outputSection.style.display = hideOutput ? 'none' : '';
   if (outputEl && !hideOutput) {
     outputEl.innerHTML = '';
@@ -23609,23 +23652,29 @@ function renderWizardBizIdentity() {
     });
   }
 
-  // Part C: Channels (multi-select, rendered once)
+  // Part C: Revenue channels (multi-select)
   var chanEl = document.getElementById('wizardBizChannels');
-  if (chanEl && chanEl.childNodes.length === 0) {
-    var channels = BEC.DECLARED_CHANNELS || [];
-    channels.forEach(function(ch) {
+  if (chanEl) {
+    chanEl.innerHTML = '';
+    var revChannels = BEC.REVENUE_CHANNELS || [];
+    revChannels.forEach(function(ch) {
       var chip = document.createElement('label');
-      var chkd = state.channels.indexOf(ch.value) >= 0;
+      var chkd = state.revenueChannels.indexOf(ch.value) >= 0;
       chip.style.cssText = multiChipCss(chkd);
       var cb = document.createElement('input');
       cb.type = 'checkbox';
       cb.style.cssText = 'position:absolute;opacity:0;width:0;height:0;pointer-events:none;';
       cb.checked = chkd;
       cb.onchange = function() {
-        var idx = state.channels.indexOf(ch.value);
-        if (cb.checked && idx < 0) state.channels.push(ch.value);
-        else if (!cb.checked && idx >= 0) state.channels.splice(idx, 1);
+        var idx = state.revenueChannels.indexOf(ch.value);
+        if (cb.checked && idx < 0) state.revenueChannels.push(ch.value);
+        else if (!cb.checked && idx >= 0) state.revenueChannels.splice(idx, 1);
         chip.style.cssText = multiChipCss(cb.checked);
+        // Show/hide conditional fields
+        var urlRow = document.getElementById('wizardStorefrontUrlRow');
+        var otherRow = document.getElementById('wizardOtherChannelRow');
+        if (urlRow) urlRow.style.display = state.revenueChannels.indexOf('online-own') >= 0 ? '' : 'none';
+        if (otherRow) otherRow.style.display = state.revenueChannels.indexOf('other') >= 0 ? '' : 'none';
       };
       var span = document.createElement('span');
       span.textContent = ch.label;
@@ -23633,14 +23682,24 @@ function renderWizardBizIdentity() {
       chip.appendChild(span);
       chanEl.appendChild(chip);
     });
+    // Sync conditional field visibility on re-render
+    var urlRow = document.getElementById('wizardStorefrontUrlRow');
+    var otherRow = document.getElementById('wizardOtherChannelRow');
+    if (urlRow) urlRow.style.display = state.revenueChannels.indexOf('online-own') >= 0 ? '' : 'none';
+    if (otherRow) otherRow.style.display = state.revenueChannels.indexOf('other') >= 0 ? '' : 'none';
+    // Restore saved values
+    var urlInput = document.getElementById('wizardStorefrontUrlInput');
+    if (urlInput && state.storefrontUrl) urlInput.value = state.storefrontUrl;
+    var otherInput = document.getElementById('wizardOtherChannelInput');
+    if (otherInput && state.otherChannelNote) otherInput.value = state.otherChannelNote;
   }
 
-  // Part D: Current tools — full path only
+  // Part D: Current tools (payment + shipping only) — full path only
   var toolsSection = document.getElementById('wizardCurrentToolsSection');
   if (toolsSection) toolsSection.style.display = depth === 'full' ? '' : 'none';
   if (depth === 'full') {
     var tools = BEC.CURRENT_TOOLS || [];
-    var categories = { payment: 'wizardToolsPaymentChips', ecommerce: 'wizardToolsEcommerceChips', shipping: 'wizardToolsShippingChips', labels: 'wizardToolsShippingChips' };
+    var categories = { payment: 'wizardToolsPaymentChips', shipping: 'wizardToolsShippingChips', labels: 'wizardToolsShippingChips' };
     var rendered = {};
     tools.forEach(function(tool) {
       var containerId = categories[tool.category] || 'wizardToolsShippingChips';
@@ -23671,21 +23730,33 @@ function renderWizardBizIdentity() {
   // Continue enabled when: business type selected AND (if mixed: primary type also selected)
   var confirmBtn = document.getElementById('wizardBizIdentityConfirmBtn');
   if (confirmBtn) {
-    confirmBtn.disabled = !(state.businessType &&
-      (state.businessType !== 'mixed' || state.primaryType));
+    confirmBtn.disabled = !(state.businessCategory && state.archetype);
   }
 }
 
 async function wizardConfirmBizIdentity() {
   var state = _wizardBizIdentityState || {};
-  if (!state.businessType || (state.businessType === 'mixed' && !state.primaryType)) {
-    showToast('Please select how you create what you sell.', true);
+  if (!state.businessCategory || !state.archetype) {
+    showToast('Please select your business category and type.', true);
     return;
   }
-  // Derive the effective business type for configuration purposes.
-  // 'mixed' uses primaryType for module defaults; primaryType is also stored separately.
-  var effectiveType = (state.businessType === 'mixed' && state.primaryType) ? state.primaryType : state.businessType;
-  // Derive primary output from business type if not explicitly selected.
+  // Read conditional text inputs into state before saving
+  var urlInput = document.getElementById('wizardStorefrontUrlInput');
+  if (urlInput) state.storefrontUrl = urlInput.value.trim();
+  var otherInput = document.getElementById('wizardOtherChannelInput');
+  if (otherInput) state.otherChannelNote = otherInput.value.trim();
+
+  // Pre-fill the site import step if a storefront URL was provided
+  if (state.storefrontUrl) {
+    window._wizardPrefilledSiteUrl = state.storefrontUrl;
+    var s1 = document.getElementById('wizardSiteUrl');
+    if (s1 && !s1.value) s1.value = state.storefrontUrl;
+    var s8 = document.getElementById('wizardSiteUrl8');
+    if (s8 && !s8.value) s8.value = state.storefrontUrl;
+  }
+
+  // businessType is derived from category; use it directly as effectiveType
+  var effectiveType = state.businessType || 'produce';
   var derivedOutput = effectiveType === 'teach' ? 'classes' :
                       effectiveType === 'resell' ? 'physical' : 'physical';
   var primaryOutput = (state.supplementalOutputs && state.supplementalOutputs.length)
@@ -23695,28 +23766,31 @@ async function wizardConfirmBizIdentity() {
   if (btn) btn.disabled = true;
   try {
     var identityUpdate = {
+      businessCategory: state.businessCategory,
+      archetype: state.archetype,
       businessType: state.businessType,
       effectiveBusinessType: effectiveType,
       primaryOutput: primaryOutput
     };
-    if (state.businessType === 'mixed' && state.primaryType) {
-      identityUpdate.primaryType = state.primaryType;
-    }
     if (state.supplementalOutputs && state.supplementalOutputs.length) {
       identityUpdate.supplementalOutputs = state.supplementalOutputs.slice();
     }
     await MastDB.businessEntity.update('identity', identityUpdate);
-    if (state.channels.length) {
-      await MastDB.businessEntity.update('presence', { declaredChannels: state.channels.slice() });
-    }
-    if (state.currentTools.length) {
-      await MastDB.businessEntity.update('presence', { currentTools: state.currentTools.slice() });
+    var presenceUpdate = {};
+    if (state.revenueChannels.length) presenceUpdate.revenueChannels = state.revenueChannels.slice();
+    if (state.storefrontUrl)          presenceUpdate.storefrontUrl    = state.storefrontUrl;
+    if (state.otherChannelNote)       presenceUpdate.otherChannelNote = state.otherChannelNote;
+    if (state.currentTools.length)    presenceUpdate.currentTools     = state.currentTools.slice();
+    if (Object.keys(presenceUpdate).length) {
+      await MastDB.businessEntity.update('presence', presenceUpdate);
     }
     logWizardEvent(2, 'biz_identity_confirmed', {
+      businessCategory: state.businessCategory,
+      archetype: state.archetype,
       businessType: state.businessType,
-      effectiveType: effectiveType,
       primaryOutput: primaryOutput,
-      channelsCount: state.channels.length,
+      revenueChannelsCount: state.revenueChannels.length,
+      hasStorefrontUrl: !!state.storefrontUrl,
       toolsCount: state.currentTools.length
     });
     // Full path no longer has a 2b step — calibration moved to step 4 after 3b.
@@ -23823,13 +23897,12 @@ function _wizardModulePreselect() {
   var state = _wizardBizIdentityState || {};
   var engagement = window._wizardEngagement || {};
   var goals = (engagement.goals || []);
-  var channels = (state.channels || []);
-  var businessType = (state.businessType || '');
+  var revenueChannels = (state.revenueChannels || []);
+  var effectiveType = state.businessType || '';
   var selected = always.slice();
-  var effectiveType = (state.businessType === 'mixed' && state.primaryType) ? state.primaryType : businessType;
   if (effectiveType === 'teach') { ['classes','events'].forEach(function(m){ if(selected.indexOf(m)<0) selected.push(m); }); }
   if (effectiveType === 'produce') { if(selected.indexOf('operations')<0) selected.push('operations'); }
-  if (channels.indexOf('wholesale') >= 0) { if(selected.indexOf('retention')<0) selected.push('retention'); }
+  if (revenueChannels.indexOf('bm-wholesale') >= 0) { if(selected.indexOf('retention')<0) selected.push('retention'); }
   if (goals.indexOf('get-online-shop') >= 0) { if(selected.indexOf('marketing')<0) selected.push('marketing'); }
   if (goals.indexOf('class-registration') >= 0) { if(selected.indexOf('classes')<0) selected.push('classes'); }
   return selected;
@@ -24282,16 +24355,27 @@ function renderWizardFastSummary() {
   var businessName = (brandNameEl && brandNameEl.value) || extracted.businessName || '';
 
   // Business type label
-  var types = BEC.BUSINESS_TYPES || [];
+  var cats4 = BEC.BUSINESS_CATEGORIES || [];
   var typeLabel = '';
-  for (var j = 0; j < types.length; j++) {
-    if (types[j].value === state.businessType) { typeLabel = types[j].label; break; }
+  for (var j = 0; j < cats4.length; j++) {
+    if (cats4[j].value === state.businessCategory) {
+      typeLabel = cats4[j].label;
+      if (state.archetype) {
+        for (var k = 0; k < cats4[j].subtypes.length; k++) {
+          if (cats4[j].subtypes[k].value === state.archetype) {
+            typeLabel += ' — ' + cats4[j].subtypes[k].label;
+            break;
+          }
+        }
+      }
+      break;
+    }
   }
 
-  // Channels
-  var channels = BEC.DECLARED_CHANNELS || [];
-  var chanLabels = (state.channels || []).map(function(v) {
-    for (var k = 0; k < channels.length; k++) { if (channels[k].value === v) return channels[k].label; }
+  // Revenue channels
+  var revChannelDefs = BEC.REVENUE_CHANNELS || [];
+  var chanLabels = (state.revenueChannels || []).map(function(v) {
+    for (var k = 0; k < revChannelDefs.length; k++) { if (revChannelDefs[k].value === v) return revChannelDefs[k].label; }
     return v;
   });
 
@@ -24634,6 +24718,120 @@ function wizardSkipSite() {
   showWizardStep('3');
 }
 
+// ----------------------------------------------------------------
+// Step 1: Site path picker (migrate vs integrate)
+// ----------------------------------------------------------------
+
+function wizardShowSitePathPicker(data) {
+  var manifest = (data && data.crawlManifest) || {};
+  var platform = manifest.platform || '';
+  var productCount = (manifest.products && manifest.products.length) || 0;
+  var brandName = manifest.businessName || '';
+
+  // Hide URL form, show picker
+  var urlForm = document.getElementById('wizardStep1UrlForm');
+  if (urlForm) urlForm.style.display = 'none';
+
+  var platformLabel = (platform && platform !== 'unknown')
+    ? platform.charAt(0).toUpperCase() + platform.slice(1)
+    : 'your site';
+  var keepLabel = (platform && platform !== 'unknown')
+    ? 'Keep ' + platformLabel + ', use Mast for ops'
+    : 'Keep my current site, use Mast for ops';
+
+  var foundHtml = '';
+  if (productCount > 0 || brandName) {
+    var parts = [];
+    if (productCount > 0) parts.push(productCount + ' product' + (productCount !== 1 ? 's' : ''));
+    if (brandName) parts.push('brand info for <strong>' + esc(brandName) + '</strong>');
+    foundHtml = '<div style="background:rgba(42,124,111,0.08);border:1px solid var(--teal);border-radius:8px;padding:12px 14px;margin-bottom:16px;font-size:0.88rem;color:var(--charcoal,#2a2a2a);">' +
+      '&#10003; Found ' + parts.join(' and ') + ' — ready to import.' +
+      '</div>';
+  }
+
+  var picker = document.getElementById('wizardSitePathPicker');
+  if (!picker) return;
+
+  picker.style.display = '';
+  picker.innerHTML =
+    '<h2 style="font-size:1.4rem;margin-bottom:6px;">What do you want to do with ' + esc(platformLabel) + '?</h2>' +
+    '<p style="color:var(--warm-gray);margin-bottom:16px;font-size:0.9rem;">We scanned your site — now tell us how Mast fits in.</p>' +
+    foundHtml +
+    '<div style="display:grid;gap:10px;margin-bottom:20px;">' +
+      '<div class="wizard-feature-card" style="border:1px solid var(--wiz-border,#ddd);border-radius:10px;padding:18px;cursor:pointer;background:var(--wiz-input,#fff);" onclick="wizardChooseSiteIntent(\'migrate\')">' +
+        '<div style="font-weight:700;font-size:1rem;margin-bottom:4px;">Move to Mast</div>' +
+        '<div style="font-size:0.85rem;color:var(--warm-gray);">Import your products and content. Mast becomes your storefront.</div>' +
+      '</div>' +
+      '<div class="wizard-feature-card" style="border:1px solid var(--wiz-border,#ddd);border-radius:10px;padding:18px;cursor:pointer;background:var(--wiz-input,#fff);" onclick="wizardChooseSiteIntent(\'integrate\')">' +
+        '<div style="font-weight:700;font-size:1rem;margin-bottom:4px;">' + esc(keepLabel) + '</div>' +
+        '<div style="font-size:0.85rem;color:var(--warm-gray);">Stay on your current storefront. Mast syncs products and handles orders, inventory, and production behind the scenes.</div>' +
+      '</div>' +
+    '</div>' +
+    '<button class="btn btn-secondary" onclick="wizardResetSiteStep()">&#8592; Change URL</button>';
+}
+
+function wizardChooseSiteIntent(intent) {
+  window._wizardSiteIntent = intent;
+  var picker = document.getElementById('wizardSitePathPicker');
+  if (picker) {
+    var cards = picker.querySelectorAll('.wizard-feature-card');
+    cards.forEach(function(c, i) {
+      var chosen = (i === 0 && intent === 'migrate') || (i === 1 && intent === 'integrate');
+      c.style.borderColor = chosen ? 'var(--teal)' : 'var(--wiz-border,#ddd)';
+      c.style.background = chosen ? 'rgba(42,124,111,0.06)' : 'var(--wiz-input,#fff)';
+    });
+  }
+  MastDB.config.set('setupProgress/siteIntent', intent).catch(function() {});
+  logWizardEvent(1, 'site_intent_chosen', { intent: intent });
+  showWizardStep('3');
+  saveWizardProgress('3', { siteAnalyzed: true, siteIntent: intent, autoApplied: _wizardAutoApplied });
+  _wizardAnalyzing = false;
+}
+
+function wizardResetSiteStep() {
+  var picker = document.getElementById('wizardSitePathPicker');
+  if (picker) { picker.style.display = 'none'; picker.innerHTML = ''; }
+  var urlForm = document.getElementById('wizardStep1UrlForm');
+  if (urlForm) urlForm.style.display = '';
+  var btn = document.getElementById('wizardAnalyzeBtn');
+  if (btn) { btn.disabled = false; btn.textContent = 'Analyze My Site'; }
+  var skipBtn = document.getElementById('wizardSkipSiteBtn');
+  if (skipBtn) skipBtn.style.display = '';
+  var statusEl = document.getElementById('wizardAnalysisStatus');
+  if (statusEl) statusEl.innerHTML = '';
+  _wizardAnalyzing = false;
+}
+
+// ----------------------------------------------------------------
+// Step 1.5: Logo upload preview
+// ----------------------------------------------------------------
+
+function wizardPreviewLogo(input) {
+  var nameEl = document.getElementById('wizardLogoFileName');
+  var wrapEl = document.getElementById('wizardLogoPreviewWrap');
+  var previewEl = document.getElementById('wizardLogoPreviewImg');
+  if (!input || !input.files || !input.files[0]) return;
+  var file = input.files[0];
+  if (nameEl) nameEl.textContent = file.name;
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    if (previewEl) previewEl.src = e.target.result;
+    if (wrapEl) wrapEl.style.display = '';
+  };
+  reader.readAsDataURL(file);
+}
+
+function wizardClearLogo() {
+  var input = document.getElementById('wizardBrandLogo');
+  if (input) input.value = '';
+  var nameEl = document.getElementById('wizardLogoFileName');
+  if (nameEl) nameEl.textContent = 'No file chosen';
+  var wrapEl = document.getElementById('wizardLogoPreviewWrap');
+  if (wrapEl) wrapEl.style.display = 'none';
+  var previewEl = document.getElementById('wizardLogoPreviewImg');
+  if (previewEl) previewEl.src = '';
+}
+
 // B9: lightweight keyword matcher. Maps free-text "what do you sell" to an
 // archetype ID if a word unambiguously matches; else null (B1a blank-dropdown).
 function _inferArchetypeFromSellText(text) {
@@ -24868,7 +25066,7 @@ async function wizardAnalyzeSite() {
   var progressTimer = setInterval(function() { updateProgressMsg(); }, 4000);
 
   btn.disabled = true;
-  btn.textContent = 'Migrating...';
+  btn.textContent = 'Analyzing...';
   _wizardAnalyzing = true;
   logWizardEvent(1, 'analyze_start', { url: url });
 
@@ -24924,11 +25122,16 @@ async function wizardAnalyzeSite() {
       templateConfidence: window._wizardTemplateConfidence
     });
 
-    // Archetype already confirmed in Step 1a — go straight to engagement.
     window._wizardHasWebsite = true;
-    showWizardStep('3');
-    saveWizardProgress('3', { siteAnalyzed: true, autoApplied: _wizardAutoApplied });
-    _wizardAnalyzing = false;
+    // If coming from Step 8 (post-wizard late import), skip path picker and finish.
+    if (window._wizardStep8PostAnalyze) {
+      window._wizardStep8PostAnalyze = false;
+      showWizardStep('fastDpa');
+      saveWizardProgress('fastDpa', { siteAnalyzed: true, autoApplied: _wizardAutoApplied });
+      _wizardAnalyzing = false;
+    } else {
+      wizardShowSitePathPicker(data);
+    }
   } catch (err) {
     clearInterval(progressTimer);
     _wizardAnalyzing = false;
