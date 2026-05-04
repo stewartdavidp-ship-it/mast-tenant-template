@@ -6695,7 +6695,7 @@
         <!-- Step 8 (full-path): Site Migration (optional) -->
         <div id="wizardStep8" class="wizard-step" style="display:none;">
           <h2 style="font-size:1.6rem;margin-bottom:8px;">Import your existing site <span style="font-weight:400;color:var(--warm-gray);">(optional)</span></h2>
-          <p style="color:var(--warm-gray);margin-bottom:20px;">If you have an existing website, we can import your products, images, and content automatically.</p>
+          <p style="color:var(--warm-gray);margin-bottom:20px;">You skipped the site import earlier. If you have an existing website, paste the URL here and we'll pull in your products, images, and content. You can also do this later from <strong>Settings → Import</strong>.</p>
           <div class="form-group" style="margin-bottom:16px;">
             <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Your website URL</label>
             <input type="url" id="wizardSiteUrl8" placeholder="https://www.yourbusiness.com"
@@ -22937,6 +22937,17 @@ function showWizardStep(step) {
   if (stepStr === '7') {
     renderWizardSettingsSpotlight();
   }
+  if (stepStr === '8') {
+    // Skip this step if the user already imported from step 1
+    if (window._wizardAnalyzedUrl || (typeof wizardProgress !== 'undefined' && wizardProgress.analyzedUrl)) {
+      showWizardStep('fastDpa');
+      return;
+    }
+    // Pre-fill URL if entered but not yet analyzed
+    var url8El = document.getElementById('wizardSiteUrl8');
+    var existingUrl = window._wizardAnalyzedUrl || (typeof wizardProgress !== 'undefined' && wizardProgress.analyzedUrl) || '';
+    if (url8El && !url8El.value && existingUrl) url8El.value = existingUrl;
+  }
   if (stepStr === 'fastDpa') {
     renderWizardFastSummary();
     renderWizardActivationGate();
@@ -26015,6 +26026,14 @@ function wizardToggleGapAction(capKey) {
 function wizardUpdateCostBar() {
   var costBar = document.getElementById('wizardGapCostBar');
   if (!costBar) return;
+
+  // If the wallet listener hasn't fired yet (e.g. permission error on boot),
+  // do a one-shot read and re-render once it resolves.
+  if (!_tokenWallet) {
+    MastDB.tokenWallet.get().then(function(data) {
+      if (data) { _tokenWallet = data; wizardUpdateCostBar(); }
+    }).catch(function() {});
+  }
 
   var selectedCount = 0;
   var totalTokens = 0;
