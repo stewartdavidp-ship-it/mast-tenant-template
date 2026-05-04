@@ -6747,10 +6747,6 @@
             <h2 style="font-size:1.6rem;margin-bottom:8px;">How will you use Mast?</h2>
             <p style="color:var(--warm-gray);margin-bottom:20px;">Pick the mode that matches your business today. You can always change this later.</p>
             <div id="wizardEngagementCards" style="display:grid;gap:12px;margin-bottom:20px;"></div>
-            <div id="wizardEngagementGoals" style="background:var(--cream-dark);border-radius:8px;padding:16px;margin-bottom:20px;">
-              <p style="font-size:0.9rem;font-weight:600;margin:0 0 8px;">What do you want Mast to help with? <span style="color:var(--warm-gray);font-weight:400;">(optional)</span></p>
-              <div id="wizardEngagementGoalList" style="display:flex;flex-wrap:wrap;gap:8px;"></div>
-            </div>
             <div style="display:flex;justify-content:space-between;align-items:center;">
               <button class="btn btn-secondary" id="wizardStep3BackBtn" onclick="wizardStep3Back()">Back</button>
               <button class="btn btn-primary" id="wizardEngagementConfirmBtn" onclick="wizardConfirmEngagement()">Continue</button>
@@ -23202,48 +23198,6 @@ function renderWizardEngagement() {
     }
   }
 
-  // Goals — two-panel ranked shuttle: pool on left, priority list on right.
-  var goalsList = document.getElementById('wizardEngagementGoalList');
-  if (goalsList) {
-    goalsList.style.cssText = 'display:grid;grid-template-columns:1fr 1fr;gap:10px;';
-    var available = (defaults && defaults.goalsAvailable) ? defaults.goalsAvailable.slice() : [];
-    var seen = {}, ordered = [];
-    for (var gi = 0; gi < available.length; gi++) { if (!seen[available[gi]]) { seen[available[gi]] = 1; ordered.push(available[gi]); } }
-    var poolItems = ordered.filter(function(g) { return state.goals.indexOf(g) < 0; });
-    var panelStyle = 'border:1px solid var(--wiz-border,var(--border,#ddd));border-radius:8px;padding:8px;min-height:80px;background:var(--wiz-bg,var(--surface-card,#fff));';
-    var itemStyle = 'display:flex;align-items:center;justify-content:space-between;padding:5px 8px;border-radius:5px;font-size:0.8rem;margin-bottom:4px;background:var(--cream-dark,#f8f5f0);';
-    var poolHTML = '<div style="font-size:0.7rem;font-weight:600;text-transform:uppercase;color:var(--warm-gray);margin-bottom:6px;">Available</div>';
-    if (poolItems.length) {
-      poolItems.forEach(function(g) {
-        poolHTML += '<div style="' + itemStyle + '">' +
-          '<span>' + (goalLabels[g] || g) + '</span>' +
-          '<button onclick="(function(){var s=window._wizardEngagement;if(s.goals.indexOf(\'' + g + '\')<0)s.goals.push(\'' + g + '\');renderWizardEngagement();})()"\
-          ' style="border:none;background:var(--teal);color:#fff;border-radius:4px;padding:2px 7px;font-size:0.75rem;cursor:pointer;flex-shrink:0;">+</button></div>';
-      });
-    } else {
-      poolHTML += '<span style="font-size:0.78rem;color:var(--warm-gray);">All goals added</span>';
-    }
-    var rankedHTML = '<div style="font-size:0.7rem;font-weight:600;text-transform:uppercase;color:var(--warm-gray);margin-bottom:6px;">Priority order</div>';
-    if (state.goals.length) {
-      state.goals.forEach(function(g, i) {
-        var idx = i;
-        var upBtn = idx > 0 ? '<button onclick="(function(){var s=window._wizardEngagement,a=s.goals,t=a['+idx+'];a.splice('+idx+',1);a.splice('+(idx-1)+',0,t);renderWizardEngagement();})()"\
-          ' style="border:none;background:transparent;cursor:pointer;font-size:0.78rem;color:var(--warm-gray);padding:0 2px;" title="Move up">&#9650;</button>' : '<span style="display:inline-block;width:18px;"></span>';
-        var downBtn = idx < state.goals.length - 1 ? '<button onclick="(function(){var s=window._wizardEngagement,a=s.goals,t=a['+idx+'];a.splice('+idx+',1);a.splice('+(idx+1)+',0,t);renderWizardEngagement();})()"\
-          ' style="border:none;background:transparent;cursor:pointer;font-size:0.78rem;color:var(--warm-gray);padding:0 2px;" title="Move down">&#9660;</button>' : '<span style="display:inline-block;width:18px;"></span>';
-        var removeBtn = '<button onclick="(function(){var s=window._wizardEngagement;s.goals.splice('+idx+',1);renderWizardEngagement();})()"\
-          ' style="border:none;background:transparent;cursor:pointer;font-size:0.85rem;color:var(--danger,#dc2626);padding:0 2px;margin-left:2px;" title="Remove">&#215;</button>';
-        rankedHTML += '<div style="' + itemStyle + '">' +
-          '<span style="font-size:0.72rem;color:var(--teal);font-weight:700;min-width:16px;">' + (idx+1) + '.</span>' +
-          '<span style="flex:1;margin:0 4px;">' + (goalLabels[g] || g) + '</span>' +
-          '<span style="display:flex;align-items:center;">' + upBtn + downBtn + removeBtn + '</span></div>';
-      });
-    } else {
-      rankedHTML += '<span style="font-size:0.78rem;color:var(--warm-gray);">Add goals from the left</span>';
-    }
-    goalsList.innerHTML = '<div style="' + panelStyle + '">' + poolHTML + '</div><div style="' + panelStyle + '">' + rankedHTML + '</div>';
-  }
-
   // Continue button disabled until a mode is picked.
   var btn = document.getElementById('wizardEngagementConfirmBtn');
   if (btn) btn.disabled = !state.mode;
@@ -24449,6 +24403,13 @@ function renderWizardFastSummary() {
       esc(dpaCopy.linkText || 'Data Processing Addendum') + '</a> ' +
       '<span style="color:var(--danger);font-weight:600;">' + esc(dpaCopy.requiredLabel || '(Required.)') + '</span>';
   }
+  // Wire fast DPA checkbox → gate highlight + button enable/disable
+  var dpaCheckFastEl = document.getElementById('wizardDpaCheckboxFast');
+  if (dpaCheckFastEl && !dpaCheckFastEl._dpaGateWired) {
+    dpaCheckFastEl._dpaGateWired = true;
+    dpaCheckFastEl.onchange = function() { _wizardDpaGateUpdate(true); };
+  }
+  _wizardDpaGateUpdate(true);
   var nocEl = document.getElementById('wizardNoticeAtCollectionFast');
   if (nocEl) {
     nocEl.innerHTML =
@@ -26186,6 +26147,8 @@ function wizardTransitionToWalkthrough(job) {
     }
     h += '</div>';
     actions.innerHTML = h;
+    // Re-apply DPA gate state — the new button starts enabled; lock it if DPA not yet checked.
+    _wizardDpaGateUpdate(false);
   }
 }
 
@@ -26670,6 +26633,33 @@ async function processAndUploadLogo(logoUrl) {
   }
 }
 
+// Update DPA gate visual state and enable/disable the adjacent launch button.
+// isFast=true targets the fastDpa step elements; false targets step 3 watch pane.
+function _wizardDpaGateUpdate(isFast) {
+  var cbId    = isFast ? 'wizardDpaCheckboxFast' : 'wizardDpaCheckbox';
+  var gateId  = isFast ? 'wizardDpaGateFast'    : 'wizardDpaGate';
+  var actId   = isFast ? 'wizardActivateErrorsFast' : 'wizardActivateErrors';
+  var cb      = document.getElementById(cbId);
+  var gate    = document.getElementById(gateId);
+  var checked = cb && cb.checked;
+  if (gate) {
+    gate.style.borderColor  = checked ? 'var(--teal)' : 'var(--amber,#c4853c)';
+    gate.style.background   = checked ? 'rgba(42,124,111,0.06)' : 'rgba(196,133,60,0.06)';
+  }
+  // Find the launch button in the sibling actions container and toggle disabled
+  var actionsId = isFast ? 'wizardStep3Actions' : 'wizardStep3Actions';
+  // For fast path, the button is directly in wizardStepFastDpa; use a data attribute to find it
+  var launchBtn = isFast
+    ? document.querySelector('#wizardStepFastDpa .btn-primary:not([data-skip])')
+    : document.querySelector('#wizardStep3Actions .btn-primary, #wizardStep3Actions button.btn-primary');
+  if (launchBtn) launchBtn.disabled = !checked;
+  // Clear inline error if box is now checked
+  if (checked) {
+    var errEl = document.getElementById(actId);
+    if (errEl) { errEl.style.display = 'none'; errEl.textContent = ''; }
+  }
+}
+
 // B4: render DPA label + role/team-size radios + Notice at Collection.
 // Idempotent — safe to call repeatedly as the user re-enters Step 3 watch pane.
 function renderWizardActivationGate() {
@@ -26688,6 +26678,14 @@ function renderWizardActivationGate() {
       esc(dpaCopy.linkText || 'Data Processing Addendum') + '</a> ' +
       '<span style="color:var(--danger);font-weight:600;">' + esc(dpaCopy.requiredLabel || '(Required.)') + '</span>';
   }
+  // Wire checkbox → gate highlight + button enable/disable
+  var dpaGateEl = document.getElementById('wizardDpaGate');
+  var dpaCheckEl = document.getElementById('wizardDpaCheckbox');
+  if (dpaCheckEl && !dpaCheckEl._dpaGateWired) {
+    dpaCheckEl._dpaGateWired = true;
+    dpaCheckEl.onchange = function() { _wizardDpaGateUpdate(false); };
+  }
+  _wizardDpaGateUpdate(false);
   var nocEl = document.getElementById('wizardNoticeAtCollection');
   if (nocEl) {
     nocEl.innerHTML =
