@@ -6828,18 +6828,6 @@
 
           <div id="wizardPublishStatus" style="font-size:0.85rem;margin-bottom:16px;"></div>
 
-          <!-- B4: primary-contact progressive capture (optional) + DPA gate -->
-          <div id="wizardPrimaryContact" style="background:var(--cream-dark);border-radius:8px;padding:16px;margin-bottom:12px;">
-            <p style="font-size:0.9rem;font-weight:600;margin:0 0 10px;">A couple of optional details</p>
-            <div class="form-group" style="margin-bottom:10px;">
-              <label style="font-size:0.8rem;font-weight:600;display:block;margin-bottom:4px;">Your role</label>
-              <div id="wizardRoleOptions" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
-            </div>
-            <div class="form-group" style="margin-bottom:0;">
-              <label style="font-size:0.8rem;font-weight:600;display:block;margin-bottom:4px;">Team size</label>
-              <div id="wizardTeamSizeOptions" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
-            </div>
-          </div>
           <!-- Notice at Collection — CCPA required, harmless elsewhere (spec §8.2) -->
           <p id="wizardNoticeAtCollection" style="font-size:0.75rem;color:var(--warm-gray);margin:0 0 12px;"></p>
           <!-- DPA click-through gate — submission blocked until checked (spec §8.2, §7.3) -->
@@ -22845,26 +22833,53 @@ function _wizardGetStepOrder() {
   return (window._wizardOnboardingDepth === 'full') ? _wizardStepOrderFull : _wizardStepOrder;
 }
 
+function _wizardLsKey() {
+  try { return 'mast_wizard_' + (MastDB.tenantId ? MastDB.tenantId() : 'default'); } catch(e) { return 'mast_wizard_default'; }
+}
+function _wizardLsLoad() {
+  try { return JSON.parse(localStorage.getItem(_wizardLsKey()) || 'null') || {}; } catch(e) { return {}; }
+}
+function _wizardLsSave(update) {
+  try {
+    var existing = _wizardLsLoad();
+    Object.assign(existing, update);
+    localStorage.setItem(_wizardLsKey(), JSON.stringify(existing));
+  } catch(e) {}
+}
+function _wizardApplyProgress(progress) {
+  wizardProgress = progress;
+  if (wizardProgress.onboardingDepth) window._wizardOnboardingDepth = wizardProgress.onboardingDepth;
+  if (!window._wizardCrawlManifest && wizardProgress.crawlManifest) {
+    window._wizardCrawlManifest = wizardProgress.crawlManifest;
+    window._wizardAnalyzedUrl = wizardProgress.analyzedUrl || '';
+    window._wizardSiteFingerprint = wizardProgress.siteFingerprint || null;
+  }
+  if (wizardProgress.autoApplied) _wizardAutoApplied = wizardProgress.autoApplied;
+  if (wizardProgress._engagement) window._wizardEngagement = wizardProgress._engagement;
+  if (wizardProgress._extracted) window._wizardExtracted = wizardProgress._extracted;
+  if (wizardProgress._archetypeDefaults) window._wizardArchetypeDefaults = wizardProgress._archetypeDefaults;
+  if (wizardProgress._siteIntent) window._wizardSiteIntent = wizardProgress._siteIntent;
+  if (wizardProgress._selectedModules) window._wizardSelectedModules = wizardProgress._selectedModules;
+  showWizardStep(wizardProgress.currentStep || '0');
+}
 function initSetupWizard() {
-  // Default depth to quick
   window._wizardOnboardingDepth = window._wizardOnboardingDepth || 'quick';
-  // Load saved progress
+  // Try localStorage first — survives browser back/forward without a network round trip
+  var lsProgress = _wizardLsLoad();
+  if (lsProgress.currentStep) {
+    _wizardApplyProgress(lsProgress);
+    // Also sync from Firestore in background to pick up any cross-device changes
+    MastDB.config.get('setupProgress').then(function(snap) {
+      var fsProgress = snap || {};
+      if (fsProgress.currentStep && fsProgress.updatedAt > (lsProgress.updatedAt || '')) {
+        _wizardApplyProgress(fsProgress);
+      }
+    }).catch(function() {});
+    return;
+  }
+  // No localStorage — load from Firestore
   MastDB.config.get('setupProgress').then(function(snap) {
-    wizardProgress = snap.val() || {};
-    // Restore depth if previously saved
-    if (wizardProgress.onboardingDepth) {
-      window._wizardOnboardingDepth = wizardProgress.onboardingDepth;
-    }
-    // Restore crawl manifest from Firebase if page was reloaded (auth redirect, etc.)
-    if (!window._wizardCrawlManifest && wizardProgress.crawlManifest) {
-      window._wizardCrawlManifest = wizardProgress.crawlManifest;
-      window._wizardAnalyzedUrl = wizardProgress.analyzedUrl || '';
-      window._wizardSiteFingerprint = wizardProgress.siteFingerprint || null;
-    }
-    if (wizardProgress.autoApplied) {
-      _wizardAutoApplied = wizardProgress.autoApplied;
-    }
-    showWizardStep(wizardProgress.currentStep || '0');
+    _wizardApplyProgress(snap || {});
   }).catch(function() {
     showWizardStep('0');
   });
@@ -22895,6 +22910,14 @@ function showWizardStep(step) {
   }
   if (stepStr === '2') {
     renderWizardBizIdentity();
+  }
+  if (stepStr === '1_5') {
+    // Restore brand fields from saved extracted data or wizard progress
+    var extracted = window._wizardExtracted || {};
+    var brandNameEl = document.getElementById('wizardBrandName');
+    var brandTaglineEl = document.getElementById('wizardBrandTagline');
+    if (brandNameEl && !brandNameEl.value) brandNameEl.value = extracted.businessName || (wizardProgress && wizardProgress.businessName) || '';
+    if (brandTaglineEl && !brandTaglineEl.value) brandTaglineEl.value = extracted.tagline || (wizardProgress && wizardProgress.tagline) || '';
   }
   if (stepStr === '3') {
     if (typeof renderWizardEngagement === 'function') {
@@ -23107,13 +23130,18 @@ function renderWizardEngagement() {
   if (engagePane) engagePane.style.display = '';
   if (watchPane) watchPane.style.display = 'none';
 
-  // Initialize in-memory selection state.
+  // Initialize in-memory selection state. Pre-select mode from site intent if not yet chosen.
   if (!window._wizardEngagement) {
+    var _intentToMode = { 'migrate': 'storefront', 'integrate': 'sync-channels' };
+    var _defaultMode = _intentToMode[window._wizardSiteIntent] || null;
     window._wizardEngagement = {
-      mode: null,
+      mode: _defaultMode,
       surfaceByMode: {},   // { storefront: 'hybrid', ... } so switching modes remembers per-mode surface
       goals: []
     };
+    if (_defaultMode) {
+      window._wizardEngagement.surfaceByMode[_defaultMode] = (defaultSurfaceByMode[_defaultMode]) || cards.find(function(c){return c.value===_defaultMode;}).defaultSurface || 'hybrid';
+    }
   }
   var state = window._wizardEngagement;
 
@@ -23174,42 +23202,46 @@ function renderWizardEngagement() {
     }
   }
 
-  // Goals checklist — archetype-specific first, then universal; capped at ~10 visible.
+  // Goals — two-panel ranked shuttle: pool on left, priority list on right.
   var goalsList = document.getElementById('wizardEngagementGoalList');
   if (goalsList) {
-    goalsList.innerHTML = '';
+    goalsList.style.cssText = 'display:grid;grid-template-columns:1fr 1fr;gap:10px;';
     var available = (defaults && defaults.goalsAvailable) ? defaults.goalsAvailable.slice() : [];
-    // Deduplicate while preserving order.
     var seen = {}, ordered = [];
     for (var gi = 0; gi < available.length; gi++) { if (!seen[available[gi]]) { seen[available[gi]] = 1; ordered.push(available[gi]); } }
-    for (var gj = 0; gj < ordered.length; gj++) {
-      (function(goalId) {
-        var chip = document.createElement('label');
-        var on = state.goals.indexOf(goalId) >= 0;
-        chip.style.cssText = 'display:inline-flex;align-items:center;padding:6px 12px;border-radius:999px;border:' +
-          (on ? '2px solid var(--teal)' : '1px solid var(--wiz-border,var(--border,#ccc))') +
-          ';background:' + (on ? 'var(--teal)' : 'var(--wiz-bg,var(--surface-card,#fff))') +
-          ';cursor:pointer;font-size:0.82rem;color:' + (on ? '#fff' : 'var(--wiz-text,var(--text,#2a2a2a))') + ';font-weight:' + (on ? '600' : '400') + ';transition:all 0.15s;';
-        var cb = document.createElement('input');
-        cb.type = 'checkbox';
-        cb.checked = on;
-        cb.style.cssText = 'position:absolute;opacity:0;width:0;height:0;pointer-events:none;';
-        cb.onchange = function() {
-          var idx = state.goals.indexOf(goalId);
-          if (cb.checked && idx < 0) state.goals.push(goalId);
-          else if (!cb.checked && idx >= 0) state.goals.splice(idx, 1);
-          renderWizardEngagement();
-        };
-        var text = document.createElement('span');
-        text.textContent = goalLabels[goalId] || goalId;
-        chip.appendChild(cb);
-        chip.appendChild(text);
-        goalsList.appendChild(chip);
-      })(ordered[gj]);
+    var poolItems = ordered.filter(function(g) { return state.goals.indexOf(g) < 0; });
+    var panelStyle = 'border:1px solid var(--wiz-border,var(--border,#ddd));border-radius:8px;padding:8px;min-height:80px;background:var(--wiz-bg,var(--surface-card,#fff));';
+    var itemStyle = 'display:flex;align-items:center;justify-content:space-between;padding:5px 8px;border-radius:5px;font-size:0.8rem;margin-bottom:4px;background:var(--cream-dark,#f8f5f0);';
+    var poolHTML = '<div style="font-size:0.7rem;font-weight:600;text-transform:uppercase;color:var(--warm-gray);margin-bottom:6px;">Available</div>';
+    if (poolItems.length) {
+      poolItems.forEach(function(g) {
+        poolHTML += '<div style="' + itemStyle + '">' +
+          '<span>' + (goalLabels[g] || g) + '</span>' +
+          '<button onclick="(function(){var s=window._wizardEngagement;if(s.goals.indexOf(\'' + g + '\')<0)s.goals.push(\'' + g + '\');renderWizardEngagement();})()"\
+          ' style="border:none;background:var(--teal);color:#fff;border-radius:4px;padding:2px 7px;font-size:0.75rem;cursor:pointer;flex-shrink:0;">+</button></div>';
+      });
+    } else {
+      poolHTML += '<span style="font-size:0.78rem;color:var(--warm-gray);">All goals added</span>';
     }
-    if (!ordered.length) {
-      goalsList.innerHTML = '<span style="font-size:0.82rem;color:var(--warm-gray);">We\u2019ll recommend goals later based on how you use Mast.</span>';
+    var rankedHTML = '<div style="font-size:0.7rem;font-weight:600;text-transform:uppercase;color:var(--warm-gray);margin-bottom:6px;">Priority order</div>';
+    if (state.goals.length) {
+      state.goals.forEach(function(g, i) {
+        var idx = i;
+        var upBtn = idx > 0 ? '<button onclick="(function(){var s=window._wizardEngagement,a=s.goals,t=a['+idx+'];a.splice('+idx+',1);a.splice('+(idx-1)+',0,t);renderWizardEngagement();})()"\
+          ' style="border:none;background:transparent;cursor:pointer;font-size:0.78rem;color:var(--warm-gray);padding:0 2px;" title="Move up">&#9650;</button>' : '<span style="display:inline-block;width:18px;"></span>';
+        var downBtn = idx < state.goals.length - 1 ? '<button onclick="(function(){var s=window._wizardEngagement,a=s.goals,t=a['+idx+'];a.splice('+idx+',1);a.splice('+(idx+1)+',0,t);renderWizardEngagement();})()"\
+          ' style="border:none;background:transparent;cursor:pointer;font-size:0.78rem;color:var(--warm-gray);padding:0 2px;" title="Move down">&#9660;</button>' : '<span style="display:inline-block;width:18px;"></span>';
+        var removeBtn = '<button onclick="(function(){var s=window._wizardEngagement;s.goals.splice('+idx+',1);renderWizardEngagement();})()"\
+          ' style="border:none;background:transparent;cursor:pointer;font-size:0.85rem;color:var(--danger,#dc2626);padding:0 2px;margin-left:2px;" title="Remove">&#215;</button>';
+        rankedHTML += '<div style="' + itemStyle + '">' +
+          '<span style="font-size:0.72rem;color:var(--teal);font-weight:700;min-width:16px;">' + (idx+1) + '.</span>' +
+          '<span style="flex:1;margin:0 4px;">' + (goalLabels[g] || g) + '</span>' +
+          '<span style="display:flex;align-items:center;">' + upBtn + downBtn + removeBtn + '</span></div>';
+      });
+    } else {
+      rankedHTML += '<span style="font-size:0.78rem;color:var(--warm-gray);">Add goals from the left</span>';
     }
+    goalsList.innerHTML = '<div style="' + panelStyle + '">' + poolHTML + '</div><div style="' + panelStyle + '">' + rankedHTML + '</div>';
   }
 
   // Continue button disabled until a mode is picked.
@@ -24686,14 +24718,24 @@ function wizardStep3Back() {
 function saveWizardProgress(step, extras) {
   var update = { currentStep: step, updatedAt: new Date().toISOString() };
   if (extras) Object.assign(update, extras);
+  // Snapshot key in-memory wizard state so it survives back/forward navigation
+  if (window._wizardEngagement) update._engagement = window._wizardEngagement;
+  if (window._wizardExtracted) update._extracted = window._wizardExtracted;
+  if (window._wizardArchetypeDefaults) update._archetypeDefaults = window._wizardArchetypeDefaults;
+  if (window._wizardSiteIntent) update._siteIntent = window._wizardSiteIntent;
+  if (window._wizardSelectedModules) update._selectedModules = window._wizardSelectedModules;
+  // Write to localStorage immediately — survives back/forward without a network round trip
+  _wizardLsSave(update);
   // Per-field set uses Firestore mergeFields: creates the parent doc if missing
   // (fresh tenants) and preserves siblings written by other setupProgress/*
   // paths. Previous single .update() threw 5 NOT_FOUND on first wizard step
   // for any tenant without a pre-seeded config doc.
   Object.keys(update).forEach(function(k) {
-    MastDB.config.set('setupProgress/' + k, update[k]).catch(function(e) {
-      console.warn('Failed to save wizard progress (' + k + '):', e.message);
-    });
+    if (k.charAt(0) !== '_') { // skip private in-memory state snapshots from Firestore
+      MastDB.config.set('setupProgress/' + k, update[k]).catch(function(e) {
+        console.warn('Failed to save wizard progress (' + k + '):', e.message);
+      });
+    }
   });
 }
 
@@ -26231,7 +26273,7 @@ function wizardRenderGapRows(gapRows, gaps) {
       var tokens2 = gapEntry ? gapEntry.estimatedTokens : 0;
       var coins2 = Math.ceil(tokens2 / 100);
       h += '<div style="font-size:0.78rem;margin-top:4px;color:var(--warm-gray-dark,#666);">';
-      h += '&#10024; AI enrichment &mdash; ~' + coins2 + ' coin' + (coins2 !== 1 ? 's' : '');
+      h += '&#10024; AI enrichment &mdash; ~' + tokens2.toLocaleString() + ' tokens';
       h += '</div>';
     } else if (isManual) {
       var linkTarget = row.actionLink || '';
@@ -26298,10 +26340,10 @@ function wizardUpdateCostBar() {
   h += '<div>';
   if (selectedCount > 0) {
     h += '<span style="font-weight:600;">' + selectedCount + ' selected</span>';
-    h += ' &mdash; <span style="color:var(--amber);font-weight:600;">~' + totalCoins + ' coin' + (totalCoins !== 1 ? 's' : '') + '</span>';
-    h += '<span style="color:var(--warm-gray);"> (balance: ' + availableCoins + ' coins, ' + (wallet.currentBalance || 0) + ' tokens)</span>';
+    h += ' &mdash; <span style="color:var(--amber);font-weight:600;">~' + totalTokens.toLocaleString() + ' tokens</span>';
+    h += '<span style="color:var(--warm-gray);"> (you have ' + availableTokens.toLocaleString() + ' tokens)</span>';
     if (!sufficient) {
-      h += '<div style="color:var(--danger);font-size:0.78rem;margin-top:4px;">Insufficient balance. You need ~' + totalCoins + ' coins.</div>';
+      h += '<div style="color:var(--danger);font-size:0.78rem;margin-top:4px;">Insufficient balance. Need ' + totalTokens.toLocaleString() + ' tokens — buy coins to top up.</div>';
     }
   } else {
     h += '<span style="color:var(--warm-gray);">Select items above to enrich with AI</span>';
@@ -26312,7 +26354,7 @@ function wizardUpdateCostBar() {
     h += '<button class="btn btn-primary btn-small" id="wizardGapEnrichBtn" onclick="wizardExecuteEnrichment()"';
     if (!sufficient || _wizardGapEnriching) h += ' disabled';
     h += '>';
-    h += _wizardGapEnriching ? 'Enriching...' : 'Enrich Selected (~' + totalCoins + ' coins)';
+    h += _wizardGapEnriching ? 'Enriching...' : 'Enrich Selected (~' + totalTokens.toLocaleString() + ' tokens)';
     h += '</button>';
   }
 

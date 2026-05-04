@@ -189,14 +189,14 @@
   var ENGAGEMENT_MODE_CARDS = [
     {
       value: 'storefront',
-      title: 'Build me a Mast storefront',
-      body: 'We\u2019ll set up your public storefront alongside everything else.',
+      title: 'Build a Mast storefront',
+      body: 'Launch your public Mast website. Channel sync with Etsy, Shopify, and Square is always available alongside it.',
       defaultSurface: 'hybrid'
     },
     {
       value: 'sync-channels',
-      title: 'Sync my existing channels',
-      body: 'Mast as the source-of-truth for your existing storefront(s) on Etsy, Shopify, Square, and more.',
+      title: 'Channel hub \u2014 no Mast website',
+      body: 'Manage Etsy, Shopify, Square, and more from one place. I\u2019ll stay on my existing site \u2014 I don\u2019t need a Mast storefront.',
       defaultSurface: 'ui-first'
     },
     {
