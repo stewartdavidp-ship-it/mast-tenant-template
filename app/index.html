@@ -3970,6 +3970,133 @@
     body.dark-mode .dash-inv-thumb { background: #333; }
     body.dark-mode .dash-inv-name { color: #e0e0e0; }
 
+    /* Setup Scorecard */
+    .setup-scorecard {
+      margin-bottom: 16px;
+      border: 1px solid var(--cream-dark);
+      border-radius: 8px;
+      overflow: hidden;
+      background: white;
+    }
+    .setup-scorecard-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 16px 10px;
+    }
+    .setup-scorecard-title {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 1.1rem;
+      font-weight: 600;
+      margin: 0;
+      color: var(--charcoal);
+    }
+    .setup-scorecard-dismiss {
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 1rem;
+      color: var(--warm-gray-light);
+      padding: 0 2px;
+      line-height: 1;
+      opacity: 0.6;
+      transition: opacity 0.2s;
+    }
+    .setup-scorecard-dismiss:hover { opacity: 1; }
+    .setup-scorecard-progress-wrap {
+      padding: 0 16px 12px;
+    }
+    .setup-scorecard-progress-bar-bg {
+      height: 5px;
+      background: var(--cream-dark);
+      border-radius: 3px;
+      overflow: hidden;
+      margin-bottom: 6px;
+    }
+    .setup-scorecard-progress-bar-fill {
+      height: 100%;
+      background: var(--teal);
+      border-radius: 3px;
+      transition: width 0.4s ease;
+    }
+    .setup-scorecard-progress-label {
+      font-size: 0.75rem;
+      color: var(--warm-gray);
+    }
+    .setup-scorecard-items {
+      border-top: 1px solid var(--cream-dark);
+    }
+    .setup-scorecard-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 16px;
+      cursor: pointer;
+      border-bottom: 1px solid var(--cream-dark);
+      transition: background 0.12s;
+      text-decoration: none;
+      color: inherit;
+    }
+    .setup-scorecard-item:last-child { border-bottom: none; }
+    .setup-scorecard-item:hover { background: var(--cream); }
+    .setup-scorecard-item.complete { opacity: 0.5; cursor: default; }
+    .setup-scorecard-item.complete:hover { background: transparent; }
+    .setup-scorecard-check {
+      width: 16px;
+      height: 16px;
+      border: 1.5px solid var(--warm-gray-light);
+      border-radius: 50%;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.6rem;
+    }
+    .setup-scorecard-item.complete .setup-scorecard-check {
+      border-color: var(--teal);
+      background: var(--teal);
+      color: white;
+    }
+    .setup-scorecard-label {
+      flex: 1;
+      font-size: 0.875rem;
+      color: var(--charcoal);
+    }
+    .setup-scorecard-item.complete .setup-scorecard-label {
+      text-decoration: line-through;
+      color: var(--warm-gray);
+    }
+    .setup-scorecard-arrow {
+      font-size: 0.75rem;
+      color: var(--warm-gray-light);
+    }
+    .setup-scorecard-toggle {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 9px 16px;
+      font-size: 0.8rem;
+      color: var(--teal);
+      cursor: pointer;
+      border-top: 1px solid var(--cream-dark);
+      background: none;
+      width: 100%;
+      text-align: center;
+      border-radius: 0;
+      font-family: 'DM Sans', sans-serif;
+    }
+    .setup-scorecard-toggle:hover { background: var(--cream); }
+    body.dark-mode .setup-scorecard { background: #2a2a2a; border-color: #3a3a3a; }
+    body.dark-mode .setup-scorecard-items { border-top-color: #3a3a3a; }
+    body.dark-mode .setup-scorecard-item { border-bottom-color: #3a3a3a; }
+    body.dark-mode .setup-scorecard-item:hover { background: #333; }
+    body.dark-mode .setup-scorecard-item.complete:hover { background: transparent; }
+    body.dark-mode .setup-scorecard-toggle { border-top-color: #3a3a3a; }
+    body.dark-mode .setup-scorecard-toggle:hover { background: #333; }
+    body.dark-mode .setup-scorecard-title { color: #e0e0e0; }
+    body.dark-mode .setup-scorecard-label { color: #e0e0e0; }
+    body.dark-mode .setup-scorecard-progress-bar-bg { background: #3a3a3a; }
+
     /* Dashboard Settings Gear + Card Settings */
     .dash-settings-gear { font-size: 1.15rem; cursor: pointer; opacity: 0.45; transition: opacity 0.2s; }
     .dash-settings-gear:hover { opacity: 1; }
@@ -5658,6 +5785,8 @@
         </div>
         <div id="dashRenewalSeedStatus" style="margin-top:8px;font-size:0.82rem;"></div>
       </div>
+      <!-- Setup Scorecard — shown after wizard completion until 100% complete or dismissed -->
+      <div id="setupScorecard" style="display:none;"></div>
       <!-- Dashboard Todos (above cards, extensible nudge system) -->
       <div id="dashboardTodos" style="display:none;"></div>
       <!-- Dashboard Cards -->
@@ -26410,6 +26539,277 @@ function renderFeatureGate(containerId, feature, title, message, settingsRoute) 
   el.insertBefore(callout, el.firstChild);
 }
 
+// ============================================================
+// Setup Scorecard — post-wizard completion tracking on dashboard
+// ============================================================
+// Appears at top of dashboard when setupProgress/completed = true
+// but workspace isn't fully configured yet. Dismissed via localStorage
+// once ≥80% complete. Re-evaluates on every dashboard visit.
+
+var _scorecardExpanded = false;
+var _scorecardData = null; // cached Firebase reads for this visit
+
+var SCORECARD_ITEMS = [
+  {
+    id: 'business-name',
+    label: 'Name your business',
+    route: 'settings',
+    subView: 'general',
+    check: function(d) { return !!(d.identity && d.identity.businessName && d.identity.businessName.trim()); }
+  },
+  {
+    id: 'business-type',
+    label: 'Choose your business type',
+    route: 'settings',
+    subView: 'general',
+    check: function(d) { return !!(d.identity && d.identity.businessType); }
+  },
+  {
+    id: 'payment-processor',
+    label: 'Connect a payment processor',
+    route: 'settings',
+    subView: 'payments',
+    check: function(d) {
+      // Use configChecklist flag (set when Square/Stripe is configured)
+      if (tenantConfigChecklist && tenantConfigChecklist.square) return true;
+      // Fallback: check TENANT_CONFIG for payment credentials
+      if (TENANT_CONFIG) {
+        if (TENANT_CONFIG.square && (TENANT_CONFIG.square.locationId || (TENANT_CONFIG.square.sandbox && TENANT_CONFIG.square.sandbox.locationId))) return true;
+        if (TENANT_CONFIG.stripe && (TENANT_CONFIG.stripe.publishableKey || TENANT_CONFIG.stripe.testPublishableKey)) return true;
+      }
+      return false;
+    }
+  },
+  {
+    id: 'shipping-rates',
+    label: 'Set up shipping rates',
+    route: 'settings',
+    subView: 'shipping',
+    check: function(d) {
+      if (tenantConfigChecklist && tenantConfigChecklist.shippingRates) return true;
+      // Direct check: public/config/shippingRates exists
+      return !!(d.shippingRates);
+    }
+  },
+  {
+    id: 'tax-settings',
+    label: 'Configure tax settings',
+    route: 'settings',
+    subView: 'tax',
+    check: function(d) {
+      // Check if nexusState is set in settings, or tax section exists on entity
+      return !!(d.tax && d.tax.state) || !!(d.settingsNexusState);
+    }
+  },
+  {
+    id: 'email-settings',
+    label: 'Add email settings',
+    route: 'settings',
+    subView: 'email',
+    check: function(d) {
+      // Use configChecklist flag (set when email is configured via secretsManager)
+      return !!(tenantConfigChecklist && tenantConfigChecklist.email);
+    }
+  },
+  {
+    id: 'pricing-defaults',
+    label: 'Set pricing defaults',
+    route: 'settings',
+    subView: 'product',
+    check: function(d) {
+      return !!(d.pricingDefaults && d.pricingDefaults.markupStrategy && d.pricingDefaults.markupStrategy !== 'none');
+    }
+  },
+  {
+    id: 'modules-shown',
+    label: 'Choose which modules to show',
+    route: 'settings',
+    subView: 'engagement',
+    check: function(d) {
+      return !!(d.engagement && d.engagement.modulesShown && Object.keys(d.engagement.modulesShown).length > 0);
+    }
+  },
+  {
+    id: 'sales-channels',
+    label: 'Connect your sales channels',
+    route: 'settings',
+    subView: 'channels',
+    check: function(d) {
+      return !!(d.presence && d.presence.declaredChannels && Object.keys(d.presence.declaredChannels).length > 0);
+    }
+  },
+  {
+    id: 'go-public',
+    label: 'Go public when ready',
+    route: 'settings',
+    subView: 'general',
+    check: function(d) {
+      return d.searchable === true;
+    }
+  }
+];
+
+async function loadScorecardData() {
+  var data = {};
+  try {
+    // Business entity sections
+    var entityRes = await MastDB.businessEntity.get();
+    if (entityRes && entityRes.data) {
+      var ent = entityRes.data;
+      data.identity  = ent.identity  || null;
+      data.presence  = ent.presence  || null;
+      data.tax       = ent.tax       || null;
+      data.engagement = ent.engagement || null;
+    }
+    // Shipping rates (public/config/shippingRates)
+    data.shippingRates = await MastDB.get('public/config/shippingRates');
+    // Pricing defaults (public/config/pricingDefaults)
+    data.pricingDefaults = await MastDB.get('public/config/pricingDefaults');
+    // Nexus state from settings
+    try {
+      var settingsSnap = await MastDB.get('config/settings');
+      data.settingsNexusState = settingsSnap && settingsSnap.nexusState ? settingsSnap.nexusState : null;
+    } catch(_) {}
+    // Searchable flag from platform publicConfig
+    try {
+      var tid = MastDB.tenantId();
+      data.searchable = await MastDB.platform.get('mast-platform/tenants/' + tid + '/publicConfig/searchable');
+    } catch(_) {}
+  } catch (err) {
+    console.warn('[SetupScorecard] data load error:', err && err.message);
+  }
+  return data;
+}
+
+function scorecardNavigate(route, subView) {
+  navigateTo(route);
+  if (subView) {
+    setTimeout(function() { switchSettingsSubView(subView); }, 80);
+  }
+}
+
+async function renderSetupScorecard() {
+  var container = document.getElementById('setupScorecard');
+  if (!container) return;
+
+  // Only show when setupProgress/completed = true
+  var completed;
+  try {
+    completed = await MastDB.config.get('setupProgress/completed');
+  } catch(_) {}
+  if (!completed) {
+    container.style.display = 'none';
+    return;
+  }
+
+  // Load data once per visit
+  _scorecardData = await loadScorecardData();
+
+  // Evaluate all items
+  var results = SCORECARD_ITEMS.map(function(item) {
+    var done = false;
+    try { done = item.check(_scorecardData); } catch(_) {}
+    return { item: item, done: done };
+  });
+
+  var total = results.length;
+  var doneCount = results.filter(function(r) { return r.done; }).length;
+  var pct = Math.round(doneCount / total * 100);
+
+  // If 100% complete, hide permanently
+  if (pct === 100) {
+    container.style.display = 'none';
+    return;
+  }
+
+  // If ≥80% complete and previously dismissed, respect dismissal
+  if (pct >= 80) {
+    try {
+      if (localStorage.getItem('mast_scorecard_dismissed') === '1') {
+        container.style.display = 'none';
+        return;
+      }
+    } catch(_) {}
+  }
+
+  var incomplete = results.filter(function(r) { return !r.done; });
+  var PREVIEW_COUNT = 4;
+  var showAll = _scorecardExpanded;
+  // Build visible item list: when collapsed, show up to PREVIEW_COUNT incomplete items
+  // (plus any completed items that fall between them in priority order)
+  var cappedItems = [];
+  if (showAll) {
+    cappedItems = results;
+  } else {
+    var incompleteShown = 0;
+    for (var i = 0; i < results.length; i++) {
+      // Skip completed items once we've shown enough incomplete ones
+      if (incompleteShown >= PREVIEW_COUNT && results[i].done) continue;
+      cappedItems.push(results[i]);
+      if (!results[i].done) incompleteShown++;
+      if (incompleteShown >= PREVIEW_COUNT) break;
+    }
+  }
+
+  var showDismiss = pct >= 80;
+
+  var html = '<div class="setup-scorecard">';
+  html += '<div class="setup-scorecard-header">';
+  html += '<div class="setup-scorecard-title">Finish setting up your workspace</div>';
+  if (showDismiss) {
+    html += '<button class="setup-scorecard-dismiss" onclick="dismissSetupScorecard()" title="Dismiss">&#x2715;</button>';
+  }
+  html += '</div>';
+
+  // Progress bar
+  html += '<div class="setup-scorecard-progress-wrap">';
+  html += '<div class="setup-scorecard-progress-bar-bg">';
+  html += '<div class="setup-scorecard-progress-bar-fill" style="width:' + pct + '%"></div>';
+  html += '</div>';
+  html += '<div class="setup-scorecard-progress-label">' + doneCount + ' of ' + total + ' complete</div>';
+  html += '</div>';
+
+  // Item rows
+  html += '<div class="setup-scorecard-items">';
+  cappedItems.forEach(function(r) {
+    var doneClass = r.done ? ' complete' : '';
+    var checkInner = r.done ? '&#x2713;' : '';
+    var arrowHtml = r.done ? '' : '<span class="setup-scorecard-arrow">&#x2192;</span>';
+    var clickAttr = r.done ? '' : ' onclick="scorecardNavigate(\'' + esc(r.item.route) + '\', \'' + esc(r.item.subView || '') + '\')"';
+    html += '<div class="setup-scorecard-item' + doneClass + '"' + clickAttr + '>';
+    html += '<div class="setup-scorecard-check">' + checkInner + '</div>';
+    html += '<div class="setup-scorecard-label">' + esc(r.item.label) + '</div>';
+    html += arrowHtml;
+    html += '</div>';
+  });
+  html += '</div>';
+
+  // Expand/collapse toggle — only show when there are hidden items
+  var hasHidden = cappedItems.length < results.length;
+  if (showAll) {
+    html += '<button class="setup-scorecard-toggle" onclick="toggleScorecardExpand()">Show less &#x25B4;</button>';
+  } else if (hasHidden) {
+    html += '<button class="setup-scorecard-toggle" onclick="toggleScorecardExpand()">Show all ' + total + ' items &#x25BE;</button>';
+  }
+
+  html += '</div>'; // .setup-scorecard
+
+  container.innerHTML = html;
+  container.style.display = '';
+}
+
+function toggleScorecardExpand() {
+  _scorecardExpanded = !_scorecardExpanded;
+  // Re-render with same data (no reload needed)
+  renderSetupScorecard();
+}
+
+function dismissSetupScorecard() {
+  try { localStorage.setItem('mast_scorecard_dismissed', '1'); } catch(_) {}
+  var container = document.getElementById('setupScorecard');
+  if (container) container.style.display = 'none';
+}
+
 function renderSetupBanner() {
   if (!tenantConfigChecklist) return;
   // Count incomplete required items
@@ -42745,6 +43145,8 @@ async function renderAllDashboardCards() {
   });
   // Dashboard todos / nudges (above cards)
   renderDashboardTodos();
+  // Setup Scorecard — post-wizard completion tracker
+  renderSetupScorecard();
   // Import status banner
   renderImportStatusBanner();
   // PA-9 — Renewal-seed banner (legacy cohort: compliance present, no renewals, not dismissed)
