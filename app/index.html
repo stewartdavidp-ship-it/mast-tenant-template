@@ -2453,6 +2453,7 @@
 
     /* ========== LOADING ========== */
     @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes mastSpin { to { transform: rotate(360deg); } }
     @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
     .loading {
       text-align: center;
@@ -5002,14 +5003,14 @@
 
     /* Compose Screen */
     .nl-compose-header { display:flex; align-items:center; gap:12px; margin-bottom:20px; }
-    .nl-compose-header input { flex:1; font-size:1.15rem; padding:10px 14px; border:1px solid var(--border); border-radius:6px; background:var(--card-bg); color:var(--text); font-weight:500; }
+    .nl-compose-header input { flex:1; font-size:1.15rem; padding:10px 14px; border:1px solid var(--border); border-radius:6px; background:var(--card-bg); color:var(--text,#2a2a2a); font-weight:500; }
     .nl-compose-actions { display:flex; gap:8px; flex-wrap:wrap; padding:16px 0; border-top:1px solid var(--border); margin-top:16px; }
 
     .nl-section-card { background:var(--card-bg); border:1px solid var(--border); border-radius:8px; margin-bottom:10px; overflow:hidden; }
     .nl-section-header { display:flex; align-items:center; padding:14px 16px; cursor:pointer; gap:10px; min-height:48px; }
     .nl-section-header:hover { background:rgba(196,133,60,0.04); }
     .nl-section-drag { cursor:grab; color:var(--text-secondary); font-size:1.15rem; }
-    .nl-section-title-input { flex:1; border:none; background:transparent; font-size:0.9rem; font-weight:600; color:var(--text); padding:4px 0; letter-spacing:0.01em; }
+    .nl-section-title-input { flex:1; border:none; background:transparent; font-size:0.9rem; font-weight:600; color:var(--text,#2a2a2a); padding:4px 0; letter-spacing:0.01em; }
     .nl-section-title-input:focus { outline:none; border-bottom:1px solid var(--amber); }
     .nl-section-status { font-size:0.72rem; padding:3px 8px; border-radius:8px; font-weight:600; text-transform:uppercase; white-space:nowrap; }
     .nl-section-status.empty { background:rgba(150,150,150,0.12); color:var(--text-secondary); }
@@ -5021,15 +5022,15 @@
 
     .nl-section-body { padding:0 16px 16px; }
     .nl-section-prompt { font-size:0.78rem; color:var(--text-secondary); font-style:italic; margin-bottom:10px; padding:8px 12px; background:rgba(196,133,60,0.05); border-radius:6px; border-left:3px solid var(--amber); }
-    .nl-section-textarea { width:100%; min-height:100px; padding:10px; border:1px solid var(--border); border-radius:6px; background:var(--card-bg); color:var(--text); font-family:inherit; font-size:0.9rem; resize:vertical; }
+    .nl-section-textarea { width:100%; min-height:100px; padding:10px; border:1px solid var(--border); border-radius:6px; background:var(--card-bg); color:var(--text,#2a2a2a); font-family:inherit; font-size:0.9rem; resize:vertical; }
     .nl-section-textarea:focus { outline:none; border-color:var(--amber); }
     .nl-format-toolbar { display:flex; align-items:center; gap:4px; padding:4px 6px; background:var(--card-bg); border:1px solid var(--border); border-bottom:none; border-radius:6px 6px 0 0; }
-    .nl-format-btn { width:28px; height:28px; border:1px solid transparent; border-radius:4px; background:none; cursor:pointer; font-size:0.85rem; color:var(--text); display:flex; align-items:center; justify-content:center; }
+    .nl-format-btn { width:28px; height:28px; border:1px solid transparent; border-radius:4px; background:none; cursor:pointer; font-size:0.85rem; color:var(--text,#2a2a2a); display:flex; align-items:center; justify-content:center; }
     .nl-format-btn:hover { background:rgba(184,151,90,0.1); border-color:var(--border); }
     .nl-format-btn.active { background:rgba(184,151,90,0.15); border-color:var(--amber); color:var(--amber); }
     .nl-format-btn-wide { width:auto; padding:0 8px; font-size:0.78rem; }
     .nl-format-sep { width:1px; height:18px; background:var(--border); margin:0 2px; }
-    .nl-section-editable { width:100%; min-height:100px; padding:10px; border:1px solid var(--border); border-radius:0 0 6px 6px; background:var(--card-bg); color:var(--text); font-family:inherit; font-size:0.9rem; outline:none; overflow-y:auto; line-height:1.6; }
+    .nl-section-editable { width:100%; min-height:100px; padding:10px; border:1px solid var(--border); border-radius:0 0 6px 6px; background:var(--card-bg); color:var(--text,#2a2a2a); font-family:inherit; font-size:0.9rem; outline:none; overflow-y:auto; line-height:1.6; }
     .nl-section-editable:focus { border-color:var(--amber); }
     .nl-section-editable a { color:var(--teal); text-decoration:underline; }
 
@@ -5096,30 +5097,30 @@
     .blog-author-card { display:flex; align-items:center; gap:16px; padding:16px 20px; background:#FBF8F4; border:1px solid var(--border); border-radius:10px; margin-bottom:20px; }
     .blog-author-photo { width:64px; height:64px; border-radius:50%; object-fit:cover; border:3px solid var(--amber); flex-shrink:0; }
     .blog-author-info { flex:1; }
-    .blog-author-info select { font-size:0.85rem; padding:4px 8px; border:1px solid var(--border); border-radius:4px; background:var(--card-bg); color:var(--text); }
+    .blog-author-info select { font-size:0.85rem; padding:4px 8px; border:1px solid var(--border); border-radius:4px; background:var(--card-bg); color:var(--text,#2a2a2a); }
     .blog-author-bio { font-size:0.78rem; color:var(--text-secondary); margin-top:4px; line-height:1.4; }
-    .blog-title-input { width:100%; font-family:'Cormorant Garamond',Georgia,serif; font-size:1.6rem; font-weight:400; border:none; border-bottom:1px solid var(--border); padding:10px 0; background:transparent; color:var(--text); outline:none; }
+    .blog-title-input { width:100%; font-family:'Cormorant Garamond',Georgia,serif; font-size:1.6rem; font-weight:400; border:none; border-bottom:1px solid var(--border); padding:10px 0; background:transparent; color:var(--text,#2a2a2a); outline:none; }
     .blog-title-input:focus { border-bottom-color:var(--amber); }
     .blog-title-input::placeholder { color:var(--text-secondary); opacity:0.5; }
     .blog-tags-input { width:100%; font-size:0.85rem; border:none; border-bottom:1px solid var(--border); padding:8px 0; background:transparent; color:var(--text-secondary); outline:none; margin-bottom:16px; }
     .blog-tags-input:focus { border-bottom-color:var(--amber); }
     .blog-body-toolbar { display:flex; gap:8px; margin-bottom:8px; }
-    .blog-body-textarea { width:100%; min-height:400px; padding:16px; border:1px solid var(--border); border-radius:8px; background:var(--card-bg); color:var(--text); font-family:'DM Sans',Arial,sans-serif; font-size:0.9rem; line-height:1.8; resize:vertical; }
+    .blog-body-textarea { width:100%; min-height:400px; padding:16px; border:1px solid var(--border); border-radius:8px; background:var(--card-bg); color:var(--text,#2a2a2a); font-family:'DM Sans',Arial,sans-serif; font-size:0.9rem; line-height:1.8; resize:vertical; }
     .blog-body-textarea:focus { outline:none; border-color:var(--amber); }
     /* Rich text editor */
     .blog-format-toolbar { display:flex; align-items:center; gap:4px; padding:6px 8px; background:var(--card-bg); border:1px solid var(--border); border-bottom:none; border-radius:8px 8px 0 0; flex-wrap:wrap; }
-    .blog-format-btn { width:32px; height:32px; border:1px solid transparent; border-radius:4px; background:none; cursor:pointer; font-size:0.85rem; color:var(--text); display:flex; align-items:center; justify-content:center; font-weight:400; }
+    .blog-format-btn { width:32px; height:32px; border:1px solid transparent; border-radius:4px; background:none; cursor:pointer; font-size:0.85rem; color:var(--text,#2a2a2a); display:flex; align-items:center; justify-content:center; font-weight:400; }
     .blog-format-btn:hover { background:rgba(184,151,90,0.1); border-color:var(--border); }
     .blog-format-btn.active { background:rgba(184,151,90,0.15); border-color:var(--amber); color:var(--amber); }
     .blog-format-sep { width:1px; height:20px; background:var(--border); margin:0 4px; }
-    .blog-format-select { font-size:0.78rem; padding:4px 6px; border:1px solid var(--border); border-radius:4px; background:var(--card-bg); color:var(--text); cursor:pointer; height:32px; }
+    .blog-format-select { font-size:0.78rem; padding:4px 6px; border:1px solid var(--border); border-radius:4px; background:var(--card-bg); color:var(--text,#2a2a2a); cursor:pointer; height:32px; }
     .blog-format-btn-wide { width:auto; padding:0 8px; font-size:0.78rem; font-weight:600; letter-spacing:0.5px; }
     .blog-word-count { font-size:0.78rem; color:var(--text-secondary); padding:3px 12px; text-align:right; background:var(--card-bg); border-left:1px solid var(--border); border-right:1px solid var(--border); }
     .blog-save-status { font-size:0.78rem; color:var(--text-secondary); transition:opacity 0.3s; }
     .blog-save-status.saving { color:var(--text-secondary); }
     .blog-save-status.saved { color:var(--teal,var(--teal)); }
     .blog-save-status.save-error { color:var(--danger,var(--danger)); }
-    .blog-body-editable { width:100%; min-height:400px; padding:16px; border:1px solid var(--border); border-radius:0 0 8px 8px; background:var(--card-bg); color:var(--text); font-family:'DM Sans',Arial,sans-serif; font-size:0.9rem; line-height:1.8; outline:none; overflow-y:auto; }
+    .blog-body-editable { width:100%; min-height:400px; padding:16px; border:1px solid var(--border); border-radius:0 0 8px 8px; background:var(--card-bg); color:var(--text,#2a2a2a); font-family:'DM Sans',Arial,sans-serif; font-size:0.9rem; line-height:1.8; outline:none; overflow-y:auto; }
     .blog-body-editable:focus { border-color:var(--amber); }
     .blog-body-editable:empty:before { content:attr(data-placeholder); color:var(--text-secondary); opacity:0.5; pointer-events:none; }
     .blog-img-marker { display:inline-block; background:rgba(184,151,90,0.1); border:1px solid var(--amber); border-radius:4px; padding:2px 8px; font-size:0.78rem; color:var(--amber); cursor:default; margin:4px 0; }
@@ -5146,7 +5147,7 @@
     .blog-publish-platform .platform-status { font-size:0.78rem; color:var(--text-secondary); margin-top:2px; }
     .blog-publish-platform .platform-check { width:20px; height:20px; accent-color:var(--amber); flex-shrink:0; }
     .blog-ideas-section { margin-top:24px; padding-top:20px; border-top:1px solid var(--border); }
-    .blog-ideas-section h3 { font-size:0.9rem; font-weight:600; margin-bottom:12px; color:var(--text); }
+    .blog-ideas-section h3 { font-size:0.9rem; font-weight:600; margin-bottom:12px; color:var(--text,#2a2a2a); }
     .blog-idea-row { display:flex; align-items:flex-start; padding:10px 14px; background:var(--card-bg); border:1px solid var(--border); border-radius:8px; margin-bottom:6px; gap:10px; }
     .blog-idea-row:hover { border-color:var(--amber); }
     .blog-idea-text { flex:1; font-size:0.9rem; line-height:1.4; }
@@ -5155,11 +5156,11 @@
     .blog-idea-actions button { background:none; border:none; cursor:pointer; font-size:0.85rem; padding:2px 4px; color:var(--text-secondary); }
     .blog-idea-actions button:hover { color:var(--amber); }
     .blog-idea-input { display:flex; gap:8px; margin-bottom:12px; }
-    .blog-idea-input input { flex:1; padding:8px 12px; border:1px solid var(--border); border-radius:6px; background:var(--card-bg); color:var(--text); font-size:0.9rem; }
+    .blog-idea-input input { flex:1; padding:8px 12px; border:1px solid var(--border); border-radius:6px; background:var(--card-bg); color:var(--text,#2a2a2a); font-size:0.9rem; }
     .blog-idea-input input:focus { outline:none; border-color:var(--amber); }
     /* Blog Slash Command Menu */
     .blog-slash-menu { position:absolute; z-index:100; background:var(--card-bg); border:1px solid var(--border); border-radius:8px; box-shadow:0 4px 16px rgba(0,0,0,0.25); padding:4px; min-width:180px; max-height:260px; overflow-y:auto; }
-    .blog-slash-item { display:flex; align-items:center; gap:10px; padding:8px 12px; border-radius:6px; cursor:pointer; font-size:0.85rem; color:var(--text); }
+    .blog-slash-item { display:flex; align-items:center; gap:10px; padding:8px 12px; border-radius:6px; cursor:pointer; font-size:0.85rem; color:var(--text,#2a2a2a); }
     .blog-slash-item:hover, .blog-slash-item.active { background:rgba(184,151,90,0.12); }
     .blog-slash-icon { width:24px; text-align:center; font-weight:600; font-size:0.9rem; color:var(--amber); flex-shrink:0; }
     body.dark-mode .blog-slash-menu { background:#2a2a2a; border-color:#444; }
@@ -5167,7 +5168,7 @@
     .blog-featured-image { margin-bottom:12px; }
     .blog-featured-placeholder { display:flex; flex-direction:column; align-items:center; justify-content:center; padding:16px; border:2px dashed var(--border); border-radius:8px; cursor:pointer; color:var(--text-secondary); font-size:0.85rem; transition:border-color 0.15s; }
     .blog-featured-placeholder:hover { border-color:var(--amber); color:var(--amber); }
-    .blog-excerpt-input { width:100%; padding:8px 12px; border:1px solid var(--border); border-radius:6px; background:var(--card-bg); color:var(--text); font-family:'DM Sans',sans-serif; font-size:0.85rem; line-height:1.5; resize:vertical; min-height:48px; max-height:100px; box-sizing:border-box; }
+    .blog-excerpt-input { width:100%; padding:8px 12px; border:1px solid var(--border); border-radius:6px; background:var(--card-bg); color:var(--text,#2a2a2a); font-family:'DM Sans',sans-serif; font-size:0.85rem; line-height:1.5; resize:vertical; min-height:48px; max-height:100px; box-sizing:border-box; }
     .blog-excerpt-input:focus { outline:none; border-color:var(--amber); }
     /* Blog Social Card Preview */
     .blog-social-card { border:1px solid var(--border); border-radius:12px; overflow:hidden; max-width:500px; }
@@ -5183,12 +5184,12 @@
     .blog-preview-article { background:#FDFBF8; border:1px solid var(--border); border-radius:12px; padding:40px 48px; }
     .blog-preview-byline { display:flex; align-items:center; gap:12px; margin-bottom:28px; }
     .blog-preview-byline-photo { width:48px; height:48px; border-radius:50%; object-fit:cover; }
-    .blog-preview-byline-name { font-family:'DM Sans',Arial,sans-serif; font-weight:600; font-size:0.9rem; color:var(--text); }
+    .blog-preview-byline-name { font-family:'DM Sans',Arial,sans-serif; font-weight:600; font-size:0.9rem; color:var(--text,#2a2a2a); }
     .blog-preview-byline-date { font-size:0.78rem; color:var(--text-secondary); }
-    .blog-preview-title { font-family:'Cormorant Garamond',Georgia,serif; font-size:1.6rem; font-weight:400; line-height:1.2; margin:0 0 16px 0; color:var(--text); }
+    .blog-preview-title { font-family:'Cormorant Garamond',Georgia,serif; font-size:1.6rem; font-weight:400; line-height:1.2; margin:0 0 16px 0; color:var(--text,#2a2a2a); }
     .blog-preview-tags { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:24px; }
     .blog-preview-tag { font-size:0.78rem; padding:3px 10px; background:rgba(184,151,90,0.1); color:var(--amber); border-radius:20px; }
-    .blog-preview-body { font-family:'DM Sans',Georgia,serif; font-size:1.0rem; line-height:1.9; color:var(--text); }
+    .blog-preview-body { font-family:'DM Sans',Georgia,serif; font-size:1.0rem; line-height:1.9; color:var(--text,#2a2a2a); }
     .blog-body-editable h2 { font-family:'Cormorant Garamond',Georgia,serif; font-size:1.6rem; font-weight:600; margin:1.2em 0 0.5em; line-height:1.3; }
     .blog-body-editable h3 { font-family:'Cormorant Garamond',Georgia,serif; font-size:1.15rem; font-weight:600; margin:1em 0 0.4em; line-height:1.3; }
     .blog-body-editable blockquote { border-left:3px solid var(--amber); padding-left:16px; margin:12px 0; color:var(--text-secondary); font-style:italic; }
@@ -5209,7 +5210,7 @@
     .blog-preview-body .blog-img-caption { font-size:0.85rem; color:var(--text-secondary); text-align:center; margin:-10px 0 16px 0; font-style:italic; }
     .blog-inline-img-label { font-size:0.72rem; color:var(--text-secondary); text-align:center; margin-top:2px; }
     .blog-inline-img-caption { font-size:0.72rem; color:var(--text-secondary); padding:0 2px; }
-    .blog-inline-img-caption input { width:100%; font-size:0.72rem; border:none; border-bottom:1px solid var(--border); background:transparent; color:var(--text); padding:2px 0; outline:none; }
+    .blog-inline-img-caption input { width:100%; font-size:0.72rem; border:none; border-bottom:1px solid var(--border); background:transparent; color:var(--text,#2a2a2a); padding:2px 0; outline:none; }
     .blog-inline-img-caption input:focus { border-bottom-color:var(--amber); }
 
     body.dark-mode .blog-post-row { background:#1e1e1e; border-color:#333; }
@@ -6378,6 +6379,18 @@
         <svg viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.27-4.74 3.27-8.1z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
         Sign in with Google
       </button>
+    </div>
+
+    <!-- Auth: Loading (shown immediately after Google sign-in while boot sequence runs) -->
+    <div class="auth-screen" id="loadingScreen" style="display:none;">
+      <div style="display:flex;flex-direction:column;align-items:center;gap:16px;">
+        <svg width="32" height="32" viewBox="0 0 32 32" style="animation:mastSpin 1.2s linear infinite;">
+          <circle cx="16" cy="16" r="13" stroke="var(--border,#e4ddd4)" stroke-width="3" fill="none"/>
+          <circle cx="16" cy="16" r="13" stroke="var(--amber,#e8a84c)" stroke-width="3" fill="none"
+            stroke-dasharray="54" stroke-dashoffset="40" stroke-linecap="round"/>
+        </svg>
+        <p id="loadingScreenMsg" style="margin:0;font-size:0.95rem;color:var(--warm-gray);">Loading your workspace…</p>
+      </div>
     </div>
 
     <!-- Auth: Access Denied -->
@@ -7632,7 +7645,7 @@
         <div id="storiesListContent"></div>
         <div id="storiesEmpty" style="display:none;text-align:center;padding:48px 20px;color:var(--warm-gray);">
           <div style="font-size:1.6rem;margin-bottom:12px;">📖</div>
-          <h3 style="color:var(--text);margin:0 0 8px;">No Stories Yet</h3>
+          <h3 style="color:var(--text,#2a2a2a);margin:0 0 8px;">No Stories Yet</h3>
           <p style="max-width:400px;margin:0 auto 16px;font-size:0.9rem;">Stories are curated from completed jobs. Open a completed job and click <strong>Curate Story</strong> to create one.</p>
           <button class="btn btn-secondary" onclick="navigateTo('jobs')">View Jobs</button>
         </div>
@@ -9834,14 +9847,14 @@
         <div class="section-header">
           <h2>Classes</h2>
           <div style="display:flex;gap:8px;align-items:center;">
-            <select id="bookFilterType" onchange="window._bookFilterType()" style="padding:6px 10px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:0.85rem;">
+            <select id="bookFilterType" onchange="window._bookFilterType()" style="padding:6px 10px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text,#2a2a2a);font-size:0.85rem;">
               <option value="all">All Types</option>
               <option value="series">Series</option>
               <option value="single">Single</option>
               <option value="dropin">Drop-in</option>
               <option value="private">Private</option>
             </select>
-            <select id="bookFilterStatus" onchange="window._bookFilterStatus()" style="padding:6px 10px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:0.85rem;">
+            <select id="bookFilterStatus" onchange="window._bookFilterStatus()" style="padding:6px 10px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text,#2a2a2a);font-size:0.85rem;">
               <option value="active">Active</option>
               <option value="draft">Draft</option>
               <option value="archived">Archived</option>
@@ -9865,7 +9878,7 @@
         <div class="section-header">
           <h2>Enrollments</h2>
           <div style="display:flex;gap:8px;align-items:center;">
-            <select id="enrollFilterStatus" onchange="window._enrollFilterStatus()" style="padding:6px 10px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:0.85rem;">
+            <select id="enrollFilterStatus" onchange="window._enrollFilterStatus()" style="padding:6px 10px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text,#2a2a2a);font-size:0.85rem;">
               <option value="all">All Status</option>
               <option value="confirmed">Confirmed</option>
               <option value="waitlisted">Waitlisted</option>
@@ -9873,7 +9886,7 @@
               <option value="completed">Completed</option>
               <option value="no-show">No-Show</option>
             </select>
-            <select id="enrollFilterClass" onchange="window._enrollFilterClass()" style="padding:6px 10px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:0.85rem;">
+            <select id="enrollFilterClass" onchange="window._enrollFilterClass()" style="padding:6px 10px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text,#2a2a2a);font-size:0.85rem;">
               <option value="all">All Classes</option>
             </select>
           </div>
@@ -9897,7 +9910,7 @@
         <div class="section-header">
           <h2>Instructors</h2>
           <div style="display:flex;gap:8px;align-items:center;">
-            <select id="instrFilterStatus" onchange="window._instrFilterStatus()" style="padding:6px 10px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:0.85rem;">
+            <select id="instrFilterStatus" onchange="window._instrFilterStatus()" style="padding:6px 10px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text,#2a2a2a);font-size:0.85rem;">
               <option value="active">Active</option>
               <option value="inactive">Inactive</option>
               <option value="all">All</option>
@@ -9919,12 +9932,12 @@
         <div class="section-header">
           <h2>Resources</h2>
           <div style="display:flex;gap:8px;align-items:center;">
-            <select id="resFilterType" onchange="window._resFilterType()" style="padding:6px 10px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:0.85rem;">
+            <select id="resFilterType" onchange="window._resFilterType()" style="padding:6px 10px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text,#2a2a2a);font-size:0.85rem;">
               <option value="all">All Types</option>
               <option value="room">Rooms</option>
               <option value="equipment">Equipment</option>
             </select>
-            <select id="resFilterStatus" onchange="window._resFilterStatus()" style="padding:6px 10px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:0.85rem;">
+            <select id="resFilterStatus" onchange="window._resFilterStatus()" style="padding:6px 10px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text,#2a2a2a);font-size:0.85rem;">
               <option value="active">Active</option>
               <option value="inactive">Inactive</option>
               <option value="all">All</option>
@@ -9946,7 +9959,7 @@
         <div class="section-header">
           <h2>Pass Definitions</h2>
           <div style="display:flex;gap:8px;align-items:center;">
-            <select id="passFilterType" onchange="window._passFilterType()" style="padding:6px 10px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:0.85rem;">
+            <select id="passFilterType" onchange="window._passFilterType()" style="padding:6px 10px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text,#2a2a2a);font-size:0.85rem;">
               <option value="all">All Types</option>
               <option value="drop-in">Drop-in</option>
               <option value="pack">Pack</option>
@@ -9955,7 +9968,7 @@
               <option value="series">Series</option>
               <option value="intro">Intro</option>
             </select>
-            <select id="passFilterStatus" onchange="window._passFilterStatus()" style="padding:6px 10px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:0.85rem;">
+            <select id="passFilterStatus" onchange="window._passFilterStatus()" style="padding:6px 10px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text,#2a2a2a);font-size:0.85rem;">
               <option value="active">Active</option>
               <option value="draft">Draft</option>
               <option value="archived">Archived</option>
@@ -9995,7 +10008,7 @@
             <h2 style="margin:0;">Class Reports</h2>
           </div>
           <div style="display:flex;gap:8px;align-items:center;">
-            <select id="reportDateRange" onchange="window._reportRangeChange()" style="padding:6px 10px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:0.85rem;">
+            <select id="reportDateRange" onchange="window._reportRangeChange()" style="padding:6px 10px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text,#2a2a2a);font-size:0.85rem;">
               <option value="7">Last 7 Days</option>
               <option value="30" selected>Last 30 Days</option>
               <option value="90">Last 90 Days</option>
@@ -13456,11 +13469,13 @@ auth.onAuthStateChanged(async function(user) {
   currentUser = user;
   if (user) { try { loadMastToastPrefs(); } catch (e) {} }
   const authScreen = document.getElementById('authScreen');
+  const loadingScreen = document.getElementById('loadingScreen');
   const deniedScreen = document.getElementById('deniedScreen');
   const header = document.getElementById('header');
 
   if (!user) {
     authScreen.style.display = '';
+    loadingScreen.style.display = 'none';
     deniedScreen.style.display = 'none';
     header.style.display = 'none';
     hideSidebar();
@@ -13472,6 +13487,10 @@ auth.onAuthStateChanged(async function(user) {
     rbacReady = false;
     return;
   }
+
+  // Swap auth → loading immediately so user doesn't see sign-in screen during boot
+  authScreen.style.display = 'none';
+  loadingScreen.style.display = '';
 
   // --- Tenant Resolution ---
   // Resolve tenant membership from platform registry before loading any data.
@@ -13526,6 +13545,8 @@ auth.onAuthStateChanged(async function(user) {
           if (claimResult.claimed) {
             console.log('Tenant claimed (' + (claimResult.via || 'unknown') + '):', claimResult.tenantId);
             tenantId = claimResult.tenantId;
+            // Force-refresh token to pick up new admin custom claim set by syncAdminUserClaim CF
+            try { await user.getIdToken(true); } catch(e) { console.warn('Post-claim token refresh:', e.message); }
           }
         }
       }
@@ -13577,6 +13598,7 @@ auth.onAuthStateChanged(async function(user) {
     if (!tenantId) {
       // Still no tenant — genuinely unauthorized user
       console.warn('No tenant membership for UID:', user.uid);
+      loadingScreen.style.display = 'none';
       authScreen.style.display = 'none';
       deniedScreen.style.display = '';
       header.style.display = 'none';
@@ -13607,6 +13629,7 @@ auth.onAuthStateChanged(async function(user) {
 
   if (!role) {
     // RBAC load failed — fail closed
+    loadingScreen.style.display = 'none';
     authScreen.style.display = 'none';
     deniedScreen.style.display = '';
     header.style.display = 'none';
@@ -13622,6 +13645,7 @@ auth.onAuthStateChanged(async function(user) {
   // the expired screen with the login screen. Firestore rules are the real security boundary.
   if (currentUserRole === 'guest' && currentUserRecord && currentUserRecord.accessExpiry) {
     if (new Date(currentUserRecord.accessExpiry) < new Date()) {
+      loadingScreen.style.display = 'none';
       authScreen.style.display = 'none';
       deniedScreen.style.display = 'none';
       header.style.display = 'none';
@@ -13633,6 +13657,7 @@ auth.onAuthStateChanged(async function(user) {
   }
 
   if (!isStaff()) {
+    loadingScreen.style.display = 'none';
     authScreen.style.display = 'none';
     deniedScreen.style.display = '';
     header.style.display = 'none';
@@ -13647,6 +13672,7 @@ auth.onAuthStateChanged(async function(user) {
     // Check if wizard was already completed (setupProgress.completed)
     var setupSnap = await MastDB.config.get('setupProgress/completed');
     if (!setupSnap) {
+      loadingScreen.style.display = 'none';
       authScreen.style.display = 'none';
       deniedScreen.style.display = 'none';
       header.style.display = 'none';
@@ -13658,6 +13684,7 @@ auth.onAuthStateChanged(async function(user) {
   }
 
   // Staff (Admin or User) — enter authorized state
+  loadingScreen.style.display = 'none';
   authScreen.style.display = 'none';
   deniedScreen.style.display = 'none';
   header.style.display = 'flex';
@@ -13893,7 +13920,7 @@ function renderCSVImportUI(opts) {
         var isRequired = opts.requiredFields.indexOf(field) !== -1;
         html += '<div class="form-group" style="margin-bottom:8px;">' +
           '<label style="font-size:0.78rem;font-weight:500;">' + esc(field) + (isRequired ? ' *' : '') + '</label>' +
-          '<select id="csvMap_' + opts.containerId + '_' + field + '" style="width:100%;padding:6px 8px;border:1px solid var(--surface-card-border,#ccc);border-radius:4px;font-size:0.85rem;background:var(--bg);color:var(--text);">' +
+          '<select id="csvMap_' + opts.containerId + '_' + field + '" style="width:100%;padding:6px 8px;border:1px solid var(--surface-card-border,#ccc);border-radius:4px;font-size:0.85rem;background:var(--bg);color:var(--text,#2a2a2a);">' +
           '<option value="-1">— Skip —</option>';
         for (var h = 0; h < csvData.headers.length; h++) {
           var selected = columnMapping[field] === h ? ' selected' : '';
@@ -14226,7 +14253,7 @@ function renderMigrationDashboard() {
 function statCard(label, value, icon) {
   return '<div style="background:var(--surface-card,#f5f5f5);border-radius:8px;padding:14px 16px;text-align:center;">' +
     '<div style="font-size:1.15rem;margin-bottom:4px;">' + icon + '</div>' +
-    '<div style="font-size:1.15rem;font-weight:600;color:var(--text);">' + value + '</div>' +
+    '<div style="font-size:1.15rem;font-weight:600;color:var(--text,#2a2a2a);">' + value + '</div>' +
     '<div style="font-size:0.78rem;color:var(--warm-gray);">' + esc(label) + '</div>' +
   '</div>';
 }
@@ -14425,7 +14452,7 @@ function renderMigrationPlan() {
             (step.completedAt ? ' &middot; Done: ' + esc(step.completedAt.split('T')[0]) : '') +
           '</div>' +
           (depNames.length ? '<div style="font-size:0.72rem;color:var(--warm-gray);margin-top:2px;">Depends on: ' + depNames.map(esc).join(', ') + '</div>' : '') +
-          (step.notes ? '<div style="font-size:0.78rem;color:var(--text);margin-top:4px;font-style:italic;">' + esc(step.notes) + '</div>' : '') +
+          (step.notes ? '<div style="font-size:0.78rem;color:var(--text,#2a2a2a);margin-top:4px;font-style:italic;">' + esc(step.notes) + '</div>' : '') +
         '</div>' +
       '</div>';
     });
@@ -14568,7 +14595,7 @@ function renderHistoricalOrders() {
       '<h1 style="margin-top:0;margin-bottom:4px;">Past Orders</h1>' +
       '<p style="color:var(--warm-gray);font-size:0.85rem;margin-bottom:16px;">' + orders.length + ' order' + (orders.length !== 1 ? 's' : '') + ' imported from your previous platform</p>' +
       '<div style="margin-bottom:16px;">' +
-        '<input type="text" id="histOrderSearch" placeholder="Search by name or email..." style="width:100%;max-width:320px;padding:8px 12px;border:1px solid var(--surface-card-border,#e0e0e0);border-radius:6px;font-size:0.85rem;background:var(--bg);color:var(--text);">' +
+        '<input type="text" id="histOrderSearch" placeholder="Search by name or email..." style="width:100%;max-width:320px;padding:8px 12px;border:1px solid var(--surface-card-border,#e0e0e0);border-radius:6px;font-size:0.85rem;background:var(--bg);color:var(--text,#2a2a2a);">' +
       '</div>';
 
     // Table
@@ -17683,8 +17710,8 @@ function renderEmailTriggers() {
     h += '<div onclick="toggleEmailModule(\'' + mod + '\')" style="display:flex;align-items:center;gap:8px;padding:12px 16px;cursor:pointer;background:var(--cream);user-select:none;transition:background 0.15s ease;" onmouseover="this.style.background=\'var(--cream-dark)\'" onmouseout="this.style.background=\'var(--cream)\'">';
     h += '<span style="font-size:0.85rem;color:var(--warm-gray);width:12px;text-align:center;">' + chevron + '</span>';
     h += '<span style="font-size:1.0rem;">' + moduleIcons[mod] + '</span>';
-    h += '<h3 style="font-family:\'Cormorant Garamond\',serif;font-size:1.15rem;color:var(--text);margin:0;flex:1;">' + mod + '</h3>';
-    h += '<span onclick="event.stopPropagation();toggleEmailModuleTriggers(\'' + mod + '\')" style="font-size:0.72rem;color:var(--text);background:rgba(42,124,111,0.3);padding:3px 10px;border-radius:10px;font-weight:600;cursor:pointer;transition:background 0.15s ease;" onmouseover="this.style.background=\'rgba(42,124,111,0.5)\'" onmouseout="this.style.background=\'rgba(42,124,111,0.3)\'" title="Toggle all ' + mod + ' emails">' + enabledCount + '/' + triggers.length + ' on</span>';
+    h += '<h3 style="font-family:\'Cormorant Garamond\',serif;font-size:1.15rem;color:var(--text,#2a2a2a);margin:0;flex:1;">' + mod + '</h3>';
+    h += '<span onclick="event.stopPropagation();toggleEmailModuleTriggers(\'' + mod + '\')" style="font-size:0.72rem;color:var(--text,#2a2a2a);background:rgba(42,124,111,0.3);padding:3px 10px;border-radius:10px;font-weight:600;cursor:pointer;transition:background 0.15s ease;" onmouseover="this.style.background=\'rgba(42,124,111,0.5)\'" onmouseout="this.style.background=\'rgba(42,124,111,0.3)\'" title="Toggle all ' + mod + ' emails">' + enabledCount + '/' + triggers.length + ' on</span>';
     h += '</div>';
 
     // Collapsible body
@@ -17700,7 +17727,7 @@ function renderEmailTriggers() {
       // Left side: info + preview button
       h += '<div style="flex:1;min-width:0;">';
       h += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:3px;">';
-      h += '<span style="font-weight:600;font-size:0.9rem;color:var(--text);">' + t.name + '</span>';
+      h += '<span style="font-weight:600;font-size:0.9rem;color:var(--text,#2a2a2a);">' + t.name + '</span>';
       if (isAuto) {
         h += '<span style="font-size:0.72rem;background:rgba(42,124,111,0.12);color:var(--teal);padding:1px 5px;border-radius:3px;font-weight:600;text-transform:uppercase;letter-spacing:0.3px;">Auto</span>';
       } else {
@@ -18244,7 +18271,7 @@ function loadNotificationsSettings() {
     var catLabels = { inventory: 'Inventory', orders: 'Orders', integrations: 'Integrations', tokens: 'AI Tokens' };
     Object.keys(categories).forEach(function(cat) {
       h += '<div style="margin-bottom:20px;">';
-      h += '<h4 style="font-family:\'Cormorant Garamond\',serif;font-size:1.15rem;color:var(--text);margin:0 0 8px;text-transform:capitalize;">' + (catLabels[cat] || cat) + '</h4>';
+      h += '<h4 style="font-family:\'Cormorant Garamond\',serif;font-size:1.15rem;color:var(--text,#2a2a2a);margin:0 0 8px;text-transform:capitalize;">' + (catLabels[cat] || cat) + '</h4>';
       h += '<div style="border:1px solid rgba(255,255,255,0.08);border-radius:8px;overflow:hidden;">';
 
       categories[cat].forEach(function(def, idx) {
@@ -18263,7 +18290,7 @@ function loadNotificationsSettings() {
         // Top row: toggle + name + badge (fixed layout)
         h += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">';
         h += '<input type="checkbox" ' + (enabled ? 'checked' : '') + ' onchange="toggleAlertEnabled(\'' + def.id + '\', this.checked)" style="width:16px;height:16px;cursor:pointer;flex-shrink:0;accent-color:var(--amber);">';
-        h += '<span style="font-weight:600;font-size:0.9rem;color:var(--text);flex:1;">' + def.name + '</span>';
+        h += '<span style="font-weight:600;font-size:0.9rem;color:var(--text,#2a2a2a);flex:1;">' + def.name + '</span>';
         h += '<span style="font-size:0.72rem;padding:2px 8px;border-radius:3px;background:' + severityColor + ';color:white;font-weight:600;text-transform:uppercase;flex-shrink:0;">' + def.severity + '</span>';
         h += '</div>';
 
@@ -18276,7 +18303,7 @@ function loadNotificationsSettings() {
         // Threshold input (if applicable)
         if (def.defaultThreshold != null && def.thresholdUnit) {
           h += '<div style="display:flex;align-items:center;gap:4px;">';
-          h += '<input type="number" value="' + (threshold || '') + '" min="0" style="width:56px;padding:4px 8px;border:1px solid rgba(255,255,255,0.15);border-radius:4px;font-size:0.85rem;background:rgba(255,255,255,0.06);color:var(--text);" ';
+          h += '<input type="number" value="' + (threshold || '') + '" min="0" style="width:56px;padding:4px 8px;border:1px solid rgba(255,255,255,0.15);border-radius:4px;font-size:0.85rem;background:rgba(255,255,255,0.06);color:var(--text,#2a2a2a);" ';
           h += 'onchange="updateAlertThreshold(\'' + def.id + '\', this.value)">';
           h += '<span style="font-size:0.78rem;color:rgba(255,255,255,0.4);">' + (def.thresholdUnit || '') + '</span>';
           h += '</div>';
@@ -18364,12 +18391,12 @@ function loadAlertHistory() {
       h += '<div style="padding:10px 16px;background:' + bg + ';' + borderTop + 'display:flex;align-items:center;gap:10px;">';
       h += '<span style="width:8px;height:8px;border-radius:50%;background:' + (isRead ? 'transparent' : severityColor) + ';flex-shrink:0;border:1px solid ' + severityColor + ';"></span>';
       h += '<div style="flex:1;min-width:0;">';
-      h += '<div style="font-weight:' + (isRead ? '400' : '600') + ';font-size:0.85rem;color:var(--text);">' + (alert.name || alert.alertId) + '</div>';
+      h += '<div style="font-weight:' + (isRead ? '400' : '600') + ';font-size:0.85rem;color:var(--text,#2a2a2a);">' + (alert.name || alert.alertId) + '</div>';
       h += '<div style="font-size:0.78rem;color:rgba(255,255,255,0.4);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + (alert.message || '') + '</div>';
       h += '</div>';
       h += '<div style="font-size:0.72rem;color:rgba(255,255,255,0.35);flex-shrink:0;text-align:right;">' + date + '</div>';
       if (!isRead) {
-        h += '<button onclick="acknowledgeAlertFromUI(\'' + alert.id + '\', this)" style="font-size:0.72rem;padding:3px 10px;border:1px solid rgba(255,255,255,0.15);border-radius:4px;background:rgba(255,255,255,0.08);color:var(--text);cursor:pointer;">Dismiss</button>';
+        h += '<button onclick="acknowledgeAlertFromUI(\'' + alert.id + '\', this)" style="font-size:0.72rem;padding:3px 10px;border:1px solid rgba(255,255,255,0.15);border-radius:4px;background:rgba(255,255,255,0.08);color:var(--text,#2a2a2a);cursor:pointer;">Dismiss</button>';
       }
       h += '</div>';
     });
@@ -23087,11 +23114,13 @@ function renderWizardEngagement() {
       (function(card) {
         var wrap = document.createElement('div');
         wrap.className = 'wizard-feature-card';
-        wrap.style.cssText = 'border:1px solid #ddd;border-radius:8px;padding:14px 16px;cursor:pointer;background:#fff;';
         var selected = state.mode === card.value;
-        if (selected) { wrap.setAttribute('data-selected', 'true'); wrap.style.borderColor = 'var(--teal)'; }
+        if (selected) wrap.setAttribute('data-selected', 'true');
+        wrap.style.cssText = 'border:' + (selected ? '2px solid var(--teal)' : '1px solid var(--border,#ddd)') +
+          ';border-radius:8px;padding:14px 16px;cursor:pointer;background:' +
+          (selected ? 'rgba(42,124,111,0.1)' : 'var(--surface-card,#fff)') + ';color:var(--text,#2a2a2a);transition:border-color 0.15s,background 0.15s;';
         var title = document.createElement('div');
-        title.style.cssText = 'font-weight:600;font-size:0.95rem;margin-bottom:4px;';
+        title.style.cssText = 'font-weight:600;font-size:0.95rem;margin-bottom:4px;color:var(--text,#2a2a2a);';
         title.textContent = card.title;
         var body = document.createElement('div');
         body.style.cssText = 'font-size:0.85rem;color:var(--warm-gray);margin-bottom:' + (selected ? '10px' : '0') + ';';
@@ -23110,7 +23139,9 @@ function renderWizardEngagement() {
               btn.textContent = surf.label;
               btn.title = surf.hint;
               var on = activeSurface === surf.value;
-              btn.style.cssText = 'padding:6px 10px;border-radius:999px;border:1px solid ' + (on ? 'var(--teal)' : '#ccc') + ';background:' + (on ? 'rgba(42,124,111,0.08)' : 'transparent') + ';font-size:0.78rem;cursor:pointer;';
+              btn.style.cssText = 'padding:6px 10px;border-radius:999px;border:' + (on ? '2px solid var(--teal)' : '1px solid var(--border,#ccc)') +
+                ';background:' + (on ? 'rgba(42,124,111,0.12)' : 'var(--surface-card,#fff)') +
+                ';font-size:0.78rem;cursor:pointer;color:var(--text,#2a2a2a);transition:all 0.15s;';
               btn.onclick = function(ev) {
                 ev.stopPropagation();
                 state.surfaceByMode[card.value] = surf.value;
@@ -23145,11 +23176,14 @@ function renderWizardEngagement() {
       (function(goalId) {
         var chip = document.createElement('label');
         var on = state.goals.indexOf(goalId) >= 0;
-        chip.style.cssText = 'display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:999px;border:1px solid ' + (on ? 'var(--teal)' : '#ccc') + ';background:' + (on ? 'rgba(42,124,111,0.08)' : '#fff') + ';cursor:pointer;font-size:0.82rem;';
+        chip.style.cssText = 'display:inline-flex;align-items:center;padding:6px 12px;border-radius:999px;border:' +
+          (on ? '2px solid var(--teal)' : '1px solid var(--border,#ccc)') +
+          ';background:' + (on ? 'rgba(42,124,111,0.12)' : 'var(--surface-card,#fff)') +
+          ';cursor:pointer;font-size:0.82rem;color:var(--text,#2a2a2a);transition:all 0.15s;';
         var cb = document.createElement('input');
         cb.type = 'checkbox';
         cb.checked = on;
-        cb.style.cssText = 'margin:0;';
+        cb.style.cssText = 'position:absolute;opacity:0;width:0;height:0;pointer-events:none;';
         cb.onchange = function() {
           var idx = state.goals.indexOf(goalId);
           if (cb.checked && idx < 0) state.goals.push(goalId);
@@ -23300,14 +23334,14 @@ function renderWizardCalibration() {
       var btn = document.createElement('button');
       btn.type = 'button';
       btn.textContent = role.label;
-      btn.style.cssText = 'padding:6px 10px;border-radius:999px;border:1px solid #ccc;background:#fff;font-size:0.78rem;cursor:pointer;';
+      btn.style.cssText = 'padding:6px 10px;border-radius:999px;border:1px solid var(--border,#ccc);background:var(--surface-card,#fff);font-size:0.78rem;cursor:pointer;color:var(--text,#2a2a2a);transition:all 0.15s;';
       btn.dataset.value = role.value;
       btn.onclick = function() {
         cal4State.role = role.value;
         Array.prototype.forEach.call(rolesEl.children, function(c) {
           var s = cal4State.role === c.dataset.value;
-          c.style.borderColor = s ? 'var(--teal)' : '#ccc';
-          c.style.background = s ? 'rgba(42,124,111,0.08)' : '#fff';
+          c.style.border = s ? '2px solid var(--teal)' : '1px solid var(--border,#ccc)';
+          c.style.background = s ? 'rgba(42,124,111,0.12)' : 'var(--surface-card,#fff)';
         });
       };
       rolesEl.appendChild(btn);
@@ -23320,15 +23354,15 @@ function renderWizardCalibration() {
       var btn = document.createElement('button');
       btn.type = 'button';
       btn.textContent = band.label;
-      btn.style.cssText = 'padding:6px 10px;border-radius:999px;border:1px solid #ccc;background:#fff;font-size:0.78rem;cursor:pointer;';
+      btn.style.cssText = 'padding:6px 10px;border-radius:999px;border:1px solid var(--border,#ccc);background:var(--surface-card,#fff);font-size:0.78rem;cursor:pointer;color:var(--text,#2a2a2a);transition:all 0.15s;';
       btn.dataset.value = band.value;
       btn.onclick = function() {
         cal4State.teamSize = band.value;
         cal4State.hasEmployees = band.value !== 'solo';
         Array.prototype.forEach.call(sizeEl.children, function(c) {
           var s = cal4State.teamSize === c.dataset.value;
-          c.style.borderColor = s ? 'var(--teal)' : '#ccc';
-          c.style.background = s ? 'rgba(42,124,111,0.08)' : '#fff';
+          c.style.border = s ? '2px solid var(--teal)' : '1px solid var(--border,#ccc)';
+          c.style.background = s ? 'rgba(42,124,111,0.12)' : 'var(--surface-card,#fff)';
         });
       };
       sizeEl.appendChild(btn);
@@ -23505,10 +23539,11 @@ function renderWizardBizIdentity() {
       var card = document.createElement('div');
       card.className = 'wizard-feature-card';
       var sel = state.businessType === t.value;
-      card.style.cssText = 'border:' + (sel ? '2px solid var(--teal)' : '1px solid #ddd') +
+      if (sel) card.setAttribute('data-selected', 'true');
+      card.style.cssText = 'border:' + (sel ? '2px solid var(--teal)' : '1px solid var(--border,#ddd)') +
         ';border-radius:8px;padding:12px 14px;cursor:pointer;background:' +
-        (sel ? 'rgba(42,124,111,0.06)' : '#fff') + ';';
-      card.innerHTML = '<div style="font-weight:600;font-size:0.9rem;margin-bottom:3px;">' + esc(t.label) + '</div>' +
+        (sel ? 'rgba(42,124,111,0.1)' : 'var(--surface-card,#fff)') + ';color:var(--text,#2a2a2a);transition:border-color 0.15s,background 0.15s;';
+      card.innerHTML = '<div style="font-weight:600;font-size:0.9rem;margin-bottom:3px;color:var(--text,#2a2a2a);">' + esc(t.label) + '</div>' +
         '<div style="font-size:0.78rem;color:var(--warm-gray);">' + esc(t.description) + '</div>';
       card.onclick = function() {
         state.businessType = t.value;
@@ -23527,8 +23562,9 @@ function renderWizardBizIdentity() {
       var chip = document.createElement('button');
       chip.type = 'button';
       var sel = state.primaryOutput === o.value;
-      chip.style.cssText = 'padding:7px 14px;border-radius:999px;border:' + (sel ? '2px solid var(--teal)' : '1px solid #ccc') +
-        ';background:' + (sel ? 'rgba(42,124,111,0.08)' : '#fff') + ';font-size:0.85rem;cursor:pointer;font-family:inherit;';
+      chip.style.cssText = 'padding:7px 14px;border-radius:999px;border:' + (sel ? '2px solid var(--teal)' : '1px solid var(--border,#ccc)') +
+        ';background:' + (sel ? 'rgba(42,124,111,0.12)' : 'var(--surface-card,#fff)') +
+        ';font-size:0.85rem;cursor:pointer;font-family:inherit;color:var(--text,#2a2a2a);transition:all 0.15s;';
       chip.textContent = o.label;
       chip.onclick = function() {
         state.primaryOutput = o.value;
@@ -23544,17 +23580,21 @@ function renderWizardBizIdentity() {
     var channels = BEC.DECLARED_CHANNELS || [];
     channels.forEach(function(ch) {
       var chip = document.createElement('label');
-      chip.style.cssText = 'display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;border:1px solid #ccc;background:#fff;cursor:pointer;font-size:0.78rem;';
+      var chkd = state.channels.indexOf(ch.value) >= 0;
+      chip.style.cssText = 'display:inline-flex;align-items:center;padding:6px 12px;border-radius:999px;border:' +
+        (chkd ? '2px solid var(--teal)' : '1px solid var(--border,#ccc)') +
+        ';background:' + (chkd ? 'rgba(42,124,111,0.12)' : 'var(--surface-card,#fff)') +
+        ';cursor:pointer;font-size:0.78rem;color:var(--text,#2a2a2a);transition:all 0.15s;';
       var cb = document.createElement('input');
       cb.type = 'checkbox';
-      cb.style.cssText = 'margin:0;';
-      cb.checked = state.channels.indexOf(ch.value) >= 0;
+      cb.style.cssText = 'position:absolute;opacity:0;width:0;height:0;pointer-events:none;';
+      cb.checked = chkd;
       cb.onchange = function() {
         var idx = state.channels.indexOf(ch.value);
         if (cb.checked && idx < 0) state.channels.push(ch.value);
         else if (!cb.checked && idx >= 0) state.channels.splice(idx, 1);
-        chip.style.borderColor = cb.checked ? 'var(--teal)' : '#ccc';
-        chip.style.background = cb.checked ? 'rgba(42,124,111,0.08)' : '#fff';
+        chip.style.border = cb.checked ? '2px solid var(--teal)' : '1px solid var(--border,#ccc)';
+        chip.style.background = cb.checked ? 'rgba(42,124,111,0.12)' : 'var(--surface-card,#fff)';
       };
       var span = document.createElement('span');
       span.textContent = ch.label;
@@ -23581,17 +23621,21 @@ function renderWizardBizIdentity() {
         container.innerHTML = '';
       }
       var chip = document.createElement('label');
-      chip.style.cssText = 'display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;border:1px solid #ccc;background:#fff;cursor:pointer;font-size:0.78rem;';
+      var chkd = state.currentTools.indexOf(tool.value) >= 0;
+      chip.style.cssText = 'display:inline-flex;align-items:center;padding:6px 12px;border-radius:999px;border:' +
+        (chkd ? '2px solid var(--teal)' : '1px solid var(--border,#ccc)') +
+        ';background:' + (chkd ? 'rgba(42,124,111,0.12)' : 'var(--surface-card,#fff)') +
+        ';cursor:pointer;font-size:0.78rem;color:var(--text,#2a2a2a);transition:all 0.15s;';
       var cb = document.createElement('input');
       cb.type = 'checkbox';
-      cb.style.cssText = 'margin:0;';
-      cb.checked = state.currentTools.indexOf(tool.value) >= 0;
+      cb.style.cssText = 'position:absolute;opacity:0;width:0;height:0;pointer-events:none;';
+      cb.checked = chkd;
       cb.onchange = function() {
         var idx = state.currentTools.indexOf(tool.value);
         if (cb.checked && idx < 0) state.currentTools.push(tool.value);
         else if (!cb.checked && idx >= 0) state.currentTools.splice(idx, 1);
-        chip.style.borderColor = cb.checked ? 'var(--teal)' : '#ccc';
-        chip.style.background = cb.checked ? 'rgba(42,124,111,0.08)' : '#fff';
+        chip.style.border = cb.checked ? '2px solid var(--teal)' : '1px solid var(--border,#ccc)';
+        chip.style.background = cb.checked ? 'rgba(42,124,111,0.12)' : 'var(--surface-card,#fff)';
       };
       var span = document.createElement('span');
       span.textContent = tool.label;
@@ -27040,7 +27084,7 @@ function startInlinePrice(el, pid, e) {
     'onclick="event.stopPropagation()" ' +
     'onkeydown="if(event.key===\'Enter\'){saveInlinePrice(this);} if(event.key===\'Escape\'){cancelInlinePrice(this);}" ' +
     'onblur="saveInlinePrice(this)" ' +
-    'style="width:70px;font-size:0.85rem;padding:2px 6px;text-align:right;border:1px solid var(--amber);border-radius:4px;background:var(--bg);color:var(--text);">';
+    'style="width:70px;font-size:0.85rem;padding:2px 6px;text-align:right;border:1px solid var(--amber);border-radius:4px;background:var(--bg);color:var(--text,#2a2a2a);">';
   var input = el.querySelector('input');
   if (input) { input.focus(); input.select(); }
 }
@@ -27158,7 +27202,7 @@ function showCardStockAdjust(el, pid, e) {
     '<div style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:6px;">Current: ' + totals.onHand + ' on hand</div>' +
     '<div style="display:flex;gap:6px;align-items:center;">' +
       '<span style="font-size:0.78rem;">Add:</span>' +
-      '<input type="number" id="cardStockAdj_' + esc(pid) + '" value="1" min="1" style="width:50px;font-size:0.78rem;padding:3px 4px;border:1px solid var(--cream-dark);border-radius:4px;background:var(--bg);color:var(--text);" onclick="event.stopPropagation()">' +
+      '<input type="number" id="cardStockAdj_' + esc(pid) + '" value="1" min="1" style="width:50px;font-size:0.78rem;padding:3px 4px;border:1px solid var(--cream-dark);border-radius:4px;background:var(--bg);color:var(--text,#2a2a2a);" onclick="event.stopPropagation()">' +
       '<button class="btn btn-primary btn-small" style="font-size:0.72rem;padding:2px 8px;" onclick="event.stopPropagation();saveCardStockAdjust(\'' + esc(pid) + '\')">OK</button>' +
     '</div>';
   el.style.position = 'relative';
@@ -27558,7 +27602,7 @@ function renderProducts() {
         : '<div style="width:56px;height:56px;border-radius:6px;background:var(--cream-dark,#e8e0d4);display:flex;align-items:center;justify-content:center;font-size:1.2rem;">📦</div>') +
       '</td>';
     html += '<td>' +
-      '<div style="font-weight:600;color:var(--text);">' + esc(p.name || '') + '</div>' +
+      '<div style="font-weight:600;color:var(--text,#2a2a2a);">' + esc(p.name || '') + '</div>' +
       (catTxt ? '<div style="font-size:0.78rem;color:var(--warm-gray);">' + esc(catTxt) + '</div>' : '') +
       '</td>';
     html += '<td>' + statusBadge + '</td>';
@@ -37762,7 +37806,7 @@ function openUserPermissionsPanel(uid) {
     var expiryVal = u.accessExpiry ? u.accessExpiry.substring(0, 10) : '';
     guestExpiryField = '<div class="form-group" style="margin-bottom:16px;">' +
       '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:6px;">Access Expires On</label>' +
-      '<input type="date" id="userPanelExpiry" value="' + esc(expiryVal) + '" style="padding:7px 10px;border:1px solid var(--cream-dark);border-radius:6px;font-size:0.85rem;background:var(--surface);color:var(--text);">' +
+      '<input type="date" id="userPanelExpiry" value="' + esc(expiryVal) + '" style="padding:7px 10px;border:1px solid var(--cream-dark);border-radius:6px;font-size:0.85rem;background:var(--surface);color:var(--text,#2a2a2a);">' +
       '<p style="font-size:0.72rem;color:var(--warm-gray);margin-top:4px;">Stored for display — enforcement is Phase 3.</p>' +
     '</div>';
   }
@@ -37900,7 +37944,7 @@ function showInviteUserModal() {
     '</div>' +
     '<div class="form-group" id="inviteGuestExpiryGroup" style="display:none;">' +
       '<label for="inviteGuestExpiry">Access Expires On <span class="field-required">*</span></label>' +
-      '<input type="date" id="inviteGuestExpiry" style="width:100%;padding:8px;border:1px solid var(--cream-dark);border-radius:6px;background:var(--surface);color:var(--text);">' +
+      '<input type="date" id="inviteGuestExpiry" style="width:100%;padding:8px;border:1px solid var(--cream-dark);border-radius:6px;background:var(--surface);color:var(--text,#2a2a2a);">' +
       '<p style="font-size:0.72rem;color:var(--warm-gray);margin-top:4px;">Stored for display — enforcement is Phase 3.</p>' +
     '</div>' +
   '</div>' +
@@ -43560,7 +43604,7 @@ function renderDashCardLowInventory() {
           '</div>' +
           '<div style="display:flex;align-items:center;gap:4px;margin-left:8px;flex-shrink:0;">' +
             '<div id="dashAdjForm_' + esc(item.pid) + '" style="display:none;align-items:center;gap:4px;">' +
-              '<input type="number" id="dashAdjQty_' + esc(item.pid) + '" min="1" value="1" style="width:50px;font-size:0.78rem;padding:3px 4px;border:1px solid var(--cream-dark);border-radius:4px;background:var(--bg);color:var(--text);">' +
+              '<input type="number" id="dashAdjQty_' + esc(item.pid) + '" min="1" value="1" style="width:50px;font-size:0.78rem;padding:3px 4px;border:1px solid var(--cream-dark);border-radius:4px;background:var(--bg);color:var(--text,#2a2a2a);">' +
               '<button class="btn btn-primary btn-small" style="font-size:0.72rem;padding:2px 8px;" data-pid="' + esc(item.pid) + '" onclick="event.stopPropagation();saveDashInlineAdjust(this.dataset.pid);" aria-label="Confirm add stock">OK</button>' +
               '<button class="btn btn-secondary btn-small" style="font-size:0.72rem;padding:2px 6px;" data-pid="' + esc(item.pid) + '" onclick="event.stopPropagation();document.getElementById(\'dashAdjForm_\'+this.dataset.pid).style.display=\'none\';" aria-label="Cancel">✕</button>' +
             '</div>' +
