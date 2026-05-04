@@ -175,22 +175,22 @@
   // Engagement-mode card copy (spec §5 matrix).
   var ENGAGEMENT_MODE_CARDS = [
     {
+      value: 'storefront',
+      title: 'Build me a Mast storefront',
+      body: 'We\u2019ll set up your public storefront alongside everything else.',
+      defaultSurface: 'hybrid'
+    },
+    {
       value: 'sync-channels',
-      title: 'Sync My Channels',
+      title: 'Sync my existing channels',
       body: 'Mast as the source-of-truth for your existing storefront(s) on Etsy, Shopify, Square, and more.',
       defaultSurface: 'ui-first'
     },
     {
       value: 'back-office',
-      title: 'Run My Back Office',
+      title: 'Back-office only \u2014 no website',
       body: 'POS, customers, orders, inventory \u2014 no online storefront.',
       defaultSurface: 'ai-first'
-    },
-    {
-      value: 'storefront',
-      title: 'Build Me a Storefront Too',
-      body: 'We\u2019ll set up your public storefront alongside everything else.',
-      defaultSurface: 'hybrid'
     }
   ];
 

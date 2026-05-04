@@ -6282,20 +6282,33 @@
       </div>
     </div>
 
-    <!-- Setup Wizard — shown for onboarding tenants (3-step auto-apply flow) -->
+    <!-- Setup Wizard — shown for onboarding tenants (business-first flow) -->
     <div id="setupWizardScreen" style="display:none;">
       <div style="max-width:600px;margin:80px auto 40px;padding:0 24px;">
-        <!-- Progress bar (3 steps) -->
-        <div id="wizardProgress" style="display:flex;align-items:center;gap:4px;margin-bottom:32px;">
-          <div class="wizard-step-dot active" data-step="1">1</div>
-          <div class="wizard-step-line"></div>
-          <div class="wizard-step-dot" data-step="2">2</div>
-          <div class="wizard-step-line"></div>
-          <div class="wizard-step-dot" data-step="3">3</div>
+        <!-- Progress bar — dots injected dynamically by updateWizardProgress() -->
+        <div id="wizardProgress" style="display:flex;align-items:center;gap:4px;margin-bottom:32px;"></div>
+
+        <!-- Screen 0: Welcome — Quick vs Full onboarding depth -->
+        <div id="wizardStep0" class="wizard-step">
+          <h2 style="font-size:1.6rem;margin-bottom:8px;">Welcome to Mast</h2>
+          <p style="color:var(--warm-gray);margin-bottom:24px;">How do you want to get started?</p>
+          <div style="display:grid;gap:12px;margin-bottom:24px;">
+            <div id="wizardDepthQuick" class="wizard-feature-card" style="border:2px solid var(--teal);border-radius:12px;padding:20px;cursor:pointer;background:rgba(42,124,111,0.05);" onclick="wizardSelectDepth('quick')">
+              <div style="font-weight:700;font-size:1.1rem;margin-bottom:6px;">Quick Start</div>
+              <div style="font-size:0.88rem;color:var(--warm-gray);">4 questions, about 60 seconds. Your dashboard setup checklist handles the rest.</div>
+            </div>
+            <div id="wizardDepthFull" class="wizard-feature-card" style="border:1px solid #ddd;border-radius:12px;padding:20px;cursor:pointer;background:#fff;" onclick="wizardSelectDepth('full')">
+              <div style="font-weight:700;font-size:1.1rem;margin-bottom:6px;">Full Setup</div>
+              <div style="font-size:0.88rem;color:var(--warm-gray);">8 steps, about 6 minutes. Connect your tools and configure key settings now.</div>
+            </div>
+          </div>
+          <div style="display:flex;justify-content:flex-end;">
+            <button class="btn btn-primary" id="wizardDepthContinueBtn" onclick="wizardConfirmDepth()" style="font-size:1rem;padding:12px 32px;">Let's go &rarr;</button>
+          </div>
         </div>
 
         <!-- Step 1: Migrate My Site (URL + auto-analysis + auto-apply) -->
-        <div id="wizardStep1" class="wizard-step">
+        <div id="wizardStep1" class="wizard-step" style="display:none;">
           <h2 style="font-size:1.6rem;margin-bottom:8px;">Let's Move Your Site</h2>
           <p style="color:var(--warm-gray);margin-bottom:24px;">Paste your website URL and we'll set everything up automatically.</p>
           <div class="form-group" style="margin-bottom:16px;">
@@ -6310,9 +6323,8 @@
           </div>
         </div>
 
-        <!-- Step 1b (B9): No-website 5-question fallback -->
-        <!-- Shown when the user clicks "I don't have a website" on Step 1. -->
-        <div id="wizardStep1b" class="wizard-step" style="display:none;">
+        <!-- Step 1b (B9): No-website 5-question fallback. Renamed from wizardStep1b to avoid collision. -->
+        <div id="wizardStepNoWebsite" class="wizard-step" style="display:none;">
           <h2 style="font-size:1.6rem;margin-bottom:8px;">Tell us a little about your business</h2>
           <p style="color:var(--warm-gray);margin-bottom:20px;">Five quick questions so Mast can set up the right tools for you.</p>
           <div class="form-group" style="margin-bottom:14px;">
@@ -6347,16 +6359,17 @@
         </div>
 
         <!-- Step 1a (B1a): Archetype Confirmation -->
-        <!-- Inserted between scrape completion and calibration. Confidence bands per spec §4 D6. -->
+        <!-- Inserted between scrape completion and brand step. Confidence bands per spec §4 D6. -->
         <div id="wizardStep1a" class="wizard-step" style="display:none;">
           <h2 style="font-size:1.6rem;margin-bottom:8px;">What kind of business are you?</h2>
           <p id="wizardArchetypeBanner" style="color:var(--warm-gray);margin-bottom:20px;"></p>
           <div class="form-group" style="margin-bottom:16px;">
             <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Pick the closest match</label>
-            <select id="wizardArchetypeSelect" style="width:100%;padding:10px 14px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.95rem;box-sizing:border-box;background:#fff;">
+            <select id="wizardArchetypeSelect" onchange="wizardUpdateArchetypeHint()" style="width:100%;padding:10px 14px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.95rem;box-sizing:border-box;background:#fff;">
               <option value="">— Select —</option>
             </select>
             <p id="wizardArchetypeHint" style="font-size:0.78rem;color:var(--warm-gray);margin-top:6px;min-height:1em;"></p>
+            <p id="wizardArchetypeModuleHint" style="font-size:0.78rem;color:var(--teal);margin-top:4px;min-height:1em;"></p>
           </div>
           <div style="display:flex;justify-content:space-between;">
             <button class="btn btn-secondary" onclick="wizardSkipArchetype()">Not sure, pick later</button>
@@ -6364,9 +6377,84 @@
           </div>
         </div>
 
-        <!-- Step 2 (B2): Calibration — revenue bracket + "one thing you wish was easier" -->
-        <!-- Replaces the legacy module picker per spec §8.1. Both fields optional. -->
+        <!-- Step 1.5 (NEW): Brand Identity -->
+        <div id="wizardStep1_5" class="wizard-step" style="display:none;">
+          <h2 style="font-size:1.6rem;margin-bottom:8px;">What's your business called?</h2>
+          <p style="color:var(--warm-gray);margin-bottom:20px;">This is how customers will see you on Mast.</p>
+          <div class="form-group" style="margin-bottom:14px;">
+            <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Business name <span style="color:var(--danger);font-weight:400;">*</span></label>
+            <input type="text" id="wizardBrandName" maxlength="100" placeholder="e.g., Meadow Pottery"
+              style="width:100%;padding:10px 14px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;box-sizing:border-box;">
+            <p id="wizardBrandNameError" style="font-size:0.78rem;color:var(--danger);margin-top:4px;display:none;">Business name is required.</p>
+          </div>
+          <div class="form-group" style="margin-bottom:14px;">
+            <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Tagline <span style="color:var(--warm-gray);font-weight:400;">(optional, 80 chars)</span></label>
+            <input type="text" id="wizardBrandTagline" maxlength="80" placeholder="e.g., Handmade ceramics from Vermont"
+              style="width:100%;padding:10px 14px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;box-sizing:border-box;">
+          </div>
+          <div class="form-group" style="margin-bottom:18px;">
+            <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Logo <span style="color:var(--warm-gray);font-weight:400;">(optional)</span></label>
+            <input type="file" id="wizardBrandLogo" accept="image/*"
+              style="width:100%;padding:8px 0;font-size:0.85rem;">
+            <p style="font-size:0.75rem;color:var(--warm-gray);margin-top:4px;">PNG, JPG, or SVG. Square works best.</p>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <button class="btn btn-secondary" onclick="showWizardStep('1a')">Back</button>
+            <button class="btn btn-primary" id="wizardBrandConfirmBtn" onclick="wizardConfirmBrand()">Continue</button>
+          </div>
+        </div>
+
+        <!-- Step 2 (NEW): Business Identity — what/how/where/tools -->
         <div id="wizardStep2" class="wizard-step" style="display:none;">
+          <h2 style="font-size:1.6rem;margin-bottom:8px;">What are you selling and how?</h2>
+          <p style="color:var(--warm-gray);margin-bottom:20px;">Helps Mast configure the right tools for you.</p>
+
+          <!-- Part A: Business type -->
+          <div class="form-group" style="margin-bottom:20px;">
+            <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:8px;">Business type <span style="color:var(--danger);font-weight:400;">*</span></label>
+            <div id="wizardBusinessTypeCards" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;"></div>
+          </div>
+
+          <!-- Part B: Primary output -->
+          <div class="form-group" style="margin-bottom:20px;">
+            <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:8px;">What do you primarily offer? <span style="color:var(--danger);font-weight:400;">*</span></label>
+            <div id="wizardPrimaryOutputChips" style="display:flex;flex-wrap:wrap;gap:8px;"></div>
+          </div>
+
+          <!-- Part C: Channels -->
+          <div class="form-group" style="margin-bottom:20px;">
+            <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:8px;">Where do customers buy today? <span style="color:var(--warm-gray);font-weight:400;">(optional)</span></label>
+            <div id="wizardBizChannels" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
+          </div>
+
+          <!-- Part D: Current tools (full path only) -->
+          <div id="wizardCurrentToolsSection" class="form-group" style="margin-bottom:20px;">
+            <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:8px;">Do you use any of these tools already? <span style="color:var(--warm-gray);font-weight:400;">(optional)</span></label>
+            <div id="wizardCurrentToolsPayment" style="margin-bottom:10px;">
+              <div style="font-size:0.75rem;font-weight:600;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">Payment</div>
+              <div style="display:flex;flex-wrap:wrap;gap:6px;" id="wizardToolsPaymentChips"></div>
+            </div>
+            <div id="wizardCurrentToolsEcommerce" style="margin-bottom:10px;">
+              <div style="font-size:0.75rem;font-weight:600;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">Ecommerce</div>
+              <div style="display:flex;flex-wrap:wrap;gap:6px;" id="wizardToolsEcommerceChips"></div>
+            </div>
+            <div id="wizardCurrentToolsShipping">
+              <div style="font-size:0.75rem;font-weight:600;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">Shipping &amp; Labels</div>
+              <div style="display:flex;flex-wrap:wrap;gap:6px;" id="wizardToolsShippingChips"></div>
+            </div>
+          </div>
+
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <button class="btn btn-secondary" onclick="showWizardStep('1_5')">Back</button>
+            <button class="btn btn-primary" id="wizardBizIdentityConfirmBtn" onclick="wizardConfirmBizIdentity()">Continue</button>
+          </div>
+          <div style="text-align:center;margin-top:12px;">
+            <a href="#" onclick="event.preventDefault();wizardFastExit();" style="font-size:0.82rem;color:var(--warm-gray);text-decoration:none;">Already know what you need? Skip to launch &rarr;</a>
+          </div>
+        </div>
+
+        <!-- Step 2b (B2): Calibration — revenue bracket + "one thing you wish was easier" (full path only) -->
+        <div id="wizardStep2b" class="wizard-step" style="display:none;">
           <h2 style="font-size:1.6rem;margin-bottom:8px;">A quick calibration</h2>
           <p style="color:var(--warm-gray);margin-bottom:20px;">Helps Mast tailor recommendations. Both questions are optional.</p>
           <div class="form-group" style="margin-bottom:16px;">
@@ -6383,7 +6471,7 @@
             <p id="wizardWishCount" style="font-size:0.75rem;color:var(--warm-gray);text-align:right;margin-top:4px;">0 / 500</p>
           </div>
           <div style="display:flex;justify-content:space-between;">
-            <button class="btn btn-secondary" onclick="wizardSkipCalibration()">Skip</button>
+            <button class="btn btn-secondary" onclick="showWizardStep(2)">Back</button>
             <button class="btn btn-primary" id="wizardCalibrationConfirmBtn" onclick="wizardConfirmCalibration()">Save and continue</button>
           </div>
         </div>
@@ -6400,9 +6488,12 @@
               <p style="font-size:0.9rem;font-weight:600;margin:0 0 8px;">What do you want Mast to help with? <span style="color:var(--warm-gray);font-weight:400;">(optional)</span></p>
               <div id="wizardEngagementGoalList" style="display:flex;flex-wrap:wrap;gap:8px;"></div>
             </div>
-            <div style="display:flex;justify-content:space-between;">
-              <button class="btn btn-secondary" onclick="showWizardStep(2)">Back</button>
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <button class="btn btn-secondary" id="wizardStep3BackBtn" onclick="wizardStep3Back()">Back</button>
               <button class="btn btn-primary" id="wizardEngagementConfirmBtn" onclick="wizardConfirmEngagement()">Continue</button>
+            </div>
+            <div style="text-align:center;margin-top:12px;">
+              <a href="#" onclick="event.preventDefault();wizardFastExit();" style="font-size:0.82rem;color:var(--warm-gray);text-decoration:none;">Already know what you need? Skip to launch &rarr;</a>
             </div>
           </div>
 
@@ -6503,6 +6594,57 @@
           </div>
           <!-- end wizardStep3Watch -->
         </div>
+
+        <!-- Step 3b (NEW): Mast Feature pages — only for sync-channels or back-office modes -->
+        <div id="wizardStep3b" class="wizard-step" style="display:none;">
+          <h2 style="font-size:1.6rem;margin-bottom:8px;">Which Mast features do you want?</h2>
+          <p style="color:var(--warm-gray);margin-bottom:8px;">Even without a Mast storefront, you can use these customer-facing tools. Each gets its own URL on your Mast site.</p>
+          <p style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:20px;">You can always change this in Settings.</p>
+          <div id="wizardFeaturePageCards" style="display:grid;gap:10px;margin-bottom:20px;"></div>
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <button class="btn btn-secondary" onclick="showWizardStep(3)">Back</button>
+            <button class="btn btn-primary" id="wizardFeaturePagesConfirmBtn" onclick="wizardConfirmFeaturePages()">Continue</button>
+          </div>
+          <div style="text-align:center;margin-top:12px;">
+            <a href="#" onclick="event.preventDefault();wizardFastExit();" style="font-size:0.82rem;color:var(--warm-gray);text-decoration:none;">Already know what you need? Skip to launch &rarr;</a>
+          </div>
+        </div>
+
+        <!-- Fast-path DPA gate — shown after Step 3b or fast-exit (non-storefront + fast-exit paths) -->
+        <div id="wizardStepFastDpa" class="wizard-step" style="display:none;">
+          <!-- Setup summary card -->
+          <div id="wizardFastSummaryCard" style="background:var(--cream-dark);border-radius:10px;padding:16px;margin-bottom:20px;font-size:0.9rem;"></div>
+
+          <h3 style="font-size:1.1rem;margin-bottom:16px;">One last thing before you launch:</h3>
+
+          <!-- Primary-contact optional details (fast-path copy, unique IDs) -->
+          <div id="wizardPrimaryContactFast" style="background:var(--cream-dark);border-radius:8px;padding:16px;margin-bottom:12px;">
+            <p style="font-size:0.9rem;font-weight:600;margin:0 0 10px;">A couple of optional details</p>
+            <div class="form-group" style="margin-bottom:10px;">
+              <label style="font-size:0.8rem;font-weight:600;display:block;margin-bottom:4px;">Your role</label>
+              <div id="wizardRoleOptionsFast" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
+            </div>
+            <div class="form-group" style="margin-bottom:0;">
+              <label style="font-size:0.8rem;font-weight:600;display:block;margin-bottom:4px;">Team size</label>
+              <div id="wizardTeamSizeOptionsFast" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
+            </div>
+          </div>
+          <!-- Notice at Collection — CCPA required, harmless elsewhere (spec §8.2) -->
+          <p id="wizardNoticeAtCollectionFast" style="font-size:0.75rem;color:var(--warm-gray);margin:0 0 12px;"></p>
+          <!-- DPA click-through gate — submission blocked until checked (spec §8.2, §7.3) -->
+          <div id="wizardDpaGateFast" style="background:#fff;border:1px solid #ddd;border-radius:8px;padding:12px 14px;margin-bottom:12px;">
+            <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:0.88rem;">
+              <input type="checkbox" id="wizardDpaCheckboxFast" style="margin-top:3px;flex-shrink:0;">
+              <span id="wizardDpaLabelFast"></span>
+            </label>
+          </div>
+          <div id="wizardActivateErrorsFast" style="display:none;background:rgba(220,38,38,0.08);border:1px solid var(--danger);border-radius:8px;padding:12px 14px;margin-bottom:12px;font-size:0.85rem;color:var(--danger);"></div>
+
+          <div id="wizardStep3ActionsFast">
+            <button class="btn btn-primary" style="font-size:1rem;padding:12px 32px;" onclick="wizardCompleteFast()">Launch Dashboard</button>
+          </div>
+        </div>
+
       </div>
     </div>
 
@@ -22277,13 +22419,26 @@ var _wizardSiteAnalysis = null; // cached analysis results from step 1
 var _wizardAutoApplied = {}; // record of what was auto-applied
 var _wizardSelectedModules = []; // module selections for step 2
 
+// Step ordering for progress bar. 0 = welcome screen (no progress dots shown).
+// quick path shows steps 0,1,1a,1_5,2,3,fastDpa
+// full path shows steps 0,1,1a,1_5,2,2b,3,3b,fastDpa
+var _wizardStepOrder = ['0','1','1a','1_5','2','3','fastDpa'];
+var _wizardStepOrderFull = ['0','1','1a','1_5','2','2b','3','3b','fastDpa'];
+
+function _wizardGetStepOrder() {
+  return (window._wizardOnboardingDepth === 'full') ? _wizardStepOrderFull : _wizardStepOrder;
+}
+
 function initSetupWizard() {
+  // Default depth to quick
+  window._wizardOnboardingDepth = window._wizardOnboardingDepth || 'quick';
   // Load saved progress
   MastDB.config.get('setupProgress').then(function(snap) {
     wizardProgress = snap.val() || {};
-    wizardCurrentStep = wizardProgress.currentStep || 1;
-    // Clamp to 3-step range (handles tenants mid-old-wizard)
-    if (wizardCurrentStep > 3) wizardCurrentStep = 1;
+    // Restore depth if previously saved
+    if (wizardProgress.onboardingDepth) {
+      window._wizardOnboardingDepth = wizardProgress.onboardingDepth;
+    }
     // Restore crawl manifest from Firebase if page was reloaded (auth redirect, etc.)
     if (!window._wizardCrawlManifest && wizardProgress.crawlManifest) {
       window._wizardCrawlManifest = wizardProgress.crawlManifest;
@@ -22293,30 +22448,41 @@ function initSetupWizard() {
     if (wizardProgress.autoApplied) {
       _wizardAutoApplied = wizardProgress.autoApplied;
     }
-    showWizardStep(wizardCurrentStep);
+    // Always start at Screen 0 for fresh or in-progress sessions
+    showWizardStep('0');
   }).catch(function() {
-    showWizardStep(1);
+    showWizardStep('0');
   });
 }
 
+// showWizardStep accepts string step IDs: '0','1','1a','1_5','2','2b','3','3b','fastDpa'
+// Also accepts legacy numeric 1/2/3 for backward compat from deep internal callers.
 function showWizardStep(step) {
-  wizardCurrentStep = step;
-  // Hide every wizard step pane (numbered + interstitials like 1a).
+  var stepStr = String(step);
+  // Remap legacy numeric step 2 → '2b' (old calibration step) when called from
+  // old internal paths (wizardConfirmCalibration/wizardSkipCalibration advance to 3 directly)
+  // Keep 1→1, 3→3 as-is.
+  wizardCurrentStep = stepStr;
+  // Hide every wizard step pane
   var allSteps = document.querySelectorAll('#setupWizardScreen .wizard-step');
   for (var s = 0; s < allSteps.length; s++) allSteps[s].style.display = 'none';
-  var show = document.getElementById('wizardStep' + step);
+  var elId = stepStr === 'fastDpa' ? 'wizardStepFastDpa'
+           : stepStr === '1a'      ? 'wizardStep1a'
+           : stepStr === '1_5'     ? 'wizardStep1_5'
+           : stepStr === '2b'      ? 'wizardStep2b'
+           : stepStr === '3b'      ? 'wizardStep3b'
+           :                         'wizardStep' + stepStr;
+  var show = document.getElementById(elId);
   if (show) show.style.display = '';
   updateWizardProgress();
-  if (step === 2) {
-    if (typeof renderWizardCalibration === 'function') {
-      renderWizardCalibration();
-    } else {
-      wizardRenderModuleCards();
-    }
+
+  if (stepStr === '2b') {
+    if (typeof renderWizardCalibration === 'function') renderWizardCalibration();
   }
-  if (step === 3) {
-    // B3 renders the engagement picker first; legacy "watch come to life" UI
-    // shows after confirm via renderWizardEngagementPostConfirm.
+  if (stepStr === '2') {
+    renderWizardBizIdentity();
+  }
+  if (stepStr === '3') {
     if (typeof renderWizardEngagement === 'function') {
       renderWizardEngagement();
     } else {
@@ -22325,11 +22491,18 @@ function showWizardStep(step) {
       showWizardImportTimeline();
     }
   }
+  if (stepStr === '3b') {
+    renderWizardFeaturePages();
+  }
+  if (stepStr === 'fastDpa') {
+    renderWizardFastSummary();
+    renderWizardActivationGate();
+  }
 }
 
-// B1a: archetype confirmation step. Not a numbered step — progress dot stays at 1.
+// B1a: archetype confirmation step. Progress dot stays at step 1.
 function showWizardArchetypeConfirm() {
-  wizardCurrentStep = 1;
+  wizardCurrentStep = '1a';
   var allSteps = document.querySelectorAll('#setupWizardScreen .wizard-step');
   for (var s = 0; s < allSteps.length; s++) allSteps[s].style.display = 'none';
   var el = document.getElementById('wizardStep1a');
@@ -22409,12 +22582,45 @@ function renderArchetypeConfirm() {
     var h = '';
     for (var m = 0; m < archetypes.length; m++) { if (archetypes[m].value === v) { h = archetypes[m].hint || ''; break; } }
     if (hint) hint.textContent = h;
+    // Show module hint for the selected archetype
+    var moduleHintEl = document.getElementById('wizardArchetypeModuleHint');
+    if (moduleHintEl && v) {
+      var defaults = MastDB.businessEntity.archetypeDefaults && MastDB.businessEntity.archetypeDefaults(v);
+      var modules = (defaults && Array.isArray(defaults.modulesShown)) ? defaults.modulesShown.slice(0, 3) : [];
+      if (modules.length) {
+        moduleHintEl.textContent = 'Enables by default: ' + modules.join(', ');
+      } else {
+        moduleHintEl.textContent = '';
+      }
+    } else if (moduleHintEl) {
+      moduleHintEl.textContent = '';
+    }
   }
   sel.onchange = updateHint;
   updateHint();
 }
 
-// B1a: write the selected archetype, cache archetype defaults, advance to B2.
+// Called by onchange on the archetype dropdown (inline handler in HTML).
+function wizardUpdateArchetypeHint() {
+  var sel = document.getElementById('wizardArchetypeSelect');
+  var hint = document.getElementById('wizardArchetypeHint');
+  var moduleHintEl = document.getElementById('wizardArchetypeModuleHint');
+  var BEC = window.BusinessEntityConstants || {};
+  var archetypes = BEC.ARCHETYPES || [];
+  var v = sel ? sel.value : '';
+  var h = '';
+  for (var m = 0; m < archetypes.length; m++) { if (archetypes[m].value === v) { h = archetypes[m].hint || ''; break; } }
+  if (hint) hint.textContent = h;
+  if (moduleHintEl && v) {
+    var defaults = MastDB.businessEntity.archetypeDefaults && MastDB.businessEntity.archetypeDefaults(v);
+    var modules = (defaults && Array.isArray(defaults.modulesShown)) ? defaults.modulesShown.slice(0, 3) : [];
+    moduleHintEl.textContent = modules.length ? 'Enables by default: ' + modules.join(', ') : '';
+  } else if (moduleHintEl) {
+    moduleHintEl.textContent = '';
+  }
+}
+
+// B1a: write the selected archetype, cache archetype defaults, advance to Step 1.5 (Brand).
 async function wizardConfirmArchetype() {
   var sel = document.getElementById('wizardArchetypeSelect');
   var btn = document.getElementById('wizardArchetypeConfirmBtn');
@@ -22433,8 +22639,17 @@ async function wizardConfirmArchetype() {
       confidenceBand: band,
       scrapeInferred: extracted.inferredArchetype || null
     });
-    showWizardStep(2);
-    saveWizardProgress(2, { archetypeConfirmed: archetype, archetypeConfidenceBand: band });
+    // Pre-fill brand name from no-website path if available
+    var brandNameEl = document.getElementById('wizardBrandName');
+    if (brandNameEl && !brandNameEl.value && extracted.businessName) {
+      brandNameEl.value = extracted.businessName;
+    }
+    var brandTaglineEl = document.getElementById('wizardBrandTagline');
+    if (brandTaglineEl && !brandTaglineEl.value && extracted.tagline) {
+      brandTaglineEl.value = extracted.tagline;
+    }
+    showWizardStep('1_5');
+    saveWizardProgress('1_5', { archetypeConfirmed: archetype, archetypeConfidenceBand: band });
   } catch (err) {
     btn.disabled = false;
     showToast('Could not save archetype: ' + esc(err.message || ''), true);
@@ -22604,25 +22819,29 @@ async function wizardConfirmEngagement() {
     }
 
     logWizardEvent(3, 'engagement_chosen', {
-      mode: mode, surface: surface, goalsCount: goals.length,
-      archetype: (await MastDB.businessEntity.get('identity')).data && (await MastDB.businessEntity.get('identity')).data.archetype || null
+      mode: mode, surface: surface, goalsCount: goals.length
     });
 
-    // Flip Step 3 from engagement pane to import-watch pane.
-    var engagePane = document.getElementById('wizardStep3Engagement');
-    var watchPane = document.getElementById('wizardStep3Watch');
-    if (engagePane) engagePane.style.display = 'none';
-    if (watchPane) watchPane.style.display = '';
-    // Drive the existing watch UI + activation gate. Non-storefront modes still
-    // see progress text (no-op watch for back-office; pim-only shows PIM import).
-    try {
-      renderWizardSummary();
-      renderCapabilityPreview();
-      showWizardImportTimeline();
-    } catch (e) { /* non-fatal if legacy helpers error */ }
-    try { renderWizardFeeProjection(); } catch (e) { /* non-fatal — card is optional */ }
-    try { renderWizardActivationGate(); } catch (e) { /* render-on-demand fallback below */ }
-    saveWizardProgress(3, { engagementConfirmed: { mode: mode, surface: surface, goalsCount: goals.length } });
+    if (mode === 'storefront') {
+      // Set featureMode for storefront
+      await MastDB.businessEntity.update('presence', { featureMode: 'full-storefront' }).catch(function() {});
+      // Flip Step 3 from engagement pane to import-watch pane (existing storefront watch path).
+      var engagePane = document.getElementById('wizardStep3Engagement');
+      var watchPane = document.getElementById('wizardStep3Watch');
+      if (engagePane) engagePane.style.display = 'none';
+      if (watchPane) watchPane.style.display = '';
+      try {
+        renderWizardSummary();
+        renderCapabilityPreview();
+        showWizardImportTimeline();
+      } catch (e) { /* non-fatal if legacy helpers error */ }
+      try { renderWizardFeeProjection(); } catch (e) { /* non-fatal — card is optional */ }
+      try { renderWizardActivationGate(); } catch (e) { /* render-on-demand fallback below */ }
+    } else {
+      // sync-channels or back-office: show Step 3b (feature pages picker)
+      showWizardStep('3b');
+    }
+    saveWizardProgress('3', { engagementConfirmed: { mode: mode, surface: surface, goalsCount: goals.length } });
   } catch (err) {
     if (btn) { btn.disabled = false; btn.textContent = 'Continue'; }
     showToast('Could not save engagement: ' + esc(err.message || ''), true);
@@ -22726,38 +22945,635 @@ async function wizardSkipArchetype() {
     await MastDB.businessEntity.update('identity', { archetype: 'other-maker' });
     window._wizardArchetypeDefaults = MastDB.businessEntity.archetypeDefaults('other-maker');
     logWizardEvent(1.5, 'archetype_skipped', { default: 'other-maker' });
-    showWizardStep(2);
-    saveWizardProgress(2, { archetypeConfirmed: 'other-maker', archetypeSkipped: true });
+    showWizardStep('1_5');
+    saveWizardProgress('1_5', { archetypeConfirmed: 'other-maker', archetypeSkipped: true });
   } catch (err) {
     showToast('Could not save archetype: ' + esc(err.message || ''), true);
   }
 }
 
+// ----------------------------------------------------------------
+// Step 1.5: Brand Identity
+// ----------------------------------------------------------------
+
+async function wizardConfirmBrand() {
+  var nameEl = document.getElementById('wizardBrandName');
+  var taglineEl = document.getElementById('wizardBrandTagline');
+  var logoEl = document.getElementById('wizardBrandLogo');
+  var btn = document.getElementById('wizardBrandConfirmBtn');
+  var nameErrEl = document.getElementById('wizardBrandNameError');
+
+  var businessName = nameEl ? (nameEl.value || '').trim() : '';
+  var tagline = taglineEl ? (taglineEl.value || '').trim() : '';
+
+  // Validation
+  if (!businessName) {
+    if (nameErrEl) nameErrEl.style.display = '';
+    if (nameEl) nameEl.focus();
+    return;
+  }
+  if (nameErrEl) nameErrEl.style.display = 'none';
+  if (btn) btn.disabled = true;
+
+  try {
+    // Write to identity + config/brand
+    await MastDB.businessEntity.update('identity', { businessName: businessName });
+    await MastDB.config.update('brand', {
+      name: businessName,
+      tagline: tagline || null,
+      updatedAt: new Date().toISOString()
+    }).catch(function() {});
+
+    // Logo upload (best-effort, non-blocking)
+    if (logoEl && logoEl.files && logoEl.files[0]) {
+      (function(file) {
+        try {
+          var storageRef = firebase.storage().ref('tenants/' + MastDB.tenantId() + '/brand/logo');
+          storageRef.put(file).then(function(snapshot) {
+            return snapshot.ref.getDownloadURL();
+          }).then(function(url) {
+            MastDB.config.update('brand', { logoUrl: url }).catch(function() {});
+            MastDB.businessEntity.update('identity', { logoUrl: url }).catch(function() {});
+          }).catch(function(e) { console.warn('[Wizard] Logo upload failed:', e && e.message); });
+        } catch (e) { /* non-fatal */ }
+      })(logoEl.files[0]);
+    }
+
+    logWizardEvent(1.7, 'brand_confirmed', { hasTagline: !!tagline, hasLogo: !!(logoEl && logoEl.files && logoEl.files[0]) });
+    showWizardStep('2');
+    saveWizardProgress('2', { brandConfirmed: true, businessName: businessName });
+  } catch (err) {
+    if (btn) btn.disabled = false;
+    showToast('Could not save brand: ' + esc(err.message || ''), true);
+  }
+}
+
+// ----------------------------------------------------------------
+// Step 2: Business Identity (type + output + channels + tools)
+// ----------------------------------------------------------------
+
+var _wizardBizIdentityState = null;
+
+function renderWizardBizIdentity() {
+  var BEC = window.BusinessEntityConstants || {};
+  var state = _wizardBizIdentityState = _wizardBizIdentityState || {
+    businessType: null,
+    primaryOutput: null,
+    channels: [],
+    currentTools: []
+  };
+  var depth = window._wizardOnboardingDepth || 'quick';
+
+  // Part A: Business type cards
+  var typeEl = document.getElementById('wizardBusinessTypeCards');
+  if (typeEl) {
+    typeEl.innerHTML = '';
+    var types = BEC.BUSINESS_TYPES || [];
+    types.forEach(function(t) {
+      var card = document.createElement('div');
+      card.className = 'wizard-feature-card';
+      var sel = state.businessType === t.value;
+      card.style.cssText = 'border:' + (sel ? '2px solid var(--teal)' : '1px solid #ddd') +
+        ';border-radius:8px;padding:12px 14px;cursor:pointer;background:' +
+        (sel ? 'rgba(42,124,111,0.06)' : '#fff') + ';';
+      card.innerHTML = '<div style="font-weight:600;font-size:0.9rem;margin-bottom:3px;">' + esc(t.label) + '</div>' +
+        '<div style="font-size:0.78rem;color:var(--warm-gray);">' + esc(t.description) + '</div>';
+      card.onclick = function() {
+        state.businessType = t.value;
+        renderWizardBizIdentity();
+      };
+      typeEl.appendChild(card);
+    });
+  }
+
+  // Part B: Primary output chips
+  var outputEl = document.getElementById('wizardPrimaryOutputChips');
+  if (outputEl) {
+    outputEl.innerHTML = '';
+    var outputs = BEC.PRIMARY_OUTPUTS || [];
+    outputs.forEach(function(o) {
+      var chip = document.createElement('button');
+      chip.type = 'button';
+      var sel = state.primaryOutput === o.value;
+      chip.style.cssText = 'padding:7px 14px;border-radius:999px;border:' + (sel ? '2px solid var(--teal)' : '1px solid #ccc') +
+        ';background:' + (sel ? 'rgba(42,124,111,0.08)' : '#fff') + ';font-size:0.85rem;cursor:pointer;font-family:inherit;';
+      chip.textContent = o.label;
+      chip.onclick = function() {
+        state.primaryOutput = o.value;
+        renderWizardBizIdentity();
+      };
+      outputEl.appendChild(chip);
+    });
+  }
+
+  // Part C: Channels
+  var chanEl = document.getElementById('wizardBizChannels');
+  if (chanEl && chanEl.childNodes.length === 0) {
+    var channels = BEC.DECLARED_CHANNELS || [];
+    channels.forEach(function(ch) {
+      var chip = document.createElement('label');
+      chip.style.cssText = 'display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;border:1px solid #ccc;background:#fff;cursor:pointer;font-size:0.78rem;';
+      var cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.style.cssText = 'margin:0;';
+      cb.checked = state.channels.indexOf(ch.value) >= 0;
+      cb.onchange = function() {
+        var idx = state.channels.indexOf(ch.value);
+        if (cb.checked && idx < 0) state.channels.push(ch.value);
+        else if (!cb.checked && idx >= 0) state.channels.splice(idx, 1);
+        chip.style.borderColor = cb.checked ? 'var(--teal)' : '#ccc';
+        chip.style.background = cb.checked ? 'rgba(42,124,111,0.08)' : '#fff';
+      };
+      var span = document.createElement('span');
+      span.textContent = ch.label;
+      chip.appendChild(cb);
+      chip.appendChild(span);
+      chanEl.appendChild(chip);
+    });
+  }
+
+  // Part D: Current tools — only shown for full path
+  var toolsSection = document.getElementById('wizardCurrentToolsSection');
+  if (toolsSection) toolsSection.style.display = depth === 'full' ? '' : 'none';
+  if (depth === 'full') {
+    var tools = BEC.CURRENT_TOOLS || [];
+    var categories = { payment: 'wizardToolsPaymentChips', ecommerce: 'wizardToolsEcommerceChips', shipping: 'wizardToolsShippingChips', labels: 'wizardToolsShippingChips' };
+    var rendered = {};
+    tools.forEach(function(tool) {
+      var containerId = categories[tool.category] || 'wizardToolsShippingChips';
+      var container = document.getElementById(containerId);
+      if (!container) return;
+      // Only render each container once
+      if (!rendered[containerId]) {
+        rendered[containerId] = true;
+        container.innerHTML = '';
+      }
+      var chip = document.createElement('label');
+      chip.style.cssText = 'display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;border:1px solid #ccc;background:#fff;cursor:pointer;font-size:0.78rem;';
+      var cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.style.cssText = 'margin:0;';
+      cb.checked = state.currentTools.indexOf(tool.value) >= 0;
+      cb.onchange = function() {
+        var idx = state.currentTools.indexOf(tool.value);
+        if (cb.checked && idx < 0) state.currentTools.push(tool.value);
+        else if (!cb.checked && idx >= 0) state.currentTools.splice(idx, 1);
+        chip.style.borderColor = cb.checked ? 'var(--teal)' : '#ccc';
+        chip.style.background = cb.checked ? 'rgba(42,124,111,0.08)' : '#fff';
+      };
+      var span = document.createElement('span');
+      span.textContent = tool.label;
+      chip.appendChild(cb);
+      chip.appendChild(span);
+      container.appendChild(chip);
+    });
+  }
+
+  // Enable/disable Continue
+  var confirmBtn = document.getElementById('wizardBizIdentityConfirmBtn');
+  if (confirmBtn) confirmBtn.disabled = !(state.businessType && state.primaryOutput);
+}
+
+async function wizardConfirmBizIdentity() {
+  var state = _wizardBizIdentityState || {};
+  if (!state.businessType || !state.primaryOutput) {
+    showToast('Please pick a business type and primary offering.', true);
+    return;
+  }
+  var btn = document.getElementById('wizardBizIdentityConfirmBtn');
+  if (btn) btn.disabled = true;
+  try {
+    await MastDB.businessEntity.update('identity', {
+      businessType: state.businessType,
+      primaryOutput: state.primaryOutput
+    });
+    if (state.channels.length) {
+      await MastDB.businessEntity.update('presence', { declaredChannels: state.channels.slice() });
+    }
+    if (state.currentTools.length) {
+      await MastDB.businessEntity.update('presence', { currentTools: state.currentTools.slice() });
+    }
+    logWizardEvent(2, 'biz_identity_confirmed', {
+      businessType: state.businessType,
+      primaryOutput: state.primaryOutput,
+      channelsCount: state.channels.length,
+      toolsCount: state.currentTools.length
+    });
+    var depth = window._wizardOnboardingDepth || 'quick';
+    var nextStep = depth === 'full' ? '2b' : '3';
+    showWizardStep(nextStep);
+    saveWizardProgress(nextStep, { bizIdentityConfirmed: true });
+  } catch (err) {
+    if (btn) btn.disabled = false;
+    showToast('Could not save: ' + esc(err.message || ''), true);
+  }
+}
+
+// ----------------------------------------------------------------
+// Step 3b: Feature Pages (for sync-channels and back-office modes)
+// ----------------------------------------------------------------
+
+var _wizardSelectedFeaturePages = [];
+
+function renderWizardFeaturePages() {
+  var BEC = window.BusinessEntityConstants || {};
+  var pages = BEC.FEATURE_PAGE_OPTIONS || [];
+  var el = document.getElementById('wizardFeaturePageCards');
+  if (!el) return;
+  el.innerHTML = '';
+  pages.forEach(function(page) {
+    var card = document.createElement('div');
+    card.className = 'wizard-feature-card';
+    var sel = _wizardSelectedFeaturePages.indexOf(page.value) >= 0;
+    card.style.cssText = 'border:' + (sel ? '2px solid var(--teal)' : '1px solid #ddd') +
+      ';border-radius:8px;padding:12px 16px;cursor:pointer;background:' +
+      (sel ? 'rgba(42,124,111,0.06)' : '#fff') +
+      ';display:flex;align-items:flex-start;gap:10px;';
+    var checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.checked = sel;
+    checkbox.style.cssText = 'margin-top:2px;flex-shrink:0;';
+    checkbox.onchange = function(ev) { ev.stopPropagation(); toggleFeaturePage(page.value); };
+    var textDiv = document.createElement('div');
+    textDiv.innerHTML = '<div style="font-weight:600;font-size:0.9rem;margin-bottom:3px;">' + esc(page.label) + '</div>' +
+      '<div style="font-size:0.78rem;color:var(--warm-gray);">' + esc(page.description) + '</div>';
+    card.appendChild(checkbox);
+    card.appendChild(textDiv);
+    card.onclick = function() { toggleFeaturePage(page.value); };
+    el.appendChild(card);
+  });
+}
+
+function toggleFeaturePage(value) {
+  var idx = _wizardSelectedFeaturePages.indexOf(value);
+  if (idx >= 0) _wizardSelectedFeaturePages.splice(idx, 1);
+  else _wizardSelectedFeaturePages.push(value);
+  renderWizardFeaturePages();
+}
+
+async function wizardConfirmFeaturePages() {
+  var btn = document.getElementById('wizardFeaturePagesConfirmBtn');
+  if (btn) btn.disabled = true;
+  var selected = _wizardSelectedFeaturePages.slice();
+  var engagement = window._wizardEngagement || {};
+  var mode = engagement.mode || 'back-office';
+  try {
+    if (selected.length > 0) {
+      await MastDB.businessEntity.applyFeaturesOnlyConfig(selected);
+    } else {
+      await MastDB.businessEntity.setFeatureMode('none');
+    }
+    logWizardEvent('3b', 'feature_pages_confirmed', {
+      mode: mode, selectedPages: selected, count: selected.length
+    });
+    showWizardStep('fastDpa');
+    saveWizardProgress('fastDpa', { featurePagesConfirmed: true, featurePages: selected });
+  } catch (err) {
+    if (btn) btn.disabled = false;
+    showToast('Could not save features: ' + esc(err.message || ''), true);
+  }
+}
+
+// ----------------------------------------------------------------
+// Fast-exit path
+// ----------------------------------------------------------------
+
+function wizardFastExit() {
+  window._wizardFastExit = true;
+  logWizardEvent('fast-exit', 'fast_exit_triggered', { fromStep: wizardCurrentStep });
+  showWizardStep('fastDpa');
+}
+
+function renderWizardFastSummary() {
+  var el = document.getElementById('wizardFastSummaryCard');
+  if (!el) return;
+  var BEC = window.BusinessEntityConstants || {};
+  var state = _wizardBizIdentityState || {};
+  var engagement = window._wizardEngagement || {};
+  var extracted = window._wizardExtracted || {};
+
+  // Archetype label
+  var archetypes = BEC.ARCHETYPES || [];
+  var archetypeLabel = '';
+  var archetypeVal = (extracted.inferredArchetype) || '';
+  for (var i = 0; i < archetypes.length; i++) {
+    if (archetypes[i].value === archetypeVal) { archetypeLabel = archetypes[i].label; break; }
+  }
+
+  // Business name
+  var brandNameEl = document.getElementById('wizardBrandName');
+  var businessName = (brandNameEl && brandNameEl.value) || extracted.businessName || '';
+
+  // Business type label
+  var types = BEC.BUSINESS_TYPES || [];
+  var typeLabel = '';
+  for (var j = 0; j < types.length; j++) {
+    if (types[j].value === state.businessType) { typeLabel = types[j].label; break; }
+  }
+
+  // Channels
+  var channels = BEC.DECLARED_CHANNELS || [];
+  var chanLabels = (state.channels || []).map(function(v) {
+    for (var k = 0; k < channels.length; k++) { if (channels[k].value === v) return channels[k].label; }
+    return v;
+  });
+
+  // Engagement mode label
+  var modeCards = BEC.ENGAGEMENT_MODE_CARDS || [];
+  var modeLabel = '';
+  for (var m = 0; m < modeCards.length; m++) {
+    if (modeCards[m].value === engagement.mode) { modeLabel = modeCards[m].title; break; }
+  }
+
+  var rows = [];
+  if (archetypeLabel || businessName) rows.push('Business: ' + [archetypeLabel, businessName].filter(Boolean).join(' — '));
+  if (typeLabel) rows.push('Type: ' + typeLabel);
+  if (chanLabels.length) rows.push('Selling via: ' + chanLabels.join(', '));
+  else rows.push('Selling via: not set yet');
+  if (modeLabel) rows.push('Mode: ' + modeLabel);
+
+  el.innerHTML = ‘<p style="font-weight:600;margin:0 0 10px;">Here’s your workspace setup so far:</p>’ +
+    ‘<ul style="margin:0;padding-left:18px;line-height:1.8;">’ +
+    rows.map(function(r) { return ‘<li>’ + esc(r) + ‘</li>’; }).join(‘’) +
+    ‘</ul>’ +
+    ‘<p style="margin:10px 0 0;font-size:0.82rem;color:var(--warm-gray);">Your dashboard setup checklist will guide you through the rest.</p>’;
+
+  // Populate fast-path DPA elements (mirroring renderWizardActivationGate for the -Fast IDs)
+  var dpaCopy = BEC.DPA_COPY || {};
+  var noc = BEC.NOTICE_AT_COLLECTION_COPY || {};
+  var privacyUrl = BEC.PRIVACY_POLICY_URL || ‘/privacy’;
+
+  var labelEl = document.getElementById(‘wizardDpaLabelFast’);
+  if (labelEl) {
+    labelEl.innerHTML =
+      esc(dpaCopy.checkbox || ‘’) + ‘ ‘ +
+      ‘<a href="’ + esc(dpaCopy.linkUrl || ‘/dpa’) + ‘" target="_blank" rel="noopener">’ +
+      esc(dpaCopy.linkText || ‘Data Processing Addendum’) + ‘</a> ‘ +
+      ‘<span style="color:var(--danger);font-weight:600;">’ + esc(dpaCopy.requiredLabel || ‘(Required.)’) + ‘</span>’;
+  }
+  var nocEl = document.getElementById(‘wizardNoticeAtCollectionFast’);
+  if (nocEl) {
+    nocEl.innerHTML =
+      esc(noc.body || ‘’) + ‘ ‘ +
+      ‘<a href="’ + esc(privacyUrl) + ‘" target="_blank" rel="noopener">’ + esc(noc.privacyLinkText || ‘Privacy Policy’) + ‘</a> · ‘ +
+      ‘<a href="’ + esc(dpaCopy.linkUrl || ‘/dpa’) + ‘" target="_blank" rel="noopener">’ + esc(noc.dpaLinkText || ‘Data Processing Addendum’) + ‘</a>’;
+  }
+
+  var fastPeopleState = window._wizardPeopleSelectionFast = window._wizardPeopleSelectionFast || {};
+  var rolesElFast = document.getElementById(‘wizardRoleOptionsFast’);
+  if (rolesElFast && rolesElFast.childNodes.length === 0) {
+    var roles = BEC.PRIMARY_CONTACT_ROLES || [];
+    roles.forEach(function(role) {
+      var btn = document.createElement(‘button’);
+      btn.type = ‘button’;
+      btn.textContent = role.label;
+      btn.style.cssText = ‘padding:6px 10px;border-radius:999px;border:1px solid #ccc;background:#fff;font-size:0.78rem;cursor:pointer;’;
+      btn.dataset.value = role.value;
+      btn.onclick = function() {
+        fastPeopleState.role = role.value;
+        Array.prototype.forEach.call(rolesElFast.children, function(c) {
+          var s = fastPeopleState.role === c.dataset.value;
+          c.style.borderColor = s ? ‘var(--teal)’ : ‘#ccc’;
+          c.style.background = s ? ‘rgba(42,124,111,0.08)’ : ‘#fff’;
+        });
+      };
+      rolesElFast.appendChild(btn);
+    });
+  }
+  var sizeElFast = document.getElementById(‘wizardTeamSizeOptionsFast’);
+  if (sizeElFast && sizeElFast.childNodes.length === 0) {
+    var bands = BEC.TEAM_SIZE_BANDS || [];
+    bands.forEach(function(band) {
+      var btn = document.createElement(‘button’);
+      btn.type = ‘button’;
+      btn.textContent = band.label;
+      btn.style.cssText = ‘padding:6px 10px;border-radius:999px;border:1px solid #ccc;background:#fff;font-size:0.78rem;cursor:pointer;’;
+      btn.dataset.value = band.value;
+      btn.onclick = function() {
+        fastPeopleState.teamSize = band.value;
+        fastPeopleState.hasEmployees = band.value !== ‘solo’;
+        Array.prototype.forEach.call(sizeElFast.children, function(c) {
+          var s = fastPeopleState.teamSize === c.dataset.value;
+          c.style.borderColor = s ? ‘var(--teal)’ : ‘#ccc’;
+          c.style.background = s ? ‘rgba(42,124,111,0.08)’ : ‘#fff’;
+        });
+      };
+      sizeElFast.appendChild(btn);
+    });
+  }
+}
+
+// wizardCompleteFast: DPA activation for fast-path (non-storefront + fast-exit).
+// Shares all Firebase write logic with wizardComplete but reads -Fast DPA elements.
+async function wizardCompleteFast() {
+  var BEC = window.BusinessEntityConstants || {};
+  var dpaCopy = BEC.DPA_COPY || {};
+  var errorsEl = document.getElementById(‘wizardActivateErrorsFast’);
+  if (errorsEl) { errorsEl.style.display = ‘none’; errorsEl.textContent = ‘’; }
+
+  var dpaCheckbox = document.getElementById(‘wizardDpaCheckboxFast’);
+  if (!dpaCheckbox || !dpaCheckbox.checked) {
+    if (errorsEl) {
+      errorsEl.style.display = ‘’;
+      errorsEl.textContent = dpaCopy.missingError || ‘You must accept the Data Processing Addendum to continue.’;
+    }
+    showToast(dpaCopy.missingError || ‘You must accept the DPA to continue.’, true);
+    return;
+  }
+
+  try {
+    var user = firebase.auth().currentUser;
+    var displayName = (user && user.displayName) || ‘’;
+    var email = (user && user.email) || ‘’;
+    var sel = window._wizardPeopleSelectionFast || {};
+    var peoplePayload = {
+      primaryContact: {
+        name: displayName,
+        email: email,
+        dpaAcceptedAt: new Date().toISOString(),
+        dpaVersion: BEC.DPA_VERSION || ‘2026-05-v1’
+      }
+    };
+    if (sel.role) peoplePayload.primaryContact.role = sel.role;
+    if (sel.teamSize) peoplePayload.teamSize = sel.teamSize;
+    if (typeof sel.hasEmployees === ‘boolean’) peoplePayload.hasEmployees = sel.hasEmployees;
+
+    await MastDB.businessEntity.update(‘people’, peoplePayload);
+
+    try {
+      await MastDB.businessEntity.activate();
+    } catch (activateErr) {
+      var missing = (activateErr && activateErr.missingFields) || null;
+      if (errorsEl) {
+        errorsEl.style.display = ‘’;
+        if (missing && missing.length) {
+          errorsEl.innerHTML = ‘<strong>A few fields are still required:</strong><ul style="margin:6px 0 0 18px;">’ +
+            missing.map(function(m) { return ‘<li>’ + esc(m) + ‘</li>’; }).join(‘’) + ‘</ul>’;
+        } else {
+          errorsEl.textContent = activateErr.message || ‘Activation failed. Please try again.’;
+        }
+      }
+      logWizardEvent(4, ‘activate_failed’, { missingFields: missing || null, path: ‘fast’ });
+      return;
+    }
+
+    // Write onboardingDepth to presence now that wizard is complete
+    var depth = window._wizardOnboardingDepth || ‘quick’;
+    await MastDB.businessEntity.update(‘presence’, { onboardingDepth: depth }).catch(function() {});
+
+    await MastDB.platform.set(‘mast-platform/tenants/’ + MastDB.tenantId() + ‘/status’, ‘active’);
+    await MastDB.platform.set(‘mast-platform/tenants/’ + MastDB.tenantId() + ‘/publicConfig/tenantStatus’, ‘active’);
+    await MastDB.config.set(‘setupProgress/completed’, true);
+    await MastDB.config.set(‘setupProgress/completedAt’, new Date().toISOString());
+    await updateConfigChecklist(‘brand’, true);
+
+    try {
+      await MastDB.subscription.update({
+        model: ‘revenue-1pct’, tier: null, selectedModules: null,
+        moduleLimit: null, selectableModules: null, needsModuleSelection: false,
+        updatedAt: new Date().toISOString()
+      });
+    } catch (subErr) { console.warn(‘[Wizard] subscription stamp failed:’, subErr && subErr.message); }
+
+    try {
+      var planStatus = await MastDB.get(‘admin/businessPlan/planStatus’);
+      if (!planStatus || planStatus === ‘none’) await MastDB.set(‘admin/businessPlan/planStatus’, ‘draft’);
+    } catch (planErr) { /* best-effort */ }
+
+    // Trigger deploy for storefront mode even on fast-exit path
+    var engView = await MastDB.businessEntity.get(‘engagement’);
+    var engMode = ((engView && engView.data) || {}).mode || ‘back-office’;
+    if (engMode === ‘storefront’) {
+      try {
+        var idToken = await firebase.auth().currentUser.getIdToken();
+        var cfBase = (TENANT_CONFIG && TENANT_CONFIG.cloudFunctionsBase) || ‘https://us-central1-mast-platform-prod.cloudfunctions.net’;
+        var deployResp = await fetch(cfBase + ‘/triggerTenantDeploy’, {
+          method: ‘POST’,
+          headers: { ‘Content-Type’: ‘application/json’, ‘Authorization’: ‘Bearer ‘ + idToken },
+          body: JSON.stringify({ tenantId: MastDB.tenantId() })
+        });
+        if (!deployResp.ok) {
+          logWizardEvent(4, ‘auto_deploy_failed’, { status: deployResp.status, path: ‘fast’ });
+          showToast(‘Your site couldn’t auto-deploy. Open Settings > Hosting to retry.’, true);
+        }
+      } catch (deployErr) {
+        logWizardEvent(4, ‘auto_deploy_error’, { message: (deployErr && deployErr.message) || ‘unknown’, path: ‘fast’ });
+      }
+    }
+
+    logWizardEvent(4, ‘wizard_complete’, {
+      entityStatus: ‘active’, engagementMode: engMode,
+      dpaVersion: BEC.DPA_VERSION || ‘2026-05-v1’,
+      path: window._wizardFastExit ? ‘fast-exit’ : ‘fast-dpa’,
+      onboardingDepth: depth
+    });
+    showToast(‘Setup complete! Welcome to your dashboard.’);
+
+    await loadTenantSubscription();
+    document.getElementById(‘setupWizardScreen’).style.display = ‘none’;
+    document.getElementById(‘header’).style.display = ‘flex’;
+    showSidebar();
+    productsLoaded = false;
+    productsData = [];
+    navigateTo(‘dashboard’);
+    Promise.all([loadNextStepsCache(), loadDismissedSteps()]).then(function() { renderDashCardSetupShop(); });
+    attachListeners();
+    loadSettings();
+  } catch (err) {
+    if (errorsEl) {
+      errorsEl.style.display = ‘’;
+      errorsEl.textContent = ‘Error completing setup: ‘ + (err.message || ‘unknown’);
+    }
+    showToast(‘Error completing setup: ‘ + esc(err.message || ‘’), true);
+  }
+}
+
 function updateWizardProgress() {
-  var dots = document.querySelectorAll('#wizardProgress .wizard-step-dot');
-  var lines = document.querySelectorAll('#wizardProgress .wizard-step-line');
-  dots.forEach(function(dot) {
-    var s = parseInt(dot.dataset.step);
-    dot.className = 'wizard-step-dot';
-    if (s < wizardCurrentStep) dot.className += ' completed';
-    else if (s === wizardCurrentStep) dot.className += ' active';
-  });
-  lines.forEach(function(line, idx) {
-    line.className = 'wizard-step-line' + (idx < wizardCurrentStep - 1 ? ' completed' : '');
-  });
+  var progressEl = document.getElementById('wizardProgress');
+  if (!progressEl) return;
+  var currentStep = String(wizardCurrentStep || '0');
+
+  // Screen 0 (welcome): hide progress bar entirely
+  if (currentStep === '0') {
+    progressEl.style.display = 'none';
+    return;
+  }
+  progressEl.style.display = 'flex';
+
+  var order = _wizardGetStepOrder();
+  // Filter to steps that show in the progress bar (exclude '0' and 'fastDpa')
+  var barSteps = order.filter(function(s) { return s !== '0' && s !== 'fastDpa'; });
+  var currentIdx = barSteps.indexOf(currentStep);
+  // For interstitial steps not in barSteps (e.g. '1a' in quick), find nearest
+  if (currentIdx < 0) {
+    // Use the full order to find position
+    var fullIdx = order.indexOf(currentStep);
+    // Walk backwards to find last bar step
+    for (var fi = fullIdx - 1; fi >= 0; fi--) {
+      var ci = barSteps.indexOf(order[fi]);
+      if (ci >= 0) { currentIdx = ci; break; }
+    }
+  }
+
+  // Rebuild dots + lines
+  var html = '';
+  for (var i = 0; i < barSteps.length; i++) {
+    var cls = 'wizard-step-dot';
+    if (i < currentIdx) cls += ' completed';
+    else if (i === currentIdx) cls += ' active';
+    html += '<div class="' + cls + '" data-step="' + barSteps[i] + '">' + (i + 1) + '</div>';
+    if (i < barSteps.length - 1) {
+      var lineCls = 'wizard-step-line' + (i < currentIdx ? ' completed' : '');
+      html += '<div class="' + lineCls + '"></div>';
+    }
+  }
+  progressEl.innerHTML = html;
 }
 
 function wizardNext(fromStep) {
-  var next = fromStep + 1;
-  if (next > 3) return;
-  showWizardStep(next);
-  saveWizardProgress(next);
+  var order = _wizardGetStepOrder();
+  var idx = order.indexOf(String(fromStep));
+  if (idx < 0 || idx >= order.length - 1) return;
+  showWizardStep(order[idx + 1]);
+  saveWizardProgress(order[idx + 1]);
 }
 
 function wizardPrev(fromStep) {
-  var prev = fromStep - 1;
-  if (prev < 1) return;
-  showWizardStep(prev);
+  var order = _wizardGetStepOrder();
+  var idx = order.indexOf(String(fromStep));
+  if (idx <= 0) return;
+  showWizardStep(order[idx - 1]);
+}
+
+// Screen 0: user selects quick or full depth
+function wizardSelectDepth(depth) {
+  window._wizardOnboardingDepth = depth;
+  // Update card UI
+  var quickCard = document.getElementById('wizardDepthQuick');
+  var fullCard = document.getElementById('wizardDepthFull');
+  if (quickCard) {
+    quickCard.style.border = depth === 'quick' ? '2px solid var(--teal)' : '1px solid #ddd';
+    quickCard.style.background = depth === 'quick' ? 'rgba(42,124,111,0.05)' : '#fff';
+  }
+  if (fullCard) {
+    fullCard.style.border = depth === 'full' ? '2px solid var(--teal)' : '1px solid #ddd';
+    fullCard.style.background = depth === 'full' ? 'rgba(42,124,111,0.05)' : '#fff';
+  }
+}
+
+async function wizardConfirmDepth() {
+  var depth = window._wizardOnboardingDepth || 'quick';
+  logWizardEvent(0, 'depth_selected', { depth: depth });
+  // Hide current tools section in Step 2 for quick path
+  // (will be applied when Step 2 renders)
+  showWizardStep('1');
+  saveWizardProgress('1', { onboardingDepth: depth });
+}
+
+// Step 3 back — goes to step 2 or 2b depending on depth
+function wizardStep3Back() {
+  var depth = window._wizardOnboardingDepth || 'quick';
+  showWizardStep(depth === 'full' ? '2b' : '2');
 }
 
 function saveWizardProgress(step, extras) {
@@ -22799,9 +23615,10 @@ function wizardSkipSite() {
   // Hide every wizard pane, then show the no-website form.
   var allSteps = document.querySelectorAll('#setupWizardScreen .wizard-step');
   for (var s = 0; s < allSteps.length; s++) allSteps[s].style.display = 'none';
-  var pane = document.getElementById('wizardStep1b');
+  // Renamed from wizardStep1b to wizardStepNoWebsite to avoid collision with new steps.
+  var pane = document.getElementById('wizardStepNoWebsite');
   if (pane) pane.style.display = '';
-  wizardCurrentStep = 1;
+  wizardCurrentStep = '1';
   updateWizardProgress();
   renderWizardNoWebsite();
   logWizardEvent(0.5, 'no_website_shown', {});
