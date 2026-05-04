@@ -6480,64 +6480,6 @@
           <div id="wizardSitePathPicker" style="display:none;"></div>
         </div>
 
-        <!-- Step 1b (B9): No-website 5-question fallback. Renamed from wizardStep1b to avoid collision. -->
-        <div id="wizardStepNoWebsite" class="wizard-step" style="display:none;">
-          <h2 style="font-size:1.6rem;margin-bottom:8px;">Tell us a little about your business</h2>
-          <p style="color:var(--warm-gray);margin-bottom:20px;">Five quick questions so Mast can set up the right tools for you.</p>
-          <div class="form-group" style="margin-bottom:14px;">
-            <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Business name</label>
-            <input type="text" id="wizardNwBusinessName" maxlength="100"
-              style="width:100%;padding:10px 14px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;box-sizing:border-box;">
-          </div>
-          <div class="form-group" style="margin-bottom:14px;">
-            <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">What do you sell or offer?</label>
-            <input type="text" id="wizardNwSells" maxlength="240" placeholder="e.g., hand-thrown ceramics, stained glass panels, pottery classes"
-              style="width:100%;padding:10px 14px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;box-sizing:border-box;">
-          </div>
-          <div class="form-group" style="margin-bottom:14px;">
-            <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Where do customers buy today? <span style="color:var(--warm-gray);font-weight:400;">(optional, multi-select)</span></label>
-            <div id="wizardNwChannels" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
-          </div>
-          <div class="form-group" style="margin-bottom:14px;">
-            <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Roughly, annual revenue? <span style="color:var(--warm-gray);font-weight:400;">(optional)</span></label>
-            <select id="wizardNwRevenue" onchange="_wizardUpdateBracketProjection('wizardNwRevenue','wizardNwRevenueProjection')" style="width:100%;padding:10px 14px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.95rem;box-sizing:border-box;background:#fff;">
-              <option value="">— Prefer not to say —</option>
-            </select>
-            <p id="wizardNwRevenueProjection" style="font-size:0.78rem;color:var(--warm-gray);margin:6px 0 0;line-height:1.4;">We use this to show what your monthly software subscription will look like. Mast charges 1% of net revenue, capped at $1,000/mo; free when net is under $500/mo.</p>
-          </div>
-          <div class="form-group" style="margin-bottom:18px;">
-            <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Your role <span style="color:var(--warm-gray);font-weight:400;">(optional)</span></label>
-            <div id="wizardNwRoles" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
-          </div>
-          <div style="display:flex;justify-content:space-between;">
-            <button class="btn btn-secondary" onclick="showWizardStep(1)">Back</button>
-            <button class="btn btn-primary" id="wizardNwConfirmBtn" onclick="wizardConfirmNoWebsite()">Continue</button>
-          </div>
-        </div>
-
-        <!-- Step 1a (B1a): Archetype Confirmation -->
-        <!-- Inserted between scrape completion and brand step. Confidence bands per spec §4 D6. -->
-        <div id="wizardStep1a" class="wizard-step" style="display:none;">
-          <h2 style="font-size:1.6rem;margin-bottom:8px;">What kind of business are you?</h2>
-          <p id="wizardArchetypeBanner" style="color:var(--warm-gray);margin-bottom:20px;"></p>
-          <div class="form-group" style="margin-bottom:16px;">
-            <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Pick the closest match</label>
-            <select id="wizardArchetypeSelect" onchange="wizardUpdateArchetypeHint()" style="width:100%;padding:10px 14px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.95rem;box-sizing:border-box;background:#fff;">
-              <option value="">— Select —</option>
-            </select>
-            <p id="wizardArchetypeHint" style="font-size:0.78rem;color:var(--warm-gray);margin-top:6px;min-height:1em;"></p>
-            <p id="wizardArchetypeModuleHint" style="font-size:0.78rem;color:var(--teal);margin-top:4px;min-height:1em;"></p>
-          </div>
-          <div style="display:flex;justify-content:space-between;">
-            <button class="btn btn-secondary" onclick="showWizardStep('2')">Back</button>
-            <div style="display:flex;gap:8px;">
-              <button class="btn btn-secondary" onclick="wizardSkipArchetype()">Not sure, pick later</button>
-              <button class="btn btn-primary" id="wizardArchetypeConfirmBtn" onclick="wizardConfirmArchetype()">Confirm</button>
-            </div>
-          </div>
-        </div>
-
-        <!-- Step 1.5 (NEW): Brand Identity -->
         <div id="wizardStep1_5" class="wizard-step" style="display:none;">
           <h2 style="font-size:1.6rem;margin-bottom:8px;">What's your business called?</h2>
           <p style="color:var(--warm-gray);margin-bottom:20px;">This is how customers will see you on Mast.</p>
@@ -22819,9 +22761,8 @@ var _wizardAutoApplied = {}; // record of what was auto-applied
 var _wizardSelectedModules = []; // module selections for step 2
 
 // Step ordering for progress bar. 0 = welcome screen (no progress dots shown).
-// quick path shows steps 0,1,1a,1_5,2,3,fastDpa
-// full path shows steps 0,1,1a,1_5,2,3,3b,4,5,6,7,8,fastDpa
-// (calibration moved from 2b to 4; steps 5-8 are new full-path-only steps)
+// quick path: 0,2,1_5,1,3,fastDpa
+// full path:  0,2,1_5,1,3,3b,4,5,6,7,8,fastDpa
 var _wizardStepOrder = ['0','2','1_5','1','3','fastDpa'];
 var _wizardStepOrderFull = ['0','2','1_5','1','3','3b','4','5','6','7','8','fastDpa'];
 
@@ -22856,12 +22797,7 @@ function _wizardApplyProgress(progress) {
   if (wizardProgress._archetypeDefaults) window._wizardArchetypeDefaults = wizardProgress._archetypeDefaults;
   if (wizardProgress._siteIntent) window._wizardSiteIntent = wizardProgress._siteIntent;
   if (wizardProgress._selectedModules) window._wizardSelectedModules = wizardProgress._selectedModules;
-  var restoredStep = wizardProgress.currentStep || '0';
-  // Remap retired step IDs to their successors so stale localStorage/Firestore
-  // saves from older wizard versions don't land on removed steps.
-  var _stepRemap = { '1a': '1_5' };
-  if (_stepRemap[restoredStep]) restoredStep = _stepRemap[restoredStep];
-  showWizardStep(restoredStep);
+  showWizardStep(wizardProgress.currentStep || '0');
 }
 function initSetupWizard() {
   window._wizardOnboardingDepth = window._wizardOnboardingDepth || 'quick';
@@ -22886,8 +22822,7 @@ function initSetupWizard() {
   });
 }
 
-// showWizardStep accepts string step IDs: '0','1','1a','1_5','2','3','3b','4','5','6','7','8','fastDpa'
-// Also accepts legacy numeric 1/2/3 for backward compat from deep internal callers.
+// showWizardStep accepts string step IDs: '0','1','1_5','2','3','3b','4','5','6','7','8','fastDpa'
 function showWizardStep(step) {
   var stepStr = String(step);
   wizardCurrentStep = stepStr;
@@ -22895,7 +22830,6 @@ function showWizardStep(step) {
   var allSteps = document.querySelectorAll('#setupWizardScreen .wizard-step');
   for (var s = 0; s < allSteps.length; s++) allSteps[s].style.display = 'none';
   var elId = stepStr === 'fastDpa' ? 'wizardStepFastDpa'
-           : stepStr === '1a'      ? 'wizardStep1a'
            : stepStr === '1_5'     ? 'wizardStep1_5'
            : stepStr === '3b'      ? 'wizardStep3b'
            :                         'wizardStep' + stepStr;
@@ -22903,9 +22837,6 @@ function showWizardStep(step) {
   if (show) show.style.display = '';
   updateWizardProgress();
 
-  if (stepStr === '1a') {
-    renderArchetypeConfirm();
-  }
   if (stepStr === '4') {
     if (typeof renderWizardCalibration === 'function') renderWizardCalibration();
   }
@@ -22958,164 +22889,7 @@ function showWizardStep(step) {
   }
 }
 
-// B1a: archetype confirmation step. Progress dot stays at step 1.
-function showWizardArchetypeConfirm() {
-  wizardCurrentStep = '1a';
-  var allSteps = document.querySelectorAll('#setupWizardScreen .wizard-step');
-  for (var s = 0; s < allSteps.length; s++) allSteps[s].style.display = 'none';
-  var el = document.getElementById('wizardStep1a');
-  if (el) el.style.display = '';
-  updateWizardProgress();
-  renderArchetypeConfirm();
-}
-
-// Build the archetype dropdown options from BusinessEntityConstants.ARCHETYPES.
-// Applies the §4 D6 confidence-band UX (auto-confirm / pre-select / blank).
-function renderArchetypeConfirm() {
-  var BEC = window.BusinessEntityConstants || {};
-  var archetypes = BEC.ARCHETYPES || [];
-  var sel = document.getElementById('wizardArchetypeSelect');
-  var banner = document.getElementById('wizardArchetypeBanner');
-  var hint = document.getElementById('wizardArchetypeHint');
-  var confirmBtn = document.getElementById('wizardArchetypeConfirmBtn');
-  if (!sel || !banner || !confirmBtn) return;
-
-  // Build grouped options once.
-  sel.innerHTML = '<option value="">— Select —</option>';
-  var groups = {};
-  for (var i = 0; i < archetypes.length; i++) {
-    var a = archetypes[i];
-    if (!groups[a.group]) groups[a.group] = [];
-    groups[a.group].push(a);
-  }
-  var order = ['Makers', 'Service', 'Other'];
-  for (var g = 0; g < order.length; g++) {
-    var groupName = order[g];
-    if (!groups[groupName]) continue;
-    var og = document.createElement('optgroup');
-    og.label = groupName;
-    for (var j = 0; j < groups[groupName].length; j++) {
-      var item = groups[groupName][j];
-      var opt = document.createElement('option');
-      opt.value = item.value;
-      opt.textContent = item.label;
-      opt.dataset.hint = item.hint || '';
-      og.appendChild(opt);
-    }
-    sel.appendChild(og);
-  }
-
-  // Resolve confidence band.
-  var extracted = window._wizardExtracted || {};
-  var inferred = extracted.inferredArchetype || null;
-  var confidence = (typeof extracted.archetypeConfidence === 'number') ? extracted.archetypeConfidence : null;
-  var band = 'low';
-  if (confidence !== null && confidence >= 0.80) band = 'high';
-  else if (confidence !== null && confidence >= 0.50) band = 'medium';
-  window._wizardArchetypeConfidenceBand = band;
-
-  var inferredLabel = null;
-  if (inferred) {
-    for (var k = 0; k < archetypes.length; k++) {
-      if (archetypes[k].value === inferred) { inferredLabel = archetypes[k].label; break; }
-    }
-  }
-
-  if (band === 'high' && inferred && inferredLabel) {
-    sel.value = inferred;
-    banner.textContent = 'We detected you\u2019re a ' + inferredLabel + '. Change this below, or confirm to continue.';
-    confirmBtn.textContent = 'Confirm';
-  } else if (band === 'medium' && inferred && inferredLabel) {
-    sel.value = inferred;
-    banner.textContent = 'We think you\u2019re a ' + inferredLabel + ' — tap Confirm, or pick another.';
-    confirmBtn.textContent = 'Confirm';
-  } else {
-    sel.value = '';
-    banner.textContent = 'Not sure which fits? Hover an option to see what each means.';
-    confirmBtn.textContent = 'Confirm';
-  }
-
-  function updateHint() {
-    var v = sel.value;
-    var h = '';
-    for (var m = 0; m < archetypes.length; m++) { if (archetypes[m].value === v) { h = archetypes[m].hint || ''; break; } }
-    if (hint) hint.textContent = h;
-    // Show module hint for the selected archetype
-    var moduleHintEl = document.getElementById('wizardArchetypeModuleHint');
-    if (moduleHintEl && v) {
-      var defaults = MastDB.businessEntity.archetypeDefaults && MastDB.businessEntity.archetypeDefaults(v);
-      var modules = (defaults && Array.isArray(defaults.modulesShown)) ? defaults.modulesShown.slice(0, 3) : [];
-      if (modules.length) {
-        moduleHintEl.textContent = 'Enables by default: ' + modules.join(', ');
-      } else {
-        moduleHintEl.textContent = '';
-      }
-    } else if (moduleHintEl) {
-      moduleHintEl.textContent = '';
-    }
-  }
-  sel.onchange = updateHint;
-  updateHint();
-}
-
-// Called by onchange on the archetype dropdown (inline handler in HTML).
-function wizardUpdateArchetypeHint() {
-  var sel = document.getElementById('wizardArchetypeSelect');
-  var hint = document.getElementById('wizardArchetypeHint');
-  var moduleHintEl = document.getElementById('wizardArchetypeModuleHint');
-  var BEC = window.BusinessEntityConstants || {};
-  var archetypes = BEC.ARCHETYPES || [];
-  var v = sel ? sel.value : '';
-  var h = '';
-  for (var m = 0; m < archetypes.length; m++) { if (archetypes[m].value === v) { h = archetypes[m].hint || ''; break; } }
-  if (hint) hint.textContent = h;
-  if (moduleHintEl && v) {
-    var defaults = MastDB.businessEntity.archetypeDefaults && MastDB.businessEntity.archetypeDefaults(v);
-    var modules = (defaults && Array.isArray(defaults.modulesShown)) ? defaults.modulesShown.slice(0, 3) : [];
-    moduleHintEl.textContent = modules.length ? 'Enables by default: ' + modules.join(', ') : '';
-  } else if (moduleHintEl) {
-    moduleHintEl.textContent = '';
-  }
-}
-
-// B1a: write the selected archetype, cache archetype defaults, advance to Step 1.5 (Brand).
-async function wizardConfirmArchetype() {
-  var sel = document.getElementById('wizardArchetypeSelect');
-  var btn = document.getElementById('wizardArchetypeConfirmBtn');
-  if (!sel || !btn) return;
-  var archetype = sel.value || '';
-  if (!archetype) { showToast('Please pick an archetype.', true); return; }
-  btn.disabled = true;
-  try {
-    await MastDB.businessEntity.update('identity', { archetype: archetype });
-    var defaults = MastDB.businessEntity.archetypeDefaults(archetype);
-    window._wizardArchetypeDefaults = defaults;
-    var band = window._wizardArchetypeConfidenceBand || 'low';
-    var extracted = window._wizardExtracted || {};
-    logWizardEvent(1.5, 'archetype_confirmed', {
-      archetype: archetype,
-      confidenceBand: band,
-      scrapeInferred: extracted.inferredArchetype || null
-    });
-    // Pre-fill brand name from no-website path if available
-    var brandNameEl = document.getElementById('wizardBrandName');
-    if (brandNameEl && !brandNameEl.value && extracted.businessName) {
-      brandNameEl.value = extracted.businessName;
-    }
-    var brandTaglineEl = document.getElementById('wizardBrandTagline');
-    if (brandTaglineEl && !brandTaglineEl.value && extracted.tagline) {
-      brandTaglineEl.value = extracted.tagline;
-    }
-    showWizardStep('1_5');
-    saveWizardProgress('1_5', { archetypeConfirmed: archetype, archetypeConfidenceBand: band });
-  } catch (err) {
-    btn.disabled = false;
-    showToast('Could not save archetype: ' + esc(err.message || ''), true);
-  }
-}
-
-// B3: render engagement-mode cards + goals checklist. Reads _wizardArchetype
-// Defaults cached by B1a so we don't re-lookup. In-memory selection state lives
+// B3: render engagement-mode cards. In-memory selection state lives
 // on window._wizardEngagement until confirm.
 function renderWizardEngagement() {
   var BEC = window.BusinessEntityConstants || {};
@@ -23451,18 +23225,6 @@ async function wizardSkipCalibration() {
 }
 
 // B1a: user can defer archetype — write 'other-maker' as escape hatch (spec §4 D1).
-async function wizardSkipArchetype() {
-  try {
-    await MastDB.businessEntity.update('identity', { archetype: 'other-maker' });
-    window._wizardArchetypeDefaults = MastDB.businessEntity.archetypeDefaults('other-maker');
-    logWizardEvent(1.5, 'archetype_skipped', { default: 'other-maker' });
-    showWizardStep('1_5');
-    saveWizardProgress('1_5', { archetypeConfirmed: 'other-maker', archetypeSkipped: true });
-  } catch (err) {
-    showToast('Could not save archetype: ' + esc(err.message || ''), true);
-  }
-}
-
 // ----------------------------------------------------------------
 // Step 1.5: Brand Identity
 // ----------------------------------------------------------------
@@ -23783,7 +23545,7 @@ async function wizardConfirmBizIdentity() {
       hasStorefrontUrl: !!state.storefrontUrl,
       toolsCount: state.currentTools.length
     });
-    // Archetype already collected in step 2 — skip step 1a, go straight to brand.
+    // Archetype collected in step 2 — go straight to brand.
     window._wizardArchetypeDefaults = MastDB.businessEntity.archetypeDefaults(state.archetype);
     var extracted = window._wizardExtracted || {};
     var brandNameEl = document.getElementById('wizardBrandName');
@@ -24610,7 +24372,7 @@ function updateWizardProgress() {
   // Filter to steps that show in the progress bar (exclude '0' and 'fastDpa')
   var barSteps = order.filter(function(s) { return s !== '0' && s !== 'fastDpa'; });
   var currentIdx = barSteps.indexOf(currentStep);
-  // For interstitial steps not in barSteps (e.g. '1a' in quick), find nearest
+  // For interstitial steps not in barSteps, find nearest
   if (currentIdx < 0) {
     // Use the full order to find position
     var fullIdx = order.indexOf(currentStep);
@@ -24847,162 +24609,6 @@ function wizardClearLogo() {
 
 // B9: lightweight keyword matcher. Maps free-text "what do you sell" to an
 // archetype ID if a word unambiguously matches; else null (B1a blank-dropdown).
-function _inferArchetypeFromSellText(text) {
-  if (!text) return null;
-  var t = String(text).toLowerCase();
-  var matchers = [
-    { archetype: 'glass-artisan',         words: ['glass', 'stained glass', 'glassblow'] },
-    { archetype: 'ceramics-pottery',      words: ['ceramic', 'pottery', 'pot ', 'clay', 'wheel-thrown', 'porcelain'] },
-    { archetype: 'jewelry-maker',         words: ['jewelry', 'jewellery', 'necklace', 'earring', 'ring', 'beadwork'] },
-    { archetype: 'fiber-textile',         words: ['fiber', 'textile', 'weaving', 'knit', 'quilt', 'sewn', 'rug'] },
-    { archetype: 'woodworker',            words: ['wood', 'furniture', 'carved', 'cutting board', 'turnery'] },
-    { archetype: 'painter-printmaker',    words: ['paint', 'print', 'screenprint', 'letterpress', 'giclée', 'giclee'] },
-    { archetype: 'leather-metal',         words: ['leather', 'blacksmith', 'ironwork', 'metalwork'] },
-    { archetype: 'mixed-media-artist',    words: ['mixed media', 'assemblage', 'sculpture'] },
-    { archetype: 'instructor-studio',     words: ['class', 'classes', 'workshop', 'studio time', 'lesson'] },
-    { archetype: 'commissioned-services', words: ['commission', 'custom', 'bespoke', 'portrait'] }
-  ];
-  for (var i = 0; i < matchers.length; i++) {
-    var m = matchers[i];
-    for (var j = 0; j < m.words.length; j++) {
-      if (t.indexOf(m.words[j]) >= 0) return m.archetype;
-    }
-  }
-  return null;
-}
-
-function renderWizardNoWebsite() {
-  var BEC = window.BusinessEntityConstants || {};
-  var channelsEl = document.getElementById('wizardNwChannels');
-  var state = window._wizardNoWebsite = window._wizardNoWebsite || { channels: [], role: null };
-  if (channelsEl && channelsEl.childNodes.length === 0) {
-    var channels = BEC.DECLARED_CHANNELS || [];
-    for (var i = 0; i < channels.length; i++) {
-      (function(ch) {
-        var chip = document.createElement('label');
-        chip.style.cssText = 'display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;border:1px solid #ccc;background:#fff;cursor:pointer;font-size:0.78rem;';
-        var cb = document.createElement('input');
-        cb.type = 'checkbox';
-        cb.style.cssText = 'margin:0;';
-        cb.onchange = function() {
-          var idx = state.channels.indexOf(ch.value);
-          if (cb.checked && idx < 0) state.channels.push(ch.value);
-          else if (!cb.checked && idx >= 0) state.channels.splice(idx, 1);
-          chip.style.borderColor = cb.checked ? 'var(--teal)' : '#ccc';
-          chip.style.background = cb.checked ? 'rgba(42,124,111,0.08)' : '#fff';
-        };
-        chip.appendChild(cb);
-        var span = document.createElement('span');
-        span.textContent = ch.label;
-        chip.appendChild(span);
-        channelsEl.appendChild(chip);
-      })(channels[i]);
-    }
-  }
-
-  var revSel = document.getElementById('wizardNwRevenue');
-  if (revSel && revSel.options.length <= 1) {
-    var brackets = BEC.REVENUE_BRACKETS || [];
-    for (var b = 0; b < brackets.length; b++) {
-      var o = document.createElement('option');
-      o.value = brackets[b].value;
-      o.textContent = brackets[b].label;
-      revSel.appendChild(o);
-    }
-  }
-  _wizardUpdateBracketProjection('wizardNwRevenue', 'wizardNwRevenueProjection');
-
-  var rolesEl = document.getElementById('wizardNwRoles');
-  if (rolesEl && rolesEl.childNodes.length === 0) {
-    var roles = BEC.PRIMARY_CONTACT_ROLES || [];
-    for (var r = 0; r < roles.length; r++) {
-      (function(role) {
-        var btn = document.createElement('button');
-        btn.type = 'button';
-        btn.textContent = role.label;
-        btn.style.cssText = 'padding:6px 10px;border-radius:999px;border:1px solid #ccc;background:#fff;font-size:0.78rem;cursor:pointer;';
-        btn.onclick = function() {
-          state.role = role.value;
-          Array.prototype.forEach.call(rolesEl.children, function(c) {
-            var sel = state.role === c.dataset.value;
-            c.style.borderColor = sel ? 'var(--teal)' : '#ccc';
-            c.style.background = sel ? 'rgba(42,124,111,0.08)' : '#fff';
-          });
-        };
-        btn.dataset.value = role.value;
-        rolesEl.appendChild(btn);
-      })(roles[r]);
-    }
-  }
-}
-
-// B9: write the five fields + localization, set up B1a to land in blank-dropdown
-// (or pre-selected if keyword inference matched), route to archetype confirm.
-async function wizardConfirmNoWebsite() {
-  var nameEl = document.getElementById('wizardNwBusinessName');
-  var sellsEl = document.getElementById('wizardNwSells');
-  var revEl = document.getElementById('wizardNwRevenue');
-  var btn = document.getElementById('wizardNwConfirmBtn');
-  var state = window._wizardNoWebsite || { channels: [], role: null };
-
-  var businessName = nameEl ? (nameEl.value || '').trim() : '';
-  var sells = sellsEl ? (sellsEl.value || '').trim() : '';
-  var revenueBracket = revEl ? (revEl.value || '') : '';
-  window._wizardRevenueBracket = revenueBracket || '';
-  if (!businessName) {
-    showToast('Please enter a business name.', true);
-    return;
-  }
-  if (btn) btn.disabled = true;
-
-  var inferredArchetype = _inferArchetypeFromSellText(sells);
-  // Propagate to the shared extracted state so B1a can render with the inference.
-  window._wizardExtracted = window._wizardExtracted || {};
-  window._wizardExtracted.businessName = businessName;
-  window._wizardExtracted.oneLineDescription = sells || window._wizardExtracted.oneLineDescription || '';
-  window._wizardExtracted.inferredArchetype = inferredArchetype;
-  // archetypeConfidence stays null so B1a always renders the blank/pre-select band,
-  // never auto-confirm (user explicitly clicks a button there).
-  window._wizardExtracted.archetypeConfidence = null;
-  window._wizardExtracted.declaredChannels = state.channels.slice();
-
-  try {
-    await MastDB.businessEntity.update('identity', {
-      businessName: businessName,
-      oneLineDescription: sells,
-      archetypeConfidence: null
-    });
-    if (state.channels.length) {
-      await MastDB.businessEntity.update('presence', { declaredChannels: state.channels.slice() });
-    }
-    // Always write localization so activation gate passes (D2 silent inference).
-    await _applyEntityOperationsLocalization();
-    var calibration = { capturedAt: new Date().toISOString() };
-    if (revenueBracket) calibration.revenueBracket = revenueBracket;
-    await MastDB.businessEntity.update('engagement', { calibration: calibration });
-    if (state.role) {
-      await MastDB.businessEntity.update('people', { primaryContact: { role: state.role } });
-    }
-    // Brand pointer gets the name so downstream readers (config/brand) don't
-    // render "Tenant" during the rest of the wizard.
-    await MastDB.config.update('brand', { name: businessName, updatedAt: new Date().toISOString() }).catch(function() {});
-
-    logWizardEvent(0.5, 'no_website_fallback', {
-      sellsLength: sells.length,
-      channelsCount: state.channels.length,
-      role: state.role || null,
-      revenueBracket: revenueBracket || null,
-      inferredArchetype: inferredArchetype || null
-    });
-
-    showWizardArchetypeConfirm();
-    saveWizardProgress(1, { noWebsitePath: true, skippedSiteAnalysis: true });
-  } catch (err) {
-    if (btn) btn.disabled = false;
-    showToast('Could not save: ' + esc(err.message || ''), true);
-  }
-}
-
 // Wizard event logging — writes to {tenantId}/admin/setupLog for diagnostics
 function logWizardEvent(step, event, detail) {
   try {
