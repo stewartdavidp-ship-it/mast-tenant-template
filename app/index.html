@@ -6459,9 +6459,9 @@
 
         <!-- Step 1: Existing Site (analyze + migrate vs integrate choice) -->
         <div id="wizardStep3" class="wizard-step" style="display:none;">
-          <h2 style="font-size:1.6rem;margin-bottom:8px;">Do you have an existing site?</h2>
-          <p style="color:var(--warm-gray);margin-bottom:24px;">Paste your URL and we'll scan it — then you can decide whether to move it to Mast or just connect it.</p>
           <div id="wizardStep3UrlForm">
+            <h2 style="font-size:1.6rem;margin-bottom:8px;">Do you have an existing site?</h2>
+            <p style="color:var(--warm-gray);margin-bottom:24px;">Paste your URL and we'll scan it — then you can decide whether to move it to Mast or just connect it.</p>
             <div class="form-group" style="margin-bottom:16px;">
               <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Your Website URL</label>
               <input type="url" id="wizardSiteUrl" placeholder="https://www.yourbusiness.com"
@@ -6486,12 +6486,14 @@
           <div class="form-group" style="margin-bottom:14px;">
             <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Business name <span style="color:var(--danger);font-weight:400;">*</span></label>
             <input type="text" id="wizardBrandName" maxlength="100" placeholder="e.g., Meadow Pottery"
+              oninput="snapshotWizardField('businessName', this.value)"
               style="width:100%;padding:10px 14px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;box-sizing:border-box;">
             <p id="wizardBrandNameError" style="font-size:0.78rem;color:var(--danger);margin-top:4px;display:none;">Business name is required.</p>
           </div>
           <div class="form-group" style="margin-bottom:14px;">
             <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Tagline <span style="color:var(--warm-gray);font-weight:400;">(optional, 80 chars)</span></label>
             <input type="text" id="wizardBrandTagline" maxlength="80" placeholder="e.g., Handmade ceramics from Vermont"
+              oninput="snapshotWizardField('tagline', this.value)"
               style="width:100%;padding:10px 14px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;box-sizing:border-box;">
           </div>
           <div class="form-group" style="margin-bottom:18px;">
@@ -6715,8 +6717,8 @@
 
           <!-- B3 engagement picker (visible first). After confirm, hides and shows wizardStep4Watch. -->
           <div id="wizardStep4Engagement">
-            <h2 style="font-size:1.6rem;margin-bottom:8px;">How will you use Mast?</h2>
-            <p style="color:var(--warm-gray);margin-bottom:20px;">Pick the mode that matches your business today. You can always change this later.</p>
+            <h2 id="wizardStep4Heading" style="font-size:1.6rem;margin-bottom:8px;">How will you use Mast?</h2>
+            <p id="wizardStep4Subhead" style="color:var(--warm-gray);margin-bottom:20px;">Pick the mode that matches your business today. You can always change this later.</p>
             <div id="wizardEngagementCards" style="display:grid;gap:12px;margin-bottom:20px;"></div>
             <div style="display:flex;justify-content:space-between;align-items:center;">
               <button class="btn btn-secondary" id="wizardStep4BackBtn" onclick="wizardStep4Back()">Back</button>
@@ -22833,6 +22835,7 @@ function _wizardApplyProgress(progress) {
   if (wizardProgress._archetypeDefaults) window._wizardArchetypeDefaults = wizardProgress._archetypeDefaults;
   if (wizardProgress._siteIntent) window._wizardSiteIntent = wizardProgress._siteIntent;
   if (wizardProgress._selectedModules) window._wizardSelectedModules = wizardProgress._selectedModules;
+  if (wizardProgress._bizSubStep) _wizardBizSubStep = wizardProgress._bizSubStep;
   showWizardStep(wizardProgress.currentStep || '0');
 }
 function initSetupWizard() {
@@ -22874,7 +22877,8 @@ function showWizardStep(step) {
     if (typeof renderWizardCalibration === 'function') renderWizardCalibration();
   }
   if (stepStr === '1') {
-    _wizardBizSubStep = '1A';
+    // Use saved sub-step if we have one (resume from reload); otherwise start at 1A.
+    if (!_wizardBizSubStep) _wizardBizSubStep = (wizardProgress && wizardProgress._bizSubStep) || '1A';
     renderWizardBizIdentity();
   }
   if (stepStr === '2') {
@@ -22895,16 +22899,50 @@ function showWizardStep(step) {
     }
   }
   if (stepStr === '4b') {
+    // Restore in-progress selections if user reloaded mid-step
+    if ((!_wizardSelectedFeaturePages || _wizardSelectedFeaturePages.length === 0) &&
+        wizardProgress && wizardProgress._featurePagesDraft) {
+      _wizardSelectedFeaturePages = wizardProgress._featurePagesDraft.slice();
+    }
     renderWizardFeaturePages();
   }
   if (stepStr === '6') {
+    if ((!_wizardSelectedModulesStep5 || _wizardSelectedModulesStep5.length === 0) &&
+        wizardProgress && wizardProgress._modulesDraft) {
+      _wizardSelectedModulesStep5 = wizardProgress._modulesDraft.slice();
+    }
     renderWizardModuleSelector();
   }
   if (stepStr === '7') {
+    if (wizardProgress && wizardProgress._intDraft && Object.keys(_wizardIntegrationState).length === 0) {
+      try { Object.assign(_wizardIntegrationState, wizardProgress._intDraft); } catch(e) {}
+    }
     renderWizardIntegrations();
   }
   if (stepStr === '8') {
     renderWizardSettingsSpotlight();
+  }
+  if (stepStr === '3') {
+    // If the user already analyzed and chose an intent, don't make them re-run it.
+    // Restore the picker (no re-crawl) or skip the step entirely.
+    var savedIntent = (wizardProgress && wizardProgress.siteIntent) || window._wizardSiteIntent;
+    var savedManifest = window._wizardCrawlManifest || (wizardProgress && wizardProgress.crawlManifest);
+    var urlForm3 = document.getElementById('wizardStep3UrlForm');
+    var picker3 = document.getElementById('wizardSitePathPicker');
+    if (savedIntent && savedManifest) {
+      // Already chose migrate/integrate — skip past step 3
+      showWizardStep('4');
+      return;
+    }
+    if (savedManifest && !savedIntent && typeof wizardShowSitePathPicker === 'function') {
+      // Crawled but didn't pick — re-show picker without re-running analyze
+      window._wizardCrawlManifest = savedManifest;
+      wizardShowSitePathPicker({ crawlManifest: savedManifest });
+    } else {
+      // Fresh entry — make sure URL form is visible and picker is hidden
+      if (urlForm3) urlForm3.style.display = '';
+      if (picker3) { picker3.style.display = 'none'; picker3.innerHTML = ''; }
+    }
   }
   if (stepStr === '9') {
     // Skip this step if the user already imported from step 1
@@ -22938,6 +22976,30 @@ function renderWizardEngagement() {
   var watchPane = document.getElementById('wizardStep4Watch');
   if (engagePane) engagePane.style.display = '';
   if (watchPane) watchPane.style.display = 'none';
+
+  // Reword heading to acknowledge the site-intent choice from step 3.
+  var headingEl = document.getElementById('wizardStep4Heading');
+  var subheadEl = document.getElementById('wizardStep4Subhead');
+  var intent = window._wizardSiteIntent || (wizardProgress && wizardProgress.siteIntent);
+  var platformLabel = '';
+  try {
+    var manifest = window._wizardCrawlManifest || (wizardProgress && wizardProgress.crawlManifest) || {};
+    if (manifest.platform && manifest.platform !== 'unknown') {
+      platformLabel = manifest.platform.charAt(0).toUpperCase() + manifest.platform.slice(1);
+    }
+  } catch (e) {}
+  if (headingEl && subheadEl) {
+    if (intent === 'migrate') {
+      headingEl.textContent = 'Confirm how you’ll use Mast';
+      subheadEl.textContent = 'You’re moving' + (platformLabel ? ' from ' + platformLabel : '') + ' to Mast — Storefront mode is selected. Adjust if needed.';
+    } else if (intent === 'integrate') {
+      headingEl.textContent = 'Confirm how you’ll use Mast';
+      subheadEl.textContent = 'You’re keeping ' + (platformLabel || 'your current site') + ' — Sync channels mode is selected. Adjust if needed.';
+    } else {
+      headingEl.textContent = 'How will you use Mast?';
+      subheadEl.textContent = 'Pick the mode that matches your business today. You can always change this later.';
+    }
+  }
 
   // Initialize in-memory selection state. Pre-select mode from site intent if not yet chosen.
   if (!window._wizardEngagement) {
@@ -23127,15 +23189,42 @@ function renderWizardCalibration() {
   }
   if (txt) {
     txt.placeholder = BEC.WISH_STATEMENT_PLACEHOLDER || '';
+    // Restore prior draft if user reloaded mid-step
+    if (!txt.value && wizardProgress && wizardProgress._calibDraft && wizardProgress._calibDraft.wishStatement) {
+      txt.value = wizardProgress._calibDraft.wishStatement;
+    }
     txt.oninput = function() {
       if (cnt) cnt.textContent = (txt.value || '').length + ' / 500';
+      try {
+        var d = (wizardProgress && wizardProgress._calibDraft) || {};
+        d.wishStatement = txt.value;
+        snapshotWizardField('_calibDraft', d);
+      } catch(e) {}
     };
     if (cnt) cnt.textContent = (txt.value || '').length + ' / 500';
+  }
+  if (sel) {
+    if (!sel.value && wizardProgress && wizardProgress._calibDraft && wizardProgress._calibDraft.revenueBracket) {
+      sel.value = wizardProgress._calibDraft.revenueBracket;
+    }
+    // Chain onto the existing inline onchange (projection updater) instead of replacing it.
+    sel.addEventListener('change', function() {
+      try {
+        var d = (wizardProgress && wizardProgress._calibDraft) || {};
+        d.revenueBracket = sel.value;
+        snapshotWizardField('_calibDraft', d);
+      } catch(e) {}
+    });
   }
   _wizardUpdateBracketProjection('wizardRevenueBracket', 'wizardRevenueBracketProjection');
 
   // Role buttons (step 4 — unique IDs wizardRoleOptions4, wizardTeamSizeOptions4)
   var cal4State = window._wizardCalibrationPeopleState = window._wizardCalibrationPeopleState || {};
+  // Restore role/team draft if user reloaded mid-step
+  if ((!cal4State.role || !cal4State.teamSize) && wizardProgress && wizardProgress._calibDraft) {
+    if (!cal4State.role && wizardProgress._calibDraft.role) cal4State.role = wizardProgress._calibDraft.role;
+    if (!cal4State.teamSize && wizardProgress._calibDraft.teamSize) cal4State.teamSize = wizardProgress._calibDraft.teamSize;
+  }
   var rolesEl = document.getElementById('wizardRoleOptions4');
   if (rolesEl && rolesEl.childNodes.length === 0) {
     var roles = BEC.PRIMARY_CONTACT_ROLES || [];
@@ -23154,6 +23243,11 @@ function renderWizardCalibration() {
           c.style.color = s ? '#fff' : 'var(--text,#2a2a2a)';
           c.style.fontWeight = s ? '600' : '400';
         });
+        try {
+          var d = (wizardProgress && wizardProgress._calibDraft) || {};
+          d.role = cal4State.role;
+          snapshotWizardField('_calibDraft', d);
+        } catch(e) {}
       };
       rolesEl.appendChild(btn);
     });
@@ -23177,22 +23271,34 @@ function renderWizardCalibration() {
           c.style.color = s ? '#fff' : 'var(--text,#2a2a2a)';
           c.style.fontWeight = s ? '600' : '400';
         });
+        try {
+          var d = (wizardProgress && wizardProgress._calibDraft) || {};
+          d.teamSize = cal4State.teamSize;
+          snapshotWizardField('_calibDraft', d);
+        } catch(e) {}
       };
       sizeEl.appendChild(btn);
     });
   }
+  // Apply restored selection styles after buttons are present (handles reload restore).
+  function _applySel(parentEl, value) {
+    if (!parentEl || !value) return;
+    Array.prototype.forEach.call(parentEl.children, function(c) {
+      var s = value === c.dataset.value;
+      c.style.border = '2px solid ' + (s ? 'var(--teal)' : 'var(--border,#ccc)');
+      c.style.background = s ? 'var(--teal)' : 'var(--surface-card,#fff)';
+      c.style.color = s ? '#fff' : 'var(--text,#2a2a2a)';
+      c.style.fontWeight = s ? '600' : '400';
+    });
+  }
+  _applySel(rolesEl, cal4State.role);
+  _applySel(sizeEl, cal4State.teamSize);
 }
 
-// Step 4: back button — go to 3b if full path, else 3
+// Step 5 (calibration) back: storefront mode skipped 4b, so go straight to 4; otherwise 4b.
 function wizardStep5Back() {
-  var depth = window._wizardOnboardingDepth || 'quick';
-  if (depth === 'full') {
-    // In full path 3b comes before 4; but if storefront mode skipped 3b go to 3
-    var eng = window._wizardEngagement || {};
-    showWizardStep(eng.mode === 'storefront' ? '4' : '4b');
-  } else {
-    showWizardStep('4');
-  }
+  var eng = window._wizardEngagement || {};
+  showWizardStep(eng.mode === 'storefront' ? '4' : '4b');
 }
 
 // Step 4: write engagement.calibration + people, advance to step 5 (full) or 3 (quick fallback).
@@ -23229,10 +23335,9 @@ async function wizardConfirmCalibration() {
       role: cal4State.role || null,
       teamSize: cal4State.teamSize || null
     });
-    var depth = window._wizardOnboardingDepth || 'quick';
-    var nextStep = depth === 'full' ? '5' : '3';
-    showWizardStep(nextStep);
-    saveWizardProgress(nextStep, { calibrationCaptured: true });
+    // Calibration is full-path only; advance to module selector.
+    showWizardStep('6');
+    saveWizardProgress('6', { calibrationCaptured: true });
   } catch (err) {
     if (btn) btn.disabled = false;
     showToast('Could not save calibration: ' + esc(err.message || ''), true);
@@ -23248,10 +23353,8 @@ async function wizardSkipCalibration() {
       calibration: { capturedAt: new Date().toISOString() }
     });
     logWizardEvent(5, 'calibration_skipped', {});
-    var depth = window._wizardOnboardingDepth || 'quick';
-    var nextStep = depth === 'full' ? '5' : '3';
-    showWizardStep(nextStep);
-    saveWizardProgress(nextStep, { calibrationCaptured: false });
+    showWizardStep('6');
+    saveWizardProgress('6', { calibrationCaptured: false });
   } catch (err) {
     if (btn) btn.disabled = false;
     showToast('Could not advance: ' + esc(err.message || ''), true);
@@ -23343,7 +23446,20 @@ function renderWizardBizIdentity() {
     if (_saved.revenueChannels) state.revenueChannels = _saved.revenueChannels.slice();
     if (_saved.shippingTools) state.shippingTools = _saved.shippingTools.slice();
     if (_saved.currentTools) state.currentTools = _saved.currentTools.slice();
+    if (_saved.storefrontUrl) state.storefrontUrl = _saved.storefrontUrl;
+    if (_saved.otherChannelNote) state.otherChannelNote = _saved.otherChannelNote;
   }
+  // Snapshot current step-1 state on every render so partial input survives a reload.
+  try { snapshotWizardField('_bizIdentity', {
+    businessCategory: state.businessCategory,
+    archetype: state.archetype,
+    businessType: state.businessType,
+    revenueChannels: (state.revenueChannels || []).slice(),
+    shippingTools: (state.shippingTools || []).slice(),
+    currentTools: (state.currentTools || []).slice(),
+    storefrontUrl: state.storefrontUrl || '',
+    otherChannelNote: state.otherChannelNote || ''
+  }); } catch(e) {}
   var depth = window._wizardOnboardingDepth || 'quick';
 
   // Enforce which sub-step panel is visible (safe to call on every re-render)
@@ -23606,6 +23722,8 @@ function renderWizardBizIdentity() {
 
 function showWizardSubStep(sub) {
   _wizardBizSubStep = sub;
+  // Persist position so a reload mid-Step 1 returns to the same sub-step.
+  try { _wizardLsSave({ _bizSubStep: sub }); } catch(e) {}
   ['1A','1B','1C','1D'].forEach(function(s) {
     var el = document.getElementById('wizardSubStep' + s);
     if (el) el.style.display = (s === sub) ? '' : 'none';
@@ -23770,6 +23888,7 @@ function toggleFeaturePage(value) {
   var idx = _wizardSelectedFeaturePages.indexOf(value);
   if (idx >= 0) _wizardSelectedFeaturePages.splice(idx, 1);
   else _wizardSelectedFeaturePages.push(value);
+  try { snapshotWizardField('_featurePagesDraft', _wizardSelectedFeaturePages.slice()); } catch(e) {}
   renderWizardFeaturePages();
 }
 
@@ -23788,9 +23907,9 @@ async function wizardConfirmFeaturePages() {
     logWizardEvent('4b', 'feature_pages_confirmed', {
       mode: mode, selectedPages: selected, count: selected.length
     });
-    // Full path continues to step 4 (calibration); quick path goes to fastDpa.
+    // Full path continues to step 5 (calibration); quick path goes to fastDpa.
     var depth = window._wizardOnboardingDepth || 'quick';
-    var nextStep = depth === 'full' ? '4' : 'fastDpa';
+    var nextStep = depth === 'full' ? '5' : 'fastDpa';
     showWizardStep(nextStep);
     saveWizardProgress(nextStep, { featurePagesConfirmed: true, featurePages: selected });
   } catch (err) {
@@ -23874,6 +23993,7 @@ function _wizardToggleModule(id) {
   var idx = _wizardSelectedModulesStep5.indexOf(id);
   if (idx >= 0) _wizardSelectedModulesStep5.splice(idx, 1);
   else _wizardSelectedModulesStep5.push(id);
+  try { snapshotWizardField('_modulesDraft', _wizardSelectedModulesStep5.slice()); } catch(e) {}
   renderWizardModuleSelector();
 }
 
@@ -24079,12 +24199,14 @@ function _wizardConnectTool(toolId) {
   MastDB.config.update('integrations/' + toolId, safe).catch(function(){});
   _wizardIntegrationState[toolId] = { _connected: true, _skipped: false };
   logWizardEvent(7, 'tool_connected', { tool: toolId });
+  try { snapshotWizardField('_intDraft', _wizardIntegrationState); } catch(e) {}
   hideWizardCredentialEntry();
 }
 
 function _wizardSkipTool(toolId) {
   _wizardIntegrationState[toolId] = { _connected: false, _skipped: true };
   logWizardEvent(7, 'tool_skipped', { tool: toolId });
+  try { snapshotWizardField('_intDraft', _wizardIntegrationState); } catch(e) {}
   hideWizardCredentialEntry();
 }
 
@@ -24151,6 +24273,61 @@ function renderWizardSettingsSpotlight() {
   }
 
   el.innerHTML = html;
+
+  // Restore + snapshot wiring for all settings inputs.
+  var draft = (wizardProgress && wizardProgress._settingsDraft) || {};
+  var taxStateEl = document.getElementById('wizardTaxState');
+  var emailFromEl = document.getElementById('wizardEmailFrom');
+  var emailReplyEl = document.getElementById('wizardEmailReplyTo');
+  var markupEl = document.getElementById('wizardDefaultMarkup');
+  if (taxStateEl) {
+    if (draft.taxState) taxStateEl.value = draft.taxState;
+    taxStateEl.addEventListener('change', function() {
+      var d = (wizardProgress && wizardProgress._settingsDraft) || {};
+      d.taxState = taxStateEl.value;
+      snapshotWizardField('_settingsDraft', d);
+    });
+  }
+  document.querySelectorAll('input[name="wizardCollectTax"]').forEach(function(r) {
+    if (draft.collectTax && r.value === draft.collectTax) r.checked = true;
+    r.addEventListener('change', function() {
+      var d = (wizardProgress && wizardProgress._settingsDraft) || {};
+      d.collectTax = r.value;
+      snapshotWizardField('_settingsDraft', d);
+    });
+  });
+  if (emailFromEl) {
+    if (draft.emailFrom) emailFromEl.value = draft.emailFrom;
+    emailFromEl.addEventListener('input', function() {
+      var d = (wizardProgress && wizardProgress._settingsDraft) || {};
+      d.emailFrom = emailFromEl.value;
+      snapshotWizardField('_settingsDraft', d);
+    });
+  }
+  if (emailReplyEl) {
+    if (draft.emailReplyTo) emailReplyEl.value = draft.emailReplyTo;
+    emailReplyEl.addEventListener('input', function() {
+      var d = (wizardProgress && wizardProgress._settingsDraft) || {};
+      d.emailReplyTo = emailReplyEl.value;
+      snapshotWizardField('_settingsDraft', d);
+    });
+  }
+  if (markupEl) {
+    if (draft.defaultMarkup != null) markupEl.value = draft.defaultMarkup;
+    markupEl.addEventListener('input', function() {
+      var d = (wizardProgress && wizardProgress._settingsDraft) || {};
+      d.defaultMarkup = markupEl.value;
+      snapshotWizardField('_settingsDraft', d);
+    });
+  }
+  document.querySelectorAll('input[name="wizardSiteVis"]').forEach(function(r) {
+    if (draft.siteVisibility && r.value === draft.siteVisibility) r.checked = true;
+    r.addEventListener('change', function() {
+      var d = (wizardProgress && wizardProgress._settingsDraft) || {};
+      d.siteVisibility = r.value;
+      snapshotWizardField('_settingsDraft', d);
+    });
+  });
 }
 
 function _wizardSettingsSection(key, title, subtitle, bodyHtml) {
@@ -24616,6 +24793,33 @@ async function wizardConfirmDepth() {
 // Step 3 back — go to site URL step if they went through it, otherwise brand step
 function wizardStep4Back() {
   showWizardStep(window._wizardHasWebsite ? '3' : '2');
+}
+
+// Snapshot a single field of in-progress wizard state without changing currentStep.
+// Writes to localStorage synchronously (survives reload immediately) and Firestore
+// best-effort. Use for live form input — does NOT advance the wizard.
+var _wizardSnapshotTimers = {};
+function snapshotWizardField(key, value) {
+  if (!key) return;
+  try {
+    var update = {};
+    update[key] = value;
+    update._schemaVersion = 2;
+    update.updatedAt = new Date().toISOString();
+    _wizardLsSave(update);
+    // Mirror into in-memory wizardProgress so other code paths that read it see fresh data.
+    if (typeof wizardProgress === 'object' && wizardProgress) wizardProgress[key] = value;
+    // Debounced Firestore write (per-key) — never blocks UI.
+    if (key.charAt(0) === '_') return; // skip private snapshots from Firestore
+    if (_wizardSnapshotTimers[key]) clearTimeout(_wizardSnapshotTimers[key]);
+    _wizardSnapshotTimers[key] = setTimeout(function() {
+      try {
+        MastDB.config.set('setupProgress/' + key, value).catch(function(e) {
+          console.warn('Snapshot save (' + key + ') failed:', e && e.message);
+        });
+      } catch(e) {}
+    }, 800);
+  } catch(e) {}
 }
 
 function saveWizardProgress(step, extras) {
