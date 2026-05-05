@@ -150,7 +150,13 @@
     var basePath = getBasePath();
     var homepage = isHomepage();
     var showSignIn = (config && config.showSignIn === false) ? false : true;
-    var rawLogo = (config && config.logoUrl) || '';
+    // Logo source — canonical: config/brand/logo/primary.url (delivered via STOREFRONT_DATA.brandLogo.primary).
+    // Legacy mirror public/config/nav.logoUrl (= config.logoUrl) kept as transitional fallback while
+    // tenants are migrated; remove once brand-sync.js drops the mirror write.
+    var brandLogoData = window.__navBrandLogo || null;
+    var canonicalLogo = (brandLogoData && brandLogoData.primary && brandLogoData.primary.url) || '';
+    var legacyLogo = (config && config.logoUrl) || '';
+    var rawLogo = canonicalLogo || legacyLogo || '';
     var logoUrl = (rawLogo && (rawLogo.indexOf('https://') === 0 || rawLogo.indexOf('/') === 0 || rawLogo.indexOf('../') === 0)) ? rawLogo : (basePath + 'favicon.svg');
     var brandName = (window.TENANT_BRAND && window.TENANT_BRAND.name) || 'My Shop';
 
@@ -379,6 +385,8 @@
         var config = results[0];
         var bannerConfig = results[1];
         var brandLogo = results[2];
+        // Expose canonical brand logo to buildNav (uses primary.url as the canonical source).
+        window.__navBrandLogo = brandLogo || null;
         // Remove any hardcoded free-ship-banner from HTML
         var existing = document.querySelector('.free-ship-banner');
         if (existing) existing.remove();
@@ -435,11 +443,13 @@
     var heroLogoEl = document.getElementById('heroLogo');
     if (!heroLogoEl) return; // Not on homepage
 
-    // Try brand logo system for hero placement first
+    // Try brand logo system for hero placement first, then fall back to canonical primary,
+    // then legacy public/config/nav.logoUrl mirror as a last resort.
     var heroUrl = (brandLogo && brandLogo.hero && brandLogo.hero.url) || null;
     var heroMaxHeight = (brandLogo && brandLogo.hero && brandLogo.hero.maxHeight) || null;
+    var primaryUrl = (brandLogo && brandLogo.primary && brandLogo.primary.url) || null;
 
-    var rawLogo = heroUrl || (config && config.logoUrl) || '';
+    var rawLogo = heroUrl || primaryUrl || (config && config.logoUrl) || '';
     if (!rawLogo) return; // No logo configured
 
     var basePath = getBasePath();

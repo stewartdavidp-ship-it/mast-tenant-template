@@ -104,6 +104,16 @@ window.TENANT_READY = new Promise(function(resolve, reject) {
       cloudFunctionsBase: publicConfig.cloudFunctionsBase
     };
 
+    // TENANT_BRAND decision (logo): we deliberately do NOT populate TENANT_BRAND.logoUrl
+    // from publicConfig.brandLogoUrl. Logo readers (storefront-nav, tenant-brand) consume the
+    // canonical config/brand/logo/primary.url via STOREFRONT_DATA.brandLogo (prefetched in
+    // parallel with theme/nav, no extra round-trip). This keeps a single source of truth and
+    // avoids drift between platform publicConfig and tenant brand config.
+    // Pre-paint trade-off: nav logo paints after the parallel prefetch resolves (same tick as
+    // nav config); image swap is invisible to users. Favicon is set via tenant-brand.js after
+    // MastDB init. If a future change requires a logo URL before STOREFRONT_DATA resolves
+    // (e.g. inline <head> hero render), keep publicConfig.brandLogoUrl populated as the platform
+    // pre-paint fallback and read it here.
     TENANT_BRAND = {
       name: publicConfig.brandName || publicConfig.name,
       tagline: publicConfig.brandTagline || '',
