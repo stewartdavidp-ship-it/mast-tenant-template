@@ -564,7 +564,7 @@
     }
     .wizard-substep-line {
       flex: 1; height: 2px; background: var(--cream-dark, #f0e9d6);
-      transition: background 0.3s; max-width: 28px;
+      transition: background 0.3s;
     }
     .wizard-substep-line.completed { background: var(--teal); }
     body.dark-mode .wizard-substep-dot { background: #333; color: #999; border-color: #444; }
@@ -22893,10 +22893,35 @@ function initSetupWizard() {
   });
 }
 
+// IDs of every primary "Continue/Confirm" button across the wizard.
+// Each gets disabled on submit; we re-enable them all on every step entry so
+// back-nav after a successful submit doesn't strand the user with a greyed-out button.
+var _WIZARD_CONFIRM_BTN_IDS = [
+  'wizardBizIdentityConfirmBtn',  // step 1D
+  'wizardBrandConfirmBtn',         // step 2
+  'wizardEngagementConfirmBtn',    // step 4
+  'wizardFeaturePagesConfirmBtn',  // step 4b
+  'wizardCalibrationConfirmBtn',   // step 5
+  'wizardModulesConfirmBtn',       // step 6
+  'wizardSettingsConfirmBtn',      // step 8
+  'wizardAnalyzeBtn',              // step 3 analyze
+  'wizardMigrateBtn8'              // step 9 import
+];
+
 // showWizardStep accepts string step IDs: '0','1','2','3','4','4b','5','6','7','8','9','fastDpa'
 function showWizardStep(step) {
   var stepStr = String(step);
   wizardCurrentStep = stepStr;
+  // Re-enable every primary submit button so a stale DOM-disabled state from a
+  // prior submit doesn't carry over to the new step.
+  for (var bi = 0; bi < _WIZARD_CONFIRM_BTN_IDS.length; bi++) {
+    var _b = document.getElementById(_WIZARD_CONFIRM_BTN_IDS[bi]);
+    if (_b) {
+      _b.disabled = false;
+      // Restore default text where the submit handler swapped it for "Saving…".
+      if (_b.textContent === 'Saving…') _b.textContent = 'Continue';
+    }
+  }
   // Hide every wizard step pane
   var allSteps = document.querySelectorAll('#setupWizardScreen .wizard-step');
   for (var s = 0; s < allSteps.length; s++) allSteps[s].style.display = 'none';
