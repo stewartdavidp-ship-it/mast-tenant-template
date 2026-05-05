@@ -25457,21 +25457,30 @@ async function _applyEntityOperationsLocalization() {
 
 // B1: brand pointer (config/brand is the canonical visual source; entity.visual
 // reads through to it per spec §2.3). Preserves the existing logo-processing step.
+// Does NOT overwrite a logoUrl the user already set (e.g. via the brand-step upload).
 async function _applyBrandPointer(extracted) {
+  // Read existing brand to check what the user has already set explicitly.
+  var existing = await MastDB.config.get('brand').catch(function() { return null; });
+  var existingLogo = existing && existing.logoUrl;
+  var existingName = existing && existing.name;
+  var existingTagline = existing && existing.tagline;
+
   var logoUrl = extracted.logoUrl;
   if (logoUrl) {
     try { logoUrl = await processAndUploadLogo(logoUrl); } catch (e) { /* use original */ }
   }
   extracted.logoUrl = logoUrl;
   var brandUpdate = {
-    name: extracted.businessName,
-    tagline: extracted.tagline,
     primaryColor: extracted.primaryColor,
     accentColor: extracted.accentColor,
     updatedAt: new Date().toISOString()
   };
+  // Only fill name/tagline/logo from the scan when the user hasn't set them.
+  // Otherwise we'd overwrite their explicit choices made on the brand step.
+  if (!existingName && extracted.businessName) brandUpdate.name = extracted.businessName;
+  if (!existingTagline && extracted.tagline) brandUpdate.tagline = extracted.tagline;
   if (extracted.oneLineDescription) brandUpdate.description = extracted.oneLineDescription;
-  if (logoUrl) brandUpdate.logoUrl = logoUrl;
+  if (!existingLogo && logoUrl) brandUpdate.logoUrl = logoUrl;
   return MastDB.config.update('brand', brandUpdate);
 }
 
