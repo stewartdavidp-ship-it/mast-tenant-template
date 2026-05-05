@@ -23581,7 +23581,8 @@ async function wizardConfirmBrand() {
       updatedAt: new Date().toISOString()
     }).catch(function() {});
 
-    // Logo upload (best-effort, non-blocking)
+    // Logo upload (best-effort, non-blocking). Writes to ALL the places the
+    // storefront reads from so the user's choice actually appears.
     if (logoEl && logoEl.files && logoEl.files[0]) {
       (function(file) {
         try {
@@ -23589,8 +23590,18 @@ async function wizardConfirmBrand() {
           storageRef.put(file).then(function(snapshot) {
             return snapshot.ref.getDownloadURL();
           }).then(function(url) {
+            // Admin-side refs
             MastDB.config.update('brand', { logoUrl: url }).catch(function() {});
             MastDB.businessEntity.update('identity', { logoUrl: url }).catch(function() {});
+            // Public-facing storefront refs (otherwise scan-set values win at deploy time)
+            MastDB.set('public/config/nav/logoUrl', url).catch(function() {});
+            try {
+              MastDB.platform.update('mast-platform/tenants/' + MastDB.tenantId() + '/publicConfig', {
+                brandLogoUrl: url
+              }).catch(function() {});
+            } catch (e) {}
+            // Mark as user-set so applyStorefrontConfig/_applyPlatformRegistry skip overwriting.
+            window._wizardUserSetLogo = true;
           }).catch(function(e) { console.warn('[Wizard] Logo upload failed:', e && e.message); });
         } catch (e) { /* non-fatal */ }
       })(logoEl.files[0]);
@@ -25488,15 +25499,18 @@ async function _applyBrandPointer(extracted) {
 // B1: platform registry + publicConfig writes (unchanged from v1).
 async function _applyPlatformRegistry(extracted) {
   if (!extracted.businessName) return null;
+  // Don't overwrite a logo the user explicitly uploaded on the brand step.
+  var userSetLogo = !!window._wizardUserSetLogo;
   await MastDB.platform.update('mast-platform/tenants/' + MastDB.tenantId(), { name: extracted.businessName });
-  return MastDB.platform.update('mast-platform/tenants/' + MastDB.tenantId() + '/publicConfig', {
+  var publicConfigUpdate = {
     brandName: extracted.businessName,
     brandTagline: extracted.tagline,
     brandDescription: extracted.oneLineDescription,
-    brandLogoUrl: extracted.logoUrl || '',
     primaryColor: extracted.primaryColor,
     accentColor: extracted.accentColor
-  });
+  };
+  if (!userSetLogo) publicConfigUpdate.brandLogoUrl = extracted.logoUrl || '';
+  return MastDB.platform.update('mast-platform/tenants/' + MastDB.tenantId() + '/publicConfig', publicConfigUpdate);
 }
 
 // B1: storefront-only writes. Called by B3 when engagement.mode === 'storefront'.
@@ -25540,7 +25554,9 @@ async function applyStorefrontConfig(extracted, detectedModules) {
   if (features.newsletter) navSections.newsletter = { enabled: true, order: 60 };
   navSections.contact = { enabled: true, order: 99 };
   await MastDB.set('public/config/nav/sections', navSections).catch(function(e) { errors.push('nav: ' + e.message); });
-  if (logoUrl) await MastDB.set('public/config/nav/logoUrl', logoUrl).catch(function(e) { errors.push('nav logo: ' + e.message); });
+  // Skip writing the scanned logo to the public storefront if the user already
+  // uploaded their own on the brand step.
+  if (logoUrl && !window._wizardUserSetLogo) await MastDB.set('public/config/nav/logoUrl', logoUrl).catch(function(e) { errors.push('nav logo: ' + e.message); });
 
   var wpConfig = {
     style: extracted.styleRecommendation,
