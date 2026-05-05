@@ -6863,6 +6863,9 @@
 
         <!-- Fast-path DPA gate — shown after Step 3b or fast-exit (non-storefront + fast-exit paths) -->
         <div id="wizardStepFastDpa" class="wizard-step" style="display:none;">
+          <h2 id="wizardFastDpaHeading" style="font-size:1.6rem;margin-bottom:8px;">Ready to launch your store</h2>
+          <p id="wizardFastDpaSubhead" style="color:var(--warm-gray);margin-bottom:20px;">Review your setup, accept the data agreement, and you're live.</p>
+
           <!-- Setup summary card -->
           <div id="wizardFastSummaryCard" style="background:var(--cream-dark);border-radius:10px;padding:16px;margin-bottom:20px;font-size:0.9rem;"></div>
 
@@ -6891,7 +6894,8 @@
           </div>
           <div id="wizardActivateErrorsFast" style="display:none;background:rgba(220,38,38,0.08);border:1px solid var(--danger);border-radius:8px;padding:12px 14px;margin-bottom:12px;font-size:0.85rem;color:var(--danger);"></div>
 
-          <div id="wizardStep4ActionsFast">
+          <div id="wizardStep4ActionsFast" style="display:flex;justify-content:space-between;align-items:center;">
+            <button class="btn btn-secondary" onclick="wizardFastDpaBack()">Back</button>
             <button class="btn btn-primary" style="font-size:1rem;padding:12px 32px;" onclick="wizardCompleteFast()">Launch Dashboard</button>
           </div>
         </div>
@@ -23037,6 +23041,29 @@ function showWizardStep(step) {
   if (stepStr === 'fastDpa') {
     renderWizardFastSummary();
     renderWizardActivationGate();
+    // Repeat-visit aware framing: if user has been here before, soften the urgency.
+    var fastHeadingEl = document.getElementById('wizardFastDpaHeading');
+    var fastSubheadEl = document.getElementById('wizardFastDpaSubhead');
+    var alreadyVisited = !!(wizardProgress && wizardProgress.engagementConfirmed);
+    if (fastHeadingEl && fastSubheadEl) {
+      if (alreadyVisited) {
+        fastHeadingEl.textContent = 'Ready when you are';
+        fastSubheadEl.textContent = 'Your setup is saved. Accept the data agreement and launch your dashboard.';
+      } else {
+        fastHeadingEl.textContent = 'Ready to launch your store';
+        fastSubheadEl.textContent = 'Review your setup, accept the data agreement, and you’re live.';
+      }
+    }
+  }
+}
+
+// fastDpa Back: route to the right prior step based on path.
+function wizardFastDpaBack() {
+  var depth = window._wizardOnboardingDepth || 'quick';
+  if (depth === 'full') {
+    showWizardStep('9');
+  } else {
+    showWizardStep('4');
   }
 }
 
@@ -23253,25 +23280,21 @@ async function wizardConfirmEngagement() {
     });
 
     if (mode === 'storefront') {
-      // Set featureMode for storefront
+      // Set featureMode for storefront (import job already kicked off above).
       await MastDB.businessEntity.update('presence', { featureMode: 'full-storefront' }).catch(function() {});
-      // Flip Step 3 from engagement pane to import-watch pane (existing storefront watch path).
-      var engagePane = document.getElementById('wizardStep4Engagement');
-      var watchPane = document.getElementById('wizardStep4Watch');
-      if (engagePane) engagePane.style.display = 'none';
-      if (watchPane) watchPane.style.display = '';
-      try {
-        renderWizardSummary();
-        renderCapabilityPreview();
-        showWizardImportTimeline();
-      } catch (e) { /* non-fatal if legacy helpers error */ }
-      try { renderWizardFeeProjection(); } catch (e) { /* non-fatal — card is optional */ }
-      try { renderWizardActivationGate(); } catch (e) { /* render-on-demand fallback below */ }
-    } else {
-      // sync-channels or back-office: show Step 3b (feature pages picker)
-      showWizardStep('4b');
     }
-    saveWizardProgress('4', { engagementConfirmed: { mode: mode, surface: surface, goalsCount: goals.length } });
+    // Always advance to the next step instead of swapping panes in-place. Avoids
+    // the "progress dot stays on 4 but content changes" confusion. Quick-path
+    // storefront → activation page; non-storefront → feature picker; full path → calibration.
+    var depth = window._wizardOnboardingDepth || 'quick';
+    var nextStep;
+    if (mode === 'storefront') {
+      nextStep = (depth === 'full') ? '5' : 'fastDpa';
+    } else {
+      nextStep = '4b';
+    }
+    showWizardStep(nextStep);
+    saveWizardProgress(nextStep, { engagementConfirmed: { mode: mode, surface: surface, goalsCount: goals.length } });
   } catch (err) {
     if (btn) { btn.disabled = false; btn.textContent = 'Continue'; }
     showToast('Could not save engagement: ' + esc(err.message || ''), true);
