@@ -22927,17 +22927,18 @@ function showWizardStep(step) {
     // Restore the picker (no re-crawl) or skip the step entirely.
     var savedIntent = (wizardProgress && wizardProgress.siteIntent) || window._wizardSiteIntent;
     var savedManifest = window._wizardCrawlManifest || (wizardProgress && wizardProgress.crawlManifest);
+    var siteAnalyzed = !!(wizardProgress && (wizardProgress.siteAnalyzed || wizardProgress.analyzedUrl)) || !!window._wizardAnalyzedUrl;
     var urlForm3 = document.getElementById('wizardStep3UrlForm');
     var picker3 = document.getElementById('wizardSitePathPicker');
-    if (savedIntent && savedManifest) {
+    if (savedIntent && (savedManifest || siteAnalyzed)) {
       // Already chose migrate/integrate — skip past step 3
       showWizardStep('4');
       return;
     }
-    if (savedManifest && !savedIntent && typeof wizardShowSitePathPicker === 'function') {
+    if ((savedManifest || siteAnalyzed) && !savedIntent && typeof wizardShowSitePathPicker === 'function') {
       // Crawled but didn't pick — re-show picker without re-running analyze
-      window._wizardCrawlManifest = savedManifest;
-      wizardShowSitePathPicker({ crawlManifest: savedManifest });
+      if (savedManifest) window._wizardCrawlManifest = savedManifest;
+      wizardShowSitePathPicker({ crawlManifest: savedManifest || {} });
     } else {
       // Fresh entry — make sure URL form is visible and picker is hidden
       if (urlForm3) urlForm3.style.display = '';
@@ -25090,13 +25091,26 @@ async function wizardAnalyzeSite() {
       '<div style="width:24px;height:24px;border:3px solid var(--cream-dark);border-top-color:var(--amber);border-radius:50%;animation:spin 0.8s linear infinite;flex-shrink:0;"></div>' +
       '<span style="color:var(--warm-gray);">Applying your brand and setting up your store...</span></div>';
 
-    // Persist crawl manifest to Firebase (survives page reloads)
+    // Persist crawl manifest to Firebase (survives page reloads).
+    // Stamp _schemaVersion alongside so _wizardApplyProgress's v2 guard doesn't wipe these.
     var persistPromises = [
       MastDB.config.set('setupProgress/analyzedUrl', url).catch(function() {}),
-      MastDB.config.set('setupProgress/siteAnalyzed', true).catch(function() {})
+      MastDB.config.set('setupProgress/siteAnalyzed', true).catch(function() {}),
+      MastDB.config.set('setupProgress/_schemaVersion', 2).catch(function() {})
     ];
     if (crawlManifest) persistPromises.push(MastDB.config.set('setupProgress/crawlManifest', crawlManifest).catch(function() {}));
     if (data.siteFingerprint) persistPromises.push(MastDB.config.set('setupProgress/siteFingerprint', data.siteFingerprint).catch(function() {}));
+    // Mirror to localStorage immediately so a reload before Firestore round-trips still skips re-analyze.
+    try {
+      _wizardLsSave({
+        analyzedUrl: url,
+        siteAnalyzed: true,
+        crawlManifest: crawlManifest || null,
+        siteFingerprint: data.siteFingerprint || null,
+        _schemaVersion: 2,
+        updatedAt: new Date().toISOString()
+      });
+    } catch(e) {}
     if (data.draftTemplateId) persistPromises.push(MastDB.config.set('setupProgress/draftTemplateId', data.draftTemplateId).catch(function() {}));
 
     // === AUTO-APPLY EVERYTHING ===
