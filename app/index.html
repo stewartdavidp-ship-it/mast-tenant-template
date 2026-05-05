@@ -22989,13 +22989,18 @@ function renderWizardEngagement() {
       platformLabel = manifest.platform.charAt(0).toUpperCase() + manifest.platform.slice(1);
     }
   } catch (e) {}
+  // Reframe step 4 around what's still unknown after step 3.
+  // - migrate: mode is implied (storefront); only surface is unknown.
+  // - integrate: mode is sync-channels OR back-office; surface is unknown.
+  // - no intent: ask everything.
+  var unlockMode = !!window._wizardUnlockMode;
   if (headingEl && subheadEl) {
-    if (intent === 'migrate') {
-      headingEl.textContent = 'Confirm how you’ll use Mast';
-      subheadEl.textContent = 'You’re moving' + (platformLabel ? ' from ' + platformLabel : '') + ' to Mast — Storefront mode is selected. Adjust if needed.';
-    } else if (intent === 'integrate') {
-      headingEl.textContent = 'Confirm how you’ll use Mast';
-      subheadEl.textContent = 'You’re keeping ' + (platformLabel || 'your current site') + ' — Sync channels mode is selected. Adjust if needed.';
+    if (intent === 'migrate' && !unlockMode) {
+      headingEl.textContent = 'How do you want to work with Mast day-to-day?';
+      subheadEl.textContent = 'You’re moving' + (platformLabel ? ' from ' + platformLabel : '') + ' to Mast as your storefront. Pick how you’ll run things.';
+    } else if (intent === 'integrate' && !unlockMode) {
+      headingEl.textContent = 'What should Mast do behind the scenes?';
+      subheadEl.textContent = 'You’re keeping ' + (platformLabel || 'your current site') + ' out front. Pick the back-office role Mast plays.';
     } else {
       headingEl.textContent = 'How will you use Mast?';
       subheadEl.textContent = 'Pick the mode that matches your business today. You can always change this later.';
@@ -23017,10 +23022,76 @@ function renderWizardEngagement() {
   }
   var state = window._wizardEngagement;
 
+  // Filter visible cards by intent (Option 1: tie steps 3 + 4 together).
+  var visibleCards = cards;
+  if (intent === 'migrate' && !unlockMode) {
+    visibleCards = []; // mode is fixed at storefront; render a compact badge instead
+  } else if (intent === 'integrate' && !unlockMode) {
+    visibleCards = cards.filter(function(c) { return c.value === 'sync-channels' || c.value === 'back-office'; });
+  }
+
+  // Helper: build the surface-chip row used in both the inline-card path and the migrate-only standalone path.
+  function _renderSurfaceRow(modeValue) {
+    var row = document.createElement('div');
+    row.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;';
+    var modeCard = cards.find(function(c){ return c.value === modeValue; }) || {};
+    var activeSurface = state.surfaceByMode[modeValue] || defaultSurfaceByMode[modeValue] || modeCard.defaultSurface || 'hybrid';
+    state.surfaceByMode[modeValue] = activeSurface;
+    surfaceOptions.forEach(function(surf) {
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.textContent = surf.label;
+      btn.title = surf.hint;
+      var on = activeSurface === surf.value;
+      btn.style.cssText = 'padding:6px 10px;border-radius:999px;border:2px solid ' + (on ? 'var(--teal)' : 'var(--wiz-border,var(--border,#ccc))') +
+        ';background:' + (on ? 'var(--teal)' : 'var(--wiz-bg,var(--surface-card,#fff))') +
+        ';font-size:0.78rem;cursor:pointer;color:' + (on ? '#fff' : 'var(--wiz-text,var(--text,#2a2a2a))') + ';font-weight:' + (on ? '600' : '400') + ';transition:all 0.15s;';
+      btn.onclick = function(ev) {
+        ev.stopPropagation();
+        state.surfaceByMode[modeValue] = surf.value;
+        renderWizardEngagement();
+      };
+      row.appendChild(btn);
+    });
+    return row;
+  }
+
   var cardsEl = document.getElementById('wizardEngagementCards');
   if (cardsEl) {
     cardsEl.innerHTML = '';
-    for (var i = 0; i < cards.length; i++) {
+
+    // Migrate-path: mode is fixed at storefront. Render compact badge + standalone surface picker.
+    if (intent === 'migrate' && !unlockMode) {
+      // Make sure state.mode is locked in (for confirm).
+      if (state.mode !== 'storefront') {
+        state.mode = 'storefront';
+        if (!state.surfaceByMode.storefront) state.surfaceByMode.storefront = defaultSurfaceByMode.storefront || 'hybrid';
+      }
+      var badge = document.createElement('div');
+      badge.style.cssText = 'display:flex;justify-content:space-between;align-items:center;background:rgba(42,124,111,0.08);border:1px solid var(--teal);border-radius:8px;padding:12px 14px;margin-bottom:14px;';
+      badge.innerHTML =
+        '<div><div style="font-weight:600;font-size:0.95rem;color:var(--text,#2a2a2a);">Mode: Storefront</div>' +
+        '<div style="font-size:0.82rem;color:var(--warm-gray);margin-top:2px;">Mast is your public site — products, orders, and content all live here.</div></div>';
+      var changeLink = document.createElement('a');
+      changeLink.href = '#';
+      changeLink.textContent = 'Change mode';
+      changeLink.style.cssText = 'font-size:0.82rem;color:var(--teal);text-decoration:none;font-weight:600;flex-shrink:0;margin-left:12px;';
+      changeLink.onclick = function(e) {
+        e.preventDefault();
+        window._wizardUnlockMode = true;
+        renderWizardEngagement();
+      };
+      badge.appendChild(changeLink);
+      cardsEl.appendChild(badge);
+
+      var surfaceLabel = document.createElement('div');
+      surfaceLabel.style.cssText = 'font-size:0.85rem;font-weight:600;color:var(--text,#2a2a2a);margin-bottom:6px;';
+      surfaceLabel.textContent = 'How do you want to interact with Mast?';
+      cardsEl.appendChild(surfaceLabel);
+      cardsEl.appendChild(_renderSurfaceRow('storefront'));
+    }
+
+    for (var i = 0; i < visibleCards.length; i++) {
       (function(card) {
         var wrap = document.createElement('div');
         wrap.className = 'wizard-feature-card';
@@ -23028,7 +23099,7 @@ function renderWizardEngagement() {
         if (selected) wrap.setAttribute('data-selected', 'true');
         wrap.style.cssText = 'border:2px solid ' + (selected ? 'var(--teal)' : 'var(--border,#ddd)') +
           ';border-radius:8px;padding:14px 16px;cursor:pointer;background:' +
-          (selected ? 'var(--teal)' : 'var(--surface-card,#fff)') + ';transition:all 0.15s;';
+          (selected ? 'var(--teal)' : 'var(--surface-card,#fff)') + ';transition:all 0.15s;margin-bottom:8px;';
         var title = document.createElement('div');
         title.style.cssText = 'font-weight:600;font-size:0.95rem;margin-bottom:4px;color:' + (selected ? '#fff' : 'var(--text,#2a2a2a)') + ';';
         title.textContent = card.title;
@@ -23037,31 +23108,7 @@ function renderWizardEngagement() {
         body.textContent = card.body;
         wrap.appendChild(title);
         wrap.appendChild(body);
-        if (selected) {
-          var surfaceRow = document.createElement('div');
-          surfaceRow.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;';
-          var activeSurface = state.surfaceByMode[card.value] || defaultSurfaceByMode[card.value] || card.defaultSurface || 'hybrid';
-          state.surfaceByMode[card.value] = activeSurface;
-          for (var s = 0; s < surfaceOptions.length; s++) {
-            (function(surf) {
-              var btn = document.createElement('button');
-              btn.type = 'button';
-              btn.textContent = surf.label;
-              btn.title = surf.hint;
-              var on = activeSurface === surf.value;
-              btn.style.cssText = 'padding:6px 10px;border-radius:999px;border:2px solid ' + (on ? 'var(--teal)' : 'var(--wiz-border,var(--border,#ccc))') +
-                ';background:' + (on ? 'var(--teal)' : 'var(--wiz-bg,var(--surface-card,#fff))') +
-                ';font-size:0.78rem;cursor:pointer;color:' + (on ? '#fff' : 'var(--wiz-text,var(--text,#2a2a2a))') + ';font-weight:' + (on ? '600' : '400') + ';transition:all 0.15s;';
-              btn.onclick = function(ev) {
-                ev.stopPropagation();
-                state.surfaceByMode[card.value] = surf.value;
-                renderWizardEngagement();
-              };
-              surfaceRow.appendChild(btn);
-            })(surfaceOptions[s]);
-          }
-          wrap.appendChild(surfaceRow);
-        }
+        if (selected) wrap.appendChild(_renderSurfaceRow(card.value));
         wrap.onclick = function() {
           state.mode = card.value;
           if (!state.surfaceByMode[card.value]) {
@@ -23070,7 +23117,7 @@ function renderWizardEngagement() {
           renderWizardEngagement();
         };
         cardsEl.appendChild(wrap);
-      })(cards[i]);
+      })(visibleCards[i]);
     }
   }
 
@@ -23085,6 +23132,8 @@ async function wizardConfirmEngagement() {
   var state = window._wizardEngagement || {};
   var mode = state.mode;
   if (!mode) { showToast('Pick a mode to continue.', true); return; }
+  // Reset the "Change mode" override so future re-entries to step 4 re-lock to intent.
+  window._wizardUnlockMode = false;
   var surface = (state.surfaceByMode && state.surfaceByMode[mode])
     || (BEC.DEFAULT_SURFACE_BY_MODE && BEC.DEFAULT_SURFACE_BY_MODE[mode])
     || 'hybrid';
