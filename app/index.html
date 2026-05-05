@@ -22750,7 +22750,15 @@ var _wizardStepOrder = ['0','1','2','3','4','fastDpa'];
 var _wizardStepOrderFull = ['0','1','2','3','4','4b','5','6','7','8','9','fastDpa'];
 
 function _wizardGetStepOrder() {
-  return (window._wizardOnboardingDepth === 'full') ? _wizardStepOrderFull : _wizardStepOrder;
+  var base = (window._wizardOnboardingDepth === 'full') ? _wizardStepOrderFull : _wizardStepOrder;
+  // Filter to the user's actual path so the progress bar reflects what they
+  // will visit. Storefront mode skips '4b' (feature pages picker is non-storefront only).
+  // Falls back to including '4b' if mode isn't decided yet (initial render before step 3).
+  var eng = window._wizardEngagement || (typeof wizardProgress !== 'undefined' && wizardProgress && wizardProgress._engagement) || {};
+  if (eng.mode === 'storefront') {
+    return base.filter(function(s) { return s !== '4b'; });
+  }
+  return base;
 }
 
 function _wizardLsKey() {
