@@ -6628,17 +6628,6 @@
                 <div id="wizardBizChannelsPriority"></div>
               </div>
             </div>
-            <div id="wizardStorefrontUrlRow" style="display:none;margin-bottom:8px;">
-              <label style="font-size:0.78rem;font-weight:600;display:block;margin-bottom:3px;color:var(--wiz-text,inherit);">Your storefront URL</label>
-              <input type="url" id="wizardStorefrontUrlInput" placeholder="https://yourshop.com"
-                style="width:100%;padding:8px 10px;border:1px solid var(--wiz-border,#ddd);border-radius:5px;font-family:'DM Sans',sans-serif;font-size:0.85rem;box-sizing:border-box;background:var(--wiz-input,#fff);color:var(--wiz-text,inherit);">
-              <div style="font-size:0.75rem;color:var(--warm-gray);margin-top:3px;">We'll import your products — you can also do this later.</div>
-            </div>
-            <div id="wizardOtherChannelRow" style="display:none;margin-bottom:8px;">
-              <label style="font-size:0.78rem;font-weight:600;display:block;margin-bottom:3px;color:var(--wiz-text,inherit);">Describe your other channel</label>
-              <input type="text" id="wizardOtherChannelInput" placeholder="e.g. Gallery representation, craft fairs…"
-                style="width:100%;padding:8px 10px;border:1px solid var(--wiz-border,#ddd);border-radius:5px;font-family:'DM Sans',sans-serif;font-size:0.85rem;box-sizing:border-box;background:var(--wiz-input,#fff);color:var(--wiz-text,inherit);">
-            </div>
             <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;">
               <button class="btn btn-secondary" onclick="showWizardSubStep('1A');renderWizardBizIdentity();">Back</button>
               <button class="btn btn-primary" onclick="wizardBizNext1B()">Continue</button>
@@ -23632,8 +23621,6 @@ function renderWizardBizIdentity() {
     archetype: null,          // specific subtype within category
     businessType: null,       // derived: 'produce' | 'resell' | 'teach'
     revenueChannels: [],      // ordered priority array
-    storefrontUrl: '',
-    otherChannelNote: '',
     currentTools: [],         // payment tools (unordered)
     shippingTools: []         // shipping tools ordered by priority
   };
@@ -23646,8 +23633,6 @@ function renderWizardBizIdentity() {
     if (_saved.revenueChannels) state.revenueChannels = _saved.revenueChannels.slice();
     if (_saved.shippingTools) state.shippingTools = _saved.shippingTools.slice();
     if (_saved.currentTools) state.currentTools = _saved.currentTools.slice();
-    if (_saved.storefrontUrl) state.storefrontUrl = _saved.storefrontUrl;
-    if (_saved.otherChannelNote) state.otherChannelNote = _saved.otherChannelNote;
   }
   // Pre-fill from site scan when nothing saved yet — user confirms/adjusts.
   if (!state.businessCategory || !state.archetype || state.revenueChannels.length === 0) {
@@ -23679,9 +23664,7 @@ function renderWizardBizIdentity() {
     businessType: state.businessType,
     revenueChannels: (state.revenueChannels || []).slice(),
     shippingTools: (state.shippingTools || []).slice(),
-    currentTools: (state.currentTools || []).slice(),
-    storefrontUrl: state.storefrontUrl || '',
-    otherChannelNote: state.otherChannelNote || ''
+    currentTools: (state.currentTools || []).slice()
   }); } catch(e) {}
   var depth = window._wizardOnboardingDepth || 'quick';
 
@@ -23838,16 +23821,6 @@ function renderWizardBizIdentity() {
       chanPrioEl.appendChild(item);
     });
   }
-  // Conditional fields based on what's in priority list
-  var urlRow = document.getElementById('wizardStorefrontUrlRow');
-  var otherRow = document.getElementById('wizardOtherChannelRow');
-  if (urlRow) urlRow.style.display = state.revenueChannels.indexOf('online-own') >= 0 ? '' : 'none';
-  if (otherRow) otherRow.style.display = state.revenueChannels.indexOf('other') >= 0 ? '' : 'none';
-  var urlInput = document.getElementById('wizardStorefrontUrlInput');
-  if (urlInput && state.storefrontUrl) urlInput.value = state.storefrontUrl;
-  var otherInput = document.getElementById('wizardOtherChannelInput');
-  if (otherInput && state.otherChannelNote) otherInput.value = state.otherChannelNote;
-
   // Part D: Current tools — full path only (sub-steps 1C and 1D are only reachable on full path)
   if (depth === 'full') {
     var allTools = BEC.CURRENT_TOOLS || [];
@@ -23994,11 +23967,6 @@ function wizardBizNext1A() {
 }
 
 function wizardBizNext1B() {
-  var state = _wizardBizIdentityState || {};
-  var urlInput = document.getElementById('wizardStorefrontUrlInput');
-  if (urlInput) state.storefrontUrl = urlInput.value.trim();
-  var otherInput = document.getElementById('wizardOtherChannelInput');
-  if (otherInput) state.otherChannelNote = otherInput.value.trim();
   var depth = window._wizardOnboardingDepth || 'quick';
   if (depth === 'full') {
     showWizardSubStep('1C');
@@ -24019,20 +23987,6 @@ async function wizardConfirmBizIdentity() {
     showToast('Please select your business category and type.', true);
     return;
   }
-  // Read conditional text inputs into state before saving
-  var urlInput = document.getElementById('wizardStorefrontUrlInput');
-  if (urlInput) state.storefrontUrl = urlInput.value.trim();
-  var otherInput = document.getElementById('wizardOtherChannelInput');
-  if (otherInput) state.otherChannelNote = otherInput.value.trim();
-
-  // Pre-fill the site import step if a storefront URL was provided
-  if (state.storefrontUrl) {
-    window._wizardPrefilledSiteUrl = state.storefrontUrl;
-    var s1 = document.getElementById('wizardSiteUrl');
-    if (s1 && !s1.value) s1.value = state.storefrontUrl;
-    var s8 = document.getElementById('wizardSiteUrl8');
-    if (s8 && !s8.value) s8.value = state.storefrontUrl;
-  }
 
   // businessType is derived from category; use it directly as effectiveType
   var effectiveType = state.businessType || 'produce';
@@ -24051,8 +24005,6 @@ async function wizardConfirmBizIdentity() {
     await MastDB.businessEntity.update('identity', identityUpdate);
     var presenceUpdate = {};
     if (state.revenueChannels.length) presenceUpdate.revenueChannels = state.revenueChannels.slice();
-    if (state.storefrontUrl)          presenceUpdate.storefrontUrl    = state.storefrontUrl;
-    if (state.otherChannelNote)       presenceUpdate.otherChannelNote = state.otherChannelNote;
     if (state.currentTools.length)    presenceUpdate.currentTools     = state.currentTools.slice();
     if (state.shippingTools && state.shippingTools.length) presenceUpdate.shippingTools = state.shippingTools.slice();
     if (Object.keys(presenceUpdate).length) {
@@ -24064,7 +24016,6 @@ async function wizardConfirmBizIdentity() {
       businessType: state.businessType,
       primaryOutput: primaryOutput,
       revenueChannelsCount: state.revenueChannels.length,
-      hasStorefrontUrl: !!state.storefrontUrl,
       toolsCount: state.currentTools.length,
       shippingToolsCount: (state.shippingTools || []).length
     });
