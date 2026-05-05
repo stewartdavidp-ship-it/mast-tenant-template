@@ -6534,25 +6534,26 @@
             </div>
           </div>
 
-          <!-- Part B: Supplemental outputs — only shown when relevant; not required -->
-          <div id="wizardPrimaryOutputSection" class="form-group" style="margin-bottom:20px;display:none;">
-            <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:8px;">Do you also sell any of these? <span style="color:var(--warm-gray);font-weight:400;">(optional)</span></label>
-            <div id="wizardPrimaryOutputChips" style="display:flex;flex-wrap:wrap;gap:8px;"></div>
-          </div>
-
-          <!-- Part C: Revenue channels -->
+          <!-- Part C: Revenue channels — priority picker -->
           <div class="form-group" style="margin-bottom:20px;">
-            <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">How do you sell today? <span style="color:var(--warm-gray);font-weight:400;">(optional — select all that apply)</span></label>
-            <div style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:8px;">Helps Mast set up the right features for you.</div>
-            <div id="wizardBizChannels" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;"></div>
-            <!-- Shown when "Online storefront I own" is selected -->
-            <div id="wizardStorefrontUrlRow" style="display:none;margin-top:6px;">
+            <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">How do you sell today? <span style="color:var(--warm-gray);font-weight:400;">(optional — add in priority order)</span></label>
+            <div style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:8px;">Click a channel to add it. Drag or use arrows to reorder.</div>
+            <div style="display:flex;gap:10px;margin-bottom:8px;">
+              <div style="flex:1;min-width:0;">
+                <div style="font-size:0.7rem;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--warm-gray);margin-bottom:5px;">Available</div>
+                <div id="wizardBizChannels"></div>
+              </div>
+              <div style="flex:1;min-width:0;">
+                <div style="font-size:0.7rem;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--warm-gray);margin-bottom:5px;">Your order</div>
+                <div id="wizardBizChannelsPriority"></div>
+              </div>
+            </div>
+            <div id="wizardStorefrontUrlRow" style="display:none;margin-top:2px;">
               <label style="font-size:0.78rem;font-weight:600;display:block;margin-bottom:3px;color:var(--wiz-text,inherit);">Your storefront URL</label>
               <input type="url" id="wizardStorefrontUrlInput" placeholder="https://yourshop.com"
                 style="width:100%;padding:8px 10px;border:1px solid var(--wiz-border,#ddd);border-radius:5px;font-family:'DM Sans',sans-serif;font-size:0.85rem;box-sizing:border-box;background:var(--wiz-input,#fff);color:var(--wiz-text,inherit);">
               <div style="font-size:0.75rem;color:var(--warm-gray);margin-top:3px;">We'll import your products from it — you can also do this later.</div>
             </div>
-            <!-- Shown when "Other" is selected -->
             <div id="wizardOtherChannelRow" style="display:none;margin-top:6px;">
               <label style="font-size:0.78rem;font-weight:600;display:block;margin-bottom:3px;color:var(--wiz-text,inherit);">Describe your other channel</label>
               <input type="text" id="wizardOtherChannelInput" placeholder="e.g. Gallery representation, craft fairs…"
@@ -6563,13 +6564,22 @@
           <!-- Part D: Current tools (full path only) -->
           <div id="wizardCurrentToolsSection" class="form-group" style="margin-bottom:20px;">
             <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:8px;">Do you use any of these tools already? <span style="color:var(--warm-gray);font-weight:400;">(optional)</span></label>
-            <div id="wizardCurrentToolsPayment" style="margin-bottom:10px;">
+            <div id="wizardCurrentToolsPayment" style="margin-bottom:14px;">
               <div style="font-size:0.75rem;font-weight:600;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">Payment</div>
               <div style="display:flex;flex-wrap:wrap;gap:6px;" id="wizardToolsPaymentChips"></div>
             </div>
             <div id="wizardCurrentToolsShipping">
-              <div style="font-size:0.75rem;font-weight:600;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">Shipping</div>
-              <div style="display:flex;flex-wrap:wrap;gap:6px;" id="wizardToolsShippingChips"></div>
+              <div style="font-size:0.75rem;font-weight:600;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">Shipping <span style="font-weight:400;text-transform:none;letter-spacing:0;">— add in priority order</span></div>
+              <div style="display:flex;gap:10px;">
+                <div style="flex:1;min-width:0;">
+                  <div style="font-size:0.7rem;color:var(--warm-gray);margin-bottom:5px;">Available</div>
+                  <div id="wizardShippingToolsAvail"></div>
+                </div>
+                <div style="flex:1;min-width:0;">
+                  <div style="font-size:0.7rem;color:var(--warm-gray);margin-bottom:5px;">Your order</div>
+                  <div id="wizardShippingToolsPriority"></div>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -23295,11 +23305,22 @@ function renderWizardBizIdentity() {
     businessCategory: null,  // e.g. 'makers', 'food-bev', 'services'
     archetype: null,          // specific subtype within category
     businessType: null,       // derived: 'produce' | 'resell' | 'teach'
-    revenueChannels: [],
+    revenueChannels: [],      // ordered priority array
     storefrontUrl: '',
     otherChannelNote: '',
-    currentTools: []
+    currentTools: [],         // payment tools (unordered)
+    shippingTools: []         // shipping tools ordered by priority
   };
+  // Restore from saved progress if in-memory state was lost (e.g. back-nav to step 0 then forward)
+  if (!state.businessCategory && wizardProgress && wizardProgress._bizIdentity) {
+    var _saved = wizardProgress._bizIdentity;
+    if (_saved.businessCategory) state.businessCategory = _saved.businessCategory;
+    if (_saved.archetype) state.archetype = _saved.archetype;
+    if (_saved.businessType) state.businessType = _saved.businessType;
+    if (_saved.revenueChannels) state.revenueChannels = _saved.revenueChannels.slice();
+    if (_saved.shippingTools) state.shippingTools = _saved.shippingTools.slice();
+    if (_saved.currentTools) state.currentTools = _saved.currentTools.slice();
+  }
   var depth = window._wizardOnboardingDepth || 'quick';
 
   function solidChipCss(sel) {
@@ -23381,104 +23402,170 @@ function renderWizardBizIdentity() {
     };
   }
 
-  // Part B: Supplemental outputs — hidden for 'teach', shown otherwise
-  var outputSection = document.getElementById('wizardPrimaryOutputSection');
-  var outputEl = document.getElementById('wizardPrimaryOutputChips');
-  var hideOutput = state.businessType === 'teach' || state.businessType === 'resell' || !state.businessType;
-  if (outputSection) outputSection.style.display = hideOutput ? 'none' : '';
-  if (outputEl && !hideOutput) {
-    outputEl.innerHTML = '';
-    var outputs = BEC.PRIMARY_OUTPUTS || [];
-    outputs.forEach(function(o) {
-      var chip = document.createElement('button');
-      chip.type = 'button';
-      var sel = (state.supplementalOutputs || []).indexOf(o.value) >= 0;
-      chip.style.cssText = multiChipCss(sel);
-      chip.textContent = o.label;
-      chip.onclick = function() {
-        if (!state.supplementalOutputs) state.supplementalOutputs = [];
-        var idx = state.supplementalOutputs.indexOf(o.value);
-        if (idx >= 0) state.supplementalOutputs.splice(idx, 1);
-        else state.supplementalOutputs.push(o.value);
+  // Part C: Revenue channels — priority picker
+  var revChannels = BEC.REVENUE_CHANNELS || [];
+  var revChanMap = {};
+  revChannels.forEach(function(ch) { revChanMap[ch.value] = ch; });
+
+  var chanAvailEl = document.getElementById('wizardBizChannels');
+  if (chanAvailEl) {
+    chanAvailEl.innerHTML = '';
+    var availCount = 0;
+    revChannels.forEach(function(ch) {
+      if (state.revenueChannels.indexOf(ch.value) >= 0) return;
+      availCount++;
+      var item = document.createElement('div');
+      item.style.cssText = 'padding:6px 10px;border:1px solid var(--wiz-border,#ddd);border-radius:5px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;font-size:0.82rem;background:var(--wiz-input,#fff);color:var(--wiz-text,#2a2a2a);transition:border-color 0.12s;';
+      var nameSpan = document.createElement('span');
+      nameSpan.textContent = ch.label;
+      var addSpan = document.createElement('span');
+      addSpan.style.cssText = 'color:var(--teal);font-size:1rem;line-height:1;margin-left:6px;flex-shrink:0;';
+      addSpan.textContent = '+';
+      item.appendChild(nameSpan);
+      item.appendChild(addSpan);
+      item.onclick = function() {
+        state.revenueChannels.push(ch.value);
         renderWizardBizIdentity();
       };
-      outputEl.appendChild(chip);
+      chanAvailEl.appendChild(item);
     });
+    if (availCount === 0) {
+      chanAvailEl.innerHTML = '<div style="font-size:0.78rem;color:var(--warm-gray);padding:4px 0;">All added</div>';
+    }
   }
 
-  // Part C: Revenue channels (multi-select)
-  var chanEl = document.getElementById('wizardBizChannels');
-  if (chanEl) {
-    chanEl.innerHTML = '';
-    var revChannels = BEC.REVENUE_CHANNELS || [];
-    revChannels.forEach(function(ch) {
-      var chip = document.createElement('label');
-      var chkd = state.revenueChannels.indexOf(ch.value) >= 0;
-      chip.style.cssText = multiChipCss(chkd);
-      var cb = document.createElement('input');
-      cb.type = 'checkbox';
-      cb.style.cssText = 'position:absolute;opacity:0;width:0;height:0;pointer-events:none;';
-      cb.checked = chkd;
-      cb.onchange = function() {
-        var idx = state.revenueChannels.indexOf(ch.value);
-        if (cb.checked && idx < 0) state.revenueChannels.push(ch.value);
-        else if (!cb.checked && idx >= 0) state.revenueChannels.splice(idx, 1);
-        chip.style.cssText = multiChipCss(cb.checked);
-        // Show/hide conditional fields
-        var urlRow = document.getElementById('wizardStorefrontUrlRow');
-        var otherRow = document.getElementById('wizardOtherChannelRow');
-        if (urlRow) urlRow.style.display = state.revenueChannels.indexOf('online-own') >= 0 ? '' : 'none';
-        if (otherRow) otherRow.style.display = state.revenueChannels.indexOf('other') >= 0 ? '' : 'none';
-      };
-      var span = document.createElement('span');
-      span.textContent = ch.label;
-      chip.appendChild(cb);
-      chip.appendChild(span);
-      chanEl.appendChild(chip);
+  var chanPrioEl = document.getElementById('wizardBizChannelsPriority');
+  if (chanPrioEl) {
+    chanPrioEl.innerHTML = '';
+    if (state.revenueChannels.length === 0) {
+      chanPrioEl.innerHTML = '<div style="font-size:0.78rem;color:var(--warm-gray);padding:4px 0;">None yet — click to add</div>';
+    }
+    state.revenueChannels.forEach(function(val, idx) {
+      var ch = revChanMap[val];
+      if (!ch) return;
+      var item = document.createElement('div');
+      item.style.cssText = 'padding:5px 7px;background:var(--teal);color:#fff;border-radius:5px;display:flex;align-items:center;gap:3px;margin-bottom:4px;font-size:0.82rem;';
+      var badge = document.createElement('span');
+      badge.style.cssText = 'min-width:16px;font-size:0.68rem;font-weight:700;opacity:0.75;flex-shrink:0;';
+      badge.textContent = (idx + 1) + '.';
+      var lbl = document.createElement('span');
+      lbl.style.cssText = 'flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+      lbl.textContent = ch.label;
+      function mkBtn(icon, disabled) {
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.style.cssText = 'background:rgba(255,255,255,0.2);border:none;border-radius:3px;color:#fff;cursor:pointer;padding:1px 5px;font-size:0.72rem;line-height:1.4;flex-shrink:0;' + (disabled ? 'opacity:0.3;pointer-events:none;' : '');
+        b.textContent = icon;
+        return b;
+      }
+      var btnUp   = mkBtn('↑', idx === 0);
+      var btnDown = mkBtn('↓', idx === state.revenueChannels.length - 1);
+      var btnX    = mkBtn('×', false);
+      btnX.style.cssText += 'font-size:0.85rem;';
+      btnUp.onclick = function() { state.revenueChannels.splice(idx, 1); state.revenueChannels.splice(idx - 1, 0, val); renderWizardBizIdentity(); };
+      btnDown.onclick = function() { state.revenueChannels.splice(idx, 1); state.revenueChannels.splice(idx + 1, 0, val); renderWizardBizIdentity(); };
+      btnX.onclick = function() { state.revenueChannels.splice(idx, 1); renderWizardBizIdentity(); };
+      item.appendChild(badge); item.appendChild(lbl); item.appendChild(btnUp); item.appendChild(btnDown); item.appendChild(btnX);
+      chanPrioEl.appendChild(item);
     });
-    // Sync conditional field visibility on re-render
-    var urlRow = document.getElementById('wizardStorefrontUrlRow');
-    var otherRow = document.getElementById('wizardOtherChannelRow');
-    if (urlRow) urlRow.style.display = state.revenueChannels.indexOf('online-own') >= 0 ? '' : 'none';
-    if (otherRow) otherRow.style.display = state.revenueChannels.indexOf('other') >= 0 ? '' : 'none';
-    // Restore saved values
-    var urlInput = document.getElementById('wizardStorefrontUrlInput');
-    if (urlInput && state.storefrontUrl) urlInput.value = state.storefrontUrl;
-    var otherInput = document.getElementById('wizardOtherChannelInput');
-    if (otherInput && state.otherChannelNote) otherInput.value = state.otherChannelNote;
   }
+  // Conditional fields based on what's in priority list
+  var urlRow = document.getElementById('wizardStorefrontUrlRow');
+  var otherRow = document.getElementById('wizardOtherChannelRow');
+  if (urlRow) urlRow.style.display = state.revenueChannels.indexOf('online-own') >= 0 ? '' : 'none';
+  if (otherRow) otherRow.style.display = state.revenueChannels.indexOf('other') >= 0 ? '' : 'none';
+  var urlInput = document.getElementById('wizardStorefrontUrlInput');
+  if (urlInput && state.storefrontUrl) urlInput.value = state.storefrontUrl;
+  var otherInput = document.getElementById('wizardOtherChannelInput');
+  if (otherInput && state.otherChannelNote) otherInput.value = state.otherChannelNote;
 
-  // Part D: Current tools (payment + shipping only) — full path only
+  // Part D: Current tools — full path only
   var toolsSection = document.getElementById('wizardCurrentToolsSection');
   if (toolsSection) toolsSection.style.display = depth === 'full' ? '' : 'none';
   if (depth === 'full') {
-    var tools = BEC.CURRENT_TOOLS || [];
-    var categories = { payment: 'wizardToolsPaymentChips', shipping: 'wizardToolsShippingChips', labels: 'wizardToolsShippingChips' };
-    var rendered = {};
-    tools.forEach(function(tool) {
-      var containerId = categories[tool.category] || 'wizardToolsShippingChips';
-      var container = document.getElementById(containerId);
-      if (!container) return;
-      if (!rendered[containerId]) { rendered[containerId] = true; container.innerHTML = ''; }
-      var chip = document.createElement('label');
-      var chkd = state.currentTools.indexOf(tool.value) >= 0;
-      chip.style.cssText = multiChipCss(chkd);
-      var cb = document.createElement('input');
-      cb.type = 'checkbox';
-      cb.style.cssText = 'position:absolute;opacity:0;width:0;height:0;pointer-events:none;';
-      cb.checked = chkd;
-      cb.onchange = function() {
-        var idx = state.currentTools.indexOf(tool.value);
-        if (cb.checked && idx < 0) state.currentTools.push(tool.value);
-        else if (!cb.checked && idx >= 0) state.currentTools.splice(idx, 1);
-        chip.style.cssText = multiChipCss(cb.checked);
-      };
-      var span = document.createElement('span');
-      span.textContent = tool.label;
-      chip.appendChild(cb);
-      chip.appendChild(span);
-      container.appendChild(chip);
-    });
+    var allTools = BEC.CURRENT_TOOLS || [];
+
+    // Payment — chips (unordered)
+    var payContainer = document.getElementById('wizardToolsPaymentChips');
+    if (payContainer) {
+      payContainer.innerHTML = '';
+      allTools.filter(function(t) { return t.category === 'payment'; }).forEach(function(tool) {
+        var chip = document.createElement('label');
+        var chkd = state.currentTools.indexOf(tool.value) >= 0;
+        chip.style.cssText = multiChipCss(chkd);
+        var cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.style.cssText = 'position:absolute;opacity:0;width:0;height:0;pointer-events:none;';
+        cb.checked = chkd;
+        cb.onchange = function() {
+          var idx = state.currentTools.indexOf(tool.value);
+          if (cb.checked && idx < 0) state.currentTools.push(tool.value);
+          else if (!cb.checked && idx >= 0) state.currentTools.splice(idx, 1);
+          chip.style.cssText = multiChipCss(cb.checked);
+        };
+        var span = document.createElement('span');
+        span.textContent = tool.label;
+        chip.appendChild(cb); chip.appendChild(span);
+        payContainer.appendChild(chip);
+      });
+    }
+
+    // Shipping — priority picker
+    var shipTools = allTools.filter(function(t) { return t.category === 'shipping'; });
+    var shipMap = {};
+    shipTools.forEach(function(t) { shipMap[t.value] = t; });
+
+    var shipAvailEl = document.getElementById('wizardShippingToolsAvail');
+    if (shipAvailEl) {
+      shipAvailEl.innerHTML = '';
+      var shipAvailCount = 0;
+      shipTools.forEach(function(tool) {
+        if (state.shippingTools.indexOf(tool.value) >= 0) return;
+        shipAvailCount++;
+        var item = document.createElement('div');
+        item.style.cssText = 'padding:6px 10px;border:1px solid var(--wiz-border,#ddd);border-radius:5px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;font-size:0.82rem;background:var(--wiz-input,#fff);color:var(--wiz-text,#2a2a2a);';
+        var ns = document.createElement('span'); ns.textContent = tool.label;
+        var as = document.createElement('span'); as.style.cssText = 'color:var(--teal);font-size:1rem;line-height:1;margin-left:6px;flex-shrink:0;'; as.textContent = '+';
+        item.appendChild(ns); item.appendChild(as);
+        item.onclick = function() { state.shippingTools.push(tool.value); renderWizardBizIdentity(); };
+        shipAvailEl.appendChild(item);
+      });
+      if (shipAvailCount === 0) {
+        shipAvailEl.innerHTML = '<div style="font-size:0.78rem;color:var(--warm-gray);padding:4px 0;">All added</div>';
+      }
+    }
+
+    var shipPrioEl = document.getElementById('wizardShippingToolsPriority');
+    if (shipPrioEl) {
+      shipPrioEl.innerHTML = '';
+      if (state.shippingTools.length === 0) {
+        shipPrioEl.innerHTML = '<div style="font-size:0.78rem;color:var(--warm-gray);padding:4px 0;">None yet — click to add</div>';
+      }
+      state.shippingTools.forEach(function(val, idx) {
+        var tool = shipMap[val];
+        if (!tool) return;
+        var item = document.createElement('div');
+        item.style.cssText = 'padding:5px 7px;background:var(--teal);color:#fff;border-radius:5px;display:flex;align-items:center;gap:3px;margin-bottom:4px;font-size:0.82rem;';
+        var badge = document.createElement('span');
+        badge.style.cssText = 'min-width:16px;font-size:0.68rem;font-weight:700;opacity:0.75;flex-shrink:0;';
+        badge.textContent = (idx + 1) + '.';
+        var lbl = document.createElement('span'); lbl.style.cssText = 'flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;'; lbl.textContent = tool.label;
+        function mkSBtn(icon, disabled) {
+          var b = document.createElement('button');
+          b.type = 'button';
+          b.style.cssText = 'background:rgba(255,255,255,0.2);border:none;border-radius:3px;color:#fff;cursor:pointer;padding:1px 5px;font-size:0.72rem;line-height:1.4;flex-shrink:0;' + (disabled ? 'opacity:0.3;pointer-events:none;' : '');
+          b.textContent = icon; return b;
+        }
+        var bUp   = mkSBtn('↑', idx === 0);
+        var bDown = mkSBtn('↓', idx === state.shippingTools.length - 1);
+        var bX    = mkSBtn('×', false); bX.style.cssText += 'font-size:0.85rem;';
+        bUp.onclick   = function() { state.shippingTools.splice(idx,1); state.shippingTools.splice(idx-1,0,val); renderWizardBizIdentity(); };
+        bDown.onclick = function() { state.shippingTools.splice(idx,1); state.shippingTools.splice(idx+1,0,val); renderWizardBizIdentity(); };
+        bX.onclick    = function() { state.shippingTools.splice(idx,1); renderWizardBizIdentity(); };
+        item.appendChild(badge); item.appendChild(lbl); item.appendChild(bUp); item.appendChild(bDown); item.appendChild(bX);
+        shipPrioEl.appendChild(item);
+      });
+    }
   }
 
   // Continue enabled when: business type selected AND (if mixed: primary type also selected)
@@ -23511,10 +23598,7 @@ async function wizardConfirmBizIdentity() {
 
   // businessType is derived from category; use it directly as effectiveType
   var effectiveType = state.businessType || 'produce';
-  var derivedOutput = effectiveType === 'teach' ? 'classes' :
-                      effectiveType === 'resell' ? 'physical' : 'physical';
-  var primaryOutput = (state.supplementalOutputs && state.supplementalOutputs.length)
-    ? state.supplementalOutputs[0] : derivedOutput;
+  var primaryOutput = effectiveType === 'teach' ? 'classes' : 'physical';
 
   var btn = document.getElementById('wizardBizIdentityConfirmBtn');
   if (btn) btn.disabled = true;
@@ -23526,15 +23610,13 @@ async function wizardConfirmBizIdentity() {
       effectiveBusinessType: effectiveType,
       primaryOutput: primaryOutput
     };
-    if (state.supplementalOutputs && state.supplementalOutputs.length) {
-      identityUpdate.supplementalOutputs = state.supplementalOutputs.slice();
-    }
     await MastDB.businessEntity.update('identity', identityUpdate);
     var presenceUpdate = {};
     if (state.revenueChannels.length) presenceUpdate.revenueChannels = state.revenueChannels.slice();
     if (state.storefrontUrl)          presenceUpdate.storefrontUrl    = state.storefrontUrl;
     if (state.otherChannelNote)       presenceUpdate.otherChannelNote = state.otherChannelNote;
     if (state.currentTools.length)    presenceUpdate.currentTools     = state.currentTools.slice();
+    if (state.shippingTools && state.shippingTools.length) presenceUpdate.shippingTools = state.shippingTools.slice();
     if (Object.keys(presenceUpdate).length) {
       await MastDB.businessEntity.update('presence', presenceUpdate);
     }
@@ -23545,7 +23627,8 @@ async function wizardConfirmBizIdentity() {
       primaryOutput: primaryOutput,
       revenueChannelsCount: state.revenueChannels.length,
       hasStorefrontUrl: !!state.storefrontUrl,
-      toolsCount: state.currentTools.length
+      toolsCount: state.currentTools.length,
+      shippingToolsCount: (state.shippingTools || []).length
     });
     // Archetype collected in step 2 — go straight to brand.
     window._wizardArchetypeDefaults = MastDB.businessEntity.archetypeDefaults(state.archetype);
@@ -23555,7 +23638,18 @@ async function wizardConfirmBizIdentity() {
     var brandTaglineEl = document.getElementById('wizardBrandTagline');
     if (brandTaglineEl && !brandTaglineEl.value && extracted.tagline) brandTaglineEl.value = extracted.tagline;
     showWizardStep('1_5');
-    saveWizardProgress('1_5', { bizIdentityConfirmed: true, archetypeConfirmed: state.archetype });
+    saveWizardProgress('1_5', {
+      bizIdentityConfirmed: true,
+      archetypeConfirmed: state.archetype,
+      _bizIdentity: {
+        businessCategory: state.businessCategory,
+        archetype: state.archetype,
+        businessType: state.businessType,
+        revenueChannels: state.revenueChannels.slice(),
+        shippingTools: (state.shippingTools || []).slice(),
+        currentTools: state.currentTools.slice()
+      }
+    });
   } catch (err) {
     if (btn) btn.disabled = false;
     showToast('Could not save: ' + esc(err.message || ''), true);
