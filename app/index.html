@@ -563,7 +563,8 @@
       background: var(--teal-light, #d8ebe7); color: var(--teal-deep, #1f5d54); border-color: var(--teal);
     }
     .wizard-substep-line {
-      flex: 1; height: 2px; background: var(--cream-dark, #f0e9d6);
+      flex: 1; height: 2px; min-width: 24px;
+      background: var(--border, #d4cdb8);
       transition: background 0.3s;
     }
     .wizard-substep-line.completed { background: var(--teal); }
