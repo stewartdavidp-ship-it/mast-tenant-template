@@ -183,7 +183,10 @@
       altEls[k].alt = name;
     }
 
-    // Update footer logo and gate logos — try brand system first, fall back to legacy nav logoUrl
+    // Update footer logo and gate logos — read order:
+    //   1. public/config/brand/logo/footer.url    (placement-specific, public mirror)
+    //   2. config/brand/logo/primary.url          (canonical)
+    //   3. public/config/nav/logoUrl              (legacy mirror — transitional, remove after all tenants migrated)
     var tid = window.TENANT_ID;
     if (tid && typeof firebase !== 'undefined' && firebase.apps && firebase.apps.length > 0 && firebase.firestore) {
       // Ensure MastDB is initialized — tenant-brand.js may run before host page inits it.
@@ -191,45 +194,54 @@
         MastDB.init({ firestore: firebase.firestore(), tenantId: tid });
       }
 
-      // Try brand logo system first (write-time resolved URLs)
+      var applyFooterLogo = function(url, maxHeight) {
+        var logoEls = document.querySelectorAll('.footer-logo img, .ws-gate-logo');
+        for (var fi = 0; fi < logoEls.length; fi++) {
+          if (url) {
+            logoEls[fi].src = url;
+            logoEls[fi].alt = name;
+            if (maxHeight) logoEls[fi].style.maxHeight = maxHeight + 'px';
+          } else {
+            logoEls[fi].style.display = 'none';
+          }
+        }
+      };
+
+      var readPrimaryLogo = function() {
+        // Canonical: config/brand doc, field logo.primary.url
+        return MastDB.get('config/brand').then(function(brand) {
+          var primary = brand && brand.logo && brand.logo.primary;
+          return primary && primary.url ? primary.url : null;
+        }).catch(function() { return null; });
+      };
+
+      var readLegacyNavLogo = function() {
+        // Legacy mirror — kept until all tenants migrate. Remove with mirror cleanup phase.
+        return MastDB.get('public/config/nav/logoUrl').then(function(u) {
+          return u || null;
+        }).catch(function() { return null; });
+      };
+
       MastDB.get('public/config/brand/logo/footer').then(function(brandFooter) {
         if (brandFooter && brandFooter.url) {
-          var logoEls = document.querySelectorAll('.footer-logo img, .ws-gate-logo');
-          for (var fi = 0; fi < logoEls.length; fi++) {
-            logoEls[fi].src = brandFooter.url;
-            logoEls[fi].alt = name;
-            if (brandFooter.maxHeight) {
-              logoEls[fi].style.maxHeight = brandFooter.maxHeight + 'px';
-            }
-          }
-        } else {
-          // Fall back to legacy nav logoUrl
-          MastDB.get('public/config/nav/logoUrl').then(function(logoUrl) {
-            if (logoUrl) {
-              var logoEls = document.querySelectorAll('.footer-logo img, .ws-gate-logo');
-              for (var fi = 0; fi < logoEls.length; fi++) {
-                logoEls[fi].src = logoUrl;
-                logoEls[fi].alt = name;
-              }
-            } else {
-              var logoEls = document.querySelectorAll('.footer-logo img, .ws-gate-logo');
-              for (var fi = 0; fi < logoEls.length; fi++) {
-                logoEls[fi].style.display = 'none';
-              }
-            }
-          }).catch(function() {});
+          applyFooterLogo(brandFooter.url, brandFooter.maxHeight);
+          return;
         }
+        // No placement-specific footer — try canonical primary, then legacy mirror.
+        readPrimaryLogo().then(function(primaryUrl) {
+          if (primaryUrl) { applyFooterLogo(primaryUrl, null); return; }
+          readLegacyNavLogo().then(function(legacyUrl) {
+            applyFooterLogo(legacyUrl, null);
+          });
+        });
       }).catch(function() {
-        // Brand system read failed — fall back to legacy
-        MastDB.get('public/config/nav/logoUrl').then(function(logoUrl) {
-          if (logoUrl) {
-            var logoEls = document.querySelectorAll('.footer-logo img, .ws-gate-logo');
-            for (var fi = 0; fi < logoEls.length; fi++) {
-              logoEls[fi].src = logoUrl;
-              logoEls[fi].alt = name;
-            }
-          }
-        }).catch(function() {});
+        // public/config/brand/logo/footer read failed — try canonical, then legacy.
+        readPrimaryLogo().then(function(primaryUrl) {
+          if (primaryUrl) { applyFooterLogo(primaryUrl, null); return; }
+          readLegacyNavLogo().then(function(legacyUrl) {
+            applyFooterLogo(legacyUrl, null);
+          });
+        });
       });
 
       // Favicon — read from brand system if configured
