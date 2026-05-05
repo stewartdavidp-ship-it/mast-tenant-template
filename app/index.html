@@ -6469,16 +6469,9 @@
         <!-- Screen 0: Welcome — Quick vs Full onboarding depth -->
         <div id="wizardStep0" class="wizard-step">
           <h2 style="font-size:1.6rem;margin-bottom:8px;">Welcome to Mast</h2>
-          <p style="color:var(--warm-gray);margin-bottom:24px;">How do you want to get started?</p>
-          <div style="display:grid;gap:12px;">
-            <div id="wizardDepthQuick" class="wizard-feature-card" style="border:2px solid var(--teal);border-radius:12px;padding:20px;cursor:pointer;background:rgba(42,124,111,0.05);" onclick="wizardSelectDepth('quick');wizardConfirmDepth()">
-              <div style="font-weight:700;font-size:1.1rem;margin-bottom:6px;">Quick Start</div>
-              <div style="font-size:0.88rem;color:var(--warm-gray);">4 questions, about 60 seconds. Your dashboard setup checklist handles the rest.</div>
-            </div>
-            <div id="wizardDepthFull" class="wizard-feature-card" style="border:1px solid #ddd;border-radius:12px;padding:20px;cursor:pointer;background:#fff;" onclick="wizardSelectDepth('full');wizardConfirmDepth()">
-              <div style="font-weight:700;font-size:1.1rem;margin-bottom:6px;">Full Setup</div>
-              <div style="font-size:0.88rem;color:var(--warm-gray);">8 steps, about 6 minutes. Connect your tools and configure key settings now.</div>
-            </div>
+          <p style="color:var(--warm-gray);margin-bottom:24px;">A few questions to set up your workspace. We'll start by looking at your current site (if you have one) so we can pre-fill what we can.</p>
+          <div style="display:flex;justify-content:flex-end;">
+            <button class="btn btn-primary" style="font-size:1rem;padding:12px 32px;" onclick="wizardConfirmDepth()">Get started</button>
           </div>
         </div>
 
@@ -6540,6 +6533,51 @@
           </div>
         </div>
 
+        <!-- New: Matching questions (stage + bottleneck + volume) -->
+        <div id="wizardStepMatchq" class="wizard-step" style="display:none;">
+          <h2 style="font-size:1.6rem;margin-bottom:8px;">A few questions to tailor your setup</h2>
+          <p style="color:var(--warm-gray);margin-bottom:20px;">These shape what we recommend on your dashboard. Three quick picks.</p>
+
+          <div class="form-group" style="margin-bottom:18px;">
+            <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:6px;">What stage are you?</label>
+            <div id="wizardMatchqStage" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
+          </div>
+
+          <div class="form-group" style="margin-bottom:18px;">
+            <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:6px;">What's your biggest bottleneck right now?</label>
+            <div id="wizardMatchqBottleneck" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
+          </div>
+
+          <div class="form-group" style="margin-bottom:24px;">
+            <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:6px;">Roughly how many products / SKUs?</label>
+            <div id="wizardMatchqVolume" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
+          </div>
+
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <button class="btn btn-secondary" onclick="showWizardStep('2')">Back</button>
+            <button class="btn btn-primary" id="wizardMatchqConfirmBtn" onclick="wizardConfirmMatchQ()">Continue</button>
+          </div>
+        </div>
+
+        <!-- Decision fork (after engagement, before optional integrations + settings) -->
+        <div id="wizardStepFork" class="wizard-step" style="display:none;">
+          <h2 style="font-size:1.6rem;margin-bottom:8px;">You're set up. What's next?</h2>
+          <p style="color:var(--warm-gray);margin-bottom:24px;">Your workspace is ready. You can finish connecting your tools and tax/email settings now, or jump straight in and do that later from Settings.</p>
+          <div style="display:grid;gap:12px;margin-bottom:16px;">
+            <div class="wizard-feature-card" style="border:2px solid var(--teal);border-radius:12px;padding:20px;cursor:pointer;background:rgba(42,124,111,0.05);" onclick="wizardForkDashboard()">
+              <div style="font-weight:700;font-size:1.05rem;margin-bottom:4px;">▶ Take me to my dashboard</div>
+              <div style="font-size:0.88rem;color:var(--warm-gray);">Launch now. Connect tools and configure settings later.</div>
+            </div>
+            <div class="wizard-feature-card" style="border:1px solid var(--border,#ddd);border-radius:12px;padding:20px;cursor:pointer;background:var(--surface-card,#fff);" onclick="wizardForkContinue()">
+              <div style="font-weight:700;font-size:1.05rem;margin-bottom:4px;">⚙ Finish setup</div>
+              <div style="font-size:0.88rem;color:var(--warm-gray);">Connect payment / shipping tools and set tax + email defaults before launching. ~3 minutes.</div>
+            </div>
+          </div>
+          <div style="display:flex;justify-content:flex-start;">
+            <button class="btn btn-secondary" onclick="wizardForkBack()">Back</button>
+          </div>
+        </div>
+
         <!-- Step 2: Business Identity — 4 sub-steps (1A → 1B → 1C → 1D) -->
         <div id="wizardStep1" class="wizard-step" style="display:none;">
 
@@ -6567,7 +6605,7 @@
               </div>
             </div>
             <div style="display:flex;justify-content:space-between;align-items:center;">
-              <button class="btn btn-secondary" onclick="showWizardStep('0')">Back</button>
+              <button class="btn btn-secondary" onclick="showWizardStep('3')">Back</button>
               <button class="btn btn-primary" id="wizardSubStep1ABtn" onclick="wizardBizNext1A()" disabled>Continue</button>
             </div>
             <div style="text-align:center;margin-top:12px;">
@@ -22706,8 +22744,11 @@ var _wizardSelectedModules = []; // module selections for step 2
 // Step 4 has sub-steps 4A (engagement mode picker) and 4B (feature pages, non-storefront only).
 // Like step 1's 1A-1D, sub-steps share the parent dot and use a letter row inside the pane.
 // '4b' is intentionally excluded from the main order so it doesn't get its own progress dot.
-var _wizardStepOrder = ['0','1','2','3','4','fastDpa'];
-var _wizardStepOrderFull = ['0','1','2','3','4','7','8','9','fastDpa'];
+// New flow order (single path; depth fork moved to end-of-Phase-1):
+// 0 welcome → 3 site → 1 identity → 2 brand → matchq → 4 engagement (4A/4B) → fork → 7 integrations → 8 settings → fastDpa
+// Bar dots (excluding 0, fork, fastDpa): site, identity, brand, matchq, engagement, integrations, settings = 7
+var _wizardStepOrder = ['0','3','1','2','matchq','4','fork','7','8','fastDpa'];
+var _wizardStepOrderFull = ['0','3','1','2','matchq','4','fork','7','8','fastDpa'];
 
 function _wizardGetStepOrder() {
   return (window._wizardOnboardingDepth === 'full') ? _wizardStepOrderFull : _wizardStepOrder;
@@ -22801,7 +22842,10 @@ function showWizardStep(step) {
   // Hide every wizard step pane
   var allSteps = document.querySelectorAll('#setupWizardScreen .wizard-step');
   for (var s = 0; s < allSteps.length; s++) allSteps[s].style.display = 'none';
-  var elId = stepStr === 'fastDpa' ? 'wizardStepFastDpa' : 'wizardStep' + stepStr;
+  var elId = (stepStr === 'fastDpa') ? 'wizardStepFastDpa'
+    : (stepStr === 'matchq')        ? 'wizardStepMatchq'
+    : (stepStr === 'fork')          ? 'wizardStepFork'
+    : 'wizardStep' + stepStr;
   var show = document.getElementById(elId);
   if (show) show.style.display = '';
   updateWizardProgress();
@@ -22872,8 +22916,8 @@ function showWizardStep(step) {
     var urlForm3 = document.getElementById('wizardStep3UrlForm');
     var picker3 = document.getElementById('wizardSitePathPicker');
     if (savedIntent && (savedManifest || siteAnalyzed)) {
-      // Already chose migrate/integrate — skip past step 3
-      showWizardStep('4');
+      // Already chose migrate/integrate — skip past step 3 (next is identity in new flow)
+      showWizardStep('1');
       return;
     }
     if ((savedManifest || siteAnalyzed) && !savedIntent && typeof wizardShowSitePathPicker === 'function') {
@@ -22914,6 +22958,12 @@ function showWizardStep(step) {
       }
     }
   }
+  if (stepStr === 'matchq') {
+    if (typeof renderWizardMatchQ === 'function') renderWizardMatchQ();
+  }
+  if (stepStr === 'fork') {
+    if (typeof renderWizardFork === 'function') renderWizardFork();
+  }
 }
 
 // Render the A-B letter row for step 4 (engagement) sub-steps.
@@ -22950,14 +23000,122 @@ function _renderEngagementLetterRow(activeLetter) {
   targetEl.style.display = 'flex';
 }
 
-// fastDpa Back: route to the right prior step based on path.
+// fastDpa Back: route to fork (where they decided whether to do optional setup).
 function wizardFastDpaBack() {
-  var depth = window._wizardOnboardingDepth || 'quick';
-  if (depth === 'full') {
-    showWizardStep('9');
-  } else {
-    showWizardStep('4');
+  showWizardStep('fork');
+}
+
+// ----------------------------------------------------------------
+// Matchq step: stage + bottleneck + volume (the 3 matching questions)
+// ----------------------------------------------------------------
+
+var _wizardMatchQState = { stage: null, bottleneck: null, volume: null };
+
+var _WIZARD_MATCHQ_OPTIONS = {
+  stage: [
+    { value: 'idea',        label: 'Just an idea' },
+    { value: 'launching',   label: 'Launching soon' },
+    { value: 'established', label: 'Established' },
+    { value: 'scaling',     label: 'Scaling up' }
+  ],
+  bottleneck: [
+    { value: 'sales',       label: 'Selling more' },
+    { value: 'operations',  label: 'Operations / chaos' },
+    { value: 'inventory',   label: 'Inventory tracking' },
+    { value: 'customers',   label: 'Customer management' },
+    { value: 'books',       label: 'Books / finances' }
+  ],
+  volume: [
+    { value: '1-10',   label: '1–10' },
+    { value: '10-50',  label: '10–50' },
+    { value: '50-200', label: '50–200' },
+    { value: '200+',   label: '200+' }
+  ]
+};
+
+function renderWizardMatchQ() {
+  // Restore from saved draft if present
+  if (wizardProgress && wizardProgress._matchqDraft) {
+    var d = wizardProgress._matchqDraft;
+    if (!_wizardMatchQState.stage && d.stage) _wizardMatchQState.stage = d.stage;
+    if (!_wizardMatchQState.bottleneck && d.bottleneck) _wizardMatchQState.bottleneck = d.bottleneck;
+    if (!_wizardMatchQState.volume && d.volume) _wizardMatchQState.volume = d.volume;
   }
+  ['stage','bottleneck','volume'].forEach(function(field) {
+    var el = document.getElementById('wizardMatchq' + field.charAt(0).toUpperCase() + field.slice(1));
+    if (!el) return;
+    el.innerHTML = '';
+    _WIZARD_MATCHQ_OPTIONS[field].forEach(function(opt) {
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.textContent = opt.label;
+      var on = _wizardMatchQState[field] === opt.value;
+      btn.style.cssText = 'padding:7px 14px;border-radius:999px;border:2px solid ' +
+        (on ? 'var(--teal)' : 'var(--border,#ccc)') +
+        ';background:' + (on ? 'var(--teal)' : 'var(--surface-card,#fff)') +
+        ';font-size:0.85rem;cursor:pointer;color:' + (on ? '#fff' : 'var(--text,#2a2a2a)') +
+        ';font-weight:' + (on ? '600' : '400') + ';transition:all 0.15s;';
+      btn.onclick = function() {
+        _wizardMatchQState[field] = opt.value;
+        try { snapshotWizardField('_matchqDraft', Object.assign({}, _wizardMatchQState)); } catch(e) {}
+        renderWizardMatchQ();
+      };
+      el.appendChild(btn);
+    });
+  });
+}
+
+async function wizardConfirmMatchQ() {
+  // All optional but encourage all three picked. Continue regardless.
+  var btn = document.getElementById('wizardMatchqConfirmBtn');
+  if (btn) btn.disabled = true;
+  try {
+    if (typeof MastDB !== 'undefined' && MastDB.businessEntity) {
+      await MastDB.businessEntity.update('engagement', {
+        matching: {
+          stage:      _wizardMatchQState.stage || null,
+          bottleneck: _wizardMatchQState.bottleneck || null,
+          volume:     _wizardMatchQState.volume || null,
+          capturedAt: new Date().toISOString()
+        }
+      }).catch(function(){});
+    }
+    logWizardEvent('matchq', 'matchq_captured', {
+      stage: _wizardMatchQState.stage,
+      bottleneck: _wizardMatchQState.bottleneck,
+      volume: _wizardMatchQState.volume
+    });
+    showWizardStep('4');
+    saveWizardProgress('4', { matchqCaptured: true });
+  } catch (err) {
+    if (btn) btn.disabled = false;
+    showToast('Could not save: ' + esc(err.message || ''), true);
+  }
+}
+
+// ----------------------------------------------------------------
+// Fork step: dashboard now vs. finish setup (integrations + settings)
+// ----------------------------------------------------------------
+
+function renderWizardFork() {
+  // Nothing dynamic to render currently; placeholder for future personalization.
+}
+
+function wizardForkBack() {
+  // Back to engagement step. For non-storefront mode, that's effectively 4B; both sit on dot 4.
+  showWizardStep('4');
+}
+
+function wizardForkDashboard() {
+  // Skip optional integrations + settings, jump to activation.
+  saveWizardProgress('fastDpa', { forkChoice: 'dashboard' });
+  showWizardStep('fastDpa');
+}
+
+function wizardForkContinue() {
+  // Proceed to integrations + settings.
+  saveWizardProgress('7', { forkChoice: 'continue' });
+  showWizardStep('7');
 }
 
 // B3: render engagement-mode cards. In-memory selection state lives
@@ -23180,13 +23338,9 @@ async function wizardConfirmEngagement() {
     // Always advance to the next step instead of swapping panes in-place. Avoids
     // the "progress dot stays on 4 but content changes" confusion. Quick-path
     // storefront → activation page; non-storefront → feature picker; full path → calibration.
-    var depth = window._wizardOnboardingDepth || 'quick';
-    var nextStep;
-    if (mode === 'storefront') {
-      nextStep = (depth === 'full') ? '7' : 'fastDpa';
-    } else {
-      nextStep = '4b';
-    }
+    // New flow: storefront mode → fork (decide dashboard vs. continue setup).
+    // Non-storefront → 4B feature pages (then on 4B confirm → fork).
+    var nextStep = (mode === 'storefront') ? 'fork' : '4b';
     showWizardStep(nextStep);
     saveWizardProgress(nextStep, { engagementConfirmed: { mode: mode, surface: surface } });
   } catch (err) {
@@ -23455,8 +23609,9 @@ async function wizardConfirmBrand() {
     }
 
     logWizardEvent(2, 'brand_confirmed', { hasTagline: !!tagline, hasLogo: !!(logoEl && logoEl.files && logoEl.files[0]) });
-    showWizardStep('3');
-    saveWizardProgress('3', { brandConfirmed: true, businessName: businessName });
+    // New flow: brand → matchq (stage + bottleneck + volume) → engagement
+    showWizardStep('matchq');
+    saveWizardProgress('matchq', { brandConfirmed: true, businessName: businessName });
   } catch (err) {
     if (btn) btn.disabled = false;
     showToast('Could not save brand: ' + esc(err.message || ''), true);
@@ -23970,11 +24125,9 @@ async function wizardConfirmFeaturePages() {
     logWizardEvent('4b', 'feature_pages_confirmed', {
       mode: mode, selectedPages: selected, count: selected.length
     });
-    // Full path continues to step 7 (integrations); quick path goes to fastDpa.
-    var depth = window._wizardOnboardingDepth || 'quick';
-    var nextStep = depth === 'full' ? '7' : 'fastDpa';
-    showWizardStep(nextStep);
-    saveWizardProgress(nextStep, { featurePagesConfirmed: true, featurePages: selected });
+    // After 4B feature pages, route everyone to fork (decide dashboard vs. continue setup).
+    showWizardStep('fork');
+    saveWizardProgress('fork', { featurePagesConfirmed: true, featurePages: selected });
   } catch (err) {
     if (btn) btn.disabled = false;
     showToast('Could not save features: ' + esc(err.message || ''), true);
@@ -24278,15 +24431,9 @@ function wizardStep7Continue() {
   saveWizardProgress('8', { integrationsStepDone: true });
 }
 
-// Step 7 (integrations) Back: route to dot 4 — 4B for non-storefront, 4 (4A) for storefront.
-// Steps 5 and 6 (calibration + module selector) were removed, so 4 is the immediate prior dot.
+// Step 7 (integrations) Back: go to the fork (where the user opted into Phase 2).
 function wizardStep7Back() {
-  var eng = window._wizardEngagement || (typeof wizardProgress !== 'undefined' && wizardProgress && wizardProgress._engagement) || {};
-  if (eng.mode && eng.mode !== 'storefront') {
-    showWizardStep('4b');
-  } else {
-    showWizardStep('4');
-  }
+  showWizardStep('fork');
 }
 
 // ---- Step 7: Settings Spotlight ----
@@ -24473,8 +24620,9 @@ async function wizardConfirmSettings() {
   try {
     await Promise.all(writes);
     logWizardEvent(8, 'settings_saved', { taxState: taxState || null, fromEmail: fromEmail || null, markupPct: isNaN(markupVal) ? null : markupVal });
-    showWizardStep('9');
-    saveWizardProgress('9', { settingsSaved: true });
+    // Settings is the last optional step in Phase 2 — advance to activation.
+    showWizardStep('fastDpa');
+    saveWizardProgress('fastDpa', { settingsSaved: true });
   } catch (err) {
     if (btn) btn.disabled = false;
     showToast('Could not save settings: ' + esc(err.message || ''), true);
@@ -24795,8 +24943,8 @@ function updateWizardProgress() {
   progressEl.style.display = 'flex';
 
   var order = _wizardGetStepOrder();
-  // Filter to steps that show in the progress bar (exclude '0' and 'fastDpa')
-  var barSteps = order.filter(function(s) { return s !== '0' && s !== 'fastDpa'; });
+  // Filter to steps that show in the progress bar (exclude welcome + interstitial decisions)
+  var barSteps = order.filter(function(s) { return s !== '0' && s !== 'fastDpa' && s !== 'fork'; });
   // Sub-step → parent dot mapping (sub-steps don't appear in the bar; they highlight the parent).
   var SUB_STEP_PARENT = { '4b': '4' };
   var lookupStep = SUB_STEP_PARENT[currentStep] || currentStep;
@@ -24859,27 +25007,19 @@ function wizardSelectDepth(depth) {
 }
 
 async function wizardConfirmDepth() {
-  var depth = window._wizardOnboardingDepth || 'quick';
-  logWizardEvent(0, 'depth_selected', { depth: depth });
-  // Hide current tools section in Step 2 for quick path
-  // (will be applied when Step 2 renders)
-  showWizardStep('1');
-  saveWizardProgress('1', { onboardingDepth: depth });
+  // No more quick/full picker — depth decision moves to the fork at end of Phase 1.
+  // Default to 'full' so the order arrays include the integrations/settings dots;
+  // the fork handler decides whether to traverse them.
+  window._wizardOnboardingDepth = 'full';
+  logWizardEvent(0, 'wizard_started', {});
+  showWizardStep('3');
+  saveWizardProgress('3', { onboardingDepth: 'full' });
 }
 
-// Step 4 back — always go to step 3 (the previous step in every path).
-// Clear the intent + engagement so the user can re-pick migrate/integrate;
-// the persisted crawl manifest stays, so step 3 re-shows the picker without re-analyzing.
+// Step 4 (engagement) back — go to matchq, the immediate prior step in the new flow.
+// Don't clear engagement state; user may just want to glance back without losing input.
 function wizardStep4Back() {
-  window._wizardSiteIntent = null;
-  if (typeof MastDB !== 'undefined' && MastDB.config) {
-    MastDB.config.set('setupProgress/siteIntent', null).catch(function(){});
-  }
-  if (wizardProgress) wizardProgress.siteIntent = null;
-  try { _wizardLsSave({ siteIntent: null, _schemaVersion: 2, updatedAt: new Date().toISOString() }); } catch(e) {}
-  window._wizardEngagement = null;
-  window._wizardUnlockMode = false;
-  showWizardStep('3');
+  showWizardStep('matchq');
 }
 
 // Snapshot a single field of in-progress wizard state without changing currentStep.
@@ -24956,7 +25096,8 @@ function wizardSkipSite() {
   };
   window._wizardDetectedModules = [];
   logWizardEvent(0.5, 'site_skipped', {});
-  showWizardStep('4');
+  // New flow: site → identity (no scan, manual fill)
+  showWizardStep('1');
 }
 
 // ----------------------------------------------------------------
@@ -25024,8 +25165,9 @@ function wizardChooseSiteIntent(intent) {
   }
   MastDB.config.set('setupProgress/siteIntent', intent).catch(function() {});
   logWizardEvent(3, 'site_intent_chosen', { intent: intent });
-  showWizardStep('4');
-  saveWizardProgress('4', { siteAnalyzed: true, siteIntent: intent, autoApplied: _wizardAutoApplied });
+  // New flow: site → identity (pre-filled by scan) → brand → matchq → engagement
+  showWizardStep('1');
+  saveWizardProgress('1', { siteAnalyzed: true, siteIntent: intent, autoApplied: _wizardAutoApplied });
   _wizardAnalyzing = false;
 }
 
