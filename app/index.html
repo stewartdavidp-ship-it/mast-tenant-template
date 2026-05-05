@@ -6744,6 +6744,8 @@
         <!-- Step 4: engagement mode + surface picker. Confirm advances forward
              (storefront → fastDpa or 5; non-storefront → 4b). -->
         <div id="wizardStep4" class="wizard-step" style="display:none;">
+          <!-- Sub-step letter row (4A engagement mode, 4B feature pages — only for non-storefront) -->
+          <div id="wizardStep4LetterRow" class="wizard-letter-row" style="display:none;"></div>
 
           <!-- Engagement picker -->
           <div id="wizardStep4Engagement">
@@ -6761,8 +6763,11 @@
 
         </div>
 
-        <!-- Step 3b (NEW): Mast Feature pages — only for sync-channels or back-office modes -->
+        <!-- Step 4B: Mast Feature pages — only for sync-channels or back-office modes.
+             Sub-step of dot 4 (engagement); shares the parent dot in the progress bar. -->
         <div id="wizardStep4b" class="wizard-step" style="display:none;">
+          <!-- Sub-step letter row mirrored from step 4 -->
+          <div id="wizardStep4bLetterRow" class="wizard-letter-row"></div>
           <h2 style="font-size:1.6rem;margin-bottom:8px;">Which Mast features do you want?</h2>
           <p style="color:var(--warm-gray);margin-bottom:8px;">Even without a Mast storefront, you can use these customer-facing tools. Each gets its own URL on your Mast site.</p>
           <p style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:20px;">You can always change this in Settings.</p>
@@ -22746,19 +22751,14 @@ var _wizardSelectedModules = []; // module selections for step 2
 // Step ordering for progress bar. 0 = welcome screen (no progress dots shown).
 // quick path: 0,1,2,3,4,fastDpa
 // full path:  0,1,2,3,4,4b,5,6,7,8,9,fastDpa
+// Step 4 has sub-steps 4A (engagement mode picker) and 4B (feature pages, non-storefront only).
+// Like step 1's 1A-1D, sub-steps share the parent dot and use a letter row inside the pane.
+// '4b' is intentionally excluded from the main order so it doesn't get its own progress dot.
 var _wizardStepOrder = ['0','1','2','3','4','fastDpa'];
-var _wizardStepOrderFull = ['0','1','2','3','4','4b','5','6','7','8','9','fastDpa'];
+var _wizardStepOrderFull = ['0','1','2','3','4','5','6','7','8','9','fastDpa'];
 
 function _wizardGetStepOrder() {
-  var base = (window._wizardOnboardingDepth === 'full') ? _wizardStepOrderFull : _wizardStepOrder;
-  // Filter to the user's actual path so the progress bar reflects what they
-  // will visit. Storefront mode skips '4b' (feature pages picker is non-storefront only).
-  // Falls back to including '4b' if mode isn't decided yet (initial render before step 3).
-  var eng = window._wizardEngagement || (typeof wizardProgress !== 'undefined' && wizardProgress && wizardProgress._engagement) || {};
-  if (eng.mode === 'storefront') {
-    return base.filter(function(s) { return s !== '4b'; });
-  }
-  return base;
+  return (window._wizardOnboardingDepth === 'full') ? _wizardStepOrderFull : _wizardStepOrder;
 }
 
 function _wizardLsKey() {
@@ -22896,6 +22896,7 @@ function showWizardStep(step) {
   }
   if (stepStr === '4') {
     renderWizardEngagement();
+    _renderEngagementLetterRow('A');
   }
   if (stepStr === '4b') {
     // Restore in-progress selections if user reloaded mid-step
@@ -22904,6 +22905,7 @@ function showWizardStep(step) {
       _wizardSelectedFeaturePages = wizardProgress._featurePagesDraft.slice();
     }
     renderWizardFeaturePages();
+    _renderEngagementLetterRow('B');
   }
   if (stepStr === '6') {
     if ((!_wizardSelectedModulesStep5 || _wizardSelectedModulesStep5.length === 0) &&
@@ -22972,6 +22974,40 @@ function showWizardStep(step) {
       }
     }
   }
+}
+
+// Render the A-B letter row for step 4 (engagement) sub-steps.
+// 4A = engagement mode picker, 4B = feature pages (non-storefront only).
+// Storefront mode has no 4B, so the row is hidden entirely.
+function _renderEngagementLetterRow(activeLetter) {
+  var eng = window._wizardEngagement || (typeof wizardProgress !== 'undefined' && wizardProgress && wizardProgress._engagement) || {};
+  var hasFeaturePages = eng.mode && eng.mode !== 'storefront';
+  var rowAEl = document.getElementById('wizardStep4LetterRow');
+  var rowBEl = document.getElementById('wizardStep4bLetterRow');
+  var targetEl = (activeLetter === 'B') ? rowBEl : rowAEl;
+  // Always hide the inactive row to avoid duplicate dots.
+  if (rowAEl) rowAEl.style.display = 'none';
+  if (rowBEl) rowBEl.style.display = 'none';
+  if (!targetEl) return;
+  // Storefront mode: no sub-steps to show.
+  if (!hasFeaturePages) return;
+  var letters = ['A', 'B'];
+  var labels = { 'A': 'Engagement mode', 'B': 'Feature pages' };
+  var idx = letters.indexOf(activeLetter);
+  if (idx < 0) idx = 0;
+  var html = '';
+  for (var i = 0; i < letters.length; i++) {
+    var dotCls = 'wizard-letter-dot';
+    if (i < idx) dotCls += ' completed';
+    else if (i === idx) dotCls += ' active';
+    html += '<div class="' + dotCls + '" title="' + labels[letters[i]] + '">' + letters[i] + '</div>';
+    if (i < letters.length - 1) {
+      var lineCls = 'wizard-letter-line' + (i < idx ? ' completed' : '');
+      html += '<div class="' + lineCls + '"></div>';
+    }
+  }
+  targetEl.innerHTML = html;
+  targetEl.style.display = 'flex';
 }
 
 // fastDpa Back: route to the right prior step based on path.
@@ -24809,11 +24845,14 @@ function updateWizardProgress() {
   var order = _wizardGetStepOrder();
   // Filter to steps that show in the progress bar (exclude '0' and 'fastDpa')
   var barSteps = order.filter(function(s) { return s !== '0' && s !== 'fastDpa'; });
-  var currentIdx = barSteps.indexOf(currentStep);
+  // Sub-step → parent dot mapping (sub-steps don't appear in the bar; they highlight the parent).
+  var SUB_STEP_PARENT = { '4b': '4' };
+  var lookupStep = SUB_STEP_PARENT[currentStep] || currentStep;
+  var currentIdx = barSteps.indexOf(lookupStep);
   // For interstitial steps not in barSteps, find nearest
   if (currentIdx < 0) {
     // Use the full order to find position
-    var fullIdx = order.indexOf(currentStep);
+    var fullIdx = order.indexOf(lookupStep);
     // Walk backwards to find last bar step
     for (var fi = fullIdx - 1; fi >= 0; fi--) {
       var ci = barSteps.indexOf(order[fi]);
