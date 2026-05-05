@@ -23371,6 +23371,8 @@ function renderWizardBizIdentity() {
       }
       if (arcRow) arcRow.style.display = catDef ? '' : 'none';
       renderWizardBizIdentity();
+      var _btn0 = document.getElementById('wizardBizIdentityConfirmBtn');
+      if (_btn0) _btn0.disabled = !(state.businessCategory && state.archetype);
     };
   } else if (catEl) {
     catEl.value = state.businessCategory || '';
@@ -23398,6 +23400,8 @@ function renderWizardBizIdentity() {
     arcEl.value = state.archetype || '';
     arcEl.onchange = function() {
       state.archetype = arcEl.value || null;
+      var _btn1 = document.getElementById('wizardBizIdentityConfirmBtn');
+      if (_btn1) _btn1.disabled = !(state.businessCategory && state.archetype);
       renderWizardBizIdentity();
     };
   }
@@ -23511,6 +23515,7 @@ function renderWizardBizIdentity() {
     }
 
     // Shipping — priority picker
+    if (!state.shippingTools) state.shippingTools = [];
     var shipTools = allTools.filter(function(t) { return t.category === 'shipping'; });
     var shipMap = {};
     shipTools.forEach(function(t) { shipMap[t.value] = t; });
