@@ -6458,10 +6458,10 @@
         </div>
 
         <!-- Step 1: Existing Site (analyze + migrate vs integrate choice) -->
-        <div id="wizardStep1" class="wizard-step" style="display:none;">
+        <div id="wizardStep3" class="wizard-step" style="display:none;">
           <h2 style="font-size:1.6rem;margin-bottom:8px;">Do you have an existing site?</h2>
           <p style="color:var(--warm-gray);margin-bottom:24px;">Paste your URL and we'll scan it — then you can decide whether to move it to Mast or just connect it.</p>
-          <div id="wizardStep1UrlForm">
+          <div id="wizardStep3UrlForm">
             <div class="form-group" style="margin-bottom:16px;">
               <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Your Website URL</label>
               <input type="url" id="wizardSiteUrl" placeholder="https://www.yourbusiness.com"
@@ -6469,7 +6469,7 @@
             </div>
             <div id="wizardAnalysisStatus" style="font-size:0.85rem;margin-bottom:16px;"></div>
             <div style="display:flex;justify-content:space-between;">
-              <button class="btn btn-secondary" onclick="showWizardStep('1_5')">Back</button>
+              <button class="btn btn-secondary" onclick="showWizardStep('2')">Back</button>
               <div style="display:flex;gap:8px;">
                 <button class="btn btn-secondary" id="wizardSkipSiteBtn" onclick="wizardSkipSite()" style="font-size:0.9rem;">Skip</button>
                 <button class="btn btn-primary" id="wizardAnalyzeBtn" onclick="wizardAnalyzeSite()">Analyze My Site</button>
@@ -6480,7 +6480,7 @@
           <div id="wizardSitePathPicker" style="display:none;"></div>
         </div>
 
-        <div id="wizardStep1_5" class="wizard-step" style="display:none;">
+        <div id="wizardStep2" class="wizard-step" style="display:none;">
           <h2 style="font-size:1.6rem;margin-bottom:8px;">What's your business called?</h2>
           <p style="color:var(--warm-gray);margin-bottom:20px;">This is how customers will see you on Mast.</p>
           <div class="form-group" style="margin-bottom:14px;">
@@ -6508,36 +6508,47 @@
             <p style="font-size:0.75rem;color:var(--warm-gray);margin-top:6px;">PNG, JPG, or SVG. Square works best.</p>
           </div>
           <div style="display:flex;justify-content:space-between;align-items:center;">
-            <button class="btn btn-secondary" onclick="showWizardStep('2')">Back</button>
+            <button class="btn btn-secondary" onclick="showWizardStep('1')">Back</button>
             <button class="btn btn-primary" id="wizardBrandConfirmBtn" onclick="wizardConfirmBrand()">Continue</button>
           </div>
         </div>
 
-        <!-- Step 2 (NEW): Business Identity — what/how/where/tools -->
-        <div id="wizardStep2" class="wizard-step" style="display:none;">
-          <h2 style="font-size:1.6rem;margin-bottom:8px;">What are you selling and how?</h2>
-          <p style="color:var(--warm-gray);margin-bottom:20px;">Helps Mast configure the right tools for you.</p>
+        <!-- Step 2: Business Identity — 4 sub-steps (1A → 1B → 1C → 1D) -->
+        <div id="wizardStep1" class="wizard-step" style="display:none;">
 
-          <!-- Part A: Business category + subtype -->
-          <div class="form-group" style="margin-bottom:20px;">
-            <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:6px;">What kind of business are you? <span style="color:var(--danger);font-weight:400;">*</span></label>
-            <select id="wizardBizCategory"
-              style="width:100%;padding:9px 12px;border:1px solid var(--wiz-border,#ddd);border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;background:var(--wiz-input,#fff);color:var(--wiz-text,inherit);margin-bottom:10px;">
-              <option value="">Select a category…</option>
-            </select>
-            <div id="wizardArchetypeRow" style="display:none;">
-              <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:6px;">What best describes your business? <span style="color:var(--danger);font-weight:400;">*</span></label>
-              <select id="wizardBizArchetype"
-                style="width:100%;padding:9px 12px;border:1px solid var(--wiz-border,#ddd);border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;background:var(--wiz-input,#fff);color:var(--wiz-text,inherit);">
-                <option value="">Select a type…</option>
+          <!-- Sub-step 1A: What kind of business? -->
+          <div id="wizardSubStep1A">
+            <div id="wizardSubStepTrack1A" style="font-size:0.72rem;font-weight:600;color:var(--teal);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px;"></div>
+            <h2 style="font-size:1.6rem;margin-bottom:8px;">What kind of business are you?</h2>
+            <p style="color:var(--warm-gray);margin-bottom:20px;">Helps Mast configure the right tools for you.</p>
+            <div class="form-group" style="margin-bottom:20px;">
+              <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:6px;">Business category <span style="color:var(--danger);font-weight:400;">*</span></label>
+              <select id="wizardBizCategory"
+                style="width:100%;padding:9px 12px;border:1px solid var(--wiz-border,#ddd);border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;background:var(--wiz-input,#fff);color:var(--wiz-text,inherit);margin-bottom:10px;">
+                <option value="">Select a category…</option>
               </select>
+              <div id="wizardArchetypeRow" style="display:none;">
+                <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:6px;">What best describes you? <span style="color:var(--danger);font-weight:400;">*</span></label>
+                <select id="wizardBizArchetype"
+                  style="width:100%;padding:9px 12px;border:1px solid var(--wiz-border,#ddd);border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;background:var(--wiz-input,#fff);color:var(--wiz-text,inherit);">
+                  <option value="">Select a type…</option>
+                </select>
+              </div>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <button class="btn btn-secondary" onclick="showWizardStep('0')">Back</button>
+              <button class="btn btn-primary" id="wizardSubStep1ABtn" onclick="wizardBizNext1A()" disabled>Continue</button>
+            </div>
+            <div style="text-align:center;margin-top:12px;">
+              <a href="#" onclick="event.preventDefault();wizardFastExit();" style="font-size:0.82rem;color:var(--warm-gray);text-decoration:none;">Already know what you need? Skip to launch &rarr;</a>
             </div>
           </div>
 
-          <!-- Part C: Revenue channels — priority picker -->
-          <div class="form-group" style="margin-bottom:20px;">
-            <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">How do you sell today? <span style="color:var(--warm-gray);font-weight:400;">(optional — add in priority order)</span></label>
-            <div style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:8px;">Click a channel to add it. Drag or use arrows to reorder.</div>
+          <!-- Sub-step 1B: How do you sell today? -->
+          <div id="wizardSubStep1B" style="display:none;">
+            <div id="wizardSubStepTrack1B" style="font-size:0.72rem;font-weight:600;color:var(--teal);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px;"></div>
+            <h2 style="font-size:1.6rem;margin-bottom:8px;">How do you sell today?</h2>
+            <p style="color:var(--warm-gray);margin-bottom:16px;">Optional — click to add, use arrows to set priority.</p>
             <div style="display:flex;gap:10px;margin-bottom:8px;">
               <div style="flex:1;min-width:0;">
                 <div style="font-size:0.7rem;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--warm-gray);margin-bottom:5px;">Available</div>
@@ -6548,53 +6559,61 @@
                 <div id="wizardBizChannelsPriority"></div>
               </div>
             </div>
-            <div id="wizardStorefrontUrlRow" style="display:none;margin-top:2px;">
+            <div id="wizardStorefrontUrlRow" style="display:none;margin-bottom:8px;">
               <label style="font-size:0.78rem;font-weight:600;display:block;margin-bottom:3px;color:var(--wiz-text,inherit);">Your storefront URL</label>
               <input type="url" id="wizardStorefrontUrlInput" placeholder="https://yourshop.com"
                 style="width:100%;padding:8px 10px;border:1px solid var(--wiz-border,#ddd);border-radius:5px;font-family:'DM Sans',sans-serif;font-size:0.85rem;box-sizing:border-box;background:var(--wiz-input,#fff);color:var(--wiz-text,inherit);">
-              <div style="font-size:0.75rem;color:var(--warm-gray);margin-top:3px;">We'll import your products from it — you can also do this later.</div>
+              <div style="font-size:0.75rem;color:var(--warm-gray);margin-top:3px;">We'll import your products — you can also do this later.</div>
             </div>
-            <div id="wizardOtherChannelRow" style="display:none;margin-top:6px;">
+            <div id="wizardOtherChannelRow" style="display:none;margin-bottom:8px;">
               <label style="font-size:0.78rem;font-weight:600;display:block;margin-bottom:3px;color:var(--wiz-text,inherit);">Describe your other channel</label>
               <input type="text" id="wizardOtherChannelInput" placeholder="e.g. Gallery representation, craft fairs…"
                 style="width:100%;padding:8px 10px;border:1px solid var(--wiz-border,#ddd);border-radius:5px;font-family:'DM Sans',sans-serif;font-size:0.85rem;box-sizing:border-box;background:var(--wiz-input,#fff);color:var(--wiz-text,inherit);">
             </div>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;">
+              <button class="btn btn-secondary" onclick="showWizardSubStep('1A');renderWizardBizIdentity();">Back</button>
+              <button class="btn btn-primary" onclick="wizardBizNext1B()">Continue</button>
+            </div>
           </div>
 
-          <!-- Part D: Current tools (full path only) -->
-          <div id="wizardCurrentToolsSection" class="form-group" style="margin-bottom:20px;">
-            <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:8px;">Do you use any of these tools already? <span style="color:var(--warm-gray);font-weight:400;">(optional)</span></label>
-            <div id="wizardCurrentToolsPayment" style="margin-bottom:14px;">
-              <div style="font-size:0.75rem;font-weight:600;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">Payment</div>
-              <div style="display:flex;flex-wrap:wrap;gap:6px;" id="wizardToolsPaymentChips"></div>
+          <!-- Sub-step 1C: Payment (full path only) -->
+          <div id="wizardSubStep1C" style="display:none;">
+            <div id="wizardSubStepTrack1C" style="font-size:0.72rem;font-weight:600;color:var(--teal);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px;"></div>
+            <h2 style="font-size:1.6rem;margin-bottom:8px;">What payment systems do you use?</h2>
+            <p style="color:var(--warm-gray);margin-bottom:16px;">Optional — select all that apply.</p>
+            <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:20px;" id="wizardToolsPaymentChips"></div>
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <button class="btn btn-secondary" onclick="showWizardSubStep('1B');renderWizardBizIdentity();">Back</button>
+              <button class="btn btn-primary" onclick="wizardBizNext1C()">Continue</button>
             </div>
-            <div id="wizardCurrentToolsShipping">
-              <div style="font-size:0.75rem;font-weight:600;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">Shipping <span style="font-weight:400;text-transform:none;letter-spacing:0;">— add in priority order</span></div>
-              <div style="display:flex;gap:10px;">
-                <div style="flex:1;min-width:0;">
-                  <div style="font-size:0.7rem;color:var(--warm-gray);margin-bottom:5px;">Available</div>
-                  <div id="wizardShippingToolsAvail"></div>
-                </div>
-                <div style="flex:1;min-width:0;">
-                  <div style="font-size:0.7rem;color:var(--warm-gray);margin-bottom:5px;">Your order</div>
-                  <div id="wizardShippingToolsPriority"></div>
-                </div>
+          </div>
+
+          <!-- Sub-step 1D: Shipping (full path only) -->
+          <div id="wizardSubStep1D" style="display:none;">
+            <div id="wizardSubStepTrack1D" style="font-size:0.72rem;font-weight:600;color:var(--teal);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px;"></div>
+            <h2 style="font-size:1.6rem;margin-bottom:8px;">What shipping platforms do you use?</h2>
+            <p style="color:var(--warm-gray);margin-bottom:16px;">Optional — click to add, use arrows to set priority.</p>
+            <div style="display:flex;gap:10px;margin-bottom:20px;">
+              <div style="flex:1;min-width:0;">
+                <div style="font-size:0.7rem;color:var(--warm-gray);margin-bottom:5px;">Available</div>
+                <div id="wizardShippingToolsAvail"></div>
+              </div>
+              <div style="flex:1;min-width:0;">
+                <div style="font-size:0.7rem;color:var(--warm-gray);margin-bottom:5px;">Your order</div>
+                <div id="wizardShippingToolsPriority"></div>
               </div>
             </div>
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <button class="btn btn-secondary" onclick="showWizardSubStep('1C');renderWizardBizIdentity();">Back</button>
+              <button class="btn btn-primary" id="wizardBizIdentityConfirmBtn" onclick="wizardConfirmBizIdentity()">Continue</button>
+            </div>
           </div>
 
-          <div style="display:flex;justify-content:space-between;align-items:center;">
-            <button class="btn btn-secondary" onclick="showWizardStep('0')">Back</button>
-            <button class="btn btn-primary" id="wizardBizIdentityConfirmBtn" onclick="wizardConfirmBizIdentity()">Continue</button>
-          </div>
-          <div style="text-align:center;margin-top:12px;">
-            <a href="#" onclick="event.preventDefault();wizardFastExit();" style="font-size:0.82rem;color:var(--warm-gray);text-decoration:none;">Already know what you need? Skip to launch &rarr;</a>
-          </div>
         </div>
 
         <!-- Step 2b (B2): Calibration — revenue bracket + "one thing you wish was easier" (full path only) -->
         <!-- Step 4 (full-path): Calibration — revenue, wish statement, role, team size -->
-        <div id="wizardStep4" class="wizard-step" style="display:none;">
+        <div id="wizardStep5" class="wizard-step" style="display:none;">
           <h2 style="font-size:1.6rem;margin-bottom:8px;">A quick calibration</h2>
           <p style="color:var(--warm-gray);margin-bottom:20px;">Helps Mast tailor recommendations. All fields are optional.</p>
           <div class="form-group" style="margin-bottom:16px;">
@@ -6619,7 +6638,7 @@
             <div id="wizardTeamSizeOptions4" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
           </div>
           <div style="display:flex;justify-content:space-between;align-items:center;">
-            <button class="btn btn-secondary" onclick="wizardStep4Back()">Back</button>
+            <button class="btn btn-secondary" onclick="wizardStep5Back()">Back</button>
             <button class="btn btn-primary" id="wizardCalibrationConfirmBtn" onclick="wizardConfirmCalibration()">Continue</button>
           </div>
           <div style="text-align:center;margin-top:12px;">
@@ -6628,12 +6647,12 @@
         </div>
 
         <!-- Step 5 (full-path): Module Selector -->
-        <div id="wizardStep5" class="wizard-step" style="display:none;">
+        <div id="wizardStep6" class="wizard-step" style="display:none;">
           <h2 style="font-size:1.6rem;margin-bottom:8px;">Which areas of Mast will you use?</h2>
           <p style="color:var(--warm-gray);margin-bottom:20px;">We've pre-selected based on your business type. Adjust to match.</p>
           <div id="wizardModuleGrid" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:24px;"></div>
           <div style="display:flex;justify-content:space-between;align-items:center;">
-            <button class="btn btn-secondary" onclick="showWizardStep('4')">Back</button>
+            <button class="btn btn-secondary" onclick="showWizardStep('5')">Back</button>
             <button class="btn btn-primary" id="wizardModulesConfirmBtn" onclick="wizardConfirmModuleSelector()">Continue</button>
           </div>
           <div style="text-align:center;margin-top:12px;">
@@ -6642,29 +6661,29 @@
         </div>
 
         <!-- Step 6 (full-path): Integrations -->
-        <div id="wizardStep6" class="wizard-step" style="display:none;">
-          <div id="wizardStep6Header">
+        <div id="wizardStep7" class="wizard-step" style="display:none;">
+          <div id="wizardStep7Header">
             <h2 style="font-size:1.6rem;margin-bottom:8px;">Connect your tools</h2>
             <p style="color:var(--warm-gray);margin-bottom:20px;">You told us you're using these tools. Connect them now or skip and do it later — you can always find this in <strong>Settings → Integrations</strong>.</p>
           </div>
           <div id="wizardIntegrationCards" style="margin-bottom:24px;"></div>
           <div id="wizardCredentialEntryPane" style="display:none;margin-bottom:24px;"></div>
-          <div id="wizardStep6NavButtons" style="display:flex;justify-content:space-between;align-items:center;">
-            <button class="btn btn-secondary" onclick="showWizardStep('5')">Back</button>
-            <button class="btn btn-primary" onclick="wizardStep6Continue()">Continue</button>
+          <div id="wizardStep7NavButtons" style="display:flex;justify-content:space-between;align-items:center;">
+            <button class="btn btn-secondary" onclick="showWizardStep('6')">Back</button>
+            <button class="btn btn-primary" onclick="wizardStep7Continue()">Continue</button>
           </div>
-          <div id="wizardStep6SkipLink" style="text-align:center;margin-top:12px;">
+          <div id="wizardStep7SkipLink" style="text-align:center;margin-top:12px;">
             <a href="#" onclick="event.preventDefault();wizardSkipToLaunch();" style="font-size:0.82rem;color:var(--warm-gray);text-decoration:none;">Skip remaining setup &rarr;</a>
           </div>
         </div>
 
         <!-- Step 7 (full-path): Settings Spotlight -->
-        <div id="wizardStep7" class="wizard-step" style="display:none;">
+        <div id="wizardStep8" class="wizard-step" style="display:none;">
           <h2 style="font-size:1.6rem;margin-bottom:8px;">A few settings that matter most</h2>
           <p style="color:var(--warm-gray);margin-bottom:20px;">These take two minutes and prevent common setup headaches.</p>
           <div id="wizardSettingsSections" style="margin-bottom:24px;"></div>
           <div style="display:flex;justify-content:space-between;align-items:center;">
-            <button class="btn btn-secondary" onclick="showWizardStep('6')">Back</button>
+            <button class="btn btn-secondary" onclick="showWizardStep('7')">Back</button>
             <button class="btn btn-primary" id="wizardSettingsConfirmBtn" onclick="wizardConfirmSettings()">Continue</button>
           </div>
           <div style="text-align:center;margin-top:12px;">
@@ -6673,7 +6692,7 @@
         </div>
 
         <!-- Step 8 (full-path): Site Migration (optional) -->
-        <div id="wizardStep8" class="wizard-step" style="display:none;">
+        <div id="wizardStep9" class="wizard-step" style="display:none;">
           <h2 style="font-size:1.6rem;margin-bottom:8px;">Import your existing site <span style="font-weight:400;color:var(--warm-gray);">(optional)</span></h2>
           <p style="color:var(--warm-gray);margin-bottom:20px;">You skipped the site import earlier. If you have an existing website, paste the URL here and we'll pull in your products, images, and content. You can also do this later from <strong>Settings → Import</strong>.</p>
           <div class="form-group" style="margin-bottom:16px;">
@@ -6683,7 +6702,7 @@
           </div>
           <div id="wizardAnalysisStatus8" style="font-size:0.85rem;margin-bottom:16px;"></div>
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-            <button class="btn btn-secondary" onclick="showWizardStep('7')">Back</button>
+            <button class="btn btn-secondary" onclick="showWizardStep('8')">Back</button>
             <button class="btn btn-primary" id="wizardMigrateBtn8" onclick="wizardAnalyzeSiteStep8()">Import My Site</button>
           </div>
           <div style="text-align:center;">
@@ -6692,15 +6711,15 @@
         </div>
 
         <!-- Step 3 (B3): engagement mode + surface + goals picker, then watch pane -->
-        <div id="wizardStep3" class="wizard-step" style="display:none;">
+        <div id="wizardStep4" class="wizard-step" style="display:none;">
 
-          <!-- B3 engagement picker (visible first). After confirm, hides and shows wizardStep3Watch. -->
-          <div id="wizardStep3Engagement">
+          <!-- B3 engagement picker (visible first). After confirm, hides and shows wizardStep4Watch. -->
+          <div id="wizardStep4Engagement">
             <h2 style="font-size:1.6rem;margin-bottom:8px;">How will you use Mast?</h2>
             <p style="color:var(--warm-gray);margin-bottom:20px;">Pick the mode that matches your business today. You can always change this later.</p>
             <div id="wizardEngagementCards" style="display:grid;gap:12px;margin-bottom:20px;"></div>
             <div style="display:flex;justify-content:space-between;align-items:center;">
-              <button class="btn btn-secondary" id="wizardStep3BackBtn" onclick="wizardStep3Back()">Back</button>
+              <button class="btn btn-secondary" id="wizardStep4BackBtn" onclick="wizardStep4Back()">Back</button>
               <button class="btn btn-primary" id="wizardEngagementConfirmBtn" onclick="wizardConfirmEngagement()">Continue</button>
             </div>
             <div style="text-align:center;margin-top:12px;">
@@ -6709,9 +6728,9 @@
           </div>
 
           <!-- Existing "watch your store come to life" pane — hidden until engagement confirmed. -->
-          <div id="wizardStep3Watch" style="display:none;">
+          <div id="wizardStep4Watch" style="display:none;">
           <h2 style="font-size:1.6rem;margin-bottom:8px;">Watch Your Store Come to Life</h2>
-          <p id="wizardStep3Subtitle" style="color:var(--warm-gray);margin-bottom:20px;">We're building your store in real time. Learn what you can do while you wait.</p>
+          <p id="wizardStep4Subtitle" style="color:var(--warm-gray);margin-bottom:20px;">We're building your store in real time. Learn what you can do while you wait.</p>
 
           <!-- Progress bar -->
           <div id="wizardImportProgressBar" style="display:none;margin-bottom:20px;">
@@ -6787,21 +6806,21 @@
           </div>
           <div id="wizardActivateErrors" style="display:none;background:rgba(220,38,38,0.08);border:1px solid var(--danger);border-radius:8px;padding:12px 14px;margin-bottom:12px;font-size:0.85rem;color:var(--danger);"></div>
 
-          <div id="wizardStep3Actions">
+          <div id="wizardStep4Actions">
             <button class="btn btn-primary" style="font-size:1rem;padding:12px 32px;" onclick="wizardComplete()">Launch Dashboard</button>
           </div>
           </div>
-          <!-- end wizardStep3Watch -->
+          <!-- end wizardStep4Watch -->
         </div>
 
         <!-- Step 3b (NEW): Mast Feature pages — only for sync-channels or back-office modes -->
-        <div id="wizardStep3b" class="wizard-step" style="display:none;">
+        <div id="wizardStep4b" class="wizard-step" style="display:none;">
           <h2 style="font-size:1.6rem;margin-bottom:8px;">Which Mast features do you want?</h2>
           <p style="color:var(--warm-gray);margin-bottom:8px;">Even without a Mast storefront, you can use these customer-facing tools. Each gets its own URL on your Mast site.</p>
           <p style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:20px;">You can always change this in Settings.</p>
           <div id="wizardFeaturePageCards" style="display:grid;gap:10px;margin-bottom:20px;"></div>
           <div style="display:flex;justify-content:space-between;align-items:center;">
-            <button class="btn btn-secondary" onclick="showWizardStep(3)">Back</button>
+            <button class="btn btn-secondary" onclick="showWizardStep('4')">Back</button>
             <button class="btn btn-primary" id="wizardFeaturePagesConfirmBtn" onclick="wizardConfirmFeaturePages()">Continue</button>
           </div>
           <div style="text-align:center;margin-top:12px;">
@@ -6839,7 +6858,7 @@
           </div>
           <div id="wizardActivateErrorsFast" style="display:none;background:rgba(220,38,38,0.08);border:1px solid var(--danger);border-radius:8px;padding:12px 14px;margin-bottom:12px;font-size:0.85rem;color:var(--danger);"></div>
 
-          <div id="wizardStep3ActionsFast">
+          <div id="wizardStep4ActionsFast">
             <button class="btn btn-primary" style="font-size:1rem;padding:12px 32px;" onclick="wizardCompleteFast()">Launch Dashboard</button>
           </div>
         </div>
@@ -22773,10 +22792,10 @@ var _wizardAutoApplied = {}; // record of what was auto-applied
 var _wizardSelectedModules = []; // module selections for step 2
 
 // Step ordering for progress bar. 0 = welcome screen (no progress dots shown).
-// quick path: 0,2,1_5,1,3,fastDpa
-// full path:  0,2,1_5,1,3,3b,4,5,6,7,8,fastDpa
-var _wizardStepOrder = ['0','2','1_5','1','3','fastDpa'];
-var _wizardStepOrderFull = ['0','2','1_5','1','3','3b','4','5','6','7','8','fastDpa'];
+// quick path: 0,1,2,3,4,fastDpa
+// full path:  0,1,2,3,4,4b,5,6,7,8,9,fastDpa
+var _wizardStepOrder = ['0','1','2','3','4','fastDpa'];
+var _wizardStepOrderFull = ['0','1','2','3','4','4b','5','6','7','8','9','fastDpa'];
 
 function _wizardGetStepOrder() {
   return (window._wizardOnboardingDepth === 'full') ? _wizardStepOrderFull : _wizardStepOrder;
@@ -22834,28 +22853,26 @@ function initSetupWizard() {
   });
 }
 
-// showWizardStep accepts string step IDs: '0','1','1_5','2','3','3b','4','5','6','7','8','fastDpa'
+// showWizardStep accepts string step IDs: '0','1','2','3','4','4b','5','6','7','8','9','fastDpa'
 function showWizardStep(step) {
   var stepStr = String(step);
   wizardCurrentStep = stepStr;
   // Hide every wizard step pane
   var allSteps = document.querySelectorAll('#setupWizardScreen .wizard-step');
   for (var s = 0; s < allSteps.length; s++) allSteps[s].style.display = 'none';
-  var elId = stepStr === 'fastDpa' ? 'wizardStepFastDpa'
-           : stepStr === '1_5'     ? 'wizardStep1_5'
-           : stepStr === '3b'      ? 'wizardStep3b'
-           :                         'wizardStep' + stepStr;
+  var elId = stepStr === 'fastDpa' ? 'wizardStepFastDpa' : 'wizardStep' + stepStr;
   var show = document.getElementById(elId);
   if (show) show.style.display = '';
   updateWizardProgress();
 
-  if (stepStr === '4') {
+  if (stepStr === '5') {
     if (typeof renderWizardCalibration === 'function') renderWizardCalibration();
   }
-  if (stepStr === '2') {
+  if (stepStr === '1') {
+    _wizardBizSubStep = '1A';
     renderWizardBizIdentity();
   }
-  if (stepStr === '1_5') {
+  if (stepStr === '2') {
     // Restore brand fields from saved extracted data or wizard progress
     var extracted = window._wizardExtracted || {};
     var brandNameEl = document.getElementById('wizardBrandName');
@@ -22863,7 +22880,7 @@ function showWizardStep(step) {
     if (brandNameEl && !brandNameEl.value) brandNameEl.value = extracted.businessName || (wizardProgress && wizardProgress.businessName) || '';
     if (brandTaglineEl && !brandTaglineEl.value) brandTaglineEl.value = extracted.tagline || (wizardProgress && wizardProgress.tagline) || '';
   }
-  if (stepStr === '3') {
+  if (stepStr === '4') {
     if (typeof renderWizardEngagement === 'function') {
       renderWizardEngagement();
     } else {
@@ -22872,19 +22889,19 @@ function showWizardStep(step) {
       showWizardImportTimeline();
     }
   }
-  if (stepStr === '3b') {
+  if (stepStr === '4b') {
     renderWizardFeaturePages();
   }
-  if (stepStr === '5') {
+  if (stepStr === '6') {
     renderWizardModuleSelector();
   }
-  if (stepStr === '6') {
+  if (stepStr === '7') {
     renderWizardIntegrations();
   }
-  if (stepStr === '7') {
+  if (stepStr === '8') {
     renderWizardSettingsSpotlight();
   }
-  if (stepStr === '8') {
+  if (stepStr === '9') {
     // Skip this step if the user already imported from step 1
     if (window._wizardAnalyzedUrl || (typeof wizardProgress !== 'undefined' && wizardProgress.analyzedUrl)) {
       showWizardStep('fastDpa');
@@ -22912,8 +22929,8 @@ function renderWizardEngagement() {
   var defaults = window._wizardArchetypeDefaults || MastDB.businessEntity.archetypeDefaults('other-maker') || { goalsAvailable: [] };
 
   // Ensure engagement pane visible, watch pane hidden (in case of back-nav).
-  var engagePane = document.getElementById('wizardStep3Engagement');
-  var watchPane = document.getElementById('wizardStep3Watch');
+  var engagePane = document.getElementById('wizardStep4Engagement');
+  var watchPane = document.getElementById('wizardStep4Watch');
   if (engagePane) engagePane.style.display = '';
   if (watchPane) watchPane.style.display = 'none';
 
@@ -23036,7 +23053,7 @@ async function wizardConfirmEngagement() {
       await wizardCreateImportJob({ mode: jobMode });
     }
 
-    logWizardEvent(3, 'engagement_chosen', {
+    logWizardEvent(4, 'engagement_chosen', {
       mode: mode, surface: surface, goalsCount: goals.length
     });
 
@@ -23044,8 +23061,8 @@ async function wizardConfirmEngagement() {
       // Set featureMode for storefront
       await MastDB.businessEntity.update('presence', { featureMode: 'full-storefront' }).catch(function() {});
       // Flip Step 3 from engagement pane to import-watch pane (existing storefront watch path).
-      var engagePane = document.getElementById('wizardStep3Engagement');
-      var watchPane = document.getElementById('wizardStep3Watch');
+      var engagePane = document.getElementById('wizardStep4Engagement');
+      var watchPane = document.getElementById('wizardStep4Watch');
       if (engagePane) engagePane.style.display = 'none';
       if (watchPane) watchPane.style.display = '';
       try {
@@ -23057,9 +23074,9 @@ async function wizardConfirmEngagement() {
       try { renderWizardActivationGate(); } catch (e) { /* render-on-demand fallback below */ }
     } else {
       // sync-channels or back-office: show Step 3b (feature pages picker)
-      showWizardStep('3b');
+      showWizardStep('4b');
     }
-    saveWizardProgress('3', { engagementConfirmed: { mode: mode, surface: surface, goalsCount: goals.length } });
+    saveWizardProgress('4', { engagementConfirmed: { mode: mode, surface: surface, goalsCount: goals.length } });
   } catch (err) {
     if (btn) { btn.disabled = false; btn.textContent = 'Continue'; }
     showToast('Could not save engagement: ' + esc(err.message || ''), true);
@@ -23162,14 +23179,14 @@ function renderWizardCalibration() {
 }
 
 // Step 4: back button — go to 3b if full path, else 3
-function wizardStep4Back() {
+function wizardStep5Back() {
   var depth = window._wizardOnboardingDepth || 'quick';
   if (depth === 'full') {
     // In full path 3b comes before 4; but if storefront mode skipped 3b go to 3
     var eng = window._wizardEngagement || {};
-    showWizardStep(eng.mode === 'storefront' ? '3' : '3b');
+    showWizardStep(eng.mode === 'storefront' ? '4' : '4b');
   } else {
-    showWizardStep('3');
+    showWizardStep('4');
   }
 }
 
@@ -23201,7 +23218,7 @@ async function wizardConfirmCalibration() {
       }
       await MastDB.businessEntity.update('people', peoplePayload);
     }
-    logWizardEvent(4, 'calibration_saved', {
+    logWizardEvent(5, 'calibration_saved', {
       revenueBracket: bracket || null,
       wishStatementLength: wish.length,
       role: cal4State.role || null,
@@ -23225,7 +23242,7 @@ async function wizardSkipCalibration() {
     await MastDB.businessEntity.update('engagement', {
       calibration: { capturedAt: new Date().toISOString() }
     });
-    logWizardEvent(4, 'calibration_skipped', {});
+    logWizardEvent(5, 'calibration_skipped', {});
     var depth = window._wizardOnboardingDepth || 'quick';
     var nextStep = depth === 'full' ? '5' : '3';
     showWizardStep(nextStep);
@@ -23284,9 +23301,9 @@ async function wizardConfirmBrand() {
       })(logoEl.files[0]);
     }
 
-    logWizardEvent(1.7, 'brand_confirmed', { hasTagline: !!tagline, hasLogo: !!(logoEl && logoEl.files && logoEl.files[0]) });
-    showWizardStep('1');
-    saveWizardProgress('1', { brandConfirmed: true, businessName: businessName });
+    logWizardEvent(2, 'brand_confirmed', { hasTagline: !!tagline, hasLogo: !!(logoEl && logoEl.files && logoEl.files[0]) });
+    showWizardStep('3');
+    saveWizardProgress('3', { brandConfirmed: true, businessName: businessName });
   } catch (err) {
     if (btn) btn.disabled = false;
     showToast('Could not save brand: ' + esc(err.message || ''), true);
@@ -23298,6 +23315,7 @@ async function wizardConfirmBrand() {
 // ----------------------------------------------------------------
 
 var _wizardBizIdentityState = null;
+var _wizardBizSubStep = '1A';
 
 function renderWizardBizIdentity() {
   var BEC = window.BusinessEntityConstants || {};
@@ -23322,6 +23340,9 @@ function renderWizardBizIdentity() {
     if (_saved.currentTools) state.currentTools = _saved.currentTools.slice();
   }
   var depth = window._wizardOnboardingDepth || 'quick';
+
+  // Enforce which sub-step panel is visible (safe to call on every re-render)
+  showWizardSubStep(_wizardBizSubStep || '1A');
 
   function solidChipCss(sel) {
     return sel
@@ -23371,7 +23392,7 @@ function renderWizardBizIdentity() {
       }
       if (arcRow) arcRow.style.display = catDef ? '' : 'none';
       renderWizardBizIdentity();
-      var _btn0 = document.getElementById('wizardBizIdentityConfirmBtn');
+      var _btn0 = document.getElementById('wizardSubStep1ABtn');
       if (_btn0) _btn0.disabled = !(state.businessCategory && state.archetype);
     };
   } else if (catEl) {
@@ -23400,7 +23421,7 @@ function renderWizardBizIdentity() {
     arcEl.value = state.archetype || '';
     arcEl.onchange = function() {
       state.archetype = arcEl.value || null;
-      var _btn1 = document.getElementById('wizardBizIdentityConfirmBtn');
+      var _btn1 = document.getElementById('wizardSubStep1ABtn');
       if (_btn1) _btn1.disabled = !(state.businessCategory && state.archetype);
       renderWizardBizIdentity();
     };
@@ -23483,9 +23504,7 @@ function renderWizardBizIdentity() {
   var otherInput = document.getElementById('wizardOtherChannelInput');
   if (otherInput && state.otherChannelNote) otherInput.value = state.otherChannelNote;
 
-  // Part D: Current tools — full path only
-  var toolsSection = document.getElementById('wizardCurrentToolsSection');
-  if (toolsSection) toolsSection.style.display = depth === 'full' ? '' : 'none';
+  // Part D: Current tools — full path only (sub-steps 1C and 1D are only reachable on full path)
   if (depth === 'full') {
     var allTools = BEC.CURRENT_TOOLS || [];
 
@@ -23573,11 +23592,61 @@ function renderWizardBizIdentity() {
     }
   }
 
-  // Continue enabled when: business type selected AND (if mixed: primary type also selected)
-  var confirmBtn = document.getElementById('wizardBizIdentityConfirmBtn');
+  // Enable the 1A Continue button when category + archetype are both selected
+  var confirmBtn = document.getElementById('wizardSubStep1ABtn');
   if (confirmBtn) {
     confirmBtn.disabled = !(state.businessCategory && state.archetype);
   }
+}
+
+function showWizardSubStep(sub) {
+  _wizardBizSubStep = sub;
+  ['1A','1B','1C','1D'].forEach(function(s) {
+    var el = document.getElementById('wizardSubStep' + s);
+    if (el) el.style.display = (s === sub) ? '' : 'none';
+  });
+  // Update breadcrumb track labels
+  var depth = window._wizardOnboardingDepth || 'quick';
+  var labels = {
+    '1A': 'Business type',
+    '1B': 'Sales channels',
+    '1C': 'Payment tools',
+    '1D': 'Shipping platforms'
+  };
+  var subOrder = depth === 'full' ? ['1A','1B','1C','1D'] : ['1A','1B'];
+  var idx = subOrder.indexOf(sub);
+  var trackEl = document.getElementById('wizardSubStepTrack' + sub);
+  if (trackEl) trackEl.textContent = (labels[sub] || '') + ' · ' + (idx + 1) + ' of ' + subOrder.length;
+}
+
+function wizardBizNext1A() {
+  var state = _wizardBizIdentityState || {};
+  if (!state.businessCategory || !state.archetype) {
+    showToast('Please select your business category and type.', true);
+    return;
+  }
+  showWizardSubStep('1B');
+  renderWizardBizIdentity();
+}
+
+function wizardBizNext1B() {
+  var state = _wizardBizIdentityState || {};
+  var urlInput = document.getElementById('wizardStorefrontUrlInput');
+  if (urlInput) state.storefrontUrl = urlInput.value.trim();
+  var otherInput = document.getElementById('wizardOtherChannelInput');
+  if (otherInput) state.otherChannelNote = otherInput.value.trim();
+  var depth = window._wizardOnboardingDepth || 'quick';
+  if (depth === 'full') {
+    showWizardSubStep('1C');
+    renderWizardBizIdentity();
+  } else {
+    wizardConfirmBizIdentity();
+  }
+}
+
+function wizardBizNext1C() {
+  showWizardSubStep('1D');
+  renderWizardBizIdentity();
 }
 
 async function wizardConfirmBizIdentity() {
@@ -23625,7 +23694,7 @@ async function wizardConfirmBizIdentity() {
     if (Object.keys(presenceUpdate).length) {
       await MastDB.businessEntity.update('presence', presenceUpdate);
     }
-    logWizardEvent(2, 'biz_identity_confirmed', {
+    logWizardEvent(1, 'biz_identity_confirmed', {
       businessCategory: state.businessCategory,
       archetype: state.archetype,
       businessType: state.businessType,
@@ -23642,8 +23711,8 @@ async function wizardConfirmBizIdentity() {
     if (brandNameEl && !brandNameEl.value && extracted.businessName) brandNameEl.value = extracted.businessName;
     var brandTaglineEl = document.getElementById('wizardBrandTagline');
     if (brandTaglineEl && !brandTaglineEl.value && extracted.tagline) brandTaglineEl.value = extracted.tagline;
-    showWizardStep('1_5');
-    saveWizardProgress('1_5', {
+    showWizardStep('2');
+    saveWizardProgress('2', {
       bizIdentityConfirmed: true,
       archetypeConfirmed: state.archetype,
       _bizIdentity: {
@@ -23711,7 +23780,7 @@ async function wizardConfirmFeaturePages() {
     } else {
       await MastDB.businessEntity.setFeatureMode('none');
     }
-    logWizardEvent('3b', 'feature_pages_confirmed', {
+    logWizardEvent('4b', 'feature_pages_confirmed', {
       mode: mode, selectedPages: selected, count: selected.length
     });
     // Full path continues to step 4 (calibration); quick path goes to fastDpa.
@@ -23809,9 +23878,9 @@ async function wizardConfirmModuleSelector() {
   var selected = (_wizardSelectedModulesStep5 || _wizardModulePreselect()).slice();
   try {
     await MastDB.businessEntity.update('engagement', { modulesShown: selected });
-    logWizardEvent(5, 'modules_confirmed', { modules: selected, count: selected.length });
-    showWizardStep('6');
-    saveWizardProgress('6', { modulesConfirmed: true, modules: selected });
+    logWizardEvent(6, 'modules_confirmed', { modules: selected, count: selected.length });
+    showWizardStep('7');
+    saveWizardProgress('7', { modulesConfirmed: true, modules: selected });
   } catch (err) {
     if (btn) btn.disabled = false;
     showToast('Could not save modules: ' + esc(err.message || ''), true);
@@ -23913,10 +23982,10 @@ function showWizardCredentialEntry(toolId) {
   if (!def) return;
 
   var cardList = document.getElementById('wizardIntegrationCards');
-  var header   = document.getElementById('wizardStep6Header');
+  var header   = document.getElementById('wizardStep7Header');
   var pane     = document.getElementById('wizardCredentialEntryPane');
-  var navBtns  = document.getElementById('wizardStep6NavButtons');
-  var skipLink = document.getElementById('wizardStep6SkipLink');
+  var navBtns  = document.getElementById('wizardStep7NavButtons');
+  var skipLink = document.getElementById('wizardStep7SkipLink');
   if (cardList) cardList.style.display = 'none';
   if (header)   header.style.display   = 'none';
   if (navBtns)  navBtns.style.display  = 'none';
@@ -23971,10 +24040,10 @@ function showWizardCredentialEntry(toolId) {
 
 function hideWizardCredentialEntry() {
   var cardList = document.getElementById('wizardIntegrationCards');
-  var header   = document.getElementById('wizardStep6Header');
+  var header   = document.getElementById('wizardStep7Header');
   var pane     = document.getElementById('wizardCredentialEntryPane');
-  var navBtns  = document.getElementById('wizardStep6NavButtons');
-  var skipLink = document.getElementById('wizardStep6SkipLink');
+  var navBtns  = document.getElementById('wizardStep7NavButtons');
+  var skipLink = document.getElementById('wizardStep7SkipLink');
   if (cardList) cardList.style.display = '';
   if (header)   header.style.display   = '';
   if (navBtns)  navBtns.style.display  = '';
@@ -24004,19 +24073,19 @@ function _wizardConnectTool(toolId) {
   safe.connectedAt = new Date().toISOString();
   MastDB.config.update('integrations/' + toolId, safe).catch(function(){});
   _wizardIntegrationState[toolId] = { _connected: true, _skipped: false };
-  logWizardEvent(6, 'tool_connected', { tool: toolId });
+  logWizardEvent(7, 'tool_connected', { tool: toolId });
   hideWizardCredentialEntry();
 }
 
 function _wizardSkipTool(toolId) {
   _wizardIntegrationState[toolId] = { _connected: false, _skipped: true };
-  logWizardEvent(6, 'tool_skipped', { tool: toolId });
+  logWizardEvent(7, 'tool_skipped', { tool: toolId });
   hideWizardCredentialEntry();
 }
 
-function wizardStep6Continue() {
-  showWizardStep('7');
-  saveWizardProgress('7', { integrationsStepDone: true });
+function wizardStep7Continue() {
+  showWizardStep('8');
+  saveWizardProgress('8', { integrationsStepDone: true });
 }
 
 // ---- Step 7: Settings Spotlight ----
@@ -24147,9 +24216,9 @@ async function wizardConfirmSettings() {
 
   try {
     await Promise.all(writes);
-    logWizardEvent(7, 'settings_saved', { taxState: taxState || null, fromEmail: fromEmail || null, markupPct: isNaN(markupVal) ? null : markupVal });
-    showWizardStep('8');
-    saveWizardProgress('8', { settingsSaved: true });
+    logWizardEvent(8, 'settings_saved', { taxState: taxState || null, fromEmail: fromEmail || null, markupPct: isNaN(markupVal) ? null : markupVal });
+    showWizardStep('9');
+    saveWizardProgress('9', { settingsSaved: true });
   } catch (err) {
     if (btn) btn.disabled = false;
     showToast('Could not save settings: ' + esc(err.message || ''), true);
@@ -24174,7 +24243,7 @@ async function wizardAnalyzeSiteStep8() {
   if (statusEl) statusEl.innerHTML = '<span style="color:var(--warm-gray);">Analyzing your site…</span>';
 
   // Delegate to existing wizardAnalyzeSite(). Flag tells downstream to go to fastDpa when done.
-  window._wizardStep8PostAnalyze = true;
+  window._wizardStep9PostAnalyze = true;
   if (typeof wizardAnalyzeSite === 'function') {
     wizardAnalyzeSite();
   } else {
@@ -24382,7 +24451,7 @@ async function wizardCompleteFast() {
           errorsEl.textContent = activateErr.message || 'Activation failed. Please try again.';
         }
       }
-      logWizardEvent(4, 'activate_failed', { missingFields: missing || null, path: 'fast' });
+      logWizardEvent(5, 'activate_failed', { missingFields: missing || null, path: 'fast' });
       return;
     }
 
@@ -24422,15 +24491,15 @@ async function wizardCompleteFast() {
           body: JSON.stringify({ tenantId: MastDB.tenantId() })
         });
         if (!deployResp.ok) {
-          logWizardEvent(4, 'auto_deploy_failed', { status: deployResp.status, path: 'fast' });
+          logWizardEvent(5, 'auto_deploy_failed', { status: deployResp.status, path: 'fast' });
           showToast("Your site couldn't auto-deploy. Open Settings > Hosting to retry.", true);
         }
       } catch (deployErr) {
-        logWizardEvent(4, 'auto_deploy_error', { message: (deployErr && deployErr.message) || 'unknown', path: 'fast' });
+        logWizardEvent(5, 'auto_deploy_error', { message: (deployErr && deployErr.message) || 'unknown', path: 'fast' });
       }
     }
 
-    logWizardEvent(4, 'wizard_complete', {
+    logWizardEvent(5, 'wizard_complete', {
       entityStatus: 'active', engagementMode: engMode,
       dpaVersion: BEC.DPA_VERSION || '2026-05-v1',
       path: window._wizardFastExit ? 'fast-exit' : 'fast-dpa',
@@ -24535,13 +24604,13 @@ async function wizardConfirmDepth() {
   logWizardEvent(0, 'depth_selected', { depth: depth });
   // Hide current tools section in Step 2 for quick path
   // (will be applied when Step 2 renders)
-  showWizardStep('2');
-  saveWizardProgress('2', { onboardingDepth: depth });
+  showWizardStep('1');
+  saveWizardProgress('1', { onboardingDepth: depth });
 }
 
 // Step 3 back — go to site URL step if they went through it, otherwise brand step
-function wizardStep3Back() {
-  showWizardStep(window._wizardHasWebsite ? '1' : '1_5');
+function wizardStep4Back() {
+  showWizardStep(window._wizardHasWebsite ? '3' : '2');
 }
 
 function saveWizardProgress(step, extras) {
@@ -24591,7 +24660,7 @@ function wizardSkipSite() {
   };
   window._wizardDetectedModules = [];
   logWizardEvent(0.5, 'site_skipped', {});
-  showWizardStep('3');
+  showWizardStep('4');
 }
 
 // ----------------------------------------------------------------
@@ -24605,7 +24674,7 @@ function wizardShowSitePathPicker(data) {
   var brandName = manifest.businessName || '';
 
   // Hide URL form, show picker
-  var urlForm = document.getElementById('wizardStep1UrlForm');
+  var urlForm = document.getElementById('wizardStep3UrlForm');
   if (urlForm) urlForm.style.display = 'none';
 
   var platformLabel = (platform && platform !== 'unknown')
@@ -24658,16 +24727,16 @@ function wizardChooseSiteIntent(intent) {
     });
   }
   MastDB.config.set('setupProgress/siteIntent', intent).catch(function() {});
-  logWizardEvent(1, 'site_intent_chosen', { intent: intent });
-  showWizardStep('3');
-  saveWizardProgress('3', { siteAnalyzed: true, siteIntent: intent, autoApplied: _wizardAutoApplied });
+  logWizardEvent(3, 'site_intent_chosen', { intent: intent });
+  showWizardStep('4');
+  saveWizardProgress('4', { siteAnalyzed: true, siteIntent: intent, autoApplied: _wizardAutoApplied });
   _wizardAnalyzing = false;
 }
 
 function wizardResetSiteStep() {
   var picker = document.getElementById('wizardSitePathPicker');
   if (picker) { picker.style.display = 'none'; picker.innerHTML = ''; }
-  var urlForm = document.getElementById('wizardStep1UrlForm');
+  var urlForm = document.getElementById('wizardStep3UrlForm');
   if (urlForm) urlForm.style.display = '';
   var btn = document.getElementById('wizardAnalyzeBtn');
   if (btn) { btn.disabled = false; btn.textContent = 'Analyze My Site'; }
@@ -24788,7 +24857,7 @@ async function wizardAnalyzeSite() {
   btn.disabled = true;
   btn.textContent = 'Analyzing...';
   _wizardAnalyzing = true;
-  logWizardEvent(1, 'analyze_start', { url: url });
+  logWizardEvent(3, 'analyze_start', { url: url });
 
   try {
     var result = await firebase.functions().httpsCallable('analyzeExistingSite', { timeout: 120000 })({
@@ -24835,7 +24904,7 @@ async function wizardAnalyzeSite() {
     var tierConfig = TIER_CONFIG[sub.tier] || {};
     var needsModuleChoice = tierConfig.moduleLimit > 0 && tierConfig.moduleLimit < 7 && (sub.selectableModules || []).length > 0;
 
-    logWizardEvent(1, 'analyze_complete', {
+    logWizardEvent(3, 'analyze_complete', {
       crawlTier: data.crawlTier,
       platform: (data.crawlManifest && data.crawlManifest.platform) || 'unknown',
       templateId: data.draftTemplateId || null,
@@ -24844,8 +24913,8 @@ async function wizardAnalyzeSite() {
 
     window._wizardHasWebsite = true;
     // If coming from Step 8 (post-wizard late import), skip path picker and finish.
-    if (window._wizardStep8PostAnalyze) {
-      window._wizardStep8PostAnalyze = false;
+    if (window._wizardStep9PostAnalyze) {
+      window._wizardStep9PostAnalyze = false;
       showWizardStep('fastDpa');
       saveWizardProgress('fastDpa', { siteAnalyzed: true, autoApplied: _wizardAutoApplied });
       _wizardAnalyzing = false;
@@ -24855,7 +24924,7 @@ async function wizardAnalyzeSite() {
   } catch (err) {
     clearInterval(progressTimer);
     _wizardAnalyzing = false;
-    logWizardEvent(1, 'analyze_error', { code: err.code || '', message: err.message || '' });
+    logWizardEvent(3, 'analyze_error', { code: err.code || '', message: err.message || '' });
 
     var userMsg = 'We hit a snag analyzing your site.';
     var code = err.code || '';
@@ -25109,10 +25178,10 @@ async function wizardAutoApplyAll(analysis, data) {
   await MastDB.config.set('setupProgress/autoApplied', autoApplied).catch(function() {});
 
   if (writeErrors.length > 0) {
-    logWizardEvent(1, 'auto_apply_partial', { errors: writeErrors });
+    logWizardEvent(3, 'auto_apply_partial', { errors: writeErrors });
     showToast('Some settings could not be saved. You can update them in Settings.', true);
   } else {
-    logWizardEvent(1, 'auto_apply_complete', autoApplied);
+    logWizardEvent(3, 'auto_apply_complete', autoApplied);
   }
 }
 
@@ -25266,11 +25335,11 @@ async function wizardConfirmModules() {
     navSections.contact = { enabled: true, order: 99 };
     await MastDB.set('public/config/nav/sections', navSections);
 
-    logWizardEvent(2, 'modules_confirmed', { modules: _wizardSelectedModules });
-    showWizardStep(3);
-    saveWizardProgress(3, { modulesSelected: _wizardSelectedModules });
+    logWizardEvent(6, 'modules_confirmed', { modules: _wizardSelectedModules });
+    showWizardStep('4');
+    saveWizardProgress('4', { modulesSelected: _wizardSelectedModules });
   } catch (err) {
-    logWizardEvent(2, 'modules_error', { message: err.message });
+    logWizardEvent(6, 'modules_error', { message: err.message });
     showToast('Failed to save module selection: ' + esc(err.message), true);
     if (btn) { btn.disabled = false; btn.textContent = 'Try Again'; }
   }
@@ -25684,7 +25753,7 @@ async function wizardRequestEnrichment() {
 // ─── Wizard Launch Button Control ────────────────────────────
 
 function wizardSetLaunchEnabled(enabled) {
-  var actions = document.getElementById('wizardStep3Actions');
+  var actions = document.getElementById('wizardStep4Actions');
   if (!actions) return;
   var btn = actions.querySelector('.btn-primary');
   if (btn) {
@@ -25811,7 +25880,7 @@ function wizardTransitionToWalkthrough(job) {
   if (carousel) carousel.style.display = 'none';
 
   // Update header
-  var subtitle = document.getElementById('wizardStep3Subtitle');
+  var subtitle = document.getElementById('wizardStep4Subtitle');
   if (subtitle) subtitle.textContent = 'Here\'s what we imported and what you can do next.';
 
   // Hide legacy report/enrichment (we replace them with the walkthrough)
@@ -25841,7 +25910,7 @@ function wizardTransitionToWalkthrough(job) {
   loadTokenWallet();
 
   // Update action buttons — full path continues to step 4, quick path completes.
-  var actions = document.getElementById('wizardStep3Actions');
+  var actions = document.getElementById('wizardStep4Actions');
   if (actions) {
     var _depth = window._wizardOnboardingDepth || 'quick';
     var h = '<div style="display:flex;gap:12px;flex-wrap:wrap;justify-content:center;">';
@@ -26359,11 +26428,11 @@ function _wizardDpaGateUpdate(isFast) {
     gate.style.background   = checked ? 'rgba(42,124,111,0.06)' : 'rgba(196,133,60,0.06)';
   }
   // Find the launch button in the sibling actions container and toggle disabled
-  var actionsId = isFast ? 'wizardStep3Actions' : 'wizardStep3Actions';
+  var actionsId = isFast ? 'wizardStep4Actions' : 'wizardStep4Actions';
   // For fast path, the button is directly in wizardStepFastDpa; use a data attribute to find it
   var launchBtn = isFast
     ? document.querySelector('#wizardStepFastDpa .btn-primary:not([data-skip])')
-    : document.querySelector('#wizardStep3Actions .btn-primary, #wizardStep3Actions button.btn-primary');
+    : document.querySelector('#wizardStep4Actions .btn-primary, #wizardStep4Actions button.btn-primary');
   if (launchBtn) launchBtn.disabled = !checked;
   // Clear inline error if box is now checked
   if (checked) {
@@ -26511,7 +26580,7 @@ async function wizardComplete() {
           errorsEl.textContent = activateErr.message || 'Activation failed. Please try again.';
         }
       }
-      logWizardEvent(4, 'activate_failed', { missingFields: missing || null });
+      logWizardEvent(5, 'activate_failed', { missingFields: missing || null });
       return;
     }
 
@@ -26568,19 +26637,19 @@ async function wizardComplete() {
           var deployErrBody = '';
           try { deployErrBody = await deployResp.text(); } catch (_readErr) {}
           console.warn('[Wizard] Auto-deploy failed:', deployResp.status, deployErrBody);
-          logWizardEvent(4, 'auto_deploy_failed', { status: deployResp.status, body: deployErrBody.slice(0, 200) });
+          logWizardEvent(5, 'auto_deploy_failed', { status: deployResp.status, body: deployErrBody.slice(0, 200) });
           showToast('Your site couldn\u2019t auto-deploy. Open Settings > Hosting to retry, or contact support.', true);
         }
       } catch (deployErr) {
         console.warn('[Wizard] Auto-deploy network error:', deployErr && deployErr.message);
-        logWizardEvent(4, 'auto_deploy_error', { message: (deployErr && deployErr.message) || 'unknown' });
+        logWizardEvent(5, 'auto_deploy_error', { message: (deployErr && deployErr.message) || 'unknown' });
         showToast('Your site couldn\u2019t auto-deploy. Open Settings > Hosting to retry, or contact support.', true);
       }
     } else {
       console.log('[Wizard] Skipping storefront deploy (engagement.mode = ' + engagementMode + ')');
     }
 
-    logWizardEvent(4, 'wizard_complete', {
+    logWizardEvent(5, 'wizard_complete', {
       entityStatus: 'active',
       engagementMode: engagementMode,
       dpaVersion: BEC.DPA_VERSION || '2026-05-v1'
