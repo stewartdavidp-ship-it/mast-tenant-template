@@ -10440,6 +10440,7 @@ function _makeEntity(path, dl) {
   if (dl) {
     e.list = function(limit) { return MastDB.query(path).limitToLast(limit || dl).once(); };
     e.listen = function(limit, cb) { return MastDB.query(path).limitToLast(limit || dl).subscribe(cb); };
+    e.unlisten = function(unsub) { if (typeof unsub === 'function') unsub(); };
   } else {
     e.list = function() { return MastDB.list(path); };
   }
@@ -10454,7 +10455,8 @@ MastDB.gallery = _makeEntity('public/gallery', 500);
 
 MastDB.images = {
   PATH: 'images',
-  listen: function(limit, cb) { return MastDB.query('images').limitToLast(limit || 500).subscribe(cb); }
+  listen: function(limit, cb) { return MastDB.query('images').limitToLast(limit || 500).subscribe(cb); },
+  unlisten: function(unsub) { if (typeof unsub === 'function') unsub(); }
 };
 
 MastDB.products = {
@@ -27042,7 +27044,7 @@ async function loadProducts() {
   loading.style.display = '';
   try {
     var val = await MastDB.products.get();
-    productsData = val ? Object.values(val) : [];
+    productsData = val ? Object.values(val).filter(Boolean) : [];
     productsData.sort(function(a, b) { return (a.name || '').localeCompare(b.name || ''); });
     productsLoaded = true;
     renderProducts();
@@ -37208,6 +37210,7 @@ function loadAuditLog() {
     });
     keys.forEach(function(childKey) {
       var entry = rows[childKey];
+      if (!entry) return;
       entry._key = childKey;
       auditEntries.push(entry);
       if (entry.actor && entry.actor.displayName) {
@@ -37390,6 +37393,7 @@ async function renderRecordHistory(entity, entityId) {
     var entries = [];
     keys.forEach(function(childKey) {
       var e = rows[childKey];
+      if (!e) return;
       e._key = childKey;
       entries.push(e);
     });
@@ -43135,7 +43139,7 @@ async function ensureProductsLoaded() {
   if (productsLoaded && productsData.length > 0) return;
   try {
     var val = await MastDB.products.get();
-    productsData = val ? Object.values(val) : [];
+    productsData = val ? Object.values(val).filter(Boolean) : [];
     productsData.sort(function(a, b) { return (a.name || '').localeCompare(b.name || ''); });
     productsLoaded = true;
   } catch (err) {
