@@ -208,9 +208,9 @@
   ];
 
   var SURFACE_OPTIONS = [
-    { value: 'ai-first', label: 'AI-first',  hint: 'Dashboard + Advisor. Ask in plain English.' },
-    { value: 'ui-first', label: 'UI-first',  hint: 'Classic menus and forms.' },
-    { value: 'hybrid',   label: 'Hybrid',    hint: 'Both — Advisor banner + full nav.' }
+    { value: 'ui-first', label: 'Click & menus',  hint: 'I prefer clicking through screens to get things done.' },
+    { value: 'ai-first', label: 'Chat with AI',   hint: 'I’d rather tell an assistant what I need.' },
+    { value: 'hybrid',   label: 'Mix of both',    hint: 'Menus when I want them, AI when I don’t.' }
   ];
 
   // New wizard constants — additive only, do not remove or rename existing constants above.

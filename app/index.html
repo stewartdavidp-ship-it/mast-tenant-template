@@ -19,7 +19,7 @@
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-storage-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-functions-compat.js"></script>
   <script src="../shared/mastdb.js?v=5"></script>
-  <script src="../shared/business-entity-constants.js?v=2"></script>
+  <script src="../shared/business-entity-constants.js?v=3"></script>
   <script src="../shared/customer-resolver.js?v=1"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
@@ -23176,25 +23176,26 @@ function renderWizardEngagement() {
   // Helper: build the surface-chip row used in both the inline-card path and the migrate-only standalone path.
   function _renderSurfaceRow(modeValue) {
     var row = document.createElement('div');
-    row.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;';
+    row.style.cssText = 'display:grid;gap:8px;margin-top:8px;';
     var modeCard = cards.find(function(c){ return c.value === modeValue; }) || {};
     var activeSurface = state.surfaceByMode[modeValue] || defaultSurfaceByMode[modeValue] || modeCard.defaultSurface || 'hybrid';
     state.surfaceByMode[modeValue] = activeSurface;
     surfaceOptions.forEach(function(surf) {
-      var btn = document.createElement('button');
-      btn.type = 'button';
-      btn.textContent = surf.label;
-      btn.title = surf.hint;
+      var card = document.createElement('div');
       var on = activeSurface === surf.value;
-      btn.style.cssText = 'padding:6px 10px;border-radius:999px;border:2px solid ' + (on ? 'var(--teal)' : 'var(--wiz-border,var(--border,#ccc))') +
-        ';background:' + (on ? 'var(--teal)' : 'var(--wiz-bg,var(--surface-card,#fff))') +
-        ';font-size:0.78rem;cursor:pointer;color:' + (on ? '#fff' : 'var(--wiz-text,var(--text,#2a2a2a))') + ';font-weight:' + (on ? '600' : '400') + ';transition:all 0.15s;';
-      btn.onclick = function(ev) {
+      card.style.cssText = 'border:2px solid ' + (on ? 'var(--teal)' : 'var(--wiz-border,var(--border,#ddd))') +
+        ';border-radius:8px;padding:10px 14px;cursor:pointer;background:' +
+        (on ? 'rgba(42,124,111,0.08)' : 'var(--wiz-bg,var(--surface-card,#fff))') +
+        ';transition:all 0.15s;';
+      card.innerHTML =
+        '<div style="font-weight:' + (on ? '700' : '600') + ';font-size:0.92rem;color:var(--wiz-text,var(--text,#2a2a2a));margin-bottom:2px;">' + esc(surf.label) + '</div>' +
+        '<div style="font-size:0.8rem;color:var(--warm-gray);">' + esc(surf.hint) + '</div>';
+      card.onclick = function(ev) {
         ev.stopPropagation();
         state.surfaceByMode[modeValue] = surf.value;
         renderWizardEngagement();
       };
-      row.appendChild(btn);
+      row.appendChild(card);
     });
     return row;
   }
@@ -23229,7 +23230,7 @@ function renderWizardEngagement() {
 
       var surfaceLabel = document.createElement('div');
       surfaceLabel.style.cssText = 'font-size:0.85rem;font-weight:600;color:var(--text,#2a2a2a);margin-bottom:6px;';
-      surfaceLabel.textContent = 'How do you want to interact with Mast?';
+      surfaceLabel.textContent = 'How do you prefer to get things done?';
       cardsEl.appendChild(surfaceLabel);
       cardsEl.appendChild(_renderSurfaceRow('storefront'));
     }
