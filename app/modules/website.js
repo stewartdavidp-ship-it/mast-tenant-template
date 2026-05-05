@@ -2012,11 +2012,15 @@
         await MastDB.remove('public/config/theme/accentColor');
       }
 
-      // Set default font pair from new manifest
+      // Set default font pair from new manifest (route through MastBrandSync).
       var defaultFont = (newManifest.fontPairs || []).find(function(f) { return f.default; });
       var defaultFontId = defaultFont ? defaultFont.id : (newManifest.fontPairs && newManifest.fontPairs[0] ? newManifest.fontPairs[0].id : null);
       if (defaultFontId) {
-        await MastDB.set('public/config/theme/fontPair', defaultFontId);
+        if (window.MastBrandSync) {
+          await window.MastBrandSync.setFontPair(defaultFontId);
+        } else {
+          await MastDB.set('public/config/theme/fontPair', defaultFontId);
+        }
       }
 
       // Clear layout/variant overrides so new template defaults apply
@@ -2084,7 +2088,8 @@
     showCustomColors = false;
     try {
       await MastDB.set('public/config/theme/colorSchemeId', schemeId);
-      // Remove custom color overrides from Firebase
+      // Remove custom color overrides from Firebase. (MastBrandSync.setColors
+      // is for setting values, not removing — direct removes are fine here.)
       await MastDB.remove('public/config/theme/primaryColor');
       await MastDB.remove('public/config/theme/accentColor');
       markUnpublished();
@@ -2108,7 +2113,15 @@
     if (!themeConfig) themeConfig = {};
     themeConfig[field] = value;
     debounce('theme-color-' + field, function() {
-      MastDB.set('public/config/theme/' + field, value);
+      // Single writer — MastBrandSync.setColors writes canonical
+      // public/config/theme + mirrors to platform publicConfig.
+      if (window.MastBrandSync && (field === 'primaryColor' || field === 'accentColor')) {
+        var update = {};
+        update[field] = value;
+        window.MastBrandSync.setColors(update);
+      } else {
+        MastDB.set('public/config/theme/' + field, value);
+      }
       markUnpublished();
     }, 400);
   };
@@ -2117,7 +2130,13 @@
     if (!themeConfig) themeConfig = {};
     themeConfig.fontPair = fontPairId;
     try {
-      await MastDB.set('public/config/theme/fontPair', fontPairId);
+      // Single writer — MastBrandSync.setFontPair writes canonical
+      // public/config/theme.fontPair.
+      if (window.MastBrandSync) {
+        await window.MastBrandSync.setFontPair(fontPairId);
+      } else {
+        await MastDB.set('public/config/theme/fontPair', fontPairId);
+      }
       markUnpublished();
       showToast('Font pair updated.');
     } catch (err) {
@@ -2991,20 +3010,29 @@
     if (!draft) { showToast('Draft not found.', true); return; }
 
     try {
-      // Write the finalized template config to tenant theme
-      var themeUpdate = {
-        templateId: draft.baseTemplateId || 'the-studio',
-        fontPair: draft.fontPairId || 'classic'
-      };
-      // Apply custom colors if present
+      // Write non-brand theme fields directly; brand fields go through MastBrandSync.
+      var nonBrandUpdate = { templateId: draft.baseTemplateId || 'the-studio' };
+      var fontPairId = draft.fontPairId || 'classic';
       var scheme = draft.colorSchemes && draft.colorSchemes[0];
+      var customColors = null;
       if (scheme && scheme.colors) {
-        if (scheme.colors.primaryColor) themeUpdate.primaryColor = scheme.colors.primaryColor;
-        if (scheme.colors.accentColor) themeUpdate.accentColor = scheme.colors.accentColor;
-        themeUpdate.colorSchemeId = null; // custom colors, no preset
+        customColors = {};
+        if (scheme.colors.primaryColor) customColors.primaryColor = scheme.colors.primaryColor;
+        if (scheme.colors.accentColor) customColors.accentColor = scheme.colors.accentColor;
+        nonBrandUpdate.colorSchemeId = null; // custom colors, no preset
       }
 
-      await MastDB.update('public/config/theme', themeUpdate);
+      await MastDB.update('public/config/theme', nonBrandUpdate);
+      if (window.MastBrandSync) {
+        await window.MastBrandSync.setFontPair(fontPairId);
+        if (customColors && Object.keys(customColors).length) {
+          await window.MastBrandSync.setColors(customColors);
+        }
+      } else {
+        var fallback = { fontPair: fontPairId };
+        if (customColors) Object.assign(fallback, customColors);
+        await MastDB.update('public/config/theme', fallback);
+      }
 
       // Store the custom homepage flow as a draft template override
       await MastDB.set('webPresence/draftTemplates/' + draftId + '/status', 'saved');

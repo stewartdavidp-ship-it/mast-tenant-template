@@ -25463,10 +25463,17 @@ async function _applyEntityOperationsLocalization() {
 // B1: brand pointer (config/brand is the canonical visual source; entity.visual
 // reads through to it per spec §2.3). Preserves the existing logo-processing step.
 // Does NOT overwrite a logoUrl the user already set (e.g. via the brand-step upload).
+//
+// All brand-field writes go through MastBrandSync (single writer, see
+// shared/brand-sync.js — introduced in 2d9faa2). MastBrandSync writes the
+// canonical paths (config/brand/logo/primary, config/brand.name|tagline,
+// public/config/theme.{primaryColor,accentColor}) and fans out to legacy mirrors
+// (public/config/nav/logoUrl, config/brand.logoUrl, businessEntity/identity,
+// platform publicConfig). NEVER write those paths directly here.
 async function _applyBrandPointer(extracted) {
   // Read existing brand to check what the user has already set explicitly.
   var existing = await MastDB.config.get('brand').catch(function() { return null; });
-  var existingLogo = existing && existing.logoUrl;
+  var existingLogo = existing && (existing.logoUrl || (existing.logo && existing.logo.primary && existing.logo.primary.url));
   var existingName = existing && existing.name;
   var existingTagline = existing && existing.tagline;
 
@@ -25475,52 +25482,83 @@ async function _applyBrandPointer(extracted) {
     try { logoUrl = await processAndUploadLogo(logoUrl); } catch (e) { /* use original */ }
   }
   extracted.logoUrl = logoUrl;
-  var brandUpdate = {
-    primaryColor: extracted.primaryColor,
-    accentColor: extracted.accentColor,
-    updatedAt: new Date().toISOString()
-  };
+
+  // Description is not yet a first-class MastBrandSync field; write it directly
+  // to config/brand (alongside the updatedAt stamp) as a legacy field.
+  if (extracted.oneLineDescription) {
+    await MastDB.config.update('brand', {
+      description: extracted.oneLineDescription,
+      updatedAt: new Date().toISOString()
+    });
+  }
+
+  // Route all canonical brand writes through MastBrandSync.
   // Only fill name/tagline/logo from the scan when the user hasn't set them.
-  // Otherwise we'd overwrite their explicit choices made on the brand step.
-  if (!existingName && extracted.businessName) brandUpdate.name = extracted.businessName;
-  if (!existingTagline && extracted.tagline) brandUpdate.tagline = extracted.tagline;
-  if (extracted.oneLineDescription) brandUpdate.description = extracted.oneLineDescription;
-  if (!existingLogo && logoUrl) brandUpdate.logoUrl = logoUrl;
-  return MastDB.config.update('brand', brandUpdate);
+  if (!existingName && extracted.businessName && window.MastBrandSync) {
+    await window.MastBrandSync.setName(extracted.businessName);
+  }
+  if (!existingTagline && extracted.tagline && window.MastBrandSync) {
+    await window.MastBrandSync.setTagline(extracted.tagline);
+  }
+  if (!existingLogo && logoUrl && window.MastBrandSync) {
+    await window.MastBrandSync.setLogo({
+      url: logoUrl,
+      storagePath: MastDB.tenantId() + '/brand/logo-processed.png',
+      format: 'png'
+    });
+  }
+  if (window.MastBrandSync && (extracted.primaryColor || extracted.accentColor)) {
+    await window.MastBrandSync.setColors({
+      primaryColor: extracted.primaryColor,
+      accentColor: extracted.accentColor
+    });
+  }
 }
 
-// B1: platform registry + publicConfig writes (unchanged from v1).
+// B1: platform registry + publicConfig writes.
+// Brand fields (name, tagline, logo, colors) are mirrored to platform publicConfig
+// by MastBrandSync — _applyBrandPointer already invoked it for those fields above.
+// This function only writes the non-brand fields (brandDescription) to avoid
+// double-writing and to keep MastBrandSync as the single writer for brand data.
 async function _applyPlatformRegistry(extracted) {
   if (!extracted.businessName) return null;
-  // Don't overwrite a logo the user explicitly uploaded on the brand step.
-  var userSetLogo = !!window._wizardUserSetLogo;
-  await MastDB.platform.update('mast-platform/tenants/' + MastDB.tenantId(), { name: extracted.businessName });
-  var publicConfigUpdate = {
-    brandName: extracted.businessName,
-    brandTagline: extracted.tagline,
-    brandDescription: extracted.oneLineDescription,
-    primaryColor: extracted.primaryColor,
-    accentColor: extracted.accentColor
-  };
-  if (!userSetLogo) publicConfigUpdate.brandLogoUrl = extracted.logoUrl || '';
-  return MastDB.platform.update('mast-platform/tenants/' + MastDB.tenantId() + '/publicConfig', publicConfigUpdate);
+  // brandDescription is not yet a first-class MastBrandSync field; mirror it directly.
+  if (extracted.oneLineDescription) {
+    return MastDB.platform.update('mast-platform/tenants/' + MastDB.tenantId() + '/publicConfig', {
+      brandDescription: extracted.oneLineDescription
+    });
+  }
+  return null;
 }
 
 // B1: storefront-only writes. Called by B3 when engagement.mode === 'storefront'.
 // This is the old wizardAutoApplyAll steps 2, 4, 5.
+//
+// Brand-related theme fields (primaryColor, accentColor, fontPair) go through
+// MastBrandSync. templateId/colorSchemeId are storefront-only fields (not brand)
+// and stay as direct theme writes.
 async function applyStorefrontConfig(extracted, detectedModules) {
   var errors = [];
-  var logoUrl = extracted.logoUrl || '';
   var templateMapping = STYLE_TO_TEMPLATE[extracted.styleRecommendation] || STYLE_TO_TEMPLATE['artisan-warm'];
-  var themeUpdate = { templateId: templateMapping.templateId, fontPair: templateMapping.fontPair };
-  if (templateMapping.schemeId) {
-    themeUpdate.colorSchemeId = templateMapping.schemeId;
-  } else {
-    themeUpdate.colorSchemeId = null;
-    themeUpdate.primaryColor = extracted.primaryColor;
-    themeUpdate.accentColor = extracted.accentColor;
+  // Non-brand theme fields (templateId, colorSchemeId) — direct write.
+  var themeUpdate = {
+    templateId: templateMapping.templateId,
+    colorSchemeId: templateMapping.schemeId || null
+  };
+  await MastDB.update('public/config/theme', themeUpdate).catch(function(e) { errors.push('theme: ' + e.message); });
+  // Brand theme fields — route through MastBrandSync (writes canonical
+  // public/config/theme + mirrors to platform publicConfig).
+  if (window.MastBrandSync) {
+    if (templateMapping.fontPair) {
+      await window.MastBrandSync.setFontPair(templateMapping.fontPair).catch(function(e) { errors.push('fontPair: ' + e.message); });
+    }
+    if (!templateMapping.schemeId && (extracted.primaryColor || extracted.accentColor)) {
+      await window.MastBrandSync.setColors({
+        primaryColor: extracted.primaryColor,
+        accentColor: extracted.accentColor
+      }).catch(function(e) { errors.push('colors: ' + e.message); });
+    }
   }
-  await MastDB.set('public/config/theme', themeUpdate).catch(function(e) { errors.push('theme: ' + e.message); });
 
   var sub = getTenantSubscription();
   var tierConfig = TIER_CONFIG[sub.tier] || {};
@@ -25547,9 +25585,10 @@ async function applyStorefrontConfig(extracted, detectedModules) {
   if (features.newsletter) navSections.newsletter = { enabled: true, order: 60 };
   navSections.contact = { enabled: true, order: 99 };
   await MastDB.set('public/config/nav/sections', navSections).catch(function(e) { errors.push('nav: ' + e.message); });
-  // Skip writing the scanned logo to the public storefront if the user already
-  // uploaded their own on the brand step.
-  if (logoUrl && !window._wizardUserSetLogo) await MastDB.set('public/config/nav/logoUrl', logoUrl).catch(function(e) { errors.push('nav logo: ' + e.message); });
+  // Logo mirror to public/config/nav/logoUrl is handled by MastBrandSync.setLogo
+  // (called from _applyBrandPointer above when the scanned logo wins). Direct
+  // writes to that path are intentionally omitted to keep MastBrandSync the
+  // single writer for brand data.
 
   var wpConfig = {
     style: extracted.styleRecommendation,
