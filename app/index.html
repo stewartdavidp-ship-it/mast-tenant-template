@@ -13698,7 +13698,7 @@ auth.onAuthStateChanged(async function(user) {
   try { await loadConfigChecklist(); } catch(e) { console.warn('loadConfigChecklist failed:', e.message); }
 
   // Guided next steps (module-aware onboarding) — replaces old setup banner
-  Promise.all([loadNextStepsCache(), loadDismissedSteps()]).then(function() { renderDashCardSetupShop(); });
+  Promise.all([loadNextStepsCache(), loadDismissedSteps(), loadMatchingPrefs()]).then(function() { renderDashCardSetupShop(); });
 
   // Legacy Business Entity bootstrap banner (S2 — Entity Phase 1).
   // Non-blocking: failures are swallowed inside the function.
@@ -23649,6 +23649,29 @@ function renderWizardBizIdentity() {
     if (_saved.storefrontUrl) state.storefrontUrl = _saved.storefrontUrl;
     if (_saved.otherChannelNote) state.otherChannelNote = _saved.otherChannelNote;
   }
+  // Pre-fill from site scan when nothing saved yet — user confirms/adjusts.
+  if (!state.businessCategory || !state.archetype || state.revenueChannels.length === 0) {
+    var _ext = window._wizardExtracted || {};
+    var _cats = BEC.BUSINESS_CATEGORIES || [];
+    // Map inferredArchetype back to its parent category + archetype.
+    if (!state.businessCategory && _ext.inferredArchetype) {
+      for (var _ci = 0; _ci < _cats.length; _ci++) {
+        for (var _sj = 0; _sj < _cats[_ci].subtypes.length; _sj++) {
+          if (_cats[_ci].subtypes[_sj].value === _ext.inferredArchetype) {
+            state.businessCategory = _cats[_ci].value;
+            state.archetype = _ext.inferredArchetype;
+            state.businessType = _cats[_ci].businessType || null;
+            break;
+          }
+        }
+        if (state.businessCategory) break;
+      }
+    }
+    // Pre-fill channel priority list from declared/inferred channels.
+    if (state.revenueChannels.length === 0 && Array.isArray(_ext.declaredChannels) && _ext.declaredChannels.length) {
+      state.revenueChannels = _ext.declaredChannels.slice();
+    }
+  }
   // Snapshot current step-1 state on every render so partial input survives a reload.
   try { snapshotWizardField('_bizIdentity', {
     businessCategory: state.businessCategory,
@@ -24918,7 +24941,7 @@ async function wizardCompleteFast() {
     productsLoaded = false;
     productsData = [];
     navigateTo('dashboard');
-    Promise.all([loadNextStepsCache(), loadDismissedSteps()]).then(function() { renderDashCardSetupShop(); });
+    Promise.all([loadNextStepsCache(), loadDismissedSteps(), loadMatchingPrefs()]).then(function() { renderDashCardSetupShop(); });
     attachListeners();
     loadSettings();
   } catch (err) {
@@ -27117,7 +27140,7 @@ async function wizardComplete() {
 
     navigateTo('dashboard');
 
-    Promise.all([loadNextStepsCache(), loadDismissedSteps()]).then(function() { renderDashCardSetupShop(); });
+    Promise.all([loadNextStepsCache(), loadDismissedSteps(), loadMatchingPrefs()]).then(function() { renderDashCardSetupShop(); });
     attachListeners();
     loadSettings();
   } catch (err) {
@@ -27510,6 +27533,44 @@ async function loadDismissedSteps() {
     _dismissedSteps = raw || {};
   } catch (e) { _dismissedSteps = {}; }
 }
+
+// Priority order driven by the wizard's matching question (bottleneck).
+// Step IDs listed here float to the top of the next-steps card when the user
+// picked the matching bottleneck. Other steps follow in their definition order.
+var NEXT_STEP_PRIORITY_BY_BOTTLENECK = {
+  'sales':      ['setup-website','customize-content','choose-template','social-post','setup-square'],
+  'operations': ['add-job','add-product','setup-shipping','setup-square'],
+  'inventory':  ['add-product','complete-migration','setup-shipping'],
+  'customers':  ['setup-email','social-post','setup-website'],
+  'books':      ['setup-square','setup-shipping','setup-email']
+};
+
+// Cached matching answers from engagement.matching, populated on dashboard load.
+window._matchingPrefsCache = null;
+async function loadMatchingPrefs() {
+  try {
+    var view = await MastDB.businessEntity.get('engagement');
+    var matching = (view && view.data && view.data.matching) || null;
+    window._matchingPrefsCache = matching;
+  } catch (e) { window._matchingPrefsCache = null; }
+}
+
+// Re-order a list of steps so high-priority ones (matching the user's bottleneck) come first.
+function _prioritizeNextSteps(steps) {
+  var prefs = window._matchingPrefsCache || {};
+  var bottleneck = prefs.bottleneck || null;
+  if (!bottleneck) return steps;
+  var priority = NEXT_STEP_PRIORITY_BY_BOTTLENECK[bottleneck] || [];
+  if (priority.length === 0) return steps;
+  var rankOf = {};
+  priority.forEach(function(id, i) { rankOf[id] = i; });
+  // Stable sort: priority steps first (in priority order), then the rest in original order.
+  return steps.slice().sort(function(a, b) {
+    var ra = (rankOf[a.id] !== undefined) ? rankOf[a.id] : 999;
+    var rb = (rankOf[b.id] !== undefined) ? rankOf[b.id] : 999;
+    return ra - rb;
+  });
+}
 function dismissNextStep(stepId) {
   _dismissedSteps[stepId] = true;
   MastDB.set('webPresence/config/dismissedSteps/' + stepId, true);
@@ -27532,6 +27593,8 @@ function renderDashCardSetupShop() {
 
   var todo = steps.filter(function(s) { return !s.check() && !_dismissedSteps[s.id]; });
   var done = steps.filter(function(s) { return s.check() || _dismissedSteps[s.id]; });
+  // Sort todo so steps matching the user's wizard bottleneck come first.
+  todo = _prioritizeNextSteps(todo);
 
   // If all done, hide the card
   if (todo.length === 0) {
