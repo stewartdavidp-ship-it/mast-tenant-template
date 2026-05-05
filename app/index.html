@@ -22815,6 +22815,11 @@ function _wizardLsSave(update) {
   } catch(e) {}
 }
 function _wizardApplyProgress(progress) {
+  // Step IDs were renumbered in schema v2. Old saves have no _schemaVersion or v1.
+  // Reset them to the welcome screen so the user doesn't land on a missing step.
+  if (!progress._schemaVersion || progress._schemaVersion < 2) {
+    progress = {};
+  }
   wizardProgress = progress;
   if (wizardProgress.onboardingDepth) window._wizardOnboardingDepth = wizardProgress.onboardingDepth;
   if (!window._wizardCrawlManifest && wizardProgress.crawlManifest) {
@@ -24614,7 +24619,7 @@ function wizardStep4Back() {
 }
 
 function saveWizardProgress(step, extras) {
-  var update = { currentStep: step, updatedAt: new Date().toISOString() };
+  var update = { currentStep: step, updatedAt: new Date().toISOString(), _schemaVersion: 2 };
   if (extras) Object.assign(update, extras);
   // Snapshot key in-memory wizard state so it survives back/forward navigation
   if (window._wizardEngagement) update._engagement = window._wizardEngagement;
