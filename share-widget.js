@@ -132,8 +132,15 @@
   }
   } // end initShareWidget
 
+  // Wait for TENANT_READY and (when present) STOREFRONT_DATA. STOREFRONT_DATA
+  // upgrades TENANT_BRAND.name/tagline from canonical config/brand; reading after
+  // it resolves ensures the share copy uses canonical brand values, not the
+  // pre-paint publicConfig fallback.
   if (typeof window.TENANT_READY !== 'undefined') {
-    window.TENANT_READY.then(initShareWidget).catch(function() {});
+    var sd = window.STOREFRONT_DATA && typeof window.STOREFRONT_DATA.then === 'function'
+      ? window.STOREFRONT_DATA.catch(function() { return null; })
+      : Promise.resolve(null);
+    Promise.all([window.TENANT_READY, sd]).then(initShareWidget).catch(function() {});
   } else {
     initShareWidget();
   }

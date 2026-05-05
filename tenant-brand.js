@@ -25,8 +25,14 @@
 (function() {
   if (typeof window.TENANT_READY === 'undefined') return;
 
-  // Wait for both TENANT_READY and DOM before applying brand
-  window.TENANT_READY.then(function() {
+  // Wait for both TENANT_READY and DOM before applying brand.
+  // Also await STOREFRONT_DATA so TENANT_BRAND.name/tagline have been upgraded
+  // to canonical config/brand values (storefront-tenant.js mutates in place).
+  // Falls through gracefully if STOREFRONT_DATA isn't present (e.g. legacy callers).
+  var storefrontReady = window.STOREFRONT_DATA && typeof window.STOREFRONT_DATA.then === 'function'
+    ? window.STOREFRONT_DATA.catch(function() { return null; })
+    : Promise.resolve(null);
+  Promise.all([window.TENANT_READY, storefrontReady]).then(function() {
     var brand = window.TENANT_BRAND || {};
     var config = window.TENANT_FIREBASE_CONFIG || {};
     var tenantId = window.TENANT_ID;

@@ -114,6 +114,12 @@ window.TENANT_READY = new Promise(function(resolve, reject) {
     // MastDB init. If a future change requires a logo URL before STOREFRONT_DATA resolves
     // (e.g. inline <head> hero render), keep publicConfig.brandLogoUrl populated as the platform
     // pre-paint fallback and read it here.
+    //
+    // TENANT_BRAND decision (name/tagline): canonical source is config/brand.{name,tagline}
+    // via STOREFRONT_DATA.brandName/brandTagline. publicConfig.brandName/brandTagline is kept
+    // here ONLY as a pre-paint fallback so document.title and any synchronous render that
+    // runs before STOREFRONT_DATA resolves doesn't show "My Shop". Once STOREFRONT_DATA
+    // resolves, TENANT_BRAND.name/tagline are upgraded to canonical (see block below).
     TENANT_BRAND = {
       name: publicConfig.brandName || publicConfig.name,
       tagline: publicConfig.brandTagline || '',
@@ -351,7 +357,7 @@ window.STOREFRONT_DATA = window.TENANT_READY.then(function() {
     fetchFsDoc('config/theme'),
     fetchFsDoc('config/nav'),
     fetchFsDoc('config/promoBanner'),
-    fetchFsDoc('config/brand').then(function(brand) { return brand && brand.logo ? brand.logo : null; }),
+    fetchFsDoc('config/brand'),
     fetchFsDoc('config/shopDisplay')
   ];
 
@@ -377,7 +383,10 @@ window.STOREFRONT_DATA = window.TENANT_READY.then(function() {
   }
 
   return Promise.all(fetches).then(function(results) {
-    var brandLogo = results[3];
+    var brandDoc = results[3] || null;
+    var brandLogo = brandDoc && brandDoc.logo ? brandDoc.logo : null;
+    var brandName = brandDoc && brandDoc.name ? brandDoc.name : null;
+    var brandTagline = brandDoc && typeof brandDoc.tagline === 'string' ? brandDoc.tagline : null;
     var shopDisplay = results[4];
     var pageDataResult = results[5]; // shifted by 1 due to shopDisplay insert
     var data = {
@@ -385,9 +394,22 @@ window.STOREFRONT_DATA = window.TENANT_READY.then(function() {
       nav: results[1],
       promo: results[2],
       brandLogo: brandLogo || null,
+      brandName: brandName,
+      brandTagline: brandTagline,
       shopDisplay: shopDisplay || null,
       pageData: pageDataKey ? { type: pageDataKey, data: pageDataResult } : null
     };
+
+    // Upgrade TENANT_BRAND.name/tagline to canonical config/brand values.
+    // setGlobals seeded these from publicConfig.brandName/Tagline as a pre-paint fallback;
+    // canonical wins once it's available. Mutating in place so all consumers
+    // (tenant-brand.js, schema-org.js, share-widget.js) read canonical values.
+    try {
+      if (window.TENANT_BRAND) {
+        if (brandName) window.TENANT_BRAND.name = brandName;
+        if (brandTagline !== null) window.TENANT_BRAND.tagline = brandTagline;
+      }
+    } catch (e) { /* non-fatal */ }
 
     // Cache the result
     try {
