@@ -543,6 +543,33 @@
       transition: background 0.3s;
     }
     .wizard-step-line.completed { background: var(--teal); }
+    /* Sub-step letter row: identical layout to wizard-step-dot/-line, just smaller. */
+    .wizard-letter-row {
+      display: flex; align-items: center; gap: 4px;
+      margin-bottom: 18px;
+    }
+    .wizard-letter-dot {
+      width: 26px; height: 26px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.72rem; font-weight: 700; flex-shrink: 0;
+      background: #888; color: #fff;
+      border: 2px solid #888;
+      transition: all 0.3s;
+    }
+    .wizard-letter-dot.active {
+      background: var(--teal, #2a7c6f); color: #fff;
+      border-color: var(--teal, #2a7c6f);
+    }
+    .wizard-letter-dot.completed {
+      background: var(--teal-light, #d8ebe7); color: var(--teal-deep, #1f5d54);
+      border-color: var(--teal, #2a7c6f);
+    }
+    .wizard-letter-line {
+      width: 28px; height: 2px; flex-shrink: 0;
+      background: #888;
+      transition: background 0.3s;
+    }
+    .wizard-letter-line.completed { background: var(--teal, #2a7c6f); }
     .wizard-step { animation: wizardFadeIn 0.3s ease; }
     @keyframes wizardFadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
     @keyframes wizardPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
@@ -6518,10 +6545,9 @@
         <!-- Step 2: Business Identity — 4 sub-steps (1A → 1B → 1C → 1D) -->
         <div id="wizardStep1" class="wizard-step" style="display:none;">
 
-          <!-- Sub-step progress dots (A-B-C-D) — populated by showWizardSubStep.
-               Reuses the wizardProgress flex container styling so dots/lines
-               render exactly like the main numbered bar. -->
-          <div id="wizardSubStepDots" style="display:flex;align-items:center;gap:4px;margin-bottom:18px;"></div>
+          <!-- Sub-step letter row (A-B-C-D) — populated by showWizardSubStep.
+               Same flex layout as the main numbered bar, smaller font/dot size. -->
+          <div id="wizardSubStepDots" class="wizard-letter-row"></div>
 
           <!-- Sub-step 1A: What kind of business? -->
           <div id="wizardSubStep1A">
@@ -23842,21 +23868,20 @@ function showWizardSubStep(sub) {
   var idx = subOrder.indexOf(sub);
   var trackEl = document.getElementById('wizardSubStepTrack' + sub);
   if (trackEl) trackEl.textContent = (labels[sub] || '') + ' · ' + (idx + 1) + ' of ' + subOrder.length;
-  // Render A-B-C-D sub-step dots. Reuse the wizard-step-dot class for the dots
-  // and inline-style the connector line with a hardcoded visible color, since
-  // the .wizard-step-line CSS var resolves to invisible in this DOM context.
+  // Render A-B-C-D letter row using the wizard-letter-* classes (smaller dots,
+  // fixed-width connector lines so spacing matches the numbered bar's 1—2 gap).
   var dotsEl = document.getElementById('wizardSubStepDots');
   if (dotsEl) {
     var html = '';
     for (var i = 0; i < subOrder.length; i++) {
       var letter = subOrder[i].charAt(1); // 'A','B','C','D'
-      var cls = 'wizard-step-dot';
+      var cls = 'wizard-letter-dot';
       if (i < idx) cls += ' completed';
       else if (i === idx) cls += ' active';
       html += '<div class="' + cls + '" title="' + labels[subOrder[i]] + '">' + letter + '</div>';
       if (i < subOrder.length - 1) {
-        var lineColor = (i < idx) ? '#2a7c6f' /* teal */ : '#888' /* grey */;
-        html += '<div style="flex:1;height:2px;background:' + lineColor + ';transition:background 0.3s;"></div>';
+        var lineCls = 'wizard-letter-line' + (i < idx ? ' completed' : '');
+        html += '<div class="' + lineCls + '"></div>';
       }
     }
     dotsEl.innerHTML = html;
