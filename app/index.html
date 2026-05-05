@@ -6487,7 +6487,7 @@
             </div>
             <div id="wizardAnalysisStatus" style="font-size:0.85rem;margin-bottom:16px;"></div>
             <div style="display:flex;justify-content:space-between;">
-              <button class="btn btn-secondary" onclick="showWizardStep('2')">Back</button>
+              <button class="btn btn-secondary" onclick="showWizardStep('0')">Back</button>
               <div style="display:flex;gap:8px;">
                 <button class="btn btn-secondary" id="wizardSkipSiteBtn" onclick="wizardSkipSite()" style="font-size:0.9rem;">Skip</button>
                 <button class="btn btn-primary" id="wizardAnalyzeBtn" onclick="wizardAnalyzeSite()">Analyze My Site</button>
@@ -22840,8 +22840,11 @@ function showWizardStep(step) {
   updateWizardProgress();
 
   if (stepStr === '1') {
-    // Use saved sub-step if we have one (resume from reload); otherwise start at 1A.
-    if (!_wizardBizSubStep) _wizardBizSubStep = (wizardProgress && wizardProgress._bizSubStep) || '1A';
+    // Restore the last sub-step the user was on (e.g. '1D' after they completed
+    // identity and are coming back from brand). The previous if-check never fired
+    // because the in-memory default is '1A' (truthy), so any saved state was ignored.
+    var savedSub = wizardProgress && wizardProgress._bizSubStep;
+    if (savedSub) _wizardBizSubStep = savedSub;
     renderWizardBizIdentity();
   }
   if (stepStr === '2') {
@@ -25118,7 +25121,7 @@ function wizardShowSitePathPicker(data) {
         '<div style="font-size:0.85rem;color:var(--warm-gray);">Stay on your current storefront. Mast syncs products and handles orders, inventory, and production behind the scenes.</div>' +
       '</div>' +
     '</div>' +
-    '<button class="btn btn-secondary" onclick="showWizardStep(\'2\')">&#8592; Back</button>';
+    '<button class="btn btn-secondary" onclick="wizardResetSiteStep()">&#8592; Back</button>';
 }
 
 function wizardChooseSiteIntent(intent) {
