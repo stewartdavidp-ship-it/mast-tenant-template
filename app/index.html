@@ -23842,7 +23842,9 @@ function showWizardSubStep(sub) {
   var idx = subOrder.indexOf(sub);
   var trackEl = document.getElementById('wizardSubStepTrack' + sub);
   if (trackEl) trackEl.textContent = (labels[sub] || '') + ' · ' + (idx + 1) + ' of ' + subOrder.length;
-  // Render A-B-C-D sub-step dots using the SAME classes as the main numbered bar.
+  // Render A-B-C-D sub-step dots. Reuse the wizard-step-dot class for the dots
+  // and inline-style the connector line with a hardcoded visible color, since
+  // the .wizard-step-line CSS var resolves to invisible in this DOM context.
   var dotsEl = document.getElementById('wizardSubStepDots');
   if (dotsEl) {
     var html = '';
@@ -23853,8 +23855,8 @@ function showWizardSubStep(sub) {
       else if (i === idx) cls += ' active';
       html += '<div class="' + cls + '" title="' + labels[subOrder[i]] + '">' + letter + '</div>';
       if (i < subOrder.length - 1) {
-        var lineCls = 'wizard-step-line' + (i < idx ? ' completed' : '');
-        html += '<div class="' + lineCls + '"></div>';
+        var lineColor = (i < idx) ? '#2a7c6f' /* teal */ : '#888' /* grey */;
+        html += '<div style="flex:1;height:2px;background:' + lineColor + ';transition:background 0.3s;"></div>';
       }
     }
     dotsEl.innerHTML = html;
