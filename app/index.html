@@ -6642,54 +6642,6 @@
 
         </div>
 
-        <!-- Step 2b (B2): Calibration — revenue bracket + "one thing you wish was easier" (full path only) -->
-        <!-- Step 4 (full-path): Calibration — revenue, wish statement, role, team size -->
-        <div id="wizardStep5" class="wizard-step" style="display:none;">
-          <h2 style="font-size:1.6rem;margin-bottom:8px;">A quick calibration</h2>
-          <p style="color:var(--warm-gray);margin-bottom:20px;">Helps Mast tailor recommendations. All fields are optional.</p>
-          <div class="form-group" style="margin-bottom:16px;">
-            <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Roughly, your annual revenue?</label>
-            <select id="wizardRevenueBracket" onchange="_wizardUpdateBracketProjection('wizardRevenueBracket','wizardRevenueBracketProjection')" style="width:100%;padding:10px 14px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.95rem;box-sizing:border-box;background:#fff;">
-              <option value="">— Prefer not to say —</option>
-            </select>
-            <p id="wizardRevenueBracketProjection" style="font-size:0.78rem;color:var(--warm-gray);margin:6px 0 0;line-height:1.4;">We use this to show what your monthly software subscription will look like. Mast charges 1% of net revenue, capped at $1,000/mo; free when net is under $500/mo.</p>
-          </div>
-          <div class="form-group" style="margin-bottom:16px;">
-            <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">The one thing you wish was easier?</label>
-            <textarea id="wizardWishStatement" maxlength="500" rows="3" placeholder=""
-              style="width:100%;padding:10px 14px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;box-sizing:border-box;resize:vertical;"></textarea>
-            <p id="wizardWishCount" style="font-size:0.75rem;color:var(--warm-gray);text-align:right;margin-top:4px;">0 / 500</p>
-          </div>
-          <div class="form-group" style="margin-bottom:16px;">
-            <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:6px;">Your role</label>
-            <div id="wizardRoleOptions4" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
-          </div>
-          <div class="form-group" style="margin-bottom:20px;">
-            <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:6px;">Team size</label>
-            <div id="wizardTeamSizeOptions4" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
-          </div>
-          <div style="display:flex;justify-content:space-between;align-items:center;">
-            <button class="btn btn-secondary" onclick="wizardStep5Back()">Back</button>
-            <button class="btn btn-primary" id="wizardCalibrationConfirmBtn" onclick="wizardConfirmCalibration()">Continue</button>
-          </div>
-          <div style="text-align:center;margin-top:12px;">
-            <a href="#" onclick="event.preventDefault();wizardSkipToLaunch();" style="font-size:0.82rem;color:var(--warm-gray);text-decoration:none;">Skip remaining setup &rarr;</a>
-          </div>
-        </div>
-
-        <!-- Step 5 (full-path): Module Selector -->
-        <div id="wizardStep6" class="wizard-step" style="display:none;">
-          <h2 style="font-size:1.6rem;margin-bottom:8px;">Which areas of Mast will you use?</h2>
-          <p style="color:var(--warm-gray);margin-bottom:20px;">We've pre-selected based on your business type. Adjust to match.</p>
-          <div id="wizardModuleGrid" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:24px;"></div>
-          <div style="display:flex;justify-content:space-between;align-items:center;">
-            <button class="btn btn-secondary" onclick="showWizardStep('5')">Back</button>
-            <button class="btn btn-primary" id="wizardModulesConfirmBtn" onclick="wizardConfirmModuleSelector()">Continue</button>
-          </div>
-          <div style="text-align:center;margin-top:12px;">
-            <a href="#" onclick="event.preventDefault();wizardSkipToLaunch();" style="font-size:0.82rem;color:var(--warm-gray);text-decoration:none;">Skip remaining setup &rarr;</a>
-          </div>
-        </div>
 
         <!-- Step 6 (full-path): Integrations -->
         <div id="wizardStep7" class="wizard-step" style="display:none;">
@@ -6700,7 +6652,7 @@
           <div id="wizardIntegrationCards" style="margin-bottom:24px;"></div>
           <div id="wizardCredentialEntryPane" style="display:none;margin-bottom:24px;"></div>
           <div id="wizardStep7NavButtons" style="display:flex;justify-content:space-between;align-items:center;">
-            <button class="btn btn-secondary" onclick="showWizardStep('6')">Back</button>
+            <button class="btn btn-secondary" onclick="wizardStep7Back()">Back</button>
             <button class="btn btn-primary" onclick="wizardStep7Continue()">Continue</button>
           </div>
           <div id="wizardStep7SkipLink" style="text-align:center;margin-top:12px;">
@@ -22755,7 +22707,7 @@ var _wizardSelectedModules = []; // module selections for step 2
 // Like step 1's 1A-1D, sub-steps share the parent dot and use a letter row inside the pane.
 // '4b' is intentionally excluded from the main order so it doesn't get its own progress dot.
 var _wizardStepOrder = ['0','1','2','3','4','fastDpa'];
-var _wizardStepOrderFull = ['0','1','2','3','4','5','6','7','8','9','fastDpa'];
+var _wizardStepOrderFull = ['0','1','2','3','4','7','8','9','fastDpa'];
 
 function _wizardGetStepOrder() {
   return (window._wizardOnboardingDepth === 'full') ? _wizardStepOrderFull : _wizardStepOrder;
@@ -22827,14 +22779,12 @@ var _WIZARD_CONFIRM_BTN_IDS = [
   'wizardBrandConfirmBtn',         // step 2
   'wizardEngagementConfirmBtn',    // step 4
   'wizardFeaturePagesConfirmBtn',  // step 4b
-  'wizardCalibrationConfirmBtn',   // step 5
-  'wizardModulesConfirmBtn',       // step 6
   'wizardSettingsConfirmBtn',      // step 8
   'wizardAnalyzeBtn',              // step 3 analyze
   'wizardMigrateBtn8'              // step 9 import
 ];
 
-// showWizardStep accepts string step IDs: '0','1','2','3','4','4b','5','6','7','8','9','fastDpa'
+// showWizardStep accepts string step IDs: '0','1','2','3','4','4b','7','8','9','fastDpa'
 function showWizardStep(step) {
   var stepStr = String(step);
   wizardCurrentStep = stepStr;
@@ -22856,9 +22806,6 @@ function showWizardStep(step) {
   if (show) show.style.display = '';
   updateWizardProgress();
 
-  if (stepStr === '5') {
-    if (typeof renderWizardCalibration === 'function') renderWizardCalibration();
-  }
   if (stepStr === '1') {
     // Use saved sub-step if we have one (resume from reload); otherwise start at 1A.
     if (!_wizardBizSubStep) _wizardBizSubStep = (wizardProgress && wizardProgress._bizSubStep) || '1A';
@@ -22906,13 +22853,6 @@ function showWizardStep(step) {
     }
     renderWizardFeaturePages();
     _renderEngagementLetterRow('B');
-  }
-  if (stepStr === '6') {
-    if ((!_wizardSelectedModulesStep5 || _wizardSelectedModulesStep5.length === 0) &&
-        wizardProgress && wizardProgress._modulesDraft) {
-      _wizardSelectedModulesStep5 = wizardProgress._modulesDraft.slice();
-    }
-    renderWizardModuleSelector();
   }
   if (stepStr === '7') {
     if (wizardProgress && wizardProgress._intDraft && Object.keys(_wizardIntegrationState).length === 0) {
@@ -23196,8 +23136,9 @@ async function wizardConfirmEngagement() {
     || (BEC.DEFAULT_SURFACE_BY_MODE && BEC.DEFAULT_SURFACE_BY_MODE[mode])
     || 'hybrid';
   var goals = (state.goals || []).slice();
-  var defaults = window._wizardArchetypeDefaults || MastDB.businessEntity.archetypeDefaults('other-maker') || {};
-  var modulesShown = (defaults.modulesShown || []).slice();
+  // Show ALL modules by default — better discoverability than asking users to pick
+  // before they know what's available. They can hide modules later in Settings.
+  var modulesShown = ['products','sales','marketing','retention','events','classes','finance','operations','customer-service'];
 
   var btn = document.getElementById('wizardEngagementConfirmBtn');
   if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
@@ -23242,12 +23183,12 @@ async function wizardConfirmEngagement() {
     var depth = window._wizardOnboardingDepth || 'quick';
     var nextStep;
     if (mode === 'storefront') {
-      nextStep = (depth === 'full') ? '5' : 'fastDpa';
+      nextStep = (depth === 'full') ? '7' : 'fastDpa';
     } else {
       nextStep = '4b';
     }
     showWizardStep(nextStep);
-    saveWizardProgress(nextStep, { engagementConfirmed: { mode: mode, surface: surface, goalsCount: goals.length } });
+    saveWizardProgress(nextStep, { engagementConfirmed: { mode: mode, surface: surface } });
   } catch (err) {
     if (btn) { btn.disabled = false; btn.textContent = 'Continue'; }
     showToast('Could not save engagement: ' + esc(err.message || ''), true);
@@ -24029,9 +23970,9 @@ async function wizardConfirmFeaturePages() {
     logWizardEvent('4b', 'feature_pages_confirmed', {
       mode: mode, selectedPages: selected, count: selected.length
     });
-    // Full path continues to step 5 (calibration); quick path goes to fastDpa.
+    // Full path continues to step 7 (integrations); quick path goes to fastDpa.
     var depth = window._wizardOnboardingDepth || 'quick';
-    var nextStep = depth === 'full' ? '5' : 'fastDpa';
+    var nextStep = depth === 'full' ? '7' : 'fastDpa';
     showWizardStep(nextStep);
     saveWizardProgress(nextStep, { featurePagesConfirmed: true, featurePages: selected });
   } catch (err) {
@@ -24335,6 +24276,17 @@ function _wizardSkipTool(toolId) {
 function wizardStep7Continue() {
   showWizardStep('8');
   saveWizardProgress('8', { integrationsStepDone: true });
+}
+
+// Step 7 (integrations) Back: route to dot 4 — 4B for non-storefront, 4 (4A) for storefront.
+// Steps 5 and 6 (calibration + module selector) were removed, so 4 is the immediate prior dot.
+function wizardStep7Back() {
+  var eng = window._wizardEngagement || (typeof wizardProgress !== 'undefined' && wizardProgress && wizardProgress._engagement) || {};
+  if (eng.mode && eng.mode !== 'storefront') {
+    showWizardStep('4b');
+  } else {
+    showWizardStep('4');
+  }
 }
 
 // ---- Step 7: Settings Spotlight ----
