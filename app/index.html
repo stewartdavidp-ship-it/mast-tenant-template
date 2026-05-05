@@ -22888,6 +22888,25 @@ function showWizardStep(step) {
     var brandTaglineEl = document.getElementById('wizardBrandTagline');
     if (brandNameEl && !brandNameEl.value) brandNameEl.value = extracted.businessName || (wizardProgress && wizardProgress.businessName) || '';
     if (brandTaglineEl && !brandTaglineEl.value) brandTaglineEl.value = extracted.tagline || (wizardProgress && wizardProgress.tagline) || '';
+    // Restore previously-uploaded logo preview from config/brand.logoUrl.
+    // File inputs can't be programmatically refilled, so show the saved logo as a thumbnail
+    // with text indicating an upload would replace it.
+    (function() {
+      var nameEl = document.getElementById('wizardLogoFileName');
+      var wrapEl = document.getElementById('wizardLogoPreviewWrap');
+      var previewEl = document.getElementById('wizardLogoPreviewImg');
+      if (!wrapEl || !previewEl) return;
+      // Skip if user has already picked a new file in this session
+      var input = document.getElementById('wizardBrandLogo');
+      if (input && input.files && input.files[0]) return;
+      MastDB.config.get('brand').then(function(brand) {
+        var url = brand && brand.logoUrl;
+        if (!url) return;
+        previewEl.src = url;
+        wrapEl.style.display = '';
+        if (nameEl) nameEl.textContent = 'Current logo (upload to replace)';
+      }).catch(function(){});
+    })();
   }
   if (stepStr === '4') {
     if (typeof renderWizardEngagement === 'function') {
@@ -24840,9 +24859,19 @@ async function wizardConfirmDepth() {
   saveWizardProgress('1', { onboardingDepth: depth });
 }
 
-// Step 3 back — go to site URL step if they went through it, otherwise brand step
+// Step 4 back — always go to step 3 (the previous step in every path).
+// Clear the intent + engagement so the user can re-pick migrate/integrate;
+// the persisted crawl manifest stays, so step 3 re-shows the picker without re-analyzing.
 function wizardStep4Back() {
-  showWizardStep(window._wizardHasWebsite ? '3' : '2');
+  window._wizardSiteIntent = null;
+  if (typeof MastDB !== 'undefined' && MastDB.config) {
+    MastDB.config.set('setupProgress/siteIntent', null).catch(function(){});
+  }
+  if (wizardProgress) wizardProgress.siteIntent = null;
+  try { _wizardLsSave({ siteIntent: null, _schemaVersion: 2, updatedAt: new Date().toISOString() }); } catch(e) {}
+  window._wizardEngagement = null;
+  window._wizardUnlockMode = false;
+  showWizardStep('3');
 }
 
 // Snapshot a single field of in-progress wizard state without changing currentStep.
