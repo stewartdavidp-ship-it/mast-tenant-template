@@ -2157,8 +2157,10 @@
     STYLE_DEFS.forEach(function(s) {
       if (s.id === styleId) websiteConfig.fontPair = s.font;
     });
+    // Style ID still lives under webPresence/config/style (consumed elsewhere in builder).
+    // Font pair routes through MastBrandSync to the canonical public/config/theme.fontPair.
     await MastDB.set('webPresence/config/style', styleId);
-    await MastDB.set('webPresence/config/fontPair', websiteConfig.fontPair);
+    if (window.MastBrandSync) await window.MastBrandSync.setFontPair(websiteConfig.fontPair);
     markUnpublished();
     renderWebsite();
   };
@@ -2166,14 +2168,19 @@
   window.wpUpdateColor = function(field, value) {
     websiteConfig[field] = value;
     debounce('color-' + field, function() {
-      MastDB.set('webPresence/config/' + field, value);
+      // Single writer — MastBrandSync writes canonical public/config/theme + mirrors.
+      if (window.MastBrandSync) {
+        var update = {};
+        update[field] = value;
+        window.MastBrandSync.setColors(update);
+      }
       markUnpublished();
     }, 400);
   };
 
   window.wpUpdateFont = function(value) {
     websiteConfig.fontPair = value;
-    MastDB.set('webPresence/config/fontPair', value);
+    if (window.MastBrandSync) window.MastBrandSync.setFontPair(value);
     markUnpublished();
   };
 
@@ -2368,8 +2375,10 @@
   };
 
   window.wpApplyColors = function(primary, accent) {
-    if (primary) { websiteConfig.primaryColor = primary; MastDB.set('webPresence/config/primaryColor', primary); }
-    if (accent) { websiteConfig.accentColor = accent; MastDB.set('webPresence/config/accentColor', accent); }
+    var update = {};
+    if (primary) { websiteConfig.primaryColor = primary; update.primaryColor = primary; }
+    if (accent)  { websiteConfig.accentColor  = accent;  update.accentColor  = accent; }
+    if (Object.keys(update).length && window.MastBrandSync) window.MastBrandSync.setColors(update);
     markUnpublished();
     showToast('Colors applied!');
   };

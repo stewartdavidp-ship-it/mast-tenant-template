@@ -385,9 +385,17 @@
       };
 
       if (targetType === 'primary') {
-        config.uploadedAt = new Date().toISOString();
-        await MastDB.set('config/brand/logo/primary', config);
-        await MastDB.set('public/config/nav/logoUrl', uploadResult.url);
+        // Single writer — MastBrandSync.setLogo writes canonical config/brand/logo/primary
+        // PLUS fans out to all legacy mirror paths (public/config/nav/logoUrl,
+        // platform publicConfig.brandLogoUrl, etc.).
+        if (window.MastBrandSync && typeof window.MastBrandSync.setLogo === 'function') {
+          await window.MastBrandSync.setLogo(config);
+        } else {
+          // Fallback for stale loads where brand-sync.js hasn't loaded
+          config.uploadedAt = new Date().toISOString();
+          await MastDB.set('config/brand/logo/primary', config);
+          await MastDB.set('public/config/nav/logoUrl', uploadResult.url);
+        }
       } else {
         config.generatedFrom = 'manual';
         config.createdAt = new Date().toISOString();
@@ -419,9 +427,13 @@
           };
 
           if (targetType === 'primary') {
-            config.uploadedAt = new Date().toISOString();
-            await MastDB.set('config/brand/logo/primary', config);
-            await MastDB.set('public/config/nav/logoUrl', url);
+            if (window.MastBrandSync && typeof window.MastBrandSync.setLogo === 'function') {
+              await window.MastBrandSync.setLogo(config);
+            } else {
+              config.uploadedAt = new Date().toISOString();
+              await MastDB.set('config/brand/logo/primary', config);
+              await MastDB.set('public/config/nav/logoUrl', url);
+            }
           } else {
             config.generatedFrom = 'manual';
             config.createdAt = new Date().toISOString();

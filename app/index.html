@@ -21,6 +21,7 @@
   <script src="../shared/mastdb.js?v=5"></script>
   <script src="../shared/business-entity-constants.js?v=3"></script>
   <script src="../shared/customer-resolver.js?v=1"></script>
+  <script src="../shared/brand-sync.js?v=1"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="../storefront-tenant.js?v=1773887711"></script>
@@ -23573,16 +23574,13 @@ async function wizardConfirmBrand() {
   if (btn) btn.disabled = true;
 
   try {
-    // Write to identity + config/brand
-    await MastDB.businessEntity.update('identity', { businessName: businessName });
-    await MastDB.config.update('brand', {
-      name: businessName,
-      tagline: tagline || null,
-      updatedAt: new Date().toISOString()
-    }).catch(function() {});
+    // All brand writes go through MastBrandSync — single writer, fans out to
+    // every legacy mirror path (storefront nav, newsletter, platform, etc.).
+    await MastBrandSync.setName(businessName);
+    await MastBrandSync.setTagline(tagline);
 
-    // Logo upload (best-effort, non-blocking). Writes to ALL the places the
-    // storefront + Brand module read from so the user's choice actually appears.
+    // Logo upload (best-effort, non-blocking). Sync helper writes the canonical
+    // Brand-module structure AND mirrors to all legacy paths in one call.
     if (logoEl && logoEl.files && logoEl.files[0]) {
       (function(file) {
         try {
@@ -23592,26 +23590,9 @@ async function wizardConfirmBrand() {
           storageRef.put(file).then(function(snapshot) {
             return snapshot.ref.getDownloadURL();
           }).then(function(url) {
-            // Legacy admin-side refs
-            MastDB.config.update('brand', { logoUrl: url }).catch(function() {});
-            MastDB.businessEntity.update('identity', { logoUrl: url }).catch(function() {});
-            // Legacy public-facing storefront refs
-            MastDB.set('public/config/nav/logoUrl', url).catch(function() {});
-            try {
-              MastDB.platform.update('mast-platform/tenants/' + MastDB.tenantId() + '/publicConfig', {
-                brandLogoUrl: url
-              }).catch(function() {});
-            } catch (e) {}
-            // New Brand module structure — populates the "Primary" slot in the
-            // Brand & Logo tab so it doesn't show NOT CONFIGURED.
-            MastDB.set('config/brand/logo/primary', {
-              url: url,
-              storagePath: storagePath,
-              format: fmt,
-              hasTransparency: false,
-              dimensions: null,
-              uploadedAt: new Date().toISOString()
-            }).catch(function() {});
+            MastBrandSync.setLogo({ url: url, storagePath: storagePath, format: fmt }).catch(function(e) {
+              console.warn('[Wizard] BrandSync.setLogo failed:', e && e.message);
+            });
             // Mark as user-set so applyStorefrontConfig/_applyPlatformRegistry skip overwriting.
             window._wizardUserSetLogo = true;
           }).catch(function(e) { console.warn('[Wizard] Logo upload failed:', e && e.message); });
