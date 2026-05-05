@@ -22897,24 +22897,19 @@ function showWizardStep(step) {
     renderWizardSettingsSpotlight();
   }
   if (stepStr === '3') {
-    // If the user already analyzed and chose an intent, don't make them re-run it.
-    // Restore the picker (no re-crawl) or skip the step entirely.
-    var savedIntent = (wizardProgress && wizardProgress.siteIntent) || window._wizardSiteIntent;
+    // Don't auto-skip forward when the user has already analyzed/chosen — that
+    // creates an infinite redirect loop with Back from dot 2 (identity → site →
+    // auto-skip back to identity). _wizardApplyProgress already restores the
+    // correct currentStep on reload, so step 3 is only reached by explicit nav.
+    // Show the picker (no re-crawl) when a manifest exists; show the URL form otherwise.
     var savedManifest = window._wizardCrawlManifest || (wizardProgress && wizardProgress.crawlManifest);
     var siteAnalyzed = !!(wizardProgress && (wizardProgress.siteAnalyzed || wizardProgress.analyzedUrl)) || !!window._wizardAnalyzedUrl;
     var urlForm3 = document.getElementById('wizardStep3UrlForm');
     var picker3 = document.getElementById('wizardSitePathPicker');
-    if (savedIntent && (savedManifest || siteAnalyzed)) {
-      // Already chose migrate/integrate — skip past step 3 (next is identity in new flow)
-      showWizardStep('1');
-      return;
-    }
-    if ((savedManifest || siteAnalyzed) && !savedIntent && typeof wizardShowSitePathPicker === 'function') {
-      // Crawled but didn't pick — re-show picker without re-running analyze
+    if ((savedManifest || siteAnalyzed) && typeof wizardShowSitePathPicker === 'function') {
       if (savedManifest) window._wizardCrawlManifest = savedManifest;
       wizardShowSitePathPicker({ crawlManifest: savedManifest || {} });
     } else {
-      // Fresh entry — make sure URL form is visible and picker is hidden
       if (urlForm3) urlForm3.style.display = '';
       if (picker3) { picker3.style.display = 'none'; picker3.innerHTML = ''; }
     }
