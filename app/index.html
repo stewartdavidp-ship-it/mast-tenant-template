@@ -543,6 +543,35 @@
       transition: background 0.3s;
     }
     .wizard-step-line.completed { background: var(--teal); }
+    /* Sub-step dot row (A-B-C-D within a parent step) */
+    .wizard-substep-row {
+      display: flex; align-items: center; gap: 4px;
+      margin-bottom: 18px;
+    }
+    .wizard-substep-dot {
+      width: 22px; height: 22px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.68rem; font-weight: 700; flex-shrink: 0;
+      background: var(--cream-dark, #f0e9d6); color: var(--warm-gray);
+      border: 2px solid var(--cream-dark, #f0e9d6);
+      transition: all 0.3s;
+    }
+    .wizard-substep-dot.active {
+      background: var(--teal); color: white; border-color: var(--teal);
+    }
+    .wizard-substep-dot.completed {
+      background: var(--teal-light, #d8ebe7); color: var(--teal-deep, #1f5d54); border-color: var(--teal);
+    }
+    .wizard-substep-line {
+      flex: 1; height: 2px; background: var(--cream-dark, #f0e9d6);
+      transition: background 0.3s; max-width: 28px;
+    }
+    .wizard-substep-line.completed { background: var(--teal); }
+    body.dark-mode .wizard-substep-dot { background: #333; color: #999; border-color: #444; }
+    body.dark-mode .wizard-substep-dot.active { background: var(--teal); color: white; border-color: var(--teal); }
+    body.dark-mode .wizard-substep-dot.completed { background: #1a3a34; color: var(--teal-light); border-color: var(--teal); }
+    body.dark-mode .wizard-substep-line { background: #444; }
+    body.dark-mode .wizard-substep-line.completed { background: var(--teal); }
     .wizard-step { animation: wizardFadeIn 0.3s ease; }
     @keyframes wizardFadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
     @keyframes wizardPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
@@ -6517,6 +6546,9 @@
 
         <!-- Step 2: Business Identity — 4 sub-steps (1A → 1B → 1C → 1D) -->
         <div id="wizardStep1" class="wizard-step" style="display:none;">
+
+          <!-- Sub-step progress dots (A-B-C-D) — populated by showWizardSubStep -->
+          <div id="wizardSubStepDots" class="wizard-substep-row"></div>
 
           <!-- Sub-step 1A: What kind of business? -->
           <div id="wizardSubStep1A">
@@ -22882,6 +22914,9 @@ function showWizardStep(step) {
     renderWizardBizIdentity();
   }
   if (stepStr === '2') {
+    // Re-enable Continue (it gets disabled on submit; persists on back-nav).
+    var brandBtn = document.getElementById('wizardBrandConfirmBtn');
+    if (brandBtn) brandBtn.disabled = false;
     // Restore brand fields from saved extracted data or wizard progress
     var extracted = window._wizardExtracted || {};
     var brandNameEl = document.getElementById('wizardBrandName');
@@ -23809,6 +23844,23 @@ function showWizardSubStep(sub) {
   var idx = subOrder.indexOf(sub);
   var trackEl = document.getElementById('wizardSubStepTrack' + sub);
   if (trackEl) trackEl.textContent = (labels[sub] || '') + ' · ' + (idx + 1) + ' of ' + subOrder.length;
+  // Render A-B-C-D sub-step dots
+  var dotsEl = document.getElementById('wizardSubStepDots');
+  if (dotsEl) {
+    var html = '';
+    for (var i = 0; i < subOrder.length; i++) {
+      var letter = subOrder[i].charAt(1); // 'A','B','C','D'
+      var cls = 'wizard-substep-dot';
+      if (i < idx) cls += ' completed';
+      else if (i === idx) cls += ' active';
+      html += '<div class="' + cls + '" title="' + labels[subOrder[i]] + '">' + letter + '</div>';
+      if (i < subOrder.length - 1) {
+        var lineCls = 'wizard-substep-line' + (i < idx ? ' completed' : '');
+        html += '<div class="' + lineCls + '"></div>';
+      }
+    }
+    dotsEl.innerHTML = html;
+  }
 }
 
 function wizardBizNext1A() {
