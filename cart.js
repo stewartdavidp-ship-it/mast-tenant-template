@@ -911,14 +911,46 @@
 
     if (footerEl) footerEl.style.display = '';
 
+    // B2: upfront payments guard. If publicConfig.acceptsPayments === false the
+    // tenant cannot accept online orders (e.g. Stripe Connect not finished).
+    // Render a banner at the top of the drawer body and disable Checkout. The
+    // flag defaults to true (window.TENANT_ACCEPTS_PAYMENTS undefined or true)
+    // so existing tenants are unaffected; checkout.js still has the post-submit
+    // guard as a safety net.
+    var paymentsDown = (window.TENANT_ACCEPTS_PAYMENTS === false);
+
     // Show/hide checkout button
     var checkoutBtn = document.getElementById('cartCheckoutBtn');
     if (checkoutBtn) {
       checkoutBtn.style.display = cart.length > 0 ? '' : 'none';
+      if (paymentsDown) {
+        checkoutBtn.disabled = true;
+        checkoutBtn.textContent = 'Payments Unavailable';
+        checkoutBtn.style.opacity = '0.6';
+        checkoutBtn.style.cursor = 'not-allowed';
+      } else {
+        checkoutBtn.disabled = false;
+        checkoutBtn.textContent = 'Checkout';
+        checkoutBtn.style.opacity = '';
+        checkoutBtn.style.cursor = '';
+      }
     }
 
     // Build items HTML
     var html = '';
+
+    // B2: upfront banner when tenant cannot accept online orders.
+    if (paymentsDown) {
+      html +=
+        '<div role="alert" style="' +
+          'margin:12px;padding:12px 14px;border-radius:6px;' +
+          'background:rgba(220,80,80,0.08);border:1px solid rgba(220,80,80,0.35);' +
+          'color:var(--text,#2a2a2a);font-family:DM Sans,sans-serif;font-size:0.85rem;' +
+          'line-height:1.4;">' +
+          '<strong style="display:block;margin-bottom:4px;">This shop is not accepting online orders</strong>' +
+          'You can still browse and review your cart, but checkout is unavailable. Please contact the seller directly to place an order.' +
+        '</div>';
+    }
     for (var i = 0; i < cart.length; i++) {
       var item = cart[i];
       var optionsHtml = '';
