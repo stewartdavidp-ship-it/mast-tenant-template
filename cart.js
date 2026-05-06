@@ -652,6 +652,72 @@
   // Email-link completion handler. Runs once on page load when Firebase is
   // ready. If the URL is a sign-in link, complete the auth; on success,
   // strip the OOB params from the URL so reload doesn't re-trigger.
+  // Styled prompt/alert helper — matches the sign-in modal aesthetic so the
+  // cross-device email entry and failure-message dialogs respect dark mode.
+  // (Native window.prompt / window.alert are OS-level and ignore site theme.)
+  // Returns a Promise resolving to the input value, or null on cancel/dismiss.
+  // For alert-style use, pass noCancel:true and skip the input option.
+  function showAuthDialog(opts) {
+    opts = opts || {};
+    return new Promise(function (resolve) {
+      // If a previous dialog is open, dismiss it first.
+      var existing = document.getElementById('mast-auth-dialog');
+      if (existing && existing.parentNode) existing.parentNode.removeChild(existing);
+      var overlay = document.createElement('div');
+      overlay.id = 'mast-auth-dialog';
+      overlay.setAttribute('role', 'dialog');
+      overlay.setAttribute('aria-modal', 'true');
+      if (opts.title) overlay.setAttribute('aria-label', opts.title);
+      overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9999;display:flex;align-items:center;justify-content:center;padding:1rem;';
+      var inputHtml = '';
+      if (opts.input) {
+        var inputType = opts.input === 'email' ? 'email' : 'text';
+        var ph = (opts.inputPlaceholder || '').replace(/[<>&"]/g, '');
+        inputHtml = '<input id="mast-auth-dialog-input" type="' + inputType + '" autocomplete="email" placeholder="' + ph + '" style="display:block;width:100%;padding:0.6rem 0.75rem;border:1px solid var(--border,#ccc);border-radius:8px;font-size:1rem;margin-bottom:0.75rem;background:var(--bg,#fff);color:var(--text,#222);box-sizing:border-box;">';
+      }
+      var msg = (opts.message || '').replace(/[<>&]/g, function (c) { return ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' })[c]; });
+      var title = (opts.title || '').replace(/[<>&]/g, function (c) { return ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' })[c]; });
+      var cancelHtml = opts.noCancel ? '' :
+        '<button id="mast-auth-dialog-cancel" type="button" style="flex:1;padding:0.6rem;background:transparent;border:1px solid var(--border,#ccc);border-radius:8px;font-size:0.95rem;cursor:pointer;color:inherit;">Cancel</button>';
+      overlay.innerHTML = '' +
+        '<div style="background:var(--bg,#fff);color:var(--text,#222);max-width:380px;width:100%;border-radius:12px;padding:1.5rem 1.5rem 1.25rem;box-shadow:0 10px 40px rgba(0,0,0,0.3);">' +
+          (title ? '<h3 style="margin:0 0 0.5rem;font-size:1.1rem;">' + title + '</h3>' : '') +
+          (msg ? '<p style="margin:0 0 0.75rem;font-size:0.9rem;opacity:0.85;">' + msg + '</p>' : '') +
+          inputHtml +
+          '<div style="display:flex;gap:0.5rem;">' +
+            cancelHtml +
+            '<button id="mast-auth-dialog-confirm" type="button" style="flex:1;padding:0.6rem;background:var(--primary,#2563eb);color:#fff;border:none;border-radius:8px;font-size:0.95rem;cursor:pointer;">' + ((opts.confirmLabel || 'OK').replace(/[<>&]/g, '')) + '</button>' +
+          '</div>' +
+        '</div>';
+      document.body.appendChild(overlay);
+      var inputEl = document.getElementById('mast-auth-dialog-input');
+      var confirmBtn = document.getElementById('mast-auth-dialog-confirm');
+      var cancelBtn = document.getElementById('mast-auth-dialog-cancel');
+      function close(result) {
+        if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+        resolve(result);
+      }
+      function submit() {
+        var v = inputEl ? (inputEl.value || '').trim() : '';
+        close(inputEl ? (v || null) : true);
+      }
+      confirmBtn.addEventListener('click', submit);
+      if (cancelBtn) cancelBtn.addEventListener('click', function () { close(null); });
+      overlay.addEventListener('click', function (e) {
+        if (e.target === overlay && !opts.noCancel) close(null);
+      });
+      if (inputEl) {
+        inputEl.addEventListener('keydown', function (e) {
+          if (e.key === 'Enter') { e.preventDefault(); submit(); }
+          if (e.key === 'Escape' && !opts.noCancel) { e.preventDefault(); close(null); }
+        });
+        setTimeout(function () { try { inputEl.focus(); } catch (e) { /* ignore */ } }, 0);
+      } else {
+        setTimeout(function () { try { confirmBtn.focus(); } catch (e) { /* ignore */ } }, 0);
+      }
+    });
+  }
+
   function completeEmailLinkSignInIfPresent() {
     if (!fireAuth || typeof firebase === 'undefined' || !firebase.auth) return;
     try {
@@ -661,31 +727,43 @@
     }
     var email = null;
     try { email = window.localStorage.getItem(SIGNIN_EMAIL_KEY); } catch (e) { /* ignore */ }
-    if (!email) {
-      // Cross-device: link clicked on a different browser than where the
-      // email was entered. Standard Firebase pattern is to prompt.
-      email = window.prompt('Enter the email address you used to sign in:');
-      if (!email) return;
+
+    function proceed(emailValue) {
+      fireAuth.signInWithEmailLink(emailValue, window.location.href).then(function () {
+        try { window.localStorage.removeItem(SIGNIN_EMAIL_KEY); } catch (e) { /* ignore */ }
+        // Strip OOB params so refresh doesn't re-trigger.
+        try {
+          var url = new URL(window.location.href);
+          ['oobCode', 'mode', 'apiKey', 'lang', 'tenantId', 'continueUrl', 'completeSignIn'].forEach(function (k) {
+            url.searchParams.delete(k);
+          });
+          window.history.replaceState({}, document.title, url.pathname + (url.search || '') + url.hash);
+        } catch (e) { /* ignore */ }
+      }).catch(function (err) {
+        console.warn('Email-link sign-in failed:', err && err.code, err && err.message);
+        var msg = (err && err.code === 'auth/expired-action-code')
+          ? 'That sign-in link has expired. Please request a new one.'
+          : 'Sign-in failed. The link may be invalid or already used. Please request a new one.';
+        showAuthDialog({ title: 'Sign-in failed', message: msg, confirmLabel: 'OK', noCancel: true });
+      });
     }
-    fireAuth.signInWithEmailLink(email, window.location.href).then(function () {
-      try { window.localStorage.removeItem(SIGNIN_EMAIL_KEY); } catch (e) { /* ignore */ }
-      // Strip OOB params so refresh doesn't re-trigger.
-      try {
-        var url = new URL(window.location.href);
-        ['oobCode', 'mode', 'apiKey', 'lang', 'tenantId', 'continueUrl', 'completeSignIn'].forEach(function (k) {
-          url.searchParams.delete(k);
-        });
-        window.history.replaceState({}, document.title, url.pathname + (url.search || '') + url.hash);
-      } catch (e) { /* ignore */ }
-    }).catch(function (err) {
-      console.warn('Email-link sign-in failed:', err && err.code, err && err.message);
-      // Surface a minimal alert so the customer knows; common cause is an
-      // expired link (auth/expired-action-code) — they can request a new one.
-      var msg = (err && err.code === 'auth/expired-action-code')
-        ? 'That sign-in link has expired. Please request a new one.'
-        : 'Sign-in failed. The link may be invalid or already used. Please request a new one.';
-      try { window.alert(msg); } catch (e) { /* ignore */ }
-    });
+
+    if (email) {
+      proceed(email);
+    } else {
+      // Cross-device: link clicked on a different browser/profile than where
+      // the email was entered. Prompt for it via the styled dialog (dark-mode
+      // compliant, unlike window.prompt).
+      showAuthDialog({
+        title: 'Almost there',
+        message: 'Enter the email address you used to sign in:',
+        input: 'email',
+        inputPlaceholder: 'you@example.com',
+        confirmLabel: 'Sign in'
+      }).then(function (entered) {
+        if (entered) proceed(entered);
+      });
+    }
   }
 
   function signOut() {
