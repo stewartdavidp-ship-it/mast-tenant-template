@@ -25540,6 +25540,19 @@ async function _applyPlatformRegistry(extracted) {
 async function applyStorefrontConfig(extracted, detectedModules) {
   var errors = [];
   var templateMapping = STYLE_TO_TEMPLATE[extracted.styleRecommendation] || STYLE_TO_TEMPLATE['artisan-warm'];
+
+  // Read canonical brand fields. `_applyBrandPointer` runs before this function
+  // and preserves any user-set name/tagline (only filling them when blank). The
+  // canonical config/brand is therefore the source of truth for the hero
+  // headline + site title — NOT the raw scan output `extracted.businessName`,
+  // which can be a generic page <title> like "Example Domain" when the user
+  // is just exploring with a placeholder URL. Fall back to scan output only
+  // when the canonical field is empty.
+  var canonicalBrand = await MastDB.config.get('brand').catch(function() { return null; });
+  var canonicalName = (canonicalBrand && canonicalBrand.name) || extracted.businessName || '';
+  var canonicalTagline = (canonicalBrand && canonicalBrand.tagline) || extracted.tagline || '';
+  var canonicalDescription = (canonicalBrand && canonicalBrand.description) || extracted.oneLineDescription || '';
+
   // Non-brand theme fields (templateId, colorSchemeId) — direct write.
   var themeUpdate = {
     templateId: templateMapping.templateId,
@@ -25596,15 +25609,15 @@ async function applyStorefrontConfig(extracted, detectedModules) {
     accentColor: extracted.accentColor,
     fontPair: templateMapping.fontPair,
     sections: {
-      hero: { headline: extracted.businessName, subheadline: extracted.tagline, ctaText: 'Shop Now', ctaUrl: '', backgroundType: 'color', backgroundAsset: '', overlayOpacity: 40 },
+      hero: { headline: canonicalName, subheadline: canonicalTagline, ctaText: 'Shop Now', ctaUrl: '', backgroundType: 'color', backgroundAsset: '', overlayOpacity: 40 },
       gallery: { enabled: true, heading: 'Our Work', layout: 'grid', columns: 3 },
-      about: { enabled: true, heading: 'About', body: extracted.oneLineDescription, imageUrl: '' },
+      about: { enabled: true, heading: 'About', body: canonicalDescription, imageUrl: '' },
       contact: { enabled: true, heading: 'Contact', email: '', phone: '', address: '', showForm: true, socialLinks: {} },
       newsletter: { enabled: false, heading: 'Stay in touch', subheadline: '', buttonLabel: 'Subscribe' },
       members: { enabled: false, accessModel: 'passcode', passcode: '', allowedEmails: [], gatedContent: '' }
     },
     nav: { items: ['Work', 'About', 'Contact'], showShopLink: hasSell, shopUrl: '' },
-    meta: { siteTitle: extracted.businessName, tagline: extracted.tagline, favicon: '' },
+    meta: { siteTitle: canonicalName, tagline: canonicalTagline, favicon: '' },
     status: 'draft',
     publishedAt: null,
     updatedAt: new Date().toISOString()
