@@ -55,6 +55,13 @@
   var _cartWholesaleFreeThreshold = 35000; // cents; loaded from config
 
   function initFirebase() {
+    // Guard against pages that load cart.js without the Firebase compat SDK
+    // (e.g. early during page rewrites). Cart still functions in localStorage-only
+    // mode; auth-aware nav and Firestore-backed cart features just stay off.
+    if (typeof firebase === 'undefined') {
+      console.warn('[cart] Firebase SDK not loaded; running in offline cart mode.');
+      return;
+    }
     try {
       fireApp = firebase.app(); // use default app — shared auth state
     } catch (e) {
