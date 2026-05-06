@@ -70,6 +70,10 @@
     if (firebase.auth) {
       fireAuth = fireApp.auth();
       fireAuth.onAuthStateChanged(onAuthChanged);
+      // If the current URL is a Firebase email-link sign-in callback, complete
+      // it now. Runs before any other auth gating — this is the customer
+      // returning from clicking the link in their email.
+      completeEmailLinkSignInIfPresent();
     }
     // Re-sync auth UI when dynamic nav is built (may arrive after onAuthStateChanged)
     window.addEventListener('storefront-nav-ready', function () {
@@ -527,13 +531,160 @@
     }
   }
 
+  // ── Sign-in modal ──
+  // Customer sign-in offers email-link (magic link) as primary, Google as
+  // secondary. Magic link works for any email — Apple, Yahoo, Gmail, custom
+  // domain — and skips the password-reset support burden. Google stays for
+  // customers who prefer one-click. Admin sign-in is unchanged (admin pages
+  // still call signInWithPopup directly).
+  var SIGNIN_EMAIL_KEY = 'mast_signin_email';
+
+  function signInWithGoogle() {
+    if (!fireAuth) return Promise.reject(new Error('auth-unavailable'));
+    var provider = new firebase.auth.GoogleAuthProvider();
+    return fireAuth.signInWithPopup(provider).catch(function (err) {
+      if (err.code !== 'auth/popup-closed-by-user') {
+        console.warn('Google sign-in error:', err.message);
+      }
+      throw err;
+    });
+  }
+
+  function sendEmailLink(email) {
+    if (!fireAuth) return Promise.reject(new Error('auth-unavailable'));
+    // The action URL is where the customer lands after clicking the email
+    // link. Firebase routes through its own /__/auth/action handler first,
+    // which redirects here. Both Firebase's domain and this storefront
+    // domain are in authorizedDomains (provisioning pipeline ensures
+    // {sub}.runmast.com; BYO custom domains via manageDomain).
+    var actionCodeSettings = {
+      url: window.location.origin + '/?completeSignIn=1',
+      handleCodeInApp: true
+    };
+    return fireAuth.sendSignInLinkToEmail(email, actionCodeSettings).then(function () {
+      try { window.localStorage.setItem(SIGNIN_EMAIL_KEY, email); } catch (e) { /* private browsing */ }
+    });
+  }
+
+  function isValidEmail(s) {
+    return typeof s === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s.trim());
+  }
+
+  function showSignInModal() {
+    if (document.getElementById('mast-signin-modal')) return; // already open
+    var overlay = document.createElement('div');
+    overlay.id = 'mast-signin-modal';
+    overlay.setAttribute('role', 'dialog');
+    overlay.setAttribute('aria-modal', 'true');
+    overlay.setAttribute('aria-label', 'Sign in');
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9999;display:flex;align-items:center;justify-content:center;padding:1rem;';
+    overlay.innerHTML = '' +
+      '<div style="background:var(--bg,#fff);color:var(--text,#222);max-width:380px;width:100%;border-radius:12px;padding:1.5rem 1.5rem 1.25rem;box-shadow:0 10px 40px rgba(0,0,0,0.3);">' +
+        '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.75rem;">' +
+          '<h3 style="margin:0;font-size:1.15rem;">Sign in</h3>' +
+          '<button id="mast-signin-close" type="button" aria-label="Close" style="background:none;border:none;font-size:1.5rem;line-height:1;cursor:pointer;color:inherit;padding:0 0.25rem;">×</button>' +
+        '</div>' +
+        '<div id="mast-signin-body">' +
+          '<p style="margin:0 0 0.75rem;font-size:0.9rem;opacity:0.85;">We\'ll email you a sign-in link. No password to remember.</p>' +
+          '<form id="mast-signin-form" novalidate>' +
+            '<input id="mast-signin-email" type="email" autocomplete="email" required placeholder="you@example.com" style="display:block;width:100%;padding:0.6rem 0.75rem;border:1px solid var(--border,#ccc);border-radius:8px;font-size:1rem;margin-bottom:0.5rem;background:var(--bg,#fff);color:var(--text,#222);box-sizing:border-box;">' +
+            '<div id="mast-signin-error" style="color:#c33;font-size:0.85rem;min-height:1.2em;margin-bottom:0.5rem;" aria-live="polite"></div>' +
+            '<button id="mast-signin-submit" type="submit" style="width:100%;padding:0.65rem;background:var(--primary,#2563eb);color:#fff;border:none;border-radius:8px;font-size:1rem;cursor:pointer;">Send sign-in link</button>' +
+          '</form>' +
+          '<div style="text-align:center;margin:1rem 0 0.5rem;font-size:0.85rem;opacity:0.6;">or</div>' +
+          '<button id="mast-signin-google" type="button" style="width:100%;padding:0.6rem;background:transparent;border:1px solid var(--border,#ccc);border-radius:8px;font-size:0.95rem;cursor:pointer;color:inherit;">Sign in with Google</button>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(overlay);
+
+    function close() {
+      var el = document.getElementById('mast-signin-modal');
+      if (el && el.parentNode) el.parentNode.removeChild(el);
+    }
+    overlay.addEventListener('click', function (e) {
+      if (e.target === overlay) close();
+    });
+    document.getElementById('mast-signin-close').addEventListener('click', close);
+
+    var form = document.getElementById('mast-signin-form');
+    var emailInput = document.getElementById('mast-signin-email');
+    var errorEl = document.getElementById('mast-signin-error');
+    var submitBtn = document.getElementById('mast-signin-submit');
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      errorEl.textContent = '';
+      var email = (emailInput.value || '').trim();
+      if (!isValidEmail(email)) {
+        errorEl.textContent = 'Please enter a valid email address.';
+        return;
+      }
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Sending...';
+      sendEmailLink(email).then(function () {
+        var body = document.getElementById('mast-signin-body');
+        body.innerHTML = '' +
+          '<p style="margin:0 0 0.5rem;font-size:1rem;font-weight:600;">Check your email</p>' +
+          '<p style="margin:0 0 1rem;font-size:0.9rem;opacity:0.85;">We sent a sign-in link to <strong>' + email.replace(/[<>&]/g, '') + '</strong>. Click the link to finish signing in. (Check your spam folder if you don\'t see it.)</p>' +
+          '<button type="button" id="mast-signin-done" style="width:100%;padding:0.6rem;background:transparent;border:1px solid var(--border,#ccc);border-radius:8px;cursor:pointer;color:inherit;">Done</button>';
+        document.getElementById('mast-signin-done').addEventListener('click', close);
+      }).catch(function (err) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Send sign-in link';
+        var msg = (err && err.code === 'auth/invalid-email')
+          ? 'That email address looks invalid. Please try again.'
+          : 'Couldn\'t send the link. Please try again or use Google sign-in.';
+        errorEl.textContent = msg;
+      });
+    });
+
+    document.getElementById('mast-signin-google').addEventListener('click', function () {
+      signInWithGoogle().then(close).catch(function () { /* error logged inside */ });
+    });
+
+    setTimeout(function () { try { emailInput.focus(); } catch (e) { /* ignore */ } }, 0);
+  }
+
   function signIn() {
     if (!fireAuth) return;
-    var provider = new firebase.auth.GoogleAuthProvider();
-    fireAuth.signInWithPopup(provider).catch(function (err) {
-      if (err.code !== 'auth/popup-closed-by-user') {
-        console.warn('Sign-in error:', err.message);
-      }
+    showSignInModal();
+  }
+
+  // Email-link completion handler. Runs once on page load when Firebase is
+  // ready. If the URL is a sign-in link, complete the auth; on success,
+  // strip the OOB params from the URL so reload doesn't re-trigger.
+  function completeEmailLinkSignInIfPresent() {
+    if (!fireAuth || typeof firebase === 'undefined' || !firebase.auth) return;
+    try {
+      if (!fireAuth.isSignInWithEmailLink(window.location.href)) return;
+    } catch (e) {
+      return;
+    }
+    var email = null;
+    try { email = window.localStorage.getItem(SIGNIN_EMAIL_KEY); } catch (e) { /* ignore */ }
+    if (!email) {
+      // Cross-device: link clicked on a different browser than where the
+      // email was entered. Standard Firebase pattern is to prompt.
+      email = window.prompt('Enter the email address you used to sign in:');
+      if (!email) return;
+    }
+    fireAuth.signInWithEmailLink(email, window.location.href).then(function () {
+      try { window.localStorage.removeItem(SIGNIN_EMAIL_KEY); } catch (e) { /* ignore */ }
+      // Strip OOB params so refresh doesn't re-trigger.
+      try {
+        var url = new URL(window.location.href);
+        ['oobCode', 'mode', 'apiKey', 'lang', 'tenantId', 'continueUrl', 'completeSignIn'].forEach(function (k) {
+          url.searchParams.delete(k);
+        });
+        window.history.replaceState({}, document.title, url.pathname + (url.search || '') + url.hash);
+      } catch (e) { /* ignore */ }
+    }).catch(function (err) {
+      console.warn('Email-link sign-in failed:', err && err.code, err && err.message);
+      // Surface a minimal alert so the customer knows; common cause is an
+      // expired link (auth/expired-action-code) — they can request a new one.
+      var msg = (err && err.code === 'auth/expired-action-code')
+        ? 'That sign-in link has expired. Please request a new one.'
+        : 'Sign-in failed. The link may be invalid or already used. Please request a new one.';
+      try { window.alert(msg); } catch (e) { /* ignore */ }
     });
   }
 
