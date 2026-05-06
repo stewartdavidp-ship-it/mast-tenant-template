@@ -138,9 +138,9 @@ window.TENANT_READY = new Promise(function(resolve, reject) {
     // B2: expose payments-accepting flag for cart/checkout upfront guard.
     // Default to true when absent so existing tenants (no flag set yet) keep
     // current behavior — the post-submit guard in checkout.js still catches
-    // the unrecoverable case via response.reason. When the backend Stripe
-    // Connect callback starts writing publicConfig.acceptsPayments, storefronts
-    // gate the cart/checkout up front instead of after a wasted submit.
+    // the unrecoverable case via response.reason. The flag is maintained by
+    // the secretsManager Cloud Function (mast-architecture/functions/) on
+    // stripe/square save + disconnect via stripe-accepts-payments helper.
     window.TENANT_ACCEPTS_PAYMENTS = (publicConfig.acceptsPayments !== false);
 
     // Block search engines unless tenant has explicitly opted in
