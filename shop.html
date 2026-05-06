@@ -745,17 +745,20 @@ window.TENANT_READY.then(function() {
     }).catch(function() {});
 
     // Load categories, products, sales, and wallet config in parallel
+    // Defensive: tolerate tenants where seeds (categories, products) haven't run yet.
+    // Each read swallows its own permission/empty error so the storefront renders an
+    // intentional empty state rather than getting stuck on "Loading products...".
     var gcConfigPromise = MastDB.get('public/config/walletConfig').catch(function() { return null; });
 
-    MastDB.get('public/config/categories').then(function(catData) {
+    MastDB.get('public/config/categories').catch(function() { return null; }).then(function(catData) {
       if (catData && Array.isArray(catData)) {
         SHOP_CATS = catData.filter(function(c) { return c && c.id && c.id !== 'shop' && c.label; });
       }
       SHOP_IDS = SHOP_CATS.map(function(c) { return c.id; });
-      // Load products, sales, and gift card config in parallel
+      // Load products, sales, and gift card config in parallel — each tolerant of failures.
       return Promise.all([
-        MastDB.get('public/products'),
-        MastDB.get('public/sales-promotions'),
+        MastDB.get('public/products').catch(function() { return null; }),
+        MastDB.get('public/sales-promotions').catch(function() { return null; }),
         gcConfigPromise
       ]);
     }).then(function(results) {
@@ -764,7 +767,14 @@ window.TENANT_READY.then(function() {
       var data = results[0];
       var salesData = results[1];
       buildSaleLookup(salesData);
-      if (!data) return;
+      if (!data) {
+        // No products yet (unseeded tenant or empty catalog) — render empty state, not a stuck spinner.
+        var emptyContainer = document.getElementById('shopContainer');
+        if (emptyContainer) {
+          emptyContainer.innerHTML = '<p style="text-align:center;color:var(--warm-gray);padding:3rem;">This shop is being set up &mdash; check back soon.</p>';
+        }
+        return;
+      }
       allShopItems = Object.values(data)
         .filter(function(p) {
           // Keep discontinued products (portfolio visibility), hide non-discontinued sold items
@@ -838,8 +848,13 @@ window.TENANT_READY.then(function() {
         MastSchema.inject(MastSchema.productList(allShopItems, 'Shop'));
       }
     }).catch(function(err) {
-      console.error('Shop load error:', err);
-      document.getElementById('shopContainer').innerHTML = '<p style="text-align:center;color:var(--warm-gray);padding:3rem;">Unable to load products.</p>';
+      // Last-resort empty state. Don't propagate Firestore "permission denied" / unseeded
+      // tenant errors as console errors — treat as "not yet seeded" gracefully.
+      var msg = err && err.message ? err.message : '';
+      var benign = /permission|insufficient|not.?found|missing/i.test(msg);
+      if (!benign) console.error('Shop load error:', err);
+      var c = document.getElementById('shopContainer');
+      if (c) c.innerHTML = '<p style="text-align:center;color:var(--warm-gray);padding:3rem;">This shop is being set up &mdash; check back soon.</p>';
     });
   })();
 
