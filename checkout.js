@@ -2110,18 +2110,18 @@
         window.location.href = result.checkoutUrl;
       } else {
         // B2: detect unrecoverable payment-setup failures (e.g. tenant has not
-        // completed Stripe Connect onboarding). The CF currently returns the
-        // generic "Payment setup failed. Please try again." for this case
-        // — no specific reason flag — so we treat any payment-setup error as
-        // unrecoverable for the customer: retrying will hit the same wall.
-        // (FOLLOW-UP: surface a `reason: "stripe_not_connected"` or similar
-        // flag from submitOrder in mast-architecture/functions/tenant-functions.js
-        // so we can distinguish transient errors from a missing payments setup.)
+        // completed Stripe Connect onboarding). Newer CF versions of submitOrder
+        // emit a structured `reason` field (stripe_not_connected | card_declined
+        // | payment_processor_error). We treat stripe_not_connected as
+        // unrecoverable. The string-match on "Payment setup failed" is kept as
+        // a fallback for older CF versions that haven't been redeployed yet.
         var rawErr = result && result.error ? String(result.error) : '';
+        var rsn = (result && result.reason) ? String(result.reason) : '';
         var isPaymentSetupError = /payment setup failed/i.test(rawErr);
-        var unrecoverable = isPaymentSetupError ||
-          (result && (result.reason === 'stripe_not_connected' ||
-                      result.reason === 'payment_processor_not_configured'));
+        var unrecoverable =
+          rsn === 'stripe_not_connected' ||
+          rsn === 'payment_processor_not_configured' ||
+          (isPaymentSetupError && rsn !== 'card_declined');
 
         if (unrecoverable) {
           paymentSetupBlocked = true;
@@ -3043,6 +3043,20 @@
   // ── Public API ──
   window.MastCheckout = {
     start: function () {
+      // B2: upfront payments guard — if tenant can't accept online orders,
+      // bail out with a toast instead of opening the checkout flow. The cart
+      // drawer's Checkout button is already disabled in this state, so this
+      // is belt-and-suspenders for any other callers of MastCheckout.start().
+      if (window.TENANT_ACCEPTS_PAYMENTS === false) {
+        paymentSetupBlocked = true;
+        if (window.MastCart && window.MastCart.showToast) {
+          window.MastCart.showToast(
+            "This store isn't accepting online orders right now. Please contact the seller directly.",
+            true
+          );
+        }
+        return;
+      }
       attachDelegate();
       trackCheckoutEvent('checkout_start');
       // Load wallet instruments for authenticated user

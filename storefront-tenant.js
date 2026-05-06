@@ -135,6 +135,14 @@ window.TENANT_READY = new Promise(function(resolve, reject) {
     // Client-side key, restricted by HTTP referrer (*.web.app, *.runmast.com)
     window.MAST_GOOGLE_MAPS_KEY = publicConfig.googleMapsApiKey || 'AIzaSyBVvmq3xHDnSHFY8KrypURwwYC4Th69P3U';
 
+    // B2: expose payments-accepting flag for cart/checkout upfront guard.
+    // Default to true when absent so existing tenants (no flag set yet) keep
+    // current behavior — the post-submit guard in checkout.js still catches
+    // the unrecoverable case via response.reason. When the backend Stripe
+    // Connect callback starts writing publicConfig.acceptsPayments, storefronts
+    // gate the cart/checkout up front instead of after a wasted submit.
+    window.TENANT_ACCEPTS_PAYMENTS = (publicConfig.acceptsPayments !== false);
+
     // Block search engines unless tenant has explicitly opted in
     if (!publicConfig.searchable) {
       var meta = document.createElement('meta');
