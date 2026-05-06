@@ -11878,9 +11878,16 @@ function getModuleForRoute(route) {
 
 // Can the tenant access a route based on subscription?
 // Special case: inventory is accessible if Make OR Sell is active.
+// Special case: orders/commissions/rma are always readable — orders can exist
+// regardless of module enablement (e.g., legacy data, payment-failed test
+// orders, historical orders after a downgrade). Hiding the list strands real
+// data. Module gating still applies to create-order flows inside POS.
 function canAccessRoute(route) {
   if (route === 'inventory') {
     return hasModule('make') || hasModule('sell');
+  }
+  if (route === 'orders' || route === 'commissions' || route === 'rma') {
+    return true;
   }
   var moduleId = getModuleForRoute(route);
   if (!moduleId) return true; // Manage/Dashboard routes always accessible
