@@ -48,12 +48,13 @@
   var placesApiKey = null;
 
   // ── Shipping defaults ──
+  // Rates are integer cents (Phase C). $6 = 600, $10 = 1000, etc.
   var DEFAULT_SHIPPING_CONFIG = {
-    small:     { rate: 6,  boxL: 6,  boxW: 6,  boxH: 6 },
-    medium:    { rate: 10, boxL: 10, boxW: 8,  boxH: 6 },
-    large:     { rate: 15, boxL: 14, boxW: 12, boxH: 8 },
-    oversized: { rate: 22, boxL: 20, boxW: 16, boxH: 12 },
-    additionalItemSurcharge: 2,
+    small:     { rate: 600,  boxL: 6,  boxW: 6,  boxH: 6 },
+    medium:    { rate: 1000, boxL: 10, boxW: 8,  boxH: 6 },
+    large:     { rate: 1500, boxL: 14, boxW: 12, boxH: 8 },
+    oversized: { rate: 2200, boxL: 20, boxW: 16, boxH: 12 },
+    additionalItemSurcharge: 200,
     freeThreshold: null,
     packingBufferOz: 8
   };
