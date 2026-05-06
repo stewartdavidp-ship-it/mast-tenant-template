@@ -192,7 +192,7 @@
     // Update footer logo and gate logos — read order:
     //   1. public/config/brand/logo/footer.url    (placement-specific, public mirror)
     //   2. config/brand/logo/primary.url          (canonical)
-    //   3. public/config/nav/logoUrl              (legacy mirror — transitional, remove after all tenants migrated)
+    // Phase 4: legacy public/config/nav/logoUrl fallback removed; canonical is sole source.
     var tid = window.TENANT_ID;
     if (tid && typeof firebase !== 'undefined' && firebase.apps && firebase.apps.length > 0 && firebase.firestore) {
       // Ensure MastDB is initialized — tenant-brand.js may run before host page inits it.
@@ -221,32 +221,19 @@
         }).catch(function() { return null; });
       };
 
-      var readLegacyNavLogo = function() {
-        // Legacy mirror — kept until all tenants migrate. Remove with mirror cleanup phase.
-        return MastDB.get('public/config/nav/logoUrl').then(function(u) {
-          return u || null;
-        }).catch(function() { return null; });
-      };
-
       MastDB.get('public/config/brand/logo/footer').then(function(brandFooter) {
         if (brandFooter && brandFooter.url) {
           applyFooterLogo(brandFooter.url, brandFooter.maxHeight);
           return;
         }
-        // No placement-specific footer — try canonical primary, then legacy mirror.
+        // No placement-specific footer — fall back to canonical primary.
         readPrimaryLogo().then(function(primaryUrl) {
-          if (primaryUrl) { applyFooterLogo(primaryUrl, null); return; }
-          readLegacyNavLogo().then(function(legacyUrl) {
-            applyFooterLogo(legacyUrl, null);
-          });
+          applyFooterLogo(primaryUrl, null);
         });
       }).catch(function() {
-        // public/config/brand/logo/footer read failed — try canonical, then legacy.
+        // public/config/brand/logo/footer read failed — fall back to canonical primary.
         readPrimaryLogo().then(function(primaryUrl) {
-          if (primaryUrl) { applyFooterLogo(primaryUrl, null); return; }
-          readLegacyNavLogo().then(function(legacyUrl) {
-            applyFooterLogo(legacyUrl, null);
-          });
+          applyFooterLogo(primaryUrl, null);
         });
       });
 

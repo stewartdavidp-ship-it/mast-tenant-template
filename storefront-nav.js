@@ -151,12 +151,10 @@
     var homepage = isHomepage();
     var showSignIn = (config && config.showSignIn === false) ? false : true;
     // Logo source — canonical: config/brand/logo/primary.url (delivered via STOREFRONT_DATA.brandLogo.primary).
-    // Legacy mirror public/config/nav.logoUrl (= config.logoUrl) kept as transitional fallback while
-    // tenants are migrated; remove once brand-sync.js drops the mirror write.
+    // Phase 4: legacy public/config/nav.logoUrl (= config.logoUrl) fallback removed; canonical is sole source.
     var brandLogoData = window.__navBrandLogo || null;
     var canonicalLogo = (brandLogoData && brandLogoData.primary && brandLogoData.primary.url) || '';
-    var legacyLogo = (config && config.logoUrl) || '';
-    var rawLogo = canonicalLogo || legacyLogo || '';
+    var rawLogo = canonicalLogo || '';
     var logoUrl = (rawLogo && (rawLogo.indexOf('https://') === 0 || rawLogo.indexOf('/') === 0 || rawLogo.indexOf('../') === 0)) ? rawLogo : (basePath + 'favicon.svg');
     var brandName = (window.TENANT_BRAND && window.TENANT_BRAND.name) || 'My Shop';
 
@@ -443,13 +441,13 @@
     var heroLogoEl = document.getElementById('heroLogo');
     if (!heroLogoEl) return; // Not on homepage
 
-    // Try brand logo system for hero placement first, then fall back to canonical primary,
-    // then legacy public/config/nav.logoUrl mirror as a last resort.
+    // Try brand logo system for hero placement first, then fall back to canonical primary.
+    // Phase 4: legacy public/config/nav.logoUrl fallback removed.
     var heroUrl = (brandLogo && brandLogo.hero && brandLogo.hero.url) || null;
     var heroMaxHeight = (brandLogo && brandLogo.hero && brandLogo.hero.maxHeight) || null;
     var primaryUrl = (brandLogo && brandLogo.primary && brandLogo.primary.url) || null;
 
-    var rawLogo = heroUrl || primaryUrl || (config && config.logoUrl) || '';
+    var rawLogo = heroUrl || primaryUrl || '';
     if (!rawLogo) return; // No logo configured
 
     var basePath = getBasePath();
