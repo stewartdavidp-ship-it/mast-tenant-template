@@ -373,10 +373,8 @@
     showToast('Saving...');
 
     try {
-      // URL-paste path: store the source URL directly. No re-host through the
-      // uploadImage Cloud Function — that path was returning 401 because the
-      // admin's ID token does not always carry the _tenantId claim that
-      // verifyAdmin requires, and re-hosting a URL the user already trusts
+      // URL-paste path stores the source URL directly. No re-host through the
+      // uploadImage Cloud Function — re-hosting a URL the user already trusts
       // adds no value. The image stays at the source URL the user pasted.
       var formatMatch = url.match(/\.([a-z0-9]+)(?:\?|$)/i);
       var config = {
