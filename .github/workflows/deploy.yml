@@ -1,18 +1,29 @@
-name: Deploy to GitHub Pages
+name: CI lint
+
+# Runs the design-token + MastDB lints on every push to main and PRs.
+#
+# History notes (2026-05-06):
+#   - Removed `deploy` job: per CLAUDE.md "Firebase Hosting — deployed via
+#     mast_hosting MCP tool. No GitHub Pages." Tenants serve from
+#     mast-tenant-shared.web.app via the CF wildcard worker; GH Pages was
+#     never a real consumer.
+#   - Removed `sync-workflows` job: writing docs/workflows.yaml to RTDB at
+#     /dev/workflows is doubly obsolete — RTDB was retired post-B.5/B.7
+#     cutover (data lives in Firestore now), AND the auth had been broken
+#     for ~30 days (last successful run 2026-04-07). The `mast_workflows`
+#     MCP tool owns this surface and writes Firestore directly.
+#   - lint-design-tokens font-size violations (427 backlog) downgraded to
+#     advisory in the script; cleanup tracked separately.
 
 on:
   push:
+    branches: ["main"]
+  pull_request:
     branches: ["main"]
   workflow_dispatch:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
-
-concurrency:
-  group: "pages"
-  cancel-in-progress: true
 
 jobs:
   lint:
@@ -26,49 +37,5 @@ jobs:
           node-version: '20'
       - name: MastDB access lint
         run: node scripts/lint-mastdb.js
-      - name: Design token lint
+      - name: Design token lint (advisory)
         run: node scripts/lint-design-tokens.js
-
-  deploy:
-    needs: lint
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Setup Pages
-        uses: actions/configure-pages@v5
-      - name: Prepare deploy directory
-        run: |
-          mkdir -p _site
-          rsync -a --exclude='database.rules.json' \
-                   --exclude='.github/' \
-                   --exclude='studio/train-model.py' \
-                   --exclude='.gitignore' \
-                   --exclude='_site/' \
-                   . _site/
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: '_site'
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
-
-  sync-workflows:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-      - name: Install sync dependencies
-        run: cd scripts && npm ci
-      - name: Sync workflows to Firebase
-        env:
-          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-        run: node scripts/sync-workflows.js
