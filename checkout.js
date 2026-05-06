@@ -2624,7 +2624,8 @@
 
   function injectPlacesScript(callback) {
     var script = document.createElement('script');
-    script.src = 'https://maps.googleapis.com/maps/api/js?key=' + placesApiKey + '&libraries=places&callback=__mastPlacesReady';
+    script.src = 'https://maps.googleapis.com/maps/api/js?key=' + placesApiKey + '&libraries=places&loading=async&callback=__mastPlacesReady';
+    script.async = true;
     window.__mastPlacesReady = function () {
       placesLoaded = true;
       callback();
