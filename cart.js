@@ -426,6 +426,19 @@
     return 'users/' + currentUser.uid + '/cart';
   }
 
+  // Fields that must NOT be persisted to Firebase. cartItemId is the Firebase
+  // key (stored as the property name on `data`), so it's redundant inside the
+  // value. _metaOverrides is a transient input-only field accepted by addItem.
+  // Everything else on the cart line is persisted so that on re-sign-in the
+  // restored cart faithfully matches what the user added — including sale
+  // pricing (salePriceCents/originalPrice), wholesale tier (isWholesale),
+  // class/pass booking metadata (bookingType/sessionId/classId/
+  // passDefinitionId/passId/totalSessions), personalization, and order-engine
+  // metadata. Persisting the whole line via spread (rather than an explicit
+  // whitelist) avoids silent field-drop bugs whenever new line fields are
+  // introduced in addItem.
+  var SYNC_DENYLIST = { cartItemId: 1, _metaOverrides: 1 };
+
   function syncToFirebase() {
     var path = cartPath();
     if (!path) return;
@@ -433,16 +446,17 @@
     var data = {};
     for (var i = 0; i < cart.length; i++) {
       var item = cart[i];
-      var syncItem = {
-        pid: item.pid,
-        name: item.name,
-        priceCents: item.priceCents || 0,
-        image: item.image || '',
-        options: item.options || {},
-        qty: item.qty,
-        addedAt: item.addedAt || Date.now()
-      };
-      if (item.variantId) syncItem.variantId = item.variantId;
+      var syncItem = {};
+      for (var k in item) {
+        if (Object.prototype.hasOwnProperty.call(item, k) && !SYNC_DENYLIST[k]) {
+          syncItem[k] = item[k];
+        }
+      }
+      // Defensive defaults for fields the merge/restore path expects to find.
+      if (typeof syncItem.priceCents !== 'number') syncItem.priceCents = item.priceCents || 0;
+      if (!syncItem.image) syncItem.image = item.image || '';
+      if (!syncItem.options) syncItem.options = item.options || {};
+      if (!syncItem.addedAt) syncItem.addedAt = item.addedAt || Date.now();
       data[item.cartItemId] = syncItem;
     }
     MastDB.set(path, data).catch(function (err) {
