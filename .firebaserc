@@ -1,0 +1,16 @@
+{
+  "projects": {},
+  "targets": {
+    "mast-platform-prod": {
+      "hosting": {
+        "dev": [
+          "mast-dev-env"
+        ],
+        "shared": [
+          "mast-tenant-shared"
+        ]
+      }
+    }
+  },
+  "etags": {}
+}

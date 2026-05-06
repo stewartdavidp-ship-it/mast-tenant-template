@@ -32,3 +32,6 @@ __pycache__/
 
 # Storage assets (live in Firebase Storage, not git)
 wholesale-images/
+
+# Downloaded repo tarballs (duplicates of this repo)
+stewartdavidp-ship-it-mast-tenant-template-*/
