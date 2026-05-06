@@ -1267,8 +1267,17 @@ window.TENANT_READY.then(function() {
 <!-- Auth (siteSignIn/siteSignOut/ensureCustomerAccount) handled by cart.js -->
 <script>
 window.TENANT_READY.then(function() {
-  // Page-specific: show welcome message when signed in
-  var auth = firebase.app('public-shop').auth();
+  // Page-specific: show welcome message when signed in.
+  // Use the default Firebase app (initialized earlier in this page and by cart.js).
+  // The previous `firebase.app('public-shop')` call referenced a named app that was
+  // never created, throwing "No Firebase App 'public-shop' has been created" on every load.
+  var app;
+  try { app = firebase.app(); }
+  catch (e) {
+    try { app = firebase.initializeApp(window.TENANT_FIREBASE_CONFIG); }
+    catch (e2) { return; }
+  }
+  var auth = app.auth();
   auth.onAuthStateChanged(function(user) {
     var welcome = document.getElementById('shopWelcome');
     if (user && !user.isAnonymous) {
@@ -1281,7 +1290,7 @@ window.TENANT_READY.then(function() {
       if (welcome) welcome.style.display = 'none';
     }
   });
-}).catch(function(err) { console.error('[shop] Auth welcome failed:', err.message); });
+}).catch(function(err) { console.error('[shop] Auth welcome failed:', err && err.message); });
 </script>
 <script defer src="feedback-widget.js"></script>
 <script defer src="share-widget.js"></script>
