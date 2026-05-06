@@ -370,18 +370,21 @@
     if (!url) { showToast('Please enter an image URL', true); return; }
 
     closeModal();
-    showToast('Uploading...');
+    showToast('Saving...');
 
     try {
-      var uploadResult = await uploadImageToStorage(url);
-      if (!uploadResult || !uploadResult.url) throw new Error('Upload failed');
-
+      // URL-paste path: store the source URL directly. No re-host through the
+      // uploadImage Cloud Function — that path was returning 401 because the
+      // admin's ID token does not always carry the _tenantId claim that
+      // verifyAdmin requires, and re-hosting a URL the user already trusts
+      // adds no value. The image stays at the source URL the user pasted.
+      var formatMatch = url.match(/\.([a-z0-9]+)(?:\?|$)/i);
       var config = {
-        url: uploadResult.url,
-        storagePath: uploadResult.storagePath || '',
-        format: uploadResult.format || 'png',
+        url: url,
+        storagePath: '',
+        format: formatMatch ? formatMatch[1].toLowerCase() : 'png',
         hasTransparency: false,
-        dimensions: uploadResult.dimensions || null
+        dimensions: null
       };
 
       if (targetType === 'primary') {
@@ -454,35 +457,6 @@
       brandUploadLogoPrompt(targetType);
     }
   };
-
-  // ─── Storage Upload Helper ───
-
-  async function uploadImageToStorage(url) {
-    var user = firebase.auth().currentUser;
-    if (!user) throw new Error('Not authenticated');
-    var idToken = await user.getIdToken();
-    var cfBase = 'https://us-central1-' + (TENANT_CONFIG && TENANT_CONFIG.gcpProject || 'mast-platform-prod') + '.cloudfunctions.net';
-    var resp = await fetch(cfBase + '/uploadImage', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + idToken },
-      body: JSON.stringify({ image: await fetchImageAsBase64(url), tags: ['logo'], source: 'brand-upload' })
-    });
-    if (!resp.ok) throw new Error('Upload returned ' + resp.status);
-    var result = await resp.json();
-    return { url: result.url, storagePath: result.storagePath || '', format: 'jpg', dimensions: result.dimensions || null };
-  }
-
-  async function fetchImageAsBase64(url) {
-    var resp = await fetch(url);
-    if (!resp.ok) throw new Error('Failed to fetch image');
-    var blob = await resp.blob();
-    return new Promise(function(resolve, reject) {
-      var reader = new FileReader();
-      reader.onload = function() { resolve(reader.result.split(',')[1]); };
-      reader.onerror = reject;
-      reader.readAsDataURL(blob);
-    });
-  }
 
   // ─── Placement Resolution ───
 
