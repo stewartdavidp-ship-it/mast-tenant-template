@@ -40,6 +40,7 @@
   var shippingConfigCache = null; // cached flat-rate config
   var breakdownTimer = null;      // debounce timer for engine calls
   var isSubmitting = false;
+  var paymentSetupBlocked = false; // B2: set when submitOrder fails on payment setup; prevents retry loop
   var walletLoadedResolve = null;
   var walletLoadedPromise = new Promise(function(resolve) { walletLoadedResolve = resolve; });
   var walletLoadPending = 5;       // credits, gift cards, loyalty, passes, membership
@@ -1970,6 +1971,15 @@
   // ── Place Order ──
   function placeOrder() {
     if (isSubmitting) return;
+    // B2: once we've hit an unrecoverable payment-setup error this session,
+    // don't submit again — the customer would just loop on the same wall.
+    if (paymentSetupBlocked) {
+      window.MastCart.showToast(
+        "This store isn't accepting online orders right now. Please contact the seller directly.",
+        true
+      );
+      return;
+    }
 
     // Check if this is a pay-by-check wholesale order
     var hasWholesale = window.MastCart.hasWholesaleItems && window.MastCart.hasWholesaleItems();
@@ -2099,11 +2109,37 @@
         // Redirect to payment processor's hosted checkout (Square or Stripe)
         window.location.href = result.checkoutUrl;
       } else {
-        if (btn) {
-          btn.disabled = false;
-          btn.textContent = 'Proceed to Payment';
+        // B2: detect unrecoverable payment-setup failures (e.g. tenant has not
+        // completed Stripe Connect onboarding). The CF currently returns the
+        // generic "Payment setup failed. Please try again." for this case
+        // — no specific reason flag — so we treat any payment-setup error as
+        // unrecoverable for the customer: retrying will hit the same wall.
+        // (FOLLOW-UP: surface a `reason: "stripe_not_connected"` or similar
+        // flag from submitOrder in mast-architecture/functions/tenant-functions.js
+        // so we can distinguish transient errors from a missing payments setup.)
+        var rawErr = result && result.error ? String(result.error) : '';
+        var isPaymentSetupError = /payment setup failed/i.test(rawErr);
+        var unrecoverable = isPaymentSetupError ||
+          (result && (result.reason === 'stripe_not_connected' ||
+                      result.reason === 'payment_processor_not_configured'));
+
+        if (unrecoverable) {
+          paymentSetupBlocked = true;
+          if (btn) {
+            btn.disabled = true;
+            btn.textContent = 'Payments Unavailable';
+          }
+          window.MastCart.showToast(
+            "This store isn't accepting online orders right now. Please contact the seller directly.",
+            true
+          );
+        } else {
+          if (btn) {
+            btn.disabled = false;
+            btn.textContent = 'Proceed to Payment';
+          }
+          window.MastCart.showToast(rawErr || 'Order failed. Please try again.');
         }
-        window.MastCart.showToast(result && result.error ? result.error : 'Order failed. Please try again.');
       }
     });
   }
