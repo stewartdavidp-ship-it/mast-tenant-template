@@ -97,14 +97,14 @@
       // Diff-review modal (opens when user clicks Review)
       '.capture-modal-backdrop { position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9000;display:flex;align-items:center;justify-content:center;padding:20px; }',
       '.capture-modal { background:var(--bg-primary,#1a1a1a);border:1px solid rgba(255,255,255,0.1);border-radius:14px;max-width:720px;width:100%;max-height:85vh;overflow:auto;padding:24px;color:var(--text,#fff);box-shadow:0 20px 60px rgba(0,0,0,0.5); }',
-      '.capture-modal h2 { margin:0 0 4px 0;font-size:1.2rem;display:flex;align-items:center;gap:8px; }',
-      '.capture-modal .modal-sub { font-size:0.82rem;color:var(--warm-gray,#888);margin-bottom:16px; }',
-      '.capture-modal .modal-escape { margin-bottom:16px;padding:10px 12px;background:rgba(234,179,8,0.08);border:1px solid rgba(234,179,8,0.25);border-radius:8px;font-size:0.82rem;display:flex;justify-content:space-between;align-items:center;gap:12px; }',
+      '.capture-modal h2 { margin:0 0 4px 0;font-size:1.15rem;display:flex;align-items:center;gap:8px; }',
+      '.capture-modal .modal-sub { font-size:0.85rem;color:var(--warm-gray,#888);margin-bottom:16px; }',
+      '.capture-modal .modal-escape { margin-bottom:16px;padding:10px 12px;background:rgba(234,179,8,0.08);border:1px solid rgba(234,179,8,0.25);border-radius:8px;font-size:0.85rem;display:flex;justify-content:space-between;align-items:center;gap:12px; }',
       '.capture-modal .modal-escape a { color:#eab308;text-decoration:underline;cursor:pointer; }',
       '.capture-modal .diff-row { border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:12px;margin-bottom:10px;background:var(--bg-secondary,#232323); }',
       '.capture-modal .diff-row.unknown { opacity:0.55; }',
       '.capture-modal .diff-row-header { display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:8px; }',
-      '.capture-modal .diff-row-field { font-family:var(--mono, monospace);font-size:0.82rem;font-weight:600;color:var(--teal,#2a9d8f); }',
+      '.capture-modal .diff-row-field { font-family:var(--mono, monospace);font-size:0.85rem;font-weight:600;color:var(--teal,#2a9d8f); }',
       '.capture-modal .diff-row-checkbox { display:flex;align-items:center;gap:6px;font-size:0.78rem;color:var(--warm-gray,#888);cursor:pointer; }',
       '.capture-modal .diff-row-checkbox input[type="checkbox"] { width:16px;height:16px;cursor:pointer; }',
       '.capture-modal .diff-pair { display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:0.85rem; }',
@@ -113,10 +113,10 @@
       '.capture-modal .diff-pane.proposed { color:var(--text,#fff);border:1px solid rgba(42,157,143,0.4); }',
       '.capture-modal .diff-pane.proposed.removed { border-color:rgba(239,68,68,0.4);color:#ef4444; }',
       '.capture-modal .diff-pane.unknown-sentinel { color:#eab308;font-style:italic; }',
-      '.capture-modal .diff-label { font-size:0.68rem;text-transform:uppercase;letter-spacing:0.5px;color:var(--warm-gray-light,#666);margin-bottom:4px; }',
+      '.capture-modal .diff-label { font-size:0.72rem;text-transform:uppercase;letter-spacing:0.5px;color:var(--warm-gray-light,#666);margin-bottom:4px; }',
       '.capture-modal .modal-toggles { display:flex;gap:8px;margin-bottom:14px; }',
       '.capture-modal .modal-actions { display:flex;justify-content:flex-end;gap:10px;margin-top:20px;padding-top:16px;border-top:1px solid rgba(255,255,255,0.06); }',
-      '.capture-modal .modal-reject-reason { width:100%;box-sizing:border-box;background:var(--bg-primary,var(--charcoal));color:var(--text,#fff);border:1px solid rgba(255,255,255,0.15);border-radius:6px;padding:6px 8px;font-size:0.82rem;font-family:inherit;margin-top:8px;display:none; }',
+      '.capture-modal .modal-reject-reason { width:100%;box-sizing:border-box;background:var(--bg-primary,var(--charcoal));color:var(--text,#fff);border:1px solid rgba(255,255,255,0.15);border-radius:6px;padding:6px 8px;font-size:0.85rem;font-family:inherit;margin-top:8px;display:none; }',
       '.capture-modal .modal-reject-reason.open { display:block; }',
     ].join('\n');
     document.head.appendChild(style);
@@ -306,7 +306,7 @@
     h += '<div class="advisor-section" style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 16px;background:var(--bg-secondary,#232323);border-radius:10px;margin-bottom:20px;">' +
       '<div>' +
         '<div style="font-weight:600;margin-bottom:2px;">&#127970; Your business at a glance</div>' +
-        '<div style="font-size:0.82rem;color:var(--warm-gray,#888);">Identity, channels, compliance, renewals, people, and more \u2014 all in one place.</div>' +
+        '<div style="font-size:0.85rem;color:var(--warm-gray,#888);">Identity, channels, compliance, renewals, people, and more \u2014 all in one place.</div>' +
       '</div>' +
       '<button class="btn btn-primary btn-small" onclick="navigateTo(\'business\')">View full Business profile &rarr;</button>' +
     '</div>';
@@ -415,7 +415,7 @@
       }
       h += '<div class="advisor-dim-card" style="text-align:left;">';
       h += '<div style="display:flex;align-items:center;gap:8px;">';
-      h += '<span style="font-size:1.1rem;">' + icon + '</span>';
+      h += '<span style="font-size:1.15rem;">' + icon + '</span>';
       h += '<div style="font-weight:600;text-transform:capitalize;">' + esc(platform) + '</div>';
       h += '<div style="margin-left:auto;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.5px;color:' + statusColor + ';">' + esc(status) + '</div>';
       h += '</div>';
@@ -1083,7 +1083,7 @@
     var pending = (capturesData || []).filter(function(c) { return c && c.status === 'pending-review'; });
     if (pending.length === 0) return '';
     var h = '<div class="advisor-section">';
-    h += '<div class="advisor-section-title">\u{1F4AC} Pending Reviews <span style="font-weight:400;color:var(--warm-gray-light);font-size:0.82rem;margin-left:4px;">(' + pending.length + ')</span></div>';
+    h += '<div class="advisor-section-title">\u{1F4AC} Pending Reviews <span style="font-weight:400;color:var(--warm-gray-light);font-size:0.85rem;margin-left:4px;">(' + pending.length + ')</span></div>';
     pending.forEach(function(cap) {
       var isLowConf = typeof cap.confidence === 'number' && cap.confidence < 0.6;
       var pillClass = isLowConf ? 'advisor-capture-pill low-confidence' : 'advisor-capture-pill';

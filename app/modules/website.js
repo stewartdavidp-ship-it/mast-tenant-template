@@ -2822,7 +2822,7 @@
 
     var header = '<div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--charcoal-light,#333);">' +
       '<h3 style="margin:0;font-size:1rem;font-weight:600;">Manage Categories</h3>' +
-      '<button onclick="closeCatMgrDialog()" style="background:none;border:none;color:var(--warm-gray);font-size:1.2rem;cursor:pointer;padding:4px;">✕</button>' +
+      '<button onclick="closeCatMgrDialog()" style="background:none;border:none;color:var(--warm-gray);font-size:1.15rem;cursor:pointer;padding:4px;">✕</button>' +
       '</div>';
     var body = '<div id="catMgrBody" style="flex:1;overflow-y:auto;padding:20px;">' + renderCategoriesTab() + '</div>';
     var footer = '<div style="padding:12px 20px;border-top:1px solid var(--charcoal-light,#333);display:flex;justify-content:flex-end;">' +

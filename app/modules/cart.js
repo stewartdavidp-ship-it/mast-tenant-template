@@ -148,7 +148,7 @@
         if (featureMode === 'features-only' && enabledPages.indexOf('gift-cards') !== -1) {
           var domain = (window.TENANT_CONFIG && window.TENANT_CONFIG.domain) || window.location.hostname;
           var gcUrl = 'https://' + domain + '/gift-cards';
-          html += '<div style="display:flex;align-items:flex-start;gap:10px;padding:10px 14px;background:rgba(42,124,111,0.09);border:1px solid rgba(42,124,111,0.2);border-radius:8px;margin-bottom:16px;font-size:0.83rem;">' +
+          html += '<div style="display:flex;align-items:flex-start;gap:10px;padding:10px 14px;background:rgba(42,124,111,0.09);border:1px solid rgba(42,124,111,0.2);border-radius:8px;margin-bottom:16px;font-size:0.85rem;">' +
             '<span style="color:var(--teal);flex-shrink:0;margin-top:1px;">&#9432;</span>' +
             '<span>Gift card purchases go to your Mast URL: ' +
             '<a href="' + esc(gcUrl) + '" target="_blank" rel="noopener" style="color:var(--teal);font-family:monospace;">' + esc(gcUrl) + '</a></span>' +
