@@ -965,9 +965,17 @@
             leadTimeHtml +
             '<div class="cart-item-row">' +
               '<span class="cart-item-price">' +
-                (item.originalPrice && item.salePriceCents
-                  ? '<span style="text-decoration:line-through;color:var(--warm-gray,#6B6560);font-weight:400;font-size:0.85em;">' + escHtml(item.originalPrice) + '</span> <span style="font-weight:700;color:var(--accent,var(--primary,#c05621));">' + formatCents(item.salePriceCents) + '</span>'
-                  : (item.priceCents > 0 ? formatCents(item.priceCents) : 'Price on request')) +
+                // C-4 fix: ALWAYS display priceCents — this is the canonical unit price the
+                // customer will be charged at checkout. priceCents is set to the resolved
+                // sale price at add-time (see product.html resolvedCents), so showing it is
+                // correct whether or not a sale is active. salePriceCents/originalPrice are
+                // kept on the line item for "was/now" strikethrough decoration only, and
+                // never as a source of truth for the displayed unit price or subtotal.
+                (item.priceCents > 0
+                  ? (item.originalPrice
+                      ? '<span style="text-decoration:line-through;color:var(--warm-gray,#6B6560);font-weight:400;font-size:0.85em;">' + escHtml(item.originalPrice) + '</span> <span style="font-weight:700;color:var(--accent,var(--primary,#c05621));">' + formatCents(item.priceCents) + '</span>'
+                      : formatCents(item.priceCents))
+                  : 'Price on request') +
               '</span>' +
               qtyHtml +
             '</div>' +
@@ -982,11 +990,12 @@
       var subtotalCents = 0;
       var hasWholesale = false;
       for (var s = 0; s < cart.length; s++) {
-        // Use sale price when available, else list priceCents
-        var lineCents = (cart[s].salePriceCents != null && cart[s].salePriceCents > 0)
-          ? cart[s].salePriceCents
-          : (cart[s].priceCents || 0);
-        subtotalCents += lineCents * (cart[s].qty || 1);
+        // C-4 fix: subtotal must mirror checkout (which reads priceCents only — see
+        // checkout.js calcSubtotal). priceCents is already the resolved sale price at
+        // add-time, so this honors active sales without diverging from what the customer
+        // is actually charged. Reading salePriceCents here caused stale-sale drift where
+        // the drawer showed e.g. $30.00 while checkout charged $39.98.
+        subtotalCents += (cart[s].priceCents || 0) * (cart[s].qty || 1);
         if (cart[s].isWholesale) hasWholesale = true;
       }
       // freeThreshold is in cents (loaded from retailMods[i].threshold). Compare cents-to-cents.
