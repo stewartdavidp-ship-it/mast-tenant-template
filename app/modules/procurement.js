@@ -125,9 +125,9 @@
       text = 'Unpaid' + (due ? ' · due ' + due : '');
     }
     var link = (ps !== 'paid')
-      ? ' <button type="button" onclick="navigateTo(\'finance-ap\')" style="background:none;border:none;color:var(--teal);font-size:0.8rem;cursor:pointer;padding:0;font-family:inherit;text-decoration:underline;text-underline-offset:2px;">Record payment →</button>'
+      ? ' <button type="button" onclick="navigateTo(\'finance-ap\')" style="background:none;border:none;color:var(--teal);font-size:0.78rem;cursor:pointer;padding:0;font-family:inherit;text-decoration:underline;text-underline-offset:2px;">Record payment →</button>'
       : '';
-    return '<div style="font-size:0.8rem;margin-top:4px;">' +
+    return '<div style="font-size:0.78rem;margin-top:4px;">' +
       '<span style="color:' + (ps === 'paid' ? 'var(--teal)' : ps === 'partial' ? 'var(--amber-light)' : 'var(--danger)') + ';">' + text + '</span>' +
       link + '</div>';
   }

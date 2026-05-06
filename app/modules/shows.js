@@ -2693,8 +2693,8 @@ async function runShowDeepDive(showId) {
     var steps = ['Fetch & Parse', 'Images', 'Auto-Map', 'Gap Analysis', 'Preview'];
 
     var h = '<div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">';
-    h += '<button onclick="showsAIBackToSelect()" style="background:none;border:none;cursor:pointer;font-size:1.1rem;color:var(--text-secondary,#888);" title="Back to show list">←</button>';
-    h += '<div><span style="font-weight:600;font-size:1.1rem;">' + esc(show.name || 'Show') + '</span>';
+    h += '<button onclick="showsAIBackToSelect()" style="background:none;border:none;cursor:pointer;font-size:1.15rem;color:var(--text-secondary,#888);" title="Back to show list">←</button>';
+    h += '<div><span style="font-weight:600;font-size:1.15rem;">' + esc(show.name || 'Show') + '</span>';
     if (show.applicationDeadline) {
       h += '<span style="font-size:0.78rem;color:#f59e0b;margin-left:8px;">Deadline: ' + formatShowDate(show.applicationDeadline) + '</span>';
     }
@@ -2733,7 +2733,7 @@ async function runShowDeepDive(showId) {
 
     var h = '<div style="background:var(--bg-secondary,#f9f9f9);border-radius:10px;padding:20px;">';
     h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">';
-    h += '<div style="font-weight:600;font-size:0.95rem;">Step 1: Fetch &amp; Parse Application</div>';
+    h += '<div style="font-weight:600;font-size:0.9rem;">Step 1: Fetch &amp; Parse Application</div>';
     h += costHtml + '</div>';
 
     if (!show.applicationUrl) {
@@ -2886,7 +2886,7 @@ async function runShowDeepDive(showId) {
     });
 
     var h = '<div style="background:var(--bg-secondary,#f9f9f9);border-radius:10px;padding:20px;">';
-    h += '<div style="font-weight:600;font-size:0.95rem;margin-bottom:4px;">Step 2: Assign Images</div>';
+    h += '<div style="font-weight:600;font-size:0.9rem;margin-bottom:4px;">Step 2: Assign Images</div>';
     h += '<p style="font-size:0.85rem;color:var(--text-secondary,#888);margin:0 0 16px;">Click each slot to assign an image from your gallery.</p>';
 
     if (photos.length === 0) {
@@ -2906,7 +2906,7 @@ async function runShowDeepDive(showId) {
           h += '<div style="font-size:0.78rem;color:var(--primary,var(--teal));">✓ ' + esc(p.slot || 'Photo ' + (idx + 1)) + '</div>';
           if (isProfileBooth) h += '<div style="font-size:0.72rem;color:#f59e0b;">From profile default</div>';
         } else {
-          h += '<div style="font-size:1.4rem;color:var(--text-secondary,#ccc);margin-bottom:4px;">+</div>';
+          h += '<div style="font-size:1.6rem;color:var(--text-secondary,#ccc);margin-bottom:4px;">+</div>';
           h += '<div style="font-size:0.78rem;color:var(--text-secondary,#888);">' + esc(p.slot || 'Photo ' + (idx + 1)) + '</div>';
           if (p.dimensions) h += '<div style="font-size:0.72rem;color:#f59e0b;">' + esc(p.dimensions) + '</div>';
         }
@@ -2924,7 +2924,7 @@ async function runShowDeepDive(showId) {
       var appDesc = img.applicationDescription || '';
       var prodOptions = (window.productsData || []).filter(function(pr) { return pr.name; }).slice().sort(function(a, b) { return (a.name || '').localeCompare(b.name || ''); });
       h += '<div style="margin-top:12px;padding:14px;background:var(--bg-primary,#fff);border:1px solid var(--border-color,#ddd);border-radius:8px;position:relative;">';
-      h += '<button onclick="showsAIAssignImage(' + idx + ', null)" style="position:absolute;top:8px;right:8px;background:none;border:none;color:var(--text-secondary,#888);font-size:1.1rem;cursor:pointer;" title="Remove image">&times;</button>';
+      h += '<button onclick="showsAIAssignImage(' + idx + ', null)" style="position:absolute;top:8px;right:8px;background:none;border:none;color:var(--text-secondary,#888);font-size:1.15rem;cursor:pointer;" title="Remove image">&times;</button>';
       h += '<div style="display:flex;gap:12px;align-items:flex-start;">';
       h += '<img src="' + esc(img.thumbnailUrl || img.url || '') + '" style="width:72px;height:72px;object-fit:cover;border-radius:6px;flex-shrink:0;">';
       h += '<div style="flex:1;">';
@@ -3098,7 +3098,7 @@ async function runShowDeepDive(showId) {
     }
 
     var h = '<div style="background:var(--bg-secondary,#f9f9f9);border-radius:10px;padding:20px;">';
-    h += '<div style="font-weight:600;font-size:0.95rem;margin-bottom:4px;">Step 3: Auto-Map Fields</div>';
+    h += '<div style="font-weight:600;font-size:0.9rem;margin-bottom:4px;">Step 3: Auto-Map Fields</div>';
     h += '<p style="font-size:0.85rem;color:var(--text-secondary,#888);margin:0 0 16px;">Review how your vendor profile maps to the application fields. Edit values as needed.</p>';
 
     fields.forEach(function(f) {
@@ -3161,11 +3161,11 @@ async function runShowDeepDive(showId) {
     showsAIGaps = gaps;
 
     var h = '<div style="background:var(--bg-secondary,#f9f9f9);border-radius:10px;padding:20px;">';
-    h += '<div style="font-weight:600;font-size:0.95rem;margin-bottom:12px;">Step 4: Gap Analysis</div>';
+    h += '<div style="font-weight:600;font-size:0.9rem;margin-bottom:12px;">Step 4: Gap Analysis</div>';
 
     if (gaps.length === 0) {
       h += '<div style="text-align:center;padding:20px;">';
-      h += '<div style="font-size:1.4rem;color:#16a34a;margin-bottom:6px;">✓</div>';
+      h += '<div style="font-size:1.6rem;color:#16a34a;margin-bottom:6px;">✓</div>';
       h += '<div style="font-weight:600;color:#16a34a;">All requirements met!</div>';
       h += '<div style="font-size:0.85rem;color:var(--text-secondary,#888);margin-top:4px;">Your profile and gallery cover everything this show needs.</div>';
       h += '</div>';
@@ -3200,7 +3200,7 @@ async function runShowDeepDive(showId) {
     var appUrl = show.applicationUrl || '';
 
     var h = '<div style="background:var(--bg-secondary,#f9f9f9);border-radius:10px;padding:20px;">';
-    h += '<div style="font-weight:600;font-size:0.95rem;margin-bottom:12px;">Step 5: Application Assistant</div>';
+    h += '<div style="font-weight:600;font-size:0.9rem;margin-bottom:12px;">Step 5: Application Assistant</div>';
 
     h += '<div style="background:var(--bg-primary,#fff);border:1px solid var(--border-color,#ddd);padding:14px;border-radius:8px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;">';
     h += '<div><div style="font-weight:600;">' + esc(show.name || 'Show') + '</div>';

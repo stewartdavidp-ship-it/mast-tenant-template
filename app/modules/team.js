@@ -398,7 +398,7 @@
 
       var h = '';
       if (entries.length === 0) {
-        h = '<div style="text-align:center;padding:40px 20px;color:var(--warm-gray);"><div style="font-size:1.4rem;margin-bottom:8px;">&#9201;</div><p style="font-size:0.9rem;font-weight:500;">No time entries this week</p></div>';
+        h = '<div style="text-align:center;padding:40px 20px;color:var(--warm-gray);"><div style="font-size:1.6rem;margin-bottom:8px;">&#9201;</div><p style="font-size:0.9rem;font-weight:500;">No time entries this week</p></div>';
       } else {
         h += '<div style="overflow-x:auto;"><table style="width:100%;font-size:0.85rem;border-collapse:collapse;">';
         h += '<thead><tr style="border-bottom:2px solid var(--cream-dark,var(--cream-dark));text-align:left;">';
@@ -453,7 +453,7 @@
       if (openEntry) {
         sh += '<div style="background:rgba(34,197,94,0.15);border:1px solid rgba(34,197,94,0.4);border-radius:8px;padding:10px 16px;">';
         sh += '<div style="font-size:0.85rem;color:#22c55e;font-weight:600;">&#9679; Clocked in since ' + formatTime(openEntry.clockIn) + '</div>';
-        sh += '<div id="tcTimer" style="font-size:1.4rem;font-weight:700;font-family:monospace;color:#22c55e;"></div></div>';
+        sh += '<div id="tcTimer" style="font-size:1.6rem;font-weight:700;font-family:monospace;color:#22c55e;"></div></div>';
         sh += '<button class="btn btn-primary" data-key="' + esc(openEntry._key) + '" onclick="teamTcClockOut(this.dataset.key)">Clock Out</button>';
         startTcTimer(openEntry.clockIn);
       } else {
@@ -645,11 +645,11 @@
       h += '<div style="display:flex;gap:8px;"><button class="btn btn-secondary btn-small" data-emp="' + esc(empId) + '" onclick="teamPtoEditPolicy(this.dataset.emp)">Edit Policy</button><button class="btn btn-primary btn-small" data-emp="' + esc(empId) + '" onclick="teamPtoRecordUsage(this.dataset.emp)">Record Usage</button></div></div>';
       h += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-bottom:16px;">';
       var balColor = balance < 0 ? '#d97706' : 'inherit';
-      h += '<div style="background:var(--cream,var(--cream));border:1px solid ' + (balance < 0 ? '#d97706' : 'var(--cream-dark,var(--cream-dark))') + ';border-radius:8px;padding:12px 16px;box-shadow:0 1px 3px rgba(0,0,0,0.08);"><div style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:4px;">Balance</div><div style="font-size:1.6rem;font-weight:700;color:' + balColor + ';">' + balance.toFixed(1) + '</div><div style="font-size:0.75rem;color:var(--warm-gray);">hours</div>' + (balance < 0 ? '<div style="font-size:0.72rem;color:#d97706;margin-top:4px;">Balance below zero — review accrual policy</div>' : '') + '</div>';
+      h += '<div style="background:var(--cream,var(--cream));border:1px solid ' + (balance < 0 ? '#d97706' : 'var(--cream-dark,var(--cream-dark))') + ';border-radius:8px;padding:12px 16px;box-shadow:0 1px 3px rgba(0,0,0,0.08);"><div style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:4px;">Balance</div><div style="font-size:1.6rem;font-weight:700;color:' + balColor + ';">' + balance.toFixed(1) + '</div><div style="font-size:0.78rem;color:var(--warm-gray);">hours</div>' + (balance < 0 ? '<div style="font-size:0.72rem;color:#d97706;margin-top:4px;">Balance below zero — review accrual policy</div>' : '') + '</div>';
       if (policy) {
         var aType = policy.accrualType === 'annual-grant' ? 'Annual Grant' : policy.accrualType === 'hourly' ? 'Hourly' : 'Manual';
         var aDetail = policy.accrualType === 'annual-grant' && policy.accrualRate ? policy.accrualRate + ' hrs/year' : policy.accrualType === 'hourly' && policy.accrualRate ? policy.accrualRate + ' hrs/hr' : '';
-        h += '<div style="background:var(--cream,var(--cream));border:1px solid var(--cream-dark,var(--cream-dark));border-radius:8px;padding:12px 16px;box-shadow:0 1px 3px rgba(0,0,0,0.08);"><div style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:4px;">Accrual</div><div style="font-size:0.95rem;font-weight:600;">' + esc(aType) + '</div>' + (aDetail ? '<div style="font-size:0.75rem;color:var(--warm-gray);">' + esc(aDetail) + '</div>' : '') + '</div>';
+        h += '<div style="background:var(--cream,var(--cream));border:1px solid var(--cream-dark,var(--cream-dark));border-radius:8px;padding:12px 16px;box-shadow:0 1px 3px rgba(0,0,0,0.08);"><div style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:4px;">Accrual</div><div style="font-size:0.9rem;font-weight:600;">' + esc(aType) + '</div>' + (aDetail ? '<div style="font-size:0.78rem;color:var(--warm-gray);">' + esc(aDetail) + '</div>' : '') + '</div>';
       }
       h += '</div>';
       h += '<h4 style="font-size:0.9rem;font-weight:600;margin-bottom:8px;">PTO History</h4>';
@@ -700,7 +700,7 @@
 
       var h = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-bottom:16px;">';
       var balColor = balance < 0 ? '#d97706' : 'inherit';
-      h += '<div style="background:var(--cream,var(--cream));border:1px solid ' + (balance < 0 ? '#d97706' : 'var(--cream-dark,var(--cream-dark))') + ';border-radius:8px;padding:12px 16px;box-shadow:0 1px 3px rgba(0,0,0,0.08);"><div style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:4px;">Balance</div><div style="font-size:1.6rem;font-weight:700;color:' + balColor + ';">' + balance.toFixed(1) + '</div><div style="font-size:0.75rem;color:var(--warm-gray);">hours</div>' + (balance < 0 ? '<div style="font-size:0.72rem;color:#d97706;margin-top:4px;">Balance below zero — review accrual policy</div>' : '') + '</div>';
+      h += '<div style="background:var(--cream,var(--cream));border:1px solid ' + (balance < 0 ? '#d97706' : 'var(--cream-dark,var(--cream-dark))') + ';border-radius:8px;padding:12px 16px;box-shadow:0 1px 3px rgba(0,0,0,0.08);"><div style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:4px;">Balance</div><div style="font-size:1.6rem;font-weight:700;color:' + balColor + ';">' + balance.toFixed(1) + '</div><div style="font-size:0.78rem;color:var(--warm-gray);">hours</div>' + (balance < 0 ? '<div style="font-size:0.72rem;color:#d97706;margin-top:4px;">Balance below zero — review accrual policy</div>' : '') + '</div>';
       if (myPolicy) {
         var aLabel = myPolicy.accrualType === 'annual-grant' ? 'Annual grant — ' + (myPolicy.accrualRate || 0) + ' hrs/year' : myPolicy.accrualType === 'hourly' ? 'Hourly — ' + (myPolicy.accrualRate || 0) + ' hrs/hr' : 'Manual';
         h += '<div style="background:var(--cream,var(--cream));border:1px solid var(--cream-dark,var(--cream-dark));border-radius:8px;padding:12px 16px;box-shadow:0 1px 3px rgba(0,0,0,0.08);"><div style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:4px;">Accrual</div><div style="font-size:0.85rem;font-weight:600;">' + esc(aLabel) + '</div></div>';
@@ -856,7 +856,7 @@
       h += '<tr style="border-bottom:1px solid var(--cream-dark,var(--cream-dark));">';
       h += '<td style="padding:8px 10px;font-weight:500;">' + esc(row.emp.fullName || '') + '</td>';
       h += '<td style="padding:8px 10px;">' + esc(row.field.label) + '</td>';
-      h += '<td style="padding:8px 10px;"><span style="color:' + sc + ';font-weight:600;">' + sl + '</span>' + (row.item.expiryDate && row.status !== 'missing' ? '<div style="font-size:0.75rem;color:var(--warm-gray-light);">Expires ' + esc(row.item.expiryDate) + '</div>' : '') + '</td>';
+      h += '<td style="padding:8px 10px;"><span style="color:' + sc + ';font-weight:600;">' + sl + '</span>' + (row.item.expiryDate && row.status !== 'missing' ? '<div style="font-size:0.78rem;color:var(--warm-gray-light);">Expires ' + esc(row.item.expiryDate) + '</div>' : '') + '</td>';
       h += '<td style="padding:8px 10px;color:var(--warm-gray);">' + (row.item.storageLocation ? esc(capitalize(row.item.storageLocation.replace('-', ' '))) : '—') + '</td>';
       h += '<td style="padding:8px 10px;color:var(--warm-gray);">' + (row.item.updatedAt ? esc(row.item.updatedAt.split('T')[0]) : '—') + '</td>';
       h += '<td style="padding:8px 10px;"><button class="btn btn-secondary btn-small" data-emp="' + esc(row.emp._key) + '" data-key="' + esc(row.field.key) + '" onclick="teamEditCompliance(this.dataset.emp, this.dataset.key)">' + (row.status === 'completed' ? 'Update' : 'Mark On File') + '</button></td>';

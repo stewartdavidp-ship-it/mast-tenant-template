@@ -194,7 +194,7 @@
     html += '<div class="section-header" style="margin-bottom:12px;">';
     html += '<h2 style="margin:0;">' + (isInbox ? 'Inbox' : 'Tickets') + '</h2>';
     html += '<div style="display:flex;align-items:center;gap:8px;">';
-    html += '<span style="font-size:0.83rem;color:var(--warm-gray);">' +
+    html += '<span style="font-size:0.85rem;color:var(--warm-gray);">' +
       filtered.length + ' ticket' + (filtered.length !== 1 ? 's' : '') + '</span>';
     html += '<button class="btn btn-secondary btn-small" onclick="csRefreshTickets()">Refresh</button>';
     html += '<button class="btn btn-primary btn-small" onclick="csOpenCreate()">New Ticket</button>';
@@ -244,11 +244,11 @@
   function renderFilterBar() {
     var statuses = ['all', 'open', 'in_progress', 'waiting', 'resolved', 'closed'];
     var priorities = ['all', 'low', 'normal', 'high', 'urgent'];
-    var selStyle = 'font-size:0.83rem;padding:4px 8px;background:var(--surface-card);border:1px solid var(--border);border-radius:4px;color:var(--text);';
+    var selStyle = 'font-size:0.85rem;padding:4px 8px;background:var(--surface-card);border:1px solid var(--border);border-radius:4px;color:var(--text);';
 
     var html = '<div style="display:flex;gap:10px;align-items:center;margin-bottom:6px;flex-wrap:wrap;">';
 
-    html += '<label style="font-size:0.83rem;color:var(--warm-gray);">Status</label>';
+    html += '<label style="font-size:0.85rem;color:var(--warm-gray);">Status</label>';
     html += '<select onchange="csSetStatusFilter(this.value)" style="' + selStyle + '">';
     statuses.forEach(function(s) {
       html += '<option value="' + s + '"' + (statusFilter === s ? ' selected' : '') + '>' +
@@ -256,7 +256,7 @@
     });
     html += '</select>';
 
-    html += '<label style="font-size:0.83rem;color:var(--warm-gray);">Priority</label>';
+    html += '<label style="font-size:0.85rem;color:var(--warm-gray);">Priority</label>';
     html += '<select onchange="csSetPriorityFilter(this.value)" style="' + selStyle + '">';
     priorities.forEach(function(p) {
       html += '<option value="' + p + '"' + (priorityFilter === p ? ' selected' : '') + '>' +
@@ -325,7 +325,7 @@
       return '<option value="' + p + '"' + (ticket.priority === p ? ' selected' : '') + '>' + PRIORITY_LABELS[p] + '</option>';
     }).join('');
 
-    var selStyle = 'font-size:0.83rem;padding:4px 8px;background:var(--surface-card);border:1px solid var(--border);border-radius:4px;color:var(--text);';
+    var selStyle = 'font-size:0.85rem;padding:4px 8px;background:var(--surface-card);border:1px solid var(--border);border-radius:4px;color:var(--text);';
 
     var html = '<div style="display:flex;flex-direction:column;height:100%;">';
 
@@ -336,7 +336,7 @@
     html += '<div style="flex:1;min-width:0;">';
     html += '<div style="font-weight:600;font-size:1rem;">' +
       _esc(num) + ' — ' + _esc(ticket.subject || 'No subject') + '</div>';
-    html += '<div style="font-size:0.8rem;color:var(--warm-gray);margin-top:2px;">from ' +
+    html += '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:2px;">from ' +
       _esc(ticket.contactName || ticket.contactEmail || 'Unknown') +
       (ticket.contactEmail && ticket.contactName ? ' (' + _esc(ticket.contactEmail) + ')' : '') +
       ' · ' + fmtDate(ticket.createdAt) + '</div>';
@@ -351,7 +351,7 @@
     // Message thread
     html += '<div id="csThreadMessages" style="flex:1;overflow-y:auto;padding:16px 24px;display:flex;flex-direction:column;gap:10px;">';
     if (threadMessages.length === 0) {
-      html += '<div style="color:var(--warm-gray);font-size:0.87rem;text-align:center;padding:32px 0;">No messages yet.</div>';
+      html += '<div style="color:var(--warm-gray);font-size:0.85rem;text-align:center;padding:32px 0;">No messages yet.</div>';
     } else {
       threadMessages.forEach(function(msg) {
         html += renderMessageBubble(msg);
@@ -365,10 +365,10 @@
     html += '<textarea id="csReplyBody" rows="3" placeholder="' +
       (isInternalNote ? 'Write an internal note…' : 'Write a reply…') +
       '" style="width:100%;padding:10px 14px;background:transparent;border:none;color:var(--text);' +
-      'font-size:0.87rem;resize:vertical;outline:none;box-sizing:border-box;' +
+      'font-size:0.85rem;resize:vertical;outline:none;box-sizing:border-box;' +
       (isInternalNote ? 'border-left:3px solid rgba(91,33,182,0.5);' : '') + '"></textarea>';
     html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 12px;border-top:1px solid var(--border);">';
-    html += '<label style="display:flex;align-items:center;gap:6px;font-size:0.82rem;color:var(--warm-gray);cursor:pointer;">' +
+    html += '<label style="display:flex;align-items:center;gap:6px;font-size:0.85rem;color:var(--warm-gray);cursor:pointer;">' +
       '<input type="checkbox" id="csInternalToggle" onchange="csToggleInternal(this.checked)"' +
       (isInternalNote ? ' checked' : '') + '> Internal Note</label>';
     html += '<button class="btn btn-primary btn-small" id="csReplyBtn" onclick="csSendReply()">Send Reply</button>';
@@ -405,7 +405,7 @@
         'margin-bottom:4px;font-style:italic;">— Internal Note —</div>';
     }
     html += '<div style="' + bubbleStyle + '">';
-    html += '<div style="white-space:pre-wrap;font-size:0.87rem;word-break:break-word;">' +
+    html += '<div style="white-space:pre-wrap;font-size:0.85rem;word-break:break-word;">' +
       _esc(msg.body || '') + '</div>';
     html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;">';
     html += '<span style="font-size:0.72rem;color:var(--warm-gray);">' +
@@ -422,7 +422,7 @@
   // ============================================================
 
   function renderCreate() {
-    var selStyle = 'width:100%;padding:8px 10px;background:var(--surface-card);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:0.87rem;';
+    var selStyle = 'width:100%;padding:8px 10px;background:var(--surface-card);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:0.85rem;';
     var sourceOpts = ['email', 'web', 'phone', 'chat', 'manual'].map(function(s) {
       return '<option value="' + s + '">' + _esc(s.charAt(0).toUpperCase() + s.slice(1)) + '</option>';
     }).join('');
@@ -517,20 +517,20 @@
   function reviewBadge(s) {
     var bg = s === 'approved' ? 'rgba(42,124,111,0.20)' : (s === 'rejected' ? 'rgba(220,38,38,0.20)' : 'rgba(196,133,60,0.25)');
     var color = s === 'approved' ? 'var(--teal)' : (s === 'rejected' ? 'var(--danger)' : 'var(--amber-light)');
-    return '<span style="background:' + bg + ';color:' + color + ';padding:2px 10px;border-radius:12px;font-size:0.75rem;font-weight:600;">' + _esc(s || 'pending') + '</span>';
+    return '<span style="background:' + bg + ';color:' + color + ';padding:2px 10px;border-radius:12px;font-size:0.78rem;font-weight:600;">' + _esc(s || 'pending') + '</span>';
   }
 
   function surveyBadge(s) {
     var bg = s === 'active' ? 'rgba(42,124,111,0.20)' : (s === 'inactive' ? 'rgba(220,38,38,0.15)' : 'rgba(0,0,0,0.10)');
     var color = s === 'active' ? 'var(--teal)' : (s === 'inactive' ? 'var(--danger)' : 'var(--text)');
-    return '<span style="background:' + bg + ';color:' + color + ';padding:2px 10px;border-radius:12px;font-size:0.75rem;font-weight:600;">' + _esc(s || 'draft') + '</span>';
+    return '<span style="background:' + bg + ';color:' + color + ';padding:2px 10px;border-radius:12px;font-size:0.78rem;font-weight:600;">' + _esc(s || 'draft') + '</span>';
   }
 
   function kpiCard(label, val, sub) {
     return '<div style="flex:1;min-width:120px;padding:12px 16px;border:1px solid var(--cream-dark);border-radius:10px;background:var(--surface-card);">' +
-      '<div style="font-size:0.75rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.05em;font-weight:600;margin-bottom:4px;">' + label + '</div>' +
-      '<div style="font-size:1.5rem;font-weight:700;font-family:monospace;color:var(--text);">' + val + '</div>' +
-      (sub ? '<div style="font-size:0.8rem;color:var(--warm-gray);margin-top:2px;">' + sub + '</div>' : '') +
+      '<div style="font-size:0.78rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.05em;font-weight:600;margin-bottom:4px;">' + label + '</div>' +
+      '<div style="font-size:1.6rem;font-weight:700;font-family:monospace;color:var(--text);">' + val + '</div>' +
+      (sub ? '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:2px;">' + sub + '</div>' : '') +
     '</div>';
   }
 
@@ -595,7 +595,7 @@
         html += '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px;">';
         html += '<span style="font-weight:600;">' + _esc(r.reviewerName || 'Anonymous') + '</span>';
         html += '<span style="color:var(--amber-light);letter-spacing:0.04em;">' + starsHtml(r.rating) + '</span>';
-        if (r.reviewerEmail) html += '<span style="font-size:0.8rem;color:var(--warm-gray);">' + _esc(r.reviewerEmail) + '</span>';
+        if (r.reviewerEmail) html += '<span style="font-size:0.78rem;color:var(--warm-gray);">' + _esc(r.reviewerEmail) + '</span>';
         html += '<span style="font-size:0.78rem;color:var(--warm-gray);margin-left:auto;">' + relativeTime(r.createdAt) + '</span>';
         html += reviewBadge(r.status) + '</div>';
         if (r.headline || r.productId) {
@@ -658,7 +658,7 @@
         if (featureMode === 'features-only' && enabledPages.indexOf('surveys') !== -1) {
           var domain = (window.TENANT_CONFIG && window.TENANT_CONFIG.domain) || window.location.hostname;
           var surveyUrl = 'https://' + domain + '/survey';
-          html += '<div style="display:flex;align-items:flex-start;gap:10px;padding:10px 14px;background:rgba(42,124,111,0.09);border:1px solid rgba(42,124,111,0.2);border-radius:8px;margin-bottom:16px;font-size:0.83rem;">' +
+          html += '<div style="display:flex;align-items:flex-start;gap:10px;padding:10px 14px;background:rgba(42,124,111,0.09);border:1px solid rgba(42,124,111,0.2);border-radius:8px;margin-bottom:16px;font-size:0.85rem;">' +
             '<span style="color:var(--teal);flex-shrink:0;margin-top:1px;">&#9432;</span>' +
             '<span>Survey emails link to your Mast URL. Make sure this URL is accessible: ' +
             '<a href="' + _esc(surveyUrl) + '" target="_blank" rel="noopener" style="color:var(--teal);font-family:monospace;">' + _esc(surveyUrl) + '</a></span>' +
@@ -676,8 +676,8 @@
     html += '<span style="position:absolute;top:3px;' + (automatedSurveysEnabled ? 'right:3px' : 'left:3px') + ';width:20px;height:20px;border-radius:50%;background:#fff;display:block;transition:all 0.2s;"></span>';
     html += '</button>';
     html += '<div style="flex:1;">';
-    html += '<div style="font-weight:600;font-size:0.95rem;">Automated Surveys <span style="margin-left:6px;font-size:0.78rem;font-weight:700;color:' + (automatedSurveysEnabled ? 'var(--teal)' : 'var(--warm-gray)') + ';">' + toggleLabel + '</span></div>';
-    html += '<div style="font-size:0.82rem;color:var(--warm-gray);margin-top:2px;">When enabled, surveys are sent automatically based on your active trigger rules below.</div>';
+    html += '<div style="font-weight:600;font-size:0.9rem;">Automated Surveys <span style="margin-left:6px;font-size:0.78rem;font-weight:700;color:' + (automatedSurveysEnabled ? 'var(--teal)' : 'var(--warm-gray)') + ';">' + toggleLabel + '</span></div>';
+    html += '<div style="font-size:0.85rem;color:var(--warm-gray);margin-top:2px;">When enabled, surveys are sent automatically based on your active trigger rules below.</div>';
     html += '</div></div>';
 
     html += '<div class="view-tabs" style="margin-bottom:18px;">';
@@ -712,8 +712,8 @@
       if (questionEditId === q.id) { html += renderQuestionForm(q); return; }
       html += '<div style="border:1px solid var(--cream-dark);border-radius:8px;padding:12px 16px;background:var(--surface-card);display:flex;align-items:center;gap:10px;">';
       html += '<div style="flex:1;"><span style="font-weight:600;">' + _esc(q.text) + '</span><span style="margin-left:8px;font-size:0.78rem;color:var(--warm-gray);">[' + _esc(q.type) + ']</span>';
-      if (q.isStock) html += '<span style="margin-left:8px;background:rgba(42,124,111,0.15);color:var(--teal);padding:1px 8px;border-radius:10px;font-size:0.75rem;">stock</span>';
-      if (q.type === 'multiple_choice' && q.options && q.options.length) html += '<div style="font-size:0.8rem;color:var(--warm-gray);margin-top:3px;">Options: ' + q.options.map(function (o) { return _esc(o); }).join(', ') + '</div>';
+      if (q.isStock) html += '<span style="margin-left:8px;background:rgba(42,124,111,0.15);color:var(--teal);padding:1px 8px;border-radius:10px;font-size:0.78rem;">stock</span>';
+      if (q.type === 'multiple_choice' && q.options && q.options.length) html += '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:3px;">Options: ' + q.options.map(function (o) { return _esc(o); }).join(', ') + '</div>';
       html += '</div><button class="btn btn-secondary btn-small" onclick="csEditQuestion(\'' + _esc(q.id) + '\')">Edit</button>';
       html += '<button class="btn btn-danger btn-small" onclick="csDeleteQuestion(\'' + _esc(q.id) + '\')">Delete</button></div>';
     });
@@ -725,17 +725,17 @@
     var optVal = isEdit && q.options ? q.options.join(', ') : '';
     var html = '<div style="border:2px solid var(--amber-light);border-radius:10px;padding:16px;background:var(--surface-card);margin-bottom:12px;">';
     html += '<h4 style="margin:0 0 12px;">' + (isEdit ? 'Edit Question' : 'New Question') + '</h4>';
-    html += '<div style="margin-bottom:10px;"><label style="font-weight:600;font-size:0.88rem;display:block;margin-bottom:4px;">Question Text *</label>';
+    html += '<div style="margin-bottom:10px;"><label style="font-weight:600;font-size:0.9rem;display:block;margin-bottom:4px;">Question Text *</label>';
     html += '<input id="csQText" class="form-input" style="width:100%;box-sizing:border-box;" value="' + (isEdit ? _esc(q.text || '') : '') + '" placeholder="Enter question text"></div>';
-    html += '<div style="margin-bottom:10px;"><label style="font-weight:600;font-size:0.88rem;display:block;margin-bottom:4px;">Type</label>';
+    html += '<div style="margin-bottom:10px;"><label style="font-weight:600;font-size:0.9rem;display:block;margin-bottom:4px;">Type</label>';
     html += '<select id="csQType" class="form-select" style="width:100%;" onchange="csQTypeChange(this.value)">';
     ['rating','NPS','yes_no','multiple_choice','open_text'].forEach(function (t) { html += '<option value="' + t + '"' + (typeVal === t ? ' selected' : '') + '>' + t + '</option>'; });
     html += '</select></div>';
     html += '<div id="csQOptionsRow" style="margin-bottom:10px;' + (typeVal === 'multiple_choice' ? '' : 'display:none;') + '">';
-    html += '<label style="font-weight:600;font-size:0.88rem;display:block;margin-bottom:4px;">Options (comma-separated)</label>';
+    html += '<label style="font-weight:600;font-size:0.9rem;display:block;margin-bottom:4px;">Options (comma-separated)</label>';
     html += '<input id="csQOptions" class="form-input" style="width:100%;box-sizing:border-box;" value="' + _esc(optVal) + '" placeholder="Option A, Option B"></div>';
     var reqChecked = isEdit ? (q.required !== false) : true;
-    html += '<div style="margin-bottom:12px;"><label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.88rem;">';
+    html += '<div style="margin-bottom:12px;"><label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.9rem;">';
     html += '<input type="checkbox" id="csQRequired"' + (reqChecked ? ' checked' : '') + ' style="width:15px;height:15px;accent-color:var(--amber-light);">';
     html += '<span><strong>Required</strong> — respondent must answer before continuing</span></label></div>';
     html += '<div style="display:flex;gap:8px;"><button class="btn btn-primary btn-small" onclick="csSaveQuestion(\'' + id + '\')">' + (isEdit ? 'Save' : 'Add') + '</button>';
@@ -774,7 +774,7 @@
       html += '<div style="flex:1;"><span style="font-weight:600;">' + _esc(g.name) + '</span>';
       if (g.eventType) html += '<span style="margin-left:8px;font-size:0.78rem;color:var(--warm-gray);">' + _esc(g.eventType) + '</span>';
       html += '<span style="margin-left:8px;font-size:0.78rem;color:var(--warm-gray);">' + qc + ' question' + (qc !== 1 ? 's' : '') + '</span>';
-      if (g.isActive === false) html += '<span style="margin-left:8px;background:rgba(220,38,38,0.15);color:var(--danger);padding:1px 8px;border-radius:10px;font-size:0.75rem;">inactive</span>';
+      if (g.isActive === false) html += '<span style="margin-left:8px;background:rgba(220,38,38,0.15);color:var(--danger);padding:1px 8px;border-radius:10px;font-size:0.78rem;">inactive</span>';
       html += '</div><button class="btn btn-secondary btn-small" onclick="csEditGroup(\'' + _esc(g.id) + '\')">Edit</button>';
       html += '<button class="btn btn-danger btn-small" onclick="csDeleteGroup(\'' + _esc(g.id) + '\')">Delete</button></div>';
     });
@@ -786,14 +786,14 @@
     var qItems = Object.values(questionsData);
     var html = '<div style="border:2px solid var(--amber-light);border-radius:10px;padding:16px;background:var(--surface-card);margin-bottom:12px;">';
     html += '<h4 style="margin:0 0 12px;">' + (isEdit ? 'Edit Group' : 'New Group') + '</h4>';
-    html += '<div style="margin-bottom:10px;"><label style="font-weight:600;font-size:0.88rem;display:block;margin-bottom:4px;">Name *</label>';
+    html += '<div style="margin-bottom:10px;"><label style="font-weight:600;font-size:0.9rem;display:block;margin-bottom:4px;">Name *</label>';
     html += '<input id="csGName" class="form-input" style="width:100%;box-sizing:border-box;" value="' + (isEdit ? _esc(g.name || '') : '') + '" placeholder="e.g. Post-Purchase Survey"></div>';
-    html += '<div style="margin-bottom:10px;"><label style="font-weight:600;font-size:0.88rem;display:block;margin-bottom:4px;">Event Type</label>';
+    html += '<div style="margin-bottom:10px;"><label style="font-weight:600;font-size:0.9rem;display:block;margin-bottom:4px;">Event Type</label>';
     html += '<input id="csGEventType" class="form-input" style="width:100%;box-sizing:border-box;" value="' + (isEdit ? _esc(g.eventType || '') : '') + '" placeholder="e.g. order_complete"></div>';
-    html += '<div style="margin-bottom:12px;"><label style="font-weight:600;font-size:0.88rem;display:block;margin-bottom:6px;">Questions</label>';
+    html += '<div style="margin-bottom:12px;"><label style="font-weight:600;font-size:0.9rem;display:block;margin-bottom:6px;">Questions</label>';
     html += '<div style="max-height:160px;overflow-y:auto;border:1px solid var(--cream-dark);border-radius:6px;padding:8px;background:var(--bg);">';
     if (!qItems.length) { html += '<div style="font-size:0.85rem;color:var(--warm-gray);">No questions — add some first.</div>'; }
-    else { qItems.forEach(function (q) { html += '<label style="display:flex;align-items:center;gap:8px;padding:3px 0;font-size:0.88rem;cursor:pointer;"><input type="checkbox" name="csGQIds" value="' + _esc(q.id) + '"' + (selectedIds.indexOf(q.id) >= 0 ? ' checked' : '') + '>' + _esc(q.text) + ' <span style="color:var(--warm-gray);font-size:0.75rem;">[' + _esc(q.type) + ']</span></label>'; }); }
+    else { qItems.forEach(function (q) { html += '<label style="display:flex;align-items:center;gap:8px;padding:3px 0;font-size:0.9rem;cursor:pointer;"><input type="checkbox" name="csGQIds" value="' + _esc(q.id) + '"' + (selectedIds.indexOf(q.id) >= 0 ? ' checked' : '') + '>' + _esc(q.text) + ' <span style="color:var(--warm-gray);font-size:0.78rem;">[' + _esc(q.type) + ']</span></label>'; }); }
     html += '</div></div>';
     html += '<div style="display:flex;gap:8px;"><button class="btn btn-primary btn-small" onclick="csSaveGroup(\'' + id + '\')">' + (isEdit ? 'Save' : 'Add') + '</button>';
     html += '<button class="btn btn-secondary btn-small" onclick="csCancelGroup()">Cancel</button></div></div>';
@@ -829,8 +829,8 @@
       html += '<div style="border:1px solid var(--cream-dark);border-radius:8px;padding:12px 16px;background:var(--surface-card);">';
       html += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;"><span style="font-weight:600;">' + _esc(sv.name) + '</span>' + surveyBadge(isClosed ? 'closed' : sv.status);
       html += '<span style="font-size:0.78rem;color:var(--warm-gray);margin-left:auto;">' + relativeTime(sv.createdAt) + '</span></div>';
-      html += '<div style="font-size:0.83rem;color:var(--warm-gray);margin-bottom:' + (sv.closesAt ? '4px' : '10px') + ';">Group: ' + _esc(grp ? grp.name : (sv.groupId || 'none')) + '</div>';
-      if (sv.closesAt) { html += '<div style="font-size:0.83rem;color:' + (isClosed ? 'var(--danger)' : 'var(--warm-gray)') + ';margin-bottom:10px;">' + (isClosed ? 'Closed ' : 'Closes ') + relativeTime(sv.closesAt) + '</div>'; }
+      html += '<div style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:' + (sv.closesAt ? '4px' : '10px') + ';">Group: ' + _esc(grp ? grp.name : (sv.groupId || 'none')) + '</div>';
+      if (sv.closesAt) { html += '<div style="font-size:0.85rem;color:' + (isClosed ? 'var(--danger)' : 'var(--warm-gray)') + ';margin-bottom:10px;">' + (isClosed ? 'Closed ' : 'Closes ') + relativeTime(sv.closesAt) + '</div>'; }
       html += '<div style="display:flex;gap:8px;flex-wrap:wrap;">';
       html += '<button class="btn btn-primary btn-small" onclick="csSendLink(\'' + _esc(sv.id) + '\')">Send Survey</button>';
       html += '<button class="btn btn-secondary btn-small" onclick="csPreviewSurvey(\'' + _esc(sv.id) + '\')">Preview</button>';
@@ -844,18 +844,18 @@
     var isEdit = !!sv, id = isEdit ? _esc(sv.id) : '', statusVal = isEdit ? (sv.status || 'draft') : 'draft';
     var html = '<div style="border:2px solid var(--amber-light);border-radius:10px;padding:16px;background:var(--surface-card);margin-bottom:12px;">';
     html += '<h4 style="margin:0 0 12px;">' + (isEdit ? 'Edit Survey' : 'New Survey') + '</h4>';
-    html += '<div style="margin-bottom:10px;"><label style="font-weight:600;font-size:0.88rem;display:block;margin-bottom:4px;">Name *</label>';
+    html += '<div style="margin-bottom:10px;"><label style="font-weight:600;font-size:0.9rem;display:block;margin-bottom:4px;">Name *</label>';
     html += '<input id="csSvName" class="form-input" style="width:100%;box-sizing:border-box;" value="' + (isEdit ? _esc(sv.name || '') : '') + '" placeholder="Survey name"></div>';
-    html += '<div style="margin-bottom:10px;"><label style="font-weight:600;font-size:0.88rem;display:block;margin-bottom:4px;">Group *</label>';
+    html += '<div style="margin-bottom:10px;"><label style="font-weight:600;font-size:0.9rem;display:block;margin-bottom:4px;">Group *</label>';
     html += '<select id="csSvGroup" class="form-select" style="width:100%;"><option value="">— select group —</option>';
     Object.values(groupsData).forEach(function (g) { html += '<option value="' + _esc(g.id) + '"' + (isEdit && sv.groupId === g.id ? ' selected' : '') + '>' + _esc(g.name) + '</option>'; });
     html += '</select></div>';
-    html += '<div style="margin-bottom:10px;"><label style="font-weight:600;font-size:0.88rem;display:block;margin-bottom:4px;">Status</label>';
+    html += '<div style="margin-bottom:10px;"><label style="font-weight:600;font-size:0.9rem;display:block;margin-bottom:4px;">Status</label>';
     html += '<select id="csSvStatus" class="form-select" style="width:100%;">';
     ['draft','active','inactive'].forEach(function (s) { html += '<option value="' + s + '"' + (statusVal === s ? ' selected' : '') + '>' + s + '</option>'; });
     html += '</select></div>';
     var closesAtVal = isEdit && sv.closesAt ? sv.closesAt.substring(0, 16) : '';
-    html += '<div style="margin-bottom:12px;"><label style="font-weight:600;font-size:0.88rem;display:block;margin-bottom:4px;">Closes at <span style="font-weight:400;color:var(--warm-gray);">(optional)</span></label>';
+    html += '<div style="margin-bottom:12px;"><label style="font-weight:600;font-size:0.9rem;display:block;margin-bottom:4px;">Closes at <span style="font-weight:400;color:var(--warm-gray);">(optional)</span></label>';
     html += '<input id="csSvClosesAt" type="datetime-local" class="form-input" style="width:100%;box-sizing:border-box;" value="' + closesAtVal + '"></div>';
     html += '<div style="display:flex;gap:8px;"><button class="btn btn-primary btn-small" onclick="csSaveSurvey(\'' + id + '\')">' + (isEdit ? 'Save' : 'Create') + '</button>';
     html += '<button class="btn btn-secondary btn-small" onclick="csCancelSurvey()">Cancel</button></div></div>';
@@ -913,10 +913,10 @@
       var sv = surveysDefData[t.surveyId], isActive = t.isActive !== false;
       html += '<div style="border:1px solid var(--cream-dark);border-radius:8px;padding:12px 16px;background:var(--surface-card);display:flex;align-items:center;gap:10px;">';
       html += '<div style="flex:1;"><span style="font-weight:600;">' + _esc(t.eventType) + '</span>';
-      html += '<span style="margin-left:8px;font-size:0.83rem;color:var(--warm-gray);">→ ' + _esc(sv ? sv.name : (t.surveyId || '—')) + '</span>';
+      html += '<span style="margin-left:8px;font-size:0.85rem;color:var(--warm-gray);">→ ' + _esc(sv ? sv.name : (t.surveyId || '—')) + '</span>';
       if (t.delayHours) html += '<span style="margin-left:8px;font-size:0.78rem;color:var(--warm-gray);">' + _esc(String(t.delayHours)) + 'h delay</span>';
       html += '</div>';
-      html += '<span style="background:' + (isActive ? 'rgba(42,124,111,0.15)' : 'rgba(0,0,0,0.10)') + ';color:' + (isActive ? 'var(--teal)' : 'var(--warm-gray)') + ';padding:2px 10px;border-radius:12px;font-size:0.75rem;">' + (isActive ? 'active' : 'inactive') + '</span>';
+      html += '<span style="background:' + (isActive ? 'rgba(42,124,111,0.15)' : 'rgba(0,0,0,0.10)') + ';color:' + (isActive ? 'var(--teal)' : 'var(--warm-gray)') + ';padding:2px 10px;border-radius:12px;font-size:0.78rem;">' + (isActive ? 'active' : 'inactive') + '</span>';
       html += '<button class="btn btn-secondary btn-small" onclick="csEditTrigger(\'' + _esc(t.id) + '\')">Edit</button>';
       html += '<button class="btn btn-danger btn-small" onclick="csDeleteTrigger(\'' + _esc(t.id) + '\')">Delete</button></div>';
     });
@@ -927,15 +927,15 @@
     var isEdit = !!t, id = isEdit ? _esc(t.id) : '', isActive = isEdit ? (t.isActive !== false) : true;
     var html = '<div style="border:2px solid var(--amber-light);border-radius:10px;padding:16px;background:var(--surface-card);margin-bottom:12px;">';
     html += '<h4 style="margin:0 0 12px;">' + (isEdit ? 'Edit Trigger' : 'New Trigger') + '</h4>';
-    html += '<div style="margin-bottom:10px;"><label style="font-weight:600;font-size:0.88rem;display:block;margin-bottom:4px;">Event Type *</label>';
+    html += '<div style="margin-bottom:10px;"><label style="font-weight:600;font-size:0.9rem;display:block;margin-bottom:4px;">Event Type *</label>';
     html += '<input id="csTEventType" class="form-input" style="width:100%;box-sizing:border-box;" value="' + (isEdit ? _esc(t.eventType || '') : '') + '" placeholder="e.g. order_complete"></div>';
-    html += '<div style="margin-bottom:10px;"><label style="font-weight:600;font-size:0.88rem;display:block;margin-bottom:4px;">Survey *</label>';
+    html += '<div style="margin-bottom:10px;"><label style="font-weight:600;font-size:0.9rem;display:block;margin-bottom:4px;">Survey *</label>';
     html += '<select id="csTSurveyId" class="form-select" style="width:100%;"><option value="">— select survey —</option>';
     Object.values(surveysDefData).forEach(function (sv) { html += '<option value="' + _esc(sv.id) + '"' + (isEdit && t.surveyId === sv.id ? ' selected' : '') + '>' + _esc(sv.name) + '</option>'; });
     html += '</select></div>';
-    html += '<div style="margin-bottom:10px;"><label style="font-weight:600;font-size:0.88rem;display:block;margin-bottom:4px;">Delay (hours)</label>';
+    html += '<div style="margin-bottom:10px;"><label style="font-weight:600;font-size:0.9rem;display:block;margin-bottom:4px;">Delay (hours)</label>';
     html += '<input id="csTDelay" type="number" min="0" class="form-input" style="width:100%;box-sizing:border-box;" value="' + (isEdit ? _esc(String(t.delayHours || 0)) : '0') + '"></div>';
-    html += '<div style="margin-bottom:12px;display:flex;align-items:center;gap:8px;"><input type="checkbox" id="csTActive"' + (isActive ? ' checked' : '') + '><label for="csTActive" style="font-size:0.88rem;">Active</label></div>';
+    html += '<div style="margin-bottom:12px;display:flex;align-items:center;gap:8px;"><input type="checkbox" id="csTActive"' + (isActive ? ' checked' : '') + '><label for="csTActive" style="font-size:0.9rem;">Active</label></div>';
     html += '<div style="display:flex;gap:8px;"><button class="btn btn-primary btn-small" onclick="csSaveTrigger(\'' + id + '\')">' + (isEdit ? 'Save' : 'Add') + '</button>';
     html += '<button class="btn btn-secondary btn-small" onclick="csCancelTrigger()">Cancel</button></div></div>';
     return html;
@@ -977,9 +977,9 @@
         html += '<div style="border:1px solid var(--cream-dark);border-radius:10px;padding:14px 16px;background:var(--surface-card);">';
         html += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">';
         html += '<span style="font-weight:600;">' + _esc(p.name) + '</span>';
-        html += '<span style="font-size:0.8rem;color:var(--warm-gray);font-family:monospace;">/' + _esc(p.slug || '') + '</span>';
-        html += '<span style="margin-left:auto;background:' + (p.storefrontEnabled ? 'rgba(42,124,111,0.15)' : 'rgba(0,0,0,0.10)') + ';color:' + (p.storefrontEnabled ? 'var(--teal)' : 'var(--warm-gray)') + ';padding:2px 10px;border-radius:12px;font-size:0.75rem;">' + (p.storefrontEnabled ? 'live' : 'hidden') + '</span></div>';
-        if (p.contentHtml) { var preview = p.contentHtml.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 100); html += '<div style="font-size:0.82rem;color:var(--warm-gray);margin-bottom:10px;">' + _esc(preview) + (preview.length === 100 ? '…' : '') + '</div>'; }
+        html += '<span style="font-size:0.78rem;color:var(--warm-gray);font-family:monospace;">/' + _esc(p.slug || '') + '</span>';
+        html += '<span style="margin-left:auto;background:' + (p.storefrontEnabled ? 'rgba(42,124,111,0.15)' : 'rgba(0,0,0,0.10)') + ';color:' + (p.storefrontEnabled ? 'var(--teal)' : 'var(--warm-gray)') + ';padding:2px 10px;border-radius:12px;font-size:0.78rem;">' + (p.storefrontEnabled ? 'live' : 'hidden') + '</span></div>';
+        if (p.contentHtml) { var preview = p.contentHtml.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 100); html += '<div style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:10px;">' + _esc(preview) + (preview.length === 100 ? '…' : '') + '</div>'; }
         html += '<div style="display:flex;gap:8px;flex-wrap:wrap;">';
         html += '<button class="btn btn-secondary btn-small" onclick="csTogglePolicyStorefront(\'' + _esc(p.id) + '\',' + (p.storefrontEnabled ? 'false' : 'true') + ')">' + (p.storefrontEnabled ? 'Hide from Storefront' : 'Show on Storefront') + '</button>';
         html += '<button class="btn btn-secondary btn-small" onclick="csEditPolicy(\'' + _esc(p.id) + '\')">Edit</button>';
@@ -995,13 +995,13 @@
     var isEdit = !!p, id = isEdit ? _esc(p.id) : '';
     var html = '<div style="border:2px solid var(--amber-light);border-radius:10px;padding:16px;background:var(--surface-card);margin-bottom:12px;">';
     html += '<h4 style="margin:0 0 12px;">' + (isEdit ? 'Edit Policy' : 'New Policy') + '</h4>';
-    html += '<div style="margin-bottom:10px;"><label style="font-weight:600;font-size:0.88rem;display:block;margin-bottom:4px;">Name *</label>';
+    html += '<div style="margin-bottom:10px;"><label style="font-weight:600;font-size:0.9rem;display:block;margin-bottom:4px;">Name *</label>';
     html += '<input id="csPName" class="form-input" style="width:100%;box-sizing:border-box;" value="' + (isEdit ? _esc(p.name || '') : '') + '" placeholder="e.g. Return Policy" oninput="csAutofillPolicySlug(this.value,' + (isEdit ? 'false' : 'true') + ')"></div>';
-    html += '<div style="margin-bottom:10px;"><label style="font-weight:600;font-size:0.88rem;display:block;margin-bottom:4px;">Slug</label>';
+    html += '<div style="margin-bottom:10px;"><label style="font-weight:600;font-size:0.9rem;display:block;margin-bottom:4px;">Slug</label>';
     html += '<input id="csPSlug" class="form-input" style="width:100%;box-sizing:border-box;" value="' + (isEdit ? _esc(p.slug || '') : '') + '" placeholder="return-policy"></div>';
-    html += '<div style="margin-bottom:10px;"><label style="font-weight:600;font-size:0.88rem;display:block;margin-bottom:4px;">Content (HTML)</label>';
-    html += '<textarea id="csPContent" class="form-input" rows="10" style="width:100%;box-sizing:border-box;font-family:monospace;font-size:0.82rem;">' + (isEdit ? _esc(p.contentHtml || '') : '') + '</textarea></div>';
-    html += '<div style="margin-bottom:14px;display:flex;align-items:center;gap:8px;"><input type="checkbox" id="csPStorefront"' + (isEdit && p.storefrontEnabled ? ' checked' : '') + '><label for="csPStorefront" style="font-size:0.88rem;cursor:pointer;">Show on storefront</label></div>';
+    html += '<div style="margin-bottom:10px;"><label style="font-weight:600;font-size:0.9rem;display:block;margin-bottom:4px;">Content (HTML)</label>';
+    html += '<textarea id="csPContent" class="form-input" rows="10" style="width:100%;box-sizing:border-box;font-family:monospace;font-size:0.85rem;">' + (isEdit ? _esc(p.contentHtml || '') : '') + '</textarea></div>';
+    html += '<div style="margin-bottom:14px;display:flex;align-items:center;gap:8px;"><input type="checkbox" id="csPStorefront"' + (isEdit && p.storefrontEnabled ? ' checked' : '') + '><label for="csPStorefront" style="font-size:0.9rem;cursor:pointer;">Show on storefront</label></div>';
     html += '<div style="display:flex;gap:8px;"><button class="btn btn-primary btn-small" onclick="csSavePolicy(\'' + id + '\')">' + (isEdit ? 'Save' : 'Create') + '</button>';
     html += '<button class="btn btn-secondary btn-small" onclick="csCancelPolicy()">Cancel</button></div></div>';
     return html;
@@ -1153,7 +1153,7 @@
     }
 
     var thStyle = 'padding:8px 12px;text-align:left;font-size:0.78rem;color:var(--warm-gray);font-weight:600;text-transform:uppercase;letter-spacing:0.05em;border-bottom:1px solid var(--cream-dark);white-space:nowrap;';
-    var tdStyle = 'padding:9px 12px;font-size:0.87rem;border-bottom:1px solid var(--cream-dark);';
+    var tdStyle = 'padding:9px 12px;font-size:0.85rem;border-bottom:1px solid var(--cream-dark);';
 
     var html = '<div style="overflow-x:auto;">';
     html += '<table style="width:100%;border-collapse:collapse;background:var(--surface-card);border-radius:10px;overflow:hidden;border:1px solid var(--cream-dark);">';
@@ -1223,7 +1223,7 @@
     }
 
     var thStyle = 'padding:8px 12px;text-align:left;font-size:0.78rem;color:var(--warm-gray);font-weight:600;text-transform:uppercase;letter-spacing:0.05em;border-bottom:1px solid var(--cream-dark);white-space:nowrap;';
-    var tdStyle = 'padding:9px 12px;font-size:0.87rem;border-bottom:1px solid var(--cream-dark);';
+    var tdStyle = 'padding:9px 12px;font-size:0.85rem;border-bottom:1px solid var(--cream-dark);';
 
     html += '<div style="overflow-x:auto;">';
     html += '<table style="width:100%;border-collapse:collapse;background:var(--surface-card);border-radius:10px;overflow:hidden;border:1px solid var(--cream-dark);">';

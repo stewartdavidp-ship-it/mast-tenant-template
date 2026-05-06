@@ -2277,12 +2277,12 @@
       var pVer = Number(p.version) || 1;
       var pHasChild = !!findChildVersion(pid);
       if (pVer >= 2) {
-        versionBadge = ' <span class="status-badge" style="background:rgba(217,119,6,0.15);color:#b45309;font-size:0.68rem;padding:2px 6px;">v' + pVer + '</span>';
+        versionBadge = ' <span class="status-badge" style="background:rgba(217,119,6,0.15);color:#b45309;font-size:0.72rem;padding:2px 6px;">v' + pVer + '</span>';
       } else if (pHasChild) {
-        versionBadge = ' <span class="status-badge" style="background:rgba(217,119,6,0.10);color:#b45309;font-size:0.68rem;padding:2px 6px;" title="A v2 Draft exists for this product">v1 · v2 in dev</span>';
+        versionBadge = ' <span class="status-badge" style="background:rgba(217,119,6,0.10);color:#b45309;font-size:0.72rem;padding:2px 6px;" title="A v2 Draft exists for this product">v1 · v2 in dev</span>';
       }
       var pendingBadge = p.hasPendingRevision
-        ? ' <span class="status-badge" style="background:rgba(217,119,6,0.18);color:#b45309;font-size:0.68rem;padding:2px 6px;" title="Pending revision">⚠ pending</span>'
+        ? ' <span class="status-badge" style="background:rgba(217,119,6,0.18);color:#b45309;font-size:0.72rem;padding:2px 6px;" title="Pending revision">⚠ pending</span>'
         : '';
       var _thumbSrc = (typeof window.firstProductImage === 'function') ? window.firstProductImage(p) : '';
       html += '<td style="padding:4px 4px;width:44px;vertical-align:middle;">' +
@@ -2297,9 +2297,9 @@
       // Mode badge for VAR/Resell — render before the recipe column
       var modeBadgeHtml = '';
       if (atype === 'var') {
-        modeBadgeHtml = ' <span class="status-badge" style="background:rgba(196,133,60,0.15);color:var(--amber);font-size:0.68rem;padding:2px 6px;">VAR</span>';
+        modeBadgeHtml = ' <span class="status-badge" style="background:rgba(196,133,60,0.15);color:var(--amber);font-size:0.72rem;padding:2px 6px;">VAR</span>';
       } else if (atype === 'resell') {
-        modeBadgeHtml = ' <span class="status-badge" style="background:rgba(42,124,111,0.15);color:var(--teal);font-size:0.68rem;padding:2px 6px;">Resell</span>';
+        modeBadgeHtml = ' <span class="status-badge" style="background:rgba(42,124,111,0.15);color:var(--teal);font-size:0.72rem;padding:2px 6px;">Resell</span>';
       }
       if (hasRecipe) {
         var dirtyIcon = recipe.costsDirty ? ' <span title="Costs changed" style="color:#f59e0b;">⚠</span>' : '';
@@ -2645,7 +2645,7 @@
     // Components section
     html += '<div data-readiness-section="define-section" style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:16px;margin-bottom:16px;">';
     html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">';
-    html += '<h4 style="margin:0;font-size:1.05rem;">Components</h4>';
+    html += '<h4 style="margin:0;font-size:1.15rem;">Components</h4>';
     html += '<button class="btn btn-secondary btn-small" onclick="makerVarAddComponent()">+ Add component</button>';
     html += '</div>';
     if (components.length === 0) {
@@ -2687,7 +2687,7 @@
     // Value-Add Steps section
     html += '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:16px;margin-bottom:16px;">';
     html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">';
-    html += '<h4 style="margin:0;font-size:1.05rem;">Value-Add Steps</h4>';
+    html += '<h4 style="margin:0;font-size:1.15rem;">Value-Add Steps</h4>';
     html += '<button class="btn btn-secondary btn-small" onclick="makerVarAddStep()">+ Add step</button>';
     html += '</div>';
     if (steps.length === 0) {
@@ -2744,7 +2744,7 @@
 
     // Supplier
     html += '<div data-readiness-section="define-section" style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:16px;margin-bottom:16px;">';
-    html += '<h4 style="margin:0 0 12px;font-size:1.05rem;">Supplier</h4>';
+    html += '<h4 style="margin:0 0 12px;font-size:1.15rem;">Supplier</h4>';
     html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">';
     html += resellField('Supplier name', 'text', supplier.supplierName || '', 'supplier.supplierName');
     html += resellField('Supplier SKU', 'text', supplier.supplierSku || '', 'supplier.supplierSku');
@@ -2754,7 +2754,7 @@
 
     // Landed cost
     html += '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:16px;margin-bottom:16px;">';
-    html += '<h4 style="margin:0 0 12px;font-size:1.05rem;">Landed cost (per unit)</h4>';
+    html += '<h4 style="margin:0 0 12px;font-size:1.15rem;">Landed cost (per unit)</h4>';
     html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">';
     html += resellField('Freight ($)', 'number', landed.freight || 0, 'landedCost.freight', 0.01);
     // Duty with mode picker
@@ -2771,7 +2771,7 @@
 
     // Lead time
     html += '<div data-readiness-section="capacity-section" style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:16px;margin-bottom:16px;">';
-    html += '<h4 style="margin:0 0 12px;font-size:1.05rem;">Lead time</h4>';
+    html += '<h4 style="margin:0 0 12px;font-size:1.15rem;">Lead time</h4>';
     html += '<div style="max-width:240px;">';
     html += '<label style="display:block;font-size:0.78rem;font-weight:600;margin-bottom:4px;">Lead time (days)</label>';
     html += '<input type="number" step="1" min="0" value="' + leadTimeDays + '" oninput="makerResellSet(\'leadTimeDays\',this.value)" style="width:100%;padding:6px 8px;font-size:0.85rem;">';
@@ -3376,9 +3376,9 @@
 
   function readinessIcon(state) {
     // ✅ pass, ⚠ optional-fail, ⏳ pending
-    if (state === 'pass') return '<span style="color:#2a7c6f;font-size:1.05rem;">✅</span>';
-    if (state === 'warn') return '<span style="color:#b45309;font-size:1.05rem;">⚠️</span>';
-    return '<span style="color:#9ca3af;font-size:1.05rem;">⏳</span>';
+    if (state === 'pass') return '<span style="color:#2a7c6f;font-size:1.15rem;">✅</span>';
+    if (state === 'warn') return '<span style="color:#b45309;font-size:1.15rem;">⚠️</span>';
+    return '<span style="color:#9ca3af;font-size:1.15rem;">⏳</span>';
   }
 
   function renderReadinessChecklistPanel(product) {
@@ -3421,7 +3421,7 @@
       var state = pass ? 'pass' : (it.required ? 'pending' : 'warn');
       html += '<div role="button" tabindex="0" onclick="makerScrollToReadinessSection(\'' + it.scrollTo + '\')" style="display:flex;align-items:flex-start;gap:8px;padding:8px 10px;border:1px solid ' + (pass ? 'rgba(42,124,111,0.25)' : 'rgba(0,0,0,0.08)') + ';border-radius:6px;background:' + (pass ? 'rgba(42,124,111,0.04)' : 'rgba(0,0,0,0.02)') + ';cursor:pointer;">';
       html += '<div>' + readinessIcon(state) + '</div>';
-      html += '<div style="flex:1;min-width:0;"><div style="font-weight:600;font-size:0.82rem;">' + MastAdmin.esc(it.label) + (it.required ? '' : ' <span style="font-weight:400;color:var(--warm-gray,#777);font-size:0.7rem;">(optional)</span>') + '</div>';
+      html += '<div style="flex:1;min-width:0;"><div style="font-weight:600;font-size:0.85rem;">' + MastAdmin.esc(it.label) + (it.required ? '' : ' <span style="font-weight:400;color:var(--warm-gray,#777);font-size:0.72rem;">(optional)</span>') + '</div>';
       html += '<div style="font-size:0.72rem;color:var(--warm-gray,#777);">' + MastAdmin.esc(it.hint) + '</div></div>';
       html += '</div>';
     });
@@ -3454,7 +3454,7 @@
     var html = '';
     html += '<div data-readiness-section="markup-section" style="background:var(--cream,#faf7f0);border:1px solid var(--cream-dark,#e5e1d8);border-radius:8px;padding:16px;margin-bottom:16px;">';
     html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">';
-    html += '<h4 style="margin:0;font-size:1.05rem;">Markup config</h4>' + hint + '</div>';
+    html += '<h4 style="margin:0;font-size:1.15rem;">Markup config</h4>' + hint + '</div>';
     html += '<div style="display:grid;grid-template-columns:repeat(3,minmax(120px,1fr));gap:12px;">';
     html += '<div><label style="display:block;font-size:0.78rem;font-weight:600;margin-bottom:4px;">Wholesale markup ×</label>';
     html += '<input type="number" step="0.05" min="0" value="' + w + '" oninput="makerSetMarkup(\'wholesaleMarkup\',this.value)" style="width:100%;padding:6px 8px;font-size:0.85rem;" placeholder="' + DEFAULT_MARKUPS.wholesaleMarkup + '"></div>';
@@ -4023,7 +4023,7 @@
     html += '<button class="btn btn-secondary btn-small" onclick="makerDiscardPendingChanges(\'' + pid + '\')">Discard</button>';
     html += '</div></div>';
     if (keys.length > 0) {
-      html += '<ul style="margin:8px 0 0;padding-left:20px;font-size:0.82rem;color:#92400e;">';
+      html += '<ul style="margin:8px 0 0;padding-left:20px;font-size:0.85rem;color:#92400e;">';
       keys.forEach(function(k) {
         var live = readNestedField(product, k);
         html += '<li><code>' + MastAdmin.esc(k) + '</code>: <span style="color:#9ca3af;text-decoration:line-through;">' + MastAdmin.esc(fmtPendingValue(live)) + '</span> → <span style="color:#b45309;font-weight:600;">' + MastAdmin.esc(fmtPendingValue(changes[k])) + '</span> <span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#d97706;margin-left:4px;" title="pending"></span></li>';
@@ -4155,7 +4155,7 @@
     if (!meta) return '';
     return '<span class="status-badge product-archived-substate-' + subState +
       '" style="background:' + meta.badgeBg + ';color:' + meta.badgeColor +
-      ';font-size:0.68rem;padding:2px 6px;border-radius:8px;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;margin-left:4px;">' +
+      ';font-size:0.72rem;padding:2px 6px;border-radius:8px;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;margin-left:4px;">' +
       MastAdmin.esc(meta.label) + '</span>';
   }
 
@@ -4263,7 +4263,7 @@
     modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.4);display:flex;align-items:center;justify-content:center;z-index:9000;';
     modal.innerHTML =
       '<div class="mast-modal" style="background:var(--surface-card,#fff);border-radius:12px;max-width:520px;width:92%;padding:20px 22px;box-shadow:0 20px 50px rgba(0,0,0,0.25);">' +
-        '<h3 style="margin:0 0 12px;font-family:\'Cormorant Garamond\',serif;font-weight:500;font-size:1.4rem;">Archive product</h3>' +
+        '<h3 style="margin:0 0 12px;font-family:\'Cormorant Garamond\',serif;font-weight:500;font-size:1.6rem;">Archive product</h3>' +
         '<div id="archiveModalBody">' + html + '</div>' +
         '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px;">' +
           '<button class="btn btn-secondary btn-small" onclick="makerArchiveModalCancel()">Cancel</button>' +
@@ -4573,7 +4573,7 @@
         'font-size:0.72rem;font-weight:600;cursor:pointer;text-transform:uppercase;letter-spacing:0.04em;">' + label + '</button>';
     }
     var html = '';
-    html += '<div class="mast-lens-toggle" style="display:inline-flex;gap:4px;align-items:center;font-size:0.7rem;color:var(--warm-gray,#777);">';
+    html += '<div class="mast-lens-toggle" style="display:inline-flex;gap:4px;align-items:center;font-size:0.72rem;color:var(--warm-gray,#777);">';
     html += '<span style="margin-right:4px;">Viewing as:</span>';
     html += pill('develop', 'Develop');
     html += pill('catalog', 'Catalog');
@@ -4688,7 +4688,7 @@
       html += '<label style="display:flex;gap:10px;align-items:flex-start;padding:9px 10px;border:1px solid #ddd;border-radius:6px;margin-bottom:6px;cursor:pointer;background:rgba(255,255,255,0.5);">';
       html += '<input type="radio" name="newPieceAcquisitionType" value="' + m.id + '"' + checked + ' style="margin-top:3px;flex:0 0 auto;">';
       html += '<span style="display:flex;flex-direction:column;gap:2px;">';
-      html += '<span style="font-weight:600;font-size:0.88rem;">' + m.label + '</span>';
+      html += '<span style="font-weight:600;font-size:0.9rem;">' + m.label + '</span>';
       html += '<span style="font-size:0.78rem;color:var(--warm-gray);line-height:1.35;">' + m.desc + '</span>';
       html += '</span>';
       html += '</label>';
@@ -4967,7 +4967,7 @@
       });
       if (moves.length > 0) {
         var savedAt = bs.spotSnapshotAt ? new Date(bs.spotSnapshotAt).toLocaleDateString() : 'last save';
-        html += '<div style="background:rgba(245,158,11,0.10);border:1px solid rgba(245,158,11,0.30);border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:0.88rem;color:var(--text,#2a2a2a);display:flex;align-items:center;gap:14px;flex-wrap:wrap;">';
+        html += '<div style="background:rgba(245,158,11,0.10);border:1px solid rgba(245,158,11,0.30);border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:0.9rem;color:var(--text,#2a2a2a);display:flex;align-items:center;gap:14px;flex-wrap:wrap;">';
         html += '<span style="font-weight:600;">Spot prices moved since ' + esc(savedAt) + ':</span>';
         moves.forEach(function(m) {
           var dirArrow = m.pct > 0 ? '↑' : '↓';
@@ -4976,11 +4976,11 @@
             dirArrow + ' ' + m.metal.charAt(0).toUpperCase() + m.metal.slice(1) +
             ' ' + (m.pct > 0 ? '+' : '') + m.pct.toFixed(1) + '%' +
           '</span>' +
-          '<span style="opacity:0.7;font-family:monospace;font-size:0.82rem;">' +
+          '<span style="opacity:0.7;font-family:monospace;font-size:0.85rem;">' +
             '$' + m.was.toFixed(2) + '→$' + m.now.toFixed(2) + '/oz' +
           '</span>';
         });
-        html += '<span style="opacity:0.7;font-size:0.82rem;flex-basis:100%;">Material costs are recomputed live; save to acknowledge.</span>';
+        html += '<span style="opacity:0.7;font-size:0.85rem;flex-basis:100%;">Material costs are recomputed live; save to acknowledge.</span>';
         html += '</div>';
       }
     }
@@ -5144,7 +5144,7 @@
     html += '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:24px;flex-wrap:wrap;">';
     html += '<div>';
     html += '<div style="font-size:0.78rem;text-transform:uppercase;letter-spacing:0.08em;opacity:0.7;font-weight:600;margin-bottom:4px;">Total Cost Per Unit</div>';
-    html += '<div style="font-family:monospace;font-size:2rem;font-weight:700;line-height:1;">$' + calc.totalCost.toFixed(2) + '</div>';
+    html += '<div style="font-family:monospace;font-size:1.6rem;font-weight:700;line-height:1;">$' + calc.totalCost.toFixed(2) + '</div>';
     html += '</div>';
     html += '<div style="font-size:0.85rem;opacity:0.85;display:flex;gap:16px;flex-wrap:wrap;">';
     html += '<span>Materials <span style="font-family:monospace;font-weight:600;">$' + calc.totalMaterialCost.toFixed(2) + '</span></span>';

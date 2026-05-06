@@ -243,7 +243,7 @@
       var status = o.status || 'placed';
       var sourceBadge = o.source === 'etsy' ? ' <span class="status-badge" style="' + etsySourceBadgeStyle() + '">Etsy</span>' : '';
       var effInv = getEffectiveInvoiceStatus(o);
-      var invBadge = effInv ? ' <span class="status-badge" style="font-size:0.68rem;padding:1px 6px;' + invoiceStatusBadgeStyle(effInv) + '">INV:' + effInv + '</span>' : '';
+      var invBadge = effInv ? ' <span class="status-badge" style="font-size:0.72rem;padding:1px 6px;' + invoiceStatusBadgeStyle(effInv) + '">INV:' + effInv + '</span>' : '';
       rowsHtml += '<tr onclick="viewOrder(\'' + esc(key) + '\')">' +
         '<td><span style="font-family:monospace;font-weight:600;">' + num + '</span>' + sourceBadge + '</td>' +
         '<td>' + esc(o.email || '') + '</td>' +
@@ -263,7 +263,7 @@
       var status = o.status || 'placed';
       var cardSourceBadge = o.source === 'etsy' ? '<span class="status-badge" style="margin-left:8px;' + etsySourceBadgeStyle() + '">Etsy</span>' : '';
       var cardEffInv = getEffectiveInvoiceStatus(o);
-      var cardInvBadge = cardEffInv ? '<span class="status-badge" style="margin-left:6px;font-size:0.68rem;padding:1px 6px;' + invoiceStatusBadgeStyle(cardEffInv) + '">INV:' + cardEffInv + '</span>' : '';
+      var cardInvBadge = cardEffInv ? '<span class="status-badge" style="margin-left:6px;font-size:0.72rem;padding:1px 6px;' + invoiceStatusBadgeStyle(cardEffInv) + '">INV:' + cardEffInv + '</span>' : '';
       var cardShippable = ['confirmed', 'building', 'pack', 'packing', 'packed', 'handed_to_carrier'].indexOf(status) !== -1;
       var cardBtns = '<div style="display:flex;gap:6px;flex-shrink:0;">';
       if (cardShippable) {
@@ -1233,7 +1233,7 @@
       // Header row
       h += '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;flex-wrap:wrap;gap:8px;">';
       h += '<div>';
-      h += '<div style="font-size:1.05rem;font-weight:700;">' + esc(o.invoiceNumber || '') + '</div>';
+      h += '<div style="font-size:1.15rem;font-weight:700;">' + esc(o.invoiceNumber || '') + '</div>';
       h += '<div style="font-size:0.78rem;color:var(--warm-gray-light);">Issue Date: ' + formatOrderDate(o.invoiceIssuedAt || new Date().toISOString()) + '</div>';
       h += '<div style="font-size:0.78rem;color:var(--warm-gray-light);">Due Date: ' + esc(o.invoiceDueDate || '—') + '</div>';
       h += '</div>';
@@ -1245,10 +1245,10 @@
       h += '<div style="margin-bottom:14px;">';
       h += '<div style="font-size:0.72rem;color:var(--warm-gray-light);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Bill To</div>';
       h += '<div style="font-size:0.85rem;">' + esc(ship.name || o.customerName || o.email || '') + '</div>';
-      if (o.email) h += '<div style="font-size:0.82rem;color:var(--warm-gray);">' + esc(o.email) + '</div>';
+      if (o.email) h += '<div style="font-size:0.85rem;color:var(--warm-gray);">' + esc(o.email) + '</div>';
       if (ship.address1) {
-        h += '<div style="font-size:0.82rem;color:var(--warm-gray);">' + esc(ship.address1) + (ship.address2 ? ', ' + esc(ship.address2) : '') + '</div>';
-        h += '<div style="font-size:0.82rem;color:var(--warm-gray);">' + esc(ship.city || '') + ', ' + esc(ship.state || '') + ' ' + esc(ship.zip || '') + '</div>';
+        h += '<div style="font-size:0.85rem;color:var(--warm-gray);">' + esc(ship.address1) + (ship.address2 ? ', ' + esc(ship.address2) : '') + '</div>';
+        h += '<div style="font-size:0.85rem;color:var(--warm-gray);">' + esc(ship.city || '') + ', ' + esc(ship.state || '') + ' ' + esc(ship.zip || '') + '</div>';
       }
       h += '</div>';
 
@@ -1272,9 +1272,9 @@
 
       // Totals
       h += '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px;margin-bottom:14px;">';
-      h += '<div style="font-size:0.82rem;color:var(--warm-gray);">Subtotal: $' + (o.subtotal || 0).toFixed(2) + '</div>';
-      if (o.tax) h += '<div style="font-size:0.82rem;color:var(--warm-gray);">Tax: $' + o.tax.toFixed(2) + '</div>';
-      if (o.shippingCost) h += '<div style="font-size:0.82rem;color:var(--warm-gray);">Shipping: $' + o.shippingCost.toFixed(2) + '</div>';
+      h += '<div style="font-size:0.85rem;color:var(--warm-gray);">Subtotal: $' + (o.subtotal || 0).toFixed(2) + '</div>';
+      if (o.tax) h += '<div style="font-size:0.85rem;color:var(--warm-gray);">Tax: $' + o.tax.toFixed(2) + '</div>';
+      if (o.shippingCost) h += '<div style="font-size:0.85rem;color:var(--warm-gray);">Shipping: $' + o.shippingCost.toFixed(2) + '</div>';
       h += '<div style="font-weight:700;">Total: $' + (o.total || 0).toFixed(2) + '</div>';
       h += '</div>';
 
@@ -1303,7 +1303,7 @@
         var sqLinkHtml = o.squareInvoiceUrl
           ? '<a href="' + esc(o.squareInvoiceUrl) + '" target="_blank" rel="noopener" style="color:var(--teal);">View on Square ↗</a>'
           : 'Square Invoice';
-        rows += '<div style="display:flex;justify-content:space-between;padding:4px 0;"><span style="color:var(--warm-gray-light);">Via Square</span><span style="font-size:0.82rem;">' + sqLinkHtml + '</span></div>';
+        rows += '<div style="display:flex;justify-content:space-between;padding:4px 0;"><span style="color:var(--warm-gray-light);">Via Square</span><span style="font-size:0.85rem;">' + sqLinkHtml + '</span></div>';
       }
 
       h += rows;
@@ -2698,7 +2698,7 @@
         '<td><span class="status-badge" style="' + (statusColors[c.status] || '') + 'font-size:0.72rem;">' + esc(statusLabel) + '</span></td>' +
         '<td style="font-size:0.85rem;">' + esc((c.channel || '').toUpperCase()) + '</td>' +
         '<td style="font-size:0.85rem;">' + esc(dateStr) + '</td>' +
-        '<td>' + (c.ticketId ? '<a href="#" onclick="event.stopPropagation();event.preventDefault();viewCommissionTicket(\'' + esc(c.ticketId) + '\')" style="color:var(--teal);font-size:0.82rem;white-space:nowrap;">View ticket →</a>' : '<span style="color:var(--warm-gray);font-size:0.82rem;">—</span>') + '</td>' +
+        '<td>' + (c.ticketId ? '<a href="#" onclick="event.stopPropagation();event.preventDefault();viewCommissionTicket(\'' + esc(c.ticketId) + '\')" style="color:var(--teal);font-size:0.85rem;white-space:nowrap;">View ticket →</a>' : '<span style="color:var(--warm-gray);font-size:0.85rem;">—</span>') + '</td>' +
       '</tr>';
     });
     document.getElementById('commissionsTableBody').innerHTML = html;

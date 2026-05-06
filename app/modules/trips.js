@@ -1183,15 +1183,15 @@
       '<title>Trip Mileage Report — ' + year + '</title>' +
       '<style>' +
         'body{font-family:\'DM Sans\',sans-serif;font-size:13px;color:#111;margin:24px;}' +
-        'h2{margin:0 0 4px;font-size:1.1rem;}' +
+        'h2{margin:0 0 4px;font-size:1.15rem;}' +
         'p{margin:0 0 16px;font-size:0.85rem;color:#666;}' +
         'table{width:100%;border-collapse:collapse;}' +
         'th,td{padding:6px 8px;text-align:left;border-bottom:1px solid #e0e0e0;}' +
         'th{font-weight:700;border-bottom:2px solid #ccc;}' +
         '.stat-row{display:flex;gap:24px;margin-bottom:20px;}' +
         '.stat{background:#f8f8f8;border-radius:6px;padding:12px 16px;min-width:120px;}' +
-        '.stat-label{font-size:0.7rem;text-transform:uppercase;color:#666;margin-bottom:2px;}' +
-        '.stat-value{font-size:1.4rem;font-weight:700;}' +
+        '.stat-label{font-size:0.72rem;text-transform:uppercase;color:#666;margin-bottom:2px;}' +
+        '.stat-value{font-size:1.6rem;font-weight:700;}' +
         '.highlight{background:#ecfdf5;}.highlight .stat-value{color:#059669;}' +
         '@media print{body{margin:0;}}' +
       '</style></head><body>' +

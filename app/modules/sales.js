@@ -1120,7 +1120,7 @@ function showManualSaleModal(eventId) {
       '<div class="form-group" style="flex:1;">' +
         '<label for="manualSaleDate">Payment Received Date</label>' +
         '<input type="date" id="manualSaleDate" value="' + today + '" style="width:100%;padding:8px;border:1px solid var(--cream-dark);border-radius:6px;">' +
-        '<div style="font-size:0.75rem;color:var(--warm-gray);margin-top:4px;">For wholesale: use the date payment arrived, not invoice date.</div>' +
+        '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:4px;">For wholesale: use the date payment arrived, not invoice date.</div>' +
       '</div>' +
     '</div>' +
     '<div class="form-group">' +

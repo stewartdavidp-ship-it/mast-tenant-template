@@ -105,7 +105,7 @@ function skeletonTable(rows, cols) {
 function statCard(label, value, color, sub) {
   return '<div style="background:var(--bg-secondary,#232323);border-radius:10px;padding:14px;flex:1;min-width:120px;">' +
     '<div style="font-size:0.72rem;color:var(--warm-gray,#888);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">' + label + '</div>' +
-    '<div style="font-size:1.2rem;font-weight:700;color:' + (color||'var(--text,#fff)') + ';">' + value + '</div>' +
+    '<div style="font-size:1.15rem;font-weight:700;color:' + (color||'var(--text,#fff)') + ';">' + value + '</div>' +
     (sub ? '<div style="font-size:0.72rem;color:var(--warm-gray-light,#666);margin-top:2px;">' + sub + '</div>' : '') +
     '</div>';
 }
@@ -151,7 +151,7 @@ function setupRevenueTab() {
   var el = document.getElementById('financeRevenueTab');
   el.innerHTML =
     '<div style="padding:20px;max-width:1100px;">' +
-    '<h2 style="margin:0 0 16px 0;font-size:1.2rem;font-weight:700;">Revenue</h2>' +
+    '<h2 style="margin:0 0 16px 0;font-size:1.15rem;font-weight:700;">Revenue</h2>' +
     periodPicker('fRev', monthStart(), monthEnd()) +
     '<div id="fRevContent">' + skeletonCards(4) + '</div>' +
     '</div>';
@@ -230,8 +230,8 @@ function renderRevenue(totalCents, byChannel, txns, start, end) {
 
   if (totalCents === 0) {
     return h + '<div style="text-align:center;padding:48px 20px;color:var(--warm-gray,#888);">' +
-      '<div style="font-size:2rem;margin-bottom:8px;">💰</div>' +
-      '<div style="font-size:0.95rem;font-weight:500;">No revenue in this period</div>' +
+      '<div style="font-size:1.6rem;margin-bottom:8px;">💰</div>' +
+      '<div style="font-size:0.9rem;font-weight:500;">No revenue in this period</div>' +
       '<div style="font-size:0.85rem;margin-top:4px;">Try selecting a different date range.</div></div>';
   }
 
@@ -244,7 +244,7 @@ function renderRevenue(totalCents, byChannel, txns, start, end) {
       var color = channelColors[ch] || '#888';
       h += '<div style="background:var(--bg-secondary,#232323);border-radius:8px;padding:10px 14px;min-width:130px;border-left:3px solid ' + color + ';">';
       h += '<div style="font-size:0.85rem;font-weight:600;text-transform:capitalize;">' + e(ch) + '</div>';
-      h += '<div style="font-size:1.05rem;font-weight:700;">' + fmt$(byChannel[ch]) + '</div>';
+      h += '<div style="font-size:1.15rem;font-weight:700;">' + fmt$(byChannel[ch]) + '</div>';
       h += '<div style="font-size:0.72rem;color:var(--warm-gray,#888);">' + Math.round(byChannel[ch]/totalCents*100) + '% of total</div>';
       h += '</div>';
     });
@@ -266,15 +266,15 @@ function renderRevenue(totalCents, byChannel, txns, start, end) {
       h += '<div style="background:var(--bg-secondary,#232323);border-radius:8px;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;gap:12px;">';
       h += '<div style="flex:1;min-width:0;">';
       h += '<div style="font-size:0.85rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + e(t.desc) + '</div>';
-      h += '<div style="font-size:0.75rem;color:var(--warm-gray,#888);margin-top:2px;">';
+      h += '<div style="font-size:0.78rem;color:var(--warm-gray,#888);margin-top:2px;">';
       h += toDateShort(t.date);
-      h += ' · <span style="background:' + color + ';color:#fff;padding:1px 5px;border-radius:3px;font-size:0.7rem;text-transform:capitalize;">' + e(t.channel) + '</span>';
+      h += ' · <span style="background:' + color + ';color:#fff;padding:1px 5px;border-radius:3px;font-size:0.72rem;text-transform:capitalize;">' + e(t.channel) + '</span>';
       if (t.ref) h += ' · <span style="opacity:0.7;">' + e(t.ref) + '</span>';
       h += '</div></div>';
-      h += '<div style="font-weight:700;font-size:0.95rem;flex-shrink:0;">' + fmt$(t.cents) + '</div>';
+      h += '<div style="font-weight:700;font-size:0.9rem;flex-shrink:0;">' + fmt$(t.cents) + '</div>';
       h += '</div>';
     });
-    if (txns.length > 100) h += '<div style="color:var(--warm-gray,#888);font-size:0.8rem;padding:8px 0;">Showing 100 of ' + txns.length + ' transactions.</div>';
+    if (txns.length > 100) h += '<div style="color:var(--warm-gray,#888);font-size:0.78rem;padding:8px 0;">Showing 100 of ' + txns.length + ' transactions.</div>';
     h += '</div>';
   }
 
@@ -288,7 +288,7 @@ function setupExpensesTab() {
   var el = document.getElementById('financeExpensesTab');
   el.innerHTML =
     '<div style="padding:20px;max-width:1100px;">' +
-    '<h2 style="margin:0 0 16px 0;font-size:1.2rem;font-weight:700;">Expenses</h2>' +
+    '<h2 style="margin:0 0 16px 0;font-size:1.15rem;font-weight:700;">Expenses</h2>' +
     '<div id="fExpBanks" style="margin-bottom:16px;">' + skeletonCards(2) + '</div>' +
     periodPicker('fExp', monthStart(), monthEnd()) +
     '<div id="fExpContent">' + skeletonTable(6,4) + '</div>' +
@@ -305,7 +305,7 @@ async function loadFinExpBanks() {
     var keys = Object.keys(items);
     if (keys.length === 0) {
       el.innerHTML = '<div style="background:var(--bg-secondary,#232323);border-radius:10px;padding:14px 18px;margin-bottom:4px;display:flex;align-items:center;gap:10px;">' +
-        '<span style="font-size:1.3rem;">🏦</span>' +
+        '<span style="font-size:1.15rem;">🏦</span>' +
         '<div><div style="font-size:0.9rem;font-weight:600;">No banks connected</div>' +
         '<div style="font-size:0.78rem;color:var(--warm-gray,#888);">Connect a bank in the Expenses view to import transactions automatically.</div></div>' +
         '</div>';
@@ -319,7 +319,7 @@ async function loadFinExpBanks() {
       h += '<div style="background:var(--bg-secondary,#232323);border-radius:10px;padding:12px 16px;flex:1;min-width:200px;display:flex;justify-content:space-between;align-items:center;gap:10px;">';
       h += '<div>';
       h += '<div style="font-weight:600;font-size:0.9rem;">' + e(item.institutionName || 'Bank') + '</div>';
-      h += '<div style="font-size:0.75rem;color:var(--warm-gray,#888);">' + acctCount + ' account' + (acctCount !== 1 ? 's' : '');
+      h += '<div style="font-size:0.78rem;color:var(--warm-gray,#888);">' + acctCount + ' account' + (acctCount !== 1 ? 's' : '');
       if (item.lastSyncAt) h += ' · Synced ' + toDateShort(item.lastSyncAt);
       h += '</div></div>';
       h += '<div style="display:flex;gap:6px;align-items:center;">';
@@ -380,8 +380,8 @@ function renderFinExpenses(expenses, start, end) {
 
   if (expenses.length === 0) {
     return h + '<div style="text-align:center;padding:48px 20px;color:var(--warm-gray,#888);">' +
-      '<div style="font-size:2rem;margin-bottom:8px;">💸</div>' +
-      '<div style="font-size:0.95rem;font-weight:500;">No expenses in this period</div>' +
+      '<div style="font-size:1.6rem;margin-bottom:8px;">💸</div>' +
+      '<div style="font-size:0.9rem;font-weight:500;">No expenses in this period</div>' +
       '<div style="font-size:0.85rem;margin-top:4px;">Connect a bank or add expenses in the Expenses view.</div></div>';
   }
 
@@ -394,8 +394,8 @@ function renderFinExpenses(expenses, start, end) {
     cats.forEach(function(cat) {
       var color = catColors[cat] || '#6b7280';
       h += '<div style="background:var(--bg-secondary,#232323);border-radius:8px;padding:8px 12px;border-left:3px solid ' + color + ';">';
-      h += '<div style="font-size:0.8rem;font-weight:600;text-transform:capitalize;">' + e(cat.replace(/_/g,' ')) + '</div>';
-      h += '<div style="font-size:0.95rem;font-weight:700;">' + fmt$(byCategory[cat]) + '</div>';
+      h += '<div style="font-size:0.78rem;font-weight:600;text-transform:capitalize;">' + e(cat.replace(/_/g,' ')) + '</div>';
+      h += '<div style="font-size:0.9rem;font-weight:700;">' + fmt$(byCategory[cat]) + '</div>';
       h += '</div>';
     });
     h += '</div></div>';
@@ -411,15 +411,15 @@ function renderFinExpenses(expenses, start, end) {
     h += '<div style="background:var(--bg-secondary,#232323);border-radius:8px;padding:10px 14px;border-left:3px solid ' + (needsReview ? '#eab308' : 'transparent') + ';display:flex;justify-content:space-between;align-items:center;gap:12px;">';
     h += '<div style="flex:1;min-width:0;">';
     h += '<div style="font-size:0.85rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + e(ex.merchantName || ex.description || 'Expense') + '</div>';
-    h += '<div style="font-size:0.75rem;color:var(--warm-gray,#888);margin-top:2px;">';
+    h += '<div style="font-size:0.78rem;color:var(--warm-gray,#888);margin-top:2px;">';
     h += e(ex.date || '');
-    h += ' · <span style="background:' + color + '22;color:' + color + ';padding:1px 6px;border-radius:3px;font-size:0.7rem;">' + e(cat.replace(/_/g,' ')) + '</span>';
+    h += ' · <span style="background:' + color + '22;color:' + color + ';padding:1px 6px;border-radius:3px;font-size:0.72rem;">' + e(cat.replace(/_/g,' ')) + '</span>';
     if (needsReview) h += ' · <span style="color:#eab308;font-size:0.72rem;">⚠ Review needed</span>';
     h += '</div></div>';
-    h += '<div style="font-weight:700;font-size:0.95rem;flex-shrink:0;">' + fmt$(ex.amount || 0) + '</div>';
+    h += '<div style="font-weight:700;font-size:0.9rem;flex-shrink:0;">' + fmt$(ex.amount || 0) + '</div>';
     h += '</div>';
   });
-  if (expenses.length > 100) h += '<div style="color:var(--warm-gray,#888);font-size:0.8rem;padding:8px 0;">Showing 100 of ' + expenses.length + ' expenses.</div>';
+  if (expenses.length > 100) h += '<div style="color:var(--warm-gray,#888);font-size:0.78rem;padding:8px 0;">Showing 100 of ' + expenses.length + ' expenses.</div>';
   h += '</div>';
 
   return h;
@@ -448,8 +448,8 @@ function setupPlTab() {
   el.innerHTML =
     '<div style="padding:20px;max-width:1100px;">' +
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">' +
-    '<h2 style="margin:0;font-size:1.2rem;font-weight:700;">Profit & Loss</h2>' +
-    '<span style="background:rgba(239,68,68,0.12);color:#ef4444;padding:3px 10px;border-radius:6px;font-size:0.75rem;font-weight:600;">Admin Only</span>' +
+    '<h2 style="margin:0;font-size:1.15rem;font-weight:700;">Profit & Loss</h2>' +
+    '<span style="background:rgba(239,68,68,0.12);color:#ef4444;padding:3px 10px;border-radius:6px;font-size:0.78rem;font-weight:600;">Admin Only</span>' +
     '</div>' +
     periodPicker('fPl', monthStart(), monthEnd()) +
     '<div id="fPlContent">' + skeletonCards(4) + '</div>' +
@@ -610,8 +610,8 @@ function renderPnl(curr, prev, start, end, prior) {
   }
 
   h += '<div style="display:flex;justify-content:space-between;padding:9px 0;border-top:2px solid rgba(255,255,255,0.2);margin-top:8px;">';
-  h += '<span style="font-size:1.1rem;font-weight:700;">Net Profit</span>';
-  h += '<span style="font-size:1.1rem;font-weight:700;color:' + (curr.netProfit >= 0 ? '#22c55e' : '#ef4444') + ';">' + fmt$(curr.netProfit) + '</span>';
+  h += '<span style="font-size:1.15rem;font-weight:700;">Net Profit</span>';
+  h += '<span style="font-size:1.15rem;font-weight:700;color:' + (curr.netProfit >= 0 ? '#22c55e' : '#ef4444') + ';">' + fmt$(curr.netProfit) + '</span>';
   if (netMarginPct) h += '<span style="font-size:0.78rem;color:var(--warm-gray,#888);align-self:center;margin-left:8px;">' + netMarginPct + '% net</span>';
   h += '</div>';
 
@@ -620,14 +620,14 @@ function renderPnl(curr, prev, start, end, prior) {
   // Prior period comparison
   if (prev && prev.revenue !== undefined) {
     h += '<div style="background:var(--bg-secondary,#232323);border-radius:10px;padding:14px 18px;">';
-    h += '<div style="font-size:0.75rem;font-weight:600;color:var(--warm-gray,#888);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px;">Prior Period (' + toDateShort(prior.start) + ' – ' + toDateShort(prior.end) + ')</div>';
+    h += '<div style="font-size:0.78rem;font-weight:600;color:var(--warm-gray,#888);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px;">Prior Period (' + toDateShort(prior.start) + ' – ' + toDateShort(prior.end) + ')</div>';
     h += '<div style="display:flex;gap:20px;flex-wrap:wrap;">';
     function cmpItem(label, curr, prev) {
       var d = curr - prev;
       var pctVal = prev !== 0 ? (d / Math.abs(prev) * 100).toFixed(1) : null;
       var color = d >= 0 ? '#22c55e' : '#ef4444';
       var arrow = d >= 0 ? '▲' : '▼';
-      return '<div><div style="font-size:0.75rem;color:var(--warm-gray,#888);">' + label + '</div>' +
+      return '<div><div style="font-size:0.78rem;color:var(--warm-gray,#888);">' + label + '</div>' +
         '<div style="font-size:0.9rem;font-weight:600;">' + fmt$(prev) + '</div>' +
         (pctVal !== null ? '<div style="font-size:0.72rem;color:' + color + ';">' + arrow + ' ' + Math.abs(pctVal) + '%</div>' : '') +
         '</div>';
@@ -652,7 +652,7 @@ function setupCashFlowTab() {
   el.innerHTML =
     '<div style="padding:20px;max-width:1100px;">' +
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">' +
-    '<h2 style="margin:0;font-size:1.2rem;font-weight:700;">Cash Flow</h2>' +
+    '<h2 style="margin:0;font-size:1.15rem;font-weight:700;">Cash Flow</h2>' +
     '<button class="btn btn-secondary btn-small" onclick="loadCashFlow()">Refresh</button>' +
     '</div>' +
     '<div id="fCfContent">' + skeletonCards(3) + '</div>' +
@@ -779,22 +779,22 @@ function renderCashFlow(bankTotal, bankAccounts, staleItems, arTotal, arDue30, a
   h += '<div style="display:flex;gap:16px;flex-wrap:wrap;">';
 
   h += '<div style="flex:1;min-width:200px;">';
-  h += '<div style="font-size:0.8rem;color:var(--warm-gray,#888);margin-bottom:4px;">Money In (AR due ≤30d)</div>';
-  h += '<div style="font-size:1.3rem;font-weight:700;color:#22c55e;">' + fmt$(arDue30) + '</div>';
-  h += '<div style="font-size:0.75rem;color:var(--warm-gray,#888);">from open invoices</div>';
+  h += '<div style="font-size:0.78rem;color:var(--warm-gray,#888);margin-bottom:4px;">Money In (AR due ≤30d)</div>';
+  h += '<div style="font-size:1.15rem;font-weight:700;color:#22c55e;">' + fmt$(arDue30) + '</div>';
+  h += '<div style="font-size:0.78rem;color:var(--warm-gray,#888);">from open invoices</div>';
   h += '</div>';
 
   h += '<div style="flex:1;min-width:200px;">';
-  h += '<div style="font-size:0.8rem;color:var(--warm-gray,#888);margin-bottom:4px;">Money Out (AP due ≤30d)</div>';
-  h += '<div style="font-size:1.3rem;font-weight:700;color:#ef4444;">' + fmt$(apDue30) + '</div>';
-  h += '<div style="font-size:0.75rem;color:var(--warm-gray,#888);">from unpaid receipts</div>';
+  h += '<div style="font-size:0.78rem;color:var(--warm-gray,#888);margin-bottom:4px;">Money Out (AP due ≤30d)</div>';
+  h += '<div style="font-size:1.15rem;font-weight:700;color:#ef4444;">' + fmt$(apDue30) + '</div>';
+  h += '<div style="font-size:0.78rem;color:var(--warm-gray,#888);">from unpaid receipts</div>';
   h += '</div>';
 
   h += '<div style="flex:1;min-width:200px;">';
-  h += '<div style="font-size:0.8rem;color:var(--warm-gray,#888);margin-bottom:4px;">Projected Net Position</div>';
+  h += '<div style="font-size:0.78rem;color:var(--warm-gray,#888);margin-bottom:4px;">Projected Net Position</div>';
   var projColor = netProjected >= 0 ? '#22c55e' : '#ef4444';
-  h += '<div style="font-size:1.3rem;font-weight:700;color:' + projColor + ';">$' + Math.abs(netProjected).toFixed(2) + (netProjected < 0 ? ' deficit' : '') + '</div>';
-  h += '<div style="font-size:0.75rem;color:var(--warm-gray,#888);">cash + AR in − AP out</div>';
+  h += '<div style="font-size:1.15rem;font-weight:700;color:' + projColor + ';">$' + Math.abs(netProjected).toFixed(2) + (netProjected < 0 ? ' deficit' : '') + '</div>';
+  h += '<div style="font-size:0.78rem;color:var(--warm-gray,#888);">cash + AR in − AP out</div>';
   h += '</div>';
 
   h += '</div></div>';
@@ -811,7 +811,7 @@ function setupArTab() {
   el.innerHTML =
     '<div style="padding:20px;max-width:1100px;">' +
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">' +
-    '<h2 style="margin:0;font-size:1.2rem;font-weight:700;">Accounts Receivable</h2>' +
+    '<h2 style="margin:0;font-size:1.15rem;font-weight:700;">Accounts Receivable</h2>' +
     '<button class="btn btn-secondary btn-small" onclick="loadArData()">Refresh</button>' +
     '</div>' +
     '<div id="fArContent">' + skeletonCards(5) + '<div style="margin-top:16px;">' + skeletonTable(5,6) + '</div></div>' +
@@ -906,8 +906,8 @@ function renderArContent() {
   if (filtered.length === 0) {
     if (rows.length === 0) {
       h += '<div style="text-align:center;padding:48px 20px;color:var(--warm-gray,#888);">' +
-        '<div style="font-size:2rem;margin-bottom:8px;">✅</div>' +
-        '<div style="font-size:0.95rem;font-weight:500;">No outstanding invoices</div>' +
+        '<div style="font-size:1.6rem;margin-bottom:8px;">✅</div>' +
+        '<div style="font-size:0.9rem;font-weight:500;">No outstanding invoices</div>' +
         '<div style="font-size:0.85rem;margin-top:4px;">Create invoices from the <button class="btn btn-secondary btn-small" onclick="navigateTo(\'orders\')">Orders</button> view.</div></div>';
     } else {
       h += '<div style="color:var(--warm-gray,#888);font-size:0.85rem;padding:12px 0;">No invoices match this filter.</div>';
@@ -927,10 +927,10 @@ function renderArContent() {
   filtered.forEach(function(r) {
     h += '<tr style="border-bottom:1px solid rgba(255,255,255,0.06);">';
     h += '<td style="padding:10px;">' + e(r.customerName) + '</td>';
-    h += '<td style="padding:10px;font-size:0.8rem;color:var(--warm-gray,#888);">' + e(r.invoiceNumber || '—') + '</td>';
-    h += '<td style="padding:10px;font-size:0.8rem;"><a href="#" style="color:var(--teal,#2a9d8f);" onclick="event.preventDefault();navigateTo(\'orders\')">' + e(r.orderId.slice(-8)) + '</a></td>';
+    h += '<td style="padding:10px;font-size:0.78rem;color:var(--warm-gray,#888);">' + e(r.invoiceNumber || '—') + '</td>';
+    h += '<td style="padding:10px;font-size:0.78rem;"><a href="#" style="color:var(--teal,#2a9d8f);" onclick="event.preventDefault();navigateTo(\'orders\')">' + e(r.orderId.slice(-8)) + '</a></td>';
     h += '<td style="padding:10px;font-weight:700;color:' + bucketColor(r.bucket) + ';">' + fmt$(r.amtDue) + '</td>';
-    h += '<td style="padding:10px;font-size:0.8rem;">' + e(r.dueDate ? new Date(r.dueDate).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : '—') + '</td>';
+    h += '<td style="padding:10px;font-size:0.78rem;">' + e(r.dueDate ? new Date(r.dueDate).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : '—') + '</td>';
     h += '<td style="padding:10px;">' + agingBadge(r.daysOverdue) + '</td>';
     h += '<td style="padding:10px;"><span style="background:rgba(241,164,0,0.15);color:#f59e0b;padding:2px 8px;border-radius:4px;font-size:0.72rem;font-weight:600;">' + e(r.invoiceStatus) + '</span></td>';
     h += '<td style="padding:10px;white-space:nowrap;">';
@@ -973,7 +973,7 @@ function setupApTab() {
   el.innerHTML =
     '<div style="padding:20px;max-width:1100px;">' +
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">' +
-    '<h2 style="margin:0;font-size:1.2rem;font-weight:700;">Accounts Payable</h2>' +
+    '<h2 style="margin:0;font-size:1.15rem;font-weight:700;">Accounts Payable</h2>' +
     '<button class="btn btn-secondary btn-small" onclick="loadApData()">Refresh</button>' +
     '</div>' +
     '<div id="fApContent">' + skeletonCards(5) + '<div style="margin-top:16px;">' + skeletonTable(5,7) + '</div></div>' +
@@ -1073,8 +1073,8 @@ function renderApContent() {
   if (filtered.length === 0) {
     if (rows.length === 0) {
       h += '<div style="text-align:center;padding:48px 20px;color:var(--warm-gray,#888);">' +
-        '<div style="font-size:2rem;margin-bottom:8px;">✅</div>' +
-        '<div style="font-size:0.95rem;font-weight:500;">No outstanding payables</div>' +
+        '<div style="font-size:1.6rem;margin-bottom:8px;">✅</div>' +
+        '<div style="font-size:0.9rem;font-weight:500;">No outstanding payables</div>' +
         '<div style="font-size:0.85rem;margin-top:4px;">Unpaid receipts appear here. Create receipts in <button class="btn btn-secondary btn-small" onclick="navigateTo(\'procurement\')">Procurement</button>.</div></div>';
     } else {
       h += '<div style="color:var(--warm-gray,#888);font-size:0.85rem;padding:12px 0;">No receipts match this filter.</div>';
@@ -1105,11 +1105,11 @@ function renderApFlat(filtered) {
   filtered.forEach(function(r) {
     h += '<tr style="border-bottom:1px solid rgba(255,255,255,0.06);">';
     h += '<td style="padding:10px;font-weight:600;">' + e(r.vendorName) + '</td>';
-    h += '<td style="padding:10px;font-size:0.8rem;color:var(--warm-gray,#888);">' + e(r.vendorInvoiceRef || r.receiptId.slice(-8)) + '</td>';
+    h += '<td style="padding:10px;font-size:0.78rem;color:var(--warm-gray,#888);">' + e(r.vendorInvoiceRef || r.receiptId.slice(-8)) + '</td>';
     h += '<td style="padding:10px;">' + fmt$(r.totalCents) + '</td>';
     h += '<td style="padding:10px;color:#22c55e;">' + fmt$(r.paidCents) + '</td>';
     h += '<td style="padding:10px;font-weight:700;color:' + bucketColor(r.bucket) + ';">' + fmt$(r.amtDue) + '</td>';
-    h += '<td style="padding:10px;font-size:0.8rem;">' + e(r.dueDate ? new Date(r.dueDate).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : '—') + '</td>';
+    h += '<td style="padding:10px;font-size:0.78rem;">' + e(r.dueDate ? new Date(r.dueDate).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : '—') + '</td>';
     h += '<td style="padding:10px;">' + agingBadge(r.daysOverdue) + '</td>';
     h += '<td style="padding:10px;"><span style="background:' + (r.paymentStatus === 'partial' ? 'rgba(234,179,8,0.15)' : 'rgba(239,68,68,0.12)') + ';color:' + (r.paymentStatus === 'partial' ? '#eab308' : '#ef4444') + ';padding:2px 8px;border-radius:4px;font-size:0.72rem;font-weight:600;">' + e(r.paymentStatus) + '</span></td>';
     h += '<td style="padding:10px;white-space:nowrap;display:flex;gap:4px;">';
@@ -1163,7 +1163,7 @@ function renderApGrouped(filtered) {
     h += '<span style="color:var(--warm-gray,#888);font-size:0.78rem;">' + g.rows.length + ' receipt' + (g.rows.length !== 1 ? 's' : '') + '</span>';
     h += '</div>';
     h += '<div style="display:flex;align-items:center;gap:16px;">';
-    h += '<span><span style="color:var(--warm-gray,#888);font-size:0.78rem;">Due</span> <span style="font-size:0.8rem;">' + e(dueDateStr) + '</span></span>';
+    h += '<span><span style="color:var(--warm-gray,#888);font-size:0.78rem;">Due</span> <span style="font-size:0.78rem;">' + e(dueDateStr) + '</span></span>';
     h += '<span style="font-weight:700;color:' + worstColor + ';">' + fmt$(g.totalDue) + '</span>';
     h += '<span style="color:var(--warm-gray,#888);font-size:0.85rem;">' + (isExpanded ? '▾' : '▸') + '</span>';
     h += '</div></div></button>';
@@ -1171,10 +1171,10 @@ function renderApGrouped(filtered) {
     // Expanded receipt rows
     if (isExpanded) {
       h += '<div style="border-top:1px solid rgba(255,255,255,0.08);">';
-      h += '<table style="width:100%;border-collapse:collapse;font-size:0.82rem;">';
+      h += '<table style="width:100%;border-collapse:collapse;font-size:0.85rem;">';
       h += '<thead><tr style="background:rgba(255,255,255,0.03);">';
       ['Ref','Total','Paid','Remaining','Due Date','Age','Status',''].forEach(function(col) {
-        h += '<th style="text-align:left;padding:7px 10px;font-size:0.7rem;color:var(--warm-gray,#888);text-transform:uppercase;letter-spacing:0.5px;white-space:nowrap;">' + col + '</th>';
+        h += '<th style="text-align:left;padding:7px 10px;font-size:0.72rem;color:var(--warm-gray,#888);text-transform:uppercase;letter-spacing:0.5px;white-space:nowrap;">' + col + '</th>';
       });
       h += '</tr></thead><tbody>';
       g.rows.forEach(function(r) {
@@ -1185,7 +1185,7 @@ function renderApGrouped(filtered) {
         h += '<td style="padding:8px 10px;font-weight:700;color:' + bucketColor(r.bucket) + ';">' + fmt$(r.amtDue) + '</td>';
         h += '<td style="padding:8px 10px;">' + e(r.dueDate ? new Date(r.dueDate).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : '—') + '</td>';
         h += '<td style="padding:8px 10px;">' + agingBadge(r.daysOverdue) + '</td>';
-        h += '<td style="padding:8px 10px;"><span style="background:' + (r.paymentStatus === 'partial' ? 'rgba(234,179,8,0.15)' : 'rgba(239,68,68,0.12)') + ';color:' + (r.paymentStatus === 'partial' ? '#eab308' : '#ef4444') + ';padding:2px 6px;border-radius:4px;font-size:0.7rem;font-weight:600;">' + e(r.paymentStatus) + '</span></td>';
+        h += '<td style="padding:8px 10px;"><span style="background:' + (r.paymentStatus === 'partial' ? 'rgba(234,179,8,0.15)' : 'rgba(239,68,68,0.12)') + ';color:' + (r.paymentStatus === 'partial' ? '#eab308' : '#ef4444') + ';padding:2px 6px;border-radius:4px;font-size:0.72rem;font-weight:600;">' + e(r.paymentStatus) + '</span></td>';
         h += '<td style="padding:8px 10px;white-space:nowrap;display:flex;gap:4px;">';
         h += '<button class="btn btn-primary btn-small" data-rid="' + e(r.receiptId) + '" data-total="' + r.totalCents + '" onclick="finApMarkPaid(this.dataset.rid, parseInt(this.dataset.total))">Paid</button>';
         h += '<button class="btn btn-secondary btn-small" data-rid="' + e(r.receiptId) + '" data-paid="' + r.paidCents + '" data-total="' + r.totalCents + '" onclick="finApShowPartial(this.dataset.rid, parseInt(this.dataset.paid), parseInt(this.dataset.total))">Partial</button>';
@@ -1292,8 +1292,8 @@ var _loanReportMetrics = '';
 function renderTaxHeader() {
   var tabs = [['sales-tax','Sales Tax by State'], ['nexus','Nexus Tracker'], ['1099','1099 Prep']];
   var h = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">';
-  h += '<h2 style="margin:0;font-size:1.2rem;font-weight:700;">Tax</h2>';
-  h += '<span style="background:rgba(239,68,68,0.12);color:#ef4444;padding:3px 10px;border-radius:6px;font-size:0.75rem;font-weight:600;">Admin Only</span>';
+  h += '<h2 style="margin:0;font-size:1.15rem;font-weight:700;">Tax</h2>';
+  h += '<span style="background:rgba(239,68,68,0.12);color:#ef4444;padding:3px 10px;border-radius:6px;font-size:0.78rem;font-weight:600;">Admin Only</span>';
   h += '</div>';
   h += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px;">';
   tabs.forEach(function(t) {
@@ -1346,7 +1346,7 @@ function renderFilingDeadlineBanner() {
   return '<div style="background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.2);border-radius:8px;padding:10px 16px;margin-bottom:16px;display:flex;align-items:center;gap:10px;">' +
     '<span>📅</span>' +
     '<div><span style="font-size:0.85rem;font-weight:600;color:' + urgencyColor + ';">' + e(upcoming.q) + ' filing due ' + e(label) + '</span>' +
-    '<span style="font-size:0.8rem;color:var(--warm-gray,#888);margin-left:8px;">' + daysUntil + ' days away</span></div>' +
+    '<span style="font-size:0.78rem;color:var(--warm-gray,#888);margin-left:8px;">' + daysUntil + ' days away</span></div>' +
     '</div>';
 }
 
@@ -1406,8 +1406,8 @@ function renderTaxSalesTax(byState, nexus, start, end) {
 
   if (states.length === 0) {
     return h + '<div style="text-align:center;padding:48px 20px;color:var(--warm-gray,#888);">' +
-      '<div style="font-size:2rem;margin-bottom:8px;">🧾</div>' +
-      '<div style="font-size:0.95rem;font-weight:500;">No taxable orders in this period</div></div>';
+      '<div style="font-size:1.6rem;margin-bottom:8px;">🧾</div>' +
+      '<div style="font-size:0.9rem;font-weight:500;">No taxable orders in this period</div></div>';
   }
 
   h += '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:0.85rem;">';
@@ -1501,7 +1501,7 @@ function renderTaxNexus(states, byState, nexus, threshold, txnThreshold, approac
   h += '</div>';
 
   if (states.length === 0) {
-    return h + '<div style="text-align:center;padding:48px 20px;color:var(--warm-gray,#888);"><div style="font-size:0.95rem;font-weight:500;">No sales data found for trailing 12 months</div></div>';
+    return h + '<div style="text-align:center;padding:48px 20px;color:var(--warm-gray,#888);"><div style="font-size:0.9rem;font-weight:500;">No sales data found for trailing 12 months</div></div>';
   }
 
   h += '<div style="font-size:0.78rem;color:var(--warm-gray,#888);margin-bottom:10px;">$100K revenue threshold · 200 transaction threshold · Exclusive boundaries (>$100K triggers nexus)</div>';
@@ -1531,7 +1531,7 @@ function renderTaxNexus(states, byState, nexus, threshold, txnThreshold, approac
     h += '<td style="padding:10px;min-width:130px;"><div style="display:flex;align-items:center;gap:8px;">' +
       '<div style="flex:1;height:6px;background:rgba(255,255,255,0.08);border-radius:3px;overflow:hidden;">' +
       '<div style="height:100%;width:' + Math.min(revPct,100) + '%;background:' + barColor + ';border-radius:3px;"></div></div>' +
-      '<span style="font-size:0.75rem;color:var(--warm-gray,#888);white-space:nowrap;">' + revPct + '%</span></div></td>';
+      '<span style="font-size:0.78rem;color:var(--warm-gray,#888);white-space:nowrap;">' + revPct + '%</span></div></td>';
     h += '<td style="padding:10px;">' + badge + '</td>';
     h += '</tr>';
   });
@@ -1624,8 +1624,8 @@ function render1099(contractors, year) {
 
   if (contractors.length === 0) {
     return h + '<div style="text-align:center;padding:48px 20px;color:var(--warm-gray,#888);">' +
-      '<div style="font-size:2rem;margin-bottom:8px;">✅</div>' +
-      '<div style="font-size:0.95rem;font-weight:500;">No contractors paid over $600 in ' + year + '</div>' +
+      '<div style="font-size:1.6rem;margin-bottom:8px;">✅</div>' +
+      '<div style="font-size:0.9rem;font-weight:500;">No contractors paid over $600 in ' + year + '</div>' +
       '<div style="font-size:0.85rem;margin-top:4px;">1099-NEC threshold is $600.01 or more.</div></div>';
   }
 
@@ -1640,8 +1640,8 @@ function render1099(contractors, year) {
   h += '</tr></thead><tbody>';
   contractors.forEach(function(c) {
     var tidCell = c.hasTaxId
-      ? '<span style="font-family:monospace;font-size:0.8rem;">' + e(c.maskedTaxId) + '</span>'
-      : '<span style="color:#ef4444;font-size:0.8rem;font-weight:600;">Missing — action required</span>';
+      ? '<span style="font-family:monospace;font-size:0.78rem;">' + e(c.maskedTaxId) + '</span>'
+      : '<span style="color:#ef4444;font-size:0.78rem;font-weight:600;">Missing — action required</span>';
     var border = c.hasTaxId ? '' : 'border-left:3px solid #ef4444;';
     h += '<tr style="border-bottom:1px solid rgba(255,255,255,0.06);' + border + '">';
     h += '<td style="padding:10px;font-weight:600;">' + e(c.name) + '</td>';
@@ -1680,15 +1680,15 @@ function setupReportsTab() {
   }
   var h = '<div style="padding:20px;max-width:1100px;">';
   h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">';
-  h += '<h2 style="margin:0;font-size:1.2rem;font-weight:700;">Reports</h2>';
-  h += '<span style="background:rgba(239,68,68,0.12);color:#ef4444;padding:3px 10px;border-radius:6px;font-size:0.75rem;font-weight:600;">Admin Only</span>';
+  h += '<h2 style="margin:0;font-size:1.15rem;font-weight:700;">Reports</h2>';
+  h += '<span style="background:rgba(239,68,68,0.12);color:#ef4444;padding:3px 10px;border-radius:6px;font-size:0.78rem;font-weight:600;">Admin Only</span>';
   h += '</div>';
 
   // Report A card
   h += '<div style="background:var(--bg-secondary,#232323);border-radius:12px;padding:20px;margin-bottom:16px;">';
   h += '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;">';
   h += '<div><div style="font-size:1rem;font-weight:700;margin-bottom:4px;">Loan / Investor Report</div>';
-  h += '<div style="font-size:0.82rem;color:var(--warm-gray,#888);">12-month financial summary formatted for a bank or investor. Print or save as PDF.</div></div>';
+  h += '<div style="font-size:0.85rem;color:var(--warm-gray,#888);">12-month financial summary formatted for a bank or investor. Print or save as PDF.</div></div>';
   h += '<button class="btn btn-secondary btn-small" onclick="loadLoanReport()">Generate</button></div>';
   h += '<div id="fLoanContent"></div></div>';
 
@@ -1696,9 +1696,9 @@ function setupReportsTab() {
   h += '<div style="background:var(--bg-secondary,#232323);border-radius:12px;padding:20px;">';
   h += '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;">';
   h += '<div><div style="font-size:1rem;font-weight:700;margin-bottom:4px;">Year-End Tax Package</div>';
-  h += '<div style="font-size:0.82rem;color:var(--warm-gray,#888);">Everything your CPA needs for Schedule C and state filings. Export CSVs or print the full package.</div></div>';
+  h += '<div style="font-size:0.85rem;color:var(--warm-gray,#888);">Everything your CPA needs for Schedule C and state filings. Export CSVs or print the full package.</div></div>';
   h += '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">';
-  h += '<select id="fReportYear" onchange="finSetReportYear(this.value)" style="background:var(--bg-primary,#1a1a1a);border:1px solid rgba(255,255,255,0.15);border-radius:6px;color:var(--text,#fff);padding:4px 8px;font-size:0.82rem;">' + yearOpts + '</select>';
+  h += '<select id="fReportYear" onchange="finSetReportYear(this.value)" style="background:var(--bg-primary,#1a1a1a);border:1px solid rgba(255,255,255,0.15);border-radius:6px;color:var(--text,#fff);padding:4px 8px;font-size:0.85rem;">' + yearOpts + '</select>';
   h += '<button class="btn btn-secondary btn-small" onclick="loadYearEndReport()">Generate</button></div></div>';
   h += '<div id="fYearEndContent"></div></div>';
 
@@ -1814,14 +1814,14 @@ function renderLoanReport(monthly, bankTotal, startDate, endDate) {
 
   // Header
   h += '<div style="margin-bottom:20px;">';
-  h += '<div style="font-size:1.3rem;font-weight:700;">' + e(tenantName) + '</div>';
+  h += '<div style="font-size:1.15rem;font-weight:700;">' + e(tenantName) + '</div>';
   h += '<div style="font-size:0.85rem;color:var(--warm-gray,#888);margin-top:4px;">Financial Summary · ' + toDateShort(startDate) + ' – ' + toDateShort(endDate) + '</div>';
-  h += '<div style="font-size:0.75rem;color:var(--warm-gray,#888);margin-top:2px;">Generated ' + reportDate + '</div>';
+  h += '<div style="font-size:0.78rem;color:var(--warm-gray,#888);margin-top:2px;">Generated ' + reportDate + '</div>';
   h += '</div>';
 
   // Key metrics
   h += '<div style="margin-bottom:22px;">';
-  h += '<div style="font-size:0.8rem;font-weight:600;color:var(--warm-gray,#888);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px;">Key Metrics</div>';
+  h += '<div style="font-size:0.78rem;font-weight:600;color:var(--warm-gray,#888);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px;">Key Metrics</div>';
   h += '<div style="display:flex;gap:10px;flex-wrap:wrap;">';
   h += statCard('Total Revenue', fmt$(totalRevenue), '#16a34a');
   h += statCard('Gross Margin', grossMarginPct!==null?grossMarginPct+'%':'—', '#22c55e');
@@ -1833,29 +1833,29 @@ function renderLoanReport(monthly, bankTotal, startDate, endDate) {
 
   // 12-month revenue trend (bar table)
   h += '<div style="margin-bottom:22px;">';
-  h += '<div style="font-size:0.8rem;font-weight:600;color:var(--warm-gray,#888);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px;">12-Month Revenue Trend</div>';
+  h += '<div style="font-size:0.78rem;font-weight:600;color:var(--warm-gray,#888);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px;">12-Month Revenue Trend</div>';
   var maxRev = Math.max.apply(null, monthly.map(function(m){return m.revenue;}))||1;
   h += '<div style="display:flex;flex-direction:column;gap:4px;">';
   monthly.forEach(function(m) {
     var w = maxRev>0?Math.round(m.revenue/maxRev*100):0;
     h += '<div style="display:flex;align-items:center;gap:8px;">';
-    h += '<div style="width:68px;font-size:0.73rem;color:var(--warm-gray,#888);text-align:right;flex-shrink:0;">' + e(m.label) + '</div>';
+    h += '<div style="width:68px;font-size:0.72rem;color:var(--warm-gray,#888);text-align:right;flex-shrink:0;">' + e(m.label) + '</div>';
     h += '<div style="flex:1;height:16px;background:rgba(255,255,255,0.06);border-radius:3px;overflow:hidden;">';
     if (w>0) h += '<div style="height:100%;width:'+w+'%;background:#16a34a;border-radius:3px;"></div>';
     h += '</div>';
-    h += '<div style="width:76px;font-size:0.73rem;font-weight:600;text-align:right;flex-shrink:0;">' + fmt$(m.revenue) + '</div>';
+    h += '<div style="width:76px;font-size:0.72rem;font-weight:600;text-align:right;flex-shrink:0;">' + fmt$(m.revenue) + '</div>';
     h += '</div>';
   });
   h += '</div></div>';
 
   // P&L Summary
   h += '<div style="margin-bottom:22px;">';
-  h += '<div style="font-size:0.8rem;font-weight:600;color:var(--warm-gray,#888);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px;">P&L Summary</div>';
+  h += '<div style="font-size:0.78rem;font-weight:600;color:var(--warm-gray,#888);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px;">P&L Summary</div>';
   h += '<div style="background:var(--bg-secondary,#232323);border-radius:8px;padding:16px;">';
   function lrRow(label, cents, bold, color) {
     return '<div style="display:flex;justify-content:space-between;padding:4px 0' + (bold?';border-top:1px solid rgba(255,255,255,0.1);margin-top:4px;padding-top:8px;':'') + '">' +
-      '<span style="font-size:0.88rem;' + (bold?'font-weight:600;':'color:var(--warm-gray,#888);') + '">' + label + '</span>' +
-      '<span style="font-size:0.88rem;font-weight:' + (bold?'700':'400') + ';color:' + (color||'var(--text,#fff)') + ';">' + fmt$(cents) + '</span></div>';
+      '<span style="font-size:0.9rem;' + (bold?'font-weight:600;':'color:var(--warm-gray,#888);') + '">' + label + '</span>' +
+      '<span style="font-size:0.9rem;font-weight:' + (bold?'700':'400') + ';color:' + (color||'var(--text,#fff)') + ';">' + fmt$(cents) + '</span></div>';
   }
   h += lrRow('Total Revenue', totalRevenue, true, '#16a34a');
   h += lrRow('Cost of Goods Sold', totalCogs, false, null);
@@ -1867,9 +1867,9 @@ function renderLoanReport(monthly, bankTotal, startDate, endDate) {
   // Cash position
   if (bankTotal > 0) {
     h += '<div style="margin-bottom:22px;">';
-    h += '<div style="font-size:0.8rem;font-weight:600;color:var(--warm-gray,#888);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Cash Position</div>';
-    h += '<div style="font-size:1.4rem;font-weight:700;color:#22c55e;">$' + bankTotal.toFixed(2) + '</div>';
-    h += '<div style="font-size:0.75rem;color:var(--warm-gray,#888);margin-top:2px;">Current cash on hand · via connected bank accounts</div>';
+    h += '<div style="font-size:0.78rem;font-weight:600;color:var(--warm-gray,#888);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Cash Position</div>';
+    h += '<div style="font-size:1.6rem;font-weight:700;color:#22c55e;">$' + bankTotal.toFixed(2) + '</div>';
+    h += '<div style="font-size:0.78rem;color:var(--warm-gray,#888);margin-top:2px;">Current cash on hand · via connected bank accounts</div>';
     h += '</div>';
   }
 
@@ -2025,10 +2025,10 @@ function renderYearEndReport(pnlData, taxData, contractors, mileage, year) {
   if (stateKeys.length>0) {
     h += '<div style="background:var(--bg-primary,#1a1a1a);border-radius:8px;padding:16px;margin-bottom:16px;">';
     h += '<div style="font-size:0.9rem;font-weight:700;margin-bottom:10px;">Sales Tax by State · ' + year + '</div>';
-    h += '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:0.82rem;">';
+    h += '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:0.85rem;">';
     h += '<thead><tr style="border-bottom:1px solid rgba(255,255,255,0.1);">';
     ['State','Tax Collected','Orders','Registered'].forEach(function(c) {
-      h += '<th style="text-align:left;padding:6px 10px;font-size:0.7rem;color:var(--warm-gray,#888);text-transform:uppercase;">' + c + '</th>';
+      h += '<th style="text-align:left;padding:6px 10px;font-size:0.72rem;color:var(--warm-gray,#888);text-transform:uppercase;">' + c + '</th>';
     });
     h += '</tr></thead><tbody>';
     stateKeys.forEach(function(state) {
@@ -2048,16 +2048,16 @@ function renderYearEndReport(pnlData, taxData, contractors, mileage, year) {
   if (contractors.length>0) {
     h += '<div style="background:var(--bg-primary,#1a1a1a);border-radius:8px;padding:16px;margin-bottom:16px;">';
     h += '<div style="font-size:0.9rem;font-weight:700;margin-bottom:10px;">1099 Summary · ' + year + '</div>';
-    h += '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:0.82rem;">';
+    h += '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:0.85rem;">';
     h += '<thead><tr style="border-bottom:1px solid rgba(255,255,255,0.1);">';
     ['Contractor','Tax ID','Total Paid','1099 Required'].forEach(function(c) {
-      h += '<th style="text-align:left;padding:6px 10px;font-size:0.7rem;color:var(--warm-gray,#888);text-transform:uppercase;">' + c + '</th>';
+      h += '<th style="text-align:left;padding:6px 10px;font-size:0.72rem;color:var(--warm-gray,#888);text-transform:uppercase;">' + c + '</th>';
     });
     h += '</tr></thead><tbody>';
     contractors.forEach(function(c) {
       h += '<tr style="border-bottom:1px solid rgba(255,255,255,0.05);">';
       h += '<td style="padding:7px 10px;font-weight:600;">' + e(c.name) + '</td>';
-      h += '<td style="padding:7px 10px;font-size:0.8rem;">' + (c.hasTaxId?'<span style="font-family:monospace;">XXX-XX-'+String(c.taxId||'').replace(/[^0-9]/g,'').slice(-4)+'</span>':'<span style="color:#ef4444;">Missing</span>') + '</td>';
+      h += '<td style="padding:7px 10px;font-size:0.78rem;">' + (c.hasTaxId?'<span style="font-family:monospace;">XXX-XX-'+String(c.taxId||'').replace(/[^0-9]/g,'').slice(-4)+'</span>':'<span style="color:#ef4444;">Missing</span>') + '</td>';
       h += '<td style="padding:7px 10px;font-weight:700;">' + fmt$(c.totalPaid) + '</td>';
       h += '<td style="padding:7px 10px;color:#22c55e;">Yes</td>';
       h += '</tr>';

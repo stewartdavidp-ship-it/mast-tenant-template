@@ -15,9 +15,8 @@
 //      0.72, 0.78, 0.85, 0.9, 1.0, 1.15, 1.6
 //   2. Literal hex colors in module inline styles
 //
-// Both classes currently advisory until the 427-violation font-size backlog
-// cleanup ships (tracked separately, spawned 2026-05-06). Restore blocking
-// behavior at the bottom of this file once that lands.
+// Font-size: blocking (cleanup landed 2026-05-06; backlog cleared to 0).
+// Hex colors: still advisory pending separate cleanup pass.
 
 const fs = require('fs');
 const path = require('path');
@@ -104,7 +103,5 @@ if (violations.length) {
   }
 }
 
-// Advisory mode (2026-05-06) — exit 0 regardless. Both classes are warnings
-// until the cleanup pass ships. To re-enable blocking, restore:
-//   process.exit(fontErrors > 0 ? 1 : 0);
-process.exit(0);
+// Font-size: blocking. Hex: advisory only.
+process.exit(fontErrors > 0 ? 1 : 0);

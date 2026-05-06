@@ -265,14 +265,14 @@
       '<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">' +
         '<span style="' + chipStyle + '">' + esc(status) + '</span>' +
       '</div>' +
-      '<div style="font-size:0.8rem;color:var(--warm-gray-light);margin-bottom:8px;">' + statRow + '</div>' +
+      '<div style="font-size:0.78rem;color:var(--warm-gray-light);margin-bottom:8px;">' + statRow + '</div>' +
       '<button onclick="toggleSignalsCollapsible()" style="background:none;border:none;cursor:pointer;padding:0;' +
-        'color:var(--warm-gray);font-size:0.8rem;display:flex;align-items:center;gap:6px;font-family:inherit;">' +
+        'color:var(--warm-gray);font-size:0.78rem;display:flex;align-items:center;gap:6px;font-family:inherit;">' +
         '<span id="signalsChevron">' + chevron + '</span> Customer Signals' +
       '</button>' +
       '<div id="contactSignalsBody" style="display:' + bodyDisplay + ';margin-top:8px;">' +
         '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:14px 18px;">' +
-          '<div style="display:grid;grid-template-columns:180px 1fr;gap:8px 16px;font-size:0.82rem;">' +
+          '<div style="display:grid;grid-template-columns:180px 1fr;gap:8px 16px;font-size:0.85rem;">' +
             '<div style="color:var(--warm-gray-light);">Lifetime Value</div>' +
             '<div>' + ltvDisplay + '</div>' +
             '<div style="color:var(--warm-gray-light);">Orders</div>' +
@@ -360,7 +360,7 @@
     } catch (err) {
       console.error('Contact signals load failed:', err);
       var section = document.getElementById('contactSignalsSection');
-      if (section) section.innerHTML = '<span style="font-size:0.8rem;color:var(--warm-gray-light);">Customer signals unavailable.</span>';
+      if (section) section.innerHTML = '<span style="font-size:0.78rem;color:var(--warm-gray-light);">Customer signals unavailable.</span>';
     }
   }
 
@@ -844,13 +844,13 @@ function renderContactDetail(contact) {
   var cEmail = contact.email;
   if (!cEmail) {
     signalsHtml = '<div id="contactSignalsSection" style="margin-bottom:16px;">' +
-      '<span style="font-size:0.8rem;color:var(--warm-gray-light);">No email — customer signals unavailable.</span>' +
+      '<span style="font-size:0.78rem;color:var(--warm-gray-light);">No email — customer signals unavailable.</span>' +
       '</div>';
   } else if (contactSignalsCache[cEmail]) {
     signalsHtml = buildSignalsSectionHtml(contactSignalsCache[cEmail]);
   } else {
     signalsHtml = '<div id="contactSignalsSection" style="margin-bottom:16px;">' +
-      '<div style="font-size:0.8rem;color:var(--warm-gray);">Loading customer signals…</div>' +
+      '<div style="font-size:0.78rem;color:var(--warm-gray);">Loading customer signals…</div>' +
       '</div>';
   }
 
