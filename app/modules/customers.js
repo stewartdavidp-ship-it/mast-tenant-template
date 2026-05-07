@@ -23,6 +23,33 @@
   // ============================================================
 
   var customersData = [];
+  // Tenant business timezone — lazy-fetched from businessEntity for
+  // URL-driven date filtering so admin agrees with MCP regardless of
+  // where the user is browsing from. Mirrors orders.js' helpers.
+  var _tenantTz = null;
+  var _tenantTzLoading = null;
+  function ensureTenantTz() {
+    if (_tenantTz !== null) return Promise.resolve(_tenantTz);
+    if (_tenantTzLoading) return _tenantTzLoading;
+    _tenantTzLoading = (window.MastDB && MastDB.businessEntity
+      ? MastDB.businessEntity.get('operations')
+      : Promise.resolve({ data: null })
+    ).then(function(r) {
+      var d = (r && r.data) || {};
+      _tenantTz = (d.localization && d.localization.timezone) || '';
+      return _tenantTz;
+    }).catch(function() { _tenantTz = ''; return ''; });
+    return _tenantTzLoading;
+  }
+  function tzDateStr(isoStr) {
+    if (!isoStr) return '';
+    var d = new Date(isoStr);
+    if (isNaN(d.getTime())) return '';
+    var opts = { year: 'numeric', month: '2-digit', day: '2-digit' };
+    if (_tenantTz) opts.timeZone = _tenantTz;
+    var fmt = new Intl.DateTimeFormat('en-CA', opts);
+    return fmt.format(d); // YYYY-MM-DD
+  }
   var duplicatesData = [];
   var segmentsData = [];           // Phase 6.3 — saved segments from admin/customerSegments
   var currentSegmentId = null;     // active segment id (built-in or saved)
@@ -427,9 +454,73 @@
     return h;
   }
 
+  // URL-driven filters from MCP admin links: tag, source, dateFrom,
+  // dateTo, customerIds (#customers?...). Read once, used by getFilteredCustomers
+  // and the banner renderer. URL-overrides-pill: when any URL filter is
+  // present it bypasses pill / segment state for this render.
+  function getCustomersUrlFilters() {
+    var rp = (typeof window.getRouteParams === 'function') ? window.getRouteParams() : {};
+    var ids = (rp && typeof rp.customerIds === 'string' ? rp.customerIds : '')
+      .split(',').map(function(s) { return s.trim(); }).filter(Boolean);
+    var idLookup = ids.length > 0 ? Object.create(null) : null;
+    if (idLookup) ids.forEach(function(id) { idLookup[id] = true; });
+    return {
+      tag:       (rp && typeof rp.tag === 'string') ? rp.tag : '',
+      source:    (rp && typeof rp.source === 'string') ? rp.source : '',
+      dateFrom:  (rp && typeof rp.dateFrom === 'string') ? rp.dateFrom.slice(0, 10) : '',
+      dateTo:    (rp && typeof rp.dateTo === 'string') ? rp.dateTo.slice(0, 10) : '',
+      ids:       ids,
+      idLookup:  idLookup,
+      get hasAny() {
+        return !!(this.tag || this.source || this.dateFrom || this.dateTo || this.ids.length);
+      }
+    };
+  }
+
   // Phase 6.1 — apply current segment + filters to the customer set.
   // Returns the filtered, sorted array. Shared by renderTable and CSV export.
   function getFilteredCustomers() {
+    var urlF = getCustomersUrlFilters();
+
+    if (urlF.hasAny) {
+      // URL-driven filters from an MCP admin link override pill / segment state.
+      if ((urlF.dateFrom || urlF.dateTo) && _tenantTz === null) {
+        // First render uses browser TZ; re-render once tenant TZ resolves.
+        ensureTenantTz().then(function() { renderTable(); });
+      }
+      var filteredU = customersData.filter(function(c) {
+        if (!c || c.status === 'merged' || c.status === 'archived') return false;
+        if (urlF.tag && (c.tags || []).indexOf(urlF.tag) === -1) return false;
+        if (urlF.source && urlF.source !== 'all' && c.source !== urlF.source) return false;
+        if (urlF.idLookup && !urlF.idLookup[c.id]) return false;
+        if (urlF.dateFrom || urlF.dateTo) {
+          var stats = c.stats || {};
+          var d = tzDateStr(stats.firstOrderAt || '');
+          if (!d) return false;
+          if (urlF.dateFrom && d < urlF.dateFrom) return false;
+          if (urlF.dateTo && d > urlF.dateTo) return false;
+        }
+        return true;
+      });
+      // Sort by spend desc by default for URL-driven views (matches the
+      // common "top spenders" / "top customers" use case); fall back to
+      // active sort if pill state has one selected.
+      var fAct = readActiveFilters();
+      var sortBy = fAct.sortBy || 'spend';
+      filteredU.sort(function(a, b) {
+        var sa = a.stats || {};
+        var sb = b.stats || {};
+        if (sortBy === 'name')      return (a.displayName || '').localeCompare(b.displayName || '');
+        if (sortBy === 'email')     return (a.primaryEmail || '').localeCompare(b.primaryEmail || '');
+        if (sortBy === 'lastOrder') return (sb.lastOrderAt || '').localeCompare(sa.lastOrderAt || '');
+        if (sortBy === 'spend')     return (sb.lifetimeSpendCents || 0) - (sa.lifetimeSpendCents || 0);
+        var av = a[sortBy] || '';
+        var bv = b[sortBy] || '';
+        return bv.localeCompare(av);
+      });
+      return filteredU;
+    }
+
     var f = readActiveFilters();
 
     // Mix in built-in segment flags from the active segment.
@@ -464,6 +555,33 @@
   function renderTable() {
     var wrap = document.getElementById('customersTableWrap');
     if (!wrap) return;
+
+    // URL-filter banner — surfaces active MCP-link filters with a Clear
+    // button. Inserted just above the table wrap, lazily.
+    var urlF = getCustomersUrlFilters();
+    var bannerEl = document.getElementById('customersUrlFilterBanner');
+    if (!bannerEl && urlF.hasAny) {
+      bannerEl = document.createElement('div');
+      bannerEl.id = 'customersUrlFilterBanner';
+      bannerEl.style.cssText = 'background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.35);color:#F59E0B;padding:8px 12px;margin-bottom:12px;border-radius:6px;display:flex;align-items:center;gap:12px;font-size:0.875rem;';
+      if (wrap.parentNode) wrap.parentNode.insertBefore(bannerEl, wrap);
+    }
+    if (bannerEl) {
+      if (urlF.hasAny) {
+        var parts = [];
+        if (urlF.ids.length) parts.push(urlF.ids.length + ' selected customer' + (urlF.ids.length === 1 ? '' : 's'));
+        if (urlF.tag) parts.push('tag: ' + urlF.tag);
+        if (urlF.source) parts.push('source: ' + urlF.source);
+        if (urlF.dateFrom && urlF.dateTo) parts.push('first order ' + urlF.dateFrom + ' to ' + urlF.dateTo);
+        else if (urlF.dateFrom) parts.push('first order from ' + urlF.dateFrom + ' onward');
+        else if (urlF.dateTo) parts.push('first order through ' + urlF.dateTo);
+        bannerEl.innerHTML = '<span>👥 Showing ' + parts.join(', ') + '</span>' +
+          '<button type="button" onclick="clearCustomersFilter()" style="margin-left:auto;background:transparent;border:1px solid rgba(245,158,11,0.5);color:#F59E0B;padding:2px 10px;border-radius:4px;cursor:pointer;font-size:0.8rem;">Clear filter</button>';
+        bannerEl.style.display = 'flex';
+      } else {
+        bannerEl.style.display = 'none';
+      }
+    }
 
     var filtered = getFilteredCustomers();
 
@@ -1927,6 +2045,13 @@
   window.customersSwitchView = switchView;
   window.customersOpenDetail = openDetail;
   window.customersRender = renderTable;
+  window.clearCustomersFilter = function() {
+    var p = (typeof window.getRouteParams === 'function') ? window.getRouteParams() : {};
+    var next = {};
+    var DROP = { tag: 1, source: 1, dateFrom: 1, dateTo: 1, customerIds: 1 };
+    Object.keys(p).forEach(function(k) { if (!DROP[k]) next[k] = p[k]; });
+    if (typeof navigateTo === 'function') navigateTo('customers', next);
+  };
   window.customersSwitchDetailTab = switchDetailTab;
   window.customersOpenOrder = openOrderFromCustomer;
   window.customersAddTag = addTag;
