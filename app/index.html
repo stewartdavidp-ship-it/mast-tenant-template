@@ -9239,9 +9239,10 @@
 
         <!-- In-page Ask AI gating -->
         <div class="form-group" style="background:var(--cream,#faf8f5);border:1px solid var(--cream-dark,#e8e0d4);border-radius:8px;padding:14px 16px;margin-bottom:24px;">
-          <label style="font-size:1rem;font-weight:600;display:block;margin-bottom:4px;">In-page Ask AI buttons</label>
+          <label style="font-size:1rem;font-weight:600;display:block;margin-bottom:4px;">In-page Ask AI buttons <span style="font-size:0.72rem;font-weight:500;color:var(--warm-gray);">· per-user setting</span></label>
+          <div id="askAiStatusBanner" style="font-size:0.85rem;padding:8px 12px;border-radius:6px;margin-bottom:12px;">Loading…</div>
           <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:14px;">
-            Show ✨ Ask AI buttons across the admin so you can send page context (filters, aggregates, top transactions) to your AI tool. Buttons stay hidden until both prerequisites below are set.
+            Show ✨ Ask AI buttons across the admin so you can send page context (filters, aggregates, top transactions) to your AI tool. Buttons stay hidden until both prerequisites below are set. This is configured per user — each admin who wants Ask AI sets their own.
           </p>
 
           <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Claude subscription</label>
@@ -22337,6 +22338,21 @@ window.loadPlaidBanksForSettings = loadPlaidBanksForSettings;
 
 // ── Ask AI gating UI (Settings → AI) ─────────────────────────────────────────
 
+function _renderAskAiStatusBanner() {
+  if (!window.MastAskAi) return;
+  var st = MastAskAi.getStatus();
+  var banner = document.getElementById('askAiStatusBanner');
+  if (!banner) return;
+  var bg, color;
+  if (st.level === 'ok')      { bg = 'rgba(22,163,74,0.12)';  color = '#16a34a'; }
+  else if (st.level === 'warn') { bg = 'rgba(245,158,11,0.12)'; color = '#b45309'; }
+  else                          { bg = 'var(--cream-dark,#e8e0d4)'; color = 'var(--warm-gray)'; }
+  banner.style.background = bg;
+  banner.style.color = color;
+  banner.style.fontWeight = '600';
+  banner.textContent = st.text;
+}
+
 async function loadAskAiConfigUI() {
   if (!window.MastAskAi) return;
   try { await MastAskAi.init(); } catch (_e) {}
@@ -22345,6 +22361,7 @@ async function loadAskAiConfigUI() {
   var cb  = document.getElementById('askAiMcpConfiguredCb');
   if (sel) sel.value = cfg.subscription || '';
   if (cb)  cb.checked = !!cfg.mcpConfigured;
+  _renderAskAiStatusBanner();
 }
 
 window.saveAskAiConfig = async function() {
@@ -22361,6 +22378,7 @@ window.saveAskAiConfig = async function() {
       ? '<span style="color:var(--teal);">✓ Saved — ✨ Ask AI buttons will now appear across the admin.</span>'
       : '<span style="color:var(--warm-gray);">Saved — buttons stay hidden until both fields are set.</span>';
     showToast('Ask AI settings saved');
+    _renderAskAiStatusBanner();
   } catch (err) {
     if (statusEl) statusEl.innerHTML = '<span style="color:#dc2626;">Save failed: ' + esc(err.message) + '</span>';
     showToast('Save failed: ' + err.message, true);
@@ -22405,12 +22423,21 @@ window.MastAskAi = (function() {
     enabled = !!subscription && subscription !== '' && mcpConfigured;
   }
 
+  // Per-user, per-tenant config. Each user's Claude subscription + MCP status
+  // is theirs alone — two operators on the same tenant configure independently.
+  function _getDocPath() {
+    var u = (typeof firebase !== 'undefined' && firebase.auth) ? firebase.auth().currentUser : null;
+    if (!u || !u.uid) return null;
+    return 'admin/askAi/' + u.uid;
+  }
+
   async function init() {
     if (initPromise) return initPromise;
     initPromise = (async function() {
       try {
-        if (typeof MastDB !== 'undefined' && MastDB.get) {
-          var cfg = (await MastDB.get('admin/askAi')) || {};
+        var path = _getDocPath();
+        if (path && typeof MastDB !== 'undefined' && MastDB.get) {
+          var cfg = (await MastDB.get(path)) || {};
           subscription = cfg.subscription || null;
           mcpConfigured = !!cfg.mcpConfigured;
         }
@@ -22426,8 +22453,9 @@ window.MastAskAi = (function() {
     subscription = (cfg && cfg.subscription) || null;
     mcpConfigured = !!(cfg && cfg.mcpConfigured);
     _recompute();
-    if (typeof MastDB !== 'undefined' && MastDB.set) {
-      await MastDB.set('admin/askAi', {
+    var path = _getDocPath();
+    if (path && typeof MastDB !== 'undefined' && MastDB.set) {
+      await MastDB.set(path, {
         subscription: subscription,
         mcpConfigured: mcpConfigured,
         updatedAt: new Date().toISOString()
@@ -22435,6 +22463,23 @@ window.MastAskAi = (function() {
     }
     initialized = true;
     window.dispatchEvent(new CustomEvent('mastaskai:configchanged', { detail: { enabled: enabled } }));
+  }
+
+  // Returns a human-readable status string + level (ok/warn). Used by Settings
+  // to show the user exactly what is preventing buttons from appearing.
+  function getStatus() {
+    if (!initialized) return { level: 'pending', text: 'Loading…' };
+    if (enabled) return { level: 'ok', text: '✓ Active — ✨ Ask AI buttons appear on data-rich pages.' };
+    if (!subscription && !mcpConfigured) {
+      return { level: 'warn', text: '⚠ Not configured — set both fields below to enable buttons.' };
+    }
+    if (!subscription) {
+      return { level: 'warn', text: '⚠ Subscription not set — pick your Claude tier below.' };
+    }
+    if (!mcpConfigured) {
+      return { level: 'warn', text: '⚠ Mast tenant MCP not yet configured — set up the connector below, then check the box.' };
+    }
+    return { level: 'warn', text: '⚠ Not configured.' };
   }
 
   function open(pageId) {
@@ -22597,6 +22642,7 @@ window.MastAskAi = (function() {
     isEnabled: isEnabled,
     getConfig: getConfig,
     setConfig: setConfig,
+    getStatus: getStatus,
     _registry: registry
   };
 })();
