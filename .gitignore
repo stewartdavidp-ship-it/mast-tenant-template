@@ -27,8 +27,10 @@ __pycache__/
 # Firebase CLI cache
 .firebase/
 
-# Claude Code
-.claude/
+# Claude Code — ignore everything under .claude/ except the team-wide
+# settings file (carries the design-token-lint PostToolUse hook).
+.claude/*
+!.claude/settings.json
 
 # Storage assets (live in Firebase Storage, not git)
 wholesale-images/
