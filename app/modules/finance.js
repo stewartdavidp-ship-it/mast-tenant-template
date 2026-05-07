@@ -510,6 +510,7 @@ function renderFinExpenses(expenses, start, end) {
     var isChecked = !!finExpSelected[ex._id];
     h += '<div style="background:var(--bg-secondary,#232323);border-radius:8px;padding:10px 14px;border-left:3px solid ' + (needsReview ? '#eab308' : 'transparent') + ';display:flex;align-items:center;gap:10px;">';
     h += '<input type="checkbox" class="fin-exp-row-cb" data-id="' + e(ex._id) + '" onclick="finExpToggleRow(this.dataset.id, this.checked)"' + (isChecked ? ' checked' : '') + ' style="width:16px;height:16px;cursor:pointer;flex-shrink:0;accent-color:var(--amber,#c4853c);">';
+    h += '<div onclick="finExpOpenDetail(\'' + e(ex._id) + '\')" style="flex:1;min-width:0;display:flex;align-items:center;gap:12px;cursor:pointer;">';
     h += '<div style="flex:1;min-width:0;">';
     h += '<div style="font-size:0.85rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + e(ex.merchantName || ex.description || 'Expense') + '</div>';
     h += '<div style="font-size:0.78rem;color:var(--warm-gray,#888);margin-top:2px;">';
@@ -522,7 +523,7 @@ function renderFinExpenses(expenses, start, end) {
     if (needsReview) h += ' · <span style="color:#eab308;font-size:0.72rem;">⚠ Review needed</span>';
     h += '</div></div>';
     h += '<div style="font-weight:700;font-size:0.9rem;flex-shrink:0;">' + fmt$(ex.amount || 0) + '</div>';
-    h += '</div>';
+    h += '</div></div>';
   });
   if (expenses.length > 100) h += '<div style="color:var(--warm-gray,#888);font-size:0.78rem;padding:8px 0;">Showing 100 of ' + expenses.length + ' expenses. Use filters to narrow.</div>';
   h += '</div>';
@@ -620,6 +621,182 @@ window.finExpBulkPersonal = function() {
     } catch (err) {
       showToast('Failed: ' + e(err.message), true);
       if (btn) { btn.disabled = false; btn.textContent = 'Mark Personal'; }
+    }
+  });
+};
+
+// ── Detail slide-over (edit category, business line, notes, etc) ─────────────
+
+var FIN_EXP_BUSINESS_LINES = [
+  { v: '',           l: '—' },
+  { v: 'production', l: 'Production' },
+  { v: 'sculpture',  l: 'Sculpture' },
+  { v: 'general',    l: 'General' }
+];
+
+window.finExpOpenDetail = function(id) {
+  var ex = finExpAllExpenses.find(function(x) { return x._id === id; });
+  if (!ex) return;
+  renderFinExpDetailPanel(ex);
+};
+
+window.finExpCloseDetail = function() {
+  var p = document.getElementById('finExpDetailPanel');
+  if (p) p.remove();
+};
+
+function renderFinExpDetailPanel(ex) {
+  var existing = document.getElementById('finExpDetailPanel');
+  if (existing) existing.remove();
+
+  var amountStr = (ex.amount >= 0 ? '' : '-') + '$' + (Math.abs(ex.amount) / 100).toFixed(2);
+  var amountColor = ex.amount >= 0 ? 'inherit' : '#16a34a';
+  var sourceLabel = ex.source === 'plaid' ? 'Plaid' : ex.source === 'csv_import' ? 'CSV Import' : 'Manual';
+  var sourceIcon = ex.source === 'plaid' ? '🏦' : ex.source === 'csv_import' ? '📄' : '✍️';
+  var inputStyle = 'width:100%;padding:9px 12px;border:1px solid rgba(255,255,255,0.12);border-radius:6px;background:var(--bg,#1a1a1a);color:var(--text,#fff);font-family:inherit;font-size:0.9rem;box-sizing:border-box;';
+  var labelStyle = 'font-size:0.72rem;color:var(--warm-gray,#888);text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:6px;font-weight:600;';
+  var idEsc = e(ex._id);
+
+  var allCats = FIN_EXP_CATEGORIES.concat([{ v: 'personal', l: 'Personal' }]);
+
+  var h = '';
+  h += '<div onclick="finExpCloseDetail()" style="flex:1;background:rgba(0,0,0,0.5);"></div>';
+  h += '<div style="width:480px;max-width:100%;background:var(--bg-secondary,#232323);overflow:auto;box-shadow:-8px 0 24px rgba(0,0,0,0.4);" onclick="event.stopPropagation()">';
+
+  // Header
+  h += '<div style="padding:16px 20px;border-bottom:1px solid rgba(255,255,255,0.08);display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">';
+  h += '<div style="flex:1;min-width:0;">';
+  h += '<div style="font-size:1rem;font-weight:700;">' + sourceIcon + ' ' + e(ex.merchantName || ex.description || 'Expense') + '</div>';
+  h += '<div style="font-size:0.78rem;color:var(--warm-gray,#888);margin-top:2px;">' + e(ex.date || '') + ' · ' + sourceLabel + (ex.pending ? ' · pending' : '') + '</div>';
+  h += '</div>';
+  h += '<div style="font-size:1.4rem;font-weight:700;color:' + amountColor + ';flex-shrink:0;">' + amountStr + '</div>';
+  h += '<button onclick="finExpCloseDetail()" style="background:none;border:none;font-size:1.4rem;cursor:pointer;color:var(--warm-gray,#888);padding:0 4px;line-height:1;flex-shrink:0;">×</button>';
+  h += '</div>';
+
+  // Body
+  h += '<div style="padding:20px;">';
+
+  if (ex.description && ex.description !== ex.merchantName) {
+    h += '<div style="margin-bottom:14px;"><label style="' + labelStyle + '">Description</label><div style="font-size:0.9rem;">' + e(ex.description) + '</div></div>';
+  }
+
+  // Category
+  h += '<div style="margin-bottom:14px;"><label style="' + labelStyle + '">Category</label>';
+  h += '<select onchange="finExpUpdateField(\'' + idEsc + '\',\'category\',this.value)" style="' + inputStyle + '">';
+  allCats.forEach(function(c) {
+    h += '<option value="' + c.v + '"' + (ex.category === c.v ? ' selected' : '') + '>' + e(c.l) + '</option>';
+  });
+  h += '</select></div>';
+
+  // Business Line
+  h += '<div style="margin-bottom:14px;"><label style="' + labelStyle + '">Business Line</label>';
+  h += '<select onchange="finExpUpdateField(\'' + idEsc + '\',\'businessLine\',this.value)" style="' + inputStyle + '">';
+  FIN_EXP_BUSINESS_LINES.forEach(function(b) {
+    h += '<option value="' + b.v + '"' + ((ex.businessLine || '') === b.v ? ' selected' : '') + '>' + e(b.l) + '</option>';
+  });
+  h += '</select></div>';
+
+  // Studio overhead
+  h += '<label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;margin-bottom:14px;padding:10px 12px;background:var(--bg,#1a1a1a);border-radius:6px;border:1px solid rgba(255,255,255,0.06);">';
+  h += '<input type="checkbox"' + (ex.isStudioOverhead ? ' checked' : '') + ' onchange="finExpUpdateField(\'' + idEsc + '\',\'isStudioOverhead\',this.checked)" style="width:18px;height:18px;margin-top:1px;accent-color:var(--amber,#c4853c);">';
+  h += '<div><div style="font-size:0.85rem;font-weight:600;">Fixed studio overhead</div>';
+  h += '<div style="font-size:0.78rem;color:var(--warm-gray,#888);margin-top:2px;">Recurring costs to keep your studio running (rent, insurance, subscriptions).</div></div></label>';
+
+  // Notes
+  h += '<div style="margin-bottom:14px;"><label style="' + labelStyle + '">Notes</label>';
+  h += '<textarea rows="3" onblur="finExpUpdateField(\'' + idEsc + '\',\'notes\',this.value)" style="' + inputStyle + 'resize:vertical;">' + e(ex.notes || '') + '</textarea></div>';
+
+  // Source details (collapsible)
+  h += '<details style="margin-top:8px;font-size:0.78rem;color:var(--warm-gray,#888);">';
+  h += '<summary style="cursor:pointer;padding:6px 0;">Source details</summary>';
+  h += '<div style="margin-top:8px;display:grid;grid-template-columns:auto 1fr;gap:6px 12px;font-size:0.78rem;line-height:1.4;">';
+  h += '<div>Source:</div><div>' + sourceLabel + '</div>';
+  if (ex.plaidCategory) h += '<div>Plaid Category:</div><div>' + e(ex.plaidCategory) + '</div>';
+  if (ex.plaidCategoryDetailed) h += '<div>Plaid Detail:</div><div>' + e(ex.plaidCategoryDetailed) + '</div>';
+  if (ex.categoryConfidence != null) h += '<div>Confidence:</div><div>' + Math.round(ex.categoryConfidence * 100) + '%</div>';
+  if (ex.sourceTransactionId) h += '<div>Txn ID:</div><div style="word-break:break-all;font-family:monospace;font-size:0.72rem;">' + e(ex.sourceTransactionId) + '</div>';
+  if (ex.plaidAccountId && finExpAccountLookup[ex.plaidAccountId]) {
+    var a = finExpAccountLookup[ex.plaidAccountId];
+    h += '<div>Account:</div><div>' + e(a.institution) + ' ••' + e(a.mask) + '</div>';
+  }
+  if (ex.createdAt) h += '<div>Created:</div><div>' + new Date(ex.createdAt).toLocaleString() + '</div>';
+  if (ex.updatedAt) h += '<div>Updated:</div><div>' + new Date(ex.updatedAt).toLocaleString() + '</div>';
+  h += '</div></details>';
+
+  // Action row
+  h += '<div style="margin-top:20px;padding-top:16px;border-top:1px solid rgba(255,255,255,0.08);display:flex;gap:8px;flex-wrap:wrap;align-items:center;">';
+  if (!ex.reviewed) {
+    h += '<button class="btn btn-primary btn-small" onclick="finExpDetailApprove(\'' + idEsc + '\')">Approve</button>';
+    h += '<button class="btn btn-secondary btn-small" onclick="finExpDetailPersonal(\'' + idEsc + '\')">Personal</button>';
+  } else {
+    h += '<span style="background:#16a34a;color:#fff;padding:6px 12px;border-radius:4px;font-size:0.78rem;font-weight:600;">✓ Approved</span>';
+  }
+  h += '<div style="flex:1;"></div>';
+  h += '<button class="btn btn-danger btn-small" onclick="finExpDetailDelete(\'' + idEsc + '\')">Delete</button>';
+  h += '</div>';
+
+  h += '</div>'; // body
+  h += '</div>'; // panel
+
+  var overlay = document.createElement('div');
+  overlay.id = 'finExpDetailPanel';
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:9000;display:flex;justify-content:flex-end;';
+  overlay.innerHTML = h;
+  document.body.appendChild(overlay);
+}
+
+window.finExpUpdateField = async function(id, field, value) {
+  try {
+    var updates = {};
+    updates[field] = (value === '' && field !== 'notes') ? null : value;
+    updates.updatedAt = new Date().toISOString();
+    if (field === 'category') updates.categorySource = 'user';
+    await MastDB.expenses.update(id, updates);
+    var ex = finExpAllExpenses.find(function(x) { return x._id === id; });
+    if (ex) Object.assign(ex, updates);
+    applyFinExpFilters();
+  } catch (err) {
+    showToast('Update failed: ' + e(err.message), true);
+  }
+};
+
+window.finExpDetailApprove = async function(id) {
+  try {
+    await MastDB.expenses.update(id, { reviewed: true, updatedAt: new Date().toISOString() });
+    showToast('Expense approved');
+    finExpCloseDetail();
+    loadFinExpenses();
+  } catch (err) {
+    showToast('Approve failed: ' + e(err.message), true);
+  }
+};
+
+window.finExpDetailPersonal = async function(id) {
+  try {
+    await MastDB.expenses.update(id, {
+      category: 'personal',
+      categorySource: 'user',
+      reviewed: true,
+      updatedAt: new Date().toISOString()
+    });
+    showToast('Marked as personal');
+    finExpCloseDetail();
+    loadFinExpenses();
+  } catch (err) {
+    showToast('Failed: ' + e(err.message), true);
+  }
+};
+
+window.finExpDetailDelete = function(id) {
+  mastConfirm('Delete this expense? This cannot be undone.', { title: 'Delete expense', confirmLabel: 'Delete', danger: true }).then(async function(ok) {
+    if (!ok) return;
+    try {
+      await MastDB.expenses.remove(id);
+      showToast('Expense deleted');
+      finExpCloseDetail();
+      loadFinExpenses();
+    } catch (err) {
+      showToast('Delete failed: ' + e(err.message), true);
     }
   });
 };
