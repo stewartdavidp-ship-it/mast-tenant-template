@@ -71,16 +71,56 @@
 
   function renderBlogList() {
     blogCurrentView = 'list';
+
+    // URL-driven filters from MCP admin links: status, dateFrom, dateTo, postIds.
+    var rp = (typeof window.getRouteParams === 'function') ? window.getRouteParams() : {};
+    var urlStatus = (rp && typeof rp.status === 'string') ? rp.status : '';
+    var urlDateFrom = (rp && typeof rp.dateFrom === 'string') ? rp.dateFrom.slice(0, 10) : '';
+    var urlDateTo = (rp && typeof rp.dateTo === 'string') ? rp.dateTo.slice(0, 10) : '';
+    var urlIdsParam = (rp && typeof rp.postIds === 'string') ? rp.postIds : '';
+    var urlIds = urlIdsParam ? urlIdsParam.split(',').map(function(s){return s.trim();}).filter(Boolean) : [];
+    var urlIdLookup = urlIds.length > 0 ? Object.create(null) : null;
+    if (urlIdLookup) urlIds.forEach(function(id){urlIdLookup[id]=true;});
+    var hasUrlFilter = !!(urlStatus || urlDateFrom || urlDateTo || urlIds.length);
+
+    var filteredPosts = hasUrlFilter
+      ? blogPosts.filter(function(post) {
+          if (urlStatus && (post.status || 'draft') !== urlStatus) return false;
+          if (urlIdLookup && !urlIdLookup[post.id]) return false;
+          if (urlDateFrom || urlDateTo) {
+            var iso = post.publishedAt || post.createdAt || '';
+            if (!iso) return false;
+            var d = iso.slice(0, 10);
+            if (urlDateFrom && d < urlDateFrom) return false;
+            if (urlDateTo && d > urlDateTo) return false;
+          }
+          return true;
+        })
+      : blogPosts;
+
     var html = '<div class="blog-header"><h2>Blog Posts</h2>' +
       '<button class="btn btn-primary" onclick="blogCreatePost()">+ New Post</button></div>';
 
-    if (blogPosts.length === 0) {
+    if (hasUrlFilter) {
+      var bParts = [];
+      if (urlIds.length) bParts.push(urlIds.length + ' selected post' + (urlIds.length === 1 ? '' : 's'));
+      if (urlStatus) bParts.push('status: ' + urlStatus);
+      if (urlDateFrom && urlDateTo) bParts.push('from ' + urlDateFrom + ' to ' + urlDateTo);
+      else if (urlDateFrom) bParts.push('from ' + urlDateFrom + ' onward');
+      else if (urlDateTo) bParts.push('through ' + urlDateTo);
+      html += '<div id="blogUrlFilterBanner" style="background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.35);color:#F59E0B;padding:8px 12px;margin-bottom:12px;border-radius:6px;display:flex;align-items:center;gap:12px;font-size:0.85rem;">' +
+        '<span>\ud83d\udcdd Showing ' + bParts.join(', ') + '</span>' +
+        '<button type="button" onclick="clearBlogFilter()" style="margin-left:auto;background:transparent;border:1px solid rgba(245,158,11,0.5);color:#F59E0B;padding:2px 10px;border-radius:4px;cursor:pointer;font-size:0.78rem;">Clear filter</button>' +
+        '</div>';
+    }
+
+    if (filteredPosts.length === 0) {
       html += '<div style="text-align:center;padding:40px 20px;color:var(--warm-gray);">' +
         '<div style="font-size:1.6rem;margin-bottom:12px;">\u270d\ufe0f</div>' +
         '<p style="font-size:0.9rem;font-weight:500;margin-bottom:4px;">No blog posts yet</p>' +
         '<p style="font-size:0.85rem;color:var(--warm-gray-light);">Write your first post to share your voice as an artist.</p></div>';
     } else {
-      blogPosts.forEach(function(post) {
+      filteredPosts.forEach(function(post) {
         var author = BLOG_AUTHORS[post.author] || BLOG_AUTHORS[Object.keys(BLOG_AUTHORS)[0]] || { name: post.author || 'Author', photoUrl: '', bio: '' };
         var dateStr = post.createdAt ? new Date(post.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
         html += '<div class="blog-post-row" onclick="blogOpenPost(\'' + post.id + '\')">' +
@@ -1877,6 +1917,13 @@
   // ============================================================
 
   window.blogCreatePost = blogCreatePost;
+  window.clearBlogFilter = function() {
+    var p = (typeof window.getRouteParams === 'function') ? window.getRouteParams() : {};
+    var next = {};
+    var DROP = { status: 1, dateFrom: 1, dateTo: 1, postIds: 1 };
+    Object.keys(p).forEach(function(k) { if (!DROP[k]) next[k] = p[k]; });
+    if (typeof navigateTo === 'function') navigateTo('blog', next);
+  };
   window.blogOpenPost = blogOpenPost;
   window.blogDeletePost = blogDeletePost;
   window.blogBackToList = blogBackToList;

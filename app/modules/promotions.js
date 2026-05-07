@@ -126,12 +126,46 @@
       return Object.assign({ id: id, computedStatus: computeStatus(s) }, s);
     });
 
-    // Filter
-    if (currentFilter !== 'all') {
+    // URL-driven filters from MCP admin links: status, saleIds.
+    var rp = (typeof window.getRouteParams === 'function') ? window.getRouteParams() : {};
+    var urlStatus = (rp && typeof rp.status === 'string') ? rp.status : '';
+    var urlIdsParam = (rp && typeof rp.saleIds === 'string') ? rp.saleIds : '';
+    var urlIds = urlIdsParam ? urlIdsParam.split(',').map(function(s){return s.trim();}).filter(Boolean) : [];
+    var urlIdLookup = urlIds.length > 0 ? Object.create(null) : null;
+    if (urlIdLookup) urlIds.forEach(function(id){urlIdLookup[id]=true;});
+    var hasUrlFilter = !!(urlStatus || urlIds.length);
+
+    if (hasUrlFilter) {
       sales = sales.filter(function(s) {
-        if (currentFilter === 'ended') return s.computedStatus === 'ended';
-        return s.computedStatus === currentFilter;
+        if (urlIdLookup && !urlIdLookup[s.id]) return false;
+        if (urlStatus && urlStatus !== 'all') {
+          if (urlStatus === 'archived') { if (!s.archived) return false; }
+          else if (s.computedStatus !== urlStatus) return false;
+        }
+        return true;
       });
+
+      // Banner
+      var existing = document.getElementById('promotionsUrlFilterBanner');
+      if (existing) existing.remove();
+      var banner = document.createElement('div');
+      banner.id = 'promotionsUrlFilterBanner';
+      banner.style.cssText = 'background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.35);color:#F59E0B;padding:8px 12px;margin-bottom:12px;border-radius:6px;display:flex;align-items:center;gap:12px;font-size:0.85rem;';
+      var bParts = [];
+      if (urlIds.length) bParts.push(urlIds.length + ' selected sale' + (urlIds.length === 1 ? '' : 's'));
+      if (urlStatus) bParts.push('status: ' + urlStatus);
+      banner.innerHTML = '<span>🔥 Showing ' + bParts.join(', ') + '</span>' +
+        '<button type="button" onclick="clearPromotionsFilter()" style="margin-left:auto;background:transparent;border:1px solid rgba(245,158,11,0.5);color:#F59E0B;padding:2px 10px;border-radius:4px;cursor:pointer;font-size:0.78rem;">Clear filter</button>';
+      if (tableEl && tableEl.parentNode) tableEl.parentNode.insertBefore(banner, tableEl);
+    } else {
+      var stale = document.getElementById('promotionsUrlFilterBanner');
+      if (stale) stale.remove();
+      if (currentFilter !== 'all') {
+        sales = sales.filter(function(s) {
+          if (currentFilter === 'ended') return s.computedStatus === 'ended';
+          return s.computedStatus === currentFilter;
+        });
+      }
     }
 
     // Sort: active first, then scheduled, then ended
@@ -453,6 +487,14 @@
   };
 
   // ── Module Registration ──
+
+  window.clearPromotionsFilter = function() {
+    var p = (typeof window.getRouteParams === 'function') ? window.getRouteParams() : {};
+    var next = {};
+    var DROP = { status: 1, saleIds: 1 };
+    Object.keys(p).forEach(function(k) { if (!DROP[k]) next[k] = p[k]; });
+    if (typeof navigateTo === 'function') navigateTo('promotions', next);
+  };
 
   MastAdmin.registerModule('promotions', {
     routes: {

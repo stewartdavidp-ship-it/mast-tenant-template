@@ -94,6 +94,24 @@
   // ===== ISSUE LIST SCREEN =====
   function renderNLIssueList() {
     nlCurrentView = 'issues';
+
+    // URL-driven filters from MCP admin links: status, issueIds.
+    var rp = (typeof window.getRouteParams === 'function') ? window.getRouteParams() : {};
+    var urlStatus = (rp && typeof rp.status === 'string') ? rp.status : '';
+    var urlIdsParam = (rp && typeof rp.issueIds === 'string') ? rp.issueIds : '';
+    var urlIds = urlIdsParam ? urlIdsParam.split(',').map(function(s){return s.trim();}).filter(Boolean) : [];
+    var urlIdLookup = urlIds.length > 0 ? Object.create(null) : null;
+    if (urlIdLookup) urlIds.forEach(function(id){urlIdLookup[id]=true;});
+    var hasUrlFilter = !!(urlStatus || urlIds.length);
+
+    var filteredIssues = hasUrlFilter
+      ? nlIssues.filter(function(issue) {
+          if (urlStatus && (issue.status || 'draft') !== urlStatus) return false;
+          if (urlIdLookup && !urlIdLookup[issue.id]) return false;
+          return true;
+        })
+      : nlIssues;
+
     var html = '<div class="nl-sub-nav">' +
       '<button class="active" onclick="nlSwitchView(\'issues\')">Issues</button>' +
       '<button onclick="nlSwitchView(\'subscribers\')">Subscribers</button>' +
@@ -101,13 +119,23 @@
       '<div class="nl-header"><h2>Newsletter Issues</h2>' +
       '<button class="btn btn-primary" onclick="nlCreateIssue()">+ New Issue</button></div>';
 
-    if (nlIssues.length === 0) {
+    if (hasUrlFilter) {
+      var bParts = [];
+      if (urlIds.length) bParts.push(urlIds.length + ' selected issue' + (urlIds.length === 1 ? '' : 's'));
+      if (urlStatus) bParts.push('status: ' + urlStatus);
+      html += '<div id="newsletterUrlFilterBanner" style="background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.35);color:#F59E0B;padding:8px 12px;margin-bottom:12px;border-radius:6px;display:flex;align-items:center;gap:12px;font-size:0.85rem;">' +
+        '<span>📰 Showing ' + bParts.join(', ') + '</span>' +
+        '<button type="button" onclick="clearNewsletterFilter()" style="margin-left:auto;background:transparent;border:1px solid rgba(245,158,11,0.5);color:#F59E0B;padding:2px 10px;border-radius:4px;cursor:pointer;font-size:0.78rem;">Clear filter</button>' +
+        '</div>';
+    }
+
+    if (filteredIssues.length === 0) {
       html += '<div style="text-align:center;padding:40px 20px;color:var(--warm-gray);">' +
         '<div style="font-size:1.6rem;margin-bottom:12px;">📰</div>' +
         '<p style="font-size:0.9rem;font-weight:500;margin-bottom:4px;">No newsletter issues yet</p>' +
         '<p style="font-size:0.85rem;color:var(--warm-gray-light);">Create your first issue to start composing.</p></div>';
     } else {
-      nlIssues.forEach(function(issue) {
+      filteredIssues.forEach(function(issue) {
         var dateStr = issue.createdAt ? new Date(issue.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
         html += '<div class="nl-issue-row" onclick="nlOpenIssue(\'' + issue.id + '\')">' +
           '<span class="nl-issue-num">#' + (issue.issueNumber || '?') + '</span>' +
@@ -1194,6 +1222,13 @@
   window.nlShowAddSectionMenu = nlShowAddSectionMenu;
   window.nlPickCouponForSection = nlPickCouponForSection;
   window.nlSetSectionCoupon = nlSetSectionCoupon;
+  window.clearNewsletterFilter = function() {
+    var p = (typeof window.getRouteParams === 'function') ? window.getRouteParams() : {};
+    var next = {};
+    var DROP = { status: 1, issueIds: 1 };
+    Object.keys(p).forEach(function(k) { if (!DROP[k]) next[k] = p[k]; });
+    if (typeof navigateTo === 'function') navigateTo('newsletter', next);
+  };
 
   // Image picker
   function nlOpenImagePicker(secId) {
