@@ -397,14 +397,64 @@ async function loadContacts() {
 }
 
 function renderContacts() {
+  // URL-driven filters from MCP admin links: category, dateFrom, dateTo,
+  // contactIds (#contacts?...). URL-overrides-pill — when any URL filter
+  // is present, bypass the dropdown for this render.
+  var rp = (typeof window.getRouteParams === 'function') ? window.getRouteParams() : {};
+  var urlCategory = (rp && typeof rp.category === 'string') ? rp.category : '';
+  var urlDateFrom = (rp && typeof rp.dateFrom === 'string') ? rp.dateFrom.slice(0, 10) : '';
+  var urlDateTo = (rp && typeof rp.dateTo === 'string') ? rp.dateTo.slice(0, 10) : '';
+  var urlIdsParam = (rp && typeof rp.contactIds === 'string') ? rp.contactIds : '';
+  var urlIds = urlIdsParam ? urlIdsParam.split(',').map(function(s){return s.trim();}).filter(Boolean) : [];
+  var urlIdLookup = urlIds.length > 0 ? Object.create(null) : null;
+  if (urlIdLookup) urlIds.forEach(function(id){ urlIdLookup[id]=true; });
+  var hasUrlFilter = !!(urlCategory || urlDateFrom || urlDateTo || urlIds.length);
+
   var searchText = (document.getElementById('contactsSearch').value || '').trim().toLowerCase();
   var catFilter = document.getElementById('contactsCategoryFilter').value;
 
   var filtered = contactsData.filter(function(c) {
+    if (hasUrlFilter) {
+      if (urlCategory && (c.category || '').toLowerCase() !== urlCategory.toLowerCase()) return false;
+      if (urlIdLookup && !urlIdLookup[c.id]) return false;
+      if (urlDateFrom || urlDateTo) {
+        var iso = c.createdAt || '';
+        if (!iso) return false;
+        var d = iso.slice(0, 10);
+        if (urlDateFrom && d < urlDateFrom) return false;
+        if (urlDateTo && d > urlDateTo) return false;
+      }
+      return true;
+    }
     if (searchText && (c.name || '').toLowerCase().indexOf(searchText) === -1) return false;
     if (catFilter !== 'all' && c.category !== catFilter) return false;
     return true;
   });
+
+  // URL-filter banner.
+  var bannerEl = document.getElementById('contactsUrlFilterBanner');
+  var wrap = document.getElementById('contactsTableWrap');
+  if (!bannerEl && hasUrlFilter && wrap && wrap.parentNode) {
+    bannerEl = document.createElement('div');
+    bannerEl.id = 'contactsUrlFilterBanner';
+    bannerEl.style.cssText = 'background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.35);color:#F59E0B;padding:8px 12px;margin-bottom:12px;border-radius:6px;display:flex;align-items:center;gap:12px;font-size:0.85rem;';
+    wrap.parentNode.insertBefore(bannerEl, wrap);
+  }
+  if (bannerEl) {
+    if (hasUrlFilter) {
+      var parts = [];
+      if (urlIds.length) parts.push(urlIds.length + ' selected contact' + (urlIds.length === 1 ? '' : 's'));
+      if (urlCategory) parts.push('category: ' + urlCategory);
+      if (urlDateFrom && urlDateTo) parts.push('from ' + urlDateFrom + ' to ' + urlDateTo);
+      else if (urlDateFrom) parts.push('from ' + urlDateFrom + ' onward');
+      else if (urlDateTo) parts.push('through ' + urlDateTo);
+      bannerEl.innerHTML = '<span>📇 Showing ' + parts.join(', ') + '</span>' +
+        '<button type="button" onclick="clearContactsFilter()" style="margin-left:auto;background:transparent;border:1px solid rgba(245,158,11,0.5);color:#F59E0B;padding:2px 10px;border-radius:4px;cursor:pointer;font-size:0.78rem;">Clear filter</button>';
+      bannerEl.style.display = 'flex';
+    } else {
+      bannerEl.style.display = 'none';
+    }
+  }
 
   document.getElementById('contactsCount').textContent = filtered.length + ' of ' + contactsData.length + ' contacts';
 
@@ -1456,6 +1506,13 @@ async function doSyncGoogleContacts() {
 
   window.loadContacts = loadContacts;
   window.renderContacts = renderContacts;
+  window.clearContactsFilter = function() {
+    var p = (typeof window.getRouteParams === 'function') ? window.getRouteParams() : {};
+    var next = {};
+    var DROP = { category: 1, dateFrom: 1, dateTo: 1, contactIds: 1 };
+    Object.keys(p).forEach(function(k) { if (!DROP[k]) next[k] = p[k]; });
+    if (typeof navigateTo === 'function') navigateTo('contacts', next);
+  };
   window.openAddContactModal = openAddContactModal;
   window.cancelAddContactModal = cancelAddContactModal;
   window.saveNewContact = saveNewContact;
@@ -1510,6 +1567,7 @@ async function doSyncGoogleContacts() {
     routes: {
       'contacts': { tab: 'contactsTab', setup: function() {
         if (!contactsLoaded) loadContacts();
+        else renderContacts();
         updateGoogleContactsButtons();
       } }
     },

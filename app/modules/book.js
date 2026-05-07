@@ -304,14 +304,55 @@
     var container = document.getElementById('bookClassesTable');
     if (!container) return;
 
+    // URL-driven filters from MCP admin links: status, category, type, classIds.
+    var rp = (typeof window.getRouteParams === 'function') ? window.getRouteParams() : {};
+    var urlStatus = (rp && typeof rp.status === 'string') ? rp.status : '';
+    var urlCategory = (rp && typeof rp.category === 'string') ? rp.category : '';
+    var urlType = (rp && typeof rp.type === 'string') ? rp.type : '';
+    var urlIdsParam = (rp && typeof rp.classIds === 'string') ? rp.classIds : '';
+    var urlIds = urlIdsParam ? urlIdsParam.split(',').map(function(s){return s.trim();}).filter(Boolean) : [];
+    var urlIdLookup = urlIds.length > 0 ? Object.create(null) : null;
+    if (urlIdLookup) urlIds.forEach(function(id){urlIdLookup[id]=true;});
+    var hasUrlFilter = !!(urlStatus || urlCategory || urlType || urlIds.length);
+
     var typeFilter = (document.getElementById('bookFilterType') || {}).value || 'all';
     var statusFilter = (document.getElementById('bookFilterStatus') || {}).value || 'active';
 
     var filtered = classesData.filter(function(c) {
+      if (hasUrlFilter) {
+        if (urlStatus && c.status !== urlStatus) return false;
+        if (urlType && c.type !== urlType) return false;
+        if (urlCategory && (c.category || '').toLowerCase() !== urlCategory.toLowerCase()) return false;
+        if (urlIdLookup && !urlIdLookup[c.id]) return false;
+        return true;
+      }
       if (typeFilter !== 'all' && c.type !== typeFilter) return false;
       if (statusFilter !== 'all' && c.status !== statusFilter) return false;
       return true;
     });
+
+    // URL-filter banner.
+    var bannerEl = document.getElementById('classesUrlFilterBanner');
+    if (!bannerEl && hasUrlFilter && container.parentNode) {
+      bannerEl = document.createElement('div');
+      bannerEl.id = 'classesUrlFilterBanner';
+      bannerEl.style.cssText = 'background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.35);color:#F59E0B;padding:8px 12px;margin-bottom:12px;border-radius:6px;display:flex;align-items:center;gap:12px;font-size:0.85rem;';
+      container.parentNode.insertBefore(bannerEl, container);
+    }
+    if (bannerEl) {
+      if (hasUrlFilter) {
+        var parts = [];
+        if (urlIds.length) parts.push(urlIds.length + ' selected class' + (urlIds.length === 1 ? '' : 'es'));
+        if (urlStatus) parts.push('status: ' + urlStatus);
+        if (urlType) parts.push('type: ' + urlType);
+        if (urlCategory) parts.push('category: ' + urlCategory);
+        bannerEl.innerHTML = '<span>📚 Showing ' + parts.join(', ') + '</span>' +
+          '<button type="button" onclick="clearClassesFilter()" style="margin-left:auto;background:transparent;border:1px solid rgba(245,158,11,0.5);color:#F59E0B;padding:2px 10px;border-radius:4px;cursor:pointer;font-size:0.78rem;">Clear filter</button>';
+        bannerEl.style.display = 'flex';
+      } else {
+        bannerEl.style.display = 'none';
+      }
+    }
 
     filtered.sort(function(a, b) {
       return (b.updatedAt || b.createdAt || '').localeCompare(a.updatedAt || a.createdAt || '');
@@ -961,14 +1002,67 @@
     var table = document.getElementById('bookEnrollmentsTable');
     if (!table) return;
 
+    // URL-driven filters from MCP admin links: status, classId, sessionId, dateFrom, dateTo, enrollmentIds.
+    var rp = (typeof window.getRouteParams === 'function') ? window.getRouteParams() : {};
+    var urlStatus = (rp && typeof rp.status === 'string') ? rp.status : '';
+    var urlClassId = (rp && typeof rp.classId === 'string') ? rp.classId : '';
+    var urlSessionId = (rp && typeof rp.sessionId === 'string') ? rp.sessionId : '';
+    var urlDateFrom = (rp && typeof rp.dateFrom === 'string') ? rp.dateFrom.slice(0, 10) : '';
+    var urlDateTo = (rp && typeof rp.dateTo === 'string') ? rp.dateTo.slice(0, 10) : '';
+    var urlIdsParam = (rp && typeof rp.enrollmentIds === 'string') ? rp.enrollmentIds : '';
+    var urlIds = urlIdsParam ? urlIdsParam.split(',').map(function(s){return s.trim();}).filter(Boolean) : [];
+    var urlIdLookup = urlIds.length > 0 ? Object.create(null) : null;
+    if (urlIdLookup) urlIds.forEach(function(id){urlIdLookup[id]=true;});
+    var hasUrlFilter = !!(urlStatus || urlClassId || urlSessionId || urlDateFrom || urlDateTo || urlIds.length);
+
     var statusFilter = (document.getElementById('enrollFilterStatus') || {}).value || 'all';
     var classFilter = (document.getElementById('enrollFilterClass') || {}).value || 'all';
 
     var filtered = enrollmentsData.filter(function(e) {
+      if (hasUrlFilter) {
+        if (urlStatus && e.status !== urlStatus) return false;
+        if (urlClassId && e.classId !== urlClassId) return false;
+        if (urlSessionId && e.sessionId !== urlSessionId) return false;
+        if (urlIdLookup && !urlIdLookup[e.id]) return false;
+        if (urlDateFrom || urlDateTo) {
+          var iso = e.enrolledAt || '';
+          if (!iso) return false;
+          var d = iso.slice(0, 10);
+          if (urlDateFrom && d < urlDateFrom) return false;
+          if (urlDateTo && d > urlDateTo) return false;
+        }
+        return true;
+      }
       if (statusFilter !== 'all' && e.status !== statusFilter) return false;
       if (classFilter !== 'all' && e.classId !== classFilter) return false;
       return true;
     });
+
+    // URL-filter banner.
+    var bannerEl = document.getElementById('enrollmentsUrlFilterBanner');
+    if (!bannerEl && hasUrlFilter && table.parentNode) {
+      bannerEl = document.createElement('div');
+      bannerEl.id = 'enrollmentsUrlFilterBanner';
+      bannerEl.style.cssText = 'background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.35);color:#F59E0B;padding:8px 12px;margin-bottom:12px;border-radius:6px;display:flex;align-items:center;gap:12px;font-size:0.85rem;';
+      table.parentNode.insertBefore(bannerEl, table);
+    }
+    if (bannerEl) {
+      if (hasUrlFilter) {
+        var parts = [];
+        if (urlIds.length) parts.push(urlIds.length + ' selected enrollment' + (urlIds.length === 1 ? '' : 's'));
+        if (urlStatus) parts.push('status: ' + urlStatus);
+        if (urlClassId) parts.push('class: ' + urlClassId);
+        if (urlSessionId) parts.push('session: ' + urlSessionId);
+        if (urlDateFrom && urlDateTo) parts.push('from ' + urlDateFrom + ' to ' + urlDateTo);
+        else if (urlDateFrom) parts.push('from ' + urlDateFrom + ' onward');
+        else if (urlDateTo) parts.push('through ' + urlDateTo);
+        bannerEl.innerHTML = '<span>🎓 Showing ' + parts.join(', ') + '</span>' +
+          '<button type="button" onclick="clearEnrollmentsFilter()" style="margin-left:auto;background:transparent;border:1px solid rgba(245,158,11,0.5);color:#F59E0B;padding:2px 10px;border-radius:4px;cursor:pointer;font-size:0.78rem;">Clear filter</button>';
+        bannerEl.style.display = 'flex';
+      } else {
+        bannerEl.style.display = 'none';
+      }
+    }
 
     filtered.sort(function(a, b) {
       // Waitlisted sort by position, everything else by date descending
@@ -3651,6 +3745,22 @@
       }
     });
   }
+
+  // URL-filter clear handlers — drop filter params + re-navigate.
+  window.clearClassesFilter = function() {
+    var p = (typeof window.getRouteParams === 'function') ? window.getRouteParams() : {};
+    var next = {};
+    var DROP = { status: 1, category: 1, type: 1, classIds: 1 };
+    Object.keys(p).forEach(function(k) { if (!DROP[k]) next[k] = p[k]; });
+    if (typeof navigateTo === 'function') navigateTo('book', next);
+  };
+  window.clearEnrollmentsFilter = function() {
+    var p = (typeof window.getRouteParams === 'function') ? window.getRouteParams() : {};
+    var next = {};
+    var DROP = { status: 1, classId: 1, sessionId: 1, dateFrom: 1, dateTo: 1, enrollmentIds: 1 };
+    Object.keys(p).forEach(function(k) { if (!DROP[k]) next[k] = p[k]; });
+    if (typeof navigateTo === 'function') navigateTo('enrollments', next);
+  };
 
   MastAdmin.registerModule('book', {
     routes: {
