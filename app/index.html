@@ -22169,7 +22169,7 @@ async function loadPlaidBanksForSettings() {
       h += '<div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;" onclick="togglePlaidBankCard(\'' + esc(itemId) + '\')">';
       h += '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">';
       h += '<span id="plaidBankArrow_' + esc(itemId) + '" style="font-size:0.72rem;transition:transform 0.2s;">&#9654;</span>';
-      h += '<span style="font-weight:600;font-size:0.95rem;">' + esc(item.institutionName || 'Unknown Bank') + '</span>';
+      h += '<span style="font-weight:600;font-size:0.9rem;">' + esc(item.institutionName || 'Unknown Bank') + '</span>';
       h += '<span style="font-size:0.78rem;color:var(--warm-gray);">' + acctCount + ' account' + (acctCount !== 1 ? 's' : '') + '</span>';
       h += '<span style="background:' + statusBg + ';color:#fff;padding:2px 8px;border-radius:4px;font-size:0.72rem;font-weight:600;">' + esc(item.status || 'unknown') + '</span>';
       if (item.lastSyncAt) h += '<span style="font-size:0.78rem;color:var(--warm-gray-light);">Synced ' + new Date(item.lastSyncAt).toLocaleDateString() + '</span>';
@@ -22642,7 +22642,7 @@ window.MastAskAi = (function() {
             '<h3 style="margin:0;font-size:1rem;">✨ ' + esc(cfg.title || 'Ask AI') + '</h3>' +
             '<div style="font-size:0.78rem;color:var(--warm-gray,#888);margin-top:2px;">Page context will be sent with your question.</div>' +
           '</div>' +
-          '<button onclick="MastAskAi.close()" style="background:none;border:none;font-size:1.4rem;cursor:pointer;color:var(--warm-gray,#888);padding:0 4px;line-height:1;">×</button>' +
+          '<button onclick="MastAskAi.close()" style="background:none;border:none;font-size:1.6rem;cursor:pointer;color:var(--warm-gray,#888);padding:0 4px;line-height:1;">×</button>' +
         '</div>' +
         '<div style="padding:18px 22px;">' +
           '<label for="mastAskAiQ" style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:6px;">Your question</label>' +
@@ -22839,7 +22839,7 @@ window.MastAskAi = (function() {
             '<h3 style="margin:0;font-size:1rem;">' + esc(titleText) + '</h3>' +
             '<div style="font-size:0.78rem;color:var(--warm-gray,#888);margin-top:2px;">Paste the full Claude reply — the app will extract content inside &lt;mast-return&gt; tags.</div>' +
           '</div>' +
-          '<button onclick="MastAskAi.closeReturn()" style="background:none;border:none;font-size:1.4rem;cursor:pointer;color:var(--warm-gray,#888);padding:0 4px;line-height:1;">×</button>' +
+          '<button onclick="MastAskAi.closeReturn()" style="background:none;border:none;font-size:1.6rem;cursor:pointer;color:var(--warm-gray,#888);padding:0 4px;line-height:1;">×</button>' +
         '</div>' +
         '<div style="padding:18px 22px;">' +
           '<textarea id="mastAskAiReturnText" rows="10" placeholder="Paste the full Claude reply here…" style="width:100%;padding:10px 12px;border:1px solid rgba(255,255,255,0.1);border-radius:6px;font-family:\'DM Sans\',sans-serif;font-size:0.9rem;background:var(--bg,#1a1a1a);color:var(--text,#fff);resize:vertical;box-sizing:border-box;"></textarea>' +
@@ -29115,7 +29115,7 @@ function renderProducts() {
     if (!bannerEl && hasUrlFilter) {
       bannerEl = document.createElement('div');
       bannerEl.id = 'productsUrlFilterBanner';
-      bannerEl.style.cssText = 'background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.35);color:#F59E0B;padding:8px 12px;margin-bottom:12px;border-radius:6px;display:flex;align-items:center;gap:12px;font-size:0.875rem;';
+      bannerEl.style.cssText = 'background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.35);color:#F59E0B;padding:8px 12px;margin-bottom:12px;border-radius:6px;display:flex;align-items:center;gap:12px;font-size:0.85rem;';
       var grid = document.getElementById('productsGrid');
       if (grid && grid.parentNode) grid.parentNode.insertBefore(bannerEl, grid);
     }
@@ -29129,7 +29129,7 @@ function renderProducts() {
       else if (urlDateFrom) parts.push('from ' + urlDateFrom + ' onward');
       else if (urlDateTo) parts.push('through ' + urlDateTo);
       bannerEl.innerHTML = '<span>📅 Showing ' + parts.join(', ') + '</span>' +
-        '<button type="button" onclick="clearProductsFilter()" style="margin-left:auto;background:transparent;border:1px solid rgba(245,158,11,0.5);color:#F59E0B;padding:2px 10px;border-radius:4px;cursor:pointer;font-size:0.8rem;">Clear filter</button>';
+        '<button type="button" onclick="clearProductsFilter()" style="margin-left:auto;background:transparent;border:1px solid rgba(245,158,11,0.5);color:#F59E0B;padding:2px 10px;border-radius:4px;cursor:pointer;font-size:0.78rem;">Clear filter</button>';
       bannerEl.style.display = 'flex';
     } else {
       bannerEl.style.display = 'none';
@@ -30021,6 +30021,15 @@ function toggleForecastSlow() {
 }
 
 // ---- Inventory Overview (standalone Inventory tab) ----
+// Drop URL-driven inventory filters; keep route + non-filter params.
+window.clearInventoryFilter = function() {
+  var p = (typeof window.getRouteParams === 'function') ? window.getRouteParams() : {};
+  var next = {};
+  var DROP = { stockType: 1, lowStock: 1, category: 1, productIds: 1 };
+  Object.keys(p).forEach(function(k) { if (!DROP[k]) next[k] = p[k]; });
+  if (typeof navigateTo === 'function') navigateTo('inventory', next);
+};
+
 function renderInventoryOverview() {
   var el = document.getElementById('inventoryOverviewContent');
   if (!el) return;
@@ -30033,6 +30042,21 @@ function renderInventoryOverview() {
     }
     return;
   }
+
+  // URL-driven filters from MCP admin links: stockType, lowStock, category,
+  // productIds (#inventory?...). URL-overrides-pill — when any URL filter
+  // is present we narrow the row set after the standard build/sort and
+  // surface an orange banner with a Clear button. The summary stat bar
+  // still reflects the whole tenant (informative even when filtered).
+  var _invRouteParams = (typeof window.getRouteParams === 'function') ? window.getRouteParams() : {};
+  var _invUrlStockType = (_invRouteParams && typeof _invRouteParams.stockType === 'string') ? _invRouteParams.stockType : '';
+  var _invUrlLowStock = !!(_invRouteParams && (_invRouteParams.lowStock === 'true' || _invRouteParams.lowStock === true));
+  var _invUrlCategory = (_invRouteParams && typeof _invRouteParams.category === 'string') ? _invRouteParams.category : '';
+  var _invUrlIdsParam = (_invRouteParams && typeof _invRouteParams.productIds === 'string') ? _invRouteParams.productIds : '';
+  var _invUrlIds = _invUrlIdsParam ? _invUrlIdsParam.split(',').map(function(s) { return s.trim(); }).filter(Boolean) : [];
+  var _invUrlIdLookup = _invUrlIds.length > 0 ? Object.create(null) : null;
+  if (_invUrlIdLookup) _invUrlIds.forEach(function(id) { _invUrlIdLookup[id] = true; });
+  var _invHasUrlFilter = !!(_invUrlStockType || _invUrlLowStock || _invUrlCategory || _invUrlIds.length);
 
   // Build summary stats
   var totalProducts = productsData.length;
@@ -30142,6 +30166,27 @@ function renderInventoryOverview() {
     // Then by available descending
     return b.available - a.available;
   });
+
+  // Apply URL-driven filters after sorting (so the banner-narrowed table
+  // still shows the same urgency ordering as the full view).
+  if (_invHasUrlFilter) {
+    var _invCategoryLower = _invUrlCategory ? _invUrlCategory.toLowerCase() : '';
+    rows = rows.filter(function(r) {
+      if (_invUrlIdLookup && !_invUrlIdLookup[r.pid]) return false;
+      if (_invCategoryLower) {
+        if (!Array.isArray(r.categories) || !r.categories.some(function(c) {
+          return typeof c === 'string' && c.toLowerCase() === _invCategoryLower;
+        })) return false;
+      }
+      if (_invUrlStockType && r.stockType !== _invUrlStockType) return false;
+      if (_invUrlLowStock) {
+        // "Low stock" matches strict/STB rows at-or-below threshold (not BTO).
+        if (isBTO(r.stockType)) return false;
+        if (r.available > r.threshold) return false;
+      }
+      return true;
+    });
+  }
 
   // Summary bar
   var summaryHtml = '<div class="inv-overview-summary">' +
@@ -30270,7 +30315,23 @@ function renderInventoryOverview() {
 
   tableHtml += '</tbody></table></div>';
 
-  el.innerHTML = summaryHtml + tableHtml;
+  // URL-filter banner — built inline so it lives inside #inventoryOverviewContent
+  // and gets re-rendered every pass (avoids stale-DOM problems when the user
+  // clicks Clear and the whole content gets re-painted).
+  var bannerHtml = '';
+  if (_invHasUrlFilter) {
+    var bParts = [];
+    if (_invUrlIds.length) bParts.push(_invUrlIds.length + ' selected product' + (_invUrlIds.length === 1 ? '' : 's'));
+    if (_invUrlLowStock) bParts.push('low stock only');
+    if (_invUrlStockType) bParts.push('stockType: ' + _invUrlStockType);
+    if (_invUrlCategory) bParts.push('category: ' + _invUrlCategory);
+    bannerHtml = '<div id="inventoryUrlFilterBanner" style="background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.35);color:#F59E0B;padding:8px 12px;margin-bottom:12px;border-radius:6px;display:flex;align-items:center;gap:12px;font-size:0.85rem;">' +
+      '<span>📦 Showing ' + bParts.join(', ') + '</span>' +
+      '<button type="button" onclick="clearInventoryFilter()" style="margin-left:auto;background:transparent;border:1px solid rgba(245,158,11,0.5);color:#F59E0B;padding:2px 10px;border-radius:4px;cursor:pointer;font-size:0.78rem;">Clear filter</button>' +
+    '</div>';
+  }
+
+  el.innerHTML = summaryHtml + bannerHtml + tableHtml;
 }
 
 var expandedInventoryPid = null;
