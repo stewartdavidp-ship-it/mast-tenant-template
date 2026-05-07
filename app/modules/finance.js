@@ -335,6 +335,22 @@ async function loadFinExpBanks() {
 }
 
 var finExpCache = { expenses: [], start: '', end: '' };
+var finExpAllExpenses = [];          // pre-filter (date-period only, personal excluded)
+var finExpAccountLookup = {};        // plaidAccountId → { institution, mask }
+var finExpFilters = { status: 'all', category: '', accountId: '' };
+var finExpSelected = {};             // _id → true
+var FIN_EXP_CATEGORIES = [
+  { v: 'materials',         l: 'Materials' },
+  { v: 'booth_fee',         l: 'Booth Fee' },
+  { v: 'shipping_supplies', l: 'Shipping' },
+  { v: 'travel',            l: 'Travel' },
+  { v: 'marketing',         l: 'Marketing' },
+  { v: 'equipment',         l: 'Equipment' },
+  { v: 'software',          l: 'Software' },
+  { v: 'payroll',           l: 'Payroll' },
+  { v: 'taxes',             l: 'Taxes' },
+  { v: 'other',             l: 'Other' }
+];
 
 async function loadFinExpenses() {
   var startEl = document.getElementById('fExpS');
@@ -346,18 +362,58 @@ async function loadFinExpenses() {
   if (!el) return;
   el.innerHTML = skeletonTable(6,4);
 
+  finExpSelected = {}; // reset selection on reload
+
   try {
+    // Build account lookup once per load (used by Account filter + row display)
+    try {
+      var plaidItems = (await MastDB.plaidItems.list()) || {};
+      finExpAccountLookup = {};
+      Object.values(plaidItems).forEach(function(item) {
+        if (item.accounts) {
+          item.accounts.forEach(function(acct) {
+            finExpAccountLookup[acct.accountId] = {
+              institution: item.institutionName || 'Bank',
+              mask: acct.mask || '????'
+            };
+          });
+        }
+      });
+    } catch (e) { /* non-critical */ }
+
     var raw = await MastDB.query('admin/expenses').orderByChild('date').startAt(start).endAt(end).limitToLast(500).once();
     var expenses = Object.entries(raw || {}).map(function(kv) { return Object.assign({ _id: kv[0] }, kv[1]); });
     expenses = expenses.filter(function(ex) { return ex.category !== 'personal'; });
     expenses.sort(function(a,b) { return (b.date || '').localeCompare(a.date || ''); });
 
-    finExpCache = { expenses: expenses, start: start, end: end };
-    el.innerHTML = renderFinExpenses(expenses, start, end);
+    finExpAllExpenses = expenses;
+    finExpCache.start = start;
+    finExpCache.end = end;
+    applyFinExpFilters();
   } catch (err) {
     el.innerHTML = '<div style="color:var(--danger,#dc2626);padding:12px;">' + e(err.message) + '</div>';
   }
 }
+
+function applyFinExpFilters() {
+  var f = finExpFilters;
+  var filtered = finExpAllExpenses.filter(function(ex) {
+    if (f.status === 'unreviewed' && ex.reviewed) return false;
+    if (f.status === 'reviewed' && !ex.reviewed) return false;
+    if (f.category && ex.category !== f.category) return false;
+    if (f.accountId && ex.plaidAccountId !== f.accountId) return false;
+    return true;
+  });
+  finExpCache.expenses = filtered;
+  var el = document.getElementById('fExpContent');
+  if (el) el.innerHTML = renderFinExpenses(filtered, finExpCache.start, finExpCache.end);
+}
+
+window.setFinExpFilter = function(key, value) {
+  finExpFilters[key] = value;
+  finExpSelected = {};
+  applyFinExpFilters();
+};
 
 function renderFinExpenses(expenses, start, end) {
   var total = 0;
@@ -381,16 +437,51 @@ function renderFinExpenses(expenses, start, end) {
   h += statCard('Period', toDateShort(start) + ' – ' + toDateShort(end), 'var(--warm-gray,#888)');
   h += '</div>';
 
-  // Ask AI bar
-  h += '<div style="display:flex;justify-content:flex-end;margin-bottom:16px;">';
+  // Filter row + Ask AI
+  var filterSelStyle = 'padding:7px 10px;border:1px solid rgba(255,255,255,0.1);border-radius:6px;font-family:inherit;font-size:0.85rem;background:var(--bg,#1a1a1a);color:var(--text,#fff);';
+  h += '<div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap;">';
+  h += '<select onchange="setFinExpFilter(\'status\', this.value)" style="' + filterSelStyle + '">';
+  h += '<option value="all"' + (finExpFilters.status === 'all' ? ' selected' : '') + '>All</option>';
+  h += '<option value="unreviewed"' + (finExpFilters.status === 'unreviewed' ? ' selected' : '') + '>Unreviewed</option>';
+  h += '<option value="reviewed"' + (finExpFilters.status === 'reviewed' ? ' selected' : '') + '>Reviewed</option>';
+  h += '</select>';
+  h += '<select onchange="setFinExpFilter(\'category\', this.value)" style="' + filterSelStyle + '">';
+  h += '<option value=""' + (finExpFilters.category === '' ? ' selected' : '') + '>All Categories</option>';
+  FIN_EXP_CATEGORIES.forEach(function(c) {
+    h += '<option value="' + c.v + '"' + (finExpFilters.category === c.v ? ' selected' : '') + '>' + e(c.l) + '</option>';
+  });
+  h += '</select>';
+  if (Object.keys(finExpAccountLookup).length > 0) {
+    h += '<select onchange="setFinExpFilter(\'accountId\', this.value)" style="' + filterSelStyle + '">';
+    h += '<option value=""' + (finExpFilters.accountId === '' ? ' selected' : '') + '>All Accounts</option>';
+    Object.keys(finExpAccountLookup).forEach(function(acctId) {
+      var a = finExpAccountLookup[acctId];
+      h += '<option value="' + e(acctId) + '"' + (finExpFilters.accountId === acctId ? ' selected' : '') + '>' + e(a.institution) + ' ••' + e(a.mask) + '</option>';
+    });
+    h += '</select>';
+  }
+  h += '<div style="flex:1;"></div>';
   h += '<button class="btn btn-secondary btn-small" onclick="askAiAboutFinExpenses()" title="Ask Claude about what you are seeing">✨ Ask AI</button>';
+  h += '</div>';
+
+  // Bulk action bar
+  var visibleIds = expenses.slice(0, 100).map(function(ex) { return ex._id; });
+  var selectedCount = visibleIds.filter(function(id) { return finExpSelected[id]; }).length;
+  var allSelected = visibleIds.length > 0 && selectedCount === visibleIds.length;
+  h += '<div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap;font-size:0.85rem;">';
+  h += '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;color:var(--warm-gray,#888);">';
+  h += '<input type="checkbox" id="finExpSelectAll" onclick="finExpToggleAll(this.checked)"' + (allSelected ? ' checked' : '') + ' style="width:16px;height:16px;cursor:pointer;accent-color:var(--amber,#c4853c);">';
+  h += 'Select all visible';
+  h += '</label>';
+  h += '<button class="btn btn-secondary btn-small" id="finExpBulkApproveBtn" onclick="finExpBulkApprove()"' + (selectedCount === 0 ? ' disabled' : '') + '>Approve' + (selectedCount > 0 ? ' (' + selectedCount + ')' : '') + '</button>';
+  h += '<button class="btn btn-secondary btn-small" id="finExpBulkPersonalBtn" onclick="finExpBulkPersonal()"' + (selectedCount === 0 ? ' disabled' : '') + '>Mark Personal</button>';
   h += '</div>';
 
   if (expenses.length === 0) {
     return h + '<div style="text-align:center;padding:48px 20px;color:var(--warm-gray,#888);">' +
       '<div style="font-size:1.6rem;margin-bottom:8px;">💸</div>' +
-      '<div style="font-size:0.9rem;font-weight:500;">No expenses in this period</div>' +
-      '<div style="font-size:0.85rem;margin-top:4px;">Connect a bank or add expenses in the Expenses view.</div></div>';
+      '<div style="font-size:0.9rem;font-weight:500;">No expenses match these filters</div>' +
+      '<div style="font-size:0.85rem;margin-top:4px;">Try clearing a filter, or expand the date range.</div></div>';
   }
 
   // Category breakdown
@@ -416,22 +507,122 @@ function renderFinExpenses(expenses, start, end) {
     var cat = ex.category || 'other';
     var color = catColors[cat] || '#6b7280';
     var needsReview = !ex.reviewed;
-    h += '<div style="background:var(--bg-secondary,#232323);border-radius:8px;padding:10px 14px;border-left:3px solid ' + (needsReview ? '#eab308' : 'transparent') + ';display:flex;justify-content:space-between;align-items:center;gap:12px;">';
+    var isChecked = !!finExpSelected[ex._id];
+    h += '<div style="background:var(--bg-secondary,#232323);border-radius:8px;padding:10px 14px;border-left:3px solid ' + (needsReview ? '#eab308' : 'transparent') + ';display:flex;align-items:center;gap:10px;">';
+    h += '<input type="checkbox" class="fin-exp-row-cb" data-id="' + e(ex._id) + '" onclick="finExpToggleRow(this.dataset.id, this.checked)"' + (isChecked ? ' checked' : '') + ' style="width:16px;height:16px;cursor:pointer;flex-shrink:0;accent-color:var(--amber,#c4853c);">';
     h += '<div style="flex:1;min-width:0;">';
     h += '<div style="font-size:0.85rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + e(ex.merchantName || ex.description || 'Expense') + '</div>';
     h += '<div style="font-size:0.78rem;color:var(--warm-gray,#888);margin-top:2px;">';
     h += e(ex.date || '');
     h += ' · <span style="background:' + color + '22;color:' + color + ';padding:1px 6px;border-radius:3px;font-size:0.72rem;">' + e(cat.replace(/_/g,' ')) + '</span>';
+    if (ex.plaidAccountId && finExpAccountLookup[ex.plaidAccountId]) {
+      var a = finExpAccountLookup[ex.plaidAccountId];
+      h += ' · <span style="font-size:0.72rem;">' + e(a.institution) + ' ••' + e(a.mask) + '</span>';
+    }
     if (needsReview) h += ' · <span style="color:#eab308;font-size:0.72rem;">⚠ Review needed</span>';
     h += '</div></div>';
     h += '<div style="font-weight:700;font-size:0.9rem;flex-shrink:0;">' + fmt$(ex.amount || 0) + '</div>';
     h += '</div>';
   });
-  if (expenses.length > 100) h += '<div style="color:var(--warm-gray,#888);font-size:0.78rem;padding:8px 0;">Showing 100 of ' + expenses.length + ' expenses.</div>';
+  if (expenses.length > 100) h += '<div style="color:var(--warm-gray,#888);font-size:0.78rem;padding:8px 0;">Showing 100 of ' + expenses.length + ' expenses. Use filters to narrow.</div>';
   h += '</div>';
 
   return h;
 }
+
+// ── Bulk select / actions ────────────────────────────────────────────────────
+
+window.finExpToggleRow = function(id, checked) {
+  if (checked) finExpSelected[id] = true;
+  else delete finExpSelected[id];
+  finExpUpdateBulkUI();
+};
+
+window.finExpToggleAll = function(checked) {
+  var visible = finExpCache.expenses.slice(0, 100);
+  if (checked) {
+    visible.forEach(function(ex) { finExpSelected[ex._id] = true; });
+  } else {
+    visible.forEach(function(ex) { delete finExpSelected[ex._id]; });
+  }
+  document.querySelectorAll('.fin-exp-row-cb').forEach(function(cb) { cb.checked = checked; });
+  finExpUpdateBulkUI();
+};
+
+function finExpUpdateBulkUI() {
+  var visible = finExpCache.expenses.slice(0, 100);
+  var selectedCount = visible.filter(function(ex) { return finExpSelected[ex._id]; }).length;
+  var approveBtn = document.getElementById('finExpBulkApproveBtn');
+  var personalBtn = document.getElementById('finExpBulkPersonalBtn');
+  var selectAll = document.getElementById('finExpSelectAll');
+  if (approveBtn) {
+    approveBtn.disabled = selectedCount === 0;
+    approveBtn.textContent = selectedCount > 0 ? 'Approve (' + selectedCount + ')' : 'Approve';
+  }
+  if (personalBtn) personalBtn.disabled = selectedCount === 0;
+  if (selectAll) {
+    selectAll.checked = visible.length > 0 && selectedCount === visible.length;
+    selectAll.indeterminate = selectedCount > 0 && selectedCount < visible.length;
+  }
+}
+
+function finExpSelectedIds() {
+  return finExpCache.expenses.slice(0, 100)
+    .filter(function(ex) { return finExpSelected[ex._id]; })
+    .map(function(ex) { return ex._id; });
+}
+
+window.finExpBulkApprove = function() {
+  var ids = finExpSelectedIds();
+  if (ids.length === 0) return;
+  mastConfirm('Approve ' + ids.length + ' expense' + (ids.length !== 1 ? 's' : '') + '?', { title: 'Approve expenses', confirmLabel: 'Approve' }).then(async function(ok) {
+    if (!ok) return;
+    var btn = document.getElementById('finExpBulkApproveBtn');
+    if (btn) { btn.disabled = true; btn.textContent = 'Approving…'; }
+    try {
+      var updates = {};
+      var now = new Date().toISOString();
+      ids.forEach(function(id) {
+        updates['admin/expenses/' + id + '/reviewed'] = true;
+        updates['admin/expenses/' + id + '/updatedAt'] = now;
+      });
+      await MastDB.update('', updates);
+      showToast('Approved ' + ids.length + ' expense' + (ids.length !== 1 ? 's' : ''));
+      finExpSelected = {};
+      loadFinExpenses();
+    } catch (err) {
+      showToast('Approve failed: ' + e(err.message), true);
+      if (btn) { btn.disabled = false; btn.textContent = 'Approve (' + ids.length + ')'; }
+    }
+  });
+};
+
+window.finExpBulkPersonal = function() {
+  var ids = finExpSelectedIds();
+  if (ids.length === 0) return;
+  mastConfirm('Mark ' + ids.length + ' expense' + (ids.length !== 1 ? 's' : '') + ' as personal? They will be excluded from business reports.', { title: 'Mark as personal', confirmLabel: 'Mark Personal' }).then(async function(ok) {
+    if (!ok) return;
+    var btn = document.getElementById('finExpBulkPersonalBtn');
+    if (btn) { btn.disabled = true; btn.textContent = 'Marking…'; }
+    try {
+      var updates = {};
+      var now = new Date().toISOString();
+      ids.forEach(function(id) {
+        updates['admin/expenses/' + id + '/category'] = 'personal';
+        updates['admin/expenses/' + id + '/categorySource'] = 'user';
+        updates['admin/expenses/' + id + '/reviewed'] = true;
+        updates['admin/expenses/' + id + '/updatedAt'] = now;
+      });
+      await MastDB.update('', updates);
+      showToast(ids.length + ' marked personal');
+      finExpSelected = {};
+      loadFinExpenses();
+    } catch (err) {
+      showToast('Failed: ' + e(err.message), true);
+      if (btn) { btn.disabled = false; btn.textContent = 'Mark Personal'; }
+    }
+  });
+};
 
 // ── Ask AI (UI → Claude handoff) ─────────────────────────────────────────────
 // See CC Idea -Os1Lrm8ShTKZMafXV4k.
@@ -459,6 +650,14 @@ function buildFinExpAskAiContext() {
     route: '/app#finance-expenses',
     pageTitle: 'Finance — Expenses',
     period: { start: finExpCache.start, end: finExpCache.end },
+    filters: {
+      status: finExpFilters.status,
+      category: finExpFilters.category || null,
+      accountId: finExpFilters.accountId || null,
+      accountLabel: (finExpFilters.accountId && finExpAccountLookup[finExpFilters.accountId])
+        ? (finExpAccountLookup[finExpFilters.accountId].institution + ' ••' + finExpAccountLookup[finExpFilters.accountId].mask)
+        : null
+    },
     aggregates: {
       rowCount: finExpCache.expenses.length,
       totalCents: totalCents,
