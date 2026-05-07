@@ -461,7 +461,7 @@ function renderFinExpenses(expenses, start, end) {
     h += '</select>';
   }
   h += '<div style="flex:1;"></div>';
-  h += '<button class="btn btn-secondary btn-small" onclick="askAiAboutFinExpenses()" title="Ask Claude about what you are seeing">✨ Ask AI</button>';
+  h += '<button class="btn btn-secondary btn-small" onclick="MastAskAi.open(\'finance-expenses\')" title="Ask Claude about what you are seeing">✨ Ask AI</button>';
   h += '</div>';
 
   // Bulk action bar
@@ -801,224 +801,90 @@ window.finExpDetailDelete = function(id) {
   });
 };
 
-// ── Ask AI (UI → Claude handoff) ─────────────────────────────────────────────
-// See CC Idea -Os1Lrm8ShTKZMafXV4k.
+// ── Ask AI registration (UI → Claude handoff) ────────────────────────────────
+// See CC Idea -Os1Lrm8ShTKZMafXV4k. Modal, launch strategy, and prompt envelope
+// live in window.MastAskAi (index.html). This page only contributes its
+// snapshot via buildContext() and domain hints via notes.
 
-function buildFinExpAskAiContext() {
-  var byCategory = {};
-  var byMonth = {};
-  var byMerchant = {};
-  var totalCents = 0;
-  var unreviewedCount = 0;
-  finExpCache.expenses.forEach(function(ex) {
-    var amt = ex.amount || 0;
-    totalCents += amt;
-    if (!ex.reviewed) unreviewedCount++;
-    var cat = ex.category || 'other';
-    if (!byCategory[cat]) byCategory[cat] = { count: 0, totalCents: 0 };
-    byCategory[cat].count++; byCategory[cat].totalCents += amt;
-    var month = (ex.date || '').substring(0, 7) || 'unknown';
-    if (!byMonth[month]) byMonth[month] = { count: 0, totalCents: 0 };
-    byMonth[month].count++; byMonth[month].totalCents += amt;
-    var merchant = ex.merchantName || ex.description || '(unknown)';
-    if (!byMerchant[merchant]) byMerchant[merchant] = { count: 0, totalCents: 0, category: cat };
-    byMerchant[merchant].count++;
-    byMerchant[merchant].totalCents += amt;
-  });
+if (window.MastAskAi) {
+  window.MastAskAi.register('finance-expenses', {
+    title: 'Ask AI about these expenses',
+    placeholder: 'e.g. How does my Materials spend this month compare to the prior two months? What categories are growing fastest?',
+    notes: [
+      'byMonth keys are YYYY-MM. byCategory keys are the page category slugs.',
+      'topTransactions is sorted by absolute amount (largest charges and largest credits first).',
+      'Amounts are in cents; positive = expense outflow, negative = refund/credit/reimbursement.',
+      'Personal-category expenses are filtered out before aggregation.',
+      'If a refund is large enough it can make a category total negative — that is a real signal, not a bug.'
+    ],
+    buildContext: function() {
+      var byCategory = {};
+      var byMonth = {};
+      var byMerchant = {};
+      var totalCents = 0;
+      var unreviewedCount = 0;
+      finExpCache.expenses.forEach(function(ex) {
+        var amt = ex.amount || 0;
+        totalCents += amt;
+        if (!ex.reviewed) unreviewedCount++;
+        var cat = ex.category || 'other';
+        if (!byCategory[cat]) byCategory[cat] = { count: 0, totalCents: 0 };
+        byCategory[cat].count++; byCategory[cat].totalCents += amt;
+        var month = (ex.date || '').substring(0, 7) || 'unknown';
+        if (!byMonth[month]) byMonth[month] = { count: 0, totalCents: 0 };
+        byMonth[month].count++; byMonth[month].totalCents += amt;
+        var merchant = ex.merchantName || ex.description || '(unknown)';
+        if (!byMerchant[merchant]) byMerchant[merchant] = { count: 0, totalCents: 0, category: cat };
+        byMerchant[merchant].count++;
+        byMerchant[merchant].totalCents += amt;
+      });
 
-  // Top transactions by absolute amount (max 15)
-  var topTransactions = finExpCache.expenses.slice()
-    .sort(function(a, b) { return Math.abs(b.amount || 0) - Math.abs(a.amount || 0); })
-    .slice(0, 15)
-    .map(function(ex) {
+      var topTransactions = finExpCache.expenses.slice()
+        .sort(function(a, b) { return Math.abs(b.amount || 0) - Math.abs(a.amount || 0); })
+        .slice(0, 15)
+        .map(function(ex) {
+          return {
+            date: ex.date || null,
+            merchant: ex.merchantName || ex.description || '(unknown)',
+            amountCents: ex.amount || 0,
+            category: ex.category || 'other',
+            reviewed: !!ex.reviewed
+          };
+        });
+
+      var topMerchants = Object.keys(byMerchant)
+        .map(function(name) {
+          return { merchant: name, count: byMerchant[name].count, totalCents: byMerchant[name].totalCents, category: byMerchant[name].category };
+        })
+        .sort(function(a, b) { return Math.abs(b.totalCents) - Math.abs(a.totalCents); })
+        .slice(0, 10);
+
       return {
-        date: ex.date || null,
-        merchant: ex.merchantName || ex.description || '(unknown)',
-        amountCents: ex.amount || 0,
-        category: ex.category || 'other',
-        reviewed: !!ex.reviewed
+        route: '/app#finance-expenses',
+        pageTitle: 'Finance → Expenses',
+        period: { start: finExpCache.start, end: finExpCache.end },
+        filters: {
+          status: finExpFilters.status,
+          category: finExpFilters.category || null,
+          accountId: finExpFilters.accountId || null,
+          accountLabel: (finExpFilters.accountId && finExpAccountLookup[finExpFilters.accountId])
+            ? (finExpAccountLookup[finExpFilters.accountId].institution + ' ••' + finExpAccountLookup[finExpFilters.accountId].mask)
+            : null
+        },
+        aggregates: {
+          rowCount: finExpCache.expenses.length,
+          totalCents: totalCents,
+          totalUSD: (totalCents / 100).toFixed(2),
+          unreviewedCount: unreviewedCount,
+          byCategory: byCategory,
+          byMonth: byMonth
+        },
+        topTransactions: topTransactions,
+        topMerchants: topMerchants
       };
-    });
-
-  // Top merchants by total spend (max 10, descending)
-  var topMerchants = Object.keys(byMerchant)
-    .map(function(name) {
-      return { merchant: name, count: byMerchant[name].count, totalCents: byMerchant[name].totalCents, category: byMerchant[name].category };
-    })
-    .sort(function(a, b) { return Math.abs(b.totalCents) - Math.abs(a.totalCents); })
-    .slice(0, 10);
-
-  return {
-    version: '1',
-    app: 'mast',
-    tenantId: (typeof MastDB !== 'undefined' && MastDB.tenantId) ? MastDB.tenantId() : null,
-    route: '/app#finance-expenses',
-    pageTitle: 'Finance — Expenses',
-    period: { start: finExpCache.start, end: finExpCache.end },
-    filters: {
-      status: finExpFilters.status,
-      category: finExpFilters.category || null,
-      accountId: finExpFilters.accountId || null,
-      accountLabel: (finExpFilters.accountId && finExpAccountLookup[finExpFilters.accountId])
-        ? (finExpAccountLookup[finExpFilters.accountId].institution + ' ••' + finExpAccountLookup[finExpFilters.accountId].mask)
-        : null
-    },
-    aggregates: {
-      rowCount: finExpCache.expenses.length,
-      totalCents: totalCents,
-      totalUSD: (totalCents / 100).toFixed(2),
-      unreviewedCount: unreviewedCount,
-      byCategory: byCategory,
-      byMonth: byMonth
-    },
-    topTransactions: topTransactions,
-    topMerchants: topMerchants,
-    note: 'Aggregates plus top-15 transactions and top-10 merchants from the current view. Personal-category expenses are excluded. Amounts in cents (negative = refund/credit). Use this data to answer — do not ask for more.',
-    capturedAt: new Date().toISOString()
-  };
-}
-
-function buildFinExpAskAiPrompt(question, ctx) {
-  return [
-    'I am looking at the Finance → Expenses page in my Mast admin and want help understanding what I see. Answer using only the data in the context block below — do not ask me to fetch more, install connectors, or run additional queries. If a question genuinely cannot be answered from the included aggregates plus top-N transactions, say what additional view or filter I should apply on the page and re-ask, but only as a last resort.',
-    '',
-    '<mast-ui-context version="1">',
-    JSON.stringify(ctx, null, 2),
-    '</mast-ui-context>',
-    '',
-    'My question: ' + question,
-    '',
-    'Reference:',
-    '- byMonth keys are YYYY-MM. byCategory keys are the page category slugs.',
-    '- topTransactions is sorted by absolute amount (largest charges and largest credits first).',
-    '- Amounts are in cents; positive = expense outflow, negative = refund/credit/reimbursement.',
-    '- Personal-category expenses are filtered out before aggregation.',
-    '- If a refund is large enough it can make a category total negative — that is a real signal, not a bug.'
-  ].join('\n');
-}
-
-window.askAiAboutFinExpenses = function() {
-  if (document.getElementById('finAskAiModal')) return;
-  var ctx = buildFinExpAskAiContext();
-  var overlay = document.createElement('div');
-  overlay.id = 'finAskAiModal';
-  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
-  overlay.innerHTML =
-    '<div role="dialog" aria-modal="true" style="background:var(--bg-secondary,#232323);color:var(--text,#fff);border-radius:12px;max-width:560px;width:100%;max-height:90vh;overflow:auto;box-shadow:0 20px 50px rgba(0,0,0,0.5);">' +
-      '<div style="padding:18px 22px;border-bottom:1px solid rgba(255,255,255,0.08);display:flex;justify-content:space-between;align-items:center;">' +
-        '<div>' +
-          '<h3 style="margin:0;font-size:1rem;">✨ Ask AI about these expenses</h3>' +
-          '<div style="font-size:0.78rem;color:var(--warm-gray,#888);margin-top:2px;">Page context will be sent with your question.</div>' +
-        '</div>' +
-        '<button onclick="closeFinAskAi()" style="background:none;border:none;font-size:1.4rem;cursor:pointer;color:var(--warm-gray,#888);padding:0 4px;line-height:1;">×</button>' +
-      '</div>' +
-      '<div style="padding:18px 22px;">' +
-        '<label for="finAskAiQ" style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:6px;">Your question</label>' +
-        '<textarea id="finAskAiQ" rows="4" placeholder="e.g. How does my Materials spend this month compare to the prior two months? What categories are growing fastest?" style="width:100%;padding:10px 12px;border:1px solid rgba(255,255,255,0.1);border-radius:6px;font-family:\'DM Sans\',sans-serif;font-size:0.9rem;background:var(--bg,#1a1a1a);color:var(--text,#fff);resize:vertical;box-sizing:border-box;"></textarea>' +
-        '<details style="margin-top:14px;">' +
-          '<summary style="font-size:0.78rem;color:var(--warm-gray,#888);cursor:pointer;">Preview context (' + ctx.aggregates.rowCount + ' expenses, $' + ctx.aggregates.totalUSD + ' total)</summary>' +
-          '<pre id="finAskAiPreview" style="margin-top:8px;font-size:0.72rem;background:var(--bg,#1a1a1a);padding:10px;border-radius:6px;max-height:240px;overflow:auto;white-space:pre-wrap;"></pre>' +
-        '</details>' +
-        '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">' +
-          '<button class="btn btn-secondary btn-small" onclick="closeFinAskAi()">Cancel</button>' +
-          '<button class="btn btn-primary btn-small" onclick="submitFinAskAi()">Copy & Open Claude</button>' +
-        '</div>' +
-        '<div style="font-size:0.72rem;color:var(--warm-gray,#888);margin-top:10px;">The prompt will be copied to your clipboard, then a new Claude tab opens. Paste into the chat to start.</div>' +
-      '</div>' +
-    '</div>';
-  document.body.appendChild(overlay);
-  var preview = document.getElementById('finAskAiPreview');
-  if (preview) preview.textContent = JSON.stringify(ctx, null, 2);
-  overlay._ctx = ctx;
-  setTimeout(function() { var t = document.getElementById('finAskAiQ'); if (t) t.focus(); }, 50);
-  overlay.addEventListener('click', function(ev) { if (ev.target === overlay) closeFinAskAi(); });
-};
-
-window.closeFinAskAi = function() {
-  var m = document.getElementById('finAskAiModal');
-  if (m) m.remove();
-};
-
-window.submitFinAskAi = async function() {
-  var modal = document.getElementById('finAskAiModal');
-  var ta = document.getElementById('finAskAiQ');
-  if (!modal || !ta) return;
-  var question = (ta.value || '').trim();
-  if (!question) { ta.focus(); showToast('Type a question first', true); return; }
-  var prompt = buildFinExpAskAiPrompt(question, modal._ctx);
-
-  // Tier 1: Claude Desktop deep-link (claude://) prefills the composer directly.
-  // Tier 2: clipboard + browser tab fallback (paste manually).
-  // Always copy to clipboard first as a safety net regardless of which tier wins.
-  try {
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      await navigator.clipboard.writeText(prompt);
-    } else {
-      var tmp = document.createElement('textarea');
-      tmp.value = prompt; tmp.style.position = 'fixed'; tmp.style.opacity = '0';
-      document.body.appendChild(tmp); tmp.select(); document.execCommand('copy'); document.body.removeChild(tmp);
     }
-  } catch (err) {
-    showToast('Copy failed: ' + e(err.message), true); return;
-  }
-
-  closeFinAskAi();
-
-  var encoded = encodeURIComponent(prompt);
-
-  // claude:// has a ~14,000 char ceiling on the q parameter. If we exceed it,
-  // skip the deep link and go straight to the browser fallback — clipboard
-  // already holds the full prompt.
-  if (encoded.length > 13800) {
-    showToast('Prompt too long for Desktop — opening claude.ai (paste from clipboard).');
-    window.open('https://claude.ai/new', '_blank', 'noopener');
-    return;
-  }
-
-  // User can force the browser path by setting localStorage.mastAskAiSkipDesktop = '1'.
-  // Auto-detect: try the deep link, then check whether the page lost focus
-  // (the OS handler took over). If still visible after the timeout, fall back.
-  var skipDesktop = false;
-  try { skipDesktop = localStorage.getItem('mastAskAiSkipDesktop') === '1'; } catch (_e) {}
-
-  if (skipDesktop) {
-    showToast('Opening claude.ai (paste from clipboard).');
-    window.open('https://claude.ai/new', '_blank', 'noopener');
-    return;
-  }
-
-  showToast('Opening Claude Desktop…');
-  var deepLink = 'claude://claude.ai/new?q=' + encoded;
-
-  // Hidden iframe avoids navigating the current page if no handler is registered.
-  var iframe = document.createElement('iframe');
-  iframe.style.cssText = 'position:absolute;width:0;height:0;border:0;left:-1000px;';
-  iframe.src = deepLink;
-  document.body.appendChild(iframe);
-
-  // After a short window, decide: did Desktop take over (visibility hidden /
-  // window blur), or is the page still visible (no handler)?
-  var settled = false;
-  function onBlur() {
-    if (settled) return;
-    settled = true;
-    // Desktop took focus — clean up. Nothing more to do.
-    try { iframe.parentNode && iframe.parentNode.removeChild(iframe); } catch (_e) {}
-    window.removeEventListener('blur', onBlur);
-  }
-  window.addEventListener('blur', onBlur);
-
-  setTimeout(function() {
-    if (settled) return;
-    settled = true;
-    window.removeEventListener('blur', onBlur);
-    try { iframe.parentNode && iframe.parentNode.removeChild(iframe); } catch (_e) {}
-    if (document.visibilityState === 'hidden') return; // Desktop got it
-    // Fall back to browser. Clipboard still has the prompt.
-    showToast('Claude Desktop not detected — opening claude.ai (paste from clipboard).');
-    window.open('https://claude.ai/new', '_blank', 'noopener');
-  }, 1200);
-};
+  });
+}
 
 window.finExpSyncBank = async function(itemId) {
   showToast('Syncing transactions…');

@@ -22296,6 +22296,174 @@ window.syncPlaidItem = syncPlaidItem;
 window.disconnectPlaidItem = disconnectPlaidItem;
 window.loadPlaidBanksForSettings = loadPlaidBanksForSettings;
 
+// ── MastAskAi: per-page registry + two-tier Claude launch ────────────────────
+// CC Idea -Os1Lrm8ShTKZMafXV4k. Each page that wants Ask AI calls
+// MastAskAi.register(pageId, { title, placeholder, buildContext, notes });
+// Then renders a button: <button onclick="MastAskAi.open('pageId')">.
+// The helper owns the modal, the claude:// → clipboard → browser launch
+// strategy, the envelope (version/app/tenantId/capturedAt), and prompt
+// template. Pages only contribute page-specific snapshot data.
+window.MastAskAi = (function() {
+  var registry = {};
+
+  function register(pageId, config) {
+    registry[pageId] = config || {};
+  }
+
+  function open(pageId) {
+    var cfg = registry[pageId];
+    if (!cfg) { showToast('Ask AI not configured for this page', true); return; }
+    if (document.getElementById('mastAskAiModal')) return;
+    var pageCtx = (typeof cfg.buildContext === 'function') ? (cfg.buildContext() || {}) : {};
+    var ctx = Object.assign({
+      version: '1',
+      app: 'mast',
+      tenantId: (typeof MastDB !== 'undefined' && MastDB.tenantId) ? MastDB.tenantId() : null,
+      capturedAt: new Date().toISOString()
+    }, pageCtx);
+    renderModal(ctx, cfg);
+  }
+
+  function renderModal(ctx, cfg) {
+    var rowCount = (ctx.aggregates && ctx.aggregates.rowCount != null) ? ctx.aggregates.rowCount : null;
+    var totalUSD = (ctx.aggregates && ctx.aggregates.totalUSD) || null;
+    var summary = rowCount != null
+      ? (totalUSD ? rowCount + ' rows, $' + totalUSD : rowCount + ' rows')
+      : 'context preview';
+
+    var overlay = document.createElement('div');
+    overlay.id = 'mastAskAiModal';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
+    overlay.innerHTML =
+      '<div role="dialog" aria-modal="true" style="background:var(--bg-secondary,#232323);color:var(--text,#fff);border-radius:12px;max-width:560px;width:100%;max-height:90vh;overflow:auto;box-shadow:0 20px 50px rgba(0,0,0,0.5);">' +
+        '<div style="padding:18px 22px;border-bottom:1px solid rgba(255,255,255,0.08);display:flex;justify-content:space-between;align-items:center;">' +
+          '<div>' +
+            '<h3 style="margin:0;font-size:1rem;">✨ ' + esc(cfg.title || 'Ask AI') + '</h3>' +
+            '<div style="font-size:0.78rem;color:var(--warm-gray,#888);margin-top:2px;">Page context will be sent with your question.</div>' +
+          '</div>' +
+          '<button onclick="MastAskAi.close()" style="background:none;border:none;font-size:1.4rem;cursor:pointer;color:var(--warm-gray,#888);padding:0 4px;line-height:1;">×</button>' +
+        '</div>' +
+        '<div style="padding:18px 22px;">' +
+          '<label for="mastAskAiQ" style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:6px;">Your question</label>' +
+          '<textarea id="mastAskAiQ" rows="4" placeholder="' + esc(cfg.placeholder || '') + '" style="width:100%;padding:10px 12px;border:1px solid rgba(255,255,255,0.1);border-radius:6px;font-family:\'DM Sans\',sans-serif;font-size:0.9rem;background:var(--bg,#1a1a1a);color:var(--text,#fff);resize:vertical;box-sizing:border-box;"></textarea>' +
+          '<details style="margin-top:14px;">' +
+            '<summary style="font-size:0.78rem;color:var(--warm-gray,#888);cursor:pointer;">Preview context (' + esc(summary) + ')</summary>' +
+            '<pre id="mastAskAiPreview" style="margin-top:8px;font-size:0.72rem;background:var(--bg,#1a1a1a);padding:10px;border-radius:6px;max-height:240px;overflow:auto;white-space:pre-wrap;"></pre>' +
+          '</details>' +
+          '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">' +
+            '<button class="btn btn-secondary btn-small" onclick="MastAskAi.close()">Cancel</button>' +
+            '<button class="btn btn-primary btn-small" onclick="MastAskAi.submit()">Copy &amp; Open Claude</button>' +
+          '</div>' +
+          '<div style="font-size:0.72rem;color:var(--warm-gray,#888);margin-top:10px;">Tries Claude Desktop first; falls back to claude.ai in a new tab if Desktop is not detected.</div>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(overlay);
+    var preview = document.getElementById('mastAskAiPreview');
+    if (preview) preview.textContent = JSON.stringify(ctx, null, 2);
+    overlay._ctx = ctx;
+    overlay._cfg = cfg;
+    setTimeout(function() { var t = document.getElementById('mastAskAiQ'); if (t) t.focus(); }, 50);
+    overlay.addEventListener('click', function(ev) { if (ev.target === overlay) close(); });
+  }
+
+  function close() {
+    var m = document.getElementById('mastAskAiModal');
+    if (m) m.remove();
+  }
+
+  function buildPrompt(question, ctx, cfg) {
+    var pageDesc = ctx.pageTitle ? ('the ' + ctx.pageTitle + ' page') : 'this page';
+    var lines = [
+      'I am looking at ' + pageDesc + ' in my Mast admin and want help understanding what I see. Answer using only the data in the context block below — do not ask me to fetch more, install connectors, or run additional queries. If a question genuinely cannot be answered from the included data, suggest a filter or view I should apply on the page and ask me to re-send, but only as a last resort.',
+      '',
+      '<mast-ui-context version="1">',
+      JSON.stringify(ctx, null, 2),
+      '</mast-ui-context>',
+      '',
+      'My question: ' + question
+    ];
+    var notes = (cfg.notes || []).filter(Boolean);
+    if (notes.length) {
+      lines.push('');
+      lines.push('Reference:');
+      notes.forEach(function(n) { lines.push('- ' + n); });
+    }
+    return lines.join('\n');
+  }
+
+  async function submit() {
+    var modal = document.getElementById('mastAskAiModal');
+    var ta = document.getElementById('mastAskAiQ');
+    if (!modal || !ta) return;
+    var question = (ta.value || '').trim();
+    if (!question) { ta.focus(); showToast('Type a question first', true); return; }
+    var prompt = buildPrompt(question, modal._ctx, modal._cfg);
+
+    // Always copy to clipboard as a safety net (works for both tiers).
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(prompt);
+      } else {
+        var tmp = document.createElement('textarea');
+        tmp.value = prompt; tmp.style.position = 'fixed'; tmp.style.opacity = '0';
+        document.body.appendChild(tmp); tmp.select(); document.execCommand('copy'); document.body.removeChild(tmp);
+      }
+    } catch (err) {
+      showToast('Copy failed: ' + (err && err.message ? err.message : 'unknown'), true);
+      return;
+    }
+
+    close();
+
+    var encoded = encodeURIComponent(prompt);
+
+    // Tier 2 (length-forced): claude:// q caps around 14K chars.
+    if (encoded.length > 13800) {
+      showToast('Prompt too long for Desktop — opening claude.ai (paste from clipboard).');
+      window.open('https://claude.ai/new', '_blank', 'noopener');
+      return;
+    }
+
+    // Tier 2 (user-forced): localStorage escape hatch.
+    var skipDesktop = false;
+    try { skipDesktop = localStorage.getItem('mastAskAiSkipDesktop') === '1'; } catch (_e) {}
+    if (skipDesktop) {
+      showToast('Opening claude.ai (paste from clipboard).');
+      window.open('https://claude.ai/new', '_blank', 'noopener');
+      return;
+    }
+
+    // Tier 1: Claude Desktop deep-link via hidden iframe.
+    showToast('Opening Claude Desktop…');
+    var deepLink = 'claude://claude.ai/new?q=' + encoded;
+    var iframe = document.createElement('iframe');
+    iframe.style.cssText = 'position:absolute;width:0;height:0;border:0;left:-1000px;';
+    iframe.src = deepLink;
+    document.body.appendChild(iframe);
+
+    var settled = false;
+    function onBlur() {
+      if (settled) return;
+      settled = true;
+      try { iframe.parentNode && iframe.parentNode.removeChild(iframe); } catch (_e) {}
+      window.removeEventListener('blur', onBlur);
+    }
+    window.addEventListener('blur', onBlur);
+
+    setTimeout(function() {
+      if (settled) return;
+      settled = true;
+      window.removeEventListener('blur', onBlur);
+      try { iframe.parentNode && iframe.parentNode.removeChild(iframe); } catch (_e) {}
+      if (document.visibilityState === 'hidden') return;
+      showToast('Claude Desktop not detected — opening claude.ai (paste from clipboard).');
+      window.open('https://claude.ai/new', '_blank', 'noopener');
+    }, 1200);
+  }
+
+  return { register: register, open: open, close: close, submit: submit, _registry: registry };
+})();
+
 async function saveShopifyConfig() {
   if (!hasPermission('settings', 'update')) { showToast('You do not have permission to update settings.', true); return; }
   var rawDomain = (getFieldValue('shopifyShopDomain') || '').trim().toLowerCase();
