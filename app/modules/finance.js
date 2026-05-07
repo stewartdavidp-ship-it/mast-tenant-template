@@ -807,6 +807,7 @@ window.finExpDetailDelete = function(id) {
 function buildFinExpAskAiContext() {
   var byCategory = {};
   var byMonth = {};
+  var byMerchant = {};
   var totalCents = 0;
   var unreviewedCount = 0;
   finExpCache.expenses.forEach(function(ex) {
@@ -819,7 +820,34 @@ function buildFinExpAskAiContext() {
     var month = (ex.date || '').substring(0, 7) || 'unknown';
     if (!byMonth[month]) byMonth[month] = { count: 0, totalCents: 0 };
     byMonth[month].count++; byMonth[month].totalCents += amt;
+    var merchant = ex.merchantName || ex.description || '(unknown)';
+    if (!byMerchant[merchant]) byMerchant[merchant] = { count: 0, totalCents: 0, category: cat };
+    byMerchant[merchant].count++;
+    byMerchant[merchant].totalCents += amt;
   });
+
+  // Top transactions by absolute amount (max 15)
+  var topTransactions = finExpCache.expenses.slice()
+    .sort(function(a, b) { return Math.abs(b.amount || 0) - Math.abs(a.amount || 0); })
+    .slice(0, 15)
+    .map(function(ex) {
+      return {
+        date: ex.date || null,
+        merchant: ex.merchantName || ex.description || '(unknown)',
+        amountCents: ex.amount || 0,
+        category: ex.category || 'other',
+        reviewed: !!ex.reviewed
+      };
+    });
+
+  // Top merchants by total spend (max 10, descending)
+  var topMerchants = Object.keys(byMerchant)
+    .map(function(name) {
+      return { merchant: name, count: byMerchant[name].count, totalCents: byMerchant[name].totalCents, category: byMerchant[name].category };
+    })
+    .sort(function(a, b) { return Math.abs(b.totalCents) - Math.abs(a.totalCents); })
+    .slice(0, 10);
+
   return {
     version: '1',
     app: 'mast',
@@ -843,14 +871,16 @@ function buildFinExpAskAiContext() {
       byCategory: byCategory,
       byMonth: byMonth
     },
-    note: 'Aggregates only — raw rows omitted by policy. Personal-category expenses excluded by the page filter. Amounts in cents (negative = refund).',
+    topTransactions: topTransactions,
+    topMerchants: topMerchants,
+    note: 'Aggregates plus top-15 transactions and top-10 merchants from the current view. Personal-category expenses are excluded. Amounts in cents (negative = refund/credit). Use this data to answer — do not ask for more.',
     capturedAt: new Date().toISOString()
   };
 }
 
 function buildFinExpAskAiPrompt(question, ctx) {
   return [
-    'I am looking at the Finance → Expenses page in my Mast admin and want help understanding what I see.',
+    'I am looking at the Finance → Expenses page in my Mast admin and want help understanding what I see. Answer using only the data in the context block below — do not ask me to fetch more, install connectors, or run additional queries. If a question genuinely cannot be answered from the included aggregates plus top-N transactions, say what additional view or filter I should apply on the page and re-ask, but only as a last resort.',
     '',
     '<mast-ui-context version="1">',
     JSON.stringify(ctx, null, 2),
@@ -858,10 +888,12 @@ function buildFinExpAskAiPrompt(question, ctx) {
     '',
     'My question: ' + question,
     '',
-    'Notes for you:',
-    '- Aggregates reflect what is on screen for the selected period.',
-    '- Raw rows are intentionally omitted. If you need them to answer, tell me to enable the Mast MCP connector so you can fetch under proper RBAC.',
-    '- byMonth keys are YYYY-MM. Personal-category expenses are filtered out before aggregation.'
+    'Reference:',
+    '- byMonth keys are YYYY-MM. byCategory keys are the page category slugs.',
+    '- topTransactions is sorted by absolute amount (largest charges and largest credits first).',
+    '- Amounts are in cents; positive = expense outflow, negative = refund/credit/reimbursement.',
+    '- Personal-category expenses are filtered out before aggregation.',
+    '- If a refund is large enough it can make a category total negative — that is a real signal, not a bug.'
   ].join('\n');
 }
 
