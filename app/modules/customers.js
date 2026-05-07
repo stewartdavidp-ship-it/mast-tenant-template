@@ -281,6 +281,9 @@
     h += '</div>';
     h += '</div>';
     h += '<div style="display:flex;gap:6px;flex-wrap:wrap;">';
+    if (window.MastAskAi && window.MastAskAi.isEnabled()) {
+      h += '<button class="btn btn-secondary btn-small" onclick="MastAskAi.open(\'customers\')" title="Ask Claude about these customers">✨ Ask AI</button>';
+    }
     h += '<button class="btn btn-secondary btn-small" onclick="customersExportCsv()" title="Download current view as CSV">⤓ Export CSV</button>';
     h += '<button class="btn btn-secondary btn-small" onclick="customersBackfillStats()" title="Recompute cached stats for all customers">↻ Recompute stats</button>';
     h += '</div>';
@@ -1997,6 +2000,123 @@
   // ============================================================
   // Module registration
   // ============================================================
+
+  // ============================================================
+  // Ask AI registration (MastAskAi page registry)
+  // CC Idea -Os1Lrm8ShTKZMafXV4k.
+  // ============================================================
+
+  window.addEventListener('mastaskai:configchanged', function() {
+    var tab = document.getElementById('customersTab');
+    if (tab && tab.style.display !== 'none' && currentView === 'list') {
+      try { render(); } catch (_e) {}
+    }
+  });
+
+  if (window.MastAskAi) {
+    window.MastAskAi.register('customers', {
+      title: 'Ask AI about these customers',
+      placeholder: 'e.g. Who are my top spenders? Which customers haven\'t ordered in 6+ months? Where are my customers coming from?',
+      notes: [
+        'Lifetime spend amounts (lifetimeSpendCents and totalLifetimeSpendCents) are in CENTS.',
+        'topCustomers is sorted by lifetimeSpendCents descending; spendBracketUSD groups customers by tier.',
+        'Sources: order, enrollment, contact, newsletter, account, manual, import — describes how the customer first entered the system.',
+        'A customer with stats.orderCount = 0 has joined (e.g. via newsletter) but never bought; useful for re-engagement questions.',
+        'bySource counts how customers ENTERED the system; it does not necessarily reflect ongoing revenue source.',
+        'lastOrderAt is ISO; "stale" customers are those whose last order was many months ago.',
+        'If filters.search is set, the listing is narrowed by free-text on name/email; topCustomers reflects only the filtered set.'
+      ],
+      buildContext: function() {
+        var filtered = getFilteredCustomers();
+        var totalLifetimeSpendCents = 0;
+        var totalOrders = 0;
+        var bySource = {}, byTag = {}, byCreatedMonth = {}, bySpendBracket = {};
+        var BRACKETS = [
+          { name: '$0', min: 0, max: 0 },
+          { name: '$1–$99', min: 1, max: 9999 },
+          { name: '$100–$499', min: 10000, max: 49999 },
+          { name: '$500–$999', min: 50000, max: 99999 },
+          { name: '$1k–$4.9k', min: 100000, max: 499999 },
+          { name: '$5k+', min: 500000, max: Infinity }
+        ];
+
+        filtered.forEach(function(c) {
+          var stats = c.stats || {};
+          var spend = stats.lifetimeSpendCents || 0;
+          totalLifetimeSpendCents += spend;
+          totalOrders += stats.orderCount || 0;
+
+          var source = c.source || 'unknown';
+          if (!bySource[source]) bySource[source] = { count: 0, totalSpendCents: 0 };
+          bySource[source].count++; bySource[source].totalSpendCents += spend;
+
+          (c.tags || []).forEach(function(t) {
+            if (!byTag[t]) byTag[t] = { count: 0, totalSpendCents: 0 };
+            byTag[t].count++; byTag[t].totalSpendCents += spend;
+          });
+
+          var month = (c.createdAt || '').substring(0, 7) || 'unknown';
+          if (!byCreatedMonth[month]) byCreatedMonth[month] = { count: 0 };
+          byCreatedMonth[month].count++;
+
+          for (var i = 0; i < BRACKETS.length; i++) {
+            if (spend >= BRACKETS[i].min && spend <= BRACKETS[i].max) {
+              if (!bySpendBracket[BRACKETS[i].name]) bySpendBracket[BRACKETS[i].name] = { count: 0, totalSpendCents: 0 };
+              bySpendBracket[BRACKETS[i].name].count++;
+              bySpendBracket[BRACKETS[i].name].totalSpendCents += spend;
+              break;
+            }
+          }
+        });
+
+        var topCustomers = filtered.slice()
+          .sort(function(a, b) { return ((b.stats || {}).lifetimeSpendCents || 0) - ((a.stats || {}).lifetimeSpendCents || 0); })
+          .slice(0, 15)
+          .map(function(c) {
+            var s = c.stats || {};
+            return {
+              name: c.displayName || '(no name)',
+              email: c.primaryEmail || '',
+              source: c.source || 'unknown',
+              orderCount: s.orderCount || 0,
+              lifetimeSpendUSD: +((s.lifetimeSpendCents || 0) / 100).toFixed(2),
+              lastOrderAt: s.lastOrderAt ? s.lastOrderAt.slice(0, 10) : null,
+              tags: c.tags || []
+            };
+          });
+
+        var f = readActiveFilters();
+        var seg = findSegmentById(currentSegmentId);
+        return {
+          route: '/app#customers',
+          pageTitle: 'Customers',
+          filters: {
+            search: f.search || null,
+            source: f.source !== 'all' ? f.source : null,
+            tag: f.tag || null,
+            lastOrderBefore: f.lastOrderBefore || null,
+            minSpendDollars: f.minSpendDollars || null,
+            sortBy: f.sortBy,
+            segment: seg ? { id: seg.id, name: seg.name, builtin: !!seg._builtin } : null
+          },
+          aggregates: {
+            rowCount: filtered.length,
+            totalLifetimeSpendCents: totalLifetimeSpendCents,
+            totalLifetimeSpendUSD: +(totalLifetimeSpendCents / 100).toFixed(2),
+            totalOrdersAcrossCustomers: totalOrders,
+            avgSpendPerCustomerUSD: filtered.length > 0
+              ? +(totalLifetimeSpendCents / 100 / filtered.length).toFixed(2)
+              : 0,
+            bySource: bySource,
+            byTag: byTag,
+            byCreatedMonth: byCreatedMonth,
+            bySpendBracketUSD: bySpendBracket
+          },
+          topCustomers: topCustomers
+        };
+      }
+    });
+  }
 
   MastAdmin.registerModule('customers', {
     routes: {

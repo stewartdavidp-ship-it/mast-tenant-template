@@ -2368,6 +2368,141 @@ async function exitPackingMode() {
     if (!salesLoaded) loadSales();
   }
 
+  // ============================================================
+  // Ask AI registration (MastAskAi page registry)
+  // CC Idea -Os1Lrm8ShTKZMafXV4k.
+  // ============================================================
+
+  function paintSalesAskAiSlot() {
+    var slot = document.getElementById('salesAskAiSlot');
+    if (!slot) return;
+    if (window.MastAskAi && window.MastAskAi.isEnabled()) {
+      slot.innerHTML = '<button class="btn btn-secondary" style="font-size:0.78rem;padding:4px 12px;" onclick="MastAskAi.open(\'sales\')" title="Ask Claude about these sales">✨ Ask AI</button>';
+    } else {
+      slot.innerHTML = '';
+    }
+  }
+
+  window.addEventListener('mastaskai:ready', paintSalesAskAiSlot);
+  window.addEventListener('mastaskai:configchanged', paintSalesAskAiSlot);
+
+  if (window.MastAskAi) {
+    window.MastAskAi.register('sales', {
+      title: 'Ask AI about these sales',
+      placeholder: 'e.g. What are my best-selling items today? What\'s the cash vs Square split? When are my busiest hours?',
+      notes: [
+        'Amounts are in CENTS (totalAmountCents, byPaymentType[*].totalCents, etc.).',
+        'Statuses: captured (newly recorded), reconciled (matched against deposit), voided (refunded/cancelled).',
+        'Payment types: cash, square (and any other PoS-recorded type). Voided sales are excluded from totalAmountCents but counted in voidedCount.',
+        'topItems aggregates across the items[] array on each sale by productName, summing quantity sold and revenue.',
+        'byHour buckets sales by hour-of-day (0-23) so questions like "when am I busiest" answer directly.',
+        'If filters.date is set, the listing covers that single day; otherwise the full sales history is included up to the visible-row cap.',
+        'topSales is sorted by amount descending — biggest individual transactions in the current view.'
+      ],
+      buildContext: function() {
+        var all = getSalesArray();
+        var dateInput = document.getElementById('salesDateFilter');
+        var filterDate = dateInput ? dateInput.value : '';
+        if (filterDate) {
+          all = all.filter(function(s) {
+            var d = new Date(s.timestamp);
+            var ds = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+            return ds === filterDate;
+          });
+        }
+        var statusSel = document.getElementById('salesStatusFilter');
+        var statusFilter = statusSel ? statusSel.value : 'all';
+        if (statusFilter !== 'all') {
+          all = all.filter(function(s) { return s.status === statusFilter; });
+        }
+
+        var totalAmountCents = 0;
+        var voidedCount = 0;
+        var byPaymentType = {}, byStatus = {}, byHour = {}, byDay = {}, itemTotals = {};
+        all.forEach(function(s) {
+          var status = s.status || 'captured';
+          if (!byStatus[status]) byStatus[status] = { count: 0, totalCents: 0 };
+          byStatus[status].count++;
+          if (status === 'voided') {
+            voidedCount++;
+            return;
+          }
+          var amt = s.amount || 0;
+          totalAmountCents += amt;
+          byStatus[status].totalCents += amt;
+
+          var pt = s.paymentType || 'unknown';
+          if (!byPaymentType[pt]) byPaymentType[pt] = { count: 0, totalCents: 0 };
+          byPaymentType[pt].count++;
+          byPaymentType[pt].totalCents += amt;
+
+          if (s.timestamp) {
+            var d = new Date(s.timestamp);
+            if (!isNaN(d.getTime())) {
+              var hour = d.getHours();
+              if (!byHour[hour]) byHour[hour] = { count: 0, totalCents: 0 };
+              byHour[hour].count++; byHour[hour].totalCents += amt;
+              var ds = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+              if (!byDay[ds]) byDay[ds] = { count: 0, totalCents: 0 };
+              byDay[ds].count++; byDay[ds].totalCents += amt;
+            }
+          }
+
+          (s.items || []).forEach(function(item) {
+            var name = item.productName || '(unknown)';
+            if (!itemTotals[name]) itemTotals[name] = { quantity: 0, revenueCents: 0 };
+            var qty = item.quantity || 1;
+            itemTotals[name].quantity += qty;
+            itemTotals[name].revenueCents += (item.totalPrice || item.price || 0) * (item.totalPrice ? 1 : qty);
+          });
+        });
+
+        var topItems = Object.keys(itemTotals)
+          .map(function(name) {
+            return { product: name, quantity: itemTotals[name].quantity, revenueCents: itemTotals[name].revenueCents };
+          })
+          .sort(function(a, b) { return b.quantity - a.quantity; })
+          .slice(0, 10);
+
+        var topSales = all.slice()
+          .filter(function(s) { return s.status !== 'voided'; })
+          .sort(function(a, b) { return (b.amount || 0) - (a.amount || 0); })
+          .slice(0, 15)
+          .map(function(s) {
+            return {
+              timestamp: s.timestamp || null,
+              amountCents: s.amount || 0,
+              paymentType: s.paymentType || 'unknown',
+              status: s.status || 'captured',
+              itemCount: (s.items || []).reduce(function(t, it) { return t + (it.quantity || 1); }, 0)
+            };
+          });
+
+        return {
+          route: '/app#pos',
+          pageTitle: 'Sales',
+          filters: {
+            date: filterDate || null,
+            status: statusFilter
+          },
+          aggregates: {
+            saleCount: all.length,
+            nonVoidedCount: all.length - voidedCount,
+            voidedCount: voidedCount,
+            totalAmountCents: totalAmountCents,
+            totalAmountUSD: +(totalAmountCents / 100).toFixed(2),
+            byPaymentType: byPaymentType,
+            byStatus: byStatus,
+            byHour: byHour,
+            byDay: byDay
+          },
+          topItems: topItems,
+          topSales: topSales
+        };
+      }
+    });
+  }
+
   MastAdmin.registerModule('sales', {
     routes: {
       'pos': { tab: 'salesTab', setup: function() { ensureSalesData(); if (showingSquarePayments) toggleSquarePayments(); checkLiveSessionButton(); } },

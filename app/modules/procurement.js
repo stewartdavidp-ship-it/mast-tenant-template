@@ -217,10 +217,14 @@
   }
 
   function renderHeader() {
+    var askAi = (window.MastAskAi && window.MastAskAi.isEnabled())
+      ? '<button class="btn btn-secondary btn-small" onclick="MastAskAi.open(\'procurement\')" title="Ask Claude about your procurement">✨ Ask AI</button>'
+      : '';
     return '<div class="section-header" style="margin-bottom:14px;">' +
       '<h2 style="margin:0;">Procurement</h2>' +
       '<div style="display:flex;align-items:center;gap:12px;">' +
         '<span style="font-size:0.85rem;color:var(--warm-gray);">Vendors, POs, receipts, and on-hand lots</span>' +
+        askAi +
         '<button class="btn btn-secondary btn-small" onclick="window.procurementRefresh()">Refresh</button>' +
       '</div>' +
     '</div>';
@@ -1687,6 +1691,160 @@
     } else {
       if (deepLinkReceiptId) { _applyDeepLink(); } else { render(); }
     }
+  }
+
+  // ============================================================
+  // Ask AI registration (MastAskAi page registry)
+  // CC Idea -Os1Lrm8ShTKZMafXV4k.
+  // ============================================================
+
+  window.addEventListener('mastaskai:configchanged', function() {
+    var tab = document.getElementById('procurementTab');
+    if (tab && tab.style.display !== 'none' && currentView === 'index') {
+      try { render(); } catch (_e) {}
+    }
+  });
+
+  if (window.MastAskAi) {
+    window.MastAskAi.register('procurement', {
+      title: 'Ask AI about your procurement',
+      placeholder: 'e.g. Which vendors am I spending the most with? Which POs are stuck submitted? What is sitting in inventory?',
+      notes: [
+        'Money fields are USD dollars (the procurement module uses dollars throughout, NOT cents).',
+        'PO statuses: draft, submitted, partially_received, received, closed, cancelled. The "open" filter rolls up draft + submitted + partially_received.',
+        'topVendorsBySpend looks at all-time PO totals across the vendor; topVendorsByOpen ranks by outstanding (open-PO) dollars.',
+        'topLotsByValue is qtyRemaining × unitCost on each material lot — what is currently sitting on the shelves.',
+        'lastReceiptAt is when material last entered inventory; gaps suggest a stalled supply pipeline.',
+        'recentPOs lists the 15 most recent POs for context-aware questions about activity in the last few weeks.'
+      ],
+      buildContext: function() {
+        var pos = Object.values(purchaseOrdersData);
+        var lots = Object.values(materialLotsData);
+        var vendors = vendorsData;
+
+        // PO stats
+        var byStatus = {}, byMonth = {}, byVendor = {};
+        var totalAll = 0, totalOpen = 0;
+        var openSet = { draft: true, submitted: true, partially_received: true };
+        pos.forEach(function(p) {
+          var t = poTotal(p);
+          totalAll += t;
+          var st = p.status || 'draft';
+          if (!byStatus[st]) byStatus[st] = { count: 0, totalUSD: 0 };
+          byStatus[st].count++; byStatus[st].totalUSD += t;
+          if (openSet[st]) totalOpen += t;
+          var month = (p.createdAt || p.submittedAt || '').substring(0, 7) || 'unknown';
+          if (!byMonth[month]) byMonth[month] = { count: 0, totalUSD: 0 };
+          byMonth[month].count++; byMonth[month].totalUSD += t;
+          var vid = p.vendorId || '(unknown)';
+          if (!byVendor[vid]) byVendor[vid] = { count: 0, totalUSD: 0, openTotalUSD: 0 };
+          byVendor[vid].count++; byVendor[vid].totalUSD += t;
+          if (openSet[st]) byVendor[vid].openTotalUSD += t;
+        });
+        Object.keys(byStatus).forEach(function(k) { byStatus[k].totalUSD = +byStatus[k].totalUSD.toFixed(2); });
+        Object.keys(byMonth).forEach(function(k)  { byMonth[k].totalUSD  = +byMonth[k].totalUSD.toFixed(2); });
+
+        function vendorName(id) {
+          var v = vendors[id];
+          return v ? (v.name || id) : id;
+        }
+
+        var topVendorsBySpend = Object.keys(byVendor)
+          .map(function(id) {
+            return { vendor: vendorName(id), poCount: byVendor[id].count, totalUSD: +byVendor[id].totalUSD.toFixed(2), openUSD: +byVendor[id].openTotalUSD.toFixed(2) };
+          })
+          .sort(function(a, b) { return b.totalUSD - a.totalUSD; })
+          .slice(0, 10);
+
+        var topVendorsByOpen = Object.keys(byVendor)
+          .filter(function(id) { return byVendor[id].openTotalUSD > 0; })
+          .map(function(id) {
+            return { vendor: vendorName(id), openUSD: +byVendor[id].openTotalUSD.toFixed(2), poCount: byVendor[id].count };
+          })
+          .sort(function(a, b) { return b.openUSD - a.openUSD; })
+          .slice(0, 10);
+
+        var recentPOs = pos.slice()
+          .sort(function(a, b) { return (b.createdAt || '').localeCompare(a.createdAt || ''); })
+          .slice(0, 15)
+          .map(function(p) {
+            return {
+              poNumber: p.poNumber || p.id || '(unknown)',
+              vendor: vendorName(p.vendorId),
+              status: p.status || 'draft',
+              totalUSD: +poTotal(p).toFixed(2),
+              createdAt: (p.createdAt || '').slice(0, 10)
+            };
+          });
+
+        // Lots / inventory
+        var inventoryValueUSD = 0;
+        var byMaterial = {};
+        lots.forEach(function(l) {
+          var v = (Number(l.qtyRemaining) || 0) * (Number(l.unitCost) || 0);
+          inventoryValueUSD += v;
+          var matId = l.materialId || '(unknown)';
+          var matName = (materialsData[matId] && materialsData[matId].name) || matId;
+          if (!byMaterial[matName]) byMaterial[matName] = { lotCount: 0, totalValueUSD: 0, qtyRemaining: 0 };
+          byMaterial[matName].lotCount++;
+          byMaterial[matName].totalValueUSD += v;
+          byMaterial[matName].qtyRemaining += (Number(l.qtyRemaining) || 0);
+        });
+        Object.keys(byMaterial).forEach(function(k) {
+          byMaterial[k].totalValueUSD = +byMaterial[k].totalValueUSD.toFixed(2);
+          byMaterial[k].qtyRemaining = +byMaterial[k].qtyRemaining.toFixed(2);
+        });
+
+        var topLotsByValue = lots.slice()
+          .map(function(l) {
+            var matId = l.materialId || '(unknown)';
+            return {
+              material: (materialsData[matId] && materialsData[matId].name) || matId,
+              vendor: vendorName(l.vendorId),
+              qtyRemaining: Number(l.qtyRemaining) || 0,
+              unitCostUSD: Number(l.unitCost) || 0,
+              valueUSD: +(((Number(l.qtyRemaining) || 0) * (Number(l.unitCost) || 0))).toFixed(2),
+              receivedAt: (l.receivedAt || '').slice(0, 10)
+            };
+          })
+          .sort(function(a, b) { return b.valueUSD - a.valueUSD; })
+          .slice(0, 15);
+
+        // Last receipt
+        var receipts = Object.values(purchaseReceiptsData);
+        var lastReceiptAt = null;
+        receipts.forEach(function(r) {
+          var t = r.receivedAt || r.createdAt;
+          if (t && (!lastReceiptAt || t > lastReceiptAt)) lastReceiptAt = t;
+        });
+
+        return {
+          route: '/app#procurement',
+          pageTitle: 'Procurement',
+          filters: {
+            currentTab: currentTab,
+            poStatusFilter: poStatusFilter
+          },
+          aggregates: {
+            poCount: pos.length,
+            openPoCount: pos.filter(function(p) { return openSet[p.status]; }).length,
+            totalAllPosUSD: +totalAll.toFixed(2),
+            totalOutstandingOpenUSD: +totalOpen.toFixed(2),
+            inventoryValueUSD: +inventoryValueUSD.toFixed(2),
+            lotCount: lots.length,
+            vendorCount: Object.keys(vendors).length,
+            lastReceiptAt: lastReceiptAt,
+            byStatus: byStatus,
+            byMonth: byMonth,
+            byMaterial: byMaterial
+          },
+          topVendorsBySpend: topVendorsBySpend,
+          topVendorsByOpen: topVendorsByOpen,
+          topLotsByValue: topLotsByValue,
+          recentPOs: recentPOs
+        };
+      }
+    });
   }
 
   if (window.MastAdmin && typeof window.MastAdmin.registerModule === 'function') {
