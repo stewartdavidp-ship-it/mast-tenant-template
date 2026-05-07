@@ -79,6 +79,35 @@ function filterSalesByDate() {
   renderSales();
 }
 
+// Tenant-TZ-aware date helpers for URL filter (timestamp is ISO).
+var _salesTenantTz = null;
+function salesEnsureTenantTz() {
+  if (_salesTenantTz !== null) return Promise.resolve(_salesTenantTz);
+  try {
+    return MastDB.businessEntity.get('operations').then(function(snap) {
+      var ops = (snap && typeof snap.val === 'function') ? snap.val() : snap;
+      var tz = ops && ops.localization && ops.localization.timezone;
+      _salesTenantTz = (tz && typeof tz === 'string') ? tz : 'UTC';
+      return _salesTenantTz;
+    }).catch(function() { _salesTenantTz = 'UTC'; return 'UTC'; });
+  } catch (e) {
+    _salesTenantTz = 'UTC';
+    return Promise.resolve('UTC');
+  }
+}
+function salesTzPartsFromIso(iso) {
+  if (!iso) return null;
+  var dt = new Date(iso);
+  if (isNaN(dt.getTime())) return null;
+  var fmt = new Intl.DateTimeFormat('en-CA', {
+    timeZone: _salesTenantTz || 'UTC',
+    year: 'numeric', month: '2-digit', day: '2-digit'
+  });
+  var parts = {};
+  fmt.formatToParts(dt).forEach(function(x) { if (x.type !== 'literal') parts[x.type] = x.value; });
+  return parts;
+}
+
 function renderSales() {
   var loadingEl = document.getElementById('salesLoading');
   var emptyEl = document.getElementById('salesEmpty');
@@ -92,24 +121,81 @@ function renderSales() {
   if (loadingEl) loadingEl.style.display = 'none';
   if (detailEl) detailEl.style.display = 'none';
 
-  var all = getSalesArray();
-
-  // Date filter
-  var dateInput = document.getElementById('salesDateFilter');
-  var filterDate = dateInput ? dateInput.value : '';
-  if (filterDate) {
-    all = all.filter(function(s) {
-      var d = new Date(s.timestamp);
-      var ds = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
-      return ds === filterDate;
-    });
+  // URL-driven filters from MCP admin links (#pos?...)
+  var rp = (typeof window.getRouteParams === 'function') ? window.getRouteParams() : {};
+  var urlStatus = (rp && typeof rp.status === 'string') ? rp.status : '';
+  var urlPayment = (rp && typeof rp.paymentType === 'string') ? rp.paymentType : '';
+  var urlDateFrom = (rp && typeof rp.dateFrom === 'string') ? rp.dateFrom.slice(0, 10) : '';
+  var urlDateTo = (rp && typeof rp.dateTo === 'string') ? rp.dateTo.slice(0, 10) : '';
+  var urlIdsParam = (rp && typeof rp.saleIds === 'string') ? rp.saleIds : '';
+  var urlIds = urlIdsParam ? urlIdsParam.split(',').map(function(s) { return s.trim(); }).filter(Boolean) : [];
+  var urlIdLookup = urlIds.length > 0 ? Object.create(null) : null;
+  if (urlIdLookup) urlIds.forEach(function(id) { urlIdLookup[id] = true; });
+  var hasUrlFilter = !!(urlStatus || urlPayment || urlDateFrom || urlDateTo || urlIds.length);
+  if (hasUrlFilter && (urlDateFrom || urlDateTo) && _salesTenantTz === null) {
+    salesEnsureTenantTz().then(function() { renderSales(); });
   }
 
-  // Status filter
-  var statusSel = document.getElementById('salesStatusFilter');
-  var statusFilter = statusSel ? statusSel.value : 'all';
-  if (statusFilter !== 'all') {
-    all = all.filter(function(s) { return s.status === statusFilter; });
+  var all = getSalesArray();
+
+  if (hasUrlFilter) {
+    all = all.filter(function(s) {
+      if (urlStatus && (s.status || 'captured') !== urlStatus) return false;
+      if (urlPayment && s.paymentType !== urlPayment) return false;
+      if (urlIdLookup && !urlIdLookup[s._key]) return false;
+      if (urlDateFrom || urlDateTo) {
+        var p = salesTzPartsFromIso(s.timestamp || s.createdAt || '');
+        if (!p) return false;
+        var ds = p.year + '-' + p.month + '-' + p.day;
+        if (urlDateFrom && ds < urlDateFrom) return false;
+        if (urlDateTo && ds > urlDateTo) return false;
+      }
+      return true;
+    });
+  } else {
+    // Date filter (single-day)
+    var dateInput = document.getElementById('salesDateFilter');
+    var filterDate = dateInput ? dateInput.value : '';
+    if (filterDate) {
+      all = all.filter(function(s) {
+        var d = new Date(s.timestamp);
+        var ds = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+        return ds === filterDate;
+      });
+    }
+
+    // Status filter
+    var statusSel = document.getElementById('salesStatusFilter');
+    var statusFilter = statusSel ? statusSel.value : 'all';
+    if (statusFilter !== 'all') {
+      all = all.filter(function(s) { return s.status === statusFilter; });
+    }
+  }
+
+  // URL-filter banner — surfaces active MCP-link filters with Clear button.
+  var bannerEl = document.getElementById('salesUrlFilterBanner');
+  var bannerHost = summaryEl || tableWrap;
+  if (!bannerEl && hasUrlFilter && bannerHost && bannerHost.parentNode) {
+    bannerEl = document.createElement('div');
+    bannerEl.id = 'salesUrlFilterBanner';
+    bannerEl.style.cssText = 'background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.35);color:#F59E0B;padding:8px 12px;margin-bottom:12px;border-radius:6px;display:flex;align-items:center;gap:12px;font-size:0.85rem;';
+    bannerHost.parentNode.insertBefore(bannerEl, bannerHost);
+  }
+  if (bannerEl) {
+    if (hasUrlFilter) {
+      var bparts = [];
+      if (urlIds.length) bparts.push(urlIds.length + ' selected sale' + (urlIds.length === 1 ? '' : 's'));
+      if (urlStatus) bparts.push('status: ' + urlStatus);
+      if (urlPayment) bparts.push('payment: ' + urlPayment);
+      if (urlDateFrom && urlDateTo) bparts.push('from ' + urlDateFrom + ' to ' + urlDateTo);
+      else if (urlDateFrom) bparts.push('from ' + urlDateFrom + ' onward');
+      else if (urlDateTo) bparts.push('through ' + urlDateTo);
+      bannerEl.innerHTML = '<span>💵 Showing ' + bparts.join(', ') + ' (' + all.length + ')</span>' +
+        '<button type="button" onclick="clearSalesFilter()" style="margin-left:auto;background:transparent;border:1px solid rgba(245,158,11,0.5);color:#F59E0B;padding:2px 10px;border-radius:4px;cursor:pointer;font-size:0.78rem;">Clear filter</button>';
+      bannerEl.style.display = 'flex';
+    } else {
+      bannerEl.style.display = 'none';
+    }
   }
 
   // Summary
@@ -580,10 +666,49 @@ function renderSalesEvents() {
   loadingEl.style.display = 'none';
   if (detailEl && detailEl.style.display !== 'none') return;
 
+  // URL-driven filters from MCP admin links (#events?...)
+  var rp = (typeof window.getRouteParams === 'function') ? window.getRouteParams() : {};
+  var urlStatus = (rp && typeof rp.status === 'string') ? rp.status : '';
+  var urlIdsParam = (rp && typeof rp.eventIds === 'string') ? rp.eventIds : '';
+  var urlIds = urlIdsParam ? urlIdsParam.split(',').map(function(s) { return s.trim(); }).filter(Boolean) : [];
+  var urlIdLookup = urlIds.length > 0 ? Object.create(null) : null;
+  if (urlIdLookup) urlIds.forEach(function(id) { urlIdLookup[id] = true; });
+  var hasUrlFilter = !!(urlStatus || urlIds.length);
+
   var arr = getSalesEventsArray();
-  var statusFilter = document.getElementById('salesEventsStatusFilter').value;
-  if (statusFilter !== 'all') {
-    arr = arr.filter(function(ev) { return ev.status === statusFilter; });
+  if (hasUrlFilter) {
+    arr = arr.filter(function(ev) {
+      if (urlStatus && (ev.status || 'planning') !== urlStatus) return false;
+      if (urlIdLookup && !urlIdLookup[ev._key]) return false;
+      return true;
+    });
+  } else {
+    var statusEl = document.getElementById('salesEventsStatusFilter');
+    var statusFilter = statusEl ? statusEl.value : 'all';
+    if (statusFilter !== 'all') {
+      arr = arr.filter(function(ev) { return ev.status === statusFilter; });
+    }
+  }
+
+  // URL-filter banner
+  var bannerEl = document.getElementById('salesEventsUrlFilterBanner');
+  if (!bannerEl && hasUrlFilter && tableWrap && tableWrap.parentNode) {
+    bannerEl = document.createElement('div');
+    bannerEl.id = 'salesEventsUrlFilterBanner';
+    bannerEl.style.cssText = 'background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.35);color:#F59E0B;padding:8px 12px;margin-bottom:12px;border-radius:6px;display:flex;align-items:center;gap:12px;font-size:0.85rem;';
+    tableWrap.parentNode.insertBefore(bannerEl, tableWrap);
+  }
+  if (bannerEl) {
+    if (hasUrlFilter) {
+      var bparts = [];
+      if (urlIds.length) bparts.push(urlIds.length + ' selected event' + (urlIds.length === 1 ? '' : 's'));
+      if (urlStatus) bparts.push('status: ' + urlStatus);
+      bannerEl.innerHTML = '<span>🎪 Showing ' + bparts.join(', ') + ' (' + arr.length + ')</span>' +
+        '<button type="button" onclick="clearSalesEventsFilter()" style="margin-left:auto;background:transparent;border:1px solid rgba(245,158,11,0.5);color:#F59E0B;padding:2px 10px;border-radius:4px;cursor:pointer;font-size:0.78rem;">Clear filter</button>';
+      bannerEl.style.display = 'flex';
+    } else {
+      bannerEl.style.display = 'none';
+    }
   }
 
   countEl.textContent = arr.length + ' event' + (arr.length !== 1 ? 's' : '');
@@ -2503,6 +2628,28 @@ async function exitPackingMode() {
       }
     });
   }
+
+  // URL-filter clears for MCP admin-link landings
+  window.clearSalesFilter = function() {
+    var rp = (typeof window.getRouteParams === 'function') ? window.getRouteParams() : {};
+    var clean = {};
+    Object.keys(rp || {}).forEach(function(k) {
+      if (k !== 'status' && k !== 'paymentType' && k !== 'dateFrom' && k !== 'dateTo' && k !== 'saleIds') clean[k] = rp[k];
+    });
+    if (typeof window.navigateTo === 'function') window.navigateTo('pos', clean);
+    else location.hash = '#pos';
+    setTimeout(function() { if (typeof renderSales === 'function') renderSales(); }, 0);
+  };
+  window.clearSalesEventsFilter = function() {
+    var rp = (typeof window.getRouteParams === 'function') ? window.getRouteParams() : {};
+    var clean = {};
+    Object.keys(rp || {}).forEach(function(k) {
+      if (k !== 'status' && k !== 'eventIds') clean[k] = rp[k];
+    });
+    if (typeof window.navigateTo === 'function') window.navigateTo('events', clean);
+    else location.hash = '#events';
+    setTimeout(function() { if (typeof renderSalesEvents === 'function') renderSalesEvents(); }, 0);
+  };
 
   MastAdmin.registerModule('sales', {
     routes: {
