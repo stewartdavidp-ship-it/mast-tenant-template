@@ -89,24 +89,52 @@
     return order.orderNumber || order.orderId || order._key;
   }
 
+  // Tenant business timezone, fetched lazily from businessEntity. All
+  // date display + filtering goes through this so admin agrees with
+  // MCP regardless of where the user is browsing from.
+  var _tenantTz = null;
+  var _tenantTzLoading = null;
+  function ensureTenantTz() {
+    if (_tenantTz !== null) return Promise.resolve(_tenantTz);
+    if (_tenantTzLoading) return _tenantTzLoading;
+    _tenantTzLoading = (window.MastDB && MastDB.businessEntity
+      ? MastDB.businessEntity.get('operations')
+      : Promise.resolve({ data: null })
+    ).then(function(r) {
+      var d = (r && r.data) || {};
+      _tenantTz = (d.localization && d.localization.timezone) || '';
+      return _tenantTz;
+    }).catch(function() { _tenantTz = ''; return ''; });
+    return _tenantTzLoading;
+  }
+  function tzPartsFromIso(isoStr) {
+    if (!isoStr) return null;
+    var d = new Date(isoStr);
+    if (isNaN(d.getTime())) return null;
+    var opts = { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false };
+    if (_tenantTz) opts.timeZone = _tenantTz;
+    var fmt = new Intl.DateTimeFormat('en-CA', opts);
+    var parts = fmt.formatToParts(d).reduce(function(acc, p) { acc[p.type] = p.value; return acc; }, {});
+    return parts; // { year, month, day, hour, minute, ... }
+  }
+
   function formatOrderDate(isoStr) {
     if (!isoStr) return '';
-    var d = new Date(isoStr);
-    if (isNaN(d.getTime())) return isoStr;
+    var p = tzPartsFromIso(isoStr);
+    if (!p) return isoStr;
     var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-    return months[d.getMonth()] + ' ' + d.getDate() + ', ' + d.getFullYear();
+    return months[parseInt(p.month, 10) - 1] + ' ' + parseInt(p.day, 10) + ', ' + p.year;
   }
 
   function formatOrderDateTime(isoStr) {
     if (!isoStr) return '';
-    var d = new Date(isoStr);
-    if (isNaN(d.getTime())) return isoStr;
+    var p = tzPartsFromIso(isoStr);
+    if (!p) return isoStr;
     var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-    var hours = d.getHours();
+    var hours = parseInt(p.hour, 10);
     var ampm = hours >= 12 ? 'PM' : 'AM';
     hours = hours % 12 || 12;
-    var mins = d.getMinutes().toString().padStart(2, '0');
-    return months[d.getMonth()] + ' ' + d.getDate() + ', ' + hours + ':' + mins + ' ' + ampm;
+    return months[parseInt(p.month, 10) - 1] + ' ' + parseInt(p.day, 10) + ', ' + hours + ':' + p.minute + ' ' + ampm;
   }
 
   function getOrderItemsLabel(order) {
@@ -226,21 +254,15 @@
     if (orderIdLookup) orderIdSet.forEach(function(id) { orderIdLookup[id] = true; });
 
     if (dateFrom || dateTo) {
-      // Use the same local-date interpretation the UI display uses
-      // (formatOrderDate -> new Date()) so the filter agrees with what
-      // the user sees in the DATE column. A UTC slice would include
-      // orders displayed as the previous day in negative-UTC timezones.
-      var toLocalDateStr = function(iso) {
-        if (!iso) return '';
-        var dt = new Date(iso);
-        if (isNaN(dt.getTime())) return '';
-        var y = dt.getFullYear();
-        var m = String(dt.getMonth() + 1).padStart(2, '0');
-        var day = String(dt.getDate()).padStart(2, '0');
-        return y + '-' + m + '-' + day;
+      // Use the tenant business timezone so the filter matches the UI's
+      // DATE column AND the MCP's filter (both also use tenant TZ).
+      var tzDateStr = function(iso) {
+        var p = tzPartsFromIso(iso);
+        if (!p) return '';
+        return p.year + '-' + p.month + '-' + p.day;
       };
       filtered = filtered.filter(function(o) {
-        var d = toLocalDateStr(o.placedAt || o.createdAt || '');
+        var d = tzDateStr(o.placedAt || o.createdAt || '');
         if (!d) return false;
         if (dateFrom && d < dateFrom) return false;
         if (dateTo && d > dateTo) return false;
@@ -4455,6 +4477,12 @@
     var params = (typeof window.getRouteParams === 'function') ? window.getRouteParams() : {};
     orderFilter = (params && typeof params.status === 'string' && params.status) ? params.status : 'active';
     orderSourceFilter = (params && typeof params.source === 'string' && params.source) ? params.source : 'all';
+    // Warm the tenant timezone cache so date display + filter use it.
+    // First render may run before this resolves; once it does, re-render.
+    var tzAlreadyKnown = _tenantTz !== null;
+    ensureTenantTz().then(function() {
+      if (!tzAlreadyKnown && ordersLoaded) renderOrders();
+    });
     if (ordersLoaded) renderOrders();
   }
 
