@@ -285,12 +285,30 @@ function renderRevenue(totalCents, byChannel, txns, start, end) {
 
 function setupExpensesTab() {
   injectFinancePulseCSS();
+  // URL-driven filters from MCP admin links: status, category, account,
+  // dateFrom, dateTo, expenseIds (#finance-expenses?...). When any URL
+  // filter is present, seed in-memory filter state from URL (and the
+  // period inputs from dateFrom/dateTo) so the load + render reflect
+  // it. Banner + Clear surface in renderFinExpenses.
+  var rp = (typeof window.getRouteParams === 'function') ? window.getRouteParams() : {};
+  var initStart = monthStart();
+  var initEnd = monthEnd();
+  var hasUrlDate = false;
+  if (rp && typeof rp.dateFrom === 'string' && rp.dateFrom) { initStart = rp.dateFrom.slice(0, 10); hasUrlDate = true; }
+  if (rp && typeof rp.dateTo === 'string' && rp.dateTo) { initEnd = rp.dateTo.slice(0, 10); hasUrlDate = true; }
+  if (rp && typeof rp.status === 'string' && rp.status) finExpFilters.status = rp.status;
+  else finExpFilters.status = 'all';
+  if (rp && typeof rp.category === 'string') finExpFilters.category = rp.category;
+  else finExpFilters.category = '';
+  if (rp && typeof rp.account === 'string') finExpFilters.accountId = rp.account;
+  else finExpFilters.accountId = '';
+
   var el = document.getElementById('financeExpensesTab');
   el.innerHTML =
     '<div style="padding:20px;max-width:1100px;">' +
     '<h2 style="margin:0 0 16px 0;font-size:1.15rem;font-weight:700;">Expenses</h2>' +
     '<div id="fExpBanks" style="margin-bottom:16px;">' + skeletonCards(2) + '</div>' +
-    periodPicker('fExp', monthStart(), monthEnd()) +
+    periodPicker('fExp', initStart, initEnd) +
     '<div id="fExpContent">' + skeletonTable(6,4) + '</div>' +
     '</div>';
   loadFinExpBanks();
@@ -397,11 +415,20 @@ async function loadFinExpenses() {
 
 function applyFinExpFilters() {
   var f = finExpFilters;
+  // expenseIds URL filter: applied on top of pill state.
+  var rp = (typeof window.getRouteParams === 'function') ? window.getRouteParams() : {};
+  var idsParam = (rp && typeof rp.expenseIds === 'string') ? rp.expenseIds : '';
+  var idLookup = null;
+  if (idsParam) {
+    idLookup = Object.create(null);
+    idsParam.split(',').map(function(s){return s.trim();}).filter(Boolean).forEach(function(id){idLookup[id]=true;});
+  }
   var filtered = finExpAllExpenses.filter(function(ex) {
     if (f.status === 'unreviewed' && ex.reviewed) return false;
     if (f.status === 'reviewed' && !ex.reviewed) return false;
     if (f.category && ex.category !== f.category) return false;
     if (f.accountId && ex.plaidAccountId !== f.accountId) return false;
+    if (idLookup && !idLookup[ex._id]) return false;
     return true;
   });
   finExpCache.expenses = filtered;
@@ -415,6 +442,15 @@ window.setFinExpFilter = function(key, value) {
   applyFinExpFilters();
 };
 
+// Drop URL-driven expense filters and re-navigate to the bare expenses view.
+window.clearExpensesFilter = function() {
+  var p = (typeof window.getRouteParams === 'function') ? window.getRouteParams() : {};
+  var next = {};
+  var DROP = { status: 1, category: 1, account: 1, dateFrom: 1, dateTo: 1, expenseIds: 1 };
+  Object.keys(p).forEach(function(k) { if (!DROP[k]) next[k] = p[k]; });
+  if (typeof navigateTo === 'function') navigateTo('finance-expenses', next);
+};
+
 function renderFinExpenses(expenses, start, end) {
   var total = 0;
   var byCategory = {};
@@ -426,7 +462,38 @@ function renderFinExpenses(expenses, start, end) {
 
   var catColors = { materials:'#8b5cf6', booth_fee:'#f59e0b', shipping_supplies:'#3b82f6', travel:'#10b981', marketing:'#ec4899', equipment:'#6366f1', software:'#0ea5e9', payroll:'#f97316', taxes:'#dc2626', other:'#6b7280' };
 
+  // URL-filter banner — surfaces active MCP-link filters with Clear button.
+  var rpExp = (typeof window.getRouteParams === 'function') ? window.getRouteParams() : {};
+  var urlExpStatus = (rpExp && typeof rpExp.status === 'string') ? rpExp.status : '';
+  var urlExpCategory = (rpExp && typeof rpExp.category === 'string') ? rpExp.category : '';
+  var urlExpAccount = (rpExp && typeof rpExp.account === 'string') ? rpExp.account : '';
+  var urlExpDateFrom = (rpExp && typeof rpExp.dateFrom === 'string') ? rpExp.dateFrom.slice(0, 10) : '';
+  var urlExpDateTo = (rpExp && typeof rpExp.dateTo === 'string') ? rpExp.dateTo.slice(0, 10) : '';
+  var urlExpIdsParam = (rpExp && typeof rpExp.expenseIds === 'string') ? rpExp.expenseIds : '';
+  var urlExpIds = urlExpIdsParam ? urlExpIdsParam.split(',').map(function(s){return s.trim();}).filter(Boolean) : [];
+  var hasUrlExpFilter = !!(urlExpStatus || urlExpCategory || urlExpAccount || urlExpDateFrom || urlExpDateTo || urlExpIds.length);
+
   var h = '';
+  if (hasUrlExpFilter) {
+    var bParts = [];
+    if (urlExpIds.length) bParts.push(urlExpIds.length + ' selected expense' + (urlExpIds.length === 1 ? '' : 's'));
+    if (urlExpStatus) bParts.push('status: ' + urlExpStatus);
+    if (urlExpCategory) bParts.push('category: ' + urlExpCategory);
+    if (urlExpAccount) {
+      var acctLabel = urlExpAccount;
+      if (typeof finExpAccountLookup !== 'undefined' && finExpAccountLookup[urlExpAccount]) {
+        acctLabel = finExpAccountLookup[urlExpAccount].institution + ' ••' + finExpAccountLookup[urlExpAccount].mask;
+      }
+      bParts.push('account: ' + acctLabel);
+    }
+    if (urlExpDateFrom && urlExpDateTo) bParts.push('from ' + urlExpDateFrom + ' to ' + urlExpDateTo);
+    else if (urlExpDateFrom) bParts.push('from ' + urlExpDateFrom + ' onward');
+    else if (urlExpDateTo) bParts.push('through ' + urlExpDateTo);
+    h += '<div id="fExpUrlFilterBanner" style="background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.35);color:#F59E0B;padding:8px 12px;margin-bottom:12px;border-radius:6px;display:flex;align-items:center;gap:12px;font-size:0.85rem;">' +
+      '<span>💸 Showing ' + bParts.join(', ') + '</span>' +
+      '<button type="button" onclick="clearExpensesFilter()" style="margin-left:auto;background:transparent;border:1px solid rgba(245,158,11,0.5);color:#F59E0B;padding:2px 10px;border-radius:4px;cursor:pointer;font-size:0.78rem;">Clear filter</button>' +
+    '</div>';
+  }
 
   // Summary cards
   h += '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px;align-items:flex-start;">';
