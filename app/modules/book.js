@@ -1228,20 +1228,50 @@
     var container = document.getElementById('bookInstructorsTable');
     if (!container) return;
 
-    var statusFilter = (document.getElementById('instrFilterStatus') || {}).value || 'active';
-    var filtered = instructorsData.filter(function(i) {
-      if (statusFilter !== 'all' && i.status !== statusFilter) return false;
-      return true;
-    });
+    // URL-driven filters from MCP admin links (#instructors?...)
+    var rp = (typeof window.getRouteParams === 'function') ? window.getRouteParams() : {};
+    var urlStatus = (rp && typeof rp.status === 'string') ? rp.status : '';
+    var urlIdsParam = (rp && typeof rp.instructorIds === 'string') ? rp.instructorIds : '';
+    var urlIds = urlIdsParam ? urlIdsParam.split(',').map(function(s) { return s.trim(); }).filter(Boolean) : [];
+    var urlIdLookup = urlIds.length > 0 ? Object.create(null) : null;
+    if (urlIdLookup) urlIds.forEach(function(id) { urlIdLookup[id] = true; });
+    var hasUrlFilter = !!(urlStatus || urlIds.length);
+
+    var filtered;
+    if (hasUrlFilter) {
+      filtered = instructorsData.filter(function(i) {
+        if (urlStatus && i.status !== urlStatus) return false;
+        if (urlIdLookup && !urlIdLookup[i.id]) return false;
+        return true;
+      });
+    } else {
+      var statusFilter = (document.getElementById('instrFilterStatus') || {}).value || 'active';
+      filtered = instructorsData.filter(function(i) {
+        if (statusFilter !== 'all' && i.status !== statusFilter) return false;
+        return true;
+      });
+    }
 
     filtered.sort(function(a, b) { return (a.name || '').localeCompare(b.name || ''); });
 
+    var html = '';
+    if (hasUrlFilter) {
+      var bparts = [];
+      if (urlIds.length) bparts.push(urlIds.length + ' selected instructor' + (urlIds.length === 1 ? '' : 's'));
+      if (urlStatus) bparts.push('status: ' + urlStatus);
+      html += '<div id="bookInstructorsUrlFilterBanner" style="background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.35);color:#F59E0B;padding:8px 12px;margin-bottom:12px;border-radius:6px;display:flex;align-items:center;gap:12px;font-size:0.85rem;">' +
+        '<span>\ud83d\udc69\u200d\ud83c\udfeb Showing ' + bparts.join(', ') + ' (' + filtered.length + ')</span>' +
+        '<button type="button" onclick="clearInstructorsFilter()" style="margin-left:auto;background:transparent;border:1px solid rgba(245,158,11,0.5);color:#F59E0B;padding:2px 10px;border-radius:4px;cursor:pointer;font-size:0.78rem;">Clear filter</button>' +
+        '</div>';
+    }
+
     if (filtered.length === 0) {
-      container.innerHTML = bookEmptyState('\ud83d\udc69\u200d\ud83c\udfeb', 'No instructors yet', 'Click + New Instructor to add one.');
+      container.innerHTML = html + (hasUrlFilter
+        ? '<div style="text-align:center;padding:30px;color:#999;font-size:0.85rem;">No instructors match the filter.</div>'
+        : bookEmptyState('\ud83d\udc69\u200d\ud83c\udfeb', 'No instructors yet', 'Click + New Instructor to add one.'));
       return;
     }
 
-    var html = '';
     filtered.forEach(function(i) {
       var specs = (i.specialties || []).join(', ') || '';
       html += '<div class="book-card" onclick="window._instrEdit(\'' + esc(i.id) + '\')">' +
@@ -1392,23 +1422,55 @@
     var container = document.getElementById('bookResourcesTable');
     if (!container) return;
 
-    var typeFilter = (document.getElementById('resFilterType') || {}).value || 'all';
-    var statusFilter = (document.getElementById('resFilterStatus') || {}).value || 'active';
+    // URL-driven filters from MCP admin links (#resources?...)
+    var rp = (typeof window.getRouteParams === 'function') ? window.getRouteParams() : {};
+    var urlType = (rp && typeof rp.type === 'string') ? rp.type : '';
+    var urlStatus = (rp && typeof rp.status === 'string') ? rp.status : '';
+    var urlIdsParam = (rp && typeof rp.resourceIds === 'string') ? rp.resourceIds : '';
+    var urlIds = urlIdsParam ? urlIdsParam.split(',').map(function(s) { return s.trim(); }).filter(Boolean) : [];
+    var urlIdLookup = urlIds.length > 0 ? Object.create(null) : null;
+    if (urlIdLookup) urlIds.forEach(function(id) { urlIdLookup[id] = true; });
+    var hasUrlFilter = !!(urlType || urlStatus || urlIds.length);
 
-    var filtered = resourcesData.filter(function(r) {
-      if (typeFilter !== 'all' && r.type !== typeFilter) return false;
-      if (statusFilter !== 'all' && r.status !== statusFilter) return false;
-      return true;
-    });
+    var filtered;
+    if (hasUrlFilter) {
+      filtered = resourcesData.filter(function(r) {
+        if (urlType && r.type !== urlType) return false;
+        if (urlStatus && r.status !== urlStatus) return false;
+        if (urlIdLookup && !urlIdLookup[r.id]) return false;
+        return true;
+      });
+    } else {
+      var typeFilter = (document.getElementById('resFilterType') || {}).value || 'all';
+      var statusFilter = (document.getElementById('resFilterStatus') || {}).value || 'active';
+      filtered = resourcesData.filter(function(r) {
+        if (typeFilter !== 'all' && r.type !== typeFilter) return false;
+        if (statusFilter !== 'all' && r.status !== statusFilter) return false;
+        return true;
+      });
+    }
 
     filtered.sort(function(a, b) { return (a.name || '').localeCompare(b.name || ''); });
 
+    var html = '';
+    if (hasUrlFilter) {
+      var bparts = [];
+      if (urlIds.length) bparts.push(urlIds.length + ' selected resource' + (urlIds.length === 1 ? '' : 's'));
+      if (urlType) bparts.push('type: ' + urlType);
+      if (urlStatus) bparts.push('status: ' + urlStatus);
+      html += '<div id="bookResourcesUrlFilterBanner" style="background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.35);color:#F59E0B;padding:8px 12px;margin-bottom:12px;border-radius:6px;display:flex;align-items:center;gap:12px;font-size:0.85rem;">' +
+        '<span>\ud83c\udfe0 Showing ' + bparts.join(', ') + ' (' + filtered.length + ')</span>' +
+        '<button type="button" onclick="clearResourcesFilter()" style="margin-left:auto;background:transparent;border:1px solid rgba(245,158,11,0.5);color:#F59E0B;padding:2px 10px;border-radius:4px;cursor:pointer;font-size:0.78rem;">Clear filter</button>' +
+        '</div>';
+    }
+
     if (filtered.length === 0) {
-      container.innerHTML = bookEmptyState('\ud83c\udfe0', 'No resources yet', 'Click + New Resource to add one.');
+      container.innerHTML = html + (hasUrlFilter
+        ? '<div style="text-align:center;padding:30px;color:#999;font-size:0.85rem;">No resources match the filter.</div>'
+        : bookEmptyState('\ud83c\udfe0', 'No resources yet', 'Click + New Resource to add one.'));
       return;
     }
 
-    var html = '';
     filtered.forEach(function(r) {
       html += '<div class="book-card" onclick="window._resEdit(\'' + esc(r.id) + '\')">' +
         '<div style="display:flex;justify-content:space-between;align-items:center;">' +
@@ -1544,23 +1606,56 @@
     var container = document.getElementById('bookPassesTable');
     if (!container) return;
 
-    var typeFilter = (document.getElementById('passFilterType') || {}).value || 'all';
-    var statusFilter = (document.getElementById('passFilterStatus') || {}).value || 'active';
+    // URL-driven filters from MCP admin links (#passes?...)
+    var rp = (typeof window.getRouteParams === 'function') ? window.getRouteParams() : {};
+    var urlStatus = (rp && typeof rp.status === 'string') ? rp.status : '';
+    var urlType = (rp && typeof rp.type === 'string') ? rp.type : '';
+    var urlIdsParam = (rp && typeof rp.passDefinitionIds === 'string') ? rp.passDefinitionIds : '';
+    var urlIds = urlIdsParam ? urlIdsParam.split(',').map(function(s) { return s.trim(); }).filter(Boolean) : [];
+    var urlIdLookup = urlIds.length > 0 ? Object.create(null) : null;
+    if (urlIdLookup) urlIds.forEach(function(id) { urlIdLookup[id] = true; });
+    var hasUrlFilter = !!(urlStatus || urlType || urlIds.length);
 
-    var filtered = passDefsData.filter(function(p) {
-      if (typeFilter !== 'all' && p.type !== typeFilter) return false;
-      if (statusFilter !== 'all' && p.status !== statusFilter) return false;
-      return true;
-    });
+    var filtered;
+    if (hasUrlFilter) {
+      filtered = passDefsData.filter(function(p) {
+        if (urlType && p.type !== urlType) return false;
+        if (urlStatus && p.status !== urlStatus) return false;
+        if (urlIdLookup && !urlIdLookup[p.id]) return false;
+        return true;
+      });
+    } else {
+      var typeFilter = (document.getElementById('passFilterType') || {}).value || 'all';
+      var statusFilter = (document.getElementById('passFilterStatus') || {}).value || 'active';
+      filtered = passDefsData.filter(function(p) {
+        if (typeFilter !== 'all' && p.type !== typeFilter) return false;
+        if (statusFilter !== 'all' && p.status !== statusFilter) return false;
+        return true;
+      });
+    }
 
     filtered.sort(function(a, b) { return (a.sortOrder || 0) - (b.sortOrder || 0) || (a.name || '').localeCompare(b.name || ''); });
 
+    var html = '';
+    if (hasUrlFilter) {
+      var bparts = [];
+      if (urlIds.length) bparts.push(urlIds.length + ' selected definition' + (urlIds.length === 1 ? '' : 's'));
+      if (urlType) bparts.push('type: ' + urlType);
+      if (urlStatus) bparts.push('status: ' + urlStatus);
+      html += '<div id="bookPassesUrlFilterBanner" style="background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.35);color:#F59E0B;padding:8px 12px;margin-bottom:12px;border-radius:6px;display:flex;align-items:center;gap:12px;font-size:0.85rem;">' +
+        '<span>\ud83c\udf9f\ufe0f Showing ' + bparts.join(', ') + ' (' + filtered.length + ')</span>' +
+        '<button type="button" onclick="clearPassesFilter()" style="margin-left:auto;background:transparent;border:1px solid rgba(245,158,11,0.5);color:#F59E0B;padding:2px 10px;border-radius:4px;cursor:pointer;font-size:0.78rem;">Clear filter</button>' +
+        '</div>';
+    }
+
     if (filtered.length === 0) {
-      container.innerHTML = bookEmptyState('\ud83c\udf9f\ufe0f', 'No passes yet', 'Click + New Pass to create one.');
+      container.innerHTML = html + (hasUrlFilter
+        ? '<div style="text-align:center;padding:30px;color:#999;font-size:0.85rem;">No definitions match the filter.</div>'
+        : bookEmptyState('\ud83c\udf9f\ufe0f', 'No passes yet', 'Click + New Pass to create one.'));
       return;
     }
 
-    var html = '<table class="data-table"><thead><tr>' +
+    html += '<table class="data-table"><thead><tr>' +
       '<th>Name</th><th>Type</th><th>Price</th><th>Visits</th><th>Validity</th><th>Priority</th><th>Status</th><th>Actions</th>' +
       '</tr></thead><tbody>';
 
@@ -3760,6 +3855,38 @@
     var DROP = { status: 1, classId: 1, sessionId: 1, dateFrom: 1, dateTo: 1, enrollmentIds: 1 };
     Object.keys(p).forEach(function(k) { if (!DROP[k]) next[k] = p[k]; });
     if (typeof navigateTo === 'function') navigateTo('enrollments', next);
+  };
+
+  // URL-filter clears for MCP admin-link landings (book sub-tabs)
+  window.clearInstructorsFilter = function() {
+    var rp = (typeof window.getRouteParams === 'function') ? window.getRouteParams() : {};
+    var clean = {};
+    Object.keys(rp || {}).forEach(function(k) {
+      if (k !== 'status' && k !== 'instructorIds') clean[k] = rp[k];
+    });
+    if (typeof window.navigateTo === 'function') window.navigateTo('instructors', clean);
+    else location.hash = '#instructors';
+    setTimeout(function() { if (typeof renderInstructorList === 'function') renderInstructorList(); }, 0);
+  };
+  window.clearResourcesFilter = function() {
+    var rp = (typeof window.getRouteParams === 'function') ? window.getRouteParams() : {};
+    var clean = {};
+    Object.keys(rp || {}).forEach(function(k) {
+      if (k !== 'type' && k !== 'status' && k !== 'resourceIds') clean[k] = rp[k];
+    });
+    if (typeof window.navigateTo === 'function') window.navigateTo('resources', clean);
+    else location.hash = '#resources';
+    setTimeout(function() { if (typeof renderResourceList === 'function') renderResourceList(); }, 0);
+  };
+  window.clearPassesFilter = function() {
+    var rp = (typeof window.getRouteParams === 'function') ? window.getRouteParams() : {};
+    var clean = {};
+    Object.keys(rp || {}).forEach(function(k) {
+      if (k !== 'status' && k !== 'type' && k !== 'passDefinitionIds') clean[k] = rp[k];
+    });
+    if (typeof window.navigateTo === 'function') window.navigateTo('passes', clean);
+    else location.hash = '#passes';
+    setTimeout(function() { if (typeof renderPassDefList === 'function') renderPassDefList(); }, 0);
   };
 
   MastAdmin.registerModule('book', {
