@@ -18,6 +18,37 @@
   var currentView = 'list'; // 'list' | 'builder'
   var currentDocId = null;
 
+  // Tenant-TZ-aware date helpers for URL filter (createdAt is ISO timestamp).
+  // Lazy-loads tenant TZ from businessEntity once; first render before resolve
+  // uses browser TZ then re-renders.
+  var _tenantTz = null;
+  function ensureTenantTz() {
+    if (_tenantTz !== null) return Promise.resolve(_tenantTz);
+    try {
+      return MastDB.businessEntity.get('operations').then(function(snap) {
+        var ops = (snap && typeof snap.val === 'function') ? snap.val() : snap;
+        var tz = ops && ops.localization && ops.localization.timezone;
+        _tenantTz = (tz && typeof tz === 'string') ? tz : 'UTC';
+        return _tenantTz;
+      }).catch(function() { _tenantTz = 'UTC'; return 'UTC'; });
+    } catch (e) {
+      _tenantTz = 'UTC';
+      return Promise.resolve('UTC');
+    }
+  }
+  function tzPartsFromIso(iso) {
+    if (!iso) return null;
+    var dt = new Date(iso);
+    if (isNaN(dt.getTime())) return null;
+    var fmt = new Intl.DateTimeFormat('en-CA', {
+      timeZone: _tenantTz || 'UTC',
+      year: 'numeric', month: '2-digit', day: '2-digit'
+    });
+    var parts = {};
+    fmt.formatToParts(dt).forEach(function(x) { if (x.type !== 'literal') parts[x.type] = x.value; });
+    return parts;
+  }
+
   // ============================================================
   // Data Layer
   // ============================================================
@@ -165,11 +196,42 @@
     var tab = document.getElementById('lookbooksTab');
     if (!tab) return;
 
+    // URL-driven filters from MCP admin links: type, status, dateFrom, dateTo, lookbookIds
+    var rp = (typeof window.getRouteParams === 'function') ? window.getRouteParams() : {};
+    var urlType = (rp && typeof rp.type === 'string') ? rp.type : '';
+    var urlStatus = (rp && typeof rp.status === 'string') ? rp.status : '';
+    var urlDateFrom = (rp && typeof rp.dateFrom === 'string') ? rp.dateFrom.slice(0, 10) : '';
+    var urlDateTo = (rp && typeof rp.dateTo === 'string') ? rp.dateTo.slice(0, 10) : '';
+    var urlIdsParam = (rp && typeof rp.lookbookIds === 'string') ? rp.lookbookIds : '';
+    var urlIds = urlIdsParam ? urlIdsParam.split(',').map(function(s) { return s.trim(); }).filter(Boolean) : [];
+    var urlIdLookup = urlIds.length > 0 ? Object.create(null) : null;
+    if (urlIdLookup) urlIds.forEach(function(id) { urlIdLookup[id] = true; });
+    var hasUrlFilter = !!(urlType || urlStatus || urlDateFrom || urlDateTo || urlIds.length);
+    if (hasUrlFilter && (urlDateFrom || urlDateTo) && _tenantTz === null) {
+      ensureTenantTz().then(function() { renderDocList(); });
+    }
+
     var docs = Object.values(docsData).sort(function(a, b) {
       return (b.updatedAt || '').localeCompare(a.updatedAt || '');
     });
 
-    if (!docs.length) {
+    if (hasUrlFilter) {
+      docs = docs.filter(function(d) {
+        if (urlType && d.type !== urlType) return false;
+        if (urlStatus && (d.status || 'draft') !== urlStatus) return false;
+        if (urlIdLookup && !urlIdLookup[d.documentId]) return false;
+        if (urlDateFrom || urlDateTo) {
+          var p = tzPartsFromIso(d.createdAt || '');
+          if (!p) return false;
+          var ds = p.year + '-' + p.month + '-' + p.day;
+          if (urlDateFrom && ds < urlDateFrom) return false;
+          if (urlDateTo && ds > urlDateTo) return false;
+        }
+        return true;
+      });
+    }
+
+    if (!docs.length && !hasUrlFilter) {
       tab.innerHTML =
         '<div style="text-align:center;padding:40px 20px;color:var(--warm-gray);">' +
           '<div style="font-size:1.6rem;margin-bottom:12px;">📄</div>' +
@@ -180,11 +242,34 @@
       return;
     }
 
-    var html =
+    var html = '';
+
+    // URL-filter banner
+    if (hasUrlFilter) {
+      var bparts = [];
+      if (urlIds.length) bparts.push(urlIds.length + ' selected document' + (urlIds.length === 1 ? '' : 's'));
+      if (urlType) bparts.push('type: ' + urlType);
+      if (urlStatus) bparts.push('status: ' + urlStatus);
+      if (urlDateFrom && urlDateTo) bparts.push('from ' + urlDateFrom + ' to ' + urlDateTo);
+      else if (urlDateFrom) bparts.push('from ' + urlDateFrom + ' onward');
+      else if (urlDateTo) bparts.push('through ' + urlDateTo);
+      html += '<div id="lookbooksUrlFilterBanner" style="background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.35);color:#F59E0B;padding:8px 12px;margin-bottom:12px;border-radius:6px;display:flex;align-items:center;gap:12px;font-size:0.85rem;">' +
+        '<span>📄 Showing ' + bparts.join(', ') + ' (' + docs.length + ')</span>' +
+        '<button type="button" onclick="clearLookbooksFilter()" style="margin-left:auto;background:transparent;border:1px solid rgba(245,158,11,0.5);color:#F59E0B;padding:2px 10px;border-radius:4px;cursor:pointer;font-size:0.78rem;">Clear filter</button>' +
+        '</div>';
+    }
+
+    html +=
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">' +
         '<h3 style="font-family:\'Cormorant Garamond\',serif;font-size:1.6rem;font-weight:500;margin:0;">Look Books & Line Sheets</h3>' +
         '<button class="btn btn-primary" onclick="lbNewDoc()">+ New Document</button>' +
       '</div>';
+
+    if (!docs.length) {
+      html += '<div style="text-align:center;padding:30px;color:#999;font-size:0.85rem;">No documents match the filter.</div>';
+      tab.innerHTML = html;
+      return;
+    }
 
     html += '<div style="display:flex;flex-direction:column;gap:12px;">';
     docs.forEach(function(doc) {
@@ -504,6 +589,19 @@
   window.lbToggleCategory = toggleCategory;
   window.lbAddExclusion = addExclusion;
   window.lbRemoveExclusion = removeExclusion;
+
+  // URL-filter clear (MCP admin-link landings)
+  window.clearLookbooksFilter = function() {
+    var rp = (typeof window.getRouteParams === 'function') ? window.getRouteParams() : {};
+    var clean = {};
+    Object.keys(rp || {}).forEach(function(k) {
+      if (k !== 'type' && k !== 'status' && k !== 'dateFrom' && k !== 'dateTo' && k !== 'lookbookIds') clean[k] = rp[k];
+    });
+    if (typeof window.navigateTo === 'function') window.navigateTo('lookbooks', clean);
+    else location.hash = '#lookbooks';
+    setTimeout(function() { if (typeof renderDocList === 'function') renderDocList(); }, 0);
+  };
+  window.renderLookbooksList = renderDocList;
 
   // ============================================================
   // Register with MastAdmin

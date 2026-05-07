@@ -22,6 +22,35 @@
   var currentView = 'list'; // 'list' | 'detail' | 'new'
   var currentPlacementId = null;
 
+  // Tenant-TZ-aware date helpers for URL filter (createdAt is ISO timestamp).
+  var _tenantTz = null;
+  function ensureTenantTz() {
+    if (_tenantTz !== null) return Promise.resolve(_tenantTz);
+    try {
+      return MastDB.businessEntity.get('operations').then(function(snap) {
+        var ops = (snap && typeof snap.val === 'function') ? snap.val() : snap;
+        var tz = ops && ops.localization && ops.localization.timezone;
+        _tenantTz = (tz && typeof tz === 'string') ? tz : 'UTC';
+        return _tenantTz;
+      }).catch(function() { _tenantTz = 'UTC'; return 'UTC'; });
+    } catch (e) {
+      _tenantTz = 'UTC';
+      return Promise.resolve('UTC');
+    }
+  }
+  function tzPartsFromIso(iso) {
+    if (!iso) return null;
+    var dt = new Date(iso);
+    if (isNaN(dt.getTime())) return null;
+    var fmt = new Intl.DateTimeFormat('en-CA', {
+      timeZone: _tenantTz || 'UTC',
+      year: 'numeric', month: '2-digit', day: '2-digit'
+    });
+    var parts = {};
+    fmt.formatToParts(dt).forEach(function(x) { if (x.type !== 'literal') parts[x.type] = x.value; });
+    return parts;
+  }
+
   // ============================================================
   // Data Layer — CRUD + Calculations
   // ============================================================
@@ -208,13 +237,42 @@
     var tab = document.getElementById('galleriesTab');
     if (!tab) return;
 
+    // URL-driven filters from MCP admin links: status, dateFrom, dateTo, placementIds (#galleries?...)
+    var rp = (typeof window.getRouteParams === 'function') ? window.getRouteParams() : {};
+    var urlStatus = (rp && typeof rp.status === 'string') ? rp.status : '';
+    var urlDateFrom = (rp && typeof rp.dateFrom === 'string') ? rp.dateFrom.slice(0, 10) : '';
+    var urlDateTo = (rp && typeof rp.dateTo === 'string') ? rp.dateTo.slice(0, 10) : '';
+    var urlIdsParam = (rp && typeof rp.placementIds === 'string') ? rp.placementIds : '';
+    var urlIds = urlIdsParam ? urlIdsParam.split(',').map(function(s) { return s.trim(); }).filter(Boolean) : [];
+    var urlIdLookup = urlIds.length > 0 ? Object.create(null) : null;
+    if (urlIdLookup) urlIds.forEach(function(id) { urlIdLookup[id] = true; });
+    var hasUrlFilter = !!(urlStatus || urlDateFrom || urlDateTo || urlIds.length);
+    if (hasUrlFilter && (urlDateFrom || urlDateTo) && _tenantTz === null) {
+      ensureTenantTz().then(function() { renderPlacementList(); });
+    }
+
     var placements = Object.values(placementsData).sort(function(a, b) {
       if (a.status === 'active' && b.status !== 'active') return -1;
       if (a.status !== 'active' && b.status === 'active') return 1;
       return (b.createdAt || '').localeCompare(a.createdAt || '');
     });
 
-    if (!placements.length) {
+    if (hasUrlFilter) {
+      placements = placements.filter(function(p) {
+        if (urlStatus && (p.status || 'active') !== urlStatus) return false;
+        if (urlIdLookup && !urlIdLookup[p.placementId]) return false;
+        if (urlDateFrom || urlDateTo) {
+          var parts = tzPartsFromIso(p.createdAt || '');
+          if (!parts) return false;
+          var ds = parts.year + '-' + parts.month + '-' + parts.day;
+          if (urlDateFrom && ds < urlDateFrom) return false;
+          if (urlDateTo && ds > urlDateTo) return false;
+        }
+        return true;
+      });
+    }
+
+    if (!placements.length && !hasUrlFilter) {
       tab.innerHTML =
         '<div style="text-align:center;padding:40px 20px;color:var(--warm-gray);">' +
           '<div style="font-size:1.6rem;margin-bottom:12px;">🏛️</div>' +
@@ -225,11 +283,32 @@
       return;
     }
 
-    var html =
+    var html = '';
+
+    if (hasUrlFilter) {
+      var bparts = [];
+      if (urlIds.length) bparts.push(urlIds.length + ' selected placement' + (urlIds.length === 1 ? '' : 's'));
+      if (urlStatus) bparts.push('status: ' + urlStatus);
+      if (urlDateFrom && urlDateTo) bparts.push('from ' + urlDateFrom + ' to ' + urlDateTo);
+      else if (urlDateFrom) bparts.push('from ' + urlDateFrom + ' onward');
+      else if (urlDateTo) bparts.push('through ' + urlDateTo);
+      html += '<div id="consignmentUrlFilterBanner" style="background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.35);color:#F59E0B;padding:8px 12px;margin-bottom:12px;border-radius:6px;display:flex;align-items:center;gap:12px;font-size:0.85rem;">' +
+        '<span>🏛️ Showing ' + bparts.join(', ') + ' (' + placements.length + ')</span>' +
+        '<button type="button" onclick="clearConsignmentFilter()" style="margin-left:auto;background:transparent;border:1px solid rgba(245,158,11,0.5);color:#F59E0B;padding:2px 10px;border-radius:4px;cursor:pointer;font-size:0.78rem;">Clear filter</button>' +
+        '</div>';
+    }
+
+    html +=
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">' +
         '<h3 style="font-family:\'Cormorant Garamond\',serif;font-size:1.6rem;font-weight:500;margin:0;">Galleries & Consignment</h3>' +
         '<button class="btn btn-primary" onclick="consignmentShowNew()">+ New Placement</button>' +
       '</div>';
+
+    if (!placements.length) {
+      html += '<div style="text-align:center;padding:30px;color:#999;font-size:0.85rem;">No placements match the filter.</div>';
+      tab.innerHTML = html;
+      return;
+    }
 
     html += '<div class="consignment-list">';
     placements.forEach(function(p) {
@@ -932,6 +1011,19 @@
   window.consignmentAddProductRow = addProductRow;
   window.consignmentProductSelected = productSelected;
   window.consignmentRemoveProductRow = removeProductRow;
+
+  // URL-filter clear (MCP admin-link landings)
+  window.clearConsignmentFilter = function() {
+    var rp = (typeof window.getRouteParams === 'function') ? window.getRouteParams() : {};
+    var clean = {};
+    Object.keys(rp || {}).forEach(function(k) {
+      if (k !== 'status' && k !== 'dateFrom' && k !== 'dateTo' && k !== 'placementIds') clean[k] = rp[k];
+    });
+    if (typeof window.navigateTo === 'function') window.navigateTo('galleries', clean);
+    else location.hash = '#galleries';
+    setTimeout(function() { if (typeof renderPlacementList === 'function') renderPlacementList(); }, 0);
+  };
+  window.renderConsignmentList = renderPlacementList;
 
   // ============================================================
   // Register with MastAdmin

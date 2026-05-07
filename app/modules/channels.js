@@ -353,6 +353,19 @@
     var tab = document.getElementById('channelsTab');
     if (!tab) return;
 
+    // URL-driven filters from MCP admin links: isActive, type, channelIds
+    // (#channels?...). URL-overrides-pill — when any URL filter is present,
+    // bypass the pill filters for this render.
+    var rp = (typeof window.getRouteParams === 'function') ? window.getRouteParams() : {};
+    var urlActiveRaw = (rp && (typeof rp.isActive === 'string')) ? rp.isActive : '';
+    var urlActive = urlActiveRaw === 'true' ? true : (urlActiveRaw === 'false' ? false : null);
+    var urlType = (rp && typeof rp.type === 'string') ? rp.type : '';
+    var urlIdsParam = (rp && typeof rp.channelIds === 'string') ? rp.channelIds : '';
+    var urlIds = urlIdsParam ? urlIdsParam.split(',').map(function(s) { return s.trim(); }).filter(Boolean) : [];
+    var urlIdLookup = urlIds.length > 0 ? Object.create(null) : null;
+    if (urlIdLookup) urlIds.forEach(function(id) { urlIdLookup[id] = true; });
+    var hasUrlFilter = !!(urlActive !== null || urlType || urlIds.length);
+
     var channels = Object.values(channelsData).sort(function(a, b) {
       if ((a.isActive !== false) && (b.isActive === false)) return -1;
       if ((a.isActive === false) && (b.isActive !== false)) return 1;
@@ -365,12 +378,22 @@
     var searchVal = searchEl ? searchEl.value.toLowerCase() : '';
     var typeVal = typeEl ? typeEl.value : '';
 
-    var filtered = channels.filter(function(ch) {
-      if (searchVal && (ch.name || '').toLowerCase().indexOf(searchVal) === -1) return false;
-      // Phase 2a — filter via shim so route+platform-only channels still match
-      if (typeVal && getChannelType(ch) !== typeVal) return false;
-      return true;
-    });
+    var filtered;
+    if (hasUrlFilter) {
+      filtered = channels.filter(function(ch) {
+        if (urlActive !== null && (ch.isActive !== false) !== urlActive) return false;
+        if (urlType && getChannelType(ch) !== urlType) return false;
+        if (urlIdLookup && !urlIdLookup[ch.channelId]) return false;
+        return true;
+      });
+    } else {
+      filtered = channels.filter(function(ch) {
+        if (searchVal && (ch.name || '').toLowerCase().indexOf(searchVal) === -1) return false;
+        // Phase 2a — filter via shim so route+platform-only channels still match
+        if (typeVal && getChannelType(ch) !== typeVal) return false;
+        return true;
+      });
+    }
 
     if (!channels.length) {
       // Redirect to onboarding flow
@@ -379,6 +402,19 @@
     }
 
     var h = '';
+
+    // URL-filter banner — surfaces active MCP-link filters with Clear button.
+    if (hasUrlFilter) {
+      var bparts = [];
+      if (urlIds.length) bparts.push(urlIds.length + ' selected channel' + (urlIds.length === 1 ? '' : 's'));
+      if (urlActive === true) bparts.push('active only');
+      if (urlActive === false) bparts.push('inactive only');
+      if (urlType) bparts.push('type: ' + urlType);
+      h += '<div id="channelsUrlFilterBanner" style="background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.35);color:#F59E0B;padding:8px 12px;margin-bottom:12px;border-radius:6px;display:flex;align-items:center;gap:12px;font-size:0.85rem;">' +
+        '<span>📡 Showing ' + bparts.join(', ') + ' (' + filtered.length + ')</span>' +
+        '<button type="button" onclick="clearChannelsFilter()" style="margin-left:auto;background:transparent;border:1px solid rgba(245,158,11,0.5);color:#F59E0B;padding:2px 10px;border-radius:4px;cursor:pointer;font-size:0.78rem;">Clear filter</button>' +
+        '</div>';
+    }
 
     // Header
     h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">';
@@ -2617,6 +2653,19 @@
   window.channelSaveOnboarding = saveOnboarding;
   window.channelShowOnboarding = function() { currentView = 'onboarding'; onboardingSelections = {}; renderCurrentView(); };
   window.channelSyncNow = syncNow;
+
+  // URL-filter clear (MCP admin-link landings)
+  window.clearChannelsFilter = function() {
+    var rp = (typeof window.getRouteParams === 'function') ? window.getRouteParams() : {};
+    var clean = {};
+    Object.keys(rp || {}).forEach(function(k) {
+      if (k !== 'isActive' && k !== 'type' && k !== 'channelIds') clean[k] = rp[k];
+    });
+    if (typeof window.navigateTo === 'function') window.navigateTo('channels', clean);
+    else location.hash = '#channels';
+    setTimeout(function() { if (typeof renderList === 'function') renderList(); }, 0);
+  };
+  window.renderChannelsList = renderList;
 
   // Phase 2a (D23, D25) — expose shim accessors + metadata for product editor,
   // recipe handshake banner, and E2E verification.

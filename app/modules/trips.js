@@ -943,19 +943,71 @@
     var container = document.getElementById('tripsList');
     if (!container) return;
 
-    var completed = tripsData.filter(function(t) { return t.status === 'completed'; });
+    // URL-driven filters from MCP admin links: status, dateFrom, dateTo, tripIds
+    // (#trips?...). URL-overrides-pill — when any URL filter is present, bypass
+    // the month dropdown and status default (completed) for this render.
+    var rp = (typeof window.getRouteParams === 'function') ? window.getRouteParams() : {};
+    var urlStatus = (rp && typeof rp.status === 'string') ? rp.status : '';
+    var urlDateFrom = (rp && typeof rp.dateFrom === 'string') ? rp.dateFrom.slice(0, 10) : '';
+    var urlDateTo = (rp && typeof rp.dateTo === 'string') ? rp.dateTo.slice(0, 10) : '';
+    var urlIdsParam = (rp && typeof rp.tripIds === 'string') ? rp.tripIds : '';
+    var urlIds = urlIdsParam ? urlIdsParam.split(',').map(function(s) { return s.trim(); }).filter(Boolean) : [];
+    var urlIdLookup = urlIds.length > 0 ? Object.create(null) : null;
+    if (urlIdLookup) urlIds.forEach(function(id) { urlIdLookup[id] = true; });
+    var hasUrlFilter = !!(urlStatus || urlDateFrom || urlDateTo || urlIds.length);
 
-    // Apply date filter
-    var filterVal = document.getElementById('tripsMonthFilter') ? document.getElementById('tripsMonthFilter').value : 'all';
-    if (filterVal !== 'all') {
-      var parts = filterVal.split('-');
-      var filterYear = parseInt(parts[0]);
-      var filterMonth = parts[1] ? parseInt(parts[1]) : null;
-      completed = completed.filter(function(t) {
-        var d = new Date(t.startTime);
-        if (filterMonth) return d.getFullYear() === filterYear && (d.getMonth() + 1) === filterMonth;
-        return d.getFullYear() === filterYear;
+    var completed;
+    if (hasUrlFilter) {
+      // tripDate is YYYY-MM-DD or derived from startTime ISO; direct string compare.
+      completed = tripsData.filter(function(t) {
+        if (urlStatus && t.status !== urlStatus) return false;
+        if (urlIdLookup && !urlIdLookup[t.id]) return false;
+        if (urlDateFrom || urlDateTo) {
+          var d = t.tripDate || (t.startTime ? t.startTime.slice(0, 10) : '');
+          if (!d) return false;
+          if (urlDateFrom && d < urlDateFrom) return false;
+          if (urlDateTo && d > urlDateTo) return false;
+        }
+        return true;
       });
+    } else {
+      completed = tripsData.filter(function(t) { return t.status === 'completed'; });
+      // Apply date filter
+      var filterVal = document.getElementById('tripsMonthFilter') ? document.getElementById('tripsMonthFilter').value : 'all';
+      if (filterVal !== 'all') {
+        var parts = filterVal.split('-');
+        var filterYear = parseInt(parts[0]);
+        var filterMonth = parts[1] ? parseInt(parts[1]) : null;
+        completed = completed.filter(function(t) {
+          var d = new Date(t.startTime);
+          if (filterMonth) return d.getFullYear() === filterYear && (d.getMonth() + 1) === filterMonth;
+          return d.getFullYear() === filterYear;
+        });
+      }
+    }
+
+    // URL-filter banner — surfaces active MCP-link filters with Clear button.
+    var bannerEl = document.getElementById('tripsUrlFilterBanner');
+    if (!bannerEl && hasUrlFilter && container.parentNode) {
+      bannerEl = document.createElement('div');
+      bannerEl.id = 'tripsUrlFilterBanner';
+      bannerEl.style.cssText = 'background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.35);color:#F59E0B;padding:8px 12px;margin-bottom:12px;border-radius:6px;display:flex;align-items:center;gap:12px;font-size:0.85rem;';
+      container.parentNode.insertBefore(bannerEl, container);
+    }
+    if (bannerEl) {
+      if (hasUrlFilter) {
+        var bparts = [];
+        if (urlIds.length) bparts.push(urlIds.length + ' selected trip' + (urlIds.length === 1 ? '' : 's'));
+        if (urlStatus) bparts.push('status: ' + String(urlStatus).replace(/-/g, ' '));
+        if (urlDateFrom && urlDateTo) bparts.push('from ' + urlDateFrom + ' to ' + urlDateTo);
+        else if (urlDateFrom) bparts.push('from ' + urlDateFrom + ' onward');
+        else if (urlDateTo) bparts.push('through ' + urlDateTo);
+        bannerEl.innerHTML = '<span>🚗 Showing ' + bparts.join(', ') + '</span>' +
+          '<button type="button" onclick="clearTripsFilter()" style="margin-left:auto;background:transparent;border:1px solid rgba(245,158,11,0.5);color:#F59E0B;padding:2px 10px;border-radius:4px;cursor:pointer;font-size:0.78rem;">Clear filter</button>';
+        bannerEl.style.display = 'flex';
+      } else {
+        bannerEl.style.display = 'none';
+      }
     }
 
     if (completed.length === 0) {
@@ -2004,6 +2056,19 @@
   window.checkForActiveTrip = checkForActiveTrip;
   window.renderActiveTripBanner = renderActiveTripBanner;
   window.initTripsModule = initTripsModule;
+
+  // URL-filter clear (MCP admin-link landings)
+  window.clearTripsFilter = function() {
+    var rp = (typeof window.getRouteParams === 'function') ? window.getRouteParams() : {};
+    var clean = {};
+    Object.keys(rp || {}).forEach(function(k) {
+      if (k !== 'status' && k !== 'dateFrom' && k !== 'dateTo' && k !== 'tripIds') clean[k] = rp[k];
+    });
+    if (typeof window.navigateTo === 'function') window.navigateTo('trips', clean);
+    else location.hash = '#trips';
+    setTimeout(function() { if (typeof renderTripsList === 'function') renderTripsList(); }, 0);
+  };
+  window.renderTripsList = renderTripsList;
 
   // ============================================================
   // Register with MastAdmin
