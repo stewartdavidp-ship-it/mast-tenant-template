@@ -591,10 +591,12 @@
     // CTA
     var ctaLabel = isPreShoot ? 'Generate Shoot Card' : 'Generate';
     var ctaDisabled = !d.treatment ? ' disabled' : '';
-    html += '<div style="margin-top:24px;text-align:center;">' +
+    var showClaudeBtn = !isPreShoot && window.MastAskAi && window.MastAskAi.isEnabled();
+    html += '<div style="margin-top:24px;text-align:center;display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">' +
       '<button class="btn btn-primary" style="padding:12px 40px;font-size:1rem;"' + ctaDisabled + ' onclick="smGenerate()" title="Uses tokens">' + ctaLabel + '</button>' +
-      (!d.treatment ? '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:8px;">Select a content style to continue</div>' : '') +
+      (showClaudeBtn ? '<button class="btn btn-outline" style="padding:12px 24px;font-size:0.95rem;"' + ctaDisabled + ' onclick="smCaptionInClaude()" title="Opens Claude Desktop">✨ or draft in Claude</button>' : '') +
     '</div>';
+    if (!d.treatment) html += '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:8px;text-align:center;">Select a content style to continue</div>';
 
     container.innerHTML = html;
   }
@@ -656,6 +658,60 @@
       // Post-capture flow → Readiness check, then captions
       smRunReadinessAndCaptions();
     }
+  }
+
+  function smCaptionInClaude() {
+    var d = smEnhanceData;
+    if (!d.treatment) { showToast('Please select a content style', true); return; }
+    if (!window.MastAskAi || !window.MastAskAi.isEnabled()) {
+      showToast('Configure Ask AI in Settings → AI to enable Claude drafting', true);
+      return;
+    }
+
+    // Capture form values before opening modal (smGenerate does the same)
+    var descEl = document.getElementById('smDescInput');
+    if (descEl) d.description = descEl.value;
+    var prodEl = document.getElementById('smProductPicker');
+    if (prodEl) d.productId = prodEl.value;
+    var eventEl = document.getElementById('smEventInput');
+    if (eventEl) d.eventName = eventEl.value;
+    if (d.subjectType === 'product' && d.productId) {
+      var products = window.productsData || [];
+      var product = products.find(function(p) { return p.pid === d.productId; });
+      if (product) {
+        d.productName = product.name;
+        d.productPriceCents = product.priceCents || 0;
+        d.productMaterials = product.materials;
+        d.productCategory = product.categories ? product.categories.join(', ') : '';
+      }
+    }
+
+    var treatment = SM_TREATMENTS.find(function(t) { return t.id === d.treatment; });
+    var treatmentName = treatment ? treatment.name : d.treatment;
+    var subject = d.productName || d.eventName || d.description || 'handmade piece';
+    var destinations = (d.destinations || []).join(', ') || 'Instagram';
+    var details = [];
+    if (d.productName) details.push('Product: ' + d.productName);
+    if (d.productCategory) details.push('Category: ' + d.productCategory);
+    if (d.productMaterials) details.push('Materials: ' + d.productMaterials);
+    if (d.eventName) details.push('Event: ' + d.eventName);
+    if (d.description) details.push('Notes: ' + d.description);
+
+    window.MastAskAi.openWithReturn({
+      title: 'Social caption: ' + subject,
+      prompt: 'Write a single social media caption for ' + destinations + '. ' +
+              'Treatment style: ' + treatmentName + '. Subject: ' + subject + '.\n\n' +
+              (details.length ? 'Details:\n' + details.join('\n') + '\n\n' : '') +
+              'Keep the voice warm and concrete. One short caption, no hashtag block (we handle hashtags separately).',
+      onReturn: function(text) {
+        d.captions = [{ style: 'Claude', text: text }];
+        d.selectedCaptionIdx = 0;
+        d.readinessChecks = d.readinessChecks || [];
+        smCurrentView = 'staging';
+        renderSocialMedia();
+        showToast('Caption drafted — review and post.');
+      }
+    });
   }
 
   // ---- Shoot Card (pre-shoot flow) ----
@@ -1090,6 +1146,7 @@
   window.smSelectTreatment = smSelectTreatment;
   window.smToggleDest = smToggleDest;
   window.smGenerate = smGenerate;
+  window.smCaptionInClaude = smCaptionInClaude;
   window.smSelectCaption = smSelectCaption;
   window.smCopyCaption = smCopyCaption;
   window.smCopyHashtags = smCopyHashtags;

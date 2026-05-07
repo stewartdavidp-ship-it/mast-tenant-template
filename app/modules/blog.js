@@ -265,6 +265,9 @@
       html += '<div class="blog-actions" style="max-width:680px;margin:16px auto 0;">';
       if (status === 'draft') {
         html += '<button class="btn" onclick="blogPolishWithAI()" id="blogPolishBtn">\u2728 Polish with AI</button>';
+        if (window.MastAskAi && window.MastAskAi.isEnabled()) {
+          html += '<button class="btn btn-outline" onclick="blogDraftInClaude()" title="Opens Claude Desktop">\u2728 Draft in Claude</button>';
+        }
         html += '<button class="btn btn-primary" onclick="blogMarkComplete()">\u2705 Finish Post</button>';
       } else if (status === 'scheduled') {
         var schedDate = post.scheduledAt ? new Date(post.scheduledAt).toLocaleString('en-US', { month:'short', day:'numeric', year:'numeric', hour:'numeric', minute:'2-digit' }) : '';
@@ -419,6 +422,9 @@
     html += '<div class="blog-actions">';
     if (status === 'draft') {
       html += '<button class="btn" onclick="blogPolishWithAI()" id="blogPolishBtn">\u2728 Polish with AI</button>';
+      if (window.MastAskAi && window.MastAskAi.isEnabled()) {
+        html += '<button class="btn btn-outline" onclick="blogDraftInClaude()" title="Opens Claude Desktop">\u2728 Draft in Claude</button>';
+      }
       html += '<button class="btn btn-primary" onclick="blogMarkComplete()">\u2705 Finish Post</button>';
     } else if (status === 'scheduled') {
       var schedDate2 = post.scheduledAt ? new Date(post.scheduledAt).toLocaleString('en-US', { month:'short', day:'numeric', year:'numeric', hour:'numeric', minute:'2-digit' }) : '';
@@ -1531,6 +1537,49 @@
     }
   }
 
+  function blogDraftInClaude() {
+    if (!blogCurrentPost) return;
+    if (!window.MastAskAi || !window.MastAskAi.isEnabled()) {
+      showToast('Configure Ask AI in Settings → AI to enable Claude drafting', true);
+      return;
+    }
+    // Sync editable body before reading
+    var editable = document.getElementById('blogBodyEditable');
+    if (editable) blogCurrentPost.body = blogSaveBodyFromEditor();
+
+    var title = (blogCurrentPost.title || '').trim();
+    var existingBody = blogExtractStructuredText(blogCurrentPost.body || '')
+      .replace(/\[Image \d+\]/g, '').replace(/\[Coupon:[^\]]+\]/g, '').trim();
+    var tags = (blogCurrentPost.tags || []).join(', ');
+    var brandName = '';
+    try { brandName = (window.TENANT_CONFIG && (window.TENANT_CONFIG.brandName || window.TENANT_CONFIG.tenantName)) || ''; } catch (_e) {}
+
+    var prompt = 'Draft a blog post' + (brandName ? ' for ' + brandName : '') + '. ' +
+      'Title (working): ' + (title || '(none yet)') + '.\n' +
+      (tags ? 'Tags: ' + tags + '.\n' : '') +
+      (existingBody ? '\nStarting material from the author:\n' + existingBody + '\n' : '') +
+      '\nRequirements:\n' +
+      '- Match a warm, concrete, craft-forward voice\n' +
+      '- Suggest a strong opening hook\n' +
+      '- Aim for 600–900 words\n' +
+      '- Use short paragraphs and clear section breaks';
+
+    window.MastAskAi.openWithReturn({
+      title: 'Blog post: ' + (title || 'Untitled'),
+      prompt: prompt,
+      onReturn: async function(text) {
+        try {
+          await blogUpdateBody(text);
+          renderBlogEditor();
+          showToast('Draft applied — review and edit.');
+        } catch (err) {
+          console.error('Blog draft apply error:', err);
+          showToast('Draft saved locally — sync error: ' + (err && err.message ? err.message : 'unknown'), true);
+        }
+      }
+    });
+  }
+
   async function blogPickVersion(version) {
     if (!blogCurrentPost) return;
     if (version === 'ai' && blogAiResult) {
@@ -1866,6 +1915,7 @@
   window.blogRemoveInlineImage = blogRemoveInlineImage;
   window.blogTogglePreview = blogTogglePreview;
   window.blogPolishWithAI = blogPolishWithAI;
+  window.blogDraftInClaude = blogDraftInClaude;
   window.blogPickVersion = blogPickVersion;
   window.blogMarkComplete = blogMarkComplete;
   window.blogBackToDraft = blogBackToDraft;

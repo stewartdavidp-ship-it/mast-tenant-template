@@ -31102,6 +31102,47 @@ function _productEditUpdateDirtyIndicator() {
   else btn.classList.remove('dirty');
 }
 
+function pdDescribeInClaude() {
+  if (!window.MastAskAi || !window.MastAskAi.isEnabled()) {
+    showToast('Configure Ask AI in Settings → AI to enable Claude drafting', true);
+    return;
+  }
+  var nameEl = document.getElementById('pdName');
+  var descEl = document.getElementById('pdDescription');
+  var shortEl = document.getElementById('pdShortDesc');
+  var catEl = document.getElementById('pdCategory');
+  if (!descEl) return;
+  var name = nameEl ? nameEl.value.trim() : '';
+  if (!name) { showToast('Add a product name first', true); return; }
+  var category = catEl ? catEl.value : '';
+  var shortDesc = shortEl ? shortEl.value.trim() : '';
+  var existing = descEl.value.trim();
+  var matEls = document.querySelectorAll('#pdMaterialsTags .pd-material-tag');
+  var materials = Array.from(matEls).map(function(t) { return t.textContent.replace(/×$/, '').trim(); }).filter(Boolean).join(', ');
+  var brandName = '';
+  try { brandName = (window.TENANT_CONFIG && (window.TENANT_CONFIG.brandName || window.TENANT_CONFIG.tenantName)) || ''; } catch (_e) {}
+
+  var details = [];
+  details.push('Product name: ' + name);
+  if (category && category !== '__manage__') details.push('Category: ' + category);
+  if (materials) details.push('Materials: ' + materials);
+  if (shortDesc) details.push('Short description: ' + shortDesc);
+  if (existing) details.push('Existing description (may be partial):\n' + existing);
+
+  window.MastAskAi.openWithReturn({
+    title: 'Product description: ' + name,
+    prompt: 'Write a clean, customer-facing product description' + (brandName ? ' for ' + brandName : '') + '. ' +
+            'Keep the voice warm and concrete. Lead with what makes the piece distinctive. Aim for 2–4 short sentences unless the details warrant more.\n\n' +
+            details.join('\n'),
+    onReturn: function(text) {
+      descEl.value = text;
+      try { descEl.dispatchEvent(new Event('input', { bubbles: true })); } catch (_e) {}
+      try { descEl.dispatchEvent(new Event('change', { bubbles: true })); } catch (_e) {}
+      showToast('Description drafted — review then Save.');
+    }
+  });
+}
+
 function toggleProductAdvanced() {
   var panel = document.getElementById('productAdvancedPanel');
   var chevron = document.getElementById('productAdvancedChevron');
@@ -36319,7 +36360,9 @@ function renderProductDetail(pid) {
   if (isEditing) {
     detailsHtml +=
       '<div class="form-group"><label>Name</label><input type="text" id="pdName" value="' + esc(product.name) + '" onchange="if(productCreateMode){document.getElementById(\'pdSlug\').value=generateSlug(this.value);}"></div>' +
-      '<div class="form-group"><label>Description</label><textarea id="pdDescription" rows="3">' + esc(product.description || '') + '</textarea></div>' +
+      '<div class="form-group"><label>Description</label><textarea id="pdDescription" rows="3">' + esc(product.description || '') + '</textarea>' +
+        ((window.MastAskAi && window.MastAskAi.isEnabled()) ? '<div style="margin-top:6px;"><button type="button" class="btn btn-outline" style="font-size:0.78rem;padding:4px 10px;" onclick="pdDescribeInClaude()" title="Opens Claude Desktop">✨ Draft in Claude</button></div>' : '') +
+      '</div>' +
       '<div class="form-group"><label>Short Description</label><input type="text" id="pdShortDesc" value="' + esc(product.shortDescription || '') + '"></div>' +
       '<div style="display:flex;gap:16px;flex-wrap:wrap;">' +
         '<div class="form-group" style="min-width:150px;"><label>Category</label><select id="pdCategory" onchange="handlePdCategoryChange(this)">' +
