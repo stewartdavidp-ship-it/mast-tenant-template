@@ -264,7 +264,7 @@
       // Actions bar even in preview
       html += '<div class="blog-actions" style="max-width:680px;margin:16px auto 0;">';
       if (status === 'draft') {
-        html += '<button class="btn" onclick="blogPolishWithAI()" id="blogPolishBtn">\u2728 Polish with AI</button>';
+        html += '<button class="btn" onclick="blogPolishWithAI()" id="blogPolishBtn" title="Uses tokens">Polish with AI</button>';
         if (window.MastAskAi && window.MastAskAi.isEnabled()) {
           html += '<button class="btn btn-outline" onclick="blogDraftInClaude()" title="Opens Claude Desktop">\u2728 Draft in Claude</button>';
         }
@@ -421,7 +421,7 @@
     // Actions bar
     html += '<div class="blog-actions">';
     if (status === 'draft') {
-      html += '<button class="btn" onclick="blogPolishWithAI()" id="blogPolishBtn">\u2728 Polish with AI</button>';
+      html += '<button class="btn" onclick="blogPolishWithAI()" id="blogPolishBtn" title="Uses tokens">Polish with AI</button>';
       if (window.MastAskAi && window.MastAskAi.isEnabled()) {
         html += '<button class="btn btn-outline" onclick="blogDraftInClaude()" title="Opens Claude Desktop">\u2728 Draft in Claude</button>';
       }
@@ -1533,7 +1533,7 @@
       renderBlogEditor();
     } catch (err) {
       showToast('AI polish failed: ' + err.message, true);
-      if (btn) { btn.disabled = false; btn.innerHTML = '\u2728 Polish with AI'; }
+      if (btn) { btn.disabled = false; btn.innerHTML = 'Polish with AI'; }
     }
   }
 
