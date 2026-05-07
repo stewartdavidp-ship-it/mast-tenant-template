@@ -4137,15 +4137,12 @@
   // ============================================================
 
   function ensureOrdersData() {
-    // Apply MCP-supplied filter params (e.g. #orders?status=refunded)
-    // before render so the filter pill state matches the URL on entry.
+    // Sync filter state to URL params on every route entry. Absent params
+    // reset to defaults — otherwise an MCP deep link with ?status=X would
+    // become the user's persistent default until they manually reset.
     var params = (typeof window.getRouteParams === 'function') ? window.getRouteParams() : {};
-    if (params && typeof params.status === 'string' && params.status) {
-      orderFilter = params.status;
-    }
-    if (params && typeof params.source === 'string' && params.source) {
-      orderSourceFilter = params.source;
-    }
+    orderFilter = (params && typeof params.status === 'string' && params.status) ? params.status : 'active';
+    orderSourceFilter = (params && typeof params.source === 'string' && params.source) ? params.source : 'all';
     if (ordersLoaded) renderOrders();
   }
 
