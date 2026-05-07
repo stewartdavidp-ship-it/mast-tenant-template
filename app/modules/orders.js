@@ -213,10 +213,17 @@
       filtered = sourceFiltered.filter(function(o) { return (o.status || 'placed') === orderFilter; });
     }
 
-    // Date-range filter from URL params (#orders?dateFrom=YYYY-MM-DD&dateTo=...)
+    // URL-driven filters: dateFrom, dateTo, orderIds (#orders?...)
     var routeParams = (typeof window.getRouteParams === 'function') ? window.getRouteParams() : {};
     var dateFrom = routeParams && typeof routeParams.dateFrom === 'string' ? routeParams.dateFrom.slice(0, 10) : '';
     var dateTo = routeParams && typeof routeParams.dateTo === 'string' ? routeParams.dateTo.slice(0, 10) : '';
+    var orderIdsParam = routeParams && typeof routeParams.orderIds === 'string' ? routeParams.orderIds : '';
+    var orderIdSet = orderIdsParam
+      ? orderIdsParam.split(',').map(function(s) { return s.trim(); }).filter(Boolean)
+      : [];
+    var orderIdLookup = orderIdSet.length > 0 ? Object.create(null) : null;
+    if (orderIdLookup) orderIdSet.forEach(function(id) { orderIdLookup[id] = true; });
+
     if (dateFrom || dateTo) {
       filtered = filtered.filter(function(o) {
         var d = (o.placedAt || o.createdAt || '').slice(0, 10);
@@ -225,11 +232,15 @@
         return true;
       });
     }
+    if (orderIdLookup) {
+      filtered = filtered.filter(function(o) { return orderIdLookup[o._key] || orderIdLookup[o.orderId]; });
+    }
 
-    // Date filter banner — surfaces the active date filter so users know
-    // why fewer orders are showing, with a clear button.
+    // URL-filter banner — surfaces active filters so users know why
+    // fewer orders are showing, with a Clear button.
+    var hasUrlFilter = !!(dateFrom || dateTo || orderIdSet.length);
     var bannerEl = document.getElementById('ordersDateBanner');
-    if (!bannerEl && (dateFrom || dateTo)) {
+    if (!bannerEl && hasUrlFilter) {
       bannerEl = document.createElement('div');
       bannerEl.id = 'ordersDateBanner';
       bannerEl.style.cssText = 'background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.35);color:#F59E0B;padding:8px 12px;margin-bottom:12px;border-radius:6px;display:flex;align-items:center;gap:12px;font-size:0.875rem;';
@@ -237,11 +248,13 @@
       if (pillsParent) pillsParent.insertBefore(bannerEl, pillsEl.nextSibling);
     }
     if (bannerEl) {
-      if (dateFrom || dateTo) {
-        var label = 'Showing orders';
-        if (dateFrom && dateTo) label += ' from ' + dateFrom + ' to ' + dateTo;
-        else if (dateFrom) label += ' from ' + dateFrom + ' onward';
-        else label += ' through ' + dateTo;
+      if (hasUrlFilter) {
+        var parts = [];
+        if (orderIdSet.length) parts.push(orderIdSet.length + ' selected order' + (orderIdSet.length === 1 ? '' : 's'));
+        if (dateFrom && dateTo) parts.push('from ' + dateFrom + ' to ' + dateTo);
+        else if (dateFrom) parts.push('from ' + dateFrom + ' onward');
+        else if (dateTo) parts.push('through ' + dateTo);
+        var label = 'Showing ' + parts.join(', ');
         bannerEl.innerHTML = '<span>📅 ' + label + '</span><button type="button" onclick="clearOrdersDateFilter()" style="margin-left:auto;background:transparent;border:1px solid rgba(245,158,11,0.5);color:#F59E0B;padding:2px 10px;border-radius:4px;cursor:pointer;font-size:0.8rem;">Clear filter</button>';
         bannerEl.style.display = 'flex';
       } else {
@@ -4081,13 +4094,14 @@
   window.setOrderFilter = setOrderFilter;
   window.filterOrdersBySource = filterOrdersBySource;
   window.clearOrdersDateFilter = function() {
-    // Drop date params from the URL hash, keep route + other params.
+    // Drop URL-driven filters (date range + specific order IDs); keep
+    // route and any non-filter params. navigateTo re-applies + re-renders.
     var params = (typeof window.getRouteParams === 'function') ? window.getRouteParams() : {};
     var next = {};
+    var DROP = { dateFrom: 1, dateTo: 1, orderIds: 1 };
     Object.keys(params).forEach(function(k) {
-      if (k !== 'dateFrom' && k !== 'dateTo') next[k] = params[k];
+      if (!DROP[k]) next[k] = params[k];
     });
-    // navigateTo with cleaned params re-applies route + re-renders.
     if (typeof navigateTo === 'function') navigateTo('orders', next);
   };
   window.renderOrders = renderOrders;
@@ -4177,6 +4191,133 @@
   window.markOrderInvoicePaid = markOrderInvoicePaid;
   window.resendInvoice = resendInvoice;
   window.buildInvoiceSection = buildInvoiceSection;
+
+  // ============================================================
+  // Ask AI registration (MastAskAi page registry)
+  // CC Idea -Os1Lrm8ShTKZMafXV4k. Modal/launch live in window.MastAskAi.
+  // ============================================================
+
+  function paintOrdersAskAiSlot() {
+    var slot = document.getElementById('ordersAskAiSlot');
+    if (!slot) return;
+    if (window.MastAskAi && window.MastAskAi.isEnabled()) {
+      slot.innerHTML = '<button class="btn" style="font-size:0.85rem;padding:6px 12px;" onclick="MastAskAi.open(\'orders\')" title="Ask Claude about these orders">✨ Ask AI</button>';
+    } else {
+      slot.innerHTML = '';
+    }
+  }
+
+  window.addEventListener('mastaskai:ready', paintOrdersAskAiSlot);
+  window.addEventListener('mastaskai:configchanged', paintOrdersAskAiSlot);
+
+  if (window.MastAskAi) {
+    window.MastAskAi.register('orders', {
+      title: 'Ask AI about these orders',
+      placeholder: 'e.g. Which customers placed multiple orders this month? Which status has the most orders stuck?',
+      notes: [
+        'Amounts are USD (dollars, NOT cents — different convention from the Expenses page).',
+        'Status enum: pending_payment, payment_failed, placed, confirmed, building, ready, pack, packing, packed, handed_to_carrier, shipped, delivered, cancelled, return_requested, return_approved, return_shipped, return_received, partially_returned, refunded.',
+        'The "active" filter means: not delivered, not cancelled, not payment_failed.',
+        'Sources: direct (the tenant storefront) or etsy (synced from Etsy).',
+        'topOrders is sorted by total descending; topCustomers is by lifetime spend within the current view.',
+        'byMonth keys are YYYY-MM based on order placedAt.',
+        'If filters.dateFrom or filters.dateTo is set, the listing is narrowed to that range — not all orders for the tenant.'
+      ],
+      buildContext: function() {
+        // Mirror renderOrders' filter logic so the snapshot matches the on-screen list
+        var all = getOrdersArray();
+        var sourceFiltered = all;
+        if (orderSourceFilter === 'direct') {
+          sourceFiltered = all.filter(function(o) { return !o.source || o.source === 'direct'; });
+        } else if (orderSourceFilter === 'etsy') {
+          sourceFiltered = all.filter(function(o) { return o.source === 'etsy'; });
+        }
+        var filtered;
+        if (orderFilter === 'all') {
+          filtered = sourceFiltered;
+        } else if (orderFilter === 'active') {
+          filtered = sourceFiltered.filter(function(o) {
+            return o.status !== 'delivered' && o.status !== 'cancelled' && o.status !== 'payment_failed';
+          });
+        } else {
+          filtered = sourceFiltered.filter(function(o) { return (o.status || 'placed') === orderFilter; });
+        }
+        var routeParams = (typeof window.getRouteParams === 'function') ? window.getRouteParams() : {};
+        var dateFrom = routeParams && typeof routeParams.dateFrom === 'string' ? routeParams.dateFrom.slice(0, 10) : '';
+        var dateTo   = routeParams && typeof routeParams.dateTo   === 'string' ? routeParams.dateTo.slice(0, 10)   : '';
+        if (dateFrom || dateTo) {
+          filtered = filtered.filter(function(o) {
+            var d = (o.placedAt || o.createdAt || '').slice(0, 10);
+            if (dateFrom && d < dateFrom) return false;
+            if (dateTo && d > dateTo) return false;
+            return true;
+          });
+        }
+
+        var totalUSD = 0;
+        var byStatus = {}, byMonth = {}, bySource = {}, byCustomer = {};
+        filtered.forEach(function(o) {
+          var amt = o.total || 0;
+          totalUSD += amt;
+          var status = o.status || 'placed';
+          if (!byStatus[status]) byStatus[status] = { count: 0, totalUSD: 0 };
+          byStatus[status].count++; byStatus[status].totalUSD += amt;
+          var month = ((o.placedAt || o.createdAt || '').substring(0, 7)) || 'unknown';
+          if (!byMonth[month]) byMonth[month] = { count: 0, totalUSD: 0 };
+          byMonth[month].count++; byMonth[month].totalUSD += amt;
+          var source = o.source || 'direct';
+          if (!bySource[source]) bySource[source] = { count: 0, totalUSD: 0 };
+          bySource[source].count++; bySource[source].totalUSD += amt;
+          var customer = o.email || '(no email)';
+          if (!byCustomer[customer]) byCustomer[customer] = { count: 0, totalUSD: 0 };
+          byCustomer[customer].count++; byCustomer[customer].totalUSD += amt;
+        });
+        Object.keys(byStatus).forEach(function(k) { byStatus[k].totalUSD = +byStatus[k].totalUSD.toFixed(2); });
+        Object.keys(byMonth).forEach(function(k)  { byMonth[k].totalUSD  = +byMonth[k].totalUSD.toFixed(2);  });
+        Object.keys(bySource).forEach(function(k) { bySource[k].totalUSD = +bySource[k].totalUSD.toFixed(2); });
+
+        var topOrders = filtered.slice()
+          .sort(function(a, b) { return (b.total || 0) - (a.total || 0); })
+          .slice(0, 15)
+          .map(function(o) {
+            return {
+              number:   getOrderDisplayNumber(o),
+              placedAt: (o.placedAt || o.createdAt || '').slice(0, 10),
+              customer: o.email || '(no email)',
+              totalUSD: +(o.total || 0).toFixed(2),
+              status:   o.status || 'placed',
+              source:   o.source || 'direct',
+              itemCount: (o.items || []).reduce(function(s, it) { return s + (it.qty || 1); }, 0)
+            };
+          });
+
+        var topCustomers = Object.keys(byCustomer)
+          .map(function(email) { return { email: email, orderCount: byCustomer[email].count, totalUSD: +byCustomer[email].totalUSD.toFixed(2) }; })
+          .sort(function(a, b) { return b.totalUSD - a.totalUSD; })
+          .slice(0, 10);
+
+        return {
+          route: '/app#orders',
+          pageTitle: 'Orders',
+          filters: {
+            status:   orderFilter,
+            source:   orderSourceFilter,
+            dateFrom: dateFrom || null,
+            dateTo:   dateTo   || null
+          },
+          aggregates: {
+            rowCount: filtered.length,
+            totalUSD: +totalUSD.toFixed(2),
+            byStatus: byStatus,
+            byMonth:  byMonth,
+            bySource: bySource
+          },
+          topOrders:    topOrders,
+          topCustomers: topCustomers
+        };
+      }
+    });
+  }
 
   // ============================================================
   // Register with MastAdmin
