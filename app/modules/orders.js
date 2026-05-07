@@ -226,8 +226,22 @@
     if (orderIdLookup) orderIdSet.forEach(function(id) { orderIdLookup[id] = true; });
 
     if (dateFrom || dateTo) {
+      // Use the same local-date interpretation the UI display uses
+      // (formatOrderDate -> new Date()) so the filter agrees with what
+      // the user sees in the DATE column. A UTC slice would include
+      // orders displayed as the previous day in negative-UTC timezones.
+      var toLocalDateStr = function(iso) {
+        if (!iso) return '';
+        var dt = new Date(iso);
+        if (isNaN(dt.getTime())) return '';
+        var y = dt.getFullYear();
+        var m = String(dt.getMonth() + 1).padStart(2, '0');
+        var day = String(dt.getDate()).padStart(2, '0');
+        return y + '-' + m + '-' + day;
+      };
       filtered = filtered.filter(function(o) {
-        var d = (o.placedAt || o.createdAt || '').slice(0, 10);
+        var d = toLocalDateStr(o.placedAt || o.createdAt || '');
+        if (!d) return false;
         if (dateFrom && d < dateFrom) return false;
         if (dateTo && d > dateTo) return false;
         return true;
