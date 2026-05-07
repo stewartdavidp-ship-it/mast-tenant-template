@@ -108,9 +108,15 @@ function switchShowSubView(view) {
   if (h2) h2.textContent = heading.title;
   var actions = document.getElementById('showHeaderActions');
   if (actions) actions.innerHTML = heading.actions;
-  // Update route
+  // Update route. Only rewrite the hash when the bare route is changing —
+  // otherwise we'd strip URL filter params (e.g. ?status=accepted from an
+  // MCP admin link) every time switchShowSubView is called for the same
+  // view. Mirror the guard used by navigateTo() in core.
   currentRoute = 'show-' + view;
-  location.hash = currentRoute;
+  var existingBare = location.hash.replace(/^#/, '').split('?')[0];
+  if (existingBare !== currentRoute) {
+    location.hash = currentRoute;
+  }
 
   // If a show detail is open, switch its content section via sidebar
   if (selectedShowId && view !== 'find') {
