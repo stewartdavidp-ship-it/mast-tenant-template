@@ -6137,65 +6137,6 @@
       <div id="financialsEmpty" style="color:var(--text-secondary, #888);font-size:0.9rem;">Select a date range and click Load Sales to view Square transactions.</div>
     </div>
 
-    <!-- ===== EXPENSES TAB ===== -->
-    <div id="expensesTab" style="display:none;">
-      <div class="section-header" style="display:flex;justify-content:space-between;align-items:center;">
-        <h2>Expenses</h2>
-      </div>
-      <!-- Tabs -->
-      <div class="view-tabs" id="expViewTabs">
-        <button class="view-tab active" data-exp-view="transactions" onclick="showExpensesView('transactions')">Transactions</button>
-        <button class="view-tab" data-exp-view="accounts" onclick="showExpensesView('accounts')">Banks</button>
-      </div>
-      <!-- Connected Accounts View -->
-      <div id="expAccountsView" style="display:none;">
-        <div style="display:flex;justify-content:flex-end;margin-bottom:12px;">
-          <button class="btn btn-primary" onclick="connectPlaidAccount()" id="connectPlaidBtn">+ Connect Bank</button>
-        </div>
-        <div id="plaidAccountsList"></div>
-      </div>
-      <!-- Transaction List View -->
-      <div id="expTransactionsView">
-        <div style="display:flex;gap:12px;align-items:center;margin-bottom:16px;flex-wrap:wrap;">
-          <select id="expFilterStatus" onchange="loadExpenses()" style="padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;background:var(--cream, var(--cream));color:var(--charcoal, var(--charcoal));">
-            <option value="unreviewed">Unreviewed</option>
-            <option value="all">All</option>
-            <option value="reviewed">Reviewed</option>
-          </select>
-          <select id="expFilterCategory" onchange="loadExpenses()" style="padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;background:var(--cream, var(--cream));color:var(--charcoal, var(--charcoal));">
-            <option value="">All Categories</option>
-            <option value="materials">Materials</option>
-            <option value="booth_fee">Booth Fee</option>
-            <option value="shipping_supplies">Shipping Supplies</option>
-            <option value="travel">Travel</option>
-            <option value="marketing">Marketing</option>
-            <option value="equipment">Equipment</option>
-            <option value="software">Software</option>
-            <option value="payroll">Payroll</option>
-            <option value="taxes">Taxes</option>
-            <option value="other">Other</option>
-            <option value="personal">Personal</option>
-          </select>
-          <select id="expFilterAccount" onchange="loadExpenses()" style="padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;background:var(--cream, var(--cream));color:var(--charcoal, var(--charcoal));">
-            <option value="">All Accounts</option>
-          </select>
-          <label style="display:flex;align-items:center;gap:4px;font-size:0.85rem;cursor:pointer;"><input type="checkbox" id="expSelectAll" onclick="toggleSelectAll(this.checked)" style="width:16px;height:16px;accent-color:var(--amber, var(--amber));"> Select All</label>
-          <button class="btn btn-outline btn-small" onclick="bulkApproveExpenses()" id="bulkApproveBtn" disabled>Approve</button>
-          <button class="btn btn-secondary btn-small" onclick="markPersonal()" id="markPersonalBtn">Personal</button>
-          <div style="flex:1;"></div>
-          <button class="btn btn-secondary btn-small" onclick="askAiAboutExpenses()" title="Ask Claude about what you're seeing">✨ Ask AI</button>
-          <button class="btn btn-secondary btn-small" onclick="downloadExpensesCsv()">Download CSV</button>
-        </div>
-        <div id="expSummaryBar" style="margin-bottom:16px;"></div>
-        <div id="expTransactionsList"></div>
-        <div id="expEmpty" style="display:none;"></div>
-      </div>
-      <!-- Transaction Detail View -->
-      <div id="expDetailView" style="display:none;">
-        <div id="expDetailContent"></div>
-      </div>
-    </div>
-
     <!-- ===== FINANCE MODULE TABS ===== -->
     <div id="financeRevenueTab" style="display:none;">
       <div class="placeholder-view">
@@ -8842,6 +8783,19 @@
             <div id="shopifyWebhookRegistry" style="margin-top:8px;"></div>
           </div>
         </div>
+
+        <hr style="border:none;border-top:1px solid #eee;margin:24px 0;">
+
+        <div class="form-group" id="plaidBanksSection">
+          <label style="font-size:1.15rem;font-weight:600;">Banks (Plaid)</label>
+          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:16px;">
+            Connect a bank or credit card to automatically import transactions into Finance &rarr; Expenses. Access tokens are stored in encrypted secret storage &mdash; Mast staff never see them.
+          </p>
+          <div id="plaidBanksList" style="margin-bottom:12px;"></div>
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-primary" onclick="connectPlaidAccount()" id="connectPlaidBtn">+ Connect Bank</button>
+          </div>
+        </div>
       </div>
       <div id="settingsSubPim" style="display:none;max-width:700px;">
         <div style="margin-bottom:20px;">
@@ -11364,7 +11318,7 @@ var MODULE_REGISTRY = {
   market: { id: 'market', name: 'Market', icon: '\uD83D\uDCE3', description: 'Social media, blog, newsletter, stories.', section: 'marketing', navPosition: 2, purchasable: true, routes: ['social', 'blog', 'newsletter', 'stories'], manageSettings: ['newsletter', 'email'], synergies: ['sell', 'show'], status: 'active' },
   sell:   { id: 'sell',   name: 'Sell',   icon: '\uD83D\uDCB0', description: 'Point of sale, orders, commissions, wholesale.', section: 'sales', navPosition: 3, purchasable: true, routes: ['pos', 'orders', 'commissions', 'rma', 'wholesale', 'galleries', 'receipts', 'coupons', 'promotions'], manageSettings: ['square'], synergies: ['ship', 'make'], status: 'active' },
   ship:   { id: 'ship',   name: 'Ship',   icon: '\uD83D\uDCE6', description: 'Pack orders, ship deliveries, track fulfillment.', section: 'sales', navPosition: 4, purchasable: true, routes: ['pack', 'ship'], manageSettings: ['shippingRates'], synergies: ['sell', 'show'], status: 'active' },
-  run:    { id: 'run',    name: 'Run',    icon: '\uD83D\uDCCB', description: 'Trips, expenses, revenue, reports, contacts.', section: 'operations', navPosition: 5, purchasable: true, routes: ['trips', 'expenses', 'reports', 'financials', 'contacts', 'customers'], manageSettings: [], synergies: ['sell', 'show'], status: 'active' },
+  run:    { id: 'run',    name: 'Run',    icon: '\uD83D\uDCCB', description: 'Trips, expenses, revenue, reports, contacts.', section: 'operations', navPosition: 5, purchasable: true, routes: ['trips', 'reports', 'financials', 'contacts', 'customers'], manageSettings: [], synergies: ['sell', 'show'], status: 'active' },
   web:    { id: 'web',    name: 'Web',    icon: '\uD83C\uDF10', description: 'Website pages and content management.', section: 'marketing', navPosition: 6, purchasable: false, showInGrid: true, routes: ['website', 'gallery', 'images'], manageSettings: [], synergies: ['market', 'sell'], status: 'active' },
   show:   { id: 'show',   name: 'Show',   icon: '\uD83C\uDFAA', description: 'Find, apply, prep, and execute craft fairs and events.', section: 'events', navPosition: 7, purchasable: true, routes: ['show', 'show-find', 'show-apply', 'show-prep', 'show-execute', 'show-history'], manageSettings: [], synergies: ['sell', 'ship', 'make'], status: 'active' },
   'show-light': { id: 'show-light', name: 'Show Light', icon: '\u2728', description: 'Vendor profile, image gallery, and AI-powered show application builder.', section: 'events', navPosition: 8, purchasable: false, showInGrid: true, routes: ['show-light-profile', 'show-light-gallery', 'show-light-shows', 'show-light-apply'], manageSettings: [], synergies: ['show', 'sell', 'market'], status: 'active' },
@@ -13668,12 +13622,17 @@ auth.onAuthStateChanged(async function(user) {
 
   // After navigation, resume action if returning from coin purchase
   if (_coinPurchaseReturn && _coinPurchaseAction === 'connectBank') {
-    // Small delay to let the module load, then switch to banks tab and auto-trigger connect
+    // Navigate to Settings → Integrations and auto-trigger connect
     setTimeout(function() {
-      if (typeof showExpensesView === 'function') showExpensesView('accounts');
+      navigateTo('settings');
       setTimeout(function() {
-        if (typeof connectPlaidAccount === 'function') connectPlaidAccount();
-      }, 300);
+        if (typeof switchSettingsSubView === 'function') switchSettingsSubView('integrations');
+        setTimeout(function() {
+          var section = document.getElementById('plaidBanksSection');
+          if (section) section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          if (typeof connectPlaidAccount === 'function') connectPlaidAccount();
+        }, 300);
+      }, 200);
     }, 500);
   }
 
@@ -14992,7 +14951,7 @@ var SECTION_ROUTES = {
   'finance':           ['finance-revenue', 'finance-expenses', 'finance-pl',
                         'finance-cash-flow', 'finance-ar', 'finance-ap',
                         'finance-tax', 'finance-reports',
-                        'financials', 'expenses'],
+                        'financials'],
   'operations':        ['trips', 'reports',
                         'advisor', 'studio', 'team', 'business',
                         'channels', 'contacts'],
@@ -15006,7 +14965,7 @@ var SECTION_ROUTES = {
                         'historical-orders']
 };
 
-var ALL_TAB_IDS = ['scheduleTab', 'galleryTab', 'homepageTab', 'brandTab', 'productsTab', 'ordersTab', 'salesTab', 'salesEventsTab', 'productionTab', 'forecastTab', 'couponsTab', 'analyticsTab', 'settingsTab', 'imagesTab', 'auditLogTab', 'employeesTab', 'contactsTab', 'customersTab', 'packTab', 'shipTab', 'commissionsTab', 'rmaTab', 'socialMediaTab', 'blogTab', 'newsletterTab', 'placeholderTab', 'inventoryTab', 'storiesTab', 'dashboardTab', 'tripsTab', 'wholesaleTab', 'showTab', 'financialsTab', 'eventsAdminTab', 'websiteTab', 'showLightTab', 'emailLogTab', 'materialsTab', 'piecesTab', 'galleriesTab', 'lookbooksTab', 'promotionsTab', 'expensesTab', 'bookTab', 'subscriptionTab', 'aboutTab', 'walletTab', 'giftCardsTab', 'loyaltyTab', 'membershipTab', 'termsTab', 'advisorTab', 'studioTab', 'teamTab', 'studentsTab', 'migrationDashTab', 'migrationConfirmTab', 'migrationPlanTab', 'migrationImportTab', 'historicalOrdersTab', 'channelsTab', 'businessTab', 'myFeedbackTab', 'procurementTab', 'csInboxTab', 'csTicketsTab', 'csSurveysTab', 'csReviewsTab', 'csFaqsTab', 'csMembersTab', 'financeRevenueTab', 'financeExpensesTab', 'financePlTab', 'financeCashFlowTab', 'financeArTab', 'financeApTab', 'financeTaxTab', 'financeReportsTab'];
+var ALL_TAB_IDS = ['scheduleTab', 'galleryTab', 'homepageTab', 'brandTab', 'productsTab', 'ordersTab', 'salesTab', 'salesEventsTab', 'productionTab', 'forecastTab', 'couponsTab', 'analyticsTab', 'settingsTab', 'imagesTab', 'auditLogTab', 'employeesTab', 'contactsTab', 'customersTab', 'packTab', 'shipTab', 'commissionsTab', 'rmaTab', 'socialMediaTab', 'blogTab', 'newsletterTab', 'placeholderTab', 'inventoryTab', 'storiesTab', 'dashboardTab', 'tripsTab', 'wholesaleTab', 'showTab', 'financialsTab', 'eventsAdminTab', 'websiteTab', 'showLightTab', 'emailLogTab', 'materialsTab', 'piecesTab', 'galleriesTab', 'lookbooksTab', 'promotionsTab', 'bookTab', 'subscriptionTab', 'aboutTab', 'walletTab', 'giftCardsTab', 'loyaltyTab', 'membershipTab', 'termsTab', 'advisorTab', 'studioTab', 'teamTab', 'studentsTab', 'migrationDashTab', 'migrationConfirmTab', 'migrationPlanTab', 'migrationImportTab', 'historicalOrdersTab', 'channelsTab', 'businessTab', 'myFeedbackTab', 'procurementTab', 'csInboxTab', 'csTicketsTab', 'csSurveysTab', 'csReviewsTab', 'csFaqsTab', 'csMembersTab', 'financeRevenueTab', 'financeExpensesTab', 'financePlTab', 'financeCashFlowTab', 'financeArTab', 'financeApTab', 'financeTaxTab', 'financeReportsTab'];
 
 var currentRoute = 'dashboard';
 var currentRouteParams = {};
@@ -15666,7 +15625,7 @@ function switchSettingsSubView(view) {
   // Lazy loads
   if (view === 'shipping') { loadShipProviderConfig(); }
   if (view === 'email') { loadEmailConfig(); loadEmailDomainSection(); }
-  if (view === 'integrations') { loadEtsyConfig(); loadShopifyConfig(); }
+  if (view === 'integrations') { loadEtsyConfig(); loadShopifyConfig(); loadPlaidBanksForSettings(); }
   if (view === 'trips') { MastAdmin.loadModule('trips').then(function() { if (typeof loadTripsSettings === 'function') loadTripsSettings(); }); }
   if (view === 'storefront') { loadShopDisplaySettings(); loadPrivacyUrlSettings(); }
   if (view === 'dashboard') renderDashCardSettings();
@@ -22119,6 +22078,223 @@ function loadShopifyConfig() {
     if (statusEl) statusEl.innerHTML = '<span style="color:var(--warm-gray-light);">Not connected.</span>';
   });
 }
+
+// ── Plaid Bank Connections (Settings → Integrations) ─────────────────────────
+var _PLAID_BANK_LIMITS = { 'free': 0, 'publish': 2, 'launch': 2, 'operate': 3, 'command': 5 };
+var _plaidLinkLoaded = false;
+var _plaidLastConnectAt = 0;
+
+function getPlaidBankLimit() {
+  var sub = typeof getTenantSubscription === 'function' ? getTenantSubscription() : {};
+  var plan = sub.plan || sub.tier || (window.TENANT_CONFIG && window.TENANT_CONFIG.plan) || 'publish';
+  return _PLAID_BANK_LIMITS[plan] !== undefined ? _PLAID_BANK_LIMITS[plan] : 1;
+}
+
+async function loadPlaidBanksForSettings() {
+  var container = document.getElementById('plaidBanksList');
+  if (!container) return;
+  container.innerHTML = '<div style="font-size:0.85rem;color:var(--warm-gray);">Loading connected banks…</div>';
+
+  try {
+    var items = (await MastDB.plaidItems.list()) || {};
+    var keys = Object.keys(items);
+    var includedLimit = getPlaidBankLimit();
+
+    if (keys.length === 0) {
+      container.innerHTML = '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:12px 14px;font-size:0.85rem;color:var(--warm-gray);">' +
+        'No banks connected. ' + includedLimit + ' bank' + (includedLimit !== 1 ? 's' : '') + ' included in your plan; additional banks cost 100 tokens/month.' +
+        '</div>';
+      return;
+    }
+
+    var activeCount = keys.filter(function(k) { return items[k].status === 'active'; }).length;
+    var h = '<div style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:8px;">' +
+      activeCount + ' of ' + includedLimit + ' included banks used' +
+      (activeCount > includedLimit ? ' · <span style="color:#f59e0b;">' + (activeCount - includedLimit) + ' extra (' + ((activeCount - includedLimit) * 100) + ' tokens/month)</span>' : '') +
+      '</div>';
+
+    keys.forEach(function(itemId) {
+      var item = items[itemId];
+      var statusBg = item.status === 'active' ? '#16a34a' : item.status === 'error' ? '#dc2626' : '#9ca3af';
+      var acctCount = (item.accounts && item.accounts.length) || 0;
+
+      h += '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:12px 14px;margin-bottom:8px;">';
+      h += '<div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;" onclick="togglePlaidBankCard(\'' + esc(itemId) + '\')">';
+      h += '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">';
+      h += '<span id="plaidBankArrow_' + esc(itemId) + '" style="font-size:0.72rem;transition:transform 0.2s;">&#9654;</span>';
+      h += '<span style="font-weight:600;font-size:0.95rem;">' + esc(item.institutionName || 'Unknown Bank') + '</span>';
+      h += '<span style="font-size:0.78rem;color:var(--warm-gray);">' + acctCount + ' account' + (acctCount !== 1 ? 's' : '') + '</span>';
+      h += '<span style="background:' + statusBg + ';color:#fff;padding:2px 8px;border-radius:4px;font-size:0.72rem;font-weight:600;">' + esc(item.status || 'unknown') + '</span>';
+      if (item.lastSyncAt) h += '<span style="font-size:0.78rem;color:var(--warm-gray-light);">Synced ' + new Date(item.lastSyncAt).toLocaleDateString() + '</span>';
+      h += '</div>';
+
+      h += '<div style="display:flex;gap:6px;" onclick="event.stopPropagation()">';
+      if (item.status === 'active') {
+        h += '<button class="btn btn-secondary btn-small" data-item-id="' + esc(itemId) + '" onclick="syncPlaidItem(this.dataset.itemId)">Sync</button>';
+      }
+      h += '<button class="btn btn-danger btn-small" data-item-id="' + esc(itemId) + '" onclick="disconnectPlaidItem(this.dataset.itemId)">Disconnect</button>';
+      h += '</div>';
+      h += '</div>';
+
+      h += '<div id="plaidBankDetail_' + esc(itemId) + '" style="display:none;margin-top:10px;padding-top:10px;border-top:1px solid var(--cream-dark);">';
+      if (item.accounts && item.accounts.length) {
+        item.accounts.forEach(function(acct) {
+          h += '<div style="font-size:0.85rem;color:var(--warm-gray);margin-top:2px;">';
+          h += esc(acct.name || acct.type) + ' ••' + esc(acct.mask || '????');
+          h += ' <span style="text-transform:capitalize;font-size:0.78rem;">(' + esc(acct.subtype || acct.type) + ')</span>';
+          h += '</div>';
+        });
+      }
+      if (item.lastSyncAt) {
+        h += '<div style="font-size:0.78rem;color:var(--warm-gray-light);margin-top:6px;">Last synced ' + new Date(item.lastSyncAt).toLocaleString() + '</div>';
+      }
+      if (item.lastError) {
+        h += '<div style="font-size:0.78rem;color:#dc2626;margin-top:4px;">' + esc(item.lastError) + '</div>';
+      }
+      h += '</div></div>';
+    });
+
+    container.innerHTML = h;
+  } catch (err) {
+    container.innerHTML = '<div style="color:#dc2626;font-size:0.85rem;">' + esc(err.message) + '</div>';
+  }
+}
+
+window.togglePlaidBankCard = function(itemId) {
+  var detail = document.getElementById('plaidBankDetail_' + itemId);
+  var arrow = document.getElementById('plaidBankArrow_' + itemId);
+  if (!detail) return;
+  var isOpen = detail.style.display !== 'none';
+  detail.style.display = isOpen ? 'none' : '';
+  if (arrow) arrow.style.transform = isOpen ? '' : 'rotate(90deg)';
+};
+
+async function connectPlaidAccount() {
+  if (Date.now() - _plaidLastConnectAt < 10000) {
+    showToast('Please wait before connecting another bank', true);
+    return;
+  }
+  try {
+    var allItems = (await MastDB.plaidItems.list()) || {};
+    var activeCount = Object.values(allItems).filter(function(i) { return i.status === 'active'; }).length;
+    var includedLimit = getPlaidBankLimit();
+
+    if (includedLimit === 0) {
+      showToast('Bank connections are not available on the free plan. Upgrade to connect a bank.', true);
+      return;
+    }
+
+    if (activeCount >= includedLimit) {
+      var EXTRA_COST = 100;
+      var w = getTokenWallet();
+      var availableTokens = (w.currentBalance || 0) + (w.coinTokenSurplus || 0) + ((w.coinBalance || 0) * 100);
+
+      if (availableTokens < EXTRA_COST) {
+        var shortfall = EXTRA_COST - availableTokens;
+        mastConfirm(
+          'You\'ve used your ' + includedLimit + ' included banks.\n\nAdding another costs ' + EXTRA_COST + ' tokens/month but you only have ' + availableTokens + ' tokens available (need ' + shortfall + ' more).',
+          { title: 'Not enough tokens', confirmLabel: 'Purchase Tokens' }
+        ).then(function(ok) {
+          if (ok && typeof openCoinPurchaseModal === 'function') openCoinPurchaseModal('settings-integrations', 'connectBank');
+        });
+        return;
+      }
+
+      mastConfirm(
+        'You\'ve used your ' + includedLimit + ' included banks.\n\nAdding another will cost ' + EXTRA_COST + ' tokens/month (' + availableTokens + ' tokens available). If you don\'t have enough tokens next month, this bank will be automatically disconnected.',
+        { title: 'Extra bank connection', confirmLabel: 'Continue' }
+      ).then(function(ok) { if (ok) startPlaidLink(); });
+      return;
+    }
+  } catch (e) { /* server enforces too */ }
+
+  startPlaidLink();
+}
+
+async function startPlaidLink() {
+  var btn = document.getElementById('connectPlaidBtn');
+  _plaidLastConnectAt = Date.now();
+  if (btn) { btn.disabled = true; btn.textContent = 'Connecting…'; }
+
+  try {
+    if (!_plaidLinkLoaded) {
+      await new Promise(function(resolve, reject) {
+        var script = document.createElement('script');
+        script.src = 'https://cdn.plaid.com/link/v2/stable/link-initialize.js';
+        script.onload = function() { _plaidLinkLoaded = true; resolve(); };
+        script.onerror = function() { reject(new Error('Failed to load Plaid Link SDK')); };
+        document.head.appendChild(script);
+      });
+    }
+
+    var createLinkToken = firebase.functions().httpsCallable('createPlaidLinkToken');
+    var result = await createLinkToken({ tenantId: MastDB.tenantId() });
+    var linkToken = result.data.link_token;
+
+    var handler = Plaid.create({
+      token: linkToken,
+      onSuccess: async function(publicToken) {
+        if (btn) btn.textContent = 'Exchanging token…';
+        try {
+          var exchangeToken = firebase.functions().httpsCallable('exchangePlaidToken');
+          var exchangeResult = await exchangeToken({
+            tenantId: MastDB.tenantId(),
+            public_token: publicToken
+          });
+          showToast('Connected ' + esc(exchangeResult.data.institutionName || 'bank account') + ' (' + exchangeResult.data.accountCount + ' accounts)');
+          loadPlaidBanksForSettings();
+        } catch (err) {
+          showToast('Failed to connect: ' + esc(err.message), true);
+        }
+        if (btn) { btn.disabled = false; btn.textContent = '+ Connect Bank'; }
+      },
+      onExit: function(err) {
+        if (err) showToast('Plaid connection cancelled', true);
+        if (btn) { btn.disabled = false; btn.textContent = '+ Connect Bank'; }
+      }
+    });
+    handler.open();
+  } catch (err) {
+    showToast('Failed to start Plaid connection: ' + esc(err.message), true);
+    if (btn) { btn.disabled = false; btn.textContent = '+ Connect Bank'; }
+  }
+}
+
+async function syncPlaidItem(itemId) {
+  showToast('Syncing transactions…');
+  try {
+    var syncFn = firebase.functions().httpsCallable('syncPlaidTransactions');
+    var result = await syncFn({ tenantId: MastDB.tenantId(), itemId: itemId });
+    var d = result.data;
+    showToast('Synced: ' + d.imported + ' new, ' + d.updated + ' updated, ' + d.removed + ' removed');
+    loadPlaidBanksForSettings();
+  } catch (err) {
+    showToast('Sync failed: ' + esc(err.message), true);
+    loadPlaidBanksForSettings();
+  }
+}
+
+function disconnectPlaidItem(itemId) {
+  mastConfirm('Disconnect this bank? Existing imported transactions will remain.', { title: 'Disconnect bank', confirmLabel: 'Disconnect', danger: true }).then(function(ok) {
+    if (ok) doDisconnectPlaidItem(itemId);
+  });
+}
+
+async function doDisconnectPlaidItem(itemId) {
+  try {
+    var disconnectFn = firebase.functions().httpsCallable('disconnectPlaidItem');
+    await disconnectFn({ tenantId: MastDB.tenantId(), itemId: itemId });
+    showToast('Bank disconnected');
+    loadPlaidBanksForSettings();
+  } catch (err) {
+    showToast('Disconnect failed: ' + esc(err.message), true);
+  }
+}
+
+window.connectPlaidAccount = connectPlaidAccount;
+window.syncPlaidItem = syncPlaidItem;
+window.disconnectPlaidItem = disconnectPlaidItem;
+window.loadPlaidBanksForSettings = loadPlaidBanksForSettings;
 
 async function saveShopifyConfig() {
   if (!hasPermission('settings', 'update')) { showToast('You do not have permission to update settings.', true); return; }
