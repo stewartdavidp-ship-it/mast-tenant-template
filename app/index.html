@@ -9236,6 +9236,40 @@
             Connect AI tools (Claude, ChatGPT, Cursor) to manage your store through natural language. Generate an API key and add it to your AI tool's configuration.
           </p>
         </div>
+
+        <!-- In-page Ask AI gating -->
+        <div class="form-group" style="background:var(--cream,#faf8f5);border:1px solid var(--cream-dark,#e8e0d4);border-radius:8px;padding:14px 16px;margin-bottom:24px;">
+          <label style="font-size:1rem;font-weight:600;display:block;margin-bottom:4px;">In-page Ask AI buttons</label>
+          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:14px;">
+            Show ✨ Ask AI buttons across the admin so you can send page context (filters, aggregates, top transactions) to your AI tool. Buttons stay hidden until both prerequisites below are set.
+          </p>
+
+          <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Claude subscription</label>
+          <p style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:6px;">
+            Required because the deep-link uses <code>claude://</code> to open Claude Desktop. (Other AI tools coming later.)
+          </p>
+          <select id="askAiSubscriptionSel" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;background:var(--cream,#faf8f5);color:inherit;margin-bottom:14px;">
+            <option value="">— Not configured —</option>
+            <option value="pro">Claude Pro</option>
+            <option value="max">Claude Max</option>
+            <option value="team">Claude Team</option>
+            <option value="enterprise">Claude Enterprise</option>
+            <option value="other">Other (paste-only fallback)</option>
+          </select>
+
+          <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;margin-bottom:14px;">
+            <input type="checkbox" id="askAiMcpConfiguredCb" style="width:18px;height:18px;margin-top:2px;accent-color:var(--amber);">
+            <div>
+              <div style="font-size:0.85rem;font-weight:600;">I've configured the Mast tenant MCP in Claude</div>
+              <div style="font-size:0.78rem;color:var(--warm-gray);">Use the setup instructions below to add the MCP connector. Without it, Claude can't pull deeper data when your question needs it.</div>
+            </div>
+          </label>
+
+          <div style="display:flex;gap:8px;align-items:center;">
+            <button class="btn btn-primary btn-small" onclick="saveAskAiConfig()">Save</button>
+            <div id="askAiConfigStatus" style="font-size:0.85rem;"></div>
+          </div>
+        </div>
         <div id="aiKeysList" style="margin-bottom:24px;">
           <div class="loading">Loading API keys...</div>
         </div>
@@ -13656,6 +13690,11 @@ auth.onAuthStateChanged(async function(user) {
   // Load configChecklist for progressive feature gating
   try { await loadConfigChecklist(); } catch(e) { console.warn('loadConfigChecklist failed:', e.message); }
 
+  // Init MastAskAi: load the per-tenant Ask AI gating config (subscription +
+  // MCP-configured flag). Pages call MastAskAi.isEnabled() before rendering
+  // their ✨ Ask AI buttons; defaults off until this resolves.
+  try { if (window.MastAskAi) await MastAskAi.init(); } catch(e) { console.warn('MastAskAi.init failed:', e.message); }
+
   // Guided next steps (module-aware onboarding) — replaces old setup banner
   Promise.all([loadNextStepsCache(), loadDismissedSteps(), loadMatchingPrefs()]).then(function() { renderDashCardSetupShop(); });
 
@@ -15630,7 +15669,7 @@ function switchSettingsSubView(view) {
   if (view === 'storefront') { loadShopDisplaySettings(); loadPrivacyUrlSettings(); }
   if (view === 'dashboard') renderDashCardSettings();
   if (view === 'domains') loadDomainSettings();
-  if (view === 'ai') loadAiIntegrations();
+  if (view === 'ai') { loadAiIntegrations(); loadAskAiConfigUI(); }
   if (view === 'subscription') renderSubscriptionSettings();
   if (view === 'product') loadProductSettings();
   if (view === 'about') renderAboutSettings();
@@ -22296,6 +22335,38 @@ window.syncPlaidItem = syncPlaidItem;
 window.disconnectPlaidItem = disconnectPlaidItem;
 window.loadPlaidBanksForSettings = loadPlaidBanksForSettings;
 
+// ── Ask AI gating UI (Settings → AI) ─────────────────────────────────────────
+
+async function loadAskAiConfigUI() {
+  if (!window.MastAskAi) return;
+  try { await MastAskAi.init(); } catch (_e) {}
+  var cfg = MastAskAi.getConfig();
+  var sel = document.getElementById('askAiSubscriptionSel');
+  var cb  = document.getElementById('askAiMcpConfiguredCb');
+  if (sel) sel.value = cfg.subscription || '';
+  if (cb)  cb.checked = !!cfg.mcpConfigured;
+}
+
+window.saveAskAiConfig = async function() {
+  if (!window.MastAskAi) return;
+  if (!hasPermission('settings', 'update')) { showToast('You do not have permission to update settings.', true); return; }
+  var sub = document.getElementById('askAiSubscriptionSel').value;
+  var mcp = document.getElementById('askAiMcpConfiguredCb').checked;
+  var statusEl = document.getElementById('askAiConfigStatus');
+  if (statusEl) statusEl.innerHTML = '<span style="color:var(--warm-gray);">Saving…</span>';
+  try {
+    await MastAskAi.setConfig({ subscription: sub, mcpConfigured: mcp });
+    var enabled = MastAskAi.isEnabled();
+    if (statusEl) statusEl.innerHTML = enabled
+      ? '<span style="color:var(--teal);">✓ Saved — ✨ Ask AI buttons will now appear across the admin.</span>'
+      : '<span style="color:var(--warm-gray);">Saved — buttons stay hidden until both fields are set.</span>';
+    showToast('Ask AI settings saved');
+  } catch (err) {
+    if (statusEl) statusEl.innerHTML = '<span style="color:#dc2626;">Save failed: ' + esc(err.message) + '</span>';
+    showToast('Save failed: ' + err.message, true);
+  }
+};
+
 // ── MastAskAi: per-page registry + two-tier Claude launch ────────────────────
 // CC Idea -Os1Lrm8ShTKZMafXV4k. Each page that wants Ask AI calls
 // MastAskAi.register(pageId, { title, placeholder, buildContext, notes });
@@ -22305,9 +22376,65 @@ window.loadPlaidBanksForSettings = loadPlaidBanksForSettings;
 // template. Pages only contribute page-specific snapshot data.
 window.MastAskAi = (function() {
   var registry = {};
+  var enabled = false;
+  var initialized = false;
+  var initPromise = null;
+  var subscription = null;        // null | 'pro' | 'max' | 'team' | 'enterprise' | 'other'
+  var mcpConfigured = false;
 
   function register(pageId, config) {
     registry[pageId] = config || {};
+  }
+
+  // Pages call isEnabled() before rendering Ask AI buttons. False until config
+  // is loaded — we deliberately default off so we never show a button the user
+  // can't actually use. Once init() resolves and the config is loaded, this
+  // becomes true if BOTH subscription is set AND MCP is configured.
+  function isEnabled() { return enabled; }
+
+  function getConfig() {
+    return {
+      subscription: subscription,
+      mcpConfigured: mcpConfigured,
+      enabled: enabled,
+      initialized: initialized
+    };
+  }
+
+  function _recompute() {
+    enabled = !!subscription && subscription !== '' && mcpConfigured;
+  }
+
+  async function init() {
+    if (initPromise) return initPromise;
+    initPromise = (async function() {
+      try {
+        if (typeof MastDB !== 'undefined' && MastDB.get) {
+          var cfg = (await MastDB.get('admin/askAi')) || {};
+          subscription = cfg.subscription || null;
+          mcpConfigured = !!cfg.mcpConfigured;
+        }
+      } catch (_e) { /* leave defaults */ }
+      _recompute();
+      initialized = true;
+      window.dispatchEvent(new CustomEvent('mastaskai:ready', { detail: { enabled: enabled } }));
+    })();
+    return initPromise;
+  }
+
+  async function setConfig(cfg) {
+    subscription = (cfg && cfg.subscription) || null;
+    mcpConfigured = !!(cfg && cfg.mcpConfigured);
+    _recompute();
+    if (typeof MastDB !== 'undefined' && MastDB.set) {
+      await MastDB.set('admin/askAi', {
+        subscription: subscription,
+        mcpConfigured: mcpConfigured,
+        updatedAt: new Date().toISOString()
+      });
+    }
+    initialized = true;
+    window.dispatchEvent(new CustomEvent('mastaskai:configchanged', { detail: { enabled: enabled } }));
   }
 
   function open(pageId) {
@@ -22461,7 +22588,17 @@ window.MastAskAi = (function() {
     }, 1200);
   }
 
-  return { register: register, open: open, close: close, submit: submit, _registry: registry };
+  return {
+    register: register,
+    open: open,
+    close: close,
+    submit: submit,
+    init: init,
+    isEnabled: isEnabled,
+    getConfig: getConfig,
+    setConfig: setConfig,
+    _registry: registry
+  };
 })();
 
 async function saveShopifyConfig() {

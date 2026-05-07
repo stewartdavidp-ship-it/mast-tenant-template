@@ -461,7 +461,9 @@ function renderFinExpenses(expenses, start, end) {
     h += '</select>';
   }
   h += '<div style="flex:1;"></div>';
-  h += '<button class="btn btn-secondary btn-small" onclick="MastAskAi.open(\'finance-expenses\')" title="Ask Claude about what you are seeing">✨ Ask AI</button>';
+  if (window.MastAskAi && window.MastAskAi.isEnabled()) {
+    h += '<button class="btn btn-secondary btn-small" onclick="MastAskAi.open(\'finance-expenses\')" title="Ask Claude about what you are seeing">✨ Ask AI</button>';
+  }
   h += '</div>';
 
   // Bulk action bar
@@ -805,6 +807,15 @@ window.finExpDetailDelete = function(id) {
 // See CC Idea -Os1Lrm8ShTKZMafXV4k. Modal, launch strategy, and prompt envelope
 // live in window.MastAskAi (index.html). This page only contributes its
 // snapshot via buildContext() and domain hints via notes.
+
+// Re-render the Expenses page when MastAskAi config changes so the button
+// appears/disappears immediately after the user saves in Settings → AI.
+window.addEventListener('mastaskai:configchanged', function() {
+  var tab = document.getElementById('financeExpensesTab');
+  if (tab && tab.style.display !== 'none' && typeof loadFinExpenses === 'function') {
+    loadFinExpenses();
+  }
+});
 
 if (window.MastAskAi) {
   window.MastAskAi.register('finance-expenses', {
