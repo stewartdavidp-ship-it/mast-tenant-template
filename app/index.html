@@ -7040,6 +7040,7 @@
         <h2>Coupons</h2>
         <button class="btn btn-primary" onclick="openCouponModal()">+ Add Coupon</button>
       </div>
+      <div id="couponsUrlFilterBanner" style="display:none;"></div>
       <div id="couponsLoading" class="loading">Loading...</div>
       <div id="couponsEmpty" class="empty-state" style="display:none;">
         <div class="empty-icon">&#127915;</div>
@@ -7065,6 +7066,15 @@
 
       <!-- Mobile Cards -->
       <div class="coupon-cards" id="couponCards"></div>
+    </div>
+
+    <!-- Admin: Inquiries Tab (MCP deep-link landing) -->
+    <div id="inquiriesTab" style="display:none;">
+      <div class="section-header">
+        <h2>Inquiries</h2>
+      </div>
+      <div id="inquiriesUrlFilterBanner" style="display:none;"></div>
+      <div id="inquiriesContent"></div>
     </div>
 
     <!-- Admin: Sale Promotions Tab -->
@@ -14975,7 +14985,8 @@ var ROUTE_MAP = {
   'cs-surveys':        { tab: 'csSurveysTab' },
   'cs-reviews':        { tab: 'csReviewsTab' },
   'cs-faqs':           { tab: 'csFaqsTab' },
-  'cs-members':        { tab: 'csMembersTab' }
+  'cs-members':        { tab: 'csMembersTab' },
+  'inquiries':         { tab: 'inquiriesTab', setup: function() { renderInquiriesAdmin(); } }
 };
 
 // Section → which routes belong to it (for auto-expanding)
@@ -15012,7 +15023,7 @@ var SECTION_ROUTES = {
                         'historical-orders']
 };
 
-var ALL_TAB_IDS = ['scheduleTab', 'galleryTab', 'homepageTab', 'brandTab', 'productsTab', 'ordersTab', 'salesTab', 'salesEventsTab', 'productionTab', 'forecastTab', 'couponsTab', 'analyticsTab', 'settingsTab', 'imagesTab', 'auditLogTab', 'employeesTab', 'contactsTab', 'customersTab', 'packTab', 'shipTab', 'commissionsTab', 'rmaTab', 'socialMediaTab', 'blogTab', 'newsletterTab', 'placeholderTab', 'inventoryTab', 'storiesTab', 'dashboardTab', 'tripsTab', 'wholesaleTab', 'showTab', 'financialsTab', 'eventsAdminTab', 'websiteTab', 'showLightTab', 'emailLogTab', 'materialsTab', 'piecesTab', 'galleriesTab', 'lookbooksTab', 'promotionsTab', 'bookTab', 'subscriptionTab', 'aboutTab', 'walletTab', 'giftCardsTab', 'loyaltyTab', 'membershipTab', 'termsTab', 'advisorTab', 'studioTab', 'teamTab', 'studentsTab', 'migrationDashTab', 'migrationConfirmTab', 'migrationPlanTab', 'migrationImportTab', 'historicalOrdersTab', 'channelsTab', 'businessTab', 'myFeedbackTab', 'procurementTab', 'csInboxTab', 'csTicketsTab', 'csSurveysTab', 'csReviewsTab', 'csFaqsTab', 'csMembersTab', 'financeRevenueTab', 'financeExpensesTab', 'financePlTab', 'financeCashFlowTab', 'financeArTab', 'financeApTab', 'financeTaxTab', 'financeReportsTab'];
+var ALL_TAB_IDS = ['inquiriesTab', 'scheduleTab', 'galleryTab', 'homepageTab', 'brandTab', 'productsTab', 'ordersTab', 'salesTab', 'salesEventsTab', 'productionTab', 'forecastTab', 'couponsTab', 'analyticsTab', 'settingsTab', 'imagesTab', 'auditLogTab', 'employeesTab', 'contactsTab', 'customersTab', 'packTab', 'shipTab', 'commissionsTab', 'rmaTab', 'socialMediaTab', 'blogTab', 'newsletterTab', 'placeholderTab', 'inventoryTab', 'storiesTab', 'dashboardTab', 'tripsTab', 'wholesaleTab', 'showTab', 'financialsTab', 'eventsAdminTab', 'websiteTab', 'showLightTab', 'emailLogTab', 'materialsTab', 'piecesTab', 'galleriesTab', 'lookbooksTab', 'promotionsTab', 'bookTab', 'subscriptionTab', 'aboutTab', 'walletTab', 'giftCardsTab', 'loyaltyTab', 'membershipTab', 'termsTab', 'advisorTab', 'studioTab', 'teamTab', 'studentsTab', 'migrationDashTab', 'migrationConfirmTab', 'migrationPlanTab', 'migrationImportTab', 'historicalOrdersTab', 'channelsTab', 'businessTab', 'myFeedbackTab', 'procurementTab', 'csInboxTab', 'csTicketsTab', 'csSurveysTab', 'csReviewsTab', 'csFaqsTab', 'csMembersTab', 'financeRevenueTab', 'financeExpensesTab', 'financePlTab', 'financeCashFlowTab', 'financeArTab', 'financeApTab', 'financeTaxTab', 'financeReportsTab'];
 
 var currentRoute = 'dashboard';
 var currentRouteParams = {};
@@ -42982,6 +42993,14 @@ window.MastCouponCard = (function() {
 // ============================================================
 // Coupons Management
 // ============================================================
+window.clearCouponsFilter = function() {
+  var p = (typeof window.getRouteParams === 'function') ? window.getRouteParams() : {};
+  var next = {};
+  var DROP = { status: 1, codes: 1 };
+  Object.keys(p).forEach(function(k) { if (!DROP[k]) next[k] = p[k]; });
+  if (typeof navigateTo === 'function') navigateTo('coupons', next);
+};
+
 function loadCoupons() {
   // Listener already attached in attachListeners — this just ensures loading state is correct
   if (couponsLoaded) {
@@ -43027,10 +43046,43 @@ function renderCoupons() {
   var tableEl = document.getElementById('couponsTable');
   var tbodyEl = document.getElementById('couponsTableBody');
   var cardsEl = document.getElementById('couponCards');
+  var bannerEl = document.getElementById('couponsUrlFilterBanner');
 
   if (loadingEl) loadingEl.style.display = 'none';
 
+  // URL-driven filters from MCP admin links: status (effective), codes.
+  var rp = (typeof window.getRouteParams === 'function') ? window.getRouteParams() : {};
+  var urlStatus = (rp && typeof rp.status === 'string') ? rp.status : '';
+  var urlCodesParam = (rp && typeof rp.codes === 'string') ? rp.codes : '';
+  var urlCodes = urlCodesParam ? urlCodesParam.split(',').map(function(s){return s.trim().toUpperCase();}).filter(Boolean) : [];
+  var urlCodeLookup = urlCodes.length > 0 ? Object.create(null) : null;
+  if (urlCodeLookup) urlCodes.forEach(function(c){urlCodeLookup[c]=true;});
+  var hasUrlFilter = !!(urlStatus || urlCodes.length);
+
+  if (bannerEl) {
+    if (hasUrlFilter) {
+      var bParts = [];
+      if (urlCodes.length) bParts.push(urlCodes.length + ' selected coupon' + (urlCodes.length === 1 ? '' : 's'));
+      if (urlStatus) bParts.push('status: ' + urlStatus);
+      bannerEl.style.cssText = 'background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.35);color:#F59E0B;padding:8px 12px;margin-bottom:12px;border-radius:6px;display:flex;align-items:center;gap:12px;font-size:0.85rem;';
+      bannerEl.innerHTML =
+        '<span>&#127915; Showing ' + bParts.join(', ') + '</span>' +
+        '<button type="button" onclick="clearCouponsFilter()" style="margin-left:auto;background:transparent;border:1px solid rgba(245,158,11,0.5);color:#F59E0B;padding:2px 10px;border-radius:4px;cursor:pointer;font-size:0.78rem;">Clear filter</button>';
+    } else {
+      bannerEl.style.display = 'none';
+      bannerEl.innerHTML = '';
+    }
+  }
+
   var codes = Object.keys(coupons);
+  if (hasUrlFilter) {
+    codes = codes.filter(function(code) {
+      if (urlCodeLookup && !urlCodeLookup[code.toUpperCase()]) return false;
+      if (urlStatus && getCouponEffectiveStatus(coupons[code]) !== urlStatus) return false;
+      return true;
+    });
+  }
+
   if (codes.length === 0) {
     if (emptyEl) emptyEl.style.display = '';
     if (tableEl) tableEl.style.display = 'none';
@@ -45196,6 +45248,104 @@ function renderDashCardNewInquiries() {
   }).catch(function(err) {
     console.error('Error loading inquiries:', err);
     container.innerHTML = '';
+  });
+}
+
+window.clearInquiriesFilter = function() {
+  var p = (typeof window.getRouteParams === 'function') ? window.getRouteParams() : {};
+  var next = {};
+  var DROP = { status: 1, dateFrom: 1, dateTo: 1, inquiryIds: 1 };
+  Object.keys(p).forEach(function(k) { if (!DROP[k]) next[k] = p[k]; });
+  if (typeof navigateTo === 'function') navigateTo('inquiries', next);
+};
+
+function renderInquiriesAdmin() {
+  var contentEl = document.getElementById('inquiriesContent');
+  var bannerEl = document.getElementById('inquiriesUrlFilterBanner');
+  if (!contentEl) return;
+
+  // URL-driven filters from MCP admin links: status, dateFrom, dateTo, inquiryIds.
+  var rp = (typeof window.getRouteParams === 'function') ? window.getRouteParams() : {};
+  var urlStatus = (rp && typeof rp.status === 'string') ? rp.status : '';
+  var urlDateFrom = (rp && typeof rp.dateFrom === 'string') ? rp.dateFrom.slice(0, 10) : '';
+  var urlDateTo = (rp && typeof rp.dateTo === 'string') ? rp.dateTo.slice(0, 10) : '';
+  var urlIdsParam = (rp && typeof rp.inquiryIds === 'string') ? rp.inquiryIds : '';
+  var urlIds = urlIdsParam ? urlIdsParam.split(',').map(function(s){return s.trim();}).filter(Boolean) : [];
+  var urlIdLookup = urlIds.length > 0 ? Object.create(null) : null;
+  if (urlIdLookup) urlIds.forEach(function(id){urlIdLookup[id]=true;});
+  var hasUrlFilter = !!(urlStatus || urlDateFrom || urlDateTo || urlIds.length);
+
+  if (bannerEl) {
+    if (hasUrlFilter) {
+      var bParts = [];
+      if (urlIds.length) bParts.push(urlIds.length + ' selected inquir' + (urlIds.length === 1 ? 'y' : 'ies'));
+      if (urlStatus) bParts.push('status: ' + urlStatus);
+      if (urlDateFrom) bParts.push('from ' + urlDateFrom);
+      if (urlDateTo) bParts.push('to ' + urlDateTo);
+      bannerEl.style.cssText = 'background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.35);color:#F59E0B;padding:8px 12px;margin-bottom:12px;border-radius:6px;display:flex;align-items:center;gap:12px;font-size:0.85rem;';
+      bannerEl.innerHTML =
+        '<span>&#128231; Showing ' + bParts.join(', ') + '</span>' +
+        '<button type="button" onclick="clearInquiriesFilter()" style="margin-left:auto;background:transparent;border:1px solid rgba(245,158,11,0.5);color:#F59E0B;padding:2px 10px;border-radius:4px;cursor:pointer;font-size:0.78rem;">Clear filter</button>';
+    } else {
+      bannerEl.style.display = 'none';
+      bannerEl.innerHTML = '';
+    }
+  }
+
+  contentEl.innerHTML = '<div class="loading">Loading inquiries...</div>';
+
+  MastDB.query('inquiries').limitToLast(500).once('value').then(function(snap) {
+    var val = snap && typeof snap.val === 'function' ? snap.val() : snap;
+    var items = val ? Object.keys(val).map(function(id) {
+      var inq = val[id] || {};
+      inq.id = inq.id || id;
+      return inq;
+    }) : [];
+
+    items.sort(function(a, b) { return (b.createdAt || '').localeCompare(a.createdAt || ''); });
+
+    if (hasUrlFilter) {
+      items = items.filter(function(inq) {
+        if (urlStatus && (inq.status || 'new') !== urlStatus) return false;
+        var d = (inq.createdAt || '').slice(0, 10);
+        if (urlDateFrom && (!d || d < urlDateFrom)) return false;
+        if (urlDateTo && (!d || d > urlDateTo)) return false;
+        if (urlIdLookup && !urlIdLookup[inq.id]) return false;
+        return true;
+      });
+    }
+
+    if (items.length === 0) {
+      contentEl.innerHTML = '<div style="text-align:center;padding:40px 20px;color:var(--warm-gray);">' +
+        '<div style="font-size:1.6rem;margin-bottom:12px;">&#128231;</div>' +
+        '<p style="font-size:0.9rem;font-weight:500;margin-bottom:4px;">No inquiries' + (hasUrlFilter ? ' match these filters' : ' yet') + '.</p></div>';
+      return;
+    }
+
+    var html = '<div class="events-table data-table">' +
+      '<table><thead><tr>' +
+        '<th>Name</th><th>Type</th><th>Message</th><th>Status</th><th>Received</th><th>Actions</th>' +
+      '</tr></thead><tbody>';
+
+    items.forEach(function(inq) {
+      var dateStr = inq.createdAt ? new Date(inq.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+      var status = inq.status || 'new';
+      var msg = (inq.message || '').substring(0, 80);
+      var contactId = inq.contactId || '';
+      html += '<tr>' +
+        '<td>' + esc(inq.name || 'Unknown') + '</td>' +
+        '<td>' + esc(inq.type || '') + '</td>' +
+        '<td style="font-size:0.85rem;color:var(--warm-gray);">' + esc(msg) + (msg.length >= 80 ? '…' : '') + '</td>' +
+        '<td><span class="status-badge">' + esc(status) + '</span></td>' +
+        '<td style="font-size:0.85rem;">' + dateStr + '</td>' +
+        '<td><button class="btn btn-secondary btn-small" onclick="MastAdmin.loadModule(\'contacts\').then(function(){openInquiryResponseModal(\'' + esc(contactId) + '\', null, \'' + esc(inq.id) + '\')})">Respond</button></td>' +
+      '</tr>';
+    });
+
+    html += '</tbody></table></div>';
+    contentEl.innerHTML = html;
+  }).catch(function(err) {
+    contentEl.innerHTML = '<div style="padding:24px;color:var(--danger);">Error loading inquiries: ' + esc(err.message) + '</div>';
   });
 }
 

@@ -458,7 +458,30 @@
   // ============================================================
 
   function renderVendorsTab() {
-    var vendors = Object.values(vendorsData).filter(function(v) { return v.active !== false; });
+    // URL-driven filters from MCP admin links: active, role, vendorIds.
+    var rp = (typeof window.getRouteParams === 'function') ? window.getRouteParams() : {};
+    var urlActive = (rp && typeof rp.active === 'string') ? rp.active : '';
+    var urlRole = (rp && typeof rp.role === 'string') ? rp.role : '';
+    var urlIdsParam = (rp && typeof rp.vendorIds === 'string') ? rp.vendorIds : '';
+    var urlIds = urlIdsParam ? urlIdsParam.split(',').map(function(s){return s.trim();}).filter(Boolean) : [];
+    var urlIdLookup = urlIds.length > 0 ? Object.create(null) : null;
+    if (urlIdLookup) urlIds.forEach(function(id){urlIdLookup[id]=true;});
+    var hasUrlFilter = !!(urlActive || urlRole || urlIds.length);
+
+    var vendors;
+    if (hasUrlFilter) {
+      vendors = Object.values(vendorsData).filter(function(v) {
+        if (urlActive === 'true' && v.active === false) return false;
+        if (urlActive === 'false' && v.active !== false) return false;
+        if (urlActive === '' && v.active === false) return false;
+        if (urlRole === 'supplier' && (v.roleFlags && v.roleFlags.isSupplier === false)) return false;
+        if (urlRole === 'customer' && (v.roleFlags && v.roleFlags.isCustomer === false)) return false;
+        if (urlIdLookup && !urlIdLookup[v.vendorId]) return false;
+        return true;
+      });
+    } else {
+      vendors = Object.values(vendorsData).filter(function(v) { return v.active !== false; });
+    }
     vendors.sort(function(a, b) { return (a.name || '').localeCompare(b.name || ''); });
 
     var psByVendor = {};
@@ -484,6 +507,17 @@
     });
 
     var html = '';
+    if (hasUrlFilter) {
+      var bParts = [];
+      if (urlIds.length) bParts.push(urlIds.length + ' selected vendor' + (urlIds.length === 1 ? '' : 's'));
+      if (urlActive === 'true') bParts.push('active only');
+      else if (urlActive === 'false') bParts.push('inactive only');
+      if (urlRole) bParts.push('role: ' + urlRole);
+      html += '<div id="procurementVendorsUrlFilterBanner" style="background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.35);color:#F59E0B;padding:8px 12px;margin-bottom:12px;border-radius:6px;display:flex;align-items:center;gap:12px;font-size:0.85rem;">' +
+        '<span>&#127981; Showing ' + bParts.join(', ') + '</span>' +
+        '<button type="button" onclick="clearProcurementFilter()" style="margin-left:auto;background:transparent;border:1px solid rgba(245,158,11,0.5);color:#F59E0B;padding:2px 10px;border-radius:4px;cursor:pointer;font-size:0.78rem;">Clear filter</button>' +
+        '</div>';
+    }
     html += '<div style="display:flex;justify-content:flex-end;margin-bottom:14px;">' +
       '<button class="btn btn-primary btn-small" onclick="window.procurementOpenNewVendor()">+ New Vendor</button>' +
     '</div>';
@@ -1673,6 +1707,14 @@
     }, 50);
   }
 
+  window.clearProcurementFilter = function() {
+    var p = (typeof window.getRouteParams === 'function') ? window.getRouteParams() : {};
+    var next = {};
+    var DROP = { active: 1, role: 1, vendorIds: 1 };
+    Object.keys(p).forEach(function(k) { if (!DROP[k]) next[k] = p[k]; });
+    if (typeof navigateTo === 'function') navigateTo('procurement', next);
+  };
+
   function setup() {
     try {
       var raw = sessionStorage.getItem('procurementDeepLink');
@@ -1682,6 +1724,15 @@
         if (parsed && parsed.receiptId) deepLinkReceiptId = parsed.receiptId;
       }
     } catch (e) { deepLinkReceiptId = null; }
+
+    // MCP admin links may target the vendors tab via URL filter params.
+    try {
+      var rp0 = (typeof window.getRouteParams === 'function') ? window.getRouteParams() : {};
+      if (rp0 && (rp0.active || rp0.role || rp0.vendorIds)) {
+        currentTab = 'vendors';
+        currentView = 'index';
+      }
+    } catch (_e) {}
 
     if (!dataLoaded) {
       render();

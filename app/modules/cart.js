@@ -183,6 +183,17 @@
     var claimedCount = cards.filter(function(c) { return c.status === 'claimed'; }).length;
     var expiredCount = cards.filter(function(c) { return c.status === 'expired'; }).length;
 
+    // URL-driven filters from MCP admin links: status, dateFrom, dateTo, codes.
+    var rp = (typeof window.getRouteParams === 'function') ? window.getRouteParams() : {};
+    var urlStatus = (rp && typeof rp.status === 'string') ? rp.status : '';
+    var urlDateFrom = (rp && typeof rp.dateFrom === 'string') ? rp.dateFrom.slice(0, 10) : '';
+    var urlDateTo = (rp && typeof rp.dateTo === 'string') ? rp.dateTo.slice(0, 10) : '';
+    var urlCodesParam = (rp && typeof rp.codes === 'string') ? rp.codes : '';
+    var urlCodes = urlCodesParam ? urlCodesParam.split(',').map(function(s){return s.trim();}).filter(Boolean) : [];
+    var urlCodeLookup = urlCodes.length > 0 ? Object.create(null) : null;
+    if (urlCodeLookup) urlCodes.forEach(function(c){urlCodeLookup[c]=true;});
+    var hasUrlFilter = !!(urlStatus || urlDateFrom || urlDateTo || urlCodes.length);
+
     html += '<div class="view-tabs" style="margin-bottom:16px;">' +
       '<button class="view-tab' + (currentGiftCardFilter === 'all' ? ' active' : '') + '" onclick="window._gcFilter(\'all\')">All (' + cards.length + ')</button>' +
       '<button class="view-tab' + (currentGiftCardFilter === 'issued' ? ' active' : '') + '" onclick="window._gcFilter(\'issued\')">Issued (' + issuedCount + ')</button>' +
@@ -190,10 +201,33 @@
       '<button class="view-tab' + (currentGiftCardFilter === 'expired' ? ' active' : '') + '" onclick="window._gcFilter(\'expired\')">Expired (' + expiredCount + ')</button>' +
     '</div>';
 
+    if (hasUrlFilter) {
+      var bParts = [];
+      if (urlCodes.length) bParts.push(urlCodes.length + ' selected card' + (urlCodes.length === 1 ? '' : 's'));
+      if (urlStatus) bParts.push('status: ' + urlStatus);
+      if (urlDateFrom) bParts.push('from ' + urlDateFrom);
+      if (urlDateTo) bParts.push('to ' + urlDateTo);
+      html += '<div id="giftCardsUrlFilterBanner" style="background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.35);color:#F59E0B;padding:8px 12px;margin-bottom:12px;border-radius:6px;display:flex;align-items:center;gap:12px;font-size:0.85rem;">' +
+        '<span>&#127873; Showing ' + bParts.join(', ') + '</span>' +
+        '<button type="button" onclick="clearGiftCardsFilter()" style="margin-left:auto;background:transparent;border:1px solid rgba(245,158,11,0.5);color:#F59E0B;padding:2px 10px;border-radius:4px;cursor:pointer;font-size:0.78rem;">Clear filter</button>' +
+        '</div>';
+    }
+
     // Filter
-    var filtered = cards;
-    if (currentGiftCardFilter !== 'all') {
+    var filtered;
+    if (hasUrlFilter) {
+      filtered = cards.filter(function(c) {
+        if (urlStatus && c.status !== urlStatus) return false;
+        var d = (c.issuedAt || '').slice(0, 10);
+        if (urlDateFrom && (!d || d < urlDateFrom)) return false;
+        if (urlDateTo && (!d || d > urlDateTo)) return false;
+        if (urlCodeLookup && !urlCodeLookup[c._code]) return false;
+        return true;
+      });
+    } else if (currentGiftCardFilter !== 'all') {
       filtered = cards.filter(function(c) { return c.status === currentGiftCardFilter; });
+    } else {
+      filtered = cards;
     }
 
     if (filtered.length === 0) {
@@ -246,6 +280,14 @@
   }
 
   // ---- Gift Card Config Modal (Step 2.1) ----
+
+  window.clearGiftCardsFilter = function() {
+    var p = (typeof window.getRouteParams === 'function') ? window.getRouteParams() : {};
+    var next = {};
+    var DROP = { status: 1, dateFrom: 1, dateTo: 1, codes: 1 };
+    Object.keys(p).forEach(function(k) { if (!DROP[k]) next[k] = p[k]; });
+    if (typeof navigateTo === 'function') navigateTo('gift-cards', next);
+  };
 
   window._gcOpenConfig = function() {
     var config = giftCardConfig || {};
