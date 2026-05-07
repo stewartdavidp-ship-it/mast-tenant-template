@@ -6936,6 +6936,9 @@
             <h2>Returns (RMA)</h2>
             <span class="products-stat" id="rmaCount"></span>
           </div>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span id="rmaAskAiSlot"></span>
+          </div>
         </div>
         <div id="rmaFilterPills" class="order-filter-pills"></div>
         <div id="rmaLoading" class="loading">Loading...</div>
@@ -7488,6 +7491,7 @@
       <div class="section-header">
         <h2>Inventory</h2>
         <div style="display:flex;gap:8px;">
+          <span id="inventoryAskAiSlot"></span>
           <button class="btn btn-primary" onclick="startIntakeMode()">📷 Inventory Intake</button>
           <button class="btn btn-secondary" onclick="openMoveItemsModal()">↔ Move Items</button>
           <button class="btn btn-secondary" onclick="openRecountModal()">📋 Recount</button>
@@ -9792,6 +9796,7 @@
         <div class="section-header">
           <h2>Enrollments</h2>
           <div style="display:flex;gap:8px;align-items:center;">
+            <span id="enrollmentsAskAiSlot"></span>
             <select id="enrollFilterStatus" onchange="window._enrollFilterStatus()" style="padding:6px 10px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text,#2a2a2a);font-size:0.85rem;">
               <option value="all">All Status</option>
               <option value="confirmed">Confirmed</option>
@@ -22364,6 +22369,124 @@ async function loadAskAiConfigUI() {
   if (sel) sel.value = cfg.subscription || '';
   if (cb)  cb.checked = !!cfg.mcpConfigured;
   _renderAskAiStatusBanner();
+}
+
+// ── Inventory Ask AI registration ────────────────────────────────────────────
+
+function paintInventoryAskAiSlot() {
+  var slot = document.getElementById('inventoryAskAiSlot');
+  if (!slot) return;
+  if (window.MastAskAi && window.MastAskAi.isEnabled()) {
+    slot.innerHTML = '<button class="btn btn-secondary" onclick="MastAskAi.open(\'inventory\')" title="Ask Claude about your inventory">✨ Ask AI</button>';
+  } else {
+    slot.innerHTML = '';
+  }
+}
+
+window.addEventListener('mastaskai:ready', paintInventoryAskAiSlot);
+window.addEventListener('mastaskai:configchanged', paintInventoryAskAiSlot);
+
+if (window.MastAskAi) {
+  window.MastAskAi.register('inventory', {
+    title: 'Ask AI about your inventory',
+    placeholder: 'e.g. Which products are out of stock or low? What is sitting on the shelf? Which haven\'t been counted in 60+ days?',
+    notes: [
+      'Money values use cents (priceCents on each product); quantities are whole units.',
+      'Stock types: in-stock / strict / limited (true inventory tracked), stock-to-build (kept on hand but built when reordered), build-to-order / made-to-order (BTO — never "out of stock", just lead time).',
+      'Health buckets reflect last-counted recency: green = within 30 days, yellow = 31-60, red = 60+ or never. BTO products are excluded from health (stockType=none).',
+      'available = onHand - committed; if a product has variants, those values aggregate across all variant SKUs.',
+      'topProductsBySpend lists products sorted by available × priceCents (potential revenue sitting on the shelf).',
+      'lowOrOut surfaces specifically the products the operator should restock; capped at the worst 20.'
+    ],
+    buildContext: function() {
+      if (typeof productsData === 'undefined' || !productsData || !productsData.length) {
+        return { route: '/app#inventory', pageTitle: 'Inventory', aggregates: { rowCount: 0 }, note: 'Inventory data not loaded yet.' };
+      }
+      var totalProducts = productsData.length;
+      var totalOnHand = 0, totalCommitted = 0;
+      var byStockType = {};
+      var byHealth = { green: 0, yellow: 0, red: 0, never: 0, none: 0 };
+      var lowOrOut = [];
+      var topByValue = [];
+
+      productsData.forEach(function(p) {
+        var inv = (typeof inventory !== 'undefined' && inventory[p.pid]) ? inventory[p.pid] : {};
+        var totals = (typeof getInventoryTotals === 'function') ? getInventoryTotals(inv) : { onHand: 0, available: 0, committed: 0 };
+        var stockType = inv.stockType || 'made-to-order';
+        var threshold = inv.lowStockThreshold || 2;
+        var isBTO = (stockType === 'build-to-order' || stockType === 'made-to-order');
+
+        totalOnHand += totals.onHand;
+        totalCommitted += totals.committed;
+        if (!byStockType[stockType]) byStockType[stockType] = { count: 0, totalOnHand: 0 };
+        byStockType[stockType].count++;
+        byStockType[stockType].totalOnHand += totals.onHand;
+
+        var stock = (inv && inv.stock) ? inv.stock : {};
+        var lastCounted = (stock._default && stock._default.lastCountedAt) ? stock._default.lastCountedAt : null;
+        if (isBTO) {
+          byHealth.none++;
+        } else if (!lastCounted) {
+          byHealth.never++;
+        } else {
+          var days = Math.floor((Date.now() - new Date(lastCounted).getTime()) / 86400000);
+          if (days <= 30) byHealth.green++;
+          else if (days <= 60) byHealth.yellow++;
+          else byHealth.red++;
+        }
+
+        if (!isBTO) {
+          var status = null;
+          if (totals.available <= 0) status = 'out_of_stock';
+          else if (totals.available <= threshold) status = 'low';
+          if (status) {
+            lowOrOut.push({
+              product: p.name,
+              status: status,
+              available: totals.available,
+              onHand: totals.onHand,
+              committed: totals.committed,
+              threshold: threshold,
+              stockType: stockType,
+              priceUSD: p.priceCents ? +(p.priceCents / 100).toFixed(2) : null
+            });
+          }
+        }
+
+        var valueCents = (p.priceCents || 0) * Math.max(0, totals.available);
+        if (valueCents > 0) {
+          topByValue.push({
+            product: p.name,
+            available: totals.available,
+            priceUSD: p.priceCents ? +(p.priceCents / 100).toFixed(2) : null,
+            potentialRevenueUSD: +(valueCents / 100).toFixed(2),
+            stockType: stockType
+          });
+        }
+      });
+
+      lowOrOut.sort(function(a, b) {
+        if (a.status !== b.status) return a.status === 'out_of_stock' ? -1 : 1;
+        return a.available - b.available;
+      });
+      topByValue.sort(function(a, b) { return b.potentialRevenueUSD - a.potentialRevenueUSD; });
+
+      return {
+        route: '/app#inventory',
+        pageTitle: 'Inventory',
+        aggregates: {
+          rowCount: totalProducts,
+          totalOnHand: totalOnHand,
+          totalCommitted: totalCommitted,
+          totalAvailable: totalOnHand - totalCommitted,
+          byStockType: byStockType,
+          byHealth: byHealth
+        },
+        lowOrOut: lowOrOut.slice(0, 20),
+        topProductsByPotentialRevenue: topByValue.slice(0, 15)
+      };
+    }
+  });
 }
 
 window.saveAskAiConfig = async function() {

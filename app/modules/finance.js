@@ -1280,11 +1280,16 @@ function setupArTab() {
   injectFinancePulseCSS();
   _arFilter = 'all';
   var el = document.getElementById('financeArTab');
+  var askAi = (window.MastAskAi && window.MastAskAi.isEnabled())
+    ? '<button class="btn btn-secondary btn-small" onclick="MastAskAi.open(\'finance-ar\')" title="Ask Claude about your AR">✨ Ask AI</button>'
+    : '';
   el.innerHTML =
     '<div style="padding:20px;max-width:1100px;">' +
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">' +
     '<h2 style="margin:0;font-size:1.15rem;font-weight:700;">Accounts Receivable</h2>' +
+    '<div style="display:flex;gap:8px;">' + askAi +
     '<button class="btn btn-secondary btn-small" onclick="loadArData()">Refresh</button>' +
+    '</div>' +
     '</div>' +
     '<div id="fArContent">' + skeletonCards(5) + '<div style="margin-top:16px;">' + skeletonTable(5,6) + '</div></div>' +
     '</div>';
@@ -1412,6 +1417,92 @@ function renderArContent() {
 
   h += '</tbody></table></div>';
   return h;
+}
+
+if (window.MastAskAi) {
+  window.MastAskAi.register('finance-ar', {
+    title: 'Ask AI about your AR',
+    placeholder: 'e.g. Who owes me the most? Which invoices are 60+ days overdue? What\'s my expected cash this month?',
+    notes: [
+      'Amounts are in CENTS (amtDue, totalCents, paidCents).',
+      'Aging buckets: current (not yet due), 1_to_30, 31_to_60, 61_to_90, 90_plus (days past due date).',
+      'topDebtors aggregates by customerName across all open invoices in the current view.',
+      'oldestOverdue lists the 15 highest-aged invoices — top of the collection priority list.',
+      'totalARCents is sum of amtDue across all rows; bucketTotalsUSD breaks that down by aging bucket.',
+      'Only invoiceStatus = sent or overdue invoices are loaded; paid invoices are excluded by the query.'
+    ],
+    buildContext: function() {
+      if (!_arData) return { route: '/app#finance-ar', pageTitle: 'Finance → AR', aggregates: { rowCount: 0 }, note: 'AR data not loaded yet.' };
+      var rows = _arData.rows;
+      var filtered = rows.filter(function(r) {
+        if (_arFilter === 'all') return true;
+        if (_arFilter === 'current') return r.bucket === 'current';
+        if (_arFilter === 'overdue') return r.bucket !== 'current';
+        return true;
+      });
+
+      var bucketTotalsCents = { current: 0, '1_to_30': 0, '31_to_60': 0, '61_to_90': 0, '90_plus': 0 };
+      var bucketCounts = { current: 0, '1_to_30': 0, '31_to_60': 0, '61_to_90': 0, '90_plus': 0 };
+      var totalARCents = 0;
+      var byCustomer = {};
+      filtered.forEach(function(r) {
+        bucketTotalsCents[r.bucket] += r.amtDue;
+        bucketCounts[r.bucket]++;
+        totalARCents += r.amtDue;
+        var c = r.customerName || '(unknown)';
+        if (!byCustomer[c]) byCustomer[c] = { invoiceCount: 0, totalDueCents: 0, oldestDays: 0 };
+        byCustomer[c].invoiceCount++;
+        byCustomer[c].totalDueCents += r.amtDue;
+        if (r.daysOverdue > byCustomer[c].oldestDays) byCustomer[c].oldestDays = r.daysOverdue;
+      });
+
+      var bucketTotalsUSD = {};
+      Object.keys(bucketTotalsCents).forEach(function(k) {
+        bucketTotalsUSD[k] = { count: bucketCounts[k], totalUSD: +(bucketTotalsCents[k] / 100).toFixed(2) };
+      });
+
+      var topDebtors = Object.keys(byCustomer)
+        .map(function(c) {
+          return {
+            customer: c,
+            invoiceCount: byCustomer[c].invoiceCount,
+            totalDueUSD: +(byCustomer[c].totalDueCents / 100).toFixed(2),
+            oldestDaysOverdue: byCustomer[c].oldestDays
+          };
+        })
+        .sort(function(a, b) { return b.totalDueUSD - a.totalDueUSD; })
+        .slice(0, 10);
+
+      var oldestOverdue = filtered.slice()
+        .sort(function(a, b) { return b.daysOverdue - a.daysOverdue; })
+        .slice(0, 15)
+        .map(function(r) {
+          return {
+            customer: r.customerName,
+            invoiceNumber: r.invoiceNumber || null,
+            amtDueUSD: +(r.amtDue / 100).toFixed(2),
+            dueDate: r.dueDate || null,
+            daysOverdue: r.daysOverdue,
+            bucket: r.bucket
+          };
+        });
+
+      return {
+        route: '/app#finance-ar',
+        pageTitle: 'Finance → AR',
+        filters: { bucket: _arFilter },
+        asOf: _arData.asOf,
+        aggregates: {
+          rowCount: filtered.length,
+          totalARCents: totalARCents,
+          totalARUSD: +(totalARCents / 100).toFixed(2),
+          bucketTotalsUSD: bucketTotalsUSD
+        },
+        topDebtors: topDebtors,
+        oldestOverdue: oldestOverdue
+      };
+    }
+  });
 }
 
 window.finArFilter = function(bucket) {

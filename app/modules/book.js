@@ -3532,6 +3532,124 @@
     });
   }
 
+  // ============================================================
+  // Ask AI registration — Enrollments
+  // ============================================================
+
+  function paintEnrollmentsAskAiSlot() {
+    var slot = document.getElementById('enrollmentsAskAiSlot');
+    if (!slot) return;
+    if (window.MastAskAi && window.MastAskAi.isEnabled()) {
+      slot.innerHTML = '<button class="btn btn-secondary btn-small" onclick="MastAskAi.open(\'enrollments\')" title="Ask Claude about your enrollments">✨ Ask AI</button>';
+    } else {
+      slot.innerHTML = '';
+    }
+  }
+
+  window.addEventListener('mastaskai:ready', paintEnrollmentsAskAiSlot);
+  window.addEventListener('mastaskai:configchanged', paintEnrollmentsAskAiSlot);
+
+  if (window.MastAskAi) {
+    window.MastAskAi.register('enrollments', {
+      title: 'Ask AI about your enrollments',
+      placeholder: 'e.g. What\'s my fill rate by class? Which classes are waitlisted? Who are my repeat students?',
+      notes: [
+        'Statuses: confirmed (paid + holding seat), waitlisted (queued for cancellation seat), cancelled, completed (attended), no-show (registered but did not attend), late.',
+        'pricePaidCents is in cents; pricePaid (without suffix) may also exist — prefer pricePaidCents when both are present.',
+        'byClass aggregates by classId — match against classMap for human-readable names where available.',
+        'topClassesByRevenue ranks by total dollars collected from enrollments in the current view.',
+        'topStudents counts enrollments per student email — repeat customers for the class business.',
+        'no-show rate (noShowCount / completedCount + noShowCount) is a useful health metric for class confirmations.',
+        'If filters.status or filters.class is set, all aggregates reflect that filtered view.'
+      ],
+      buildContext: function() {
+        var statusFilter = (document.getElementById('enrollFilterStatus') || {}).value || 'all';
+        var classFilter = (document.getElementById('enrollFilterClass') || {}).value || 'all';
+        var filtered = enrollmentsData.filter(function(e) {
+          if (statusFilter !== 'all' && e.status !== statusFilter) return false;
+          if (classFilter !== 'all' && e.classId !== classFilter) return false;
+          return true;
+        });
+
+        var byStatus = {}, byClass = {}, byMonth = {}, byStudent = {};
+        var totalPaidCents = 0;
+        filtered.forEach(function(e) {
+          var status = e.status || 'confirmed';
+          if (!byStatus[status]) byStatus[status] = { count: 0, totalCents: 0 };
+          byStatus[status].count++;
+          var paid = e.pricePaidCents || (e.pricePaid ? Math.round(e.pricePaid * 100) : 0);
+          byStatus[status].totalCents += paid;
+          totalPaidCents += paid;
+
+          var classId = e.classId || '(unknown)';
+          var className = (typeof allClassesMap !== 'undefined' && allClassesMap[classId]) ? allClassesMap[classId].name : classId;
+          if (!byClass[classId]) byClass[classId] = { name: className, count: 0, totalCents: 0, byStatus: {} };
+          byClass[classId].count++;
+          byClass[classId].totalCents += paid;
+          byClass[classId].byStatus[status] = (byClass[classId].byStatus[status] || 0) + 1;
+
+          var month = (e.enrolledAt || '').substring(0, 7) || 'unknown';
+          if (!byMonth[month]) byMonth[month] = { count: 0, totalCents: 0 };
+          byMonth[month].count++; byMonth[month].totalCents += paid;
+
+          var student = e.studentEmail || e.customerEmail || '(no email)';
+          if (!byStudent[student]) byStudent[student] = { count: 0, totalCents: 0, name: e.studentName || e.customerName || '' };
+          byStudent[student].count++; byStudent[student].totalCents += paid;
+        });
+
+        var topClassesByRevenue = Object.keys(byClass)
+          .map(function(id) {
+            return {
+              classId: id,
+              name: byClass[id].name,
+              enrollmentCount: byClass[id].count,
+              revenueUSD: +(byClass[id].totalCents / 100).toFixed(2),
+              byStatus: byClass[id].byStatus
+            };
+          })
+          .sort(function(a, b) { return b.revenueUSD - a.revenueUSD; })
+          .slice(0, 10);
+
+        var topStudents = Object.keys(byStudent)
+          .map(function(email) {
+            return {
+              email: email,
+              name: byStudent[email].name,
+              enrollmentCount: byStudent[email].count,
+              totalSpentUSD: +(byStudent[email].totalCents / 100).toFixed(2)
+            };
+          })
+          .sort(function(a, b) { return b.enrollmentCount - a.enrollmentCount; })
+          .slice(0, 10);
+
+        var completedCount = (byStatus['completed'] || { count: 0 }).count;
+        var noShowCount = (byStatus['no-show'] || { count: 0 }).count;
+        var noShowRate = (completedCount + noShowCount) > 0
+          ? +(noShowCount / (completedCount + noShowCount)).toFixed(3)
+          : null;
+
+        return {
+          route: '/app#enrollments',
+          pageTitle: 'Classes → Enrollments',
+          filters: {
+            status: statusFilter,
+            classId: classFilter !== 'all' ? classFilter : null
+          },
+          aggregates: {
+            rowCount: filtered.length,
+            totalPaidCents: totalPaidCents,
+            totalPaidUSD: +(totalPaidCents / 100).toFixed(2),
+            noShowRate: noShowRate,
+            byStatus: byStatus,
+            byMonth: byMonth
+          },
+          topClassesByRevenue: topClassesByRevenue,
+          topStudents: topStudents
+        };
+      }
+    });
+  }
+
   MastAdmin.registerModule('book', {
     routes: {
       'book': { tab: 'bookTab', setup: function() { loadClasses(); switchSubTab('classes'); } },

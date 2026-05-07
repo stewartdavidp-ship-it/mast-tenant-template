@@ -574,7 +574,10 @@
     var ratedList = all.filter(function (r) { return r.rating; });
     var avgRating = ratedList.length ? (ratedList.reduce(function (s, r) { return s + (r.rating || 0); }, 0) / ratedList.length) : 0;
     var html = '<div style="padding:24px;">';
-    html += '<div class="section-header" style="margin-bottom:14px;"><h2 style="margin:0;">Reviews</h2><button class="btn btn-secondary btn-small" onclick="csReviewsRefresh()">Refresh</button></div>';
+    var askAi = (window.MastAskAi && window.MastAskAi.isEnabled())
+      ? '<button class="btn btn-secondary btn-small" onclick="MastAskAi.open(\'cs-reviews\')" title="Ask Claude about your reviews">✨ Ask AI</button>'
+      : '';
+    html += '<div class="section-header" style="margin-bottom:14px;"><h2 style="margin:0;">Reviews</h2><div style="display:flex;gap:8px;">' + askAi + '<button class="btn btn-secondary btn-small" onclick="csReviewsRefresh()">Refresh</button></div></div>';
     html += '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:18px;">';
     html += kpiCard('Pending', String(pending), 'awaiting review');
     html += kpiCard('Approved', String(approved), 'live on site');
@@ -1596,6 +1599,97 @@
   // ============================================================
   // Register with MastAdmin
   // ============================================================
+
+  // ============================================================
+  // Ask AI registration (MastAskAi)
+  // ============================================================
+
+  if (window.MastAskAi) {
+    window.MastAskAi.register('cs-reviews', {
+      title: 'Ask AI about your reviews',
+      placeholder: 'e.g. What\'s my average rating? Which products are getting low ratings? What themes show up in negative reviews?',
+      notes: [
+        'Statuses: pending (awaiting moderation), approved (live on site), rejected (hidden).',
+        'rating is on a 1-5 scale; null/missing means an unrated review.',
+        'avgRating in aggregates is computed only across rated reviews.',
+        'byProduct buckets reviews by productId; missing productId means a generic shop review.',
+        'topLowRatedProducts surfaces products with the lowest average rating (min 2 reviews to count) — investigate these first.',
+        'recentReviews includes the most recent 15 reviews regardless of status, with full body text so themes can be compared.'
+      ],
+      buildContext: function() {
+        var all = Object.values(reviewsData);
+        var filtered = reviewsFilter === 'all' ? all.slice() : all.filter(function(r) { return r.status === reviewsFilter; });
+        filtered.sort(function(a, b) { return (b.createdAt || '').localeCompare(a.createdAt || ''); });
+
+        var byStatus = {}, byRating = {1:0,2:0,3:0,4:0,5:0,unrated:0}, byProduct = {}, byMonth = {};
+        var totalRated = 0, sumRating = 0;
+        all.forEach(function(r) {
+          var status = r.status || 'pending';
+          if (!byStatus[status]) byStatus[status] = { count: 0 };
+          byStatus[status].count++;
+          if (r.rating) {
+            byRating[r.rating] = (byRating[r.rating] || 0) + 1;
+            totalRated++;
+            sumRating += r.rating;
+          } else {
+            byRating.unrated++;
+          }
+          var pid = r.productId || '(general)';
+          if (!byProduct[pid]) byProduct[pid] = { count: 0, sumRating: 0, ratedCount: 0 };
+          byProduct[pid].count++;
+          if (r.rating) { byProduct[pid].sumRating += r.rating; byProduct[pid].ratedCount++; }
+          var month = (r.createdAt || '').substring(0, 7) || 'unknown';
+          if (!byMonth[month]) byMonth[month] = { count: 0 };
+          byMonth[month].count++;
+        });
+
+        var topLowRatedProducts = Object.keys(byProduct)
+          .filter(function(pid) { return byProduct[pid].ratedCount >= 2; })
+          .map(function(pid) {
+            return {
+              productId: pid,
+              reviewCount: byProduct[pid].count,
+              avgRating: +(byProduct[pid].sumRating / byProduct[pid].ratedCount).toFixed(2)
+            };
+          })
+          .sort(function(a, b) { return a.avgRating - b.avgRating; })
+          .slice(0, 10);
+
+        var recentReviews = all.slice()
+          .sort(function(a, b) { return (b.createdAt || '').localeCompare(a.createdAt || ''); })
+          .slice(0, 15)
+          .map(function(r) {
+            return {
+              createdAt: (r.createdAt || '').slice(0, 10),
+              rating: r.rating || null,
+              status: r.status || 'pending',
+              productId: r.productId || null,
+              headline: r.headline || null,
+              body: (r.body || '').slice(0, 400),
+              reviewerName: r.reviewerName || 'Anonymous'
+            };
+          });
+
+        return {
+          route: '/app#cs-reviews',
+          pageTitle: 'Customer Service → Reviews',
+          filters: { status: reviewsFilter },
+          aggregates: {
+            rowCount: filtered.length,
+            totalAcrossStatuses: all.length,
+            avgRating: totalRated > 0 ? +(sumRating / totalRated).toFixed(2) : null,
+            ratedCount: totalRated,
+            unratedCount: byRating.unrated,
+            byStatus: byStatus,
+            byRating: byRating,
+            byMonth: byMonth
+          },
+          topLowRatedProducts: topLowRatedProducts,
+          recentReviews: recentReviews
+        };
+      }
+    });
+  }
 
   MastAdmin.registerModule('customer-service', {
     routes: {

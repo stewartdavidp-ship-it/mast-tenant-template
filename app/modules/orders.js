@@ -4336,6 +4336,115 @@
   }
 
   // ============================================================
+  // RMA Ask AI registration
+  // ============================================================
+
+  function paintRmaAskAiSlot() {
+    var slot = document.getElementById('rmaAskAiSlot');
+    if (!slot) return;
+    if (window.MastAskAi && window.MastAskAi.isEnabled()) {
+      slot.innerHTML = '<button class="btn" style="font-size:0.85rem;padding:6px 12px;" onclick="MastAskAi.open(\'rma\')" title="Ask Claude about your returns">✨ Ask AI</button>';
+    } else {
+      slot.innerHTML = '';
+    }
+  }
+
+  window.addEventListener('mastaskai:ready', paintRmaAskAiSlot);
+  window.addEventListener('mastaskai:configchanged', paintRmaAskAiSlot);
+
+  if (window.MastAskAi) {
+    window.MastAskAi.register('rma', {
+      title: 'Ask AI about your returns',
+      placeholder: 'e.g. What is my return rate this period? Which products get returned most? What reasons come up most?',
+      notes: [
+        'RMA statuses: requested, approved, declined, shipped-back, received, inspected, restocked, seconds, repair-queued, written-off, refund-issued.',
+        'Active = requested|approved|shipped-back|received|inspected. Completed = restocked|seconds|repair-queued|written-off|refund-issued.',
+        'Reasons are user-submitted strings (e.g. "damaged in shipping", "wrong size", "changed mind") — group similar wordings yourself when answering.',
+        'requestedAt and createdAt are ISO timestamps; use the more recent of the two when computing age.',
+        'topProducts buckets by item.productName across all RMAs in the current view; topReasons groups by the reason field.',
+        'refundsTotalUSD reflects refund-issued items only; outstandingTotalUSD is items in active statuses where a refund may still be issued.'
+      ],
+      buildContext: function() {
+        var all = getRmaArray();
+        var ACTIVE = ['requested', 'approved', 'shipped-back', 'received', 'inspected'];
+        var COMPLETED = ['restocked', 'seconds', 'repair-queued', 'written-off', 'refund-issued'];
+        var filtered;
+        if (rmaFilter === 'all') filtered = all;
+        else if (rmaFilter === 'active') filtered = all.filter(function(r) { return ACTIVE.indexOf(r.status) >= 0; });
+        else if (rmaFilter === 'completed') filtered = all.filter(function(r) { return COMPLETED.indexOf(r.status) >= 0; });
+        else filtered = all.filter(function(r) { return (r.status || 'requested') === rmaFilter; });
+
+        var byStatus = {}, byReason = {}, byProduct = {}, byMonth = {};
+        var refundsTotalCents = 0, outstandingTotalCents = 0;
+        filtered.forEach(function(r) {
+          var status = r.status || 'requested';
+          if (!byStatus[status]) byStatus[status] = { count: 0 };
+          byStatus[status].count++;
+
+          var reason = (r.reason || '(unspecified)').trim();
+          if (!byReason[reason]) byReason[reason] = { count: 0 };
+          byReason[reason].count++;
+
+          (r.items || []).forEach(function(it) {
+            var pname = it.productName || '(unknown)';
+            if (!byProduct[pname]) byProduct[pname] = { count: 0, qty: 0 };
+            byProduct[pname].count++;
+            byProduct[pname].qty += (it.qty || 1);
+          });
+
+          var dateStr = r.requestedAt || r.createdAt || '';
+          var month = dateStr.substring(0, 7) || 'unknown';
+          if (!byMonth[month]) byMonth[month] = { count: 0 };
+          byMonth[month].count++;
+
+          var refundCents = Math.round((r.refundAmount || 0) * 100);
+          if (status === 'refund-issued') refundsTotalCents += refundCents;
+          else if (ACTIVE.indexOf(status) >= 0) outstandingTotalCents += refundCents;
+        });
+
+        var topProducts = Object.keys(byProduct)
+          .map(function(name) { return { product: name, returnCount: byProduct[name].count, qty: byProduct[name].qty }; })
+          .sort(function(a, b) { return b.returnCount - a.returnCount; })
+          .slice(0, 10);
+
+        var topReasons = Object.keys(byReason)
+          .map(function(reason) { return { reason: reason, count: byReason[reason].count }; })
+          .sort(function(a, b) { return b.count - a.count; })
+          .slice(0, 10);
+
+        var recentRmas = filtered.slice(0, 15).map(function(r) {
+          return {
+            requestedAt: (r.requestedAt || r.createdAt || '').slice(0, 10),
+            customer: r.customerEmail || r.customerName || '(unknown)',
+            status: r.status || 'requested',
+            reason: r.reason || '(unspecified)',
+            itemCount: (r.items || []).reduce(function(t, it) { return t + (it.qty || 1); }, 0),
+            refundUSD: r.refundAmount ? +(+r.refundAmount).toFixed(2) : 0
+          };
+        });
+
+        return {
+          route: '/app#rma',
+          pageTitle: 'Returns (RMA)',
+          filters: { status: rmaFilter },
+          aggregates: {
+            rowCount: filtered.length,
+            activeCount: filtered.filter(function(r) { return ACTIVE.indexOf(r.status) >= 0; }).length,
+            completedCount: filtered.filter(function(r) { return COMPLETED.indexOf(r.status) >= 0; }).length,
+            refundsTotalUSD: +(refundsTotalCents / 100).toFixed(2),
+            outstandingTotalUSD: +(outstandingTotalCents / 100).toFixed(2),
+            byStatus: byStatus,
+            byMonth: byMonth
+          },
+          topProducts: topProducts,
+          topReasons: topReasons,
+          recentRmas: recentRmas
+        };
+      }
+    });
+  }
+
+  // ============================================================
   // Register with MastAdmin
   // ============================================================
 
