@@ -28971,6 +28971,35 @@ function handleProductsCategoryChange() {
 }
 
 
+// Tenant business timezone helpers — lazy fetch from businessEntity, used
+// by URL-driven date filtering so admin agrees with MCP regardless of
+// where the user is browsing from. Mirrors the helpers in modules/orders.js
+// but lives in core because productsTab is a core view (not a module).
+window._productsTenantTz = window._productsTenantTz === undefined ? null : window._productsTenantTz;
+window._productsTenantTzLoading = window._productsTenantTzLoading || null;
+function ensureProductsTenantTz() {
+  if (window._productsTenantTz !== null) return Promise.resolve(window._productsTenantTz);
+  if (window._productsTenantTzLoading) return window._productsTenantTzLoading;
+  window._productsTenantTzLoading = (window.MastDB && MastDB.businessEntity
+    ? MastDB.businessEntity.get('operations')
+    : Promise.resolve({ data: null })
+  ).then(function(r) {
+    var d = (r && r.data) || {};
+    window._productsTenantTz = (d.localization && d.localization.timezone) || '';
+    return window._productsTenantTz;
+  }).catch(function() { window._productsTenantTz = ''; return ''; });
+  return window._productsTenantTzLoading;
+}
+function productsTzDateStr(isoStr) {
+  if (!isoStr) return '';
+  var d = new Date(isoStr);
+  if (isNaN(d.getTime())) return '';
+  var opts = { year: 'numeric', month: '2-digit', day: '2-digit' };
+  if (window._productsTenantTz) opts.timeZone = window._productsTenantTz;
+  var fmt = new Intl.DateTimeFormat('en-CA', opts);
+  return fmt.format(d); // YYYY-MM-DD
+}
+
 function renderProducts() {
   var cat = document.getElementById('productsCategory').value;
   // Unified product filter: 'develop' | 'catalog' | 'sell'. Sidebar entry
@@ -28979,6 +29008,27 @@ function renderProducts() {
     window.productsStatusFilter = (window.productsViewMode === 'develop') ? 'develop' : 'catalog';
   }
   var statusFilter = window.productsStatusFilter;
+
+  // URL-driven filters from MCP admin links: status, category, dateFrom,
+  // dateTo, productIds (#products?...). When any URL filter is present it
+  // overrides pill state for this render — the orange banner surfaces it
+  // and Clear restores pill-driven view.
+  var routeParams = (typeof window.getRouteParams === 'function') ? window.getRouteParams() : {};
+  var urlStatus = routeParams && typeof routeParams.status === 'string' ? routeParams.status : '';
+  var urlCategory = routeParams && typeof routeParams.category === 'string' ? routeParams.category : '';
+  var urlDateFrom = routeParams && typeof routeParams.dateFrom === 'string' ? routeParams.dateFrom.slice(0, 10) : '';
+  var urlDateTo = routeParams && typeof routeParams.dateTo === 'string' ? routeParams.dateTo.slice(0, 10) : '';
+  var urlIdsParam = routeParams && typeof routeParams.productIds === 'string' ? routeParams.productIds : '';
+  var urlIdSet = urlIdsParam
+    ? urlIdsParam.split(',').map(function(s) { return s.trim(); }).filter(Boolean)
+    : [];
+  var urlIdLookup = urlIdSet.length > 0 ? Object.create(null) : null;
+  if (urlIdLookup) urlIdSet.forEach(function(id) { urlIdLookup[id] = true; });
+  var hasUrlFilter = !!(urlStatus || urlCategory || urlDateFrom || urlDateTo || urlIdSet.length);
+  if (hasUrlFilter && (urlDateFrom || urlDateTo) && window._productsTenantTz === null) {
+    // TZ not yet loaded — first render uses browser TZ; re-render once it resolves.
+    ensureProductsTenantTz().then(function() { renderProducts(); });
+  }
 
   function _statusOf(p) { return (p && p.status) || 'draft'; }
   function _isOnAnyChannel(p) {
@@ -29033,12 +29083,54 @@ function renderProducts() {
   }
 
   var filtered = productsData.filter(function(p) {
+    if (hasUrlFilter) {
+      // URL-driven filters from an MCP admin link override pill state.
+      if (urlStatus && (p.status || 'draft') !== urlStatus) return false;
+      if (urlCategory && (!p.categories || p.categories.indexOf(urlCategory) === -1)) return false;
+      if (urlIdLookup && !urlIdLookup[p.pid]) return false;
+      if (urlDateFrom || urlDateTo) {
+        var d = productsTzDateStr(p.createdAt || '');
+        if (!d) return false;
+        if (urlDateFrom && d < urlDateFrom) return false;
+        if (urlDateTo && d > urlDateTo) return false;
+      }
+      return true;
+    }
     if (!_matchesFilter(p, statusFilter)) return false;
     if (cat !== 'all' && (!p.categories || p.categories.indexOf(cat) === -1)) return false;
     if (stockFilter === 'low' && _stockBucket(p) !== 'low') return false;
     if (stockFilter === 'out' && _stockBucket(p) !== 'out') return false;
     return true;
   });
+
+  // URL-filter banner — surfaces active MCP-link filters with a Clear button.
+  // Inserted just above #productsGrid; created lazily so it doesn't appear
+  // in the DOM during normal pill-driven use.
+  (function renderProductsUrlFilterBanner() {
+    var bannerEl = document.getElementById('productsUrlFilterBanner');
+    if (!bannerEl && hasUrlFilter) {
+      bannerEl = document.createElement('div');
+      bannerEl.id = 'productsUrlFilterBanner';
+      bannerEl.style.cssText = 'background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.35);color:#F59E0B;padding:8px 12px;margin-bottom:12px;border-radius:6px;display:flex;align-items:center;gap:12px;font-size:0.875rem;';
+      var grid = document.getElementById('productsGrid');
+      if (grid && grid.parentNode) grid.parentNode.insertBefore(bannerEl, grid);
+    }
+    if (!bannerEl) return;
+    if (hasUrlFilter) {
+      var parts = [];
+      if (urlIdSet.length) parts.push(urlIdSet.length + ' selected product' + (urlIdSet.length === 1 ? '' : 's'));
+      if (urlStatus) parts.push('status: ' + String(urlStatus).replace(/_/g, ' '));
+      if (urlCategory) parts.push('category: ' + urlCategory);
+      if (urlDateFrom && urlDateTo) parts.push('from ' + urlDateFrom + ' to ' + urlDateTo);
+      else if (urlDateFrom) parts.push('from ' + urlDateFrom + ' onward');
+      else if (urlDateTo) parts.push('through ' + urlDateTo);
+      bannerEl.innerHTML = '<span>📅 Showing ' + parts.join(', ') + '</span>' +
+        '<button type="button" onclick="clearProductsFilter()" style="margin-left:auto;background:transparent;border:1px solid rgba(245,158,11,0.5);color:#F59E0B;padding:2px 10px;border-radius:4px;cursor:pointer;font-size:0.8rem;">Clear filter</button>';
+      bannerEl.style.display = 'flex';
+    } else {
+      bannerEl.style.display = 'none';
+    }
+  })();
 
   // Total / count
   // productsCount text was the old "N products" header. Now redundant with
@@ -29203,6 +29295,18 @@ function setProductsStockFilter(v) {
   window.productsStockFilter = (v === 'low' || v === 'out') ? v : 'all';
   renderProducts();
 }
+
+// Drop URL-driven product filters (status, category, date range, productIds);
+// keep route + any non-filter params. navigateTo re-applies and re-renders.
+window.clearProductsFilter = function() {
+  var params = (typeof window.getRouteParams === 'function') ? window.getRouteParams() : {};
+  var next = {};
+  var DROP = { status: 1, category: 1, dateFrom: 1, dateTo: 1, productIds: 1 };
+  Object.keys(params).forEach(function(k) {
+    if (!DROP[k]) next[k] = params[k];
+  });
+  if (typeof navigateTo === 'function') navigateTo('products', next);
+};
 
 // ============================================================
 // Product Detail View & Variant Inventory
