@@ -213,6 +213,42 @@
       filtered = sourceFiltered.filter(function(o) { return (o.status || 'placed') === orderFilter; });
     }
 
+    // Date-range filter from URL params (#orders?dateFrom=YYYY-MM-DD&dateTo=...)
+    var routeParams = (typeof window.getRouteParams === 'function') ? window.getRouteParams() : {};
+    var dateFrom = routeParams && typeof routeParams.dateFrom === 'string' ? routeParams.dateFrom.slice(0, 10) : '';
+    var dateTo = routeParams && typeof routeParams.dateTo === 'string' ? routeParams.dateTo.slice(0, 10) : '';
+    if (dateFrom || dateTo) {
+      filtered = filtered.filter(function(o) {
+        var d = (o.placedAt || o.createdAt || '').slice(0, 10);
+        if (dateFrom && d < dateFrom) return false;
+        if (dateTo && d > dateTo) return false;
+        return true;
+      });
+    }
+
+    // Date filter banner — surfaces the active date filter so users know
+    // why fewer orders are showing, with a clear button.
+    var bannerEl = document.getElementById('ordersDateBanner');
+    if (!bannerEl && (dateFrom || dateTo)) {
+      bannerEl = document.createElement('div');
+      bannerEl.id = 'ordersDateBanner';
+      bannerEl.style.cssText = 'background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.35);color:#F59E0B;padding:8px 12px;margin-bottom:12px;border-radius:6px;display:flex;align-items:center;gap:12px;font-size:0.875rem;';
+      var pillsParent = pillsEl && pillsEl.parentNode;
+      if (pillsParent) pillsParent.insertBefore(bannerEl, pillsEl.nextSibling);
+    }
+    if (bannerEl) {
+      if (dateFrom || dateTo) {
+        var label = 'Showing orders';
+        if (dateFrom && dateTo) label += ' from ' + dateFrom + ' to ' + dateTo;
+        else if (dateFrom) label += ' from ' + dateFrom + ' onward';
+        else label += ' through ' + dateTo;
+        bannerEl.innerHTML = '<span>📅 ' + label + '</span><button type="button" onclick="clearOrdersDateFilter()" style="margin-left:auto;background:transparent;border:1px solid rgba(245,158,11,0.5);color:#F59E0B;padding:2px 10px;border-radius:4px;cursor:pointer;font-size:0.8rem;">Clear filter</button>';
+        bannerEl.style.display = 'flex';
+      } else {
+        bannerEl.style.display = 'none';
+      }
+    }
+
     if (countEl) countEl.textContent = filtered.length + ' order' + (filtered.length !== 1 ? 's' : '');
 
     if (filtered.length === 0) {
@@ -4044,6 +4080,16 @@
   window.getOrderItemsLabel = getOrderItemsLabel;
   window.setOrderFilter = setOrderFilter;
   window.filterOrdersBySource = filterOrdersBySource;
+  window.clearOrdersDateFilter = function() {
+    // Drop date params from the URL hash, keep route + other params.
+    var params = (typeof window.getRouteParams === 'function') ? window.getRouteParams() : {};
+    var next = {};
+    Object.keys(params).forEach(function(k) {
+      if (k !== 'dateFrom' && k !== 'dateTo') next[k] = params[k];
+    });
+    // navigateTo with cleaned params re-applies route + re-renders.
+    if (typeof navigateTo === 'function') navigateTo('orders', next);
+  };
   window.renderOrders = renderOrders;
   window.renderOrderProgress = renderOrderProgress;
   window.viewOrder = viewOrder;
