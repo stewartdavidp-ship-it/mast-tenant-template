@@ -259,13 +259,56 @@
   // ========================================
   function renderRoster() {
     var h = '';
-    var active = studentsData.filter(function(s) { return (s.status || 'active') !== 'inactive'; });
+
+    // URL-driven filters from MCP admin links: status, studentIds, onboardingGapsOnly, isMinor
+    var rp = (typeof window.getRouteParams === 'function') ? window.getRouteParams() : {};
+    var urlStatus = (rp && typeof rp.status === 'string') ? rp.status : '';
+    var urlIdsParam = (rp && typeof rp.studentIds === 'string') ? rp.studentIds : '';
+    var urlIds = urlIdsParam ? urlIdsParam.split(',').map(function(s) { return s.trim(); }).filter(Boolean) : [];
+    var urlIdLookup = urlIds.length > 0 ? Object.create(null) : null;
+    if (urlIdLookup) urlIds.forEach(function(id) { urlIdLookup[id] = true; });
+    var urlGapsOnly = !!(rp && (rp.onboardingGapsOnly === '1' || rp.onboardingGapsOnly === 'true'));
+    var urlMinorRaw = (rp && typeof rp.isMinor === 'string') ? rp.isMinor : '';
+    var urlMinor = urlMinorRaw === 'true' ? true : (urlMinorRaw === 'false' ? false : null);
+    var hasUrlFilter = !!(urlStatus || urlIds.length || urlGapsOnly || urlMinor !== null);
+
+    var active;
+    if (hasUrlFilter) {
+      active = studentsData.filter(function(s) {
+        var st = s.status || 'active';
+        if (urlStatus) { if (st !== urlStatus) return false; }
+        else if (st === 'inactive') return false;
+        if (urlIdLookup && !urlIdLookup[s._key]) return false;
+        if (urlMinor !== null && (s.isMinor || false) !== urlMinor) return false;
+        if (urlGapsOnly) {
+          var gap = s.waiverStatus !== 'signed' || !s.safetyOrientationCompleted;
+          if (!gap) return false;
+        }
+        return true;
+      });
+    } else {
+      active = studentsData.filter(function(s) { return (s.status || 'active') !== 'inactive'; });
+    }
     var minors = active.filter(function(s) { return s.isMinor; });
     var gapCount = 0;
     active.forEach(function(stu) {
       if (stu.waiverStatus !== 'signed') gapCount++;
       if (!stu.safetyOrientationCompleted) gapCount++;
     });
+
+    // URL-filter banner
+    if (hasUrlFilter) {
+      var bparts = [];
+      if (urlIds.length) bparts.push(urlIds.length + ' selected student' + (urlIds.length === 1 ? '' : 's'));
+      if (urlStatus) bparts.push('status: ' + urlStatus);
+      if (urlGapsOnly) bparts.push('onboarding gaps only');
+      if (urlMinor === true) bparts.push('minors only');
+      if (urlMinor === false) bparts.push('non-minors only');
+      h += '<div id="studentsUrlFilterBanner" style="background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.35);color:#F59E0B;padding:8px 12px;margin-bottom:12px;border-radius:6px;display:flex;align-items:center;gap:12px;font-size:0.85rem;">' +
+        '<span>🎓 Showing ' + bparts.join(', ') + ' (' + active.length + ')</span>' +
+        '<button type="button" onclick="clearStudentsFilter()" style="margin-left:auto;background:transparent;border:1px solid rgba(245,158,11,0.5);color:#F59E0B;padding:2px 10px;border-radius:4px;cursor:pointer;font-size:0.78rem;">Clear filter</button>' +
+        '</div>';
+    }
 
     h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">';
     h += '<div>';
@@ -1383,12 +1426,37 @@
     }
   };
 
+  // URL-filter clear (MCP admin-link landings)
+  window.clearStudentsFilter = function() {
+    var rp = (typeof window.getRouteParams === 'function') ? window.getRouteParams() : {};
+    var clean = {};
+    Object.keys(rp || {}).forEach(function(k) {
+      if (k !== 'status' && k !== 'studentIds' && k !== 'onboardingGapsOnly' && k !== 'isMinor') clean[k] = rp[k];
+    });
+    if (typeof window.navigateTo === 'function') window.navigateTo('students', clean);
+    else location.hash = '#students';
+    setTimeout(function() {
+      var container = document.getElementById('studentsTab');
+      if (container && typeof renderStudents === 'function') renderStudents(container);
+    }, 0);
+  };
+
   // --- Module Registration ---
   MastAdmin.registerModule('students', {
     routes: {
       'students': {
         tab: 'studentsTab',
-        setup: function() { if (!studentsLoaded) loadStudents(); }
+        setup: function() {
+          // When MCP link includes filter params, force the roster sub-view
+          var rp = (typeof window.getRouteParams === 'function') ? window.getRouteParams() : {};
+          var hasUrlFilter = !!(rp && (rp.status || rp.studentIds || rp.onboardingGapsOnly || rp.isMinor));
+          if (hasUrlFilter) currentView = 'roster';
+          if (!studentsLoaded) loadStudents();
+          else {
+            var container = document.getElementById('studentsTab');
+            if (container) renderStudents(container);
+          }
+        }
       }
     },
     detachListeners: function() {

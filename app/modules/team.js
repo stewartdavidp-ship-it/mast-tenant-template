@@ -951,7 +951,39 @@
   // ========================================
   function renderRoster() {
     var h = '';
-    var active = employeesData.filter(function(e) { return (e.status || 'active') === 'active'; });
+
+    // URL-driven filters from MCP admin links: status, employmentType, employeeIds, complianceGapsOnly
+    var rp = (typeof window.getRouteParams === 'function') ? window.getRouteParams() : {};
+    var urlStatus = (rp && typeof rp.status === 'string') ? rp.status : '';
+    var urlEmpType = (rp && typeof rp.employmentType === 'string') ? rp.employmentType : '';
+    var urlIdsParam = (rp && typeof rp.employeeIds === 'string') ? rp.employeeIds : '';
+    var urlIds = urlIdsParam ? urlIdsParam.split(',').map(function(s) { return s.trim(); }).filter(Boolean) : [];
+    var urlIdLookup = urlIds.length > 0 ? Object.create(null) : null;
+    if (urlIdLookup) urlIds.forEach(function(id) { urlIdLookup[id] = true; });
+    var urlGapsOnly = !!(rp && (rp.complianceGapsOnly === '1' || rp.complianceGapsOnly === 'true'));
+    var hasUrlFilter = !!(urlStatus || urlEmpType || urlIds.length || urlGapsOnly);
+
+    var active;
+    if (hasUrlFilter) {
+      active = employeesData.filter(function(e) {
+        var st = e.status || 'active';
+        if (urlStatus) { if (st !== urlStatus) return false; }
+        else if (st !== 'active') return false;
+        if (urlEmpType && e.employmentType !== urlEmpType) return false;
+        if (urlIdLookup && !urlIdLookup[e._key]) return false;
+        if (urlGapsOnly) {
+          var cl = e.complianceChecklist || {};
+          var hasGap = false;
+          COMPLIANCE_FIELDS.forEach(function(f) {
+            if (!cl[f.key] || cl[f.key].status !== 'completed') hasGap = true;
+          });
+          if (!hasGap) return false;
+        }
+        return true;
+      });
+    } else {
+      active = employeesData.filter(function(e) { return (e.status || 'active') === 'active'; });
+    }
     var partTime = active.filter(function(e) { return e.employmentType === 'part-time'; });
     var gapCount = 0;
     active.forEach(function(emp) {
@@ -961,6 +993,19 @@
       });
     });
     var totalMonthlyCost = active.reduce(function(s, e) { return s + calcMonthlyCost(e); }, 0);
+
+    // URL-filter banner
+    if (hasUrlFilter) {
+      var bparts = [];
+      if (urlIds.length) bparts.push(urlIds.length + ' selected employee' + (urlIds.length === 1 ? '' : 's'));
+      if (urlStatus) bparts.push('status: ' + urlStatus);
+      if (urlEmpType) bparts.push('type: ' + urlEmpType);
+      if (urlGapsOnly) bparts.push('compliance gaps only');
+      h += '<div id="teamUrlFilterBanner" style="background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.35);color:#F59E0B;padding:8px 12px;margin-bottom:12px;border-radius:6px;display:flex;align-items:center;gap:12px;font-size:0.85rem;">' +
+        '<span>👥 Showing ' + bparts.join(', ') + ' (' + active.length + ')</span>' +
+        '<button type="button" onclick="clearTeamFilter()" style="margin-left:auto;background:transparent;border:1px solid rgba(245,158,11,0.5);color:#F59E0B;padding:2px 10px;border-radius:4px;cursor:pointer;font-size:0.78rem;">Clear filter</button>' +
+        '</div>';
+    }
 
     h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">';
     h += '<div>';
@@ -2005,12 +2050,41 @@
   window.teamSaveReference = saveReference;
   window.teamDeleteReference = deleteReference;
 
+  // URL-filter clear (MCP admin-link landings)
+  window.clearTeamFilter = function() {
+    var rp = (typeof window.getRouteParams === 'function') ? window.getRouteParams() : {};
+    var clean = {};
+    Object.keys(rp || {}).forEach(function(k) {
+      if (k !== 'status' && k !== 'employmentType' && k !== 'employeeIds' && k !== 'complianceGapsOnly') clean[k] = rp[k];
+    });
+    if (typeof window.navigateTo === 'function') window.navigateTo('team', clean);
+    else location.hash = '#team';
+    setTimeout(function() {
+      var container = document.getElementById('teamTab');
+      if (container && typeof renderTeam === 'function') renderTeam(container);
+    }, 0);
+  };
+  window.renderTeamRoster = function() {
+    var container = document.getElementById('teamTab');
+    if (container && typeof renderTeam === 'function') renderTeam(container);
+  };
+
   // Register module
   MastAdmin.registerModule('team', {
     routes: {
       'team': {
         tab: 'teamTab',
-        setup: function() { if (!teamLoaded) loadTeam(); }
+        setup: function() {
+          // When MCP link includes filter params, force the roster sub-view
+          var rp = (typeof window.getRouteParams === 'function') ? window.getRouteParams() : {};
+          var hasUrlFilter = !!(rp && (rp.status || rp.employmentType || rp.employeeIds || rp.complianceGapsOnly));
+          if (hasUrlFilter) currentView = 'roster';
+          if (!teamLoaded) loadTeam();
+          else {
+            var container = document.getElementById('teamTab');
+            if (container) renderTeam(container);
+          }
+        }
       }
     },
     detachListeners: function() {
