@@ -334,6 +334,8 @@ async function loadFinExpBanks() {
   }
 }
 
+var finExpCache = { expenses: [], start: '', end: '' };
+
 async function loadFinExpenses() {
   var startEl = document.getElementById('fExpS');
   var endEl   = document.getElementById('fExpE');
@@ -350,6 +352,7 @@ async function loadFinExpenses() {
     expenses = expenses.filter(function(ex) { return ex.category !== 'personal'; });
     expenses.sort(function(a,b) { return (b.date || '').localeCompare(a.date || ''); });
 
+    finExpCache = { expenses: expenses, start: start, end: end };
     el.innerHTML = renderFinExpenses(expenses, start, end);
   } catch (err) {
     el.innerHTML = '<div style="color:var(--danger,#dc2626);padding:12px;">' + e(err.message) + '</div>';
@@ -370,12 +373,17 @@ function renderFinExpenses(expenses, start, end) {
   var h = '';
 
   // Summary cards
-  h += '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px;">';
+  h += '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px;align-items:flex-start;">';
   h += statCard('Total Expenses', fmt$(total), '#dc2626');
   h += statCard('Transactions', String(expenses.length), 'var(--text,#fff)');
   var unreviewedCount = expenses.filter(function(ex) { return !ex.reviewed; }).length;
   if (unreviewedCount > 0) h += statCard('Needs Review', String(unreviewedCount), '#eab308');
   h += statCard('Period', toDateShort(start) + ' – ' + toDateShort(end), 'var(--warm-gray,#888)');
+  h += '</div>';
+
+  // Ask AI bar
+  h += '<div style="display:flex;justify-content:flex-end;margin-bottom:16px;">';
+  h += '<button class="btn btn-secondary btn-small" onclick="askAiAboutFinExpenses()" title="Ask Claude about what you are seeing">✨ Ask AI</button>';
   h += '</div>';
 
   if (expenses.length === 0) {
@@ -424,6 +432,127 @@ function renderFinExpenses(expenses, start, end) {
 
   return h;
 }
+
+// ── Ask AI (UI → Claude handoff) ─────────────────────────────────────────────
+// See CC Idea -Os1Lrm8ShTKZMafXV4k.
+
+function buildFinExpAskAiContext() {
+  var byCategory = {};
+  var byMonth = {};
+  var totalCents = 0;
+  var unreviewedCount = 0;
+  finExpCache.expenses.forEach(function(ex) {
+    var amt = ex.amount || 0;
+    totalCents += amt;
+    if (!ex.reviewed) unreviewedCount++;
+    var cat = ex.category || 'other';
+    if (!byCategory[cat]) byCategory[cat] = { count: 0, totalCents: 0 };
+    byCategory[cat].count++; byCategory[cat].totalCents += amt;
+    var month = (ex.date || '').substring(0, 7) || 'unknown';
+    if (!byMonth[month]) byMonth[month] = { count: 0, totalCents: 0 };
+    byMonth[month].count++; byMonth[month].totalCents += amt;
+  });
+  return {
+    version: '1',
+    app: 'mast',
+    tenantId: (typeof MastDB !== 'undefined' && MastDB.tenantId) ? MastDB.tenantId() : null,
+    route: '/app#finance-expenses',
+    pageTitle: 'Finance — Expenses',
+    period: { start: finExpCache.start, end: finExpCache.end },
+    aggregates: {
+      rowCount: finExpCache.expenses.length,
+      totalCents: totalCents,
+      totalUSD: (totalCents / 100).toFixed(2),
+      unreviewedCount: unreviewedCount,
+      byCategory: byCategory,
+      byMonth: byMonth
+    },
+    note: 'Aggregates only — raw rows omitted by policy. Personal-category expenses excluded by the page filter. Amounts in cents (negative = refund).',
+    capturedAt: new Date().toISOString()
+  };
+}
+
+function buildFinExpAskAiPrompt(question, ctx) {
+  return [
+    'I am looking at the Finance → Expenses page in my Mast admin and want help understanding what I see.',
+    '',
+    '<mast-ui-context version="1">',
+    JSON.stringify(ctx, null, 2),
+    '</mast-ui-context>',
+    '',
+    'My question: ' + question,
+    '',
+    'Notes for you:',
+    '- Aggregates reflect what is on screen for the selected period.',
+    '- Raw rows are intentionally omitted. If you need them to answer, tell me to enable the Mast MCP connector so you can fetch under proper RBAC.',
+    '- byMonth keys are YYYY-MM. Personal-category expenses are filtered out before aggregation.'
+  ].join('\n');
+}
+
+window.askAiAboutFinExpenses = function() {
+  if (document.getElementById('finAskAiModal')) return;
+  var ctx = buildFinExpAskAiContext();
+  var overlay = document.createElement('div');
+  overlay.id = 'finAskAiModal';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
+  overlay.innerHTML =
+    '<div role="dialog" aria-modal="true" style="background:var(--bg-secondary,#232323);color:var(--text,#fff);border-radius:12px;max-width:560px;width:100%;max-height:90vh;overflow:auto;box-shadow:0 20px 50px rgba(0,0,0,0.5);">' +
+      '<div style="padding:18px 22px;border-bottom:1px solid rgba(255,255,255,0.08);display:flex;justify-content:space-between;align-items:center;">' +
+        '<div>' +
+          '<h3 style="margin:0;font-size:1rem;">✨ Ask AI about these expenses</h3>' +
+          '<div style="font-size:0.78rem;color:var(--warm-gray,#888);margin-top:2px;">Page context will be sent with your question.</div>' +
+        '</div>' +
+        '<button onclick="closeFinAskAi()" style="background:none;border:none;font-size:1.4rem;cursor:pointer;color:var(--warm-gray,#888);padding:0 4px;line-height:1;">×</button>' +
+      '</div>' +
+      '<div style="padding:18px 22px;">' +
+        '<label for="finAskAiQ" style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:6px;">Your question</label>' +
+        '<textarea id="finAskAiQ" rows="4" placeholder="e.g. How does my Materials spend this month compare to the prior two months? What categories are growing fastest?" style="width:100%;padding:10px 12px;border:1px solid rgba(255,255,255,0.1);border-radius:6px;font-family:\'DM Sans\',sans-serif;font-size:0.9rem;background:var(--bg,#1a1a1a);color:var(--text,#fff);resize:vertical;box-sizing:border-box;"></textarea>' +
+        '<details style="margin-top:14px;">' +
+          '<summary style="font-size:0.78rem;color:var(--warm-gray,#888);cursor:pointer;">Preview context (' + ctx.aggregates.rowCount + ' expenses, $' + ctx.aggregates.totalUSD + ' total)</summary>' +
+          '<pre id="finAskAiPreview" style="margin-top:8px;font-size:0.72rem;background:var(--bg,#1a1a1a);padding:10px;border-radius:6px;max-height:240px;overflow:auto;white-space:pre-wrap;"></pre>' +
+        '</details>' +
+        '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">' +
+          '<button class="btn btn-secondary btn-small" onclick="closeFinAskAi()">Cancel</button>' +
+          '<button class="btn btn-primary btn-small" onclick="submitFinAskAi()">Copy & Open Claude</button>' +
+        '</div>' +
+        '<div style="font-size:0.72rem;color:var(--warm-gray,#888);margin-top:10px;">The prompt will be copied to your clipboard, then a new Claude tab opens. Paste into the chat to start.</div>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(overlay);
+  var preview = document.getElementById('finAskAiPreview');
+  if (preview) preview.textContent = JSON.stringify(ctx, null, 2);
+  overlay._ctx = ctx;
+  setTimeout(function() { var t = document.getElementById('finAskAiQ'); if (t) t.focus(); }, 50);
+  overlay.addEventListener('click', function(ev) { if (ev.target === overlay) closeFinAskAi(); });
+};
+
+window.closeFinAskAi = function() {
+  var m = document.getElementById('finAskAiModal');
+  if (m) m.remove();
+};
+
+window.submitFinAskAi = async function() {
+  var modal = document.getElementById('finAskAiModal');
+  var ta = document.getElementById('finAskAiQ');
+  if (!modal || !ta) return;
+  var question = (ta.value || '').trim();
+  if (!question) { ta.focus(); showToast('Type a question first', true); return; }
+  var prompt = buildFinExpAskAiPrompt(question, modal._ctx);
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(prompt);
+    } else {
+      var tmp = document.createElement('textarea');
+      tmp.value = prompt; tmp.style.position = 'fixed'; tmp.style.opacity = '0';
+      document.body.appendChild(tmp); tmp.select(); document.execCommand('copy'); document.body.removeChild(tmp);
+    }
+    showToast('Prompt copied. Paste into the new Claude tab.');
+  } catch (err) {
+    showToast('Copy failed: ' + e(err.message), true); return;
+  }
+  closeFinAskAi();
+  window.open('https://claude.ai/new', '_blank', 'noopener');
+};
 
 window.finExpSyncBank = async function(itemId) {
   showToast('Syncing transactions…');
