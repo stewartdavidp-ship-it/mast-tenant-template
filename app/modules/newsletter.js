@@ -309,7 +309,7 @@
             html += nlContentEditableHtml('nlListRaw', sec.id, 'rawInput', sec.rawInput || '', charLimitList);
             var hasContent = !!(sec.rawInput && nlStripTags(sec.rawInput).trim());
             html += '<div style="margin-top:8px;display:flex;gap:8px;align-items:center;">' +
-              '<button class="btn btn-outline" style="font-size:0.78rem;" ' + (hasContent ? '' : 'disabled') + ' onclick="nlPolishSection(\'' + sec.id + '\')">✨ Polish with AI</button>';
+              '<button class="btn btn-outline" style="font-size:0.78rem;" ' + (hasContent ? '' : 'disabled') + ' onclick="nlPolishSection(\'' + sec.id + '\')" title="Uses tokens">Polish with AI</button>';
             if (hasContent) html += '<button class="btn btn-outline" style="font-size:0.78rem;" onclick="nlUseAsIs(\'' + sec.id + '\')">Use as-is</button>';
             html += '</div>';
           }
@@ -779,7 +779,7 @@
       var hasContent = !!(sec.rawInput && nlStripTags(sec.rawInput).trim());
       html += '<div style="margin-top:8px;display:flex;gap:8px;">' +
         '<button class="btn btn-outline" style="font-size:0.78rem;" ' + (hasContent ? '' : 'disabled') +
-        ' onclick="nlPolishSection(\'' + secId + '\')">✨ Polish with AI</button>';
+        ' onclick="nlPolishSection(\'' + secId + '\')" title="Uses tokens">Polish with AI</button>';
       if (hasContent) html += '<button class="btn btn-outline" style="font-size:0.78rem;" onclick="nlUseAsIs(\'' + secId + '\'); setTimeout(function(){nlOpenCardEditor(\'' + secId + '\')},100);">Use as-is</button>';
       html += '</div>';
     }

@@ -27298,7 +27298,7 @@ function wizardUpdateCostBar() {
   h += '</div>';
 
   if (selectedCount > 0) {
-    h += '<button class="btn btn-primary btn-small" id="wizardGapEnrichBtn" onclick="wizardExecuteEnrichment()"';
+    h += '<button class="btn btn-primary btn-small" id="wizardGapEnrichBtn" onclick="wizardExecuteEnrichment()" title="Uses tokens"';
     if (!sufficient || _wizardGapEnriching) h += ' disabled';
     h += '>';
     h += _wizardGapEnriching ? 'Enriching...' : 'Enrich Selected (~' + totalTokens.toLocaleString() + ' tokens)';

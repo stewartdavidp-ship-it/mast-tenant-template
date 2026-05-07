@@ -1148,7 +1148,7 @@
     html += '<div style="display:flex;gap:8px;">';
     var lastUrl = (websiteConfig && websiteConfig._lastAnalyzedUrl) || '';
     html += '<input type="text" id="wpImportUrl" placeholder="www.yourbusiness.com" value="' + esc(lastUrl) + '" style="flex:1;">';
-    html += '<button class="btn btn-primary" onclick="wpAnalyze()" id="wpAnalyzeBtn">Analyze</button>';
+    html += '<button class="btn btn-primary" onclick="wpAnalyze()" id="wpAnalyzeBtn" title="Uses tokens">Analyze</button>';
     html += '</div></div>';
     html += '<div id="wpAnalyzeStatus" style="font-size:0.85rem;margin-bottom:16px;"></div>';
     html += '<div id="wpAnalyzeResults"></div>';
@@ -1587,7 +1587,7 @@
         paidGaps.forEach(function(gap) {
           html += '<div style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:4px;padding-left:16px;">' + esc(gap.description) + '</div>';
         });
-        html += '<button class="btn btn-primary btn-small" style="margin-top:8px;margin-left:16px;" onclick="wpRunEnrichment(\'' + esc(jobId) + '\')">Enrich with AI</button>';
+        html += '<button class="btn btn-primary btn-small" style="margin-top:8px;margin-left:16px;" onclick="wpRunEnrichment(\'' + esc(jobId) + '\')" title="Uses tokens">Enrich with AI</button>';
         html += '</div>';
       }
 
@@ -1668,7 +1668,7 @@
     html += '</div>';
 
     if (hasPaidGaps && jobId) {
-      html += '<button class="btn btn-primary btn-small" onclick="wpRunEnrichment(\'' + esc(jobId) + '\')">';
+      html += '<button class="btn btn-primary btn-small" onclick="wpRunEnrichment(\'' + esc(jobId) + '\')" title="Uses tokens">';
       html += 'Enrich with AI';
       if (costSummary && costSummary.estimatedCost) html += ' (' + esc(costSummary.estimatedCost) + ')';
       html += '</button>';

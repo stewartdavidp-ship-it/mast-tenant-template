@@ -592,7 +592,7 @@
     var ctaLabel = isPreShoot ? 'Generate Shoot Card' : 'Generate';
     var ctaDisabled = !d.treatment ? ' disabled' : '';
     html += '<div style="margin-top:24px;text-align:center;">' +
-      '<button class="btn btn-primary" style="padding:12px 40px;font-size:1rem;"' + ctaDisabled + ' onclick="smGenerate()">' + ctaLabel + '</button>' +
+      '<button class="btn btn-primary" style="padding:12px 40px;font-size:1rem;"' + ctaDisabled + ' onclick="smGenerate()" title="Uses tokens">' + ctaLabel + '</button>' +
       (!d.treatment ? '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:8px;">Select a content style to continue</div>' : '') +
     '</div>';
 
