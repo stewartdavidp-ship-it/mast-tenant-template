@@ -3547,7 +3547,17 @@ async function runShowDeepDive(showId) {
     routes: {
       'show':          { tab: 'showTab', setup: function() { ensureShowsData(); navigateTo('show-apply'); } },
       'show-find':     { tab: 'showTab', setup: function() { ensureShowsData(); switchShowSubView('find'); } },
-      'show-apply':    { tab: 'showTab', setup: function() { ensureShowsData(); switchShowSubView('apply'); } },
+      'show-apply':    { tab: 'showTab', setup: function() {
+        ensureShowsData();
+        switchShowSubView('apply');
+        // MCP-link landings carry filter params; force the manual list
+        // mode so the filtered shows are visible (default AI mode hides
+        // the shows list).
+        var rp = (typeof window.getRouteParams === 'function') ? window.getRouteParams() : {};
+        if (rp && (rp.status || rp.dateFrom || rp.dateTo || rp.showIds)) {
+          switchShowApplyMode('manual');
+        }
+      } },
       'show-prep':     { tab: 'showTab', setup: function() { ensureShowsData(); switchShowSubView('prep'); } },
       'show-execute':  { tab: 'showTab', setup: function() { ensureShowsData(); switchShowSubView('execute'); } },
       'show-history':  { tab: 'showTab', setup: function() { ensureShowsData(); switchShowSubView('history'); } }
