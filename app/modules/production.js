@@ -358,11 +358,57 @@ async function doAssignExistingJob(requestId) {
   }
 }
 
+// Tenant-TZ-aware date helpers for URL filter (createdAt is ISO timestamp).
+var _prodTenantTz = null;
+function prodEnsureTenantTz() {
+  if (_prodTenantTz !== null) return Promise.resolve(_prodTenantTz);
+  try {
+    return MastDB.businessEntity.get('operations').then(function(snap) {
+      var ops = (snap && typeof snap.val === 'function') ? snap.val() : snap;
+      var tz = ops && ops.localization && ops.localization.timezone;
+      _prodTenantTz = (tz && typeof tz === 'string') ? tz : 'UTC';
+      return _prodTenantTz;
+    }).catch(function() { _prodTenantTz = 'UTC'; return 'UTC'; });
+  } catch (e) {
+    _prodTenantTz = 'UTC';
+    return Promise.resolve('UTC');
+  }
+}
+function prodTzPartsFromIso(iso) {
+  if (!iso) return null;
+  var dt = new Date(iso);
+  if (isNaN(dt.getTime())) return null;
+  var fmt = new Intl.DateTimeFormat('en-CA', {
+    timeZone: _prodTenantTz || 'UTC',
+    year: 'numeric', month: '2-digit', day: '2-digit'
+  });
+  var parts = {};
+  fmt.formatToParts(dt).forEach(function(x) { if (x.type !== 'literal') parts[x.type] = x.value; });
+  return parts;
+}
+
 // ---- Production Jobs List ----
 function renderProductionJobs() {
   var listEl = document.getElementById('productionJobsList');
   var emptyEl = document.getElementById('productionJobsEmpty');
   if (!listEl) return;
+
+  // URL-driven filters from MCP admin links: status, purpose, workType, dateFrom, dateTo, jobIds
+  var rp = (typeof window.getRouteParams === 'function') ? window.getRouteParams() : {};
+  var urlStatus = (rp && typeof rp.status === 'string') ? rp.status : '';
+  var urlPurpose = (rp && typeof rp.purpose === 'string') ? rp.purpose : '';
+  var urlWorkType = (rp && typeof rp.workType === 'string') ? rp.workType : '';
+  var urlDateFrom = (rp && typeof rp.dateFrom === 'string') ? rp.dateFrom.slice(0, 10) : '';
+  var urlDateTo = (rp && typeof rp.dateTo === 'string') ? rp.dateTo.slice(0, 10) : '';
+  var urlIdsParam = (rp && typeof rp.jobIds === 'string') ? rp.jobIds : '';
+  var urlIds = urlIdsParam ? urlIdsParam.split(',').map(function(s) { return s.trim(); }).filter(Boolean) : [];
+  var urlIdLookup = urlIds.length > 0 ? Object.create(null) : null;
+  if (urlIdLookup) urlIds.forEach(function(id) { urlIdLookup[id] = true; });
+  var hasUrlFilter = !!(urlStatus || urlPurpose || urlWorkType || urlDateFrom || urlDateTo || urlIds.length);
+  if (hasUrlFilter && (urlDateFrom || urlDateTo) && _prodTenantTz === null) {
+    prodEnsureTenantTz().then(function() { renderProductionJobs(); });
+  }
+
   var statusFilter = document.getElementById('prodFilterStatus');
   var purposeFilter = document.getElementById('prodFilterPurpose');
   var workTypeFilter = document.getElementById('prodFilterWorkType');
@@ -370,21 +416,69 @@ function renderProductionJobs() {
   var pf = purposeFilter ? purposeFilter.value : 'all';
   var wf = workTypeFilter ? workTypeFilter.value : 'all';
 
-  var jobs = Object.keys(productionJobs).map(function(k) {
-    var j = productionJobs[k];
-    j._key = k;
-    return j;
-  }).filter(function(j) {
-    if (sf === 'active') return j.status === 'definition' || j.status === 'in-progress';
-    if (sf !== 'all') return j.status === sf;
-    return true;
-  }).filter(function(j) {
-    if (pf !== 'all') return j.purpose === pf;
-    return true;
-  }).filter(function(j) {
-    if (wf !== 'all') return j.workType === wf;
-    return true;
-  });
+  var jobs;
+  if (hasUrlFilter) {
+    jobs = Object.keys(productionJobs).map(function(k) {
+      var j = productionJobs[k];
+      j._key = k;
+      return j;
+    }).filter(function(j) {
+      if (urlStatus && j.status !== urlStatus) return false;
+      if (urlPurpose && j.purpose !== urlPurpose) return false;
+      if (urlWorkType && j.workType !== urlWorkType) return false;
+      if (urlIdLookup && !urlIdLookup[j._key]) return false;
+      if (urlDateFrom || urlDateTo) {
+        var p = prodTzPartsFromIso(j.createdAt || '');
+        if (!p) return false;
+        var ds = p.year + '-' + p.month + '-' + p.day;
+        if (urlDateFrom && ds < urlDateFrom) return false;
+        if (urlDateTo && ds > urlDateTo) return false;
+      }
+      return true;
+    });
+  } else {
+    jobs = Object.keys(productionJobs).map(function(k) {
+      var j = productionJobs[k];
+      j._key = k;
+      return j;
+    }).filter(function(j) {
+      if (sf === 'active') return j.status === 'definition' || j.status === 'in-progress';
+      if (sf !== 'all') return j.status === sf;
+      return true;
+    }).filter(function(j) {
+      if (pf !== 'all') return j.purpose === pf;
+      return true;
+    }).filter(function(j) {
+      if (wf !== 'all') return j.workType === wf;
+      return true;
+    });
+  }
+
+  // URL-filter banner — surfaces active MCP-link filters with Clear button.
+  var bannerEl = document.getElementById('productionJobsUrlFilterBanner');
+  if (!bannerEl && hasUrlFilter && listEl.parentNode) {
+    bannerEl = document.createElement('div');
+    bannerEl.id = 'productionJobsUrlFilterBanner';
+    bannerEl.style.cssText = 'background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.35);color:#F59E0B;padding:8px 12px;margin-bottom:12px;border-radius:6px;display:flex;align-items:center;gap:12px;font-size:0.85rem;';
+    listEl.parentNode.insertBefore(bannerEl, listEl);
+  }
+  if (bannerEl) {
+    if (hasUrlFilter) {
+      var bparts = [];
+      if (urlIds.length) bparts.push(urlIds.length + ' selected job' + (urlIds.length === 1 ? '' : 's'));
+      if (urlStatus) bparts.push('status: ' + String(urlStatus).replace(/-/g, ' '));
+      if (urlPurpose) bparts.push('purpose: ' + urlPurpose);
+      if (urlWorkType) bparts.push('workType: ' + urlWorkType);
+      if (urlDateFrom && urlDateTo) bparts.push('from ' + urlDateFrom + ' to ' + urlDateTo);
+      else if (urlDateFrom) bparts.push('from ' + urlDateFrom + ' onward');
+      else if (urlDateTo) bparts.push('through ' + urlDateTo);
+      bannerEl.innerHTML = '<span>🛠️ Showing ' + bparts.join(', ') + ' (' + jobs.length + ')</span>' +
+        '<button type="button" onclick="clearProductionJobsFilter()" style="margin-left:auto;background:transparent;border:1px solid rgba(245,158,11,0.5);color:#F59E0B;padding:2px 10px;border-radius:4px;cursor:pointer;font-size:0.78rem;">Clear filter</button>';
+      bannerEl.style.display = 'flex';
+    } else {
+      bannerEl.style.display = 'none';
+    }
+  }
 
   // Sort: priority (high first), then deadline
   var priorityOrder = { high: 0, medium: 1, low: 2 };
@@ -3121,6 +3215,19 @@ async function linkProductToBuild(jobId, lineItemId) {
   window.loadJobProductLinks = loadJobProductLinks;
   window.linkProductToBuild = linkProductToBuild;
   window.loadProduction = loadProduction;
+
+  // URL-filter clear (MCP admin-link landings)
+  window.clearProductionJobsFilter = function() {
+    var rp = (typeof window.getRouteParams === 'function') ? window.getRouteParams() : {};
+    var clean = {};
+    Object.keys(rp || {}).forEach(function(k) {
+      if (k !== 'status' && k !== 'purpose' && k !== 'workType' && k !== 'dateFrom' && k !== 'dateTo' && k !== 'jobIds') clean[k] = rp[k];
+    });
+    if (typeof window.navigateTo === 'function') window.navigateTo('jobs', clean);
+    else location.hash = '#jobs';
+    setTimeout(function() { if (typeof renderProductionJobs === 'function') renderProductionJobs(); }, 0);
+  };
+  window.renderProductionJobs = renderProductionJobs;
 
   // ============================================================
   // Register with MastAdmin

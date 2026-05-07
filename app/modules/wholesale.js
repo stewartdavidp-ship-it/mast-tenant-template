@@ -17,9 +17,45 @@ var wholesaleQRLib = null; // lazy-loaded QRCode library
 
 // ── Render main wholesale admin view ──
 
+// Tenant-TZ-aware date helpers for URL filter (createdAt is ISO timestamp).
+var _wsTenantTz = null;
+function wsEnsureTenantTz() {
+  if (_wsTenantTz !== null) return Promise.resolve(_wsTenantTz);
+  try {
+    return MastDB.businessEntity.get('operations').then(function(snap) {
+      var ops = (snap && typeof snap.val === 'function') ? snap.val() : snap;
+      var tz = ops && ops.localization && ops.localization.timezone;
+      _wsTenantTz = (tz && typeof tz === 'string') ? tz : 'UTC';
+      return _wsTenantTz;
+    }).catch(function() { _wsTenantTz = 'UTC'; return 'UTC'; });
+  } catch (e) {
+    _wsTenantTz = 'UTC';
+    return Promise.resolve('UTC');
+  }
+}
+function wsTzPartsFromIso(iso) {
+  if (!iso) return null;
+  var dt = new Date(iso);
+  if (isNaN(dt.getTime())) return null;
+  var fmt = new Intl.DateTimeFormat('en-CA', {
+    timeZone: _wsTenantTz || 'UTC',
+    year: 'numeric', month: '2-digit', day: '2-digit'
+  });
+  var parts = {};
+  fmt.formatToParts(dt).forEach(function(x) { if (x.type !== 'literal') parts[x.type] = x.value; });
+  return parts;
+}
+
 function renderWholesaleAdmin() {
   var el = document.getElementById('wholesaleContent');
   if (!el) return;
+
+  // URL-driven sub-tab forcing (MCP admin links). #wholesale?subView=users|requests
+  var rp = (typeof window.getRouteParams === 'function') ? window.getRouteParams() : {};
+  var urlSubView = (rp && typeof rp.subView === 'string') ? rp.subView : '';
+  if (urlSubView && (urlSubView === 'orders' || urlSubView === 'users' || urlSubView === 'requests')) {
+    wholesaleSubView = urlSubView;
+  }
 
   var html = '<div style="max-width:1100px;margin:0 auto;padding:24px;">' +
     '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">' +
@@ -75,6 +111,19 @@ function renderWholesaleUsers() {
 
   container.innerHTML = '<div style="color:var(--warm-gray);padding:40px 0;text-align:center;">Loading authorized users...</div>';
 
+  // URL-driven filters (#wholesale?subView=users&active=true&accountIds=...)
+  var rpUsers = (typeof window.getRouteParams === 'function') ? window.getRouteParams() : {};
+  var urlActiveRawU = (rpUsers && typeof rpUsers.active === 'string') ? rpUsers.active : '';
+  var urlActiveU = urlActiveRawU === 'true' ? true : (urlActiveRawU === 'false' ? false : null);
+  var urlAccountIdsParam = (rpUsers && typeof rpUsers.accountIds === 'string') ? rpUsers.accountIds : '';
+  var urlAccountIds = urlAccountIdsParam ? urlAccountIdsParam.split(',').map(function(s) { return s.trim(); }).filter(Boolean) : [];
+  var urlAccountKeyLookup = urlAccountIds.length > 0 ? Object.create(null) : null;
+  if (urlAccountKeyLookup) urlAccountIds.forEach(function(s) {
+    urlAccountKeyLookup[s] = true;
+    if (s.indexOf('@') >= 0) urlAccountKeyLookup[wsEmailToKey(s)] = true;
+  });
+  var hasUrlFilterU = !!(urlActiveU !== null || urlAccountIds.length);
+
   MastDB.get('admin/wholesaleAuthorized').then(function(snapVal) {
     wholesaleAuthorizedData = snapVal || {};
     var users = Object.keys(wholesaleAuthorizedData).map(function(k) {
@@ -84,7 +133,28 @@ function renderWholesaleUsers() {
       return u;
     }).sort(function(a, b) { return (b.createdAt || '').localeCompare(a.createdAt || ''); });
 
-    var html = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">' +
+    if (hasUrlFilterU) {
+      users = users.filter(function(u) {
+        var isActive = u.active !== false;
+        if (urlActiveU !== null && isActive !== urlActiveU) return false;
+        if (urlAccountKeyLookup && !urlAccountKeyLookup[u._key] && !urlAccountKeyLookup[u._email]) return false;
+        return true;
+      });
+    }
+
+    var html = '';
+    if (hasUrlFilterU) {
+      var bpartsU = [];
+      if (urlAccountIds.length) bpartsU.push(urlAccountIds.length + ' selected account' + (urlAccountIds.length === 1 ? '' : 's'));
+      if (urlActiveU === true) bpartsU.push('active only');
+      if (urlActiveU === false) bpartsU.push('revoked only');
+      html += '<div id="wholesaleUsersUrlFilterBanner" style="background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.35);color:#F59E0B;padding:8px 12px;margin-bottom:12px;border-radius:6px;display:flex;align-items:center;gap:12px;font-size:0.85rem;">' +
+        '<span>👤 Showing ' + bpartsU.join(', ') + ' (' + users.length + ')</span>' +
+        '<button type="button" onclick="clearWholesaleFilter()" style="margin-left:auto;background:transparent;border:1px solid rgba(245,158,11,0.5);color:#F59E0B;padding:2px 10px;border-radius:4px;cursor:pointer;font-size:0.78rem;">Clear filter</button>' +
+        '</div>';
+    }
+
+    html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">' +
       '<div style="font-size:0.85rem;color:var(--warm-gray);">' + users.length + ' authorized user' + (users.length !== 1 ? 's' : '') + '</div>' +
       '<button class="btn-small" onclick="addWholesaleUser()" style="background:var(--teal);color:#fff;border:none;padding:8px 16px;border-radius:4px;cursor:pointer;font-size:0.78rem;">+ New User</button>' +
     '</div>';
@@ -172,6 +242,20 @@ function renderWholesaleRequests() {
 
   container.innerHTML = '<div style="color:var(--warm-gray);padding:40px 0;text-align:center;">Loading requests...</div>';
 
+  // URL-driven filters (#wholesale?subView=requests&status=...&dateFrom=...&dateTo=...&requestIds=...)
+  var rpReq = (typeof window.getRouteParams === 'function') ? window.getRouteParams() : {};
+  var urlReqStatus = (rpReq && typeof rpReq.status === 'string') ? rpReq.status : '';
+  var urlReqDateFrom = (rpReq && typeof rpReq.dateFrom === 'string') ? rpReq.dateFrom.slice(0, 10) : '';
+  var urlReqDateTo = (rpReq && typeof rpReq.dateTo === 'string') ? rpReq.dateTo.slice(0, 10) : '';
+  var urlReqIdsParam = (rpReq && typeof rpReq.requestIds === 'string') ? rpReq.requestIds : '';
+  var urlReqIds = urlReqIdsParam ? urlReqIdsParam.split(',').map(function(s) { return s.trim(); }).filter(Boolean) : [];
+  var urlReqIdLookup = urlReqIds.length > 0 ? Object.create(null) : null;
+  if (urlReqIdLookup) urlReqIds.forEach(function(id) { urlReqIdLookup[id] = true; });
+  var hasUrlFilterR = !!(urlReqStatus || urlReqDateFrom || urlReqDateTo || urlReqIds.length);
+  if (hasUrlFilterR && (urlReqDateFrom || urlReqDateTo) && _wsTenantTz === null) {
+    wsEnsureTenantTz().then(function() { renderWholesaleRequests(); });
+  }
+
   MastDB.get('admin/wholesaleRequests').then(function(snapVal) {
     wholesaleRequestsData = snapVal || {};
     var requests = Object.keys(wholesaleRequestsData).map(function(k) {
@@ -180,7 +264,22 @@ function renderWholesaleRequests() {
       return r;
     }).sort(function(a, b) { return (b.createdAt || '').localeCompare(a.createdAt || ''); });
 
-    if (requests.length === 0) {
+    if (hasUrlFilterR) {
+      requests = requests.filter(function(r) {
+        if (urlReqStatus && (r.status || 'pending') !== urlReqStatus) return false;
+        if (urlReqIdLookup && !urlReqIdLookup[r._id]) return false;
+        if (urlReqDateFrom || urlReqDateTo) {
+          var p = wsTzPartsFromIso(r.createdAt || '');
+          if (!p) return false;
+          var ds = p.year + '-' + p.month + '-' + p.day;
+          if (urlReqDateFrom && ds < urlReqDateFrom) return false;
+          if (urlReqDateTo && ds > urlReqDateTo) return false;
+        }
+        return true;
+      });
+    }
+
+    if (requests.length === 0 && !hasUrlFilterR) {
       container.innerHTML = '<div style="text-align:center;padding:60px 20px;color:var(--warm-gray);">' +
         '<div style="font-size:1.6rem;margin-bottom:12px;">&#128233;</div>' +
         '<h3 style="font-weight:600;margin-bottom:8px;">No access requests</h3>' +
@@ -190,6 +289,27 @@ function renderWholesaleRequests() {
     }
 
     var html = '';
+
+    // URL-filter banner
+    if (hasUrlFilterR) {
+      var bpartsR = [];
+      if (urlReqIds.length) bpartsR.push(urlReqIds.length + ' selected request' + (urlReqIds.length === 1 ? '' : 's'));
+      if (urlReqStatus) bpartsR.push('status: ' + urlReqStatus);
+      if (urlReqDateFrom && urlReqDateTo) bpartsR.push('from ' + urlReqDateFrom + ' to ' + urlReqDateTo);
+      else if (urlReqDateFrom) bpartsR.push('from ' + urlReqDateFrom + ' onward');
+      else if (urlReqDateTo) bpartsR.push('through ' + urlReqDateTo);
+      html += '<div id="wholesaleReqUrlFilterBanner" style="background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.35);color:#F59E0B;padding:8px 12px;margin-bottom:12px;border-radius:6px;display:flex;align-items:center;gap:12px;font-size:0.85rem;">' +
+        '<span>📨 Showing ' + bpartsR.join(', ') + ' (' + requests.length + ')</span>' +
+        '<button type="button" onclick="clearWholesaleFilter()" style="margin-left:auto;background:transparent;border:1px solid rgba(245,158,11,0.5);color:#F59E0B;padding:2px 10px;border-radius:4px;cursor:pointer;font-size:0.78rem;">Clear filter</button>' +
+        '</div>';
+    }
+
+    if (requests.length === 0) {
+      html += '<div style="text-align:center;padding:30px;color:#999;font-size:0.85rem;">No requests match the filter.</div>';
+      container.innerHTML = html;
+      return;
+    }
+
     // Pending first, then resolved
     var pending = requests.filter(function(r) { return r.status === 'pending'; });
     var resolved = requests.filter(function(r) { return r.status !== 'pending'; });
@@ -534,6 +654,16 @@ function copyToClipboard(text) {
 
 // ── Window exports for onclick handlers ──
 window.renderWholesaleAdmin = renderWholesaleAdmin;
+window.clearWholesaleFilter = function() {
+  var rp = (typeof window.getRouteParams === 'function') ? window.getRouteParams() : {};
+  var clean = {};
+  Object.keys(rp || {}).forEach(function(k) {
+    if (k !== 'subView' && k !== 'active' && k !== 'accountIds' && k !== 'status' && k !== 'dateFrom' && k !== 'dateTo' && k !== 'requestIds') clean[k] = rp[k];
+  });
+  if (typeof window.navigateTo === 'function') window.navigateTo('wholesale', clean);
+  else location.hash = '#wholesale';
+  setTimeout(function() { if (typeof renderWholesaleAdmin === 'function') renderWholesaleAdmin(); }, 0);
+};
 window.switchWholesaleView = switchWholesaleView;
 window.renderWholesaleUsers = renderWholesaleUsers;
 window.addWholesaleUser = addWholesaleUser;
