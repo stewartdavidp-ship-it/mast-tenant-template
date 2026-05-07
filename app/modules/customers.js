@@ -177,7 +177,12 @@
     }
 
     render();
-    if (currentView === 'list') requestAnimationFrame(renderTable);
+    // Populate the table synchronously — render() writes the wrap div via
+    // innerHTML in the same task, so it's already in the DOM. Deferring to
+    // rAF here opens a window where a stray render() (segment init,
+    // mastaskai listener, etc.) can land between the queue and the fire and
+    // leave the wrap visible-but-empty until a later trigger re-paints.
+    if (currentView === 'list') renderTable();
   }
 
   // ============================================================

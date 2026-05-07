@@ -182,14 +182,69 @@ function renderShowsList() {
 
   if (loadingEl) loadingEl.style.display = 'none';
 
+  // URL-driven filters from MCP admin links: status, dateFrom, dateTo,
+  // showIds (#show-apply?...). URL-overrides-pill — when any URL filter
+  // is present, bypass the dropdown filters for this render. Banner +
+  // Clear button surface it.
+  var rp = (typeof window.getRouteParams === 'function') ? window.getRouteParams() : {};
+  var urlStatus = (rp && typeof rp.status === 'string') ? rp.status : '';
+  var urlDateFrom = (rp && typeof rp.dateFrom === 'string') ? rp.dateFrom.slice(0, 10) : '';
+  var urlDateTo = (rp && typeof rp.dateTo === 'string') ? rp.dateTo.slice(0, 10) : '';
+  var urlIdsParam = (rp && typeof rp.showIds === 'string') ? rp.showIds : '';
+  var urlIds = urlIdsParam ? urlIdsParam.split(',').map(function(s) { return s.trim(); }).filter(Boolean) : [];
+  var urlIdLookup = urlIds.length > 0 ? Object.create(null) : null;
+  if (urlIdLookup) urlIds.forEach(function(id) { urlIdLookup[id] = true; });
+  var hasUrlFilter = !!(urlStatus || urlDateFrom || urlDateTo || urlIds.length);
+
   var arr = getShowsArray();
-  var statusFilter = document.getElementById('showStatusFilter');
-  var typeFilter = document.getElementById('showTypeFilter');
-  if (statusFilter && statusFilter.value !== 'all') {
-    arr = arr.filter(function(s) { return s.applicationStatus === statusFilter.value; });
+  if (hasUrlFilter) {
+    // Shows store startDate as YYYY-MM-DD already, so direct string compare
+    // works (no tenant-TZ math needed — unlike orders/products/customers
+    // which carry ISO timestamps).
+    arr = arr.filter(function(s) {
+      if (urlStatus && s.applicationStatus !== urlStatus) return false;
+      if (urlIdLookup && !urlIdLookup[s._key]) return false;
+      if (urlDateFrom || urlDateTo) {
+        if (!s.startDate) return false;
+        if (urlDateFrom && s.startDate < urlDateFrom) return false;
+        if (urlDateTo && s.startDate > urlDateTo) return false;
+      }
+      return true;
+    });
+  } else {
+    var statusFilter = document.getElementById('showStatusFilter');
+    var typeFilter = document.getElementById('showTypeFilter');
+    if (statusFilter && statusFilter.value !== 'all') {
+      arr = arr.filter(function(s) { return s.applicationStatus === statusFilter.value; });
+    }
+    if (typeFilter && typeFilter.value !== 'all') {
+      arr = arr.filter(function(s) { return s.type === typeFilter.value; });
+    }
   }
-  if (typeFilter && typeFilter.value !== 'all') {
-    arr = arr.filter(function(s) { return s.type === typeFilter.value; });
+
+  // URL-filter banner — surfaces active MCP-link filters with a Clear button.
+  // Inserted just above the cards container, lazily.
+  var bannerEl = document.getElementById('showsUrlFilterBanner');
+  if (!bannerEl && hasUrlFilter) {
+    bannerEl = document.createElement('div');
+    bannerEl.id = 'showsUrlFilterBanner';
+    bannerEl.style.cssText = 'background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.35);color:#F59E0B;padding:8px 12px;margin-bottom:12px;border-radius:6px;display:flex;align-items:center;gap:12px;font-size:0.875rem;';
+    if (cardsEl.parentNode) cardsEl.parentNode.insertBefore(bannerEl, cardsEl);
+  }
+  if (bannerEl) {
+    if (hasUrlFilter) {
+      var parts = [];
+      if (urlIds.length) parts.push(urlIds.length + ' selected show' + (urlIds.length === 1 ? '' : 's'));
+      if (urlStatus) parts.push('status: ' + urlStatus);
+      if (urlDateFrom && urlDateTo) parts.push('start ' + urlDateFrom + ' to ' + urlDateTo);
+      else if (urlDateFrom) parts.push('start from ' + urlDateFrom + ' onward');
+      else if (urlDateTo) parts.push('start through ' + urlDateTo);
+      bannerEl.innerHTML = '<span>🎪 Showing ' + parts.join(', ') + '</span>' +
+        '<button type="button" onclick="clearShowsFilter()" style="margin-left:auto;background:transparent;border:1px solid rgba(245,158,11,0.5);color:#F59E0B;padding:2px 10px;border-radius:4px;cursor:pointer;font-size:0.8rem;">Clear filter</button>';
+      bannerEl.style.display = 'flex';
+    } else {
+      bannerEl.style.display = 'none';
+    }
   }
 
   if (countEl) countEl.textContent = arr.length + ' show' + (arr.length !== 1 ? 's' : '');
@@ -3386,6 +3441,13 @@ async function runShowDeepDive(showId) {
   window.switchShowSubView = switchShowSubView;
   window.loadShows = loadShows;
   window.renderShowsList = renderShowsList;
+  window.clearShowsFilter = function() {
+    var p = (typeof window.getRouteParams === 'function') ? window.getRouteParams() : {};
+    var next = {};
+    var DROP = { status: 1, dateFrom: 1, dateTo: 1, showIds: 1 };
+    Object.keys(p).forEach(function(k) { if (!DROP[k]) next[k] = p[k]; });
+    if (typeof navigateTo === 'function') navigateTo('show-apply', next);
+  };
   window.openCreateShowModal = openCreateShowModal;
   window.closeCreateShowModal = closeCreateShowModal;
   window.saveShow = saveShow;
