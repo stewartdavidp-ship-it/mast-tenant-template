@@ -2385,6 +2385,7 @@ async function exitPackingMode() {
 
   window.addEventListener('mastaskai:ready', paintSalesAskAiSlot);
   window.addEventListener('mastaskai:configchanged', paintSalesAskAiSlot);
+  paintSalesAskAiSlot();
 
   if (window.MastAskAi) {
     window.MastAskAi.register('sales', {

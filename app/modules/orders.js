@@ -2729,6 +2729,23 @@
   }
 
   function renderCommissions() {
+    // URL-driven filters from MCP admin links: status, dateFrom, dateTo,
+    // commissionIds (#commissions?...). URL-overrides-pill — when any URL
+    // filter is present, bypass the dropdown filter for this render.
+    var rp = (typeof window.getRouteParams === 'function') ? window.getRouteParams() : {};
+    var urlStatus = (rp && typeof rp.status === 'string') ? rp.status : '';
+    var urlDateFrom = (rp && typeof rp.dateFrom === 'string') ? rp.dateFrom.slice(0, 10) : '';
+    var urlDateTo = (rp && typeof rp.dateTo === 'string') ? rp.dateTo.slice(0, 10) : '';
+    var urlIdsParam = (rp && typeof rp.commissionIds === 'string') ? rp.commissionIds : '';
+    var urlIds = urlIdsParam ? urlIdsParam.split(',').map(function(s) { return s.trim(); }).filter(Boolean) : [];
+    var urlIdLookup = urlIds.length > 0 ? Object.create(null) : null;
+    if (urlIdLookup) urlIds.forEach(function(id) { urlIdLookup[id] = true; });
+    var hasUrlFilter = !!(urlStatus || urlDateFrom || urlDateTo || urlIds.length);
+    if (hasUrlFilter && (urlDateFrom || urlDateTo) && _tenantTz === null) {
+      // First render uses browser TZ; re-render once tenant TZ resolves.
+      ensureTenantTz().then(function() { renderCommissions(); });
+    }
+
     var filterEl = document.getElementById('commissionsStatusFilter');
     var filter = filterEl ? filterEl.value : 'all';
     var items = Object.keys(commissionsData).map(function(k) {
@@ -2736,10 +2753,48 @@
       c.id = k;
       return c;
     });
-    if (filter !== 'all') {
+    if (hasUrlFilter) {
+      items = items.filter(function(c) {
+        if (urlStatus && c.status !== urlStatus) return false;
+        if (urlIdLookup && !urlIdLookup[c.id]) return false;
+        if (urlDateFrom || urlDateTo) {
+          var p = tzPartsFromIso(c.createdAt || '');
+          if (!p) return false;
+          var d = p.year + '-' + p.month + '-' + p.day;
+          if (urlDateFrom && d < urlDateFrom) return false;
+          if (urlDateTo && d > urlDateTo) return false;
+        }
+        return true;
+      });
+    } else if (filter !== 'all') {
       items = items.filter(function(c) { return c.status === filter; });
     }
     items.sort(function(a, b) { return (b.createdAt || '').localeCompare(a.createdAt || ''); });
+
+    // URL-filter banner — surfaces active MCP-link filters with Clear button.
+    var bannerEl = document.getElementById('commissionsUrlFilterBanner');
+    var tableEl = document.getElementById('commissionsTable');
+    if (!bannerEl && hasUrlFilter && tableEl && tableEl.parentNode) {
+      bannerEl = document.createElement('div');
+      bannerEl.id = 'commissionsUrlFilterBanner';
+      bannerEl.style.cssText = 'background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.35);color:#F59E0B;padding:8px 12px;margin-bottom:12px;border-radius:6px;display:flex;align-items:center;gap:12px;font-size:0.875rem;';
+      tableEl.parentNode.insertBefore(bannerEl, tableEl);
+    }
+    if (bannerEl) {
+      if (hasUrlFilter) {
+        var parts = [];
+        if (urlIds.length) parts.push(urlIds.length + ' selected commission' + (urlIds.length === 1 ? '' : 's'));
+        if (urlStatus) parts.push('status: ' + String(urlStatus).replace(/-/g, ' '));
+        if (urlDateFrom && urlDateTo) parts.push('from ' + urlDateFrom + ' to ' + urlDateTo);
+        else if (urlDateFrom) parts.push('from ' + urlDateFrom + ' onward');
+        else if (urlDateTo) parts.push('through ' + urlDateTo);
+        bannerEl.innerHTML = '<span>🎨 Showing ' + parts.join(', ') + '</span>' +
+          '<button type="button" onclick="clearCommissionsFilter()" style="margin-left:auto;background:transparent;border:1px solid rgba(245,158,11,0.5);color:#F59E0B;padding:2px 10px;border-radius:4px;cursor:pointer;font-size:0.8rem;">Clear filter</button>';
+        bannerEl.style.display = 'flex';
+      } else {
+        bannerEl.style.display = 'none';
+      }
+    }
 
     var countEl = document.getElementById('commissionsCount');
     if (countEl) countEl.textContent = items.length + ' inquir' + (items.length === 1 ? 'y' : 'ies');
@@ -4131,6 +4186,13 @@
   window.getOrderItemsLabel = getOrderItemsLabel;
   window.setOrderFilter = setOrderFilter;
   window.filterOrdersBySource = filterOrdersBySource;
+  window.clearCommissionsFilter = function() {
+    var p = (typeof window.getRouteParams === 'function') ? window.getRouteParams() : {};
+    var next = {};
+    var DROP = { status: 1, dateFrom: 1, dateTo: 1, commissionIds: 1 };
+    Object.keys(p).forEach(function(k) { if (!DROP[k]) next[k] = p[k]; });
+    if (typeof navigateTo === 'function') navigateTo('commissions', next);
+  };
   window.clearOrdersDateFilter = function() {
     // Drop all URL-driven filters (status + date range + specific order IDs);
     // keep route and any non-filter params. navigateTo re-applies + re-renders.
@@ -4247,6 +4309,7 @@
 
   window.addEventListener('mastaskai:ready', paintOrdersAskAiSlot);
   window.addEventListener('mastaskai:configchanged', paintOrdersAskAiSlot);
+  paintOrdersAskAiSlot();
 
   if (window.MastAskAi) {
     window.MastAskAi.register('orders', {
@@ -4373,6 +4436,7 @@
 
   window.addEventListener('mastaskai:ready', paintRmaAskAiSlot);
   window.addEventListener('mastaskai:configchanged', paintRmaAskAiSlot);
+  paintRmaAskAiSlot();
 
   if (window.MastAskAi) {
     window.MastAskAi.register('rma', {
@@ -4515,6 +4579,7 @@
       'rma': { tab: 'rmaTab', setup: function() { loadRmaData(); } },
       'commissions': { tab: 'commissionsTab', setup: function() {
         if (!commissionsLoaded) loadCommissions();
+        else renderCommissions();
         // Deep link: ?view=commissions&id=xxx
         var urlParams = new URLSearchParams(window.location.search);
         var deepId = urlParams.get('id');

@@ -3548,6 +3548,8 @@
 
   window.addEventListener('mastaskai:ready', paintEnrollmentsAskAiSlot);
   window.addEventListener('mastaskai:configchanged', paintEnrollmentsAskAiSlot);
+  // Paint immediately in case mastaskai:ready already fired before this lazy module loaded.
+  paintEnrollmentsAskAiSlot();
 
   if (window.MastAskAi) {
     window.MastAskAi.register('enrollments', {

@@ -22383,11 +22383,16 @@ function paintInventoryAskAiSlot() {
   }
 }
 
+function _registerInventoryAskAiSurface() {
+  if (!window.MastAskAi || !window.MastAskAi.register) return;
+  if (window.MastAskAi._registry && window.MastAskAi._registry.inventory) return;
+  window.MastAskAi.register('inventory', _inventoryAskAiConfig);
+}
+window.addEventListener('mastaskai:ready', _registerInventoryAskAiSurface);
 window.addEventListener('mastaskai:ready', paintInventoryAskAiSlot);
 window.addEventListener('mastaskai:configchanged', paintInventoryAskAiSlot);
 
-if (window.MastAskAi) {
-  window.MastAskAi.register('inventory', {
+var _inventoryAskAiConfig = {
     title: 'Ask AI about your inventory',
     placeholder: 'e.g. Which products are out of stock or low? What is sitting on the shelf? Which haven\'t been counted in 60+ days?',
     notes: [
@@ -22486,8 +22491,7 @@ if (window.MastAskAi) {
         topProductsByPotentialRevenue: topByValue.slice(0, 15)
       };
     }
-  });
-}
+};
 
 window.saveAskAiConfig = async function() {
   if (!window.MastAskAi) return;
