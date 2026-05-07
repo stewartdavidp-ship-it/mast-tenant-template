@@ -765,6 +765,168 @@ function csvEscape(str) {
   return str;
 }
 
+// ── Ask AI (UI → Claude handoff prototype) ──
+// See CC Idea -Os1Lrm8ShTKZMafXV4k. Captures page context, builds a versioned
+// prompt, copies to clipboard, and opens claude.ai/new. Schema is forward-
+// compatible with a future deep-link or postMessage handoff.
+
+function buildExpensesAskAiContext() {
+  var statusEl = document.getElementById('expFilterStatus');
+  var catEl = document.getElementById('expFilterCategory');
+  var acctEl = document.getElementById('expFilterAccount');
+
+  var totalCents = 0;
+  var unreviewedCount = 0;
+  var byCategory = {};
+  var byMonth = {};
+  expensesCache.forEach(function(e) {
+    var amt = e.amount || 0;
+    totalCents += amt;
+    if (!e.reviewed) unreviewedCount++;
+    var cat = e.category || 'uncategorized';
+    if (!byCategory[cat]) byCategory[cat] = { count: 0, totalCents: 0 };
+    byCategory[cat].count++;
+    byCategory[cat].totalCents += amt;
+    var month = (e.date || '').substring(0, 7) || 'unknown';
+    if (!byMonth[month]) byMonth[month] = { count: 0, totalCents: 0 };
+    byMonth[month].count++;
+    byMonth[month].totalCents += amt;
+  });
+
+  var acctLabel = '';
+  if (acctEl && acctEl.value && accountLookup[acctEl.value]) {
+    var a = accountLookup[acctEl.value];
+    acctLabel = a.institution + ' ••' + a.mask;
+  }
+
+  return {
+    version: '1',
+    app: 'mast',
+    tenantId: (typeof MastDB !== 'undefined' && MastDB.tenantId) ? MastDB.tenantId() : null,
+    route: '/app#expenses',
+    pageTitle: 'Expenses — Transactions',
+    filters: {
+      status: statusEl ? statusEl.value : null,
+      category: catEl ? catEl.value : null,
+      accountId: acctEl ? acctEl.value : null,
+      accountLabel: acctLabel || null
+    },
+    aggregates: {
+      rowCount: expensesCache.length,
+      totalCents: totalCents,
+      totalUSD: (totalCents / 100).toFixed(2),
+      unreviewedCount: unreviewedCount,
+      byCategory: byCategory,
+      byMonth: byMonth
+    },
+    categoriesAvailable: CATEGORIES.map(function(c) { return c.value; }),
+    note: 'Aggregates only — raw rows omitted by policy. Ask Claude to fetch via Mast MCP for row-level detail.',
+    capturedAt: new Date().toISOString()
+  };
+}
+
+function buildExpensesAskAiPrompt(question, ctx) {
+  return [
+    'I am looking at the Expenses page in my Mast admin app and want help understanding what I see.',
+    '',
+    '<mast-ui-context version="1">',
+    JSON.stringify(ctx, null, 2),
+    '</mast-ui-context>',
+    '',
+    'My question: ' + question,
+    '',
+    'Notes for you:',
+    '- The aggregates above reflect what is currently on screen given the active filters.',
+    '- Raw transaction rows are intentionally omitted. If you need row-level data to answer, tell me to enable the Mast MCP connector so you can fetch under proper RBAC.',
+    '- byMonth keys are YYYY-MM. Amounts are in cents (negative = refund/credit).'
+  ].join('\n');
+}
+
+function askAiAboutExpenses() {
+  if (document.getElementById('askAiModal')) return;
+
+  var ctx = buildExpensesAskAiContext();
+
+  var overlay = document.createElement('div');
+  overlay.id = 'askAiModal';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
+
+  overlay.innerHTML =
+    '<div role="dialog" aria-modal="true" style="background:var(--cream, #fefdf8);border-radius:12px;max-width:560px;width:100%;max-height:90vh;overflow:auto;box-shadow:0 20px 50px rgba(0,0,0,0.3);">' +
+      '<div style="padding:20px 24px;border-bottom:1px solid var(--cream-dark, #e8e3d3);display:flex;justify-content:space-between;align-items:center;">' +
+        '<div>' +
+          '<h3 style="margin:0;font-size:1.1rem;">✨ Ask AI about these expenses</h3>' +
+          '<div style="font-size:0.78rem;color:var(--warm-gray, #6b6555);margin-top:2px;">Page context will be sent with your question.</div>' +
+        '</div>' +
+        '<button onclick="closeAskAiModal()" style="background:none;border:none;font-size:1.4rem;cursor:pointer;color:var(--warm-gray, #6b6555);padding:0 4px;line-height:1;">×</button>' +
+      '</div>' +
+      '<div style="padding:20px 24px;">' +
+        '<label for="askAiQuestion" style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:6px;">Your question</label>' +
+        '<textarea id="askAiQuestion" rows="4" placeholder="e.g. How does my Materials spend this month compare to the prior two months? What categories are growing fastest?" style="width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:6px;font-family:\'DM Sans\',sans-serif;font-size:0.9rem;background:white;color:inherit;resize:vertical;box-sizing:border-box;"></textarea>' +
+        '<details style="margin-top:14px;">' +
+          '<summary style="font-size:0.78rem;color:var(--warm-gray, #6b6555);cursor:pointer;">Preview context being sent (' + ctx.aggregates.rowCount + ' expenses, $' + ctx.aggregates.totalUSD + ' total)</summary>' +
+          '<pre id="askAiCtxPreview" style="margin-top:8px;font-size:0.72rem;background:#f7f4eb;padding:10px;border-radius:6px;max-height:240px;overflow:auto;white-space:pre-wrap;"></pre>' +
+        '</details>' +
+        '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">' +
+          '<button class="btn btn-secondary btn-small" onclick="closeAskAiModal()">Cancel</button>' +
+          '<button class="btn btn-primary btn-small" onclick="submitAskAi()">Copy & Open Claude</button>' +
+        '</div>' +
+        '<div style="font-size:0.72rem;color:var(--warm-gray-light, #9a9485);margin-top:10px;">The prompt will be copied to your clipboard, then a new Claude tab opens. Paste into the chat to start.</div>' +
+      '</div>' +
+    '</div>';
+
+  document.body.appendChild(overlay);
+  var preview = document.getElementById('askAiCtxPreview');
+  if (preview) preview.textContent = JSON.stringify(ctx, null, 2);
+  overlay._askAiCtx = ctx;
+  setTimeout(function() {
+    var ta = document.getElementById('askAiQuestion');
+    if (ta) ta.focus();
+  }, 50);
+
+  overlay.addEventListener('click', function(ev) { if (ev.target === overlay) closeAskAiModal(); });
+}
+
+function closeAskAiModal() {
+  var m = document.getElementById('askAiModal');
+  if (m) m.remove();
+}
+
+async function submitAskAi() {
+  var modal = document.getElementById('askAiModal');
+  var ta = document.getElementById('askAiQuestion');
+  if (!modal || !ta) return;
+  var question = (ta.value || '').trim();
+  if (!question) {
+    ta.focus();
+    showToast('Type a question first', true);
+    return;
+  }
+  var prompt = buildExpensesAskAiPrompt(question, modal._askAiCtx);
+
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(prompt);
+    } else {
+      var tmp = document.createElement('textarea');
+      tmp.value = prompt;
+      tmp.style.position = 'fixed';
+      tmp.style.opacity = '0';
+      document.body.appendChild(tmp);
+      tmp.select();
+      document.execCommand('copy');
+      document.body.removeChild(tmp);
+    }
+    showToast('Prompt copied. Paste into the new Claude tab.');
+  } catch (err) {
+    showToast('Copy failed: ' + esc(err.message), true);
+    return;
+  }
+
+  closeAskAiModal();
+  window.open('https://claude.ai/new', '_blank', 'noopener');
+}
+
 function initExpenses() {
   showExpensesView('transactions');
 }
@@ -793,6 +955,9 @@ window.markPersonalAndBack = markPersonalAndBack;
 window.downloadExpensesCsv = downloadExpensesCsv;
 window.updateApproveButton = updateApproveButton;
 window.toggleSelectAll = toggleSelectAll;
+window.askAiAboutExpenses = askAiAboutExpenses;
+window.closeAskAiModal = closeAskAiModal;
+window.submitAskAi = submitAskAi;
 
 // ── Module registration ──
 MastAdmin.registerModule('expenses', {
