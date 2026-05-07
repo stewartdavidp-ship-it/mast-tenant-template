@@ -568,7 +568,7 @@
     if (!bannerEl && urlF.hasAny) {
       bannerEl = document.createElement('div');
       bannerEl.id = 'customersUrlFilterBanner';
-      bannerEl.style.cssText = 'background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.35);color:#F59E0B;padding:8px 12px;margin-bottom:12px;border-radius:6px;display:flex;align-items:center;gap:12px;font-size:0.875rem;';
+      bannerEl.style.cssText = 'background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.35);color:#F59E0B;padding:8px 12px;margin-bottom:12px;border-radius:6px;display:flex;align-items:center;gap:12px;font-size:0.85rem;';
       if (wrap.parentNode) wrap.parentNode.insertBefore(bannerEl, wrap);
     }
     if (bannerEl) {
@@ -581,7 +581,7 @@
         else if (urlF.dateFrom) parts.push('first order from ' + urlF.dateFrom + ' onward');
         else if (urlF.dateTo) parts.push('first order through ' + urlF.dateTo);
         bannerEl.innerHTML = '<span>👥 Showing ' + parts.join(', ') + '</span>' +
-          '<button type="button" onclick="clearCustomersFilter()" style="margin-left:auto;background:transparent;border:1px solid rgba(245,158,11,0.5);color:#F59E0B;padding:2px 10px;border-radius:4px;cursor:pointer;font-size:0.8rem;">Clear filter</button>';
+          '<button type="button" onclick="clearCustomersFilter()" style="margin-left:auto;background:transparent;border:1px solid rgba(245,158,11,0.5);color:#F59E0B;padding:2px 10px;border-radius:4px;cursor:pointer;font-size:0.78rem;">Clear filter</button>';
         bannerEl.style.display = 'flex';
       } else {
         bannerEl.style.display = 'none';

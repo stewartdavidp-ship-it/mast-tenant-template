@@ -594,7 +594,7 @@
     var showClaudeBtn = !isPreShoot && window.MastAskAi && window.MastAskAi.isEnabled();
     html += '<div style="margin-top:24px;text-align:center;display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">' +
       '<button class="btn btn-primary" style="padding:12px 40px;font-size:1rem;"' + ctaDisabled + ' onclick="smGenerate()" title="Uses tokens">' + ctaLabel + '</button>' +
-      (showClaudeBtn ? '<button class="btn btn-outline" style="padding:12px 24px;font-size:0.95rem;"' + ctaDisabled + ' onclick="smCaptionInClaude()" title="Opens Claude Desktop">✨ or draft in Claude</button>' : '') +
+      (showClaudeBtn ? '<button class="btn btn-outline" style="padding:12px 24px;font-size:0.9rem;"' + ctaDisabled + ' onclick="smCaptionInClaude()" title="Opens Claude Desktop">✨ or draft in Claude</button>' : '') +
     '</div>';
     if (!d.treatment) html += '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:8px;text-align:center;">Select a content style to continue</div>';
 

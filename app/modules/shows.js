@@ -234,7 +234,7 @@ function renderShowsList() {
   if (!bannerEl && hasUrlFilter) {
     bannerEl = document.createElement('div');
     bannerEl.id = 'showsUrlFilterBanner';
-    bannerEl.style.cssText = 'background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.35);color:#F59E0B;padding:8px 12px;margin-bottom:12px;border-radius:6px;display:flex;align-items:center;gap:12px;font-size:0.875rem;';
+    bannerEl.style.cssText = 'background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.35);color:#F59E0B;padding:8px 12px;margin-bottom:12px;border-radius:6px;display:flex;align-items:center;gap:12px;font-size:0.85rem;';
     if (cardsEl.parentNode) cardsEl.parentNode.insertBefore(bannerEl, cardsEl);
   }
   if (bannerEl) {
@@ -246,7 +246,7 @@ function renderShowsList() {
       else if (urlDateFrom) parts.push('start from ' + urlDateFrom + ' onward');
       else if (urlDateTo) parts.push('start through ' + urlDateTo);
       bannerEl.innerHTML = '<span>🎪 Showing ' + parts.join(', ') + '</span>' +
-        '<button type="button" onclick="clearShowsFilter()" style="margin-left:auto;background:transparent;border:1px solid rgba(245,158,11,0.5);color:#F59E0B;padding:2px 10px;border-radius:4px;cursor:pointer;font-size:0.8rem;">Clear filter</button>';
+        '<button type="button" onclick="clearShowsFilter()" style="margin-left:auto;background:transparent;border:1px solid rgba(245,158,11,0.5);color:#F59E0B;padding:2px 10px;border-radius:4px;cursor:pointer;font-size:0.78rem;">Clear filter</button>';
       bannerEl.style.display = 'flex';
     } else {
       bannerEl.style.display = 'none';

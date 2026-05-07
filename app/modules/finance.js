@@ -671,8 +671,8 @@ function renderFinExpDetailPanel(ex) {
   h += '<div style="font-size:1rem;font-weight:700;">' + sourceIcon + ' ' + e(ex.merchantName || ex.description || 'Expense') + '</div>';
   h += '<div style="font-size:0.78rem;color:var(--warm-gray,#888);margin-top:2px;">' + e(ex.date || '') + ' · ' + sourceLabel + (ex.pending ? ' · pending' : '') + '</div>';
   h += '</div>';
-  h += '<div style="font-size:1.4rem;font-weight:700;color:' + amountColor + ';flex-shrink:0;">' + amountStr + '</div>';
-  h += '<button onclick="finExpCloseDetail()" style="background:none;border:none;font-size:1.4rem;cursor:pointer;color:var(--warm-gray,#888);padding:0 4px;line-height:1;flex-shrink:0;">×</button>';
+  h += '<div style="font-size:1.6rem;font-weight:700;color:' + amountColor + ';flex-shrink:0;">' + amountStr + '</div>';
+  h += '<button onclick="finExpCloseDetail()" style="background:none;border:none;font-size:1.6rem;cursor:pointer;color:var(--warm-gray,#888);padding:0 4px;line-height:1;flex-shrink:0;">×</button>';
   h += '</div>';
 
   // Body
