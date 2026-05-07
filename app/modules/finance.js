@@ -946,6 +946,10 @@ window.submitFinAskAi = async function() {
   var question = (ta.value || '').trim();
   if (!question) { ta.focus(); showToast('Type a question first', true); return; }
   var prompt = buildFinExpAskAiPrompt(question, modal._ctx);
+
+  // Tier 1: Claude Desktop deep-link (claude://) prefills the composer directly.
+  // Tier 2: clipboard + browser tab fallback (paste manually).
+  // Always copy to clipboard first as a safety net regardless of which tier wins.
   try {
     if (navigator.clipboard && navigator.clipboard.writeText) {
       await navigator.clipboard.writeText(prompt);
@@ -954,12 +958,66 @@ window.submitFinAskAi = async function() {
       tmp.value = prompt; tmp.style.position = 'fixed'; tmp.style.opacity = '0';
       document.body.appendChild(tmp); tmp.select(); document.execCommand('copy'); document.body.removeChild(tmp);
     }
-    showToast('Prompt copied. Paste into the new Claude tab.');
   } catch (err) {
     showToast('Copy failed: ' + e(err.message), true); return;
   }
+
   closeFinAskAi();
-  window.open('https://claude.ai/new', '_blank', 'noopener');
+
+  var encoded = encodeURIComponent(prompt);
+
+  // claude:// has a ~14,000 char ceiling on the q parameter. If we exceed it,
+  // skip the deep link and go straight to the browser fallback — clipboard
+  // already holds the full prompt.
+  if (encoded.length > 13800) {
+    showToast('Prompt too long for Desktop — opening claude.ai (paste from clipboard).');
+    window.open('https://claude.ai/new', '_blank', 'noopener');
+    return;
+  }
+
+  // User can force the browser path by setting localStorage.mastAskAiSkipDesktop = '1'.
+  // Auto-detect: try the deep link, then check whether the page lost focus
+  // (the OS handler took over). If still visible after the timeout, fall back.
+  var skipDesktop = false;
+  try { skipDesktop = localStorage.getItem('mastAskAiSkipDesktop') === '1'; } catch (_e) {}
+
+  if (skipDesktop) {
+    showToast('Opening claude.ai (paste from clipboard).');
+    window.open('https://claude.ai/new', '_blank', 'noopener');
+    return;
+  }
+
+  showToast('Opening Claude Desktop…');
+  var deepLink = 'claude://claude.ai/new?q=' + encoded;
+
+  // Hidden iframe avoids navigating the current page if no handler is registered.
+  var iframe = document.createElement('iframe');
+  iframe.style.cssText = 'position:absolute;width:0;height:0;border:0;left:-1000px;';
+  iframe.src = deepLink;
+  document.body.appendChild(iframe);
+
+  // After a short window, decide: did Desktop take over (visibility hidden /
+  // window blur), or is the page still visible (no handler)?
+  var settled = false;
+  function onBlur() {
+    if (settled) return;
+    settled = true;
+    // Desktop took focus — clean up. Nothing more to do.
+    try { iframe.parentNode && iframe.parentNode.removeChild(iframe); } catch (_e) {}
+    window.removeEventListener('blur', onBlur);
+  }
+  window.addEventListener('blur', onBlur);
+
+  setTimeout(function() {
+    if (settled) return;
+    settled = true;
+    window.removeEventListener('blur', onBlur);
+    try { iframe.parentNode && iframe.parentNode.removeChild(iframe); } catch (_e) {}
+    if (document.visibilityState === 'hidden') return; // Desktop got it
+    // Fall back to browser. Clipboard still has the prompt.
+    showToast('Claude Desktop not detected — opening claude.ai (paste from clipboard).');
+    window.open('https://claude.ai/new', '_blank', 'noopener');
+  }, 1200);
 };
 
 window.finExpSyncBank = async function(itemId) {
