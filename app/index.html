@@ -22758,6 +22758,130 @@ window.MastAskAi = (function() {
     }, 1200);
   }
 
+  function openWithReturn(opts) {
+    opts = opts || {};
+    if (!isEnabled()) {
+      showToast('Configure Ask AI in Settings → AI to enable Claude drafting', true);
+      return;
+    }
+    var basePrompt = String(opts.prompt || '').trim();
+    if (!basePrompt) { showToast('Nothing to draft', true); return; }
+    var prompt = basePrompt +
+      '\n\nWhen ready, reply with the polished result wrapped in ' +
+      '<mast-return> ... </mast-return> tags so the app can extract it.';
+
+    // Best-effort clipboard write (safety net for fallback paths).
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(prompt);
+      }
+    } catch (_e) {}
+
+    var encoded = encodeURIComponent(prompt);
+    var openedFallback = false;
+
+    if (encoded.length > 13800) {
+      showToast('Prompt too long for Desktop — opening claude.ai (paste from clipboard).');
+      window.open('https://claude.ai/new', '_blank', 'noopener');
+      openedFallback = true;
+    } else {
+      var skipDesktop = false;
+      try { skipDesktop = localStorage.getItem('mastAskAiSkipDesktop') === '1'; } catch (_e) {}
+      if (skipDesktop) {
+        showToast('Opening claude.ai (paste from clipboard).');
+        window.open('https://claude.ai/new', '_blank', 'noopener');
+        openedFallback = true;
+      } else {
+        showToast('Opening Claude Desktop…');
+        var deepLink = 'claude://claude.ai/new?q=' + encoded;
+        var iframe = document.createElement('iframe');
+        iframe.style.cssText = 'position:absolute;width:0;height:0;border:0;left:-1000px;';
+        iframe.src = deepLink;
+        document.body.appendChild(iframe);
+        var settled = false;
+        function onBlur() {
+          if (settled) return;
+          settled = true;
+          try { iframe.parentNode && iframe.parentNode.removeChild(iframe); } catch (_e) {}
+          window.removeEventListener('blur', onBlur);
+        }
+        window.addEventListener('blur', onBlur);
+        setTimeout(function() {
+          if (settled) return;
+          settled = true;
+          window.removeEventListener('blur', onBlur);
+          try { iframe.parentNode && iframe.parentNode.removeChild(iframe); } catch (_e) {}
+          if (document.visibilityState === 'hidden') return;
+          showToast('Claude Desktop not detected — opening claude.ai (paste from clipboard).');
+          window.open('https://claude.ai/new', '_blank', 'noopener');
+        }, 1200);
+      }
+    }
+
+    renderReturnModal(opts);
+  }
+
+  function renderReturnModal(opts) {
+    var existing = document.getElementById('mastAskAiReturnModal');
+    if (existing) existing.remove();
+    var titleText = 'Paste result from Claude — ' + (opts.title || 'AI draft');
+    var overlay = document.createElement('div');
+    overlay.id = 'mastAskAiReturnModal';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
+    overlay.innerHTML =
+      '<div role="dialog" aria-modal="true" style="background:var(--bg-secondary,#232323);color:var(--text,#fff);border-radius:12px;max-width:640px;width:100%;max-height:90vh;overflow:auto;box-shadow:0 20px 50px rgba(0,0,0,0.5);">' +
+        '<div style="padding:18px 22px;border-bottom:1px solid rgba(255,255,255,0.08);display:flex;justify-content:space-between;align-items:center;">' +
+          '<div>' +
+            '<h3 style="margin:0;font-size:1rem;">' + esc(titleText) + '</h3>' +
+            '<div style="font-size:0.78rem;color:var(--warm-gray,#888);margin-top:2px;">Paste the full Claude reply — the app will extract content inside &lt;mast-return&gt; tags.</div>' +
+          '</div>' +
+          '<button onclick="MastAskAi.closeReturn()" style="background:none;border:none;font-size:1.4rem;cursor:pointer;color:var(--warm-gray,#888);padding:0 4px;line-height:1;">×</button>' +
+        '</div>' +
+        '<div style="padding:18px 22px;">' +
+          '<textarea id="mastAskAiReturnText" rows="10" placeholder="Paste the full Claude reply here…" style="width:100%;padding:10px 12px;border:1px solid rgba(255,255,255,0.1);border-radius:6px;font-family:\'DM Sans\',sans-serif;font-size:0.9rem;background:var(--bg,#1a1a1a);color:var(--text,#fff);resize:vertical;box-sizing:border-box;"></textarea>' +
+          '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">' +
+            '<button class="btn btn-secondary btn-small" onclick="MastAskAi.closeReturn()">Cancel</button>' +
+            '<button class="btn btn-primary btn-small" id="mastAskAiApplyBtn">Apply result</button>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(overlay);
+    overlay.addEventListener('click', function(ev) { if (ev.target === overlay) closeReturn(); });
+    setTimeout(function() {
+      var ta = document.getElementById('mastAskAiReturnText');
+      if (ta) ta.focus();
+    }, 50);
+    var applyBtn = document.getElementById('mastAskAiApplyBtn');
+    if (applyBtn) {
+      applyBtn.addEventListener('click', function() {
+        var ta = document.getElementById('mastAskAiReturnText');
+        var raw = (ta && ta.value) || '';
+        if (!raw.trim()) { if (ta) ta.focus(); showToast('Paste the Claude reply first', true); return; }
+        var match = raw.match(/<mast-return>([\s\S]*?)<\/mast-return>/i);
+        var text;
+        if (match) {
+          text = match[1].trim();
+        } else {
+          text = raw.trim();
+          showToast('No <mast-return> tags found — applying the full pasted text.');
+        }
+        try {
+          if (typeof opts.onReturn === 'function') opts.onReturn(text);
+        } catch (err) {
+          console.error('openWithReturn onReturn handler error:', err);
+          showToast('Apply failed: ' + (err && err.message ? err.message : 'unknown'), true);
+          return;
+        }
+        closeReturn();
+      });
+    }
+  }
+
+  function closeReturn() {
+    var m = document.getElementById('mastAskAiReturnModal');
+    if (m) m.remove();
+  }
+
   return {
     register: register,
     open: open,
@@ -22768,6 +22892,8 @@ window.MastAskAi = (function() {
     getConfig: getConfig,
     setConfig: setConfig,
     getStatus: getStatus,
+    openWithReturn: openWithReturn,
+    closeReturn: closeReturn,
     _registry: registry
   };
 })();

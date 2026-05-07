@@ -308,8 +308,11 @@
             var charLimitList = NL_CHAR_LIMITS[sec.cardSize || 'medium'];
             html += nlContentEditableHtml('nlListRaw', sec.id, 'rawInput', sec.rawInput || '', charLimitList);
             var hasContent = !!(sec.rawInput && nlStripTags(sec.rawInput).trim());
-            html += '<div style="margin-top:8px;display:flex;gap:8px;align-items:center;">' +
+            html += '<div style="margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">' +
               '<button class="btn btn-outline" style="font-size:0.78rem;" ' + (hasContent ? '' : 'disabled') + ' onclick="nlPolishSection(\'' + sec.id + '\')" title="Uses tokens">Polish with AI</button>';
+            if (window.MastAskAi && window.MastAskAi.isEnabled() && hasContent) {
+              html += '<button class="btn btn-outline" style="font-size:0.78rem;" onclick="nlDraftInClaude(\'' + sec.id + '\')" title="Opens Claude Desktop">✨ or draft in Claude</button>';
+            }
             if (hasContent) html += '<button class="btn btn-outline" style="font-size:0.78rem;" onclick="nlUseAsIs(\'' + sec.id + '\')">Use as-is</button>';
             html += '</div>';
           }
@@ -777,9 +780,12 @@
     } else {
       html += nlContentEditableHtml('nlModalRaw', secId, 'rawInput', sec.rawInput || '', charLimit);
       var hasContent = !!(sec.rawInput && nlStripTags(sec.rawInput).trim());
-      html += '<div style="margin-top:8px;display:flex;gap:8px;">' +
+      html += '<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;">' +
         '<button class="btn btn-outline" style="font-size:0.78rem;" ' + (hasContent ? '' : 'disabled') +
         ' onclick="nlPolishSection(\'' + secId + '\')" title="Uses tokens">Polish with AI</button>';
+      if (window.MastAskAi && window.MastAskAi.isEnabled() && hasContent) {
+        html += '<button class="btn btn-outline" style="font-size:0.78rem;" onclick="nlDraftInClaude(\'' + secId + '\')" title="Opens Claude Desktop">✨ or draft in Claude</button>';
+      }
       if (hasContent) html += '<button class="btn btn-outline" style="font-size:0.78rem;" onclick="nlUseAsIs(\'' + secId + '\'); setTimeout(function(){nlOpenCardEditor(\'' + secId + '\')},100);">Use as-is</button>';
       html += '</div>';
     }
@@ -977,6 +983,35 @@
       btn.disabled = false;
       btn.textContent = origText;
     }
+  }
+
+  function nlDraftInClaude(secId) {
+    if (!nlCurrentIssue || !nlCurrentIssue.sections || !nlCurrentIssue.sections[secId]) return;
+    var sec = nlCurrentIssue.sections[secId];
+    if (!sec.rawInput || !nlStripTags(sec.rawInput).trim()) { showToast('Write some content first', true); return; }
+    if (!window.MastAskAi || !window.MastAskAi.isEnabled()) {
+      showToast('Configure Ask AI in Settings → AI to enable Claude drafting', true);
+      return;
+    }
+    var sectionLabel = sec.label || sec.title || sec.type || secId;
+    window.MastAskAi.openWithReturn({
+      title: 'Newsletter section: ' + sectionLabel,
+      prompt: 'Polish this newsletter section into clean, friendly customer-facing copy. ' +
+              'Keep the voice warm and concrete. Cut filler. Aim for one short paragraph ' +
+              'unless the source clearly needs more.\n\nSource:\n' + nlStripTags(sec.rawInput),
+      onReturn: async function(text) {
+        nlAiResults[secId] = text;
+        sec.aiVersion = text;
+        try {
+          await MastDB.newsletter.issues.sectionField(nlCurrentIssueId, secId, 'aiVersion').set(text);
+        } catch (err) {
+          console.error('Save Claude draft error:', err);
+          showToast('Saved locally — sync error: ' + (err && err.message ? err.message : 'unknown'), true);
+        }
+        renderNLCompose();
+        showToast('Draft applied. Click Use AI Version to keep it.');
+      }
+    });
   }
 
   async function nlPickVersion(secId, version) {
@@ -1565,6 +1600,7 @@
   window.nlUpdateFinalContent = nlUpdateFinalContent;
   window.nlUseAsIs = nlUseAsIs;
   window.nlPolishSection = nlPolishSection;
+  window.nlDraftInClaude = nlDraftInClaude;
   window.nlPickVersion = nlPickVersion;
   window.nlResetSection = nlResetSection;
   window.nlAddSection = nlAddSection;
