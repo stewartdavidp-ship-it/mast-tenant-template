@@ -213,8 +213,9 @@
       filtered = sourceFiltered.filter(function(o) { return (o.status || 'placed') === orderFilter; });
     }
 
-    // URL-driven filters: dateFrom, dateTo, orderIds (#orders?...)
+    // URL-driven filters: status, dateFrom, dateTo, orderIds (#orders?...)
     var routeParams = (typeof window.getRouteParams === 'function') ? window.getRouteParams() : {};
+    var statusFromUrl = routeParams && typeof routeParams.status === 'string' ? routeParams.status : '';
     var dateFrom = routeParams && typeof routeParams.dateFrom === 'string' ? routeParams.dateFrom.slice(0, 10) : '';
     var dateTo = routeParams && typeof routeParams.dateTo === 'string' ? routeParams.dateTo.slice(0, 10) : '';
     var orderIdsParam = routeParams && typeof routeParams.orderIds === 'string' ? routeParams.orderIds : '';
@@ -238,7 +239,7 @@
 
     // URL-filter banner — surfaces active filters so users know why
     // fewer orders are showing, with a Clear button.
-    var hasUrlFilter = !!(dateFrom || dateTo || orderIdSet.length);
+    var hasUrlFilter = !!(statusFromUrl || dateFrom || dateTo || orderIdSet.length);
     var bannerEl = document.getElementById('ordersDateBanner');
     if (!bannerEl && hasUrlFilter) {
       bannerEl = document.createElement('div');
@@ -251,6 +252,7 @@
       if (hasUrlFilter) {
         var parts = [];
         if (orderIdSet.length) parts.push(orderIdSet.length + ' selected order' + (orderIdSet.length === 1 ? '' : 's'));
+        if (statusFromUrl) parts.push('status: ' + String(statusFromUrl).replace(/_/g, ' '));
         if (dateFrom && dateTo) parts.push('from ' + dateFrom + ' to ' + dateTo);
         else if (dateFrom) parts.push('from ' + dateFrom + ' onward');
         else if (dateTo) parts.push('through ' + dateTo);
@@ -4094,11 +4096,11 @@
   window.setOrderFilter = setOrderFilter;
   window.filterOrdersBySource = filterOrdersBySource;
   window.clearOrdersDateFilter = function() {
-    // Drop URL-driven filters (date range + specific order IDs); keep
-    // route and any non-filter params. navigateTo re-applies + re-renders.
+    // Drop all URL-driven filters (status + date range + specific order IDs);
+    // keep route and any non-filter params. navigateTo re-applies + re-renders.
     var params = (typeof window.getRouteParams === 'function') ? window.getRouteParams() : {};
     var next = {};
-    var DROP = { dateFrom: 1, dateTo: 1, orderIds: 1 };
+    var DROP = { status: 1, dateFrom: 1, dateTo: 1, orderIds: 1 };
     Object.keys(params).forEach(function(k) {
       if (!DROP[k]) next[k] = params[k];
     });
