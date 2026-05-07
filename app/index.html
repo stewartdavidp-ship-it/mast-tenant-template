@@ -13646,9 +13646,11 @@ auth.onAuthStateChanged(async function(user) {
     _coinPurchaseReturn = true;
   }
 
-  // Strip query params from hash for clean route navigation
-  var initialRoute = (location.hash.split('?')[0]).replace('#', '') || 'dashboard';
-  navigateTo(initialRoute);
+  // Parse hash into {route, params} so MCP-supplied deep links like
+  // #orders?status=refunded can pre-filter the destination view.
+  var _initialParsed = parseHash(location.hash);
+  currentRouteParams = _initialParsed.params;
+  navigateTo(_initialParsed.route || 'dashboard', _initialParsed.params);
   attachListeners();
 
   // Seed presence cache early so module banners (cs-surveys, gift-cards) show
@@ -15006,8 +15008,45 @@ var SECTION_ROUTES = {
 var ALL_TAB_IDS = ['scheduleTab', 'galleryTab', 'homepageTab', 'brandTab', 'productsTab', 'ordersTab', 'salesTab', 'salesEventsTab', 'productionTab', 'forecastTab', 'couponsTab', 'analyticsTab', 'settingsTab', 'imagesTab', 'auditLogTab', 'employeesTab', 'contactsTab', 'customersTab', 'packTab', 'shipTab', 'commissionsTab', 'rmaTab', 'socialMediaTab', 'blogTab', 'newsletterTab', 'placeholderTab', 'inventoryTab', 'storiesTab', 'dashboardTab', 'tripsTab', 'wholesaleTab', 'showTab', 'financialsTab', 'eventsAdminTab', 'websiteTab', 'showLightTab', 'emailLogTab', 'materialsTab', 'piecesTab', 'galleriesTab', 'lookbooksTab', 'promotionsTab', 'expensesTab', 'bookTab', 'subscriptionTab', 'aboutTab', 'walletTab', 'giftCardsTab', 'loyaltyTab', 'membershipTab', 'termsTab', 'advisorTab', 'studioTab', 'teamTab', 'studentsTab', 'migrationDashTab', 'migrationConfirmTab', 'migrationPlanTab', 'migrationImportTab', 'historicalOrdersTab', 'channelsTab', 'businessTab', 'myFeedbackTab', 'procurementTab', 'csInboxTab', 'csTicketsTab', 'csSurveysTab', 'csReviewsTab', 'csFaqsTab', 'csMembersTab', 'financeRevenueTab', 'financeExpensesTab', 'financePlTab', 'financeCashFlowTab', 'financeArTab', 'financeApTab', 'financeTaxTab', 'financeReportsTab'];
 
 var currentRoute = 'dashboard';
+var currentRouteParams = {};
 
-function navigateTo(route) {
+// Splits "#orders?status=refunded&dateFrom=2026-05-01" into
+// {route:'orders', params:{status:'refunded', dateFrom:'2026-05-01'}}.
+// Tolerates missing leading '#', missing query, and decodes URI components.
+function parseHash(hash) {
+  var raw = (hash || '').replace(/^#/, '');
+  if (!raw) return { route: '', params: {} };
+  var qIdx = raw.indexOf('?');
+  if (qIdx < 0) return { route: raw, params: {} };
+  var route = raw.slice(0, qIdx);
+  var qs = raw.slice(qIdx + 1);
+  var params = {};
+  qs.split('&').forEach(function(pair) {
+    if (!pair) return;
+    var eq = pair.indexOf('=');
+    var k = eq < 0 ? pair : pair.slice(0, eq);
+    var v = eq < 0 ? '' : pair.slice(eq + 1);
+    if (!k) return;
+    try { params[decodeURIComponent(k)] = decodeURIComponent(v); }
+    catch (_e) { params[k] = v; }
+  });
+  return { route: route, params: params };
+}
+
+function buildHash(route, params) {
+  var keys = params ? Object.keys(params) : [];
+  if (!keys.length) return route;
+  var qs = keys
+    .filter(function(k) { return params[k] !== undefined && params[k] !== null && params[k] !== ''; })
+    .map(function(k) { return encodeURIComponent(k) + '=' + encodeURIComponent(params[k]); })
+    .join('&');
+  return qs ? route + '?' + qs : route;
+}
+
+// Section modules call this on render to read incoming filter params.
+window.getRouteParams = function() { return currentRouteParams || {}; };
+
+function navigateTo(route, params) {
   // Top-level nav (sidebar click, dashboard tile, in-page button) consults
   // the unsaved-changes registry and resets the back-nav stack. Programmatic
   // navigation from inside MastNavStack.popAndReturn sets _mastNavInternal
@@ -15016,9 +15055,10 @@ function navigateTo(route) {
     var dirty = MastDirty.getDirtyKeys();
     if (dirty.length > 0) {
       var targetRoute = route;
+      var targetParams = params;
       MastDirty.checkAndExit(function() {
         MastNavStack.clear();
-        navigateTo(targetRoute);
+        navigateTo(targetRoute, targetParams);
       });
       return;
     }
@@ -15067,7 +15107,12 @@ function navigateTo(route) {
     if (actionKey) incrementQuickAction(actionKey);
   }
   currentRoute = route;
-  location.hash = route;
+  currentRouteParams = (params && typeof params === 'object') ? params : {};
+  var newHash = buildHash(route, currentRouteParams);
+  // Use replaceState when the hash already matches to avoid spurious
+  // hashchange events; otherwise assign directly so existing back-nav works.
+  var currentBare = location.hash.replace(/^#/, '');
+  if (currentBare !== newHash) location.hash = newHash;
 
   // Check if route belongs to a lazy-loaded module
   var moduleId = getModuleForRouteManifest(route);
@@ -15264,28 +15309,32 @@ document.getElementById('mobileMenuOverlay').addEventListener('mousedown', funct
 
 // Hash routing
 window.addEventListener('hashchange', function() {
-  var hash = location.hash.replace('#', '') || 'dashboard';
+  var parsed = parseHash(location.hash);
+  var route = parsed.route || 'dashboard';
+  var params = parsed.params;
   // Subscription gating on deep links
-  if (!canAccessRoute(hash)) {
-    var blockedModuleId = getModuleForRoute(hash);
+  if (!canAccessRoute(route)) {
+    var blockedModuleId = getModuleForRoute(route);
     if (blockedModuleId) {
       var mod = MODULE_REGISTRY[blockedModuleId];
       showToast('This feature requires the ' + (mod ? mod.name : blockedModuleId) + ' module.', true);
     }
-    hash = 'dashboard';
+    route = 'dashboard';
+    params = {};
     location.hash = 'dashboard';
   }
   // Role nav filter — block sections hidden for this role
-  if (!canViewSection(hash)) {
+  if (!canViewSection(route)) {
     showToast("You don't have access to that section.", true);
-    hash = 'dashboard';
+    route = 'dashboard';
+    params = {};
     location.hash = 'dashboard';
   }
-  if (hash !== currentRoute) {
-    // Route through navigateTo for lazy module loading.
-    // navigateTo sets currentRoute before setting hash, so
-    // the re-triggered hashchange will see hash === currentRoute and stop.
-    navigateTo(hash);
+  // Re-route on route change OR when params changed for the same route
+  // (lets MCP-supplied filter links re-apply without a full reload).
+  var paramsChanged = JSON.stringify(params) !== JSON.stringify(currentRouteParams || {});
+  if (route !== currentRoute || paramsChanged) {
+    navigateTo(route, params);
   }
 });
 
