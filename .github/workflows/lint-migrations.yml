@@ -8,6 +8,10 @@ name: Lint migrations
 # invokes it. R18: portable shell only — official actions/checkout + actions/
 # setup-node only. No marketplace plugins, no GHA composite actions.
 #
+# mast-deploy is published to GitHub Packages under the
+# @stewartdavidp-ship-it scope. setup-node configures ~/.npmrc; the
+# auto-provided GITHUB_TOKEN authenticates with read:packages in the same org.
+#
 # See https://github.com/stewartdavidp-ship-it/mast-deploy/blob/main/docs/lint-migrations.md
 
 on:
@@ -26,9 +30,13 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
+          registry-url: https://npm.pkg.github.com/
+          scope: '@stewartdavidp-ship-it'
       - name: Run R3 dry-run lint
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          npx --yes -p github:stewartdavidp-ship-it/mast-deploy mast-deploy-lint-migrations \
+          npx --yes @stewartdavidp-ship-it/mast-deploy@latest mast-deploy-lint-migrations \
             --repo . \
             --diff "origin/${{ github.base_ref }}"
