@@ -1,0 +1,34 @@
+name: Lint migrations
+
+# R3 dry-run gate (Job 2b Stage 2). Flags new/modified scripts under scripts/
+# that LOOK like data migrations (backfill-/migrate-/cleanup-/cutover- prefixes
+# or contain a // MIGRATION marker) but lack a --dry-run parser + commit guard.
+#
+# Lint logic lives in mast-deploy per R12; this workflow is one shell line that
+# invokes it. R18: portable shell only — official actions/checkout + actions/
+# setup-node only. No marketplace plugins, no GHA composite actions.
+#
+# See https://github.com/stewartdavidp-ship-it/mast-deploy/blob/main/docs/lint-migrations.md
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/**'
+      - '.github/workflows/lint-migrations.yml'
+
+jobs:
+  lint-migrations:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # need git history to diff against base
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Run R3 dry-run lint
+        run: |
+          set -euo pipefail
+          npx --yes -p github:stewartdavidp-ship-it/mast-deploy mast-deploy-lint-migrations \
+            --repo . \
+            --diff "origin/${{ github.base_ref }}"
