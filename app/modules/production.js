@@ -3250,6 +3250,7 @@ async function linkProductToBuild(jobId, lineItemId) {
         if (buildView) buildView.style.display = 'none';
         selectedProductionJobId = null;
         renderPendingRequestsBanner();
+        if (productionLoaded) renderProductionJobs();
       } },
       'production': { tab: 'productionTab', setup: function() { ensureProductionData(); navigateTo('jobs'); } },
       'stories': { tab: 'storiesTab', setup: function() {

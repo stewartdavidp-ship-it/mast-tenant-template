@@ -2653,7 +2653,7 @@ async function exitPackingMode() {
 
   MastAdmin.registerModule('sales', {
     routes: {
-      'pos': { tab: 'salesTab', setup: function() { ensureSalesData(); if (showingSquarePayments) toggleSquarePayments(); checkLiveSessionButton(); } },
+      'pos': { tab: 'salesTab', setup: function() { ensureSalesData(); if (showingSquarePayments) toggleSquarePayments(); checkLiveSessionButton(); if (salesLoaded) renderSales(); } },
       'receipts': { tab: 'salesTab', setup: function() { ensureSalesData(); if (!showingSquarePayments) toggleSquarePayments(); } },
       'events': { tab: 'salesEventsTab', setup: function() {
         if (!salesEventsLoaded) loadSalesEvents();
