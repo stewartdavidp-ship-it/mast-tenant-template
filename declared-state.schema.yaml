@@ -1,0 +1,53 @@
+# Declared state for mast-tenant-template (storefront surface).
+#
+# Consumed by:
+#   - mast-deploy reconciler (Job 2b Stage 1 — `mast-deploy reconcile --pod=<id>`):
+#     verifies each tenant's Firebase Hosting site has a live release matching
+#     the build-version manifest below. Manifest hash drift = drift.
+#   - mast-deploy `storefront` subcommand (Job 2b Stage 3b):
+#     when invoked without --tenant, expands the deploy targets from the pod's
+#     `tenants[]` list and the `excludeTenants[]` skip-list defined here.
+#
+# Source of truth status:
+#   - `excludeTenants[]` mirrors the runtime skip-list documented in
+#     ~/.claude/projects/-Users-davidstewart-Downloads/memory/feedback_platform_hosting_deploy_all.md.
+#     The platform `mast_hosting deploy_all` MCP tool already honors this set;
+#     duplicating it here gives the reconciler / storefront command pre-flight
+#     visibility (the underlying tool is still the single source of truth at
+#     deploy time — R15).
+#   - `expectedBuildVersion` is intentionally absent today. The reconciler
+#     surfaces "build version: unknown" in degraded mode. A follow-up wires
+#     this from `package.json` version + git SHA on every tenant deploy.
+#   - Per-tenant manifest hash is also a follow-up (build pipeline must emit
+#     the hash; reconciler then matches against pod-runtime view).
+#
+# Maintenance:
+#   - Adding a system tenant that should NOT receive deploys: append it to
+#     excludeTenants[] AND keep `feedback_platform_hosting_deploy_all.md` in sync.
+#   - Adding a customer tenant: ADD nothing here. Live tenants are enumerated
+#     in `pods/<id>.yaml` `tenants[]`; this file only declares the skip-list
+#     and the build-version contract.
+
+# Tenants that are part of the platform's internal infrastructure (system
+# accounts, demo, defaults). NEVER receive a storefront deploy from
+# `mast-deploy storefront --pod=<id>` (no --tenant flag). Pass an explicit
+# `--tenant=<id>` to override (rare; only for incident response).
+excludeTenants:
+  - default          # legacy system slot
+  - demo             # platform demo tenant (read-only public surface)
+  - mast-platform    # platform admin tenant
+  - system           # generic system slot
+
+# Build-version contract. The pipeline that builds each tenant's bundle should
+# emit a `build-version.json` next to the bundle output containing { version,
+# gitSha, builtAt }. Reconciler reads observed version from Firebase Hosting
+# release metadata; mismatch with declared = drift.
+buildVersion:
+  declaredFrom: package.json
+  bundlePath: dist/                # default bundle output path
+
+# Manifest hash provenance. For now, marker only — reconciler treats any
+# tenant with no manifest hash as "unknown" rather than "drift".
+manifestHash:
+  source: tenant-runtime           # pulled from pod runtime view, not git
+  required: false                  # follow-up: flip to true once pipeline emits
