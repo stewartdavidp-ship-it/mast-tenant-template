@@ -37,6 +37,6 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          npx --yes @stewartdavidp-ship-it/mast-deploy@latest mast-deploy-lint-migrations \
+          npx --yes -p @stewartdavidp-ship-it/mast-deploy@latest mast-deploy-lint-migrations \
             --repo . \
             --diff "origin/${{ github.base_ref }}"
