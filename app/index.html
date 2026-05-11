@@ -19378,12 +19378,43 @@ function renderSubscriptionBillingInfo(sub) {
 
   h += '</div>';
 
-  // Cancel warning
+  // Cancel warning — Layer-2 mode-aware. Three shapes:
+  //   1. cancel_immediately + waiver confirmed → red, "data deletion confirmed for <date>, no recovery"
+  //   2. cancel_immediately → amber, "new sales disabled; fulfill pending orders until <date>; data deleted 30d after"
+  //   3. stop_renewal (or unknown mode for backward-compat) → amber, "subscription ends <date>; data kept 30d after"
   if (details && details.cancelAtPeriodEnd && details.currentPeriodEnd) {
     var endDate = new Date(details.currentPeriodEnd).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
-    h += '<div style="background:#fef3c7;border:1px solid #f59e0b;border-radius:6px;padding:10px 14px;margin-bottom:16px;font-size:0.85rem;color:#92400e;">';
-    h += 'Your subscription will end on <strong>' + endDate + '</strong>. After that, Mast will stop billing you for new revenue.';
-    h += '</div>';
+    var mode = details.pendingDeletion && details.pendingDeletion.mode;
+    var imm = details.pendingImmediateDeletion;
+    var purgeAt = (imm && imm.confirmedAt && imm.scheduledPurgeAt)
+      ? new Date(imm.scheduledPurgeAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+      : (details.pendingDeletion && details.pendingDeletion.scheduledPurgeAt)
+        ? new Date(details.pendingDeletion.scheduledPurgeAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+        : null;
+
+    if (imm && imm.confirmedAt) {
+      // Waiver confirmed — most severe banner. Red.
+      h += '<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:6px;padding:10px 14px;margin-bottom:16px;font-size:0.85rem;color:#7f1d1d;">';
+      h += '<strong>Data deletion confirmed.</strong> Your subscription ends on <strong>' + endDate + '</strong>';
+      if (purgeAt) h += ' and all your data will be permanently deleted on <strong>' + purgeAt + '</strong> with no recovery';
+      h += '. To stop this, contact Mast support immediately.';
+      h += '</div>';
+    } else if (mode === 'cancel_immediately') {
+      // Hard cancel — storefront stops accepting new sales, admin can still
+      // fulfill in-flight. Amber-strong.
+      h += '<div style="background:#fef3c7;border:1px solid #f59e0b;border-radius:6px;padding:10px 14px;margin-bottom:16px;font-size:0.85rem;color:#92400e;">';
+      h += '<strong>Subscription cancelled.</strong> New sales are disabled. You can fulfill pending orders until <strong>' + endDate + '</strong>';
+      if (purgeAt) h += '. Data will be permanently deleted on <strong>' + purgeAt + '</strong>';
+      h += ' unless you resubscribe.';
+      h += '</div>';
+    } else {
+      // stop_renewal OR legacy cancel — softer copy, full ops continue.
+      h += '<div style="background:#fef3c7;border:1px solid #f59e0b;border-radius:6px;padding:10px 14px;margin-bottom:16px;font-size:0.85rem;color:#92400e;">';
+      h += 'Your subscription will end on <strong>' + endDate + '</strong>';
+      if (purgeAt) h += ' and your data will be permanently deleted on <strong>' + purgeAt + '</strong>';
+      h += ' unless you resubscribe.';
+      h += '</div>';
+    }
   }
 
   // Action buttons
@@ -19454,9 +19485,12 @@ async function stopAutoRenewalUI() {
     : 'the end of your billing period';
   showConfirmDialog(
     'Stop auto-renewal?',
-    'Your subscription stays active until ' + endDate + '. You can resume anytime before then.',
+    'Your subscription stays active until ' + endDate + ' and your revenue meter keeps running normally. Your final invoice will charge for revenue earned through then. After that, your data is kept for 30 more days unless you resubscribe.',
     async function() {
-      await toggleSubscriptionCancel('cancel');
+      // stop_renewal: conventional SaaS — meter keeps running, full ops
+      // through period-end. Distinct from cancelSubscriptionUI which freezes
+      // the meter at click.
+      await toggleSubscriptionCancel('cancel', { mode: 'stop_renewal' });
       try {
         await MastDB.ref('admin/subscriptionNudge').set({
           type: 'auto_renewal_stopped',
@@ -19514,8 +19548,18 @@ function cancelSubscriptionUI() {
   h += '</div>';
 
   // What happens next
-  h += '<div style="background:#fef3c7;border-radius:6px;padding:10px 14px;margin-bottom:20px;font-size:0.85rem;color:#92400e;">';
-  h += 'Your access continues until <strong>' + endDate + '</strong>. After that, your software subscription will end and Mast will stop billing for new revenue.';
+  h += '<div style="background:#fef3c7;border-radius:6px;padding:10px 14px;margin-bottom:14px;font-size:0.85rem;color:#92400e;">';
+  h += 'We\'ll stop the revenue meter now. You\'ll receive one final invoice for revenue earned through today. Until <strong>' + endDate + '</strong> you can fulfill pending orders but cannot accept new sales. After that, your data is kept for 30 more days unless you resubscribe.';
+  h += '</div>';
+
+  // L2 waiver: collapses the 30-day data-deletion grace period to 0 days.
+  // Email confirmation is required after submit — clicking the link in the
+  // verification email is what actually opts in to the no-recovery path.
+  h += '<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:6px;padding:10px 14px;margin-bottom:20px;font-size:0.85rem;color:#7f1d1d;">';
+  h += '<label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;">';
+  h += '<input type="checkbox" id="cancelWaiverCheckbox" style="margin-top:3px;flex-shrink:0;">';
+  h += '<span><strong>Also delete all my data when subscription ends.</strong> This waives the 30-day grace period — your data will be permanently deleted on ' + endDate + ' with no recovery. You\'ll receive an email to confirm.</span>';
+  h += '</label>';
   h += '</div>';
 
   // Buttons
@@ -19547,18 +19591,23 @@ function closeCancelModal() {
 async function confirmCancelSubscription() {
   var reason = document.getElementById('cancelReasonSelect');
   var feedback = document.getElementById('cancelFeedbackText');
+  var waiverEl = document.getElementById('cancelWaiverCheckbox');
   var reasonVal = reason ? reason.value : '';
   var feedbackVal = feedback ? feedback.value.trim() : '';
+  var waiverVal = !!(waiverEl && waiverEl.checked);
 
   closeCancelModal();
-  await toggleSubscriptionCancel('cancel');
+  // cancel_immediately: freeze revenue meter at click. Pairs with admin
+  // read-only enforcement. waiver=true also fires requestImmediateTenantDeletion
+  // to send the verification email.
+  await toggleSubscriptionCancel('cancel', { mode: 'cancel_immediately', waiver: waiverVal });
 
-  // Save cancellation feedback + flag for retention outreach
   try {
     await MastDB.ref('admin/subscriptionCancellation').set({
       type: 'cancel_subscription',
       reason: reasonVal || 'not_specified',
       feedback: feedbackVal || null,
+      waiverRequested: waiverVal,
       cancelledAt: new Date().toISOString(),
       periodEnd: _subscriptionDetails && _subscriptionDetails.currentPeriodEnd || null,
       tier: getTenantSubscription().tier,
@@ -19581,9 +19630,15 @@ async function resumeSubscription() {
   );
 }
 
-async function toggleSubscriptionCancel(action) {
+async function toggleSubscriptionCancel(action, opts) {
+  // opts: { mode?: 'stop_renewal' | 'cancel_immediately', waiver?: boolean }
+  // mode is forwarded to the cancelSubscription CF; waiver=true triggers a
+  // follow-up requestImmediateTenantDeletion call after a successful cancel.
+  opts = opts || {};
   try {
     var token = await firebase.auth().currentUser.getIdToken();
+    var body = { tenantId: MastDB.tenantId(), action: action };
+    if (action === 'cancel' && opts.mode) body.mode = opts.mode;
     var resp = await fetch(CLOUD_FUNCTIONS_BASE + '/cancelSubscription', {
       method: 'POST',
       headers: {
@@ -19591,19 +19646,48 @@ async function toggleSubscriptionCancel(action) {
         'Authorization': 'Bearer ' + token,
         'X-Tenant-ID': MastDB.tenantId(),
       },
-      body: JSON.stringify({ tenantId: MastDB.tenantId(), action: action }),
+      body: JSON.stringify(body),
     });
     if (!resp.ok) {
       var errData = await resp.json().catch(function() { return {}; });
       throw new Error(errData.error || 'Failed to ' + action + ' subscription');
     }
     var data = await resp.json();
-    // Update cached details
     if (_subscriptionDetails) {
       _subscriptionDetails.cancelAtPeriodEnd = data.cancelAtPeriodEnd;
       if (data.currentPeriodEnd) _subscriptionDetails.currentPeriodEnd = data.currentPeriodEnd;
     }
-    showToast(action === 'cancel' ? 'Auto-renewal stopped.' : 'Auto-renewal resumed.');
+
+    // L2 waiver: only fires AFTER a successful cancel. Failure here is
+    // surfaced separately but doesn't roll back the cancellation — the
+    // tenant can re-request the waiver email if needed.
+    if (action === 'cancel' && opts.waiver) {
+      try {
+        var waiverResp = await fetch(CLOUD_FUNCTIONS_BASE + '/requestImmediateTenantDeletion', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + token,
+            'X-Tenant-ID': MastDB.tenantId(),
+          },
+          body: JSON.stringify({ tenantId: MastDB.tenantId() }),
+        });
+        if (!waiverResp.ok) {
+          var werr = await waiverResp.json().catch(function() { return {}; });
+          throw new Error(werr.error || 'Failed to send confirmation email');
+        }
+        var wdata = await waiverResp.json();
+        showToast('Subscription cancelled. Check ' + wdata.sentTo + ' to confirm data deletion.');
+      } catch (werr) {
+        showToast('Subscription cancelled, but confirmation email failed: ' + werr.message, true);
+      }
+    } else {
+      showToast(action === 'cancel'
+        ? (opts.mode === 'cancel_immediately'
+            ? 'Subscription cancelled. Revenue meter stopped.'
+            : 'Auto-renewal stopped.')
+        : 'Auto-renewal resumed.');
+    }
     renderSubscriptionSettings();
   } catch (err) {
     showToast(err.message, true);
@@ -25709,26 +25793,12 @@ async function wizardCompleteFast() {
       if (!planStatus || planStatus === 'none') await MastDB.set('admin/businessPlan/planStatus', 'draft');
     } catch (planErr) { /* best-effort */ }
 
-    // Trigger deploy for storefront mode even on fast-exit path
+    // Per-tenant Firebase Hosting deploy was removed 2026-05-10 — tenant
+    // sites now serve from the Cloudflare-wildcard shared site
+    // (mast-tenant-shared.web.app), so wizard-complete no longer triggers
+    // a per-tenant deploy.
     var engView = await MastDB.businessEntity.get('engagement');
     var engMode = ((engView && engView.data) || {}).mode || 'back-office';
-    if (engMode === 'storefront') {
-      try {
-        var idToken = await firebase.auth().currentUser.getIdToken();
-        var cfBase = (TENANT_CONFIG && TENANT_CONFIG.cloudFunctionsBase) || 'https://us-central1-mast-platform-prod.cloudfunctions.net';
-        var deployResp = await fetch(cfBase + '/triggerTenantDeploy', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + idToken },
-          body: JSON.stringify({ tenantId: MastDB.tenantId() })
-        });
-        if (!deployResp.ok) {
-          logWizardEvent(5, 'auto_deploy_failed', { status: deployResp.status, path: 'fast' });
-          showToast("Your site couldn't auto-deploy. Open Settings > Hosting to retry.", true);
-        }
-      } catch (deployErr) {
-        logWizardEvent(5, 'auto_deploy_error', { message: (deployErr && deployErr.message) || 'unknown', path: 'fast' });
-      }
-    }
 
     logWizardEvent(5, 'wizard_complete', {
       entityStatus: 'active', engagementMode: engMode,
@@ -27928,7 +27998,9 @@ async function wizardComplete() {
       return;
     }
 
-    // Read engagement.mode — triggerTenantDeploy fires only for storefront mode.
+    // engagement.mode no longer drives a deploy POST (triggerTenantDeploy
+    // was removed 2026-05-10 — Cloudflare-wildcard hosting). Mode is still
+    // logged below for wizard analytics.
     var engagementView = await MastDB.businessEntity.get('engagement');
     var engagement = (engagementView && engagementView.data) || {};
     var engagementMode = engagement.mode || 'storefront';
@@ -27965,33 +28037,6 @@ async function wizardComplete() {
         await MastDB.set('admin/businessPlan/planStatus', 'draft');
       }
     } catch (planErr) { /* best-effort */ }
-
-    if (engagementMode === 'storefront') {
-      try {
-        var idToken = await firebase.auth().currentUser.getIdToken();
-        var cfBase = (TENANT_CONFIG && TENANT_CONFIG.cloudFunctionsBase) || 'https://us-central1-mast-platform-prod.cloudfunctions.net';
-        var deployResp = await fetch(cfBase + '/triggerTenantDeploy', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + idToken },
-          body: JSON.stringify({ tenantId: MastDB.tenantId() })
-        });
-        if (deployResp.ok) {
-          console.log('[Wizard] Auto-deploy triggered (storefront)');
-        } else {
-          var deployErrBody = '';
-          try { deployErrBody = await deployResp.text(); } catch (_readErr) {}
-          console.warn('[Wizard] Auto-deploy failed:', deployResp.status, deployErrBody);
-          logWizardEvent(5, 'auto_deploy_failed', { status: deployResp.status, body: deployErrBody.slice(0, 200) });
-          showToast('Your site couldn\u2019t auto-deploy. Open Settings > Hosting to retry, or contact support.', true);
-        }
-      } catch (deployErr) {
-        console.warn('[Wizard] Auto-deploy network error:', deployErr && deployErr.message);
-        logWizardEvent(5, 'auto_deploy_error', { message: (deployErr && deployErr.message) || 'unknown' });
-        showToast('Your site couldn\u2019t auto-deploy. Open Settings > Hosting to retry, or contact support.', true);
-      }
-    } else {
-      console.log('[Wizard] Skipping storefront deploy (engagement.mode = ' + engagementMode + ')');
-    }
 
     logWizardEvent(5, 'wizard_complete', {
       entityStatus: 'active',
