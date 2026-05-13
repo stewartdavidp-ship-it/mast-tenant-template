@@ -10291,8 +10291,12 @@ async function loadTenantConfig(tenantId) {
   }
   // Read tenant registry fields — try publicConfig first (world-readable), fall back to full registry
   try {
-    // publicConfig is readable by anyone — contains tenantStatus, plan, etc.
-    var pc = (await MastDB.platform.get('mast-platform/tenants/' + tenantId + '/publicConfig')) || {};
+    // publicConfig mirror is world-readable — contains tenantStatus, plan, etc.
+    // Read from platform_tenantPublicConfigs (allow read: if true), NOT platform_tenants
+    // (which is gated to platform admins and would fail on pods where the operator
+    // isn't a platform admin, silently defaulting tenantStatus to 'active' and
+    // bypassing the first-login wizard for tenants still in onboarding).
+    var pc = (await MastDB.platform.get('mast-platform/tenantPublicConfigs/' + tenantId)) || {};
     TENANT_CONFIG.tenantStatus = pc.tenantStatus || 'active';
     TENANT_CONFIG.plan = pc.plan || 'publish';
     TENANT_CONFIG.registryName = pc.name || pc.brandName || '';

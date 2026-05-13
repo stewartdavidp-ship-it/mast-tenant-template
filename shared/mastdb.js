@@ -155,6 +155,7 @@ var MastDB = (function() {
     'auth/apiKeys': 'platform_auth_apiKeys',
     'auth/tenantApiKeys': 'platform_auth_tenantApiKeys',
     'tenants': 'platform_tenants',
+    'tenantPublicConfigs': 'platform_tenantPublicConfigs',
     'tenantsByDomain': 'platform_tenantsByDomain',
     'platformAdmins': 'platform_platformAdmins',
     'userTenantMap': 'platform_userTenantMap',
