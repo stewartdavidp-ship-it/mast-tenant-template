@@ -849,7 +849,8 @@
         : 'https://us-central1-' + (app.options ? app.options.projectId : 'mast-platform-prod') + '.cloudfunctions.net';
       cfUrl = base + '/submitReview';
     } catch (e) {
-      cfUrl = 'https://us-central1-mast-platform-prod.cloudfunctions.net/submitReview';
+      var fallbackBase = (window.TENANT_FIREBASE_CONFIG && TENANT_FIREBASE_CONFIG.cloudFunctionsBase) || 'https://us-central1-mast-platform-prod.cloudfunctions.net';
+      cfUrl = fallbackBase + '/submitReview';
     }
 
     var getToken = currentUser ? currentUser.getIdToken() : Promise.resolve(null);

@@ -3,7 +3,7 @@
 // ============================================================
 var firebaseApp, auth, storage, currentUser;
 var TENANT_ID_LOCAL = null;
-var FUNCTIONS_BASE = 'https://us-central1-mast-platform-prod.cloudfunctions.net';
+var FUNCTIONS_BASE = (window.TENANT_FIREBASE_CONFIG && TENANT_FIREBASE_CONFIG.cloudFunctionsBase) || 'https://us-central1-mast-platform-prod.cloudfunctions.net';
 
 // Helper: authenticated Cloud Function call
 async function callFunction(fnName, body) {

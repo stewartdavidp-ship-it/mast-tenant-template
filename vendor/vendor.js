@@ -1,7 +1,7 @@
 (function() {
   'use strict';
 
-  var FUNCTIONS_BASE = 'https://us-central1-mast-platform-prod.cloudfunctions.net';
+  var FUNCTIONS_BASE = (window.TENANT_FIREBASE_CONFIG && TENANT_FIREBASE_CONFIG.cloudFunctionsBase) || 'https://us-central1-mast-platform-prod.cloudfunctions.net';
   var app = document.getElementById('app');
 
   // ── Core state ──

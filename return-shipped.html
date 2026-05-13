@@ -182,7 +182,7 @@
   'use strict';
 
   var TENANT_ID = null;
-  var FUNCTION_BASE = 'https://us-central1-mast-platform-prod.cloudfunctions.net/';
+  var FUNCTION_BASE = ((window.TENANT_FIREBASE_CONFIG && TENANT_FIREBASE_CONFIG.cloudFunctionsBase) || 'https://us-central1-mast-platform-prod.cloudfunctions.net') + '/';
   var auth = null;
   var db = null;
 
@@ -203,6 +203,9 @@
     // Wait for tenant resolution and cart.js auth setup
     window.TENANT_READY.then(function() {
       TENANT_ID = window.TENANT_ID;
+      if (window.TENANT_FIREBASE_CONFIG && window.TENANT_FIREBASE_CONFIG.cloudFunctionsBase) {
+        FUNCTION_BASE = window.TENANT_FIREBASE_CONFIG.cloudFunctionsBase + '/';
+      }
       try { db = firebase.firestore(firebase.app()); } catch (e) {
         db = firebase.firestore(firebase.initializeApp(window.TENANT_FIREBASE_CONFIG));
       }

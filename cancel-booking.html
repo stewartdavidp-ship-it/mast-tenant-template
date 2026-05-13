@@ -255,7 +255,7 @@
   'use strict';
 
   var TENANT_ID = null;
-  var FUNCTION_BASE = 'https://us-central1-mast-platform-prod.cloudfunctions.net/';
+  var FUNCTION_BASE = ((window.TENANT_FIREBASE_CONFIG && TENANT_FIREBASE_CONFIG.cloudFunctionsBase) || 'https://us-central1-mast-platform-prod.cloudfunctions.net') + '/';
 
   function esc(s) { if (!s) return ''; var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 
@@ -293,6 +293,9 @@
 
     window.TENANT_READY.then(function() {
       TENANT_ID = window.TENANT_ID;
+      if (window.TENANT_FIREBASE_CONFIG && window.TENANT_FIREBASE_CONFIG.cloudFunctionsBase) {
+        FUNCTION_BASE = window.TENANT_FIREBASE_CONFIG.cloudFunctionsBase + '/';
+      }
       loadCancelInfo(enrollmentId);
     });
   }
