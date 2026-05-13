@@ -264,6 +264,11 @@
     return params.get('enrollment') || '';
   }
 
+  function getCancelToken() {
+    var params = new URLSearchParams(window.location.search);
+    return params.get('token') || '';
+  }
+
   function formatDate(dateStr) {
     if (!dateStr) return '';
     try {
@@ -304,7 +309,7 @@
     fetch(FUNCTION_BASE + 'getBookingCancelInfo', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ data: { tenantId: TENANT_ID, enrollmentId: enrollmentId } })
+      body: JSON.stringify({ data: { tenantId: TENANT_ID, enrollmentId: enrollmentId, token: getCancelToken() } })
     })
     .then(function(resp) { return resp.json(); })
     .then(function(data) {
@@ -412,7 +417,7 @@
     fetch(FUNCTION_BASE + 'cancelBookingEnrollment', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ data: { tenantId: TENANT_ID, enrollmentId: enrollmentId, reason: reason } })
+      body: JSON.stringify({ data: { tenantId: TENANT_ID, enrollmentId: enrollmentId, reason: reason, token: getCancelToken() } })
     })
     .then(function(resp) { return resp.json(); })
     .then(function(data) {

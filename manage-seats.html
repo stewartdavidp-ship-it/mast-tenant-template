@@ -273,6 +273,11 @@
     return params.get('order') || '';
   }
 
+  function getSeatToken() {
+    var params = new URLSearchParams(window.location.search);
+    return params.get('token') || '';
+  }
+
   function formatDate(dateStr) {
     if (!dateStr) return '';
     try {
@@ -323,7 +328,7 @@
     fetch(FUNCTION_BASE + 'getOrderSeats', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ data: { tenantId: TENANT_ID, orderId: orderId } })
+      body: JSON.stringify({ data: { tenantId: TENANT_ID, orderId: orderId, token: getSeatToken() } })
     })
     .then(function(resp) { return resp.json(); })
     .then(function(data) {
@@ -450,7 +455,7 @@
     fetch(FUNCTION_BASE + 'updateSeatInfo', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ data: { tenantId: TENANT_ID, orderId: orderId, seats: updates } })
+      body: JSON.stringify({ data: { tenantId: TENANT_ID, orderId: orderId, seats: updates, token: getSeatToken() } })
     })
     .then(function(resp) { return resp.json(); })
     .then(function(data) {
