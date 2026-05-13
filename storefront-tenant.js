@@ -23,7 +23,12 @@ var TENANT_ID = null;
 var TENANT_FIREBASE_CONFIG = null;
 var TENANT_BRAND = null;
 
-var PLATFORM_FIRESTORE_BASE = 'https://firestore.googleapis.com/v1/projects/mast-platform-prod/databases/(default)/documents';
+// Platform project for the pod this hosting site belongs to. Replaced at
+// deploy time when targeting per-pod hosting sites (mast-tenant-shared-*).
+// Source pod default = 'mast-platform-prod'. Deploy script substitutes for
+// east/west/etc. before uploading to the per-pod hosting site.
+var PLATFORM_PROJECT_ID = (typeof window !== 'undefined' && window.MAST_POD_PLATFORM_PROJECT) || 'mast-platform-prod';
+var PLATFORM_FIRESTORE_BASE = 'https://firestore.googleapis.com/v1/projects/' + PLATFORM_PROJECT_ID + '/databases/(default)/documents';
 var CACHE_TTL_MS = 60 * 1000; // 1 minute
 
 // Unwrap Firestore REST field value into a plain JS value.
