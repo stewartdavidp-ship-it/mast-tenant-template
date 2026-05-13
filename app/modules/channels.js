@@ -2275,7 +2275,8 @@
     }
 
     // Call the Cloud Function directly via fetch
-    var cfUrl = 'https://us-central1-mast-platform-prod.cloudfunctions.net/syncInventoryToChannels';
+    var cfBase = (window.TENANT_FIREBASE_CONFIG && TENANT_FIREBASE_CONFIG.cloudFunctionsBase) || 'https://us-central1-mast-platform-prod.cloudfunctions.net';
+    var cfUrl = cfBase + '/syncInventoryToChannels';
     var tenantId = (typeof MastDB !== 'undefined' && typeof MastDB.tenantId === 'function') ? MastDB.tenantId() : null;
 
     if (!tenantId) {

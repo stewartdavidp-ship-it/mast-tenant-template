@@ -1296,7 +1296,7 @@ async function sendInquiryResponse() {
 // Google Contacts Integration (via Cloud Function proxy)
 // ============================================================
 
-var GOOGLE_CONTACTS_FUNCTIONS_BASE = 'https://us-central1-mast-platform-prod.cloudfunctions.net';
+var GOOGLE_CONTACTS_FUNCTIONS_BASE = (window.TENANT_FIREBASE_CONFIG && TENANT_FIREBASE_CONFIG.cloudFunctionsBase) || 'https://us-central1-mast-platform-prod.cloudfunctions.net';
 
 /**
  * Check if the current user has connected Google Contacts.

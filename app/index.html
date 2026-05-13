@@ -14480,7 +14480,8 @@ window.triggerPostCutoverRerun = function() {
   // Call the Cloud Function
   var tenantId = MastDB.tenantId();
   if (!tenantId) return;
-  fetch('https://us-central1-mast-platform-prod.cloudfunctions.net/runPostCutoverChecks?tenantId=' + encodeURIComponent(tenantId))
+  var cfBase = (window.TENANT_FIREBASE_CONFIG && TENANT_FIREBASE_CONFIG.cloudFunctionsBase) || 'https://us-central1-mast-platform-prod.cloudfunctions.net';
+  fetch(cfBase + '/runPostCutoverChecks?tenantId=' + encodeURIComponent(tenantId))
     .then(function(r) { return r.json(); })
     .then(function(result) {
       if (result.success) {
