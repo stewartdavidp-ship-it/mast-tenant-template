@@ -13154,11 +13154,14 @@ function showToast(message, isError) {
   toast.setAttribute('role', isError ? 'alert' : 'status');
   toast.textContent = message;
 
-  // Override rules per skill: errors are always persistent. Otherwise honor pref.
+  // Errors auto-dismiss after a long duration (still long enough to read;
+  // click-to-dismiss keeps fast-kill). Previously errors were persistent
+  // (durationMs=0), which stranded transient-failure toasts across auth
+  // state changes and route changes — e.g. a "Sign-in failed" toast
+  // lingering on the dashboard after the user later signs in successfully.
   var durationMs;
   if (isError) {
-    durationMs = 0; // persistent — user must dismiss
-    toast.classList.add('persistent');
+    durationMs = 10000;
     toast.style.cursor = 'pointer';
     toast.title = 'Click to dismiss';
     toast.addEventListener('click', function() { if (toast.parentNode) toast.parentNode.removeChild(toast); });
@@ -13405,7 +13408,19 @@ auth.getRedirectResult().catch(function(err) {
 auth.onAuthStateChanged(async function(user) {
   if (TEST_MODE && new URLSearchParams(window.location.search).get('testmode') === '1') return; // Already handled above
   currentUser = user;
-  if (user) { try { loadMastToastPrefs(); } catch (e) {} }
+  if (user) {
+    try { loadMastToastPrefs(); } catch (e) {}
+    // Clear any stranded sign-in error toasts now that auth succeeded.
+    // Belt-and-suspenders alongside auto-dismiss in showToast — keeps a
+    // failure toast from any prior attempt from following the user into
+    // their now-authenticated dashboard.
+    try {
+      var tc = document.getElementById('toastContainer');
+      if (tc) tc.querySelectorAll('.toast.error, .toast.persistent').forEach(function(t) {
+        if (t.parentNode) t.parentNode.removeChild(t);
+      });
+    } catch (e) {}
+  }
   const authScreen = document.getElementById('authScreen');
   const loadingScreen = document.getElementById('loadingScreen');
   const deniedScreen = document.getElementById('deniedScreen');
