@@ -14,7 +14,7 @@
      before any external scripts download. storefront-tenant.js consumes the result. -->
 <script>
 (function(){
-  var B='https://firestore.googleapis.com/v1/projects/mast-platform-prod/databases/(default)/documents';
+  var P=window.MAST_POD_PLATFORM_PROJECT||'mast-platform-prod',B='https://firestore.googleapis.com/v1/projects/'+P+'/databases/(default)/documents';
   var h=location.hostname,C=5*60*1000;
   if(h==='localhost'||h==='127.0.0.1')return;
   try{var r=localStorage.getItem('mast_tenant_'+h);if(r){var c=JSON.parse(r);if(Date.now()-c.timestamp<C){window.__earlyTenant=Promise.resolve(c.data);return;}}}catch(e){}
