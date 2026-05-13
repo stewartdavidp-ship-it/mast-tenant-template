@@ -38,7 +38,8 @@
     var tenantId = window.TENANT_ID;
 
     // Fetch extended brand config from platform publicConfig (world-readable)
-    var PLATFORM_FS_BASE = 'https://firestore.googleapis.com/v1/projects/mast-platform-prod/databases/(default)/documents';
+    var PLATFORM_PROJECT_ID = window.MAST_POD_PLATFORM_PROJECT || 'mast-platform-prod';
+    var PLATFORM_FS_BASE = 'https://firestore.googleapis.com/v1/projects/' + PLATFORM_PROJECT_ID + '/databases/(default)/documents';
     var brandReady;
     if (tenantId) {
       var publicConfigUrl = PLATFORM_FS_BASE + '/platform_tenantPublicConfigs/' + tenantId;
