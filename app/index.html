@@ -27761,6 +27761,16 @@ function processLogoWhiteBackground(imageUrl) {
     // Skip SVGs
     if (/\.svg(\?|$)/i.test(imageUrl)) { resolve(null); return; }
 
+    // Hard timeout: if the source server is slow, returns CORS-blocked content,
+    // or stalls the connection without responding, neither onload nor onerror
+    // fires and the Promise hangs forever — which freezes the wizard's
+    // "Applying your brand..." step (observed 2026-05-13 on prodtest15 +
+    // prodtest16, both pointed at shirglassworks.com whose logo endpoint
+    // returns 403 to server fetches and CORS-stalls in the browser).
+    var settled = false;
+    function done(value) { if (settled) return; settled = true; resolve(value); }
+    setTimeout(function() { done(null); }, 15000);
+
     var img = new Image();
     img.crossOrigin = 'anonymous';
     img.onload = function() {
@@ -27788,7 +27798,7 @@ function processLogoWhiteBackground(imageUrl) {
           whiteCount++;
         }
       }
-      if (whiteCount < 6) { resolve(null); return; }
+      if (whiteCount < 6) { done(null); return; }
 
       // Iterative flood-fill from corners
       var visited = new Uint8Array(w * h);
@@ -27832,12 +27842,12 @@ function processLogoWhiteBackground(imageUrl) {
       for (var i = 0; i < w * h; i++) {
         if (visited[i]) { data[i*4+3] = 0; removed++; }
       }
-      if (removed === 0) { resolve(null); return; }
+      if (removed === 0) { done(null); return; }
 
       ctx.putImageData(imageData, 0, 0);
-      canvas.toBlob(function(blob) { resolve(blob); }, 'image/png');
+      canvas.toBlob(function(blob) { done(blob); }, 'image/png');
     };
-    img.onerror = function() { resolve(null); };
+    img.onerror = function() { done(null); };
     img.src = imageUrl;
   });
 }
