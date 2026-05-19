@@ -2206,6 +2206,12 @@
       status: 'pending_check_verification',
       paymentMethod: 'check',
       type: 'wholesale',
+      // W2c — write both discriminators so any downstream filter or gate that
+      // strictly checks `isWholesale` or `orderType` works without further
+      // field-name coordination. Existing orders are also recognized by the
+      // looser `isOrderInvoiceable` gate that accepts `type === 'wholesale'`.
+      orderType: 'wholesale',
+      isWholesale: true,
       source: 'wholesale_catalog',
       buyerName: checkoutData.shipping.name || '',
       buyerEmail: checkoutData.email || '',

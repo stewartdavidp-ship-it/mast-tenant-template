@@ -1125,7 +1125,11 @@
   function isOrderInvoiceable(o) {
     var terms = (o.paymentTerms || '').toLowerCase();
     var isNetTerms = terms === 'net15' || terms === 'net30' || terms === 'net60';
-    var isWholesale = o.isWholesale === true || o.orderType === 'wholesale';
+    // W2c — wholesale orders from checkout.js write the discriminator as
+    // `type: 'wholesale'` (not `orderType`), so the original gate was always
+    // false on real wholesale orders and the Generate Invoice button never
+    // appeared. Accept all three field forms; no schema migration needed.
+    var isWholesale = o.isWholesale === true || o.orderType === 'wholesale' || o.type === 'wholesale';
     var status = o.invoiceStatus;
     var canGenerate = !status || status === 'draft';
     return (isNetTerms || isWholesale) && canGenerate;
