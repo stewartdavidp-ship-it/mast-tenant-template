@@ -8,7 +8,9 @@ var wholesaleTokensData = {};
 var wholesaleOrdersData = {};
 var wholesaleAuthorizedData = {};
 var wholesaleRequestsData = {};
-var wholesaleSubView = 'orders'; // orders | users | requests
+// W2a — accounts is the canonical commercial-terms record per buyer.
+var wholesaleAccountsData = {};
+var wholesaleSubView = 'orders'; // accounts | orders | users | requests
 var wholesaleQRLib = null; // lazy-loaded QRCode library
 
 // WHOLESALE_SEED and WHOLESALE_COLOR_UPDATES removed in unified pricing model Phase 4.
@@ -50,10 +52,10 @@ function renderWholesaleAdmin() {
   var el = document.getElementById('wholesaleContent');
   if (!el) return;
 
-  // URL-driven sub-tab forcing (MCP admin links). #wholesale?subView=users|requests
+  // URL-driven sub-tab forcing (MCP admin links). #wholesale?subView=accounts|orders|users|requests
   var rp = (typeof window.getRouteParams === 'function') ? window.getRouteParams() : {};
   var urlSubView = (rp && typeof rp.subView === 'string') ? rp.subView : '';
-  if (urlSubView && (urlSubView === 'orders' || urlSubView === 'users' || urlSubView === 'requests')) {
+  if (urlSubView && (urlSubView === 'accounts' || urlSubView === 'orders' || urlSubView === 'users' || urlSubView === 'requests')) {
     wholesaleSubView = urlSubView;
   }
 
@@ -68,6 +70,7 @@ function renderWholesaleAdmin() {
       '<div id="wholesalePdfQR"></div>' +
     '</div>' +
     '<div class="view-tabs" style="margin-bottom:20px;">' +
+      '<div class="view-tab' + (wholesaleSubView === 'accounts' ? ' active' : '') + '" onclick="switchWholesaleView(\'accounts\')">Accounts</div>' +
       '<div class="view-tab' + (wholesaleSubView === 'orders' ? ' active' : '') + '" onclick="switchWholesaleView(\'orders\')">Orders</div>' +
       '<div class="view-tab' + (wholesaleSubView === 'users' ? ' active' : '') + '" onclick="switchWholesaleView(\'users\')">Authorized Users</div>' +
       '<div class="view-tab' + (wholesaleSubView === 'requests' ? ' active' : '') + '" onclick="switchWholesaleView(\'requests\')">Access Requests <span id="wsRequestBadge"></span></div>' +
@@ -83,7 +86,8 @@ function renderWholesaleAdmin() {
   // Update request count badge
   updateWholesaleRequestBadge();
 
-  if (wholesaleSubView === 'users') renderWholesaleUsers();
+  if (wholesaleSubView === 'accounts') renderWholesaleAccounts();
+  else if (wholesaleSubView === 'users') renderWholesaleUsers();
   else if (wholesaleSubView === 'requests') renderWholesaleRequests();
   else if (wholesaleSubView === 'orders') renderWholesaleOrders();
 }
@@ -218,6 +222,223 @@ async function revokeWholesaleUser(key) {
     showToast('Access revoked for ' + email);
     renderWholesaleUsers();
   });
+}
+
+// ── Accounts sub-view (W2a) ──
+// Wholesale "account" = the buyer entity (boutique / gallery / rep agency) that
+// carries NET terms, credit limit, MOQ rules, resale cert, sales rep, territory.
+// Authorized users in admin/wholesaleAuthorized reference an account via
+// wholesaleAccountId; wholesale orders reference one too so AR aging + dormant-
+// account rollups become joins. URL filter banner already lives in the
+// Authorized Users sub-view (?accountIds=...) — see line 118+.
+
+var WS_NET_TERMS = [
+  { v: 'DUE_ON_RECEIPT', l: 'Due on receipt' },
+  { v: 'NET_15', l: 'NET-15' },
+  { v: 'NET_30', l: 'NET-30' },
+  { v: 'NET_45', l: 'NET-45' },
+  { v: 'NET_60', l: 'NET-60' }
+];
+var WS_ACCOUNT_TYPES = [
+  { v: 'retailer', l: 'Retailer / Boutique' },
+  { v: 'gallery', l: 'Gallery' },
+  { v: 'museum_store', l: 'Museum store' },
+  { v: 'rep_agency', l: 'Sales rep agency' },
+  { v: 'other', l: 'Other' }
+];
+var WS_PAYMENT_METHODS = [
+  { v: 'check', l: 'Check' },
+  { v: 'card', l: 'Card' },
+  { v: 'ach', l: 'ACH / bank transfer' }
+];
+var WS_ACCOUNT_STATUSES = [
+  { v: 'active', l: 'Active' },
+  { v: 'on_hold', l: 'On hold' },
+  { v: 'closed', l: 'Closed' }
+];
+
+function renderWholesaleAccounts() {
+  var container = document.getElementById('wholesaleSubContent');
+  if (!container) return;
+  container.innerHTML = '<div style="color:var(--warm-gray);padding:40px 0;text-align:center;">Loading accounts...</div>';
+
+  MastDB.wholesaleAccounts.list(200).then(function(snap) {
+    var val = (snap && typeof snap.val === 'function') ? snap.val() : snap;
+    wholesaleAccountsData = val || {};
+    var accounts = Object.keys(wholesaleAccountsData).map(function(id) {
+      var a = wholesaleAccountsData[id];
+      a._id = id;
+      return a;
+    }).sort(function(a, b) { return (a.name || '').localeCompare(b.name || ''); });
+
+    var html = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">' +
+      '<div style="font-size:0.85rem;color:var(--warm-gray);">' + accounts.length + ' wholesale account' + (accounts.length !== 1 ? 's' : '') + '</div>' +
+      '<button class="btn-small" onclick="openNewWholesaleAccountModal()" style="background:var(--teal);color:#fff;border:none;padding:8px 16px;border-radius:4px;cursor:pointer;font-size:0.78rem;">+ New Account</button>' +
+    '</div>';
+
+    if (accounts.length === 0) {
+      html += '<div style="text-align:center;padding:60px 20px;color:var(--warm-gray);">' +
+        '<div style="font-size:1.6rem;margin-bottom:12px;">&#127970;</div>' +
+        '<h3 style="font-weight:600;margin-bottom:8px;">No wholesale accounts yet</h3>' +
+        '<p style="font-size:0.85rem;max-width:420px;margin:0 auto;">Add a boutique, gallery, or rep agency. Stores their NET terms, credit limit, MOQ, resale cert, and sales rep — so the Generate Invoice button on their orders fills in the right defaults.</p>' +
+      '</div>';
+    } else {
+      html += '<div style="display:flex;flex-direction:column;gap:8px;">';
+      accounts.forEach(function(a) {
+        var statusColor = a.status === 'on_hold' ? '#F59E0B' : (a.status === 'closed' ? '#9ca3af' : '#16a34a');
+        var statusLabel = (WS_ACCOUNT_STATUSES.find(function(s) { return s.v === a.status; }) || { l: 'Active' }).l;
+        var termsLabel = (WS_NET_TERMS.find(function(t) { return t.v === a.netTerms; }) || { l: '—' }).l;
+        var typeLabel = (WS_ACCOUNT_TYPES.find(function(t) { return t.v === a.accountType; }) || { l: '' }).l;
+        var creditStr = a.creditLimitCents ? '$' + (a.creditLimitCents / 100).toLocaleString() : '—';
+        html += '<div onclick="editWholesaleAccount(\'' + esc(a._id) + '\')" style="background:#fff;border:1px solid var(--cream-dark,#e8e0d4);border-radius:8px;padding:14px 16px;cursor:pointer;display:flex;align-items:center;gap:16px;">';
+        html += '<div style="flex:1;min-width:0;">';
+        html += '<div style="font-weight:600;font-size:0.9rem;color:var(--charcoal);">' + esc(a.name || '(unnamed)') + '</div>';
+        html += '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:2px;">' + esc(typeLabel) + (typeLabel && a.territory ? ' · ' : '') + esc(a.territory || '') + (a.salesRepName ? ' · Rep: ' + esc(a.salesRepName) : '') + '</div>';
+        html += '</div>';
+        html += '<div style="text-align:right;font-size:0.78rem;color:var(--warm-gray);min-width:120px;">';
+        html += '<div>' + esc(termsLabel) + '</div>';
+        html += '<div>Credit: ' + esc(creditStr) + '</div>';
+        html += '</div>';
+        html += '<span style="font-size:0.72rem;font-weight:600;padding:3px 10px;border-radius:10px;background:' + statusColor + '22;color:' + statusColor + ';border:1px solid ' + statusColor + '55;">' + esc(statusLabel) + '</span>';
+        html += '</div>';
+      });
+      html += '</div>';
+    }
+
+    container.innerHTML = html;
+  }).catch(function(err) {
+    container.innerHTML = '<div style="color:var(--danger);padding:20px;">Error loading accounts: ' + esc(err.message || String(err)) + '</div>';
+  });
+}
+
+function openNewWholesaleAccountModal(existingId) {
+  var a = existingId ? (wholesaleAccountsData[existingId] || {}) : {};
+  var isEdit = !!existingId;
+  var overlay = document.createElement('div');
+  overlay.id = 'wsAccountModal';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:10001;display:flex;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto;';
+
+  function optsHtml(opts, selected) {
+    return opts.map(function(o) { return '<option value="' + esc(o.v) + '"' + (o.v === selected ? ' selected' : '') + '>' + esc(o.l) + '</option>'; }).join('');
+  }
+
+  overlay.innerHTML =
+    '<div style="background:#fff;border-radius:12px;padding:24px;width:100%;max-width:560px;margin-top:40px;color:var(--charcoal);">' +
+      '<h3 style="margin:0 0 16px;font-size:1.15rem;">' + (isEdit ? 'Edit Wholesale Account' : 'New Wholesale Account') + '</h3>' +
+      '<form id="wsAccountForm" onsubmit="event.preventDefault();saveWholesaleAccount(' + (isEdit ? '\'' + esc(existingId) + '\'' : 'null') + ');return false;">' +
+        '<div style="margin-bottom:12px;"><label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Account name *</label>' +
+          '<input id="wsa_name" required value="' + esc(a.name || '') + '" placeholder="Coastal Home Boutique" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;"></div>' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">' +
+          '<div><label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Type</label>' +
+            '<select id="wsa_type" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;background:#fff;">' + optsHtml(WS_ACCOUNT_TYPES, a.accountType || 'retailer') + '</select></div>' +
+          '<div><label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Status</label>' +
+            '<select id="wsa_status" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;background:#fff;">' + optsHtml(WS_ACCOUNT_STATUSES, a.status || 'active') + '</select></div>' +
+        '</div>' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">' +
+          '<div><label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">NET terms</label>' +
+            '<select id="wsa_netTerms" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;background:#fff;">' + optsHtml(WS_NET_TERMS, a.netTerms || 'NET_30') + '</select></div>' +
+          '<div><label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Default payment</label>' +
+            '<select id="wsa_paymentMethod" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;background:#fff;">' + optsHtml(WS_PAYMENT_METHODS, a.paymentMethodDefault || 'check') + '</select></div>' +
+        '</div>' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:12px;">' +
+          '<div><label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Credit limit ($)</label>' +
+            '<input id="wsa_creditLimit" type="number" min="0" step="1" value="' + esc(a.creditLimitCents ? (a.creditLimitCents / 100) : '') + '" placeholder="5000" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;"></div>' +
+          '<div><label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Opener min ($)</label>' +
+            '<input id="wsa_opener" type="number" min="0" step="1" value="' + esc(a.minimumOpenerCents ? (a.minimumOpenerCents / 100) : '') + '" placeholder="500" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;"></div>' +
+          '<div><label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Reorder min ($)</label>' +
+            '<input id="wsa_reorder" type="number" min="0" step="1" value="' + esc(a.minimumReorderCents ? (a.minimumReorderCents / 100) : '') + '" placeholder="250" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;"></div>' +
+        '</div>' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">' +
+          '<div><label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Sales rep (name)</label>' +
+            '<input id="wsa_rep" value="' + esc(a.salesRepName || '') + '" placeholder="Jane Doe" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;"></div>' +
+          '<div><label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Territory</label>' +
+            '<input id="wsa_territory" value="' + esc(a.territory || '') + '" placeholder="Northeast" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;"></div>' +
+        '</div>' +
+        '<div style="display:grid;grid-template-columns:2fr 1fr;gap:12px;margin-bottom:12px;">' +
+          '<div><label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Resale cert number</label>' +
+            '<input id="wsa_resaleCert" value="' + esc(a.resaleCertNumber || '') + '" placeholder="(optional)" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;"></div>' +
+          '<div style="display:flex;align-items:flex-end;padding-bottom:6px;"><label style="display:flex;align-items:center;gap:8px;font-size:0.85rem;cursor:pointer;"><input id="wsa_taxExempt" type="checkbox"' + (a.taxExempt !== false ? ' checked' : '') + '> Tax-exempt</label></div>' +
+        '</div>' +
+        '<div style="margin-bottom:16px;"><label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Notes</label>' +
+          '<textarea id="wsa_notes" rows="2" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;font-family:inherit;">' + esc(a.notes || '') + '</textarea></div>' +
+        '<div style="display:flex;gap:8px;justify-content:flex-end;">' +
+          '<button type="button" onclick="closeWholesaleAccountModal()" class="btn-small" style="background:#fff;color:var(--charcoal);border:1px solid #ddd;padding:8px 16px;border-radius:4px;cursor:pointer;font-size:0.85rem;">Cancel</button>' +
+          (isEdit ? '<button type="button" onclick="deleteWholesaleAccount(\'' + esc(existingId) + '\')" class="btn-small" style="background:#fff;color:var(--danger);border:1px solid var(--danger);padding:8px 16px;border-radius:4px;cursor:pointer;font-size:0.85rem;">Delete</button>' : '') +
+          '<button type="submit" class="btn-small" style="background:var(--teal);color:#fff;border:none;padding:8px 18px;border-radius:4px;cursor:pointer;font-size:0.85rem;">' + (isEdit ? 'Save' : 'Create account') + '</button>' +
+        '</div>' +
+      '</form>' +
+    '</div>';
+  overlay.addEventListener('click', function(e) { if (e.target === overlay) closeWholesaleAccountModal(); });
+  document.body.appendChild(overlay);
+  setTimeout(function() { var nameEl = document.getElementById('wsa_name'); if (nameEl) nameEl.focus(); }, 30);
+}
+
+function closeWholesaleAccountModal() {
+  var el = document.getElementById('wsAccountModal');
+  if (el) el.parentNode.removeChild(el);
+}
+
+function editWholesaleAccount(id) { openNewWholesaleAccountModal(id); }
+
+async function deleteWholesaleAccount(id) {
+  var a = wholesaleAccountsData[id];
+  if (!a) return;
+  if (!await mastConfirm('Delete "' + (a.name || 'this account') + '"? Authorized users + orders linked to this account will be unlinked but not removed.', { title: 'Delete account', danger: true })) return;
+  try {
+    await MastDB.wholesaleAccounts.remove(id);
+    showToast('Account deleted');
+    closeWholesaleAccountModal();
+    renderWholesaleAccounts();
+  } catch (err) {
+    showToast('Error: ' + (err.message || String(err)), true);
+  }
+}
+
+async function saveWholesaleAccount(existingId) {
+  var name = (document.getElementById('wsa_name').value || '').trim();
+  if (!name) { showToast('Name is required', true); return; }
+  function toCents(elId) {
+    var v = (document.getElementById(elId).value || '').trim();
+    if (!v) return null;
+    var n = parseFloat(v);
+    return isNaN(n) ? null : Math.round(n * 100);
+  }
+  function selVal(elId) { return document.getElementById(elId).value; }
+  function txt(elId) { return (document.getElementById(elId).value || '').trim(); }
+  var now = new Date().toISOString();
+  var data = {
+    name: name,
+    accountType: selVal('wsa_type'),
+    status: selVal('wsa_status'),
+    netTerms: selVal('wsa_netTerms'),
+    paymentMethodDefault: selVal('wsa_paymentMethod'),
+    creditLimitCents: toCents('wsa_creditLimit'),
+    minimumOpenerCents: toCents('wsa_opener'),
+    minimumReorderCents: toCents('wsa_reorder'),
+    salesRepName: txt('wsa_rep') || null,
+    territory: txt('wsa_territory') || null,
+    resaleCertNumber: txt('wsa_resaleCert') || null,
+    taxExempt: !!document.getElementById('wsa_taxExempt').checked,
+    notes: txt('wsa_notes') || null,
+    updatedAt: now
+  };
+  try {
+    var id;
+    if (existingId) {
+      await MastDB.wholesaleAccounts.update(existingId, data);
+      id = existingId;
+      showToast('Account updated');
+    } else {
+      data.createdAt = now;
+      id = MastDB.wholesaleAccounts.newKey();
+      await MastDB.wholesaleAccounts.set(id, data);
+      showToast('Account created');
+    }
+    closeWholesaleAccountModal();
+    renderWholesaleAccounts();
+  } catch (err) {
+    showToast('Error: ' + (err.message || String(err)), true);
+  }
 }
 
 // ── Access Requests sub-view ──
@@ -674,6 +895,13 @@ window.denyWholesaleRequest = denyWholesaleRequest;
 window.renderWholesaleOrders = renderWholesaleOrders;
 window.viewWholesaleOrder = viewWholesaleOrder;
 window.updateWholesaleOrderStatus = updateWholesaleOrderStatus;
+// W2a wholesale accounts
+window.renderWholesaleAccounts = renderWholesaleAccounts;
+window.openNewWholesaleAccountModal = openNewWholesaleAccountModal;
+window.closeWholesaleAccountModal = closeWholesaleAccountModal;
+window.editWholesaleAccount = editWholesaleAccount;
+window.deleteWholesaleAccount = deleteWholesaleAccount;
+window.saveWholesaleAccount = saveWholesaleAccount;
 // renderWholesaleSetup and runWholesaleSeed removed — wholesale products now managed via product admin
 window.uploadWholesalePDF = uploadWholesalePDF;
 window.copyQRImage = copyQRImage;

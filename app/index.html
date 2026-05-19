@@ -10598,6 +10598,27 @@ MastDB.salesEvents = {
   sub: function() { return 'admin/salesEvents/' + Array.from(arguments).join('/'); }
 };
 
+// W2a — wholesaleAccount as a first-class object. Holds the per-buyer
+// commercial terms (netTerms, creditLimit, MOQ, resale cert, sales rep,
+// territory) that previously had no home. Authorized users in
+// admin/wholesaleAuthorized can reference an account via wholesaleAccountId;
+// wholesale orders can also stamp wholesaleAccountId for AR + dormant-account
+// rollups. Field-permissive on writes — schema enforced in the UI form, not
+// in this adapter, so MCP and direct writes can extend.
+MastDB.wholesaleAccounts = {
+  PATH: 'admin/wholesaleAccounts',
+  list: function(limit) { return MastDB.query('admin/wholesaleAccounts').limitToLast(limit || 200).once(); },
+  get: function(id) { return MastDB.get('admin/wholesaleAccounts/' + id); },
+  set: function(id, data) { return MastDB.set('admin/wholesaleAccounts/' + id, data); },
+  update: function(id, data) { return MastDB.update('admin/wholesaleAccounts/' + id, data); },
+  remove: function(id) { return MastDB.remove('admin/wholesaleAccounts/' + id); },
+  newKey: function() { return MastDB.newKey('admin/wholesaleAccounts'); },
+  listen: function(limit, cb) { return MastDB.query('admin/wholesaleAccounts').limitToLast(limit || 200).subscribe(cb); },
+  query: function() { return MastDB.query('admin/wholesaleAccounts'); },
+  sub: function() { return 'admin/wholesaleAccounts/' + Array.from(arguments).join('/'); },
+  subRef: function() { return _makeRefCompat('admin/wholesaleAccounts/' + Array.from(arguments).join('/')); }
+};
+
 MastDB.shows = {
   PATH: 'admin/shows',
   list: function(limit) { return MastDB.query('admin/shows').limitToLast(limit || 100).once(); },
