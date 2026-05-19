@@ -1269,7 +1269,14 @@ function renderShowDetailHistory(showId, s) {
   h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">';
   h += '<h3 style="margin:0;">Profit &amp; Loss</h3>';
   if (hasPermission('shows', 'update')) {
+    h += '<div style="display:flex;gap:8px;">';
     h += '<button class="btn btn-sm" onclick="openShowExpenseModal(\'' + showId + '\')" style="background:var(--primary, var(--teal));color:white;border:none;">+ Add Expense</button>';
+    // W1 — first-class entry point for "I drove to this show." Previously the
+    // only caller of startRetroactiveFromShow was a trips-module nudge template
+    // that required a prior trip + a missing-mileage detection pass; new shows
+    // couldn't log mileage from the show view at all.
+    h += '<button class="btn btn-sm" onclick="MastAdmin.loadModule(\'trips\').then(function(){ window.startRetroactiveFromShow(\'' + showId + '\'); })" style="background:transparent;border:1px solid var(--teal);color:var(--teal);">+ Add Mileage</button>';
+    h += '</div>';
   }
   h += '</div>';
 

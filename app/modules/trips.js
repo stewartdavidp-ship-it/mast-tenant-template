@@ -1464,8 +1464,23 @@
 
   function startRetroactiveFromShow(showId) {
     var s = showsData[showId];
-    if (!s) { showToast('Show not found', true); return; }
+    if (s) { _openRetroFromShow(showId, s); return; }
+    // W1 fix — when called from outside trips.js (e.g. the Show History P&L "Add
+    // Mileage" button), trips' local showsData cache may not be populated yet.
+    // Fall back to a one-shot fetch via MastDB so any show can drive a retro
+    // trip without first navigating into Trips and waiting for its listener.
+    if (window.MastDB && MastDB.shows && typeof MastDB.shows.get === 'function') {
+      MastDB.shows.get(showId).then(function(fetched) {
+        if (!fetched) { showToast('Show not found', true); return; }
+        showsData[showId] = fetched;
+        _openRetroFromShow(showId, fetched);
+      }).catch(function() { showToast('Show not found', true); });
+      return;
+    }
+    showToast('Show not found', true);
+  }
 
+  function _openRetroFromShow(showId, s) {
     var location = [s.locationCity, s.locationState].filter(Boolean).join(', ');
     retroModalData = {
       showId: showId,
@@ -1477,7 +1492,6 @@
       currentLegOrigin: null,
       eventSessionId: null
     };
-
     openRetroactiveTripModal();
   }
 

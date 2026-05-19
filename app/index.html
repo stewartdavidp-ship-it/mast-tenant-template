@@ -10609,7 +10609,12 @@ MastDB.shows = {
   listen: function(limit, cb) { return MastDB.query('admin/shows').limitToLast(limit || 100).subscribe(cb); },
   query: function() { return MastDB.query('admin/shows'); },
   pushApplicationHistory: function(showId, data) { return MastDB.push('admin/shows/' + showId + '/applicationHistory', data); },
-  sub: function() { return 'admin/shows/' + Array.from(arguments).join('/'); }
+  sub: function() { return 'admin/shows/' + Array.from(arguments).join('/'); },
+  // W1 verify caught 15+ shows.js write call sites using .subRef(...).update/.set/.remove —
+  // the entity was missing the chainable ref helper that _makeEntity provides for
+  // other entities at line 10421. Adding it here fixes per-show sales / notes /
+  // reconciliation / expense / staffing writes that have been broken at runtime.
+  subRef: function() { return _makeRefCompat('admin/shows/' + Array.from(arguments).join('/')); }
 };
 
 MastDB.bundles = _makeEntity('admin/bundles', 50);
