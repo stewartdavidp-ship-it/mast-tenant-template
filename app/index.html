@@ -36736,6 +36736,14 @@ function renderProductDetail(pid) {
         '<div class="form-group" style="min-width:200px;"><label>SKU</label><input type="text" id="pdSku" value="' + esc(product.sku || '') + '" placeholder="e.g., BV-12OZ-BLUE"></div>' +
         '<div class="form-group" style="min-width:100px;"><label>Processing Min (days)</label><input type="number" id="pdProcessingMin" value="' + ((product.processingDays && product.processingDays.min) || '') + '" placeholder="e.g., 3" min="0"></div>' +
         '<div class="form-group" style="min-width:100px;"><label>Processing Max (days)</label><input type="number" id="pdProcessingMax" value="' + ((product.processingDays && product.processingDays.max) || '') + '" placeholder="e.g., 7" min="0"></div>' +
+      '</div>' +
+      // W2b — wholesale MOQ + case pack. Sets the floor + multiple enforced on
+      // the wholesale storefront's qty input and add-to-cart. Empty values mean
+      // "no constraint" so retail-only products are unaffected.
+      '<div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:8px;">' +
+        '<div class="form-group" style="min-width:140px;"><label>Wholesale MOQ</label><input type="number" id="pdMoq" value="' + esc(product.moq != null ? product.moq : '') + '" placeholder="e.g., 12" min="1"></div>' +
+        '<div class="form-group" style="min-width:140px;"><label>Case pack</label><input type="number" id="pdCasePack" value="' + esc(product.casePack != null ? product.casePack : '') + '" placeholder="e.g., 12" min="1"></div>' +
+        '<div class="form-group" style="flex:1;min-width:200px;"><label style="visibility:hidden;">.</label><div style="font-size:0.78rem;color:var(--warm-gray);padding-top:8px;">Minimum order quantity and units-per-case for wholesale orders. Storefront enforces qty &ge; MOQ and qty as a multiple of case pack.</div></div>' +
       '</div>';
 
     // Personalization section
@@ -37748,6 +37756,24 @@ async function saveProduct(pid) {
       directPriceCents: directPriceCents,
       isWholesale: isWholesale,
       wholesalePriceCents: wholesalePriceCents,
+      // W2b — wholesale MOQ + case pack. Null when the inputs are blank so a
+      // product without these constraints behaves exactly as before.
+      moq: (function() {
+        var el = document.getElementById('pdMoq');
+        if (!el) return (__existingForFallback ? (__existingForFallback.moq != null ? __existingForFallback.moq : null) : null);
+        var v = (el.value || '').trim();
+        if (!v) return null;
+        var n = parseInt(v, 10);
+        return (isNaN(n) || n < 1) ? null : n;
+      })(),
+      casePack: (function() {
+        var el = document.getElementById('pdCasePack');
+        if (!el) return (__existingForFallback ? (__existingForFallback.casePack != null ? __existingForFallback.casePack : null) : null);
+        var v = (el.value || '').trim();
+        if (!v) return null;
+        var n = parseInt(v, 10);
+        return (isNaN(n) || n < 1) ? null : n;
+      })(),
       etsyListingId: etsyId,
       buildTime: buildTime,
       costToBuild: costToBuild,

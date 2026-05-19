@@ -783,6 +783,21 @@
       });
     }
 
+    // W2b \u2014 wholesale MOQ + case pack. Defaults preserve the prior "value=6 min=1"
+    // behavior when the product hasn't set these (so legacy tenants are unaffected).
+    var moq = (typeof p.moq === 'number' && p.moq > 0) ? p.moq : null;
+    var casePack = (typeof p.casePack === 'number' && p.casePack > 0) ? p.casePack : null;
+    var qtyInitial = moq || 6;
+    var qtyMin = moq || 1;
+    var qtyStep = casePack || 1;
+    var moqHint = '';
+    if (moq || casePack) {
+      var hintParts = [];
+      if (moq) hintParts.push('MOQ ' + moq);
+      if (casePack) hintParts.push('case pack ' + casePack);
+      moqHint = '<div class="ws-moq-hint" style="font-size:0.72rem;color:#999;margin-top:4px;">' + hintParts.join(' \u00b7 ') + '</div>';
+    }
+
     return '<div class="ws-card">' +
       imgHtml +
       '<div class="ws-card-body">' +
@@ -792,11 +807,12 @@
         '<div class="ws-card-price">' + priceHtml + '</div>' +
         variantsHtml +
         '<div class="ws-card-actions">' +
-          '<input type="number" class="ws-qty-input" id="wsQty_' + esc(pid) + '" value="6" min="1" max="9999">' +
+          '<input type="number" class="ws-qty-input" id="wsQty_' + esc(pid) + '" value="' + qtyInitial + '" min="' + qtyMin + '" max="9999" step="' + qtyStep + '">' +
           '<button class="ws-add-btn" onclick="wsAddToCart(\'' + esc(pid) + '\')"' +
             (!allSelected && p.options && p.options.length > 0 ? ' disabled title="Select options first"' : '') +
             '>Add to Cart</button>' +
         '</div>' +
+        moqHint +
         (!allSelected && p.options && p.options.length > 0
           ? '<div class="ws-select-hint" id="wsHint_' + esc(pid) + '">\u2191 Select ' + p.options.map(function(o){return o.label.toLowerCase();}).join(' & ') + ' first</div>'
           : '') +
@@ -853,6 +869,26 @@
 
     var qtyInput = document.getElementById('wsQty_' + pid);
     var qty = parseInt(qtyInput ? qtyInput.value : '1', 10) || 1;
+
+    // W2b — enforce MOQ + case pack at add-to-cart. Empty/missing values
+    // mean "no constraint" — retail-style behavior. When MOQ is set,
+    // we reject (don't auto-fix) so the buyer sees the constraint exists
+    // and we don't silently increase their order; case pack auto-rounds up
+    // to the next multiple since that's the natural "add the missing units"
+    // affordance for cases.
+    var moq = (typeof p.moq === 'number' && p.moq > 0) ? p.moq : null;
+    var casePack = (typeof p.casePack === 'number' && p.casePack > 0) ? p.casePack : null;
+    if (moq && qty < moq) {
+      MastCart.showToast('Minimum order for ' + p.name + ' is ' + moq + ' (you entered ' + qty + ').');
+      if (qtyInput) { qtyInput.value = moq; qtyInput.focus(); qtyInput.select(); }
+      return;
+    }
+    if (casePack && qty % casePack !== 0) {
+      var rounded = Math.ceil(qty / casePack) * casePack;
+      MastCart.showToast(p.name + ' ships in cases of ' + casePack + ' — rounded ' + qty + ' up to ' + rounded + '.');
+      qty = rounded;
+      if (qtyInput) qtyInput.value = rounded;
+    }
 
     var opts = selectedOptions[pid] || {};
 
