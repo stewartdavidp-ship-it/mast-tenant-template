@@ -13,6 +13,20 @@
   var tripsLoaded = false;
   var showsData = window.showsData || {}; // Cross-module: loaded by shows module or fetched locally
   var showsLoaded = !!(window.showsData && Object.keys(window.showsData).length > 0);
+
+  // Local copy of formatShowDate — same implementation as modules/shows.js:308
+  // but lives inside this IIFE so trips.js doesn't break when shows.js isn't
+  // loaded (mileage nudge + retroactive modal title + previous-trips list all
+  // call this; the nudge can fire before the shows module ever loads).
+  function formatShowDate(dateStr) {
+    if (!dateStr) return '';
+    var parts = String(dateStr).split('-');
+    if (parts.length < 3) return dateStr;
+    var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    var m = months[parseInt(parts[1], 10) - 1];
+    var d = parseInt(parts[2], 10);
+    return (m || parts[1]) + ' ' + d + ', ' + parts[0];
+  }
   var tripLocationsData = {};
   var tripLocationsLoaded = false;
   var tripSettingsData = { irsRates: { '2025': 70, '2026': 70 }, knownLocations: ['home-studio', 'new-studio'] };
