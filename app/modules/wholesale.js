@@ -899,6 +899,15 @@ async function generateInvoiceForWholesale(orderId) {
     return;
   }
   await window.generateInvoice(orderId);
+  // W2c — wholesale orders pay by check (not Square), so there's no
+  // separate "send" step that triggers an external API. Promote the
+  // freshly-generated invoice from draft → sent immediately so it shows
+  // up in Finance → AR aging (which filters for status 'sent' / 'overdue').
+  // For retail orders the orders-tab flow keeps draft + a dedicated Send
+  // button that hits the Square Invoices API.
+  try {
+    await MastDB.orders.update(orderId, { invoiceStatus: 'sent', updatedAt: new Date().toISOString() });
+  } catch (_e) {}
   // Re-fetch so the wholesale-tab cache picks up the freshly-written invoice fields.
   try {
     var snap = await MastDB.orders.get(orderId);
