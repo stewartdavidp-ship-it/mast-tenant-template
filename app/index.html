@@ -5608,11 +5608,17 @@
         <div class="sidebar-item" data-route="customers" onclick="navigateTo('customers')">Customers</div>
       </div>
     </div>
-    <!-- Events -->
+    <!-- Shows (vendor flow + optional organizer admin) -->
+    <!-- Renamed from "Events" → "Shows" 2026-05-19 per persona findings (W1a-new):
+         vendor-attendees overwhelmingly say "show" not "event"; the prior label
+         hid the vendor-side workflow (Find/Apply/Prep/Execute/History) and led
+         testers to the organizer-side path (events-shows) as if it were canonical.
+         The hidden organizer items (revealed by applyOrganizerMode) are relabeled
+         so the parent "Shows" section header doesn't collide with a child "Shows" item. -->
     <div class="sidebar-section" data-section="events">
       <div class="sidebar-section-header" onclick="toggleSection('events')">
         <span class="sidebar-section-icon">&#128205;</span>
-        <span class="sidebar-section-label">Events</span>
+        <span class="sidebar-section-label">Shows</span>
         <span class="sidebar-section-arrow">&#9654;</span>
       </div>
       <div class="sidebar-items">
@@ -5621,8 +5627,8 @@
         <div class="sidebar-item muted" data-route="show-prep" onclick="navigateTo('show-prep')">Prep</div>
         <div class="sidebar-item muted" data-route="show-execute" onclick="navigateTo('show-execute')">Execute</div>
         <div class="sidebar-item muted" data-route="show-history" onclick="navigateTo('show-history')">History</div>
-        <div class="sidebar-item" data-route="events-shows" onclick="navigateTo('events-shows')" style="display:none;">Shows</div>
-        <div class="sidebar-item" data-route="events-settings" onclick="navigateTo('events-settings')" style="display:none;">Settings</div>
+        <div class="sidebar-item" data-route="events-shows" onclick="navigateTo('events-shows')" style="display:none;">Show Admin</div>
+        <div class="sidebar-item" data-route="events-settings" onclick="navigateTo('events-settings')" style="display:none;">Show Settings</div>
       </div>
     </div>
     <!-- Classes -->

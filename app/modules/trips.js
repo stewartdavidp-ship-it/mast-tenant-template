@@ -1708,6 +1708,11 @@
       expenses: [],
       entryMethod: retroModalData.entryMethod,
       eventSessionId: retroModalData.eventSessionId,
+      // W1b — when a trip is started from a show ("Add mileage to this show"),
+      // carry the show linkage onto the trip itself so Show P&L can sum
+      // travel costs without scanning eventSessionId labels.
+      showId: retroModalData.showId || null,
+      showName: retroModalData.showName || null,
       roundTrip: roundTrip
     };
 
