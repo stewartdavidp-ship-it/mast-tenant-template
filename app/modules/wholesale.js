@@ -846,9 +846,66 @@ function viewWholesaleOrder(orderId) {
       '<tbody>' + itemsHtml + '</tbody>' +
       '<tfoot><tr><td colspan="3" style="text-align:right;font-weight:700;">Total</td><td style="text-align:right;font-weight:700;">$' + ((o.totalCents || 0) / 100).toFixed(2) + '</td></tr></tfoot>' +
     '</table>' +
+    // W2c — invoice section. The Generate Invoice action existed in orders.js
+    // but the wholesale-tab order detail had its own template that never
+    // invoked it, so the persona's "no invoice button on wholesale orders"
+    // report was correct end-to-end. Reuse window.generateInvoice (now
+    // cache-tolerant) and refresh this view in place after it returns.
+    renderWholesaleInvoiceSection(o, orderId) +
   '</div>';
 
   document.getElementById('wholesaleSubContent').innerHTML = html;
+}
+
+function renderWholesaleInvoiceSection(o, orderId) {
+  var hasInvoice = !!o.invoiceNumber;
+  var status = o.invoiceStatus || (hasInvoice ? 'draft' : null);
+  var canGenerate = !status || status === 'draft';
+  var statusColors = {
+    draft:   '#9ca3af',
+    sent:    '#3b82f6',
+    paid:    '#16a34a',
+    overdue: '#dc2626'
+  };
+  var statusColor = statusColors[status] || '#9ca3af';
+  var html = '<div style="margin-top:20px;padding-top:16px;border-top:1px solid #e8e0d4;">';
+  html += '<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">';
+  html += '<div>';
+  html += '<div style="font-size:0.78rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.08em;">Invoice</div>';
+  if (hasInvoice) {
+    html += '<div style="font-weight:600;margin-top:4px;">' + esc(o.invoiceNumber) +
+      ' <span style="font-size:0.72rem;font-weight:600;padding:2px 8px;border-radius:10px;background:' + statusColor + '22;color:' + statusColor + ';border:1px solid ' + statusColor + '55;margin-left:6px;">' + esc(status) + '</span></div>';
+    if (o.invoiceDueDate) html += '<div style="font-size:0.78rem;color:var(--warm-gray);">Due ' + esc(o.invoiceDueDate) + '</div>';
+  } else {
+    html += '<div style="font-size:0.85rem;color:var(--warm-gray);margin-top:4px;">No invoice generated yet.</div>';
+  }
+  html += '</div>';
+  if (canGenerate) {
+    html += '<button class="btn-small" onclick="generateInvoiceForWholesale(\'' + esc(orderId) + '\')" style="background:var(--teal);color:#fff;border:none;padding:8px 16px;border-radius:4px;cursor:pointer;font-size:0.78rem;">' +
+      (hasInvoice ? 'Regenerate' : 'Generate Invoice') + '</button>';
+  }
+  html += '</div></div>';
+  return html;
+}
+
+async function generateInvoiceForWholesale(orderId) {
+  if (typeof window.generateInvoice !== 'function') {
+    // generateInvoice is defined in modules/orders.js; trigger module load if
+    // the user hasn't visited Orders yet this session.
+    try { await MastAdmin.loadModule('orders'); } catch (_e) {}
+  }
+  if (typeof window.generateInvoice !== 'function') {
+    showToast('Invoice helper not available yet — try again', true);
+    return;
+  }
+  await window.generateInvoice(orderId);
+  // Re-fetch so the wholesale-tab cache picks up the freshly-written invoice fields.
+  try {
+    var snap = await MastDB.orders.get(orderId);
+    var fresh = (snap && typeof snap.val === 'function') ? snap.val() : snap;
+    if (fresh) wholesaleOrdersData[orderId] = fresh;
+  } catch (_e) {}
+  viewWholesaleOrder(orderId);
 }
 
 function updateWholesaleOrderStatus(orderId, newStatus) {
@@ -902,6 +959,8 @@ window.closeWholesaleAccountModal = closeWholesaleAccountModal;
 window.editWholesaleAccount = editWholesaleAccount;
 window.deleteWholesaleAccount = deleteWholesaleAccount;
 window.saveWholesaleAccount = saveWholesaleAccount;
+// W2c — wholesale-side invoice action bridge
+window.generateInvoiceForWholesale = generateInvoiceForWholesale;
 // renderWholesaleSetup and runWholesaleSeed removed — wholesale products now managed via product admin
 window.uploadWholesalePDF = uploadWholesalePDF;
 window.copyQRImage = copyQRImage;

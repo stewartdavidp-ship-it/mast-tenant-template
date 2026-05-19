@@ -1169,8 +1169,20 @@
   }
 
   async function generateInvoice(orderId) {
+    // Allow callers outside the orders module (e.g. wholesale.js viewWholesaleOrder)
+    // to invoke this without first populating the orders cache. Fetch from MastDB
+    // when missing. Only re-render the orders-tab detail when we were actually
+    // operating against the orders-tab cached copy; otherwise the caller handles
+    // its own re-render.
     var o = orders[orderId];
-    if (!o) return;
+    var fromOrdersCache = !!o;
+    if (!o) {
+      try {
+        var snap = await MastDB.orders.get(orderId);
+        o = (snap && typeof snap.val === 'function') ? snap.val() : snap;
+      } catch (_e) {}
+    }
+    if (!o) { showToast('Order not found', true); return; }
     try {
       var now = new Date().toISOString();
       var year = new Date().getFullYear();
@@ -1201,7 +1213,7 @@
       o.invoiceIssuedAt = now;
 
       showToast('Invoice ' + invoiceNumber + ' generated');
-      renderOrderDetail(orderId);
+      if (fromOrdersCache) renderOrderDetail(orderId);
     } catch (err) {
       showToast('Failed to generate invoice: ' + err.message, true);
     }
