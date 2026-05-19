@@ -28759,8 +28759,11 @@ async function loadNextStepsCache() {
     window._nextStepsCache.hasContent = !!heroHeadline;
   } catch (e) { /* ignore */ }
   try {
-    // Check if any tenant API key has been generated for AI/MCP tools
-    var keysSnap = await MastDB.query('admin/config/aiIntegrations/keys').limitToFirst(1).once('value');
+    // Check for an *active* tenant API key (matches the UI's filter at
+    // loadAiIntegrations — a tenant with only revoked keys still needs to
+    // mint a new one before MCP works, so the Connect Claude step must
+    // re-surface in that case).
+    var keysSnap = await MastDB.query('admin/config/aiIntegrations/keys').orderByChild('status').equalTo('active').limitToFirst(1).once('value');
     var keysVal = keysSnap && (typeof keysSnap.val === 'function' ? keysSnap.val() : keysSnap);
     window._nextStepsCache.hasAiApiKey = !!(keysVal && Object.keys(keysVal).length > 0);
   } catch (e) { /* ignore */ }
