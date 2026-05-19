@@ -7634,7 +7634,7 @@
             </button>
             <div class="settings-nav-items">
               <button class="settings-nav-item" data-nav-key="integrations" onclick="switchSettingsSubView('integrations')">Integrations</button>
-              <button class="settings-nav-item" data-nav-key="ai" onclick="switchSettingsSubView('ai')">AI</button>
+              <button class="settings-nav-item" data-nav-key="ai" onclick="switchSettingsSubView('ai')">AI &amp; API Keys</button>
             </div>
           </div>
 
@@ -15043,6 +15043,40 @@ var SECTION_ROUTES = {
                         'historical-orders']
 };
 
+// URL aliases for routes users naturally guess but that aren't the canonical names.
+// Resolved at the top of navigateTo() and the hashchange handler before route lookup.
+// When you rename a route, add the old name here so deep links survive.
+var ROUTE_ALIASES = {
+  'look-books': 'lookbooks',
+  'lookbook': 'lookbooks',
+  'cash-flow': 'finance-cash-flow',
+  'cashflow': 'finance-cash-flow',
+  'ar': 'finance-ar',
+  'ap': 'finance-ap',
+  'pl': 'finance-pl',
+  'p-and-l': 'finance-pl',
+  'profit-and-loss': 'finance-pl',
+  'revenue': 'finance-revenue',
+  'expenses': 'finance-expenses',
+  'tax': 'finance-tax',
+  'customer-service': 'cs-inbox',
+  'customer-service-tickets': 'cs-tickets',
+  'tickets': 'cs-tickets',
+  'surveys': 'cs-surveys',
+  'reviews': 'cs-reviews',
+  'faqs': 'cs-faqs',
+  'inbox': 'cs-inbox',
+  'events-find': 'show-find',
+  'find-shows': 'show-find',
+  'find-show': 'show-find',
+  'find': 'show-find',
+  'email': 'email-log',
+  'emails': 'email-log',
+  'develop': 'develop-products',
+  'galleries-consignment': 'galleries',
+  'consignment': 'galleries'
+};
+
 var ALL_TAB_IDS = ['inquiriesTab', 'scheduleTab', 'galleryTab', 'homepageTab', 'brandTab', 'productsTab', 'ordersTab', 'salesTab', 'salesEventsTab', 'productionTab', 'forecastTab', 'couponsTab', 'analyticsTab', 'settingsTab', 'imagesTab', 'auditLogTab', 'employeesTab', 'contactsTab', 'customersTab', 'packTab', 'shipTab', 'commissionsTab', 'rmaTab', 'socialMediaTab', 'blogTab', 'newsletterTab', 'placeholderTab', 'inventoryTab', 'storiesTab', 'dashboardTab', 'tripsTab', 'wholesaleTab', 'showTab', 'financialsTab', 'eventsAdminTab', 'websiteTab', 'showLightTab', 'emailLogTab', 'materialsTab', 'piecesTab', 'galleriesTab', 'lookbooksTab', 'promotionsTab', 'bookTab', 'subscriptionTab', 'aboutTab', 'walletTab', 'giftCardsTab', 'loyaltyTab', 'membershipTab', 'termsTab', 'advisorTab', 'studioTab', 'teamTab', 'studentsTab', 'migrationDashTab', 'migrationConfirmTab', 'migrationPlanTab', 'migrationImportTab', 'historicalOrdersTab', 'channelsTab', 'businessTab', 'myFeedbackTab', 'procurementTab', 'csInboxTab', 'csTicketsTab', 'csSurveysTab', 'csReviewsTab', 'csFaqsTab', 'csMembersTab', 'financeRevenueTab', 'financeExpensesTab', 'financePlTab', 'financeCashFlowTab', 'financeArTab', 'financeApTab', 'financeTaxTab', 'financeReportsTab'];
 
 var currentRoute = 'dashboard';
@@ -15110,9 +15144,14 @@ function navigateTo(route, params) {
       return;
     }
   }
+  // Resolve common URL aliases (e.g. #look-books → #lookbooks) before lookup
+  if (ROUTE_ALIASES[route]) route = ROUTE_ALIASES[route];
   // Check both ROUTE_MAP (core routes) and MODULE_MANIFEST (lazy-loaded module routes)
   var isKnownRoute = !!ROUTE_MAP[route] || !!getModuleForRouteManifest(route);
-  if (!isKnownRoute) route = 'dashboard';
+  if (!isKnownRoute) {
+    renderUnknownRoutePlaceholder(route);
+    return;
+  }
   // Settings tab is admin-only — block non-admin access
   if (route === 'settings' && !isAdmin()) {
     showToast('Settings is restricted to admin users.', true);
@@ -15250,6 +15289,67 @@ function renderPlaceholder(config) {
     '</div>';
 }
 
+// Shown when navigateTo() receives a route that isn't in ROUTE_MAP, MODULE_MANIFEST,
+// or ROUTE_ALIASES. Surfaces the typed route, suggests near matches by token overlap,
+// and gives the user a way out. Previously these silently redirected to the dashboard,
+// which made any typo or stale link look identical to a successful navigation.
+function renderUnknownRoutePlaceholder(attemptedRoute) {
+  ALL_TAB_IDS.forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.style.display = 'none';
+  });
+
+  var attempted = String(attemptedRoute || '').toLowerCase();
+  var knownSet = {};
+  Object.keys(ROUTE_MAP).forEach(function(r) { knownSet[r] = true; });
+  Object.keys(_routeToModule || {}).forEach(function(r) { knownSet[r] = true; });
+  Object.keys(ROUTE_ALIASES).forEach(function(r) { knownSet[r] = true; });
+  var candidates = Object.keys(knownSet);
+
+  function score(candidate) {
+    var lower = candidate.toLowerCase();
+    if (!attempted) return 0;
+    if (lower === attempted) return 1000;
+    if (lower.indexOf(attempted) >= 0) return 200 + Math.floor((attempted.length / lower.length) * 50);
+    if (attempted.indexOf(lower) >= 0) return 150 + Math.floor((lower.length / attempted.length) * 40);
+    var aTokens = attempted.split(/[-_]+/).filter(Boolean);
+    var rTokens = lower.split(/[-_]+/).filter(Boolean);
+    var shared = aTokens.filter(function(t) { return rTokens.indexOf(t) >= 0; }).length;
+    return shared > 0 ? 20 + shared * 15 : 0;
+  }
+
+  var suggestions = candidates
+    .map(function(r) { return { route: r, score: score(r) }; })
+    .filter(function(s) { return s.score > 0; })
+    .sort(function(a, b) { return b.score - a.score; })
+    .slice(0, 5);
+
+  var safe = (typeof esc === 'function' ? esc : function(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  });
+
+  var html = '<div class="placeholder-view">' +
+    '<span class="placeholder-badge new">Not found</span>' +
+    '<div class="placeholder-title">Page not found</div>' +
+    '<div class="placeholder-desc">No page is registered at <code>#' + safe(attemptedRoute || '') + '</code>.</div>';
+  if (suggestions.length > 0) {
+    html += '<div class="placeholder-note" style="margin-top:12px;">Did you mean:</div>';
+    html += '<div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:8px;justify-content:center;">';
+    suggestions.forEach(function(s) {
+      html += '<button class="btn btn-secondary btn-small" onclick="navigateTo(\'' + safe(s.route) + '\')">#' + safe(s.route) + '</button>';
+    });
+    html += '</div>';
+  }
+  html += '<div style="margin-top:16px;"><button class="btn btn-primary" onclick="navigateTo(\'dashboard\')">Go to Dashboard</button></div>';
+  html += '</div>';
+
+  var placeholderEl = document.getElementById('placeholderTab');
+  if (placeholderEl) {
+    placeholderEl.innerHTML = html;
+    placeholderEl.style.display = '';
+  }
+}
+
 function applyOrganizerMode(isOrganizer) {
   var items = ['events-shows', 'events-settings'];
   items.forEach(function(route) {
@@ -15350,6 +15450,16 @@ window.addEventListener('hashchange', function() {
   var parsed = parseHash(location.hash);
   var route = parsed.route || 'dashboard';
   var params = parsed.params;
+  // Resolve common URL aliases (e.g. #look-books → #lookbooks) for deep links typed
+  // into the address bar. Rewrites the URL without firing another hashchange so the
+  // user sees the canonical route they landed on.
+  if (ROUTE_ALIASES[route]) {
+    route = ROUTE_ALIASES[route];
+    var canonical = '#' + buildHash(route, params);
+    if (location.hash !== canonical && typeof history !== 'undefined' && history.replaceState) {
+      history.replaceState(null, '', location.pathname + location.search + canonical);
+    }
+  }
   // Subscription gating on deep links
   if (!canAccessRoute(route)) {
     var blockedModuleId = getModuleForRoute(route);
@@ -28482,6 +28592,7 @@ var NEXT_STEP_DEFINITIONS = [
   { id: 'setup-brand',    module: null,         icon: '\uD83C\uDFE0', title: 'Set up your brand details',     desc: 'Add your business name, tagline, and contact info.',                      route: 'settings', subView: 'general', check: function() { return tenantConfigChecklist && tenantConfigChecklist.brand; } },
   { id: 'setup-square',   module: 'sell',       icon: '\uD83D\uDCB3', title: 'Connect Square for payments',   desc: 'Link your Square account to accept payments and manage orders.',          route: 'settings', subView: 'payments', check: function() { return tenantConfigChecklist && tenantConfigChecklist.square; } },
   { id: 'setup-email',    module: null,         icon: '\u2709\uFE0F', title: 'Configure email notifications', desc: 'Set up order confirmation and shipping emails for your customers.',       route: 'settings', subView: 'email', check: function() { return tenantConfigChecklist && tenantConfigChecklist.email; } },
+  { id: 'connect-claude', module: null,         icon: '\uD83E\uDD16', title: 'Connect Claude or other AI tools', desc: 'Generate an API key so Claude, ChatGPT, or Cursor can manage your store through natural language.', route: 'settings', subView: 'ai', check: function() { return window._nextStepsCache && window._nextStepsCache.hasAiApiKey; } },
   { id: 'first-show',     module: 'show',       icon: '\uD83C\uDFAA', title: 'Find your first show',          desc: 'Search for craft fairs and events in your area.',                         route: 'show-find',   check: function() { return false; } },
   { id: 'show-light-profile', module: 'show-light', icon: '\u2728', title: 'Build your vendor profile',     desc: 'Add your bio, photos, and product highlights for show applications.',     route: 'show-light-profile', check: function() { return false; } },
   { id: 'create-event',   module: 'events',     icon: '\uD83C\uDFAB', title: 'Create your first show',        desc: 'Set up a show with booths, vendors, and applications.',                   route: 'events-shows', check: function() { return false; } },
@@ -28624,7 +28735,7 @@ function renderDashCardSetupShop() {
 }
 
 // Cache for async checks (products, website, template, content)
-window._nextStepsCache = { hasProducts: false, hasWebsite: false, hasTemplate: false, hasContent: false };
+window._nextStepsCache = { hasProducts: false, hasWebsite: false, hasTemplate: false, hasContent: false, hasAiApiKey: false };
 
 async function loadNextStepsCache() {
   try {
@@ -28646,6 +28757,12 @@ async function loadNextStepsCache() {
     // Check if hero content has been customized
     var heroHeadline = await MastDB.get('webPresence/config/sections/hero/headline');
     window._nextStepsCache.hasContent = !!heroHeadline;
+  } catch (e) { /* ignore */ }
+  try {
+    // Check if any tenant API key has been generated for AI/MCP tools
+    var keysSnap = await MastDB.query('admin/config/aiIntegrations/keys').limitToFirst(1).once('value');
+    var keysVal = keysSnap && (typeof keysSnap.val === 'function' ? keysSnap.val() : keysSnap);
+    window._nextStepsCache.hasAiApiKey = !!(keysVal && Object.keys(keysVal).length > 0);
   } catch (e) { /* ignore */ }
 }
 
