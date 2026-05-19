@@ -368,9 +368,13 @@
     var year = new Date().getFullYear();
     var rate = tripSettingsData.irsRates ? (tripSettingsData.irsRates[year] || tripSettingsData.irsRates[year - 1] || 70) : 70;
 
-    var tripRef = MastDB.trips.push(user.uid);
+    // W1 fix — MastDB.trips.push(uid) on the Firestore adapter calls
+    // DocumentReference.set(undefined) immediately and throws, breaking the
+    // RTDB push→set pattern this module depends on. Pre-allocate the doc id
+    // and write via .set(uid, id, data) instead.
+    var tripId = MastDB.newKey('trips/' + user.uid);
     var tripData = {
-      tripId: tripRef.key,
+      tripId: tripId,
       driverId: user.uid,
       driverName: user.displayName || user.email || 'Unknown',
       status: 'open',
@@ -389,7 +393,7 @@
       entryMethod: 'live'
     };
 
-    tripRef.set(tripData).then(function() {
+    MastDB.trips.set(user.uid, tripId, tripData).then(function() {
       // Add destination to tripLocations if new
       if (!matchedDestKey) {
         var slug = destInput.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
@@ -400,14 +404,14 @@
       }
 
       activeTripData = tripData;
-      activeTripData.id = tripRef.key;
+      activeTripData.id = tripId;
       showTripPulsingIndicator();
       closeStartTripModal();
       showToast('Trip started — drive safe! 🚗');
       requestNotificationPermission(); // Ask for notification permission when starting a trip
-      writeAudit('create', 'trips', tripRef.key);
-      emitTestingEvent('trip_started', { tripId: tripRef.key });
-      emitTestingEvent('trip_destination_set', { tripId: tripRef.key, destination: destInput });
+      writeAudit('create', 'trips', tripId);
+      emitTestingEvent('trip_started', { tripId: tripId });
+      emitTestingEvent('trip_destination_set', { tripId: tripId, destination: destInput });
 
       // Schedule 4hr notification
       scheduleTripReminder();
@@ -1713,10 +1717,12 @@
       retroModalData.eventSessionId = 'session-' + Date.now() + '-' + Math.random().toString(36).substr(2, 6);
     }
 
-    // Create trip record
-    var tripRef = MastDB.trips.push(user.uid);
+    // Create trip record — see comment on the active-trip path above; the
+    // Firestore adapter's push(uid) call writes undefined, so allocate a key
+    // up front and use .set(uid, id, data).
+    var tripId = MastDB.newKey('trips/' + user.uid);
     var tripData = {
-      tripId: tripRef.key,
+      tripId: tripId,
       driverId: user.uid,
       driverName: user.displayName || user.email || 'Unknown',
       status: 'completed',
@@ -1745,7 +1751,7 @@
     };
 
     try {
-      await tripRef.set(tripData);
+      await MastDB.trips.set(user.uid, tripId, tripData);
 
       // Add destination to tripLocations if new
       var destSlug = destValue.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
@@ -1760,7 +1766,7 @@
 
       // Track this leg
       retroModalData.legs.push({
-        tripId: tripRef.key,
+        tripId: tripId,
         origin: origin,
         destination: destination,
         miles: totalMiles,
@@ -1768,7 +1774,7 @@
         purpose: purpose
       });
 
-      writeAudit('create', 'trips', tripRef.key);
+      writeAudit('create', 'trips', tripId);
       showToast('Leg recorded — ' + totalMiles.toFixed(1) + ' mi · $' + deductible.toFixed(2));
 
       // Ask about more legs
