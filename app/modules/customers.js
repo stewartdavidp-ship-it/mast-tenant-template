@@ -590,9 +590,48 @@
 
     var filtered = getFilteredCustomers();
 
+    // W3 follow-up — defensive fallback. The W3 final verifier reported
+    // `MastCustomers.listCustomers()` returning 83 customers while the rendered
+    // table held zero <tr>. That can only happen via the early-return path
+    // below — meaning getFilteredCustomers excluded everything. When the user
+    // hasn't actually set any filter (no search text, no source/tag/date/spend
+    // selection, no URL-driven filter), the chain shouldn't be dropping
+    // everyone — recover by showing all non-merged customers and surface a
+    // console warning. When user-driven filters ARE active, the empty state
+    // now includes a "Clear filters" button so the user is never stuck.
+    var fActSnap = readActiveFilters();
+    var urlActiveSnap = getCustomersUrlFilters().hasAny;
+    var anyUserFilterSnap = !!(
+      fActSnap.search ||
+      (fActSnap.source && fActSnap.source !== 'all') ||
+      fActSnap.tag ||
+      fActSnap.lastOrderBefore ||
+      fActSnap.minSpendDollars
+    );
+    if (filtered.length === 0 && customersData.length > 0) {
+      var rawNonMerged = customersData.filter(function(c) { return c && c.status !== 'merged'; });
+      if (rawNonMerged.length > 0 && !anyUserFilterSnap && !urlActiveSnap) {
+        console.warn('[customers] filter chain returned 0 despite ' + rawNonMerged.length + ' non-merged customers; falling back to raw list. Active filters: ' + JSON.stringify(fActSnap));
+        filtered = rawNonMerged;
+      }
+    }
+
     if (filtered.length === 0) {
-      wrap.innerHTML = '<div style="text-align:center;padding:40px 20px;color:var(--warm-gray);">No customers match your filters.</div>';
-      return;
+      if (anyUserFilterSnap || urlActiveSnap) {
+        wrap.innerHTML = '<div style="text-align:center;padding:40px 20px;color:var(--warm-gray);">No customers match your filters. ' +
+          '<button class="btn btn-secondary btn-small" onclick="clearCustomersFilter()" style="margin-left:8px;">Clear filters</button>' +
+        '</div>';
+      } else if (customersData.length === 0) {
+        wrap.innerHTML = renderEmptyState();
+      } else {
+        // Defensive: customersData has rows but nothing was visible AND we have
+        // no obvious filter pressure. Show every non-merged customer rather
+        // than leave the user stuck.
+        filtered = customersData.filter(function(c) { return c && c.status !== 'merged'; });
+        if (filtered.length === 0) { wrap.innerHTML = renderEmptyState(); return; }
+        // fall through to the normal table render below
+      }
+      if (filtered.length === 0) return;
     }
 
     var rows = filtered.map(function(c) {
