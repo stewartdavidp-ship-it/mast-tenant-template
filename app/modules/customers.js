@@ -55,6 +55,9 @@
   var currentSegmentId = null;     // active segment id (built-in or saved)
   var customersLoaded = false;
   var customersBackfillRunning = false; // Phase 6.1 — guards the backfill button
+  // W2d follow-up — email→accountId derived from admin/wholesaleAuthorized,
+  // used to compute isWholesale at render time without a customer-schema migration.
+  var wholesaleEmailMap = {};
   var currentView = 'list'; // list | detail | duplicates
   var selectedCustomerId = null;
   var detailTab = 'overview'; // overview | orders | contacts | classes | interactions | wallet
@@ -88,6 +91,12 @@
     { value: 'account',     label: 'Account' },
     { value: 'manual',      label: 'Manual' },
     { value: 'import',      label: 'Import' }
+  ];
+
+  var WHOLESALE_OPTIONS = [
+    { value: 'all',       label: 'All customers' },
+    { value: 'retail',    label: 'Retail only' },
+    { value: 'wholesale', label: 'Wholesale only' }
   ];
 
   var SORT_OPTIONS = [
@@ -152,7 +161,10 @@
       var results = await Promise.all([
         MastDB.query('admin/customers').orderByChild('updatedAt').limitToLast(500).once('value'),
         MastDB.query('admin/customerDuplicates').orderByChild('detectedAt').limitToLast(50).once('value'),
-        MastDB.get('admin/customerSegments').catch(function() { return { val: function() { return null; } }; })
+        MastDB.get('admin/customerSegments').catch(function() { return { val: function() { return null; } }; }),
+        // W2d — best-effort: missing/empty wholesaleAuthorized just means the
+        // wholesale filter shows zero rows, never blocks customers loading.
+        MastDB.get('admin/wholesaleAuthorized').catch(function() { return null; })
       ]);
       var cVal = results[0].val() || {};
       customersData = Object.values(cVal);
@@ -165,6 +177,19 @@
       var sVal = (results[2] && results[2].val && results[2].val()) || {};
       segmentsData = Object.entries(sVal).map(function(e) {
         var v = e[1] || {}; v.id = e[0]; return v;
+      });
+
+      // W2d — build email→accountId map for the Retail/Wholesale filter. Key
+      // is the Firebase-escaped form (email with dots replaced by commas);
+      // wsKeyToEmail (`,`→`.`) is the inverse used elsewhere in wholesale.js.
+      var wsVal = (results[3] && results[3].val && results[3].val()) || (results[3] || {});
+      wholesaleEmailMap = {};
+      Object.keys(wsVal || {}).forEach(function(k) {
+        var u = wsVal[k];
+        if (u && u.wholesaleAccountId) {
+          var email = k.replace(/,/g, '.').toLowerCase();
+          if (email) wholesaleEmailMap[email] = u.wholesaleAccountId;
+        }
       });
 
       customersLoaded = true;
@@ -354,6 +379,13 @@
     h += '<input type="text" id="customersSearch" placeholder="Search by name or email…" oninput="customersRender()" ' +
          'style="flex:1;min-width:220px;padding:9px 12px;border:1px solid var(--cream-dark);border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:DM Sans,sans-serif;font-size:0.9rem;">';
 
+    h += '<select id="customersWholesaleFilter" onchange="customersRender()" title="Filter by wholesale-account linkage" ' +
+         'style="padding:9px 12px;border:1px solid var(--cream-dark);border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:DM Sans,sans-serif;font-size:0.9rem;">';
+    WHOLESALE_OPTIONS.forEach(function(opt) {
+      h += '<option value="' + esc(opt.value) + '">' + esc(opt.label) + '</option>';
+    });
+    h += '</select>';
+
     h += '<select id="customersSourceFilter" onchange="customersRender()" ' +
          'style="padding:9px 12px;border:1px solid var(--cream-dark);border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:DM Sans,sans-serif;font-size:0.9rem;">';
     SOURCE_OPTIONS.forEach(function(opt) {
@@ -395,11 +427,27 @@
     return {
       search:           ((document.getElementById('customersSearch')           || {}).value || '').trim().toLowerCase(),
       source:           (document.getElementById('customersSourceFilter')      || {}).value || 'all',
+      wholesale:        (document.getElementById('customersWholesaleFilter')   || {}).value || 'all',
       tag:              (document.getElementById('customersTagFilter')         || {}).value || '',
       lastOrderBefore:  (document.getElementById('customersLastOrderBefore')   || {}).value || '',
       minSpendDollars:  (document.getElementById('customersMinSpend')          || {}).value || '',
       sortBy:           (document.getElementById('customersSortBy')            || {}).value || 'updatedAt'
     };
+  }
+
+  // W2d — true if any of the customer's emails appears in the authorized-users
+  // map with a non-null wholesaleAccountId. Customers without a primary email
+  // can never match wholesale.
+  function isWholesaleCustomer(c) {
+    if (!c) return false;
+    var candidates = [];
+    if (c.primaryEmail) candidates.push(c.primaryEmail);
+    if (Array.isArray(c.emails)) candidates = candidates.concat(c.emails);
+    for (var i = 0; i < candidates.length; i++) {
+      var e = (candidates[i] || '').toLowerCase().trim();
+      if (e && wholesaleEmailMap[e]) return true;
+    }
+    return false;
   }
 
   // Phase 6.1 — apply filter object to a customer record. Centralised so the
@@ -409,6 +457,9 @@
     if (c.status === 'merged') return false;
 
     if (f.source && f.source !== 'all' && c.source !== f.source) return false;
+
+    if (f.wholesale === 'wholesale' && !isWholesaleCustomer(c)) return false;
+    if (f.wholesale === 'retail'    &&  isWholesaleCustomer(c)) return false;
 
     if (f.tag) {
       var tags = c.tags || [];
@@ -1957,6 +2008,7 @@
     var f = (seg && seg.filters) || {};
 
     var src = document.getElementById('customersSourceFilter'); if (src) src.value = f.source || 'all';
+    var ws  = document.getElementById('customersWholesaleFilter'); if (ws) ws.value = f.wholesale || 'all';
     var tag = document.getElementById('customersTagFilter');    if (tag) tag.value = f.tag || '';
     var lob = document.getElementById('customersLastOrderBefore'); if (lob) lob.value = f.lastOrderBefore || '';
     var min = document.getElementById('customersMinSpend');     if (min) min.value = (typeof f.minSpendCents === 'number') ? (f.minSpendCents / 100) : '';
@@ -1970,6 +2022,7 @@
     var f = readActiveFilters();
     var snap = {};
     if (f.source && f.source !== 'all') snap.source = f.source;
+    if (f.wholesale && f.wholesale !== 'all') snap.wholesale = f.wholesale;
     if (f.tag) snap.tag = f.tag;
     if (f.lastOrderBefore) snap.lastOrderBefore = f.lastOrderBefore;
     if (f.minSpendDollars !== '' && f.minSpendDollars != null) {
@@ -2001,6 +2054,7 @@
       segmentsData.push(record);
       currentSegmentId = id;
       render();
+      try { renderTable(); } catch (_e) {}
       requestAnimationFrame(renderTable);
     } catch (e) {
       console.error('[customers] save segment failed', e);
@@ -2018,6 +2072,7 @@
       segmentsData = segmentsData.filter(function(s) { return s.id !== segId; });
       if (currentSegmentId === segId) currentSegmentId = '__all';
       render();
+      try { renderTable(); } catch (_e) {}
       requestAnimationFrame(renderTable);
       // Re-render manage modal if open
       if (document.getElementById('cmSegmentsModalBody')) manageSegments();
@@ -2040,6 +2095,7 @@
       seg.name = name;
       seg.updatedAt = now;
       render();
+      try { renderTable(); } catch (_e) {}
       requestAnimationFrame(renderTable);
       if (document.getElementById('cmSegmentsModalBody')) manageSegments();
     } catch (e) {
@@ -2106,8 +2162,8 @@
     // populated search box and an empty table for a frame or two — or
     // worse, never re-rendering if the navigateTo path no-ops because route
     // params didn't actually change.
-    ['customersSearch', 'customersSourceFilter', 'customersTagFilter',
-     'customersLastOrderBefore', 'customersMinSpend'].forEach(function(id) {
+    ['customersSearch', 'customersSourceFilter', 'customersWholesaleFilter',
+     'customersTagFilter', 'customersLastOrderBefore', 'customersMinSpend'].forEach(function(id) {
       var el = document.getElementById(id);
       if (el) el.value = '';
     });
@@ -2340,6 +2396,7 @@
       customersData = [];
       duplicatesData = [];
       segmentsData = [];
+      wholesaleEmailMap = {};
       currentSegmentId = null;
       customersLoaded = false;
       currentView = 'list';
