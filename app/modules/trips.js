@@ -1603,6 +1603,16 @@
             '</label>' +
           '</div>' +
 
+          // Miles override — when set, bypasses geocoding entirely. Fixes the
+          // W1 side-find where fake/unknown addresses returned 0 miles because
+          // both Maps API and haversine had nothing to compute against.
+          '<div style="margin-bottom:12px;">' +
+            '<label style="font-size:0.78rem;color:var(--warm-gray);display:block;margin-bottom:4px;">Miles <span style="opacity:0.7;">(optional — overrides auto-calc)</span></label>' +
+            '<input type="number" id="retroMilesOverride" min="0" step="0.1" placeholder="Leave blank to auto-calculate" ' +
+              'style="width:100%;padding:8px 10px;border:1px solid ' + border + ';border-radius:8px;font-size:0.9rem;' +
+              'background:' + inputBg + ';color:' + textColor + ';box-sizing:border-box;font-family:DM Sans,sans-serif;">' +
+          '</div>' +
+
           // Calculated miles display
           '<div id="retroMilesDisplay" style="display:none;margin-bottom:12px;padding:10px 12px;background:' + cardBg + ';border-radius:8px;font-size:0.85rem;">' +
             '<span id="retroMilesValue"></span> <span id="retroMilesSource" style="color:var(--warm-gray);font-size:0.78rem;"></span>' +
@@ -1701,11 +1711,22 @@
     var origin = resolveRetroOrigin(originKey);
     var destination = resolveRetroDestination(destValue);
 
-    // Calculate distance
-    var mileageResult = await calculateRetroactiveMileage(origin, destination);
-    var onewayMiles = mileageResult.miles;
+    // Miles override — when present and > 0, skip geocoding entirely. The
+    // override is interpreted as the one-way distance; round-trip doubling
+    // still applies so the meaning matches the auto-calc path.
+    var overrideEl = document.getElementById('retroMilesOverride');
+    var overrideRaw = overrideEl ? (overrideEl.value || '').trim() : '';
+    var overrideMiles = overrideRaw === '' ? NaN : parseFloat(overrideRaw);
+    var onewayMiles, milesSource;
+    if (!isNaN(overrideMiles) && overrideMiles > 0) {
+      onewayMiles = overrideMiles;
+      milesSource = 'manual-override';
+    } else {
+      var mileageResult = await calculateRetroactiveMileage(origin, destination);
+      onewayMiles = mileageResult.miles;
+      milesSource = mileageResult.source;
+    }
     var totalMiles = roundTrip ? onewayMiles * 2 : onewayMiles;
-    var milesSource = mileageResult.source;
 
     // Get IRS rate
     var tripYear = new Date(tripDate + 'T12:00:00').getFullYear();
