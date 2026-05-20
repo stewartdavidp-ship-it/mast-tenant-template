@@ -1782,7 +1782,13 @@
     if (view !== 'detail') selectedCustomerId = null;
     render();
     if (view === 'list') {
-      // Render the inner table after the outer markup is in the DOM
+      // W3 follow-up — clicking the in-detail "Back to Customers" button
+      // routes through here, and the previous rAF-only path could race / drop
+      // leaving #customersTableWrap empty until something else triggered a
+      // re-render. Same root cause + same fix as the setup else-branch and
+      // clearCustomersFilter: synchronous renderTable now, rAF as the
+      // defensive second pass.
+      try { renderTable(); } catch (_e) {}
       requestAnimationFrame(renderTable);
     }
   }
