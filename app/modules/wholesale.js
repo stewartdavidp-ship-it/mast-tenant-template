@@ -1036,6 +1036,7 @@ function viewWholesaleOrder(orderId) {
       '</div>' +
     '</div>' +
     '<div style="font-size:0.78rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px;">Payment: ' + esc(o.paymentMethod === 'check' ? 'Pay by Check' : 'Credit Card') + '</div>' +
+    renderWholesaleOrderAccountLink(o, orderId) +
     '<table class="data-table" style="width:100%;">' +
       '<thead><tr><th>Product</th><th style="text-align:center;">Qty</th><th style="text-align:right;">Price</th><th style="text-align:right;">Total</th></tr></thead>' +
       '<tbody>' + itemsHtml + '</tbody>' +
@@ -1051,6 +1052,52 @@ function viewWholesaleOrder(orderId) {
 
   document.getElementById('wholesaleSubContent').innerHTML = html;
 }
+
+// W2d follow-up #7 — Linked-account picker on the wholesale-tab order detail.
+// Lets the user retroactively bind an order to a wholesaleAccount so AR aging
+// and Dormant Accounts can attribute it without depending on the buyerEmail →
+// authorized-user join chain (which doesn't exist for orders pre-dating W2d).
+function renderWholesaleOrderAccountLink(o, orderId) {
+  var currentId = o.wholesaleAccountId || '';
+  var current = currentId ? (wholesaleAccountsData[currentId] || null) : null;
+  var currentLabel = current ? current.name : (currentId ? '(account removed)' : 'Not linked');
+  var html = '<div style="margin-bottom:16px;padding:12px;border:1px solid #e8e0d4;border-radius:6px;background:#fafaf7;">';
+  html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">';
+  html += '<div>';
+  html += '<div style="font-size:0.78rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.08em;">Linked account</div>';
+  html += '<div style="font-size:0.9rem;margin-top:2px;color:' + (currentId ? 'var(--teal)' : 'var(--warm-gray)') + ';">' + esc(currentLabel) + '</div>';
+  html += '</div>';
+  // Picker — Object.values sorted by name for a stable list.
+  var accounts = Object.keys(wholesaleAccountsData).map(function(k) {
+    var v = wholesaleAccountsData[k] || {}; v._key = k; return v;
+  }).sort(function(a, b) { return (a.name || '').localeCompare(b.name || ''); });
+  if (accounts.length === 0) {
+    html += '<div style="font-size:0.78rem;color:var(--warm-gray);">No wholesale accounts yet — create one from the Accounts tab.</div>';
+  } else {
+    html += '<select onchange="setWholesaleOrderAccount(\'' + esc(orderId) + '\', this.value)" style="padding:6px 10px;border:1px solid #ccc;border-radius:4px;font-size:0.85rem;min-width:200px;">';
+    html += '<option value=""' + (currentId ? '' : ' selected') + '>— Not linked —</option>';
+    accounts.forEach(function(a) {
+      var sel = (a._key === currentId) ? ' selected' : '';
+      html += '<option value="' + esc(a._key) + '"' + sel + '>' + esc(a.name || a._key) + '</option>';
+    });
+    html += '</select>';
+  }
+  html += '</div></div>';
+  return html;
+}
+
+async function setWholesaleOrderAccount(orderId, accountId) {
+  var update = { wholesaleAccountId: accountId || null, updatedAt: new Date().toISOString() };
+  try {
+    await MastDB.orders.update(orderId, update);
+    if (wholesaleOrdersData[orderId]) wholesaleOrdersData[orderId].wholesaleAccountId = accountId || null;
+    showToast(accountId ? 'Account linked' : 'Account unlinked');
+    viewWholesaleOrder(orderId);
+  } catch (e) {
+    showToast('Link failed: ' + (e && e.message), true);
+  }
+}
+window.setWholesaleOrderAccount = setWholesaleOrderAccount;
 
 function renderWholesaleInvoiceSection(o, orderId) {
   var hasInvoice = !!o.invoiceNumber;
