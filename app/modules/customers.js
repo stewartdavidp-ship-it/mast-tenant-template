@@ -2094,7 +2094,24 @@
     var next = {};
     var DROP = { tag: 1, source: 1, dateFrom: 1, dateTo: 1, customerIds: 1 };
     Object.keys(p).forEach(function(k) { if (!DROP[k]) next[k] = p[k]; });
+    // Explicitly reset the form filters so the re-render reflects a truly
+    // clean state. Without this, the existing input values can briefly persist
+    // between the click and the re-render, leaving the user staring at a
+    // populated search box and an empty table for a frame or two — or
+    // worse, never re-rendering if the navigateTo path no-ops because route
+    // params didn't actually change.
+    ['customersSearch', 'customersSourceFilter', 'customersTagFilter',
+     'customersLastOrderBefore', 'customersMinSpend'].forEach(function(id) {
+      var el = document.getElementById(id);
+      if (el) el.value = '';
+    });
     if (typeof navigateTo === 'function') navigateTo('customers', next);
+    // Belt-and-suspenders synchronous re-render — the navigateTo→setup→rAF
+    // chain can race, and Clear filters that doesn't immediately repopulate
+    // is exactly the bug the W3 verifier reported.
+    if (typeof renderTable === 'function') {
+      try { renderTable(); } catch (_e) {}
+    }
   };
   window.customersSwitchDetailTab = switchDetailTab;
   window.customersOpenOrder = openOrderFromCustomer;
@@ -2301,6 +2318,13 @@
             currentView = 'list';
             selectedCustomerId = null;
             render();
+            // W3 follow-up — the prior code relied solely on requestAnimationFrame
+            // to populate the table, but the rAF can race / drop on mid-session
+            // re-entry (sidebar click after a prior visit), leaving #customersTableWrap
+            // empty until something else triggers a re-render. Run renderTable
+            // synchronously NOW; keep the rAF as a defensive second pass for
+            // any layout-dependent measurements.
+            try { renderTable(); } catch (_e) {}
             requestAnimationFrame(renderTable);
           }
         }
