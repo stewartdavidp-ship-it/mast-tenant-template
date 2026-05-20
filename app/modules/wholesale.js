@@ -10,7 +10,7 @@ var wholesaleAuthorizedData = {};
 var wholesaleRequestsData = {};
 // W2a — accounts is the canonical commercial-terms record per buyer.
 var wholesaleAccountsData = {};
-var wholesaleSubView = 'orders'; // accounts | orders | users | requests
+var wholesaleSubView = 'orders'; // accounts | orders | users | requests | dormant
 var wholesaleQRLib = null; // lazy-loaded QRCode library
 
 // WHOLESALE_SEED and WHOLESALE_COLOR_UPDATES removed in unified pricing model Phase 4.
@@ -55,7 +55,7 @@ function renderWholesaleAdmin() {
   // URL-driven sub-tab forcing (MCP admin links). #wholesale?subView=accounts|orders|users|requests
   var rp = (typeof window.getRouteParams === 'function') ? window.getRouteParams() : {};
   var urlSubView = (rp && typeof rp.subView === 'string') ? rp.subView : '';
-  if (urlSubView && (urlSubView === 'accounts' || urlSubView === 'orders' || urlSubView === 'users' || urlSubView === 'requests')) {
+  if (urlSubView && (urlSubView === 'accounts' || urlSubView === 'orders' || urlSubView === 'users' || urlSubView === 'requests' || urlSubView === 'dormant')) {
     wholesaleSubView = urlSubView;
   }
 
@@ -74,6 +74,7 @@ function renderWholesaleAdmin() {
       '<div class="view-tab' + (wholesaleSubView === 'orders' ? ' active' : '') + '" onclick="switchWholesaleView(\'orders\')">Orders</div>' +
       '<div class="view-tab' + (wholesaleSubView === 'users' ? ' active' : '') + '" onclick="switchWholesaleView(\'users\')">Authorized Users</div>' +
       '<div class="view-tab' + (wholesaleSubView === 'requests' ? ' active' : '') + '" onclick="switchWholesaleView(\'requests\')">Access Requests <span id="wsRequestBadge"></span></div>' +
+      '<div class="view-tab' + (wholesaleSubView === 'dormant' ? ' active' : '') + '" onclick="switchWholesaleView(\'dormant\')">Dormant</div>' +
     '</div>' +
     '<div id="wholesaleSubContent"></div>' +
   '</div>';
@@ -90,6 +91,7 @@ function renderWholesaleAdmin() {
   else if (wholesaleSubView === 'users') renderWholesaleUsers();
   else if (wholesaleSubView === 'requests') renderWholesaleRequests();
   else if (wholesaleSubView === 'orders') renderWholesaleOrders();
+  else if (wholesaleSubView === 'dormant') renderWholesaleDormant();
 }
 
 function switchWholesaleView(view) {
@@ -173,6 +175,10 @@ function renderWholesaleUsers() {
       html += '<div style="display:flex;flex-direction:column;gap:8px;">';
       users.forEach(function(u) {
         var isActive = u.active !== false;
+        // W2d — linked wholesale account display (resolved from wholesaleAccountsData
+        // when available; falls back to "—" when missing or the cache hasn't loaded).
+        var linkedAccount = u.wholesaleAccountId ? (wholesaleAccountsData[u.wholesaleAccountId] || null) : null;
+        var linkedAccountLabel = linkedAccount ? linkedAccount.name : (u.wholesaleAccountId ? '(account removed)' : 'No linked account');
         html += '<div style="background:#fff;border:1px solid #e8e0d4;border-radius:8px;padding:14px 16px;display:flex;justify-content:space-between;align-items:center;' + (!isActive ? 'opacity:0.5;' : '') + '">' +
           '<div>' +
             '<div style="font-weight:500;font-size:0.9rem;">' + esc(u._email) + '</div>' +
@@ -181,9 +187,11 @@ function renderWholesaleUsers() {
               'Added ' + formatDate(u.createdAt) +
               (u.approvedFrom ? ' &middot; From request' : '') +
             '</div>' +
+            '<div style="font-size:0.78rem;color:' + (u.wholesaleAccountId ? 'var(--teal)' : 'var(--warm-gray)') + ';margin-top:4px;">' + esc(linkedAccountLabel) + '</div>' +
           '</div>' +
           '<div style="display:flex;gap:8px;align-items:center;">' +
             '<span style="font-size:0.72rem;padding:3px 8px;border-radius:4px;' + (isActive ? 'background:rgba(45,125,70,0.15);color:#2D7D46;' : 'background:rgba(220,53,69,0.15);color:var(--danger);') + '">' + (isActive ? 'Active' : 'Revoked') + '</span>' +
+            (isActive ? '<button onclick="openWholesaleUserModal(\'' + esc(u._key) + '\')" style="background:none;border:1px solid var(--teal);color:var(--teal);padding:4px 10px;border-radius:4px;cursor:pointer;font-size:0.72rem;">' + (u.wholesaleAccountId ? 'Edit' : 'Link') + '</button>' : '') +
             (isActive ? '<button onclick="revokeWholesaleUser(\'' + esc(u._key) + '\')" style="background:none;border:1px solid var(--danger);color:var(--danger);padding:4px 10px;border-radius:4px;cursor:pointer;font-size:0.72rem;">Revoke</button>' : '') +
           '</div>' +
         '</div>';
@@ -195,25 +203,93 @@ function renderWholesaleUsers() {
   });
 }
 
-async function addWholesaleUser() {
-  var email = await mastPrompt('Enter the buyer\'s Google email address:', { title: 'Add Wholesale User' });
-  if (!email) return;
-  email = email.trim().toLowerCase();
-  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { showToast('Invalid email address', true); return; }
+// W2d — replaced primitive mastPrompt-based addWholesaleUser with a real modal
+// that includes a wholesaleAccount picker, so a buyer's authorization can be
+// linked to the commercial-terms record at the moment of grant (or later via
+// the same modal in edit mode). The legacy addWholesaleUser export is kept
+// pointing at the new flow for backward compat.
+async function openWholesaleUserModal(existingEmailKey) {
+  var isEdit = !!existingEmailKey;
+  var existing = isEdit ? (wholesaleAuthorizedData[existingEmailKey] || {}) : {};
+  var existingEmail = isEdit ? wsKeyToEmail(existingEmailKey) : '';
 
-  var key = wsEmailToKey(email);
-  var data = {
-    active: true,
-    createdAt: new Date().toISOString()
-  };
+  // Ensure wholesaleAccountsData is fresh — picker lists from it.
+  try {
+    var snap = await MastDB.wholesaleAccounts.list(200);
+    var val = (snap && typeof snap.val === 'function') ? snap.val() : snap;
+    wholesaleAccountsData = val || {};
+  } catch (_e) {}
 
-  MastDB.set('admin/wholesaleAuthorized/' + key, data).then(function() {
-    showToast('Wholesale access granted to ' + email);
-    renderWholesaleUsers();
-  }).catch(function(err) {
-    showToast('Error: ' + err.message, true);
+  var accountOptions = '<option value="">— None / unlinked —</option>';
+  Object.keys(wholesaleAccountsData).forEach(function(id) {
+    var a = wholesaleAccountsData[id];
+    var selected = existing.wholesaleAccountId === id ? ' selected' : '';
+    accountOptions += '<option value="' + esc(id) + '"' + selected + '>' + esc(a.name || '(unnamed)') + '</option>';
   });
+
+  var overlay = document.createElement('div');
+  overlay.id = 'wsUserModal';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:10001;display:flex;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto;';
+  overlay.innerHTML =
+    '<div style="background:#fff;border-radius:12px;padding:24px;width:100%;max-width:480px;margin-top:40px;color:var(--charcoal);">' +
+      '<h3 style="margin:0 0 16px;font-size:1.15rem;">' + (isEdit ? 'Edit Wholesale User' : 'Add Wholesale User') + '</h3>' +
+      '<form id="wsUserForm" onsubmit="event.preventDefault();saveWholesaleUserLink(' + (isEdit ? '\'' + esc(existingEmailKey) + '\'' : 'null') + ');return false;">' +
+        '<div style="margin-bottom:14px;"><label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Buyer email *</label>' +
+          '<input id="wsu_email" required value="' + esc(existingEmail) + '"' + (isEdit ? ' disabled style="background:#f5f5f5;color:#666;"' : '') + ' placeholder="buyer@example.com" type="email" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;"></div>' +
+        '<div style="margin-bottom:14px;"><label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Linked wholesale account</label>' +
+          '<select id="wsu_accountId" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;background:#fff;">' + accountOptions + '</select>' +
+          '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:4px;">' +
+            (Object.keys(wholesaleAccountsData).length === 0
+              ? 'No accounts yet — create one on the Accounts tab to enable linking.'
+              : 'Links this buyer to the commercial-terms record (NET terms, credit, MOQ, etc).') +
+          '</div></div>' +
+        '<div style="display:flex;gap:8px;justify-content:flex-end;">' +
+          '<button type="button" onclick="closeWholesaleUserModal()" class="btn-small" style="background:#fff;color:var(--charcoal);border:1px solid #ddd;padding:8px 16px;border-radius:4px;cursor:pointer;font-size:0.85rem;">Cancel</button>' +
+          '<button type="submit" class="btn-small" style="background:var(--teal);color:#fff;border:none;padding:8px 18px;border-radius:4px;cursor:pointer;font-size:0.85rem;">' + (isEdit ? 'Save' : 'Add user') + '</button>' +
+        '</div>' +
+      '</form>' +
+    '</div>';
+  overlay.addEventListener('click', function(e) { if (e.target === overlay) closeWholesaleUserModal(); });
+  document.body.appendChild(overlay);
+  setTimeout(function() { var f = document.getElementById(isEdit ? 'wsu_accountId' : 'wsu_email'); if (f) f.focus(); }, 30);
 }
+
+function closeWholesaleUserModal() {
+  var el = document.getElementById('wsUserModal');
+  if (el) el.parentNode.removeChild(el);
+}
+
+async function saveWholesaleUserLink(existingEmailKey) {
+  var isEdit = !!existingEmailKey;
+  var email = isEdit ? wsKeyToEmail(existingEmailKey) : (document.getElementById('wsu_email').value || '').trim().toLowerCase();
+  if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { showToast('Invalid email address', true); return; }
+  var accountId = (document.getElementById('wsu_accountId').value || '').trim();
+  var key = wsEmailToKey(email);
+  try {
+    if (isEdit) {
+      // Use update so we don't clobber other fields (createdAt, approvedFrom, etc).
+      await MastDB.update('admin/wholesaleAuthorized/' + key, {
+        wholesaleAccountId: accountId || null,
+        updatedAt: new Date().toISOString()
+      });
+      showToast('User updated');
+    } else {
+      await MastDB.set('admin/wholesaleAuthorized/' + key, {
+        active: true,
+        createdAt: new Date().toISOString(),
+        wholesaleAccountId: accountId || null
+      });
+      showToast('Wholesale access granted to ' + email);
+    }
+    closeWholesaleUserModal();
+    renderWholesaleUsers();
+  } catch (err) {
+    showToast('Error: ' + (err.message || String(err)), true);
+  }
+}
+
+// Backward-compat — older onclick handlers still reference addWholesaleUser.
+async function addWholesaleUser() { return openWholesaleUserModal(null); }
 
 async function revokeWholesaleUser(key) {
   var email = wsKeyToEmail(key);
@@ -392,6 +468,125 @@ async function deleteWholesaleAccount(id) {
   } catch (err) {
     showToast('Error: ' + (err.message || String(err)), true);
   }
+}
+
+// ── Dormant accounts (W2e) ──
+// Wholesale orders today carry a buyerEmail but no direct wholesaleAccountId.
+// We aggregate dormancy by walking authorized users (which DO carry the link)
+// and matching wholesale orders by buyerEmail. Accounts with no linked users
+// or no orders yet appear as "No orders yet" — useful because they flag
+// accounts you've signed up but never sold to.
+function renderWholesaleDormant() {
+  var container = document.getElementById('wholesaleSubContent');
+  if (!container) return;
+  container.innerHTML = '<div style="color:var(--warm-gray);padding:40px 0;text-align:center;">Loading dormant report...</div>';
+
+  Promise.all([
+    MastDB.wholesaleAccounts.list(200).then(function(s) { return (s && typeof s.val === 'function') ? s.val() : s; }),
+    MastDB.get('admin/wholesaleAuthorized'),
+    MastDB.query('admin/orders').orderByChild('type').equalTo('wholesale').limitToLast(500).once()
+  ]).then(function(results) {
+    var accounts = results[0] || {};
+    var users = results[1] || {};
+    var ordersRaw = results[2];
+    var orders = (ordersRaw && typeof ordersRaw.val === 'function') ? (ordersRaw.val() || {}) : (ordersRaw || {});
+    wholesaleAccountsData = accounts;
+
+    // Build email → accountId via authorized users
+    var emailToAccount = {};
+    Object.keys(users).forEach(function(k) {
+      var u = users[k];
+      if (u && u.wholesaleAccountId) {
+        var email = wsKeyToEmail(k);
+        if (email) emailToAccount[email.toLowerCase()] = u.wholesaleAccountId;
+      }
+    });
+
+    // Walk orders → account → track lastOrderAt + orderCount
+    var stats = {}; // accountId → { lastOrderAt: ISO, orderCount: N, lastOrderId }
+    Object.keys(orders).forEach(function(oid) {
+      var o = orders[oid];
+      if (!o) return;
+      var email = (o.buyerEmail || o.email || '').toLowerCase();
+      var accountId = emailToAccount[email];
+      if (!accountId) return;
+      var when = o.placedAt || o.createdAt || o.updatedAt;
+      if (!when) return;
+      if (!stats[accountId]) stats[accountId] = { lastOrderAt: when, orderCount: 1, lastOrderId: oid };
+      else {
+        stats[accountId].orderCount += 1;
+        if (when > stats[accountId].lastOrderAt) {
+          stats[accountId].lastOrderAt = when;
+          stats[accountId].lastOrderId = oid;
+        }
+      }
+    });
+
+    // Build rows
+    var nowMs = Date.now();
+    var rows = Object.keys(accounts).map(function(id) {
+      var a = accounts[id];
+      var s = stats[id] || { lastOrderAt: null, orderCount: 0 };
+      var daysSince = s.lastOrderAt ? Math.floor((nowMs - new Date(s.lastOrderAt).getTime()) / 86400000) : null;
+      return {
+        id: id,
+        account: a,
+        lastOrderAt: s.lastOrderAt,
+        daysSince: daysSince,
+        orderCount: s.orderCount,
+        status: a.status || 'active'
+      };
+    });
+
+    // Sort: never-ordered first (most concerning for an account you set up), then by daysSince desc.
+    rows.sort(function(a, b) {
+      if (a.lastOrderAt === null && b.lastOrderAt !== null) return -1;
+      if (a.lastOrderAt !== null && b.lastOrderAt === null) return 1;
+      if (a.lastOrderAt === null) return 0;
+      return b.daysSince - a.daysSince;
+    });
+
+    var html = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">' +
+      '<div style="font-size:0.85rem;color:var(--warm-gray);">' + rows.length + ' wholesale account' + (rows.length !== 1 ? 's' : '') + ' — sorted by days since last order</div>' +
+      '<button class="btn-small" onclick="renderWholesaleDormant()" style="background:transparent;border:1px solid var(--teal);color:var(--teal);padding:8px 14px;border-radius:4px;cursor:pointer;font-size:0.78rem;">Refresh</button>' +
+    '</div>';
+
+    if (rows.length === 0) {
+      html += '<div style="text-align:center;padding:60px 20px;color:var(--warm-gray);">' +
+        '<div style="font-size:1.6rem;margin-bottom:12px;">&#128203;</div>' +
+        '<h3 style="font-weight:600;margin-bottom:8px;">No accounts yet</h3>' +
+        '<p style="font-size:0.85rem;max-width:420px;margin:0 auto;">Once you create wholesale accounts and link authorized users to them, dormant accounts will surface here as days-since-last-order grows.</p>' +
+      '</div>';
+    } else {
+      var anyLinked = rows.some(function(r) { return r.lastOrderAt !== null; });
+      if (!anyLinked) {
+        html += '<div style="background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.35);color:#92400e;padding:10px 14px;margin-bottom:12px;border-radius:6px;font-size:0.85rem;">' +
+          'No orders are linked to accounts yet. Open Authorized Users → click Link on each row to attach a buyer email to its account; orders from that buyer then attribute to the account here.' +
+        '</div>';
+      }
+      html += '<div style="display:flex;flex-direction:column;gap:8px;">';
+      rows.forEach(function(r) {
+        var dormantBadge;
+        if (r.lastOrderAt === null) dormantBadge = { color: '#9ca3af', label: 'No orders yet' };
+        else if (r.daysSince >= 84) dormantBadge = { color: '#dc2626', label: r.daysSince + ' days' };
+        else if (r.daysSince >= 56) dormantBadge = { color: '#F59E0B', label: r.daysSince + ' days' };
+        else dormantBadge = { color: '#16a34a', label: r.daysSince + ' days' };
+        var lastOrderStr = r.lastOrderAt ? new Date(r.lastOrderAt).toLocaleDateString() : '—';
+        html += '<div onclick="editWholesaleAccount(\'' + esc(r.id) + '\')" style="background:#fff;border:1px solid var(--cream-dark,#e8e0d4);border-radius:8px;padding:14px 16px;cursor:pointer;display:flex;align-items:center;gap:16px;">';
+        html += '<div style="flex:1;min-width:0;">';
+        html += '<div style="font-weight:600;font-size:0.9rem;color:var(--charcoal);">' + esc(r.account.name || '(unnamed)') + '</div>';
+        html += '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:2px;">' + r.orderCount + ' order' + (r.orderCount !== 1 ? 's' : '') + ' &middot; Last: ' + esc(lastOrderStr) + '</div>';
+        html += '</div>';
+        html += '<span style="font-size:0.72rem;font-weight:600;padding:3px 10px;border-radius:10px;background:' + dormantBadge.color + '22;color:' + dormantBadge.color + ';border:1px solid ' + dormantBadge.color + '55;">' + esc(dormantBadge.label) + '</span>';
+        html += '</div>';
+      });
+      html += '</div>';
+    }
+
+    container.innerHTML = html;
+  }).catch(function(err) {
+    container.innerHTML = '<div style="color:var(--danger);padding:20px;">Error loading dormant report: ' + esc(err.message || String(err)) + '</div>';
+  });
 }
 
 async function saveWholesaleAccount(existingId) {
@@ -970,6 +1165,12 @@ window.deleteWholesaleAccount = deleteWholesaleAccount;
 window.saveWholesaleAccount = saveWholesaleAccount;
 // W2c — wholesale-side invoice action bridge
 window.generateInvoiceForWholesale = generateInvoiceForWholesale;
+// W2d — authorized-user → account linkage
+window.openWholesaleUserModal = openWholesaleUserModal;
+window.closeWholesaleUserModal = closeWholesaleUserModal;
+window.saveWholesaleUserLink = saveWholesaleUserLink;
+// W2e — dormant accounts view
+window.renderWholesaleDormant = renderWholesaleDormant;
 // renderWholesaleSetup and runWholesaleSeed removed — wholesale products now managed via product admin
 window.uploadWholesalePDF = uploadWholesalePDF;
 window.copyQRImage = copyQRImage;
