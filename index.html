@@ -10,6 +10,10 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+<!-- Pod-specific runtime config — must load BEFORE any inline reader of
+     window.MAST_POD_PLATFORM_PROJECT. Substituted per-pod at deploy time
+     (see scripts/deploy-pod.sh / pod-config.js). -->
+<script src="pod-config.js"></script>
 <!-- Early tenant prefetch — starts RTDB fetch immediately during HTML parsing,
      before any external scripts download. storefront-tenant.js consumes the result. -->
 <script>

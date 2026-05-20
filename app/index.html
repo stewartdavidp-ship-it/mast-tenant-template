@@ -24,6 +24,10 @@
   <script src="../shared/brand-sync.js?v=1"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <!-- Pod-specific runtime config — sets window.MAST_POD_PLATFORM_PROJECT so
+       storefront-tenant.js routes registry lookups to the correct pod's
+       Firestore. Substituted per pod at deploy time. -->
+  <script src="../pod-config.js"></script>
   <script src="../storefront-tenant.js?v=1773887711"></script>
   <script src="../tenant-brand.js?v=2"></script>
   <style>
