@@ -15267,7 +15267,47 @@ function navigateTo(route, params) {
   closeMobileMenu();
   // Testing Mode event
   emitTestingEvent('navigate', { route: route });
+  // Telemetry — record admin navigation so the platform /usage rollup
+  // can attribute module usage per tenant. Fire-and-forget; never block
+  // navigation on a telemetry write. Schema matches cart.js trackEvent so
+  // the platformAdminApi usage_rollup CF can read both via the same
+  // collectionGroup("hits") fan-out.
+  try { trackAdminEvent('nav', route); } catch (_e) { /* silent */ }
 }
+
+// ── Admin app telemetry ──
+//
+// Writes to tenants/{tenantId}/analytics/hits (same Firestore path as
+// cart.js trackEvent on the storefront). Hit shape:
+//   { t: 'nav'|'ev', p: <route>, ts: <epoch_ms>, d: 'YYYY-MM-DD',
+//     a: '<action>', u: <admin_user_uid_short> }
+//
+// `u` is a short prefix of the operator's Firebase Auth uid (NOT email)
+// so the rollup can count unique-operators per module without storing
+// PII. The platform /usage page at admin.runmast.com aggregates these
+// platform-wide.
+function trackAdminEvent(eventType, action) {
+  if (typeof MastDB === 'undefined') return;
+  if (!action) return;
+  try {
+    var now = new Date();
+    var d = now.getFullYear() + '-' +
+      String(now.getMonth() + 1).padStart(2, '0') + '-' +
+      String(now.getDate()).padStart(2, '0');
+    var page = String(action).slice(0, 30);
+    var uid = (auth && auth.currentUser) ? String(auth.currentUser.uid).slice(0, 12) : null;
+    var hit = {
+      t: eventType === 'nav' ? 'nav' : 'ev',
+      p: page,
+      ts: Date.now(),
+      d: d,
+      a: page,
+    };
+    if (uid) hit.u = uid;
+    MastDB.push('analytics/hits', hit).catch(function () { /* silent */ });
+  } catch (_e) { /* silent */ }
+}
+window.trackAdminEvent = trackAdminEvent;
 
 function applyRoute(route) {
   var config = ROUTE_MAP[route];
