@@ -2871,7 +2871,11 @@
     var pieceName = c.sourcePieceName || (product ? product.name : 'Unknown');
     var dateStr = c.createdAt ? new Date(c.createdAt).toLocaleString() : '—';
 
-    var statusOptions = ['new', 'in-discussion', 'accepted', 'declined', 'built', 'completed'];
+    // W3c — expanded status enum. Original values stay (back-compat for existing
+    // rows); new values capture the full custom-order pipeline so a vendor doesn't
+    // have to flatten "deposit paid" / "in fabrication" / "cold-shop" / "balance
+    // invoiced" / "shipped" into one ambiguous "built" or "completed."
+    var statusOptions = ['new', 'in-discussion', 'quoted', 'accepted', 'deposit-paid', 'design-locked', 'in-fabrication', 'cold-shop', 'balance-invoiced', 'shipped', 'built', 'delivered', 'followed-up', 'completed', 'declined', 'canceled'];
     var statusSelect = '<select id="commStatusSelect" onchange="updateCommissionStatus(\'' + esc(commId) + '\', this.value)" style="font-size:0.85rem;padding:6px 10px;border-radius:6px;border:1px solid var(--cream-dark);">';
     statusOptions.forEach(function(s) {
       var label = s.replace(/-/g, ' ').replace(/\b\w/g, function(l) { return l.toUpperCase(); });
@@ -2974,7 +2978,7 @@
         '</div>';
     }
 
-    var html = '<button class="detail-back" onclick="closeCommissionDetail()">&larr; Back to Commissions</button>' +
+    var html = '<button class="detail-back" onclick="closeCommissionDetail()">&larr; Back to Custom Orders</button>' +
     '<div style="background:var(--cream,#f5f0e8);border-radius:8px;padding:24px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">' +
       '<div style="display:flex;gap:16px;align-items:flex-start;margin-bottom:20px;">' +
         (imgSrc ? '<img src="' + esc(imgSrc) + '" style="width:80px;height:80px;border-radius:8px;object-fit:cover;">' : '') +

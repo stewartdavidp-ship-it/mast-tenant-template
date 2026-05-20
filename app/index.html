@@ -5562,7 +5562,7 @@
       <div class="sidebar-items">
         <div class="sidebar-item" data-route="pos" onclick="navigateTo('pos')">Point of Sale</div>
         <div class="sidebar-item" data-route="orders" onclick="navigateTo('orders')">Retail Orders <span id="sidebarOrdersBadge" class="sidebar-badge alert" style="display:none;"></span></div>
-        <div class="sidebar-item" data-route="commissions" onclick="navigateTo('commissions')">Commissions</div>
+        <div class="sidebar-item" data-route="commissions" onclick="navigateTo('commissions')">Custom Orders</div>
         <div class="sidebar-item" data-route="rma" onclick="navigateTo('rma')">Returns <span id="sidebarRmaBadge" class="sidebar-badge alert" style="display:none;"></span></div>
         <div class="sidebar-item" data-route="wholesale" onclick="navigateTo('wholesale')">Wholesale</div>
         <div class="sidebar-item" data-route="lookbooks" onclick="navigateTo('lookbooks')">Look Books</div>
@@ -5605,7 +5605,10 @@
         <div class="sidebar-item" data-route="loyalty" onclick="navigateTo('loyalty')">Loyalty</div>
         <div class="sidebar-item" data-route="membership" onclick="navigateTo('membership')">Membership</div>
         <div class="sidebar-item" data-route="promotions" onclick="navigateTo('promotions')">Sale Promotions</div>
-        <div class="sidebar-item" data-route="customers" onclick="navigateTo('customers')">Customers</div>
+        <!-- W3e — "Customers" moved out of Retention (where it sat next to Wallet /
+             Coupons / Loyalty) and into Operations alongside Contacts, since
+             a high-touch maker's "customer database" is operational, not retention-
+             flavored. Persona finding M#21. -->
       </div>
     </div>
     <!-- Shows (vendor flow + optional organizer admin) -->
@@ -5683,6 +5686,7 @@
         <div class="sidebar-item" data-route="business" onclick="navigateTo('business')">Business</div>
         <div class="sidebar-item" data-route="channels" onclick="navigateTo('channels')">Channels</div>
         <div class="sidebar-item" data-route="contacts" onclick="navigateTo('contacts')">Contacts</div>
+        <div class="sidebar-item" data-route="customers" onclick="navigateTo('customers')">Customers</div>
       </div>
     </div>
     <!-- Customer Service -->
@@ -6972,10 +6976,13 @@
       <div id="rmaDetailView" class="order-detail" style="display:none;"></div>
     </div>
 
-    <!-- Admin: Commissions Tab -->
+    <!-- Admin: Custom Orders Tab (W3d rename — internal id + route stay
+         `commissions` to preserve data path admin/commissions; UI label flipped
+         to "Custom Orders" so the word "Commissions" can later belong to the
+         sales-rep commission ledger). -->
     <div id="commissionsTab" style="display:none;">
       <div class="section-header">
-        <h2>Commissions</h2>
+        <h2>Custom Orders</h2>
         <span id="commissionsCount" style="font-size:0.85rem;color:var(--warm-gray);margin-left:8px;"></span>
       </div>
 
@@ -6984,14 +6991,26 @@
         <div style="display:flex;gap:8px;align-items:center;margin-bottom:16px;flex-wrap:wrap;">
           <select id="commissionsStatusFilter" onchange="renderCommissions()" style="font-size:0.85rem;padding:6px 10px;border-radius:6px;border:1px solid var(--cream-dark);">
             <option value="all" selected>All</option>
-            <option value="new">New</option>
+            <!-- W3c — expanded enum. Old values kept first for back-compat with
+                 existing rows; new values capture the full custom-order pipeline. -->
+            <option value="new">New / Inquiry</option>
             <option value="in-discussion">In Discussion</option>
+            <option value="quoted">Quoted</option>
             <option value="accepted">Accepted</option>
-            <option value="declined">Declined</option>
+            <option value="deposit-paid">Deposit Paid</option>
+            <option value="design-locked">Design Locked</option>
+            <option value="in-fabrication">In Fabrication</option>
+            <option value="cold-shop">Cold-Shop / Finishing</option>
+            <option value="balance-invoiced">Balance Invoiced</option>
+            <option value="shipped">Shipped</option>
             <option value="built">Built</option>
+            <option value="delivered">Delivered</option>
+            <option value="followed-up">Followed Up</option>
             <option value="completed">Completed</option>
+            <option value="declined">Declined</option>
+            <option value="canceled">Canceled</option>
           </select>
-          <button class="btn btn-primary btn-small" onclick="openNewCommissionModal()">+ New Commission</button>
+          <button class="btn btn-primary btn-small" onclick="openNewCommissionModal()">+ New Custom Order</button>
         </div>
         <div id="commissionsLoading" class="loading" style="display:none;">Loading commissions...</div>
         <div id="commissionsEmpty" class="empty-state" style="display:none;"><div class="empty-icon">&#127912;</div><p>No commission inquiries yet.</p></div>
@@ -15050,8 +15069,10 @@ var SECTION_ROUTES = {
                         'receipts', 'terms', 'pack', 'ship'],
   'marketing':         ['social', 'blog', 'newsletter', 'stories',
                         'website', 'brand', 'homepage', 'images'],
+  // W3e — 'customers' moved out of retention into operations (auto-expand logic
+  // and section-membership routing reflect the new home).
   'retention':         ['wallet', 'gift-cards', 'coupons', 'loyalty',
-                        'membership', 'promotions', 'customers'],
+                        'membership', 'promotions'],
   'events':            ['show-find', 'show-apply', 'show-prep',
                         'show-execute', 'show-history',
                         'events-shows', 'events-settings'],
@@ -15064,7 +15085,7 @@ var SECTION_ROUTES = {
                         'financials'],
   'operations':        ['trips', 'reports',
                         'advisor', 'studio', 'team', 'business',
-                        'channels', 'contacts'],
+                        'channels', 'contacts', 'customers'],
   'customer-service':  ['cs-inbox', 'cs-tickets', 'cs-surveys',
                         'cs-reviews', 'cs-faqs', 'cs-members'],
   'admin':             ['products', 'employees', 'analytics',
@@ -43963,7 +43984,7 @@ function validateRequired(fields) {
 // Route → human-readable label
 var ROUTE_LABELS = {
   'dashboard': 'Dashboard', 'schedule': 'Schedule', 'gallery': 'Gallery',
-  'pos': 'Point of Sale', 'orders': 'Orders', 'commissions': 'Commissions',
+  'pos': 'Point of Sale', 'orders': 'Orders', 'commissions': 'Custom Orders',
   'wholesale': 'Wholesale', 'galleries': 'Galleries', 'events': 'Sales Events',
   'pack': 'Pack & Ship', 'ship': 'Shipping', 'receipts': 'Receipts',
   'social': 'Social Media', 'newsletter': 'Newsletter', 'stories': 'Stories',
