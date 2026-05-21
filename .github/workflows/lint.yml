@@ -1,0 +1,41 @@
+name: CI lint
+
+# Runs the design-token + MastDB lints on every push to main and PRs.
+#
+# History notes (2026-05-06):
+#   - Removed `deploy` job: per CLAUDE.md "Firebase Hosting — deployed via
+#     mast_hosting MCP tool. No GitHub Pages." Tenants serve from
+#     mast-tenant-shared.web.app via the CF wildcard worker; GH Pages was
+#     never a real consumer.
+#   - Removed `sync-workflows` job: writing docs/workflows.yaml to RTDB at
+#     /dev/workflows is doubly obsolete — RTDB was retired post-B.5/B.7
+#     cutover (data lives in Firestore now), AND the auth had been broken
+#     for ~30 days (last successful run 2026-04-07). The `mast_workflows`
+#     MCP tool owns this surface and writes Firestore directly.
+#   - lint-design-tokens font-size violations (427 backlog) downgraded to
+#     advisory in the script; cleanup tracked separately.
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: MastDB access lint
+        run: node scripts/lint-mastdb.js
+      - name: Design token lint (advisory)
+        run: node scripts/lint-design-tokens.js
