@@ -1490,7 +1490,10 @@
       revsInWindow.forEach(function(r) {
         if (!r.productId) return;
         if (!prodMentions[r.productId]) {
-          var resolvedName = r.productName || (productsMap[r.productId] && productsMap[r.productId].name) || '(unnamed product)';
+          var prodEntry = productsMap[r.productId];
+          var resolvedName = r.productName
+            || (prodEntry && prodEntry.name)
+            || (r.productId.charAt(0) === '-' ? '(unnamed product)' : r.productId);
           prodMentions[r.productId] = { name: resolvedName, count: 0, ratings: [] };
         }
         prodMentions[r.productId].count++;
