@@ -1918,8 +1918,19 @@ window.TENANT_READY.then(function() {
 
   function showReturnModal(order) {
     var items = order.items || [];
-    var reasons = (_termsConfig && _termsConfig.allowedReasons) || ['Defective', 'Wrong item', 'Changed my mind', 'Other'];
+    // Devon B: structured reason codes. `allowedReturnReasons` (canonical, admin-edited via
+    // sales.js Terms config) is the source of truth; tolerate the legacy `allowedReasons` typo
+    // and fall back to a sensible default enum if the tenant has not configured one.
+    var DEFAULT_RETURN_REASONS = ['defective', 'wrong-item', 'not-as-described', 'changed-mind', 'damaged-in-transit', 'arrived-late', 'other'];
+    var reasons = (_termsConfig && (_termsConfig.allowedReturnReasons || _termsConfig.allowedReasons));
+    if (!reasons || !reasons.length) reasons = DEFAULT_RETURN_REASONS;
     var restockingFeePct = (_termsConfig && _termsConfig.restockingFeePercent) || 0;
+    function _reasonLabel(code) {
+      // Humanize "wrong-item" -> "Wrong item" without changing the stored code.
+      if (!code) return '';
+      var s = String(code).replace(/[-_]+/g, ' ').trim();
+      return s.charAt(0).toUpperCase() + s.slice(1);
+    }
 
     var html = '<div class="rma-modal-overlay" id="rmaModalOverlay" onclick="if(event.target===this)closeReturnModal()">';
     html += '<div class="rma-modal">';
@@ -1950,11 +1961,12 @@ window.TENANT_READY.then(function() {
     }
     html += '</div>';
 
-    // Reason
+    // Reason — Devon B: structured code (required) + free-text detail (optional)
     html += '<div class="rma-modal-field"><label>Return Reason</label>';
-    html += '<select id="rmaReason" onchange="updateReturnEstimate()">';
+    html += '<select id="rmaReason" onchange="updateReturnEstimate()" required>';
+    html += '<option value="">Select a reason…</option>';
     for (var r = 0; r < reasons.length; r++) {
-      html += '<option value="' + esc(reasons[r]) + '">' + esc(reasons[r]) + '</option>';
+      html += '<option value="' + esc(reasons[r]) + '">' + esc(_reasonLabel(reasons[r])) + '</option>';
     }
     html += '</select></div>';
 
@@ -2093,6 +2105,15 @@ window.TENANT_READY.then(function() {
     var submitBtn = document.getElementById('rmaSubmitBtn');
     if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Submitting...'; }
 
+    // Devon B: validate the structured reason code is selected
+    var reasonEl = document.getElementById('rmaReason');
+    var returnReasonCode = reasonEl ? reasonEl.value : '';
+    if (!returnReasonCode) {
+      alert('Please select a return reason.');
+      if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Submit Return Request'; }
+      return;
+    }
+
     var selectedItems = [];
     for (var i = 0; i < items.length; i++) {
       var cb = document.getElementById('rmaItem_' + i);
@@ -2102,18 +2123,20 @@ window.TENANT_READY.then(function() {
           pid: items[i].productId || items[i].pid || '',
           name: items[i].name || items[i].productName || 'Item',
           qty: availQty,
-          reason: document.getElementById('rmaReason') ? document.getElementById('rmaReason').value : ''
+          reasonCode: returnReasonCode,
+          // legacy field — Cloud Function still reads this for damage auto-approve heuristics
+          reason: returnReasonCode
         });
       }
     }
 
     if (selectedItems.length === 0) { alert('Please select at least one item.'); if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Submit Return Request'; } return; }
 
-    var reason = document.getElementById('rmaReason');
     var notes = document.getElementById('rmaNotes');
-    var returnReason = reason ? reason.value : '';
     var additionalNotes = notes ? notes.value.trim() : '';
-    if (additionalNotes) returnReason += ' - ' + additionalNotes;
+    // Free-text is kept for nuance; the structured code is the new analytic primitive.
+    // We still concatenate into `returnReason` for back-compat with the existing CF + admin display.
+    var returnReason = additionalNotes ? (returnReasonCode + ' - ' + additionalNotes) : returnReasonCode;
 
     var user = auth.currentUser;
     var orderId = order.orderId || order.id || '';
@@ -2122,7 +2145,9 @@ window.TENANT_READY.then(function() {
       orderId: orderId,
       items: selectedItems,
       uid: user ? user.uid : '',
-      returnReason: returnReason
+      returnReason: returnReason,
+      returnReasonCode: returnReasonCode,
+      returnReasonDetail: additionalNotes || ''
     }, function(result) {
       if (result && result.success) {
         var modal = document.querySelector('.rma-modal');

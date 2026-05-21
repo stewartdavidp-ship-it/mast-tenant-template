@@ -31869,6 +31869,9 @@ function loadProductCustomerSignal(pid) {
     MastDB.query('cs_tickets').limitToLast(500).once()
       .then(function(s) { return (s && s.val()) || {}; }).catch(function() { return {}; }),
     MastDB.query('orders').orderByChild('createdAt').limitToLast(2000).once()
+      .then(function(s) { return (s && s.val()) || {}; }).catch(function() { return {}; }),
+    // Devon B: parallel admin/rma read for the Returns block.
+    MastDB.query('admin/rma').limitToLast(500).once()
       .then(function(s) { return (s && s.val()) || {}; }).catch(function() { return {}; })
   ]).then(function(results) {
     var freshEl = document.getElementById('pdCustomerSignal');
@@ -31877,6 +31880,7 @@ function loadProductCustomerSignal(pid) {
     var reviewsAll = results[0];
     var ticketsAll = results[1];
     var ordersAll = results[2];
+    var rmasAll = results[3] || {};
 
     // Reviews for this SKU
     var reviews = Object.values(reviewsAll).filter(function(r) { return r && r.productId === pid; });
@@ -31989,6 +31993,53 @@ function loadProductCustomerSignal(pid) {
       html += '<div style="font-size:1.15rem;font-weight:600;margin-top:2px;">' + esc(String(totalBuyers)) + '</div>';
       html += '<div style="font-size:0.78rem;color:var(--warm-gray);">unique customers</div>';
       html += '</div>';
+
+      // Devon B: Returns block — count + rate (returns / orders-with-SKU).
+      // Walk admin/rma for items matching this pid; aggregate top reason codes.
+      var rmaReturnCount = 0;
+      var rmaReasonCounts = {};
+      Object.values(rmasAll).forEach(function(rma) {
+        if (!rma || !Array.isArray(rma.items)) return;
+        var touches = false;
+        var perItemReasons = [];
+        rma.items.forEach(function(it) {
+          if (!it || it.pid !== pid) return;
+          touches = true;
+          if (it.reasonCode) perItemReasons.push(String(it.reasonCode));
+        });
+        if (!touches) return;
+        rmaReturnCount += 1;
+        var reasonForThisRma = perItemReasons.length > 0
+          ? perItemReasons[0]
+          : (rma.returnReasonCode ? String(rma.returnReasonCode) : null);
+        if (reasonForThisRma) {
+          rmaReasonCounts[reasonForThisRma] = (rmaReasonCounts[reasonForThisRma] || 0) + 1;
+        }
+      });
+      // Denominator: non-cancelled orders containing this SKU. We already walked ordersAll above
+      // for repurchase calc but didn't keep the simple count — recompute here cheaply.
+      var ordersWithSku = 0;
+      Object.values(ordersAll).forEach(function(o) {
+        if (!o || o.status === 'cancelled' || !Array.isArray(o.items)) return;
+        if (o.items.some(function(it) { return it && it.pid === pid; })) ordersWithSku += 1;
+      });
+      var returnRate = ordersWithSku > 0 ? (rmaReturnCount / ordersWithSku) : 0;
+      var topReturnReasons = Object.keys(rmaReasonCounts)
+        .map(function(c) { return { code: c, count: rmaReasonCounts[c] }; })
+        .sort(function(a, b) { return b.count - a.count; })
+        .slice(0, 3);
+
+      html += '<div>';
+      html += '<div style="font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.04em;">Returns</div>';
+      if (rmaReturnCount > 0) {
+        html += '<div style="font-size:1.15rem;font-weight:600;margin-top:2px;">' + (returnRate * 100).toFixed(1) + '%</div>';
+        html += '<div style="font-size:0.78rem;color:var(--warm-gray);">' +
+          esc(String(rmaReturnCount)) + ' of ' + esc(String(ordersWithSku)) + ' orders</div>';
+      } else {
+        html += '<div style="font-size:0.9rem;color:var(--warm-gray-light);">—</div>';
+        html += '<div style="font-size:0.78rem;color:var(--warm-gray-light);">No returns</div>';
+      }
+      html += '</div>';
       html += '</div>';
 
       // Top co-purchased SKUs
@@ -32002,6 +32053,21 @@ function loadProductCustomerSignal(pid) {
           html += '<div style="display:flex;justify-content:space-between;align-items:center;font-size:0.85rem;padding:4px 0;">';
           html += '<span>' + esc(coName) + '</span>';
           html += '<span style="color:var(--warm-gray);font-size:0.78rem;">' + esc(String(cp.count)) + 'x</span>';
+          html += '</div>';
+        });
+        html += '</div>';
+      }
+
+      // Devon B: Top return reasons (top 3 codes by count).
+      if (topReturnReasons.length > 0) {
+        html += '<div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--cream-dark);">';
+        html += '<div style="font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:6px;">Top return reasons</div>';
+        topReturnReasons.forEach(function(rr) {
+          var label = String(rr.code).replace(/[-_]+/g, ' ');
+          label = label.charAt(0).toUpperCase() + label.slice(1);
+          html += '<div style="display:flex;justify-content:space-between;align-items:center;font-size:0.85rem;padding:4px 0;">';
+          html += '<span>' + esc(label) + '</span>';
+          html += '<span style="color:var(--warm-gray);font-size:0.78rem;">' + esc(String(rr.count)) + 'x</span>';
           html += '</div>';
         });
         html += '</div>';
