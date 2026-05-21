@@ -7629,6 +7629,16 @@
             </div>
           </div>
 
+          <div class="settings-nav-group" id="snGroup-customerSuccess">
+            <button class="settings-nav-group-header" onclick="toggleSettingsGroup('customerSuccess')">
+              <span>Customer Success</span>
+              <svg class="settings-nav-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+            </button>
+            <div class="settings-nav-items">
+              <button class="settings-nav-item" data-nav-key="costToServe" onclick="switchSettingsSubView('costToServe')">Cost-to-Serve</button>
+            </div>
+          </div>
+
           <div class="settings-nav-group" id="snGroup-legal">
             <button class="settings-nav-group-header" onclick="toggleSettingsGroup('legal')">
               <span>Legal &amp; Compliance</span>
@@ -9019,6 +9029,16 @@
         </div>
         <div id="productSettingsContent" aria-live="polite">
           <div class="loading">Loading product settings…</div>
+        </div>
+      </div>
+
+      <div id="settingsSubCostToServe" style="display:none;max-width:700px;">
+        <div style="margin-bottom:20px;">
+          <div style="font-size:1.15rem;font-weight:600;margin-bottom:4px;">Cost-to-Serve Defaults</div>
+          <p style="font-size:0.85rem;color:var(--warm-gray);margin:0;">Per-ticket and per-return costs used by the Customer Portfolio quadrant model to compute net contribution per customer. Lower these for self-serve customers; raise them for high-touch service models.</p>
+        </div>
+        <div id="costToServeContent" aria-live="polite">
+          <div class="loading">Loading cost-to-serve defaults…</div>
         </div>
       </div>
 
@@ -15839,12 +15859,13 @@ function getModuleForRouteManifest(route) {
 // ============================================================
 // Settings Sub-Tabs
 // ============================================================
-var settingsSubViews = ['general', 'payments', 'shipping', 'tax', 'compliance', 'operations', 'email', 'integrations', 'workshop', 'trips', 'storefront', 'dashboard', 'domains', 'ai', 'engagement', 'channels', 'notifications', 'pim', 'maker', 'product'];
+var settingsSubViews = ['general', 'payments', 'shipping', 'tax', 'compliance', 'operations', 'email', 'integrations', 'workshop', 'trips', 'storefront', 'dashboard', 'domains', 'ai', 'engagement', 'channels', 'notifications', 'pim', 'maker', 'product', 'costToServe'];
 
 var SETTINGS_VIEW_GROUP = {
   'general': 'storefront', 'storefront': 'storefront', 'domains': 'storefront',
   'payments': 'selling', 'shipping': 'selling', 'operations': 'selling', 'channels': 'selling',
   'product': 'products', 'pim': 'products',
+  'costToServe': 'customerSuccess',
   'tax': 'legal', 'compliance': 'legal',
   'workshop': 'studio', 'trips': 'studio', 'maker': 'studio',
   'email': 'communications', 'notifications': 'communications',
@@ -15890,6 +15911,20 @@ function switchSettingsSubView(view) {
     });
     return;
   }
+  // Guard: if leaving the cost-to-serve tab with unsaved changes, prompt.
+  if (view !== 'costToServe' && _costToServeDirty) {
+    var msg2 = 'You have unsaved changes in Cost-to-Serve defaults. Discard them?';
+    (typeof mastConfirm === 'function'
+      ? mastConfirm(msg2, { title: 'Unsaved changes', confirmLabel: 'Discard', danger: true })
+      : Promise.resolve(window.confirm(msg2))
+    ).then(function(ok) {
+      if (!ok) return;
+      _costToServeDirty = false;
+      if (window.MastDirty) MastDirty.unregister('costToServeSettings');
+      switchSettingsSubView(view);
+    });
+    return;
+  }
   // Hide all sub-views
   settingsSubViews.forEach(function(v) {
     var el = document.getElementById('settingsSub' + v.charAt(0).toUpperCase() + v.slice(1));
@@ -15926,6 +15961,7 @@ function switchSettingsSubView(view) {
   if (view === 'ai') { loadAiIntegrations(); loadAskAiConfigUI(); }
   if (view === 'subscription') renderSubscriptionSettings();
   if (view === 'product') loadProductSettings();
+  if (view === 'costToServe') loadCostToServeSettings();
   if (view === 'about') renderAboutSettings();
   if (view === 'notifications') loadNotificationsSettings();
   if (view === 'pim') loadPimSettings();
@@ -20462,6 +20498,190 @@ function onMarkupStrategyChange(strategy) {
 // Legacy stubs — no longer called but kept to avoid errors if cached pages call them.
 function saveGlobalMarkupDefaults() { saveAllPricingDefaults(); }
 function saveBucketMarkups() { saveAllPricingDefaults(); }
+
+// ============================================================
+// Cost-to-Serve Defaults (Sam B) — Customer Success > Cost-to-Serve
+// ============================================================
+// Powers per-customer net-contribution math in the Customer Portfolio (Build 6b).
+// Storage path: admin/config/customerSuccess/costToServeDefaults
+//   { perTicketCents: number, perReturnCents: number }
+// Built-in fallback when no override stored: { perTicketCents: 1500, perReturnCents: 2500 }.
+
+var _costToServeDefaults = null;     // { perTicketCents, perReturnCents }
+var _costToServeOriginal = null;     // snapshot for cancel + audit `before`
+var _costToServeEditing = false;
+var _costToServeDirty = false;
+var _costToServeHasOverride = false;
+var COST_TO_SERVE_BUILTIN = { perTicketCents: 1500, perReturnCents: 2500 };
+
+async function loadCostToServeSettings() {
+  var el = document.getElementById('costToServeContent');
+  if (!el) return;
+  try {
+    var stored = await MastDB.get('admin/config/customerSuccess/costToServeDefaults');
+    _costToServeHasOverride = !!(stored && Object.keys(stored).length);
+    var merged = Object.assign({}, COST_TO_SERVE_BUILTIN, stored || {});
+    _costToServeDefaults = { perTicketCents: merged.perTicketCents, perReturnCents: merged.perReturnCents };
+    _costToServeOriginal = Object.assign({}, _costToServeDefaults);
+    _costToServeEditing = false;
+    _costToServeDirty = false;
+    el.innerHTML = _renderCostToServeContent();
+  } catch (e) {
+    el.innerHTML = '<p style="color:var(--danger);">Failed to load: ' + (e && e.message ? e.message : e) + '</p>';
+  }
+}
+
+function _fmtMoneyFromCents(cents) {
+  if (cents == null || isNaN(cents)) return '—';
+  return '$' + (Number(cents) / 100).toFixed(2);
+}
+
+function _renderCostToServeContent() {
+  var d = _costToServeDefaults || COST_TO_SERVE_BUILTIN;
+  if (_costToServeEditing) return _renderCostToServeEdit(d);
+  return _renderCostToServeRead(d);
+}
+
+function _renderCostToServeRead(d) {
+  var labelStyle = 'font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.06em;display:block;margin-bottom:6px;';
+  var valStyle   = 'font-size:1.15rem;font-weight:600;color:var(--charcoal);';
+  var cardStyle  = 'background:var(--cream);border:1px solid var(--cream-dark,#e6dfd3);border-radius:10px;padding:16px 18px;flex:1;min-width:180px;';
+  var sourceLabel = _costToServeHasOverride
+    ? '<span style="font-size:0.78rem;color:var(--warm-gray);">Tenant override active</span>'
+    : '<span style="font-size:0.78rem;color:var(--warm-gray);">Using built-in defaults (no tenant override)</span>';
+
+  var html = '';
+  html += '<div style="margin-bottom:14px;">' + sourceLabel + '</div>';
+  html += '<div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:18px;">';
+  html += '<div style="' + cardStyle + '">' +
+            '<span style="' + labelStyle + '">Per Ticket</span>' +
+            '<span style="' + valStyle + '">' + _fmtMoneyFromCents(d.perTicketCents) + '</span>' +
+          '</div>';
+  html += '<div style="' + cardStyle + '">' +
+            '<span style="' + labelStyle + '">Per Return</span>' +
+            '<span style="' + valStyle + '">' + _fmtMoneyFromCents(d.perReturnCents) + '</span>' +
+          '</div>';
+  html += '</div>';
+  html += '<p style="font-size:0.85rem;color:var(--warm-gray);margin:0 0 16px 0;">These costs are multiplied by each customer\'s ticket count and return count to compute their cost-to-serve, which is subtracted from gross margin to get net contribution. Used in the <a href="javascript:void(0)" onclick="navigateTo(\'customer-portfolio\')" style="color:var(--teal);text-decoration:underline;">Customer Portfolio</a> quadrants.</p>';
+  html += '<button class="btn btn-primary" onclick="editCostToServe()" style="font-size:0.9rem;">Edit</button>';
+  return html;
+}
+
+function _renderCostToServeEdit(d) {
+  var inputStyle = 'width:140px;padding:9px 12px;background:var(--charcoal);border:1px solid var(--charcoal,#252525);border-radius:6px;color:var(--cream);font-family:\'DM Sans\',sans-serif;font-size:0.9rem;text-align:right;';
+  var labelStyle = 'font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.06em;display:block;margin-bottom:6px;';
+  var rowStyle   = 'display:flex;gap:24px;flex-wrap:wrap;margin-bottom:18px;';
+
+  var perTicketDollars = (Number(d.perTicketCents) / 100).toFixed(2);
+  var perReturnDollars = (Number(d.perReturnCents) / 100).toFixed(2);
+
+  var html = '';
+  html += '<div id="costToServeDirtyBanner" style="display:' + (_costToServeDirty ? 'flex' : 'none') + ';align-items:center;justify-content:space-between;background:rgba(245,158,11,0.15);border:1px solid rgba(245,158,11,0.4);border-radius:8px;padding:10px 14px;margin-bottom:18px;gap:12px;">' +
+            '<span style="font-size:0.9rem;color:var(--charcoal);">Unsaved changes</span>' +
+            '<button class="btn btn-primary btn-small" onclick="saveCostToServe()">Save</button>' +
+          '</div>';
+  html += '<div style="' + rowStyle + '">';
+  html += '<div>' +
+            '<label style="' + labelStyle + '" for="ctsPerTicket">Per Ticket ($)</label>' +
+            '<input type="number" id="ctsPerTicket" min="0" step="0.01" value="' + perTicketDollars + '" oninput="_markCostToServeDirty()" style="' + inputStyle + '">' +
+            '<p style="font-size:0.72rem;color:var(--warm-gray);margin:6px 0 0 0;max-width:200px;">Avg cost per CS ticket (labor + tools).</p>' +
+          '</div>';
+  html += '<div>' +
+            '<label style="' + labelStyle + '" for="ctsPerReturn">Per Return ($)</label>' +
+            '<input type="number" id="ctsPerReturn" min="0" step="0.01" value="' + perReturnDollars + '" oninput="_markCostToServeDirty()" style="' + inputStyle + '">' +
+            '<p style="font-size:0.72rem;color:var(--warm-gray);margin:6px 0 0 0;max-width:200px;">Avg cost per return (shipping + restocking + write-off).</p>' +
+          '</div>';
+  html += '</div>';
+  html += '<div style="display:flex;gap:10px;align-items:center;">';
+  html += '<button class="btn btn-primary" onclick="saveCostToServe()" style="font-size:0.9rem;">Save</button>';
+  html += '<button class="btn btn-secondary" onclick="cancelCostToServe()" style="font-size:0.9rem;">Cancel</button>';
+  html += '</div>';
+  return html;
+}
+
+function editCostToServe() {
+  _costToServeEditing = true;
+  _costToServeDirty = false;
+  var el = document.getElementById('costToServeContent');
+  if (el) el.innerHTML = _renderCostToServeContent();
+}
+
+function cancelCostToServe() {
+  // Restore from snapshot, exit edit mode.
+  _costToServeDefaults = Object.assign({}, _costToServeOriginal || COST_TO_SERVE_BUILTIN);
+  _costToServeEditing = false;
+  _costToServeDirty = false;
+  if (window.MastDirty) MastDirty.unregister('costToServeSettings');
+  var el = document.getElementById('costToServeContent');
+  if (el) el.innerHTML = _renderCostToServeContent();
+}
+
+function _markCostToServeDirty() {
+  if (_costToServeDirty) return;
+  _costToServeDirty = true;
+  var banner = document.getElementById('costToServeDirtyBanner');
+  if (banner) banner.style.display = 'flex';
+  if (window.MastDirty) {
+    MastDirty.register('costToServeSettings', function() { return _costToServeDirty; }, {
+      label: 'Cost-to-serve defaults',
+      discardFn: function() {
+        _costToServeDirty = false;
+        if (window.MastDirty) MastDirty.unregister('costToServeSettings');
+      }
+    });
+  }
+}
+
+// Writes to admin/config/customerSuccess/costToServeDefaults — the same Firestore
+// path that the MCP tool `analytics_set_cost_to_serve_defaults`
+// (mast-tenant-mcp-server > analytics skill > setCostToServeDefaults) writes.
+// This keeps external AI clients (Claude / Cursor over HTTPS+API-key) and the
+// admin UI converged on a single source of truth. See
+// `mast-tenant-mcp-server/src/shared/tools/analytics.ts` ~ Build 6b.
+async function saveCostToServe() {
+  if (!hasPermission('settings', 'update')) { showToast('You do not have permission to update settings.', true); return; }
+  var ticketEl = document.getElementById('ctsPerTicket');
+  var returnEl = document.getElementById('ctsPerReturn');
+  if (!ticketEl || !returnEl) return;
+  var perTicketDollars = parseFloat(ticketEl.value);
+  var perReturnDollars = parseFloat(returnEl.value);
+  if (!isFinite(perTicketDollars) || perTicketDollars < 0) { showToast('Per Ticket must be a non-negative number.', true); ticketEl.focus(); return; }
+  if (!isFinite(perReturnDollars) || perReturnDollars < 0) { showToast('Per Return must be a non-negative number.', true); returnEl.focus(); return; }
+  var perTicketCents = Math.round(perTicketDollars * 100);
+  var perReturnCents = Math.round(perReturnDollars * 100);
+
+  var before = Object.assign({}, _costToServeOriginal || COST_TO_SERVE_BUILTIN);
+  // Merge: built-in defaults < existing stored < incoming partial. Mirrors MCP setCostToServeDefaults.
+  var merged = Object.assign({}, COST_TO_SERVE_BUILTIN, _costToServeOriginal || {}, {
+    perTicketCents: perTicketCents,
+    perReturnCents: perReturnCents
+  });
+
+  try {
+    await MastDB.set('admin/config/customerSuccess/costToServeDefaults', merged);
+    // writeAudit signature: (action, entity, entityId). Audit `before`/`after` deltas are
+    // recorded by Firestore versioning + the auditLog row; entity 'settings'.
+    var action = (_costToServeHasOverride ? 'update' : 'create');
+    await writeAudit(action, 'settings', 'costToServeDefaults');
+    _costToServeDefaults = { perTicketCents: merged.perTicketCents, perReturnCents: merged.perReturnCents };
+    _costToServeOriginal = Object.assign({}, _costToServeDefaults);
+    _costToServeHasOverride = true;
+    _costToServeEditing = false;
+    _costToServeDirty = false;
+    if (window.MastDirty) MastDirty.unregister('costToServeSettings');
+    var el = document.getElementById('costToServeContent');
+    if (el) el.innerHTML = _renderCostToServeContent();
+    showToast('Cost-to-serve defaults saved.');
+    // Refresh portfolio view if it's loaded — quadrants depend on these numbers.
+    if (typeof window.renderCustomerPortfolio === 'function') {
+      try { window.renderCustomerPortfolio(); } catch (_e) {}
+    }
+    // Unused-ref guard for `before` (intentional — kept for future audit `before`/`after` payload).
+    void before;
+  } catch (e) {
+    showToast('Failed to save: ' + (e && e.message ? e.message : e), true);
+  }
+}
 
 // ============================================================
 // Shop Display Settings (badges, lead time, commission CTA)
