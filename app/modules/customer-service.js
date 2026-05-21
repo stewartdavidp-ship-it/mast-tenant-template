@@ -492,6 +492,11 @@
   var surveysDefData = {};
   var triggersData = {};
   var surveysLoaded = false;
+  // Build 7-Responses
+  var responsesData = {};
+  var responsesLoaded = false;
+  var responsesFilter = { surveyId: 'all', status: 'all', theme: 'all' };
+  var responsesEditingThemeId = null;
   var questionEditId = null;
   var showAddQuestion = false;
   var groupEditId = null;
@@ -700,7 +705,8 @@
     html += '</div></div>';
 
     html += '<div class="view-tabs" style="margin-bottom:18px;">';
-    [['questions','Questions'],['groups','Groups'],['surveys','Surveys'],['triggers','Triggers']].forEach(function (p) {
+    // Build 7-Responses — new 5th subtab (within max-5 budget).
+    [['questions','Questions'],['groups','Groups'],['surveys','Surveys'],['triggers','Triggers'],['responses','Responses']].forEach(function (p) {
       html += '<button class="view-tab' + (surveysSubTab === p[0] ? ' active' : '') + '" onclick="csSurveysSwitchTab(\'' + p[0] + '\')">' + p[1] + '</button>';
     });
     html += '</div>';
@@ -708,6 +714,7 @@
     else if (surveysSubTab === 'groups')     html += renderGroupsTab();
     else if (surveysSubTab === 'surveys')    html += renderSurveysDefTab();
     else if (surveysSubTab === 'triggers')   html += renderTriggersTab();
+    else if (surveysSubTab === 'responses')  html += renderResponsesTab();
     if (sendLinkSurveyId) {
       var sv = surveysDefData[sendLinkSurveyId];
       html += '<div style="position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:1000;display:flex;align-items:center;justify-content:center;">';
@@ -940,6 +947,229 @@
       html += '<button class="btn btn-danger btn-small" onclick="csDeleteTrigger(\'' + _esc(t.id) + '\')">Delete</button></div>';
     });
     return html + '</div>';
+  }
+
+  // ── Build 7-Responses ────────────────────────────────────────────────
+  // Survey responses viewer. Surveys are created server-side (CF
+  // generateSurveyLink + _fireSingleSurveyTrigger) and written to
+  // cs_survey_responses/{id}. The admin module never had a UI to read
+  // them — Maya's flow E was ❌ in the persona walk because of that.
+  //
+  // Renders responses with filters by survey / status / theme tag, plus
+  // an inline theme-tag editor that writes via direct MastDB (mirroring
+  // server-side cs_tag_response_theme normalization: lowercase, dedupe,
+  // 16-tag cap).
+
+  function loadResponses() {
+    return MastDB.query('cs_survey_responses').orderByChild('createdAt').limitToLast(500).once()
+      .then(function (d) { responsesData = (d && d.val && d.val()) || (d || {}); responsesLoaded = true; })
+      .catch(function (err) {
+        console.warn('[cs-responses]', err && err.message);
+        if (typeof showToast === 'function') showToast('Failed to load survey responses', true);
+        responsesData = {}; responsesLoaded = true;
+      });
+  }
+
+  function csResponseAnswerSummary(resp) {
+    if (!resp || !Array.isArray(resp.answers) || resp.answers.length === 0) return '<span style="color:var(--warm-gray-light);">No answers yet</span>';
+    return resp.answers.map(function (a) {
+      var label = a.questionText || a.questionId || '(question)';
+      var val = a.value;
+      if (val == null) return '<div style="font-size:0.85rem;color:var(--warm-gray);">' + _esc(label) + ': —</div>';
+      var rendered = (typeof val === 'object') ? JSON.stringify(val) : String(val);
+      if (rendered.length > 200) rendered = rendered.slice(0, 197) + '…';
+      return '<div style="font-size:0.85rem;margin-bottom:4px;"><span style="color:var(--warm-gray);">' + _esc(label) + ':</span> ' + _esc(rendered) + '</div>';
+    }).join('');
+  }
+
+  function csResponseThemeChips(resp) {
+    var tags = Array.isArray(resp.themeTags) ? resp.themeTags : [];
+    if (tags.length === 0) return '<span style="color:var(--warm-gray-light);font-size:0.78rem;">— no themes —</span>';
+    return tags.map(function (t) {
+      return '<span class="status-badge" style="background:rgba(168,85,247,0.20);color:#c8a8f5;margin-right:4px;">' + _esc(t) + '</span>';
+    }).join('');
+  }
+
+  function renderResponsesTab() {
+    if (!responsesLoaded) {
+      loadResponses().then(function () { if (surveysSubTab === 'responses') renderSurveys(); });
+      return '<div style="padding:32px;text-align:center;color:var(--warm-gray);">Loading responses…</div>';
+    }
+    var all = Object.values(responsesData);
+
+    // Build filter inputs
+    var surveyOpts = [{ id: 'all', name: 'All surveys' }].concat(
+      Object.values(surveysDefData).map(function (s) { return { id: s.id, name: s.name || s.id }; })
+    );
+    var statusOpts = ['all', 'pending', 'completed', 'preview'];
+
+    // Collect all theme tags currently in use
+    var allTags = {};
+    all.forEach(function (r) {
+      (Array.isArray(r.themeTags) ? r.themeTags : []).forEach(function (t) { if (t) allTags[t] = (allTags[t] || 0) + 1; });
+    });
+    var themeOptsList = Object.keys(allTags).sort();
+
+    // Filter
+    var filtered = all.filter(function (r) {
+      if (!r) return false;
+      if (responsesFilter.surveyId !== 'all' && r.surveyId !== responsesFilter.surveyId) return false;
+      if (responsesFilter.status !== 'all' && (r.status || 'pending') !== responsesFilter.status) return false;
+      if (responsesFilter.theme !== 'all') {
+        var tags = Array.isArray(r.themeTags) ? r.themeTags : [];
+        if (tags.indexOf(responsesFilter.theme) === -1) return false;
+      }
+      return true;
+    });
+    filtered.sort(function (a, b) { return (b.createdAt || '').localeCompare(a.createdAt || ''); });
+
+    // Aggregates panel — top 5 themes + total response count + completion rate
+    var totalCount = all.length;
+    var completedCount = all.filter(function (r) { return (r.status || 'pending') === 'completed'; }).length;
+    var topThemes = Object.keys(allTags)
+      .map(function (t) { return { tag: t, count: allTags[t] }; })
+      .sort(function (a, b) { return b.count - a.count; })
+      .slice(0, 5);
+
+    var html = '';
+    html += '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:12px;">';
+    html += '<div style="font-size:0.85rem;">' +
+      _esc(String(filtered.length)) + ' of ' + _esc(String(totalCount)) + ' response' + (totalCount === 1 ? '' : 's') + ' · ' +
+      _esc(String(completedCount)) + ' completed</div>';
+    html += '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">';
+    html += '<label style="font-size:0.78rem;color:var(--warm-gray);">Survey ';
+    html += '<select onchange="csResponsesSetFilter(\'surveyId\', this.value)" style="font-size:0.78rem;padding:3px 8px;border-radius:4px;">';
+    surveyOpts.forEach(function (s) {
+      html += '<option value="' + _esc(s.id) + '"' + (responsesFilter.surveyId === s.id ? ' selected' : '') + '>' + _esc(s.name) + '</option>';
+    });
+    html += '</select></label>';
+    html += '<label style="font-size:0.78rem;color:var(--warm-gray);">Status ';
+    html += '<select onchange="csResponsesSetFilter(\'status\', this.value)" style="font-size:0.78rem;padding:3px 8px;border-radius:4px;">';
+    statusOpts.forEach(function (s) {
+      html += '<option value="' + _esc(s) + '"' + (responsesFilter.status === s ? ' selected' : '') + '>' + _esc(s === 'all' ? 'All' : s) + '</option>';
+    });
+    html += '</select></label>';
+    if (themeOptsList.length > 0) {
+      html += '<label style="font-size:0.78rem;color:var(--warm-gray);">Theme ';
+      html += '<select onchange="csResponsesSetFilter(\'theme\', this.value)" style="font-size:0.78rem;padding:3px 8px;border-radius:4px;">';
+      html += '<option value="all"' + (responsesFilter.theme === 'all' ? ' selected' : '') + '>All</option>';
+      themeOptsList.forEach(function (t) {
+        html += '<option value="' + _esc(t) + '"' + (responsesFilter.theme === t ? ' selected' : '') + '>' + _esc(t) + ' (' + allTags[t] + ')</option>';
+      });
+      html += '</select></label>';
+    }
+    html += '</div></div>';
+
+    // Top themes aggregate
+    if (topThemes.length > 0) {
+      html += '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:10px 14px;margin-bottom:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">';
+      html += '<div style="font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.04em;">Top themes</div>';
+      topThemes.forEach(function (tt) {
+        html += '<span class="status-badge" style="background:rgba(168,85,247,0.20);color:#c8a8f5;cursor:pointer;" onclick="csResponsesSetFilter(\'theme\',\'' + _esc(tt.tag) + '\')">' + _esc(tt.tag) + ' · ' + tt.count + '</span>';
+      });
+      html += '</div>';
+    }
+
+    if (filtered.length === 0) {
+      html += '<div style="padding:40px;text-align:center;color:var(--warm-gray);border:1px dashed var(--cream-dark);border-radius:10px;">No responses match these filters.</div>';
+      return html;
+    }
+
+    filtered.forEach(function (r) {
+      var survey = surveysDefData[r.surveyId];
+      var surveyName = (survey && survey.name) || r.surveyId || '(unknown survey)';
+      var who = r.contactName ? (r.contactName + ' (' + (r.contactEmail || '—') + ')') : (r.contactEmail || '(anonymous)');
+      var statusColor = r.status === 'completed' ? '#7ddca0' : (r.status === 'preview' ? '#a5a8f5' : '#fbcc70');
+      html += '<div style="border:1px solid var(--cream-dark);border-radius:10px;padding:14px 16px;margin-bottom:10px;background:var(--surface-card);">';
+      html += '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:8px;">';
+      html += '<div style="flex:1;min-width:200px;"><div style="font-weight:600;">' + _esc(surveyName) + '</div>';
+      html += '<div style="font-size:0.78rem;color:var(--warm-gray);">from ' + _esc(who) + ' · ' + _esc(fmtDate(r.createdAt)) + (r.completedAt ? ' · completed ' + _esc(fmtDate(r.completedAt)) : '') + '</div></div>';
+      html += '<span class="status-badge" style="background:' + statusColor + '22;color:' + statusColor + ';border:1px solid ' + statusColor + '44;">' + _esc(r.status || 'pending') + '</span>';
+      html += '</div>';
+      html += '<div style="margin-bottom:8px;">' + csResponseAnswerSummary(r) + '</div>';
+
+      html += '<div style="border-top:1px solid var(--cream-dark);padding-top:8px;margin-top:8px;display:flex;align-items:flex-start;gap:10px;flex-wrap:wrap;">';
+      html += '<div style="font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.04em;line-height:1.6;">Themes</div>';
+      if (responsesEditingThemeId === r.id) {
+        var tagStr = (Array.isArray(r.themeTags) ? r.themeTags : []).join(', ');
+        html += '<input id="csRespThemeInput-' + _esc(r.id) + '" value="' + _esc(tagStr) + '" placeholder="comma-separated tags" ' +
+          'style="flex:1;min-width:240px;font-size:0.85rem;padding:4px 8px;border:1px solid var(--cream-dark);border-radius:6px;background:var(--bg);color:var(--text);">';
+        html += '<button class="btn btn-primary btn-small" onclick="csSaveResponseTheme(\'' + _esc(r.id) + '\')" style="padding:4px 10px;font-size:0.78rem;">Save</button>';
+        html += '<button class="btn btn-secondary btn-small" onclick="csCancelResponseTheme()" style="padding:4px 10px;font-size:0.78rem;">Cancel</button>';
+      } else {
+        html += '<div style="flex:1;min-width:200px;">' + csResponseThemeChips(r) + '</div>';
+        html += '<button class="btn btn-secondary btn-small" onclick="csEditResponseTheme(\'' + _esc(r.id) + '\')" style="padding:4px 10px;font-size:0.78rem;">Edit themes</button>';
+      }
+      html += '</div>';
+
+      if (r.followupTicketId) {
+        html += '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:6px;">Linked ticket: <a href="#cs-tickets" onclick="event.preventDefault();csOpenTicket(\'' + _esc(r.followupTicketId) + '\')" style="color:var(--teal);text-decoration:underline;">' + _esc(r.followupTicketId) + '</a></div>';
+      }
+      html += '</div>';
+    });
+
+    return html;
+  }
+
+  function csResponsesSetFilter(key, value) {
+    responsesFilter[key] = value;
+    renderSurveys();
+  }
+
+  function csEditResponseTheme(id) {
+    responsesEditingThemeId = id;
+    renderSurveys();
+    setTimeout(function () {
+      var el = document.getElementById('csRespThemeInput-' + id);
+      if (el) el.focus();
+    }, 30);
+  }
+
+  function csCancelResponseTheme() {
+    responsesEditingThemeId = null;
+    renderSurveys();
+  }
+
+  async function csSaveResponseTheme(id) {
+    var input = document.getElementById('csRespThemeInput-' + id);
+    if (!input) return;
+    var raw = (input.value || '').split(',');
+    var seen = {};
+    var cleaned = [];
+    raw.forEach(function (t) {
+      var v = String(t || '').trim().toLowerCase();
+      if (!v) return;
+      if (seen[v]) return;
+      seen[v] = true;
+      cleaned.push(v);
+    });
+    cleaned = cleaned.slice(0, 16); // matches server-side cap
+    try {
+      var now = nowIso();
+      await MastDB.update('cs_survey_responses/' + id, {
+        themeTags: cleaned,
+        themedAt: now,
+        themedBy: (window.currentUser && currentUser.uid) || null,
+        updatedAt: now
+      });
+      if (responsesData[id]) {
+        responsesData[id].themeTags = cleaned;
+        responsesData[id].themedAt = now;
+      }
+      responsesEditingThemeId = null;
+      if (typeof showToast === 'function') showToast('Themes saved (' + cleaned.length + ').');
+      renderSurveys();
+    } catch (err) {
+      if (typeof showToast === 'function') showToast('Failed to save themes: ' + (err && err.message), true);
+    }
+  }
+
+  function csOpenTicket(ticketId) {
+    if (!ticketId) return;
+    selectedTicketId = ticketId;
+    activeRoute = 'cs-tickets';
+    if (typeof navigateTo === 'function') navigateTo('cs-tickets');
+    setTimeout(function () { renderCurrentView(); }, 30);
   }
 
   function renderTriggerForm(t) {
@@ -1322,7 +1552,19 @@
   window.csApproveReview = approveReview;
   window.csRejectReview = rejectReview;
   window.csDeleteReview = deleteReview;
-  window.csSurveysRefresh = function () { surveysLoaded = false; renderSurveys(); loadSurveysAll().then(renderSurveys); };
+  window.csSurveysRefresh = function () {
+    surveysLoaded = false;
+    responsesLoaded = false;
+    renderSurveys();
+    loadSurveysAll().then(renderSurveys);
+    // Responses lazy-load on tab visit (see renderResponsesTab).
+  };
+  // Build 7-Responses handlers
+  window.csResponsesSetFilter = csResponsesSetFilter;
+  window.csEditResponseTheme = csEditResponseTheme;
+  window.csCancelResponseTheme = csCancelResponseTheme;
+  window.csSaveResponseTheme = csSaveResponseTheme;
+  window.csOpenTicket = csOpenTicket;
   window.csSurveysSwitchTab = function (t) { surveysSubTab = t; renderSurveys(); };
   window.csToggleAutomatedSurveys = async function () {
     if (automatedSurveysToggling) return;
