@@ -135,7 +135,8 @@
     { value: 'spend',      label: 'Lifetime spend (high → low)' },
     { value: 'orders',     label: 'Orders (most → least)' },
     { value: 'lastOrder',  label: 'Last order (recent → old)' },
-    { value: 'lapseScore', label: 'Lapse score (most overdue → on rhythm)' }
+    { value: 'lapseScore', label: 'Lapse score (most overdue → on rhythm)' },
+    { value: 'grossMargin', label: 'Gross margin 12m (high → low)' }
   ];
 
   // ============================================================
@@ -194,6 +195,29 @@
     }
     var hint = (typeof score === 'number') ? (' title="lapse score ' + score.toFixed(2) + '× expected cadence"') : '';
     return '<span class="status-badge" style="background:' + bg + ';color:' + color + ';"' + hint + '>' + esc(label) + '</span>';
+  }
+
+  // Build 6b — client-side mirror of server-side classifyQuadrant.
+  // Quadrant: high margin (≥50%) × on-cadence (active lapse) →
+  //   grow / maintain / reprice / deprioritize / unclassified.
+  function portfolioQuadrant(netMarginPct, lapseStatus) {
+    if (typeof netMarginPct !== 'number' || !lapseStatus || lapseStatus === 'unknown') return 'unclassified';
+    var highMargin = netMarginPct >= 0.5;
+    var onCadence = lapseStatus === 'active';
+    if (highMargin && onCadence) return 'grow';
+    if (highMargin && !onCadence) return 'maintain';
+    if (!highMargin && onCadence) return 'reprice';
+    return 'deprioritize';
+  }
+
+  function portfolioQuadrantChip(q) {
+    var label, bg, color;
+    if (q === 'grow')              { label = 'Grow';         bg = 'rgba(34,197,94,0.25)';  color = '#7ddca0'; }
+    else if (q === 'maintain')     { label = 'Maintain';     bg = 'rgba(99,102,241,0.30)'; color = '#a5a8f5'; }
+    else if (q === 'reprice')      { label = 'Reprice';      bg = 'rgba(245,158,11,0.30)'; color = '#fbcc70'; }
+    else if (q === 'deprioritize') { label = 'Deprioritize'; bg = 'rgba(220,53,69,0.30)';  color = '#f49aa3'; }
+    else                           { return '<span style="color:var(--warm-gray-light);font-size:0.72rem;">—</span>'; }
+    return '<span class="status-badge" style="background:' + bg + ';color:' + color + ';">' + esc(label) + '</span>';
   }
 
   // ============================================================
@@ -627,6 +651,9 @@
           var ascore = typeof sa.lapseScore === 'number' ? sa.lapseScore : -1;
           var bscore = typeof sb.lapseScore === 'number' ? sb.lapseScore : -1;
           return bscore - ascore;
+        }
+        if (sortBy === 'grossMargin') {
+          return (sb.trailing12mGrossMarginCents || 0) - (sa.trailing12mGrossMarginCents || 0);
         }
         var av = a[sortBy] || '';
         var bv = b[sortBy] || '';
@@ -1303,6 +1330,39 @@
       h += '</div>';
     }
     h += detailCardClose();
+
+    // Build 6b — Trailing-12m financial card. Renders only when there's
+    // real signal (revenue OR gross margin populated). Cost-to-serve +
+    // net contribution come from get_customer_portfolio at query time —
+    // here we surface what's denormalized on stats: revenue, cogs, GM,
+    // net margin %. Quadrant inferred client-side from margin + lapse
+    // (mirrors server classifyQuadrant).
+    var fin = c.stats || {};
+    var hasFin = (typeof fin.trailing12mRevenueCents === 'number' && fin.trailing12mRevenueCents > 0)
+              || (typeof fin.trailing12mGrossMarginCents === 'number' && fin.trailing12mGrossMarginCents > 0);
+    if (hasFin) {
+      h += detailCardOpen('Financial contribution (trailing 12m)');
+      h += '<div style="display:grid;grid-template-columns:160px 1fr;gap:8px 16px;font-size:0.85rem;">';
+      h += identityRow('Revenue', esc(fmtMoney(fin.trailing12mRevenueCents || 0)));
+      h += identityRow('COGS', esc(fmtMoney(fin.trailing12mCogsCents || 0)));
+      h += identityRow('Gross margin', esc(fmtMoney(fin.trailing12mGrossMarginCents || 0)));
+      if (typeof fin.trailing12mNetMarginPct === 'number') {
+        h += identityRow('Net margin %', esc((fin.trailing12mNetMarginPct * 100).toFixed(1) + '%'));
+      }
+      var quadrant = portfolioQuadrant(fin.trailing12mNetMarginPct, fin.lapseStatus);
+      if (quadrant !== 'unclassified') {
+        h += identityRow('Portfolio quadrant', portfolioQuadrantChip(quadrant));
+      }
+      h += '</div>';
+      // Flag missing-cogs orders so the operator knows the GM may be under-counted.
+      if (typeof fin.trailing12mOrdersWithoutCogs === 'number' && fin.trailing12mOrdersWithoutCogs > 0) {
+        h += '<div style="font-size:0.72rem;color:var(--warm-gray-light);margin-top:10px;">';
+        h += esc(String(fin.trailing12mOrdersWithoutCogs)) + ' order' + (fin.trailing12mOrdersWithoutCogs === 1 ? '' : 's') + ' missing COGS — GM may be under-counted. ';
+        h += 'Run the COGS backfill or link these products to recipes.';
+        h += '</div>';
+      }
+      h += detailCardClose();
+    }
 
     // Build 5a — Linked contacts summary card. Replaces the standalone
     // Contacts tab (consolidated to stay within max-5-tabs rule). Lists
