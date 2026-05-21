@@ -75,14 +75,37 @@
     { id: '__lapsed',       name: 'Lapsed',         filters: { _lapseStatus: 'lapsed' }, _builtin: true }
   ];
 
+  // Build 5a — tab refactor from 6 → 5 to comply with design system
+  // "max 5 tabs on detail-complex" rule.
+  //
+  // Before: Overview / Orders / Contacts / Classes / Interactions / Wallet
+  // After:  Overview / Orders / Activity / Classes / Wallet
+  //
+  // - Contacts (linked-contact directory) moves to a card on Overview
+  //   (drill-out to contacts module remains via MastNavStack)
+  // - Interactions merges into the new Activity timeline (also includes
+  //   notes, enrollments, and orders; Build 5b adds tickets/surveys/reviews)
+  // - The name collision between the customer-tab "Interactions" and the
+  //   global "Interactions" view (caught in persona walk 2026-05-21) is
+  //   resolved by renaming.
   var DETAIL_TABS = [
-    { value: 'overview',     label: 'Overview' },
-    { value: 'orders',       label: 'Orders' },
-    { value: 'contacts',     label: 'Contacts' },
-    { value: 'classes',      label: 'Classes' },
-    { value: 'interactions', label: 'Interactions' },
-    { value: 'wallet',       label: 'Wallet' }
+    { value: 'overview', label: 'Overview' },
+    { value: 'orders',   label: 'Orders' },
+    { value: 'activity', label: 'Activity' },
+    { value: 'classes',  label: 'Classes' },
+    { value: 'wallet',   label: 'Wallet' }
   ];
+
+  // Activity timeline filter chips
+  var ACTIVITY_TYPE_LABELS = {
+    'all':                 'All',
+    'order':               'Orders',
+    'enrollment':          'Enrollments',
+    'contact-interaction': 'Contacts',
+    'note':                'Notes'
+    // Future (Build 5b): 'ticket', 'survey-response', 'review'
+  };
+  var activityFilter = 'all';
 
   var SOURCE_OPTIONS = [
     { value: 'all',         label: 'All sources' },
@@ -811,10 +834,13 @@
     h += '<div id="customersDetailTabBody">';
     if (detailTab === 'overview')          h += renderOverviewTab(c);
     else if (detailTab === 'orders')       h += renderOrdersTab(c);
-    else if (detailTab === 'contacts')     h += renderContactsTab(c);
+    else if (detailTab === 'activity')     h += renderActivityTab(c);
     else if (detailTab === 'classes')      h += renderClassesTab(c);
-    else if (detailTab === 'interactions') h += renderInteractionsTab(c);
     else if (detailTab === 'wallet')       h += renderWalletTab(c);
+    // Legacy routes — fall through to Activity so saved deep-links keep
+    // working after the 5a tab refactor.
+    else if (detailTab === 'interactions') h += renderActivityTab(c);
+    else if (detailTab === 'contacts')     h += renderActivityTab(c);
     h += '</div>';
 
     return h;
@@ -1275,6 +1301,43 @@
     }
     h += detailCardClose();
 
+    // Build 5a — Linked contacts summary card. Replaces the standalone
+    // Contacts tab (consolidated to stay within max-5-tabs rule). Lists
+    // each linked contact with a drill-through to the contacts module;
+    // editing remains in the contacts module (Paradigm A drill-through).
+    var linkedC = c.linkedIds || {};
+    var linkedContactIds = linkedC.contactIds || [];
+    h += detailCardOpen('Linked contacts');
+    if (linkedContactIds.length === 0) {
+      h += '<div style="font-size:0.85rem;color:var(--warm-gray);">No linked contacts yet. ';
+      h += '<a href="#" onclick="customersAddContact();return false;" style="color:var(--teal);text-decoration:underline;">Add a contact</a> to attach addresses, phones, or interactions to this customer.</div>';
+    } else {
+      var contactsCache = getCache(c.id);
+      if (!contactsCache.loaded.contacts) {
+        // Trigger fetch; will re-render when ready.
+        loadCustomerContacts(c.id);
+        h += '<div class="loading">Loading…</div>';
+      } else {
+        var cts = contactsCache.contacts || [];
+        h += '<div style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:8px;">' + cts.length + ' linked contact' + (cts.length === 1 ? '' : 's') + '</div>';
+        h += '<div style="display:flex;flex-direction:column;gap:4px;">';
+        cts.slice(0, 5).forEach(function(ct) {
+          var nm = ct.name || ct.email || ct._id;
+          var sub = [ct.email, ct.phone, ct.address].filter(Boolean).join(' · ');
+          h += '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;padding:6px 0;border-bottom:1px solid var(--cream-dark);font-size:0.85rem;cursor:pointer;" data-contact-id="' + esc(ct._id) + '" onclick="customersOpenContact(this.dataset.contactId)">';
+          h += '<div><div style="font-weight:600;">' + esc(nm) + '</div>' + (sub ? '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:2px;">' + esc(sub) + '</div>' : '') + '</div>';
+          h += '<div style="font-size:0.72rem;color:var(--teal);white-space:nowrap;">Open →</div>';
+          h += '</div>';
+        });
+        h += '</div>';
+        if (cts.length > 5) {
+          h += '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:8px;">+ ' + (cts.length - 5) + ' more — drill in for the full list.</div>';
+        }
+        h += '<div style="margin-top:10px;"><a href="#" onclick="customersAddContact();return false;" style="font-size:0.78rem;color:var(--teal);text-decoration:underline;">+ Add another contact</a></div>';
+      }
+    }
+    h += detailCardClose();
+
     // Save / Cancel buttons — Paradigm A, only when editing
     if (customerEditMode) {
       h += '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:20px;padding-top:16px;border-top:1px solid var(--cream-dark);">';
@@ -1543,6 +1606,202 @@
       cache.loaded.interactions = true;
       if (currentView === 'detail' && selectedCustomerId === customerId && detailTab === 'interactions') renderPreservingEdits();
     });
+  }
+
+  // ----- Activity tab (Build 5a) -----
+  //
+  // Unified dated touchpoint timeline. Pulls a normalized event stream
+  // (orders + enrollments + linked-contact interactions + customer notes)
+  // and renders it with type-filter chips.
+  //
+  // Backed by MastDB direct reads to mirror the patterns of the existing
+  // tabs and keep the load path consistent. A future enhancement can swap
+  // to a single MCP call to get_customer_activity_timeline so AI assistants
+  // and the UI compute against the exact same merge logic.
+
+  function loadCustomerActivity(customerId, contactIds) {
+    var cache = getCache(customerId);
+    var promises = [
+      MastDB.query('orders').orderByChild('customerId').equalTo(customerId).once()
+        .then(function(s) { return { ordersRaw: (s && s.val()) || {} }; })
+        .catch(function() { return { ordersRaw: {} }; }),
+      MastDB.query('admin/enrollments').orderByChild('customerId').equalTo(customerId).once()
+        .then(function(s) { return { enrRaw: (s && s.val()) || {} }; })
+        .catch(function() { return { enrRaw: {} }; })
+    ];
+    (contactIds || []).forEach(function(cid) {
+      promises.push(
+        MastDB.get('admin/contacts/' + cid + '/interactions')
+          .then(function(s) { return { contactId: cid, interactions: (s && s.val()) || {} }; })
+          .catch(function() { return { contactId: cid, interactions: {} }; })
+      );
+    });
+    Promise.all(promises).then(function(results) {
+      var ordersRaw = results[0].ordersRaw || {};
+      var enrRaw = results[1].enrRaw || {};
+      var events = [];
+
+      Object.keys(ordersRaw).forEach(function(oid) {
+        var o = ordersRaw[oid];
+        if (!o || o.status === 'cancelled') return;
+        var at = o.createdAt || o.placedAt;
+        if (!at) return;
+        var cents = (typeof o.totalCents === 'number') ? o.totalCents : (o.total || 0);
+        events.push({
+          type: 'order',
+          at: at,
+          summary: 'Order ' + (o.orderNumber || oid) + ' ($' + (cents / 100).toFixed(2) + ') · ' + (o.status || 'placed'),
+          sourceRoute: 'orders',
+          sourceId: oid
+        });
+      });
+
+      Object.keys(enrRaw).forEach(function(eid) {
+        var e = enrRaw[eid];
+        if (!e || e.status === 'cancelled' || e.enrollmentStatus === 'cancelled') return;
+        var at = e.createdAt;
+        if (!at) return;
+        var name = e.className || e.classTitle || '(class)';
+        events.push({
+          type: 'enrollment',
+          at: at,
+          summary: 'Enrolled · ' + name,
+          sourceRoute: 'classes',
+          sourceId: eid
+        });
+      });
+
+      for (var i = 2; i < results.length; i++) {
+        var pair = results[i];
+        var ix = pair.interactions || {};
+        Object.keys(ix).forEach(function(ixId) {
+          var raw = ix[ixId];
+          if (!raw) return;
+          var at = raw.date || raw.createdAt;
+          if (!at) return;
+          var body = raw.notes || raw.body || raw.summary || '';
+          var short = body.length > 140 ? body.slice(0, 137) + '…' : body;
+          events.push({
+            type: 'contact-interaction',
+            at: at,
+            summary: (raw.type || 'note') + (short ? ' · ' + short : ''),
+            sourceRoute: 'contacts',
+            sourceId: pair.contactId
+          });
+        });
+      }
+
+      events.sort(function(a, b) { return (b.at || '').localeCompare(a.at || ''); });
+      cache.activityEvents = events;
+      cache.loaded.activity = true;
+      if (currentView === 'detail' && selectedCustomerId === customerId && detailTab === 'activity') {
+        renderPreservingEdits();
+      }
+    });
+  }
+
+  function renderActivityTab(c) {
+    var linked = c.linkedIds || {};
+    var contactIds = linked.contactIds || [];
+
+    var cache = getCache(c.id);
+    if (!cache.loaded.activity) {
+      loadCustomerActivity(c.id, contactIds);
+      return '<div class="loading">Loading activity…</div>';
+    }
+
+    // Notes from the customer record show as a synthetic "note" event.
+    // Atomic-widget edit lives on Overview (existing pattern); this is
+    // a read-only summary entry in the timeline.
+    var events = (cache.activityEvents || []).slice();
+    if (c.notes && c.notes.trim().length > 0) {
+      var short = c.notes.length > 140 ? c.notes.slice(0, 137) + '…' : c.notes;
+      events.push({
+        type: 'note',
+        at: c.updatedAt || c.createdAt || new Date().toISOString(),
+        summary: short
+      });
+      events.sort(function(a, b) { return (b.at || '').localeCompare(a.at || ''); });
+    }
+
+    // Build per-type counts before filtering so chip badges always show
+    // the full population.
+    var counts = { 'all': events.length, 'order': 0, 'enrollment': 0, 'contact-interaction': 0, 'note': 0 };
+    events.forEach(function(e) { if (counts[e.type] != null) counts[e.type]++; });
+
+    var filtered = activityFilter === 'all' ? events : events.filter(function(e) { return e.type === activityFilter; });
+
+    var h = '';
+
+    // Filter chips
+    h += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;">';
+    ['all', 'order', 'enrollment', 'contact-interaction', 'note'].forEach(function(t) {
+      var label = ACTIVITY_TYPE_LABELS[t] || t;
+      var active = (activityFilter === t);
+      var n = counts[t] || 0;
+      h += '<button class="view-tab' + (active ? ' active' : '') + '" onclick="customersSetActivityFilter(\'' + esc(t) + '\')" style="font-size:0.78rem;padding:4px 10px;">' +
+        esc(label) + ' <span style="opacity:0.6;">(' + n + ')</span></button>';
+    });
+    h += '</div>';
+
+    if (events.length === 0) {
+      h += '<div style="text-align:center;padding:40px 20px;color:var(--warm-gray);">';
+      h += '<p style="font-size:0.9rem;font-weight:500;margin-bottom:8px;">No activity recorded</p>';
+      h += '<p style="font-size:0.85rem;color:var(--warm-gray-light);">Orders, enrollments, contact interactions, and notes will appear here as the customer relationship develops.</p>';
+      h += '</div>';
+      return h;
+    }
+    if (filtered.length === 0) {
+      h += '<div style="text-align:center;padding:40px 20px;color:var(--warm-gray);font-size:0.85rem;">No activity of this type yet.</div>';
+      return h;
+    }
+
+    h += '<div style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:8px;">' +
+      filtered.length + ' event' + (filtered.length === 1 ? '' : 's') + (activityFilter !== 'all' ? ' (' + esc(ACTIVITY_TYPE_LABELS[activityFilter] || activityFilter) + ')' : '') +
+      '</div>';
+
+    filtered.forEach(function(item) {
+      var typeColor = activityTypeColor(item.type);
+      h += '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:12px 16px;margin-bottom:8px;' +
+        (item.sourceRoute && item.sourceId ? 'cursor:pointer;' : '') + '"' +
+        (item.sourceRoute && item.sourceId ? ' onclick="customersOpenActivityDrillIn(\'' + esc(item.sourceRoute) + '\',\'' + esc(item.sourceId) + '\')"' : '') + '>';
+      h += '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;">';
+      h += '<div style="font-size:0.85rem;flex:1;min-width:200px;">';
+      h += '<span class="status-badge" style="margin-right:8px;background:' + typeColor.bg + ';color:' + typeColor.fg + ';">' + esc(ACTIVITY_TYPE_LABELS[item.type] || item.type) + '</span>';
+      h += esc(item.summary || '—');
+      h += '</div>';
+      h += '<div style="color:var(--warm-gray);font-size:0.78rem;white-space:nowrap;">' + esc(fmtDateTime(item.at)) + '</div>';
+      h += '</div>';
+      h += '</div>';
+    });
+    return h;
+  }
+
+  function activityTypeColor(type) {
+    if (type === 'order')               return { bg: 'rgba(42,124,111,0.28)', fg: '#6fc' };
+    if (type === 'enrollment')          return { bg: 'rgba(196,133,60,0.30)', fg: 'var(--amber-light)' };
+    if (type === 'contact-interaction') return { bg: 'rgba(99,102,241,0.30)', fg: '#a5a8f5' };
+    if (type === 'note')                return { bg: 'rgba(155,149,142,0.35)', fg: '#cfcac3' };
+    return { bg: 'rgba(155,149,142,0.35)', fg: '#cfcac3' };
+  }
+
+  function customersSetActivityFilter(t) {
+    activityFilter = t;
+    renderPreservingEdits();
+  }
+
+  function customersOpenActivityDrillIn(route, sourceId) {
+    if (typeof MastNavStack !== 'undefined' && MastNavStack.push) {
+      var c = customersData.find(function(x) { return x && x.id === selectedCustomerId; });
+      var label = c ? (c.displayName || c.primaryEmail || c.id) : 'customer';
+      MastNavStack.push({
+        route: 'customers',
+        view: 'detail',
+        state: { customerId: selectedCustomerId, detailTab: 'activity', scrollTop: 0 },
+        label: label
+      });
+    }
+    if (typeof navigateTo === 'function') navigateTo(route);
   }
 
   // ----- Wallet tab -----
@@ -2263,6 +2522,9 @@
     });
   }
   window.customersAddContact = addContactToCustomer;
+  // Build 5a — Activity tab handlers
+  window.customersSetActivityFilter = customersSetActivityFilter;
+  window.customersOpenActivityDrillIn = customersOpenActivityDrillIn;
   // Called by contacts.js after atomically creating a contact that's linked
   // to a customer. Keeps the customers module's in-memory copy in sync so
   // MastNavStack.popAndReturn → restorer → render shows the new entry.
