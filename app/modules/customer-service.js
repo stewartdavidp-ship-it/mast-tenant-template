@@ -1408,25 +1408,31 @@
   // cs_generate_voc_digest: aggregates themes (with sample quotes) +
   // ticket categories + reviews summary + customer-health counts into
   // a copy-paste-ready markdown digest. Window: last 30 days.
-  async function csGenerateVocDigest() {
+  async function csGenerateVocDigest(windowDays) {
+    var days = Number(windowDays) > 0 ? Number(windowDays) : 30;
+    var windowLabel = days === 365 ? 'Last 12 months' : 'Last ' + days + ' days';
+    var existing = document.getElementById('csVocDigestOverlay');
+    if (existing && existing.parentNode) existing.parentNode.removeChild(existing);
     var overlay = document.createElement('div');
     overlay.id = 'csVocDigestOverlay';
     overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px;';
     overlay.innerHTML = '<div style="background:var(--bg);border-radius:12px;padding:24px;color:var(--text);">Generating digest…</div>';
     document.body.appendChild(overlay);
 
-    var cutoff = new Date(Date.now() - 30 * 86400000).toISOString();
+    var cutoff = new Date(Date.now() - days * 86400000).toISOString();
     try {
       var results = await Promise.all([
         responsesLoaded ? Promise.resolve(responsesData) : loadResponses().then(function() { return responsesData; }),
         MastDB.query('cs_tickets').limitToLast(2000).once().then(function(s) { return (s && s.val && s.val()) || (s || {}); }).catch(function() { return {}; }),
         MastDB.query('cs_reviews').limitToLast(500).once().then(function(s) { return (s && s.val && s.val()) || (s || {}); }).catch(function() { return {}; }),
-        MastDB.get('admin/customers').then(function(s) { return (s && s.val && s.val()) || (s || {}); }).catch(function() { return {}; })
+        MastDB.get('admin/customers').then(function(s) { return (s && s.val && s.val()) || (s || {}); }).catch(function() { return {}; }),
+        (MastDB.products && MastDB.products.get) ? MastDB.products.get().then(function(s) { return (s && s.val && s.val()) || (s || {}); }).catch(function() { return {}; }) : Promise.resolve({})
       ]);
       var responses = results[0] || {};
       var tickets = results[1] || {};
       var reviews = results[2] || {};
       var customers = results[3] || {};
+      var productsMap = results[4] || {};
 
       // Themes
       var themeAgg = {};
@@ -1483,7 +1489,10 @@
       var prodMentions = {};
       revsInWindow.forEach(function(r) {
         if (!r.productId) return;
-        if (!prodMentions[r.productId]) prodMentions[r.productId] = { name: r.productName || r.productId, count: 0, ratings: [] };
+        if (!prodMentions[r.productId]) {
+          var resolvedName = r.productName || (productsMap[r.productId] && productsMap[r.productId].name) || '(unnamed product)';
+          prodMentions[r.productId] = { name: resolvedName, count: 0, ratings: [] };
+        }
         prodMentions[r.productId].count++;
         if (typeof r.rating === 'number') prodMentions[r.productId].ratings.push(r.rating);
       });
@@ -1509,7 +1518,7 @@
 
       // Build markdown
       var lines = [];
-      lines.push('# Voice of Customer — Last 30 days');
+      lines.push('# Voice of Customer — ' + windowLabel);
       lines.push('*Generated ' + new Date().toISOString() + '*');
       lines.push('');
       lines.push('## Summary');
@@ -1546,11 +1555,25 @@
       var markdown = lines.join('\n');
 
       // Render modal
+      var windowOptions = [
+        { v: 7, label: 'Last 7 days' },
+        { v: 30, label: 'Last 30 days' },
+        { v: 60, label: 'Last 60 days' },
+        { v: 90, label: 'Last 90 days' },
+        { v: 180, label: 'Last 180 days' },
+        { v: 365, label: 'Last 12 months' }
+      ];
+      var selectHtml = '<select id="csVocWindowSel" class="form-select" style="font-size:0.85rem;padding:4px 8px;" onchange="csGenerateVocDigest(this.value)">' +
+        windowOptions.map(function(o) {
+          return '<option value="' + o.v + '"' + (o.v === days ? ' selected' : '') + '>' + o.label + '</option>';
+        }).join('') +
+        '</select>';
       overlay.innerHTML =
         '<div style="background:var(--bg);border-radius:12px;padding:20px 22px;width:min(720px,94vw);max-height:90vh;display:flex;flex-direction:column;box-shadow:0 8px 32px rgba(0,0,0,0.4);">' +
-          '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">' +
-            '<h3 style="margin:0;font-size:1.15rem;">Voice of Customer · Last 30 days</h3>' +
-            '<button class="btn btn-secondary btn-small" onclick="csCloseVocDigest()" style="padding:4px 10px;">Close</button>' +
+          '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;gap:10px;">' +
+            '<h3 style="margin:0;font-size:1.15rem;">Voice of Customer · ' + windowLabel + '</h3>' +
+            '<div style="display:flex;gap:8px;align-items:center;">' + selectHtml +
+            '<button class="btn btn-secondary btn-small" onclick="csCloseVocDigest()" style="padding:4px 10px;">Close</button></div>' +
           '</div>' +
           '<div style="display:flex;gap:8px;margin-bottom:10px;">' +
             '<button class="btn btn-primary btn-small" id="csVocCopyBtn" onclick="csCopyVocDigest()">📋 Copy markdown</button>' +

@@ -31996,8 +31996,8 @@ function loadProductCustomerSignal(pid) {
         html += '<div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--cream-dark);">';
         html += '<div style="font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:6px;">Often bought together (within 90d)</div>';
         topCoPurchase.forEach(function(cp) {
-          var coProd = (window.productsData || []).find(function(p) { return p && p.pid === cp.pid; });
-          var coName = (coProd && coProd.name) || cp.pid;
+          var coProd = (window.productsData || []).find(function(p) { return p && (p.pid === cp.pid || p.id === cp.pid); });
+          var coName = (coProd && coProd.name) || '(unnamed product)';
           html += '<div style="display:flex;justify-content:space-between;align-items:center;font-size:0.85rem;padding:4px 0;">';
           html += '<span>' + esc(coName) + '</span>';
           html += '<span style="color:var(--warm-gray);font-size:0.78rem;">' + esc(String(cp.count)) + 'x</span>';
