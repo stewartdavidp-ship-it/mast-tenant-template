@@ -2810,6 +2810,338 @@ window.finLoad = function(pfx) {
   else if (pfx === 'fTax') loadTaxSalesTaxData();
 };
 
+// ── Customer Portfolio (Build 6b UI-2) ────────────────────────────────────────
+//
+// Top-level surface for Sam's portfolio thinking. Computed client-side
+// mirroring the server-side analytics.get_customer_portfolio +
+// analytics.get_concentration. Reads:
+//   admin/customers                                   (lifetime + trailing-12m stats)
+//   cs_tickets                                        (cost-to-serve input)
+//   admin/rma                                         (cost-to-serve input)
+//   admin/config/customerSuccess/costToServeDefaults  (per-tenant defaults)
+//
+// Renders: concentration card (top-5/10/25 + HHI band) + quadrant chips
+// with counts + customer rows sortable by Net Contribution / GM / Revenue.
+// Row click → MastNavStack push → customer detail.
+
+var portfolioState = {
+  sortBy: 'netContribution',
+  quadrantFilter: null,
+  rows: null,
+  thresholds: null,
+  concentration: null,
+};
+
+var CTS_DEFAULTS = { perTicketCents: 1500, perReturnCents: 2500 };
+
+function portfolioClassify(netMarginPct, lapseStatus) {
+  if (typeof netMarginPct !== 'number' || !lapseStatus || lapseStatus === 'unknown') return 'unclassified';
+  var highMargin = netMarginPct >= 0.5;
+  var onCadence = lapseStatus === 'active';
+  if (highMargin && onCadence) return 'grow';
+  if (highMargin && !onCadence) return 'maintain';
+  if (!highMargin && onCadence) return 'reprice';
+  return 'deprioritize';
+}
+
+function portfolioQuadrantStyle(q) {
+  if (q === 'grow')         return { label: 'Grow',         bg: 'rgba(34,197,94,0.25)',  color: '#7ddca0' };
+  if (q === 'maintain')     return { label: 'Maintain',     bg: 'rgba(99,102,241,0.30)', color: '#a5a8f5' };
+  if (q === 'reprice')      return { label: 'Reprice',      bg: 'rgba(245,158,11,0.30)', color: '#fbcc70' };
+  if (q === 'deprioritize') return { label: 'Deprioritize', bg: 'rgba(220,53,69,0.30)',  color: '#f49aa3' };
+  return                          { label: 'Unclassified', bg: 'rgba(155,149,142,0.35)', color: '#cfcac3' };
+}
+
+function portfolioFmtMoney(cents) {
+  if (typeof cents !== 'number') return '—';
+  var sign = cents < 0 ? '-' : '';
+  return sign + '$' + (Math.abs(cents) / 100).toFixed(2);
+}
+
+function renderCustomerPortfolio() {
+  var el = document.getElementById('customerPortfolioContent');
+  if (!el) return;
+  el.innerHTML = '<div style="color:var(--warm-gray);padding:40px 0;text-align:center;">Loading portfolio…</div>';
+
+  Promise.all([
+    MastDB.query('admin/customers').once()
+      .then(function(s) { return (s && s.val()) || {}; }).catch(function() { return {}; }),
+    MastDB.query('cs_tickets').limitToLast(2000).once()
+      .then(function(s) { return (s && s.val()) || {}; }).catch(function() { return {}; }),
+    MastDB.query('admin/rma').limitToLast(2000).once()
+      .then(function(s) { return (s && s.val()) || {}; }).catch(function() { return {}; }),
+    MastDB.get('admin/config/customerSuccess/costToServeDefaults').catch(function() { return null; })
+  ]).then(function(results) {
+    var customersRaw = results[0] || {};
+    var ticketsRaw = results[1] || {};
+    var rmaRaw = results[2] || {};
+    var c2s = Object.assign({}, CTS_DEFAULTS, results[3] || {});
+
+    // Per-customer ticket / return counts
+    var ticketCount = {}, returnCount = {};
+    Object.values(ticketsRaw).forEach(function(t) {
+      if (!t || !t.customerId) return;
+      ticketCount[t.customerId] = (ticketCount[t.customerId] || 0) + 1;
+    });
+    Object.values(rmaRaw).forEach(function(r) {
+      if (!r || !r.customerId) return;
+      returnCount[r.customerId] = (returnCount[r.customerId] || 0) + 1;
+    });
+
+    var rows = [];
+    Object.keys(customersRaw).forEach(function(cid) {
+      var cust = customersRaw[cid];
+      if (!cust || cust.status === 'merged') return;
+      var stats = cust.stats || {};
+      var rev = typeof stats.trailing12mRevenueCents === 'number' ? stats.trailing12mRevenueCents : 0;
+      var cogs = typeof stats.trailing12mCogsCents === 'number' ? stats.trailing12mCogsCents : 0;
+      var gm = typeof stats.trailing12mGrossMarginCents === 'number' ? stats.trailing12mGrossMarginCents : (rev - cogs);
+      var netMarginPct = typeof stats.trailing12mNetMarginPct === 'number' ? stats.trailing12mNetMarginPct : (rev > 0 ? gm / rev : null);
+      var tc = ticketCount[cid] || 0;
+      var rc = returnCount[cid] || 0;
+      var c2sCents = tc * c2s.perTicketCents + rc * c2s.perReturnCents;
+      var net = gm - c2sCents;
+      var q = portfolioClassify(netMarginPct, stats.lapseStatus || null);
+      rows.push({
+        customerId: cid,
+        displayName: cust.displayName || cust.primaryEmail || cid,
+        primaryEmail: cust.primaryEmail || null,
+        revenueCents: rev,
+        cogsCents: cogs,
+        grossMarginCents: gm,
+        netMarginPct: netMarginPct,
+        ticketCount: tc,
+        returnCount: rc,
+        costToServeCents: c2sCents,
+        netContributionCents: net,
+        lapseStatus: stats.lapseStatus || null,
+        quadrant: q,
+        tags: Array.isArray(cust.tags) ? cust.tags : []
+      });
+    });
+
+    // Concentration: top-N share + HHI on revenue
+    var ranked = rows.filter(function(r) { return r.revenueCents > 0; })
+      .map(function(r) { return { customerId: r.customerId, displayName: r.displayName, revenue: r.revenueCents }; })
+      .sort(function(a, b) { return b.revenue - a.revenue; });
+    var totalRev = ranked.reduce(function(s, r) { return s + r.revenue; }, 0);
+    var topShare = function(n) {
+      var top = ranked.slice(0, n);
+      var rev = top.reduce(function(s, r) { return s + r.revenue; }, 0);
+      return { n: top.length, revenueCents: rev, sharePct: totalRev > 0 ? Math.round((rev / totalRev) * 1000) / 1000 : 0 };
+    };
+    var top5 = topShare(5), top10 = topShare(10);
+    var hhi = 0;
+    if (totalRev > 0) {
+      ranked.forEach(function(r) { var s = r.revenue / totalRev; hhi += s * s; });
+      hhi = Math.round(hhi * 10000);
+    }
+    var hhiBand = hhi < 1500 ? 'unconcentrated' : (hhi < 2500 ? 'moderate' : 'high');
+    var hhiBandColor = hhi < 1500 ? '#7ddca0' : (hhi < 2500 ? '#fbcc70' : '#f49aa3');
+
+    // Quadrant counts
+    var qCounts = { grow: 0, maintain: 0, reprice: 0, deprioritize: 0, unclassified: 0 };
+    rows.forEach(function(r) { qCounts[r.quadrant]++; });
+
+    portfolioState.rows = rows;
+    portfolioState.thresholds = c2s;
+    portfolioState.concentration = { top5: top5, top10: top10, hhi: hhi, hhiBand: hhiBand, totalRevenueCents: totalRev };
+
+    // Render
+    var html = '';
+    html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:12px;">';
+    html += '<h2 style="font-size:1.6rem;font-weight:700;color:var(--charcoal);margin:0;">Customer Portfolio</h2>';
+    html += '<div style="font-size:0.78rem;color:var(--warm-gray);">' +
+      esc(String(rows.length)) + ' customers · trailing-12m · cost-to-serve $' + (c2s.perTicketCents/100).toFixed(0) +
+      '/ticket, $' + (c2s.perReturnCents/100).toFixed(0) + '/return</div>';
+    html += '</div>';
+
+    // Concentration card
+    html += '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:16px 20px;margin-bottom:16px;">';
+    html += '<div style="font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:10px;">Concentration risk</div>';
+    html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:16px;">';
+    html += '<div><div style="font-size:0.78rem;color:var(--warm-gray);">Top 5 share</div>' +
+      '<div style="font-size:1.6rem;font-weight:600;color:' + (top5.sharePct > 0.4 ? '#f49aa3' : 'var(--charcoal)') + ';">' +
+      (top5.sharePct * 100).toFixed(1) + '%</div></div>';
+    html += '<div><div style="font-size:0.78rem;color:var(--warm-gray);">Top 10 share</div>' +
+      '<div style="font-size:1.6rem;font-weight:600;">' + (top10.sharePct * 100).toFixed(1) + '%</div></div>';
+    html += '<div><div style="font-size:0.78rem;color:var(--warm-gray);">HHI</div>' +
+      '<div style="font-size:1.6rem;font-weight:600;color:' + hhiBandColor + ';">' + esc(String(hhi)) +
+      ' <span style="font-size:0.78rem;font-weight:400;color:var(--warm-gray);">' + esc(hhiBand) + '</span></div></div>';
+    html += '<div><div style="font-size:0.78rem;color:var(--warm-gray);">Total revenue (12m)</div>' +
+      '<div style="font-size:1.6rem;font-weight:600;">' + esc(portfolioFmtMoney(totalRev)) + '</div></div>';
+    html += '</div>';
+    if (top5.sharePct > 0.4) {
+      html += '<div style="font-size:0.78rem;color:#f49aa3;margin-top:10px;">⚠ Top-5 customers exceed 40% of revenue. Concentration risk.</div>';
+    }
+    html += '</div>';
+
+    // Quadrant chips
+    html += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">';
+    [{q:null,label:'All'},{q:'grow'},{q:'maintain'},{q:'reprice'},{q:'deprioritize'},{q:'unclassified'}].forEach(function(opt) {
+      var qq = opt.q;
+      var lbl = opt.label || portfolioQuadrantStyle(qq).label;
+      var n = qq === null ? rows.length : qCounts[qq];
+      var active = (portfolioState.quadrantFilter === qq);
+      html += '<button class="view-tab' + (active ? ' active' : '') +
+        '" onclick="portfolioSetQuadrant(' + (qq === null ? 'null' : '\'' + qq + '\'') + ')"' +
+        ' style="font-size:0.78rem;padding:6px 12px;">' + esc(lbl) +
+        ' <span style="opacity:0.6;">(' + n + ')</span></button>';
+    });
+    html += '</div>';
+
+    // Sort + bulk action toolbar
+    html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:8px;">';
+    html += '<div style="font-size:0.78rem;color:var(--warm-gray);">Sort by ';
+    ['netContribution','grossMargin','revenue'].forEach(function(s) {
+      var sLabel = s === 'netContribution' ? 'Net contribution' : (s === 'grossMargin' ? 'Gross margin' : 'Revenue');
+      var active = portfolioState.sortBy === s;
+      html += '<a href="#" onclick="event.preventDefault();portfolioSetSort(\'' + s + '\')" ' +
+        'style="margin-left:6px;color:' + (active ? 'var(--teal)' : 'var(--warm-gray)') + ';' +
+        (active ? 'font-weight:600;' : '') + 'text-decoration:' + (active ? 'underline' : 'none') + ';">' +
+        esc(sLabel) + '</a>';
+    });
+    html += '</div>';
+    html += '<div id="pfBulkBar" style="font-size:0.78rem;color:var(--warm-gray);"></div>';
+    html += '</div>';
+
+    // Table
+    var displayRows = rows.slice();
+    if (portfolioState.quadrantFilter) {
+      displayRows = displayRows.filter(function(r) { return r.quadrant === portfolioState.quadrantFilter; });
+    }
+    if (portfolioState.sortBy === 'grossMargin') {
+      displayRows.sort(function(a, b) { return b.grossMarginCents - a.grossMarginCents; });
+    } else if (portfolioState.sortBy === 'revenue') {
+      displayRows.sort(function(a, b) { return b.revenueCents - a.revenueCents; });
+    } else {
+      displayRows.sort(function(a, b) { return b.netContributionCents - a.netContributionCents; });
+    }
+    displayRows = displayRows.slice(0, 200);
+
+    html += '<div class="data-table"><table>';
+    html += '<thead><tr>' +
+      '<th style="width:30px;"><input type="checkbox" id="pfSelectAll" onchange="portfolioToggleSelectAll(this.checked)"></th>' +
+      '<th>Customer</th>' +
+      '<th>Quadrant</th>' +
+      '<th style="text-align:right;">Revenue 12m</th>' +
+      '<th style="text-align:right;">GM</th>' +
+      '<th style="text-align:right;">Margin %</th>' +
+      '<th style="text-align:right;">Cost to serve</th>' +
+      '<th style="text-align:right;">Net contribution</th>' +
+      '<th>Lapse</th>' +
+      '</tr></thead><tbody>';
+    displayRows.forEach(function(r) {
+      var qStyle = portfolioQuadrantStyle(r.quadrant);
+      var lapseLabel = r.lapseStatus || '—';
+      var lapseColor = r.lapseStatus === 'lapsed' ? '#f49aa3' :
+                      r.lapseStatus === 'at-risk' ? '#fbcc70' :
+                      r.lapseStatus === 'active' ? '#7ddca0' : 'var(--warm-gray-light)';
+      var marginPctStr = typeof r.netMarginPct === 'number' ? (r.netMarginPct * 100).toFixed(1) + '%' : '—';
+      html += '<tr data-customer-id="' + esc(r.customerId) + '">' +
+        '<td><input type="checkbox" class="pf-row-check" data-customer-id="' + esc(r.customerId) + '" onchange="portfolioUpdateBulkBar()" onclick="event.stopPropagation();"></td>' +
+        '<td style="cursor:pointer;" onclick="portfolioOpenCustomer(this.parentNode.dataset.customerId)">' + esc(r.displayName) + '</td>' +
+        '<td><span class="status-badge" style="background:' + qStyle.bg + ';color:' + qStyle.color + ';">' + esc(qStyle.label) + '</span></td>' +
+        '<td style="text-align:right;">' + esc(portfolioFmtMoney(r.revenueCents)) + '</td>' +
+        '<td style="text-align:right;">' + esc(portfolioFmtMoney(r.grossMarginCents)) + '</td>' +
+        '<td style="text-align:right;">' + esc(marginPctStr) + '</td>' +
+        '<td style="text-align:right;color:var(--warm-gray);">' + esc(portfolioFmtMoney(r.costToServeCents)) + '</td>' +
+        '<td style="text-align:right;font-weight:600;color:' + (r.netContributionCents < 0 ? '#f49aa3' : 'var(--charcoal)') + ';">' +
+          esc(portfolioFmtMoney(r.netContributionCents)) + '</td>' +
+        '<td style="font-size:0.78rem;color:' + lapseColor + ';">' + esc(lapseLabel) + '</td>' +
+        '</tr>';
+    });
+    if (displayRows.length === 0) {
+      html += '<tr><td colspan="9" style="text-align:center;padding:40px;color:var(--warm-gray);">No customers in this quadrant.</td></tr>';
+    }
+    html += '</tbody></table></div>';
+
+    el.innerHTML = html;
+    portfolioUpdateBulkBar();
+  }).catch(function(err) {
+    el.innerHTML = '<div style="color:var(--danger);padding:20px;">Error loading portfolio: ' + esc(err && err.message || String(err)) + '</div>';
+  });
+}
+
+function portfolioSetSort(s) {
+  portfolioState.sortBy = s;
+  renderCustomerPortfolio();
+}
+
+function portfolioSetQuadrant(q) {
+  portfolioState.quadrantFilter = q;
+  renderCustomerPortfolio();
+}
+
+function portfolioOpenCustomer(cid) {
+  if (!cid) return;
+  if (window.MastNavStack && MastNavStack.push) {
+    MastNavStack.push({
+      route: 'customer-portfolio',
+      view: 'list',
+      state: { sortBy: portfolioState.sortBy, quadrantFilter: portfolioState.quadrantFilter, scrollTop: window.scrollY || 0 },
+      label: 'Customer Portfolio'
+    });
+  }
+  if (typeof navigateTo === 'function') navigateTo('customers');
+  if (typeof window.customersOpenDetail === 'function') {
+    setTimeout(function() { window.customersOpenDetail(cid); }, 50);
+  }
+}
+
+function portfolioToggleSelectAll(checked) {
+  document.querySelectorAll('.pf-row-check').forEach(function(cb) { cb.checked = checked; });
+  portfolioUpdateBulkBar();
+}
+
+function portfolioUpdateBulkBar() {
+  var bar = document.getElementById('pfBulkBar');
+  if (!bar) return;
+  var checked = Array.from(document.querySelectorAll('.pf-row-check:checked'));
+  if (checked.length === 0) {
+    bar.innerHTML = '';
+    return;
+  }
+  bar.innerHTML = esc(String(checked.length)) + ' selected · ' +
+    '<a href="#" onclick="event.preventDefault();portfolioBulkTag(\'white-glove\')" style="color:var(--teal);text-decoration:underline;">Tag: white-glove</a> · ' +
+    '<a href="#" onclick="event.preventDefault();portfolioBulkTag(\'renegotiate\')" style="color:var(--teal);text-decoration:underline;">renegotiate</a> · ' +
+    '<a href="#" onclick="event.preventDefault();portfolioBulkTag(\'deprioritize\')" style="color:var(--teal);text-decoration:underline;">deprioritize</a>';
+}
+
+async function portfolioBulkTag(tag) {
+  var checked = Array.from(document.querySelectorAll('.pf-row-check:checked'));
+  if (checked.length === 0) return;
+  var ids = checked.map(function(cb) { return cb.dataset.customerId; });
+  var confirmed = await (typeof mastConfirm === 'function'
+    ? mastConfirm('Apply tag "' + tag + '" to ' + ids.length + ' customer' + (ids.length === 1 ? '' : 's') + '?', { title: 'Bulk tag' })
+    : Promise.resolve(window.confirm('Apply tag "' + tag + '" to ' + ids.length + ' customers?')));
+  if (!confirmed) return;
+  var now = new Date().toISOString();
+  var errCount = 0;
+  for (var i = 0; i < ids.length; i++) {
+    try {
+      var cust = portfolioState.rows.find(function(r) { return r.customerId === ids[i]; });
+      var existingTags = (cust && cust.tags) || [];
+      if (existingTags.indexOf(tag) === -1) {
+        var newTags = existingTags.concat([tag]);
+        await MastDB.update('admin/customers/' + ids[i], { tags: newTags, updatedAt: now });
+      }
+    } catch (e) { errCount++; }
+  }
+  if (typeof showToast === 'function') {
+    showToast('Tagged ' + (ids.length - errCount) + (errCount > 0 ? ' (' + errCount + ' errored)' : '') + ' customer(s) as "' + tag + '".');
+  }
+  renderCustomerPortfolio();
+}
+
+window.renderCustomerPortfolio = renderCustomerPortfolio;
+window.portfolioSetSort = portfolioSetSort;
+window.portfolioSetQuadrant = portfolioSetQuadrant;
+window.portfolioOpenCustomer = portfolioOpenCustomer;
+window.portfolioToggleSelectAll = portfolioToggleSelectAll;
+window.portfolioUpdateBulkBar = portfolioUpdateBulkBar;
+window.portfolioBulkTag = portfolioBulkTag;
+
 // ── Window exports for onclick handlers ───────────────────────────────────────
 
 window.loadRevenue    = loadRevenue;
@@ -2824,14 +3156,15 @@ window.loadApData     = loadApData;
 
 MastAdmin.registerModule('finance', {
   routes: {
-    'finance-revenue':   { tab: 'financeRevenueTab',   setup: function() { setupRevenueTab(); } },
-    'finance-expenses':  { tab: 'financeExpensesTab',  setup: function() { setupExpensesTab(); } },
-    'finance-pl':        { tab: 'financePlTab',        setup: function() { setupPlTab(); } },
-    'finance-cash-flow': { tab: 'financeCashFlowTab',  setup: function() { setupCashFlowTab(); } },
-    'finance-ar':        { tab: 'financeArTab',        setup: function() { setupArTab(); } },
-    'finance-ap':        { tab: 'financeApTab',        setup: function() { setupApTab(); } },
-    'finance-tax':       { tab: 'financeTaxTab',       setup: function() { setupTaxTab(); } },
-    'finance-reports':   { tab: 'financeReportsTab',   setup: function() { setupReportsTab(); } }
+    'finance-revenue':    { tab: 'financeRevenueTab',    setup: function() { setupRevenueTab(); } },
+    'finance-expenses':   { tab: 'financeExpensesTab',   setup: function() { setupExpensesTab(); } },
+    'finance-pl':         { tab: 'financePlTab',         setup: function() { setupPlTab(); } },
+    'finance-cash-flow':  { tab: 'financeCashFlowTab',   setup: function() { setupCashFlowTab(); } },
+    'finance-ar':         { tab: 'financeArTab',         setup: function() { setupArTab(); } },
+    'finance-ap':         { tab: 'financeApTab',         setup: function() { setupApTab(); } },
+    'finance-tax':        { tab: 'financeTaxTab',        setup: function() { setupTaxTab(); } },
+    'finance-reports':    { tab: 'financeReportsTab',    setup: function() { setupReportsTab(); } },
+    'customer-portfolio': { tab: 'customerPortfolioTab', setup: function() { renderCustomerPortfolio(); } }
   }
 });
 

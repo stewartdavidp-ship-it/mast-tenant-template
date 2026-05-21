@@ -5672,6 +5672,7 @@
         <div class="sidebar-item" data-route="finance-ap" onclick="navigateTo('finance-ap')">AP</div>
         <div class="sidebar-item" data-route="finance-tax" onclick="navigateTo('finance-tax')">Tax</div>
         <div class="sidebar-item" data-route="finance-reports" onclick="navigateTo('finance-reports')">Reports</div>
+        <div class="sidebar-item" data-route="customer-portfolio" onclick="navigateTo('customer-portfolio')">Customer Portfolio</div>
       </div>
     </div>
     <!-- Operations -->
@@ -6215,6 +6216,12 @@
         <div class="placeholder-desc">Pre-built financial reports: income statement, mileage summary, expense export by category, show-by-show profitability, and Schedule C prep package.</div>
         <div class="placeholder-note">Reports are generated from live Finance data once Revenue and Expenses are wired.</div>
       </div>
+    </div>
+    <!-- Build 6b UI-2 — Customer Portfolio dashboard. Concentration + quadrants
+         + bulk-tag actions. Computed client-side mirroring the server-side
+         analytics.get_customer_portfolio + analytics.get_concentration. -->
+    <div id="customerPortfolioTab" style="display:none;">
+      <div id="customerPortfolioContent" style="max-width:1200px;margin:0 auto;padding:24px;"></div>
     </div>
 
     <!-- Events Organizer — moved to standalone app at ../events/index.html -->
@@ -15086,6 +15093,7 @@ var SECTION_ROUTES = {
   'finance':           ['finance-revenue', 'finance-expenses', 'finance-pl',
                         'finance-cash-flow', 'finance-ar', 'finance-ap',
                         'finance-tax', 'finance-reports',
+                        'customer-portfolio',
                         'financials'],
   'operations':        ['trips', 'reports',
                         'advisor', 'studio', 'team', 'business',
@@ -15134,7 +15142,7 @@ var ROUTE_ALIASES = {
   'consignment': 'galleries'
 };
 
-var ALL_TAB_IDS = ['inquiriesTab', 'scheduleTab', 'galleryTab', 'homepageTab', 'brandTab', 'productsTab', 'ordersTab', 'salesTab', 'salesEventsTab', 'productionTab', 'forecastTab', 'couponsTab', 'analyticsTab', 'settingsTab', 'imagesTab', 'auditLogTab', 'employeesTab', 'contactsTab', 'customersTab', 'packTab', 'shipTab', 'commissionsTab', 'rmaTab', 'socialMediaTab', 'blogTab', 'newsletterTab', 'placeholderTab', 'inventoryTab', 'storiesTab', 'dashboardTab', 'tripsTab', 'wholesaleTab', 'showTab', 'financialsTab', 'eventsAdminTab', 'websiteTab', 'showLightTab', 'emailLogTab', 'materialsTab', 'piecesTab', 'galleriesTab', 'lookbooksTab', 'promotionsTab', 'bookTab', 'subscriptionTab', 'aboutTab', 'walletTab', 'giftCardsTab', 'loyaltyTab', 'membershipTab', 'termsTab', 'advisorTab', 'studioTab', 'teamTab', 'studentsTab', 'migrationDashTab', 'migrationConfirmTab', 'migrationPlanTab', 'migrationImportTab', 'historicalOrdersTab', 'channelsTab', 'businessTab', 'myFeedbackTab', 'procurementTab', 'csInboxTab', 'csTicketsTab', 'csSurveysTab', 'csReviewsTab', 'csFaqsTab', 'csMembersTab', 'financeRevenueTab', 'financeExpensesTab', 'financePlTab', 'financeCashFlowTab', 'financeArTab', 'financeApTab', 'financeTaxTab', 'financeReportsTab'];
+var ALL_TAB_IDS = ['inquiriesTab', 'scheduleTab', 'galleryTab', 'homepageTab', 'brandTab', 'productsTab', 'ordersTab', 'salesTab', 'salesEventsTab', 'productionTab', 'forecastTab', 'couponsTab', 'analyticsTab', 'settingsTab', 'imagesTab', 'auditLogTab', 'employeesTab', 'contactsTab', 'customersTab', 'packTab', 'shipTab', 'commissionsTab', 'rmaTab', 'socialMediaTab', 'blogTab', 'newsletterTab', 'placeholderTab', 'inventoryTab', 'storiesTab', 'dashboardTab', 'tripsTab', 'wholesaleTab', 'showTab', 'financialsTab', 'eventsAdminTab', 'websiteTab', 'showLightTab', 'emailLogTab', 'materialsTab', 'piecesTab', 'galleriesTab', 'lookbooksTab', 'promotionsTab', 'bookTab', 'subscriptionTab', 'aboutTab', 'walletTab', 'giftCardsTab', 'loyaltyTab', 'membershipTab', 'termsTab', 'advisorTab', 'studioTab', 'teamTab', 'studentsTab', 'migrationDashTab', 'migrationConfirmTab', 'migrationPlanTab', 'migrationImportTab', 'historicalOrdersTab', 'channelsTab', 'businessTab', 'myFeedbackTab', 'procurementTab', 'csInboxTab', 'csTicketsTab', 'csSurveysTab', 'csReviewsTab', 'csFaqsTab', 'csMembersTab', 'financeRevenueTab', 'financeExpensesTab', 'financePlTab', 'financeCashFlowTab', 'financeArTab', 'financeApTab', 'financeTaxTab', 'financeReportsTab', 'customerPortfolioTab'];
 
 var currentRoute = 'dashboard';
 var currentRouteParams = {};
@@ -15784,7 +15792,7 @@ var MODULE_MANIFEST = {
   social: { src: 'modules/social.js', routes: ['social'] },
   trips: { src: 'modules/trips.js', routes: ['trips'] },
   wholesale: { src: 'modules/wholesale.js', routes: ['wholesale'] },
-  finance: { src: 'modules/finance.js', routes: ['finance-revenue', 'finance-expenses', 'finance-pl', 'finance-cash-flow', 'finance-ar', 'finance-ap', 'finance-tax', 'finance-reports'] },
+  finance: { src: 'modules/finance.js', routes: ['finance-revenue', 'finance-expenses', 'finance-pl', 'finance-cash-flow', 'finance-ar', 'finance-ap', 'finance-tax', 'finance-reports', 'customer-portfolio'] },
   shows: { src: 'modules/shows.js', routes: ['show', 'show-find', 'show-apply', 'show-prep', 'show-execute', 'show-history'] },
   production: { src: 'modules/production.js', routes: ['jobs', 'production', 'stories', 'forecast'] },
   procurement: { src: 'modules/procurement.js', routes: ['procurement'] },
