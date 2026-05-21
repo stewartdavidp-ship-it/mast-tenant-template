@@ -336,9 +336,19 @@
     html += '<div style="flex:1;min-width:0;">';
     html += '<div style="font-weight:600;font-size:1rem;">' +
       _esc(num) + ' — ' + _esc(ticket.subject || 'No subject') + '</div>';
+    // Build 5b.2 — when the ticket carries customerId (post-backfill),
+    // render the customer name/email as a drill-in to the customer detail.
+    // Pre-backfill tickets still render plain text. Drill-in goes through
+    // MastNavStack so back-nav returns to the ticket.
+    var fromLabel = _esc(ticket.contactName || ticket.contactEmail || 'Unknown') +
+      (ticket.contactEmail && ticket.contactName ? ' (' + _esc(ticket.contactEmail) + ')' : '');
+    var fromCell = ticket.customerId
+      ? '<a href="#" data-customer-id="' + _esc(ticket.customerId) +
+        '" onclick="event.preventDefault();csOpenLinkedCustomer(this.dataset.customerId);" ' +
+        'style="color:var(--teal);text-decoration:underline;">' + fromLabel + '</a>'
+      : fromLabel;
     html += '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:2px;">from ' +
-      _esc(ticket.contactName || ticket.contactEmail || 'Unknown') +
-      (ticket.contactEmail && ticket.contactName ? ' (' + _esc(ticket.contactEmail) + ')' : '') +
+      fromCell +
       ' · ' + fmtDate(ticket.createdAt) + '</div>';
     html += '</div>';
     html += '<div style="display:flex;gap:8px;align-items:center;flex-shrink:0;">';
@@ -604,7 +614,13 @@
         if (r.headline || r.productId) {
           html += '<div style="font-size:0.85rem;margin-bottom:6px;">';
           if (r.headline) html += '<strong>' + _esc(r.headline) + '</strong> ';
-          if (r.productId) html += '<span style="color:var(--warm-gray);">Product: ' + _esc(r.productId) + '</span>';
+          // Build 5b.2 — show productName (snapshotted at write time by the
+          // submitReview CF) instead of the raw Firebase productId. Falls
+          // back to the id only when the name wasn't captured (legacy reviews).
+          if (r.productId) {
+            var prodLabel = r.productName || r.productId;
+            html += '<span style="color:var(--warm-gray);">Product: ' + _esc(prodLabel) + '</span>';
+          }
           html += '</div>';
         }
         if (r.body) html += '<div style="font-size:0.9rem;margin-bottom:10px;">' + _esc(r.body) + '</div>';
@@ -1284,6 +1300,23 @@
     if (typeof navigateTo === 'function') navigateTo('contacts', { email: email });
   };
 
+  // Build 5b.2 — ticket → customer detail drill-in via MastNavStack.
+  // Renders a link only when the ticket carries customerId (post-backfill).
+  window.csOpenLinkedCustomer = function (customerId) {
+    if (!customerId) return;
+    if (window.MastNavStack && MastNavStack.push) {
+      MastNavStack.push({
+        route: 'cs-tickets',
+        view: 'thread',
+        state: { ticketId: selectedTicketId },
+        label: 'ticket ' + (selectedTicketId || '')
+      });
+    }
+    if (typeof navigateTo === 'function') navigateTo('customers');
+    if (typeof window.customersOpenDetail === 'function') {
+      setTimeout(function () { window.customersOpenDetail(customerId); }, 50);
+    }
+  };
   window.csReviewsRefresh = function () { reviewsLoaded = false; renderReviews(); loadReviews().then(renderReviews); };
   window.csReviewsSetFilter = function (f) { reviewsFilter = f; renderReviews(); };
   window.csApproveReview = approveReview;
