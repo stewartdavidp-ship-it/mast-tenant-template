@@ -3912,7 +3912,7 @@
       '</div>' +
       '<div class="order-detail-section">' +
         '<div class="order-detail-section-title">Return Reason</div>' +
-        '<div style="font-size:0.9rem;">' + esc(r.returnReason || 'No reason provided') + '</div>' +
+        renderRmaReasonBlock(rmaId, r) +
       '</div>' +
       '<div class="order-detail-section">' +
         '<div class="order-detail-section-title">Items Being Returned</div>' +
@@ -4121,6 +4121,125 @@
       showToast('Complete failed: ' + (err.message || err), true);
     }
   }
+
+  // ── Devon B: Return Reason Code (Paradigm A read → edit → save/cancel) ──
+  var _rmaReasonEditing = {}; // rmaId -> bool
+  var _cachedAllowedReturnReasons = null; // populated lazily
+
+  var DEFAULT_RETURN_REASONS = ['defective', 'wrong-item', 'not-as-described', 'changed-mind', 'damaged-in-transit', 'arrived-late', 'other'];
+
+  function _humanizeReason(code) {
+    if (!code) return '';
+    var s = String(code).replace(/[-_]+/g, ' ').trim();
+    return s.charAt(0).toUpperCase() + s.slice(1);
+  }
+
+  function _allowedReasonCodes() {
+    if (_cachedAllowedReturnReasons && _cachedAllowedReturnReasons.length) {
+      return _cachedAllowedReturnReasons.slice();
+    }
+    return DEFAULT_RETURN_REASONS.slice();
+  }
+
+  function _ensureAllowedReasonsLoaded() {
+    if (_cachedAllowedReturnReasons !== null) return Promise.resolve();
+    return MastDB.termsConfig.get().then(function(snap) {
+      var tc = (snap && typeof snap.val === 'function') ? snap.val() : snap;
+      if (tc && Array.isArray(tc.allowedReturnReasons) && tc.allowedReturnReasons.length) {
+        _cachedAllowedReturnReasons = tc.allowedReturnReasons.slice();
+      } else {
+        _cachedAllowedReturnReasons = [];
+      }
+    }).catch(function() { _cachedAllowedReturnReasons = []; });
+  }
+
+  function renderRmaReasonBlock(rmaId, r) {
+    var code = r.returnReasonCode || '';
+    var detail = r.returnReasonDetail || '';
+    // Back-compat: legacy RMAs stored the dropdown choice concatenated into returnReason as "code - detail".
+    if (!code && r.returnReason) {
+      var raw = String(r.returnReason);
+      var sepIdx = raw.indexOf(' - ');
+      if (sepIdx > 0) {
+        code = raw.slice(0, sepIdx);
+        if (!detail) detail = raw.slice(sepIdx + 3);
+      } else {
+        code = raw;
+      }
+    }
+    if (_rmaReasonEditing[rmaId]) {
+      var codes = _allowedReasonCodes();
+      // Make sure the current code (if any) appears even if it's not in the active enum.
+      if (code && codes.indexOf(code) === -1) codes.unshift(code);
+      var opts = '<option value="">Select a reason…</option>' + codes.map(function(c) {
+        return '<option value="' + esc(c) + '"' + (c === code ? ' selected' : '') + '>' + esc(_humanizeReason(c)) + '</option>';
+      }).join('');
+      return '<div style="display:flex;flex-direction:column;gap:8px;">' +
+        '<select id="rmaReasonCodeEdit_' + esc(rmaId) + '" style="padding:6px 10px;border:1px solid var(--cream-dark);border-radius:4px;font-size:0.85rem;background:var(--cream);color:var(--charcoal);max-width:280px;">' + opts + '</select>' +
+        '<textarea id="rmaReasonDetailEdit_' + esc(rmaId) + '" placeholder="Additional detail (optional)" style="padding:6px 10px;border:1px solid var(--cream-dark);border-radius:4px;font-size:0.85rem;background:var(--cream);color:var(--charcoal);min-height:60px;">' + esc(detail) + '</textarea>' +
+        '<div style="display:flex;gap:8px;">' +
+          '<button class="btn btn-primary" style="font-size:0.78rem;padding:6px 14px;" onclick="saveRmaReason(\'' + esc(rmaId) + '\')">Save</button>' +
+          '<button class="btn btn-outline" style="font-size:0.78rem;padding:6px 14px;" onclick="cancelRmaReasonEdit(\'' + esc(rmaId) + '\')">Cancel</button>' +
+        '</div>' +
+      '</div>';
+    }
+    var chip = code
+      ? '<span class="status-badge pill" style="background:rgba(0,121,107,0.15);color:var(--teal);border:1px solid rgba(0,121,107,0.35);font-size:0.78rem;">' + esc(_humanizeReason(code)) + '</span>'
+      : '<span style="color:var(--warm-gray-light);font-size:0.85rem;">No reason code</span>';
+    var detailHtml = detail
+      ? '<div style="font-size:0.85rem;color:var(--warm-gray);margin-top:6px;">' + esc(detail) + '</div>'
+      : (!code && r.returnReason ? '<div style="font-size:0.85rem;color:var(--warm-gray);margin-top:6px;">' + esc(r.returnReason) + '</div>' : '');
+    return '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">' +
+        chip +
+        '<button class="btn btn-outline" style="font-size:0.72rem;padding:3px 10px;" onclick="editRmaReason(\'' + esc(rmaId) + '\')">Edit</button>' +
+      '</div>' + detailHtml;
+  }
+
+  window.editRmaReason = function(rmaId) {
+    _ensureAllowedReasonsLoaded().then(function() {
+      _rmaReasonEditing[rmaId] = true;
+      renderRmaDetail(rmaId);
+    });
+  };
+
+  window.cancelRmaReasonEdit = function(rmaId) {
+    _rmaReasonEditing[rmaId] = false;
+    renderRmaDetail(rmaId);
+  };
+
+  window.saveRmaReason = async function(rmaId) {
+    var codeEl = document.getElementById('rmaReasonCodeEdit_' + rmaId);
+    var detailEl = document.getElementById('rmaReasonDetailEdit_' + rmaId);
+    if (!codeEl) return;
+    var newCode = codeEl.value || '';
+    var newDetail = detailEl ? detailEl.value.trim() : '';
+    if (!newCode) {
+      showToast('Please select a reason code.', true);
+      return;
+    }
+    var combined = newDetail ? (newCode + ' - ' + newDetail) : newCode;
+    try {
+      await MastDB.update('admin/rma/' + rmaId, {
+        returnReasonCode: newCode,
+        returnReasonDetail: newDetail,
+        returnReason: combined,
+        updatedAt: new Date().toISOString()
+      });
+      if (typeof writeAudit === 'function') {
+        try { writeAudit('update', 'rma', rmaId, { field: 'returnReasonCode', value: newCode }); } catch (_e) {}
+      }
+      if (rmaData[rmaId]) {
+        rmaData[rmaId].returnReasonCode = newCode;
+        rmaData[rmaId].returnReasonDetail = newDetail;
+        rmaData[rmaId].returnReason = combined;
+      }
+      _rmaReasonEditing[rmaId] = false;
+      renderRmaDetail(rmaId);
+      showToast('Return reason updated');
+    } catch (err) {
+      showToast('Failed to update reason: ' + (err && err.message || err), true);
+    }
+  };
 
   async function overrideRmaRefund(rmaId) {
     var methodEl = document.getElementById('rmaRefundMethodOverride');
