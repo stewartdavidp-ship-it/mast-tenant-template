@@ -55,7 +55,7 @@ function renderWholesaleAdmin() {
   // URL-driven sub-tab forcing (MCP admin links). #wholesale?subView=accounts|orders|users|requests
   var rp = (typeof window.getRouteParams === 'function') ? window.getRouteParams() : {};
   var urlSubView = (rp && typeof rp.subView === 'string') ? rp.subView : '';
-  if (urlSubView && (urlSubView === 'accounts' || urlSubView === 'orders' || urlSubView === 'users' || urlSubView === 'requests' || urlSubView === 'dormant')) {
+  if (urlSubView && (urlSubView === 'accounts' || urlSubView === 'orders' || urlSubView === 'users' || urlSubView === 'requests' || urlSubView === 'dormant' || urlSubView === 'cadence')) {
     wholesaleSubView = urlSubView;
   }
 
@@ -72,6 +72,7 @@ function renderWholesaleAdmin() {
     '<div class="view-tabs" style="margin-bottom:20px;">' +
       '<div class="view-tab' + (wholesaleSubView === 'accounts' ? ' active' : '') + '" onclick="switchWholesaleView(\'accounts\')">Accounts</div>' +
       '<div class="view-tab' + (wholesaleSubView === 'orders' ? ' active' : '') + '" onclick="switchWholesaleView(\'orders\')">Orders</div>' +
+      '<div class="view-tab' + (wholesaleSubView === 'cadence' ? ' active' : '') + '" onclick="switchWholesaleView(\'cadence\')">Cadence</div>' +
       '<div class="view-tab' + (wholesaleSubView === 'users' ? ' active' : '') + '" onclick="switchWholesaleView(\'users\')">Authorized Users</div>' +
       '<div class="view-tab' + (wholesaleSubView === 'requests' ? ' active' : '') + '" onclick="switchWholesaleView(\'requests\')">Access Requests <span id="wsRequestBadge"></span></div>' +
       '<div class="view-tab' + (wholesaleSubView === 'dormant' ? ' active' : '') + '" onclick="switchWholesaleView(\'dormant\')">Dormant</div>' +
@@ -92,6 +93,7 @@ function renderWholesaleAdmin() {
   else if (wholesaleSubView === 'requests') renderWholesaleRequests();
   else if (wholesaleSubView === 'orders') renderWholesaleOrders();
   else if (wholesaleSubView === 'dormant') renderWholesaleDormant();
+  else if (wholesaleSubView === 'cadence') renderWholesaleCadence();
 }
 
 function switchWholesaleView(view) {
@@ -472,6 +474,175 @@ async function deleteWholesaleAccount(id) {
 
 // ── Dormant accounts (W2e) ──
 // Wholesale orders today carry a buyerEmail but no direct wholesaleAccountId.
+// ── Cadence sub-view (Build 2) ─────────────────────────────────────────
+// Per-account learned reorder cadence (median of own intervals) + cadence-
+// aware overdue chip using tenant-configurable thresholds. Mirrors the
+// server-side wholesale.getWholesaleActivity compute so the URL-shared
+// admin view stays consistent with what AI assistants see via MCP.
+//
+// Thresholds live at admin/config/customerSuccess/wholesaleCadenceThresholds.
+// If absent, fall back to defaults: dueSoon=0.9, overdue=1.25, lapsed=2.0,
+// defaultIntervalDays=90.
+
+var WS_CADENCE_DEFAULTS = { dueSoonMultiplier: 0.9, overdueMultiplier: 1.25, lapsedMultiplier: 2.0, defaultIntervalDays: 90 };
+
+function wsMedianIntervalDays(timestampsMs) {
+  if (!timestampsMs || timestampsMs.length < 2) return null;
+  var sorted = timestampsMs.slice().sort(function(a,b){ return a-b; });
+  var intervals = [];
+  for (var i = 1; i < sorted.length; i++) intervals.push(sorted[i] - sorted[i-1]);
+  intervals.sort(function(a,b){ return a-b; });
+  var mid = Math.floor(intervals.length / 2);
+  var medianMs = intervals.length % 2 === 0 ? (intervals[mid-1] + intervals[mid]) / 2 : intervals[mid];
+  return Math.max(1, Math.round(medianMs / 86400000));
+}
+
+function wsClassifyOverdue(daysSince, intervalDays, t) {
+  if (daysSince == null || !intervalDays || intervalDays <= 0) return { status: 'unknown', ratio: null };
+  var ratio = Math.round((daysSince / intervalDays) * 100) / 100;
+  if (ratio >= t.lapsedMultiplier) return { status: 'lapsed', ratio: ratio };
+  if (ratio >= t.overdueMultiplier) return { status: 'overdue', ratio: ratio };
+  if (ratio >= t.dueSoonMultiplier) return { status: 'due-soon', ratio: ratio };
+  return { status: 'on-track', ratio: ratio };
+}
+
+function wsCadenceChip(status, ratio) {
+  if (!status || status === 'unknown') return '<span style="color:var(--warm-gray-light);font-size:0.72rem;">—</span>';
+  var bg, color, label;
+  if (status === 'on-track')      { bg = 'rgba(34,197,94,0.20)'; color = '#7ddca0'; label = 'On track'; }
+  else if (status === 'due-soon') { bg = 'rgba(245,158,11,0.30)'; color = '#fbcc70'; label = 'Due soon'; }
+  else if (status === 'overdue')  { bg = 'rgba(220,53,69,0.30)'; color = '#f49aa3'; label = 'Overdue'; }
+  else                            { bg = 'rgba(155,28,28,0.40)'; color = '#f49aa3'; label = 'Lapsed'; }
+  var tip = (typeof ratio === 'number') ? (' title="' + ratio.toFixed(2) + '× expected interval"') : '';
+  return '<span class="status-badge" style="background:' + bg + ';color:' + color + ';"' + tip + '>' + esc(label) + '</span>';
+}
+
+function renderWholesaleCadence() {
+  var container = document.getElementById('wholesaleSubContent');
+  if (!container) return;
+  container.innerHTML = '<div style="color:var(--warm-gray);padding:40px 0;text-align:center;">Loading cadence…</div>';
+
+  Promise.all([
+    MastDB.query('admin/wholesaleAuthorized').once(),
+    MastDB.query('orders').orderByChild('createdAt').limitToLast(2000).once(),
+    MastDB.get('admin/config/customerSuccess/wholesaleCadenceThresholds').catch(function(){ return null; })
+  ]).then(function(results) {
+    var authData = (results[0] && typeof results[0].val === 'function' ? results[0].val() : results[0]) || {};
+    var ordersData = (results[1] && typeof results[1].val === 'function' ? results[1].val() : results[1]) || {};
+    var storedThresh = results[2] || null;
+    var t = Object.assign({}, WS_CADENCE_DEFAULTS, storedThresh || {});
+
+    var now = Date.now();
+    var yearStartMs = Date.UTC(new Date().getUTCFullYear(), 0, 1);
+    var twelveMonthsAgoMs = now - 365 * 86400000;
+
+    // Index orders by email (lowercase). Skip cancelled.
+    var perEmail = Object.create(null);
+    Object.keys(ordersData).forEach(function(oid) {
+      var o = ordersData[oid];
+      if (!o || o.status === 'cancelled') return;
+      var em = (o.email || o.customerEmail || (o.customer && o.customer.email) || '').toLowerCase();
+      if (!em) return;
+      var ts = o.createdAt ? new Date(o.createdAt).getTime() : NaN;
+      if (isNaN(ts)) return;
+      var rec = perEmail[em];
+      if (!rec) { rec = perEmail[em] = { lastIso: '', count: 0, total: 0, ytd: 0, t12m: 0, timestamps: [] }; }
+      rec.count++;
+      var amount = (typeof o.totalCents === 'number') ? o.totalCents : (o.total || 0);
+      rec.total += amount;
+      if (ts >= yearStartMs) rec.ytd += amount;
+      if (ts >= twelveMonthsAgoMs) rec.t12m += amount;
+      rec.timestamps.push(ts);
+      if ((o.createdAt || '') > rec.lastIso) rec.lastIso = o.createdAt || '';
+    });
+
+    var rows = Object.keys(authData).map(function(emailKey) {
+      var rec = authData[emailKey] || {};
+      var email = wsKeyToEmail(emailKey);
+      var act = perEmail[email.toLowerCase()];
+      var daysSince = act && act.lastIso ? Math.floor((now - new Date(act.lastIso).getTime()) / 86400000) : null;
+      var learned = act ? wsMedianIntervalDays(act.timestamps) : null;
+      var effective = learned != null ? learned : t.defaultIntervalDays;
+      var cls = wsClassifyOverdue(daysSince, daysSince != null ? effective : null, t);
+      return {
+        email: email,
+        displayName: rec.displayName || null,
+        active: rec.active !== false,
+        lastIso: (act && act.lastIso) || '',
+        count: (act && act.count) || 0,
+        ytdSpend: (act && act.ytd) || 0,
+        t12mSpend: (act && act.t12m) || 0,
+        daysSince: daysSince,
+        learnedInterval: learned,
+        effectiveInterval: daysSince != null ? effective : null,
+        intervalSource: learned != null ? 'learned' : (daysSince != null ? 'default' : null),
+        status: cls.status,
+        ratio: cls.ratio
+      };
+    });
+
+    // Sort: lapsed → overdue → due-soon → on-track → unknown. Within
+    // bucket, highest ratio first.
+    var statusRank = { lapsed: 0, overdue: 1, 'due-soon': 2, 'on-track': 3, unknown: 4 };
+    rows.sort(function(a, b) {
+      var ra = statusRank[a.status] != null ? statusRank[a.status] : 99;
+      var rb = statusRank[b.status] != null ? statusRank[b.status] : 99;
+      if (ra !== rb) return ra - rb;
+      return (b.ratio || 0) - (a.ratio || 0);
+    });
+
+    var overdueCount = rows.filter(function(r){ return r.active && (r.status === 'overdue' || r.status === 'lapsed'); }).length;
+    var dueSoonCount = rows.filter(function(r){ return r.active && r.status === 'due-soon'; }).length;
+
+    var html = '<div style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:12px;">' +
+      esc(String(rows.length)) + ' authorized account' + (rows.length === 1 ? '' : 's') +
+      ' &middot; <span style="color:#f49aa3;font-weight:600;">' + esc(String(overdueCount)) + ' overdue+lapsed</span>' +
+      ' &middot; <span style="color:#fbcc70;font-weight:600;">' + esc(String(dueSoonCount)) + ' due soon</span>' +
+      ' &middot; thresholds: dueSoon ' + t.dueSoonMultiplier + '× &middot; overdue ' + t.overdueMultiplier + '× &middot; lapsed ' + t.lapsedMultiplier + '×' +
+      ' &middot; default cadence ' + t.defaultIntervalDays + 'd' +
+      '</div>';
+
+    if (rows.length === 0) {
+      html += '<div style="text-align:center;padding:60px 20px;color:var(--warm-gray);">No authorized wholesale accounts yet.</div>';
+    } else {
+      html += '<div class="data-table"><table><thead><tr>' +
+        '<th>Account</th>' +
+        '<th>Last order</th>' +
+        '<th>Days since</th>' +
+        '<th>Expected cadence</th>' +
+        '<th>Status</th>' +
+        '<th>YTD spend</th>' +
+        '<th>Trailing 12m</th>' +
+        '<th>Orders</th>' +
+        '</tr></thead><tbody>';
+      rows.forEach(function(r) {
+        var nameStr = r.displayName ? (r.displayName + ' (' + r.email + ')') : r.email;
+        var lastStr = r.lastIso ? new Date(r.lastIso).toLocaleDateString() : '—';
+        var daysStr = (r.daysSince == null) ? '—' : (r.daysSince + 'd');
+        var intervalStr = (r.effectiveInterval == null) ? '—'
+          : (r.effectiveInterval + 'd' + (r.intervalSource === 'learned' ? '' : ' (default)'));
+        var ytdStr = '$' + (r.ytdSpend / 100).toFixed(2);
+        var t12mStr = '$' + (r.t12mSpend / 100).toFixed(2);
+        html += '<tr' + (r.active ? '' : ' style="opacity:0.5;"') + '>' +
+          '<td>' + esc(nameStr) + '</td>' +
+          '<td style="color:var(--warm-gray);font-size:0.78rem;">' + esc(lastStr) + '</td>' +
+          '<td style="color:var(--warm-gray);font-size:0.78rem;">' + esc(daysStr) + '</td>' +
+          '<td style="color:var(--warm-gray);font-size:0.78rem;">' + esc(intervalStr) + '</td>' +
+          '<td>' + wsCadenceChip(r.status, r.ratio) + '</td>' +
+          '<td>' + esc(ytdStr) + '</td>' +
+          '<td style="color:var(--warm-gray);">' + esc(t12mStr) + '</td>' +
+          '<td style="color:var(--warm-gray);">' + esc(String(r.count)) + '</td>' +
+          '</tr>';
+      });
+      html += '</tbody></table></div>';
+    }
+
+    container.innerHTML = html;
+  }).catch(function(err) {
+    container.innerHTML = '<div style="color:var(--danger);padding:20px;">Error loading cadence: ' + esc(err.message || String(err)) + '</div>';
+  });
+}
+
 // We aggregate dormancy by walking authorized users (which DO carry the link)
 // and matching wholesale orders by buyerEmail. Accounts with no linked users
 // or no orders yet appear as "No orders yet" — useful because they flag
@@ -1218,6 +1389,7 @@ window.closeWholesaleUserModal = closeWholesaleUserModal;
 window.saveWholesaleUserLink = saveWholesaleUserLink;
 // W2e — dormant accounts view
 window.renderWholesaleDormant = renderWholesaleDormant;
+window.renderWholesaleCadence = renderWholesaleCadence;
 // renderWholesaleSetup and runWholesaleSeed removed — wholesale products now managed via product admin
 window.uploadWholesalePDF = uploadWholesalePDF;
 window.copyQRImage = copyQRImage;
