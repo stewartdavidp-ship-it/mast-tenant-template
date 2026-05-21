@@ -1272,7 +1272,10 @@
     html += '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:12px;">';
     html += '<div style="font-size:0.85rem;">' +
       _esc(String(filtered.length)) + ' of ' + _esc(String(totalCount)) + ' response' + (totalCount === 1 ? '' : 's') + ' · ' +
-      _esc(String(completedCount)) + ' completed</div>';
+      _esc(String(completedCount)) + ' completed' +
+      // Build 9 — VoC digest button
+      ' · <a href="#" onclick="event.preventDefault();csGenerateVocDigest();" style="color:var(--teal);text-decoration:underline;">✨ Generate VoC digest</a>' +
+      '</div>';
     html += '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">';
     html += '<label style="font-size:0.78rem;color:var(--warm-gray);">Survey ';
     html += '<select onchange="csResponsesSetFilter(\'surveyId\', this.value)" style="font-size:0.78rem;padding:3px 8px;border-radius:4px;">';
@@ -1399,6 +1402,204 @@
     } catch (err) {
       if (typeof showToast === 'function') showToast('Failed to save themes: ' + (err && err.message), true);
     }
+  }
+
+  // Build 9 — Voice of Customer digest. Mirrors server-side
+  // cs_generate_voc_digest: aggregates themes (with sample quotes) +
+  // ticket categories + reviews summary + customer-health counts into
+  // a copy-paste-ready markdown digest. Window: last 30 days.
+  async function csGenerateVocDigest() {
+    var overlay = document.createElement('div');
+    overlay.id = 'csVocDigestOverlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px;';
+    overlay.innerHTML = '<div style="background:var(--bg);border-radius:12px;padding:24px;color:var(--text);">Generating digest…</div>';
+    document.body.appendChild(overlay);
+
+    var cutoff = new Date(Date.now() - 30 * 86400000).toISOString();
+    try {
+      var results = await Promise.all([
+        responsesLoaded ? Promise.resolve(responsesData) : loadResponses().then(function() { return responsesData; }),
+        MastDB.query('cs_tickets').limitToLast(2000).once().then(function(s) { return (s && s.val && s.val()) || (s || {}); }).catch(function() { return {}; }),
+        MastDB.query('cs_reviews').limitToLast(500).once().then(function(s) { return (s && s.val && s.val()) || (s || {}); }).catch(function() { return {}; }),
+        MastDB.get('admin/customers').then(function(s) { return (s && s.val && s.val()) || (s || {}); }).catch(function() { return {}; })
+      ]);
+      var responses = results[0] || {};
+      var tickets = results[1] || {};
+      var reviews = results[2] || {};
+      var customers = results[3] || {};
+
+      // Themes
+      var themeAgg = {};
+      var totalResp = 0, completedResp = 0;
+      Object.values(responses).forEach(function(r) {
+        if (!r || (r.createdAt || '') < cutoff) return;
+        totalResp++;
+        if (r.status === 'completed') completedResp++;
+        var tags = Array.isArray(r.themeTags) ? r.themeTags : [];
+        if (tags.length === 0) return;
+        var openText = null;
+        if (Array.isArray(r.answers)) {
+          for (var i = 0; i < r.answers.length; i++) {
+            var a = r.answers[i];
+            if (a && typeof a.value === 'string' && a.value.trim().length > 0) {
+              openText = a.value.length > 200 ? a.value.slice(0, 197) + '…' : a.value;
+              break;
+            }
+          }
+        }
+        tags.forEach(function(t) {
+          var key = String(t || '').trim().toLowerCase();
+          if (!key) return;
+          if (!themeAgg[key]) themeAgg[key] = { count: 0, quotes: [] };
+          themeAgg[key].count++;
+          if (openText && themeAgg[key].quotes.length < 2) themeAgg[key].quotes.push(openText);
+        });
+      });
+      var topThemes = Object.entries(themeAgg)
+        .map(function(e) { return { tag: e[0], count: e[1].count, sampleQuotes: e[1].quotes }; })
+        .sort(function(a, b) { return b.count - a.count; })
+        .slice(0, 10);
+
+      // Tickets
+      var catAgg = {};
+      var ticketsInWindow = 0, openTickets = 0;
+      Object.values(tickets).forEach(function(t) {
+        if (!t) return;
+        var at = t.updatedAt || t.createdAt;
+        if ((at || '') < cutoff) return;
+        ticketsInWindow++;
+        if (t.status === 'open' || t.status === 'in_progress' || t.status === 'waiting') openTickets++;
+        var cat = t.category || 'uncategorized';
+        catAgg[cat] = (catAgg[cat] || 0) + 1;
+      });
+      var ticketCats = Object.entries(catAgg)
+        .map(function(e) { return { category: e[0], count: e[1] }; })
+        .sort(function(a, b) { return b.count - a.count; });
+
+      // Reviews
+      var revsInWindow = Object.values(reviews).filter(function(r) { return r && (r.createdAt || '') >= cutoff; });
+      var ratings = revsInWindow.map(function(r) { return r.rating; }).filter(function(n) { return typeof n === 'number'; });
+      var avgRating = ratings.length > 0 ? Math.round((ratings.reduce(function(s, n) { return s + n; }, 0) / ratings.length) * 100) / 100 : null;
+      var prodMentions = {};
+      revsInWindow.forEach(function(r) {
+        if (!r.productId) return;
+        if (!prodMentions[r.productId]) prodMentions[r.productId] = { name: r.productName || r.productId, count: 0, ratings: [] };
+        prodMentions[r.productId].count++;
+        if (typeof r.rating === 'number') prodMentions[r.productId].ratings.push(r.rating);
+      });
+      var topProds = Object.entries(prodMentions)
+        .map(function(e) {
+          var v = e[1];
+          return { name: v.name, count: v.count, avg: v.ratings.length > 0 ? Math.round((v.ratings.reduce(function(s, n) { return s + n; }, 0) / v.ratings.length) * 100) / 100 : null };
+        })
+        .sort(function(a, b) { return b.count - a.count; })
+        .slice(0, 5);
+
+      // Customer health
+      var atRisk = 0, lapsed = 0, active = 0, unknown = 0, totalCust = 0;
+      Object.values(customers).forEach(function(c) {
+        if (!c || c.status === 'merged' || c.status === 'archived') return;
+        totalCust++;
+        var s = (c.stats || {}).lapseStatus;
+        if (s === 'at-risk') atRisk++;
+        else if (s === 'lapsed') lapsed++;
+        else if (s === 'active') active++;
+        else unknown++;
+      });
+
+      // Build markdown
+      var lines = [];
+      lines.push('# Voice of Customer — Last 30 days');
+      lines.push('*Generated ' + new Date().toISOString() + '*');
+      lines.push('');
+      lines.push('## Summary');
+      lines.push('- **' + totalResp + '** survey responses (' + completedResp + ' completed)');
+      lines.push('- **' + ticketsInWindow + '** support tickets (' + openTickets + ' still open)');
+      lines.push('- **' + revsInWindow.length + '** reviews' + (avgRating != null ? ' · avg ' + avgRating.toFixed(2) + ' ★' : ''));
+      lines.push('- **' + totalCust + '** active customers · ' + atRisk + ' at-risk · ' + lapsed + ' lapsed' + (unknown > 0 ? ' (' + unknown + ' with insufficient cadence signal)' : ''));
+      lines.push('');
+      if (topThemes.length > 0) {
+        lines.push('## Top themes (from survey free-text)');
+        topThemes.forEach(function(t, i) {
+          lines.push((i + 1) + '. **' + t.tag + '** — ' + t.count + ' response' + (t.count === 1 ? '' : 's'));
+          t.sampleQuotes.forEach(function(q) { lines.push('   > "' + q + '"'); });
+        });
+        lines.push('');
+      }
+      if (ticketCats.length > 0) {
+        lines.push('## Ticket categories');
+        ticketCats.forEach(function(c) { lines.push('- **' + c.category + '**: ' + c.count); });
+        lines.push('');
+      }
+      if (topProds.length > 0) {
+        lines.push('## Most-reviewed products');
+        topProds.forEach(function(p) {
+          lines.push('- **' + p.name + '** — ' + p.count + ' review' + (p.count === 1 ? '' : 's') + (p.avg != null ? ' · ' + p.avg.toFixed(2) + ' ★' : ''));
+        });
+        lines.push('');
+      }
+      if (atRisk + lapsed > 0) {
+        lines.push('## Action items');
+        if (atRisk > 0) lines.push('- **' + atRisk + ' at-risk customer' + (atRisk === 1 ? '' : 's') + '** — reach out before cadence breaks fully');
+        if (lapsed > 0) lines.push('- **' + lapsed + ' lapsed customer' + (lapsed === 1 ? '' : 's') + '** — win-back outreach candidates');
+      }
+      var markdown = lines.join('\n');
+
+      // Render modal
+      overlay.innerHTML =
+        '<div style="background:var(--bg);border-radius:12px;padding:20px 22px;width:min(720px,94vw);max-height:90vh;display:flex;flex-direction:column;box-shadow:0 8px 32px rgba(0,0,0,0.4);">' +
+          '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">' +
+            '<h3 style="margin:0;font-size:1.15rem;">Voice of Customer · Last 30 days</h3>' +
+            '<button class="btn btn-secondary btn-small" onclick="csCloseVocDigest()" style="padding:4px 10px;">Close</button>' +
+          '</div>' +
+          '<div style="display:flex;gap:8px;margin-bottom:10px;">' +
+            '<button class="btn btn-primary btn-small" id="csVocCopyBtn" onclick="csCopyVocDigest()">📋 Copy markdown</button>' +
+            '<button class="btn btn-secondary btn-small" onclick="csDownloadVocDigest()">⬇ Download .md</button>' +
+          '</div>' +
+          '<pre id="csVocDigestText" style="flex:1;overflow:auto;background:var(--surface-card);border:1px solid var(--cream-dark);border-radius:6px;padding:14px 16px;font-family:ui-monospace,Menlo,monospace;font-size:0.85rem;line-height:1.55;white-space:pre-wrap;color:var(--text);margin:0;"></pre>' +
+        '</div>';
+      var pre = document.getElementById('csVocDigestText');
+      if (pre) pre.textContent = markdown;
+      window.__csVocDigestMarkdown = markdown;
+    } catch (err) {
+      overlay.innerHTML = '<div style="background:var(--bg);border-radius:12px;padding:24px;color:var(--danger);">Failed to generate digest: ' + esc(err && err.message || String(err)) + '<br><br><button class="btn btn-secondary btn-small" onclick="csCloseVocDigest()">Close</button></div>';
+    }
+  }
+
+  function csCloseVocDigest() {
+    var ov = document.getElementById('csVocDigestOverlay');
+    if (ov && ov.parentNode) ov.parentNode.removeChild(ov);
+    delete window.__csVocDigestMarkdown;
+  }
+
+  async function csCopyVocDigest() {
+    var md = window.__csVocDigestMarkdown;
+    if (!md) return;
+    try {
+      await navigator.clipboard.writeText(md);
+      var btn = document.getElementById('csVocCopyBtn');
+      if (btn) {
+        var prev = btn.textContent;
+        btn.textContent = '✓ Copied';
+        setTimeout(function() { if (btn) btn.textContent = prev; }, 1500);
+      }
+    } catch (e) {
+      showToast('Copy failed: ' + (e && e.message), true);
+    }
+  }
+
+  function csDownloadVocDigest() {
+    var md = window.__csVocDigestMarkdown;
+    if (!md) return;
+    var blob = new Blob([md], { type: 'text/markdown' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = 'voc-digest-' + new Date().toISOString().slice(0, 10) + '.md';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   }
 
   function csOpenTicket(ticketId) {
@@ -1802,6 +2003,11 @@
   window.csCancelResponseTheme = csCancelResponseTheme;
   window.csSaveResponseTheme = csSaveResponseTheme;
   window.csOpenTicket = csOpenTicket;
+  // Build 9 — VoC digest
+  window.csGenerateVocDigest = csGenerateVocDigest;
+  window.csCloseVocDigest = csCloseVocDigest;
+  window.csCopyVocDigest = csCopyVocDigest;
+  window.csDownloadVocDigest = csDownloadVocDigest;
   window.csSurveysSwitchTab = function (t) { surveysSubTab = t; renderSurveys(); };
   window.csToggleAutomatedSurveys = async function () {
     if (automatedSurveysToggling) return;
