@@ -504,6 +504,14 @@
   var surveyEditId = null;
   var showAddSurvey = false;
   var sendLinkSurveyId = null;
+  // Build 7-BulkSend
+  var sendMode = 'one';                    // 'one' | 'segment'
+  var sendSegmentId = null;                // selected segment id
+  var sendSegmentsLoaded = false;
+  var sendSegmentsData = {};               // saved segments from admin/customerSegments
+  var sendSegmentMembersCount = null;      // live preview count
+  var sendInProgress = false;
+  var sendProgress = null;                 // { total, sent, failed, currentEmail }
   var triggerEditId = null;
   var showAddTrigger = false;
 
@@ -718,11 +726,70 @@
     if (sendLinkSurveyId) {
       var sv = surveysDefData[sendLinkSurveyId];
       html += '<div style="position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:1000;display:flex;align-items:center;justify-content:center;">';
-      html += '<div style="background:var(--bg);border-radius:12px;padding:24px;width:min(440px,90vw);box-shadow:0 8px 32px rgba(0,0,0,0.3);">';
-      html += '<h3 style="margin:0 0 4px;">Send Survey</h3><div style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:16px;">' + _esc(sv ? sv.name : sendLinkSurveyId) + '</div>';
-      html += '<div style="margin-bottom:12px;"><label style="display:block;font-weight:600;font-size:0.9rem;margin-bottom:4px;">Contact Email *</label><input id="csSendEmail" type="email" class="form-input" style="width:100%;box-sizing:border-box;" placeholder="customer@example.com"></div>';
-      html += '<div style="margin-bottom:18px;"><label style="display:block;font-weight:600;font-size:0.9rem;margin-bottom:4px;">Contact Name</label><input id="csSendName" type="text" class="form-input" style="width:100%;box-sizing:border-box;" placeholder="Optional"></div>';
-      html += '<div style="display:flex;gap:8px;justify-content:flex-end;"><button class="btn btn-secondary" onclick="csSendLinkCancel()">Cancel</button><button class="btn btn-primary" onclick="csSendLinkSubmit()">Send Invite</button></div>';
+      html += '<div style="background:var(--bg);border-radius:12px;padding:24px;width:min(520px,92vw);box-shadow:0 8px 32px rgba(0,0,0,0.3);">';
+      html += '<h3 style="margin:0 0 4px;">Send Survey</h3><div style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:14px;">' + _esc(sv ? sv.name : sendLinkSurveyId) + '</div>';
+
+      // Build 7-BulkSend — mode toggle
+      html += '<div style="display:flex;gap:8px;margin-bottom:14px;">';
+      html += '<button class="view-tab' + (sendMode === 'one' ? ' active' : '') + '" onclick="csSendSetMode(\'one\')" style="font-size:0.78rem;padding:5px 10px;">Send to one person</button>';
+      html += '<button class="view-tab' + (sendMode === 'segment' ? ' active' : '') + '" onclick="csSendSetMode(\'segment\')" style="font-size:0.78rem;padding:5px 10px;">Send to a segment</button>';
+      html += '</div>';
+
+      if (sendInProgress && sendProgress) {
+        // Live progress UI
+        var pct = sendProgress.total > 0 ? Math.round(((sendProgress.sent + sendProgress.failed) / sendProgress.total) * 100) : 0;
+        html += '<div style="margin-bottom:14px;">';
+        html += '<div style="font-size:0.85rem;margin-bottom:6px;">Sending ' + esc(String(sendProgress.sent + sendProgress.failed)) + ' / ' + esc(String(sendProgress.total)) + '…</div>';
+        html += '<div style="height:8px;background:var(--cream-dark);border-radius:4px;overflow:hidden;"><div style="height:100%;width:' + pct + '%;background:var(--teal);transition:width 0.2s;"></div></div>';
+        if (sendProgress.currentEmail) {
+          html += '<div style="font-size:0.72rem;color:var(--warm-gray);margin-top:4px;">→ ' + _esc(sendProgress.currentEmail) + '</div>';
+        }
+        if (sendProgress.failed > 0) {
+          html += '<div style="font-size:0.78rem;color:var(--danger);margin-top:4px;">' + esc(String(sendProgress.failed)) + ' failed</div>';
+        }
+        html += '</div>';
+        html += '<div style="display:flex;gap:8px;justify-content:flex-end;"><button class="btn btn-secondary" disabled>Sending…</button></div>';
+      } else if (sendMode === 'one') {
+        html += '<div style="margin-bottom:12px;"><label style="display:block;font-weight:600;font-size:0.9rem;margin-bottom:4px;">Contact Email *</label><input id="csSendEmail" type="email" class="form-input" style="width:100%;box-sizing:border-box;" placeholder="customer@example.com"></div>';
+        html += '<div style="margin-bottom:18px;"><label style="display:block;font-weight:600;font-size:0.9rem;margin-bottom:4px;">Contact Name</label><input id="csSendName" type="text" class="form-input" style="width:100%;box-sizing:border-box;" placeholder="Optional"></div>';
+        html += '<div style="display:flex;gap:8px;justify-content:flex-end;"><button class="btn btn-secondary" onclick="csSendLinkCancel()">Cancel</button><button class="btn btn-primary" onclick="csSendLinkSubmit()">Send Invite</button></div>';
+      } else {
+        // Segment mode
+        if (!sendSegmentsLoaded) {
+          html += '<div style="padding:24px;text-align:center;color:var(--warm-gray);">Loading segments…</div>';
+          setTimeout(function () { csLoadSendSegments(); }, 0);
+        } else {
+          var segList = Object.entries(sendSegmentsData).map(function (e) { return Object.assign({ id: e[0] }, e[1] || {}); });
+          if (segList.length === 0) {
+            html += '<div style="padding:16px;background:var(--cream);border-radius:8px;font-size:0.85rem;color:var(--warm-gray);margin-bottom:12px;">No saved segments yet. Go to <a href="#customers" onclick="event.preventDefault();csSendLinkCancel();navigateTo(\'customers\');" style="color:var(--teal);">Customers</a> and use "Save as segment" to create one.</div>';
+          } else {
+            html += '<div style="margin-bottom:12px;"><label style="display:block;font-weight:600;font-size:0.9rem;margin-bottom:4px;">Segment *</label>';
+            html += '<select id="csSendSegment" onchange="csSendSetSegment(this.value)" class="form-input" style="width:100%;box-sizing:border-box;">';
+            html += '<option value="">— Pick a segment —</option>';
+            segList.forEach(function (s) {
+              html += '<option value="' + _esc(s.id) + '"' + (sendSegmentId === s.id ? ' selected' : '') + '>' + _esc(s.name || s.id) + '</option>';
+            });
+            html += '</select></div>';
+            if (sendSegmentId) {
+              var preview = sendSegmentMembersCount;
+              html += '<div style="margin-bottom:12px;font-size:0.85rem;">';
+              if (preview == null) {
+                html += '<span style="color:var(--warm-gray);">Counting recipients…</span>';
+              } else {
+                var capped = preview > 25;
+                html += '<strong>' + esc(String(preview)) + '</strong> matching customer' + (preview === 1 ? '' : 's') +
+                  (capped ? '<span style="color:var(--amber);"> — capped to 25 per send (re-run to continue)</span>' : '');
+              }
+              html += '</div>';
+            }
+          }
+          html += '<div style="display:flex;gap:8px;justify-content:flex-end;">';
+          html += '<button class="btn btn-secondary" onclick="csSendLinkCancel()">Cancel</button>';
+          var canSend = sendSegmentId && sendSegmentMembersCount > 0;
+          html += '<button class="btn btn-primary"' + (canSend ? '' : ' disabled') + ' onclick="csSendLinkSegmentSubmit()">Send to segment</button>';
+          html += '</div>';
+        }
+      }
       html += '</div></div>';
     }
     html += '</div>';
@@ -916,6 +983,149 @@
       await fn({ tenantId: window.TENANT_ID, surveyId: sendLinkSurveyId, contactEmail: email, contactName: contactName || null });
       sendLinkSurveyId = null; showToast('Survey invite sent!'); renderSurveys();
     } catch (err) { showToast('Failed to send: ' + (err && err.message), true); }
+  }
+
+  // ── Build 7-BulkSend ─────────────────────────────────────────────────
+  // Send a survey to all members of a saved segment. Client-side
+  // orchestration: resolves segment members, then iterates calling the
+  // existing generateSurveyLink CF per recipient with a small delay
+  // between calls to protect email-send rate. Capped at 25 per send to
+  // bound modal latency; larger segments can re-run after the initial
+  // batch (the CF dedupes by responseId/token so re-sends to already-
+  // invited customers are fine).
+  //
+  // Mirrors the segment-filter shape from customers.js so the count
+  // matches what Maya saw when she saved the segment.
+
+  var SEND_BATCH_CAP = 25;
+  var SEND_DELAY_MS = 200;
+
+  function csLoadSendSegments() {
+    if (sendSegmentsLoaded) return Promise.resolve();
+    return MastDB.query('admin/customerSegments').once()
+      .then(function (s) {
+        sendSegmentsData = (s && s.val && s.val()) || (s || {});
+        sendSegmentsLoaded = true;
+        renderSurveys();
+      })
+      .catch(function (err) {
+        console.warn('[cs-send-segments]', err && err.message);
+        sendSegmentsData = {};
+        sendSegmentsLoaded = true;
+        renderSurveys();
+      });
+  }
+
+  // Minimal mirror of customers.js's customerMatchesFilters.
+  // Built-in segments expose their own _flag keys (e.g. _lapseStatus).
+  function csCustomerMatches(c, f) {
+    if (!c) return false;
+    if (c.status === 'merged') return false;
+    if (c.status === 'archived' && !f.includeArchived) return false;
+    if (f.source && f.source !== 'all' && c.source !== f.source) return false;
+    if (f.tag && (c.tags || []).indexOf(f.tag) === -1) return false;
+    var stats = c.stats || {};
+    if (f.lastOrderBefore) {
+      var cutoff = f.lastOrderBefore + 'T23:59:59';
+      if (!stats.lastOrderAt || stats.lastOrderAt > cutoff) return false;
+    }
+    if (typeof f.minSpendCents === 'number' && (stats.lifetimeSpendCents || 0) < f.minSpendCents) return false;
+    if (f._newThisWeek) {
+      var weekAgo = new Date(Date.now() - 7 * 86400000).toISOString();
+      if (!c.createdAt || c.createdAt < weekAgo) return false;
+    }
+    if (f._noOrders && (stats.orderCount || 0) > 0) return false;
+    if (f._lapseStatus) {
+      var actual = stats.lapseStatus || 'unknown';
+      if (actual !== f._lapseStatus) return false;
+    }
+    return true;
+  }
+
+  function csResolveSegmentMembers(segmentId) {
+    var seg = sendSegmentsData[segmentId];
+    if (!seg) return Promise.resolve([]);
+    return MastDB.query('admin/customers').once()
+      .then(function (s) {
+        var all = (s && s.val && s.val()) || (s || {});
+        var matches = [];
+        Object.keys(all).forEach(function (cid) {
+          var c = all[cid];
+          if (!c) return;
+          if (csCustomerMatches(c, seg.filters || {})) {
+            var email = c.primaryEmail || (c.emails || [])[0];
+            if (email) matches.push({ customerId: cid, email: email, name: c.displayName || null });
+          }
+        });
+        return matches;
+      })
+      .catch(function () { return []; });
+  }
+
+  function csSendSetMode(m) {
+    sendMode = m;
+    sendSegmentId = null;
+    sendSegmentMembersCount = null;
+    renderSurveys();
+    if (m === 'segment' && !sendSegmentsLoaded) csLoadSendSegments();
+  }
+
+  function csSendSetSegment(segmentId) {
+    sendSegmentId = segmentId || null;
+    sendSegmentMembersCount = null;
+    renderSurveys();
+    if (sendSegmentId) {
+      csResolveSegmentMembers(sendSegmentId).then(function (members) {
+        if (sendSegmentId !== segmentId) return; // changed mid-flight
+        sendSegmentMembersCount = members.length;
+        renderSurveys();
+      });
+    }
+  }
+
+  async function csSendLinkSegmentSubmit() {
+    if (!sendLinkSurveyId || !sendSegmentId) return;
+    var members = await csResolveSegmentMembers(sendSegmentId);
+    if (members.length === 0) {
+      showToast('No recipients matched the segment.', true);
+      return;
+    }
+    var batch = members.slice(0, SEND_BATCH_CAP);
+    sendInProgress = true;
+    sendProgress = { total: batch.length, sent: 0, failed: 0, currentEmail: null };
+    renderSurveys();
+
+    var fn = firebase.functions().httpsCallable('generateSurveyLink');
+    for (var i = 0; i < batch.length; i++) {
+      var m = batch[i];
+      sendProgress.currentEmail = m.email;
+      renderSurveys();
+      try {
+        await fn({ tenantId: window.TENANT_ID, surveyId: sendLinkSurveyId, contactEmail: m.email, contactName: m.name });
+        sendProgress.sent++;
+      } catch (e) {
+        console.warn('[csBulkSend]', m.email, e && e.message);
+        sendProgress.failed++;
+      }
+      renderSurveys();
+      if (i < batch.length - 1) {
+        await new Promise(function (r) { setTimeout(r, SEND_DELAY_MS); });
+      }
+    }
+
+    sendInProgress = false;
+    var summary = 'Sent ' + sendProgress.sent + ' of ' + sendProgress.total + ' invite' + (sendProgress.total === 1 ? '' : 's');
+    if (sendProgress.failed > 0) summary += ' (' + sendProgress.failed + ' failed)';
+    if (members.length > SEND_BATCH_CAP) {
+      summary += ' · ' + (members.length - SEND_BATCH_CAP) + ' more left in segment — re-run to send next batch';
+    }
+    showToast(summary);
+    sendLinkSurveyId = null;
+    sendMode = 'one';
+    sendSegmentId = null;
+    sendSegmentMembersCount = null;
+    sendProgress = null;
+    renderSurveys();
   }
 
   async function previewSurvey(surveyId) {
@@ -1600,8 +1810,27 @@
   window.csSaveSurvey = saveSurvey;
   window.csDeleteSurvey = deleteSurvey;
   window.csCancelSurvey = function () { showAddSurvey = false; surveyEditId = null; renderSurveys(); };
-  window.csSendLink = function (id) { sendLinkSurveyId = id; renderSurveys(); };
-  window.csSendLinkCancel = function () { sendLinkSurveyId = null; renderSurveys(); };
+  window.csSendLink = function (id) {
+    sendLinkSurveyId = id;
+    sendMode = 'one';
+    sendSegmentId = null;
+    sendSegmentMembersCount = null;
+    sendInProgress = false;
+    sendProgress = null;
+    renderSurveys();
+  };
+  window.csSendLinkCancel = function () {
+    if (sendInProgress) return; // can't cancel mid-batch (would orphan tokens)
+    sendLinkSurveyId = null;
+    sendMode = 'one';
+    sendSegmentId = null;
+    sendSegmentMembersCount = null;
+    renderSurveys();
+  };
+  // Build 7-BulkSend handlers
+  window.csSendSetMode = csSendSetMode;
+  window.csSendSetSegment = csSendSetSegment;
+  window.csSendLinkSegmentSubmit = csSendLinkSegmentSubmit;
   window.csSendLinkSubmit = sendSurveyLink;
   window.csPreviewSurvey = previewSurvey;
   window.csShowAddTrigger = function () { showAddTrigger = true; triggerEditId = null; renderSurveys(); };
