@@ -70,7 +70,9 @@
   var BUILTIN_SEGMENTS = [
     { id: '__all',          name: 'All customers',  filters: {}, _builtin: true },
     { id: '__new_week',     name: 'New this week',  filters: { _newThisWeek: true }, _builtin: true },
-    { id: '__no_orders',    name: 'No orders yet',  filters: { _noOrders: true }, _builtin: true }
+    { id: '__no_orders',    name: 'No orders yet',  filters: { _noOrders: true }, _builtin: true },
+    { id: '__at_risk',      name: 'At-risk',        filters: { _lapseStatus: 'at-risk' }, _builtin: true },
+    { id: '__lapsed',       name: 'Lapsed',         filters: { _lapseStatus: 'lapsed' }, _builtin: true }
   ];
 
   var DETAIL_TABS = [
@@ -106,7 +108,8 @@
     { value: 'email',      label: 'Email (A–Z)' },
     { value: 'spend',      label: 'Lifetime spend (high → low)' },
     { value: 'orders',     label: 'Orders (most → least)' },
-    { value: 'lastOrder',  label: 'Last order (recent → old)' }
+    { value: 'lastOrder',  label: 'Last order (recent → old)' },
+    { value: 'lapseScore', label: 'Lapse score (most overdue → on rhythm)' }
   ];
 
   // ============================================================
@@ -147,6 +150,24 @@
       default:            bg = 'rgba(155,149,142,0.35)'; color = '#cfcac3';
     }
     return '<span class="status-badge" style="background:' + bg + ';color:' + color + ';">' + esc(source) + '</span>';
+  }
+
+  // Build 3 — cadence-aware lapse chip. Mirrors palette + sizing of
+  // sourceBadge so list density stays consistent.
+  function lapseChip(status, score) {
+    if (!status || status === 'unknown') {
+      return '<span style="color:var(--warm-gray-light);font-size:0.72rem;">—</span>';
+    }
+    var bg, color, label;
+    if (status === 'active') {
+      bg = 'rgba(34,197,94,0.20)'; color = '#7ddca0'; label = 'Active';
+    } else if (status === 'at-risk') {
+      bg = 'rgba(245,158,11,0.30)'; color = '#fbcc70'; label = 'At-risk';
+    } else { // lapsed
+      bg = 'rgba(220,53,69,0.30)'; color = '#f49aa3'; label = 'Lapsed';
+    }
+    var hint = (typeof score === 'number') ? (' title="lapse score ' + score.toFixed(2) + '× expected cadence"') : '';
+    return '<span class="status-badge" style="background:' + bg + ';color:' + color + ';"' + hint + '>' + esc(label) + '</span>';
   }
 
   // ============================================================
@@ -497,6 +518,10 @@
     if (f._noOrders) {
       if ((stats.orderCount || 0) > 0) return false;
     }
+    if (f._lapseStatus) {
+      var actual = stats.lapseStatus || 'unknown';
+      if (actual !== f._lapseStatus) return false;
+    }
 
     return true;
   }
@@ -572,6 +597,11 @@
         if (sortBy === 'lastOrder') return (sb.lastOrderAt || '').localeCompare(sa.lastOrderAt || '');
         if (sortBy === 'spend')     return (sb.lifetimeSpendCents || 0) - (sa.lifetimeSpendCents || 0);
         if (sortBy === 'orders')    return (sb.orderCount || 0) - (sa.orderCount || 0);
+        if (sortBy === 'lapseScore') {
+          var ascore = typeof sa.lapseScore === 'number' ? sa.lapseScore : -1;
+          var bscore = typeof sb.lapseScore === 'number' ? sb.lapseScore : -1;
+          return bscore - ascore;
+        }
         var av = a[sortBy] || '';
         var bv = b[sortBy] || '';
         return bv.localeCompare(av);
@@ -712,6 +742,7 @@
       var lastOrderCell = stats.lastOrderAt
         ? esc(relativeTime(stats.lastOrderAt))
         : '<span style="color:var(--warm-gray-light);">—</span>';
+      var statusCell = lapseChip(stats.lapseStatus, stats.lapseScore);
 
       return '<tr data-customer-id="' + esc(c.id) + '" style="cursor:pointer;" onclick="customersOpenDetail(this.dataset.customerId)">' +
         '<td>' + nameDisplay + '</td>' +
@@ -719,6 +750,7 @@
         '<td>' + sourceBadge(c.source) + '</td>' +
         '<td>' + ordersCell + '</td>' +
         '<td>' + spendCell + '</td>' +
+        '<td>' + statusCell + '</td>' +
         '<td style="color:var(--warm-gray);font-size:0.78rem;">' + lastOrderCell + '</td>' +
         '<td style="color:var(--warm-gray);font-size:0.78rem;">' + esc(linkedText) + '</td>' +
         '<td style="color:var(--warm-gray);font-size:0.78rem;">' + esc(relativeTime(c.updatedAt || c.createdAt)) + '</td>' +
@@ -730,7 +762,7 @@
     html += '<div style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:8px;">Showing ' + filtered.length + ' of ' + nonMergedTotal + '</div>';
     html += '<div class="data-table"><table>';
     html += '<thead><tr>';
-    html += '<th>Name</th><th>Primary email</th><th>Source</th><th>Frequency</th><th>Spend</th><th>Last order</th><th>Linked</th><th>Last activity</th>';
+    html += '<th>Name</th><th>Primary email</th><th>Source</th><th>Frequency</th><th>Spend</th><th>Status</th><th>Last order</th><th>Linked</th><th>Last activity</th>';
     html += '</tr></thead>';
     html += '<tbody>' + rows + '</tbody>';
     html += '</table></div>';
@@ -1218,6 +1250,19 @@
     h += identityRow('Last order',      esc(lastStr));
     h += identityRow('Enrollments',     esc(enrCntStr));
     h += identityRow('Last enrollment', esc(lastEnrStr));
+    // Build 3 — cadence + lapse meter. Only render when there's real signal.
+    if (hasStats && typeof stats.medianIntervalDays === 'number' && stats.medianIntervalDays > 0) {
+      var cadenceStr = stats.medianIntervalDays + (stats.medianIntervalDays === 1 ? ' day' : ' days');
+      h += identityRow('Median reorder cadence', esc(cadenceStr));
+      if (stats.expectedNextOrderBy) {
+        var nextStr = fmtDate(stats.expectedNextOrderBy);
+        h += identityRow('Expected next order', esc(nextStr));
+      }
+      if (stats.lapseStatus && stats.lapseStatus !== 'unknown') {
+        var scoreText = (typeof stats.lapseScore === 'number') ? (' &middot; ' + stats.lapseScore.toFixed(2) + '&times; expected') : '';
+        h += identityRow('Lapse status', lapseChip(stats.lapseStatus, stats.lapseScore) + '<span style="color:var(--warm-gray);font-size:0.78rem;margin-left:8px;">' + scoreText + '</span>');
+      }
+    }
     h += '</div>';
     if (!hasStats) {
       h += '<div style="font-size:0.78rem;color:var(--warm-gray-light);margin-top:10px;">';
