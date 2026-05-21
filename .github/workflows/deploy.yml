@@ -1,41 +1,104 @@
-name: CI lint
-
-# Runs the design-token + MastDB lints on every push to main and PRs.
+# Deploy mast-tenant-template (storefront shared site) via mast-deploy CLI.
 #
-# History notes (2026-05-06):
-#   - Removed `deploy` job: per CLAUDE.md "Firebase Hosting — deployed via
-#     mast_hosting MCP tool. No GitHub Pages." Tenants serve from
-#     mast-tenant-shared.web.app via the CF wildcard worker; GH Pages was
-#     never a real consumer.
-#   - Removed `sync-workflows` job: writing docs/workflows.yaml to RTDB at
-#     /dev/workflows is doubly obsolete — RTDB was retired post-B.5/B.7
-#     cutover (data lives in Firestore now), AND the auth had been broken
-#     for ~30 days (last successful run 2026-04-07). The `mast_workflows`
-#     MCP tool owns this surface and writes Firestore directly.
-#   - lint-design-tokens font-size violations (427 backlog) downgraded to
-#     advisory in the script; cleanup tracked separately.
+# Wave 2 of Mast release-flow normalization (CC Idea -OtAeMTQK0RUU-ggz3v7,
+# W2-M2). Mirrors the auto-deploy pattern from W1-M2 used by the other
+# three component repos.
+#
+# Triggers:
+#   - push to main: auto-deploys storefront to pod `dev` via
+#     `mast-deploy storefront-shared --pod=dev`. DECISIONs -OtAI5hzrFooRVol2SxZ,
+#     -OtAeRqYnSr93BChesJv.
+#   - workflow_dispatch (manual rerun against dev). `pod` is locked to `dev`
+#     per DECISION -OtAM6SDqYM9JZ-vQxDs — prod storefront deploys remain
+#     operator-driven via the mast_hosting MCP tool until a future wave.
+#
+# Auth path:
+#   - WIF: federated identity impersonates mast-deploy-gha@mast-platform-registry
+#     (same pool as mast-mcp-server / mast-tenant-mcp-server / mast-architecture).
+#     mast-tenant-template was added to the WIF allowlist in
+#     mast-platform-registry/iam/wif-bootstrap.sh (PR #168).
+#   - MAST_PLATFORM_API_KEY: HTTP API key for the platform `mast_hosting`
+#     endpoint, set as a repo-level secret. Required because mast_hosting
+#     uses api-key auth (not WIF) for incoming HTTP calls.
+
+name: Deploy
 
 on:
   push:
-    branches: ["main"]
-  pull_request:
-    branches: ["main"]
+    branches: [main]
   workflow_dispatch:
-
-permissions:
-  contents: read
+    inputs:
+      pod:
+        description: 'Pod ID (dev only — prod requires mast-deploy CLI)'
+        required: false
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+      git_sha:
+        description: 'Git SHA to deploy (defaults to current ref HEAD)'
+        required: false
+        type: string
+      dry_run:
+        description: 'Dry run only — no actual deploy'
+        required: false
+        default: false
+        type: boolean
 
 jobs:
-  lint:
+  deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write   # required for WIF
+    env:
+      MAST_REGISTRY_REPO: ${{ vars.MAST_REGISTRY_REPO || 'stewartdavidp-ship-it/mast-platform-registry' }}
     steps:
-      - name: Checkout
+      - name: Checkout mast-tenant-template
         uses: actions/checkout@v4
-      - name: Setup Node.js
+        with:
+          path: mast-tenant-template
+          fetch-depth: 0
+          ref: ${{ inputs.git_sha || github.sha }}
+
+      - name: Checkout mast-platform-registry
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.MAST_REGISTRY_REPO }}
+          path: mast-platform-registry
+          token: ${{ secrets.MAST_GHA_PAT }}
+
+      - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
-      - name: MastDB access lint
-        run: node scripts/lint-mastdb.js
-      - name: Design token lint (advisory)
-        run: node scripts/lint-design-tokens.js
+          node-version: 22
+          registry-url: https://npm.pkg.github.com/
+          scope: '@stewartdavidp-ship-it'
+
+      - name: Authenticate to GCP via WIF
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/${{ vars.REGISTRY_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/mast-deploy-pool/providers/github-oidc
+          service_account: mast-deploy-gha@mast-platform-registry.iam.gserviceaccount.com
+
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Deploy storefront-shared via mast-deploy CLI
+        env:
+          MAST_REGISTRY_PATH: ${{ github.workspace }}/mast-platform-registry
+          MAST_TENANT_TEMPLATE_PATH: ${{ github.workspace }}/mast-tenant-template
+          MAST_DEPLOY_KEY_FILE: ${{ env.GOOGLE_APPLICATION_CREDENTIALS }}
+          MAST_PLATFORM_API_KEY: ${{ secrets.MAST_PLATFORM_API_KEY }}
+        run: |
+          POD="${{ inputs.pod || 'dev' }}"
+          DRY_RUN_FLAG=""
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            DRY_RUN_FLAG="--dry-run"
+          fi
+          # mast-deploy storefront-shared lands in 0.7.0 (W2-M2). Bump after every
+          # mast-deploy publish that ships new storefront functionality.
+          NODE_AUTH_TOKEN="${{ secrets.MAST_GHA_PAT }}" \
+            npx --yes -p '@stewartdavidp-ship-it/mast-deploy@0.7.0' \
+              mast-deploy storefront-shared --pod="${POD}" $DRY_RUN_FLAG
