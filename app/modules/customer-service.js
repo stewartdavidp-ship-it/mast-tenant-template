@@ -97,6 +97,23 @@
     urgent: { bg: 'rgba(185,28,28,0.2)',  color: '#F48FB1', border: 'rgba(185,28,28,0.35)' }
   };
   var PRIORITY_LABELS = { low: 'Low', normal: 'Normal', high: 'High', urgent: 'Urgent' };
+  // Build 8 — root-cause category list. Mirrors server-side
+  // TICKET_CATEGORIES in mast-tenant-mcp-server. Display labels stay
+  // here; the persisted value matches the server enum.
+  var CS_TICKET_CATEGORIES = [
+    { value: 'shipping',         label: 'Shipping' },
+    { value: 'product-defect',   label: 'Product defect' },
+    { value: 'billing',          label: 'Billing' },
+    { value: 'general-question', label: 'General question' },
+    { value: 'custom-order',     label: 'Custom order' },
+    { value: 'returns',          label: 'Returns' },
+    { value: 'feedback',         label: 'Feedback' },
+    { value: 'other',            label: 'Other' }
+  ];
+  function csCategoryLabel(value) {
+    var found = CS_TICKET_CATEGORIES.find(function(c) { return c.value === value; });
+    return found ? found.label : value;
+  }
 
   var SOURCE_ICONS = { email: '✉', web: '🌐', phone: '☎', chat: '💬', manual: '✏' };
 
@@ -301,6 +318,8 @@
       '<div style="display:flex;gap:6px;align-items:center;flex-shrink:0;">' +
         statusBadge(t.status) +
         priorityBadge(t.priority) +
+        // Build 8 — category chip when present
+        (t.category ? '<span style="font-size:0.72rem;padding:2px 8px;border-radius:10px;background:rgba(99,102,241,0.20);color:#a5a8f5;">' + _esc(csCategoryLabel(t.category)) + '</span>' : '') +
       '</div>' +
 
       // Time
@@ -324,6 +343,13 @@
     var priorityOpts = Object.keys(PRIORITY_LABELS).map(function(p) {
       return '<option value="' + p + '"' + (ticket.priority === p ? ' selected' : '') + '>' + PRIORITY_LABELS[p] + '</option>';
     }).join('');
+    // Build 8 — root-cause category dropdown. Matches server-side
+    // TICKET_CATEGORIES in mast-tenant-mcp-server/src/shared/tools/
+    // customer-service.ts. Both must stay in sync.
+    var categoryOpts = '<option value=""' + (!ticket.category ? ' selected' : '') + '>— Uncategorized —</option>';
+    CS_TICKET_CATEGORIES.forEach(function(c) {
+      categoryOpts += '<option value="' + c.value + '"' + (ticket.category === c.value ? ' selected' : '') + '>' + c.label + '</option>';
+    });
 
     var selStyle = 'font-size:0.85rem;padding:4px 8px;background:var(--surface-card);border:1px solid var(--border);border-radius:4px;color:var(--text);';
 
@@ -351,9 +377,10 @@
       fromCell +
       ' · ' + fmtDate(ticket.createdAt) + '</div>';
     html += '</div>';
-    html += '<div style="display:flex;gap:8px;align-items:center;flex-shrink:0;">';
+    html += '<div style="display:flex;gap:8px;align-items:center;flex-shrink:0;flex-wrap:wrap;">';
     html += '<select onchange="csUpdateStatus(this.value)" style="' + selStyle + '">' + statusOpts + '</select>';
     html += '<select onchange="csUpdatePriority(this.value)" style="' + selStyle + '">' + priorityOpts + '</select>';
+    html += '<select onchange="csUpdateCategory(this.value)" style="' + selStyle + '" title="Root-cause category">' + categoryOpts + '</select>';
     html += '</div>';
     html += '</div>';
     html += '</div>';
@@ -1990,6 +2017,21 @@
     }
   }
 
+  // Build 8 — root-cause category. Empty string from dropdown = clear.
+  async function csUpdateCategory(category) {
+    if (!selectedTicketId) return;
+    var value = category || null;
+    try {
+      var now = new Date().toISOString();
+      await MastDB.update('cs_tickets/' + selectedTicketId, { category: value, updatedAt: now });
+      var idx = ticketsData.findIndex(function(t) { return t.id === selectedTicketId; });
+      if (idx !== -1) { ticketsData[idx].category = value; ticketsData[idx].updatedAt = now; }
+      showToast(value ? 'Category set to ' + csCategoryLabel(value) + '.' : 'Category cleared.');
+    } catch (err) {
+      showToast('Failed to update category.', true);
+    }
+  }
+
   async function csSubmitCreate() {
     var subject = (document.getElementById('csCreateSubject') || {}).value;
     subject = (subject || '').trim();
@@ -2095,6 +2137,7 @@
   window.csToggleInternal = csToggleInternal;
   window.csUpdateStatus = csUpdateStatus;
   window.csUpdatePriority = csUpdatePriority;
+  window.csUpdateCategory = csUpdateCategory;
   window.csSubmitCreate = csSubmitCreate;
   window.csSetInboxTab = csSetInboxTab;
   window.csSetStatusFilter = csSetStatusFilter;
