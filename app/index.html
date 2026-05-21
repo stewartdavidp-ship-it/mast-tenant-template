@@ -31847,6 +31847,166 @@ function switchProductTab(tab) {
 var invHistoryEntries = [];
 var invHistoryPid = null;
 
+// Build 6c — Customer Signal card. Mirrors server-side cs_get_product_signal
+// + get_sku_repurchase. Computes client-side from cs_reviews, cs_tickets,
+// and orders. Renders into #pdCustomerSignal after the product detail loads.
+function loadProductCustomerSignal(pid) {
+  var el = document.getElementById('pdCustomerSignal');
+  if (!el || el.dataset.pid !== pid) return;
+  el.innerHTML = '<div class="loading" style="padding:20px;color:var(--warm-gray);">Loading customer signal…</div>';
+
+  Promise.all([
+    MastDB.query('cs_reviews').orderByChild('createdAt').limitToLast(500).once()
+      .then(function(s) { return (s && s.val()) || {}; }).catch(function() { return {}; }),
+    MastDB.query('cs_tickets').limitToLast(500).once()
+      .then(function(s) { return (s && s.val()) || {}; }).catch(function() { return {}; }),
+    MastDB.query('orders').orderByChild('createdAt').limitToLast(2000).once()
+      .then(function(s) { return (s && s.val()) || {}; }).catch(function() { return {}; })
+  ]).then(function(results) {
+    var freshEl = document.getElementById('pdCustomerSignal');
+    if (!freshEl || freshEl.dataset.pid !== pid) return; // navigated away
+
+    var reviewsAll = results[0];
+    var ticketsAll = results[1];
+    var ordersAll = results[2];
+
+    // Reviews for this SKU
+    var reviews = Object.values(reviewsAll).filter(function(r) { return r && r.productId === pid; });
+    var ratings = reviews.map(function(r) { return r.rating; }).filter(function(n) { return typeof n === 'number'; });
+    var avgRating = ratings.length > 0
+      ? Math.round((ratings.reduce(function(s, n) { return s + n; }, 0) / ratings.length) * 100) / 100
+      : null;
+    var approvedReviewCount = reviews.filter(function(r) { return r.status === 'approved'; }).length;
+    var pendingReviewCount = reviews.filter(function(r) { return r.status === 'pending'; }).length;
+
+    // Tickets with productIds[] containing this pid (post-Build-5b multi-link)
+    var tickets = Object.values(ticketsAll).filter(function(t) {
+      if (!t) return false;
+      if (Array.isArray(t.productIds) && t.productIds.indexOf(pid) !== -1) return true;
+      return t.productId === pid;
+    });
+    var openTicketCount = tickets.filter(function(t) {
+      return t.status === 'open' || t.status === 'in_progress' || t.status === 'waiting';
+    }).length;
+
+    // Repurchase rate (90-day window) — mirrors get_sku_repurchase.
+    var windowMs = 90 * 86400000;
+    var firstBuyAt = {}; // customerId -> ms
+    Object.values(ordersAll).forEach(function(o) {
+      if (!o || o.status === 'cancelled' || !o.customerId || !o.createdAt) return;
+      if (!Array.isArray(o.items)) return;
+      if (!o.items.some(function(it) { return it && it.pid === pid; })) return;
+      var t = new Date(o.createdAt).getTime();
+      if (isNaN(t)) return;
+      if (firstBuyAt[o.customerId] == null || t < firstBuyAt[o.customerId]) {
+        firstBuyAt[o.customerId] = t;
+      }
+    });
+    var buyerIds = Object.keys(firstBuyAt);
+    var totalBuyers = buyerIds.length;
+    var repurchasedSet = {};
+    var coPurchaseCounts = {};
+    Object.values(ordersAll).forEach(function(o) {
+      if (!o || o.status === 'cancelled' || !o.customerId || !o.createdAt) return;
+      if (!Array.isArray(o.items)) return;
+      var first = firstBuyAt[o.customerId];
+      if (first == null) return;
+      var t = new Date(o.createdAt).getTime();
+      if (isNaN(t) || t <= first || t - first > windowMs) return;
+      repurchasedSet[o.customerId] = true;
+      o.items.forEach(function(it) {
+        if (!it || !it.pid || it.pid === pid) return;
+        coPurchaseCounts[it.pid] = (coPurchaseCounts[it.pid] || 0) + 1;
+      });
+    });
+    var repurchasedCount = Object.keys(repurchasedSet).length;
+    var repurchaseRate = totalBuyers > 0 ? Math.round((repurchasedCount / totalBuyers) * 1000) / 1000 : 0;
+    var topCoPurchase = Object.keys(coPurchaseCounts)
+      .map(function(p) { return { pid: p, count: coPurchaseCounts[p] }; })
+      .sort(function(a, b) { return b.count - a.count; })
+      .slice(0, 5);
+
+    // Build the card. Reuse detailCard pattern when available.
+    var fmt = (typeof formatCurrency === 'function')
+      ? function(c) { return formatCurrency(c); }
+      : function(c) { return '$' + (c / 100).toFixed(2); };
+
+    var html = '<div class="detail-card" style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:14px 18px;">';
+    html += '<h4 style="font-size:0.85rem;font-weight:600;color:var(--charcoal);margin:0 0 12px 0;text-transform:uppercase;letter-spacing:0.04em;">Customer signal</h4>';
+    if (totalBuyers === 0 && reviews.length === 0 && tickets.length === 0) {
+      html += '<div style="font-size:0.85rem;color:var(--warm-gray);">No customer signal yet. Reviews, support tickets, and repurchase data will appear here as buyers interact with this SKU.</div>';
+    } else {
+      html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;font-size:0.85rem;">';
+      // Reviews block
+      html += '<div>';
+      html += '<div style="font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.04em;">Reviews</div>';
+      if (reviews.length > 0) {
+        html += '<div style="font-size:1.15rem;font-weight:600;margin-top:2px;">' +
+          (avgRating != null ? avgRating.toFixed(2) + ' ★' : '—') + '</div>';
+        html += '<div style="font-size:0.78rem;color:var(--warm-gray);">' +
+          esc(String(approvedReviewCount)) + ' approved · ' +
+          esc(String(pendingReviewCount)) + ' pending · ' +
+          esc(String(reviews.length)) + ' total</div>';
+      } else {
+        html += '<div style="font-size:0.9rem;color:var(--warm-gray-light);">—</div>';
+        html += '<div style="font-size:0.78rem;color:var(--warm-gray-light);">No reviews</div>';
+      }
+      html += '</div>';
+      // Tickets block
+      html += '<div>';
+      html += '<div style="font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.04em;">Support tickets</div>';
+      if (tickets.length > 0) {
+        html += '<div style="font-size:1.15rem;font-weight:600;margin-top:2px;">' + esc(String(tickets.length)) + '</div>';
+        html += '<div style="font-size:0.78rem;color:var(--warm-gray);">' + esc(String(openTicketCount)) + ' open</div>';
+      } else {
+        html += '<div style="font-size:0.9rem;color:var(--warm-gray-light);">—</div>';
+        html += '<div style="font-size:0.78rem;color:var(--warm-gray-light);">No tickets linked</div>';
+      }
+      html += '</div>';
+      // Repurchase block (90d window)
+      html += '<div>';
+      html += '<div style="font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.04em;">Repurchase rate (90d)</div>';
+      if (totalBuyers > 0) {
+        html += '<div style="font-size:1.15rem;font-weight:600;margin-top:2px;">' + (repurchaseRate * 100).toFixed(1) + '%</div>';
+        html += '<div style="font-size:0.78rem;color:var(--warm-gray);">' +
+          esc(String(repurchasedCount)) + ' of ' + esc(String(totalBuyers)) + ' buyers</div>';
+      } else {
+        html += '<div style="font-size:0.9rem;color:var(--warm-gray-light);">—</div>';
+        html += '<div style="font-size:0.78rem;color:var(--warm-gray-light);">No buyers yet</div>';
+      }
+      html += '</div>';
+      // Buyers block
+      html += '<div>';
+      html += '<div style="font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.04em;">Buyers</div>';
+      html += '<div style="font-size:1.15rem;font-weight:600;margin-top:2px;">' + esc(String(totalBuyers)) + '</div>';
+      html += '<div style="font-size:0.78rem;color:var(--warm-gray);">unique customers</div>';
+      html += '</div>';
+      html += '</div>';
+
+      // Top co-purchased SKUs
+      if (topCoPurchase.length > 0) {
+        html += '<div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--cream-dark);">';
+        html += '<div style="font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:6px;">Often bought together (within 90d)</div>';
+        topCoPurchase.forEach(function(cp) {
+          var coProd = (window.productsData || []).find(function(p) { return p && p.pid === cp.pid; });
+          var coName = (coProd && coProd.name) || cp.pid;
+          html += '<div style="display:flex;justify-content:space-between;align-items:center;font-size:0.85rem;padding:4px 0;">';
+          html += '<span>' + esc(coName) + '</span>';
+          html += '<span style="color:var(--warm-gray);font-size:0.78rem;">' + esc(String(cp.count)) + 'x</span>';
+          html += '</div>';
+        });
+        html += '</div>';
+      }
+    }
+    html += '</div>';
+    freshEl.innerHTML = html;
+  }).catch(function(err) {
+    var freshEl = document.getElementById('pdCustomerSignal');
+    if (!freshEl || freshEl.dataset.pid !== pid) return;
+    freshEl.innerHTML = '<div style="padding:20px;color:var(--danger);">Error loading customer signal: ' + esc(err && err.message || String(err)) + '</div>';
+  });
+}
+
 function loadProductInventoryHistory(pid) {
   var el = document.getElementById('pdInventoryHistory');
   if (!el) return;
@@ -37254,8 +37414,16 @@ function renderProductDetail(pid) {
   var backLabel = productViewOrigin === 'inventory' ? 'Back to Inventory' : 'Back to Products';
   var publishUndoHtml = (!isCreate && pid) ? renderPublishUndoBanner(pid) : '';
   var driftAlertHtml = (!isCreate && pid) ? renderDriftAlertBanner(pid) : '';
+  // Build 6c — Customer Signal card. Lazy-loads tickets/reviews/orders
+  // and computes a per-SKU rollup mirroring the server-side
+  // cs_get_product_signal + get_sku_repurchase tools. Renders only on
+  // existing products (skip during create).
+  var customerSignalHtml = (!isCreate && pid && !isEditing)
+    ? '<div id="pdCustomerSignal" data-pid="' + esc(pid) + '" style="padding:16px 0;"></div>'
+    : '';
   el.innerHTML = '<button class="detail-back" onclick="backToProducts()">&larr; ' + backLabel + '</button>' +
-    publishUndoHtml + driftAlertHtml + recipeReadyHtml + headerHtml + versionLinkBannerHtml + revisionBannerHtml + archivedBannerHtml + tabBarHtml + detailsHtml + variantsHtml + imagesHtml + prodHtml + invTabHtml + actionHtml;
+    publishUndoHtml + driftAlertHtml + recipeReadyHtml + headerHtml + versionLinkBannerHtml + revisionBannerHtml + archivedBannerHtml + tabBarHtml + detailsHtml + variantsHtml + imagesHtml + prodHtml + invTabHtml + customerSignalHtml + actionHtml;
+  if (customerSignalHtml) loadProductCustomerSignal(pid);
 
   // Channel-First Phase 2d (D24) — async-load recipe meta when product has a
   // linked recipe but we haven't read it yet. Re-render to paint the banner.
