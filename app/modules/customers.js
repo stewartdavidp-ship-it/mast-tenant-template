@@ -105,6 +105,7 @@
     { value: 'name',       label: 'Name (A–Z)' },
     { value: 'email',      label: 'Email (A–Z)' },
     { value: 'spend',      label: 'Lifetime spend (high → low)' },
+    { value: 'orders',     label: 'Orders (most → least)' },
     { value: 'lastOrder',  label: 'Last order (recent → old)' }
   ];
 
@@ -570,6 +571,7 @@
         if (sortBy === 'email')     return (a.primaryEmail || '').localeCompare(b.primaryEmail || '');
         if (sortBy === 'lastOrder') return (sb.lastOrderAt || '').localeCompare(sa.lastOrderAt || '');
         if (sortBy === 'spend')     return (sb.lifetimeSpendCents || 0) - (sa.lifetimeSpendCents || 0);
+        if (sortBy === 'orders')    return (sb.orderCount || 0) - (sa.orderCount || 0);
         var av = a[sortBy] || '';
         var bv = b[sortBy] || '';
         return bv.localeCompare(av);
@@ -597,6 +599,7 @@
       if (sortBy === 'name')      return (a.displayName || '').localeCompare(b.displayName || '');
       if (sortBy === 'email')     return (a.primaryEmail || '').localeCompare(b.primaryEmail || '');
       if (sortBy === 'spend')     return (sb.lifetimeSpendCents || 0) - (sa.lifetimeSpendCents || 0);
+      if (sortBy === 'orders')    return (sb.orderCount || 0) - (sa.orderCount || 0);
       if (sortBy === 'lastOrder') return (sb.lastOrderAt || '').localeCompare(sa.lastOrderAt || '');
       // createdAt / updatedAt — newest first
       var av = a[sortBy] || '';
@@ -703,6 +706,9 @@
       var spendCell = (typeof stats.lifetimeSpendCents === 'number')
         ? esc(fmtMoney(stats.lifetimeSpendCents))
         : '<span style="color:var(--warm-gray-light);">—</span>';
+      var ordersCell = (typeof stats.orderCount === 'number' && stats.orderCount > 0)
+        ? esc(stats.orderCount + (stats.orderCount === 1 ? ' order' : ' orders'))
+        : '<span style="color:var(--warm-gray-light);">—</span>';
       var lastOrderCell = stats.lastOrderAt
         ? esc(relativeTime(stats.lastOrderAt))
         : '<span style="color:var(--warm-gray-light);">—</span>';
@@ -711,6 +717,7 @@
         '<td>' + nameDisplay + '</td>' +
         '<td style="color:var(--warm-gray);">' + emailDisplay + '</td>' +
         '<td>' + sourceBadge(c.source) + '</td>' +
+        '<td>' + ordersCell + '</td>' +
         '<td>' + spendCell + '</td>' +
         '<td style="color:var(--warm-gray);font-size:0.78rem;">' + lastOrderCell + '</td>' +
         '<td style="color:var(--warm-gray);font-size:0.78rem;">' + esc(linkedText) + '</td>' +
@@ -723,7 +730,7 @@
     html += '<div style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:8px;">Showing ' + filtered.length + ' of ' + nonMergedTotal + '</div>';
     html += '<div class="data-table"><table>';
     html += '<thead><tr>';
-    html += '<th>Name</th><th>Primary email</th><th>Source</th><th>Spend</th><th>Last order</th><th>Linked</th><th>Last activity</th>';
+    html += '<th>Name</th><th>Primary email</th><th>Source</th><th>Frequency</th><th>Spend</th><th>Last order</th><th>Linked</th><th>Last activity</th>';
     html += '</tr></thead>';
     html += '<tbody>' + rows + '</tbody>';
     html += '</table></div>';

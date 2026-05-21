@@ -85,3 +85,42 @@ The `blogPosting()` generator expects these fields on the post object: `_id` (or
 
 **Pages currently covered (13):** index, about, shop, product, schedule, classes, class-detail, blog/index, blog/post, gift-cards, membership, show/index, commission.
 **Pages correctly excluded (auth-gated/transactional):** my-classes, my-passes, my-wallet, cancel-booking, manage-seats, waiver, return-shipped, orders, redeem-gift-card, claim-coupon, wholesale.
+
+## Customer Success Module — Known Gaps
+
+The `cs-*` routes (Inbox, Tickets, Surveys, Reviews, FAQs, Members) are implemented in `app/modules/customer-service.js`. Persona-testing on 2026-05-21 surfaced multiple latent gaps. Do not treat these as bugs to fix in passing — they're scoped work tracked in `~/Downloads/sessions/cs-persona-testing-2026-05-21/`. But knowing they exist will save you from re-discovering them.
+
+**Data-layer gaps (real, need build work):**
+- **Tickets** (`cs_tickets/{ticketId}`) carry `contactEmail` + `contactName` only. **No `customerId`, no `productId`.** A ticket about a glass pumpkin has zero product attribution and is not linked back to the matching customer record.
+- **Survey responses** are written to `cs_survey_responses/{responseId}` by Cloud Functions (`generateSurveyLink`, `_fireSingleSurveyTrigger`). They include `contactId`, `contactEmail`, `answers[]`, `wantsFollowup`, `followupTicketId`, `status`. **The admin UI never reads this path.** No response viewer surface exists in `customer-service.js`.
+- **Surveys can only be sent to one recipient at a time.** "Send Survey" modal collects `Contact Email` + `Contact Name`. Triggers fire on events (`order_placed`, `cart_abandoned`, `class_attended`). There is no segment-targeted bulk send.
+- **`recomputeCustomerStats` does not compute `medianIntervalDays` or `expectedNextOrderBy`.** Per-customer cadence — required for product-sales "lapsed-buyer" detection — is not yet a denormalized field.
+- **Order line items do not snapshot `cogsCents`.** Per-customer gross margin and per-SKU repurchase analytics cannot be computed without this.
+- **No `customer-service` skill in tenant-MCP** — `cs_*` writes bypass MCP entirely (direct `MastDB.set` from the admin module), violating the `mast-mcp-coverage` rule. Coverage closure requires a new skill module on the MCP server. See `mast-tenant-mcp-server/CLAUDE.md` → "Known coverage gaps".
+
+**UI-layer gaps (data exists, surface missing):**
+- **Reviews list shows raw Firebase product IDs.** The data already carries `productName` (snapshot at write time by the `submitReview` CF) — the admin reviews list at `customer-service.js → renderReviews()` just doesn't read it. ~30-min fix.
+- **Customer detail has 6 tabs** (Overview / Orders / Contacts / Classes / Interactions / Wallet) — design system caps detail-complex at 5. Consolidation needed before adding Tickets/Surveys/Reviews tabs. Suggested target: collapse Contacts + Interactions + future CS surfaces into a unified `Activity` timeline tab (5 total: Overview / Orders / Activity / Classes / Wallet).
+- **No "lapsed" or "at-risk" segment** in the customer segment picker. `listLapsedCustomers` exists in MCP with a flat days-cutoff; UI does not expose it and the cutoff isn't per-customer-cadence aware yet.
+- ~~No Frequency column on the customer list.~~ Shipped — `Frequency` column + `Orders (most → least)` sort option were added 2026-05-21.
+- **`Interactions` button collides with a global `Interactions` view of the same name.** Clicking the customer-detail tab can navigate away to a sibling surface. Rename one before the consolidation refactor.
+
+**Wholesale-specific:**
+- `getWholesaleActivity` (in `wholesale` MCP skill) already computes per-account `daysSinceLastOrder` and an overdue list, but with a hardcoded 42-day threshold and indexed by email — no learned per-account reorder cadence, no UI surface in the admin app.
+
+## Customer record schema (canonical)
+
+`{tenantId}/admin/customers/{customerId}` — see `mast-tenant-mcp-server/src/shared/tools/customers.ts` for the authoritative shape:
+
+```
+{ id, displayName, primaryEmail, emails[], phones[], source, status,
+  tags[],                                              ← first-class
+  linkedIds: {uids[], contactIds[], studentIds[], squareCustomerId},
+  marketing: {newsletterOptIn, smsOptIn},
+  notes, createdAt, updatedAt,
+  stats: { lifetimeSpendCents, orderCount,             ← persisted
+           firstOrderAt, lastOrderAt,
+           enrollmentCount, lastEnrollmentAt, statsUpdatedAt } }
+```
+
+Email→id lookup: `{tenantId}/admin/customerIndexes/byEmail/{key}` (where `{key}` is the email with `.` replaced by `,`).
