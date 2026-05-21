@@ -102,8 +102,11 @@
     'order':               'Orders',
     'enrollment':          'Enrollments',
     'contact-interaction': 'Contacts',
-    'note':                'Notes'
-    // Future (Build 5b): 'ticket', 'survey-response', 'review'
+    'note':                'Notes',
+    // Build 5b.2 — CS events now emitted by getCustomerActivityTimeline
+    'ticket':              'Tickets',
+    'review':              'Reviews',
+    'survey-response':     'Surveys'
   };
   var activityFilter = 'all';
 
@@ -1619,15 +1622,28 @@
   // to a single MCP call to get_customer_activity_timeline so AI assistants
   // and the UI compute against the exact same merge logic.
 
-  function loadCustomerActivity(customerId, contactIds) {
+  function loadCustomerActivity(customerId, contactIds, customer) {
     var cache = getCache(customerId);
+    // Build 5b.2 — also pull CS events (tickets, reviews, survey responses).
+    // Matches each record on customerId AND falls back to email/contactId/uid
+    // so the timeline is accurate before the CS-FK backfill completes
+    // (mirrors server-side getCustomerActivityTimeline).
     var promises = [
       MastDB.query('orders').orderByChild('customerId').equalTo(customerId).once()
         .then(function(s) { return { ordersRaw: (s && s.val()) || {} }; })
         .catch(function() { return { ordersRaw: {} }; }),
       MastDB.query('admin/enrollments').orderByChild('customerId').equalTo(customerId).once()
         .then(function(s) { return { enrRaw: (s && s.val()) || {} }; })
-        .catch(function() { return { enrRaw: {} }; })
+        .catch(function() { return { enrRaw: {} }; }),
+      MastDB.query('cs_tickets').limitToLast(500).once()
+        .then(function(s) { return { ticketsRaw: (s && s.val()) || {} }; })
+        .catch(function() { return { ticketsRaw: {} }; }),
+      MastDB.query('cs_reviews').limitToLast(500).once()
+        .then(function(s) { return { reviewsRaw: (s && s.val()) || {} }; })
+        .catch(function() { return { reviewsRaw: {} }; }),
+      MastDB.query('cs_survey_responses').limitToLast(500).once()
+        .then(function(s) { return { responsesRaw: (s && s.val()) || {} }; })
+        .catch(function() { return { responsesRaw: {} }; })
     ];
     (contactIds || []).forEach(function(cid) {
       promises.push(
@@ -1636,10 +1652,81 @@
           .catch(function() { return { contactId: cid, interactions: {} }; })
       );
     });
+
+    // CS-event matcher — uses linkedEmails/contactIds/uids so pre-backfill
+    // records still surface in the timeline.
+    var linkedEmails = {};
+    var primEmail = (customer && customer.primaryEmail || '').toLowerCase();
+    if (primEmail) linkedEmails[primEmail] = true;
+    ((customer && customer.emails) || []).forEach(function(e) { if (e) linkedEmails[String(e).toLowerCase()] = true; });
+    var linkedC = ((customer && customer.linkedIds) || {});
+    var linkedContactSet = {};
+    ((linkedC.contactIds) || []).forEach(function(id) { linkedContactSet[id] = true; });
+    var linkedUidSet = {};
+    ((linkedC.uids) || []).forEach(function(u) { linkedUidSet[u] = true; });
+
+    function csMatches(record, uidField) {
+      if (!record) return false;
+      if (record.customerId === customerId) return true;
+      var em = String(record.contactEmail || record.authorEmail || record.email || '').toLowerCase();
+      if (em && linkedEmails[em]) return true;
+      if (record.contactId && linkedContactSet[record.contactId]) return true;
+      if (uidField && record[uidField] && linkedUidSet[record[uidField]]) return true;
+      return false;
+    }
+
     Promise.all(promises).then(function(results) {
       var ordersRaw = results[0].ordersRaw || {};
       var enrRaw = results[1].enrRaw || {};
+      var ticketsRaw = results[2].ticketsRaw || {};
+      var reviewsRaw = results[3].reviewsRaw || {};
+      var responsesRaw = results[4].responsesRaw || {};
       var events = [];
+
+      Object.keys(ticketsRaw).forEach(function(tid) {
+        var t = ticketsRaw[tid];
+        if (!csMatches(t)) return;
+        var at = t.updatedAt || t.createdAt;
+        if (!at) return;
+        events.push({
+          type: 'ticket',
+          at: at,
+          summary: (t.ticketNumber || tid) + (t.subject ? ' · ' + t.subject : '') + (t.status ? ' [' + t.status + ']' : ''),
+          sourceRoute: 'cs-tickets',
+          sourceId: tid
+        });
+      });
+
+      Object.keys(reviewsRaw).forEach(function(rid) {
+        var r = reviewsRaw[rid];
+        if (!csMatches(r, 'authorUid')) return;
+        var at = r.createdAt;
+        if (!at) return;
+        var prodLabel = r.productName || r.productId || '';
+        var stars = (typeof r.rating === 'number' ? '★'.repeat(r.rating) : '');
+        events.push({
+          type: 'review',
+          at: at,
+          summary: (stars ? stars + ' · ' : '') + prodLabel + (r.title ? ' · ' + r.title : ''),
+          sourceRoute: 'cs-reviews',
+          sourceId: rid
+        });
+      });
+
+      Object.keys(responsesRaw).forEach(function(rid) {
+        var resp = responsesRaw[rid];
+        if (!csMatches(resp)) return;
+        var at = resp.completedAt || resp.createdAt;
+        if (!at) return;
+        var ans = (resp.answers && resp.answers.length) ? resp.answers.length + ' answer(s)' : '';
+        events.push({
+          type: 'survey-response',
+          at: at,
+          summary: 'Survey response · ' + (resp.status || 'pending') + (ans ? ' · ' + ans : ''),
+          sourceRoute: 'cs-surveys',
+          sourceId: rid
+        });
+      });
 
       Object.keys(ordersRaw).forEach(function(oid) {
         var o = ordersRaw[oid];
@@ -1671,7 +1758,9 @@
         });
       });
 
-      for (var i = 2; i < results.length; i++) {
+      // Contact-interaction promises start at index 5 now that we have:
+      // 0=orders, 1=enrollments, 2=tickets, 3=reviews, 4=responses, 5+=contactIds.
+      for (var i = 5; i < results.length; i++) {
         var pair = results[i];
         var ix = pair.interactions || {};
         Object.keys(ix).forEach(function(ixId) {
@@ -1706,7 +1795,7 @@
 
     var cache = getCache(c.id);
     if (!cache.loaded.activity) {
-      loadCustomerActivity(c.id, contactIds);
+      loadCustomerActivity(c.id, contactIds, c);
       return '<div class="loading">Loading activity…</div>';
     }
 
@@ -1726,7 +1815,7 @@
 
     // Build per-type counts before filtering so chip badges always show
     // the full population.
-    var counts = { 'all': events.length, 'order': 0, 'enrollment': 0, 'contact-interaction': 0, 'note': 0 };
+    var counts = { 'all': events.length, 'order': 0, 'enrollment': 0, 'ticket': 0, 'review': 0, 'survey-response': 0, 'contact-interaction': 0, 'note': 0 };
     events.forEach(function(e) { if (counts[e.type] != null) counts[e.type]++; });
 
     var filtered = activityFilter === 'all' ? events : events.filter(function(e) { return e.type === activityFilter; });
@@ -1735,7 +1824,7 @@
 
     // Filter chips
     h += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;">';
-    ['all', 'order', 'enrollment', 'contact-interaction', 'note'].forEach(function(t) {
+    ['all', 'order', 'enrollment', 'ticket', 'review', 'survey-response', 'contact-interaction', 'note'].forEach(function(t) {
       var label = ACTIVITY_TYPE_LABELS[t] || t;
       var active = (activityFilter === t);
       var n = counts[t] || 0;
@@ -1782,6 +1871,10 @@
     if (type === 'enrollment')          return { bg: 'rgba(196,133,60,0.30)', fg: 'var(--amber-light)' };
     if (type === 'contact-interaction') return { bg: 'rgba(99,102,241,0.30)', fg: '#a5a8f5' };
     if (type === 'note')                return { bg: 'rgba(155,149,142,0.35)', fg: '#cfcac3' };
+    // Build 5b.2 — CS event palette
+    if (type === 'ticket')              return { bg: 'rgba(220,53,69,0.25)',  fg: '#f49aa3' };
+    if (type === 'review')              return { bg: 'rgba(245,158,11,0.30)', fg: '#fbcc70' };
+    if (type === 'survey-response')     return { bg: 'rgba(168,85,247,0.25)', fg: '#c8a8f5' };
     return { bg: 'rgba(155,149,142,0.35)', fg: '#cfcac3' };
   }
 
