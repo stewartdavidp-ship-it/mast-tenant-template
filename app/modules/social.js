@@ -86,6 +86,46 @@
   }
 
   // ============================================================
+  // W1.6 fix-up — Platform chip helpers
+  // ============================================================
+  // Coarse-mapped IG / FB / X chip per platform value. Reads both shapes:
+  //   - post.platforms[] (array; current writer)
+  //   - post.platform   (string; legacy single-value docs)
+  // Strings like "instagram-reels, facebook" are split. Unknown values are
+  // ignored. Returns '' (no chips) when nothing resolves — better than a
+  // placeholder.
+  function _normalizePlatformValues(post) {
+    var raw = [];
+    if (post && Array.isArray(post.platforms)) raw = raw.concat(post.platforms);
+    if (post && typeof post.platforms === 'string') raw = raw.concat(String(post.platforms).split(/[,\s]+/));
+    if (post && typeof post.platform === 'string') raw = raw.concat(String(post.platform).split(/[,\s]+/));
+    var seen = {};
+    var out = [];
+    raw.forEach(function(v) {
+      if (!v || typeof v !== 'string') return;
+      var s = v.toLowerCase().trim();
+      if (!s) return;
+      var tag;
+      if (s.indexOf('instagram') === 0 || s === 'ig' || s === 'reels' || s === 'feed') tag = 'IG';
+      else if (s.indexOf('facebook') === 0 || s === 'fb') tag = 'FB';
+      else if (s === 'twitter' || s === 'x' || s.indexOf('twitter') === 0) tag = 'X';
+      else return;
+      if (!seen[tag]) { seen[tag] = true; out.push(tag); }
+    });
+    return out;
+  }
+  function renderPlatformChips(post) {
+    var tags = _normalizePlatformValues(post);
+    if (!tags.length) return '';
+    var colors = { IG: '#E1306C', FB: '#1877F2', X: '#000000' };
+    return tags.map(function(t) {
+      return '<span class="platform-chip platform-chip-' + t.toLowerCase() +
+        '" style="background:' + colors[t] + ';color:#fff;font-size:0.72rem;padding:2px 6px;border-radius:4px;font-weight:600;margin-left:4px;">' +
+        t + '</span>';
+    }).join('');
+  }
+
+  // ============================================================
   // Rendering — Main Router
   // ============================================================
 
@@ -192,14 +232,12 @@
         var treatmentColor = treatment ? treatment.color : '#999';
         var treatmentName = treatment ? treatment.name : post.treatment;
 
-        var platformBadges = '';
-        if (post.platforms) {
-          post.platforms.forEach(function(p) {
-            if (p === 'instagram-reels') platformBadges += '<span class="status-badge" style="background:#E1306C;color:#fff;">Reels</span>';
-            else if (p === 'instagram-feed') platformBadges += '<span class="status-badge" style="background:#833AB4;color:#fff;">Feed</span>';
-            else if (p === 'facebook') platformBadges += '<span class="status-badge" style="background:#1877F2;color:#fff;">FB</span>';
-          });
-        }
+        // W1.6 fix-up — platform chips. Normalize both shapes:
+        //   - post.platforms[] (current writer in smConfirmAndPublish)
+        //   - post.platform (legacy single-value docs)
+        // Map every value to a coarse platform: IG / FB / X. Render no chips
+        // (NOT a fake placeholder) if nothing resolves.
+        var platformBadges = renderPlatformChips(post);
 
         var signalHtml = '<div style="display:flex;gap:4px;">' +
           '<button class="btn-icon"' + (post.signalScore === 1 ? ' style="background:var(--amber-light);border-color:var(--amber);"' : '') + ' onclick="event.stopPropagation(); smSetSignal(\'' + esc(post.postId) + '\', 1)">👍</button>' +
