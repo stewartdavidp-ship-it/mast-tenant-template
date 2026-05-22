@@ -29,11 +29,12 @@ function isTestOrder(o) {
   return isTestSource(o && o.source) || (o && (o.synthetic === true || o.isTest === true));
 }
 
-// W1.5 carry-forward (resolved for P&L 2026-05-22): isTestOrder()/isTestSource()
-// thread through computePnlLocal below so revenue/COGS-implicit/NetProfit honor
-// the _includeTestData toggle the user sets on the Revenue tab. AR aging, AP,
-// and Cash Flow still pending — separate task. Test-exclusion chip rendered in
-// renderPnl mirrors the Revenue tab pattern so the user sees the same UX.
+// W1.5 carry-forward — COMPLETE 2026-05-22: isTestOrder()/isTestSource()
+// thread through Revenue + computePnlLocal + loadArData + loadCashFlow's AR
+// rollup so test-channel orders are honored across every customer-money view.
+// AP (purchaseReceipts → vendor invoices) has no test-channel concept and is
+// intentionally unfiltered. Test-exclusion chip rendered consistently across
+// Revenue, P&L, and AR aging tabs.
 
 function e(s) { return typeof window.esc === 'function' ? window.esc(s) : String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
@@ -660,11 +661,14 @@ function applyFinExpFilters() {
 
 window.toggleFinanceTestData = function() {
   _includeTestData = !_includeTestData;
-  // W1.5 carry-forward: re-fire whichever Finance loader is currently mounted
-  // so the chip-flip applies to the user's active view. Revenue + P&L both
-  // honor the flag; AR/AP/Cash Flow extensions will hook in here too.
+  // W1.5 carry-forward complete: re-fire whichever Finance loader is mounted
+  // so the chip-flip applies to the user's active view. Revenue, P&L, AR
+  // aging, and Cash Flow all honor the flag. AP (purchaseReceipts → vendor
+  // invoices) has no test-channel concept and is intentionally unfiltered.
   if (document.getElementById('fRevContent')) loadRevenue();
   if (document.getElementById('fPlContent')) loadPnl();
+  if (document.getElementById('fArContent')) loadArData();
+  if (document.getElementById('fCfContent')) loadCashFlow();
 };
 
 window.setFinExpFilter = function(key, value) {
@@ -1497,6 +1501,10 @@ async function loadCashFlow() {
     });
 
     // AR outstanding
+    // W1.5 carry-forward: filter test-channel orders out of the AR rollup
+    // (same shape as the standalone AR loader). AP rollup below is NOT
+    // filtered — purchaseReceipts are vendor invoices and have no test-
+    // channel concept.
     var allOrders = Object.assign({}, sentRaw || {}, overdueRaw || {});
     var arTotal = 0, arDue30 = 0, arCount = 0;
     Object.values(allOrders).forEach(function(o) {
@@ -1504,13 +1512,14 @@ async function loadCashFlow() {
       var paid  = o.invoicePaidAmount || 0;
       var due   = cents - paid;
       if (due <= 0) return;
+      if (isTestOrder(o) && !_includeTestData) return;
       arTotal += due; arCount++;
       if (!o.invoiceDueDate) return;
       var daysLeft = Math.floor((new Date(o.invoiceDueDate).getTime() - Date.now()) / 86400000);
       if (daysLeft >= 0 && daysLeft <= 30) arDue30 += due;
     });
 
-    // AP due
+    // AP due — vendor purchase receipts, no test-channel filter applies.
     var allReceipts = Object.assign({}, unpaidRaw || {}, partialRaw || {});
     var apTotal = 0, apDue30 = 0, apCount = 0;
     Object.values(allReceipts).forEach(function(r) {
@@ -1642,6 +1651,11 @@ async function loadArData() {
 
     var allOrders = Object.assign({}, sentRaw || {}, overdueRaw || {});
     var rows = [];
+    // W1.5 carry-forward: honor _includeTestData on AR. Test-channel orders
+    // that happened to issue invoices would inflate AR aging numbers without
+    // this filter. Tracked separately so the chip can show the excluded total.
+    var testRows = 0;
+    var testAmtDue = 0;
 
     Object.entries(allOrders).forEach(function(kv) {
       var orderId = kv[0], o = kv[1];
@@ -1649,6 +1663,11 @@ async function loadArData() {
       var paidCents  = o.invoicePaidAmount || 0;
       var amtDue     = totalCents - paidCents;
       if (amtDue <= 0) return;
+      if (isTestOrder(o) && !_includeTestData) {
+        testRows += 1;
+        testAmtDue += amtDue;
+        return;
+      }
 
       var daysOver = 0;
       var bucket = 'current';
@@ -1667,7 +1686,7 @@ async function loadArData() {
     });
 
     rows.sort(function(a,b) { return b.daysOverdue - a.daysOverdue; });
-    _arData = { rows: rows, asOf: asOf };
+    _arData = { rows: rows, asOf: asOf, testRows: testRows, testAmtDue: testAmtDue };
 
     el.innerHTML = renderArContent();
   } catch (err) {
@@ -1686,6 +1705,24 @@ function renderArContent() {
   rows.forEach(function(r) { summary[r.bucket] += r.amtDue; counts[r.bucket]++; total += r.amtDue; });
 
   var h = '';
+
+  // W1.5 carry-forward: test-data inclusion chip on AR aging. Same UX as
+  // Revenue + P&L for consistency. Test-channel invoices that issued would
+  // otherwise inflate aging numbers.
+  var testRows = (_arData && _arData.testRows) || 0;
+  var testAmtDue = (_arData && _arData.testAmtDue) || 0;
+  if (_includeTestData || testRows > 0) {
+    var chipBg = _includeTestData ? 'rgba(245,158,11,0.15)' : 'rgba(107,114,128,0.15)';
+    var chipFg = _includeTestData ? '#f59e0b' : '#9ca3af';
+    var chipLabel = _includeTestData
+      ? 'Including test data'
+      : 'Excluding test data (' + testRows + ' invoice' + (testRows === 1 ? '' : 's') + ', ' + fmt$(testAmtDue) + ')';
+    var btnLabel = _includeTestData ? 'Exclude' : 'Include';
+    h += '<div style="margin-bottom:12px;display:flex;gap:8px;align-items:center;">' +
+         '<span style="background:' + chipBg + ';color:' + chipFg + ';padding:4px 10px;border-radius:999px;font-size:0.78rem;font-weight:600;">' + chipLabel + '</span>' +
+         '<button type="button" onclick="window.toggleFinanceTestData()" style="background:transparent;border:1px solid var(--warm-gray,#666);color:var(--text,#fff);padding:3px 10px;border-radius:999px;font-size:0.78rem;cursor:pointer;">' + btnLabel + '</button>' +
+         '</div>';
+  }
 
   // Summary cards
   h += '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;">';
