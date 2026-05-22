@@ -303,6 +303,11 @@
   // and navigates into the New Post flow.
   function applySocialDraftPrefill(prefill) {
     if (!prefill || typeof prefill !== 'object') return false;
+    // smStartNewPost() resets smEnhanceData to defaults and sets view to
+    // 'newPost' (the shoot-vs-upload intent picker). We overlay the prefill
+    // and bypass straight to 'enhance' — the composer with body + image
+    // already populated — which is what the user expected when they clicked
+    // "Draft Social Post" from a review.
     smStartNewPost();
     if (prefill.body) {
       smEnhanceData.description = prefill.body;
@@ -312,9 +317,17 @@
     }
     if (prefill.imageUrl) {
       smEnhanceData.thumbnailUrl = prefill.imageUrl;
+      smEnhanceData.fileType = 'image';
+      smEnhanceData.fileName = prefill.fileName || 'review-image';
     }
     if (prefill.sourceReviewId) smEnhanceData.sourceReviewId = prefill.sourceReviewId;
-    if (prefill.sourceProductId) smEnhanceData.sourceProductId = prefill.sourceProductId;
+    if (prefill.sourceProductId) {
+      smEnhanceData.sourceProductId = prefill.sourceProductId;
+      smEnhanceData.subjectType = 'product';
+      smEnhanceData.productId = prefill.sourceProductId;
+    }
+    // F7 — skip the intent picker; go directly to the composer.
+    smCurrentView = 'enhance';
     window.smEnhanceData = smEnhanceData;
     renderSocialMedia();
     return true;

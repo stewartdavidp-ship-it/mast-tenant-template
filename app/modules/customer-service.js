@@ -693,13 +693,23 @@
         html += '<div style="border:1px solid var(--cream-dark);border-radius:10px;padding:16px;background:var(--surface-card);">';
         html += '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px;">';
         html += '<span style="font-weight:600;">' + _esc(displayName) + '</span>';
+        // W1.7 fix-up — surface customer enrichment only when a real
+        // customer match exists. Anonymous reviews stay anonymous (no badge).
         if (matchedCustomer && matchedCustomer.stats) {
           var st = matchedCustomer.stats;
           var oc = st.orderCount || 0;
-          var lastAbs = st.lastOrderAt ? new Date(st.lastOrderAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
-          html += '<span class="status-badge pill" title="' + (lastAbs ? 'Last order ' + _esc(lastAbs) : 'Linked customer') + '" style="background:rgba(42,124,111,0.15);color:var(--teal);font-size:0.72rem;">' +
-            oc + (oc === 1 ? ' order' : ' orders') +
-          '</span>';
+          if (oc > 0) {
+            html += '<span class="status-badge pill" title="Linked customer" style="background:rgba(42,124,111,0.15);color:var(--teal);font-size:0.72rem;">' +
+              oc + (oc === 1 ? ' order' : ' orders') +
+            '</span>';
+          }
+          if (st.lastOrderAt) {
+            var lastAbs = new Date(st.lastOrderAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+            var lastRel = relativeTime(st.lastOrderAt) || lastAbs;
+            html += '<span class="status-badge pill" title="' + _esc(lastAbs) + '" style="background:rgba(42,124,111,0.08);color:var(--teal);font-size:0.72rem;">' +
+              'Last bought ' + _esc(lastRel) +
+            '</span>';
+          }
         }
         html += '<span style="color:var(--amber-light);letter-spacing:0.04em;">' + starsHtml(r.rating) + '</span>';
         if (r.reviewerEmail) html += '<span style="font-size:0.78rem;color:var(--warm-gray);">' + _esc(r.reviewerEmail) + '</span>';
@@ -711,7 +721,7 @@
         if (r.headline || r.productId) {
           html += '<div style="display:flex;align-items:center;gap:10px;font-size:0.85rem;margin-bottom:6px;">';
           if (r.productId && prodInfo && prodInfo.thumbnailUrl) {
-            html += '<img src="' + _esc(prodInfo.thumbnailUrl) + '" alt="" style="width:36px;height:36px;object-fit:cover;border-radius:4px;border:1px solid var(--cream-dark);" />';
+            html += '<img src="' + _esc(prodInfo.thumbnailUrl) + '" alt="" style="width:40px;height:40px;object-fit:cover;border-radius:4px;border:1px solid var(--cream-dark);" />';
           }
           html += '<div>';
           if (r.headline) html += '<strong>' + _esc(r.headline) + '</strong> ';
@@ -761,7 +771,11 @@
 
   // ===== W1.8 — Promote approved review =====
 
-  // "Feature on site" — write a testimonial under public/homepage/testimonials.
+  // "Feature on site" — write a testimonial under public/testimonials.
+  // This is the path index.html reads on homepage load (MastDB.query
+  // 'public/testimonials').orderByChild('order').limitToLast(10)).
+  // Schema: { quote, author, rating, order, visible } — plus enrichment
+  // fields we keep for our own admin views.
   // Idempotent: re-clicking on the same review updates the existing entry
   // (keyed by sourceReviewId so we don't fan out duplicates).
   async function featureReviewOnSite(id) {
@@ -774,22 +788,37 @@
     var customerName = matchedCustomer ? matchedCustomer.displayName : (r.reviewerName || 'Anonymous');
     var quote = r.body || r.headline || '';
     if (!quote) { showToast('This review has no body text to feature.', true); return; }
+    // Use sourceReviewId as the key so re-featuring updates instead of duplicating.
+    var key = 'review_' + r.id;
     var payload = {
-      customerName: customerName,
+      id: key,
       quote: quote,
+      author: customerName,           // storefront renders "— {author}"
+      customerName: customerName,     // back-compat / admin views
       rating: r.rating || null,
+      order: Date.now(),              // orderByChild('order') — newest first by default
+      visible: true,                  // storefront filters out visible:false
       productId: r.productId || null,
       productName: r.productName || (prodInfo && prodInfo.name) || null,
       productThumbnail: (prodInfo && prodInfo.thumbnailUrl) || null,
       sourceReviewId: r.id,
+      featured: true,
       addedAt: nowIso()
     };
     try {
-      // Use sourceReviewId as the key so re-featuring updates instead of duplicating.
-      var key = 'review_' + r.id;
-      payload.id = key;
-      await MastDB.set('public/homepage/testimonials/' + key, payload);
-      showToast('Featured on homepage Testimonials.');
+      await MastDB.set('public/testimonials/' + key, payload);
+      // Mark the review itself so the admin UI can show "Featured" state.
+      try {
+        await MastDB.update('cs_reviews/' + r.id, {
+          featuredOnSite: true,
+          featuredAt: nowIso()
+        });
+        if (reviewsData[r.id]) {
+          reviewsData[r.id].featuredOnSite = true;
+          reviewsData[r.id].featuredAt = payload.addedAt;
+        }
+      } catch (_e) { /* non-fatal — testimonial already wrote */ }
+      showToast('Featured on homepage Testimonials section.');
     } catch (err) {
       showToast('Failed: ' + (err && err.message), true);
     }
