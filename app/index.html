@@ -6937,7 +6937,10 @@
             <option value="sculpture">Sculpture</option>
           </select>
           <span class="products-stat" id="productsCount"></span>
-          <button class="btn btn-secondary" id="bulkPublishShopifyBtn" style="margin-left:auto;font-size:0.85rem;padding:5px 12px;display:none;" onclick="bulkPublishToShopify()">Publish All to Shopify</button>
+          <!-- W1.7: demoted from primary `btn btn-secondary` to a small ghost
+               link-style action. Most tenants won't use this; promoting it on
+               the header tax'd visual attention. Full "More" dropdown deferred. -->
+          <button id="bulkPublishShopifyBtn" style="margin-left:auto;font-size:0.78rem;padding:3px 10px;background:transparent;border:1px solid var(--warm-gray,#666);border-radius:999px;color:var(--warm-gray,#888);cursor:pointer;display:none;" onclick="bulkPublishToShopify()" title="Sync all active products to your Shopify store">Publish all to Shopify</button>
           <button class="btn btn-primary" style="font-size:0.85rem;padding:6px 16px;" onclick="developCreateNewProduct()">+ New Product</button>
         </div>
       </div>
@@ -30262,6 +30265,33 @@ function renderDashCardSetupShop() {
   var completed = done.length;
   var pct = total > 0 ? Math.round(completed / total * 100) : 0;
 
+  // W1.7: auto-collapse Set Up Your Shop to a thin one-liner once the
+  // tenant is clearly operational. Criteria: pct >= 60% OR lifetime orders
+  // > 25. User can still expand inline via "Show all setup steps". Choice
+  // is remembered per session so a one-time expand doesn't keep
+  // re-collapsing on re-render.
+  var _autoCollapseExpanded = false;
+  try { _autoCollapseExpanded = sessionStorage.getItem('mast_setupShop_expanded') === '1'; } catch (_e) {}
+  var _lifetimeOrders = 0;
+  try {
+    if (window.ordersData && typeof window.ordersData === 'object') {
+      _lifetimeOrders = Array.isArray(window.ordersData) ? window.ordersData.length : Object.keys(window.ordersData).length;
+    }
+  } catch (_e) {}
+  var _autoCollapseEligible = (pct >= 60 || _lifetimeOrders > 25);
+  if (_autoCollapseEligible && !_autoCollapseExpanded) {
+    container.innerHTML =
+      '<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;">' +
+        '<div style="font-size:0.85rem;color:var(--warm-gray);">' +
+          '<strong style="color:var(--text);">' + pct + '% complete</strong>' +
+          ' · ' + completed + ' of ' + total + ' setup steps done' +
+        '</div>' +
+        '<button type="button" onclick="try{sessionStorage.setItem(\'mast_setupShop_expanded\',\'1\');}catch(_){};renderDashCardSetupShop();" ' +
+          'style="background:transparent;border:1px solid var(--warm-gray,#888);color:var(--text,inherit);padding:4px 12px;border-radius:999px;font-size:0.78rem;cursor:pointer;">Show all setup steps</button>' +
+      '</div>';
+    return;
+  }
+
   // Build card body content
   var h = '';
   // Progress info
@@ -30616,6 +30646,84 @@ function setProductsStatusFilter(v) {
   renderProducts();
 }
 
+// W1.1: sortable column headers on Product Catalog. Click cycles
+// asc → desc → none. Persisted across reloads via URL query (?sort=&dir=).
+var _PRODUCTS_SORT_KEYS = { name:1, status:1, variants:1, recipe:1, price:1, cost:1, margin:1, inventory:1 };
+window.productsSort = window.productsSort || (function() {
+  try {
+    var qs = new URLSearchParams(location.search);
+    var k = qs.get('sort');
+    var d = qs.get('dir');
+    if (k && _PRODUCTS_SORT_KEYS[k]) {
+      return { key: k, dir: (d === 'desc') ? 'desc' : 'asc' };
+    }
+  } catch (_e) {}
+  return { key: null, dir: 'asc' };
+})();
+
+function setProductsSort(key) {
+  if (!_PRODUCTS_SORT_KEYS[key]) return;
+  var cur = window.productsSort || { key: null, dir: 'asc' };
+  if (cur.key === key) {
+    if (cur.dir === 'asc') cur = { key: key, dir: 'desc' };
+    else cur = { key: null, dir: 'asc' };
+  } else {
+    cur = { key: key, dir: 'asc' };
+  }
+  window.productsSort = cur;
+  try {
+    var qs = new URLSearchParams(location.search);
+    if (cur.key) { qs.set('sort', cur.key); qs.set('dir', cur.dir); }
+    else { qs.delete('sort'); qs.delete('dir'); }
+    var newQs = qs.toString();
+    history.replaceState(null, '', location.pathname + (newQs ? '?' + newQs : '') + location.hash);
+  } catch (_e) {}
+  renderProducts();
+}
+
+// Compute the comparable value for a product row under a given sort key.
+// Mirrors the values shown in renderProducts() so sort order matches the
+// visible column. Build-to-Order inventory sorts as -1 so it lands below
+// any real on-hand count when sorting ascending.
+function _productSortValue(p, key, ctx) {
+  var allRecipes = (ctx && ctx.allRecipes) || {};
+  var inventory  = (ctx && ctx.inventory)  || {};
+  var recipe = (p && p.recipeId && allRecipes[p.recipeId] && allRecipes[p.recipeId].status !== 'archived')
+    ? allRecipes[p.recipeId] : null;
+  if (key === 'name')     return String((p && p.name) || '').toLowerCase();
+  if (key === 'status')   return String((p && p.status) || 'draft').toLowerCase();
+  if (key === 'variants') return (p && p.variants && p.variants.length) ? p.variants.length : 1;
+  if (key === 'recipe')   return recipe ? 1 : 0;
+  if (key === 'price' || key === 'cost' || key === 'margin') {
+    var _synthDefault = { _isSynthetic: true, id: 'default' };
+    var _pricing = (typeof variantCostAndPrice === 'function')
+      ? variantCostAndPrice(p, _synthDefault, recipe)
+      : {};
+    var _activeTier = _pricing.activeTier || (recipe && recipe.activePriceTier) || 'retail';
+    var _activePrice = _pricing[_activeTier] != null ? _pricing[_activeTier]
+      : (_pricing.retail != null ? _pricing.retail : (_pricing.direct || _pricing.wholesale));
+    if (key === 'price') return (_activePrice != null && _activePrice > 0) ? _activePrice : -Infinity;
+    if (key === 'cost')  return (_pricing.cost != null && _pricing.cost > 0) ? _pricing.cost : -Infinity;
+    if (key === 'margin') {
+      if (_activePrice != null && _activePrice > 0 && _pricing.cost != null && _pricing.cost > 0) {
+        return ((_activePrice - _pricing.cost) / _activePrice) * 100;
+      }
+      return -Infinity;
+    }
+  }
+  if (key === 'inventory') {
+    var inv = inventory[p && p.pid];
+    var stockType = (inv && inv.stockType) ? inv.stockType : 'made-to-order';
+    if (stockType === 'build-to-order' || stockType === 'made-to-order') return -1;
+    if (typeof getInventoryTotals === 'function') {
+      var totals = getInventoryTotals(inv);
+      return totals && typeof totals.onHand === 'number' ? totals.onHand : 0;
+    }
+    return 0;
+  }
+  return '';
+}
+
 // Surface orphan recipes (no productId, or productId pointing to a deleted product).
 // Per plan OPEN O5 — UI-only surface, no auto-fix. Hidden when zero orphans or when not in develop view.
 function renderDevelopOrphanRecipesPanel() {
@@ -30884,6 +30992,9 @@ function renderProducts() {
     if (cat !== 'all' && (!p.categories || p.categories.indexOf(cat) === -1)) return false;
     if (stockFilter === 'low' && _stockBucket(p) !== 'low') return false;
     if (stockFilter === 'out' && _stockBucket(p) !== 'out') return false;
+    // W1.6: when the "unnamed products" notice is clicked, restrict the list
+    // to products with missing/empty `name`. AND-composed with other filters.
+    if (window.productsUnnamedOnly === true && (p.name && String(p.name).trim() !== '')) return false;
     return true;
   });
 
@@ -30948,20 +31059,77 @@ function renderProducts() {
       pill('archived', 'Archived',        counts.archived);
   }
 
+  // W1.6: backstage notice for products with missing/empty `name`. These
+  // SKUs leak into "Often Bought Together" lists and the catalog as unhelpful
+  // placeholders. One-click filter takes the user to the list of unnamed
+  // products so they can fix them.
+  (function renderProductsUnnamedNotice() {
+    var prior = document.getElementById('productsUnnamedNotice');
+    if (prior) prior.remove();
+    var unnamed = (productsData || []).filter(function(p) {
+      return !p || !p.name || String(p.name).trim() === '';
+    });
+    var host = document.getElementById('catalogStatusBar');
+    if (!host || !host.parentNode) return;
+    if (unnamed.length === 0 && window.productsUnnamedOnly !== true) return;
+    var notice = document.createElement('div');
+    notice.id = 'productsUnnamedNotice';
+    notice.style.cssText = 'margin:6px 0 10px 0;padding:8px 12px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.35);border-radius:6px;font-size:0.85rem;color:var(--charcoal,var(--text));display:flex;justify-content:space-between;align-items:center;gap:12px;';
+    if (window.productsUnnamedOnly === true) {
+      notice.innerHTML =
+        '<span>Showing <strong>' + unnamed.length + '</strong> unnamed product' + (unnamed.length === 1 ? '' : 's') + ' — give each a name to remove placeholders from co-buy lists.</span>' +
+        '<button type="button" onclick="window.productsUnnamedOnly=false;renderProducts();" style="background:transparent;border:1px solid var(--warm-gray,#888);color:var(--text,inherit);padding:3px 10px;border-radius:999px;font-size:0.78rem;cursor:pointer;">Show all</button>';
+    } else {
+      notice.innerHTML =
+        '<span><strong>' + unnamed.length + '</strong> unnamed product' + (unnamed.length === 1 ? '' : 's') + ' detected — these are hidden from customer-signal co-buy lists until named.</span>' +
+        '<button type="button" onclick="window.productsUnnamedOnly=true;renderProducts();" style="background:transparent;border:1px solid #f59e0b;color:#f59e0b;padding:3px 10px;border-radius:999px;font-size:0.78rem;cursor:pointer;font-weight:600;">Fix names</button>';
+    }
+    host.parentNode.insertBefore(notice, host.nextSibling);
+  })();
+
   // List layout (replaces card grid). One row per product: thumb + name/category + status + variants + recipe + price.
   rebuildProductCategoryFilter();
   var allRecipes = (typeof window.makerListRecipes === 'function') ? window.makerListRecipes() : {};
+
+  // W1.1: apply active sort (if any) before rendering.
+  (function applyProductsSort() {
+    var s = window.productsSort;
+    if (!s || !s.key) return;
+    var ctx = { allRecipes: allRecipes, inventory: inventory };
+    var dir = s.dir === 'desc' ? -1 : 1;
+    filtered = filtered.slice().sort(function(a, b) {
+      var av = _productSortValue(a, s.key, ctx);
+      var bv = _productSortValue(b, s.key, ctx);
+      var cmp;
+      if (typeof av === 'number' && typeof bv === 'number') {
+        cmp = av - bv;
+      } else {
+        cmp = String(av || '').localeCompare(String(bv || ''));
+      }
+      return dir * cmp;
+    });
+  })();
+
+  // W1.1: clickable sortable headers with ▲/▼ glyph on the active column.
+  var _sortState = window.productsSort || { key: null, dir: 'asc' };
+  function _sortHeader(key, label, align) {
+    var active = _sortState.key === key;
+    var glyph = active ? (_sortState.dir === 'desc' ? ' ▼' : ' ▲') : '';
+    var color = active ? 'var(--teal,#2a7c6f)' : 'inherit';
+    var style = 'cursor:pointer;user-select:none;color:' + color + ';' + (align ? 'text-align:' + align + ';' : '');
+    return '<th style="' + style + '" onclick="setProductsSort(\'' + key + '\')">' + label + glyph + '</th>';
+  }
   var html = '<div class="data-table"><table><thead>' +
     '<tr>' +
       '<th style="width:68px;"></th>' +
-      '<th>Product</th>' +
-      '<th>Status</th>' +
-      '<th>Variants</th>' +
-      '<th>Recipe</th>' +
-      '<th style="text-align:right;">Price</th>' +
-      '<th style="text-align:right;">Cost</th>' +
-      '<th style="text-align:right;">Margin</th>' +
-      '<th style="text-align:right;">Inventory</th>' +
+      _sortHeader('name',      'Product') +
+      _sortHeader('status',    'Status') +
+      _sortHeader('variants',  'Variants') +
+      _sortHeader('recipe',    'Recipe') +
+      _sortHeader('price',     'Price',     'right') +
+      _sortHeader('cost',      'Cost',      'right') +
+      _sortHeader('margin',    'Margin',    'right') +
+      _sortHeader('inventory', 'Inventory', 'right') +
     '</tr></thead><tbody>';
 
   filtered.forEach(function(p) {
@@ -33628,15 +33796,21 @@ function loadProductCustomerSignal(pid) {
       html += '</div>';
 
       // Top co-purchased SKUs
-      if (topCoPurchase.length > 0) {
+      // W1.6: skip entries with no resolvable product name. Naming a Firestore
+      // push ID as "(unnamed product)" in this list destroys trust; if the SKU
+      // doesn't have a real name we hide the row entirely. A backstage notice
+      // on the Products list flags any unnamed SKUs so the user can fix them.
+      var renderableCoPurchase = (topCoPurchase || []).map(function(cp) {
+        var coProd = (window.productsData || []).find(function(p) { return p && (p.pid === cp.pid || p.id === cp.pid); });
+        var coName = (coProd && coProd.name) || ((cp.pid && cp.pid.charAt(0) !== '-') ? cp.pid : null);
+        return coName ? { name: coName, count: cp.count } : null;
+      }).filter(function(x) { return x !== null; });
+      if (renderableCoPurchase.length > 0) {
         html += '<div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--cream-dark);">';
         html += '<div style="font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:6px;">Often bought together (within 90d)</div>';
-        topCoPurchase.forEach(function(cp) {
-          var coProd = (window.productsData || []).find(function(p) { return p && (p.pid === cp.pid || p.id === cp.pid); });
-          // Fallback: human-readable pid (slug) is fine; Firestore push IDs (start with -) get masked.
-          var coName = (coProd && coProd.name) || (cp.pid && cp.pid.charAt(0) === '-' ? '(unnamed product)' : cp.pid);
+        renderableCoPurchase.forEach(function(cp) {
           html += '<div style="display:flex;justify-content:space-between;align-items:center;font-size:0.85rem;padding:4px 0;">';
-          html += '<span>' + esc(coName) + '</span>';
+          html += '<span>' + esc(cp.name) + '</span>';
           html += '<span style="color:var(--warm-gray);font-size:0.78rem;">' + esc(String(cp.count)) + 'x</span>';
           html += '</div>';
         });
