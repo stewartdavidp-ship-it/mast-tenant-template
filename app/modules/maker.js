@@ -1845,14 +1845,17 @@
 
     html += '<div style="flex:1;">';
     html += '<label style="display:block;font-size:0.85rem;font-weight:600;margin-bottom:4px;">Unit Cost ($) *</label>';
-    // W2.3: live fan-out preview wired to oninput. Shows "in N recipes —
-    // est. avg COGS impact: ±X.X%" as the user types the new cost. Only
-    // fires when editing an existing material (mid present + oldCost known).
-    var oldCostForFanout = m && typeof m.unitCost === 'number' ? m.unitCost : 0;
-    var fanOutHandler = (isEdit && m && m.materialId)
-      ? ' oninput="makerPreviewFanOut(\'' + esc(m.materialId) + '\',' + oldCostForFanout + ')"'
-      : '';
-    html += '<input id="matCost" type="number" step="0.01" min="0"' + fanOutHandler + ' style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.9rem;box-sizing:border-box;" value="' + (m ? m.unitCost || '' : '') + '" placeholder="0.00">';
+    // W2.3 / W2-SEC: fan-out preview attached via addEventListener after the
+    // modal mounts (see openMaterialModal's post-render wireup). Replaced the
+    // earlier `oninput="makerPreviewFanOut('<esc(materialId)>',<oldCost>)"`
+    // attribute which interpolated user-controlled data into a JS string via
+    // esc() (HTML-escape, not JS-escape) — defense-in-depth gap shared with
+    // OPEN -OtEkpFjIRwH_z-1CJuB. Switching to data attributes + delegated
+    // listener removes the gap entirely. data-fanout-mid carries the
+    // materialId (Firebase push key, safe even raw); data-fanout-oldcost
+    // carries the numeric prior cost.
+    var matIdAttr = (isEdit && m && m.materialId) ? ' data-fanout-mid="' + esc(m.materialId) + '" data-fanout-oldcost="' + (typeof m.unitCost === 'number' ? m.unitCost : 0) + '"' : '';
+    html += '<input id="matCost" type="number" step="0.01" min="0"' + matIdAttr + ' style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.9rem;box-sizing:border-box;" value="' + (m ? m.unitCost || '' : '') + '" placeholder="0.00">';
     if (isEdit && m && m.materialId) {
       html += '<div id="matFanOutReadout" style="font-size:0.78rem;margin-top:4px;min-height:1.2em;"></div>';
     }
@@ -1986,6 +1989,20 @@
     container.id = 'materialModalContainer';
     container.innerHTML = html;
     document.body.appendChild(container);
+
+    // W2-SEC: wire the fan-out preview via addEventListener using data attrs
+    // — see commit for rationale (defense-in-depth, removes the esc-into-JS
+    // pattern flagged on OPEN -OtEkpFjIRwH_z-1CJuB).
+    var costInput = document.getElementById('matCost');
+    if (costInput && costInput.dataset && costInput.dataset.fanoutMid) {
+      var mid = costInput.dataset.fanoutMid;
+      var oldCost = parseFloat(costInput.dataset.fanoutOldcost) || 0;
+      costInput.addEventListener('input', function() {
+        if (typeof window.makerPreviewFanOut === 'function') {
+          window.makerPreviewFanOut(mid, oldCost);
+        }
+      });
+    }
   }
 
   function closeMaterialModal(event) {

@@ -35342,6 +35342,29 @@ window.invalidateProductCustomerSignal = function(pid) {
   else window._pdCustomerSignalCache = Object.create(null);
 };
 
+// W2-SEC: delegated click listener for the W2.2 reviews + order-notes lists.
+// Replaces inline `onclick="event.stopPropagation();viewOrder('<esc(orderId)>')"`
+// (esc-into-JS-string pattern shared with OPEN -OtEkpFjIRwH_z-1CJuB).
+// Browser HTML-decodes the data-attribute value safely on read, removing the
+// defense-in-depth gap. Attached once on document, scoped to the Customer
+// Signal wrapper via closest() so other surfaces don't accidentally trigger.
+if (!window._pdCustomerSignalDelegatedListenerAttached) {
+  document.addEventListener('click', function(ev) {
+    var t = ev.target.closest && ev.target.closest('[data-pd-cs-action]');
+    if (!t) return;
+    // Scope: only fire when click originates inside the Customer Signal card.
+    if (!t.closest('#pdCustomerSignal')) return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    var action = t.getAttribute('data-pd-cs-action');
+    if (action === 'open-order') {
+      var orderId = t.getAttribute('data-pd-cs-order-id');
+      if (orderId && typeof viewOrder === 'function') viewOrder(orderId);
+    }
+  });
+  window._pdCustomerSignalDelegatedListenerAttached = true;
+}
+
 // Pure aggregator — variant-level returns and repurchase signal for a product.
 // Inputs are raw Firebase shapes (orders map, rmas map, product.variants array).
 // Returns { returnRows, repurchaseRows } sorted for display. No DOM, no Firebase —
@@ -35809,7 +35832,10 @@ function loadProductCustomerSignal(pid) {
             : '';
           var orderLink = '';
           if (r.orderId) {
-            orderLink = ' &middot; <a href="#" onclick="event.stopPropagation();if(typeof viewOrder===\'function\'){viewOrder(\'' + esc(r.orderId) + '\');return false;}return false;" style="color:var(--warm-gray);text-decoration:underline;">Order</a>';
+            // W2-SEC: data-attr + delegated listener (see #pdCustomerSignal
+            // wireup below) instead of esc(orderId)-into-onclick-JS-string,
+            // matching the defense-in-depth refactor for OPEN -OtEkpFjIRwH_z-1CJuB.
+            orderLink = ' &middot; <a href="#" data-pd-cs-action="open-order" data-pd-cs-order-id="' + esc(r.orderId) + '" style="color:var(--warm-gray);text-decoration:underline;">Order</a>';
           }
           var statusBadge = '';
           if (r.status === 'pending') {
@@ -35864,7 +35890,12 @@ function loadProductCustomerSignal(pid) {
             : '';
           var orderLink = '';
           if (nn.orderId) {
-            orderLink = '<a href="#" onclick="event.stopPropagation();if(typeof viewOrder===\'function\'){viewOrder(\'' + esc(String(nn.orderId)) + '\');return false;}return false;" style="color:var(--warm-gray);text-decoration:underline;">Order</a>';
+            // W2-SEC: same data-attr + delegated listener pattern as the
+            // reviews list above. Removes the esc-into-JS-string defense-
+            // in-depth gap; the delegated listener on #pdCustomerSignal
+            // calls viewOrder(orderId) with the data-attribute value (which
+            // the browser HTML-decodes safely on read).
+            orderLink = '<a href="#" data-pd-cs-action="open-order" data-pd-cs-order-id="' + esc(String(nn.orderId)) + '" style="color:var(--warm-gray);text-decoration:underline;">Order</a>';
           }
           html += '<div style="padding:8px 0;border-top:1px solid var(--cream-dark);font-size:0.85rem;">';
           html += '<div style="color:var(--charcoal,var(--text));line-height:1.4;">&ldquo;' + esc(nn.note.slice(0, 280)) + (nn.note.length > 280 ? '&hellip;' : '') + '&rdquo;</div>';
