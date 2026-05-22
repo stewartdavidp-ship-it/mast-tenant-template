@@ -39,3 +39,5 @@ jobs:
         run: node scripts/lint-mastdb.js
       - name: Design token lint (advisory)
         run: node scripts/lint-design-tokens.js
+      - name: Mode module info lint
+        run: node scripts/lint-module-info.js

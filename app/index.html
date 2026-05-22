@@ -20,6 +20,10 @@
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-functions-compat.js"></script>
   <script src="../shared/mastdb.js?v=5"></script>
   <script src="../shared/business-entity-constants.js?v=4"></script>
+  <!-- E1 (Idea -OtEQoFvlPAu90ghkDXu): Add-to-Mast page module copy + schema validator.
+       Eager-loaded — module labels are referenced by sidebar rendering at boot, not just on the Add-to-Mast page. -->
+  <script src="data/mode-module-info.schema.js?v=1"></script>
+  <script src="data/mode-module-info.js?v=1"></script>
   <script src="../shared/customer-resolver.js?v=1"></script>
   <script src="../shared/brand-sync.js?v=1"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
@@ -12451,127 +12455,12 @@ window.removeRouteFromMast = removeRouteFromMast;
 
 // M3 (Idea -OtADygKA_JhRmk1wUqN): Add-to-Mast page — central unlock surface
 // for all soft-hidden modules. Cards grouped by sidebar section, one click
-// per module to enable. The single discoverable expansion point per the
-// unlock-surface RULE.
+// per module to enable.
 //
-// MODULE_INFO holds owner-facing copy (label + one-line description). Labels
-// fall back to deriving from data-route if not declared. M4 will wire
-// mode-aware label overrides (e.g. "Custom Orders" → "Quotes" in bookings) —
-// for v1 this map carries default labels only.
-var MODE_SECTION_LABELS = {
-  'products':         'Products',
-  'sales':            'Sales',
-  'marketing':        'Marketing',
-  'retention':        'Retention',
-  'events':           'Shows & Markets',
-  'classes':          'Bookings & Classes',
-  'finance':          'Finance',
-  'operations':       'Operations',
-  'customer-service': 'Customer Service',
-  'admin':            'Admin'
-};
-
-var MODE_MODULE_INFO = {
-  // Catalog (Products is its own sidebar item and is not part of Add-to-Mast.
-  // The legacy 'develop-products' / 'pieces' routes alias to 'products'.)
-  'materials':          { label: 'Materials',       section: 'products', desc: 'Track raw materials, suppliers, and unit costs.' },
-  'forecast':           { label: 'Forecast',        section: 'products', desc: 'Predict inventory needs based on sales velocity.' },
-  'jobs':               { label: 'Jobs',            section: 'products', desc: 'Schedule production runs and batch work.' },
-  'procurement':        { label: 'Procurement',     section: 'products', desc: 'Manage purchase orders and supplier relationships.' },
-  'inventory':          { label: 'Inventory',       section: 'products', desc: 'Track stock levels across products and variants.' },
-  'products':           { label: 'Products',        section: 'products', desc: 'Browse and edit your product catalog.' },
-  // Sales
-  'pos':                { label: 'Point of Sale',   section: 'sales',    desc: 'Ring up sales in person — phone, tablet, or laptop.' },
-  'orders':             { label: 'Retail Orders',   section: 'sales',    desc: 'View and process incoming customer orders.' },
-  'commissions':        { label: 'Custom Orders',   section: 'sales',    desc: 'Manage custom orders, quotes, and bespoke work.' },
-  'rma':                { label: 'Returns',         section: 'sales',    desc: 'Process returns, refunds, and replacements.' },
-  'wholesale':          { label: 'Wholesale',       section: 'sales',    desc: 'Sell to other businesses at wholesale pricing.' },
-  'galleries':          { label: 'Galleries',       section: 'sales',    desc: 'Track inventory placed on consignment at galleries.' },
-  'lookbooks':          { label: 'Look Books',      section: 'sales',    desc: 'Generate PDF line sheets and look books for buyers.' },
-  'pack':               { label: 'Pack',            section: 'sales',    desc: 'Pick and pack orders for shipment.' },
-  'ship':               { label: 'Ship',            section: 'sales',    desc: 'Buy shipping labels and track packages.' },
-  // Marketing
-  'social':             { label: 'Social Media',    section: 'marketing', desc: 'Schedule and publish social posts.' },
-  'blog':               { label: 'Blog',            section: 'marketing', desc: 'Publish long-form articles on your website.' },
-  'newsletter':         { label: 'Newsletter',      section: 'marketing', desc: 'Email your customer list with campaigns and updates.' },
-  'stories':            { label: 'Stories',         section: 'marketing', desc: 'Behind-the-scenes posts that showcase your craft.' },
-  'homepage':           { label: 'Page Builder',    section: 'marketing', desc: 'Customize your storefront homepage layout.' },
-  // Retention
-  'wallet':             { label: 'Wallet',          section: 'retention', desc: 'Store credit, points, and pre-paid balances.' },
-  'gift-cards':         { label: 'Gift Cards',      section: 'retention', desc: 'Sell and redeem gift cards.' },
-  'coupons':            { label: 'Coupons',         section: 'retention', desc: 'Discount codes for promotions.' },
-  'loyalty':            { label: 'Loyalty',         section: 'retention', desc: 'Reward repeat customers with points.' },
-  'membership':         { label: 'Membership',      section: 'retention', desc: 'Recurring subscription tiers with member perks.' },
-  'promotions':         { label: 'Sale Promotions', section: 'retention', desc: 'Run sales and promotional campaigns.' },
-  // Shows & Markets
-  'show-find':          { label: 'Find Shows',      section: 'events',   desc: 'Discover shows, markets, and fairs to apply to.' },
-  'show-apply':         { label: 'Apply',           section: 'events',   desc: 'Submit applications to upcoming shows.' },
-  'show-prep':          { label: 'Prep',            section: 'events',   desc: 'Plan inventory, packing, and logistics for shows.' },
-  'show-execute':       { label: 'Execute',         section: 'events',   desc: 'Run your booth — POS, restocks, traffic notes.' },
-  'show-history':       { label: 'Show History',    section: 'events',   desc: 'Past show records, sales, and lessons learned.' },
-  'events-shows':       { label: 'Host Shows',      section: 'events',   desc: 'Organize your own events as a show host.' },
-  'events-settings':    { label: 'Show Settings',   section: 'events',   desc: 'Configure your event hosting settings.' },
-  // Bookings & Classes
-  'book':               { label: 'Classes',         section: 'classes',  desc: 'Schedule classes, workshops, and appointments.' },
-  'calendar':           { label: 'Calendar',        section: 'classes',  desc: 'View all upcoming bookings in calendar form.' },
-  'enrollments':        { label: 'Enrollments',     section: 'classes',  desc: 'Track student enrollments per class.' },
-  'passes':             { label: 'Passes',          section: 'classes',  desc: 'Multi-class passes and punch cards.' },
-  'resources':          { label: 'Resources',       section: 'classes',  desc: 'Manage rooms, equipment, and instructor time slots.' },
-  'students':           { label: 'Students',        section: 'classes',  desc: 'Student database with class history.' },
-  'instructors':        { label: 'Instructors',     section: 'classes',  desc: 'Manage instructor profiles and pay rates.' },
-  'book-reports':       { label: 'Class Reports',   section: 'classes',  desc: 'Attendance and revenue reports for classes.' },
-  // Finance (extended)
-  'finance-pl':         { label: 'Profit & Loss',   section: 'finance',  desc: 'Profit & loss statements and trend analysis.' },
-  'finance-cash-flow':  { label: 'Cash Flow',       section: 'finance',  desc: 'Cash flow tracking and projections.' },
-  'finance-ar':         { label: 'Accounts Receivable', section: 'finance', desc: 'Money owed to you by customers and accounts.' },
-  'finance-ap':         { label: 'Accounts Payable',    section: 'finance', desc: 'Bills and supplier invoices.' },
-  'finance-reports':    { label: 'Financial Reports',   section: 'finance', desc: 'Tax-ready reports and ledger exports.' },
-  'customer-portfolio': { label: 'Customer Portfolio',  section: 'finance', desc: 'Per-customer revenue and lifetime value.' },
-  // Operations
-  'trips':              { label: 'Trips',           section: 'operations', desc: 'Track delivery trips and business mileage.' },
-  'reports':            { label: 'Reports',         section: 'operations', desc: 'Operational reports across the business.' },
-  'advisor':            { label: 'Business Plan',   section: 'operations', desc: 'AI business plan and growth recommendations.' },
-  'studio':             { label: 'Studio',          section: 'operations', desc: 'Configure studio locations and equipment.' },
-  'channels':           { label: 'Channels',        section: 'operations', desc: 'Manage Etsy, Shopify, and other sales channels.' },
-  // Customer Service
-  'cs-inbox':           { label: 'Inbox',           section: 'customer-service', desc: 'Customer messages and email inquiries.' },
-  'cs-tickets':         { label: 'Tickets',         section: 'customer-service', desc: 'Support ticket queue and resolution tracking.' },
-  'cs-surveys':         { label: 'Surveys',         section: 'customer-service', desc: 'Send post-purchase surveys to customers.' },
-  'cs-reviews':         { label: 'Reviews',         section: 'customer-service', desc: 'Customer reviews and ratings management.' },
-  'cs-faqs':            { label: 'FAQs',            section: 'customer-service', desc: 'Self-service knowledge base.' },
-  'cs-members':         { label: 'Members',         section: 'customer-service', desc: 'Member directory and lifecycle tracking.' },
-
-  // === Always-on items — rendered with "Always on" pill, no toggle button.
-  // Shown for completeness so owners can see every sidebar item on this page. ===
-  // Sales (always-on)
-  'receipts':           { label: 'Receipts & Reconciliation', section: 'sales',     desc: 'Match payouts and reconcile receipts.' },
-  'terms':              { label: 'Terms & Conditions',        section: 'sales',     desc: 'Storefront legal copy and policies.' },
-  // Marketing (always-on)
-  'website':            { label: 'Website Content', section: 'marketing', desc: 'Public-facing storefront pages and copy.' },
-  'brand':              { label: 'Brand',           section: 'marketing', desc: 'Logo, colors, fonts, and brand identity.' },
-  'images':             { label: 'Images',          section: 'marketing', desc: 'Image library and asset management.' },
-  // Finance (always-on)
-  'finance-revenue':    { label: 'Revenue',         section: 'finance',   desc: 'Revenue tracking and trend reports.' },
-  'finance-expenses':   { label: 'Expenses',        section: 'finance',   desc: 'Expense entry and categorization.' },
-  'finance-tax':        { label: 'Tax',             section: 'finance',   desc: 'Sales tax configuration and remittance reports.' },
-  // Operations (always-on)
-  'contacts':           { label: 'Contacts',        section: 'operations', desc: 'Contact database for non-customer relationships.' },
-  'customers':          { label: 'Customers',       section: 'operations', desc: 'Customer database, lifecycle, and history.' },
-  'team':               { label: 'Team',            section: 'operations', desc: 'Team members, roles, and time tracking.' },
-  'business':           { label: 'Business',        section: 'operations', desc: 'Business entity configuration and compliance.' },
-  // Admin (always-on)
-  'settings':           { label: 'Settings',        section: 'admin',     desc: 'Tenant settings, integrations, and configuration.' },
-  'employees':          { label: 'Permissions',     section: 'admin',     desc: 'User roles, permissions, and RBAC.' },
-  'analytics':          { label: 'Analytics',       section: 'admin',     desc: 'Site analytics and operational metrics.' },
-  'auditlog':           { label: 'Audit Log',       section: 'admin',     desc: 'System audit trail for all admin actions.' },
-  'subscription':       { label: 'Subscription',    section: 'admin',     desc: 'Mast subscription, billing, and plan management.' },
-  'about':              { label: 'About',           section: 'admin',     desc: 'About this Mast tenant — version, support.' },
-  'email-log':          { label: 'Email Log',       section: 'admin',     desc: 'Outbound transactional email log.' }
-  // Migration routes (migration, migration-confirm, migration-plan, migration-import,
-  // historical-orders) are intentionally omitted — they're system-managed,
-  // conditionally shown by the migration state, not by user preference.
-};
-
+// E1 (Idea -OtEQoFvlPAu90ghkDXu, 2026-05-22): MODE_MODULE_INFO and
+// MODE_SECTION_LABELS migrated to app/data/mode-module-info.js so the
+// core stays thin. Globals are still `window.MODE_MODULE_INFO` and
+// `window.MODE_SECTION_LABELS` — no consumer changes needed.
 // Pure function — compute the list of routes eligible for the Add-to-Mast page
 // (soft-hidden in the tenant's current modeSet AND not already enabled by override).
 // Used by M7 threshold counter and bulk "+ Add all" / "+ Add all in section" handlers.
@@ -12609,6 +12498,115 @@ function _getToggleableRoutes() {
   }
   return result;
 }
+
+// E1 (Idea -OtEQoFvlPAu90ghkDXu): Inline-expand details panel for an
+// enriched module card. Pure HTML string — all values esc()'d. Hidden by
+// default; toggleAddToMastDetails() flips display + aria-expanded.
+//
+// Sections render only when their data is present (missing fields hide
+// entirely, never stubbed). Image 404 swaps to a neutral placeholder div.
+function renderAddToMastEnrichedDetails(routeId, info) {
+  var BASE_TXT = 'font-size:0.78rem;color:var(--charcoal,var(--text));line-height:1.5;';
+  var LABEL    = 'font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.06em;font-weight:600;margin-top:10px;margin-bottom:4px;';
+  var CHIP     = 'display:inline-block;font-size:0.72rem;color:var(--warm-gray);background:var(--bg-soft,rgba(0,0,0,0.04));border-radius:999px;padding:2px 8px;margin-right:4px;margin-bottom:4px;';
+  var CHIP_LINK = CHIP + 'cursor:default;';
+
+  var out = '';
+  out += '<div id="add-to-mast-details-' + esc(routeId) + '" class="add-to-mast-details" data-details-for="' + esc(routeId) + '" hidden style="border-top:1px solid var(--border,#e5e0d8);margin-top:4px;padding-top:10px;">';
+
+  // Screenshot — graceful fallback on 404 (CDN bucket may not exist yet).
+  if (info.preview && info.preview.url) {
+    var altText = info.preview.alt || (info.label + ' preview');
+    out += '<div style="margin-bottom:10px;border-radius:6px;overflow:hidden;background:var(--bg-soft,rgba(0,0,0,0.04));aspect-ratio:16/9;display:flex;align-items:center;justify-content:center;">';
+    out += '<img src="' + esc(info.preview.url) + '" alt="' + esc(altText) + '" onerror="this.outerHTML=&quot;<div style=\\&quot;font-size:0.72rem;color:var(--warm-gray);padding:24px;text-align:center;\\&quot;>Preview coming soon</div>&quot;" style="max-width:100%;height:auto;display:block;" />';
+    out += '</div>';
+  }
+
+  if (info.outcome) {
+    out += '<div style="' + LABEL + '">What you&rsquo;ll get</div>';
+    out += '<div style="' + BASE_TXT + '">' + esc(info.outcome) + '</div>';
+  }
+  if (info.goodFitWhen) {
+    out += '<div style="' + LABEL + '">Good fit if&hellip;</div>';
+    out += '<div style="' + BASE_TXT + '">' + esc(info.goodFitWhen) + '</div>';
+  }
+  if (info.notAFitWhen) {
+    out += '<div style="' + LABEL + '">Skip if&hellip;</div>';
+    out += '<div style="' + BASE_TXT + '">' + esc(info.notAFitWhen) + '</div>';
+  }
+  if (Array.isArray(info.automates) && info.automates.length > 0) {
+    out += '<div style="' + LABEL + '">Replaces</div>';
+    out += '<ul style="' + BASE_TXT + 'padding-left:18px;margin:0;">';
+    for (var ai = 0; ai < info.automates.length; ai++) {
+      out += '<li>' + esc(info.automates[ai]) + '</li>';
+    }
+    out += '</ul>';
+  }
+  if (Array.isArray(info.complementsTools) && info.complementsTools.length > 0) {
+    out += '<div style="' + LABEL + '">Works alongside</div><div>';
+    for (var ci = 0; ci < info.complementsTools.length; ci++) {
+      out += '<span style="' + CHIP_LINK + '">' + esc(info.complementsTools[ci]) + '</span>';
+    }
+    out += '</div>';
+  }
+  if (Array.isArray(info.replacesTools) && info.replacesTools.length > 0) {
+    out += '<div style="' + LABEL + '">Replaces tools</div><div>';
+    for (var ri = 0; ri < info.replacesTools.length; ri++) {
+      out += '<span style="' + CHIP_LINK + '">' + esc(info.replacesTools[ri]) + '</span>';
+    }
+    out += '</div>';
+  }
+  if (Array.isArray(info.prerequisites) && info.prerequisites.length > 0) {
+    out += '<div style="' + LABEL + '">You&rsquo;ll need first</div>';
+    out += '<ul style="' + BASE_TXT + 'list-style:none;padding-left:0;margin:0;">';
+    for (var pi = 0; pi < info.prerequisites.length; pi++) {
+      out += '<li style="padding:2px 0;">&#9744; ' + esc(info.prerequisites[pi]) + '</li>';
+    }
+    out += '</ul>';
+  }
+  if (Array.isArray(info.pairsWith) && info.pairsWith.length > 0) {
+    out += '<div style="' + LABEL + '">Pairs with</div><div>';
+    var MMI = window.MODE_MODULE_INFO || {};
+    for (var wi = 0; wi < info.pairsWith.length; wi++) {
+      var pwId = info.pairsWith[wi];
+      var pwLabel = (MMI[pwId] && MMI[pwId].label) || pwId;
+      out += '<span style="' + CHIP_LINK + '">' + esc(pwLabel) + '</span>';
+    }
+    out += '</div>';
+  }
+  if (info.learnMoreUrl) {
+    out += '<div style="margin-top:12px;font-size:0.78rem;">';
+    out += '<a href="' + esc(info.learnMoreUrl) + '" target="_blank" rel="noopener noreferrer" style="color:var(--teal,#2a7c6f);text-decoration:none;font-weight:600;">Learn more &rarr;</a>';
+    out += '</div>';
+  }
+
+  out += '</div>';
+  return out;
+}
+window.renderAddToMastEnrichedDetails = renderAddToMastEnrichedDetails;
+
+// E1: Toggle the inline-expand details panel. Pure DOM mutation — no Firebase
+// writes, no telemetry yet (clickstream extension is a separate job).
+function toggleAddToMastDetails(routeId) {
+  try {
+    var panel = document.getElementById('add-to-mast-details-' + routeId);
+    var toggle = document.querySelector('[data-details-toggle-for="' + routeId + '"]');
+    if (!panel || !toggle) return;
+    var isOpen = !panel.hasAttribute('hidden');
+    if (isOpen) {
+      panel.setAttribute('hidden', '');
+      toggle.setAttribute('aria-expanded', 'false');
+      toggle.innerHTML = 'Details &#9662;';
+    } else {
+      panel.removeAttribute('hidden');
+      toggle.setAttribute('aria-expanded', 'true');
+      toggle.innerHTML = 'Less &#9652;';
+    }
+  } catch (err) {
+    console.warn('[toggleAddToMastDetails] failed:', err && err.message);
+  }
+}
+window.toggleAddToMastDetails = toggleAddToMastDetails;
 
 async function renderAddToMast() {
   var container = document.getElementById('addToMastContent');
@@ -12732,13 +12730,36 @@ async function renderAddToMast() {
         html += '<span style="font-size:0.72rem;color:var(--teal,#2a7c6f);font-weight:600;text-transform:uppercase;letter-spacing:0.05em;">In sidebar</span>';
       }
       html += '</div>';
-      html += '<div style="font-size:0.78rem;color:var(--warm-gray);line-height:1.45;flex-grow:1;">' + esc(it.info.desc) + '</div>';
+      // tagline (new schema field) falls back to legacy `desc` via the
+      // back-compat shim in data/mode-module-info.js.
+      html += '<div style="font-size:0.78rem;color:var(--warm-gray);line-height:1.45;flex-grow:1;">' + esc(it.info.tagline || it.info.desc || '') + '</div>';
+      // E1: chip row — setupDepth + Details toggle (only when card is enriched).
+      var isEnriched = !!it.info.outcome;
+      var hasChips   = !!it.info.setupDepth;
+      if (hasChips || isEnriched) {
+        html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:2px;flex-wrap:wrap;">';
+        html += '<div style="display:flex;gap:6px;flex-wrap:wrap;">';
+        if (it.info.setupDepth) {
+          var depthLabel = ({ quick: 'Quick setup', moderate: 'Moderate setup', heavy: 'Heavier setup' })[it.info.setupDepth] || it.info.setupDepth;
+          html += '<span class="add-to-mast-chip" style="font-size:0.72rem;color:var(--warm-gray);background:var(--bg-soft,rgba(0,0,0,0.04));border-radius:999px;padding:2px 8px;">' + esc(depthLabel) + '</span>';
+        }
+        html += '</div>';
+        if (isEnriched) {
+          html += '<button type="button" class="add-to-mast-details-toggle" data-details-toggle-for="' + esc(it.routeId) + '" onclick="toggleAddToMastDetails(\'' + esc(it.routeId) + '\')" aria-expanded="false" aria-controls="add-to-mast-details-' + esc(it.routeId) + '" style="background:transparent;border:0;color:var(--teal,#2a7c6f);font-size:0.72rem;font-weight:600;cursor:pointer;padding:2px 4px;">Details &#9662;</button>';
+        }
+        html += '</div>';
+      }
       if (it.alwaysOn) {
         // No button — always-on items are informational only.
       } else if (it.visible) {
         html += '<button class="btn btn-secondary btn-small" onclick="removeFromMastClick(\'' + esc(it.routeId) + '\')" aria-label="Remove ' + esc(displayLabel) + ' from my Mast" style="margin-top:4px;align-self:flex-start;">Remove from my Mast</button>';
       } else {
         html += '<button class="btn btn-primary btn-small" onclick="addToMastClick(\'' + esc(it.routeId) + '\')" aria-label="Add ' + esc(displayLabel) + ' to my Mast" style="margin-top:4px;align-self:flex-start;">+ Add to my Mast</button>';
+      }
+      // E1: Inline-expand details panel (hidden by default). Renders only
+      // when the entry has `outcome` (the gate for "enriched" status).
+      if (isEnriched) {
+        html += renderAddToMastEnrichedDetails(it.routeId, it.info);
       }
       html += '</div>';
     }
