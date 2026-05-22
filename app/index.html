@@ -6864,7 +6864,16 @@
     <div id="imagesTab" style="display:none;">
       <div class="section-header">
         <h2>Image Library</h2>
-        <div style="display:flex;gap:8px;align-items:center;">
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <!-- W1.10: filename search + date range + sort -->
+          <input type="text" id="imageLibraryFilename" placeholder="Search filename..." oninput="renderImageLibrary()" style="padding:6px 10px;border-radius:4px;border:1px solid #ddd;font-size:0.85rem;width:160px;" title="Case-insensitive substring match on filename">
+          <input type="date" id="imageLibraryDateFrom" onchange="renderImageLibrary()" style="padding:6px 8px;border-radius:4px;border:1px solid #ddd;font-size:0.78rem;" title="From date">
+          <input type="date" id="imageLibraryDateTo" onchange="renderImageLibrary()" style="padding:6px 8px;border-radius:4px;border:1px solid #ddd;font-size:0.78rem;" title="To date">
+          <select id="imageLibrarySort" onchange="renderImageLibrary()" style="padding:6px 8px;border-radius:4px;border:1px solid #ddd;font-size:0.78rem;" title="Sort order">
+            <option value="newest" selected>Newest</option>
+            <option value="oldest">Oldest</option>
+            <option value="mostUsed">Most used</option>
+          </select>
           <input type="text" id="imageLibrarySearch" placeholder="Search tags..." oninput="renderImageLibrary()" style="padding:6px 10px;border-radius:4px;border:1px solid #ddd;font-size:0.85rem;width:160px;">
           <button class="btn btn-primary" onclick="openLibraryUploadModal()">Upload Image</button>
         </div>
@@ -45460,7 +45469,7 @@ function renderImageLibrary() {
   var search = (document.getElementById('imageLibrarySearch') || {}).value || '';
   search = search.toLowerCase().trim();
 
-  // Filter by search
+  // Filter by tags/source/id search (legacy)
   if (search) {
     entries = entries.filter(function(e) {
       var img = e[1];
@@ -45470,10 +45479,56 @@ function renderImageLibrary() {
     });
   }
 
-  // Sort newest first
-  entries.sort(function(a, b) {
-    return (b[1].uploadedAt || '').localeCompare(a[1].uploadedAt || '');
-  });
+  // W1.10 — filename substring filter (case-insensitive)
+  var fnameQ = ((document.getElementById('imageLibraryFilename') || {}).value || '').toLowerCase().trim();
+  if (fnameQ) {
+    entries = entries.filter(function(e) {
+      var img = e[1];
+      return String(img.filename || '').toLowerCase().indexOf(fnameQ) !== -1;
+    });
+  }
+
+  // W1.10 — date range filter (uses image.createdAt, falls back to uploadedAt)
+  var fromVal = (document.getElementById('imageLibraryDateFrom') || {}).value || '';
+  var toVal = (document.getElementById('imageLibraryDateTo') || {}).value || '';
+  var fromMs = fromVal ? new Date(fromVal + 'T00:00:00').getTime() : NaN;
+  var toMs = toVal ? new Date(toVal + 'T23:59:59').getTime() : NaN;
+  if (!isNaN(fromMs) || !isNaN(toMs)) {
+    entries = entries.filter(function(e) {
+      var img = e[1];
+      var raw = img.createdAt || img.uploadedAt || null;
+      if (!raw) return false;
+      var t = new Date(raw).getTime();
+      if (isNaN(t)) return false;
+      if (!isNaN(fromMs) && t < fromMs) return false;
+      if (!isNaN(toMs) && t > toMs) return false;
+      return true;
+    });
+  }
+
+  // W1.10 — sort: newest / oldest / most-used
+  var sortMode = (document.getElementById('imageLibrarySort') || {}).value || 'newest';
+  var usageForSort = (sortMode === 'mostUsed') ? computeImageUsage() : null;
+  if (sortMode === 'oldest') {
+    entries.sort(function(a, b) {
+      return (a[1].uploadedAt || '').localeCompare(b[1].uploadedAt || '');
+    });
+  } else if (sortMode === 'mostUsed') {
+    entries.sort(function(a, b) {
+      var ua = usageForSort && usageForSort[a[0]];
+      var ub = usageForSort && usageForSort[b[0]];
+      var ca = ua ? ((ua.products ? ua.products.length : 0) + (ua.galleryCount || 0) + (ua.onWebsite ? 1 : 0)) : 0;
+      var cb = ub ? ((ub.products ? ub.products.length : 0) + (ub.galleryCount || 0) + (ub.onWebsite ? 1 : 0)) : 0;
+      if (cb !== ca) return cb - ca;
+      // tiebreak: newest first
+      return (b[1].uploadedAt || '').localeCompare(a[1].uploadedAt || '');
+    });
+  } else {
+    // newest (default)
+    entries.sort(function(a, b) {
+      return (b[1].uploadedAt || '').localeCompare(a[1].uploadedAt || '');
+    });
+  }
 
   var usage = computeImageUsage();
   var totalOnWebsite = 0;
