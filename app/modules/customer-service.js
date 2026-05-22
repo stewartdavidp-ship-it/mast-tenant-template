@@ -685,10 +685,13 @@
       filtered.forEach(function (r) {
         // W1.7 — resolve customer + product info (only if review has a real email; truly
         // anonymous reviews are NOT cross-referenced for privacy).
-        var emailKey = r.reviewerEmail ? String(r.reviewerEmail).toLowerCase().trim() : '';
+        // W1.7 fix-up #2 — review docs from submitReview CF use authorEmail/authorName;
+        // legacy paths used reviewerEmail/reviewerName. Read both shapes.
+        var reviewEmail = r.authorEmail || r.reviewerEmail || '';
+        var emailKey = reviewEmail ? String(reviewEmail).toLowerCase().trim() : '';
         var matchedCustomer = emailKey ? csReviewCustomerByEmail[emailKey] : null;
         var prodInfo = r.productId ? csReviewProductIndex[r.productId] : null;
-        var displayName = matchedCustomer ? matchedCustomer.displayName : (r.reviewerName || 'Anonymous');
+        var displayName = matchedCustomer ? matchedCustomer.displayName : (r.authorName || r.reviewerName || 'Anonymous');
 
         html += '<div style="border:1px solid var(--cream-dark);border-radius:10px;padding:16px;background:var(--surface-card);">';
         html += '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px;">';
@@ -712,7 +715,7 @@
           }
         }
         html += '<span style="color:var(--amber-light);letter-spacing:0.04em;">' + starsHtml(r.rating) + '</span>';
-        if (r.reviewerEmail) html += '<span style="font-size:0.78rem;color:var(--warm-gray);">' + _esc(r.reviewerEmail) + '</span>';
+        if (reviewEmail) html += '<span style="font-size:0.78rem;color:var(--warm-gray);">' + _esc(reviewEmail) + '</span>';
         html += '<span style="font-size:0.78rem;color:var(--warm-gray);margin-left:auto;">' + relativeTime(r.createdAt) + '</span>';
         html += reviewBadge(r.status) + '</div>';
 
@@ -782,10 +785,11 @@
     var r = reviewsData[id];
     if (!r) { showToast('Review not found', true); return; }
     if (r.status !== 'approved') { showToast('Only approved reviews can be featured.', true); return; }
-    var emailKey = r.reviewerEmail ? String(r.reviewerEmail).toLowerCase().trim() : '';
+    var reviewEmail = r.authorEmail || r.reviewerEmail || '';
+    var emailKey = reviewEmail ? String(reviewEmail).toLowerCase().trim() : '';
     var matchedCustomer = emailKey ? csReviewCustomerByEmail[emailKey] : null;
     var prodInfo = r.productId ? csReviewProductIndex[r.productId] : null;
-    var customerName = matchedCustomer ? matchedCustomer.displayName : (r.reviewerName || 'Anonymous');
+    var customerName = matchedCustomer ? matchedCustomer.displayName : (r.authorName || r.reviewerName || 'Anonymous');
     var quote = r.body || r.headline || '';
     if (!quote) { showToast('This review has no body text to feature.', true); return; }
     // Use sourceReviewId as the key so re-featuring updates instead of duplicating.
@@ -831,10 +835,11 @@
   function draftSocialFromReview(id) {
     var r = reviewsData[id];
     if (!r) { showToast('Review not found', true); return; }
-    var emailKey = r.reviewerEmail ? String(r.reviewerEmail).toLowerCase().trim() : '';
+    var reviewEmail = r.authorEmail || r.reviewerEmail || '';
+    var emailKey = reviewEmail ? String(reviewEmail).toLowerCase().trim() : '';
     var matchedCustomer = emailKey ? csReviewCustomerByEmail[emailKey] : null;
     var prodInfo = r.productId ? csReviewProductIndex[r.productId] : null;
-    var name = matchedCustomer ? (matchedCustomer.displayName || '').split(' ')[0] : (r.reviewerName || 'a customer');
+    var name = matchedCustomer ? (matchedCustomer.displayName || '').split(' ')[0] : (r.authorName || r.reviewerName || 'a customer');
     var productName = r.productName || (prodInfo && prodInfo.name) || '';
     var quote = (r.body || r.headline || '').trim().replace(/\s+/g, ' ');
     var body = productName
