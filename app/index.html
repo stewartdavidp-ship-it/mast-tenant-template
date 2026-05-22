@@ -16253,7 +16253,17 @@ var ROUTE_MAP = {
   // newsletter route handled by newsletter module (lazy-loaded)
   // stories route handled by production module (lazy-loaded)
   // website route handled by website module (lazy-loaded)
-  'products':    { tab: 'productsTab' },
+  'products':    { tab: 'productsTab', setup: function() {
+    // W1.3: URL-routed product detail. #products?pid=<id> opens the
+    // detail view; #products with no pid shows the list. Browser back
+    // and deep-link refresh both flow through here.
+    var p = (typeof currentRouteParams === 'object' && currentRouteParams) ? currentRouteParams : {};
+    if (p.pid) {
+      if (typeof viewProduct === 'function') viewProduct(p.pid);
+    } else if (selectedProductPid && typeof _closeProductDetail === 'function') {
+      _closeProductDetail();
+    }
+  } },
   'inventory':   { tab: 'inventoryTab', setup: function() { renderInventoryOverview(); } },
   'forecast':    { tab: 'forecastTab', setup: function() { loadAndRenderForecast(); } },
   'customers':   { tab: null, placeholder: { name: 'Customers', desc: 'Contacts, collectors, purchase history.', badge: 'new' } },
@@ -31693,8 +31703,11 @@ function renderForecastSuggestedBuilds() {
     if (f.trending) reasons.push('Trending &#x2191;');
     if (hasUpcomingEvent) reasons.push('Upcoming Event');
 
+    // W1.4: title + image area is a link to product detail. Create Job
+    // button below stays unaffected since the click handler is on the
+    // header div only, not the whole card.
     html += '<div style="background:var(--cream,#f5f0e8);border:1px solid var(--cream-dark,#e8e0d4);border-radius:10px;padding:16px;display:flex;flex-direction:column;gap:8px;">' +
-      '<div style="display:flex;gap:12px;align-items:flex-start;">' +
+      '<div role="link" tabindex="0" onclick="viewProduct(\'' + esc(f.pid) + '\')" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();viewProduct(\'' + esc(f.pid) + '\');}" style="display:flex;gap:12px;align-items:flex-start;cursor:pointer;border-radius:6px;padding:2px;" onmouseover="this.style.background=\'rgba(0,0,0,0.04)\';" onmouseout="this.style.background=\'transparent\';">' +
         (imgUrl ? '<img src="' + esc(imgUrl) + '" style="width:56px;height:56px;border-radius:8px;object-fit:cover;" loading="lazy">' : '<div style="width:56px;height:56px;border-radius:8px;background:var(--cream-dark,#e8e0d4);display:flex;align-items:center;justify-content:center;font-size:1.6rem;">&#x1F3A8;</div>') +
         '<div style="flex:1;min-width:0;">' +
           '<div style="font-weight:600;font-size:0.9rem;">' + esc(f.name) + '</div>' +
@@ -31723,8 +31736,10 @@ function renderForecastSuggestedBuilds() {
     html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;">';
     mtoConsider.forEach(function(f) {
       var imgUrl = firstProductImage(f);
+      // W1.4: title + image area is a link to product detail. The Update
+      // Product Type button below stays as its own action.
       html += '<div style="background:var(--cream,#f5f0e8);border:1px solid var(--cream-dark,#e8e0d4);border-radius:10px;padding:16px;display:flex;flex-direction:column;gap:8px;">' +
-        '<div style="display:flex;gap:12px;align-items:flex-start;">' +
+        '<div role="link" tabindex="0" onclick="viewProduct(\'' + esc(f.pid) + '\')" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();viewProduct(\'' + esc(f.pid) + '\');}" style="display:flex;gap:12px;align-items:flex-start;cursor:pointer;border-radius:6px;padding:2px;" onmouseover="this.style.background=\'rgba(0,0,0,0.04)\';" onmouseout="this.style.background=\'transparent\';">' +
           (imgUrl ? '<img src="' + esc(imgUrl) + '" style="width:56px;height:56px;border-radius:8px;object-fit:cover;" loading="lazy">' : '<div style="width:56px;height:56px;border-radius:8px;background:var(--cream-dark,#e8e0d4);display:flex;align-items:center;justify-content:center;font-size:1.6rem;">&#x1F3A8;</div>') +
           '<div style="flex:1;min-width:0;">' +
             '<div style="font-weight:600;font-size:0.9rem;">' + esc(f.name) + '</div>' +
@@ -31732,7 +31747,7 @@ function renderForecastSuggestedBuilds() {
           '</div>' +
         '</div>' +
         '<div style="font-size:0.85rem;color:var(--warm-gray);">' + f.last90 + ' ordered in 90 days &middot; Selling ' + f.monthlyRate + '/mo</div>' +
-        '<button class="btn btn-secondary" style="font-size:0.85rem;padding:6px 14px;align-self:flex-start;" onclick="navigateTo(\'products\')">Update Product Type &#x2192;</button>' +
+        '<button class="btn btn-secondary" style="font-size:0.85rem;padding:6px 14px;align-self:flex-start;" onclick="viewProduct(\'' + esc(f.pid) + '\')">Update Product Type &#x2192;</button>' +
       '</div>';
     });
     html += '</div>';
@@ -33003,6 +33018,22 @@ function setProductSection(value) {
 }
 
 function viewProduct(pid) {
+  // W1.3: URL gate. If current URL already targets this pid, render directly
+  // (re-entry from applyRoute → setup). Otherwise push #products?pid=<pid>
+  // and let the route setup re-call us — that path makes browser back,
+  // deep-link refresh, and bookmarks all work.
+  if (!pid) return;
+  var p = (typeof currentRouteParams === 'object' && currentRouteParams) ? currentRouteParams : {};
+  if (!(currentRoute === 'products' && p.pid === pid)) {
+    var newParams = Object.assign({}, p);
+    newParams.pid = pid;
+    navigateTo('products', newParams);
+    return;
+  }
+  _renderProductDetailView(pid);
+}
+
+function _renderProductDetailView(pid) {
   // Honor a previously-chosen section for this pid, else derive from entry point.
   var stored = null;
   try { stored = sessionStorage.getItem('mastProductSection_' + pid); } catch (e) {}
@@ -33016,11 +33047,34 @@ function viewProduct(pid) {
   document.querySelector('#productsTab .section-header').style.display = 'none';
   var _csb = document.getElementById('catalogStatusBar');
   if (_csb) _csb.style.display = 'none';
+  var unnamedNotice = document.getElementById('productsUnnamedNotice');
+  if (unnamedNotice) unnamedNotice.style.display = 'none';
   document.getElementById('productsLoading').style.display = 'none';
   var detailEl = document.getElementById('productDetailView');
   detailEl.style.display = '';
   renderProductDetail(pid);
   checkMakerAttributesVisibility();
+}
+
+function _closeProductDetail() {
+  // W1.3: shared detail teardown. Called from the products-route setup when
+  // params lose the `pid` (browser back, sidebar Products click, etc.) and
+  // by backToProducts() after the route push.
+  selectedProductPid = null;
+  productEditMode = false;
+  if (typeof clearPublishStateOnLeave === 'function') clearPublishStateOnLeave();
+  if (window.MastDirty) MastDirty.unregister('productEdit');
+  var detailEl = document.getElementById('productDetailView');
+  if (detailEl) { detailEl.style.display = 'none'; detailEl.innerHTML = ''; }
+  var grid = document.getElementById('productsGrid');
+  if (grid) grid.style.display = '';
+  var sh = document.querySelector('#productsTab .section-header');
+  if (sh) sh.style.display = '';
+  var csbBack = document.getElementById('catalogStatusBar');
+  if (csbBack) csbBack.style.display = '';
+  var unnamedNoticeBack = document.getElementById('productsUnnamedNotice');
+  if (unnamedNoticeBack) unnamedNoticeBack.style.display = '';
+  if (typeof renderProducts === 'function') renderProducts();
 }
 
 function viewProductFromInventory(pid) {
@@ -33050,34 +33104,29 @@ function viewProductFromInventory(pid) {
 }
 
 function backToProducts() {
+  // W1.3: route-driven back. Drop the `pid` from the URL; route setup
+  // (or the inventory-origin / MastNavStack branches below) handles
+  // teardown. MastDirty gate preserved.
   var doBack = function() {
-    selectedProductPid = null;
-    productEditMode = false;
-    if (typeof clearPublishStateOnLeave === 'function') clearPublishStateOnLeave();
-    if (window.MastDirty) MastDirty.unregister('productEdit');
-    var detailEl = document.getElementById('productDetailView');
-    if (detailEl) {
-      detailEl.style.display = 'none';
-      detailEl.innerHTML = '';
-    }
-    // If MastNavStack has an entry, return to that context.
+    // MastNavStack-driven return (e.g., from inventory drill-in) keeps
+    // its existing semantics — pop and let popAndReturn rebuild the URL.
     if (window.MastNavStack && MastNavStack.size() > 0) {
+      _closeProductDetail();
       MastNavStack.popAndReturn();
       return;
     }
     if (productViewOrigin === 'inventory') {
       productViewOrigin = 'products';
+      _closeProductDetail();
       window._mastNavInternal = true;
       try { navigateTo('inventory'); } finally { window._mastNavInternal = false; }
-    } else {
-      var grid = document.getElementById('productsGrid');
-      if (grid) grid.style.display = '';
-      var sh = document.querySelector('#productsTab .section-header');
-      if (sh) sh.style.display = '';
-      var csbBack = document.getElementById('catalogStatusBar');
-      if (csbBack) csbBack.style.display = '';
-      renderProducts();
+      return;
     }
+    // Normal back to the catalog list — drop ?pid= and let route setup
+    // call _closeProductDetail via the setup hook.
+    var p = (typeof currentRouteParams === 'object' && currentRouteParams) ? Object.assign({}, currentRouteParams) : {};
+    delete p.pid;
+    navigateTo('products', p);
   };
   if (window.MastDirty) MastDirty.checkAndExit(doBack); else doBack();
 }
