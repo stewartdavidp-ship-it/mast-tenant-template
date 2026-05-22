@@ -2929,6 +2929,33 @@
        (ui-first filters). Orthogonal to subscription .locked state — both can
        stack. Fail-open: unset when _engagementSurface is null/hybrid. */
     .sidebar-section.engagement-hidden { display: none !important; }
+
+    /* ========== MAST MODES FILTERING (M2 — Idea -OtADygKA_JhRmk1wUqN) ========== */
+    /* Soft-hides items + entire sections that aren't in the tenant's modeSet
+       defaults. Per the visibility-not-entitlement RULE, items stay reachable —
+       Add-to-Mast page (M3) is the canonical reveal surface. The .show-all
+       state (toggled by sidebarExpandToggle) makes them visible inline at 50%
+       opacity so users can browse. Stacks with .engagement-hidden + .locked. */
+    .sidebar-item.mode-hidden { display: none; }
+    .sidebar-section.mode-all-hidden { display: none; }
+    body.sidebar-show-all .sidebar-item.mode-hidden { display: block; opacity: 0.5; }
+    body.sidebar-show-all .sidebar-section.mode-all-hidden { display: block; opacity: 0.5; }
+
+    /* M7 (Idea -OtADygKA_JhRmk1wUqN): Mast modes banner — non-blocking
+       suggestion/migration prompt under the header. Uses teal accent to
+       distinguish from alert banners. Always dismissable. */
+    #modesBannerSlot .modes-banner {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 24px;
+      background: rgba(42,124,111,0.08);
+      border-bottom: 1px solid rgba(42,124,111,0.18);
+      font-size: 0.85rem;
+      color: var(--charcoal, var(--text));
+    }
+    #modesBannerSlot .modes-banner-message { flex: 1; line-height: 1.45; }
+    #modesBannerSlot .modes-banner-actions { display: flex; gap: 8px; flex-shrink: 0; }
     .sidebar-lock-icon { font-size: 0.72rem; margin-left: auto; flex-shrink: 0; opacity: 0.6; }
     .sidebar-upgrade-nudge {
       display: none;
@@ -5520,6 +5547,11 @@
     </div>
   </header>
 
+  <!-- M7 (Idea -OtADygKA_JhRmk1wUqN): Mast modes banner slot — non-blocking
+       suggestion/migration banners injected by checkModeSetBanners(). Sits
+       directly under the header so it's discoverable without modal-blocking. -->
+  <div id="modesBannerSlot" style="display:none;"></div>
+
   <!-- ===== NOTIFICATION PANEL ===== -->
   <div id="notificationPanel">
     <div class="notif-header">
@@ -5748,6 +5780,17 @@
     <div class="sidebar-expand-toggle" id="sidebarExpandToggle" style="display:none;" onclick="toggleSidebarLockedModules()">
       <span class="sidebar-expand-arrow" id="sidebarExpandArrow">&#9660;</span>
       <span class="sidebar-expand-label" id="sidebarExpandLabel">Show all modules</span>
+    </div>
+    <!-- M3 (Idea -OtADygKA_JhRmk1wUqN): Add-to-Mast — canonical unlock surface
+         for soft-hidden modules. Always visible at the bottom of the sidebar
+         per the unlock-surface RULE. Item appears as a sidebar-item with
+         data-route so navigateTo + applyRoute pick it up. -->
+    <div class="sidebar-section" data-section="add-to-mast-section">
+      <div class="sidebar-items">
+        <div class="sidebar-item" data-route="add-to-mast" onclick="navigateTo('add-to-mast')" style="font-weight:600;color:var(--teal,#2a7c6f);">
+          <span style="margin-right:6px;">+</span>Add to Mast
+        </div>
+      </div>
     </div>
   </nav>
 
@@ -7697,6 +7740,17 @@
         </nav>
         <div class="settings-content-area">
           <div id="settingsSubGeneral" style="max-width:500px;">
+        <!-- M6 (Idea -OtADygKA_JhRmk1wUqN): Change my business setup — entry
+             point for the explicit owner-driven mode-change flow. Placed
+             first in General settings since it's a load-bearing tenant-shape
+             control that other settings depend on. -->
+        <div class="form-group" style="margin-bottom:24px;">
+          <label>Business setup</label>
+          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:8px;">
+            Change what kind of business Mast is set up for &mdash; updates which modules appear in your sidebar by default. We&rsquo;ll show you a preview of what will change before applying.
+          </p>
+          <button class="btn btn-secondary" onclick="navigateTo('business-setup')">Change my business setup &rarr;</button>
+        </div>
         <div id="githubPatSection" class="form-group" style="display:none;">
           <label>GitHub Personal Access Token</label>
           <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:8px;">
@@ -9602,6 +9656,24 @@
         <h2>About</h2>
       </div>
       <div id="aboutContent"></div>
+    </div>
+
+    <!-- M3 (Idea -OtADygKA_JhRmk1wUqN): Add-to-Mast — central unlock surface
+         for soft-hidden modules. Rendered by renderAddToMast(). -->
+    <div id="addToMastTab" style="display:none;">
+      <div class="section-header">
+        <h2>Add to Mast</h2>
+      </div>
+      <div id="addToMastContent"></div>
+    </div>
+
+    <!-- M6 (Idea -OtADygKA_JhRmk1wUqN): Business Setup — explicit mode-change
+         flow with diff preview. Rendered by renderBusinessSetup(). -->
+    <div id="businessSetupTab" style="display:none;">
+      <div class="section-header">
+        <h2>Change my business setup</h2>
+      </div>
+      <div id="businessSetupContent"></div>
     </div>
 
     <!-- Admin: Audit Log Tab -->
@@ -11539,6 +11611,8 @@ async function hydrateEngagementSurface() {
   try {
     if (!window.MastDB || !window.MastDB.businessEntity) {
       _engagementSurface = fallback;
+      _modeSetSnapshot = null;
+      _modeOverridesSnapshot = null;
       return _engagementSurface;
     }
     var ent = await window.MastDB.businessEntity.get();
@@ -11553,12 +11627,35 @@ async function hydrateEngagementSurface() {
     } else {
       _engagementSurface = fallback;
     }
+
+    // M2 (Idea -OtADygKA_JhRmk1wUqN): hydrate the Mast modes mode-set + overrides
+    // alongside the engagement surface. Both ride the same businessEntity read.
+    _modeSetSnapshot = (ent && ent.modeSet) || null;
+    _modeOverridesSnapshot = (ent && ent.modeOverrides) || { enabledRoutes: [] };
+
+    // Apply mode-based nav filter (fail-open if modeSet missing — legacy tenants
+    // pre-M1 backfill see full nav; new tenants always have modeSet from M1).
+    if (typeof applyModeNavFilter === 'function') applyModeNavFilter();
+    // M7: evaluate reactive suggestion + migration banners.
+    if (typeof checkModeSetBanners === 'function') {
+      checkModeSetBanners().catch(function(_e) { /* fail-open */ });
+    }
   } catch (err) {
     console.warn('[engagement] hydration failed, fail-open hybrid/ui-first:', err && err.message);
     _engagementSurface = fallback;
+    _modeSetSnapshot = null;
+    _modeOverridesSnapshot = null;
   }
   return _engagementSurface;
 }
+
+// M2 (Idea -OtADygKA_JhRmk1wUqN): Mast modes snapshots hydrated by
+// hydrateEngagementSurface. Null when unset (legacy tenants pre-M1 backfill)
+// or unrecoverable error — both fail-open to the full sidebar.
+var _modeSetSnapshot = null;
+var _modeOverridesSnapshot = null;
+function getModeSet() { return _modeSetSnapshot; }
+function getModeOverrides() { return _modeOverridesSnapshot || { enabledRoutes: [] }; }
 
 function getTenantSubscription() {
   // Default: minimal access if subscription not yet loaded
@@ -12069,11 +12166,798 @@ function applyEngagementNavFiltering() {
 }
 
 
-// Show/hide the expand toggle based on whether locked sections exist
+// M2 (Idea -OtADygKA_JhRmk1wUqN): Mast modes sidebar filter. Reads
+// _modeSetSnapshot + _modeOverridesSnapshot (hydrated in hydrateEngagementSurface)
+// and toggles .mode-hidden on items whose data-route is not visible-by-default
+// for the tenant's modeSet. Sections with zero visible items get
+// .mode-all-hidden. Per the soft-hide DECISION, the sidebarExpandToggle reveals
+// hidden items at 50% opacity for browsing; Add-to-Mast (M3) is the canonical
+// reveal surface.
+//
+// Fail-open: if modeSet is null/empty (legacy tenants pre-M1 backfill), this
+// function is a no-op and the full sidebar renders.
+function applyModeNavFilter() {
+  var BEC = window.BusinessEntityConstants;
+  if (!BEC || typeof BEC.isRouteVisible !== 'function') return;
+  var modeSet = _modeSetSnapshot;
+  if (!modeSet || !Array.isArray(modeSet.modes) || modeSet.modes.length === 0) {
+    // Strip any prior mode-hidden classes (e.g., if modeSet was just cleared)
+    var stale = document.querySelectorAll('.mode-hidden, .mode-all-hidden');
+    for (var i0 = 0; i0 < stale.length; i0++) {
+      stale[i0].classList.remove('mode-hidden');
+      stale[i0].classList.remove('mode-all-hidden');
+    }
+    return;
+  }
+
+  var overrides = _modeOverridesSnapshot || { enabledRoutes: [] };
+  var allItems = document.querySelectorAll('.sidebar-item[data-route]');
+  var sectionVisibleCount = Object.create(null);
+  // M4: clear the label cache so updated modeSet produces fresh labels
+  if (typeof BEC._clearLabelCache === 'function') BEC._clearLabelCache();
+
+  for (var i = 0; i < allItems.length; i++) {
+    var item = allItems[i];
+    var routeId = item.getAttribute('data-route');
+    var visible = BEC.isRouteVisible(routeId, modeSet, overrides);
+    var sec = item.closest ? item.closest('.sidebar-section') : null;
+    var secName = sec ? sec.getAttribute('data-section') : null;
+    if (secName) {
+      if (!(secName in sectionVisibleCount)) sectionVisibleCount[secName] = 0;
+      if (visible) sectionVisibleCount[secName]++;
+    }
+    if (visible) {
+      item.classList.remove('mode-hidden');
+    } else {
+      item.classList.add('mode-hidden');
+    }
+
+    // M4 (Idea -OtADygKA_JhRmk1wUqN): apply mode-aware label override if one
+    // exists for this routeId. Preserve child elements (badges, etc.) by only
+    // rewriting the first non-empty text node. Capture the original label once
+    // on first encounter so we can restore it when modeSet changes.
+    if (typeof BEC.labelFor === 'function' && BEC.MODE_LABEL_OVERRIDES && BEC.MODE_LABEL_OVERRIDES[routeId]) {
+      var originalLabel = item.getAttribute('data-mode-original-label');
+      if (!originalLabel) {
+        for (var c = 0; c < item.childNodes.length; c++) {
+          var node = item.childNodes[c];
+          if (node.nodeType === 3 && node.textContent.trim()) {
+            originalLabel = node.textContent.trim();
+            item.setAttribute('data-mode-original-label', originalLabel);
+            break;
+          }
+        }
+      }
+      var resolvedLabel = BEC.labelFor(routeId, modeSet, originalLabel);
+      var targetLabel = (resolvedLabel && resolvedLabel !== originalLabel) ? resolvedLabel : originalLabel;
+      if (targetLabel) {
+        for (var c2 = 0; c2 < item.childNodes.length; c2++) {
+          var n2 = item.childNodes[c2];
+          if (n2.nodeType === 3 && n2.textContent.trim()) {
+            // Preserve any trailing whitespace before child elements (e.g., " " before badge spans)
+            var trailingSpace = /\s$/.test(n2.textContent) ? ' ' : '';
+            n2.textContent = targetLabel + trailingSpace;
+            break;
+          }
+        }
+      }
+    }
+  }
+
+  // Hide the section header too when ALL its items are mode-hidden — keeps
+  // the sidebar clean. Skip sections in ENGAGEMENT_ALWAYS_VISIBLE_SECTIONS
+  // (currently just admin) since they own the always-on settings entry points.
+  var allSections = document.querySelectorAll('.sidebar-section[data-section]');
+  for (var s = 0; s < allSections.length; s++) {
+    var section = allSections[s];
+    var name = section.getAttribute('data-section');
+    if (ENGAGEMENT_ALWAYS_VISIBLE_SECTIONS && ENGAGEMENT_ALWAYS_VISIBLE_SECTIONS[name]) {
+      section.classList.remove('mode-all-hidden');
+      continue;
+    }
+    var count = sectionVisibleCount[name] || 0;
+    if (count === 0) {
+      section.classList.add('mode-all-hidden');
+    } else {
+      section.classList.remove('mode-all-hidden');
+    }
+  }
+
+  // Surface the expand-toggle so users can browse the soft-hidden items.
+  if (typeof updateSidebarExpandToggle === 'function') updateSidebarExpandToggle();
+}
+
+// M2: Write-side counterpart for the "+ add" affordance — M3 (Add-to-Mast page)
+// calls this when an owner enables a soft-hidden route. Appends to
+// admin/businessEntity/modeOverrides.enabledRoutes (idempotent — no-op if
+// already enabled), refreshes the local snapshot, and re-runs the filter.
+// Emits a stub clickstream log — M5 replaces with mast.modes.module_enabled.
+async function addRouteToMast(routeId, context) {
+  context = context || 'add_to_mast_page';
+  try {
+    var current = (_modeOverridesSnapshot && Array.isArray(_modeOverridesSnapshot.enabledRoutes))
+      ? _modeOverridesSnapshot.enabledRoutes.slice()
+      : [];
+    if (current.indexOf(routeId) !== -1) return { success: true, alreadyEnabled: true };
+    current.push(routeId);
+    if (window.MastDB && window.MastDB.businessEntity) {
+      await window.MastDB.businessEntity.update('modeOverrides', {
+        enabledRoutes: current
+      });
+    }
+    _modeOverridesSnapshot = { enabledRoutes: current };
+    // M5 (Idea -OtADygKA_JhRmk1wUqN): emit mast.modes.module_enabled clickstream
+    // event. Fire-and-forget — telemetry must never break the user flow.
+    // Builder is pure; write is to mast-platform/modes_clickstream/{eventId}
+    // (the rollup CF in mast-architecture aggregates these for matrix self-correction).
+    try {
+      var BEC_emit = window.BusinessEntityConstants;
+      if (BEC_emit && typeof BEC_emit.buildModuleEnabledEvent === 'function' &&
+          window.MastDB && typeof MastDB.platform === 'object') {
+        var user = (typeof firebase !== 'undefined' && firebase.auth) ? firebase.auth().currentUser : null;
+        var payload = BEC_emit.buildModuleEnabledEvent({
+          tenantId: MastDB.tenantId(),
+          userId: user && user.uid,
+          modeSetDoc: _modeSetSnapshot,
+          moduleId: routeId,
+          context: context
+        });
+        if (payload) {
+          var eventId = MastDB.platform.newKey('mast-platform/modes_clickstream');
+          MastDB.platform.set('mast-platform/modes_clickstream/' + eventId, payload).catch(function(emitErr) {
+            console.warn('[modes] clickstream emit failed:', emitErr && emitErr.message);
+          });
+        }
+      }
+    } catch (emitOuterErr) {
+      console.warn('[modes] clickstream emit threw:', emitOuterErr && emitOuterErr.message);
+    }
+    applyModeNavFilter();
+    return { success: true, alreadyEnabled: false };
+  } catch (err) {
+    console.warn('[modes] addRouteToMast failed for ' + routeId + ':', err && err.message);
+    return { success: false, error: err && err.message };
+  }
+}
+window.addRouteToMast = addRouteToMast;
+
+// M3 (Idea -OtADygKA_JhRmk1wUqN): Add-to-Mast page — central unlock surface
+// for all soft-hidden modules. Cards grouped by sidebar section, one click
+// per module to enable. The single discoverable expansion point per the
+// unlock-surface RULE.
+//
+// MODULE_INFO holds owner-facing copy (label + one-line description). Labels
+// fall back to deriving from data-route if not declared. M4 will wire
+// mode-aware label overrides (e.g. "Custom Orders" → "Quotes" in bookings) —
+// for v1 this map carries default labels only.
+var MODE_SECTION_LABELS = {
+  'products':         'Catalog',
+  'sales':            'Sales',
+  'marketing':        'Marketing',
+  'retention':        'Retention',
+  'events':           'Shows & Markets',
+  'classes':          'Bookings & Classes',
+  'finance':          'Finance',
+  'operations':       'Operations',
+  'customer-service': 'Customer Service'
+};
+
+var MODE_MODULE_INFO = {
+  // Catalog
+  'develop-products':   { label: 'Develop',         section: 'products', desc: 'Plan and stage new products before they go live.' },
+  'materials':          { label: 'Materials',       section: 'products', desc: 'Track raw materials, suppliers, and unit costs.' },
+  'forecast':           { label: 'Forecast',        section: 'products', desc: 'Predict inventory needs based on sales velocity.' },
+  'jobs':               { label: 'Jobs',            section: 'products', desc: 'Schedule production runs and batch work.' },
+  'procurement':        { label: 'Procurement',     section: 'products', desc: 'Manage purchase orders and supplier relationships.' },
+  'inventory':          { label: 'Inventory',       section: 'products', desc: 'Track stock levels across products and variants.' },
+  'products':           { label: 'Catalog',         section: 'products', desc: 'Browse and edit your product catalog.' },
+  // Sales
+  'pos':                { label: 'Point of Sale',   section: 'sales',    desc: 'Ring up sales in person — phone, tablet, or laptop.' },
+  'orders':             { label: 'Retail Orders',   section: 'sales',    desc: 'View and process incoming customer orders.' },
+  'commissions':        { label: 'Custom Orders',   section: 'sales',    desc: 'Manage custom orders, quotes, and bespoke work.' },
+  'rma':                { label: 'Returns',         section: 'sales',    desc: 'Process returns, refunds, and replacements.' },
+  'wholesale':          { label: 'Wholesale',       section: 'sales',    desc: 'Sell to other businesses at wholesale pricing.' },
+  'galleries':          { label: 'Galleries',       section: 'sales',    desc: 'Track inventory placed on consignment at galleries.' },
+  'lookbooks':          { label: 'Look Books',      section: 'sales',    desc: 'Generate PDF line sheets and look books for buyers.' },
+  'pack':               { label: 'Pack',            section: 'sales',    desc: 'Pick and pack orders for shipment.' },
+  'ship':               { label: 'Ship',            section: 'sales',    desc: 'Buy shipping labels and track packages.' },
+  // Marketing
+  'social':             { label: 'Social Media',    section: 'marketing', desc: 'Schedule and publish social posts.' },
+  'blog':               { label: 'Blog',            section: 'marketing', desc: 'Publish long-form articles on your website.' },
+  'newsletter':         { label: 'Newsletter',      section: 'marketing', desc: 'Email your customer list with campaigns and updates.' },
+  'stories':            { label: 'Stories',         section: 'marketing', desc: 'Behind-the-scenes posts that showcase your craft.' },
+  'homepage':           { label: 'Page Builder',    section: 'marketing', desc: 'Customize your storefront homepage layout.' },
+  // Retention
+  'wallet':             { label: 'Wallet',          section: 'retention', desc: 'Store credit, points, and pre-paid balances.' },
+  'gift-cards':         { label: 'Gift Cards',      section: 'retention', desc: 'Sell and redeem gift cards.' },
+  'coupons':            { label: 'Coupons',         section: 'retention', desc: 'Discount codes for promotions.' },
+  'loyalty':            { label: 'Loyalty',         section: 'retention', desc: 'Reward repeat customers with points.' },
+  'membership':         { label: 'Membership',      section: 'retention', desc: 'Recurring subscription tiers with member perks.' },
+  'promotions':         { label: 'Sale Promotions', section: 'retention', desc: 'Run sales and promotional campaigns.' },
+  // Shows & Markets
+  'show-find':          { label: 'Find Shows',      section: 'events',   desc: 'Discover shows, markets, and fairs to apply to.' },
+  'show-apply':         { label: 'Apply',           section: 'events',   desc: 'Submit applications to upcoming shows.' },
+  'show-prep':          { label: 'Prep',            section: 'events',   desc: 'Plan inventory, packing, and logistics for shows.' },
+  'show-execute':       { label: 'Execute',         section: 'events',   desc: 'Run your booth — POS, restocks, traffic notes.' },
+  'show-history':       { label: 'Show History',    section: 'events',   desc: 'Past show records, sales, and lessons learned.' },
+  'events-shows':       { label: 'Host Shows',      section: 'events',   desc: 'Organize your own events as a show host.' },
+  'events-settings':    { label: 'Show Settings',   section: 'events',   desc: 'Configure your event hosting settings.' },
+  // Bookings & Classes
+  'book':               { label: 'Classes',         section: 'classes',  desc: 'Schedule classes, workshops, and appointments.' },
+  'calendar':           { label: 'Calendar',        section: 'classes',  desc: 'View all upcoming bookings in calendar form.' },
+  'enrollments':        { label: 'Enrollments',     section: 'classes',  desc: 'Track student enrollments per class.' },
+  'passes':             { label: 'Passes',          section: 'classes',  desc: 'Multi-class passes and punch cards.' },
+  'resources':          { label: 'Resources',       section: 'classes',  desc: 'Manage rooms, equipment, and instructor time slots.' },
+  'students':           { label: 'Students',        section: 'classes',  desc: 'Student database with class history.' },
+  'instructors':        { label: 'Instructors',     section: 'classes',  desc: 'Manage instructor profiles and pay rates.' },
+  'book-reports':       { label: 'Class Reports',   section: 'classes',  desc: 'Attendance and revenue reports for classes.' },
+  // Finance (extended)
+  'finance-pl':         { label: 'Profit & Loss',   section: 'finance',  desc: 'Profit & loss statements and trend analysis.' },
+  'finance-cash-flow':  { label: 'Cash Flow',       section: 'finance',  desc: 'Cash flow tracking and projections.' },
+  'finance-ar':         { label: 'Accounts Receivable', section: 'finance', desc: 'Money owed to you by customers and accounts.' },
+  'finance-ap':         { label: 'Accounts Payable',    section: 'finance', desc: 'Bills and supplier invoices.' },
+  'finance-reports':    { label: 'Financial Reports',   section: 'finance', desc: 'Tax-ready reports and ledger exports.' },
+  'customer-portfolio': { label: 'Customer Portfolio',  section: 'finance', desc: 'Per-customer revenue and lifetime value.' },
+  // Operations
+  'trips':              { label: 'Trips',           section: 'operations', desc: 'Track delivery trips and business mileage.' },
+  'reports':            { label: 'Reports',         section: 'operations', desc: 'Operational reports across the business.' },
+  'advisor':            { label: 'Business Plan',   section: 'operations', desc: 'AI business plan and growth recommendations.' },
+  'studio':             { label: 'Studio',          section: 'operations', desc: 'Configure studio locations and equipment.' },
+  'channels':           { label: 'Channels',        section: 'operations', desc: 'Manage Etsy, Shopify, and other sales channels.' },
+  // Customer Service
+  'cs-inbox':           { label: 'Inbox',           section: 'customer-service', desc: 'Customer messages and email inquiries.' },
+  'cs-tickets':         { label: 'Tickets',         section: 'customer-service', desc: 'Support ticket queue and resolution tracking.' },
+  'cs-surveys':         { label: 'Surveys',         section: 'customer-service', desc: 'Send post-purchase surveys to customers.' },
+  'cs-reviews':         { label: 'Reviews',         section: 'customer-service', desc: 'Customer reviews and ratings management.' },
+  'cs-faqs':            { label: 'FAQs',            section: 'customer-service', desc: 'Self-service knowledge base.' },
+  'cs-members':         { label: 'Members',         section: 'customer-service', desc: 'Member directory and lifecycle tracking.' }
+};
+
+// Pure function — compute the list of routes eligible for the Add-to-Mast page
+// (soft-hidden in the tenant's current modeSet AND not already in overrides).
+// Exposed for unit-testability and for M7's threshold counter.
+function _getSoftHiddenRoutes(modeSet, overrides) {
+  var BEC = window.BusinessEntityConstants;
+  if (!BEC || !BEC.MODE_ROUTE_VISIBILITY) return [];
+  var matrix = BEC.MODE_ROUTE_VISIBILITY;
+  var result = [];
+  for (var routeId in matrix) {
+    if (!Object.prototype.hasOwnProperty.call(matrix, routeId)) continue;
+    var rule = matrix[routeId];
+    if (rule && rule.alwaysOn) continue;  // never show always-on routes here
+    if (BEC.isRouteVisible(routeId, modeSet, overrides)) continue;
+    result.push(routeId);
+  }
+  return result;
+}
+window._getSoftHiddenRoutes = _getSoftHiddenRoutes;
+
+async function renderAddToMast() {
+  var container = document.getElementById('addToMastContent');
+  if (!container) return;
+
+  // Re-hydrate snapshots in case Settings or another flow changed modeSet
+  // since last load. Cheap (single Firestore read; cached in MastDB).
+  if (typeof hydrateEngagementSurface === 'function') {
+    try { await hydrateEngagementSurface(); } catch (_e) { /* fail-open */ }
+  }
+
+  var modeSet = (typeof getModeSet === 'function') ? getModeSet() : null;
+  var overrides = (typeof getModeOverrides === 'function') ? getModeOverrides() : { enabledRoutes: [] };
+  var BEC = window.BusinessEntityConstants;
+
+  // Legacy fallback: modeSet missing means M1 backfill hasn't run for this
+  // tenant yet — show full nav (nothing to "add") with an explanatory message.
+  if (!modeSet || !Array.isArray(modeSet.modes) || modeSet.modes.length === 0) {
+    container.innerHTML =
+      '<div style="padding:24px;color:var(--warm-gray);text-align:center;font-size:0.9rem;">' +
+      'Your business setup is still loading. If this persists, contact support.' +
+      '</div>';
+    return;
+  }
+
+  var softHidden = _getSoftHiddenRoutes(modeSet, overrides);
+
+  // Empty state
+  if (softHidden.length === 0) {
+    container.innerHTML =
+      '<div style="padding:48px 24px;text-align:center;color:var(--warm-gray);">' +
+      '<div style="font-size:1.15rem;margin-bottom:12px;">You&rsquo;re using everything Mast offers!</div>' +
+      '<div style="font-size:0.85rem;opacity:0.7;">Every feature is enabled for your business. ' +
+      'To simplify your sidebar, hide modules you don&rsquo;t use from Settings &rarr; Change my business setup.</div>' +
+      '</div>';
+    return;
+  }
+
+  // Group by section, preserving sidebar section order
+  var sectionOrder = ['products', 'sales', 'marketing', 'retention', 'events', 'classes', 'finance', 'operations', 'customer-service'];
+  var grouped = {};
+  for (var i = 0; i < softHidden.length; i++) {
+    var routeId = softHidden[i];
+    var info = MODE_MODULE_INFO[routeId];
+    if (!info) {
+      // Unknown route: skip silently (no description, no card)
+      continue;
+    }
+    if (!grouped[info.section]) grouped[info.section] = [];
+    grouped[info.section].push({ routeId: routeId, info: info });
+  }
+
+  // Header summary
+  var html = '';
+  html += '<div style="padding:0 24px 16px;color:var(--warm-gray);font-size:0.9rem;line-height:1.5;">';
+  html += 'Browse modules that aren&rsquo;t in your default Mast sidebar yet. ';
+  html += 'Add what you need &mdash; you can always hide it again later.';
+  html += '<div style="margin-top:8px;font-size:0.85rem;opacity:0.8;">';
+  html += '<strong>' + softHidden.length + '</strong> module' + (softHidden.length === 1 ? '' : 's') + ' available to add.';
+  html += '</div></div>';
+
+  // Section blocks
+  for (var s = 0; s < sectionOrder.length; s++) {
+    var sectionKey = sectionOrder[s];
+    var items = grouped[sectionKey];
+    if (!items || items.length === 0) continue;
+    var sectionLabel = MODE_SECTION_LABELS[sectionKey] || sectionKey;
+
+    html += '<div class="add-to-mast-section" style="padding:0 24px 24px;">';
+    html += '<h3 style="font-size:1.0rem;margin:16px 0 12px;color:var(--charcoal,var(--text));border-bottom:1px solid var(--border,#e5e0d8);padding-bottom:8px;">' + esc(sectionLabel) + '</h3>';
+    html += '<div class="add-to-mast-cards" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;">';
+
+    for (var k = 0; k < items.length; k++) {
+      var it = items[k];
+      // M4 (Idea -OtADygKA_JhRmk1wUqN): resolve mode-aware label override.
+      // Falls back to the MODE_MODULE_INFO default label when no override exists.
+      var displayLabel = (window.BusinessEntityConstants && typeof BusinessEntityConstants.labelFor === 'function')
+        ? BusinessEntityConstants.labelFor(it.routeId, modeSet, it.info.label)
+        : it.info.label;
+      html += '<div class="add-to-mast-card" data-route-id="' + esc(it.routeId) + '" style="border:1px solid var(--border,#e5e0d8);border-radius:8px;padding:14px;background:var(--surface-card,#fff);display:flex;flex-direction:column;gap:8px;">';
+      html += '<div style="font-size:0.9rem;font-weight:600;color:var(--charcoal,var(--text));">' + esc(displayLabel) + '</div>';
+      html += '<div style="font-size:0.78rem;color:var(--warm-gray);line-height:1.45;flex-grow:1;">' + esc(it.info.desc) + '</div>';
+      html += '<button class="btn btn-primary btn-small" onclick="addToMastClick(\'' + esc(it.routeId) + '\')" aria-label="Add ' + esc(displayLabel) + ' to my Mast" style="margin-top:4px;align-self:flex-start;">+ Add to my Mast</button>';
+      html += '</div>';
+    }
+
+    html += '</div></div>';
+  }
+
+  container.innerHTML = html;
+}
+window.renderAddToMast = renderAddToMast;
+
+// Click handler — wraps the M2 addRouteToMast helper with toast feedback +
+// page re-render so the card disappears immediately.
+async function addToMastClick(routeId) {
+  try {
+    var info = MODE_MODULE_INFO[routeId];
+    var defaultLabel = (info && info.label) || routeId;
+    // M4: prefer mode-aware label for toast copy
+    var modeSet = (typeof getModeSet === 'function') ? getModeSet() : null;
+    var label = (window.BusinessEntityConstants && typeof BusinessEntityConstants.labelFor === 'function')
+      ? BusinessEntityConstants.labelFor(routeId, modeSet, defaultLabel)
+      : defaultLabel;
+    var result = await addRouteToMast(routeId, 'add_to_mast_page');
+    if (result && result.success) {
+      if (typeof showToast === 'function') {
+        showToast(result.alreadyEnabled
+          ? label + ' was already enabled.'
+          : label + ' added to your Mast.');
+      }
+      // Re-render the page so the card disappears
+      renderAddToMast();
+    } else {
+      if (typeof showToast === 'function') {
+        showToast('Could not add ' + label + ': ' + ((result && result.error) || 'unknown error'), true);
+      }
+    }
+  } catch (err) {
+    console.warn('[addToMastClick] failed:', err && err.message);
+    if (typeof showToast === 'function') showToast('Could not add module.', true);
+  }
+}
+window.addToMastClick = addToMastClick;
+
+// ============================================================
+// M6 (Idea -OtADygKA_JhRmk1wUqN): Change-my-business-setup flow
+// ============================================================
+// Owner-driven mode-change UX. Re-presents the wizard's persona inputs
+// (category, revenueChannels, engagement.mode, modulesShown), runs the
+// same deriveModeSet under the hood, shows a clear diff of what becomes
+// visible/hidden, and on Apply writes the new modeSet with derivedFrom=
+// "settings" — preserving per-tenant modeOverrides so anything the owner
+// previously "+ added" stays visible.
+
+// In-memory form state for the page (cleared on navigate-away or apply)
+var _businessSetupFormState = null;
+
+async function renderBusinessSetup() {
+  var container = document.getElementById('businessSetupContent');
+  if (!container) return;
+
+  // Always re-hydrate so the form reflects the current persisted state
+  if (typeof hydrateEngagementSurface === 'function') {
+    try { await hydrateEngagementSurface(); } catch (_e) { /* fail-open */ }
+  }
+
+  var BEC = window.BusinessEntityConstants;
+  if (!BEC || typeof BEC.deriveModeSet !== 'function') {
+    container.innerHTML = '<div style="padding:24px;color:var(--warm-gray);">Business setup unavailable — modes system not loaded.</div>';
+    return;
+  }
+
+  // Read current entity to pre-fill the form
+  var entity = {};
+  try { entity = (await MastDB.businessEntity.get()) || {}; }
+  catch (err) { console.warn('[business-setup] entity read failed:', err && err.message); }
+
+  // Initialize form state from current entity (only first render — preserves
+  // edits when the page re-renders after a diff preview)
+  if (!_businessSetupFormState) {
+    _businessSetupFormState = {
+      category: entity.category || '',
+      revenueChannels: Array.isArray(entity.revenueChannels) ? entity.revenueChannels.slice() : [],
+      engagementMode: (entity.engagement && entity.engagement.mode) || 'storefront',
+      modulesShown: (entity.engagement && Array.isArray(entity.engagement.modulesShown))
+        ? entity.engagement.modulesShown.slice() : [],
+      showDiff: false
+    };
+  }
+  var st = _businessSetupFormState;
+
+  var html = '';
+  html += '<div style="padding:0 24px 16px;color:var(--warm-gray);font-size:0.9rem;line-height:1.5;">';
+  html += 'Update what kind of business you run. We&rsquo;ll show you what will change before applying. ';
+  html += 'Modules you&rsquo;ve manually added stay enabled.';
+  html += '</div>';
+
+  html += '<div style="padding:0 24px;max-width:720px;">';
+
+  // === Business category ===
+  html += '<div style="margin-bottom:20px;">';
+  html += '<label style="display:block;font-size:0.85rem;font-weight:600;margin-bottom:6px;color:var(--charcoal,var(--text));">Business category</label>';
+  html += '<select id="bsCategory" onchange="bsUpdateField(\'category\', this.value)" style="width:100%;max-width:360px;padding:8px;font-size:0.9rem;border:1px solid var(--border,#e5e0d8);border-radius:6px;background:var(--surface-card,#fff);">';
+  html += '<option value="">— choose —</option>';
+  var cats = BEC.BUSINESS_CATEGORIES || [];
+  for (var i = 0; i < cats.length; i++) {
+    var cat = cats[i];
+    var sel = (cat.value === st.category) ? ' selected' : '';
+    html += '<option value="' + esc(cat.value) + '"' + sel + '>' + esc(cat.label) + '</option>';
+  }
+  html += '</select>';
+  html += '</div>';
+
+  // === Revenue channels (multi-select checkboxes) ===
+  html += '<div style="margin-bottom:20px;">';
+  html += '<label style="display:block;font-size:0.85rem;font-weight:600;margin-bottom:6px;color:var(--charcoal,var(--text));">How do you sell today? <span style="font-weight:400;color:var(--warm-gray);">(check all that apply)</span></label>';
+  var channels = BEC.REVENUE_CHANNELS || [];
+  html += '<div style="display:flex;flex-direction:column;gap:6px;">';
+  for (var c = 0; c < channels.length; c++) {
+    var ch = channels[c];
+    var checked = (st.revenueChannels.indexOf(ch.value) !== -1) ? ' checked' : '';
+    html += '<label style="display:flex;align-items:center;gap:8px;font-size:0.9rem;cursor:pointer;">';
+    html += '<input type="checkbox" value="' + esc(ch.value) + '" onchange="bsToggleListField(\'revenueChannels\', this.value, this.checked)"' + checked + ' style="width:16px;height:16px;">';
+    html += '<span>' + esc(ch.label) + '</span>';
+    html += '</label>';
+  }
+  html += '</div></div>';
+
+  // === Engagement mode (radio) ===
+  html += '<div style="margin-bottom:20px;">';
+  html += '<label style="display:block;font-size:0.85rem;font-weight:600;margin-bottom:6px;color:var(--charcoal,var(--text));">How do you want to use Mast?</label>';
+  var modes = BEC.ENGAGEMENT_MODE_CARDS || [];
+  html += '<div style="display:flex;flex-direction:column;gap:6px;">';
+  for (var m = 0; m < modes.length; m++) {
+    var mode = modes[m];
+    var radioSel = (mode.value === st.engagementMode) ? ' checked' : '';
+    html += '<label style="display:flex;align-items:flex-start;gap:8px;font-size:0.9rem;cursor:pointer;">';
+    html += '<input type="radio" name="bsEngagementMode" value="' + esc(mode.value) + '" onchange="bsUpdateField(\'engagementMode\', this.value)"' + radioSel + ' style="margin-top:3px;">';
+    html += '<span><strong>' + esc(mode.title) + '</strong><br><span style="font-size:0.78rem;color:var(--warm-gray);">' + esc(mode.body) + '</span></span>';
+    html += '</label>';
+  }
+  html += '</div></div>';
+
+  // === Modules shown (checkboxes) ===
+  // The 9 valid modulesShown values. Labels deliberately match the wizard step 5 copy.
+  var moduleOpts = [
+    { value: 'products',         label: 'Products (catalog, inventory, materials)' },
+    { value: 'sales',            label: 'Sales (orders, POS, returns, wholesale)' },
+    { value: 'marketing',        label: 'Marketing (blog, social, newsletter, brand)' },
+    { value: 'retention',        label: 'Retention (loyalty, gift cards, coupons)' },
+    { value: 'events',           label: 'Events (markets, pop-ups, shows)' },
+    { value: 'classes',          label: 'Classes & bookings (instructors, students)' },
+    { value: 'finance',          label: 'Finance (revenue, expenses, P&L)' },
+    { value: 'operations',       label: 'Operations (studio, team, trips)' },
+    { value: 'customer-service', label: 'Customer service (inbox, tickets, reviews)' }
+  ];
+  html += '<div style="margin-bottom:20px;">';
+  html += '<label style="display:block;font-size:0.85rem;font-weight:600;margin-bottom:6px;color:var(--charcoal,var(--text));">Modules you want enabled <span style="font-weight:400;color:var(--warm-gray);">(check all that apply)</span></label>';
+  html += '<div style="display:flex;flex-direction:column;gap:6px;">';
+  for (var n = 0; n < moduleOpts.length; n++) {
+    var mo = moduleOpts[n];
+    var modChk = (st.modulesShown.indexOf(mo.value) !== -1) ? ' checked' : '';
+    html += '<label style="display:flex;align-items:center;gap:8px;font-size:0.9rem;cursor:pointer;">';
+    html += '<input type="checkbox" value="' + esc(mo.value) + '" onchange="bsToggleListField(\'modulesShown\', this.value, this.checked)"' + modChk + ' style="width:16px;height:16px;">';
+    html += '<span>' + esc(mo.label) + '</span>';
+    html += '</label>';
+  }
+  html += '</div></div>';
+
+  // === Diff preview / apply controls ===
+  html += '<div style="margin-top:24px;padding-top:16px;border-top:1px solid var(--border,#e5e0d8);">';
+
+  if (!st.showDiff) {
+    html += '<button class="btn btn-primary" onclick="bsPreviewDiff()">Preview changes</button>';
+  } else {
+    // Compute the diff inline
+    var currentModeSet = entity.modeSet || null;
+    var derivedNext = BEC.deriveModeSet({
+      category: st.category,
+      revenueChannels: st.revenueChannels,
+      engagement: { mode: st.engagementMode, modulesShown: st.modulesShown }
+    }, { derivedFrom: 'settings' });
+    var overrides = (typeof getModeOverrides === 'function') ? getModeOverrides() : { enabledRoutes: [] };
+    var diff = BEC.diffModeSets(currentModeSet, derivedNext, overrides);
+
+    html += '<div style="margin-bottom:12px;font-size:0.9rem;color:var(--charcoal,var(--text));">';
+    html += '<strong>New mode-set:</strong> ' + esc(derivedNext.modes.join(', '));
+    if (derivedNext.overlays.length) html += ' <span style="color:var(--warm-gray);">+ ' + esc(derivedNext.overlays.join(', ')) + ' overlay</span>';
+    if (derivedNext.cohortFlag) html += ' <span style="color:var(--warm-gray);">+ cohort flag</span>';
+    html += '</div>';
+
+    var hasAny = (diff.becomingVisible.length + diff.becomingHidden.length) > 0;
+
+    if (!hasAny) {
+      html += '<div style="padding:12px;background:rgba(42,124,111,0.08);border-radius:6px;font-size:0.9rem;color:var(--charcoal,var(--text));margin-bottom:12px;">';
+      html += 'Nothing will change &mdash; your new selections produce the same visible sidebar as today.';
+      html += '</div>';
+    } else {
+      if (diff.becomingVisible.length) {
+        html += '<div style="margin-bottom:12px;">';
+        html += '<div style="font-size:0.85rem;font-weight:600;color:var(--charcoal,var(--text));margin-bottom:4px;">These modules will become visible (' + diff.becomingVisible.length + '):</div>';
+        html += '<ul style="margin:0;padding-left:20px;font-size:0.85rem;color:var(--warm-gray);line-height:1.6;">';
+        for (var v = 0; v < diff.becomingVisible.length; v++) {
+          var rv = diff.becomingVisible[v];
+          var labelV = (MODE_MODULE_INFO[rv] && MODE_MODULE_INFO[rv].label) || rv;
+          var resolvedV = BEC.labelFor(rv, derivedNext, labelV);
+          html += '<li>' + esc(resolvedV) + '</li>';
+        }
+        html += '</ul></div>';
+      }
+      if (diff.becomingHidden.length) {
+        html += '<div style="margin-bottom:12px;">';
+        html += '<div style="font-size:0.85rem;font-weight:600;color:var(--charcoal,var(--text));margin-bottom:4px;">These will be soft-hidden (you can still add them anytime):</div>';
+        html += '<ul style="margin:0;padding-left:20px;font-size:0.85rem;color:var(--warm-gray);line-height:1.6;">';
+        for (var h = 0; h < diff.becomingHidden.length; h++) {
+          var rh = diff.becomingHidden[h];
+          var labelH = (MODE_MODULE_INFO[rh] && MODE_MODULE_INFO[rh].label) || rh;
+          var resolvedH = BEC.labelFor(rh, currentModeSet, labelH);
+          html += '<li>' + esc(resolvedH) + '</li>';
+        }
+        html += '</ul></div>';
+      }
+      html += '<div style="margin-bottom:12px;font-size:0.78rem;color:var(--warm-gray);font-style:italic;">';
+      html += 'Modules you&rsquo;ve manually added stay enabled and won&rsquo;t be hidden.';
+      html += '</div>';
+    }
+
+    html += '<div style="display:flex;gap:8px;">';
+    html += '<button class="btn btn-primary" onclick="bsApplyChanges()">Apply changes</button>';
+    html += '<button class="btn btn-secondary" onclick="bsCancelDiff()">Keep editing</button>';
+    html += '</div>';
+  }
+
+  html += '</div></div>';
+  container.innerHTML = html;
+}
+window.renderBusinessSetup = renderBusinessSetup;
+
+function bsUpdateField(field, value) {
+  if (!_businessSetupFormState) return;
+  _businessSetupFormState[field] = value;
+  _businessSetupFormState.showDiff = false;
+}
+window.bsUpdateField = bsUpdateField;
+
+function bsToggleListField(field, value, isChecked) {
+  if (!_businessSetupFormState) return;
+  if (!Array.isArray(_businessSetupFormState[field])) _businessSetupFormState[field] = [];
+  var idx = _businessSetupFormState[field].indexOf(value);
+  if (isChecked && idx === -1) _businessSetupFormState[field].push(value);
+  else if (!isChecked && idx !== -1) _businessSetupFormState[field].splice(idx, 1);
+  _businessSetupFormState.showDiff = false;
+}
+window.bsToggleListField = bsToggleListField;
+
+function bsPreviewDiff() {
+  if (!_businessSetupFormState) return;
+  _businessSetupFormState.showDiff = true;
+  renderBusinessSetup();
+}
+window.bsPreviewDiff = bsPreviewDiff;
+
+function bsCancelDiff() {
+  if (!_businessSetupFormState) return;
+  _businessSetupFormState.showDiff = false;
+  renderBusinessSetup();
+}
+window.bsCancelDiff = bsCancelDiff;
+
+async function bsApplyChanges() {
+  if (!_businessSetupFormState) return;
+  var st = _businessSetupFormState;
+  var BEC = window.BusinessEntityConstants;
+  try {
+    // Persist the underlying entity fields the user changed (revenueChannels +
+    // engagement.mode + engagement.modulesShown + category). These writes go
+    // through the existing MastDB.businessEntity.update path so audit/validation
+    // hooks fire normally.
+    if (st.category) {
+      await MastDB.businessEntity.update('identity', { category: st.category }).catch(function() {
+        // identity may not be a real updatable section for category — fall back
+        return MastDB.set('admin/businessEntity/category', st.category);
+      });
+    }
+    await MastDB.set('admin/businessEntity/revenueChannels', st.revenueChannels || []);
+    await MastDB.businessEntity.update('engagement', {
+      mode: st.engagementMode,
+      modulesShown: st.modulesShown || []
+    });
+
+    // Re-read the entity to derive against the now-persisted fields (avoids
+    // any drift between in-memory form state and what actually landed).
+    var fresh = await MastDB.businessEntity.get();
+    var derived = BEC.deriveModeSet(fresh || {}, { derivedFrom: 'settings' });
+    await MastDB.businessEntity.update('modeSet', derived);
+
+    // modeOverrides is preserved automatically — we never touched it.
+
+    if (typeof showToast === 'function') showToast('Business setup updated.');
+
+    // Clear form state and re-hydrate / re-filter sidebar so the new mode-set
+    // takes effect immediately.
+    _businessSetupFormState = null;
+    if (typeof hydrateEngagementSurface === 'function') await hydrateEngagementSurface();
+
+    // Navigate to dashboard so the user sees the new sidebar layout
+    if (typeof navigateTo === 'function') navigateTo('dashboard');
+  } catch (err) {
+    console.warn('[business-setup] apply failed:', err && err.message);
+    if (typeof showToast === 'function') showToast('Could not update business setup: ' + (err.message || ''), true);
+  }
+}
+window.bsApplyChanges = bsApplyChanges;
+
+// ============================================================
+// M7 (Idea -OtADygKA_JhRmk1wUqN): Modes banners
+// ============================================================
+// Two non-blocking prompts:
+//   1. Reactive mode-change suggestion — if owner has accumulated overrides
+//      outside their modeSet defaults (signal their business shape shifted),
+//      suggest re-running the Settings flow.
+//   2. modeVersion migration prompt — if canonical mode-mapping changed since
+//      tenant's stored modeVersion, prompt to review new recommended modules.
+//
+// Both ride hydrateEngagementSurface — they re-evaluate on every hydration
+// (app load, settings change, "+ add"). Dismiss writes a timestamp to
+// admin/businessEntity/ui and respects a 30-day cooldown before re-showing.
+
+var _modesUiSnapshot = null;  // { modeSuggestionDismissedAt, modeMigrationDismissedAt }
+
+async function checkModeSetBanners() {
+  var slot = document.getElementById('modesBannerSlot');
+  if (!slot) return;
+  var BEC = window.BusinessEntityConstants;
+  if (!BEC || typeof BEC.shouldShowModeChangeSuggestion !== 'function') {
+    slot.style.display = 'none';
+    return;
+  }
+  var modeSet = _modeSetSnapshot;
+  if (!modeSet) { slot.style.display = 'none'; return; }
+
+  // Hydrate UI dismissals (separate sub-doc read)
+  try {
+    var ent = await MastDB.businessEntity.get();
+    _modesUiSnapshot = (ent && ent.ui) || {};
+  } catch (_e) {
+    _modesUiSnapshot = {};
+  }
+
+  var overrides = _modeOverridesSnapshot || { enabledRoutes: [] };
+
+  // Banner 1 — reactive suggestion takes priority over migration
+  var sug = BEC.shouldShowModeChangeSuggestion(modeSet, overrides, _modesUiSnapshot);
+  if (sug.show) {
+    slot.style.display = '';
+    slot.innerHTML =
+      '<div class="modes-banner" role="status" aria-live="polite">' +
+      '<div class="modes-banner-message">' +
+      'Looks like your business is changing shape &mdash; you&rsquo;ve added <strong>' + sug.overflowingCount +
+      '</strong> module' + (sug.overflowingCount === 1 ? '' : 's') + ' outside your current setup. ' +
+      'Update your business setup for a more tailored Mast?' +
+      '</div>' +
+      '<div class="modes-banner-actions">' +
+      '<button class="btn btn-primary btn-small" onclick="modeBannerAcceptSuggestion()" aria-label="Open business setup to update your modes">Update setup</button>' +
+      '<button class="btn btn-secondary btn-small" onclick="modeBannerDismissSuggestion()" aria-label="Dismiss for 30 days">Not now</button>' +
+      '</div></div>';
+    return;
+  }
+
+  // Banner 2 — migration prompt (zero-firing in v1; ships the mechanism)
+  var mig = BEC.shouldShowModeMigrationPrompt(modeSet, _modesUiSnapshot);
+  if (mig.show) {
+    slot.style.display = '';
+    slot.innerHTML =
+      '<div class="modes-banner" role="status" aria-live="polite">' +
+      '<div class="modes-banner-message">' +
+      'Your Mast setup has new recommended modules. Review what&rsquo;s changed?' +
+      '</div>' +
+      '<div class="modes-banner-actions">' +
+      '<button class="btn btn-primary btn-small" onclick="modeBannerAcceptMigration()">Review</button>' +
+      '<button class="btn btn-secondary btn-small" onclick="modeBannerDismissMigration()" aria-label="Dismiss migration prompt">Not now</button>' +
+      '</div></div>';
+    return;
+  }
+
+  // Nothing to show — clear any stale banner
+  slot.style.display = 'none';
+  slot.innerHTML = '';
+}
+window.checkModeSetBanners = checkModeSetBanners;
+
+function modeBannerAcceptSuggestion() {
+  if (typeof navigateTo === 'function') navigateTo('business-setup');
+}
+window.modeBannerAcceptSuggestion = modeBannerAcceptSuggestion;
+
+async function modeBannerDismissSuggestion() {
+  try {
+    var nowIso = new Date().toISOString();
+    var update = { modeSuggestionDismissedAt: nowIso };
+    await MastDB.businessEntity.update('ui', update);
+    _modesUiSnapshot = Object.assign({}, _modesUiSnapshot || {}, update);
+    var slot = document.getElementById('modesBannerSlot');
+    if (slot) { slot.style.display = 'none'; slot.innerHTML = ''; }
+  } catch (err) {
+    console.warn('[modes] dismiss suggestion failed:', err && err.message);
+  }
+}
+window.modeBannerDismissSuggestion = modeBannerDismissSuggestion;
+
+function modeBannerAcceptMigration() {
+  // For v1: same destination as the suggestion banner — the Settings flow lets
+  // the user pick what they want. Once v1.1 ships a real migration UI we can
+  // route to a dedicated diff view here.
+  if (typeof navigateTo === 'function') navigateTo('business-setup');
+}
+window.modeBannerAcceptMigration = modeBannerAcceptMigration;
+
+async function modeBannerDismissMigration() {
+  try {
+    var nowIso = new Date().toISOString();
+    var update = { modeMigrationDismissedAt: nowIso };
+    // Also bump tenant modeVersion to canonical so the prompt doesn't re-fire
+    // — per the spec, dismiss = "I've seen it, no thanks."
+    await MastDB.businessEntity.update('ui', update);
+    if (_modeSetSnapshot && window.BusinessEntityConstants) {
+      var bumped = Object.assign({}, _modeSetSnapshot, { modeVersion: BusinessEntityConstants.MODE_VERSION });
+      await MastDB.businessEntity.update('modeSet', bumped);
+      _modeSetSnapshot = bumped;
+    }
+    _modesUiSnapshot = Object.assign({}, _modesUiSnapshot || {}, update);
+    var slot = document.getElementById('modesBannerSlot');
+    if (slot) { slot.style.display = 'none'; slot.innerHTML = ''; }
+  } catch (err) {
+    console.warn('[modes] dismiss migration failed:', err && err.message);
+  }
+}
+window.modeBannerDismissMigration = modeBannerDismissMigration;
+
+// Show/hide the expand toggle based on whether locked / mode-hidden sections exist
 function updateSidebarExpandToggle() {
   var toggle = document.getElementById('sidebarExpandToggle');
   if (!toggle) return;
-  var hideable = document.querySelectorAll('.sidebar-section.locked, .sidebar-future-section');
+  var hideable = document.querySelectorAll(
+    '.sidebar-section.locked, .sidebar-future-section, .sidebar-section.mode-all-hidden, .sidebar-item.mode-hidden'
+  );
   if (hideable.length > 0) {
     toggle.style.display = '';
     // Default to collapsed (hidden) on first load
@@ -12104,6 +12988,14 @@ function setSidebarLockedVisibility(show) {
     if (el.classList.contains('subsumed')) return;
     el.style.display = show ? '' : 'none';
   });
+
+  // M2 (Idea -OtADygKA_JhRmk1wUqN): also toggle the body.sidebar-show-all class
+  // so .mode-hidden items + .mode-all-hidden sections reveal at 50% opacity.
+  // CSS-driven (see mode filtering section) — no inline style needed.
+  if (document.body) {
+    if (show) document.body.classList.add('sidebar-show-all');
+    else document.body.classList.remove('sidebar-show-all');
+  }
 
   if (toggle) {
     toggle.classList.toggle('expanded', show);
@@ -15061,6 +15953,10 @@ var ROUTE_MAP = {
   'settings':    { tab: 'settingsTab', setup: function() { restoreSettingsGroupState(); applySettingsGating(); } },
   'subscription': { tab: 'subscriptionTab', setup: function() { renderSubscriptionSettings(); } },
   'about':        { tab: 'aboutTab', setup: function() { renderAboutSettings(); } },
+  // M3 (Idea -OtADygKA_JhRmk1wUqN): Add-to-Mast — central unlock surface for soft-hidden modules
+  'add-to-mast':  { tab: 'addToMastTab', setup: function() { renderAddToMast(); } },
+  // M6 (Idea -OtADygKA_JhRmk1wUqN): Change my business setup — owner-driven mode change with diff preview
+  'business-setup': { tab: 'businessSetupTab', setup: function() { renderBusinessSetup(); } },
   // trips route handled by trips module (lazy-loaded)
   // expenses route handled by expenses module (lazy-loaded)
   'reports':     { tab: null, placeholder: { name: 'Reports', desc: 'Tax reports, mileage summaries, expense exports.', badge: 'new' } },
@@ -26276,6 +27172,26 @@ async function wizardCompleteFast() {
     var engView = await MastDB.businessEntity.get('engagement');
     var engMode = ((engView && engView.data) || {}).mode || 'back-office';
 
+    // Mast Modes (Idea -OtADygKA_JhRmk1wUqN): same derivation as wizardComplete
+    // — fast-path users also get a modeSet so M2's sidebar filter has signal.
+    // Non-blocking; defaults to standard mode on any error.
+    try {
+      var fullEntityFast = await MastDB.businessEntity.get();
+      if (BEC && typeof BEC.deriveModeSet === 'function') {
+        var derivedModeSetFast = BEC.deriveModeSet(fullEntityFast || {}, { derivedFrom: 'wizard' });
+        await MastDB.businessEntity.update('modeSet', derivedModeSetFast);
+        logWizardEvent(5, 'modeSet_derived', {
+          modes: derivedModeSetFast.modes,
+          overlays: derivedModeSetFast.overlays,
+          cohortFlag: derivedModeSetFast.cohortFlag,
+          modeVersion: derivedModeSetFast.modeVersion,
+          path: 'fast'
+        });
+      }
+    } catch (modeErrFast) {
+      console.warn('[Wizard] Failed to derive/persist modeSet (fast path):', modeErrFast && modeErrFast.message);
+    }
+
     logWizardEvent(5, 'wizard_complete', {
       entityStatus: 'active', engagementMode: engMode,
       dpaVersion: BEC.DPA_VERSION || '2026-05-v1',
@@ -28490,6 +29406,28 @@ async function wizardComplete() {
     var engagementView = await MastDB.businessEntity.get('engagement');
     var engagement = (engagementView && engagementView.data) || {};
     var engagementMode = engagement.mode || 'storefront';
+
+    // Mast Modes (Idea -OtADygKA_JhRmk1wUqN): derive and persist the tenant's
+    // modeSet from existing wizard fields. Visibility defaults only — not an
+    // entitlement gate. M2 (sidebar mode-filter) will read this. Non-blocking:
+    // if derivation/write fails, the existing engagement-surface filter still
+    // applies and the wizard completes normally.
+    try {
+      var fullEntity = await MastDB.businessEntity.get();
+      var BEC_modes = window.BusinessEntityConstants;
+      if (BEC_modes && typeof BEC_modes.deriveModeSet === 'function') {
+        var derivedModeSet = BEC_modes.deriveModeSet(fullEntity || {}, { derivedFrom: 'wizard' });
+        await MastDB.businessEntity.update('modeSet', derivedModeSet);
+        logWizardEvent(5, 'modeSet_derived', {
+          modes: derivedModeSet.modes,
+          overlays: derivedModeSet.overlays,
+          cohortFlag: derivedModeSet.cohortFlag,
+          modeVersion: derivedModeSet.modeVersion
+        });
+      }
+    } catch (modeErr) {
+      console.warn('[Wizard] Failed to derive/persist modeSet:', modeErr && modeErr.message);
+    }
 
     // Legacy registry bookkeeping retained for backward compat with non-entity consumers.
     await MastDB.platform.set('mast-platform/tenants/' + MastDB.tenantId() + '/status', 'active');

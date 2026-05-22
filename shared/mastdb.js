@@ -931,7 +931,11 @@ var MastDB = (function() {
       // Phase 2 PA-5: compliance + ui are now first-class updatable sections.
       // compliance holds licenses/insurance/certifications/taxJurisdictions
       // arrays. ui holds small UI-state flags like renewalSeedDismissedAt.
-      var UPDATABLE_SECTIONS = { identity: 1, presence: 1, operations: 1, people: 1, engagement: 1, compliance: 1, ui: 1 };
+      // Mast Modes (Idea -OtADygKA_JhRmk1wUqN): modeSet holds the derived
+      // visibility mode-set for sidebar filtering — { modes[], overlays[],
+      // cohortFlag, modeVersion, derivedAt, derivedFrom }. Written by
+      // wizardComplete + Settings re-derivation + backfill.
+      var UPDATABLE_SECTIONS = { identity: 1, presence: 1, operations: 1, people: 1, engagement: 1, compliance: 1, ui: 1, modeSet: 1, modeOverrides: 1 };
 
       function _dig(obj, dotted) {
         if (!obj) return undefined;
