@@ -16,8 +16,22 @@ var _apFilter = 'all';
 var _apGroupByVendor = false;
 var _apExpandedVendors = {};
 var _cfLoaded = false;
+var _includeTestData = false;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+
+function isTestSource(src) {
+  var s = String(src || '').toLowerCase();
+  return s === 'test' || s.indexOf('test-') === 0 || s.indexOf('test_') === 0 || s === 'synthetic';
+}
+
+function isTestOrder(o) {
+  return isTestSource(o && o.source) || (o && (o.synthetic === true || o.isTest === true));
+}
+
+// TODO (W2): thread isTestOrder()/isTestSource() through P&L, AR aging, AP,
+// and Cash Flow accumulators so test-channel orders are excluded from every
+// money view by default (currently only Revenue tab honors _includeTestData).
 
 function e(s) { return typeof window.esc === 'function' ? window.esc(s) : String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
@@ -181,15 +195,23 @@ async function loadRevenue() {
     var totalCents = 0;
     var byChannel  = {};
     var txns = [];
+    var testTotalCents = 0;
+    var testTxnCount = 0;
 
     orders.forEach(function(o) {
       if (o.status === 'cancelled') return;
       var cents = Math.round((o.total || 0) * 100);
       if (cents <= 0) return;
       var ch = o.source || 'direct';
+      var isTest = isTestOrder(o);
+      if (isTest && !_includeTestData) {
+        testTotalCents += cents;
+        testTxnCount += 1;
+        return;
+      }
       byChannel[ch] = (byChannel[ch] || 0) + cents;
       totalCents += cents;
-      txns.push({ date: o.placedAt, channel: ch, ref: o.orderNumber || o._id, desc: o.customerName || 'Order', cents: cents, type: 'order' });
+      txns.push({ date: o.placedAt, channel: ch, ref: o.orderNumber || o._id, desc: o.customerName || 'Order', cents: cents, type: 'order', isTest: isTest });
     });
 
     sales.forEach(function(s) {
@@ -197,25 +219,45 @@ async function loadRevenue() {
       var cents = Math.round((s.amount || 0) * 100);
       if (cents <= 0) return;
       var ch = s.source || 'pos';
+      var isTest = isTestOrder(s);
+      if (isTest && !_includeTestData) {
+        testTotalCents += cents;
+        testTxnCount += 1;
+        return;
+      }
       byChannel[ch] = (byChannel[ch] || 0) + cents;
       totalCents += cents;
-      txns.push({ date: s.createdAt, channel: ch, ref: s.receiptNumber || s._id, desc: s.note || 'POS Sale', cents: cents, type: 'sale' });
+      txns.push({ date: s.createdAt, channel: ch, ref: s.receiptNumber || s._id, desc: s.note || 'POS Sale', cents: cents, type: 'sale', isTest: isTest });
     });
 
     txns.sort(function(a,b) { return (b.date || '').localeCompare(a.date || ''); });
 
-    el.innerHTML = renderRevenue(totalCents, byChannel, txns, start, end);
+    el.innerHTML = renderRevenue(totalCents, byChannel, txns, start, end, testTotalCents, testTxnCount);
   } catch (err) {
     el.innerHTML = '<div style="color:var(--danger,#dc2626);padding:12px;">' + e(err.message) + '</div>';
     showToast('Revenue load failed: ' + err.message, true);
   }
 }
 
-function renderRevenue(totalCents, byChannel, txns, start, end) {
-  var channelColors = { direct:'#3b82f6', pos:'#8b5cf6', square:'#7c3aed', etsy:'#f1641e', shopify:'#96bf48', manual:'#6b7280', stripe:'#635bff' };
+function renderRevenue(totalCents, byChannel, txns, start, end, testTotalCents, testTxnCount) {
+  var channelColors = { direct:'#3b82f6', pos:'#8b5cf6', square:'#7c3aed', etsy:'#f1641e', shopify:'#96bf48', manual:'#6b7280', stripe:'#635bff', test:'#f59e0b' };
   var channels = Object.keys(byChannel).sort(function(a,b) { return byChannel[b]-byChannel[a]; });
 
   var h = '';
+
+  // Test-data inclusion chip
+  if (_includeTestData || (testTxnCount && testTxnCount > 0)) {
+    var chipBg = _includeTestData ? 'rgba(245,158,11,0.15)' : 'rgba(107,114,128,0.15)';
+    var chipFg = _includeTestData ? '#f59e0b' : '#9ca3af';
+    var chipLabel = _includeTestData
+      ? 'Including test data'
+      : 'Excluding test data (' + testTxnCount + ' txn' + (testTxnCount === 1 ? '' : 's') + ', ' + fmt$(testTotalCents) + ')';
+    var btnLabel = _includeTestData ? 'Exclude' : 'Include';
+    h += '<div style="margin-bottom:12px;display:flex;gap:8px;align-items:center;">' +
+         '<span style="background:' + chipBg + ';color:' + chipFg + ';padding:4px 10px;border-radius:999px;font-size:0.78rem;font-weight:600;">' + chipLabel + '</span>' +
+         '<button type="button" onclick="window.toggleFinanceTestData()" style="background:transparent;border:1px solid var(--warm-gray,#666);color:var(--text,#fff);padding:3px 10px;border-radius:999px;font-size:0.78rem;cursor:pointer;">' + btnLabel + '</button>' +
+         '</div>';
+  }
 
   // Summary cards
   h += '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px;">';
@@ -435,6 +477,11 @@ function applyFinExpFilters() {
   var el = document.getElementById('fExpContent');
   if (el) el.innerHTML = renderFinExpenses(filtered, finExpCache.start, finExpCache.end);
 }
+
+window.toggleFinanceTestData = function() {
+  _includeTestData = !_includeTestData;
+  loadRevenue();
+};
 
 window.setFinExpFilter = function(key, value) {
   finExpFilters[key] = value;
