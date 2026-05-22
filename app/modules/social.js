@@ -40,6 +40,19 @@
     return currentUser ? currentUser.uid : null;
   }
 
+  // W1.6 — safe date formatter. Returns "—" instead of "Invalid Date" when
+  // the field is missing, NaN, or unparseable.
+  function formatPostDate(raw) {
+    if (!raw) return '—';
+    var t;
+    if (typeof raw === 'number') t = raw;
+    else if (typeof raw === 'string') t = new Date(raw).getTime();
+    else if (raw && typeof raw === 'object' && raw.seconds) t = raw.seconds * 1000;
+    else t = NaN;
+    if (!t || isNaN(t)) return '—';
+    return new Date(t).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  }
+
   // ============================================================
   // Data Loading
   // ============================================================
@@ -78,6 +91,16 @@
 
   function renderSocialMedia() {
     var container = document.getElementById('socialMediaContent');
+    // W1.6/W1.8 — on home, check for a pending prefill (e.g. from "Draft
+    // Social Post from Review") and bounce into the New Post flow.
+    if (smCurrentView === 'home') {
+      try {
+        if (sessionStorage.getItem('__socialDraftPrefill')) {
+          smConsumePendingPrefill();
+          return; // applySocialDraftPrefill calls renderSocialMedia again
+        }
+      } catch (_e) {}
+    }
     if (smCurrentView === 'home') renderSMHome(container);
     else if (smCurrentView === 'newPost') renderSMNewPost(container);
     else if (smCurrentView === 'enhance') renderSMEnhance(container);
@@ -111,7 +134,7 @@
       html += '<div style="text-align:center;padding:40px 20px;color:var(--warm-gray);"><div style="font-size:1.6rem;margin-bottom:12px;">📱</div><p style="font-size:0.9rem;font-weight:500;margin-bottom:4px;">No pending clips yet</p><button class="btn btn-primary" style="margin-top:16px;" onclick="smStartNewPost()">+ New Post</button></div>';
     } else {
       pendingActive.forEach(function(clip) {
-        var dateStr = clip.uploadedAt ? new Date(clip.uploadedAt).toLocaleDateString() : '';
+        var dateStr = formatPostDate(clip.uploadedAt);
         var thumbHtml = clip.thumbnailUrl
           ? '<img class="sm-clip-thumb" src="' + esc(clip.thumbnailUrl) + '" alt="">'
           : '<div class="sm-clip-thumb-placeholder">' + (clip.fileType === 'video' ? '🎬' : '📷') + '</div>';
@@ -127,14 +150,44 @@
     }
     html += '</div>';
 
+    // W1.6 — Scheduled (future-dated, not yet posted) — render above Posted.
+    var nowMs = Date.now();
+    var scheduledPosts = smPosts.filter(function(p) {
+      if (p.postedAt) return false;
+      if (!p.scheduledAt) return false;
+      var t = new Date(p.scheduledAt).getTime();
+      return !isNaN(t) && t > nowMs;
+    });
+    if (scheduledPosts.length > 0) {
+      html += '<div class="sm-section">';
+      html += '<div class="sm-section-label">Scheduled <span class="status-badge pill" style="background:#3b82f6;color:#fff;">' + scheduledPosts.length + '</span></div>';
+      scheduledPosts.forEach(function(post) {
+        var dateStr = formatPostDate(post.scheduledAt);
+        var thumbHtml = post.thumbnailUrl
+          ? '<img class="sm-post-thumb" src="' + esc(post.thumbnailUrl) + '" alt="">'
+          : '<div class="sm-post-thumb" style="display:flex;align-items:center;justify-content:center;font-size:1.15rem;">📅</div>';
+        html += '<div class="sm-post-card">' +
+          '<div class="sm-post-card-top">' + thumbHtml +
+            '<div class="sm-post-info">' +
+              '<div class="sm-post-title">' + esc(post.description || post.productName || 'Scheduled post') + '</div>' +
+              '<div class="sm-post-date">' + esc(dateStr) + '</div>' +
+            '</div>' +
+            '<div class="sm-post-badges"><span class="status-badge" style="background:#3b82f6;color:#fff;">Scheduled</span></div>' +
+          '</div></div>';
+      });
+      html += '</div>';
+    }
+
     // Posted History
+    var postedActual = smPosts.filter(function(p) { return !!p.postedAt; });
     html += '<div class="sm-section">';
-    html += '<div class="sm-section-label">Posted <span class="status-badge pill" style="background:var(--amber);color:#fff;">' + smPosts.length + '</span></div>';
-    if (smPosts.length === 0) {
+    html += '<div class="sm-section-label">Posted <span class="status-badge pill" style="background:var(--amber);color:#fff;">' + postedActual.length + '</span></div>';
+    if (postedActual.length === 0) {
       html += '<div style="text-align:center;padding:40px 20px;color:var(--warm-gray);"><div style="font-size:1.6rem;margin-bottom:12px;">📝</div><p style="font-size:0.9rem;font-weight:500;margin-bottom:4px;">No posts yet</p><p style="font-size:0.85rem;color:var(--warm-gray-light);">Complete the pipeline to see your history here.</p></div>';
     } else {
-      smPosts.forEach(function(post) {
-        var dateStr = post.postedAt ? new Date(post.postedAt).toLocaleDateString() : '';
+      postedActual.forEach(function(post) {
+        // W1.6 — guard against Invalid Date when both postedAt and scheduledAt are missing.
+        var dateStr = formatPostDate(post.postedAt || post.scheduledAt || post.createdAt);
         var treatment = SM_TREATMENTS.find(function(t) { return t.id === post.treatment; });
         var treatmentColor = treatment ? treatment.color : '#999';
         var treatmentName = treatment ? treatment.name : post.treatment;
@@ -205,6 +258,41 @@
     } catch (err) {
       showToast('Error: ' + err.message, true);
     }
+  }
+
+  // W1.8 — Receive a draft prefill from another module (e.g. customer-service
+  // "Draft Social Post from Review"). Stashes the prefill onto smEnhanceData
+  // and navigates into the New Post flow.
+  function applySocialDraftPrefill(prefill) {
+    if (!prefill || typeof prefill !== 'object') return false;
+    smStartNewPost();
+    if (prefill.body) {
+      smEnhanceData.description = prefill.body;
+      // Also seed the first caption slot so the composer shows it immediately.
+      smEnhanceData.captions = [prefill.body];
+      smEnhanceData.selectedCaptionIdx = 0;
+    }
+    if (prefill.imageUrl) {
+      smEnhanceData.thumbnailUrl = prefill.imageUrl;
+    }
+    if (prefill.sourceReviewId) smEnhanceData.sourceReviewId = prefill.sourceReviewId;
+    if (prefill.sourceProductId) smEnhanceData.sourceProductId = prefill.sourceProductId;
+    window.smEnhanceData = smEnhanceData;
+    renderSocialMedia();
+    return true;
+  }
+  window.__draftSocialPostFromReview = applySocialDraftPrefill;
+
+  // Consume any pending prefill stashed via sessionStorage (fallback path
+  // when this module wasn't loaded yet when csDraftSocialFromReview fired).
+  function smConsumePendingPrefill() {
+    try {
+      var raw = sessionStorage.getItem('__socialDraftPrefill');
+      if (!raw) return;
+      sessionStorage.removeItem('__socialDraftPrefill');
+      var parsed = JSON.parse(raw);
+      applySocialDraftPrefill(parsed);
+    } catch (_e) {}
   }
 
   // ---- Screen 2: New Post — Intent ----
