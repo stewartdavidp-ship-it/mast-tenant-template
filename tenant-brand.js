@@ -114,8 +114,17 @@
     var year = new Date().getFullYear();
 
 
-    // Update document.title
-    document.title = document.title.replace(/My Shop/g, name);
+    // Update document.title — replace any literal "My Shop" placeholder.
+    // W1.5: also set a fallback title here using just brand name; SEO meta
+    // upgrade happens in applySeoMeta() once we've loaded voice fields.
+    document.title = (document.title || '').replace(/My Shop/g, name);
+    if (!document.title || /My Shop/i.test(document.title)) document.title = name;
+
+    // W1.5 — apply SEO meta + OG/Twitter tags from brand voice fields.
+    // Reads tagline + positioningOneLiner from public/config/brand (mirrored
+    // from config/brand/voice by the admin Voice subtab). Falls back to
+    // brand.tagline (legacy registry field) and brand.description.
+    applySeoMeta(brand, name);
 
     // Update data-tenant elements
     var elements = document.querySelectorAll('[data-tenant]');
@@ -309,4 +318,74 @@
   window.TENANT_TITLE_SUFFIX = function() {
     return (window.TENANT_BRAND && window.TENANT_BRAND.name) || 'Shop';
   };
+
+  // ─── W1.5: SEO meta + OG/Twitter from Brand Voice ───
+  // Sets/upserts <title>, meta description, og:*, twitter:* on every public page.
+  // Skips the /app/ admin shell.
+  function applySeoMeta(brand, name) {
+    if (window.location.pathname.indexOf('/app') === 0) return;
+
+    var tagline = brand.tagline || '';
+    var positioning = brand.description || '';
+    var logoUrl = '';
+
+    function upsertMeta(attrName, attrValue, contentValue) {
+      if (!contentValue) return;
+      var sel = 'meta[' + attrName + '="' + attrValue + '"]';
+      var el = document.head.querySelector(sel);
+      if (!el) {
+        el = document.createElement('meta');
+        el.setAttribute(attrName, attrValue);
+        document.head.appendChild(el);
+      }
+      el.setAttribute('content', contentValue);
+    }
+
+    function applyAll() {
+      // Title: "{name} — {tagline}" if both, else just name
+      var pageTitle = tagline ? (name + ' — ' + tagline) : name;
+      // Honor page-specific titles (e.g. product detail) — only overwrite
+      // the generic landing-style title, not titles that already contain a
+      // page-specific subject.
+      var current = document.title || '';
+      if (!current || /My Shop/i.test(current) || current === name || current === pageTitle) {
+        document.title = pageTitle;
+      }
+
+      var description = positioning || tagline || '';
+
+      upsertMeta('name', 'description', description);
+      upsertMeta('property', 'og:title', pageTitle);
+      upsertMeta('property', 'og:description', description);
+      upsertMeta('property', 'og:type', 'website');
+      upsertMeta('property', 'og:site_name', name);
+      try {
+        upsertMeta('property', 'og:url', window.location.origin + window.location.pathname);
+      } catch (_e) {}
+      if (logoUrl) upsertMeta('property', 'og:image', logoUrl);
+
+      upsertMeta('name', 'twitter:card', logoUrl ? 'summary_large_image' : 'summary');
+      upsertMeta('name', 'twitter:title', pageTitle);
+      upsertMeta('name', 'twitter:description', description);
+      if (logoUrl) upsertMeta('name', 'twitter:image', logoUrl);
+    }
+
+    // Try to enrich with voice + logo from Firestore, then apply. If
+    // MastDB isn't initialized yet, apply with what we have synchronously.
+    var canRead = (typeof MastDB !== 'undefined') && MastDB.tenantId && MastDB.tenantId();
+    if (canRead) {
+      Promise.all([
+        MastDB.get('public/config/brand/tagline').catch(function() { return null; }),
+        MastDB.get('public/config/brand/positioningOneLiner').catch(function() { return null; }),
+        MastDB.get('public/config/brand/logo/hero/url').catch(function() { return null; })
+      ]).then(function(vals) {
+        if (vals[0]) tagline = vals[0];
+        if (vals[1]) positioning = vals[1];
+        if (vals[2]) logoUrl = vals[2];
+        applyAll();
+      }).catch(function() { applyAll(); });
+    } else {
+      applyAll();
+    }
+  }
 })();
