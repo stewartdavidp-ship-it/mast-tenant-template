@@ -35630,6 +35630,107 @@ function loadProductCustomerSignal(pid) {
           html += '</tbody></table></div>';
         }
       }
+
+      // W2.2: Reviews list — render each review with stars + body + author +
+      // date + order link. Reviews sorted newest first and capped at 5 for the
+      // card view (Reviews tab in customer-service.js shows full list). Body
+      // resolves from r.body || r.text || r.comment || r.review — legacy field
+      // names that appear across older submit paths. If ALL surfaced reviews
+      // lack body text, render a backstage notice explaining how to wire the
+      // submitReview Cloud Function to capture body content. Resolves OPEN
+      // -OtEOa4kn2PalHghA3I0.
+      var reviewsByRecent = reviews.slice().sort(function(a, b) {
+        var aT = new Date(a.createdAt || 0).getTime();
+        var bT = new Date(b.createdAt || 0).getTime();
+        return bT - aT;
+      });
+      var hasAnyBody = reviewsByRecent.some(function(r) {
+        return !!(r && (r.body || r.text || r.comment || r.review));
+      });
+      var topReviews = reviewsByRecent.slice(0, 5);
+      if (topReviews.length > 0) {
+        html += '<div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--cream-dark);">';
+        html += '<div style="font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:6px;">Recent reviews</div>';
+        if (!hasAnyBody) {
+          html += '<div style="font-size:0.78rem;color:var(--warm-gray-light);font-style:italic;padding:4px 0 8px 0;">' +
+            'Review bodies not captured. Wire the submitReview Cloud Function to persist body text on cs_reviews; rating-only reviews show below.' +
+            '</div>';
+        }
+        topReviews.forEach(function(r) {
+          var stars = '';
+          var nStars = typeof r.rating === 'number' ? Math.max(0, Math.min(5, Math.round(r.rating))) : 0;
+          for (var i = 0; i < 5; i++) stars += (i < nStars ? '★' : '☆');
+          var body = r.body || r.text || r.comment || r.review || '';
+          var author = r.authorName || r.userName || r.contactName || r.displayName || '';
+          var dateStr = r.createdAt
+            ? (typeof formatOrderDate === 'function' ? formatOrderDate(r.createdAt) : String(r.createdAt).slice(0, 10))
+            : '';
+          var orderLink = '';
+          if (r.orderId) {
+            orderLink = ' &middot; <a href="#" onclick="event.stopPropagation();if(typeof viewOrder===\'function\'){viewOrder(\'' + esc(r.orderId) + '\');return false;}return false;" style="color:var(--warm-gray);text-decoration:underline;">Order</a>';
+          }
+          var statusBadge = '';
+          if (r.status === 'pending') {
+            statusBadge = ' <span style="background:rgba(245,158,11,0.15);color:#f59e0b;padding:1px 6px;border-radius:4px;font-size:0.72rem;font-weight:600;">Pending</span>';
+          }
+          html += '<div style="padding:8px 0;border-top:1px solid var(--cream-dark);font-size:0.85rem;">';
+          html += '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">';
+          html += '<span style="color:#f59e0b;letter-spacing:1px;">' + stars + '</span>' + statusBadge;
+          html += '<span style="color:var(--warm-gray);font-size:0.78rem;">' + esc(author) + (author && dateStr ? ' &middot; ' : '') + esc(dateStr) + orderLink + '</span>';
+          html += '</div>';
+          if (body) {
+            html += '<div style="margin-top:4px;color:var(--charcoal,var(--text));line-height:1.4;">&ldquo;' + esc(String(body).slice(0, 280)) + (String(body).length > 280 ? '&hellip;' : '') + '&rdquo;</div>';
+          }
+          html += '</div>';
+        });
+        if (reviewsByRecent.length > 5) {
+          html += '<div style="font-size:0.78rem;color:var(--warm-gray-light);padding:6px 0 0 0;">Showing 5 of ' + reviewsByRecent.length + ' &middot; <a href="#cs-reviews" onclick="event.stopPropagation();" style="color:var(--warm-gray);text-decoration:underline;">View all in Reviews</a></div>';
+        }
+        html += '</div>';
+      }
+
+      // W2.2: Order notes mentioning this product. Walks ordersAll, collects
+      // distinct `o.notes` values from orders containing this pid (deduped by
+      // exact note text — same template note from a CSV import shouldn't
+      // appear 50 times). Caps at 5 most-recent. Each links back to the
+      // order via viewOrder() when available.
+      var notesByText = {};
+      Object.keys(ordersAll).forEach(function(oid) {
+        var o = ordersAll[oid];
+        if (!o || o.status === 'cancelled' || !o.notes || !Array.isArray(o.items)) return;
+        var note = String(o.notes).trim();
+        if (!note) return;
+        if (!o.items.some(function(it) { return it && it.pid === pid; })) return;
+        var resolvedId = oid || o._id || o.id || o.orderNumber;
+        if (!notesByText[note]) {
+          notesByText[note] = { note: note, orderId: resolvedId, createdAt: o.createdAt || '', customerName: o.customerName || '' };
+        } else if ((o.createdAt || '') > (notesByText[note].createdAt || '')) {
+          notesByText[note].orderId = resolvedId;
+          notesByText[note].createdAt = o.createdAt || '';
+          notesByText[note].customerName = o.customerName || '';
+        }
+      });
+      var noteList = Object.values(notesByText).sort(function(a, b) {
+        return (b.createdAt || '').localeCompare(a.createdAt || '');
+      }).slice(0, 5);
+      if (noteList.length > 0) {
+        html += '<div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--cream-dark);">';
+        html += '<div style="font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:6px;">Order notes mentioning this product</div>';
+        noteList.forEach(function(nn) {
+          var dateStr = nn.createdAt
+            ? (typeof formatOrderDate === 'function' ? formatOrderDate(nn.createdAt) : String(nn.createdAt).slice(0, 10))
+            : '';
+          var orderLink = '';
+          if (nn.orderId) {
+            orderLink = '<a href="#" onclick="event.stopPropagation();if(typeof viewOrder===\'function\'){viewOrder(\'' + esc(String(nn.orderId)) + '\');return false;}return false;" style="color:var(--warm-gray);text-decoration:underline;">Order</a>';
+          }
+          html += '<div style="padding:8px 0;border-top:1px solid var(--cream-dark);font-size:0.85rem;">';
+          html += '<div style="color:var(--charcoal,var(--text));line-height:1.4;">&ldquo;' + esc(nn.note.slice(0, 280)) + (nn.note.length > 280 ? '&hellip;' : '') + '&rdquo;</div>';
+          html += '<div style="margin-top:4px;color:var(--warm-gray);font-size:0.78rem;">' + esc(nn.customerName) + (nn.customerName && dateStr ? ' &middot; ' : '') + esc(dateStr) + (orderLink ? ' &middot; ' + orderLink : '') + '</div>';
+          html += '</div>';
+        });
+        html += '</div>';
+      }
     }
     html += '</div>';
     freshEl.innerHTML = html;
