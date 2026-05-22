@@ -11632,7 +11632,12 @@ async function hydrateEngagementSurface() {
     // M2 (Idea -OtADygKA_JhRmk1wUqN): hydrate the Mast modes mode-set + overrides
     // alongside the engagement surface. Both ride the same businessEntity read.
     _modeSetSnapshot = (ent && ent.modeSet) || null;
-    _modeOverridesSnapshot = (ent && ent.modeOverrides) || { enabledRoutes: [] };
+    _modeOverridesSnapshot = ent && ent.modeOverrides
+      ? {
+          enabledRoutes: Array.isArray(ent.modeOverrides.enabledRoutes) ? ent.modeOverrides.enabledRoutes : [],
+          disabledRoutes: Array.isArray(ent.modeOverrides.disabledRoutes) ? ent.modeOverrides.disabledRoutes : []
+        }
+      : { enabledRoutes: [], disabledRoutes: [] };
 
     // Apply mode-based nav filter (fail-open if modeSet missing — legacy tenants
     // pre-M1 backfill see full nav; new tenants always have modeSet from M1).
@@ -11656,7 +11661,7 @@ async function hydrateEngagementSurface() {
 var _modeSetSnapshot = null;
 var _modeOverridesSnapshot = null;
 function getModeSet() { return _modeSetSnapshot; }
-function getModeOverrides() { return _modeOverridesSnapshot || { enabledRoutes: [] }; }
+function getModeOverrides() { return _modeOverridesSnapshot || { enabledRoutes: [], disabledRoutes: [] }; }
 
 function getTenantSubscription() {
   // Default: minimal access if subscription not yet loaded
@@ -12191,7 +12196,7 @@ function applyModeNavFilter() {
     return;
   }
 
-  var overrides = _modeOverridesSnapshot || { enabledRoutes: [] };
+  var overrides = _modeOverridesSnapshot || { enabledRoutes: [], disabledRoutes: [] };
   var allItems = document.querySelectorAll('.sidebar-item[data-route]');
   var sectionVisibleCount = Object.create(null);
   // M4: clear the label cache so updated modeSet produces fresh labels
@@ -12268,25 +12273,26 @@ function applyModeNavFilter() {
   if (typeof updateSidebarExpandToggle === 'function') updateSidebarExpandToggle();
 }
 
-// M2: Write-side counterpart for the "+ add" affordance — M3 (Add-to-Mast page)
-// calls this when an owner enables a soft-hidden route. Appends to
-// admin/businessEntity/modeOverrides.enabledRoutes (idempotent — no-op if
-// already enabled), refreshes the local snapshot, and re-runs the filter.
-// Emits a stub clickstream log — M5 replaces with mast.modes.module_enabled.
+// M2: Write-side counterpart for the toggle affordances on the Add-to-Mast page.
+// Adds the route to admin/businessEntity/modeOverrides via the normalized
+// setRouteVisibilityOverride helper (which keeps the persisted doc minimal —
+// no override entry needed if target matches mode-default). Idempotent.
+// Emits a clickstream event (M5).
 async function addRouteToMast(routeId, context) {
   context = context || 'add_to_mast_page';
   try {
-    var current = (_modeOverridesSnapshot && Array.isArray(_modeOverridesSnapshot.enabledRoutes))
-      ? _modeOverridesSnapshot.enabledRoutes.slice()
-      : [];
-    if (current.indexOf(routeId) !== -1) return { success: true, alreadyEnabled: true };
-    current.push(routeId);
-    if (window.MastDB && window.MastDB.businessEntity) {
-      await window.MastDB.businessEntity.update('modeOverrides', {
-        enabledRoutes: current
-      });
+    var BEC = window.BusinessEntityConstants;
+    if (!BEC || typeof BEC.setRouteVisibilityOverride !== 'function') {
+      return { success: false, error: 'BEC not loaded' };
     }
-    _modeOverridesSnapshot = { enabledRoutes: current };
+    var current = _modeOverridesSnapshot || { enabledRoutes: [], disabledRoutes: [] };
+    var nextOverrides = BEC.setRouteVisibilityOverride(current, routeId, true, _modeSetSnapshot);
+    var alreadyEnabled = BEC.isRouteVisible(routeId, _modeSetSnapshot, current);
+    if (alreadyEnabled) return { success: true, alreadyEnabled: true };
+    if (window.MastDB && window.MastDB.businessEntity) {
+      await window.MastDB.businessEntity.update('modeOverrides', nextOverrides);
+    }
+    _modeOverridesSnapshot = nextOverrides;
     // M5 (Idea -OtADygKA_JhRmk1wUqN): emit mast.modes.module_enabled clickstream
     // event. Fire-and-forget — telemetry must never break the user flow.
     // Builder is pure; write is to mast-platform/modes_clickstream/{eventId}
@@ -12322,27 +12328,40 @@ async function addRouteToMast(routeId, context) {
 }
 window.addRouteToMast = addRouteToMast;
 
-// Bulk variant of addRouteToMast — single Firebase write for N routes, one
-// clickstream event per route. Used by the Add-to-Mast page's "+ Add all" +
-// per-section "+ Add all in [Section]" buttons. Idempotent (filters out
-// already-enabled routes before writing).
+// Bulk add — collapses N route adds into a single Firebase write. Used by
+// "+ Add all" + per-section bulk buttons. Idempotent (filters out routes
+// already visible). One clickstream event per actually-added route.
 async function addRoutesToMast(routeIds, context) {
   context = context || 'add_to_mast_bulk';
   if (!Array.isArray(routeIds) || routeIds.length === 0) {
     return { success: true, addedCount: 0, alreadyEnabled: true };
   }
   try {
-    var current = (_modeOverridesSnapshot && Array.isArray(_modeOverridesSnapshot.enabledRoutes))
-      ? _modeOverridesSnapshot.enabledRoutes.slice() : [];
-    var toAdd = routeIds.filter(function(r) { return current.indexOf(r) === -1; });
+    var BEC = window.BusinessEntityConstants;
+    if (!BEC || typeof BEC.setRouteVisibilityOverride !== 'function') {
+      return { success: false, error: 'BEC not loaded' };
+    }
+    var currentOverrides = _modeOverridesSnapshot || { enabledRoutes: [], disabledRoutes: [] };
+    // Apply each route to the running overrides snapshot; capture which ones
+    // actually changed state for the clickstream emit.
+    var nextOverrides = {
+      enabledRoutes: (currentOverrides.enabledRoutes || []).slice(),
+      disabledRoutes: (currentOverrides.disabledRoutes || []).slice()
+    };
+    var toAdd = [];
+    for (var i = 0; i < routeIds.length; i++) {
+      var rid = routeIds[i];
+      if (BEC.isRouteVisible(rid, _modeSetSnapshot, nextOverrides)) continue;
+      nextOverrides = BEC.setRouteVisibilityOverride(nextOverrides, rid, true, _modeSetSnapshot);
+      toAdd.push(rid);
+    }
     if (toAdd.length === 0) {
       return { success: true, addedCount: 0, alreadyEnabled: true };
     }
-    var next = current.concat(toAdd);
     if (window.MastDB && window.MastDB.businessEntity) {
-      await window.MastDB.businessEntity.update('modeOverrides', { enabledRoutes: next });
+      await window.MastDB.businessEntity.update('modeOverrides', nextOverrides);
     }
-    _modeOverridesSnapshot = { enabledRoutes: next };
+    _modeOverridesSnapshot = nextOverrides;
     // Fire one clickstream event per added route (M5 semantics preserved)
     try {
       var BEC_emit = window.BusinessEntityConstants;
@@ -12374,6 +12393,39 @@ async function addRoutesToMast(routeIds, context) {
   }
 }
 window.addRoutesToMast = addRoutesToMast;
+
+// Remove a single route from the tenant's visible sidebar. Always-on routes
+// can't be removed (helper no-ops cleanly). Mirrors addRouteToMast semantics.
+async function removeRouteFromMast(routeId, context) {
+  context = context || 'remove_from_mast_page';
+  try {
+    var BEC = window.BusinessEntityConstants;
+    if (!BEC || typeof BEC.setRouteVisibilityOverride !== 'function') {
+      return { success: false, error: 'BEC not loaded' };
+    }
+    var rule = BEC.MODE_ROUTE_VISIBILITY && BEC.MODE_ROUTE_VISIBILITY[routeId];
+    if (rule && rule.alwaysOn) {
+      return { success: false, alwaysOn: true, error: 'Always-on route cannot be removed' };
+    }
+    var current = _modeOverridesSnapshot || { enabledRoutes: [], disabledRoutes: [] };
+    if (!BEC.isRouteVisible(routeId, _modeSetSnapshot, current)) {
+      return { success: true, alreadyHidden: true };
+    }
+    var nextOverrides = BEC.setRouteVisibilityOverride(current, routeId, false, _modeSetSnapshot);
+    if (window.MastDB && window.MastDB.businessEntity) {
+      await window.MastDB.businessEntity.update('modeOverrides', nextOverrides);
+    }
+    _modeOverridesSnapshot = nextOverrides;
+    // Stub clickstream — mast.modes.module_disabled is a future event type
+    console.log('[modes] removeRouteFromMast:', routeId, '(context: ' + context + ')');
+    applyModeNavFilter();
+    return { success: true, alreadyHidden: false };
+  } catch (err) {
+    console.warn('[modes] removeRouteFromMast failed for ' + routeId + ':', err && err.message);
+    return { success: false, error: err && err.message };
+  }
+}
+window.removeRouteFromMast = removeRouteFromMast;
 
 // M3 (Idea -OtADygKA_JhRmk1wUqN): Add-to-Mast page — central unlock surface
 // for all soft-hidden modules. Cards grouped by sidebar section, one click
@@ -12468,8 +12520,8 @@ var MODE_MODULE_INFO = {
 };
 
 // Pure function — compute the list of routes eligible for the Add-to-Mast page
-// (soft-hidden in the tenant's current modeSet AND not already in overrides).
-// Exposed for unit-testability and for M7's threshold counter.
+// (soft-hidden in the tenant's current modeSet AND not already enabled by override).
+// Used by M7 threshold counter and bulk "+ Add all" / "+ Add all in section" handlers.
 function _getSoftHiddenRoutes(modeSet, overrides) {
   var BEC = window.BusinessEntityConstants;
   if (!BEC || !BEC.MODE_ROUTE_VISIBILITY) return [];
@@ -12478,13 +12530,30 @@ function _getSoftHiddenRoutes(modeSet, overrides) {
   for (var routeId in matrix) {
     if (!Object.prototype.hasOwnProperty.call(matrix, routeId)) continue;
     var rule = matrix[routeId];
-    if (rule && rule.alwaysOn) continue;  // never show always-on routes here
+    if (rule && rule.alwaysOn) continue;
     if (BEC.isRouteVisible(routeId, modeSet, overrides)) continue;
     result.push(routeId);
   }
   return result;
 }
 window._getSoftHiddenRoutes = _getSoftHiddenRoutes;
+
+// Toggleable routes — every non-always-on route in the matrix. Renders on
+// the Add-to-Mast page so owners can add OR remove (the page is the canonical
+// manage surface, not just the add surface).
+function _getToggleableRoutes() {
+  var BEC = window.BusinessEntityConstants;
+  if (!BEC || !BEC.MODE_ROUTE_VISIBILITY) return [];
+  var matrix = BEC.MODE_ROUTE_VISIBILITY;
+  var result = [];
+  for (var routeId in matrix) {
+    if (!Object.prototype.hasOwnProperty.call(matrix, routeId)) continue;
+    var rule = matrix[routeId];
+    if (rule && rule.alwaysOn) continue;
+    result.push(routeId);
+  }
+  return result;
+}
 
 async function renderAddToMast() {
   var container = document.getElementById('addToMastContent');
@@ -12497,7 +12566,7 @@ async function renderAddToMast() {
   }
 
   var modeSet = (typeof getModeSet === 'function') ? getModeSet() : null;
-  var overrides = (typeof getModeOverrides === 'function') ? getModeOverrides() : { enabledRoutes: [] };
+  var overrides = (typeof getModeOverrides === 'function') ? getModeOverrides() : { enabledRoutes: [], disabledRoutes: [] };
   var BEC = window.BusinessEntityConstants;
 
   // Legacy fallback: modeSet missing means M1 backfill hasn't run for this
@@ -12510,70 +12579,82 @@ async function renderAddToMast() {
     return;
   }
 
-  var softHidden = _getSoftHiddenRoutes(modeSet, overrides);
+  // Build a unified view: EVERY non-always-on route, each labeled with current
+  // visibility. The page is the canonical manage surface for the sidebar —
+  // not just "what can I add" but "what's in my Mast right now, toggle either way."
+  var allToggleable = _getToggleableRoutes();
+  var visibleCount = 0;
+  var hiddenCount = 0;
 
-  // Empty state
-  if (softHidden.length === 0) {
-    container.innerHTML =
-      '<div style="padding:48px 24px;text-align:center;color:var(--warm-gray);">' +
-      '<div style="font-size:1.15rem;margin-bottom:12px;">You&rsquo;re using everything Mast offers!</div>' +
-      '<div style="font-size:0.85rem;opacity:0.7;">Every feature is enabled for your business. ' +
-      'To simplify your sidebar, hide modules you don&rsquo;t use from Settings &rarr; Change my business setup.</div>' +
-      '</div>';
-    return;
-  }
-
-  // Group by section, preserving sidebar section order
+  // Group by section, preserving sidebar order
   var sectionOrder = ['products', 'sales', 'marketing', 'retention', 'events', 'classes', 'finance', 'operations', 'customer-service'];
   var grouped = {};
-  for (var i = 0; i < softHidden.length; i++) {
-    var routeId = softHidden[i];
+  for (var i = 0; i < allToggleable.length; i++) {
+    var routeId = allToggleable[i];
     var info = MODE_MODULE_INFO[routeId];
-    if (!info) {
-      // Unknown route: skip silently (no description, no card)
-      continue;
-    }
+    if (!info) continue;  // unknown route, skip silently
+    var visible = BEC.isRouteVisible(routeId, modeSet, overrides);
+    if (visible) visibleCount++; else hiddenCount++;
     if (!grouped[info.section]) grouped[info.section] = [];
-    grouped[info.section].push({ routeId: routeId, info: info });
+    grouped[info.section].push({ routeId: routeId, info: info, visible: visible });
   }
 
-  // Header summary + "+ Add all" bulk control
+  // Page header: counts + bulk "+ Add all hidden" control
   var html = '';
   html += '<div style="padding:0 24px 16px;display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;">';
   html += '<div style="color:var(--warm-gray);font-size:0.9rem;line-height:1.5;flex:1;min-width:240px;">';
-  html += 'Browse modules that aren&rsquo;t in your default Mast sidebar yet. ';
-  html += 'Add what you need &mdash; you can always hide it again later.';
+  html += 'Manage what shows up in your Mast sidebar. ';
+  html += 'Add modules you need, or hide ones you don&rsquo;t. Everything stays one click away.';
   html += '<div style="margin-top:8px;font-size:0.85rem;opacity:0.8;">';
-  html += '<strong>' + softHidden.length + '</strong> module' + (softHidden.length === 1 ? '' : 's') + ' available to add.';
+  html += '<strong>' + visibleCount + '</strong> in your sidebar &middot; <strong>' + hiddenCount + '</strong> available to add.';
   html += '</div></div>';
-  html += '<button class="btn btn-primary" onclick="addAllToMastClick()" aria-label="Add all ' + softHidden.length + ' modules to my Mast" style="flex-shrink:0;align-self:flex-start;">+ Add all (' + softHidden.length + ')</button>';
+  if (hiddenCount > 0) {
+    html += '<button class="btn btn-primary" onclick="addAllToMastClick()" aria-label="Add all ' + hiddenCount + ' hidden modules to my Mast" style="flex-shrink:0;align-self:flex-start;">+ Add all (' + hiddenCount + ')</button>';
+  }
   html += '</div>';
 
-  // Section blocks
+  // Section blocks — every section that has any toggleable items
   for (var s = 0; s < sectionOrder.length; s++) {
     var sectionKey = sectionOrder[s];
     var items = grouped[sectionKey];
     if (!items || items.length === 0) continue;
     var sectionLabel = MODE_SECTION_LABELS[sectionKey] || sectionKey;
+    var sectionHiddenCount = 0;
+    for (var sh = 0; sh < items.length; sh++) if (!items[sh].visible) sectionHiddenCount++;
 
     html += '<div class="add-to-mast-section" style="padding:0 24px 24px;">';
     html += '<div style="display:flex;align-items:baseline;justify-content:space-between;gap:16px;border-bottom:1px solid var(--border,#e5e0d8);padding-bottom:8px;margin:16px 0 12px;">';
-    html += '<h3 style="font-size:1.0rem;margin:0;color:var(--charcoal,var(--text));">' + esc(sectionLabel) + ' <span style="font-weight:400;color:var(--warm-gray);font-size:0.85rem;">(' + items.length + ')</span></h3>';
-    html += '<button class="btn btn-secondary btn-small" onclick="addAllInSectionClick(\'' + esc(sectionKey) + '\')" aria-label="Add all ' + items.length + ' modules in ' + esc(sectionLabel) + ' to my Mast">+ Add all in ' + esc(sectionLabel) + '</button>';
+    html += '<h3 style="font-size:1.0rem;margin:0;color:var(--charcoal,var(--text));">' + esc(sectionLabel) + ' <span style="font-weight:400;color:var(--warm-gray);font-size:0.85rem;">(' + (items.length - sectionHiddenCount) + '/' + items.length + ' visible)</span></h3>';
+    if (sectionHiddenCount > 0) {
+      html += '<button class="btn btn-secondary btn-small" onclick="addAllInSectionClick(\'' + esc(sectionKey) + '\')" aria-label="Add all ' + sectionHiddenCount + ' hidden modules in ' + esc(sectionLabel) + ' to my Mast">+ Add all ' + sectionHiddenCount + ' hidden</button>';
+    }
     html += '</div>';
     html += '<div class="add-to-mast-cards" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;">';
 
     for (var k = 0; k < items.length; k++) {
       var it = items[k];
-      // M4 (Idea -OtADygKA_JhRmk1wUqN): resolve mode-aware label override.
-      // Falls back to the MODE_MODULE_INFO default label when no override exists.
-      var displayLabel = (window.BusinessEntityConstants && typeof BusinessEntityConstants.labelFor === 'function')
-        ? BusinessEntityConstants.labelFor(it.routeId, modeSet, it.info.label)
+      var displayLabel = (typeof BEC.labelFor === 'function')
+        ? BEC.labelFor(it.routeId, modeSet, it.info.label)
         : it.info.label;
-      html += '<div class="add-to-mast-card" data-route-id="' + esc(it.routeId) + '" style="border:1px solid var(--border,#e5e0d8);border-radius:8px;padding:14px;background:var(--surface-card,#fff);display:flex;flex-direction:column;gap:8px;">';
+
+      // State-driven styling: visible cards are greyed (already in sidebar);
+      // hidden cards are full opacity (calls to action).
+      var cardStyle = 'border:1px solid var(--border,#e5e0d8);border-radius:8px;padding:14px;background:var(--surface-card,#fff);display:flex;flex-direction:column;gap:8px;';
+      if (it.visible) cardStyle += 'opacity:0.55;';
+
+      html += '<div class="add-to-mast-card" data-route-id="' + esc(it.routeId) + '" data-visible="' + (it.visible ? 'true' : 'false') + '" style="' + cardStyle + '">';
+      html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">';
       html += '<div style="font-size:0.9rem;font-weight:600;color:var(--charcoal,var(--text));">' + esc(displayLabel) + '</div>';
+      if (it.visible) {
+        html += '<span style="font-size:0.72rem;color:var(--teal,#2a7c6f);font-weight:600;text-transform:uppercase;letter-spacing:0.05em;">In sidebar</span>';
+      }
+      html += '</div>';
       html += '<div style="font-size:0.78rem;color:var(--warm-gray);line-height:1.45;flex-grow:1;">' + esc(it.info.desc) + '</div>';
-      html += '<button class="btn btn-primary btn-small" onclick="addToMastClick(\'' + esc(it.routeId) + '\')" aria-label="Add ' + esc(displayLabel) + ' to my Mast" style="margin-top:4px;align-self:flex-start;">+ Add to my Mast</button>';
+      if (it.visible) {
+        html += '<button class="btn btn-secondary btn-small" onclick="removeFromMastClick(\'' + esc(it.routeId) + '\')" aria-label="Remove ' + esc(displayLabel) + ' from my Mast" style="margin-top:4px;align-self:flex-start;">Remove from my Mast</button>';
+      } else {
+        html += '<button class="btn btn-primary btn-small" onclick="addToMastClick(\'' + esc(it.routeId) + '\')" aria-label="Add ' + esc(displayLabel) + ' to my Mast" style="margin-top:4px;align-self:flex-start;">+ Add to my Mast</button>';
+      }
       html += '</div>';
     }
 
@@ -12616,12 +12697,45 @@ async function addToMastClick(routeId) {
 }
 window.addToMastClick = addToMastClick;
 
+// Click handler for the "Remove from my Mast" button on visible cards.
+// Wraps removeRouteFromMast + toast feedback + re-render so the card
+// flips to the hidden state immediately.
+async function removeFromMastClick(routeId) {
+  try {
+    var info = MODE_MODULE_INFO[routeId];
+    var defaultLabel = (info && info.label) || routeId;
+    var modeSet = (typeof getModeSet === 'function') ? getModeSet() : null;
+    var label = (window.BusinessEntityConstants && typeof BusinessEntityConstants.labelFor === 'function')
+      ? BusinessEntityConstants.labelFor(routeId, modeSet, defaultLabel)
+      : defaultLabel;
+    var result = await removeRouteFromMast(routeId, 'remove_from_mast_page');
+    if (result && result.success) {
+      if (typeof showToast === 'function') {
+        showToast(result.alreadyHidden
+          ? label + ' was already hidden.'
+          : label + ' removed from your Mast.');
+      }
+      renderAddToMast();
+    } else if (result && result.alwaysOn) {
+      if (typeof showToast === 'function') showToast(label + ' is always on and can’t be hidden.', true);
+    } else {
+      if (typeof showToast === 'function') {
+        showToast('Could not remove ' + label + ': ' + ((result && result.error) || 'unknown error'), true);
+      }
+    }
+  } catch (err) {
+    console.warn('[removeFromMastClick] failed:', err && err.message);
+    if (typeof showToast === 'function') showToast('Could not remove module.', true);
+  }
+}
+window.removeFromMastClick = removeFromMastClick;
+
 // Bulk: add EVERY soft-hidden module on the page. Confirms first (significant
 // action — turns the sidebar full-fat). Idempotent — re-clicking after partial
 // adds just enables the remainder.
 async function addAllToMastClick() {
   var modeSet = (typeof getModeSet === 'function') ? getModeSet() : null;
-  var overrides = (typeof getModeOverrides === 'function') ? getModeOverrides() : { enabledRoutes: [] };
+  var overrides = (typeof getModeOverrides === 'function') ? getModeOverrides() : { enabledRoutes: [], disabledRoutes: [] };
   var softHidden = _getSoftHiddenRoutes(modeSet, overrides);
   if (softHidden.length === 0) {
     if (typeof showToast === 'function') showToast('Nothing left to add.');
@@ -12659,7 +12773,7 @@ window.addAllToMastClick = addAllToMastClick;
 // radius). Toast feedback + immediate re-render.
 async function addAllInSectionClick(sectionKey) {
   var modeSet = (typeof getModeSet === 'function') ? getModeSet() : null;
-  var overrides = (typeof getModeOverrides === 'function') ? getModeOverrides() : { enabledRoutes: [] };
+  var overrides = (typeof getModeOverrides === 'function') ? getModeOverrides() : { enabledRoutes: [], disabledRoutes: [] };
   var softHidden = _getSoftHiddenRoutes(modeSet, overrides);
   var inSection = softHidden.filter(function(routeId) {
     var info = MODE_MODULE_INFO[routeId];
@@ -12827,7 +12941,7 @@ async function renderBusinessSetup() {
       revenueChannels: st.revenueChannels,
       engagement: { mode: st.engagementMode, modulesShown: st.modulesShown }
     }, { derivedFrom: 'settings' });
-    var overrides = (typeof getModeOverrides === 'function') ? getModeOverrides() : { enabledRoutes: [] };
+    var overrides = (typeof getModeOverrides === 'function') ? getModeOverrides() : { enabledRoutes: [], disabledRoutes: [] };
     var diff = BEC.diffModeSets(currentModeSet, derivedNext, overrides);
 
     html += '<div style="margin-bottom:12px;font-size:0.9rem;color:var(--charcoal,var(--text));">';
@@ -12994,7 +13108,7 @@ async function checkModeSetBanners() {
     _modesUiSnapshot = {};
   }
 
-  var overrides = _modeOverridesSnapshot || { enabledRoutes: [] };
+  var overrides = _modeOverridesSnapshot || { enabledRoutes: [], disabledRoutes: [] };
 
   // Banner 1 — reactive suggestion takes priority over migration
   var sug = BEC.shouldShowModeChangeSuggestion(modeSet, overrides, _modesUiSnapshot);

@@ -769,17 +769,63 @@
 
   /**
    * Resolved visibility for a route, including per-tenant manual overrides.
+   * Always-on routes are never hidden (universal tier wins over user overrides).
+   *
    * @param {string} routeId
    * @param {Object} modeSetDoc        - { modes, overlays, cohortFlag }
-   * @param {Object} modeOverridesDoc  - { enabledRoutes: [] } — user-enabled routes
+   * @param {Object} modeOverridesDoc  - { enabledRoutes: [], disabledRoutes: [] }
+   *   enabledRoutes:  user-added overrides (force visible)
+   *   disabledRoutes: user-hidden overrides (force hidden, except always-on)
    * @returns {boolean}
    */
   function isRouteVisible(routeId, modeSetDoc, modeOverridesDoc) {
-    if (modeOverridesDoc && Array.isArray(modeOverridesDoc.enabledRoutes) &&
-        modeOverridesDoc.enabledRoutes.indexOf(routeId) !== -1) {
-      return true;
+    var rule = MODE_ROUTE_VISIBILITY[routeId];
+    if (rule && rule.alwaysOn) return true;     // always-on overrides any user override
+    if (modeOverridesDoc) {
+      if (Array.isArray(modeOverridesDoc.disabledRoutes) &&
+          modeOverridesDoc.disabledRoutes.indexOf(routeId) !== -1) {
+        return false;                            // explicit user-hide
+      }
+      if (Array.isArray(modeOverridesDoc.enabledRoutes) &&
+          modeOverridesDoc.enabledRoutes.indexOf(routeId) !== -1) {
+        return true;                             // explicit user-enable
+      }
     }
     return isRouteVisibleByDefault(routeId, modeSetDoc);
+  }
+
+  /**
+   * Compute the minimal modeOverrides doc after toggling a route's visibility.
+   * Removes any pre-existing override for the route, then adds an enable/disable
+   * entry only if the target state diverges from the mode-default. Keeps the
+   * persisted overrides as small as possible (no redundant entries).
+   *
+   * Always-on routes are no-op (you can't remove Settings) — returns the
+   * overrides unchanged.
+   *
+   * @param {Object} overrides     - current { enabledRoutes: [], disabledRoutes: [] }
+   * @param {string} routeId
+   * @param {boolean} targetVisible - true to add, false to remove
+   * @param {Object} modeSetDoc
+   * @returns {Object} new { enabledRoutes: [], disabledRoutes: [] }
+   */
+  function setRouteVisibilityOverride(overrides, routeId, targetVisible, modeSetDoc) {
+    overrides = overrides || {};
+    var rule = MODE_ROUTE_VISIBILITY[routeId];
+    if (rule && rule.alwaysOn) {
+      // No-op — always-on can't be toggled
+      return {
+        enabledRoutes: (overrides.enabledRoutes || []).slice(),
+        disabledRoutes: (overrides.disabledRoutes || []).slice()
+      };
+    }
+    var enabled = (overrides.enabledRoutes || []).filter(function(r) { return r !== routeId; });
+    var disabled = (overrides.disabledRoutes || []).filter(function(r) { return r !== routeId; });
+    var defaultVisible = isRouteVisibleByDefault(routeId, modeSetDoc);
+    if (targetVisible && !defaultVisible) enabled.push(routeId);
+    else if (!targetVisible && defaultVisible) disabled.push(routeId);
+    // else: target matches default → no override needed (clean state)
+    return { enabledRoutes: enabled, disabledRoutes: disabled };
   }
 
   // ============================================================
@@ -1006,11 +1052,25 @@
       // Unknown route → soft-hidden
       { name: 'unknown route soft-hidden', route: 'nonexistent-route', modeSet: ms(['maker']), expect: false },
 
-      // Override mechanism
+      // Override mechanism — enabledRoutes
       { name: 'override forces visible', route: 'blog', modeSet: ms(['standard']),
         overrides: { enabledRoutes: ['blog'] }, expect: true, useResolved: true },
       { name: 'no override keeps default', route: 'blog', modeSet: ms(['standard']),
-        overrides: { enabledRoutes: ['stories'] }, expect: false, useResolved: true }
+        overrides: { enabledRoutes: ['stories'] }, expect: false, useResolved: true },
+
+      // Override mechanism — disabledRoutes (force hide)
+      { name: 'disabledRoutes forces hidden for default-visible route',
+        route: 'pos', modeSet: ms(['retail']),
+        overrides: { disabledRoutes: ['pos'] }, expect: false, useResolved: true },
+      { name: 'disabledRoutes does NOT hide always-on routes',
+        route: 'settings', modeSet: ms(['retail']),
+        overrides: { disabledRoutes: ['settings'] }, expect: true, useResolved: true },
+      { name: 'enabled wins over default-hidden when both lists touch different routes',
+        route: 'blog', modeSet: ms(['standard']),
+        overrides: { enabledRoutes: ['blog'], disabledRoutes: ['pos'] }, expect: true, useResolved: true },
+      { name: 'disabled wins when same route appears in both (defensive)',
+        route: 'pos', modeSet: ms(['retail']),
+        overrides: { enabledRoutes: ['pos'], disabledRoutes: ['pos'] }, expect: false, useResolved: true }
     ];
 
     var passed = 0, failed = 0, failures = [];
@@ -1547,6 +1607,7 @@
     MODE_ROUTE_VISIBILITY: MODE_ROUTE_VISIBILITY,
     isRouteVisibleByDefault: isRouteVisibleByDefault,
     isRouteVisible: isRouteVisible,
+    setRouteVisibilityOverride: setRouteVisibilityOverride,
     _runVisibilitySelfTests: _runVisibilitySelfTests,
     MODE_LABEL_OVERRIDES: MODE_LABEL_OVERRIDES,
     labelFor: labelFor,
