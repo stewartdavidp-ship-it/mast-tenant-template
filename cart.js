@@ -828,6 +828,50 @@
   }
 
   // ── Analytics ──
+
+  // W1.12 — first-hit attribution capture.
+  // On the first pageview in a session, read UTM params from the landing URL
+  // and sanitize the document.referrer (strip query strings) for privacy.
+  // Cache to sessionStorage so subsequent pageviews in the same session keep
+  // the same attribution (matches GA4 / Segment first-touch semantics).
+  function getSessionAttribution() {
+    try {
+      var cached = sessionStorage.getItem('__mast_attr');
+      if (cached) return JSON.parse(cached);
+    } catch (_e) {}
+
+    var attr = {};
+    try {
+      var qs = new URLSearchParams(window.location.search);
+      var utmKeys = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term'];
+      utmKeys.forEach(function(k) {
+        var v = qs.get(k);
+        if (v) attr[k] = String(v).slice(0, 80);
+      });
+    } catch (_e) {}
+
+    try {
+      var ref = document.referrer || '';
+      if (ref) {
+        // Privacy: strip query string + fragment from referrer. Keep scheme +
+        // host + path only — never log ?token=... or ?session=... values.
+        try {
+          var u = new URL(ref);
+          attr.referrer = u.protocol + '//' + u.host + u.pathname;
+        } catch (_e) {
+          // Fallback: best-effort regex if URL constructor rejects it.
+          attr.referrer = ref.split('?')[0].split('#')[0];
+        }
+        if (attr.referrer && attr.referrer.length > 200) attr.referrer = attr.referrer.slice(0, 200);
+      }
+    } catch (_e) {}
+
+    try {
+      sessionStorage.setItem('__mast_attr', JSON.stringify(attr));
+    } catch (_e) {}
+    return attr;
+  }
+
   function trackEvent(action, pid) {
     try {
       if (typeof MastDB === 'undefined') return;
@@ -849,8 +893,30 @@
       if (pid) hit.a = action + ':' + pid;
       if (hit.a && hit.a.length > 40) hit.a = hit.a.substring(0, 40);
 
+      // W1.12 — attach session attribution to every event so downstream
+      // queries can join purchases back to source. Compact field names match
+      // the rest of the hit schema.
+      var attr = getSessionAttribution();
+      if (attr.utm_source)   hit.us = String(attr.utm_source).slice(0, 40);
+      if (attr.utm_medium)   hit.um = String(attr.utm_medium).slice(0, 40);
+      if (attr.utm_campaign) hit.uc = String(attr.utm_campaign).slice(0, 40);
+      if (attr.utm_content)  hit.uct = String(attr.utm_content).slice(0, 40);
+      if (attr.utm_term)     hit.utm = String(attr.utm_term).slice(0, 40);
+      if (attr.referrer)     hit.r = attr.referrer;
+
       MastDB.push('analytics/hits', hit).catch(function () { /* silent */ });
     } catch (e) { /* silent */ }
+  }
+
+  // W1.12 — page-view emission. Fires once per page load after init() so
+  // attribution is recorded even when the user does nothing else on the page.
+  var _pageViewSent = false;
+  function trackPageView() {
+    if (_pageViewSent) return;
+    _pageViewSent = true;
+    // Prime the session attribution cache on first hit.
+    getSessionAttribution();
+    trackEvent('page_view', '');
   }
 
   // ── Gift Card Icon Visibility ──
@@ -1473,6 +1539,8 @@
     updateBadge();
     renderDrawerItems();
     initAbandonDetection();
+    // W1.12 — fire page_view once on init with attribution attached.
+    trackPageView();
   }
 
   // Wait for tenant resolution then DOM ready
