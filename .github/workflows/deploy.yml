@@ -99,11 +99,10 @@ jobs:
           fi
           # mast-deploy storefront-shared lands in 0.7.0 (W2-M2). Bump after every
           # mast-deploy publish that ships new storefront functionality.
-          # 0.7.4: SHA-pinning (commit-pinned tarball) + positive-evidence
-          # success check (require deployed:true + versionName, fail on
-          # silent-success envelopes like c2-gate confirmation tokens).
+          # 0.7.5: alignment bump (no functional change for storefront-shared;
+          # 0.7.5 also adds the kv-sync subcommand used by operator workflows).
           NODE_AUTH_TOKEN="${{ secrets.MAST_GHA_PAT }}" \
-            npx --yes -p '@stewartdavidp-ship-it/mast-deploy@0.7.4' \
+            npx --yes -p '@stewartdavidp-ship-it/mast-deploy@0.7.5' \
               mast-deploy storefront-shared --pod="${POD}" $DRY_RUN_FLAG
 
       # Verification: confirm the deployed origin actually serves THIS commit's
