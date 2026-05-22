@@ -11901,14 +11901,36 @@ function renderTokenBalanceIndicator() {
     return;
   }
   el.style.display = 'flex';
-  var total = (w.currentBalance || 0) + (w.coinTokenSurplus || 0) + ((w.coinBalance || 0) * 100); // monthly + coin surplus + unconverted coins
+  // F-M1e: show "used / allocation" — backend resolves monthlyAllocation per V1 tier.
+  // Fallback to combined total when allocation is missing (legacy wallets).
+  var alloc = w.monthlyAllocation || 0;
+  var current = w.currentBalance || 0;
+  var used = alloc > 0 ? Math.max(0, alloc - current) : 0;
   var statusColor = w.status === 'suspended' ? 'var(--danger, #dc2626)' :
                     w.status === 'borrowing' ? 'var(--amber, var(--amber))' : 'var(--sage, #7A8B6F)';
   var statusIcon = w.status === 'suspended' ? '⏸' : w.status === 'borrowing' ? '⚠' : '⚡';
-  el.innerHTML = '<span style="cursor:pointer;display:flex;align-items:center;gap:4px;padding:4px 10px;border-radius:8px;background:rgba(122,139,111,0.1);font-size:0.78rem;color:' + statusColor + ';" onclick="openCoinPurchaseModal()">' +
-    statusIcon + ' <strong>' + total + '</strong> tokens' +
-    (w.coinBalance > 0 ? ' <span style="opacity:0.7;font-size:0.72rem;">(' + w.coinBalance + ' coins)</span>' : '') +
+
+  var primary;
+  if (alloc > 0) {
+    primary = '<strong>' + used.toLocaleString() + '</strong> / ' + alloc.toLocaleString() + ' tokens';
+  } else {
+    var total = current + (w.coinTokenSurplus || 0) + ((w.coinBalance || 0) * 100);
+    primary = '<strong>' + total.toLocaleString() + '</strong> tokens';
+  }
+  var coinBadge = (w.coinBalance > 0)
+    ? ' <span style="opacity:0.7;font-size:0.72rem;">(+' + w.coinBalance + ' coin' + (w.coinBalance === 1 ? '' : 's') + ')</span>'
+    : '';
+
+  var html = '<span style="cursor:pointer;display:flex;align-items:center;gap:4px;padding:4px 10px;border-radius:8px;background:rgba(122,139,111,0.1);font-size:0.78rem;color:' + statusColor + ';" title="Click to view billing usage" onclick="navigateTo(\'subscription\')">' +
+    statusIcon + ' ' + primary + coinBadge +
     '</span>';
+
+  // F-M1e: email-buffer pill — visible when actively borrowing into the +20% email-only buffer.
+  var borrowed = w.borrowedAmount || 0;
+  if (borrowed > 0) {
+    html += '<span style="margin-left:6px;padding:4px 8px;border-radius:8px;background:rgba(196,133,60,0.12);color:var(--amber);font-size:0.72rem;" title="Email-only buffer in use">✉ +' + borrowed.toLocaleString() + '</span>';
+  }
+  el.innerHTML = html;
 }
 
 // Wallet modal
@@ -25029,7 +25051,16 @@ function loadShopifyConfig() {
 }
 
 // ── Plaid Bank Connections (Settings → Integrations) ─────────────────────────
-var _PLAID_BANK_LIMITS = { 'free': 0, 'publish': 2, 'launch': 2, 'operate': 3, 'command': 5 };
+// V1 Plaid caps (free/starter/growth/scale). Legacy keys retained for tenants
+// still mapped to the old tier names; resolveTierForPlan-style fallback below
+// converts publish→free, launch→starter, operate→growth, command→scale, etc.
+var _PLAID_BANK_LIMITS = {
+  // V1 keys
+  'free': 0, 'starter': 5, 'growth': 15, 'scale': 50,
+  // Legacy keys (kept for tenants whose subscription doc still has these)
+  'publish': 0, 'launch': 5, 'operate': 15, 'command': 50,
+  'organizer': 15, 'professional': 50
+};
 var _plaidLinkLoaded = false;
 var _plaidLastConnectAt = 0;
 
@@ -25049,17 +25080,31 @@ async function loadPlaidBanksForSettings() {
     var keys = Object.keys(items);
     var includedLimit = getPlaidBankLimit();
 
+    // F-M1e: V1 Plaid model — hard cap per tier (caps enforced server-side by A-M4),
+    // 200 tokens/month reserved per active account at reset time.
+    var wallet = (typeof getTokenWallet === 'function') ? getTokenWallet() : null;
+    var alloc = (wallet && wallet.monthlyAllocation) || 0;
+    var PLAID_TOKEN_RATE = 200;
+
     if (keys.length === 0) {
       container.innerHTML = '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:12px 14px;font-size:0.85rem;color:var(--warm-gray);">' +
-        'No banks connected. ' + includedLimit + ' bank' + (includedLimit !== 1 ? 's' : '') + ' included in your plan; additional banks cost 100 tokens/month.' +
+        '0 of ' + includedLimit + ' Plaid account' + (includedLimit !== 1 ? 's' : '') + ' connected' +
+        (includedLimit > 0 ? '. Each connected account reserves ' + PLAID_TOKEN_RATE + ' tokens/month from your allocation at the next reset.' : ' (your tier does not include Plaid — upgrade to Starter or higher).') +
         '</div>';
       return;
     }
 
     var activeCount = keys.filter(function(k) { return items[k].status === 'active'; }).length;
-    var h = '<div style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:8px;">' +
-      activeCount + ' of ' + includedLimit + ' included banks used' +
-      (activeCount > includedLimit ? ' · <span style="color:#f59e0b;">' + (activeCount - includedLimit) + ' extra (' + ((activeCount - includedLimit) * 100) + ' tokens/month)</span>' : '') +
+    var reserved = activeCount * PLAID_TOKEN_RATE;
+    var capExceeded = activeCount > includedLimit;
+    var summary = activeCount + ' of ' + includedLimit + ' Plaid accounts connected';
+    if (alloc > 0) {
+      summary += ' · ' + reserved.toLocaleString() + ' of ' + alloc.toLocaleString() + ' tokens reserved for Plaid this month';
+    } else {
+      summary += ' · ' + reserved.toLocaleString() + ' tokens reserved for Plaid this month';
+    }
+    var h = '<div style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:8px;">' + summary +
+      (capExceeded ? ' · <span style="color:#f59e0b;">over cap by ' + (activeCount - includedLimit) + '</span>' : '') +
       '</div>';
 
     keys.forEach(function(itemId) {
@@ -35322,7 +35367,23 @@ function loadProductCustomerSignal(pid) {
 
     // Repurchase rate (90-day window) — mirrors get_sku_repurchase.
     var windowMs = 90 * 86400000;
-    var firstBuyAt = {}; // customerId -> ms
+    var firstBuyAt = {}; // customerId -> ms (first time this customer bought THIS product)
+    // W2.7: globalFirstOrderAt — earliest non-cancelled order date across ALL
+    // products for each customer. Compared to firstBuyAt to classify each
+    // buyer as "first-time" (this product was their entry-point order, i.e.
+    // the same timestamp) vs "returning" (they were already a customer when
+    // they bought this product). Resolves OPEN -OtEOewcRQe0bKazDHBq.
+    // Computed from ordersAll alone — no extra DB read needed; the canonical
+    // customer.stats.firstOrderAt is a denormalized copy of this same value.
+    var globalFirstOrderAt = {};
+    Object.values(ordersAll).forEach(function(o) {
+      if (!o || o.status === 'cancelled' || !o.customerId || !o.createdAt) return;
+      var t = new Date(o.createdAt).getTime();
+      if (isNaN(t)) return;
+      if (globalFirstOrderAt[o.customerId] == null || t < globalFirstOrderAt[o.customerId]) {
+        globalFirstOrderAt[o.customerId] = t;
+      }
+    });
     Object.values(ordersAll).forEach(function(o) {
       if (!o || o.status === 'cancelled' || !o.customerId || !o.createdAt) return;
       if (!Array.isArray(o.items)) return;
@@ -35335,6 +35396,20 @@ function loadProductCustomerSignal(pid) {
     });
     var buyerIds = Object.keys(firstBuyAt);
     var totalBuyers = buyerIds.length;
+    // W2.7: split buyers. A buyer is "first-time" if their global earliest
+    // order timestamp equals their earliest order containing this product
+    // (i.e. this product was in their inaugural order). Tolerance of 0ms is
+    // fine — both values are computed from the same orders dataset.
+    var firstTimeBuyers = 0;
+    var returningBuyers = 0;
+    buyerIds.forEach(function(cid) {
+      var gFirst = globalFirstOrderAt[cid];
+      if (gFirst != null && firstBuyAt[cid] === gFirst) {
+        firstTimeBuyers += 1;
+      } else {
+        returningBuyers += 1;
+      }
+    });
     var repurchasedSet = {};
     var coPurchaseCounts = {};
     Object.values(ordersAll).forEach(function(o) {
@@ -35406,11 +35481,19 @@ function loadProductCustomerSignal(pid) {
         html += '<div style="font-size:0.78rem;color:var(--warm-gray-light);">No buyers yet</div>';
       }
       html += '</div>';
-      // Buyers block
+      // Buyers block — W2.7: new-vs-repeat split derived from
+      // globalFirstOrderAt vs firstBuyAt (no DB read; pure computation over
+      // the ordersAll set already loaded for repurchase math).
       html += '<div>';
       html += '<div style="font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.04em;">Buyers</div>';
       html += '<div style="font-size:1.15rem;font-weight:600;margin-top:2px;">' + esc(String(totalBuyers)) + '</div>';
-      html += '<div style="font-size:0.78rem;color:var(--warm-gray);">unique customers</div>';
+      if (totalBuyers > 0) {
+        html += '<div style="font-size:0.78rem;color:var(--warm-gray);">' +
+          esc(String(firstTimeBuyers)) + ' first-time &middot; ' +
+          esc(String(returningBuyers)) + ' returning</div>';
+      } else {
+        html += '<div style="font-size:0.78rem;color:var(--warm-gray);">unique customers</div>';
+      }
       html += '</div>';
 
       // Devon B: Returns block — count + rate (returns / orders-with-SKU).
