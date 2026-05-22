@@ -30911,6 +30911,18 @@ function renderProducts() {
   }
   var statusFilter = window.productsStatusFilter;
 
+  // W1.2: eagerly kick off the shared sales-map load on first paint so
+  // the demand chips (No demand 90d / Trending up) become discoverable
+  // even on tenants with no stock alerts. Subsequent renders are a no-op
+  // because the map is cached.
+  if (!window._mastProductSalesMap && !window._mastProductSalesMapLoading) {
+    window._mastProductSalesMapLoading = true;
+    _ensureProductSalesMap(function() {
+      window._mastProductSalesMapLoading = false;
+      renderProducts();
+    });
+  }
+
   // URL-driven filters from MCP admin links: status, category, dateFrom,
   // dateTo, productIds (#products?...). When any URL filter is present it
   // overrides pill state for this render — the orange banner surfaces it
@@ -31005,6 +31017,21 @@ function renderProducts() {
     // W1.6: when the "unnamed products" notice is clicked, restrict the list
     // to products with missing/empty `name`. AND-composed with other filters.
     if (window.productsUnnamedOnly === true && (p.name && String(p.name).trim() !== '')) return false;
+    // W1.2: demand-based filters. Use the shared productSales map (or
+    // skip the row if the map isn't loaded yet — chips render with "?"
+    // counts until data arrives, then a re-render fires).
+    if (window.productsDemandFilter) {
+      var _salesMap = window._mastProductSalesMap;
+      if (!_salesMap) return false; // pending load, don't show stale matches
+      var _ps = _salesMap[p.pid] || { last30: 0, last90: 0, prior60of30: 0 };
+      if (window.productsDemandFilter === 'noDemand90d' && _ps.last90 !== 0) return false;
+      if (window.productsDemandFilter === 'trendingUp') {
+        // 30d sold > 30d-prior-30d sold (per spec). prior60of30 covers
+        // days 31–90, so the comparable prior 30d is prior60of30 / 2.
+        var _prior30 = _ps.prior60of30 / 2;
+        if (!(_ps.last30 > _prior30 && _ps.last30 > 0)) return false;
+      }
+    }
     return true;
   });
 
@@ -31219,7 +31246,11 @@ function renderProducts() {
   // status filters so the user sees what they'll actually get.
   var summaryBar = document.getElementById('inventorySummaryBar');
   if (summaryBar) {
-    var allCount = 0, lowCount = 0, outCount = 0;
+    var allCount = 0, lowCount = 0, outCount = 0, noDemandCount = 0, trendingUpCount = 0;
+    // W1.2: shared sales map. May be null on first paint — chips show
+    // "?" counts until _ensureProductSalesMap resolves.
+    var _salesMapForCounts = window._mastProductSalesMap;
+    var _salesReady = !!_salesMapForCounts;
     productsData.forEach(function(p) {
       if (!_matchesFilter(p, statusFilter)) return;
       if (cat !== 'all' && (!p.categories || p.categories.indexOf(cat) === -1)) return;
@@ -31227,11 +31258,21 @@ function renderProducts() {
       var b = _stockBucket(p);
       if (b === 'low') lowCount++;
       else if (b === 'out') outCount++;
+      if (_salesReady) {
+        var ps = _salesMapForCounts[p.pid] || { last30: 0, last90: 0, prior60of30: 0 };
+        if (ps.last90 === 0) noDemandCount++;
+        var prior30 = ps.prior60of30 / 2;
+        if (ps.last30 > prior30 && ps.last30 > 0) trendingUpCount++;
+      }
     });
-    // Hide entirely when there's nothing to track (no low/out across the
-    // current view) AND filter isn't already set to a stock slice.
+    var demandFilter = window.productsDemandFilter || null;
+    // Hide entirely when there's truly nothing to track: no stock alerts,
+    // no demand signals (or data not yet loaded), no active filters.
+    // Otherwise show — the demand chips need to be discoverable if a
+    // tenant has dead SKUs (noDemandCount > 0) or upward movers.
     var hasInventoryAlerts = lowCount > 0 || outCount > 0;
-    if (!hasInventoryAlerts && stockFilter === 'all') {
+    var hasDemandSignal = _salesReady && (noDemandCount > 0 || trendingUpCount > 0);
+    if (!hasInventoryAlerts && !hasDemandSignal && stockFilter === 'all' && !demandFilter) {
       summaryBar.style.display = 'none';
     } else {
       summaryBar.style.display = '';
@@ -31245,10 +31286,33 @@ function renderProducts() {
           ';font-size:0.85rem;cursor:pointer;font-weight:' + (active ? '600' : '500') + ';margin-right:6px;font-family:\'DM Sans\',sans-serif;">' +
           label + ' <span style="opacity:0.7;font-weight:400;">(' + n + ')</span></button>';
       }
+      // W1.2: demand chips. Click cycles same-key off; clicking a
+      // different key switches. Counts show "?" until the shared sales
+      // map loads (kicked off below via _ensureProductSalesMap).
+      function demandPill(value, label, n, alertColor) {
+        var active = demandFilter === value;
+        var nextValue = active ? '' : value;
+        var bg = active ? 'rgba(42,124,111,0.15)' : 'transparent';
+        var fg = active ? 'var(--teal)' : (alertColor || 'var(--text)');
+        var bd = active ? 'var(--teal)' : 'var(--cream-dark)';
+        var countTxt = _salesReady ? String(n) : '?';
+        return '<button onclick="setProductsDemandFilter(\'' + nextValue + '\')" ' +
+          'style="padding:6px 14px;border:1px solid ' + bd + ';border-radius:16px;background:' + bg + ';color:' + fg +
+          ';font-size:0.85rem;cursor:pointer;font-weight:' + (active ? '600' : '500') + ';margin-right:6px;font-family:\'DM Sans\',sans-serif;">' +
+          label + ' <span style="opacity:0.7;font-weight:400;">(' + countTxt + ')</span></button>';
+      }
       summaryBar.innerHTML =
         stockPill('all', 'All products', allCount) +
         stockPill('low', 'Low stock',    lowCount, 'var(--amber-light)') +
-        stockPill('out', 'Out of stock', outCount, 'var(--danger)');
+        stockPill('out', 'Out of stock', outCount, 'var(--danger)') +
+        '<span style="display:inline-block;width:1px;height:18px;background:var(--cream-dark,#e8e0d4);margin:0 4px 0 2px;vertical-align:middle;"></span>' +
+        demandPill('noDemand90d', 'No demand 90d', noDemandCount, 'var(--warm-gray)') +
+        demandPill('trendingUp',  'Trending up',   trendingUpCount, 'var(--teal)');
+      // Kick off sales-map load if not yet loaded. Re-renders once data
+      // arrives so chip counts move from "?" to real numbers.
+      if (!_salesReady && typeof _ensureProductSalesMap === 'function') {
+        _ensureProductSalesMap(function() { renderProducts(); });
+      }
     }
   }
 }
@@ -31256,6 +31320,19 @@ function renderProducts() {
 function setProductsStockFilter(v) {
   window.productsStockFilter = (v === 'low' || v === 'out') ? v : 'all';
   renderProducts();
+}
+
+// W1.2: demand-based filter ("no demand 90d" or "trending up"). Reads
+// the shared productSales map (same data source as Forecast Demand
+// Overview). When clicked before the map has loaded, triggers a load
+// and re-renders once data arrives.
+function setProductsDemandFilter(v) {
+  window.productsDemandFilter = (v === 'noDemand90d' || v === 'trendingUp') ? v : null;
+  if (window.productsDemandFilter && !window._mastProductSalesMap) {
+    _ensureProductSalesMap(function() { renderProducts(); });
+  } else {
+    renderProducts();
+  }
 }
 
 // Drop URL-driven product filters (status, category, date range, productIds);
@@ -31450,6 +31527,64 @@ var forecastTimeHorizon = 'adaptive'; // 'adaptive' | '30d' | '90d' | 'all'
 var forecastDemandSort = { col: 'trending', asc: false };
 var forecastSlowExpanded = false;
 
+// W1.2: shared demand-data helpers. The same productSales map computed by
+// the Forecast Demand Overview is reused by the Products list filter
+// chips ("No demand 90d", "Trending up") so both surfaces stay in sync.
+function _buildProductSalesMap(orderMap) {
+  var now = Date.now();
+  var DAY_MS = 86400000;
+  var d30 = now - 30 * DAY_MS;
+  var d90 = now - 90 * DAY_MS;
+  var d150 = now - 150 * DAY_MS;
+  var productSales = {};
+  Object.keys(orderMap || {}).forEach(function(ordKey) {
+    var ord = orderMap[ordKey];
+    if (!ord || !ord.items || !ord.items.length) return;
+    var ts = new Date(ord.placedAt || ord.createdAt || '').getTime();
+    if (isNaN(ts)) return;
+    ord.items.forEach(function(item) {
+      if (!item.pid) return;
+      var qty = item.qty || 1;
+      if (!productSales[item.pid]) {
+        productSales[item.pid] = { last30: 0, last90: 0, prior60of30: 0, prior60of90: 0, lastOrdered: null, allTime: 0 };
+      }
+      var ps = productSales[item.pid];
+      ps.allTime += qty;
+      if (ts >= d90) ps.last90 += qty;
+      if (ts >= d30) ps.last30 += qty;
+      if (ts >= d90 && ts < d30) ps.prior60of30 += qty;
+      if (ts >= d150 && ts < d90) ps.prior60of90 += qty;
+      if (!ps.lastOrdered || (ord.placedAt || ord.createdAt) > ps.lastOrdered) {
+        ps.lastOrdered = ord.placedAt || ord.createdAt;
+      }
+    });
+  });
+  return productSales;
+}
+
+// Returns the current cached productSales map (or null if not yet loaded)
+// and triggers a load if missing. Callers should re-check after the
+// returned promise resolves. Cached on window._mastProductSalesMap so
+// repeated calls don't re-scan the order history.
+function _ensureProductSalesMap(cb) {
+  if (window._mastProductSalesMap) {
+    if (cb) cb(window._mastProductSalesMap);
+    return Promise.resolve(window._mastProductSalesMap);
+  }
+  if (forecastOrdersLoaded) {
+    window._mastProductSalesMap = _buildProductSalesMap(forecastOrders);
+    if (cb) cb(window._mastProductSalesMap);
+    return Promise.resolve(window._mastProductSalesMap);
+  }
+  return MastDB.orders.query().limitToLast(500).once('value').then(function(snap) {
+    forecastOrders = snap.val() || {};
+    forecastOrdersLoaded = true;
+    window._mastProductSalesMap = _buildProductSalesMap(forecastOrders);
+    if (cb) cb(window._mastProductSalesMap);
+    return window._mastProductSalesMap;
+  }).catch(function() { if (cb) cb(null); return null; });
+}
+
 function loadAndRenderForecast() {
   // Ensure products and inventory are loaded
   if (!productsLoaded) loadProducts();
@@ -31471,39 +31606,11 @@ function loadAndRenderForecast() {
 function computeAndRenderForecast() {
   if (!productsLoaded || !forecastOrdersLoaded) return;
 
-  var now = Date.now();
-  var DAY_MS = 86400000;
-  var d30 = now - 30 * DAY_MS;
-  var d90 = now - 90 * DAY_MS;
-  var d150 = now - 150 * DAY_MS; // 90d window + 60d prior
-
-  // Build per-product order tallies from forecastOrders
-  var productSales = {}; // pid → { last30: qty, last90: qty, prior60of30: qty, prior60of90: qty, lastOrdered: ISO, allTime: qty }
-
-  Object.keys(forecastOrders).forEach(function(ordKey) {
-    var ord = forecastOrders[ordKey];
-    if (!ord.items || !ord.items.length) return;
-    var ts = new Date(ord.placedAt || ord.createdAt || '').getTime();
-    if (isNaN(ts)) return;
-    ord.items.forEach(function(item) {
-      if (!item.pid) return;
-      var qty = item.qty || 1;
-      if (!productSales[item.pid]) {
-        productSales[item.pid] = { last30: 0, last90: 0, prior60of30: 0, prior60of90: 0, lastOrdered: null, allTime: 0 };
-      }
-      var ps = productSales[item.pid];
-      ps.allTime += qty;
-      if (ts >= d90) { ps.last90 += qty; }
-      if (ts >= d30) { ps.last30 += qty; }
-      // Prior 60d for 30d window: days 31-90
-      if (ts >= d90 && ts < d30) { ps.prior60of30 += qty; }
-      // Prior 60d for 90d window: days 91-150
-      if (ts >= d150 && ts < d90) { ps.prior60of90 += qty; }
-      if (!ps.lastOrdered || (ord.placedAt || ord.createdAt) > ps.lastOrdered) {
-        ps.lastOrdered = ord.placedAt || ord.createdAt;
-      }
-    });
-  });
+  // W1.2: single source of truth — same map the Products-list filter
+  // chips read. _buildProductSalesMap was extracted from this loop and
+  // produces identical output, so behavior is unchanged.
+  var productSales = _buildProductSalesMap(forecastOrders);
+  window._mastProductSalesMap = productSales;
 
   // Build forecast per production product
   var forecasts = [];
