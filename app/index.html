@@ -33273,9 +33273,30 @@ var invHistoryPid = null;
 // Build 6c — Customer Signal card. Mirrors server-side cs_get_product_signal
 // + get_sku_repurchase. Computes client-side from cs_reviews, cs_tickets,
 // and orders. Renders into #pdCustomerSignal after the product detail loads.
+//
+// Perf — cached per pid with a 5-minute TTL. Each load fans out to ~3,500
+// Firestore docs (cs_reviews 500 + cs_tickets 500 + orders 2000 + admin/rma 500);
+// without caching, every tab click on the product detail re-fired the load.
+// Cache is invalidated by explicit reload (e.g. after a review/ticket update)
+// via window.invalidateProductCustomerSignal(pid) or just .clear() for all.
+window._pdCustomerSignalCache = window._pdCustomerSignalCache || Object.create(null);
+window._pdCustomerSignalCacheTTLms = 5 * 60 * 1000;
+window.invalidateProductCustomerSignal = function(pid) {
+  if (pid) delete window._pdCustomerSignalCache[pid];
+  else window._pdCustomerSignalCache = Object.create(null);
+};
+
 function loadProductCustomerSignal(pid) {
   var el = document.getElementById('pdCustomerSignal');
   if (!el || el.dataset.pid !== pid) return;
+
+  // Serve from cache if fresh — avoids re-fetching on every tab click.
+  var cached = window._pdCustomerSignalCache[pid];
+  if (cached && (Date.now() - cached.cachedAt) < window._pdCustomerSignalCacheTTLms && cached.html) {
+    el.innerHTML = cached.html;
+    return;
+  }
+
   el.innerHTML = '<div class="loading" style="padding:20px;color:var(--warm-gray);">Loading customer signal…</div>';
 
   Promise.all([
@@ -33490,10 +33511,14 @@ function loadProductCustomerSignal(pid) {
     }
     html += '</div>';
     freshEl.innerHTML = html;
+    // Cache the rendered HTML so subsequent tab-clicks on the same product
+    // serve from cache (5-min TTL) instead of re-fetching ~3,500 docs.
+    window._pdCustomerSignalCache[pid] = { html: html, cachedAt: Date.now() };
   }).catch(function(err) {
     var freshEl = document.getElementById('pdCustomerSignal');
     if (!freshEl || freshEl.dataset.pid !== pid) return;
     freshEl.innerHTML = '<div style="padding:20px;color:var(--danger);">Error loading customer signal: ' + esc(err && err.message || String(err)) + '</div>';
+    // Don't cache errors — let the next attempt retry.
   });
 }
 
