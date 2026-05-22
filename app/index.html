@@ -32812,8 +32812,18 @@ function _buildProductSalesMap(orderMap) {
   var now = Date.now();
   var DAY_MS = 86400000;
   var d30 = now - 30 * DAY_MS;
+  var d60 = now - 60 * DAY_MS;
   var d90 = now - 90 * DAY_MS;
   var d150 = now - 150 * DAY_MS;
+  var d180 = now - 180 * DAY_MS;
+  // W2.1: real prior-window buckets (prior30 = days 31-60, prior90 = days 91-180)
+  // for accurate Δ% on Demand Overview. Legacy prior60of30/prior60of90 fields
+  // remain populated so existing chip math (Products list "Trending up" at
+  // line ~32252, count-row at ~32486) keeps working — new code should read
+  // prior30 / prior90 directly. Revenue tracked in cents, per window, via
+  // item.priceCents (matches sales.js:307 pattern). hasPriceData flag lets
+  // the UI render "—" rather than misleading $0 when an order is missing
+  // priceCents (legacy seed data).
   var productSales = {};
   Object.keys(orderMap || {}).forEach(function(ordKey) {
     var ord = orderMap[ordKey];
@@ -32823,15 +32833,28 @@ function _buildProductSalesMap(orderMap) {
     ord.items.forEach(function(item) {
       if (!item.pid) return;
       var qty = item.qty || 1;
+      var lineCents = (typeof item.priceCents === 'number') ? (item.priceCents * qty) : 0;
       if (!productSales[item.pid]) {
-        productSales[item.pid] = { last30: 0, last90: 0, prior60of30: 0, prior60of90: 0, lastOrdered: null, allTime: 0 };
+        productSales[item.pid] = {
+          last30: 0, last90: 0, allTime: 0,
+          prior60of30: 0, prior60of90: 0,
+          prior30: 0, prior90: 0,
+          revenue30: 0, revenue90: 0, revenueAll: 0,
+          revenuePrior30: 0, revenuePrior90: 0,
+          hasPriceData: false,
+          lastOrdered: null
+        };
       }
       var ps = productSales[item.pid];
       ps.allTime += qty;
-      if (ts >= d90) ps.last90 += qty;
-      if (ts >= d30) ps.last30 += qty;
+      ps.revenueAll += lineCents;
+      if (lineCents > 0) ps.hasPriceData = true;
+      if (ts >= d90) { ps.last90 += qty; ps.revenue90 += lineCents; }
+      if (ts >= d30) { ps.last30 += qty; ps.revenue30 += lineCents; }
       if (ts >= d90 && ts < d30) ps.prior60of30 += qty;
       if (ts >= d150 && ts < d90) ps.prior60of90 += qty;
+      if (ts >= d60 && ts < d30) { ps.prior30 += qty; ps.revenuePrior30 += lineCents; }
+      if (ts >= d180 && ts < d90) { ps.prior90 += qty; ps.revenuePrior90 += lineCents; }
       if (!ps.lastOrdered || (ord.placedAt || ord.createdAt) > ps.lastOrdered) {
         ps.lastOrdered = ord.placedAt || ord.createdAt;
       }
@@ -32890,6 +32913,42 @@ function computeAndRenderForecast() {
   var productSales = _buildProductSalesMap(forecastOrders);
   window._mastProductSalesMap = productSales;
 
+  // W2.1: per-product unit-cost lookup from recipes (productId -> unitCost).
+  // recipesData is encapsulated in the maker module; we lazy-load a parallel
+  // cache here so Forecast can render Margin without requiring the user to
+  // visit Maker first. If the cache is missing, trigger a one-time load and
+  // re-fire computeAndRenderForecast on resolution. Subsequent renders use
+  // the cached map. Margin renders "—" for products with no active recipe.
+  if (!window._mastRecipeCostByProduct) {
+    if (!window._mastRecipeCostLoading) {
+      window._mastRecipeCostLoading = true;
+      MastDB.recipes.list(200).then(function(recipeMap) {
+        var costByProduct = {};
+        Object.keys(recipeMap || {}).forEach(function(rid) {
+          var r = recipeMap[rid];
+          if (!r || !r.productId || r.status === 'archived') return;
+          // First active recipe wins; in practice most products have one.
+          if (typeof costByProduct[r.productId] === 'undefined' && typeof r.unitCost === 'number') {
+            costByProduct[r.productId] = r.unitCost;
+          }
+        });
+        window._mastRecipeCostByProduct = costByProduct;
+        window._mastRecipeCostLoading = false;
+        computeAndRenderForecast();
+      }).catch(function() {
+        // Failed lookup — set empty map so Margin renders "—" instead of
+        // blocking the Forecast view forever.
+        window._mastRecipeCostByProduct = {};
+        window._mastRecipeCostLoading = false;
+        computeAndRenderForecast();
+      });
+    }
+    // Render-with-placeholder approach: continue rendering this pass; recipe
+    // costs will arrive on the next compute call. Margin column will show "—"
+    // on the first paint and update on the second.
+  }
+  var recipeCostByProduct = window._mastRecipeCostByProduct || {};
+
   // Build forecast per production product
   var forecasts = [];
   productsData.forEach(function(p) {
@@ -32899,7 +32958,15 @@ function computeAndRenderForecast() {
     var pid = p.pid;
     var inv = inventory[pid] || {};
     var stock = (inv.stock && inv.stock._default) ? (inv.stock._default.available || 0) : 0;
-    var ps = productSales[pid] || { last30: 0, last90: 0, prior60of30: 0, prior60of90: 0, lastOrdered: null, allTime: 0 };
+    var ps = productSales[pid] || {
+      last30: 0, last90: 0, allTime: 0,
+      prior60of30: 0, prior60of90: 0,
+      prior30: 0, prior90: 0,
+      revenue30: 0, revenue90: 0, revenueAll: 0,
+      revenuePrior30: 0, revenuePrior90: 0,
+      hasPriceData: false,
+      lastOrdered: null
+    };
 
     // Adaptive windowing: classify velocity
     var avgPerMonth90 = ps.last90 / 3;
@@ -32909,6 +32976,14 @@ function computeAndRenderForecast() {
     var recentSold = isFastMover ? ps.last30 : ps.last90;
     var priorAvgMonthly = isFastMover ? (ps.prior60of30 / 2) : (ps.prior60of90 / 2);
     var weeksCoverage = recentSold > 0 ? Math.round((stock / (recentSold / windowWeeks)) * 10) / 10 : (stock > 0 ? 999 : 0);
+
+    // W2.1: real prior-period counts per horizon (resolves OPEN -OtEO_4RncYB1m7hCbiZ).
+    // prior30 = days 31-60, prior90 = days 91-180. allTime/adaptive horizons
+    // expose `priorPeriodSold` so the renderer can show "—" vs an Δ% chip.
+    var priorAdaptive = isFastMover ? ps.prior30 : ps.prior90;
+    var deltaPct30 = ps.prior30 > 0 ? ((ps.last30 - ps.prior30) / ps.prior30) * 100 : null;
+    var deltaPct90 = ps.prior90 > 0 ? ((ps.last90 - ps.prior90) / ps.prior90) * 100 : null;
+    var deltaPctAdaptive = isFastMover ? deltaPct30 : deltaPct90;
 
     // Trending detection
     var prior30Avg = ps.prior60of30 / 2; // avg per 30d from prior 60d
@@ -32932,6 +33007,16 @@ function computeAndRenderForecast() {
 
     // Monthly rate for display
     var monthlyRate = recentSold / (windowDays / 30);
+
+    // W2.1: Margin = revenue − units × current recipe unit cost.
+    // recipeUnitCost is the recipe's totalCost (per-unit). null if no active
+    // recipe — UI renders "—" for Margin in that case. Per W2 spec this is
+    // gross margin (current cost basis), NOT contribution margin — that's W3.
+    var recipeUnitCost = (typeof recipeCostByProduct[pid] === 'number') ? recipeCostByProduct[pid] : null;
+    function _marginCents(revCents, units) {
+      if (recipeUnitCost === null) return null;
+      return revCents - Math.round(units * recipeUnitCost * 100);
+    }
 
     forecasts.push({
       pid: pid,
@@ -32957,7 +33042,27 @@ function computeAndRenderForecast() {
       isFastMover: isFastMover,
       // Raw data for time horizon override display
       last30: ps.last30,
-      last90: ps.last90
+      last90: ps.last90,
+      // W2.1: prior-period counts (real, not normalized)
+      prior30: ps.prior30,
+      prior90: ps.prior90,
+      priorAdaptive: priorAdaptive,
+      // W2.1: per-horizon Δ% (null when prior=0 → UI renders "—")
+      deltaPct30: deltaPct30,
+      deltaPct90: deltaPct90,
+      deltaPctAdaptive: deltaPctAdaptive,
+      // W2.1: revenue in cents, per horizon
+      revenue30Cents: ps.revenue30,
+      revenue90Cents: ps.revenue90,
+      revenueAllCents: ps.revenueAll,
+      revenuePrior30Cents: ps.revenuePrior30,
+      revenuePrior90Cents: ps.revenuePrior90,
+      hasPriceData: ps.hasPriceData,
+      // W2.1: margin in cents per horizon; null if no recipe
+      recipeUnitCost: recipeUnitCost,
+      margin30Cents: _marginCents(ps.revenue30, ps.last30),
+      margin90Cents: _marginCents(ps.revenue90, ps.last90),
+      marginAllCents: _marginCents(ps.revenueAll, ps.allTime)
     });
   });
 
@@ -33238,18 +33343,66 @@ function renderForecastDemandTable(targetId) {
   // Filter: production products with at least 1 all-time order
   var rows = forecastData.filter(function(f) { return f.allTimeSold > 0; });
 
+  // W2.1: per-horizon accessors so sort, render, and headers all read from
+  // the same source of truth. 'all' has no prior window — sold/revenue/margin
+  // still resolve, but prior + Δ% render "—".
+  var horizon = forecastTimeHorizon;
+  function _soldFor(f) {
+    return horizon === '30d' ? f.last30
+      : horizon === '90d' ? f.last90
+      : horizon === 'all' ? f.allTimeSold
+      : f.recentSold;
+  }
+  function _priorFor(f) {
+    if (horizon === '30d') return f.prior30;
+    if (horizon === '90d') return f.prior90;
+    if (horizon === 'all') return null;
+    return f.priorAdaptive;
+  }
+  function _deltaFor(f) {
+    if (horizon === '30d') return f.deltaPct30;
+    if (horizon === '90d') return f.deltaPct90;
+    if (horizon === 'all') return null;
+    return f.deltaPctAdaptive;
+  }
+  function _revenueCentsFor(f) {
+    if (horizon === '30d') return f.revenue30Cents;
+    if (horizon === '90d') return f.revenue90Cents;
+    if (horizon === 'all') return f.revenueAllCents;
+    return f.isFastMover ? f.revenue30Cents : f.revenue90Cents;
+  }
+  function _marginCentsFor(f) {
+    if (horizon === '30d') return f.margin30Cents;
+    if (horizon === '90d') return f.margin90Cents;
+    if (horizon === 'all') return f.marginAllCents;
+    return f.isFastMover ? f.margin30Cents : f.margin90Cents;
+  }
+
   // Sort
   rows.sort(function(a, b) {
     var col = forecastDemandSort.col;
     var dir = forecastDemandSort.asc ? 1 : -1;
     if (col === 'name') return dir * (a.name || '').localeCompare(b.name || '');
     if (col === 'stock') return dir * (a.stock - b.stock);
-    if (col === 'sold') {
-      var aVal = forecastTimeHorizon === '30d' ? a.last30 : forecastTimeHorizon === '90d' ? a.last90 : forecastTimeHorizon === 'all' ? a.allTimeSold : a.recentSold;
-      var bVal = forecastTimeHorizon === '30d' ? b.last30 : forecastTimeHorizon === '90d' ? b.last90 : forecastTimeHorizon === 'all' ? b.allTimeSold : b.recentSold;
-      return dir * (aVal - bVal);
+    if (col === 'sold') return dir * (_soldFor(a) - _soldFor(b));
+    if (col === 'prior') {
+      // null prior (e.g. 'all' horizon) sorts to the end regardless of direction
+      var aP = _priorFor(a), bP = _priorFor(b);
+      if (aP == null && bP == null) return 0;
+      if (aP == null) return 1;
+      if (bP == null) return -1;
+      return dir * (aP - bP);
     }
-    if (col === 'priorAvg') return dir * (a.priorAvgMonthly - b.priorAvgMonthly);
+    if (col === 'revenue') return dir * ((_revenueCentsFor(a) || 0) - (_revenueCentsFor(b) || 0));
+    if (col === 'margin') {
+      // No-recipe (null) rows sort to the end regardless of direction so the
+      // ranked actionable rows stay visible.
+      var aM = _marginCentsFor(a), bM = _marginCentsFor(b);
+      if (aM == null && bM == null) return 0;
+      if (aM == null) return 1;
+      if (bM == null) return -1;
+      return dir * (aM - bM);
+    }
     if (col === 'trending') {
       var aT = a.trending ? 2 : a.declining ? 0 : 1;
       var bT = b.trending ? 2 : b.declining ? 0 : 1;
@@ -33266,14 +33419,18 @@ function renderForecastDemandTable(targetId) {
     return forecastDemandSort.asc ? ' &#x25B2;' : ' &#x25BC;';
   };
 
-  var horizonLabel = forecastTimeHorizon === '30d' ? '30d' : forecastTimeHorizon === '90d' ? '90d' : forecastTimeHorizon === 'all' ? 'All' : 'Adaptive';
+  var horizonLabel = horizon === '30d' ? '30d' : horizon === '90d' ? '90d' : horizon === 'all' ? 'All' : 'Adaptive';
+  var priorLabel = horizon === '30d' ? 'Prior 30d'
+    : horizon === '90d' ? 'Prior 90d'
+    : horizon === 'all' ? 'Prior'
+    : 'Prior';
 
   var html = '<div style="display:flex;justify-content:space-between;align-items:center;margin:24px 0 12px 0;">' +
     '<h3 style="margin:0;font-size:1.15rem;">Demand Overview</h3>' +
     '<div style="display:flex;gap:4px;">' +
       ['adaptive','30d','90d','all'].map(function(h) {
         var label = h === 'adaptive' ? 'Adaptive' : h === 'all' ? 'All' : h;
-        var active = forecastTimeHorizon === h;
+        var active = horizon === h;
         return '<button class="btn ' + (active ? 'btn-primary' : 'btn-secondary') + '" style="font-size:0.72rem;padding:4px 10px;" onclick="setForecastHorizon(\'' + h + '\')">' + label + '</button>';
       }).join('') +
     '</div>' +
@@ -33284,16 +33441,36 @@ function renderForecastDemandTable(targetId) {
     '<thead><tr style="border-bottom:2px solid var(--cream-dark,#e8e0d4);text-align:left;">' +
       '<th style="padding:8px;cursor:pointer;white-space:nowrap;" onclick="sortForecastDemand(\'name\')">Product' + sortArrow('name') + '</th>' +
       '<th style="padding:8px;cursor:pointer;text-align:right;" onclick="sortForecastDemand(\'stock\')">In Stock' + sortArrow('stock') + '</th>' +
-      '<th style="padding:8px;cursor:pointer;text-align:right;" onclick="sortForecastDemand(\'sold\')">Sold (' + horizonLabel + ')' + sortArrow('sold') + '</th>' +
-      '<th style="padding:8px;cursor:pointer;text-align:right;" onclick="sortForecastDemand(\'priorAvg\')">Prior Avg/mo' + sortArrow('priorAvg') + '</th>' +
+      '<th style="padding:8px;cursor:pointer;text-align:right;white-space:nowrap;" onclick="sortForecastDemand(\'sold\')">Sold (' + horizonLabel + ')' + sortArrow('sold') + '</th>' +
+      '<th style="padding:8px;cursor:pointer;text-align:right;white-space:nowrap;" onclick="sortForecastDemand(\'prior\')">' + priorLabel + sortArrow('prior') + '</th>' +
+      '<th style="padding:8px;cursor:pointer;text-align:right;white-space:nowrap;" onclick="sortForecastDemand(\'revenue\')">Revenue' + sortArrow('revenue') + '</th>' +
+      '<th style="padding:8px;cursor:pointer;text-align:right;white-space:nowrap;" onclick="sortForecastDemand(\'margin\')">Margin' + sortArrow('margin') + '</th>' +
       '<th style="padding:8px;cursor:pointer;text-align:center;" onclick="sortForecastDemand(\'trending\')">Trending' + sortArrow('trending') + '</th>' +
       '<th style="padding:8px;cursor:pointer;text-align:center;" onclick="sortForecastDemand(\'type\')">Type' + sortArrow('type') + '</th>' +
       '<th style="padding:8px;cursor:pointer;" onclick="sortForecastDemand(\'lastOrdered\')">Last Ordered' + sortArrow('lastOrdered') + '</th>' +
     '</tr></thead><tbody>';
 
   rows.forEach(function(f) {
-    var soldVal = forecastTimeHorizon === '30d' ? f.last30 : forecastTimeHorizon === '90d' ? f.last90 : forecastTimeHorizon === 'all' ? f.allTimeSold : f.recentSold;
+    var soldVal = _soldFor(f);
+    var priorVal = _priorFor(f);
+    var deltaPct = _deltaFor(f);
+    var revCents = _revenueCentsFor(f);
+    var marCents = _marginCentsFor(f);
     var imgUrl = firstProductImage(f);
+
+    // W2.1: Δ% chip next to Sold cell. Threshold ±5% to avoid visual noise on
+    // single-unit swings. null prior → "—" (no comparison available).
+    var deltaChip = '';
+    if (deltaPct == null) {
+      deltaChip = '';
+    } else if (deltaPct >= 5) {
+      deltaChip = ' <span style="background:rgba(46,125,50,0.15);color:#4caf50;padding:1px 6px;border-radius:4px;font-size:0.72rem;font-weight:600;white-space:nowrap;">+' + Math.round(deltaPct) + '%</span>';
+    } else if (deltaPct <= -5) {
+      deltaChip = ' <span style="background:rgba(198,40,40,0.15);color:#ef5350;padding:1px 6px;border-radius:4px;font-size:0.72rem;font-weight:600;white-space:nowrap;">' + Math.round(deltaPct) + '%</span>';
+    } else {
+      deltaChip = ' <span style="color:var(--warm-gray);font-size:0.72rem;">' + (deltaPct >= 0 ? '+' : '') + Math.round(deltaPct) + '%</span>';
+    }
+
     var trendBadge = f.trending
       ? '<span style="background:rgba(46,125,50,0.15);color:#4caf50;padding:2px 8px;border-radius:4px;font-size:0.72rem;font-weight:600;">&#x2191;</span>'
       : f.declining
@@ -33302,6 +33479,16 @@ function renderForecastDemandTable(targetId) {
     var typeBadge = f.isStocked
       ? '<span style="background:rgba(46,125,50,0.15);color:#4caf50;padding:2px 8px;border-radius:4px;font-size:0.72rem;">Stocked</span>'
       : '<span style="background:rgba(21,101,192,0.15);color:#42a5f5;padding:2px 8px;border-radius:4px;font-size:0.72rem;">MTO</span>';
+
+    var priorCell = (priorVal == null) ? '<span style="color:var(--warm-gray);">&mdash;</span>' : priorVal;
+    // W2.1: Revenue cell shows "—" when no order in this product had
+    // priceCents (legacy seed) — revenue would be a misleading $0.
+    var revCell = (!f.hasPriceData && (revCents == null || revCents === 0))
+      ? '<span style="color:var(--warm-gray);">&mdash;</span>'
+      : _fmtMoneyFromCents(revCents);
+    var marCell = (marCents == null)
+      ? '<span style="color:var(--warm-gray);" title="No active recipe — margin not computable">&mdash;</span>'
+      : _fmtMoneyFromCents(marCents);
 
     // W1.8: row drills into the specific product, not back to the list.
     // Same viewProduct() flow as the W1.4 Forecast card links.
@@ -33313,8 +33500,10 @@ function renderForecastDemandTable(targetId) {
         '</div>' +
       '</td>' +
       '<td style="padding:8px;text-align:right;">' + f.stock + '</td>' +
-      '<td style="padding:8px;text-align:right;">' + soldVal + '</td>' +
-      '<td style="padding:8px;text-align:right;">' + (Math.round(f.priorAvgMonthly * 10) / 10) + '</td>' +
+      '<td style="padding:8px;text-align:right;white-space:nowrap;">' + soldVal + deltaChip + '</td>' +
+      '<td style="padding:8px;text-align:right;">' + priorCell + '</td>' +
+      '<td style="padding:8px;text-align:right;white-space:nowrap;">' + revCell + '</td>' +
+      '<td style="padding:8px;text-align:right;white-space:nowrap;">' + marCell + '</td>' +
       '<td style="padding:8px;text-align:center;">' + trendBadge + '</td>' +
       '<td style="padding:8px;text-align:center;">' + typeBadge + '</td>' +
       '<td style="padding:8px;">' + (f.lastOrdered ? (typeof formatOrderDate === 'function' ? formatOrderDate(f.lastOrdered) : (typeof window.formatOrderDate === 'function' ? window.formatOrderDate(f.lastOrdered) : esc(String(f.lastOrdered).slice(0, 10)))) : '<span style="color:var(--warm-gray);font-style:italic;">Never</span>') + '</td>' +
