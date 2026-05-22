@@ -33531,8 +33531,10 @@ function loadProductCustomerSignal(pid) {
 }
 
 // Click handler for the Customer Signal collapsible header. Expanded ⇄ collapsed
-// state lives on the wrapper's data-expanded attribute; chevron + aria-expanded
-// mirror the state. On expand, fire loadProductCustomerSignal if content empty.
+// state is persisted to window._pdCustomerSignalExpanded so subsequent
+// product-detail re-renders (e.g. on tab clicks) respect the user's last
+// intent rather than auto-expanding based on cache presence. On expand, fire
+// loadProductCustomerSignal if content empty.
 window.toggleProductCustomerSignal = function(pid) {
   var wrapper = document.getElementById('pdCustomerSignal');
   if (!wrapper || wrapper.dataset.pid !== pid) return;
@@ -33540,18 +33542,20 @@ window.toggleProductCustomerSignal = function(pid) {
   var chevron = document.getElementById('pdCustomerSignalChevron');
   var header = wrapper.querySelector('[role="button"][aria-label="Toggle customer signal"]');
   var expanded = wrapper.dataset.expanded === 'true';
+  window._pdCustomerSignalExpanded = window._pdCustomerSignalExpanded || Object.create(null);
 
   if (expanded) {
     if (contentEl) contentEl.style.display = 'none';
-    if (chevron) chevron.innerHTML = '▸'; // ▸
+    if (chevron) chevron.innerHTML = '▸';
     wrapper.dataset.expanded = 'false';
     if (header) header.setAttribute('aria-expanded', 'false');
+    window._pdCustomerSignalExpanded[pid] = false;
   } else {
     if (contentEl) contentEl.style.display = '';
-    if (chevron) chevron.innerHTML = '▾'; // ▾
+    if (chevron) chevron.innerHTML = '▾';
     wrapper.dataset.expanded = 'true';
     if (header) header.setAttribute('aria-expanded', 'true');
-    // Lazy-fetch on first expand for this pid in this session
+    window._pdCustomerSignalExpanded[pid] = true;
     if (contentEl && !contentEl.innerHTML.trim()) {
       loadProductCustomerSignal(pid);
     }
@@ -38970,33 +38974,35 @@ function renderProductDetail(pid) {
   // cs_get_product_signal + get_sku_repurchase tools. Renders only on
   // existing products (skip during create).
   // Customer Signal is on-demand — the underlying load fans out to ~3,500
-  // Firestore docs (cs_reviews + cs_tickets + orders + admin/rma). Auto-loading
-  // it on every product detail render was expensive AND re-fired on every
-  // tab click. Now: render a collapsible header row; clicking the header
-  // expands the card and fires the load (cached for 5min so repeat-clicks
-  // are instant). Tab clicks re-render with the cached state preserved so
-  // there's no flash for already-expanded cards.
+  // Firestore docs (cs_reviews + cs_tickets + orders + admin/rma). The card is
+  // a collapse/expand toggle; expansion state is tracked per-pid in
+  // _pdCustomerSignalExpanded (USER INTENT — not cache presence) so tab clicks
+  // re-render with whatever state the user last set. Defaults to collapsed.
+  window._pdCustomerSignalExpanded = window._pdCustomerSignalExpanded || Object.create(null);
+  var isExpanded = window._pdCustomerSignalExpanded[pid] === true;
   var hasCachedSignal = !!(window._pdCustomerSignalCache && window._pdCustomerSignalCache[pid]);
-  var expandedAttr = hasCachedSignal ? ' data-expanded="true"' : ' data-expanded="false"';
-  var chevronInitial = hasCachedSignal ? '&#9662;' : '&#9656;'; // ▾ vs ▸
-  var contentInitial = hasCachedSignal ? window._pdCustomerSignalCache[pid].html : '';
+  var expandedAttr = isExpanded ? ' data-expanded="true"' : ' data-expanded="false"';
+  var chevronInitial = isExpanded ? '&#9662;' : '&#9656;'; // ▾ vs ▸
+  // If user wants it expanded AND we have cache, inline the content (no flash).
+  // If expanded but no cache yet, content stays empty — toggle fn fetches on render.
+  var contentInitial = (isExpanded && hasCachedSignal) ? window._pdCustomerSignalCache[pid].html : '';
   var customerSignalHtml = (!isCreate && pid && !isEditing)
     ? '<div id="pdCustomerSignal" data-pid="' + esc(pid) + '"' + expandedAttr + ' style="padding:16px 0;">' +
-        '<div onclick="toggleProductCustomerSignal(\'' + esc(pid) + '\')" role="button" tabindex="0" aria-expanded="' + (hasCachedSignal ? 'true' : 'false') + '" aria-label="Toggle customer signal" style="border:1px solid var(--border,#e5e0d8);border-radius:8px;padding:14px 18px;display:flex;align-items:center;justify-content:space-between;gap:16px;background:var(--surface-card,#fff);cursor:pointer;user-select:none;">' +
+        '<div onclick="toggleProductCustomerSignal(\'' + esc(pid) + '\')" role="button" tabindex="0" aria-expanded="' + (isExpanded ? 'true' : 'false') + '" aria-label="Toggle customer signal" style="border:1px solid var(--border,#e5e0d8);border-radius:8px;padding:14px 18px;display:flex;align-items:center;justify-content:space-between;gap:16px;background:var(--surface-card,#fff);cursor:pointer;user-select:none;">' +
           '<div>' +
             '<div style="font-size:0.85rem;font-weight:600;color:var(--charcoal,var(--text));text-transform:uppercase;letter-spacing:0.04em;">Customer Signal</div>' +
             '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:4px;">Reviews, repurchase rate, return reasons, and often-bought-together &mdash; per this product.</div>' +
           '</div>' +
           '<span id="pdCustomerSignalChevron" aria-hidden="true" style="font-size:1.0rem;color:var(--warm-gray);flex-shrink:0;transition:transform 0.15s;">' + chevronInitial + '</span>' +
         '</div>' +
-        '<div id="pdCustomerSignalContent" style="' + (hasCachedSignal ? '' : 'display:none;') + '">' + contentInitial + '</div>' +
+        '<div id="pdCustomerSignalContent" style="' + (isExpanded ? '' : 'display:none;') + '">' + contentInitial + '</div>' +
       '</div>'
     : '';
   el.innerHTML = '<button class="detail-back" onclick="backToProducts()">&larr; ' + backLabel + '</button>' +
     publishUndoHtml + driftAlertHtml + recipeReadyHtml + headerHtml + versionLinkBannerHtml + revisionBannerHtml + archivedBannerHtml + tabBarHtml + detailsHtml + variantsHtml + imagesHtml + prodHtml + invTabHtml + customerSignalHtml + actionHtml;
-  // No auto-load on render — cached content already inlined above when present,
-  // and uncached state stays collapsed until user clicks the header.
-  if (false && customerSignalHtml && window._pdCustomerSignalCache && window._pdCustomerSignalCache[pid]) {
+  // Edge case: user wants it expanded (tracked above), but cache expired
+  // or got cleared between renders → kick off a fresh load to populate.
+  if (customerSignalHtml && isExpanded && !contentInitial) {
     loadProductCustomerSignal(pid);
   }
 
