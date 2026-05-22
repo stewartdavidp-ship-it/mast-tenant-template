@@ -12592,6 +12592,35 @@ async function removeRouteFromMast(routeId, context) {
 }
 window.removeRouteFromMast = removeRouteFromMast;
 
+// Reset all per-route overrides — restores the sidebar to whatever the
+// tenant's modeSet (their onboarding-selected modes) prescribes. Does NOT
+// change the modeSet itself; that lives in Settings → Change my business
+// setup. Always-on routes are unaffected (they're always-on).
+async function resetModeOverridesToDefaults(context) {
+  context = context || 'reset_from_mast_page';
+  try {
+    var current = _modeOverridesSnapshot || { enabledRoutes: [], disabledRoutes: [] };
+    var hadAny = (Array.isArray(current.enabledRoutes) && current.enabledRoutes.length > 0) ||
+                 (Array.isArray(current.disabledRoutes) && current.disabledRoutes.length > 0);
+    if (!hadAny) {
+      return { success: true, alreadyDefault: true, clearedCount: 0 };
+    }
+    var clearedCount = (current.enabledRoutes || []).length + (current.disabledRoutes || []).length;
+    var nextOverrides = { enabledRoutes: [], disabledRoutes: [] };
+    if (window.MastDB && window.MastDB.businessEntity) {
+      await window.MastDB.businessEntity.update('modeOverrides', nextOverrides);
+    }
+    _modeOverridesSnapshot = nextOverrides;
+    console.log('[modes] resetModeOverridesToDefaults cleared ' + clearedCount + ' override(s) (context: ' + context + ')');
+    applyModeNavFilter();
+    return { success: true, alreadyDefault: false, clearedCount: clearedCount };
+  } catch (err) {
+    console.warn('[modes] resetModeOverridesToDefaults failed:', err && err.message);
+    return { success: false, error: err && err.message };
+  }
+}
+window.resetModeOverridesToDefaults = resetModeOverridesToDefaults;
+
 // M3 (Idea -OtADygKA_JhRmk1wUqN): Add-to-Mast page — central unlock surface
 // for all soft-hidden modules. Cards grouped by sidebar section, one click
 // per module to enable.
@@ -12972,8 +13001,20 @@ async function renderAddToMast() {
           '<strong>' + hiddenCount + '</strong> available to add' +
           (alwaysOnCount > 0 ? ' &middot; <strong>' + alwaysOnCount + '</strong> always on' : '') + '.';
   html += '</div></div>';
-  if (hiddenCount > 0) {
-    html += '<button class="btn btn-primary" onclick="addAllToMastClick()" aria-label="Add all ' + hiddenCount + ' hidden modules to my Mast" style="flex-shrink:0;align-self:flex-start;">+ Add all (' + hiddenCount + ')</button>';
+  // Header buttons: "Reset to default" (only when overrides exist) + "+ Add all".
+  var ovr = _modeOverridesSnapshot || { enabledRoutes: [], disabledRoutes: [] };
+  var overrideCount = ((ovr.enabledRoutes || []).length) + ((ovr.disabledRoutes || []).length);
+  if (hiddenCount > 0 || overrideCount > 0) {
+    html += '<div style="display:flex;gap:8px;flex-shrink:0;align-self:flex-start;flex-wrap:wrap;">';
+    if (overrideCount > 0) {
+      html += '<button class="btn btn-secondary" onclick="resetModeOverridesClick()" ' +
+              'aria-label="Reset sidebar to default — undoes ' + overrideCount + ' override' + (overrideCount === 1 ? '' : 's') + '" ' +
+              'title="Restore your sidebar to what your business setup prescribes.">Reset to default</button>';
+    }
+    if (hiddenCount > 0) {
+      html += '<button class="btn btn-primary" onclick="addAllToMastClick()" aria-label="Add all ' + hiddenCount + ' hidden modules to my Mast">+ Add all (' + hiddenCount + ')</button>';
+    }
+    html += '</div>';
   }
   html += '</div>';
 
@@ -13173,6 +13214,51 @@ async function addAllToMastClick() {
   }
 }
 window.addAllToMastClick = addAllToMastClick;
+
+// Click handler — confirms then clears all per-route overrides. Significant
+// action (undoes everything the owner has manually added or hidden on this
+// tenant), so always behind a mastConfirm dialog.
+async function resetModeOverridesClick() {
+  var current = _modeOverridesSnapshot || { enabledRoutes: [], disabledRoutes: [] };
+  var addedCount   = (current.enabledRoutes || []).length;
+  var hiddenCount  = (current.disabledRoutes || []).length;
+  if (addedCount === 0 && hiddenCount === 0) {
+    if (typeof showToast === 'function') showToast('Your sidebar is already at the default.');
+    return;
+  }
+  var parts = [];
+  if (addedCount > 0)  parts.push(addedCount + ' added module' + (addedCount === 1 ? '' : 's'));
+  if (hiddenCount > 0) parts.push(hiddenCount + ' hidden module' + (hiddenCount === 1 ? '' : 's'));
+  var prompt = 'Reset to default? This undoes ' + parts.join(' and ') +
+               ', putting your sidebar back to what your business setup prescribes. ' +
+               'You can re-add or re-hide modules at any time.';
+  var ok;
+  if (typeof mastConfirm === 'function') {
+    ok = await mastConfirm(prompt, { title: 'Reset to default', confirmLabel: 'Reset to default' });
+  } else {
+    ok = window.confirm(prompt);
+  }
+  if (!ok) return;
+  try {
+    var result = await resetModeOverridesToDefaults('reset_from_mast_page');
+    if (result && result.success) {
+      if (typeof showToast === 'function') {
+        showToast(result.alreadyDefault
+          ? 'Your sidebar was already at the default.'
+          : 'Sidebar reset to default (' + result.clearedCount + ' override' + (result.clearedCount === 1 ? '' : 's') + ' cleared).');
+      }
+      renderAddToMast();
+    } else {
+      if (typeof showToast === 'function') {
+        showToast('Could not reset to default: ' + ((result && result.error) || 'unknown error'), true);
+      }
+    }
+  } catch (err) {
+    console.warn('[resetModeOverridesClick] failed:', err && err.message);
+    if (typeof showToast === 'function') showToast('Could not reset to default.', true);
+  }
+}
+window.resetModeOverridesClick = resetModeOverridesClick;
 
 // Bulk: add every soft-hidden module in a single section. Lower-friction than
 // "add all" — no confirm dialog (typical section is 4-8 modules, low blast
