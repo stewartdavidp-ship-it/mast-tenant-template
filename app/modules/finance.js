@@ -2858,6 +2858,187 @@ function portfolioFmtMoney(cents) {
   return sign + '$' + (Math.abs(cents) / 100).toFixed(2);
 }
 
+// Sam G — compute trailing N-month portfolio trend (client-side mirror of
+// the analytics_get_portfolio_trend MCP tool). Returns
+// { months: [{monthLabel, monthlyRevenueCents, top5SharePct, hhi, netContributionCents, activeCustomerCount}] }.
+function portfolioComputeTrend(ordersRaw, customersRaw, ticketsRaw, rmaRaw, c2s, monthsBack) {
+  var n = Math.max(1, Math.min(monthsBack || 12, 36));
+  var now = new Date();
+  var labels = [];
+  for (var i = n - 1; i >= 0; i--) {
+    var d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1));
+    labels.push(d.getUTCFullYear() + '-' + String(d.getUTCMonth() + 1).padStart(2, '0'));
+  }
+  var labelIdx = {};
+  labels.forEach(function(l, i) { labelIdx[l] = i; });
+
+  var revByCust = labels.map(function() { return {}; });
+  var activeSet = labels.map(function() { return {}; });
+
+  Object.keys(ordersRaw || {}).forEach(function(oid) {
+    var o = ordersRaw[oid];
+    if (!o || !o.createdAt) return;
+    if (o.status === 'cancelled' || o.status === 'refunded') return;
+    var mk = String(o.createdAt).slice(0, 7);
+    var idx = labelIdx[mk];
+    if (idx === undefined) return;
+    var cid = o.customerId || o.linkedCustomerId || null;
+    if (!cid) return;
+    var amt = typeof o.totalCents === 'number' ? o.totalCents : (typeof o.total === 'number' ? o.total : 0);
+    revByCust[idx][cid] = (revByCust[idx][cid] || 0) + amt;
+    activeSet[idx][cid] = true;
+  });
+
+  var ticketC = {}, returnC = {};
+  Object.values(ticketsRaw || {}).forEach(function(t) {
+    if (!t || !t.customerId) return;
+    ticketC[t.customerId] = (ticketC[t.customerId] || 0) + 1;
+  });
+  Object.values(rmaRaw || {}).forEach(function(r) {
+    if (!r || !r.customerId) return;
+    returnC[r.customerId] = (returnC[r.customerId] || 0) + 1;
+  });
+
+  var activeMonthsByCust = {};
+  for (var ii = 0; ii < n; ii++) {
+    Object.keys(activeSet[ii]).forEach(function(cid) {
+      activeMonthsByCust[cid] = (activeMonthsByCust[cid] || 0) + 1;
+    });
+  }
+
+  var marginPctByCust = {};
+  Object.keys(customersRaw || {}).forEach(function(cid) {
+    var cust = customersRaw[cid];
+    if (!cust) return;
+    var s = cust.stats || {};
+    var r = typeof s.trailing12mRevenueCents === 'number' ? s.trailing12mRevenueCents : 0;
+    var g = typeof s.trailing12mGrossMarginCents === 'number' ? s.trailing12mGrossMarginCents
+      : (typeof s.trailing12mCogsCents === 'number' ? r - s.trailing12mCogsCents : 0);
+    marginPctByCust[cid] = r > 0 ? g / r : null;
+  });
+
+  var months = labels.map(function(label, idx) {
+    var map = revByCust[idx];
+    var ranked = Object.keys(map).map(function(cid) { return { cid: cid, rev: map[cid] }; })
+      .sort(function(a, b) { return b.rev - a.rev; });
+    var total = ranked.reduce(function(s, r) { return s + r.rev; }, 0);
+    var top5 = ranked.slice(0, 5).reduce(function(s, r) { return s + r.rev; }, 0);
+    var top10 = ranked.slice(0, 10).reduce(function(s, r) { return s + r.rev; }, 0);
+    var hhi = 0;
+    if (total > 0) {
+      ranked.forEach(function(r) { var sh = r.rev / total; hhi += sh * sh; });
+      hhi = Math.round(hhi * 10000);
+    }
+    var netC = 0;
+    ranked.forEach(function(row) {
+      var mPct = marginPctByCust[row.cid];
+      var gm = mPct != null ? Math.round(row.rev * mPct) : 0;
+      var am = activeMonthsByCust[row.cid] || 1;
+      var totalC2s = (ticketC[row.cid] || 0) * c2s.perTicketCents
+        + (returnC[row.cid] || 0) * c2s.perReturnCents;
+      var monthlyC2s = Math.round(totalC2s / am);
+      netC += (gm - monthlyC2s);
+    });
+    return {
+      monthLabel: label,
+      monthlyRevenueCents: total,
+      top5SharePct: total > 0 ? Math.round((top5 / total) * 1000) / 1000 : 0,
+      top10SharePct: total > 0 ? Math.round((top10 / total) * 1000) / 1000 : 0,
+      hhi: hhi,
+      netContributionCents: netC,
+      activeCustomerCount: ranked.length
+    };
+  });
+
+  return { months: months, monthsWithRevenue: months.filter(function(m) { return m.monthlyRevenueCents > 0; }).length };
+}
+
+// Render an inline SVG sparkline. values are numbers; opts: {width, height, stroke, format, lo, hi}.
+function portfolioRenderSparkSvg(values, opts) {
+  var w = (opts && opts.width) || 200;
+  var h = (opts && opts.height) || 40;
+  var stroke = (opts && opts.stroke) || 'var(--teal)';
+  if (!values || values.length < 2) {
+    return '<svg width="' + w + '" height="' + h + '" role="img" aria-label="not enough data"></svg>';
+  }
+  var min = Math.min.apply(null, values);
+  var max = Math.max.apply(null, values);
+  if (min === max) { min -= 1; max += 1; }
+  var pad = 4;
+  var ih = h - pad * 2;
+  var iw = w - pad * 2;
+  var step = values.length > 1 ? iw / (values.length - 1) : 0;
+  var pts = values.map(function(v, i) {
+    var x = pad + i * step;
+    var y = pad + ih - ((v - min) / (max - min)) * ih;
+    return x.toFixed(1) + ',' + y.toFixed(1);
+  });
+  var lastX = pad + (values.length - 1) * step;
+  var lastY = pad + ih - ((values[values.length - 1] - min) / (max - min)) * ih;
+  var titleAttr = (opts && opts.title) ? '<title>' + opts.title + '</title>' : '';
+  return '<svg width="' + w + '" height="' + h + '" viewBox="0 0 ' + w + ' ' + h + '" role="img">' +
+    titleAttr +
+    '<polyline fill="none" stroke="' + stroke + '" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" points="' + pts.join(' ') + '"/>' +
+    '<circle cx="' + lastX.toFixed(1) + '" cy="' + lastY.toFixed(1) + '" r="2.5" fill="' + stroke + '"/>' +
+    '</svg>';
+}
+
+function portfolioFmtPct(v) { return (v * 100).toFixed(1) + '%'; }
+
+function portfolioRenderSparklines(trend) {
+  var months = trend.months || [];
+  if (trend.monthsWithRevenue < 3) {
+    return '<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--cream-dark);font-size:0.78rem;color:var(--warm-gray);">Need 3+ months of orders to show trend.</div>';
+  }
+
+  function buildCard(title, values, latest, prev, formatter, stroke) {
+    var sv = portfolioRenderSparkSvg(values, {
+      width: 200, height: 40, stroke: stroke,
+      title: months.map(function(m, i) { return m.monthLabel + ': ' + formatter(values[i]); }).join(' | ')
+    });
+    var dir = '→', dirColor = 'var(--warm-gray)';
+    if (prev != null && prev !== 0) {
+      var delta = ((latest - prev) / Math.abs(prev)) * 100;
+      if (delta > 1) { dir = '↑'; dirColor = '#7ddca0'; }
+      else if (delta < -1) { dir = '↓'; dirColor = '#f49aa3'; }
+      var deltaStr = (delta >= 0 ? '+' : '') + delta.toFixed(0) + '%';
+      dir = dir + ' ' + deltaStr;
+    }
+    var min = Math.min.apply(null, values);
+    var max = Math.max.apply(null, values);
+    return '<div style="min-width:200px;flex:1;">' +
+      '<div style="display:flex;justify-content:space-between;align-items:baseline;font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:4px;">' +
+        '<span>' + esc(title) + '</span>' +
+        '<span style="color:' + dirColor + ';text-transform:none;letter-spacing:0;">' + esc(dir) + '</span>' +
+      '</div>' +
+      '<div style="font-size:0.9rem;font-weight:600;color:var(--charcoal);margin-bottom:2px;">' + esc(formatter(latest)) + '</div>' +
+      sv +
+      '<div style="display:flex;justify-content:space-between;font-size:0.72rem;color:var(--warm-gray);margin-top:2px;">' +
+        '<span>' + esc(formatter(min)) + '</span>' +
+        '<span>' + esc(months[0].monthLabel) + ' → ' + esc(months[months.length - 1].monthLabel) + '</span>' +
+        '<span>' + esc(formatter(max)) + '</span>' +
+      '</div>' +
+    '</div>';
+  }
+
+  var top5Vals = months.map(function(m) { return m.top5SharePct; });
+  var hhiVals = months.map(function(m) { return m.hhi; });
+  var netVals = months.map(function(m) { return m.netContributionCents; });
+  var last = months.length - 1;
+  var prevIdx = last - 1;
+
+  var html = '';
+  html += '<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--cream-dark);">';
+  html += '<div style="font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:8px;">12-month trend</div>';
+  html += '<div style="display:flex;gap:20px;flex-wrap:wrap;">';
+  html += buildCard('Top-5 share', top5Vals, top5Vals[last], top5Vals[prevIdx], portfolioFmtPct, 'var(--teal)');
+  html += buildCard('HHI', hhiVals, hhiVals[last], hhiVals[prevIdx], function(v) { return String(Math.round(v)); }, 'var(--warm-gray)');
+  html += buildCard('Net contribution', netVals, netVals[last], netVals[prevIdx], portfolioFmtMoney, 'var(--charcoal)');
+  html += '</div>';
+  html += '</div>';
+  return html;
+}
+
 function renderCustomerPortfolio() {
   var el = document.getElementById('customerPortfolioContent');
   if (!el) return;
@@ -2870,12 +3051,15 @@ function renderCustomerPortfolio() {
       .then(function(s) { return (s && s.val()) || {}; }).catch(function() { return {}; }),
     MastDB.query('admin/rma').limitToLast(2000).once()
       .then(function(s) { return (s && s.val()) || {}; }).catch(function() { return {}; }),
-    MastDB.get('admin/config/customerSuccess/costToServeDefaults').catch(function() { return null; })
+    MastDB.get('admin/config/customerSuccess/costToServeDefaults').catch(function() { return null; }),
+    MastDB.query('orders').orderByChild('createdAt').limitToLast(5000).once()
+      .then(function(s) { return (s && s.val()) || {}; }).catch(function() { return {}; })
   ]).then(function(results) {
     var customersRaw = results[0] || {};
     var ticketsRaw = results[1] || {};
     var rmaRaw = results[2] || {};
     var c2s = Object.assign({}, CTS_DEFAULTS, results[3] || {});
+    var ordersRaw = results[4] || {};
 
     // Per-customer ticket / return counts
     var ticketCount = {}, returnCount = {};
@@ -2974,6 +3158,12 @@ function renderCustomerPortfolio() {
     if (top5.sharePct > 0.4) {
       html += '<div style="font-size:0.78rem;color:#f49aa3;margin-top:10px;">⚠ Top-5 customers exceed 40% of revenue. Concentration risk.</div>';
     }
+
+    // Sam G — 12-month portfolio trend sparklines (top-5 share / HHI / net contribution).
+    // Computed client-side from orders + customers + tickets + rma already loaded above.
+    var trend = portfolioComputeTrend(ordersRaw, customersRaw, ticketsRaw, rmaRaw, c2s, 12);
+    html += portfolioRenderSparklines(trend);
+
     html += '</div>';
 
     // Quadrant chips
