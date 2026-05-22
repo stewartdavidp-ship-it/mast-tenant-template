@@ -330,9 +330,14 @@
     var logoUrl = '';
 
     function upsertMeta(attrName, attrValue, contentValue) {
-      if (!contentValue) return;
       var sel = 'meta[' + attrName + '="' + attrValue + '"]';
       var el = document.head.querySelector(sel);
+      if (!contentValue) {
+        // No value to set — remove any pre-rendered placeholder so we don't
+        // ship empty `content=""` to crawlers (worse than no tag at all).
+        if (el && el.parentNode) el.parentNode.removeChild(el);
+        return;
+      }
       if (!el) {
         el = document.createElement('meta');
         el.setAttribute(attrName, attrValue);
@@ -341,14 +346,39 @@
       el.setAttribute('content', contentValue);
     }
 
+    // F3 — upsert <link rel="canonical"> on every public page. Strip query
+    // strings; preserve the path. Blog post page sets a more specific
+    // canonical of its own AFTER us (post.canonical || self with ?id=) — we
+    // do not overwrite a canonical that's already been pinned to a non-self
+    // URL by page code.
+    function upsertCanonical() {
+      try {
+        var href = window.location.origin + window.location.pathname;
+        var link = document.head.querySelector('link[rel="canonical"]');
+        if (link) {
+          var existing = link.getAttribute('href') || '';
+          // Honor explicit canonicals that point off-page (e.g. blog post
+          // with post.canonical override). Only overwrite if it's empty or
+          // points to a stale "My Shop" placeholder origin.
+          if (existing && existing !== href && existing.indexOf('?') === -1) return;
+        } else {
+          link = document.createElement('link');
+          link.setAttribute('rel', 'canonical');
+          document.head.appendChild(link);
+        }
+        link.setAttribute('href', href);
+      } catch (_e) {}
+    }
+
     function applyAll() {
       // Title: "{name} — {tagline}" if both, else just name
       var pageTitle = tagline ? (name + ' — ' + tagline) : name;
       // Honor page-specific titles (e.g. product detail) — only overwrite
       // the generic landing-style title, not titles that already contain a
-      // page-specific subject.
+      // page-specific subject. Also catch the new "Storefront" static default
+      // we ship in the HTML.
       var current = document.title || '';
-      if (!current || /My Shop/i.test(current) || current === name || current === pageTitle) {
+      if (!current || /My Shop/i.test(current) || /^Storefront$/i.test(current) || current === name || current === pageTitle) {
         document.title = pageTitle;
       }
 
@@ -362,12 +392,51 @@
       try {
         upsertMeta('property', 'og:url', window.location.origin + window.location.pathname);
       } catch (_e) {}
-      if (logoUrl) upsertMeta('property', 'og:image', logoUrl);
+      // F2 — only emit og:image / twitter:image when we have a real URL.
+      // upsertMeta now removes pre-existing tags when content is empty.
+      upsertMeta('property', 'og:image', logoUrl || '');
 
       upsertMeta('name', 'twitter:card', logoUrl ? 'summary_large_image' : 'summary');
       upsertMeta('name', 'twitter:title', pageTitle);
       upsertMeta('name', 'twitter:description', description);
-      if (logoUrl) upsertMeta('name', 'twitter:image', logoUrl);
+      upsertMeta('name', 'twitter:image', logoUrl || '');
+
+      upsertCanonical();
+    }
+
+    // F2 — resolve og:image through a fallback chain:
+    //   1. public/config/brand/logo/hero/url
+    //   2. public/config/brand/logo/primary/url
+    //   3. public/config/brand/heroImageUrl
+    //   4. first featured product image
+    // First non-empty wins. Null/empty everywhere → no og:image tag at all.
+    function resolveOgImage() {
+      var chain = [
+        MastDB.get('public/config/brand/logo/hero/url').catch(function() { return null; }),
+        MastDB.get('public/config/brand/logo/primary/url').catch(function() { return null; }),
+        MastDB.get('public/config/brand/heroImageUrl').catch(function() { return null; })
+      ];
+      return Promise.all(chain).then(function(vals) {
+        for (var i = 0; i < vals.length; i++) {
+          if (vals[i] && typeof vals[i] === 'string') return vals[i];
+        }
+        // Last resort: first featured product image. Tolerant of multiple
+        // schemas: products keyed by id with imageUrl|images[0].url|thumbnailUrl.
+        return MastDB.get('public/products').then(function(pm) {
+          if (!pm || typeof pm !== 'object') return null;
+          var keys = Object.keys(pm);
+          for (var k = 0; k < keys.length; k++) {
+            var p = pm[keys[k]];
+            if (!p || p.featured !== true) continue;
+            var url = p.imageUrl ||
+              (Array.isArray(p.images) && p.images[0] && (p.images[0].url || p.images[0])) ||
+              p.thumbnailUrl || null;
+            if (url) return url;
+          }
+          // No featured product image either — return null to omit the tag.
+          return null;
+        }).catch(function() { return null; });
+      });
     }
 
     // Try to enrich with voice + logo from Firestore, then apply. If
@@ -377,7 +446,7 @@
       Promise.all([
         MastDB.get('public/config/brand/tagline').catch(function() { return null; }),
         MastDB.get('public/config/brand/positioningOneLiner').catch(function() { return null; }),
-        MastDB.get('public/config/brand/logo/hero/url').catch(function() { return null; })
+        resolveOgImage()
       ]).then(function(vals) {
         if (vals[0]) tagline = vals[0];
         if (vals[1]) positioning = vals[1];
