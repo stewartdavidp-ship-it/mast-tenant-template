@@ -5768,6 +5768,7 @@
         <div class="sidebar-item" data-route="auditlog" onclick="navigateTo('auditlog')">Audit Log</div>
         <div class="sidebar-item" data-route="settings" onclick="navigateTo('settings')">Settings <span id="sidebarAlertBadge" class="sidebar-badge alert" style="display:none;"></span> <span id="settingsSandboxBadge" style="display:none;background:#f59e0b;color:#fff;font-size:0.72rem;padding:2px 6px;border-radius:4px;margin-left:4px;font-weight:700;vertical-align:middle;">SANDBOX</span></div>
         <div class="sidebar-item" data-route="subscription" onclick="navigateTo('subscription')">Subscription</div>
+        <div class="sidebar-item" data-route="coins" onclick="navigateTo('coins')">Coins</div>
         <div class="sidebar-item" data-route="about" onclick="navigateTo('about')">About</div>
         <div class="sidebar-item" data-route="email-log" onclick="navigateTo('email-log')">Email Log</div>
         <div class="sidebar-item" id="testingModeItem" onclick="toggleTestingMode()" style="display:none;">🧪 Testing Mode</div>
@@ -9732,9 +9733,21 @@
         <h2>Subscription</h2>
       </div>
       <div id="subscriptionBillingInfo" style="margin-bottom:24px;"></div>
-      <div id="subscriptionRevenueMeter" style="margin-bottom:24px;"></div>
-      <div id="subscriptionMonthlyBill" style="margin-bottom:24px;"></div>
-      <div id="subscriptionBillHistory" style="margin-bottom:24px;"></div>
+      <div id="subscriptionTierCard" style="margin-bottom:24px;"></div>
+      <div id="subscriptionUsageCard" style="margin-bottom:24px;"></div>
+      <div id="subscriptionRevenueCard" style="margin-bottom:24px;"></div>
+      <div id="subscriptionTierTable" style="margin-bottom:24px;"></div>
+      <div id="subscriptionManageBlock" style="margin-bottom:24px;"></div>
+    </div>
+
+    <!-- Coins tab (F-M1b) -->
+    <div id="coinsTab" style="display:none;">
+      <div class="section-header">
+        <h2>Coins</h2>
+      </div>
+      <div id="coinsBalanceCard" style="margin-bottom:24px;"></div>
+      <div id="coinsPackList" style="margin-bottom:24px;"></div>
+      <div id="coinsRecentList" style="margin-bottom:24px;"></div>
     </div>
 
     <!-- Admin: About Tab (standalone) -->
@@ -16537,6 +16550,7 @@ var ROUTE_MAP = {
   'business':    { tab: 'businessTab', setup: function() { if (typeof loadBusinessView === 'function') loadBusinessView(); } },
   'settings':    { tab: 'settingsTab', setup: function() { restoreSettingsGroupState(); applySettingsGating(); } },
   'subscription': { tab: 'subscriptionTab', setup: function() { renderSubscriptionSettings(); } },
+  'coins': { tab: 'coinsTab', setup: function() { renderCoinsTab(); } },
   'about':        { tab: 'aboutTab', setup: function() { renderAboutSettings(); } },
   // M3 (Idea -OtADygKA_JhRmk1wUqN): Add-to-Mast — central unlock surface for soft-hidden modules
   'add-to-mast':  { tab: 'addToMastTab', setup: function() { renderAddToMast(); } },
@@ -16650,7 +16664,7 @@ var ROUTE_ALIASES = {
   'consignment': 'galleries'
 };
 
-var ALL_TAB_IDS = ['inquiriesTab', 'scheduleTab', 'galleryTab', 'homepageTab', 'brandTab', 'productsTab', 'ordersTab', 'salesTab', 'salesEventsTab', 'productionTab', 'forecastTab', 'couponsTab', 'analyticsTab', 'settingsTab', 'imagesTab', 'auditLogTab', 'employeesTab', 'contactsTab', 'customersTab', 'packTab', 'shipTab', 'commissionsTab', 'rmaTab', 'socialMediaTab', 'blogTab', 'newsletterTab', 'placeholderTab', 'inventoryTab', 'storiesTab', 'dashboardTab', 'tripsTab', 'wholesaleTab', 'showTab', 'financialsTab', 'eventsAdminTab', 'websiteTab', 'showLightTab', 'emailLogTab', 'materialsTab', 'piecesTab', 'galleriesTab', 'lookbooksTab', 'promotionsTab', 'bookTab', 'subscriptionTab', 'aboutTab', 'walletTab', 'giftCardsTab', 'loyaltyTab', 'membershipTab', 'termsTab', 'advisorTab', 'studioTab', 'teamTab', 'studentsTab', 'migrationDashTab', 'migrationConfirmTab', 'migrationPlanTab', 'migrationImportTab', 'historicalOrdersTab', 'channelsTab', 'businessTab', 'myFeedbackTab', 'procurementTab', 'csInboxTab', 'csTicketsTab', 'csSurveysTab', 'csReviewsTab', 'csFaqsTab', 'csMembersTab', 'financeRevenueTab', 'financeExpensesTab', 'financePlTab', 'financeCashFlowTab', 'financeArTab', 'financeApTab', 'financeTaxTab', 'financeReportsTab', 'customerPortfolioTab',
+var ALL_TAB_IDS = ['inquiriesTab', 'scheduleTab', 'galleryTab', 'homepageTab', 'brandTab', 'productsTab', 'ordersTab', 'salesTab', 'salesEventsTab', 'productionTab', 'forecastTab', 'couponsTab', 'analyticsTab', 'settingsTab', 'imagesTab', 'auditLogTab', 'employeesTab', 'contactsTab', 'customersTab', 'packTab', 'shipTab', 'commissionsTab', 'rmaTab', 'socialMediaTab', 'blogTab', 'newsletterTab', 'placeholderTab', 'inventoryTab', 'storiesTab', 'dashboardTab', 'tripsTab', 'wholesaleTab', 'showTab', 'financialsTab', 'eventsAdminTab', 'websiteTab', 'showLightTab', 'emailLogTab', 'materialsTab', 'piecesTab', 'galleriesTab', 'lookbooksTab', 'promotionsTab', 'bookTab', 'subscriptionTab', 'coinsTab', 'aboutTab', 'walletTab', 'giftCardsTab', 'loyaltyTab', 'membershipTab', 'termsTab', 'advisorTab', 'studioTab', 'teamTab', 'studentsTab', 'migrationDashTab', 'migrationConfirmTab', 'migrationPlanTab', 'migrationImportTab', 'historicalOrdersTab', 'channelsTab', 'businessTab', 'myFeedbackTab', 'procurementTab', 'csInboxTab', 'csTicketsTab', 'csSurveysTab', 'csReviewsTab', 'csFaqsTab', 'csMembersTab', 'financeRevenueTab', 'financeExpensesTab', 'financePlTab', 'financeCashFlowTab', 'financeArTab', 'financeApTab', 'financeTaxTab', 'financeReportsTab', 'customerPortfolioTab',
 // M3 + M6 (Idea -OtADygKA_JhRmk1wUqN): Mast modes tabs — must be in this list
 // so applyRoute correctly hides them when navigating away.
 // W1.8: Sales by Product (PM/Operator doorway) — same reason.
@@ -20886,13 +20900,404 @@ var _subscriptionDetailsLoading = false;
 
 // Revenue-based pricing is the single path post-cutover. The feature-flag branch
 // and tier/module picker rendering were removed in Checkpoint 4b.
+// V1 pricing tier constants (mirrors functions/module-system.js DEFAULT_TIER_ALLOCATIONS
+// and the seeded mast-platform/config/tokenRates/tierBonusMultipliers). Hardcoded
+// in client; Firebase is the canonical source for the backend.
+var V1_TIERS = [
+  { key: 'free',    label: 'Free',    priceMonthly: 0,    tokens: 250,    bonusPct: 0,  plaidCap: 0,  revenueFloor: 0 },
+  { key: 'starter', label: 'Starter', priceMonthly: 1900, tokens: 750,    bonusPct: 15, plaidCap: 5,  revenueFloor: 0 },
+  { key: 'growth',  label: 'Growth',  priceMonthly: 4900, tokens: 2500,   bonusPct: 30, plaidCap: 15, revenueFloor: 100000 },
+  { key: 'scale',   label: 'Scale',   priceMonthly: 7900, tokens: 10000,  bonusPct: 50, plaidCap: 50, revenueFloor: 500000 }
+];
+var V1_TIER_BY_KEY = V1_TIERS.reduce(function(m, t) { m[t.key] = t; return m; }, {});
+var V1_LEGACY_TIER_MAP = { publish:'free', launch:'starter', operate:'growth', command:'scale', organizer:'growth', professional:'scale' };
+
+function v1ResolveTierKey(name) {
+  if (!name) return 'free';
+  if (V1_TIER_BY_KEY[name]) return name;
+  return V1_LEGACY_TIER_MAP[name] || 'free';
+}
+
+function v1FormatCents(cents) {
+  if (!cents) return '$0';
+  var dollars = cents / 100;
+  return '$' + (dollars % 1 === 0 ? dollars.toFixed(0) : dollars.toFixed(2));
+}
+
+// Read V1 subscription state from the platform tenant doc.
+// Cached per-renderSubscriptionSettings call.
+var _v1PlatformTenantCache = null;
+async function v1LoadPlatformTenant(force) {
+  if (_v1PlatformTenantCache && !force) return _v1PlatformTenantCache;
+  try {
+    var tid = MastDB.tenantId();
+    _v1PlatformTenantCache = (await MastDB.platform.get('mast-platform/tenants/' + tid)) || {};
+  } catch (err) {
+    console.warn('v1LoadPlatformTenant failed:', err && err.message);
+    _v1PlatformTenantCache = {};
+  }
+  return _v1PlatformTenantCache;
+}
+
+function v1PickActiveSub(platformTenant) {
+  var subs = (platformTenant && platformTenant.subscriptions) || [];
+  if (!Array.isArray(subs) || !subs.length) return null;
+  // Prefer status=active, fall back to first
+  for (var i = 0; i < subs.length; i++) {
+    if (subs[i] && subs[i].status === 'active') return subs[i];
+  }
+  return subs[0];
+}
+
 function renderSubscriptionSettings() {
   var sub = getTenantSubscription();
   renderSubscriptionBillingInfo(sub);
-  renderRevenueMeter();
-  renderMonthlyBill();
-  renderBillHistory();
+  _v1PlatformTenantCache = null; // refresh each render
+  v1LoadPlatformTenant().then(function(platformTenant) {
+    renderV1TierCard(platformTenant);
+    renderV1UsageCard(platformTenant);
+    renderV1RevenueAndNextTier(platformTenant);
+    renderV1TierComparison(platformTenant);
+    renderV1ManageBlock();
+  });
 }
+
+function renderV1TierCard(platformTenant) {
+  var el = document.getElementById('subscriptionTierCard');
+  if (!el) return;
+  var v1sub = v1PickActiveSub(platformTenant);
+  var tierKey = v1ResolveTierKey(v1sub ? v1sub.plan : (platformTenant && platformTenant.currentTier));
+  var tier = V1_TIER_BY_KEY[tierKey];
+  var interval = (v1sub && v1sub.billingInterval) || 'month';
+  var priceText = v1FormatCents(tier.priceMonthly) + '/mo';
+  if (interval === 'year') priceText = v1FormatCents(tier.priceMonthly * 10) + '/yr (2 months free)';
+
+  var h = '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:20px;">';
+  h += '<div style="font-weight:600;font-family:\'Cormorant Garamond\',serif;font-size:1.15rem;color:var(--charcoal);margin-bottom:4px;">Current tier</div>';
+  h += '<div style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:14px;">Your V1 plan determines monthly token allowance, coin-purchase bonus, and connected-account caps.</div>';
+  h += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px 24px;">';
+  h += '<div><div style="font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;">Plan</div><div style="font-size:1.15rem;font-weight:600;color:var(--charcoal);">' + esc(tier.label) + '</div></div>';
+  h += '<div><div style="font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;">Price</div><div style="font-size:1.15rem;font-weight:600;color:var(--amber);">' + esc(priceText) + '</div></div>';
+  h += '<div><div style="font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;">Monthly tokens</div><div style="font-size:1rem;font-weight:600;color:var(--charcoal);">' + tier.tokens.toLocaleString() + '</div></div>';
+  h += '<div><div style="font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;">Coin bonus</div><div style="font-size:1rem;font-weight:600;color:var(--charcoal);">+' + tier.bonusPct + '%</div></div>';
+  h += '<div><div style="font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;">Plaid accounts</div><div style="font-size:1rem;font-weight:600;color:var(--charcoal);">' + (tier.plaidCap || '0') + ' cap</div></div>';
+  h += '</div>';
+  h += '</div>';
+  el.innerHTML = h;
+}
+
+function renderV1UsageCard(platformTenant) {
+  var el = document.getElementById('subscriptionUsageCard');
+  if (!el) return;
+  var v1sub = v1PickActiveSub(platformTenant);
+  var tierKey = v1ResolveTierKey(v1sub ? v1sub.plan : (platformTenant && platformTenant.currentTier));
+  var tier = V1_TIER_BY_KEY[tierKey];
+  var w = (platformTenant && platformTenant.tokenWallet) || getTokenWallet() || {};
+  var alloc = tier.tokens;
+  var current = w.currentBalance || 0;
+  var used = Math.max(0, alloc - current);
+  var pct = alloc > 0 ? Math.min(100, Math.round((used / alloc) * 100)) : 0;
+  var coinBalance = w.coinBalance || 0;
+  var coinSurplus = w.coinTokenSurplus || 0;
+
+  var h = '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:20px;">';
+  h += '<div style="font-weight:600;font-family:\'Cormorant Garamond\',serif;font-size:1.15rem;color:var(--charcoal);margin-bottom:4px;">Current period usage</div>';
+  h += '<div style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:14px;">Resets on the 1st of each month at 00:00 UTC.</div>';
+  h += '<div style="font-size:0.85rem;margin-bottom:6px;"><strong>' + used.toLocaleString() + '</strong> / ' + alloc.toLocaleString() + ' tokens used (' + pct + '%)</div>';
+  h += '<div style="background:var(--cream-dark);border-radius:6px;height:10px;overflow:hidden;margin-bottom:14px;">';
+  h += '<div style="background:var(--amber);height:100%;width:' + pct + '%;"></div>';
+  h += '</div>';
+  h += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px 24px;font-size:0.85rem;">';
+  h += '<div><span style="color:var(--warm-gray);">Coins:</span> <span style="color:var(--charcoal);font-weight:600;">' + coinBalance + '</span></div>';
+  if (coinSurplus > 0) {
+    h += '<div><span style="color:var(--warm-gray);">Coin token surplus:</span> <span style="color:var(--charcoal);font-weight:600;">' + coinSurplus + '</span></div>';
+  }
+  h += '<div><span style="color:var(--warm-gray);">Tokens remaining:</span> <span style="color:var(--charcoal);font-weight:600;">' + current.toLocaleString() + '</span></div>';
+  h += '</div>';
+  h += '</div>';
+  el.innerHTML = h;
+}
+
+async function renderV1RevenueAndNextTier(platformTenant) {
+  var el = document.getElementById('subscriptionRevenueCard');
+  if (!el) return;
+  el.innerHTML = '<div class="loading">Loading trailing revenue…</div>';
+
+  // Read last 3 monthly revenue docs from tenant DB.
+  var monthKeys = [];
+  var now = new Date();
+  for (var i = 1; i <= 3; i++) {
+    var d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1));
+    monthKeys.push(d.getUTCFullYear() + '-' + String(d.getUTCMonth() + 1).padStart(2, '0'));
+  }
+  var docs;
+  try {
+    docs = await Promise.all(monthKeys.map(function(k) { return _revenueMeterFetchMonth(k); }));
+  } catch (err) {
+    el.innerHTML = '<div style="color:var(--warm-gray-light);font-size:0.85rem;">Could not load revenue history.</div>';
+    return;
+  }
+  var totalNet = 0;
+  var present = 0;
+  docs.forEach(function(d) { if (d && typeof d.netCents === 'number') { totalNet += d.netCents; present++; } });
+  var avgCents = present > 0 ? Math.round(totalNet / present) : 0;
+
+  var v1sub = v1PickActiveSub(platformTenant);
+  var tierKey = v1ResolveTierKey(v1sub ? v1sub.plan : (platformTenant && platformTenant.currentTier));
+  var idx = V1_TIERS.findIndex(function(t) { return t.key === tierKey; });
+  var nextTier = (idx >= 0 && idx < V1_TIERS.length - 1) ? V1_TIERS[idx + 1] : null;
+
+  var h = '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:20px;">';
+  h += '<div style="font-weight:600;font-family:\'Cormorant Garamond\',serif;font-size:1.15rem;color:var(--charcoal);margin-bottom:4px;">Trailing 3-month revenue</div>';
+  h += '<div style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:14px;">Net revenue across all channels for the past 3 closed months.</div>';
+  h += '<div style="display:flex;align-items:baseline;gap:20px;flex-wrap:wrap;">';
+  h += '<div><div style="font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;">3-month avg net</div><div style="font-family:\'Cormorant Garamond\',serif;font-size:1.6rem;font-weight:700;color:var(--amber);">' + esc(v1FormatCents(avgCents)) + '/mo</div></div>';
+  if (present < 3) {
+    h += '<div style="font-size:0.78rem;color:var(--warm-gray);">' + present + ' of 3 months available</div>';
+  }
+  h += '</div>';
+
+  if (nextTier) {
+    var threshold = nextTier.revenueFloor;
+    if (threshold > 0) {
+      var pct = Math.min(100, Math.round((avgCents / threshold) * 100));
+      var atOrAbove = avgCents >= Math.round(threshold * 0.8);
+      h += '<div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--cream-dark);">';
+      h += '<div style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:6px;">Next tier: <strong style="color:var(--charcoal);">' + esc(nextTier.label) + '</strong> threshold ' + esc(v1FormatCents(threshold)) + '/mo (' + pct + '% of band)</div>';
+      h += '<div style="background:var(--cream-dark);border-radius:6px;height:8px;overflow:hidden;">';
+      h += '<div style="background:' + (atOrAbove ? '#16a34a' : 'var(--amber)') + ';height:100%;width:' + pct + '%;"></div>';
+      h += '</div>';
+      if (atOrAbove) {
+        h += '<div style="margin-top:8px;font-size:0.85rem;color:#16a34a;font-weight:600;">You&rsquo;re approaching the ' + esc(nextTier.label) + ' tier. Auto-upgrade runs the 1st of next month based on your trailing 3-month average.</div>';
+      }
+      h += '</div>';
+    }
+  } else {
+    h += '<div style="margin-top:14px;font-size:0.85rem;color:var(--warm-gray);">You’re on the top tier (' + esc(V1_TIERS[V1_TIERS.length - 1].label) + ').</div>';
+  }
+  h += '</div>';
+  el.innerHTML = h;
+}
+
+function renderV1TierComparison(platformTenant) {
+  var el = document.getElementById('subscriptionTierTable');
+  if (!el) return;
+  var v1sub = v1PickActiveSub(platformTenant);
+  var currentKey = v1ResolveTierKey(v1sub ? v1sub.plan : (platformTenant && platformTenant.currentTier));
+
+  var h = '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:20px;">';
+  h += '<div style="font-weight:600;font-family:\'Cormorant Garamond\',serif;font-size:1.15rem;color:var(--charcoal);margin-bottom:4px;">All tiers</div>';
+  h += '<div style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:14px;">Compare and switch via the Stripe Customer Portal. Plan changes prorate automatically.</div>';
+  h += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;">';
+  V1_TIERS.forEach(function(t) {
+    var isCurrent = t.key === currentKey;
+    var border = isCurrent ? '2px solid var(--amber)' : '1px solid var(--cream-dark)';
+    h += '<div style="background:#fff;border:' + border + ';border-radius:8px;padding:14px;display:flex;flex-direction:column;gap:6px;">';
+    h += '<div style="font-weight:600;font-size:1rem;color:var(--charcoal);">' + esc(t.label) + (isCurrent ? ' <span style="color:var(--amber);font-size:0.72rem;text-transform:uppercase;">Current</span>' : '') + '</div>';
+    h += '<div style="font-family:\'Cormorant Garamond\',serif;font-size:1.15rem;font-weight:700;color:var(--amber);">' + esc(v1FormatCents(t.priceMonthly)) + '<span style="font-size:0.78rem;color:var(--warm-gray);font-weight:400;font-family:inherit;">/mo</span></div>';
+    h += '<div style="font-size:0.78rem;color:var(--warm-gray);">' + t.tokens.toLocaleString() + ' tokens/mo</div>';
+    h += '<div style="font-size:0.78rem;color:var(--warm-gray);">+' + t.bonusPct + '% coin bonus</div>';
+    h += '<div style="font-size:0.78rem;color:var(--warm-gray);">' + t.plaidCap + ' Plaid account' + (t.plaidCap === 1 ? '' : 's') + '</div>';
+    h += '</div>';
+  });
+  h += '</div>';
+  h += '</div>';
+  el.innerHTML = h;
+}
+
+function renderV1ManageBlock() {
+  var el = document.getElementById('subscriptionManageBlock');
+  if (!el) return;
+  var h = '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:20px;">';
+  h += '<div style="font-weight:600;font-family:\'Cormorant Garamond\',serif;font-size:1.15rem;color:var(--charcoal);margin-bottom:4px;">Manage subscription</div>';
+  h += '<div style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:14px;">Open the Stripe Customer Portal to change plan, update payment method, or download invoices.</div>';
+  h += '<button class="btn btn-primary" onclick="openBillingPortal()" id="billingPortalBtn">Manage subscription</button>';
+  h += '<span id="billingPortalStatus" style="margin-left:12px;font-size:0.85rem;"></span>';
+  h += '</div>';
+  el.innerHTML = h;
+}
+
+async function openBillingPortal() {
+  var btn = document.getElementById('billingPortalBtn');
+  var statusEl = document.getElementById('billingPortalStatus');
+  if (btn) { btn.disabled = true; btn.textContent = 'Opening…'; }
+  try {
+    var user = firebase.auth().currentUser;
+    if (!user) throw new Error('Sign in first');
+    var idToken = await user.getIdToken();
+    var resp = await fetch('https://us-central1-mast-platform-prod.cloudfunctions.net/createBillingPortalSession', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + idToken },
+      body: JSON.stringify({ tenantId: MastDB.tenantId() })
+    });
+    var data = await resp.json();
+    if (!resp.ok || !data.url) throw new Error((data && data.error) || 'Portal session failed');
+    window.location.href = data.url;
+  } catch (err) {
+    if (statusEl) statusEl.innerHTML = '<span style="color:var(--amber);">' + esc(err.message || String(err)) + '</span>';
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Manage subscription'; }
+  }
+}
+window.openBillingPortal = openBillingPortal;
+
+// ============ Coins tab (F-M1b) ============
+
+var V1_COIN_PACKS = [
+  { coins: 10,  label: '$10' },
+  { coins: 20,  label: '$20' },
+  { coins: 50,  label: '$50' },
+  { coins: 100, label: '$100' },
+  { coins: 500, label: '$500' }
+];
+
+async function renderCoinsTab() {
+  _v1PlatformTenantCache = null;
+  var platformTenant = await v1LoadPlatformTenant();
+  renderCoinsBalanceCard(platformTenant);
+  renderCoinsPackList(platformTenant);
+  renderCoinsRecentList();
+  maybeShowCoinPurchaseToast();
+}
+
+function renderCoinsBalanceCard(platformTenant) {
+  var el = document.getElementById('coinsBalanceCard');
+  if (!el) return;
+  var w = (platformTenant && platformTenant.tokenWallet) || getTokenWallet() || {};
+  var coinBalance = w.coinBalance || 0;
+  var coinSurplus = w.coinTokenSurplus || 0;
+  var totalCoinTokens = (coinBalance * 100) + coinSurplus;
+  var h = '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:20px;">';
+  h += '<div style="font-weight:600;font-family:\'Cormorant Garamond\',serif;font-size:1.15rem;color:var(--charcoal);margin-bottom:4px;">Coin balance</div>';
+  h += '<div style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:14px;">Coins purchase additional tokens beyond your monthly allocation. 1 coin = $1 = 100 tokens (plus your tier bonus at time of purchase).</div>';
+  h += '<div style="display:flex;align-items:baseline;gap:24px;flex-wrap:wrap;">';
+  h += '<div><div style="font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;">Coins</div><div style="font-family:\'Cormorant Garamond\',serif;font-size:1.6rem;font-weight:700;color:var(--amber);">' + coinBalance + '</div></div>';
+  h += '<div><div style="font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;">Surplus tokens</div><div style="font-size:1.15rem;font-weight:600;color:var(--charcoal);">' + coinSurplus.toLocaleString() + '</div></div>';
+  h += '<div><div style="font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;">Total token value</div><div style="font-size:1.15rem;font-weight:600;color:var(--charcoal);">' + totalCoinTokens.toLocaleString() + '</div></div>';
+  h += '</div>';
+  h += '</div>';
+  el.innerHTML = h;
+}
+
+function renderCoinsPackList(platformTenant) {
+  var el = document.getElementById('coinsPackList');
+  if (!el) return;
+  var v1sub = v1PickActiveSub(platformTenant);
+  var tierKey = v1ResolveTierKey(v1sub ? v1sub.plan : (platformTenant && platformTenant.currentTier));
+  var tier = V1_TIER_BY_KEY[tierKey];
+  var bonusPct = tier.bonusPct;
+
+  var h = '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:20px;">';
+  h += '<div style="font-weight:600;font-family:\'Cormorant Garamond\',serif;font-size:1.15rem;color:var(--charcoal);margin-bottom:4px;">Buy coins</div>';
+  h += '<div style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:14px;">Your ' + esc(tier.label) + ' tier earns a <strong>+' + bonusPct + '%</strong> bonus on every purchase. The bonus rate locks at the time of purchase.</div>';
+  h += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;">';
+  V1_COIN_PACKS.forEach(function(p) {
+    var baseTokens = p.coins * 100;
+    var bonusTokens = Math.floor(baseTokens * (bonusPct / 100));
+    var totalTokens = baseTokens + bonusTokens;
+    h += '<div style="background:#fff;border:1px solid var(--cream-dark);border-radius:8px;padding:14px;display:flex;flex-direction:column;gap:6px;">';
+    h += '<div style="font-family:\'Cormorant Garamond\',serif;font-size:1.15rem;font-weight:700;color:var(--charcoal);">' + esc(p.label) + '</div>';
+    h += '<div style="font-size:0.85rem;color:var(--charcoal);">' + totalTokens.toLocaleString() + ' tokens</div>';
+    if (bonusTokens > 0) {
+      h += '<div style="font-size:0.78rem;color:var(--teal);">' + baseTokens.toLocaleString() + ' base + ' + bonusTokens.toLocaleString() + ' bonus</div>';
+    } else {
+      h += '<div style="font-size:0.78rem;color:var(--warm-gray);">' + baseTokens.toLocaleString() + ' tokens (no bonus)</div>';
+    }
+    h += '<button class="btn btn-primary btn-small" style="margin-top:6px;" onclick="buyCoinPack(' + p.coins + ', this)">Buy ' + esc(p.label) + '</button>';
+    h += '</div>';
+  });
+  h += '</div>';
+  h += '<div id="coinsPurchaseStatus" style="margin-top:12px;font-size:0.85rem;"></div>';
+  h += '</div>';
+  el.innerHTML = h;
+}
+
+async function buyCoinPack(coins, btn) {
+  var statusEl = document.getElementById('coinsPurchaseStatus');
+  if (btn) { btn.disabled = true; btn.textContent = 'Opening…'; }
+  if (statusEl) statusEl.textContent = '';
+  try {
+    var user = firebase.auth().currentUser;
+    if (!user) throw new Error('Sign in first');
+    var idToken = await user.getIdToken();
+    var resp = await fetch('https://us-central1-mast-platform-prod.cloudfunctions.net/createCoinCheckout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + idToken },
+      body: JSON.stringify({ tenantId: MastDB.tenantId(), coins: coins, returnRoute: 'coins' })
+    });
+    var data = await resp.json();
+    if (!resp.ok || !data.sessionUrl) throw new Error((data && data.error) || 'Checkout failed');
+    window.location.href = data.sessionUrl;
+  } catch (err) {
+    if (statusEl) statusEl.innerHTML = '<span style="color:var(--amber);">' + esc(err.message || String(err)) + '</span>';
+    if (btn) { btn.disabled = false; btn.textContent = 'Buy $' + coins; }
+  }
+}
+window.buyCoinPack = buyCoinPack;
+
+async function renderCoinsRecentList() {
+  var el = document.getElementById('coinsRecentList');
+  if (!el) return;
+  el.innerHTML = '<div class="loading">Loading recent purchases…</div>';
+  try {
+    // Read last ~50 tokenLog entries and filter to coin purchases.
+    var log = await MastDB.query('tokenLog').orderByChild('timestamp').limitToLast(50).get();
+    var rows = [];
+    if (log) {
+      Object.keys(log).forEach(function(k) {
+        var r = log[k];
+        if (r && r.category === 'coin_purchase') rows.push(r);
+      });
+    }
+    rows.sort(function(a, b) { return (b.timestamp || '').localeCompare(a.timestamp || ''); });
+    rows = rows.slice(0, 10);
+
+    var h = '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:20px;">';
+    h += '<div style="font-weight:600;font-family:\'Cormorant Garamond\',serif;font-size:1.15rem;color:var(--charcoal);margin-bottom:4px;">Recent purchases</div>';
+    h += '<div style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:14px;">Last 10 coin purchases — bonus rate locked at the time of purchase.</div>';
+    if (!rows.length) {
+      h += '<div style="font-size:0.85rem;color:var(--warm-gray);">No coin purchases yet.</div>';
+    } else {
+      h += '<div style="display:grid;grid-template-columns:1fr auto auto auto;gap:8px 16px;font-size:0.85rem;align-items:center;">';
+      h += '<div style="font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;">Date</div>';
+      h += '<div style="font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;text-align:right;">Coins</div>';
+      h += '<div style="font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;text-align:right;">Bonus</div>';
+      h += '<div style="font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;text-align:right;">Tier</div>';
+      rows.forEach(function(r) {
+        var d = r.timestamp ? new Date(r.timestamp) : null;
+        var dateStr = d && !isNaN(d.getTime()) ? d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
+        var coins = r.coinsPurchased || r.coins || 0;
+        var multi = (typeof r.bonusMultiplier === 'number') ? r.bonusMultiplier : 1;
+        var bonusPct = Math.round((multi - 1) * 100);
+        var tierAt = r.tierAtPurchase || '—';
+        h += '<div>' + esc(dateStr) + '</div>';
+        h += '<div style="text-align:right;font-weight:600;">' + coins + '</div>';
+        h += '<div style="text-align:right;color:var(--teal);">+' + bonusPct + '%</div>';
+        h += '<div style="text-align:right;color:var(--warm-gray);">' + esc(tierAt) + '</div>';
+      });
+      h += '</div>';
+    }
+    h += '</div>';
+    el.innerHTML = h;
+  } catch (err) {
+    el.innerHTML = '<div style="font-size:0.85rem;color:var(--warm-gray-light);">Could not load recent purchases.</div>';
+    console.warn('renderCoinsRecentList failed:', err && err.message);
+  }
+}
+
+function maybeShowCoinPurchaseToast() {
+  try {
+    var params = new URLSearchParams(window.location.search || (window.location.hash.indexOf('?') >= 0 ? window.location.hash.slice(window.location.hash.indexOf('?')) : ''));
+    var status = params.get('coinPurchase');
+    var coins = params.get('coins');
+    if (status === 'success' && coins) {
+      showToast('Purchase complete — ' + coins + ' coins added shortly.');
+    } else if (status === 'cancelled') {
+      showToast('Purchase cancelled.');
+    }
+  } catch (e) {}
+}
+window.renderCoinsTab = renderCoinsTab;
 
 async function renderRevenueMeter() {
   var el = document.getElementById('subscriptionRevenueMeter');
