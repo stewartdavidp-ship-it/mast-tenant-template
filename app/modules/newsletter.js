@@ -44,7 +44,17 @@
   function nlBadgeHtml(status) {
     var s = status || 'draft';
     var colors = { draft: 'background:rgba(196,133,60,0.15);color:var(--amber)', ready: 'background:rgba(42,124,111,0.15);color:var(--teal)', sent: 'background:rgba(139,111,94,0.15);color:#8B6F5E', published: 'background:#16a34a;color:#fff', complete: 'background:rgba(42,124,111,0.15);color:var(--teal)', posted: 'background:#16a34a;color:#fff' };
-    return '<span class="status-badge pill" style="' + (colors[s] || colors.draft) + '">' + s + '</span>';
+    // W1.3 — accessible tooltip on each status chip.
+    var tips = {
+      draft:     'Draft — still editing. Not yet sent or published.',
+      ready:     'Ready to send. Click "Mark as Sent" or "Publish to Website" to ship.',
+      sent:      'Email sent to subscribers. The web version may or may not be published.',
+      published: 'Web version is live on the storefront /news page.',
+      complete:  'Both sent and published.',
+      posted:    'Published to the storefront.'
+    };
+    var tip = tips[s] || ('Status: ' + s);
+    return '<span class="status-badge pill" style="' + (colors[s] || colors.draft) + '" title="' + esc(tip) + '">' + s + '</span>';
   }
 
   var NL_DEFAULT_SECTIONS = [
@@ -139,7 +149,7 @@
         var dateStr = issue.createdAt ? new Date(issue.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
         html += '<div class="nl-issue-row" onclick="nlOpenIssue(\'' + issue.id + '\')">' +
           '<span class="nl-issue-num">#' + (issue.issueNumber || '?') + '</span>' +
-          '<span class="nl-issue-title">' + esc(issue.title || 'Untitled Issue') + '</span>' +
+          '<span class="nl-issue-title">' + esc(issue.title || ('Draft — Issue #' + (issue.issueNumber || '?'))) + '</span>' +
           nlBadgeHtml(issue.status) +
           '<span class="nl-issue-date">' + dateStr + '</span>' +
           '<button class="nl-issue-action" onclick="event.stopPropagation();nlDuplicateIssue(\'' + issue.id + '\')" title="Duplicate as template">📋</button>' +
@@ -165,16 +175,19 @@
       var issueNumber = result.snapshot.val();
 
       var issueId = MastDB.newsletter.issues.newKey();
+      // W1.3 — auto-name new drafts "Draft — MMM D" instead of empty/Untitled.
+      var draftLabel = 'Draft — ' + new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
       var issueData = {
         id: issueId,
         issueNumber: issueNumber,
-        title: '',
+        title: draftLabel,
         slug: '',
         status: 'draft',
         sentAt: null,
         publishedAt: null,
         sentSubscriberCount: null,
         subjectLine: '',
+        audienceSegmentId: null, // W1.1 — defaults to "all subscribers"
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       };
@@ -259,6 +272,118 @@
   }
 
   // ===== COMPOSE SCREEN =====
+  // ===== W1.1: AUDIENCE SEGMENTS =====
+  // Loaded lazily from admin/customerSegments + admin/customers. Built-in
+  // segments stay in code (mirrors customers.js semantics).
+  var nlSegmentsLoaded = false;
+  var nlSavedSegments = [];          // [{id,name,filters,...}]
+  var nlCustomerStatsByEmail = {};   // emailLower -> {orderCount, lifetimeSpendCents, lastOrderAt}
+
+  var NL_BUILTIN_SEGMENTS = [
+    { id: '__all',         name: 'All active subscribers' },
+    { id: '__has_orders',  name: 'Customers (1+ orders)' },
+    { id: '__no_orders',   name: 'No orders yet' },
+    { id: '__repeat_2',    name: 'Repeat buyers (2+ orders)' },
+    { id: '__lapsed_90',   name: 'Lapsed (no order in 90d)' }
+  ];
+
+  function nlLoadSegmentsLazy() {
+    if (nlSegmentsLoaded) return Promise.resolve();
+    var segP = MastDB.get('admin/customerSegments').catch(function() { return null; });
+    var custP = MastDB.get('admin/customers').catch(function() { return null; });
+    return Promise.all([segP, custP]).then(function(vals) {
+      var sVal = vals[0] || {};
+      nlSavedSegments = Object.keys(sVal).map(function(k) {
+        var v = sVal[k] || {}; v.id = k; return v;
+      });
+      var cVal = vals[1] || {};
+      Object.keys(cVal).forEach(function(cid) {
+        var c = cVal[cid]; if (!c) return;
+        var emails = [];
+        if (c.primaryEmail) emails.push(c.primaryEmail);
+        (c.emails || []).forEach(function(e) {
+          if (e && typeof e === 'string') emails.push(e);
+          else if (e && e.address) emails.push(e.address);
+        });
+        var stats = (c.stats) || {};
+        emails.forEach(function(e) {
+          var key = String(e).toLowerCase().trim();
+          if (key) nlCustomerStatsByEmail[key] = {
+            orderCount: stats.orderCount || 0,
+            lifetimeSpendCents: stats.lifetimeSpendCents || 0,
+            lastOrderAt: stats.lastOrderAt || null,
+            firstOrderAt: stats.firstOrderAt || null
+          };
+        });
+      });
+      nlSegmentsLoaded = true;
+    });
+  }
+
+  // Returns array of {sub, stats} for active subs that match the segment.
+  function nlMatchSubscribersForSegment(segmentId) {
+    var active = nlSubscribers.filter(function(s) { return s.status === 'active'; });
+    var ninetyDaysAgo = Date.now() - 90 * 86400 * 1000;
+    return active.filter(function(sub) {
+      var key = String(sub.email || '').toLowerCase().trim();
+      var stats = nlCustomerStatsByEmail[key] || null;
+      switch (segmentId) {
+        case '__all': case '': case null: case undefined:
+          return true;
+        case '__has_orders':
+          return !!(stats && stats.orderCount > 0);
+        case '__no_orders':
+          return !stats || !stats.orderCount;
+        case '__repeat_2':
+          return !!(stats && stats.orderCount >= 2);
+        case '__lapsed_90':
+          if (!stats || !stats.lastOrderAt) return false;
+          return new Date(stats.lastOrderAt).getTime() < ninetyDaysAgo;
+        default:
+          // Saved segment — for W1, treat as "all" (no filter eval engine here).
+          return true;
+      }
+    });
+  }
+
+  function nlAudienceSelectorHtml(issue) {
+    var current = issue.audienceSegmentId || '__all';
+    var allSegs = NL_BUILTIN_SEGMENTS.concat(nlSavedSegments.map(function(s) {
+      return { id: s.id, name: s.name || 'Saved segment', _saved: true };
+    }));
+    var options = allSegs.map(function(seg) {
+      var sel = (seg.id === current) ? ' selected' : '';
+      return '<option value="' + esc(seg.id) + '"' + sel + '>' + esc(seg.name) + (seg._saved ? ' (saved)' : '') + '</option>';
+    }).join('');
+    var countHtml = '<span id="nlAudienceCount" style="font-size:0.78rem;color:var(--text-secondary);">' +
+      (nlSegmentsLoaded ? esc(String(nlMatchSubscribersForSegment(current).length)) + ' recipients' : 'counting…') +
+    '</span>';
+    var html = '<div class="nl-compose-header" style="margin-top:6px;">' +
+      '<span style="font-weight:600;color:var(--text-secondary);white-space:nowrap;font-size:0.85rem;" title="Audience for this issue. Used by Send + future bulk-send.">Audience</span>' +
+      '<select onchange="nlUpdateAudienceSegment(this.value)" style="padding:6px 8px;border-radius:4px;border:1px solid var(--border);background:var(--card-bg,transparent);color:var(--text);font-size:0.85rem;flex:1;max-width:320px;">' +
+        options +
+      '</select>' +
+      countHtml +
+      '</div>';
+    // Kick off lazy load on first render — re-render compose when ready.
+    if (!nlSegmentsLoaded) {
+      nlLoadSegmentsLazy().then(function() { renderNLCompose(); }).catch(function() { nlSegmentsLoaded = true; });
+    }
+    return html;
+  }
+
+  window.nlUpdateAudienceSegment = function(segId) {
+    if (!nlCurrentIssue) return;
+    nlCurrentIssue.audienceSegmentId = segId || null;
+    nlCurrentIssue.updatedAt = new Date().toISOString();
+    MastDB.newsletter.issues.ref(nlCurrentIssueId).update({
+      audienceSegmentId: nlCurrentIssue.audienceSegmentId,
+      updatedAt: nlCurrentIssue.updatedAt
+    }).catch(function(err) { showToast('Error saving audience: ' + err.message, true); });
+    var countEl = document.getElementById('nlAudienceCount');
+    if (countEl) countEl.textContent = nlMatchSubscribersForSegment(segId).length + ' recipients';
+  };
+
   function renderNLCompose() {
     var issue = nlCurrentIssue;
     if (!issue) { renderNLIssueList(); return; }
@@ -281,7 +406,9 @@
       '<div class="nl-compose-header" style="margin-top:6px;">' +
       '<span style="font-weight:600;color:var(--text-secondary);white-space:nowrap;font-size:0.85rem;">Subject</span>' +
       '<input type="text" value="' + (issue.subjectLine || '').replace(/"/g, '&quot;') + '" placeholder="Email subject line (defaults to title if empty)" style="font-size:0.9rem;" onchange="nlUpdateSubjectLine(this.value)" />' +
-      '</div>';
+      '</div>' +
+      // W1.1 — audience segment selector + estimated recipient count
+      nlAudienceSelectorHtml(issue);
 
     if (nlViewMode === 'list') {
       // ===== LIST VIEW (original) =====
@@ -1483,11 +1610,62 @@
   }
 
   // ===== SUBSCRIBERS SCREEN =====
+  // W1.2 — saved filter preset for subscribers (in-memory; persists per session)
+  var nlSubPreset = window.nlSubPreset || '__all';
+
+  function nlSubPresetMatches(sub, preset) {
+    var key = String(sub.email || '').toLowerCase().trim();
+    var stats = nlCustomerStatsByEmail[key];
+    var ninetyDaysAgo = Date.now() - 90 * 86400 * 1000;
+    switch (preset) {
+      case '__repeat_2': return !!(stats && stats.orderCount >= 2);
+      case '__lapsed_90':
+        if (!stats || !stats.lastOrderAt) return false;
+        return new Date(stats.lastOrderAt).getTime() < ninetyDaysAgo;
+      case '__no_orders': return !stats || !stats.orderCount;
+      default: return true;
+    }
+  }
+
+  function nlFmtRelativeDate(iso) {
+    if (!iso) return '—';
+    var t;
+    try { t = new Date(iso).getTime(); } catch (_e) { return '—'; }
+    if (isNaN(t)) return '—';
+    var diff = Date.now() - t;
+    var d = Math.floor(diff / 86400000);
+    var label;
+    if (d < 1) label = 'today';
+    else if (d < 7) label = d + 'd ago';
+    else if (d < 30) label = Math.floor(d / 7) + 'w ago';
+    else if (d < 365) label = Math.floor(d / 30) + 'mo ago';
+    else label = Math.floor(d / 365) + 'y ago';
+    return label;
+  }
+
+  function nlFmtMoney(cents) {
+    if (!cents) return '$0';
+    return '$' + (cents / 100).toFixed(2).replace(/\.00$/, '');
+  }
+
   function renderNLSubscribers() {
     nlCurrentView = 'subscribers';
+    // Ensure stats are loaded — fire-and-forget; re-render when ready.
+    if (!nlSegmentsLoaded) {
+      nlLoadSegmentsLazy().then(function() { renderNLSubscribers(); }).catch(function() { nlSegmentsLoaded = true; });
+    }
+
     var showAll = window.nlShowAllSubs || false;
-    var filtered = showAll ? nlSubscribers : nlSubscribers.filter(function(s) { return s.status === 'active'; });
+    var preset = window.nlSubPreset || nlSubPreset || '__all';
+    var base = showAll ? nlSubscribers : nlSubscribers.filter(function(s) { return s.status === 'active'; });
+    var filtered = (preset === '__all') ? base : base.filter(function(s) { return nlSubPresetMatches(s, preset); });
     var activeCount = nlSubscribers.filter(function(s) { return s.status === 'active'; }).length;
+
+    var presetBtn = function(id, label, tip) {
+      var active = preset === id;
+      var bg = active ? 'background:var(--teal,#2a7c6f);color:#fff;border-color:var(--teal,#2a7c6f);' : '';
+      return '<button class="btn btn-outline" style="font-size:0.78rem;padding:4px 10px;' + bg + '" title="' + esc(tip) + '" onclick="window.nlSubPreset=\'' + id + '\'; renderNLSubscribers();">' + esc(label) + '</button>';
+    };
 
     var html = '<div class="nl-sub-nav">' +
       '<button onclick="nlSwitchView(\'issues\')">Issues</button>' +
@@ -1498,27 +1676,51 @@
       '<button class="btn btn-outline" onclick="nlExportSubscribersCSV()">📤 Export CSV</button>' +
       '<button class="btn btn-primary" onclick="nlAddSubscriber()">+ Add Subscriber</button>' +
       '</div></div>' +
-      '<div style="margin-bottom:12px;display:flex;gap:8px;align-items:center;">' +
-      '<label style="font-size:0.85rem;color:var(--text-secondary);display:flex;align-items:center;gap:6px;">' +
+      // W1.2 — saved-filter presets + show-unsubscribed toggle on one row
+      '<div style="margin-bottom:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">' +
+      presetBtn('__all',       'All',                 'No filter') +
+      presetBtn('__repeat_2',  'Repeat buyer 2+',     'Subscribers with 2 or more orders') +
+      presetBtn('__lapsed_90', 'Lapsed 90d',          'No order in the last 90 days') +
+      presetBtn('__no_orders', 'No orders yet',       'Subscribed but never purchased') +
+      '<label style="margin-left:auto;font-size:0.85rem;color:var(--text-secondary);display:flex;align-items:center;gap:6px;">' +
       '<input type="checkbox" ' + (showAll ? 'checked' : '') + ' onchange="window.nlShowAllSubs=this.checked; renderNLSubscribers();" /> Show unsubscribed</label></div>';
 
     if (filtered.length === 0) {
       html += '<div style="text-align:center;padding:40px 20px;color:var(--warm-gray);">' +
         '<div style="font-size:1.6rem;margin-bottom:12px;">📬</div>' +
-        '<p style="font-size:0.9rem;font-weight:500;margin-bottom:4px;">No subscribers yet</p>' +
-        '<p style="font-size:0.85rem;color:var(--warm-gray-light);">Add subscribers manually or share the sign-up form on your website.</p></div>';
+        '<p style="font-size:0.9rem;font-weight:500;margin-bottom:4px;">No subscribers match this filter</p>' +
+        '<p style="font-size:0.85rem;color:var(--warm-gray-light);">Switch to "All" or add subscribers manually.</p></div>';
     } else {
+      // W1.2 — added Orders, Last purchased, Lifetime value columns
       html += '<table class="nl-sub-table"><thead><tr>' +
-        '<th>Name</th><th>Email</th><th>Source</th><th>Subscribed</th><th>Status</th><th>Notes</th><th></th></tr></thead><tbody>';
+        '<th>Name</th><th>Email</th><th>Source</th><th>Subscribed</th>' +
+        '<th style="text-align:right;">Orders</th>' +
+        '<th>Last purchased</th>' +
+        '<th style="text-align:right;">Lifetime value</th>' +
+        '<th>Status</th><th>Notes</th><th></th></tr></thead><tbody>';
       filtered.forEach(function(sub) {
         var dateStr = sub.subscribedAt ? new Date(sub.subscribedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
         var sourceClass = sub.source === 'website-form' ? 'website' : 'manual';
         var sourceLabel = sub.source === 'website-form' ? 'Website' : 'Manual';
+        var key = String(sub.email || '').toLowerCase().trim();
+        var stats = nlCustomerStatsByEmail[key];
+        var ordersHtml = stats ? String(stats.orderCount || 0) : '<span style="color:var(--text-secondary);">—</span>';
+        var lastHtml;
+        if (stats && stats.lastOrderAt) {
+          var abs = new Date(stats.lastOrderAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+          lastHtml = '<span title="' + esc(abs) + '">' + esc(nlFmtRelativeDate(stats.lastOrderAt)) + '</span>';
+        } else {
+          lastHtml = '<span style="color:var(--text-secondary);">—</span>';
+        }
+        var ltvHtml = stats ? nlFmtMoney(stats.lifetimeSpendCents || 0) : '<span style="color:var(--text-secondary);">—</span>';
         html += '<tr>' +
           '<td>' + nlEscHtml(sub.name) + '</td>' +
           '<td>' + nlEscHtml(sub.email) + '</td>' +
           '<td><span class="nl-source-badge ' + sourceClass + '">' + sourceLabel + '</span></td>' +
           '<td>' + dateStr + '</td>' +
+          '<td style="text-align:right;">' + ordersHtml + '</td>' +
+          '<td>' + lastHtml + '</td>' +
+          '<td style="text-align:right;">' + ltvHtml + '</td>' +
           '<td>' + (sub.status === 'active' ? '<span style="color:#5A7A5A;">Active</span>' : '<span style="color:var(--text-secondary);">Unsubscribed</span>') + '</td>' +
           '<td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + nlEscHtml(sub.notes || '') + '</td>' +
           '<td>';
