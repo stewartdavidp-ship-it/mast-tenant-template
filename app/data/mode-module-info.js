@@ -478,8 +478,8 @@
       label:    'Loyalty',
       section:  'retention',
       tagline:  'Reward repeat customers with points.',
-      outcome:      "Give your best customers a reason to come back twice as often, without running a punch-card program by hand.",
-      goodFitWhen:  "you have customers who buy from you more than once a year and you want them to buy more.",
+      outcome:      "Reward repeat customers with points — set up tier rewards and thresholds in ~10 minutes in Settings.",
+      goodFitWhen:  "you have customers who buy more than once a year, and you're up for a short setup to get rewards live.",
       notAFitWhen:  "your work is a one-time purchase (e.g. wedding pieces, large commissions) with no repeat path.",
       automates: [
         "Stamping a paper punch card at the register",
@@ -489,7 +489,8 @@
       replacesTools:    ["Punch cards", "Smile.io", "Yotpo Loyalty"],
       complementsTools: ["Square Loyalty"],
       prerequisites: [
-        "Customers module enabled"
+        "Customers module enabled",
+        "Loyalty program enabled in Settings after adding"
       ],
       pairsWith:  ["customers", "pos", "orders", "wallet", "newsletter"],
       setupDepth: "moderate",
@@ -885,17 +886,19 @@
       learnMoreUrl: HELP_BASE + 'trips'
     },
     'reports': {
+      // Card softened 2026-05-22: the underlying module currently shows
+      // "feature on roadmap" — copy now matches reality. Restore the
+      // value-prop framing (automates, replacesTools) when the report
+      // builder actually ships.
       label: 'Reports', section: 'operations',
-      tagline: 'Operational reports across the business.',
-      outcome: "Pull a report on slow sellers, top customers, fulfillment time, or class fill rate — without exporting to a spreadsheet.",
-      goodFitWhen: "you want answers to questions like \"which class fills fastest\" or \"how long do orders sit unshipped\".",
-      notAFitWhen: "the per-section reports already cover what you need to see.",
-      automates: ["Exporting CSVs and stitching them in Excel", "Building the same chart over and over"],
-      complementsTools: ["Excel", "Google Sheets"],
+      tagline: 'Cross-section reports — coming soon.',
+      outcome: "Coming soon: a report builder for slow sellers, top customers, and fulfillment time. Add it now to be early.",
+      goodFitWhen: "you want answers a spreadsheet won't easily give — and don't mind waiting for the build.",
+      notAFitWhen: "you need reporting today — the per-section reports already cover most of what you need.",
       prerequisites: [],
       pairsWith: ["finance-reports", "sales-by-product", "book-reports", "show-history", "customer-portfolio"],
-      setupDepth: "moderate",
-      preview: { url: ASSET_BASE + 'reports.png', alt: "Report builder with saved reports and chart preview" },
+      setupDepth: "quick",
+      preview: { url: ASSET_BASE + 'reports.png', alt: "Report builder coming-soon placeholder" },
       learnMoreUrl: HELP_BASE + 'reports'
     },
     'advisor': {
