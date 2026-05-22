@@ -12704,9 +12704,28 @@ function openAddToMastDetails(routeId) {
     var closeBtn = panel.querySelector('button[aria-label="Close details"]');
     if (closeBtn) closeBtn.focus();
 
-    // Esc-to-close.
+    // Esc-to-close + Tab focus trap (E1-SEC-FIX-1, WCAG 2.4.3).
+    // Without the trap, Tab from inside the drawer escapes to the cards
+    // behind the scrim — confusing for keyboard + AT users.
     _addToMastDrawerKeyHandler = function (e) {
-      if (e.key === 'Escape') closeAddToMastDetails();
+      if (e.key === 'Escape') { closeAddToMastDetails(); return; }
+      if (e.key !== 'Tab') return;
+      var trapPanel = document.getElementById('addToMastDrawerPanel');
+      if (!trapPanel) return;
+      var nodes = trapPanel.querySelectorAll(
+        'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      );
+      if (nodes.length === 0) return;
+      var first  = nodes[0];
+      var last   = nodes[nodes.length - 1];
+      var active = document.activeElement;
+      if (e.shiftKey && (active === first || !trapPanel.contains(active))) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && (active === last || !trapPanel.contains(active))) {
+        e.preventDefault();
+        first.focus();
+      }
     };
     document.addEventListener('keydown', _addToMastDrawerKeyHandler);
   } catch (err) {

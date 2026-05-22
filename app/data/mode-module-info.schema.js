@@ -7,6 +7,26 @@
 //
 // Idea -OtEQoFvlPAu90ghkDXu (Enriched module cards). Schema versioned so
 // future shape changes can be migrated without surprise.
+//
+// ─── TRUST BOUNDARY (E1-SEC-FIX-2, 2026-05-22) ──────────────
+// This validator is a SHAPE CONTRACT. It is NOT an XSS defense.
+//
+// The actual safety boundary is `esc()` (HTML-entity escaping) at the
+// rendering sink. The renderer in app/index.html escapes every
+// owner-authored string before innerHTML interpolation, regardless of
+// whether the entry passed validation. The URL regexes below (HELP_URL_RE,
+// ASSET_URL_RE) are defense-in-depth — they reject `javascript:`/`data:`/
+// `file:` schemes — but the renderer does not rely on them being correct.
+//
+// If you add a NEW SINK that interpolates one of these fields into the
+// DOM (e.g. a Markdown preview, a tooltip helper, a fresh innerHTML
+// build), you MUST `esc()` the value at the sink. Do not assume the
+// validator caught everything. The runtime validator fails soft (warn-
+// only) so a malformed entry does not crash the admin app; that means a
+// bad entry CAN reach the renderer in prod. esc() is what keeps it safe.
+//
+// Schema changes that relax string-length caps or add free-form fields
+// must be reviewed against this boundary.
 // ============================================================
 (function (root, factory) {
   var api = factory();
