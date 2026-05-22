@@ -32538,7 +32538,9 @@ function renderProducts() {
 
     var catTxt = (p.categories && p.categories.length) ? p.categories.join(', ') : '';
 
-    html += '<tr style="cursor:pointer;" onclick="viewProduct(\'' + esc(p.pid) + '\')">';
+    // W1-followup: data-attr + delegated listener (see top of file). Same
+    // behavior as the prior inline onclick; closes the W1-side esc-into-JS gap.
+    html += '<tr style="cursor:pointer;" data-view-pid="' + esc(p.pid) + '">';
     html += '<td>' +
       (thumb
         ? '<img src="' + esc(thumb) + '" alt="" style="width:56px;height:56px;object-fit:cover;border-radius:6px;display:block;">'
@@ -33255,7 +33257,8 @@ function renderForecastSuggestedBuilds() {
     // button below stays unaffected since the click handler is on the
     // header div only, not the whole card.
     html += '<div style="background:var(--cream,#f5f0e8);border:1px solid var(--cream-dark,#e8e0d4);border-radius:10px;padding:16px;display:flex;flex-direction:column;gap:8px;">' +
-      '<div role="link" tabindex="0" onclick="viewProduct(\'' + esc(f.pid) + '\')" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();viewProduct(\'' + esc(f.pid) + '\');}" style="display:flex;gap:12px;align-items:flex-start;cursor:pointer;border-radius:6px;padding:2px;" onmouseover="this.style.background=\'rgba(127,127,127,0.12)\';" onmouseout="this.style.background=\'transparent\';">' +
+      // W1-followup: same data-view-pid + global delegated handler pattern.
+      '<div role="link" tabindex="0" data-view-pid="' + esc(f.pid) + '" style="display:flex;gap:12px;align-items:flex-start;cursor:pointer;border-radius:6px;padding:2px;" onmouseover="this.style.background=\'rgba(127,127,127,0.12)\';" onmouseout="this.style.background=\'transparent\';">' +
         (imgUrl ? '<img src="' + esc(imgUrl) + '" style="width:56px;height:56px;border-radius:8px;object-fit:cover;" loading="lazy">' : '<div style="width:56px;height:56px;border-radius:8px;background:var(--cream-dark,#e8e0d4);display:flex;align-items:center;justify-content:center;font-size:1.6rem;">&#x1F3A8;</div>') +
         '<div style="flex:1;min-width:0;">' +
           '<div style="font-weight:600;font-size:0.9rem;">' + esc(f.name) + '</div>' +
@@ -33287,7 +33290,8 @@ function renderForecastSuggestedBuilds() {
       // W1.4: title + image area is a link to product detail. The Update
       // Product Type button below stays as its own action.
       html += '<div style="background:var(--cream,#f5f0e8);border:1px solid var(--cream-dark,#e8e0d4);border-radius:10px;padding:16px;display:flex;flex-direction:column;gap:8px;">' +
-        '<div role="link" tabindex="0" onclick="viewProduct(\'' + esc(f.pid) + '\')" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();viewProduct(\'' + esc(f.pid) + '\');}" style="display:flex;gap:12px;align-items:flex-start;cursor:pointer;border-radius:6px;padding:2px;" onmouseover="this.style.background=\'rgba(127,127,127,0.12)\';" onmouseout="this.style.background=\'transparent\';">' +
+        // W1-followup: same pattern as the sibling Forecast card above.
+        '<div role="link" tabindex="0" data-view-pid="' + esc(f.pid) + '" style="display:flex;gap:12px;align-items:flex-start;cursor:pointer;border-radius:6px;padding:2px;" onmouseover="this.style.background=\'rgba(127,127,127,0.12)\';" onmouseout="this.style.background=\'transparent\';">' +
           (imgUrl ? '<img src="' + esc(imgUrl) + '" style="width:56px;height:56px;border-radius:8px;object-fit:cover;" loading="lazy">' : '<div style="width:56px;height:56px;border-radius:8px;background:var(--cream-dark,#e8e0d4);display:flex;align-items:center;justify-content:center;font-size:1.6rem;">&#x1F3A8;</div>') +
           '<div style="flex:1;min-width:0;">' +
             '<div style="font-weight:600;font-size:0.9rem;">' + esc(f.name) + '</div>' +
@@ -33295,7 +33299,10 @@ function renderForecastSuggestedBuilds() {
           '</div>' +
         '</div>' +
         '<div style="font-size:0.85rem;color:var(--warm-gray);">' + f.last90 + ' ordered in 90 days &middot; Selling ' + f.monthlyRate + '/mo</div>' +
-        '<button class="btn btn-secondary" style="font-size:0.85rem;padding:6px 14px;align-self:flex-start;" onclick="viewProduct(\'' + esc(f.pid) + '\')">Update Product Type &#x2192;</button>' +
+        // W1-followup: button inside Forecast card — data-view-pid on the
+        // button itself so the inner-button-skip guard in the delegated
+        // listener doesn't block it (buttons opt in via data-view-pid).
+        '<button class="btn btn-secondary" style="font-size:0.85rem;padding:6px 14px;align-self:flex-start;" data-view-pid="' + esc(f.pid) + '">Update Product Type &#x2192;</button>' +
       '</div>';
     });
     html += '</div>';
@@ -33548,7 +33555,9 @@ function renderForecastDemandTable(targetId) {
 
     // W1.8: row drills into the specific product, not back to the list.
     // Same viewProduct() flow as the W1.4 Forecast card links.
-    html += '<tr style="border-bottom:1px solid var(--cream-dark,#e8e0d4);cursor:pointer;" onclick="viewProduct(\'' + esc(f.pid) + '\')">' +
+    // W1-followup: Demand Overview row click (originally W1.8 surface flagged
+    // in W1-SEC; tracked under OPEN -OtEkpFjIRwH_z-1CJuB).
+    html += '<tr style="border-bottom:1px solid var(--cream-dark,#e8e0d4);cursor:pointer;" data-view-pid="' + esc(f.pid) + '">' +
       '<td style="padding:8px;">' +
         '<div style="display:flex;gap:8px;align-items:center;">' +
           (imgUrl ? '<img src="' + esc(imgUrl) + '" style="width:32px;height:32px;border-radius:6px;object-fit:cover;" loading="lazy">' : '') +
@@ -35363,6 +35372,48 @@ if (!window._pdCustomerSignalDelegatedListenerAttached) {
     }
   });
   window._pdCustomerSignalDelegatedListenerAttached = true;
+}
+
+// W1-followup (OPEN -OtEkpFjIRwH_z-1CJuB): global delegated handler for
+// product-id-bearing onclicks across Forecast cards, Products list rows,
+// Demand Overview rows, and the Sales-by-Product doorway. Replaces the
+// pattern `onclick="viewProduct('<esc(pid)>')"` with `data-view-pid="<esc>"`.
+// Keyboard activation (Enter/Space on role="link" tabindex="0" elements)
+// flows through the same handler. Idempotent attach + scoped via attribute
+// presence so it only fires on opted-in elements.
+if (!window._mastViewProductDelegateAttached) {
+  function _mastViewProductFromEvent(ev) {
+    var t = ev.target.closest && ev.target.closest('[data-view-pid]');
+    if (!t) return;
+    var pid = t.getAttribute('data-view-pid');
+    if (!pid) return;
+    // Don't hijack clicks on nested actionable controls (buttons, inputs,
+    // links) that have their own handlers — match the previous behavior
+    // where row-level onclick only fired when the user clicked the row body.
+    var hit = ev.target;
+    while (hit && hit !== t) {
+      var tag = hit.tagName;
+      if (tag === 'BUTTON' || tag === 'A' || tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') {
+        // Allow the inner control to opt-in if it carries data-view-pid itself.
+        if (hit.hasAttribute('data-view-pid')) break;
+        return;
+      }
+      hit = hit.parentElement;
+    }
+    ev.preventDefault();
+    if (typeof viewProduct === 'function') viewProduct(pid);
+  }
+  document.addEventListener('click', _mastViewProductFromEvent);
+  document.addEventListener('keydown', function(ev) {
+    if (ev.key !== 'Enter' && ev.key !== ' ') return;
+    var t = ev.target.closest && ev.target.closest('[data-view-pid]');
+    if (!t) return;
+    // Only Enter/Space activation for role="link" + tabindex="0" elements
+    // (matches the original onkeydown pattern on Forecast cards).
+    if (t.getAttribute('role') !== 'link') return;
+    _mastViewProductFromEvent(ev);
+  });
+  window._mastViewProductDelegateAttached = true;
 }
 
 // Pure aggregator — variant-level returns and repurchase signal for a product.
