@@ -33287,8 +33287,12 @@ window.invalidateProductCustomerSignal = function(pid) {
 };
 
 function loadProductCustomerSignal(pid) {
-  var el = document.getElementById('pdCustomerSignal');
-  if (!el || el.dataset.pid !== pid) return;
+  // Writes the rendered signal into #pdCustomerSignalContent (the inner div
+  // below the collapsible header). Pid match is checked against the wrapper.
+  var wrapper = document.getElementById('pdCustomerSignal');
+  if (!wrapper || wrapper.dataset.pid !== pid) return;
+  var el = document.getElementById('pdCustomerSignalContent');
+  if (!el) return;
 
   // Serve from cache if fresh — avoids re-fetching on every tab click.
   var cached = window._pdCustomerSignalCache[pid];
@@ -33310,8 +33314,10 @@ function loadProductCustomerSignal(pid) {
     MastDB.query('admin/rma').limitToLast(500).once()
       .then(function(s) { return (s && s.val()) || {}; }).catch(function() { return {}; })
   ]).then(function(results) {
-    var freshEl = document.getElementById('pdCustomerSignal');
-    if (!freshEl || freshEl.dataset.pid !== pid) return; // navigated away
+    var freshWrapper = document.getElementById('pdCustomerSignal');
+    if (!freshWrapper || freshWrapper.dataset.pid !== pid) return; // navigated away
+    var freshEl = document.getElementById('pdCustomerSignalContent');
+    if (!freshEl) return;
 
     var reviewsAll = results[0];
     var ticketsAll = results[1];
@@ -33515,12 +33521,42 @@ function loadProductCustomerSignal(pid) {
     // serve from cache (5-min TTL) instead of re-fetching ~3,500 docs.
     window._pdCustomerSignalCache[pid] = { html: html, cachedAt: Date.now() };
   }).catch(function(err) {
-    var freshEl = document.getElementById('pdCustomerSignal');
-    if (!freshEl || freshEl.dataset.pid !== pid) return;
+    var freshWrapper = document.getElementById('pdCustomerSignal');
+    if (!freshWrapper || freshWrapper.dataset.pid !== pid) return;
+    var freshEl = document.getElementById('pdCustomerSignalContent');
+    if (!freshEl) return;
     freshEl.innerHTML = '<div style="padding:20px;color:var(--danger);">Error loading customer signal: ' + esc(err && err.message || String(err)) + '</div>';
     // Don't cache errors — let the next attempt retry.
   });
 }
+
+// Click handler for the Customer Signal collapsible header. Expanded ⇄ collapsed
+// state lives on the wrapper's data-expanded attribute; chevron + aria-expanded
+// mirror the state. On expand, fire loadProductCustomerSignal if content empty.
+window.toggleProductCustomerSignal = function(pid) {
+  var wrapper = document.getElementById('pdCustomerSignal');
+  if (!wrapper || wrapper.dataset.pid !== pid) return;
+  var contentEl = document.getElementById('pdCustomerSignalContent');
+  var chevron = document.getElementById('pdCustomerSignalChevron');
+  var header = wrapper.querySelector('[role="button"][aria-label="Toggle customer signal"]');
+  var expanded = wrapper.dataset.expanded === 'true';
+
+  if (expanded) {
+    if (contentEl) contentEl.style.display = 'none';
+    if (chevron) chevron.innerHTML = '▸'; // ▸
+    wrapper.dataset.expanded = 'false';
+    if (header) header.setAttribute('aria-expanded', 'false');
+  } else {
+    if (contentEl) contentEl.style.display = '';
+    if (chevron) chevron.innerHTML = '▾'; // ▾
+    wrapper.dataset.expanded = 'true';
+    if (header) header.setAttribute('aria-expanded', 'true');
+    // Lazy-fetch on first expand for this pid in this session
+    if (contentEl && !contentEl.innerHTML.trim()) {
+      loadProductCustomerSignal(pid);
+    }
+  }
+};
 
 function loadProductInventoryHistory(pid) {
   var el = document.getElementById('pdInventoryHistory');
@@ -38936,25 +38972,31 @@ function renderProductDetail(pid) {
   // Customer Signal is on-demand — the underlying load fans out to ~3,500
   // Firestore docs (cs_reviews + cs_tickets + orders + admin/rma). Auto-loading
   // it on every product detail render was expensive AND re-fired on every
-  // tab click. Now: render a collapsed placeholder with an explicit "Show"
-  // button; user clicks → fetch + render. Cache (5-min TTL) still applies so
-  // re-clicks within the same session are instant.
+  // tab click. Now: render a collapsible header row; clicking the header
+  // expands the card and fires the load (cached for 5min so repeat-clicks
+  // are instant). Tab clicks re-render with the cached state preserved so
+  // there's no flash for already-expanded cards.
+  var hasCachedSignal = !!(window._pdCustomerSignalCache && window._pdCustomerSignalCache[pid]);
+  var expandedAttr = hasCachedSignal ? ' data-expanded="true"' : ' data-expanded="false"';
+  var chevronInitial = hasCachedSignal ? '&#9662;' : '&#9656;'; // ▾ vs ▸
+  var contentInitial = hasCachedSignal ? window._pdCustomerSignalCache[pid].html : '';
   var customerSignalHtml = (!isCreate && pid && !isEditing)
-    ? '<div id="pdCustomerSignal" data-pid="' + esc(pid) + '" style="padding:16px 0;">' +
-        '<div style="border:1px solid var(--border,#e5e0d8);border-radius:8px;padding:14px 18px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;background:var(--surface-card,#fff);">' +
+    ? '<div id="pdCustomerSignal" data-pid="' + esc(pid) + '"' + expandedAttr + ' style="padding:16px 0;">' +
+        '<div onclick="toggleProductCustomerSignal(\'' + esc(pid) + '\')" role="button" tabindex="0" aria-expanded="' + (hasCachedSignal ? 'true' : 'false') + '" aria-label="Toggle customer signal" style="border:1px solid var(--border,#e5e0d8);border-radius:8px;padding:14px 18px;display:flex;align-items:center;justify-content:space-between;gap:16px;background:var(--surface-card,#fff);cursor:pointer;user-select:none;">' +
           '<div>' +
             '<div style="font-size:0.85rem;font-weight:600;color:var(--charcoal,var(--text));text-transform:uppercase;letter-spacing:0.04em;">Customer Signal</div>' +
             '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:4px;">Reviews, repurchase rate, return reasons, and often-bought-together &mdash; per this product.</div>' +
           '</div>' +
-          '<button class="btn btn-secondary btn-small" onclick="loadProductCustomerSignal(\'' + esc(pid) + '\')" aria-label="Load customer signal for this product">Show customer signal</button>' +
+          '<span id="pdCustomerSignalChevron" aria-hidden="true" style="font-size:1.0rem;color:var(--warm-gray);flex-shrink:0;transition:transform 0.15s;">' + chevronInitial + '</span>' +
         '</div>' +
+        '<div id="pdCustomerSignalContent" style="' + (hasCachedSignal ? '' : 'display:none;') + '">' + contentInitial + '</div>' +
       '</div>'
     : '';
   el.innerHTML = '<button class="detail-back" onclick="backToProducts()">&larr; ' + backLabel + '</button>' +
     publishUndoHtml + driftAlertHtml + recipeReadyHtml + headerHtml + versionLinkBannerHtml + revisionBannerHtml + archivedBannerHtml + tabBarHtml + detailsHtml + variantsHtml + imagesHtml + prodHtml + invTabHtml + customerSignalHtml + actionHtml;
-  // Auto-show ONLY if the signal for this pid is already cached (free, instant) —
-  // otherwise stay collapsed and let the user opt in via the button.
-  if (customerSignalHtml && window._pdCustomerSignalCache && window._pdCustomerSignalCache[pid]) {
+  // No auto-load on render — cached content already inlined above when present,
+  // and uncached state stays collapsed until user clicks the header.
+  if (false && customerSignalHtml && window._pdCustomerSignalCache && window._pdCustomerSignalCache[pid]) {
     loadProductCustomerSignal(pid);
   }
 
