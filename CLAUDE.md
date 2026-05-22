@@ -7,26 +7,42 @@
 1. **Read ARCHITECTURE.md** in this repo — it documents the Mast three-app architecture, deployment procedures, data model, and key patterns. Do NOT assume hosting strategy, deploy process, or auth flow.
 2. **Read memory files** — Check `~/.claude/projects/-Users-davidstewart-Downloads/memory/MEMORY.md` for cross-project context, active jobs, and deployment procedures.
 3. **If touching admin UI, load the Admin Design System.** Read `/Users/davidstewart/Developer/mast-architecture/docs/admin-design-system.md` and load the `mast-ux-style-guide` skill first, then relevant sub-skills (`mast-ux-tokens`, `mast-ux-screen-types`, `mast-ux-interaction`, `mast-ux-widgets`, `mast-ux-navigation-toasts`, `mast-ux-accessibility`). Customer and product detail screens are the reference implementations of Paradigm A. Do NOT copy patterns from non-retrofitted modules.
-4. **Deploy via `mast-deploy storefront` (canonical) or `mast_hosting` MCP tool (underlying mechanism).** Job 2b Stage 3b added a pod-aware wrapper:
+4. **Deploy via `mast-deploy storefront` (canonical) or `mast_hosting` MCP tool (underlying mechanism).** A deploy uploads code to a Firebase Hosting site. The Cloudflare worker (`runmast-tenant-proxy`) decides whether any given tenant hostname reads from that site — based on the `podRouting` KV entry for the hostname (or the fallback `mast-tenant-shared.web.app`). **Deploying alone does not switch what a tenant serves; you also need the right KV entry.** Job 2b Stage 3b added a pod-aware wrapper:
    - **Canonical path:** `npx mast-deploy storefront --pod=<id> [--tenant=<id>]` — pod-aware (target project resolved from `pods/<id>.yaml`), R17-audited (`deploy_events` row per tenant + summary), and dry-run capable (`--dry-run` writes a T2 audit row without invoking the MCP tool). The wrapper delegates to `mast_hosting deploy` per tenant — `mast_hosting` remains the single source of truth for deploy mechanics (skip-list, sequential ordering, pre-paint config writes — see `feedback_platform_hosting_deploy_all.md`).
-   - **Direct MCP path (still supported):** `mast_hosting(action: "deploy", tenantId: "{tenantId}")` — use when you need fine-grained control or are mid-incident. If MCP tools aren't in your tool list, use the HTTP fallback documented in memory.
+   - **Pod-shared path:** `npx mast-deploy storefront-shared --pod=<id>` — should target the per-pod shared site (`mast-tenant-shared` or `mast-tenant-shared-<pod>`), which is what most tenants serve from via the KV fallback or explicit KV entry. ⚠️ Currently silently no-ops (see sibling fix-task); until fixed, deploy with `mast_hosting(action: "deploy", tenantId: "shared")` directly.
+   - **Direct MCP path (still supported):** `mast_hosting(action: "deploy", tenantId: "{tenantId}")` — `tenantId: "shared"` lands on the shared site; a specific tenantId lands on that tenant's legacy per-tenant site (only meaningful if KV routes them there). Use when you need fine-grained control or are mid-incident. If MCP tools aren't in your tool list, use the HTTP fallback documented in memory.
    - **`declared-state.schema.yaml`** at the repo root declares the system-tenant skip-list and the build-version contract. Reconciler (Job 2b Stage 1) reads this file to surface drift.
+
+   **How to test your changes on a tenant:**
+   1. Deploy to the shared site (or per-pod shared site if working on a non-default pod): `mast_hosting(action: "deploy", tenantId: "shared")` (or `npx mast-deploy storefront-shared --pod=<id>` once fixed).
+   2. Hard refresh `<tenant>.runmast.com` (cache-bust: ⌘⇧R, or append `?v=<timestamp>`). The worker will proxy to the shared origin and serve the new code.
+   3. **If the KV entry for that tenant points to a per-tenant site** (legacy/pinned), the shared deploy will not show up — you must also deploy to that tenant's specific site with `mast_hosting(action: "deploy", tenantId: "<tenantId>")`, or update the KV entry to fall back to shared. Check the KV in the Cloudflare dashboard (KV namespace `podRouting`) when in doubt.
 5. **After context compaction** — Re-read this bootstrap section, ARCHITECTURE.md, and memory files. Never improvise from summary alone.
 
 ## What This Repo Is
 
-This is the **Mast Tenant Template** (formerly "Tenant 0" / shirglassworks). It is the master development repo from which all Mast tenant sites are deployed. It is NOT a production tenant — it is the source code that `mast_hosting` deploys to every tenant's Firebase Hosting site.
+This is the **Mast Tenant Template** (formerly "Tenant 0" / shirglassworks). It is the master development repo for all Mast tenant sites. It is NOT a production tenant — it is the source code that `mast_hosting` deploys to Firebase Hosting sites that a Cloudflare worker then routes tenant traffic to.
 
-Features: public storefront (shop, commissions, blog), admin app (Studio Companion PWA — camera-first POS, production management, inventory, QR scanning, Market tools). Firebase Firestore + Storage + Cloud Functions. Firebase Hosting (deployed via `mast_hosting` MCP tool).
+Features: public storefront (shop, commissions, blog), admin app (Studio Companion PWA — camera-first POS, production management, inventory, QR scanning, Market tools). Firebase Firestore + Storage + Cloud Functions. Firebase Hosting origins, fronted by Cloudflare worker `runmast-tenant-proxy`.
 
-## How Tenants Work
+## How Tenants Work (current serving + deploy model — verified 2026-05-22)
 
-- Each tenant gets their own Firebase Hosting site (e.g., `mast-shirglassworks.web.app`, `mast-meadowpottery.web.app`)
-- `mast_hosting deploy` downloads this repo's tarball from GitHub and uploads it to the tenant's site
-- `storefront-tenant.js` resolves the tenant dynamically from the hostname via platform Firestore (`tenantsByDomain` → `publicConfig`)
-- `tenant-brand.js` injects brand-specific content (name, tagline, colors, contact info) into DOM elements via `data-tenant` attributes
-- The admin app reads `TENANT_FIREBASE_CONFIG` (set by `storefront-tenant.js`) and `TENANT_CONFIG` (from platform registry) — no hardcoded tenant references
-- All tenant data lives under `tenants/{tenantId}/` in Firestore (legacy-style paths like `admin/...` and `public/...` translate via `MastDB` / DataStore adapter to `tenants/{tenantId}/...` collections). `MastDB` enforces tenant scope.
+**Serving path (request flow):**
+
+1. **DNS:** `*.runmast.com` delegates to Cloudflare nameservers. All hostnames hit the Cloudflare worker `runmast-tenant-proxy` (source at `/Users/davidstewart/Downloads/runmast-tenant-proxy/worker.js`).
+2. **Worker routing:**
+   - Apex `runmast.com` → proxied to `mast-platform-prod.web.app` (marketing site).
+   - All other hostnames → KV lookup in namespace `podRouting` (CF KV id `254fd9d0ee8142328dfb72b15d51d5f5`) keyed by hostname. The value is JSON `{ podId, originHost }` — the worker proxies the request to `originHost` (a Firebase Hosting site).
+   - **Fallback:** if the hostname has no KV entry, the worker proxies to `mast-tenant-shared.web.app` (the default pod-shared site).
+3. **Origin:** Firebase Hosting serves this repo's code. `storefront-tenant.js` resolves the tenant ID from the incoming hostname via the platform Firestore registry (`tenantsByDomain` → `publicConfig`).
+4. **Tenant data:** `tenant-brand.js` injects brand content via `data-tenant` attributes. Admin reads `TENANT_FIREBASE_CONFIG` + `TENANT_CONFIG`. All tenant data lives under `tenants/{tenantId}/` in Firestore — `MastDB` enforces tenant scope.
+
+**Site model:**
+
+- **Per-pod shared site** (e.g. `mast-tenant-shared.web.app`, `mast-tenant-shared-<pod>.web.app`) — the primary origin for almost every tenant. One deploy serves many tenants. This is what the KV fallback and most KV entries point to.
+- **Per-tenant sites** (e.g. `mast-shirglassworks.web.app`) — legacy / rollback-only. Still deployable for tenants that need a pinned version or a hot-patch, but the default tenant is served from the shared site.
+
+**KV `podRouting` is the authoritative serving map.** A Firebase deploy lands code on a hosting site, but the worker decides whether any given tenant hostname actually reads from that site. Updating `podRouting` is a separate flow from `mast_hosting deploy` (currently a Cloud Function reconciler — undocumented; see sibling task tracking).
 
 ## RULEs — Do not violate these.
 
@@ -43,7 +59,7 @@ Features: public storefront (shop, commissions, blog), admin app (Studio Compani
 
 ## CONSTRAINTs — External realities. Work within these.
 
-- Firebase Hosting — deployed via `mast_hosting` MCP tool. No GitHub Pages.
+- Firebase Hosting is the origin layer (deployed via `mast_hosting` MCP tool). Cloudflare worker `runmast-tenant-proxy` is the edge/routing layer — tenant hostnames are mapped to origin hosting sites via the `podRouting` KV namespace. No GitHub Pages.
 - Firebase Firestore is the persistence layer. All tenant data under `tenants/{tenantId}/...` (DataStore translates legacy `{tenantId}/...` path strings).
 - Platform registry lives in `mast-platform-prod` Firestore (collections prefixed `platform_*`, e.g. `platform_tenants`, `platform_userTenantMap`).
 - Cloud Functions deployed on `mast-platform-prod`. Tenant-specific secrets in GCP Secret Manager with `{secretPrefix}_` prefix.

@@ -25,7 +25,46 @@ This repo is the **Mast Tenant Template** — the master source code deployed to
 
 ## Overview
 
-The Mast Tenant Template is a multi-tenant storefront deployed to Firebase Hosting with a Firebase Firestore backend (post-B.5/B.7 cutover; legacy RTDB retained for lockdown only). The public site (product catalog, gallery, checkout) uses vanilla JS with no framework. The admin app (`/app/index.html`) is a single-file React 18 app with multi-tenant auth and RBAC.
+The Mast Tenant Template is a multi-tenant storefront deployed to Firebase Hosting **origins**, fronted by a Cloudflare worker (`runmast-tenant-proxy`) that routes tenant hostnames to the correct origin. Backend is Firebase Firestore (post-B.5/B.7 cutover; legacy RTDB retained for lockdown only). The public site (product catalog, gallery, checkout) uses vanilla JS with no framework. The admin app (`/app/index.html`) is a single-file React 18 app with multi-tenant auth and RBAC.
+
+### Serving flow (verified 2026-05-22)
+
+```
+  Browser
+    │  https://<tenant>.runmast.com/...
+    ▼
+  Cloudflare DNS  (*.runmast.com → CF nameservers)
+    │
+    ▼
+  Worker: runmast-tenant-proxy
+    │   source: /Users/davidstewart/Downloads/runmast-tenant-proxy/worker.js
+    │
+    ├── hostname == runmast.com (apex)
+    │     → proxy to mast-platform-prod.web.app   (marketing site)
+    │
+    └── else → KV lookup in `podRouting` (id 254fd9d0ee8142328dfb72b15d51d5f5)
+          │     key: hostname
+          │     value: { podId, originHost }
+          │
+          ├── hit → proxy to originHost           (Firebase Hosting site)
+          └── miss → proxy to mast-tenant-shared.web.app   (default shared origin)
+
+  Origin: Firebase Hosting site (this repo's code)
+    │
+    ▼
+  storefront-tenant.js resolves tenantId from hostname
+  (platform Firestore: tenantsByDomain → publicConfig)
+    │
+    ▼
+  tenant-brand.js + MastDB read tenants/{tenantId}/...
+```
+
+**Two kinds of origin sites:**
+
+- **Per-pod shared site** (`mast-tenant-shared.web.app`, `mast-tenant-shared-<pod>.web.app`) — primary origin for most tenants. One deploy serves many tenants. Both the KV fallback and most explicit KV entries point here.
+- **Per-tenant sites** (`mast-shirglassworks.web.app`, etc.) — legacy / rollback-only. Used when a tenant needs a pinned version or hot-patch; KV must explicitly route the hostname here.
+
+**KV `podRouting` is the authoritative serving map.** Deploying to a Firebase site lands code but does not switch what a tenant reads from — that's the KV entry. KV updates are a separate flow (currently a Cloud Function reconciler — see CLAUDE.md).
 
 **Repo:** `stewartdavidp-ship-it/mast-tenant-template`
 **GCP project (platform):** `mast-platform-prod`
@@ -51,32 +90,37 @@ There are two distinct environments. Both serve the same code from this repo but
 ### Production Environment — `mast-platform-prod` project
 
 - **GCP/Firebase project:** `mast-platform-prod`
-- **Hosting sites:** One per tenant (e.g., `mast-shirglassworks`, `mast-meadowpottery`) → `mast-{tenantId}.web.app`
+- **Hosting sites:**
+  - **Per-pod shared:** `mast-tenant-shared.web.app` (default pod), `mast-tenant-shared-<pod>.web.app` (other pods). Primary origin for almost every tenant.
+  - **Per-tenant (legacy/rollback only):** `mast-{tenantId}.web.app` (e.g., `mast-shirglassworks`, `mast-meadowpottery`). Only meaningful if the KV `podRouting` entry for the hostname points here.
 - **Firestore:** `mast-platform-prod` (tenant data under `tenants/{tenantId}/...` collections)
 - **Storage:** `gs://mast-platform-prod.firebasestorage.app` (tenant assets under `{tenantId}/`)
+- **Edge / routing:** Cloudflare worker `runmast-tenant-proxy` + KV namespace `podRouting`. The worker decides which origin a tenant hostname reads from — see the serving-flow diagram in Overview.
 - **Purpose:** Production tenants. Contains curated production data (subset of dev data — test data excluded).
-- **Deploy:** `mast_hosting(action: "deploy", tenantId: "{tenantId}")` via MCP tool. Downloads this repo's tarball from GitHub, uploads to the tenant's Firebase Hosting site.
-- **Custom domains:** Production tenants will get custom domains (e.g., `shirglassworks.com` → `mast-shirglassworks.web.app`). Managed via `mast_domains` MCP tool.
+- **Deploy:** `mast_hosting(action: "deploy", tenantId: "shared" | "{tenantId}")` via MCP tool. Downloads this repo's tarball from GitHub, uploads to the named Firebase Hosting site. Whether tenants actually serve the new code depends on KV routing.
+- **Custom domains:** Production tenants will get custom domains (e.g., `shirglassworks.com`). Custom domains terminate at Cloudflare and hit the same worker; the worker resolves them via the same KV lookup. Managed via `mast_domains` MCP tool.
 
 ### Deploy Flow — Code Push
 
-When code is pushed to this repo, it needs to be deployed to all environments:
+When code is pushed to this repo, it needs to be deployed to all relevant origins:
 
+- **Shared site (covers most tenants):** `mast_hosting(action: "deploy", tenantId: "shared")` — or `npx mast-deploy storefront-shared --pod=<id>` (currently silently no-ops; see sibling fix-task).
+- **Per-pod shared:** `mast_hosting(action: "deploy", tenantId: "shared-<pod>")` for non-default pods.
 - **Dev site:** `mast_hosting(action: "deploy", tenantId: "dev")`
-- **Specific tenant:** `mast_hosting(action: "deploy", tenantId: "{tenantId}")`
-- **All active tenants:** `mast_hosting(action: "deploy_all")` — deploys sequentially to all active tenants including dev
+- **Specific tenant (legacy/pinned):** `mast_hosting(action: "deploy", tenantId: "{tenantId}")` — only needed if KV routes that tenant to a per-tenant site.
+- **All active per-tenant sites:** `mast_hosting(action: "deploy_all")` — deploys sequentially. Mostly relevant for tenants still on legacy per-tenant routing.
 
-All deploys use the `mast_hosting` MCP tool — no Firebase CLI required.
+All deploys use the `mast_hosting` MCP tool — no Firebase CLI required. Updating `podRouting` KV entries (which tenant reads from which site) is a separate flow — currently a Cloud Function reconciler, not part of `mast_hosting deploy`.
 
 ## Deployment Details (Production)
 
 Deployed programmatically via the `mast_hosting` MCP tool on the Mast MCP server (`mast-platform-prod` GCP project). The tool downloads this repo's tarball from GitHub, gzips files, and uploads via the Firebase Hosting REST API.
 
-- **Deploy command:** `mast_hosting(action: "deploy", tenantId: "{tenantId}")`
-- **Deploy all:** `mast_hosting(action: "deploy_all")` — deploys to all active tenants
+- **Deploy command:** `mast_hosting(action: "deploy", tenantId: "shared" | "{tenantId}")`
+- **Deploy all:** `mast_hosting(action: "deploy_all")` — deploys to all active per-tenant sites
 - **Hosting config:** `platform_tenants/{tenantId}` document → `hosting` field in `mast-platform-prod` Firestore
 - **Rewrite rule:** `/app/**` → `/app/index.html` (SPA routing for admin app)
-- Each tenant has its own Firebase Hosting site (e.g., `mast-shirglassworks.web.app`, `mast-meadowpottery.web.app`)
+- **Origin sites:** one per-pod shared site (serves most tenants) plus legacy per-tenant sites (rollback / pinned use only). See Overview for the worker + KV routing model.
 
 ## Public Site
 

@@ -99,8 +99,46 @@ jobs:
           fi
           # mast-deploy storefront-shared lands in 0.7.0 (W2-M2). Bump after every
           # mast-deploy publish that ships new storefront functionality.
-          # 0.7.3: SSE response parsing (server upgrades when client offers
-          # both content types).
+          # 0.7.4: SHA-pinning (commit-pinned tarball) + positive-evidence
+          # success check (require deployed:true + versionName, fail on
+          # silent-success envelopes like c2-gate confirmation tokens).
           NODE_AUTH_TOKEN="${{ secrets.MAST_GHA_PAT }}" \
-            npx --yes -p '@stewartdavidp-ship-it/mast-deploy@0.7.3' \
+            npx --yes -p '@stewartdavidp-ship-it/mast-deploy@0.7.4' \
               mast-deploy storefront-shared --pod="${POD}" $DRY_RUN_FLAG
+
+      # Verification: confirm the deployed origin actually serves THIS commit's
+      # content. Added after 2026-05-22 silent-success incident (GHA run
+      # 26294583197) where the CLI printed ✓ but mast_hosting had pulled a stale
+      # GitHub `/tarball/main` from before the push and released it. Compares
+      # SHA-256 of `app/index.html` in the checkout against the live URL with a
+      # short retry budget. Skipped on dry-run.
+      - name: Verify deployed content matches commit
+        if: ${{ inputs.dry_run != true }}
+        env:
+          POD: ${{ inputs.pod || 'dev' }}
+        run: |
+          set -euo pipefail
+          # Site host is pod-dependent. Mirrors POD_TARGETS in
+          # mast-mcp-server/src/tools/mast-hosting.ts.
+          case "${POD}" in
+            dev|legacy)         SITE="mast-tenant-shared" ;;
+            prod-us-east-1)     SITE="mast-tenant-shared-east-1" ;;
+            prod-us-west-1)     SITE="mast-tenant-shared-west-1" ;;
+            *) echo "::error::unknown pod '${POD}' — extend verify step"; exit 1 ;;
+          esac
+          URL="https://${SITE}.web.app/app/index.html"
+          EXPECTED=$(sha256sum mast-tenant-template/app/index.html | awk '{print $1}')
+          echo "expected sha256(app/index.html): ${EXPECTED}"
+          echo "verifying ${URL}"
+          for i in 1 2 3 4 5 6 7 8 9 10; do
+            ACTUAL=$(curl -fsSL --max-time 15 "${URL}" | sha256sum | awk '{print $1}') || ACTUAL=""
+            if [ "${ACTUAL}" = "${EXPECTED}" ]; then
+              echo "✓ deployed origin matches commit (attempt ${i})"
+              exit 0
+            fi
+            echo "attempt ${i}: got ${ACTUAL:-<fetch failed>}, retrying in 15s..."
+            sleep 15
+          done
+          echo "::error::deployed origin never converged to commit ${{ github.sha }} (expected sha256 ${EXPECTED})"
+          echo "::error::silent-success class of failure — mast_hosting likely served a stale GitHub tarball"
+          exit 1
