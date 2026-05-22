@@ -295,30 +295,59 @@ window.TENANT_READY.then(function() {
 
     document.title = post.title + ' \u2014 ' + TENANT_TITLE_SUFFIX();
 
-    // OG meta tags for social sharing
-    var ogTags = [
-      { property: 'og:title', content: post.title || '' },
-      { property: 'og:type', content: 'article' },
-      { property: 'og:url', content: window.location.href }
-    ];
-    if (post.excerpt) ogTags.push({ property: 'og:description', content: post.excerpt });
-    else if (post.bodyHtml) {
+    // W1.4 \u2014 derive SEO description: explicit metaDescription > excerpt > body extract.
+    var description = post.metaDescription || post.excerpt || '';
+    if (!description && post.bodyHtml) {
       var _ogTmp = document.createElement('div'); _ogTmp.innerHTML = post.bodyHtml;
-      var _ogDesc = (_ogTmp.textContent || '').trim().substring(0, 200);
-      if (_ogDesc) ogTags.push({ property: 'og:description', content: _ogDesc });
+      description = (_ogTmp.textContent || '').trim().substring(0, 200);
     }
-    if (post.image) ogTags.push({ property: 'og:image', content: post.image });
-    ogTags.push({ name: 'twitter:card', content: post.image ? 'summary_large_image' : 'summary' });
-    ogTags.forEach(function(tag) {
-      var meta = document.createElement('meta');
-      Object.keys(tag).forEach(function(k) { meta.setAttribute(k, tag[k]); });
-      document.head.appendChild(meta);
-    });
+    var ogImage = post.ogImage || post.image || '';
 
-    // Schema.org: BlogPosting
+    function upsertMeta(attrName, attrValue, contentValue) {
+      if (!contentValue) return;
+      var sel = 'meta[' + attrName + '="' + attrValue + '"]';
+      var el = document.head.querySelector(sel);
+      if (!el) {
+        el = document.createElement('meta');
+        el.setAttribute(attrName, attrValue);
+        document.head.appendChild(el);
+      }
+      el.setAttribute('content', contentValue);
+    }
+
+    // Standard meta description
+    upsertMeta('name', 'description', description);
+
+    // W1.4 \u2014 canonical link (use explicit canonical if set, else self)
+    var canonicalHref = post.canonical || window.location.href.split('?')[0] + '?id=' + postId;
+    var canonicalLink = document.head.querySelector('link[rel="canonical"]');
+    if (!canonicalLink) {
+      canonicalLink = document.createElement('link');
+      canonicalLink.setAttribute('rel', 'canonical');
+      document.head.appendChild(canonicalLink);
+    }
+    canonicalLink.setAttribute('href', canonicalHref);
+
+    // OG + Twitter meta tags for social sharing
+    upsertMeta('property', 'og:title', post.title || '');
+    upsertMeta('property', 'og:type', 'article');
+    upsertMeta('property', 'og:url', window.location.href);
+    upsertMeta('property', 'og:description', description);
+    if (ogImage) upsertMeta('property', 'og:image', ogImage);
+    upsertMeta('name', 'twitter:card', ogImage ? 'summary_large_image' : 'summary');
+    upsertMeta('name', 'twitter:title', post.title || '');
+    upsertMeta('name', 'twitter:description', description);
+    if (ogImage) upsertMeta('name', 'twitter:image', ogImage);
+
+    // Schema.org: BlogPosting / Article \u2014 W1.4 respects post.schemaType selector.
     if (window.MastSchema) {
       post._id = post._id || postId;
-      MastSchema.inject(MastSchema.blogPosting(post));
+      post.image = ogImage || post.image;
+      var schemaJson = MastSchema.blogPosting(post);
+      if (post.schemaType === 'Article' && schemaJson && schemaJson['@type']) {
+        schemaJson['@type'] = 'Article';
+      }
+      MastSchema.inject(schemaJson);
     }
 
     var date = post.publishedAt ? new Date(post.publishedAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : '';

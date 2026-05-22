@@ -374,6 +374,54 @@
       '<div style="font-size:0.72rem;color:var(--text-secondary);text-align:right;" id="blogExcerptCount">' + (post.excerpt || '').length + '/300</div>' +
       '</div>';
 
+    // ── W1.4 SEO fields (collapsed by default) ──
+    // Backfill defaults on first render of an existing post that's missing them.
+    blogBackfillSeoDefaults(post);
+    var schemaType = post.schemaType || 'BlogPosting';
+    html += '<details class="blog-seo-details" style="margin-bottom:12px;border:1px solid var(--border);border-radius:6px;padding:8px 12px;background:var(--surface-card,transparent);">' +
+      '<summary style="cursor:pointer;font-size:0.85rem;font-weight:600;color:var(--text-primary);">SEO &amp; Schema</summary>' +
+      '<div style="display:grid;gap:10px;margin-top:10px;">' +
+
+      '<div>' +
+        '<label style="display:block;font-size:0.78rem;color:var(--text-secondary);margin-bottom:2px;">URL slug</label>' +
+        '<input type="text" value="' + escapeHtml(post.slug || '') + '" onchange="blogUpdateSlug(this.value)" placeholder="post-url-slug" ' +
+          'style="width:100%;padding:6px 8px;border-radius:4px;border:1px solid var(--border);background:var(--surface-dark,transparent);color:var(--text-primary);font-size:0.85rem;font-family:monospace;">' +
+        '<div style="font-size:0.72rem;color:var(--text-secondary);margin-top:2px;">Auto-generated from the title. Edit to lock a custom URL.</div>' +
+      '</div>' +
+
+      '<div>' +
+        '<label style="display:block;font-size:0.78rem;color:var(--text-secondary);margin-bottom:2px;">Meta description</label>' +
+        '<textarea maxlength="200" rows="2" onchange="blogUpdateMetaDescription(this.value)" placeholder="Short summary for search engines (max ~160 chars)" ' +
+          'style="width:100%;padding:6px 8px;border-radius:4px;border:1px solid var(--border);background:var(--surface-dark,transparent);color:var(--text-primary);font-size:0.85rem;font-family:inherit;resize:vertical;">' +
+          escapeHtml(post.metaDescription || '') + '</textarea>' +
+        '<div style="font-size:0.72rem;color:var(--text-secondary);margin-top:2px;">Defaults to the excerpt if blank.</div>' +
+      '</div>' +
+
+      '<div>' +
+        '<label style="display:block;font-size:0.78rem;color:var(--text-secondary);margin-bottom:2px;">Canonical URL (optional)</label>' +
+        '<input type="text" value="' + escapeHtml(post.canonical || '') + '" onchange="blogUpdateCanonical(this.value)" placeholder="https://example.com/canonical-source" ' +
+          'style="width:100%;padding:6px 8px;border-radius:4px;border:1px solid var(--border);background:var(--surface-dark,transparent);color:var(--text-primary);font-size:0.85rem;font-family:monospace;">' +
+        '<div style="font-size:0.72rem;color:var(--text-secondary);margin-top:2px;">Use if this post was first published elsewhere.</div>' +
+      '</div>' +
+
+      '<div>' +
+        '<label style="display:block;font-size:0.78rem;color:var(--text-secondary);margin-bottom:2px;">OG image URL (optional)</label>' +
+        '<input type="text" value="' + escapeHtml(post.ogImage || '') + '" onchange="blogUpdateOgImage(this.value)" placeholder="Defaults to featured image" ' +
+          'style="width:100%;padding:6px 8px;border-radius:4px;border:1px solid var(--border);background:var(--surface-dark,transparent);color:var(--text-primary);font-size:0.85rem;font-family:monospace;">' +
+      '</div>' +
+
+      '<div>' +
+        '<label style="display:block;font-size:0.78rem;color:var(--text-secondary);margin-bottom:4px;">Schema.org type</label>' +
+        '<label style="font-size:0.85rem;margin-right:16px;cursor:pointer;">' +
+          '<input type="radio" name="blogSchemaType" value="BlogPosting" ' + (schemaType === 'BlogPosting' ? 'checked' : '') + ' onchange="blogUpdateSchemaType(this.value)"> BlogPosting' +
+        '</label>' +
+        '<label style="font-size:0.85rem;cursor:pointer;">' +
+          '<input type="radio" name="blogSchemaType" value="Article" ' + (schemaType === 'Article' ? 'checked' : '') + ' onchange="blogUpdateSchemaType(this.value)"> Article' +
+        '</label>' +
+      '</div>' +
+
+      '</div></details>';
+
     // AI compare mode or rich text editor
     if (blogAiResult) {
       html += '<div class="nl-ai-compare">' +
@@ -1128,8 +1176,16 @@
 
   async function blogUpdateTitle(val) {
     if (!blogCurrentPost) return;
+    // W1.4: only auto-update slug if it's empty or still matches the
+    // auto-generated form of the *previous* title (i.e. user hasn't customized it).
+    var prevTitle = blogCurrentPost.title || '';
+    var prevAutoSlug = blogSlugify(prevTitle);
+    var currentSlug = blogCurrentPost.slug || '';
+    var shouldAutoSlug = !currentSlug || currentSlug === prevAutoSlug;
     blogCurrentPost.title = val;
-    blogCurrentPost.slug = val.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    if (shouldAutoSlug) {
+      blogCurrentPost.slug = blogSlugify(val);
+    }
     blogCurrentPost.updatedAt = new Date().toISOString();
     try {
       await MastDB.blog.posts.ref(blogCurrentPostId).update({
@@ -1726,6 +1782,101 @@
     if (el) el.textContent = val.length + '/300';
   }
 
+  // ===== W1.4 SEO FIELDS =====
+
+  function blogSlugify(str) {
+    return String(str || '').toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '')
+      .slice(0, 80);
+  }
+
+  // Backfill slug + metaDescription on first edit of an existing post that
+  // doesn't have them yet. Pure client-side, fire-and-forget.
+  function blogBackfillSeoDefaults(post) {
+    if (!post || post._seoBackfilled) return;
+    var updates = {};
+    if (!post.slug && post.title) {
+      updates.slug = blogSlugify(post.title);
+      post.slug = updates.slug;
+    }
+    if (!post.metaDescription && post.excerpt) {
+      updates.metaDescription = String(post.excerpt).slice(0, 200);
+      post.metaDescription = updates.metaDescription;
+    }
+    post._seoBackfilled = true;
+    if (Object.keys(updates).length === 0) return;
+    updates.updatedAt = new Date().toISOString();
+    post.updatedAt = updates.updatedAt;
+    try {
+      MastDB.blog.posts.ref(post.id).update(updates).catch(function() {});
+    } catch (_e) {}
+  }
+
+  function blogUpdateSlug(val) {
+    if (!blogCurrentPost) return;
+    var clean = blogSlugify(val);
+    blogCurrentPost.slug = clean;
+    blogCurrentPost.updatedAt = new Date().toISOString();
+    MastDB.blog.posts.ref(blogCurrentPostId).update({
+      slug: clean,
+      updatedAt: blogCurrentPost.updatedAt
+    }).catch(function(err) { showToast('Error saving slug: ' + err.message, true); });
+  }
+
+  function blogUpdateMetaDescription(val) {
+    if (!blogCurrentPost) return;
+    var clean = String(val || '').slice(0, 200);
+    blogCurrentPost.metaDescription = clean;
+    blogCurrentPost.updatedAt = new Date().toISOString();
+    MastDB.blog.posts.ref(blogCurrentPostId).update({
+      metaDescription: clean,
+      updatedAt: blogCurrentPost.updatedAt
+    }).catch(function(err) { showToast('Error saving meta description: ' + err.message, true); });
+  }
+
+  function blogUpdateCanonical(val) {
+    if (!blogCurrentPost) return;
+    var clean = String(val || '').trim();
+    // Light validation — only persist plausible URLs or empty.
+    if (clean && !/^https?:\/\//i.test(clean)) {
+      showToast('Canonical URL must start with http:// or https://', true);
+      return;
+    }
+    blogCurrentPost.canonical = clean;
+    blogCurrentPost.updatedAt = new Date().toISOString();
+    MastDB.blog.posts.ref(blogCurrentPostId).update({
+      canonical: clean || null,
+      updatedAt: blogCurrentPost.updatedAt
+    }).catch(function(err) { showToast('Error saving canonical: ' + err.message, true); });
+  }
+
+  function blogUpdateOgImage(val) {
+    if (!blogCurrentPost) return;
+    var clean = String(val || '').trim();
+    if (clean && !/^https?:\/\//i.test(clean)) {
+      showToast('OG image URL must start with http:// or https://', true);
+      return;
+    }
+    blogCurrentPost.ogImage = clean;
+    blogCurrentPost.updatedAt = new Date().toISOString();
+    MastDB.blog.posts.ref(blogCurrentPostId).update({
+      ogImage: clean || null,
+      updatedAt: blogCurrentPost.updatedAt
+    }).catch(function(err) { showToast('Error saving OG image: ' + err.message, true); });
+  }
+
+  function blogUpdateSchemaType(val) {
+    if (!blogCurrentPost) return;
+    var clean = (val === 'Article') ? 'Article' : 'BlogPosting';
+    blogCurrentPost.schemaType = clean;
+    blogCurrentPost.updatedAt = new Date().toISOString();
+    MastDB.blog.posts.ref(blogCurrentPostId).update({
+      schemaType: clean,
+      updatedAt: blogCurrentPost.updatedAt
+    }).catch(function(err) { showToast('Error saving schema type: ' + err.message, true); });
+  }
+
   // ===== SCHEDULED PUBLISHING =====
 
   function blogCheckScheduledPosts() {
@@ -1946,6 +2097,11 @@
   window.blogRemoveFeaturedImage = blogRemoveFeaturedImage;
   window.blogUpdateExcerpt = blogUpdateExcerpt;
   window.blogUpdateExcerptCount = blogUpdateExcerptCount;
+  window.blogUpdateSlug = blogUpdateSlug;
+  window.blogUpdateMetaDescription = blogUpdateMetaDescription;
+  window.blogUpdateCanonical = blogUpdateCanonical;
+  window.blogUpdateOgImage = blogUpdateOgImage;
+  window.blogUpdateSchemaType = blogUpdateSchemaType;
   window.blogCancelSchedule = blogCancelSchedule;
   window.blogExecuteSlashCommand = blogExecuteSlashCommand;
   window.blogToggleEmojiPicker = blogToggleEmojiPicker;
