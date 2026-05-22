@@ -2129,264 +2129,35 @@
     renderPiecesList();
   }
 
+  // renderPiecesList — DEPRECATED. The Develop/Catalog lens was retired
+  // when sidebar consolidation collapsed both into a single Products page;
+  // chip filters (Draft / Review / Active / Archived) are the only lens now.
+  // Kept as a delegating shim so internal maker callers keep refreshing the
+  // unified products list without each needing edits. Prefer calling
+  // window.renderProducts() directly in new code.
   function renderPiecesList() {
-    var tab = document.getElementById('piecesTab');
-    if (!tab) return;
-    var esc = MastAdmin.esc;
+    if (typeof window.renderProducts === 'function') window.renderProducts();
+  }
 
-    // Get products from global productsData
-    var products = window.productsData || [];
-    if (!products.length && !window.productsLoaded) {
-      tab.innerHTML = '<div class="loading">Loading products...</div>';
-      // Wait for products to load, then re-render
-      if (typeof window.loadProducts === 'function') {
-        window.loadProducts().then(function() { renderPiecesList(); });
-      }
-      return;
-    }
-
-    // Build recipe lookup: productId → recipe
-    var recipeByProduct = {};
-    Object.values(recipesData).forEach(function(r) {
-      if (r.status !== 'archived' && r.productId) {
-        recipeByProduct[r.productId] = r;
-      }
-    });
-
-    var html = '';
-
-    // Header
-    html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">';
-    html += '<div>';
-    html += '<h2 style="font-family:\'Cormorant Garamond\',serif;font-size:1.6rem;font-weight:500;margin:0;">Products</h2>';
-    // Checkpoint G — Develop list shows the Develop-lens slice:
-    //   draft, ready, active+pendingRevision, archived (discontinuing or selling-through).
-    var filteredProducts = products.filter(function(p) {
-      if (typeof isProductInDevelopView === 'function') {
-        if (!isProductInDevelopView(p)) return false;
-      }
-      if (piecesCategoryFilter && (p.categories || []).indexOf(piecesCategoryFilter) < 0) return false;
-      return true;
-    });
-    var filteredWithRecipes = filteredProducts.filter(function(p){ return !!recipeByProduct[p.pid]; }).length;
-    html += '<span style="font-size:0.85rem;color:var(--warm-gray);">' + filteredProducts.length + ' product' + (filteredProducts.length === 1 ? '' : 's') + (piecesCategoryFilter ? ' in ' + esc(piecesCategoryFilter) : '') + ', ' + filteredWithRecipes + ' with recipes</span>';
-    html += '</div>';
-    html += '<div style="display:flex;gap:8px;align-items:center;">';
-
-    // Health badges: dirty count + below-floor count + Phase 2C drift count
-    var dirtyCount = 0;
-    var belowFloorCount = 0;
-    var driftFlagged = 0;
+  // Utility counts surfaced as badges in the unified Products header
+  // (dirty-recipe / drift / below-margin-floor). renderProducts pulls these
+  // via window.makerComputeUtilityCounts() so the maker-side signals stay
+  // visible regardless of which chip filter is active.
+  function computeUtilityCounts() {
+    var dirty = 0, drift = 0, belowFloor = 0;
     Object.keys(recipesData).forEach(function(rid) {
       var r = recipesData[rid];
       if (!r || r.status === 'archived') return;
-      if (r.costsDirty) dirtyCount++;
-      if (typeof r.currentDriftPct === 'number' && Math.abs(r.currentDriftPct) >= repricingThresholdPct && r.driftBaseline) driftFlagged++;
+      if (r.costsDirty) dirty++;
+      if (typeof r.currentDriftPct === 'number' && Math.abs(r.currentDriftPct) >= repricingThresholdPct && r.driftBaseline) drift++;
       if (r.minMarginPercent != null) {
         var aTier = r.activePriceTier || 'direct';
         var aPrice = (r.isVariantEnabled && r.variants) ? getFirstVariantTierPrice(aTier, r) : (r[aTier + 'Price'] || 0);
         var aPct = aPrice > 0 ? ((aPrice - (r.totalCost || 0)) / aPrice) * 100 : 0;
-        if (aPct < r.minMarginPercent) belowFloorCount++;
+        if (aPct < r.minMarginPercent) belowFloor++;
       }
     });
-    if (dirtyCount > 0) {
-      html += '<button class="btn btn-secondary btn-small" style="background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.4);color:#b45309;" onclick="makerRecalcAllDirty()" title="Recalculate all flagged recipes">⚠ ' + dirtyCount + ' need recalc</button>';
-    }
-    if (driftFlagged > 0) {
-      html += '<button class="btn btn-secondary btn-small" style="background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.4);color:#991b1b;" onclick="makerOpenRepriceAllModal()" title="Bulk reprice — preview before commit">↻ ' + driftFlagged + ' need repricing</button>';
-    }
-    if (belowFloorCount > 0) {
-      html += '<span class="status-badge" style="background:rgba(220,38,38,0.1);color:#991b1b;border:1px solid rgba(220,38,38,0.3);font-size:0.72rem;padding:5px 9px;">' + belowFloorCount + ' below margin floor</span>';
-    }
-
-    // Category filter — collect unique categories from all products
-    var categorySet = {};
-    products.forEach(function(p) {
-      (p.categories || []).forEach(function(c) { if (c) categorySet[c] = true; });
-    });
-    var categoryList = Object.keys(categorySet).sort();
-    if (categoryList.length > 0) {
-      html += '<select onchange="makerSetCategoryFilter(this.value)" style="padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.85rem;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';cursor:pointer;" title="Filter by category">';
-      html += '<option value=""' + (piecesCategoryFilter === '' ? ' selected' : '') + '>All categories</option>';
-      categoryList.forEach(function(c) {
-        html += '<option value="' + esc(c) + '"' + (piecesCategoryFilter === c ? ' selected' : '') + '>' + esc(c) + '</option>';
-      });
-      html += '</select>';
-    }
-
-    html += '<button class="btn btn-primary btn-small" onclick="makerCreateNewPiece()">+ New Product</button>';
-    html += '<button class="btn btn-secondary btn-small" onclick="makerOpenWhatIfSimulator()" title="Simulate metals price shifts across all recipes">📊 What-if</button>';
-    html += '<button class="btn btn-secondary btn-small" onclick="makerOpenChannelsManager()" title="Manage sales channel fee profiles">Channels</button>';
-    html += '<button class="btn btn-secondary btn-small" onclick="makerOpenImport(\'products\')">Import CSV</button>';
-    html += '</div>';
-    html += '</div>';
-
-    if (products.length === 0) {
-      html += '<div style="text-align:center;padding:40px 20px;color:var(--warm-gray);">';
-      html += '<div style="font-size:1.6rem;margin-bottom:12px;">📦</div>';
-      html += '<p style="font-size:0.9rem;font-weight:500;margin-bottom:4px;">No products yet</p>';
-      html += '<p style="font-size:0.85rem;color:var(--warm-gray-light);">Add products first, then create recipes to calculate pricing.</p>';
-      html += '</div>';
-      tab.innerHTML = html;
-      return;
-    }
-
-    // Table
-    html += '<div class="data-table"><table><thead><tr>';
-    html += '<th style="width:44px;padding:6px 4px;"></th>';
-    html += '<th>Product</th>';
-    html += '<th>Status</th>';
-    html += '<th>Category</th>';
-    html += '<th>Recipe</th>';
-    html += '<th style="text-align:right;">Total Cost</th>';
-    html += '<th>Active Tier</th>';
-    html += '<th style="text-align:right;">Price</th>';
-    html += '<th style="text-align:right;">Actions</th>';
-    html += '</tr></thead><tbody>';
-
-    filteredProducts.forEach(function(p) {
-      var pid = p.pid;
-      var recipe = recipeByProduct[pid];
-      var hasRecipe = !!recipe;
-      var prodVariants = Array.isArray(p.variants) ? p.variants.map(function(v) {
-        if (v && v.id) return v;
-        var k = productVariantKey(v);
-        return k ? Object.assign({}, v, { id: k }) : null;
-      }).filter(Boolean) : [];
-      var hasVariants = prodVariants.length > 0;
-
-      // Whole-row click dispatches by acquisitionType:
-      // 'build' → recipe builder (legacy); 'var' / 'resell' → Define view.
-      var atype = p.acquisitionType || 'build';
-      var rowClick;
-      if (atype === 'build') {
-        rowClick = hasRecipe
-          ? 'makerOpenRecipeBuilder(\'' + esc(recipe.recipeId) + '\')'
-          : 'makerCreateRecipeForProduct(this.dataset.pid, this.dataset.name)';
-      } else {
-        rowClick = 'makerOpenDefineForProduct(this.dataset.pid)';
-      }
-      html += '<tr style="cursor:pointer;" data-pid="' + esc(pid) + '" data-name="' + esc(p.name || '') + '" onclick="' + rowClick + '">';
-      var isExpanded = !!piecesExpandedPids[pid];
-      var expandToggle = hasVariants
-        ? '<span onclick="event.stopPropagation();makerTogglePieceVariants(\'' + esc(pid) + '\')" style="display:inline-block;width:16px;text-align:center;cursor:pointer;color:var(--warm-gray);margin-right:6px;user-select:none;" title="' + (isExpanded ? 'Collapse' : 'Expand') + ' variants">' + (isExpanded ? '▾' : '▸') + '</span>'
-        : '<span style="display:inline-block;width:16px;margin-right:6px;"></span>';
-      var variantCountBadge = hasVariants ? ' <span style="font-size:0.72rem;color:var(--warm-gray-light);font-weight:400;">(' + prodVariants.length + ' variants)</span>' : '';
-      // Checkpoint F — version badge for v2+ or products with a child Draft
-      var versionBadge = '';
-      var pVer = Number(p.version) || 1;
-      var pHasChild = !!findChildVersion(pid);
-      if (pVer >= 2) {
-        versionBadge = ' <span class="status-badge" style="background:rgba(217,119,6,0.15);color:#b45309;font-size:0.72rem;padding:2px 6px;">v' + pVer + '</span>';
-      } else if (pHasChild) {
-        versionBadge = ' <span class="status-badge" style="background:rgba(217,119,6,0.10);color:#b45309;font-size:0.72rem;padding:2px 6px;" title="A v2 Draft exists for this product">v1 · v2 in dev</span>';
-      }
-      var pendingBadge = p.hasPendingRevision
-        ? ' <span class="status-badge" style="background:rgba(217,119,6,0.18);color:#b45309;font-size:0.72rem;padding:2px 6px;" title="Pending revision">⚠ pending</span>'
-        : '';
-      var _thumbSrc = (typeof window.firstProductImage === 'function') ? window.firstProductImage(p) : '';
-      html += '<td style="padding:4px 4px;width:44px;vertical-align:middle;">' +
-        (_thumbSrc
-          ? '<img src="' + esc(_thumbSrc) + '" alt="" style="width:36px;height:36px;object-fit:cover;border-radius:4px;display:block;">'
-          : '<div style="width:36px;height:36px;border-radius:4px;background:var(--cream-dark,#e8e0d8);display:flex;align-items:center;justify-content:center;font-size:1rem;">📦</div>') +
-        '</td>';
-      html += '<td style="font-weight:500;">' + expandToggle + esc(p.name || '') + variantCountBadge + versionBadge + pendingBadge + '</td>';
-      html += '<td>' + productStatusBadgeHtml(p.status) + (p.status === 'archived' && p.archivedSubState ? archiveSubStateBadgeHtml(p.archivedSubState) : '') + '</td>';
-      html += '<td>' + esc((p.categories || []).join(', ')) + '</td>';
-
-      // Mode badge for VAR/Resell — render before the recipe column
-      var modeBadgeHtml = '';
-      if (atype === 'var') {
-        modeBadgeHtml = ' <span class="status-badge" style="background:rgba(196,133,60,0.15);color:var(--amber);font-size:0.72rem;padding:2px 6px;">VAR</span>';
-      } else if (atype === 'resell') {
-        modeBadgeHtml = ' <span class="status-badge" style="background:rgba(42,124,111,0.15);color:var(--teal);font-size:0.72rem;padding:2px 6px;">Resell</span>';
-      }
-      if (hasRecipe) {
-        var dirtyIcon = recipe.costsDirty ? ' <span title="Costs changed" style="color:#f59e0b;">⚠</span>' : '';
-        html += '<td><span class="status-badge" style="' + materialStatusBadgeStyle('active') + '">has recipe</span>' + dirtyIcon + modeBadgeHtml + '</td>';
-        html += '<td style="text-align:right;font-family:monospace;">$' + (recipe.totalCost || 0).toFixed(2) + '</td>';
-        var etsyIcon = p.etsyListingId ? (recipe.lastEtsySyncAt ? ' <span title="Synced to Etsy" style="font-size:0.78rem;">🔗</span>' : ' <span title="Etsy listing linked" style="font-size:0.78rem;opacity:0.5;">🔗</span>') : '';
-        var variantBadge = recipe.isVariantEnabled && recipe.variants ? ' <span class="status-badge" style="background:rgba(196,133,60,0.15);color:var(--amber);font-size:0.72rem;">' + Object.keys(recipe.variants).length + ' variants</span>' : '';
-        html += '<td><span class="status-badge pill" style="background:rgba(42,124,111,0.12);color:var(--teal);border:1px solid rgba(42,124,111,0.25);">' + esc(recipe.activePriceTier || 'none') + '</span>' + variantBadge + etsyIcon + '</td>';
-        var activePrice;
-        if (recipe.isVariantEnabled && recipe.variants) {
-          activePrice = getFirstVariantTierPrice(recipe.activePriceTier, recipe);
-        } else {
-          activePrice = getTierPrice(recipe.activePriceTier, recipe);
-        }
-        html += '<td style="text-align:right;font-family:monospace;font-weight:600;">$' + activePrice.toFixed(2) + '</td>';
-        html += '<td style="text-align:right;">';
-        if (atype === 'build') {
-          html += '<button style="background:none;border:none;color:var(--teal);cursor:pointer;font-size:0.85rem;font-family:\'DM Sans\';" onclick="event.stopPropagation();makerOpenRecipeBuilder(\'' + esc(recipe.recipeId) + '\')">Edit Recipe</button>';
-        } else {
-          html += '<button style="background:none;border:none;color:var(--teal);cursor:pointer;font-size:0.85rem;font-family:\'DM Sans\';" data-pid="' + esc(pid) + '" onclick="event.stopPropagation();makerOpenDefineForProduct(this.dataset.pid)">Edit Define</button>';
-        }
-        html += '</td>';
-      } else {
-        if (atype === 'build') {
-          html += '<td><span style="color:var(--warm-gray-light);font-size:0.85rem;">no recipe</span>' + modeBadgeHtml + '</td>';
-        } else {
-          html += '<td><span style="color:var(--warm-gray-light);font-size:0.85rem;">define ' + atype + '</span>' + modeBadgeHtml + '</td>';
-        }
-        var totalCostDollars = (p.totalCost || 0) / 100;
-        html += '<td style="text-align:right;font-family:monospace;">' + (atype === 'build' ? '—' : ('$' + totalCostDollars.toFixed(2))) + '</td>';
-        html += '<td>—</td>';
-        html += '<td style="text-align:right;font-family:monospace;">$' + (p.priceCents ? (p.priceCents / 100).toFixed(2) : '0.00') + '</td>';
-        html += '<td style="text-align:right;">';
-        if (atype === 'build') {
-          html += '<button class="btn btn-outline btn-small" data-pid="' + esc(pid) + '" data-name="' + esc(p.name || '') + '" onclick="event.stopPropagation();makerCreateRecipeForProduct(this.dataset.pid, this.dataset.name)">+ Add Recipe</button>';
-        } else {
-          html += '<button class="btn btn-outline btn-small" data-pid="' + esc(pid) + '" onclick="event.stopPropagation();makerOpenDefineForProduct(this.dataset.pid)">' + (atype === 'var' ? 'Define VAR' : 'Define Resell') + '</button>';
-        }
-        html += '</td>';
-      }
-
-      html += '</tr>';
-
-      // Variant sub-rows — one per product variant, showing recipe override cost/price if present
-      if (hasVariants && isExpanded) {
-        var activeTier = hasRecipe ? (recipe.activePriceTier || 'direct') : 'direct';
-        prodVariants.forEach(function(pv) {
-          var vName = variantDisplayName(pv);
-          var rvOverride = hasRecipe && recipe.variants && recipe.variants[pv.id] ? recipe.variants[pv.id] : null;
-          var vCost = rvOverride && typeof rvOverride.totalCost === 'number' ? rvOverride.totalCost : (hasRecipe ? (recipe.totalCost || 0) : 0);
-          var vPrice = 0;
-          if (rvOverride && typeof rvOverride[activeTier + 'Price'] === 'number') {
-            vPrice = rvOverride[activeTier + 'Price'];
-          } else if (typeof pv.priceCents === 'number') {
-            vPrice = pv.priceCents / 100;
-          }
-          var vRowClick = hasRecipe
-            ? 'makerOpenRecipeBuilder(\'' + esc(recipe.recipeId) + '\', \'' + esc(pv.id) + '\')'
-            : 'makerCreateRecipeForProduct(this.dataset.pid, this.dataset.name)';
-          html += '<tr style="cursor:pointer;background:rgba(0,0,0,0.015);" data-pid="' + esc(pid) + '" data-name="' + esc(p.name || '') + '" onclick="' + vRowClick + '">';
-          html += '<td></td>'; // thumbnail (blank for variant sub-rows)
-          html += '<td style="padding-left:28px;font-size:0.85rem;color:var(--warm-gray);">↳ ' + esc(vName) + '</td>';
-          html += '<td></td>'; // status (variant inherits from parent)
-          html += '<td></td>';
-          if (hasRecipe) {
-            var overrideBadge = rvOverride
-              ? '<span class="status-badge" style="background:rgba(196,133,60,0.12);color:var(--amber);font-size:0.72rem;">override</span>'
-              : '<span style="font-size:0.78rem;color:var(--warm-gray-light);font-style:italic;">inherits default</span>';
-            html += '<td>' + overrideBadge + '</td>';
-            html += '<td style="text-align:right;font-family:monospace;font-size:0.85rem;color:var(--warm-gray);">$' + vCost.toFixed(2) + '</td>';
-            html += '<td></td>';
-            html += '<td style="text-align:right;font-family:monospace;font-size:0.85rem;">$' + vPrice.toFixed(2) + '</td>';
-            html += '<td></td>';
-          } else {
-            html += '<td><span style="color:var(--warm-gray-light);font-size:0.78rem;">—</span></td>';
-            html += '<td style="text-align:right;">—</td>';
-            html += '<td></td>';
-            html += '<td style="text-align:right;font-family:monospace;font-size:0.85rem;">$' + vPrice.toFixed(2) + '</td>';
-            html += '<td></td>';
-          }
-          html += '</tr>';
-        });
-      }
-    });
-
-    html += '</tbody></table></div>';
-    tab.innerHTML = html;
+    return { dirty: dirty, drift: drift, belowFloor: belowFloor };
   }
 
   // ============================================================
@@ -4471,115 +4242,6 @@
     return html;
   }
 
-  // ----- Two-view filter logic ---------------------------------------------
-
-  /**
-   * True if the product belongs in the Develop view list:
-   *   - status: draft or ready
-   *   - status: active AND hasPendingRevision (in-progress rework)
-   *   - status: archived AND archivedSubState ∈ {discontinuing, selling-through}
-   */
-  function isProductInDevelopView(p) {
-    if (!p) return false;
-    var st = p.status || 'draft';
-    if (st === 'draft' || st === 'ready') return true;
-    if (st === 'active' && p.hasPendingRevision) return true;
-    if (st === 'archived') {
-      var sub = p.archivedSubState || 'discontinuing';
-      if (sub === 'discontinuing' || sub === 'selling-through') return true;
-    }
-    return false;
-  }
-
-  /**
-   * True if the product belongs in the Catalog view list:
-   *   - status: active
-   *   - status: archived (all sub-states) — UI provides chip filter.
-   *   - status: draft / ready when "Show drafts" toggle is on.
-   */
-  function isProductInCatalogView(p, opts) {
-    if (!p) return false;
-    var st = p.status || 'draft';
-    var includeDrafts = !!(opts && opts.includeDrafts);
-    if (st === 'active') return true;
-    if (st === 'archived') {
-      if (opts && opts.archivedSubStateFilter && opts.archivedSubStateFilter !== 'all') {
-        return (p.archivedSubState || 'discontinuing') === opts.archivedSubStateFilter;
-      }
-      return true;
-    }
-    if ((st === 'draft' || st === 'ready') && includeDrafts) return true;
-    return false;
-  }
-
-  // ----- Lens toggle (Develop / Catalog) on detail screen ------------------
-
-  /**
-   * Per-pid lens preference. Default lens depends on entry point:
-   *   - opened from Develop list → 'develop'
-   *   - opened from Catalog list → 'catalog'
-   * Persisted in sessionStorage so it survives within a tab.
-   */
-  function getProductDetailLens(pid) {
-    if (!pid) return 'catalog';
-    try {
-      var key = 'mastProductLens_' + pid;
-      var v = sessionStorage.getItem(key);
-      if (v === 'develop' || v === 'catalog') return v;
-    } catch (e) {}
-    if (window.productsViewMode === 'develop') return 'develop';
-    return 'catalog';
-  }
-
-  function setProductDetailLens(pid, lens) {
-    if (!pid || (lens !== 'develop' && lens !== 'catalog')) return;
-    try { sessionStorage.setItem('mastProductLens_' + pid, lens); } catch (e) {}
-    // Re-render whichever surface is showing this pid.
-    if (typeof window.renderProductDetail === 'function' && window.selectedProductPid === pid) {
-      // Pick the right default tab for the new lens.
-      window.productEditTab = pickDefaultTabForLens(findProduct(pid), lens);
-      window.renderProductDetail(pid);
-    }
-  }
-
-  /**
-   * Status-aware default tab routing.
-   *   draft / ready (any lens)         → details (Define for Develop module)
-   *   active + Develop lens            → details / define
-   *   active + Catalog lens            → details (listing)
-   *   archived (any lens)              → details (listing) with read-only banner
-   * The product detail screen in index.html uses 'details' as the listing tab.
-   */
-  function pickDefaultTabForLens(product, lens) {
-    if (!product) return 'details';
-    var st = product.status || 'draft';
-    if (st === 'archived') return 'details';
-    if (st === 'draft' || st === 'ready') return 'details';
-    // active
-    if (lens === 'catalog') return 'details';
-    return 'details';
-  }
-
-  function renderLensToggle(product) {
-    if (!product || !product.pid) return '';
-    var pid = MastAdmin.esc(product.pid);
-    var current = getProductDetailLens(product.pid);
-    function pill(value, label) {
-      var active = current === value;
-      return '<button onclick="makerSetProductDetailLens(\'' + pid + '\',\'' + value + '\')" ' +
-        'style="padding:4px 10px;border:1px solid ' + (active ? 'var(--teal,#2a7c6f)' : 'rgba(0,0,0,0.15)') + ';' +
-        'border-radius:14px;background:' + (active ? 'rgba(42,124,111,0.12)' : 'transparent') + ';' +
-        'color:' + (active ? 'var(--teal,#2a7c6f)' : 'var(--warm-gray,#777)') + ';' +
-        'font-size:0.72rem;font-weight:600;cursor:pointer;text-transform:uppercase;letter-spacing:0.04em;">' + label + '</button>';
-    }
-    var html = '';
-    html += '<div class="mast-lens-toggle" style="display:inline-flex;gap:4px;align-items:center;font-size:0.72rem;color:var(--warm-gray,#777);">';
-    html += '<span style="margin-right:4px;">Viewing as:</span>';
-    html += pill('develop', 'Develop');
-    html += pill('catalog', 'Catalog');
-    html += '</div>';
-    return html;
-  }
 
   /**
    * Composite status badge: base status + sub-state chip if archived.
@@ -6056,12 +5718,7 @@
   window.makerRenderArchivedProductBanner = renderArchivedProductBanner;
   window.makerArchiveSubStateBadgeHtml = archiveSubStateBadgeHtml;
   window.makerProductStatusBadgeWithSubStateHtml = productStatusBadgeWithSubStateHtml;
-  window.makerIsProductInDevelopView = isProductInDevelopView;
-  window.makerIsProductInCatalogView = isProductInCatalogView;
-  window.makerGetProductDetailLens = getProductDetailLens;
-  window.makerSetProductDetailLens = setProductDetailLens;
-  window.makerPickDefaultTabForLens = pickDefaultTabForLens;
-  window.makerRenderLensToggle = renderLensToggle;
+  window.makerComputeUtilityCounts = computeUtilityCounts;
   window.makerArchiveSubStates = ARCHIVE_SUB_STATES;
   window.makerCloseRecipeBuilder = closeRecipeBuilder;
   window.makerCreateRecipeForProduct = createRecipeForProduct;
@@ -6688,26 +6345,6 @@
       'materials': { tab: 'materialsTab', setup: function() {
         loadMaterials();
         checkMakerOnboarding();
-      } },
-      // Checkpoint C: pieces & develop-products both render the Develop-side products list
-      // (productsTab in core) with status filter applied. Recipe Builder still uses piecesTab DOM
-      // when opened via openRecipeBuilder. We hand back to the core route, but ensure recipes/materials
-      // are loaded so the orphan-recipes panel and any subsequent recipe-builder navigation works.
-      'develop-products': { tab: 'productsTab', setup: function() {
-        loadMaterials();
-        loadRecipes();
-        if (!window.productsLoaded && typeof window.loadProducts === 'function') {
-          window.loadProducts();
-        }
-        if (typeof window.setProductsViewMode === 'function') window.setProductsViewMode('develop');
-      } },
-      'pieces': { tab: 'productsTab', setup: function() {
-        loadMaterials();
-        loadRecipes();
-        if (!window.productsLoaded && typeof window.loadProducts === 'function') {
-          window.loadProducts();
-        }
-        if (typeof window.setProductsViewMode === 'function') window.setProductsViewMode('develop');
       } }
     },
     detachListeners: function() {
@@ -6715,5 +6352,13 @@
       unloadRecipes();
     }
   });
+
+  // Lens architecture retired: 'products' is a core route, but the unified
+  // Products list needs maker-side data (recipes for the linked badge, the
+  // utility-counts in the section header). Load materials + recipes whenever
+  // this module loads — covers entry via #products, #materials, and the
+  // recipe-builder cross-module openers.
+  loadMaterials();
+  loadRecipes();
 
 })();
