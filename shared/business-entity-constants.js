@@ -638,6 +638,11 @@
     'team':               { alwaysOn: true },
     'settings':           { alwaysOn: true },
 
+    // === Unlock surface — always visible (M3 route, special) ===
+    // Not counted in the matrix-v2.md "12 universal" tier (which is content
+    // routes); 'add-to-mast' is the meta-route that exposes everything else.
+    'add-to-mast':        { alwaysOn: true },
+
     // === Catalog / Products section ===
     'develop-products':   { modes: ['maker'] },
     'materials':          { modes: ['maker'] },

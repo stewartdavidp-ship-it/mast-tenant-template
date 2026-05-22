@@ -5783,14 +5783,13 @@
     </div>
     <!-- M3 (Idea -OtADygKA_JhRmk1wUqN): Add-to-Mast — canonical unlock surface
          for soft-hidden modules. Always visible at the bottom of the sidebar
-         per the unlock-surface RULE. Item appears as a sidebar-item with
-         data-route so navigateTo + applyRoute pick it up. -->
-    <div class="sidebar-section" data-section="add-to-mast-section">
-      <div class="sidebar-items">
-        <div class="sidebar-item" data-route="add-to-mast" onclick="navigateTo('add-to-mast')" style="font-weight:600;color:var(--teal,#2a7c6f);">
-          <span style="margin-right:6px;">+</span>Add to Mast
-        </div>
-      </div>
+         per the unlock-surface RULE. Rendered as a peer to sidebarExpandToggle
+         (NOT wrapped in a sidebar-section, since .sidebar-items is display:none
+         unless the parent section is .open — sidebar-section requires a header
+         + toggle to expand, which doesn't fit this always-visible entry point).
+         Uses sidebar-item class so :hover + active styles apply consistently. -->
+    <div class="sidebar-item add-to-mast-link" data-route="add-to-mast" onclick="navigateTo('add-to-mast')" style="font-weight:600;padding:12px 20px;border-top:1px solid rgba(255,255,255,0.06);">
+      <span style="margin-right:6px;color:var(--teal,#2a7c6f);">+</span><span style="color:var(--teal,#2a7c6f);">Add to Mast</span>
     </div>
   </nav>
 
