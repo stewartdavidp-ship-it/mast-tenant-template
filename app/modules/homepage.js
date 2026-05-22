@@ -7,7 +7,14 @@
 
   // --- State ---
   var loaded = false;
-  var selectedSection = null;
+  // W1.9 — default to Hero so the edit panel surfaces inline immediately
+  // instead of the "Select a section below to edit" empty state. Persona walk
+  // 2026-05-22 showed operators tapping the Hero card and getting no
+  // visible response (it WAS selected, but the empty state didn't update
+  // until they scrolled). Defaulting to 'hero' resolves the perceived
+  // affordance gap for every section card, not just Hero — once one is
+  // selected, clicking any other card swaps the panel as expected.
+  var selectedSection = 'hero';
   var galleryData = {};
   var galleryListener = null;
   var websiteConfig = null;
@@ -290,7 +297,10 @@
   // --- Edit view (top panel) ---
   function renderEditView() {
     if (!selectedSection) {
-      return '<div class="hp-edit-empty"><p>Select a section below to edit its content and images.</p></div>';
+      // W1.9 — fallback empty state. With default selectedSection='hero'
+      // operators should rarely hit this; left in place for the case where
+      // a section gets cleared programmatically.
+      return '<div class="hp-edit-empty"><p>Click any section card below to edit its content and images.</p></div>';
     }
 
     var sec = getSectionById(selectedSection);
