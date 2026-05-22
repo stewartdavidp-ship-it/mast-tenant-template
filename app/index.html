@@ -38933,12 +38933,30 @@ function renderProductDetail(pid) {
   // and computes a per-SKU rollup mirroring the server-side
   // cs_get_product_signal + get_sku_repurchase tools. Renders only on
   // existing products (skip during create).
+  // Customer Signal is on-demand — the underlying load fans out to ~3,500
+  // Firestore docs (cs_reviews + cs_tickets + orders + admin/rma). Auto-loading
+  // it on every product detail render was expensive AND re-fired on every
+  // tab click. Now: render a collapsed placeholder with an explicit "Show"
+  // button; user clicks → fetch + render. Cache (5-min TTL) still applies so
+  // re-clicks within the same session are instant.
   var customerSignalHtml = (!isCreate && pid && !isEditing)
-    ? '<div id="pdCustomerSignal" data-pid="' + esc(pid) + '" style="padding:16px 0;"></div>'
+    ? '<div id="pdCustomerSignal" data-pid="' + esc(pid) + '" style="padding:16px 0;">' +
+        '<div style="border:1px solid var(--border,#e5e0d8);border-radius:8px;padding:14px 18px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;background:var(--surface-card,#fff);">' +
+          '<div>' +
+            '<div style="font-size:0.85rem;font-weight:600;color:var(--charcoal,var(--text));text-transform:uppercase;letter-spacing:0.04em;">Customer Signal</div>' +
+            '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:4px;">Reviews, repurchase rate, return reasons, and often-bought-together &mdash; per this product.</div>' +
+          '</div>' +
+          '<button class="btn btn-secondary btn-small" onclick="loadProductCustomerSignal(\'' + esc(pid) + '\')" aria-label="Load customer signal for this product">Show customer signal</button>' +
+        '</div>' +
+      '</div>'
     : '';
   el.innerHTML = '<button class="detail-back" onclick="backToProducts()">&larr; ' + backLabel + '</button>' +
     publishUndoHtml + driftAlertHtml + recipeReadyHtml + headerHtml + versionLinkBannerHtml + revisionBannerHtml + archivedBannerHtml + tabBarHtml + detailsHtml + variantsHtml + imagesHtml + prodHtml + invTabHtml + customerSignalHtml + actionHtml;
-  if (customerSignalHtml) loadProductCustomerSignal(pid);
+  // Auto-show ONLY if the signal for this pid is already cached (free, instant) —
+  // otherwise stay collapsed and let the user opt in via the button.
+  if (customerSignalHtml && window._pdCustomerSignalCache && window._pdCustomerSignalCache[pid]) {
+    loadProductCustomerSignal(pid);
+  }
 
   // Channel-First Phase 2d (D24) — async-load recipe meta when product has a
   // linked recipe but we haven't read it yet. Re-render to paint the banner.
