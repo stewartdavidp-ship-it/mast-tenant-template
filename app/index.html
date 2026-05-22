@@ -16332,7 +16332,10 @@ var ROUTE_MAP = {
 
 // Section → which routes belong to it (for auto-expanding)
 var SECTION_ROUTES = {
-  'products':          ['products', 'materials', 'forecast',
+  // W1.8/W1-SEC: 'sales-by-product' lives in the Production sidebar
+  // group so canViewSection() routes it through the same permission
+  // table as products/materials/forecast, not the catch-all allow path.
+  'products':          ['products', 'sales-by-product', 'materials', 'forecast',
                         'jobs', 'procurement', 'inventory'],
   'sales':             ['pos', 'orders', 'commissions', 'rma',
                         'wholesale', 'lookbooks', 'galleries',
@@ -16489,9 +16492,11 @@ function navigateTo(route, params) {
     showToast('Settings is restricted to admin users.', true);
     route = 'dashboard';
   }
-  // Forecast is Owner/Manager only — Staff lacks forecast:read
-  if (route === 'forecast' && !hasPermission('forecast', 'read')) {
-    showToast('Forecast is restricted to Owner and Manager roles.', true);
+  // Forecast + Sales by Product are Owner/Manager only — Staff lacks
+  // forecast:read. W1.8's Sales by Product surfaces the same Demand
+  // Overview data as Forecast, so the role gate must apply to both.
+  if ((route === 'forecast' || route === 'sales-by-product') && !hasPermission('forecast', 'read')) {
+    showToast('Sales analytics are restricted to Owner and Manager roles.', true);
     route = 'dashboard';
   }
   // Finance sensitive tabs (P&L, Tax, Reports) are Admin-only — manager lacks financeSensitive:read
