@@ -5585,6 +5585,8 @@
       </div>
       <div class="sidebar-items">
         <div class="sidebar-item" data-route="products" onclick="navigateTo('products')">Products</div>
+        <!-- W1.8: PM/Operator doorway to the same Demand Overview data Forecast shows, framed for strategy rather than maker production planning. -->
+        <div class="sidebar-item" data-route="sales-by-product" onclick="navigateTo('sales-by-product')">Sales by Product</div>
         <div class="sidebar-item" data-route="materials" onclick="navigateTo('materials')">Materials</div>
         <div class="sidebar-item" data-route="forecast" onclick="navigateTo('forecast')">Forecast</div>
         <div class="sidebar-item" data-route="jobs" onclick="navigateTo('jobs')">Jobs</div>
@@ -7581,6 +7583,19 @@
       <div id="forecastSuggestedBuilds"></div>
       <div id="forecastDemandOverview"></div>
       <div id="forecastSlowMovement"></div>
+    </div>
+
+    <!-- ===== SALES BY PRODUCT TAB (W1.8) ===== -->
+    <!-- Same Demand Overview data as Forecast, framed for PM/Operator use:
+         no Suggested Builds (maker-facing) and no Create Job CTAs. The
+         Forecast surface keeps both. Demand table is rendered to whichever
+         surface is currently mounted via _renderAllDemandOverviewSurfaces(). -->
+    <div id="salesByProductTab" style="display:none;">
+      <div class="section-header">
+        <h2>Sales by Product</h2>
+        <p style="font-size:0.85rem;color:var(--warm-gray);margin:4px 0 0 0;">Which SKUs sold, how velocity moved, and what's trending — the same data Forecast reads, framed for strategy rather than production planning.</p>
+      </div>
+      <div id="salesByProductOverview"></div>
     </div>
 
     <!-- ===== INVENTORY TAB (standalone) ===== -->
@@ -16266,6 +16281,11 @@ var ROUTE_MAP = {
   } },
   'inventory':   { tab: 'inventoryTab', setup: function() { renderInventoryOverview(); } },
   'forecast':    { tab: 'forecastTab', setup: function() { loadAndRenderForecast(); } },
+  // W1.8: PM/Operator doorway. Reuses loadAndRenderForecast to populate
+  // shared forecastData; the demand-overview renderer fans out to both
+  // #forecastDemandOverview and #salesByProductOverview so this tab
+  // shows the same table without the maker-facing Suggested Builds.
+  'sales-by-product': { tab: 'salesByProductTab', setup: function() { loadAndRenderForecast(); } },
   'customers':   { tab: null, placeholder: { name: 'Customers', desc: 'Contacts, collectors, purchase history.', badge: 'new' } },
   'images':      { tab: 'imagesTab' },
   'employees':   { tab: 'employeesTab', setup: function() { switchEmployeesView('users'); } },
@@ -31688,7 +31708,9 @@ function computeAndRenderForecast() {
   // Render all sections
   renderForecastEventBanner();
   renderForecastSuggestedBuilds();
-  renderForecastDemandTable();
+  // W1.8: fan-out so #salesByProductOverview gets the same table on
+  // the Sales-by-Product tab when that's the active surface.
+  _renderAllDemandOverviewSurfaces();
   renderForecastSlowMovement();
 }
 
@@ -31946,8 +31968,13 @@ async function doCreateForecastJob(pid, suggestedQty, purpose) {
 }
 
 // ---- Demand Overview Table ----
-function renderForecastDemandTable() {
-  var el = document.getElementById('forecastDemandOverview');
+// W1.8: parameterized target so the same table can render into Forecast
+// (#forecastDemandOverview) and the new Sales-by-Product doorway
+// (#salesByProductOverview). _renderAllDemandOverviewSurfaces() below is
+// the fan-out caller used by sort/horizon controls; computeAndRenderForecast
+// still calls this with no args (defaults to the Forecast element).
+function renderForecastDemandTable(targetId) {
+  var el = document.getElementById(targetId || 'forecastDemandOverview');
   if (!el || !forecastData) return;
 
   // Filter: production products with at least 1 all-time order
@@ -32018,7 +32045,9 @@ function renderForecastDemandTable() {
       ? '<span style="background:rgba(46,125,50,0.15);color:#4caf50;padding:2px 8px;border-radius:4px;font-size:0.72rem;">Stocked</span>'
       : '<span style="background:rgba(21,101,192,0.15);color:#42a5f5;padding:2px 8px;border-radius:4px;font-size:0.72rem;">MTO</span>';
 
-    html += '<tr style="border-bottom:1px solid var(--cream-dark,#e8e0d4);cursor:pointer;" onclick="navigateTo(\'products\')">' +
+    // W1.8: row drills into the specific product, not back to the list.
+    // Same viewProduct() flow as the W1.4 Forecast card links.
+    html += '<tr style="border-bottom:1px solid var(--cream-dark,#e8e0d4);cursor:pointer;" onclick="viewProduct(\'' + esc(f.pid) + '\')">' +
       '<td style="padding:8px;">' +
         '<div style="display:flex;gap:8px;align-items:center;">' +
           (imgUrl ? '<img src="' + esc(imgUrl) + '" style="width:32px;height:32px;border-radius:6px;object-fit:cover;" loading="lazy">' : '') +
@@ -32038,6 +32067,14 @@ function renderForecastDemandTable() {
   el.innerHTML = html;
 }
 
+// W1.8: render the demand table into every mounted surface. Keeps Forecast
+// and Sales-by-Product in lock-step when sort or horizon controls fire.
+function _renderAllDemandOverviewSurfaces() {
+  ['forecastDemandOverview', 'salesByProductOverview'].forEach(function(id) {
+    if (document.getElementById(id)) renderForecastDemandTable(id);
+  });
+}
+
 function sortForecastDemand(col) {
   if (forecastDemandSort.col === col) {
     forecastDemandSort.asc = !forecastDemandSort.asc;
@@ -32045,12 +32082,12 @@ function sortForecastDemand(col) {
     forecastDemandSort.col = col;
     forecastDemandSort.asc = col === 'name';
   }
-  renderForecastDemandTable();
+  _renderAllDemandOverviewSurfaces();
 }
 
 function setForecastHorizon(h) {
   forecastTimeHorizon = h;
-  renderForecastDemandTable();
+  _renderAllDemandOverviewSurfaces();
 }
 
 // ---- Slow/No Movement ----
