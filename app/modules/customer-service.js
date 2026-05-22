@@ -584,10 +584,49 @@
     '</div>';
   }
 
+  // W1.7 — caches for review→customer and review→product resolution.
+  var csReviewProductIndex = {};   // productId -> { name, thumbnailUrl }
+  var csReviewCustomerByEmail = {}; // emailLower -> { id, displayName, stats }
+
   function loadReviews() {
-    return MastDB.query('cs_reviews').limitToLast(100).once()
+    var reviewsP = MastDB.query('cs_reviews').limitToLast(100).once()
       .then(function (d) { reviewsData = d || {}; reviewsLoaded = true; })
       .catch(function (err) { console.warn('[cs-reviews]', err && err.message); if (typeof showToast === 'function') showToast('Failed to load reviews', true); });
+    // Best-effort prefetch of customer + product indexes for resolution. Failures are non-fatal.
+    var custP = MastDB.get('admin/customers').then(function(cMap) {
+      cMap = cMap || {};
+      Object.keys(cMap).forEach(function(cid) {
+        var c = cMap[cid]; if (!c) return;
+        var emails = [];
+        if (c.primaryEmail) emails.push(c.primaryEmail);
+        (c.emails || []).forEach(function(e) {
+          if (e && typeof e === 'string') emails.push(e);
+          else if (e && e.address) emails.push(e.address);
+        });
+        emails.forEach(function(e) {
+          var key = String(e).toLowerCase().trim();
+          if (key) csReviewCustomerByEmail[key] = {
+            id: c.id || cid,
+            displayName: c.displayName || c.primaryEmail || key,
+            stats: c.stats || {}
+          };
+        });
+      });
+    }).catch(function() {});
+    var prodP = ((MastDB.products && MastDB.products.get) ?
+      MastDB.products.get().then(function(s) { return (s && s.val && s.val()) || (s || {}); }) :
+      Promise.resolve({})
+    ).then(function(pMap) {
+      pMap = pMap || {};
+      Object.keys(pMap).forEach(function(pid) {
+        var p = pMap[pid]; if (!p) return;
+        csReviewProductIndex[pid] = {
+          name: p.name || p.title || pid,
+          thumbnailUrl: p.thumbnailUrl || p.imageUrl || (Array.isArray(p.images) && p.images[0] && (p.images[0].url || p.images[0])) || ''
+        };
+      });
+    }).catch(function() {});
+    return Promise.all([reviewsP, custP, prodP]).then(function() {});
   }
 
   function loadSurveysAll() {
@@ -644,26 +683,47 @@
     } else {
       html += '<div style="display:flex;flex-direction:column;gap:10px;">';
       filtered.forEach(function (r) {
+        // W1.7 — resolve customer + product info (only if review has a real email; truly
+        // anonymous reviews are NOT cross-referenced for privacy).
+        var emailKey = r.reviewerEmail ? String(r.reviewerEmail).toLowerCase().trim() : '';
+        var matchedCustomer = emailKey ? csReviewCustomerByEmail[emailKey] : null;
+        var prodInfo = r.productId ? csReviewProductIndex[r.productId] : null;
+        var displayName = matchedCustomer ? matchedCustomer.displayName : (r.reviewerName || 'Anonymous');
+
         html += '<div style="border:1px solid var(--cream-dark);border-radius:10px;padding:16px;background:var(--surface-card);">';
         html += '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px;">';
-        html += '<span style="font-weight:600;">' + _esc(r.reviewerName || 'Anonymous') + '</span>';
+        html += '<span style="font-weight:600;">' + _esc(displayName) + '</span>';
+        if (matchedCustomer && matchedCustomer.stats) {
+          var st = matchedCustomer.stats;
+          var oc = st.orderCount || 0;
+          var lastAbs = st.lastOrderAt ? new Date(st.lastOrderAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+          html += '<span class="status-badge pill" title="' + (lastAbs ? 'Last order ' + _esc(lastAbs) : 'Linked customer') + '" style="background:rgba(42,124,111,0.15);color:var(--teal);font-size:0.72rem;">' +
+            oc + (oc === 1 ? ' order' : ' orders') +
+          '</span>';
+        }
         html += '<span style="color:var(--amber-light);letter-spacing:0.04em;">' + starsHtml(r.rating) + '</span>';
         if (r.reviewerEmail) html += '<span style="font-size:0.78rem;color:var(--warm-gray);">' + _esc(r.reviewerEmail) + '</span>';
         html += '<span style="font-size:0.78rem;color:var(--warm-gray);margin-left:auto;">' + relativeTime(r.createdAt) + '</span>';
         html += reviewBadge(r.status) + '</div>';
+
+        // W1.7 — product row with thumbnail + name (uses snapshotted productName,
+        // falls back to product index, then to id).
         if (r.headline || r.productId) {
-          html += '<div style="font-size:0.85rem;margin-bottom:6px;">';
+          html += '<div style="display:flex;align-items:center;gap:10px;font-size:0.85rem;margin-bottom:6px;">';
+          if (r.productId && prodInfo && prodInfo.thumbnailUrl) {
+            html += '<img src="' + _esc(prodInfo.thumbnailUrl) + '" alt="" style="width:36px;height:36px;object-fit:cover;border-radius:4px;border:1px solid var(--cream-dark);" />';
+          }
+          html += '<div>';
           if (r.headline) html += '<strong>' + _esc(r.headline) + '</strong> ';
-          // Build 5b.2 — show productName (snapshotted at write time by the
-          // submitReview CF) instead of the raw Firebase productId. Falls
-          // back to the id only when the name wasn't captured (legacy reviews).
           if (r.productId) {
-            var prodLabel = r.productName || r.productId;
+            var prodLabel = r.productName || (prodInfo && prodInfo.name) || r.productId;
             html += '<span style="color:var(--warm-gray);">Product: ' + _esc(prodLabel) + '</span>';
           }
-          html += '</div>';
+          html += '</div></div>';
         }
+
         if (r.body) html += '<div style="font-size:0.9rem;margin-bottom:10px;">' + _esc(r.body) + '</div>';
+
         html += '<div style="display:flex;gap:8px;flex-wrap:wrap;">';
         if (r.status === 'pending') {
           html += '<button class="btn btn-primary btn-small" onclick="csApproveReview(\'' + _esc(r.id) + '\')">Approve</button>';
@@ -671,6 +731,9 @@
         } else if (r.status === 'rejected') {
           html += '<button class="btn btn-secondary btn-small" onclick="csApproveReview(\'' + _esc(r.id) + '\')">Approve</button>';
         } else if (r.status === 'approved') {
+          // W1.8 — promote approved reviews into Testimonials + drafted social posts.
+          html += '<button class="btn btn-primary btn-small" onclick="csFeatureReviewOnSite(\'' + _esc(r.id) + '\')" title="Add this review to the homepage Testimonials section">⭐ Feature on site</button>';
+          html += '<button class="btn btn-secondary btn-small" onclick="csDraftSocialFromReview(\'' + _esc(r.id) + '\')" title="Open the Social composer with this review pre-filled">✍ Draft Social Post</button>';
           html += '<button class="btn btn-secondary btn-small" onclick="csRejectReview(\'' + _esc(r.id) + '\')">Unpublish</button>';
         }
         html += '<button class="btn btn-danger btn-small" style="margin-left:auto;" onclick="csDeleteReview(\'' + _esc(r.id) + '\')">Delete</button>';
@@ -694,6 +757,85 @@
     if (!confirm('Delete this review? This cannot be undone.')) return;
     try { await MastDB.remove('cs_reviews/' + id); delete reviewsData[id]; showToast('Review deleted'); renderReviews(); }
     catch (err) { showToast('Failed: ' + (err && err.message), true); }
+  }
+
+  // ===== W1.8 — Promote approved review =====
+
+  // "Feature on site" — write a testimonial under public/homepage/testimonials.
+  // Idempotent: re-clicking on the same review updates the existing entry
+  // (keyed by sourceReviewId so we don't fan out duplicates).
+  async function featureReviewOnSite(id) {
+    var r = reviewsData[id];
+    if (!r) { showToast('Review not found', true); return; }
+    if (r.status !== 'approved') { showToast('Only approved reviews can be featured.', true); return; }
+    var emailKey = r.reviewerEmail ? String(r.reviewerEmail).toLowerCase().trim() : '';
+    var matchedCustomer = emailKey ? csReviewCustomerByEmail[emailKey] : null;
+    var prodInfo = r.productId ? csReviewProductIndex[r.productId] : null;
+    var customerName = matchedCustomer ? matchedCustomer.displayName : (r.reviewerName || 'Anonymous');
+    var quote = r.body || r.headline || '';
+    if (!quote) { showToast('This review has no body text to feature.', true); return; }
+    var payload = {
+      customerName: customerName,
+      quote: quote,
+      rating: r.rating || null,
+      productId: r.productId || null,
+      productName: r.productName || (prodInfo && prodInfo.name) || null,
+      productThumbnail: (prodInfo && prodInfo.thumbnailUrl) || null,
+      sourceReviewId: r.id,
+      addedAt: nowIso()
+    };
+    try {
+      // Use sourceReviewId as the key so re-featuring updates instead of duplicating.
+      var key = 'review_' + r.id;
+      payload.id = key;
+      await MastDB.set('public/homepage/testimonials/' + key, payload);
+      showToast('Featured on homepage Testimonials.');
+    } catch (err) {
+      showToast('Failed: ' + (err && err.message), true);
+    }
+  }
+
+  // "Draft Social Post" — open the Social composer pre-filled. Tries the global
+  // window.__draftSocialPostFromReview hook first (social.js can register it);
+  // otherwise navigates to #social and stashes a draft on sessionStorage that
+  // social.js can pick up on its first render.
+  function draftSocialFromReview(id) {
+    var r = reviewsData[id];
+    if (!r) { showToast('Review not found', true); return; }
+    var emailKey = r.reviewerEmail ? String(r.reviewerEmail).toLowerCase().trim() : '';
+    var matchedCustomer = emailKey ? csReviewCustomerByEmail[emailKey] : null;
+    var prodInfo = r.productId ? csReviewProductIndex[r.productId] : null;
+    var name = matchedCustomer ? (matchedCustomer.displayName || '').split(' ')[0] : (r.reviewerName || 'a customer');
+    var productName = r.productName || (prodInfo && prodInfo.name) || '';
+    var quote = (r.body || r.headline || '').trim().replace(/\s+/g, ' ');
+    var body = productName
+      ? '"' + quote + '" — ' + name + ', on ' + productName
+      : '"' + quote + '" — ' + name;
+    var image = (r.photos && r.photos[0]) || (prodInfo && prodInfo.thumbnailUrl) || '';
+    var prefill = {
+      body: body,
+      imageUrl: image,
+      sourceReviewId: r.id,
+      sourceProductId: r.productId || null
+    };
+
+    if (typeof window.__draftSocialPostFromReview === 'function') {
+      try {
+        window.__draftSocialPostFromReview(prefill);
+        return;
+      } catch (e) { /* fall through */ }
+    }
+
+    // Fallback path: stash prefill + navigate. social.js (W1.6) reads this on render.
+    try {
+      sessionStorage.setItem('__socialDraftPrefill', JSON.stringify(prefill));
+    } catch (_e) {}
+    if (typeof navigateTo === 'function') {
+      navigateTo('social');
+    } else {
+      window.location.hash = '#social';
+    }
+    showToast('Opening Social with this review pre-filled…');
   }
 
   function renderSurveys() {
@@ -2016,6 +2158,8 @@
   window.csApproveReview = approveReview;
   window.csRejectReview = rejectReview;
   window.csDeleteReview = deleteReview;
+  window.csFeatureReviewOnSite = featureReviewOnSite;
+  window.csDraftSocialFromReview = draftSocialFromReview;
   window.csSurveysRefresh = function () {
     surveysLoaded = false;
     responsesLoaded = false;
