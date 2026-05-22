@@ -8504,11 +8504,20 @@
 
           <!-- Resend provider fields -->
           <div id="emailProviderResend" style="display:none;margin-bottom:12px;">
+            <div style="background:rgba(255,193,7,0.08);border:1px solid rgba(255,193,7,0.2);border-radius:8px;padding:12px 16px;font-size:0.85rem;margin-bottom:12px;">
+              <strong style="color:var(--amber);">Bring Your Own Resend</strong>
+              <p style="margin:6px 0 0;color:var(--warm-gray);">Paste a key from <a href="https://resend.com/api-keys" target="_blank" rel="noopener" style="color:var(--teal);text-decoration:underline;">resend.com/api-keys</a>. When connected, emails route through your Resend account and don't consume Mast email tokens.</p>
+            </div>
             <label style="font-size:0.85rem;font-weight:600;margin-bottom:4px;display:block;">Resend API Key</label>
             <div style="display:flex;gap:6px;margin-bottom:8px;">
               <input type="password" id="emailResendApiKey" placeholder="re_..."
                 style="flex:1;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;box-sizing:border-box;">
               <button type="button" onclick="toggleReveal('emailResendApiKey',this)" class="btn btn-small" style="font-size:0.78rem;padding:6px 10px;white-space:nowrap;">Show</button>
+            </div>
+            <!-- BYO Resend connected status (populated by loadByoResendStatus) -->
+            <div id="byoResendStatusBlock" style="display:none;margin-top:10px;padding:10px 12px;background:rgba(42,124,111,0.08);border:1px solid rgba(42,124,111,0.22);border-radius:6px;font-size:0.85rem;">
+              <div id="byoResendStatusInfo" style="color:var(--warm-gray);"></div>
+              <button type="button" class="btn btn-secondary btn-small" onclick="disconnectByoResend()" style="font-size:0.78rem;padding:4px 10px;margin-top:8px;">Disconnect Resend</button>
             </div>
           </div>
 
@@ -9383,6 +9392,57 @@
       </div>
       <!-- AI Integrations Settings -->
       <div id="settingsSubAi" style="display:none;max-width:600px;">
+        <!-- BYO Anthropic — Ask AI Provider (F-M1a) -->
+        <div class="form-group" style="background:var(--cream,#faf8f5);border:1px solid var(--cream-dark,#e8e0d4);border-radius:8px;padding:14px 16px;margin-bottom:24px;">
+          <label style="font-size:1.15rem;font-weight:600;display:block;margin-bottom:4px;">Ask AI Provider</label>
+          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:14px;">
+            Powers the in-admin Ask AI calls (cost previews, page-context summaries). Use Mast-managed (deducts tokens) or bring your own Anthropic API key.
+          </p>
+
+          <!-- Pitch state: not connected -->
+          <div id="byoAnthropicPitch" style="display:none;">
+            <div style="background:rgba(255,193,7,0.08);border:1px solid rgba(255,193,7,0.2);border-radius:6px;padding:10px 12px;font-size:0.85rem;margin-bottom:12px;">
+              <strong style="color:var(--amber);">Bring your own Anthropic key</strong>
+              <p style="margin:6px 0 0;color:var(--warm-gray);">Paste a key from <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener" style="color:var(--teal);text-decoration:underline;">console.anthropic.com</a>. AI calls bypass Mast tokens and bill directly to your Anthropic account. We validate the key against Anthropic before saving.</p>
+            </div>
+            <label style="font-size:0.85rem;font-weight:600;margin-bottom:4px;display:block;">Anthropic API Key</label>
+            <div style="display:flex;gap:6px;margin-bottom:8px;">
+              <input type="password" id="byoAnthropicApiKey" placeholder="sk-ant-..."
+                style="flex:1;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;box-sizing:border-box;">
+              <button type="button" onclick="toggleReveal('byoAnthropicApiKey',this)" class="btn btn-small" style="font-size:0.78rem;padding:6px 10px;white-space:nowrap;">Show</button>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+              <button class="btn btn-primary" onclick="connectByoAnthropic()" id="byoAnthropicConnectBtn">Test &amp; Connect</button>
+              <div id="byoAnthropicConnectStatus" style="font-size:0.85rem;"></div>
+            </div>
+          </div>
+
+          <!-- Connected state -->
+          <div id="byoAnthropicConnected" style="display:none;">
+            <div style="background:rgba(42,124,111,0.08);border:1px solid rgba(42,124,111,0.22);border-radius:6px;padding:10px 12px;font-size:0.85rem;margin-bottom:12px;">
+              <div><span style="color:var(--teal);font-weight:600;">&#10003; Connected</span> &middot; <code id="byoAnthropicKeyMasked" style="font-size:0.78rem;">—</code></div>
+              <div id="byoAnthropicMeta" style="font-size:0.78rem;color:var(--warm-gray);margin-top:4px;"></div>
+            </div>
+            <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;margin-bottom:12px;">
+              <input type="checkbox" id="byoAnthropicFallbackCb" onchange="toggleByoAnthropicFallback(this.checked)" style="width:18px;height:18px;margin-top:2px;accent-color:var(--amber);">
+              <div>
+                <div style="font-size:0.85rem;font-weight:600;">Fall back to Mast-managed if my key fails</div>
+                <div style="font-size:0.78rem;color:var(--warm-gray);">If your Anthropic key is revoked or rate-limited mid-call, we'll silently retry with the Mast platform key and deduct tokens. Off by default — calls hard-fail with a clear error.</div>
+              </div>
+            </label>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+              <button class="btn btn-secondary btn-small" onclick="replaceByoAnthropic()" style="font-size:0.78rem;padding:6px 12px;">Replace key</button>
+              <button class="btn btn-secondary btn-small" onclick="disconnectByoAnthropic()" style="font-size:0.78rem;padding:6px 12px;">Disconnect</button>
+            </div>
+          </div>
+
+          <!-- Usage card (always shown when panel open) -->
+          <div id="askAiUsageCard" style="margin-top:14px;padding-top:12px;border-top:1px solid var(--cream-dark,#e8e0d4);">
+            <div style="font-size:0.85rem;font-weight:600;margin-bottom:6px;">This month's Ask AI usage</div>
+            <div id="askAiUsageBody" style="font-size:0.85rem;color:var(--warm-gray);">Loading…</div>
+          </div>
+        </div>
+
         <div class="form-group">
           <label style="font-size:1.15rem;font-weight:600;">AI Integrations</label>
           <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:16px;">
@@ -17391,7 +17451,7 @@ function switchSettingsSubView(view) {
   if (view === 'storefront') { loadShopDisplaySettings(); loadPrivacyUrlSettings(); }
   if (view === 'dashboard') renderDashCardSettings();
   if (view === 'domains') loadDomainSettings();
-  if (view === 'ai') { loadAiIntegrations(); loadAskAiConfigUI(); }
+  if (view === 'ai') { loadAiIntegrations(); loadAskAiConfigUI(); loadByoAnthropicUI(); loadAskAiUsage(); }
   if (view === 'subscription') renderSubscriptionSettings();
   if (view === 'product') loadProductSettings();
   if (view === 'costToServe') loadCostToServeSettings();
@@ -23603,8 +23663,22 @@ async function saveEmailConfig() {
     var apiKey = getFieldValue('emailSendgridApiKey');
     if (apiKey && !apiKey.includes('••••')) secrets[sp + '-sendgrid-api-key'] = apiKey;
   } else if (provider === 'resend') {
+    // BYO Resend: route the key through byoResendConnect (validates against
+    // Resend API + stores in Secret Manager + flips config/email.provider).
+    // Skip the secretsManager path for the key itself; common fields below
+    // still go through it.
     var apiKey = getFieldValue('emailResendApiKey');
-    if (apiKey && !apiKey.includes('••••')) secrets[sp + '-resend-api-key'] = apiKey;
+    if (apiKey && !apiKey.includes('••••')) {
+      try {
+        var connectRes = await firebase.functions().httpsCallable('byoResendConnect')({ apiKey: apiKey });
+        var data = connectRes && connectRes.data ? connectRes.data : {};
+        showToast('Resend connected (' + (data.keyMasked || 'key saved') + (data.domainCount != null ? ', ' + data.domainCount + ' domain' + (data.domainCount === 1 ? '' : 's') : '') + ').');
+      } catch (err) {
+        var msg = (err && err.message) ? err.message : String(err);
+        showToast('Resend key rejected: ' + msg, true);
+        return;
+      }
+    }
   } else if (provider === 'custom') {
     var apiKey = getFieldValue('emailCustomApiKey');
     if (apiKey && !apiKey.includes('••••')) secrets[sp + '-email-api-key'] = apiKey;
@@ -23700,6 +23774,8 @@ function loadEmailConfig() {
     }
     // Refresh domain section after email config loads
     loadEmailDomainSection();
+    // Refresh BYO Resend status (no-op when provider !== 'resend')
+    loadByoResendStatus();
   }).catch(function(err) {
     console.warn('Email config read failed:', err.message);
     if (statusEl) statusEl.innerHTML = '<span style="color:var(--warm-gray-light);">Could not load config.</span>';
@@ -23709,6 +23785,42 @@ function loadEmailConfig() {
     if (addrEl) addrEl.textContent = tenantId + '@mail.mastplatform.com';
     loadEmailDomainSection();
   });
+}
+
+function loadByoResendStatus() {
+  var block = document.getElementById('byoResendStatusBlock');
+  var info = document.getElementById('byoResendStatusInfo');
+  if (!block || !info) return;
+  firebase.functions().httpsCallable('byoResendStatus')({}).then(function(res) {
+    var s = (res && res.data) ? res.data : {};
+    if (!s.byo) { block.style.display = 'none'; return; }
+    var lines = [];
+    lines.push('<div><span style="color:var(--teal);font-weight:600;">&#10003; Connected</span> &middot; <code style="font-size:0.78rem;">' + esc(s.keyMasked || '—') + '</code></div>');
+    if (s.connectedAt) {
+      var d = new Date(s.connectedAt);
+      lines.push('<div style="font-size:0.78rem;margin-top:4px;">Connected ' + (isNaN(d.getTime()) ? esc(s.connectedAt) : d.toLocaleString()) + '</div>');
+    }
+    if (s.domainCount != null) {
+      lines.push('<div style="font-size:0.78rem;">' + s.domainCount + ' domain' + (s.domainCount === 1 ? '' : 's') + ' on your Resend account</div>');
+    }
+    info.innerHTML = lines.join('');
+    block.style.display = 'block';
+  }).catch(function(err) {
+    block.style.display = 'none';
+    console.warn('byoResendStatus failed:', err && err.message);
+  });
+}
+
+async function disconnectByoResend() {
+  if (!hasPermission('settings', 'update')) { showToast('You do not have permission.', true); return; }
+  if (!confirm('Disconnect Resend? Email will revert to Mast-managed (uses tokens). Your stored key is retained for audit.')) return;
+  try {
+    await firebase.functions().httpsCallable('byoResendDisconnect')({});
+    showToast('Resend disconnected.');
+    loadEmailConfig();
+  } catch (err) {
+    showToast('Disconnect failed: ' + (err && err.message ? err.message : err), true);
+  }
 }
 
 async function sendTestEmailFromSettings() {
@@ -24345,6 +24457,158 @@ async function doDisconnectPlaidItem(itemId) {
 window.connectPlaidAccount = connectPlaidAccount;
 window.syncPlaidItem = syncPlaidItem;
 window.disconnectPlaidItem = disconnectPlaidItem;
+
+// ============ BYO Anthropic + Ask AI usage (F-M1a) ============
+
+function _setByoAnthropicState(connected, status) {
+  var pitch = document.getElementById('byoAnthropicPitch');
+  var conn = document.getElementById('byoAnthropicConnected');
+  if (!pitch || !conn) return;
+  if (connected) {
+    pitch.style.display = 'none';
+    conn.style.display = 'block';
+    var maskedEl = document.getElementById('byoAnthropicKeyMasked');
+    if (maskedEl) maskedEl.textContent = status.keyMasked || '—';
+    var meta = document.getElementById('byoAnthropicMeta');
+    if (meta) {
+      var parts = [];
+      if (status.connectedAt) {
+        var d = new Date(status.connectedAt);
+        parts.push('Connected ' + (isNaN(d.getTime()) ? esc(status.connectedAt) : d.toLocaleString()));
+      }
+      if (status.modelValidatedWith) parts.push('validated against ' + esc(status.modelValidatedWith));
+      meta.textContent = parts.join(' · ');
+    }
+    var cb = document.getElementById('byoAnthropicFallbackCb');
+    if (cb) cb.checked = !!status.fallbackToMastOnError;
+  } else {
+    pitch.style.display = 'block';
+    conn.style.display = 'none';
+    var input = document.getElementById('byoAnthropicApiKey');
+    if (input) input.value = '';
+    var s = document.getElementById('byoAnthropicConnectStatus');
+    if (s) s.textContent = '';
+  }
+}
+
+async function loadByoAnthropicUI() {
+  try {
+    var res = await firebase.functions().httpsCallable('byoAnthropicStatus')({});
+    var s = (res && res.data) ? res.data : {};
+    _setByoAnthropicState(!!s.byo, s);
+  } catch (err) {
+    console.warn('byoAnthropicStatus failed:', err && err.message);
+    _setByoAnthropicState(false, {});
+  }
+}
+
+async function connectByoAnthropic() {
+  if (!hasPermission('settings', 'update')) { showToast('You do not have permission.', true); return; }
+  var input = document.getElementById('byoAnthropicApiKey');
+  var btn = document.getElementById('byoAnthropicConnectBtn');
+  var statusEl = document.getElementById('byoAnthropicConnectStatus');
+  var apiKey = (input && input.value || '').trim();
+  if (!apiKey) {
+    if (statusEl) statusEl.innerHTML = '<span style="color:var(--amber);">Paste a key first (starts with sk-ant-).</span>';
+    return;
+  }
+  if (btn) { btn.disabled = true; btn.textContent = 'Testing…'; }
+  if (statusEl) statusEl.innerHTML = '<span style="color:var(--warm-gray);">Validating with Anthropic…</span>';
+  try {
+    var res = await firebase.functions().httpsCallable('byoAnthropicConnect')({ apiKey: apiKey });
+    var d = (res && res.data) ? res.data : {};
+    showToast('Anthropic key connected (' + (d.keyMasked || 'saved') + ').');
+    _setByoAnthropicState(true, {
+      keyMasked: d.keyMasked,
+      connectedAt: d.validatedAt,
+      modelValidatedWith: d.modelValidatedWith,
+      fallbackToMastOnError: d.fallbackToMastOnError
+    });
+    loadAskAiUsage();
+  } catch (err) {
+    var msg = (err && err.message) ? err.message : String(err);
+    if (statusEl) statusEl.innerHTML = '<span style="color:var(--amber);">' + esc(msg) + '</span>';
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Test & Connect'; }
+  }
+}
+
+function replaceByoAnthropic() {
+  _setByoAnthropicState(false, {});
+  var input = document.getElementById('byoAnthropicApiKey');
+  if (input) input.focus();
+}
+
+async function disconnectByoAnthropic() {
+  if (!hasPermission('settings', 'update')) { showToast('You do not have permission.', true); return; }
+  if (!confirm('Disconnect your Anthropic key? Ask AI will revert to Mast-managed (deducts tokens). Your stored key is retained for audit.')) return;
+  try {
+    await firebase.functions().httpsCallable('byoAnthropicDisconnect')({});
+    showToast('Anthropic key disconnected.');
+    loadByoAnthropicUI();
+    loadAskAiUsage();
+  } catch (err) {
+    showToast('Disconnect failed: ' + (err && err.message ? err.message : err), true);
+  }
+}
+
+async function toggleByoAnthropicFallback(enabled) {
+  try {
+    await firebase.functions().httpsCallable('byoAnthropicSetFallback')({ enabled: !!enabled });
+    showToast(enabled ? 'Fallback enabled — Mast-managed will cover BYO failures.' : 'Fallback disabled — BYO failures will hard-fail.');
+  } catch (err) {
+    showToast('Could not update fallback setting: ' + (err && err.message ? err.message : err), true);
+    var cb = document.getElementById('byoAnthropicFallbackCb');
+    if (cb) cb.checked = !enabled;
+  }
+}
+
+async function loadAskAiUsage() {
+  var body = document.getElementById('askAiUsageBody');
+  if (!body) return;
+  body.textContent = 'Loading…';
+  try {
+    var res = await firebase.functions().httpsCallable('getAiUsageStats')({});
+    var s = (res && res.data) ? res.data : {};
+    var total = s.totalCalls || 0;
+    if (!total) {
+      body.innerHTML = '<span style="color:var(--warm-gray);">No Ask AI calls yet this month.</span>';
+      return;
+    }
+    var modes = s.byMode || {};
+    var mast = modes.mast || 0;
+    var byo = modes.byo || 0;
+    var fb = modes['mast-fallback'] || 0;
+    var html = '<div>' + total + ' call' + (total === 1 ? '' : 's') + ' this month: ';
+    var parts = [];
+    if (byo) parts.push('<strong>' + byo + '</strong> via your key');
+    if (mast) parts.push('<strong>' + mast + '</strong> via Mast tokens');
+    if (fb) parts.push('<strong>' + fb + '</strong> via Mast fallback');
+    html += parts.join(', ') + '.</div>';
+    if (s.mastTokensUsed) {
+      html += '<div style="font-size:0.78rem;margin-top:4px;">' + s.mastTokensUsed + ' Mast token' + (s.mastTokensUsed === 1 ? '' : 's') + ' deducted.</div>';
+    }
+    var models = s.byModel || {};
+    var modelKeys = Object.keys(models);
+    if (modelKeys.length) {
+      var modelLine = modelKeys.map(function(m) { return esc(m) + ' (' + models[m] + ')'; }).join(', ');
+      html += '<div style="font-size:0.78rem;margin-top:4px;">Models: ' + modelLine + '</div>';
+    }
+    body.innerHTML = html;
+  } catch (err) {
+    body.innerHTML = '<span style="color:var(--warm-gray-light);">Could not load usage stats.</span>';
+    console.warn('getAiUsageStats failed:', err && err.message);
+  }
+}
+
+window.connectByoAnthropic = connectByoAnthropic;
+window.replaceByoAnthropic = replaceByoAnthropic;
+window.disconnectByoAnthropic = disconnectByoAnthropic;
+window.toggleByoAnthropicFallback = toggleByoAnthropicFallback;
+window.loadByoAnthropicUI = loadByoAnthropicUI;
+window.loadAskAiUsage = loadAskAiUsage;
+window.disconnectByoResend = disconnectByoResend;
+window.loadByoResendStatus = loadByoResendStatus;
 window.loadPlaidBanksForSettings = loadPlaidBanksForSettings;
 
 // ── Ask AI gating UI (Settings → AI) ─────────────────────────────────────────
