@@ -643,6 +643,17 @@
     // routes); 'add-to-mast' is the meta-route that exposes everything else.
     'add-to-mast':        { alwaysOn: true },
 
+    // === Migration section — system-managed, conditionally shown ===
+    // The sidebar Migration section has display:none unless an active
+    // migration exists; sub-routes are alwaysOn here so the modes filter
+    // doesn't soft-hide them when the migration UI is active. They're
+    // excluded from Add-to-Mast (system-managed, not user-toggleable).
+    'migration':           { alwaysOn: true, systemManaged: true },
+    'migration-confirm':   { alwaysOn: true, systemManaged: true },
+    'migration-plan':      { alwaysOn: true, systemManaged: true },
+    'migration-import':    { alwaysOn: true, systemManaged: true },
+    'historical-orders':   { alwaysOn: true, systemManaged: true },
+
     // === Catalog / Products section ===
     'develop-products':   { modes: ['maker'] },
     'materials':          { modes: ['maker'] },

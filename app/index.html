@@ -6938,7 +6938,7 @@
           </select>
           <span class="products-stat" id="productsCount"></span>
           <button class="btn btn-secondary" id="bulkPublishShopifyBtn" style="margin-left:auto;font-size:0.85rem;padding:5px 12px;display:none;" onclick="bulkPublishToShopify()">Publish All to Shopify</button>
-          <button class="btn btn-primary" style="font-size:0.85rem;padding:6px 16px;" onclick="createNewProduct()">+ New Product</button>
+          <button class="btn btn-primary" style="font-size:0.85rem;padding:6px 16px;" onclick="developCreateNewProduct()">+ New Product</button>
         </div>
       </div>
       <div id="productsLoading" class="loading" style="display:none;padding:40px;text-align:center;">Loading products...</div>
@@ -11529,7 +11529,7 @@ MastDB.passDefinitions = _makeEntity('admin/passDefinitions', 100);
 // Web is the base module (always included, not purchasable). All others are purchasable.
 // Grid layout: Row1: Develop, Market, Sell | Row2: Ship, Run, Web | Row3: Show, Show Light, Events | Row4: Book
 var MODULE_REGISTRY = {
-  make:   { id: 'make',   name: 'Develop', icon: '\uD83D\uDD25', description: 'Product lifecycle: production, sourcing, materials, pricing, and catalog development.', section: 'products', navPosition: 1, purchasable: true, routes: ['jobs', 'production', 'procurement', 'materials', 'pieces', 'lookbooks'], manageSettings: [], synergies: ['sell', 'market'], status: 'active' },
+  make:   { id: 'make',   name: 'Develop', icon: '\uD83D\uDD25', description: 'Product lifecycle: production, sourcing, materials, pricing, and catalog development.', section: 'products', navPosition: 1, purchasable: true, routes: ['jobs', 'production', 'procurement', 'materials', 'lookbooks'], manageSettings: [], synergies: ['sell', 'market'], status: 'active' },
   market: { id: 'market', name: 'Market', icon: '\uD83D\uDCE3', description: 'Social media, blog, newsletter, stories.', section: 'marketing', navPosition: 2, purchasable: true, routes: ['social', 'blog', 'newsletter', 'stories'], manageSettings: ['newsletter', 'email'], synergies: ['sell', 'show'], status: 'active' },
   sell:   { id: 'sell',   name: 'Sell',   icon: '\uD83D\uDCB0', description: 'Point of sale, orders, commissions, wholesale.', section: 'sales', navPosition: 3, purchasable: true, routes: ['pos', 'orders', 'commissions', 'rma', 'wholesale', 'galleries', 'receipts', 'coupons', 'promotions'], manageSettings: ['square'], synergies: ['ship', 'make'], status: 'active' },
   ship:   { id: 'ship',   name: 'Ship',   icon: '\uD83D\uDCE6', description: 'Pack orders, ship deliveries, track fulfillment.', section: 'sales', navPosition: 4, purchasable: true, routes: ['pack', 'ship'], manageSettings: ['shippingRates'], synergies: ['sell', 'show'], status: 'active' },
@@ -12449,15 +12449,13 @@ var MODE_SECTION_LABELS = {
   'classes':          'Bookings & Classes',
   'finance':          'Finance',
   'operations':       'Operations',
-  'customer-service': 'Customer Service'
+  'customer-service': 'Customer Service',
+  'admin':            'Admin'
 };
 
 var MODE_MODULE_INFO = {
-  // Catalog
-  // Note: 'develop-products' deliberately omitted — the Develop/Catalog lens
-  // distinction lives on the Products page as a status filter chip
-  // (Draft / Review / Active / Archived), not as a separate route/module.
-  // The route still exists for legacy URLs but doesn't appear in Add-to-Mast.
+  // Catalog (Products is its own sidebar item and is not part of Add-to-Mast.
+  // The legacy 'develop-products' / 'pieces' routes alias to 'products'.)
   'materials':          { label: 'Materials',       section: 'products', desc: 'Track raw materials, suppliers, and unit costs.' },
   'forecast':           { label: 'Forecast',        section: 'products', desc: 'Predict inventory needs based on sales velocity.' },
   'jobs':               { label: 'Jobs',            section: 'products', desc: 'Schedule production runs and batch work.' },
@@ -12523,7 +12521,37 @@ var MODE_MODULE_INFO = {
   'cs-surveys':         { label: 'Surveys',         section: 'customer-service', desc: 'Send post-purchase surveys to customers.' },
   'cs-reviews':         { label: 'Reviews',         section: 'customer-service', desc: 'Customer reviews and ratings management.' },
   'cs-faqs':            { label: 'FAQs',            section: 'customer-service', desc: 'Self-service knowledge base.' },
-  'cs-members':         { label: 'Members',         section: 'customer-service', desc: 'Member directory and lifecycle tracking.' }
+  'cs-members':         { label: 'Members',         section: 'customer-service', desc: 'Member directory and lifecycle tracking.' },
+
+  // === Always-on items — rendered with "Always on" pill, no toggle button.
+  // Shown for completeness so owners can see every sidebar item on this page. ===
+  // Sales (always-on)
+  'receipts':           { label: 'Receipts & Reconciliation', section: 'sales',     desc: 'Match payouts and reconcile receipts.' },
+  'terms':              { label: 'Terms & Conditions',        section: 'sales',     desc: 'Storefront legal copy and policies.' },
+  // Marketing (always-on)
+  'website':            { label: 'Website Content', section: 'marketing', desc: 'Public-facing storefront pages and copy.' },
+  'brand':              { label: 'Brand',           section: 'marketing', desc: 'Logo, colors, fonts, and brand identity.' },
+  'images':             { label: 'Images',          section: 'marketing', desc: 'Image library and asset management.' },
+  // Finance (always-on)
+  'finance-revenue':    { label: 'Revenue',         section: 'finance',   desc: 'Revenue tracking and trend reports.' },
+  'finance-expenses':   { label: 'Expenses',        section: 'finance',   desc: 'Expense entry and categorization.' },
+  'finance-tax':        { label: 'Tax',             section: 'finance',   desc: 'Sales tax configuration and remittance reports.' },
+  // Operations (always-on)
+  'contacts':           { label: 'Contacts',        section: 'operations', desc: 'Contact database for non-customer relationships.' },
+  'customers':          { label: 'Customers',       section: 'operations', desc: 'Customer database, lifecycle, and history.' },
+  'team':               { label: 'Team',            section: 'operations', desc: 'Team members, roles, and time tracking.' },
+  'business':           { label: 'Business',        section: 'operations', desc: 'Business entity configuration and compliance.' },
+  // Admin (always-on)
+  'settings':           { label: 'Settings',        section: 'admin',     desc: 'Tenant settings, integrations, and configuration.' },
+  'employees':          { label: 'Permissions',     section: 'admin',     desc: 'User roles, permissions, and RBAC.' },
+  'analytics':          { label: 'Analytics',       section: 'admin',     desc: 'Site analytics and operational metrics.' },
+  'auditlog':           { label: 'Audit Log',       section: 'admin',     desc: 'System audit trail for all admin actions.' },
+  'subscription':       { label: 'Subscription',    section: 'admin',     desc: 'Mast subscription, billing, and plan management.' },
+  'about':              { label: 'About',           section: 'admin',     desc: 'About this Mast tenant — version, support.' },
+  'email-log':          { label: 'Email Log',       section: 'admin',     desc: 'Outbound transactional email log.' }
+  // Migration routes (migration, migration-confirm, migration-plan, migration-import,
+  // historical-orders) are intentionally omitted — they're system-managed,
+  // conditionally shown by the migration state, not by user preference.
 };
 
 // Pure function — compute the list of routes eligible for the Add-to-Mast page
@@ -12545,9 +12573,10 @@ function _getSoftHiddenRoutes(modeSet, overrides) {
 }
 window._getSoftHiddenRoutes = _getSoftHiddenRoutes;
 
-// Toggleable routes — every non-always-on route in the matrix. Renders on
-// the Add-to-Mast page so owners can add OR remove (the page is the canonical
-// manage surface, not just the add surface).
+// Routes shown on the Add-to-Mast page. Includes always-on items so owners
+// see every sidebar item represented (rendered as informational "Always on"
+// cards with no toggle button). Excludes systemManaged routes (Migration
+// section sub-items, conditionally shown by app state — not user-toggleable).
 function _getToggleableRoutes() {
   var BEC = window.BusinessEntityConstants;
   if (!BEC || !BEC.MODE_ROUTE_VISIBILITY) return [];
@@ -12556,7 +12585,8 @@ function _getToggleableRoutes() {
   for (var routeId in matrix) {
     if (!Object.prototype.hasOwnProperty.call(matrix, routeId)) continue;
     var rule = matrix[routeId];
-    if (rule && rule.alwaysOn) continue;
+    if (rule && rule.systemManaged) continue;     // skip migration/historical-orders
+    if (routeId === 'add-to-mast') continue;       // skip the page itself
     result.push(routeId);
   }
   return result;
@@ -12592,18 +12622,24 @@ async function renderAddToMast() {
   var allToggleable = _getToggleableRoutes();
   var visibleCount = 0;
   var hiddenCount = 0;
+  var alwaysOnCount = 0;
 
   // Group by section, preserving sidebar order
-  var sectionOrder = ['products', 'sales', 'marketing', 'retention', 'events', 'classes', 'finance', 'operations', 'customer-service'];
+  var sectionOrder = ['products', 'sales', 'marketing', 'retention', 'events', 'classes', 'finance', 'operations', 'customer-service', 'admin'];
   var grouped = {};
   for (var i = 0; i < allToggleable.length; i++) {
     var routeId = allToggleable[i];
     var info = MODE_MODULE_INFO[routeId];
     if (!info) continue;  // unknown route, skip silently
-    var visible = BEC.isRouteVisible(routeId, modeSet, overrides);
-    if (visible) visibleCount++; else hiddenCount++;
+    var rule = BEC.MODE_ROUTE_VISIBILITY[routeId] || {};
+    var isAlwaysOn = !!rule.alwaysOn;
+    var visible = isAlwaysOn || BEC.isRouteVisible(routeId, modeSet, overrides);
+    // Track three buckets: alwaysOn (informational, no toggle), visible-toggleable, hidden
+    if (isAlwaysOn) alwaysOnCount++;
+    else if (visible) visibleCount++;
+    else hiddenCount++;
     if (!grouped[info.section]) grouped[info.section] = [];
-    grouped[info.section].push({ routeId: routeId, info: info, visible: visible });
+    grouped[info.section].push({ routeId: routeId, info: info, visible: visible, alwaysOn: isAlwaysOn });
   }
 
   // Page header: counts + bulk "+ Add all hidden" control
@@ -12613,7 +12649,9 @@ async function renderAddToMast() {
   html += 'Manage what shows up in your Mast sidebar. ';
   html += 'Add modules you need, or hide ones you don&rsquo;t. Everything stays one click away.';
   html += '<div style="margin-top:8px;font-size:0.85rem;opacity:0.8;">';
-  html += '<strong>' + visibleCount + '</strong> in your sidebar &middot; <strong>' + hiddenCount + '</strong> available to add.';
+  html += '<strong>' + (visibleCount + alwaysOnCount) + '</strong> in your sidebar &middot; ' +
+          '<strong>' + hiddenCount + '</strong> available to add' +
+          (alwaysOnCount > 0 ? ' &middot; <strong>' + alwaysOnCount + '</strong> always on' : '') + '.';
   html += '</div></div>';
   if (hiddenCount > 0) {
     html += '<button class="btn btn-primary" onclick="addAllToMastClick()" aria-label="Add all ' + hiddenCount + ' hidden modules to my Mast" style="flex-shrink:0;align-self:flex-start;">+ Add all (' + hiddenCount + ')</button>';
@@ -12627,16 +12665,31 @@ async function renderAddToMast() {
     if (!items || items.length === 0) continue;
     var sectionLabel = MODE_SECTION_LABELS[sectionKey] || sectionKey;
     var sectionHiddenCount = 0;
-    for (var sh = 0; sh < items.length; sh++) if (!items[sh].visible) sectionHiddenCount++;
+    var sectionVisibleCount = 0;
+    var sectionAlwaysOnCount = 0;
+    for (var sh = 0; sh < items.length; sh++) {
+      if (items[sh].alwaysOn) sectionAlwaysOnCount++;
+      else if (items[sh].visible) sectionVisibleCount++;
+      else sectionHiddenCount++;
+    }
+    var sectionVisibleTotal = sectionVisibleCount + sectionAlwaysOnCount;
 
     html += '<div class="add-to-mast-section" style="padding:0 24px 24px;">';
     html += '<div style="display:flex;align-items:baseline;justify-content:space-between;gap:16px;border-bottom:1px solid var(--border,#e5e0d8);padding-bottom:8px;margin:16px 0 12px;">';
-    html += '<h3 style="font-size:1.0rem;margin:0;color:var(--charcoal,var(--text));">' + esc(sectionLabel) + ' <span style="font-weight:400;color:var(--warm-gray);font-size:0.85rem;">(' + (items.length - sectionHiddenCount) + '/' + items.length + ' visible)</span></h3>';
+    html += '<h3 style="font-size:1.0rem;margin:0;color:var(--charcoal,var(--text));">' + esc(sectionLabel) + ' <span style="font-weight:400;color:var(--warm-gray);font-size:0.85rem;">(' + sectionVisibleTotal + '/' + items.length + ' visible)</span></h3>';
     if (sectionHiddenCount > 0) {
       html += '<button class="btn btn-secondary btn-small" onclick="addAllInSectionClick(\'' + esc(sectionKey) + '\')" aria-label="Add all ' + sectionHiddenCount + ' hidden modules in ' + esc(sectionLabel) + ' to my Mast">+ Add all ' + sectionHiddenCount + ' hidden</button>';
     }
     html += '</div>';
     html += '<div class="add-to-mast-cards" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;">';
+
+    // Render order within section: hidden first (call to action), then visible-toggleable
+    // (slightly greyed, removable), then always-on (most muted, no toggle).
+    items.sort(function(a, b) {
+      var orderA = a.alwaysOn ? 2 : (a.visible ? 1 : 0);
+      var orderB = b.alwaysOn ? 2 : (b.visible ? 1 : 0);
+      return orderA - orderB;
+    });
 
     for (var k = 0; k < items.length; k++) {
       var it = items[k];
@@ -12644,20 +12697,27 @@ async function renderAddToMast() {
         ? BEC.labelFor(it.routeId, modeSet, it.info.label)
         : it.info.label;
 
-      // State-driven styling: visible cards are greyed (already in sidebar);
-      // hidden cards are full opacity (calls to action).
+      // Three card states:
+      //   hidden       → full opacity, "+ Add to my Mast" primary button
+      //   visible      → opacity 0.55, "In sidebar" pill, "Remove from my Mast" secondary button
+      //   alwaysOn     → opacity 0.4, "Always on" pill, no button (informational only)
       var cardStyle = 'border:1px solid var(--border,#e5e0d8);border-radius:8px;padding:14px;background:var(--surface-card,#fff);display:flex;flex-direction:column;gap:8px;';
-      if (it.visible) cardStyle += 'opacity:0.55;';
+      if (it.alwaysOn) cardStyle += 'opacity:0.4;';
+      else if (it.visible) cardStyle += 'opacity:0.55;';
 
-      html += '<div class="add-to-mast-card" data-route-id="' + esc(it.routeId) + '" data-visible="' + (it.visible ? 'true' : 'false') + '" style="' + cardStyle + '">';
+      html += '<div class="add-to-mast-card" data-route-id="' + esc(it.routeId) + '" data-visible="' + (it.visible ? 'true' : 'false') + '" data-always-on="' + (it.alwaysOn ? 'true' : 'false') + '" style="' + cardStyle + '">';
       html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">';
       html += '<div style="font-size:0.9rem;font-weight:600;color:var(--charcoal,var(--text));">' + esc(displayLabel) + '</div>';
-      if (it.visible) {
+      if (it.alwaysOn) {
+        html += '<span style="font-size:0.72rem;color:var(--warm-gray);font-weight:600;text-transform:uppercase;letter-spacing:0.05em;">Always on</span>';
+      } else if (it.visible) {
         html += '<span style="font-size:0.72rem;color:var(--teal,#2a7c6f);font-weight:600;text-transform:uppercase;letter-spacing:0.05em;">In sidebar</span>';
       }
       html += '</div>';
       html += '<div style="font-size:0.78rem;color:var(--warm-gray);line-height:1.45;flex-grow:1;">' + esc(it.info.desc) + '</div>';
-      if (it.visible) {
+      if (it.alwaysOn) {
+        // No button — always-on items are informational only.
+      } else if (it.visible) {
         html += '<button class="btn btn-secondary btn-small" onclick="removeFromMastClick(\'' + esc(it.routeId) + '\')" aria-label="Remove ' + esc(displayLabel) + ' from my Mast" style="margin-top:4px;align-self:flex-start;">Remove from my Mast</button>';
       } else {
         html += '<button class="btn btn-primary btn-small" onclick="addToMastClick(\'' + esc(it.routeId) + '\')" aria-label="Add ' + esc(displayLabel) + ' to my Mast" style="margin-top:4px;align-self:flex-start;">+ Add to my Mast</button>';
@@ -16190,11 +16250,7 @@ var ROUTE_MAP = {
   // newsletter route handled by newsletter module (lazy-loaded)
   // stories route handled by production module (lazy-loaded)
   // website route handled by website module (lazy-loaded)
-  'products':    { tab: 'productsTab', setup: function() { setProductsViewMode('catalog'); } },
-  // Develop-side Products list — same tab, status filter pre-applied to {draft, ready}.
-  // Backward compat: legacy 'pieces' route aliases to this.
-  'develop-products': { tab: 'productsTab', setup: function() { setProductsViewMode('develop'); } },
-  'pieces':       { tab: 'productsTab', setup: function() { setProductsViewMode('develop'); } },
+  'products':    { tab: 'productsTab' },
   'inventory':   { tab: 'inventoryTab', setup: function() { renderInventoryOverview(); } },
   'forecast':    { tab: 'forecastTab', setup: function() { loadAndRenderForecast(); } },
   'customers':   { tab: null, placeholder: { name: 'Customers', desc: 'Contacts, collectors, purchase history.', badge: 'new' } },
@@ -16243,7 +16299,7 @@ var ROUTE_MAP = {
 
 // Section → which routes belong to it (for auto-expanding)
 var SECTION_ROUTES = {
-  'products':          ['products', 'develop-products', 'materials', 'forecast',
+  'products':          ['products', 'materials', 'forecast',
                         'jobs', 'procurement', 'inventory'],
   'sales':             ['pos', 'orders', 'commissions', 'rma',
                         'wholesale', 'lookbooks', 'galleries',
@@ -16307,7 +16363,11 @@ var ROUTE_ALIASES = {
   'find': 'show-find',
   'email': 'email-log',
   'emails': 'email-log',
-  'develop': 'develop-products',
+  // Lens architecture retired: Develop/Catalog distinction is now a chip
+  // filter on the unified Products page. Legacy routes alias to 'products'.
+  'develop': 'products',
+  'develop-products': 'products',
+  'pieces': 'products',
   'galleries-consignment': 'galleries',
   'consignment': 'galleries'
 };
@@ -16525,7 +16585,6 @@ function lazyLoadForRoute(route) {
   if (route === 'settings') { updateGitHubTokenStatus(); loadOperators(); loadStorageInfo(); loadStudioLocations(); loadLocations(); loadPublicFeedbackSetting(); loadEmailConfig(); loadEmailDomainSection(); applySettingsGating(); loadSiteVisibility(); loadActiveMastPages(); }
   if (route === 'analytics' && !analyticsLoaded) loadAnalytics();
   if (route === 'products') loadProducts();
-  if (route === 'develop-products' || route === 'pieces') loadProducts();
   // orders lazy-load handled by orders module
   // pos/receipts/sales lazy-load handled by sales module
   // events/salesEvents lazy-load handled by sales module
@@ -16979,7 +17038,7 @@ var MODULE_MANIFEST = {
 homepage: { src: 'modules/homepage.js', routes: ['homepage'] },
   showLight: { src: 'modules/show-light.js', routes: ['show-light-profile', 'show-light-gallery', 'show-light-shows', 'show-light-apply'] },
   emailLog: { src: 'modules/email-log.js', routes: ['email-log'] },
-  maker: { src: 'modules/maker.js', routes: ['materials', 'pieces', 'develop-products'] },
+  maker: { src: 'modules/maker.js', routes: ['materials', 'products'] },
   consignment: { src: 'modules/consignment.js', routes: ['galleries'] },
   lookbooks: { src: 'modules/lookbooks.js', routes: ['lookbooks'] },
   brand: { src: 'modules/brand.js', routes: ['brand'] },
@@ -30557,32 +30616,6 @@ function setProductsStatusFilter(v) {
   renderProducts();
 }
 
-// Checkpoint C — Products view mode: 'catalog' (top-level Sell-side, all products)
-// or 'develop' (Develop-side, drafts+ready). Set via setProductsViewMode() on route entry.
-// Note: When productsViewMode === 'develop', maker.js's renderPiecesList renders the
-// Develop list in productsTab; this top-level renderProducts then short-circuits to
-// drafts/ready only as a defensive filter for any direct render that bypasses maker.
-var productsViewMode = 'catalog';
-
-function setProductsViewMode(mode) {
-  productsViewMode = mode === 'develop' ? 'develop' : 'catalog';
-  // Sidebar nav presets the filter — Develop sidebar lands on the develop
-  // slice; Manage > Products lands on the full catalog. The user can flip
-  // pills to widen / narrow without leaving the section.
-  window.productsStatusFilter = (mode === 'develop') ? 'develop' : 'catalog';
-  var headerH2 = document.querySelector('#productsTab .section-header h2');
-  if (headerH2) headerH2.textContent = 'Products';
-  var newBtn = document.querySelector('#productsTab .section-header .btn-primary');
-  if (newBtn) {
-    newBtn.setAttribute('onclick', productsViewMode === 'develop'
-      ? 'developCreateNewProduct()'
-      : 'createNewProduct()');
-  }
-  if (typeof productsLoaded !== 'undefined' && productsLoaded) {
-    renderProducts();
-  }
-}
-
 // Surface orphan recipes (no productId, or productId pointing to a deleted product).
 // Per plan OPEN O5 — UI-only surface, no auto-fix. Hidden when zero orphans or when not in develop view.
 function renderDevelopOrphanRecipesPanel() {
@@ -30594,7 +30627,7 @@ function renderDevelopOrphanRecipesPanel() {
   // eslint-disable-next-line no-unreachable
   var grid = document.getElementById('productsGrid');
   if (!grid) return;
-  if (productsViewMode !== 'develop') return;
+  if (window.productsStatusFilter !== 'develop') return;
   // Only render if maker module exposed recipes to us
   var recipes = (window.makerListRecipes && typeof window.makerListRecipes === 'function')
     ? window.makerListRecipes()
@@ -30756,7 +30789,7 @@ function renderProducts() {
   // Unified product filter: 'develop' | 'catalog' | 'sell'. Sidebar entry
   // presets it; user can flip pills without leaving the section.
   if (!window.productsStatusFilter) {
-    window.productsStatusFilter = (window.productsViewMode === 'develop') ? 'develop' : 'catalog';
+    window.productsStatusFilter = 'catalog';
   }
   var statusFilter = window.productsStatusFilter;
 
@@ -32781,9 +32814,11 @@ function checkMakerAttributesVisibility() {
 var productSection = 'catalog';
 function _deriveProductSection() {
   var r = (typeof currentRoute === 'string') ? currentRoute : '';
-  if (r === 'develop-products' || r === 'pieces') return 'develop';
   if (r === 'inventory') return 'inventory';
-  // 'products' (sidebar Manage) and any other path land in catalog by default.
+  // Products route is unified — section is derived from the active status
+  // chip filter so detail-screen actions match the user's current slice.
+  if (window.productsStatusFilter === 'develop' || window.productsStatusFilter === 'review') return 'develop';
+  if (window.productsStatusFilter === 'sell') return 'sell';
   return 'catalog';
 }
 
@@ -33286,6 +33321,114 @@ window.invalidateProductCustomerSignal = function(pid) {
   else window._pdCustomerSignalCache = Object.create(null);
 };
 
+// Pure aggregator — variant-level returns and repurchase signal for a product.
+// Inputs are raw Firebase shapes (orders map, rmas map, product.variants array).
+// Returns { returnRows, repurchaseRows } sorted for display. No DOM, no Firebase —
+// safe to unit-test by passing in fixtures.
+window.computeProductVariantSignal = function(ordersAll, rmasAll, pid, productVariants, opts) {
+  opts = opts || {};
+  var windowMs = opts.windowMs != null ? opts.windowMs : (90 * 86400000);
+
+  var variantLabels = {};
+  (productVariants || []).forEach(function(v) {
+    if (!v || !v.id) return;
+    var lbl = '';
+    if (v.combo && typeof v.combo === 'object') lbl = Object.values(v.combo).join(' / ');
+    variantLabels[v.id] = lbl || v.label || v.id;
+  });
+
+  var ordersByVariant = {};
+  var firstBuyByVariant = {};
+  Object.values(ordersAll || {}).forEach(function(o) {
+    if (!o || o.status === 'cancelled' || !Array.isArray(o.items) || !o.createdAt) return;
+    var t = new Date(o.createdAt).getTime();
+    if (isNaN(t)) return;
+    var seenInOrder = {};
+    o.items.forEach(function(it) {
+      if (!it || it.pid !== pid || !it.variantId) return;
+      var vid = it.variantId;
+      if (it.variantLabel && !variantLabels[vid]) variantLabels[vid] = it.variantLabel;
+      if (!seenInOrder[vid]) {
+        seenInOrder[vid] = true;
+        ordersByVariant[vid] = (ordersByVariant[vid] || 0) + 1;
+      }
+      if (o.customerId) {
+        firstBuyByVariant[vid] = firstBuyByVariant[vid] || {};
+        if (firstBuyByVariant[vid][o.customerId] == null || t < firstBuyByVariant[vid][o.customerId]) {
+          firstBuyByVariant[vid][o.customerId] = t;
+        }
+      }
+    });
+  });
+
+  var sameRepurchase = {};
+  var anyRepurchase = {};
+  Object.values(ordersAll || {}).forEach(function(o) {
+    if (!o || o.status === 'cancelled' || !Array.isArray(o.items) || !o.createdAt || !o.customerId) return;
+    var t = new Date(o.createdAt).getTime();
+    if (isNaN(t)) return;
+    var hasPid = false;
+    var variantsInThisOrder = {};
+    o.items.forEach(function(it) {
+      if (!it || it.pid !== pid) return;
+      hasPid = true;
+      if (it.variantId) variantsInThisOrder[it.variantId] = true;
+    });
+    if (!hasPid) return;
+    Object.keys(firstBuyByVariant).forEach(function(vid) {
+      var first = firstBuyByVariant[vid][o.customerId];
+      if (first == null) return;
+      if (t <= first || t - first > windowMs) return;
+      anyRepurchase[vid] = anyRepurchase[vid] || {};
+      anyRepurchase[vid][o.customerId] = true;
+      if (variantsInThisOrder[vid]) {
+        sameRepurchase[vid] = sameRepurchase[vid] || {};
+        sameRepurchase[vid][o.customerId] = true;
+      }
+    });
+  });
+
+  var returnsByVariant = {};
+  Object.values(rmasAll || {}).forEach(function(rma) {
+    if (!rma || !Array.isArray(rma.items)) return;
+    var seenInRma = {};
+    rma.items.forEach(function(it) {
+      if (!it || it.pid !== pid || !it.variantId) return;
+      var vid = it.variantId;
+      if (it.variantLabel && !variantLabels[vid]) variantLabels[vid] = it.variantLabel;
+      if (seenInRma[vid]) return;
+      seenInRma[vid] = true;
+      returnsByVariant[vid] = (returnsByVariant[vid] || 0) + 1;
+    });
+  });
+
+  var allVids = {};
+  Object.keys(ordersByVariant).forEach(function(v) { allVids[v] = true; });
+  Object.keys(returnsByVariant).forEach(function(v) { allVids[v] = true; });
+  var variantRows = Object.keys(allVids).map(function(vid) {
+    var orders = ordersByVariant[vid] || 0;
+    var returns = returnsByVariant[vid] || 0;
+    var buyers = firstBuyByVariant[vid] ? Object.keys(firstBuyByVariant[vid]).length : 0;
+    var sameN = sameRepurchase[vid] ? Object.keys(sameRepurchase[vid]).length : 0;
+    var anyN = anyRepurchase[vid] ? Object.keys(anyRepurchase[vid]).length : 0;
+    return {
+      vid: vid,
+      label: variantLabels[vid] || vid,
+      orders: orders, returns: returns, buyers: buyers,
+      returnRate: orders > 0 ? returns / orders : 0,
+      sameRate: buyers > 0 ? sameN / buyers : 0,
+      anyRate: buyers > 0 ? anyN / buyers : 0
+    };
+  });
+
+  return {
+    returnRows: variantRows.filter(function(r) { return r.orders > 0; })
+      .sort(function(a, b) { return b.returnRate - a.returnRate; }),
+    repurchaseRows: variantRows.filter(function(r) { return r.buyers > 0; })
+      .sort(function(a, b) { return b.sameRate - a.sameRate; })
+  };
+};
+
 function loadProductCustomerSignal(pid) {
   // Writes the rendered signal into #pdCustomerSignalContent (the inner div
   // below the collapsible header). Pid match is checked against the wrapper.
@@ -33513,6 +33656,56 @@ function loadProductCustomerSignal(pid) {
           html += '</div>';
         });
         html += '</div>';
+      }
+
+      // Variant-level breakdown — only render when the product actually has
+      // variants. Returns and repurchase split by variantId; reviews/tickets
+      // omitted because cs_reviews/cs_tickets don't capture variantId yet.
+      var product = (window.productsData || []).find(function(p) { return p && (p.pid === pid || p.id === pid); });
+      var hasVariants = product && Array.isArray(product.variants) && product.variants.length > 0;
+      if (hasVariants) {
+        var variantSignal = window.computeProductVariantSignal(ordersAll, rmasAll, pid, product.variants, { windowMs: windowMs });
+        var returnRows = variantSignal.returnRows;
+        var repurchaseRows = variantSignal.repurchaseRows;
+        if (returnRows.length > 0) {
+          html += '<div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--cream-dark);">';
+          html += '<div style="font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:6px;">Returns by variant</div>';
+          html += '<table style="width:100%;font-size:0.85rem;border-collapse:collapse;">';
+          html += '<thead><tr style="color:var(--warm-gray);font-size:0.78rem;text-align:left;">' +
+            '<th style="padding:4px 6px;font-weight:500;">Variant</th>' +
+            '<th style="padding:4px 6px;font-weight:500;text-align:right;">Returns</th>' +
+            '<th style="padding:4px 6px;font-weight:500;text-align:right;">Return rate</th>' +
+          '</tr></thead><tbody>';
+          returnRows.forEach(function(r) {
+            html += '<tr>' +
+              '<td style="padding:4px 6px;">' + esc(r.label) + '</td>' +
+              '<td style="padding:4px 6px;text-align:right;">' + esc(String(r.returns)) + ' / ' + esc(String(r.orders)) + '</td>' +
+              '<td style="padding:4px 6px;text-align:right;">' + (r.returnRate * 100).toFixed(1) + '%</td>' +
+            '</tr>';
+          });
+          html += '</tbody></table></div>';
+        }
+
+        if (repurchaseRows.length > 0) {
+          html += '<div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--cream-dark);">';
+          html += '<div style="font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:6px;">Repurchase by variant (90d)</div>';
+          html += '<table style="width:100%;font-size:0.85rem;border-collapse:collapse;">';
+          html += '<thead><tr style="color:var(--warm-gray);font-size:0.78rem;text-align:left;">' +
+            '<th style="padding:4px 6px;font-weight:500;">Variant</th>' +
+            '<th style="padding:4px 6px;font-weight:500;text-align:right;">Buyers</th>' +
+            '<th style="padding:4px 6px;font-weight:500;text-align:right;">Same variant</th>' +
+            '<th style="padding:4px 6px;font-weight:500;text-align:right;">Any variant</th>' +
+          '</tr></thead><tbody>';
+          repurchaseRows.forEach(function(r) {
+            html += '<tr>' +
+              '<td style="padding:4px 6px;">' + esc(r.label) + '</td>' +
+              '<td style="padding:4px 6px;text-align:right;">' + esc(String(r.buyers)) + '</td>' +
+              '<td style="padding:4px 6px;text-align:right;">' + (r.sameRate * 100).toFixed(1) + '%</td>' +
+              '<td style="padding:4px 6px;text-align:right;">' + (r.anyRate * 100).toFixed(1) + '%</td>' +
+            '</tr>';
+          });
+          html += '</tbody></table></div>';
+        }
       }
     }
     html += '</div>';
@@ -33764,9 +33957,11 @@ async function addRecipeForProduct(pid) {
     // Link recipe back to product
     await MastDB.products.update(pid, { recipeId: recipe.recipeId, updatedAt: new Date().toISOString() });
     showToast('Recipe created — opening in Develop');
-    // Navigate to Develop-side products view; recipe builder is opened directly below.
+    // Navigate to unified Products view with Draft chip preselected; recipe
+    // builder is opened directly below.
     if (typeof window.navigateTo === 'function') {
-      window.navigateTo('develop-products');
+      window.productsStatusFilter = 'develop';
+      window.navigateTo('products');
       setTimeout(function() {
         if (typeof window.makerOpenRecipeBuilder === 'function') window.makerOpenRecipeBuilder(recipe.recipeId);
       }, 300);
@@ -40456,7 +40651,7 @@ function attachListeners() {
       if (currentRoute === 'images') renderImageLibrary();
       // Product cards resolve thumbnails via imageLibrary (reverse productId/tag link).
       // Re-render the catalog/develop grid so first paint with an empty library can fill in.
-      if ((currentRoute === 'products' || currentRoute === 'develop-products' || currentRoute === 'pieces') && typeof renderProducts === 'function') {
+      if (currentRoute === 'products' && typeof renderProducts === 'function') {
         renderProducts();
       }
     }, function(err) {
