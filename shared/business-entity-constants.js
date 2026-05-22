@@ -662,6 +662,11 @@
     'procurement':        { modes: ['maker', 'retail'] },
     'inventory':          { modes: ['maker', 'retail'], overlays: ['event'] },
     'products':           { modes: ['maker', 'retail'] },
+    // W1.8: Sales by Product is the PM/Operator doorway to the same demand
+    // data Forecast surfaces. Visible in every mode that sells products
+    // (broader than 'products' itself because the strategy view matters
+    // for bookings/standard tenants too once they have any catalog).
+    'sales-by-product':   { modes: ['standard', 'retail', 'bookings', 'maker'] },
 
     // === Sales section ===
     'pos':                { modes: ['standard', 'retail', 'bookings', 'maker'], overlays: ['event'] },

@@ -19,7 +19,7 @@
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-storage-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-functions-compat.js"></script>
   <script src="../shared/mastdb.js?v=5"></script>
-  <script src="../shared/business-entity-constants.js?v=3"></script>
+  <script src="../shared/business-entity-constants.js?v=4"></script>
   <script src="../shared/customer-resolver.js?v=1"></script>
   <script src="../shared/brand-sync.js?v=1"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
@@ -16408,7 +16408,8 @@ var ROUTE_ALIASES = {
 var ALL_TAB_IDS = ['inquiriesTab', 'scheduleTab', 'galleryTab', 'homepageTab', 'brandTab', 'productsTab', 'ordersTab', 'salesTab', 'salesEventsTab', 'productionTab', 'forecastTab', 'couponsTab', 'analyticsTab', 'settingsTab', 'imagesTab', 'auditLogTab', 'employeesTab', 'contactsTab', 'customersTab', 'packTab', 'shipTab', 'commissionsTab', 'rmaTab', 'socialMediaTab', 'blogTab', 'newsletterTab', 'placeholderTab', 'inventoryTab', 'storiesTab', 'dashboardTab', 'tripsTab', 'wholesaleTab', 'showTab', 'financialsTab', 'eventsAdminTab', 'websiteTab', 'showLightTab', 'emailLogTab', 'materialsTab', 'piecesTab', 'galleriesTab', 'lookbooksTab', 'promotionsTab', 'bookTab', 'subscriptionTab', 'aboutTab', 'walletTab', 'giftCardsTab', 'loyaltyTab', 'membershipTab', 'termsTab', 'advisorTab', 'studioTab', 'teamTab', 'studentsTab', 'migrationDashTab', 'migrationConfirmTab', 'migrationPlanTab', 'migrationImportTab', 'historicalOrdersTab', 'channelsTab', 'businessTab', 'myFeedbackTab', 'procurementTab', 'csInboxTab', 'csTicketsTab', 'csSurveysTab', 'csReviewsTab', 'csFaqsTab', 'csMembersTab', 'financeRevenueTab', 'financeExpensesTab', 'financePlTab', 'financeCashFlowTab', 'financeArTab', 'financeApTab', 'financeTaxTab', 'financeReportsTab', 'customerPortfolioTab',
 // M3 + M6 (Idea -OtADygKA_JhRmk1wUqN): Mast modes tabs — must be in this list
 // so applyRoute correctly hides them when navigating away.
-'addToMastTab', 'businessSetupTab'];
+// W1.8: Sales by Product (PM/Operator doorway) — same reason.
+'addToMastTab', 'businessSetupTab', 'salesByProductTab'];
 
 var currentRoute = 'dashboard';
 var currentRouteParams = {};
@@ -30296,19 +30297,39 @@ function renderDashCardSetupShop() {
   var pct = total > 0 ? Math.round(completed / total * 100) : 0;
 
   // W1.7: auto-collapse Set Up Your Shop to a thin one-liner once the
-  // tenant is clearly operational. Criteria: pct >= 60% OR lifetime orders
-  // > 25. User can still expand inline via "Show all setup steps". Choice
-  // is remembered per session so a one-time expand doesn't keep
-  // re-collapsing on re-render.
+  // tenant is clearly operational. Criteria: pct >= 30% OR lifetime
+  // orders > 5. Lowered from 60%/25 after the original threshold proved
+  // too strict — sgtest15 at 40% / 89 orders wasn't triggering because
+  // window.ordersData isn't loaded at Dashboard render. Now we also kick
+  // off a Firestore count query on first render so the threshold check
+  // becomes correct on the re-render that follows. Choice is remembered
+  // per session so a one-time expand doesn't keep re-collapsing.
   var _autoCollapseExpanded = false;
   try { _autoCollapseExpanded = sessionStorage.getItem('mast_setupShop_expanded') === '1'; } catch (_e) {}
   var _lifetimeOrders = 0;
   try {
-    if (window.ordersData && typeof window.ordersData === 'object') {
+    if (typeof window._lifetimeOrdersCount === 'number') {
+      _lifetimeOrders = window._lifetimeOrdersCount;
+    } else if (window.ordersData && typeof window.ordersData === 'object') {
       _lifetimeOrders = Array.isArray(window.ordersData) ? window.ordersData.length : Object.keys(window.ordersData).length;
     }
   } catch (_e) {}
-  var _autoCollapseEligible = (pct >= 60 || _lifetimeOrders > 25);
+  // Kick off a lifetime-orders count query if we don't have a number yet.
+  // The query is cheap (key-only via limitToLast on a small page) and
+  // re-renders this card once it resolves.
+  if (typeof window._lifetimeOrdersCount !== 'number' && !window._lifetimeOrdersCountLoading
+      && typeof MastDB !== 'undefined' && MastDB.orders && typeof MastDB.orders.query === 'function') {
+    window._lifetimeOrdersCountLoading = true;
+    try {
+      MastDB.orders.query().limitToLast(500).once('value').then(function(snap) {
+        var val = snap && (typeof snap.val === 'function' ? snap.val() : snap);
+        window._lifetimeOrdersCount = val ? Object.keys(val).length : 0;
+        window._lifetimeOrdersCountLoading = false;
+        if (typeof renderDashCardSetupShop === 'function') renderDashCardSetupShop();
+      }).catch(function() { window._lifetimeOrdersCountLoading = false; });
+    } catch (_e) { window._lifetimeOrdersCountLoading = false; }
+  }
+  var _autoCollapseEligible = (pct >= 30 || _lifetimeOrders > 5);
   if (_autoCollapseEligible && !_autoCollapseExpanded) {
     container.innerHTML =
       '<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;">' +
@@ -31836,7 +31857,7 @@ function renderForecastSuggestedBuilds() {
     // button below stays unaffected since the click handler is on the
     // header div only, not the whole card.
     html += '<div style="background:var(--cream,#f5f0e8);border:1px solid var(--cream-dark,#e8e0d4);border-radius:10px;padding:16px;display:flex;flex-direction:column;gap:8px;">' +
-      '<div role="link" tabindex="0" onclick="viewProduct(\'' + esc(f.pid) + '\')" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();viewProduct(\'' + esc(f.pid) + '\');}" style="display:flex;gap:12px;align-items:flex-start;cursor:pointer;border-radius:6px;padding:2px;" onmouseover="this.style.background=\'rgba(0,0,0,0.04)\';" onmouseout="this.style.background=\'transparent\';">' +
+      '<div role="link" tabindex="0" onclick="viewProduct(\'' + esc(f.pid) + '\')" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();viewProduct(\'' + esc(f.pid) + '\');}" style="display:flex;gap:12px;align-items:flex-start;cursor:pointer;border-radius:6px;padding:2px;" onmouseover="this.style.background=\'rgba(127,127,127,0.12)\';" onmouseout="this.style.background=\'transparent\';">' +
         (imgUrl ? '<img src="' + esc(imgUrl) + '" style="width:56px;height:56px;border-radius:8px;object-fit:cover;" loading="lazy">' : '<div style="width:56px;height:56px;border-radius:8px;background:var(--cream-dark,#e8e0d4);display:flex;align-items:center;justify-content:center;font-size:1.6rem;">&#x1F3A8;</div>') +
         '<div style="flex:1;min-width:0;">' +
           '<div style="font-weight:600;font-size:0.9rem;">' + esc(f.name) + '</div>' +
@@ -31868,7 +31889,7 @@ function renderForecastSuggestedBuilds() {
       // W1.4: title + image area is a link to product detail. The Update
       // Product Type button below stays as its own action.
       html += '<div style="background:var(--cream,#f5f0e8);border:1px solid var(--cream-dark,#e8e0d4);border-radius:10px;padding:16px;display:flex;flex-direction:column;gap:8px;">' +
-        '<div role="link" tabindex="0" onclick="viewProduct(\'' + esc(f.pid) + '\')" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();viewProduct(\'' + esc(f.pid) + '\');}" style="display:flex;gap:12px;align-items:flex-start;cursor:pointer;border-radius:6px;padding:2px;" onmouseover="this.style.background=\'rgba(0,0,0,0.04)\';" onmouseout="this.style.background=\'transparent\';">' +
+        '<div role="link" tabindex="0" onclick="viewProduct(\'' + esc(f.pid) + '\')" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();viewProduct(\'' + esc(f.pid) + '\');}" style="display:flex;gap:12px;align-items:flex-start;cursor:pointer;border-radius:6px;padding:2px;" onmouseover="this.style.background=\'rgba(127,127,127,0.12)\';" onmouseout="this.style.background=\'transparent\';">' +
           (imgUrl ? '<img src="' + esc(imgUrl) + '" style="width:56px;height:56px;border-radius:8px;object-fit:cover;" loading="lazy">' : '<div style="width:56px;height:56px;border-radius:8px;background:var(--cream-dark,#e8e0d4);display:flex;align-items:center;justify-content:center;font-size:1.6rem;">&#x1F3A8;</div>') +
           '<div style="flex:1;min-width:0;">' +
             '<div style="font-weight:600;font-size:0.9rem;">' + esc(f.name) + '</div>' +
@@ -32059,7 +32080,7 @@ function renderForecastDemandTable(targetId) {
       '<td style="padding:8px;text-align:right;">' + (Math.round(f.priorAvgMonthly * 10) / 10) + '</td>' +
       '<td style="padding:8px;text-align:center;">' + trendBadge + '</td>' +
       '<td style="padding:8px;text-align:center;">' + typeBadge + '</td>' +
-      '<td style="padding:8px;">' + (f.lastOrdered ? formatOrderDate(f.lastOrdered) : '<span style="color:var(--warm-gray);font-style:italic;">Never</span>') + '</td>' +
+      '<td style="padding:8px;">' + (f.lastOrdered ? (typeof formatOrderDate === 'function' ? formatOrderDate(f.lastOrdered) : (typeof window.formatOrderDate === 'function' ? window.formatOrderDate(f.lastOrdered) : esc(String(f.lastOrdered).slice(0, 10)))) : '<span style="color:var(--warm-gray);font-style:italic;">Never</span>') + '</td>' +
     '</tr>';
   });
 
@@ -33178,6 +33199,32 @@ function viewProduct(pid) {
 }
 
 function _renderProductDetailView(pid) {
+  // W1.3 fix: cold-load / reload race. When the route hydrates from a
+  // direct deep-link (#products?pid=X), productsData may not be loaded
+  // yet — renderProductDetail then fails to find the pid and shows
+  // "Product not found." Wait for the load, show a placeholder in the
+  // meantime, then retry.
+  if (typeof productsLoaded !== 'undefined' && !productsLoaded && typeof loadProducts === 'function') {
+    var detailLoading = document.getElementById('productDetailView');
+    if (detailLoading) {
+      detailLoading.style.display = '';
+      detailLoading.innerHTML = '<div style="padding:32px;color:var(--warm-gray);text-align:center;">Loading product…</div>';
+    }
+    var listGrid = document.getElementById('productsGrid');
+    if (listGrid) listGrid.style.display = 'none';
+    var loadResult = loadProducts();
+    if (loadResult && typeof loadResult.then === 'function') {
+      loadResult.then(function() { _renderProductDetailView(pid); });
+    } else {
+      // loadProducts didn't return a promise — poll briefly until productsLoaded.
+      var pollStart = Date.now();
+      var poll = setInterval(function() {
+        if (productsLoaded) { clearInterval(poll); _renderProductDetailView(pid); }
+        else if (Date.now() - pollStart > 8000) { clearInterval(poll); }
+      }, 100);
+    }
+    return;
+  }
   // Honor a previously-chosen section for this pid, else derive from entry point.
   var stored = null;
   try { stored = sessionStorage.getItem('mastProductSection_' + pid); } catch (e) {}
