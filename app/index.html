@@ -9734,6 +9734,7 @@
         <h2>Subscription</h2>
       </div>
       <div id="subscriptionBillingInfo" style="margin-bottom:24px;"></div>
+      <div id="subscriptionUpgradeOfferBanner" style="margin-bottom:24px;"></div>
       <div id="subscriptionTierCard" style="margin-bottom:24px;"></div>
       <div id="subscriptionUsageCard" style="margin-bottom:24px;"></div>
       <div id="subscriptionRevenueCard" style="margin-bottom:24px;"></div>
@@ -20998,6 +20999,7 @@ function renderSubscriptionSettings() {
   renderSubscriptionBillingInfo(sub);
   _v1PlatformTenantCache = null; // refresh each render
   v1LoadPlatformTenant().then(function(platformTenant) {
+    renderV1UpgradeOfferBanner(platformTenant);
     renderV1TierCard(platformTenant);
     renderV1UsageCard(platformTenant);
     renderV1RevenueAndNextTier(platformTenant);
@@ -21005,6 +21007,61 @@ function renderSubscriptionSettings() {
     renderV1ManageBlock();
   });
 }
+
+function renderV1UpgradeOfferBanner(platformTenant) {
+  var el = document.getElementById('subscriptionUpgradeOfferBanner');
+  if (!el) return;
+  var offer = platformTenant && platformTenant.pendingUpgradeOffer;
+  if (!offer || offer.dismissed || !offer.targetTier) { el.innerHTML = ''; return; }
+  var tier = V1_TIER_BY_KEY[offer.targetTier];
+  if (!tier) { el.innerHTML = ''; return; }
+  var avgDollars = offer.avgCents ? ('$' + Math.round(offer.avgCents / 100)) : '';
+  var h = '<div style="background:rgba(255,193,7,0.1);border:1px solid rgba(255,193,7,0.35);border-radius:8px;padding:16px 20px;">';
+  h += '<div style="font-weight:600;font-family:\'Cormorant Garamond\',serif;font-size:1.15rem;color:var(--charcoal);margin-bottom:4px;">You qualified for the ' + esc(tier.label) + ' tier</div>';
+  h += '<div style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:12px;">Trailing 3-month average revenue ' + (avgDollars ? '(' + esc(avgDollars) + '/mo) ' : '') + 'crossed the ' + esc(tier.label) + ' threshold. Connect a payment method to upgrade and unlock ' + tier.tokens.toLocaleString() + ' tokens/mo + ' + tier.bonusPct + '% coin bonus.</div>';
+  h += '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">';
+  h += '<button class="btn btn-primary" onclick="upgradeFreeTenant(\'' + esc(offer.targetTier) + '\', \'month\')">Upgrade to ' + esc(tier.label) + ' (monthly)</button>';
+  h += '<button class="btn btn-secondary" onclick="upgradeFreeTenant(\'' + esc(offer.targetTier) + '\', \'year\')">Annual (2 months free)</button>';
+  h += '<button class="btn btn-secondary btn-small" onclick="dismissUpgradeOfferBanner()" style="font-size:0.78rem;padding:6px 12px;">Dismiss</button>';
+  h += '<span id="upgradeOfferStatus" style="font-size:0.85rem;color:var(--warm-gray);"></span>';
+  h += '</div>';
+  h += '</div>';
+  el.innerHTML = h;
+}
+
+async function upgradeFreeTenant(targetTier, billingInterval) {
+  var statusEl = document.getElementById('upgradeOfferStatus');
+  if (statusEl) statusEl.textContent = 'Opening Checkout…';
+  try {
+    var user = firebase.auth().currentUser;
+    if (!user) throw new Error('Sign in first');
+    var idToken = await user.getIdToken();
+    var resp = await fetch('https://us-central1-mast-platform-prod.cloudfunctions.net/createUpgradeCheckoutSession', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + idToken },
+      body: JSON.stringify({ tenantId: MastDB.tenantId(), targetTier: targetTier, billingInterval: billingInterval })
+    });
+    var data = await resp.json();
+    if (!resp.ok || !data.sessionUrl) throw new Error((data && data.error) || 'Upgrade checkout failed');
+    window.location.href = data.sessionUrl;
+  } catch (err) {
+    if (statusEl) statusEl.innerHTML = '<span style="color:var(--amber);">' + esc(err.message || String(err)) + '</span>';
+  }
+}
+
+async function dismissUpgradeOfferBanner() {
+  if (!confirm('Dismiss the upgrade offer? We won\'t show it again until you cross a new tier threshold.')) return;
+  try {
+    await firebase.functions().httpsCallable('dismissUpgradeOffer')({ tenantId: MastDB.tenantId() });
+    showToast('Upgrade offer dismissed.');
+    _v1PlatformTenantCache = null;
+    renderSubscriptionSettings();
+  } catch (err) {
+    showToast('Could not dismiss: ' + (err && err.message ? err.message : err), true);
+  }
+}
+window.upgradeFreeTenant = upgradeFreeTenant;
+window.dismissUpgradeOfferBanner = dismissUpgradeOfferBanner;
 
 function renderV1TierCard(platformTenant) {
   var el = document.getElementById('subscriptionTierCard');
