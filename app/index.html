@@ -12320,6 +12320,59 @@ async function addRouteToMast(routeId, context) {
 }
 window.addRouteToMast = addRouteToMast;
 
+// Bulk variant of addRouteToMast — single Firebase write for N routes, one
+// clickstream event per route. Used by the Add-to-Mast page's "+ Add all" +
+// per-section "+ Add all in [Section]" buttons. Idempotent (filters out
+// already-enabled routes before writing).
+async function addRoutesToMast(routeIds, context) {
+  context = context || 'add_to_mast_bulk';
+  if (!Array.isArray(routeIds) || routeIds.length === 0) {
+    return { success: true, addedCount: 0, alreadyEnabled: true };
+  }
+  try {
+    var current = (_modeOverridesSnapshot && Array.isArray(_modeOverridesSnapshot.enabledRoutes))
+      ? _modeOverridesSnapshot.enabledRoutes.slice() : [];
+    var toAdd = routeIds.filter(function(r) { return current.indexOf(r) === -1; });
+    if (toAdd.length === 0) {
+      return { success: true, addedCount: 0, alreadyEnabled: true };
+    }
+    var next = current.concat(toAdd);
+    if (window.MastDB && window.MastDB.businessEntity) {
+      await window.MastDB.businessEntity.update('modeOverrides', { enabledRoutes: next });
+    }
+    _modeOverridesSnapshot = { enabledRoutes: next };
+    // Fire one clickstream event per added route (M5 semantics preserved)
+    try {
+      var BEC_emit = window.BusinessEntityConstants;
+      if (BEC_emit && typeof BEC_emit.buildModuleEnabledEvent === 'function' &&
+          window.MastDB && typeof MastDB.platform === 'object') {
+        var user = (typeof firebase !== 'undefined' && firebase.auth) ? firebase.auth().currentUser : null;
+        var tenantId = MastDB.tenantId();
+        toAdd.forEach(function(routeId) {
+          var payload = BEC_emit.buildModuleEnabledEvent({
+            tenantId: tenantId, userId: user && user.uid,
+            modeSetDoc: _modeSetSnapshot, moduleId: routeId, context: context
+          });
+          if (payload) {
+            var eventId = MastDB.platform.newKey('mast-platform/modes_clickstream');
+            MastDB.platform.set('mast-platform/modes_clickstream/' + eventId, payload).catch(function(emitErr) {
+              console.warn('[modes] bulk clickstream emit failed for ' + routeId + ':', emitErr && emitErr.message);
+            });
+          }
+        });
+      }
+    } catch (emitOuterErr) {
+      console.warn('[modes] bulk clickstream emit threw:', emitOuterErr && emitOuterErr.message);
+    }
+    applyModeNavFilter();
+    return { success: true, addedCount: toAdd.length };
+  } catch (err) {
+    console.warn('[modes] addRoutesToMast failed:', err && err.message);
+    return { success: false, error: err && err.message };
+  }
+}
+window.addRoutesToMast = addRoutesToMast;
+
 // M3 (Idea -OtADygKA_JhRmk1wUqN): Add-to-Mast page — central unlock surface
 // for all soft-hidden modules. Cards grouped by sidebar section, one click
 // per module to enable. The single discoverable expansion point per the
@@ -12482,14 +12535,17 @@ async function renderAddToMast() {
     grouped[info.section].push({ routeId: routeId, info: info });
   }
 
-  // Header summary
+  // Header summary + "+ Add all" bulk control
   var html = '';
-  html += '<div style="padding:0 24px 16px;color:var(--warm-gray);font-size:0.9rem;line-height:1.5;">';
+  html += '<div style="padding:0 24px 16px;display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;">';
+  html += '<div style="color:var(--warm-gray);font-size:0.9rem;line-height:1.5;flex:1;min-width:240px;">';
   html += 'Browse modules that aren&rsquo;t in your default Mast sidebar yet. ';
   html += 'Add what you need &mdash; you can always hide it again later.';
   html += '<div style="margin-top:8px;font-size:0.85rem;opacity:0.8;">';
   html += '<strong>' + softHidden.length + '</strong> module' + (softHidden.length === 1 ? '' : 's') + ' available to add.';
   html += '</div></div>';
+  html += '<button class="btn btn-primary" onclick="addAllToMastClick()" aria-label="Add all ' + softHidden.length + ' modules to my Mast" style="flex-shrink:0;align-self:flex-start;">+ Add all (' + softHidden.length + ')</button>';
+  html += '</div>';
 
   // Section blocks
   for (var s = 0; s < sectionOrder.length; s++) {
@@ -12499,7 +12555,10 @@ async function renderAddToMast() {
     var sectionLabel = MODE_SECTION_LABELS[sectionKey] || sectionKey;
 
     html += '<div class="add-to-mast-section" style="padding:0 24px 24px;">';
-    html += '<h3 style="font-size:1.0rem;margin:16px 0 12px;color:var(--charcoal,var(--text));border-bottom:1px solid var(--border,#e5e0d8);padding-bottom:8px;">' + esc(sectionLabel) + '</h3>';
+    html += '<div style="display:flex;align-items:baseline;justify-content:space-between;gap:16px;border-bottom:1px solid var(--border,#e5e0d8);padding-bottom:8px;margin:16px 0 12px;">';
+    html += '<h3 style="font-size:1.0rem;margin:0;color:var(--charcoal,var(--text));">' + esc(sectionLabel) + ' <span style="font-weight:400;color:var(--warm-gray);font-size:0.85rem;">(' + items.length + ')</span></h3>';
+    html += '<button class="btn btn-secondary btn-small" onclick="addAllInSectionClick(\'' + esc(sectionKey) + '\')" aria-label="Add all ' + items.length + ' modules in ' + esc(sectionLabel) + ' to my Mast">+ Add all in ' + esc(sectionLabel) + '</button>';
+    html += '</div>';
     html += '<div class="add-to-mast-cards" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;">';
 
     for (var k = 0; k < items.length; k++) {
@@ -12554,6 +12613,79 @@ async function addToMastClick(routeId) {
   }
 }
 window.addToMastClick = addToMastClick;
+
+// Bulk: add EVERY soft-hidden module on the page. Confirms first (significant
+// action — turns the sidebar full-fat). Idempotent — re-clicking after partial
+// adds just enables the remainder.
+async function addAllToMastClick() {
+  var modeSet = (typeof getModeSet === 'function') ? getModeSet() : null;
+  var overrides = (typeof getModeOverrides === 'function') ? getModeOverrides() : { enabledRoutes: [] };
+  var softHidden = _getSoftHiddenRoutes(modeSet, overrides);
+  if (softHidden.length === 0) {
+    if (typeof showToast === 'function') showToast('Nothing left to add.');
+    return;
+  }
+  var prompt = 'Add all ' + softHidden.length + ' modules to your Mast? You can hide any of them later from Settings &rarr; Change my business setup.';
+  var ok;
+  if (typeof mastConfirm === 'function') {
+    ok = await mastConfirm(prompt, { title: 'Add all modules', confirmLabel: 'Add all (' + softHidden.length + ')' });
+  } else {
+    ok = window.confirm(prompt);
+  }
+  if (!ok) return;
+  try {
+    var result = await addRoutesToMast(softHidden, 'add_all_to_mast_page');
+    if (result && result.success) {
+      if (typeof showToast === 'function') {
+        showToast(result.addedCount + ' module' + (result.addedCount === 1 ? '' : 's') + ' added to your Mast.');
+      }
+      renderAddToMast();
+    } else {
+      if (typeof showToast === 'function') {
+        showToast('Could not add all modules: ' + ((result && result.error) || 'unknown error'), true);
+      }
+    }
+  } catch (err) {
+    console.warn('[addAllToMastClick] failed:', err && err.message);
+    if (typeof showToast === 'function') showToast('Could not add all modules.', true);
+  }
+}
+window.addAllToMastClick = addAllToMastClick;
+
+// Bulk: add every soft-hidden module in a single section. Lower-friction than
+// "add all" — no confirm dialog (typical section is 4-8 modules, low blast
+// radius). Toast feedback + immediate re-render.
+async function addAllInSectionClick(sectionKey) {
+  var modeSet = (typeof getModeSet === 'function') ? getModeSet() : null;
+  var overrides = (typeof getModeOverrides === 'function') ? getModeOverrides() : { enabledRoutes: [] };
+  var softHidden = _getSoftHiddenRoutes(modeSet, overrides);
+  var inSection = softHidden.filter(function(routeId) {
+    var info = MODE_MODULE_INFO[routeId];
+    return info && info.section === sectionKey;
+  });
+  if (inSection.length === 0) {
+    if (typeof showToast === 'function') showToast('Nothing left to add in this section.');
+    return;
+  }
+  try {
+    var result = await addRoutesToMast(inSection, 'add_all_in_section');
+    if (result && result.success) {
+      var sectionLabel = MODE_SECTION_LABELS[sectionKey] || sectionKey;
+      if (typeof showToast === 'function') {
+        showToast(result.addedCount + ' ' + sectionLabel + ' module' + (result.addedCount === 1 ? '' : 's') + ' added.');
+      }
+      renderAddToMast();
+    } else {
+      if (typeof showToast === 'function') {
+        showToast('Could not add section: ' + ((result && result.error) || 'unknown error'), true);
+      }
+    }
+  } catch (err) {
+    console.warn('[addAllInSectionClick] failed:', err && err.message);
+    if (typeof showToast === 'function') showToast('Could not add section modules.', true);
+  }
+}
+window.addAllInSectionClick = addAllInSectionClick;
 
 // ============================================================
 // M6 (Idea -OtADygKA_JhRmk1wUqN): Change-my-business-setup flow
