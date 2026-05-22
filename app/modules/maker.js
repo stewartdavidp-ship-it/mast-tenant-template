@@ -1524,6 +1524,98 @@
     return Object.keys(cats).sort();
   }
 
+  // W2.3 helper: render a small Δ% chip showing cost change vs ~90 days ago.
+  // Uses material.costHistory[] (rolling, capped at 50 entries by
+  // updateMaterial). Picks the entry whose changedAt is closest to 90d ago
+  // (preferring the oldest entry within the last 120 days); if no entry is
+  // older than 30 days we render "—" (not enough history to compare).
+  function cost90dDeltaChip(m) {
+    if (!m || typeof m.unitCost !== 'number' || m.unitCost <= 0) return '<span style="color:var(--warm-gray-light);">—</span>';
+    var history = Array.isArray(m.costHistory) ? m.costHistory : [];
+    if (history.length === 0) return '<span style="color:var(--warm-gray-light);">—</span>';
+    var now = Date.now();
+    var target = now - 90 * 86400000;
+    var thirtyDaysAgo = now - 30 * 86400000;
+    // Pick the entry whose changedAt is oldest but still <= 30 days ago
+    // (so we don't false-positive a 2-day-old change as a "90d delta").
+    // Among eligible entries, pick the one closest to 90d-ago.
+    var best = null;
+    var bestDelta = Infinity;
+    history.forEach(function(h) {
+      if (!h || typeof h.cost !== 'number') return;
+      var t = h.changedAt ? new Date(h.changedAt).getTime() : 0;
+      if (isNaN(t) || t > thirtyDaysAgo) return;
+      var d = Math.abs(t - target);
+      if (d < bestDelta) { bestDelta = d; best = h; }
+    });
+    if (!best) return '<span style="color:var(--warm-gray-light);">—</span>';
+    if (best.cost <= 0) return '<span style="color:var(--warm-gray-light);">—</span>';
+    var pct = ((m.unitCost - best.cost) / best.cost) * 100;
+    var color = Math.abs(pct) < 1
+      ? 'var(--warm-gray)'
+      : pct > 0
+        ? '#dc2626'  // cost up = bad for margin
+        : '#16a34a'; // cost down = good for margin
+    var sign = pct >= 0 ? '+' : '';
+    return '<span style="color:' + color + ';font-weight:600;">' + sign + pct.toFixed(1) + '%</span>';
+  }
+
+  // W2.3 helper: preview the fan-out impact of a unitCost change on dependent
+  // recipes. Returns { recipeCount, avgImpactPct } using the live recipesData
+  // map (loaded by loadRecipes). impactPct per recipe = (deltaCost × qty_used)
+  // / recipe.totalCost × 100. Avg is across affected recipes; null when no
+  // recipes use this material. Pure function, safe to call on every input
+  // event in the modal. Sub-assemblies (kind=recipe line items) are NOT
+  // walked recursively here — only the direct-material recipes. The recipe
+  // recalc engine handles sub-assembly propagation when the user saves.
+  function previewFanOutEstimate(materialId, newUnitCost, oldUnitCost) {
+    if (!materialId || typeof newUnitCost !== 'number') return null;
+    if (typeof oldUnitCost !== 'number') return null;
+    var delta = newUnitCost - oldUnitCost;
+    if (delta === 0) return { recipeCount: 0, avgImpactPct: 0 };
+    var impacts = [];
+    Object.keys(recipesData || {}).forEach(function(rid) {
+      var r = recipesData[rid];
+      if (!r || r.status === 'archived') return;
+      var lineItems = r.lineItems || {};
+      var qtyUsed = 0;
+      Object.keys(lineItems).forEach(function(liId) {
+        var li = lineItems[liId];
+        if (li && li.materialId === materialId && (li.kind === undefined || li.kind === 'material')) {
+          qtyUsed += (li.quantity || 0);
+        }
+      });
+      if (qtyUsed <= 0) return;
+      var totalCost = r.unitCost || r.totalCost || 0;
+      if (totalCost <= 0) return;
+      var costDelta = delta * qtyUsed;
+      impacts.push((costDelta / totalCost) * 100);
+    });
+    if (impacts.length === 0) return { recipeCount: 0, avgImpactPct: 0 };
+    var avg = impacts.reduce(function(s, v) { return s + v; }, 0) / impacts.length;
+    return { recipeCount: impacts.length, avgImpactPct: avg };
+  }
+
+  // Exposed so the modal's oninput handler can call into the IIFE.
+  window.makerPreviewFanOut = function(materialId, oldUnitCost) {
+    var input = document.getElementById('matCost');
+    var readout = document.getElementById('matFanOutReadout');
+    if (!input || !readout) return;
+    var newCost = parseFloat(input.value);
+    if (isNaN(newCost) || newCost < 0) { readout.innerHTML = ''; return; }
+    var preview = previewFanOutEstimate(materialId, newCost, oldUnitCost);
+    if (!preview || preview.recipeCount === 0) {
+      readout.innerHTML = newCost === oldUnitCost
+        ? ''
+        : '<span style="color:var(--warm-gray-light);">No recipes use this material yet.</span>';
+      return;
+    }
+    var sign = preview.avgImpactPct >= 0 ? '+' : '';
+    var color = preview.avgImpactPct > 0 ? '#dc2626' : preview.avgImpactPct < 0 ? '#16a34a' : 'var(--warm-gray)';
+    readout.innerHTML = '<span style="color:var(--warm-gray);">In ' + preview.recipeCount + ' recipe' + (preview.recipeCount === 1 ? '' : 's') +
+      ' &middot; est. avg COGS impact: <span style="color:' + color + ';font-weight:600;">' + sign + preview.avgImpactPct.toFixed(1) + '%</span></span>';
+  };
+
   function renderMaterials() {
     var tab = document.getElementById('materialsTab');
     if (!tab) return;
@@ -1621,6 +1713,9 @@
     html += '<th>Category</th>';
     html += '<th>UOM</th>';
     html += '<th style="text-align:right;">Unit Cost</th>';
+    // W2.3: Δ% vs 90d ago — uses material.costHistory[] (rolling, capped at
+    // 50 entries, already maintained by updateMaterial at line ~384).
+    html += '<th style="text-align:right;" title="Cost change vs ~90 days ago, from rolling cost history">Δ 90d</th>';
     html += '<th style="text-align:right;">On Hand</th>';
     html += '<th>Status</th>';
     html += '<th style="text-align:right;">Actions</th>';
@@ -1635,6 +1730,10 @@
       html += '<td>' + esc(m.category || '') + '</td>';
       html += '<td>' + esc(getUomShort(m.unitOfMeasure)) + '</td>';
       html += '<td style="text-align:right;font-family:monospace;">$' + (m.unitCost || 0).toFixed(2) + '</td>';
+      // W2.3: Δ 90d chip — finds the costHistory entry closest to 90d ago
+      // and shows %-change. "—" when no history. Resolves OPEN
+      // -OtEObAwxnUpFmiLp-30 (partial — MCP tool tracked separately).
+      html += '<td style="text-align:right;font-family:monospace;font-size:0.78rem;">' + cost90dDeltaChip(m) + '</td>';
       html += '<td style="text-align:right;">' + (m.onHandQty || 0) + '</td>';
       html += '<td><span class="status-badge" style="' + materialStatusBadgeStyle(m.status) + '">' + esc(m.status || 'draft') + '</span></td>';
       html += '<td style="text-align:right;white-space:nowrap;" onclick="event.stopPropagation()">';
@@ -1746,7 +1845,17 @@
 
     html += '<div style="flex:1;">';
     html += '<label style="display:block;font-size:0.85rem;font-weight:600;margin-bottom:4px;">Unit Cost ($) *</label>';
-    html += '<input id="matCost" type="number" step="0.01" min="0" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.9rem;box-sizing:border-box;" value="' + (m ? m.unitCost || '' : '') + '" placeholder="0.00">';
+    // W2.3: live fan-out preview wired to oninput. Shows "in N recipes —
+    // est. avg COGS impact: ±X.X%" as the user types the new cost. Only
+    // fires when editing an existing material (mid present + oldCost known).
+    var oldCostForFanout = m && typeof m.unitCost === 'number' ? m.unitCost : 0;
+    var fanOutHandler = (isEdit && m && m.materialId)
+      ? ' oninput="makerPreviewFanOut(\'' + esc(m.materialId) + '\',' + oldCostForFanout + ')"'
+      : '';
+    html += '<input id="matCost" type="number" step="0.01" min="0"' + fanOutHandler + ' style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.9rem;box-sizing:border-box;" value="' + (m ? m.unitCost || '' : '') + '" placeholder="0.00">';
+    if (isEdit && m && m.materialId) {
+      html += '<div id="matFanOutReadout" style="font-size:0.78rem;margin-top:4px;min-height:1.2em;"></div>';
+    }
     html += '</div>';
 
     html += '</div>';
