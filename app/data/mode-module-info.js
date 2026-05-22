@@ -901,7 +901,7 @@
     'advisor': {
       label: 'Business Plan', section: 'operations',
       tagline: 'AI business plan and growth recommendations.',
-      outcome: "An AI that reads your sales, costs, and customer data and suggests the next move — like a part-time advisor, but free.",
+      outcome: "An AI that reads your sales, costs, and customer data and suggests the next move — like a part-time advisor, on tap.",
       goodFitWhen: "you want a second opinion on what to focus on next quarter.",
       notAFitWhen: "you already work with a business coach or have a clear plan.",
       automates: ["Wondering if you should raise prices", "Guessing which channel to invest in", "Building a business plan in a doc nobody reads"],
