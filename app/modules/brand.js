@@ -11,8 +11,9 @@
   var brandLoaded = false;
   var logoConfig = null;
   var legacyLogoUrl = null;
+  var voiceConfig = null;
   var selectedType = 'primary'; // which logo type is focused in detail panel
-  var activeTab = 'logos'; // 'logos' or 'placements'
+  var activeTab = 'logos'; // 'logos' | 'placements' | 'voice'
 
   // All logo types — primary + variants, treated equally in the grid
   var LOGO_TYPES = [
@@ -38,10 +39,12 @@
     try {
       logoConfig = (await MastDB.get('config/brand/logo')) || null;
       legacyLogoUrl = (await MastDB.get('public/config/nav/logoUrl')) || null;
+      voiceConfig = (await MastDB.get('config/brand/voice')) || null;
     } catch (err) {
       console.warn('[Brand] Failed to load:', err.message);
       logoConfig = null;
       legacyLogoUrl = null;
+      voiceConfig = null;
     }
     brandLoaded = true;
     renderBrand();
@@ -100,16 +103,20 @@
     var activeStyle = tabStyle + 'color:var(--teal);border-bottom-color:var(--teal);font-weight:600;';
     var inactiveStyle = tabStyle + 'color:var(--warm-gray);';
 
+    var voiceActive = activeTab === 'voice';
     html += '<div style="display:flex;gap:4px;border-bottom:1px solid var(--warm-gray-dark);margin-bottom:20px;">' +
       '<button onclick="brandSwitchTab(\'logos\')" style="' + (logosActive ? activeStyle : inactiveStyle) + '">Logos</button>' +
       '<button onclick="brandSwitchTab(\'placements\')" style="' + (placementsActive ? activeStyle : inactiveStyle) + '">Placements</button>' +
+      '<button onclick="brandSwitchTab(\'voice\')" style="' + (voiceActive ? activeStyle : inactiveStyle) + '">Voice</button>' +
     '</div>';
 
     if (logosActive) {
       html += renderDetailPanel();
       html += renderTypeGrid();
-    } else {
+    } else if (placementsActive) {
       html += renderPlacementTable();
+    } else {
+      html += renderVoicePanel();
     }
 
     html += '</div>';
@@ -484,6 +491,79 @@
 
     if (Object.keys(updates).length > 0) await MastDB.multiUpdate(updates);
   }
+
+  // ─── Voice Panel ───
+
+  function renderVoicePanel() {
+    var v = voiceConfig || {};
+    var voiceRules = v.voiceRules || '';
+    var tagline = v.tagline || '';
+    var positioning = v.positioningOneLiner || '';
+
+    var html = '<div style="background:var(--surface-card);border-radius:8px;padding:20px;">' +
+      '<h3 style="margin:0 0 4px;font-size:1.15rem;color:var(--text-primary);">Brand Voice</h3>' +
+      '<div style="color:var(--warm-gray);font-size:0.85rem;margin-bottom:20px;">Words and tone used across storefront SEO, newsletter, and social drafts.</div>';
+
+    // Tagline
+    html += '<div style="margin-bottom:16px;">' +
+      '<label style="display:block;font-size:0.85rem;font-weight:600;color:var(--text-primary);margin-bottom:4px;">Tagline</label>' +
+      '<div style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:6px;">Short phrase (max 80 chars). Used in storefront &lt;title&gt; and OG tags.</div>' +
+      '<input type="text" id="brandVoiceTagline" maxlength="80" value="' + esc(tagline) + '" placeholder="e.g. Handmade glass from the high desert" ' +
+        'style="width:100%;padding:8px 10px;border-radius:4px;border:1px solid var(--warm-gray);background:var(--surface-dark);color:var(--text-primary);font-size:0.9rem;">' +
+    '</div>';
+
+    // Positioning one-liner
+    html += '<div style="margin-bottom:16px;">' +
+      '<label style="display:block;font-size:0.85rem;font-weight:600;color:var(--text-primary);margin-bottom:4px;">Positioning one-liner</label>' +
+      '<div style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:6px;">One sentence (max 160 chars). Used in meta description and OG description.</div>' +
+      '<input type="text" id="brandVoicePositioning" maxlength="160" value="' + esc(positioning) + '" placeholder="e.g. Wheel-thrown and kiln-fired in Taos, shipped worldwide." ' +
+        'style="width:100%;padding:8px 10px;border-radius:4px;border:1px solid var(--warm-gray);background:var(--surface-dark);color:var(--text-primary);font-size:0.9rem;">' +
+    '</div>';
+
+    // Voice rules
+    html += '<div style="margin-bottom:16px;">' +
+      '<label style="display:block;font-size:0.85rem;font-weight:600;color:var(--text-primary);margin-bottom:4px;">Voice rules</label>' +
+      '<div style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:6px;">Tone, do/don\'t list, signature phrases. Used by Claude when drafting newsletter or social copy.</div>' +
+      '<textarea id="brandVoiceRules" rows="8" placeholder="e.g.&#10;- Warm, plainspoken, never salesy&#10;- Refer to pieces as &quot;work&quot; not &quot;products&quot;&#10;- Always credit the artist by first name" ' +
+        'style="width:100%;padding:8px 10px;border-radius:4px;border:1px solid var(--warm-gray);background:var(--surface-dark);color:var(--text-primary);font-size:0.9rem;font-family:inherit;resize:vertical;">' + esc(voiceRules) + '</textarea>' +
+    '</div>';
+
+    html += '<div style="display:flex;gap:8px;align-items:center;">' +
+      '<button class="btn btn-primary" onclick="brandSaveVoice()">Save Voice</button>' +
+      '<span id="brandVoiceSaveMsg" style="font-size:0.78rem;color:var(--warm-gray);"></span>' +
+    '</div>';
+
+    html += '</div>';
+    return html;
+  }
+
+  window.brandSaveVoice = async function() {
+    var taglineEl = document.getElementById('brandVoiceTagline');
+    var positioningEl = document.getElementById('brandVoicePositioning');
+    var rulesEl = document.getElementById('brandVoiceRules');
+    var msg = document.getElementById('brandVoiceSaveMsg');
+    if (!taglineEl) return;
+    var payload = {
+      tagline: (taglineEl.value || '').slice(0, 80).trim(),
+      positioningOneLiner: (positioningEl ? positioningEl.value || '' : '').slice(0, 160).trim(),
+      voiceRules: (rulesEl ? rulesEl.value || '' : '').trim(),
+      updatedAt: new Date().toISOString()
+    };
+    try {
+      await MastDB.set('config/brand/voice', payload);
+      // Also mirror tagline + positioning to public/ so storefront-tenant can read them.
+      await MastDB.multiUpdate({
+        'public/config/brand/tagline': payload.tagline || null,
+        'public/config/brand/positioningOneLiner': payload.positioningOneLiner || null
+      });
+      voiceConfig = payload;
+      if (msg) { msg.textContent = 'Saved.'; setTimeout(function() { if (msg) msg.textContent = ''; }, 2000); }
+      if (typeof showToast === 'function') showToast('Brand voice saved.');
+    } catch (err) {
+      if (typeof showToast === 'function') showToast('Save failed: ' + err.message, true);
+      else if (msg) msg.textContent = 'Save failed.';
+    }
+  };
 
   // ─── Module Registration ───
 
