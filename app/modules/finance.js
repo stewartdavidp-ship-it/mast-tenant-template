@@ -29,9 +29,11 @@ function isTestOrder(o) {
   return isTestSource(o && o.source) || (o && (o.synthetic === true || o.isTest === true));
 }
 
-// TODO (W2): thread isTestOrder()/isTestSource() through P&L, AR aging, AP,
-// and Cash Flow accumulators so test-channel orders are excluded from every
-// money view by default (currently only Revenue tab honors _includeTestData).
+// W1.5 carry-forward (resolved for P&L 2026-05-22): isTestOrder()/isTestSource()
+// thread through computePnlLocal below so revenue/COGS-implicit/NetProfit honor
+// the _includeTestData toggle the user sets on the Revenue tab. AR aging, AP,
+// and Cash Flow still pending — separate task. Test-exclusion chip rendered in
+// renderPnl mirrors the Revenue tab pattern so the user sees the same UX.
 
 function e(s) { return typeof window.esc === 'function' ? window.esc(s) : String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
@@ -658,7 +660,11 @@ function applyFinExpFilters() {
 
 window.toggleFinanceTestData = function() {
   _includeTestData = !_includeTestData;
-  loadRevenue();
+  // W1.5 carry-forward: re-fire whichever Finance loader is currently mounted
+  // so the chip-flip applies to the user's active view. Revenue + P&L both
+  // honor the flag; AR/AP/Cash Flow extensions will hook in here too.
+  if (document.getElementById('fRevContent')) loadRevenue();
+  if (document.getElementById('fPlContent')) loadPnl();
 };
 
 window.setFinExpFilter = function(key, value) {
@@ -1260,10 +1266,20 @@ async function computePnlLocal(startDate, endDate) {
 
   var revenue = 0;
   var revByChannel = {};
+  // W1.5 carry-forward: honor _includeTestData so P&L matches what Revenue
+  // shows. Test-exclusion totals tracked for the surface chip so the user
+  // can see the gap rather than wondering why P&L < raw orders.
+  var testRevenue = 0;
+  var testTxnCount = 0;
   orders.forEach(function(o) {
     if (o.status === 'cancelled') return;
     var c = Math.round((o.total || 0) * 100); if (c <= 0) return;
     var ch = o.source || 'direct';
+    if (isTestOrder(o) && !_includeTestData) {
+      testRevenue += c;
+      testTxnCount += 1;
+      return;
+    }
     revByChannel[ch] = (revByChannel[ch] || 0) + c;
     revenue += c;
   });
@@ -1271,6 +1287,11 @@ async function computePnlLocal(startDate, endDate) {
     if (s.status === 'voided') return;
     var c = Math.round((s.amount || 0) * 100); if (c <= 0) return;
     var ch = s.source || 'pos';
+    if (isTestOrder(s) && !_includeTestData) {
+      testRevenue += c;
+      testTxnCount += 1;
+      return;
+    }
     revByChannel[ch] = (revByChannel[ch] || 0) + c;
     revenue += c;
   });
@@ -1307,7 +1328,7 @@ async function computePnlLocal(startDate, endDate) {
   var grossProfit = revenue - cogs;
   var netProfit   = grossProfit - opex;
 
-  return { revenue, cogs, grossProfit, opex, netProfit, revByChannel, opexByCategory, hasPayroll };
+  return { revenue, cogs, grossProfit, opex, netProfit, revByChannel, opexByCategory, hasPayroll, testRevenue: testRevenue, testTxnCount: testTxnCount };
 }
 
 function deltaBadge(curr, prev) {
@@ -1323,6 +1344,25 @@ function deltaBadge(curr, prev) {
 
 function renderPnl(curr, prev, start, end, prior) {
   var h = '';
+
+  // W1.5 carry-forward: test-data inclusion chip — same UX as Revenue tab so
+  // the user sees consistent toggle state across Finance surfaces. Toggle
+  // flips _includeTestData via window.toggleFinanceTestData(); P&L re-loads
+  // with the new flag respected in computePnlLocal.
+  var testTxnCount = (curr && curr.testTxnCount) || 0;
+  var testRevenue = (curr && curr.testRevenue) || 0;
+  if (_includeTestData || testTxnCount > 0) {
+    var chipBg = _includeTestData ? 'rgba(245,158,11,0.15)' : 'rgba(107,114,128,0.15)';
+    var chipFg = _includeTestData ? '#f59e0b' : '#9ca3af';
+    var chipLabel = _includeTestData
+      ? 'Including test data'
+      : 'Excluding test data (' + testTxnCount + ' txn' + (testTxnCount === 1 ? '' : 's') + ', ' + fmt$(testRevenue) + ')';
+    var btnLabel = _includeTestData ? 'Exclude' : 'Include';
+    h += '<div style="margin-bottom:12px;display:flex;gap:8px;align-items:center;">' +
+         '<span style="background:' + chipBg + ';color:' + chipFg + ';padding:4px 10px;border-radius:999px;font-size:0.78rem;font-weight:600;">' + chipLabel + '</span>' +
+         '<button type="button" onclick="window.toggleFinanceTestData()" style="background:transparent;border:1px solid var(--warm-gray,#666);color:var(--text,#fff);padding:3px 10px;border-radius:999px;font-size:0.78rem;cursor:pointer;">' + btnLabel + '</button>' +
+         '</div>';
+  }
 
   // Top metrics row
   var grossMarginPct = curr.revenue > 0 ? (curr.grossProfit / curr.revenue * 100).toFixed(1) : null;
