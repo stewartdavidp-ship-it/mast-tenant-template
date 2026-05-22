@@ -24739,11 +24739,22 @@ async function addEmailDomain() {
   if (!domain) { showToast('Enter a domain name.', true); return; }
 
   var statusEl = document.getElementById('emailDomainStatus');
-  if (statusEl) statusEl.innerHTML = '<span style="color:var(--warm-gray);">Adding domain to Resend...</span>';
+  if (statusEl) statusEl.innerHTML = '<span style="color:var(--warm-gray);">Adding domain to Resend…</span>';
 
   try {
-    var result = await firebase.functions().httpsCallable('verifyEmailDomain')({ domain: domain });
-    showToast('Domain added — configure DNS records shown below.');
+    // F-M3: setupBYOResendDomain is BYO-aware AND auto-applies Cloudflare DNS
+    // when the domain is on the runmast.com zone (Path A). For other domains
+    // it falls through to the same record-return shape verifyEmailDomain used,
+    // and the existing manual-DNS flow continues to work.
+    var result = await firebase.functions().httpsCallable('setupBYOResendDomain')({ domain: domain });
+    var data = (result && result.data) || {};
+    if (data.path === 'A' && data.status === 'verified') {
+      showToast('Domain auto-verified — DNS records added to Cloudflare and Resend confirmed.');
+    } else if (data.path === 'A') {
+      showToast('DNS records added to Cloudflare. Resend verification is still propagating — check again in a moment.');
+    } else {
+      showToast('Domain added — configure DNS records shown below.');
+    }
     await writeAudit('create', 'settings', 'emailDomain', { domain: domain });
     loadEmailDomainSection();
   } catch (err) {
@@ -33655,7 +33666,14 @@ function renderInventoryOverview() {
   var _invUrlIds = _invUrlIdsParam ? _invUrlIdsParam.split(',').map(function(s) { return s.trim(); }).filter(Boolean) : [];
   var _invUrlIdLookup = _invUrlIds.length > 0 ? Object.create(null) : null;
   if (_invUrlIdLookup) _invUrlIds.forEach(function(id) { _invUrlIdLookup[id] = true; });
-  var _invHasUrlFilter = !!(_invUrlStockType || _invUrlLowStock || _invUrlCategory || _invUrlIds.length);
+  // W2.4: chip-driven filters. "$ at risk" = no-demand-90d rows in the top
+  // 20% by inventory $ (so the chip surfaces the high-value tail, not every
+  // stale SKU). "Aging >60d" = days since last unit moved > 60. Both flow
+  // through the same URL filter mechanism as lowStock so the existing banner
+  // + Clear button machinery works unchanged.
+  var _invUrlAtRisk = !!(_invRouteParams && (_invRouteParams.atRisk === 'true' || _invRouteParams.atRisk === true));
+  var _invUrlAging60 = !!(_invRouteParams && (_invRouteParams.aging60 === 'true' || _invRouteParams.aging60 === true));
+  var _invHasUrlFilter = !!(_invUrlStockType || _invUrlLowStock || _invUrlCategory || _invUrlIds.length || _invUrlAtRisk || _invUrlAging60);
 
   // Build summary stats
   var totalProducts = productsData.length;
@@ -33667,6 +33685,41 @@ function renderInventoryOverview() {
   var stockToBuildCount = 0;
   var buildToOrderCount = 0;
   var healthGreen = 0, healthYellow = 0, healthRed = 0, neverCounted = 0;
+  // W2.4: $-value + aging signals (resolves OPEN -OtEOcB4xeTk-wxyHYjK).
+  // Reuses the recipe-cost map + product-sales map already lazy-loaded by the
+  // W2.1 Forecast path. If the user lands on Inventory before Forecast we
+  // trigger the loads here too. Cells render "—" until they resolve.
+  if (!window._mastRecipeCostByProduct && !window._mastRecipeCostLoading) {
+    window._mastRecipeCostLoading = true;
+    MastDB.recipes.list(200).then(function(recipeMap) {
+      var costByProduct = {};
+      Object.keys(recipeMap || {}).forEach(function(rid) {
+        var r = recipeMap[rid];
+        if (!r || !r.productId || r.status === 'archived') return;
+        if (typeof costByProduct[r.productId] === 'undefined' && typeof r.unitCost === 'number') {
+          costByProduct[r.productId] = r.unitCost;
+        }
+      });
+      window._mastRecipeCostByProduct = costByProduct;
+      window._mastRecipeCostLoading = false;
+      // Re-render once the recipe map arrives so Inventory $ / $ at risk
+      // populate without requiring a manual refresh.
+      if (document.getElementById('inventoryOverviewContent')) renderInventoryOverview();
+    }).catch(function() {
+      window._mastRecipeCostByProduct = {};
+      window._mastRecipeCostLoading = false;
+    });
+  }
+  if (!window._mastProductSalesMap && typeof _ensureProductSalesMap === 'function') {
+    _ensureProductSalesMap(function() {
+      if (document.getElementById('inventoryOverviewContent')) renderInventoryOverview();
+    });
+  }
+  var recipeCostByProduct = window._mastRecipeCostByProduct || {};
+  var productSalesMap = window._mastProductSalesMap || {};
+  var totalInventoryDollarsCents = 0;
+  var dollarsAtRiskCents = 0; // sum of inv$ for products with last90 === 0
+  var agingOver60Count = 0; // count of products with agingDays > 60 (no-BTO)
 
   // Build rows data
   var rows = productsData.map(function(p) {
@@ -33728,6 +33781,32 @@ function renderInventoryOverview() {
       }
     }
 
+    // W2.4: Inventory $ value (onHand × current recipe unit cost). null when
+    // no recipe — UI renders "—". Aging = days since last unit moved
+    // (currently last-sold via ps.lastOrdered; job-consumption not yet
+    // tracked per-unit, see follow-up note below). Both signals feed the
+    // "$ at risk" + "Aging >60d" filter chips and the Count Health row.
+    var recipeUnitCost = (typeof recipeCostByProduct[p.pid] === 'number') ? recipeCostByProduct[p.pid] : null;
+    var inventoryDollarsCents = recipeUnitCost == null ? null : Math.round(totals.onHand * recipeUnitCost * 100);
+    var ps = productSalesMap[p.pid] || null;
+    var last90 = ps ? ps.last90 : 0;
+    var agingDays = null;
+    if (ps && ps.lastOrdered) {
+      var t = new Date(ps.lastOrdered).getTime();
+      if (!isNaN(t)) agingDays = Math.floor((Date.now() - t) / 86400000);
+    } else if (ps) {
+      // Never sold but tracked — treat as very old for sorting/filter purposes.
+      agingDays = 999;
+    }
+    var isBTOforTotals = (stockType === 'build-to-order' || stockType === 'made-to-order');
+    if (inventoryDollarsCents != null && !isBTOforTotals) {
+      totalInventoryDollarsCents += inventoryDollarsCents;
+      if (last90 === 0) dollarsAtRiskCents += inventoryDollarsCents;
+    }
+    if (agingDays != null && agingDays > 60 && !isBTOforTotals && totals.onHand > 0) {
+      agingOver60Count += 1;
+    }
+
     return {
       pid: p.pid,
       name: p.name,
@@ -33744,7 +33823,11 @@ function renderInventoryOverview() {
       productionLeadTimeDays: inv.productionLeadTimeDays || null,
       stockFulfillmentDays: inv.stockFulfillmentDays || null,
       availability: p.availability || '',
-      health: health
+      health: health,
+      // W2.4
+      inventoryDollarsCents: inventoryDollarsCents,
+      agingDays: agingDays,
+      last90: last90
     };
   });
 
@@ -33783,8 +33866,26 @@ function renderInventoryOverview() {
         if (isBTO(r.stockType)) return false;
         if (r.available > r.threshold) return false;
       }
+      // W2.4: "Aging >60d" — exclude BTO + zero-stock rows.
+      if (_invUrlAging60) {
+        if (isBTO(r.stockType)) return false;
+        if (r.onHand <= 0) return false;
+        if (!(typeof r.agingDays === 'number' && r.agingDays > 60)) return false;
+      }
       return true;
     });
+    // W2.4: "$ at risk" — applied AFTER other filters so the top-20%-by-$
+    // calculation operates on the already-narrowed set (avoids the chip
+    // surfacing a single high-$ outlier in an unrelated category).
+    if (_invUrlAtRisk) {
+      var atRiskCandidates = rows.filter(function(r) {
+        return !isBTO(r.stockType) && r.last90 === 0 && typeof r.inventoryDollarsCents === 'number' && r.inventoryDollarsCents > 0;
+      }).sort(function(a, b) { return b.inventoryDollarsCents - a.inventoryDollarsCents; });
+      var topN = Math.max(1, Math.ceil(atRiskCandidates.length * 0.2));
+      var atRiskPids = Object.create(null);
+      atRiskCandidates.slice(0, topN).forEach(function(r) { atRiskPids[r.pid] = true; });
+      rows = rows.filter(function(r) { return atRiskPids[r.pid]; });
+    }
   }
 
   // Summary bar
@@ -33796,6 +33897,12 @@ function renderInventoryOverview() {
     '<div class="inv-overview-stat">' +
       '<div class="inv-overview-stat-value">' + totalOnHand + '</div>' +
       '<div class="inv-overview-stat-label">Total On Hand</div>' +
+    '</div>' +
+    // W2.4: total inventory $ value (sum of onHand × recipe unit cost across
+    // non-BTO products). "—" while the recipe-cost map is still loading.
+    '<div class="inv-overview-stat">' +
+      '<div class="inv-overview-stat-value">' + (window._mastRecipeCostByProduct ? '$' + Math.round(totalInventoryDollarsCents / 100).toLocaleString() : '—') + '</div>' +
+      '<div class="inv-overview-stat-label">Inventory $</div>' +
     '</div>' +
     '<div class="inv-overview-stat">' +
       '<div class="inv-overview-stat-value">' + totalCommitted + '</div>' +
@@ -33828,9 +33935,25 @@ function renderInventoryOverview() {
     (healthYellow > 0 ? '<span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#FF9800;margin-right:3px;vertical-align:middle;"></span>' + healthYellow + ' aging</span>' : '') +
     (healthRed > 0 ? '<span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#F44336;margin-right:3px;vertical-align:middle;"></span>' + healthRed + ' overdue</span>' : '') +
     (neverCounted > 0 ? '<span style="opacity:0.7;">' + neverCounted + ' never counted</span>' : '') +
+    // W2.4: "$ at risk" chip — total inv$ tied up in no-demand-90d products.
+    // Renders only when meaningful (>0) and the recipe-cost map is loaded.
+    (window._mastRecipeCostByProduct && dollarsAtRiskCents > 0
+      ? '<span style="margin-left:auto;display:flex;gap:8px;align-items:center;">' +
+        '<a href="#inventory?atRisk=true" onclick="event.preventDefault();window.location.hash=\'#inventory?atRisk=true\';" style="color:var(--danger,#dc2626);text-decoration:underline;font-weight:500;">$' + Math.round(dollarsAtRiskCents / 100).toLocaleString() + ' at risk</a>' +
+        (agingOver60Count > 0 ? '<a href="#inventory?aging60=true" onclick="event.preventDefault();window.location.hash=\'#inventory?aging60=true\';" style="color:#E65100;text-decoration:underline;">' + agingOver60Count + ' aging &gt;60d</a>' : '') +
+      '</span>'
+      : (agingOver60Count > 0
+        ? '<span style="margin-left:auto;"><a href="#inventory?aging60=true" onclick="event.preventDefault();window.location.hash=\'#inventory?aging60=true\';" style="color:#E65100;text-decoration:underline;">' + agingOver60Count + ' aging &gt;60d</a></span>'
+        : ''
+      )
+    ) +
   '</div>' : '');
 
   // Table
+  // W2.4: +1 column for Inventory $ (between Committed and Lead Time). Aging
+  // signal is folded into the Inventory $ cell as a small subscript on rows
+  // with onHand>0 and no demand-90d, to avoid widening the table further on
+  // small screens. colspan calls below bump from 8 → 9 to match.
   var tableHtml = '<div class="inv-overview-table data-table"><table>' +
     '<thead><tr>' +
       '<th style="width:40px;"></th>' +
@@ -33838,6 +33961,7 @@ function renderInventoryOverview() {
       '<th style="text-align:center;">Type</th>' +
       '<th style="text-align:center;">On Hand</th>' +
       '<th style="text-align:center;">Committed</th>' +
+      '<th style="text-align:center;">Inventory $</th>' +
       '<th style="text-align:center;">Lead Time</th>' +
       '<th>Attributes</th>' +
       '<th style="width:70px;"></th>' +
@@ -33900,15 +34024,31 @@ function renderInventoryOverview() {
       '<td style="text-align:center;">' + statusBadge + '</td>' +
       '<td style="text-align:center;' + qtyStyle + '">' + (isBTORow ? '<span style="color:var(--warm-gray-light);">—</span>' : r.onHand) + '</td>' +
       '<td style="text-align:center;color:var(--warm-gray);">' + (r.committed > 0 ? r.committed : (isBTORow ? '<span style="color:var(--warm-gray-light);">—</span>' : '0')) + '</td>' +
+      // W2.4: Inventory $ cell with optional aging subscript. "—" when BTO,
+      // no recipe, or onHand=0. Aging shown only on rows with stock and
+      // agingDays > 60 (so the cell stays clean for healthy rows).
+      '<td style="text-align:center;color:var(--warm-gray);font-size:0.85rem;">' +
+        (isBTORow || r.inventoryDollarsCents == null
+          ? '<span style="color:var(--warm-gray-light);">—</span>'
+          : (r.inventoryDollarsCents === 0
+            ? '<span style="color:var(--warm-gray-light);">$0</span>'
+            : ('$' + Math.round(r.inventoryDollarsCents / 100).toLocaleString())
+          )
+        ) +
+        (!isBTORow && r.onHand > 0 && typeof r.agingDays === 'number' && r.agingDays > 60
+          ? '<div style="font-size:0.72rem;color:#E65100;margin-top:1px;">' + (r.agingDays >= 999 ? 'never sold' : r.agingDays + 'd since sold') + '</div>'
+          : ''
+        ) +
+      '</td>' +
       '<td style="text-align:center;color:var(--warm-gray);font-size:0.85rem;">' + leadTimeStr + '</td>' +
       '<td>' + (r.attrSummary || '<span style="color:var(--warm-gray-light);font-size:0.78rem;">No variants</span>') + '</td>' +
       '<td style="text-align:center;">' + (!isBTORow ? '<button class="btn btn-secondary btn-small" style="font-size:0.72rem;padding:3px 8px;" data-pid="' + esc(r.pid) + '" onclick="event.stopPropagation();toggleInlineAdjust(this.dataset.pid);" aria-label="Adjust stock for ' + esc(r.name) + '">Adjust</button>' : '') + '</td>' +
     '</tr>';
     if (inlineAdjustPid === r.pid) {
-      tableHtml += '<tr class="inv-adjust-row"><td colspan="8">' + renderInlineAdjustRow(r.pid) + '</td></tr>';
+      tableHtml += '<tr class="inv-adjust-row"><td colspan="9">' + renderInlineAdjustRow(r.pid) + '</td></tr>';
     }
     if (isExpanded && r.hasVariants) {
-      tableHtml += '<tr class="inv-expand-row"><td colspan="8">' + renderVariantDrillDown(r.pid) + '</td></tr>';
+      tableHtml += '<tr class="inv-expand-row"><td colspan="9">' + renderVariantDrillDown(r.pid) + '</td></tr>';
     }
   });
 
@@ -33922,6 +34062,8 @@ function renderInventoryOverview() {
     var bParts = [];
     if (_invUrlIds.length) bParts.push(_invUrlIds.length + ' selected product' + (_invUrlIds.length === 1 ? '' : 's'));
     if (_invUrlLowStock) bParts.push('low stock only');
+    if (_invUrlAtRisk) bParts.push('$ at risk (top 20% of no-demand-90d)');
+    if (_invUrlAging60) bParts.push('aging >60d');
     if (_invUrlStockType) bParts.push('stockType: ' + _invUrlStockType);
     if (_invUrlCategory) bParts.push('category: ' + _invUrlCategory);
     bannerHtml = '<div id="inventoryUrlFilterBanner" style="background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.35);color:#F59E0B;padding:8px 12px;margin-bottom:12px;border-radius:6px;display:flex;align-items:center;gap:12px;font-size:0.85rem;">' +
