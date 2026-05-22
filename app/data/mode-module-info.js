@@ -45,12 +45,15 @@
 
     // ── Products ──────────────────────────────────────────────
     'materials': {
+      // 2026-05-22 audit: dropped "Reorder reminders for low stock" from
+      // automates — reorderThreshold IS stored on each material but is never
+      // read to fire a reminder anywhere. Trimmed outcome to match.
       label: 'Materials', section: 'products',
       tagline: 'Track raw materials, suppliers, and unit costs.',
-      outcome: "Know exactly what a piece costs to make and when you need to reorder a material before you run out.",
+      outcome: "Know exactly what a piece costs to make and keep your reorder thresholds in one place.",
       goodFitWhen: "you buy raw materials in bulk and want true cost-per-piece numbers.",
       notAFitWhen: "you only resell finished goods you don't make.",
-      automates: ["Guessing unit cost from invoices", "Reorder reminders for low stock", "Calculating material cost per piece"],
+      automates: ["Guessing unit cost from invoices", "Calculating material cost per piece", "Re-typing supplier prices into spreadsheets"],
       complementsTools: ["QuickBooks"],
       prerequisites: [],
       pairsWith: ["procurement", "inventory", "jobs", "products", "studio"],
@@ -337,18 +340,22 @@
 
     // ── Marketing ─────────────────────────────────────────────
     'social': {
+      // Card rewritten 2026-05-22 to match reality. Original copy sold scheduling
+      // + cross-posting (Later/Buffer/Hootsuite replacement) but the module is
+      // actually an AI caption + shoot-card generator. Restore the scheduler
+      // framing when scheduling/publish ships.
       label: 'Social Media', section: 'marketing',
-      tagline: 'Schedule and publish social posts.',
-      outcome: "Plan a week of Instagram and Facebook posts on Sunday, see what posted when, and stop forgetting to share new pieces.",
-      goodFitWhen: "you post to social regularly and want to batch the work instead of doing it daily.",
-      notAFitWhen: "you don't use social for your business.",
-      automates: ["Posting to Instagram and Facebook one at a time", "Forgetting to share a new piece you just listed", "Cropping the same image three different ways"],
-      replacesTools: ["Later", "Buffer", "Hootsuite"],
-      complementsTools: ["Instagram", "Facebook"],
+      tagline: 'AI captions and shoot cards for Instagram.',
+      outcome: "Turn your product photos into Instagram-ready captions and shoot cards in seconds — pick your best one and post.",
+      goodFitWhen: "you post to Instagram regularly and the bottleneck is writing captions, not deciding when to post.",
+      notAFitWhen: "you don't post to social, or you need an actual scheduler that publishes for you.",
+      automates: ["Staring at a blank caption box", "Coming up with new caption angles", "Designing shoot cards in Canva"],
+      replacesTools: ["ChatGPT for captions", "Canva text overlays"],
+      complementsTools: ["Instagram"],
       prerequisites: ["Brand colors and logo set"],
       pairsWith: ["stories", "blog", "newsletter", "images", "homepage"],
-      setupDepth: "moderate",
-      preview: { url: ASSET_BASE + 'social.png', alt: "Weekly social calendar with scheduled posts per platform" },
+      setupDepth: "quick",
+      preview: { url: ASSET_BASE + 'social.png', alt: "AI caption generator with product photo and shoot-card options" },
       learnMoreUrl: HELP_BASE + 'social'
     },
     'blog': {
@@ -460,18 +467,21 @@
       learnMoreUrl: HELP_BASE + 'gift-cards'
     },
     'coupons': {
+      // 2026-05-22 audit: alt-text + automates overclaimed revenue
+      // attribution. Module tracks claim/usage count per code; no per-code
+      // revenue surface exists. Trimmed claims to match.
       label: 'Coupons', section: 'retention',
       tagline: 'Discount codes for promotions.',
       outcome: "Create a discount code in 30 seconds for a holiday sale, a podcast sponsorship, or a friends-and-family run.",
-      goodFitWhen: "you run promotions, partner with creators, or want to track which campaigns drive sales.",
+      goodFitWhen: "you run promotions or partner with creators and want to know how many people claimed each code.",
       notAFitWhen: "you never discount your work and don't plan to.",
-      automates: ["Tracking codes in a spreadsheet", "Manually adjusting prices at checkout", "Wondering which campaign drove a sale"],
+      automates: ["Tracking codes in a spreadsheet", "Manually adjusting prices at checkout", "Wondering how many people claimed your code"],
       replacesTools: ["Shopify discounts", "Square discounts"],
       complementsTools: ["Newsletter", "Social Media"],
       prerequisites: [],
       pairsWith: ["orders", "pos", "promotions", "newsletter", "customers"],
       setupDepth: "quick",
-      preview: { url: ASSET_BASE + 'coupons.png', alt: "Discount code list with usage counts and revenue per code" },
+      preview: { url: ASSET_BASE + 'coupons.png', alt: "Discount code list with claim counts and edit actions" },
       learnMoreUrl: HELP_BASE + 'coupons'
     },
     'loyalty': {
@@ -711,18 +721,23 @@
       learnMoreUrl: HELP_BASE + 'enrollments'
     },
     'passes': {
+      // 2026-05-22 audit: the module is a CRUD list of pass DEFINITIONS
+      // (name, type, price, visits, validity). Per-student balance + punch
+      // ledger surfaces aren't built in admin yet. Redemption may be in
+      // cart.js checkout but no admin tally view exists. Softened outcome
+      // + dropped the "active balances per student" alt-text claim.
       label: 'Passes', section: 'classes',
-      tagline: 'Multi-class passes and punch cards.',
-      outcome: "Sell a 5-class pass or a monthly studio pass and let students redeem at booking — without you tracking punches.",
-      goodFitWhen: "you offer bundled class pricing and want to stop tracking remaining classes on paper.",
+      tagline: 'Multi-class pass and punch-card pricing.',
+      outcome: "Sell a 5-class pass or a monthly studio pass — define pricing and visit counts here, sold at checkout.",
+      goodFitWhen: "you offer bundled class pricing and want a price list students can buy from.",
       notAFitWhen: "you only sell single-class drop-ins.",
-      automates: ["Punching paper cards", "Tracking who has classes left", "Calculating expiration dates"],
-      replacesTools: ["MindBody punch cards"],
+      automates: ["Setting pass prices on a price sheet you re-print", "Re-pricing every season"],
+      replacesTools: ["MindBody pass definitions"],
       complementsTools: ["Membership", "Wallet"],
       prerequisites: ["Classes module enabled"],
       pairsWith: ["book", "students", "wallet", "membership", "enrollments"],
-      setupDepth: "moderate",
-      preview: { url: ASSET_BASE + 'passes.png', alt: "Pass types with price, class count, and active-pass balances per student" },
+      setupDepth: "quick",
+      preview: { url: ASSET_BASE + 'passes.png', alt: "Pass types with price, visit count, validity, and active status" },
       learnMoreUrl: HELP_BASE + 'passes'
     },
     'resources': {
@@ -752,17 +767,20 @@
       learnMoreUrl: HELP_BASE + 'students'
     },
     'instructors': {
+      // 2026-05-22 audit: removed "running tally of what you owe them" — the
+      // module stores payRateCents but doesn't tally payouts anywhere.
+      // Restore the tally framing when that surface ships.
       label: 'Instructors', section: 'classes',
       tagline: 'Manage instructor profiles and pay rates.',
-      outcome: "Track which classes each instructor teaches, their pay split, and a running tally of what you owe them.",
-      goodFitWhen: "you have guest instructors or assistant teachers and pay per-class or revenue-share.",
+      outcome: "Track which classes each instructor teaches and store their pay rate — payouts stay a manual export today.",
+      goodFitWhen: "you have guest instructors or assistant teachers and need a single place for their rate + assignments.",
       notAFitWhen: "you're the only instructor.",
-      automates: ["Calculating per-class payouts by hand", "Tracking which class each instructor taught", "Remembering pay-split agreements"],
+      automates: ["Tracking which class each instructor taught", "Remembering pay-rate agreements"],
       complementsTools: ["QuickBooks"],
       prerequisites: ["Classes module enabled"],
       pairsWith: ["book", "team", "resources", "book-reports", "finance-ap"],
-      setupDepth: "moderate",
-      preview: { url: ASSET_BASE + 'instructors.png', alt: "Instructor profiles with assigned classes and YTD payout summary" },
+      setupDepth: "quick",
+      preview: { url: ASSET_BASE + 'instructors.png', alt: "Instructor profiles with assigned classes and pay rate" },
       learnMoreUrl: HELP_BASE + 'instructors'
     },
     'book-reports': {
@@ -797,6 +815,8 @@
       learnMoreUrl: HELP_BASE + 'finance-pl'
     },
     'finance-cash-flow': {
+      // 2026-05-22 audit: Cash on Hand reads from Plaid; shows "—" until
+      // bank connected. Added Plaid prereq.
       label: 'Cash Flow', section: 'finance',
       tagline: 'Cash flow tracking and projections.',
       outcome: "See what's actually in the bank this week vs. what you'll owe — so you don't get blindsided by a quiet month.",
@@ -804,7 +824,7 @@
       notAFitWhen: "you have plenty of runway and don't track cash by week.",
       automates: ["Mental math on \"can I afford this kiln repair right now\"", "Surprise overdraft after a slow week"],
       complementsTools: ["QuickBooks", "your bank"],
-      prerequisites: ["Receipts module enabled"],
+      prerequisites: ["Receipts module enabled", "Bank account connected via Plaid (in Expenses)"],
       pairsWith: ["finance-revenue", "finance-expenses", "finance-ap", "finance-ar", "receipts"],
       setupDepth: "moderate",
       preview: { url: ASSET_BASE + 'finance-cash-flow.png', alt: "Cash flow chart with weekly in/out and projected balance" },
@@ -902,16 +922,19 @@
       learnMoreUrl: HELP_BASE + 'reports'
     },
     'advisor': {
+      // 2026-05-22 audit: the advisor view is hollow until a business plan
+      // is built in Claude Chat (external). Added the Claude Chat prereq +
+      // adjusted goodFitWhen to set expectations.
       label: 'Business Plan', section: 'operations',
       tagline: 'AI business plan and growth recommendations.',
-      outcome: "An AI that reads your sales, costs, and customer data and suggests the next move — like a part-time advisor, on tap.",
-      goodFitWhen: "you want a second opinion on what to focus on next quarter.",
+      outcome: "Build your plan in Claude Chat once; this view surfaces and tracks it alongside your real sales and costs.",
+      goodFitWhen: "you want a second opinion on what to focus on next quarter, and you'll spend an hour with Claude Chat to set it up.",
       notAFitWhen: "you already work with a business coach or have a clear plan.",
       automates: ["Wondering if you should raise prices", "Guessing which channel to invest in", "Building a business plan in a doc nobody reads"],
       complementsTools: ["ChatGPT", "Claude"],
-      prerequisites: ["At least 60 days of data"],
+      prerequisites: ["At least 60 days of data", "Business plan created in Claude Chat"],
       pairsWith: ["finance-pl", "sales-by-product", "customer-portfolio", "show-history", "channels"],
-      setupDepth: "quick",
+      setupDepth: "moderate",
       preview: { url: ASSET_BASE + 'advisor.png', alt: "AI advisor chat with current recommendations and supporting metrics" },
       learnMoreUrl: HELP_BASE + 'advisor'
     },
