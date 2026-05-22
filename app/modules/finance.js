@@ -255,6 +255,17 @@ async function loadRevenue() {
     var testTotalCents = 0;
     var testTxnCount = 0;
 
+    // W2.5: pricing-tier mix tracking — Wholesale / Direct / POS. Retail
+    // (in-person markets/shows) is currently subsumed under POS in the
+    // data model; when a tier field lands on line items / order, this
+    // split becomes 4-way. Resolves OPEN -OtEOd0bj9ZhP2Vd_itj (portfolio
+    // card); per-product mix on Demand Overview is a follow-up gated on
+    // forecastOrders extension to include admin/sales — see task notes.
+    var byTier = { Wholesale: 0, Direct: 0, POS: 0 };
+    function _resolveOrderTier(o) {
+      if (o && (o.isWholesale === true || o.orderType === 'wholesale' || o.type === 'wholesale')) return 'Wholesale';
+      return 'Direct';
+    }
     orders.forEach(function(o) {
       if (o.status === 'cancelled') return;
       var cents = Math.round((o.total || 0) * 100);
@@ -267,6 +278,8 @@ async function loadRevenue() {
         return;
       }
       byChannel[ch] = (byChannel[ch] || 0) + cents;
+      var tier = _resolveOrderTier(o);
+      byTier[tier] = (byTier[tier] || 0) + cents;
       totalCents += cents;
       txns.push({ date: o.placedAt, channel: ch, ref: o.orderNumber || o._id, desc: o.customerName || 'Order', cents: cents, type: 'order', isTest: isTest });
     });
@@ -283,6 +296,7 @@ async function loadRevenue() {
         return;
       }
       byChannel[ch] = (byChannel[ch] || 0) + cents;
+      byTier.POS += cents;
       totalCents += cents;
       txns.push({ date: s.createdAt, channel: ch, ref: s.receiptNumber || s._id, desc: s.note || 'POS Sale', cents: cents, type: 'sale', isTest: isTest });
     });
@@ -293,7 +307,7 @@ async function loadRevenue() {
     // an initial pass with prior=null so the user sees the current numbers
     // immediately (network latency on the prior fetch shouldn't gate first
     // paint), then re-render with prior data when it arrives.
-    el.innerHTML = renderRevenue(totalCents, byChannel, txns, start, end, testTotalCents, testTxnCount, null);
+    el.innerHTML = renderRevenue(totalCents, byChannel, txns, start, end, testTotalCents, testTxnCount, null, null, byTier);
     var priorWin = _priorRevenueWindow(start, end);
     if (priorWin) {
       _loadRevenueAggregate(priorWin.start, priorWin.end).then(function(prior) {
@@ -303,7 +317,7 @@ async function loadRevenue() {
         var curS = document.getElementById('fRevS');
         var curE = document.getElementById('fRevE');
         if (curS && curE && curS.value === start && curE.value === end) {
-          el.innerHTML = renderRevenue(totalCents, byChannel, txns, start, end, testTotalCents, testTxnCount, prior, priorWin);
+          el.innerHTML = renderRevenue(totalCents, byChannel, txns, start, end, testTotalCents, testTxnCount, prior, priorWin, byTier);
         }
       }).catch(function() {
         // Prior fetch failed — leave first-paint as-is. Δ chips will read "—".
@@ -342,7 +356,7 @@ function _renderRevenueDelta(curCents, priorCents) {
     sign + fmt$(absD).replace('-', '') + ' &middot; ' + pctSign + Math.round(deltaPct) + '%</div>';
 }
 
-function renderRevenue(totalCents, byChannel, txns, start, end, testTotalCents, testTxnCount, prior, priorWin) {
+function renderRevenue(totalCents, byChannel, txns, start, end, testTotalCents, testTxnCount, prior, priorWin, byTier) {
   var channelColors = { direct:'#3b82f6', pos:'#8b5cf6', square:'#7c3aed', etsy:'#f1641e', shopify:'#96bf48', manual:'#6b7280', stripe:'#635bff', test:'#f59e0b' };
   var channels = Object.keys(byChannel).sort(function(a,b) { return byChannel[b]-byChannel[a]; });
 
@@ -416,6 +430,45 @@ function renderRevenue(totalCents, byChannel, txns, start, end, testTotalCents, 
       h += '</div>';
     });
     h += '</div></div>';
+  }
+
+  // W2.5: Pricing-tier mix card. Stacked bar showing Wholesale / Direct / POS
+  // split for the current period. "Retail" tier subsumed under POS in current
+  // data model — when a tier field lands on line items / order, this becomes
+  // 4-way. Resolves OPEN -OtEOd0bj9ZhP2Vd_itj on the portfolio side; the
+  // per-product mix column on Demand Overview is gated on extending
+  // forecastOrders to include admin/sales (filed as follow-up).
+  if (byTier && totalCents > 0) {
+    var tierColors = { Wholesale: '#8b5cf6', Direct: '#3b82f6', POS: '#16a34a' };
+    var tierOrder = ['Wholesale', 'Direct', 'POS'];
+    var tierTotal = tierOrder.reduce(function(s, t) { return s + (byTier[t] || 0); }, 0);
+    if (tierTotal > 0) {
+      h += '<div style="margin-bottom:20px;">';
+      h += '<div style="font-size:0.85rem;font-weight:600;color:var(--warm-gray,#888);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px;">Pricing-tier mix</div>';
+      // Stacked bar
+      h += '<div style="display:flex;height:18px;border-radius:6px;overflow:hidden;background:var(--bg-secondary,#232323);margin-bottom:8px;">';
+      tierOrder.forEach(function(t) {
+        var cents = byTier[t] || 0;
+        if (cents <= 0) return;
+        var pct = (cents / tierTotal) * 100;
+        h += '<div title="' + t + ': ' + fmt$(cents) + ' (' + pct.toFixed(1) + '%)" style="background:' + tierColors[t] + ';width:' + pct + '%;"></div>';
+      });
+      h += '</div>';
+      // Legend rows
+      h += '<div style="display:flex;gap:14px;flex-wrap:wrap;font-size:0.85rem;">';
+      tierOrder.forEach(function(t) {
+        var cents = byTier[t] || 0;
+        var pct = tierTotal > 0 ? (cents / tierTotal) * 100 : 0;
+        h += '<div style="display:flex;align-items:center;gap:6px;">';
+        h += '<span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:' + tierColors[t] + ';"></span>';
+        h += '<span style="font-weight:600;">' + t + '</span>';
+        h += '<span style="color:var(--warm-gray,#888);">' + fmt$(cents) + ' &middot; ' + pct.toFixed(0) + '%</span>';
+        h += '</div>';
+      });
+      h += '</div>';
+      h += '<div style="font-size:0.72rem;color:var(--warm-gray,#888);margin-top:6px;">In-person retail currently subsumed under POS — extend when tier field lands on line items.</div>';
+      h += '</div>';
+    }
   }
 
   // Transaction log
