@@ -99,6 +99,7 @@ jobs:
           fi
           # mast-deploy storefront-shared lands in 0.7.0 (W2-M2). Bump after every
           # mast-deploy publish that ships new storefront functionality.
+          # 0.7.1: bearer env-var fallback chain + canonical platform MCP URL.
           NODE_AUTH_TOKEN="${{ secrets.MAST_GHA_PAT }}" \
-            npx --yes -p '@stewartdavidp-ship-it/mast-deploy@0.7.0' \
+            npx --yes -p '@stewartdavidp-ship-it/mast-deploy@0.7.1' \
               mast-deploy storefront-shared --pod="${POD}" $DRY_RUN_FLAG
