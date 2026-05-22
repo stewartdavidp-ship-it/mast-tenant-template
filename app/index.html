@@ -12849,10 +12849,12 @@ function openAddToMastDetails(routeId) {
       footerHtml += '<button type="button" class="btn btn-secondary btn-small" onclick="closeAddToMastDetails()">Close</button>';
     } else if (isVisible) {
       footerHtml += '<button type="button" class="btn btn-secondary btn-small" onclick="closeAddToMastDetails()">Close</button>';
-      footerHtml += '<button type="button" class="btn btn-secondary btn-small" onclick="removeFromMastClick(\'' + esc(routeId) + '\');closeAddToMastDetails();">Remove from my Mast</button>';
+      // W1-followup OPEN -OtEkpFjIRwH_z-1CJuB: data-attrs + delegated dispatch
+      // instead of inline onclick with esc(routeId) interpolated into JS.
+      footerHtml += '<button type="button" class="btn btn-secondary btn-small" data-amt-action="remove" data-amt-route="' + esc(routeId) + '" data-amt-close-drawer="1">Remove from my Mast</button>';
     } else {
       footerHtml += '<button type="button" class="btn btn-secondary btn-small" onclick="closeAddToMastDetails()">Maybe later</button>';
-      footerHtml += '<button type="button" class="btn btn-primary btn-small" onclick="addToMastClick(\'' + esc(routeId) + '\');closeAddToMastDetails();">+ Add to my Mast</button>';
+      footerHtml += '<button type="button" class="btn btn-primary btn-small" data-amt-action="add" data-amt-route="' + esc(routeId) + '" data-amt-close-drawer="1">+ Add to my Mast</button>';
     }
     footerEl.innerHTML = footerHtml;
 
@@ -13038,7 +13040,7 @@ async function renderAddToMast() {
     html += '<div style="display:flex;align-items:baseline;justify-content:space-between;gap:16px;border-bottom:1px solid var(--border,#e5e0d8);padding-bottom:8px;margin:16px 0 12px;">';
     html += '<h3 style="font-size:1.0rem;margin:0;color:var(--charcoal,var(--text));">' + esc(sectionLabel) + ' <span style="font-weight:400;color:var(--warm-gray);font-size:0.85rem;">(' + sectionVisibleTotal + '/' + items.length + ' visible)</span></h3>';
     if (sectionHiddenCount > 0) {
-      html += '<button class="btn btn-secondary btn-small" onclick="addAllInSectionClick(\'' + esc(sectionKey) + '\')" aria-label="Add all ' + sectionHiddenCount + ' hidden modules in ' + esc(sectionLabel) + ' to my Mast">+ Add all ' + sectionHiddenCount + ' hidden</button>';
+      html += '<button class="btn btn-secondary btn-small" data-amt-action="section-add" data-amt-section="' + esc(sectionKey) + '" aria-label="Add all ' + sectionHiddenCount + ' hidden modules in ' + esc(sectionLabel) + ' to my Mast">+ Add all ' + sectionHiddenCount + ' hidden</button>';
     }
     html += '</div>';
     html += '<div class="add-to-mast-cards" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;">';
@@ -13089,16 +13091,16 @@ async function renderAddToMast() {
         }
         html += '</div>';
         if (isEnriched) {
-          html += '<button type="button" class="add-to-mast-details-toggle" onclick="openAddToMastDetails(\'' + esc(it.routeId) + '\')" aria-haspopup="dialog" aria-label="Details about ' + esc(displayLabel) + '" style="background:transparent;border:0;color:var(--teal,#2a7c6f);font-size:0.72rem;font-weight:600;cursor:pointer;padding:2px 4px;">Details &rarr;</button>';
+          html += '<button type="button" class="add-to-mast-details-toggle" data-amt-action="details" data-amt-route="' + esc(it.routeId) + '" aria-haspopup="dialog" aria-label="Details about ' + esc(displayLabel) + '" style="background:transparent;border:0;color:var(--teal,#2a7c6f);font-size:0.72rem;font-weight:600;cursor:pointer;padding:2px 4px;">Details &rarr;</button>';
         }
         html += '</div>';
       }
       if (it.alwaysOn) {
         // No button — always-on items are informational only.
       } else if (it.visible) {
-        html += '<button class="btn btn-secondary btn-small" onclick="removeFromMastClick(\'' + esc(it.routeId) + '\')" aria-label="Remove ' + esc(displayLabel) + ' from my Mast" style="margin-top:4px;align-self:flex-start;">Remove from my Mast</button>';
+        html += '<button class="btn btn-secondary btn-small" data-amt-action="remove" data-amt-route="' + esc(it.routeId) + '" aria-label="Remove ' + esc(displayLabel) + ' from my Mast" style="margin-top:4px;align-self:flex-start;">Remove from my Mast</button>';
       } else {
-        html += '<button class="btn btn-primary btn-small" onclick="addToMastClick(\'' + esc(it.routeId) + '\')" aria-label="Add ' + esc(displayLabel) + ' to my Mast" style="margin-top:4px;align-self:flex-start;">+ Add to my Mast</button>';
+        html += '<button class="btn btn-primary btn-small" data-amt-action="add" data-amt-route="' + esc(it.routeId) + '" aria-label="Add ' + esc(displayLabel) + ' to my Mast" style="margin-top:4px;align-self:flex-start;">+ Add to my Mast</button>';
       }
       // E1 v2 (2026-05-22): inline-expand replaced with right-side drawer.
       // Drawer DOM is global; created lazily by openAddToMastDetails().
@@ -33361,7 +33363,10 @@ function renderForecastSuggestedBuilds() {
           return '<span style="background:' + bg + ';color:' + color + ';padding:2px 8px;border-radius:4px;font-size:0.72rem;font-weight:600;">' + r + '</span>';
         }).join('') +
       '</div>' +
-      '<button class="btn btn-primary" style="font-size:0.85rem;padding:6px 14px;align-self:flex-start;margin-top:4px;" onclick="openForecastJobModal(\'' + esc(f.pid) + '\',' + f.suggestedQty + ')">Create Job (' + f.suggestedQty + ' pcs)</button>' +
+      // W1-followup OPEN -OtEkpFjIRwH_z-1CJuB: data-attrs + delegated handler
+      // instead of inline onclick with esc(pid) interpolated into a JS string.
+      // esc() is HTML-safe, not JS-string-safe — defense-in-depth.
+      '<button class="btn btn-primary" style="font-size:0.85rem;padding:6px 14px;align-self:flex-start;margin-top:4px;" data-create-job-pid="' + esc(f.pid) + '" data-create-job-qty="' + f.suggestedQty + '">Create Job (' + f.suggestedQty + ' pcs)</button>' +
     '</div>';
   });
 
@@ -33401,7 +33406,11 @@ function openForecastJobModal(pid, suggestedQty) {
   var product = productsData.find(function(p) { return p.pid === pid; });
   var name = product ? product.name : pid;
   var purposeButtons = Object.keys(PURPOSE_LABELS).map(function(key) {
-    return '<button class="btn btn-secondary" style="font-size:0.85rem;padding:8px 14px;margin:4px;" onclick="doCreateForecastJob(\'' + esc(pid) + '\',' + suggestedQty + ',\'' + key + '\')">' +
+    // W1-followup OPEN -OtEkpFjIRwH_z-1CJuB: data-attrs + delegated handler.
+    // The delegated listener branches on the presence of data-create-job-purpose
+    // — with it → doCreateForecastJob(pid, qty, purpose); without it →
+    // openForecastJobModal(pid, qty).
+    return '<button class="btn btn-secondary" style="font-size:0.85rem;padding:8px 14px;margin:4px;" data-create-job-pid="' + esc(pid) + '" data-create-job-qty="' + suggestedQty + '" data-create-job-purpose="' + esc(key) + '">' +
       PURPOSE_LABELS[key] + '</button>';
   }).join('');
   var html = '<div style="max-width:450px;">' +
@@ -35500,6 +35509,67 @@ if (!window._mastViewProductDelegateAttached) {
     _mastViewProductFromEvent(ev);
   });
   window._mastViewProductDelegateAttached = true;
+}
+
+// W1-followup OPEN -OtEkpFjIRwH_z-1CJuB: delegated handler for Forecast's
+// Create-Job affordances. Replaces inline onclick="openForecastJobModal('+
+// esc(pid) + ',' + qty + ')" + the sibling doCreateForecastJob() handlers
+// in the purpose-button modal. Buttons opt in via data-create-job-pid;
+// presence of data-create-job-purpose decides which downstream function runs.
+if (!window._mastCreateJobDelegateAttached) {
+  document.addEventListener('click', function(ev) {
+    var t = ev.target.closest && ev.target.closest('[data-create-job-pid]');
+    if (!t) return;
+    var pid = t.getAttribute('data-create-job-pid');
+    if (!pid) return;
+    var qty = parseInt(t.getAttribute('data-create-job-qty'), 10);
+    if (!(qty > 0)) qty = 0;
+    var purpose = t.getAttribute('data-create-job-purpose');
+    ev.preventDefault();
+    if (purpose) {
+      if (typeof doCreateForecastJob === 'function') doCreateForecastJob(pid, qty, purpose);
+    } else {
+      if (typeof openForecastJobModal === 'function') openForecastJobModal(pid, qty);
+    }
+  });
+  window._mastCreateJobDelegateAttached = true;
+}
+
+// W1-followup OPEN -OtEkpFjIRwH_z-1CJuB: delegated dispatcher for the
+// Add-to-Mast page action buttons. Replaces inline onclicks that
+// interpolated esc(routeId) into JS strings. routeIds come from
+// MODE_ROUTE_VISIBILITY (hardcoded constants), but defense-in-depth
+// says don't interpolate IDs into JS regardless of source.
+//
+// Attribute scheme:
+//   data-amt-action     — add | remove | details | section-add
+//   data-amt-route      — routeId (for add/remove/details)
+//   data-amt-section    — sectionKey (for section-add)
+//   data-amt-close-drawer — "1" to close the details drawer after
+//                            the action runs (used on drawer footer)
+if (!window._mastAddToMastDelegateAttached) {
+  document.addEventListener('click', function(ev) {
+    var t = ev.target.closest && ev.target.closest('[data-amt-action]');
+    if (!t) return;
+    var action = t.getAttribute('data-amt-action');
+    var route = t.getAttribute('data-amt-route');
+    var section = t.getAttribute('data-amt-section');
+    var closeDrawer = t.getAttribute('data-amt-close-drawer') === '1';
+    ev.preventDefault();
+    if (action === 'add' && route && typeof addToMastClick === 'function') {
+      addToMastClick(route);
+    } else if (action === 'remove' && route && typeof removeFromMastClick === 'function') {
+      removeFromMastClick(route);
+    } else if (action === 'details' && route && typeof openAddToMastDetails === 'function') {
+      openAddToMastDetails(route);
+    } else if (action === 'section-add' && section && typeof addAllInSectionClick === 'function') {
+      addAllInSectionClick(section);
+    } else {
+      return;
+    }
+    if (closeDrawer && typeof closeAddToMastDetails === 'function') closeAddToMastDetails();
+  });
+  window._mastAddToMastDelegateAttached = true;
 }
 
 // Pure aggregator — variant-level returns and repurchase signal for a product.
