@@ -178,11 +178,19 @@
         var thumbHtml = clip.thumbnailUrl
           ? '<img class="sm-clip-thumb" src="' + esc(clip.thumbnailUrl) + '" alt="">'
           : '<div class="sm-clip-thumb-placeholder">' + (clip.fileType === 'video' ? '🎬' : '📷') + '</div>';
+        // W1.6 fix-up #2 — surface coarse platform chips on pending clips too,
+        // reading clip.platforms[] or clip.destinations[] if the operator picked
+        // a target before publishing. When nothing resolves, show a neutral
+        // "Draft" hint so the absence of platform color isn't surprising.
+        var clipChips = renderPlatformChips({ platforms: clip.platforms || clip.destinations });
+        var clipPlatformsHtml = clipChips
+          ? clipChips
+          : '<span class="platform-chip platform-chip-draft" style="background:var(--cream-dark);color:var(--warm-gray);font-size:0.72rem;padding:2px 6px;border-radius:4px;font-weight:600;margin-left:4px;" title="Pick a platform in Enhance to assign IG / FB / X">Draft</span>';
         html += '<div class="sm-clip-card" onclick="smEnhanceClip(\'' + esc(clip.clipId) + '\')">' +
           thumbHtml +
           '<div class="sm-clip-info">' +
             '<div class="sm-clip-name">' + esc(clip.fileName || 'Untitled clip') + '</div>' +
-            '<div class="sm-clip-meta">' + esc(dateStr) + ' · ' + esc(clip.fileType || 'file') + '</div>' +
+            '<div class="sm-clip-meta">' + esc(dateStr) + ' · ' + esc(clip.fileType || 'file') + ' ' + clipPlatformsHtml + '</div>' +
           '</div>' +
           '<button class="btn btn-primary" style="flex-shrink:0;" onclick="event.stopPropagation(); smEnhanceClip(\'' + esc(clip.clipId) + '\')">Enhance →</button>' +
         '</div>';
