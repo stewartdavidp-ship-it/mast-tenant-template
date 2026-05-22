@@ -172,6 +172,63 @@ function setupRevenueTab() {
   loadRevenue();
 }
 
+// W2.6: prior-equivalent window — same length, immediately before [start, end].
+// Period selector controls both windows. Returns ISO date strings (YYYY-MM-DD).
+// Resolves OPEN -OtEOdthKP8z-75j82ic.
+function _priorRevenueWindow(start, end) {
+  var DAY_MS = 86400000;
+  var s = new Date(start + 'T00:00:00').getTime();
+  var e = new Date(end + 'T00:00:00').getTime();
+  if (isNaN(s) || isNaN(e) || e < s) return null;
+  var lengthMs = e - s; // inclusive day-difference; we treat [start,end] as a window
+  var priorEnd = new Date(s - DAY_MS);            // day before current start
+  var priorStart = new Date(priorEnd.getTime() - lengthMs);
+  function fmt(d) {
+    var yyyy = d.getFullYear();
+    var mm = String(d.getMonth() + 1).padStart(2, '0');
+    var dd = String(d.getDate()).padStart(2, '0');
+    return yyyy + '-' + mm + '-' + dd;
+  }
+  return { start: fmt(priorStart), end: fmt(priorEnd) };
+}
+
+// W2.6: aggregate orders+sales for a given window using the same channel +
+// test-data rules as loadRevenue's main path. Returns { totalCents, byChannel,
+// txnCount }. Test data is excluded when _includeTestData is false (matches
+// the visible total user sees). Used for prior-period comparison.
+async function _loadRevenueAggregate(start, end) {
+  var [ordersRaw, salesRaw] = await Promise.all([
+    MastDB.query('orders').orderByChild('placedAt').startAt(isoStart(start)).endAt(isoEnd(end)).limitToLast(1000).once(),
+    MastDB.query('admin/sales').orderByChild('createdAt').startAt(isoStart(start)).endAt(isoEnd(end)).limitToLast(500).once()
+  ]);
+  var orders = Object.entries(ordersRaw || {}).map(function(kv) { return Object.assign({ _id: kv[0] }, kv[1]); });
+  var sales  = Object.entries(salesRaw  || {}).map(function(kv) { return Object.assign({ _id: kv[0] }, kv[1]); });
+  var totalCents = 0;
+  var byChannel = {};
+  var txnCount = 0;
+  orders.forEach(function(o) {
+    if (o.status === 'cancelled') return;
+    var cents = Math.round((o.total || 0) * 100);
+    if (cents <= 0) return;
+    if (isTestOrder(o) && !_includeTestData) return;
+    var ch = o.source || 'direct';
+    byChannel[ch] = (byChannel[ch] || 0) + cents;
+    totalCents += cents;
+    txnCount += 1;
+  });
+  sales.forEach(function(s) {
+    if (s.status === 'voided') return;
+    var cents = Math.round((s.amount || 0) * 100);
+    if (cents <= 0) return;
+    if (isTestOrder(s) && !_includeTestData) return;
+    var ch = s.source || 'pos';
+    byChannel[ch] = (byChannel[ch] || 0) + cents;
+    totalCents += cents;
+    txnCount += 1;
+  });
+  return { totalCents: totalCents, byChannel: byChannel, txnCount: txnCount };
+}
+
 async function loadRevenue() {
   var startEl = document.getElementById('fRevS');
   var endEl   = document.getElementById('fRevE');
@@ -232,14 +289,60 @@ async function loadRevenue() {
 
     txns.sort(function(a,b) { return (b.date || '').localeCompare(a.date || ''); });
 
-    el.innerHTML = renderRevenue(totalCents, byChannel, txns, start, end, testTotalCents, testTxnCount);
+    // W2.6: fetch prior equivalent window in parallel for Δ comparison. Render
+    // an initial pass with prior=null so the user sees the current numbers
+    // immediately (network latency on the prior fetch shouldn't gate first
+    // paint), then re-render with prior data when it arrives.
+    el.innerHTML = renderRevenue(totalCents, byChannel, txns, start, end, testTotalCents, testTxnCount, null);
+    var priorWin = _priorRevenueWindow(start, end);
+    if (priorWin) {
+      _loadRevenueAggregate(priorWin.start, priorWin.end).then(function(prior) {
+        // Guard against the user changing the period before prior arrives:
+        // only update if the dom node still contains the placeholder we just
+        // rendered (heuristic: same start/end inputs).
+        var curS = document.getElementById('fRevS');
+        var curE = document.getElementById('fRevE');
+        if (curS && curE && curS.value === start && curE.value === end) {
+          el.innerHTML = renderRevenue(totalCents, byChannel, txns, start, end, testTotalCents, testTxnCount, prior, priorWin);
+        }
+      }).catch(function() {
+        // Prior fetch failed — leave first-paint as-is. Δ chips will read "—".
+      });
+    }
   } catch (err) {
     el.innerHTML = '<div style="color:var(--danger,#dc2626);padding:12px;">' + e(err.message) + '</div>';
     showToast('Revenue load failed: ' + err.message, true);
   }
 }
 
-function renderRevenue(totalCents, byChannel, txns, start, end, testTotalCents, testTxnCount) {
+// W2.6: render a Δ chip showing both Δ$ and Δ% vs prior equivalent window.
+// Returns empty string if prior is null/0 (no comparison available).
+// Threshold: |Δ%| < 1 renders neutral gray rather than green/red to avoid
+// visual noise on tiny shifts (e.g. $5 swing on a $50k month).
+function _renderRevenueDelta(curCents, priorCents) {
+  if (priorCents == null) return '';
+  if (priorCents === 0) {
+    if (curCents === 0) return '';
+    return '<div style="font-size:0.72rem;color:var(--warm-gray,#888);margin-top:2px;">vs $0 prior</div>';
+  }
+  var deltaCents = curCents - priorCents;
+  var deltaPct = (deltaCents / priorCents) * 100;
+  var sign = deltaCents >= 0 ? '+' : '−';
+  var absD = Math.abs(deltaCents);
+  var pctSign = deltaPct >= 0 ? '+' : '';
+  var color;
+  if (Math.abs(deltaPct) < 1) {
+    color = 'var(--warm-gray,#888)';
+  } else if (deltaCents >= 0) {
+    color = '#4caf50';
+  } else {
+    color = '#ef5350';
+  }
+  return '<div style="font-size:0.72rem;color:' + color + ';margin-top:2px;font-weight:600;">' +
+    sign + fmt$(absD).replace('-', '') + ' &middot; ' + pctSign + Math.round(deltaPct) + '%</div>';
+}
+
+function renderRevenue(totalCents, byChannel, txns, start, end, testTotalCents, testTxnCount, prior, priorWin) {
   var channelColors = { direct:'#3b82f6', pos:'#8b5cf6', square:'#7c3aed', etsy:'#f1641e', shopify:'#96bf48', manual:'#6b7280', stripe:'#635bff', test:'#f59e0b' };
   var channels = Object.keys(byChannel).sort(function(a,b) { return byChannel[b]-byChannel[a]; });
 
@@ -259,13 +362,32 @@ function renderRevenue(totalCents, byChannel, txns, start, end, testTotalCents, 
          '</div>';
   }
 
-  // Summary cards
+  // W2.6: prior-period header note. Period selector controls both windows —
+  // prior window is the equivalent length immediately before [start, end].
+  if (prior && priorWin) {
+    h += '<div style="margin-bottom:12px;font-size:0.72rem;color:var(--warm-gray,#888);">' +
+      'Comparing to ' + toDateShort(priorWin.start) + ' &ndash; ' + toDateShort(priorWin.end) +
+      ' (' + fmt$(prior.totalCents) + ' &middot; ' + prior.txnCount + ' txn' + (prior.txnCount === 1 ? '' : 's') + ')' +
+      '</div>';
+  }
+
+  // Summary cards. W2.6: Total Revenue + Top Channel cards get Δ$ + Δ% chips
+  // when prior data is available. statCard takes a 4th `sub` argument that
+  // renders below the value — append the delta there.
+  var totalDelta = prior ? _renderRevenueDelta(totalCents, prior.totalCents) : '';
   h += '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px;">';
-  h += statCard('Total Revenue', fmt$(totalCents), '#16a34a');
-  h += statCard('Transactions', String(txns.length), 'var(--text,#fff)');
+  h += statCard('Total Revenue', fmt$(totalCents), '#16a34a', totalDelta);
+  var txnDelta = '';
+  if (prior) {
+    var pct = prior.txnCount > 0 ? Math.round((txns.length - prior.txnCount) / prior.txnCount * 100) : null;
+    txnDelta = (pct == null) ? '' : '<div style="font-size:0.72rem;color:var(--warm-gray,#888);margin-top:2px;">' + (pct >= 0 ? '+' : '') + pct + '% vs prior</div>';
+  }
+  h += statCard('Transactions', String(txns.length), 'var(--text,#fff)', txnDelta);
   if (channels.length > 0) {
     var topCh = channels[0];
-    h += statCard('Top Channel', e(topCh), channelColors[topCh] || '#888', fmt$(byChannel[topCh]) + ' · ' + Math.round(byChannel[topCh]/totalCents*100) + '%');
+    var topChSub = fmt$(byChannel[topCh]) + ' · ' + Math.round(byChannel[topCh]/totalCents*100) + '%';
+    if (prior) topChSub += _renderRevenueDelta(byChannel[topCh], (prior.byChannel || {})[topCh] || 0);
+    h += statCard('Top Channel', e(topCh), channelColors[topCh] || '#888', topChSub);
   }
   h += statCard('Period', toDateShort(start) + ' – ' + toDateShort(end), 'var(--warm-gray,#888)');
   h += '</div>';
@@ -288,6 +410,9 @@ function renderRevenue(totalCents, byChannel, txns, start, end, testTotalCents, 
       h += '<div style="font-size:0.85rem;font-weight:600;text-transform:capitalize;">' + e(ch) + '</div>';
       h += '<div style="font-size:1.15rem;font-weight:700;">' + fmt$(byChannel[ch]) + '</div>';
       h += '<div style="font-size:0.72rem;color:var(--warm-gray,#888);">' + Math.round(byChannel[ch]/totalCents*100) + '% of total</div>';
+      // W2.6: per-channel Δ vs prior. Prior channels that disappeared still
+      // surface here as a — chip via _renderRevenueDelta(0, priorCents).
+      if (prior) h += _renderRevenueDelta(byChannel[ch], (prior.byChannel || {})[ch] || 0);
       h += '</div>';
     });
     h += '</div></div>';
