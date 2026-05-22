@@ -5572,6 +5572,11 @@
       </div>
     </div>
     <!-- Products -->
+    <!-- Products section — section header keeps the toggle pattern (matches
+         Sales/Marketing/etc.). Catalog + Develop sub-items removed 2026-05-22:
+         the Develop/Catalog lens distinction is handled by the in-page lens
+         toggle pill per ARCHITECTURE.md "Two-View Architecture", so a single
+         "Products" sub-item is enough as the entry into the lifecycle. -->
     <div class="sidebar-section" data-section="products">
       <div class="sidebar-section-header" onclick="toggleSection('products')">
         <span class="sidebar-section-icon">&#127991;</span>
@@ -5579,8 +5584,7 @@
         <span class="sidebar-section-arrow">&#9654;</span>
       </div>
       <div class="sidebar-items">
-        <div class="sidebar-item" data-route="products" onclick="navigateTo('products')">Catalog</div>
-        <div class="sidebar-item" data-route="develop-products" onclick="navigateTo('develop-products')">Develop</div>
+        <div class="sidebar-item" data-route="products" onclick="navigateTo('products')">Products</div>
         <div class="sidebar-item" data-route="materials" onclick="navigateTo('materials')">Materials</div>
         <div class="sidebar-item" data-route="forecast" onclick="navigateTo('forecast')">Forecast</div>
         <div class="sidebar-item" data-route="jobs" onclick="navigateTo('jobs')">Jobs</div>
