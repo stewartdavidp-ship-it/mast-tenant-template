@@ -12454,7 +12454,10 @@ var MODE_SECTION_LABELS = {
 
 var MODE_MODULE_INFO = {
   // Catalog
-  'develop-products':   { label: 'Develop',         section: 'products', desc: 'Plan and stage new products before they go live.' },
+  // Note: 'develop-products' deliberately omitted — the Develop/Catalog lens
+  // distinction lives on the Products page as a status filter chip
+  // (Draft / Review / Active / Archived), not as a separate route/module.
+  // The route still exists for legacy URLs but doesn't appear in Add-to-Mast.
   'materials':          { label: 'Materials',       section: 'products', desc: 'Track raw materials, suppliers, and unit costs.' },
   'forecast':           { label: 'Forecast',        section: 'products', desc: 'Predict inventory needs based on sales velocity.' },
   'jobs':               { label: 'Jobs',            section: 'products', desc: 'Schedule production runs and batch work.' },
@@ -33924,7 +33927,7 @@ function openPublishToChannelDialog(pid) {
         (notActive
           ? '<div style="margin-bottom:12px;padding:10px 12px;background:rgba(217,119,6,0.08);border:1px solid rgba(217,119,6,0.4);border-radius:6px;font-size:0.85rem;color:#b45309;">' +
               '<strong>This product is in <code>' + esc(product.status || 'draft') + '</code>.</strong> ' +
-              'Promote it to <strong>active</strong> from the Catalog view before publishing to a customer-facing channel.' +
+              'Promote it to <strong>active</strong> from the product detail before publishing to a customer-facing channel.' +
             '</div>'
           : '');
 
