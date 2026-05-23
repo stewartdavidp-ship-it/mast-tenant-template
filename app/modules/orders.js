@@ -3139,6 +3139,18 @@
     renderCommissions();
   }
 
+  // W2 R3 Fix 1: tab swap for commission detail. The tab buttons rendered
+  // by viewCommissionDetail use inline onclick="setCommissionDetailTab(...)"
+  // — that handler was never defined, so clicking Thread/Milestones/Money/
+  // Terms threw ReferenceError and the body never swapped. Defines + exposes
+  // on window so the inline onclick resolves; re-runs viewCommissionDetail
+  // to re-render the body with the newly selected tab.
+  function setCommissionDetailTab(commId, tabKey) {
+    if (!commId || !tabKey) return;
+    commDetailActiveTab = tabKey;
+    viewCommissionDetail(commId);
+  }
+
   function viewCommissionDetail(commId) {
     var c = commissionsData[commId];
     if (!c) return;
@@ -5301,6 +5313,7 @@
   window.loadCommissions = loadCommissions;
   window.renderCommissions = renderCommissions;
   window.viewCommissionDetail = viewCommissionDetail;
+  window.setCommissionDetailTab = setCommissionDetailTab;
   window.setCommissionStatusFilter = setCommissionStatusFilter;
   window.setCommissionSort = setCommissionSort;
   window.saveCommissionProposal = saveCommissionProposal;
