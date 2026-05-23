@@ -801,7 +801,10 @@
     var emailKey = reviewEmail ? String(reviewEmail).toLowerCase().trim() : '';
     var matchedCustomer = emailKey ? csReviewCustomerByEmail[emailKey] : null;
     var prodInfo = r.productId ? csReviewProductIndex[r.productId] : null;
-    var customerName = matchedCustomer ? matchedCustomer.displayName : (r.authorName || r.reviewerName || 'Anonymous');
+    // Prefer the review's own authorName over matchedCustomer.displayName for the
+    // public storefront. Admin-controlled displayName can carry annotations like
+    // "VIP whale" that we don't want leaking onto the homepage testimonial card.
+    var customerName = (r.authorName || r.reviewerName) || (matchedCustomer && matchedCustomer.displayName) || 'Anonymous';
     var quote = r.body || r.headline || '';
     if (!quote) { showToast('This review has no body text to feature.', true); return; }
     // Use sourceReviewId as the key so re-featuring updates instead of duplicating.

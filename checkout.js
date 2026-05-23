@@ -2063,13 +2063,18 @@
       var attrRaw = sessionStorage.getItem('__mast_attr');
       if (attrRaw) {
         var attr = JSON.parse(attrRaw);
+        // Defense-in-depth: re-truncate UTM fields to 80 chars at checkout copy.
+        // cart.js already caps at landing, but sessionStorage can be mutated
+        // between landing and checkout (other tabs, devtools, etc.) — re-cap here
+        // so the order doc never receives unbounded strings.
+        var cap = function(v) { return v == null ? null : String(v).slice(0, 80); };
         payload.attribution = {
-          source:   attr.utm_source   || null,
-          medium:   attr.utm_medium   || null,
-          campaign: attr.utm_campaign || null,
-          content:  attr.utm_content  || null,
-          term:     attr.utm_term     || null,
-          referrer: attr.referrer     || null,
+          source:   cap(attr.utm_source),
+          medium:   cap(attr.utm_medium),
+          campaign: cap(attr.utm_campaign),
+          content:  cap(attr.utm_content),
+          term:     cap(attr.utm_term),
+          referrer: cap(attr.referrer),
           capturedAt: new Date().toISOString()
         };
       }

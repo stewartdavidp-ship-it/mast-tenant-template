@@ -98,7 +98,10 @@
         kind: 'review',
         id: id,
         customerId: cust ? cust.id : null,
-        customerName: (cust && cust.displayName) || r.authorName || r.reviewerName || (email || 'Anonymous'),
+        // Mirror cs-reviews list: prefer matched customer, then review-supplied
+        // name, then 'Anonymous'. Do NOT fall back to the raw email — that's PII
+        // and isn't a display name. (W3a-cleanup, OPEN -OtI-8rtdmqYrwjTKjYc.)
+        customerName: (cust && cust.displayName) || r.authorName || r.reviewerName || 'Anonymous',
         sentiment: _sentimentForReview(r),
         preview: String(r.text || r.body || '').slice(0, 80),
         ageIso: r.createdAt || r.submittedAt || '',
