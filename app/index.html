@@ -6954,6 +6954,24 @@
         <h3 class="analytics-section-title">Recent Activity</h3>
         <div id="analyticsRecent"></div>
       </div>
+
+      <!-- W2.5 — Traffic & Revenue by Source -->
+      <div style="margin-top:32px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+          <h3 class="analytics-section-title" style="margin:0;">Traffic &amp; Revenue by Source</h3>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <select id="trafficSourceRange" onchange="renderTrafficBySource()" style="padding:6px 10px;border-radius:4px;border:1px solid #ddd;font-size:0.85rem;">
+              <option value="30" selected>Last 30 days</option>
+              <option value="90">Last 90 days</option>
+            </select>
+            <select id="trafficSourceCampaign" onchange="renderTrafficBySource()" style="padding:6px 10px;border-radius:4px;border:1px solid #ddd;font-size:0.85rem;">
+              <option value="">All campaigns</option>
+            </select>
+          </div>
+        </div>
+        <div id="trafficSourceTop3" style="display:flex;gap:8px;margin:8px 0;flex-wrap:wrap;font-size:0.9rem;"></div>
+        <div id="trafficSourceTable"></div>
+      </div>
     </div>
 
     <!-- Admin: Products Tab -->
@@ -42889,6 +42907,155 @@ var ACTION_LABELS = {
 
 var PAGE_LABELS = { home: 'Home', about: 'About', shop: 'Shop', schedule: 'Schedule' };
 
+// ============================================================
+// W2.5 — Traffic & Revenue by Source
+// ============================================================
+//
+// Joins analytics/hits (cart.js trackEvent w/ utm + referrer) to orders
+// (server-side attribution attached via submitOrder payload) and presents
+// hits/orders/revenue per source. Campaign filter reads admin/campaigns
+// utmCampaign values. Defaults to last 30d, top-3 row + grouped table.
+
+var _w25Hits = null;
+var _w25Orders = null;
+var _w25Campaigns = null;
+
+async function _w25LoadData() {
+  // Hits — last 90d gives us enough range for both 30d and 90d toggles.
+  if (!_w25Hits) {
+    try {
+      var snap = await MastDB.query('analytics/hits').orderByChild('ts').limitToLast(5000).once();
+      _w25Hits = Object.values(snap.val() || {});
+    } catch (_e) { _w25Hits = []; }
+  }
+  if (!_w25Orders) {
+    try {
+      var oSnap = await MastDB.query('orders').orderByChild('createdAt').limitToLast(500).once();
+      _w25Orders = Object.values(oSnap.val() || {});
+    } catch (_e) { _w25Orders = []; }
+  }
+  if (!_w25Campaigns) {
+    try {
+      _w25Campaigns = (await MastDB.list('admin/campaigns')) || {};
+    } catch (_e) { _w25Campaigns = {}; }
+  }
+}
+
+async function renderTrafficBySource() {
+  await _w25LoadData();
+  var rangeEl = document.getElementById('trafficSourceRange');
+  var rangeDays = rangeEl ? (parseInt(rangeEl.value, 10) || 30) : 30;
+  var campEl = document.getElementById('trafficSourceCampaign');
+  var campFilter = campEl ? campEl.value : '';
+
+  // Populate campaign dropdown if not yet populated.
+  if (campEl && campEl.options.length <= 1) {
+    Object.keys(_w25Campaigns).forEach(function(cid) {
+      var c = _w25Campaigns[cid];
+      if (!c || !c.utmCampaign) return;
+      var opt = document.createElement('option');
+      opt.value = c.utmCampaign;
+      opt.textContent = c.name + ' (' + c.utmCampaign + ')';
+      campEl.appendChild(opt);
+    });
+  }
+
+  var cutoff = Date.now() - (rangeDays * 86400000);
+  var hits = (_w25Hits || []).filter(function(h) {
+    if (!h || (h.ts || 0) < cutoff) return false;
+    if (campFilter && h.uc !== campFilter) return false;
+    return true;
+  });
+
+  // Group hits by source. Source key = utm_source || referrer-host || 'direct'.
+  var bySource = {};
+  hits.forEach(function(h) {
+    var src = h.us || _hostFromRef(h.r) || 'direct';
+    src = String(src).toLowerCase();
+    if (!bySource[src]) bySource[src] = { hits: 0, orderCount: 0, revenueCents: 0 };
+    bySource[src].hits++;
+  });
+
+  // Join orders. Orders carry `attribution` (or legacy `utm`) — read both.
+  (_w25Orders || []).forEach(function(o) {
+    if (!o) return;
+    var ts = o.createdAt ? new Date(o.createdAt).getTime() : 0;
+    if (ts < cutoff) return;
+    var attr = o.attribution || o.utm || {};
+    if (campFilter && attr.campaign !== campFilter && attr.utm_campaign !== campFilter) return;
+    var src = attr.source || attr.utm_source || _hostFromRef(attr.referrer) || 'direct';
+    src = String(src).toLowerCase();
+    if (!bySource[src]) bySource[src] = { hits: 0, orderCount: 0, revenueCents: 0 };
+    bySource[src].orderCount++;
+    bySource[src].revenueCents += (o.totalCents || o.total || 0);
+  });
+
+  // Top-3 row by revenue
+  var entries = Object.entries(bySource);
+  entries.sort(function(a, b) { return b[1].revenueCents - a[1].revenueCents; });
+  var top3El = document.getElementById('trafficSourceTop3');
+  if (top3El) {
+    if (!entries.length) {
+      top3El.innerHTML = '<span style="color:var(--warm-gray);font-size:0.85rem;">' +
+        'No traffic events captured yet — UTMs will appear here once visitors land with utm_source params.</span>';
+    } else {
+      var top = entries.slice(0, 3);
+      top3El.innerHTML = '<span style="color:var(--warm-gray);">Top sources (last ' + rangeDays + 'd):</span> ' +
+        top.map(function(e) {
+          var k = e[0], v = e[1];
+          return '<span style="background:var(--cream);padding:4px 10px;border-radius:4px;"><strong>' + esc(k) + '</strong> $' + (v.revenueCents / 100).toFixed(2) + ' (' + v.orderCount + ' order' + (v.orderCount !== 1 ? 's' : '') + ')</span>';
+        }).join(' ');
+    }
+  }
+
+  // Table
+  var tableEl = document.getElementById('trafficSourceTable');
+  if (!tableEl) return;
+  if (!entries.length) { tableEl.innerHTML = ''; return; }
+  var html = '<table style="width:100%;border-collapse:collapse;font-size:0.85rem;margin-top:8px;">' +
+    '<thead><tr style="border-bottom:1px solid var(--cream-dark);text-align:left;">' +
+      '<th style="padding:6px;">Source</th>' +
+      '<th style="padding:6px;text-align:right;">Hits</th>' +
+      '<th style="padding:6px;text-align:right;">Orders</th>' +
+      '<th style="padding:6px;text-align:right;">Revenue</th>' +
+    '</tr></thead><tbody>';
+  entries.forEach(function(e) {
+    var k = e[0], v = e[1];
+    html += '<tr style="border-bottom:1px solid var(--cream);">' +
+      '<td style="padding:6px;">' + esc(k) + '</td>' +
+      '<td style="padding:6px;text-align:right;">' + v.hits + '</td>' +
+      '<td style="padding:6px;text-align:right;">' + v.orderCount + '</td>' +
+      '<td style="padding:6px;text-align:right;">$' + (v.revenueCents / 100).toFixed(2) + '</td>' +
+    '</tr>';
+  });
+  html += '</tbody></table>';
+  tableEl.innerHTML = html;
+}
+window.renderTrafficBySource = renderTrafficBySource;
+
+function _hostFromRef(ref) {
+  if (!ref) return '';
+  try { return new URL(ref).host.replace(/^www\./, ''); }
+  catch (_e) { return ''; }
+}
+
+// Cross-module helper consumed by the Campaigns module's attribution panel.
+window.computeAttributionForCampaign = async function(utmCampaign) {
+  await _w25LoadData();
+  var totals = { totalHits: 0, orderCount: 0, totalRevenue: 0 };
+  (_w25Hits || []).forEach(function(h) {
+    if (h && h.uc === utmCampaign) totals.totalHits++;
+  });
+  (_w25Orders || []).forEach(function(o) {
+    var attr = o && (o.attribution || o.utm) || {};
+    if (attr.campaign === utmCampaign || attr.utm_campaign === utmCampaign) {
+      totals.orderCount++;
+      totals.totalRevenue += (o.totalCents || o.total || 0);
+    }
+  });
+  return totals;
+};
+
 async function loadAnalytics() {
   analyticsLoaded = true;
   var loading = document.getElementById('analyticsLoading');
@@ -42933,6 +43100,10 @@ async function loadAnalytics() {
     renderAnalyticsInteractions(rangeHits);
     renderAnalyticsVisitors(rangeHits);
     renderAnalyticsRecent(hits.slice(0, 30));
+    // W2.5 — Traffic & Revenue by Source panel. Resets hit cache so a
+    // Refresh of the page also refreshes the per-source roll-up.
+    _w25Hits = null; _w25Orders = null; _w25Campaigns = null;
+    renderTrafficBySource();
   } catch (err) {
     showToast('Error loading analytics: ' + err.message, true);
   } finally {

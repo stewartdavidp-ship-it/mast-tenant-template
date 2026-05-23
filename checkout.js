@@ -2054,6 +2054,27 @@
     var wd = buildWalletDeductionsPayload();
     if (wd) payload.walletDeductions = wd;
 
+    // W2.5 — UTM-on-checkout. Persist first-touch attribution captured by
+    // cart.js (sessionStorage __mast_attr) onto the order so the Analytics
+    // Traffic-by-Source panel can join hits→orders by source/campaign.
+    // Server-side submitOrder writes pass-through unknown fields to the
+    // order doc; the storefront referrer is already query-stripped on write.
+    try {
+      var attrRaw = sessionStorage.getItem('__mast_attr');
+      if (attrRaw) {
+        var attr = JSON.parse(attrRaw);
+        payload.attribution = {
+          source:   attr.utm_source   || null,
+          medium:   attr.utm_medium   || null,
+          campaign: attr.utm_campaign || null,
+          content:  attr.utm_content  || null,
+          term:     attr.utm_term     || null,
+          referrer: attr.referrer     || null,
+          capturedAt: new Date().toISOString()
+        };
+      }
+    } catch (_e) { /* silent */ }
+
     callFunction('submitOrder', payload, function (result) {
       isSubmitting = false;
 
