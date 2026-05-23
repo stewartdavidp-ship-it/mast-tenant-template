@@ -110,11 +110,17 @@
     try { sessionStorage.setItem('sg_fb_last', String(Date.now())); } catch (e) {}
   }
 
-  // Check if public feedback is enabled
-  MastDB.get('admin/feedbackSettings/publicEnabled').then(function(v) {
+  // Check if public feedback is enabled.
+  // W3a-cleanup (OPEN -OtHKHHztxZ8R08YE7k8): moved storefront read from
+  // admin/feedbackSettings/publicEnabled (admin-gated path — caused
+  // "Missing or insufficient permissions" in storefront console on every
+  // page load) to public/config/feedbackPublicEnabled, which is anon-readable.
+  // Admin write path mirrors to this public key — see app/index.html
+  // setFeedbackPublicEnabled().
+  MastDB.get('public/config/feedbackPublicEnabled').then(function(v) {
     if (v !== true) return;
     injectWidget();
-  });
+  }).catch(function() { /* silent — widget stays hidden */ });
 
   function injectWidget() {
     // Inject CSS

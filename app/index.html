@@ -49504,6 +49504,10 @@ async function togglePublicFeedback() {
   var statusEl = document.getElementById('publicFeedbackStatus');
   try {
     await MastDB.feedbackSettings.ref('publicEnabled').set(enabled);
+    // W3a-cleanup (OPEN -OtHKHHztxZ8R08YE7k8): mirror to public/config so the
+    // unauthenticated storefront feedback widget can read the toggle without
+    // hitting an admin-gated path.
+    await MastDB.set('public/config/feedbackPublicEnabled', enabled);
     if (statusEl) {
       statusEl.textContent = enabled ? 'Public feedback enabled.' : 'Public feedback disabled.';
       statusEl.style.color = 'var(--teal)';
