@@ -24,6 +24,8 @@
   var contents = {};
   var current = null;
   var voiceRules = '';
+  var brandTagline = '';
+  var brandPositioning = '';
   var brandLoaded = false;
   var imagesLoadedLocal = false;
 
@@ -40,15 +42,19 @@
     listLoaded = true;
   }
   async function loadBrandVoice() {
-    // FIX 3 (W2 round 1): brand.js writes voiceRules to `config/brand/voice`
-    // (admin-only path); only tagline + positioningOneLiner are mirrored to
-    // `public/config/brand`. Read from the admin path that brand.js actually
-    // writes to.
+    // FIX 1 (W2 round 2): brand.js writes ALL three voice fields to
+    // `config/brand/voice` (admin-only) — tagline, positioningOneLiner,
+    // voiceRules. The mirror to `public/config/brand` is for the storefront
+    // head only. Single source-of-truth read here covers all three.
     if (brandLoaded) return;
     try {
       var v = await MastDB.get('config/brand/voice');
       voiceRules = (v && v.voiceRules) || '';
-    } catch (_e) { voiceRules = ''; }
+      brandTagline = (v && v.tagline) || '';
+      brandPositioning = (v && v.positioningOneLiner) || '';
+    } catch (_e) {
+      voiceRules = ''; brandTagline = ''; brandPositioning = '';
+    }
     brandLoaded = true;
   }
 
@@ -187,9 +193,23 @@
         // Sidebar — voice rules
         '<aside style="border-left:1px solid var(--cream-dark);padding-left:14px;">' +
           '<h4 style="font-size:0.9rem;margin:0 0 6px 0;">Brand Voice</h4>' +
-          '<div style="font-size:0.78rem;color:var(--warm-gray);white-space:pre-wrap;">' +
-            esc(voiceRules || 'No voice rules set — open Brand → Voice to add some.') +
-          '</div>' +
+          (brandTagline
+            ? '<div style="font-size:0.85rem;font-style:italic;color:var(--text-primary);margin-bottom:6px;">' +
+                esc(brandTagline) +
+              '</div>'
+            : '') +
+          (brandPositioning
+            ? '<div style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:8px;">' +
+                esc(brandPositioning) +
+              '</div>'
+            : '') +
+          (voiceRules
+            ? '<div style="font-size:0.78rem;color:var(--warm-gray);white-space:pre-wrap;">' +
+                esc(voiceRules) +
+              '</div>'
+            : (!brandTagline && !brandPositioning
+                ? '<div style="font-size:0.78rem;color:var(--warm-gray);">No voice set — open Brand &rarr; Voice to add some.</div>'
+                : '')) +
         '</aside>' +
       '</div>';
 

@@ -45642,32 +45642,67 @@ async function deleteImage(imageId) {
 // ============================================================
 function computeImageUsage() {
   var usage = {};
+  function ensure(iid) {
+    if (!usage[iid]) usage[iid] = { onWebsite: false, products: [], galleryCount: 0 };
+    return usage[iid];
+  }
   // Scan gallery for URL matches to library images
   Object.values(gallery).forEach(function(g) {
     Object.keys(imageLibrary).forEach(function(imgId) {
       var img = imageLibrary[imgId];
       if (g.url === img.url || g.url === img.thumbnailUrl) {
-        if (!usage[imgId]) usage[imgId] = { onWebsite: false, products: [], galleryCount: 0 };
-        usage[imgId].onWebsite = true;
+        ensure(imgId).onWebsite = true;
         usage[imgId].galleryCount++;
       }
     });
   });
-  // Scan products for imageId matches
+  // W2 round 2 FIX 2: index productsData by pid + id for direct
+  // `image.productId` foreign-key lookup. Many images on this tenant carry
+  // a direct productId — the previous logic only matched via product-side
+  // imageIds[] / images[] / imageUrl, which misses those entirely (header
+  // showed "1 linked" against a library where most images have productId).
+  var productsById = {};
+  (productsData || []).forEach(function(p) {
+    if (!p) return;
+    if (p.pid) productsById[p.pid] = p;
+    if (p.id && !productsById[p.id]) productsById[p.id] = p;
+  });
+  // Direct image.productId foreign-key resolution
+  Object.keys(imageLibrary).forEach(function(imgId) {
+    var img = imageLibrary[imgId];
+    if (img && img.productId && productsById[img.productId]) {
+      var p = productsById[img.productId];
+      var label = p.name || p.pid || img.productId;
+      var slot = ensure(imgId);
+      if (slot.products.indexOf(label) === -1) slot.products.push(label);
+    }
+  });
+  // Scan products for imageId matches (product-side links)
   productsData.forEach(function(p) {
+    var label = p.name || p.pid;
     (p.imageIds || []).forEach(function(iid) {
-      if (!usage[iid]) usage[iid] = { onWebsite: false, products: [], galleryCount: 0 };
-      usage[iid].products.push(p.name || p.pid);
+      var slot = ensure(iid);
+      if (slot.products.indexOf(label) === -1) slot.products.push(label);
     });
     // Also check image URL matches for products that only have urls but no imageIds
     (p.images || []).forEach(function(pUrl) {
+      var url = (pUrl && typeof pUrl === 'object') ? pUrl.url : pUrl;
+      if (!url) return;
       Object.keys(imageLibrary).forEach(function(imgId) {
-        if (imageLibrary[imgId].url === pUrl && (!usage[imgId] || usage[imgId].products.indexOf(p.name || p.pid) === -1)) {
-          if (!usage[imgId]) usage[imgId] = { onWebsite: false, products: [], galleryCount: 0 };
-          usage[imgId].products.push(p.name || p.pid);
+        if (imageLibrary[imgId].url === url) {
+          var slot = ensure(imgId);
+          if (slot.products.indexOf(label) === -1) slot.products.push(label);
         }
       });
     });
+    if (p.imageUrl) {
+      Object.keys(imageLibrary).forEach(function(imgId) {
+        if (imageLibrary[imgId].url === p.imageUrl) {
+          var slot = ensure(imgId);
+          if (slot.products.indexOf(label) === -1) slot.products.push(label);
+        }
+      });
+    }
   });
   return usage;
 }
@@ -46202,8 +46237,26 @@ async function renderImageDetailBackrefs(imageId) {
           pArr = Object.keys(prods).map(function(k) { return prods[k]; });
         } catch (_e) {}
       }
+      // W2 round 2 FIX 2: direct image.productId foreign-key lookup first
+      // (cheap, primary truth on this tenant). Then fall back to product-side
+      // links so we still surface products that reference this image without
+      // the image carrying productId.
+      var seenProductIds = {};
+      var imgProductId = img && img.productId;
+      if (imgProductId) {
+        for (var dpi = 0; dpi < pArr.length; dpi++) {
+          var dp = pArr[dpi];
+          if (dp && (dp.pid === imgProductId || dp.id === imgProductId)) {
+            result.products.push({ id: dp.pid || dp.id, name: dp.name || dp.title || '(unnamed)' });
+            seenProductIds[dp.pid || dp.id] = true;
+            break;
+          }
+        }
+      }
       pArr.forEach(function(p) {
         if (!p) return;
+        var pid = p.pid || p.id;
+        if (pid && seenProductIds[pid]) return;
         var hit = false;
         // imageIds[] — admin-side schema, primary match
         if (Array.isArray(p.imageIds) && p.imageIds.indexOf(imageId) !== -1) hit = true;
@@ -46220,7 +46273,10 @@ async function renderImageDetailBackrefs(imageId) {
         }
         // primary imageUrl field
         if (!hit && url && p.imageUrl === url) hit = true;
-        if (hit) result.products.push({ id: p.pid || p.id, name: p.name || p.title || '(unnamed)' });
+        if (hit) {
+          result.products.push({ id: pid, name: p.name || p.title || '(unnamed)' });
+          if (pid) seenProductIds[pid] = true;
+        }
       });
     } catch (_e) {}
     // Blog
