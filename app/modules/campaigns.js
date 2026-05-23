@@ -406,7 +406,11 @@
     }
     html += '</div><div class="modal-footer">' +
       '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
-      (ids.length ? '<button class="btn btn-primary" onclick="campaignsAttachArtifact(\'' + esc(type) + '\', \'' + esc(refId) + '\')">Attach</button>' : '') +
+      // W2-SEC: stash refId/type on the button as dataset attrs rather than
+      // inlining into a JS string literal. esc() encodes ' as &#39; which the
+      // HTML parser decodes inside attribute values, allowing JS-context
+      // escape if refId contains a quote. Reading from dataset is parsed-once.
+      (ids.length ? '<button class="btn btn-primary" data-camp-type="' + esc(type) + '" data-camp-refid="' + esc(refId) + '" onclick="campaignsAttachArtifact(this.dataset.campType, this.dataset.campRefid)">Attach</button>' : '') +
     '</div>';
     openModal(html);
   }

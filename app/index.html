@@ -16983,6 +16983,15 @@ function navigateTo(route, params) {
     showToast('Engagement Inbox is in the Marketing section, which is not enabled for your role.', true);
     route = 'dashboard';
   }
+  // W2-SEC: parallel-route-role-gate trap (per feedback_parallel_route_role_gate).
+  // Engagement Inbox surfaces cs_reviews + cs_tickets data — the same dataset the
+  // cs-* routes gate via the 'customer-service' section. Marketing-section access
+  // alone is not sufficient; a custom role with marketing but not customer-service
+  // would otherwise read CS data through Engagement Inbox. Require both sections.
+  if (route === 'engagement-inbox' && !canViewSection('cs-reviews')) {
+    showToast('Engagement Inbox surfaces Customer Service data; your role lacks that section.', true);
+    route = 'dashboard';
+  }
   // Subscription module gating — block routes for locked modules
   if (!canAccessRoute(route)) {
     var blockedModuleId = getModuleForRoute(route);
@@ -45987,7 +45996,11 @@ function renderImagesTagChipStrip() {
   html += '<span class="img-tag-chip" data-tag="" onclick="setImageTagFilter(\'\')" style="padding:3px 10px;border-radius:999px;border:1px solid ' + (imagesTagFilter === '' ? 'var(--amber)' : 'var(--cream-dark)') + ';background:' + (imagesTagFilter === '' ? 'var(--amber)' : 'transparent') + ';color:' + (imagesTagFilter === '' ? '#fff' : 'var(--text-primary)') + ';cursor:pointer;">All</span>';
   tags.forEach(function(t) {
     var active = imagesTagFilter === t;
-    html += '<span class="img-tag-chip" data-tag="' + esc(t) + '" onclick="setImageTagFilter(\'' + esc(t) + '\')" style="padding:3px 10px;border-radius:999px;border:1px solid ' + (active ? 'var(--amber)' : 'var(--cream-dark)') + ';background:' + (active ? 'var(--amber)' : 'transparent') + ';color:' + (active ? '#fff' : 'var(--text-primary)') + ';cursor:pointer;">' + esc(t) + ' <span style="opacity:.7;">' + counts[t] + '</span></span>';
+    // W2-SEC: read tag from data-tag (HTML-attribute-escaped) rather than inlining
+    // into the JS string literal. esc() encodes ' as &#39; which the HTML parser
+    // decodes inside the attribute value, allowing JS-context escape from user-typed
+    // tag content. dataset.tag is the parsed attribute value — no JS-context concat.
+    html += '<span class="img-tag-chip" data-tag="' + esc(t) + '" onclick="setImageTagFilter(this.dataset.tag)" style="padding:3px 10px;border-radius:999px;border:1px solid ' + (active ? 'var(--amber)' : 'var(--cream-dark)') + ';background:' + (active ? 'var(--amber)' : 'transparent') + ';color:' + (active ? '#fff' : 'var(--text-primary)') + ';cursor:pointer;">' + esc(t) + ' <span style="opacity:.7;">' + counts[t] + '</span></span>';
   });
   el.innerHTML = html;
 }
