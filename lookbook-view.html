@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src 'self' https://*.cloudfunctions.net https://firestore.googleapis.com https://firebaseio.com https://*.firebaseio.com; img-src 'self' data: blob: https:; object-src 'self' https: blob: data:; frame-src 'self' https: blob: data:; frame-ancestors 'none';">
+<title>Lookbook</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="storefront.css">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<style>
+html, body { margin: 0; padding: 0; height: 100%; background: #111; }
+body { font-family: 'DM Sans', system-ui, -apple-system, sans-serif; color: #fff; }
+.lb-frame { width: 100%; height: 100vh; border: none; display: block; }
+.lb-error {
+  max-width: 520px;
+  margin: 64px auto;
+  padding: 28px 24px;
+  background: #fff;
+  color: #1a1a1a;
+  border-radius: 12px;
+  text-align: center;
+}
+.lb-error h1 { font-size: 1.3rem; font-weight: 600; margin: 0 0 12px; }
+.lb-error p { font-size: 0.9rem; line-height: 1.55; color: #555; margin: 0; }
+.lb-loading {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: #ccc;
+  font-size: 0.9rem;
+  text-align: center;
+}
+</style>
+</head>
+<body>
+<div id="lb-loading" class="lb-loading">Loading lookbook…</div>
+<div id="lb-error-card" class="lb-error" style="display:none">
+  <h1 id="lb-error-h">This lookbook isn't available</h1>
+  <p id="lb-error-p">Please check the link from your email and try again.</p>
+</div>
+<embed id="lb-frame" class="lb-frame" type="application/pdf" style="display:none">
+
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="storefront-tenant.js"></script>
+<script src="tenant-brand.js"></script>
+<script>
+(function(){
+  var params = new URLSearchParams(window.location.search);
+  var token = params.get('t');
+  var tid = params.get('tid');
+  var loadingEl = document.getElementById('lb-loading');
+  var errorCard = document.getElementById('lb-error-card');
+  var errorH = document.getElementById('lb-error-h');
+  var errorP = document.getElementById('lb-error-p');
+  var frame = document.getElementById('lb-frame');
+
+  function showError(h, p) {
+    loadingEl.style.display = 'none';
+    frame.style.display = 'none';
+    errorH.textContent = h;
+    errorP.textContent = p;
+    errorCard.style.display = 'block';
+  }
+
+  if (!token || !tid) {
+    showError('Link missing required info', 'Please use the link from the email you received.');
+    return;
+  }
+
+  function decodeJwt(t) {
+    try {
+      var parts = t.split('.');
+      if (parts.length < 2) return null;
+      var b64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+      while (b64.length % 4) b64 += '=';
+      return JSON.parse(atob(b64));
+    } catch (e) { return null; }
+  }
+
+  var payload = decodeJwt(token);
+  if (!payload || !payload.lid) {
+    showError('This link is invalid', 'Please use the link from the email you received.');
+    return;
+  }
+  var lookbookId = payload.lid;
+
+  function whenTenantReady(fn) {
+    if (window.TENANT_FIREBASE_CONFIG && window.TENANT_ID) { fn(); return; }
+    var n = 0;
+    var iv = setInterval(function(){
+      n++;
+      if ((window.TENANT_FIREBASE_CONFIG && window.TENANT_ID) || n > 50) {
+        clearInterval(iv);
+        if (window.TENANT_FIREBASE_CONFIG && window.TENANT_ID) fn();
+        else showError('Could not load lookbook', 'Please try refreshing the page.');
+      }
+    }, 100);
+  }
+
+  // Track the open event server-side. Best-effort — UI proceeds either way.
+  function trackOpen() {
+    try {
+      fetch('https://us-central1-mast-platform-prod.cloudfunctions.net/trackLookbookOpen', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ t: token }),
+      }).then(function(resp){
+        // If server rejects the token (expired/revoked), surface the error.
+        if (!resp.ok) {
+          return resp.json().then(function(json){
+            var err = json && json.error;
+            if (err === 'expired' || err === 'revoked' || err === 'invalid-token') {
+              showError('This lookbook link is no longer valid', 'It may have expired or been revoked. Please contact the sender for a new link.');
+            }
+          }).catch(function(){});
+        }
+      }).catch(function(){ /* swallow — open tracking is best-effort */ });
+    } catch (e) { /* noop */ }
+  }
+
+  whenTenantReady(function(){
+    try {
+      if (!firebase.apps.length) {
+        firebase.initializeApp(window.TENANT_FIREBASE_CONFIG);
+      }
+      var db = firebase.firestore();
+      // Read the lookbook PDF URL from admin/lookbooks/{lookbookId}.
+      // Firestore rules must allow anon read on this collection — this is
+      // a deliberate W2.4 decision (lookbook URLs are bearer-token-gated
+      // at the CF layer, doc-level rules are belt+suspenders).
+      db.collection('tenants').doc(tid)
+        .collection('admin').doc('lookbooks')
+        .collection('items').doc(lookbookId)
+        .get()
+        .then(function(snap){
+          var data = snap.exists ? snap.data() : null;
+          if (!data || !data.pdfUrl) {
+            showError('Lookbook not found', 'The lookbook may have been removed. Please contact the sender.');
+            return;
+          }
+          // Fire-and-forget open tracking.
+          trackOpen();
+          // Render the PDF.
+          frame.src = data.pdfUrl;
+          frame.style.display = 'block';
+          loadingEl.style.display = 'none';
+        })
+        .catch(function(err){
+          console.error('lookbook-load-failed', err);
+          showError('Could not load lookbook', 'Please try refreshing the page.');
+        });
+    } catch (e) {
+      console.error('firebase-init-failed', e);
+      showError('Could not initialize', 'Please try refreshing the page.');
+    }
+  });
+})();
+</script>
+</body>
+</html>

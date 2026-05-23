@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src 'self' https://*.cloudfunctions.net https://firestore.googleapis.com https://firebaseio.com https://*.firebaseio.com; img-src 'self' data: blob: https:; frame-ancestors 'none';">
+<title>Commission Terms</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="storefront.css">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<style>
+.ct-page {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 32px 20px 64px;
+  font-family: 'DM Sans', system-ui, -apple-system, sans-serif;
+  color: var(--text, #1a1a1a);
+}
+.ct-card {
+  background: var(--card-bg, #fff);
+  border: 1px solid var(--border, #e5e5e5);
+  border-radius: 12px;
+  padding: 28px 24px;
+}
+.ct-brand {
+  font-size: 0.85rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted, #777);
+  margin: 0 0 8px;
+}
+.ct-h {
+  font-size: 1.6rem;
+  font-weight: 600;
+  margin: 0 0 12px;
+  line-height: 1.25;
+}
+.ct-p {
+  font-size: 1.0rem;
+  line-height: 1.55;
+  color: var(--text, #1a1a1a);
+  margin: 0 0 16px;
+}
+.ct-muted { color: var(--text-muted, #777); font-size: 0.9rem; }
+.ct-terms {
+  margin: 18px 0;
+  padding: 16px 18px;
+  background: rgba(0,0,0,0.03);
+  border-radius: 8px;
+  font-size: 0.9rem;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  max-height: 480px;
+  overflow-y: auto;
+  border: 1px solid var(--border, #e5e5e5);
+}
+.ct-agree {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  padding: 12px 14px;
+  background: rgba(0,0,0,0.03);
+  border-radius: 8px;
+  margin: 18px 0;
+}
+.ct-agree input { margin-top: 3px; flex-shrink: 0; }
+.ct-btn {
+  display: inline-block;
+  width: 100%;
+  background: var(--primary, #111);
+  color: var(--primary-on, #fff);
+  font-size: 1.0rem;
+  font-weight: 500;
+  border: none;
+  border-radius: 8px;
+  padding: 14px 20px;
+  cursor: pointer;
+  margin-top: 8px;
+}
+.ct-btn[disabled] { opacity: 0.5; cursor: not-allowed; }
+.ct-status {
+  margin-top: 18px;
+  font-size: 0.9rem;
+  padding: 12px 14px;
+  border-radius: 8px;
+}
+.ct-status.ok { background: rgba(16,185,129,0.12); color: #047857; }
+.ct-status.err { background: rgba(220,38,38,0.10); color: #b91c1c; }
+.ct-loading { color: var(--text-muted, #777); font-style: italic; }
+</style>
+</head>
+<body>
+<div class="ct-page">
+  <div class="ct-card" id="ct-card">
+    <p class="ct-brand" data-tenant="brand-name">Commission Terms</p>
+    <h1 class="ct-h">Please review and accept</h1>
+    <p class="ct-p">Before we begin work on your commission, please read through the terms below and confirm your acceptance.</p>
+
+    <div id="ct-terms" class="ct-terms ct-loading">Loading terms…</div>
+
+    <form id="ct-form" style="display:none">
+      <label class="ct-agree">
+        <input id="ct-agree" name="agree" type="checkbox" value="true" required>
+        <span>I have read and agree to these commission terms.</span>
+      </label>
+      <button class="ct-btn" id="ct-submit" type="submit">Accept</button>
+    </form>
+
+    <div id="ct-status" class="ct-status" style="display:none"></div>
+    <p class="ct-muted" style="margin-top:18px">This link is good for 7 days and can only be used once.</p>
+  </div>
+</div>
+
+<!-- Firebase compat SDK so we can read the public terms text without auth -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="storefront-tenant.js"></script>
+<script src="tenant-brand.js"></script>
+<script>
+(function(){
+  var params = new URLSearchParams(window.location.search);
+  var token = params.get('t');
+  var tid = params.get('tid');
+  var statusEl = document.getElementById('ct-status');
+  var termsEl = document.getElementById('ct-terms');
+  var form = document.getElementById('ct-form');
+  var btn = document.getElementById('ct-submit');
+
+  function showStatus(msg, kind) {
+    statusEl.textContent = msg;
+    statusEl.className = 'ct-status ' + (kind || '');
+    statusEl.style.display = 'block';
+  }
+
+  if (!token || !tid) {
+    termsEl.textContent = '';
+    termsEl.classList.remove('ct-loading');
+    showStatus('This link is missing required information. Please use the link from the email you received.', 'err');
+    return;
+  }
+
+  // Decode the JWT client-side (NOT for trust — only to extract termsVersionId
+  // so we know which terms doc to fetch and render). Server re-verifies on submit.
+  function decodeJwt(t) {
+    try {
+      var parts = t.split('.');
+      if (parts.length < 2) return null;
+      var b64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+      while (b64.length % 4) b64 += '=';
+      return JSON.parse(atob(b64));
+    } catch (e) { return null; }
+  }
+
+  var payload = decodeJwt(token);
+  if (!payload || !payload.tv) {
+    termsEl.textContent = '';
+    termsEl.classList.remove('ct-loading');
+    showStatus('This link is invalid. Please use the link from the email you received.', 'err');
+    return;
+  }
+  var termsVersionId = payload.tv;
+
+  // Wait for tenant Firebase config to initialize, then read the terms text.
+  function whenTenantReady(fn) {
+    if (window.TENANT_FIREBASE_CONFIG && window.TENANT_ID) { fn(); return; }
+    var n = 0;
+    var iv = setInterval(function(){
+      n++;
+      if ((window.TENANT_FIREBASE_CONFIG && window.TENANT_ID) || n > 50) {
+        clearInterval(iv);
+        if (window.TENANT_FIREBASE_CONFIG && window.TENANT_ID) fn();
+        else {
+          termsEl.textContent = '';
+          termsEl.classList.remove('ct-loading');
+          showStatus('Could not load tenant configuration. Please try refreshing.', 'err');
+        }
+      }
+    }, 100);
+  }
+
+  whenTenantReady(function(){
+    try {
+      if (!firebase.apps.length) {
+        firebase.initializeApp(window.TENANT_FIREBASE_CONFIG);
+      }
+      var db = firebase.firestore();
+      // Public-readable terms doc lives at the public path.
+      // Per the W2.3 ratified data model, terms are stored under
+      // tenants/{tid}/admin/commissionTerms/{termsVersionId} — admin path,
+      // but the doc is intended to be publicly readable (Firestore rules
+      // must allow anon read on this collection; see operator follow-up).
+      db.collection('tenants').doc(tid)
+        .collection('admin').doc('commissionTerms')
+        .collection('versions').doc(termsVersionId)
+        .get()
+        .then(function(snap){
+          var data = snap.exists ? snap.data() : null;
+          if (!data || !data.body) {
+            termsEl.textContent = '(Terms could not be loaded. Please contact the seller.)';
+            termsEl.classList.remove('ct-loading');
+            return;
+          }
+          termsEl.textContent = data.body;
+          termsEl.classList.remove('ct-loading');
+          form.style.display = 'block';
+        })
+        .catch(function(err){
+          console.error('terms-load-failed', err);
+          termsEl.textContent = '(Terms could not be loaded. Please contact the seller.)';
+          termsEl.classList.remove('ct-loading');
+        });
+    } catch (e) {
+      console.error('firebase-init-failed', e);
+      termsEl.textContent = '';
+      termsEl.classList.remove('ct-loading');
+      showStatus('Could not initialize. Please try refreshing.', 'err');
+    }
+  });
+
+  form.addEventListener('submit', function(e){
+    e.preventDefault();
+    var agree = document.getElementById('ct-agree').checked;
+    if (!agree) { showStatus('Please check the box to confirm you have read and agree to the terms.', 'err'); return; }
+
+    btn.disabled = true;
+    btn.textContent = 'Submitting…';
+    statusEl.style.display = 'none';
+
+    var endpoint = 'https://us-central1-mast-platform-prod.cloudfunctions.net/submitCommissionTermsAcceptance';
+
+    fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ t: token, agree: true }),
+    }).then(function(resp){
+      return resp.json().then(function(json){ return { ok: resp.ok, status: resp.status, json: json }; });
+    }).then(function(r){
+      if (r.ok && r.json && r.json.ok) {
+        form.style.display = 'none';
+        showStatus('Thank you. Your acceptance has been recorded. You may close this page.', 'ok');
+        return;
+      }
+      var err = (r.json && r.json.error) || 'unknown-error';
+      var msg;
+      if (err === 'already-used') msg = 'This link has already been used. If you need to re-confirm, please contact the seller.';
+      else if (err === 'expired' || err === 'invalid-token') msg = 'This link has expired or is no longer valid.';
+      else if (err === 'agreement-required') msg = 'Please check the agreement box.';
+      else msg = 'Something went wrong. Please try again, or reply to the email if it keeps happening.';
+      showStatus(msg, 'err');
+      btn.disabled = false;
+      btn.textContent = 'Accept';
+    }).catch(function(){
+      showStatus('Couldn\'t reach the server. Please check your connection and try again.', 'err');
+      btn.disabled = false;
+      btn.textContent = 'Accept';
+    });
+  });
+})();
+</script>
+</body>
+</html>
