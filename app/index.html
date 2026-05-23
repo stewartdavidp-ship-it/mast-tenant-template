@@ -6878,8 +6878,15 @@
           <button class="btn btn-primary" onclick="openLibraryUploadModal()">Upload Image</button>
         </div>
       </div>
+      <!-- W2.4: sub-tab + tag-filter chip strip -->
+      <div id="imagesSubTabs" style="display:flex;gap:4px;border-bottom:1px solid var(--cream-dark);margin:8px 0 4px 0;">
+        <button id="imagesSubTabAll" class="btn-tab active" onclick="setImagesSubTab('all')" style="padding:6px 14px;border:none;background:transparent;border-bottom:2px solid var(--amber);font-size:0.85rem;font-weight:600;cursor:pointer;color:var(--text-primary);">All Images</button>
+        <button id="imagesSubTabCollections" class="btn-tab" onclick="setImagesSubTab('collections')" style="padding:6px 14px;border:none;background:transparent;border-bottom:2px solid transparent;font-size:0.85rem;cursor:pointer;color:var(--warm-gray);">Collections</button>
+      </div>
+      <div id="imagesTagChipStrip" style="display:flex;flex-wrap:wrap;gap:4px;margin:6px 0;font-size:0.78rem;"></div>
       <div id="imageLibraryStats" style="display:flex;gap:16px;padding:8px 0;font-size:0.85rem;color:var(--warm-gray);"></div>
       <div id="imageLibraryGrid"></div>
+      <div id="imageCollectionsView" style="display:none;"></div>
     </div>
 
     <!-- Admin: Gallery Tab (legacy — replaced by Homepage module) -->
@@ -16705,7 +16712,10 @@ var ROUTE_MAP = {
   // shows the same table without the maker-facing Suggested Builds.
   'sales-by-product': { tab: 'salesByProductTab', setup: function() { loadAndRenderForecast(); } },
   'customers':   { tab: null, placeholder: { name: 'Customers', desc: 'Contacts, collectors, purchase history.', badge: 'new' } },
-  'images':      { tab: 'imagesTab' },
+  'images':      { tab: 'imagesTab', setup: function() {
+    // W2.4 — render tag-filter chip strip on every images-tab open.
+    if (typeof renderImagesTagChipStrip === 'function') renderImagesTagChipStrip();
+  } },
   'employees':   { tab: 'employeesTab', setup: function() { switchEmployeesView('users'); } },
   // contacts route handled by contacts module (lazy-loaded)
   'auditlog':    { tab: 'auditLogTab' },
@@ -45479,6 +45489,14 @@ function renderImageLibrary() {
     });
   }
 
+  // W2.4 — single-tag chip filter (exact tag match)
+  if (imagesTagFilter) {
+    entries = entries.filter(function(e) {
+      var img = e[1];
+      return (img.tags || []).some(function(t) { return String(t || '').trim().toLowerCase() === imagesTagFilter; });
+    });
+  }
+
   // W1.10 — filename substring filter (case-insensitive)
   var fnameQ = ((document.getElementById('imageLibraryFilename') || {}).value || '').toLowerCase().trim();
   if (fnameQ) {
@@ -45613,6 +45631,25 @@ function viewLibraryImage(imageId) {
         '<span style="color:var(--warm-gray);">On Website</span><span>' + (u.onWebsite ? 'Yes (' + u.galleryCount + ' placement' + (u.galleryCount !== 1 ? 's' : '') + ')' : 'No') + '</span>' +
         '<span style="color:var(--warm-gray);">Products</span><span>' + (u.products.length > 0 ? esc(u.products.join(', ')) : 'None') + '</span>' +
       '</div>' +
+      // W2.4 — editable tags
+      '<div style="margin-top:14px;">' +
+        '<label style="font-size:0.85rem;color:var(--warm-gray);">Tags (comma-separated)</label>' +
+        '<div style="display:flex;gap:6px;">' +
+          '<input type="text" id="imgDetailTagsInput" value="' + esc((img.tags || []).join(', ')) + '" placeholder="figurine, blue, summer" style="flex:1;font-size:0.85rem;padding:6px 8px;">' +
+          '<button class="btn btn-secondary btn-small" onclick="saveImageTags(\'' + esc(imageId) + '\')">Save</button>' +
+        '</div>' +
+      '</div>' +
+      // W2.4 — collections
+      '<div style="margin-top:14px;">' +
+        '<label style="font-size:0.85rem;color:var(--warm-gray);">Collections</label>' +
+        '<div id="imgDetailCollections" style="font-size:0.85rem;">Loading...</div>' +
+        '<button class="btn btn-secondary btn-small" style="margin-top:4px;" onclick="openAddImageToCollectionPicker(\'' + esc(imageId) + '\')">+ Add to collection</button>' +
+      '</div>' +
+      // W2.4 — backref scanner (lazy)
+      '<div style="margin-top:14px;">' +
+        '<label style="font-size:0.85rem;color:var(--warm-gray);">Used in</label>' +
+        '<div id="imgDetailBackrefs" style="font-size:0.85rem;">Scanning...</div>' +
+      '</div>' +
       '<div style="margin-top:12px;">' +
         '<label style="font-size:0.85rem;color:var(--warm-gray);">' + (isVideo ? 'Video' : 'Image') + ' URL</label>' +
         '<input type="text" value="' + esc(img.url || '') + '" readonly onclick="this.select()" style="width:100%;font-size:0.78rem;">' +
@@ -45622,6 +45659,414 @@ function viewLibraryImage(imageId) {
       '<button class="btn btn-secondary" onclick="closeModal()">Close</button>' +
     '</div>';
   openModal(html);
+  // W2.4 — populate collections + backrefs lazily after modal renders
+  setTimeout(function() {
+    renderImageDetailCollections(imageId);
+    renderImageDetailBackrefs(imageId);
+  }, 0);
+}
+
+// ============================================================
+// W2.4 — Image Library v2: tags / collections / backrefs
+// ============================================================
+//
+// Tags: stored as `img.tags[]` on each image doc (already supported).
+// Tag autocomplete sources are the union of tags across the library
+// (no separate `imageTags` collection needed — index built in memory).
+// Tag-filter chip strip sits above the grid.
+//
+// Collections: `imageCollections/{collectionId}` =
+//   { id, name, description, imageIds[], coverImageId, createdAt, updatedAt }.
+// Admin-only writes (covered by the existing admin-only catch-all rule).
+//
+// Backrefs: lazy scan on detail-modal open. NOT a Firebase collection —
+// computed live by scanning products / blog / social / stories / homepage.
+// Cached in `imageBackrefsCache[imageId]` for the session.
+
+var imagesSubTab = 'all';
+var imagesTagFilter = ''; // current tag filter (single)
+var imageCollections = {}; // loaded lazily
+var imageCollectionsLoaded = false;
+var imageBackrefsCache = {};
+
+function setImagesSubTab(tab) {
+  imagesSubTab = tab;
+  var allBtn = document.getElementById('imagesSubTabAll');
+  var colBtn = document.getElementById('imagesSubTabCollections');
+  var grid   = document.getElementById('imageLibraryGrid');
+  var cols   = document.getElementById('imageCollectionsView');
+  var chipStrip = document.getElementById('imagesTagChipStrip');
+  var stats  = document.getElementById('imageLibraryStats');
+  if (!allBtn || !colBtn) return;
+  if (tab === 'collections') {
+    allBtn.style.borderBottomColor = 'transparent';
+    allBtn.style.color = 'var(--warm-gray)';
+    colBtn.style.borderBottomColor = 'var(--amber)';
+    colBtn.style.color = 'var(--text-primary)';
+    colBtn.style.fontWeight = '600';
+    allBtn.style.fontWeight = '400';
+    if (grid) grid.style.display = 'none';
+    if (cols) cols.style.display = 'block';
+    if (chipStrip) chipStrip.style.display = 'none';
+    if (stats) stats.style.display = 'none';
+    loadAndRenderImageCollections();
+  } else {
+    allBtn.style.borderBottomColor = 'var(--amber)';
+    allBtn.style.color = 'var(--text-primary)';
+    allBtn.style.fontWeight = '600';
+    colBtn.style.borderBottomColor = 'transparent';
+    colBtn.style.color = 'var(--warm-gray)';
+    colBtn.style.fontWeight = '400';
+    if (grid) grid.style.display = '';
+    if (cols) cols.style.display = 'none';
+    if (chipStrip) chipStrip.style.display = '';
+    if (stats) stats.style.display = '';
+    renderImagesTagChipStrip();
+    renderImageLibrary();
+  }
+}
+window.setImagesSubTab = setImagesSubTab;
+
+function renderImagesTagChipStrip() {
+  var el = document.getElementById('imagesTagChipStrip');
+  if (!el) return;
+  var counts = {};
+  Object.keys(imageLibrary || {}).forEach(function(id) {
+    var img = imageLibrary[id];
+    (img.tags || []).forEach(function(t) {
+      t = String(t || '').trim().toLowerCase();
+      if (!t) return;
+      counts[t] = (counts[t] || 0) + 1;
+    });
+  });
+  var tags = Object.keys(counts).sort(function(a, b) { return counts[b] - counts[a]; }).slice(0, 24);
+  if (!tags.length) { el.innerHTML = ''; return; }
+  var html = '<span style="color:var(--warm-gray);margin-right:4px;">Tag:</span>';
+  html += '<span class="img-tag-chip" data-tag="" onclick="setImageTagFilter(\'\')" style="padding:3px 10px;border-radius:999px;border:1px solid ' + (imagesTagFilter === '' ? 'var(--amber)' : 'var(--cream-dark)') + ';background:' + (imagesTagFilter === '' ? 'var(--amber)' : 'transparent') + ';color:' + (imagesTagFilter === '' ? '#fff' : 'var(--text-primary)') + ';cursor:pointer;">All</span>';
+  tags.forEach(function(t) {
+    var active = imagesTagFilter === t;
+    html += '<span class="img-tag-chip" data-tag="' + esc(t) + '" onclick="setImageTagFilter(\'' + esc(t) + '\')" style="padding:3px 10px;border-radius:999px;border:1px solid ' + (active ? 'var(--amber)' : 'var(--cream-dark)') + ';background:' + (active ? 'var(--amber)' : 'transparent') + ';color:' + (active ? '#fff' : 'var(--text-primary)') + ';cursor:pointer;">' + esc(t) + ' <span style="opacity:.7;">' + counts[t] + '</span></span>';
+  });
+  el.innerHTML = html;
+}
+window.renderImagesTagChipStrip = renderImagesTagChipStrip;
+
+function setImageTagFilter(t) {
+  imagesTagFilter = String(t || '').trim().toLowerCase();
+  renderImagesTagChipStrip();
+  renderImageLibrary();
+}
+window.setImageTagFilter = setImageTagFilter;
+
+async function saveImageTags(imageId) {
+  var inp = document.getElementById('imgDetailTagsInput');
+  if (!inp) return;
+  var raw = inp.value || '';
+  var tags = raw.split(',').map(function(s) { return s.trim(); }).filter(Boolean);
+  try {
+    await MastDB.update('images/' + imageId, { tags: tags, updatedAt: new Date().toISOString() });
+    if (imageLibrary[imageId]) imageLibrary[imageId].tags = tags;
+    if (typeof showToast === 'function') showToast('Tags saved');
+    renderImagesTagChipStrip();
+  } catch (e) {
+    console.warn('[W2.4] saveImageTags', e);
+    if (typeof showToast === 'function') showToast('Failed to save tags', true);
+  }
+}
+window.saveImageTags = saveImageTags;
+
+async function loadAndRenderImageCollections() {
+  var host = document.getElementById('imageCollectionsView');
+  if (!host) return;
+  host.innerHTML = '<div class="loading">Loading collections...</div>';
+  try {
+    var snap = await MastDB.list('imageCollections');
+    imageCollections = snap || {};
+    imageCollectionsLoaded = true;
+  } catch (e) {
+    imageCollections = {};
+    console.warn('[W2.4] loadCollections', e);
+  }
+  var ids = Object.keys(imageCollections);
+  var html = '<div style="display:flex;gap:8px;margin:8px 0;">' +
+    '<button class="btn btn-primary" onclick="openCollectionEditor(null)">+ New Collection</button>' +
+    '</div>';
+  if (!ids.length) {
+    html += '<div style="text-align:center;padding:40px;color:var(--warm-gray);">No collections yet. Create one to group images for campaigns, lookbooks, or batch publishing.</div>';
+    host.innerHTML = html;
+    return;
+  }
+  html += '<div class="img-lib-grid">';
+  ids.sort(function(a, b) { return (imageCollections[b].createdAt || '').localeCompare(imageCollections[a].createdAt || ''); });
+  ids.forEach(function(cid) {
+    var c = imageCollections[cid];
+    var count = (c.imageIds || []).length;
+    var cover = c.coverImageId && imageLibrary[c.coverImageId];
+    var thumb = cover ? (cover.thumbnailUrl || cover.url) : '';
+    html += '<div class="img-lib-card" onclick="openCollectionEditor(\'' + esc(cid) + '\')" style="cursor:pointer;">' +
+      (thumb ? '<img src="' + esc(thumb) + '" loading="lazy" onerror="this.style.display=\'none\'">' :
+        '<div style="height:120px;display:flex;align-items:center;justify-content:center;background:var(--charcoal);color:var(--warm-gray-light);font-size:1.6rem;">&#128194;</div>') +
+      '<div class="img-lib-card-body">' +
+        '<div style="font-weight:600;font-size:0.9rem;">' + esc(c.name || '(untitled)') + '</div>' +
+        '<div style="font-size:0.78rem;color:var(--warm-gray);">' + count + ' image' + (count !== 1 ? 's' : '') + '</div>' +
+      '</div></div>';
+  });
+  html += '</div>';
+  host.innerHTML = html;
+}
+window.loadAndRenderImageCollections = loadAndRenderImageCollections;
+
+function openCollectionEditor(cid) {
+  var existing = cid ? imageCollections[cid] : null;
+  var name = existing ? (existing.name || '') : '';
+  var desc = existing ? (existing.description || '') : '';
+  var imageIds = existing ? (existing.imageIds || []).slice() : [];
+  var coverId = existing ? (existing.coverImageId || '') : '';
+  var html =
+    '<div class="modal-header"><h3>' + (cid ? 'Edit Collection' : 'New Collection') + '</h3>' +
+      '<button class="modal-close" onclick="closeModal()">&times;</button></div>' +
+    '<div class="modal-body">' +
+      '<div class="form-group"><label>Name</label><input type="text" id="collName" value="' + esc(name) + '"></div>' +
+      '<div class="form-group"><label>Description</label><textarea id="collDesc" rows="2">' + esc(desc) + '</textarea></div>' +
+      '<div class="form-group"><label>Images (' + imageIds.length + ' selected)</label>' +
+        '<div id="collImageGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(80px,1fr));gap:6px;max-height:220px;overflow:auto;border:1px solid var(--cream-dark);padding:6px;border-radius:4px;">' +
+          Object.keys(imageLibrary).map(function(id) {
+            var im = imageLibrary[id];
+            var th = im.thumbnailUrl || im.url || '';
+            var sel = imageIds.indexOf(id) !== -1;
+            return '<label style="position:relative;cursor:pointer;">' +
+              '<input type="checkbox" class="coll-img-cb" data-img-id="' + esc(id) + '"' + (sel ? ' checked' : '') + ' style="position:absolute;top:2px;left:2px;z-index:1;">' +
+              (th ? '<img src="' + esc(th) + '" style="width:100%;height:60px;object-fit:cover;border-radius:3px;' + (sel ? 'outline:2px solid var(--amber);' : '') + '">' : '<div style="height:60px;background:var(--charcoal);"></div>') +
+              '</label>';
+          }).join('') +
+        '</div>' +
+      '</div>' +
+      '<div class="form-group"><label>Cover image ID (optional)</label><input type="text" id="collCover" value="' + esc(coverId) + '" placeholder="Leave blank for first image"></div>' +
+    '</div>' +
+    '<div class="modal-footer">' +
+      (cid ? '<button class="btn btn-danger" onclick="deleteImageCollection(\'' + esc(cid) + '\')">Delete</button>' : '') +
+      '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
+      '<button class="btn btn-primary" onclick="saveImageCollection(' + (cid ? '\'' + esc(cid) + '\'' : 'null') + ')">Save</button>' +
+    '</div>';
+  openModal(html);
+}
+window.openCollectionEditor = openCollectionEditor;
+
+async function saveImageCollection(cid) {
+  var name = (document.getElementById('collName') || {}).value || '';
+  var desc = (document.getElementById('collDesc') || {}).value || '';
+  var cover = (document.getElementById('collCover') || {}).value || '';
+  var ids = [];
+  var cbs = document.querySelectorAll('.coll-img-cb');
+  for (var i = 0; i < cbs.length; i++) {
+    if (cbs[i].checked) ids.push(cbs[i].getAttribute('data-img-id'));
+  }
+  if (!name.trim()) { if (typeof showToast === 'function') showToast('Collection name required', true); return; }
+  var nowIso = new Date().toISOString();
+  try {
+    if (cid) {
+      await MastDB.update('imageCollections/' + cid, {
+        name: name.trim(), description: desc.trim(), imageIds: ids,
+        coverImageId: cover || ids[0] || null, updatedAt: nowIso
+      });
+    } else {
+      var newId = MastDB.newKey('imageCollections');
+      await MastDB.set('imageCollections/' + newId, {
+        id: newId, name: name.trim(), description: desc.trim(), imageIds: ids,
+        coverImageId: cover || ids[0] || null, createdAt: nowIso, updatedAt: nowIso
+      });
+    }
+    if (typeof closeModal === 'function') closeModal();
+    if (typeof showToast === 'function') showToast('Collection saved');
+    loadAndRenderImageCollections();
+  } catch (e) {
+    console.warn('[W2.4] saveCollection', e);
+    if (typeof showToast === 'function') showToast('Failed to save collection', true);
+  }
+}
+window.saveImageCollection = saveImageCollection;
+
+async function deleteImageCollection(cid) {
+  if (!confirm('Delete this collection? (Images themselves are not deleted.)')) return;
+  try {
+    await MastDB.remove('imageCollections/' + cid);
+    delete imageCollections[cid];
+    if (typeof closeModal === 'function') closeModal();
+    if (typeof showToast === 'function') showToast('Collection deleted');
+    loadAndRenderImageCollections();
+  } catch (e) {
+    if (typeof showToast === 'function') showToast('Failed to delete', true);
+  }
+}
+window.deleteImageCollection = deleteImageCollection;
+
+async function renderImageDetailCollections(imageId) {
+  var el = document.getElementById('imgDetailCollections');
+  if (!el) return;
+  if (!imageCollectionsLoaded) {
+    try { imageCollections = (await MastDB.list('imageCollections')) || {}; imageCollectionsLoaded = true; }
+    catch (_e) { imageCollections = {}; }
+  }
+  var inColls = [];
+  Object.keys(imageCollections).forEach(function(cid) {
+    var c = imageCollections[cid];
+    if ((c.imageIds || []).indexOf(imageId) !== -1) inColls.push(c);
+  });
+  if (!inColls.length) { el.innerHTML = '<span style="color:var(--warm-gray);">Not in any collection.</span>'; return; }
+  el.innerHTML = inColls.map(function(c) {
+    return '<span style="display:inline-block;background:var(--cream);padding:2px 10px;border-radius:999px;margin:2px 4px 2px 0;font-size:0.78rem;">' + esc(c.name || '(untitled)') + '</span>';
+  }).join('');
+}
+
+async function openAddImageToCollectionPicker(imageId) {
+  if (!imageCollectionsLoaded) {
+    try { imageCollections = (await MastDB.list('imageCollections')) || {}; imageCollectionsLoaded = true; }
+    catch (_e) { imageCollections = {}; }
+  }
+  var ids = Object.keys(imageCollections);
+  var html = '<div class="modal-header"><h3>Add to Collection</h3>' +
+    '<button class="modal-close" onclick="closeModal()">&times;</button></div>' +
+    '<div class="modal-body">';
+  if (!ids.length) {
+    html += '<p style="color:var(--warm-gray);">No collections yet. Create one from the Collections sub-tab.</p>';
+  } else {
+    html += '<div style="display:flex;flex-direction:column;gap:6px;">';
+    ids.forEach(function(cid) {
+      var c = imageCollections[cid];
+      var inIt = (c.imageIds || []).indexOf(imageId) !== -1;
+      html += '<button class="btn btn-secondary" style="text-align:left;" onclick="toggleImageInCollection(\'' + esc(imageId) + '\', \'' + esc(cid) + '\', ' + (!inIt) + ')">' +
+        (inIt ? '✓ ' : '+ ') + esc(c.name || '(untitled)') + ' <span style="opacity:.6;font-size:0.78rem;">(' + (c.imageIds || []).length + ')</span></button>';
+    });
+    html += '</div>';
+  }
+  html += '</div><div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal()">Close</button></div>';
+  openModal(html);
+}
+window.openAddImageToCollectionPicker = openAddImageToCollectionPicker;
+
+async function toggleImageInCollection(imageId, collectionId, add) {
+  var c = imageCollections[collectionId];
+  if (!c) return;
+  var ids = (c.imageIds || []).slice();
+  var idx = ids.indexOf(imageId);
+  if (add && idx === -1) ids.push(imageId);
+  else if (!add && idx !== -1) ids.splice(idx, 1);
+  try {
+    await MastDB.update('imageCollections/' + collectionId, { imageIds: ids, updatedAt: new Date().toISOString() });
+    c.imageIds = ids;
+    if (typeof closeModal === 'function') closeModal();
+    if (typeof showToast === 'function') showToast(add ? 'Added to collection' : 'Removed');
+  } catch (e) {
+    if (typeof showToast === 'function') showToast('Failed', true);
+  }
+}
+window.toggleImageInCollection = toggleImageInCollection;
+
+// W2.4 — lazy backref scanner. Scans products/blog/social/stories/homepage
+// for references to a given image (by id OR by url). Cached per session.
+async function renderImageDetailBackrefs(imageId) {
+  var el = document.getElementById('imgDetailBackrefs');
+  if (!el) return;
+  if (imageBackrefsCache[imageId]) {
+    el.innerHTML = _formatBackrefList(imageBackrefsCache[imageId]);
+    return;
+  }
+  el.innerHTML = '<span style="color:var(--warm-gray);">Scanning...</span>';
+  var img = imageLibrary[imageId] || {};
+  var url = img.url || '';
+  var result = { products: [], blogPosts: [], socialPosts: [], stories: [], homepageSections: 0 };
+  try {
+    // Products
+    if (typeof imageLibrary !== 'undefined') {
+      // We already maintain product back-references in computeImageUsage,
+      // but we need names for click-through. Reuse the cached product list.
+      try {
+        var prods = (window.products && Array.isArray(window.products)) ? window.products :
+          ((await MastDB.list('public/products')) || {});
+        var pArr = Array.isArray(prods) ? prods : Object.keys(prods).map(function(k) { return prods[k]; });
+        pArr.forEach(function(p) {
+          if (!p) return;
+          var hit = false;
+          if (Array.isArray(p.imageIds) && p.imageIds.indexOf(imageId) !== -1) hit = true;
+          if (!hit && url && Array.isArray(p.images) && p.images.indexOf(url) !== -1) hit = true;
+          if (!hit && url && p.productImageUrl === url) hit = true;
+          if (hit) result.products.push({ id: p.pid || p.id, name: p.name || p.title || '(unnamed)' });
+        });
+      } catch (_e) {}
+    }
+    // Blog
+    try {
+      var blog = (await MastDB.list('blog/posts')) || {};
+      Object.keys(blog).forEach(function(k) {
+        var post = blog[k];
+        if (!post) return;
+        if (url && (post.featuredImage === url || post.ogImage === url || post.coverImage === url)) {
+          result.blogPosts.push({ id: post.id || k, title: post.title || '(untitled)' });
+        }
+      });
+    } catch (_e) {}
+    // Social
+    try {
+      var market = (await MastDB.list('market/posts')) || {};
+      Object.keys(market).forEach(function(uid) {
+        var posts = market[uid] || {};
+        Object.keys(posts).forEach(function(pid) {
+          var sp = posts[pid];
+          if (sp && url && (sp.image === url || sp.mediaUrl === url || (Array.isArray(sp.images) && sp.images.indexOf(url) !== -1))) {
+            result.socialPosts.push({ id: pid, caption: (sp.caption || '').slice(0, 40) });
+          }
+        });
+      });
+    } catch (_e) {}
+    // Stories
+    try {
+      var stories = (await MastDB.list('public/stories')) || {};
+      Object.keys(stories).forEach(function(k) {
+        var st = stories[k];
+        if (st && url && (st.image === url || st.imageUrl === url || (Array.isArray(st.images) && st.images.indexOf(url) !== -1))) {
+          result.stories.push({ id: st.id || k, title: st.title || '(untitled)' });
+        }
+      });
+    } catch (_e) {}
+    // Homepage sections
+    try {
+      var sections = (await MastDB.list('public/homepage/sections')) || {};
+      Object.keys(sections).forEach(function(k) {
+        var s = sections[k];
+        if (!s) return;
+        var raw = JSON.stringify(s);
+        if (url && raw.indexOf(url) !== -1) result.homepageSections++;
+      });
+    } catch (_e) {}
+  } catch (_e) { /* silent */ }
+  imageBackrefsCache[imageId] = result;
+  el.innerHTML = _formatBackrefList(result);
+}
+window.renderImageDetailBackrefs = renderImageDetailBackrefs;
+
+function _formatBackrefList(r) {
+  var pieces = [];
+  if (r.products.length) {
+    pieces.push('<div><strong>' + r.products.length + ' product' + (r.products.length !== 1 ? 's' : '') + ':</strong> ' +
+      r.products.slice(0, 8).map(function(p) { return '<a href="#products?pid=' + esc(p.id) + '" onclick="closeModal()">' + esc(p.name) + '</a>'; }).join(', ') +
+      (r.products.length > 8 ? ' …' : '') + '</div>');
+  }
+  if (r.blogPosts.length) {
+    pieces.push('<div><strong>' + r.blogPosts.length + ' blog post' + (r.blogPosts.length !== 1 ? 's' : '') + ':</strong> ' +
+      r.blogPosts.map(function(p) { return '<a href="#blog?postId=' + esc(p.id) + '" onclick="closeModal()">' + esc(p.title) + '</a>'; }).join(', ') + '</div>');
+  }
+  if (r.socialPosts.length) {
+    pieces.push('<div><strong>' + r.socialPosts.length + ' social post' + (r.socialPosts.length !== 1 ? 's' : '') + '</strong></div>');
+  }
+  if (r.stories.length) {
+    pieces.push('<div><strong>' + r.stories.length + ' stor' + (r.stories.length !== 1 ? 'ies' : 'y') + ':</strong> ' +
+      r.stories.map(function(s) { return esc(s.title); }).join(', ') + '</div>');
+  }
+  if (r.homepageSections) {
+    pieces.push('<div><strong>' + r.homepageSections + ' homepage section' + (r.homepageSections !== 1 ? 's' : '') + '</strong></div>');
+  }
+  if (!pieces.length) return '<span style="color:var(--warm-gray);">Not used anywhere yet.</span>';
+  return pieces.join('');
 }
 
 function openLibraryUploadModal() {
