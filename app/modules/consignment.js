@@ -19,8 +19,13 @@
   var placementsData = {};
   var placementsLoaded = false;
   var placementsListener = null;
-  var currentView = 'list'; // 'list' | 'detail' | 'new'
+  var currentView = 'list'; // 'list' | 'detail' | 'new' | 'galleries' | 'galleryDetail' | 'galleryEdit'
   var currentPlacementId = null;
+  // W2.7: gallery entities (admin/galleries/{galleryId}).
+  var galleriesData = {};
+  var galleriesLoaded = false;
+  var galleriesListener = null;
+  var currentGalleryId = null;
 
   // Tenant-TZ-aware date helpers for URL filter (createdAt is ISO timestamp).
   var _tenantTz = null;
@@ -218,8 +223,362 @@
       renderPlacementDetail(currentPlacementId);
     } else if (currentView === 'new') {
       renderNewPlacementForm();
+    } else if (currentView === 'galleries') {
+      renderGalleryList();
+    } else if (currentView === 'galleryDetail' && currentGalleryId) {
+      renderGalleryDetail(currentGalleryId);
+    } else if (currentView === 'galleryEdit') {
+      renderGalleryEditForm(currentGalleryId);
     } else {
       renderPlacementList();
+    }
+  }
+
+  // ============================================================
+  // W2.7 — Gallery-as-entity (admin/galleries)
+  // ============================================================
+  function loadGalleries(cb) {
+    if (galleriesLoaded) { if (cb) cb(); return; }
+    try {
+      galleriesListener = MastDB.subscribe('admin/galleries', function(val) {
+        galleriesData = val || {};
+        galleriesLoaded = true;
+        if (currentView === 'galleries' || currentView === 'galleryDetail') renderCurrentView();
+        if (cb) { var done = cb; cb = null; done(); }
+      });
+    } catch (e) {
+      // Fallback to one-shot get.
+      MastDB.get('admin/galleries').then(function(val) {
+        galleriesData = val || {};
+        galleriesLoaded = true;
+        if (cb) cb();
+      }).catch(function() { galleriesData = {}; galleriesLoaded = true; if (cb) cb(); });
+    }
+  }
+
+  function _placementsForGallery(galleryId) {
+    // Match by galleryId FK first; fall back to locationName match for legacy
+    // placements that haven't been backfilled yet.
+    var g = galleriesData[galleryId];
+    var legacyKey = g && g.name ? g.name.trim().toLowerCase() : '';
+    return Object.keys(placementsData).map(function(k) {
+      return placementsData[k];
+    }).filter(function(p) {
+      if (!p) return false;
+      if (p.galleryId === galleryId) return true;
+      if (!p.galleryId && legacyKey && (p.locationName || '').trim().toLowerCase() === legacyKey) return true;
+      return false;
+    });
+  }
+
+  function _galleryPayoutsDue(galleryId) {
+    // Sum unpaid commission across all placements for this gallery.
+    // unpaid = max(0, makerEarnings - sum(settlements.amountReceivedCents)).
+    // Note: legacy placements compute makerEarnings as the maker's share; what
+    // the gallery owes the maker is commissionOwed less settlements paid in.
+    // Per W1.10 spec: "sum unpaid commission across all placements for this
+    // gallery" — interpret as unpaid maker earnings (what gallery still owes).
+    var placements = _placementsForGallery(galleryId);
+    var total = 0;
+    placements.forEach(function(p) {
+      var totals = calculatePlacementTotals(p);
+      var settlements = (p.settlements && typeof p.settlements === 'object') ? p.settlements : {};
+      var paid = Object.values(settlements).reduce(function(s, x) {
+        return s + ((x && Number(x.amountReceivedCents)) || 0);
+      }, 0);
+      var owed = Math.max(0, (totals.makerEarnings || 0) - paid);
+      total += owed;
+    });
+    return total;
+  }
+
+  function renderGalleryList() {
+    var tab = document.getElementById('galleriesTab');
+    if (!tab) return;
+    if (!galleriesLoaded) {
+      tab.innerHTML = '<div style="color:var(--warm-gray);padding:40px 0;text-align:center;">Loading galleries...</div>';
+      loadGalleries(function() { renderCurrentView(); });
+      return;
+    }
+    var galleries = Object.keys(galleriesData).map(function(id) {
+      var g = galleriesData[id]; g._id = id; return g;
+    });
+    // Sort by Payouts Due descending (highest-owed first).
+    var rows = galleries.map(function(g) {
+      var placements = _placementsForGallery(g._id);
+      var active = placements.filter(function(p) { return (p.status || 'active') === 'active'; }).length;
+      return {
+        g: g,
+        active: active,
+        total: placements.length,
+        payoutsDue: _galleryPayoutsDue(g._id)
+      };
+    }).sort(function(a, b) { return b.payoutsDue - a.payoutsDue; });
+
+    var html = _galleriesSubNavHtml('galleries');
+    html += '<div style="display:flex;align-items:center;justify-content:space-between;margin:16px 0;">' +
+      '<div style="font-size:0.85rem;color:var(--warm-gray);">' + rows.length + ' galler' + (rows.length === 1 ? 'y' : 'ies') + '</div>' +
+      '<button class="btn btn-primary" onclick="consignmentNewGallery()">+ New Gallery</button>' +
+    '</div>';
+
+    if (rows.length === 0) {
+      html += '<div style="text-align:center;padding:40px 20px;color:var(--warm-gray);">' +
+        '<div style="font-size:1.6rem;margin-bottom:12px;">&#127963;&#65039;</div>' +
+        '<p style="font-size:0.9rem;font-weight:500;margin-bottom:4px;">No gallery entities yet</p>' +
+        '<p style="font-size:0.85rem;color:var(--warm-gray-light);max-width:480px;margin:0 auto;">Galleries are first-class entities now. Each holds addresses, contacts, default commission %, and rolls up Payouts Due across all its placements. Use the backfill script <code>scripts/backfill-gallery-entities.js</code> to derive these from existing placement <code>locationName</code> values.</p>' +
+      '</div>';
+      tab.innerHTML = html;
+      return;
+    }
+
+    html += '<table style="width:100%;border-collapse:collapse;font-size:0.85rem;background:#fff;border:1px solid var(--cream-dark,#e8e0d4);border-radius:8px;overflow:hidden;">' +
+      '<thead><tr style="background:var(--cream);text-align:left;">' +
+        '<th style="padding:8px 10px;">Name</th>' +
+        '<th style="padding:8px 10px;">Addresses</th>' +
+        '<th style="padding:8px 10px;">Contacts</th>' +
+        '<th style="padding:8px 10px;" align="right">Default %</th>' +
+        '<th style="padding:8px 10px;" align="right">Active</th>' +
+        '<th style="padding:8px 10px;" align="right">Payouts Due</th>' +
+      '</tr></thead><tbody>';
+    rows.forEach(function(r) {
+      var g = r.g;
+      var addrCount = (g.addresses || []).length;
+      var contactCount = (g.contacts || []).length;
+      var pct = (typeof g.defaultCommissionPct === 'number') ? (Math.round(g.defaultCommissionPct * 100) / 100) + '%' : '—';
+      html += '<tr style="border-top:1px solid var(--cream-dark,#e8e0d4);cursor:pointer;" onclick="consignmentShowGallery(\'' + _jsAttr(g._id) + '\')">' +
+        '<td style="padding:8px 10px;font-weight:600;">' + esc(g.name || '(unnamed)') + '</td>' +
+        '<td style="padding:8px 10px;color:var(--warm-gray);">' + addrCount + '</td>' +
+        '<td style="padding:8px 10px;color:var(--warm-gray);">' + contactCount + '</td>' +
+        '<td style="padding:8px 10px;" align="right">' + pct + '</td>' +
+        '<td style="padding:8px 10px;" align="right">' + r.active + ' / ' + r.total + '</td>' +
+        '<td style="padding:8px 10px;" align="right" style="font-weight:600;color:' + (r.payoutsDue > 0 ? '#F59E0B' : 'var(--warm-gray)') + ';">' + formatCurrency(r.payoutsDue) + '</td>' +
+      '</tr>';
+    });
+    html += '</tbody></table>';
+    tab.innerHTML = html;
+  }
+
+  function _galleriesSubNavHtml(active) {
+    return '<div class="view-tabs" style="margin-bottom:0;">' +
+      '<div class="view-tab' + (active === 'placements' ? ' active' : '') + '" onclick="consignmentShowList()">Placements</div>' +
+      '<div class="view-tab' + (active === 'galleries' ? ' active' : '') + '" onclick="consignmentShowGalleries()">Galleries</div>' +
+    '</div>';
+  }
+
+  function renderGalleryDetail(galleryId) {
+    var tab = document.getElementById('galleriesTab');
+    if (!tab) return;
+    var g = galleriesData[galleryId];
+    if (!g) {
+      tab.innerHTML = '<button class="detail-back" onclick="consignmentShowGalleries()">&larr; Galleries</button>' +
+        '<div style="padding:24px;color:var(--danger);">Gallery not found.</div>';
+      return;
+    }
+    var placements = _placementsForGallery(galleryId);
+    var active = placements.filter(function(p) { return (p.status || 'active') === 'active'; });
+    var closed = placements.filter(function(p) { return (p.status || 'active') !== 'active'; });
+    var payoutsDue = _galleryPayoutsDue(galleryId);
+    var addresses = (g.addresses || []);
+    var contacts = (g.contacts || []);
+
+    var html = '<button class="detail-back" onclick="consignmentShowGalleries()">&larr; Galleries</button>' +
+      '<div style="display:flex;align-items:flex-start;justify-content:space-between;margin:16px 0;gap:16px;">' +
+        '<div>' +
+          '<h3 style="font-family:\'Cormorant Garamond\',serif;font-size:1.6rem;font-weight:500;margin:0;">' + esc(g.name || '(unnamed)') + '</h3>' +
+          '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:4px;">Default commission: ' + ((typeof g.defaultCommissionPct === 'number') ? esc((Math.round(g.defaultCommissionPct * 100) / 100) + '%') : '—') + '</div>' +
+        '</div>' +
+        '<div style="text-align:right;">' +
+          '<div style="font-size:0.78rem;color:var(--warm-gray);">Payouts Due</div>' +
+          '<div style="font-size:1.6rem;font-weight:700;color:' + (payoutsDue > 0 ? '#F59E0B' : 'var(--charcoal)') + ';">' + formatCurrency(payoutsDue) + '</div>' +
+          '<button class="btn btn-secondary btn-small" style="margin-top:6px;" onclick="consignmentEditGallery(\'' + _jsAttr(galleryId) + '\')">Edit</button>' +
+        '</div>' +
+      '</div>';
+
+    // Addresses
+    html += '<section style="background:#fff;border:1px solid var(--cream-dark,#e8e0d4);border-radius:8px;padding:16px;margin-bottom:12px;">' +
+      '<h4 style="margin:0 0 10px;font-size:0.9rem;">Addresses</h4>';
+    if (addresses.length === 0) html += '<div style="color:var(--warm-gray);font-size:0.85rem;">No addresses on file.</div>';
+    else addresses.forEach(function(a) {
+      html += '<div style="padding:4px 0;font-size:0.85rem;">' + esc([a.street, a.city, a.state, a.zip, a.country].filter(Boolean).join(', ')) + '</div>';
+    });
+    html += '</section>';
+
+    // Contacts
+    html += '<section style="background:#fff;border:1px solid var(--cream-dark,#e8e0d4);border-radius:8px;padding:16px;margin-bottom:12px;">' +
+      '<h4 style="margin:0 0 10px;font-size:0.9rem;">Contacts</h4>';
+    if (contacts.length === 0) html += '<div style="color:var(--warm-gray);font-size:0.85rem;">No contacts on file.</div>';
+    else contacts.forEach(function(c) {
+      html += '<div style="padding:4px 0;font-size:0.85rem;"><b>' + esc(c.name || '—') + '</b>' +
+        (c.role ? ' <span style="color:var(--warm-gray);">· ' + esc(c.role) + '</span>' : '') +
+        '<div style="color:var(--warm-gray);font-size:0.78rem;">' + esc(c.email || '') + (c.phone ? ' · ' + esc(c.phone) : '') + '</div>' +
+      '</div>';
+    });
+    html += '</section>';
+
+    // Notes
+    if (g.notes) {
+      html += '<section style="background:#fff;border:1px solid var(--cream-dark,#e8e0d4);border-radius:8px;padding:16px;margin-bottom:12px;">' +
+        '<h4 style="margin:0 0 10px;font-size:0.9rem;">Notes</h4>' +
+        '<div style="font-size:0.85rem;white-space:pre-wrap;color:var(--warm-gray);">' + esc(g.notes) + '</div>' +
+      '</section>';
+    }
+
+    function _placementsTable(list, label) {
+      if (list.length === 0) return '<section style="background:#fff;border:1px solid var(--cream-dark,#e8e0d4);border-radius:8px;padding:16px;margin-bottom:12px;"><h4 style="margin:0 0 10px;font-size:0.9rem;">' + esc(label) + '</h4><div style="color:var(--warm-gray);font-size:0.85rem;">None.</div></section>';
+      var inner = list.map(function(p) {
+        var totals = calculatePlacementTotals(p);
+        return '<tr style="border-top:1px solid var(--cream-dark,#e8e0d4);cursor:pointer;" onclick="consignmentShowDetail(\'' + _jsAttr(p.placementId) + '\')">' +
+          '<td style="padding:6px 8px;">' + esc(p.locationName || '—') + '</td>' +
+          '<td style="padding:6px 8px;">' + esc(p.status || 'active') + '</td>' +
+          '<td style="padding:6px 8px;" align="right">' + formatCurrency(totals.totalSold) + '</td>' +
+          '<td style="padding:6px 8px;" align="right">' + formatCurrency(totals.makerEarnings) + '</td>' +
+        '</tr>';
+      }).join('');
+      return '<section style="background:#fff;border:1px solid var(--cream-dark,#e8e0d4);border-radius:8px;padding:16px;margin-bottom:12px;">' +
+        '<h4 style="margin:0 0 10px;font-size:0.9rem;">' + esc(label) + ' (' + list.length + ')</h4>' +
+        '<table style="width:100%;border-collapse:collapse;font-size:0.85rem;"><thead><tr style="text-align:left;color:var(--warm-gray);">' +
+          '<th style="padding:6px 8px;">Placement</th><th style="padding:6px 8px;">Status</th><th style="padding:6px 8px;" align="right">Sold</th><th style="padding:6px 8px;" align="right">Earnings</th>' +
+        '</tr></thead><tbody>' + inner + '</tbody></table>' +
+      '</section>';
+    }
+    html += _placementsTable(active, 'Active placements');
+    html += _placementsTable(closed, 'Historical placements');
+
+    tab.innerHTML = html;
+  }
+
+  function renderGalleryEditForm(galleryId) {
+    var tab = document.getElementById('galleriesTab');
+    if (!tab) return;
+    var g = galleryId ? (galleriesData[galleryId] || {}) : {};
+    var isEdit = !!galleryId;
+    var addresses = (g.addresses && g.addresses.length) ? g.addresses : [{ street: '', city: '', state: '', zip: '', country: '' }];
+    var contacts = (g.contacts && g.contacts.length) ? g.contacts : [{ name: '', email: '', phone: '', role: '' }];
+
+    function addrRowsHtml() {
+      return addresses.map(function(a, i) {
+        return '<div style="display:grid;grid-template-columns:2fr 1fr 80px 100px 100px;gap:8px;margin-bottom:6px;" data-gal-addr-row="' + i + '">' +
+          '<input data-gal-addr="street" data-i="' + i + '" placeholder="Street" value="' + esc(a.street || '') + '" style="padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.85rem;">' +
+          '<input data-gal-addr="city" data-i="' + i + '" placeholder="City" value="' + esc(a.city || '') + '" style="padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.85rem;">' +
+          '<input data-gal-addr="state" data-i="' + i + '" placeholder="ST" value="' + esc(a.state || '') + '" style="padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.85rem;">' +
+          '<input data-gal-addr="zip" data-i="' + i + '" placeholder="Zip" value="' + esc(a.zip || '') + '" style="padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.85rem;">' +
+          '<input data-gal-addr="country" data-i="' + i + '" placeholder="Country" value="' + esc(a.country || '') + '" style="padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.85rem;">' +
+        '</div>';
+      }).join('');
+    }
+    function contactRowsHtml() {
+      return contacts.map(function(c, i) {
+        return '<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;margin-bottom:6px;" data-gal-contact-row="' + i + '">' +
+          '<input data-gal-contact="name" data-i="' + i + '" placeholder="Name" value="' + esc(c.name || '') + '" style="padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.85rem;">' +
+          '<input data-gal-contact="email" data-i="' + i + '" placeholder="Email" value="' + esc(c.email || '') + '" style="padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.85rem;">' +
+          '<input data-gal-contact="phone" data-i="' + i + '" placeholder="Phone" value="' + esc(c.phone || '') + '" style="padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.85rem;">' +
+          '<input data-gal-contact="role" data-i="' + i + '" placeholder="Role" value="' + esc(c.role || '') + '" style="padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.85rem;">' +
+        '</div>';
+      }).join('');
+    }
+
+    var html = '<button class="detail-back" onclick="consignmentShowGalleries()">&larr; Galleries</button>' +
+      '<h3 style="font-family:\'Cormorant Garamond\',serif;font-size:1.6rem;font-weight:500;margin:16px 0;">' + (isEdit ? 'Edit Gallery' : 'New Gallery') + '</h3>' +
+      '<form id="galleryEditForm" onsubmit="event.preventDefault();consignmentSaveGallery(' + (isEdit ? '\'' + _jsAttr(galleryId) + '\'' : 'null') + ');return false;" style="max-width:760px;">' +
+        '<div style="margin-bottom:12px;"><label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Name *</label>' +
+          '<input id="gal_name" required value="' + esc(g.name || '') + '" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;"></div>' +
+        '<div style="margin-bottom:12px;">' +
+          '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">' +
+            '<label style="font-size:0.85rem;font-weight:600;">Addresses</label>' +
+          '</div>' +
+          '<div id="galAddressRows">' + addrRowsHtml() + '</div>' +
+        '</div>' +
+        '<div style="margin-bottom:12px;">' +
+          '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">' +
+            '<label style="font-size:0.85rem;font-weight:600;">Contacts</label>' +
+          '</div>' +
+          '<div id="galContactRows">' + contactRowsHtml() + '</div>' +
+        '</div>' +
+        '<div style="display:grid;grid-template-columns:120px 100px 1fr;gap:8px;margin-bottom:12px;">' +
+          '<div><label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Default %</label>' +
+            '<input id="gal_pct" type="number" min="0" max="100" step="0.5" value="' + esc((typeof g.defaultCommissionPct === 'number') ? g.defaultCommissionPct : '') + '" placeholder="40" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;"></div>' +
+          '<div><label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Currency</label>' +
+            '<input id="gal_currency" value="' + esc(g.currency || 'USD') + '" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;"></div>' +
+        '</div>' +
+        '<div style="margin-bottom:16px;"><label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Notes</label>' +
+          '<textarea id="gal_notes" rows="3" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;font-family:inherit;">' + esc(g.notes || '') + '</textarea></div>' +
+        '<div style="display:flex;gap:8px;justify-content:flex-end;">' +
+          '<button type="button" class="btn btn-secondary" onclick="consignmentShowGalleries()">Cancel</button>' +
+          (isEdit ? '<button type="button" class="btn btn-secondary" style="color:var(--danger);border-color:var(--danger);" onclick="consignmentDeleteGallery(\'' + _jsAttr(galleryId) + '\')">Delete</button>' : '') +
+          '<button type="submit" class="btn btn-primary">' + (isEdit ? 'Save' : 'Create gallery') + '</button>' +
+        '</div>' +
+      '</form>';
+    tab.innerHTML = html;
+  }
+
+  function _collectGalleryFormValues() {
+    function val(id) { var el = document.getElementById(id); return el ? el.value.trim() : ''; }
+    var name = val('gal_name');
+    var pct = parseFloat(val('gal_pct'));
+    var currency = val('gal_currency') || 'USD';
+    var notes = val('gal_notes');
+    var addresses = [];
+    document.querySelectorAll('[data-gal-addr-row]').forEach(function(row) {
+      var rec = {};
+      row.querySelectorAll('[data-gal-addr]').forEach(function(inp) {
+        rec[inp.getAttribute('data-gal-addr')] = inp.value.trim();
+      });
+      if (Object.values(rec).some(function(v) { return v; })) addresses.push(rec);
+    });
+    var contacts = [];
+    document.querySelectorAll('[data-gal-contact-row]').forEach(function(row) {
+      var rec = {};
+      row.querySelectorAll('[data-gal-contact]').forEach(function(inp) {
+        rec[inp.getAttribute('data-gal-contact')] = inp.value.trim();
+      });
+      if (Object.values(rec).some(function(v) { return v; })) contacts.push(rec);
+    });
+    return {
+      name: name,
+      addresses: addresses,
+      contacts: contacts,
+      defaultCommissionPct: isNaN(pct) ? null : pct,
+      currency: currency,
+      notes: notes
+    };
+  }
+
+  async function saveGallery(galleryId) {
+    var v = _collectGalleryFormValues();
+    if (!v.name) { showToast('Name is required'); return; }
+    var now = new Date().toISOString();
+    var id = galleryId || MastDB.newKey('admin/galleries');
+    var existing = galleryId ? (galleriesData[galleryId] || {}) : {};
+    var rec = Object.assign({}, existing, v, {
+      id: id,
+      createdAt: existing.createdAt || now,
+      updatedAt: now
+    });
+    try {
+      await MastDB.set('admin/galleries/' + id, rec);
+      galleriesData[id] = rec;
+      showToast(galleryId ? 'Gallery saved' : 'Gallery created');
+      currentGalleryId = id;
+      currentView = 'galleryDetail';
+      renderCurrentView();
+    } catch (e) {
+      showToast('Save failed: ' + (e.message || String(e)), true);
+    }
+  }
+
+  async function deleteGalleryEntity(galleryId) {
+    var g = galleriesData[galleryId];
+    if (!g) return;
+    if (!await mastConfirm('Delete "' + (g.name || 'this gallery') + '"? Linked placements will remain but lose the gallery FK.', { title: 'Delete gallery', danger: true })) return;
+    try {
+      await MastDB.set('admin/galleries/' + galleryId, null);
+      delete galleriesData[galleryId];
+      showToast('Gallery deleted');
+      currentView = 'galleries';
+      currentGalleryId = null;
+      renderCurrentView();
+    } catch (e) {
+      showToast('Delete failed: ' + (e.message || String(e)), true);
     }
   }
 
@@ -273,7 +632,7 @@
     }
 
     if (!placements.length && !hasUrlFilter) {
-      tab.innerHTML =
+      tab.innerHTML = _galleriesSubNavHtml('placements') +
         '<div style="text-align:center;padding:40px 20px;color:var(--warm-gray);">' +
           '<div style="font-size:1.6rem;margin-bottom:12px;">🏛️</div>' +
           '<p style="font-size:0.9rem;font-weight:500;margin-bottom:4px;">No consignment placements yet</p>' +
@@ -298,8 +657,9 @@
         '</div>';
     }
 
+    html += _galleriesSubNavHtml('placements');
     html +=
-      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin:16px 0;">' +
         '<h3 style="font-family:\'Cormorant Garamond\',serif;font-size:1.6rem;font-weight:500;margin:0;">Galleries & Consignment</h3>' +
         '<button class="btn btn-primary" onclick="consignmentShowNew()">+ New Placement</button>' +
       '</div>';
@@ -1025,6 +1385,32 @@
   };
   window.renderConsignmentList = renderPlacementList;
 
+  // W2.7 — Gallery-as-entity windowed actions
+  window.consignmentShowGalleries = function() {
+    currentView = 'galleries';
+    currentGalleryId = null;
+    if (!galleriesLoaded) loadGalleries(function() { renderCurrentView(); });
+    else renderCurrentView();
+  };
+  window.consignmentShowGallery = function(id) {
+    currentGalleryId = id;
+    currentView = 'galleryDetail';
+    if (!galleriesLoaded) loadGalleries(function() { renderCurrentView(); });
+    else renderCurrentView();
+  };
+  window.consignmentNewGallery = function() {
+    currentGalleryId = null;
+    currentView = 'galleryEdit';
+    renderCurrentView();
+  };
+  window.consignmentEditGallery = function(id) {
+    currentGalleryId = id;
+    currentView = 'galleryEdit';
+    renderCurrentView();
+  };
+  window.consignmentSaveGallery = saveGallery;
+  window.consignmentDeleteGallery = deleteGalleryEntity;
+
   // ============================================================
   // Register with MastAdmin
   // ============================================================
@@ -1035,6 +1421,7 @@
         currentView = 'list';
         currentPlacementId = null;
         loadPlacements();
+        loadGalleries();
         // Ensure products are loaded for product picker
         if (!window.productsLoaded && typeof window.loadProducts === 'function') {
           window.loadProducts();
@@ -1043,6 +1430,12 @@
     },
     detachListeners: function() {
       unloadPlacements();
+      if (galleriesListener && typeof galleriesListener === 'function') {
+        try { galleriesListener(); } catch (e) {}
+      }
+      galleriesListener = null;
+      galleriesData = {};
+      galleriesLoaded = false;
     }
   });
 
