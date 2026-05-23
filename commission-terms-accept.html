@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src 'self' https://*.cloudfunctions.net https://firestore.googleapis.com https://firebaseio.com https://*.firebaseio.com; img-src 'self' data: blob: https:; frame-ancestors 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src 'self' https://*.cloudfunctions.net https://firestore.googleapis.com; img-src 'self' data: blob: https:; frame-ancestors 'none';">
 <title>Commission Terms</title>
 <meta name="robots" content="noindex, nofollow">
 <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
@@ -116,9 +116,10 @@
   </div>
 </div>
 
-<!-- Firebase compat SDK so we can read the public terms text without auth -->
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<!-- W2 R5: Firebase compat SDK removed — viewer now reads via JWT-vouched
+     getCommissionTermsByToken CF. storefront-tenant.js + tenant-brand.js
+     remain for brand styling (they use REST against firestore.googleapis.com,
+     no SDK needed). -->
 <script src="storefront-tenant.js"></script>
 <script src="tenant-brand.js"></script>
 <script>
@@ -137,89 +138,66 @@
     statusEl.style.display = 'block';
   }
 
-  if (!token || !tid) {
+  if (!token) {
     termsEl.textContent = '';
     termsEl.classList.remove('ct-loading');
     showStatus('This link is missing required information. Please use the link from the email you received.', 'err');
     return;
   }
 
-  // Decode the JWT client-side (NOT for trust — only to extract termsVersionId
-  // so we know which terms doc to fetch and render). Server re-verifies on submit.
-  function decodeJwt(t) {
-    try {
-      var parts = t.split('.');
-      if (parts.length < 2) return null;
-      var b64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
-      while (b64.length % 4) b64 += '=';
-      return JSON.parse(atob(b64));
-    } catch (e) { return null; }
-  }
+  // W2 R5: fetch terms via JWT-vouched CF (was a direct Firestore read; denied
+  // by `isAdmin(tid)` rules). The CF verifies the JWT server-side against the
+  // per-tenant signing secret and returns only the published terms text + a
+  // minimal commission context for display.
+  var getEndpoint = 'https://us-central1-mast-platform-prod.cloudfunctions.net/getCommissionTermsByToken';
 
-  var payload = decodeJwt(token);
-  if (!payload || !payload.tv) {
-    termsEl.textContent = '';
-    termsEl.classList.remove('ct-loading');
-    showStatus('This link is invalid. Please use the link from the email you received.', 'err');
-    return;
-  }
-  var termsVersionId = payload.tv;
-
-  // Wait for tenant Firebase config to initialize, then read the terms text.
-  function whenTenantReady(fn) {
-    if (window.TENANT_FIREBASE_CONFIG && window.TENANT_ID) { fn(); return; }
-    var n = 0;
-    var iv = setInterval(function(){
-      n++;
-      if ((window.TENANT_FIREBASE_CONFIG && window.TENANT_ID) || n > 50) {
-        clearInterval(iv);
-        if (window.TENANT_FIREBASE_CONFIG && window.TENANT_ID) fn();
-        else {
-          termsEl.textContent = '';
-          termsEl.classList.remove('ct-loading');
-          showStatus('Could not load tenant configuration. Please try refreshing.', 'err');
-        }
-      }
-    }, 100);
-  }
-
-  whenTenantReady(function(){
-    try {
-      if (!firebase.apps.length) {
-        firebase.initializeApp(window.TENANT_FIREBASE_CONFIG);
-      }
-      var db = firebase.firestore();
-      // Public-readable terms doc lives at the public path.
-      // Per the W2.3 ratified data model, terms are stored under
-      // tenants/{tid}/admin/commissionTerms/{termsVersionId} — admin path,
-      // but the doc is intended to be publicly readable (Firestore rules
-      // must allow anon read on this collection; see operator follow-up).
-      db.collection('tenants').doc(tid)
-        .collection('admin').doc('commissionTerms')
-        .collection('versions').doc(termsVersionId)
-        .get()
-        .then(function(snap){
-          var data = snap.exists ? snap.data() : null;
-          if (!data || !data.body) {
-            termsEl.textContent = '(Terms could not be loaded. Please contact the seller.)';
-            termsEl.classList.remove('ct-loading');
-            return;
-          }
-          termsEl.textContent = data.body;
-          termsEl.classList.remove('ct-loading');
-          form.style.display = 'block';
-        })
-        .catch(function(err){
-          console.error('terms-load-failed', err);
-          termsEl.textContent = '(Terms could not be loaded. Please contact the seller.)';
-          termsEl.classList.remove('ct-loading');
-        });
-    } catch (e) {
-      console.error('firebase-init-failed', e);
+  fetch(getEndpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ t: token }),
+  }).then(function(resp){
+    return resp.json().then(function(json){ return { ok: resp.ok, status: resp.status, json: json }; });
+  }).then(function(r){
+    if (!r.ok || !r.json || !r.json.ok) {
+      var err = (r.json && r.json.error) || 'unknown-error';
       termsEl.textContent = '';
       termsEl.classList.remove('ct-loading');
-      showStatus('Could not initialize. Please try refreshing.', 'err');
+      if (err === 'terms-version-not-available') {
+        showStatus('These terms are no longer available. Please contact the seller for an updated link.', 'err');
+      } else if (err === 'invalid-token') {
+        showStatus('This link has expired or is no longer valid. Please contact the seller.', 'err');
+      } else {
+        showStatus('Could not load terms. Please try refreshing.', 'err');
+      }
+      return;
     }
+    var terms = r.json.terms || {};
+    var commission = r.json.commission || {};
+    if (!terms.body) {
+      termsEl.textContent = '(Terms could not be loaded. Please contact the seller.)';
+      termsEl.classList.remove('ct-loading');
+      return;
+    }
+    // textContent is XSS-safe even if terms.body contains HTML.
+    termsEl.textContent = terms.body;
+    termsEl.classList.remove('ct-loading');
+    // Surface commission context above the form (best-effort).
+    if (commission.pieceTitle || commission.customerName) {
+      var contextEl = document.createElement('p');
+      contextEl.className = 'ct-muted';
+      contextEl.style.marginTop = '4px';
+      var parts = [];
+      if (commission.pieceTitle) parts.push('For commission: ' + commission.pieceTitle);
+      if (commission.customerName) parts.push(commission.customerName);
+      contextEl.textContent = parts.join(' — ');
+      termsEl.parentNode.insertBefore(contextEl, termsEl);
+    }
+    form.style.display = 'block';
+  }).catch(function(err){
+    console.error('terms-load-failed', err);
+    termsEl.textContent = '';
+    termsEl.classList.remove('ct-loading');
+    showStatus('Could not reach the server. Please check your connection and try again.', 'err');
   });
 
   form.addEventListener('submit', function(e){
