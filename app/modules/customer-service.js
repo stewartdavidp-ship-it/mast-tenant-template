@@ -941,7 +941,10 @@
     var prodInfo = r.productId ? csReviewProductIndex[r.productId] : null;
     var productName = r.productName || (prodInfo && prodInfo.name) || '(product)';
     var quote = (r.body || r.headline || '').trim().replace(/\s+/g, ' ');
-    var brandName = (window.TENANT_CONFIG && (window.TENANT_CONFIG.brandName || window.TENANT_CONFIG.name)) || 'the team';
+    var brandName = (window.TENANT_CONFIG && window.TENANT_CONFIG.brand && window.TENANT_CONFIG.brand.name)
+      || (window.TENANT_BRAND && window.TENANT_BRAND.name)
+      || (window.TENANT_CONFIG && (window.TENANT_CONFIG.brandName || window.TENANT_CONFIG.name))
+      || 'the team';
 
     var defaultSubject = 'A small request from ' + brandName;
     var previewBody =
@@ -983,7 +986,9 @@
       sendBtn.disabled = true;
       sendBtn.textContent = 'Sending…';
       try {
-        var tenantId = (window.TENANT_CONFIG && window.TENANT_CONFIG.tenantId) || null;
+        var tenantId = window.TENANT_ID
+          || (window.TENANT_CONFIG && window.TENANT_CONFIG.tenantId)
+          || null;
         if (!tenantId) throw new Error('tenantId not resolved');
         var fn = firebase.functions().httpsCallable('mintUgcUploadToken');
         var resp = await fn({
