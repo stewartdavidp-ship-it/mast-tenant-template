@@ -303,6 +303,10 @@
               '<button class="btn btn-small" style="font-size:0.72rem;" onclick="event.stopPropagation();lbGenerate(\'' + esc(doc.documentId) + '\')">' +
                 (doc.generatedUrl ? (expExpired ? 'Re-issue link' : 'Regenerate') : 'Generate') +
               '</button>' +
+              // W2.4 — Share-with-Buyer (only meaningful when a generated PDF exists)
+              (doc.generatedUrl
+                ? '<button class="btn btn-small" style="font-size:0.72rem;" onclick="event.stopPropagation();lbOpenShareModal(\'' + (window._jsAttr ? window._jsAttr(doc.documentId) : esc(doc.documentId)) + '\')">Share with Buyer</button>'
+                : '') +
             '</div>' +
           '</div>' +
           '<div style="font-size:0.78rem;color:var(--warm-gray-light);margin-top:8px;">' +
@@ -465,8 +469,16 @@
         '</div>' +
       '</div>';
 
+    // W2.4 — Opens panel + Share button for existing docs (edit mode).
+    if (isEdit && docId) {
+      html += lbRenderOpensPanel(docId);
+    }
+
     html += '</div>';
     tab.innerHTML = html;
+
+    // Kick off async opens load for the panel.
+    if (isEdit && docId) lbLoadOpens(docId);
   }
 
   // ============================================================
@@ -574,6 +586,189 @@
       showView('list');
     });
   }
+
+  // ============================================================
+  // W2.4 — Share with Buyer (token mint via mintLookbookShareToken CF) +
+  // opens-tracking panel (reads admin/lookbook_share_opens).
+  // ============================================================
+
+  // Cache of opens rows per documentId: { docId: [openRow, ...] }
+  var lbOpensCache = {};
+
+  function _jsAttrSafe(s) {
+    if (typeof window._jsAttr === 'function') return window._jsAttr(s);
+    return String(s == null ? '' : s).replace(/\\/g, '\\\\').replace(/'/g, '\\\'').replace(/</g, '\\u003C');
+  }
+
+  function lbOpenShareModal(docId) {
+    var doc = docsData[docId];
+    if (!doc) return;
+    if (!doc.generatedUrl) {
+      if (typeof showToast === 'function') showToast('Generate the PDF first before sharing.', true);
+      return;
+    }
+    var html =
+      '<div style="max-width:480px;">' +
+        '<h3>Share &ldquo;' + esc(doc.title || 'Untitled') + '&rdquo; with a buyer</h3>' +
+        '<div class="form-group">' +
+          '<label>Buyer name</label>' +
+          '<input type="text" id="lbShareName" placeholder="e.g. Anna Wilson" autocomplete="off">' +
+        '</div>' +
+        '<div class="form-group">' +
+          '<label>Buyer email (optional — required for email send)</label>' +
+          '<input type="email" id="lbShareEmail" placeholder="buyer@example.com" autocomplete="off">' +
+        '</div>' +
+        '<div class="form-group">' +
+          '<label style="display:flex;gap:8px;align-items:center;font-size:0.9rem;">' +
+            '<input type="checkbox" id="lbShareSendEmail" checked> Send via email' +
+          '</label>' +
+        '</div>' +
+        '<div id="lbShareStatus" style="margin-top:8px;font-size:0.85rem;"></div>' +
+        '<div id="lbShareResult" style="margin-top:12px;display:none;"></div>' +
+        '<div style="margin-top:16px;display:flex;gap:8px;justify-content:flex-end;">' +
+          '<button class="btn btn-secondary" onclick="closeModal()">Close</button>' +
+          '<button class="btn btn-primary" id="lbShareGenerate" onclick="lbGenerateShareLink(\'' + _jsAttrSafe(docId) + '\')">Generate Share Link</button>' +
+        '</div>' +
+      '</div>';
+    openModal(html);
+  }
+  window.lbOpenShareModal = lbOpenShareModal;
+
+  async function lbGenerateShareLink(docId) {
+    var doc = docsData[docId];
+    if (!doc) return;
+    var name = (document.getElementById('lbShareName').value || '').trim();
+    var email = (document.getElementById('lbShareEmail').value || '').trim();
+    var sendEmail = document.getElementById('lbShareSendEmail').checked;
+    var statusEl = document.getElementById('lbShareStatus');
+    var resultEl = document.getElementById('lbShareResult');
+    var btn = document.getElementById('lbShareGenerate');
+
+    if (sendEmail && !email) {
+      if (statusEl) { statusEl.textContent = 'Email required when "Send via email" is checked.'; statusEl.style.color = '#a67c00'; }
+      return;
+    }
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      if (statusEl) { statusEl.textContent = 'Invalid email address.'; statusEl.style.color = '#a67c00'; }
+      return;
+    }
+
+    if (btn) { btn.disabled = true; btn.textContent = 'Generating…'; }
+    if (statusEl) { statusEl.textContent = 'Minting share token…'; statusEl.style.color = 'var(--warm-gray)'; }
+
+    try {
+      var tenantId = (MastDB.tenantId && MastDB.tenantId()) || window.TENANT_ID;
+      var res = await firebase.functions().httpsCallable('mintLookbookShareToken')({
+        tenantId: tenantId,
+        lookbookId: doc.documentId,
+        recipientName: name || null,
+        recipientEmail: email || null,
+        sendEmail: !!(sendEmail && email)
+      });
+      var data = (res && res.data) || {};
+      if (data.success === false) throw new Error(data.error || 'mint failed');
+      var shareUrl = data.shareUrl || data.url || '';
+      if (!shareUrl) throw new Error('No shareUrl returned');
+
+      if (statusEl) {
+        statusEl.textContent = sendEmail && email ? ('Email queued to ' + email + '.') : 'Share link ready.';
+        statusEl.style.color = 'var(--teal)';
+      }
+      if (resultEl) {
+        resultEl.style.display = '';
+        resultEl.innerHTML =
+          '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Share URL</label>' +
+          '<div style="display:flex;gap:8px;">' +
+            '<input type="text" id="lbShareUrl" readonly value="' + esc(shareUrl) + '" style="flex:1;padding:8px;border-radius:6px;border:1px solid var(--cream-dark);font-size:0.85rem;background:var(--surface-card,#fff);">' +
+            '<button class="btn btn-secondary" style="font-size:0.78rem;" onclick="lbCopyShareUrl()">Copy</button>' +
+          '</div>';
+      }
+      // Invalidate opens cache so a refresh of the panel shows the new token if it has been opened.
+      delete lbOpensCache[docId];
+    } catch (err) {
+      if (statusEl) { statusEl.textContent = 'Error: ' + err.message; statusEl.style.color = '#ef5350'; }
+      if (btn) { btn.disabled = false; btn.textContent = 'Generate Share Link'; }
+    }
+  }
+  window.lbGenerateShareLink = lbGenerateShareLink;
+
+  function lbCopyShareUrl() {
+    var el = document.getElementById('lbShareUrl');
+    if (!el) return;
+    el.select();
+    try {
+      document.execCommand('copy');
+      if (typeof showToast === 'function') showToast('Copied to clipboard');
+    } catch (e) {
+      if (typeof showToast === 'function') showToast('Copy failed — select + copy manually', true);
+    }
+  }
+  window.lbCopyShareUrl = lbCopyShareUrl;
+
+  // ─── Opens panel (rendered inside renderBuilder) ───
+
+  async function lbLoadOpens(docId) {
+    try {
+      var snap = await MastDB.get('admin/lookbook_share_opens');
+      var rows = snap ? Object.keys(snap).map(function(k) { var r = snap[k]; r.id = k; return r; }) : [];
+      // Filter to this lookbook + last 30 days.
+      var cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
+      rows = rows.filter(function(r) {
+        if (r.lookbookId !== docId) return false;
+        var t = r.openedAt ? new Date(r.openedAt).getTime() : 0;
+        return t >= cutoff;
+      });
+      rows.sort(function(a, b) { return (b.openedAt || '').localeCompare(a.openedAt || ''); });
+      lbOpensCache[docId] = rows.slice(0, 50);
+    } catch (err) {
+      console.warn('[lookbooks] opens load failed:', err && err.message);
+      lbOpensCache[docId] = [];
+    }
+    var panel = document.getElementById('lbOpensPanel_' + docId);
+    if (panel) panel.innerHTML = lbRenderOpensPanelInner(docId);
+  }
+
+  function _agoLabel(iso) {
+    if (!iso) return '';
+    var ms = Date.now() - new Date(iso).getTime();
+    if (ms < 0) return '';
+    var min = Math.floor(ms / 60000);
+    if (min < 1) return 'just now';
+    if (min < 60) return min + 'm ago';
+    var hr = Math.floor(min / 60);
+    if (hr < 24) return hr + 'h ago';
+    var day = Math.floor(hr / 24);
+    return day + 'd ago';
+  }
+
+  function lbRenderOpensPanelInner(docId) {
+    var rows = lbOpensCache[docId];
+    if (!rows) return '<div style="color:var(--warm-gray);font-size:0.85rem;">Loading opens…</div>';
+    if (!rows.length) return '<div style="color:var(--warm-gray);font-size:0.85rem;">No opens tracked yet.</div>';
+    var html = '<table class="data-table" style="width:100%;font-size:0.85rem;">' +
+      '<thead><tr><th>When</th><th>Recipient</th><th>Email</th></tr></thead><tbody>';
+    rows.forEach(function(r) {
+      var when = r.openedAt ? new Date(r.openedAt).toLocaleString() : '—';
+      html += '<tr>' +
+        '<td>' + esc(when) + ' <span style="color:var(--warm-gray);font-size:0.72rem;">(' + esc(_agoLabel(r.openedAt)) + ')</span></td>' +
+        '<td>' + esc(r.recipientName || '—') + '</td>' +
+        '<td>' + esc(r.recipientEmail || '—') + '</td>' +
+      '</tr>';
+    });
+    html += '</tbody></table>';
+    return html;
+  }
+
+  function lbRenderOpensPanel(docId) {
+    return '<div class="lb-builder-section" style="margin-top:24px;">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">' +
+        '<div style="font-size:1rem;font-weight:500;">Opens (last 30 days)</div>' +
+        '<button class="btn btn-secondary btn-small" style="font-size:0.72rem;" onclick="lbOpenShareModal(\'' + _jsAttrSafe(docId) + '\')">Share with Buyer</button>' +
+      '</div>' +
+      '<div id="lbOpensPanel_' + esc(docId) + '">' + lbRenderOpensPanelInner(docId) + '</div>' +
+    '</div>';
+  }
+  window.lbRenderOpensPanel = lbRenderOpensPanel;
 
   // ============================================================
   // Window-exposed functions
