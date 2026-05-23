@@ -23295,6 +23295,11 @@ async function saveEventsCount() {
     return;
   }
   try {
+    // W3a-cleanup (OPEN -OtHKHHztxZ8R08YE7k8): write to public/config so
+    // the unauthenticated storefront homepage can read it. `settings/*`
+    // is gated on isMember(tenantId) per firestore.rules.
+    await MastDB.set('public/config/homepageEventsCount', count);
+    // Keep the legacy mirror for back-compat (other admin code may still read it).
     await MastDB.config.settingsField('homepageEventsCount').set(count);
     await writeAudit('update', 'settings', 'homepageEventsCount');
     showToast('Events count saved: ' + count);

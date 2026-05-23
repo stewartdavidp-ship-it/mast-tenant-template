@@ -1840,7 +1840,14 @@ window.TENANT_READY.then(function() {
   }).catch(function() { /* keep hardcoded fallback */ });
 
   // ---- EVENTS (configurable count, default 3) ----
-  MastDB.get('public/settings/homepageEventsCount').then(function(countVal) {
+  // W3a-cleanup (OPEN -OtHKHHztxZ8R08YE7k8): moved from `public/settings/...`
+  // to `public/config/...`. The storefront homepage runs unauthenticated, but
+  // MastDB.translate sends `public/settings/*` to Firestore collection
+  // `settings`, which is gated on isMember(tenantId). Admin-only path being
+  // read from storefront → permission-denied error in console on every load.
+  // `public/config/*` is anon-readable per firestore.rules and is the correct
+  // home for storefront-tunable values.
+  MastDB.get('public/config/homepageEventsCount').then(function(countVal) {
     var eventsCount = countVal || 3;
     return MastDB.query('public/events').orderByChild('date').once().then(function(data) {
       if (!data || Object.keys(data).length === 0) return;
