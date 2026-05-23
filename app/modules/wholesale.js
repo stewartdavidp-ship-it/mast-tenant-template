@@ -1371,8 +1371,13 @@ function renderWholesaleOrderAccountLink(o, orderId) {
   if (accounts.length === 0) {
     html += '<div style="font-size:0.78rem;color:var(--warm-gray);">No wholesale accounts yet — create one from the Accounts tab.</div>';
   } else {
+    // W1.9: FK enforcement — operator must choose a real account OR the explicit
+    // Direct/Retail sentinel. The "Not linked" empty option is gone so we don't
+    // accept ambiguous nulls on new writes.
     html += '<select onchange="setWholesaleOrderAccount(\'' + esc(orderId) + '\', this.value)" style="padding:6px 10px;border:1px solid #ccc;border-radius:4px;font-size:0.85rem;min-width:200px;">';
-    html += '<option value=""' + (currentId ? '' : ' selected') + '>— Not linked —</option>';
+    html += '<option value="" disabled' + (currentId || o.wholesaleAccountId === 'direct_retail' ? '' : ' selected') + '>— Choose one —</option>';
+    var isDirect = o.wholesaleAccountId === 'direct_retail';
+    html += '<option value="__direct_retail__"' + (isDirect ? ' selected' : '') + '>Direct / Retail</option>';
     accounts.forEach(function(a) {
       var sel = (a._key === currentId) ? ' selected' : '';
       html += '<option value="' + esc(a._key) + '"' + sel + '>' + esc(a.name || a._key) + '</option>';
@@ -1384,11 +1389,18 @@ function renderWholesaleOrderAccountLink(o, orderId) {
 }
 
 async function setWholesaleOrderAccount(orderId, accountId) {
-  var update = { wholesaleAccountId: accountId || null, updatedAt: new Date().toISOString() };
+  // W1.9: FK enforcement. Reject empty. Map sentinel to the explicit
+  // 'direct_retail' marker — distinct from null/missing.
+  if (!accountId) {
+    showToast('Pick a wholesale account or "Direct / Retail".', true);
+    return;
+  }
+  var stored = (accountId === '__direct_retail__') ? 'direct_retail' : accountId;
+  var update = { wholesaleAccountId: stored, updatedAt: new Date().toISOString() };
   try {
     await MastDB.orders.update(orderId, update);
-    if (wholesaleOrdersData[orderId]) wholesaleOrdersData[orderId].wholesaleAccountId = accountId || null;
-    showToast(accountId ? 'Account linked' : 'Account unlinked');
+    if (wholesaleOrdersData[orderId]) wholesaleOrdersData[orderId].wholesaleAccountId = stored;
+    showToast(stored === 'direct_retail' ? 'Marked as Direct/Retail' : 'Account linked');
     viewWholesaleOrder(orderId);
   } catch (e) {
     showToast('Link failed: ' + (e && e.message), true);
