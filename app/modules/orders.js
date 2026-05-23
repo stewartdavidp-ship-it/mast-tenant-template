@@ -707,6 +707,10 @@
     if (isOrderInvoiceable(o)) {
       actionsHtml += '<button class="btn btn-secondary" onclick="generateInvoice(\'' + esc(orderId) + '\')">Generate Invoice</button>';
     }
+    // W1.5: Start Return — available on any shipped/delivered/completed order. Operator-initiated RMA.
+    if (status === 'shipped' || status === 'delivered' || status === 'completed') {
+      actionsHtml += '<button class="btn btn-secondary" onclick="openNewRmaModal(\'' + esc(orderId) + '\')">Start Return</button>';
+    }
 
     // Items section
     var itemsHtml = '';
@@ -4066,6 +4070,143 @@
     if (tbodyEl) tbodyEl.innerHTML = rowsHtml;
   }
 
+  // W1.5: operator-initiated RMA entry. Refund-intent only — no payment-provider API call.
+  function openNewRmaModal(originOrderId) {
+    var existing = document.getElementById('newRmaModal');
+    if (existing) existing.remove();
+    var modal = document.createElement('div');
+    modal.id = 'newRmaModal';
+    modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:1000;display:flex;align-items:center;justify-content:center;';
+
+    var preselected = originOrderId ? orders[originOrderId] : null;
+    var orderOptionsHtml = '<option value="">— Select order —</option>';
+    var orderArr = Object.keys(orders || {}).map(function(k) {
+      var o = orders[k]; o._id = k; return o;
+    }).sort(function(a, b) { return (b.createdAt || 0) - (a.createdAt || 0); }).slice(0, 200);
+    orderArr.forEach(function(o) {
+      var num = getOrderDisplayNumber(o);
+      var who = o.customerName || o.email || '';
+      var sel = (originOrderId && o._id === originOrderId) ? ' selected' : '';
+      orderOptionsHtml += '<option value="' + esc(o._id) + '"' + sel + '>' + esc(num) + ' — ' + esc(who) + '</option>';
+    });
+
+    var pickerDisabled = preselected ? ' disabled' : '';
+    var pickerNote = preselected
+      ? '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:4px;">Locked — launched from order detail.</div>'
+      : '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:4px;">Optional — leave empty to record a return without a source order.</div>';
+
+    modal.innerHTML = '<div style="background:var(--cream,#f5f0e8);border-radius:12px;padding:24px;max-width:520px;width:90%;max-height:85vh;overflow-y:auto;">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">' +
+        '<h3 style="margin:0;font-size:1.15rem;">New Return</h3>' +
+        '<span onclick="closeNewRmaModal()" style="cursor:pointer;font-size:1.15rem;color:var(--warm-gray);">&times;</span>' +
+      '</div>' +
+
+      '<div style="margin-bottom:14px;">' +
+        '<label style="font-size:0.85rem;color:var(--warm-gray);display:block;margin-bottom:4px;">Source Order' + (preselected ? ' *' : '') + '</label>' +
+        '<select id="newRmaOrderId"' + pickerDisabled + ' style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid var(--cream-dark);font-size:0.9rem;background:var(--cream,#f5f0e8);box-sizing:border-box;">' +
+          orderOptionsHtml +
+        '</select>' +
+        pickerNote +
+      '</div>' +
+
+      '<div style="margin-bottom:14px;">' +
+        '<label style="font-size:0.85rem;color:var(--warm-gray);display:block;margin-bottom:4px;">Type</label>' +
+        '<select id="newRmaType" style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid var(--cream-dark);font-size:0.9rem;background:var(--cream,#f5f0e8);box-sizing:border-box;">' +
+          '<option value="refund" selected>Refund</option>' +
+          '<option value="exchange">Exchange</option>' +
+        '</select>' +
+      '</div>' +
+
+      '<div style="margin-bottom:14px;">' +
+        '<label style="font-size:0.85rem;color:var(--warm-gray);display:block;margin-bottom:4px;">Customer Email</label>' +
+        '<input type="email" id="newRmaEmail" value="' + esc((preselected && (preselected.email || preselected.customerEmail)) || '') + '" placeholder="customer@example.com" style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid var(--cream-dark);font-size:0.9rem;background:var(--cream,#f5f0e8);box-sizing:border-box;">' +
+      '</div>' +
+
+      '<div style="margin-bottom:14px;">' +
+        '<label style="font-size:0.85rem;color:var(--warm-gray);display:block;margin-bottom:4px;">Reason</label>' +
+        '<textarea id="newRmaReason" rows="3" placeholder="Customer reported breakage on arrival..." style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid var(--cream-dark);font-size:0.9rem;resize:vertical;background:var(--cream,#f5f0e8);box-sizing:border-box;"></textarea>' +
+      '</div>' +
+
+      '<div style="margin-bottom:14px;">' +
+        '<label style="font-size:0.85rem;color:var(--warm-gray);display:block;margin-bottom:4px;">Refund Amount ($)</label>' +
+        '<input type="number" min="0" step="0.01" id="newRmaAmount" placeholder="0.00" style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid var(--cream-dark);font-size:0.9rem;background:var(--cream,#f5f0e8);box-sizing:border-box;">' +
+        '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:4px;">Refund intent only — no payment provider call from this form.</div>' +
+      '</div>' +
+
+      '<div style="margin-bottom:14px;display:flex;align-items:center;gap:8px;">' +
+        '<input type="checkbox" id="newRmaRestock" style="margin:0;">' +
+        '<label for="newRmaRestock" style="font-size:0.85rem;cursor:pointer;">Restock inventory on completion</label>' +
+      '</div>' +
+
+      '<div id="newRmaError" style="color:var(--danger);font-size:0.85rem;margin-bottom:8px;display:none;"></div>' +
+
+      '<div style="display:flex;gap:8px;justify-content:flex-end;">' +
+        '<button class="btn btn-secondary" onclick="closeNewRmaModal()">Cancel</button>' +
+        '<button class="btn btn-primary" id="newRmaSaveBtn" onclick="saveNewRma()">Create Return</button>' +
+      '</div>' +
+    '</div>';
+    document.body.appendChild(modal);
+    // Stash locked originOrderId so save can read it (disabled select returns '').
+    modal.dataset.lockedOrderId = preselected ? (originOrderId || '') : '';
+  }
+
+  function closeNewRmaModal() {
+    var modal = document.getElementById('newRmaModal');
+    if (modal) modal.remove();
+  }
+
+  async function saveNewRma() {
+    var modal = document.getElementById('newRmaModal');
+    var lockedOrderId = modal && modal.dataset ? (modal.dataset.lockedOrderId || '') : '';
+    var orderId = lockedOrderId || (document.getElementById('newRmaOrderId') || {}).value || '';
+    var type = (document.getElementById('newRmaType') || {}).value || 'refund';
+    var email = ((document.getElementById('newRmaEmail') || {}).value || '').trim();
+    var reason = ((document.getElementById('newRmaReason') || {}).value || '').trim();
+    var amountRaw = (document.getElementById('newRmaAmount') || {}).value || '';
+    var refundCents = amountRaw ? Math.round(parseFloat(amountRaw) * 100) : 0;
+    var restock = !!(document.getElementById('newRmaRestock') || {}).checked;
+
+    var errEl = document.getElementById('newRmaError');
+    function showErr(m) { if (errEl) { errEl.textContent = m; errEl.style.display = 'block'; } }
+
+    if (lockedOrderId && !orderId) { showErr('Missing source order.'); return; }
+
+    var btn = document.getElementById('newRmaSaveBtn');
+    if (btn) { btn.disabled = true; btn.textContent = 'Creating...'; }
+
+    try {
+      var rmaId = 'rma_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+      var srcOrder = orderId ? orders[orderId] : null;
+      var orderNumber = srcOrder ? getOrderDisplayNumber(srcOrder) : '';
+      var nowIso = new Date().toISOString();
+      var rec = {
+        type: type,
+        originOrderId: orderId || null,
+        orderId: orderId || null,
+        orderNumber: orderNumber,
+        customerEmail: email || (srcOrder && (srcOrder.email || srcOrder.customerEmail)) || '',
+        reason: reason,
+        refundAmountCents: refundCents,
+        restockInventory: restock,
+        status: 'requested',
+        items: [],
+        requestedAt: nowIso,
+        createdAt: nowIso,
+        createdBy: 'operator',
+        source: 'operator-initiated'
+      };
+      await MastDB.set('admin/rma/' + rmaId, rec);
+      rmaData[rmaId] = rec;
+      closeNewRmaModal();
+      showToast('Return created');
+      renderRma();
+    } catch (err) {
+      console.error('[RMA] create error:', err);
+      showErr('Error: ' + (err && err.message || 'unknown'));
+      if (btn) { btn.disabled = false; btn.textContent = 'Create Return'; }
+    }
+  }
+
   function viewRma(rmaId) {
     selectedRmaId = rmaId;
     document.getElementById('rmaListView').style.display = 'none';
@@ -4767,6 +4908,9 @@
   window.loadRmaData = loadRmaData;
   window.setRmaFilter = setRmaFilter;
   window.renderRma = renderRma;
+  window.openNewRmaModal = openNewRmaModal;
+  window.closeNewRmaModal = closeNewRmaModal;
+  window.saveNewRma = saveNewRma;
   window.viewRma = viewRma;
   window.backToRmaList = backToRmaList;
   window.renderRmaDetail = renderRmaDetail;
