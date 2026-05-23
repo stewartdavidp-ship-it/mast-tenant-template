@@ -16966,6 +16966,15 @@ function navigateTo(route, params) {
     showToast('This report is restricted to Admin users.', true);
     route = 'dashboard';
   }
+  // W2.3 — Engagement Inbox surfaces cs_reviews + cs_tickets data; mirror
+  // the cs-* routes' implicit gate by requiring customerService:read.
+  // feedback_parallel_route_role_gate.md: this is the data gate — the
+  // route gate IS the data gate when the new route aggregates a subset
+  // of an already-gated module's reads.
+  if (route === 'engagement-inbox' && !hasPermission('customerService', 'read')) {
+    showToast('Engagement Inbox requires Customer Service access.', true);
+    route = 'dashboard';
+  }
   // Subscription module gating — block routes for locked modules
   if (!canAccessRoute(route)) {
     var blockedModuleId = getModuleForRoute(route);
