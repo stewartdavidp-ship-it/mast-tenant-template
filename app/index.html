@@ -8612,6 +8612,24 @@
           <label style="font-size:1rem;font-weight:600;">Email Sending Domain</label>
           <div id="emailDomainContent"></div>
         </div>
+
+        <!-- W3a-send — Resend Webhook (BYO Resend deliverability events) -->
+        <div class="form-group" id="resendWebhookSection" style="margin-top:16px;border-top:1px solid rgba(255,255,255,0.06);padding-top:16px;">
+          <label style="font-size:1rem;font-weight:600;">Resend Webhook (deliverability events)</label>
+          <p style="font-size:0.85rem;color:var(--warm-gray);margin:6px 0 10px;">
+            To capture opens, clicks, bounces, and complaints, add this URL as a webhook destination in your Resend dashboard, then paste the signing secret here. Required only if you've connected your own Resend account.
+          </p>
+          <div style="display:flex;gap:6px;align-items:center;margin-bottom:10px;">
+            <input type="text" id="resendWebhookUrl" readonly style="flex:1;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--card-bg);color:var(--text);font-family:monospace;font-size:0.85rem;" />
+            <button class="btn btn-outline" style="font-size:0.85rem;" onclick="copyResendWebhookUrl()">Copy URL</button>
+          </div>
+          <label style="font-size:0.85rem;display:block;margin-bottom:4px;">Resend signing secret (whsec_…)</label>
+          <input type="password" id="resendWebhookSecret" placeholder="whsec_..." style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;margin-bottom:8px;box-sizing:border-box;" />
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-primary" style="font-size:0.85rem;" onclick="saveResendWebhookSecret()">Save webhook secret</button>
+            <span id="resendWebhookStatus" style="font-size:0.85rem;color:var(--text-secondary);align-self:center;"></span>
+          </div>
+        </div>
         </div><!-- end emailInnerProvider -->
 
         <div id="emailInnerTriggers" style="display:none;">
@@ -17109,7 +17127,7 @@ function applyRoute(route) {
 }
 
 function lazyLoadForRoute(route) {
-  if (route === 'settings') { updateGitHubTokenStatus(); loadOperators(); loadStorageInfo(); loadStudioLocations(); loadLocations(); loadPublicFeedbackSetting(); loadEmailConfig(); loadEmailDomainSection(); applySettingsGating(); loadSiteVisibility(); loadActiveMastPages(); }
+  if (route === 'settings') { updateGitHubTokenStatus(); loadOperators(); loadStorageInfo(); loadStudioLocations(); loadLocations(); loadPublicFeedbackSetting(); loadEmailConfig(); loadEmailDomainSection(); loadResendWebhookSection(); applySettingsGating(); loadSiteVisibility(); loadActiveMastPages(); }
   if (route === 'analytics' && !analyticsLoaded) loadAnalytics();
   if (route === 'products') loadProducts();
   // orders lazy-load handled by orders module
@@ -17696,7 +17714,7 @@ function switchSettingsSubView(view) {
   }
   // Lazy loads
   if (view === 'shipping') { loadShipProviderConfig(); }
-  if (view === 'email') { loadEmailConfig(); loadEmailDomainSection(); }
+  if (view === 'email') { loadEmailConfig(); loadEmailDomainSection(); loadResendWebhookSection(); }
   if (view === 'integrations') { loadEtsyConfig(); loadShopifyConfig(); loadPlaidBanksForSettings(); }
   if (view === 'trips') { MastAdmin.loadModule('trips').then(function() { if (typeof loadTripsSettings === 'function') loadTripsSettings(); }); }
   if (view === 'storefront') { loadShopDisplaySettings(); loadPrivacyUrlSettings(); }
@@ -24830,6 +24848,56 @@ async function sendTestEmailFromSettings() {
 // ============================================================
 // Email Domain Verification
 // ============================================================
+
+// W3a-send — Resend webhook (per-tenant deliverability events from BYO Resend)
+var RESEND_WEBHOOK_CF_URL = 'https://us-central1-mast-platform-prod.cloudfunctions.net/recordResendWebhook';
+
+function _buildResendWebhookUrl() {
+  return RESEND_WEBHOOK_CF_URL + '?tid=' + encodeURIComponent(MastDB.tenantId());
+}
+
+async function loadResendWebhookSection() {
+  var urlEl = document.getElementById('resendWebhookUrl');
+  if (urlEl) urlEl.value = _buildResendWebhookUrl();
+  try {
+    var cfg = await MastDB.get('admin/config/email');
+    var secret = cfg && cfg.resendWebhookSecret;
+    var statusEl = document.getElementById('resendWebhookStatus');
+    if (statusEl) {
+      statusEl.textContent = secret
+        ? 'Secret saved ✓ (last 4: …' + esc(String(secret).slice(-4)) + ')'
+        : 'No secret saved yet.';
+      statusEl.style.color = secret ? 'var(--teal)' : 'var(--text-secondary)';
+    }
+  } catch (_e) { /* tolerate */ }
+}
+
+function copyResendWebhookUrl() {
+  var url = _buildResendWebhookUrl();
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(url).then(function() { showToast('Webhook URL copied 📋'); }).catch(function() {});
+  } else {
+    var inp = document.getElementById('resendWebhookUrl');
+    if (inp) { inp.select(); document.execCommand('copy'); showToast('Webhook URL copied 📋'); }
+  }
+}
+
+async function saveResendWebhookSecret() {
+  var el = document.getElementById('resendWebhookSecret');
+  var secret = el ? String(el.value || '').trim() : '';
+  if (!secret) { showToast('Paste the Resend signing secret first', true); return; }
+  try {
+    var cur = (await MastDB.get('admin/config/email')) || {};
+    cur.resendWebhookSecret = secret;
+    cur.updatedAt = new Date().toISOString();
+    await MastDB.set('admin/config/email', cur);
+    if (el) el.value = '';
+    showToast('Webhook secret saved ✓');
+    loadResendWebhookSection();
+  } catch (err) {
+    showToast('Error saving secret: ' + err.message, true);
+  }
+}
 
 function loadEmailDomainSection() {
   var container = document.getElementById('emailDomainContent');

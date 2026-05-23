@@ -590,13 +590,59 @@
     html += '<div style="text-align:center;margin:16px 0;">' +
       '<button class="btn btn-outline" onclick="nlShowAddSectionMenu()">+ Add Section</button></div>';
 
+    // W3a-send — A/B test + send controls
+    var abTest = issue.abTest || {};
+    var abEnabled = !!abTest.enabled;
+    var winnerPicked = !!abTest.winnerPickedAt;
+    var canPickWinnerNow = abEnabled && !winnerPicked && abTest.sendStartedAt;
+    var sendStatus = issue.sendStatus || (issue.status === 'sent' ? 'completed-legacy' : null);
+
+    html += '<details class="nl-ab-panel" style="margin:16px 0;padding:12px;border:1px solid var(--border);border-radius:6px;background:var(--card-bg);" ' + (abEnabled ? 'open' : '') + '>' +
+      '<summary style="cursor:pointer;font-weight:600;font-size:0.9rem;">A/B test &amp; audience split</summary>' +
+      '<div style="margin-top:10px;display:flex;flex-direction:column;gap:8px;">' +
+      '<label style="display:flex;align-items:center;gap:6px;font-size:0.85rem;">' +
+        '<input type="checkbox" ' + (abEnabled ? 'checked' : '') + ' onchange="nlToggleAbTest(this.checked)" />' +
+        ' Enable A/B test (variant B subject + holdout)' +
+      '</label>';
+    if (abEnabled) {
+      var variantB = abTest.variantB || {};
+      var holdoutPct = typeof abTest.holdoutPct === 'number' ? abTest.holdoutPct : 50;
+      var testHours = typeof abTest.testWindowHours === 'number' ? abTest.testWindowHours : 4;
+      html += '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:0.85rem;">' +
+        '<span style="white-space:nowrap;color:var(--text-secondary);">Variant B subject</span>' +
+        '<input type="text" value="' + (variantB.subject || '').replace(/"/g, '&quot;') + '" placeholder="Variant B subject..." style="flex:1;min-width:240px;font-size:0.85rem;" onchange="nlUpdateAbField(\'variantB.subject\', this.value)" />' +
+        '</div>' +
+        '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:0.85rem;">' +
+        '<label>Holdout %: <input type="number" min="10" max="90" value="' + holdoutPct + '" style="width:64px;" onchange="nlUpdateAbField(\'holdoutPct\', Number(this.value))" /></label>' +
+        '<label>Test window (hours): <input type="number" min="1" max="72" value="' + testHours + '" style="width:64px;" onchange="nlUpdateAbField(\'testWindowHours\', Number(this.value))" /></label>' +
+        '</div>';
+      if (canPickWinnerNow) {
+        var stats = abTest.stats || {};
+        html += '<div style="font-size:0.78rem;color:var(--text-secondary);">A opens=' + ((stats.A && stats.A.opens) || 0) + ' / sends=' + ((stats.A && stats.A.sends) || 0) + ' &nbsp;|&nbsp; B opens=' + ((stats.B && stats.B.opens) || 0) + ' / sends=' + ((stats.B && stats.B.sends) || 0) + '</div>' +
+          '<button class="btn btn-outline" style="font-size:0.85rem;" onclick="nlPickWinnerNow()">⏱ Pick Winner Now</button>';
+      } else if (winnerPicked) {
+        html += '<div style="font-size:0.85rem;color:var(--teal);">Winner: variant ' + esc(abTest.winner || '?') + ' (picked at ' + esc(abTest.winnerPickedAt) + ')</div>';
+      }
+    }
+    html += '</div></details>';
+
     // Actions bar
     html += '<div class="nl-compose-actions">' +
       '<button class="btn btn-primary" onclick="nlExportHTML()">📥 Export HTML</button>' +
       '<button class="btn btn-outline" onclick="nlPublishToWebsite()">🌐 Publish to Website</button>' +
-      '<button class="btn btn-outline" onclick="nlMarkAsSent()">✉️ Mark as Sent</button>' +
+      '<button class="btn btn-primary" onclick="nlSendTest()">📨 Send Test</button>' +
+      '<button class="btn btn-primary" onclick="nlSendIssue()"' + (sendStatus === 'sending' || sendStatus === 'completed' ? ' disabled title="Already sent"' : '') + '>🚀 Send</button>' +
+      '<button class="btn btn-outline" onclick="nlMarkAsSent()" title="Fallback — only use if Send failed">✉️ Mark as sent (fallback)</button>' +
       '<button class="btn btn-outline" style="color:var(--danger);border-color:var(--danger);margin-left:auto;" onclick="nlDeleteIssue(\'' + nlCurrentIssueId + '\')">Delete Issue</button>' +
       '</div>';
+    if (sendStatus) {
+      var statusColor = sendStatus === 'completed' ? 'var(--teal)' : (sendStatus === 'failed' ? 'var(--danger)' : 'var(--text-secondary)');
+      html += '<div style="margin-top:6px;font-size:0.78rem;color:' + statusColor + ';">Send status: ' + esc(sendStatus) +
+        (issue.sendQueuedCount ? ' &middot; queued ' + issue.sendQueuedCount : '') +
+        (issue.sendSkippedCount ? ' &middot; skipped ' + issue.sendSkippedCount : '') +
+        (issue.sendStartedAt ? ' &middot; started ' + esc(issue.sendStartedAt) : '') +
+        '</div>';
+    }
 
     document.getElementById('newsletterContent').innerHTML = html;
   }
@@ -1590,9 +1636,10 @@
     } catch (err) { showToast('Error publishing: ' + err.message, true); }
   }
 
-  // ===== MARK AS SENT =====
+  // ===== MARK AS SENT (fallback only — use Send button for real sends) =====
   async function nlMarkAsSent() {
     if (!nlCurrentIssue) return;
+    if (!await mastConfirm('Mark as sent without actually sending? Use this only if Send failed or you sent the issue manually.', { title: 'Mark as Sent (fallback)' })) return;
     var sentAt = new Date().toISOString();
     var activeSubs = nlSubscribers.filter(function(s) { return s.status === 'active'; }).length;
 
@@ -1602,11 +1649,292 @@
       nlCurrentIssue.sentSubscriberCount = activeSubs;
       nlCurrentIssue.updatedAt = new Date().toISOString();
       await MastDB.newsletter.issues.ref(nlCurrentIssueId).update({
-        status: 'sent', sentAt: sentAt, sentSubscriberCount: activeSubs, updatedAt: nlCurrentIssue.updatedAt
+        status: 'sent', sentAt: sentAt, sentSubscriberCount: activeSubs, sendStatus: 'manual-mark', updatedAt: nlCurrentIssue.updatedAt
       });
       showToast('Marked as sent to ' + activeSubs + ' subscribers ✉️');
       renderNLCompose();
     } catch (err) { showToast('Error: ' + err.message, true); }
+  }
+
+  // ===== W3a-send — A/B test field toggles =====
+  async function nlToggleAbTest(enabled) {
+    if (!nlCurrentIssue) return;
+    var ab = nlCurrentIssue.abTest || {};
+    ab.enabled = !!enabled;
+    if (enabled) {
+      if (typeof ab.holdoutPct !== 'number') ab.holdoutPct = 50;
+      if (typeof ab.testWindowHours !== 'number') ab.testWindowHours = 4;
+      if (!ab.variantA) ab.variantA = {};
+      if (!ab.variantB) ab.variantB = {};
+    }
+    nlCurrentIssue.abTest = ab;
+    try {
+      await MastDB.newsletter.issues.ref(nlCurrentIssueId).update({ abTest: ab, updatedAt: new Date().toISOString() });
+      renderNLCompose();
+    } catch (err) { showToast('Error: ' + err.message, true); }
+  }
+
+  async function nlUpdateAbField(path, value) {
+    if (!nlCurrentIssue) return;
+    var ab = nlCurrentIssue.abTest || {};
+    var parts = String(path).split('.');
+    var cur = ab;
+    for (var i = 0; i < parts.length - 1; i++) {
+      if (!cur[parts[i]] || typeof cur[parts[i]] !== 'object') cur[parts[i]] = {};
+      cur = cur[parts[i]];
+    }
+    cur[parts[parts.length - 1]] = value;
+    nlCurrentIssue.abTest = ab;
+    try {
+      await MastDB.newsletter.issues.ref(nlCurrentIssueId).update({ abTest: ab, updatedAt: new Date().toISOString() });
+    } catch (err) { showToast('Error: ' + err.message, true); }
+  }
+
+  // ===== W3a-send — compose rendered HTML body for the issue =====
+  function nlComposeIssueHtml(issueOverride) {
+    var issue = issueOverride || nlCurrentIssue;
+    if (!issue) return '';
+    var brand = (window.TENANT_CONFIG && window.TENANT_CONFIG.brand) || {};
+    var sections = issue.sections ? Object.keys(issue.sections).map(function(k) {
+      var s = issue.sections[k]; s.id = s.id || k; return s;
+    }).filter(function(s) { return s.included !== false; }).sort(function(a, b) {
+      return (a.order || 0) - (b.order || 0);
+    }) : [];
+    var headerHtml = '<table width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td style="background:#0f1014;padding:20px 24px;color:#f5f0eb;font-family:sans-serif;">' +
+      '<div style="font-size:20px;font-weight:700;">' + nlEscHtml(brand.name || 'Newsletter') + '</div>' +
+      (brand.tagline ? '<div style="font-size:12px;color:#aaa;margin-top:4px;">' + nlEscHtml(brand.tagline) + '</div>' : '') +
+      '</td></tr></table>';
+    var body = sections.map(function(sec) {
+      var content = sec.finalContent || sec.rawInput || '';
+      return '<table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 16px;"><tr><td style="padding:16px 24px;background:#fff;font-family:sans-serif;color:#222;font-size:15px;line-height:1.5;">' +
+        (sec.title ? '<h2 style="font-size:18px;margin:0 0 8px;">' + nlEscHtml(sec.title) + '</h2>' : '') +
+        content +
+        '</td></tr></table>';
+    }).join('');
+    var footer = '<table width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td style="background:#f5f0eb;padding:16px 24px;color:#777;font-family:sans-serif;font-size:12px;text-align:center;">' +
+      'You received this because you subscribed to ' + nlEscHtml(brand.name || 'our') + ' updates.' +
+      '</td></tr></table>';
+    return '<!doctype html><html><body style="margin:0;padding:0;background:#f0eee9;">' +
+      '<table width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td align="center"><table width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;">' +
+      '<tr><td>' + headerHtml + '</td></tr>' +
+      '<tr><td>' + body + '</td></tr>' +
+      '<tr><td>' + footer + '</td></tr>' +
+      '</table></td></tr></table></body></html>';
+  }
+
+  // ===== W3a-send — Send Test =====
+  async function nlSendTest() {
+    if (!nlCurrentIssue) return;
+    var defaultEmail = (currentUser && currentUser.email) || '';
+    var toEmail = window.prompt('Send a test of this newsletter to which email?', defaultEmail);
+    if (!toEmail) return;
+    toEmail = toEmail.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(toEmail)) { showToast('Invalid email address', true); return; }
+    var subject = (nlCurrentIssue.subjectLine || nlCurrentIssue.title || '(test)') + ' [TEST]';
+    var htmlBody = nlComposeIssueHtml(nlCurrentIssue);
+    var idempotencyKey = 'test-' + nlCurrentIssueId + '-' + Date.now();
+    try {
+      await MastDB.set('emailQueue/' + idempotencyKey, {
+        id: idempotencyKey,
+        type: 'test',
+        issueId: nlCurrentIssueId,
+        subject: subject,
+        htmlBody: htmlBody,
+        to: toEmail,
+        idempotencyKey: idempotencyKey,
+        queuedAt: new Date().toISOString(),
+        queuedBy: (currentUser && currentUser.uid) || null,
+        status: 'queued',
+      });
+      showToast('Test queued to ' + toEmail + ' — delivery in ~10s 📨');
+    } catch (err) { showToast('Send test failed: ' + err.message, true); }
+  }
+
+  // ===== W3a-send — Send (real send to audience segment) =====
+  async function nlSendIssue() {
+    if (!nlCurrentIssue) return;
+    var seg = nlCurrentIssue.segmentId || '__all_active';
+    var recipients = nlMatchSubscribersForSegment(seg);
+    if (!recipients.length) {
+      showToast('No recipients matched for this audience', true);
+      return;
+    }
+    var ab = nlCurrentIssue.abTest || {};
+    var holdoutPct = typeof ab.holdoutPct === 'number' ? ab.holdoutPct : 50;
+    var testHours = typeof ab.testWindowHours === 'number' ? ab.testWindowHours : 4;
+    var totalCount = recipients.length;
+    var msg = ab.enabled
+      ? 'Send this issue to ' + totalCount + ' subscribers? An A/B test will go to ' + (100 - holdoutPct) + '% of the list now (split A/B), then the winner will go to the remaining ' + holdoutPct + '% after ' + testHours + ' hours.'
+      : 'Send this issue to ' + totalCount + ' subscribers now?';
+    if (!await mastConfirm(msg, { title: ab.enabled ? 'Send (with A/B test)' : 'Send' })) return;
+
+    var subjectA = nlCurrentIssue.subjectLine || nlCurrentIssue.title || '(no subject)';
+    var htmlBody = nlComposeIssueHtml(nlCurrentIssue);
+
+    // Determine variant assignment.
+    var nowIso = new Date().toISOString();
+    var queuedTotal = 0;
+    var skippedTotal = 0;
+    var sendStartedAt = nowIso;
+
+    if (ab.enabled) {
+      // Shuffle deterministically by email hash for stable A/B/holdout split.
+      var hashed = recipients.map(function(r) {
+        var s = String(r.email || '').toLowerCase();
+        var h = 0; for (var i = 0; i < s.length; i++) { h = (h * 31 + s.charCodeAt(i)) >>> 0; }
+        return { r: r, h: h };
+      }).sort(function(a, b) { return a.h - b.h; });
+      var testCount = Math.floor(hashed.length * (100 - holdoutPct) / 100);
+      var halfTest = Math.floor(testCount / 2);
+      var assignVariantA = hashed.slice(0, halfTest).map(function(x) { return x.r; });
+      var assignVariantB = hashed.slice(halfTest, testCount).map(function(x) { return x.r; });
+      var holdoutRecipients = hashed.slice(testCount).map(function(x) { return x.r; });
+
+      var subjectB = (ab.variantB && ab.variantB.subject) || subjectA;
+
+      // Stash the audience split on the issue so the winner cron can find the holdout.
+      var abPersist = Object.assign({}, ab, {
+        sendStartedAt: sendStartedAt,
+        testWindowExpiresAt: new Date(Date.now() + testHours * 3600 * 1000).toISOString(),
+        winner: null,
+        winnerPickedAt: null,
+        holdoutSendStartedAt: null,
+        variantA: Object.assign({}, ab.variantA || {}, { subject: subjectA, recipientCount: assignVariantA.length }),
+        variantB: Object.assign({}, ab.variantB || {}, { subject: subjectB, recipientCount: assignVariantB.length, htmlBody: htmlBody }),
+        holdoutRecipients: holdoutRecipients,
+      });
+      // Also stash subject + htmlBody at issue level for cron reuse.
+      try {
+        await MastDB.newsletter.issues.ref(nlCurrentIssueId).update({
+          abTest: abPersist,
+          subject: subjectA,
+          htmlBody: htmlBody,
+          sendStatus: 'sending',
+          sendStartedAt: sendStartedAt,
+          updatedAt: nowIso,
+        });
+      } catch (err) { showToast('Error initializing send: ' + err.message, true); return; }
+
+      var qaSkip = await _nlQueueRecipients(assignVariantA, subjectA, htmlBody, 'A', seg);
+      var qbSkip = await _nlQueueRecipients(assignVariantB, subjectB, htmlBody, 'B', seg);
+      queuedTotal = qaSkip.queued + qbSkip.queued;
+      skippedTotal = qaSkip.skipped + qbSkip.skipped;
+    } else {
+      try {
+        await MastDB.newsletter.issues.ref(nlCurrentIssueId).update({
+          subject: subjectA,
+          htmlBody: htmlBody,
+          sendStatus: 'sending',
+          sendStartedAt: sendStartedAt,
+          updatedAt: nowIso,
+        });
+      } catch (err) { showToast('Error initializing send: ' + err.message, true); return; }
+      var qres = await _nlQueueRecipients(recipients, subjectA, htmlBody, null, seg);
+      queuedTotal = qres.queued;
+      skippedTotal = qres.skipped;
+    }
+
+    try {
+      await MastDB.newsletter.issues.ref(nlCurrentIssueId).update({
+        sendQueuedCount: queuedTotal,
+        sendSkippedCount: skippedTotal,
+        sendStatus: 'sending',
+      });
+    } catch (_e) { /* tolerate */ }
+
+    showToast('Send queued: ' + queuedTotal + ' email(s), ' + skippedTotal + ' skipped 🚀');
+    nlCurrentIssue.sendStatus = 'sending';
+    nlCurrentIssue.sendQueuedCount = queuedTotal;
+    nlCurrentIssue.sendSkippedCount = skippedTotal;
+    renderNLCompose();
+  }
+
+  // Browser-side sha1 of (issueId|segmentId|email|variant). Uses the
+  // subtle-crypto API. Returns a Promise<hexstring>.
+  function _nlSha1Hex(s) {
+    var enc = new TextEncoder().encode(s);
+    return crypto.subtle.digest('SHA-1', enc).then(function(buf) {
+      var bytes = new Uint8Array(buf);
+      var hex = '';
+      for (var i = 0; i < bytes.length; i++) {
+        var h = bytes[i].toString(16);
+        if (h.length < 2) h = '0' + h;
+        hex += h;
+      }
+      return hex;
+    });
+  }
+
+  async function _nlQueueRecipients(recipients, subject, htmlBody, variantTag, segmentId) {
+    var queued = 0, skipped = 0;
+    var nowIso = new Date().toISOString();
+    for (var i = 0; i < recipients.length; i++) {
+      var r = recipients[i];
+      if (!r || !r.email) continue;
+      var lower = String(r.email).toLowerCase();
+      var keyInput = nlCurrentIssueId + '|' + (segmentId || '') + '|' + lower + '|' + (variantTag || 'main');
+      var idempotencyKey;
+      try { idempotencyKey = await _nlSha1Hex(keyInput); }
+      catch (_e) { idempotencyKey = nlCurrentIssueId + '_' + lower.replace(/[^a-z0-9]/g, '_') + '_' + (variantTag || 'main'); }
+      // Skip-if-exists.
+      try {
+        var prior = await MastDB.get('emailQueue/' + idempotencyKey);
+        if (prior) { skipped++; continue; }
+      } catch (_e) { /* fall through to write */ }
+      try {
+        await MastDB.set('emailQueue/' + idempotencyKey, {
+          id: idempotencyKey,
+          type: 'newsletter',
+          issueId: nlCurrentIssueId,
+          segmentId: segmentId || null,
+          variant: variantTag || null,
+          subject: subject,
+          htmlBody: htmlBody,
+          to: r.email,
+          toName: r.name || null,
+          idempotencyKey: idempotencyKey,
+          queuedAt: nowIso,
+          queuedBy: (currentUser && currentUser.uid) || null,
+          status: 'queued',
+        });
+        await MastDB.set('admin/emailSends/' + idempotencyKey, {
+          idempotencyKey: idempotencyKey,
+          type: 'newsletter',
+          issueId: nlCurrentIssueId,
+          segmentId: segmentId || null,
+          variant: variantTag || null,
+          to: r.email,
+          queuedAt: nowIso,
+          status: 'queued',
+        });
+        queued++;
+      } catch (err) {
+        console.warn('queue write failed for ' + lower, err);
+      }
+    }
+    return { queued: queued, skipped: skipped };
+  }
+
+  // ===== W3a-send — Pick Winner Now (manual override) =====
+  async function nlPickWinnerNow() {
+    if (!nlCurrentIssue) return;
+    var ab = nlCurrentIssue.abTest || {};
+    if (!ab.enabled || !ab.sendStartedAt) { showToast('No A/B test in progress', true); return; }
+    if (ab.winnerPickedAt) { showToast('Winner already picked', true); return; }
+    if (!await mastConfirm('Force-pick the A/B winner now and send to holdout audience? (Normally the cron picks at the end of the test window.)', { title: 'Pick Winner Now' })) return;
+
+    // Shortcut: nudge testWindowExpiresAt into the past so the cron picks
+    // it up on the next 15-minute tick. Faster path is to do it client-side
+    // for immediate feedback.
+    var nowIso = new Date().toISOString();
+    try {
+      await MastDB.newsletter.issues.ref(nlCurrentIssueId).update({
+        'abTest/testWindowExpiresAt': nowIso,
+      });
+      showToast('Winner pick triggered — the cron will queue the holdout send on its next tick (≤15 min).');
+    } catch (err) {
+      showToast('Error: ' + err.message, true);
+    }
   }
 
   // ===== SUBSCRIBERS SCREEN =====
@@ -1697,7 +2025,7 @@
         '<th style="text-align:right;">Orders</th>' +
         '<th>Last purchased</th>' +
         '<th style="text-align:right;">Lifetime value</th>' +
-        '<th>Status</th><th>Notes</th><th></th></tr></thead><tbody>';
+        '<th>Status</th><th title="Bounce or complaint flag from Resend webhook">Health</th><th>Notes</th><th></th></tr></thead><tbody>';
       filtered.forEach(function(sub) {
         var dateStr = sub.subscribedAt ? new Date(sub.subscribedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
         var sourceClass = sub.source === 'website-form' ? 'website' : 'manual';
@@ -1722,6 +2050,7 @@
           '<td>' + lastHtml + '</td>' +
           '<td style="text-align:right;">' + ltvHtml + '</td>' +
           '<td>' + (sub.status === 'active' ? '<span style="color:#5A7A5A;">Active</span>' : '<span style="color:var(--text-secondary);">Unsubscribed</span>') + '</td>' +
+          '<td>' + (sub.bounceFlag ? '<span title="Bounced — ' + esc(sub.bounceFlagAt || '') + '" style="color:#EF5350;">⚠ Bounce</span>' : (sub.complaintFlag ? '<span title="Complained — ' + esc(sub.complaintFlagAt || '') + '" style="color:#EF5350;">⚠ Complaint</span>' : '<span style="color:var(--text-secondary);">—</span>')) + '</td>' +
           '<td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + nlEscHtml(sub.notes || '') + '</td>' +
           '<td>';
         if (sub.status === 'active') {
@@ -1858,6 +2187,11 @@
   window.nlExportHTML = nlExportHTML;
   window.nlPublishToWebsite = nlPublishToWebsite;
   window.nlMarkAsSent = nlMarkAsSent;
+  window.nlSendTest = nlSendTest;
+  window.nlSendIssue = nlSendIssue;
+  window.nlPickWinnerNow = nlPickWinnerNow;
+  window.nlToggleAbTest = nlToggleAbTest;
+  window.nlUpdateAbField = nlUpdateAbField;
   window.nlAddSubscriber = nlAddSubscriber;
   window.nlCloseSubModal = nlCloseSubModal;
   window.nlSaveSubscriber = nlSaveSubscriber;
