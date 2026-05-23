@@ -189,6 +189,7 @@ body {
   <h1 data-tenant="brand">My Shop</h1>
   <div style="display:flex;align-items:center;gap:8px;">
     <span class="mode-badge" id="modeBadge">POS</span>
+    <span id="outboxBadge" onclick="_flushOutbox()" style="display:none;align-items:center;gap:4px;font-size:0.72rem;background:var(--yellow);color:#000;padding:2px 8px;border-radius:10px;font-weight:600;cursor:pointer;" title="Tap to sync now"></span>
     <button id="eventSettingsBtn" onclick="showEventSettings()" style="display:none;background:none;border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:16px;cursor:pointer;color:var(--text);">⚙</button>
   </div>
 </div>
@@ -796,6 +797,187 @@ function selectPayment(type) {
 // ============================================================
 // Save Sale
 // ============================================================
+// ============================================================
+// W2.5: IndexedDB outbox for offline-queued sales
+// ============================================================
+var OUTBOX_DB_NAME = 'mast-pos';
+var OUTBOX_DB_VERSION = 1;
+var OUTBOX_STORE = 'pos_outbox';
+var OUTBOX_MAX_ATTEMPTS = 5;
+
+function _openOutboxDb() {
+  return new Promise(function(resolve, reject) {
+    if (!('indexedDB' in window)) { reject(new Error('IndexedDB not supported')); return; }
+    var req = indexedDB.open(OUTBOX_DB_NAME, OUTBOX_DB_VERSION);
+    req.onupgradeneeded = function() {
+      var db = req.result;
+      if (!db.objectStoreNames.contains(OUTBOX_STORE)) {
+        var store = db.createObjectStore(OUTBOX_STORE, { keyPath: 'localId' });
+        store.createIndex('syncedAt', 'syncedAt', { unique: false });
+      }
+    };
+    req.onsuccess = function() { resolve(req.result); };
+    req.onerror = function() { reject(req.error); };
+  });
+}
+
+function _uuid() {
+  if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
+  return 'pos-' + Date.now() + '-' + Math.random().toString(36).slice(2, 10);
+}
+
+function _writeSaleToOutbox(saleRecord) {
+  return _openOutboxDb().then(function(db) {
+    return new Promise(function(resolve, reject) {
+      var tx = db.transaction(OUTBOX_STORE, 'readwrite');
+      var row = {
+        localId: _uuid(),
+        saleRecord: saleRecord,
+        queuedAt: new Date().toISOString(),
+        attemptCount: 0,
+        lastAttemptError: null,
+        syncedAt: null,
+        serverSaleId: null
+      };
+      tx.objectStore(OUTBOX_STORE).put(row);
+      tx.oncomplete = function() { resolve(row); };
+      tx.onerror = function() { reject(tx.error); };
+    });
+  });
+}
+
+function _listOutbox() {
+  return _openOutboxDb().then(function(db) {
+    return new Promise(function(resolve, reject) {
+      var tx = db.transaction(OUTBOX_STORE, 'readonly');
+      var req = tx.objectStore(OUTBOX_STORE).getAll();
+      req.onsuccess = function() { resolve(req.result || []); };
+      req.onerror = function() { reject(req.error); };
+    });
+  });
+}
+
+function _updateOutboxRow(localId, patch) {
+  return _openOutboxDb().then(function(db) {
+    return new Promise(function(resolve, reject) {
+      var tx = db.transaction(OUTBOX_STORE, 'readwrite');
+      var store = tx.objectStore(OUTBOX_STORE);
+      var getReq = store.get(localId);
+      getReq.onsuccess = function() {
+        var row = getReq.result;
+        if (!row) { resolve(null); return; }
+        Object.keys(patch).forEach(function(k) { row[k] = patch[k]; });
+        store.put(row);
+      };
+      tx.oncomplete = function() { resolve(true); };
+      tx.onerror = function() { reject(tx.error); };
+    });
+  });
+}
+
+function _flushOutbox() {
+  if (!navigator.onLine) return Promise.resolve({ flushed: 0, pending: 0, errors: 0 });
+  return _listOutbox().then(function(rows) {
+    var pending = rows.filter(function(r) {
+      return !r.syncedAt && (r.attemptCount || 0) < OUTBOX_MAX_ATTEMPTS;
+    });
+    if (pending.length === 0) {
+      _renderOutboxBadge(0);
+      return { flushed: 0, pending: 0, errors: 0 };
+    }
+    var flushed = 0, errors = 0;
+    return pending.reduce(function(p, row) {
+      return p.then(function() {
+        return _writeSaleToServer(row.saleRecord).then(function() {
+          flushed++;
+          return _updateOutboxRow(row.localId, {
+            syncedAt: new Date().toISOString(),
+            serverSaleId: row.saleRecord.saleId
+          });
+        }).catch(function(err) {
+          errors++;
+          return _updateOutboxRow(row.localId, {
+            attemptCount: (row.attemptCount || 0) + 1,
+            lastAttemptError: (err && err.message) || String(err)
+          });
+        });
+      });
+    }, Promise.resolve()).then(function() {
+      return _listOutbox().then(function(rows2) {
+        var still = rows2.filter(function(r) { return !r.syncedAt; }).length;
+        _renderOutboxBadge(still);
+        if (flushed > 0) showToast('Synced ' + flushed + ' queued sale' + (flushed === 1 ? '' : 's'));
+        return { flushed: flushed, pending: still, errors: errors };
+      });
+    });
+  }).catch(function(err) {
+    console.warn('[pos-outbox] flush failed', err);
+    return { flushed: 0, pending: 0, errors: 1 };
+  });
+}
+
+function _renderOutboxBadge(count) {
+  var el = document.getElementById('outboxBadge');
+  if (!el) return;
+  if (!count || count <= 0) { el.style.display = 'none'; return; }
+  el.style.display = 'inline-flex';
+  el.textContent = 'Outbox: ' + count + ' pending';
+}
+
+function _refreshOutboxBadge() {
+  _listOutbox().then(function(rows) {
+    var pending = rows.filter(function(r) { return !r.syncedAt; }).length;
+    _renderOutboxBadge(pending);
+  }).catch(function() {});
+}
+
+// ============================================================
+// W2.5: Network-write half of saveSale (extracted)
+// Resolves on Firestore write success; rejects on any network failure.
+// ============================================================
+function _writeSaleToServer(saleRecord) {
+  var saleId = saleRecord.saleId;
+  var now = saleRecord.createdAt || saleRecord.timestamp;
+  var items = saleRecord.items || [];
+  var imagePromise;
+  if (saleRecord.__capturedImageBase64 && saleRecord.__authToken) {
+    imagePromise = fetch(UPLOAD_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + saleRecord.__authToken },
+      body: JSON.stringify({ image: saleRecord.__capturedImageBase64, tags: ['pos', 'sale'], source: 'pos' })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data && data.imageId) saleRecord.imageId = data.imageId;
+    })
+    .catch(function() { /* Image save failed — continue without */ });
+  } else {
+    imagePromise = Promise.resolve();
+  }
+
+  return imagePromise.then(function() {
+    // Strip transient fields before persisting
+    var persisted = {};
+    Object.keys(saleRecord).forEach(function(k) {
+      if (k.indexOf('__') !== 0) persisted[k] = saleRecord[k];
+    });
+    return MastDB.set(SALES_PATH + '/' + saleId, persisted);
+  }).then(function() {
+    var updates = {};
+    items.forEach(function(item) {
+      if (item.productId) updates[item.productId] = item.quantity;
+    });
+    return decrementInventory(updates);
+  }).then(function() {
+    if (saleRecord.eventId && eventData && eventData.allocations) {
+      return updateEventAllocations(items);
+    }
+  }).then(function() {
+    autoReconcileSquare(saleId, now);
+    return saleId;
+  });
+}
+
 function saveSale() {
   if (saleItems.length === 0) { showToast('No items in sale', true); return; }
 
@@ -826,73 +1008,63 @@ function saveSale() {
     eventId: eventId || null,
     status: 'captured',
     notes: document.getElementById('saleNotes').value || null,
-    recordedBy: currentUser ? currentUser.uid : null
+    recordedBy: currentUser ? currentUser.uid : null,
+    // Transient fields stripped before persist:
+    __capturedImageBase64: capturedImageBase64 || null,
+    __authToken: authToken || null
   };
 
-  // Save image to library if we have one, then save sale
-  var savePromise;
-  if (capturedImageBase64 && authToken) {
-    savePromise = fetch(UPLOAD_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + authToken },
-      body: JSON.stringify({ image: capturedImageBase64, tags: ['pos', 'sale'], source: 'pos' })
-    })
-    .then(function(r) { return r.json(); })
-    .then(function(data) {
-      if (data.imageId) saleRecord.imageId = data.imageId;
-    })
-    .catch(function() { /* Image save failed — continue without */ });
-  } else {
-    savePromise = Promise.resolve();
-  }
-
-  savePromise.then(function() {
-    // Save sale record
-    return MastDB.set(SALES_PATH + '/' + saleId, saleRecord);
-  }).then(function() {
-    // Decrement inventory for each item
-    var updates = {};
-    saleItems.forEach(function(item) {
-      if (item.productId) {
-        // Read current stock and decrement
-        updates[item.productId] = item.quantity;
-      }
-    });
-    return decrementInventory(updates);
-  }).then(function() {
-    // Update event allocations if linked to an event
-    if (eventId && eventData && eventData.allocations) {
-      return updateEventAllocations(saleItems);
-    }
-  }).then(function() {
-    // Store for receipt flow
+  function _onSaved(label) {
     lastSaleId = saleId;
     lastSaleAmount = amountCents;
     lastSaleItems = saleItems.slice();
-
     btn.disabled = false;
     btn.textContent = 'Complete Sale';
     var totalStr = '$' + (amountCents / 100).toFixed(2);
     var itemNames = saleItems.map(function(i) { return i.productName; }).join(', ');
     document.getElementById('successSummary').textContent = totalStr + ' ' + paymentType + ' — ' + itemNames;
-
-    // Reset receipt form for fresh state
     document.getElementById('receiptForm').style.display = 'none';
     document.getElementById('receiptEmail').value = '';
     document.getElementById('receiptOptIn').checked = true;
     document.getElementById('receiptStatus').textContent = '';
-
     showScreen('successScreen');
-
-    // Check if any sold item was a sculpture — prompt for commission
     checkSculptureCommission(saleItems);
+    if (label) showToast(label);
+  }
 
-    // Auto-reconcile Square payment in background
-    autoReconcileSquare(saleId, now);
+  // Offline at submit time → queue directly
+  if (!navigator.onLine) {
+    _writeSaleToOutbox(saleRecord).then(function() {
+      _refreshOutboxBadge();
+      _onSaved('Offline — sale queued');
+    }).catch(function(err) {
+      btn.disabled = false;
+      btn.textContent = 'Complete Sale';
+      showToast('Could not queue sale: ' + (err.message || err), true);
+    });
+    return;
+  }
+
+  // Online: try server; on network failure, fall back to outbox
+  _writeSaleToServer(saleRecord).then(function() {
+    _onSaved();
   }).catch(function(err) {
-    btn.disabled = false;
-    btn.textContent = 'Complete Sale';
-    showToast('Error saving sale: ' + err.message, true);
+    var isNetwork = err && (err.code === 'unavailable' ||
+      /network|offline|failed to fetch|fetch/i.test(err.message || ''));
+    if (isNetwork) {
+      _writeSaleToOutbox(saleRecord).then(function() {
+        _refreshOutboxBadge();
+        _onSaved('Network down — sale queued');
+      }).catch(function(qErr) {
+        btn.disabled = false;
+        btn.textContent = 'Complete Sale';
+        showToast('Save failed and queue failed: ' + (qErr.message || qErr), true);
+      });
+    } else {
+      btn.disabled = false;
+      btn.textContent = 'Complete Sale';
+      showToast('Error saving sale: ' + (err.message || err), true);
+    }
   });
 }
 
@@ -1249,6 +1421,18 @@ function showToast(msg, isError) {
   el.classList.add('show');
   setTimeout(function() { el.classList.remove('show'); }, 3000);
 }
+
+// W2.5: outbox auto-flush triggers
+window.addEventListener('online', function() {
+  console.log('[pos-outbox] online — flushing');
+  _flushOutbox();
+});
+window.addEventListener('load', function() {
+  _refreshOutboxBadge();
+  if (navigator.onLine) {
+    setTimeout(_flushOutbox, 1500);
+  }
+});
 </script>
 </body>
 </html>
