@@ -55,7 +55,7 @@ function renderWholesaleAdmin() {
   // URL-driven sub-tab forcing (MCP admin links). #wholesale?subView=accounts|orders|users|requests
   var rp = (typeof window.getRouteParams === 'function') ? window.getRouteParams() : {};
   var urlSubView = (rp && typeof rp.subView === 'string') ? rp.subView : '';
-  if (urlSubView && (urlSubView === 'accounts' || urlSubView === 'orders' || urlSubView === 'users' || urlSubView === 'requests' || urlSubView === 'dormant' || urlSubView === 'cadence' || urlSubView === 'account')) {
+  if (urlSubView && (urlSubView === 'accounts' || urlSubView === 'orders' || urlSubView === 'users' || urlSubView === 'requests' || urlSubView === 'dormant' || urlSubView === 'cadence' || urlSubView === 'account' || urlSubView === 'ar-aging')) {
     wholesaleSubView = urlSubView;
   } else if (!urlSubView && wholesaleSubView === 'account') {
     // W1 Round 2 — Fix 1: browser back from #wholesale?subView=account&accountId=X
@@ -85,6 +85,7 @@ function renderWholesaleAdmin() {
     '<div class="view-tabs" style="margin-bottom:20px;">' +
       '<div class="view-tab' + (wholesaleSubView === 'accounts' ? ' active' : '') + '" onclick="switchWholesaleView(\'accounts\')">Accounts</div>' +
       '<div class="view-tab' + (wholesaleSubView === 'orders' ? ' active' : '') + '" onclick="switchWholesaleView(\'orders\')">Orders</div>' +
+      '<div class="view-tab' + (wholesaleSubView === 'ar-aging' ? ' active' : '') + '" onclick="switchWholesaleView(\'ar-aging\')">AR Aging</div>' +
       '<div class="view-tab' + (wholesaleSubView === 'cadence' ? ' active' : '') + '" onclick="switchWholesaleView(\'cadence\')">Cadence</div>' +
       '<div class="view-tab' + (wholesaleSubView === 'users' ? ' active' : '') + '" onclick="switchWholesaleView(\'users\')">Authorized Users</div>' +
       '<div class="view-tab' + (wholesaleSubView === 'requests' ? ' active' : '') + '" onclick="switchWholesaleView(\'requests\')">Access Requests <span id="wsRequestBadge"></span></div>' +
@@ -107,6 +108,7 @@ function renderWholesaleAdmin() {
   else if (wholesaleSubView === 'orders') renderWholesaleOrders();
   else if (wholesaleSubView === 'dormant') renderWholesaleDormant();
   else if (wholesaleSubView === 'cadence') renderWholesaleCadence();
+  else if (wholesaleSubView === 'ar-aging') renderWholesaleArAging();
   else if (wholesaleSubView === 'account') renderWholesaleAccountDetail(urlAccountId);
 }
 
@@ -202,12 +204,53 @@ function renderWholesaleAccountDetail(accountId) {
     var termsLabel = (WS_NET_TERMS.find(function(t) { return t.v === a.netTerms; }) || { l: '—' }).l;
     var termsVersion = a.termsVersion || '—';
 
+    // W2.9: LTV rollup — 12-month + lifetime + reconcile chip.
+    var nowMs = Date.now();
+    var oneYearAgoMs = nowMs - 365 * 86400000;
+    var ltv12 = 0, ltvLifetime = 0;
+    linkedOrders.forEach(function(o) {
+      var t = _wsOrderTotal(o);
+      ltvLifetime += t;
+      var placed = o.placedAt || o.createdAt;
+      var placedMs = placed ? (typeof placed === 'number' ? placed : new Date(placed).getTime()) : 0;
+      if (placedMs >= oneYearAgoMs) ltv12 += t;
+    });
+    // Reconcile candidates: orders with no wholesaleAccountId but buyerEmail
+    // matching a known authorized-user email on this account. Best-effort,
+    // requires wholesaleAuthorizedData to be loaded; otherwise show count = 0.
+    var reconcileCount = 0;
+    var acctEmails = {};
+    if (window.wholesaleAuthorizedData && typeof window.wholesaleAuthorizedData === 'object') {
+      Object.keys(window.wholesaleAuthorizedData).forEach(function(k) {
+        var u = window.wholesaleAuthorizedData[k];
+        if (u && u.wholesaleAccountId === accountId && u.email) acctEmails[u.email.toLowerCase()] = true;
+      });
+    }
+    Object.keys(allOrders).forEach(function(k) {
+      var o = allOrders[k];
+      if (!o || o.wholesaleAccountId) return;
+      var em = (o.buyerEmail || o.email || '').toLowerCase();
+      if (em && acctEmails[em]) reconcileCount++;
+    });
+
     var html = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">' +
       '<div>' +
         '<a href="#wholesale?subView=accounts" style="color:var(--teal);font-size:0.85rem;text-decoration:none;">&larr; All accounts</a>' +
         '<h3 style="margin:6px 0 0;font-size:1.15rem;">' + esc(a.name || '(unnamed)') + '</h3>' +
       '</div>' +
-      '<button class="btn-small" onclick="editWholesaleAccount(\'' + esc(accountId) + '\')" style="background:var(--teal);color:#fff;border:none;padding:8px 16px;border-radius:4px;cursor:pointer;font-size:0.78rem;">Edit account</button>' +
+      '<button class="btn-small" onclick="editWholesaleAccount(\'' + _jsAttr(accountId) + '\')" style="background:var(--teal);color:#fff;border:none;padding:8px 16px;border-radius:4px;cursor:pointer;font-size:0.78rem;">Edit account</button>' +
+    '</div>' +
+    '<div style="background:#fff;border:1px solid var(--cream-dark,#e8e0d4);border-radius:8px;padding:16px;margin-bottom:16px;">' +
+      '<div style="display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;">' +
+        '<div>' +
+          '<div style="font-size:0.78rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.04em;">Lifetime value</div>' +
+          '<div style="display:flex;align-items:baseline;gap:18px;margin-top:6px;">' +
+            '<div><span style="font-size:1.6rem;font-weight:700;">$' + ltv12.toFixed(2) + '</span><span style="font-size:0.78rem;color:var(--warm-gray);margin-left:6px;">12-month</span></div>' +
+            '<div><span style="font-size:1.15rem;font-weight:600;color:var(--warm-gray);">$' + ltvLifetime.toFixed(2) + '</span><span style="font-size:0.78rem;color:var(--warm-gray);margin-left:6px;">lifetime</span></div>' +
+          '</div>' +
+        '</div>' +
+        (reconcileCount > 0 ? '<span style="font-size:0.78rem;font-weight:600;padding:4px 12px;border-radius:10px;background:rgba(245,158,11,0.15);color:#F59E0B;border:1px solid rgba(245,158,11,0.4);">Reconcile ' + reconcileCount + ' order' + (reconcileCount === 1 ? '' : 's') + '</span>' : '') +
+      '</div>' +
     '</div>' +
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">' +
       '<section style="background:#fff;border:1px solid var(--cream-dark,#e8e0d4);border-radius:8px;padding:16px;">' +
@@ -487,9 +530,18 @@ function renderWholesaleAccounts() {
   if (!container) return;
   container.innerHTML = '<div style="color:var(--warm-gray);padding:40px 0;text-align:center;">Loading accounts...</div>';
 
-  MastDB.wholesaleAccounts.list(200).then(function(snap) {
+  // W2.8: also load wholesale orders so we can compute per-account overdue chip.
+  Promise.all([
+    MastDB.wholesaleAccounts.list(200),
+    MastDB.query('admin/orders').orderByChild('type').equalTo('wholesale').limitToLast(500).once('value')
+  ]).then(function(results) {
+    var snap = results[0];
+    var ordersSnap = results[1];
     var val = (snap && typeof snap.val === 'function') ? snap.val() : snap;
+    var ordersVal = (ordersSnap && typeof ordersSnap.val === 'function') ? ordersSnap.val() : ordersSnap;
     wholesaleAccountsData = val || {};
+    wholesaleOrdersData = ordersVal || {};
+    var overdueByAccount = _wsOverdueCountByAccount(wholesaleOrdersData, wholesaleAccountsData);
     var accounts = Object.keys(wholesaleAccountsData).map(function(id) {
       var a = wholesaleAccountsData[id];
       a._id = id;
@@ -524,6 +576,11 @@ function renderWholesaleAccounts() {
         html += '<div>' + esc(termsLabel) + '</div>';
         html += '<div>Credit: ' + esc(creditStr) + '</div>';
         html += '</div>';
+        // W2.8: overdue chip
+        var overdueN = overdueByAccount[a._id] || 0;
+        if (overdueN > 0) {
+          html += '<span style="font-size:0.72rem;font-weight:600;padding:3px 10px;border-radius:10px;background:rgba(220,38,38,0.15);color:#dc2626;border:1px solid rgba(220,38,38,0.4);">' + overdueN + ' overdue</span>';
+        }
         html += '<span style="font-size:0.72rem;font-weight:600;padding:3px 10px;border-radius:10px;background:' + statusColor + '22;color:' + statusColor + ';border:1px solid ' + statusColor + '55;">' + esc(statusLabel) + '</span>';
         html += '</div>';
       });
@@ -662,6 +719,171 @@ function wsCadenceChip(status, ratio) {
   else                            { bg = 'rgba(155,28,28,0.40)'; color = '#f49aa3'; label = 'Lapsed'; }
   var tip = (typeof ratio === 'number') ? (' title="' + ratio.toFixed(2) + '× expected interval"') : '';
   return '<span class="status-badge" style="background:' + bg + ';color:' + color + ';"' + tip + '>' + esc(label) + '</span>';
+}
+
+// ── W2.8 AR aging ──
+// dueDate semantics:
+//   If order has explicit dueDate (ISO or ms): use it.
+//   Else compute from placedAt + account.netTerms (NET_15 / NET_30 / etc.) —
+//   DUE_ON_RECEIPT collapses to placedAt.
+//   Else if no placedAt fallback to createdAt.
+function _wsNetTermsDays(code) {
+  if (!code) return 30;
+  if (code === 'DUE_ON_RECEIPT') return 0;
+  var m = /^NET_(\d+)$/.exec(String(code));
+  return m ? parseInt(m[1], 10) : 30;
+}
+function _wsOrderDueMs(o, accounts) {
+  if (!o) return null;
+  if (o.dueDate) {
+    var d = new Date(o.dueDate);
+    if (!isNaN(d.getTime())) return d.getTime();
+  }
+  var placed = o.placedAt || o.createdAt;
+  if (!placed) return null;
+  var placedMs = (typeof placed === 'number') ? placed : new Date(placed).getTime();
+  if (isNaN(placedMs)) return null;
+  var acct = (o.wholesaleAccountId && accounts) ? accounts[o.wholesaleAccountId] : null;
+  var terms = (o.paymentTerms_days != null) ? o.paymentTerms_days
+    : _wsNetTermsDays(acct && acct.netTerms);
+  return placedMs + (terms * 86400000);
+}
+function _wsOrderTotal(o) {
+  if (typeof o.total === 'number') return o.total;
+  if (typeof o.totalCents === 'number') return o.totalCents / 100;
+  return 0;
+}
+
+function renderWholesaleArAging() {
+  var container = document.getElementById('wholesaleSubContent');
+  if (!container) return;
+  container.innerHTML = '<div style="color:var(--warm-gray);padding:40px 0;text-align:center;">Loading AR aging...</div>';
+
+  Promise.all([
+    MastDB.query('admin/orders').orderByChild('type').equalTo('wholesale').limitToLast(1000).once('value'),
+    MastDB.wholesaleAccounts.list(500)
+  ]).then(function(results) {
+    var ordersVal = (results[0] && typeof results[0].val === 'function') ? results[0].val() : results[0];
+    var accountsVal = (results[1] && typeof results[1].val === 'function') ? results[1].val() : results[1];
+    var orders = ordersVal || {};
+    var accounts = accountsVal || {};
+    wholesaleOrdersData = orders;
+    wholesaleAccountsData = accounts;
+
+    var nowMs = Date.now();
+    var unpaid = Object.keys(orders).map(function(k) {
+      var o = orders[k]; o._id = k; return o;
+    }).filter(function(o) {
+      return !o.paidAt;
+    });
+
+    var buckets = {
+      current:  { min: -Infinity, max: 0,   label: 'Current',     count: 0, total: 0, rows: [] },
+      b1_30:    { min: 1,         max: 30,  label: '1–30 days',   count: 0, total: 0, rows: [] },
+      b31_60:   { min: 31,        max: 60,  label: '31–60 days',  count: 0, total: 0, rows: [] },
+      b61_90:   { min: 61,        max: 90,  label: '61–90 days',  count: 0, total: 0, rows: [] },
+      b90plus:  { min: 91,        max: Infinity, label: '90+ days', count: 0, total: 0, rows: [] }
+    };
+    var rowsAll = [];
+    unpaid.forEach(function(o) {
+      var dueMs = _wsOrderDueMs(o, accounts);
+      if (dueMs == null) return;
+      var daysOverdue = Math.floor((nowMs - dueMs) / 86400000);
+      var total = _wsOrderTotal(o);
+      var row = { id: o._id, order: o, daysOverdue: daysOverdue, total: total, dueMs: dueMs };
+      rowsAll.push(row);
+      var b;
+      if (daysOverdue <= 0) b = buckets.current;
+      else if (daysOverdue <= 30) b = buckets.b1_30;
+      else if (daysOverdue <= 60) b = buckets.b31_60;
+      else if (daysOverdue <= 90) b = buckets.b61_90;
+      else b = buckets.b90plus;
+      b.count++;
+      b.total += total;
+      b.rows.push(row);
+    });
+
+    var bucketKeys = ['current', 'b1_30', 'b31_60', 'b61_90', 'b90plus'];
+    var grandTotal = bucketKeys.reduce(function(s, k) { return s + buckets[k].total; }, 0);
+
+    var html = '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:20px;">';
+    bucketKeys.forEach(function(k) {
+      var b = buckets[k];
+      var bg = (k === 'current') ? 'rgba(34,197,94,0.10)' :
+               (k === 'b1_30')   ? 'rgba(250,204,21,0.12)' :
+               (k === 'b31_60')  ? 'rgba(245,158,11,0.14)' :
+               (k === 'b61_90')  ? 'rgba(234,88,12,0.16)' :
+                                   'rgba(220,38,38,0.18)';
+      html += '<div style="background:' + bg + ';border:1px solid var(--cream-dark,#e8e0d4);border-radius:8px;padding:14px;">' +
+        '<div style="font-size:0.78rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.04em;">' + esc(b.label) + '</div>' +
+        '<div style="font-size:1.6rem;font-weight:700;margin-top:4px;">$' + b.total.toFixed(2) + '</div>' +
+        '<div style="font-size:0.78rem;color:var(--warm-gray);">' + b.count + ' order' + (b.count === 1 ? '' : 's') + '</div>' +
+      '</div>';
+    });
+    html += '</div>';
+
+    html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">' +
+      '<h3 style="font-size:1.15rem;margin:0;">Outstanding Orders</h3>' +
+      '<div style="font-size:0.85rem;color:var(--warm-gray);">Grand total: <b>$' + grandTotal.toFixed(2) + '</b> across ' + rowsAll.length + ' order' + (rowsAll.length === 1 ? '' : 's') + '</div>' +
+    '</div>';
+
+    if (rowsAll.length === 0) {
+      html += '<div style="background:#fff;border:1px solid var(--cream-dark,#e8e0d4);border-radius:8px;padding:30px;text-align:center;color:var(--warm-gray);">No unpaid wholesale orders. AR is clean.</div>';
+      container.innerHTML = html;
+      return;
+    }
+
+    rowsAll.sort(function(a, b) { return b.daysOverdue - a.daysOverdue; });
+
+    html += '<table style="width:100%;border-collapse:collapse;font-size:0.85rem;background:#fff;border:1px solid var(--cream-dark,#e8e0d4);border-radius:8px;overflow:hidden;">' +
+      '<thead><tr style="background:var(--cream);text-align:left;">' +
+        '<th style="padding:8px 10px;">Order</th>' +
+        '<th style="padding:8px 10px;">Account</th>' +
+        '<th style="padding:8px 10px;">Due</th>' +
+        '<th style="padding:8px 10px;" align="right">Days overdue</th>' +
+        '<th style="padding:8px 10px;" align="right">Total</th>' +
+      '</tr></thead><tbody>';
+    rowsAll.forEach(function(r) {
+      var o = r.order;
+      var num = (window.getOrderDisplayNumber ? window.getOrderDisplayNumber(o) : (r.id || '').substring(0, 8));
+      var acct = accounts[o.wholesaleAccountId];
+      var acctName = acct ? acct.name : (o.buyerName || o.buyerEmail || '—');
+      var dueStr = new Date(r.dueMs).toLocaleDateString();
+      var color = r.daysOverdue <= 0 ? 'var(--charcoal)'
+        : r.daysOverdue <= 30 ? '#ca8a04'
+        : r.daysOverdue <= 60 ? '#F59E0B'
+        : r.daysOverdue <= 90 ? '#ea580c' : '#dc2626';
+      html += '<tr style="border-top:1px solid var(--cream-dark,#e8e0d4);">' +
+        '<td style="padding:8px 10px;font-family:monospace;"><a href="javascript:void(0)" onclick="viewWholesaleOrder(\'' + _jsAttr(r.id) + '\')" style="color:var(--teal);">' + esc(num) + '</a></td>' +
+        '<td style="padding:8px 10px;">' + (acct ? '<a href="javascript:void(0)" onclick="viewWholesaleAccount(\'' + _jsAttr(o.wholesaleAccountId) + '\')" style="color:var(--teal);">' + esc(acctName) + '</a>' : esc(acctName)) + '</td>' +
+        '<td style="padding:8px 10px;color:var(--warm-gray);">' + dueStr + '</td>' +
+        '<td style="padding:8px 10px;font-weight:600;color:' + color + ';" align="right">' + (r.daysOverdue > 0 ? r.daysOverdue : 0) + '</td>' +
+        '<td style="padding:8px 10px;" align="right">$' + r.total.toFixed(2) + '</td>' +
+      '</tr>';
+    });
+    html += '</tbody></table>';
+
+    container.innerHTML = html;
+  }).catch(function(err) {
+    container.innerHTML = '<div style="color:var(--danger);padding:20px;">Error loading AR aging: ' + esc(err.message || String(err)) + '</div>';
+  });
+}
+
+// W2.8: overdue count per account (used by Accounts list chip).
+function _wsOverdueCountByAccount(orders, accounts) {
+  var nowMs = Date.now();
+  var out = {};
+  Object.keys(orders || {}).forEach(function(k) {
+    var o = orders[k];
+    if (!o || o.type !== 'wholesale' || o.paidAt) return;
+    if (!o.wholesaleAccountId) return;
+    var dueMs = _wsOrderDueMs(o, accounts);
+    if (dueMs == null) return;
+    if ((nowMs - dueMs) / 86400000 > 0) {
+      out[o.wholesaleAccountId] = (out[o.wholesaleAccountId] || 0) + 1;
+    }
+  });
+  return out;
 }
 
 function renderWholesaleCadence() {
@@ -1563,6 +1785,8 @@ window.saveWholesaleUserLink = saveWholesaleUserLink;
 // W2e — dormant accounts view
 window.renderWholesaleDormant = renderWholesaleDormant;
 window.renderWholesaleCadence = renderWholesaleCadence;
+// W2.8 AR aging
+window.renderWholesaleArAging = renderWholesaleArAging;
 // renderWholesaleSetup and runWholesaleSeed removed — wholesale products now managed via product admin
 window.uploadWholesalePDF = uploadWholesalePDF;
 window.copyQRImage = copyQRImage;
