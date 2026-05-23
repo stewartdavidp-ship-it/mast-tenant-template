@@ -27,6 +27,18 @@
   var tesseractLoaded = false;
   var _pirateShipCSVDownloaded = {};
 
+  // W2 R2 Fix 3: defensive getOrdersArray accessor.
+  // getOrdersArray is owned by the orders module (lazy-loaded). When fulfillment
+  // renders before orders loads (cold-load #ship or #pack), the bare reference
+  // throws ReferenceError. Guard via window + typeof.
+  function _getOrdersArraySafe() {
+    if (typeof window !== 'undefined' && typeof window.getOrdersArray === 'function') {
+      return window.getOrdersArray() || [];
+    }
+    try { if (console && console.warn) console.warn('[fulfillment] getOrdersArray unavailable — orders module not loaded yet; returning []'); } catch (e) {}
+    return [];
+  }
+
   // ============================================================
   // Functions
   // ============================================================
@@ -82,7 +94,7 @@
   var _buyLabelsSelected = Object.create(null);
 
   function _buyLabelsCandidates() {
-    return getOrdersArray().filter(function(o) {
+    return _getOrdersArraySafe().filter(function(o) {
       if (!o) return false;
       var s = o.status;
       if (s !== 'pack' && s !== 'packed') return false;
@@ -210,7 +222,7 @@
 
   function renderPackQueue() {
     var el = document.getElementById('fulfPackView');
-    var packable = getOrdersArray().filter(function(o) {
+    var packable = _getOrdersArraySafe().filter(function(o) {
       return o.status === 'packing' || o.status === 'pack' || o.status === 'packed';
     });
 
@@ -293,7 +305,7 @@
     else delete packSelectedIds[key];
     _syncPackToolbar();
     // Keep the Select-all header checkbox in sync with the union of row state.
-    var packable = getOrdersArray().filter(function(o) {
+    var packable = _getOrdersArraySafe().filter(function(o) {
       return o.status === 'packing' || o.status === 'pack' || o.status === 'packed';
     });
     var selEl = document.getElementById('packSelectAll');
@@ -303,7 +315,7 @@
     }
   }
   function togglePackSelectAll(checked) {
-    var packable = getOrdersArray().filter(function(o) {
+    var packable = _getOrdersArraySafe().filter(function(o) {
       return o.status === 'packing' || o.status === 'pack' || o.status === 'packed';
     });
     packSelectedIds = Object.create(null);
@@ -805,7 +817,7 @@
     var digits = sgId.replace(/[^0-9]/g, '');
     var num = parseInt(digits, 10);
     var matchedKey = null;
-    var allOrders = getOrdersArray();
+    var allOrders = _getOrdersArraySafe();
     for (var i = 0; i < allOrders.length; i++) {
       var o = allOrders[i];
       var oNum = (o.orderNumber || '').replace(/[^0-9]/g, '');
@@ -890,7 +902,7 @@
 
     // Try to find order by number
     var matchedKey = null;
-    var allOrders = getOrdersArray();
+    var allOrders = _getOrdersArraySafe();
     var searchNum = val.replace(/[^0-9]/g, '');
     for (var i = 0; i < allOrders.length; i++) {
       var o = allOrders[i];
@@ -929,7 +941,7 @@
 
     if (!openBundleId) {
       // Check for packed orders not in any bundle
-      var packedOrders = getOrdersArray().filter(function(o) { return o.status === 'packed'; });
+      var packedOrders = _getOrdersArraySafe().filter(function(o) { return o.status === 'packed'; });
       if (packedOrders.length === 0) {
         el.innerHTML = '<div class="empty-state" style="margin-top:12px;"><div class="empty-icon">&#128666;</div><p>No open bundles. Scan packages in Studio Scan first.</p></div>';
         return;
@@ -1081,7 +1093,7 @@
     var digits = sgId.replace(/[^0-9]/g, '');
     var num = parseInt(digits, 10);
     var matchedKey = null;
-    var allOrders = getOrdersArray();
+    var allOrders = _getOrdersArraySafe();
     for (var i = 0; i < allOrders.length; i++) {
       var o = allOrders[i];
       var oNum = (o.orderNumber || '').replace(/[^0-9]/g, '');
