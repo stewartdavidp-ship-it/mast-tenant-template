@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src 'self' https://*.cloudfunctions.net https://firestore.googleapis.com; img-src 'self' data: blob: https:; frame-ancestors 'none';">
+<title>Upload a photo</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="storefront.css">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<style>
+.ugc-page {
+  max-width: 560px;
+  margin: 0 auto;
+  padding: 32px 20px 64px;
+  font-family: 'DM Sans', system-ui, -apple-system, sans-serif;
+  color: var(--text, #1a1a1a);
+}
+.ugc-card {
+  background: var(--card-bg, #fff);
+  border: 1px solid var(--border, #e5e5e5);
+  border-radius: 12px;
+  padding: 28px 24px;
+}
+.ugc-brand {
+  font-size: 0.85rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted, #777);
+  margin: 0 0 8px;
+}
+.ugc-h {
+  font-size: 1.6rem;
+  font-weight: 600;
+  margin: 0 0 12px;
+  line-height: 1.25;
+}
+.ugc-p {
+  font-size: 1.0rem;
+  line-height: 1.55;
+  color: var(--text, #1a1a1a);
+  margin: 0 0 16px;
+}
+.ugc-muted { color: var(--text-muted, #777); font-size: 0.9rem; }
+.ugc-field { margin: 18px 0; }
+.ugc-label {
+  display: block;
+  font-size: 0.9rem;
+  font-weight: 500;
+  margin-bottom: 8px;
+}
+.ugc-file {
+  display: block;
+  width: 100%;
+  font-size: 1.0rem;
+}
+.ugc-perm {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  padding: 12px 14px;
+  background: rgba(0,0,0,0.03);
+  border-radius: 8px;
+}
+.ugc-perm input { margin-top: 3px; flex-shrink: 0; }
+.ugc-btn {
+  display: inline-block;
+  width: 100%;
+  background: var(--primary, #111);
+  color: var(--primary-on, #fff);
+  font-size: 1.0rem;
+  font-weight: 500;
+  border: none;
+  border-radius: 8px;
+  padding: 14px 20px;
+  cursor: pointer;
+  margin-top: 8px;
+}
+.ugc-btn[disabled] { opacity: 0.5; cursor: not-allowed; }
+.ugc-status {
+  margin-top: 18px;
+  font-size: 0.9rem;
+  padding: 12px 14px;
+  border-radius: 8px;
+}
+.ugc-status.ok { background: rgba(16,185,129,0.12); color: #047857; }
+.ugc-status.err { background: rgba(220,38,38,0.10); color: #b91c1c; }
+.ugc-preview {
+  margin: 14px 0 0;
+  max-width: 100%;
+  max-height: 280px;
+  border-radius: 8px;
+  display: block;
+}
+</style>
+</head>
+<body>
+<div class="ugc-page">
+  <div class="ugc-card">
+    <p class="ugc-brand" data-tenant="brand-name">A small request</p>
+    <h1 class="ugc-h">Share a photo with us</h1>
+    <p class="ugc-p">Thanks again for the kind review. If you have a photo you'd like us to share (with credit), upload it below.</p>
+
+    <form id="ugc-form">
+      <div class="ugc-field">
+        <label class="ugc-label" for="ugc-photo">Photo (JPEG, PNG, or WebP — up to 10MB)</label>
+        <input class="ugc-file" id="ugc-photo" name="photo" type="file" accept="image/jpeg,image/png,image/webp" required>
+        <img id="ugc-preview" class="ugc-preview" alt="" style="display:none">
+      </div>
+
+      <label class="ugc-perm">
+        <input id="ugc-perm" name="permission" type="checkbox" value="true" required>
+        <span>I grant <span data-tenant="brand-name">the brand</span> permission to share this photo on their website and social media, with credit to me.</span>
+      </label>
+
+      <button class="ugc-btn" id="ugc-submit" type="submit">Send photo</button>
+    </form>
+
+    <div id="ugc-status" class="ugc-status" style="display:none"></div>
+    <p class="ugc-muted" style="margin-top:18px">This link is good for 7 days and can only be used once.</p>
+  </div>
+</div>
+
+<script src="storefront-tenant.js"></script>
+<script src="tenant-brand.js"></script>
+<script>
+(function(){
+  var params = new URLSearchParams(window.location.search);
+  var token = params.get('t');
+  var tid = params.get('tid');
+  var statusEl = document.getElementById('ugc-status');
+  var form = document.getElementById('ugc-form');
+  var btn = document.getElementById('ugc-submit');
+  var fileInput = document.getElementById('ugc-photo');
+  var preview = document.getElementById('ugc-preview');
+
+  function showStatus(msg, kind) {
+    statusEl.textContent = msg;
+    statusEl.className = 'ugc-status ' + (kind || '');
+    statusEl.style.display = 'block';
+  }
+
+  if (!token || !tid) {
+    form.style.display = 'none';
+    showStatus('This link is missing required information. Please use the link from the email you received.', 'err');
+    return;
+  }
+
+  fileInput.addEventListener('change', function(){
+    var f = fileInput.files && fileInput.files[0];
+    if (!f) { preview.style.display = 'none'; return; }
+    if (f.size > 10 * 1024 * 1024) {
+      showStatus('That photo is larger than 10MB. Please choose a smaller one.', 'err');
+      fileInput.value = '';
+      preview.style.display = 'none';
+      return;
+    }
+    var url = URL.createObjectURL(f);
+    preview.src = url;
+    preview.style.display = 'block';
+    statusEl.style.display = 'none';
+  });
+
+  form.addEventListener('submit', function(e){
+    e.preventDefault();
+    var f = fileInput.files && fileInput.files[0];
+    if (!f) { showStatus('Please choose a photo to upload.', 'err'); return; }
+    var perm = document.getElementById('ugc-perm').checked;
+    if (!perm) { showStatus('Please check the permission box to continue.', 'err'); return; }
+
+    btn.disabled = true;
+    btn.textContent = 'Uploading…';
+    statusEl.style.display = 'none';
+
+    var fd = new FormData();
+    fd.append('photo', f);
+    fd.append('permission', 'true');
+
+    var endpoint = 'https://us-central1-mast-platform-prod.cloudfunctions.net/submitUgcPhoto?tid=' + encodeURIComponent(tid);
+
+    fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + token },
+      body: fd,
+    }).then(function(resp){
+      return resp.json().then(function(json){ return { ok: resp.ok, status: resp.status, json: json }; });
+    }).then(function(r){
+      if (r.ok && r.json && r.json.ok) {
+        form.style.display = 'none';
+        showStatus('Thanks! Your photo is in. We\'ll review it shortly and let you know if it goes live.', 'ok');
+        return;
+      }
+      var err = (r.json && r.json.error) || 'unknown-error';
+      var msg;
+      if (err === 'already-used') msg = 'This link has already been used. If you\'d like to send another photo, please get in touch with us.';
+      else if (err === 'expired' || err === 'invalid-token') msg = 'This link has expired or is no longer valid.';
+      else if (err === 'too-large') msg = 'That photo is too large. Please choose one under 10MB.';
+      else if (err === 'unsupported-format') msg = 'Please upload a JPEG, PNG, or WebP image.';
+      else if (err === 'permission-required') msg = 'Please check the permission box.';
+      else msg = 'Something went wrong. Please try again, or reply to the email if it keeps happening.';
+      showStatus(msg, 'err');
+      btn.disabled = false;
+      btn.textContent = 'Send photo';
+    }).catch(function(){
+      showStatus('Couldn\'t reach the server. Please check your connection and try again.', 'err');
+      btn.disabled = false;
+      btn.textContent = 'Send photo';
+    });
+  });
+})();
+</script>
+</body>
+</html>
