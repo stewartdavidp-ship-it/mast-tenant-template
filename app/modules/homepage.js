@@ -469,8 +469,13 @@
       html += '<div style="flex:1;min-width:0;">';
       if (stars) html += '<div style="color:var(--amber);letter-spacing:0.15em;font-size:0.85rem;margin-bottom:4px;">' + stars + '</div>';
       html += '<div style="font-size:0.9rem;font-style:italic;color:var(--text-primary);margin-bottom:4px;">“' + esc(t.quote) + '”</div>';
+      // W1.8 round-4 — read author with proper fallback chain. Round-3 writes
+      // populated `author` + `customerName`, but pre-W1.7-schema-fix entries
+      // may have `author:"Anonymous"` baked in. Prefer `customerName` (admin
+      // view canonical), then `author`, then raw review fields if present.
+      var authorName = t.customerName || t.author || t.authorName || t.reviewerName || '';
       html += '<div style="font-size:0.78rem;color:var(--warm-gray);">';
-      if (t.author) html += '— ' + esc(t.author);
+      if (authorName) html += '— ' + esc(authorName);
       if (t.productName) html += ' · ' + esc(t.productName);
       if (t.sourceReviewId) html += ' · <span title="Featured from a review">From review</span>';
       html += '</div></div>';
