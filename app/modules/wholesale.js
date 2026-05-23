@@ -57,9 +57,20 @@ function renderWholesaleAdmin() {
   var urlSubView = (rp && typeof rp.subView === 'string') ? rp.subView : '';
   if (urlSubView && (urlSubView === 'accounts' || urlSubView === 'orders' || urlSubView === 'users' || urlSubView === 'requests' || urlSubView === 'dormant' || urlSubView === 'cadence' || urlSubView === 'account')) {
     wholesaleSubView = urlSubView;
+  } else if (!urlSubView && wholesaleSubView === 'account') {
+    // W1 Round 2 — Fix 1: browser back from #wholesale?subView=account&accountId=X
+    // lands on bare #wholesale (no subView). Without this reset, the stale
+    // wholesaleSubView='account' branch fires renderWholesaleAccountDetail('')
+    // which renders the "No account selected" stub. Snap back to the accounts list.
+    wholesaleSubView = 'accounts';
   }
   // W1.8: read accountId param for inline detail view.
   var urlAccountId = (rp && typeof rp.accountId === 'string') ? rp.accountId : '';
+  // W1 Round 2 — Fix 1: defensive. If subView is 'account' but no accountId,
+  // bail out to the list rather than rendering the dead-end stub.
+  if (wholesaleSubView === 'account' && !urlAccountId) {
+    wholesaleSubView = 'accounts';
+  }
 
   var html = '<div style="max-width:1100px;margin:0 auto;padding:24px;">' +
     '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">' +
@@ -105,7 +116,10 @@ function renderWholesaleAccountDetail(accountId) {
   var container = document.getElementById('wholesaleSubContent');
   if (!container) return;
   if (!accountId) {
-    container.innerHTML = '<div style="padding:24px;color:var(--warm-gray);">No account selected. <a href="#wholesale?subView=accounts" style="color:var(--teal);">Back to accounts</a>.</div>';
+    // W1 Round 2 — Fix 1: defensive in-stub link. If anyone lands here, ensure
+    // the click re-routes to the accounts list (not the bare #wholesale fallback
+    // that re-enters this stub).
+    container.innerHTML = '<div style="padding:24px;color:var(--warm-gray);">No account selected. <a href="javascript:void(0)" onclick="location.hash=\'#wholesale?subView=accounts\';switchWholesaleView(\'accounts\')" style="color:var(--teal);">Back to accounts</a>.</div>';
     return;
   }
   container.innerHTML = '<div style="color:var(--warm-gray);padding:40px 0;text-align:center;">Loading account...</div>';
@@ -129,7 +143,7 @@ function renderWholesaleAccountDetail(accountId) {
     var a = results[0];
     var allOrders = results[1] || {};
     if (!a) {
-      container.innerHTML = '<div style="padding:24px;color:var(--danger);">Account not found. <a href="#wholesale?subView=accounts" style="color:var(--teal);">Back to accounts</a>.</div>';
+      container.innerHTML = '<div style="padding:24px;color:var(--danger);">Account not found. <a href="javascript:void(0)" onclick="location.hash=\'#wholesale?subView=accounts\';switchWholesaleView(\'accounts\')" style="color:var(--teal);">Back to accounts</a>.</div>';
       return;
     }
     // Filter orders by wholesaleAccountId.
