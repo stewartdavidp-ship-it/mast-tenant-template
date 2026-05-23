@@ -36,6 +36,19 @@
   }
   function nowIso() { return new Date().toISOString(); }
 
+  // W3a-cleanup (OPEN -OtI-3TBmtdikQVADTSZ): defense-in-depth scheme validation
+  // for image URLs. The composer image picker only selects from the curated
+  // library, but library URLs originate from user input and Firestore can be
+  // edited externally. Reject anything that isn't http(s) or a data: image MIME.
+  // Returns '' for rejected URLs — callers should fall back to a placeholder.
+  function safeImageUrl(u) {
+    if (!u) return '';
+    var s = String(u).trim();
+    if (/^https?:\/\//i.test(s)) return s;
+    if (/^data:image\/(png|jpe?g|webp|gif|svg\+xml);/i.test(s)) return s;
+    return '';
+  }
+
   async function loadList() {
     try { contents = (await MastDB.list('admin/content')) || {}; }
     catch (_e) { contents = {}; }
@@ -164,7 +177,9 @@
           '<div class="form-group"><label>Images</label>' +
             '<div id="composerImageList" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px;">' +
               images.map(function(url) {
-                return '<div style="position:relative;"><img src="' + esc(url) + '" style="width:60px;height:60px;object-fit:cover;border-radius:3px;"></div>';
+                var safe = safeImageUrl(url);
+                if (!safe) return '';
+                return '<div style="position:relative;"><img src="' + esc(safe) + '" style="width:60px;height:60px;object-fit:cover;border-radius:3px;"></div>';
               }).join('') +
               (!images.length ? '<span style="color:var(--warm-gray);font-size:0.78rem;">No images attached.</span>' : '') +
             '</div>' +
@@ -351,8 +366,9 @@
       html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:6px;">';
       ids.forEach(function(id) {
         var im = lib[id];
-        var th = im.thumbnailUrl || im.url || '';
-        var url = im.url || im.thumbnailUrl || '';
+        var th = safeImageUrl(im.thumbnailUrl || im.url || '');
+        var url = safeImageUrl(im.url || im.thumbnailUrl || '');
+        if (!url) return; // skip library entries with rejected schemes
         var sel = selected.indexOf(url) !== -1;
         html += '<label style="position:relative;cursor:pointer;">' +
           '<input type="checkbox" class="composer-img-cb" data-url="' + esc(url) + '"' + (sel ? ' checked' : '') + ' style="position:absolute;top:2px;left:2px;z-index:1;">' +
