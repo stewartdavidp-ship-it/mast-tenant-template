@@ -55,9 +55,11 @@ function renderWholesaleAdmin() {
   // URL-driven sub-tab forcing (MCP admin links). #wholesale?subView=accounts|orders|users|requests
   var rp = (typeof window.getRouteParams === 'function') ? window.getRouteParams() : {};
   var urlSubView = (rp && typeof rp.subView === 'string') ? rp.subView : '';
-  if (urlSubView && (urlSubView === 'accounts' || urlSubView === 'orders' || urlSubView === 'users' || urlSubView === 'requests' || urlSubView === 'dormant' || urlSubView === 'cadence')) {
+  if (urlSubView && (urlSubView === 'accounts' || urlSubView === 'orders' || urlSubView === 'users' || urlSubView === 'requests' || urlSubView === 'dormant' || urlSubView === 'cadence' || urlSubView === 'account')) {
     wholesaleSubView = urlSubView;
   }
+  // W1.8: read accountId param for inline detail view.
+  var urlAccountId = (rp && typeof rp.accountId === 'string') ? rp.accountId : '';
 
   var html = '<div style="max-width:1100px;margin:0 auto;padding:24px;">' +
     '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">' +
@@ -94,12 +96,136 @@ function renderWholesaleAdmin() {
   else if (wholesaleSubView === 'orders') renderWholesaleOrders();
   else if (wholesaleSubView === 'dormant') renderWholesaleDormant();
   else if (wholesaleSubView === 'cadence') renderWholesaleCadence();
+  else if (wholesaleSubView === 'account') renderWholesaleAccountDetail(urlAccountId);
 }
+
+// W1.8: inline detail surface for one wholesale account. Reachable via
+// #wholesale?subView=account&accountId=<id>.
+function renderWholesaleAccountDetail(accountId) {
+  var container = document.getElementById('wholesaleSubContent');
+  if (!container) return;
+  if (!accountId) {
+    container.innerHTML = '<div style="padding:24px;color:var(--warm-gray);">No account selected. <a href="#wholesale?subView=accounts" style="color:var(--teal);">Back to accounts</a>.</div>';
+    return;
+  }
+  container.innerHTML = '<div style="color:var(--warm-gray);padding:40px 0;text-align:center;">Loading account...</div>';
+
+  // Load account + orders in parallel. Reuse cached data where possible.
+  var loadAccount = wholesaleAccountsData[accountId]
+    ? Promise.resolve(wholesaleAccountsData[accountId])
+    : MastDB.wholesaleAccounts.list(500).then(function(snap) {
+        var val = (snap && typeof snap.val === 'function') ? snap.val() : snap;
+        wholesaleAccountsData = val || {};
+        return wholesaleAccountsData[accountId] || null;
+      });
+  var loadOrders = (wholesaleOrdersData && Object.keys(wholesaleOrdersData).length)
+    ? Promise.resolve(wholesaleOrdersData)
+    : MastDB.query('admin/orders').orderByChild('type').equalTo('wholesale').limitToLast(500).once('value').then(function(snap) {
+        wholesaleOrdersData = snap.val() || {};
+        return wholesaleOrdersData;
+      });
+
+  Promise.all([loadAccount, loadOrders]).then(function(results) {
+    var a = results[0];
+    var allOrders = results[1] || {};
+    if (!a) {
+      container.innerHTML = '<div style="padding:24px;color:var(--danger);">Account not found. <a href="#wholesale?subView=accounts" style="color:var(--teal);">Back to accounts</a>.</div>';
+      return;
+    }
+    // Filter orders by wholesaleAccountId.
+    var linkedOrders = Object.keys(allOrders).map(function(k) {
+      var o = allOrders[k]; o._id = k; return o;
+    }).filter(function(o) { return o.wholesaleAccountId === accountId; })
+      .sort(function(x, y) { return (y.createdAt || 0) - (x.createdAt || 0); });
+
+    var openInvoices = linkedOrders.filter(function(o) {
+      var inv = o.invoice || {};
+      return inv && (inv.status === 'sent' || inv.status === 'partial' || inv.status === 'overdue');
+    });
+
+    var contacts = a.contacts || (a.primaryContact ? [a.primaryContact] : []);
+    var contactsHtml = contacts.length === 0
+      ? '<div style="color:var(--warm-gray);font-size:0.85rem;">No contacts on file.</div>'
+      : contacts.map(function(c) {
+          return '<div style="padding:6px 0;border-bottom:1px solid var(--cream-dark,#e8e0d4);font-size:0.85rem;">' +
+            '<div style="font-weight:600;">' + esc(c.name || '—') + (c.role ? ' <span style="color:var(--warm-gray);font-weight:400;">· ' + esc(c.role) + '</span>' : '') + '</div>' +
+            '<div style="color:var(--warm-gray);">' + esc(c.email || '') + (c.phone ? ' · ' + esc(c.phone) : '') + '</div>' +
+          '</div>';
+        }).join('');
+
+    var ordersHtml = linkedOrders.length === 0
+      ? '<div style="color:var(--warm-gray);font-size:0.85rem;padding:8px 0;">No linked orders yet.</div>'
+      : '<table style="width:100%;border-collapse:collapse;font-size:0.85rem;">' +
+          '<thead><tr style="border-bottom:1px solid var(--cream-dark,#e8e0d4);text-align:left;">' +
+            '<th style="padding:6px 0;">Order</th><th>Date</th><th>Status</th><th align="right">Total</th>' +
+          '</tr></thead><tbody>' +
+          linkedOrders.slice(0, 50).map(function(o) {
+            var num = (window.getOrderDisplayNumber ? window.getOrderDisplayNumber(o) : (o._id || '').substring(0, 8));
+            var dt = o.createdAt ? new Date(o.createdAt).toLocaleDateString() : '—';
+            var total = (typeof o.total === 'number') ? '$' + o.total.toFixed(2) : '—';
+            return '<tr style="border-bottom:1px solid var(--cream-dark,#e8e0d4);"><td style="padding:6px 0;font-family:monospace;">' + esc(num) + '</td><td>' + dt + '</td><td>' + esc(o.status || '—') + '</td><td align="right">' + total + '</td></tr>';
+          }).join('') +
+        '</tbody></table>';
+
+    var invHtml = openInvoices.length === 0
+      ? '<div style="color:var(--warm-gray);font-size:0.85rem;padding:8px 0;">No open invoices.</div>'
+      : openInvoices.map(function(o) {
+          var inv = o.invoice || {};
+          var num = (window.getOrderDisplayNumber ? window.getOrderDisplayNumber(o) : (o._id || '').substring(0, 8));
+          return '<div style="padding:6px 0;border-bottom:1px solid var(--cream-dark,#e8e0d4);font-size:0.85rem;display:flex;justify-content:space-between;">' +
+            '<span style="font-family:monospace;">' + esc(num) + '</span>' +
+            '<span style="color:' + (inv.status === 'overdue' ? '#dc2626' : 'var(--amber)') + ';">' + esc(inv.status || 'open') + '</span>' +
+          '</div>';
+        }).join('');
+
+    var termsLabel = (WS_NET_TERMS.find(function(t) { return t.v === a.netTerms; }) || { l: '—' }).l;
+    var termsVersion = a.termsVersion || '—';
+
+    var html = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">' +
+      '<div>' +
+        '<a href="#wholesale?subView=accounts" style="color:var(--teal);font-size:0.85rem;text-decoration:none;">&larr; All accounts</a>' +
+        '<h3 style="margin:6px 0 0;font-size:1.15rem;">' + esc(a.name || '(unnamed)') + '</h3>' +
+      '</div>' +
+      '<button class="btn-small" onclick="editWholesaleAccount(\'' + esc(accountId) + '\')" style="background:var(--teal);color:#fff;border:none;padding:8px 16px;border-radius:4px;cursor:pointer;font-size:0.78rem;">Edit account</button>' +
+    '</div>' +
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">' +
+      '<section style="background:#fff;border:1px solid var(--cream-dark,#e8e0d4);border-radius:8px;padding:16px;">' +
+        '<h4 style="margin:0 0 10px;font-size:0.9rem;">Terms</h4>' +
+        '<div style="font-size:0.85rem;color:var(--warm-gray);">NET: ' + esc(termsLabel) + ' · Version: ' + esc(termsVersion) + '</div>' +
+      '</section>' +
+      '<section style="background:#fff;border:1px solid var(--cream-dark,#e8e0d4);border-radius:8px;padding:16px;">' +
+        '<h4 style="margin:0 0 10px;font-size:0.9rem;">Open invoices (' + openInvoices.length + ')</h4>' + invHtml +
+      '</section>' +
+      '<section style="background:#fff;border:1px solid var(--cream-dark,#e8e0d4);border-radius:8px;padding:16px;">' +
+        '<h4 style="margin:0 0 10px;font-size:0.9rem;">Contacts</h4>' + contactsHtml +
+      '</section>' +
+      '<section style="background:#fff;border:1px solid var(--cream-dark,#e8e0d4);border-radius:8px;padding:16px;">' +
+        '<h4 style="margin:0 0 10px;font-size:0.9rem;">Rep notes</h4>' +
+        '<div style="font-size:0.85rem;color:var(--warm-gray);white-space:pre-wrap;">' + esc(a.repNotes || a.notes || '—') + '</div>' +
+      '</section>' +
+      '<section style="background:#fff;border:1px solid var(--cream-dark,#e8e0d4);border-radius:8px;padding:16px;grid-column:1 / -1;">' +
+        '<h4 style="margin:0 0 10px;font-size:0.9rem;">Linked orders (' + linkedOrders.length + ')</h4>' + ordersHtml +
+      '</section>' +
+    '</div>';
+    container.innerHTML = html;
+  }).catch(function(err) {
+    container.innerHTML = '<div style="color:var(--danger);padding:20px;">Error loading account: ' + esc(err && err.message || String(err)) + '</div>';
+  });
+}
+window.renderWholesaleAccountDetail = renderWholesaleAccountDetail;
 
 function switchWholesaleView(view) {
   wholesaleSubView = view;
   renderWholesaleAdmin();
 }
+
+// W1.8: navigate to inline account detail. Updates the hash so the
+// browser back button + subView reload work via the URL-driven branch.
+function viewWholesaleAccount(accountId) {
+  if (!accountId) return;
+  location.hash = '#wholesale?subView=account&accountId=' + encodeURIComponent(accountId);
+}
+window.viewWholesaleAccount = viewWholesaleAccount;
 
 // ── Authorized Users sub-view ──
 
@@ -368,7 +494,7 @@ function renderWholesaleAccounts() {
         var termsLabel = (WS_NET_TERMS.find(function(t) { return t.v === a.netTerms; }) || { l: '—' }).l;
         var typeLabel = (WS_ACCOUNT_TYPES.find(function(t) { return t.v === a.accountType; }) || { l: '' }).l;
         var creditStr = a.creditLimitCents ? '$' + (a.creditLimitCents / 100).toLocaleString() : '—';
-        html += '<div onclick="editWholesaleAccount(\'' + esc(a._id) + '\')" style="background:#fff;border:1px solid var(--cream-dark,#e8e0d4);border-radius:8px;padding:14px 16px;cursor:pointer;display:flex;align-items:center;gap:16px;">';
+        html += '<div onclick="viewWholesaleAccount(\'' + esc(a._id) + '\')" style="background:#fff;border:1px solid var(--cream-dark,#e8e0d4);border-radius:8px;padding:14px 16px;cursor:pointer;display:flex;align-items:center;gap:16px;">';
         html += '<div style="flex:1;min-width:0;">';
         html += '<div style="font-weight:600;font-size:0.9rem;color:var(--charcoal);">' + esc(a.name || '(unnamed)') + '</div>';
         html += '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:2px;">' + esc(typeLabel) + (typeLabel && a.territory ? ' · ' : '') + esc(a.territory || '') + (a.salesRepName ? ' · Rep: ' + esc(a.salesRepName) : '') + '</div>';
