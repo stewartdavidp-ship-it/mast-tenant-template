@@ -3091,7 +3091,8 @@
     items.forEach(function(c) {
       var product = productsData.find(function(p) { return p.pid === c.sourcePieceId; });
       var imgSrc = product && product.images && product.images.length ? product.images[0] : '';
-      var pieceName = c.sourcePieceName || (product ? product.name : 'Unknown');
+      // W1 Round 2 — Fix 5: align PIECE column empty-state with Deadline / Total $.
+      var pieceName = c.sourcePieceName || (product ? product.name : '—');
       var statusLabel = (c.status || 'new').replace(/-/g, ' ').replace(/\b\w/g, function(l) { return l.toUpperCase(); });
       var dateStr = c.createdAt ? new Date(c.createdAt).toLocaleDateString() : '—';
       var notes = c.notes || '';
