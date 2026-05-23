@@ -245,8 +245,8 @@ function renderWholesaleAccountDetail(accountId) {
         '<div>' +
           '<div style="font-size:0.78rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.04em;">Lifetime value</div>' +
           '<div style="display:flex;align-items:baseline;gap:18px;margin-top:6px;">' +
-            '<div><span style="font-size:1.6rem;font-weight:700;">$' + ltv12.toFixed(2) + '</span><span style="font-size:0.78rem;color:var(--warm-gray);margin-left:6px;">12-month</span></div>' +
-            '<div><span style="font-size:1.15rem;font-weight:600;color:var(--warm-gray);">$' + ltvLifetime.toFixed(2) + '</span><span style="font-size:0.78rem;color:var(--warm-gray);margin-left:6px;">lifetime</span></div>' +
+            '<div><span style="font-size:1.6rem;font-weight:700;">$' + ltv12.toFixed(2) + '</span> <span style="font-size:0.78rem;color:var(--warm-gray);margin-left:6px;">12-month</span></div>' +
+            '<div><span style="font-size:1.15rem;font-weight:600;color:var(--warm-gray);">$' + ltvLifetime.toFixed(2) + '</span> <span style="font-size:0.78rem;color:var(--warm-gray);margin-left:6px;">lifetime</span></div>' +
           '</div>' +
         '</div>' +
         (reconcileCount > 0 ? '<span style="font-size:0.78rem;font-weight:600;padding:4px 12px;border-radius:10px;background:rgba(245,158,11,0.15);color:#F59E0B;border:1px solid rgba(245,158,11,0.4);">Reconcile ' + reconcileCount + ' order' + (reconcileCount === 1 ? '' : 's') + '</span>' : '') +

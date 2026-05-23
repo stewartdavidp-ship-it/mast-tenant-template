@@ -8097,7 +8097,11 @@
 
         <!-- Label Provider Config -->
         <div class="form-group">
-          <label style="font-size:1.15rem;font-weight:600;">Shipping Label Provider</label>
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+            <label style="font-size:1.15rem;font-weight:600;">Shipping Label Provider</label>
+            <!-- W2 R2 Fix 7: status chip — populated by loadShippoKeyStatus() -->
+            <span id="shippoStatusChip" style="font-size:0.72rem;font-weight:600;padding:3px 10px;border-radius:10px;background:rgba(160,160,160,0.15);color:var(--warm-gray);border:1px solid rgba(160,160,160,0.35);">Not configured</span>
+          </div>
           <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:16px;">
             Choose how shipping labels are generated. API-based providers let you buy labels and get tracking directly in Mast.
           </p>
@@ -16922,6 +16926,10 @@ var ROUTE_ALIASES = {
   'find': 'show-find',
   'email': 'email-log',
   'emails': 'email-log',
+  // W2 R2 Fix 8: Day Close direct URL — sidebar uses navigateTo('receipts')
+  // but #day-close was 404'ing. Alias to the receipts route.
+  'day-close': 'receipts',
+  'dayclose': 'receipts',
   // Lens architecture retired: Develop/Catalog distinction is now a chip
   // filter on the unified Products page. Legacy routes alias to 'products'.
   'develop': 'products',
@@ -24230,6 +24238,22 @@ function loadShipProviderConfig() {
 
 function loadShippoKeyStatus() {
   var statusEl = document.getElementById('shippoKeyStatus');
+  var chipEl = document.getElementById('shippoStatusChip');
+  // W2 R2 Fix 7: drive chip + statusEl from same source.
+  function _setChip(configured) {
+    if (!chipEl) return;
+    if (configured) {
+      chipEl.textContent = 'Configured';
+      chipEl.style.background = 'rgba(27,92,82,0.18)';
+      chipEl.style.color = '#4DB6AC';
+      chipEl.style.border = '1px solid rgba(27,92,82,0.4)';
+    } else {
+      chipEl.textContent = 'Not configured';
+      chipEl.style.background = 'rgba(160,160,160,0.15)';
+      chipEl.style.color = 'var(--warm-gray)';
+      chipEl.style.border = '1px solid rgba(160,160,160,0.35)';
+    }
+  }
   firebase.functions().httpsCallable('secretsManager')({
     action: 'read',
     service: 'shippo',
@@ -24239,11 +24263,14 @@ function loadShippoKeyStatus() {
     if (data && data.apiKey && data.apiKey !== '') {
       document.getElementById('shippoApiKeyInput').placeholder = data.apiKey;
       if (statusEl) statusEl.innerHTML = '<span style="color:var(--teal);">&#10003; Key configured</span>';
+      _setChip(true);
     } else {
       if (statusEl) statusEl.innerHTML = '<span style="color:var(--warm-gray-light);">No API key set.</span>';
+      _setChip(false);
     }
   }).catch(function() {
     if (statusEl) statusEl.innerHTML = '<span style="color:var(--warm-gray-light);">No API key set.</span>';
+    _setChip(false);
   });
 }
 
