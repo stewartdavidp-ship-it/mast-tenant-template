@@ -1398,10 +1398,76 @@
     if (!galleriesLoaded) loadGalleries(function() { renderCurrentView(); });
     else renderCurrentView();
   };
+  // W2 R3 Fix 2: New Gallery now opens a true in-page modal (was silently
+  // re-rendering #galleriesTab inline, which on certain widths/scroll
+  // positions appeared to do nothing). Modal reuses the same form field
+  // ids + data attributes so _collectGalleryFormValues() works unchanged.
+  // Submit calls consignmentSaveGalleryModal which closes the modal,
+  // persists the entity, and refreshes the list.
   window.consignmentNewGallery = function() {
-    currentGalleryId = null;
-    currentView = 'galleryEdit';
-    renderCurrentView();
+    var addrRows =
+      '<div style="display:grid;grid-template-columns:2fr 1fr 80px 100px 100px;gap:8px;margin-bottom:6px;" data-gal-addr-row="0">' +
+        '<input data-gal-addr="street" data-i="0" placeholder="Street" style="padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.85rem;">' +
+        '<input data-gal-addr="city" data-i="0" placeholder="City" style="padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.85rem;">' +
+        '<input data-gal-addr="state" data-i="0" placeholder="ST" style="padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.85rem;">' +
+        '<input data-gal-addr="zip" data-i="0" placeholder="Zip" style="padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.85rem;">' +
+        '<input data-gal-addr="country" data-i="0" placeholder="Country" style="padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.85rem;">' +
+      '</div>';
+    var contactRows =
+      '<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;margin-bottom:6px;" data-gal-contact-row="0">' +
+        '<input data-gal-contact="name" data-i="0" placeholder="Name" style="padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.85rem;">' +
+        '<input data-gal-contact="email" data-i="0" placeholder="Email" style="padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.85rem;">' +
+        '<input data-gal-contact="phone" data-i="0" placeholder="Phone" style="padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.85rem;">' +
+        '<input data-gal-contact="role" data-i="0" placeholder="Role" style="padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.85rem;">' +
+      '</div>';
+    var html =
+      '<h3 style="font-size:1.15rem;font-weight:500;margin:0 0 16px;">New Gallery</h3>' +
+      '<form id="newGalleryModalForm" onsubmit="event.preventDefault();consignmentSaveGalleryModal();return false;">' +
+        '<div style="margin-bottom:12px;"><label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Name *</label>' +
+          '<input id="gal_name" required style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;"></div>' +
+        '<div style="margin-bottom:12px;">' +
+          '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:6px;">Addresses</label>' +
+          '<div id="galAddressRows">' + addrRows + '</div>' +
+        '</div>' +
+        '<div style="margin-bottom:12px;">' +
+          '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:6px;">Contacts</label>' +
+          '<div id="galContactRows">' + contactRows + '</div>' +
+        '</div>' +
+        '<div style="display:grid;grid-template-columns:120px 100px 1fr;gap:8px;margin-bottom:12px;">' +
+          '<div><label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Default %</label>' +
+            '<input id="gal_pct" type="number" min="0" max="100" step="0.5" placeholder="40" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;"></div>' +
+          '<div><label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Currency</label>' +
+            '<input id="gal_currency" value="USD" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;"></div>' +
+        '</div>' +
+        '<div style="margin-bottom:16px;"><label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Notes</label>' +
+          '<textarea id="gal_notes" rows="3" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;font-family:inherit;"></textarea></div>' +
+        '<div style="display:flex;gap:8px;justify-content:flex-end;">' +
+          '<button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
+          '<button type="submit" class="btn btn-primary">Create gallery</button>' +
+        '</div>' +
+      '</form>';
+    openModal(html);
+  };
+
+  // Submit handler for the New Gallery modal. Persists the entity then
+  // closes the modal and shows the Galleries list with the new row.
+  window.consignmentSaveGalleryModal = async function() {
+    var v = _collectGalleryFormValues();
+    if (!v.name) { showToast('Name is required'); return; }
+    var now = new Date().toISOString();
+    var id = MastDB.newKey('admin/galleries');
+    var rec = Object.assign({}, v, { id: id, createdAt: now, updatedAt: now });
+    try {
+      await MastDB.set('admin/galleries/' + id, rec);
+      galleriesData[id] = rec;
+      closeModal();
+      showToast('Gallery created');
+      currentGalleryId = id;
+      currentView = 'galleryDetail';
+      renderCurrentView();
+    } catch (e) {
+      showToast('Save failed: ' + (e.message || String(e)), true);
+    }
   };
   window.consignmentEditGallery = function(id) {
     currentGalleryId = id;
