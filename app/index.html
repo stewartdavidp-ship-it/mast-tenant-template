@@ -5614,7 +5614,7 @@
         <div class="sidebar-item" data-route="wholesale" onclick="navigateTo('wholesale')">Wholesale</div>
         <div class="sidebar-item" data-route="lookbooks" onclick="navigateTo('lookbooks')">Look Books</div>
         <div class="sidebar-item" data-route="galleries" onclick="navigateTo('galleries')">Galleries &amp; Consignment</div>
-        <div class="sidebar-item" data-route="receipts" onclick="navigateTo('receipts')">Receipts &amp; Reconciliation</div>
+        <div class="sidebar-item" data-route="receipts" onclick="navigateTo('receipts')">Day Close</div>
         <div class="sidebar-item" data-route="terms" onclick="navigateTo('terms')">Terms &amp; Conditions</div>
         <div class="sidebar-item" data-route="pack" onclick="navigateTo('pack')">Pack</div>
         <div class="sidebar-item" data-route="ship" onclick="navigateTo('ship')">Ship</div>
@@ -7314,7 +7314,7 @@
         </div>
         <div style="display:flex;align-items:center;gap:8px;">
           <span id="salesAskAiSlot"></span>
-          <button class="btn btn-secondary" id="squarePaymentsToggle" onclick="toggleSquarePayments()" style="font-size:0.78rem;padding:4px 12px;">💳 Square Payments</button>
+          <button class="btn btn-secondary" id="squarePaymentsToggle" onclick="toggleSquarePayments()" style="font-size:0.78rem;padding:4px 12px;">💳 Day Close</button>
           <div id="salesFilterControls" style="display:flex;align-items:center;gap:8px;">
             <input type="date" id="salesDateFilter" onchange="filterSalesByDate()" style="padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.85rem;">
             <select id="salesStatusFilter" onchange="renderSales()" style="padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.85rem;">
@@ -7377,8 +7377,33 @@
         <div id="saleDetailView" style="display:none;"></div>
       </div>
 
-      <!-- Square Payments View -->
+      <!-- Square Payments View (now: Day Close) -->
       <div id="squarePaymentsView" style="display:none;">
+        <!-- W1.4: Unified Day Close transactions list. Reads admin/orders for the active day,
+             derives a processor column (Square|Stripe|Other) per row. -->
+        <div id="dayCloseUnifiedSection" style="margin:12px 0;">
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;flex-wrap:wrap;">
+            <h3 style="margin:0;font-size:1.0rem;">Transactions</h3>
+            <input type="date" id="dayCloseDateFilter" onchange="renderDayCloseUnified()" style="padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.85rem;">
+            <span id="dayCloseCount" style="font-size:0.85rem;color:var(--warm-gray);"></span>
+          </div>
+          <div id="dayCloseEmpty" class="empty-state" style="display:none;padding:18px;">
+            <p style="font-size:0.85rem;color:var(--warm-gray);">No transactions on this date.</p>
+          </div>
+          <div class="orders-table data-table" id="dayCloseTableWrap" style="display:none;">
+            <table>
+              <thead>
+                <tr>
+                  <th>Time</th>
+                  <th>Order</th>
+                  <th>Amount</th>
+                  <th>Processor</th>
+                </tr>
+              </thead>
+              <tbody id="dayCloseTableBody"></tbody>
+            </table>
+          </div>
+        </div>
         <div style="padding:10px 14px;background:var(--cream);border-radius:8px;margin:12px 0;font-size:0.85rem;color:var(--warm-gray);">
           Square card payments appear here automatically. Match unmatched payments to your PoS sales to reconcile your records.
         </div>
@@ -44102,7 +44127,7 @@ var ENTITY_LABELS = {
   jobs: 'Jobs', buildJobs: 'Build Jobs', salesEvents: 'Sales Events',
   gallery: 'Gallery', schedule: 'Schedule', locations: 'Locations',
   coupons: 'Coupons', promotions: 'Sale Promotions', settings: 'Settings', operators: 'Operators',
-  pos: 'PoS', stories: 'Stories', receipts: 'Receipts',
+  pos: 'PoS', stories: 'Stories', receipts: 'Day Close',
   users: 'Users', roles: 'Roles'
 };
 
@@ -49420,7 +49445,7 @@ var ROUTE_LABELS = {
   'dashboard': 'Dashboard', 'schedule': 'Schedule', 'gallery': 'Gallery',
   'pos': 'Sales Ledger', 'orders': 'Orders', 'commissions': 'Custom Orders',
   'wholesale': 'Wholesale', 'galleries': 'Galleries', 'events': 'Sales Events',
-  'pack': 'Pack & Ship', 'ship': 'Shipping', 'receipts': 'Receipts',
+  'pack': 'Pack & Ship', 'ship': 'Shipping', 'receipts': 'Day Close',
   'social': 'Social Media', 'newsletter': 'Newsletter', 'stories': 'Stories',
   'products': 'Products', 'inventory': 'Inventory', 'customers': 'Customers',
   'images': 'Images', 'website': 'Website', 'employees': 'Employees',

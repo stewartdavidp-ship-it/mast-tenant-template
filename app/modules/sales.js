@@ -391,13 +391,14 @@ function toggleSquarePayments() {
     toggleBtn.className = 'detail-back';
     toggleBtn.style.background = '';
     filterControls.style.display = 'none';
-    titleEl.textContent = 'Square Payments';
+    titleEl.textContent = 'Day Close';
     countEl.textContent = '';
+    renderDayCloseUnified();
     renderSquarePayments();
   } else {
     listView.style.display = '';
     sqView.style.display = 'none';
-    toggleBtn.textContent = '\uD83D\uDCB3 Square Payments';
+    toggleBtn.textContent = '\uD83D\uDCB3 Day Close';
     toggleBtn.className = 'btn btn-secondary';
     toggleBtn.style.background = '';
     filterControls.style.display = 'flex';
@@ -405,6 +406,82 @@ function toggleSquarePayments() {
     renderSales();
   }
 }
+
+// W1.4: Day Close unified transactions view. Reads admin/orders for the active day
+// and derives a processor column (Square|Stripe|Other) from order payment fields.
+// NO new collection — the "Stripe column" is just admin/orders filtered.
+var _dayCloseOrdersCache = null;
+async function renderDayCloseUnified() {
+  var dateEl = document.getElementById('dayCloseDateFilter');
+  var tbodyEl = document.getElementById('dayCloseTableBody');
+  var tableWrap = document.getElementById('dayCloseTableWrap');
+  var emptyEl = document.getElementById('dayCloseEmpty');
+  var countEl = document.getElementById('dayCloseCount');
+  if (!tbodyEl) return;
+
+  // Default date: today.
+  var filterDate = (dateEl && dateEl.value) || (function() {
+    var d = new Date();
+    var s = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    if (dateEl) dateEl.value = s;
+    return s;
+  })();
+
+  try {
+    if (!_dayCloseOrdersCache) {
+      var snap = await MastDB.query('admin/orders').limitToLast(500).once('value');
+      _dayCloseOrdersCache = snap.val() || {};
+    }
+    var rows = [];
+    Object.keys(_dayCloseOrdersCache).forEach(function(k) {
+      var o = _dayCloseOrdersCache[k];
+      if (!o) return;
+      var ts = o.paidAt || o.createdAt || 0;
+      if (!ts) return;
+      var d = new Date(ts);
+      if (isNaN(d.getTime())) return;
+      var dayStr = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+      if (dayStr !== filterDate) return;
+      // Derive processor from order payment-id fields.
+      var processor = 'Other';
+      if (o.stripePaymentIntentId || o.stripeCheckoutSessionId) processor = 'Stripe';
+      else if (o.squarePaymentId || o.squareOrderId || o.squareCheckoutId) processor = 'Square';
+      // Only include orders with payment activity for the day.
+      if (processor === 'Other' && !o.paidAt) return;
+      var amount = (typeof o.total === 'number') ? o.total : (typeof o.totalCents === 'number' ? o.totalCents / 100 : 0);
+      rows.push({ id: k, ts: ts, processor: processor, amount: amount, order: o });
+    });
+    rows.sort(function(a, b) { return (new Date(b.ts).getTime() || 0) - (new Date(a.ts).getTime() || 0); });
+
+    if (countEl) countEl.textContent = rows.length + ' transaction' + (rows.length === 1 ? '' : 's');
+    if (rows.length === 0) {
+      if (emptyEl) emptyEl.style.display = '';
+      if (tableWrap) tableWrap.style.display = 'none';
+      return;
+    }
+    if (emptyEl) emptyEl.style.display = 'none';
+    if (tableWrap) tableWrap.style.display = '';
+
+    var html = '';
+    rows.forEach(function(r) {
+      var t = new Date(r.ts);
+      var timeStr = isNaN(t.getTime()) ? '—' : t.toLocaleTimeString();
+      var num = (window.getOrderDisplayNumber && r.order) ? window.getOrderDisplayNumber(r.order) : (r.id || '').substring(0, 8);
+      var procColor = r.processor === 'Stripe' ? '#635BFF' : (r.processor === 'Square' ? '#006AFF' : 'var(--warm-gray)');
+      html += '<tr>' +
+        '<td style="font-size:0.85rem;">' + timeStr + '</td>' +
+        '<td style="font-size:0.85rem;">' + (typeof num === 'string' ? num.replace(/[<>&]/g, '') : num) + '</td>' +
+        '<td style="font-size:0.85rem;">$' + (r.amount || 0).toFixed(2) + '</td>' +
+        '<td style="font-size:0.85rem;color:' + procColor + ';">' + r.processor + '</td>' +
+      '</tr>';
+    });
+    tbodyEl.innerHTML = html;
+  } catch (err) {
+    console.error('[Day Close] render error:', err);
+    if (countEl) countEl.textContent = 'Error loading transactions';
+  }
+}
+window.renderDayCloseUnified = renderDayCloseUnified;
 
 function getSquarePaymentsArray() {
   var arr = [];
