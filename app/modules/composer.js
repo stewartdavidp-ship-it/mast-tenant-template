@@ -40,9 +40,13 @@
     listLoaded = true;
   }
   async function loadBrandVoice() {
+    // FIX 3 (W2 round 1): brand.js writes voiceRules to `config/brand/voice`
+    // (admin-only path); only tagline + positioningOneLiner are mirrored to
+    // `public/config/brand`. Read from the admin path that brand.js actually
+    // writes to.
     if (brandLoaded) return;
     try {
-      var v = await MastDB.get('public/config/brand');
+      var v = await MastDB.get('config/brand/voice');
       voiceRules = (v && v.voiceRules) || '';
     } catch (_e) { voiceRules = ''; }
     brandLoaded = true;

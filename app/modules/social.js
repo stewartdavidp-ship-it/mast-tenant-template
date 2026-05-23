@@ -1342,15 +1342,52 @@
   // W2.2 / W2.6 — Composer + Campaigns hooks
   // ============================================================
   async function socialOpenFromContent(contentId) {
+    // FIX 4 (W2 round 1): previously this only applied a prefill into the
+    // composer UI — no record was created, so the composer's "Published
+    // to: blog, social" toast was lying. Create a draft social post under
+    // the same path that smMarkPosted writes to (MastDB.market.posts),
+    // marked with source='composer' + status='draft' so the operator can
+    // see it in the social feed list and finalize/post from there.
     try {
       var c = await MastDB.get('admin/content/' + contentId);
       if (!c) { if (typeof showToast === 'function') showToast('Content not found', true); return; }
+      var uid = (auth && auth.currentUser) ? auth.currentUser.uid : null;
+      if (!uid) {
+        if (typeof showToast === 'function') showToast('Sign-in required to draft social post', true);
+        return;
+      }
+      var postId = 'post_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 6);
+      var caption = (c.body || c.title || '').toString().slice(0, 2200);
+      var firstImage = (c.images && c.images.length) ? c.images[0] : null;
+      var postData = {
+        postId: postId,
+        clipId: null,
+        productId: null,
+        productName: null,
+        eventName: null,
+        treatment: null,
+        platforms: ['instagram-reels'],
+        caption: caption,
+        hashtags: null,
+        postedAt: MastDB.serverTimestamp(),
+        signalScore: null,
+        scoredAt: null,
+        contentType: firstImage ? 'image' : 'text',
+        thumbnailUrl: firstImage,
+        description: c.title || null,
+        status: 'draft',
+        source: 'composer',
+        sourceContentId: contentId
+      };
+      await MastDB.market.posts.set(uid, postId, postData);
+      // Also apply the prefill if the social UI is currently mounted so
+      // the operator sees their content immediately.
       var prefill = {
-        text: c.body || c.title || '',
+        text: caption,
         productId: null, productName: null, productUrl: null,
         treatmentId: null, attachedCouponCode: null,
         subjectType: 'content',
-        clipUrl: (c.images && c.images.length === 1) ? c.images[0] : null,
+        clipUrl: firstImage,
         contentId: contentId
       };
       if (typeof applySocialDraftPrefill === 'function') applySocialDraftPrefill(prefill);

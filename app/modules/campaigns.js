@@ -228,12 +228,49 @@
   // CRUD
   // ─────────────────────────────────────────────────────────────────────
 
-  async function campaignsCreateNew() {
-    var name = prompt('Campaign name?');
-    if (!name) return;
+  // FIX 2 (W2 round 1): replaced window.prompt() with an in-page modal.
+  // window.prompt() blocks the renderer thread synchronously and, in some
+  // Chromium contexts (Chrome MCP automation, certain extension flows),
+  // can hang for tens of seconds before resolving — which the persona
+  // test surfaced as a >45s freeze on click. Modals are also consistent
+  // with the rest of the admin UI's "Add reference" / "Add to campaign"
+  // flows in this same file.
+  function campaignsCreateNew() {
+    var html =
+      '<div class="modal-header"><h3>New Campaign</h3>' +
+        '<button class="modal-close" onclick="closeModal()">&times;</button></div>' +
+      '<div class="modal-body">' +
+        '<div class="form-group"><label>Campaign name</label>' +
+          '<input type="text" id="newCampaignName" placeholder="e.g. Spring 2026 Glass Show" style="width:100%;padding:6px 8px;font-size:0.9rem;" autofocus></div>' +
+      '</div>' +
+      '<div class="modal-footer">' +
+        '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
+        '<button class="btn btn-primary" onclick="campaignsCreateNewConfirm()">Create</button>' +
+      '</div>';
+    openModal(html);
+    setTimeout(function() {
+      var el = document.getElementById('newCampaignName');
+      if (el) {
+        el.focus();
+        el.addEventListener('keydown', function(e) {
+          if (e.key === 'Enter') { e.preventDefault(); campaignsCreateNewConfirm(); }
+        });
+      }
+    }, 0);
+  }
+  window.campaignsCreateNew = campaignsCreateNew;
+
+  async function campaignsCreateNewConfirm() {
+    var el = document.getElementById('newCampaignName');
+    var name = el ? (el.value || '').trim() : '';
+    if (!name) {
+      if (typeof showToast === 'function') showToast('Campaign name required', true);
+      return;
+    }
+    if (typeof closeModal === 'function') closeModal();
     var id = MastDB.newKey('admin/campaigns');
     var doc = {
-      id: id, name: name.trim(), goal: '', startDate: '', endDate: '',
+      id: id, name: name, goal: '', startDate: '', endDate: '',
       utmCampaign: slugifyCampaign(name), references: [],
       status: 'active', createdAt: nowIso(), updatedAt: nowIso()
     };
@@ -247,7 +284,7 @@
       if (typeof showToast === 'function') showToast('Failed to create campaign', true);
     }
   }
-  window.campaignsCreateNew = campaignsCreateNew;
+  window.campaignsCreateNewConfirm = campaignsCreateNewConfirm;
 
   async function campaignsSaveCurrent() {
     if (!currentCampaignId) return;

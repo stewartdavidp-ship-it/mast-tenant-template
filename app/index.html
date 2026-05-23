@@ -16966,13 +16966,21 @@ function navigateTo(route, params) {
     showToast('This report is restricted to Admin users.', true);
     route = 'dashboard';
   }
-  // W2.3 — Engagement Inbox surfaces cs_reviews + cs_tickets data; mirror
-  // the cs-* routes' implicit gate by requiring customerService:read.
-  // feedback_parallel_route_role_gate.md: this is the data gate — the
-  // route gate IS the data gate when the new route aggregates a subset
-  // of an already-gated module's reads.
-  if (route === 'engagement-inbox' && !hasPermission('customerService', 'read')) {
-    showToast('Engagement Inbox requires Customer Service access.', true);
+  // W2.3 — Engagement Inbox surfaces cs_reviews + cs_tickets data. The
+  // cs-* routes themselves rely on section-level access (the
+  // 'customer-service' nav section in role.navSections) rather than an
+  // entity-level hasPermission check — there is no 'customerService'
+  // permission entity in DEFAULT_ROLES. Engagement Inbox lives in the
+  // 'marketing' section, so use canViewSection for parallel gating
+  // instead. Role nav filter at the hashchange handler (canViewSection)
+  // is the actual data gate for any role whose navSections excludes
+  // marketing; we mirror it here for direct navigateTo() calls so
+  // sidebar clicks under restricted roles get a clear toast rather than
+  // a silent allow that exposes the surface to roles whose navSections
+  // exclude the marketing section but whose section toggle is still
+  // showing for some reason.
+  if (route === 'engagement-inbox' && !canViewSection('engagement-inbox')) {
+    showToast('Engagement Inbox is in the Marketing section, which is not enabled for your role.', true);
     route = 'dashboard';
   }
   // Subscription module gating — block routes for locked modules
@@ -46175,24 +46183,46 @@ async function renderImageDetailBackrefs(imageId) {
   var url = img.url || '';
   var result = { products: [], blogPosts: [], socialPosts: [], stories: [], homepageSections: 0 };
   try {
-    // Products
-    if (typeof imageLibrary !== 'undefined') {
-      // We already maintain product back-references in computeImageUsage,
-      // but we need names for click-through. Reuse the cached product list.
-      try {
-        var prods = (window.products && Array.isArray(window.products)) ? window.products :
-          ((await MastDB.list('public/products')) || {});
-        var pArr = Array.isArray(prods) ? prods : Object.keys(prods).map(function(k) { return prods[k]; });
-        pArr.forEach(function(p) {
-          if (!p) return;
-          var hit = false;
-          if (Array.isArray(p.imageIds) && p.imageIds.indexOf(imageId) !== -1) hit = true;
-          if (!hit && url && Array.isArray(p.images) && p.images.indexOf(url) !== -1) hit = true;
-          if (!hit && url && p.productImageUrl === url) hit = true;
-          if (hit) result.products.push({ id: p.pid || p.id, name: p.name || p.title || '(unnamed)' });
-        });
-      } catch (_e) {}
-    }
+    // Products — FIX 5 (W2 round 1): mirror computeImageUsage's data source
+    // (productsData global, already loaded on app init). The previous code
+    // read from `window.products` (which doesn't exist — the global is named
+    // `productsData`) and fell back to `MastDB.list('public/products')`
+    // which is a public-mirror path whose docs don't always carry the same
+    // `imageIds[]` array the admin-side products do. The header stat at
+    // top of the grid ("N linked to products") uses computeImageUsage —
+    // so make this match.
+    try {
+      var pArr = (typeof productsData !== 'undefined' && Array.isArray(productsData))
+        ? productsData
+        : (window.productsData && Array.isArray(window.productsData) ? window.productsData : []);
+      if (!pArr.length) {
+        // Fallback: read public/products if productsData isn't loaded yet
+        try {
+          var prods = (await MastDB.list('public/products')) || {};
+          pArr = Object.keys(prods).map(function(k) { return prods[k]; });
+        } catch (_e) {}
+      }
+      pArr.forEach(function(p) {
+        if (!p) return;
+        var hit = false;
+        // imageIds[] — admin-side schema, primary match
+        if (Array.isArray(p.imageIds) && p.imageIds.indexOf(imageId) !== -1) hit = true;
+        // images[] of URLs (legacy / public mirror)
+        if (!hit && url && Array.isArray(p.images) && p.images.indexOf(url) !== -1) hit = true;
+        // Single productImageUrl (legacy)
+        if (!hit && url && p.productImageUrl === url) hit = true;
+        // images[] of objects with .url
+        if (!hit && url && Array.isArray(p.images)) {
+          for (var ii = 0; ii < p.images.length; ii++) {
+            var imEntry = p.images[ii];
+            if (imEntry && typeof imEntry === 'object' && imEntry.url === url) { hit = true; break; }
+          }
+        }
+        // primary imageUrl field
+        if (!hit && url && p.imageUrl === url) hit = true;
+        if (hit) result.products.push({ id: p.pid || p.id, name: p.name || p.title || '(unnamed)' });
+      });
+    } catch (_e) {}
     // Blog
     try {
       var blog = (await MastDB.list('blog/posts')) || {};
