@@ -733,6 +733,52 @@
     margin-bottom: 0.4rem;
   }
 
+  /* W1.8 round-3 — multi-testimonial grid (replaces single-quote layout) */
+  .testimonials-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 1.5rem;
+    margin-top: 2.5rem;
+    text-align: left;
+  }
+  .testimonial-card {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 8px;
+    padding: 1.5rem;
+    color: rgba(255,255,255,0.88);
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+  }
+  .testimonial-card .tc-stars {
+    color: var(--amber-light);
+    font-size: 0.85rem;
+    letter-spacing: 0.2em;
+  }
+  .testimonial-card .tc-quote {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 1.15rem;
+    font-style: italic;
+    line-height: 1.55;
+  }
+  .testimonial-card .tc-author {
+    font-size: 0.85rem;
+    color: var(--teal-light);
+    letter-spacing: 0.08em;
+    margin-top: 0.4rem;
+  }
+  .testimonial-card .tc-product {
+    font-size: 0.78rem;
+    margin-top: 0.4rem;
+  }
+  .testimonial-card .tc-product a {
+    color: var(--amber-light);
+    text-decoration: none;
+    border-bottom: 1px dotted rgba(255,255,255,0.3);
+  }
+  .testimonial-card .tc-product a:hover { border-bottom-color: var(--amber-light); }
+
   /* ========= PROCESS ========= */
   .process-section {
     max-width: 1200px;
@@ -1443,9 +1489,12 @@
   <div class="testimonials-container fade-up">
     <p class="section-label">What People Say</p>
     <h2 class="section-title">Customer Reviews</h2>
-    <div class="testimonial-stars" id="testimonialStars"></div>
-    <div class="testimonial-quote" id="testimonialQuote"></div>
-    <div class="testimonial-author" id="testimonialAuthor"></div>
+    <!-- Legacy single-quote slots (kept for back-compat with prior render path).
+         W1.8 round-3: multi-card grid below is the primary surface. -->
+    <div class="testimonial-stars" id="testimonialStars" style="display:none;"></div>
+    <div class="testimonial-quote" id="testimonialQuote" style="display:none;"></div>
+    <div class="testimonial-author" id="testimonialAuthor" style="display:none;"></div>
+    <div class="testimonials-grid" id="testimonialsGrid"></div>
   </div>
 </section>
 
@@ -1832,27 +1881,53 @@ window.TENANT_READY.then(function() {
   }).catch(function() { /* no events data — section stays hidden */ });
 
   // ---- TESTIMONIALS (load from Firebase or keep hidden) ----
+  // W1.8 round-3: render up to 3 testimonials as cards in a grid. When data
+  // exists, force the section visible even if the active template's
+  // homepageFlow omits 'testimonials' — operators who explicitly featured a
+  // review on site clearly want it surfaced. Each card shows stars, quote,
+  // author, and an optional product link (when productId is on the entry).
   MastDB.query('public/testimonials').orderByChild('order').limitToLast(10).once().then(function(data) {
     if (!data || Object.keys(data).length === 0) return;
     var testimonials = Object.values(data).filter(function(t) { return t.visible !== false && t.quote; });
     if (testimonials.length === 0) return;
-    testimonials.sort(function(a, b) { return (a.order || 0) - (b.order || 0); });
+    // Newest first (higher 'order' = newer per featureReviewOnSite which uses Date.now())
+    testimonials.sort(function(a, b) { return (b.order || 0) - (a.order || 0); });
+    testimonials = testimonials.slice(0, 3);
 
-    // Show first testimonial (or random)
-    var t = testimonials[Math.floor(Math.random() * testimonials.length)];
-    var starsEl = document.getElementById('testimonialStars');
-    var quoteEl = document.getElementById('testimonialQuote');
-    var authorEl = document.getElementById('testimonialAuthor');
-
-    if (starsEl && t.rating) {
-      starsEl.textContent = '★ '.repeat(Math.min(t.rating, 5)).trim();
+    function starHtml(r) {
+      if (!r) return '';
+      var n = Math.max(0, Math.min(5, parseInt(r, 10) || 0));
+      return n > 0 ? '★ '.repeat(n).trim() : '';
     }
-    if (quoteEl) quoteEl.textContent = t.quote;
-    if (authorEl) authorEl.textContent = t.author ? ('— ' + t.author) : '';
+
+    var gridEl = document.getElementById('testimonialsGrid');
+    if (gridEl) {
+      var html = '';
+      testimonials.forEach(function(t) {
+        html += '<div class="testimonial-card">';
+        var stars = starHtml(t.rating);
+        if (stars) html += '<div class="tc-stars">' + stars + '</div>';
+        html += '<div class="tc-quote">' + esc(t.quote) + '</div>';
+        if (t.author) html += '<div class="tc-author">— ' + esc(t.author) + '</div>';
+        if (t.productId && t.productName) {
+          html += '<div class="tc-product"><a href="product.html?id=' + esc(t.productId) + '">' + esc(t.productName) + '</a></div>';
+        } else if (t.productName) {
+          html += '<div class="tc-product">' + esc(t.productName) + '</div>';
+        }
+        html += '</div>';
+      });
+      gridEl.innerHTML = html;
+    }
 
     var section = document.getElementById('testimonials');
+    // Force visible regardless of homepageFlow — featured testimonials are
+    // an operator-curated surface and shouldn't be silently suppressed by
+    // template-default flow ordering.
     (window.MAST_THEME_READY || Promise.resolve()).then(function() {
-      if (section && !section.hasAttribute('data-flow-hidden')) section.style.display = '';
+      if (section) {
+        section.removeAttribute('data-flow-hidden');
+        section.style.display = '';
+      }
     });
   }).catch(function() { /* no testimonials — section stays hidden */ });
 

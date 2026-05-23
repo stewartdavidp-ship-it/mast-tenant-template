@@ -21,6 +21,10 @@
   var themeConfig = null;
   var templateManifest = null;
   var navSections = null;
+  // W1.8 round-3 — testimonials surfaced in the Page Builder Testimonials
+  // section so operators see review-driven entries from public/testimonials/
+  // alongside any image-based legacy entries.
+  var testimonialsData = {};
 
   // --- Sync gallery data into the core shell's object without replacing the reference ---
   function syncToGlobal(data) {
@@ -118,6 +122,12 @@
 
     // Load nav sections (enabled states)
     navSections = (await MastDB.get('public/config/nav/sections')) || {};
+
+    // W1.8 round-3 — load review-driven testimonials so the Testimonials
+    // section card can surface them with visibility toggles.
+    try {
+      testimonialsData = (await MastDB.get('public/testimonials')) || {};
+    } catch (_e) { testimonialsData = {}; }
 
     // Load template manifest — try shared data first, then load independently
     templateManifest = MastAdmin.getData('templateManifest');
@@ -320,6 +330,15 @@
     html += renderSectionFields(sec.id);
     html += '</div>';
 
+    // W1.8 round-3 — Testimonials section: render the review-driven list
+    // (public/testimonials/) above the legacy image grid. Each row shows the
+    // quote/author/rating/product with a Hide/Show toggle (visibility flag
+    // on the testimonial doc). Image-grid below remains for any legacy
+    // image-style entries.
+    if (sec.id === 'testimonials') {
+      html += renderTestimonialsList();
+    }
+
     // Gallery images for this section
     var sectionImages = getImagesForSection(sec.id);
     if (sectionImages.length > 0 || hasImageCapability(sec.id)) {
@@ -416,6 +435,51 @@
       }
     }
     html += '</div>';
+    return html;
+  }
+
+  // W1.8 round-3 — render the testimonials list (review-driven entries from
+  // public/testimonials/). Each row: quote text, author, rating stars,
+  // product link, source ("From review"), + visibility toggle. Sorted
+  // newest first (matches storefront ordering).
+  function renderTestimonialsList() {
+    var entries = Object.keys(testimonialsData)
+      .map(function(k) { var t = testimonialsData[k] || {}; return Object.assign({}, t, { _key: k }); })
+      .filter(function(t) { return t.quote; })
+      .sort(function(a, b) { return (b.order || 0) - (a.order || 0); });
+
+    var html = '<div class="hp-edit-gallery"><div class="hp-gallery-header">';
+    html += '<h4>Featured testimonials (' + entries.length + ')</h4>';
+    html += '<span style="font-size:0.78rem;color:var(--warm-gray);">Featured from Customer Service › Reviews</span>';
+    html += '</div>';
+
+    if (entries.length === 0) {
+      html += '<div class="empty-state" style="padding:20px;">' +
+        '<p>No testimonials featured yet. Approve a review in Customer Service and click "Feature on site" to add one here.</p>' +
+      '</div></div>';
+      return html;
+    }
+
+    html += '<div style="display:flex;flex-direction:column;gap:8px;">';
+    entries.forEach(function(t) {
+      var stars = t.rating ? ('★ '.repeat(Math.max(0, Math.min(5, parseInt(t.rating, 10) || 0))).trim()) : '';
+      var visible = t.visible !== false;
+      var keyEsc = esc(t._key);
+      html += '<div style="display:flex;gap:12px;padding:12px;background:var(--surface-card);border:1px solid var(--cream-dark);border-radius:8px;align-items:flex-start;">';
+      html += '<div style="flex:1;min-width:0;">';
+      if (stars) html += '<div style="color:var(--amber);letter-spacing:0.15em;font-size:0.85rem;margin-bottom:4px;">' + stars + '</div>';
+      html += '<div style="font-size:0.9rem;font-style:italic;color:var(--text-primary);margin-bottom:4px;">“' + esc(t.quote) + '”</div>';
+      html += '<div style="font-size:0.78rem;color:var(--warm-gray);">';
+      if (t.author) html += '— ' + esc(t.author);
+      if (t.productName) html += ' · ' + esc(t.productName);
+      if (t.sourceReviewId) html += ' · <span title="Featured from a review">From review</span>';
+      html += '</div></div>';
+      html += '<label class="toggle-switch" title="' + (visible ? 'Visible on site — click to hide' : 'Hidden — click to show') + '" style="flex-shrink:0;">';
+      html += '<input type="checkbox"' + (visible ? ' checked' : '') + ' onchange="hpToggleTestimonialVisible(\'' + keyEsc + '\', this.checked)">';
+      html += '<span class="toggle-slider"></span></label>';
+      html += '</div>';
+    });
+    html += '</div></div>';
     return html;
   }
 
@@ -583,6 +647,21 @@
     } else {
       showToast('Image picker not available.', true);
     }
+  };
+
+  // W1.8 round-3 — toggle testimonial visibility from the Page Builder
+  // Testimonials card. Writes to public/testimonials/{key}/visible; the
+  // storefront index.html testimonials loader filters on visible !== false.
+  window.hpToggleTestimonialVisible = async function(key, visible) {
+    if (!testimonialsData[key]) testimonialsData[key] = {};
+    testimonialsData[key].visible = !!visible;
+    try {
+      await MastDB.set('public/testimonials/' + key + '/visible', !!visible);
+      showToast(visible ? 'Testimonial shown on site.' : 'Testimonial hidden.');
+    } catch (err) {
+      showToast('Error: ' + err.message, true);
+    }
+    renderHomepage();
   };
 
   // --- Module Registration ---

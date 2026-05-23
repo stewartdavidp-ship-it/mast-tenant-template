@@ -745,7 +745,19 @@
           html += '<button class="btn btn-secondary btn-small" onclick="csApproveReview(\'' + _esc(r.id) + '\')">Approve</button>';
         } else if (r.status === 'approved') {
           // W1.8 — promote approved reviews into Testimonials + drafted social posts.
-          html += '<button class="btn btn-primary btn-small" onclick="csFeatureReviewOnSite(\'' + _esc(r.id) + '\')" title="Add this review to the homepage Testimonials section">⭐ Feature on site</button>';
+          // W1.8 round-3: reflect featuredOnSite state visibly on the row so
+          // operators see the toggle took effect (was: button label never changed,
+          // no "Featured" chip).
+          if (r.featuredOnSite) {
+            var featRel = r.featuredAt ? (relativeTime(r.featuredAt) || '') : '';
+            var featTitle = r.featuredAt ? new Date(r.featuredAt).toLocaleString() : 'Featured on site';
+            html += '<span class="status-badge pill" title="' + _esc(featTitle) + '" style="background:rgba(212,162,69,0.16);color:var(--amber);font-size:0.78rem;display:inline-flex;align-items:center;gap:4px;">' +
+              '✓ Featured' + (featRel ? ' <span style="color:var(--warm-gray);font-weight:400;">· ' + _esc(featRel) + '</span>' : '') +
+            '</span>';
+            html += '<button class="btn btn-secondary btn-small" onclick="csUnfeatureReviewOnSite(\'' + _esc(r.id) + '\')" title="Remove this review from the homepage Testimonials section">Unfeature</button>';
+          } else {
+            html += '<button class="btn btn-primary btn-small" onclick="csFeatureReviewOnSite(\'' + _esc(r.id) + '\')" title="Add this review to the homepage Testimonials section">⭐ Feature on site</button>';
+          }
           html += '<button class="btn btn-secondary btn-small" onclick="csDraftSocialFromReview(\'' + _esc(r.id) + '\')" title="Open the Social composer with this review pre-filled">✍ Draft Social Post</button>';
           html += '<button class="btn btn-secondary btn-small" onclick="csRejectReview(\'' + _esc(r.id) + '\')">Unpublish</button>';
         }
@@ -823,6 +835,33 @@
         }
       } catch (_e) { /* non-fatal — testimonial already wrote */ }
       showToast('Featured on homepage Testimonials section.');
+      // W1.8 round-3 — re-render so the row visibly flips to "✓ Featured" + Unfeature.
+      renderReviews();
+    } catch (err) {
+      showToast('Failed: ' + (err && err.message), true);
+    }
+  }
+
+  // "Unfeature" — remove the testimonial entry + clear the review flag.
+  // Idempotent: re-clicking on a non-featured review is a no-op.
+  async function unfeatureReviewOnSite(id) {
+    var r = reviewsData[id];
+    if (!r) { showToast('Review not found', true); return; }
+    var key = 'review_' + r.id;
+    try {
+      await MastDB.remove('public/testimonials/' + key);
+      try {
+        await MastDB.update('cs_reviews/' + r.id, {
+          featuredOnSite: false,
+          featuredAt: null
+        });
+        if (reviewsData[r.id]) {
+          reviewsData[r.id].featuredOnSite = false;
+          reviewsData[r.id].featuredAt = null;
+        }
+      } catch (_e) { /* non-fatal */ }
+      showToast('Removed from homepage Testimonials section.');
+      renderReviews();
     } catch (err) {
       showToast('Failed: ' + (err && err.message), true);
     }
@@ -2193,6 +2232,7 @@
   window.csRejectReview = rejectReview;
   window.csDeleteReview = deleteReview;
   window.csFeatureReviewOnSite = featureReviewOnSite;
+  window.csUnfeatureReviewOnSite = unfeatureReviewOnSite;
   window.csDraftSocialFromReview = draftSocialFromReview;
   window.csSurveysRefresh = function () {
     surveysLoaded = false;
