@@ -271,6 +271,8 @@
           '</div>' +
           '<div class="sm-post-caption-expand" id="smPostCaption_' + esc(post.postId) + '" style="display:none;">' +
             esc(post.caption || 'No caption saved') +
+            // W3b — per-content attribution panel host (populated by smTogglePostCaption).
+            '<div id="smPostAttr_' + esc(post.postId) + '" data-post-id="' + esc(post.postId) + '" data-product-id="' + esc(post.productId || '') + '"></div>' +
           '</div>' +
         '</div>';
       });
@@ -283,6 +285,22 @@
   function smTogglePostCaption(postId) {
     var el = document.getElementById('smPostCaption_' + postId);
     if (el) el.style.display = el.style.display === 'none' ? '' : 'none';
+    // W3b — lazy-populate the per-content attribution panel on first expand.
+    if (el && el.style.display !== 'none' && typeof window.renderContentAttributionPanel === 'function') {
+      var attrHost = document.getElementById('smPostAttr_' + postId);
+      if (attrHost && !attrHost.dataset.attrLoaded) {
+        attrHost.dataset.attrLoaded = '1';
+        var productId = attrHost.dataset.productId || '';
+        var path = productId ? ('/product.html?id=' + encodeURIComponent(productId)) : '/';
+        window.renderContentAttributionPanel({
+          hostEl: attrHost,
+          contentId: postId,
+          utmSource: 'social',
+          utmMedium: 'social',
+          path: path,
+        });
+      }
+    }
   }
 
   async function smSetSignal(postId, score) {

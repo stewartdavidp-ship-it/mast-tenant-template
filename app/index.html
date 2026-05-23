@@ -43138,6 +43138,163 @@ function _hostFromRef(ref) {
   catch (_e) { return ''; }
 }
 
+// W3b — Cross-module helper consumed by the per-content attribution panel
+// (blog post detail, newsletter issue detail, social post detail, composer
+// content detail). Joins _w25Hits and _w25Orders on attribution.content ===
+// contentId (or hit.uct === contentId) and returns the per-content rollup.
+//
+// Hits carry `uct` (capped utm_content, see cart.js).
+// Orders carry `attribution.content` (snapshot at checkout, see checkout.js).
+//
+// Returns:
+//   { revenue, orderCount, topCustomer: {name, totalCents} | null,
+//     conversionRate, uniqueVisitors }
+window.computeRevenueForContent = async function(contentId) {
+  if (!contentId) return { revenue: 0, orderCount: 0, topCustomer: null, conversionRate: 0, uniqueVisitors: 0 };
+  await _w25LoadData();
+  var cidStr = String(contentId);
+  var cidShort = cidStr.slice(0, 40);
+  var matchedHits = [];
+  (_w25Hits || []).forEach(function(h) {
+    if (!h) return;
+    // utm_content on hits is stored as `uct` (40-char cap).
+    if (h.uct && (h.uct === cidStr || h.uct === cidShort)) matchedHits.push(h);
+  });
+  var matchedOrders = [];
+  (_w25Orders || []).forEach(function(o) {
+    if (!o) return;
+    var attr = o.attribution || o.utm || {};
+    var c = attr.content || attr.utm_content || '';
+    if (c && (c === cidStr || c === cidShort)) matchedOrders.push(o);
+  });
+
+  var revenue = 0;
+  var byCustomer = {};
+  matchedOrders.forEach(function(o) {
+    var cents = (o.totalCents || o.total || 0);
+    revenue += cents;
+    var cid = o.customerId || o.email || 'unknown';
+    var cname = o.customerName || o.email || 'Customer';
+    if (!byCustomer[cid]) byCustomer[cid] = { name: cname, totalCents: 0 };
+    byCustomer[cid].totalCents += cents;
+  });
+  var topCustomer = null;
+  Object.keys(byCustomer).forEach(function(k) {
+    if (!topCustomer || byCustomer[k].totalCents > topCustomer.totalCents) topCustomer = byCustomer[k];
+  });
+
+  // Unique visitors = unique session/visitor IDs across matched hits. Hits
+  // carry `sid` (session id) per analytics-hits schema; fall back to `vid`.
+  var uniq = {};
+  matchedHits.forEach(function(h) {
+    var k = h.sid || h.vid || h.ip || '';
+    if (k) uniq[k] = true;
+  });
+  var uniqueVisitors = Object.keys(uniq).length;
+  var conversionRate = uniqueVisitors > 0 ? (matchedOrders.length / uniqueVisitors) : 0;
+
+  return {
+    revenue: revenue / 100,
+    revenueCents: revenue,
+    orderCount: matchedOrders.length,
+    topCustomer: topCustomer,
+    conversionRate: conversionRate,
+    uniqueVisitors: uniqueVisitors,
+  };
+};
+
+// W3b — Helper to build a tracking URL with utm_source/medium/content (and
+// optionally utm_campaign). storefrontPath is page-relative (e.g.
+// '/blog/post.html?id=...').
+window.buildContentTrackingUrl = function(opts) {
+  opts = opts || {};
+  var domain = (window.TENANT_CONFIG && window.TENANT_CONFIG.domain) || window.location.hostname;
+  var base = 'https://' + domain + (opts.path || '/');
+  var sep = base.indexOf('?') !== -1 ? '&' : '?';
+  var parts = [];
+  if (opts.utmSource)   parts.push('utm_source=' + encodeURIComponent(opts.utmSource));
+  if (opts.utmMedium)   parts.push('utm_medium=' + encodeURIComponent(opts.utmMedium));
+  if (opts.utmCampaign) parts.push('utm_campaign=' + encodeURIComponent(opts.utmCampaign));
+  if (opts.utmContent)  parts.push('utm_content=' + encodeURIComponent(opts.utmContent));
+  return parts.length ? (base + sep + parts.join('&')) : base;
+};
+
+// W3b — Render the per-content "Revenue attributed to this content" panel
+// into a target host element. Each module supplies its own utm_source +
+// path; this function handles the layout + Copy button + computeRevenueForContent
+// data fetch + the empty/loading states.
+//
+// opts: {
+//   hostEl,           // DOM element to render into (required)
+//   contentId,        // identifier used for utm_content + lookup (required)
+//   utmSource,        // 'blog' | 'newsletter' | 'social' | 'content' (required)
+//   utmMedium,        // e.g. 'organic' | 'email' (required)
+//   utmCampaign,      // optional — when content rolls up under a Campaign
+//   path,             // storefront path the tracking URL points to (required)
+// }
+window.renderContentAttributionPanel = async function(opts) {
+  if (!opts || !opts.hostEl || !opts.contentId) return;
+  var host = opts.hostEl;
+  var cid = String(opts.contentId);
+  var cidShort = cid.slice(0, 40);
+  host.innerHTML =
+    '<div style="margin:18px 0;padding:14px 16px;background:var(--cream,rgba(0,0,0,0.03));border-radius:8px;font-size:0.85rem;">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:8px;">' +
+        '<strong style="font-size:0.9rem;">Revenue attributed to this content</strong>' +
+        '<button class="btn btn-secondary btn-small" id="contentAttrCopyBtn" style="padding:4px 10px;font-size:0.78rem;">📋 Copy tracking URL</button>' +
+      '</div>' +
+      '<div id="contentAttrBody" style="color:var(--warm-gray,#777);">Loading…</div>' +
+      '<div style="margin-top:8px;color:var(--warm-gray,#999);font-size:0.78rem;">Filtering on utm_content=' + (cidShort) + '</div>' +
+    '</div>';
+
+  var trackingUrl = window.buildContentTrackingUrl({
+    path: opts.path || '/',
+    utmSource: opts.utmSource,
+    utmMedium: opts.utmMedium,
+    utmCampaign: opts.utmCampaign || null,
+    utmContent: cidShort,
+  });
+
+  var copyBtn = host.querySelector('#contentAttrCopyBtn');
+  if (copyBtn) {
+    copyBtn.onclick = function() {
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(trackingUrl).then(function(){
+            if (typeof showToast === 'function') showToast('Tracking URL copied');
+          }, function(){
+            if (typeof showToast === 'function') showToast('Copy failed', true);
+          });
+        } else {
+          // Fallback: prompt.
+          window.prompt('Tracking URL', trackingUrl);
+        }
+      } catch (_e) {
+        window.prompt('Tracking URL', trackingUrl);
+      }
+    };
+  }
+
+  try {
+    var stats = await window.computeRevenueForContent(cid);
+    var body = host.querySelector('#contentAttrBody');
+    if (!body) return;
+    var topCust = stats.topCustomer ? (stats.topCustomer.name + ' ($' + (stats.topCustomer.totalCents/100).toFixed(2) + ')') : '—';
+    var convPct = (stats.conversionRate * 100).toFixed(1) + '%';
+    body.innerHTML =
+      '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;color:var(--text,#222);">' +
+        '<div><div style="font-size:0.78rem;color:var(--warm-gray,#777);">Revenue</div><div style="font-size:1.15rem;font-weight:600;">$' + stats.revenue.toFixed(2) + '</div></div>' +
+        '<div><div style="font-size:0.78rem;color:var(--warm-gray,#777);">Orders</div><div style="font-size:1.15rem;font-weight:600;">' + stats.orderCount + '</div></div>' +
+        '<div><div style="font-size:0.78rem;color:var(--warm-gray,#777);">Unique visitors</div><div style="font-size:1.15rem;font-weight:600;">' + stats.uniqueVisitors + '</div></div>' +
+        '<div><div style="font-size:0.78rem;color:var(--warm-gray,#777);">Conversion rate</div><div style="font-size:1.15rem;font-weight:600;">' + convPct + '</div></div>' +
+        '<div><div style="font-size:0.78rem;color:var(--warm-gray,#777);">Top customer</div><div style="font-size:0.9rem;font-weight:500;">' + (topCust || '—') + '</div></div>' +
+      '</div>';
+  } catch (err) {
+    var body2 = host.querySelector('#contentAttrBody');
+    if (body2) body2.textContent = 'Could not load attribution data.';
+  }
+};
+
 // Cross-module helper consumed by the Campaigns module's attribution panel.
 window.computeAttributionForCampaign = async function(utmCampaign) {
   await _w25LoadData();

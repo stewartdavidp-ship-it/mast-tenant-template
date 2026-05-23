@@ -530,7 +530,25 @@
     }
     html += '</div>';
 
+    // W3b — per-content attribution panel host.
+    html += '<div id="blogContentAttrPanel" style="max-width:680px;margin:0 auto;"></div>';
+
     document.getElementById('blogContent').innerHTML = html;
+
+    // W3b — populate attribution panel for this post.
+    if (post && post.id && typeof window.renderContentAttributionPanel === 'function') {
+      var attrHost = document.getElementById('blogContentAttrPanel');
+      if (attrHost) {
+        window.renderContentAttributionPanel({
+          hostEl: attrHost,
+          contentId: post.id,
+          utmSource: 'blog',
+          utmMedium: 'organic',
+          utmCampaign: post.campaignUtm || null,
+          path: '/blog/post.html?id=' + encodeURIComponent(post.id),
+        });
+      }
+    }
 
     // Load body content into contentEditable div (must be done after innerHTML is set)
     if (!blogAiResult && !blogShowPreview) {

@@ -226,9 +226,30 @@
                 ? '<div style="font-size:0.78rem;color:var(--warm-gray);">No voice set — open Brand &rarr; Voice to add some.</div>'
                 : '')) +
         '</aside>' +
-      '</div>';
+      '</div>' +
+      // W3b — per-content attribution panel host.
+      '<div id="composerAttrPanel"></div>';
 
     host.innerHTML = html;
+
+    // W3b — populate attribution panel for this Content. Tracking URL points
+    // to whichever channel artifact is linked (blog post by default; falls
+    // back to storefront root).
+    if (c && c.id && typeof window.renderContentAttributionPanel === 'function') {
+      var attrHost = document.getElementById('composerAttrPanel');
+      if (attrHost) {
+        var la = c.linkedArtifacts || {};
+        var path = '/';
+        if (la.blogPostId) path = '/blog/post.html?id=' + encodeURIComponent(la.blogPostId);
+        window.renderContentAttributionPanel({
+          hostEl: attrHost,
+          contentId: c.id,
+          utmSource: 'content',
+          utmMedium: 'organic',
+          path: path,
+        });
+      }
+    }
   }
 
   function _channelCheckbox(ch, current) {

@@ -644,7 +644,25 @@
         '</div>';
     }
 
+    // W3b — per-content attribution panel host.
+    html += '<div id="nlIssueAttrPanel"></div>';
+
     document.getElementById('newsletterContent').innerHTML = html;
+
+    // W3b — populate attribution panel for this issue.
+    if (issue && issue.id && typeof window.renderContentAttributionPanel === 'function') {
+      var attrHost = document.getElementById('nlIssueAttrPanel');
+      if (attrHost) {
+        window.renderContentAttributionPanel({
+          hostEl: attrHost,
+          contentId: issue.id,
+          utmSource: 'newsletter',
+          utmMedium: 'email',
+          utmCampaign: issue.campaignUtm || null,
+          path: '/news/?issueId=' + encodeURIComponent(issue.id),
+        });
+      }
+    }
   }
 
   function nlEscHtml(str) {
