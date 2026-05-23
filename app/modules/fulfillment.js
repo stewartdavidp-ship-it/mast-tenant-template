@@ -63,7 +63,7 @@
   function switchShipSubView(view) {
     shipSubView = view;
     document.querySelectorAll('#shipSubNav .view-tab').forEach(function(b) { b.classList.remove('active'); });
-    var views = { deliver: 'fulfDeliverView', bundles: 'fulfBundlesView' };
+    var views = { deliver: 'fulfDeliverView', bundles: 'fulfBundlesView', buylabels: 'fulfBuyLabelsView' };
     Object.keys(views).forEach(function(v) {
       var btn = document.getElementById('shipSub' + v.charAt(0).toUpperCase() + v.slice(1));
       var el = document.getElementById(views[v]);
@@ -73,6 +73,135 @@
     stopScanCamera();
     if (view === 'deliver') renderDeliverView();
     else if (view === 'bundles') renderBundlesView();
+    else if (view === 'buylabels') renderBuyLabelsView();
+  }
+
+  // ---- Buy Labels (W2.6 — Shippo) ----
+  // Bulk-buy shipping labels via the buyShippingLabels CF. Lists orders in
+  // pack/packed status that don't yet have a tracking number.
+  var _buyLabelsSelected = Object.create(null);
+
+  function _buyLabelsCandidates() {
+    return getOrdersArray().filter(function(o) {
+      if (!o) return false;
+      var s = o.status;
+      if (s !== 'pack' && s !== 'packed') return false;
+      var t = o.tracking || {};
+      if (t.trackingNumber) return false;
+      return true;
+    });
+  }
+
+  function renderBuyLabelsView() {
+    var el = document.getElementById('fulfBuyLabelsView');
+    if (!el) return;
+    var rows = _buyLabelsCandidates();
+    var selCount = Object.keys(_buyLabelsSelected).filter(function(k) { return _buyLabelsSelected[k]; }).length;
+
+    if (rows.length === 0) {
+      el.innerHTML = '<div class="empty-state"><div class="empty-icon">&#127991;&#65039;</div><p>No orders ready to buy labels for. Orders in <b>pack</b> or <b>packed</b> without a tracking number will appear here.</p></div>';
+      return;
+    }
+
+    var html = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:12px;flex-wrap:wrap;">' +
+      '<div style="font-size:0.85rem;color:var(--warm-gray);">' + rows.length + ' order' + (rows.length === 1 ? '' : 's') + ' ready &middot; ' + selCount + ' selected</div>' +
+      '<button id="buyLabelsBtn" class="btn btn-primary" ' + (selCount === 0 ? 'disabled' : '') + ' style="font-size:0.85rem;padding:8px 16px;' + (selCount === 0 ? 'opacity:0.5;cursor:not-allowed;' : '') + '" onclick="buyLabelsSelected()">Buy Selected (' + selCount + ')</button>' +
+    '</div>';
+
+    html += '<table style="width:100%;border-collapse:collapse;font-size:0.85rem;background:#fff;border:1px solid var(--cream-dark,#e8e0d4);border-radius:8px;overflow:hidden;">' +
+      '<thead><tr style="background:var(--cream);text-align:left;">' +
+        '<th style="padding:8px 10px;width:32px;"><input type="checkbox" id="buyLabelsSelectAll" onclick="toggleBuyLabelsSelectAll()"' + (selCount === rows.length && rows.length > 0 ? ' checked' : '') + '></th>' +
+        '<th style="padding:8px 10px;">Order</th>' +
+        '<th style="padding:8px 10px;">Buyer</th>' +
+        '<th style="padding:8px 10px;">Ship To</th>' +
+        '<th style="padding:8px 10px;">Status</th>' +
+        '<th style="padding:8px 10px;" align="right">Total</th>' +
+      '</tr></thead><tbody>';
+
+    rows.forEach(function(o) {
+      var key = o._key || o.id;
+      var checked = !!_buyLabelsSelected[key];
+      var num = (window.getOrderDisplayNumber ? window.getOrderDisplayNumber(o) : (key || '').substring(0, 8));
+      var buyer = esc((o.buyerName || o.customerName || o.buyerEmail || o.email || '—'));
+      var shipTo = o.shippingAddress || {};
+      var shipLine = esc([shipTo.city, shipTo.state, shipTo.zip].filter(Boolean).join(', ') || '—');
+      var total = (typeof o.total === 'number') ? '$' + o.total.toFixed(2)
+        : (typeof o.totalCents === 'number') ? '$' + (o.totalCents / 100).toFixed(2) : '—';
+      html += '<tr style="border-top:1px solid var(--cream-dark,#e8e0d4);">' +
+        '<td style="padding:8px 10px;"><input type="checkbox" data-buy-labels-row="' + esc(key) + '"' + (checked ? ' checked' : '') + ' onclick="toggleBuyLabelsRow(\'' + _jsAttr(key) + '\')"></td>' +
+        '<td style="padding:8px 10px;font-family:monospace;">' + esc(num) + '</td>' +
+        '<td style="padding:8px 10px;">' + buyer + '</td>' +
+        '<td style="padding:8px 10px;color:var(--warm-gray);">' + shipLine + '</td>' +
+        '<td style="padding:8px 10px;">' + esc(o.status || '—') + '</td>' +
+        '<td style="padding:8px 10px;" align="right">' + total + '</td>' +
+      '</tr>';
+    });
+    html += '</tbody></table>';
+
+    el.innerHTML = html;
+  }
+
+  function toggleBuyLabelsRow(key) {
+    if (!key) return;
+    _buyLabelsSelected[key] = !_buyLabelsSelected[key];
+    renderBuyLabelsView();
+  }
+
+  function toggleBuyLabelsSelectAll() {
+    var rows = _buyLabelsCandidates();
+    var allSelected = rows.length > 0 && rows.every(function(o) { return _buyLabelsSelected[o._key || o.id]; });
+    rows.forEach(function(o) {
+      var k = o._key || o.id;
+      _buyLabelsSelected[k] = !allSelected;
+    });
+    renderBuyLabelsView();
+  }
+
+  async function buyLabelsSelected() {
+    var ids = Object.keys(_buyLabelsSelected).filter(function(k) { return _buyLabelsSelected[k]; });
+    if (ids.length === 0) return;
+    var btn = document.getElementById('buyLabelsBtn');
+    if (btn) { btn.disabled = true; btn.textContent = 'Buying ' + ids.length + ' label(s)…'; }
+    try {
+      var tenantId = (typeof window.TENANT_ID === 'string' && window.TENANT_ID) || (window.TENANT_CONFIG && window.TENANT_CONFIG.tenantId);
+      var fn = firebase.functions().httpsCallable('buyShippingLabels');
+      var res = await fn({ tenantId: tenantId, orderIds: ids });
+      var data = (res && res.data) || {};
+      _showBuyLabelsResultModal(data.results || []);
+      // Clear selection on success path
+      _buyLabelsSelected = Object.create(null);
+      renderBuyLabelsView();
+    } catch (e) {
+      showToast('Buy labels failed: ' + (e && e.message ? e.message : String(e)), true);
+      if (btn) { btn.disabled = false; btn.textContent = 'Buy Selected (' + ids.length + ')'; }
+    }
+  }
+
+  function _showBuyLabelsResultModal(results) {
+    var overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:10002;display:flex;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto;';
+    var ok = results.filter(function(r) { return r && r.ok; }).length;
+    var bad = results.length - ok;
+    var rowsHtml = results.map(function(r) {
+      var oid = (r && r.orderId) || '—';
+      if (r && r.ok) {
+        var url = r.labelUrl || r.label_url || '';
+        var track = r.trackingNumber || r.tracking_number || '';
+        return '<tr style="border-top:1px solid var(--cream-dark,#e8e0d4);"><td style="padding:6px 8px;font-family:monospace;">' + esc(oid) + '</td><td style="padding:6px 8px;color:#16a34a;">OK</td><td style="padding:6px 8px;">' + esc(track) + '</td><td style="padding:6px 8px;">' + (url ? '<a href="' + esc(url) + '" target="_blank" style="color:var(--teal);">Label PDF</a>' : '—') + '</td></tr>';
+      }
+      var err = (r && (r.error || r.message)) || 'Unknown error';
+      return '<tr style="border-top:1px solid var(--cream-dark,#e8e0d4);"><td style="padding:6px 8px;font-family:monospace;">' + esc(oid) + '</td><td style="padding:6px 8px;color:var(--danger);">FAIL</td><td colspan="2" style="padding:6px 8px;color:var(--warm-gray);">' + esc(err) + '</td></tr>';
+    }).join('');
+    overlay.innerHTML = '<div style="background:#fff;border-radius:12px;padding:24px;width:100%;max-width:700px;margin-top:40px;color:var(--charcoal);">' +
+      '<h3 style="margin:0 0 12px;font-size:1.15rem;">Buy Labels — ' + ok + ' ok, ' + bad + ' failed</h3>' +
+      '<table style="width:100%;border-collapse:collapse;font-size:0.85rem;"><thead><tr style="text-align:left;background:var(--cream);">' +
+        '<th style="padding:6px 8px;">Order</th><th style="padding:6px 8px;">Result</th><th style="padding:6px 8px;">Tracking</th><th style="padding:6px 8px;">Label</th>' +
+      '</tr></thead><tbody>' + (rowsHtml || '<tr><td colspan="4" style="padding:12px;color:var(--warm-gray);">No results.</td></tr>') + '</tbody></table>' +
+      '<div style="display:flex;justify-content:flex-end;margin-top:16px;"><button class="btn btn-primary" onclick="this.closest(\'[data-buy-labels-modal]\').remove()" style="font-size:0.85rem;padding:8px 16px;">Close</button></div>' +
+    '</div>';
+    overlay.setAttribute('data-buy-labels-modal', '1');
+    overlay.addEventListener('click', function(e) { if (e.target === overlay) overlay.remove(); });
+    document.body.appendChild(overlay);
   }
 
   // ---- Pack Queue ----
@@ -1173,6 +1302,10 @@
   window.showManualOrderEntry = showManualOrderEntry;
   window.processManualScan = processManualScan;
   window.renderDeliverView = renderDeliverView;
+  window.renderBuyLabelsView = renderBuyLabelsView;
+  window.toggleBuyLabelsRow = toggleBuyLabelsRow;
+  window.toggleBuyLabelsSelectAll = toggleBuyLabelsSelectAll;
+  window.buyLabelsSelected = buyLabelsSelected;
   window.setDeliverCarrier = setDeliverCarrier;
   window.startDeliverCamera = startDeliverCamera;
   window.openConfirmAllDeliveredModal = openConfirmAllDeliveredModal;
