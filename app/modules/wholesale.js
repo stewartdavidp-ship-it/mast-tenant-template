@@ -115,6 +115,13 @@ function renderWholesaleAdmin() {
 function renderWholesaleAccountDetail(accountId) {
   var container = document.getElementById('wholesaleSubContent');
   if (!container) return;
+  // W1-SEC: reflected-XSS guard. accountId arrives from URL (?accountId=) and
+  // is interpolated into JS-string literals in onclick handlers; esc() escapes
+  // HTML but NOT single quotes. Restrict to Firebase-key charset.
+  if (accountId && !/^[A-Za-z0-9_-]+$/.test(accountId)) {
+    container.innerHTML = '<div style="padding:24px;color:var(--danger);">Invalid account id.</div>';
+    return;
+  }
   if (!accountId) {
     // W1 Round 2 — Fix 1: defensive in-stub link. If anyone lands here, ensure
     // the click re-routes to the accounts list (not the bare #wholesale fallback
