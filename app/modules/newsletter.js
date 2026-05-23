@@ -1874,6 +1874,32 @@
   window.renderNLSubscribers = renderNLSubscribers;
 
   // ============================================================
+  // W2.2 / W2.6 — Composer + Campaigns hooks
+  // ============================================================
+  async function newsletterOpenFromContent(contentId) {
+    try {
+      var c = await MastDB.get('admin/content/' + contentId);
+      if (!c) { if (typeof showToast === 'function') showToast('Content not found', true); return; }
+      // Composer-driven newsletter sections aren't tied to a specific issue
+      // editor in v1 — we simply persist a "loose" section under the
+      // newsletter sections collection so the operator can attach it to an
+      // issue manually from the Newsletter UI.
+      var sectionId = MastDB.newKey('admin/newsletterSections');
+      await MastDB.set('admin/newsletterSections/' + sectionId, {
+        id: sectionId,
+        title: c.title || '',
+        body: c.body || '',
+        source: 'composer',
+        sourceContentId: contentId,
+        createdAt: new Date().toISOString()
+      });
+      if (typeof navigateTo === 'function') navigateTo('newsletter');
+      if (typeof showToast === 'function') showToast('Newsletter section drafted from content');
+    } catch (e) { console.warn('[newsletter] openFromContent', e); }
+  }
+  window.newsletterOpenFromContent = newsletterOpenFromContent;
+
+  // ============================================================
   // Module registration
   // ============================================================
 

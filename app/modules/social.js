@@ -1339,6 +1339,27 @@
   window.smEnhanceData = smEnhanceData;
 
   // ============================================================
+  // W2.2 / W2.6 — Composer + Campaigns hooks
+  // ============================================================
+  async function socialOpenFromContent(contentId) {
+    try {
+      var c = await MastDB.get('admin/content/' + contentId);
+      if (!c) { if (typeof showToast === 'function') showToast('Content not found', true); return; }
+      var prefill = {
+        text: c.body || c.title || '',
+        productId: null, productName: null, productUrl: null,
+        treatmentId: null, attachedCouponCode: null,
+        subjectType: 'content',
+        clipUrl: (c.images && c.images.length === 1) ? c.images[0] : null,
+        contentId: contentId
+      };
+      if (typeof applySocialDraftPrefill === 'function') applySocialDraftPrefill(prefill);
+      else if (typeof window.__draftSocialPostFromReview === 'function') window.__draftSocialPostFromReview(prefill);
+    } catch (e) { console.warn('[social] openFromContent', e); }
+  }
+  window.socialOpenFromContent = socialOpenFromContent;
+
+  // ============================================================
   // Register with MastAdmin
   // ============================================================
 

@@ -2141,6 +2141,59 @@
     });
   }
 
+  // ============================================================
+  // W2.2 / W2.6 — Composer + Campaigns hooks
+  // ============================================================
+  //
+  // blogOpenFromContent(contentId) — fetches a Content doc from
+  // tenants/{tid}/admin/content/{contentId} and prefills the blog editor
+  // with its title/body. Called by the Composer when "Blog post" channel is
+  // selected at publish time.
+  //
+  // blogAddCurrentToCampaign() — opens the global campaign picker (lazy-
+  // loads the campaigns module if needed) for the currently-open blog post.
+  async function blogOpenFromContent(contentId) {
+    try {
+      var c = await MastDB.get('admin/content/' + contentId);
+      if (!c) { if (typeof showToast === 'function') showToast('Content not found', true); return; }
+      // Create a fresh draft seeded from this Content doc.
+      var id = MastDB.newKey('blog/posts');
+      var post = {
+        id: id,
+        title: c.title || '(untitled)',
+        bodyHtml: c.body || '',
+        author: '',
+        excerpt: '',
+        tags: [],
+        status: 'draft',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        sourceContentId: contentId
+      };
+      await MastDB.blog.posts.ref(id).set(post);
+      if (typeof navigateTo === 'function') navigateTo('blog', { postId: id });
+      else location.hash = 'blog?postId=' + id;
+    } catch (e) {
+      console.warn('[blog] openFromContent', e);
+      if (typeof showToast === 'function') showToast('Failed to open from content', true);
+    }
+  }
+  window.blogOpenFromContent = blogOpenFromContent;
+
+  function blogAddCurrentToCampaign() {
+    if (!blogCurrentPostId) return;
+    if (typeof window.openAddToCampaignPicker === 'function') {
+      window.openAddToCampaignPicker('blog', blogCurrentPostId);
+    } else if (typeof MastAdmin !== 'undefined' && MastAdmin.loadModule) {
+      MastAdmin.loadModule('campaigns').then(function() {
+        if (typeof window.openAddToCampaignPicker === 'function') {
+          window.openAddToCampaignPicker('blog', blogCurrentPostId);
+        }
+      });
+    }
+  }
+  window.blogAddCurrentToCampaign = blogAddCurrentToCampaign;
+
   MastAdmin.registerModule('blog', {
     routes: {
       'blog': { tab: 'blogTab', setup: function() { if (!blogLoaded) loadBlog(); } }

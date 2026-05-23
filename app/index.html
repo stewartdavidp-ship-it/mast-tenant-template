@@ -5627,6 +5627,11 @@
         <span class="sidebar-section-arrow">&#9654;</span>
       </div>
       <div class="sidebar-items">
+        <!-- W2: marketing aggregators (calendar/composer/inbox/campaigns) -->
+        <div class="sidebar-item" data-route="marketing-calendar" onclick="navigateTo('marketing-calendar')">Calendar</div>
+        <div class="sidebar-item" data-route="composer" onclick="navigateTo('composer')">Composer</div>
+        <div class="sidebar-item" data-route="engagement-inbox" onclick="navigateTo('engagement-inbox')">Engagement Inbox</div>
+        <div class="sidebar-item" data-route="campaigns" onclick="navigateTo('campaigns')">Campaigns</div>
         <div class="sidebar-item" data-route="social" onclick="navigateTo('social')">Social Media</div>
         <div class="sidebar-item" data-route="blog" onclick="navigateTo('blog')">Blog</div>
         <div class="sidebar-item" data-route="newsletter" onclick="navigateTo('newsletter')">Newsletter</div>
@@ -5859,6 +5864,12 @@
     <div id="socialMediaTab" style="display:none;">
       <div id="socialMediaContent"></div>
     </div>
+
+    <!-- ===== W2 Marketing Aggregator Tabs ===== -->
+    <div id="marketingCalendarTab" style="display:none;"></div>
+    <div id="composerTab" style="display:none;"></div>
+    <div id="engagementInboxTab" style="display:none;"></div>
+    <div id="campaignsTab" style="display:none;"></div>
 
     <!-- ===== BLOG TAB ===== -->
     <div id="blogTab" style="display:none;">
@@ -16770,7 +16781,8 @@ var SECTION_ROUTES = {
   'sales':             ['pos', 'orders', 'commissions', 'rma',
                         'wholesale', 'lookbooks', 'galleries',
                         'receipts', 'terms', 'pack', 'ship'],
-  'marketing':         ['social', 'blog', 'newsletter', 'stories',
+  'marketing':         ['marketing-calendar', 'composer', 'engagement-inbox', 'campaigns',
+                        'social', 'blog', 'newsletter', 'stories',
                         'website', 'brand', 'homepage', 'images'],
   // W3e — 'customers' moved out of retention into operations (auto-expand logic
   // and section-membership routing reflect the new home).
@@ -16842,7 +16854,9 @@ var ALL_TAB_IDS = ['inquiriesTab', 'scheduleTab', 'galleryTab', 'homepageTab', '
 // M3 + M6 (Idea -OtADygKA_JhRmk1wUqN): Mast modes tabs — must be in this list
 // so applyRoute correctly hides them when navigating away.
 // W1.8: Sales by Product (PM/Operator doorway) — same reason.
-'addToMastTab', 'businessSetupTab', 'salesByProductTab'];
+'addToMastTab', 'businessSetupTab', 'salesByProductTab',
+// W2 — marketing aggregator tabs
+'marketingCalendarTab', 'composerTab', 'engagementInboxTab', 'campaignsTab'];
 
 var currentRoute = 'dashboard';
 var currentRouteParams = {};
@@ -17519,7 +17533,12 @@ homepage: { src: 'modules/homepage.js', routes: ['homepage'] },
   team: { src: 'modules/team.js', routes: ['team'] },
   students: { src: 'modules/students.js', routes: ['students'] },
   channels: { src: 'modules/channels.js', routes: ['channels'] },
-  'customer-service': { src: 'modules/customer-service.js', routes: ['cs-inbox', 'cs-tickets', 'cs-surveys', 'cs-reviews', 'cs-faqs', 'cs-members'] }
+  'customer-service': { src: 'modules/customer-service.js', routes: ['cs-inbox', 'cs-tickets', 'cs-surveys', 'cs-reviews', 'cs-faqs', 'cs-members'] },
+  // W2 marketing-suite modules
+  campaigns: { src: 'modules/campaigns.js', routes: ['campaigns'] },
+  marketingCalendar: { src: 'modules/marketing-calendar.js', routes: ['marketing-calendar'] },
+  engagementInbox: { src: 'modules/engagement-inbox.js', routes: ['engagement-inbox'] },
+  composer: { src: 'modules/composer.js', routes: ['composer'] }
 };
 
 // Reverse lookup: route → moduleId (built from MODULE_MANIFEST)

@@ -3238,6 +3238,34 @@ async function linkProductToBuild(jobId, lineItemId) {
     if (!productsLoaded) loadProducts();
   }
 
+  // ============================================================
+  // W2.2 — Composer hook: story from Content
+  // ============================================================
+  // Composer can target Stories. The resulting story is "loose" — not
+  // bound to a production job — and is marked source='composer' so it can
+  // be distinguished from job-driven stories.
+  async function storyOpenFromContent(contentId) {
+    try {
+      var c = await MastDB.get('admin/content/' + contentId);
+      if (!c) { if (typeof showToast === 'function') showToast('Content not found', true); return; }
+      var storyId = MastDB.stories.newKey();
+      await MastDB.stories.set(storyId, {
+        id: storyId,
+        title: c.title || '',
+        body: c.body || '',
+        images: c.images || [],
+        source: 'composer',
+        sourceContentId: contentId,
+        status: 'draft',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      });
+      if (typeof navigateTo === 'function') navigateTo('stories');
+      if (typeof showToast === 'function') showToast('Story drafted from content');
+    } catch (e) { console.warn('[stories] openFromContent', e); }
+  }
+  window.storyOpenFromContent = storyOpenFromContent;
+
   MastAdmin.registerModule('production', {
     routes: {
       'jobs': { tab: 'productionTab', setup: function() {
