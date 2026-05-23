@@ -759,6 +759,12 @@
             html += '<button class="btn btn-primary btn-small" onclick="csFeatureReviewOnSite(\'' + _esc(r.id) + '\')" title="Add this review to the homepage Testimonials section">⭐ Feature on site</button>';
           }
           html += '<button class="btn btn-secondary btn-small" onclick="csDraftSocialFromReview(\'' + _esc(r.id) + '\')" title="Open the Social composer with this review pre-filled">✍ Draft Social Post</button>';
+          // W3b — Ask reviewer for a photo via signed upload link. Only show
+          // when we have a recipient email to send to.
+          var askEmail = r.authorEmail || r.reviewerEmail || '';
+          if (askEmail) {
+            html += '<button class="btn btn-secondary btn-small" onclick="csAskForUgcPhoto(\'' + _esc(r.id) + '\')" title="Email this customer a one-time upload link for a photo of the product">📸 Ask for photo</button>';
+          }
           html += '<button class="btn btn-secondary btn-small" onclick="csRejectReview(\'' + _esc(r.id) + '\')">Unpublish</button>';
         }
         html += '<button class="btn btn-danger btn-small" style="margin-left:auto;" onclick="csDeleteReview(\'' + _esc(r.id) + '\')">Delete</button>';
@@ -912,6 +918,95 @@
       window.location.hash = '#social';
     }
     showToast('Opening Social with this review pre-filled…');
+  }
+
+  // ===== W3b — Ask reviewer for a UGC photo =====
+
+  // Pops a confirm modal that previews the permission-ask email subject and
+  // body. On Send, calls mintUgcUploadToken (CF) which mints a single-use
+  // JWT, writes admin/ugc_tokens/{jti}, and queues the email at
+  // tenants/{tid}/emailQueue/{idempotencyKey} for processEmailQueue to send.
+  // Idempotent: re-asking the same review for the same recipient collides
+  // on idempotencyKey = sha1(tid|reviewId|recipientEmail).
+  function askForUgcPhoto(id) {
+    var r = reviewsData[id];
+    if (!r) { showToast('Review not found', true); return; }
+    var recipientEmail = r.authorEmail || r.reviewerEmail || '';
+    if (!recipientEmail) { showToast('This review has no email on file to send to.', true); return; }
+    var emailKey = String(recipientEmail).toLowerCase().trim();
+    var matchedCustomer = csReviewCustomerByEmail[emailKey] || null;
+    var customerFirstName =
+      (matchedCustomer && (matchedCustomer.displayName || '').split(' ')[0]) ||
+      (r.authorName || r.reviewerName || '').split(' ')[0] || '';
+    var prodInfo = r.productId ? csReviewProductIndex[r.productId] : null;
+    var productName = r.productName || (prodInfo && prodInfo.name) || '(product)';
+    var quote = (r.body || r.headline || '').trim().replace(/\s+/g, ' ');
+    var brandName = (window.TENANT_CONFIG && (window.TENANT_CONFIG.brandName || window.TENANT_CONFIG.name)) || 'the team';
+
+    var defaultSubject = 'A small request from ' + brandName;
+    var previewBody =
+      'Hi ' + (customerFirstName || 'there') + ',\n\n' +
+      'Thank you so much for your kind review of ' + productName + ':\n\n' +
+      '"' + quote + '"\n\n' +
+      "If you happen to have a photo of you wearing it (or just the piece itself), we'd love to share it on our site and social media with credit to you.\n\n" +
+      '[Upload a photo] — link good for 7 days, single use\n\n' +
+      "No pressure either way — we just love sharing our customers when they're up for it.\n\n" +
+      '— ' + brandName;
+
+    // Build the modal.
+    var overlay = document.createElement('div');
+    overlay.id = 'csUgcAskOverlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:9999;padding:20px;';
+    var card = document.createElement('div');
+    card.style.cssText = 'background:var(--card-bg,#fff);color:var(--text,#1a1a1a);border-radius:12px;max-width:560px;width:100%;max-height:90vh;overflow:auto;padding:24px;';
+    card.innerHTML =
+      '<h3 style="margin:0 0 6px;font-size:1.15rem;">📸 Ask for a photo</h3>' +
+      '<p style="margin:0 0 16px;font-size:0.9rem;color:var(--warm-gray,#777);">Sends a one-time, 7-day signed upload link to <strong>' + _esc(recipientEmail) + '</strong>.</p>' +
+      '<label style="display:block;font-size:0.85rem;font-weight:500;margin-bottom:6px;">Subject</label>' +
+      '<input id="csUgcAskSubject" type="text" value="' + _esc(defaultSubject) + '" style="width:100%;padding:8px 10px;border:1px solid var(--border,#e5e5e5);border-radius:6px;font-size:0.9rem;margin-bottom:14px;">' +
+      '<label style="display:block;font-size:0.85rem;font-weight:500;margin-bottom:6px;">Preview</label>' +
+      '<pre id="csUgcAskBody" style="white-space:pre-wrap;font-family:inherit;font-size:0.85rem;line-height:1.5;background:rgba(0,0,0,0.04);padding:12px 14px;border-radius:6px;max-height:280px;overflow:auto;margin:0 0 16px;"></pre>' +
+      '<div style="display:flex;gap:8px;justify-content:flex-end;">' +
+      '<button class="btn btn-secondary btn-small" id="csUgcAskCancel">Cancel</button>' +
+      '<button class="btn btn-primary btn-small" id="csUgcAskSend">Send</button>' +
+      '</div>';
+    overlay.appendChild(card);
+    document.body.appendChild(overlay);
+    document.getElementById('csUgcAskBody').textContent = previewBody;
+
+    function close() { if (overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay); }
+    document.getElementById('csUgcAskCancel').onclick = close;
+    overlay.onclick = function(e){ if (e.target === overlay) close(); };
+
+    document.getElementById('csUgcAskSend').onclick = async function() {
+      var sendBtn = this;
+      sendBtn.disabled = true;
+      sendBtn.textContent = 'Sending…';
+      try {
+        var tenantId = (window.TENANT_CONFIG && window.TENANT_CONFIG.tenantId) || null;
+        if (!tenantId) throw new Error('tenantId not resolved');
+        var fn = firebase.functions().httpsCallable('mintUgcUploadToken');
+        var resp = await fn({
+          tenantId: tenantId,
+          customerId: (matchedCustomer && matchedCustomer.customerId) || null,
+          customerEmail: recipientEmail,
+          customerFirstName: customerFirstName || null,
+          productId: r.productId || null,
+          productName: productName,
+          reviewId: r.id,
+          reviewQuote: quote,
+        });
+        var data = (resp && resp.data) || {};
+        if (!data.ok) throw new Error('mint failed');
+        close();
+        showToast('Permission ask emailed to ' + recipientEmail);
+      } catch (err) {
+        var msg = (err && err.message) || 'unknown error';
+        sendBtn.disabled = false;
+        sendBtn.textContent = 'Send';
+        showToast('Failed to send: ' + msg, true);
+      }
+    };
   }
 
   function renderSurveys() {
@@ -2237,6 +2332,7 @@
   window.csFeatureReviewOnSite = featureReviewOnSite;
   window.csUnfeatureReviewOnSite = unfeatureReviewOnSite;
   window.csDraftSocialFromReview = draftSocialFromReview;
+  window.csAskForUgcPhoto = askForUgcPhoto;
   window.csSurveysRefresh = function () {
     surveysLoaded = false;
     responsesLoaded = false;

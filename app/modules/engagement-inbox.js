@@ -19,7 +19,7 @@
   var loaded = false;
   var rows = []; // unified row list
   var selected = {}; // id -> true
-  var filterSource = 'all';   // all | review | ticket
+  var filterSource = 'all';   // all | review | ticket | ugc
   var filterSentiment = 'all';// all | positive | neutral | negative
   var filterStatus = 'all';   // all | pending | approved | replied | closed
   var hideResolved = false;
@@ -69,15 +69,19 @@
     var reviewsP = MastDB.query('cs_reviews').limitToLast(200).once().catch(function() { return null; });
     var ticketsP = MastDB.query('cs_tickets').limitToLast(200).once().catch(function() { return null; });
     var custP = MastDB.get('admin/customers').catch(function() { return null; });
+    // W3b — pull UGC submissions for the inbox queue.
+    var ugcP = MastDB.get('admin/ugc_submissions').catch(function() { return null; });
 
-    var results = await Promise.all([reviewsP, ticketsP, custP]);
+    var results = await Promise.all([reviewsP, ticketsP, custP, ugcP]);
     var reviews = results[0] || {};
     var tickets = results[1] || {};
     var customers = results[2] || {};
+    var ugc = results[3] || {};
 
     if (reviews && reviews.val) reviews = reviews.val() || {};
     if (tickets && tickets.val) tickets = tickets.val() || {};
     if (customers && customers.val) customers = customers.val() || {};
+    if (ugc && ugc.val) ugc = ugc.val() || {};
 
     // Build email→customer index for resolution (mirrors W1.7).
     var byEmail = {};
@@ -126,6 +130,24 @@
       });
     });
 
+    // W3b — UGC submissions (pending-review by default; show approved/rejected too).
+    Object.keys(ugc || {}).forEach(function(sid) {
+      var u = ugc[sid] || {};
+      var email = String(u.customerEmail || '').toLowerCase();
+      var cust = email ? byEmail[email] : null;
+      out.push({
+        kind: 'ugc',
+        id: sid,
+        customerId: (cust && cust.id) || u.customerId || null,
+        customerName: (cust && cust.displayName) || email || 'Customer',
+        sentiment: 'positive',
+        preview: 'Photo · ' + (u.productId ? ('product ' + u.productId) : 'submission'),
+        ageIso: u.submittedAt || '',
+        status: u.status || 'pending-review',
+        raw: u
+      });
+    });
+
     out.sort(function(a, b) { return (b.ageIso || '').localeCompare(a.ageIso || ''); });
     rows = out;
     loaded = true;
@@ -164,7 +186,7 @@
       '</div>' +
       // Filters bar
       '<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:8px 0;font-size:0.85rem;">' +
-        _selectFilter('Source', 'filterSource', filterSource, [['all','All'],['review','Reviews'],['ticket','Tickets']]) +
+        _selectFilter('Source', 'filterSource', filterSource, [['all','All'],['review','Reviews'],['ticket','Tickets'],['ugc','📸 UGC']]) +
         _selectFilter('Sentiment', 'filterSentiment', filterSentiment, [['all','All'],['positive','🟢 Positive'],['neutral','🟡 Neutral'],['negative','🔴 Negative']]) +
         _selectFilter('Status', 'filterStatus', filterStatus, [['all','All'],['pending','Pending'],['approved','Approved'],['replied','Replied'],['closed','Closed']]) +
         '<label style="display:inline-flex;align-items:center;gap:4px;">' +
@@ -198,7 +220,26 @@
           '<th style="padding:6px;color:var(--warm-gray-light,#bbb);" title="Pending social platform integrations — see Idea -OtGTgi7XKedsvl5XZOm">📱</th>' +
         '</tr></thead><tbody>';
       filtered.forEach(function(r) {
-        var sIcon = r.kind === 'review' ? '★' : '\u{1F4AC}';
+        var sIcon = r.kind === 'review' ? '★' : r.kind === 'ugc' ? '\u{1F4F8}' : '\u{1F4AC}';
+        // For UGC, the Preview cell shows a thumbnail + actions; for other
+        // rows, fall through to the standard text preview.
+        var previewCell;
+        if (r.kind === 'ugc') {
+          var url = (r.raw && r.raw.photoUrl) || '';
+          var thumb = url
+            ? '<img src="' + esc(url) + '" alt="" data-ei-ugc-id="' + esc(r.id) + '" onclick="engagementInboxOpenUgcPhoto(\'' + esc(r.id) + '\')" style="width:40px;height:40px;object-fit:cover;border-radius:4px;cursor:pointer;vertical-align:middle;" />'
+            : '<span style="color:var(--warm-gray);">(no photo)</span>';
+          var actions = '';
+          if (r.status === 'pending-review') {
+            actions =
+              ' <button class="btn btn-primary btn-small" style="padding:2px 8px;font-size:0.78rem;" onclick="engagementInboxApproveUgc(\'' + esc(r.id) + '\')">Approve</button>' +
+              ' <button class="btn btn-secondary btn-small" style="padding:2px 8px;font-size:0.78rem;" onclick="engagementInboxRejectUgc(\'' + esc(r.id) + '\')">Reject</button>';
+          }
+          var prodName = (r.raw && (r.raw.productName || r.raw.productId)) || '';
+          previewCell = thumb + ' <span style="font-size:0.78rem;color:var(--warm-gray);">' + esc(prodName) + '</span>' + actions;
+        } else {
+          previewCell = esc(r.preview);
+        }
         html += '<tr style="border-bottom:1px solid var(--cream);' + (selected[r.id] ? 'background:rgba(245,158,11,0.08);' : '') + '">' +
           '<td style="padding:6px;"><input type="checkbox" data-ei-id="' + esc(r.id) + '" data-ei-kind="' + esc(r.kind) + '"' + (selected[r.id] ? ' checked' : '') + ' onchange="engagementInboxToggleSelect(\'' + esc(r.id) + '\', this.checked)"></td>' +
           '<td style="padding:6px;">' + sIcon + ' ' + esc(r.kind) + '</td>' +
@@ -206,7 +247,7 @@
             ? '<a href="#customers?customerId=' + esc(r.customerId) + '">' + esc(r.customerName) + '</a>'
             : esc(r.customerName)) + '</td>' +
           '<td style="padding:6px;">' + sentimentChip(r.sentiment) + '</td>' +
-          '<td style="padding:6px;">' + esc(r.preview) + '</td>' +
+          '<td style="padding:6px;">' + previewCell + '</td>' +
           '<td style="padding:6px;color:var(--warm-gray);">' + _ageRel(r.ageIso) + '</td>' +
           '<td style="padding:6px;">' + esc(r.status) + '</td>' +
           '<td style="padding:6px;color:var(--warm-gray-light,#bbb);">—</td>' +
@@ -315,6 +356,123 @@
     }
   }
   window.engagementInboxDraftSocial = engagementInboxDraftSocial;
+
+  // ─── W3b UGC handlers ───
+
+  function engagementInboxOpenUgcPhoto(id) {
+    var row = rows.find(function(r) { return r.id === id && r.kind === 'ugc'; });
+    if (!row) return;
+    var url = (row.raw && row.raw.photoUrl) || '';
+    if (!url) return;
+    var overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;z-index:9999;cursor:zoom-out;';
+    overlay.onclick = function(){ if (overlay.parentNode) overlay.parentNode.removeChild(overlay); };
+    var img = document.createElement('img');
+    img.src = url;
+    img.style.cssText = 'max-width:92vw;max-height:92vh;object-fit:contain;border-radius:6px;';
+    overlay.appendChild(img);
+    document.body.appendChild(overlay);
+  }
+  window.engagementInboxOpenUgcPhoto = engagementInboxOpenUgcPhoto;
+
+  async function engagementInboxApproveUgc(id) {
+    var row = rows.find(function(r) { return r.id === id && r.kind === 'ugc'; });
+    if (!row) return;
+    var u = row.raw || {};
+    try {
+      // Look up the originating review to recover quote + customer first name
+      // for the auto-drafted Content body.
+      var quote = '';
+      var customerFirstName = '';
+      var productName = u.productName || '';
+      if (u.reviewId) {
+        try {
+          var rev = await MastDB.get('cs_reviews/' + u.reviewId);
+          if (rev) {
+            quote = (rev.body || rev.headline || '').trim();
+            var nm = rev.authorName || rev.reviewerName || '';
+            customerFirstName = (nm.split(' ')[0]) || '';
+            if (!productName) productName = rev.productName || '';
+          }
+        } catch (_e) {}
+      }
+      if (!customerFirstName) {
+        customerFirstName = ((row.customerName || '').split(' ')[0]) || 'A customer';
+      }
+
+      // Create a Content draft so Composer/Social/Story all converge on one
+      // canonical object. Source = 'ugc' so analytics can split it out.
+      var contentId = MastDB.newKey('admin/content');
+      var title = 'Customer photo' + (productName ? (': ' + productName) : '');
+      var body = quote
+        ? ('"' + quote + '" — Photo by ' + customerFirstName)
+        : ('Photo by ' + customerFirstName + (productName ? (' — ' + productName) : ''));
+      var contentDoc = {
+        id: contentId,
+        title: title,
+        body: body,
+        images: [u.photoUrl].filter(Boolean),
+        targetChannels: ['social', 'story'],
+        status: 'draft',
+        source: 'ugc',
+        sourceUgcSubmissionId: id,
+        sourceReviewId: u.reviewId || null,
+        sourceProductId: u.productId || null,
+        sourceCustomerId: row.customerId || u.customerId || null,
+        scheduledAt: null,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        linkedArtifacts: {}
+      };
+      await MastDB.set('admin/content/' + contentId, contentDoc);
+
+      // Mark the submission approved + link back to the Content.
+      var nowIso = new Date().toISOString();
+      var approver = (window.currentUser && window.currentUser.uid) || null;
+      await MastDB.update('admin/ugc_submissions/' + id, {
+        status: 'approved',
+        approvedAt: nowIso,
+        approvedBy: approver,
+        contentId: contentId,
+      });
+      row.status = 'approved';
+      row.raw.status = 'approved';
+      row.raw.contentId = contentId;
+
+      // Kick the social + story modules into creating their own drafts
+      // attached to this Content. Each module owns its own per-channel draft.
+      try { if (typeof window.socialOpenFromContent === 'function') window.socialOpenFromContent(contentId); } catch (_e) {}
+      try { if (typeof window.storyOpenFromContent === 'function') window.storyOpenFromContent(contentId); } catch (_e) {}
+
+      if (typeof showToast === 'function') showToast('UGC approved — social + story drafts created');
+      render();
+    } catch (err) {
+      if (typeof showToast === 'function') showToast('Approve failed: ' + (err && err.message || 'unknown'), true);
+    }
+  }
+  window.engagementInboxApproveUgc = engagementInboxApproveUgc;
+
+  async function engagementInboxRejectUgc(id) {
+    if (!confirm('Reject this photo submission? The photo stays in storage for audit but will not be used.')) return;
+    var row = rows.find(function(r) { return r.id === id && r.kind === 'ugc'; });
+    if (!row) return;
+    try {
+      var nowIso = new Date().toISOString();
+      var rejecter = (window.currentUser && window.currentUser.uid) || null;
+      await MastDB.update('admin/ugc_submissions/' + id, {
+        status: 'rejected',
+        rejectedAt: nowIso,
+        rejectedBy: rejecter,
+      });
+      row.status = 'rejected';
+      row.raw.status = 'rejected';
+      if (typeof showToast === 'function') showToast('Submission rejected');
+      render();
+    } catch (err) {
+      if (typeof showToast === 'function') showToast('Reject failed: ' + (err && err.message || 'unknown'), true);
+    }
+  }
+  window.engagementInboxRejectUgc = engagementInboxRejectUgc;
 
   MastAdmin.registerModule('engagementInbox', {
     routes: {
