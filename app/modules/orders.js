@@ -13,6 +13,8 @@
   var orderSourceFilter = 'all';
   // W1.2: bulk selection state — keys of selected orders in current filtered view.
   var selectedOrderIds = Object.create(null);
+  // W1.7: commission sort state. Field: 'date'|'piece'|'customer'|'status'|'deadline'|'total'. Direction: 'asc'|'desc'.
+  var commissionSort = { field: 'deadline', dir: 'asc' };
   var _viewOrderReturnRoute = null;
 
   // ============================================================
@@ -2969,7 +2971,30 @@
     } else if (filter !== 'all') {
       items = items.filter(function(c) { return c.status === filter; });
     }
-    items.sort(function(a, b) { return (b.createdAt || '').localeCompare(a.createdAt || ''); });
+
+    // W1.7: sort by commissionSort. Undefined values sink to the bottom regardless of dir.
+    var sortField = commissionSort.field || 'date';
+    var sortDir = commissionSort.dir === 'asc' ? 1 : -1;
+    function _valFor(c, f) {
+      if (f === 'date') return c.createdAt || '';
+      if (f === 'deadline') return c.targetDeadline || '';
+      if (f === 'total') return (typeof c.quoteAmountCents === 'number') ? c.quoteAmountCents : null;
+      if (f === 'piece') return (c.sourcePieceName || '').toLowerCase();
+      if (f === 'customer') return (c.customerName || '').toLowerCase();
+      if (f === 'status') return (c.status || '').toLowerCase();
+      return '';
+    }
+    items.sort(function(a, b) {
+      var av = _valFor(a, sortField);
+      var bv = _valFor(b, sortField);
+      var aMissing = (av === '' || av === null || av === undefined);
+      var bMissing = (bv === '' || bv === null || bv === undefined);
+      if (aMissing && bMissing) return 0;
+      if (aMissing) return 1;
+      if (bMissing) return -1;
+      if (typeof av === 'number' && typeof bv === 'number') return (av - bv) * sortDir;
+      return String(av).localeCompare(String(bv)) * sortDir;
+    });
 
     // URL-filter banner — surfaces active MCP-link filters with Clear button.
     var bannerEl = document.getElementById('commissionsUrlFilterBanner');
@@ -3019,6 +3044,45 @@
       'completed': 'background:var(--teal);color:white;'
     };
 
+    // W1.7: render interactive status chip row. Active chip highlighted.
+    var chipsEl = document.getElementById('commissionsStatusChips');
+    if (chipsEl) {
+      var currentFilter = (filterEl && filterEl.value) || 'all';
+      var chipStatuses = ['all', 'new', 'in-discussion', 'accepted', 'built', 'completed', 'declined'];
+      var chipHtml = chipStatuses.map(function(s) {
+        var label = s === 'all' ? 'All' : s.replace(/-/g, ' ').replace(/\b\w/g, function(l) { return l.toUpperCase(); });
+        var isActive = currentFilter === s;
+        var base = 'cursor:pointer;font-size:0.78rem;padding:4px 10px;border-radius:12px;border:1px solid var(--cream-dark);margin-right:6px;background:transparent;color:inherit;';
+        if (isActive) {
+          var activeStyle = statusColors[s] || 'background:var(--teal);color:white;';
+          base = 'cursor:pointer;font-size:0.78rem;padding:4px 10px;border-radius:12px;border:1px solid transparent;margin-right:6px;' + activeStyle;
+        }
+        return '<button type="button" class="status-chip" data-status="' + esc(s) + '" onclick="setCommissionStatusFilter(\'' + esc(s) + '\')" style="' + base + '">' + esc(label) + '</button>';
+      }).join('');
+      chipsEl.innerHTML = chipHtml;
+    }
+
+    // W1.7: render sort indicators. Arrow on active column only.
+    var sortFields = ['piece', 'customer', 'status', 'deadline', 'total', 'date'];
+    sortFields.forEach(function(f) {
+      var el = document.getElementById('commSort' + f.charAt(0).toUpperCase() + f.slice(1));
+      if (el) el.textContent = (sortField === f) ? (sortDir === 1 ? '▲' : '▼') : '';
+    });
+
+    function _fmtMoney(cents) {
+      if (typeof cents !== 'number') return '—';
+      return '$' + (cents / 100).toFixed(2);
+    }
+    function _fmtDeadline(d) {
+      if (!d) return '—';
+      try {
+        // Accept ISO date (YYYY-MM-DD) or full ISO. Render locale date.
+        var dt = new Date(d.length === 10 ? d + 'T00:00:00' : d);
+        if (isNaN(dt.getTime())) return esc(String(d));
+        return dt.toLocaleDateString();
+      } catch (e) { return esc(String(d)); }
+    }
+
     var html = '';
     items.forEach(function(c) {
       var product = productsData.find(function(p) { return p.pid === c.sourcePieceId; });
@@ -3039,11 +3103,32 @@
         '<td style="font-size:0.85rem;color:var(--warm-gray);">' + esc(notes) + '</td>' +
         '<td><span class="status-badge" style="' + (statusColors[c.status] || '') + 'font-size:0.72rem;">' + esc(statusLabel) + '</span></td>' +
         '<td style="font-size:0.85rem;">' + esc((c.channel || '').toUpperCase()) + '</td>' +
+        '<td style="font-size:0.85rem;">' + esc(_fmtDeadline(c.targetDeadline)) + '</td>' +
+        '<td style="font-size:0.85rem;">' + esc(_fmtMoney(c.quoteAmountCents)) + '</td>' +
         '<td style="font-size:0.85rem;">' + esc(dateStr) + '</td>' +
         '<td>' + (c.ticketId ? '<a href="#" onclick="event.stopPropagation();event.preventDefault();viewCommissionTicket(\'' + esc(c.ticketId) + '\')" style="color:var(--teal);font-size:0.85rem;white-space:nowrap;">View ticket →</a>' : '<span style="color:var(--warm-gray);font-size:0.85rem;">—</span>') + '</td>' +
       '</tr>';
     });
     document.getElementById('commissionsTableBody').innerHTML = html;
+  }
+
+  // W1.7: chip-driven status filter. Keeps the legacy select in sync.
+  function setCommissionStatusFilter(s) {
+    var sel = document.getElementById('commissionsStatusFilter');
+    if (sel) sel.value = s;
+    renderCommissions();
+  }
+
+  // W1.7: sortable column headers. Same-field click toggles direction.
+  function setCommissionSort(field) {
+    if (commissionSort.field === field) {
+      commissionSort.dir = (commissionSort.dir === 'asc') ? 'desc' : 'asc';
+    } else {
+      commissionSort.field = field;
+      // Default sensible direction per field: deadline asc, total/date desc.
+      commissionSort.dir = (field === 'deadline' || field === 'piece' || field === 'customer' || field === 'status') ? 'asc' : 'desc';
+    }
+    renderCommissions();
   }
 
   function viewCommissionDetail(commId) {
@@ -4661,6 +4746,8 @@
   window.loadCommissions = loadCommissions;
   window.renderCommissions = renderCommissions;
   window.viewCommissionDetail = viewCommissionDetail;
+  window.setCommissionStatusFilter = setCommissionStatusFilter;
+  window.setCommissionSort = setCommissionSort;
   window.saveCommissionProposal = saveCommissionProposal;
   window.sendCommissionProposal = sendCommissionProposal;
   window.createCommissionJob = createCommissionJob;

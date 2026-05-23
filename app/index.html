@@ -7113,8 +7113,9 @@
 
       <!-- Commission List View -->
       <div id="commissionsListView">
+        <div id="commissionsStatusChips" class="order-filter-pills" style="margin-bottom:8px;"></div>
         <div style="display:flex;gap:8px;align-items:center;margin-bottom:16px;flex-wrap:wrap;">
-          <select id="commissionsStatusFilter" onchange="renderCommissions()" style="font-size:0.85rem;padding:6px 10px;border-radius:6px;border:1px solid var(--cream-dark);">
+          <select id="commissionsStatusFilter" onchange="renderCommissions()" style="display:none;font-size:0.85rem;padding:6px 10px;border-radius:6px;border:1px solid var(--cream-dark);">
             <option value="all" selected>All</option>
             <!-- W3c — expanded enum. Old values kept first for back-compat with
                  existing rows; new values capture the full custom-order pipeline. -->
@@ -7142,13 +7143,15 @@
         <table class="data-table" id="commissionsTable" style="display:none;">
           <thead>
             <tr>
-              <th>Piece</th>
-              <th>Customer</th>
+              <th style="cursor:pointer;" onclick="setCommissionSort('piece')">Piece <span id="commSortPiece"></span></th>
+              <th style="cursor:pointer;" onclick="setCommissionSort('customer')">Customer <span id="commSortCustomer"></span></th>
               <th>Contact</th>
               <th>Notes</th>
-              <th>Status</th>
+              <th style="cursor:pointer;" onclick="setCommissionSort('status')">Status <span id="commSortStatus"></span></th>
               <th>Channel</th>
-              <th>Date</th>
+              <th style="cursor:pointer;" onclick="setCommissionSort('deadline')">Deadline <span id="commSortDeadline"></span></th>
+              <th style="cursor:pointer;" onclick="setCommissionSort('total')">Total $ <span id="commSortTotal"></span></th>
+              <th style="cursor:pointer;" onclick="setCommissionSort('date')">Date <span id="commSortDate"></span></th>
               <th>Ticket</th>
             </tr>
           </thead>
