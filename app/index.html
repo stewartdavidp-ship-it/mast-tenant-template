@@ -5606,7 +5606,8 @@
         <span class="sidebar-section-arrow">&#9654;</span>
       </div>
       <div class="sidebar-items">
-        <div class="sidebar-item" data-route="pos" onclick="navigateTo('pos')">Point of Sale</div>
+        <div class="sidebar-item" data-route="pos" onclick="navigateTo('pos')">Sales Ledger</div>
+        <div class="sidebar-item" onclick="window.open('../pos/', '_blank')" title="Open POS checkout in a new tab">Point of Sale &#8599;</div>
         <div class="sidebar-item" data-route="orders" onclick="navigateTo('orders')">Retail Orders <span id="sidebarOrdersBadge" class="sidebar-badge alert" style="display:none;"></span></div>
         <div class="sidebar-item" data-route="commissions" onclick="navigateTo('commissions')">Custom Orders</div>
         <div class="sidebar-item" data-route="rma" onclick="navigateTo('rma')">Returns <span id="sidebarRmaBadge" class="sidebar-badge alert" style="display:none;"></span></div>
@@ -7295,7 +7296,7 @@
     <div id="salesTab" style="display:none;">
       <div class="section-header">
         <div style="display:flex;align-items:center;gap:12px;">
-          <h2 id="salesViewTitle">Sales</h2>
+          <h2 id="salesViewTitle">Sales Ledger</h2>
           <span class="products-stat" id="salesCount"></span>
         </div>
         <div style="display:flex;align-items:center;gap:8px;">
@@ -49404,7 +49405,7 @@ function validateRequired(fields) {
 // Route → human-readable label
 var ROUTE_LABELS = {
   'dashboard': 'Dashboard', 'schedule': 'Schedule', 'gallery': 'Gallery',
-  'pos': 'Point of Sale', 'orders': 'Orders', 'commissions': 'Custom Orders',
+  'pos': 'Sales Ledger', 'orders': 'Orders', 'commissions': 'Custom Orders',
   'wholesale': 'Wholesale', 'galleries': 'Galleries', 'events': 'Sales Events',
   'pack': 'Pack & Ship', 'ship': 'Shipping', 'receipts': 'Receipts',
   'social': 'Social Media', 'newsletter': 'Newsletter', 'stories': 'Stories',
