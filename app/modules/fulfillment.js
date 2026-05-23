@@ -76,6 +76,9 @@
   }
 
   // ---- Pack Queue ----
+  // W1.3: pack queue selection state. Keys of selected order IDs.
+  var packSelectedIds = Object.create(null);
+
   function renderPackQueue() {
     var el = document.getElementById('fulfPackView');
     var packable = getOrdersArray().filter(function(o) {
@@ -87,18 +90,32 @@
       return;
     }
 
+    // W1.3: print toolbar — Pick List for selected, Packing Slip per-row.
+    var selectedCount = Object.keys(packSelectedIds).length;
     var html = '<div style="margin-top:12px;">';
+    html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap;">' +
+      '<label style="font-size:0.85rem;display:flex;align-items:center;gap:6px;cursor:pointer;">' +
+        '<input type="checkbox" id="packSelectAll" onchange="togglePackSelectAll(this.checked)"> Select all' +
+      '</label>' +
+      '<span id="packSelectedCount" style="font-size:0.85rem;color:var(--warm-gray);">' + selectedCount + ' selected</span>' +
+      '<button class="btn btn-secondary" style="font-size:0.78rem;padding:4px 12px;" onclick="printPickList()"' + (selectedCount === 0 ? ' disabled' : '') + '>🖨 Print Pick List</button>' +
+    '</div>';
+
     packable.forEach(function(o) {
       var key = o._key;
       var num = esc(getOrderDisplayNumber(o));
       var status = o.status || 'placed';
       var itemNames = (o.items || []).map(function(it) { return it.name + ' x' + (it.qty || 1); }).join(', ');
       var custName = o.shipping ? esc(o.shipping.name || '') : '';
+      var isChecked = !!packSelectedIds[key];
       html += '<div data-order-key="' + esc(key) + '" style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:12px 16px;margin-bottom:8px;cursor:pointer;" onclick="if(!event.defaultPrevented)viewOrder(this.dataset.orderKey)">' +
         '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">' +
-          '<div>' +
-            '<div style="font-weight:600;font-family:monospace;">' + num + ' <span class="status-badge pill" style="' + orderStatusBadgeStyle(status) + '">' + status.replace(/_/g, ' ') + '</span></div>' +
-            '<div style="font-size:0.85rem;color:var(--warm-gray);">' + custName + ' &mdash; ' + esc(itemNames) + '</div>' +
+          '<div style="display:flex;align-items:center;gap:10px;">' +
+            '<input type="checkbox" class="pack-row-check" data-order-key="' + esc(key) + '"' + (isChecked ? ' checked' : '') + ' onclick="event.stopPropagation();togglePackRowSelect(\'' + esc(key) + '\', this.checked)">' +
+            '<div>' +
+              '<div style="font-weight:600;font-family:monospace;">' + num + ' <span class="status-badge pill" style="' + orderStatusBadgeStyle(status) + '">' + status.replace(/_/g, ' ') + '</span></div>' +
+              '<div style="font-size:0.85rem;color:var(--warm-gray);">' + custName + ' &mdash; ' + esc(itemNames) + '</div>' +
+            '</div>' +
           '</div>' +
           '<div style="display:flex;gap:6px;">';
       // Single next-action button based on current status
@@ -111,6 +128,7 @@
       } else if (status === 'shipped') {
         html += '<button class="btn btn-primary" style="font-size:0.78rem;padding:4px 12px;" onclick="event.stopPropagation();packQueueTransition(\'' + esc(key) + '\', \'delivered\')">Delivered</button>';
       }
+      html += '<button class="btn btn-secondary" style="font-size:0.78rem;padding:4px 12px;" onclick="event.stopPropagation();printPackingSlip(\'' + esc(key) + '\')">🖨 Slip</button>';
       html += '<button class="btn btn-secondary" style="font-size:0.78rem;padding:4px 12px;" onclick="event.stopPropagation();viewOrder(\'' + esc(key) + '\')">View</button>' +
         '</div></div>' +
         renderOrderProgress(status) +
@@ -118,6 +136,127 @@
     });
     html += '</div>';
     el.innerHTML = html;
+
+    // Sync the Select-all checkbox state with current selection.
+    var selEl = document.getElementById('packSelectAll');
+    if (selEl) {
+      var allKeys = packable.map(function(o) { return o._key; });
+      var allSelected = allKeys.length > 0 && allKeys.every(function(k) { return packSelectedIds[k]; });
+      selEl.checked = allSelected;
+    }
+  }
+
+  // W1.3: pack selection helpers.
+  function togglePackRowSelect(key, checked) {
+    if (checked) packSelectedIds[key] = true;
+    else delete packSelectedIds[key];
+    var countEl = document.getElementById('packSelectedCount');
+    if (countEl) countEl.textContent = Object.keys(packSelectedIds).length + ' selected';
+  }
+  function togglePackSelectAll(checked) {
+    var packable = getOrdersArray().filter(function(o) {
+      return o.status === 'packing' || o.status === 'pack' || o.status === 'packed';
+    });
+    packSelectedIds = Object.create(null);
+    if (checked) packable.forEach(function(o) { packSelectedIds[o._key] = true; });
+    renderPackQueue();
+  }
+
+  // W1.3: window.print pick list. Builds a hidden styled DOM, prints, removes.
+  function printPickList() {
+    var selectedKeys = Object.keys(packSelectedIds);
+    if (selectedKeys.length === 0) return;
+    // Aggregate product+option+location to qty across selected orders.
+    var agg = Object.create(null);
+    selectedKeys.forEach(function(key) {
+      var o = orders[key];
+      if (!o) return;
+      (o.items || []).forEach(function(it) {
+        var optStr = '';
+        if (it.options && typeof it.options === 'object') {
+          var parts = []; Object.keys(it.options).forEach(function(k) { parts.push(k + ': ' + it.options[k]); });
+          optStr = parts.join(', ');
+        }
+        var aggKey = (it.name || 'Item') + '|' + optStr + '|' + (it.location || '');
+        if (!agg[aggKey]) {
+          agg[aggKey] = { name: it.name || 'Item', options: optStr, location: it.location || '', qty: 0 };
+        }
+        agg[aggKey].qty += (it.qty || 1);
+      });
+    });
+    var rowsHtml = Object.keys(agg).sort().map(function(k) {
+      var r = agg[k];
+      return '<tr><td>' + r.qty + '</td><td>' + escHtml(r.name) + '</td><td>' + escHtml(r.options) + '</td><td>' + escHtml(r.location) + '</td></tr>';
+    }).join('');
+    _printAndCleanup('print-pick-list',
+      '<h1 style="font-size:18px;margin:0 0 12px;">Pick List — ' + selectedKeys.length + ' orders</h1>' +
+      '<p style="font-size:11px;color:#666;margin:0 0 12px;">Generated ' + new Date().toLocaleString() + '</p>' +
+      '<table style="width:100%;border-collapse:collapse;font-size:12px;">' +
+        '<thead><tr style="border-bottom:2px solid #000;"><th align="left">Qty</th><th align="left">Product</th><th align="left">Options</th><th align="left">Location</th></tr></thead>' +
+        '<tbody>' + rowsHtml + '</tbody>' +
+      '</table>'
+    );
+  }
+
+  function printPackingSlip(orderId) {
+    var o = orders[orderId];
+    if (!o) return;
+    var num = (typeof getOrderDisplayNumber === 'function') ? getOrderDisplayNumber(o) : orderId;
+    var ship = o.shipping || {};
+    var addrHtml = [ship.name, ship.address1, ship.address2,
+      [ship.city, ship.state, ship.zip].filter(Boolean).join(', '),
+      ship.country].filter(Boolean).map(function(l) { return escHtml(l); }).join('<br>');
+    var itemRows = (o.items || []).map(function(it) {
+      var optStr = '';
+      if (it.options && typeof it.options === 'object') {
+        var parts = []; Object.keys(it.options).forEach(function(k) { parts.push(k + ': ' + it.options[k]); });
+        optStr = parts.join(', ');
+      }
+      return '<tr><td>' + (it.qty || 1) + '</td><td>' + escHtml(it.name || '') + (optStr ? '<br><span style="font-size:10px;color:#666;">' + escHtml(optStr) + '</span>' : '') + '</td></tr>';
+    }).join('');
+    var giftMsg = o.giftMessage || (o.gift && o.gift.message) || '';
+    _printAndCleanup('print-packing-slip',
+      '<h1 style="font-size:18px;margin:0 0 4px;">Packing Slip</h1>' +
+      '<div style="font-size:14px;margin:0 0 12px;font-family:monospace;">' + escHtml(num) + '</div>' +
+      '<div style="margin:0 0 16px;font-size:12px;">' + addrHtml + '</div>' +
+      '<table style="width:100%;border-collapse:collapse;font-size:12px;margin-bottom:16px;">' +
+        '<thead><tr style="border-bottom:2px solid #000;"><th align="left" style="width:60px;">Qty</th><th align="left">Item</th></tr></thead>' +
+        '<tbody>' + itemRows + '</tbody>' +
+      '</table>' +
+      (giftMsg ? '<div style="border:1px dashed #999;padding:8px;font-size:12px;font-style:italic;">Gift message: ' + escHtml(giftMsg) + '</div>' : '')
+    );
+  }
+
+  function escHtml(s) {
+    if (s == null) return '';
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
+  function _printAndCleanup(elId, innerHtml) {
+    // Inject style once.
+    if (!document.getElementById('mast-print-style')) {
+      var st = document.createElement('style');
+      st.id = 'mast-print-style';
+      st.textContent =
+        '#print-pick-list, #print-packing-slip { display: none; }' +
+        '@media print {' +
+          '#print-pick-list, #print-packing-slip { display: block; padding: 24px; font-family: sans-serif; }' +
+          'body > *:not(#print-pick-list):not(#print-packing-slip) { display: none !important; }' +
+        '}';
+      document.head.appendChild(st);
+    }
+    var existing = document.getElementById(elId);
+    if (existing) existing.remove();
+    var div = document.createElement('div');
+    div.id = elId;
+    div.innerHTML = innerHtml;
+    document.body.appendChild(div);
+    try {
+      window.print();
+    } finally {
+      // Remove after print dialog closes. setTimeout gives the browser a tick to render.
+      setTimeout(function() { if (div && div.parentNode) div.parentNode.removeChild(div); }, 500);
+    }
   }
 
   function downloadOrderCSV(orderId) {
@@ -981,6 +1120,10 @@
   window.switchPackSubView = switchPackSubView;
   window.switchShipSubView = switchShipSubView;
   window.renderPackQueue = renderPackQueue;
+  window.togglePackRowSelect = togglePackRowSelect;
+  window.togglePackSelectAll = togglePackSelectAll;
+  window.printPickList = printPickList;
+  window.printPackingSlip = printPackingSlip;
   window.packQueueTransition = async function(orderId, newStatus) {
     await transitionOrder(orderId, newStatus);
     renderPackQueue();
