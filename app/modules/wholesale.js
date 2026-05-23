@@ -1300,6 +1300,20 @@ function viewWholesaleOrder(orderId) {
   var o = wholesaleOrdersData[orderId];
   if (!o) return;
 
+  // W1 Round 2 — Fix 2: accounts may not be loaded yet if the user navigated
+  // straight to #wholesale?subView=orders without visiting Accounts first.
+  // Without the cache, renderWholesaleOrderAccountLink falls into the
+  // "No wholesale accounts yet" empty-state and the operator has no way to
+  // link a legacy "Not linked" order from the detail view. Hydrate, then re-call.
+  if (!wholesaleAccountsData || Object.keys(wholesaleAccountsData).length === 0) {
+    MastDB.wholesaleAccounts.list(500).then(function(snap) {
+      var val = (snap && typeof snap.val === 'function') ? snap.val() : snap;
+      wholesaleAccountsData = val || {};
+      viewWholesaleOrder(orderId);
+    });
+    return;
+  }
+
   var items = o.items || [];
   var itemsHtml = items.map(function(it) {
     var opts = it.options ? Object.entries(it.options).map(function(e) { return e[0] + ': ' + e[1]; }).join(', ') : '';
