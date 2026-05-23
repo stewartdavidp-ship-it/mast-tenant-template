@@ -3252,7 +3252,11 @@
         '</div>';
     }
 
-    var html = '<button class="detail-back" onclick="closeCommissionDetail()">&larr; Back to Custom Orders</button>' +
+    // W2.1: header (always-visible) + tabbed body. Tabs: Spec / Thread /
+    // Milestones / Money / Terms. Spec preserves the legacy surface; the
+    // CS-ticket link moved into the Thread tab (rendered inline).
+    var headerHtml =
+    '<button class="detail-back" onclick="closeCommissionDetail()">&larr; Back to Custom Orders</button>' +
     '<div style="background:var(--cream,#f5f0e8);border-radius:8px;padding:24px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">' +
       '<div style="display:flex;gap:16px;align-items:flex-start;margin-bottom:20px;">' +
         (imgSrc ? '<img src="' + esc(imgSrc) + '" style="width:80px;height:80px;border-radius:8px;object-fit:cover;">' : '') +
@@ -3268,19 +3272,423 @@
         '<span style="color:var(--warm-gray);">Date</span><span>' + esc(dateStr) + '</span>' +
         '<span style="color:var(--warm-gray);">Status</span><span>' + statusSelect + '</span>' +
         '<span style="color:var(--warm-gray);">Notes</span><span style="white-space:pre-wrap;">' + esc(c.notes || '—') + '</span>' +
-        (c.ticketId ? '<span style="color:var(--warm-gray);">CS Ticket</span><span><a href="#" onclick="event.preventDefault();viewCommissionTicket(\'' + esc(c.ticketId) + '\')" style="color:var(--teal);">' + esc(c.ticketNumber || c.ticketId) + ' →</a></span>' : '') +
         inspirationHtml +
         refImageHtml +
       '</div>' +
-    '</div>' +
-    proposalSection +
-    docsSection +
-    jobSection;
+    '</div>';
 
-    document.getElementById('commissionDetailView').innerHTML = html;
+    var tabs = [
+      { key: 'spec',       label: 'Spec' },
+      { key: 'thread',     label: 'Thread' + (c.ticketId ? '' : ' (—)') },
+      { key: 'milestones', label: 'Milestones' },
+      { key: 'money',      label: 'Money' },
+      { key: 'terms',      label: 'Terms' }
+    ];
+    var tabBarHtml = '<div style="display:flex;gap:4px;margin-top:16px;border-bottom:1px solid var(--cream-dark,#e8e0d4);">';
+    tabs.forEach(function(t) {
+      var isActive = commDetailActiveTab === t.key;
+      tabBarHtml += '<button type="button" style="background:none;border:none;border-bottom:2px solid ' +
+        (isActive ? 'var(--teal)' : 'transparent') +
+        ';color:' + (isActive ? 'var(--teal)' : 'var(--warm-gray)') +
+        ';padding:8px 14px;font-size:0.9rem;cursor:pointer;font-weight:' + (isActive ? '600' : '400') + ';" ' +
+        'onclick="setCommissionDetailTab(\'' + _jsAttr(commId) + '\',\'' + _jsAttr(t.key) + '\')">' +
+        esc(t.label) + '</button>';
+    });
+    tabBarHtml += '</div>';
+
+    var bodyHtml = '<div id="commTabBody" style="margin-top:16px;">';
+    if (commDetailActiveTab === 'spec') {
+      bodyHtml += proposalSection + docsSection + jobSection;
+    } else if (commDetailActiveTab === 'thread') {
+      bodyHtml += _renderCommissionThreadTab(commId, c);
+    } else if (commDetailActiveTab === 'milestones') {
+      bodyHtml += _renderCommissionMilestonesTab(commId, c);
+    } else if (commDetailActiveTab === 'money') {
+      bodyHtml += _renderCommissionMoneyTab(commId, c);
+    } else if (commDetailActiveTab === 'terms') {
+      bodyHtml += _renderCommissionTermsTab(commId, c);
+    }
+    bodyHtml += '</div>';
+
+    document.getElementById('commissionDetailView').innerHTML = headerHtml + tabBarHtml + bodyHtml;
     document.getElementById('commissionDetailView').style.display = '';
     document.getElementById('commissionsListView').style.display = 'none';
+
+    // Async loads for tabs that need them.
+    if (commDetailActiveTab === 'thread' && c.ticketId) {
+      _loadCommissionThread(commId, c.ticketId);
+    } else if (commDetailActiveTab === 'milestones') {
+      _loadCommissionMilestones(commId);
+    }
   }
+
+  // ===== W2.1: Thread tab — inline CS-ticket messages =====
+  function _renderCommissionThreadTab(commId, c) {
+    if (!c.ticketId) {
+      return '<div style="background:var(--cream);border-radius:8px;padding:24px;color:var(--warm-gray);font-size:0.9rem;">' +
+        'No customer-service thread linked to this commission yet.' +
+      '</div>';
+    }
+    var msgs = commThreadCache[c.ticketId];
+    if (!msgs) {
+      return '<div style="background:var(--cream);border-radius:8px;padding:24px;color:var(--warm-gray);font-size:0.9rem;">Loading thread…</div>';
+    }
+    if (!msgs.length) {
+      return '<div style="background:var(--cream);border-radius:8px;padding:24px;color:var(--warm-gray);font-size:0.9rem;">' +
+        'Thread exists but has no messages yet. ' +
+        '<a href="#" onclick="event.preventDefault();viewCommissionTicket(\'' + _jsAttr(c.ticketId) + '\')" style="color:var(--teal);">Open in CS Tickets &rarr;</a>' +
+      '</div>';
+    }
+    var rows = msgs.map(function(m) {
+      var who = esc(m.authorName || m.authorEmail || (m.direction === 'inbound' ? (c.customerName || 'Customer') : 'Team'));
+      var when = m.createdAt ? new Date(m.createdAt).toLocaleString() : '';
+      var dirChip = m.direction === 'inbound' ? 'IN' : (m.direction === 'outbound' ? 'OUT' : '—');
+      var noteFlag = m.isInternal ? ' <span style="background:#fffbe6;color:#a67c00;padding:1px 6px;border-radius:4px;font-size:0.72rem;">internal</span>' : '';
+      return '<div style="border-bottom:1px solid var(--cream-dark);padding:10px 0;">' +
+        '<div style="display:flex;gap:8px;align-items:center;font-size:0.78rem;color:var(--warm-gray);margin-bottom:4px;">' +
+          '<span style="background:var(--cream-dark);padding:1px 6px;border-radius:4px;">' + esc(dirChip) + '</span>' +
+          '<strong style="color:var(--text);">' + who + '</strong>' +
+          noteFlag +
+          '<span style="margin-left:auto;">' + esc(when) + '</span>' +
+        '</div>' +
+        '<div style="font-size:0.9rem;white-space:pre-wrap;">' + esc(m.body || '') + '</div>' +
+      '</div>';
+    }).join('');
+    return '<div style="background:var(--cream);border-radius:8px;padding:24px;">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">' +
+        '<h4 style="margin:0;font-size:1rem;">CS Thread</h4>' +
+        '<a href="#" onclick="event.preventDefault();viewCommissionTicket(\'' + _jsAttr(c.ticketId) + '\')" style="color:var(--teal);font-size:0.85rem;">Open in CS Tickets &rarr;</a>' +
+      '</div>' +
+      rows +
+    '</div>';
+  }
+
+  async function _loadCommissionThread(commId, ticketId) {
+    try {
+      var ticket = await MastDB.get('cs_tickets/' + ticketId);
+      var msgs = (ticket && ticket.messages) ? Object.values(ticket.messages) : [];
+      msgs.sort(function(a, b) { return (a.createdAt || '').localeCompare(b.createdAt || ''); });
+      commThreadCache[ticketId] = msgs;
+    } catch (err) {
+      console.error('[commission] load thread:', err);
+      commThreadCache[ticketId] = [];
+    }
+    var c = commissionsData[commId];
+    if (c && commDetailActiveTab === 'thread') {
+      var bodyEl = document.getElementById('commTabBody');
+      if (bodyEl) bodyEl.innerHTML = _renderCommissionThreadTab(commId, c);
+    }
+  }
+
+  // ===== W2.2: Milestones tab + Post Milestone modal =====
+  var COMMISSION_MILESTONE_STAGES = [
+    { key: 'kickoff',          label: 'Kickoff',          tmpl: 'Hi {customerName}, we\'re kicking off your custom piece. Expect updates as the work progresses.' },
+    { key: 'design-locked',    label: 'Design locked',    tmpl: 'Quick update — the design is now locked and we\'re moving to fabrication.' },
+    { key: 'in-fabrication',   label: 'In fabrication',   tmpl: 'Fabrication is underway. We\'ll share a WIP photo soon.' },
+    { key: 'wip-photo',        label: 'WIP photo',        tmpl: 'Here\'s a work-in-progress photo of your piece.' },
+    { key: 'cold-shop',        label: 'Cold-shop',        tmpl: 'The piece is out of the hot shop and in cold-shop finishing.' },
+    { key: 'balance-invoiced', label: 'Balance invoiced', tmpl: 'Your balance invoice is on its way separately. Once paid, we\'ll ship.' },
+    { key: 'ready-to-ship',    label: 'Ready to ship',    tmpl: 'Your piece is finished and ready to ship.' },
+    { key: 'shipped',          label: 'Shipped',          tmpl: 'Your piece has shipped! Tracking details to follow.' },
+    { key: 'delivered',        label: 'Delivered',        tmpl: 'Tracking shows your piece has arrived. We hope you love it.' }
+  ];
+
+  function _milestoneStageLabel(key) {
+    for (var i = 0; i < COMMISSION_MILESTONE_STAGES.length; i++) {
+      if (COMMISSION_MILESTONE_STAGES[i].key === key) return COMMISSION_MILESTONE_STAGES[i].label;
+    }
+    return key;
+  }
+
+  function _renderCommissionMilestonesTab(commId, c) {
+    var ms = commMilestonesCache[commId];
+    var listHtml;
+    if (!ms) {
+      listHtml = '<div style="color:var(--warm-gray);font-size:0.9rem;">Loading milestones…</div>';
+    } else if (!ms.length) {
+      listHtml = '<div style="color:var(--warm-gray);font-size:0.9rem;">No milestones posted yet.</div>';
+    } else {
+      listHtml = ms.map(function(m) {
+        var photo = m.photoUrl ? '<img src="' + esc(m.photoUrl) + '" style="max-width:180px;max-height:180px;border-radius:6px;object-fit:cover;margin-top:8px;">' : '';
+        var when = m.postedAt ? new Date(m.postedAt).toLocaleString() : '';
+        var sent = m.emailQueuedAt ? '<span style="color:var(--teal);font-size:0.72rem;margin-left:8px;">emailed</span>' : '';
+        return '<div style="border-bottom:1px solid var(--cream-dark);padding:12px 0;">' +
+          '<div style="display:flex;gap:8px;align-items:center;font-size:0.85rem;">' +
+            '<strong>' + esc(_milestoneStageLabel(m.stage)) + '</strong>' +
+            sent +
+            '<span style="margin-left:auto;color:var(--warm-gray);font-size:0.78rem;">' + esc(when) + '</span>' +
+          '</div>' +
+          (m.copyHtml ? '<div style="font-size:0.9rem;white-space:pre-wrap;margin-top:4px;">' + esc(m.copyHtml) + '</div>' : '') +
+          photo +
+        '</div>';
+      }).join('');
+    }
+    return '<div style="background:var(--cream);border-radius:8px;padding:24px;">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">' +
+        '<h4 style="margin:0;font-size:1rem;">Milestones</h4>' +
+        '<button class="btn btn-primary" style="font-size:0.85rem;" onclick="openCommissionMilestoneModal(\'' + _jsAttr(commId) + '\')">+ Post Milestone</button>' +
+      '</div>' +
+      listHtml +
+    '</div>';
+  }
+
+  async function _loadCommissionMilestones(commId) {
+    try {
+      var snap = await MastDB.get('admin/commissions/' + commId + '/milestones');
+      var ms = snap ? Object.keys(snap).map(function(k) { var m = snap[k]; m.id = k; return m; }) : [];
+      ms.sort(function(a, b) { return (b.postedAt || '').localeCompare(a.postedAt || ''); });
+      commMilestonesCache[commId] = ms;
+    } catch (err) {
+      console.error('[commission] load milestones:', err);
+      commMilestonesCache[commId] = [];
+    }
+    var c = commissionsData[commId];
+    if (c && commDetailActiveTab === 'milestones') {
+      var bodyEl = document.getElementById('commTabBody');
+      if (bodyEl) bodyEl.innerHTML = _renderCommissionMilestonesTab(commId, c);
+    }
+  }
+
+  function openCommissionMilestoneModal(commId) {
+    var c = commissionsData[commId];
+    if (!c) return;
+    var stageOpts = COMMISSION_MILESTONE_STAGES.map(function(s) {
+      return '<option value="' + esc(s.key) + '">' + esc(s.label) + '</option>';
+    }).join('');
+    var defaultTmpl = COMMISSION_MILESTONE_STAGES[0].tmpl.replace('{customerName}', c.customerName || 'there');
+    var hasEmail = c.customerContact && c.customerContact.indexOf('@') !== -1;
+    var html =
+      '<div style="max-width:500px;">' +
+        '<h3>Post Milestone</h3>' +
+        '<div class="form-group">' +
+          '<label>Stage</label>' +
+          '<select id="commMilestoneStage" onchange="onCommMilestoneStageChange(\'' + _jsAttr(commId) + '\')">' + stageOpts + '</select>' +
+        '</div>' +
+        '<div class="form-group">' +
+          '<label>Photo (optional)</label>' +
+          '<input type="file" id="commMilestonePhoto" accept="image/*">' +
+        '</div>' +
+        '<div class="form-group">' +
+          '<label>Copy</label>' +
+          '<textarea id="commMilestoneCopy" rows="4" style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--cream-dark);font-size:0.9rem;resize:vertical;box-sizing:border-box;">' + esc(defaultTmpl) + '</textarea>' +
+        '</div>' +
+        '<div class="form-group">' +
+          '<label style="display:flex;gap:8px;align-items:center;font-size:0.9rem;">' +
+            '<input type="checkbox" id="commMilestoneSendEmail" ' + (hasEmail ? 'checked' : 'disabled') + '> Send to client' +
+            (hasEmail ? ' <span style="color:var(--warm-gray);font-size:0.78rem;">(' + esc(c.customerContact) + ')</span>'
+                      : ' <span style="color:#a67c00;font-size:0.78rem;">(no email on file)</span>') +
+          '</label>' +
+        '</div>' +
+        '<div id="commMilestoneStatus" style="margin-top:8px;font-size:0.85rem;"></div>' +
+        '<div style="margin-top:16px;display:flex;gap:8px;justify-content:flex-end;">' +
+          '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
+          '<button class="btn btn-primary" id="commMilestoneSubmit" onclick="submitCommissionMilestone(\'' + _jsAttr(commId) + '\')">Post</button>' +
+        '</div>' +
+      '</div>';
+    openModal(html);
+  }
+  window.openCommissionMilestoneModal = openCommissionMilestoneModal;
+
+  function onCommMilestoneStageChange(commId) {
+    var c = commissionsData[commId];
+    var stageEl = document.getElementById('commMilestoneStage');
+    var copyEl = document.getElementById('commMilestoneCopy');
+    if (!stageEl || !copyEl || !c) return;
+    var stageDef = COMMISSION_MILESTONE_STAGES.find(function(s) { return s.key === stageEl.value; });
+    if (stageDef) copyEl.value = stageDef.tmpl.replace('{customerName}', c.customerName || 'there');
+  }
+  window.onCommMilestoneStageChange = onCommMilestoneStageChange;
+
+  function _commSha1Hex(s) {
+    var enc = new TextEncoder().encode(s);
+    return crypto.subtle.digest('SHA-1', enc).then(function(buf) {
+      var bytes = new Uint8Array(buf);
+      var hex = '';
+      for (var i = 0; i < bytes.length; i++) {
+        var h = bytes[i].toString(16);
+        if (h.length < 2) h = '0' + h;
+        hex += h;
+      }
+      return hex;
+    });
+  }
+
+  async function submitCommissionMilestone(commId) {
+    var c = commissionsData[commId];
+    if (!c) return;
+    var stage = document.getElementById('commMilestoneStage').value;
+    var copyHtml = document.getElementById('commMilestoneCopy').value.trim();
+    var sendEmailEl = document.getElementById('commMilestoneSendEmail');
+    var sendEmail = sendEmailEl && sendEmailEl.checked && !sendEmailEl.disabled;
+    var fileEl = document.getElementById('commMilestonePhoto');
+    var file = fileEl && fileEl.files && fileEl.files[0];
+    var statusEl = document.getElementById('commMilestoneStatus');
+    var submitBtn = document.getElementById('commMilestoneSubmit');
+    if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Posting…'; }
+
+    try {
+      var milestoneId = 'mst_' + Date.now().toString(36);
+      var photoUrl = null;
+      if (file) {
+        if (statusEl) statusEl.textContent = 'Uploading photo…';
+        var ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+        var path = MastDB.storagePath('commissions/' + commId + '/milestones/' + milestoneId + '.' + ext);
+        var ref = firebase.storage().ref(path);
+        var task = ref.put(file);
+        await new Promise(function(res, rej) { task.on('state_changed', null, rej, res); });
+        photoUrl = await task.snapshot.ref.getDownloadURL();
+      }
+
+      var now = new Date().toISOString();
+      var user = firebase.auth().currentUser;
+      var postedBy = (user && (user.email || user.uid)) || null;
+
+      var milestone = {
+        stage: stage,
+        postedAt: now,
+        photoUrl: photoUrl,
+        copyHtml: copyHtml,
+        postedBy: postedBy
+      };
+      await MastDB.set('admin/commissions/' + commId + '/milestones/' + milestoneId, milestone);
+
+      // Bump commission status if the stage implies one.
+      var statusEnum = ['design-locked', 'in-fabrication', 'cold-shop', 'balance-invoiced', 'shipped', 'delivered'];
+      var statusUpdate = (statusEnum.indexOf(stage) !== -1 && c.status !== stage) ? stage : null;
+      if (statusUpdate) {
+        await MastDB.commissions.update(commId, { status: statusUpdate, updatedAt: now });
+        commissionsData[commId].status = statusUpdate;
+      }
+
+      if (sendEmail && c.customerContact && c.customerContact.indexOf('@') !== -1) {
+        if (statusEl) statusEl.textContent = 'Queuing email…';
+        var tenantId = (MastDB.tenantId && MastDB.tenantId()) || window.TENANT_ID || '';
+        var brandName = (window.TENANT_CONFIG && window.TENANT_CONFIG.brand && window.TENANT_CONFIG.brand.name) || 'The Team';
+        var idemSeed = tenantId + '|' + commId + '|' + stage + '|' + Date.now();
+        var idempotencyKey = await _commSha1Hex(idemSeed);
+        var subject = brandName + ' — ' + _milestoneStageLabel(stage) + ' update on your commission';
+        var photoBlock = photoUrl ? '<p><img src="' + esc(photoUrl) + '" style="max-width:400px;border-radius:6px;"></p>' : '';
+        var htmlBody =
+          '<p>Hi ' + esc(c.customerName || 'there') + ',</p>' +
+          '<p>' + esc(copyHtml).replace(/\n/g, '<br>') + '</p>' +
+          photoBlock +
+          '<p>— ' + esc(brandName) + '</p>';
+        await MastDB.set('emailQueue/' + idempotencyKey, {
+          id: idempotencyKey,
+          emailType: 'commission_milestone',
+          to: c.customerContact,
+          toName: c.customerName || null,
+          subject: subject,
+          htmlBody: htmlBody,
+          fromName: brandName,
+          idempotencyKey: idempotencyKey,
+          queuedAt: now,
+          queuedBy: postedBy,
+          status: 'queued',
+          attemptCount: 0,
+          meta: { commissionId: commId, milestoneId: milestoneId, stage: stage, photoUrl: photoUrl }
+        });
+        await MastDB.update('admin/commissions/' + commId + '/milestones/' + milestoneId, { emailQueuedAt: now, emailIdempotencyKey: idempotencyKey });
+        milestone.emailQueuedAt = now;
+        milestone.emailIdempotencyKey = idempotencyKey;
+      }
+
+      await writeAudit('create', 'commissionMilestone', milestoneId);
+      closeModal();
+      showToast('Milestone posted' + (sendEmail && c.customerContact && c.customerContact.indexOf('@') !== -1 ? ' — email queued' : ''));
+      delete commMilestonesCache[commId];
+      _loadCommissionMilestones(commId);
+      if (statusUpdate) viewCommissionDetail(commId);
+    } catch (err) {
+      if (statusEl) { statusEl.textContent = 'Error: ' + err.message; statusEl.style.color = '#ef5350'; }
+      if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Post'; }
+    }
+  }
+  window.submitCommissionMilestone = submitCommissionMilestone;
+
+  // ===== W2.1: Money tab =====
+  function _renderCommissionMoneyTab(commId, c) {
+    function _money(cents) {
+      if (cents == null || isNaN(cents)) return '—';
+      return '$' + (cents / 100).toFixed(2);
+    }
+    var quote = c.quoteAmountCents;
+    var deposit = c.depositAmountCents;
+    var balance = (quote != null && deposit != null) ? (quote - deposit) : null;
+    var rows = [
+      ['Quote (total)',     _money(quote)],
+      ['Deposit',           _money(deposit) + (c.depositPaidAt ? ' <span style="color:var(--teal);font-size:0.78rem;">paid ' + esc(new Date(c.depositPaidAt).toLocaleDateString()) + '</span>' : '')],
+      ['Balance remaining', _money(balance)],
+      ['Balance invoiced',  c.balanceInvoicedAt ? esc(new Date(c.balanceInvoicedAt).toLocaleDateString()) : '—'],
+      ['Balance paid',      c.balancePaidAt ? esc(new Date(c.balancePaidAt).toLocaleDateString()) : '—']
+    ];
+    var html = '<div style="background:var(--cream);border-radius:8px;padding:24px;">' +
+      '<h4 style="margin:0 0 12px 0;font-size:1rem;">Money</h4>' +
+      '<div style="display:grid;grid-template-columns:160px 1fr;gap:8px 16px;font-size:0.9rem;">';
+    rows.forEach(function(r) {
+      html += '<span style="color:var(--warm-gray);">' + esc(r[0]) + '</span><span>' + r[1] + '</span>';
+    });
+    html += '</div></div>';
+    return html;
+  }
+
+  // ===== W2.1: Terms tab =====
+  function _renderCommissionTermsTab(commId, c) {
+    var content;
+    if (c.acceptedTermsVersionId) {
+      var when = c.acceptedAt ? new Date(c.acceptedAt).toLocaleString() : '';
+      content =
+        '<div style="font-size:0.9rem;">' +
+          '<span style="background:#e8f5e9;color:#2e7d32;padding:3px 10px;border-radius:12px;font-size:0.78rem;font-weight:600;">Accepted</span> ' +
+          'version <strong>' + esc(c.acceptedTermsVersionId) + '</strong>' +
+          (when ? ' on ' + esc(when) : '') +
+        '</div>';
+    } else {
+      content =
+        '<div style="font-size:0.9rem;color:var(--warm-gray);margin-bottom:12px;">Customer has not yet accepted the commission terms.</div>' +
+        '<button class="btn btn-primary" style="font-size:0.85rem;" onclick="sendCommissionTermsToken(\'' + _jsAttr(commId) + '\')">Send Terms</button>' +
+        '<div id="commTermsStatus" style="margin-top:8px;font-size:0.85rem;"></div>';
+    }
+    return '<div style="background:var(--cream);border-radius:8px;padding:24px;">' +
+      '<h4 style="margin:0 0 12px 0;font-size:1rem;">Commission Terms</h4>' +
+      content +
+    '</div>';
+  }
+
+  async function sendCommissionTermsToken(commId) {
+    var c = commissionsData[commId];
+    if (!c) return;
+    var statusEl = document.getElementById('commTermsStatus');
+    if (!c.customerContact || c.customerContact.indexOf('@') === -1) {
+      if (statusEl) { statusEl.textContent = 'No customer email on file.'; statusEl.style.color = '#a67c00'; }
+      return;
+    }
+    try {
+      var snap = await MastDB.get('admin/commissionTerms');
+      var versions = snap ? Object.keys(snap).map(function(k) { var v = snap[k]; v.id = k; return v; }) : [];
+      var published = versions.filter(function(v) { return v.status === 'published'; });
+      published.sort(function(a, b) { return (b.publishedAt || '').localeCompare(a.publishedAt || ''); });
+      if (!published.length) {
+        if (statusEl) { statusEl.textContent = 'No published terms version yet. Create one in Commission Terms.'; statusEl.style.color = '#a67c00'; }
+        return;
+      }
+      var tenantId = (MastDB.tenantId && MastDB.tenantId()) || window.TENANT_ID;
+      if (statusEl) { statusEl.textContent = 'Sending…'; statusEl.style.color = 'var(--warm-gray)'; }
+      var res = await firebase.functions().httpsCallable('mintCommissionTermsToken')({
+        tenantId: tenantId,
+        commissionId: commId,
+        customerEmail: c.customerContact,
+        termsVersionId: published[0].id
+      });
+      var data = (res && res.data) || {};
+      if (data.success === false) throw new Error(data.error || 'mint failed');
+      if (statusEl) { statusEl.textContent = 'Terms link sent to ' + c.customerContact + '.'; statusEl.style.color = 'var(--teal)'; }
+      showToast('Terms link sent');
+    } catch (err) {
+      if (statusEl) { statusEl.textContent = 'Error: ' + err.message; statusEl.style.color = '#ef5350'; }
+    }
+  }
+  window.sendCommissionTermsToken = sendCommissionTermsToken;
 
   async function saveCommissionProposal(commId) {
     var price = document.getElementById('commProposalPrice').value.trim();
@@ -3734,6 +4142,8 @@
     document.getElementById('commissionDetailView').style.display = 'none';
     document.getElementById('commissionDetailView').innerHTML = '';
     document.getElementById('commissionsListView').style.display = '';
+    // W2.1: reset tab so next detail open starts on Spec.
+    commDetailActiveTab = 'spec';
   }
 
   function viewCommissionTicket(ticketId) {
@@ -5217,15 +5627,27 @@
       'commissions': { tab: 'commissionsTab', setup: function() {
         if (!commissionsLoaded) loadCommissions();
         else renderCommissions();
-        // Deep link: ?view=commissions&id=xxx
-        var urlParams = new URLSearchParams(window.location.search);
-        var deepId = urlParams.get('id');
-        if (deepId && urlParams.get('view') === 'commissions') {
+        // Deep links — two flavors supported:
+        //   1) Legacy ?view=commissions&id=xxx (URL search)
+        //   2) W2.1 hash params  #commissions?subView=detail&commissionId=xxx
+        var rp = (typeof window.getRouteParams === 'function') ? window.getRouteParams() : {};
+        var deepId = null;
+        if (rp && rp.subView === 'detail' && rp.commissionId) {
+          deepId = rp.commissionId;
+        } else {
+          var urlParams = new URLSearchParams(window.location.search);
+          if (urlParams.get('view') === 'commissions' && urlParams.get('id')) {
+            deepId = urlParams.get('id');
+            window.history.replaceState({}, '', window.location.pathname + '#commissions');
+          }
+        }
+        if (deepId) {
+          // Reset to spec tab on fresh deep-link.
+          commDetailActiveTab = 'spec';
           var checkReady = setInterval(function() {
             if (commissionsData[deepId]) { clearInterval(checkReady); viewCommissionDetail(deepId); }
           }, 200);
           setTimeout(function() { clearInterval(checkReady); }, 5000);
-          window.history.replaceState({}, '', window.location.pathname + '#commissions');
         }
       } }
     },
