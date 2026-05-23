@@ -147,11 +147,31 @@
   }
 
   // W1.3: pack selection helpers.
+  // W1 Round 2 — Fix 4: also reflect selection state on the Print Pick List
+  // button (disable-when-zero) without a full re-render on every row toggle.
+  function _syncPackToolbar() {
+    var count = Object.keys(packSelectedIds).length;
+    var countEl = document.getElementById('packSelectedCount');
+    if (countEl) countEl.textContent = count + ' selected';
+    var btn = document.querySelector('button[onclick="printPickList()"]');
+    if (btn) {
+      if (count === 0) btn.setAttribute('disabled', 'disabled');
+      else btn.removeAttribute('disabled');
+    }
+  }
   function togglePackRowSelect(key, checked) {
     if (checked) packSelectedIds[key] = true;
     else delete packSelectedIds[key];
-    var countEl = document.getElementById('packSelectedCount');
-    if (countEl) countEl.textContent = Object.keys(packSelectedIds).length + ' selected';
+    _syncPackToolbar();
+    // Keep the Select-all header checkbox in sync with the union of row state.
+    var packable = getOrdersArray().filter(function(o) {
+      return o.status === 'packing' || o.status === 'pack' || o.status === 'packed';
+    });
+    var selEl = document.getElementById('packSelectAll');
+    if (selEl) {
+      var keys = packable.map(function(o) { return o._key; });
+      selEl.checked = keys.length > 0 && keys.every(function(k) { return packSelectedIds[k]; });
+    }
   }
   function togglePackSelectAll(checked) {
     var packable = getOrdersArray().filter(function(o) {
@@ -159,6 +179,14 @@
     });
     packSelectedIds = Object.create(null);
     if (checked) packable.forEach(function(o) { packSelectedIds[o._key] = true; });
+    // Flip each row checkbox in the DOM directly so the user sees the change
+    // before the re-render. Quinn reported persona-driven test runs missed the
+    // tick state in the prior implementation (likely a re-render race).
+    var rowChecks = document.querySelectorAll('.pack-row-check');
+    for (var i = 0; i < rowChecks.length; i++) {
+      rowChecks[i].checked = !!checked;
+    }
+    _syncPackToolbar();
     renderPackQueue();
   }
 
