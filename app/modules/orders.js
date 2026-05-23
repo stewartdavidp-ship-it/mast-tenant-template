@@ -11,6 +11,8 @@
 
   var orderFilter = 'active';
   var orderSourceFilter = 'all';
+  // W1.2: bulk selection state — keys of selected orders in current filtered view.
+  var selectedOrderIds = Object.create(null);
   var _viewOrderReturnRoute = null;
 
   // ============================================================
@@ -159,6 +161,138 @@
     renderOrders();
   }
 
+  // ============================================================
+  // W1.2: Bulk-select helpers (Mark Shipped / Cancel / Export CSV)
+  // ============================================================
+  function updateOrdersBulkBar() {
+    var bar = document.getElementById('ordersBulkBar');
+    var count = document.getElementById('ordersBulkCount');
+    var keys = Object.keys(selectedOrderIds);
+    if (bar) bar.style.display = keys.length ? 'flex' : 'none';
+    if (count) count.textContent = keys.length + ' selected';
+    var allCb = document.getElementById('ordersBulkSelectAll');
+    if (allCb) {
+      var visibleCbs = document.querySelectorAll('.orders-bulk-cb');
+      var allChecked = visibleCbs.length > 0;
+      visibleCbs.forEach(function(cb) { if (!cb.checked) allChecked = false; });
+      allCb.checked = allChecked;
+    }
+  }
+  function toggleOrdersBulkSelect(key, cb) {
+    if (!key) return;
+    if (cb && cb.checked) selectedOrderIds[key] = true;
+    else delete selectedOrderIds[key];
+    updateOrdersBulkBar();
+  }
+  function toggleOrdersBulkSelectAll(masterCb) {
+    var cbs = document.querySelectorAll('.orders-bulk-cb');
+    cbs.forEach(function(cb) {
+      cb.checked = !!(masterCb && masterCb.checked);
+      var k = cb.getAttribute('data-key');
+      if (cb.checked) selectedOrderIds[k] = true;
+      else delete selectedOrderIds[k];
+    });
+    updateOrdersBulkBar();
+  }
+  function bulkOrdersClear() {
+    selectedOrderIds = Object.create(null);
+    var cbs = document.querySelectorAll('.orders-bulk-cb');
+    cbs.forEach(function(cb) { cb.checked = false; });
+    updateOrdersBulkBar();
+  }
+  function _bulkOrdersSelected() {
+    var keys = Object.keys(selectedOrderIds);
+    var all = getOrdersArray();
+    var byKey = {};
+    all.forEach(function(o) { byKey[o._key] = o; });
+    return keys.map(function(k) { return byKey[k]; }).filter(Boolean);
+  }
+  async function bulkOrdersMarkShipped() {
+    var orders = _bulkOrdersSelected();
+    if (!orders.length) return;
+    var etsyBlocked = orders.filter(function(o) { return o.source === 'etsy'; });
+    if (etsyBlocked.length) {
+      if (typeof window.MastToast === 'object' && window.MastToast.warn) {
+        window.MastToast.warn(etsyBlocked.length + ' Etsy order(s) skipped — Etsy ships via Etsy.');
+      }
+    }
+    var eligible = orders.filter(function(o) { return o.source !== 'etsy'; });
+    if (!eligible.length) return;
+    if (!window.confirm('Mark ' + eligible.length + ' order(s) as shipped?')) return;
+    var ok = 0, fail = 0;
+    for (var i = 0; i < eligible.length; i++) {
+      try {
+        if (window.MastDB && MastDB.orders && MastDB.orders.update) {
+          await MastDB.orders.update(eligible[i]._key, { status: 'shipped', shippedAt: new Date().toISOString() });
+        }
+        ok++;
+      } catch (e) { fail++; }
+    }
+    if (window.MastToast && window.MastToast.success) window.MastToast.success('Marked ' + ok + ' shipped' + (fail ? ' (' + fail + ' failed)' : ''));
+    bulkOrdersClear();
+  }
+  async function bulkOrdersCancel() {
+    var orders = _bulkOrdersSelected();
+    if (!orders.length) return;
+    if (!window.confirm('Cancel ' + orders.length + ' order(s)? This cannot be undone via this dialog.')) return;
+    var ok = 0, fail = 0;
+    for (var i = 0; i < orders.length; i++) {
+      try {
+        if (window.MastDB && MastDB.orders && MastDB.orders.update) {
+          await MastDB.orders.update(orders[i]._key, { status: 'cancelled', cancelledAt: new Date().toISOString() });
+        }
+        ok++;
+      } catch (e) { fail++; }
+    }
+    if (window.MastToast && window.MastToast.success) window.MastToast.success('Cancelled ' + ok + (fail ? ' (' + fail + ' failed)' : ''));
+    bulkOrdersClear();
+  }
+  function bulkOrdersExportCsv() {
+    var orders = _bulkOrdersSelected();
+    if (!orders.length) {
+      // If nothing selected, export all currently visible (filter result).
+      orders = (function() {
+        var rows = [];
+        var all = getOrdersArray();
+        var keys = Array.from(document.querySelectorAll('.orders-bulk-cb')).map(function(cb) { return cb.getAttribute('data-key'); });
+        var byKey = {}; all.forEach(function(o) { byKey[o._key] = o; });
+        keys.forEach(function(k) { if (byKey[k]) rows.push(byKey[k]); });
+        return rows;
+      })();
+    }
+    if (!orders.length) return;
+    var cols = ['orderId','displayNumber','email','status','total','items','tracking','placedAt','source'];
+    var lines = [cols.join(',')];
+    orders.forEach(function(o) {
+      var row = [
+        o._key || '',
+        getOrderDisplayNumber(o),
+        o.email || '',
+        o.status || '',
+        (o.total || 0).toFixed(2),
+        (o.items || []).reduce(function(s, it) { return s + (it.qty || 1); }, 0),
+        (o.tracking && (o.tracking.trackingNumber || o.tracking.number)) || '',
+        o.placedAt || o.createdAt || '',
+        o.source || 'direct'
+      ];
+      lines.push(row.map(function(v) {
+        var s = String(v == null ? '' : v);
+        if (s.indexOf(',') !== -1 || s.indexOf('"') !== -1 || s.indexOf('\n') !== -1) {
+          return '"' + s.replace(/"/g, '""') + '"';
+        }
+        return s;
+      }).join(','));
+    });
+    var blob = new Blob([lines.join('\n')], { type: 'text/csv' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = 'orders-export-' + (new Date().toISOString().slice(0,10)) + '.csv';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function() { document.body.removeChild(a); URL.revokeObjectURL(url); }, 100);
+  }
+
   function renderOrders() {
     var loadingEl = document.getElementById('ordersLoading');
     var emptyEl = document.getElementById('ordersEmpty');
@@ -197,8 +331,34 @@
     }
 
     // Render filter pills
+    // W1.2: Today / This Week date pills, computed in tenant tz.
+    var _today = (function() {
+      var p = tzPartsFromIso(new Date().toISOString());
+      return p ? (p.year + '-' + p.month + '-' + p.day) : '';
+    })();
+    var _weekStart = (function() {
+      if (!_today) return '';
+      var t = new Date(_today + 'T00:00:00');
+      // Treat Monday as start of week
+      var dow = t.getDay(); // 0=Sun..6=Sat
+      var diff = (dow + 6) % 7;
+      t.setDate(t.getDate() - diff);
+      var mm = String(t.getMonth() + 1).padStart(2, '0');
+      var dd = String(t.getDate()).padStart(2, '0');
+      return t.getFullYear() + '-' + mm + '-' + dd;
+    })();
+    var todayCount = 0, weekCount = 0;
+    all.forEach(function(o) {
+      var p = tzPartsFromIso(o.placedAt || o.createdAt || '');
+      if (!p) return;
+      var d = p.year + '-' + p.month + '-' + p.day;
+      if (_today && d === _today) todayCount++;
+      if (_weekStart && d >= _weekStart) weekCount++;
+    });
     var pillStatuses = [
       { key: 'active', label: 'Active', count: activeCount },
+      { key: 'today', label: 'Today', count: todayCount },
+      { key: 'this_week', label: 'This Week', count: weekCount },
       { key: 'all', label: 'All', count: all.length },
       { key: 'pending_payment', label: 'Pending Payment', count: counts.pending_payment || 0 },
       { key: 'placed', label: 'Placed', count: counts.placed || 0 },
@@ -236,6 +396,18 @@
     } else if (orderFilter === 'active') {
       filtered = sourceFiltered.filter(function(o) {
         return o.status !== 'delivered' && o.status !== 'cancelled' && o.status !== 'payment_failed';
+      });
+    } else if (orderFilter === 'today') {
+      filtered = sourceFiltered.filter(function(o) {
+        var p = tzPartsFromIso(o.placedAt || o.createdAt || '');
+        if (!p) return false;
+        return _today && (p.year + '-' + p.month + '-' + p.day) === _today;
+      });
+    } else if (orderFilter === 'this_week') {
+      filtered = sourceFiltered.filter(function(o) {
+        var p = tzPartsFromIso(o.placedAt || o.createdAt || '');
+        if (!p) return false;
+        return _weekStart && (p.year + '-' + p.month + '-' + p.day) >= _weekStart;
       });
     } else {
       filtered = sourceFiltered.filter(function(o) { return (o.status || 'placed') === orderFilter; });
@@ -322,6 +494,13 @@
         pendingRequests.length + ' production request' + (pendingRequests.length !== 1 ? 's' : '') + ' pending</div>';
     }
 
+    // W1.2: prune selectedOrderIds to keys still present in filtered view.
+    var _filteredKeys = Object.create(null);
+    filtered.forEach(function(o) { _filteredKeys[o._key] = true; });
+    Object.keys(selectedOrderIds).forEach(function(k) {
+      if (!_filteredKeys[k]) delete selectedOrderIds[k];
+    });
+
     // Table rows
     var rowsHtml = '';
     filtered.forEach(function(o) {
@@ -331,16 +510,21 @@
       var sourceBadge = o.source === 'etsy' ? ' <span class="status-badge" style="' + etsySourceBadgeStyle() + '">Etsy</span>' : '';
       var effInv = getEffectiveInvoiceStatus(o);
       var invBadge = effInv ? ' <span class="status-badge" style="font-size:0.72rem;padding:1px 6px;' + invoiceStatusBadgeStyle(effInv) + '">INV:' + effInv + '</span>' : '';
+      var trk = (o.tracking && (o.tracking.trackingNumber || o.tracking.number)) || '';
+      var checked = selectedOrderIds[key] ? ' checked' : '';
       rowsHtml += '<tr onclick="viewOrder(\'' + esc(key) + '\')">' +
+        '<td onclick="event.stopPropagation();"><input type="checkbox" class="orders-bulk-cb" data-key="' + esc(key) + '"' + checked + ' onclick="event.stopPropagation();toggleOrdersBulkSelect(\'' + esc(key) + '\', this)"></td>' +
         '<td><span style="font-family:monospace;font-weight:600;">' + num + '</span>' + sourceBadge + '</td>' +
         '<td>' + esc(o.email || '') + '</td>' +
         '<td>' + getOrderItemsLabel(o) + '</td>' +
         '<td>$' + (o.total || 0).toFixed(2) + '</td>' +
         '<td><span class="status-badge pill" style="' + orderStatusBadgeStyle(status) + '">' + status.replace(/_/g, ' ') + '</span>' + invBadge + '</td>' +
+        '<td>' + (trk ? '<span style="font-family:monospace;font-size:0.78rem;">' + esc(trk) + '</span>' : '<span style="color:var(--warm-gray);">—</span>') + '</td>' +
         '<td>' + formatOrderDate(o.placedAt || o.pendingPaymentAt) + '</td>' +
         '</tr>';
     });
     if (tbodyEl) tbodyEl.innerHTML = rowsHtml;
+    updateOrdersBulkBar();
 
     // Mobile cards
     var cardHtml = queueSummaryHtml;
@@ -4324,6 +4508,13 @@
   window.formatOrderDateTime = formatOrderDateTime;
   window.getOrderItemsLabel = getOrderItemsLabel;
   window.setOrderFilter = setOrderFilter;
+  window.toggleOrdersBulkSelect = toggleOrdersBulkSelect;
+  window.toggleOrdersBulkSelectAll = toggleOrdersBulkSelectAll;
+  window.bulkOrdersClear = bulkOrdersClear;
+  window.bulkOrdersMarkShipped = bulkOrdersMarkShipped;
+  window.bulkOrdersCancel = bulkOrdersCancel;
+  window.bulkOrdersExportCsv = bulkOrdersExportCsv;
+  window.updateOrdersBulkBar = updateOrdersBulkBar;
   window.filterOrdersBySource = filterOrdersBySource;
   window.clearCommissionsFilter = function() {
     var p = (typeof window.getRouteParams === 'function') ? window.getRouteParams() : {};

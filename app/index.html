@@ -7027,6 +7027,13 @@
         </div>
         <div id="ordersFilterPills" class="order-filter-pills"></div>
         <div style="font-size:0.78rem;color:var(--warm-gray);margin:4px 0 12px 0;">Click an order to view details, update status, add tracking, or manage production requests.</div>
+        <div id="ordersBulkBar" style="display:none;align-items:center;gap:8px;padding:8px 12px;background:rgba(20,184,166,0.08);border:1px solid rgba(20,184,166,0.35);border-radius:6px;margin-bottom:8px;font-size:0.85rem;">
+          <span id="ordersBulkCount" style="font-weight:600;"></span>
+          <button class="btn btn-primary" style="font-size:0.78rem;padding:4px 10px;" onclick="bulkOrdersMarkShipped()">Mark Shipped</button>
+          <button class="btn btn-secondary" style="font-size:0.78rem;padding:4px 10px;" onclick="bulkOrdersCancel()">Cancel</button>
+          <button class="btn btn-secondary" style="font-size:0.78rem;padding:4px 10px;" onclick="bulkOrdersExportCsv()">Export CSV</button>
+          <button class="btn" style="font-size:0.78rem;padding:4px 10px;margin-left:auto;" onclick="bulkOrdersClear()">Clear</button>
+        </div>
         <div id="ordersLoading" class="loading">Loading...</div>
         <div id="ordersEmpty" class="empty-state" style="display:none;">
           <div class="empty-icon">&#128230;</div>
@@ -7036,11 +7043,13 @@
           <table>
             <thead>
               <tr>
+                <th style="width:28px;"><input type="checkbox" id="ordersBulkSelectAll" onclick="toggleOrdersBulkSelectAll(this)" title="Select all visible"></th>
                 <th>Order</th>
                 <th>Customer</th>
                 <th>Items</th>
                 <th>Total</th>
                 <th>Status</th>
+                <th>Tracking</th>
                 <th>Date</th>
               </tr>
             </thead>
