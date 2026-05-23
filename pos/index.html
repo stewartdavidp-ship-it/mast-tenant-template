@@ -7,6 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>My Shop — Point of Sale</title><!-- TENANT: brand -->
 <link rel="icon" href="../images/favicon.svg" type="image/svg+xml">
+<link rel="manifest" href="/pos/manifest.json">
 <style>
 :root {
   --bg: #1a1a1a;
@@ -300,6 +301,16 @@ var eventContextUnsub = null;
 var CLASSIFY_URL, UPLOAD_URL, PRODUCTS_PATH, SALES_PATH, SALES_EVENTS_PATH, STUDIO_LOCATIONS_PATH;
 
 function esc(s) { var d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+
+// W2.5: register service worker scoped to /pos/ ONLY (must not register at root —
+// would steal admin/storefront fetches).
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function() {
+    navigator.serviceWorker.register('/pos/sw.js', { scope: '/pos/' })
+      .then(function(reg) { console.log('[pos] SW registered scope=' + reg.scope); })
+      .catch(function(err) { console.error('[pos] SW registration failed', err); });
+  });
+}
 var STUDIO_RADIUS_METERS = 500;
 
 // ============================================================
