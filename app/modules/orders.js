@@ -15,6 +15,9 @@
   var selectedOrderIds = Object.create(null);
   // W1.7: commission sort state. Field: 'date'|'piece'|'customer'|'status'|'deadline'|'total'. Direction: 'asc'|'desc'.
   var commissionSort = { field: 'deadline', dir: 'asc' };
+  // W2 R2 Fix 1: commission-detail active tab state ('spec'|'thread'|'milestones'|'money'|'terms').
+  // Must be declared at module scope so render fns reading it don't ReferenceError.
+  var commDetailActiveTab = 'spec';
   var _viewOrderReturnRoute = null;
 
   // ============================================================
