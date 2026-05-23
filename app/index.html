@@ -43752,6 +43752,34 @@ function esc(str) {
   return div.innerHTML;
 }
 
+// ============================================================
+// W2: JS-in-attribute escape + CSV cell guard (shared helpers)
+// W1-SEC MEDIUM -OtKk4mzZYmCZIwvQ8k4 + LOW -OtKk1jhCkBcT3PHCQmp.
+// _jsAttr: safe to drop into onclick="...'X'..." after first
+//   running its arg through esc() OR by itself when value sits
+//   inside a quoted JS string literal in an HTML attribute.
+// _csvCell: prevents formula injection (=, +, -, @) and quotes
+//   any cell containing CSV-significant chars.
+// ============================================================
+function _jsAttr(s) {
+  return String(s == null ? '' : s)
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, '\\\'')
+    .replace(/"/g, '&quot;')
+    .replace(/\n/g, '\\n')
+    .replace(/\r/g, '\\r')
+    .replace(/</g, '\\u003C');
+}
+window._jsAttr = _jsAttr;
+
+function _csvCell(s) {
+  var v = String(s == null ? '' : s);
+  if (/^[=+\-@\t\r]/.test(v)) v = '\'' + v;
+  if (/[",\n\r]/.test(v)) v = '"' + v.replace(/"/g, '""') + '"';
+  return v;
+}
+window._csvCell = _csvCell;
+
 /** Resolve a product image entry to a URL string. Handles both legacy strings and {url, libraryImageId} objects. */
 function resolveImageUrl(img) {
   if (!img) return '';
