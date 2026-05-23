@@ -3467,8 +3467,33 @@
       '</div>' +
 
       '<div style="margin-bottom:14px;">' +
+        '<label style="font-size:0.85rem;color:var(--warm-gray);display:block;margin-bottom:4px;">Piece Title *</label>' +
+        '<input type="text" id="newCommPieceTitle" placeholder="e.g. Anniversary glass pumpkin trio" style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid var(--cream-dark);font-size:0.9rem;background:var(--cream,#f5f0e8);box-sizing:border-box;">' +
+      '</div>' +
+
+      '<div style="display:flex;gap:8px;margin-bottom:14px;">' +
+        '<div style="flex:1;">' +
+          '<label style="font-size:0.85rem;color:var(--warm-gray);display:block;margin-bottom:4px;">Target Deadline</label>' +
+          '<input type="date" id="newCommTargetDeadline" style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid var(--cream-dark);font-size:0.9rem;background:var(--cream,#f5f0e8);box-sizing:border-box;">' +
+        '</div>' +
+        '<div style="flex:1;">' +
+          '<label style="font-size:0.85rem;color:var(--warm-gray);display:block;margin-bottom:4px;">Quote $</label>' +
+          '<input type="number" min="0" step="0.01" id="newCommQuoteAmount" placeholder="0.00" style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid var(--cream-dark);font-size:0.9rem;background:var(--cream,#f5f0e8);box-sizing:border-box;">' +
+        '</div>' +
+        '<div style="flex:1;">' +
+          '<label style="font-size:0.85rem;color:var(--warm-gray);display:block;margin-bottom:4px;">Deposit $</label>' +
+          '<input type="number" min="0" step="0.01" id="newCommDepositAmount" placeholder="0.00" style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid var(--cream-dark);font-size:0.9rem;background:var(--cream,#f5f0e8);box-sizing:border-box;">' +
+        '</div>' +
+      '</div>' +
+
+      '<div style="margin-bottom:14px;">' +
         '<label style="font-size:0.85rem;color:var(--warm-gray);display:block;margin-bottom:4px;">What are they looking for?</label>' +
         '<textarea id="newCommNotes" rows="3" placeholder="Describe what the customer asked about — size, colors, style, occasion..." style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid var(--cream-dark);font-size:0.9rem;resize:vertical;background:var(--cream,#f5f0e8);box-sizing:border-box;"></textarea>' +
+      '</div>' +
+
+      '<div style="margin-bottom:14px;">' +
+        '<label style="font-size:0.85rem;color:var(--warm-gray);display:block;margin-bottom:4px;">Attachments <span style="font-size:0.78rem;">(images, PDFs — uploaded after create)</span></label>' +
+        '<input type="file" id="newCommAttachments" multiple accept="image/*,application/pdf" style="font-size:0.85rem;">' +
       '</div>' +
 
       (catalogHtml ? '<div style="margin-bottom:14px;">' +
@@ -3510,10 +3535,25 @@
     var contact = document.getElementById('newCommContact').value.trim();
     var channel = document.getElementById('newCommChannel').value;
     var notes = document.getElementById('newCommNotes').value.trim();
+    // W1.6: structured fields
+    var pieceTitle = (document.getElementById('newCommPieceTitle') || {}).value;
+    pieceTitle = pieceTitle ? pieceTitle.trim() : '';
+    var targetDeadline = (document.getElementById('newCommTargetDeadline') || {}).value || '';
+    var quoteRaw = (document.getElementById('newCommQuoteAmount') || {}).value || '';
+    var depositRaw = (document.getElementById('newCommDepositAmount') || {}).value || '';
+    var quoteAmountCents = quoteRaw ? Math.round(parseFloat(quoteRaw) * 100) : null;
+    var depositAmountCents = depositRaw ? Math.round(parseFloat(depositRaw) * 100) : null;
+    var attachInput = document.getElementById('newCommAttachments');
+    var attachFiles = (attachInput && attachInput.files) ? Array.from(attachInput.files) : [];
     var errorEl = document.getElementById('newCommError');
 
     if (!name || !contact) {
       errorEl.textContent = 'Customer name and contact info are required.';
+      errorEl.style.display = '';
+      return;
+    }
+    if (!pieceTitle) {
+      errorEl.textContent = 'Piece title is required.';
       errorEl.style.display = '';
       return;
     }
@@ -3538,6 +3578,10 @@
         customerContact: contact,
         channel: channel,
         notes: notes || null,
+        pieceTitle: pieceTitle,
+        targetDeadline: targetDeadline || null,
+        quoteAmountCents: quoteAmountCents,
+        depositAmountCents: depositAmountCents,
         inspirationPieces: inspirationPieces.length > 0 ? inspirationPieces : null,
         referenceImageUrl: null,
         status: 'new',
@@ -3546,6 +3590,37 @@
 
       await MastDB.commissions.set(commId, record);
       await writeAudit('create', 'commission', commId);
+
+      // W1.6: Upload attachments (after commission exists).
+      if (attachFiles.length && typeof firebase !== 'undefined' && firebase.storage) {
+        btn.textContent = 'Uploading attachments...';
+        var tenantId = (MastDB.tenantId && MastDB.tenantId()) || window.TENANT_ID;
+        var attachmentMeta = [];
+        for (var i = 0; i < attachFiles.length; i++) {
+          var f = attachFiles[i];
+          try {
+            var safeName = f.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+            var storagePath = tenantId + '/commissions/' + commId + '/attachments/' + Date.now() + '_' + safeName;
+            var ref = firebase.storage().ref(storagePath);
+            var snap = await ref.put(f);
+            var url = await snap.ref.getDownloadURL();
+            var attId = MastDB.newKey('admin/commissions/' + commId + '/attachments');
+            var meta = {
+              name: f.name,
+              url: url,
+              storagePath: storagePath,
+              mimeType: f.type || null,
+              size: f.size,
+              uploadedAt: new Date().toISOString()
+            };
+            await MastDB.set('admin/commissions/' + commId + '/attachments/' + attId, meta);
+            attachmentMeta.push(Object.assign({ id: attId }, meta));
+          } catch (eUp) {
+            console.warn('Commission attachment upload failed', eUp);
+          }
+        }
+        if (attachmentMeta.length) record.attachments = attachmentMeta;
+      }
 
       // Update local data
       commissionsData[commId] = record;
