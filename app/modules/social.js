@@ -675,12 +675,16 @@
         '<label>Select Event</label>' +
         '<input type="text" id="smEventInput" placeholder="Event name" value="' + esc(d.eventName || '') + '" onchange="smEnhanceData.eventName=this.value">' +
       '</div>';
-    } else {
-      html += '<div class="form-group" style="margin-top:12px;">' +
-        '<label>Describe what this video is about</label>' +
-        '<textarea id="smDescInput" rows="2" placeholder="What should the caption call out?" onchange="smEnhanceData.description=this.value">' + esc(d.description) + '</textarea>' +
-      '</div>';
     }
+    // W1.8 round-3 — always show the caption draft textarea so prefilled
+    // body text (e.g. from "Draft Social Post from Review") is visible to
+    // the operator regardless of subjectType. Previously this only rendered
+    // when subjectType==='none', so review-driven prefills landed in state
+    // but never on screen.
+    html += '<div class="form-group" style="margin-top:12px;">' +
+      '<label>Caption draft</label>' +
+      '<textarea id="smDescInput" rows="3" placeholder="What should the caption call out?" onchange="smEnhanceData.description=this.value;smEnhanceData.captions=[this.value];smEnhanceData.selectedCaptionIdx=0">' + esc(d.description || '') + '</textarea>' +
+    '</div>';
     html += '</div>';
 
     // Section 2: Metadata
