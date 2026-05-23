@@ -1418,8 +1418,22 @@
   MastAdmin.registerModule('consignment', {
     routes: {
       'galleries': { tab: 'galleriesTab', setup: function() {
-        currentView = 'list';
-        currentPlacementId = null;
+        // W2 R2 Fix 4: honor ?subView=galleries URL param so deep-link + sub-tab
+        // refresh land on the Galleries entity view instead of always defaulting
+        // to Placements. Without this, currentView was forcibly reset to 'list'
+        // on every route entry, hiding the new W2.7 surfaces.
+        var rp = (typeof window.getRouteParams === 'function') ? window.getRouteParams() : {};
+        var sv = rp && typeof rp.subView === 'string' ? rp.subView : '';
+        if (sv === 'galleries') {
+          currentView = 'galleries';
+          currentGalleryId = null;
+        } else if (sv === 'galleryDetail' && rp.galleryId) {
+          currentView = 'galleryDetail';
+          currentGalleryId = rp.galleryId;
+        } else {
+          currentView = 'list';
+          currentPlacementId = null;
+        }
         loadPlacements();
         loadGalleries();
         // Ensure products are loaded for product picker
