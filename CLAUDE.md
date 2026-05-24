@@ -44,6 +44,15 @@ Features: public storefront (shop, commissions, blog), admin app (Studio Compani
 
 **KV `podRouting` is the authoritative serving map.** A Firebase deploy lands code on a hosting site, but the worker decides whether any given tenant hostname actually reads from that site. Updating `podRouting` is a separate flow from `mast_hosting deploy` (currently a Cloud Function reconciler — undocumented; see sibling task tracking).
 
+**Deploying admin changes per pod (gotcha — verified 2026-05-24):** `mast-tenant-shared.web.app` is the *default-pod* shared site. East-pod tenants (e.g. `e2estarter-ny-005`) route via `podRouting` KV to `mast-tenant-shared-east-1.web.app` (a separate Firebase Hosting site under `mast-platform-prod-us-east-1`). A deploy to the default shared site is a no-op for non-default-pod tenants. To deploy admin to a specific tenant:
+
+1. Resolve the pod: `mast_platform_tenant_search` for the tenantId, read `pod` (or check `platform_tenantsByDomain/{hostname}.podId`).
+2. Deploy to that pod's shared site:
+   - default pod → `mast-tenant-shared.web.app`
+   - `prod-us-east-1` → `mast-tenant-shared-east-1.web.app`
+   - `prod-us-west-1` → `mast-tenant-shared-west-1.web.app` (verify by pattern; not personally confirmed)
+3. Verify via `curl -sI https://<tenant>.runmast.com/app/ | grep last-modified` (or fetch any sentinel file) before declaring the deploy live.
+
 ## RULEs — Do not violate these.
 
 - No unbounded Firebase listeners. All reads must use limitToLast(N) or .once('value'). Prevents billing spikes.
