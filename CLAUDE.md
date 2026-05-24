@@ -50,7 +50,7 @@ Features: public storefront (shop, commissions, blog), admin app (Studio Compani
 2. Deploy to that pod's shared site:
    - default pod → `mast-tenant-shared.web.app`
    - `prod-us-east-1` → `mast-tenant-shared-east-1.web.app`
-   - `prod-us-west-1` → `mast-tenant-shared-west-1.web.app` (verify by pattern; not personally confirmed)
+   - `prod-us-west-1` → `mast-tenant-shared-west-1.web.app` (confirmed 2026-05-24 via mast_hosting deploy)
 3. Verify via `curl -sI https://<tenant>.runmast.com/app/ | grep last-modified` (or fetch any sentinel file) before declaring the deploy live.
 
 ## RULEs — Do not violate these.
