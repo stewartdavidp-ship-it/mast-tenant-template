@@ -3421,9 +3421,267 @@ function setupReportsTab() {
   h += '<button class="btn btn-secondary btn-small" onclick="loadYearEndReport()">Generate</button></div></div>';
   h += '<div id="fYearEndContent"></div></div>';
 
+  // W2.9 (-OtMNL4nQ4s08pPaxYBu): AR/AP report variants. All read the global
+  // _finPeriod selector for the snapshot date; customer/vendor dropdowns
+  // hydrate from admin/customers + admin/vendors after first render.
+  h += '<div style="background:var(--bg-secondary,#232323);border-radius:12px;padding:20px;margin-top:16px;">';
+  h += '<div style="font-size:1rem;font-weight:700;margin-bottom:4px;">Receivables &amp; Payables Snapshots</div>';
+  h += '<div style="font-size:0.85rem;color:var(--warm-gray,#888);margin-bottom:14px;">Period-end snapshots, per-customer statements, and vendor 1099-prep exports. Period anchor comes from the selector at the top of this page.</div>';
+  h += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px;">';
+  h += '<button class="btn btn-secondary btn-small" onclick="finReportArAgingSnapshot()" style="text-align:left;padding:12px;">📊 AR Aging Snapshot CSV<div style="font-size:0.72rem;color:var(--warm-gray,#888);margin-top:4px;">Open invoices as of period end</div></button>';
+  h += '<button class="btn btn-secondary btn-small" onclick="finReportApAgingSnapshot()" style="text-align:left;padding:12px;">📊 AP Aging Snapshot CSV<div style="font-size:0.72rem;color:var(--warm-gray,#888);margin-top:4px;">Open bills as of period end</div></button>';
+  h += '<button class="btn btn-secondary btn-small" onclick="finReportStatementOfAccount()" style="text-align:left;padding:12px;">📄 Per-Customer Statement<div style="font-size:0.72rem;color:var(--warm-gray,#888);margin-top:4px;">Choose customer ▾</div></button>';
+  h += '<button class="btn btn-secondary btn-small" onclick="finReportVendor1099Prep()" style="text-align:left;padding:12px;">📑 Vendor 1099-Prep Export<div style="font-size:0.72rem;color:var(--warm-gray,#888);margin-top:4px;">Period-windowed (not calendar year)</div></button>';
+  h += '</div>';
+  h += '<div id="fW29CustomerPicker" style="display:none;margin-top:14px;"></div>';
+  h += '<div id="fW29VendorPicker" style="display:none;margin-top:14px;"></div>';
+  h += '</div>';
+
   h += '</div>';
   el.innerHTML = h;
 }
+
+// W2.9: snapshot CSVs read the global _finPeriod selector for the "as-of"
+// boundary. AR/AP snapshots use period.end as the as-of date; customer
+// statement uses [period.start, period.end] for the activity window.
+
+window.finReportArAgingSnapshot = async function() {
+  var period = _finResolvePeriod();
+  var asOf = period.end;
+  try {
+    var [sentRaw, overdueRaw] = await Promise.all([
+      MastDB.query('orders').orderByChild('invoiceStatus').equalTo('sent').limitToLast(2000).once(),
+      MastDB.query('orders').orderByChild('invoiceStatus').equalTo('overdue').limitToLast(2000).once()
+    ]);
+    var rows = [['Customer','Customer Email','Invoice #','Order ID','Amount Due (USD)','Due Date','Days Overdue (as of ' + asOf + ')','Bucket','Status']];
+    var asOfMs = new Date(asOf + 'T23:59:59Z').getTime();
+    Object.entries(Object.assign({}, sentRaw || {}, overdueRaw || {})).forEach(function(kv) {
+      var orderId = kv[0], o = kv[1];
+      if (!o) return;
+      var c = Math.round((o.total || 0) * 100);
+      var paid = o.invoicePaidAmount || 0;
+      var due = c - paid;
+      if (due <= 0) return;
+      if (isTestOrder(o) && !_includeTestData) return;
+      var daysOver = 0, bucket = 'current';
+      if (o.invoiceDueDate) {
+        var dueMs = new Date(o.invoiceDueDate + 'T00:00:00Z').getTime();
+        daysOver = Math.max(0, Math.floor((asOfMs - dueMs) / 86400000));
+        if (daysOver <= 0) bucket = 'current';
+        else if (daysOver <= 30) bucket = '1_to_30';
+        else if (daysOver <= 60) bucket = '31_to_60';
+        else if (daysOver <= 90) bucket = '61_to_90';
+        else bucket = '90_plus';
+      }
+      rows.push([
+        o.customerName || 'Unknown',
+        o.customerEmail || (o.customer && o.customer.email) || '',
+        o.invoiceNumber || '',
+        orderId,
+        (due / 100).toFixed(2),
+        o.invoiceDueDate || '',
+        String(daysOver),
+        bucket,
+        o.invoiceStatus || ''
+      ]);
+    });
+    if (rows.length === 1) { showToast('No open invoices as of ' + asOf, true); return; }
+    _finDownloadCsv('ar-aging-snapshot', rows, 'AR Aging as of ' + asOf + ' · Basis: orders.invoiceDueDate (invoiceStatus IN sent,overdue)');
+    showToast('AR aging snapshot exported');
+  } catch (err) {
+    showToast('Snapshot failed: ' + (err.message || err), true);
+  }
+};
+
+window.finReportApAgingSnapshot = async function() {
+  var period = _finResolvePeriod();
+  var asOf = period.end;
+  try {
+    var [unpaidRaw, partialRaw, vendorsRaw] = await Promise.all([
+      MastDB.query('admin/purchaseReceipts').orderByChild('paymentStatus').equalTo('unpaid').limitToLast(2000).once(),
+      MastDB.query('admin/purchaseReceipts').orderByChild('paymentStatus').equalTo('partial').limitToLast(2000).once(),
+      MastDB.get('admin/vendors')
+    ]);
+    var vendors = vendorsRaw || {};
+    var rows = [['Vendor','Vendor Email','Invoice Ref','Receipt ID','Amount Due (USD)','Due Date','Days Overdue (as of ' + asOf + ')','Bucket','Payment Status']];
+    var asOfMs = new Date(asOf + 'T23:59:59Z').getTime();
+    Object.entries(Object.assign({}, unpaidRaw || {}, partialRaw || {})).forEach(function(kv) {
+      var receiptId = kv[0], r = kv[1];
+      if (!r) return;
+      var amt = r.amountCents || 0; var paid = r.paidAmount || 0;
+      var due = amt - paid;
+      if (due <= 0) return;
+      var daysOver = 0, bucket = 'current';
+      if (r.dueDate) {
+        var dueMs = new Date(r.dueDate + 'T00:00:00Z').getTime();
+        daysOver = Math.max(0, Math.floor((asOfMs - dueMs) / 86400000));
+        if (daysOver <= 0) bucket = 'current';
+        else if (daysOver <= 30) bucket = '1_to_30';
+        else if (daysOver <= 60) bucket = '31_to_60';
+        else if (daysOver <= 90) bucket = '61_to_90';
+        else bucket = '90_plus';
+      }
+      var v = vendors[r.vendorId] || {};
+      rows.push([
+        v.name || 'Unknown Vendor',
+        v.email || '',
+        r.vendorInvoiceRef || '',
+        receiptId,
+        (due / 100).toFixed(2),
+        r.dueDate || '',
+        String(daysOver),
+        bucket,
+        r.paymentStatus || ''
+      ]);
+    });
+    if (rows.length === 1) { showToast('No open bills as of ' + asOf, true); return; }
+    _finDownloadCsv('ap-aging-snapshot', rows, 'AP Aging as of ' + asOf + ' · Basis: admin/purchaseReceipts.dueDate (paymentStatus IN unpaid,partial)');
+    showToast('AP aging snapshot exported');
+  } catch (err) {
+    showToast('Snapshot failed: ' + (err.message || err), true);
+  }
+};
+
+window.finReportStatementOfAccount = async function() {
+  var picker = document.getElementById('fW29CustomerPicker');
+  if (!picker) return;
+  picker.style.display = 'block';
+  picker.innerHTML = '<div style="color:var(--warm-gray,#888);font-size:0.85rem;">Loading customers…</div>';
+  try {
+    var customersRaw = (await MastDB.get('admin/customers')) || {};
+    var customers = Object.entries(customersRaw)
+      .map(function(kv) { return Object.assign({ _id: kv[0] }, kv[1]); })
+      .filter(function(c) { return c && (c.displayName || c.primaryEmail); })
+      .sort(function(a, b) { return (a.displayName || '').localeCompare(b.displayName || ''); });
+    if (customers.length === 0) { picker.innerHTML = '<div style="color:var(--warm-gray,#888);font-size:0.85rem;">No customers found.</div>'; return; }
+    var opts = '<option value="">— Choose a customer —</option>';
+    customers.forEach(function(c) {
+      var label = (c.displayName || '(no name)') + (c.primaryEmail ? ' · ' + c.primaryEmail : '');
+      opts += '<option value="' + e(c._id) + '">' + e(label) + '</option>';
+    });
+    picker.innerHTML =
+      '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">' +
+      '<label style="font-size:0.78rem;color:var(--warm-gray,#888);">Customer:</label>' +
+      '<select id="fW29CustomerSelect" style="background:var(--bg-primary,#1a1a1a);border:1px solid rgba(255,255,255,0.15);border-radius:6px;color:var(--text,#fff);padding:5px 8px;font-size:0.85rem;min-width:240px;">' + opts + '</select>' +
+      '<button class="btn btn-primary btn-small" onclick="finReportStatementExport()">Export Statement CSV</button>' +
+      '</div>';
+  } catch (err) {
+    picker.innerHTML = '<div style="color:var(--danger,#dc2626);font-size:0.85rem;">Failed to load customers: ' + e(err.message || String(err)) + '</div>';
+  }
+};
+
+window.finReportStatementExport = async function() {
+  var sel = document.getElementById('fW29CustomerSelect');
+  if (!sel) return;
+  var customerId = sel.value;
+  if (!customerId) { showToast('Pick a customer first', true); return; }
+  var period = _finResolvePeriod();
+  try {
+    var customer = (await MastDB.get('admin/customers/' + customerId)) || {};
+    var ordersRaw = await MastDB.query('orders').orderByChild('placedAt').startAt(isoStart(period.start)).endAt(isoEnd(period.end)).limitToLast(2000).once();
+    var orders = Object.entries(ordersRaw || {})
+      .map(function(kv) { return Object.assign({ _id: kv[0] }, kv[1]); })
+      .filter(function(o) {
+        return o && (
+          o.customerId === customerId ||
+          (o.customerEmail && customer.primaryEmail && o.customerEmail.toLowerCase() === customer.primaryEmail.toLowerCase())
+        );
+      });
+    orders.sort(function(a, b) { return (a.placedAt || '').localeCompare(b.placedAt || ''); });
+    var rows = [['Date','Order #','Description','Charges (USD)','Payments (USD)','Balance (USD)','Invoice Status']];
+    var balanceCents = 0;
+    orders.forEach(function(o) {
+      var totalCents = Math.round((o.total || 0) * 100);
+      var paidCents = o.invoicePaidAmount || 0;
+      balanceCents += (totalCents - paidCents);
+      rows.push([
+        (o.placedAt || '').slice(0, 10),
+        o.orderNumber || o._id,
+        o.customerName ? 'Order — ' + o.customerName : 'Order',
+        (totalCents / 100).toFixed(2),
+        (paidCents / 100).toFixed(2),
+        (balanceCents / 100).toFixed(2),
+        o.invoiceStatus || ''
+      ]);
+    });
+    rows.push(['','','TOTAL BALANCE', '', '', (balanceCents / 100).toFixed(2), '']);
+    var fname = 'statement-' + (customer.displayName || customerId).replace(/[^A-Za-z0-9]+/g, '-').toLowerCase();
+    _finDownloadCsv(fname, rows, 'Statement for ' + (customer.displayName || customerId) + ' · ' + period.start + ' to ' + period.end);
+    showToast('Statement exported');
+  } catch (err) {
+    showToast('Export failed: ' + (err.message || err), true);
+  }
+};
+
+window.finReportVendor1099Prep = async function() {
+  var picker = document.getElementById('fW29VendorPicker');
+  if (!picker) return;
+  picker.style.display = 'block';
+  picker.innerHTML = '<div style="color:var(--warm-gray,#888);font-size:0.85rem;">Loading vendors…</div>';
+  try {
+    var vendorsRaw = (await MastDB.get('admin/vendors')) || {};
+    var contractors = Object.entries(vendorsRaw)
+      .map(function(kv) { return Object.assign({ _id: kv[0] }, kv[1]); })
+      .filter(function(v) { return v && ((v.vendorType || v.payeeType) === 'contractor'); })
+      .sort(function(a, b) { return (a.name || '').localeCompare(b.name || ''); });
+    if (contractors.length === 0) { picker.innerHTML = '<div style="color:var(--warm-gray,#888);font-size:0.85rem;">No contractor vendors found. Mark a vendor as type=contractor first.</div>'; return; }
+    var opts = '<option value="__all__">— All contractors —</option>';
+    contractors.forEach(function(v) {
+      opts += '<option value="' + e(v._id) + '">' + e(v.name || '(no name)') + (v.taxId ? ' (TIN on file)' : ' (TIN MISSING)') + '</option>';
+    });
+    picker.innerHTML =
+      '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">' +
+      '<label style="font-size:0.78rem;color:var(--warm-gray,#888);">Contractor:</label>' +
+      '<select id="fW29VendorSelect" style="background:var(--bg-primary,#1a1a1a);border:1px solid rgba(255,255,255,0.15);border-radius:6px;color:var(--text,#fff);padding:5px 8px;font-size:0.85rem;min-width:240px;">' + opts + '</select>' +
+      '<button class="btn btn-primary btn-small" onclick="finReportVendor1099Export()">Export 1099-Prep CSV</button>' +
+      '</div>';
+  } catch (err) {
+    picker.innerHTML = '<div style="color:var(--danger,#dc2626);font-size:0.85rem;">Failed to load vendors: ' + e(err.message || String(err)) + '</div>';
+  }
+};
+
+window.finReportVendor1099Export = async function() {
+  var sel = document.getElementById('fW29VendorSelect');
+  if (!sel) return;
+  var pick = sel.value;
+  if (!pick) { showToast('Pick a vendor first', true); return; }
+  var period = _finResolvePeriod();
+  try {
+    var [vendorsRaw, receiptsRaw] = await Promise.all([
+      MastDB.get('admin/vendors'),
+      MastDB.query('admin/purchaseReceipts').orderByChild('receivedAt').startAt(isoStart(period.start)).endAt(isoEnd(period.end)).limitToLast(5000).once()
+    ]);
+    var vendors = vendorsRaw || {};
+    var receipts = Object.values(receiptsRaw || {});
+    var totals = {};
+    receipts.forEach(function(r) {
+      if (!r) return;
+      var v = vendors[r.vendorId];
+      if (!v) return;
+      if ((v.vendorType || v.payeeType) !== 'contractor') return;
+      if (pick !== '__all__' && r.vendorId !== pick) return;
+      if (r.paymentStatus !== 'paid') return;
+      if (!totals[r.vendorId]) totals[r.vendorId] = { total: 0, vendor: v };
+      totals[r.vendorId].total += r.amountCents || 0;
+    });
+    var rows = [['Contractor','Tax ID (masked)','TIN Status','Period Paid (USD)','Threshold','1099 Required (>$600)']];
+    var keys = Object.keys(totals).sort(function(a, b) { return totals[b].total - totals[a].total; });
+    keys.forEach(function(vid) {
+      var d = totals[vid];
+      var taxId = d.vendor.taxId;
+      var hasTaxId = !!(taxId && String(taxId).trim().length > 0);
+      var masked = hasTaxId ? 'XXX-XX-' + String(taxId).replace(/[^0-9]/g, '').slice(-4) : '';
+      var tinStatus = hasTaxId ? 'On file' : 'MISSING — request W-9';
+      var required = d.total > 60000 ? 'Yes' : 'No (below threshold)';
+      rows.push([d.vendor.name || 'Unknown', masked, tinStatus, (d.total / 100).toFixed(2), '$600 (period-windowed)', required]);
+    });
+    if (rows.length === 1) { showToast('No paid receipts in period for this vendor', true); return; }
+    _finDownloadCsv('vendor-1099-prep', rows, '1099 Prep · ' + period.start + ' to ' + period.end + ' (period-windowed; legal threshold is calendar year)');
+    showToast('1099-prep export downloaded');
+  } catch (err) {
+    showToast('Export failed: ' + (err.message || err), true);
+  }
+};
 
 async function computeMonthlyBreakdown(startDate, endDate) {
   var [ordersRaw, salesRaw, expensesRaw, jeRaw] = await Promise.all([
