@@ -2247,21 +2247,39 @@ function _dcGatherPayload() {
   };
 }
 
-// Close v3: load all versions of a date from `closes/day/{closeId}` plus the
+// Close v3: load all versions of a date from `closes/day/{date}/v{n}` plus the
 // legacy `dayClose/{date}` doc (fallback for the Migrate-to-v1 path).
+//
+// Agent A writes versions to the subcollection `closes/day/{date}/v{n}` (one
+// subcollection per date), NOT a flat `closes/day/{closeId}` collection.
+// MastDB can't traverse subcollections so we use raw firebase.firestore()
+// (same pattern as customer-service.js:2097 for membership queries).
+//
+// Field-name reconciliation (Agent A writes vs UI reads, both supported):
+//   savedBy        ← operatorUid
+//   savedAt        ← serverTs (Firestore Timestamp; .toDate() for display)
+//   superseded     ← supersededBy != null
 async function _dcLoadVersionsForDate(date) {
   var versions = [];
   try {
-    // Versions are written under closes/day/{closeId} where closeId starts with `{date}-v`.
-    // We list the whole `closes/day` collection then filter by date. For tenants with
-    // years of history this could grow — Agent A's writeDayClose CF MAY want to add a
-    // per-date index. For now the list call is bounded by MastDB's default page size.
-    var all = (await MastDB.get('closes/day')) || {};
-    Object.keys(all).forEach(function(id) {
-      var v = all[id];
-      if (v && v.date === date) {
-        versions.push(Object.assign({ id: id }, v));
+    var db = firebase.firestore();
+    var base = 'tenants/' + MastDB.tenantId() + '/closes/day/' + date;
+    var snap = await db.collection(base).get();
+    snap.forEach(function(doc) {
+      var d = doc.data() || {};
+      // Adapt A's field names to UI's expected field names.
+      var savedAtIso = null;
+      if (d.serverTs && typeof d.serverTs.toDate === 'function') {
+        try { savedAtIso = d.serverTs.toDate().toISOString(); } catch (xerr) {}
+      } else if (typeof d.savedAt === 'string') {
+        savedAtIso = d.savedAt;
       }
+      versions.push(Object.assign({}, d, {
+        id: doc.id,
+        savedBy: d.savedBy || d.operatorUid || null,
+        savedAt: savedAtIso,
+        superseded: d.supersededBy != null
+      }));
     });
     versions.sort(function(a, b) { return (a.version || 0) - (b.version || 0); });
   } catch (xerr) { /* collection may not yet exist */ }
@@ -2273,6 +2291,139 @@ async function _dcLoadVersionsForDate(date) {
   var legacy = null;
   try { legacy = await MastDB.get('dayClose/' + date); } catch (xerr) {}
   return { versions: versions, latest: latest, legacy: legacy };
+}
+
+// Close v3: enumerate the latest non-superseded day close for every date in a
+// month, reading from the per-date subcollections under closes/day/. Used by
+// renderPeriodClose. Returns a {date: latestVersionDoc} map.
+async function _dcLoadLatestDayClosesForMonth(monthStr) {
+  // monthStr = 'YYYY-MM'. Build the date range, fan out per-date reads in
+  // parallel. For 31 days this is 31 small subcollection reads — cheap.
+  var parts = monthStr.split('-');
+  var y = parseInt(parts[0], 10);
+  var m = parseInt(parts[1], 10);
+  var lastDay = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  var dates = [];
+  for (var d = 1; d <= lastDay; d++) {
+    dates.push(monthStr + '-' + (d < 10 ? '0' + d : '' + d));
+  }
+  var db = firebase.firestore();
+  var base = 'tenants/' + MastDB.tenantId() + '/closes/day';
+  var pairs = await Promise.all(dates.map(async function(date) {
+    try {
+      var snap = await db.collection(base + '/' + date).get();
+      var latest = null;
+      snap.forEach(function(doc) {
+        var dat = doc.data() || {};
+        if (dat.supersededBy != null) return;
+        if (!latest || (dat.version || 0) > (latest.version || 0)) {
+          latest = Object.assign({}, dat, { id: doc.id, savedBy: dat.savedBy || dat.operatorUid, superseded: false });
+        }
+      });
+      // If everything is superseded (shouldn't normally happen), take the
+      // highest version anyway.
+      if (!latest && !snap.empty) {
+        snap.forEach(function(doc) {
+          var dat = doc.data() || {};
+          if (!latest || (dat.version || 0) > (latest.version || 0)) {
+            latest = Object.assign({}, dat, { id: doc.id, savedBy: dat.savedBy || dat.operatorUid, superseded: dat.supersededBy != null });
+          }
+        });
+      }
+      return [date, latest];
+    } catch (xerr) {
+      return [date, null];
+    }
+  }));
+  var out = {};
+  pairs.forEach(function(p) { if (p[1]) out[p[0]] = p[1]; });
+  return out;
+}
+
+// Close v3: load the latest non-superseded period close for a given month
+// from `closes/period/{periodId}/v{n}`. Returns null if no period close yet.
+async function _dcLoadLatestPeriodClose(monthStr) {
+  try {
+    var db = firebase.firestore();
+    var base = 'tenants/' + MastDB.tenantId() + '/closes/period/' + monthStr;
+    var snap = await db.collection(base).get();
+    var latest = null;
+    function adapt(d, id) {
+      // Adapt A's field names to what renderPeriodClose expects.
+      var closedAtIso = null;
+      if (d.serverTs && typeof d.serverTs.toDate === 'function') {
+        try { closedAtIso = d.serverTs.toDate().toISOString(); } catch (xerr) {}
+      } else if (typeof d.closedAt === 'string') {
+        closedAtIso = d.closedAt;
+      }
+      return Object.assign({}, d, {
+        id: id,
+        closedAt: d.status === 'closed' ? closedAtIso : (d.closedAt || null),
+        autoClosedAt: d.status === 'auto-closed' ? closedAtIso : (d.autoClosedAt || null),
+        closedBy: d.closedBy || d.operatorUid || null,
+        rollup: d.rollup || {
+          openingCashCentsSum: d.openingCashCents || 0,
+          closingCashCentsSum: d.closingCashCents || 0,
+          varianceCentsSum: d.varianceCents || 0
+        }
+      });
+    }
+    snap.forEach(function(doc) {
+      var d = doc.data() || {};
+      if (d.supersededBy != null) return;
+      if (!latest || (d.version || 0) > (latest.version || 0)) {
+        latest = adapt(d, doc.id);
+      }
+    });
+    if (!latest && !snap.empty) {
+      snap.forEach(function(doc) {
+        var d = doc.data() || {};
+        if (!latest || (d.version || 0) > (latest.version || 0)) {
+          latest = adapt(d, doc.id);
+        }
+      });
+    }
+    return latest;
+  } catch (xerr) { return null; }
+}
+
+// Close v3: collect all amendments across the last 12 months. Subcollection
+// shape is `amendments/{periodId}/items/{amendmentId}` so we fan out one
+// `.collection('items')` read per recent month. A collectionGroup query
+// would be more efficient but requires a composite index — deferred per
+// the build brief.
+async function _dcLoadRecentAmendments() {
+  var months = (typeof _pcLast12Months === 'function') ? _pcLast12Months() : [];
+  if (months.length === 0) {
+    // Fallback: compute last 12 months inline.
+    var now = new Date();
+    for (var i = 0; i < 12; i++) {
+      var dt = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1));
+      months.push(dt.getUTCFullYear() + '-' + String(dt.getUTCMonth() + 1).padStart(2, '0'));
+    }
+  }
+  var db = firebase.firestore();
+  var base = 'tenants/' + MastDB.tenantId() + '/amendments';
+  var all = [];
+  await Promise.all(months.map(async function(periodId) {
+    try {
+      var snap = await db.collection(base + '/' + periodId + '/items').get();
+      snap.forEach(function(doc) {
+        var d = doc.data() || {};
+        // Normalize submittedAt / approvedAt / rejectedAt timestamps so
+        // the renderer's string-slice logic works for both Firestore
+        // Timestamp objects and plain ISO strings.
+        ['submittedAt', 'approvedAt', 'rejectedAt'].forEach(function(k) {
+          var v = d[k];
+          if (v && typeof v.toDate === 'function') {
+            try { d[k] = v.toDate().toISOString(); } catch (xerr) {}
+          }
+        });
+        all.push(Object.assign({}, d, { id: doc.id, periodId: d.periodId || periodId }));
+      });
+    } catch (xerr) { /* periodId may have no amendments */ }
+  }));
+  return all;
 }
 
 // Close v3: view a specific version of the form (read-only when not latest).
@@ -5990,20 +6141,20 @@ async function renderPeriodClose() {
   if (!el) return;
   el.innerHTML = '<div style="color:var(--warm-gray,#888);padding:20px;text-align:center;">Loading period close…</div>';
   try {
-    // Read all day-close versions + all period-close docs in parallel.
-    var dayCloses = (await MastDB.get('closes/day')) || {};
-    var periodCloses = (await MastDB.get('closes/period')) || {};
-    // Build per-day "latest non-superseded version" map.
-    var latestByDate = {};
-    Object.keys(dayCloses).forEach(function(id) {
-      var v = dayCloses[id];
-      if (!v || !v.date) return;
-      var cur = latestByDate[v.date];
-      if (!cur || (v.version || 0) > (cur.version || 0)) {
-        if (!v.superseded) latestByDate[v.date] = v;
-      }
-    });
+    // Close v3: canonical paths are `closes/day/{date}/v{n}` subcollections
+    // and `closes/period/{periodId}/v{n}`. Fan out per-month reads using
+    // raw firebase.firestore() (MastDB can't reach subcollections).
     var months = _pcLast12Months();
+    var perMonthDays = await Promise.all(months.map(_dcLoadLatestDayClosesForMonth));
+    var perMonthClose = await Promise.all(months.map(_dcLoadLatestPeriodClose));
+    var latestByDate = {};
+    perMonthDays.forEach(function(map) {
+      Object.keys(map).forEach(function(d) { latestByDate[d] = map[d]; });
+    });
+    var periodCloses = {};
+    months.forEach(function(monthStr, idx) {
+      if (perMonthClose[idx]) periodCloses[monthStr] = perMonthClose[idx];
+    });
     var h = '<div style="max-width:960px;">';
     h += '<h3 style="margin:0 0 14px;font-size:1rem;font-weight:700;">Period Close — last 12 months</h3>';
     h += '<div style="font-size:0.78rem;color:var(--warm-gray,#888);margin-bottom:14px;">Closing a period locks all day closes in the month. Day closes can still be re-closed (creates new versions) until the period is closed.</div>';
@@ -6106,18 +6257,11 @@ window.finPeriodCloseRun = async function(monthStr) {
 window.finPeriodCloseDrillDown = async function(monthStr) {
   if (!_isSafeFbKey(monthStr.replace('-', ''))) return;
   try {
-    var pc = await MastDB.get('closes/period/' + monthStr);
+    // Close v3: read from versioned subcollections via raw firebase.firestore().
+    var pc = await _dcLoadLatestPeriodClose(monthStr);
     if (!pc) { showToast('No close record for ' + monthStr, true); return; }
-    var range = _pcMonthRange(monthStr);
-    var dayCloses = (await MastDB.get('closes/day')) || {};
-    var rows = [];
-    Object.keys(dayCloses).forEach(function(id) {
-      var v = dayCloses[id];
-      if (!v || !v.date) return;
-      if (v.date < range.start || v.date > range.end) return;
-      if (v.superseded) return;
-      rows.push(v);
-    });
+    var latestByDate = await _dcLoadLatestDayClosesForMonth(monthStr);
+    var rows = Object.keys(latestByDate).map(function(d) { return latestByDate[d]; });
     rows.sort(function(a, b) { return a.date < b.date ? -1 : 1; });
     var rollup = pc.rollup || {};
     var inner = '<div style="margin-bottom:10px;font-size:0.85rem;">';
@@ -6192,13 +6336,10 @@ async function renderAmendments() {
   if (!el) return;
   el.innerHTML = '<div style="color:var(--warm-gray,#888);padding:20px;text-align:center;">Loading amendments…</div>';
   try {
-    var all = (await MastDB.get('closes/amendments')) || {};
-    var rows = [];
-    Object.keys(all).forEach(function(id) {
-      var a = all[id];
-      if (!a) return;
-      rows.push(Object.assign({ id: id }, a));
-    });
+    // Close v3: amendments live at `amendments/{periodId}/items/{id}` (subcollection).
+    // Fan out the last-12-months periodIds and merge — collectionGroup is
+    // available too but needs a composite index (deferred).
+    var rows = await _dcLoadRecentAmendments();
     // Sort: pending first by submittedAt desc, then approved/rejected by submittedAt desc.
     rows.sort(function(a, b) {
       var aPending = a.status === 'pending' ? 0 : 1;
