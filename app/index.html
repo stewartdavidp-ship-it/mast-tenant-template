@@ -20963,6 +20963,7 @@ function _submitAutoReport(type, message) {
 }
 
 function fireAutoReport(type, message) {
+  if (window._wizardAnalyzing) return;
   if (!_autoReportEnabled()) return;
   if (_autoIgnore(message)) return;
 
