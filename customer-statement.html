@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src 'self' https://*.cloudfunctions.net; img-src 'self' data: blob: https:;">
+<title>Statement</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<style>
+  html, body { margin: 0; padding: 0; background: #f5f4f0; font-family: 'DM Sans', system-ui, -apple-system, sans-serif; color: #1a1a1a; }
+  .wrap { max-width: 760px; margin: 0 auto; padding: 24px 16px 64px; }
+  .card { background: #fff; border-radius: 12px; padding: 28px 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); margin-bottom: 16px; }
+  h1 { font-size: 1.6rem; font-weight: 600; margin: 0 0 4px; }
+  h2 { font-size: 1.15rem; font-weight: 600; margin: 0 0 12px; }
+  .sub { color: #666; font-size: 0.9rem; margin: 0 0 12px; }
+  .total-row { display:flex; align-items:baseline; justify-content:space-between; padding:16px 0; border-top:1px solid #eee; margin-top:8px; }
+  .total-label { font-size: 0.85rem; color: #666; text-transform: uppercase; letter-spacing: 0.04em; }
+  .total-amt { font-size: 1.6rem; font-weight: 700; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+  th { text-align: left; padding: 10px 8px; border-bottom: 1px solid #eee; font-weight: 600; color: #555; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; }
+  td { padding: 12px 8px; border-bottom: 1px solid #f4f4f4; vertical-align: top; }
+  td.right, th.right { text-align: right; }
+  .badge { display: inline-block; padding: 2px 8px; font-size: 0.72rem; border-radius: 10px; font-weight: 600; }
+  .badge-overdue { background: #fde2e2; color: #b22020; }
+  .badge-sent { background: #e3f0fc; color: #1b5fb0; }
+  .badge-paid { background: #e6f4ea; color: #2d7a3f; }
+  .pay-btn { display: inline-block; background: #111; color: #fff; text-decoration: none; padding: 6px 14px; border-radius: 6px; font-size: 0.85rem; font-weight: 500; }
+  .pay-btn:hover { background: #333; }
+  .aging-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin: 12px 0 4px; }
+  .aging-cell { background: #f8f7f3; padding: 10px; border-radius: 8px; text-align: center; }
+  .aging-cell .label { font-size: 0.72rem; color: #666; text-transform: uppercase; letter-spacing: 0.04em; }
+  .aging-cell .amt { font-size: 1.0rem; font-weight: 600; margin-top: 2px; }
+  .aging-cell.has-due { background: #fef6e8; }
+  .aging-cell.overdue { background: #fde2e2; color: #b22020; }
+  .empty { color: #999; padding: 20px 0; text-align: center; }
+  .err { max-width: 480px; margin: 80px auto; padding: 28px 24px; background: #fff; border-radius: 12px; text-align: center; }
+  .err h1 { font-size: 1.3rem; margin: 0 0 12px; }
+  .err p { font-size: 0.9rem; color: #555; margin: 0; }
+  .brand-bar { padding: 16px 0 4px; text-align: center; }
+  .brand-bar .brand-name { font-size: 1.0rem; font-weight: 600; color: #111; }
+  .recent-paid { font-size: 0.85rem; color: #666; }
+  @media print {
+    body { background: #fff; }
+    .card { box-shadow: none; padding: 16px 0; }
+    .pay-btn { display: none; }
+    .wrap { max-width: 100%; padding: 0; }
+  }
+  @media (max-width: 540px) {
+    .aging-grid { grid-template-columns: repeat(2, 1fr); }
+    th, td { padding: 8px 4px; font-size: 0.85rem; }
+    h1 { font-size: 1.3rem; }
+  }
+</style>
+</head>
+<body>
+<div id="loading-card" class="err">
+  <p>Loading statement…</p>
+</div>
+<div id="error-card" class="err" style="display:none">
+  <h1 id="error-h">This statement isn't available</h1>
+  <p id="error-p">Please check the link you received and try again.</p>
+</div>
+<div id="statement-wrap" class="wrap" style="display:none">
+  <div class="brand-bar">
+    <div class="brand-name" id="brand-name"></div>
+  </div>
+  <div class="card">
+    <h1 id="customer-name"></h1>
+    <p class="sub" id="customer-email"></p>
+    <p class="sub" id="statement-date"></p>
+    <div class="total-row">
+      <span class="total-label">Total owed</span>
+      <span class="total-amt" id="total-owed">$0.00</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Aging summary</h2>
+    <div class="aging-grid" id="aging-grid"></div>
+  </div>
+
+  <div class="card">
+    <h2>Open invoices</h2>
+    <div id="open-invoices"></div>
+  </div>
+
+  <div class="card">
+    <h2>Recent paid</h2>
+    <div id="recent-paid"></div>
+  </div>
+</div>
+
+<script>
+(function(){
+  var params = new URLSearchParams(window.location.search);
+  var token = params.get('t');
+  var loadingEl = document.getElementById('loading-card');
+  var errCard = document.getElementById('error-card');
+  var errH = document.getElementById('error-h');
+  var errP = document.getElementById('error-p');
+  var wrap = document.getElementById('statement-wrap');
+
+  function esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+  function fmtCents(c) {
+    var n = (c || 0) / 100;
+    return '$' + n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  }
+  function fmtDate(iso) {
+    if (!iso) return '—';
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return '—';
+    return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+  }
+  function showError(h, p) {
+    loadingEl.style.display = 'none';
+    wrap.style.display = 'none';
+    errH.textContent = h;
+    errP.textContent = p;
+    errCard.style.display = 'block';
+  }
+
+  if (!token) {
+    showError('Link missing required info', 'Please use the link you received.');
+    return;
+  }
+
+  var endpoint = 'https://us-central1-mast-platform-prod.cloudfunctions.net/getCustomerStatementByToken';
+
+  fetch(endpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ t: token }),
+  }).then(function(resp){
+    return resp.json().then(function(json){ return { ok: resp.ok, status: resp.status, json: json }; });
+  }).then(function(r){
+    if (!r.ok || !r.json || !r.json.ok) {
+      var err = (r.json && r.json.error) || 'unknown-error';
+      if (err === 'revoked') {
+        showError('This statement link has been revoked', 'Please contact us for a new link.');
+      } else if (err === 'invalid-token') {
+        showError('This statement link is no longer valid', 'It may have expired. Please contact us for a new link.');
+      } else if (err === 'customer-not-found') {
+        showError('Statement not found', 'Please contact us for a new link.');
+      } else {
+        showError('Could not load statement', 'Please try refreshing the page.');
+      }
+      return;
+    }
+    render(r.json);
+  }).catch(function(err){
+    console.error('statement-load-failed', err);
+    showError('Could not reach the server', 'Please check your connection and try refreshing.');
+  });
+
+  function isOverdue(inv) {
+    if (inv.status === 'overdue') return true;
+    if (!inv.dueDate) return false;
+    var d = Date.parse(inv.dueDate);
+    return isFinite(d) && d < Date.now();
+  }
+
+  function statusBadge(inv) {
+    if (isOverdue(inv)) return '<span class="badge badge-overdue">Overdue</span>';
+    if (inv.status === 'paid') return '<span class="badge badge-paid">Paid</span>';
+    return '<span class="badge badge-sent">Sent</span>';
+  }
+
+  function render(data) {
+    var brand = data.brand || {};
+    var customer = data.customer || {};
+    var stmt = data.statement || {};
+
+    document.title = 'Statement — ' + (brand.name || '');
+    document.getElementById('brand-name').textContent = brand.name || '';
+    document.getElementById('customer-name').textContent = customer.displayName || 'Statement';
+    document.getElementById('customer-email').textContent = customer.primaryEmail || '';
+    document.getElementById('statement-date').textContent = 'As of ' + fmtDate(stmt.periodEnd);
+    document.getElementById('total-owed').textContent = fmtCents(stmt.totalOwedCents);
+
+    // Aging.
+    var aging = stmt.aging || {};
+    var bucketLabels = [
+      { key: 'current', label: 'Current' },
+      { key: '30', label: '1–30 days' },
+      { key: '60', label: '31–60 days' },
+      { key: '90', label: '61–90 days' },
+      { key: '90plus', label: '90+ days' },
+    ];
+    var agingHtml = bucketLabels.map(function(b) {
+      var amt = aging[b.key] || 0;
+      var cls = 'aging-cell';
+      if (amt > 0 && (b.key === '60' || b.key === '90' || b.key === '90plus')) cls += ' overdue';
+      else if (amt > 0) cls += ' has-due';
+      return '<div class="' + cls + '"><div class="label">' + esc(b.label) + '</div><div class="amt">' + fmtCents(amt) + '</div></div>';
+    }).join('');
+    document.getElementById('aging-grid').innerHTML = agingHtml;
+
+    // Open invoices.
+    var openHtml;
+    var open = stmt.openInvoices || [];
+    if (open.length === 0) {
+      openHtml = '<div class="empty">No open invoices.</div>';
+    } else {
+      var rows = open.map(function(inv) {
+        var payCell = inv.paymentLinkUrl
+          ? '<a class="pay-btn" rel="noopener noreferrer" target="_blank" href="' + esc(inv.paymentLinkUrl) + '">Pay</a>'
+          : '';
+        return '<tr>' +
+          '<td>' + esc(fmtDate(inv.date)) + '</td>' +
+          '<td>' + esc(inv.invoiceNumber) + '</td>' +
+          '<td>' + esc(fmtDate(inv.dueDate)) + '</td>' +
+          '<td class="right">' + esc(fmtCents(inv.amountCents)) + '</td>' +
+          '<td>' + statusBadge(inv) + '</td>' +
+          '<td class="right">' + payCell + '</td>' +
+          '</tr>';
+      }).join('');
+      openHtml =
+        '<table><thead><tr>' +
+          '<th>Date</th><th>Invoice #</th><th>Due</th><th class="right">Amount</th><th>Status</th><th></th>' +
+        '</tr></thead><tbody>' + rows + '</tbody></table>';
+    }
+    document.getElementById('open-invoices').innerHTML = openHtml;
+
+    // Recent paid.
+    var paid = stmt.recentPaid || [];
+    var paidHtml;
+    if (paid.length === 0) {
+      paidHtml = '<div class="empty">No recent payments.</div>';
+    } else {
+      var prows = paid.map(function(inv) {
+        return '<tr>' +
+          '<td>' + esc(fmtDate(inv.paidAt || inv.date)) + '</td>' +
+          '<td>' + esc(inv.invoiceNumber) + '</td>' +
+          '<td class="right">' + esc(fmtCents(inv.amountCents)) + '</td>' +
+          '<td>' + statusBadge(inv) + '</td>' +
+          '</tr>';
+      }).join('');
+      paidHtml =
+        '<table class="recent-paid"><thead><tr>' +
+          '<th>Paid</th><th>Invoice #</th><th class="right">Amount</th><th>Status</th>' +
+        '</tr></thead><tbody>' + prows + '</tbody></table>';
+    }
+    document.getElementById('recent-paid').innerHTML = paidHtml;
+
+    loadingEl.style.display = 'none';
+    wrap.style.display = 'block';
+  }
+})();
+</script>
+</body>
+</html>
