@@ -166,6 +166,16 @@ function isTestOrder(o) {
 // Revenue, P&L, and AR aging tabs.
 
 function e(s) { return typeof window.esc === 'function' ? window.esc(s) : String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+// Module-level JS-attribute escape — for inline onclick args. Falls back to a
+// quoted, backslash-escaped string when window._jsAttr isn't loaded yet.
+// Returns a JS literal expression (already includes its own quotes).
+function _jsAttrSafe(s) {
+  if (typeof window._jsAttr === 'function') return window._jsAttr(s);
+  return '"' + String(s == null ? '' : s).replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/</g, '\\x3c') + '"';
+}
+// Firebase-key charset validator (lowercase a-z, A-Z, 0-9, hyphen, underscore).
+// Used to guard URL-param-supplied IDs that flow into Firebase paths or DOM.
+function _isSafeFbKey(s) { return typeof s === 'string' && /^[A-Za-z0-9_-]+$/.test(s) && s.length <= 64; }
 
 function fmt$(cents) {
   if (cents == null || isNaN(cents)) return '$0.00';
@@ -1942,32 +1952,123 @@ function setupCashFlowTab() {
   loadCashFlow();
 }
 
-// W2.7 (-OtMNKlf5Y6xDSOE0b_Z): Day Close v2 sub-view. Per-day cash-drawer
-// count + check entry + variance + notes. Persisted at dayClose/{YYYY-MM-DD}
-// — top-level tenant collection (3-segment from root). Idempotent by date.
+// Close v3 (Idea -OtQH_uRXqz9jJBRsmrj): Day Close gains immutable versioning.
+// Reads versions from `closes/day/{closeId}` collection (latest non-superseded
+// is the active view). Legacy `dayClose/{date}` still read on first render so
+// operators can "Migrate to v1" with their existing values pre-filled. Writes
+// flow through CF `writeDayClose` which creates a new version, marks prior
+// version superseded, and writes the audit row.
+//
+// IDs scheme: `{date}-v{n}`. Listing by date uses `orderByChild('date')`.
+//
+// W2.7 history (KEPT) — Day Close v2 cash-drawer UX (opening/closing cash,
+// checks list, variance, notes) is preserved as-is. v3 layers version control
+// on top: header version badge, history drawer, re-close diff modal.
 async function renderDayCloseV2(dateParam) {
   var el = document.getElementById('fCfContent');
   if (!el) return;
   var date = dateParam || todayStr();
   el.innerHTML = '<div style="color:var(--warm-gray,#888);padding:20px;text-align:center;">Loading day close…</div>';
   try {
-    var existing = (await MastDB.get('dayClose/' + date)) || {};
+    // Load latest version + full version history + legacy v2 fallback in parallel.
+    var versionsResult = await _dcLoadVersionsForDate(date);
+    var versions = versionsResult.versions;        // sorted asc by version
+    var latest = versionsResult.latest;            // latest (highest version) or null
+    var legacy = versionsResult.legacy;            // legacy dayClose/{date} doc or null
+    var viewVersionId = (typeof window._dcViewVersionId === 'string') ? window._dcViewVersionId : null;
+    // Determine which version's data populates the form. Read-only if not latest.
+    var source = null;
+    var readOnly = false;
+    if (viewVersionId && versions.some(function(v) { return v.id === viewVersionId; })) {
+      source = versions.filter(function(v) { return v.id === viewVersionId; })[0];
+      readOnly = (latest && source.id !== latest.id);
+    } else if (latest) {
+      source = latest;
+    } else if (legacy && (legacy.openingCashCents != null || legacy.closingCashCents != null)) {
+      source = legacy;
+    } else {
+      source = {};
+    }
+    var existing = source || {};
+    el._dcSourceVersion = source && source.version ? source.version : null;
+    el._dcLatestVersion = latest && latest.version ? latest.version : 0;
+    el._dcLatest = latest || null;
+    el._dcLegacy = legacy || null;
+    el._dcVersions = versions;
+    el._dcReadOnly = readOnly;
     var openingCash = existing.openingCashCents != null ? (existing.openingCashCents / 100).toFixed(2) : '';
     var closingCash = existing.closingCashCents != null ? (existing.closingCashCents / 100).toFixed(2) : '';
     var notes = existing.notes || '';
-    var checks = Array.isArray(existing.checks) ? existing.checks.slice() : [];
+    // Close v3: stored checks use canonical {number, payerName, amountCents, memo, invoiceRef}.
+    // Form inputs work in display units ($), so convert amountCents → amount.
+    // Also tolerate legacy `payor` from drafts saved before the v3 cutover.
+    var checks = (Array.isArray(existing.checks) ? existing.checks : []).map(function(c) {
+      var amt = (c.amountCents != null)
+        ? (Number(c.amountCents) / 100).toFixed(2)
+        : (c.amount != null ? c.amount : '');
+      return {
+        number: c.number || '',
+        payerName: (c.payerName != null) ? c.payerName : (c.payor || ''),
+        amount: amt,
+        memo: c.memo || '',
+        invoiceRef: c.invoiceRef || ''
+      };
+    });
     // Cache the checks array on the element so add/remove handlers can mutate
     // and re-render without round-trips. State scope is per-render.
     el._dcChecks = checks;
 
     var h = '<div style="max-width:760px;">';
+    // Header: title + version badge + last-closed line + date picker
+    var verBadge = '';
+    var lastLine = 'Not yet closed';
+    if (latest) {
+      verBadge = '<span style="display:inline-block;background:rgba(34,197,94,0.18);color:#22c55e;font-size:0.72rem;font-weight:700;padding:2px 8px;border-radius:10px;margin-left:8px;vertical-align:middle;">v' + latest.version + '</span>';
+      var opName = latest.savedByName || latest.savedBy || 'unknown';
+      var ts = latest.savedAt ? String(latest.savedAt).replace('T', ' ').slice(0, 16) : '';
+      lastLine = 'Last closed by ' + e(opName) + (ts ? ' at ' + e(ts) : '');
+    } else if (legacy && legacy.savedAt) {
+      verBadge = '<span style="display:inline-block;background:rgba(234,179,8,0.18);color:#eab308;font-size:0.72rem;font-weight:700;padding:2px 8px;border-radius:10px;margin-left:8px;vertical-align:middle;">legacy v0</span>';
+      lastLine = 'Legacy v2 doc — saved ' + e(String(legacy.savedAt).replace('T',' ').slice(0,16));
+    }
     h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:10px;">';
-    h += '<div><h3 style="margin:0;font-size:1rem;font-weight:700;">Day Close — ' + e(date) + '</h3>';
-    h += '<div style="font-size:0.78rem;color:var(--warm-gray,#888);margin-top:3px;">' + (existing.savedAt ? 'Last saved ' + e(existing.savedAt.replace('T', ' ').slice(0, 16)) : 'Not yet saved') + '</div></div>';
+    h += '<div><h3 style="margin:0;font-size:1rem;font-weight:700;">Day Close — ' + e(date) + verBadge + '</h3>';
+    h += '<div style="font-size:0.78rem;color:var(--warm-gray,#888);margin-top:3px;">' + lastLine + '</div></div>';
     h += '<div style="display:flex;gap:6px;align-items:center;">';
     h += '<label style="font-size:0.78rem;color:var(--warm-gray,#888);">Date:</label>';
     h += '<input type="date" id="dcDate" value="' + e(date) + '" onchange="finDayCloseChangeDate(this.value)" style="background:var(--bg-secondary,#232323);border:1px solid rgba(255,255,255,0.15);border-radius:6px;color:var(--text,#fff);padding:5px 8px;font-size:0.85rem;">';
     h += '</div></div>';
+
+    // Read-only banner when viewing a superseded version
+    if (readOnly && source && latest) {
+      var supTs = latest.savedAt ? String(latest.savedAt).replace('T',' ').slice(0,16) : '';
+      h += '<div style="background:rgba(234,179,8,0.12);border:1px solid rgba(234,179,8,0.35);border-radius:8px;padding:10px 12px;margin-bottom:12px;color:#eab308;font-size:0.85rem;">';
+      h += 'Showing v' + source.version + ' (superseded by v' + latest.version + (supTs ? ' at ' + e(supTs) : '') + '). ';
+      h += '<a href="javascript:void(0)" onclick="finDayCloseViewVersion(null)" style="color:#eab308;text-decoration:underline;">Return to latest</a>';
+      h += '</div>';
+    }
+
+    // Version history drawer (collapsible)
+    if (versions.length > 0) {
+      h += '<details style="margin-bottom:14px;background:var(--bg-secondary,#232323);border-radius:10px;padding:0;">';
+      h += '<summary style="cursor:pointer;padding:10px 14px;font-size:0.85rem;font-weight:700;list-style:none;">Version history (' + versions.length + ')</summary>';
+      h += '<div style="padding:6px 14px 12px;">';
+      // newest first in the list
+      var sortedDesc = versions.slice().sort(function(a, b) { return (b.version || 0) - (a.version || 0); });
+      sortedDesc.forEach(function(v) {
+        var vop = v.savedByName || v.savedBy || 'unknown';
+        var vts = v.savedAt ? String(v.savedAt).replace('T',' ').slice(0,16) : '';
+        var vvar = v.varianceCents != null ? fmt$(v.varianceCents) : '—';
+        var isLatest = latest && v.id === latest.id;
+        h += '<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.06);font-size:0.78rem;">';
+        h += '<div><span style="color:var(--warm-gray,#888);font-weight:700;">v' + v.version + '</span>';
+        if (isLatest) h += ' <span style="color:#22c55e;font-weight:700;">(latest)</span>';
+        h += ' &middot; ' + e(vop) + (vts ? ' &middot; ' + e(vts) : '') + ' &middot; variance ' + e(vvar) + '</div>';
+        h += '<button class="btn btn-secondary btn-small" onclick="finDayCloseViewVersion(' + _jsAttrSafe(v.id) + ')">View</button>';
+        h += '</div>';
+      });
+      h += '</div></details>';
+    }
 
     // Cash drawer panel
     h += '<div style="background:var(--bg-secondary,#232323);border-radius:10px;padding:16px;margin-bottom:14px;">';
@@ -1998,11 +2099,30 @@ async function renderDayCloseV2(dateParam) {
     h += '<textarea id="dcNotes" rows="3" style="width:100%;background:var(--bg-primary,#1a1a1a);border:1px solid rgba(255,255,255,0.15);border-radius:6px;color:var(--text,#fff);padding:8px 10px;font-size:0.85rem;font-family:inherit;box-sizing:border-box;" placeholder="Anything unusual? Shortages, overages, deposits, etc.">' + e(notes) + '</textarea>';
     h += '</div>';
 
-    // Action buttons
-    h += '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px;">';
+    // Action buttons — Close v3 CTA state machine:
+    //   no v1 + legacy doc exists  → "Migrate to v1" (pre-fills cash drawer)
+    //   no version + no legacy     → "Close as v1"
+    //   any version exists         → "Re-close (creates v{n+1})" — opens diff modal
+    // Disabled entirely when viewing a superseded version (must "Return to latest" first).
+    h += '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px;align-items:center;">';
     h += '<button class="btn btn-secondary btn-small" onclick="finDayCloseExportCsv()">Export CSV</button>';
     h += '<button class="btn btn-secondary btn-small" onclick="window.print()">Print</button>';
-    h += '<button class="btn btn-primary btn-small" onclick="finDayCloseSave()">Save Day Close</button>';
+    if (readOnly) {
+      h += '<span style="font-size:0.78rem;color:var(--warm-gray,#888);">Editing disabled while viewing v' + (source && source.version) + '</span>';
+    } else {
+      var ctaLabel, ctaHandler;
+      if (!latest && legacy && (legacy.openingCashCents != null || legacy.closingCashCents != null)) {
+        ctaLabel = 'Migrate to v1';
+        ctaHandler = 'finDayCloseSave(\'migrate\')';
+      } else if (!latest) {
+        ctaLabel = 'Close as v1';
+        ctaHandler = 'finDayCloseSave(\'first\')';
+      } else {
+        ctaLabel = 'Re-close (creates v' + (latest.version + 1) + ')';
+        ctaHandler = 'finDayCloseSave(\'reclose\')';
+      }
+      h += '<button class="btn btn-primary btn-small" onclick="' + ctaHandler + '">' + e(ctaLabel) + '</button>';
+    }
     h += '</div>';
     h += '</div>';
 
@@ -2015,6 +2135,21 @@ async function renderDayCloseV2(dateParam) {
     var dcClose = document.getElementById('dcClose');
     if (dcOpen) dcOpen.addEventListener('input', _dcUpdateVariance);
     if (dcClose) dcClose.addEventListener('input', _dcUpdateVariance);
+    // Close v3: lock down all inputs + the +Add Check button when viewing a
+    // superseded version. The cash-drawer values, checks list, and notes are
+    // immutable per the v3 rule (re-close creates a new version, not edits in place).
+    if (readOnly) {
+      try {
+        var formEls = el.querySelectorAll('input, textarea');
+        for (var i = 0; i < formEls.length; i++) {
+          if (formEls[i].id === 'dcDate') continue; // date picker still works for navigation
+          formEls[i].setAttribute('disabled', 'disabled');
+          formEls[i].style.opacity = '0.6';
+        }
+        var addCheckBtn = el.querySelector('button[onclick="finDayCloseAddCheck()"]');
+        if (addCheckBtn) addCheckBtn.style.display = 'none';
+      } catch (xerr) { /* non-fatal */ }
+    }
   } catch (err) {
     el.innerHTML = '<div style="padding:20px;color:var(--danger,#dc2626);">Failed to load day close: ' + e(err.message || err) + '</div>';
   }
@@ -2038,9 +2173,14 @@ function _dcRenderCheckRows() {
   } else {
     var h = '';
     checks.forEach(function(c, i) {
-      h += '<div style="display:grid;grid-template-columns:120px 1fr 1fr 90px 32px;gap:8px;align-items:center;margin-bottom:6px;">';
+      // Close v3 reconciliation: canonical check fields are
+      // {number, payerName, amountCents, memo?, invoiceRef?}. Render
+      // accepts legacy `payor` as fallback for in-flight drafts.
+      var payerVal = (c.payerName != null) ? c.payerName : (c.payor || '');
+      h += '<div style="display:grid;grid-template-columns:90px 110px 1fr 1fr 90px 32px;gap:8px;align-items:center;margin-bottom:6px;">';
+      h += '<input type="text" placeholder="Check #" value="' + e(c.number || '') + '" onchange="finDayCloseUpdateCheck(' + i + ',\'number\',this.value)" style="background:var(--bg-primary,#1a1a1a);border:1px solid rgba(255,255,255,0.15);border-radius:6px;color:var(--text,#fff);padding:5px 8px;font-size:0.85rem;">';
       h += '<input type="number" step="0.01" placeholder="Amount" value="' + e(c.amount != null ? c.amount : '') + '" onchange="finDayCloseUpdateCheck(' + i + ',\'amount\',this.value)" style="background:var(--bg-primary,#1a1a1a);border:1px solid rgba(255,255,255,0.15);border-radius:6px;color:var(--text,#fff);padding:5px 8px;font-size:0.85rem;">';
-      h += '<input type="text" placeholder="Payor" value="' + e(c.payor || '') + '" onchange="finDayCloseUpdateCheck(' + i + ',\'payor\',this.value)" style="background:var(--bg-primary,#1a1a1a);border:1px solid rgba(255,255,255,0.15);border-radius:6px;color:var(--text,#fff);padding:5px 8px;font-size:0.85rem;">';
+      h += '<input type="text" placeholder="Payer name" value="' + e(payerVal) + '" onchange="finDayCloseUpdateCheck(' + i + ',\'payerName\',this.value)" style="background:var(--bg-primary,#1a1a1a);border:1px solid rgba(255,255,255,0.15);border-radius:6px;color:var(--text,#fff);padding:5px 8px;font-size:0.85rem;">';
       h += '<input type="text" placeholder="Memo / applied invoice" value="' + e(c.memo || '') + '" onchange="finDayCloseUpdateCheck(' + i + ',\'memo\',this.value)" style="background:var(--bg-primary,#1a1a1a);border:1px solid rgba(255,255,255,0.15);border-radius:6px;color:var(--text,#fff);padding:5px 8px;font-size:0.85rem;">';
       h += '<input type="text" placeholder="Invoice #" value="' + e(c.invoiceRef || '') + '" onchange="finDayCloseUpdateCheck(' + i + ',\'invoiceRef\',this.value)" style="background:var(--bg-primary,#1a1a1a);border:1px solid rgba(255,255,255,0.15);border-radius:6px;color:var(--text,#fff);padding:5px 8px;font-size:0.85rem;">';
       h += '<button class="btn btn-secondary btn-small" onclick="finDayCloseRemoveCheck(' + i + ')" title="Remove">✕</button>';
@@ -2072,7 +2212,8 @@ function _dcUpdateVariance() {
 }
 window.finDayCloseAddCheck = function() {
   var arr = _dcChecks();
-  arr.push({ amount: '', payor: '', memo: '', invoiceRef: '' });
+  // Close v3 canonical check shape: {number, payerName, amount, memo, invoiceRef}
+  arr.push({ number: '', amount: '', payerName: '', memo: '', invoiceRef: '' });
   _dcSetChecks(arr);
   _dcRenderCheckRows();
 };
@@ -2099,41 +2240,318 @@ window.finDayCloseChangeDate = function(date) {
   if (!date) return;
   location.hash = '#finance-cash-flow?subView=dayclose&date=' + encodeURIComponent(date);
 };
-window.finDayCloseSave = async function() {
+// Close v3: gather form values, build payload. Single source for save + diff modal.
+function _dcGatherPayload() {
   var date = (document.getElementById('dcDate') || {}).value || todayStr();
   var openVal = parseFloat((document.getElementById('dcOpen') || {}).value);
   var closeVal = parseFloat((document.getElementById('dcClose') || {}).value);
   var notes = ((document.getElementById('dcNotes') || {}).value || '').trim();
   var checks = _dcChecks().filter(function(c) { return c.amount && !isNaN(parseFloat(c.amount)); }).map(function(c) {
+    // Close v3 canonical check shape: {number, payerName, amountCents, memo, invoiceRef}
     return {
+      number: (c.number || '').trim(),
+      payerName: (c.payerName != null ? c.payerName : (c.payor || '')).trim(),
       amountCents: Math.round(parseFloat(c.amount) * 100),
-      payor: (c.payor || '').trim(),
       memo: (c.memo || '').trim(),
-      invoiceRef: (c.invoiceRef || '').trim() || null
+      invoiceRef: (c.invoiceRef || '').trim()
     };
   });
   var checkTotalCents = checks.reduce(function(s, c) { return s + c.amountCents; }, 0);
   var variance = (isNaN(openVal) || isNaN(closeVal)) ? null : Math.round((closeVal - openVal) * 100);
-  var now = new Date().toISOString();
-  var user = firebase.auth().currentUser;
-  var payload = {
+  return {
     date: date,
     openingCashCents: isNaN(openVal) ? null : Math.round(openVal * 100),
     closingCashCents: isNaN(closeVal) ? null : Math.round(closeVal * 100),
     varianceCents: variance,
     checks: checks,
     checkTotalCents: checkTotalCents,
-    notes: notes || null,
-    savedAt: now,
-    savedBy: (user && user.uid) || 'unknown'
+    notes: notes || null
   };
+}
+
+// Close v3: load all versions of a date from `closes/day/{date}/v{n}` plus the
+// legacy `dayClose/{date}` doc (fallback for the Migrate-to-v1 path).
+//
+// Agent A writes versions to the subcollection `closes/day/{date}/v{n}` (one
+// subcollection per date), NOT a flat `closes/day/{closeId}` collection.
+// MastDB can't traverse subcollections so we use raw firebase.firestore()
+// (same pattern as customer-service.js:2097 for membership queries).
+//
+// Field-name reconciliation (Agent A writes vs UI reads, both supported):
+//   savedBy        ← operatorUid
+//   savedAt        ← serverTs (Firestore Timestamp; .toDate() for display)
+//   superseded     ← supersededBy != null
+async function _dcLoadVersionsForDate(date) {
+  var versions = [];
   try {
-    // dayClose/{YYYY-MM-DD} — top-level tenant collection (no admin/ prefix).
-    // Idempotent: same date overwrites prior entry.
-    await MastDB.set('dayClose/' + date, payload);
-    showToast('Day Close saved for ' + date);
-    renderDayCloseV2(date);
+    var db = firebase.firestore();
+    var base = 'tenants/' + MastDB.tenantId() + '/closes/day/' + date;
+    var snap = await db.collection(base).get();
+    snap.forEach(function(doc) {
+      var d = doc.data() || {};
+      // Adapt A's field names to UI's expected field names.
+      var savedAtIso = null;
+      if (d.serverTs && typeof d.serverTs.toDate === 'function') {
+        try { savedAtIso = d.serverTs.toDate().toISOString(); } catch (xerr) {}
+      } else if (typeof d.savedAt === 'string') {
+        savedAtIso = d.savedAt;
+      }
+      versions.push(Object.assign({}, d, {
+        id: doc.id,
+        savedBy: d.savedBy || d.operatorUid || null,
+        savedAt: savedAtIso,
+        superseded: d.supersededBy != null
+      }));
+    });
+    versions.sort(function(a, b) { return (a.version || 0) - (b.version || 0); });
+  } catch (xerr) { /* collection may not yet exist */ }
+  var latest = null;
+  for (var i = versions.length - 1; i >= 0; i--) {
+    if (!versions[i].superseded) { latest = versions[i]; break; }
+  }
+  if (!latest && versions.length > 0) latest = versions[versions.length - 1];
+  var legacy = null;
+  try { legacy = await MastDB.get('dayClose/' + date); } catch (xerr) {}
+  return { versions: versions, latest: latest, legacy: legacy };
+}
+
+// Close v3: enumerate the latest non-superseded day close for every date in a
+// month, reading from the per-date subcollections under closes/day/. Used by
+// renderPeriodClose. Returns a {date: latestVersionDoc} map.
+async function _dcLoadLatestDayClosesForMonth(monthStr) {
+  // monthStr = 'YYYY-MM'. Build the date range, fan out per-date reads in
+  // parallel. For 31 days this is 31 small subcollection reads — cheap.
+  var parts = monthStr.split('-');
+  var y = parseInt(parts[0], 10);
+  var m = parseInt(parts[1], 10);
+  var lastDay = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  var dates = [];
+  for (var d = 1; d <= lastDay; d++) {
+    dates.push(monthStr + '-' + (d < 10 ? '0' + d : '' + d));
+  }
+  var db = firebase.firestore();
+  var base = 'tenants/' + MastDB.tenantId() + '/closes/day';
+  var pairs = await Promise.all(dates.map(async function(date) {
+    try {
+      var snap = await db.collection(base + '/' + date).get();
+      var latest = null;
+      snap.forEach(function(doc) {
+        var dat = doc.data() || {};
+        if (dat.supersededBy != null) return;
+        if (!latest || (dat.version || 0) > (latest.version || 0)) {
+          latest = Object.assign({}, dat, { id: doc.id, savedBy: dat.savedBy || dat.operatorUid, superseded: false });
+        }
+      });
+      // If everything is superseded (shouldn't normally happen), take the
+      // highest version anyway.
+      if (!latest && !snap.empty) {
+        snap.forEach(function(doc) {
+          var dat = doc.data() || {};
+          if (!latest || (dat.version || 0) > (latest.version || 0)) {
+            latest = Object.assign({}, dat, { id: doc.id, savedBy: dat.savedBy || dat.operatorUid, superseded: dat.supersededBy != null });
+          }
+        });
+      }
+      return [date, latest];
+    } catch (xerr) {
+      return [date, null];
+    }
+  }));
+  var out = {};
+  pairs.forEach(function(p) { if (p[1]) out[p[0]] = p[1]; });
+  return out;
+}
+
+// Close v3: load the latest non-superseded period close for a given month
+// from `closes/period/{periodId}/v{n}`. Returns null if no period close yet.
+async function _dcLoadLatestPeriodClose(monthStr) {
+  try {
+    var db = firebase.firestore();
+    var base = 'tenants/' + MastDB.tenantId() + '/closes/period/' + monthStr;
+    var snap = await db.collection(base).get();
+    var latest = null;
+    function adapt(d, id) {
+      // Adapt A's field names to what renderPeriodClose expects.
+      var closedAtIso = null;
+      if (d.serverTs && typeof d.serverTs.toDate === 'function') {
+        try { closedAtIso = d.serverTs.toDate().toISOString(); } catch (xerr) {}
+      } else if (typeof d.closedAt === 'string') {
+        closedAtIso = d.closedAt;
+      }
+      return Object.assign({}, d, {
+        id: id,
+        closedAt: d.status === 'closed' ? closedAtIso : (d.closedAt || null),
+        autoClosedAt: d.status === 'auto-closed' ? closedAtIso : (d.autoClosedAt || null),
+        closedBy: d.closedBy || d.operatorUid || null,
+        rollup: d.rollup || {
+          openingCashCentsSum: d.openingCashCents || 0,
+          closingCashCentsSum: d.closingCashCents || 0,
+          varianceCentsSum: d.varianceCents || 0
+        }
+      });
+    }
+    snap.forEach(function(doc) {
+      var d = doc.data() || {};
+      if (d.supersededBy != null) return;
+      if (!latest || (d.version || 0) > (latest.version || 0)) {
+        latest = adapt(d, doc.id);
+      }
+    });
+    if (!latest && !snap.empty) {
+      snap.forEach(function(doc) {
+        var d = doc.data() || {};
+        if (!latest || (d.version || 0) > (latest.version || 0)) {
+          latest = adapt(d, doc.id);
+        }
+      });
+    }
+    return latest;
+  } catch (xerr) { return null; }
+}
+
+// Close v3: collect all amendments across the last 12 months. Subcollection
+// shape is `amendments/{periodId}/items/{amendmentId}` so we fan out one
+// `.collection('items')` read per recent month. A collectionGroup query
+// would be more efficient but requires a composite index — deferred per
+// the build brief.
+async function _dcLoadRecentAmendments() {
+  var months = (typeof _pcLast12Months === 'function') ? _pcLast12Months() : [];
+  if (months.length === 0) {
+    // Fallback: compute last 12 months inline.
+    var now = new Date();
+    for (var i = 0; i < 12; i++) {
+      var dt = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1));
+      months.push(dt.getUTCFullYear() + '-' + String(dt.getUTCMonth() + 1).padStart(2, '0'));
+    }
+  }
+  var db = firebase.firestore();
+  var base = 'tenants/' + MastDB.tenantId() + '/amendments';
+  var all = [];
+  await Promise.all(months.map(async function(periodId) {
+    try {
+      var snap = await db.collection(base + '/' + periodId + '/items').get();
+      snap.forEach(function(doc) {
+        var d = doc.data() || {};
+        // Normalize submittedAt / approvedAt / rejectedAt timestamps so
+        // the renderer's string-slice logic works for both Firestore
+        // Timestamp objects and plain ISO strings.
+        ['submittedAt', 'approvedAt', 'rejectedAt'].forEach(function(k) {
+          var v = d[k];
+          if (v && typeof v.toDate === 'function') {
+            try { d[k] = v.toDate().toISOString(); } catch (xerr) {}
+          }
+        });
+        all.push(Object.assign({}, d, { id: doc.id, periodId: d.periodId || periodId }));
+      });
+    } catch (xerr) { /* periodId may have no amendments */ }
+  }));
+  return all;
+}
+
+// Close v3: view a specific version of the form (read-only when not latest).
+window.finDayCloseViewVersion = function(versionId) {
+  window._dcViewVersionId = versionId || null;
+  var date = (document.getElementById('dcDate') || {}).value || todayStr();
+  renderDayCloseV2(date);
+};
+
+// Close v3: Re-close diff modal. Renders before/after for each changed field.
+function _dcRenderDiff(latest, next) {
+  var rows = [];
+  function row(label, before, after) {
+    if (before === after) return;
+    rows.push({ label: label, before: before, after: after });
+  }
+  row('Opening cash', fmt$(latest.openingCashCents), fmt$(next.openingCashCents));
+  row('Closing cash', fmt$(latest.closingCashCents), fmt$(next.closingCashCents));
+  row('Variance', fmt$(latest.varianceCents), fmt$(next.varianceCents));
+  row('Check total', fmt$(latest.checkTotalCents), fmt$(next.checkTotalCents));
+  var prevChecks = Array.isArray(latest.checks) ? latest.checks.length : 0;
+  var newChecks = next.checks.length;
+  if (prevChecks !== newChecks) {
+    row('Check count', String(prevChecks), String(newChecks) + ' (' + (newChecks > prevChecks ? '+' : '') + (newChecks - prevChecks) + ')');
+  }
+  row('Notes', (latest.notes || '(empty)'), (next.notes || '(empty)'));
+  if (rows.length === 0) return '<div style="color:var(--warm-gray,#888);font-size:0.85rem;">No changes detected. Re-closing will still create a new version row for audit.</div>';
+  var h = '<table style="width:100%;border-collapse:collapse;font-size:0.85rem;">';
+  h += '<thead><tr><th style="text-align:left;padding:6px 8px;border-bottom:1px solid rgba(255,255,255,0.15);">Field</th><th style="text-align:left;padding:6px 8px;border-bottom:1px solid rgba(255,255,255,0.15);">v' + latest.version + ' (current)</th><th style="text-align:left;padding:6px 8px;border-bottom:1px solid rgba(255,255,255,0.15);">v' + (latest.version + 1) + ' (proposed)</th></tr></thead><tbody>';
+  rows.forEach(function(r) {
+    h += '<tr><td style="padding:6px 8px;border-bottom:1px solid rgba(255,255,255,0.06);font-weight:600;">' + e(r.label) + '</td>';
+    h += '<td style="padding:6px 8px;border-bottom:1px solid rgba(255,255,255,0.06);color:#eab308;">' + e(r.before) + '</td>';
+    h += '<td style="padding:6px 8px;border-bottom:1px solid rgba(255,255,255,0.06);color:#22c55e;">' + e(r.after) + '</td></tr>';
+  });
+  h += '</tbody></table>';
+  return h;
+}
+
+// Close v3: HTML-bodied confirm modal (mastConfirm escapes; we need rendered table).
+// Built locally to match mastConfirm visual chrome.
+function _dcShowDiffModal(date, nextVersion, innerHtml) {
+  return new Promise(function(resolve) {
+    var overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;';
+    var h = '<div style="background:var(--bg-secondary,#232323);border-radius:10px;max-width:640px;width:96%;padding:22px 24px;box-shadow:0 8px 30px rgba(0,0,0,0.4);color:var(--text,#fff);">';
+    h += '<div style="font-size:1.0rem;font-weight:700;margin-bottom:10px;">Re-close ' + e(date) + ' &mdash; review changes</div>';
+    h += '<div style="font-size:0.78rem;color:var(--warm-gray,#888);margin-bottom:14px;">Creating an immutable v' + nextVersion + '. The current version is preserved in history.</div>';
+    h += '<div style="max-height:340px;overflow-y:auto;margin-bottom:18px;">' + innerHtml + '</div>';
+    h += '<div style="display:flex;justify-content:flex-end;gap:8px;">';
+    h += '<button class="btn btn-secondary" id="dcDiffCancel">Cancel</button>';
+    h += '<button class="btn btn-primary" id="dcDiffOK">Create v' + nextVersion + '</button>';
+    h += '</div></div>';
+    overlay.innerHTML = h;
+    document.body.appendChild(overlay);
+    function close(result) { if (overlay.parentNode) overlay.parentNode.removeChild(overlay); resolve(result); }
+    overlay.querySelector('#dcDiffCancel').addEventListener('click', function() { close(false); });
+    overlay.querySelector('#dcDiffOK').addEventListener('click', function() { close(true); });
+    overlay.addEventListener('click', function(ev) { if (ev.target === overlay) close(false); });
+  });
+}
+
+// Close v3: small wrapper that invokes one of the Close v3 CFs via
+// firebase.functions().httpsCallable(name). Agent A's CFs are onCall and
+// expect tid in data.tid (httpsCallable has no header concept). The httpsCallable
+// invocation auto-injects the Firebase Auth ID token — no Authorization header
+// needed. Returns the unwrapped `data` object (response is `{data: {ok, ...}}`).
+async function _closeV3Call(name, payload) {
+  var p = Object.assign({}, payload || {});
+  if (!p.tid) p.tid = MastDB.tenantId();
+  var fn = firebase.functions().httpsCallable(name);
+  var res = await fn(p);
+  return (res && res.data) ? res.data : {};
+}
+
+// Close v3: Save — always goes through the writeDayClose CF. The CF performs
+// the version-bump + supersede + audit-row write atomically (single Firestore
+// transaction). requestId is a client UUID for at-most-once semantics.
+window.finDayCloseSave = async function(mode) {
+  var el = document.getElementById('fCfContent');
+  if (el && el._dcReadOnly) { showToast('Cannot edit a superseded version.', true); return; }
+  var payload = _dcGatherPayload();
+  var latest = el && el._dcLatest;
+  // Re-close: show diff modal first; user confirms inside the modal.
+  if (mode === 'reclose' && latest) {
+    var diffHtml = _dcRenderDiff(latest, payload);
+    var ok = await _dcShowDiffModal(payload.date, latest.version + 1, diffHtml);
+    if (!ok) return;
+  }
+  // Best-effort UUID (crypto.randomUUID is widely supported in supported browsers).
+  var requestId = (window.crypto && window.crypto.randomUUID) ? window.crypto.randomUUID()
+    : ('rid-' + Date.now() + '-' + Math.random().toString(36).slice(2));
+  payload.requestId = requestId;
+  try {
+    var json = await _closeV3Call('writeDayClose', payload);
+    if (!json || json.ok === false) {
+      showToast('Save failed: ' + ((json && (json.message || json.error)) || 'unknown error'), true);
+      return;
+    }
+    // Audit: client-side row for cross-UI consistency. CF also writes its own
+    // immutable audit row in `closes/audit/{...}` (Agent A) so this is belt-and-braces.
+    try { await writeAudit(mode === 'reclose' ? 'update' : 'create', 'dayClose', payload.date + ':v' + (json.version || '?')); } catch (xerr) {}
+    showToast('Day Close v' + (json.version || '?') + ' saved for ' + payload.date);
+    window._dcViewVersionId = null;
+    renderDayCloseV2(payload.date);
   } catch (err) {
+    // httpsCallable throws HttpsError-shaped objects; surface .message.
     showToast('Save failed: ' + (err.message || err), true);
   }
 };
@@ -2148,10 +2566,11 @@ window.finDayCloseExportCsv = function() {
   rows.push(['Cash Drawer','Closing Cash', isNaN(closeVal) ? '' : closeVal.toFixed(2)]);
   if (!isNaN(openVal) && !isNaN(closeVal)) rows.push(['Cash Drawer','Variance', (closeVal - openVal).toFixed(2)]);
   rows.push([]);
-  rows.push(['Checks','Amount','Payor','Memo','Invoice Ref']);
+  rows.push(['Checks','Check #','Amount','Payer Name','Memo','Invoice Ref']);
   checks.forEach(function(c) {
     if (!c.amount) return;
-    rows.push(['Check', parseFloat(c.amount).toFixed(2), c.payor || '', c.memo || '', c.invoiceRef || '']);
+    var payer = (c.payerName != null) ? c.payerName : (c.payor || '');
+    rows.push(['Check', c.number || '', parseFloat(c.amount).toFixed(2), payer, c.memo || '', c.invoiceRef || '']);
   });
   rows.push(['Checks','Total', checks.reduce(function(s, c) { return s + (parseFloat(c.amount) || 0); }, 0).toFixed(2)]);
   rows.push([]);
@@ -5706,6 +6125,485 @@ async function _loadFinanceOverview() {
 }
 window.renderFinanceOverview = renderFinanceOverview;
 
+// ============================================================================
+// Close v3 — Period Close tab (Idea -OtQH_uRXqz9jJBRsmrj, sub-task 3)
+// ============================================================================
+// Lists the last 12 months. Each row shows status (Open / Closed / Auto-closed),
+// aggregate variance + opening + closing cash, and CTA. CF /writePeriodClose
+// performs the actual close; on response.code==='unclosedDays' we surface a
+// modal listing the offending dates with deep-links back to Day Close UI.
+
+function _pcMonthRange(monthStr) {
+  // monthStr = "YYYY-MM". Return {start, end} ISO date strings (inclusive).
+  var parts = monthStr.split('-');
+  var y = parseInt(parts[0], 10);
+  var m = parseInt(parts[1], 10);
+  var start = new Date(Date.UTC(y, m - 1, 1));
+  var end = new Date(Date.UTC(y, m, 0));
+  function pad(n) { return n < 10 ? '0' + n : '' + n; }
+  return {
+    start: start.getUTCFullYear() + '-' + pad(start.getUTCMonth() + 1) + '-' + pad(start.getUTCDate()),
+    end:   end.getUTCFullYear()   + '-' + pad(end.getUTCMonth() + 1)   + '-' + pad(end.getUTCDate())
+  };
+}
+
+function _pcLast12Months() {
+  var out = [];
+  var d = new Date();
+  d.setUTCDate(1);
+  for (var i = 0; i < 12; i++) {
+    var y = d.getUTCFullYear();
+    var m = d.getUTCMonth() + 1;
+    out.push(y + '-' + (m < 10 ? '0' + m : '' + m));
+    d.setUTCMonth(d.getUTCMonth() - 1);
+  }
+  return out;
+}
+
+function _pcMonthLabel(monthStr) {
+  var parts = monthStr.split('-');
+  var d = new Date(Date.UTC(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, 1));
+  return d.toLocaleDateString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+}
+
+async function renderPeriodClose() {
+  var el = document.getElementById('financePeriodCloseTab');
+  if (!el) return;
+  el.innerHTML = '<div style="color:var(--warm-gray,#888);padding:20px;text-align:center;">Loading period close…</div>';
+  try {
+    // Close v3: canonical paths are `closes/day/{date}/v{n}` subcollections
+    // and `closes/period/{periodId}/v{n}`. Fan out per-month reads using
+    // raw firebase.firestore() (MastDB can't reach subcollections).
+    var months = _pcLast12Months();
+    var perMonthDays = await Promise.all(months.map(_dcLoadLatestDayClosesForMonth));
+    var perMonthClose = await Promise.all(months.map(_dcLoadLatestPeriodClose));
+    var latestByDate = {};
+    perMonthDays.forEach(function(map) {
+      Object.keys(map).forEach(function(d) { latestByDate[d] = map[d]; });
+    });
+    var periodCloses = {};
+    months.forEach(function(monthStr, idx) {
+      if (perMonthClose[idx]) periodCloses[monthStr] = perMonthClose[idx];
+    });
+    var h = '<div style="max-width:960px;">';
+    h += '<h3 style="margin:0 0 14px;font-size:1rem;font-weight:700;">Period Close — last 12 months</h3>';
+    h += '<div style="font-size:0.78rem;color:var(--warm-gray,#888);margin-bottom:14px;">Closing a period locks all day closes in the month. Day closes can still be re-closed (creates new versions) until the period is closed.</div>';
+    h += '<table style="width:100%;border-collapse:collapse;font-size:0.85rem;">';
+    h += '<thead><tr style="text-align:left;color:var(--warm-gray,#888);font-size:0.78rem;">';
+    h += '<th style="padding:8px 10px;border-bottom:1px solid rgba(255,255,255,0.12);">Month</th>';
+    h += '<th style="padding:8px 10px;border-bottom:1px solid rgba(255,255,255,0.12);">Status</th>';
+    h += '<th style="padding:8px 10px;border-bottom:1px solid rgba(255,255,255,0.12);text-align:right;">Opening cash</th>';
+    h += '<th style="padding:8px 10px;border-bottom:1px solid rgba(255,255,255,0.12);text-align:right;">Closing cash</th>';
+    h += '<th style="padding:8px 10px;border-bottom:1px solid rgba(255,255,255,0.12);text-align:right;">Variance</th>';
+    h += '<th style="padding:8px 10px;border-bottom:1px solid rgba(255,255,255,0.12);"></th>';
+    h += '</tr></thead><tbody>';
+    months.forEach(function(monthStr) {
+      var range = _pcMonthRange(monthStr);
+      var openingSum = 0, closingSum = 0, varianceSum = 0, dayCount = 0;
+      Object.keys(latestByDate).forEach(function(d) {
+        if (d >= range.start && d <= range.end) {
+          var v = latestByDate[d];
+          openingSum += v.openingCashCents || 0;
+          closingSum += v.closingCashCents || 0;
+          varianceSum += v.varianceCents || 0;
+          dayCount++;
+        }
+      });
+      var pc = periodCloses[monthStr] || null;
+      var statusChip = '';
+      if (pc && pc.status === 'closed') {
+        var ts = pc.closedAt ? String(pc.closedAt).replace('T',' ').slice(0,16) : '';
+        statusChip = '<span style="background:rgba(34,197,94,0.18);color:#22c55e;padding:2px 8px;border-radius:10px;font-size:0.72rem;font-weight:700;">Closed</span>'
+          + (ts ? ' <span style="color:var(--warm-gray,#888);font-size:0.72rem;">' + e(ts) + '</span>' : '');
+      } else if (pc && pc.status === 'auto-closed') {
+        var ats = pc.autoClosedAt ? String(pc.autoClosedAt).replace('T',' ').slice(0,16) : '';
+        statusChip = '<span style="background:rgba(99,102,241,0.18);color:#818cf8;padding:2px 8px;border-radius:10px;font-size:0.72rem;font-weight:700;">Auto-closed</span>'
+          + (ats ? ' <span style="color:var(--warm-gray,#888);font-size:0.72rem;">' + e(ats) + '</span>' : '');
+      } else {
+        statusChip = '<span style="background:rgba(234,179,8,0.18);color:#eab308;padding:2px 8px;border-radius:10px;font-size:0.72rem;font-weight:700;">Open</span>';
+      }
+      var rowClickAttr = (pc ? 'onclick="finPeriodCloseDrillDown(' + _jsAttrSafe(monthStr) + ')" style="cursor:pointer;"' : '');
+      h += '<tr ' + rowClickAttr + '>';
+      h += '<td style="padding:8px 10px;border-bottom:1px solid rgba(255,255,255,0.06);font-weight:600;">' + e(_pcMonthLabel(monthStr)) + '</td>';
+      h += '<td style="padding:8px 10px;border-bottom:1px solid rgba(255,255,255,0.06);">' + statusChip + '</td>';
+      h += '<td style="padding:8px 10px;border-bottom:1px solid rgba(255,255,255,0.06);text-align:right;">' + e(fmt$(openingSum)) + '</td>';
+      h += '<td style="padding:8px 10px;border-bottom:1px solid rgba(255,255,255,0.06);text-align:right;">' + e(fmt$(closingSum)) + '</td>';
+      h += '<td style="padding:8px 10px;border-bottom:1px solid rgba(255,255,255,0.06);text-align:right;color:' + (varianceSum === 0 ? 'var(--warm-gray,#888)' : (Math.abs(varianceSum) < 500 ? '#22c55e' : '#eab308')) + ';">' + e(fmt$(varianceSum)) + '</td>';
+      h += '<td style="padding:8px 10px;border-bottom:1px solid rgba(255,255,255,0.06);text-align:right;">';
+      if (!pc) {
+        h += '<button class="btn btn-primary btn-small" onclick="event.stopPropagation();finPeriodCloseRun(' + _jsAttrSafe(monthStr) + ')">Close ' + e(_pcMonthLabel(monthStr).split(' ')[0]) + '</button>';
+      } else {
+        h += '<span style="color:var(--warm-gray,#888);font-size:0.78rem;">' + dayCount + ' day' + (dayCount === 1 ? '' : 's') + '</span>';
+      }
+      h += '</td></tr>';
+    });
+    h += '</tbody></table>';
+    h += '</div>';
+    el.innerHTML = h;
+  } catch (err) {
+    el.innerHTML = '<div style="padding:20px;color:var(--danger,#dc2626);">Failed to load period close: ' + e(err.message || err) + '</div>';
+  }
+}
+
+window.finPeriodCloseRun = async function(monthStr) {
+  if (!_isSafeFbKey(monthStr.replace('-', ''))) { showToast('Invalid period.', true); return; }
+  var ok = await mastConfirm('Close period ' + _pcMonthLabel(monthStr) + '? After closing, day closes in this month become read-only.', { title: 'Close period', confirmLabel: 'Close period' });
+  if (!ok) return;
+  var requestId = (window.crypto && window.crypto.randomUUID) ? window.crypto.randomUUID()
+    : ('rid-' + Date.now() + '-' + Math.random().toString(36).slice(2));
+  try {
+    var json = await _closeV3Call('writePeriodClose', { periodId: monthStr, requestId: requestId });
+    if (!json || json.ok === false) {
+      showToast('Close failed: ' + ((json && (json.message || json.error)) || 'unknown error'), true);
+      return;
+    }
+    try { await writeAudit('create', 'periodClose', monthStr); } catch (xerr) {}
+    showToast('Closed ' + _pcMonthLabel(monthStr));
+    renderPeriodClose();
+  } catch (err) {
+    // Agent A throws HttpsError('failed-precondition', 'unclosedDays', {dates:[...]}).
+    // httpsCallable surfaces this as err.code = 'failed-precondition',
+    // err.message = 'unclosedDays', err.details = {code:'unclosedDays', dates:[...]}.
+    var details = err && err.details;
+    var dates = (details && Array.isArray(details.dates)) ? details.dates : null;
+    if ((err && err.message === 'unclosedDays') && dates) {
+      var listHtml = '<div style="margin-bottom:10px;color:var(--warm-gray,#888);font-size:0.85rem;">The following dates have no closed day. Close each, then re-run period close.</div>';
+      listHtml += '<ul style="margin:0;padding-left:18px;font-size:0.85rem;">';
+      dates.forEach(function(d) {
+        if (/^\d{4}-\d{2}-\d{2}$/.test(d)) {
+          listHtml += '<li style="margin-bottom:4px;"><a href="#finance-cash-flow?subView=dayclose&date=' + e(d) + '" style="color:#22c55e;text-decoration:underline;">' + e(d) + '</a></li>';
+        }
+      });
+      listHtml += '</ul>';
+      _pcShowInfoModal('Cannot close ' + _pcMonthLabel(monthStr), listHtml);
+      return;
+    }
+    showToast('Close failed: ' + (err.message || err), true);
+  }
+};
+
+window.finPeriodCloseDrillDown = async function(monthStr) {
+  if (!_isSafeFbKey(monthStr.replace('-', ''))) return;
+  try {
+    // Close v3: read from versioned subcollections via raw firebase.firestore().
+    var pc = await _dcLoadLatestPeriodClose(monthStr);
+    if (!pc) { showToast('No close record for ' + monthStr, true); return; }
+    var latestByDate = await _dcLoadLatestDayClosesForMonth(monthStr);
+    var rows = Object.keys(latestByDate).map(function(d) { return latestByDate[d]; });
+    rows.sort(function(a, b) { return a.date < b.date ? -1 : 1; });
+    var rollup = pc.rollup || {};
+    var inner = '<div style="margin-bottom:10px;font-size:0.85rem;">';
+    inner += '<div>Status: <strong>' + e(pc.status || 'unknown') + '</strong></div>';
+    if (pc.closedAt) inner += '<div>Closed at: ' + e(String(pc.closedAt).replace('T',' ').slice(0,16)) + '</div>';
+    if (pc.closedByName || pc.closedBy) inner += '<div>Closed by: ' + e(pc.closedByName || pc.closedBy) + '</div>';
+    inner += '<div>Rollup variance: <strong>' + e(fmt$(rollup.varianceCentsSum || 0)) + '</strong></div>';
+    inner += '<div>Opening sum: ' + e(fmt$(rollup.openingCashCentsSum || 0)) + ' &middot; Closing sum: ' + e(fmt$(rollup.closingCashCentsSum || 0)) + '</div>';
+    inner += '</div>';
+    inner += '<div style="max-height:280px;overflow-y:auto;">';
+    inner += '<table style="width:100%;font-size:0.78rem;border-collapse:collapse;">';
+    inner += '<thead><tr><th style="text-align:left;padding:4px 6px;border-bottom:1px solid rgba(255,255,255,0.12);">Date</th><th style="text-align:right;padding:4px 6px;border-bottom:1px solid rgba(255,255,255,0.12);">Variance</th><th style="padding:4px 6px;border-bottom:1px solid rgba(255,255,255,0.12);"></th></tr></thead><tbody>';
+    rows.forEach(function(v) {
+      inner += '<tr><td style="padding:4px 6px;">' + e(v.date) + ' <span style="color:var(--warm-gray,#888);">v' + e(String(v.version || 1)) + '</span></td>';
+      inner += '<td style="padding:4px 6px;text-align:right;">' + e(fmt$(v.varianceCents || 0)) + '</td>';
+      inner += '<td style="padding:4px 6px;text-align:right;"><a href="#finance-cash-flow?subView=dayclose&date=' + e(v.date) + '" style="color:#22c55e;text-decoration:underline;font-size:0.72rem;">Open</a></td></tr>';
+    });
+    if (rows.length === 0) inner += '<tr><td colspan="3" style="padding:8px;color:var(--warm-gray,#888);">No day closes.</td></tr>';
+    inner += '</tbody></table></div>';
+    _pcShowInfoModal(_pcMonthLabel(monthStr) + ' — period close detail', inner);
+  } catch (err) {
+    showToast('Failed to load drill-down: ' + (err.message || err), true);
+  }
+};
+
+function _pcShowInfoModal(title, innerHtml) {
+  var overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;';
+  var h = '<div style="background:var(--bg-secondary,#232323);border-radius:10px;max-width:640px;width:96%;padding:22px 24px;box-shadow:0 8px 30px rgba(0,0,0,0.4);color:var(--text,#fff);">';
+  h += '<div style="font-size:1.0rem;font-weight:700;margin-bottom:14px;">' + e(title) + '</div>';
+  h += '<div>' + innerHtml + '</div>';
+  h += '<div style="display:flex;justify-content:flex-end;margin-top:18px;">';
+  h += '<button class="btn btn-primary" id="pcInfoClose">Close</button>';
+  h += '</div></div>';
+  overlay.innerHTML = h;
+  document.body.appendChild(overlay);
+  function close() { if (overlay.parentNode) overlay.parentNode.removeChild(overlay); }
+  overlay.querySelector('#pcInfoClose').addEventListener('click', close);
+  overlay.addEventListener('click', function(ev) { if (ev.target === overlay) close(); });
+}
+
+window.renderPeriodClose = renderPeriodClose;
+
+// ============================================================================
+// Close v3 — Amendments tab (Idea -OtQH_uRXqz9jJBRsmrj, sub-task 6)
+// ============================================================================
+// Operators submit amendments against closed-period records elsewhere; this UI
+// surfaces the queue for approval/rejection. Approve writes a counter-entry
+// to the next open period (Agent A's CF /approveAmendment); reject is a
+// simple status update with optional reason. All actions audit-logged.
+
+function _amDiffRows(before, after) {
+  // Produce a list of {field, before, after} for keys that changed. Both args
+  // are plain objects (typically a snapshot of the targeted Firebase doc).
+  before = before || {};
+  after = after || {};
+  var keys = {};
+  Object.keys(before).forEach(function(k) { keys[k] = true; });
+  Object.keys(after).forEach(function(k) { keys[k] = true; });
+  var rows = [];
+  Object.keys(keys).forEach(function(k) {
+    var b = before[k], a = after[k];
+    var bStr = (typeof b === 'object' ? JSON.stringify(b) : (b == null ? '' : String(b)));
+    var aStr = (typeof a === 'object' ? JSON.stringify(a) : (a == null ? '' : String(a)));
+    if (bStr !== aStr) rows.push({ field: k, before: bStr, after: aStr });
+  });
+  return rows;
+}
+
+async function renderAmendments() {
+  var el = document.getElementById('financeAmendmentsTab');
+  if (!el) return;
+  el.innerHTML = '<div style="color:var(--warm-gray,#888);padding:20px;text-align:center;">Loading amendments…</div>';
+  try {
+    // Close v3: amendments live at `amendments/{periodId}/items/{id}` (subcollection).
+    // Fan out the last-12-months periodIds and merge — collectionGroup is
+    // available too but needs a composite index (deferred).
+    var rows = await _dcLoadRecentAmendments();
+    // Sort: pending first by submittedAt desc, then approved/rejected by submittedAt desc.
+    rows.sort(function(a, b) {
+      var aPending = a.status === 'pending' ? 0 : 1;
+      var bPending = b.status === 'pending' ? 0 : 1;
+      if (aPending !== bPending) return aPending - bPending;
+      return (b.submittedAt || '') < (a.submittedAt || '') ? -1 : 1;
+    });
+    // Group by periodId.
+    var groups = {};
+    rows.forEach(function(r) {
+      var p = r.periodId || '(no period)';
+      if (!groups[p]) groups[p] = [];
+      groups[p].push(r);
+    });
+    var canApprove = (typeof hasPermission === 'function') && hasPermission('finance', 'approveAmendment');
+    var h = '<div style="max-width:960px;">';
+    h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;flex-wrap:wrap;gap:8px;">';
+    h += '<h3 style="margin:0;font-size:1rem;font-weight:700;">Amendments</h3>';
+    h += '<button class="btn btn-primary btn-small" onclick="finAmendmentOpenSubmit()">+ Submit Amendment</button>';
+    h += '</div>';
+    h += '<div style="font-size:0.78rem;color:var(--warm-gray,#888);margin-bottom:14px;">';
+    h += 'Proposed changes to closed-period records. Approve writes a counter-entry to the next open period rather than mutating the immutable past.';
+    if (!canApprove) {
+      h += ' <strong style="color:#eab308;">You do not have the approveAmendment permission</strong> — Approve buttons are disabled.';
+    }
+    h += '</div>';
+    if (rows.length === 0) {
+      h += '<div style="background:var(--bg-secondary,#232323);border-radius:10px;padding:24px;text-align:center;color:var(--warm-gray,#888);font-size:0.85rem;">No amendments submitted yet.</div>';
+    }
+    var groupKeys = Object.keys(groups).sort().reverse();
+    groupKeys.forEach(function(p) {
+      h += '<div style="margin-bottom:18px;">';
+      h += '<div style="font-size:0.85rem;font-weight:700;margin-bottom:8px;color:var(--warm-gray,#888);">Period: ' + e(p) + ' <span style="font-weight:400;">(' + groups[p].length + ')</span></div>';
+      groups[p].forEach(function(a) {
+        h += '<div style="background:var(--bg-secondary,#232323);border-radius:10px;padding:14px 16px;margin-bottom:10px;">';
+        // Header row: target + status + meta
+        var statusColor = a.status === 'pending' ? '#eab308' : (a.status === 'approved' ? '#22c55e' : '#dc2626');
+        var statusBg = a.status === 'pending' ? 'rgba(234,179,8,0.18)' : (a.status === 'approved' ? 'rgba(34,197,94,0.18)' : 'rgba(220,38,38,0.18)');
+        h += '<div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;margin-bottom:10px;">';
+        h += '<div>';
+        h += '<div style="font-size:0.85rem;font-weight:600;">' + e(a.targetCollection || 'unknown') + ' / <code style="font-size:0.78rem;">' + e(a.targetId || '?') + '</code></div>';
+        var subBy = a.submittedByName || a.submittedBy || 'unknown';
+        var subAt = a.submittedAt ? String(a.submittedAt).replace('T',' ').slice(0,16) : '';
+        h += '<div style="font-size:0.72rem;color:var(--warm-gray,#888);margin-top:2px;">Submitted by ' + e(subBy) + (subAt ? ' at ' + e(subAt) : '') + '</div>';
+        h += '</div>';
+        h += '<span style="background:' + statusBg + ';color:' + statusColor + ';padding:2px 10px;border-radius:10px;font-size:0.72rem;font-weight:700;">' + e((a.status || 'pending').toUpperCase()) + '</span>';
+        h += '</div>';
+        // Reason
+        if (a.reason) {
+          h += '<div style="background:rgba(255,255,255,0.04);border-radius:6px;padding:8px 10px;font-size:0.85rem;margin-bottom:10px;"><strong style="color:var(--warm-gray,#888);">Reason:</strong> ' + e(a.reason) + '</div>';
+        }
+        // Diff table
+        var diffs = _amDiffRows(a.before, a.after);
+        if (diffs.length === 0) {
+          h += '<div style="font-size:0.78rem;color:var(--warm-gray,#888);margin-bottom:10px;">No field-level diff captured.</div>';
+        } else {
+          h += '<table style="width:100%;font-size:0.78rem;border-collapse:collapse;margin-bottom:10px;">';
+          h += '<thead><tr><th style="text-align:left;padding:4px 6px;border-bottom:1px solid rgba(255,255,255,0.12);">Field</th><th style="text-align:left;padding:4px 6px;border-bottom:1px solid rgba(255,255,255,0.12);">Before</th><th style="text-align:left;padding:4px 6px;border-bottom:1px solid rgba(255,255,255,0.12);">After</th></tr></thead><tbody>';
+          diffs.forEach(function(d) {
+            h += '<tr><td style="padding:4px 6px;font-weight:600;">' + e(d.field) + '</td>';
+            h += '<td style="padding:4px 6px;color:#eab308;">' + e(d.before || '(empty)') + '</td>';
+            h += '<td style="padding:4px 6px;color:#22c55e;">' + e(d.after || '(empty)') + '</td></tr>';
+          });
+          h += '</tbody></table>';
+        }
+        // Action row (pending only)
+        if (a.status === 'pending') {
+          h += '<div style="display:flex;justify-content:flex-end;gap:8px;align-items:center;">';
+          var apprDisabled = canApprove ? '' : ' disabled style="opacity:0.5;cursor:not-allowed;"';
+          h += '<button class="btn btn-secondary btn-small" onclick="finAmendmentReject(' + _jsAttrSafe(a.id) + ')">Reject</button>';
+          h += '<button class="btn btn-primary btn-small"' + apprDisabled + ' onclick="finAmendmentApprove(' + _jsAttrSafe(a.id) + ',' + _jsAttrSafe(a.reason || '') + ')">Approve</button>';
+          h += '</div>';
+        } else if (a.status === 'approved') {
+          var apTs = a.approvedAt ? String(a.approvedAt).replace('T',' ').slice(0,16) : '';
+          var apBy = a.approvedByName || a.approvedBy || 'unknown';
+          h += '<div style="font-size:0.72rem;color:var(--warm-gray,#888);">Approved by ' + e(apBy) + (apTs ? ' at ' + e(apTs) : '') + (a.counterEntryId ? ' &middot; counter-entry <code>' + e(a.counterEntryId) + '</code>' : '') + '</div>';
+        } else if (a.status === 'rejected') {
+          var rjTs = a.rejectedAt ? String(a.rejectedAt).replace('T',' ').slice(0,16) : '';
+          var rjBy = a.rejectedByName || a.rejectedBy || 'unknown';
+          h += '<div style="font-size:0.72rem;color:var(--warm-gray,#888);">Rejected by ' + e(rjBy) + (rjTs ? ' at ' + e(rjTs) : '') + (a.rejectReason ? ' &middot; ' + e(a.rejectReason) : '') + '</div>';
+        }
+        h += '</div>';
+      });
+      h += '</div>';
+    });
+    h += '</div>';
+    el.innerHTML = h;
+  } catch (err) {
+    el.innerHTML = '<div style="padding:20px;color:var(--danger,#dc2626);">Failed to load amendments: ' + e(err.message || err) + '</div>';
+  }
+}
+
+window.finAmendmentApprove = async function(amendmentId, reasonText) {
+  if (!_isSafeFbKey(amendmentId)) { showToast('Invalid amendment ID.', true); return; }
+  if (!hasPermission('finance', 'approveAmendment')) {
+    showToast('You do not have permission to approve amendments.', true);
+    return;
+  }
+  var ok = await mastConfirm('This writes a counter-entry to the next open period. Reason: ' + (reasonText || '(none provided)'), { title: 'Approve amendment', confirmLabel: 'Approve' });
+  if (!ok) return;
+  var requestId = (window.crypto && window.crypto.randomUUID) ? window.crypto.randomUUID()
+    : ('rid-' + Date.now() + '-' + Math.random().toString(36).slice(2));
+  try {
+    var json = await _closeV3Call('approveAmendment', { amendmentId: amendmentId, requestId: requestId });
+    if (!json || json.ok === false) {
+      showToast('Approve failed: ' + ((json && (json.message || json.error)) || 'unknown error'), true);
+      return;
+    }
+    try { await writeAudit('update', 'amendment', amendmentId + ':approved'); } catch (xerr) {}
+    showToast('Amendment approved' + (json.counterEntryId ? ' (counter-entry ' + json.counterEntryId + ')' : ''));
+    renderAmendments();
+  } catch (err) {
+    showToast('Approve failed: ' + (err.message || err), true);
+  }
+};
+
+window.finAmendmentReject = async function(amendmentId) {
+  if (!_isSafeFbKey(amendmentId)) { showToast('Invalid amendment ID.', true); return; }
+  var reason = await mastPrompt('Reject reason (optional):', { title: 'Reject amendment', confirmLabel: 'Reject', placeholder: 'e.g. duplicate, lacks supporting evidence' });
+  if (reason === null) return; // cancelled
+  var requestId = (window.crypto && window.crypto.randomUUID) ? window.crypto.randomUUID()
+    : ('rid-' + Date.now() + '-' + Math.random().toString(36).slice(2));
+  try {
+    var json = await _closeV3Call('rejectAmendment', {
+      amendmentId: amendmentId,
+      reason: (reason || '').trim(),
+      requestId: requestId
+    });
+    if (!json || json.ok === false) {
+      showToast('Reject failed: ' + ((json && (json.message || json.error)) || 'unknown error'), true);
+      return;
+    }
+    try { await writeAudit('update', 'amendment', amendmentId + ':rejected'); } catch (xerr) {}
+    showToast('Amendment rejected');
+    renderAmendments();
+  } catch (err) {
+    showToast('Reject failed: ' + (err.message || err), true);
+  }
+};
+
+window.renderAmendments = renderAmendments;
+
+// ─── Submit Amendment modal (Close v3 reconciliation, item 6) ─────────────────
+// Admin/staff (finance:write) submits a proposed change against a record in
+// a closed period. Inputs:
+//   - target collection (orders | refunds | expenses | vendorBills)
+//   - target doc id
+//   - reason (>= 10 chars; the CF re-validates server-side)
+//   - after-shape JSON (full proposed doc shape — NOT a delta)
+//
+// `before` is server-fetched by routeAmendment (we don't pre-fetch here —
+// the CF rejects with not-found if the doc doesn't exist, which surfaces
+// the right error to the operator). Gate matches Agent A's CF
+// (_assertAdminOrStaff). The Approve perm is checked separately.
+
+window.finAmendmentOpenSubmit = function() {
+  // Permission check matches the CF gate (admin OR staff).
+  // We don't have a sync `isAdmin` check separate from hasPermission, so
+  // fall through to the CF — server is the source of truth — but warn if
+  // we can detect the user isn't admin/staff client-side.
+  var overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;';
+  var collections = [
+    { id: 'orders', label: 'Order' },
+    { id: 'refunds', label: 'Refund' },
+    { id: 'expenses', label: 'Expense' },
+    { id: 'vendorBills', label: 'Vendor bill' }
+  ];
+  var optHtml = collections.map(function(c) {
+    return '<option value="' + e(c.id) + '">' + e(c.label) + ' (' + e(c.id) + ')</option>';
+  }).join('');
+  var inputCss = 'background:var(--bg-primary,#1a1a1a);border:1px solid rgba(255,255,255,0.15);border-radius:6px;color:var(--text,#fff);padding:6px 8px;font-size:0.85rem;width:100%;box-sizing:border-box;font-family:inherit;';
+  var h = '<div style="background:var(--bg-secondary,#232323);border-radius:10px;max-width:640px;width:96%;padding:22px 24px;box-shadow:0 8px 30px rgba(0,0,0,0.4);color:var(--text,#fff);">';
+  h += '<div style="font-size:1rem;font-weight:700;margin-bottom:10px;">Submit amendment</div>';
+  h += '<div style="font-size:0.78rem;color:var(--warm-gray,#888);margin-bottom:14px;">';
+  h += 'Closed-period records cannot be edited directly. Submitting an amendment routes a proposed change to the approval queue. Approval writes a dated counter-entry in the next open period.';
+  h += '</div>';
+  h += '<div style="display:grid;grid-template-columns:140px 1fr;gap:10px 12px;align-items:center;margin-bottom:14px;">';
+  h += '<label style="font-size:0.78rem;color:var(--warm-gray,#888);">Target collection</label>';
+  h += '<select id="amSubCol" style="' + inputCss + '">' + optHtml + '</select>';
+  h += '<label style="font-size:0.78rem;color:var(--warm-gray,#888);">Target doc ID</label>';
+  h += '<input id="amSubId" type="text" placeholder="Firestore document id" style="' + inputCss + '">';
+  h += '<label style="font-size:0.78rem;color:var(--warm-gray,#888);align-self:start;padding-top:6px;">Reason (≥ 10 chars)</label>';
+  h += '<textarea id="amSubReason" rows="2" placeholder="Why this change?" style="' + inputCss + '"></textarea>';
+  h += '<label style="font-size:0.78rem;color:var(--warm-gray,#888);align-self:start;padding-top:6px;">Proposed shape (JSON)</label>';
+  h += '<textarea id="amSubAfter" rows="6" placeholder=\'{"amountCents": 12345, "memo": "corrected"}\' style="' + inputCss + 'font-family:ui-monospace,Menlo,Monaco,Consolas,monospace;font-size:0.78rem;"></textarea>';
+  h += '</div>';
+  h += '<div id="amSubErr" style="font-size:0.78rem;color:#dc2626;margin-bottom:10px;min-height:14px;"></div>';
+  h += '<div style="display:flex;justify-content:flex-end;gap:8px;">';
+  h += '<button class="btn btn-secondary" id="amSubCancel">Cancel</button>';
+  h += '<button class="btn btn-primary" id="amSubOK">Submit</button>';
+  h += '</div></div>';
+  overlay.innerHTML = h;
+  document.body.appendChild(overlay);
+  function close() { if (overlay.parentNode) overlay.parentNode.removeChild(overlay); }
+  overlay.querySelector('#amSubCancel').addEventListener('click', close);
+  overlay.addEventListener('click', function(ev) { if (ev.target === overlay) close(); });
+  overlay.querySelector('#amSubOK').addEventListener('click', async function() {
+    var errEl = overlay.querySelector('#amSubErr');
+    errEl.textContent = '';
+    var col = overlay.querySelector('#amSubCol').value;
+    var id = (overlay.querySelector('#amSubId').value || '').trim();
+    var reason = (overlay.querySelector('#amSubReason').value || '').trim();
+    var afterStr = (overlay.querySelector('#amSubAfter').value || '').trim();
+    if (!id) { errEl.textContent = 'Target doc ID required.'; return; }
+    if (reason.length < 10) { errEl.textContent = 'Reason must be at least 10 characters.'; return; }
+    var afterObj;
+    try { afterObj = JSON.parse(afterStr); }
+    catch (perr) { errEl.textContent = 'Proposed shape is not valid JSON: ' + perr.message; return; }
+    if (!afterObj || typeof afterObj !== 'object' || Array.isArray(afterObj)) {
+      errEl.textContent = 'Proposed shape must be a JSON object.'; return;
+    }
+    try {
+      var subName = (firebase.auth().currentUser && (firebase.auth().currentUser.displayName || firebase.auth().currentUser.email)) || null;
+      var json = await _closeV3Call('routeAmendment', {
+        targetCollection: col,
+        targetId: id,
+        after: afterObj,
+        reason: reason,
+        submittedByName: subName
+      });
+      if (!json || json.ok === false) {
+        errEl.textContent = (json && (json.message || json.error)) || 'Submit failed.';
+        return;
+      }
+      try { await writeAudit('create', 'amendment', json.amendmentId + ':submitted'); } catch (xerr) {}
+      showToast('Amendment submitted for period ' + json.periodId);
+      close();
+      renderAmendments();
+    } catch (err) {
+      errEl.textContent = (err && err.message) ? err.message : String(err);
+    }
+  });
+};
+window.finAmendmentSubmit = window.finAmendmentOpenSubmit; // alias
+
 // ── Module registration ───────────────────────────────────────────────────────
 
 MastAdmin.registerModule('finance', {
@@ -5720,7 +6618,10 @@ MastAdmin.registerModule('finance', {
     'finance-reports':    { tab: 'financeReportsTab',    setup: function() { setupReportsTab(); } },
     'customer-portfolio': { tab: 'customerPortfolioTab', setup: function() { renderCustomerPortfolio(); } },
     // W2.1: new #financials overview dashboard (replaces orphan Square sync route).
-    'financials':         { tab: 'financeOverviewTab',   setup: function() { renderFinanceOverview(); } }
+    'financials':         { tab: 'financeOverviewTab',   setup: function() { renderFinanceOverview(); } },
+    // Close v3 (Idea -OtQH_uRXqz9jJBRsmrj):
+    'finance-period-close': { tab: 'financePeriodCloseTab', setup: function() { renderPeriodClose(); } },
+    'finance-amendments':   { tab: 'financeAmendmentsTab',  setup: function() { renderAmendments(); } }
   }
 });
 
