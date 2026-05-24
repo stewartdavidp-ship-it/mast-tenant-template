@@ -5713,6 +5713,7 @@
         <span class="sidebar-section-arrow">&#9654;</span>
       </div>
       <div class="sidebar-items">
+        <div class="sidebar-item" data-route="financials" onclick="navigateTo('financials')">Overview</div>
         <div class="sidebar-item" data-route="finance-revenue" onclick="navigateTo('finance-revenue')">Revenue</div>
         <div class="sidebar-item" data-route="finance-expenses" onclick="navigateTo('finance-expenses')">Expenses</div>
         <div class="sidebar-item" data-route="finance-pl" onclick="navigateTo('finance-pl')">P&amp;L</div>
@@ -6292,6 +6293,9 @@
     <div id="customerPortfolioTab" style="display:none;">
       <div id="customerPortfolioContent" style="max-width:1200px;margin:0 auto;padding:24px;"></div>
     </div>
+
+    <!-- W2.1: Finance Overview landing dashboard for #financials -->
+    <div id="financeOverviewTab" style="display:none;"></div>
 
     <!-- Events Organizer — moved to standalone app at ../events/index.html -->
 
@@ -16815,7 +16819,7 @@ var ROUTE_MAP = {
   'employees':   { tab: 'employeesTab', setup: function() { switchEmployeesView('users'); } },
   // contacts route handled by contacts module (lazy-loaded)
   'auditlog':    { tab: 'auditLogTab' },
-  // financials route handled by financials module (lazy-loaded)
+  // financials route handled by finance module (W2.1 Overview dashboard)
   'business':    { tab: 'businessTab', setup: function() { if (typeof loadBusinessView === 'function') loadBusinessView(); } },
   'settings':    { tab: 'settingsTab', setup: function() { restoreSettingsGroupState(); applySettingsGating(); } },
   'subscription': { tab: 'subscriptionTab', setup: function() { renderSubscriptionSettings(); } },
@@ -16939,7 +16943,7 @@ var ROUTE_ALIASES = {
   'consignment': 'galleries'
 };
 
-var ALL_TAB_IDS = ['inquiriesTab', 'scheduleTab', 'galleryTab', 'homepageTab', 'brandTab', 'productsTab', 'ordersTab', 'salesTab', 'salesEventsTab', 'productionTab', 'forecastTab', 'couponsTab', 'analyticsTab', 'settingsTab', 'imagesTab', 'auditLogTab', 'employeesTab', 'contactsTab', 'customersTab', 'packTab', 'shipTab', 'commissionsTab', 'rmaTab', 'socialMediaTab', 'blogTab', 'newsletterTab', 'placeholderTab', 'inventoryTab', 'storiesTab', 'dashboardTab', 'tripsTab', 'wholesaleTab', 'showTab', 'financialsTab', 'eventsAdminTab', 'websiteTab', 'showLightTab', 'emailLogTab', 'materialsTab', 'piecesTab', 'galleriesTab', 'lookbooksTab', 'promotionsTab', 'bookTab', 'subscriptionTab', 'coinsTab', 'askAiTab', 'aboutTab', 'walletTab', 'giftCardsTab', 'loyaltyTab', 'membershipTab', 'termsTab', 'advisorTab', 'studioTab', 'teamTab', 'studentsTab', 'migrationDashTab', 'migrationConfirmTab', 'migrationPlanTab', 'migrationImportTab', 'historicalOrdersTab', 'channelsTab', 'businessTab', 'myFeedbackTab', 'procurementTab', 'csInboxTab', 'csTicketsTab', 'csSurveysTab', 'csReviewsTab', 'csFaqsTab', 'csMembersTab', 'financeRevenueTab', 'financeExpensesTab', 'financePlTab', 'financeCashFlowTab', 'financeArTab', 'financeApTab', 'financeTaxTab', 'financeReportsTab', 'customerPortfolioTab',
+var ALL_TAB_IDS = ['inquiriesTab', 'scheduleTab', 'galleryTab', 'homepageTab', 'brandTab', 'productsTab', 'ordersTab', 'salesTab', 'salesEventsTab', 'productionTab', 'forecastTab', 'couponsTab', 'analyticsTab', 'settingsTab', 'imagesTab', 'auditLogTab', 'employeesTab', 'contactsTab', 'customersTab', 'packTab', 'shipTab', 'commissionsTab', 'rmaTab', 'socialMediaTab', 'blogTab', 'newsletterTab', 'placeholderTab', 'inventoryTab', 'storiesTab', 'dashboardTab', 'tripsTab', 'wholesaleTab', 'showTab', 'financialsTab', 'eventsAdminTab', 'websiteTab', 'showLightTab', 'emailLogTab', 'materialsTab', 'piecesTab', 'galleriesTab', 'lookbooksTab', 'promotionsTab', 'bookTab', 'subscriptionTab', 'coinsTab', 'askAiTab', 'aboutTab', 'walletTab', 'giftCardsTab', 'loyaltyTab', 'membershipTab', 'termsTab', 'advisorTab', 'studioTab', 'teamTab', 'studentsTab', 'migrationDashTab', 'migrationConfirmTab', 'migrationPlanTab', 'migrationImportTab', 'historicalOrdersTab', 'channelsTab', 'businessTab', 'myFeedbackTab', 'procurementTab', 'csInboxTab', 'csTicketsTab', 'csSurveysTab', 'csReviewsTab', 'csFaqsTab', 'csMembersTab', 'financeRevenueTab', 'financeExpensesTab', 'financePlTab', 'financeCashFlowTab', 'financeArTab', 'financeApTab', 'financeTaxTab', 'financeReportsTab', 'customerPortfolioTab', 'financeOverviewTab',
 // M3 + M6 (Idea -OtADygKA_JhRmk1wUqN): Mast modes tabs — must be in this list
 // so applyRoute correctly hides them when navigating away.
 // W1.8: Sales by Product (PM/Operator doorway) — same reason.
@@ -17034,8 +17038,10 @@ function navigateTo(route, params) {
     showToast('Sales analytics are restricted to Owner and Manager roles.', true);
     route = 'dashboard';
   }
-  // Finance sensitive tabs (P&L, Tax, Reports) are Admin-only — manager lacks financeSensitive:read
-  if (['finance-pl', 'finance-tax', 'finance-reports'].indexOf(route) >= 0 && !hasPermission('financeSensitive', 'read')) {
+  // Finance sensitive tabs (P&L, Tax, Reports, Overview) are Admin-only —
+  // manager lacks financeSensitive:read. W2.1 adds 'financials' (Overview)
+  // since it surfaces Margin + Runway = sensitive aggregates.
+  if (['finance-pl', 'finance-tax', 'finance-reports', 'financials'].indexOf(route) >= 0 && !hasPermission('financeSensitive', 'read')) {
     showToast('This report is restricted to Admin users.', true);
     route = 'dashboard';
   }
@@ -17624,7 +17630,7 @@ var MODULE_MANIFEST = {
   social: { src: 'modules/social.js', routes: ['social'] },
   trips: { src: 'modules/trips.js', routes: ['trips'] },
   wholesale: { src: 'modules/wholesale.js', routes: ['wholesale'] },
-  finance: { src: 'modules/finance.js', routes: ['finance-revenue', 'finance-expenses', 'finance-pl', 'finance-cash-flow', 'finance-ar', 'finance-ap', 'finance-tax', 'finance-reports', 'customer-portfolio'] },
+  finance: { src: 'modules/finance.js', routes: ['finance-revenue', 'finance-expenses', 'finance-pl', 'finance-cash-flow', 'finance-ar', 'finance-ap', 'finance-tax', 'finance-reports', 'customer-portfolio', 'financials'] },
   shows: { src: 'modules/shows.js', routes: ['show', 'show-find', 'show-apply', 'show-prep', 'show-execute', 'show-history'] },
   production: { src: 'modules/production.js', routes: ['jobs', 'production', 'stories', 'forecast'] },
   procurement: { src: 'modules/procurement.js', routes: ['procurement'] },

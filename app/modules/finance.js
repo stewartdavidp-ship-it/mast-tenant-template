@@ -4454,6 +4454,170 @@ window.loadCashFlow   = loadCashFlow;
 window.loadArData     = loadArData;
 window.loadApData     = loadApData;
 
+// ── W2.1 Finance Overview (#financials) ──────────────────────────────────────
+// Net-new landing dashboard for the Finance section. 6 KPI cards drawn from
+// canonical helpers used elsewhere in the module (R-FIN-2 compliance: `—`
+// + diagnostic when an input is 0/missing). Period footer respects global
+// _finPeriod selector. Replaces legacy Square sales-sync route at #financials
+// (financials.js was orphaned dead code — not in MODULE_MANIFEST, never
+// script-loaded; the old Square sync surface lives behind Settings).
+
+function renderFinanceOverview() {
+  var el = document.getElementById('financeOverviewTab');
+  if (!el) return;
+  injectFinancePulseCSS();
+  el.innerHTML =
+    '<div style="padding:20px;max-width:1100px;">' +
+    renderFinancePeriodBar() +
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">' +
+    '<h2 style="margin:0;font-size:1.15rem;font-weight:700;">Finance Overview</h2>' +
+    '<button class="btn btn-secondary btn-small" onclick="renderFinanceOverview()">Refresh</button>' +
+    '</div>' +
+    '<div id="fOvContent">' + skeletonCards(6) + '</div>' +
+    '</div>';
+  _loadFinanceOverview();
+}
+
+async function _loadFinanceOverview() {
+  var el = document.getElementById('fOvContent');
+  if (!el) return;
+  var period = _finResolvePeriod();
+  // MTD anchor for the Revenue card delta (per spec card 4 = MTD revenue +
+  // delta vs prior MTD), independent of the global selector — operator
+  // dashboard should always show "this month vs last month" regardless of
+  // the active period window. The other cards consume the global period
+  // where applicable (Margin); cash/AR/AP/runway are point-in-time.
+  try {
+    var ms = monthStart(), me = monthEnd();
+    var prior = priorPeriod(ms, me);
+
+    var [plaidRaw, sentRaw, overdueRaw, unpaidRaw, partialRaw, mtdAgg, priorMtdAgg, pnlMtd] = await Promise.all([
+      MastDB.plaidItems.list().catch(function() { return {}; }),
+      MastDB.query('orders').orderByChild('invoiceStatus').equalTo('sent').limitToLast(500).once().catch(function() { return {}; }),
+      MastDB.query('orders').orderByChild('invoiceStatus').equalTo('overdue').limitToLast(500).once().catch(function() { return {}; }),
+      MastDB.query('admin/purchaseReceipts').orderByChild('paymentStatus').equalTo('unpaid').limitToLast(500).once().catch(function() { return {}; }),
+      MastDB.query('admin/purchaseReceipts').orderByChild('paymentStatus').equalTo('partial').limitToLast(500).once().catch(function() { return {}; }),
+      _loadRevenueAggregate(ms, me).catch(function() { return null; }),
+      _loadRevenueAggregate(prior.start, prior.end).catch(function() { return null; }),
+      computePnlLocal(period.start, period.end).catch(function() { return null; })
+    ]);
+
+    var bankConnected = false, bankTotal = 0;
+    Object.values(plaidRaw || {}).forEach(function(it) {
+      if (it && it.status === 'active') {
+        bankConnected = true;
+        (it.accounts || []).forEach(function(a) { bankTotal += (a.currentBalance || 0); });
+      }
+    });
+
+    var arOutstandingCents = 0, arCount = 0;
+    Object.values(Object.assign({}, sentRaw || {}, overdueRaw || {})).forEach(function(o) {
+      if (!o) return;
+      var c = Math.round((o.total || 0) * 100);
+      var paid = o.invoicePaidAmount || 0;
+      var due = c - paid;
+      if (due <= 0) return;
+      if (isTestOrder(o) && !_includeTestData) return;
+      arOutstandingCents += due; arCount++;
+    });
+
+    var apOwedCents = 0, apCount = 0;
+    Object.values(Object.assign({}, unpaidRaw || {}, partialRaw || {})).forEach(function(r) {
+      if (!r) return;
+      var amt = r.amountCents || 0; var paid = r.paidAmount || 0;
+      var due = amt - paid;
+      if (due <= 0) return;
+      apOwedCents += due; apCount++;
+    });
+
+    var mtdRev = mtdAgg ? mtdAgg.totalCents : 0;
+    var priorRev = priorMtdAgg ? priorMtdAgg.totalCents : 0;
+    var revDeltaPct = null;
+    if (priorRev > 0) revDeltaPct = (mtdRev - priorRev) / priorRev * 100;
+
+    // Margin per R-FIN-2: `—` + diagnostic when revenue is 0 or COGS missing.
+    var marginCard;
+    if (!pnlMtd || (pnlMtd.revenue || 0) <= 0) {
+      marginCard = { value: '—', diag: 'No revenue in selected period', color: 'var(--warm-gray,#888)' };
+    } else if ((pnlMtd.cogs || 0) <= 0) {
+      marginCard = { value: '—', diag: 'COGS not yet tracked — set material costs in Products', color: 'var(--warm-gray,#888)' };
+    } else {
+      var marginPct = ((pnlMtd.revenue - pnlMtd.cogs) / pnlMtd.revenue) * 100;
+      marginCard = { value: marginPct.toFixed(1) + '%', diag: 'Gross margin · period: ' + period.mode.toUpperCase(), color: marginPct >= 30 ? '#22c55e' : (marginPct >= 10 ? '#eab308' : '#ef4444') };
+    }
+
+    // Runway per R-FIN-2: `—` when cash is `—` (no bank connected).
+    var runwayCard;
+    if (!bankConnected) {
+      runwayCard = { value: '—', diag: 'Connect a bank in Expenses to see runway', color: 'var(--warm-gray,#888)' };
+    } else {
+      // Burn rate: average daily opex from MTD P&L; runway = bankTotal / avgDailyOpex
+      var daysInPeriod = Math.max(1, Math.round((new Date(period.end).getTime() - new Date(period.start).getTime()) / 86400000) + 1);
+      var opexCents = pnlMtd ? (pnlMtd.opex || 0) : 0;
+      var avgDailyOpex = opexCents / daysInPeriod / 100; // $/day
+      if (avgDailyOpex <= 0) {
+        runwayCard = { value: '∞', diag: 'No tracked opex in period', color: '#22c55e' };
+      } else {
+        var days = Math.floor(bankTotal / avgDailyOpex);
+        runwayCard = { value: String(days) + 'd', diag: '$' + bankTotal.toFixed(0) + ' / $' + avgDailyOpex.toFixed(0) + '/day', color: days >= 90 ? '#22c55e' : (days >= 30 ? '#eab308' : '#ef4444') };
+      }
+    }
+
+    function card(label, value, color, sub, onclickRoute) {
+      var clickAttr = onclickRoute ? ' onclick="navigateTo(\'' + onclickRoute + '\')" style="cursor:pointer;"' : '';
+      return '<div' + clickAttr + ' style="background:var(--bg-secondary,#232323);border-radius:10px;padding:18px;border:1px solid rgba(255,255,255,0.06);' + (onclickRoute ? 'transition:border-color 0.15s;' : '') + '">' +
+        '<div style="font-size:0.72rem;color:var(--warm-gray,#888);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">' + e(label) + '</div>' +
+        '<div style="font-size:1.6rem;font-weight:700;color:' + (color || 'var(--text,#fff)') + ';margin-bottom:6px;">' + value + '</div>' +
+        '<div style="font-size:0.72rem;color:var(--warm-gray,#888);">' + sub + '</div>' +
+        '</div>';
+    }
+
+    var cashCard, cashVal, cashSub, cashColor;
+    if (!bankConnected) {
+      cashVal = '—'; cashSub = 'Connect a bank in Expenses'; cashColor = 'var(--warm-gray,#888)';
+    } else {
+      cashVal = '$' + bankTotal.toFixed(2); cashSub = 'Across active accounts'; cashColor = '#22c55e';
+    }
+
+    var revSub = '';
+    if (revDeltaPct == null) revSub = priorRev === 0 ? 'No prior MTD comparison' : '—';
+    else {
+      var sign = revDeltaPct >= 0 ? '+' : '−';
+      revSub = sign + Math.abs(Math.round(revDeltaPct)) + '% vs prior MTD';
+    }
+
+    var h = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;">';
+    h += card('Cash on Hand', cashVal, cashColor, cashSub, null);
+    h += card('AR Outstanding', fmt$(arOutstandingCents), '#3b82f6', arCount + ' open invoice' + (arCount === 1 ? '' : 's'), 'finance-ar');
+    h += card('AP Owed', fmt$(apOwedCents), '#f97316', apCount + ' open bill' + (apCount === 1 ? '' : 's'), 'finance-ap');
+    h += card('MTD Revenue', fmt$(mtdRev), '#16a34a', revSub, 'finance-revenue');
+    h += card('Margin', marginCard.value, marginCard.color, marginCard.diag, 'finance-pl');
+    h += card('Runway', runwayCard.value, runwayCard.color, runwayCard.diag, 'finance-cash-flow');
+    h += '</div>';
+
+    // R-FIN-1 footer — explicit period label since this dashboard mixes
+    // MTD (revenue/margin) and point-in-time (cash/AR/AP/runway).
+    _finExporters.financials = function() {
+      var rows = [
+        ['KPI','Value','Notes'],
+        ['Cash on Hand', cashVal, cashSub],
+        ['AR Outstanding', '$' + (arOutstandingCents/100).toFixed(2), arCount + ' invoices'],
+        ['AP Owed', '$' + (apOwedCents/100).toFixed(2), apCount + ' bills'],
+        ['MTD Revenue', '$' + (mtdRev/100).toFixed(2), revSub],
+        ['Margin', marginCard.value, marginCard.diag],
+        ['Runway', runwayCard.value, runwayCard.diag]
+      ];
+      _finDownloadCsv('financials', rows, 'As of ' + todayStr() + ' · Mixed (MTD + point-in-time)');
+    };
+    h += _finFooter('financials', 'As of ' + todayStr() + ' · MTD revenue/margin · point-in-time cash/AR/AP', 'plaidItems + orders + admin/purchaseReceipts + admin/expenses');
+
+    el.innerHTML = h;
+  } catch (err) {
+    el.innerHTML = '<div style="color:var(--danger,#dc2626);padding:12px;">' + e(err.message || String(err)) + '</div>';
+  }
+}
+window.renderFinanceOverview = renderFinanceOverview;
+
 // ── Module registration ───────────────────────────────────────────────────────
 
 MastAdmin.registerModule('finance', {
@@ -4466,7 +4630,9 @@ MastAdmin.registerModule('finance', {
     'finance-ap':         { tab: 'financeApTab',         setup: function() { setupApTab(); } },
     'finance-tax':        { tab: 'financeTaxTab',        setup: function() { setupTaxTab(); } },
     'finance-reports':    { tab: 'financeReportsTab',    setup: function() { setupReportsTab(); } },
-    'customer-portfolio': { tab: 'customerPortfolioTab', setup: function() { renderCustomerPortfolio(); } }
+    'customer-portfolio': { tab: 'customerPortfolioTab', setup: function() { renderCustomerPortfolio(); } },
+    // W2.1: new #financials overview dashboard (replaces orphan Square sync route).
+    'financials':         { tab: 'financeOverviewTab',   setup: function() { renderFinanceOverview(); } }
   }
 });
 
