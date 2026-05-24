@@ -14,6 +14,11 @@ name: CI lint
 #     MCP tool owns this surface and writes Firestore directly.
 #   - lint-design-tokens font-size violations (427 backlog) downgraded to
 #     advisory in the script; cleanup tracked separately.
+#
+# Update (PR #30, 2026-05-06): the 427-violation backlog was cleared and
+# font-size lint is now BLOCKING again — any rem value outside the 7-scale
+# (0.72/0.78/0.85/0.9/1.0/1.15/1.6) fails the build. Hex-color lint remains
+# advisory pending its own cleanup pass.
 
 on:
   push:

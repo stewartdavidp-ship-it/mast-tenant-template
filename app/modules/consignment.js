@@ -858,12 +858,12 @@
       '<!doctype html><html><head><title>Payout Statement — ' + esc(g.name || '') + '</title>' +
       '<style>' +
         'body{font-family:system-ui,-apple-system,sans-serif;color:#1a1a1a;max-width:680px;margin:24px auto;padding:0 16px;line-height:1.5;}' +
-        'h1{font-size:1.4rem;margin:0 0 4px;}h2{font-size:1.0rem;margin:24px 0 8px;}' +
+        'h1{font-size:1.6rem;margin:0 0 4px;}h2{font-size:1.0rem;margin:24px 0 8px;}' +
         '.muted{color:#666;font-size:0.85rem;}' +
         'table{width:100%;border-collapse:collapse;font-size:0.9rem;margin-top:8px;}' +
         'th{text-align:left;padding:6px;border-bottom:2px solid #1a1a1a;}' +
         'td{padding:6px;border-bottom:1px solid #eee;}' +
-        '.right{text-align:right;}.total{font-weight:600;font-size:1.05rem;}' +
+        '.right{text-align:right;}.total{font-weight:600;font-size:1.0rem;}' +
         '@media print{body{margin:0;padding:0;}}' +
       '</style></head><body>' +
       '<h1>Payout Statement</h1>' +

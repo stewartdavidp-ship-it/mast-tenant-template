@@ -10,13 +10,12 @@
 //     -> detected by matching "font-size:NNpx" which the font-size rule already ignores
 //   - .nl-grid-* CSS in index.html (admin newsletter preview, mirrors email client styles)
 //
-// Rules tracked (advisory — see exit logic at bottom):
-//   1. Font sizes in rem SHOULD be one of the 7-scale:
+// Rules tracked:
+//   1. Font sizes in rem MUST be one of the 7-scale (BLOCKING — backlog
+//      cleared by PR #30, 2026-05-06; regressions fail CI):
 //      0.72, 0.78, 0.85, 0.9, 1.0, 1.15, 1.6
-//   2. Literal hex colors in module inline styles
-//
-// Font-size: blocking (cleanup landed 2026-05-06; backlog cleared to 0).
-// Hex colors: still advisory pending separate cleanup pass.
+//   2. Literal hex colors in module inline styles (advisory — pending
+//      separate cleanup pass).
 
 const fs = require('fs');
 const path = require('path');
@@ -81,7 +80,7 @@ for (const file of targets) {
 }
 
 console.log('Design token lint — ' + targets.length + ' files scanned');
-console.log('  Font-size violations (advisory):  ' + fontErrors);
+console.log('  Font-size violations (blocking):  ' + fontErrors);
 console.log('  Hex color warnings (advisory):    ' + hexWarnings);
 
 if (violations.length) {
