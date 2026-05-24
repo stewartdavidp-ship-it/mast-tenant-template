@@ -6161,6 +6161,218 @@ function _pcShowInfoModal(title, innerHtml) {
 
 window.renderPeriodClose = renderPeriodClose;
 
+// ============================================================================
+// Close v3 — Amendments tab (Idea -OtQH_uRXqz9jJBRsmrj, sub-task 6)
+// ============================================================================
+// Operators submit amendments against closed-period records elsewhere; this UI
+// surfaces the queue for approval/rejection. Approve writes a counter-entry
+// to the next open period (Agent A's CF /approveAmendment); reject is a
+// simple status update with optional reason. All actions audit-logged.
+
+function _amDiffRows(before, after) {
+  // Produce a list of {field, before, after} for keys that changed. Both args
+  // are plain objects (typically a snapshot of the targeted Firebase doc).
+  before = before || {};
+  after = after || {};
+  var keys = {};
+  Object.keys(before).forEach(function(k) { keys[k] = true; });
+  Object.keys(after).forEach(function(k) { keys[k] = true; });
+  var rows = [];
+  Object.keys(keys).forEach(function(k) {
+    var b = before[k], a = after[k];
+    var bStr = (typeof b === 'object' ? JSON.stringify(b) : (b == null ? '' : String(b)));
+    var aStr = (typeof a === 'object' ? JSON.stringify(a) : (a == null ? '' : String(a)));
+    if (bStr !== aStr) rows.push({ field: k, before: bStr, after: aStr });
+  });
+  return rows;
+}
+
+async function renderAmendments() {
+  var el = document.getElementById('financeAmendmentsTab');
+  if (!el) return;
+  el.innerHTML = '<div style="color:var(--warm-gray,#888);padding:20px;text-align:center;">Loading amendments…</div>';
+  try {
+    var all = (await MastDB.get('closes/amendments')) || {};
+    var rows = [];
+    Object.keys(all).forEach(function(id) {
+      var a = all[id];
+      if (!a) return;
+      rows.push(Object.assign({ id: id }, a));
+    });
+    // Sort: pending first by submittedAt desc, then approved/rejected by submittedAt desc.
+    rows.sort(function(a, b) {
+      var aPending = a.status === 'pending' ? 0 : 1;
+      var bPending = b.status === 'pending' ? 0 : 1;
+      if (aPending !== bPending) return aPending - bPending;
+      return (b.submittedAt || '') < (a.submittedAt || '') ? -1 : 1;
+    });
+    // Group by periodId.
+    var groups = {};
+    rows.forEach(function(r) {
+      var p = r.periodId || '(no period)';
+      if (!groups[p]) groups[p] = [];
+      groups[p].push(r);
+    });
+    var canApprove = (typeof hasPermission === 'function') && hasPermission('finance', 'approveAmendment');
+    var h = '<div style="max-width:960px;">';
+    h += '<h3 style="margin:0 0 6px;font-size:1rem;font-weight:700;">Amendments</h3>';
+    h += '<div style="font-size:0.78rem;color:var(--warm-gray,#888);margin-bottom:14px;">';
+    h += 'Proposed changes to closed-period records. Approve writes a counter-entry to the next open period rather than mutating the immutable past.';
+    if (!canApprove) {
+      h += ' <strong style="color:#eab308;">You do not have the approveAmendment permission</strong> — Approve buttons are disabled.';
+    }
+    h += '</div>';
+    if (rows.length === 0) {
+      h += '<div style="background:var(--bg-secondary,#232323);border-radius:10px;padding:24px;text-align:center;color:var(--warm-gray,#888);font-size:0.85rem;">No amendments submitted yet.</div>';
+    }
+    var groupKeys = Object.keys(groups).sort().reverse();
+    groupKeys.forEach(function(p) {
+      h += '<div style="margin-bottom:18px;">';
+      h += '<div style="font-size:0.85rem;font-weight:700;margin-bottom:8px;color:var(--warm-gray,#888);">Period: ' + e(p) + ' <span style="font-weight:400;">(' + groups[p].length + ')</span></div>';
+      groups[p].forEach(function(a) {
+        h += '<div style="background:var(--bg-secondary,#232323);border-radius:10px;padding:14px 16px;margin-bottom:10px;">';
+        // Header row: target + status + meta
+        var statusColor = a.status === 'pending' ? '#eab308' : (a.status === 'approved' ? '#22c55e' : '#dc2626');
+        var statusBg = a.status === 'pending' ? 'rgba(234,179,8,0.18)' : (a.status === 'approved' ? 'rgba(34,197,94,0.18)' : 'rgba(220,38,38,0.18)');
+        h += '<div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;margin-bottom:10px;">';
+        h += '<div>';
+        h += '<div style="font-size:0.85rem;font-weight:600;">' + e(a.targetCollection || 'unknown') + ' / <code style="font-size:0.78rem;">' + e(a.targetId || '?') + '</code></div>';
+        var subBy = a.submittedByName || a.submittedBy || 'unknown';
+        var subAt = a.submittedAt ? String(a.submittedAt).replace('T',' ').slice(0,16) : '';
+        h += '<div style="font-size:0.72rem;color:var(--warm-gray,#888);margin-top:2px;">Submitted by ' + e(subBy) + (subAt ? ' at ' + e(subAt) : '') + '</div>';
+        h += '</div>';
+        h += '<span style="background:' + statusBg + ';color:' + statusColor + ';padding:2px 10px;border-radius:10px;font-size:0.72rem;font-weight:700;">' + e((a.status || 'pending').toUpperCase()) + '</span>';
+        h += '</div>';
+        // Reason
+        if (a.reason) {
+          h += '<div style="background:rgba(255,255,255,0.04);border-radius:6px;padding:8px 10px;font-size:0.85rem;margin-bottom:10px;"><strong style="color:var(--warm-gray,#888);">Reason:</strong> ' + e(a.reason) + '</div>';
+        }
+        // Diff table
+        var diffs = _amDiffRows(a.before, a.after);
+        if (diffs.length === 0) {
+          h += '<div style="font-size:0.78rem;color:var(--warm-gray,#888);margin-bottom:10px;">No field-level diff captured.</div>';
+        } else {
+          h += '<table style="width:100%;font-size:0.78rem;border-collapse:collapse;margin-bottom:10px;">';
+          h += '<thead><tr><th style="text-align:left;padding:4px 6px;border-bottom:1px solid rgba(255,255,255,0.12);">Field</th><th style="text-align:left;padding:4px 6px;border-bottom:1px solid rgba(255,255,255,0.12);">Before</th><th style="text-align:left;padding:4px 6px;border-bottom:1px solid rgba(255,255,255,0.12);">After</th></tr></thead><tbody>';
+          diffs.forEach(function(d) {
+            h += '<tr><td style="padding:4px 6px;font-weight:600;">' + e(d.field) + '</td>';
+            h += '<td style="padding:4px 6px;color:#eab308;">' + e(d.before || '(empty)') + '</td>';
+            h += '<td style="padding:4px 6px;color:#22c55e;">' + e(d.after || '(empty)') + '</td></tr>';
+          });
+          h += '</tbody></table>';
+        }
+        // Action row (pending only)
+        if (a.status === 'pending') {
+          h += '<div style="display:flex;justify-content:flex-end;gap:8px;align-items:center;">';
+          var apprDisabled = canApprove ? '' : ' disabled style="opacity:0.5;cursor:not-allowed;"';
+          h += '<button class="btn btn-secondary btn-small" onclick="finAmendmentReject(' + _jsAttrSafe(a.id) + ')">Reject</button>';
+          h += '<button class="btn btn-primary btn-small"' + apprDisabled + ' onclick="finAmendmentApprove(' + _jsAttrSafe(a.id) + ',' + _jsAttrSafe(a.reason || '') + ')">Approve</button>';
+          h += '</div>';
+        } else if (a.status === 'approved') {
+          var apTs = a.approvedAt ? String(a.approvedAt).replace('T',' ').slice(0,16) : '';
+          var apBy = a.approvedByName || a.approvedBy || 'unknown';
+          h += '<div style="font-size:0.72rem;color:var(--warm-gray,#888);">Approved by ' + e(apBy) + (apTs ? ' at ' + e(apTs) : '') + (a.counterEntryId ? ' &middot; counter-entry <code>' + e(a.counterEntryId) + '</code>' : '') + '</div>';
+        } else if (a.status === 'rejected') {
+          var rjTs = a.rejectedAt ? String(a.rejectedAt).replace('T',' ').slice(0,16) : '';
+          var rjBy = a.rejectedByName || a.rejectedBy || 'unknown';
+          h += '<div style="font-size:0.72rem;color:var(--warm-gray,#888);">Rejected by ' + e(rjBy) + (rjTs ? ' at ' + e(rjTs) : '') + (a.rejectReason ? ' &middot; ' + e(a.rejectReason) : '') + '</div>';
+        }
+        h += '</div>';
+      });
+      h += '</div>';
+    });
+    h += '</div>';
+    el.innerHTML = h;
+  } catch (err) {
+    el.innerHTML = '<div style="padding:20px;color:var(--danger,#dc2626);">Failed to load amendments: ' + e(err.message || err) + '</div>';
+  }
+}
+
+window.finAmendmentApprove = async function(amendmentId, reasonText) {
+  if (!_isSafeFbKey(amendmentId)) { showToast('Invalid amendment ID.', true); return; }
+  if (!hasPermission('finance', 'approveAmendment')) {
+    showToast('You do not have permission to approve amendments.', true);
+    return;
+  }
+  var ok = await mastConfirm('This writes a counter-entry to the next open period. Reason: ' + (reasonText || '(none provided)'), { title: 'Approve amendment', confirmLabel: 'Approve' });
+  if (!ok) return;
+  var requestId = (window.crypto && window.crypto.randomUUID) ? window.crypto.randomUUID()
+    : ('rid-' + Date.now() + '-' + Math.random().toString(36).slice(2));
+  try {
+    var resp = await callCF('/approveAmendment', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ amendmentId: amendmentId, requestId: requestId })
+    });
+    var json = null;
+    try { json = await resp.json(); } catch (jerr) {}
+    if (!resp.ok || !json || json.ok === false) {
+      // CF may not yet be deployed during pre-Agent-A handoff — surface a
+      // soft-fail with the precise reason so operator knows it's a backend
+      // wiring gap, not a permission denial.
+      var msg = (json && (json.message || json.error)) || ('HTTP ' + resp.status);
+      if (resp.status === 404) {
+        showToast('Approve CF /approveAmendment pending (Agent A). Filed as follow-up OPEN.', true);
+      } else {
+        showToast('Approve failed: ' + msg, true);
+      }
+      return;
+    }
+    try { await writeAudit('update', 'amendment', amendmentId + ':approved'); } catch (xerr) {}
+    showToast('Amendment approved' + (json.counterEntryId ? ' (counter-entry ' + json.counterEntryId + ')' : ''));
+    renderAmendments();
+  } catch (err) {
+    showToast('Approve failed: ' + (err.message || err), true);
+  }
+};
+
+window.finAmendmentReject = async function(amendmentId) {
+  if (!_isSafeFbKey(amendmentId)) { showToast('Invalid amendment ID.', true); return; }
+  var reason = await mastPrompt('Reject reason (optional):', { title: 'Reject amendment', confirmLabel: 'Reject', placeholder: 'e.g. duplicate, lacks supporting evidence' });
+  if (reason === null) return; // cancelled
+  var requestId = (window.crypto && window.crypto.randomUUID) ? window.crypto.randomUUID()
+    : ('rid-' + Date.now() + '-' + Math.random().toString(36).slice(2));
+  try {
+    var resp = await callCF('/rejectAmendment', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ amendmentId: amendmentId, reason: (reason || '').trim(), requestId: requestId })
+    });
+    var json = null;
+    try { json = await resp.json(); } catch (jerr) {}
+    if (!resp.ok || !json || json.ok === false) {
+      // Soft-fall-back: write status update directly (best-effort) when CF
+      // isn't yet deployed. Audit row still written.
+      if (resp.status === 404) {
+        try {
+          await MastDB.update('closes/amendments/' + amendmentId, {
+            status: 'rejected',
+            rejectedAt: new Date().toISOString(),
+            rejectedBy: (firebase.auth().currentUser && firebase.auth().currentUser.uid) || 'unknown',
+            rejectReason: (reason || '').trim() || null
+          });
+          try { await writeAudit('update', 'amendment', amendmentId + ':rejected'); } catch (xerr) {}
+          showToast('Amendment rejected (client fallback — CF pending)');
+          renderAmendments();
+          return;
+        } catch (cferr) {
+          showToast('Reject failed: ' + (cferr.message || cferr), true);
+          return;
+        }
+      }
+      showToast('Reject failed: ' + ((json && (json.message || json.error)) || ('HTTP ' + resp.status)), true);
+      return;
+    }
+    try { await writeAudit('update', 'amendment', amendmentId + ':rejected'); } catch (xerr) {}
+    showToast('Amendment rejected');
+    renderAmendments();
+  } catch (err) {
+    showToast('Reject failed: ' + (err.message || err), true);
+  }
+};
+
+window.renderAmendments = renderAmendments;
+
 // ── Module registration ───────────────────────────────────────────────────────
 
 MastAdmin.registerModule('finance', {
