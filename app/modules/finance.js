@@ -5603,16 +5603,24 @@ async function _loadFinanceOverview() {
     if (priorRev > 0) revDeltaPct = (periodRev - priorRev) / priorRev * 100;
 
     // R-FIN-2 sentinel: Margin renders `—` + diagnostic when revenue is 0 OR
-    // COGS is missing/0. Applied uniformly to MTD/QTD/FYTD/Custom — a
-    // structurally-meaningless 99.9% margin must never render under any
-    // selector state. `cogsCents not a number` is treated as missing.
+    // any line items lack COGS (partial coverage → margin is structurally
+    // unreliable, would mislead). Applied uniformly to MTD/QTD/FYTD/Custom —
+    // a structurally-meaningless 99.9% margin must never render under any
+    // selector state. W2 R3 fix: gate on cogsLineMissingCount > 0, not just
+    // `cogs <= 0` — earlier check let QTD/FYTD show 99.9% when some line
+    // items had snapshot cogsCents and others didn't.
     var marginCard;
     var cogsVal = pnlPeriod ? pnlPeriod.cogs : null;
     var revVal = pnlPeriod ? pnlPeriod.revenue : 0;
+    var anyCogsMissing = pnlPeriod ? (pnlPeriod.cogsLineMissingCount || 0) > 0 : true;
     if (!pnlPeriod || (revVal || 0) <= 0) {
       marginCard = { value: '—', diag: 'No revenue in selected period', color: 'var(--warm-gray,#888)' };
-    } else if (cogsVal == null || isNaN(cogsVal) || cogsVal <= 0) {
-      marginCard = { value: '—', diag: 'COGS not yet tracked — set material costs in Products', color: 'var(--warm-gray,#888)' };
+    } else if (anyCogsMissing || cogsVal == null || isNaN(cogsVal) || cogsVal <= 0) {
+      var missCount = pnlPeriod.cogsLineMissingCount || 0;
+      var diag = missCount > 0
+        ? (missCount + ' line item' + (missCount === 1 ? '' : 's') + ' missing COGS — set product costs in Maker')
+        : 'COGS not yet tracked — set material costs in Products';
+      marginCard = { value: '—', diag: diag, color: 'var(--warm-gray,#888)' };
     } else {
       var marginPct = ((revVal - cogsVal) / revVal) * 100;
       marginCard = { value: marginPct.toFixed(1) + '%', diag: 'Gross margin · period: ' + period.mode.toUpperCase(), color: marginPct >= 30 ? '#22c55e' : (marginPct >= 10 ? '#eab308' : '#ef4444') };
