@@ -2064,7 +2064,7 @@ async function renderDayCloseV2(dateParam) {
         h += '<div><span style="color:var(--warm-gray,#888);font-weight:700;">v' + v.version + '</span>';
         if (isLatest) h += ' <span style="color:#22c55e;font-weight:700;">(latest)</span>';
         h += ' &middot; ' + e(vop) + (vts ? ' &middot; ' + e(vts) : '') + ' &middot; variance ' + e(vvar) + '</div>';
-        h += '<button class="btn btn-secondary btn-small" onclick="finDayCloseViewVersion(' + _jsAttrSafe(v.id) + ')">View</button>';
+        h += '<button class="btn btn-secondary btn-small" onclick="finDayCloseViewVersion(\'' + _jsAttrSafe(v.id) + '\')">View</button>';
         h += '</div>';
       });
       h += '</div></details>';
@@ -6222,7 +6222,7 @@ async function renderPeriodClose() {
       } else {
         statusChip = '<span style="background:rgba(234,179,8,0.18);color:#eab308;padding:2px 8px;border-radius:10px;font-size:0.72rem;font-weight:700;">Open</span>';
       }
-      var rowClickAttr = (pc ? 'onclick="finPeriodCloseDrillDown(' + _jsAttrSafe(monthStr) + ')" style="cursor:pointer;"' : '');
+      var rowClickAttr = (pc ? 'onclick="finPeriodCloseDrillDown(\'' + _jsAttrSafe(monthStr) + '\')" style="cursor:pointer;"' : '');
       h += '<tr ' + rowClickAttr + '>';
       h += '<td style="padding:8px 10px;border-bottom:1px solid rgba(255,255,255,0.06);font-weight:600;">' + e(_pcMonthLabel(monthStr)) + '</td>';
       h += '<td style="padding:8px 10px;border-bottom:1px solid rgba(255,255,255,0.06);">' + statusChip + '</td>';
@@ -6231,7 +6231,7 @@ async function renderPeriodClose() {
       h += '<td style="padding:8px 10px;border-bottom:1px solid rgba(255,255,255,0.06);text-align:right;color:' + (varianceSum === 0 ? 'var(--warm-gray,#888)' : (Math.abs(varianceSum) < 500 ? '#22c55e' : '#eab308')) + ';">' + e(fmt$(varianceSum)) + '</td>';
       h += '<td style="padding:8px 10px;border-bottom:1px solid rgba(255,255,255,0.06);text-align:right;">';
       if (!pc) {
-        h += '<button class="btn btn-primary btn-small" onclick="event.stopPropagation();finPeriodCloseRun(' + _jsAttrSafe(monthStr) + ')">Close ' + e(_pcMonthLabel(monthStr).split(' ')[0]) + '</button>';
+        h += '<button class="btn btn-primary btn-small" onclick="event.stopPropagation();finPeriodCloseRun(\'' + _jsAttrSafe(monthStr) + '\')">Close ' + e(_pcMonthLabel(monthStr).split(' ')[0]) + '</button>';
       } else {
         h += '<span style="color:var(--warm-gray,#888);font-size:0.78rem;">' + dayCount + ' day' + (dayCount === 1 ? '' : 's') + '</span>';
       }
@@ -6437,8 +6437,8 @@ async function renderAmendments() {
         if (a.status === 'pending') {
           h += '<div style="display:flex;justify-content:flex-end;gap:8px;align-items:center;">';
           var apprDisabled = canApprove ? '' : ' disabled style="opacity:0.5;cursor:not-allowed;"';
-          h += '<button class="btn btn-secondary btn-small" onclick="finAmendmentReject(' + _jsAttrSafe(a.id) + ')">Reject</button>';
-          h += '<button class="btn btn-primary btn-small"' + apprDisabled + ' onclick="finAmendmentApprove(' + _jsAttrSafe(a.id) + ',' + _jsAttrSafe(a.reason || '') + ')">Approve</button>';
+          h += '<button class="btn btn-secondary btn-small" onclick="finAmendmentReject(\'' + _jsAttrSafe(a.id) + '\')">Reject</button>';
+          h += '<button class="btn btn-primary btn-small"' + apprDisabled + ' onclick="finAmendmentApprove(\'' + _jsAttrSafe(a.id) + '\',\'' + _jsAttrSafe(a.reason || '') + '\')">Approve</button>';
           h += '</div>';
         } else if (a.status === 'approved') {
           var apTs = a.approvedAt ? String(a.approvedAt).replace('T',' ').slice(0,16) : '';
