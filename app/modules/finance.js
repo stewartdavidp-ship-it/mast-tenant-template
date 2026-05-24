@@ -2680,7 +2680,9 @@ async function loadApData() {
 
       var vendorName = (vendors[r.vendorId] && vendors[r.vendorId].name) || 'Unknown Vendor';
 
-      rows.push({ receiptId, vendorName, vendorInvoiceRef: r.vendorInvoiceRef || '', totalCents, paidCents, amtDue, dueDate: r.dueDate || '', daysOverdue: daysOver, bucket, paymentStatus: r.paymentStatus });
+      // W2.2: surface vendorId on row so the vendor name can deep-link to
+      // #finance-ap?subView=vendor&vendorId=<id>.
+      rows.push({ receiptId, vendorId: r.vendorId || null, vendorName, vendorInvoiceRef: r.vendorInvoiceRef || '', totalCents, paidCents, amtDue, dueDate: r.dueDate || '', daysOverdue: daysOver, bucket, paymentStatus: r.paymentStatus });
     });
 
     rows.sort(function(a,b) { return b.daysOverdue - a.daysOverdue; });
@@ -2781,7 +2783,12 @@ function renderApFlat(filtered) {
 
   filtered.forEach(function(r) {
     h += '<tr style="border-bottom:1px solid rgba(255,255,255,0.06);">';
-    h += '<td style="padding:10px;font-weight:600;">' + e(r.vendorName) + '</td>';
+    // W2.2: clickable vendor name → detail
+    if (r.vendorId) {
+      h += '<td style="padding:10px;font-weight:600;"><a href="javascript:void(0)" onclick="finApOpenVendor(\'' + (window._jsAttr ? window._jsAttr(r.vendorId) : r.vendorId) + '\')" style="color:var(--teal,#2a9d8f);text-decoration:none;">' + e(r.vendorName) + '</a></td>';
+    } else {
+      h += '<td style="padding:10px;font-weight:600;">' + e(r.vendorName) + '</td>';
+    }
     h += '<td style="padding:10px;font-size:0.78rem;color:var(--warm-gray,#888);">' + e(r.vendorInvoiceRef || r.receiptId.slice(-8)) + '</td>';
     h += '<td style="padding:10px;">' + fmt$(r.totalCents) + '</td>';
     h += '<td style="padding:10px;color:#22c55e;">' + fmt$(r.paidCents) + '</td>';
@@ -2792,6 +2799,8 @@ function renderApFlat(filtered) {
     h += '<td style="padding:10px;white-space:nowrap;display:flex;gap:4px;">';
     h += '<button class="btn btn-primary btn-small" data-rid="' + e(r.receiptId) + '" data-total="' + r.totalCents + '" onclick="finApMarkPaid(this.dataset.rid, parseInt(this.dataset.total))">Paid</button>';
     h += '<button class="btn btn-secondary btn-small" data-rid="' + e(r.receiptId) + '" data-paid="' + r.paidCents + '" data-total="' + r.totalCents + '" onclick="finApShowPartial(this.dataset.rid, parseInt(this.dataset.paid), parseInt(this.dataset.total))">Partial</button>';
+    // W2.2: inline edit
+    h += '<button class="btn btn-secondary btn-small" data-rid="' + e(r.receiptId) + '" onclick="finApNewBill(this.dataset.rid)" title="Edit bill">✎</button>';
     h += '<button class="btn btn-secondary btn-small" data-rid="' + e(r.receiptId) + '" onclick="finApOpenInProcurement(this.dataset.rid)" title="View in Procurement">→</button>';
     h += '</td></tr>';
   });
@@ -2956,6 +2965,292 @@ window.finApSubmitPartial = async function(receiptId, currentPaid, totalCents) {
 window.finApOpenInProcurement = function(receiptId) {
   try { sessionStorage.setItem('procurementDeepLink', JSON.stringify({ receiptId: receiptId })); } catch (e) {}
   navigateTo('procurement');
+};
+
+// ── W2.2: Vendor + Bill CRUD ─────────────────────────────────────────────────
+// Vendors at admin/vendors/{id} → tenants/{tid}/vendors/{id} after MastDB
+// strips the prefix. Bills at admin/purchaseReceipts/{id} → tenants/{tid}/
+// purchaseReceipts/{id}. Both writes respect existing rules (admin-only).
+
+function _finOpenModal(title, bodyHtml) {
+  var existing = document.getElementById('finW22Modal');
+  if (existing) existing.remove();
+  var overlay = document.createElement('div');
+  overlay.id = 'finW22Modal';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
+  overlay.innerHTML =
+    '<div onclick="event.stopPropagation()" style="background:var(--bg-primary,#1a1a1a);border:1px solid rgba(255,255,255,0.12);border-radius:12px;padding:20px;max-width:520px;width:100%;max-height:90vh;overflow:auto;">' +
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">' +
+    '<div style="font-size:1rem;font-weight:700;">' + e(title) + '</div>' +
+    '<button class="btn btn-secondary btn-small" onclick="finCloseModal()">✕</button>' +
+    '</div>' +
+    bodyHtml +
+    '</div>';
+  overlay.onclick = function() { _finCloseModal(); };
+  document.body.appendChild(overlay);
+}
+function _finCloseModal() {
+  var m = document.getElementById('finW22Modal');
+  if (m) m.remove();
+}
+window.finCloseModal = _finCloseModal;
+
+window.finApNewVendor = function(presetId) {
+  var isEdit = !!presetId;
+  // Pre-populate on edit
+  (isEdit ? MastDB.get('admin/vendors/' + presetId) : Promise.resolve({})).then(function(v) {
+    v = v || {};
+    var body =
+      '<div style="display:flex;flex-direction:column;gap:10px;">' +
+      _fInput('vName', 'Name *', v.name || '') +
+      _fInput('vEmail', 'Email', v.email || '') +
+      _fInput('vTaxId', 'Tax ID (EIN/SSN)', v.taxId || '') +
+      _fSelect('vVendorType', 'Vendor Type', [['', '— Select —'], ['supplier', 'Supplier'], ['contractor', 'Contractor'], ['utility', 'Utility'], ['other', 'Other']], v.vendorType || v.payeeType || '') +
+      _fInput('vPhone', 'Phone', v.phone || '') +
+      '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px;">' +
+      (isEdit ? '<button class="btn btn-secondary btn-small" onclick="finApDeleteVendor(\'' + (window._jsAttr ? window._jsAttr(presetId) : presetId) + '\')">Delete</button>' : '') +
+      '<button class="btn btn-secondary btn-small" onclick="finCloseModal()">Cancel</button>' +
+      '<button class="btn btn-primary btn-small" onclick="finApSaveVendor(' + (isEdit ? '\'' + (window._jsAttr ? window._jsAttr(presetId) : presetId) + '\'' : 'null') + ')">' + (isEdit ? 'Save' : 'Create Vendor') + '</button>' +
+      '</div></div>';
+    _finOpenModal(isEdit ? 'Edit Vendor' : 'New Vendor', body);
+  });
+};
+
+function _fInput(id, label, val, type) {
+  return '<label style="display:flex;flex-direction:column;gap:4px;font-size:0.78rem;color:var(--warm-gray,#888);">' + e(label) +
+    '<input type="' + (type || 'text') + '" id="' + id + '" value="' + e(val || '') + '" style="background:var(--bg-secondary,#232323);border:1px solid rgba(255,255,255,0.15);border-radius:6px;color:var(--text,#fff);padding:7px 10px;font-size:0.85rem;">' +
+    '</label>';
+}
+function _fSelect(id, label, opts, selVal) {
+  var optHtml = '';
+  opts.forEach(function(kv) {
+    var v = kv[0], l = kv[1];
+    optHtml += '<option value="' + e(v) + '"' + (v === selVal ? ' selected' : '') + '>' + e(l) + '</option>';
+  });
+  return '<label style="display:flex;flex-direction:column;gap:4px;font-size:0.78rem;color:var(--warm-gray,#888);">' + e(label) +
+    '<select id="' + id + '" style="background:var(--bg-secondary,#232323);border:1px solid rgba(255,255,255,0.15);border-radius:6px;color:var(--text,#fff);padding:7px 10px;font-size:0.85rem;">' + optHtml + '</select>' +
+    '</label>';
+}
+
+window.finApSaveVendor = async function(vendorId) {
+  var name = (document.getElementById('vName') || {}).value;
+  if (!name || !name.trim()) { showToast('Name is required', true); return; }
+  var now = new Date().toISOString();
+  var payload = {
+    name: name.trim(),
+    email: ((document.getElementById('vEmail') || {}).value || '').trim() || null,
+    taxId: ((document.getElementById('vTaxId') || {}).value || '').trim() || null,
+    vendorType: ((document.getElementById('vVendorType') || {}).value || '').trim() || null,
+    phone: ((document.getElementById('vPhone') || {}).value || '').trim() || null,
+    updatedAt: now
+  };
+  try {
+    if (!vendorId) {
+      var id = 'v_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8);
+      payload.id = id; payload.createdAt = now;
+      await MastDB.set('admin/vendors/' + id, payload);
+      showToast('Vendor created');
+    } else {
+      await MastDB.update('admin/vendors/' + vendorId, payload);
+      showToast('Vendor updated');
+    }
+    _finCloseModal();
+    loadApData();
+  } catch (err) {
+    showToast('Save failed: ' + (err.message || err), true);
+  }
+};
+
+window.finApDeleteVendor = async function(vendorId) {
+  if (!vendorId) return;
+  if (!window.confirm('Delete this vendor? Existing bills will be orphaned (their vendorId reference will dangle).')) return;
+  try {
+    await MastDB.remove('admin/vendors/' + vendorId);
+    showToast('Vendor deleted');
+    _finCloseModal();
+    // Navigate away from vendor detail to AP list.
+    location.hash = '#finance-ap';
+  } catch (err) {
+    showToast('Delete failed: ' + (err.message || err), true);
+  }
+};
+
+window.finApNewBill = function(presetBillId) {
+  var isEdit = !!presetBillId;
+  Promise.all([
+    MastDB.get('admin/vendors'),
+    isEdit ? MastDB.get('admin/purchaseReceipts/' + presetBillId) : Promise.resolve({})
+  ]).then(function(results) {
+    var vendors = results[0] || {};
+    var bill = results[1] || {};
+    var vendorOpts = [['', '— Choose vendor —']];
+    Object.entries(vendors).forEach(function(kv) {
+      var vid = kv[0], v = kv[1] || {};
+      vendorOpts.push([vid, v.name || '(no name)']);
+    });
+    var body =
+      '<div style="display:flex;flex-direction:column;gap:10px;">' +
+      _fSelect('bVendor', 'Vendor *', vendorOpts, bill.vendorId || '') +
+      _fInput('bRef', 'Invoice Ref / PO #', bill.vendorInvoiceRef || '') +
+      _fInput('bAmount', 'Amount (USD) *', bill.amountCents ? (bill.amountCents / 100).toFixed(2) : '', 'number') +
+      _fInput('bReceivedAt', 'Received Date *', (bill.receivedAt || new Date().toISOString()).slice(0, 10), 'date') +
+      _fInput('bDueDate', 'Due Date', (bill.dueDate || ''), 'date') +
+      _fSelect('bStatus', 'Status', [['unpaid', 'Unpaid'], ['partial', 'Partially Paid'], ['paid', 'Paid']], bill.paymentStatus || 'unpaid') +
+      '<label style="display:flex;flex-direction:column;gap:4px;font-size:0.78rem;color:var(--warm-gray,#888);">Notes' +
+      '<textarea id="bNotes" rows="2" style="background:var(--bg-secondary,#232323);border:1px solid rgba(255,255,255,0.15);border-radius:6px;color:var(--text,#fff);padding:7px 10px;font-size:0.85rem;font-family:inherit;">' + e(bill.notes || '') + '</textarea>' +
+      '</label>' +
+      '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px;">' +
+      (isEdit ? '<button class="btn btn-secondary btn-small" onclick="finApDeleteBill(\'' + (window._jsAttr ? window._jsAttr(presetBillId) : presetBillId) + '\')">Delete</button>' : '') +
+      '<button class="btn btn-secondary btn-small" onclick="finCloseModal()">Cancel</button>' +
+      '<button class="btn btn-primary btn-small" onclick="finApSaveBill(' + (isEdit ? '\'' + (window._jsAttr ? window._jsAttr(presetBillId) : presetBillId) + '\'' : 'null') + ')">' + (isEdit ? 'Save' : 'Create Bill') + '</button>' +
+      '</div></div>';
+    _finOpenModal(isEdit ? 'Edit Bill' : 'New Bill', body);
+  });
+};
+
+window.finApSaveBill = async function(billId) {
+  var vendorId = (document.getElementById('bVendor') || {}).value;
+  if (!vendorId) { showToast('Pick a vendor', true); return; }
+  var amount = parseFloat((document.getElementById('bAmount') || {}).value);
+  if (isNaN(amount) || amount <= 0) { showToast('Amount must be > 0', true); return; }
+  var receivedAt = (document.getElementById('bReceivedAt') || {}).value;
+  if (!receivedAt) { showToast('Received date required', true); return; }
+  var amountCents = Math.round(amount * 100);
+  var now = new Date().toISOString();
+  var status = (document.getElementById('bStatus') || {}).value || 'unpaid';
+  var payload = {
+    vendorId: vendorId,
+    vendorInvoiceRef: ((document.getElementById('bRef') || {}).value || '').trim() || null,
+    amountCents: amountCents,
+    receivedAt: receivedAt + 'T00:00:00Z',
+    dueDate: ((document.getElementById('bDueDate') || {}).value || '').trim() || null,
+    paymentStatus: status,
+    notes: ((document.getElementById('bNotes') || {}).value || '').trim() || null,
+    updatedAt: now
+  };
+  if (status === 'paid') payload.paidAmount = amountCents;
+  else if (status !== 'partial') payload.paidAmount = 0;
+  try {
+    if (!billId) {
+      var id = 'b_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8);
+      payload.id = id; payload.createdAt = now;
+      await MastDB.set('admin/purchaseReceipts/' + id, payload);
+      showToast('Bill created');
+    } else {
+      await MastDB.update('admin/purchaseReceipts/' + billId, payload);
+      showToast('Bill updated');
+    }
+    _finCloseModal();
+    loadApData();
+  } catch (err) {
+    showToast('Save failed: ' + (err.message || err), true);
+  }
+};
+
+window.finApDeleteBill = async function(billId) {
+  if (!billId) return;
+  if (!window.confirm('Delete this bill?')) return;
+  try {
+    await MastDB.remove('admin/purchaseReceipts/' + billId);
+    showToast('Bill deleted');
+    _finCloseModal();
+    loadApData();
+  } catch (err) {
+    showToast('Delete failed: ' + (err.message || err), true);
+  }
+};
+
+// W2.2 vendor detail / ledger sub-view at #finance-ap?subView=vendor&vendorId=<id>
+async function renderApVendorDetail(vendorId) {
+  var el = document.getElementById('fApContent');
+  if (!el) return;
+  el.innerHTML = '<div style="color:var(--warm-gray,#888);padding:30px;text-align:center;">Loading vendor…</div>';
+  try {
+    var [vendor, allReceiptsRaw] = await Promise.all([
+      MastDB.get('admin/vendors/' + vendorId),
+      MastDB.get('admin/purchaseReceipts')
+    ]);
+    if (!vendor) {
+      el.innerHTML = '<div style="padding:20px;"><a href="#finance-ap" style="color:var(--teal,#2a9d8f);">&larr; Back to AP</a><div style="margin-top:12px;color:var(--danger,#dc2626);">Vendor not found.</div></div>';
+      return;
+    }
+    var receipts = Object.entries(allReceiptsRaw || {})
+      .map(function(kv) { return Object.assign({ _id: kv[0] }, kv[1]); })
+      .filter(function(r) { return r && r.vendorId === vendorId; })
+      .sort(function(a, b) { return (b.receivedAt || '').localeCompare(a.receivedAt || ''); });
+
+    var totalBilled = 0, totalPaid = 0, totalDue = 0;
+    receipts.forEach(function(r) {
+      var amt = r.amountCents || 0;
+      var paid = r.paidAmount || 0;
+      totalBilled += amt;
+      totalPaid += paid;
+      totalDue += Math.max(0, amt - paid);
+    });
+
+    var h = '<div style="padding:20px;max-width:1100px;">';
+    h += '<a href="#finance-ap" style="color:var(--teal,#2a9d8f);font-size:0.85rem;text-decoration:none;">&larr; All vendors</a>';
+    h += '<div style="display:flex;justify-content:space-between;align-items:center;margin:10px 0 16px 0;">';
+    h += '<h2 style="margin:0;font-size:1.15rem;font-weight:700;">' + e(vendor.name || 'Vendor') + '</h2>';
+    h += '<div style="display:flex;gap:6px;">';
+    h += '<button class="btn btn-secondary btn-small" onclick="finApNewVendor(\'' + (window._jsAttr ? window._jsAttr(vendorId) : vendorId) + '\')">Edit Vendor</button>';
+    h += '<button class="btn btn-primary btn-small" onclick="finApNewBill()">+ New Bill</button>';
+    h += '</div></div>';
+
+    // Vendor info card
+    h += '<div style="background:var(--bg-secondary,#232323);border-radius:10px;padding:14px;margin-bottom:14px;display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;">';
+    h += '<div><div style="font-size:0.72rem;color:var(--warm-gray,#888);text-transform:uppercase;letter-spacing:0.5px;">Type</div><div style="font-size:0.9rem;margin-top:3px;">' + e((vendor.vendorType || vendor.payeeType || '—').replace(/^\w/, function(c) { return c.toUpperCase(); })) + '</div></div>';
+    h += '<div><div style="font-size:0.72rem;color:var(--warm-gray,#888);text-transform:uppercase;letter-spacing:0.5px;">Email</div><div style="font-size:0.9rem;margin-top:3px;">' + e(vendor.email || '—') + '</div></div>';
+    h += '<div><div style="font-size:0.72rem;color:var(--warm-gray,#888);text-transform:uppercase;letter-spacing:0.5px;">Phone</div><div style="font-size:0.9rem;margin-top:3px;">' + e(vendor.phone || '—') + '</div></div>';
+    h += '<div><div style="font-size:0.72rem;color:var(--warm-gray,#888);text-transform:uppercase;letter-spacing:0.5px;">Tax ID</div><div style="font-size:0.9rem;margin-top:3px;">' + (vendor.taxId ? 'XXX-XX-' + String(vendor.taxId).replace(/[^0-9]/g, '').slice(-4) : '—') + '</div></div>';
+    h += '</div>';
+
+    // Summary
+    h += '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;">';
+    h += statCard('Lifetime Billed', fmt$(totalBilled), 'var(--text,#fff)', receipts.length + ' bill' + (receipts.length === 1 ? '' : 's'));
+    h += statCard('Paid', fmt$(totalPaid), '#22c55e');
+    h += statCard('Outstanding', fmt$(totalDue), totalDue > 0 ? '#f97316' : '#22c55e');
+    h += '</div>';
+
+    // Ledger
+    if (receipts.length === 0) {
+      h += '<div style="text-align:center;padding:30px;color:var(--warm-gray,#888);">No bills for this vendor yet.</div>';
+    } else {
+      h += '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:0.85rem;">';
+      h += '<thead><tr style="border-bottom:1px solid rgba(255,255,255,0.1);">';
+      ['Received','Invoice Ref','Amount','Paid','Status','Due Date',''].forEach(function(col) {
+        h += '<th style="text-align:left;padding:8px 10px;font-size:0.72rem;color:var(--warm-gray,#888);text-transform:uppercase;letter-spacing:0.5px;">' + col + '</th>';
+      });
+      h += '</tr></thead><tbody>';
+      receipts.forEach(function(r) {
+        h += '<tr style="border-bottom:1px solid rgba(255,255,255,0.06);">';
+        h += '<td style="padding:8px 10px;">' + e((r.receivedAt || '').slice(0, 10)) + '</td>';
+        h += '<td style="padding:8px 10px;">' + e(r.vendorInvoiceRef || r._id.slice(-8)) + '</td>';
+        h += '<td style="padding:8px 10px;font-weight:600;">' + fmt$(r.amountCents || 0) + '</td>';
+        h += '<td style="padding:8px 10px;">' + fmt$(r.paidAmount || 0) + '</td>';
+        h += '<td style="padding:8px 10px;font-size:0.78rem;">' + e(r.paymentStatus || '—') + '</td>';
+        h += '<td style="padding:8px 10px;font-size:0.78rem;">' + e(r.dueDate || '—') + '</td>';
+        h += '<td style="padding:8px 10px;"><button class="btn btn-secondary btn-small" onclick="finApNewBill(\'' + (window._jsAttr ? window._jsAttr(r._id) : r._id) + '\')">Edit</button></td>';
+        h += '</tr>';
+      });
+      h += '</tbody></table></div>';
+    }
+
+    h += _finFooter('finance-ap-vendor', 'Vendor ledger · all-time', 'admin/purchaseReceipts where vendorId === ' + vendorId);
+    h += '</div>';
+
+    el.innerHTML = h;
+  } catch (err) {
+    el.innerHTML = '<div style="padding:20px;color:var(--danger,#dc2626);">Failed to load vendor: ' + e(err.message || String(err)) + '</div>';
+  }
+}
+
+// Also wire vendor name in flat/grouped AP list to navigate into detail.
+// We patch renderApFlat/renderApGrouped onclick via a delegated helper; the
+// simpler approach is a top-level handler that intercepts vendor-name clicks.
+window.finApOpenVendor = function(vendorId) {
+  if (!vendorId) return;
+  location.hash = '#finance-ap?subView=vendor&vendorId=' + encodeURIComponent(vendorId);
 };
 
 // ── Tax Tab ───────────────────────────────────────────────────────────────────
