@@ -534,7 +534,25 @@
     html += '<section style="background:#fff;border:1px solid var(--cream-dark,#e8e0d4);border-radius:8px;padding:16px;margin-bottom:12px;">' +
       '<h4 style="margin:0 0 10px;font-size:0.9rem;">Galleries owed payouts</h4>';
     if (filtered.length === 0) {
-      html += '<div style="color:var(--warm-gray);padding:20px;text-align:center;font-size:0.85rem;">No galleries match this filter.</div>';
+      // Smarter empty state: if there are placements without galleryId FK, the
+      // operator probably has legacy data and needs the backfill flow. Otherwise
+      // it's just an empty filter.
+      var unlinkedPlacementCount = Object.values(placementsData || {}).filter(function(p) {
+        return p && !p.galleryId && p.locationName;
+      }).length;
+      if (galleries.length === 0 && unlinkedPlacementCount > 0) {
+        html += '<div style="color:var(--warm-gray);padding:20px;text-align:left;font-size:0.85rem;line-height:1.5;">' +
+          '<strong>No Gallery entities created yet.</strong><br>' +
+          'You have <strong>' + unlinkedPlacementCount + ' placement' + (unlinkedPlacementCount === 1 ? '' : 's') + '</strong> using the legacy <code>locationName</code> string. To use the payout register, either:' +
+          '<ul style="margin:8px 0 0 18px;padding:0;">' +
+          '<li>Create Gallery entities one-by-one at <a href="#galleries?subView=galleries" style="color:var(--teal);text-decoration:underline;">Galleries → Entities</a>, then assign each placement to a gallery, OR</li>' +
+          '<li>Run <code>scripts/backfill-gallery-fk.js --apply --tenant ' + esc(window.TENANT_ID || '<tid>') + '</code> for an operator-approval-per-group migration.</li>' +
+          '</ul></div>';
+      } else if (galleries.length === 0) {
+        html += '<div style="color:var(--warm-gray);padding:20px;text-align:center;font-size:0.85rem;">No Gallery entities yet. Create one at <a href="#galleries?subView=galleries" style="color:var(--teal);text-decoration:underline;">Galleries → Entities</a>.</div>';
+      } else {
+        html += '<div style="color:var(--warm-gray);padding:20px;text-align:center;font-size:0.85rem;">No galleries match this filter.</div>';
+      }
     } else {
       html += '<table style="width:100%;border-collapse:collapse;font-size:0.85rem;"><thead><tr style="text-align:left;color:var(--warm-gray);">' +
         '<th style="padding:6px 8px;">Gallery</th>' +
