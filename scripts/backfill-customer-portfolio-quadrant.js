@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Backfill `stats.portfolioQuadrant` + `stats.classifiedAt` on
- *   tenants/{tid}/admin/customers/{customerId}
+ *   tenants/{tid}/customers/{customerId}
  *
  * Mirrors the render-time logic in app/modules/finance.js
  *   renderCustomerPortfolio() / portfolioClassify()
@@ -167,9 +167,9 @@ async function processTenant(tid, totals) {
   const cts = await readCts(tid);
 
   const [customers, tickets, rmas] = await Promise.all([
-    fsListAll(`tenants/${tid}/admin/customers`),
-    fsListAll(`tenants/${tid}/admin/cs_tickets`),
-    fsListAll(`tenants/${tid}/admin/rma`)
+    fsListAll(`tenants/${tid}/customers`),
+    fsListAll(`tenants/${tid}/cs_tickets`),
+    fsListAll(`tenants/${tid}/rma`)
   ]);
 
   if (customers.length === 0) {
@@ -217,7 +217,7 @@ async function processTenant(tid, totals) {
     if (!APPLY) continue;
 
     try {
-      await fsPatchStatsQuadrant(`tenants/${tid}/admin/customers/${c.id}`, q, new Date().toISOString());
+      await fsPatchStatsQuadrant(`tenants/${tid}/customers/${c.id}`, q, new Date().toISOString());
     } catch (e) {
       errors++;
       console.error(`  ✗ ${c.id}: ${e.message}`);
