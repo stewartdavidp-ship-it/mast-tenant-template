@@ -177,6 +177,73 @@ function _jsAttrSafe(s) {
 // Used to guard URL-param-supplied IDs that flow into Firebase paths or DOM.
 function _isSafeFbKey(s) { return typeof s === 'string' && /^[A-Za-z0-9_-]+$/.test(s) && s.length <= 64; }
 
+// Close v3 fix-up: async UID → displayName/email resolver with in-memory cache.
+// Renders that show "operator" fields (Day Close header, version history,
+// Period Close drill-down, Amendments queue) snapshot a `*ByName` field at
+// write time — but older rows + retry paths may only have the raw UID. Resolve
+// lazily and patch the DOM via data-uid markers; idempotent (cache).
+var _finUidCache = {};   // uid → resolved label (or null while in-flight)
+var _finUidInflight = {};
+function _finUidPlaceholder(uid) {
+  if (!uid || typeof uid !== 'string') return 'unknown';
+  if (_finUidCache[uid]) return _finUidCache[uid];
+  return uid;   // initial render shows uid; resolver patches DOM
+}
+async function _finResolveUid(uid) {
+  if (!uid || typeof uid !== 'string') return 'unknown';
+  if (_finUidCache[uid]) return _finUidCache[uid];
+  if (_finUidInflight[uid]) return _finUidInflight[uid];
+  _finUidInflight[uid] = (async function() {
+    try {
+      var u = await MastDB.adminUsers.get(uid);
+      var label = (u && (u.displayName || u.email)) || uid;
+      _finUidCache[uid] = label;
+      return label;
+    } catch (x) { _finUidCache[uid] = uid; return uid; }
+    finally { delete _finUidInflight[uid]; }
+  })();
+  return _finUidInflight[uid];
+}
+// Scan a container and replace any element with data-uid-label="<uid>" by the
+// resolved label. Idempotent — safe to re-run after re-render.
+function _finPatchUidLabels(root) {
+  try {
+    var rootEl = root || document;
+    var nodes = rootEl.querySelectorAll('[data-uid-label]');
+    nodes.forEach(function(n) {
+      var uid = n.getAttribute('data-uid-label');
+      if (!uid) return;
+      if (_finUidCache[uid]) {
+        n.textContent = _finUidCache[uid];
+        n.removeAttribute('data-uid-label');
+        return;
+      }
+      _finResolveUid(uid).then(function(label) {
+        if (n && n.isConnected) {
+          n.textContent = label;
+          n.removeAttribute('data-uid-label');
+        }
+      });
+    });
+  } catch (x) {}
+}
+// Renders a span that initially shows `name || uid`, and (if the value looks
+// like a raw UID — 20+ chars no spaces) schedules a resolver patch.
+function _finRenderUserCell(uidOrName, snapshotName) {
+  var label = snapshotName || uidOrName || 'unknown';
+  // Heuristic: Firebase UIDs are 20-28 chars, no spaces, no @. If snapshotName
+  // is present we trust it. Otherwise if the bare value looks like a UID, mark
+  // for async resolution.
+  var looksLikeUid = !snapshotName && typeof uidOrName === 'string' &&
+                     uidOrName.length >= 20 && !/\s|@/.test(uidOrName);
+  if (looksLikeUid) {
+    var cached = _finUidCache[uidOrName];
+    if (cached) return '<span>' + e(cached) + '</span>';
+    return '<span data-uid-label="' + e(uidOrName) + '">' + e(uidOrName) + '</span>';
+  }
+  return '<span>' + e(label) + '</span>';
+}
+
 function fmt$(cents) {
   if (cents == null || isNaN(cents)) return '$0.00';
   var n = Math.abs(cents) / 100;
@@ -2021,12 +2088,16 @@ async function renderDayCloseV2(dateParam) {
     var h = '<div style="max-width:760px;">';
     // Header: title + version badge + last-closed line + date picker
     var verBadge = '';
-    var lastLine = 'Not yet closed';
+    // Close v3 fix-up: amber pill for "Not yet closed" status.
+    var lastLine = '<span style="display:inline-block;padding:2px 8px;border-radius:10px;background:rgba(234,179,8,0.18);color:#eab308;border:1px solid rgba(234,179,8,0.35);font-size:0.72rem;font-weight:600;">Not yet closed (v1)</span>';
     if (latest) {
-      verBadge = '<span style="display:inline-block;background:rgba(34,197,94,0.18);color:#22c55e;font-size:0.72rem;font-weight:700;padding:2px 8px;border-radius:10px;margin-left:8px;vertical-align:middle;">v' + latest.version + '</span>';
-      var opName = latest.savedByName || latest.savedBy || 'unknown';
+      // Close v3 fix-up: v1/v2 tooltip on version badge.
+      var verTip = (latest.version === 1)
+        ? 'First close of this day'
+        : ('Re-close #' + latest.version + '. See version history for prior close details.');
+      verBadge = '<span title="' + e(verTip) + '" style="display:inline-block;background:rgba(34,197,94,0.18);color:#22c55e;font-size:0.72rem;font-weight:700;padding:2px 8px;border-radius:10px;margin-left:8px;vertical-align:middle;cursor:help;">v' + latest.version + '</span>';
       var ts = latest.savedAt ? String(latest.savedAt).replace('T', ' ').slice(0, 16) : '';
-      lastLine = 'Last closed by ' + e(opName) + (ts ? ' at ' + e(ts) : '');
+      lastLine = 'Last closed by ' + _finRenderUserCell(latest.savedBy, latest.savedByName) + (ts ? ' at ' + e(ts) : '');
     } else if (legacy && legacy.savedAt) {
       verBadge = '<span style="display:inline-block;background:rgba(234,179,8,0.18);color:#eab308;font-size:0.72rem;font-weight:700;padding:2px 8px;border-radius:10px;margin-left:8px;vertical-align:middle;">legacy v0</span>';
       lastLine = 'Legacy v2 doc — saved ' + e(String(legacy.savedAt).replace('T',' ').slice(0,16));
@@ -2056,14 +2127,14 @@ async function renderDayCloseV2(dateParam) {
       // newest first in the list
       var sortedDesc = versions.slice().sort(function(a, b) { return (b.version || 0) - (a.version || 0); });
       sortedDesc.forEach(function(v) {
-        var vop = v.savedByName || v.savedBy || 'unknown';
+        var vopCell = _finRenderUserCell(v.savedBy, v.savedByName);
         var vts = v.savedAt ? String(v.savedAt).replace('T',' ').slice(0,16) : '';
         var vvar = v.varianceCents != null ? fmt$(v.varianceCents) : '—';
         var isLatest = latest && v.id === latest.id;
         h += '<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.06);font-size:0.78rem;">';
         h += '<div><span style="color:var(--warm-gray,#888);font-weight:700;">v' + v.version + '</span>';
         if (isLatest) h += ' <span style="color:#22c55e;font-weight:700;">(latest)</span>';
-        h += ' &middot; ' + e(vop) + (vts ? ' &middot; ' + e(vts) : '') + ' &middot; variance ' + e(vvar) + '</div>';
+        h += ' &middot; ' + vopCell + (vts ? ' &middot; ' + e(vts) : '') + ' &middot; variance ' + e(vvar) + '</div>';
         h += '<button class="btn btn-secondary btn-small" onclick="finDayCloseViewVersion(\'' + _jsAttrSafe(v.id) + '\')">View</button>';
         h += '</div>';
       });
@@ -2127,6 +2198,8 @@ async function renderDayCloseV2(dateParam) {
     h += '</div>';
 
     el.innerHTML = h;
+    // Close v3 fix-up: async-resolve any raw UIDs into displayName/email.
+    _finPatchUidLabels(el);
     // Initial check rows render + variance compute
     _dcRenderCheckRows();
     _dcUpdateVariance();
@@ -6295,7 +6368,7 @@ window.finPeriodCloseDrillDown = async function(monthStr) {
     var inner = '<div style="margin-bottom:10px;font-size:0.85rem;">';
     inner += '<div>Status: <strong>' + e(pc.status || 'unknown') + '</strong></div>';
     if (pc.closedAt) inner += '<div>Closed at: ' + e(String(pc.closedAt).replace('T',' ').slice(0,16)) + '</div>';
-    if (pc.closedByName || pc.closedBy) inner += '<div>Closed by: ' + e(pc.closedByName || pc.closedBy) + '</div>';
+    if (pc.closedByName || pc.closedBy) inner += '<div>Closed by: ' + _finRenderUserCell(pc.closedBy, pc.closedByName) + '</div>';
     inner += '<div>Rollup variance: <strong>' + e(fmt$(rollup.varianceCentsSum || 0)) + '</strong></div>';
     inner += '<div>Opening sum: ' + e(fmt$(rollup.openingCashCentsSum || 0)) + ' &middot; Closing sum: ' + e(fmt$(rollup.closingCashCentsSum || 0)) + '</div>';
     inner += '</div>';
@@ -6326,6 +6399,8 @@ function _pcShowInfoModal(title, innerHtml) {
   h += '</div></div>';
   overlay.innerHTML = h;
   document.body.appendChild(overlay);
+  // Close v3 fix-up: async-resolve any raw UIDs into displayName/email.
+  _finPatchUidLabels(overlay);
   function close() { if (overlay.parentNode) overlay.parentNode.removeChild(overlay); }
   overlay.querySelector('#pcInfoClose').addEventListener('click', close);
   overlay.addEventListener('click', function(ev) { if (ev.target === overlay) close(); });
@@ -6409,9 +6484,9 @@ async function renderAmendments() {
         h += '<div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;margin-bottom:10px;">';
         h += '<div>';
         h += '<div style="font-size:0.85rem;font-weight:600;">' + e(a.targetCollection || 'unknown') + ' / <code style="font-size:0.78rem;">' + e(a.targetId || '?') + '</code></div>';
-        var subBy = a.submittedByName || a.submittedBy || 'unknown';
+        var subCell = _finRenderUserCell(a.submittedBy, a.submittedByName);
         var subAt = a.submittedAt ? String(a.submittedAt).replace('T',' ').slice(0,16) : '';
-        h += '<div style="font-size:0.72rem;color:var(--warm-gray,#888);margin-top:2px;">Submitted by ' + e(subBy) + (subAt ? ' at ' + e(subAt) : '') + '</div>';
+        h += '<div style="font-size:0.72rem;color:var(--warm-gray,#888);margin-top:2px;">Submitted by ' + subCell + (subAt ? ' at ' + e(subAt) : '') + '</div>';
         h += '</div>';
         h += '<span style="background:' + statusBg + ';color:' + statusColor + ';padding:2px 10px;border-radius:10px;font-size:0.72rem;font-weight:700;">' + e((a.status || 'pending').toUpperCase()) + '</span>';
         h += '</div>';
@@ -6442,12 +6517,12 @@ async function renderAmendments() {
           h += '</div>';
         } else if (a.status === 'approved') {
           var apTs = a.approvedAt ? String(a.approvedAt).replace('T',' ').slice(0,16) : '';
-          var apBy = a.approvedByName || a.approvedBy || 'unknown';
-          h += '<div style="font-size:0.72rem;color:var(--warm-gray,#888);">Approved by ' + e(apBy) + (apTs ? ' at ' + e(apTs) : '') + (a.counterEntryId ? ' &middot; counter-entry <code>' + e(a.counterEntryId) + '</code>' : '') + '</div>';
+          var apCell = _finRenderUserCell(a.approvedBy, a.approvedByName);
+          h += '<div style="font-size:0.72rem;color:var(--warm-gray,#888);">Approved by ' + apCell + (apTs ? ' at ' + e(apTs) : '') + (a.counterEntryId ? ' &middot; counter-entry <code>' + e(a.counterEntryId) + '</code>' : '') + '</div>';
         } else if (a.status === 'rejected') {
           var rjTs = a.rejectedAt ? String(a.rejectedAt).replace('T',' ').slice(0,16) : '';
-          var rjBy = a.rejectedByName || a.rejectedBy || 'unknown';
-          h += '<div style="font-size:0.72rem;color:var(--warm-gray,#888);">Rejected by ' + e(rjBy) + (rjTs ? ' at ' + e(rjTs) : '') + (a.rejectReason ? ' &middot; ' + e(a.rejectReason) : '') + '</div>';
+          var rjCell = _finRenderUserCell(a.rejectedBy, a.rejectedByName);
+          h += '<div style="font-size:0.72rem;color:var(--warm-gray,#888);">Rejected by ' + rjCell + (rjTs ? ' at ' + e(rjTs) : '') + (a.rejectReason ? ' &middot; ' + e(a.rejectReason) : '') + '</div>';
         }
         h += '</div>';
       });
@@ -6455,6 +6530,8 @@ async function renderAmendments() {
     });
     h += '</div>';
     el.innerHTML = h;
+    // Close v3 fix-up: async-resolve any raw UIDs into displayName/email.
+    _finPatchUidLabels(el);
   } catch (err) {
     el.innerHTML = '<div style="padding:20px;color:var(--danger,#dc2626);">Failed to load amendments: ' + e(err.message || err) + '</div>';
   }
