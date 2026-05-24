@@ -31,6 +31,119 @@ var _bankSyncInFlight = {};
 // Cleared on AR data reload.
 var _arReminderState = {};
 
+// W2.8 (-OtMNKv4uK0PWXTcTfZY): cross-view period selector. Lives on
+// window._finPeriod so every finance view (Revenue, Expenses, P&L, Cash Flow,
+// AR, AP, Tax, Portfolio, Reports, Overview) reads from the same source of
+// truth. `mode` drives the period bar's segmented control; start/end are
+// resolved ISO dates (YYYY-MM-DD). Custom mode keeps whatever start/end the
+// user typed; segmented modes recompute on click. Initial default: MTD.
+window._finPeriod = window._finPeriod || { mode: 'mtd', start: null, end: null };
+function _finResolvePeriod(p) {
+  if (!p) p = window._finPeriod || { mode: 'mtd' };
+  var s, e2;
+  if (p.mode === 'qtd') { s = quarterStart(); e2 = todayStr(); }
+  else if (p.mode === 'fy') { s = ytdStart(); e2 = todayStr(); }
+  else if (p.mode === 'custom') { s = p.start || monthStart(); e2 = p.end || monthEnd(); }
+  else { s = monthStart(); e2 = monthEnd(); p.mode = 'mtd'; }
+  return { mode: p.mode, start: s, end: e2 };
+}
+function _finPeriodLabel(p) {
+  var r = _finResolvePeriod(p);
+  if (r.mode === 'mtd') return 'MTD (' + r.start + ' to ' + r.end + ')';
+  if (r.mode === 'qtd') return 'QTD (' + r.start + ' to ' + r.end + ')';
+  if (r.mode === 'fy')  return 'FYTD (' + r.start + ' to ' + r.end + ')';
+  return r.start + ' to ' + r.end;
+}
+// Per-view ID-prefix hook: when a view's local periodPicker syncs to global,
+// the picker re-fills these inputs from _finPeriod on render. Two-way sync:
+// finPeriod(pfx, range) (existing) updates inputs only; global bar handlers
+// (finGlobalPeriod / finGlobalCustom) update _finPeriod and trigger reload
+// via _finReloadCurrent(). Each setup* fn calls _finSyncLocalPicker(pfx) so
+// the local picker reflects whatever the global picker last set.
+function _finSyncLocalPicker(pfx) {
+  var r = _finResolvePeriod();
+  var sEl = document.getElementById(pfx + 'S');
+  var eEl = document.getElementById(pfx + 'E');
+  if (sEl) sEl.value = r.start;
+  if (eEl) eEl.value = r.end;
+}
+
+// W2.8: Period bar shown at the top of every finance view. Segmented control
+// drives _finPeriod; Custom mode reveals two date inputs. The Active route's
+// loader fn is re-invoked when the period changes (looked up by hash).
+function renderFinancePeriodBar() {
+  var p = _finResolvePeriod();
+  var btn = function(mode, label) {
+    var active = p.mode === mode;
+    return '<button type="button" class="btn btn-' + (active ? 'primary' : 'secondary') +
+      ' btn-small" onclick="finGlobalPeriod(\'' + mode + '\')">' + label + '</button>';
+  };
+  var h = '<div id="finPeriodBar" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;padding:10px 14px;background:var(--bg-secondary,#232323);border-radius:8px;margin-bottom:14px;border:1px solid rgba(255,255,255,0.06);">';
+  h += '<span style="font-size:0.72rem;color:var(--warm-gray,#888);text-transform:uppercase;letter-spacing:0.5px;margin-right:4px;">Period</span>';
+  h += btn('mtd', 'MTD');
+  h += btn('qtd', 'QTD');
+  h += btn('fy', 'FYTD');
+  h += btn('custom', 'Custom');
+  if (p.mode === 'custom') {
+    h += '<input type="date" id="finGlobalStart" value="' + e(p.start) + '" onchange="finGlobalCustom()" style="background:var(--bg-primary,#1a1a1a);border:1px solid rgba(255,255,255,0.15);border-radius:6px;color:var(--text,#fff);padding:4px 8px;font-size:0.85rem;">';
+    h += '<span style="color:var(--warm-gray,#888);font-size:0.85rem;">to</span>';
+    h += '<input type="date" id="finGlobalEnd" value="' + e(p.end) + '" onchange="finGlobalCustom()" style="background:var(--bg-primary,#1a1a1a);border:1px solid rgba(255,255,255,0.15);border-radius:6px;color:var(--text,#fff);padding:4px 8px;font-size:0.85rem;">';
+  }
+  h += '<span style="margin-left:auto;font-size:0.72rem;color:var(--warm-gray,#888);">' + e(_finPeriodLabel(p)) + '</span>';
+  h += '</div>';
+  return h;
+}
+
+// Reload the currently visible finance view after _finPeriod changes. Each
+// setup* fn re-fetches via its loader, so we just re-invoke setup based on
+// the current route hash.
+window._finReloadCurrent = function() {
+  var route = (location.hash || '').replace(/^#/, '').split('?')[0];
+  var map = {
+    'finance-revenue':    function() { if (typeof setupRevenueTab === 'function') setupRevenueTab(); },
+    'finance-expenses':   function() { if (typeof setupExpensesTab === 'function') setupExpensesTab(); },
+    'finance-pl':         function() { if (typeof setupPlTab === 'function') setupPlTab(); },
+    'finance-cash-flow':  function() { if (typeof setupCashFlowTab === 'function') setupCashFlowTab(); },
+    'finance-ar':         function() { if (typeof setupArTab === 'function') setupArTab(); },
+    'finance-ap':         function() { if (typeof setupApTab === 'function') setupApTab(); },
+    'finance-tax':        function() { if (typeof setupTaxTab === 'function') setupTaxTab(); },
+    'finance-reports':    function() { if (typeof setupReportsTab === 'function') setupReportsTab(); },
+    'customer-portfolio': function() { if (typeof renderCustomerPortfolio === 'function') renderCustomerPortfolio(); },
+    'financials':         function() { if (typeof renderFinanceOverview === 'function') renderFinanceOverview(); }
+  };
+  var fn = map[route];
+  if (typeof fn === 'function') fn();
+};
+
+window.finGlobalPeriod = function(mode) {
+  var allowed = { mtd:1, qtd:1, fy:1, custom:1 };
+  if (!allowed[mode]) return;
+  window._finPeriod = window._finPeriod || {};
+  window._finPeriod.mode = mode;
+  if (mode !== 'custom') {
+    // Reset start/end so resolver recomputes fresh.
+    window._finPeriod.start = null;
+    window._finPeriod.end = null;
+  } else {
+    // Seed custom with current resolution so the inputs aren't blank.
+    var cur = _finResolvePeriod({ mode: 'mtd' });
+    window._finPeriod.start = window._finPeriod.start || cur.start;
+    window._finPeriod.end = window._finPeriod.end || cur.end;
+  }
+  window._finReloadCurrent();
+};
+
+window.finGlobalCustom = function() {
+  var sEl = document.getElementById('finGlobalStart');
+  var eEl = document.getElementById('finGlobalEnd');
+  if (!sEl || !eEl) return;
+  var s = sEl.value, en = eEl.value;
+  if (!s || !en) return;
+  if (en < s) { showToast('End date must be on or after start date', true); return; }
+  window._finPeriod = { mode: 'custom', start: s, end: en };
+  window._finReloadCurrent();
+};
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function isTestSource(src) {
@@ -230,7 +343,14 @@ window._finDownloadCsv = _finDownloadCsv;
 // Every render fn that surfaces money numbers must include this footer so the
 // user always knows what period and source field is being shown.
 function _finFooter(viewName, periodLabel, basisLabel) {
-  var periodLine = 'Period: ' + (periodLabel || '—') + ' · Basis: ' + (basisLabel || '—');
+  // W2.8: when caller passes a non-empty periodLabel it wins (per-view date
+  // range or as-of overrides the global selector — same precedence rule the
+  // view already enforces on its data fetch). Empty → read from _finPeriod.
+  var pl = periodLabel;
+  if (!pl) {
+    try { pl = _finPeriodLabel(window._finPeriod); } catch (x) { pl = '—'; }
+  }
+  var periodLine = 'Period: ' + (pl || '—') + ' · Basis: ' + (basisLabel || '—');
   var h = '<div style="margin-top:18px;padding-top:12px;border-top:1px solid rgba(255,255,255,0.08);display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">';
   h += '<div style="font-size:0.72rem;color:var(--warm-gray,#888);">' + e(periodLine) + '</div>';
   h += '<button class="btn btn-secondary btn-small" onclick="window._finExportView(\'' + (window._jsAttr ? window._jsAttr(viewName) : viewName) + '\')" title="Download CSV">⬇ Export CSV</button>';
@@ -261,10 +381,14 @@ function injectFinancePulseCSS() {
 function setupRevenueTab() {
   injectFinancePulseCSS();
   var el = document.getElementById('financeRevenueTab');
+  // W2.8: global period selector drives both the per-view picker (kept for
+  // back-compat + custom one-off date typing) and the data fetch.
+  var gp = _finResolvePeriod();
   el.innerHTML =
     '<div style="padding:20px;max-width:1100px;">' +
+    renderFinancePeriodBar() +
     '<h2 style="margin:0 0 16px 0;font-size:1.15rem;font-weight:700;">Revenue</h2>' +
-    periodPicker('fRev', monthStart(), monthEnd()) +
+    periodPicker('fRev', gp.start, gp.end) +
     '<div id="fRevContent">' + skeletonCards(4) + '</div>' +
     '</div>';
   loadRevenue();
@@ -638,8 +762,17 @@ function setupExpensesTab() {
   else finExpFilters.accountId = '';
 
   var el = document.getElementById('financeExpensesTab');
+  // W2.8: when no URL date filter is present, prefer the global _finPeriod
+  // so a top-bar MTD/QTD/FYTD pick propagates here too. URL filters still
+  // win because MCP admin deep links carry intent for a one-off date window.
+  if (!hasUrlDate) {
+    var gp = _finResolvePeriod();
+    initStart = gp.start;
+    initEnd = gp.end;
+  }
   el.innerHTML =
     '<div style="padding:20px;max-width:1100px;">' +
+    renderFinancePeriodBar() +
     '<h2 style="margin:0 0 16px 0;font-size:1.15rem;font-weight:700;">Expenses</h2>' +
     '<div id="fExpBanks" style="margin-bottom:16px;">' + skeletonCards(2) + '</div>' +
     periodPicker('fExp', initStart, initEnd) +
@@ -1428,13 +1561,15 @@ function setupPlTab() {
   injectFinancePulseCSS();
   // RBAC check is enforced in navigateTo() — setup only runs for admins
   var el = document.getElementById('financePlTab');
+  var gp = _finResolvePeriod(); // W2.8
   el.innerHTML =
     '<div style="padding:20px;max-width:1100px;">' +
+    renderFinancePeriodBar() +
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">' +
     '<h2 style="margin:0;font-size:1.15rem;font-weight:700;">Profit & Loss</h2>' +
     '<span style="background:rgba(239,68,68,0.12);color:#ef4444;padding:3px 10px;border-radius:6px;font-size:0.78rem;font-weight:600;">Admin Only</span>' +
     '</div>' +
-    periodPicker('fPl', monthStart(), monthEnd()) +
+    periodPicker('fPl', gp.start, gp.end) +
     '<div id="fPlContent">' + skeletonCards(4) + '</div>' +
     '</div>';
   loadPnl();
@@ -1777,8 +1912,11 @@ function setupCashFlowTab() {
   injectFinancePulseCSS();
   _cfLoaded = false;
   var el = document.getElementById('financeCashFlowTab');
+  // W2.8: global period bar. Cash Flow is point-in-time ("as of today") so
+  // the bar drives horizon-relative views but doesn't change the asOf anchor.
   el.innerHTML =
     '<div style="padding:20px;max-width:1100px;">' +
+    renderFinancePeriodBar() +
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">' +
     '<h2 style="margin:0;font-size:1.15rem;font-weight:700;">Cash Flow</h2>' +
     '<button class="btn btn-secondary btn-small" onclick="loadCashFlow()">Refresh</button>' +
@@ -2022,14 +2160,21 @@ function setupArTab() {
     : '';
   el.innerHTML =
     '<div style="padding:20px;max-width:1100px;">' +
+    renderFinancePeriodBar() +
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">' +
     '<h2 style="margin:0;font-size:1.15rem;font-weight:700;">Accounts Receivable</h2>' +
     '<div style="display:flex;gap:8px;">' + askAi +
+    '<button class="btn btn-secondary btn-small" onclick="navigateTo(\'finance-ar?subView=settings\')">Dunning Settings</button>' +
+    '<button class="btn btn-secondary btn-small" onclick="navigateTo(\'finance-ar?subView=audit\')">Audit Log</button>' +
     '<button class="btn btn-secondary btn-small" onclick="loadArData()">Refresh</button>' +
     '</div>' +
     '</div>' +
     '<div id="fArContent">' + skeletonCards(5) + '<div style="margin-top:16px;">' + skeletonTable(5,6) + '</div></div>' +
     '</div>';
+  // W2.4 sub-view routing — settings + audit log surfaces co-located.
+  var rp = (typeof window.getRouteParams === 'function') ? window.getRouteParams() : {};
+  if (rp && rp.subView === 'settings') { renderArDunningSettings(); return; }
+  if (rp && rp.subView === 'audit')    { renderArAuditLog(); return; }
   loadArData();
 }
 
@@ -2479,12 +2624,20 @@ function setupApTab() {
   var el = document.getElementById('financeApTab');
   el.innerHTML =
     '<div style="padding:20px;max-width:1100px;">' +
+    renderFinancePeriodBar() +
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">' +
     '<h2 style="margin:0;font-size:1.15rem;font-weight:700;">Accounts Payable</h2>' +
+    '<div style="display:flex;gap:8px;">' +
+    '<button class="btn btn-primary btn-small" onclick="finApNewVendor()">+ New Vendor</button>' +
+    '<button class="btn btn-primary btn-small" onclick="finApNewBill()">+ New Bill</button>' +
     '<button class="btn btn-secondary btn-small" onclick="loadApData()">Refresh</button>' +
+    '</div>' +
     '</div>' +
     '<div id="fApContent">' + skeletonCards(5) + '<div style="margin-top:16px;">' + skeletonTable(5,7) + '</div></div>' +
     '</div>';
+  // W2.2 sub-view: vendor detail / ledger.
+  var rp = (typeof window.getRouteParams === 'function') ? window.getRouteParams() : {};
+  if (rp && rp.subView === 'vendor' && rp.vendorId) { renderApVendorDetail(rp.vendorId); return; }
   loadApData();
 }
 
@@ -2834,7 +2987,7 @@ function setupTaxTab() {
   if (!el) return;
   _taxSection = 'sales-tax';
   _1099Year = new Date().getFullYear();
-  el.innerHTML = '<div style="padding:20px;max-width:1100px;">' + renderTaxHeader() +
+  el.innerHTML = '<div style="padding:20px;max-width:1100px;">' + renderFinancePeriodBar() + renderTaxHeader() +
     '<div id="fTaxContent">' + skeletonTable(5,4) + '</div></div>';
   loadTaxSalesTax();
 }
@@ -2843,7 +2996,7 @@ window.taxSection = function(section) {
   _taxSection = section;
   var el = document.getElementById('financeTaxTab');
   if (!el) return;
-  el.innerHTML = '<div style="padding:20px;max-width:1100px;">' + renderTaxHeader() +
+  el.innerHTML = '<div style="padding:20px;max-width:1100px;">' + renderFinancePeriodBar() + renderTaxHeader() +
     '<div id="fTaxContent">' + skeletonTable(5,4) + '</div></div>';
   if (section === 'sales-tax') loadTaxSalesTax();
   else if (section === 'nexus') loadTaxNexus();
@@ -3244,6 +3397,7 @@ function setupReportsTab() {
     yearOpts += '<option value="' + y + '"' + (y === nowYear ? ' selected' : '') + '>' + y + '</option>';
   }
   var h = '<div style="padding:20px;max-width:1100px;">';
+  h += renderFinancePeriodBar();
   h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">';
   h += '<h2 style="margin:0;font-size:1.15rem;font-weight:700;">Reports</h2>';
   h += '<span style="background:rgba(239,68,68,0.12);color:#ef4444;padding:3px 10px;border-radius:6px;font-size:0.78rem;font-weight:600;">Admin Only</span>';
@@ -3977,7 +4131,9 @@ function portfolioRenderSparklines(trend) {
 function renderCustomerPortfolio() {
   var el = document.getElementById('customerPortfolioContent');
   if (!el) return;
-  el.innerHTML = '<div style="color:var(--warm-gray);padding:40px 0;text-align:center;">Loading portfolio…</div>';
+  // W2.8: period bar shown above loading state so user sees it during fetch.
+  el.innerHTML = renderFinancePeriodBar() +
+    '<div style="color:var(--warm-gray);padding:40px 0;text-align:center;">Loading portfolio…</div>';
 
   Promise.all([
     MastDB.query('admin/customers').once()
@@ -4068,6 +4224,7 @@ function renderCustomerPortfolio() {
 
     // Render
     var html = '';
+    html += renderFinancePeriodBar(); // W2.8
     html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:12px;">';
     html += '<h2 style="font-size:1.6rem;font-weight:700;color:var(--charcoal);margin:0;">Customer Portfolio</h2>';
     html += '<div style="font-size:0.78rem;color:var(--warm-gray);">' +
@@ -4204,7 +4361,7 @@ function renderCustomerPortfolio() {
     el.innerHTML = html;
     portfolioUpdateBulkBar();
   }).catch(function(err) {
-    el.innerHTML = '<div style="color:var(--danger);padding:20px;">Error loading portfolio: ' + esc(err && err.message || String(err)) + '</div>';
+    el.innerHTML = renderFinancePeriodBar() + '<div style="color:var(--danger);padding:20px;">Error loading portfolio: ' + esc(err && err.message || String(err)) + '</div>';
   });
 }
 
