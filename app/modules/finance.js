@@ -172,7 +172,12 @@ function bucketColor(bucket) {
 // truth — apply in tier mix, AR aging, and Cash Flow inflow classification.
 function isWholesaleOrder(o) {
   if (!o) return false;
+  // Sales W1.9 sentinel: 'direct_retail' is an EXPLICIT non-wholesale marker.
+  // Treat it as a hard "false" before any fallback — otherwise the truthy
+  // string would mis-classify all retail orders as wholesale (W1 R2-F2).
+  if (o.wholesaleAccountId === 'direct_retail') return false;
   if (o.wholesaleAccountId) return true;
+  // Fallback chain when FK absent (existing orders pre-backfill on sgtest15):
   if (o.isWholesale === true) return true;
   if (o.orderType === 'wholesale') return true;
   if (o.type === 'wholesale') return true;
@@ -915,10 +920,17 @@ function renderFinExpenses(expenses, start, end) {
   h += '</div>';
 
   if (expenses.length === 0) {
-    return h + '<div style="text-align:center;padding:48px 20px;color:var(--warm-gray,#888);">' +
+    h += '<div style="text-align:center;padding:48px 20px;color:var(--warm-gray,#888);">' +
       '<div style="font-size:1.6rem;margin-bottom:8px;">💸</div>' +
       '<div style="font-size:0.9rem;font-weight:500;">No expenses match these filters</div>' +
       '<div style="font-size:0.85rem;margin-top:4px;">Try clearing a filter, or expand the date range.</div></div>';
+    // W1 R2-F3: keep canonical Period · Basis footer visible even when empty.
+    _finExporters.expenses = function() {
+      _finDownloadCsv('expenses', [['Date','Merchant','Description','Category','Account','Reviewed','Amount (USD)']],
+        'Period: ' + start + ' to ' + end + ' · Basis: admin/expenses.date + plaidTransactions.date');
+    };
+    h += _finFooter('expenses', start + ' to ' + end, 'admin/expenses.date + plaidTransactions.date');
+    return h;
   }
 
   // Category breakdown
@@ -979,9 +991,9 @@ function renderFinExpenses(expenses, start, end) {
         ((ex.amount || 0) / 100).toFixed(2)
       ]);
     });
-    _finDownloadCsv('expenses', rows, 'Period: ' + start + ' to ' + end + ' · Basis: admin/expenses.date');
+    _finDownloadCsv('expenses', rows, 'Period: ' + start + ' to ' + end + ' · Basis: admin/expenses.date + plaidTransactions.date');
   };
-  h += _finFooter('expenses', start + ' to ' + end, 'admin/expenses.date');
+  h += _finFooter('expenses', start + ' to ' + end, 'admin/expenses.date + plaidTransactions.date');
 
   return h;
 }
@@ -2585,6 +2597,23 @@ function renderApContent() {
   } else {
     h += renderApFlat(filtered);
   }
+
+  // W1 R2-F1: CSV exporter + Period · Basis footer. Mirrors AR pattern.
+  _finExporters.ap = function() {
+    var rows = [];
+    rows.push(['Vendor', 'Invoice Ref', 'Total (USD)', 'Paid (USD)', 'Amount Due (USD)', 'Due Date', 'Days Overdue', 'Bucket', 'Payment Status']);
+    filtered.forEach(function(r) {
+      rows.push([
+        r.vendorName, r.vendorInvoiceRef || r.receiptId,
+        (r.totalCents / 100).toFixed(2), (r.paidCents / 100).toFixed(2),
+        (r.amtDue / 100).toFixed(2), r.dueDate || '',
+        String(r.daysOverdue), r.bucket, r.paymentStatus || ''
+      ]);
+    });
+    _finDownloadCsv('finance-ap', rows, 'As of ' + (_apData.asOf || todayStr()) + ' · Basis: admin/purchaseReceipts.dueDate (paymentStatus IN unpaid,partial)');
+  };
+  h += _finFooter('finance-ap', 'As of ' + (_apData.asOf || todayStr()), 'admin/purchaseReceipts.dueDate (paymentStatus IN unpaid,partial)');
+
   return h;
 }
 
@@ -2899,10 +2928,22 @@ function renderTaxSalesTax(byState, nexus, start, end) {
   h += statCard('Period', toDateShort(start) + ' – ' + toDateShort(end), 'var(--warm-gray,#888)');
   h += '</div>';
 
+  // W1 R2-F3: register exporter early so footer button works even on empty state.
+  _finExporters['finance-tax-sales'] = function() {
+    var rows = [['State','Nexus Status','Tax Collected (USD)','Orders']];
+    states.forEach(function(s) {
+      var reg = nexus[s] && nexus[s].registered;
+      rows.push([s, reg ? 'Registered' : 'Not Registered', (byState[s].taxCollected / 100).toFixed(2), String(byState[s].orderCount)]);
+    });
+    _finDownloadCsv('finance-tax-sales', rows, 'Period: ' + start + ' to ' + end + ' · Basis: orders.placedAt + orders.taxState/shippingState + admin/nexusRegistrations');
+  };
+  var _taxSalesFooter = _finFooter('finance-tax-sales', start + ' to ' + end, 'orders.placedAt + orders.taxState/shippingState + admin/nexusRegistrations');
+
   if (states.length === 0) {
     return h + '<div style="text-align:center;padding:48px 20px;color:var(--warm-gray,#888);">' +
       '<div style="font-size:1.6rem;margin-bottom:8px;">🧾</div>' +
-      '<div style="font-size:0.9rem;font-weight:500;">No taxable orders in this period</div></div>';
+      '<div style="font-size:0.9rem;font-weight:500;">No taxable orders in this period</div></div>' +
+      _taxSalesFooter;
   }
 
   h += '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:0.85rem;">';
@@ -2928,6 +2969,7 @@ function renderTaxSalesTax(byState, nexus, start, end) {
     h += '</tr>';
   });
   h += '</tbody></table></div>';
+  h += _taxSalesFooter;
   return h;
 }
 
@@ -2995,8 +3037,22 @@ function renderTaxNexus(states, byState, nexus, threshold, txnThreshold, approac
   h += statCard('Trailing 12mo', toDateShort(startDate) + ' – ' + toDateShort(endDate), 'var(--warm-gray,#888)');
   h += '</div>';
 
+  // W1 R2-F3: register exporter early so footer button works on empty state too.
+  _finExporters['finance-tax-nexus'] = function() {
+    var rows = [['State','Revenue 12mo (USD)','Transactions','% of $100K','Status']];
+    states.forEach(function(s) {
+      var d = byState[s];
+      var reg = nexus[s] && nexus[s].registered;
+      var above = d.revenue > threshold || d.count > txnThreshold;
+      var status = reg ? 'Registered' : above ? 'Above threshold' : 'Below';
+      rows.push([s, (d.revenue / 100).toFixed(2), String(d.count), String(Math.round(d.revenue / threshold * 100)), status]);
+    });
+    _finDownloadCsv('finance-tax-nexus', rows, 'Period: trailing-12m (' + startDate + ' to ' + endDate + ') · Basis: orders.placedAt by state + admin/nexusRegistrations');
+  };
+  var _taxNexusFooter = _finFooter('finance-tax-nexus', 'trailing-12m (' + startDate + ' to ' + endDate + ')', 'orders.placedAt by state + admin/nexusRegistrations');
+
   if (states.length === 0) {
-    return h + '<div style="text-align:center;padding:48px 20px;color:var(--warm-gray,#888);"><div style="font-size:0.9rem;font-weight:500;">No sales data found for trailing 12 months</div></div>';
+    return h + '<div style="text-align:center;padding:48px 20px;color:var(--warm-gray,#888);"><div style="font-size:0.9rem;font-weight:500;">No sales data found for trailing 12 months</div></div>' + _taxNexusFooter;
   }
 
   h += '<div style="font-size:0.78rem;color:var(--warm-gray,#888);margin-bottom:10px;">$100K revenue threshold · 200 transaction threshold · Exclusive boundaries (>$100K triggers nexus)</div>';
@@ -3031,6 +3087,7 @@ function renderTaxNexus(states, byState, nexus, threshold, txnThreshold, approac
     h += '</tr>';
   });
   h += '</tbody></table></div>';
+  h += _taxNexusFooter;
   return h;
 }
 
@@ -3117,11 +3174,23 @@ function render1099(contractors, year) {
   if (missingCount > 0) h += statCard('Missing Tax ID', String(missingCount), '#ef4444', 'action required');
   h += '</div>';
 
+  // W1 R2-F3: register canonical exporter + footer (separate from legacy
+  // fin1099Export button — we keep both so existing UI still works).
+  _finExporters['finance-tax-1099'] = function() {
+    var rows = [['Contractor','Tax ID','Total Paid (USD)','1099 Required']];
+    contractors.forEach(function(c) {
+      rows.push([c.name, c.hasTaxId ? c.taxId : 'MISSING', (c.totalPaid / 100).toFixed(2), 'Yes']);
+    });
+    _finDownloadCsv('finance-tax-1099', rows, 'Period: tax year ' + year + ' · Basis: admin/vendors + admin/purchaseReceipts');
+  };
+  var _tax1099Footer = _finFooter('finance-tax-1099', 'tax year ' + year, 'admin/vendors + admin/purchaseReceipts');
+
   if (contractors.length === 0) {
     return h + '<div style="text-align:center;padding:48px 20px;color:var(--warm-gray,#888);">' +
       '<div style="font-size:1.6rem;margin-bottom:8px;">✅</div>' +
       '<div style="font-size:0.9rem;font-weight:500;">No contractors paid over $600 in ' + year + '</div>' +
-      '<div style="font-size:0.85rem;margin-top:4px;">1099-NEC threshold is $600.01 or more.</div></div>';
+      '<div style="font-size:0.85rem;margin-top:4px;">1099-NEC threshold is $600.01 or more.</div></div>' +
+      _tax1099Footer;
   }
 
   h += '<div style="display:flex;justify-content:flex-end;margin-bottom:10px;">';
@@ -3146,6 +3215,7 @@ function render1099(contractors, year) {
     h += '</tr>';
   });
   h += '</tbody></table></div>';
+  h += _tax1099Footer;
   return h;
 }
 
@@ -4110,6 +4180,26 @@ function renderCustomerPortfolio() {
       html += '<tr><td colspan="9" style="text-align:center;padding:40px;color:var(--warm-gray);">No customers in this quadrant.</td></tr>';
     }
     html += '</tbody></table></div>';
+
+    // W1 R2-F3: canonical Period · Basis footer + CSV export.
+    _finExporters['customer-portfolio'] = function() {
+      var csvRows = [];
+      csvRows.push(['Customer','Email','Quadrant','Revenue 12m (USD)','COGS 12m (USD)','Gross Margin (USD)','Net Margin %','Tickets','Returns','Cost to Serve (USD)','Net Contribution (USD)','Lapse Status','Tags']);
+      displayRows.forEach(function(r) {
+        csvRows.push([
+          r.displayName || '', r.primaryEmail || '', r.quadrant || '',
+          (r.revenueCents / 100).toFixed(2), (r.cogsCents / 100).toFixed(2),
+          (r.grossMarginCents / 100).toFixed(2),
+          typeof r.netMarginPct === 'number' ? (r.netMarginPct * 100).toFixed(1) : '',
+          String(r.ticketCount || 0), String(r.returnCount || 0),
+          (r.costToServeCents / 100).toFixed(2),
+          (r.netContributionCents / 100).toFixed(2),
+          r.lapseStatus || '', (r.tags || []).join('|')
+        ]);
+      });
+      _finDownloadCsv('customer-portfolio', csvRows, 'Period: trailing-12m as of ' + todayStr() + ' · Basis: admin/customers.stats.trailing12m* + cs_tickets + admin/rma');
+    };
+    html += _finFooter('customer-portfolio', 'trailing-12m as of ' + todayStr(), 'admin/customers.stats.trailing12m* + cs_tickets + admin/rma');
 
     el.innerHTML = html;
     portfolioUpdateBulkBar();
