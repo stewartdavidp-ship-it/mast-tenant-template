@@ -166,6 +166,16 @@ function isTestOrder(o) {
 // Revenue, P&L, and AR aging tabs.
 
 function e(s) { return typeof window.esc === 'function' ? window.esc(s) : String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+// Module-level JS-attribute escape — for inline onclick args. Falls back to a
+// quoted, backslash-escaped string when window._jsAttr isn't loaded yet.
+// Returns a JS literal expression (already includes its own quotes).
+function _jsAttrSafe(s) {
+  if (typeof window._jsAttr === 'function') return window._jsAttr(s);
+  return '"' + String(s == null ? '' : s).replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/</g, '\\x3c') + '"';
+}
+// Firebase-key charset validator (lowercase a-z, A-Z, 0-9, hyphen, underscore).
+// Used to guard URL-param-supplied IDs that flow into Firebase paths or DOM.
+function _isSafeFbKey(s) { return typeof s === 'string' && /^[A-Za-z0-9_-]+$/.test(s) && s.length <= 64; }
 
 function fmt$(cents) {
   if (cents == null || isNaN(cents)) return '$0.00';
@@ -1942,16 +1952,50 @@ function setupCashFlowTab() {
   loadCashFlow();
 }
 
-// W2.7 (-OtMNKlf5Y6xDSOE0b_Z): Day Close v2 sub-view. Per-day cash-drawer
-// count + check entry + variance + notes. Persisted at dayClose/{YYYY-MM-DD}
-// — top-level tenant collection (3-segment from root). Idempotent by date.
+// Close v3 (Idea -OtQH_uRXqz9jJBRsmrj): Day Close gains immutable versioning.
+// Reads versions from `closes/day/{closeId}` collection (latest non-superseded
+// is the active view). Legacy `dayClose/{date}` still read on first render so
+// operators can "Migrate to v1" with their existing values pre-filled. Writes
+// flow through CF `writeDayClose` which creates a new version, marks prior
+// version superseded, and writes the audit row.
+//
+// IDs scheme: `{date}-v{n}`. Listing by date uses `orderByChild('date')`.
+//
+// W2.7 history (KEPT) — Day Close v2 cash-drawer UX (opening/closing cash,
+// checks list, variance, notes) is preserved as-is. v3 layers version control
+// on top: header version badge, history drawer, re-close diff modal.
 async function renderDayCloseV2(dateParam) {
   var el = document.getElementById('fCfContent');
   if (!el) return;
   var date = dateParam || todayStr();
   el.innerHTML = '<div style="color:var(--warm-gray,#888);padding:20px;text-align:center;">Loading day close…</div>';
   try {
-    var existing = (await MastDB.get('dayClose/' + date)) || {};
+    // Load latest version + full version history + legacy v2 fallback in parallel.
+    var versionsResult = await _dcLoadVersionsForDate(date);
+    var versions = versionsResult.versions;        // sorted asc by version
+    var latest = versionsResult.latest;            // latest (highest version) or null
+    var legacy = versionsResult.legacy;            // legacy dayClose/{date} doc or null
+    var viewVersionId = (typeof window._dcViewVersionId === 'string') ? window._dcViewVersionId : null;
+    // Determine which version's data populates the form. Read-only if not latest.
+    var source = null;
+    var readOnly = false;
+    if (viewVersionId && versions.some(function(v) { return v.id === viewVersionId; })) {
+      source = versions.filter(function(v) { return v.id === viewVersionId; })[0];
+      readOnly = (latest && source.id !== latest.id);
+    } else if (latest) {
+      source = latest;
+    } else if (legacy && (legacy.openingCashCents != null || legacy.closingCashCents != null)) {
+      source = legacy;
+    } else {
+      source = {};
+    }
+    var existing = source || {};
+    el._dcSourceVersion = source && source.version ? source.version : null;
+    el._dcLatestVersion = latest && latest.version ? latest.version : 0;
+    el._dcLatest = latest || null;
+    el._dcLegacy = legacy || null;
+    el._dcVersions = versions;
+    el._dcReadOnly = readOnly;
     var openingCash = existing.openingCashCents != null ? (existing.openingCashCents / 100).toFixed(2) : '';
     var closingCash = existing.closingCashCents != null ? (existing.closingCashCents / 100).toFixed(2) : '';
     var notes = existing.notes || '';
@@ -1961,13 +2005,56 @@ async function renderDayCloseV2(dateParam) {
     el._dcChecks = checks;
 
     var h = '<div style="max-width:760px;">';
+    // Header: title + version badge + last-closed line + date picker
+    var verBadge = '';
+    var lastLine = 'Not yet closed';
+    if (latest) {
+      verBadge = '<span style="display:inline-block;background:rgba(34,197,94,0.18);color:#22c55e;font-size:0.72rem;font-weight:700;padding:2px 8px;border-radius:10px;margin-left:8px;vertical-align:middle;">v' + latest.version + '</span>';
+      var opName = latest.savedByName || latest.savedBy || 'unknown';
+      var ts = latest.savedAt ? String(latest.savedAt).replace('T', ' ').slice(0, 16) : '';
+      lastLine = 'Last closed by ' + e(opName) + (ts ? ' at ' + e(ts) : '');
+    } else if (legacy && legacy.savedAt) {
+      verBadge = '<span style="display:inline-block;background:rgba(234,179,8,0.18);color:#eab308;font-size:0.72rem;font-weight:700;padding:2px 8px;border-radius:10px;margin-left:8px;vertical-align:middle;">legacy v0</span>';
+      lastLine = 'Legacy v2 doc — saved ' + e(String(legacy.savedAt).replace('T',' ').slice(0,16));
+    }
     h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:10px;">';
-    h += '<div><h3 style="margin:0;font-size:1rem;font-weight:700;">Day Close — ' + e(date) + '</h3>';
-    h += '<div style="font-size:0.78rem;color:var(--warm-gray,#888);margin-top:3px;">' + (existing.savedAt ? 'Last saved ' + e(existing.savedAt.replace('T', ' ').slice(0, 16)) : 'Not yet saved') + '</div></div>';
+    h += '<div><h3 style="margin:0;font-size:1rem;font-weight:700;">Day Close — ' + e(date) + verBadge + '</h3>';
+    h += '<div style="font-size:0.78rem;color:var(--warm-gray,#888);margin-top:3px;">' + lastLine + '</div></div>';
     h += '<div style="display:flex;gap:6px;align-items:center;">';
     h += '<label style="font-size:0.78rem;color:var(--warm-gray,#888);">Date:</label>';
     h += '<input type="date" id="dcDate" value="' + e(date) + '" onchange="finDayCloseChangeDate(this.value)" style="background:var(--bg-secondary,#232323);border:1px solid rgba(255,255,255,0.15);border-radius:6px;color:var(--text,#fff);padding:5px 8px;font-size:0.85rem;">';
     h += '</div></div>';
+
+    // Read-only banner when viewing a superseded version
+    if (readOnly && source && latest) {
+      var supTs = latest.savedAt ? String(latest.savedAt).replace('T',' ').slice(0,16) : '';
+      h += '<div style="background:rgba(234,179,8,0.12);border:1px solid rgba(234,179,8,0.35);border-radius:8px;padding:10px 12px;margin-bottom:12px;color:#eab308;font-size:0.85rem;">';
+      h += 'Showing v' + source.version + ' (superseded by v' + latest.version + (supTs ? ' at ' + e(supTs) : '') + '). ';
+      h += '<a href="javascript:void(0)" onclick="finDayCloseViewVersion(null)" style="color:#eab308;text-decoration:underline;">Return to latest</a>';
+      h += '</div>';
+    }
+
+    // Version history drawer (collapsible)
+    if (versions.length > 0) {
+      h += '<details style="margin-bottom:14px;background:var(--bg-secondary,#232323);border-radius:10px;padding:0;">';
+      h += '<summary style="cursor:pointer;padding:10px 14px;font-size:0.85rem;font-weight:700;list-style:none;">Version history (' + versions.length + ')</summary>';
+      h += '<div style="padding:6px 14px 12px;">';
+      // newest first in the list
+      var sortedDesc = versions.slice().sort(function(a, b) { return (b.version || 0) - (a.version || 0); });
+      sortedDesc.forEach(function(v) {
+        var vop = v.savedByName || v.savedBy || 'unknown';
+        var vts = v.savedAt ? String(v.savedAt).replace('T',' ').slice(0,16) : '';
+        var vvar = v.varianceCents != null ? fmt$(v.varianceCents) : '—';
+        var isLatest = latest && v.id === latest.id;
+        h += '<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.06);font-size:0.78rem;">';
+        h += '<div><span style="color:var(--warm-gray,#888);font-weight:700;">v' + v.version + '</span>';
+        if (isLatest) h += ' <span style="color:#22c55e;font-weight:700;">(latest)</span>';
+        h += ' &middot; ' + e(vop) + (vts ? ' &middot; ' + e(vts) : '') + ' &middot; variance ' + e(vvar) + '</div>';
+        h += '<button class="btn btn-secondary btn-small" onclick="finDayCloseViewVersion(' + _jsAttrSafe(v.id) + ')">View</button>';
+        h += '</div>';
+      });
+      h += '</div></details>';
+    }
 
     // Cash drawer panel
     h += '<div style="background:var(--bg-secondary,#232323);border-radius:10px;padding:16px;margin-bottom:14px;">';
@@ -1998,11 +2085,30 @@ async function renderDayCloseV2(dateParam) {
     h += '<textarea id="dcNotes" rows="3" style="width:100%;background:var(--bg-primary,#1a1a1a);border:1px solid rgba(255,255,255,0.15);border-radius:6px;color:var(--text,#fff);padding:8px 10px;font-size:0.85rem;font-family:inherit;box-sizing:border-box;" placeholder="Anything unusual? Shortages, overages, deposits, etc.">' + e(notes) + '</textarea>';
     h += '</div>';
 
-    // Action buttons
-    h += '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px;">';
+    // Action buttons — Close v3 CTA state machine:
+    //   no v1 + legacy doc exists  → "Migrate to v1" (pre-fills cash drawer)
+    //   no version + no legacy     → "Close as v1"
+    //   any version exists         → "Re-close (creates v{n+1})" — opens diff modal
+    // Disabled entirely when viewing a superseded version (must "Return to latest" first).
+    h += '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px;align-items:center;">';
     h += '<button class="btn btn-secondary btn-small" onclick="finDayCloseExportCsv()">Export CSV</button>';
     h += '<button class="btn btn-secondary btn-small" onclick="window.print()">Print</button>';
-    h += '<button class="btn btn-primary btn-small" onclick="finDayCloseSave()">Save Day Close</button>';
+    if (readOnly) {
+      h += '<span style="font-size:0.78rem;color:var(--warm-gray,#888);">Editing disabled while viewing v' + (source && source.version) + '</span>';
+    } else {
+      var ctaLabel, ctaHandler;
+      if (!latest && legacy && (legacy.openingCashCents != null || legacy.closingCashCents != null)) {
+        ctaLabel = 'Migrate to v1';
+        ctaHandler = 'finDayCloseSave(\'migrate\')';
+      } else if (!latest) {
+        ctaLabel = 'Close as v1';
+        ctaHandler = 'finDayCloseSave(\'first\')';
+      } else {
+        ctaLabel = 'Re-close (creates v' + (latest.version + 1) + ')';
+        ctaHandler = 'finDayCloseSave(\'reclose\')';
+      }
+      h += '<button class="btn btn-primary btn-small" onclick="' + ctaHandler + '">' + e(ctaLabel) + '</button>';
+    }
     h += '</div>';
     h += '</div>';
 
@@ -2015,6 +2121,21 @@ async function renderDayCloseV2(dateParam) {
     var dcClose = document.getElementById('dcClose');
     if (dcOpen) dcOpen.addEventListener('input', _dcUpdateVariance);
     if (dcClose) dcClose.addEventListener('input', _dcUpdateVariance);
+    // Close v3: lock down all inputs + the +Add Check button when viewing a
+    // superseded version. The cash-drawer values, checks list, and notes are
+    // immutable per the v3 rule (re-close creates a new version, not edits in place).
+    if (readOnly) {
+      try {
+        var formEls = el.querySelectorAll('input, textarea');
+        for (var i = 0; i < formEls.length; i++) {
+          if (formEls[i].id === 'dcDate') continue; // date picker still works for navigation
+          formEls[i].setAttribute('disabled', 'disabled');
+          formEls[i].style.opacity = '0.6';
+        }
+        var addCheckBtn = el.querySelector('button[onclick="finDayCloseAddCheck()"]');
+        if (addCheckBtn) addCheckBtn.style.display = 'none';
+      } catch (xerr) { /* non-fatal */ }
+    }
   } catch (err) {
     el.innerHTML = '<div style="padding:20px;color:var(--danger,#dc2626);">Failed to load day close: ' + e(err.message || err) + '</div>';
   }
@@ -2099,7 +2220,8 @@ window.finDayCloseChangeDate = function(date) {
   if (!date) return;
   location.hash = '#finance-cash-flow?subView=dayclose&date=' + encodeURIComponent(date);
 };
-window.finDayCloseSave = async function() {
+// Close v3: gather form values, build payload. Single source for save + diff modal.
+function _dcGatherPayload() {
   var date = (document.getElementById('dcDate') || {}).value || todayStr();
   var openVal = parseFloat((document.getElementById('dcOpen') || {}).value);
   var closeVal = parseFloat((document.getElementById('dcClose') || {}).value);
@@ -2114,25 +2236,141 @@ window.finDayCloseSave = async function() {
   });
   var checkTotalCents = checks.reduce(function(s, c) { return s + c.amountCents; }, 0);
   var variance = (isNaN(openVal) || isNaN(closeVal)) ? null : Math.round((closeVal - openVal) * 100);
-  var now = new Date().toISOString();
-  var user = firebase.auth().currentUser;
-  var payload = {
+  return {
     date: date,
     openingCashCents: isNaN(openVal) ? null : Math.round(openVal * 100),
     closingCashCents: isNaN(closeVal) ? null : Math.round(closeVal * 100),
     varianceCents: variance,
     checks: checks,
     checkTotalCents: checkTotalCents,
-    notes: notes || null,
-    savedAt: now,
-    savedBy: (user && user.uid) || 'unknown'
+    notes: notes || null
   };
+}
+
+// Close v3: load all versions of a date from `closes/day/{closeId}` plus the
+// legacy `dayClose/{date}` doc (fallback for the Migrate-to-v1 path).
+async function _dcLoadVersionsForDate(date) {
+  var versions = [];
   try {
-    // dayClose/{YYYY-MM-DD} — top-level tenant collection (no admin/ prefix).
-    // Idempotent: same date overwrites prior entry.
-    await MastDB.set('dayClose/' + date, payload);
-    showToast('Day Close saved for ' + date);
-    renderDayCloseV2(date);
+    // Versions are written under closes/day/{closeId} where closeId starts with `{date}-v`.
+    // We list the whole `closes/day` collection then filter by date. For tenants with
+    // years of history this could grow — Agent A's writeDayClose CF MAY want to add a
+    // per-date index. For now the list call is bounded by MastDB's default page size.
+    var all = (await MastDB.get('closes/day')) || {};
+    Object.keys(all).forEach(function(id) {
+      var v = all[id];
+      if (v && v.date === date) {
+        versions.push(Object.assign({ id: id }, v));
+      }
+    });
+    versions.sort(function(a, b) { return (a.version || 0) - (b.version || 0); });
+  } catch (xerr) { /* collection may not yet exist */ }
+  var latest = null;
+  for (var i = versions.length - 1; i >= 0; i--) {
+    if (!versions[i].superseded) { latest = versions[i]; break; }
+  }
+  if (!latest && versions.length > 0) latest = versions[versions.length - 1];
+  var legacy = null;
+  try { legacy = await MastDB.get('dayClose/' + date); } catch (xerr) {}
+  return { versions: versions, latest: latest, legacy: legacy };
+}
+
+// Close v3: view a specific version of the form (read-only when not latest).
+window.finDayCloseViewVersion = function(versionId) {
+  window._dcViewVersionId = versionId || null;
+  var date = (document.getElementById('dcDate') || {}).value || todayStr();
+  renderDayCloseV2(date);
+};
+
+// Close v3: Re-close diff modal. Renders before/after for each changed field.
+function _dcRenderDiff(latest, next) {
+  var rows = [];
+  function row(label, before, after) {
+    if (before === after) return;
+    rows.push({ label: label, before: before, after: after });
+  }
+  row('Opening cash', fmt$(latest.openingCashCents), fmt$(next.openingCashCents));
+  row('Closing cash', fmt$(latest.closingCashCents), fmt$(next.closingCashCents));
+  row('Variance', fmt$(latest.varianceCents), fmt$(next.varianceCents));
+  row('Check total', fmt$(latest.checkTotalCents), fmt$(next.checkTotalCents));
+  var prevChecks = Array.isArray(latest.checks) ? latest.checks.length : 0;
+  var newChecks = next.checks.length;
+  if (prevChecks !== newChecks) {
+    row('Check count', String(prevChecks), String(newChecks) + ' (' + (newChecks > prevChecks ? '+' : '') + (newChecks - prevChecks) + ')');
+  }
+  row('Notes', (latest.notes || '(empty)'), (next.notes || '(empty)'));
+  if (rows.length === 0) return '<div style="color:var(--warm-gray,#888);font-size:0.85rem;">No changes detected. Re-closing will still create a new version row for audit.</div>';
+  var h = '<table style="width:100%;border-collapse:collapse;font-size:0.85rem;">';
+  h += '<thead><tr><th style="text-align:left;padding:6px 8px;border-bottom:1px solid rgba(255,255,255,0.15);">Field</th><th style="text-align:left;padding:6px 8px;border-bottom:1px solid rgba(255,255,255,0.15);">v' + latest.version + ' (current)</th><th style="text-align:left;padding:6px 8px;border-bottom:1px solid rgba(255,255,255,0.15);">v' + (latest.version + 1) + ' (proposed)</th></tr></thead><tbody>';
+  rows.forEach(function(r) {
+    h += '<tr><td style="padding:6px 8px;border-bottom:1px solid rgba(255,255,255,0.06);font-weight:600;">' + e(r.label) + '</td>';
+    h += '<td style="padding:6px 8px;border-bottom:1px solid rgba(255,255,255,0.06);color:#eab308;">' + e(r.before) + '</td>';
+    h += '<td style="padding:6px 8px;border-bottom:1px solid rgba(255,255,255,0.06);color:#22c55e;">' + e(r.after) + '</td></tr>';
+  });
+  h += '</tbody></table>';
+  return h;
+}
+
+// Close v3: HTML-bodied confirm modal (mastConfirm escapes; we need rendered table).
+// Built locally to match mastConfirm visual chrome.
+function _dcShowDiffModal(date, nextVersion, innerHtml) {
+  return new Promise(function(resolve) {
+    var overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;';
+    var h = '<div style="background:var(--bg-secondary,#232323);border-radius:10px;max-width:640px;width:96%;padding:22px 24px;box-shadow:0 8px 30px rgba(0,0,0,0.4);color:var(--text,#fff);">';
+    h += '<div style="font-size:1.0rem;font-weight:700;margin-bottom:10px;">Re-close ' + e(date) + ' &mdash; review changes</div>';
+    h += '<div style="font-size:0.78rem;color:var(--warm-gray,#888);margin-bottom:14px;">Creating an immutable v' + nextVersion + '. The current version is preserved in history.</div>';
+    h += '<div style="max-height:340px;overflow-y:auto;margin-bottom:18px;">' + innerHtml + '</div>';
+    h += '<div style="display:flex;justify-content:flex-end;gap:8px;">';
+    h += '<button class="btn btn-secondary" id="dcDiffCancel">Cancel</button>';
+    h += '<button class="btn btn-primary" id="dcDiffOK">Create v' + nextVersion + '</button>';
+    h += '</div></div>';
+    overlay.innerHTML = h;
+    document.body.appendChild(overlay);
+    function close(result) { if (overlay.parentNode) overlay.parentNode.removeChild(overlay); resolve(result); }
+    overlay.querySelector('#dcDiffCancel').addEventListener('click', function() { close(false); });
+    overlay.querySelector('#dcDiffOK').addEventListener('click', function() { close(true); });
+    overlay.addEventListener('click', function(ev) { if (ev.target === overlay) close(false); });
+  });
+}
+
+// Close v3: Save — always goes through the writeDayClose CF. The CF performs
+// the version-bump + supersede + audit-row write atomically (single Firestore
+// transaction). requestId is a client UUID for at-most-once semantics.
+window.finDayCloseSave = async function(mode) {
+  var el = document.getElementById('fCfContent');
+  if (el && el._dcReadOnly) { showToast('Cannot edit a superseded version.', true); return; }
+  var payload = _dcGatherPayload();
+  var latest = el && el._dcLatest;
+  // Re-close: show diff modal first; user confirms inside the modal.
+  if (mode === 'reclose' && latest) {
+    var diffHtml = _dcRenderDiff(latest, payload);
+    var ok = await _dcShowDiffModal(payload.date, latest.version + 1, diffHtml);
+    if (!ok) return;
+  }
+  // Best-effort UUID (crypto.randomUUID is widely supported in supported browsers).
+  var requestId = (window.crypto && window.crypto.randomUUID) ? window.crypto.randomUUID()
+    : ('rid-' + Date.now() + '-' + Math.random().toString(36).slice(2));
+  payload.requestId = requestId;
+  try {
+    var resp = await callCF('/writeDayClose', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    var json = null;
+    try { json = await resp.json(); } catch (jerr) {}
+    if (!resp.ok || !json || json.ok === false) {
+      var msg = (json && (json.message || json.error)) || ('HTTP ' + resp.status);
+      showToast('Save failed: ' + msg, true);
+      return;
+    }
+    // Audit: client-side row for cross-UI consistency. CF also writes its own
+    // immutable audit row in `closes/audit/{...}` (Agent A) so this is belt-and-braces.
+    try { await writeAudit(mode === 'reclose' ? 'update' : 'create', 'dayClose', payload.date + ':v' + (json.version || '?')); } catch (xerr) {}
+    showToast('Day Close v' + (json.version || '?') + ' saved for ' + payload.date);
+    window._dcViewVersionId = null;
+    renderDayCloseV2(payload.date);
   } catch (err) {
     showToast('Save failed: ' + (err.message || err), true);
   }
