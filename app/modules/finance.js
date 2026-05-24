@@ -2278,7 +2278,11 @@ function _dcUpdateVariance() {
     vEl.textContent = 'Variance: $0.00 (closing − opening − checks)';
     return;
   }
-  var diff = close - open;
+  // Close v3 R2-F2: variance = closing − opening − checkTotal (CPA convention).
+  // Matches _dcGatherPayload computation so live preview equals saved value.
+  var checks = _dcChecks();
+  var checkTotal = checks.reduce(function(s, c) { return s + (parseFloat(c.amount) || 0); }, 0);
+  var diff = close - open - checkTotal;
   var sign = diff >= 0 ? '+' : '−';
   var color = diff === 0 ? 'var(--warm-gray,#888)' : (Math.abs(diff) < 5 ? '#22c55e' : '#eab308');
   vEl.innerHTML = '<span style="color:' + color + ';font-weight:600;">Variance: ' + sign + '$' + Math.abs(diff).toFixed(2) + ' (closing − opening − checks)</span>';
@@ -2330,7 +2334,12 @@ function _dcGatherPayload() {
     };
   });
   var checkTotalCents = checks.reduce(function(s, c) { return s + c.amountCents; }, 0);
-  var variance = (isNaN(openVal) || isNaN(closeVal)) ? null : Math.round((closeVal - openVal) * 100);
+  // Close v3 R2-F2: variance = closing − opening − checks (CPA convention).
+  // Checks have been logged as accounted-for cash; variance is what's UNaccounted.
+  // Pre-Round-2 closes used `closing − opening` only; their hashes are not
+  // comparable to post-Round-2 closes for the same inputs. Don't backfill —
+  // legacy v1 docs retain their original computation; new closes use this formula.
+  var variance = (isNaN(openVal) || isNaN(closeVal)) ? null : Math.round((closeVal - openVal) * 100) - checkTotalCents;
   return {
     date: date,
     openingCashCents: isNaN(openVal) ? null : Math.round(openVal * 100),
@@ -2641,7 +2650,11 @@ window.finDayCloseExportCsv = function() {
   var rows = [['Section','Field','Value']];
   rows.push(['Cash Drawer','Opening Cash', isNaN(openVal) ? '' : openVal.toFixed(2)]);
   rows.push(['Cash Drawer','Closing Cash', isNaN(closeVal) ? '' : closeVal.toFixed(2)]);
-  if (!isNaN(openVal) && !isNaN(closeVal)) rows.push(['Cash Drawer','Variance', (closeVal - openVal).toFixed(2)]);
+  if (!isNaN(openVal) && !isNaN(closeVal)) {
+    // Close v3 R2-F2: variance = closing − opening − checkTotal (CPA convention).
+    var _csvCheckTotal = checks.reduce(function(s, c) { return s + (parseFloat(c.amount) || 0); }, 0);
+    rows.push(['Cash Drawer','Variance (closing − opening − checks)', (closeVal - openVal - _csvCheckTotal).toFixed(2)]);
+  }
   rows.push([]);
   rows.push(['Checks','Check #','Amount','Payer Name','Memo','Invoice Ref']);
   checks.forEach(function(c) {
