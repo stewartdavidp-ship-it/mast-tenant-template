@@ -26,6 +26,10 @@ var _cashHorizonDays = 30;
 var _cfLastSnapshot = null;
 // W1.5: bank-sync per-item retry/reconnect in-flight tracking.
 var _bankSyncInFlight = {};
+// W1.10 (-OtMNJdpUIMpbJcKQAY0): per-order AR reminder state. Values:
+// 'sending' (in-flight write to emailQueue), 'sent' (queued successfully).
+// Cleared on AR data reload.
+var _arReminderState = {};
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -494,7 +498,7 @@ function renderRevenue(totalCents, byChannel, txns, start, end, testTotalCents, 
   if (channels.length > 0) {
     var topCh = channels[0];
     var topChSub = fmt$(byChannel[topCh]) + ' · ' + Math.round(byChannel[topCh]/totalCents*100) + '%';
-    if (prior) topChSub += _renderRevenueDelta(byChannel[topCh], (prior.byChannel || {})[topCh] || 0);
+    if (prior) topChSub += _sanityWrap(_renderRevenueDelta(byChannel[topCh], (prior.byChannel || {})[topCh] || 0), byChannel[topCh], (prior.byChannel || {})[topCh] || 0);
     h += statCard('Top Channel', e(topCh), channelColors[topCh] || '#888', topChSub);
   }
   h += statCard('Period', toDateShort(start) + ' – ' + toDateShort(end), 'var(--warm-gray,#888)');
@@ -520,7 +524,7 @@ function renderRevenue(totalCents, byChannel, txns, start, end, testTotalCents, 
       h += '<div style="font-size:0.72rem;color:var(--warm-gray,#888);">' + Math.round(byChannel[ch]/totalCents*100) + '% of total</div>';
       // W2.6: per-channel Δ vs prior. Prior channels that disappeared still
       // surface here as a — chip via _renderRevenueDelta(0, priorCents).
-      if (prior) h += _renderRevenueDelta(byChannel[ch], (prior.byChannel || {})[ch] || 0);
+      if (prior) h += _sanityWrap(_renderRevenueDelta(byChannel[ch], (prior.byChannel || {})[ch] || 0), byChannel[ch], (prior.byChannel || {})[ch] || 0);
       h += '</div>';
     });
     h += '</div></div>';
@@ -2021,6 +2025,9 @@ async function loadArData() {
   var el = document.getElementById('fArContent');
   if (!el) return;
   el.innerHTML = skeletonCards(5) + '<div style="margin-top:16px;">' + skeletonTable(5,6) + '</div>';
+  // W1.10: clear reminder UI state on fresh load — historical reminders
+  // live in admin/ar_reminders, not in this transient render-only map.
+  _arReminderState = {};
 
   try {
     var asOf = todayStr();
@@ -2062,7 +2069,22 @@ async function loadArData() {
         else bucket = '90_plus';
       }
 
-      rows.push({ orderId, invoiceNumber: o.invoiceNumber || '', customerName: o.customerName || 'Unknown', amtDue, totalCents, dueDate: o.invoiceDueDate || '', daysOverdue: daysOver, bucket, invoiceStatus: o.invoiceStatus });
+      // W1.7: snapshot wholesale flag + contact email for the row so the
+      // table can show a Tier badge and W1.10 can queue a reminder.
+      rows.push({
+        orderId: orderId,
+        invoiceNumber: o.invoiceNumber || '',
+        customerName: o.customerName || 'Unknown',
+        customerEmail: o.customerEmail || (o.customer && o.customer.email) || '',
+        amtDue: amtDue,
+        totalCents: totalCents,
+        dueDate: o.invoiceDueDate || '',
+        daysOverdue: daysOver,
+        bucket: bucket,
+        invoiceStatus: o.invoiceStatus,
+        isWholesale: isWholesaleOrder(o),
+        wholesaleAccountId: o.wholesaleAccountId || null
+      });
     });
 
     rows.sort(function(a,b) { return b.daysOverdue - a.daysOverdue; });
@@ -2142,17 +2164,27 @@ function renderArContent() {
   }
 
   // Table
+  // W1.7: Tier column. W1.10: per-row "Send Reminder" action.
   h += '<div style="overflow-x:auto;">';
   h += '<table style="width:100%;border-collapse:collapse;font-size:0.85rem;">';
   h += '<thead><tr style="border-bottom:1px solid rgba(255,255,255,0.1);">';
-  ['Customer','Invoice #','Order','Amount Due','Due Date','Age','Status',''].forEach(function(col) {
+  ['Customer','Tier','Invoice #','Order','Amount Due','Due Date','Age','Status',''].forEach(function(col) {
     h += '<th style="text-align:left;padding:8px 10px;font-size:0.72rem;color:var(--warm-gray,#888);text-transform:uppercase;letter-spacing:0.5px;white-space:nowrap;">' + col + '</th>';
   });
   h += '</tr></thead><tbody>';
 
   filtered.forEach(function(r) {
+    var reminderState = (_arReminderState && _arReminderState[r.orderId]) || null;
+    var canRemind = !!r.customerEmail && r.customerEmail.indexOf('@') > 0;
+    var orderIdAttr = (window._jsAttr ? window._jsAttr(r.orderId) : r.orderId);
     h += '<tr style="border-bottom:1px solid rgba(255,255,255,0.06);">';
     h += '<td style="padding:10px;">' + e(r.customerName) + '</td>';
+    // W1.7 Tier badge
+    if (r.isWholesale) {
+      h += '<td style="padding:10px;"><span style="background:rgba(139,92,246,0.18);color:#8b5cf6;padding:2px 8px;border-radius:4px;font-size:0.72rem;font-weight:600;">Wholesale</span></td>';
+    } else {
+      h += '<td style="padding:10px;"><span style="background:rgba(59,130,246,0.15);color:#3b82f6;padding:2px 8px;border-radius:4px;font-size:0.72rem;font-weight:600;">Direct</span></td>';
+    }
     h += '<td style="padding:10px;font-size:0.78rem;color:var(--warm-gray,#888);">' + e(r.invoiceNumber || '—') + '</td>';
     h += '<td style="padding:10px;font-size:0.78rem;"><a href="#" style="color:var(--teal,#2a9d8f);" onclick="event.preventDefault();navigateTo(\'orders\')">' + e(r.orderId.slice(-8)) + '</a></td>';
     h += '<td style="padding:10px;font-weight:700;color:' + bucketColor(r.bucket) + ';">' + fmt$(r.amtDue) + '</td>';
@@ -2160,11 +2192,45 @@ function renderArContent() {
     h += '<td style="padding:10px;">' + agingBadge(r.daysOverdue) + '</td>';
     h += '<td style="padding:10px;"><span style="background:rgba(241,164,0,0.15);color:#f59e0b;padding:2px 8px;border-radius:4px;font-size:0.72rem;font-weight:600;">' + e(r.invoiceStatus) + '</span></td>';
     h += '<td style="padding:10px;white-space:nowrap;">';
+    // W1.10 (-OtMNJdpUIMpbJcKQAY0): Send Reminder action. Only for overdue
+    // rows (daysOverdue > 0) — current invoices don't need chasing.
+    if (r.daysOverdue > 0) {
+      if (reminderState === 'sent') {
+        h += '<span style="background:rgba(34,197,94,0.15);color:#22c55e;padding:3px 10px;border-radius:999px;font-size:0.72rem;font-weight:600;margin-right:6px;">Reminder queued</span>';
+      } else {
+        var inFlight = reminderState === 'sending';
+        var disabledAttr = (canRemind && !inFlight) ? '' : ' disabled';
+        var titleAttr = canRemind ? 'Queue an email reminder to ' + r.customerEmail : 'No customer email on file';
+        h += '<button class="btn btn-secondary btn-small"' + disabledAttr +
+          ' title="' + e(titleAttr) + '"' +
+          ' onclick="finArSendReminder(\'' + orderIdAttr + '\')"' +
+          ' style="margin-right:6px;">' +
+          (inFlight ? 'Sending…' : 'Send Reminder') +
+          '</button>';
+      }
+    }
     h += '<button class="btn btn-primary btn-small" data-order-id="' + e(r.orderId) + '" data-amt="' + r.totalCents + '" onclick="finArMarkPaid(this.dataset.orderId, parseInt(this.dataset.amt))">Mark Paid</button>';
     h += '</td></tr>';
   });
 
   h += '</tbody></table></div>';
+
+  // W1.3 + R-FIN-1: CSV exporter + Period · Basis footer.
+  _finExporters.ar = function() {
+    var rows = [];
+    rows.push(['Customer', 'Tier', 'Invoice #', 'Order ID', 'Amount Due (USD)', 'Due Date', 'Days Overdue', 'Bucket', 'Status', 'Customer Email']);
+    filtered.forEach(function(r) {
+      rows.push([
+        r.customerName, r.isWholesale ? 'Wholesale' : 'Direct',
+        r.invoiceNumber || '', r.orderId, (r.amtDue / 100).toFixed(2),
+        r.dueDate || '', String(r.daysOverdue), r.bucket,
+        r.invoiceStatus || '', r.customerEmail || ''
+      ]);
+    });
+    _finDownloadCsv('ar', rows, 'As of ' + (_arData.asOf || todayStr()) + ' · Basis: orders.invoiceDueDate (invoiceStatus IN sent,overdue)');
+  };
+  h += _finFooter('ar', 'As of ' + (_arData.asOf || todayStr()), 'orders.invoiceDueDate (invoiceStatus IN sent,overdue)');
+
   return h;
 }
 
@@ -2273,6 +2339,123 @@ window.finArMarkPaid = async function(orderId, totalCents) {
     loadArData();
   } catch (err) {
     showToast('Error: ' + e(err.message), true);
+  }
+};
+
+// W1.10 (-OtMNJdpUIMpbJcKQAY0): SHA-1 helper for idempotency key.
+// Mirrors orders.js _commSha1Hex shape — daily idempotency window so a
+// rapid double-click on Send Reminder doesn't queue two emails, but a
+// genuine next-day reminder is allowed.
+function _finSha1Hex(s) {
+  var enc = new TextEncoder().encode(s);
+  return crypto.subtle.digest('SHA-1', enc).then(function(buf) {
+    var bytes = new Uint8Array(buf);
+    var hex = '';
+    for (var i = 0; i < bytes.length; i++) {
+      var h = bytes[i].toString(16);
+      if (h.length < 2) h = '0' + h;
+      hex += h;
+    }
+    return hex;
+  });
+}
+
+// W1.10: queue an AR reminder email. Writes to tenants/{tid}/emailQueue/
+// (consumed by processEmailQueue CF — Marketing W3a-send pattern) and logs
+// to admin/ar_reminders/. Plain-text body with invoice number + amount due
+// + due date + optional pay link placeholder. No cadence config — that's
+// deferred to W2.4. Idempotency: same orderId + email + day = same key.
+window.finArSendReminder = async function(orderId) {
+  if (!_arData || !_arData.rows) { showToast('AR data not loaded', true); return; }
+  var row = null;
+  for (var i = 0; i < _arData.rows.length; i++) {
+    if (_arData.rows[i].orderId === orderId) { row = _arData.rows[i]; break; }
+  }
+  if (!row) { showToast('Invoice not found', true); return; }
+  if (!row.customerEmail || row.customerEmail.indexOf('@') < 1) {
+    showToast('No customer email on file for this invoice', true);
+    return;
+  }
+  if (_arReminderState[orderId] === 'sending' || _arReminderState[orderId] === 'sent') return;
+
+  _arReminderState[orderId] = 'sending';
+  var el = document.getElementById('fArContent');
+  if (el) el.innerHTML = renderArContent();
+
+  try {
+    var now = new Date().toISOString();
+    var ymd = now.slice(0, 10).replace(/-/g, '');
+    var tenantId = (MastDB.tenantId && MastDB.tenantId()) || window.TENANT_ID || '';
+    var brandName = (window.TENANT_CONFIG && window.TENANT_CONFIG.brand && window.TENANT_CONFIG.brand.name) || 'Our Studio';
+    var user = firebase.auth().currentUser;
+    var sentBy = (user && user.uid) || 'unknown';
+
+    var idemSeed = orderId + '|' + row.customerEmail + '|' + ymd;
+    var idempotencyKey = await _finSha1Hex(idemSeed);
+
+    var amountDueStr = fmt$(row.amtDue);
+    var dueDateStr = row.dueDate ? new Date(row.dueDate + 'T00:00:00Z').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : 'as soon as possible';
+    var invoiceLabel = row.invoiceNumber ? ('Invoice #' + row.invoiceNumber) : ('Order ' + orderId.slice(-8));
+    var ageStr = row.daysOverdue > 0 ? (' (' + row.daysOverdue + ' day' + (row.daysOverdue === 1 ? '' : 's') + ' overdue)') : '';
+
+    var subject = 'Reminder: ' + invoiceLabel + ' — ' + amountDueStr + ' due';
+    var textBody =
+      'Hi ' + (row.customerName || 'there') + ',\n\n' +
+      'This is a friendly reminder that ' + invoiceLabel + ' for ' + amountDueStr + ' was due on ' + dueDateStr + ageStr + '.\n\n' +
+      'If you have already sent payment, please disregard this note. Otherwise, please reach out and we will arrange a pay link.\n\n' +
+      'Thanks,\n' + brandName + '\n';
+    var htmlBody =
+      '<p>Hi ' + e(row.customerName || 'there') + ',</p>' +
+      '<p>This is a friendly reminder that <strong>' + e(invoiceLabel) + '</strong> for <strong>' + amountDueStr + '</strong> was due on <strong>' + e(dueDateStr) + '</strong>' + e(ageStr) + '.</p>' +
+      '<p>If you have already sent payment, please disregard this note. Otherwise, please reach out and we will arrange a pay link.</p>' +
+      '<p>Thanks,<br>' + e(brandName) + '</p>';
+
+    // Per Marketing W3a-send pattern: write to emailQueue with arbitrary
+    // emailType — processEmailQueue accepts any string. Tenant-scoped path
+    // (MastDB writes under tenants/{tid}/emailQueue/) means no rules widening.
+    await MastDB.set('emailQueue/' + idempotencyKey, {
+      id: idempotencyKey,
+      emailType: 'ar_reminder',
+      to: row.customerEmail,
+      toName: row.customerName || null,
+      subject: subject,
+      htmlBody: htmlBody,
+      textBody: textBody,
+      fromName: brandName,
+      idempotencyKey: idempotencyKey,
+      queuedAt: now,
+      queuedBy: sentBy,
+      status: 'queued',
+      attemptCount: 0,
+      meta: {
+        orderId: orderId,
+        invoiceNumber: row.invoiceNumber || null,
+        amtDueCents: row.amtDue,
+        dueDate: row.dueDate || null,
+        daysOverdue: row.daysOverdue
+      }
+    });
+
+    // Local audit log so the user can see reminder history per invoice.
+    await MastDB.set('admin/ar_reminders/' + idempotencyKey, {
+      invoiceId: orderId,
+      invoiceNumber: row.invoiceNumber || null,
+      customerEmail: row.customerEmail,
+      sentAt: now,
+      sentBy: sentBy,
+      status: 'queued',
+      amtDueCents: row.amtDue,
+      idempotencyKey: idempotencyKey
+    });
+
+    _arReminderState[orderId] = 'sent';
+    showToast('Reminder queued for ' + row.customerEmail);
+  } catch (err) {
+    delete _arReminderState[orderId];
+    showToast('Reminder failed: ' + (err && err.message ? err.message : err), true);
+  } finally {
+    var el2 = document.getElementById('fArContent');
+    if (el2) el2.innerHTML = renderArContent();
   }
 };
 
