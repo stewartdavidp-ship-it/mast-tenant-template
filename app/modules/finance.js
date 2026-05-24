@@ -153,6 +153,83 @@ function bucketColor(bucket) {
   return m[bucket] || 'var(--text,#fff)';
 }
 
+// W1.7 (-OtMNJ9Ds56g3iAOWBhT): canonical wholesale discriminator.
+// Prefer the FK introduced by Sales W1.9 (`order.wholesaleAccountId`); fall
+// back to the legacy boolean / orderType / type heuristic. Single source of
+// truth — apply in tier mix, AR aging, and Cash Flow inflow classification.
+function isWholesaleOrder(o) {
+  if (!o) return false;
+  if (o.wholesaleAccountId) return true;
+  if (o.isWholesale === true) return true;
+  if (o.orderType === 'wholesale') return true;
+  if (o.type === 'wholesale') return true;
+  return false;
+}
+
+// W1.9: |Δ%| > 50 sanity badge — wraps an existing delta-badge string with a
+// tooltip nudging the user to check test-data filter / data freshness /
+// period boundary. Returns the original badge unchanged if the delta is sane
+// (|Δ%| ≤ 50) or unmeasurable.
+function _sanityWrap(badgeHtml, curr, prev) {
+  if (!badgeHtml) return badgeHtml || '';
+  if (!prev || prev === 0) return badgeHtml;
+  var pct = Math.abs((curr - prev) / Math.abs(prev) * 100);
+  if (pct <= 50) return badgeHtml;
+  var tip = 'Δ ' + Math.round(pct) + '% — large swing. Check test-data filter? Data freshness? Period boundary?';
+  return '<span title="' + e(tip) + '" style="cursor:help;">' + badgeHtml +
+    ' <span style="background:rgba(245,158,11,0.18);color:#f59e0b;font-size:0.72rem;padding:1px 5px;border-radius:3px;font-weight:600;vertical-align:middle;">?</span></span>';
+}
+
+// W1.3 (-OtMNIWi6YV9zTy0YaJJ): universal CSV download helper. Uses the
+// shell-global _csvCell (defined in app/index.html ~43813) to defend against
+// formula injection. Filename pattern: {TENANT_ID}_{view}_{YYYY-MM-DD}.csv.
+function _finDownloadCsv(viewName, rows, periodLine) {
+  if (typeof window._csvCell !== 'function') {
+    showToast('CSV export unavailable: _csvCell helper missing', true);
+    return;
+  }
+  var cellFn = window._csvCell;
+  var lines = [];
+  if (periodLine) lines.push('# ' + periodLine);
+  rows.forEach(function(r) {
+    lines.push(r.map(function(c) { return cellFn(c); }).join(','));
+  });
+  var csv = lines.join('\n') + '\n';
+  var tenantId = (MastDB.tenantId && MastDB.tenantId()) || window.TENANT_ID || 'tenant';
+  var fname = tenantId + '_' + viewName + '_' + todayStr() + '.csv';
+  var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url;
+  a.download = fname;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(function() { document.body.removeChild(a); URL.revokeObjectURL(url); }, 100);
+}
+window._finDownloadCsv = _finDownloadCsv;
+
+// W1.3 + R-FIN-1: render the Period · Basis footer + Export CSV button.
+// Every render fn that surfaces money numbers must include this footer so the
+// user always knows what period and source field is being shown.
+function _finFooter(viewName, periodLabel, basisLabel) {
+  var periodLine = 'Period: ' + (periodLabel || '—') + ' · Basis: ' + (basisLabel || '—');
+  var h = '<div style="margin-top:18px;padding-top:12px;border-top:1px solid rgba(255,255,255,0.08);display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">';
+  h += '<div style="font-size:0.72rem;color:var(--warm-gray,#888);">' + e(periodLine) + '</div>';
+  h += '<button class="btn btn-secondary btn-small" onclick="window._finExportView(\'' + (window._jsAttr ? window._jsAttr(viewName) : viewName) + '\')" title="Download CSV">⬇ Export CSV</button>';
+  h += '</div>';
+  return h;
+}
+
+// W1.3: export dispatch. Each view registers its export builder so the footer
+// button can render at HTML-generation time without holding a closure.
+var _finExporters = {};
+window._finExportView = function(viewName) {
+  var fn = _finExporters[viewName];
+  if (typeof fn !== 'function') { showToast('Export not available for this view', true); return; }
+  try { fn(); }
+  catch (err) { showToast('Export failed: ' + err.message, true); }
+};
+
 function injectFinancePulseCSS() {
   if (document.getElementById('finPulseStyle')) return;
   var s = document.createElement('style');
@@ -1256,17 +1333,28 @@ async function loadPnl() {
 }
 
 async function computePnlLocal(startDate, endDate) {
-  var [ordersRaw, salesRaw, expensesRaw, jeRaw] = await Promise.all([
+  // W1.1 (-OtMNIDfXZW4FdWJ2Ty3): fetch products map for COGS fallback chain.
+  // Per R-FIN-2 — never render a structurally-meaningless number. Old behavior
+  // defaulted missing COGS to $0 (→ 100% gross margin lie). New behavior:
+  //   1. order.items[].cogsCents (snapshot — preferred)
+  //   2. products/{pid}.costCents × qty (current cost from Maker)
+  //   3. neither available → flag cogsMissing=true so renderPnl shows '—' +
+  //      diagnostic instead of computing fake-clean GP/NP.
+  var [ordersRaw, salesRaw, expensesRaw, jeRaw, productsRaw] = await Promise.all([
     MastDB.query('orders').orderByChild('placedAt').startAt(isoStart(startDate)).endAt(isoEnd(endDate)).limitToLast(1000).once(),
     MastDB.query('admin/sales').orderByChild('createdAt').startAt(isoStart(startDate)).endAt(isoEnd(endDate)).limitToLast(500).once(),
     MastDB.query('admin/expenses').orderByChild('date').startAt(startDate).endAt(endDate).limitToLast(500).once(),
-    MastDB.query('admin/journalEntries').orderByChild('date').startAt(startDate).endAt(endDate).limitToLast(500).once()
+    MastDB.query('admin/journalEntries').orderByChild('date').startAt(startDate).endAt(endDate).limitToLast(500).once(),
+    ((MastDB.products && MastDB.products.get)
+      ? MastDB.products.get().then(function(s) { return (s && s.val && s.val()) || (s || {}); }).catch(function() { return {}; })
+      : Promise.resolve({}))
   ]);
 
   var orders  = Object.values(ordersRaw  || {});
   var sales   = Object.values(salesRaw   || {});
   var expenses = Object.values(expensesRaw || {});
   var jes     = Object.values(jeRaw      || {});
+  var productsMap = productsRaw || {};
 
   var revenue = 0;
   var revByChannel = {};
@@ -1300,7 +1388,14 @@ async function computePnlLocal(startDate, endDate) {
     revenue += c;
   });
 
+  // COGS: traditional inputs (materials expenses + cogs-adjustment JEs)
+  // + per-line-item COGS attribution (snapshot OR product cost fallback).
+  // Track whether any orders had line items without an attributable cost so the
+  // UI can render a diagnostic (R-FIN-2) instead of a misleading 100% margin.
   var cogs = 0;
+  var cogsLineMissingCount = 0;   // line items with no cogsCents and no product costCents
+  var cogsLineCoveredCount = 0;   // line items that contributed real COGS via snapshot or product fallback
+  var cogsFromLineItems = 0;
   expenses.forEach(function(ex) {
     if (ex.category !== 'materials') return;
     if (!ex.reviewed) return;
@@ -1309,6 +1404,43 @@ async function computePnlLocal(startDate, endDate) {
   jes.forEach(function(j) {
     if (j.category === 'cogs-adjustment') cogs += j.amount || 0;
   });
+
+  // Per-order line-item COGS attribution. Only count orders that contributed
+  // to `revenue` above (cancelled / test-excluded already filtered).
+  orders.forEach(function(o) {
+    if (o.status === 'cancelled') return;
+    var c = Math.round((o.total || 0) * 100); if (c <= 0) return;
+    if (isTestOrder(o) && !_includeTestData) return;
+    var items = o.items || o.lineItems || [];
+    if (!items.length) return;
+    items.forEach(function(li) {
+      var qty = (li && (li.qty || li.quantity)) || 1;
+      // 1. Prefer snapshot cogsCents on the line item
+      if (li && typeof li.cogsCents === 'number' && li.cogsCents > 0) {
+        cogsFromLineItems += li.cogsCents * qty;
+        cogsLineCoveredCount += 1;
+        return;
+      }
+      // 2. Fall back to current product cost from Maker
+      var pid = li && (li.pid || li.productId);
+      var prod = pid ? productsMap[pid] : null;
+      var prodCostCents = prod && (typeof prod.costCents === 'number' ? prod.costCents
+        : (typeof prod.cost === 'number' ? Math.round(prod.cost * 100) : null));
+      if (prodCostCents != null && prodCostCents > 0) {
+        cogsFromLineItems += prodCostCents * qty;
+        cogsLineCoveredCount += 1;
+        return;
+      }
+      // 3. No COGS available for this line item — flag it.
+      cogsLineMissingCount += 1;
+    });
+  });
+  cogs += cogsFromLineItems;
+  // cogsMissing = true when we have order revenue but ZERO COGS signal
+  // (no materials expense, no JE, and every line item lacks cost data).
+  // This is the case where the old code rendered 100% margin.
+  var hasRevenue = revenue > 0;
+  var cogsMissing = hasRevenue && cogs === 0 && cogsLineMissingCount > 0 && cogsLineCoveredCount === 0;
 
   var opex = 0;
   var opexByCategory = {};
@@ -1332,7 +1464,13 @@ async function computePnlLocal(startDate, endDate) {
   var grossProfit = revenue - cogs;
   var netProfit   = grossProfit - opex;
 
-  return { revenue, cogs, grossProfit, opex, netProfit, revByChannel, opexByCategory, hasPayroll, testRevenue: testRevenue, testTxnCount: testTxnCount };
+  return {
+    revenue, cogs, grossProfit, opex, netProfit, revByChannel, opexByCategory, hasPayroll,
+    testRevenue: testRevenue, testTxnCount: testTxnCount,
+    cogsMissing: cogsMissing,
+    cogsLineMissingCount: cogsLineMissingCount,
+    cogsLineCoveredCount: cogsLineCoveredCount
+  };
 }
 
 function deltaBadge(curr, prev) {
@@ -1368,16 +1506,32 @@ function renderPnl(curr, prev, start, end, prior) {
          '</div>';
   }
 
-  // Top metrics row
-  var grossMarginPct = curr.revenue > 0 ? (curr.grossProfit / curr.revenue * 100).toFixed(1) : null;
-  var netMarginPct   = curr.revenue > 0 ? (curr.netProfit  / curr.revenue * 100).toFixed(1) : null;
+  // W1.1: per R-FIN-2 (never render meaningless number) — when COGS is missing,
+  // render '—' for COGS/GP/NP and a diagnostic that points to the fix.
+  // W1.9: |Δ%| > 50 sanity badge — wraps delta with tooltip nudging the user
+  // to check test-data filter / data freshness / period boundary.
+  var cogsMissing = !!curr.cogsMissing;
+  var grossMarginPct = (!cogsMissing && curr.revenue > 0) ? (curr.grossProfit / curr.revenue * 100).toFixed(1) : null;
+  var netMarginPct   = (!cogsMissing && curr.revenue > 0) ? (curr.netProfit  / curr.revenue * 100).toFixed(1) : null;
 
   h += '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px;">';
-  h += statCard('Revenue', fmt$(curr.revenue), '#16a34a', deltaBadge(curr.revenue, prev.revenue));
-  h += statCard('COGS',    fmt$(curr.cogs),    '#f59e0b', deltaBadge(-curr.cogs, -prev.cogs));
-  h += statCard('Gross Profit', fmt$(curr.grossProfit), curr.grossProfit >= 0 ? '#22c55e' : '#ef4444', grossMarginPct !== null ? grossMarginPct + '% margin' : null);
-  h += statCard('Net Profit', fmt$(curr.netProfit), curr.netProfit >= 0 ? '#22c55e' : '#ef4444', netMarginPct !== null ? netMarginPct + '% net margin' : null);
+  h += statCard('Revenue', fmt$(curr.revenue), '#16a34a', _sanityWrap(deltaBadge(curr.revenue, prev.revenue), curr.revenue, prev.revenue));
+  if (cogsMissing) {
+    h += statCard('COGS', '—', 'var(--warm-gray,#888)', 'COGS not available');
+    h += statCard('Gross Profit', '—', 'var(--warm-gray,#888)', 'Set product cost in Maker module');
+    h += statCard('Net Profit', '—', 'var(--warm-gray,#888)', null);
+  } else {
+    h += statCard('COGS',    fmt$(curr.cogs),    '#f59e0b', _sanityWrap(deltaBadge(-curr.cogs, -prev.cogs), -curr.cogs, -prev.cogs));
+    h += statCard('Gross Profit', fmt$(curr.grossProfit), curr.grossProfit >= 0 ? '#22c55e' : '#ef4444', grossMarginPct !== null ? grossMarginPct + '% margin' : null);
+    h += statCard('Net Profit', fmt$(curr.netProfit), curr.netProfit >= 0 ? '#22c55e' : '#ef4444', netMarginPct !== null ? netMarginPct + '% net margin' : null);
+  }
   h += '</div>';
+
+  if (cogsMissing) {
+    h += '<div style="background:rgba(245,158,11,0.10);border:1px solid rgba(245,158,11,0.35);color:#f59e0b;padding:10px 14px;border-radius:8px;margin-bottom:14px;font-size:0.85rem;">' +
+      '⚠ <strong>COGS not available.</strong> ' + curr.cogsLineMissingCount + ' line item' + (curr.cogsLineMissingCount === 1 ? '' : 's') + ' in this period have neither a snapshot <code>cogsCents</code> nor a product cost on file. Set product cost in the <strong>Maker</strong> module so P&amp;L can compute Gross Profit instead of treating COGS as $0 (which would falsely show 100% margin).' +
+      '</div>';
+  }
 
   // P&L Statement
   h += '<div style="background:var(--bg-secondary,#232323);border-radius:12px;padding:20px;margin-bottom:20px;">';
@@ -1398,12 +1552,23 @@ function renderPnl(curr, prev, start, end, prior) {
   var revChs = Object.keys(curr.revByChannel || {}).sort(function(a,b) { return (curr.revByChannel[b]||0)-(curr.revByChannel[a]||0); });
   revChs.forEach(function(ch) { h += plRow(ch.charAt(0).toUpperCase() + ch.slice(1), curr.revByChannel[ch], true, false, '+'); });
 
-  h += plRow('COGS', curr.cogs, false, true, '-');
+  if (cogsMissing) {
+    h += '<div style="display:flex;justify-content:space-between;padding:5px 0;border-top:1px solid rgba(255,255,255,0.08);margin-top:4px;padding-top:9px;">' +
+      '<span style="font-size:0.9rem;font-weight:600;">COGS</span>' +
+      '<span style="font-size:0.9rem;font-weight:700;color:var(--warm-gray,#888);">—</span>' +
+      '</div>';
+  } else {
+    h += plRow('COGS', curr.cogs, false, true, '-');
+  }
 
   h += '<div style="display:flex;justify-content:space-between;padding:9px 0;border-top:1px solid rgba(255,255,255,0.15);margin-top:4px;">';
   h += '<span style="font-size:1rem;font-weight:700;">Gross Profit</span>';
-  h += '<span style="font-size:1rem;font-weight:700;color:' + (curr.grossProfit >= 0 ? '#22c55e' : '#ef4444') + ';">' + fmt$(curr.grossProfit) + '</span>';
-  if (grossMarginPct) h += '<span style="font-size:0.78rem;color:var(--warm-gray,#888);align-self:center;margin-left:8px;">' + grossMarginPct + '% margin</span>';
+  if (cogsMissing) {
+    h += '<span style="font-size:1rem;font-weight:700;color:var(--warm-gray,#888);">—</span>';
+  } else {
+    h += '<span style="font-size:1rem;font-weight:700;color:' + (curr.grossProfit >= 0 ? '#22c55e' : '#ef4444') + ';">' + fmt$(curr.grossProfit) + '</span>';
+    if (grossMarginPct) h += '<span style="font-size:0.78rem;color:var(--warm-gray,#888);align-self:center;margin-left:8px;">' + grossMarginPct + '% margin</span>';
+  }
   h += '</div>';
 
   h += plRow('Operating Expenses', curr.opex, false, true, '-');
@@ -1419,8 +1584,12 @@ function renderPnl(curr, prev, start, end, prior) {
 
   h += '<div style="display:flex;justify-content:space-between;padding:9px 0;border-top:2px solid rgba(255,255,255,0.2);margin-top:8px;">';
   h += '<span style="font-size:1.15rem;font-weight:700;">Net Profit</span>';
-  h += '<span style="font-size:1.15rem;font-weight:700;color:' + (curr.netProfit >= 0 ? '#22c55e' : '#ef4444') + ';">' + fmt$(curr.netProfit) + '</span>';
-  if (netMarginPct) h += '<span style="font-size:0.78rem;color:var(--warm-gray,#888);align-self:center;margin-left:8px;">' + netMarginPct + '% net</span>';
+  if (cogsMissing) {
+    h += '<span style="font-size:1.15rem;font-weight:700;color:var(--warm-gray,#888);">—</span>';
+  } else {
+    h += '<span style="font-size:1.15rem;font-weight:700;color:' + (curr.netProfit >= 0 ? '#22c55e' : '#ef4444') + ';">' + fmt$(curr.netProfit) + '</span>';
+    if (netMarginPct) h += '<span style="font-size:0.78rem;color:var(--warm-gray,#888);align-self:center;margin-left:8px;">' + netMarginPct + '% net</span>';
+  }
   h += '</div>';
 
   h += '</div>';
@@ -1447,6 +1616,25 @@ function renderPnl(curr, prev, start, end, prior) {
     h += cmpItem('Net Profit', curr.netProfit, prev.netProfit);
     h += '</div></div>';
   }
+
+  // W1.3 + R-FIN-1: register CSV exporter + render Period · Basis footer.
+  _finExporters.pnl = function() {
+    var rows = [];
+    rows.push(['Line', 'Amount (USD)']);
+    rows.push(['Revenue', (curr.revenue / 100).toFixed(2)]);
+    revChs.forEach(function(ch) {
+      rows.push(['  ' + ch, (curr.revByChannel[ch] / 100).toFixed(2)]);
+    });
+    rows.push(['COGS', cogsMissing ? 'N/A (no product cost)' : (curr.cogs / 100).toFixed(2)]);
+    rows.push(['Gross Profit', cogsMissing ? 'N/A' : (curr.grossProfit / 100).toFixed(2)]);
+    rows.push(['Operating Expenses', (curr.opex / 100).toFixed(2)]);
+    opexCats.forEach(function(cat) {
+      rows.push(['  ' + cat, (curr.opexByCategory[cat] / 100).toFixed(2)]);
+    });
+    rows.push(['Net Profit', cogsMissing ? 'N/A' : (curr.netProfit / 100).toFixed(2)]);
+    _finDownloadCsv('pnl', rows, 'Period: ' + start + ' to ' + end + ' · Basis: orders.placedAt + admin/expenses.date');
+  };
+  h += _finFooter('pnl', start + ' to ' + end, 'orders.placedAt + admin/expenses.date');
 
   return h;
 }
