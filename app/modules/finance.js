@@ -1914,17 +1914,233 @@ function setupCashFlowTab() {
   var el = document.getElementById('financeCashFlowTab');
   // W2.8: global period bar. Cash Flow is point-in-time ("as of today") so
   // the bar drives horizon-relative views but doesn't change the asOf anchor.
+  // W2.7: Day Close v2 sub-view at ?subView=dayclose.
   el.innerHTML =
     '<div style="padding:20px;max-width:1100px;">' +
     renderFinancePeriodBar() +
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">' +
     '<h2 style="margin:0;font-size:1.15rem;font-weight:700;">Cash Flow</h2>' +
+    '<div style="display:flex;gap:8px;">' +
+    '<button class="btn btn-secondary btn-small" onclick="navigateTo(\'finance-cash-flow?subView=dayclose\')">Day Close</button>' +
     '<button class="btn btn-secondary btn-small" onclick="loadCashFlow()">Refresh</button>' +
+    '</div>' +
     '</div>' +
     '<div id="fCfContent">' + skeletonCards(3) + '</div>' +
     '</div>';
+  var rp = (typeof window.getRouteParams === 'function') ? window.getRouteParams() : {};
+  if (rp && rp.subView === 'dayclose') { renderDayCloseV2(rp.date); return; }
   loadCashFlow();
 }
+
+// W2.7 (-OtMNKlf5Y6xDSOE0b_Z): Day Close v2 sub-view. Per-day cash-drawer
+// count + check entry + variance + notes. Persisted at dayClose/{YYYY-MM-DD}
+// — top-level tenant collection (3-segment from root). Idempotent by date.
+async function renderDayCloseV2(dateParam) {
+  var el = document.getElementById('fCfContent');
+  if (!el) return;
+  var date = dateParam || todayStr();
+  el.innerHTML = '<div style="color:var(--warm-gray,#888);padding:20px;text-align:center;">Loading day close…</div>';
+  try {
+    var existing = (await MastDB.get('dayClose/' + date)) || {};
+    var openingCash = existing.openingCashCents != null ? (existing.openingCashCents / 100).toFixed(2) : '';
+    var closingCash = existing.closingCashCents != null ? (existing.closingCashCents / 100).toFixed(2) : '';
+    var notes = existing.notes || '';
+    var checks = Array.isArray(existing.checks) ? existing.checks.slice() : [];
+    // Cache the checks array on the element so add/remove handlers can mutate
+    // and re-render without round-trips. State scope is per-render.
+    el._dcChecks = checks;
+
+    var h = '<div style="max-width:760px;">';
+    h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:10px;">';
+    h += '<div><h3 style="margin:0;font-size:1rem;font-weight:700;">Day Close — ' + e(date) + '</h3>';
+    h += '<div style="font-size:0.78rem;color:var(--warm-gray,#888);margin-top:3px;">' + (existing.savedAt ? 'Last saved ' + e(existing.savedAt.replace('T', ' ').slice(0, 16)) : 'Not yet saved') + '</div></div>';
+    h += '<div style="display:flex;gap:6px;align-items:center;">';
+    h += '<label style="font-size:0.78rem;color:var(--warm-gray,#888);">Date:</label>';
+    h += '<input type="date" id="dcDate" value="' + e(date) + '" onchange="finDayCloseChangeDate(this.value)" style="background:var(--bg-secondary,#232323);border:1px solid rgba(255,255,255,0.15);border-radius:6px;color:var(--text,#fff);padding:5px 8px;font-size:0.85rem;">';
+    h += '</div></div>';
+
+    // Cash drawer panel
+    h += '<div style="background:var(--bg-secondary,#232323);border-radius:10px;padding:16px;margin-bottom:14px;">';
+    h += '<div style="font-size:0.85rem;font-weight:700;margin-bottom:10px;">Cash Drawer</div>';
+    h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">';
+    h += _fInput('dcOpen', 'Opening Cash (USD)', openingCash, 'number');
+    h += _fInput('dcClose', 'Closing Cash (USD)', closingCash, 'number');
+    h += '</div>';
+    h += '<div id="dcVariance" style="margin-top:10px;font-size:0.85rem;color:var(--warm-gray,#888);"></div>';
+    h += '</div>';
+
+    // Check entry panel
+    h += '<div style="background:var(--bg-secondary,#232323);border-radius:10px;padding:16px;margin-bottom:14px;">';
+    h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">';
+    h += '<div style="font-size:0.85rem;font-weight:700;">Checks Received</div>';
+    h += '<button class="btn btn-primary btn-small" onclick="finDayCloseAddCheck()">+ Add Check</button>';
+    h += '</div>';
+    h += '<div id="dcCheckRows"></div>';
+    h += '<div id="dcCheckTotal" style="margin-top:8px;font-size:0.85rem;color:var(--warm-gray,#888);"></div>';
+    h += '</div>';
+
+    // Notes
+    h += '<div style="background:var(--bg-secondary,#232323);border-radius:10px;padding:16px;margin-bottom:14px;">';
+    h += '<div style="font-size:0.85rem;font-weight:700;margin-bottom:10px;">Notes</div>';
+    h += '<textarea id="dcNotes" rows="3" style="width:100%;background:var(--bg-primary,#1a1a1a);border:1px solid rgba(255,255,255,0.15);border-radius:6px;color:var(--text,#fff);padding:8px 10px;font-size:0.85rem;font-family:inherit;box-sizing:border-box;" placeholder="Anything unusual? Shortages, overages, deposits, etc.">' + e(notes) + '</textarea>';
+    h += '</div>';
+
+    // Action buttons
+    h += '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px;">';
+    h += '<button class="btn btn-secondary btn-small" onclick="finDayCloseExportCsv()">Export CSV</button>';
+    h += '<button class="btn btn-secondary btn-small" onclick="window.print()">Print</button>';
+    h += '<button class="btn btn-primary btn-small" onclick="finDayCloseSave()">Save Day Close</button>';
+    h += '</div>';
+    h += '</div>';
+
+    el.innerHTML = h;
+    // Initial check rows render + variance compute
+    _dcRenderCheckRows();
+    _dcUpdateVariance();
+    // Hook variance recompute on input change
+    var dcOpen = document.getElementById('dcOpen');
+    var dcClose = document.getElementById('dcClose');
+    if (dcOpen) dcOpen.addEventListener('input', _dcUpdateVariance);
+    if (dcClose) dcClose.addEventListener('input', _dcUpdateVariance);
+  } catch (err) {
+    el.innerHTML = '<div style="padding:20px;color:var(--danger,#dc2626);">Failed to load day close: ' + e(err.message || err) + '</div>';
+  }
+}
+function _dcChecks() {
+  var el = document.getElementById('fCfContent');
+  if (!el) return [];
+  if (!Array.isArray(el._dcChecks)) el._dcChecks = [];
+  return el._dcChecks;
+}
+function _dcSetChecks(arr) {
+  var el = document.getElementById('fCfContent');
+  if (el) el._dcChecks = arr;
+}
+function _dcRenderCheckRows() {
+  var rowsEl = document.getElementById('dcCheckRows');
+  if (!rowsEl) return;
+  var checks = _dcChecks();
+  if (checks.length === 0) {
+    rowsEl.innerHTML = '<div style="color:var(--warm-gray,#888);font-size:0.78rem;padding:10px 0;">No checks added yet.</div>';
+  } else {
+    var h = '';
+    checks.forEach(function(c, i) {
+      h += '<div style="display:grid;grid-template-columns:120px 1fr 1fr 90px 32px;gap:8px;align-items:center;margin-bottom:6px;">';
+      h += '<input type="number" step="0.01" placeholder="Amount" value="' + e(c.amount != null ? c.amount : '') + '" onchange="finDayCloseUpdateCheck(' + i + ',\'amount\',this.value)" style="background:var(--bg-primary,#1a1a1a);border:1px solid rgba(255,255,255,0.15);border-radius:6px;color:var(--text,#fff);padding:5px 8px;font-size:0.85rem;">';
+      h += '<input type="text" placeholder="Payor" value="' + e(c.payor || '') + '" onchange="finDayCloseUpdateCheck(' + i + ',\'payor\',this.value)" style="background:var(--bg-primary,#1a1a1a);border:1px solid rgba(255,255,255,0.15);border-radius:6px;color:var(--text,#fff);padding:5px 8px;font-size:0.85rem;">';
+      h += '<input type="text" placeholder="Memo / applied invoice" value="' + e(c.memo || '') + '" onchange="finDayCloseUpdateCheck(' + i + ',\'memo\',this.value)" style="background:var(--bg-primary,#1a1a1a);border:1px solid rgba(255,255,255,0.15);border-radius:6px;color:var(--text,#fff);padding:5px 8px;font-size:0.85rem;">';
+      h += '<input type="text" placeholder="Invoice #" value="' + e(c.invoiceRef || '') + '" onchange="finDayCloseUpdateCheck(' + i + ',\'invoiceRef\',this.value)" style="background:var(--bg-primary,#1a1a1a);border:1px solid rgba(255,255,255,0.15);border-radius:6px;color:var(--text,#fff);padding:5px 8px;font-size:0.85rem;">';
+      h += '<button class="btn btn-secondary btn-small" onclick="finDayCloseRemoveCheck(' + i + ')" title="Remove">✕</button>';
+      h += '</div>';
+    });
+    rowsEl.innerHTML = h;
+  }
+  var totEl = document.getElementById('dcCheckTotal');
+  if (totEl) {
+    var tot = checks.reduce(function(s, c) { return s + (parseFloat(c.amount) || 0); }, 0);
+    totEl.textContent = 'Total checks: $' + tot.toFixed(2);
+  }
+}
+function _dcUpdateVariance() {
+  var open = parseFloat((document.getElementById('dcOpen') || {}).value);
+  var close = parseFloat((document.getElementById('dcClose') || {}).value);
+  var vEl = document.getElementById('dcVariance');
+  if (!vEl) return;
+  if (isNaN(open) || isNaN(close)) { vEl.textContent = ''; return; }
+  var diff = close - open;
+  var sign = diff >= 0 ? '+' : '−';
+  var color = diff === 0 ? 'var(--warm-gray,#888)' : (Math.abs(diff) < 5 ? '#22c55e' : '#eab308');
+  vEl.innerHTML = '<span style="color:' + color + ';font-weight:600;">Variance: ' + sign + '$' + Math.abs(diff).toFixed(2) + '</span>';
+}
+window.finDayCloseAddCheck = function() {
+  var arr = _dcChecks();
+  arr.push({ amount: '', payor: '', memo: '', invoiceRef: '' });
+  _dcSetChecks(arr);
+  _dcRenderCheckRows();
+};
+window.finDayCloseRemoveCheck = function(idx) {
+  var arr = _dcChecks();
+  arr.splice(idx, 1);
+  _dcSetChecks(arr);
+  _dcRenderCheckRows();
+};
+window.finDayCloseUpdateCheck = function(idx, field, value) {
+  var arr = _dcChecks();
+  if (!arr[idx]) return;
+  arr[idx][field] = value;
+  _dcSetChecks(arr);
+  // Re-render total only (don't blow away inputs the user is typing in).
+  var checks = arr;
+  var totEl = document.getElementById('dcCheckTotal');
+  if (totEl) {
+    var tot = checks.reduce(function(s, c) { return s + (parseFloat(c.amount) || 0); }, 0);
+    totEl.textContent = 'Total checks: $' + tot.toFixed(2);
+  }
+};
+window.finDayCloseChangeDate = function(date) {
+  if (!date) return;
+  location.hash = '#finance-cash-flow?subView=dayclose&date=' + encodeURIComponent(date);
+};
+window.finDayCloseSave = async function() {
+  var date = (document.getElementById('dcDate') || {}).value || todayStr();
+  var openVal = parseFloat((document.getElementById('dcOpen') || {}).value);
+  var closeVal = parseFloat((document.getElementById('dcClose') || {}).value);
+  var notes = ((document.getElementById('dcNotes') || {}).value || '').trim();
+  var checks = _dcChecks().filter(function(c) { return c.amount && !isNaN(parseFloat(c.amount)); }).map(function(c) {
+    return {
+      amountCents: Math.round(parseFloat(c.amount) * 100),
+      payor: (c.payor || '').trim(),
+      memo: (c.memo || '').trim(),
+      invoiceRef: (c.invoiceRef || '').trim() || null
+    };
+  });
+  var checkTotalCents = checks.reduce(function(s, c) { return s + c.amountCents; }, 0);
+  var variance = (isNaN(openVal) || isNaN(closeVal)) ? null : Math.round((closeVal - openVal) * 100);
+  var now = new Date().toISOString();
+  var user = firebase.auth().currentUser;
+  var payload = {
+    date: date,
+    openingCashCents: isNaN(openVal) ? null : Math.round(openVal * 100),
+    closingCashCents: isNaN(closeVal) ? null : Math.round(closeVal * 100),
+    varianceCents: variance,
+    checks: checks,
+    checkTotalCents: checkTotalCents,
+    notes: notes || null,
+    savedAt: now,
+    savedBy: (user && user.uid) || 'unknown'
+  };
+  try {
+    // dayClose/{YYYY-MM-DD} — top-level tenant collection (no admin/ prefix).
+    // Idempotent: same date overwrites prior entry.
+    await MastDB.set('dayClose/' + date, payload);
+    showToast('Day Close saved for ' + date);
+    renderDayCloseV2(date);
+  } catch (err) {
+    showToast('Save failed: ' + (err.message || err), true);
+  }
+};
+window.finDayCloseExportCsv = function() {
+  var date = (document.getElementById('dcDate') || {}).value || todayStr();
+  var openVal = parseFloat((document.getElementById('dcOpen') || {}).value);
+  var closeVal = parseFloat((document.getElementById('dcClose') || {}).value);
+  var notes = ((document.getElementById('dcNotes') || {}).value || '').trim();
+  var checks = _dcChecks();
+  var rows = [['Section','Field','Value']];
+  rows.push(['Cash Drawer','Opening Cash', isNaN(openVal) ? '' : openVal.toFixed(2)]);
+  rows.push(['Cash Drawer','Closing Cash', isNaN(closeVal) ? '' : closeVal.toFixed(2)]);
+  if (!isNaN(openVal) && !isNaN(closeVal)) rows.push(['Cash Drawer','Variance', (closeVal - openVal).toFixed(2)]);
+  rows.push([]);
+  rows.push(['Checks','Amount','Payor','Memo','Invoice Ref']);
+  checks.forEach(function(c) {
+    if (!c.amount) return;
+    rows.push(['Check', parseFloat(c.amount).toFixed(2), c.payor || '', c.memo || '', c.invoiceRef || '']);
+  });
+  rows.push(['Checks','Total', checks.reduce(function(s, c) { return s + (parseFloat(c.amount) || 0); }, 0).toFixed(2)]);
+  rows.push([]);
+  if (notes) rows.push(['Notes','', notes]);
+  _finDownloadCsv('dayclose-' + date, rows, 'Day Close for ' + date);
+  showToast('Day Close CSV exported');
+};
 
 async function loadCashFlow() {
   var el = document.getElementById('fCfContent');
