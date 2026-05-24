@@ -23416,6 +23416,16 @@ function _cpMonthEndPlus30(periodId) {
   function pad(n) { return n < 10 ? '0' + n : '' + n; }
   return endOfMonth.getUTCFullYear() + '-' + pad(endOfMonth.getUTCMonth() + 1) + '-' + pad(endOfMonth.getUTCDate());
 }
+function _cpMonthEnd(periodId) {
+  // periodId = 'YYYY-MM'. Returns ISO date string for month-end.
+  if (!/^\d{4}-\d{2}$/.test(periodId)) return '';
+  var parts = periodId.split('-');
+  var y = parseInt(parts[0], 10);
+  var m = parseInt(parts[1], 10);
+  var endOfMonth = new Date(Date.UTC(y, m, 0));
+  function pad(n) { return n < 10 ? '0' + n : '' + n; }
+  return endOfMonth.getUTCFullYear() + '-' + pad(endOfMonth.getUTCMonth() + 1) + '-' + pad(endOfMonth.getUTCDate());
+}
 
 function _renderClosePolicy() {
   var el = document.getElementById('closePolicyContent');
@@ -23423,7 +23433,7 @@ function _renderClosePolicy() {
   var orig = _closePolicyOriginal || _closePolicyDefaults;
   var exts = _cpExtensions();
   var h = '<div class="form-group" style="margin-bottom:24px;">';
-  h += '<label style="font-weight:600;">Auto-close day</label>';
+  h += '<label for="cpAutoCloseDay" style="font-weight:600;">Auto-close day</label>';
   h += '<p style="font-size:0.85rem;color:var(--warm-gray);margin:4px 0 8px;">Auto-close periods this many days after month-end (e.g. <strong>10</strong> = on the 10th of the following month). Range 5–30.</p>';
   h += '<input type="number" id="cpAutoCloseDay" min="5" max="30" value="' + esc(String(orig.autoCloseDay)) + '" style="width:120px;padding:8px 10px;border:1px solid rgba(255,255,255,0.15);border-radius:6px;background:var(--bg-primary,#1a1a1a);color:var(--text,#fff);font-size:0.9rem;">';
   h += '</div>';
@@ -23437,9 +23447,10 @@ function _renderClosePolicy() {
   } else {
     exts.forEach(function(x, i) {
       var cap = _cpMonthEndPlus30(x.periodId || '');
+      var floor = _cpMonthEnd(x.periodId || '');
       h += '<div style="display:grid;grid-template-columns:140px 180px 80px 32px;gap:8px;align-items:center;margin-bottom:6px;">';
       h += '<input type="text" placeholder="YYYY-MM" value="' + esc(x.periodId || '') + '" onchange="cpUpdateExtension(' + i + ',\'periodId\',this.value)" style="padding:6px 8px;border:1px solid rgba(255,255,255,0.15);border-radius:6px;background:var(--bg-primary,#1a1a1a);color:var(--text,#fff);font-size:0.85rem;">';
-      h += '<input type="date" value="' + esc(x.extendUntil || '') + '"' + (cap ? ' max="' + esc(cap) + '"' : '') + ' onchange="cpUpdateExtension(' + i + ',\'extendUntil\',this.value)" style="padding:6px 8px;border:1px solid rgba(255,255,255,0.15);border-radius:6px;background:var(--bg-primary,#1a1a1a);color:var(--text,#fff);font-size:0.85rem;">';
+      h += '<input type="date" value="' + esc(x.extendUntil || '') + '"' + (floor ? ' min="' + esc(floor) + '"' : '') + (cap ? ' max="' + esc(cap) + '"' : '') + ' onchange="cpUpdateExtension(' + i + ',\'extendUntil\',this.value)" style="padding:6px 8px;border:1px solid rgba(255,255,255,0.15);border-radius:6px;background:var(--bg-primary,#1a1a1a);color:var(--text,#fff);font-size:0.85rem;">';
       h += '<span style="font-size:0.72rem;color:var(--warm-gray);">' + (cap ? 'cap ' + esc(cap.slice(5)) : '') + '</span>';
       h += '<button class="btn btn-secondary btn-small" onclick="cpRemoveExtension(' + i + ')" title="Remove">&times;</button>';
       h += '</div>';

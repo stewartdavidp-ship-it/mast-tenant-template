@@ -2622,6 +2622,10 @@ window.finDayCloseSave = async function(mode) {
     try { await writeAudit(mode === 'reclose' ? 'update' : 'create', 'dayClose', payload.date + ':v' + (json.version || '?')); } catch (xerr) {}
     showToast('Day Close v' + (json.version || '?') + ' saved for ' + payload.date);
     window._dcViewVersionId = null;
+    // TODO(close-v3 fix-up Round 2): Morgan persona reported URL hash flips to
+    // #settings after Create v2 confirm while Day Close tab stays rendered —
+    // likely background nav from MastNavStack or a modal teardown side effect.
+    // Investigate + restore hash to the captured pre-modal route.
     renderDayCloseV2(payload.date);
   } catch (err) {
     // httpsCallable throws HttpsError-shaped objects; surface .message.
