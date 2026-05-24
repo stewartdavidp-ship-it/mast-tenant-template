@@ -770,12 +770,19 @@ function setupExpensesTab() {
     initStart = gp.start;
     initEnd = gp.end;
   }
+  // W2 R2-F3: legacy date-range picker removed — the global period selector
+  // (W2.8 renderFinancePeriodBar above) is the single period control here.
+  // Hidden inputs keep loadFinExpenses() — which reads #fExpS / #fExpE — wired
+  // without re-rendering a duplicate UI control. URL-driven date filters from
+  // MCP admin links still win (handled above via initStart/initEnd).
+  // ("Last Month" quick-pick filed as W3 OPEN; QTD/Custom covers most use.)
   el.innerHTML =
     '<div style="padding:20px;max-width:1100px;">' +
     renderFinancePeriodBar() +
     '<h2 style="margin:0 0 16px 0;font-size:1.15rem;font-weight:700;">Expenses</h2>' +
     '<div id="fExpBanks" style="margin-bottom:16px;">' + skeletonCards(2) + '</div>' +
-    periodPicker('fExp', initStart, initEnd) +
+    '<input type="hidden" id="fExpS" value="' + e(initStart) + '">' +
+    '<input type="hidden" id="fExpE" value="' + e(initEnd) + '">' +
     '<div id="fExpContent">' + skeletonTable(6,4) + '</div>' +
     '</div>';
   loadFinExpBanks();
@@ -1966,7 +1973,10 @@ async function renderDayCloseV2(dateParam) {
     h += _fInput('dcOpen', 'Opening Cash (USD)', openingCash, 'number');
     h += _fInput('dcClose', 'Closing Cash (USD)', closingCash, 'number');
     h += '</div>';
-    h += '<div id="dcVariance" style="margin-top:10px;font-size:0.85rem;color:var(--warm-gray,#888);"></div>';
+    // W2 R2-F5: render the variance formula in the empty state so operators
+    // see what's being computed BEFORE entering values. _dcUpdateVariance()
+    // replaces this with the live number once both inputs are populated.
+    h += '<div id="dcVariance" style="margin-top:10px;font-size:0.85rem;color:var(--warm-gray,#888);">Variance: $0.00 (closing − opening − checks)</div>';
     h += '</div>';
 
     // Check entry panel
@@ -2046,11 +2056,16 @@ function _dcUpdateVariance() {
   var close = parseFloat((document.getElementById('dcClose') || {}).value);
   var vEl = document.getElementById('dcVariance');
   if (!vEl) return;
-  if (isNaN(open) || isNaN(close)) { vEl.textContent = ''; return; }
+  // W2 R2-F5: when inputs are empty, keep the formula placeholder visible
+  // so the variance equation is always discoverable.
+  if (isNaN(open) || isNaN(close)) {
+    vEl.textContent = 'Variance: $0.00 (closing − opening − checks)';
+    return;
+  }
   var diff = close - open;
   var sign = diff >= 0 ? '+' : '−';
   var color = diff === 0 ? 'var(--warm-gray,#888)' : (Math.abs(diff) < 5 ? '#22c55e' : '#eab308');
-  vEl.innerHTML = '<span style="color:' + color + ';font-weight:600;">Variance: ' + sign + '$' + Math.abs(diff).toFixed(2) + '</span>';
+  vEl.innerHTML = '<span style="color:' + color + ';font-weight:600;">Variance: ' + sign + '$' + Math.abs(diff).toFixed(2) + ' (closing − opening − checks)</span>';
 }
 window.finDayCloseAddCheck = function() {
   var arr = _dcChecks();
@@ -4119,6 +4134,17 @@ function setupReportsTab() {
   h += '<div id="fW29VendorPicker" style="display:none;margin-top:14px;"></div>';
   h += '</div>';
 
+  // W2 R2-F4: R-FIN-1 Period · Basis footer. Reports is the union of multiple
+  // basis sources (loan/tax/AR/AP/statement/1099) — each report names its own
+  // window inline. The footer documents that union and surfaces the global
+  // period anchor used by the AR/AP/statement snapshot exports.
+  _finExporters['finance-reports'] = function() {
+    showToast('Use the per-report Generate / Export buttons above', true);
+  };
+  h += _finFooter('finance-reports',
+    'Per-report (loan=12m · tax=year · AR/AP/statement=' + _finPeriodLabel(window._finPeriod) + ' · 1099=tax year)',
+    'orders + admin/expenses + admin/vendors + admin/purchaseReceipts + orders.invoicePaidAt');
+
   h += '</div>';
   el.innerHTML = h;
 }
@@ -5068,11 +5094,23 @@ function portfolioRenderSparklines(trend) {
   return html;
 }
 
+// W2 R2-F6: Portfolio is intrinsically trailing-12m (rolling-window quadrant
+// model), so the global MTD/QTD/FYTD/Custom selector does NOT re-filter this
+// view. Render an explicit note next to the bar so changing the chip doesn't
+// silently mislead the operator. Fully wiring the selector to re-filter
+// Portfolio would require runtime recompute from raw orders (customers carry
+// only precomputed `stats.trailing12m*` fields) — out of scope for R2.
+function _portfolioPeriodNote() {
+  return '<div style="font-size:0.72rem;color:var(--warm-gray,#888);margin:-8px 0 14px 4px;">' +
+    'Note: Portfolio is always trailing-12m regardless of selector — quadrant model is rolling-window.' +
+    '</div>';
+}
+
 function renderCustomerPortfolio() {
   var el = document.getElementById('customerPortfolioContent');
   if (!el) return;
   // W2.8: period bar shown above loading state so user sees it during fetch.
-  el.innerHTML = renderFinancePeriodBar() +
+  el.innerHTML = renderFinancePeriodBar() + _portfolioPeriodNote() +
     '<div style="color:var(--warm-gray);padding:40px 0;text-align:center;">Loading portfolio…</div>';
 
   Promise.all([
@@ -5165,6 +5203,7 @@ function renderCustomerPortfolio() {
     // Render
     var html = '';
     html += renderFinancePeriodBar(); // W2.8
+    html += _portfolioPeriodNote(); // W2 R2-F6
     html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:12px;">';
     html += '<h2 style="font-size:1.6rem;font-weight:700;color:var(--charcoal);margin:0;">Customer Portfolio</h2>';
     html += '<div style="font-size:0.78rem;color:var(--warm-gray);">' +
@@ -5301,7 +5340,7 @@ function renderCustomerPortfolio() {
     el.innerHTML = html;
     portfolioUpdateBulkBar();
   }).catch(function(err) {
-    el.innerHTML = renderFinancePeriodBar() + '<div style="color:var(--danger);padding:20px;">Error loading portfolio: ' + esc(err && err.message || String(err)) + '</div>';
+    el.innerHTML = renderFinancePeriodBar() + _portfolioPeriodNote() + '<div style="color:var(--danger);padding:20px;">Error loading portfolio: ' + esc(err && err.message || String(err)) + '</div>';
   });
 }
 
@@ -5422,22 +5461,21 @@ async function _loadFinanceOverview() {
   var el = document.getElementById('fOvContent');
   if (!el) return;
   var period = _finResolvePeriod();
-  // MTD anchor for the Revenue card delta (per spec card 4 = MTD revenue +
-  // delta vs prior MTD), independent of the global selector — operator
-  // dashboard should always show "this month vs last month" regardless of
-  // the active period window. The other cards consume the global period
-  // where applicable (Margin); cash/AR/AP/runway are point-in-time.
+  // W2 R2-F1: Revenue card + Margin card both consume the GLOBAL period.
+  // The "vs prior" delta compares to the equivalent prior window (prior MTD
+  // when mode=mtd, prior QTD when mode=qtd, etc.) — driven by priorPeriod()
+  // applied to the current selected window. Cash/AR/AP/runway remain point-
+  // in-time. R-FIN-2 sentinel must apply to ALL periods, not just MTD.
   try {
-    var ms = monthStart(), me = monthEnd();
-    var prior = priorPeriod(ms, me);
+    var prior = priorPeriod(period.start, period.end);
 
-    var [plaidRaw, sentRaw, overdueRaw, unpaidRaw, partialRaw, mtdAgg, priorMtdAgg, pnlMtd] = await Promise.all([
+    var [plaidRaw, sentRaw, overdueRaw, unpaidRaw, partialRaw, periodAgg, priorAgg, pnlPeriod] = await Promise.all([
       MastDB.plaidItems.list().catch(function() { return {}; }),
       MastDB.query('orders').orderByChild('invoiceStatus').equalTo('sent').limitToLast(500).once().catch(function() { return {}; }),
       MastDB.query('orders').orderByChild('invoiceStatus').equalTo('overdue').limitToLast(500).once().catch(function() { return {}; }),
       MastDB.query('admin/purchaseReceipts').orderByChild('paymentStatus').equalTo('unpaid').limitToLast(500).once().catch(function() { return {}; }),
       MastDB.query('admin/purchaseReceipts').orderByChild('paymentStatus').equalTo('partial').limitToLast(500).once().catch(function() { return {}; }),
-      _loadRevenueAggregate(ms, me).catch(function() { return null; }),
+      _loadRevenueAggregate(period.start, period.end).catch(function() { return null; }),
       _loadRevenueAggregate(prior.start, prior.end).catch(function() { return null; }),
       computePnlLocal(period.start, period.end).catch(function() { return null; })
     ]);
@@ -5470,19 +5508,24 @@ async function _loadFinanceOverview() {
       apOwedCents += due; apCount++;
     });
 
-    var mtdRev = mtdAgg ? mtdAgg.totalCents : 0;
-    var priorRev = priorMtdAgg ? priorMtdAgg.totalCents : 0;
+    var periodRev = periodAgg ? periodAgg.totalCents : 0;
+    var priorRev = priorAgg ? priorAgg.totalCents : 0;
     var revDeltaPct = null;
-    if (priorRev > 0) revDeltaPct = (mtdRev - priorRev) / priorRev * 100;
+    if (priorRev > 0) revDeltaPct = (periodRev - priorRev) / priorRev * 100;
 
-    // Margin per R-FIN-2: `—` + diagnostic when revenue is 0 or COGS missing.
+    // R-FIN-2 sentinel: Margin renders `—` + diagnostic when revenue is 0 OR
+    // COGS is missing/0. Applied uniformly to MTD/QTD/FYTD/Custom — a
+    // structurally-meaningless 99.9% margin must never render under any
+    // selector state. `cogsCents not a number` is treated as missing.
     var marginCard;
-    if (!pnlMtd || (pnlMtd.revenue || 0) <= 0) {
+    var cogsVal = pnlPeriod ? pnlPeriod.cogs : null;
+    var revVal = pnlPeriod ? pnlPeriod.revenue : 0;
+    if (!pnlPeriod || (revVal || 0) <= 0) {
       marginCard = { value: '—', diag: 'No revenue in selected period', color: 'var(--warm-gray,#888)' };
-    } else if ((pnlMtd.cogs || 0) <= 0) {
+    } else if (cogsVal == null || isNaN(cogsVal) || cogsVal <= 0) {
       marginCard = { value: '—', diag: 'COGS not yet tracked — set material costs in Products', color: 'var(--warm-gray,#888)' };
     } else {
-      var marginPct = ((pnlMtd.revenue - pnlMtd.cogs) / pnlMtd.revenue) * 100;
+      var marginPct = ((revVal - cogsVal) / revVal) * 100;
       marginCard = { value: marginPct.toFixed(1) + '%', diag: 'Gross margin · period: ' + period.mode.toUpperCase(), color: marginPct >= 30 ? '#22c55e' : (marginPct >= 10 ? '#eab308' : '#ef4444') };
     }
 
@@ -5491,9 +5534,9 @@ async function _loadFinanceOverview() {
     if (!bankConnected) {
       runwayCard = { value: '—', diag: 'Connect a bank in Expenses to see runway', color: 'var(--warm-gray,#888)' };
     } else {
-      // Burn rate: average daily opex from MTD P&L; runway = bankTotal / avgDailyOpex
+      // Burn rate: average daily opex from selected-period P&L; runway = bankTotal / avgDailyOpex
       var daysInPeriod = Math.max(1, Math.round((new Date(period.end).getTime() - new Date(period.start).getTime()) / 86400000) + 1);
-      var opexCents = pnlMtd ? (pnlMtd.opex || 0) : 0;
+      var opexCents = pnlPeriod ? (pnlPeriod.opex || 0) : 0;
       var avgDailyOpex = opexCents / daysInPeriod / 100; // $/day
       if (avgDailyOpex <= 0) {
         runwayCard = { value: '∞', diag: 'No tracked opex in period', color: '#22c55e' };
@@ -5519,37 +5562,45 @@ async function _loadFinanceOverview() {
       cashVal = '$' + bankTotal.toFixed(2); cashSub = 'Across active accounts'; cashColor = '#22c55e';
     }
 
+    // W2 R2-F1: card labels + sub-text template-bound to the active period
+    // mode so MTD/QTD/FYTD/Custom all render coherently (no hardcoded "MTD").
+    var periodTag = period.mode === 'mtd' ? 'MTD'
+                  : period.mode === 'qtd' ? 'QTD'
+                  : period.mode === 'fy'  ? 'FYTD'
+                  : 'CUSTOM';
     var revSub = '';
-    if (revDeltaPct == null) revSub = priorRev === 0 ? 'No prior MTD comparison' : '—';
+    if (revDeltaPct == null) revSub = priorRev === 0 ? ('No prior ' + periodTag + ' comparison') : '—';
     else {
       var sign = revDeltaPct >= 0 ? '+' : '−';
-      revSub = sign + Math.abs(Math.round(revDeltaPct)) + '% vs prior MTD';
+      revSub = sign + Math.abs(Math.round(revDeltaPct)) + '% vs prior ' + periodTag;
     }
 
     var h = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;">';
     h += card('Cash on Hand', cashVal, cashColor, cashSub, null);
     h += card('AR Outstanding', fmt$(arOutstandingCents), '#3b82f6', arCount + ' open invoice' + (arCount === 1 ? '' : 's'), 'finance-ar');
     h += card('AP Owed', fmt$(apOwedCents), '#f97316', apCount + ' open bill' + (apCount === 1 ? '' : 's'), 'finance-ap');
-    h += card('MTD Revenue', fmt$(mtdRev), '#16a34a', revSub, 'finance-revenue');
+    h += card(periodTag + ' Revenue', fmt$(periodRev), '#16a34a', revSub, 'finance-revenue');
     h += card('Margin', marginCard.value, marginCard.color, marginCard.diag, 'finance-pl');
     h += card('Runway', runwayCard.value, runwayCard.color, runwayCard.diag, 'finance-cash-flow');
     h += '</div>';
 
-    // R-FIN-1 footer — explicit period label since this dashboard mixes
-    // MTD (revenue/margin) and point-in-time (cash/AR/AP/runway).
+    // R-FIN-1 footer — period label is template-bound to the active selector
+    // (W2 R2-F1: no hardcoded "MTD"). Dashboard mixes period-windowed
+    // (revenue/margin/runway) and point-in-time (cash/AR/AP) data.
+    var footerPeriodLabel = 'As of ' + todayStr() + ' · ' + _finPeriodLabel(period) + ' revenue/margin · point-in-time cash/AR/AP';
     _finExporters.financials = function() {
       var rows = [
         ['KPI','Value','Notes'],
         ['Cash on Hand', cashVal, cashSub],
         ['AR Outstanding', '$' + (arOutstandingCents/100).toFixed(2), arCount + ' invoices'],
         ['AP Owed', '$' + (apOwedCents/100).toFixed(2), apCount + ' bills'],
-        ['MTD Revenue', '$' + (mtdRev/100).toFixed(2), revSub],
+        [periodTag + ' Revenue', '$' + (periodRev/100).toFixed(2), revSub],
         ['Margin', marginCard.value, marginCard.diag],
         ['Runway', runwayCard.value, runwayCard.diag]
       ];
-      _finDownloadCsv('financials', rows, 'As of ' + todayStr() + ' · Mixed (MTD + point-in-time)');
+      _finDownloadCsv('financials', rows, 'As of ' + todayStr() + ' · Period: ' + _finPeriodLabel(period) + ' (revenue/margin) · point-in-time (cash/AR/AP)');
     };
-    h += _finFooter('financials', 'As of ' + todayStr() + ' · MTD revenue/margin · point-in-time cash/AR/AP', 'plaidItems + orders + admin/purchaseReceipts + admin/expenses');
+    h += _finFooter('financials', footerPeriodLabel, 'plaidItems + orders + admin/purchaseReceipts + admin/expenses');
 
     el.innerHTML = h;
   } catch (err) {
