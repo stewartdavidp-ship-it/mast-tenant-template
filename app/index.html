@@ -6,6 +6,87 @@
   <base href="/app/">
   <title>Storefront Admin</title><!-- TENANT: brand -->
   <script>
+  // Bootstrap guard. A transient Firebase-SDK load flake on first visit (one of the
+  // gstatic firebase-*-compat.js scripts failing to execute) leaves the page rendering
+  // a dead-button UI: components paint but firebase.initializeApp was never called,
+  // so MastDB writes silently no-op. This probe polls for full boot and, if it never
+  // happens, swaps in a recovery screen with a Reload button. See 2026-05-23 incident
+  // on e2estarter-ny-005.runmast.com.
+  (function() {
+    window.__mastBootOk = false;
+    window.__mastBootStarted = Date.now();
+
+    function isFullyBooted() {
+      return typeof firebase === 'object'
+        && firebase.apps && firebase.apps.length > 0
+        && typeof firebase.auth === 'function'
+        && typeof firebase.firestore === 'function'
+        && typeof firebase.storage === 'function'
+        && typeof MastDB === 'object'
+        && !!window.TENANT_FIREBASE_CONFIG;
+    }
+
+    var pollId = setInterval(function() {
+      if (isFullyBooted()) {
+        window.__mastBootOk = true;
+        clearInterval(pollId);
+        clearTimeout(intermediateId);
+        clearTimeout(failId);
+        var overlay = document.getElementById('__mastBootOverlay');
+        if (overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay);
+      }
+    }, 250);
+
+    var intermediateId = setTimeout(function() {
+      if (window.__mastBootOk) return;
+      showBootIntermediate();
+    }, 5000);
+
+    var failId = setTimeout(function() {
+      if (window.__mastBootOk) return;
+      showBootRecovery();
+    }, 15000);
+
+    function watchTenantReady() {
+      if (window.TENANT_READY && typeof window.TENANT_READY.then === 'function') {
+        window.TENANT_READY.then(function() {
+          // Init block has up to ~2s to run firebase.initializeApp; poll catches it.
+        }, function(err) {
+          if (window.__mastBootOk) return;
+          showBootRecovery('Config: ' + (err && err.message || err));
+        });
+      } else {
+        setTimeout(watchTenantReady, 100);
+      }
+    }
+    watchTenantReady();
+
+    function showBootIntermediate() {
+      if (!document.body) { document.addEventListener('DOMContentLoaded', showBootIntermediate); return; }
+      if (document.getElementById('__mastBootOverlay')) return;
+      var d = document.createElement('div');
+      d.id = '__mastBootOverlay';
+      d.style.cssText = 'position:fixed;inset:0;background:#1a1a1a;color:#aaa;z-index:9999;display:flex;align-items:center;justify-content:center;font-family:system-ui,-apple-system,sans-serif;font-size:14px;';
+      d.textContent = 'Still loading…';
+      document.body.appendChild(d);
+    }
+
+    function showBootRecovery(detail) {
+      if (!document.body) { document.addEventListener('DOMContentLoaded', function(){ showBootRecovery(detail); }); return; }
+      var safeDetail = detail ? String(detail).replace(/[<>&]/g, '') : '';
+      document.body.innerHTML =
+        '<div style="position:fixed;inset:0;background:#1a1a1a;color:#e5e5e5;display:flex;align-items:center;justify-content:center;font-family:system-ui,-apple-system,sans-serif;">' +
+          '<div style="background:#2a2a2a;border-radius:12px;padding:32px;max-width:440px;width:90%;text-align:center;box-shadow:0 8px 40px rgba(0,0,0,0.4);">' +
+            '<h2 style="margin:0 0 12px;font-size:1.15rem;font-weight:600;">We couldn’t load the admin</h2>' +
+            '<p style="margin:0 0 24px;color:#aaa;font-size:0.9rem;line-height:1.5;">Something interrupted the initial page load. Reloading usually fixes it.</p>' +
+            '<button onclick="location.reload()" style="background:#F59E0B;color:#000;border:none;padding:10px 20px;border-radius:6px;cursor:pointer;font-weight:600;font-family:inherit;font-size:0.9rem;">Reload</button>' +
+            (safeDetail ? '<p style="margin:24px 0 0;font-size:0.78rem;color:#666;">' + safeDetail + '</p>' : '') +
+          '</div>' +
+        '</div>';
+    }
+  })();
+  </script>
+  <script>
     // Admin app is ALWAYS dark mode. Apply immediately before any external scripts load.
     document.documentElement.style.colorScheme = 'dark';
     document.documentElement.classList.add('dark-mode');
