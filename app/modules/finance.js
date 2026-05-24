@@ -2622,8 +2622,11 @@ window.finDayCloseSave = async function(mode) {
   payload.requestId = requestId;
   try {
     var json = await _closeV3Call('writeDayClose', payload);
-    if (!json || json.ok === false) {
-      showToast('Save failed: ' + ((json && (json.message || json.error)) || 'unknown error'), true);
+    // R2-F1: require explicit ok===true. CF returning {} or {ok:undefined} now
+    // surfaces as an error instead of silently passing through to the success path.
+    if (!json || json.ok !== true) {
+      console.error('[close-v3] writeDayClose returned non-ok response:', json);
+      showToast('Save failed: ' + ((json && (json.message || json.error || json.code)) || 'CF returned no ok flag — check console'), true);
       return;
     }
     // Audit: client-side row for cross-UI consistency. CF also writes its own
@@ -2637,8 +2640,11 @@ window.finDayCloseSave = async function(mode) {
     // Investigate + restore hash to the captured pre-modal route.
     renderDayCloseV2(payload.date);
   } catch (err) {
-    // httpsCallable throws HttpsError-shaped objects; surface .message.
-    showToast('Save failed: ' + (err.message || err), true);
+    // httpsCallable throws HttpsError-shaped objects; surface .message + .code + .details.
+    console.error('[close-v3] writeDayClose threw:', err);
+    var msg = (err && err.message) || (err && err.code) || String(err) || 'unknown error';
+    if (err && err.details && err.details.code) msg += ' (' + err.details.code + ')';
+    showToast('Save failed: ' + msg, true);
   }
 };
 window.finDayCloseExportCsv = function() {
@@ -6343,14 +6349,17 @@ window.finPeriodCloseRun = async function(monthStr) {
     : ('rid-' + Date.now() + '-' + Math.random().toString(36).slice(2));
   try {
     var json = await _closeV3Call('writePeriodClose', { periodId: monthStr, requestId: requestId });
-    if (!json || json.ok === false) {
-      showToast('Close failed: ' + ((json && (json.message || json.error)) || 'unknown error'), true);
+    // R2-F1: require explicit ok===true (see writeDayClose comment).
+    if (!json || json.ok !== true) {
+      console.error('[close-v3] writePeriodClose returned non-ok response:', json);
+      showToast('Close failed: ' + ((json && (json.message || json.error || json.code)) || 'CF returned no ok flag — check console'), true);
       return;
     }
     try { await writeAudit('create', 'periodClose', monthStr); } catch (xerr) {}
     showToast('Closed ' + _pcMonthLabel(monthStr));
     renderPeriodClose();
   } catch (err) {
+    console.error('[close-v3] writePeriodClose threw:', err);
     // Agent A throws HttpsError('failed-precondition', 'unclosedDays', {dates:[...]}).
     // httpsCallable surfaces this as err.code = 'failed-precondition',
     // err.message = 'unclosedDays', err.details = {code:'unclosedDays', dates:[...]}.
@@ -6566,15 +6575,20 @@ window.finAmendmentApprove = async function(amendmentId, reasonText) {
     : ('rid-' + Date.now() + '-' + Math.random().toString(36).slice(2));
   try {
     var json = await _closeV3Call('approveAmendment', { amendmentId: amendmentId, requestId: requestId });
-    if (!json || json.ok === false) {
-      showToast('Approve failed: ' + ((json && (json.message || json.error)) || 'unknown error'), true);
+    // R2-F1: require explicit ok===true.
+    if (!json || json.ok !== true) {
+      console.error('[close-v3] approveAmendment returned non-ok response:', json);
+      showToast('Approve failed: ' + ((json && (json.message || json.error || json.code)) || 'CF returned no ok flag — check console'), true);
       return;
     }
     try { await writeAudit('update', 'amendment', amendmentId + ':approved'); } catch (xerr) {}
     showToast('Amendment approved' + (json.counterEntryId ? ' (counter-entry ' + json.counterEntryId + ')' : ''));
     renderAmendments();
   } catch (err) {
-    showToast('Approve failed: ' + (err.message || err), true);
+    console.error('[close-v3] approveAmendment threw:', err);
+    var amsg = (err && err.message) || (err && err.code) || String(err) || 'unknown error';
+    if (err && err.details && err.details.code) amsg += ' (' + err.details.code + ')';
+    showToast('Approve failed: ' + amsg, true);
   }
 };
 
@@ -6590,15 +6604,20 @@ window.finAmendmentReject = async function(amendmentId) {
       reason: (reason || '').trim(),
       requestId: requestId
     });
-    if (!json || json.ok === false) {
-      showToast('Reject failed: ' + ((json && (json.message || json.error)) || 'unknown error'), true);
+    // R2-F1: require explicit ok===true.
+    if (!json || json.ok !== true) {
+      console.error('[close-v3] rejectAmendment returned non-ok response:', json);
+      showToast('Reject failed: ' + ((json && (json.message || json.error || json.code)) || 'CF returned no ok flag — check console'), true);
       return;
     }
     try { await writeAudit('update', 'amendment', amendmentId + ':rejected'); } catch (xerr) {}
     showToast('Amendment rejected');
     renderAmendments();
   } catch (err) {
-    showToast('Reject failed: ' + (err.message || err), true);
+    console.error('[close-v3] rejectAmendment threw:', err);
+    var rmsg = (err && err.message) || (err && err.code) || String(err) || 'unknown error';
+    if (err && err.details && err.details.code) rmsg += ' (' + err.details.code + ')';
+    showToast('Reject failed: ' + rmsg, true);
   }
 };
 
@@ -6683,8 +6702,16 @@ window.finAmendmentOpenSubmit = function() {
         reason: reason,
         submittedByName: subName
       });
-      if (!json || json.ok === false) {
-        errEl.textContent = (json && (json.message || json.error)) || 'Submit failed.';
+      // R2-F1: require explicit ok===true. Previously `ok === false` let
+      // CF responses with no ok flag (or empty {}) silently pass through to the
+      // success path — Sky observed Submit silently doing nothing on real order
+      // -Op4nx9IgSynIRi89VZx. Now surface non-ok responses in BOTH inline error
+      // and toast, and console.error the raw payload for diagnosis.
+      if (!json || json.ok !== true) {
+        console.error('[close-v3] routeAmendment returned non-ok response:', json);
+        var smsg = (json && (json.message || json.error || json.code)) || 'CF returned no ok flag — check console';
+        errEl.textContent = 'Submit failed: ' + smsg;
+        showToast('Amendment submit failed: ' + smsg, true);
         return;
       }
       try { await writeAudit('create', 'amendment', json.amendmentId + ':submitted'); } catch (xerr) {}
@@ -6692,7 +6719,11 @@ window.finAmendmentOpenSubmit = function() {
       close();
       renderAmendments();
     } catch (err) {
-      errEl.textContent = (err && err.message) ? err.message : String(err);
+      console.error('[close-v3] routeAmendment threw:', err);
+      var emsg = (err && err.message) || (err && err.code) || String(err) || 'unknown error';
+      if (err && err.details && err.details.code) emsg += ' (' + err.details.code + ')';
+      errEl.textContent = 'Submit failed: ' + emsg;
+      showToast('Amendment submit failed: ' + emsg, true);
     }
   });
 };
