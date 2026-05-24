@@ -3532,6 +3532,35 @@ function renderTaxSalesTax(byState, nexus, start, end) {
   return h;
 }
 
+// W2.5 (-OtMNKRrTLDvUa9Fv1wN): per-state economic nexus thresholds.
+// Replaces single national $100K/200tx rule with per-state map. Conservative
+// defaults — verify at Avalara state-by-state economic-nexus guide before
+// relying on these for filing decisions. State legislatures revise periodically.
+// Tenant override stored at admin/config/taxNexusThresholds (5-segment doc).
+// Shape: { 'CA': { revenueCents:50000000, txnCount:null }, ... default applies
+// to any state not listed }.
+var _W25_DEFAULT_NEXUS_THRESHOLDS = {
+  CA: { revenueCents: 50000000, txnCount: null },              // $500K, no txn floor (per Avalara, post-AB147)
+  NY: { revenueCents: 50000000, txnCount: 100 },               // $500K + 100 txn (both required)
+  TX: { revenueCents: 50000000, txnCount: null },              // $500K
+  FL: { revenueCents: 10000000, txnCount: null },              // $100K
+  WA: { revenueCents: 10000000, txnCount: 200 },               // $100K + 200 txn (legacy)
+  __default: { revenueCents: 10000000, txnCount: 200 }         // pre-W2.5 national rule
+};
+function _W25_resolveThreshold(state, overrides) {
+  var ov = (overrides && overrides[state]) || null;
+  if (ov && (ov.revenueCents != null || ov.txnCount != null)) return ov;
+  if (_W25_DEFAULT_NEXUS_THRESHOLDS[state]) return _W25_DEFAULT_NEXUS_THRESHOLDS[state];
+  return (overrides && overrides.__default) || _W25_DEFAULT_NEXUS_THRESHOLDS.__default;
+}
+// Approaches-trigger ranking: how close (0-1) the state is to crossing.
+// Uses the lesser of the two threshold ratios (whichever ceiling is nearer).
+function _W25_proximity(stateData, thresh) {
+  var revRatio = thresh.revenueCents ? (stateData.revenue / thresh.revenueCents) : 0;
+  var txnRatio = thresh.txnCount ? (stateData.count / thresh.txnCount) : 0;
+  return Math.max(revRatio, txnRatio);
+}
+
 async function loadTaxNexus() {
   var el = document.getElementById('fTaxContent');
   if (!el) return;
@@ -3541,15 +3570,14 @@ async function loadTaxNexus() {
     var d12 = new Date(); d12.setFullYear(d12.getFullYear() - 1);
     var startDate = d12.getFullYear() + '-' + String(d12.getMonth()+1).padStart(2,'0') + '-01';
 
-    var [ordersRaw, nexusRaw] = await Promise.all([
+    var [ordersRaw, nexusRaw, overridesRaw] = await Promise.all([
       MastDB.query('orders').orderByChild('placedAt').startAt(isoStart(startDate)).endAt(isoEnd(endDate)).limitToLast(5000).once(),
-      MastDB.get('admin/nexusRegistrations')
+      MastDB.get('admin/nexusRegistrations'),
+      MastDB.get('admin/config/taxNexusThresholds').catch(function() { return null; })
     ]);
     var orders = Object.values(ordersRaw || {});
     var nexus = nexusRaw || {};
-    var THRESHOLD = 10000000; // $100K in cents (exclusive: > 10000000)
-    var TXN_THRESHOLD = 200;
-    var APPROACHING = 0.75;
+    var overrides = overridesRaw || {};
 
     var byState = {};
     orders.forEach(function(o) {
@@ -3561,21 +3589,33 @@ async function loadTaxNexus() {
       byState[state].count++;
     });
     Object.keys(nexus).forEach(function(s) { if (!byState[s]) byState[s] = { revenue: 0, count: 0 }; });
-    var states = Object.keys(byState).sort(function(a,b) { return byState[b].revenue - byState[a].revenue; });
-    el.innerHTML = renderTaxNexus(states, byState, nexus, THRESHOLD, TXN_THRESHOLD, APPROACHING, startDate, endDate);
+    // W2.5: sort by proximity to trigger (closest first) — operator's most
+    // actionable signal, vs. raw revenue sort which buried near-trigger states.
+    var states = Object.keys(byState).sort(function(a, b) {
+      var pa = _W25_proximity(byState[a], _W25_resolveThreshold(a, overrides));
+      var pb = _W25_proximity(byState[b], _W25_resolveThreshold(b, overrides));
+      return pb - pa;
+    });
+    el.innerHTML = renderTaxNexus(states, byState, nexus, overrides, startDate, endDate);
   } catch (err) {
     el.innerHTML = '<div style="color:var(--danger,#dc2626);padding:12px;">' + e(err.message) + '</div>';
     showToast('Nexus load failed: ' + err.message, true);
   }
 }
 
-function renderTaxNexus(states, byState, nexus, threshold, txnThreshold, approachingPct, startDate, endDate) {
+function renderTaxNexus(states, byState, nexus, overrides, startDate, endDate) {
+  // W2.5: per-state thresholds replace single national rule.
+  var approachingPct = 0.75;
   var actionRequired = [], approaching = [], registered = [], below = [];
   states.forEach(function(state) {
     var d = byState[state];
     var reg = nexus[state] && nexus[state].registered;
-    var above = d.revenue > threshold || d.count > txnThreshold;
-    var near = !above && (d.revenue > threshold * approachingPct || d.count > txnThreshold * approachingPct);
+    var t = _W25_resolveThreshold(state, overrides);
+    var above = (t.revenueCents && d.revenue > t.revenueCents) || (t.txnCount && d.count > t.txnCount);
+    var near = !above && (
+      (t.revenueCents && d.revenue > t.revenueCents * approachingPct) ||
+      (t.txnCount && d.count > t.txnCount * approachingPct)
+    );
     if (above && !reg) actionRequired.push(state);
     else if (reg) registered.push(state);
     else if (near) approaching.push(state);
@@ -3592,41 +3632,55 @@ function renderTaxNexus(states, byState, nexus, threshold, txnThreshold, approac
   h += '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px;">';
   h += statCard('Registered', String(registered.length), '#22c55e');
   if (actionRequired.length > 0) h += statCard('Action Required', String(actionRequired.length), '#ef4444', 'above threshold, unregistered');
-  if (approaching.length > 0) h += statCard('Approaching', String(approaching.length), '#eab308', '>75% of $100K');
+  if (approaching.length > 0) h += statCard('Approaching', String(approaching.length), '#eab308', '>75% of per-state threshold');
   h += statCard('Trailing 12mo', toDateShort(startDate) + ' – ' + toDateShort(endDate), 'var(--warm-gray,#888)');
   h += '</div>';
 
   // W1 R2-F3: register exporter early so footer button works on empty state too.
+  // W2.5: per-state thresholds in CSV — most-actionable status (closest to trigger).
   _finExporters['finance-tax-nexus'] = function() {
-    var rows = [['State','Revenue 12mo (USD)','Transactions','% of $100K','Status']];
+    var rows = [['State','Revenue 12mo (USD)','Transactions','Revenue Threshold (USD)','Txn Threshold','% to Trigger','Status']];
     states.forEach(function(s) {
       var d = byState[s];
+      var t = _W25_resolveThreshold(s, overrides);
       var reg = nexus[s] && nexus[s].registered;
-      var above = d.revenue > threshold || d.count > txnThreshold;
+      var above = (t.revenueCents && d.revenue > t.revenueCents) || (t.txnCount && d.count > t.txnCount);
       var status = reg ? 'Registered' : above ? 'Above threshold' : 'Below';
-      rows.push([s, (d.revenue / 100).toFixed(2), String(d.count), String(Math.round(d.revenue / threshold * 100)), status]);
+      var prox = _W25_proximity(d, t);
+      rows.push([
+        s, (d.revenue / 100).toFixed(2), String(d.count),
+        t.revenueCents ? (t.revenueCents / 100).toFixed(0) : '',
+        t.txnCount != null ? String(t.txnCount) : '',
+        String(Math.round(prox * 100)), status
+      ]);
     });
-    _finDownloadCsv('finance-tax-nexus', rows, 'Period: trailing-12m (' + startDate + ' to ' + endDate + ') · Basis: orders.placedAt by state + admin/nexusRegistrations');
+    _finDownloadCsv('finance-tax-nexus', rows, 'Period: trailing-12m (' + startDate + ' to ' + endDate + ') · Per-state thresholds · Basis: orders.placedAt by state + admin/nexusRegistrations + admin/config/taxNexusThresholds');
   };
-  var _taxNexusFooter = _finFooter('finance-tax-nexus', 'trailing-12m (' + startDate + ' to ' + endDate + ')', 'orders.placedAt by state + admin/nexusRegistrations');
+  var _taxNexusFooter = _finFooter('finance-tax-nexus', 'trailing-12m (' + startDate + ' to ' + endDate + ')', 'orders.placedAt by state + admin/nexusRegistrations + admin/config/taxNexusThresholds (per-state)');
 
   if (states.length === 0) {
     return h + '<div style="text-align:center;padding:48px 20px;color:var(--warm-gray,#888);"><div style="font-size:0.9rem;font-weight:500;">No sales data found for trailing 12 months</div></div>' + _taxNexusFooter;
   }
 
-  h += '<div style="font-size:0.78rem;color:var(--warm-gray,#888);margin-bottom:10px;">$100K revenue threshold · 200 transaction threshold · Exclusive boundaries (>$100K triggers nexus)</div>';
+  // W2.5: thresholds vary per state — show that explicitly.
+  h += '<div style="font-size:0.78rem;color:var(--warm-gray,#888);margin-bottom:10px;">Per-state economic-nexus thresholds (CA/TX/NY $500K · FL $100K · WA $100K+200tx · default $100K+200tx). Sorted by closest to trigger. Tenant override: <code style="background:var(--bg-secondary,#232323);padding:1px 4px;border-radius:3px;">admin/config/taxNexusThresholds</code>. Verify at avalara.com state-by-state guide before filing.</div>';
   h += '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:0.85rem;">';
   h += '<thead><tr style="border-bottom:1px solid rgba(255,255,255,0.1);">';
-  ['State', 'Revenue (12mo)', 'Transactions', '% of $100K', 'Status'].forEach(function(col) {
+  ['State', 'Revenue (12mo)', 'Transactions', 'Threshold', '% to Trigger', 'Status'].forEach(function(col) {
     h += '<th style="text-align:left;padding:8px 10px;font-size:0.72rem;color:var(--warm-gray,#888);text-transform:uppercase;letter-spacing:0.5px;">' + col + '</th>';
   });
   h += '</tr></thead><tbody>';
   states.forEach(function(state) {
     var d = byState[state];
+    var t = _W25_resolveThreshold(state, overrides);
     var reg = nexus[state] && nexus[state].registered;
-    var above = d.revenue > threshold || d.count > txnThreshold;
-    var near = !above && (d.revenue > threshold * approachingPct || d.count > txnThreshold * approachingPct);
-    var revPct = Math.min(Math.round(d.revenue / threshold * 100), 999);
+    var above = (t.revenueCents && d.revenue > t.revenueCents) || (t.txnCount && d.count > t.txnCount);
+    var near = !above && (
+      (t.revenueCents && d.revenue > t.revenueCents * approachingPct) ||
+      (t.txnCount && d.count > t.txnCount * approachingPct)
+    );
+    var prox = _W25_proximity(d, t);
+    var pct = Math.min(Math.round(prox * 100), 999);
     var barColor = reg ? '#22c55e' : above ? '#ef4444' : near ? '#eab308' : '#9ca3af';
     var badge;
     if (reg) badge = '<span style="background:rgba(34,197,94,0.15);color:#22c55e;padding:2px 8px;border-radius:4px;font-size:0.72rem;font-weight:600;">Registered</span>';
@@ -3634,14 +3688,20 @@ function renderTaxNexus(states, byState, nexus, threshold, txnThreshold, approac
     else if (near) badge = '<span style="background:rgba(234,179,8,0.15);color:#eab308;padding:2px 8px;border-radius:4px;font-size:0.72rem;font-weight:600;">Approaching</span>';
     else badge = '<span style="background:rgba(156,163,175,0.08);color:#9ca3af;padding:2px 8px;border-radius:4px;font-size:0.72rem;font-weight:600;">Below</span>';
 
+    var threshLabel = '';
+    if (t.revenueCents) threshLabel = '$' + Math.round(t.revenueCents / 100000) + 'K';
+    if (t.txnCount != null) threshLabel += (threshLabel ? ' + ' : '') + t.txnCount + 'tx';
+    if (!threshLabel) threshLabel = '—';
+
     h += '<tr style="border-bottom:1px solid rgba(255,255,255,0.06);">';
     h += '<td style="padding:10px;font-weight:600;">' + e(state) + '</td>';
     h += '<td style="padding:10px;font-weight:700;">' + fmt$(d.revenue) + '</td>';
     h += '<td style="padding:10px;">' + d.count + '</td>';
+    h += '<td style="padding:10px;font-size:0.78rem;color:var(--warm-gray,#888);">' + e(threshLabel) + '</td>';
     h += '<td style="padding:10px;min-width:130px;"><div style="display:flex;align-items:center;gap:8px;">' +
       '<div style="flex:1;height:6px;background:rgba(255,255,255,0.08);border-radius:3px;overflow:hidden;">' +
-      '<div style="height:100%;width:' + Math.min(revPct,100) + '%;background:' + barColor + ';border-radius:3px;"></div></div>' +
-      '<span style="font-size:0.78rem;color:var(--warm-gray,#888);white-space:nowrap;">' + revPct + '%</span></div></td>';
+      '<div style="height:100%;width:' + Math.min(pct,100) + '%;background:' + barColor + ';border-radius:3px;"></div></div>' +
+      '<span style="font-size:0.78rem;color:var(--warm-gray,#888);white-space:nowrap;">' + pct + '%</span></div></td>';
     h += '<td style="padding:10px;">' + badge + '</td>';
     h += '</tr>';
   });
