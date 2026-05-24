@@ -2149,6 +2149,117 @@ window.finCashSetHorizon = function(days) {
   if (typeof loadCashFlow === 'function') loadCashFlow();
 };
 
+// ── W2.4: AR Dunning Settings + Audit Log sub-views ──────────────────────────
+// Settings persisted at admin/config/dunning (canonical 5-segment doc per
+// W1.8 path lesson — tenants/{tid}/admin/config/dunning is valid). Customer
+// opt-out lives on customer.marketing.dunningOptIn (default true).
+// Audit log reads admin/ar_reminders/{key} written by finArSendReminder.
+// The scheduled cron that sends 1d/7d/30d-post-due reminders is OWNED by
+// Agent A's CF work — this UI configures it but does NOT deploy the CF.
+
+async function renderArDunningSettings() {
+  var el = document.getElementById('fArContent');
+  if (!el) return;
+  el.innerHTML = '<div style="color:var(--warm-gray,#888);padding:20px;text-align:center;">Loading settings…</div>';
+  try {
+    var cfg = (await MastDB.get('admin/config/dunning')) || {};
+    var cadence = cfg.cadence || { '1d': true, '7d': true, '30d': true };
+    var enabled = cfg.enabled !== false;
+
+    var h = '<div style="padding:20px;max-width:720px;">';
+    h += '<a href="#finance-ar" style="color:var(--teal,#2a9d8f);font-size:0.85rem;text-decoration:none;">&larr; Back to AR aging</a>';
+    h += '<h2 style="margin:12px 0 16px 0;font-size:1.15rem;font-weight:700;">Dunning Settings</h2>';
+    h += '<div style="background:var(--bg-secondary,#232323);border-radius:10px;padding:18px;">';
+    h += '<label style="display:flex;align-items:center;gap:10px;padding:6px 0;cursor:pointer;">' +
+      '<input type="checkbox" id="dunEnabled"' + (enabled ? ' checked' : '') + '>' +
+      '<span style="font-size:0.9rem;font-weight:600;">Enable automated reminders</span>' +
+      '</label>';
+    h += '<div style="font-size:0.78rem;color:var(--warm-gray,#888);margin:4px 0 14px 24px;">When enabled, the daily reminder job will queue an email for every overdue invoice that matches the cadence below (subject to customer opt-out).</div>';
+    h += '<div style="font-weight:600;font-size:0.85rem;margin-bottom:8px;">Reminder cadence (days past due)</div>';
+    [['1d', '1 day overdue'], ['7d', '7 days overdue'], ['30d', '30 days overdue']].forEach(function(kl) {
+      h += '<label style="display:flex;align-items:center;gap:10px;padding:5px 0;cursor:pointer;margin-left:6px;">' +
+        '<input type="checkbox" id="dun_' + kl[0] + '"' + (cadence[kl[0]] !== false ? ' checked' : '') + '>' +
+        '<span style="font-size:0.85rem;">' + e(kl[1]) + '</span></label>';
+    });
+    h += '<div style="margin-top:18px;padding-top:14px;border-top:1px solid rgba(255,255,255,0.08);display:flex;justify-content:flex-end;gap:8px;">';
+    h += '<button class="btn btn-secondary btn-small" onclick="location.hash=\'#finance-ar\'">Cancel</button>';
+    h += '<button class="btn btn-primary btn-small" onclick="finArSaveDunningSettings()">Save Settings</button>';
+    h += '</div></div>';
+    h += '<div style="margin-top:18px;padding:14px;background:var(--bg-secondary,#232323);border-radius:10px;font-size:0.78rem;color:var(--warm-gray,#888);">' +
+      'Per-customer opt-out lives on the customer record (Marketing tab → Dunning emails). Default is ON for newly-created customers.' +
+      '</div>';
+    h += '</div>';
+    el.innerHTML = h;
+  } catch (err) {
+    el.innerHTML = '<div style="padding:20px;color:var(--danger,#dc2626);">Failed to load settings: ' + e(err.message || err) + '</div>';
+  }
+}
+
+window.finArSaveDunningSettings = async function() {
+  var enabled = !!(document.getElementById('dunEnabled') && document.getElementById('dunEnabled').checked);
+  var cadence = {
+    '1d': !!(document.getElementById('dun_1d') && document.getElementById('dun_1d').checked),
+    '7d': !!(document.getElementById('dun_7d') && document.getElementById('dun_7d').checked),
+    '30d': !!(document.getElementById('dun_30d') && document.getElementById('dun_30d').checked)
+  };
+  try {
+    await MastDB.set('admin/config/dunning', {
+      enabled: enabled,
+      cadence: cadence,
+      updatedAt: new Date().toISOString()
+    });
+    showToast('Dunning settings saved');
+    location.hash = '#finance-ar';
+  } catch (err) {
+    showToast('Save failed: ' + (err.message || err), true);
+  }
+};
+
+async function renderArAuditLog() {
+  var el = document.getElementById('fArContent');
+  if (!el) return;
+  el.innerHTML = '<div style="color:var(--warm-gray,#888);padding:20px;text-align:center;">Loading audit log…</div>';
+  try {
+    var raw = (await MastDB.get('admin/ar_reminders')) || {};
+    var rows = Object.entries(raw)
+      .map(function(kv) { return Object.assign({ _key: kv[0] }, kv[1]); })
+      .sort(function(a, b) { return (b.sentAt || '').localeCompare(a.sentAt || ''); });
+
+    var h = '<div style="padding:20px;max-width:1100px;">';
+    h += '<a href="#finance-ar" style="color:var(--teal,#2a9d8f);font-size:0.85rem;text-decoration:none;">&larr; Back to AR aging</a>';
+    h += '<div style="display:flex;justify-content:space-between;align-items:center;margin:12px 0 16px 0;">';
+    h += '<h2 style="margin:0;font-size:1.15rem;font-weight:700;">Reminder Audit Log</h2>';
+    h += '<span style="color:var(--warm-gray,#888);font-size:0.78rem;">' + rows.length + ' record' + (rows.length === 1 ? '' : 's') + '</span>';
+    h += '</div>';
+
+    if (rows.length === 0) {
+      h += '<div style="text-align:center;padding:40px;color:var(--warm-gray,#888);">No reminders sent yet. Use the Send Reminder action on the AR aging view.</div>';
+    } else {
+      h += '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:0.85rem;">';
+      h += '<thead><tr style="border-bottom:1px solid rgba(255,255,255,0.1);">';
+      ['Sent','Invoice #','Customer Email','Amount Due','Status','Sent By'].forEach(function(c) {
+        h += '<th style="text-align:left;padding:8px 10px;font-size:0.72rem;color:var(--warm-gray,#888);text-transform:uppercase;letter-spacing:0.5px;">' + c + '</th>';
+      });
+      h += '</tr></thead><tbody>';
+      rows.forEach(function(r) {
+        h += '<tr style="border-bottom:1px solid rgba(255,255,255,0.06);">';
+        h += '<td style="padding:8px 10px;font-size:0.78rem;">' + e((r.sentAt || '').replace('T', ' ').slice(0, 16)) + '</td>';
+        h += '<td style="padding:8px 10px;font-size:0.78rem;">' + e(r.invoiceNumber || (r.invoiceId ? r.invoiceId.slice(-8) : '—')) + '</td>';
+        h += '<td style="padding:8px 10px;font-size:0.78rem;">' + e(r.customerEmail || '—') + '</td>';
+        h += '<td style="padding:8px 10px;font-weight:600;">' + fmt$(r.amtDueCents || 0) + '</td>';
+        h += '<td style="padding:8px 10px;font-size:0.78rem;">' + e(r.status || 'queued') + '</td>';
+        h += '<td style="padding:8px 10px;font-size:0.78rem;color:var(--warm-gray,#888);">' + e(r.sentBy || '—') + '</td>';
+        h += '</tr>';
+      });
+      h += '</tbody></table></div>';
+    }
+    h += '</div>';
+    el.innerHTML = h;
+  } catch (err) {
+    el.innerHTML = '<div style="padding:20px;color:var(--danger,#dc2626);">Failed to load audit log: ' + e(err.message || err) + '</div>';
+  }
+}
+
 // ── AR Tab ────────────────────────────────────────────────────────────────────
 
 function setupArTab() {
