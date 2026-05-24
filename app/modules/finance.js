@@ -1999,7 +1999,21 @@ async function renderDayCloseV2(dateParam) {
     var openingCash = existing.openingCashCents != null ? (existing.openingCashCents / 100).toFixed(2) : '';
     var closingCash = existing.closingCashCents != null ? (existing.closingCashCents / 100).toFixed(2) : '';
     var notes = existing.notes || '';
-    var checks = Array.isArray(existing.checks) ? existing.checks.slice() : [];
+    // Close v3: stored checks use canonical {number, payerName, amountCents, memo, invoiceRef}.
+    // Form inputs work in display units ($), so convert amountCents → amount.
+    // Also tolerate legacy `payor` from drafts saved before the v3 cutover.
+    var checks = (Array.isArray(existing.checks) ? existing.checks : []).map(function(c) {
+      var amt = (c.amountCents != null)
+        ? (Number(c.amountCents) / 100).toFixed(2)
+        : (c.amount != null ? c.amount : '');
+      return {
+        number: c.number || '',
+        payerName: (c.payerName != null) ? c.payerName : (c.payor || ''),
+        amount: amt,
+        memo: c.memo || '',
+        invoiceRef: c.invoiceRef || ''
+      };
+    });
     // Cache the checks array on the element so add/remove handlers can mutate
     // and re-render without round-trips. State scope is per-render.
     el._dcChecks = checks;
@@ -2159,9 +2173,14 @@ function _dcRenderCheckRows() {
   } else {
     var h = '';
     checks.forEach(function(c, i) {
-      h += '<div style="display:grid;grid-template-columns:120px 1fr 1fr 90px 32px;gap:8px;align-items:center;margin-bottom:6px;">';
+      // Close v3 reconciliation: canonical check fields are
+      // {number, payerName, amountCents, memo?, invoiceRef?}. Render
+      // accepts legacy `payor` as fallback for in-flight drafts.
+      var payerVal = (c.payerName != null) ? c.payerName : (c.payor || '');
+      h += '<div style="display:grid;grid-template-columns:90px 110px 1fr 1fr 90px 32px;gap:8px;align-items:center;margin-bottom:6px;">';
+      h += '<input type="text" placeholder="Check #" value="' + e(c.number || '') + '" onchange="finDayCloseUpdateCheck(' + i + ',\'number\',this.value)" style="background:var(--bg-primary,#1a1a1a);border:1px solid rgba(255,255,255,0.15);border-radius:6px;color:var(--text,#fff);padding:5px 8px;font-size:0.85rem;">';
       h += '<input type="number" step="0.01" placeholder="Amount" value="' + e(c.amount != null ? c.amount : '') + '" onchange="finDayCloseUpdateCheck(' + i + ',\'amount\',this.value)" style="background:var(--bg-primary,#1a1a1a);border:1px solid rgba(255,255,255,0.15);border-radius:6px;color:var(--text,#fff);padding:5px 8px;font-size:0.85rem;">';
-      h += '<input type="text" placeholder="Payor" value="' + e(c.payor || '') + '" onchange="finDayCloseUpdateCheck(' + i + ',\'payor\',this.value)" style="background:var(--bg-primary,#1a1a1a);border:1px solid rgba(255,255,255,0.15);border-radius:6px;color:var(--text,#fff);padding:5px 8px;font-size:0.85rem;">';
+      h += '<input type="text" placeholder="Payer name" value="' + e(payerVal) + '" onchange="finDayCloseUpdateCheck(' + i + ',\'payerName\',this.value)" style="background:var(--bg-primary,#1a1a1a);border:1px solid rgba(255,255,255,0.15);border-radius:6px;color:var(--text,#fff);padding:5px 8px;font-size:0.85rem;">';
       h += '<input type="text" placeholder="Memo / applied invoice" value="' + e(c.memo || '') + '" onchange="finDayCloseUpdateCheck(' + i + ',\'memo\',this.value)" style="background:var(--bg-primary,#1a1a1a);border:1px solid rgba(255,255,255,0.15);border-radius:6px;color:var(--text,#fff);padding:5px 8px;font-size:0.85rem;">';
       h += '<input type="text" placeholder="Invoice #" value="' + e(c.invoiceRef || '') + '" onchange="finDayCloseUpdateCheck(' + i + ',\'invoiceRef\',this.value)" style="background:var(--bg-primary,#1a1a1a);border:1px solid rgba(255,255,255,0.15);border-radius:6px;color:var(--text,#fff);padding:5px 8px;font-size:0.85rem;">';
       h += '<button class="btn btn-secondary btn-small" onclick="finDayCloseRemoveCheck(' + i + ')" title="Remove">✕</button>';
@@ -2193,7 +2212,8 @@ function _dcUpdateVariance() {
 }
 window.finDayCloseAddCheck = function() {
   var arr = _dcChecks();
-  arr.push({ amount: '', payor: '', memo: '', invoiceRef: '' });
+  // Close v3 canonical check shape: {number, payerName, amount, memo, invoiceRef}
+  arr.push({ number: '', amount: '', payerName: '', memo: '', invoiceRef: '' });
   _dcSetChecks(arr);
   _dcRenderCheckRows();
 };
@@ -2227,11 +2247,13 @@ function _dcGatherPayload() {
   var closeVal = parseFloat((document.getElementById('dcClose') || {}).value);
   var notes = ((document.getElementById('dcNotes') || {}).value || '').trim();
   var checks = _dcChecks().filter(function(c) { return c.amount && !isNaN(parseFloat(c.amount)); }).map(function(c) {
+    // Close v3 canonical check shape: {number, payerName, amountCents, memo, invoiceRef}
     return {
+      number: (c.number || '').trim(),
+      payerName: (c.payerName != null ? c.payerName : (c.payor || '')).trim(),
       amountCents: Math.round(parseFloat(c.amount) * 100),
-      payor: (c.payor || '').trim(),
       memo: (c.memo || '').trim(),
-      invoiceRef: (c.invoiceRef || '').trim() || null
+      invoiceRef: (c.invoiceRef || '').trim()
     };
   });
   var checkTotalCents = checks.reduce(function(s, c) { return s + c.amountCents; }, 0);
@@ -2485,6 +2507,19 @@ function _dcShowDiffModal(date, nextVersion, innerHtml) {
   });
 }
 
+// Close v3: small wrapper that invokes one of the Close v3 CFs via
+// firebase.functions().httpsCallable(name). Agent A's CFs are onCall and
+// expect tid in data.tid (httpsCallable has no header concept). The httpsCallable
+// invocation auto-injects the Firebase Auth ID token — no Authorization header
+// needed. Returns the unwrapped `data` object (response is `{data: {ok, ...}}`).
+async function _closeV3Call(name, payload) {
+  var p = Object.assign({}, payload || {});
+  if (!p.tid) p.tid = MastDB.tenantId();
+  var fn = firebase.functions().httpsCallable(name);
+  var res = await fn(p);
+  return (res && res.data) ? res.data : {};
+}
+
 // Close v3: Save — always goes through the writeDayClose CF. The CF performs
 // the version-bump + supersede + audit-row write atomically (single Firestore
 // transaction). requestId is a client UUID for at-most-once semantics.
@@ -2504,16 +2539,9 @@ window.finDayCloseSave = async function(mode) {
     : ('rid-' + Date.now() + '-' + Math.random().toString(36).slice(2));
   payload.requestId = requestId;
   try {
-    var resp = await callCF('/writeDayClose', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-    var json = null;
-    try { json = await resp.json(); } catch (jerr) {}
-    if (!resp.ok || !json || json.ok === false) {
-      var msg = (json && (json.message || json.error)) || ('HTTP ' + resp.status);
-      showToast('Save failed: ' + msg, true);
+    var json = await _closeV3Call('writeDayClose', payload);
+    if (!json || json.ok === false) {
+      showToast('Save failed: ' + ((json && (json.message || json.error)) || 'unknown error'), true);
       return;
     }
     // Audit: client-side row for cross-UI consistency. CF also writes its own
@@ -2523,6 +2551,7 @@ window.finDayCloseSave = async function(mode) {
     window._dcViewVersionId = null;
     renderDayCloseV2(payload.date);
   } catch (err) {
+    // httpsCallable throws HttpsError-shaped objects; surface .message.
     showToast('Save failed: ' + (err.message || err), true);
   }
 };
@@ -2537,10 +2566,11 @@ window.finDayCloseExportCsv = function() {
   rows.push(['Cash Drawer','Closing Cash', isNaN(closeVal) ? '' : closeVal.toFixed(2)]);
   if (!isNaN(openVal) && !isNaN(closeVal)) rows.push(['Cash Drawer','Variance', (closeVal - openVal).toFixed(2)]);
   rows.push([]);
-  rows.push(['Checks','Amount','Payor','Memo','Invoice Ref']);
+  rows.push(['Checks','Check #','Amount','Payer Name','Memo','Invoice Ref']);
   checks.forEach(function(c) {
     if (!c.amount) return;
-    rows.push(['Check', parseFloat(c.amount).toFixed(2), c.payor || '', c.memo || '', c.invoiceRef || '']);
+    var payer = (c.payerName != null) ? c.payerName : (c.payor || '');
+    rows.push(['Check', c.number || '', parseFloat(c.amount).toFixed(2), payer, c.memo || '', c.invoiceRef || '']);
   });
   rows.push(['Checks','Total', checks.reduce(function(s, c) { return s + (parseFloat(c.amount) || 0); }, 0).toFixed(2)]);
   rows.push([]);
@@ -6222,18 +6252,24 @@ window.finPeriodCloseRun = async function(monthStr) {
   var requestId = (window.crypto && window.crypto.randomUUID) ? window.crypto.randomUUID()
     : ('rid-' + Date.now() + '-' + Math.random().toString(36).slice(2));
   try {
-    var resp = await callCF('/writePeriodClose', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ periodId: monthStr, requestId: requestId })
-    });
-    var json = null;
-    try { json = await resp.json(); } catch (jerr) {}
-    if (json && json.code === 'unclosedDays' && Array.isArray(json.unclosedDates)) {
-      // Surface offending dates with deep-links into Day Close UI.
+    var json = await _closeV3Call('writePeriodClose', { periodId: monthStr, requestId: requestId });
+    if (!json || json.ok === false) {
+      showToast('Close failed: ' + ((json && (json.message || json.error)) || 'unknown error'), true);
+      return;
+    }
+    try { await writeAudit('create', 'periodClose', monthStr); } catch (xerr) {}
+    showToast('Closed ' + _pcMonthLabel(monthStr));
+    renderPeriodClose();
+  } catch (err) {
+    // Agent A throws HttpsError('failed-precondition', 'unclosedDays', {dates:[...]}).
+    // httpsCallable surfaces this as err.code = 'failed-precondition',
+    // err.message = 'unclosedDays', err.details = {code:'unclosedDays', dates:[...]}.
+    var details = err && err.details;
+    var dates = (details && Array.isArray(details.dates)) ? details.dates : null;
+    if ((err && err.message === 'unclosedDays') && dates) {
       var listHtml = '<div style="margin-bottom:10px;color:var(--warm-gray,#888);font-size:0.85rem;">The following dates have no closed day. Close each, then re-run period close.</div>';
       listHtml += '<ul style="margin:0;padding-left:18px;font-size:0.85rem;">';
-      json.unclosedDates.forEach(function(d) {
+      dates.forEach(function(d) {
         if (/^\d{4}-\d{2}-\d{2}$/.test(d)) {
           listHtml += '<li style="margin-bottom:4px;"><a href="#finance-cash-flow?subView=dayclose&date=' + e(d) + '" style="color:#22c55e;text-decoration:underline;">' + e(d) + '</a></li>';
         }
@@ -6242,14 +6278,6 @@ window.finPeriodCloseRun = async function(monthStr) {
       _pcShowInfoModal('Cannot close ' + _pcMonthLabel(monthStr), listHtml);
       return;
     }
-    if (!resp.ok || !json || json.ok === false) {
-      showToast('Close failed: ' + ((json && (json.message || json.error)) || ('HTTP ' + resp.status)), true);
-      return;
-    }
-    try { await writeAudit('create', 'periodClose', monthStr); } catch (xerr) {}
-    showToast('Closed ' + _pcMonthLabel(monthStr));
-    renderPeriodClose();
-  } catch (err) {
     showToast('Close failed: ' + (err.message || err), true);
   }
 };
@@ -6356,7 +6384,10 @@ async function renderAmendments() {
     });
     var canApprove = (typeof hasPermission === 'function') && hasPermission('finance', 'approveAmendment');
     var h = '<div style="max-width:960px;">';
-    h += '<h3 style="margin:0 0 6px;font-size:1rem;font-weight:700;">Amendments</h3>';
+    h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;flex-wrap:wrap;gap:8px;">';
+    h += '<h3 style="margin:0;font-size:1rem;font-weight:700;">Amendments</h3>';
+    h += '<button class="btn btn-primary btn-small" onclick="finAmendmentOpenSubmit()">+ Submit Amendment</button>';
+    h += '</div>';
     h += '<div style="font-size:0.78rem;color:var(--warm-gray,#888);margin-bottom:14px;">';
     h += 'Proposed changes to closed-period records. Approve writes a counter-entry to the next open period rather than mutating the immutable past.';
     if (!canApprove) {
@@ -6440,23 +6471,9 @@ window.finAmendmentApprove = async function(amendmentId, reasonText) {
   var requestId = (window.crypto && window.crypto.randomUUID) ? window.crypto.randomUUID()
     : ('rid-' + Date.now() + '-' + Math.random().toString(36).slice(2));
   try {
-    var resp = await callCF('/approveAmendment', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ amendmentId: amendmentId, requestId: requestId })
-    });
-    var json = null;
-    try { json = await resp.json(); } catch (jerr) {}
-    if (!resp.ok || !json || json.ok === false) {
-      // CF may not yet be deployed during pre-Agent-A handoff — surface a
-      // soft-fail with the precise reason so operator knows it's a backend
-      // wiring gap, not a permission denial.
-      var msg = (json && (json.message || json.error)) || ('HTTP ' + resp.status);
-      if (resp.status === 404) {
-        showToast('Approve CF /approveAmendment pending (Agent A). Filed as follow-up OPEN.', true);
-      } else {
-        showToast('Approve failed: ' + msg, true);
-      }
+    var json = await _closeV3Call('approveAmendment', { amendmentId: amendmentId, requestId: requestId });
+    if (!json || json.ok === false) {
+      showToast('Approve failed: ' + ((json && (json.message || json.error)) || 'unknown error'), true);
       return;
     }
     try { await writeAudit('update', 'amendment', amendmentId + ':approved'); } catch (xerr) {}
@@ -6474,34 +6491,13 @@ window.finAmendmentReject = async function(amendmentId) {
   var requestId = (window.crypto && window.crypto.randomUUID) ? window.crypto.randomUUID()
     : ('rid-' + Date.now() + '-' + Math.random().toString(36).slice(2));
   try {
-    var resp = await callCF('/rejectAmendment', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ amendmentId: amendmentId, reason: (reason || '').trim(), requestId: requestId })
+    var json = await _closeV3Call('rejectAmendment', {
+      amendmentId: amendmentId,
+      reason: (reason || '').trim(),
+      requestId: requestId
     });
-    var json = null;
-    try { json = await resp.json(); } catch (jerr) {}
-    if (!resp.ok || !json || json.ok === false) {
-      // Soft-fall-back: write status update directly (best-effort) when CF
-      // isn't yet deployed. Audit row still written.
-      if (resp.status === 404) {
-        try {
-          await MastDB.update('closes/amendments/' + amendmentId, {
-            status: 'rejected',
-            rejectedAt: new Date().toISOString(),
-            rejectedBy: (firebase.auth().currentUser && firebase.auth().currentUser.uid) || 'unknown',
-            rejectReason: (reason || '').trim() || null
-          });
-          try { await writeAudit('update', 'amendment', amendmentId + ':rejected'); } catch (xerr) {}
-          showToast('Amendment rejected (client fallback — CF pending)');
-          renderAmendments();
-          return;
-        } catch (cferr) {
-          showToast('Reject failed: ' + (cferr.message || cferr), true);
-          return;
-        }
-      }
-      showToast('Reject failed: ' + ((json && (json.message || json.error)) || ('HTTP ' + resp.status)), true);
+    if (!json || json.ok === false) {
+      showToast('Reject failed: ' + ((json && (json.message || json.error)) || 'unknown error'), true);
       return;
     }
     try { await writeAudit('update', 'amendment', amendmentId + ':rejected'); } catch (xerr) {}
@@ -6513,6 +6509,100 @@ window.finAmendmentReject = async function(amendmentId) {
 };
 
 window.renderAmendments = renderAmendments;
+
+// ─── Submit Amendment modal (Close v3 reconciliation, item 6) ─────────────────
+// Admin/staff (finance:write) submits a proposed change against a record in
+// a closed period. Inputs:
+//   - target collection (orders | refunds | expenses | vendorBills)
+//   - target doc id
+//   - reason (>= 10 chars; the CF re-validates server-side)
+//   - after-shape JSON (full proposed doc shape — NOT a delta)
+//
+// `before` is server-fetched by routeAmendment (we don't pre-fetch here —
+// the CF rejects with not-found if the doc doesn't exist, which surfaces
+// the right error to the operator). Gate matches Agent A's CF
+// (_assertAdminOrStaff). The Approve perm is checked separately.
+
+window.finAmendmentOpenSubmit = function() {
+  // Permission check matches the CF gate (admin OR staff).
+  // We don't have a sync `isAdmin` check separate from hasPermission, so
+  // fall through to the CF — server is the source of truth — but warn if
+  // we can detect the user isn't admin/staff client-side.
+  var overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;';
+  var collections = [
+    { id: 'orders', label: 'Order' },
+    { id: 'refunds', label: 'Refund' },
+    { id: 'expenses', label: 'Expense' },
+    { id: 'vendorBills', label: 'Vendor bill' }
+  ];
+  var optHtml = collections.map(function(c) {
+    return '<option value="' + e(c.id) + '">' + e(c.label) + ' (' + e(c.id) + ')</option>';
+  }).join('');
+  var inputCss = 'background:var(--bg-primary,#1a1a1a);border:1px solid rgba(255,255,255,0.15);border-radius:6px;color:var(--text,#fff);padding:6px 8px;font-size:0.85rem;width:100%;box-sizing:border-box;font-family:inherit;';
+  var h = '<div style="background:var(--bg-secondary,#232323);border-radius:10px;max-width:640px;width:96%;padding:22px 24px;box-shadow:0 8px 30px rgba(0,0,0,0.4);color:var(--text,#fff);">';
+  h += '<div style="font-size:1rem;font-weight:700;margin-bottom:10px;">Submit amendment</div>';
+  h += '<div style="font-size:0.78rem;color:var(--warm-gray,#888);margin-bottom:14px;">';
+  h += 'Closed-period records cannot be edited directly. Submitting an amendment routes a proposed change to the approval queue. Approval writes a dated counter-entry in the next open period.';
+  h += '</div>';
+  h += '<div style="display:grid;grid-template-columns:140px 1fr;gap:10px 12px;align-items:center;margin-bottom:14px;">';
+  h += '<label style="font-size:0.78rem;color:var(--warm-gray,#888);">Target collection</label>';
+  h += '<select id="amSubCol" style="' + inputCss + '">' + optHtml + '</select>';
+  h += '<label style="font-size:0.78rem;color:var(--warm-gray,#888);">Target doc ID</label>';
+  h += '<input id="amSubId" type="text" placeholder="Firestore document id" style="' + inputCss + '">';
+  h += '<label style="font-size:0.78rem;color:var(--warm-gray,#888);align-self:start;padding-top:6px;">Reason (≥ 10 chars)</label>';
+  h += '<textarea id="amSubReason" rows="2" placeholder="Why this change?" style="' + inputCss + '"></textarea>';
+  h += '<label style="font-size:0.78rem;color:var(--warm-gray,#888);align-self:start;padding-top:6px;">Proposed shape (JSON)</label>';
+  h += '<textarea id="amSubAfter" rows="6" placeholder=\'{"amountCents": 12345, "memo": "corrected"}\' style="' + inputCss + 'font-family:ui-monospace,Menlo,Monaco,Consolas,monospace;font-size:0.78rem;"></textarea>';
+  h += '</div>';
+  h += '<div id="amSubErr" style="font-size:0.78rem;color:#dc2626;margin-bottom:10px;min-height:14px;"></div>';
+  h += '<div style="display:flex;justify-content:flex-end;gap:8px;">';
+  h += '<button class="btn btn-secondary" id="amSubCancel">Cancel</button>';
+  h += '<button class="btn btn-primary" id="amSubOK">Submit</button>';
+  h += '</div></div>';
+  overlay.innerHTML = h;
+  document.body.appendChild(overlay);
+  function close() { if (overlay.parentNode) overlay.parentNode.removeChild(overlay); }
+  overlay.querySelector('#amSubCancel').addEventListener('click', close);
+  overlay.addEventListener('click', function(ev) { if (ev.target === overlay) close(); });
+  overlay.querySelector('#amSubOK').addEventListener('click', async function() {
+    var errEl = overlay.querySelector('#amSubErr');
+    errEl.textContent = '';
+    var col = overlay.querySelector('#amSubCol').value;
+    var id = (overlay.querySelector('#amSubId').value || '').trim();
+    var reason = (overlay.querySelector('#amSubReason').value || '').trim();
+    var afterStr = (overlay.querySelector('#amSubAfter').value || '').trim();
+    if (!id) { errEl.textContent = 'Target doc ID required.'; return; }
+    if (reason.length < 10) { errEl.textContent = 'Reason must be at least 10 characters.'; return; }
+    var afterObj;
+    try { afterObj = JSON.parse(afterStr); }
+    catch (perr) { errEl.textContent = 'Proposed shape is not valid JSON: ' + perr.message; return; }
+    if (!afterObj || typeof afterObj !== 'object' || Array.isArray(afterObj)) {
+      errEl.textContent = 'Proposed shape must be a JSON object.'; return;
+    }
+    try {
+      var subName = (firebase.auth().currentUser && (firebase.auth().currentUser.displayName || firebase.auth().currentUser.email)) || null;
+      var json = await _closeV3Call('routeAmendment', {
+        targetCollection: col,
+        targetId: id,
+        after: afterObj,
+        reason: reason,
+        submittedByName: subName
+      });
+      if (!json || json.ok === false) {
+        errEl.textContent = (json && (json.message || json.error)) || 'Submit failed.';
+        return;
+      }
+      try { await writeAudit('create', 'amendment', json.amendmentId + ':submitted'); } catch (xerr) {}
+      showToast('Amendment submitted for period ' + json.periodId);
+      close();
+      renderAmendments();
+    } catch (err) {
+      errEl.textContent = (err && err.message) ? err.message : String(err);
+    }
+  });
+};
+window.finAmendmentSubmit = window.finAmendmentOpenSubmit; // alias
 
 // ── Module registration ───────────────────────────────────────────────────────
 
