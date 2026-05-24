@@ -224,10 +224,15 @@ async function processTenant(tid, totals, rl, ctx) {
     let edgeNotes = [];
     const checksRaw = Array.isArray(data.checks) ? data.checks : [];
     if (!Array.isArray(data.checks)) edgeNotes.push('no checks[] → []');
+    // Close v3 reconciliation (item 7): canonical check shape includes
+    // memo + invoiceRef. Normalize to '' when absent on the legacy doc so
+    // the hash projection matches Agent A's canonicalCashCloseHash exactly.
     const checks = checksRaw.map(c => ({
-      number: c && c.number != null ? c.number : '',
-      payerName: c && c.payerName != null ? c.payerName : '',
-      amountCents: c && typeof c.amountCents === 'number' ? c.amountCents : 0
+      number: c && c.number != null ? String(c.number) : '',
+      payerName: c && c.payerName != null ? String(c.payerName) : '',
+      amountCents: c && typeof c.amountCents === 'number' ? c.amountCents : 0,
+      memo: c && c.memo != null ? String(c.memo) : '',
+      invoiceRef: c && c.invoiceRef != null ? String(c.invoiceRef) : ''
     }));
     const checkTotalCents = typeof data.checkTotalCents === 'number'
       ? data.checkTotalCents
