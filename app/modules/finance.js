@@ -5944,6 +5944,223 @@ async function _loadFinanceOverview() {
 }
 window.renderFinanceOverview = renderFinanceOverview;
 
+// ============================================================================
+// Close v3 — Period Close tab (Idea -OtQH_uRXqz9jJBRsmrj, sub-task 3)
+// ============================================================================
+// Lists the last 12 months. Each row shows status (Open / Closed / Auto-closed),
+// aggregate variance + opening + closing cash, and CTA. CF /writePeriodClose
+// performs the actual close; on response.code==='unclosedDays' we surface a
+// modal listing the offending dates with deep-links back to Day Close UI.
+
+function _pcMonthRange(monthStr) {
+  // monthStr = "YYYY-MM". Return {start, end} ISO date strings (inclusive).
+  var parts = monthStr.split('-');
+  var y = parseInt(parts[0], 10);
+  var m = parseInt(parts[1], 10);
+  var start = new Date(Date.UTC(y, m - 1, 1));
+  var end = new Date(Date.UTC(y, m, 0));
+  function pad(n) { return n < 10 ? '0' + n : '' + n; }
+  return {
+    start: start.getUTCFullYear() + '-' + pad(start.getUTCMonth() + 1) + '-' + pad(start.getUTCDate()),
+    end:   end.getUTCFullYear()   + '-' + pad(end.getUTCMonth() + 1)   + '-' + pad(end.getUTCDate())
+  };
+}
+
+function _pcLast12Months() {
+  var out = [];
+  var d = new Date();
+  d.setUTCDate(1);
+  for (var i = 0; i < 12; i++) {
+    var y = d.getUTCFullYear();
+    var m = d.getUTCMonth() + 1;
+    out.push(y + '-' + (m < 10 ? '0' + m : '' + m));
+    d.setUTCMonth(d.getUTCMonth() - 1);
+  }
+  return out;
+}
+
+function _pcMonthLabel(monthStr) {
+  var parts = monthStr.split('-');
+  var d = new Date(Date.UTC(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, 1));
+  return d.toLocaleDateString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+}
+
+async function renderPeriodClose() {
+  var el = document.getElementById('financePeriodCloseTab');
+  if (!el) return;
+  el.innerHTML = '<div style="color:var(--warm-gray,#888);padding:20px;text-align:center;">Loading period close…</div>';
+  try {
+    // Read all day-close versions + all period-close docs in parallel.
+    var dayCloses = (await MastDB.get('closes/day')) || {};
+    var periodCloses = (await MastDB.get('closes/period')) || {};
+    // Build per-day "latest non-superseded version" map.
+    var latestByDate = {};
+    Object.keys(dayCloses).forEach(function(id) {
+      var v = dayCloses[id];
+      if (!v || !v.date) return;
+      var cur = latestByDate[v.date];
+      if (!cur || (v.version || 0) > (cur.version || 0)) {
+        if (!v.superseded) latestByDate[v.date] = v;
+      }
+    });
+    var months = _pcLast12Months();
+    var h = '<div style="max-width:960px;">';
+    h += '<h3 style="margin:0 0 14px;font-size:1rem;font-weight:700;">Period Close — last 12 months</h3>';
+    h += '<div style="font-size:0.78rem;color:var(--warm-gray,#888);margin-bottom:14px;">Closing a period locks all day closes in the month. Day closes can still be re-closed (creates new versions) until the period is closed.</div>';
+    h += '<table style="width:100%;border-collapse:collapse;font-size:0.85rem;">';
+    h += '<thead><tr style="text-align:left;color:var(--warm-gray,#888);font-size:0.78rem;">';
+    h += '<th style="padding:8px 10px;border-bottom:1px solid rgba(255,255,255,0.12);">Month</th>';
+    h += '<th style="padding:8px 10px;border-bottom:1px solid rgba(255,255,255,0.12);">Status</th>';
+    h += '<th style="padding:8px 10px;border-bottom:1px solid rgba(255,255,255,0.12);text-align:right;">Opening cash</th>';
+    h += '<th style="padding:8px 10px;border-bottom:1px solid rgba(255,255,255,0.12);text-align:right;">Closing cash</th>';
+    h += '<th style="padding:8px 10px;border-bottom:1px solid rgba(255,255,255,0.12);text-align:right;">Variance</th>';
+    h += '<th style="padding:8px 10px;border-bottom:1px solid rgba(255,255,255,0.12);"></th>';
+    h += '</tr></thead><tbody>';
+    months.forEach(function(monthStr) {
+      var range = _pcMonthRange(monthStr);
+      var openingSum = 0, closingSum = 0, varianceSum = 0, dayCount = 0;
+      Object.keys(latestByDate).forEach(function(d) {
+        if (d >= range.start && d <= range.end) {
+          var v = latestByDate[d];
+          openingSum += v.openingCashCents || 0;
+          closingSum += v.closingCashCents || 0;
+          varianceSum += v.varianceCents || 0;
+          dayCount++;
+        }
+      });
+      var pc = periodCloses[monthStr] || null;
+      var statusChip = '';
+      if (pc && pc.status === 'closed') {
+        var ts = pc.closedAt ? String(pc.closedAt).replace('T',' ').slice(0,16) : '';
+        statusChip = '<span style="background:rgba(34,197,94,0.18);color:#22c55e;padding:2px 8px;border-radius:10px;font-size:0.72rem;font-weight:700;">Closed</span>'
+          + (ts ? ' <span style="color:var(--warm-gray,#888);font-size:0.72rem;">' + e(ts) + '</span>' : '');
+      } else if (pc && pc.status === 'auto-closed') {
+        var ats = pc.autoClosedAt ? String(pc.autoClosedAt).replace('T',' ').slice(0,16) : '';
+        statusChip = '<span style="background:rgba(99,102,241,0.18);color:#818cf8;padding:2px 8px;border-radius:10px;font-size:0.72rem;font-weight:700;">Auto-closed</span>'
+          + (ats ? ' <span style="color:var(--warm-gray,#888);font-size:0.72rem;">' + e(ats) + '</span>' : '');
+      } else {
+        statusChip = '<span style="background:rgba(234,179,8,0.18);color:#eab308;padding:2px 8px;border-radius:10px;font-size:0.72rem;font-weight:700;">Open</span>';
+      }
+      var rowClickAttr = (pc ? 'onclick="finPeriodCloseDrillDown(' + _jsAttrSafe(monthStr) + ')" style="cursor:pointer;"' : '');
+      h += '<tr ' + rowClickAttr + '>';
+      h += '<td style="padding:8px 10px;border-bottom:1px solid rgba(255,255,255,0.06);font-weight:600;">' + e(_pcMonthLabel(monthStr)) + '</td>';
+      h += '<td style="padding:8px 10px;border-bottom:1px solid rgba(255,255,255,0.06);">' + statusChip + '</td>';
+      h += '<td style="padding:8px 10px;border-bottom:1px solid rgba(255,255,255,0.06);text-align:right;">' + e(fmt$(openingSum)) + '</td>';
+      h += '<td style="padding:8px 10px;border-bottom:1px solid rgba(255,255,255,0.06);text-align:right;">' + e(fmt$(closingSum)) + '</td>';
+      h += '<td style="padding:8px 10px;border-bottom:1px solid rgba(255,255,255,0.06);text-align:right;color:' + (varianceSum === 0 ? 'var(--warm-gray,#888)' : (Math.abs(varianceSum) < 500 ? '#22c55e' : '#eab308')) + ';">' + e(fmt$(varianceSum)) + '</td>';
+      h += '<td style="padding:8px 10px;border-bottom:1px solid rgba(255,255,255,0.06);text-align:right;">';
+      if (!pc) {
+        h += '<button class="btn btn-primary btn-small" onclick="event.stopPropagation();finPeriodCloseRun(' + _jsAttrSafe(monthStr) + ')">Close ' + e(_pcMonthLabel(monthStr).split(' ')[0]) + '</button>';
+      } else {
+        h += '<span style="color:var(--warm-gray,#888);font-size:0.78rem;">' + dayCount + ' day' + (dayCount === 1 ? '' : 's') + '</span>';
+      }
+      h += '</td></tr>';
+    });
+    h += '</tbody></table>';
+    h += '</div>';
+    el.innerHTML = h;
+  } catch (err) {
+    el.innerHTML = '<div style="padding:20px;color:var(--danger,#dc2626);">Failed to load period close: ' + e(err.message || err) + '</div>';
+  }
+}
+
+window.finPeriodCloseRun = async function(monthStr) {
+  if (!_isSafeFbKey(monthStr.replace('-', ''))) { showToast('Invalid period.', true); return; }
+  var ok = await mastConfirm('Close period ' + _pcMonthLabel(monthStr) + '? After closing, day closes in this month become read-only.', { title: 'Close period', confirmLabel: 'Close period' });
+  if (!ok) return;
+  var requestId = (window.crypto && window.crypto.randomUUID) ? window.crypto.randomUUID()
+    : ('rid-' + Date.now() + '-' + Math.random().toString(36).slice(2));
+  try {
+    var resp = await callCF('/writePeriodClose', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ periodId: monthStr, requestId: requestId })
+    });
+    var json = null;
+    try { json = await resp.json(); } catch (jerr) {}
+    if (json && json.code === 'unclosedDays' && Array.isArray(json.unclosedDates)) {
+      // Surface offending dates with deep-links into Day Close UI.
+      var listHtml = '<div style="margin-bottom:10px;color:var(--warm-gray,#888);font-size:0.85rem;">The following dates have no closed day. Close each, then re-run period close.</div>';
+      listHtml += '<ul style="margin:0;padding-left:18px;font-size:0.85rem;">';
+      json.unclosedDates.forEach(function(d) {
+        if (/^\d{4}-\d{2}-\d{2}$/.test(d)) {
+          listHtml += '<li style="margin-bottom:4px;"><a href="#finance-cash-flow?subView=dayclose&date=' + e(d) + '" style="color:#22c55e;text-decoration:underline;">' + e(d) + '</a></li>';
+        }
+      });
+      listHtml += '</ul>';
+      _pcShowInfoModal('Cannot close ' + _pcMonthLabel(monthStr), listHtml);
+      return;
+    }
+    if (!resp.ok || !json || json.ok === false) {
+      showToast('Close failed: ' + ((json && (json.message || json.error)) || ('HTTP ' + resp.status)), true);
+      return;
+    }
+    try { await writeAudit('create', 'periodClose', monthStr); } catch (xerr) {}
+    showToast('Closed ' + _pcMonthLabel(monthStr));
+    renderPeriodClose();
+  } catch (err) {
+    showToast('Close failed: ' + (err.message || err), true);
+  }
+};
+
+window.finPeriodCloseDrillDown = async function(monthStr) {
+  if (!_isSafeFbKey(monthStr.replace('-', ''))) return;
+  try {
+    var pc = await MastDB.get('closes/period/' + monthStr);
+    if (!pc) { showToast('No close record for ' + monthStr, true); return; }
+    var range = _pcMonthRange(monthStr);
+    var dayCloses = (await MastDB.get('closes/day')) || {};
+    var rows = [];
+    Object.keys(dayCloses).forEach(function(id) {
+      var v = dayCloses[id];
+      if (!v || !v.date) return;
+      if (v.date < range.start || v.date > range.end) return;
+      if (v.superseded) return;
+      rows.push(v);
+    });
+    rows.sort(function(a, b) { return a.date < b.date ? -1 : 1; });
+    var rollup = pc.rollup || {};
+    var inner = '<div style="margin-bottom:10px;font-size:0.85rem;">';
+    inner += '<div>Status: <strong>' + e(pc.status || 'unknown') + '</strong></div>';
+    if (pc.closedAt) inner += '<div>Closed at: ' + e(String(pc.closedAt).replace('T',' ').slice(0,16)) + '</div>';
+    if (pc.closedByName || pc.closedBy) inner += '<div>Closed by: ' + e(pc.closedByName || pc.closedBy) + '</div>';
+    inner += '<div>Rollup variance: <strong>' + e(fmt$(rollup.varianceCentsSum || 0)) + '</strong></div>';
+    inner += '<div>Opening sum: ' + e(fmt$(rollup.openingCashCentsSum || 0)) + ' &middot; Closing sum: ' + e(fmt$(rollup.closingCashCentsSum || 0)) + '</div>';
+    inner += '</div>';
+    inner += '<div style="max-height:280px;overflow-y:auto;">';
+    inner += '<table style="width:100%;font-size:0.78rem;border-collapse:collapse;">';
+    inner += '<thead><tr><th style="text-align:left;padding:4px 6px;border-bottom:1px solid rgba(255,255,255,0.12);">Date</th><th style="text-align:right;padding:4px 6px;border-bottom:1px solid rgba(255,255,255,0.12);">Variance</th><th style="padding:4px 6px;border-bottom:1px solid rgba(255,255,255,0.12);"></th></tr></thead><tbody>';
+    rows.forEach(function(v) {
+      inner += '<tr><td style="padding:4px 6px;">' + e(v.date) + ' <span style="color:var(--warm-gray,#888);">v' + e(String(v.version || 1)) + '</span></td>';
+      inner += '<td style="padding:4px 6px;text-align:right;">' + e(fmt$(v.varianceCents || 0)) + '</td>';
+      inner += '<td style="padding:4px 6px;text-align:right;"><a href="#finance-cash-flow?subView=dayclose&date=' + e(v.date) + '" style="color:#22c55e;text-decoration:underline;font-size:0.72rem;">Open</a></td></tr>';
+    });
+    if (rows.length === 0) inner += '<tr><td colspan="3" style="padding:8px;color:var(--warm-gray,#888);">No day closes.</td></tr>';
+    inner += '</tbody></table></div>';
+    _pcShowInfoModal(_pcMonthLabel(monthStr) + ' — period close detail', inner);
+  } catch (err) {
+    showToast('Failed to load drill-down: ' + (err.message || err), true);
+  }
+};
+
+function _pcShowInfoModal(title, innerHtml) {
+  var overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;';
+  var h = '<div style="background:var(--bg-secondary,#232323);border-radius:10px;max-width:640px;width:96%;padding:22px 24px;box-shadow:0 8px 30px rgba(0,0,0,0.4);color:var(--text,#fff);">';
+  h += '<div style="font-size:1.0rem;font-weight:700;margin-bottom:14px;">' + e(title) + '</div>';
+  h += '<div>' + innerHtml + '</div>';
+  h += '<div style="display:flex;justify-content:flex-end;margin-top:18px;">';
+  h += '<button class="btn btn-primary" id="pcInfoClose">Close</button>';
+  h += '</div></div>';
+  overlay.innerHTML = h;
+  document.body.appendChild(overlay);
+  function close() { if (overlay.parentNode) overlay.parentNode.removeChild(overlay); }
+  overlay.querySelector('#pcInfoClose').addEventListener('click', close);
+  overlay.addEventListener('click', function(ev) { if (ev.target === overlay) close(); });
+}
+
+window.renderPeriodClose = renderPeriodClose;
+
 // ── Module registration ───────────────────────────────────────────────────────
 
 MastAdmin.registerModule('finance', {
@@ -5958,7 +6175,10 @@ MastAdmin.registerModule('finance', {
     'finance-reports':    { tab: 'financeReportsTab',    setup: function() { setupReportsTab(); } },
     'customer-portfolio': { tab: 'customerPortfolioTab', setup: function() { renderCustomerPortfolio(); } },
     // W2.1: new #financials overview dashboard (replaces orphan Square sync route).
-    'financials':         { tab: 'financeOverviewTab',   setup: function() { renderFinanceOverview(); } }
+    'financials':         { tab: 'financeOverviewTab',   setup: function() { renderFinanceOverview(); } },
+    // Close v3 (Idea -OtQH_uRXqz9jJBRsmrj):
+    'finance-period-close': { tab: 'financePeriodCloseTab', setup: function() { renderPeriodClose(); } },
+    'finance-amendments':   { tab: 'financeAmendmentsTab',  setup: function() { renderAmendments(); } }
   }
 });
 

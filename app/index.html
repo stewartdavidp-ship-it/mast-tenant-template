@@ -5804,6 +5804,9 @@
         <div class="sidebar-item" data-route="finance-tax" onclick="navigateTo('finance-tax')">Tax</div>
         <div class="sidebar-item" data-route="finance-reports" onclick="navigateTo('finance-reports')">Reports</div>
         <div class="sidebar-item" data-route="customer-portfolio" onclick="navigateTo('customer-portfolio')">Customer Portfolio</div>
+        <!-- Close v3 (Idea -OtQH_uRXqz9jJBRsmrj): period close + amendments queue. -->
+        <div class="sidebar-item" data-route="finance-period-close" onclick="navigateTo('finance-period-close')">Period Close</div>
+        <div class="sidebar-item" data-route="finance-amendments" onclick="navigateTo('finance-amendments')">Amendments</div>
       </div>
     </div>
     <!-- Operations -->
@@ -6368,6 +6371,10 @@
         <div class="placeholder-note">Reports are generated from live Finance data once Revenue and Expenses are wired.</div>
       </div>
     </div>
+    <!-- Close v3 (Idea -OtQH_uRXqz9jJBRsmrj): Period Close & Amendments tabs.
+         Content rendered by app/modules/finance.js (renderPeriodClose / renderAmendments). -->
+    <div id="financePeriodCloseTab" style="display:none;"></div>
+    <div id="financeAmendmentsTab" style="display:none;"></div>
     <!-- Build 6b UI-2 — Customer Portfolio dashboard. Concentration + quadrants
          + bulk-tag actions. Computed client-side mirroring the server-side
          analytics.get_customer_portfolio + analytics.get_concentration. -->
@@ -14399,7 +14406,10 @@ var DEFAULT_ROLES = {
       receipts:     { create: true, read: true, update: true, delete: true },
       contacts:     { create: true, read: true, update: true, delete: true },
       forecast:     { create: false, read: true, update: false, delete: false },
-      finance:          { create: true, read: true, update: true, delete: true },
+      // Close v3: 'approveAmendment' is a NON-CRUD action that gates the
+      // Approve button in the Amendments queue. Admin gets it by default;
+      // manager/user/guest do NOT (operator-grantable via per-user overrides).
+      finance:          { create: true, read: true, update: true, delete: true, approveAmendment: true },
       financeSensitive: { create: true, read: true, update: true, delete: true }
     }
   },
@@ -14427,7 +14437,7 @@ var DEFAULT_ROLES = {
       receipts:         { create: true, read: true, update: false, delete: false },
       contacts:         { create: true, read: true, update: true, delete: false },
       forecast:         { create: false, read: true, update: false, delete: false },
-      finance:          { create: false, read: true, update: false, delete: false },
+      finance:          { create: false, read: true, update: false, delete: false, approveAmendment: false },
       financeSensitive: { create: false, read: false, update: false, delete: false }
     },
     navSections: ['products', 'sales', 'marketing', 'retention', 'events',
@@ -14457,7 +14467,7 @@ var DEFAULT_ROLES = {
       receipts:     { create: false, read: false, update: false, delete: false },
       contacts:     { create: false, read: false, update: false, delete: false },
       forecast:         { create: false, read: false, update: false, delete: false },
-      finance:          { create: false, read: false, update: false, delete: false },
+      finance:          { create: false, read: false, update: false, delete: false, approveAmendment: false },
       financeSensitive: { create: false, read: false, update: false, delete: false }
     },
     navSections: ['sales', 'products', 'classes', 'customer-service', 'team']
@@ -14486,7 +14496,7 @@ var DEFAULT_ROLES = {
       receipts:         { create: false, read: false, update: false, delete: false },
       contacts:         { create: false, read: false, update: false, delete: false },
       forecast:         { create: false, read: false, update: false, delete: false },
-      finance:          { create: false, read: false, update: false, delete: false },
+      finance:          { create: false, read: false, update: false, delete: false, approveAmendment: false },
       financeSensitive: { create: false, read: false, update: false, delete: false }
     },
     navSections: ['sales', 'classes']
@@ -16964,11 +16974,16 @@ var SECTION_ROUTES = {
   'classes':           ['book', 'instructors', 'resources', 'passes',
                         'enrollments', 'calendar', 'students',
                         'book-reports'],
+  // Close v3 (Idea -OtQH_uRXqz9jJBRsmrj): 'finance-period-close' + 'finance-amendments'
+  // live in this section so canViewSection routes them through Finance permissions
+  // (per [[feedback_parallel_route_role_gate]]). Route-level role gates live in
+  // navigateTo() so the route itself is the data gate.
   'finance':           ['finance-revenue', 'finance-expenses', 'finance-pl',
                         'finance-cash-flow', 'finance-ar', 'finance-ap',
                         'finance-tax', 'finance-reports',
                         'customer-portfolio',
-                        'financials'],
+                        'financials',
+                        'finance-period-close', 'finance-amendments'],
   'operations':        ['trips', 'reports',
                         'advisor', 'studio', 'team', 'business',
                         'channels', 'contacts', 'customers'],
@@ -17024,7 +17039,7 @@ var ROUTE_ALIASES = {
   'consignment': 'galleries'
 };
 
-var ALL_TAB_IDS = ['inquiriesTab', 'scheduleTab', 'galleryTab', 'homepageTab', 'brandTab', 'productsTab', 'ordersTab', 'salesTab', 'salesEventsTab', 'productionTab', 'forecastTab', 'couponsTab', 'analyticsTab', 'settingsTab', 'imagesTab', 'auditLogTab', 'employeesTab', 'contactsTab', 'customersTab', 'packTab', 'shipTab', 'commissionsTab', 'rmaTab', 'socialMediaTab', 'blogTab', 'newsletterTab', 'placeholderTab', 'inventoryTab', 'storiesTab', 'dashboardTab', 'tripsTab', 'wholesaleTab', 'showTab', 'financialsTab', 'eventsAdminTab', 'websiteTab', 'showLightTab', 'emailLogTab', 'materialsTab', 'piecesTab', 'galleriesTab', 'lookbooksTab', 'promotionsTab', 'bookTab', 'subscriptionTab', 'coinsTab', 'askAiTab', 'aboutTab', 'walletTab', 'giftCardsTab', 'loyaltyTab', 'membershipTab', 'termsTab', 'advisorTab', 'studioTab', 'teamTab', 'studentsTab', 'migrationDashTab', 'migrationConfirmTab', 'migrationPlanTab', 'migrationImportTab', 'historicalOrdersTab', 'channelsTab', 'businessTab', 'myFeedbackTab', 'procurementTab', 'csInboxTab', 'csTicketsTab', 'csSurveysTab', 'csReviewsTab', 'csFaqsTab', 'csMembersTab', 'financeRevenueTab', 'financeExpensesTab', 'financePlTab', 'financeCashFlowTab', 'financeArTab', 'financeApTab', 'financeTaxTab', 'financeReportsTab', 'customerPortfolioTab', 'financeOverviewTab',
+var ALL_TAB_IDS = ['inquiriesTab', 'scheduleTab', 'galleryTab', 'homepageTab', 'brandTab', 'productsTab', 'ordersTab', 'salesTab', 'salesEventsTab', 'productionTab', 'forecastTab', 'couponsTab', 'analyticsTab', 'settingsTab', 'imagesTab', 'auditLogTab', 'employeesTab', 'contactsTab', 'customersTab', 'packTab', 'shipTab', 'commissionsTab', 'rmaTab', 'socialMediaTab', 'blogTab', 'newsletterTab', 'placeholderTab', 'inventoryTab', 'storiesTab', 'dashboardTab', 'tripsTab', 'wholesaleTab', 'showTab', 'financialsTab', 'eventsAdminTab', 'websiteTab', 'showLightTab', 'emailLogTab', 'materialsTab', 'piecesTab', 'galleriesTab', 'lookbooksTab', 'promotionsTab', 'bookTab', 'subscriptionTab', 'coinsTab', 'askAiTab', 'aboutTab', 'walletTab', 'giftCardsTab', 'loyaltyTab', 'membershipTab', 'termsTab', 'advisorTab', 'studioTab', 'teamTab', 'studentsTab', 'migrationDashTab', 'migrationConfirmTab', 'migrationPlanTab', 'migrationImportTab', 'historicalOrdersTab', 'channelsTab', 'businessTab', 'myFeedbackTab', 'procurementTab', 'csInboxTab', 'csTicketsTab', 'csSurveysTab', 'csReviewsTab', 'csFaqsTab', 'csMembersTab', 'financeRevenueTab', 'financeExpensesTab', 'financePlTab', 'financeCashFlowTab', 'financeArTab', 'financeApTab', 'financeTaxTab', 'financeReportsTab', 'customerPortfolioTab', 'financeOverviewTab', 'financePeriodCloseTab', 'financeAmendmentsTab',
 // M3 + M6 (Idea -OtADygKA_JhRmk1wUqN): Mast modes tabs — must be in this list
 // so applyRoute correctly hides them when navigating away.
 // W1.8: Sales by Product (PM/Operator doorway) — same reason.
@@ -17124,6 +17139,14 @@ function navigateTo(route, params) {
   // since it surfaces Margin + Runway = sensitive aggregates.
   if (['finance-pl', 'finance-tax', 'finance-reports', 'financials'].indexOf(route) >= 0 && !hasPermission('financeSensitive', 'read')) {
     showToast('This report is restricted to Admin users.', true);
+    route = 'dashboard';
+  }
+  // Close v3 (Idea -OtQH_uRXqz9jJBRsmrj): Period Close + Amendments require
+  // finance:update (the "write" gate per existing role bundles). Replicates the
+  // [[feedback_parallel_route_role_gate]] pattern — RBAC is route-level only,
+  // so the route gate IS the data gate.
+  if (['finance-period-close', 'finance-amendments'].indexOf(route) >= 0 && !hasPermission('finance', 'update')) {
+    showToast('Finance write access required.', true);
     route = 'dashboard';
   }
   // W2.3 — Engagement Inbox surfaces cs_reviews + cs_tickets data. The
@@ -17711,7 +17734,7 @@ var MODULE_MANIFEST = {
   social: { src: 'modules/social.js', routes: ['social'] },
   trips: { src: 'modules/trips.js', routes: ['trips'] },
   wholesale: { src: 'modules/wholesale.js', routes: ['wholesale'] },
-  finance: { src: 'modules/finance.js', routes: ['finance-revenue', 'finance-expenses', 'finance-pl', 'finance-cash-flow', 'finance-ar', 'finance-ap', 'finance-tax', 'finance-reports', 'customer-portfolio', 'financials'] },
+  finance: { src: 'modules/finance.js', routes: ['finance-revenue', 'finance-expenses', 'finance-pl', 'finance-cash-flow', 'finance-ar', 'finance-ap', 'finance-tax', 'finance-reports', 'customer-portfolio', 'financials', 'finance-period-close', 'finance-amendments'] },
   shows: { src: 'modules/shows.js', routes: ['show', 'show-find', 'show-apply', 'show-prep', 'show-execute', 'show-history'] },
   production: { src: 'modules/production.js', routes: ['jobs', 'production', 'stories', 'forecast'] },
   procurement: { src: 'modules/procurement.js', routes: ['procurement'] },
