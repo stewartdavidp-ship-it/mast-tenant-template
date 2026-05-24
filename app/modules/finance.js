@@ -17,6 +17,15 @@ var _apGroupByVendor = false;
 var _apExpandedVendors = {};
 var _cfLoaded = false;
 var _includeTestData = false;
+// W1.6 (-OtMNIz-iS6EE2q-H0V6): Cash Flow horizon toggle (30/60/90 days).
+// Default 30 for back-compat with prior "Next 30 Days" panel.
+var _cashHorizonDays = 30;
+// W1.2 + W1.6: snapshot of last cash-flow load so the horizon toggle can
+// re-render against the current data set without re-fetching. NB:
+// re-fetch on Refresh; this snapshot is for instant horizon flips.
+var _cfLastSnapshot = null;
+// W1.5: bank-sync per-item retry/reconnect in-flight tracking.
+var _bankSyncInFlight = {};
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -1693,8 +1702,23 @@ async function loadCashFlow() {
     // (same shape as the standalone AR loader). AP rollup below is NOT
     // filtered — purchaseReceipts are vendor invoices and have no test-
     // channel concept.
+    // W1.2 (-OtMNINSFRiKurYCGY1b): "Money In/Out ≤30d" filter previously
+    // required daysLeft >= 0 && <= 30 — i.e. excluded already-overdue
+    // receipts/invoices. That made the header card ("AR Outstanding $X / N")
+    // disagree with the projection cell on the same panel: overdue invoices
+    // counted toward the header but were dropped from the projection. Fix
+    // is symmetric on both AR and AP — anything due in (∞,30d] from today
+    // (i.e. daysLeft <= 30, including negative = overdue) is "money expected
+    // within the next 30d horizon." This is also the only semantics that
+    // matches the user's mental model: an invoice 5 days overdue is more
+    // certain to land in the 30-day cash window, not less.
+    // W1.6 horizon now drives the upper bound via cashHorizonDays.
+    // W1.7: wholesale FK preferred (isWholesaleOrder) when classifying
+    // inflow tier — surfaced separately in renderCashFlow.
+    var horizonDays = (typeof _cashHorizonDays === 'number') ? _cashHorizonDays : 30;
     var allOrders = Object.assign({}, sentRaw || {}, overdueRaw || {});
-    var arTotal = 0, arDue30 = 0, arCount = 0;
+    var arTotal = 0, arDueHorizon = 0, arCount = 0;
+    var arWholesaleHorizon = 0, arDirectHorizon = 0;
     Object.values(allOrders).forEach(function(o) {
       var cents = Math.round((o.total || 0) * 100);
       var paid  = o.invoicePaidAmount || 0;
@@ -1704,12 +1728,16 @@ async function loadCashFlow() {
       arTotal += due; arCount++;
       if (!o.invoiceDueDate) return;
       var daysLeft = Math.floor((new Date(o.invoiceDueDate).getTime() - Date.now()) / 86400000);
-      if (daysLeft >= 0 && daysLeft <= 30) arDue30 += due;
+      if (daysLeft <= horizonDays) {
+        arDueHorizon += due;
+        if (isWholesaleOrder(o)) arWholesaleHorizon += due;
+        else arDirectHorizon += due;
+      }
     });
 
     // AP due — vendor purchase receipts, no test-channel filter applies.
     var allReceipts = Object.assign({}, unpaidRaw || {}, partialRaw || {});
-    var apTotal = 0, apDue30 = 0, apCount = 0;
+    var apTotal = 0, apDueHorizon = 0, apCount = 0;
     Object.values(allReceipts).forEach(function(r) {
       var amtCents = r.amountCents || 0;
       var paid = r.paidAmount || 0;
@@ -1718,14 +1746,21 @@ async function loadCashFlow() {
       apTotal += due; apCount++;
       if (!r.dueDate) return;
       var daysLeft = Math.floor((new Date(r.dueDate).getTime() - Date.now()) / 86400000);
-      if (daysLeft >= 0 && daysLeft <= 30) apDue30 += due;
+      if (daysLeft <= horizonDays) apDueHorizon += due;
     });
 
     // bankTotal is in dollars from Plaid; AR/AP are in cents
     // Normalize: show bank in dollars, AR/AP in dollars too
-    var netProjected = bankTotal + (arDue30 / 100) - (apDue30 / 100);
+    var netProjected = bankTotal + (arDueHorizon / 100) - (apDueHorizon / 100);
 
-    el.innerHTML = renderCashFlow(bankTotal, bankAccounts, staleItems, arTotal, arDue30, arCount, apTotal, apDue30, apCount, netProjected, asOf);
+    _cfLastSnapshot = {
+      bankTotal: bankTotal, bankAccounts: bankAccounts, staleItems: staleItems,
+      arTotal: arTotal, arDueHorizon: arDueHorizon, arCount: arCount,
+      arWholesaleHorizon: arWholesaleHorizon, arDirectHorizon: arDirectHorizon,
+      apTotal: apTotal, apDueHorizon: apDueHorizon, apCount: apCount,
+      netProjected: netProjected, asOf: asOf, horizonDays: horizonDays
+    };
+    el.innerHTML = renderCashFlow(bankTotal, bankAccounts, staleItems, arTotal, arDueHorizon, arCount, apTotal, apDueHorizon, apCount, netProjected, asOf);
     _cfLoaded = true;
   } catch (err) {
     el.innerHTML = '<div style="color:var(--danger,#dc2626);padding:12px;">' + e(err.message) + '</div>';
@@ -1733,8 +1768,20 @@ async function loadCashFlow() {
   }
 }
 
-function renderCashFlow(bankTotal, bankAccounts, staleItems, arTotal, arDue30, arCount, apTotal, apDue30, apCount, netProjected, asOf) {
+function renderCashFlow(bankTotal, bankAccounts, staleItems, arTotal, arDueHorizon, arCount, apTotal, apDueHorizon, apCount, netProjected, asOf) {
   var h = '';
+  var horizonDays = (typeof _cashHorizonDays === 'number') ? _cashHorizonDays : 30;
+  var snap = _cfLastSnapshot || {};
+
+  // W1.6: horizon toggle (30/60/90d). Re-renders against _cfLastSnapshot —
+  // no re-fetch needed since the underlying receipts/invoices haven't moved.
+  h += '<div style="display:flex;gap:6px;margin-bottom:14px;align-items:center;">';
+  h += '<span style="font-size:0.78rem;color:var(--warm-gray,#888);margin-right:4px;">Horizon:</span>';
+  [30, 60, 90].forEach(function(d) {
+    var active = horizonDays === d;
+    h += '<button class="btn btn-' + (active ? 'primary' : 'secondary') + ' btn-small" onclick="finCashSetHorizon(' + d + ')">' + d + 'd</button>';
+  });
+  h += '</div>';
 
   // Summary cards
   var hasBank = bankAccounts.length > 0;
@@ -1744,8 +1791,12 @@ function renderCashFlow(bankTotal, bankAccounts, staleItems, arTotal, arDue30, a
   } else {
     h += statCard('Cash on Hand', '—', 'var(--warm-gray,#888)', 'Connect a bank to track');
   }
-  h += statCard('AR Outstanding', fmt$(arTotal), '#3b82f6', arCount + ' invoice' + (arCount !== 1 ? 's' : ''));
-  h += statCard('AP Due', fmt$(apTotal), '#f97316', apCount + ' receipt' + (apCount !== 1 ? 's' : ''));
+  // W1.2: card sub-label now shows the projected portion explicitly so the
+  // header and the projection cell reconcile visibly on the same panel.
+  h += statCard('AR Outstanding', fmt$(arTotal), '#3b82f6',
+    arCount + ' invoice' + (arCount !== 1 ? 's' : '') + ' · ' + fmt$(arDueHorizon) + ' in ≤' + horizonDays + 'd');
+  h += statCard('AP Due', fmt$(apTotal), '#f97316',
+    apCount + ' receipt' + (apCount !== 1 ? 's' : '') + ' · ' + fmt$(apDueHorizon) + ' in ≤' + horizonDays + 'd');
   h += '</div>';
 
   // Bank accounts
@@ -1774,20 +1825,25 @@ function renderCashFlow(bankTotal, bankAccounts, staleItems, arTotal, arDue30, a
     h += '</div>';
   }
 
-  // Next 30 days forecast
+  // Horizon forecast (30/60/90d)
   h += '<div style="background:var(--bg-secondary,#232323);border-radius:12px;padding:18px;">';
-  h += '<div style="font-size:0.85rem;font-weight:600;color:var(--warm-gray,#888);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:14px;">Next 30 Days</div>';
+  h += '<div style="font-size:0.85rem;font-weight:600;color:var(--warm-gray,#888);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:14px;">Next ' + horizonDays + ' Days</div>';
   h += '<div style="display:flex;gap:16px;flex-wrap:wrap;">';
 
   h += '<div style="flex:1;min-width:200px;">';
-  h += '<div style="font-size:0.78rem;color:var(--warm-gray,#888);margin-bottom:4px;">Money In (AR due ≤30d)</div>';
-  h += '<div style="font-size:1.15rem;font-weight:700;color:#22c55e;">' + fmt$(arDue30) + '</div>';
-  h += '<div style="font-size:0.78rem;color:var(--warm-gray,#888);">from open invoices</div>';
+  h += '<div style="font-size:0.78rem;color:var(--warm-gray,#888);margin-bottom:4px;">Money In (AR due ≤' + horizonDays + 'd)</div>';
+  h += '<div style="font-size:1.15rem;font-weight:700;color:#22c55e;">' + fmt$(arDueHorizon) + '</div>';
+  // W1.7: wholesale/direct split when available.
+  if (snap.arWholesaleHorizon || snap.arDirectHorizon) {
+    h += '<div style="font-size:0.72rem;color:var(--warm-gray,#888);">Wholesale ' + fmt$(snap.arWholesaleHorizon || 0) + ' · Direct ' + fmt$(snap.arDirectHorizon || 0) + '</div>';
+  } else {
+    h += '<div style="font-size:0.78rem;color:var(--warm-gray,#888);">from open invoices</div>';
+  }
   h += '</div>';
 
   h += '<div style="flex:1;min-width:200px;">';
-  h += '<div style="font-size:0.78rem;color:var(--warm-gray,#888);margin-bottom:4px;">Money Out (AP due ≤30d)</div>';
-  h += '<div style="font-size:1.15rem;font-weight:700;color:#ef4444;">' + fmt$(apDue30) + '</div>';
+  h += '<div style="font-size:0.78rem;color:var(--warm-gray,#888);margin-bottom:4px;">Money Out (AP due ≤' + horizonDays + 'd)</div>';
+  h += '<div style="font-size:1.15rem;font-weight:700;color:#ef4444;">' + fmt$(apDueHorizon) + '</div>';
   h += '<div style="font-size:0.78rem;color:var(--warm-gray,#888);">from unpaid receipts</div>';
   h += '</div>';
 
@@ -1800,8 +1856,37 @@ function renderCashFlow(bankTotal, bankAccounts, staleItems, arTotal, arDue30, a
 
   h += '</div></div>';
 
+  // W1.3 + R-FIN-1: CSV exporter + Period · Basis footer.
+  _finExporters['cash-flow'] = function() {
+    var rows = [];
+    rows.push(['Section', 'Label', 'Amount (USD)']);
+    rows.push(['Bank', 'Cash on Hand', bankTotal.toFixed(2)]);
+    bankAccounts.forEach(function(a) {
+      rows.push(['Bank', (a.institution || '') + ' ' + (a.name || '') + (a.mask ? ' ••' + a.mask : ''), a.balance.toFixed(2)]);
+    });
+    rows.push(['AR', 'Total Outstanding', (arTotal / 100).toFixed(2)]);
+    rows.push(['AR', 'Due ≤' + horizonDays + 'd', (arDueHorizon / 100).toFixed(2)]);
+    rows.push(['AP', 'Total Due', (apTotal / 100).toFixed(2)]);
+    rows.push(['AP', 'Due ≤' + horizonDays + 'd', (apDueHorizon / 100).toFixed(2)]);
+    rows.push(['Net', 'Projected ' + horizonDays + 'd', netProjected.toFixed(2)]);
+    _finDownloadCsv('cash-flow', rows, 'As of ' + asOf + ' · Horizon: ' + horizonDays + 'd · Basis: plaidItems + orders.invoiceDueDate + purchaseReceipts.dueDate');
+  };
+  h += _finFooter('cash-flow', 'As of ' + asOf + ' · Horizon ' + horizonDays + 'd', 'plaidItems + orders.invoiceDueDate + purchaseReceipts.dueDate');
+
   return h;
 }
+
+// W1.6 horizon toggle handler — re-render against last-loaded snapshot
+// instantly; if no snapshot (first paint failed), trigger a fresh load.
+window.finCashSetHorizon = function(days) {
+  if (days !== 30 && days !== 60 && days !== 90) return;
+  _cashHorizonDays = days;
+  // Snapshot's stored horizon may differ → recompute the per-horizon totals
+  // from the raw load. Cheap option: re-fire loadCashFlow which already
+  // honors _cashHorizonDays. This is also a good guard against drift between
+  // the snapshot's bucketing and the current toggle state.
+  if (typeof loadCashFlow === 'function') loadCashFlow();
+};
 
 // ── AR Tab ────────────────────────────────────────────────────────────────────
 
