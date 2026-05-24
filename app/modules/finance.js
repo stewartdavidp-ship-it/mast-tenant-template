@@ -351,8 +351,11 @@ async function loadRevenue() {
     // card); per-product mix on Demand Overview is a follow-up gated on
     // forecastOrders extension to include admin/sales — see task notes.
     var byTier = { Wholesale: 0, Direct: 0, POS: 0 };
+    // W1.7 (-OtMNJ9Ds56g3iAOWBhT): delegate to the canonical helper so the
+    // wholesaleAccountId FK introduced by Sales W1.9 is honored first; legacy
+    // boolean/orderType heuristics remain a fallback inside isWholesaleOrder.
     function _resolveOrderTier(o) {
-      if (o && (o.isWholesale === true || o.orderType === 'wholesale' || o.type === 'wholesale')) return 'Wholesale';
+      if (isWholesaleOrder(o)) return 'Wholesale';
       return 'Direct';
     }
     orders.forEach(function(o) {
@@ -477,7 +480,9 @@ function renderRevenue(totalCents, byChannel, txns, start, end, testTotalCents, 
   // Summary cards. W2.6: Total Revenue + Top Channel cards get Δ$ + Δ% chips
   // when prior data is available. statCard takes a 4th `sub` argument that
   // renders below the value — append the delta there.
-  var totalDelta = prior ? _renderRevenueDelta(totalCents, prior.totalCents) : '';
+  // W1.9 (-OtMNJUyp9Jyy1Pnn45n): wrap delta in sanity tooltip when |Δ%| > 50
+  // — surfaces "Check test-data filter / data freshness / period boundary?"
+  var totalDelta = prior ? _sanityWrap(_renderRevenueDelta(totalCents, prior.totalCents), totalCents, prior.totalCents) : '';
   h += '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px;">';
   h += statCard('Total Revenue', fmt$(totalCents), '#16a34a', totalDelta);
   var txnDelta = '';
@@ -587,6 +592,17 @@ function renderRevenue(totalCents, byChannel, txns, start, end, testTotalCents, 
     h += '</div>';
   }
 
+  // W1.3 + R-FIN-1: register CSV exporter + render Period · Basis footer.
+  _finExporters.revenue = function() {
+    var rows = [];
+    rows.push(['Date', 'Channel', 'Reference', 'Description', 'Amount (USD)', 'Type']);
+    txns.forEach(function(t) {
+      rows.push([t.date || '', t.channel || '', t.ref || '', t.desc || '', (t.cents / 100).toFixed(2), t.type || '']);
+    });
+    _finDownloadCsv('revenue', rows, 'Period: ' + start + ' to ' + end + ' · Basis: orders.placedAt + admin/sales.createdAt');
+  };
+  h += _finFooter('revenue', start + ' to ' + end, 'orders.placedAt + admin/sales.createdAt');
+
   return h;
 }
 
@@ -638,20 +654,47 @@ async function loadFinExpBanks() {
         '</div>';
       return;
     }
+    // W1.5 (-OtMNIpvOQT8_RitK1CX): bank-sync header redesign. The old
+    // bare "error" chip with no recovery path made the user fly blind.
+    // New: inline Reconnect (Plaid Link re-auth) + Retry (re-fire sync)
+    // buttons plus a precise lastSync timestamp ("Last successful sync:
+    // 2026-04-30 14:32"). Uses _jsAttr for onclick safety.
+    function _jsAttrSafe(s) { return (window._jsAttr) ? window._jsAttr(s) : String(s || ''); }
+    function _fmtSyncTs(iso) {
+      if (!iso) return 'never';
+      try {
+        var d = new Date(iso);
+        return d.toLocaleDateString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' }) +
+          ' ' + d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+      } catch (x) { return iso; }
+    }
     var h = '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:4px;">';
     keys.forEach(function(itemId) {
       var item = items[itemId];
-      var statusColor = item.status === 'active' ? '#16a34a' : item.status === 'error' ? '#dc2626' : '#9ca3af';
+      var status = item.status || 'unknown';
+      var isError = status === 'error' || status === 'login_required' || status === 'expired';
+      var statusColor = status === 'active' ? '#16a34a' : isError ? '#dc2626' : '#9ca3af';
       var acctCount = (item.accounts && item.accounts.length) || 0;
-      h += '<div style="background:var(--bg-secondary,#232323);border-radius:10px;padding:12px 16px;flex:1;min-width:200px;display:flex;justify-content:space-between;align-items:center;gap:10px;">';
-      h += '<div>';
+      var idAttr = _jsAttrSafe(itemId);
+      var inFlight = !!_bankSyncInFlight[itemId];
+      h += '<div style="background:var(--bg-secondary,#232323);border-radius:10px;padding:12px 16px;flex:1;min-width:240px;">';
+      h += '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:6px;">';
       h += '<div style="font-weight:600;font-size:0.9rem;">' + e(item.institutionName || 'Bank') + '</div>';
-      h += '<div style="font-size:0.78rem;color:var(--warm-gray,#888);">' + acctCount + ' account' + (acctCount !== 1 ? 's' : '');
-      if (item.lastSyncAt) h += ' · Synced ' + toDateShort(item.lastSyncAt);
-      h += '</div></div>';
-      h += '<div style="display:flex;gap:6px;align-items:center;">';
-      h += '<span style="background:' + statusColor + ';color:#fff;padding:2px 8px;border-radius:4px;font-size:0.72rem;font-weight:600;">' + e(item.status || 'unknown') + '</span>';
-      if (item.status === 'active') h += '<button class="btn btn-secondary btn-small" data-item-id="' + e(itemId) + '" onclick="finExpSyncBank(this.dataset.itemId)">Sync</button>';
+      h += '<span style="background:' + statusColor + ';color:#fff;padding:2px 8px;border-radius:4px;font-size:0.72rem;font-weight:600;">' + e(status) + '</span>';
+      h += '</div>';
+      h += '<div style="font-size:0.78rem;color:var(--warm-gray,#888);margin-bottom:8px;">' + acctCount + ' account' + (acctCount !== 1 ? 's' : '');
+      h += ' · Last successful sync: ' + e(_fmtSyncTs(item.lastSuccessfulSyncAt || item.lastSyncAt));
+      h += '</div>';
+      if (isError && item.lastSyncError) {
+        h += '<div style="font-size:0.72rem;color:#fca5a5;margin-bottom:8px;">' + e(String(item.lastSyncError).slice(0, 160)) + '</div>';
+      }
+      h += '<div style="display:flex;gap:6px;flex-wrap:wrap;">';
+      if (isError) {
+        h += '<button class="btn btn-primary btn-small" onclick="finExpReconnectBank(\'' + idAttr + '\')"' + (inFlight ? ' disabled' : '') + '>Reconnect</button>';
+        h += '<button class="btn btn-secondary btn-small" onclick="finExpSyncBank(\'' + idAttr + '\')"' + (inFlight ? ' disabled' : '') + '>Retry</button>';
+      } else {
+        h += '<button class="btn btn-secondary btn-small" onclick="finExpSyncBank(\'' + idAttr + '\')"' + (inFlight ? ' disabled' : '') + '>' + (inFlight ? 'Syncing…' : 'Sync') + '</button>';
+      }
       h += '</div></div>';
     });
     h += '</div>';
@@ -917,6 +960,24 @@ function renderFinExpenses(expenses, start, end) {
   });
   if (expenses.length > 100) h += '<div style="color:var(--warm-gray,#888);font-size:0.78rem;padding:8px 0;">Showing 100 of ' + expenses.length + ' expenses. Use filters to narrow.</div>';
   h += '</div>';
+
+  // W1.3 + R-FIN-1: CSV exporter + Period · Basis footer.
+  _finExporters.expenses = function() {
+    var rows = [];
+    rows.push(['Date', 'Merchant', 'Description', 'Category', 'Account', 'Reviewed', 'Amount (USD)']);
+    expenses.forEach(function(ex) {
+      var acct = (ex.plaidAccountId && finExpAccountLookup[ex.plaidAccountId])
+        ? (finExpAccountLookup[ex.plaidAccountId].institution + ' ••' + finExpAccountLookup[ex.plaidAccountId].mask)
+        : '';
+      rows.push([
+        ex.date || '', ex.merchantName || '', ex.description || '',
+        ex.category || '', acct, ex.reviewed ? 'yes' : 'no',
+        ((ex.amount || 0) / 100).toFixed(2)
+      ]);
+    });
+    _finDownloadCsv('expenses', rows, 'Period: ' + start + ' to ' + end + ' · Basis: admin/expenses.date');
+  };
+  h += _finFooter('expenses', start + ' to ' + end, 'admin/expenses.date');
 
   return h;
 }
@@ -1286,16 +1347,62 @@ if (window.MastAskAi) {
 }
 
 window.finExpSyncBank = async function(itemId) {
+  // W1.5: track in-flight so the redesigned header can disable buttons.
+  if (_bankSyncInFlight[itemId]) return;
+  _bankSyncInFlight[itemId] = true;
+  loadFinExpBanks(); // re-render for disabled state
   showToast('Syncing transactions…');
   try {
     var syncFn = firebase.functions().httpsCallable('syncPlaidTransactions');
     var result = await syncFn({ tenantId: MastDB.tenantId(), itemId: itemId });
-    var d = result.data;
-    showToast('Synced: ' + d.imported + ' new, ' + d.updated + ' updated');
+    var d = result.data || {};
+    showToast('Synced: ' + (d.imported || 0) + ' new, ' + (d.updated || 0) + ' updated');
     loadFinExpenses();
-    loadFinExpBanks();
   } catch (err) {
     showToast('Sync failed: ' + e(err.message), true);
+  } finally {
+    delete _bankSyncInFlight[itemId];
+    loadFinExpBanks();
+  }
+};
+
+// W1.5: Reconnect kicks off a fresh Plaid Link flow for the existing item.
+// Mirrors the new-connection callable but with itemId so the backend can
+// re-auth the SAME item (preserves transaction history). Plaid's link_token
+// create supports update mode via access_token-bound item lookup.
+window.finExpReconnectBank = async function(itemId) {
+  if (_bankSyncInFlight[itemId]) return;
+  _bankSyncInFlight[itemId] = true;
+  loadFinExpBanks();
+  try {
+    // Try common reconnect callable names — backend may expose either.
+    var fnName = 'createPlaidLinkToken';
+    var createFn = firebase.functions().httpsCallable(fnName);
+    var res = await createFn({ tenantId: MastDB.tenantId(), itemId: itemId, mode: 'update' });
+    var linkToken = res && res.data && (res.data.link_token || res.data.linkToken);
+    if (!linkToken) { showToast('Could not start reconnect (no link token returned)', true); return; }
+    if (typeof window.Plaid !== 'object' || typeof window.Plaid.create !== 'function') {
+      showToast('Plaid Link SDK not loaded — refresh the page and try again', true);
+      return;
+    }
+    var handler = window.Plaid.create({
+      token: linkToken,
+      onSuccess: async function() {
+        showToast('Bank reconnected — syncing…');
+        delete _bankSyncInFlight[itemId];
+        await window.finExpSyncBank(itemId);
+      },
+      onExit: function(err) {
+        delete _bankSyncInFlight[itemId];
+        loadFinExpBanks();
+        if (err) showToast('Reconnect cancelled', true);
+      }
+    });
+    handler.open();
+  } catch (err) {
+    showToast('Reconnect failed: ' + e(err.message), true);
+    delete _bankSyncInFlight[itemId];
+    loadFinExpBanks();
   }
 };
 
