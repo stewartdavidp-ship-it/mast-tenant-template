@@ -289,8 +289,10 @@ window.TENANT_READY = new Promise(function(resolve, reject) {
     })
     .catch(function(err) {
       console.error('[storefront-tenant] Resolution failed:', err.message);
+      // Reject FIRST so any awaiting bootstrap guard (admin SPA) can surface a
+      // recovery screen immediately, rather than waiting on its 15s wallclock.
+      reject(new Error('TENANT_FIREBASE_CONFIG fetch failed: ' + (err && err.message || err)));
       showError();
-      reject(err);
     });
 });
 
