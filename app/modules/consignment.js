@@ -19,13 +19,22 @@
   var placementsData = {};
   var placementsLoaded = false;
   var placementsListener = null;
-  var currentView = 'list'; // 'list' | 'detail' | 'new' | 'galleries' | 'galleryDetail' | 'galleryEdit'
+  var currentView = 'list'; // 'list' | 'detail' | 'new' | 'galleries' | 'galleryDetail' | 'galleryEdit' | 'payouts' | 'payoutDetail'
   var currentPlacementId = null;
   // W2.7: gallery entities (admin/galleries/{galleryId}).
   var galleriesData = {};
   var galleriesLoaded = false;
   var galleriesListener = null;
   var currentGalleryId = null;
+
+  // W2.3 (Finance): gallery payouts register.
+  // Tracks what the maker owes each gallery on commission-split sales.
+  // Path: admin/galleryPayouts/{payoutId}.
+  var galleryPayoutsData = {};
+  var galleryPayoutsLoaded = false;
+  var galleryPayoutsListener = null;
+  var currentPayoutId = null;
+  var payoutsStatusFilter = 'all'; // all | open | partial | paid
 
   // Tenant-TZ-aware date helpers for URL filter (createdAt is ISO timestamp).
   var _tenantTz = null;
@@ -229,6 +238,10 @@
       renderGalleryDetail(currentGalleryId);
     } else if (currentView === 'galleryEdit') {
       renderGalleryEditForm(currentGalleryId);
+    } else if (currentView === 'payouts') {
+      renderPayoutsList();
+    } else if (currentView === 'payoutDetail' && currentPayoutId) {
+      renderPayoutDetail(currentPayoutId);
     } else {
       renderPlacementList();
     }
@@ -362,7 +375,519 @@
     return '<div class="view-tabs" style="margin-bottom:0;">' +
       '<div class="view-tab' + (active === 'placements' ? ' active' : '') + '" onclick="consignmentShowList()">Placements</div>' +
       '<div class="view-tab' + (active === 'galleries' ? ' active' : '') + '" onclick="consignmentShowGalleries()">Galleries</div>' +
+      '<div class="view-tab' + (active === 'payouts' ? ' active' : '') + '" onclick="consignmentShowPayouts()">Payouts</div>' +
     '</div>';
+  }
+
+  // ============================================================
+  // W2.3 (Finance) — Gallery payouts register
+  // ============================================================
+  // Closes Devon's gap: gallery sub-views show what galleries owe US;
+  // this register tracks what WE owe each gallery on commission-split
+  // sales. Owed = sum(placement.commissionOwed for gallery) − sum(past
+  // paid amounts for that gallery). Payouts persist at
+  //   tenants/{tid}/admin/galleryPayouts/{id}
+  // and serve as both an audit log and the source of truth for what's
+  // already been settled with each gallery.
+  function loadGalleryPayouts(cb) {
+    if (galleryPayoutsLoaded) { if (cb) cb(); return; }
+    try {
+      galleryPayoutsListener = MastDB.subscribe('admin/galleryPayouts', function(val) {
+        galleryPayoutsData = val || {};
+        galleryPayoutsLoaded = true;
+        if (currentView === 'payouts' || currentView === 'payoutDetail') renderCurrentView();
+        if (cb) { var done = cb; cb = null; done(); }
+      });
+    } catch (e) {
+      MastDB.get('admin/galleryPayouts').then(function(val) {
+        galleryPayoutsData = val || {};
+        galleryPayoutsLoaded = true;
+        if (cb) cb();
+      }).catch(function() { galleryPayoutsData = {}; galleryPayoutsLoaded = true; if (cb) cb(); });
+    }
+  }
+
+  // Cents helpers — payout schema is cents-based (per Finance W1).
+  function _toCents(amount) {
+    return Math.round((amount || 0) * 100);
+  }
+  function _fromCents(cents) {
+    return (cents || 0) / 100;
+  }
+
+  // Compute gross sold + gallery's commission across all placements for
+  // this gallery (lifetime — period filter happens at payout-record time
+  // via the periodStart/periodEnd inputs and operator review).
+  function _galleryGrossAndCommission(galleryId) {
+    var placements = _placementsForGallery(galleryId);
+    var grossCents = 0;
+    var commissionCents = 0;
+    var contributingPlacementIds = [];
+    placements.forEach(function(p) {
+      var totals = calculatePlacementTotals(p);
+      var sold = totals.totalSold || 0;
+      var commission = totals.commissionOwed || 0;
+      if (commission > 0 || sold > 0) contributingPlacementIds.push(p.placementId);
+      grossCents += _toCents(sold);
+      commissionCents += _toCents(commission);
+    });
+    return { grossCents: grossCents, commissionCents: commissionCents, placementIds: contributingPlacementIds };
+  }
+
+  // Sum paid amounts already settled to this gallery (across all payout
+  // rows, regardless of status). Drives the "currently owed" math so we
+  // don't double-pay.
+  function _galleryPaidToDateCents(galleryId) {
+    var sum = 0;
+    Object.keys(galleryPayoutsData).forEach(function(pid) {
+      var po = galleryPayoutsData[pid];
+      if (!po || po.galleryId !== galleryId) return;
+      sum += (po.paidAmountCents || 0);
+    });
+    return sum;
+  }
+
+  function _galleryNetOwedCents(galleryId) {
+    var agg = _galleryGrossAndCommission(galleryId);
+    var paid = _galleryPaidToDateCents(galleryId);
+    return Math.max(0, agg.commissionCents - paid);
+  }
+
+  function _payoutsForGallery(galleryId) {
+    return Object.keys(galleryPayoutsData).map(function(k) {
+      var po = galleryPayoutsData[k];
+      po._id = k;
+      return po;
+    }).filter(function(po) {
+      return po && po.galleryId === galleryId;
+    }).sort(function(a, b) {
+      return (b.createdAt || '').localeCompare(a.createdAt || '');
+    });
+  }
+
+  function renderPayoutsList() {
+    var tab = document.getElementById('galleriesTab');
+    if (!tab) return;
+    if (!galleriesLoaded || !galleryPayoutsLoaded) {
+      tab.innerHTML = _galleriesSubNavHtml('payouts') +
+        '<div style="color:var(--warm-gray);padding:40px 0;text-align:center;">Loading payouts…</div>';
+      if (!galleriesLoaded) loadGalleries(function() { renderCurrentView(); });
+      if (!galleryPayoutsLoaded) loadGalleryPayouts(function() { renderCurrentView(); });
+      return;
+    }
+
+    // Panel 1: Galleries currently owed.
+    var galleries = Object.keys(galleriesData).map(function(id) {
+      var g = galleriesData[id]; g._id = id;
+      var agg = _galleryGrossAndCommission(id);
+      var paid = _galleryPaidToDateCents(id);
+      var owed = Math.max(0, agg.commissionCents - paid);
+      return {
+        g: g,
+        grossCents: agg.grossCents,
+        commissionCents: agg.commissionCents,
+        paidCents: paid,
+        owedCents: owed
+      };
+    });
+
+    // Filter by status: status here is per-gallery rollup (owed > 0 ⇒ open).
+    var filtered = galleries.slice();
+    if (payoutsStatusFilter === 'open') {
+      filtered = filtered.filter(function(r) { return r.owedCents > 0; });
+    } else if (payoutsStatusFilter === 'paid') {
+      filtered = filtered.filter(function(r) { return r.commissionCents > 0 && r.owedCents === 0; });
+    } else if (payoutsStatusFilter === 'partial') {
+      filtered = filtered.filter(function(r) { return r.paidCents > 0 && r.owedCents > 0; });
+    }
+    filtered.sort(function(a, b) { return b.owedCents - a.owedCents; });
+
+    // Aggregate recent payouts (audit log).
+    var allPayouts = Object.keys(galleryPayoutsData).map(function(k) {
+      var po = galleryPayoutsData[k]; po._id = k; return po;
+    }).sort(function(a, b) {
+      return (b.createdAt || '').localeCompare(a.createdAt || '');
+    });
+    var recent = allPayouts.slice(0, 25);
+
+    var totalOwedCents = galleries.reduce(function(s, r) { return s + r.owedCents; }, 0);
+
+    var html = _galleriesSubNavHtml('payouts');
+
+    html += '<div style="display:flex;align-items:center;justify-content:space-between;margin:16px 0;gap:12px;flex-wrap:wrap;">' +
+      '<div style="font-size:0.85rem;color:var(--warm-gray);">' +
+        '<span style="font-weight:600;color:var(--charcoal);">' + formatCurrency(_fromCents(totalOwedCents)) + '</span> owed across ' + galleries.length + ' galler' + (galleries.length === 1 ? 'y' : 'ies') +
+      '</div>' +
+      '<div style="display:flex;gap:6px;align-items:center;">' +
+        '<label style="font-size:0.85rem;color:var(--warm-gray);">Status:</label>' +
+        '<select id="payoutsStatusFilter" onchange="consignmentSetPayoutsFilter(this.value)" style="padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.85rem;">' +
+          '<option value="all"' + (payoutsStatusFilter === 'all' ? ' selected' : '') + '>All</option>' +
+          '<option value="open"' + (payoutsStatusFilter === 'open' ? ' selected' : '') + '>Open</option>' +
+          '<option value="partial"' + (payoutsStatusFilter === 'partial' ? ' selected' : '') + '>Partial</option>' +
+          '<option value="paid"' + (payoutsStatusFilter === 'paid' ? ' selected' : '') + '>Paid</option>' +
+        '</select>' +
+        '<button class="btn btn-primary" onclick="consignmentRecordGalleryPayout()">+ Record Payout</button>' +
+      '</div>' +
+    '</div>';
+
+    // Panel 1: Galleries owed.
+    html += '<section style="background:#fff;border:1px solid var(--cream-dark,#e8e0d4);border-radius:8px;padding:16px;margin-bottom:12px;">' +
+      '<h4 style="margin:0 0 10px;font-size:0.9rem;">Galleries owed payouts</h4>';
+    if (filtered.length === 0) {
+      html += '<div style="color:var(--warm-gray);padding:20px;text-align:center;font-size:0.85rem;">No galleries match this filter.</div>';
+    } else {
+      html += '<table style="width:100%;border-collapse:collapse;font-size:0.85rem;"><thead><tr style="text-align:left;color:var(--warm-gray);">' +
+        '<th style="padding:6px 8px;">Gallery</th>' +
+        '<th style="padding:6px 8px;" align="right">Gross sold</th>' +
+        '<th style="padding:6px 8px;" align="right">Gallery commission</th>' +
+        '<th style="padding:6px 8px;" align="right">Paid to date</th>' +
+        '<th style="padding:6px 8px;" align="right">Owed</th>' +
+      '</tr></thead><tbody>';
+      filtered.forEach(function(r) {
+        html += '<tr style="border-top:1px solid var(--cream-dark,#e8e0d4);cursor:pointer;" onclick="consignmentShowGalleryPayoutsDetail(\'' + _jsAttr(r.g._id) + '\')">' +
+          '<td style="padding:8px;font-weight:600;">' + esc(r.g.name || '(unnamed)') + '</td>' +
+          '<td style="padding:8px;" align="right">' + formatCurrency(_fromCents(r.grossCents)) + '</td>' +
+          '<td style="padding:8px;" align="right">' + formatCurrency(_fromCents(r.commissionCents)) + '</td>' +
+          '<td style="padding:8px;" align="right">' + formatCurrency(_fromCents(r.paidCents)) + '</td>' +
+          '<td style="padding:8px;" align="right" data-owed="' + r.owedCents + '">' +
+            '<span style="font-weight:600;color:' + (r.owedCents > 0 ? '#F59E0B' : 'var(--warm-gray)') + ';">' + formatCurrency(_fromCents(r.owedCents)) + '</span>' +
+          '</td>' +
+        '</tr>';
+      });
+      html += '</tbody></table>';
+    }
+    html += '</section>';
+
+    // Panel 2: Recent payouts (audit log).
+    html += '<section style="background:#fff;border:1px solid var(--cream-dark,#e8e0d4);border-radius:8px;padding:16px;margin-bottom:12px;">' +
+      '<h4 style="margin:0 0 10px;font-size:0.9rem;">Recent payouts</h4>';
+    if (recent.length === 0) {
+      html += '<div style="color:var(--warm-gray);padding:20px;text-align:center;font-size:0.85rem;">No payouts recorded yet.</div>';
+    } else {
+      html += '<table style="width:100%;border-collapse:collapse;font-size:0.85rem;"><thead><tr style="text-align:left;color:var(--warm-gray);">' +
+        '<th style="padding:6px 8px;">Date</th>' +
+        '<th style="padding:6px 8px;">Gallery</th>' +
+        '<th style="padding:6px 8px;">Period</th>' +
+        '<th style="padding:6px 8px;">Method</th>' +
+        '<th style="padding:6px 8px;">Status</th>' +
+        '<th style="padding:6px 8px;" align="right">Net owed</th>' +
+        '<th style="padding:6px 8px;" align="right">Paid</th>' +
+        '<th style="padding:6px 8px;"></th>' +
+      '</tr></thead><tbody>';
+      recent.forEach(function(po) {
+        var galName = (galleriesData[po.galleryId] && galleriesData[po.galleryId].name) || '(unknown)';
+        var dateStr = (po.createdAt || '').slice(0, 10);
+        var period = (po.periodStart || '?') + ' → ' + (po.periodEnd || '?');
+        html += '<tr style="border-top:1px solid var(--cream-dark,#e8e0d4);">' +
+          '<td style="padding:8px;">' + esc(dateStr) + '</td>' +
+          '<td style="padding:8px;">' + esc(galName) + '</td>' +
+          '<td style="padding:8px;color:var(--warm-gray);font-size:0.78rem;">' + esc(period) + '</td>' +
+          '<td style="padding:8px;">' + esc(po.paymentMethod || '—') + '</td>' +
+          '<td style="padding:8px;">' + esc(po.status || 'open') + '</td>' +
+          '<td style="padding:8px;" align="right">' + formatCurrency(_fromCents(po.netOwedCents)) + '</td>' +
+          '<td style="padding:8px;" align="right">' + formatCurrency(_fromCents(po.paidAmountCents)) + '</td>' +
+          '<td style="padding:8px;text-align:right;">' +
+            '<button class="btn btn-secondary btn-small" onclick="consignmentPrintGalleryPayout(\'' + _jsAttr(po._id) + '\')">Print</button>' +
+          '</td>' +
+        '</tr>';
+      });
+      html += '</tbody></table>';
+    }
+    html += '</section>';
+
+    tab.innerHTML = html;
+  }
+
+  function renderPayoutDetail(galleryId) {
+    var tab = document.getElementById('galleriesTab');
+    if (!tab) return;
+    var g = galleriesData[galleryId];
+    if (!g) {
+      tab.innerHTML = '<button class="detail-back" onclick="consignmentShowPayouts()">&larr; Payouts</button>' +
+        '<div style="padding:24px;color:var(--danger);">Gallery not found.</div>';
+      return;
+    }
+    var agg = _galleryGrossAndCommission(galleryId);
+    var paid = _galleryPaidToDateCents(galleryId);
+    var owed = Math.max(0, agg.commissionCents - paid);
+    var placements = _placementsForGallery(galleryId);
+    var payouts = _payoutsForGallery(galleryId);
+
+    var html = '<button class="detail-back" onclick="consignmentShowPayouts()">&larr; Payouts</button>' +
+      '<div style="display:flex;align-items:flex-start;justify-content:space-between;margin:16px 0;gap:16px;flex-wrap:wrap;">' +
+        '<div>' +
+          '<h3 style="font-family:\'Cormorant Garamond\',serif;font-size:1.6rem;font-weight:500;margin:0;">' + esc(g.name || '(unnamed)') + '</h3>' +
+          '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:4px;">Default commission: ' + ((typeof g.defaultCommissionPct === 'number') ? esc((Math.round(g.defaultCommissionPct * 100) / 100) + '%') : '—') + '</div>' +
+        '</div>' +
+        '<div style="text-align:right;">' +
+          '<div style="font-size:0.78rem;color:var(--warm-gray);">Currently owed</div>' +
+          '<div style="font-size:1.6rem;font-weight:700;color:' + (owed > 0 ? '#F59E0B' : 'var(--charcoal)') + ';">' + formatCurrency(_fromCents(owed)) + '</div>' +
+          '<button class="btn btn-primary btn-small" style="margin-top:6px;" onclick="consignmentRecordGalleryPayout(\'' + _jsAttr(galleryId) + '\')">+ Record Payout</button>' +
+        '</div>' +
+      '</div>';
+
+    // Summary card.
+    html += '<section style="background:#fff;border:1px solid var(--cream-dark,#e8e0d4);border-radius:8px;padding:16px;margin-bottom:12px;">' +
+      '<h4 style="margin:0 0 10px;font-size:0.9rem;">Summary</h4>' +
+      '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;">' +
+        '<div><div style="font-size:0.78rem;color:var(--warm-gray);">Gross sold (lifetime)</div><div style="font-size:1.0rem;font-weight:600;">' + formatCurrency(_fromCents(agg.grossCents)) + '</div></div>' +
+        '<div><div style="font-size:0.78rem;color:var(--warm-gray);">Gallery commission</div><div style="font-size:1.0rem;font-weight:600;">' + formatCurrency(_fromCents(agg.commissionCents)) + '</div></div>' +
+        '<div><div style="font-size:0.78rem;color:var(--warm-gray);">Paid to date</div><div style="font-size:1.0rem;font-weight:600;">' + formatCurrency(_fromCents(paid)) + '</div></div>' +
+      '</div>' +
+    '</section>';
+
+    // Contributing placements.
+    html += '<section style="background:#fff;border:1px solid var(--cream-dark,#e8e0d4);border-radius:8px;padding:16px;margin-bottom:12px;">' +
+      '<h4 style="margin:0 0 10px;font-size:0.9rem;">Contributing placements (' + placements.length + ')</h4>';
+    if (placements.length === 0) {
+      html += '<div style="color:var(--warm-gray);padding:12px;font-size:0.85rem;">No placements for this gallery.</div>';
+    } else {
+      html += '<table style="width:100%;border-collapse:collapse;font-size:0.85rem;"><thead><tr style="text-align:left;color:var(--warm-gray);">' +
+        '<th style="padding:6px 8px;">Placement</th>' +
+        '<th style="padding:6px 8px;">Status</th>' +
+        '<th style="padding:6px 8px;" align="right">Sold</th>' +
+        '<th style="padding:6px 8px;" align="right">Commission</th>' +
+      '</tr></thead><tbody>';
+      placements.forEach(function(p) {
+        var t = calculatePlacementTotals(p);
+        html += '<tr style="border-top:1px solid var(--cream-dark,#e8e0d4);cursor:pointer;" onclick="consignmentShowDetail(\'' + _jsAttr(p.placementId) + '\')">' +
+          '<td style="padding:6px 8px;">' + esc(p.locationName || '—') + '</td>' +
+          '<td style="padding:6px 8px;">' + esc(p.status || 'active') + '</td>' +
+          '<td style="padding:6px 8px;" align="right">' + formatCurrency(t.totalSold) + '</td>' +
+          '<td style="padding:6px 8px;" align="right">' + formatCurrency(t.commissionOwed) + '</td>' +
+        '</tr>';
+      });
+      html += '</tbody></table>';
+    }
+    html += '</section>';
+
+    // Payout history.
+    html += '<section style="background:#fff;border:1px solid var(--cream-dark,#e8e0d4);border-radius:8px;padding:16px;margin-bottom:12px;">' +
+      '<h4 style="margin:0 0 10px;font-size:0.9rem;">Payout history (' + payouts.length + ')</h4>';
+    if (payouts.length === 0) {
+      html += '<div style="color:var(--warm-gray);padding:12px;font-size:0.85rem;">No payouts recorded yet for this gallery.</div>';
+    } else {
+      html += '<table style="width:100%;border-collapse:collapse;font-size:0.85rem;"><thead><tr style="text-align:left;color:var(--warm-gray);">' +
+        '<th style="padding:6px 8px;">Date</th>' +
+        '<th style="padding:6px 8px;">Period</th>' +
+        '<th style="padding:6px 8px;">Method</th>' +
+        '<th style="padding:6px 8px;">Status</th>' +
+        '<th style="padding:6px 8px;" align="right">Net owed</th>' +
+        '<th style="padding:6px 8px;" align="right">Paid</th>' +
+        '<th style="padding:6px 8px;"></th>' +
+      '</tr></thead><tbody>';
+      payouts.forEach(function(po) {
+        var dateStr = (po.createdAt || '').slice(0, 10);
+        var period = (po.periodStart || '?') + ' → ' + (po.periodEnd || '?');
+        html += '<tr style="border-top:1px solid var(--cream-dark,#e8e0d4);">' +
+          '<td style="padding:6px 8px;">' + esc(dateStr) + '</td>' +
+          '<td style="padding:6px 8px;color:var(--warm-gray);font-size:0.78rem;">' + esc(period) + '</td>' +
+          '<td style="padding:6px 8px;">' + esc(po.paymentMethod || '—') + '</td>' +
+          '<td style="padding:6px 8px;">' + esc(po.status || 'open') + '</td>' +
+          '<td style="padding:6px 8px;" align="right">' + formatCurrency(_fromCents(po.netOwedCents)) + '</td>' +
+          '<td style="padding:6px 8px;" align="right">' + formatCurrency(_fromCents(po.paidAmountCents)) + '</td>' +
+          '<td style="padding:6px 8px;text-align:right;">' +
+            '<button class="btn btn-secondary btn-small" onclick="consignmentPrintGalleryPayout(\'' + _jsAttr(po._id) + '\')">Print</button>' +
+          '</td>' +
+        '</tr>';
+      });
+      html += '</tbody></table>';
+    }
+    html += '</section>';
+
+    tab.innerHTML = html;
+  }
+
+  // Record Payout modal — operator selects gallery + period + payment details.
+  // System pre-fills owed amount from placements; operator confirms / overrides.
+  function recordGalleryPayoutModal(prefillGalleryId) {
+    var galleries = Object.keys(galleriesData).map(function(id) {
+      var g = galleriesData[id]; g._id = id; return g;
+    }).sort(function(a, b) { return (a.name || '').localeCompare(b.name || ''); });
+
+    if (galleries.length === 0) {
+      showToast('Create a gallery entity first');
+      return;
+    }
+
+    var today = new Date().toISOString().slice(0, 10);
+    var defaultStart = (function() {
+      var d = new Date(); d.setMonth(d.getMonth() - 1);
+      return d.toISOString().slice(0, 10);
+    })();
+
+    var galleryOptions = galleries.map(function(g) {
+      var sel = (prefillGalleryId && g._id === prefillGalleryId) ? ' selected' : '';
+      return '<option value="' + esc(g._id) + '"' + sel + '>' + esc(g.name || '(unnamed)') + '</option>';
+    }).join('');
+
+    var html =
+      '<h3 style="font-size:1.15rem;font-weight:500;margin:0 0 16px;">Record Payout</h3>' +
+      '<form id="recordGalleryPayoutForm" onsubmit="event.preventDefault();consignmentConfirmGalleryPayout();return false;">' +
+        '<div style="margin-bottom:12px;">' +
+          '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Gallery *</label>' +
+          '<select id="payoutGalleryId" required onchange="consignmentPayoutGalleryChanged()" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;">' +
+            galleryOptions +
+          '</select>' +
+        '</div>' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;">' +
+          '<div><label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Period start</label>' +
+            '<input id="payoutPeriodStart" type="date" value="' + esc(defaultStart) + '" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;"></div>' +
+          '<div><label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Period end</label>' +
+            '<input id="payoutPeriodEnd" type="date" value="' + esc(today) + '" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;"></div>' +
+        '</div>' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px;">' +
+          '<div><label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Gross sold</label>' +
+            '<input id="payoutGross" type="number" step="0.01" min="0" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;"></div>' +
+          '<div><label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Gallery cut</label>' +
+            '<input id="payoutCommission" type="number" step="0.01" min="0" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;"></div>' +
+          '<div><label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Net owed</label>' +
+            '<input id="payoutNetOwed" type="number" step="0.01" min="0" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;"></div>' +
+        '</div>' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px;">' +
+          '<div><label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Paid amount</label>' +
+            '<input id="payoutPaidAmount" type="number" step="0.01" min="0" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;"></div>' +
+          '<div><label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Method</label>' +
+            '<select id="payoutMethod" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;">' +
+              '<option value="check">Check</option><option value="ach">ACH</option><option value="wire">Wire</option><option value="cash">Cash</option><option value="other">Other</option>' +
+            '</select></div>' +
+          '<div><label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Status</label>' +
+            '<select id="payoutStatus" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;">' +
+              '<option value="open">Open</option><option value="partial">Partial</option><option value="paid" selected>Paid</option>' +
+            '</select></div>' +
+        '</div>' +
+        '<div style="margin-bottom:16px;">' +
+          '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Notes</label>' +
+          '<textarea id="payoutNotes" rows="2" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;font-family:inherit;"></textarea>' +
+        '</div>' +
+        '<div style="display:flex;gap:8px;justify-content:flex-end;">' +
+          '<button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
+          '<button type="submit" class="btn btn-primary">Record payout</button>' +
+        '</div>' +
+      '</form>';
+    openModal(html);
+
+    // Pre-fill from selected gallery.
+    setTimeout(function() { window.consignmentPayoutGalleryChanged(); }, 0);
+  }
+
+  function payoutGalleryChanged() {
+    var sel = document.getElementById('payoutGalleryId');
+    if (!sel) return;
+    var gid = sel.value;
+    var agg = _galleryGrossAndCommission(gid);
+    var paid = _galleryPaidToDateCents(gid);
+    var owedCents = Math.max(0, agg.commissionCents - paid);
+    var setVal = function(id, cents) {
+      var el = document.getElementById(id);
+      if (el) el.value = (cents / 100).toFixed(2);
+    };
+    setVal('payoutGross', agg.grossCents);
+    setVal('payoutCommission', agg.commissionCents);
+    setVal('payoutNetOwed', owedCents);
+    setVal('payoutPaidAmount', owedCents);
+  }
+
+  async function confirmGalleryPayout() {
+    var gid = (document.getElementById('payoutGalleryId') || {}).value || '';
+    var periodStart = (document.getElementById('payoutPeriodStart') || {}).value || '';
+    var periodEnd = (document.getElementById('payoutPeriodEnd') || {}).value || '';
+    var gross = parseFloat((document.getElementById('payoutGross') || {}).value || '0');
+    var commission = parseFloat((document.getElementById('payoutCommission') || {}).value || '0');
+    var netOwed = parseFloat((document.getElementById('payoutNetOwed') || {}).value || '0');
+    var paidAmount = parseFloat((document.getElementById('payoutPaidAmount') || {}).value || '0');
+    var method = (document.getElementById('payoutMethod') || {}).value || 'other';
+    var status = (document.getElementById('payoutStatus') || {}).value || 'open';
+    var notes = (document.getElementById('payoutNotes') || {}).value || '';
+
+    if (!gid) { showToast('Pick a gallery'); return; }
+    if (!periodStart || !periodEnd) { showToast('Period start and end required'); return; }
+
+    var contributingPlacementIds = _galleryGrossAndCommission(gid).placementIds;
+    var now = new Date().toISOString();
+    var id = MastDB.newKey('admin/galleryPayouts');
+    var uid = null;
+    try { uid = (typeof firebase !== 'undefined' && firebase.auth && firebase.auth().currentUser) ? firebase.auth().currentUser.uid : null; } catch (e) {}
+
+    var rec = {
+      id: id,
+      galleryId: gid,
+      placementIds: contributingPlacementIds,
+      periodStart: periodStart,
+      periodEnd: periodEnd,
+      grossSalesCents: _toCents(gross),
+      commissionCents: _toCents(commission),
+      netOwedCents: _toCents(netOwed),
+      status: status,
+      paidAt: (status === 'paid' || status === 'partial') ? now : null,
+      paidAmountCents: _toCents(paidAmount),
+      paymentMethod: method,
+      notes: notes,
+      createdAt: now,
+      createdBy: uid
+    };
+    try {
+      await MastDB.set('admin/galleryPayouts/' + id, rec);
+      galleryPayoutsData[id] = rec;
+      closeModal();
+      showToast('Payout recorded');
+      renderCurrentView();
+    } catch (e) {
+      showToast('Save failed: ' + (e.message || String(e)), true);
+    }
+  }
+
+  // Statement-to-gallery print: simplest viable approach — open a print
+  // window with a clean HTML statement. Uses the same print pattern Sales
+  // W1.3 uses for Pack pick lists.
+  function printGalleryPayout(payoutId) {
+    var po = galleryPayoutsData[payoutId];
+    if (!po) { showToast('Payout not found'); return; }
+    var g = galleriesData[po.galleryId] || {};
+    var win = window.open('', '_blank', 'width=720,height=900');
+    if (!win) { showToast('Allow popups to print'); return; }
+    var brandName = '';
+    try { brandName = (window.TENANT_CONFIG && window.TENANT_CONFIG.brand && window.TENANT_CONFIG.brand.name) || ''; } catch (e) {}
+    var addrs = (g.addresses || []).map(function(a) {
+      return esc([a.street, a.city, a.state, a.zip].filter(Boolean).join(', '));
+    }).join('<br>');
+    var contacts = (g.contacts || []).map(function(c) {
+      return esc((c.name || '') + (c.email ? ' · ' + c.email : ''));
+    }).join('<br>');
+    var html =
+      '<!doctype html><html><head><title>Payout Statement — ' + esc(g.name || '') + '</title>' +
+      '<style>' +
+        'body{font-family:system-ui,-apple-system,sans-serif;color:#1a1a1a;max-width:680px;margin:24px auto;padding:0 16px;line-height:1.5;}' +
+        'h1{font-size:1.4rem;margin:0 0 4px;}h2{font-size:1.0rem;margin:24px 0 8px;}' +
+        '.muted{color:#666;font-size:0.85rem;}' +
+        'table{width:100%;border-collapse:collapse;font-size:0.9rem;margin-top:8px;}' +
+        'th{text-align:left;padding:6px;border-bottom:2px solid #1a1a1a;}' +
+        'td{padding:6px;border-bottom:1px solid #eee;}' +
+        '.right{text-align:right;}.total{font-weight:600;font-size:1.05rem;}' +
+        '@media print{body{margin:0;padding:0;}}' +
+      '</style></head><body>' +
+      '<h1>Payout Statement</h1>' +
+      '<div class="muted">From: ' + esc(brandName || 'Maker') + '</div>' +
+      '<div class="muted">Issued: ' + esc((po.createdAt || '').slice(0, 10)) + '</div>' +
+      '<h2>To</h2>' +
+      '<div><b>' + esc(g.name || '(unnamed)') + '</b></div>' +
+      '<div class="muted">' + addrs + '</div>' +
+      '<div class="muted">' + contacts + '</div>' +
+      '<h2>Period</h2>' +
+      '<div>' + esc(po.periodStart || '') + ' to ' + esc(po.periodEnd || '') + '</div>' +
+      '<h2>Summary</h2>' +
+      '<table><tbody>' +
+        '<tr><td>Gross sold</td><td class="right">' + esc(formatCurrency(_fromCents(po.grossSalesCents))) + '</td></tr>' +
+        '<tr><td>Gallery commission</td><td class="right">' + esc(formatCurrency(_fromCents(po.commissionCents))) + '</td></tr>' +
+        '<tr><td>Net owed</td><td class="right total">' + esc(formatCurrency(_fromCents(po.netOwedCents))) + '</td></tr>' +
+        '<tr><td>Paid (' + esc(po.paymentMethod || '—') + ')</td><td class="right">' + esc(formatCurrency(_fromCents(po.paidAmountCents))) + '</td></tr>' +
+        '<tr><td>Status</td><td class="right">' + esc(po.status || 'open') + '</td></tr>' +
+      '</tbody></table>' +
+      (po.notes ? '<h2>Notes</h2><div style="white-space:pre-wrap;">' + esc(po.notes) + '</div>' : '') +
+      '<script>setTimeout(function(){window.print();},250);<\/script>' +
+      '</body></html>';
+    win.document.write(html);
+    win.document.close();
   }
 
   function renderGalleryDetail(galleryId) {
@@ -1477,6 +2002,31 @@
   window.consignmentSaveGallery = saveGallery;
   window.consignmentDeleteGallery = deleteGalleryEntity;
 
+  // W2.3 (Finance) — Gallery payouts register
+  window.consignmentShowPayouts = function() {
+    currentView = 'payouts';
+    currentPayoutId = null;
+    if (!galleriesLoaded) loadGalleries();
+    if (!galleryPayoutsLoaded) loadGalleryPayouts(function() { renderCurrentView(); });
+    else renderCurrentView();
+  };
+  window.consignmentShowGalleryPayoutsDetail = function(galleryId) {
+    currentGalleryId = galleryId;
+    currentView = 'payoutDetail';
+    currentPayoutId = galleryId; // re-purpose as the gallery scope for the detail view
+    if (!galleriesLoaded) loadGalleries();
+    if (!galleryPayoutsLoaded) loadGalleryPayouts(function() { renderCurrentView(); });
+    else renderCurrentView();
+  };
+  window.consignmentSetPayoutsFilter = function(val) {
+    payoutsStatusFilter = val || 'all';
+    renderCurrentView();
+  };
+  window.consignmentRecordGalleryPayout = recordGalleryPayoutModal;
+  window.consignmentConfirmGalleryPayout = confirmGalleryPayout;
+  window.consignmentPayoutGalleryChanged = payoutGalleryChanged;
+  window.consignmentPrintGalleryPayout = printGalleryPayout;
+
   // ============================================================
   // Register with MastAdmin
   // ============================================================
@@ -1496,12 +2046,21 @@
         } else if (sv === 'galleryDetail' && rp.galleryId) {
           currentView = 'galleryDetail';
           currentGalleryId = rp.galleryId;
+        } else if (sv === 'payouts') {
+          currentView = 'payouts';
+          currentGalleryId = null;
+          currentPayoutId = null;
+        } else if (sv === 'payoutDetail' && rp.galleryId) {
+          currentView = 'payoutDetail';
+          currentGalleryId = rp.galleryId;
+          currentPayoutId = rp.galleryId;
         } else {
           currentView = 'list';
           currentPlacementId = null;
         }
         loadPlacements();
         loadGalleries();
+        loadGalleryPayouts();
         // Ensure products are loaded for product picker
         if (!window.productsLoaded && typeof window.loadProducts === 'function') {
           window.loadProducts();
@@ -1516,6 +2075,12 @@
       galleriesListener = null;
       galleriesData = {};
       galleriesLoaded = false;
+      if (galleryPayoutsListener && typeof galleryPayoutsListener === 'function') {
+        try { galleryPayoutsListener(); } catch (e) {}
+      }
+      galleryPayoutsListener = null;
+      galleryPayoutsData = {};
+      galleryPayoutsLoaded = false;
     }
   });
 
