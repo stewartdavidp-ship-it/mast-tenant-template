@@ -30,6 +30,9 @@ var _bankSyncInFlight = {};
 // 'sending' (in-flight write to emailQueue), 'sent' (queued successfully).
 // Cleared on AR data reload.
 var _arReminderState = {};
+// W2 R2-F2: per-customer Send Statement state. Keyed by customerId since the
+// statement is per-customer (not per-invoice). Values: 'sending' | 'sent'.
+var _arStatementState = {};
 
 // W2.8 (-OtMNKv4uK0PWXTcTfZY): cross-view period selector. Lives on
 // window._finPeriod so every finance view (Revenue, Expenses, P&L, Cash Flow,
@@ -2527,6 +2530,7 @@ async function loadArData() {
   // W1.10: clear reminder UI state on fresh load — historical reminders
   // live in admin/ar_reminders, not in this transient render-only map.
   _arReminderState = {};
+  _arStatementState = {};
 
   try {
     var asOf = todayStr();
@@ -2570,9 +2574,12 @@ async function loadArData() {
 
       // W1.7: snapshot wholesale flag + contact email for the row so the
       // table can show a Tier badge and W1.10 can queue a reminder.
+      // W2 R2-F2: also snapshot customerId so the per-row "Send Statement"
+      // button can mint a customer-statement token via the W2.6 CF.
       rows.push({
         orderId: orderId,
         invoiceNumber: o.invoiceNumber || '',
+        customerId: o.customerId || (o.customer && o.customer.id) || null,
         customerName: o.customerName || 'Unknown',
         customerEmail: o.customerEmail || (o.customer && o.customer.email) || '',
         amtDue: amtDue,
@@ -2676,6 +2683,12 @@ function renderArContent() {
     var reminderState = (_arReminderState && _arReminderState[r.orderId]) || null;
     var canRemind = !!r.customerEmail && r.customerEmail.indexOf('@') > 0;
     var orderIdAttr = (window._jsAttr ? window._jsAttr(r.orderId) : r.orderId);
+    // W2 R2-F2: Send Statement state keyed by customerId. Button hidden if
+    // the row has no customerId (legacy orders pre-customer linkage).
+    var stmtState = (r.customerId && _arStatementState && _arStatementState[r.customerId]) || null;
+    var customerIdAttr = r.customerId ? (window._jsAttr ? window._jsAttr(r.customerId) : r.customerId) : '';
+    var customerEmailAttr = (window._jsAttr ? window._jsAttr(r.customerEmail || '') : (r.customerEmail || ''));
+    var customerNameAttr = (window._jsAttr ? window._jsAttr(r.customerName || '') : (r.customerName || ''));
     h += '<tr style="border-bottom:1px solid rgba(255,255,255,0.06);">';
     h += '<td style="padding:10px;">' + e(r.customerName) + '</td>';
     // W1.7 Tier badge
@@ -2705,6 +2718,27 @@ function renderArContent() {
           ' onclick="finArSendReminder(\'' + orderIdAttr + '\')"' +
           ' style="margin-right:6px;">' +
           (inFlight ? 'Sending…' : 'Send Reminder') +
+          '</button>';
+      }
+    }
+    // W2 R2-F2 (-OtMNKZ8c0Q3VlhqcaA0): Send Statement action — mints a
+    // customer-statement share link via the W2.6 mintCustomerStatementToken CF
+    // and opens an email composer (mailto:) so the operator can send to the
+    // customer. Hidden when the row has no customerId (data-shape gap on
+    // legacy orders pre-customer-linkage).
+    if (r.customerId) {
+      if (stmtState === 'sent') {
+        h += '<span style="background:rgba(34,197,94,0.15);color:#22c55e;padding:3px 10px;border-radius:999px;font-size:0.72rem;font-weight:600;margin-right:6px;">Statement link sent</span>';
+      } else {
+        var stmtInFlight = stmtState === 'sending';
+        var canStmt = !!r.customerEmail && r.customerEmail.indexOf('@') > 0;
+        var stmtDisabledAttr = (canStmt && !stmtInFlight) ? '' : ' disabled';
+        var stmtTitleAttr = canStmt ? 'Mint a customer-statement share link and open email to ' + r.customerEmail : 'No customer email on file';
+        h += '<button class="btn btn-secondary btn-small"' + stmtDisabledAttr +
+          ' title="' + e(stmtTitleAttr) + '"' +
+          ' onclick="finArSendStatement(\'' + customerIdAttr + '\',\'' + customerEmailAttr + '\',\'' + customerNameAttr + '\')"' +
+          ' style="margin-right:6px;">' +
+          (stmtInFlight ? 'Sending…' : 'Send Statement') +
           '</button>';
       }
     }
@@ -2952,6 +2986,61 @@ window.finArSendReminder = async function(orderId) {
   } catch (err) {
     delete _arReminderState[orderId];
     showToast('Reminder failed: ' + (err && err.message ? err.message : err), true);
+  } finally {
+    var el2 = document.getElementById('fArContent');
+    if (el2) el2.innerHTML = renderArContent();
+  }
+};
+
+// W2 R2-F2 (-OtMNKZ8c0Q3VlhqcaA0): Send Statement per-row action. Mints a
+// share-link via the W2.6 mintCustomerStatementToken CF and opens an email
+// composer (mailto:) pre-populated with the link. Reuses the W2.6 viewer
+// flow that already ships customer-statement.html.
+window.finArSendStatement = async function(customerId, customerEmail, customerName) {
+  if (!customerId) { showToast('Customer link missing on this invoice', true); return; }
+  if (!customerEmail || customerEmail.indexOf('@') < 1) {
+    showToast('No customer email on file', true);
+    return;
+  }
+  if (_arStatementState[customerId] === 'sending' || _arStatementState[customerId] === 'sent') return;
+
+  _arStatementState[customerId] = 'sending';
+  var el = document.getElementById('fArContent');
+  if (el) el.innerHTML = renderArContent();
+
+  try {
+    var tenantId = (MastDB.tenantId && MastDB.tenantId()) || window.TENANT_ID || '';
+    var brandName = (window.TENANT_CONFIG && window.TENANT_CONFIG.brand && window.TENANT_CONFIG.brand.name) || 'Our Studio';
+
+    var mintFn = firebase.functions().httpsCallable('mintCustomerStatementToken');
+    var result = await mintFn({
+      tenantId: tenantId,
+      customerId: customerId,
+      expiresInDays: 30
+    });
+    var data = (result && result.data) || {};
+    var url = data.url || data.shareUrl || data.statementUrl || '';
+    if (!url) throw new Error('Mint CF did not return a URL');
+
+    var subject = 'Your account statement from ' + brandName;
+    var body =
+      'Hi ' + (customerName || 'there') + ',\n\n' +
+      'Here is your current account statement:\n\n' +
+      url + '\n\n' +
+      'This link is valid for 30 days. Please reach out with any questions.\n\n' +
+      'Thanks,\n' + brandName + '\n';
+    var mailto = 'mailto:' + encodeURIComponent(customerEmail) +
+      '?subject=' + encodeURIComponent(subject) +
+      '&body=' + encodeURIComponent(body);
+    // Open the user's email client. window.location works in admin SPA
+    // without losing the current view.
+    window.location.href = mailto;
+
+    _arStatementState[customerId] = 'sent';
+    showToast('Statement link minted for ' + customerEmail);
+  } catch (err) {
+    delete _arStatementState[customerId];
+    showToast('Statement failed: ' + (err && err.message ? err.message : err), true);
   } finally {
     var el2 = document.getElementById('fArContent');
     if (el2) el2.innerHTML = renderArContent();
