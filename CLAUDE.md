@@ -17,7 +17,15 @@
    1. Deploy to the shared site (or per-pod shared site if working on a non-default pod): `mast_hosting(action: "deploy", tenantId: "shared")` (or `npx mast-deploy storefront-shared --pod=<id>` once fixed).
    2. Hard refresh `<tenant>.runmast.com` (cache-bust: ⌘⇧R, or append `?v=<timestamp>`). The worker will proxy to the shared origin and serve the new code.
    3. **If the KV entry for that tenant points to a per-tenant site** (legacy/pinned), the shared deploy will not show up — you must also deploy to that tenant's specific site with `mast_hosting(action: "deploy", tenantId: "<tenantId>")`, or update the KV entry to fall back to shared. Check the KV in the Cloudflare dashboard (KV namespace `podRouting`) when in doubt.
-5. **After context compaction** — Re-read this bootstrap section, ARCHITECTURE.md, and memory files. Never improvise from summary alone.
+5. **Module cache-bust auto-bump (one-time setup per clone).** The admin app lazy-loads `app/modules/*.js` with a `?v=<MAST_MODULES_V>` query suffix (declared in `app/index.html`). Browsers cache by URL — if the suffix doesn't change, customers with the admin tab already open will keep serving stale JS even after a no-cache-headered redeploy (see [feedback_mast_cache_bust_process_gap.md](~/.claude/projects/-Users-davidstewart-Downloads/memory/feedback_mast_cache_bust_process_gap.md)). To prevent this, install the version-controlled pre-commit hook once per clone:
+
+   ```bash
+   ./scripts/install-hooks.sh
+   ```
+
+   This wires `core.hooksPath` to `.githooks/`. From then on, any commit that touches `app/index.html` or `app/modules/*.js` auto-bumps `MAST_MODULES_V` to `YYYYMMDD-<short-sha>` and re-stages the file. If you ever need to bump manually (e.g. CI deploy from a non-hooked env), run `./scripts/bump-modules-version.sh` directly — it's idempotent.
+
+6. **After context compaction** — Re-read this bootstrap section, ARCHITECTURE.md, and memory files. Never improvise from summary alone.
 
 ## What This Repo Is
 
