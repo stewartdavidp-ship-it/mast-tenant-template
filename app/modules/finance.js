@@ -2065,6 +2065,10 @@ async function renderDayCloseV2(dateParam) {
   if (!el) return;
   var date = dateParam || todayStr();
   el.innerHTML = '<div style="color:var(--warm-gray,#888);padding:20px;text-align:center;">Loading day close…</div>';
+  // W2b.3 — preload QBO conflicts so the dayClose banner can render. No-throw.
+  if (typeof window._qboPreloadConflicts === 'function') {
+    try { await window._qboPreloadConflicts(); } catch (_) {}
+  }
   try {
     // Load latest version + full version history + legacy v2 fallback in parallel.
     var versionsResult = await _dcLoadVersionsForDate(date);
@@ -2145,6 +2149,24 @@ async function renderDayCloseV2(dateParam) {
       h += '<div style="background:rgba(234,179,8,0.12);border:1px solid rgba(234,179,8,0.35);border-radius:8px;padding:10px 12px;margin-bottom:12px;color:#eab308;font-size:0.85rem;">';
       h += 'Showing v' + source.version + ' (superseded by v' + latest.version + (supTs ? ' at ' + e(supTs) : '') + '). ';
       h += '<a href="javascript:void(0)" onclick="finDayCloseViewVersion(null)" style="color:#eab308;text-decoration:underline;">Return to latest</a>';
+      h += '</div>';
+    }
+
+    // W2b.3 — QBO conflict banner. Any pending conflict (entityType='dayClose')
+    // whose mastId starts with this date (covers `{date}` or `{date}-v{n}`)
+    // raises a red banner with a deep-link to the Conflicts tab. Per W2a
+    // deep-link pattern, nested setTimeout to switch sub-view then inner tab.
+    var conflictsArr = Array.isArray(window.__qboConflicts) ? window.__qboConflicts : [];
+    var dcConflicts = conflictsArr.filter(function(c) {
+      if (!c || c.resolution) return false;
+      if (String(c.entityType) !== 'dayClose') return false;
+      var mid = String(c.mastId || '');
+      return mid === date || mid.indexOf(date) === 0;
+    });
+    if (dcConflicts.length > 0) {
+      h += '<div style="background:rgba(239,68,68,0.10);border:1px solid rgba(239,68,68,0.45);border-radius:8px;padding:10px 14px;margin-bottom:12px;color:#ef4444;font-size:0.85rem;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">';
+      h += '<div>⚠ This close has <strong>' + dcConflicts.length + '</strong> disputed receipt' + (dcConflicts.length === 1 ? '' : 's') + ' — QBO values diverge from Mast.</div>';
+      h += '<button class="btn btn-secondary btn-small" onclick="navigateTo(\'settings\'); setTimeout(function(){ try { switchSettingsSubView(\'integrations\'); setTimeout(function(){ try { switchQboInnerTab(\'conflicts\'); } catch(_) {} }, 50); } catch(_) {} }, 50);">Review in Conflicts tab</button>';
       h += '</div>';
     }
 
@@ -3075,6 +3097,11 @@ async function loadArData() {
   // live in admin/ar_reminders, not in this transient render-only map.
   _arReminderState = {};
   _arStatementState = {};
+  // W2b.3 — preload QBO conflicts so inline [Conflict] chips render on first
+  // paint. No-throw: chips simply won't appear if the preload fails.
+  if (typeof window._qboPreloadConflicts === 'function') {
+    try { await window._qboPreloadConflicts(); } catch (_) {}
+  }
 
   try {
     var asOf = todayStr();
@@ -3246,7 +3273,14 @@ function renderArContent() {
     h += '<td style="padding:10px;font-weight:700;color:' + bucketColor(r.bucket) + ';">' + fmt$(r.amtDue) + '</td>';
     h += '<td style="padding:10px;font-size:0.78rem;">' + e(r.dueDate ? new Date(r.dueDate).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : '—') + '</td>';
     h += '<td style="padding:10px;">' + agingBadge(r.daysOverdue) + '</td>';
-    h += '<td style="padding:10px;"><span style="background:rgba(241,164,0,0.15);color:#f59e0b;padding:2px 8px;border-radius:4px;font-size:0.72rem;font-weight:600;">' + e(r.invoiceStatus) + '</span></td>';
+    // W2b.3 — inline [Conflict] chip when this invoice has an unresolved QBO
+    // conflict. Clicking opens the resolution modal directly. Chip is hidden
+    // when no conflict pending (most rows).
+    var arConflict = (typeof window._qboFindConflict === 'function') ? window._qboFindConflict('invoice', r.orderId) : null;
+    var arConflictChip = arConflict
+      ? ' <button class="btn btn-danger" style="font-size:0.66rem;padding:1px 6px;margin-left:4px;" onclick="window.openQboConflictModal(\'' + _jsAttrSafe(arConflict.conflictId || '') + '\')" title="QBO has different values for this invoice — click to resolve">⚠ Conflict</button>'
+      : '';
+    h += '<td style="padding:10px;"><span style="background:rgba(241,164,0,0.15);color:#f59e0b;padding:2px 8px;border-radius:4px;font-size:0.72rem;font-weight:600;">' + e(r.invoiceStatus) + '</span>' + arConflictChip + '</td>';
     h += '<td style="padding:10px;white-space:nowrap;">';
     // W1.10 (-OtMNJdpUIMpbJcKQAY0): Send Reminder action. Only for overdue
     // rows (daysOverdue > 0) — current invoices don't need chasing.
@@ -3620,6 +3654,10 @@ async function loadApData() {
   var el = document.getElementById('fApContent');
   if (!el) return;
   el.innerHTML = skeletonCards(5) + '<div style="margin-top:16px;">' + skeletonTable(5,7) + '</div>';
+  // W2b.3 — preload QBO conflicts so inline [Conflict] chips render on first paint.
+  if (typeof window._qboPreloadConflicts === 'function') {
+    try { await window._qboPreloadConflicts(); } catch (_) {}
+  }
 
   try {
     var asOf = todayStr();
@@ -3770,7 +3808,13 @@ function renderApFlat(filtered) {
     h += '<td style="padding:10px;font-weight:700;color:' + bucketColor(r.bucket) + ';">' + fmt$(r.amtDue) + '</td>';
     h += '<td style="padding:10px;font-size:0.78rem;">' + e(r.dueDate ? new Date(r.dueDate).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : '—') + '</td>';
     h += '<td style="padding:10px;">' + agingBadge(r.daysOverdue) + '</td>';
-    h += '<td style="padding:10px;"><span style="background:' + (r.paymentStatus === 'partial' ? 'rgba(234,179,8,0.15)' : 'rgba(239,68,68,0.12)') + ';color:' + (r.paymentStatus === 'partial' ? '#eab308' : '#ef4444') + ';padding:2px 8px;border-radius:4px;font-size:0.72rem;font-weight:600;">' + e(r.paymentStatus) + '</span></td>';
+    // W2b.3 — inline [Conflict] chip when this bill has an unresolved QBO
+    // conflict (entityType='bill'). receiptId is the mast-side id.
+    var apConflict = (typeof window._qboFindConflict === 'function') ? window._qboFindConflict('bill', r.receiptId) : null;
+    var apConflictChip = apConflict
+      ? ' <button class="btn btn-danger" style="font-size:0.66rem;padding:1px 6px;margin-left:4px;" onclick="window.openQboConflictModal(\'' + _jsAttrSafe(apConflict.conflictId || '') + '\')" title="QBO has different values for this bill — click to resolve">⚠ Conflict</button>'
+      : '';
+    h += '<td style="padding:10px;"><span style="background:' + (r.paymentStatus === 'partial' ? 'rgba(234,179,8,0.15)' : 'rgba(239,68,68,0.12)') + ';color:' + (r.paymentStatus === 'partial' ? '#eab308' : '#ef4444') + ';padding:2px 8px;border-radius:4px;font-size:0.72rem;font-weight:600;">' + e(r.paymentStatus) + '</span>' + apConflictChip + '</td>';
     h += '<td style="padding:10px;white-space:nowrap;display:flex;gap:4px;">';
     h += '<button class="btn btn-primary btn-small" data-rid="' + e(r.receiptId) + '" data-total="' + r.totalCents + '" onclick="finApMarkPaid(this.dataset.rid, parseInt(this.dataset.total))">Paid</button>';
     h += '<button class="btn btn-secondary btn-small" data-rid="' + e(r.receiptId) + '" data-paid="' + r.paidCents + '" data-total="' + r.totalCents + '" onclick="finApShowPartial(this.dataset.rid, parseInt(this.dataset.paid), parseInt(this.dataset.total))">Partial</button>';

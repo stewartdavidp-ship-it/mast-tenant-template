@@ -70,6 +70,7 @@
     if (!body) return;
     if (subView === 'map') renderCoaMapView();
     else if (subView === 'log') renderSyncLogView();
+    else if (subView === 'conflicts') renderConflictsView();
     else renderConnectView();
   }
   window.renderQboPanel = renderQboPanel;
@@ -1039,6 +1040,193 @@
     } finally {
       // toast auto-dismisses
       void loadingToast;
+    }
+  };
+
+  // ---- Conflicts sub-view (W2b.3) -------------------------------------------
+  // Conflicts live as an array on `tenants/{tid}/admin/integrations/_meta.conflicts[]`
+  // (CONTRACTS C7). Each row: { conflictId, entityType, mastId, qboId,
+  // divergedFields:[{fieldName,mastValue,qboValue}], detectedAt, detectedBy,
+  // receiptId, resolution, resolvedAt, resolvedBy }.
+  //
+  // UI: 1 summary line + 1 table. Action button per pending row opens
+  // openMatchConfirmModal with two synthetic candidates (Keep Mast / Accept QBO)
+  // and calls resolveQboConflict({tid, conflictId, resolution}).
+  function renderConflictsView() {
+    var body = panelBody();
+    if (!body) return;
+    body.innerHTML = '<div style="color:var(--warm-gray);font-size:0.9rem;padding:24px 0;">Loading conflicts…</div>';
+    MastDB.get('admin/integrations/_meta').then(function(meta) {
+      meta = meta || {};
+      var conflicts = Array.isArray(meta.conflicts) ? meta.conflicts.slice() : [];
+      // Cache on window so finance.js chips can hand off conflictId → modal
+      // without re-fetching. Refreshed on every render.
+      window.__qboConflicts = conflicts;
+      _renderConflictsTable(body, conflicts);
+    }).catch(function(err) {
+      body.innerHTML = '<div style="color:var(--danger,#dc2626);padding:12px;">Failed to load conflicts: ' + esc(err && err.message) + '</div>';
+    });
+  }
+
+  function _renderConflictsTable(body, conflicts) {
+    var pending = conflicts.filter(function(c) { return c && !c.resolution; });
+    var resolved = conflicts.filter(function(c) { return c && c.resolution; });
+    var intro =
+      '<p style="color:var(--text-secondary);font-size:0.85rem;line-height:1.5;margin:0 0 12px;">' +
+        'Conflicts are detected when QBO field values diverge from Mast on a pull (webhook, polling, or backfill). ' +
+        'Resolve each one by choosing whose values to keep — Mast or QBO.' +
+      '</p>' +
+      '<div style="display:flex;gap:14px;margin-bottom:14px;font-size:0.85rem;">' +
+        '<div><strong style="color:#ef4444;">' + pending.length + '</strong> <span style="color:var(--warm-gray);">pending</span></div>' +
+        '<div><strong style="color:#22c55e;">' + resolved.length + '</strong> <span style="color:var(--warm-gray);">resolved</span></div>' +
+      '</div>';
+    if (conflicts.length === 0) {
+      body.innerHTML = intro +
+        '<div style="background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.25);border-radius:8px;padding:16px;text-align:center;font-size:0.85rem;color:#22c55e;">' +
+          'No conflicts. Mast and QuickBooks are aligned.' +
+        '</div>';
+      return;
+    }
+    function tsFmt(t) {
+      if (!t) return '—';
+      var d = (typeof t === 'number') ? new Date(t) : new Date(t);
+      if (isNaN(d.getTime())) return esc(String(t));
+      return d.toLocaleString();
+    }
+    function divergedSummary(divergedFields) {
+      var arr = Array.isArray(divergedFields) ? divergedFields : [];
+      if (arr.length === 0) return '—';
+      var first = arr[0] && arr[0].fieldName ? String(arr[0].fieldName) : '?';
+      if (arr.length === 1) return first;
+      return first + ' +' + (arr.length - 1) + ' more';
+    }
+    var rowsHtml = '';
+    // Pending first, then resolved (most recent first).
+    conflicts.slice().sort(function(a, b) {
+      if (!a.resolution && b.resolution) return -1;
+      if (a.resolution && !b.resolution) return 1;
+      return String(b.detectedAt || '').localeCompare(String(a.detectedAt || ''));
+    }).forEach(function(c) {
+      var divCount = Array.isArray(c.divergedFields) ? c.divergedFields.length : 0;
+      var actionHtml;
+      if (c.resolution) {
+        var resColor = (c.resolution === 'accepted-qbo') ? '#818cf8' : '#22c55e';
+        var resLabel = (c.resolution === 'accepted-qbo') ? 'Accepted QBO' : 'Kept Mast';
+        actionHtml = '<span style="display:inline-block;padding:2px 8px;border-radius:10px;background:rgba(148,163,184,0.18);color:' + resColor + ';font-size:0.72rem;font-weight:600;">' + esc(resLabel) + '</span>';
+      } else {
+        actionHtml = '<button class="btn btn-primary" style="font-size:0.78rem;padding:3px 10px;" onclick="window.openQboConflictModal(\'' + _jsAttrSafe(c.conflictId || '') + '\')">Resolve</button>';
+      }
+      rowsHtml +=
+        '<tr style="border-bottom:1px solid rgba(255,255,255,0.05);">' +
+          '<td style="padding:8px 10px;font-size:0.85rem;">' + esc(c.entityType || '—') + '</td>' +
+          '<td style="padding:8px 10px;font-family:monospace;font-size:0.78rem;">' + esc(String(c.mastId || '').slice(-12) || '—') + '</td>' +
+          '<td style="padding:8px 10px;font-family:monospace;font-size:0.78rem;">' + esc(String(c.qboId || '').slice(-12) || '—') + '</td>' +
+          '<td style="padding:8px 10px;font-size:0.85rem;" title="' + esc(divCount + ' field(s) diverged') + '">' + esc(divergedSummary(c.divergedFields)) + '</td>' +
+          '<td style="padding:8px 10px;font-size:0.78rem;color:var(--warm-gray);white-space:nowrap;">' + esc(tsFmt(c.detectedAt)) + '</td>' +
+          '<td style="padding:8px 10px;font-size:0.78rem;color:var(--warm-gray);">' + esc(c.detectedBy || '—') + '</td>' +
+          '<td style="padding:8px 10px;text-align:right;">' + actionHtml + '</td>' +
+        '</tr>';
+    });
+    body.innerHTML = intro +
+      '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:0.85rem;">' +
+        '<thead><tr style="border-bottom:1px solid rgba(255,255,255,0.1);">' +
+          ['Entity', 'Mast ID', 'QBO ID', 'Diverged fields', 'Detected', 'By', 'Action'].map(function(c) {
+            var align = (c === 'Action') ? 'right' : 'left';
+            return '<th style="text-align:' + align + ';padding:8px 10px;font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.5px;">' + esc(c) + '</th>';
+          }).join('') +
+        '</tr></thead><tbody>' + rowsHtml + '</tbody></table></div>';
+  }
+
+  // Opens openMatchConfirmModal with two synthetic candidates per CONTRACTS C7.
+  // Defensive: looks conflicts up from window.__qboConflicts (populated by
+  // renderConflictsView) OR refetches if absent (deep-link from AR/AP chip).
+  window.openQboConflictModal = async function(conflictId) {
+    if (!conflictId) { toastErr('Missing conflictId'); return; }
+    try {
+      var conflicts = window.__qboConflicts;
+      if (!Array.isArray(conflicts)) {
+        var meta = await MastDB.get('admin/integrations/_meta').catch(function() { return null; });
+        conflicts = (meta && Array.isArray(meta.conflicts)) ? meta.conflicts : [];
+        window.__qboConflicts = conflicts;
+      }
+      var c = conflicts.filter(function(x) { return x && String(x.conflictId) === String(conflictId); })[0];
+      if (!c) { toastErr('Conflict not found (may have been resolved by another session)'); return; }
+      if (c.resolution) { toastOk('Already resolved: ' + c.resolution); return; }
+      var diverged = Array.isArray(c.divergedFields) ? c.divergedFields : [];
+      function summary(side) {
+        if (diverged.length === 0) return '(no field detail recorded)';
+        return diverged.slice(0, 3).map(function(f) {
+          var v = (side === 'mast') ? f.mastValue : f.qboValue;
+          var vs = (v == null) ? '∅' : String(v);
+          if (vs.length > 30) vs = vs.slice(0, 30) + '…';
+          return String(f.fieldName || '?') + '=' + vs;
+        }).join(', ') + (diverged.length > 3 ? ' +' + (diverged.length - 3) + ' more' : '');
+      }
+      window.openMatchConfirmModal({
+        title: 'Resolve conflict — ' + (c.entityType || 'entity') + ' ' + String(c.mastId || '').slice(-8),
+        description: 'QBO has different values for ' + diverged.length + ' field(s). Choose whose values to keep.',
+        candidates: [
+          { id: 'kept-mast',     label: 'Keep Mast values',   sublabel: summary('mast'), score: 0.0 },
+          { id: 'accepted-qbo',  label: 'Accept QBO values',  sublabel: summary('qbo'),  score: 0.5 }
+        ],
+        onAccept: async function(resolution) {
+          if (!resolution) { toastErr('No resolution selected'); return; }
+          try {
+            var fn = firebase.functions().httpsCallable('resolveQboConflict');
+            var res = await fn({ tid: tenantId(), conflictId: conflictId, resolution: resolution });
+            var data = (res && res.data) || {};
+            if (data.ok === false) { toastErr('Resolve failed: ' + (data.error || 'unknown')); return; }
+            toastOk('Conflict resolved (' + resolution + ')');
+            // Refresh — works whether the modal was opened from the Conflicts
+            // tab or from an AR/AP inline chip (no harm if neither view is current).
+            if (window.__qboInnerActiveTab === 'conflicts') {
+              renderConflictsView();
+            }
+            // Best-effort: refresh AR/AP if loaded so the chip disappears.
+            try { if (typeof window.loadArData === 'function') window.loadArData(); } catch (_) {}
+            try { if (typeof window.loadApData === 'function') window.loadApData(); } catch (_) {}
+          } catch (err) {
+            toastErr('Resolve failed: ' + (err && err.message));
+          }
+        },
+        // Conflict-resolution flow has no "create new in QBO" path; this button
+        // would otherwise silently close the modal. Wire a clarifying toast.
+        onCreateNew: function() {
+          toastErr('Conflict resolution only accepts Keep/Accept — pick one of the options above');
+        },
+        onCancel: function() {}
+      });
+    } catch (err) {
+      toastErr('Failed to open conflict: ' + (err && err.message));
+    }
+  };
+
+  // Helper exposed to finance.js so AR/AP rows can decide whether to render a
+  // [Conflict] chip without re-querying _meta on every row render. Reads from
+  // window.__qboConflicts (populated when conflicts tab renders OR via the
+  // explicit preload `_qboPreloadConflicts` called from setupArTab/setupApTab).
+  // Returns the matching pending conflict object, or null.
+  window._qboFindConflict = function(entityType, mastId) {
+    var conflicts = window.__qboConflicts;
+    if (!Array.isArray(conflicts) || !mastId) return null;
+    for (var i = 0; i < conflicts.length; i++) {
+      var c = conflicts[i];
+      if (!c || c.resolution) continue;
+      if (String(c.entityType) === String(entityType) && String(c.mastId) === String(mastId)) {
+        return c;
+      }
+    }
+    return null;
+  };
+
+  // One-shot preloader for AR/AP/Day Close to populate window.__qboConflicts
+  // before they render. No-throw — chips just won't render if this fails.
+  window._qboPreloadConflicts = async function() {
+    try {
+      var meta = await MastDB.get('admin/integrations/_meta');
+      window.__qboConflicts = (meta && Array.isArray(meta.conflicts)) ? meta.conflicts : [];
+    } catch (_) {
+      if (!Array.isArray(window.__qboConflicts)) window.__qboConflicts = [];
     }
   };
 

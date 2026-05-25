@@ -9416,11 +9416,12 @@
           <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:12px;">
             Sync day-close journals, AR invoices, vendor bills, and reviewed expenses to QuickBooks. Sandbox V1 only.
           </p>
-          <!-- Inner sub-tabs: Connection / COA Map / Sync Log (consolidated from former #accounting route) -->
+          <!-- Inner sub-tabs: Connection / COA Map / Sync Log / Conflicts (W2b.3) -->
           <div class="view-tabs" id="qboInnerTabBar" style="margin-bottom:16px;">
             <button class="view-tab active" data-tab="connection" onclick="switchQboInnerTab('connection')">Connection</button>
             <button class="view-tab" data-tab="map" onclick="switchQboInnerTab('map')">COA Map</button>
             <button class="view-tab" data-tab="log" onclick="switchQboInnerTab('log')">Sync Log</button>
+            <button class="view-tab" data-tab="conflicts" onclick="switchQboInnerTab('conflicts')">Conflicts</button>
           </div>
           <div id="qboPanelBody"></div>
         </div>
@@ -18170,7 +18171,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260525-131038-c9f7328';
+var MAST_MODULES_V = '20260525-131346-c4af115';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
