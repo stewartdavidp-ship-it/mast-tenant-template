@@ -8,6 +8,31 @@
 
   var QBO_CF_ORIGIN = 'https://us-central1-mast-platform-prod.cloudfunctions.net';
 
+  // ---- Mast → QBO category map (left col of COA Map UI) ----
+  // Source: D-ACC-2/3 ratified concepts. Order = how operators think about
+  // it (revenue first, then COGS, then expenses, then liabilities).
+  var COA_CATEGORIES = [
+    { key: 'revenue_dtc', label: 'Revenue · Direct to Consumer (DTC)', section: 'Revenue' },
+    { key: 'revenue_wholesale', label: 'Revenue · Wholesale', section: 'Revenue' },
+    { key: 'revenue_gallery', label: 'Revenue · Gallery / Consignment', section: 'Revenue' },
+    { key: 'cogs', label: 'Cost of Goods Sold', section: 'COGS' },
+    { key: 'gallery_commission', label: 'Gallery Commission Expense', section: 'COGS' },
+    { key: 'expense_materials', label: 'Expense · Materials & Supplies', section: 'Expenses' },
+    { key: 'expense_studio', label: 'Expense · Studio (rent, utilities)', section: 'Expenses' },
+    { key: 'expense_equipment', label: 'Expense · Equipment', section: 'Expenses' },
+    { key: 'expense_shipping', label: 'Expense · Shipping & Packaging', section: 'Expenses' },
+    { key: 'expense_marketing', label: 'Expense · Marketing', section: 'Expenses' },
+    { key: 'expense_software', label: 'Expense · Software & Subscriptions', section: 'Expenses' },
+    { key: 'expense_travel', label: 'Expense · Travel & Shows', section: 'Expenses' },
+    { key: 'expense_professional', label: 'Expense · Professional Services', section: 'Expenses' },
+    { key: 'expense_fees', label: 'Expense · Bank & Processing Fees', section: 'Expenses' },
+    { key: 'expense_other', label: 'Expense · Other', section: 'Expenses' },
+    { key: 'sales_tax_payable', label: 'Sales Tax Payable', section: 'Liabilities' }
+  ];
+  // Required for save (all rev + COGS + sales tax + core expenses).
+  var COA_REQUIRED = ['revenue_dtc', 'revenue_wholesale', 'revenue_gallery', 'cogs', 'sales_tax_payable',
+                      'expense_materials', 'expense_studio', 'expense_shipping'];
+
   // ---- helpers ----
   function esc(s) {
     s = (s == null) ? '' : String(s);
@@ -111,12 +136,155 @@
     if (conn) conn.style.display = connected ? '' : 'none';
   }
 
-  // ---- COA Map sub-view (placeholder — W1.2 next commit) ----
+  // ---- COA Map sub-view (W1.2) ----
   function renderCoaMapView() {
     var body = document.getElementById('accountingSubviewBody');
     if (!body) return;
-    body.innerHTML = '<p style="color:var(--warm-gray);font-size:0.9rem;">Chart-of-Accounts mapping lands in W1.2.</p>';
+    body.innerHTML = '<div style="color:var(--warm-gray);font-size:0.9rem;padding:24px 0;">Loading QuickBooks chart of accounts…</div>';
+
+    var tid = tenantId();
+    if (!tid) {
+      body.innerHTML = '<div style="color:var(--danger,#dc2626);padding:12px;">Tenant ID not resolved.</div>';
+      return;
+    }
+
+    var fetchFn = firebase.functions().httpsCallable('fetchQboChart');
+    var getMapFn = firebase.functions().httpsCallable('getQboMapping');
+
+    Promise.all([
+      fetchFn({ tenantId: tid }),
+      getMapFn({ tenantId: tid })
+    ]).then(function(results) {
+      var accounts = (results[0] && results[0].data && results[0].data.accounts) || [];
+      var mappingDoc = (results[1] && results[1].data) || {};
+      var mapping = (mappingDoc && mappingDoc.mapping) || {};
+      renderCoaMapTable(body, accounts, mapping, mappingDoc);
+    }).catch(function(err) {
+      var msg = (err && err.message) || String(err);
+      var isAuth = /unauth|not.*connect|no.*token|invalid.*token/i.test(msg);
+      if (isAuth) {
+        body.innerHTML =
+          '<div style="background:rgba(234,179,8,0.08);border:1px solid rgba(234,179,8,0.25);border-radius:8px;padding:12px 16px;">' +
+            '<div style="font-size:0.9rem;font-weight:600;color:#eab308;margin-bottom:4px;">QuickBooks not connected</div>' +
+            '<div style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:12px;">Connect first, then return to map your categories.</div>' +
+            '<a class="btn btn-primary" href="#accounting?subView=connect">Go to Connection</a>' +
+          '</div>';
+      } else {
+        body.innerHTML = '<div style="color:var(--danger,#dc2626);padding:12px;">Failed to load: ' + esc(msg) + '</div>';
+      }
+    });
   }
+
+  function renderCoaMapTable(body, accounts, mapping, mappingDoc) {
+    // Group accounts by AccountType for grouped <optgroup>.
+    var byType = {};
+    accounts.forEach(function(a) {
+      if (a.Active === false) return;
+      var t = a.AccountType || 'Other';
+      if (!byType[t]) byType[t] = [];
+      byType[t].push(a);
+    });
+    Object.keys(byType).forEach(function(t) {
+      byType[t].sort(function(a, b) {
+        return String(a.FullyQualifiedName || a.Name || '').localeCompare(String(b.FullyQualifiedName || b.Name || ''));
+      });
+    });
+    var typeOrder = ['Income', 'Cost of Goods Sold', 'Expense', 'Other Current Liability', 'Other Current Asset', 'Bank', 'Credit Card', 'Long Term Liability', 'Equity', 'Other'];
+    var allTypes = Object.keys(byType).sort(function(a, b) {
+      var ai = typeOrder.indexOf(a); var bi = typeOrder.indexOf(b);
+      if (ai < 0) ai = 999; if (bi < 0) bi = 999;
+      return ai - bi;
+    });
+
+    function optionsHtmlForRow(currentId) {
+      var h = '<option value="">— Select QBO account —</option>';
+      allTypes.forEach(function(t) {
+        h += '<optgroup label="' + esc(t) + '">';
+        byType[t].forEach(function(a) {
+          var label = a.FullyQualifiedName || a.Name || a.Id;
+          var sel = (String(a.Id) === String(currentId)) ? ' selected' : '';
+          h += '<option value="' + esc(a.Id) + '"' + sel + '>' + esc(label) + '</option>';
+        });
+        h += '</optgroup>';
+      });
+      return h;
+    }
+
+    var lastSaved = '';
+    if (mappingDoc && mappingDoc.confirmedAt) {
+      var when = new Date(mappingDoc.confirmedAt).toLocaleString();
+      var who = mappingDoc.confirmedBy || '';
+      lastSaved = '<div style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:12px;">Last saved: ' + esc(when) + (who ? ' by ' + esc(who) : '') + '</div>';
+    }
+
+    var rows = '';
+    var section = null;
+    COA_CATEGORIES.forEach(function(cat) {
+      if (cat.section !== section) {
+        section = cat.section;
+        rows += '<tr><td colspan="2" style="padding:14px 10px 6px;font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.5px;border-bottom:1px solid rgba(255,255,255,0.05);">' + esc(section) + '</td></tr>';
+      }
+      var required = COA_REQUIRED.indexOf(cat.key) >= 0;
+      var current = mapping[cat.key] || '';
+      rows +=
+        '<tr style="border-bottom:1px solid rgba(255,255,255,0.05);">' +
+          '<td style="padding:10px;font-size:0.9rem;width:42%;">' + esc(cat.label) + (required ? ' <span style="color:#ef4444;font-size:0.72rem;">*</span>' : '') + '</td>' +
+          '<td style="padding:10px;">' +
+            '<select class="qbo-map-select" data-mast-key="' + esc(cat.key) + '" style="width:100%;padding:6px 8px;font-size:0.85rem;background:var(--bg-secondary,#232323);color:inherit;border:1px solid rgba(255,255,255,0.1);border-radius:4px;">' +
+              optionsHtmlForRow(current) +
+            '</select>' +
+          '</td>' +
+        '</tr>';
+    });
+
+    body.innerHTML =
+      '<div style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:12px;">' +
+        'Map each Mast category to a QBO account. Required (*) categories must be mapped before saving. Mappings can be updated anytime; future syncs use the new mapping.' +
+      '</div>' +
+      lastSaved +
+      '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;">' +
+        '<thead><tr style="border-bottom:1px solid rgba(255,255,255,0.1);">' +
+          '<th style="text-align:left;padding:8px 10px;font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.5px;">Mast Category</th>' +
+          '<th style="text-align:left;padding:8px 10px;font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.5px;">QBO Account</th>' +
+        '</tr></thead><tbody>' + rows + '</tbody></table></div>' +
+      '<div style="margin-top:16px;display:flex;gap:8px;align-items:center;">' +
+        '<button id="qboMapSaveBtn" class="btn btn-primary" onclick="window._qboSaveMapping && window._qboSaveMapping()">Save mapping</button>' +
+        '<span id="qboMapStatus" style="font-size:0.85rem;color:var(--warm-gray);"></span>' +
+      '</div>';
+  }
+
+  window._qboSaveMapping = async function() {
+    var btn = document.getElementById('qboMapSaveBtn');
+    var status = document.getElementById('qboMapStatus');
+    if (btn) btn.disabled = true;
+    if (status) status.textContent = 'Saving…';
+    try {
+      var selects = document.querySelectorAll('select.qbo-map-select');
+      var mapping = {};
+      var missingRequired = [];
+      selects.forEach(function(sel) {
+        var k = sel.getAttribute('data-mast-key');
+        var v = sel.value;
+        if (v) mapping[k] = v;
+        else if (COA_REQUIRED.indexOf(k) >= 0) missingRequired.push(k);
+      });
+      if (missingRequired.length > 0) {
+        if (status) status.innerHTML = '<span style="color:#ef4444;">Missing required: ' + esc(missingRequired.join(', ')) + '</span>';
+        if (btn) btn.disabled = false;
+        return;
+      }
+      var setMapFn = firebase.functions().httpsCallable('setQboMapping');
+      await setMapFn({ tenantId: tenantId(), mapping: mapping });
+      if (status) status.innerHTML = '<span style="color:#22c55e;">Saved.</span>';
+      toastOk('COA mapping saved');
+      // Reload to show fresh confirmedAt timestamp.
+      setTimeout(function() { renderCoaMapView(); }, 600);
+    } catch (err) {
+      if (status) status.innerHTML = '<span style="color:#ef4444;">Save failed: ' + esc(err && err.message) + '</span>';
+      toastErr('Save failed: ' + (err && err.message));
+      if (btn) btn.disabled = false;
+    }
+  };
 
   // ---- Sync Log sub-view (placeholder — W1.10 Phase 2 next commit) ----
   function renderSyncLogView() {
