@@ -151,28 +151,51 @@
     var ml = Math.max(String(a || '').length, String(b || '').length) || 1;
     return d / ml;
   }
-  // Seed keywords per Mast category — heuristic candidate set scored against
-  // each Active QBO account name with normalized Levenshtein. Lower = better.
+  // Seed keywords per Mast category. Scored against each Active QBO account
+  // via a 3-tier match (exact > substring > shared-token > Levenshtein fallback).
+  // Expanded 2026-05-25 after operator surfaced 3 unresolved (shipping, professional services, sales tax payable).
   var COA_SUGGEST_HINTS = {
     revenue_dtc: ['Sales', 'Sales of Product Income', 'Services'],
     revenue_wholesale: ['Sales of Product Income', 'Wholesale', 'Sales'],
     revenue_gallery: ['Consignment', 'Sales', 'Other Income'],
     cogs: ['Cost of Goods Sold'],
     gallery_commission: ['Commissions and Fees', 'Sales Commissions'],
-    expense_materials: ['Supplies', 'Job Materials', 'Materials & Supplies'],
-    expense_studio: ['Rent', 'Utilities', 'Studio Expense'],
-    expense_equipment: ['Equipment Rental', 'Tools', 'Equipment'],
-    expense_shipping: ['Shipping', 'Postage', 'Freight'],
-    expense_marketing: ['Advertising', 'Marketing'],
+    expense_materials: ['Supplies', 'Job Materials', 'Materials & Supplies', 'Office Supplies'],
+    expense_studio: ['Rent', 'Utilities', 'Studio Expense', 'Rent or Lease'],
+    expense_equipment: ['Equipment Rental', 'Tools', 'Equipment', 'Machinery'],
+    expense_shipping: ['Shipping', 'Postage', 'Freight', 'Postage and Delivery', 'Shipping, Freight & Delivery', 'Delivery'],
+    expense_marketing: ['Advertising', 'Marketing', 'Promotional'],
     expense_software: ['Software', 'Subscriptions', 'Dues & Subscriptions'],
-    expense_travel: ['Travel', 'Meals', 'Shows'],
-    expense_professional: ['Legal', 'Accounting', 'Professional Services'],
-    expense_fees: ['Bank Charges', 'Merchant', 'Processing Fees'],
-    expense_other: ['Other Expense', 'Miscellaneous'],
-    sales_tax_payable: ['Sales Tax Payable', 'Sales Tax']
+    expense_travel: ['Travel', 'Meals', 'Shows', 'Travel Meals'],
+    expense_professional: ['Legal', 'Accounting', 'Professional Services', 'Legal & Professional Fees', 'Consulting', 'Professional Fees'],
+    expense_fees: ['Bank Charges', 'Merchant', 'Processing Fees', 'Bank Service Charges'],
+    expense_other: ['Other Expense', 'Miscellaneous', 'Other'],
+    sales_tax_payable: ['Sales Tax Payable', 'Sales Tax', 'Out of Scope Agency Payable', 'Tax Payable', 'Sales Tax Agency Payable']
   };
-  // Returns { [catKey]: qboAccountId } for any cat that has a fuzzy match
-  // with normalized distance ≤ 0.4 against any of its hint phrases.
+  // Score one account name against one hint. Lower = better. Range [0..1].
+  // Tier 1: exact (0.0) > Tier 2: substring either direction (0.05–0.20) >
+  // Tier 3: shared token overlap (0.10–0.50) > Tier 4: Levenshtein fallback.
+  function _scoreMatch(accountName, hint) {
+    var a = String(accountName || '').toLowerCase().trim();
+    var h = String(hint || '').toLowerCase().trim();
+    if (!a || !h) return 1.0;
+    if (a === h) return 0.0;
+    // Substring match either direction
+    if (a.indexOf(h) >= 0) return 0.05 + 0.15 * (1 - h.length / a.length);
+    if (h.indexOf(a) >= 0) return 0.05 + 0.15 * (1 - a.length / h.length);
+    // Shared-token overlap (split on non-alphanumeric)
+    var aTokens = a.split(/[^a-z0-9]+/).filter(Boolean);
+    var hTokens = h.split(/[^a-z0-9]+/).filter(Boolean);
+    var shared = 0;
+    hTokens.forEach(function(t) { if (aTokens.indexOf(t) >= 0) shared++; });
+    if (shared > 0) {
+      var ratio = shared / Math.max(aTokens.length, hTokens.length);
+      return 0.50 - 0.40 * ratio;  // 1/1 → 0.10; 1/2 → 0.30; 1/3 → 0.37
+    }
+    // Levenshtein fallback
+    return _normDist(a, h);
+  }
+  // Returns { [catKey]: qboAccountId } for any cat that has a match ≤ 0.4.
   function _suggestCoaMapping(accounts) {
     var active = (accounts || []).filter(function(a) { return a.Active !== false; });
     var out = {};
@@ -183,7 +206,7 @@
         var name = a.FullyQualifiedName || a.Name || '';
         if (!name) return;
         for (var i = 0; i < hints.length; i++) {
-          var d = _normDist(name, hints[i]);
+          var d = _scoreMatch(name, hints[i]);
           if (d <= 0.4 && (best === null || d < best.d)) {
             best = { id: a.Id, d: d };
           }
