@@ -27,7 +27,7 @@ Three patches landed in one commit on `app/modules/accounting.js`:
    connected). COA Map has two variants (saved vs unsaved mapping). The W1
    auto-suggest banner still renders above the table on the unsaved branch.
 
-- Commit SHA: _(to be filled by commit step)_
-- Deploy version SHA: _(to be filled by `mast_hosting deploy pod=dev` step)_
+- Commit SHA: `0733011076d233027c352267893430d0c0f17f57`
+- Deploy version: `sites/mast-tenant-shared/versions/9ed5c21c13af7f32` (pod=dev)
 
 No public-page changes. No new MCP coverage required (UI polish only).
