@@ -54,19 +54,27 @@
     var params = new URLSearchParams(qs);
     var subView = params.get('subView') || 'connect';
 
-    function tabAttr(v) {
-      return 'class="subview-tab' + (subView === v ? ' active' : '') + '"';
+    // Canonical Mast sub-view switcher pattern: btn-secondary btn-small row,
+    // active tab swapped to btn-primary (mirrors finance.js AR / Cash Flow).
+    function tabBtn(v, label) {
+      var cls = (subView === v) ? 'btn btn-primary btn-small' : 'btn btn-secondary btn-small';
+      return '<button class="' + cls + '" onclick="navigateTo(\'accounting?subView=' + v + '\')">' + label + '</button>';
     }
 
     tab.innerHTML =
       '<div class="page-header" style="padding:24px 24px 0;">' +
+        '<div style="margin-bottom:12px;font-size:0.85rem;">' +
+          '<a href="#settings" onclick="event.preventDefault(); if (typeof switchSettingsSubView === \'function\') { navigateTo(\'settings\'); setTimeout(function(){ switchSettingsSubView(\'integrations\'); }, 50); } else { navigateTo(\'settings\'); }" style="color:var(--text-muted);text-decoration:none;">' +
+            '&larr; Settings &middot; Integrations' +
+          '</a>' +
+        '</div>' +
         '<h1 style="font-size:1.6rem;margin:0 0 4px;">QuickBooks Online</h1>' +
         '<p style="font-size:0.85rem;color:var(--warm-gray);margin:0 0 16px;">Sync day-close journals, AR invoices, and bills to QBO. Sandbox V1.</p>' +
       '</div>' +
-      '<div class="view-tabs" style="padding:0 24px;margin-bottom:16px;">' +
-        '<a href="#accounting?subView=connect" ' + tabAttr('connect') + ' style="margin-right:12px;font-size:0.9rem;">Connection</a>' +
-        '<a href="#accounting?subView=map" ' + tabAttr('map') + ' style="margin-right:12px;font-size:0.9rem;">COA Map</a>' +
-        '<a href="#accounting?subView=log" ' + tabAttr('log') + ' style="font-size:0.9rem;">Sync Log</a>' +
+      '<div style="padding:0 24px;display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;">' +
+        tabBtn('connect', 'Connection') +
+        tabBtn('map', 'COA Map') +
+        tabBtn('log', 'Sync Log') +
       '</div>' +
       '<div id="accountingSubviewBody" style="padding:0 24px 24px;"></div>';
 
@@ -89,6 +97,11 @@
         var realmShort = String(doc.realmId).slice(0, 8) + '…';
         var connectedAt = doc.connectedAt ? new Date(doc.connectedAt).toLocaleString() : '—';
         html =
+          '<p style="color:var(--text-secondary);font-size:0.85rem;line-height:1.5;margin:0 0 12px;">' +
+            'Connected to QuickBooks ' + esc(env) + ' &middot; realm ' + esc(realmShort) + '. ' +
+            'Next steps: (1) confirm your <strong>COA Map</strong> is set up, (2) check the <strong>Sync Log</strong> ' +
+            'after writing a Day Close or wholesale invoice to verify your first sync.' +
+          '</p>' +
           '<div style="background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.25);border-radius:8px;padding:12px 16px;margin-bottom:16px;">' +
             '<div style="font-size:0.9rem;font-weight:600;color:#22c55e;margin-bottom:4px;">Connected</div>' +
             '<div style="font-size:0.85rem;color:var(--warm-gray);">' +
@@ -102,8 +115,10 @@
           '</div>';
       } else {
         html =
-          '<p style="color:var(--warm-gray);font-size:0.9rem;margin-bottom:12px;">' +
-            'Connect your QuickBooks Online sandbox to begin. After connecting, map your Mast categories to QBO accounts in the COA Map tab.' +
+          '<p style="color:var(--text-secondary);font-size:0.85rem;line-height:1.5;margin-bottom:12px;">' +
+            'Connect your QuickBooks Online sandbox to start syncing data. After connecting, map your chart of accounts ' +
+            'on the <strong>COA Map</strong> tab. Once mapping is saved, every day close, wholesale invoice, vendor bill, ' +
+            'and reviewed expense will sync automatically to QBO.' +
           '</p>' +
           '<button class="btn btn-primary" onclick="window.connectQbo && window.connectQbo()">Connect QuickBooks</button>';
       }
@@ -328,10 +343,14 @@
         '</div>';
     }
 
+    var hasSaved = !!(mappingDoc && mappingDoc.confirmedAt);
+    var guidance = hasSaved
+      ? 'Your QBO account mappings. Editing these affects future syncs only; existing QBO entries are unchanged.'
+      : 'Map each Mast category to a QBO account so syncs post to the right places. Suggestions are pre-filled below &mdash; review them, adjust any that don\'t match your chart, and save.';
     body.innerHTML =
-      '<div style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:12px;">' +
-        'Map each Mast category to a QBO account. Required (*) categories must be mapped before saving. Mappings can be updated anytime; future syncs use the new mapping.' +
-      '</div>' +
+      '<p style="color:var(--text-secondary);font-size:0.85rem;line-height:1.5;margin:0 0 12px;">' +
+        guidance +
+      '</p>' +
       lastSaved +
       suggestBanner +
       '<div style="overflow-x:auto;"><table class="qbo-table">' +
@@ -387,6 +406,9 @@
     if (!body) return;
     _syncLogState = { rows: [], filterStatus: 'all', filterEntity: 'all', filterFrom: '', filterTo: '', hasMore: true, fetchedLimit: 0 };
     body.innerHTML =
+      '<p style="color:var(--text-secondary);font-size:0.85rem;line-height:1.5;margin:0 0 12px;">' +
+        'Every push to QuickBooks creates a row here. The log fills automatically when you write a Day Close, wholesale invoice, vendor bill, or reviewed expense. Failed pushes show a Retry button.' +
+      '</p>' +
       '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:16px;font-size:0.85rem;">' +
         '<label>Status: <select id="qboLogFilterStatus" class="qbo-select" style="width:auto;">' +
           '<option value="all">All</option>' +
