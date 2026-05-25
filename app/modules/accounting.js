@@ -241,16 +241,22 @@
       var accounts = (results[0] && results[0].data && results[0].data.accounts) || [];
       var mappingDoc = (results[1] && results[1].data) || {};
       var savedMapping = (mappingDoc && mappingDoc.mapping) || null;
-      // Auto-suggest ONLY when no saved mapping yet. If the operator has saved
-      // a mapping before, preserve their selections — don't override.
+      // Auto-suggest fills GAPS: preserve all saved selections, but for any
+      // category not yet mapped (including newly-added categories like 'cash'
+      // shipped in a later release) compute a fuzzy suggestion. This way a
+      // tenant who saved their map before a category was added still gets
+      // an auto-suggest for the new field on next visit.
       var suggested = false;
-      var mapping;
-      if (savedMapping && Object.keys(savedMapping).length > 0) {
-        mapping = savedMapping;
-      } else {
-        mapping = _suggestCoaMapping(accounts);
-        suggested = Object.keys(mapping).length > 0;
-      }
+      var mapping = {};
+      var suggestions = _suggestCoaMapping(accounts);
+      COA_CATEGORIES.forEach(function(cat) {
+        if (savedMapping && savedMapping[cat.key]) {
+          mapping[cat.key] = savedMapping[cat.key];
+        } else if (suggestions[cat.key]) {
+          mapping[cat.key] = suggestions[cat.key];
+          suggested = true;
+        }
+      });
       renderCoaMapTable(body, accounts, mapping, mappingDoc, suggested);
     }).catch(function(err) {
       var msg = (err && err.message) || String(err);
@@ -332,7 +338,11 @@
 
     var hasSaved = !!(mappingDoc && mappingDoc.confirmedAt);
     var unsavedBanner = '';
-    if (!hasSaved) {
+    // Banner cases:
+    //   (1) no saved mapping yet — full unsaved state
+    //   (2) saved mapping + fuzzy suggested new categories (e.g. Cash on Hand
+    //       added in a later release) — partial unsaved state
+    if (!hasSaved || suggested) {
       // Loud, top-of-page unsaved indicator. Operator surfaced 2026-05-25 that
       // the prior soft "Suggested matches" copy wasn't enough — readers
       // thought the pre-filled values were already persisted.
@@ -342,7 +352,9 @@
             '<span style="width:6px;height:6px;border-radius:50%;background:#fff;display:inline-block;"></span>Unsaved' +
           '</span>' +
           '<span style="color:var(--text,#1f2937);">' +
-            (suggested ? 'We pre-filled suggested matches. Review and click <strong>Save mapping</strong> below to apply.' : 'Set a QBO account for each category, then click <strong>Save mapping</strong> below.') +
+            (suggested && hasSaved ? 'New categories were added since your last save. We pre-filled suggested matches — review and click <strong>Save changes</strong> below to apply.' :
+             suggested ? 'We pre-filled suggested matches. Review and click <strong>Save mapping</strong> below to apply.' :
+             'Set a QBO account for each category, then click <strong>Save mapping</strong> below.') +
           '</span>' +
         '</div>';
     }
