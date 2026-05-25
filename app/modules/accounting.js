@@ -435,11 +435,10 @@
         '</select></label>' +
         '<label>Entity: <select id="qboLogFilterEntity" class="qbo-select" style="width:auto;">' +
           '<option value="all">All</option>' +
-          '<option value="journalEntry">journalEntry</option>' +
-          '<option value="invoice">invoice</option>' +
-          '<option value="bill">bill</option>' +
-          '<option value="customer">customer</option>' +
-          '<option value="vendor">vendor</option>' +
+          '<option value="expense">Expense</option>' +
+          '<option value="wholesaleInvoice">Wholesale Invoice</option>' +
+          '<option value="apBill">AP Bill</option>' +
+          '<option value="dayClose">Day Close</option>' +
         '</select></label>' +
         '<label>From: <input type="date" id="qboLogFilterFrom" class="qbo-select" style="width:auto;"></label>' +
         '<label>To: <input type="date" id="qboLogFilterTo" class="qbo-select" style="width:auto;"></label>' +
@@ -497,7 +496,7 @@
       // Filter client-side
       var filtered = arr.filter(function(r) {
         if (_syncLogState.filterStatus !== 'all' && r.status !== _syncLogState.filterStatus) return false;
-        if (_syncLogState.filterEntity !== 'all' && r.entityType !== _syncLogState.filterEntity) return false;
+        if (_syncLogState.filterEntity !== 'all' && r.mastEntityType !== _syncLogState.filterEntity) return false;
         if (_syncLogState.filterFrom) {
           var fromTs = new Date(_syncLogState.filterFrom + 'T00:00:00').getTime();
           var rt = typeof r.createdAt === 'number' ? r.createdAt : Date.parse(r.createdAt);
@@ -568,7 +567,10 @@
     rows.forEach(function(r) {
       var fault = r.lastFault || r.error || '';
       var qboId = r.qboId || '';
-      var mastId = r.mastId || r.entityId || '';
+      // Receipt schema (sync-execute.js writes): mastEntityType + mastEntityId.
+      // Older fallback names (mastId/entityType/entityId) kept for any legacy rows.
+      var mastId = r.mastEntityId || r.mastId || r.entityId || '';
+      var entityType = r.mastEntityType || r.entityType || '';
       var requestId = r.requestId || r.id || '';
       var retryHtml = '<button class="btn btn-secondary" disabled title="Retry available after retryQboSync CF deploys" style="font-size:0.78rem;padding:2px 8px;opacity:0.5;">Retry</button>';
       if (r.status === 'failed' && requestId) {
@@ -578,7 +580,7 @@
       html +=
         '<tr style="border-bottom:1px solid rgba(255,255,255,0.05);">' +
           '<td style="padding:8px 10px;white-space:nowrap;">' + esc(tsFmt(r.createdAt)) + '</td>' +
-          '<td style="padding:8px 10px;">' + esc(r.entityType || '—') + '</td>' +
+          '<td style="padding:8px 10px;">' + esc(entityType || '—') + '</td>' +
           '<td style="padding:8px 10px;font-family:monospace;font-size:0.78rem;">' + esc(truncate(mastId, 24)) + '</td>' +
           '<td style="padding:8px 10px;font-family:monospace;font-size:0.78rem;">' + esc(truncate(qboId, 18)) + copyBtn + '</td>' +
           '<td style="padding:8px 10px;">' + statusChip(r.status) + '</td>' +
