@@ -286,12 +286,210 @@
     }
   };
 
-  // ---- Sync Log sub-view (placeholder — W1.10 Phase 2 next commit) ----
+  // ---- Sync Log sub-view (W1.10 Phase 2) ----
+  var SYNC_LOG_PAGE_SIZE = 50;
+  var _syncLogState = { rows: [], filterStatus: 'all', filterEntity: 'all', filterFrom: '', filterTo: '', hasMore: true, fetchedLimit: 0 };
+
   function renderSyncLogView() {
     var body = document.getElementById('accountingSubviewBody');
     if (!body) return;
-    body.innerHTML = '<p style="color:var(--warm-gray);font-size:0.9rem;">Sync log lands in W1.10 Phase 2.</p>';
+    _syncLogState = { rows: [], filterStatus: 'all', filterEntity: 'all', filterFrom: '', filterTo: '', hasMore: true, fetchedLimit: 0 };
+    body.innerHTML =
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:16px;font-size:0.85rem;">' +
+        '<label>Status: <select id="qboLogFilterStatus" style="padding:4px 6px;background:var(--bg-secondary,#232323);color:inherit;border:1px solid rgba(255,255,255,0.1);border-radius:4px;font-size:0.85rem;">' +
+          '<option value="all">All</option>' +
+          '<option value="queued">Queued</option>' +
+          '<option value="in-flight">In flight</option>' +
+          '<option value="success">Success</option>' +
+          '<option value="failed">Failed</option>' +
+          '<option value="blocked-closed-period">Blocked (closed period)</option>' +
+          '<option value="orphaned">Orphaned</option>' +
+        '</select></label>' +
+        '<label>Entity: <select id="qboLogFilterEntity" style="padding:4px 6px;background:var(--bg-secondary,#232323);color:inherit;border:1px solid rgba(255,255,255,0.1);border-radius:4px;font-size:0.85rem;">' +
+          '<option value="all">All</option>' +
+          '<option value="journalEntry">journalEntry</option>' +
+          '<option value="invoice">invoice</option>' +
+          '<option value="bill">bill</option>' +
+          '<option value="customer">customer</option>' +
+          '<option value="vendor">vendor</option>' +
+        '</select></label>' +
+        '<label>From: <input type="date" id="qboLogFilterFrom" style="padding:4px 6px;background:var(--bg-secondary,#232323);color:inherit;border:1px solid rgba(255,255,255,0.1);border-radius:4px;font-size:0.85rem;"></label>' +
+        '<label>To: <input type="date" id="qboLogFilterTo" style="padding:4px 6px;background:var(--bg-secondary,#232323);color:inherit;border:1px solid rgba(255,255,255,0.1);border-radius:4px;font-size:0.85rem;"></label>' +
+        '<button class="btn btn-secondary" onclick="window._qboLogApplyFilters && window._qboLogApplyFilters()">Apply</button>' +
+      '</div>' +
+      '<div id="qboLogTableWrap"><div style="color:var(--warm-gray);font-size:0.9rem;padding:24px 0;">Loading sync log…</div></div>' +
+      '<div id="qboLogMoreWrap" style="margin-top:12px;text-align:center;"></div>';
+
+    loadSyncLogPage();
   }
+
+  window._qboLogApplyFilters = function() {
+    var s = document.getElementById('qboLogFilterStatus');
+    var e = document.getElementById('qboLogFilterEntity');
+    var f = document.getElementById('qboLogFilterFrom');
+    var t = document.getElementById('qboLogFilterTo');
+    _syncLogState.filterStatus = (s && s.value) || 'all';
+    _syncLogState.filterEntity = (e && e.value) || 'all';
+    _syncLogState.filterFrom = (f && f.value) || '';
+    _syncLogState.filterTo = (t && t.value) || '';
+    _syncLogState.rows = [];
+    _syncLogState.fetchedLimit = 0;
+    _syncLogState.hasMore = true;
+    document.getElementById('qboLogTableWrap').innerHTML = '<div style="color:var(--warm-gray);font-size:0.9rem;padding:24px 0;">Loading…</div>';
+    loadSyncLogPage();
+  };
+
+  function loadSyncLogPage() {
+    // Read directly from admin/qboSync — admin auth gates read per C2 rules.
+    // No native cursor on MastDB.query, so we fetch limitToLast(N) and bump
+    // N by SYNC_LOG_PAGE_SIZE on each "Load more". Hard cap 1000.
+    var nextLimit = (_syncLogState.fetchedLimit || 0) + SYNC_LOG_PAGE_SIZE;
+    if (nextLimit > 1000) nextLimit = 1000;
+    _syncLogState.fetchedLimit = nextLimit;
+
+    var q = MastDB.query('admin/qboSync').orderByChild('createdAt').limitToLast(nextLimit);
+    q.once().then(function(snap) {
+      var raw = snap || {};
+      var arr = [];
+      if (Array.isArray(raw)) arr = raw.slice();
+      else {
+        Object.keys(raw).forEach(function(k) {
+          var v = raw[k];
+          if (v && typeof v === 'object') {
+            if (!v.id) v.id = k;
+            arr.push(v);
+          }
+        });
+      }
+      // Sort desc by createdAt (most-recent first)
+      arr.sort(function(a, b) {
+        var ax = a.createdAt || 0; var bx = b.createdAt || 0;
+        if (ax < bx) return 1; if (ax > bx) return -1; return 0;
+      });
+      // Filter client-side
+      var filtered = arr.filter(function(r) {
+        if (_syncLogState.filterStatus !== 'all' && r.status !== _syncLogState.filterStatus) return false;
+        if (_syncLogState.filterEntity !== 'all' && r.entityType !== _syncLogState.filterEntity) return false;
+        if (_syncLogState.filterFrom) {
+          var fromTs = new Date(_syncLogState.filterFrom + 'T00:00:00').getTime();
+          var rt = typeof r.createdAt === 'number' ? r.createdAt : Date.parse(r.createdAt);
+          if (!isFinite(rt) || rt < fromTs) return false;
+        }
+        if (_syncLogState.filterTo) {
+          var toTs = new Date(_syncLogState.filterTo + 'T23:59:59').getTime();
+          var rt2 = typeof r.createdAt === 'number' ? r.createdAt : Date.parse(r.createdAt);
+          if (!isFinite(rt2) || rt2 > toTs) return false;
+        }
+        return true;
+      });
+      _syncLogState.rows = filtered;
+      _syncLogState.hasMore = (arr.length >= nextLimit) && (nextLimit < 1000);
+      renderSyncLogTable();
+    }).catch(function(err) {
+      var w = document.getElementById('qboLogTableWrap');
+      if (w) w.innerHTML = '<div style="color:var(--danger,#dc2626);padding:12px;">Failed to load sync log: ' + esc(err && err.message) + '</div>';
+    });
+  }
+
+  function renderSyncLogTable() {
+    var wrap = document.getElementById('qboLogTableWrap');
+    var moreWrap = document.getElementById('qboLogMoreWrap');
+    if (!wrap) return;
+    var rows = _syncLogState.rows;
+    if (rows.length === 0) {
+      wrap.innerHTML = '<div style="color:var(--warm-gray);font-size:0.9rem;padding:24px 0;text-align:center;">No sync records match the current filters.</div>';
+      if (moreWrap) moreWrap.innerHTML = '';
+      return;
+    }
+    function statusChip(s) {
+      var bg = '#444', fg = '#fff';
+      if (s === 'success') { bg = 'rgba(34,197,94,0.18)'; fg = '#22c55e'; }
+      else if (s === 'queued' || s === 'in-flight') { bg = 'rgba(234,179,8,0.15)'; fg = '#eab308'; }
+      else if (s === 'failed') { bg = 'rgba(239,68,68,0.15)'; fg = '#ef4444'; }
+      else if (s === 'blocked-closed-period') { bg = 'rgba(168,85,247,0.15)'; fg = '#a855f7'; }
+      else if (s === 'orphaned') { bg = 'rgba(148,163,184,0.18)'; fg = '#94a3b8'; }
+      return '<span style="display:inline-block;padding:2px 8px;border-radius:10px;background:' + bg + ';color:' + fg + ';font-size:0.72rem;">' + esc(s || '—') + '</span>';
+    }
+    function tsFmt(t) {
+      if (!t) return '—';
+      var d = (typeof t === 'number') ? new Date(t) : new Date(t);
+      if (isNaN(d.getTime())) return esc(String(t));
+      return d.toLocaleString();
+    }
+    function truncate(s, n) {
+      s = (s == null) ? '' : String(s);
+      if (s.length <= n) return s;
+      return s.substring(0, n) + '…';
+    }
+    function jsAttr(s) {
+      if (typeof window._jsAttr === 'function') return window._jsAttr(s);
+      return esc(s).replace(/'/g, '&#39;');
+    }
+
+    var html =
+      '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:0.85rem;">' +
+        '<thead><tr style="border-bottom:1px solid rgba(255,255,255,0.1);">' +
+          '<th style="text-align:left;padding:8px 10px;font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.5px;">Timestamp</th>' +
+          '<th style="text-align:left;padding:8px 10px;font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.5px;">Entity</th>' +
+          '<th style="text-align:left;padding:8px 10px;font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.5px;">Mast ID</th>' +
+          '<th style="text-align:left;padding:8px 10px;font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.5px;">QBO ID</th>' +
+          '<th style="text-align:left;padding:8px 10px;font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.5px;">Status</th>' +
+          '<th style="text-align:left;padding:8px 10px;font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.5px;">Last fault</th>' +
+          '<th style="text-align:right;padding:8px 10px;font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.5px;">Action</th>' +
+        '</tr></thead><tbody>';
+    rows.forEach(function(r) {
+      var fault = r.lastFault || r.error || '';
+      var qboId = r.qboId || '';
+      var mastId = r.mastId || r.entityId || '';
+      var requestId = r.requestId || r.id || '';
+      var retryHtml = '<button class="btn btn-secondary" disabled title="Retry available after retryQboSync CF deploys" style="font-size:0.78rem;padding:2px 8px;opacity:0.5;">Retry</button>';
+      if (r.status === 'failed' && requestId) {
+        retryHtml = '<button class="btn btn-secondary" onclick="window._qboRetrySync &amp;&amp; window._qboRetrySync(&#39;' + jsAttr(requestId) + '&#39;)" style="font-size:0.78rem;padding:2px 8px;">Retry</button>';
+      }
+      var copyBtn = qboId ? ' <button onclick="navigator.clipboard &amp;&amp; navigator.clipboard.writeText(&#39;' + jsAttr(qboId) + '&#39;);" title="Copy QBO ID" style="background:none;border:none;cursor:pointer;color:var(--warm-gray);font-size:0.78rem;">⧉</button>' : '';
+      html +=
+        '<tr style="border-bottom:1px solid rgba(255,255,255,0.05);">' +
+          '<td style="padding:8px 10px;white-space:nowrap;">' + esc(tsFmt(r.createdAt)) + '</td>' +
+          '<td style="padding:8px 10px;">' + esc(r.entityType || '—') + '</td>' +
+          '<td style="padding:8px 10px;font-family:monospace;font-size:0.78rem;">' + esc(truncate(mastId, 24)) + '</td>' +
+          '<td style="padding:8px 10px;font-family:monospace;font-size:0.78rem;">' + esc(truncate(qboId, 18)) + copyBtn + '</td>' +
+          '<td style="padding:8px 10px;">' + statusChip(r.status) + '</td>' +
+          '<td style="padding:8px 10px;color:var(--warm-gray);" title="' + esc(fault) + '">' + esc(truncate(fault, 48)) + '</td>' +
+          '<td style="padding:8px 10px;text-align:right;">' + retryHtml + '</td>' +
+        '</tr>';
+    });
+    html += '</tbody></table></div>';
+    wrap.innerHTML = html;
+
+    if (moreWrap) {
+      if (_syncLogState.hasMore) {
+        moreWrap.innerHTML = '<button class="btn btn-secondary" onclick="window._qboLogLoadMore && window._qboLogLoadMore()">Load more</button>';
+      } else {
+        moreWrap.innerHTML = '<div style="font-size:0.78rem;color:var(--warm-gray);">End of log</div>';
+      }
+    }
+  }
+
+  window._qboLogLoadMore = function() {
+    if (!_syncLogState.hasMore) return;
+    loadSyncLogPage();
+  };
+
+  window._qboRetrySync = async function(requestId) {
+    if (!requestId) return;
+    try {
+      var fn = firebase.functions().httpsCallable('retryQboSync');
+      await fn({ tenantId: tenantId(), requestId: requestId });
+      toastOk('Retry queued');
+      setTimeout(function() {
+        _syncLogState.rows = [];
+        _syncLogState.fetchedLimit = 0;
+        loadSyncLogPage();
+      }, 600);
+    } catch (err) {
+      toastErr('Retry failed: ' + (err && err.message));
+    }
+  };
 
   // ---- Connect / Disconnect (W1.1) ----
   window.connectQbo = async function() {
