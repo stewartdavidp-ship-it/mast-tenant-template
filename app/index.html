@@ -17282,6 +17282,15 @@ function buildHash(route, params) {
 window.getRouteParams = function() { return currentRouteParams || {}; };
 
 function navigateTo(route, params) {
+  // Retired-route redirect: #accounting and its subViews were consolidated
+  // into Settings → Integrations → QuickBooks tab (2026-05-25). Redirect
+  // bookmarked or back-nav'd links to the new home.
+  if (route === 'accounting') {
+    var qboInner = (params && /subView=(map|log|connect)/.exec(params)) ? RegExp.$1 : 'connection';
+    window.__integrationsActiveTab = 'qbo';
+    window.__qboInnerActiveTab = (qboInner === 'connect') ? 'connection' : qboInner;
+    return navigateTo('settings');
+  }
   // Top-level nav (sidebar click, dashboard tile, in-page button) consults
   // the unsaved-changes registry and resets the back-nav stack. Programmatic
   // navigation from inside MastNavStack.popAndReturn sets _mastNavInternal
@@ -17690,6 +17699,25 @@ window.addEventListener('hashchange', function() {
   var parsed = parseHash(location.hash);
   var route = parsed.route || 'dashboard';
   var params = parsed.params;
+  // Retired #accounting route → Settings → Integrations → QuickBooks tab
+  // (consolidated 2026-05-25). Preserve subView if present.
+  if (route === 'accounting') {
+    var sv = parsed.params && parsed.params.subView;
+    window.__integrationsActiveTab = 'qbo';
+    window.__qboInnerActiveTab = (sv === 'map' || sv === 'log') ? sv : 'connection';
+    var canonical = '#settings';
+    if (typeof history !== 'undefined' && history.replaceState) {
+      history.replaceState(null, '', location.pathname + location.search + canonical);
+    } else {
+      location.hash = canonical;
+    }
+    route = 'settings';
+    params = null;
+    // Settings sub-view needs to open to Integrations
+    setTimeout(function() {
+      if (typeof switchSettingsSubView === 'function') switchSettingsSubView('integrations');
+    }, 60);
+  }
   // Resolve common URL aliases (e.g. #look-books → #lookbooks) for deep links typed
   // into the address bar. Rewrites the URL without firing another hashchange so the
   // user sees the canonical route they landed on.
@@ -17916,7 +17944,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260525-070720-6d34b4f';
+var MAST_MODULES_V = '20260525-071234-6095089';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
