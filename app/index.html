@@ -990,6 +990,59 @@
     body.dark-mode .view-tab:hover { color: #ccc; }
     body.dark-mode .view-tab.active { color: var(--amber); border-bottom-color: var(--amber); }
 
+    /* Tab status dot — shown inline before the tab label to signal setup state. */
+    .view-tab .tab-status-dot {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      margin-right: 6px;
+      vertical-align: middle;
+      background: #d1d5db;
+    }
+    .view-tab .tab-status-dot[data-state="ok"]      { background: #10b981; }
+    .view-tab .tab-status-dot[data-state="partial"] { background: var(--amber); }
+    .view-tab .tab-status-dot[data-state="missing"] { background: #ef4444; }
+    .view-tab .tab-status-dot[data-state="info"]    { background: #9ca3af; }
+    .view-tab .tab-status-dot[data-state="none"]    { display: none; }
+    body.dark-mode .view-tab .tab-status-dot { background: #4b5563; }
+
+    /* Section header status pill — appears next to the tab body title. */
+    .tab-section-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 1.15rem;
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+    .tab-section-status {
+      display: inline-block;
+      padding: 2px 10px;
+      border-radius: 12px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      background: #f3f4f6;
+      color: var(--warm-gray);
+    }
+    .tab-section-status[data-state="ok"]      { background: rgba(16,185,129,0.15); color: #047857; }
+    .tab-section-status[data-state="partial"] { background: rgba(245,158,11,0.18); color: #b45309; }
+    .tab-section-status[data-state="missing"] { background: rgba(239,68,68,0.15); color: #b91c1c; }
+    .tab-section-status[data-state="info"]    { background: #f3f4f6; color: var(--warm-gray); }
+    .tab-section-status[data-state="none"]    { display: none; }
+    body.dark-mode .tab-section-status { background: #2a2a2a; color: #aaa; }
+    body.dark-mode .tab-section-status[data-state="ok"]      { background: rgba(16,185,129,0.20); color: #6ee7b7; }
+    body.dark-mode .tab-section-status[data-state="partial"] { background: rgba(245,158,11,0.22); color: #fcd34d; }
+    body.dark-mode .tab-section-status[data-state="missing"] { background: rgba(239,68,68,0.22); color: #fca5a5; }
+    .tab-section-purpose {
+      font-size: 0.85rem;
+      color: var(--warm-gray);
+      margin-bottom: 16px;
+      line-height: 1.5;
+    }
+
     /* Settings vertical sidebar nav */
     .settings-sidebar-nav {
       width: 180px;
@@ -8113,124 +8166,155 @@
           </div>
         </nav>
         <div class="settings-content-area">
-          <div id="settingsSubGeneral" style="max-width:500px;">
-        <!-- M6 (Idea -OtADygKA_JhRmk1wUqN): Change my business setup — entry
-             point for the explicit owner-driven mode-change flow. Placed
-             first in General settings since it's a load-bearing tenant-shape
-             control that other settings depend on. -->
-        <div class="form-group" style="margin-bottom:24px;">
-          <label>Business setup</label>
-          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:8px;">
-            Change what kind of business Mast is set up for &mdash; updates which modules appear in your sidebar by default. We&rsquo;ll show you a preview of what will change before applying.
-          </p>
-          <button class="btn btn-secondary" onclick="navigateTo('business-setup')">Change my business setup &rarr;</button>
+          <div id="settingsSubGeneral" style="max-width:720px;">
+        <!-- General settings tab strip (view-tabs pattern, modeled on Settings → Integrations).
+             Each tab focuses on one item so the page can't become a long undifferentiated list.
+             Tab dot signals state: green=configured/active, amber=partial, red=missing, gray=info. -->
+        <div class="view-tabs" id="generalTabBar" style="margin-bottom:20px;">
+          <button class="view-tab active" id="genTabBtn-businessSetup" data-tab="businessSetup" onclick="switchGeneralTab('businessSetup')"><span class="tab-status-dot" data-state="ok"></span>Business setup</button>
+          <button class="view-tab" id="genTabBtn-githubPat" data-tab="githubPat" style="display:none;" onclick="switchGeneralTab('githubPat')"><span class="tab-status-dot" data-state="missing"></span>GitHub token</button>
+          <button class="view-tab" id="genTabBtn-siteVisibility" data-tab="siteVisibility" onclick="switchGeneralTab('siteVisibility')"><span class="tab-status-dot" data-state="ok"></span>Site visibility</button>
+          <button class="view-tab" id="genTabBtn-activePages" data-tab="activePages" onclick="switchGeneralTab('activePages')"><span class="tab-status-dot" data-state="info"></span>Active pages</button>
+          <button class="view-tab" id="genTabBtn-featurePages" data-tab="featurePages" style="display:none;" onclick="switchGeneralTab('featurePages')"><span class="tab-status-dot" data-state="partial"></span>Feature pages</button>
+          <button class="view-tab" id="genTabBtn-homepageEvents" data-tab="homepageEvents" onclick="switchGeneralTab('homepageEvents')"><span class="tab-status-dot" data-state="ok"></span>Homepage events</button>
+          <button class="view-tab" id="genTabBtn-darkMode" data-tab="darkMode" onclick="switchGeneralTab('darkMode')"><span class="tab-status-dot" data-state="none"></span>Dark mode</button>
+          <button class="view-tab" id="genTabBtn-publicFeedback" data-tab="publicFeedback" onclick="switchGeneralTab('publicFeedback')"><span class="tab-status-dot" data-state="none"></span>Public feedback</button>
+          <button class="view-tab" id="genTabBtn-errorReporting" data-tab="errorReporting" onclick="switchGeneralTab('errorReporting')"><span class="tab-status-dot" data-state="none"></span>Error reporting</button>
+          <button class="view-tab" id="genTabBtn-testingMode" data-tab="testingMode" onclick="switchGeneralTab('testingMode')"><span class="tab-status-dot" data-state="none"></span>Testing mode</button>
         </div>
-        <div id="githubPatSection" class="form-group" style="display:none;">
-          <label>GitHub Personal Access Token</label>
-          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:8px;">
-            Required for uploading images to the gallery via GitHub. Token needs <strong>repo</strong> scope.
-          </p>
-          <div style="display:flex;gap:8px;">
-            <input type="password" id="githubTokenInput" placeholder="ghp_..."
-              style="flex:1;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;">
-            <button class="btn btn-primary" onclick="saveGitHubToken()">Save</button>
-            <button class="btn btn-secondary" onclick="testGitHubToken()">Test</button>
+
+        <!-- ── Business setup ── -->
+        <!-- M6 (Idea -OtADygKA_JhRmk1wUqN): owner-driven mode-change flow. Load-bearing
+             tenant-shape control; other settings depend on the business type. -->
+        <div id="genTab-businessSetup" class="gen-tab-body">
+          <div class="tab-section-title">Business setup<span class="tab-section-status" data-state="info">Active</span></div>
+          <p class="tab-section-purpose">Defines what kind of business Mast is configured for. This is load-bearing &mdash; it controls which modules appear in your sidebar by default, and most other settings depend on this choice. Use this section to change your business type; we&rsquo;ll preview the impact before applying.</p>
+          <div class="form-group">
+            <button class="btn btn-secondary" onclick="navigateTo('business-setup')">Change my business setup &rarr;</button>
           </div>
-          <div id="githubTokenStatus" style="margin-top:8px;font-size:0.85rem;"></div>
         </div>
-        <div class="form-group" style="margin-top:24px;">
-          <label>Site Visibility</label>
-          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:8px;">
-            When set to <strong>Private</strong>, search engines will not index your Mast-hosted site. Set to <strong>Public</strong> when you're ready to be found in search results.
-          </p>
-          <div style="display:flex;gap:12px;align-items:center;">
-            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
-              <input type="radio" name="siteVisibility" value="private" id="visibilityPrivate" onchange="saveSiteVisibility(false)" checked>
-              <span>Private <span style="font-size:0.78rem;color:var(--warm-gray);">(not indexed)</span></span>
+
+        <!-- ── GitHub personal access token ── -->
+        <div id="genTab-githubPat" class="gen-tab-body" style="display:none;">
+          <div class="tab-section-title">GitHub personal access token<span class="tab-section-status" data-state="missing" id="genStatus-githubPat">Not configured</span></div>
+          <p class="tab-section-purpose">Required only when your image storage backend is GitHub. Uploads from the gallery write directly to your GitHub repo &mdash; the token needs <strong>repo</strong> scope. If you&rsquo;re not using GitHub for image storage, this tab won&rsquo;t apply and the section will be hidden.</p>
+          <div id="githubPatSection" class="form-group" style="display:none;">
+            <div style="display:flex;gap:8px;">
+              <input type="password" id="githubTokenInput" placeholder="ghp_..."
+                style="flex:1;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;">
+              <button class="btn btn-primary" onclick="saveGitHubToken()">Save</button>
+              <button class="btn btn-secondary" onclick="testGitHubToken()">Test</button>
+            </div>
+            <div id="githubTokenStatus" style="margin-top:8px;font-size:0.85rem;"></div>
+          </div>
+        </div>
+
+        <!-- ── Site visibility ── -->
+        <div id="genTab-siteVisibility" class="gen-tab-body" style="display:none;">
+          <div class="tab-section-title">Site visibility<span class="tab-section-status" data-state="ok" id="genStatus-siteVisibility">Private</span></div>
+          <p class="tab-section-purpose">Controls whether search engines (Google, Bing, etc.) can index your Mast-hosted site. Keep it <strong>Private</strong> while you&rsquo;re setting up content. Switch to <strong>Public</strong> when you&rsquo;re ready to be found in search results.</p>
+          <div class="form-group">
+            <div style="display:flex;gap:12px;align-items:center;">
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+                <input type="radio" name="siteVisibility" value="private" id="visibilityPrivate" onchange="saveSiteVisibility(false)" checked>
+                <span>Private <span style="font-size:0.78rem;color:var(--warm-gray);">(not indexed)</span></span>
+              </label>
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+                <input type="radio" name="siteVisibility" value="public" id="visibilityPublic" onchange="saveSiteVisibility(true)">
+                <span>Public <span style="font-size:0.78rem;color:var(--warm-gray);">(search engines can find you)</span></span>
+              </label>
+            </div>
+            <div id="visibilityStatus" style="margin-top:8px;font-size:0.85rem;"></div>
+          </div>
+        </div>
+
+        <!-- ── Active Mast pages ── -->
+        <div id="genTab-activePages" class="gen-tab-body" style="display:none;">
+          <div class="tab-section-title">Active Mast pages<span class="tab-section-status" data-state="info">Read-only</span></div>
+          <p class="tab-section-purpose">Read-only summary of which Mast-hosted pages are currently live for this tenant. Use this to confirm what the public sees. To change which feature pages are enabled, use the <strong>Feature pages</strong> tab (only shown for non-storefront tenants).</p>
+          <div class="form-group" id="activeMastPagesSection">
+            <div id="activeMastPagesDisplay" style="font-size:0.85rem;color:var(--warm-gray);">Loading&hellip;</div>
+          </div>
+        </div>
+
+        <!-- ── Feature pages ── (non-storefront tenants only — gating via loadActiveMastPages) -->
+        <div id="genTab-featurePages" class="gen-tab-body" style="display:none;">
+          <div class="tab-section-title">Feature pages<span class="tab-section-status" data-state="partial" id="genStatus-featurePages">Pick pages</span></div>
+          <p class="tab-section-purpose">Choose which Mast feature pages are active for your site. These pages are reachable at your Mast domain even without a full storefront. Useful for tenants who only want a subset (e.g. blog + commissions but no shop).</p>
+          <div class="form-group" id="featurePagesTogglePanel" style="display:none;">
+            <div id="featurePageToggles" style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px;"></div>
+            <div style="display:flex;gap:8px;align-items:center;">
+              <button class="btn btn-primary" onclick="saveFeaturePageToggles()">Save</button>
+              <div id="featurePageSaveStatus" style="font-size:0.85rem;"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── Homepage events ── -->
+        <div id="genTab-homepageEvents" class="gen-tab-body" style="display:none;">
+          <div class="tab-section-title">Events shown on homepage<span class="tab-section-status" data-state="ok" id="genStatus-homepageEvents">3 events</span></div>
+          <p class="tab-section-purpose">Controls how many upcoming events appear in the schedule section on your public homepage. Set between 1 and 20. Default is 3.</p>
+          <div class="form-group">
+            <div style="display:flex;gap:8px;align-items:center;">
+              <input type="number" id="eventsCountInput" min="1" max="20" value="3"
+                style="width:80px;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;">
+              <button class="btn btn-primary" onclick="saveEventsCount()">Save</button>
+            </div>
+            <div id="eventsCountStatus" style="margin-top:8px;font-size:0.85rem;"></div>
+          </div>
+        </div>
+
+        <!-- ── Dark mode ── -->
+        <div id="genTab-darkMode" class="gen-tab-body" style="display:none;">
+          <div class="tab-section-title">Dark mode<span class="tab-section-status" data-state="none" id="genStatus-darkMode">Off</span></div>
+          <p class="tab-section-purpose">Switch the admin panel to a dark theme. This affects only the admin app you&rsquo;re looking at right now &mdash; it doesn&rsquo;t change anything customers see on your public site.</p>
+          <div class="form-group">
+            <label style="display:flex;align-items:center;gap:10px;cursor:pointer;">
+              <input type="checkbox" id="darkModeToggle" onchange="toggleDarkMode()"
+                style="width:18px;height:18px;cursor:pointer;">
+              <span>Enable dark mode</span>
             </label>
-            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
-              <input type="radio" name="siteVisibility" value="public" id="visibilityPublic" onchange="saveSiteVisibility(true)">
-              <span>Public <span style="font-size:0.78rem;color:var(--warm-gray);">(search engines can find you)</span></span>
+          </div>
+        </div>
+
+        <!-- ── Public feedback ── -->
+        <div id="genTab-publicFeedback" class="gen-tab-body" style="display:none;">
+          <div class="tab-section-title">Public feedback widget<span class="tab-section-status" data-state="none" id="genStatus-publicFeedback">Off</span></div>
+          <p class="tab-section-purpose">Adds a floating &ldquo;Send feedback&rdquo; button to your public site so visitors can submit comments. Submissions land in your admin Engagement Inbox. Off by default.</p>
+          <div class="form-group">
+            <label style="display:flex;align-items:center;gap:10px;cursor:pointer;">
+              <input type="checkbox" id="publicFeedbackToggle" onchange="togglePublicFeedback()"
+                style="width:18px;height:18px;cursor:pointer;">
+              <span>Enable public feedback button</span>
+            </label>
+            <div id="publicFeedbackStatus" style="margin-top:8px;font-size:0.85rem;"></div>
+          </div>
+        </div>
+
+        <!-- ── Automatic error reporting ── -->
+        <div id="genTab-errorReporting" class="gen-tab-body" style="display:none;">
+          <div class="tab-section-title">Automatic error reporting<span class="tab-section-status" data-state="none" id="genStatus-errorReporting">Off</span></div>
+          <p class="tab-section-purpose">When on, Mast automatically reports JS errors, failed asset loads, and spinner timeouts back to the platform. Helps us find and fix problems you might not notice. No manual action required &mdash; data is anonymized.</p>
+          <div class="form-group">
+            <label style="display:flex;align-items:center;gap:10px;cursor:pointer;">
+              <input type="checkbox" id="autoReportToggle" onchange="toggleAutoReport()"
+                style="width:18px;height:18px;cursor:pointer;">
+              <span>Automatically report detected errors</span>
             </label>
           </div>
-          <div id="visibilityStatus" style="margin-top:8px;font-size:0.85rem;"></div>
         </div>
 
-        <!-- Active Mast Pages section — populated by loadActiveMastPages() -->
-        <div class="form-group" style="margin-top:24px;" id="activeMastPagesSection">
-          <label>Active Mast Pages</label>
-          <div id="activeMastPagesDisplay" style="font-size:0.85rem;color:var(--warm-gray);">Loading…</div>
-        </div>
-
-        <!-- Feature Pages toggle panel — visible for non-storefront tenants -->
-        <div class="form-group" style="margin-top:16px;display:none;" id="featurePagesTogglePanel">
-          <label style="font-size:0.9rem;font-weight:600;margin-bottom:8px;display:block;">Manage Feature Pages</label>
-          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:10px;">
-            Choose which Mast feature pages are active for your site. These pages are reachable at your Mast domain even without a full storefront.
-          </p>
-          <div id="featurePageToggles" style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px;"></div>
-          <div style="display:flex;gap:8px;align-items:center;">
-            <button class="btn btn-primary" onclick="saveFeaturePageToggles()">Save</button>
-            <div id="featurePageSaveStatus" style="font-size:0.85rem;"></div>
+        <!-- ── Testing mode ── -->
+        <div id="genTab-testingMode" class="gen-tab-body" style="display:none;">
+          <div class="tab-section-title">Testing mode<span class="tab-section-status" data-state="none" id="genStatus-testingMode">Off</span></div>
+          <p class="tab-section-purpose">Adds a Testing Mode panel to your admin sidebar with guided QA missions. Useful while you&rsquo;re still setting up the site and want a checklist of what to validate. Turn off once you&rsquo;re live.</p>
+          <div class="form-group">
+            <label style="display:flex;align-items:center;gap:10px;cursor:pointer;">
+              <input type="checkbox" id="testingModeVisibleToggle" onchange="toggleTestingModeVisibility()"
+                style="width:18px;height:18px;cursor:pointer;">
+              <span>Show Testing Mode in sidebar</span>
+            </label>
           </div>
-        </div>
-
-        <div class="form-group" style="margin-top:24px;">
-          <label>Events to Show on Homepage</label>
-          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:8px;">
-            Number of upcoming events displayed in the homepage schedule section.
-          </p>
-          <div style="display:flex;gap:8px;align-items:center;">
-            <input type="number" id="eventsCountInput" min="1" max="20" value="3"
-              style="width:80px;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;">
-            <button class="btn btn-primary" onclick="saveEventsCount()">Save</button>
-          </div>
-          <div id="eventsCountStatus" style="margin-top:8px;font-size:0.85rem;"></div>
-        </div>
-        <div class="form-group" style="margin-top:24px;">
-          <label>Dark Mode</label>
-          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:8px;">
-            Enable dark theme for the admin panel.
-          </p>
-          <label style="display:flex;align-items:center;gap:10px;cursor:pointer;">
-            <input type="checkbox" id="darkModeToggle" onchange="toggleDarkMode()"
-              style="width:18px;height:18px;cursor:pointer;">
-            <span>Enable dark mode</span>
-          </label>
-        </div>
-        <div class="form-group" style="margin-top:24px;">
-          <label>Public Feedback</label>
-          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:8px;">
-            Allow visitors on the public site to submit feedback via a floating button.
-          </p>
-          <label style="display:flex;align-items:center;gap:10px;cursor:pointer;">
-            <input type="checkbox" id="publicFeedbackToggle" onchange="togglePublicFeedback()"
-              style="width:18px;height:18px;cursor:pointer;">
-            <span>Enable public feedback button</span>
-          </label>
-          <div id="publicFeedbackStatus" style="margin-top:8px;font-size:0.85rem;"></div>
-        </div>
-        <div class="form-group" style="margin-top:24px;">
-          <label>Automatic Error Reporting</label>
-          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:8px;">
-            Automatically report detected JS errors, failed loads, and spinner timeouts. No manual action required.
-          </p>
-          <label style="display:flex;align-items:center;gap:10px;cursor:pointer;">
-            <input type="checkbox" id="autoReportToggle" onchange="toggleAutoReport()"
-              style="width:18px;height:18px;cursor:pointer;">
-            <span>Automatically report detected errors</span>
-          </label>
-        </div>
-        <div class="form-group" style="margin-top:24px;">
-          <label>Testing Mode</label>
-          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:8px;">
-            Show the Testing Mode panel in the sidebar. Useful for QA testing with guided missions.
-          </p>
-          <label style="display:flex;align-items:center;gap:10px;cursor:pointer;">
-            <input type="checkbox" id="testingModeVisibleToggle" onchange="toggleTestingModeVisibility()"
-              style="width:18px;height:18px;cursor:pointer;">
-            <span>Show Testing Mode in sidebar</span>
-          </label>
         </div>
 
       </div>
@@ -17611,7 +17695,7 @@ function applyRoute(route) {
 }
 
 function lazyLoadForRoute(route) {
-  if (route === 'settings') { updateGitHubTokenStatus(); loadOperators(); loadStorageInfo(); loadStudioLocations(); loadLocations(); loadPublicFeedbackSetting(); loadEmailConfig(); loadEmailDomainSection(); loadResendWebhookSection(); applySettingsGating(); loadSiteVisibility(); loadActiveMastPages(); }
+  if (route === 'settings') { updateGitHubTokenStatus(); loadOperators(); loadStorageInfo(); loadStudioLocations(); loadLocations(); loadPublicFeedbackSetting(); loadEmailConfig(); loadEmailDomainSection(); loadResendWebhookSection(); applySettingsGating(); loadSiteVisibility(); loadActiveMastPages(); if (typeof applyGeneralTabGating === 'function') applyGeneralTabGating(); if (typeof refreshGeneralTabStatus === 'function') refreshGeneralTabStatus(); }
   if (route === 'analytics' && !analyticsLoaded) loadAnalytics();
   if (route === 'products') loadProducts();
   // orders lazy-load handled by orders module
@@ -18061,7 +18145,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260525-103628-d1e7255';
+var MAST_MODULES_V = '20260525-105521-2c02ea2';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -21398,6 +21482,7 @@ function toggleAutoReport() {
       localStorage.setItem(_AUTO_REPORT_DISABLED_KEY, '1');
     }
   } catch(e) {}
+  if (typeof refreshGeneralTabStatus === 'function') refreshGeneralTabStatus();
 }
 
 // Install detection listeners — called once after MastDB is ready
@@ -23316,12 +23401,16 @@ function updateGitHubTokenStatus() {
     patSection.style.display = getImageStorageBackend() === 'github' || (TENANT_CONFIG && TENANT_CONFIG.site && TENANT_CONFIG.site.github && TENANT_CONFIG.site.github.repo) ? '' : 'none';
   }
   var el = document.getElementById('githubTokenStatus');
-  if (!el) return;
-  if (githubToken) {
-    el.innerHTML = '<span style="color:var(--teal);">&#10003; Token configured</span>';
-  } else {
-    el.innerHTML = '<span style="color:var(--warm-gray-light);">No token configured. Gallery image upload requires a GitHub PAT.</span>';
+  if (el) {
+    if (githubToken) {
+      el.innerHTML = '<span style="color:var(--teal);">&#10003; Token configured</span>';
+    } else {
+      el.innerHTML = '<span style="color:var(--warm-gray-light);">No token configured. Gallery image upload requires a GitHub PAT.</span>';
+    }
   }
+  // Keep the General tab gating + status dot in sync with the new token/backend state.
+  if (typeof applyGeneralTabGating === 'function') applyGeneralTabGating();
+  if (typeof refreshGeneralTabStatus === 'function') refreshGeneralTabStatus();
 }
 
 
@@ -23970,6 +24059,7 @@ async function saveSiteVisibility(isPublic) {
   } catch (err) {
     showToast('Error saving visibility: ' + err.message, true);
   }
+  if (typeof refreshGeneralTabStatus === 'function') refreshGeneralTabStatus();
 }
 
 function loadSiteVisibility() {
@@ -23979,6 +24069,7 @@ function loadSiteVisibility() {
       var searchable = val === true;
       document.getElementById('visibilityPublic').checked = searchable;
       document.getElementById('visibilityPrivate').checked = !searchable;
+      if (typeof refreshGeneralTabStatus === 'function') refreshGeneralTabStatus();
     });
   } catch (e) { /* non-fatal */ }
 }
@@ -24003,6 +24094,7 @@ async function saveEventsCount() {
   } catch (err) {
     showToast('Error saving: ' + err.message, true);
   }
+  if (typeof refreshGeneralTabStatus === 'function') refreshGeneralTabStatus();
 }
 
 function loadSettings() {
@@ -24023,6 +24115,7 @@ function loadSettings() {
     // Auto-report toggle — driven by localStorage, not Firebase
     var autoToggle = document.getElementById('autoReportToggle');
     if (autoToggle) autoToggle.checked = _autoReportEnabled();
+    if (typeof refreshGeneralTabStatus === 'function') refreshGeneralTabStatus();
   });
   loadPaymentProcessor();
   loadShippingConfig();
@@ -24043,6 +24136,7 @@ async function toggleDarkMode() {
   } catch (err) {
     showToast('Error saving dark mode: ' + err.message, true);
   }
+  if (typeof refreshGeneralTabStatus === 'function') refreshGeneralTabStatus();
 }
 
 // ============================================================
@@ -24093,6 +24187,8 @@ async function loadActiveMastPages() {
       '<a href="' + esc(baseUrl) + '" target="_blank" rel="noopener" style="margin-left:8px;font-size:0.85rem;color:var(--teal);text-decoration:none;">View site &#8599;</a>' +
       '</div>';
     if (panelEl) panelEl.style.display = 'none';
+    if (typeof applyGeneralTabGating === 'function') applyGeneralTabGating();
+    if (typeof refreshGeneralTabStatus === 'function') refreshGeneralTabStatus();
 
   } else if (featureMode === 'features-only') {
     html += '<p style="margin:0 0 10px;font-size:0.85rem;">You\'re using select Mast features:</p>';
@@ -24163,6 +24259,10 @@ function showFeaturePageTogglePanel() {
     panelEl.style.display = 'block';
     panelEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
+  // Surface the Feature pages tab and switch to it so users land on the right page.
+  if (typeof applyGeneralTabGating === 'function') applyGeneralTabGating();
+  if (typeof switchGeneralTab === 'function') switchGeneralTab('featurePages');
+  if (typeof refreshGeneralTabStatus === 'function') refreshGeneralTabStatus();
 }
 
 function toggleFeaturePageSelection(value) {
@@ -39239,6 +39339,109 @@ function switchIntegrationsTab(tab) {
 }
 window.switchIntegrationsTab = switchIntegrationsTab;
 
+// ── Settings → Storefront → General: tabbed view (canonical view-tabs pattern).
+// Each item in General is its own tab so the page can't become a long undifferentiated list.
+var GENERAL_TABS = ['businessSetup','githubPat','siteVisibility','activePages','featurePages','homepageEvents','darkMode','publicFeedback','errorReporting','testingMode'];
+
+function switchGeneralTab(tab) {
+  window.__generalActiveTab = tab;
+  GENERAL_TABS.forEach(function(t) {
+    var body = document.getElementById('genTab-' + t);
+    if (body) body.style.display = (t === tab) ? '' : 'none';
+  });
+  document.querySelectorAll('#generalTabBar .view-tab').forEach(function(btn) {
+    btn.classList.toggle('active', btn.dataset.tab === tab);
+  });
+}
+window.switchGeneralTab = switchGeneralTab;
+
+// Hide tabs that don't apply to this tenant (GitHub PAT, Feature pages).
+// Called from settings init and whenever the underlying gating changes.
+function applyGeneralTabGating() {
+  // GitHub PAT tab — only when image storage backend is GitHub OR repo is configured.
+  var patBtn = document.getElementById('genTabBtn-githubPat');
+  if (patBtn) {
+    var showPat = false;
+    try {
+      showPat = (typeof getImageStorageBackend === 'function' && getImageStorageBackend() === 'github')
+        || !!(window.TENANT_CONFIG && TENANT_CONFIG.site && TENANT_CONFIG.site.github && TENANT_CONFIG.site.github.repo);
+    } catch (e) {}
+    patBtn.style.display = showPat ? '' : 'none';
+  }
+  // Feature pages tab — visibility mirrors the underlying #featurePagesTogglePanel (set by loadActiveMastPages).
+  var fpBtn = document.getElementById('genTabBtn-featurePages');
+  var fpPanel = document.getElementById('featurePagesTogglePanel');
+  if (fpBtn && fpPanel) {
+    fpBtn.style.display = (fpPanel.style.display === 'none' || !fpPanel.style.display) ? 'none' : '';
+    // The panel itself lives inside the tab body — it should always render when the tab is shown.
+    if (fpBtn.style.display !== 'none') fpPanel.style.display = '';
+  }
+  // If the currently active tab is now hidden, fall back to Business setup.
+  var active = window.__generalActiveTab || 'businessSetup';
+  var activeBtn = document.getElementById('genTabBtn-' + active);
+  if (!activeBtn || activeBtn.style.display === 'none') switchGeneralTab('businessSetup');
+}
+window.applyGeneralTabGating = applyGeneralTabGating;
+
+// Re-read state and update the dot + section pill for each General tab.
+// Safe to call repeatedly; cheap.
+function refreshGeneralTabStatus() {
+  function setDot(tabKey, state) {
+    var btn = document.getElementById('genTabBtn-' + tabKey);
+    if (!btn) return;
+    var dot = btn.querySelector('.tab-status-dot');
+    if (dot) dot.setAttribute('data-state', state);
+  }
+  function setPill(tabKey, state, label) {
+    var pill = document.getElementById('genStatus-' + tabKey);
+    if (!pill) return;
+    pill.setAttribute('data-state', state);
+    if (label != null) pill.textContent = label;
+  }
+
+  // businessSetup — always Active (tenant has a business type set).
+  setDot('businessSetup', 'ok');
+
+  // githubPat — green if token saved, red if not. Tab itself may be hidden via applyGeneralTabGating.
+  var hasToken = !!(typeof githubToken !== 'undefined' && githubToken);
+  setDot('githubPat', hasToken ? 'ok' : 'missing');
+  setPill('githubPat', hasToken ? 'ok' : 'missing', hasToken ? 'Configured' : 'Not configured');
+
+  // siteVisibility — reflect current value.
+  var pubEl = document.getElementById('visibilityPublic');
+  var isPublic = !!(pubEl && pubEl.checked);
+  setDot('siteVisibility', 'ok');
+  setPill('siteVisibility', 'ok', isPublic ? 'Public' : 'Private');
+
+  // activePages — informational.
+  setDot('activePages', 'info');
+
+  // featurePages — green if any toggles are checked, amber otherwise. Tab may be hidden.
+  var fpChecked = document.querySelectorAll('#featurePageToggles input[type="checkbox"]:checked').length;
+  var fpTotal = document.querySelectorAll('#featurePageToggles input[type="checkbox"]').length;
+  setDot('featurePages', fpChecked > 0 ? 'ok' : 'partial');
+  setPill('featurePages', fpChecked > 0 ? 'ok' : 'partial', fpTotal ? (fpChecked + ' of ' + fpTotal + ' enabled') : 'Pick pages');
+
+  // homepageEvents — value pill.
+  var evInput = document.getElementById('eventsCountInput');
+  var evVal = evInput && evInput.value ? parseInt(evInput.value, 10) : 3;
+  setDot('homepageEvents', 'ok');
+  setPill('homepageEvents', 'ok', evVal + (evVal === 1 ? ' event' : ' events'));
+
+  // Boolean toggles — dot amber/none, pill On/Off.
+  function syncToggle(tabKey, inputId) {
+    var input = document.getElementById(inputId);
+    var on = !!(input && input.checked);
+    setDot(tabKey, on ? 'partial' : 'none');
+    setPill(tabKey, on ? 'partial' : 'none', on ? 'On' : 'Off');
+  }
+  syncToggle('darkMode', 'darkModeToggle');
+  syncToggle('publicFeedback', 'publicFeedbackToggle');
+  syncToggle('errorReporting', 'autoReportToggle');
+  syncToggle('testingMode', 'testingModeVisibleToggle');
+}
+window.refreshGeneralTabStatus = refreshGeneralTabStatus;
+
 // Consolidated QBO surfaces — inner tab switcher for Settings → Integrations → QuickBooks.
 // Lazy-loads the accounting module then calls renderQboPanel(tab) into #qboPanelBody.
 function switchQboInnerTab(tab) {
@@ -50572,12 +50775,14 @@ async function togglePublicFeedback() {
   } catch (err) {
     if (statusEl) { statusEl.textContent = 'Error: ' + err.message; statusEl.style.color = 'var(--danger)'; }
   }
+  if (typeof refreshGeneralTabStatus === 'function') refreshGeneralTabStatus();
 }
 
 function loadPublicFeedbackSetting() {
   MastDB.feedbackSettings.ref('publicEnabled').once('value', function(snap) {
     var toggle = document.getElementById('publicFeedbackToggle');
     if (toggle) toggle.checked = snap.val() === true;
+    if (typeof refreshGeneralTabStatus === 'function') refreshGeneralTabStatus();
   });
 }
 
@@ -50594,6 +50799,7 @@ function loadTestingModeVisibility() {
     // Sync the toggle in Settings if it exists
     var toggle = document.getElementById('testingModeVisibleToggle');
     if (toggle) toggle.checked = _testingModeVisible;
+    if (typeof refreshGeneralTabStatus === 'function') refreshGeneralTabStatus();
   }).catch(function() {
     applyTestingModeVisibility();
   });
@@ -50614,6 +50820,7 @@ function toggleTestingModeVisibility() {
     _testingModeVisible = val;
     applyTestingModeVisibility();
     showToast(val ? 'Testing Mode visible in sidebar' : 'Testing Mode hidden');
+    if (typeof refreshGeneralTabStatus === 'function') refreshGeneralTabStatus();
   }).catch(function(err) { showToast('Error: ' + err.message, true); });
 }
 
