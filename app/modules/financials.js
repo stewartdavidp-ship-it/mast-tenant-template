@@ -43,19 +43,25 @@ async function fetchSquareSales() {
     financialsData = data;
     renderFinancials(data);
 
-    // Show sync status per processor
-    var statusEl = document.getElementById('financialsSyncStatus');
-    if (statusEl && data.syncMeta) {
-      var parts = [];
-      Object.keys(data.syncMeta).forEach(function(proc) {
-        var m = data.syncMeta[proc];
-        if (m.lastSyncAt) parts.push(proc + ': ' + new Date(m.lastSyncAt).toLocaleString());
-      });
-      if (parts.length) {
-        statusEl.style.display = '';
-        statusEl.textContent = 'Last synced — ' + parts.join(' | ');
+    // Legacy plain-text sync status — kept as a fallback for the case where
+    // the W2a.5 Integrations health card fails to render. Only show it if the
+    // card body never populated (still says "Loading…" or was removed).
+    setTimeout(function() {
+      var card = document.getElementById('integrationsHealthChips');
+      var cardOk = card && card.innerHTML && card.innerHTML.indexOf('Loading…') < 0;
+      var statusEl = document.getElementById('financialsSyncStatus');
+      if (!cardOk && statusEl && data.syncMeta) {
+        var parts = [];
+        Object.keys(data.syncMeta).forEach(function(proc) {
+          var m = data.syncMeta[proc];
+          if (m.lastSyncAt) parts.push(proc + ': ' + new Date(m.lastSyncAt).toLocaleString());
+        });
+        if (parts.length) {
+          statusEl.style.display = '';
+          statusEl.textContent = 'Last synced — ' + parts.join(' | ');
+        }
       }
-    }
+    }, 1500);
   } catch (err) {
     txnEl.innerHTML = '<p style="color:#dc2626;">' + esc(err.message) + '</p>';
     showToast('Failed to load sales: ' + err.message, true);
@@ -127,6 +133,7 @@ function renderFinancials(data) {
   h += financialCard('Net', '$' + (netRevenue / 100).toFixed(2), 'var(--primary, var(--teal))');
   h += financialCard('Tips', '$' + (data.totalTips / 100).toFixed(2), '#f59e0b');
   h += financialCard('Transactions', String(data.totalPayments), 'var(--text-primary, #333)');
+  h += integrationsHealthCardPlaceholder();
   h += '</div>';
 
   // --- Source breakdown ---
@@ -206,6 +213,11 @@ function renderFinancials(data) {
 
   summaryEl.innerHTML = h;
 
+  // W2a.5 — populate the per-provider Integrations health card. Async; on
+  // failure the card removes itself and the legacy plain-text status element
+  // (#financialsSyncStatus, populated by fetchSquareSales) serves as fallback.
+  loadIntegrationsHealthCard();
+
   // --- Transaction list ---
   var txnH = '<h3 style="margin:0 0 12px 0;">Transactions</h3>';
   txnH += '<div style="display:flex;flex-direction:column;gap:8px;">';
@@ -255,6 +267,73 @@ function financialCard(label, value, color) {
     '<div style="font-size:1.15rem;font-weight:700;color:' + color + ';">' + value + '</div>' +
     '<div style="font-size:0.78rem;color:var(--text-secondary, #888);text-transform:uppercase;letter-spacing:0.5px;">' + label + '</div></div>';
 }
+
+// ──────────────────────────────────────────────────────────────────
+// W2a.5 — Integrations health card (dedicated card per ratified D2)
+// Renders inline as an empty shell; populated async from
+// admin/integrations/_meta.lastSuccessfulSyncAt = { qbo?, xero? }.
+// Per-provider pill: green <24h, amber 1-7d, red >7d, gray not-connected.
+// Click pill → navigate to #accounting?subView=log&provider={qbo|xero}
+// (filtered Sync Log via the existing #accounting redirect path).
+// The legacy financialsSyncStatus plain-text element remains as fallback
+// only — populated by fetchSquareSales when this card fails to render.
+// ──────────────────────────────────────────────────────────────────
+function integrationsHealthCardPlaceholder() {
+  return '<div id="integrationsHealthCard" style="background:var(--bg-secondary, #f5f5f5);border-radius:8px;padding:12px 18px;min-width:200px;display:flex;flex-direction:column;gap:6px;">' +
+    '<div style="font-size:0.78rem;color:var(--text-secondary, #888);text-transform:uppercase;letter-spacing:0.5px;text-align:center;">Integrations health</div>' +
+    '<div id="integrationsHealthChips" style="display:flex;gap:6px;justify-content:center;flex-wrap:wrap;font-size:0.78rem;color:var(--text-secondary,#888);">Loading…</div>' +
+  '</div>';
+}
+
+function _integrationPill(provider, lastSyncIso) {
+  var label = provider.toUpperCase();
+  var bg = 'rgba(148,163,184,0.20)', fg = '#64748b', title = provider + ' not connected';
+  var deltaText = 'not connected';
+  if (lastSyncIso) {
+    var ms = (typeof lastSyncIso === 'number') ? lastSyncIso : Date.parse(lastSyncIso);
+    if (isFinite(ms)) {
+      var hours = (Date.now() - ms) / 3600000;
+      if (hours < 24) { bg = 'rgba(34,197,94,0.18)'; fg = '#16a34a'; deltaText = 'synced <24h'; }
+      else if (hours < 24 * 7) { bg = 'rgba(234,179,8,0.18)'; fg = '#b45309'; deltaText = 'synced ' + Math.floor(hours / 24) + 'd ago'; }
+      else { bg = 'rgba(239,68,68,0.18)'; fg = '#dc2626'; deltaText = 'stale (>7d)'; }
+      title = provider + ' · last sync ' + new Date(ms).toLocaleString();
+    }
+  }
+  var onclickAttr = ' onclick="window._integrationsOpenLog &amp;&amp; window._integrationsOpenLog(&#39;' +
+    (window._jsAttr ? window._jsAttr(provider) : provider) + '&#39;)"';
+  return '<span title="' + esc(title) + '"' + onclickAttr +
+    ' style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:10px;background:' + bg + ';color:' + fg +
+    ';font-size:0.72rem;font-weight:600;cursor:pointer;">' +
+    '<span style="width:6px;height:6px;border-radius:50%;background:' + fg + ';"></span>' +
+    esc(label) + ' · ' + esc(deltaText) +
+  '</span>';
+}
+
+async function loadIntegrationsHealthCard() {
+  var chipsEl = document.getElementById('integrationsHealthChips');
+  if (!chipsEl) return;
+  try {
+    var meta = await MastDB.get('admin/integrations/_meta').catch(function() { return null; });
+    var lastSync = (meta && meta.lastSuccessfulSyncAt) || {};
+    var providers = ['qbo', 'xero'];
+    var html = providers.map(function(p) { return _integrationPill(p, lastSync[p]); }).join('');
+    chipsEl.innerHTML = html || '<span style="color:var(--text-secondary,#888);">No integrations configured</span>';
+  } catch (err) {
+    // Card failed — leave space for legacy financialsSyncStatus fallback.
+    var card = document.getElementById('integrationsHealthCard');
+    if (card && card.parentNode) card.parentNode.removeChild(card);
+  }
+}
+
+window._integrationsOpenLog = function(provider) {
+  // Route through the existing #accounting redirect to Settings → QuickBooks
+  // → Sync Log tab. Provider filter is a forward-compat param (W2c will wire).
+  if (typeof navigateTo === 'function') {
+    navigateTo('accounting', 'subView=log&provider=' + encodeURIComponent(provider || ''));
+  } else {
+    window.location.hash = '#accounting?subView=log&provider=' + encodeURIComponent(provider || '');
+  }
+};
 
 // ── Window exports for onclick handlers ──
 window.loadFinancials = loadFinancials;
