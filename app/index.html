@@ -2925,6 +2925,84 @@
     body.dark-mode .empty-state { color: #999; }
     body.dark-mode .empty-state p { color: #777; }
 
+    /* ========== ACCOUNTING (QBO) — chip + COA Map + Sync Log dark-mode ========== */
+    /* W1 fix: replace inline-styled chip with token-driven class so dark mode just works. */
+    .qbo-status-chip {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-size: 0.72rem;
+      background: #eee;
+      color: #555;
+    }
+    .qbo-status-chip.connected {
+      background: rgba(34,197,94,0.15);
+      color: #16803d;
+    }
+    body.dark-mode .qbo-status-chip {
+      background: #3a3a3a;
+      color: #ccc;
+    }
+    body.dark-mode .qbo-status-chip.connected {
+      background: rgba(34,197,94,0.18);
+      color: #4ade80;
+    }
+    /* COA Map + Sync Log shared treatments — match finance.js tables. */
+    .qbo-section-header {
+      padding: 14px 10px 6px;
+      font-size: 0.72rem;
+      color: var(--warm-gray, #888);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      border-bottom: 1px solid rgba(0,0,0,0.08);
+    }
+    body.dark-mode .qbo-section-header {
+      border-bottom-color: rgba(255,255,255,0.05);
+    }
+    .qbo-table { width: 100%; border-collapse: collapse; }
+    .qbo-table th {
+      text-align: left;
+      padding: 8px 10px;
+      font-size: 0.72rem;
+      color: var(--warm-gray, #888);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      border-bottom: 1px solid rgba(0,0,0,0.1);
+    }
+    body.dark-mode .qbo-table th { border-bottom-color: rgba(255,255,255,0.1); }
+    .qbo-table td {
+      padding: 10px;
+      font-size: 0.9rem;
+      border-bottom: 1px solid rgba(0,0,0,0.06);
+    }
+    body.dark-mode .qbo-table td { border-bottom-color: rgba(255,255,255,0.05); }
+    .qbo-select {
+      width: 100%;
+      padding: 6px 8px;
+      font-size: 0.85rem;
+      background: #fff;
+      color: inherit;
+      border: 1px solid rgba(0,0,0,0.15);
+      border-radius: 4px;
+    }
+    body.dark-mode .qbo-select {
+      background: var(--bg-secondary, #232323);
+      border-color: rgba(255,255,255,0.1);
+      color: #e0e0e0;
+    }
+    .qbo-suggest-banner {
+      background: rgba(234,179,8,0.08);
+      border: 1px solid rgba(234,179,8,0.25);
+      border-radius: 8px;
+      padding: 10px 14px;
+      margin-bottom: 12px;
+      font-size: 0.85rem;
+      color: var(--warm-gray, #555);
+    }
+    body.dark-mode .qbo-suggest-banner { color: #d4d4d4; }
+    .qbo-suggest-banner strong { color: #b45309; }
+    body.dark-mode .qbo-suggest-banner strong { color: #fbbf24; }
+
     /* ========== MODULE SELECTION MODAL (Choose Your Module overlay) ========== */
     body.dark-mode #moduleSelectionOverlay > div > div { background: #1e1e1e !important; }
     body.dark-mode #moduleSelectionOverlay h2 { color: #f0ebe0 !important; }
@@ -9239,7 +9317,7 @@
             Sync your day-close journal entries, AR invoices, and bills to QuickBooks Online. Sandbox V1 only.
           </p>
           <div id="qboConfigStatus" style="margin-bottom:12px;font-size:0.85rem;">
-            <span id="qboStatusChip" style="display:inline-block;padding:2px 8px;border-radius:10px;background:#eee;color:#555;font-size:0.78rem;">Not connected</span>
+            <span id="qboStatusChip" class="qbo-status-chip">Not connected</span>
           </div>
           <div id="qboDisconnected">
             <div style="display:flex;gap:8px;flex-wrap:wrap;">
@@ -17848,7 +17926,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260525-062259-d7128c4';
+var MAST_MODULES_V = '20260525-064322-3cdd5b3';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.

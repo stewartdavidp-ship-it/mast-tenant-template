@@ -120,20 +120,93 @@
     var disc = document.getElementById('qboDisconnected');
     var conn = document.getElementById('qboConnected');
     if (chip) {
+      // Toggle class only — surface styles live in .qbo-status-chip CSS (dark-mode aware).
+      if (!chip.classList.contains('qbo-status-chip')) chip.classList.add('qbo-status-chip');
+      // Clear any legacy inline styles from earlier builds.
+      chip.style.background = '';
+      chip.style.color = '';
       if (connected) {
         var env = (doc && doc.env) || 'sandbox';
         var realm = (doc && doc.realmId) ? String(doc.realmId).slice(0, 8) + '…' : '';
         chip.textContent = 'Connected · ' + env + (realm ? ' · realm ' + realm : '');
-        chip.style.background = 'rgba(34,197,94,0.15)';
-        chip.style.color = '#22c55e';
+        chip.classList.add('connected');
       } else {
         chip.textContent = 'Not connected';
-        chip.style.background = '#eee';
-        chip.style.color = '#555';
+        chip.classList.remove('connected');
       }
     }
     if (disc) disc.style.display = connected ? 'none' : '';
     if (conn) conn.style.display = connected ? '' : 'none';
+  }
+
+  // ---- Levenshtein + COA fuzzy auto-suggest (W1 fix-up) ----
+  // Greenlit-earlier spec: when no saved mapping exists, pre-select best
+  // fuzzy match per Mast category against the QBO chart-of-accounts.
+  function _levenshtein(a, b) {
+    a = String(a || '').toLowerCase();
+    b = String(b || '').toLowerCase();
+    if (a === b) return 0;
+    if (!a.length) return b.length;
+    if (!b.length) return a.length;
+    var prev = new Array(b.length + 1);
+    var curr = new Array(b.length + 1);
+    for (var j = 0; j <= b.length; j++) prev[j] = j;
+    for (var i = 1; i <= a.length; i++) {
+      curr[0] = i;
+      for (var k = 1; k <= b.length; k++) {
+        var cost = a.charCodeAt(i - 1) === b.charCodeAt(k - 1) ? 0 : 1;
+        curr[k] = Math.min(curr[k - 1] + 1, prev[k] + 1, prev[k - 1] + cost);
+      }
+      for (var n = 0; n <= b.length; n++) prev[n] = curr[n];
+    }
+    return prev[b.length];
+  }
+  function _normDist(a, b) {
+    var d = _levenshtein(a, b);
+    var ml = Math.max(String(a || '').length, String(b || '').length) || 1;
+    return d / ml;
+  }
+  // Seed keywords per Mast category — heuristic candidate set scored against
+  // each Active QBO account name with normalized Levenshtein. Lower = better.
+  var COA_SUGGEST_HINTS = {
+    revenue_dtc: ['Sales', 'Sales of Product Income', 'Services'],
+    revenue_wholesale: ['Sales of Product Income', 'Wholesale', 'Sales'],
+    revenue_gallery: ['Consignment', 'Sales', 'Other Income'],
+    cogs: ['Cost of Goods Sold'],
+    gallery_commission: ['Commissions and Fees', 'Sales Commissions'],
+    expense_materials: ['Supplies', 'Job Materials', 'Materials & Supplies'],
+    expense_studio: ['Rent', 'Utilities', 'Studio Expense'],
+    expense_equipment: ['Equipment Rental', 'Tools', 'Equipment'],
+    expense_shipping: ['Shipping', 'Postage', 'Freight'],
+    expense_marketing: ['Advertising', 'Marketing'],
+    expense_software: ['Software', 'Subscriptions', 'Dues & Subscriptions'],
+    expense_travel: ['Travel', 'Meals', 'Shows'],
+    expense_professional: ['Legal', 'Accounting', 'Professional Services'],
+    expense_fees: ['Bank Charges', 'Merchant', 'Processing Fees'],
+    expense_other: ['Other Expense', 'Miscellaneous'],
+    sales_tax_payable: ['Sales Tax Payable', 'Sales Tax']
+  };
+  // Returns { [catKey]: qboAccountId } for any cat that has a fuzzy match
+  // with normalized distance ≤ 0.4 against any of its hint phrases.
+  function _suggestCoaMapping(accounts) {
+    var active = (accounts || []).filter(function(a) { return a.Active !== false; });
+    var out = {};
+    Object.keys(COA_SUGGEST_HINTS).forEach(function(catKey) {
+      var hints = COA_SUGGEST_HINTS[catKey];
+      var best = null;
+      active.forEach(function(a) {
+        var name = a.FullyQualifiedName || a.Name || '';
+        if (!name) return;
+        for (var i = 0; i < hints.length; i++) {
+          var d = _normDist(name, hints[i]);
+          if (d <= 0.4 && (best === null || d < best.d)) {
+            best = { id: a.Id, d: d };
+          }
+        }
+      });
+      if (best) out[catKey] = best.id;
+    });
+    return out;
   }
 
   // ---- COA Map sub-view (W1.2) ----
@@ -157,8 +230,18 @@
     ]).then(function(results) {
       var accounts = (results[0] && results[0].data && results[0].data.accounts) || [];
       var mappingDoc = (results[1] && results[1].data) || {};
-      var mapping = (mappingDoc && mappingDoc.mapping) || {};
-      renderCoaMapTable(body, accounts, mapping, mappingDoc);
+      var savedMapping = (mappingDoc && mappingDoc.mapping) || null;
+      // Auto-suggest ONLY when no saved mapping yet. If the operator has saved
+      // a mapping before, preserve their selections — don't override.
+      var suggested = false;
+      var mapping;
+      if (savedMapping && Object.keys(savedMapping).length > 0) {
+        mapping = savedMapping;
+      } else {
+        mapping = _suggestCoaMapping(accounts);
+        suggested = Object.keys(mapping).length > 0;
+      }
+      renderCoaMapTable(body, accounts, mapping, mappingDoc, suggested);
     }).catch(function(err) {
       var msg = (err && err.message) || String(err);
       var isAuth = /unauth|not.*connect|no.*token|invalid.*token/i.test(msg);
@@ -175,7 +258,7 @@
     });
   }
 
-  function renderCoaMapTable(body, accounts, mapping, mappingDoc) {
+  function renderCoaMapTable(body, accounts, mapping, mappingDoc, suggested) {
     // Group accounts by AccountType for grouped <optgroup>.
     var byType = {};
     accounts.forEach(function(a) {
@@ -222,30 +305,39 @@
     COA_CATEGORIES.forEach(function(cat) {
       if (cat.section !== section) {
         section = cat.section;
-        rows += '<tr><td colspan="2" style="padding:14px 10px 6px;font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.5px;border-bottom:1px solid rgba(255,255,255,0.05);">' + esc(section) + '</td></tr>';
+        rows += '<tr><td colspan="2" class="qbo-section-header">' + esc(section) + '</td></tr>';
       }
       var required = COA_REQUIRED.indexOf(cat.key) >= 0;
       var current = mapping[cat.key] || '';
       rows +=
-        '<tr style="border-bottom:1px solid rgba(255,255,255,0.05);">' +
-          '<td style="padding:10px;font-size:0.9rem;width:42%;">' + esc(cat.label) + (required ? ' <span style="color:#ef4444;font-size:0.72rem;">*</span>' : '') + '</td>' +
-          '<td style="padding:10px;">' +
-            '<select class="qbo-map-select" data-mast-key="' + esc(cat.key) + '" style="width:100%;padding:6px 8px;font-size:0.85rem;background:var(--bg-secondary,#232323);color:inherit;border:1px solid rgba(255,255,255,0.1);border-radius:4px;">' +
+        '<tr>' +
+          '<td style="width:42%;">' + esc(cat.label) + (required ? ' <span style="color:#ef4444;font-size:0.72rem;" aria-label="required">*</span>' : '') + '</td>' +
+          '<td>' +
+            '<select class="qbo-map-select qbo-select" data-mast-key="' + esc(cat.key) + '">' +
               optionsHtmlForRow(current) +
             '</select>' +
           '</td>' +
         '</tr>';
     });
 
+    var suggestBanner = '';
+    if (suggested) {
+      suggestBanner =
+        '<div class="qbo-suggest-banner">' +
+          '<strong>Suggested matches</strong> — review and adjust before saving. Suggestions are heuristic based on account names.' +
+        '</div>';
+    }
+
     body.innerHTML =
       '<div style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:12px;">' +
         'Map each Mast category to a QBO account. Required (*) categories must be mapped before saving. Mappings can be updated anytime; future syncs use the new mapping.' +
       '</div>' +
       lastSaved +
-      '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;">' +
-        '<thead><tr style="border-bottom:1px solid rgba(255,255,255,0.1);">' +
-          '<th style="text-align:left;padding:8px 10px;font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.5px;">Mast Category</th>' +
-          '<th style="text-align:left;padding:8px 10px;font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.5px;">QBO Account</th>' +
+      suggestBanner +
+      '<div style="overflow-x:auto;"><table class="qbo-table">' +
+        '<thead><tr>' +
+          '<th>Mast Category</th>' +
+          '<th>QBO Account</th>' +
         '</tr></thead><tbody>' + rows + '</tbody></table></div>' +
       '<div style="margin-top:16px;display:flex;gap:8px;align-items:center;">' +
         '<button id="qboMapSaveBtn" class="btn btn-primary" onclick="window._qboSaveMapping && window._qboSaveMapping()">Save mapping</button>' +
@@ -296,7 +388,7 @@
     _syncLogState = { rows: [], filterStatus: 'all', filterEntity: 'all', filterFrom: '', filterTo: '', hasMore: true, fetchedLimit: 0 };
     body.innerHTML =
       '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:16px;font-size:0.85rem;">' +
-        '<label>Status: <select id="qboLogFilterStatus" style="padding:4px 6px;background:var(--bg-secondary,#232323);color:inherit;border:1px solid rgba(255,255,255,0.1);border-radius:4px;font-size:0.85rem;">' +
+        '<label>Status: <select id="qboLogFilterStatus" class="qbo-select" style="width:auto;">' +
           '<option value="all">All</option>' +
           '<option value="queued">Queued</option>' +
           '<option value="in-flight">In flight</option>' +
@@ -305,7 +397,7 @@
           '<option value="blocked-closed-period">Blocked (closed period)</option>' +
           '<option value="orphaned">Orphaned</option>' +
         '</select></label>' +
-        '<label>Entity: <select id="qboLogFilterEntity" style="padding:4px 6px;background:var(--bg-secondary,#232323);color:inherit;border:1px solid rgba(255,255,255,0.1);border-radius:4px;font-size:0.85rem;">' +
+        '<label>Entity: <select id="qboLogFilterEntity" class="qbo-select" style="width:auto;">' +
           '<option value="all">All</option>' +
           '<option value="journalEntry">journalEntry</option>' +
           '<option value="invoice">invoice</option>' +
@@ -313,8 +405,8 @@
           '<option value="customer">customer</option>' +
           '<option value="vendor">vendor</option>' +
         '</select></label>' +
-        '<label>From: <input type="date" id="qboLogFilterFrom" style="padding:4px 6px;background:var(--bg-secondary,#232323);color:inherit;border:1px solid rgba(255,255,255,0.1);border-radius:4px;font-size:0.85rem;"></label>' +
-        '<label>To: <input type="date" id="qboLogFilterTo" style="padding:4px 6px;background:var(--bg-secondary,#232323);color:inherit;border:1px solid rgba(255,255,255,0.1);border-radius:4px;font-size:0.85rem;"></label>' +
+        '<label>From: <input type="date" id="qboLogFilterFrom" class="qbo-select" style="width:auto;"></label>' +
+        '<label>To: <input type="date" id="qboLogFilterTo" class="qbo-select" style="width:auto;"></label>' +
         '<button class="btn btn-secondary" onclick="window._qboLogApplyFilters && window._qboLogApplyFilters()">Apply</button>' +
       '</div>' +
       '<div id="qboLogTableWrap"><div style="color:var(--warm-gray);font-size:0.9rem;padding:24px 0;">Loading sync log…</div></div>' +
@@ -546,7 +638,15 @@
   };
 
   window.disconnectQbo = async function() {
-    if (!confirm('Disconnecting will not delete data in QuickBooks. You can reconnect anytime; previously-pushed entries remain. Continue?')) return;
+    // Design-system rule 19: no native confirm() — use mastConfirm (themed, dark-mode aware).
+    var msg = 'Disconnecting will not delete data in QuickBooks. You can reconnect anytime; previously-pushed entries remain. Continue?';
+    var ok;
+    if (typeof window.mastConfirm === 'function') {
+      ok = await window.mastConfirm(msg, { title: 'Disconnect QuickBooks', confirmLabel: 'Disconnect', dangerous: true });
+    } else {
+      ok = confirm(msg);
+    }
+    if (!ok) return;
     try {
       var fn = firebase.functions().httpsCallable('disconnectQbo');
       await fn({ tenantId: tenantId() });
