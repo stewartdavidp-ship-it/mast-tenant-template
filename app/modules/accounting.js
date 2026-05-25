@@ -651,18 +651,19 @@
     }
   };
 
-  // ---- Sync Log sub-view (W1.10 Phase 2) ----
+  // ---- Sync Log sub-view (W1.10 Phase 2 + W2b.2 Direction filter) ----
   var SYNC_LOG_PAGE_SIZE = 50;
-  var _syncLogState = { rows: [], filterStatus: 'all', filterEntity: 'all', filterFrom: '', filterTo: '', hasMore: true, fetchedLimit: 0 };
+  var _syncLogState = { rows: [], filterStatus: 'all', filterEntity: 'all', filterDirection: 'all', filterFrom: '', filterTo: '', hasMore: true, fetchedLimit: 0 };
 
   function renderSyncLogView() {
     var body = panelBody();
     if (!body) return;
-    _syncLogState = { rows: [], filterStatus: 'all', filterEntity: 'all', filterFrom: '', filterTo: '', hasMore: true, fetchedLimit: 0 };
+    _syncLogState = { rows: [], filterStatus: 'all', filterEntity: 'all', filterDirection: 'all', filterFrom: '', filterTo: '', hasMore: true, fetchedLimit: 0 };
     body.innerHTML =
       '<p style="color:var(--text-secondary);font-size:0.85rem;line-height:1.5;margin:0 0 12px;">' +
-        'Every push to QuickBooks creates a row here. The log fills automatically when you write a Day Close, wholesale invoice, vendor bill, or reviewed expense. Failed pushes show a Retry button.' +
+        'Every push to QuickBooks creates a row here. The log fills automatically when you write a Day Close, wholesale invoice, vendor bill, or reviewed expense. Failed pushes show a Retry button. Pull receipts (webhook / polling / backfill) also land here.' +
       '</p>' +
+      '<div id="qboLogPollChipWrap" style="margin-bottom:10px;"></div>' +
       '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:16px;font-size:0.85rem;">' +
         '<label>Status: <select id="qboLogFilterStatus" class="qbo-select" style="width:auto;">' +
           '<option value="all">All</option>' +
@@ -680,6 +681,11 @@
           '<option value="apBill">AP Bill</option>' +
           '<option value="dayClose">Day Close</option>' +
         '</select></label>' +
+        '<label>Direction: <select id="qboLogFilterDirection" class="qbo-select" style="width:auto;">' +
+          '<option value="all">All</option>' +
+          '<option value="push">Push only</option>' +
+          '<option value="pull">Pull only</option>' +
+        '</select></label>' +
         '<label>From: <input type="date" id="qboLogFilterFrom" class="qbo-select" style="width:auto;"></label>' +
         '<label>To: <input type="date" id="qboLogFilterTo" class="qbo-select" style="width:auto;"></label>' +
         '<button class="btn btn-secondary" onclick="window._qboLogApplyFilters && window._qboLogApplyFilters()">Apply</button>' +
@@ -687,16 +693,61 @@
       '<div id="qboLogTableWrap"><div style="color:var(--warm-gray);font-size:0.9rem;padding:24px 0;">Loading sync log…</div></div>' +
       '<div id="qboLogMoreWrap" style="margin-top:12px;text-align:center;"></div>';
 
+    _loadPollChip();
     loadSyncLogPage();
+  }
+
+  // W2b.2 — "Last poll: <relative>" chip above the filter bar. Reads
+  // `_meta.lastPollAt` (advanced by pollQboChanges cron every 15 min).
+  function _loadPollChip() {
+    var wrap = document.getElementById('qboLogPollChipWrap');
+    if (!wrap) return;
+    MastDB.get('admin/integrations/_meta').then(function(meta) {
+      meta = meta || {};
+      var lastPollAt = meta.lastPollAt || null;
+      var lastWebhookAt = meta.lastWebhookAt || null;
+      function rel(iso) {
+        if (!iso) return 'never';
+        var ms = (typeof iso === 'number') ? iso : Date.parse(iso);
+        if (!isFinite(ms)) return 'never';
+        var d = (Date.now() - ms) / 60000;
+        if (d < 1) return 'just now';
+        if (d < 60) return Math.round(d) + ' min ago';
+        if (d < 1440) return Math.round(d / 60) + 'h ago';
+        return Math.round(d / 1440) + 'd ago';
+      }
+      function chipColor(iso, freshMins, staleMins) {
+        if (!iso) return '#94a3b8';
+        var ms = (typeof iso === 'number') ? iso : Date.parse(iso);
+        var minsAgo = (Date.now() - ms) / 60000;
+        if (minsAgo <= freshMins) return '#22c55e';
+        if (minsAgo <= staleMins) return '#eab308';
+        return '#ef4444';
+      }
+      // Poll cron is 15 min; treat <30 min fresh, <120 min amber.
+      var pollColor = chipColor(lastPollAt, 30, 120);
+      // Webhook is event-driven — no SLA. Use looser bands (<24h green, <7d amber).
+      var hookColor = chipColor(lastWebhookAt, 60 * 24, 60 * 24 * 7);
+      wrap.innerHTML =
+        '<div style="display:inline-flex;align-items:center;gap:8px;font-size:0.78rem;color:var(--warm-gray);flex-wrap:wrap;">' +
+          '<span>Last poll: <span style="color:' + pollColor + ';font-weight:600;">' + esc(rel(lastPollAt)) + '</span></span>' +
+          '<span style="opacity:0.5;">·</span>' +
+          '<span>Last webhook: <span style="color:' + hookColor + ';font-weight:600;">' + esc(rel(lastWebhookAt)) + '</span></span>' +
+        '</div>';
+    }).catch(function() {
+      // Silent — chip is decorative.
+    });
   }
 
   window._qboLogApplyFilters = function() {
     var s = document.getElementById('qboLogFilterStatus');
     var e = document.getElementById('qboLogFilterEntity');
+    var d = document.getElementById('qboLogFilterDirection');
     var f = document.getElementById('qboLogFilterFrom');
     var t = document.getElementById('qboLogFilterTo');
     _syncLogState.filterStatus = (s && s.value) || 'all';
     _syncLogState.filterEntity = (e && e.value) || 'all';
+    _syncLogState.filterDirection = (d && d.value) || 'all';
     _syncLogState.filterFrom = (f && f.value) || '';
     _syncLogState.filterTo = (t && t.value) || '';
     _syncLogState.rows = [];
@@ -737,6 +788,11 @@
       var filtered = arr.filter(function(r) {
         if (_syncLogState.filterStatus !== 'all' && r.status !== _syncLogState.filterStatus) return false;
         if (_syncLogState.filterEntity !== 'all' && r.mastEntityType !== _syncLogState.filterEntity) return false;
+        // W2b.2 — legacy rows pre-W2b have no `direction` field; default to 'push'.
+        if (_syncLogState.filterDirection !== 'all') {
+          var d = r.direction || 'push';
+          if (d !== _syncLogState.filterDirection) return false;
+        }
         if (_syncLogState.filterFrom) {
           var fromTs = new Date(_syncLogState.filterFrom + 'T00:00:00').getTime();
           var rt = typeof r.createdAt === 'number' ? r.createdAt : Date.parse(r.createdAt);
@@ -811,6 +867,20 @@
       var mastId = r.mastEntityId || r.mastId || r.entityId || '';
       var entityType = r.mastEntityType || r.entityType || '';
       var requestId = r.requestId || r.id || '';
+      // W2b.2 — Direction chip. Legacy rows default to 'push'.
+      var direction = r.direction || 'push';
+      var pullSource = r.pullSource || '';  // webhook | poll | backfill
+      var dirBg, dirFg, dirGlyph, dirTip;
+      if (direction === 'pull') {
+        dirBg = 'rgba(99,102,241,0.18)'; dirFg = '#818cf8';
+        dirGlyph = '↓';
+        dirTip = 'Pull' + (pullSource ? ' · ' + pullSource : '');
+      } else {
+        dirBg = 'rgba(34,197,94,0.12)'; dirFg = '#22c55e';
+        dirGlyph = '↑';
+        dirTip = 'Push';
+      }
+      var directionChip = '<span title="' + esc(dirTip) + '" style="display:inline-block;padding:1px 6px;border-radius:8px;background:' + dirBg + ';color:' + dirFg + ';font-size:0.66rem;font-weight:700;margin-right:6px;">' + esc(dirGlyph) + '</span>';
       var retryHtml = '<button class="btn btn-secondary" disabled title="Retry available after retryQboSync CF deploys" style="font-size:0.78rem;padding:2px 8px;opacity:0.5;">Retry</button>';
       if (r.status === 'failed' && requestId) {
         retryHtml = '<button class="btn btn-secondary" onclick="window._qboRetrySync &amp;&amp; window._qboRetrySync(&#39;' + jsAttr(requestId) + '&#39;)" style="font-size:0.78rem;padding:2px 8px;">Retry</button>';
@@ -819,7 +889,7 @@
       html +=
         '<tr style="border-bottom:1px solid rgba(255,255,255,0.05);">' +
           '<td style="padding:8px 10px;white-space:nowrap;">' + esc(tsFmt(r.createdAt)) + '</td>' +
-          '<td style="padding:8px 10px;">' + esc(entityType || '—') + '</td>' +
+          '<td style="padding:8px 10px;">' + directionChip + esc(entityType || '—') + '</td>' +
           '<td style="padding:8px 10px;font-family:monospace;font-size:0.78rem;">' + esc(truncate(mastId, 24)) + '</td>' +
           '<td style="padding:8px 10px;font-family:monospace;font-size:0.78rem;">' + esc(truncate(qboId, 18)) + copyBtn + '</td>' +
           '<td style="padding:8px 10px;">' + statusChip(r.status) + '</td>' +

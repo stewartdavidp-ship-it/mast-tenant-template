@@ -6267,7 +6267,8 @@ window.renderFinanceOverview = renderFinanceOverview;
 // ── W2a.5 Integrations health card ───────────────────────────────────────────
 // Per-provider sync status, click-through to filtered Sync Log. Uses font sizes
 // from the canonical 7-step rem scale (0.72 / 0.78 / 0.85 / 0.9 / 1.0 / 1.15 / 1.6).
-function _integrationPill(label, lastSyncIso, status, _ignoredLegacyRouteHash) {
+// W2b.2 adds optional pull-direction sub-label (lastPollAt + lastWebhookAt).
+function _integrationPill(label, lastSyncIso, status, _ignoredLegacyRouteHash, extras) {
   var color = 'var(--warm-gray,#888)';
   var pillText;
   if (!status || status === 'not-connected') {
@@ -6292,11 +6293,32 @@ function _integrationPill(label, lastSyncIso, status, _ignoredLegacyRouteHash) {
   // and 10272). Plain navigateTo('settings') lands on the default General
   // panel, not Integrations — that bug was caught by Riley persona-verify.
   var clickAttr = ' onclick="navigateTo(\'settings\'); setTimeout(function(){ try { switchSettingsSubView(\'integrations\'); } catch(_) {} }, 50);" style="cursor:pointer;"';
-  return '<div' + clickAttr + ' style="display:inline-flex;align-items:center;gap:8px;background:var(--bg-secondary,#232323);border:1px solid rgba(255,255,255,0.08);border-radius:999px;padding:6px 14px;font-size:0.78rem;">' +
-    '<span style="font-weight:600;color:var(--text,#fff);">' + e(label) + '</span>' +
-    '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:' + color + ';"></span>' +
-    '<span style="color:var(--warm-gray,#888);">' + e(pillText) + '</span>' +
+  // W2b.2 — pull-direction sub-label. Always rendered when extras present,
+  // even with — placeholders, so operator sees the dimensions exist.
+  var subLabel = '';
+  if (extras && (extras.lastPollAt || extras.lastWebhookAt || status === 'connected')) {
+    function rel(iso) {
+      if (!iso) return '—';
+      var ms = (typeof iso === 'number') ? iso : Date.parse(iso);
+      if (!isFinite(ms)) return '—';
+      var minsAgo = (Date.now() - ms) / 60000;
+      if (minsAgo < 1) return 'now';
+      if (minsAgo < 60) return Math.round(minsAgo) + 'm';
+      if (minsAgo < 1440) return Math.round(minsAgo / 60) + 'h';
+      return Math.round(minsAgo / 1440) + 'd';
+    }
+    subLabel =
+      '<div style="font-size:0.72rem;color:var(--warm-gray,#888);margin-top:4px;text-align:center;line-height:1.3;">' +
+        'Push: ' + e(rel(lastSyncIso)) + ' · Poll: ' + e(rel(extras.lastPollAt || null)) + ' · Webhook: ' + e(rel(extras.lastWebhookAt || null)) +
+      '</div>';
+  }
+  var pillHtml =
+    '<div style="display:inline-flex;align-items:center;gap:8px;background:var(--bg-secondary,#232323);border:1px solid rgba(255,255,255,0.08);border-radius:999px;padding:6px 14px;font-size:0.78rem;">' +
+      '<span style="font-weight:600;color:var(--text,#fff);">' + e(label) + '</span>' +
+      '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:' + color + ';"></span>' +
+      '<span style="color:var(--warm-gray,#888);">' + e(pillText) + '</span>' +
     '</div>';
+  return '<div' + clickAttr + ' style="display:inline-flex;flex-direction:column;align-items:center;">' + pillHtml + subLabel + '</div>';
 }
 
 function renderIntegrationsHealthCard(integMeta, qboConn, xeroConn) {
@@ -6310,15 +6332,19 @@ function renderIntegrationsHealthCard(integMeta, qboConn, xeroConn) {
   }
   var qboStatus = statusOf(qboConn);
   var xeroStatus = statusOf(xeroConn);
+  // W2b.2 — pull-direction sub-label data. lastPollAt + lastWebhookAt are
+  // both QBO-only in W2b (Xero pull lands in W2c).
+  var qboExtras = { lastPollAt: meta.lastPollAt || null, lastWebhookAt: meta.lastWebhookAt || null };
+  var xeroExtras = null;
   var pills =
-    _integrationPill('QuickBooks', lastMap.qbo || null, qboStatus, 'settings') +
-    _integrationPill('Xero', lastMap.xero || null, xeroStatus, 'settings');
+    _integrationPill('QuickBooks', lastMap.qbo || null, qboStatus, 'settings', qboExtras) +
+    _integrationPill('Xero', lastMap.xero || null, xeroStatus, 'settings', xeroExtras);
   return '<div style="background:var(--bg-secondary,#232323);border-radius:10px;padding:18px;margin-top:14px;border:1px solid rgba(255,255,255,0.06);">' +
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">' +
       '<div style="font-size:0.72rem;color:var(--warm-gray,#888);text-transform:uppercase;letter-spacing:0.5px;">Integrations health</div>' +
-      '<div style="font-size:0.72rem;color:var(--warm-gray,#888);">Last successful push per provider · click to open Settings</div>' +
+      '<div style="font-size:0.72rem;color:var(--warm-gray,#888);">Push · Poll · Webhook timestamps per provider · click to open Settings</div>' +
     '</div>' +
-    '<div style="display:flex;gap:10px;flex-wrap:wrap;">' + pills + '</div>' +
+    '<div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start;">' + pills + '</div>' +
     '</div>';
 }
 
