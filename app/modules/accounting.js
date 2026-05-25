@@ -627,7 +627,7 @@
       var tid = tenantId();
       if (!tid) { toastErr('Tenant ID not resolved'); return; }
       var mintFn = firebase.functions().httpsCallable('mintQboAuthState');
-      var result = await mintFn({ tenantId: tid });
+      var result = await mintFn({ tenantId: tid, openerOrigin: window.location.origin });
       var authorizeUrl = result && result.data && result.data.authorizeUrl;
       if (!authorizeUrl) throw new Error('No authorize URL returned');
 
