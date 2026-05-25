@@ -9719,96 +9719,105 @@
         </div>
       </div>
       <!-- Storefront Display Settings -->
-      <div id="settingsSubStorefront" style="display:none;max-width:600px;padding-top:16px;">
-        <div class="form-group">
-          <label style="font-size:1.15rem;font-weight:600;">Storefront Display</label>
-          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:16px;">
-            Configure how inventory status, lead times, and badges appear on your public storefront.
-          </p>
+      <div id="settingsSubStorefront" style="display:none;max-width:720px;padding-top:16px;">
+        <!-- Display settings tab strip (view-tabs pattern). Each surface that affects what
+             customers see on your storefront becomes its own tab. -->
+        <div class="view-tabs" id="displayTabBar" style="margin-bottom:20px;">
+          <button class="view-tab active" id="displayTabBtn-leadTime" data-tab="leadTime" onclick="switchDisplayTab('leadTime')"><span class="tab-status-dot" data-state="none"></span>Lead time</button>
+          <button class="view-tab" id="displayTabBtn-commissionCta" data-tab="commissionCta" onclick="switchDisplayTab('commissionCta')"><span class="tab-status-dot" data-state="none"></span>Commission CTA</button>
+          <button class="view-tab" id="displayTabBtn-badges" data-tab="badges" onclick="switchDisplayTab('badges')"><span class="tab-status-dot" data-state="info"></span>Badge labels</button>
+          <button class="view-tab" id="displayTabBtn-legal" data-tab="legal" onclick="switchDisplayTab('legal')"><span class="tab-status-dot" data-state="info"></span>Legal links</button>
         </div>
 
-        <!-- Lead Time Display -->
-        <div style="background:var(--cream);border-radius:8px;padding:16px;margin-bottom:16px;">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
-            <label style="font-weight:600;font-size:0.9rem;">Show Lead Time on Products</label>
-            <label class="toggle-switch" style="margin:0;">
-              <input type="checkbox" id="sdShowLeadTime">
-              <span class="toggle-slider"></span>
+        <!-- ── Lead time ── -->
+        <div id="displayTab-leadTime" class="display-tab-body">
+          <div class="tab-section-title">Lead time on products<span class="tab-section-status" data-state="none" id="displayStatus-leadTime">Off</span></div>
+          <p class="tab-section-purpose">When on, product pages and the cart show an estimated fulfillment time based on the inventory mode for each item (in-stock, made-to-order, etc.). When off, no time estimate is shown. Useful if your fulfillment windows vary widely and you&rsquo;d rather set expectations on individual product pages.</p>
+          <div class="form-group">
+            <label style="display:flex;align-items:center;gap:10px;cursor:pointer;">
+              <span style="font-weight:600;font-size:0.9rem;">Show lead time on products</span>
+              <label class="toggle-switch" style="margin:0;">
+                <input type="checkbox" id="sdShowLeadTime">
+                <span class="toggle-slider"></span>
+              </label>
             </label>
           </div>
-          <p style="font-size:0.85rem;color:var(--warm-gray);margin:0;">Display estimated fulfillment time on product pages and cart based on inventory mode.</p>
+          <button class="btn btn-primary" onclick="saveShopDisplaySettings()">Save</button>
+          <div id="sdSaveStatus_leadTime" style="margin-top:8px;font-size:0.85rem;"></div>
         </div>
 
-        <!-- Commission CTA -->
-        <div style="background:var(--cream);border-radius:8px;padding:16px;margin-bottom:16px;">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
-            <label style="font-weight:600;font-size:0.9rem;">Commission CTA on Retired Products</label>
-            <label class="toggle-switch" style="margin:0;">
-              <input type="checkbox" id="sdShowCommissionCTA">
-              <span class="toggle-slider"></span>
+        <!-- ── Commission CTA ── -->
+        <div id="displayTab-commissionCta" class="display-tab-body" style="display:none;">
+          <div class="tab-section-title">Commission CTA on retired products<span class="tab-section-status" data-state="none" id="displayStatus-commissionCta">Off</span></div>
+          <p class="tab-section-purpose">When on, discontinued or sold-out products display a call-to-action inviting visitors to commission a custom version. Use this to capture interest in pieces that are no longer available off-the-shelf. Customize the button text and where it links to below.</p>
+          <div class="form-group">
+            <label style="display:flex;align-items:center;gap:10px;cursor:pointer;">
+              <span style="font-weight:600;font-size:0.9rem;">Show commission CTA</span>
+              <label class="toggle-switch" style="margin:0;">
+                <input type="checkbox" id="sdShowCommissionCTA">
+                <span class="toggle-slider"></span>
+              </label>
             </label>
           </div>
-          <p style="font-size:0.85rem;color:var(--warm-gray);margin:0 0 12px 0;">Show a call-to-action on discontinued + sold products inviting custom commissions.</p>
-          <div class="form-group" style="margin:0 0 8px 0;">
-            <label style="font-size:0.78rem;">CTA Text</label>
+          <div class="form-group">
+            <label style="font-size:0.85rem;">CTA text</label>
             <input type="text" id="sdCommissionCTAText" placeholder="Love this piece? Commission a custom version" style="font-size:0.85rem;">
           </div>
-          <div class="form-group" style="margin:0;">
-            <label style="font-size:0.78rem;">CTA Link</label>
+          <div class="form-group">
+            <label style="font-size:0.85rem;">CTA link</label>
             <input type="text" id="sdCommissionCTALink" placeholder="/contact" style="font-size:0.85rem;">
           </div>
+          <button class="btn btn-primary" onclick="saveShopDisplaySettings()">Save</button>
+          <div id="sdSaveStatus_commissionCta" style="margin-top:8px;font-size:0.85rem;"></div>
         </div>
 
-        <!-- Badge Text Customization -->
-        <div style="background:var(--cream);border-radius:8px;padding:16px;margin-bottom:16px;">
-          <label style="font-weight:600;font-size:0.9rem;display:block;margin-bottom:12px;">Badge Labels</label>
-          <p style="font-size:0.85rem;color:var(--warm-gray);margin:0 0 12px 0;">Customize the text shown on product badges. Use <code>{n}</code> for stock count where applicable.</p>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-            <div class="form-group" style="margin:0;">
-              <label style="font-size:0.78rem;">Discontinued + In Stock</label>
+        <!-- ── Badge labels ── -->
+        <div id="displayTab-badges" class="display-tab-body" style="display:none;">
+          <div class="tab-section-title">Product badge labels<span class="tab-section-status" data-state="info" id="displayStatus-badges">Defaults</span></div>
+          <p class="tab-section-purpose">Override the text shown on product badges for inventory states. Leave a field blank to use the default label shown in the placeholder. Use <code>{n}</code> as a placeholder for the stock count (e.g. &ldquo;Only {n} Left&rdquo;).</p>
+          <div class="form-group" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+            <div>
+              <label style="font-size:0.78rem;">Discontinued + In stock</label>
               <input type="text" id="sdBadgeDiscontinuedInStock" placeholder="Final Stock" style="font-size:0.85rem;">
             </div>
-            <div class="form-group" style="margin:0;">
+            <div>
               <label style="font-size:0.78rem;">Discontinued + Sold</label>
               <input type="text" id="sdBadgeDiscontinuedSold" placeholder="Retired" style="font-size:0.85rem;">
             </div>
-            <div class="form-group" style="margin:0;">
-              <label style="font-size:0.78rem;">Made to Order</label>
+            <div>
+              <label style="font-size:0.78rem;">Made to order</label>
               <input type="text" id="sdBadgeMadeToOrder" placeholder="Made to Order" style="font-size:0.85rem;">
             </div>
-            <div class="form-group" style="margin:0;">
-              <label style="font-size:0.78rem;">Low Stock</label>
+            <div>
+              <label style="font-size:0.78rem;">Low stock</label>
               <input type="text" id="sdBadgeLowStock" placeholder="Only {n} Left" style="font-size:0.85rem;">
             </div>
           </div>
+          <button class="btn btn-primary" onclick="saveShopDisplaySettings()">Save</button>
+          <div id="sdSaveStatus" style="margin-top:8px;font-size:0.85rem;"></div>
         </div>
 
-        <button class="btn btn-primary" onclick="saveShopDisplaySettings()">Save Storefront Settings</button>
-        <div id="sdSaveStatus" style="margin-top:8px;font-size:0.85rem;"></div>
-
-        <!-- Legal URL Overrides — legal practice-rec #11 -->
-        <div style="margin-top:32px;padding-top:24px;border-top:1px solid var(--cream-dark);">
-          <label style="font-size:1.15rem;font-weight:600;display:block;margin-bottom:4px;">Legal Policy Links</label>
-          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:16px;">
-            Override the default Mast policy links shown in your storefront footer with your own URLs. Leave blank to use the Mast default policies at runmast.com. Must be a full URL starting with https://.
-          </p>
+        <!-- ── Legal policy links ── -->
+        <div id="displayTab-legal" class="display-tab-body" style="display:none;">
+          <div class="tab-section-title">Legal policy links<span class="tab-section-status" data-state="info" id="displayStatus-legal">Mast defaults</span></div>
+          <p class="tab-section-purpose">Override the default policy links shown in your storefront footer with your own URLs. Leave any field blank to keep the Mast default policy at <code>runmast.com</code>. Each URL must be a full <code>https://</code> link to a page you control.</p>
           <div class="form-group">
-            <label style="font-size:0.85rem;">Privacy Policy URL</label>
+            <label style="font-size:0.85rem;">Privacy policy URL</label>
             <input type="text" id="sdCustomPrivacyUrl" placeholder="https://your-site.com/privacy" style="font-size:0.85rem;">
           </div>
           <div class="form-group">
-            <label style="font-size:0.85rem;">Terms of Service URL</label>
+            <label style="font-size:0.85rem;">Terms of service URL</label>
             <input type="text" id="sdCustomTermsUrl" placeholder="https://your-site.com/terms" style="font-size:0.85rem;">
           </div>
           <div class="form-group">
-            <label style="font-size:0.85rem;">Security Statement URL</label>
+            <label style="font-size:0.85rem;">Security statement URL</label>
             <input type="text" id="sdCustomSecurityUrl" placeholder="https://your-site.com/security" style="font-size:0.85rem;">
           </div>
-          <div class="form-group" style="margin-bottom:12px;">
-            <label style="font-size:0.85rem;">AI Transparency URL</label>
+          <div class="form-group">
+            <label style="font-size:0.85rem;">AI transparency URL</label>
             <input type="text" id="sdCustomAiUrl" placeholder="https://your-site.com/ai" style="font-size:0.85rem;">
           </div>
-          <button class="btn btn-primary" onclick="savePrivacyUrlSettings()">Save Legal URLs</button>
+          <button class="btn btn-primary" onclick="savePrivacyUrlSettings()">Save legal URLs</button>
           <div id="privacyUrlSaveStatus" style="margin-top:8px;font-size:0.85rem;"></div>
         </div>
       </div>
@@ -9837,39 +9846,46 @@
         </div>
       </div>
       <!-- Domain Settings -->
-      <div id="settingsSubDomains" style="display:none;max-width:600px;">
-        <div class="form-group">
-          <label style="font-size:1.15rem;font-weight:600;">Domain Configuration</label>
-          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:16px;">
-            Manage the domains that point to your storefront. Your primary domain and Firebase default domain are set automatically.
-          </p>
+      <div id="settingsSubDomains" style="display:none;max-width:720px;">
+        <!-- Domains tab strip — list of active domains vs. add a new one (view-tabs pattern). -->
+        <div class="view-tabs" id="domainsTabBar" style="margin-bottom:20px;">
+          <button class="view-tab active" id="domainsTabBtn-list" data-tab="list" onclick="switchDomainsTab('list')"><span class="tab-status-dot" data-state="info" id="domainsDot-list"></span>Active domains</button>
+          <button class="view-tab" id="domainsTabBtn-add" data-tab="add" onclick="switchDomainsTab('add')"><span class="tab-status-dot" data-state="info"></span>Add a domain</button>
         </div>
-        <div id="domainsList" style="margin-bottom:24px;">
-          <div style="text-align:center;padding:20px;color:var(--warm-gray);">Loading domains...</div>
-        </div>
-        <hr style="border:none;border-top:1px solid var(--border,#eee);margin:24px 0;">
-        <div class="form-group">
-          <label style="font-size:1rem;font-weight:600;">Add Custom Domain</label>
-          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:12px;">
-            Point your own domain to this storefront. You'll get step-by-step DNS setup instructions with links to your registrar's settings page.
-          </p>
-          <div style="display:flex;gap:8px;">
-            <input type="text" id="customDomainInput" placeholder="mycoolshop.com"
-              style="flex:1;padding:9px 12px;border:1px solid var(--border,#ddd);border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;background:var(--input-bg,#fff);color:var(--text,#333);">
-            <button class="btn btn-primary" onclick="addCustomDomain()" id="addDomainBtn">Add Domain</button>
+
+        <!-- ── Active domains ── -->
+        <div id="domainsTab-list" class="domains-tab-body">
+          <div class="tab-section-title">Active domains<span class="tab-section-status" data-state="info" id="domainsStatus-list">Loading&hellip;</span></div>
+          <p class="tab-section-purpose">All domains currently pointing to your storefront. Your primary <code>.runmast.com</code> subdomain and the Firebase default are managed automatically. Custom domains added here appear in this list with their verification status.</p>
+          <div id="domainsList" style="margin-bottom:8px;">
+            <div style="text-align:center;padding:20px;color:var(--warm-gray);">Loading domains&hellip;</div>
           </div>
-          <div id="addDomainStatus" style="margin-top:12px;font-size:0.85rem;"></div>
         </div>
-        <!-- DNS Instructions (shown after adding domain) -->
-        <div id="dnsInstructions" style="display:none;margin-top:16px;">
-          <div style="background:var(--cream,#faf8f5);border:1px solid var(--border,#e8e0d4);border-radius:8px;padding:16px;">
-            <div style="font-weight:600;margin-bottom:8px;color:var(--text,#333);">DNS Setup Required</div>
-            <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:12px;" id="dnsInstructionsText"></p>
-            <div id="dnsRegistrarLinks" style="margin-bottom:12px;display:flex;flex-wrap:wrap;gap:6px;"></div>
-            <div id="dnsRecordsList" style="font-family:monospace;font-size:0.85rem;margin-bottom:12px;"></div>
-            <div id="dnsStepsList" style="font-size:0.85rem;margin-bottom:12px;"></div>
-            <p style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:12px;" id="dnsNote"></p>
-            <button class="btn btn-secondary" style="margin-top:4px;" onclick="verifyCustomDomain()">Verify DNS</button>
+
+        <!-- ── Add a domain ── -->
+        <div id="domainsTab-add" class="domains-tab-body" style="display:none;">
+          <div class="tab-section-title">Add a custom domain<span class="tab-section-status" data-state="info">DNS setup</span></div>
+          <p class="tab-section-purpose">Point a domain you already own (e.g. <code>mycoolshop.com</code>) to this storefront. After you add it here we&rsquo;ll show step-by-step DNS instructions with direct links to your registrar&rsquo;s settings, then verify the records.</p>
+          <div class="form-group">
+            <label style="font-size:0.85rem;">Domain to add</label>
+            <div style="display:flex;gap:8px;">
+              <input type="text" id="customDomainInput" placeholder="mycoolshop.com"
+                style="flex:1;padding:9px 12px;border:1px solid var(--border,#ddd);border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;background:var(--input-bg,#fff);color:var(--text,#333);">
+              <button class="btn btn-primary" onclick="addCustomDomain()" id="addDomainBtn">Add domain</button>
+            </div>
+            <div id="addDomainStatus" style="margin-top:12px;font-size:0.85rem;"></div>
+          </div>
+          <!-- DNS Instructions (shown after adding domain) -->
+          <div id="dnsInstructions" style="display:none;margin-top:16px;">
+            <div style="background:var(--cream,#faf8f5);border:1px solid var(--border,#e8e0d4);border-radius:8px;padding:16px;">
+              <div style="font-weight:600;margin-bottom:8px;color:var(--text,#333);">DNS setup required</div>
+              <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:12px;" id="dnsInstructionsText"></p>
+              <div id="dnsRegistrarLinks" style="margin-bottom:12px;display:flex;flex-wrap:wrap;gap:6px;"></div>
+              <div id="dnsRecordsList" style="font-family:monospace;font-size:0.85rem;margin-bottom:12px;"></div>
+              <div id="dnsStepsList" style="font-size:0.85rem;margin-bottom:12px;"></div>
+              <p style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:12px;" id="dnsNote"></p>
+              <button class="btn btn-secondary" style="margin-top:4px;" onclick="verifyCustomDomain()">Verify DNS</button>
+            </div>
           </div>
         </div>
       </div>
@@ -18145,7 +18161,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260525-105521-2c02ea2';
+var MAST_MODULES_V = '20260525-110045-5fedf9c';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -18312,9 +18328,9 @@ function switchSettingsSubView(view) {
   if (view === 'email') { loadEmailConfig(); loadEmailDomainSection(); loadResendWebhookSection(); }
   if (view === 'integrations') { loadEtsyConfig(); loadShopifyConfig(); loadPlaidBanksForSettings(); if (typeof switchIntegrationsTab === 'function') switchIntegrationsTab(window.__integrationsActiveTab || 'googleMaps'); }
   if (view === 'trips') { MastAdmin.loadModule('trips').then(function() { if (typeof loadTripsSettings === 'function') loadTripsSettings(); }); }
-  if (view === 'storefront') { loadShopDisplaySettings(); loadPrivacyUrlSettings(); }
+  if (view === 'storefront') { loadShopDisplaySettings(); loadPrivacyUrlSettings(); if (typeof refreshDisplayTabStatus === 'function') refreshDisplayTabStatus(); }
   if (view === 'dashboard') renderDashCardSettings();
-  if (view === 'domains') loadDomainSettings();
+  if (view === 'domains') { loadDomainSettings(); if (typeof refreshDomainsTabStatus === 'function') refreshDomainsTabStatus(); }
   if (view === 'ai') { loadAiIntegrations(); loadAskAiConfigUI(); loadByoAnthropicUI(); loadAskAiUsage(); }
   if (view === 'subscription') renderSubscriptionSettings();
   if (view === 'product') loadProductSettings();
@@ -23111,6 +23127,7 @@ function renderDomainsList() {
   var container = document.getElementById('domainsList');
   if (!container || !tenantDomains.length) {
     if (container) container.innerHTML = '<div style="color:var(--warm-gray);padding:12px;">No domains configured.</div>';
+    if (typeof refreshDomainsTabStatus === 'function') refreshDomainsTabStatus();
     return;
   }
 
@@ -23157,6 +23174,7 @@ function renderDomainsList() {
   });
 
   container.innerHTML = html;
+  if (typeof refreshDomainsTabStatus === 'function') refreshDomainsTabStatus();
 }
 
 async function addCustomDomain() {
@@ -23967,6 +23985,7 @@ async function loadShopDisplaySettings() {
   } catch (err) {
     console.error('Error loading shop display settings:', err);
   }
+  if (typeof refreshDisplayTabStatus === 'function') refreshDisplayTabStatus();
 }
 
 async function saveShopDisplaySettings() {
@@ -23994,6 +24013,7 @@ async function saveShopDisplaySettings() {
   } catch (err) {
     showToast('Error saving storefront settings: ' + err.message, true);
   }
+  if (typeof refreshDisplayTabStatus === 'function') refreshDisplayTabStatus();
 }
 
 // Legal URL overrides — legal practice-rec #11
@@ -24012,6 +24032,7 @@ async function loadPrivacyUrlSettings() {
   } catch (err) {
     console.error('Error loading privacy URL settings:', err);
   }
+  if (typeof refreshDisplayTabStatus === 'function') refreshDisplayTabStatus();
 }
 
 async function savePrivacyUrlSettings() {
@@ -24039,6 +24060,7 @@ async function savePrivacyUrlSettings() {
   } catch (err) {
     showToast('Error saving legal URLs: ' + err.message, true);
   }
+  if (typeof refreshDisplayTabStatus === 'function') refreshDisplayTabStatus();
 }
 
 // Events count setting
@@ -39441,6 +39463,96 @@ function refreshGeneralTabStatus() {
   syncToggle('testingMode', 'testingModeVisibleToggle');
 }
 window.refreshGeneralTabStatus = refreshGeneralTabStatus;
+
+// ── Settings → Storefront → Display: tabbed view.
+var DISPLAY_TABS = ['leadTime','commissionCta','badges','legal'];
+
+function switchDisplayTab(tab) {
+  window.__displayActiveTab = tab;
+  DISPLAY_TABS.forEach(function(t) {
+    var body = document.getElementById('displayTab-' + t);
+    if (body) body.style.display = (t === tab) ? '' : 'none';
+  });
+  document.querySelectorAll('#displayTabBar .view-tab').forEach(function(btn) {
+    btn.classList.toggle('active', btn.dataset.tab === tab);
+  });
+}
+window.switchDisplayTab = switchDisplayTab;
+
+function refreshDisplayTabStatus() {
+  function setDot(tabKey, state) {
+    var btn = document.getElementById('displayTabBtn-' + tabKey);
+    if (!btn) return;
+    var dot = btn.querySelector('.tab-status-dot');
+    if (dot) dot.setAttribute('data-state', state);
+  }
+  function setPill(tabKey, state, label) {
+    var pill = document.getElementById('displayStatus-' + tabKey);
+    if (!pill) return;
+    pill.setAttribute('data-state', state);
+    if (label != null) pill.textContent = label;
+  }
+  // Lead time + Commission CTA — On/Off toggles.
+  var leadOn = !!(document.getElementById('sdShowLeadTime') && document.getElementById('sdShowLeadTime').checked);
+  setDot('leadTime', leadOn ? 'partial' : 'none');
+  setPill('leadTime', leadOn ? 'partial' : 'none', leadOn ? 'On' : 'Off');
+  var ctaOn = !!(document.getElementById('sdShowCommissionCTA') && document.getElementById('sdShowCommissionCTA').checked);
+  setDot('commissionCta', ctaOn ? 'partial' : 'none');
+  setPill('commissionCta', ctaOn ? 'partial' : 'none', ctaOn ? 'On' : 'Off');
+  // Badges — customized if any badge input has a non-empty value.
+  var badgeIds = ['sdBadgeDiscontinuedInStock','sdBadgeDiscontinuedSold','sdBadgeMadeToOrder','sdBadgeLowStock'];
+  var badgeCustom = badgeIds.some(function(id) { var el = document.getElementById(id); return el && el.value && el.value.trim(); });
+  setDot('badges', badgeCustom ? 'ok' : 'info');
+  setPill('badges', badgeCustom ? 'ok' : 'info', badgeCustom ? 'Customized' : 'Defaults');
+  // Legal — customized if any URL input non-empty.
+  var legalIds = ['sdCustomPrivacyUrl','sdCustomTermsUrl','sdCustomSecurityUrl','sdCustomAiUrl'];
+  var legalCount = legalIds.reduce(function(n, id) { var el = document.getElementById(id); return n + ((el && el.value && el.value.trim()) ? 1 : 0); }, 0);
+  setDot('legal', legalCount > 0 ? 'ok' : 'info');
+  setPill('legal', legalCount > 0 ? 'ok' : 'info', legalCount > 0 ? (legalCount + ' override' + (legalCount === 1 ? '' : 's')) : 'Mast defaults');
+}
+window.refreshDisplayTabStatus = refreshDisplayTabStatus;
+
+// ── Settings → Storefront → Domains: tabbed view.
+var DOMAINS_TABS = ['list','add'];
+
+function switchDomainsTab(tab) {
+  window.__domainsActiveTab = tab;
+  DOMAINS_TABS.forEach(function(t) {
+    var body = document.getElementById('domainsTab-' + t);
+    if (body) body.style.display = (t === tab) ? '' : 'none';
+  });
+  document.querySelectorAll('#domainsTabBar .view-tab').forEach(function(btn) {
+    btn.classList.toggle('active', btn.dataset.tab === tab);
+  });
+}
+window.switchDomainsTab = switchDomainsTab;
+
+function refreshDomainsTabStatus() {
+  var listEl = document.getElementById('domainsList');
+  var pill = document.getElementById('domainsStatus-list');
+  var dot = document.querySelector('#domainsTabBtn-list .tab-status-dot');
+  if (!listEl || !pill) return;
+  // Count rendered domain rows. The renderDomainsList renderer uses .domain-row elements;
+  // fall back to any direct child div that isn't the "Loading…" placeholder.
+  var rows = listEl.querySelectorAll('.domain-row');
+  var count = rows.length;
+  if (!count) {
+    // Heuristic fallback for variant markup.
+    var children = listEl.children;
+    var loading = listEl.textContent && /loading/i.test(listEl.textContent);
+    if (!loading) count = children.length;
+  }
+  if (count > 0) {
+    pill.setAttribute('data-state', 'ok');
+    pill.textContent = count + ' active';
+    if (dot) dot.setAttribute('data-state', 'ok');
+  } else {
+    pill.setAttribute('data-state', 'info');
+    pill.textContent = (listEl.textContent && /loading/i.test(listEl.textContent)) ? 'Loading…' : 'None yet';
+    if (dot) dot.setAttribute('data-state', 'info');
+  }
+}
+window.refreshDomainsTabStatus = refreshDomainsTabStatus;
 
 // Consolidated QBO surfaces — inner tab switcher for Settings → Integrations → QuickBooks.
 // Lazy-loads the accounting module then calls renderQboPanel(tab) into #qboPanelBody.
