@@ -200,7 +200,7 @@
         '<button class="btn btn-secondary btn-small" onclick="engagementInboxBulkMarkReplied()">Mark replied</button> ' +
         '<button class="btn btn-secondary btn-small" onclick="engagementInboxBulkFeature()">Feature on site</button> ' +
         '<button class="btn btn-secondary btn-small" onclick="engagementInboxDraftSocial()">Draft Social Post</button> ' +
-        '<button class="btn-link" onclick="engagementInboxClearSelection()" style="background:none;border:none;color:var(--text-danger,#c00);cursor:pointer;">Clear</button>' +
+        '<button class="btn-link" onclick="engagementInboxClearSelection()" style="background:none;border:none;color:var(--text-danger,#ff6b6b);cursor:pointer;">Clear</button>' +
       '</div>';
 
     if (!filtered.length) {
@@ -217,7 +217,7 @@
           '<th style="padding:6px;">Status</th>' +
           // 📱 column is intentionally grayed out — social DMs/comments
           // aren't unified yet. Hover tooltip explains the pending work.
-          '<th style="padding:6px;color:var(--warm-gray-light,#bbb);" title="Pending social platform integrations — see Idea -OtGTgi7XKedsvl5XZOm">📱</th>' +
+          '<th style="padding:6px;color:var(--warm-gray-light,#aaa);" title="Pending social platform integrations — see Idea -OtGTgi7XKedsvl5XZOm">📱</th>' +
         '</tr></thead><tbody>';
       filtered.forEach(function(r) {
         var sIcon = r.kind === 'review' ? '★' : r.kind === 'ugc' ? '\u{1F4F8}' : '\u{1F4AC}';
@@ -250,7 +250,7 @@
           '<td style="padding:6px;">' + previewCell + '</td>' +
           '<td style="padding:6px;color:var(--warm-gray);">' + _ageRel(r.ageIso) + '</td>' +
           '<td style="padding:6px;">' + esc(r.status) + '</td>' +
-          '<td style="padding:6px;color:var(--warm-gray-light,#bbb);">—</td>' +
+          '<td style="padding:6px;color:var(--warm-gray-light,#aaa);">—</td>' +
         '</tr>';
       });
       html += '</tbody></table>';

@@ -1615,7 +1615,10 @@ function renderWholesaleOrderAccountLink(o, orderId) {
   var currentId = o.wholesaleAccountId || '';
   var current = currentId ? (wholesaleAccountsData[currentId] || null) : null;
   var currentLabel = current ? current.name : (currentId ? '(account removed)' : 'Not linked');
-  var html = '<div style="margin-bottom:16px;padding:12px;border:1px solid #e8e0d4;border-radius:6px;background:#fafaf7;">';
+  // Dark-mode compliant: use surface-card token so the panel flips to
+  // dark in dark mode (literal #fafaf7 cream was painting as a bright
+  // strip against the dark order detail; reported 2026-05-24).
+  var html = '<div style="margin-bottom:16px;padding:12px;border:1px solid var(--cream-dark,#e8e0d4);border-radius:6px;background:var(--surface-card,#fafaf7);">';
   html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">';
   html += '<div>';
   html += '<div style="font-size:0.78rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.08em;">Linked account</div>';

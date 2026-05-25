@@ -5635,6 +5635,21 @@
       background: #3a2f12 !important;
       color: #f5c45a !important;
     }
+    /* Cream literals (#fafaf7, #faf8f5, #f5f0e8, etc.) used by Sales W2
+       wholesale-link panels, story cards, and a few other surfaces.
+       Same rescue as the #fff stopgap above. */
+    body.dark-mode [style*="background:#fafaf7"],
+    body.dark-mode [style*="background:#faf8f5"],
+    body.dark-mode [style*="background:#FAF8F5"],
+    body.dark-mode [style*="background:#FAFAF7"] {
+      background: var(--surface-card, #2a2a2a) !important;
+      color: #e0e0e0;
+    }
+    body.dark-mode .story-entry-card {
+      background: var(--surface-card, #2a2a2a) !important;
+      border-color: var(--cream-dark, #3a3a3a) !important;
+      color: #e0e0e0;
+    }
     /* Match border fallback to dark palette for selects/inputs whose
        wholesale.js inline styles hardcode `border:1px solid #ddd`
        (W2 admin modals). */
@@ -7530,6 +7545,13 @@
 
       <!-- Square Payments View (now: Day Close) -->
       <div id="squarePaymentsView" style="display:none;">
+        <!-- Back link sits at top-left, matching wholesale order detail
+             and every other detail surface. (2026-05-24: prior implementation
+             toggled the right-side header button's text — visually wrong
+             because every other "← Back to X" lives top-left.) -->
+        <div style="margin:0 0 8px;">
+          <button class="detail-back" onclick="toggleSquarePayments()">&larr; Back to Sales</button>
+        </div>
         <!-- W1.4: Unified Day Close transactions list. Reads admin/orders for the active day,
              derives a processor column (Square|Stripe|Other) per row. -->
         <div id="dayCloseUnifiedSection" style="margin:12px 0;">
@@ -17826,7 +17848,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260524-231409-46c50bd';
+var MAST_MODULES_V = '20260524-233146-503d3df';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -35522,6 +35544,27 @@ function viewProduct(pid) {
   if (!pid) return;
   var p = (typeof currentRouteParams === 'object' && currentRouteParams) ? currentRouteParams : {};
   if (!(currentRoute === 'products' && p.pid === pid)) {
+    // Breadcrumb: if we're entering the product detail from a *different*
+    // route (Forecast, Sales-by-Product, Customers, etc.) push the spawning
+    // route so backToProducts() can return there instead of falling through
+    // to the catalog list. Skip when:
+    //   - already on the products route (avoid spurious push when navigating
+    //     between products via the list or related-product links);
+    //   - the navigation is internal to MastNavStack restore (back-pop);
+    //   - the inventory path (viewProductFromInventory) — it manages its
+    //     own push and uses productViewOrigin='inventory' anyway.
+    if (window.MastNavStack && currentRoute && currentRoute !== 'products'
+        && !window._mastNavInternal) {
+      var _spawnLabel = (typeof ROUTE_LABELS !== 'undefined' && ROUTE_LABELS[currentRoute])
+        ? ROUTE_LABELS[currentRoute]
+        : currentRoute;
+      MastNavStack.push({
+        route: currentRoute,
+        view: 'list',
+        state: Object.assign({}, p, { scrollTop: window.scrollY || 0 }),
+        label: _spawnLabel
+      });
+    }
     var newParams = Object.assign({}, p);
     newParams.pid = pid;
     navigateTo('products', newParams);
@@ -42180,7 +42223,22 @@ function renderProductDetail(pid) {
     '</div>';
   }
 
-  var backLabel = productViewOrigin === 'inventory' ? 'Back to Inventory' : 'Back to Products';
+  // Back-label resolution priority:
+  //   1. MastNavStack top (the route that spawned this detail — Forecast,
+  //      Sales-by-Product, Customer detail, etc.). This is the user-facing
+  //      promise: "the return link goes back to the page that spawned it."
+  //   2. productViewOrigin === 'inventory' for the legacy inventory drill-in
+  //      (which uses viewProductFromInventory's own push).
+  //   3. Default to the catalog list.
+  var backLabel;
+  if (window.MastNavStack && MastNavStack.size && MastNavStack.size() > 0 && MastNavStack.label) {
+    var _navLbl = MastNavStack.label();
+    backLabel = _navLbl ? ('Back to ' + _navLbl) : 'Back to Products';
+  } else if (productViewOrigin === 'inventory') {
+    backLabel = 'Back to Inventory';
+  } else {
+    backLabel = 'Back to Products';
+  }
   var publishUndoHtml = (!isCreate && pid) ? renderPublishUndoBanner(pid) : '';
   var driftAlertHtml = (!isCreate && pid) ? renderDriftAlertBanner(pid) : '';
   // Build 6c — Customer Signal card. Lazy-loads tickets/reviews/orders
@@ -49901,7 +49959,22 @@ var ROUTE_LABELS = {
   'contacts': 'Contacts', 'analytics': 'Analytics', 'auditlog': 'Audit Log',
   'financials': 'Financials', 'settings': 'Settings', 'production': 'Production',
   'jobs': 'Jobs',
-  'brand': 'Brand'
+  'brand': 'Brand',
+  'forecast': 'Forecast', 'sales-by-product': 'Sales by Product',
+  'sales': 'Sales', 'rma': 'Returns', 'campaigns': 'Campaigns',
+  'composer': 'Composer', 'marketing-calendar': 'Marketing Calendar',
+  'engagement-inbox': 'Engagement Inbox', 'blog': 'Blog',
+  'pieces': 'Pieces (Recipes)', 'materials': 'Materials',
+  'cs-inbox': 'CS Inbox', 'cs-tickets': 'CS Tickets',
+  'cs-surveys': 'CS Surveys', 'cs-reviews': 'CS Reviews',
+  'cs-faqs': 'CS FAQs', 'cs-members': 'CS Members',
+  'finance-revenue': 'Revenue', 'finance-expenses': 'Expenses',
+  'finance-pl': 'Profit & Loss', 'finance-cash-flow': 'Cash Flow',
+  'finance-ar': 'AR Aging', 'finance-ap': 'AP Aging',
+  'finance-tax': 'Tax', 'finance-reports': 'Reports',
+  'customer-portfolio': 'Customer Portfolio',
+  'finance-overview': 'Financials Overview',
+  'finance-period-close': 'Period Close', 'finance-amendments': 'Amendments'
 };
 
 function getScreenLabel() {

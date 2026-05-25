@@ -623,7 +623,15 @@
       eventId: null,
       description: '',
       destinations: ['instagram-reels'],
-      dateCaptured: clip.uploadedAt ? new Date(clip.uploadedAt).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10),
+      // Defensive: clip.uploadedAt may be a Firebase server-timestamp
+      // sentinel (object), a number, a malformed ISO string, or missing.
+      // `new Date(undefined)` and parse failures yield Invalid Date, whose
+      // toISOString() throws RangeError. Validate then fall back to today.
+      dateCaptured: (function() {
+        var d = clip.uploadedAt ? new Date(clip.uploadedAt) : null;
+        if (!d || isNaN(d.getTime())) d = new Date();
+        return d.toISOString().slice(0, 10);
+      })(),
       location: '',
       clipId: clipId,
       fileType: clip.fileType,

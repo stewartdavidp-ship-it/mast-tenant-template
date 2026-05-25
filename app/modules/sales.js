@@ -387,9 +387,10 @@ function toggleSquarePayments() {
   if (showingSquarePayments) {
     listView.style.display = 'none';
     sqView.style.display = '';
-    toggleBtn.textContent = '\u2190 Back to Sales';
-    toggleBtn.className = 'detail-back';
-    toggleBtn.style.background = '';
+    // Hide the right-side toggle in Day Close mode \u2014 the new top-left
+    // "\u2190 Back to Sales" link inside #squarePaymentsView handles return
+    // navigation. Avoids two back-affordances on the same screen.
+    toggleBtn.style.display = 'none';
     filterControls.style.display = 'none';
     titleEl.textContent = 'Day Close';
     countEl.textContent = '';
@@ -398,6 +399,8 @@ function toggleSquarePayments() {
   } else {
     listView.style.display = '';
     sqView.style.display = 'none';
+    // Restore the right-side toggle to its original "\uD83D\uDCB3 Day Close" form.
+    toggleBtn.style.display = '';
     toggleBtn.textContent = '\uD83D\uDCB3 Day Close';
     toggleBtn.className = 'btn btn-secondary';
     toggleBtn.style.background = '';

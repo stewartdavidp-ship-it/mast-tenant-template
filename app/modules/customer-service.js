@@ -961,14 +961,14 @@
     overlay.id = 'csUgcAskOverlay';
     overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:9999;padding:20px;';
     var card = document.createElement('div');
-    card.style.cssText = 'background:var(--card-bg,#fff);color:var(--text,#1a1a1a);border-radius:12px;max-width:560px;width:100%;max-height:90vh;overflow:auto;padding:24px;';
+    card.style.cssText = 'background:var(--card-bg,#2a2a2a);color:var(--text,#e8e4df);border-radius:12px;max-width:560px;width:100%;max-height:90vh;overflow:auto;padding:24px;';
     card.innerHTML =
       '<h3 style="margin:0 0 6px;font-size:1.15rem;">📸 Ask for a photo</h3>' +
-      '<p style="margin:0 0 16px;font-size:0.9rem;color:var(--warm-gray,#777);">Sends a one-time, 7-day signed upload link to <strong>' + _esc(recipientEmail) + '</strong>.</p>' +
+      '<p style="margin:0 0 16px;font-size:0.9rem;color:var(--warm-gray,#888);">Sends a one-time, 7-day signed upload link to <strong>' + _esc(recipientEmail) + '</strong>.</p>' +
       '<label style="display:block;font-size:0.85rem;font-weight:500;margin-bottom:6px;">Subject</label>' +
-      '<input id="csUgcAskSubject" type="text" value="' + _esc(defaultSubject) + '" style="width:100%;padding:8px 10px;border:1px solid var(--border,#e5e5e5);border-radius:6px;font-size:0.9rem;margin-bottom:14px;">' +
+      '<input id="csUgcAskSubject" type="text" value="' + _esc(defaultSubject) + '" style="width:100%;padding:8px 10px;border:1px solid var(--border,#3a3a3a);border-radius:6px;font-size:0.9rem;margin-bottom:14px;">' +
       '<label style="display:block;font-size:0.85rem;font-weight:500;margin-bottom:6px;">Preview</label>' +
-      '<pre id="csUgcAskBody" style="white-space:pre-wrap;font-family:inherit;font-size:0.85rem;line-height:1.5;background:rgba(0,0,0,0.04);padding:12px 14px;border-radius:6px;max-height:280px;overflow:auto;margin:0 0 16px;"></pre>' +
+      '<pre id="csUgcAskBody" style="white-space:pre-wrap;font-family:inherit;font-size:0.85rem;line-height:1.5;background:var(--surface-card,#2a2a2a);padding:12px 14px;border-radius:6px;max-height:280px;overflow:auto;margin:0 0 16px;"></pre>' +
       '<div style="display:flex;gap:8px;justify-content:flex-end;">' +
       '<button class="btn btn-secondary btn-small" id="csUgcAskCancel">Cancel</button>' +
       '<button class="btn btn-primary btn-small" id="csUgcAskSend">Send</button>' +
