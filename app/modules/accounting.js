@@ -8,6 +8,20 @@
   // in index.html (switchQboInnerTab).
 
   var QBO_CF_ORIGIN = 'https://us-central1-mast-platform-prod.cloudfunctions.net';
+  // W2b.1 — webhook URL is one-per-Intuit-App (NOT per-tenant). Intuit routes
+  // every realm's events to this single URL; the CF reverse-lookups tenantId
+  // via platform_qboRealmIndex/{realmId}. Operator pastes this URL into the
+  // Intuit Developer Portal once; verifier token lives in Secret Manager.
+  var QBO_WEBHOOK_URL = QBO_CF_ORIGIN + '/qboWebhook';
+
+  // Module-local JS-attribute escape per W2a sprinkle pattern (-OtSIF2XO7NmEgye6bEo).
+  // Use this in any new onclick handler in this module. Falls back to a quoted
+  // string literal when window._jsAttr isn't loaded yet (it's defined inline
+  // in index.html and present by the time accounting.js is lazy-loaded).
+  function _jsAttrSafe(s) {
+    if (typeof window._jsAttr === 'function') return window._jsAttr(s);
+    return String(s == null ? '' : s).replace(/\\/g, '\\\\').replace(/'/g, '\\\'').replace(/"/g, '&quot;').replace(/</g, '\\u003C');
+  }
 
   // ---- Mast → QBO category map (left col of COA Map UI) ----
   // Source: D-ACC-2/3 ratified concepts. Order = how operators think about
@@ -81,6 +95,7 @@
         var realmShort = String(doc.realmId).slice(0, 8) + '…';
         var connectedAt = doc.connectedAt ? new Date(doc.connectedAt).toLocaleString() : '—';
         var countdownChipHtml = _renderReconnectCountdownChip(doc);
+        var webhookSectionHtml = _renderWebhookSection(meta);
         html =
           collisionBannerHtml +
           '<div style="background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.25);border-radius:8px;padding:12px 16px;margin-bottom:16px;">' +
@@ -92,6 +107,7 @@
               'Environment: <strong>' + esc(env) + '</strong> · Realm: <code style="font-size:0.78rem;">' + esc(realmShort) + '</code> · Since: ' + esc(connectedAt) +
             '</div>' +
           '</div>' +
+          webhookSectionHtml +
           '<p style="color:var(--text-secondary);font-size:0.85rem;line-height:1.5;margin:0 0 12px;">' +
             'Next steps: confirm your <strong>COA Map</strong> tab is set up, then check the <strong>Sync Log</strong> tab ' +
             'after writing a Day Close or wholesale invoice to verify your first sync.' +
@@ -211,6 +227,70 @@
       '<span style="width:6px;height:6px;border-radius:50%;background:' + fg + ';display:inline-block;"></span>' + esc(label) +
     '</span>';
   }
+
+  // W2b.1 — Webhook setup section. Renders status pill + Copy URL button + a
+  // short operator note. Status sourced from `_meta.lastWebhookAt`:
+  //   no value         → "Not registered" (red dot)
+  //   < 30 days        → "Registered" (green)
+  //   30-90 days       → "Stale" (amber) — webhook may have stopped firing
+  //   > 90 days        → "Stale" (red)   — needs operator re-registration in Intuit Portal
+  // Verifier token is platform-wide (Secret Manager `qbo-webhook-verifier-token`)
+  // so no per-tenant paste field — operator only needs the URL.
+  function _renderWebhookSection(meta) {
+    var lastWebhookAt = meta && meta.lastWebhookAt ? meta.lastWebhookAt : null;
+    var pillBg, pillFg, pillLabel, ageLine;
+    if (!lastWebhookAt) {
+      pillBg = 'rgba(239,68,68,0.18)'; pillFg = '#ef4444';
+      pillLabel = '✗ Not registered';
+      ageLine = 'No webhook events received yet. Register the URL below in the Intuit Developer Portal to enable real-time pulls.';
+    } else {
+      var lastMs = (typeof lastWebhookAt === 'number') ? lastWebhookAt : Date.parse(lastWebhookAt);
+      var ageDays = isFinite(lastMs) ? Math.floor((Date.now() - lastMs) / 86400000) : 999;
+      if (ageDays < 30) {
+        pillBg = 'rgba(34,197,94,0.18)'; pillFg = '#22c55e';
+        pillLabel = '✓ Registered';
+      } else if (ageDays < 90) {
+        pillBg = 'rgba(234,179,8,0.18)'; pillFg = '#eab308';
+        pillLabel = '⚠ Stale';
+      } else {
+        pillBg = 'rgba(239,68,68,0.18)'; pillFg = '#ef4444';
+        pillLabel = '⚠ Stale (' + ageDays + 'd)';
+      }
+      ageLine = 'Last webhook event: ' + new Date(lastMs).toLocaleString() + '.';
+    }
+    return '<div style="background:var(--bg-secondary,#1a1a1a);border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:12px 14px;margin-bottom:16px;">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap;">' +
+        '<div style="font-size:0.9rem;font-weight:600;color:var(--text,#fff);">Webhook (real-time pull)</div>' +
+        '<span style="display:inline-flex;align-items:center;gap:4px;padding:2px 10px;border-radius:10px;background:' + pillBg + ';color:' + pillFg + ';font-size:0.72rem;font-weight:600;">' +
+          '<span style="width:6px;height:6px;border-radius:50%;background:' + pillFg + ';display:inline-block;"></span>' + esc(pillLabel) +
+        '</span>' +
+      '</div>' +
+      '<div style="font-size:0.78rem;color:var(--warm-gray);line-height:1.4;margin-bottom:8px;">' + esc(ageLine) + '</div>' +
+      '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:8px;">' +
+        '<code style="font-size:0.78rem;background:rgba(0,0,0,0.25);padding:4px 8px;border-radius:4px;color:var(--text,#fff);word-break:break-all;flex:1;min-width:0;">' + esc(QBO_WEBHOOK_URL) + '</code>' +
+        '<button class="btn btn-secondary" style="font-size:0.78rem;padding:4px 10px;" onclick="window._qboCopyWebhookUrl && window._qboCopyWebhookUrl()">Copy URL</button>' +
+      '</div>' +
+      '<div style="font-size:0.72rem;color:var(--warm-gray);line-height:1.4;">' +
+        esc('Register this URL in Intuit Developer Portal → Webhooks for your app. Verifier token is managed centrally — no paste step needed.') +
+      '</div>' +
+    '</div>';
+  }
+
+  window._qboCopyWebhookUrl = function() {
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(QBO_WEBHOOK_URL).then(function() {
+          toastOk('Webhook URL copied');
+        }, function() {
+          toastErr('Copy blocked — select the URL and copy manually');
+        });
+      } else {
+        toastErr('Clipboard API unavailable — select the URL and copy manually');
+      }
+    } catch (err) {
+      toastErr('Copy failed: ' + (err && err.message));
+    }
+  };
 
   // Acknowledge a single collision row by accountId — flips status.
   window._qboAckCollision = async function(accountId) {
