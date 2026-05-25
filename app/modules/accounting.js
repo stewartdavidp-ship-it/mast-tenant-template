@@ -171,31 +171,41 @@
   }
 
   // W2a.4 — countdown chip next to "Connected" indicator.
-  // daysUntilStale = refreshTokenIdleDays - (now - lastUsedAt) - refreshAheadDays
-  // Color tiers: >30 green, 7-30 amber, <=7 red. No action — that's W2c.
+  // daysUntilReconnect = refreshTokenIdleDays - (now - lastUsedAt)
+  //   = days remaining before the QBO refresh token force-expires due to idle.
+  // Color tiers track how soon the operator needs to act:
+  //   > 30d remaining → green (plenty of headroom)
+  //   7-30d remaining → amber (refresh soon — sync once or reconnect)
+  //   ≤ 7d remaining  → red   (reconnect imminent — refresh window critical)
+  // Morgan persona-verify W2a follow-up: previously the label "Xd until
+  // reconnect" was computed as `IDLE - idle - 30`, which read "30d less than
+  // truth" and made the chip claim "reconnect in 69d" on a fresh connection
+  // where the real force-expiry was 100d out. Fixed by computing
+  // daysUntilForceReconnect directly; tier thresholds re-aligned to bands.
   function _renderReconnectCountdownChip(doc) {
     if (!doc) return '';
     var IDLE_DAYS = 100;       // QBO per C-ACC-1 (Intuit Nov-2025 policy)
-    var REFRESH_AHEAD = 30;    // per provider-policy.qbo.oauth.refreshAheadDays
+    var AMBER_THRESHOLD = 30;  // per provider-policy.qbo.oauth.refreshAheadDays
+    var RED_THRESHOLD = 7;     // per provider-policy.qbo.oauth.criticalDays
     var lastUsedAt = doc.lastUsedAt || doc.refreshedAt || doc.connectedAt;
     if (!lastUsedAt) return '';
     var lastMs = (typeof lastUsedAt === 'number') ? lastUsedAt : Date.parse(lastUsedAt);
     if (!isFinite(lastMs)) return '';
     var idleDays = (Date.now() - lastMs) / 86400000;
-    var daysUntilReconnect = Math.max(0, Math.floor(IDLE_DAYS - idleDays - REFRESH_AHEAD));
+    var daysUntilReconnect = Math.max(0, Math.floor(IDLE_DAYS - idleDays));
     var bg, fg, label, tooltip;
-    if (daysUntilReconnect > 30) {
+    if (daysUntilReconnect > AMBER_THRESHOLD) {
       bg = 'rgba(34,197,94,0.15)'; fg = '#22c55e';
       label = daysUntilReconnect + 'd until reconnect';
-      tooltip = 'QBO refresh-on-use rotates the token; you only need to reconnect if the connection sits idle past ~70d.';
-    } else if (daysUntilReconnect > 7) {
+      tooltip = 'QBO refresh-on-use rotates the token automatically on every sync. The token only force-expires after ~100 days of zero use — you have ' + daysUntilReconnect + ' days of headroom.';
+    } else if (daysUntilReconnect > RED_THRESHOLD) {
       bg = 'rgba(234,179,8,0.18)'; fg = '#eab308';
       label = daysUntilReconnect + 'd until reconnect';
-      tooltip = 'Idle threshold approaching. Trigger any sync (or click Disconnect/Connect) to refresh the token.';
+      tooltip = 'Refresh window narrowing. Trigger any sync (or click Disconnect → Connect) to rotate the token and reset the idle clock.';
     } else {
       bg = 'rgba(239,68,68,0.18)'; fg = '#ef4444';
       label = daysUntilReconnect === 0 ? 'Reconnect required' : (daysUntilReconnect + 'd until reconnect');
-      tooltip = 'QBO refresh window is critical. Connection may fail soon — reconnect to reset the idle timer.';
+      tooltip = 'QBO refresh window is critical. Reconnect within ' + (daysUntilReconnect || 0) + ' day' + ((daysUntilReconnect === 1) ? '' : 's') + ' to avoid sync failures.';
     }
     return '<span title="' + esc(tooltip) + '" style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:10px;background:' + bg + ';color:' + fg + ';font-size:0.72rem;font-weight:600;">' +
       '<span style="width:6px;height:6px;border-radius:50%;background:' + fg + ';display:inline-block;"></span>' + esc(label) +

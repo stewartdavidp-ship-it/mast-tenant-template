@@ -8318,13 +8318,11 @@
         </div>
 
       </div>
-      <div id="settingsSubPayments" style="display:none;max-width:500px;">
+      <div id="settingsSubPayments" style="display:none;max-width:720px;">
+        <div class="tab-section-title">Payment processor<span class="tab-section-status" data-state="info" id="paymentsStatusPill">Loading&hellip;</span></div>
+        <p class="tab-section-purpose">Pick the payment processor that takes money for your storefront and POS. Only one can be active at a time &mdash; switching preserves the inactive processor&rsquo;s credentials so you can flip back without re-entering them. The active processor&rsquo;s credential block is shown below; saved credentials apply on your next checkout.</p>
         <!-- Payment Processor Selector -->
         <div class="form-group" style="margin-bottom:20px;">
-          <label style="font-size:1.15rem;font-weight:600;">Payment Processor</label>
-          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:12px;">
-            Choose your payment processor. Only one can be active at a time. Your credentials are preserved if you switch.
-          </p>
           <div style="display:flex;align-items:center;gap:12px;">
             <div id="paymentProcessorDisplay" style="display:flex;align-items:center;gap:8px;">
               <span id="paymentProcessorBadge" style="display:inline-flex;align-items:center;gap:6px;background:var(--cream,#faf8f5);border:1px solid #e8e0d4;border-radius:8px;padding:8px 16px;font-weight:600;font-size:0.9rem;">
@@ -8341,10 +8339,8 @@
 
         <!-- Square Config Section -->
         <div id="squareConfigSection" class="form-group">
-          <label style="font-size:1.15rem;font-weight:600;">Square Payments</label>
-          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:16px;">
-            Configure Square payment integration. Save credentials for both environments, then toggle the active one.
-          </p>
+          <div class="tab-section-title">Square credentials<span class="tab-section-status" data-state="info" id="paymentsStatusSquare">Not configured</span></div>
+          <p class="tab-section-purpose">Save credentials for both environments (sandbox for testing, production for real charges). The Active Environment dropdown decides which set Mast uses at checkout. Tokens are stored in encrypted secret storage &mdash; Mast staff never see them.</p>
 
           <label style="font-size:0.85rem;font-weight:600;margin-bottom:4px;display:block;">Active Environment</label>
           <select id="squareEnvironment" onchange="onSquareEnvToggle()" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;margin-bottom:12px;">
@@ -8397,10 +8393,8 @@
 
         <!-- Stripe Config Section (hidden by default) -->
         <div id="stripeConfigSection" class="form-group" style="display:none;">
-          <label style="font-size:1.15rem;font-weight:600;">Stripe Payments</label>
-          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:16px;">
-            Configure Stripe payment integration. The environment is auto-detected from your key prefix (sk_test_ or sk_live_).
-          </p>
+          <div class="tab-section-title">Stripe credentials<span class="tab-section-status" data-state="info" id="paymentsStatusStripe">Not configured</span></div>
+          <p class="tab-section-purpose">Paste your Stripe secret + publishable keys. The environment is auto-detected from the key prefix (sk_test_ or sk_live_) so a test key flips the whole storefront into Stripe Test Mode automatically. Keys are stored in encrypted secret storage.</p>
 
           <div id="stripeTestBanner" style="display:none;background:#f59e0b;color:#fff;padding:8px 12px;border-radius:6px;margin-bottom:12px;font-size:0.85rem;font-weight:600;text-align:center;">
             TEST MODE — Using test keys, no real charges
@@ -8427,23 +8421,28 @@
           <div id="stripeConfigStatus" style="margin-top:8px;font-size:0.85rem;"></div>
         </div>
       </div>
-      <div id="settingsSubShipping" style="display:none;max-width:560px;">
+      <div id="settingsSubShipping" style="display:none;max-width:720px;">
 
         <!-- Operations pointer (Phase 2 P2D-S2) — shipping zones should align with fulfillmentModes regions + serviceArea. -->
         <div id="shippingOpsPointer" style="background:rgba(66,165,245,0.06);border:1px solid rgba(66,165,245,0.18);border-radius:8px;padding:10px 14px;margin-bottom:18px;font-size:0.85rem;color:var(--warm-gray);line-height:1.5;">
           Shipping regions and rates should match your <a href="javascript:void(0)" onclick="switchSettingsSubView('operations')" style="color:var(--teal);text-decoration:underline;">Operations</a> settings &mdash; fulfillment modes and service area drive who can check out with shipping.
         </div>
 
+        <div class="view-tabs" id="shippingTabBar" style="margin-bottom:20px;">
+          <button class="view-tab active" id="shippingTabBtn-provider" data-tab="provider" onclick="switchShippingTab('provider')"><span class="tab-status-dot" data-state="none"></span>Label provider</button>
+          <button class="view-tab" id="shippingTabBtn-rules" data-tab="rules" onclick="switchShippingTab('rules')"><span class="tab-status-dot" data-state="info"></span>Rules</button>
+        </div>
+
+        <!-- ── Label provider ── -->
+        <div id="shippingTab-provider" class="shipping-tab-body">
+        <div class="tab-section-title">Shipping label provider<span class="tab-section-status" data-state="info" id="shippingStatus-provider">Not configured</span></div>
+        <p class="tab-section-purpose">Choose how shipping labels get generated when you fulfill an order. Manual means you paste tracking numbers from Pirate Ship or any external service. Shippo (API) buys labels and pulls tracking directly inside Mast &mdash; the default ship-from location + package presets configured here drive that flow.</p>
         <!-- Label Provider Config -->
         <div class="form-group">
-          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-            <label style="font-size:1.15rem;font-weight:600;">Shipping Label Provider</label>
-            <!-- W2 R2 Fix 7: status chip — populated by loadShippoKeyStatus() -->
+          <!-- W2 R2 Fix 7: status chip — populated by loadShippoKeyStatus() -->
+          <div style="margin-bottom:12px;">
             <span id="shippoStatusChip" style="font-size:0.72rem;font-weight:600;padding:3px 10px;border-radius:10px;background:rgba(160,160,160,0.15);color:var(--warm-gray);border:1px solid rgba(160,160,160,0.35);">Not configured</span>
           </div>
-          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:16px;">
-            Choose how shipping labels are generated. API-based providers let you buy labels and get tracking directly in Mast.
-          </p>
 
           <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px;">
             <label style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:var(--cream);border:1px solid var(--cream-dark);border-radius:6px;cursor:pointer;font-size:0.9rem;" id="shipProviderManualLabel">
@@ -8516,13 +8515,13 @@
           </div>
         </div>
 
-        <hr style="border:none;border-top:1px solid #eee;margin:28px 0;">
+        </div><!-- end shippingTab-provider -->
 
+        <!-- ── Rules ── -->
+        <div id="shippingTab-rules" class="shipping-tab-body" style="display:none;">
+        <div class="tab-section-title">Shipping rules<span class="tab-section-status" data-state="info" id="shippingStatus-rules">Configured</span></div>
+        <p class="tab-section-purpose">Pick how shipping is calculated at checkout for retail and wholesale orders. Each track has its own strategy (category flat rate, single flat, percentage of subtotal, or free) plus optional modifiers like &ldquo;free over $X&rdquo;. Rules apply on top of whatever label provider you chose &mdash; this is what the buyer pays, not what you spend on labels.</p>
         <div class="form-group">
-          <label style="font-size:1.15rem;font-weight:600;">Shipping Rules</label>
-          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:20px;">
-            Configure how shipping is calculated for retail and wholesale orders. Each uses its own strategy with optional modifiers.
-          </p>
 
           <!-- Retail Rules -->
           <div style="border:1px solid #ddd;border-radius:8px;padding:16px;margin-bottom:16px;">
@@ -8629,6 +8628,7 @@
           </div>
           <div id="shippingConfigStatus" style="margin-top:8px;font-size:0.85rem;"></div>
         </div>
+        </div><!-- end shippingTab-rules -->
 
       </div>
       <div id="settingsSubTax" style="display:none;max-width:640px;">
@@ -8817,12 +8817,18 @@
       <div id="settingsSubOperations" style="display:none;max-width:820px;">
         <div id="operationsSectionStatus" style="margin-bottom:12px;font-size:0.85rem;"></div>
 
+        <div class="view-tabs" id="operationsTabBar" style="margin-bottom:20px;">
+          <button class="view-tab active" id="operationsTabBtn-fulfillment" data-tab="fulfillment" onclick="switchOperationsTab('fulfillment')"><span class="tab-status-dot" data-state="info"></span>Fulfillment</button>
+          <button class="view-tab" id="operationsTabBtn-serviceArea" data-tab="serviceArea" onclick="switchOperationsTab('serviceArea')"><span class="tab-status-dot" data-state="info"></span>Service area</button>
+          <button class="view-tab" id="operationsTabBtn-locale" data-tab="locale" onclick="switchOperationsTab('locale')"><span class="tab-status-dot" data-state="info"></span>Locale &amp; time</button>
+        </div>
+
+        <!-- ── Fulfillment ── -->
+        <div id="operationsTab-fulfillment" class="operations-tab-body">
+        <div class="tab-section-title">Fulfillment modes<span class="tab-section-status" data-state="info" id="operationsStatus-fulfillment">Configured</span></div>
+        <p class="tab-section-purpose">Declare how customers can take delivery &mdash; ship, local pickup, in-person at events, etc. Add one row per mode. The label you type here shows at checkout, and connected channels + the Shipping tab read this list to decide which checkout options to surface.</p>
         <!-- Fulfillment Modes section -->
-        <div class="form-group" style="margin-bottom:28px;padding-bottom:24px;border-bottom:1px solid rgba(255,255,255,0.06);">
-          <label style="font-size:1.15rem;font-weight:600;">Fulfillment Modes</label>
-          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:12px;">
-            How can customers receive orders? Add one row per mode you offer. The label appears at checkout.
-          </p>
+        <div class="form-group" style="margin-bottom:28px;">
           <div id="operationsFulfillmentList"></div>
           <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">
             <button class="btn btn-secondary" onclick="addFulfillmentMode()">+ Add fulfillment mode</button>
@@ -8834,12 +8840,14 @@
           </p>
         </div>
 
+        </div><!-- end operationsTab-fulfillment -->
+
+        <!-- ── Service area ── -->
+        <div id="operationsTab-serviceArea" class="operations-tab-body" style="display:none;">
+        <div class="tab-section-title">Service area<span class="tab-section-status" data-state="info" id="operationsStatus-serviceArea">Configured</span></div>
+        <p class="tab-section-purpose">Tell Mast where you serve customers (local radius, list of regions, nationwide, global). This drives Shipping zones and informs Tax jurisdiction hints in Compliance &mdash; both surfaces read from this answer.</p>
         <!-- Service Area section -->
         <div class="form-group" style="margin-bottom:24px;">
-          <label style="font-size:1.15rem;font-weight:600;">Service Area</label>
-          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:12px;">
-            Where do you serve customers? This drives <a href="javascript:void(0)" onclick="switchSettingsSubView('shipping')" style="color:var(--teal);text-decoration:underline;">Shipping zones</a> and informs <a href="javascript:void(0)" onclick="switchSettingsSubView('compliance')" style="color:var(--teal);text-decoration:underline;">Tax jurisdiction</a> hints in Compliance.
-          </p>
 
           <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:6px;">Coverage type</label>
           <div id="operationsServiceAreaTypeRow" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px;">
@@ -8859,8 +8867,14 @@
           <div id="operationsServiceAreaTaxHint" style="display:none;margin-top:14px;padding:10px 12px;background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.25);border-radius:8px;font-size:0.85rem;color:var(--warm-gray);line-height:1.5;"></div>
         </div>
 
+        </div><!-- end operationsTab-serviceArea -->
+
+        <!-- ── Locale & time ── -->
+        <div id="operationsTab-locale" class="operations-tab-body" style="display:none;">
+        <div class="tab-section-title">Locale &amp; time<span class="tab-section-status" data-state="info" id="operationsStatus-locale">Configured</span></div>
+        <p class="tab-section-purpose">Timezone is editable here and affects scheduled renewal reminders + ICS feed timestamps. Currency, language, and fiscal-year were set during onboarding and are wizard-managed &mdash; the summary below shows the current values; talk to the Advisor or re-run the wizard to change those.</p>
         <!-- Timezone editor (Phase 3 — timezone is editable; currency/language/fiscal-year remain wizard-managed) -->
-        <div class="form-group" style="margin-top:8px;padding-top:18px;border-top:1px solid rgba(255,255,255,0.06);margin-bottom:24px;">
+        <div class="form-group" style="margin-top:8px;margin-bottom:24px;">
           <label style="font-size:1.15rem;font-weight:600;">Timezone</label>
           <p id="operationsTimezoneDetectedHint" style="font-size:0.85rem;color:var(--warm-gray);margin-top:4px;margin-bottom:10px;line-height:1.5;">Loading&hellip;</p>
           <select id="operationsTimezoneSelect" onchange="onOperationsTimezoneChange()" style="width:100%;max-width:420px;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;box-sizing:border-box;background:var(--bg-primary,var(--charcoal));color:var(--text,#fff);"></select>
@@ -8877,6 +8891,7 @@
           <p id="operationsLocalizationSummary" style="font-size:0.85rem;color:var(--warm-gray);margin-top:4px;line-height:1.5;">Loading&hellip;</p>
           <p style="font-size:0.78rem;color:var(--warm-gray);margin-top:4px;">Currency, language, and fiscal-year are set during onboarding. To change those, talk to the Advisor or edit via the wizard. Timezone is editable above.</p>
         </div>
+        </div><!-- end operationsTab-locale -->
       </div>
       <div id="settingsSubEmail" style="display:none;max-width:700px;">
         <div style="display:flex;gap:0;border-bottom:1px solid rgba(255,255,255,0.1);margin-bottom:16px;" id="emailInnerTabs">
@@ -10124,23 +10139,22 @@
         </div>
       </div>
       <!-- Channels Settings (S3 — Entity Phase 1 + Phase 2 P2B PB-3 Shopify card) -->
-      <div id="settingsSubChannels" style="display:none;max-width:640px;">
-        <div class="form-group">
-          <label style="font-size:1.15rem;font-weight:600;">External Channels</label>
-          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:16px;">
-            Where else do you sell? The list below is a light declaration of your presence. Connected integrations (with real two-way sync) appear under the platform cards.
-          </p>
+      <div id="settingsSubChannels" style="display:none;max-width:720px;">
+        <div class="view-tabs" id="channelsTabBar" style="margin-bottom:20px;">
+          <button class="view-tab active" id="channelsTabBtn-declared" data-tab="declared" onclick="switchChannelsTab('declared')"><span class="tab-status-dot" data-state="info"></span>Declared</button>
+          <button class="view-tab" id="channelsTabBtn-connected" data-tab="connected" onclick="switchChannelsTab('connected')"><span class="tab-status-dot" data-state="info"></span>Connected</button>
         </div>
+
+        <!-- ── Declared ── -->
+        <div id="channelsTab-declared" class="channels-tab-body">
+        <div class="tab-section-title">Declared channels<span class="tab-section-status" data-state="info" id="channelsStatus-declared">None</span></div>
+        <p class="tab-section-purpose">Lightweight declaration of where you sell &mdash; Instagram, fairs, wholesale rep, etc. Toggle the channels you actually use. Saved to your business entity record as <code style="font-family:monospace;font-size:0.78rem;">presence.declaredChannels[]</code> and read by reports that need to attribute revenue across surfaces. This is just an inventory; OAuth/sync lives in the Connected tab.</p>
 
         <div id="channelsInferredHint" style="display:none;background:rgba(66,165,245,0.06);border:1px solid rgba(66,165,245,0.25);border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:0.85rem;color:var(--warm-gray);">
           <!-- populated when discovery.inferredChannels has unchecked suggestions -->
         </div>
 
         <div class="form-group">
-          <label style="font-weight:600;">Declared channels</label>
-          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:10px;">
-            Toggle each channel you use. Saved to your business entity record as <code style="font-family:monospace;font-size:0.78rem;">presence.declaredChannels[]</code>.
-          </p>
           <div id="channelsDeclaredList" style="display:flex;flex-wrap:wrap;gap:8px;">
             <div style="color:var(--warm-gray);font-size:0.85rem;">Loading...</div>
           </div>
@@ -10149,13 +10163,14 @@
           </div>
           <div id="channelsSaveStatus" style="margin-top:8px;font-size:0.85rem;"></div>
         </div>
+        </div><!-- end channelsTab-declared -->
 
+        <!-- ── Connected ── -->
+        <div id="channelsTab-connected" class="channels-tab-body" style="display:none;">
+        <div class="tab-section-title">Connected integrations<span class="tab-section-status" data-state="info" id="channelsStatus-connected">None connected</span></div>
+        <p class="tab-section-purpose">OAuth-authenticated marketplaces with live token + webhook subscriptions. Connecting a platform pulls your catalog and syncs inventory both ways. Each card shows current connection health; reconnect prompts surface here when a token expires.</p>
         <!-- Connected Integrations — Phase 2 P2B PB-6 (all 3 platforms) -->
-        <div class="form-group" style="margin-top:32px;border-top:1px solid rgba(255,255,255,0.08);padding-top:24px;">
-          <label style="font-size:1.15rem;font-weight:600;">Connected integrations</label>
-          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:16px;">
-            OAuth-authenticated channels with live token + webhook subscriptions. Connect each platform to pull your catalog and sync inventory.
-          </p>
+        <div class="form-group">
 
           <!-- EU residency gate placeholder (spec-bugs item 6, counsel marker #5 / D-7) -->
           <div id="channelsEuGate" style="display:none;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.3);border-radius:10px;padding:14px 16px;margin-bottom:14px;font-size:0.85rem;color:var(--warm-gray);">
@@ -10178,6 +10193,7 @@
             <!-- populated by loadChannelsConnectCards() — one card per platform -->
           </div>
         </div>
+        </div><!-- end channelsTab-connected -->
       </div>
         </div><!-- end .settings-content-area -->
       </div><!-- end settings flex wrapper -->
@@ -18154,7 +18170,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260525-111144-a735df8';
+var MAST_MODULES_V = '20260525-120729-39e4fc6';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -18317,7 +18333,8 @@ function switchSettingsSubView(view) {
     }
   }
   // Lazy loads
-  if (view === 'shipping') { loadShipProviderConfig(); }
+  if (view === 'shipping') { loadShipProviderConfig(); if (typeof refreshShippingTabStatus === 'function') refreshShippingTabStatus(); }
+  if (view === 'payments') { if (typeof refreshPaymentsTabStatus === 'function') refreshPaymentsTabStatus(); }
   if (view === 'email') { loadEmailConfig(); loadEmailDomainSection(); loadResendWebhookSection(); }
   if (view === 'integrations') { loadEtsyConfig(); loadShopifyConfig(); loadPlaidBanksForSettings(); if (typeof switchIntegrationsTab === 'function') switchIntegrationsTab(window.__integrationsActiveTab || 'googleMaps'); }
   if (view === 'trips') { MastAdmin.loadModule('trips').then(function() { if (typeof loadTripsSettings === 'function') loadTripsSettings(); }); }
@@ -18337,8 +18354,8 @@ function switchSettingsSubView(view) {
   if (view === 'engagement') loadEngagementSettings();
   if (view === 'tax') loadTaxLegalSettings();
   if (view === 'compliance') loadComplianceSettings();
-  if (view === 'operations') loadOperationsSettings();
-  if (view === 'channels') { loadChannelsSettings(); loadChannelsConnectCards(); }
+  if (view === 'operations') { loadOperationsSettings(); if (typeof refreshOperationsTabStatus === 'function') refreshOperationsTabStatus(); }
+  if (view === 'channels') { loadChannelsSettings(); loadChannelsConnectCards(); if (typeof refreshChannelsTabStatus === 'function') refreshChannelsTabStatus(); }
 }
 
 // ============================================================
@@ -18724,8 +18741,10 @@ async function loadChannelsSettings() {
         lbl.style.border = '1px dashed rgba(255,255,255,0.25)';
         lbl.style.color = 'var(--text,#fff)';
       }
+      if (typeof refreshChannelsTabStatus === 'function') refreshChannelsTabStatus();
     });
   });
+  if (typeof refreshChannelsTabStatus === 'function') refreshChannelsTabStatus();
 }
 
 async function saveDeclaredChannels() {
@@ -18747,6 +18766,7 @@ async function saveDeclaredChannels() {
     }
     // Refresh to update "(inferred)" suffix state.
     loadChannelsSettings();
+    if (typeof refreshChannelsTabStatus === 'function') refreshChannelsTabStatus();
   } catch (err) {
     if (statusEl) { statusEl.textContent = 'Save failed: ' + (err.message || 'unknown error'); statusEl.style.color = 'var(--danger,#ef4444)'; }
   } finally {
@@ -24640,6 +24660,7 @@ async function saveSquareConfig() {
     }
 
     // Fields stay as-entered until next page load (avoids clobbering verification badges)
+    if (typeof refreshPaymentsTabStatus === 'function') refreshPaymentsTabStatus();
   } catch (err) {
     showToast('Error saving Square config: ' + err.message, true);
   }
@@ -24797,6 +24818,7 @@ async function saveStripeConfig() {
     await writeAudit('update', 'settings', 'stripeConfig');
     showToast('Stripe config saved!');
     loadStripeConfig();
+    if (typeof refreshPaymentsTabStatus === 'function') refreshPaymentsTabStatus();
   } catch (err) {
     showToast('Error saving Stripe config: ' + err.message, true);
   }
@@ -25131,6 +25153,7 @@ async function saveShipProviderConfig() {
     if (statusEl) statusEl.innerHTML = '<span style="color:var(--teal);">&#10003; Label provider saved</span>';
     setTimeout(function() { if (statusEl) statusEl.innerHTML = ''; }, 5000);
     showToast('Label provider configuration saved');
+    if (typeof refreshShippingTabStatus === 'function') refreshShippingTabStatus();
   } catch (err) {
     showToast('Error saving: ' + esc(err.message), true);
     if (statusEl) statusEl.innerHTML = '<span style="color:var(--danger);">Error: ' + esc(err.message) + '</span>';
@@ -25211,6 +25234,7 @@ async function saveShippingConfig() {
     await writeAudit('update', 'settings', 'shippingRules');
     document.getElementById('shippingConfigStatus').innerHTML = '<span style="color:var(--teal);">&#10003; Shipping rules saved</span>';
     showToast('Shipping rules saved.');
+    if (typeof refreshShippingTabStatus === 'function') refreshShippingTabStatus();
   } catch (err) {
     showToast('Error saving shipping rules: ' + err.message, true);
   }
@@ -39504,6 +39528,181 @@ function refreshDisplayTabStatus() {
   setPill('legal', legalCount > 0 ? 'ok' : 'info', legalCount > 0 ? (legalCount + ' override' + (legalCount === 1 ? '' : 's')) : 'Mast defaults');
 }
 window.refreshDisplayTabStatus = refreshDisplayTabStatus;
+
+// ── Settings → Selling → Payments: single-page (selector-driven; section header + pill at top).
+function refreshPaymentsTabStatus() {
+  var pill = document.getElementById('paymentsStatusPill');
+  if (!pill) return;
+  var processor = 'Square';
+  try {
+    var badgeName = document.getElementById('ppBadgeName');
+    if (badgeName && badgeName.textContent) processor = badgeName.textContent.trim() || 'Square';
+  } catch (e) {}
+  pill.setAttribute('data-state', 'ok');
+  pill.textContent = 'Active: ' + processor;
+  // Per-credential pills.
+  function setPill(id, state, label) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.setAttribute('data-state', state);
+    el.textContent = label;
+  }
+  var sqTok = document.getElementById('sqProdToken');
+  var sqSandTok = document.getElementById('sqSandboxToken');
+  var hasSquare = !!((sqTok && sqTok.value) || (sqSandTok && sqSandTok.value));
+  setPill('paymentsStatusSquare', hasSquare ? 'ok' : 'missing', hasSquare ? 'Configured' : 'Not configured');
+  var stTok = document.getElementById('stripeSecretKey');
+  var hasStripe = !!(stTok && stTok.value);
+  setPill('paymentsStatusStripe', hasStripe ? 'ok' : 'missing', hasStripe ? 'Configured' : 'Not configured');
+}
+window.refreshPaymentsTabStatus = refreshPaymentsTabStatus;
+
+// ── Settings → Selling → Shipping: 2 tabs (Label provider + Rules).
+var SHIPPING_TABS = ['provider','rules'];
+function switchShippingTab(tab) {
+  window.__shippingActiveTab = tab;
+  SHIPPING_TABS.forEach(function(t) {
+    var body = document.getElementById('shippingTab-' + t);
+    if (body) body.style.display = (t === tab) ? '' : 'none';
+  });
+  document.querySelectorAll('#shippingTabBar .view-tab').forEach(function(btn) {
+    btn.classList.toggle('active', btn.dataset.tab === tab);
+  });
+}
+window.switchShippingTab = switchShippingTab;
+
+function refreshShippingTabStatus() {
+  function setDot(tabKey, state) {
+    var btn = document.getElementById('shippingTabBtn-' + tabKey);
+    if (!btn) return;
+    var dot = btn.querySelector('.tab-status-dot');
+    if (dot) dot.setAttribute('data-state', state);
+  }
+  function setPill(tabKey, state, label) {
+    var pill = document.getElementById('shippingStatus-' + tabKey);
+    if (!pill) return;
+    pill.setAttribute('data-state', state);
+    if (label != null) pill.textContent = label;
+  }
+  // Provider — green if a non-manual provider is selected (Shippo), gray if manual, red if Shippo selected without a key.
+  var shippoRadio = document.getElementById('shipProviderShippo');
+  var manualRadio = document.getElementById('shipProviderManual');
+  var keyEl = document.getElementById('shippoApiKeyInput');
+  var hasKey = !!(keyEl && keyEl.value && keyEl.value.trim());
+  if (shippoRadio && shippoRadio.checked) {
+    setDot('provider', hasKey ? 'ok' : 'missing');
+    setPill('provider', hasKey ? 'ok' : 'missing', hasKey ? 'Shippo' : 'Shippo (no key)');
+  } else if (manualRadio && manualRadio.checked) {
+    setDot('provider', 'info');
+    setPill('provider', 'info', 'Manual');
+  } else {
+    setDot('provider', 'none');
+    setPill('provider', 'info', 'Not set');
+  }
+  // Rules — informational.
+  var retail = document.getElementById('shipRetailStrategy');
+  var wholesale = document.getElementById('shipWholesaleStrategy');
+  if (retail || wholesale) {
+    setDot('rules', 'ok');
+    setPill('rules', 'ok', 'Configured');
+  } else {
+    setDot('rules', 'info');
+    setPill('rules', 'info', 'Defaults');
+  }
+}
+window.refreshShippingTabStatus = refreshShippingTabStatus;
+
+// ── Settings → Selling → Operations: 3 tabs (Fulfillment + Service area + Locale & time).
+var OPERATIONS_TABS = ['fulfillment','serviceArea','locale'];
+function switchOperationsTab(tab) {
+  window.__operationsActiveTab = tab;
+  OPERATIONS_TABS.forEach(function(t) {
+    var body = document.getElementById('operationsTab-' + t);
+    if (body) body.style.display = (t === tab) ? '' : 'none';
+  });
+  document.querySelectorAll('#operationsTabBar .view-tab').forEach(function(btn) {
+    btn.classList.toggle('active', btn.dataset.tab === tab);
+  });
+}
+window.switchOperationsTab = switchOperationsTab;
+
+function refreshOperationsTabStatus() {
+  function setDot(tabKey, state) {
+    var btn = document.getElementById('operationsTabBtn-' + tabKey);
+    if (!btn) return;
+    var dot = btn.querySelector('.tab-status-dot');
+    if (dot) dot.setAttribute('data-state', state);
+  }
+  function setPill(tabKey, state, label) {
+    var pill = document.getElementById('operationsStatus-' + tabKey);
+    if (!pill) return;
+    pill.setAttribute('data-state', state);
+    if (label != null) pill.textContent = label;
+  }
+  // Fulfillment — count rows rendered in the list.
+  var fList = document.getElementById('operationsFulfillmentList');
+  var fCount = fList ? fList.querySelectorAll('[data-fulfillment-row], .fulfillment-row, .op-row, tr, .form-row').length : 0;
+  // Fallback: just child count if no row class matched.
+  if (fList && !fCount) fCount = fList.children.length;
+  if (fCount > 0) {
+    setDot('fulfillment', 'ok');
+    setPill('fulfillment', 'ok', fCount + (fCount === 1 ? ' mode' : ' modes'));
+  } else {
+    setDot('fulfillment', 'partial');
+    setPill('fulfillment', 'partial', 'None set');
+  }
+  // Service area — green if a coverage type segment is selected.
+  var saRow = document.getElementById('operationsServiceAreaTypeRow');
+  var hasSa = !!(saRow && saRow.querySelector('.active, [aria-pressed="true"], .selected'));
+  setDot('serviceArea', hasSa ? 'ok' : 'info');
+  setPill('serviceArea', hasSa ? 'ok' : 'info', hasSa ? 'Configured' : 'Not set');
+  // Locale & time — show timezone value if selected.
+  var tz = document.getElementById('operationsTimezoneSelect');
+  var tzVal = tz && tz.value;
+  setDot('locale', tzVal ? 'ok' : 'info');
+  setPill('locale', tzVal ? 'ok' : 'info', tzVal || 'Defaults');
+}
+window.refreshOperationsTabStatus = refreshOperationsTabStatus;
+
+// ── Settings → Selling → Channels: 2 tabs (Declared + Connected).
+var CHANNELS_TABS = ['declared','connected'];
+function switchChannelsTab(tab) {
+  window.__channelsActiveTab = tab;
+  CHANNELS_TABS.forEach(function(t) {
+    var body = document.getElementById('channelsTab-' + t);
+    if (body) body.style.display = (t === tab) ? '' : 'none';
+  });
+  document.querySelectorAll('#channelsTabBar .view-tab').forEach(function(btn) {
+    btn.classList.toggle('active', btn.dataset.tab === tab);
+  });
+}
+window.switchChannelsTab = switchChannelsTab;
+
+function refreshChannelsTabStatus() {
+  function setDot(tabKey, state) {
+    var btn = document.getElementById('channelsTabBtn-' + tabKey);
+    if (!btn) return;
+    var dot = btn.querySelector('.tab-status-dot');
+    if (dot) dot.setAttribute('data-state', state);
+  }
+  function setPill(tabKey, state, label) {
+    var pill = document.getElementById('channelsStatus-' + tabKey);
+    if (!pill) return;
+    pill.setAttribute('data-state', state);
+    if (label != null) pill.textContent = label;
+  }
+  // Declared — count checked toggles in the declared list.
+  var dList = document.getElementById('channelsDeclaredList');
+  var dCount = dList ? dList.querySelectorAll('input[type="checkbox"]:checked').length : 0;
+  setDot('declared', dCount > 0 ? 'ok' : 'info');
+  setPill('declared', dCount > 0 ? 'ok' : 'info', dCount > 0 ? (dCount + (dCount === 1 ? ' channel' : ' channels')) : 'None');
+  // Connected — count cards rendered in the group.
+  var cGroup = document.getElementById('channelsCardGroup');
+  var cCount = cGroup ? cGroup.children.length : 0;
+  setDot('connected', cCount > 0 ? 'ok' : 'info');
+  setPill('connected', cCount > 0 ? 'ok' : 'info', cCount > 0 ? (cCount + (cCount === 1 ? ' card' : ' cards')) : 'None connected');
+}
+window.refreshChannelsTabStatus = refreshChannelsTabStatus;
 
 // ── Settings → Storefront → Domains: single-page status pill (no tabs).
 function refreshDomainsTabStatus() {
