@@ -328,31 +328,38 @@
         '</tr>';
     });
 
-    var suggestBanner = '';
-    if (suggested) {
-      suggestBanner =
-        '<div class="qbo-suggest-banner">' +
-          '<strong>Suggested matches</strong> — review and adjust before saving. Suggestions are heuristic based on account names.' +
+    var hasSaved = !!(mappingDoc && mappingDoc.confirmedAt);
+    var unsavedBanner = '';
+    if (!hasSaved) {
+      // Loud, top-of-page unsaved indicator. Operator surfaced 2026-05-25 that
+      // the prior soft "Suggested matches" copy wasn't enough — readers
+      // thought the pre-filled values were already persisted.
+      unsavedBanner =
+        '<div id="qboMapUnsavedBanner" style="display:flex;align-items:center;gap:10px;padding:12px 14px;margin:0 0 16px;border-radius:8px;background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.45);font-size:0.9rem;line-height:1.4;">' +
+          '<span style="display:inline-flex;align-items:center;gap:6px;padding:2px 9px;border-radius:10px;background:#f59e0b;color:#fff;font-size:0.78rem;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;flex-shrink:0;">' +
+            '<span style="width:6px;height:6px;border-radius:50%;background:#fff;display:inline-block;"></span>Unsaved' +
+          '</span>' +
+          '<span style="color:var(--text,#1f2937);">' +
+            (suggested ? 'We pre-filled suggested matches. Review and click <strong>Save mapping</strong> below to apply.' : 'Set a QBO account for each category, then click <strong>Save mapping</strong> below.') +
+          '</span>' +
         '</div>';
     }
-
-    var hasSaved = !!(mappingDoc && mappingDoc.confirmedAt);
     var guidance = hasSaved
       ? 'Your QBO account mappings. Editing these affects future syncs only; existing QBO entries are unchanged.'
-      : 'Map each Mast category to a QBO account so syncs post to the right places. Suggestions are pre-filled below &mdash; review them, adjust any that don\'t match your chart, and save.';
+      : 'Map each Mast category to a QBO account so syncs post to the right places.' + (suggested ? ' Suggestions are heuristic based on account names.' : '');
     body.innerHTML =
+      unsavedBanner +
       '<p style="color:var(--text-secondary);font-size:0.85rem;line-height:1.5;margin:0 0 12px;">' +
         guidance +
       '</p>' +
       lastSaved +
-      suggestBanner +
       '<div style="overflow-x:auto;"><table class="qbo-table">' +
         '<thead><tr>' +
           '<th>Mast Category</th>' +
           '<th>QBO Account</th>' +
         '</tr></thead><tbody>' + rows + '</tbody></table></div>' +
-      '<div style="margin-top:16px;display:flex;gap:8px;align-items:center;">' +
-        '<button id="qboMapSaveBtn" class="btn btn-primary" onclick="window._qboSaveMapping && window._qboSaveMapping()">Save mapping</button>' +
+      '<div style="margin-top:16px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">' +
+        '<button id="qboMapSaveBtn" class="btn btn-primary" onclick="window._qboSaveMapping && window._qboSaveMapping()">' + (hasSaved ? 'Save changes' : 'Save mapping') + '</button>' +
         '<span id="qboMapStatus" style="font-size:0.85rem;color:var(--warm-gray);"></span>' +
       '</div>';
   }
