@@ -358,7 +358,7 @@
     // Header
     html += '<div style="padding:16px 24px 12px;border-bottom:1px solid var(--border);">';
     html += '<div style="display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap;">';
-    html += '<button class="btn btn-secondary btn-small" onclick="csBackToList()" style="white-space:nowrap;">← Back</button>';
+    html += '<button class="detail-back" onclick="csBackToList()" style="white-space:nowrap;">← Back to Tickets</button>';
     html += '<div style="flex:1;min-width:0;">';
     html += '<div style="font-weight:600;font-size:1rem;">' +
       _esc(num) + ' — ' + _esc(ticket.subject || 'No subject') + '</div>';
@@ -469,7 +469,7 @@
 
     var html = '<div style="padding:20px 24px;">';
     html += '<div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;">';
-    html += '<button class="btn btn-secondary btn-small" onclick="csBackToList()">← Back</button>';
+    html += '<button class="detail-back" onclick="csBackToList()">← Back to Tickets</button>';
     html += '<h2 style="margin:0;">New Ticket</h2>';
     html += '</div>';
 

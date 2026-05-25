@@ -163,7 +163,7 @@
 
     var html =
       '<div class="section-header">' +
-        '<button class="btn btn-secondary btn-small" onclick="navigateTo(\'composer\')" style="margin-right:8px;">&larr; Back</button>' +
+        '<button class="detail-back" onclick="navigateTo(\'composer\')" style="margin-right:8px;">&larr; Back to Composer</button>' +
         '<h2 style="display:inline-block;">Composer</h2>' +
       '</div>' +
       '<div style="display:grid;grid-template-columns:1fr 280px;gap:16px;">' +

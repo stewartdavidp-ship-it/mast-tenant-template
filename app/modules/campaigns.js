@@ -140,7 +140,7 @@
 
     var html =
       '<div class="section-header">' +
-        '<button class="btn btn-secondary btn-small" onclick="navigateTo(\'campaigns\')" style="margin-right:8px;">&larr; Back</button>' +
+        '<button class="detail-back" onclick="navigateTo(\'campaigns\')" style="margin-right:8px;">&larr; Back to Campaigns</button>' +
         '<h2 style="display:inline-block;">' + esc(c.name || '(untitled)') + '</h2>' +
       '</div>' +
       '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin:12px 0;">' +
