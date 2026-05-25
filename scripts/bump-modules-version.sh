@@ -1,11 +1,16 @@
 #!/usr/bin/env bash
 # Bump the admin app's MAST_MODULES_V cache-bust string.
 #
-# Format: YYYYMMDD-<short-sha>
-# Where <short-sha> is the current git short SHA (HEAD).
+# Format: YYYYMMDD-HHMMSS-<short-sha>
+#   - YYYYMMDD-HHMMSS: timestamp (guarantees uniqueness per second)
+#   - <short-sha>: current git HEAD short SHA (parent of the commit being made
+#     when invoked from pre-commit; helpful for debugging which commit shipped
+#     which bust string)
 #
-# Idempotent: if HEAD short SHA already matches the value in app/index.html,
-# the script is a no-op (exit 0, no changes). Safe to run anytime.
+# Always bumps (not idempotent). The timestamp portion ensures uniqueness
+# across runs even when HEAD SHA hasn't changed (the case during a single
+# commit's pre-commit hook). Use sparingly outside the hook — every standalone
+# invocation produces a new value.
 #
 # Why: app/modules/*.js are lazy-loaded by app/index.html with a `?v=<MAST_MODULES_V>`
 # query suffix. Browsers cache by URL, so the suffix MUST change whenever any
@@ -24,7 +29,7 @@ if [[ ! -f "$INDEX_HTML" ]]; then
   exit 1
 fi
 
-# Get current values
+# Get current value (for logging only)
 CURRENT_LINE=$(grep "^var MAST_MODULES_V" "$INDEX_HTML" || true)
 if [[ -z "$CURRENT_LINE" ]]; then
   echo "error: could not find 'var MAST_MODULES_V' declaration in $INDEX_HTML" >&2
@@ -32,16 +37,10 @@ if [[ -z "$CURRENT_LINE" ]]; then
 fi
 CURRENT_VALUE=$(echo "$CURRENT_LINE" | sed -E "s/^var MAST_MODULES_V = '([^']+)';.*/\1/")
 
-# Compute new value
+# Compute new value (always unique per second + commit)
 SHORT_SHA=$(cd "$REPO_ROOT" && git rev-parse --short HEAD)
-DATE_STAMP=$(date +%Y%m%d)
-NEW_VALUE="${DATE_STAMP}-${SHORT_SHA}"
-
-# Idempotent: if already current, exit 0
-if [[ "$CURRENT_VALUE" == "$NEW_VALUE" ]]; then
-  echo "MAST_MODULES_V already current: $CURRENT_VALUE"
-  exit 0
-fi
+TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+NEW_VALUE="${TIMESTAMP}-${SHORT_SHA}"
 
 # Replace in place (use temp file for cross-platform sed compatibility)
 TMP_FILE="$(mktemp)"
