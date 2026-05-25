@@ -5945,8 +5945,8 @@
         <div class="sidebar-item" data-route="finance-tax" onclick="navigateTo('finance-tax')">Tax</div>
         <div class="sidebar-item" data-route="finance-reports" onclick="navigateTo('finance-reports')">Reports</div>
         <div class="sidebar-item" data-route="customer-portfolio" onclick="navigateTo('customer-portfolio')">Customer Portfolio</div>
-        <!-- W1.10 (Accounting — Idea -OtKxQEhTDampnjEBjvS): QBO Sync entry point. -->
-        <div class="sidebar-item" data-route="accounting" onclick="navigateTo('accounting')">QuickBooks Sync</div>
+        <!-- W1.10 (Accounting — Idea -OtKxQEhTDampnjEBjvS): QBO Sync UI consolidated into
+             Settings → Integrations → QuickBooks tab. No standalone #accounting route. -->
         <!-- Close v3 (Idea -OtQH_uRXqz9jJBRsmrj): period close + amendments queue. -->
         <div class="sidebar-item" data-route="finance-period-close" onclick="navigateTo('finance-period-close')">Period Close</div>
         <div class="sidebar-item" data-route="finance-amendments" onclick="navigateTo('finance-amendments')">Amendments</div>
@@ -6518,9 +6518,8 @@
          Content rendered by app/modules/finance.js (renderPeriodClose / renderAmendments). -->
     <div id="financePeriodCloseTab" style="display:none;"></div>
     <div id="financeAmendmentsTab" style="display:none;"></div>
-    <!-- W1.10 (Accounting — Idea -OtKxQEhTDampnjEBjvS): QBO Sync route shell.
-         Module: app/modules/accounting.js. Subviews: connect | map | log. -->
-    <div id="accountingTab" class="tab-content" style="display:none;"></div>
+    <!-- W1.10 (Accounting — Idea -OtKxQEhTDampnjEBjvS): QBO Sync UI consolidated
+         into Settings → Integrations → QuickBooks tab. Standalone #accountingTab removed. -->
     <!-- Build 6b UI-2 — Customer Portfolio dashboard. Concentration + quadrants
          + bulk-tag actions. Computed client-side mirroring the server-side
          analytics.get_customer_portfolio + analytics.get_concentration. -->
@@ -9316,23 +9315,15 @@
         <div class="form-group" id="qboIntegrationSection" style="display:none;">
           <label style="font-size:1.15rem;font-weight:600;">QuickBooks Online</label>
           <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:12px;">
-            Sync your day-close journal entries, AR invoices, and bills to QuickBooks Online. Sandbox V1 only.
+            Sync day-close journals, AR invoices, vendor bills, and reviewed expenses to QuickBooks. Sandbox V1 only.
           </p>
-          <div id="qboConfigStatus" style="margin-bottom:12px;font-size:0.85rem;">
-            <span id="qboStatusChip" class="qbo-status-chip">Not connected</span>
+          <!-- Inner sub-tabs: Connection / COA Map / Sync Log (consolidated from former #accounting route) -->
+          <div class="view-tabs" id="qboInnerTabBar" style="margin-bottom:16px;">
+            <button class="view-tab active" data-tab="connection" onclick="switchQboInnerTab('connection')">Connection</button>
+            <button class="view-tab" data-tab="map" onclick="switchQboInnerTab('map')">COA Map</button>
+            <button class="view-tab" data-tab="log" onclick="switchQboInnerTab('log')">Sync Log</button>
           </div>
-          <div id="qboDisconnected">
-            <div style="display:flex;gap:8px;flex-wrap:wrap;">
-              <button class="btn btn-primary" id="qboConnectBtn" onclick="MastAdmin.loadModule('accounting').then(function(){window.connectQbo && window.connectQbo();})">Connect QuickBooks</button>
-            </div>
-          </div>
-          <div id="qboConnected" style="display:none;">
-            <div style="display:flex;gap:8px;flex-wrap:wrap;">
-              <button class="btn btn-secondary" onclick="navigateTo('accounting','subView=map')">Manage COA Map</button>
-              <button class="btn btn-secondary" onclick="navigateTo('accounting','subView=log')">Sync Log</button>
-              <button class="btn btn-danger" id="qboDisconnectBtn" onclick="MastAdmin.loadModule('accounting').then(function(){window.disconnectQbo && window.disconnectQbo();})">Disconnect</button>
-            </div>
-          </div>
+          <div id="qboPanelBody"></div>
         </div>
 
         <div class="form-group" id="plaidBanksSection" style="display:none;">
@@ -17185,8 +17176,7 @@ var SECTION_ROUTES = {
                         'finance-tax', 'finance-reports',
                         'customer-portfolio',
                         'financials',
-                        'finance-period-close', 'finance-amendments',
-                        'accounting'],
+                        'finance-period-close', 'finance-amendments'],
   'operations':        ['trips', 'reports',
                         'advisor', 'studio', 'team', 'business',
                         'channels', 'contacts', 'customers'],
@@ -17246,7 +17236,7 @@ var ALL_TAB_IDS = ['inquiriesTab', 'scheduleTab', 'galleryTab', 'homepageTab', '
 // M3 + M6 (Idea -OtADygKA_JhRmk1wUqN): Mast modes tabs — must be in this list
 // so applyRoute correctly hides them when navigating away.
 // W1.8: Sales by Product (PM/Operator doorway) — same reason.
-'addToMastTab', 'businessSetupTab', 'salesByProductTab', 'accountingTab',
+'addToMastTab', 'businessSetupTab', 'salesByProductTab',
 // W2 — marketing aggregator tabs
 'marketingCalendarTab', 'composerTab', 'engagementInboxTab', 'campaignsTab',
 // W2.3 — Commission Terms admin editor
@@ -17340,7 +17330,7 @@ function navigateTo(route, params) {
   // Finance sensitive tabs (P&L, Tax, Reports, Overview) are Admin-only —
   // manager lacks financeSensitive:read. W2.1 adds 'financials' (Overview)
   // since it surfaces Margin + Runway = sensitive aggregates.
-  if (['finance-pl', 'finance-tax', 'finance-reports', 'financials', 'accounting'].indexOf(route) >= 0 && !hasPermission('financeSensitive', 'read')) {
+  if (['finance-pl', 'finance-tax', 'finance-reports', 'financials'].indexOf(route) >= 0 && !hasPermission('financeSensitive', 'read')) {
     showToast('This report is restricted to Admin users.', true);
     route = 'dashboard';
   }
@@ -17926,7 +17916,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260525-065533-3182bad';
+var MAST_MODULES_V = '20260525-070720-6d34b4f';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -17938,7 +17928,9 @@ var MODULE_MANIFEST = {
   trips: { src: 'modules/trips.js', routes: ['trips'] },
   wholesale: { src: 'modules/wholesale.js', routes: ['wholesale'] },
   finance: { src: 'modules/finance.js', routes: ['finance-revenue', 'finance-expenses', 'finance-pl', 'finance-cash-flow', 'finance-ar', 'finance-ap', 'finance-tax', 'finance-reports', 'customer-portfolio', 'financials', 'finance-period-close', 'finance-amendments'] },
-  accounting: { src: 'modules/accounting.js', routes: ['accounting'] },
+  // Accounting module now loaded on demand from Settings → Integrations → QuickBooks
+  // (no top-level route). Empty routes[] keeps it lazy-loadable via MastAdmin.loadModule('accounting').
+  accounting: { src: 'modules/accounting.js', routes: [] },
   shows: { src: 'modules/shows.js', routes: ['show', 'show-find', 'show-apply', 'show-prep', 'show-execute', 'show-history'] },
   production: { src: 'modules/production.js', routes: ['jobs', 'production', 'stories', 'forecast'] },
   procurement: { src: 'modules/procurement.js', routes: ['procurement'] },
@@ -39095,8 +39087,31 @@ function switchIntegrationsTab(tab) {
   document.querySelectorAll('#integrationsTabBar .view-tab').forEach(function(btn) {
     btn.classList.toggle('active', btn.dataset.tab === tab);
   });
+  // Lazy-hydrate the consolidated QBO inner panel when its tab becomes active.
+  if (tab === 'qbo' && typeof switchQboInnerTab === 'function') {
+    switchQboInnerTab(window.__qboInnerActiveTab || 'connection');
+  }
 }
 window.switchIntegrationsTab = switchIntegrationsTab;
+
+// Consolidated QBO surfaces — inner tab switcher for Settings → Integrations → QuickBooks.
+// Lazy-loads the accounting module then calls renderQboPanel(tab) into #qboPanelBody.
+function switchQboInnerTab(tab) {
+  window.__qboInnerActiveTab = tab;
+  document.querySelectorAll('#qboInnerTabBar .view-tab').forEach(function(btn) {
+    btn.classList.toggle('active', btn.dataset.tab === tab);
+  });
+  var body = document.getElementById('qboPanelBody');
+  if (body) body.innerHTML = '<div style="color:var(--warm-gray);font-size:0.9rem;padding:16px 0;">Loading…</div>';
+  if (typeof MastAdmin !== 'undefined' && MastAdmin.loadModule) {
+    MastAdmin.loadModule('accounting').then(function() {
+      if (typeof window.renderQboPanel === 'function') window.renderQboPanel(tab);
+    });
+  } else if (typeof window.renderQboPanel === 'function') {
+    window.renderQboPanel(tab);
+  }
+}
+window.switchQboInnerTab = switchQboInnerTab;
 
 function switchPimTab(tab) {
   window.__pimActiveTab = tab;

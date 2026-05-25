@@ -1,10 +1,11 @@
 (function() {
   'use strict';
   // QBO Accounting module — Mast W1 (Idea -OtKxQEhTDampnjEBjvS)
-  // Sub-views: connect | map | log
-  // W1.1 (this commit): real OAuth client via mintQboAuthState + popup +
-  // postMessage handler with strict origin check.
-  // COA Map + Sync log come in W1.2 + W1.10 Phase 2 (subsequent commits).
+  // Sub-views: connection | map | log
+  // Consolidation refactor (2026-05-25): UI moved from standalone #accounting route
+  // into Settings → Integrations → QuickBooks tab. Renderer is now
+  // window.renderQboPanel(subView), targeting #qboPanelBody. Outer tab strip lives
+  // in index.html (switchQboInnerTab).
 
   var QBO_CF_ORIGIN = 'https://us-central1-mast-platform-prod.cloudfunctions.net';
 
@@ -44,48 +45,23 @@
   function toastOk(msg) { if (typeof showToast === 'function') showToast(msg); else console.log('[accounting]', msg); }
   function toastErr(msg) { if (typeof showToast === 'function') showToast(msg, true); else console.error('[accounting]', msg); }
 
-  // ---- render shell ----
-  function renderAccounting() {
-    var tab = document.getElementById('accountingTab');
-    if (!tab) return;
-    var hash = (location.hash || '');
-    var qIdx = hash.indexOf('?');
-    var qs = qIdx >= 0 ? hash.substring(qIdx + 1) : '';
-    var params = new URLSearchParams(qs);
-    var subView = params.get('subView') || 'connect';
+  function panelBody() { return document.getElementById('qboPanelBody'); }
 
-    // Canonical Mast sub-view switcher pattern: btn-secondary btn-small row,
-    // active tab swapped to btn-primary (mirrors finance.js AR / Cash Flow).
-    function tabBtn(v, label) {
-      var cls = (subView === v) ? 'btn btn-primary btn-small' : 'btn btn-secondary btn-small';
-      return '<button class="' + cls + '" onclick="navigateTo(\'accounting?subView=' + v + '\')">' + label + '</button>';
-    }
-
-    tab.innerHTML =
-      '<div class="page-header" style="padding:24px 24px 0;">' +
-        '<div style="margin-bottom:12px;font-size:0.85rem;">' +
-          '<a href="#settings" onclick="event.preventDefault(); if (typeof switchSettingsSubView === \'function\') { navigateTo(\'settings\'); setTimeout(function(){ switchSettingsSubView(\'integrations\'); }, 50); } else { navigateTo(\'settings\'); }" style="color:var(--text-muted);text-decoration:none;">' +
-            '&larr; Settings &middot; Integrations' +
-          '</a>' +
-        '</div>' +
-        '<h1 style="font-size:1.6rem;margin:0 0 4px;">QuickBooks Online</h1>' +
-        '<p style="font-size:0.85rem;color:var(--warm-gray);margin:0 0 16px;">Sync day-close journals, AR invoices, and bills to QBO. Sandbox V1.</p>' +
-      '</div>' +
-      '<div style="padding:0 24px;display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;">' +
-        tabBtn('connect', 'Connection') +
-        tabBtn('map', 'COA Map') +
-        tabBtn('log', 'Sync Log') +
-      '</div>' +
-      '<div id="accountingSubviewBody" style="padding:0 24px 24px;"></div>';
-
+  // ---- Canonical entry: render a sub-view into #qboPanelBody ----
+  function renderQboPanel(subView) {
+    subView = subView || window.__qboInnerActiveTab || 'connection';
+    window.__qboInnerActiveTab = subView;
+    var body = panelBody();
+    if (!body) return;
     if (subView === 'map') renderCoaMapView();
     else if (subView === 'log') renderSyncLogView();
     else renderConnectView();
   }
+  window.renderQboPanel = renderQboPanel;
 
   // ---- Connection sub-view (W1.1) ----
   function renderConnectView() {
-    var body = document.getElementById('accountingSubviewBody');
+    var body = panelBody();
     if (!body) return;
     body.innerHTML = '<div id="qboConnViewStatus" style="font-size:0.9rem;color:var(--warm-gray);">Loading…</div>';
 
@@ -97,20 +73,17 @@
         var realmShort = String(doc.realmId).slice(0, 8) + '…';
         var connectedAt = doc.connectedAt ? new Date(doc.connectedAt).toLocaleString() : '—';
         html =
-          '<p style="color:var(--text-secondary);font-size:0.85rem;line-height:1.5;margin:0 0 12px;">' +
-            'Connected to QuickBooks ' + esc(env) + ' &middot; realm ' + esc(realmShort) + '. ' +
-            'Next steps: (1) confirm your <strong>COA Map</strong> is set up, (2) check the <strong>Sync Log</strong> ' +
-            'after writing a Day Close or wholesale invoice to verify your first sync.' +
-          '</p>' +
           '<div style="background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.25);border-radius:8px;padding:12px 16px;margin-bottom:16px;">' +
             '<div style="font-size:0.9rem;font-weight:600;color:#22c55e;margin-bottom:4px;">Connected</div>' +
             '<div style="font-size:0.85rem;color:var(--warm-gray);">' +
               'Environment: <strong>' + esc(env) + '</strong> · Realm: <code style="font-size:0.78rem;">' + esc(realmShort) + '</code> · Since: ' + esc(connectedAt) +
             '</div>' +
           '</div>' +
+          '<p style="color:var(--text-secondary);font-size:0.85rem;line-height:1.5;margin:0 0 12px;">' +
+            'Next steps: confirm your <strong>COA Map</strong> tab is set up, then check the <strong>Sync Log</strong> tab ' +
+            'after writing a Day Close or wholesale invoice to verify your first sync.' +
+          '</p>' +
           '<div style="display:flex;gap:8px;flex-wrap:wrap;">' +
-            '<button class="btn btn-secondary" onclick="navigateTo(\'accounting\',\'subView=map\')">Manage COA Map</button>' +
-            '<button class="btn btn-secondary" onclick="navigateTo(\'accounting\',\'subView=log\')">View Sync Log</button>' +
             '<button class="btn btn-danger" onclick="window.disconnectQbo && window.disconnectQbo()">Disconnect</button>' +
           '</div>';
       } else {
@@ -131,13 +104,12 @@
   }
 
   function reflectStatusChip(connected, doc) {
+    // The standalone status chip (#qboStatusChip) was retired in the consolidation
+    // refactor — connection state now reads from the Connection tab body. Kept as
+    // a no-op-safe function in case any legacy DOM still references it.
     var chip = document.getElementById('qboStatusChip');
-    var disc = document.getElementById('qboDisconnected');
-    var conn = document.getElementById('qboConnected');
     if (chip) {
-      // Toggle class only — surface styles live in .qbo-status-chip CSS (dark-mode aware).
       if (!chip.classList.contains('qbo-status-chip')) chip.classList.add('qbo-status-chip');
-      // Clear any legacy inline styles from earlier builds.
       chip.style.background = '';
       chip.style.color = '';
       if (connected) {
@@ -150,8 +122,6 @@
         chip.classList.remove('connected');
       }
     }
-    if (disc) disc.style.display = connected ? 'none' : '';
-    if (conn) conn.style.display = connected ? '' : 'none';
   }
 
   // ---- Levenshtein + COA fuzzy auto-suggest (W1 fix-up) ----
@@ -226,7 +196,7 @@
 
   // ---- COA Map sub-view (W1.2) ----
   function renderCoaMapView() {
-    var body = document.getElementById('accountingSubviewBody');
+    var body = panelBody();
     if (!body) return;
     body.innerHTML = '<div style="color:var(--warm-gray);font-size:0.9rem;padding:24px 0;">Loading QuickBooks chart of accounts…</div>';
 
@@ -265,7 +235,7 @@
           '<div style="background:rgba(234,179,8,0.08);border:1px solid rgba(234,179,8,0.25);border-radius:8px;padding:12px 16px;">' +
             '<div style="font-size:0.9rem;font-weight:600;color:#eab308;margin-bottom:4px;">QuickBooks not connected</div>' +
             '<div style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:12px;">Connect first, then return to map your categories.</div>' +
-            '<a class="btn btn-primary" href="#accounting?subView=connect">Go to Connection</a>' +
+            '<button class="btn btn-primary" onclick="switchQboInnerTab(\'connection\')">Go to Connection</button>' +
           '</div>';
       } else {
         body.innerHTML = '<div style="color:var(--danger,#dc2626);padding:12px;">Failed to load: ' + esc(msg) + '</div>';
@@ -402,7 +372,7 @@
   var _syncLogState = { rows: [], filterStatus: 'all', filterEntity: 'all', filterFrom: '', filterTo: '', hasMore: true, fetchedLimit: 0 };
 
   function renderSyncLogView() {
-    var body = document.getElementById('accountingSubviewBody');
+    var body = panelBody();
     if (!body) return;
     _syncLogState = { rows: [], filterStatus: 'all', filterEntity: 'all', filterFrom: '', filterTo: '', hasMore: true, fetchedLimit: 0 };
     body.innerHTML =
@@ -629,13 +599,8 @@
           window.removeEventListener('message', handler);
           try { popup && popup.close(); } catch (e) {}
           toastOk('QuickBooks connected');
-          // Refresh views.
-          if (typeof renderAccounting === 'function') renderAccounting();
-          MastDB.get('admin/integrations/qbo').then(function(doc) {
-            reflectStatusChip(true, doc || { realmId: msg.realmId, env: msg.env });
-          }).catch(function() {
-            reflectStatusChip(true, { realmId: msg.realmId, env: msg.env });
-          });
+          // Refresh consolidated panel.
+          renderQboPanel(window.__qboInnerActiveTab || 'connection');
         } else if (msg.type === 'qbo-oauth-error') {
           window.removeEventListener('message', handler);
           try { popup && popup.close(); } catch (e) {}
@@ -673,31 +638,13 @@
       var fn = firebase.functions().httpsCallable('disconnectQbo');
       await fn({ tenantId: tenantId() });
       toastOk('QuickBooks disconnected');
-      reflectStatusChip(false, null);
-      if (typeof renderAccounting === 'function') renderAccounting();
+      renderQboPanel('connection');
     } catch (err) {
       toastErr('Disconnect failed: ' + (err && err.message));
     }
   };
 
-  // ---- Settings panel chip hydration ----
-  // When Settings → Integrations renders, hydrate the QBO chip from the doc.
-  function hydrateSettingsChip() {
-    if (!document.getElementById('qboStatusChip')) return;
-    MastDB.get('admin/integrations/qbo').then(function(doc) {
-      var connected = doc && doc.realmId && !doc.disconnectedAt && (doc.status !== 'disconnected');
-      reflectStatusChip(connected, doc);
-    }).catch(function() {});
-  }
-  if (typeof MastDB !== 'undefined' && MastDB.get) {
-    try { hydrateSettingsChip(); } catch (e) {}
-  }
-
-  if (typeof MastAdmin !== 'undefined' && MastAdmin.registerModule) {
-    MastAdmin.registerModule('accounting', {
-      routes: {
-        'accounting': { tab: 'accountingTab', setup: renderAccounting }
-      }
-    });
-  }
+  // MastAdmin.registerModule call removed in the consolidation refactor — the
+  // #accounting top-level route no longer exists. The module is lazy-loaded on
+  // demand by switchQboInnerTab via MastAdmin.loadModule('accounting').
 })();
