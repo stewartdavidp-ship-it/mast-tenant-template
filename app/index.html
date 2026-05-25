@@ -9137,7 +9137,15 @@
       </div>
 
       <div id="settingsSubIntegrations" style="display:none;max-width:500px;">
-        <div class="form-group">
+        <!-- Integrations tab strip (canonical view-tabs pattern) -->
+        <div class="view-tabs" id="integrationsTabBar" style="margin-bottom:20px;">
+          <button class="view-tab active" data-tab="googleMaps" onclick="switchIntegrationsTab('googleMaps')">Google Maps</button>
+          <button class="view-tab" data-tab="etsy" onclick="switchIntegrationsTab('etsy')">Etsy</button>
+          <button class="view-tab" data-tab="shopify" onclick="switchIntegrationsTab('shopify')">Shopify</button>
+          <button class="view-tab" data-tab="qbo" onclick="switchIntegrationsTab('qbo')">QuickBooks</button>
+          <button class="view-tab" data-tab="plaid" onclick="switchIntegrationsTab('plaid')">Plaid</button>
+        </div>
+        <div class="form-group" id="googleMapsIntegrationSection">
           <label style="font-size:1.15rem;font-weight:600;">Google Maps API Key</label>
           <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:16px;">
             Used for address autocomplete at checkout. Restrict by HTTP referrer in Google Cloud Console.
@@ -9153,9 +9161,7 @@
           <div id="googleConfigStatus" style="margin-top:8px;font-size:0.85rem;"></div>
         </div>
 
-        <hr style="border:none;border-top:1px solid #eee;margin:24px 0;">
-
-        <div class="form-group">
+        <div class="form-group" id="etsyIntegrationSection" style="display:none;">
           <label style="font-size:1.15rem;font-weight:600;">Etsy Integration</label>
           <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:16px;">
             Connect your Etsy shop to sync orders automatically. Etsy orders appear in the Orders tab with an "Etsy" badge.
@@ -9183,9 +9189,7 @@
           </div>
         </div>
 
-        <hr style="border:none;border-top:1px solid #eee;margin:24px 0;">
-
-        <div class="form-group">
+        <div class="form-group" id="shopifyIntegrationSection" style="display:none;">
           <label style="font-size:1.15rem;font-weight:600;">Shopify Integration</label>
           <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:12px;">
             Connect your Shopify store so Mast can read your catalog and publish product changes back to Shopify. Your access token is stored in encrypted secret storage — Mast staff never see it.
@@ -9306,12 +9310,10 @@
           </div>
         </div>
 
-        <hr style="border:none;border-top:1px solid #eee;margin:24px 0;">
-
         <!-- W1.10 (Accounting — Idea -OtKxQEhTDampnjEBjvS): QBO Connect block,
              peer to Etsy/Shopify. Real OAuth + status reflection land in W1.1 Phase 2;
              this is the helpers-first scaffold so siblings can wire in. -->
-        <div class="form-group" id="qboIntegrationSection">
+        <div class="form-group" id="qboIntegrationSection" style="display:none;">
           <label style="font-size:1.15rem;font-weight:600;">QuickBooks Online</label>
           <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:12px;">
             Sync your day-close journal entries, AR invoices, and bills to QuickBooks Online. Sandbox V1 only.
@@ -9333,12 +9335,10 @@
           </div>
         </div>
 
-        <hr style="border:none;border-top:1px solid #eee;margin:24px 0;">
-
-        <div class="form-group" id="plaidBanksSection">
-          <label style="font-size:1.15rem;font-weight:600;">Banks (Plaid)</label>
+        <div class="form-group" id="plaidBanksSection" style="display:none;">
+          <label style="font-size:1.15rem;font-weight:600;">Plaid</label>
           <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:16px;">
-            Connect a bank or credit card to automatically import transactions into Finance &rarr; Expenses. Access tokens are stored in encrypted secret storage &mdash; Mast staff never see them.
+            Connect a bank account or credit card to automatically import transactions into Finance &rarr; Expenses. Access tokens are stored in encrypted secret storage &mdash; Mast staff never see them.
           </p>
           <div id="plaidBanksList" style="margin-bottom:12px;"></div>
           <div style="display:flex;gap:8px;">
@@ -17926,7 +17926,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260525-065131-3f96580';
+var MAST_MODULES_V = '20260525-065533-3182bad';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -18089,7 +18089,7 @@ function switchSettingsSubView(view) {
   // Lazy loads
   if (view === 'shipping') { loadShipProviderConfig(); }
   if (view === 'email') { loadEmailConfig(); loadEmailDomainSection(); loadResendWebhookSection(); }
-  if (view === 'integrations') { loadEtsyConfig(); loadShopifyConfig(); loadPlaidBanksForSettings(); }
+  if (view === 'integrations') { loadEtsyConfig(); loadShopifyConfig(); loadPlaidBanksForSettings(); if (typeof switchIntegrationsTab === 'function') switchIntegrationsTab(window.__integrationsActiveTab || 'googleMaps'); }
   if (view === 'trips') { MastAdmin.loadModule('trips').then(function() { if (typeof loadTripsSettings === 'function') loadTripsSettings(); }); }
   if (view === 'storefront') { loadShopDisplaySettings(); loadPrivacyUrlSettings(); }
   if (view === 'dashboard') renderDashCardSettings();
@@ -39077,6 +39077,26 @@ async function onMakerSaveThreshold() {
     showToast('Save failed: ' + (err.message || err), true);
   }
 }
+
+// Settings → Integrations: tab-strip switcher (Google Maps / Etsy / Shopify / QuickBooks / Plaid)
+function switchIntegrationsTab(tab) {
+  window.__integrationsActiveTab = tab;
+  var sections = {
+    googleMaps: 'googleMapsIntegrationSection',
+    etsy: 'etsyIntegrationSection',
+    shopify: 'shopifyIntegrationSection',
+    qbo: 'qboIntegrationSection',
+    plaid: 'plaidBanksSection'
+  };
+  Object.keys(sections).forEach(function(t) {
+    var el = document.getElementById(sections[t]);
+    if (el) el.style.display = t === tab ? '' : 'none';
+  });
+  document.querySelectorAll('#integrationsTabBar .view-tab').forEach(function(btn) {
+    btn.classList.toggle('active', btn.dataset.tab === tab);
+  });
+}
+window.switchIntegrationsTab = switchIntegrationsTab;
 
 function switchPimTab(tab) {
   window.__pimActiveTab = tab;
