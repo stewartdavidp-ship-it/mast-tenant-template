@@ -17848,7 +17848,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260524-233631-7c1a2d6';
+var MAST_MODULES_V = '20260524-233718-5df1b52';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -35553,6 +35553,7 @@ function viewProduct(pid) {
     //   - the navigation is internal to MastNavStack restore (back-pop);
     //   - the inventory path (viewProductFromInventory) — it manages its
     //     own push and uses productViewOrigin='inventory' anyway.
+    var _pushedNavEntry = false;
     if (window.MastNavStack && currentRoute && currentRoute !== 'products'
         && !window._mastNavInternal) {
       var _spawnLabel = (typeof ROUTE_LABELS !== 'undefined' && ROUTE_LABELS[currentRoute])
@@ -35564,10 +35565,21 @@ function viewProduct(pid) {
         state: Object.assign({}, p, { scrollTop: window.scrollY || 0 }),
         label: _spawnLabel
       });
+      _pushedNavEntry = true;
     }
     var newParams = Object.assign({}, p);
     newParams.pid = pid;
-    navigateTo('products', newParams);
+    // CRITICAL: navigateTo() calls MastNavStack.clear() on every non-internal
+    // navigation (see line ~17221). Without the _mastNavInternal flag, the
+    // push above gets wiped before back-button rendering reads it. Canonical
+    // pattern matches customers.js:openContactFromCustomer (push-then-nav).
+    if (_pushedNavEntry) {
+      window._mastNavInternal = true;
+      try { navigateTo('products', newParams); }
+      finally { window._mastNavInternal = false; }
+    } else {
+      navigateTo('products', newParams);
+    }
     return;
   }
   _renderProductDetailView(pid);
