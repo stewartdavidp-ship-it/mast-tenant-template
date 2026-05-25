@@ -9243,14 +9243,14 @@
           </div>
           <div id="qboDisconnected">
             <div style="display:flex;gap:8px;flex-wrap:wrap;">
-              <button class="btn btn-primary" id="qboConnectBtn" onclick="window.connectQbo && window.connectQbo()">Connect QuickBooks</button>
+              <button class="btn btn-primary" id="qboConnectBtn" onclick="MastAdmin.loadModule('accounting').then(function(){window.connectQbo && window.connectQbo();})">Connect QuickBooks</button>
             </div>
           </div>
           <div id="qboConnected" style="display:none;">
             <div style="display:flex;gap:8px;flex-wrap:wrap;">
               <button class="btn btn-secondary" onclick="navigateTo('accounting','subView=map')">Manage COA Map</button>
               <button class="btn btn-secondary" onclick="navigateTo('accounting','subView=log')">Sync Log</button>
-              <button class="btn btn-danger" id="qboDisconnectBtn" onclick="window.disconnectQbo && window.disconnectQbo()">Disconnect</button>
+              <button class="btn btn-danger" id="qboDisconnectBtn" onclick="MastAdmin.loadModule('accounting').then(function(){window.disconnectQbo && window.disconnectQbo();})">Disconnect</button>
             </div>
           </div>
         </div>
@@ -17848,7 +17848,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260524-234123-8898459';
+var MAST_MODULES_V = '20260525-062259-d7128c4';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
