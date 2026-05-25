@@ -1388,15 +1388,16 @@
   window.openQboConflictModal = async function(conflictId) {
     if (!conflictId) { toastErr('Missing conflictId'); return; }
     try {
-      var conflicts = window.__qboConflicts;
-      if (!Array.isArray(conflicts)) {
-        var meta = await MastDB.get('admin/integrations/_meta').catch(function() { return null; });
-        conflicts = (meta && Array.isArray(meta.conflicts)) ? meta.conflicts : [];
-        window.__qboConflicts = conflicts;
-      }
+      // W2b-SEC: always refetch on modal-open — never trust the cache.
+      // Multi-session race: another operator may have resolved this conflict
+      // since the cache was populated. Refetching also refreshes the cache
+      // so inline AR/AP chips stay in sync.
+      var meta = await MastDB.get('admin/integrations/_meta').catch(function() { return null; });
+      var conflicts = (meta && Array.isArray(meta.conflicts)) ? meta.conflicts : [];
+      window.__qboConflicts = conflicts;
       var c = conflicts.filter(function(x) { return x && String(x.conflictId) === String(conflictId); })[0];
-      if (!c) { toastErr('Conflict not found (may have been resolved by another session)'); return; }
-      if (c.resolution) { toastOk('Already resolved: ' + c.resolution); return; }
+      if (!c) { toastErr('Conflict not found — may have been resolved already.'); return; }
+      if (c.resolution) { toastOk('This conflict has already been resolved.'); return; }
       var diverged = Array.isArray(c.divergedFields) ? c.divergedFields : [];
       function summary(side) {
         if (diverged.length === 0) return '(no field detail recorded)';

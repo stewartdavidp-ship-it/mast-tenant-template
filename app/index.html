@@ -8631,13 +8631,18 @@
         </div><!-- end shippingTab-rules -->
 
       </div>
-      <div id="settingsSubTax" style="display:none;max-width:640px;">
+      <div id="settingsSubTax" style="display:none;max-width:720px;">
+        <div class="view-tabs" id="taxTabBar" style="margin-bottom:20px;">
+          <button class="view-tab active" id="taxTabBtn-identity" data-tab="identity" onclick="switchTaxTab('identity')"><span class="tab-status-dot" data-state="info"></span>Identity &amp; EIN</button>
+          <button class="view-tab" id="taxTabBtn-salesTax" data-tab="salesTax" onclick="switchTaxTab('salesTax')"><span class="tab-status-dot" data-state="info"></span>Sales tax</button>
+        </div>
+
+        <!-- ── Identity & EIN ── -->
+        <div id="taxTab-identity" class="tax-tab-body">
+        <div class="tab-section-title">Legal identity &amp; tax ID<span class="tab-section-status" data-state="info" id="taxStatus-identity">Optional</span></div>
+        <p class="tab-section-purpose">Your business&rsquo;s legal details &mdash; legal name, DBAs, entity type, year founded, and federal EIN. All fields are optional; add what you know. The EIN block includes regulatory defensive copy and the CCPA Notice at Collection.</p>
         <!-- Legal Identity (S1 — Entity Phase 1) -->
         <div class="form-group" style="margin-bottom:28px;padding-bottom:24px;border-bottom:1px solid rgba(255,255,255,0.06);">
-          <label style="font-size:1.15rem;font-weight:600;">Legal Identity</label>
-          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:14px;">
-            Your business's legal details. All fields are optional &mdash; add what you know, skip the rest. Saved to your business entity record.
-          </p>
 
           <label style="font-size:0.85rem;font-weight:600;margin-bottom:4px;display:block;">Legal Name</label>
           <input type="text" id="taxLegalName" placeholder="e.g., Acme Studio LLC"
@@ -8672,8 +8677,8 @@
         </div>
 
         <!-- Business Tax ID (EIN) — regulatory copy locked (spec §8.2) -->
-        <div class="form-group" style="margin-bottom:28px;padding-bottom:24px;border-bottom:1px solid rgba(255,255,255,0.06);">
-          <label id="taxLegalEinLabel" style="font-size:1.15rem;font-weight:600;">Business Tax ID (EIN)</label>
+        <div class="form-group" style="margin-bottom:20px;">
+          <label id="taxLegalEinLabel" style="font-size:0.9rem;font-weight:600;display:block;margin-bottom:4px;">Business Tax ID (EIN)</label>
           <p id="taxLegalEinFormat" style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:10px;">Format: XX-XXXXXXX</p>
 
           <input type="text" id="taxLegalEin" placeholder="XX-XXXXXXX" autocomplete="off" inputmode="numeric"
@@ -8692,16 +8697,17 @@
         </div>
 
         <!-- Notice at Collection (CCPA — regulatory copy, spec §8.2) -->
-        <div id="taxLegalNoticeAtCollection" style="margin-bottom:28px;padding:12px 14px;background:rgba(66,165,245,0.06);border:1px solid rgba(66,165,245,0.2);border-radius:8px;font-size:0.85rem;color:var(--warm-gray);line-height:1.5;">
+        <div id="taxLegalNoticeAtCollection" style="margin-bottom:8px;padding:12px 14px;background:rgba(66,165,245,0.06);border:1px solid rgba(66,165,245,0.2);border-radius:8px;font-size:0.85rem;color:var(--warm-gray);line-height:1.5;">
           <!-- Injected from BusinessEntityConstants.NOTICE_AT_COLLECTION_COPY -->
         </div>
+        </div><!-- end taxTab-identity -->
+
+        <!-- ── Sales tax ── -->
+        <div id="taxTab-salesTax" class="tax-tab-body" style="display:none;">
+        <div class="tab-section-title">Sales tax<span class="tab-section-status" data-state="info" id="taxStatus-salesTax">Defaults</span></div>
+        <p class="tab-section-purpose">Tax rates by US state, applied at checkout based on the customer&rsquo;s shipping state. Set your nexus state (where you collect tax) and configure rates for applicable states. Multi-state registrations live in Compliance &rarr; Tax jurisdictions.</p>
 
         <div class="form-group">
-          <label style="font-size:1.15rem;font-weight:600;">Sales Tax</label>
-          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:12px;">
-            Tax rates by US state. Rates are applied at checkout based on the customer's shipping state.
-            Set your nexus state (where you collect tax) and configure rates for applicable states.
-          </p>
 
           <div style="display:flex;gap:8px;align-items:flex-end;margin-bottom:16px;flex-wrap:wrap;">
             <div>
@@ -8733,15 +8739,13 @@
         </div>
 
         <!-- Compliance pointer (Phase 2 PA-5 moved CRUD to Settings > Compliance) -->
-        <div class="form-group" style="margin-top:28px;padding-top:20px;border-top:1px solid rgba(255,255,255,0.06);">
-          <label style="font-size:1.15rem;font-weight:600;">Licenses, insurance, certifications &amp; multi-state tax jurisdictions</label>
-          <p style="font-size:0.85rem;color:var(--warm-gray);margin-top:6px;line-height:1.5;">
-            Track these in the <a href="javascript:void(0)" onclick="switchSettingsSubView('compliance')" style="color:var(--teal);text-decoration:underline;">Compliance</a> tab &mdash; renewal dates, registration IDs, and document uploads.
-          </p>
-        </div>
+        <p style="margin-top:14px;padding:10px 12px;background:rgba(66,165,245,0.06);border:1px solid rgba(66,165,245,0.18);border-radius:8px;font-size:0.78rem;color:var(--warm-gray);line-height:1.5;">
+          Track licenses, insurance, certifications, and multi-state tax jurisdictions in <a href="javascript:void(0)" onclick="switchSettingsSubView('compliance')" style="color:var(--teal);text-decoration:underline;">Settings &gt; Compliance</a> &mdash; renewal dates, registration IDs, and document uploads.
+        </p>
+        </div><!-- end taxTab-salesTax -->
       </div>
       <!-- Compliance Settings Sub-Tab (Phase 2 PA-5) -->
-      <div id="settingsSubCompliance" style="display:none;max-width:820px;">
+      <div id="settingsSubCompliance" style="display:none;max-width:720px;">
         <!-- MA 201 CMR 17 WISP-avoidance SSN-prohibition banner (sticky, always visible). Regulatory copy — DO NOT edit without counsel approval. -->
         <div id="complianceSsnBanner" style="background:rgba(234,179,8,0.1);border:1px solid rgba(234,179,8,0.3);border-radius:8px;padding:12px 16px;margin-bottom:18px;font-size:0.85rem;line-height:1.5;">
           <div id="complianceSsnHeadline" style="font-weight:600;margin-bottom:4px;"></div>
@@ -8765,10 +8769,19 @@
 
         <div id="complianceSectionStatus" style="margin-bottom:12px;font-size:0.85rem;"></div>
 
+        <div class="view-tabs" id="complianceTabBar" style="margin-bottom:20px;">
+          <button class="view-tab active" id="complianceTabBtn-licenses" data-tab="licenses" onclick="switchComplianceTab('licenses')"><span class="tab-status-dot" data-state="info"></span>Licenses</button>
+          <button class="view-tab" id="complianceTabBtn-insurance" data-tab="insurance" onclick="switchComplianceTab('insurance')"><span class="tab-status-dot" data-state="info"></span>Insurance</button>
+          <button class="view-tab" id="complianceTabBtn-certifications" data-tab="certifications" onclick="switchComplianceTab('certifications')"><span class="tab-status-dot" data-state="info"></span>Certifications</button>
+          <button class="view-tab" id="complianceTabBtn-taxJurisdictions" data-tab="taxJurisdictions" onclick="switchComplianceTab('taxJurisdictions')"><span class="tab-status-dot" data-state="info"></span>Tax jurisdictions</button>
+        </div>
+
+        <!-- ── Licenses ── -->
+        <div id="complianceTab-licenses" class="compliance-tab-body">
+        <div class="tab-section-title">Licenses<span class="tab-section-status" data-state="info" id="complianceStatus-licenses">None</span></div>
+        <p class="tab-section-purpose">Business licenses, permits, and professional credentials. Track registration IDs, issuer, and renewal dates; upload supporting documents per item.</p>
         <!-- Licenses section -->
-        <div class="form-group" style="margin-bottom:24px;padding-bottom:20px;border-bottom:1px solid rgba(255,255,255,0.06);">
-          <label style="font-size:1.15rem;font-weight:600;">Licenses</label>
-          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:12px;">Business licenses, permits, professional credentials.</p>
+        <div class="form-group" style="margin-bottom:24px;">
           <div id="complianceLicensesList"></div>
           <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">
             <button class="btn btn-secondary" onclick="addComplianceItem('licenses')">+ Add license</button>
@@ -8776,11 +8789,14 @@
           </div>
           <div id="complianceLicensesStatus" style="margin-top:8px;font-size:0.85rem;"></div>
         </div>
+        </div><!-- end complianceTab-licenses -->
 
+        <!-- ── Insurance ── -->
+        <div id="complianceTab-insurance" class="compliance-tab-body" style="display:none;">
+        <div class="tab-section-title">Insurance<span class="tab-section-status" data-state="info" id="complianceStatus-insurance">None</span></div>
+        <p class="tab-section-purpose">Liability, property, or other business insurance policies. Track carrier, policy number, and effective/expiry dates; upload the certificate of insurance per item.</p>
         <!-- Insurance section -->
-        <div class="form-group" style="margin-bottom:24px;padding-bottom:20px;border-bottom:1px solid rgba(255,255,255,0.06);">
-          <label style="font-size:1.15rem;font-weight:600;">Insurance</label>
-          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:12px;">Liability, property, or other business insurance policies.</p>
+        <div class="form-group" style="margin-bottom:24px;">
           <div id="complianceInsuranceList"></div>
           <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">
             <button class="btn btn-secondary" onclick="addComplianceItem('insurance')">+ Add insurance</button>
@@ -8788,11 +8804,14 @@
           </div>
           <div id="complianceInsuranceStatus" style="margin-top:8px;font-size:0.85rem;"></div>
         </div>
+        </div><!-- end complianceTab-insurance -->
 
+        <!-- ── Certifications ── -->
+        <div id="complianceTab-certifications" class="compliance-tab-body" style="display:none;">
+        <div class="tab-section-title">Certifications<span class="tab-section-status" data-state="info" id="complianceStatus-certifications">None</span></div>
+        <p class="tab-section-purpose">Food-handler, ServSafe, trade, and similar professional certifications. Track the credential name, issuer, and expiry; upload the certificate per item.</p>
         <!-- Certifications section -->
-        <div class="form-group" style="margin-bottom:24px;padding-bottom:20px;border-bottom:1px solid rgba(255,255,255,0.06);">
-          <label style="font-size:1.15rem;font-weight:600;">Certifications</label>
-          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:12px;">Food-handler, ServSafe, trade certifications, and similar credentials.</p>
+        <div class="form-group" style="margin-bottom:24px;">
           <div id="complianceCertificationsList"></div>
           <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">
             <button class="btn btn-secondary" onclick="addComplianceItem('certifications')">+ Add certification</button>
@@ -8800,11 +8819,14 @@
           </div>
           <div id="complianceCertificationsStatus" style="margin-top:8px;font-size:0.85rem;"></div>
         </div>
+        </div><!-- end complianceTab-certifications -->
 
+        <!-- ── Tax Jurisdictions ── -->
+        <div id="complianceTab-taxJurisdictions" class="compliance-tab-body" style="display:none;">
+        <div class="tab-section-title">Tax jurisdictions<span class="tab-section-status" data-state="info" id="complianceStatus-taxJurisdictions">None</span></div>
+        <p class="tab-section-purpose">Multi-state sales-tax registrations &mdash; one row per state where you&rsquo;re registered to collect. Sales-tax rate tables remain on Settings &gt; Tax &amp; Legal &rarr; Sales tax.</p>
         <!-- Tax Jurisdictions section -->
         <div class="form-group" style="margin-bottom:24px;">
-          <label style="font-size:1.15rem;font-weight:600;">Tax Jurisdictions</label>
-          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:12px;">Multi-state sales-tax registrations. Sales Tax rate tables remain on the Tax &amp; Legal tab.</p>
           <div id="complianceTaxJurisdictionsList"></div>
           <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">
             <button class="btn btn-secondary" onclick="addComplianceItem('taxJurisdictions')">+ Add jurisdiction</button>
@@ -8812,6 +8834,7 @@
           </div>
           <div id="complianceTaxJurisdictionsStatus" style="margin-top:8px;font-size:0.85rem;"></div>
         </div>
+        </div><!-- end complianceTab-taxJurisdictions -->
       </div>
       <!-- Operations Settings Sub-Tab (Phase 2 P2D-S2) -->
       <div id="settingsSubOperations" style="display:none;max-width:820px;">
@@ -18171,7 +18194,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260525-131550-951846e';
+var MAST_MODULES_V = '20260525-171640-b1d3de5';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -18353,8 +18376,8 @@ function switchSettingsSubView(view) {
   if (view === 'pim') loadPimSettings();
   if (view === 'maker') loadMakerSettings();
   if (view === 'engagement') loadEngagementSettings();
-  if (view === 'tax') loadTaxLegalSettings();
-  if (view === 'compliance') loadComplianceSettings();
+  if (view === 'tax') { loadTaxLegalSettings(); if (typeof loadTaxRates === 'function') loadTaxRates(); if (typeof refreshTaxTabStatus === 'function') refreshTaxTabStatus(); }
+  if (view === 'compliance') { loadComplianceSettings(); if (typeof refreshComplianceTabStatus === 'function') refreshComplianceTabStatus(); }
   if (view === 'operations') { loadOperationsSettings(); if (typeof refreshOperationsTabStatus === 'function') refreshOperationsTabStatus(); }
   if (view === 'channels') { loadChannelsSettings(); loadChannelsConnectCards(); if (typeof refreshChannelsTabStatus === 'function') refreshChannelsTabStatus(); }
 }
@@ -19202,6 +19225,7 @@ async function loadComplianceSettings() {
 
   // Seed banner visibility
   _updateComplianceSeedBanner(ent);
+  if (typeof refreshComplianceTabStatus === 'function') refreshComplianceTabStatus();
 }
 
 function _complianceRowId(sectionKey, idx) { return 'compliance-' + sectionKey + '-row-' + idx; }
@@ -19372,6 +19396,7 @@ window.saveComplianceSection = async function(sectionKey) {
     if (window.showToast) showToast('Compliance saved');
     // Re-evaluate seed banner (data changed).
     try { var ent = await MastDB.businessEntity.get(); _updateComplianceSeedBanner(ent); } catch(_) {}
+    if (typeof refreshComplianceTabStatus === 'function') refreshComplianceTabStatus();
   } catch (err) {
     if (statusEl) { statusEl.textContent = 'Save failed: ' + (err.message || 'unknown'); statusEl.style.color = 'var(--danger,#ef4444)'; }
   }
@@ -20151,6 +20176,7 @@ async function loadTaxLegalSettings() {
   } catch (err) {
     console.warn('[tax & legal] load failed:', err && err.message);
   }
+  if (typeof refreshTaxTabStatus === 'function') refreshTaxTabStatus();
 }
 
 function onTaxLegalEinBlur() {
@@ -20216,6 +20242,7 @@ async function saveTaxLegalIdentity() {
   try {
     await MastDB.businessEntity.update('identity', data);
     if (statusEl) { statusEl.textContent = 'Legal identity saved.'; statusEl.style.color = 'var(--success,#22c55e)'; }
+    if (typeof refreshTaxTabStatus === 'function') refreshTaxTabStatus();
   } catch (err) {
     if (statusEl) { statusEl.textContent = 'Save failed: ' + (err.message || 'unknown error'); statusEl.style.color = 'var(--danger,#ef4444)'; }
   }
@@ -20248,6 +20275,7 @@ async function saveTaxLegalEin() {
     await MastDB.businessEntity.update('identity', { ein: raw });
     if (statusEl) { statusEl.textContent = raw ? 'EIN saved.' : 'EIN cleared.'; statusEl.style.color = 'var(--success,#22c55e)'; }
     if (errEl) { errEl.textContent = ''; }
+    if (typeof refreshTaxTabStatus === 'function') refreshTaxTabStatus();
   } catch (err) {
     if (statusEl) { statusEl.textContent = 'Save failed: ' + (err.message || 'unknown error'); statusEl.style.color = 'var(--danger,#ef4444)'; }
   }
@@ -25366,6 +25394,7 @@ function loadTaxRates() {
     renderTaxRatesTable(rates);
     var count = Object.keys(rates).filter(function(k) { return rates[k] > 0; }).length;
     if (statusEl) statusEl.innerHTML = '<span style="color:var(--teal);">&#10003; ' + count + ' states with non-zero tax rates configured.</span>';
+    if (typeof refreshTaxTabStatus === 'function') refreshTaxTabStatus();
   });
   // Load nexus state setting
   MastDB.config.settings().child('nexusState').once('value').then(function(snap) {
@@ -25401,6 +25430,7 @@ async function saveTaxRates() {
     var count = Object.keys(rates).filter(function(k) { return rates[k] > 0; }).length;
     document.getElementById('taxRatesStatus').innerHTML = '<span style="color:var(--teal);">&#10003; ' + count + ' state tax rates saved.</span>';
     showToast('Tax rates saved.');
+    if (typeof refreshTaxTabStatus === 'function') refreshTaxTabStatus();
   } catch (err) {
     showToast('Error saving tax rates: ' + err.message, true);
   }
@@ -25415,6 +25445,7 @@ async function clearTaxRates() {
     renderTaxRatesTable({});
     document.getElementById('taxRatesStatus').innerHTML = '<span style="color:var(--warm-gray-light);">Tax rates cleared.</span>';
     showToast('Tax rates cleared.');
+    if (typeof refreshTaxTabStatus === 'function') refreshTaxTabStatus();
   } catch (err) {
     showToast('Error clearing tax rates: ' + err.message, true);
   }
@@ -39664,6 +39695,111 @@ function refreshOperationsTabStatus() {
   setPill('locale', tzVal ? 'ok' : 'info', tzVal || 'Defaults');
 }
 window.refreshOperationsTabStatus = refreshOperationsTabStatus;
+
+// ── Settings → Tax & Legal: 2 tabs (Identity & EIN + Sales tax).
+var TAX_TABS = ['identity','salesTax'];
+function switchTaxTab(tab) {
+  window.__taxActiveTab = tab;
+  TAX_TABS.forEach(function(t) {
+    var body = document.getElementById('taxTab-' + t);
+    if (body) body.style.display = (t === tab) ? '' : 'none';
+  });
+  document.querySelectorAll('#taxTabBar .view-tab').forEach(function(btn) {
+    btn.classList.toggle('active', btn.dataset.tab === tab);
+  });
+}
+window.switchTaxTab = switchTaxTab;
+
+function refreshTaxTabStatus() {
+  function setDot(tabKey, state) {
+    var btn = document.getElementById('taxTabBtn-' + tabKey);
+    if (!btn) return;
+    var dot = btn.querySelector('.tab-status-dot');
+    if (dot) dot.setAttribute('data-state', state);
+  }
+  function setPill(tabKey, state, label) {
+    var pill = document.getElementById('taxStatus-' + tabKey);
+    if (!pill) return;
+    pill.setAttribute('data-state', state);
+    if (label != null) pill.textContent = label;
+  }
+  // Identity & EIN — green if EIN or legal name set; gray otherwise.
+  var nameEl = document.getElementById('taxLegalName');
+  var einEl = document.getElementById('taxLegalEin');
+  var hasName = !!(nameEl && nameEl.value && nameEl.value.trim());
+  var hasEin = !!(einEl && einEl.value && einEl.value.trim());
+  if (hasName && hasEin) {
+    setDot('identity', 'ok');
+    setPill('identity', 'ok', 'Configured');
+  } else if (hasName || hasEin) {
+    setDot('identity', 'partial');
+    setPill('identity', 'partial', hasEin ? 'EIN set' : 'Name set');
+  } else {
+    setDot('identity', 'info');
+    setPill('identity', 'info', 'Optional');
+  }
+  // Sales tax — count non-zero rate rows in the table; gray if defaults.
+  var body = document.getElementById('taxRatesTableBody');
+  var rows = body ? body.querySelectorAll('input[data-state]') : [];
+  var count = 0;
+  rows.forEach(function(inp) { var v = parseFloat(inp.value); if (!isNaN(v) && v > 0) count++; });
+  if (count > 0) {
+    setDot('salesTax', 'ok');
+    setPill('salesTax', 'ok', count + (count === 1 ? ' state' : ' states'));
+  } else {
+    setDot('salesTax', 'info');
+    setPill('salesTax', 'info', 'Defaults');
+  }
+}
+window.refreshTaxTabStatus = refreshTaxTabStatus;
+
+// ── Settings → Compliance: 4 tabs (Licenses + Insurance + Certifications + Tax jurisdictions).
+var COMPLIANCE_TABS = ['licenses','insurance','certifications','taxJurisdictions'];
+function switchComplianceTab(tab) {
+  window.__complianceActiveTab = tab;
+  COMPLIANCE_TABS.forEach(function(t) {
+    var body = document.getElementById('complianceTab-' + t);
+    if (body) body.style.display = (t === tab) ? '' : 'none';
+  });
+  document.querySelectorAll('#complianceTabBar .view-tab').forEach(function(btn) {
+    btn.classList.toggle('active', btn.dataset.tab === tab);
+  });
+}
+window.switchComplianceTab = switchComplianceTab;
+
+function refreshComplianceTabStatus() {
+  function setDot(tabKey, state) {
+    var btn = document.getElementById('complianceTabBtn-' + tabKey);
+    if (!btn) return;
+    var dot = btn.querySelector('.tab-status-dot');
+    if (dot) dot.setAttribute('data-state', state);
+  }
+  function setPill(tabKey, state, label) {
+    var pill = document.getElementById('complianceStatus-' + tabKey);
+    if (!pill) return;
+    pill.setAttribute('data-state', state);
+    if (label != null) pill.textContent = label;
+  }
+  function countRows(listId) {
+    var list = document.getElementById(listId);
+    if (!list) return 0;
+    var n = list.querySelectorAll('[data-compliance-row], .compliance-row, .form-row').length;
+    if (!n) n = list.children.length;
+    return n;
+  }
+  COMPLIANCE_TABS.forEach(function(key) {
+    var listId = 'compliance' + key.charAt(0).toUpperCase() + key.slice(1) + 'List';
+    var n = countRows(listId);
+    if (n > 0) {
+      setDot(key, 'ok');
+      setPill(key, 'ok', n + (n === 1 ? ' item' : ' items'));
+    } else {
+      setDot(key, 'info');
+      setPill(key, 'info', 'None');
+    }
+  });
+}
+window.refreshComplianceTabStatus = refreshComplianceTabStatus;
 
 // ── Settings → Selling → Channels: 2 tabs (Declared + Connected).
 var CHANNELS_TABS = ['declared','connected'];
