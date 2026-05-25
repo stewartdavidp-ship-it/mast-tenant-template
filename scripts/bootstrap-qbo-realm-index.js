@@ -11,7 +11,7 @@
  * tenants that connected BEFORE the W2b code shipped.
  *
  * Iterates `platform_tenants` then reads each tenant's
- * `tenants/{tid}/admin/integrations/qbo` doc directly (Firestore REST does
+ * `tenants/{tid}/admin_integrations/qbo` doc directly (Firestore REST does
  * not support collectionGroup queries via the documents API, so we walk the
  * platform_tenants index instead — same shape as backfill-qbo-item-bridge.js).
  *
@@ -114,7 +114,10 @@ async function listAllTenants() {
 }
 
 async function processTenant(tid, counters) {
-  const qboDoc = await fsGet(`tenants/${tid}/admin/integrations/qbo`);
+  // NOTE: Firestore stores this as 4-segment doc `tenants/{tid}/admin_integrations/qbo`
+  // (Mast convention flattens admin/X → admin_X). The CF code uses a `ds` resolver
+  // that applies the flattening internally; raw REST callers must use the flat path.
+  const qboDoc = await fsGet(`tenants/${tid}/admin_integrations/qbo`);
   if (!qboDoc) {
     counters.noIntegration++;
     return;
