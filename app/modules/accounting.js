@@ -66,16 +66,28 @@
     if (!body) return;
     body.innerHTML = '<div id="qboConnViewStatus" style="font-size:0.9rem;color:var(--warm-gray);">Loading…</div>';
 
-    MastDB.get('admin/integrations/qbo').then(function(doc) {
+    // Load qbo doc + _meta in parallel for collision banner + countdown chip.
+    Promise.all([
+      MastDB.get('admin/integrations/qbo'),
+      MastDB.get('admin/integrations/_meta').catch(function() { return null; })
+    ]).then(function(results) {
+      var doc = results[0];
+      var meta = results[1] || {};
       var connected = doc && doc.realmId && !doc.disconnectedAt && (doc.status !== 'disconnected');
+      var collisionBannerHtml = _renderCollisionBanner(meta);
       var html;
       if (connected) {
         var env = doc.env || 'sandbox';
         var realmShort = String(doc.realmId).slice(0, 8) + '…';
         var connectedAt = doc.connectedAt ? new Date(doc.connectedAt).toLocaleString() : '—';
+        var countdownChipHtml = _renderReconnectCountdownChip(doc);
         html =
+          collisionBannerHtml +
           '<div style="background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.25);border-radius:8px;padding:12px 16px;margin-bottom:16px;">' +
-            '<div style="font-size:0.9rem;font-weight:600;color:#22c55e;margin-bottom:4px;">Connected</div>' +
+            '<div style="display:flex;align-items:center;gap:10px;margin-bottom:4px;flex-wrap:wrap;">' +
+              '<span style="font-size:0.9rem;font-weight:600;color:#22c55e;">Connected</span>' +
+              countdownChipHtml +
+            '</div>' +
             '<div style="font-size:0.85rem;color:var(--warm-gray);">' +
               'Environment: <strong>' + esc(env) + '</strong> · Realm: <code style="font-size:0.78rem;">' + esc(realmShort) + '</code> · Since: ' + esc(connectedAt) +
             '</div>' +
@@ -85,10 +97,12 @@
             'after writing a Day Close or wholesale invoice to verify your first sync.' +
           '</p>' +
           '<div style="display:flex;gap:8px;flex-wrap:wrap;">' +
+            '<button class="btn btn-secondary" onclick="window._qboCheckBankFeedCollisions && window._qboCheckBankFeedCollisions()">Check for collisions</button>' +
             '<button class="btn btn-danger" onclick="window.disconnectQbo && window.disconnectQbo()">Disconnect</button>' +
           '</div>';
       } else {
         html =
+          collisionBannerHtml +
           '<p style="color:var(--text-secondary);font-size:0.85rem;line-height:1.5;margin-bottom:12px;">' +
             'Connect your QuickBooks Online sandbox to start syncing data. After connecting, map your chart of accounts ' +
             'on the <strong>COA Map</strong> tab. Once mapping is saved, every day close, wholesale invoice, vendor bill, ' +
@@ -124,6 +138,108 @@
       }
     }
   }
+
+  // ---- W2a.2 Bank-feed collision banner ----
+  // Reads admin/integrations/_meta.bankFeedCollisions[] where status==='pending-ack'.
+  // Renders count + expandable list above Connect/Disconnect. Per-collision
+  // "Acknowledge" flips status to 'acknowledged' so the row stops blocking.
+  function _renderCollisionBanner(meta) {
+    var collisions = (meta && Array.isArray(meta.bankFeedCollisions)) ? meta.bankFeedCollisions : [];
+    var pending = collisions.filter(function(c) { return c && c.status === 'pending-ack'; });
+    if (pending.length === 0) return '';
+    var rows = pending.map(function(c, idx) {
+      var name = c.accountName || c.accountId || '(unnamed bank account)';
+      var when = c.detectedAt ? new Date(c.detectedAt).toLocaleString() : '';
+      var safeIdx = window._jsAttr ? window._jsAttr(c.accountId || String(idx)) : esc(c.accountId || String(idx));
+      return '<li style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;border-top:1px solid rgba(0,0,0,0.06);">' +
+        '<div style="flex:1;min-width:0;">' +
+          '<div style="font-size:0.85rem;font-weight:600;color:var(--text,#1f2937);">' + esc(name) + '</div>' +
+          (when ? '<div style="font-size:0.72rem;color:var(--warm-gray);">' + esc('Detected ' + when) + '</div>' : '') +
+        '</div>' +
+        '<button class="btn btn-secondary" style="font-size:0.72rem;padding:3px 8px;" onclick="window._qboAckCollision &amp;&amp; window._qboAckCollision(&#39;' + safeIdx + '&#39;)">Acknowledge</button>' +
+      '</li>';
+    }).join('');
+    return '<div style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.35);border-radius:8px;padding:12px 14px;margin-bottom:16px;">' +
+      '<div style="font-size:0.9rem;font-weight:600;color:#ef4444;margin-bottom:4px;">' +
+        esc(pending.length + ' bank-feed collision' + (pending.length === 1 ? '' : 's') + ' detected') +
+      '</div>' +
+      '<div style="font-size:0.78rem;color:var(--warm-gray);line-height:1.4;margin-bottom:8px;">' +
+        esc('One or more QBO bank accounts share a routing/last-4 with a Plaid-connected account. Acknowledging marks the collision reviewed; it does not auto-resolve the duplicate-feed risk.') +
+      '</div>' +
+      '<ul style="list-style:none;margin:0;padding:0;">' + rows + '</ul>' +
+    '</div>';
+  }
+
+  // W2a.4 — countdown chip next to "Connected" indicator.
+  // daysUntilStale = refreshTokenIdleDays - (now - lastUsedAt) - refreshAheadDays
+  // Color tiers: >30 green, 7-30 amber, <=7 red. No action — that's W2c.
+  function _renderReconnectCountdownChip(doc) {
+    if (!doc) return '';
+    var IDLE_DAYS = 100;       // QBO per C-ACC-1 (Intuit Nov-2025 policy)
+    var REFRESH_AHEAD = 30;    // per provider-policy.qbo.oauth.refreshAheadDays
+    var lastUsedAt = doc.lastUsedAt || doc.refreshedAt || doc.connectedAt;
+    if (!lastUsedAt) return '';
+    var lastMs = (typeof lastUsedAt === 'number') ? lastUsedAt : Date.parse(lastUsedAt);
+    if (!isFinite(lastMs)) return '';
+    var idleDays = (Date.now() - lastMs) / 86400000;
+    var daysUntilReconnect = Math.max(0, Math.floor(IDLE_DAYS - idleDays - REFRESH_AHEAD));
+    var bg, fg, label, tooltip;
+    if (daysUntilReconnect > 30) {
+      bg = 'rgba(34,197,94,0.15)'; fg = '#22c55e';
+      label = daysUntilReconnect + 'd until reconnect';
+      tooltip = 'QBO refresh-on-use rotates the token; you only need to reconnect if the connection sits idle past ~70d.';
+    } else if (daysUntilReconnect > 7) {
+      bg = 'rgba(234,179,8,0.18)'; fg = '#eab308';
+      label = daysUntilReconnect + 'd until reconnect';
+      tooltip = 'Idle threshold approaching. Trigger any sync (or click Disconnect/Connect) to refresh the token.';
+    } else {
+      bg = 'rgba(239,68,68,0.18)'; fg = '#ef4444';
+      label = daysUntilReconnect === 0 ? 'Reconnect required' : (daysUntilReconnect + 'd until reconnect');
+      tooltip = 'QBO refresh window is critical. Connection may fail soon — reconnect to reset the idle timer.';
+    }
+    return '<span title="' + esc(tooltip) + '" style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:10px;background:' + bg + ';color:' + fg + ';font-size:0.72rem;font-weight:600;">' +
+      '<span style="width:6px;height:6px;border-radius:50%;background:' + fg + ';display:inline-block;"></span>' + esc(label) +
+    '</span>';
+  }
+
+  // Acknowledge a single collision row by accountId — flips status.
+  window._qboAckCollision = async function(accountId) {
+    if (!accountId) return;
+    try {
+      var meta = await MastDB.get('admin/integrations/_meta').catch(function() { return null; });
+      if (!meta || !Array.isArray(meta.bankFeedCollisions)) {
+        toastErr('No collisions to acknowledge'); return;
+      }
+      var updated = meta.bankFeedCollisions.map(function(c) {
+        if (c && String(c.accountId) === String(accountId) && c.status === 'pending-ack') {
+          return Object.assign({}, c, {
+            status: 'acknowledged',
+            acknowledgedAt: new Date().toISOString()
+          });
+        }
+        return c;
+      });
+      await MastDB.set('admin/integrations/_meta', Object.assign({}, meta, { bankFeedCollisions: updated }));
+      toastOk('Collision acknowledged');
+      renderConnectView();
+    } catch (err) {
+      toastErr('Acknowledge failed: ' + (err && err.message));
+    }
+  };
+
+  // Trigger detectBankFeedCollisions CF (admin onCall).
+  window._qboCheckBankFeedCollisions = async function() {
+    try {
+      var fn = firebase.functions().httpsCallable('detectBankFeedCollisions');
+      var result = await fn({ tenantId: tenantId() });
+      var data = (result && result.data) || {};
+      var count = data.detected || 0;
+      toastOk('Checked — ' + count + ' collision' + (count === 1 ? '' : 's') + ' detected');
+      renderConnectView();
+    } catch (err) {
+      toastErr('Collision check failed: ' + (err && err.message));
+    }
+  };
 
   // ---- Levenshtein + COA fuzzy auto-suggest (W1 fix-up) ----
   // Greenlit-earlier spec: when no saved mapping exists, pre-select best
