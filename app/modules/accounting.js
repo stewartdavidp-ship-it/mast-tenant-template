@@ -336,6 +336,40 @@
         '</tr>';
     });
 
+    // W2a.1 — Configuration section: Default Sales Item (Item bridge).
+    // Reads from mappingDoc.itemBridge per C5 / C7. Saves out-of-band via
+    // _qboPickDefaultSalesItem (not part of the COA mapping save batch — item
+    // bridge has its own field at itemBridge.defaultSalesItemId).
+    var itemBridge = (mappingDoc && mappingDoc.itemBridge) || {};
+    var defaultItemId = itemBridge.defaultSalesItemId || '';
+    var defaultItemName = itemBridge.defaultSalesItemName || '';
+    var itemBridgeReady = itemBridge.ready === true;
+    rows += '<tr><td colspan="2" class="qbo-section-header">' + esc('Configuration') + '</td></tr>';
+    rows +=
+      '<tr>' +
+        '<td style="width:42%;">' + esc('Default Sales Item') +
+          ' <span style="color:#ef4444;font-size:0.72rem;" aria-label="required">*</span>' +
+          '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:2px;line-height:1.3;">' +
+            esc('Used when a Mast product has no QBO Item mapping yet.') +
+          '</div>' +
+        '</td>' +
+        '<td>' +
+          '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">' +
+            '<span id="qboDefaultSalesItemLabel" style="font-size:0.85rem;color:var(--text,#1f2937);min-width:120px;">' +
+              (defaultItemId
+                ? esc(defaultItemName || ('Item ' + defaultItemId))
+                : '<span style="color:var(--warm-gray);">' + esc('Not set') + '</span>') +
+            '</span>' +
+            '<button class="btn btn-secondary" style="font-size:0.78rem;padding:4px 10px;" onclick="window._qboPickDefaultSalesItem && window._qboPickDefaultSalesItem()">' +
+              esc('Browse QBO Items') +
+            '</button>' +
+            (itemBridgeReady
+              ? '<span style="font-size:0.72rem;color:#22c55e;">' + esc('● ready') + '</span>'
+              : '') +
+          '</div>' +
+        '</td>' +
+      '</tr>';
+
     var hasSaved = !!(mappingDoc && mappingDoc.confirmedAt);
     var unsavedBanner = '';
     // Banner cases:
@@ -548,10 +582,9 @@
       if (s.length <= n) return s;
       return s.substring(0, n) + '…';
     }
-    function jsAttr(s) {
-      if (typeof window._jsAttr === 'function') return window._jsAttr(s);
-      return esc(s).replace(/'/g, '&#39;');
-    }
+    // Canonical _jsAttr lives on window (index.html). Local wrapper removed
+    // 2026-05-25 per sprinkle -OtSIF2XO7NmEgye6bEo.
+    function jsAttr(s) { return window._jsAttr(s); }
 
     var html =
       '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:0.85rem;">' +
@@ -607,6 +640,64 @@
 
   window._qboRetrySync = async function(requestId) {
     if (!requestId) return;
+    // W2a.1 — if receipt is parked at PENDING_ITEM_CONFIRM, open the fuzzy
+    // match modal first to resolve the candidate, then re-enqueue.
+    var row = (_syncLogState.rows || []).filter(function(r) {
+      return (r.requestId || r.id) === requestId;
+    })[0];
+    if (row && (row.code === 'PENDING_ITEM_CONFIRM' || row.faultCode === 'PENDING_ITEM_CONFIRM')) {
+      var candidates = Array.isArray(row.candidates) ? row.candidates : [];
+      var productId = row.productId || row.mastEntityRef || '';
+      window.openMatchConfirmModal({
+        title: 'Confirm QBO Item match',
+        description: candidates.length
+          ? 'We found multiple possible QBO Items for this product. Pick the correct one to continue this sync.'
+          : 'No fuzzy candidates were returned. Choose "Create new in QBO" or cancel.',
+        candidates: candidates.map(function(c) {
+          return {
+            id: c.qboItemId || c.id,
+            label: c.name || c.label || ('Item ' + (c.qboItemId || c.id)),
+            sublabel: c.incomeAccountName ? ('Income: ' + c.incomeAccountName) : '',
+            score: typeof c.score === 'number' ? c.score : 1
+          };
+        }),
+        onAccept: async function(qboItemId) {
+          if (!qboItemId) { toastErr('No item selected'); return; }
+          try {
+            var confirmFn = firebase.functions().httpsCallable('confirmQboItemMatch');
+            await confirmFn({ tid: tenantId(), productId: productId, qboItemId: qboItemId });
+            toastOk('Item match confirmed; re-queueing sync');
+            var retryFn = firebase.functions().httpsCallable('retryQboSync');
+            await retryFn({ tenantId: tenantId(), requestId: requestId });
+            setTimeout(function() {
+              _syncLogState.rows = [];
+              _syncLogState.fetchedLimit = 0;
+              loadSyncLogPage();
+            }, 600);
+          } catch (err) {
+            toastErr('Confirm failed: ' + (err && err.message));
+          }
+        },
+        onCreateNew: async function() {
+          try {
+            var lookupFn = firebase.functions().httpsCallable('lookupOrCreateQboItem');
+            await lookupFn({ tid: tenantId(), productId: productId, name: row.productName || ('Product ' + productId), forceCreate: true });
+            toastOk('Item created in QBO; re-queueing sync');
+            var retryFn = firebase.functions().httpsCallable('retryQboSync');
+            await retryFn({ tenantId: tenantId(), requestId: requestId });
+            setTimeout(function() {
+              _syncLogState.rows = [];
+              _syncLogState.fetchedLimit = 0;
+              loadSyncLogPage();
+            }, 600);
+          } catch (err) {
+            toastErr('Create-new failed: ' + (err && err.message));
+          }
+        },
+        onCancel: function() {}
+      });
+      return;
+    }
     try {
       var fn = firebase.functions().httpsCallable('retryQboSync');
       await fn({ tenantId: tenantId(), requestId: requestId });
@@ -618,6 +709,60 @@
       }, 600);
     } catch (err) {
       toastErr('Retry failed: ' + (err && err.message));
+    }
+  };
+
+  // W2a.1 — Default Sales Item picker. Lists QBO Items via lookupOrCreateQboItem
+  // in "list" mode (Agent A boundary — if list mode isn't supported by the CF,
+  // we fall back to operator entry of a QBO Item ID).
+  window._qboPickDefaultSalesItem = async function() {
+    var tid = tenantId();
+    if (!tid) { toastErr('Tenant ID not resolved'); return; }
+    var loadingToast = (typeof showToast === 'function') ? showToast('Loading QBO Items…') : null;
+    try {
+      // Best-effort: call lookupOrCreateQboItem in list mode (no productId →
+      // returns top-25 items as candidates). If CF rejects, fall back.
+      var fn = firebase.functions().httpsCallable('lookupOrCreateQboItem');
+      var result = await fn({ tid: tid, listMode: true, limit: 25 });
+      var candidates = (result && result.data && result.data.candidates) || [];
+      if (!candidates.length) {
+        toastErr('No QBO Items found — create one in QuickBooks first');
+        return;
+      }
+      window.openMatchConfirmModal({
+        title: 'Pick default Sales Item',
+        description: 'This Item will be used when a Mast product has no QBO Item mapping. You can change it later.',
+        candidates: candidates.map(function(c) {
+          return {
+            id: c.qboItemId || c.id,
+            label: c.name || c.label || ('Item ' + (c.qboItemId || c.id)),
+            sublabel: c.incomeAccountName ? ('Income: ' + c.incomeAccountName) : '',
+            score: 0.05  // not a fuzzy match — just decorative pill
+          };
+        }),
+        onAccept: async function(qboItemId) {
+          if (!qboItemId) return;
+          var picked = candidates.filter(function(c) { return String(c.qboItemId || c.id) === String(qboItemId); })[0];
+          await MastDB.set('admin/integrations/qboMapping/itemBridge', {
+            ready: true,
+            defaultSalesItemId: String(qboItemId),
+            defaultSalesItemName: (picked && (picked.name || picked.label)) || '',
+            lastValidatedAt: new Date().toISOString()
+          });
+          toastOk('Default Sales Item saved');
+          renderCoaMapView();
+        },
+        onCreateNew: function() {
+          toastErr('To create a new Item, use QuickBooks → Sales → Products & services');
+        },
+        onCancel: function() {}
+      });
+    } catch (err) {
+      var msg = (err && err.message) || String(err);
+      toastErr('Failed to list QBO Items: ' + msg);
+    } finally {
+      // toast auto-dismisses
+      void loadingToast;
     }
   };
 
