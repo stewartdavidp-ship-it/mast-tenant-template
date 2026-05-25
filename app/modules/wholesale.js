@@ -1719,6 +1719,18 @@ async function generateInvoiceForWholesale(orderId) {
   try {
     await MastDB.orders.update(orderId, { invoiceStatus: 'sent', updatedAt: new Date().toISOString() });
   } catch (_e) {}
+  // W1 final wire (Accounting Idea -OtKxQEhTDampnjEBjvS): wholesale invoice
+  // generated + auto-promoted to 'sent' → QBO push (best-effort). The Mast
+  // canonical doc is the order itself (admin/orders/{orderId}); see OPEN on
+  // pusher path mismatch (pushers/wholesale-ar.js currently reads
+  // admin/wholesale/invoices/{id}).
+  try {
+    if (typeof firebase !== 'undefined' && firebase.functions) {
+      var _trigger = firebase.functions().httpsCallable('triggerQboPush');
+      _trigger({ tid: MastDB.tenantId(), entityType: 'wholesaleInvoice', mastId: orderId })
+        .catch(function(e) { console.warn('[qbo-push] wholesaleInvoice trigger failed:', e && e.message); });
+    }
+  } catch (_e) { console.warn('[qbo-push] wholesaleInvoice trigger error:', _e && _e.message); }
   // Re-fetch so the wholesale-tab cache picks up the freshly-written invoice fields.
   try {
     var snap = await MastDB.orders.get(orderId);

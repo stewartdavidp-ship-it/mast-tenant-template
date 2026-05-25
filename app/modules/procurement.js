@@ -1458,6 +1458,15 @@
 
     try {
       await MastDB.multiUpdate(updates);
+      // W1 final wire (Accounting Idea -OtKxQEhTDampnjEBjvS): new AP bill
+      // (purchaseReceipt) → QBO push (best-effort).
+      try {
+        if (typeof firebase !== 'undefined' && firebase.functions) {
+          var _trigger = firebase.functions().httpsCallable('triggerQboPush');
+          _trigger({ tid: MastDB.tenantId(), entityType: 'apBill', mastId: receiptId })
+            .catch(function(e) { console.warn('[qbo-push] apBill trigger failed:', e && e.message); });
+        }
+      } catch (_e) { console.warn('[qbo-push] apBill trigger error:', _e && _e.message); }
       // Local cache refresh
       purchaseReceiptsData[receiptId] = receipt;
       generatedLots.forEach(function(g) {

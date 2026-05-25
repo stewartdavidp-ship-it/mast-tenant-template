@@ -1254,6 +1254,21 @@ function finExpUpdateBulkUI() {
   }
 }
 
+// W1 final wire (Accounting Idea -OtKxQEhTDampnjEBjvS): after a successful
+// Mast write to expense/apBill/wholesaleInvoice, best-effort invoke the
+// triggerQboPush callable so the sync queue picks up the change. The Mast
+// write has already succeeded — any failure here is logged and swallowed
+// so the user-visible flow stays intact (QBO is downstream-of-record).
+async function _firTriggerQboPush(entityType, mastId) {
+  try {
+    if (typeof firebase === 'undefined' || !firebase.functions) return;
+    var trigger = firebase.functions().httpsCallable('triggerQboPush');
+    await trigger({ tid: MastDB.tenantId(), entityType: entityType, mastId: mastId });
+  } catch (e) {
+    console.warn('[qbo-push] trigger failed (best-effort):', entityType, mastId, e && e.message);
+  }
+}
+
 function finExpSelectedIds() {
   return finExpCache.expenses.slice(0, 100)
     .filter(function(ex) { return finExpSelected[ex._id]; })
@@ -1276,6 +1291,14 @@ window.finExpBulkApprove = function() {
       });
       await MastDB.update('', updates);
       showToast('Approved ' + ids.length + ' expense' + (ids.length !== 1 ? 's' : ''));
+      // W1 final wire: each approved expense becomes eligible for QBO push.
+      // Filter by pusher gate (source ∈ {plaid, manual}).
+      ids.forEach(function(id) {
+        var ex = finExpAllExpenses.find(function(x) { return x._id === id; });
+        if (ex && (ex.source === 'plaid' || ex.source === 'manual')) {
+          _firTriggerQboPush('expense', id);
+        }
+      });
       finExpSelected = {};
       loadFinExpenses();
     } catch (err) {
@@ -1450,6 +1473,12 @@ window.finExpUpdateField = async function(id, field, value) {
 window.finExpDetailApprove = async function(id) {
   try {
     await MastDB.expenses.update(id, { reviewed: true, updatedAt: new Date().toISOString() });
+    // W1 final wire: approved expense → QBO push (best-effort, gated on
+    // source ∈ {plaid, manual} per pusher filter).
+    var _ex = finExpAllExpenses.find(function(x) { return x._id === id; });
+    if (_ex && (_ex.source === 'plaid' || _ex.source === 'manual')) {
+      _firTriggerQboPush('expense', id);
+    }
     showToast('Expense approved');
     finExpCloseDetail();
     loadFinExpenses();
@@ -4081,9 +4110,14 @@ window.finApSaveBill = async function(billId) {
       var id = 'b_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8);
       payload.id = id; payload.createdAt = now;
       await MastDB.set('admin/purchaseReceipts/' + id, payload);
+      // W1 final wire: new AP bill → QBO push (best-effort).
+      _firTriggerQboPush('apBill', id);
       showToast('Bill created');
     } else {
       await MastDB.update('admin/purchaseReceipts/' + billId, payload);
+      // W1 final wire: AP bill edit → QBO push (best-effort, idempotent on
+      // mast:apBill:<tid>:<mastId>).
+      _firTriggerQboPush('apBill', billId);
       showToast('Bill updated');
     }
     _finCloseModal();
