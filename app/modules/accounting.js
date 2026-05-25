@@ -81,13 +81,19 @@
     if (!body) return;
     body.innerHTML = '<div id="qboConnViewStatus" style="font-size:0.9rem;color:var(--warm-gray);">Loading…</div>';
 
-    // Load qbo doc + _meta in parallel for collision banner + countdown chip.
+    // Load qbo doc + _meta + qboMapping in parallel. qboMapping needed for
+    // W2b.4 backfill gate (itemBridge.ready check).
     Promise.all([
       MastDB.get('admin/integrations/qbo'),
-      MastDB.get('admin/integrations/_meta').catch(function() { return null; })
+      MastDB.get('admin/integrations/_meta').catch(function() { return null; }),
+      MastDB.get('admin/integrations/qboMapping').catch(function() { return null; })
     ]).then(function(results) {
       var doc = results[0];
       var meta = results[1] || {};
+      var mapping = results[2] || {};
+      // Stash mapping on window for the backfill row helper which is called
+      // inline below (avoids passing through every helper signature).
+      window.__qboMappingCache = mapping;
       var connected = doc && doc.realmId && !doc.disconnectedAt && (doc.status !== 'disconnected');
       var collisionBannerHtml = _renderCollisionBanner(meta);
       var html;
@@ -113,6 +119,7 @@
             'Next steps: confirm your <strong>COA Map</strong> tab is set up, then check the <strong>Sync Log</strong> tab ' +
             'after writing a Day Close or wholesale invoice to verify your first sync.' +
           '</p>' +
+          _renderBackfillRow(doc, meta) +
           '<div style="display:flex;gap:8px;flex-wrap:wrap;">' +
             '<button class="btn btn-secondary" onclick="window._qboCheckBankFeedCollisions && window._qboCheckBankFeedCollisions()">Check for collisions</button>' +
             '<button class="btn btn-danger" onclick="window.disconnectQbo && window.disconnectQbo()">Disconnect</button>' +
@@ -291,6 +298,244 @@
     } catch (err) {
       toastErr('Copy failed: ' + (err && err.message));
     }
+  };
+
+  // W2b.4 — Bulk historical backfill row. Three gates must clear before the
+  // button is enabled (matches CF runtime gates in CONTRACTS C8):
+  //   1. qboMapping.itemBridge.ready === true
+  //   2. _meta.bankFeedCollisions has no pending-ack
+  //   3. qbo.allowBackfill === true  (operator-set kill switch)
+  // Disabled tooltip explains which gate failed first.
+  function _renderBackfillRow(doc, meta) {
+    var mapping = window.__qboMappingCache || {};
+    var itemBridgeReady = mapping.itemBridge && mapping.itemBridge.ready === true;
+    var pendingCollisions = (meta && Array.isArray(meta.bankFeedCollisions))
+      ? meta.bankFeedCollisions.filter(function(c) { return c && c.status === 'pending-ack'; }).length
+      : 0;
+    var allowBackfill = doc && doc.allowBackfill === true;
+    var disabled = false;
+    var disabledReason = '';
+    if (!itemBridgeReady) {
+      disabled = true;
+      disabledReason = 'Set the Default Sales Item on the COA Map tab first';
+    } else if (pendingCollisions > 0) {
+      disabled = true;
+      disabledReason = 'Acknowledge ' + pendingCollisions + ' pending bank-feed collision' + (pendingCollisions === 1 ? '' : 's') + ' above first';
+    } else if (!allowBackfill) {
+      disabled = true;
+      disabledReason = 'Enable Backfill in admin/integrations/qbo.allowBackfill (operator-set kill switch)';
+    }
+    var btnAttrs = disabled
+      ? ' disabled title="' + esc(disabledReason) + '" style="opacity:0.55;"'
+      : ' title="Pull historical invoices, bills, payments from QBO"';
+    return '<div style="background:var(--bg-secondary,#1a1a1a);border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:12px 14px;margin-bottom:16px;">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">' +
+        '<div>' +
+          '<div style="font-size:0.9rem;font-weight:600;color:var(--text,#fff);">Bulk backfill historical data</div>' +
+          '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:2px;">Pull last 90 days of invoices, bills, payments, estimates from QuickBooks into Mast.</div>' +
+        '</div>' +
+        '<button class="btn btn-primary" style="font-size:0.85rem;"' + btnAttrs + ' onclick="window._qboStartBackfill && window._qboStartBackfill()">Start backfill…</button>' +
+      '</div>' +
+      (disabled ? '<div style="font-size:0.72rem;color:#eab308;margin-top:8px;">⚠ ' + esc(disabledReason) + '</div>' : '') +
+    '</div>';
+  }
+
+  // Entry point — invokes startQboHistoricalBackfill in preview mode, then
+  // hands the response to openQboBackfillModal step='preview'.
+  window._qboStartBackfill = async function() {
+    var tid = tenantId();
+    if (!tid) { toastErr('Tenant ID not resolved'); return; }
+    try {
+      var fn = firebase.functions().httpsCallable('startQboHistoricalBackfill');
+      var res = await fn({ tid: tid, mode: 'preview' });
+      var data = (res && res.data) || {};
+      if (data.ok === false) {
+        var why = data.blockedBy ? ' (' + data.blockedBy + ')' : '';
+        toastErr('Backfill blocked: ' + (data.error || 'unknown') + why);
+        return;
+      }
+      if (!data.jobId) {
+        toastErr('Backfill preview returned no jobId');
+        return;
+      }
+      window.openQboBackfillModal({
+        title: 'Backfill historical data from QBO',
+        step: 'preview',
+        summary: data.counts || {},
+        jobId: data.jobId,
+        onConfirm: async function() {
+          var fn2 = firebase.functions().httpsCallable('startQboHistoricalBackfill');
+          var r2 = await fn2({ tid: tid, mode: 'confirm', jobId: data.jobId });
+          var d2 = (r2 && r2.data) || {};
+          if (d2.ok === false) {
+            toastErr('Backfill confirm failed: ' + (d2.error || 'unknown'));
+            return false;
+          }
+          return true;
+        },
+        onCancel: function() {}
+      });
+    } catch (err) {
+      toastErr('Backfill failed to start: ' + (err && err.message));
+    }
+  };
+
+  // 3-step modal: preview → confirm-transitions-to → progress (realtime
+  // onSnapshot on admin/backfillJobs/{jobId}). Single overlay element, mutated
+  // in place per step. Not a reuse of openMatchConfirmModal — shape differs.
+  window.openQboBackfillModal = function(opts) {
+    opts = opts || {};
+    var step = opts.step || 'preview';
+    var jobId = opts.jobId || null;
+    var closed = false;
+    var unsubscribe = null;
+
+    var overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:10500;display:flex;align-items:center;justify-content:center;padding:16px;';
+    overlay.setAttribute('tabindex', '-1');
+    document.body.appendChild(overlay);
+
+    function close() {
+      if (closed) return;
+      closed = true;
+      if (typeof unsubscribe === 'function') { try { unsubscribe(); } catch (_) {} }
+      if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+      if (typeof opts.onCancel === 'function') { try { opts.onCancel(); } catch (_) {} }
+    }
+    overlay.addEventListener('click', function(ev) { if (ev.target === overlay) close(); });
+    overlay.addEventListener('keydown', function(ev) { if (ev.key === 'Escape') close(); });
+
+    function renderPreview() {
+      var counts = opts.summary || {};
+      var keys = Object.keys(counts);
+      var total = 0;
+      keys.forEach(function(k) { total += Number(counts[k] || 0); });
+      var rowsHtml = keys.length
+        ? keys.map(function(k) {
+            return '<tr><td style="padding:6px 10px;font-size:0.85rem;">' + esc(k) + '</td>' +
+              '<td style="padding:6px 10px;font-size:0.85rem;text-align:right;font-weight:600;">' + esc(String(counts[k] || 0)) + '</td></tr>';
+          }).join('')
+        : '<tr><td colspan="2" style="padding:14px;text-align:center;color:var(--warm-gray);font-size:0.85rem;">No historical entities to backfill.</td></tr>';
+      overlay.innerHTML =
+        '<div style="background:var(--cream,#fff);border-radius:10px;max-width:520px;width:96%;box-shadow:0 8px 30px rgba(0,0,0,0.2);">' +
+          '<div style="padding:20px 24px 12px;border-bottom:1px solid rgba(0,0,0,0.08);">' +
+            '<div style="font-family:\'Cormorant Garamond\',serif;font-size:1.15rem;font-weight:600;color:var(--charcoal,#1f2937);">' + esc(opts.title || 'Backfill from QBO') + '</div>' +
+            '<div style="font-size:0.85rem;color:var(--warm-gray);margin-top:6px;">Preview of historical entities QBO will return. Confirm to start the bulk pull.</div>' +
+          '</div>' +
+          '<div style="padding:16px 24px;">' +
+            '<table style="width:100%;border-collapse:collapse;">' +
+              '<thead><tr><th style="text-align:left;padding:6px 10px;font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.5px;">Entity</th><th style="text-align:right;padding:6px 10px;font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.5px;">Count</th></tr></thead>' +
+              '<tbody>' + rowsHtml + '</tbody>' +
+              '<tfoot><tr style="border-top:1px solid rgba(0,0,0,0.1);"><td style="padding:8px 10px;font-size:0.85rem;font-weight:700;">Total</td><td style="padding:8px 10px;font-size:0.85rem;text-align:right;font-weight:700;">' + esc(String(total)) + '</td></tr></tfoot>' +
+            '</table>' +
+          '</div>' +
+          '<div style="padding:14px 24px;border-top:1px solid rgba(0,0,0,0.08);display:flex;justify-content:flex-end;gap:8px;">' +
+            '<button class="btn btn-secondary" id="qboBackfillCancel">Cancel</button>' +
+            '<button class="btn btn-primary" id="qboBackfillConfirm"' + (total === 0 ? ' disabled' : '') + '>Confirm &amp; run</button>' +
+          '</div>' +
+        '</div>';
+      overlay.querySelector('#qboBackfillCancel').addEventListener('click', close);
+      overlay.querySelector('#qboBackfillConfirm').addEventListener('click', async function() {
+        var btn = overlay.querySelector('#qboBackfillConfirm');
+        if (btn) { btn.disabled = true; btn.textContent = 'Starting…'; }
+        try {
+          var ok = (typeof opts.onConfirm === 'function') ? await opts.onConfirm() : true;
+          if (ok !== false) {
+            renderProgress();
+          } else if (btn) {
+            btn.disabled = false; btn.textContent = 'Confirm & run';
+          }
+        } catch (err) {
+          if (btn) { btn.disabled = false; btn.textContent = 'Confirm & run'; }
+          toastErr('Confirm failed: ' + (err && err.message));
+        }
+      });
+    }
+
+    function renderProgress() {
+      overlay.innerHTML =
+        '<div style="background:var(--cream,#fff);border-radius:10px;max-width:520px;width:96%;box-shadow:0 8px 30px rgba(0,0,0,0.2);">' +
+          '<div style="padding:20px 24px 12px;border-bottom:1px solid rgba(0,0,0,0.08);">' +
+            '<div style="font-family:\'Cormorant Garamond\',serif;font-size:1.15rem;font-weight:600;color:var(--charcoal,#1f2937);">Backfill in progress</div>' +
+            '<div style="font-size:0.85rem;color:var(--warm-gray);margin-top:6px;">Job ID: <code>' + esc(jobId || '?') + '</code></div>' +
+          '</div>' +
+          '<div id="qboBackfillProgressBody" style="padding:16px 24px;">' +
+            '<div style="color:var(--warm-gray);font-size:0.85rem;text-align:center;padding:14px;">Waiting for first batch…</div>' +
+          '</div>' +
+          '<div id="qboBackfillFooter" style="padding:14px 24px;border-top:1px solid rgba(0,0,0,0.08);display:flex;justify-content:flex-end;gap:8px;">' +
+            '<button class="btn btn-secondary" id="qboBackfillCloseBtn">Close</button>' +
+          '</div>' +
+        '</div>';
+      overlay.querySelector('#qboBackfillCloseBtn').addEventListener('click', close);
+      _subscribeBackfillJob(jobId);
+    }
+
+    function _subscribeBackfillJob(jid) {
+      if (!jid) return;
+      var tid = tenantId();
+      if (!tid) return;
+      // Use raw firebase.firestore() — MastDB doesn't expose onSnapshot here.
+      try {
+        var docRef = firebase.firestore().doc('tenants/' + tid + '/admin/backfillJobs/' + jid);
+        unsubscribe = docRef.onSnapshot(function(snap) {
+          if (!snap.exists) {
+            _renderBackfillProgress({ status: 'queued', counts: {} });
+            return;
+          }
+          _renderBackfillProgress(snap.data() || {});
+        }, function(err) {
+          var body = overlay.querySelector('#qboBackfillProgressBody');
+          if (body) body.innerHTML = '<div style="color:#ef4444;font-size:0.85rem;padding:14px;">Subscription failed: ' + esc((err && err.message) || String(err)) + '</div>';
+        });
+      } catch (err) {
+        var body = overlay.querySelector('#qboBackfillProgressBody');
+        if (body) body.innerHTML = '<div style="color:#ef4444;font-size:0.85rem;padding:14px;">' + esc('Firestore unavailable: ' + (err && err.message)) + '</div>';
+      }
+    }
+
+    function _renderBackfillProgress(job) {
+      var body = overlay.querySelector('#qboBackfillProgressBody');
+      if (!body) return;
+      var statusColor = (job.status === 'complete') ? '#22c55e'
+        : (job.status === 'failed') ? '#ef4444'
+        : (job.status === 'in-progress') ? '#eab308' : '#94a3b8';
+      var statusHtml = '<div style="margin-bottom:10px;font-size:0.85rem;"><strong style="color:' + statusColor + ';">' + esc(job.status || 'queued') + '</strong>' +
+        (job.lastError ? ' — <span style="color:#ef4444;">' + esc(job.lastError) + '</span>' : '') +
+        '</div>';
+      var counts = job.counts || {};
+      var entityRows = Object.keys(counts).map(function(k) {
+        var c = counts[k] || {};
+        var total = Number(c.total || 0);
+        var processed = Number(c.processed || 0);
+        var errors = Number(c.errors || 0);
+        var pct = total > 0 ? Math.round((processed / total) * 100) : 0;
+        return '<tr>' +
+          '<td style="padding:6px 10px;font-size:0.85rem;">' + esc(k) + '</td>' +
+          '<td style="padding:6px 10px;font-size:0.85rem;text-align:right;">' + esc(processed + ' / ' + total) +
+            (errors > 0 ? ' <span style="color:#ef4444;">(' + esc(errors) + ' err)</span>' : '') + '</td>' +
+          '<td style="padding:6px 10px;width:80px;">' +
+            '<div style="background:rgba(0,0,0,0.1);border-radius:4px;height:6px;overflow:hidden;">' +
+              '<div style="background:' + statusColor + ';width:' + pct + '%;height:100%;"></div>' +
+            '</div>' +
+          '</td>' +
+        '</tr>';
+      }).join('');
+      body.innerHTML = statusHtml +
+        '<table style="width:100%;border-collapse:collapse;">' +
+          '<thead><tr><th style="text-align:left;padding:6px 10px;font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.5px;">Entity</th><th style="text-align:right;padding:6px 10px;font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.5px;">Processed</th><th></th></tr></thead>' +
+          '<tbody>' + (entityRows || '<tr><td colspan="3" style="padding:14px;text-align:center;color:var(--warm-gray);font-size:0.85rem;">No counts yet.</td></tr>') + '</tbody>' +
+        '</table>';
+      // Auto-close button label flip on complete
+      var closeBtn = overlay.querySelector('#qboBackfillCloseBtn');
+      if (closeBtn && (job.status === 'complete' || job.status === 'failed' || job.status === 'cancelled')) {
+        closeBtn.textContent = 'Done';
+        closeBtn.classList.remove('btn-secondary');
+        closeBtn.classList.add('btn-primary');
+      }
+    }
+
+    if (step === 'progress') renderProgress();
+    else renderPreview();
   };
 
   // Acknowledge a single collision row by accountId — flips status.
