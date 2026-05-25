@@ -6267,7 +6267,7 @@ window.renderFinanceOverview = renderFinanceOverview;
 // ── W2a.5 Integrations health card ───────────────────────────────────────────
 // Per-provider sync status, click-through to filtered Sync Log. Uses font sizes
 // from the canonical 7-step rem scale (0.72 / 0.78 / 0.85 / 0.9 / 1.0 / 1.15 / 1.6).
-function _integrationPill(label, lastSyncIso, status, routeHash) {
+function _integrationPill(label, lastSyncIso, status, _ignoredLegacyRouteHash) {
   var color = 'var(--warm-gray,#888)';
   var pillText;
   if (!status || status === 'not-connected') {
@@ -6287,7 +6287,11 @@ function _integrationPill(label, lastSyncIso, status, routeHash) {
     else if (ageD <= 7) { pillText = Math.round(ageD) + 'd'; color = '#eab308'; }
     else { pillText = Math.round(ageD) + 'd'; color = '#ef4444'; }
   }
-  var clickAttr = routeHash ? ' onclick="navigateTo(\'' + routeHash + '\')" style="cursor:pointer;"' : '';
+  // Deep-link: navigate to Settings, then activate the Integrations panel.
+  // Use the canonical setTimeout-after-navigate pattern (see index.html:6171
+  // and 10272). Plain navigateTo('settings') lands on the default General
+  // panel, not Integrations — that bug was caught by Riley persona-verify.
+  var clickAttr = ' onclick="navigateTo(\'settings\'); setTimeout(function(){ try { switchSettingsSubView(\'integrations\'); } catch(_) {} }, 50);" style="cursor:pointer;"';
   return '<div' + clickAttr + ' style="display:inline-flex;align-items:center;gap:8px;background:var(--bg-secondary,#232323);border:1px solid rgba(255,255,255,0.08);border-radius:999px;padding:6px 14px;font-size:0.78rem;">' +
     '<span style="font-weight:600;color:var(--text,#fff);">' + e(label) + '</span>' +
     '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:' + color + ';"></span>' +

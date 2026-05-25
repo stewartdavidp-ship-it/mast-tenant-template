@@ -9847,45 +9847,38 @@
       </div>
       <!-- Domain Settings -->
       <div id="settingsSubDomains" style="display:none;max-width:720px;">
-        <!-- Domains tab strip — list of active domains vs. add a new one (view-tabs pattern). -->
-        <div class="view-tabs" id="domainsTabBar" style="margin-bottom:20px;">
-          <button class="view-tab active" id="domainsTabBtn-list" data-tab="list" onclick="switchDomainsTab('list')"><span class="tab-status-dot" data-state="info" id="domainsDot-list"></span>Active domains</button>
-          <button class="view-tab" id="domainsTabBtn-add" data-tab="add" onclick="switchDomainsTab('add')"><span class="tab-status-dot" data-state="info"></span>Add a domain</button>
+        <div class="tab-section-title">Domains<span class="tab-section-status" data-state="info" id="domainsStatus">Loading&hellip;</span></div>
+        <p class="tab-section-purpose">All domains currently pointing to your storefront. Your primary <code>.runmast.com</code> subdomain and the Firebase default are managed automatically. To add a custom domain you already own, use the form below the list &mdash; after adding, we&rsquo;ll show step-by-step DNS instructions with direct links to your registrar.</p>
+
+        <div id="domainsList" style="margin-bottom:24px;">
+          <div style="text-align:center;padding:20px;color:var(--warm-gray);">Loading domains&hellip;</div>
         </div>
 
-        <!-- ── Active domains ── -->
-        <div id="domainsTab-list" class="domains-tab-body">
-          <div class="tab-section-title">Active domains<span class="tab-section-status" data-state="info" id="domainsStatus-list">Loading&hellip;</span></div>
-          <p class="tab-section-purpose">All domains currently pointing to your storefront. Your primary <code>.runmast.com</code> subdomain and the Firebase default are managed automatically. Custom domains added here appear in this list with their verification status.</p>
-          <div id="domainsList" style="margin-bottom:8px;">
-            <div style="text-align:center;padding:20px;color:var(--warm-gray);">Loading domains&hellip;</div>
+        <hr style="border:none;border-top:1px solid var(--border,#eee);margin:24px 0;">
+
+        <div class="form-group">
+          <label style="font-size:1rem;font-weight:600;">Add a custom domain</label>
+          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:12px;">
+            Enter the domain you want to point at this storefront (e.g. <code>mycoolshop.com</code>). DNS setup instructions appear below after you add it.
+          </p>
+          <div style="display:flex;gap:8px;">
+            <input type="text" id="customDomainInput" placeholder="mycoolshop.com"
+              style="flex:1;padding:9px 12px;border:1px solid var(--border,#ddd);border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;background:var(--input-bg,#fff);color:var(--text,#333);">
+            <button class="btn btn-primary" onclick="addCustomDomain()" id="addDomainBtn">Add domain</button>
           </div>
+          <div id="addDomainStatus" style="margin-top:12px;font-size:0.85rem;"></div>
         </div>
 
-        <!-- ── Add a domain ── -->
-        <div id="domainsTab-add" class="domains-tab-body" style="display:none;">
-          <div class="tab-section-title">Add a custom domain<span class="tab-section-status" data-state="info">DNS setup</span></div>
-          <p class="tab-section-purpose">Point a domain you already own (e.g. <code>mycoolshop.com</code>) to this storefront. After you add it here we&rsquo;ll show step-by-step DNS instructions with direct links to your registrar&rsquo;s settings, then verify the records.</p>
-          <div class="form-group">
-            <label style="font-size:0.85rem;">Domain to add</label>
-            <div style="display:flex;gap:8px;">
-              <input type="text" id="customDomainInput" placeholder="mycoolshop.com"
-                style="flex:1;padding:9px 12px;border:1px solid var(--border,#ddd);border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;background:var(--input-bg,#fff);color:var(--text,#333);">
-              <button class="btn btn-primary" onclick="addCustomDomain()" id="addDomainBtn">Add domain</button>
-            </div>
-            <div id="addDomainStatus" style="margin-top:12px;font-size:0.85rem;"></div>
-          </div>
-          <!-- DNS Instructions (shown after adding domain) -->
-          <div id="dnsInstructions" style="display:none;margin-top:16px;">
-            <div style="background:var(--cream,#faf8f5);border:1px solid var(--border,#e8e0d4);border-radius:8px;padding:16px;">
-              <div style="font-weight:600;margin-bottom:8px;color:var(--text,#333);">DNS setup required</div>
-              <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:12px;" id="dnsInstructionsText"></p>
-              <div id="dnsRegistrarLinks" style="margin-bottom:12px;display:flex;flex-wrap:wrap;gap:6px;"></div>
-              <div id="dnsRecordsList" style="font-family:monospace;font-size:0.85rem;margin-bottom:12px;"></div>
-              <div id="dnsStepsList" style="font-size:0.85rem;margin-bottom:12px;"></div>
-              <p style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:12px;" id="dnsNote"></p>
-              <button class="btn btn-secondary" style="margin-top:4px;" onclick="verifyCustomDomain()">Verify DNS</button>
-            </div>
+        <!-- DNS Instructions (shown after adding domain) -->
+        <div id="dnsInstructions" style="display:none;margin-top:16px;">
+          <div style="background:var(--cream,#faf8f5);border:1px solid var(--border,#e8e0d4);border-radius:8px;padding:16px;">
+            <div style="font-weight:600;margin-bottom:8px;color:var(--text,#333);">DNS setup required</div>
+            <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:12px;" id="dnsInstructionsText"></p>
+            <div id="dnsRegistrarLinks" style="margin-bottom:12px;display:flex;flex-wrap:wrap;gap:6px;"></div>
+            <div id="dnsRecordsList" style="font-family:monospace;font-size:0.85rem;margin-bottom:12px;"></div>
+            <div id="dnsStepsList" style="font-size:0.85rem;margin-bottom:12px;"></div>
+            <p style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:12px;" id="dnsNote"></p>
+            <button class="btn btn-secondary" style="margin-top:4px;" onclick="verifyCustomDomain()">Verify DNS</button>
           </div>
         </div>
       </div>
@@ -18161,7 +18154,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260525-110045-5fedf9c';
+var MAST_MODULES_V = '20260525-111144-a735df8';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -39512,44 +39505,23 @@ function refreshDisplayTabStatus() {
 }
 window.refreshDisplayTabStatus = refreshDisplayTabStatus;
 
-// ── Settings → Storefront → Domains: tabbed view.
-var DOMAINS_TABS = ['list','add'];
-
-function switchDomainsTab(tab) {
-  window.__domainsActiveTab = tab;
-  DOMAINS_TABS.forEach(function(t) {
-    var body = document.getElementById('domainsTab-' + t);
-    if (body) body.style.display = (t === tab) ? '' : 'none';
-  });
-  document.querySelectorAll('#domainsTabBar .view-tab').forEach(function(btn) {
-    btn.classList.toggle('active', btn.dataset.tab === tab);
-  });
-}
-window.switchDomainsTab = switchDomainsTab;
-
+// ── Settings → Storefront → Domains: single-page status pill (no tabs).
 function refreshDomainsTabStatus() {
   var listEl = document.getElementById('domainsList');
-  var pill = document.getElementById('domainsStatus-list');
-  var dot = document.querySelector('#domainsTabBtn-list .tab-status-dot');
+  var pill = document.getElementById('domainsStatus');
   if (!listEl || !pill) return;
-  // Count rendered domain rows. The renderDomainsList renderer uses .domain-row elements;
-  // fall back to any direct child div that isn't the "Loading…" placeholder.
   var rows = listEl.querySelectorAll('.domain-row');
   var count = rows.length;
   if (!count) {
-    // Heuristic fallback for variant markup.
-    var children = listEl.children;
     var loading = listEl.textContent && /loading/i.test(listEl.textContent);
-    if (!loading) count = children.length;
+    if (!loading) count = listEl.children.length;
   }
   if (count > 0) {
     pill.setAttribute('data-state', 'ok');
-    pill.textContent = count + ' active';
-    if (dot) dot.setAttribute('data-state', 'ok');
+    pill.textContent = count + (count === 1 ? ' domain' : ' domains');
   } else {
     pill.setAttribute('data-state', 'info');
     pill.textContent = (listEl.textContent && /loading/i.test(listEl.textContent)) ? 'Loading…' : 'None yet';
-    if (dot) dot.setAttribute('data-state', 'info');
   }
 }
 window.refreshDomainsTabStatus = refreshDomainsTabStatus;
