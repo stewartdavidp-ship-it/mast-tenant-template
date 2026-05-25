@@ -13,6 +13,7 @@
   // Source: D-ACC-2/3 ratified concepts. Order = how operators think about
   // it (revenue first, then COGS, then expenses, then liabilities).
   var COA_CATEGORIES = [
+    { key: 'cash', label: 'Cash on Hand', section: 'Assets' },
     { key: 'revenue_dtc', label: 'Revenue · Direct to Consumer (DTC)', section: 'Revenue' },
     { key: 'revenue_wholesale', label: 'Revenue · Wholesale', section: 'Revenue' },
     { key: 'revenue_gallery', label: 'Revenue · Gallery / Consignment', section: 'Revenue' },
@@ -31,7 +32,7 @@
     { key: 'sales_tax_payable', label: 'Sales Tax Payable', section: 'Liabilities' }
   ];
   // Required for save (all rev + COGS + sales tax + core expenses).
-  var COA_REQUIRED = ['revenue_dtc', 'revenue_wholesale', 'revenue_gallery', 'cogs', 'sales_tax_payable',
+  var COA_REQUIRED = ['cash', 'revenue_dtc', 'revenue_wholesale', 'revenue_gallery', 'cogs', 'sales_tax_payable',
                       'expense_materials', 'expense_studio', 'expense_shipping'];
 
   // ---- helpers ----
@@ -155,6 +156,7 @@
   // via a 3-tier match (exact > substring > shared-token > Levenshtein fallback).
   // Expanded 2026-05-25 after operator surfaced 3 unresolved (shipping, professional services, sales tax payable).
   var COA_SUGGEST_HINTS = {
+    cash: ['Cash', 'Cash on Hand', 'Checking', 'Bank Account', 'Cash and cash equivalents'],
     revenue_dtc: ['Sales', 'Sales of Product Income', 'Services'],
     revenue_wholesale: ['Sales of Product Income', 'Wholesale', 'Sales'],
     revenue_gallery: ['Consignment', 'Sales', 'Other Income'],
