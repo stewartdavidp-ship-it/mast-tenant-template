@@ -6107,7 +6107,7 @@ async function _loadFinanceOverview() {
   try {
     var prior = priorPeriod(period.start, period.end);
 
-    var [plaidRaw, sentRaw, overdueRaw, unpaidRaw, partialRaw, periodAgg, priorAgg, pnlPeriod] = await Promise.all([
+    var [plaidRaw, sentRaw, overdueRaw, unpaidRaw, partialRaw, periodAgg, priorAgg, pnlPeriod, integMeta, qboConn, xeroConn] = await Promise.all([
       MastDB.plaidItems.list().catch(function() { return {}; }),
       MastDB.query('orders').orderByChild('invoiceStatus').equalTo('sent').limitToLast(500).once().catch(function() { return {}; }),
       MastDB.query('orders').orderByChild('invoiceStatus').equalTo('overdue').limitToLast(500).once().catch(function() { return {}; }),
@@ -6115,7 +6115,11 @@ async function _loadFinanceOverview() {
       MastDB.query('admin/purchaseReceipts').orderByChild('paymentStatus').equalTo('partial').limitToLast(500).once().catch(function() { return {}; }),
       _loadRevenueAggregate(period.start, period.end).catch(function() { return null; }),
       _loadRevenueAggregate(prior.start, prior.end).catch(function() { return null; }),
-      computePnlLocal(period.start, period.end).catch(function() { return null; })
+      computePnlLocal(period.start, period.end).catch(function() { return null; }),
+      // W2a.5: Integrations health card data sources.
+      MastDB.get('admin/integrations/_meta').catch(function() { return null; }),
+      MastDB.get('admin/integrations/qbo').catch(function() { return null; }),
+      MastDB.get('admin/integrations/xero').catch(function() { return null; })
     ]);
 
     var bankConnected = false, bankTotal = 0;
@@ -6230,6 +6234,11 @@ async function _loadFinanceOverview() {
     h += card('Runway', runwayCard.value, runwayCard.color, runwayCard.diag, 'finance-cash-flow');
     h += '</div>';
 
+    // W2a.5: Integrations health card — per-provider sync status pills.
+    // Reads admin/integrations/_meta.lastSuccessfulSyncAt (provider -> ISO).
+    // Color tiers: green if synced <24h, amber 1-7d, red >7d, gray=not-connected.
+    h += renderIntegrationsHealthCard(integMeta, qboConn, xeroConn);
+
     // R-FIN-1 footer — period label is template-bound to the active selector
     // (W2 R2-F1: no hardcoded "MTD"). Dashboard mixes period-windowed
     // (revenue/margin/runway) and point-in-time (cash/AR/AP) data.
@@ -6254,6 +6263,63 @@ async function _loadFinanceOverview() {
   }
 }
 window.renderFinanceOverview = renderFinanceOverview;
+
+// ── W2a.5 Integrations health card ───────────────────────────────────────────
+// Per-provider sync status, click-through to filtered Sync Log. Uses font sizes
+// from the canonical 7-step rem scale (0.72 / 0.78 / 0.85 / 0.9 / 1.0 / 1.15 / 1.6).
+function _integrationPill(label, lastSyncIso, status, routeHash) {
+  var color = 'var(--warm-gray,#888)';
+  var pillText;
+  if (!status || status === 'not-connected') {
+    pillText = 'Not connected';
+    color = 'var(--warm-gray,#888)';
+  } else if (status === 'needs-reconnect') {
+    pillText = 'Needs reconnect';
+    color = '#ef4444';
+  } else if (!lastSyncIso) {
+    pillText = 'No sync yet';
+    color = 'var(--warm-gray,#888)';
+  } else {
+    var ageMs = Date.now() - Date.parse(lastSyncIso);
+    var ageH = ageMs / 3600000;
+    var ageD = ageH / 24;
+    if (ageH < 24) { pillText = '< 24h'; color = '#22c55e'; }
+    else if (ageD <= 7) { pillText = Math.round(ageD) + 'd'; color = '#eab308'; }
+    else { pillText = Math.round(ageD) + 'd'; color = '#ef4444'; }
+  }
+  var clickAttr = routeHash ? ' onclick="navigateTo(\'' + routeHash + '\')" style="cursor:pointer;"' : '';
+  return '<div' + clickAttr + ' style="display:inline-flex;align-items:center;gap:8px;background:var(--bg-secondary,#232323);border:1px solid rgba(255,255,255,0.08);border-radius:999px;padding:6px 14px;font-size:0.78rem;">' +
+    '<span style="font-weight:600;color:var(--text,#fff);">' + e(label) + '</span>' +
+    '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:' + color + ';"></span>' +
+    '<span style="color:var(--warm-gray,#888);">' + e(pillText) + '</span>' +
+    '</div>';
+}
+
+function renderIntegrationsHealthCard(integMeta, qboConn, xeroConn) {
+  var meta = integMeta || {};
+  var lastMap = meta.lastSuccessfulSyncAt || {};
+  function statusOf(conn) {
+    if (!conn || !conn.realmId && !conn.tenantId) return 'not-connected';
+    if (conn.status === 'needs-reconnect') return 'needs-reconnect';
+    if (conn.status === 'connected') return 'connected';
+    return 'not-connected';
+  }
+  var qboStatus = statusOf(qboConn);
+  var xeroStatus = statusOf(xeroConn);
+  var pills =
+    _integrationPill('QuickBooks', lastMap.qbo || null, qboStatus, 'settings') +
+    _integrationPill('Xero', lastMap.xero || null, xeroStatus, 'settings');
+  return '<div style="background:var(--bg-secondary,#232323);border-radius:10px;padding:18px;margin-top:14px;border:1px solid rgba(255,255,255,0.06);">' +
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">' +
+      '<div style="font-size:0.72rem;color:var(--warm-gray,#888);text-transform:uppercase;letter-spacing:0.5px;">Integrations health</div>' +
+      '<div style="font-size:0.72rem;color:var(--warm-gray,#888);">Last successful push per provider · click to open Settings</div>' +
+    '</div>' +
+    '<div style="display:flex;gap:10px;flex-wrap:wrap;">' + pills + '</div>' +
+    '</div>';
+}
+
+window.renderIntegrationsHealthCard = renderIntegrationsHealthCard;
+window._integrationPill = _integrationPill;
 
 // ============================================================================
 // Close v3 — Period Close tab (Idea -OtQH_uRXqz9jJBRsmrj, sub-task 3)
