@@ -2794,6 +2794,12 @@
       --border: #3a3a3a;
       --text: #e8e4df;
       --text-secondary: #a09890;
+      /* Tokens used by recently-shipped modules (shows.js, advisor.js,
+         engagement-inbox.js) — ensure they resolve in dark mode so
+         var(--bg-primary, #fff) / var(--text-danger, #c00) fallbacks
+         never paint cream-on-dark. */
+      --bg-primary: #1a1a1a;
+      --text-danger: #ff6b6b;
       background: var(--charcoal);
       color: #e0e0e0;
     }
@@ -5600,6 +5606,48 @@
     body.dark-mode #lookbooksTab textarea:focus,
     body.dark-mode #lookbooksTab select:focus { border-color:var(--teal); }
 
+    /* =================================================================
+       Dark-mode rescue for inline light backgrounds (2026-05-24 audit)
+       -----------------------------------------------------------------
+       Sales W2 + Marketing W3 + Products W1 shipped many inline cards
+       with `background:#fff` (and a few `#fffbe6`, `#fff3e0`) plus
+       `var(--*, #fff)` fallbacks where the token IS defined in dark
+       mode. The token-based ones flip correctly thanks to the var
+       definitions above; the *literal* `#fff` backgrounds do not.
+       Use attribute selectors to flip them — same pattern already in
+       use for showDetail at lines ~1101-1102.
+       Lighter target classes (e.g. .nl-grid-* email previews) are
+       intentional and excluded.
+       ================================================================= */
+    body.dark-mode [style*="background:#fff;"],
+    body.dark-mode [style*="background: #fff;"],
+    body.dark-mode [style*="background:#FFF;"],
+    body.dark-mode [style*="background: #FFF;"],
+    body.dark-mode [style*="background:#ffffff;"],
+    body.dark-mode [style*="background:#FFFFFF;"] {
+      background: var(--surface-card, #2a2a2a) !important;
+      color: #e0e0e0;
+    }
+    /* Cream-with-amber-text status pills (orders.js internal-note,
+       commission-terms.js DRAFT). Keep the amber text legible on dark. */
+    body.dark-mode [style*="background:#fffbe6"],
+    body.dark-mode [style*="background:#fff3e0"] {
+      background: #3a2f12 !important;
+      color: #f5c45a !important;
+    }
+    /* Match border fallback to dark palette for selects/inputs whose
+       wholesale.js inline styles hardcode `border:1px solid #ddd`
+       (W2 admin modals). */
+    body.dark-mode [style*="border:1px solid #ddd"],
+    body.dark-mode [style*="border: 1px solid #ddd"],
+    body.dark-mode [style*="1px solid #e8e0d4"] {
+      border-color: var(--border, #3a3a3a) !important;
+    }
+    /* Cream-dark border literal used in Sales W2 section cards
+       (fallback for `var(--cream-dark,#e8e0d4)` not enough when bg is
+       also literal). Pair with the bg rescue above. */
+    body.dark-mode .ct-card { background: var(--surface-card) !important; color: #e0e0e0; }
+
   </style>
 </head>
 <body>
@@ -5804,6 +5852,8 @@
         <div class="sidebar-item" data-route="finance-tax" onclick="navigateTo('finance-tax')">Tax</div>
         <div class="sidebar-item" data-route="finance-reports" onclick="navigateTo('finance-reports')">Reports</div>
         <div class="sidebar-item" data-route="customer-portfolio" onclick="navigateTo('customer-portfolio')">Customer Portfolio</div>
+        <!-- W1.10 (Accounting — Idea -OtKxQEhTDampnjEBjvS): QBO Sync entry point. -->
+        <div class="sidebar-item" data-route="accounting" onclick="navigateTo('accounting')">QuickBooks Sync</div>
         <!-- Close v3 (Idea -OtQH_uRXqz9jJBRsmrj): period close + amendments queue. -->
         <div class="sidebar-item" data-route="finance-period-close" onclick="navigateTo('finance-period-close')">Period Close</div>
         <div class="sidebar-item" data-route="finance-amendments" onclick="navigateTo('finance-amendments')">Amendments</div>
@@ -6375,6 +6425,9 @@
          Content rendered by app/modules/finance.js (renderPeriodClose / renderAmendments). -->
     <div id="financePeriodCloseTab" style="display:none;"></div>
     <div id="financeAmendmentsTab" style="display:none;"></div>
+    <!-- W1.10 (Accounting — Idea -OtKxQEhTDampnjEBjvS): QBO Sync route shell.
+         Module: app/modules/accounting.js. Subviews: connect | map | log. -->
+    <div id="accountingTab" class="tab-content" style="display:none;"></div>
     <!-- Build 6b UI-2 — Customer Portfolio dashboard. Concentration + quadrants
          + bulk-tag actions. Computed client-side mirroring the server-side
          analytics.get_customer_portfolio + analytics.get_concentration. -->
@@ -9150,6 +9203,33 @@
             </div>
             <div id="shopifyWebhookStatus" style="margin-top:8px;font-size:0.85rem;color:var(--warm-gray);"></div>
             <div id="shopifyWebhookRegistry" style="margin-top:8px;"></div>
+          </div>
+        </div>
+
+        <hr style="border:none;border-top:1px solid #eee;margin:24px 0;">
+
+        <!-- W1.10 (Accounting — Idea -OtKxQEhTDampnjEBjvS): QBO Connect block,
+             peer to Etsy/Shopify. Real OAuth + status reflection land in W1.1 Phase 2;
+             this is the helpers-first scaffold so siblings can wire in. -->
+        <div class="form-group" id="qboIntegrationSection">
+          <label style="font-size:1.15rem;font-weight:600;">QuickBooks Online</label>
+          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:12px;">
+            Sync your day-close journal entries, AR invoices, and bills to QuickBooks Online. Sandbox V1 only.
+          </p>
+          <div id="qboConfigStatus" style="margin-bottom:12px;font-size:0.85rem;">
+            <span id="qboStatusChip" style="display:inline-block;padding:2px 8px;border-radius:10px;background:#eee;color:#555;font-size:0.78rem;">Not connected</span>
+          </div>
+          <div id="qboDisconnected">
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              <button class="btn btn-primary" id="qboConnectBtn" onclick="window.connectQbo && window.connectQbo()">Connect QuickBooks</button>
+            </div>
+          </div>
+          <div id="qboConnected" style="display:none;">
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              <button class="btn btn-secondary" onclick="navigateTo('accounting','subView=map')">Manage COA Map</button>
+              <button class="btn btn-secondary" onclick="navigateTo('accounting','subView=log')">Sync Log</button>
+              <button class="btn btn-danger" id="qboDisconnectBtn" onclick="window.disconnectQbo && window.disconnectQbo()">Disconnect</button>
+            </div>
           </div>
         </div>
 
@@ -17005,7 +17085,8 @@ var SECTION_ROUTES = {
                         'finance-tax', 'finance-reports',
                         'customer-portfolio',
                         'financials',
-                        'finance-period-close', 'finance-amendments'],
+                        'finance-period-close', 'finance-amendments',
+                        'accounting'],
   'operations':        ['trips', 'reports',
                         'advisor', 'studio', 'team', 'business',
                         'channels', 'contacts', 'customers'],
@@ -17159,7 +17240,7 @@ function navigateTo(route, params) {
   // Finance sensitive tabs (P&L, Tax, Reports, Overview) are Admin-only —
   // manager lacks financeSensitive:read. W2.1 adds 'financials' (Overview)
   // since it surfaces Margin + Runway = sensitive aggregates.
-  if (['finance-pl', 'finance-tax', 'finance-reports', 'financials'].indexOf(route) >= 0 && !hasPermission('financeSensitive', 'read')) {
+  if (['finance-pl', 'finance-tax', 'finance-reports', 'financials', 'accounting'].indexOf(route) >= 0 && !hasPermission('financeSensitive', 'read')) {
     showToast('This report is restricted to Admin users.', true);
     route = 'dashboard';
   }
@@ -17745,7 +17826,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260524-225112-c99d7ba';
+var MAST_MODULES_V = '20260524-231409-46c50bd';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -17757,6 +17838,7 @@ var MODULE_MANIFEST = {
   trips: { src: 'modules/trips.js', routes: ['trips'] },
   wholesale: { src: 'modules/wholesale.js', routes: ['wholesale'] },
   finance: { src: 'modules/finance.js', routes: ['finance-revenue', 'finance-expenses', 'finance-pl', 'finance-cash-flow', 'finance-ar', 'finance-ap', 'finance-tax', 'finance-reports', 'customer-portfolio', 'financials', 'finance-period-close', 'finance-amendments'] },
+  accounting: { src: 'modules/accounting.js', routes: ['accounting'] },
   shows: { src: 'modules/shows.js', routes: ['show', 'show-find', 'show-apply', 'show-prep', 'show-execute', 'show-history'] },
   production: { src: 'modules/production.js', routes: ['jobs', 'production', 'stories', 'forecast'] },
   procurement: { src: 'modules/procurement.js', routes: ['procurement'] },
