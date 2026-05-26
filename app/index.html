@@ -8916,18 +8916,16 @@
         </div>
         </div><!-- end operationsTab-locale -->
       </div>
-      <div id="settingsSubEmail" style="display:none;max-width:700px;">
-        <div style="display:flex;gap:0;border-bottom:1px solid rgba(255,255,255,0.1);margin-bottom:16px;" id="emailInnerTabs">
-          <button class="view-tab active" onclick="switchEmailInnerTab('provider')" style="padding:8px 16px;font-size:0.85rem;">Provider</button>
-          <button class="view-tab" onclick="switchEmailInnerTab('triggers')" style="padding:8px 16px;font-size:0.85rem;">Email Triggers</button>
+      <div id="settingsSubEmail" style="display:none;max-width:720px;">
+        <div class="view-tabs" id="emailInnerTabs" style="margin-bottom:20px;">
+          <button class="view-tab active" id="emailInnerTabBtn-provider" data-tab="provider" onclick="switchEmailInnerTab('provider')"><span class="tab-status-dot" data-state="none"></span>Provider</button>
+          <button class="view-tab" id="emailInnerTabBtn-triggers" data-tab="triggers" onclick="switchEmailInnerTab('triggers')"><span class="tab-status-dot" data-state="none"></span>Email Triggers</button>
         </div>
-        <div id="emailInnerProvider" style="max-width:500px;">
+        <div id="emailInnerProvider">
         <!-- Provider-Agnostic Email Configuration (moved from Integrations tab) -->
         <div class="form-group" id="emailConfigSection">
-          <label style="font-size:1.15rem;font-weight:600;">Email Provider</label>
-          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:16px;">
-            Configure how order receipts, commission notifications, and other emails are sent.
-          </p>
+          <div class="tab-section-title">Email provider<span class="tab-section-status" data-state="info" id="emailInnerStatus-provider">Not configured</span></div>
+          <p class="tab-section-purpose">Configure how order receipts, commission notifications, and other emails are sent. Pick a provider, paste credentials if required, and set your From/Owner addresses. Use the Mast-managed default unless you need to send from your own domain.</p>
           <div id="emailConfigStatus" style="margin-bottom:12px;font-size:0.85rem;"></div>
 
           <label style="font-size:0.85rem;font-weight:600;margin-bottom:4px;display:block;">Provider</label>
@@ -9059,11 +9057,10 @@
         </div><!-- end emailInnerProvider -->
 
         <div id="emailInnerTriggers" style="display:none;">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
-            <p style="font-size:0.85rem;color:var(--warm-gray);margin:0;flex:1;">
-              Control which automated emails are sent to customers. Toggle individual emails on or off. Click any email to preview what your customers will see.
-            </p>
-            <div id="emailTriggersGlobalPill" style="flex-shrink:0;margin-left:16px;"></div>
+          <div class="tab-section-title">Email triggers<span class="tab-section-status" data-state="info" id="emailInnerStatus-triggers">Defaults</span></div>
+          <p class="tab-section-purpose">Control which automated emails are sent to customers. Toggle individual emails on or off. Click any email to preview what your customers will see.</p>
+          <div style="display:flex;align-items:center;justify-content:flex-end;margin-bottom:16px;">
+            <div id="emailTriggersGlobalPill" style="flex-shrink:0;"></div>
           </div>
           <div id="emailTriggersContent"></div>
         </div>
@@ -9092,27 +9089,27 @@
       </div>
 
       <!-- Notifications Settings Sub-Tab -->
-      <div id="settingsSubNotifications" style="display:none;max-width:700px;">
-        <div style="display:flex;gap:0;border-bottom:1px solid rgba(255,255,255,0.1);margin-bottom:16px;" id="notifInnerTabs">
-          <button class="view-tab active" onclick="switchNotifInnerTab('alerts')" style="padding:8px 16px;font-size:0.85rem;">Alerts</button>
-          <button class="view-tab" onclick="switchNotifInnerTab('history')" style="padding:8px 16px;font-size:0.85rem;">History</button>
-          <button class="view-tab" onclick="switchNotifInnerTab('renewals')" style="padding:8px 16px;font-size:0.85rem;">Renewals <span id="notifRenewalsBadge" class="sidebar-badge alert" style="display:none;margin-left:4px;"></span></button>
-          <button class="view-tab" onclick="switchNotifInnerTab('toasts')" style="padding:8px 16px;font-size:0.85rem;">Toasts</button>
+      <div id="settingsSubNotifications" style="display:none;max-width:720px;">
+        <div class="view-tabs" id="notifInnerTabs" style="margin-bottom:20px;">
+          <button class="view-tab active" id="notifInnerTabBtn-alerts" data-tab="alerts" onclick="switchNotifInnerTab('alerts')"><span class="tab-status-dot" data-state="none"></span>Alerts</button>
+          <button class="view-tab" id="notifInnerTabBtn-history" data-tab="history" onclick="switchNotifInnerTab('history')"><span class="tab-status-dot" data-state="none"></span>History</button>
+          <button class="view-tab" id="notifInnerTabBtn-renewals" data-tab="renewals" onclick="switchNotifInnerTab('renewals')"><span class="tab-status-dot" data-state="none"></span>Renewals <span id="notifRenewalsBadge" class="sidebar-badge alert" style="display:none;margin-left:4px;"></span></button>
+          <button class="view-tab" id="notifInnerTabBtn-toasts" data-tab="toasts" onclick="switchNotifInnerTab('toasts')"><span class="tab-status-dot" data-state="info"></span>Toasts</button>
         </div>
         <div id="notifInnerAlerts">
-          <p style="font-size:0.85rem;color:rgba(255,255,255,0.5);margin-bottom:16px;">
-            Configure which business alerts you receive and how they're delivered. Alerts are evaluated automatically every 4 hours.
-          </p>
+          <div class="tab-section-title">Business alerts<span class="tab-section-status" data-state="info" id="notifInnerStatus-alerts">Defaults</span></div>
+          <p class="tab-section-purpose">Configure which business alerts you receive and how they're delivered. Alerts are evaluated automatically every 4 hours.</p>
           <div id="notificationsConfigStatus" style="margin-bottom:12px;font-size:0.85rem;"></div>
           <div id="notificationsAlertList"></div>
         </div>
         <div id="notifInnerHistory" style="display:none;">
+          <div class="tab-section-title">Alert history<span class="tab-section-status" data-state="info" id="notifInnerStatus-history">Read-only</span></div>
+          <p class="tab-section-purpose">A log of business alerts that have fired recently, with their evaluation results and delivery status. Use this to confirm an alert ran or to debug a missed notification.</p>
           <div id="notificationsHistoryList"></div>
         </div>
         <div id="notifInnerToasts" style="display:none;">
-          <p style="font-size:0.85rem;color:rgba(255,255,255,0.5);margin-bottom:16px;">
-            Customize where confirmation toasts appear, how long they stay visible, and how big they are. Errors are always persistent until dismissed regardless of these settings. Preferences are stored on this device.
-          </p>
+          <div class="tab-section-title">Toast preferences<span class="tab-section-status" data-state="info" id="notifInnerStatus-toasts">Per device</span></div>
+          <p class="tab-section-purpose">Customize where confirmation toasts appear, how long they stay visible, and how big they are. Errors are always persistent until dismissed regardless of these settings. Preferences are stored on this device.</p>
 
           <div class="form-group" style="margin-bottom:18px;">
             <label style="display:block;font-size:0.85rem;font-weight:600;margin-bottom:6px;">Position</label>
@@ -9153,9 +9150,8 @@
 
         <!-- Renewals sub-tab (PA-6) — email + in-app only. NO SMS per spec-bugs 6b. -->
         <div id="notifInnerRenewals" style="display:none;">
-          <p style="font-size:0.85rem;color:rgba(255,255,255,0.5);margin-bottom:16px;">
-            Reminders for your licenses, insurance, certifications, and tax jurisdictions. Email is delivered via Resend. In-app reminders appear on your Advisor page.
-          </p>
+          <div class="tab-section-title">Renewals reminders<span class="tab-section-status" data-state="info" id="notifInnerStatus-renewals">Configured</span></div>
+          <p class="tab-section-purpose">Reminders for your licenses, insurance, certifications, and tax jurisdictions. Email is delivered via Resend. In-app reminders appear on your Advisor page.</p>
           <div id="renewalsSettingsStatus" style="margin-bottom:12px;font-size:0.85rem;"></div>
 
           <!-- Channels -->
@@ -9460,20 +9456,22 @@
           </div>
         </div>
       </div>
-      <div id="settingsSubPim" style="display:none;max-width:700px;">
+      <div id="settingsSubPim" style="display:none;max-width:720px;">
         <div style="margin-bottom:20px;">
           <div style="font-size:1.15rem;font-weight:600;margin-bottom:4px;">Product Information Management</div>
           <p style="font-size:0.85rem;color:var(--warm-gray);margin:0;">Manage channel sync drift alerts, review the sync audit log, and run integration tests.</p>
         </div>
-        <div class="view-tabs" id="pimTabBar" style="margin-bottom:16px;">
-          <button class="view-tab active" data-tab="drift" onclick="switchPimTab('drift')">Drift Queue</button>
-          <button class="view-tab" data-tab="sync" onclick="switchPimTab('sync')">Sync Log</button>
-          <button class="view-tab" data-tab="testing" onclick="switchPimTab('testing')">Testing</button>
-          <button class="view-tab" data-tab="rules" onclick="switchPimTab('rules')">Rules</button>
+        <div class="view-tabs" id="pimTabBar" style="margin-bottom:20px;">
+          <button class="view-tab active" id="pimTabBtn-drift" data-tab="drift" onclick="switchPimTab('drift')"><span class="tab-status-dot" data-state="none"></span>Drift Queue</button>
+          <button class="view-tab" id="pimTabBtn-sync" data-tab="sync" onclick="switchPimTab('sync')"><span class="tab-status-dot" data-state="none"></span>Sync Log</button>
+          <button class="view-tab" id="pimTabBtn-testing" data-tab="testing" onclick="switchPimTab('testing')"><span class="tab-status-dot" data-state="info"></span>Testing</button>
+          <button class="view-tab" id="pimTabBtn-rules" data-tab="rules" onclick="switchPimTab('rules')"><span class="tab-status-dot" data-state="info"></span>Rules</button>
         </div>
 
         <!-- Drift Queue tab -->
         <div id="pimTab_drift">
+          <div class="tab-section-title">Drift review queue<span class="tab-section-status" data-state="info" id="pimStatus-drift">Loading&hellip;</span></div>
+          <p class="tab-section-purpose">Pending drift alerts where a connected channel disagrees with Mast on title, description, price, status, or inventory. Resolve each by accepting the channel value, keeping Mast's value, or editing manually.</p>
           <div id="driftReviewQueueContainer">
             <div class="loading">Loading drift alerts...</div>
           </div>
@@ -9481,6 +9479,8 @@
 
         <!-- Sync Log tab -->
         <div id="pimTab_sync" style="display:none;">
+          <div class="tab-section-title">Sync audit log<span class="tab-section-status" data-state="info" id="pimStatus-sync">Read-only</span></div>
+          <p class="tab-section-purpose">A read-only audit trail of every sync action between Mast and connected channels (Shopify, Etsy, etc.). Use this to confirm a push landed or to debug a missed update.</p>
           <div id="syncLogContainer">
             <div class="loading">Loading sync log...</div>
           </div>
@@ -9488,6 +9488,8 @@
 
         <!-- Testing tab -->
         <div id="pimTab_testing" style="display:none;">
+          <div class="tab-section-title">Integration test harness<span class="tab-section-status" data-state="info" id="pimStatus-testing">Dev tools</span></div>
+          <p class="tab-section-purpose">Read-only and reversible-write tests against connected channels. Use these to verify your Shopify credentials, exercise metafield and inventory paths, or seed/clean up sample products. Every call is audit-logged.</p>
           <div style="margin-bottom:12px;">
             <button class="btn btn-secondary" id="pimShowTestingBtn" onclick="togglePimTesting()">Show Testing Tools</button>
           </div>
@@ -9605,6 +9607,8 @@
 
         <!-- Rules tab -->
         <div id="pimTab_rules" style="display:none;">
+          <div class="tab-section-title">Sync rules<span class="tab-section-status" data-state="info" id="pimStatus-rules">Defaults</span></div>
+          <p class="tab-section-purpose">Per-field rules that control which Mast→channel or channel→Mast updates apply automatically vs. queue for review. Tune these once your initial sync is clean and you trust a channel's data on specific fields.</p>
           <div id="syncRulesContainer">
             <div class="loading">Loading rules...</div>
           </div>
@@ -9613,31 +9617,25 @@
       </div>
       <!-- Phase 6b.1 — Develop Settings (cost tracking, drift severity, repricing threshold) -->
       <div id="settingsSubMaker" style="display:none;max-width:720px;">
-        <div style="margin-bottom:20px;">
-          <div style="font-size:1.15rem;font-weight:600;margin-bottom:4px;">Develop Settings</div>
-          <p style="font-size:0.85rem;color:var(--warm-gray);margin:0;">Recipe feedback, drift severity, and repricing thresholds. Toggle and dropdown changes save immediately.</p>
-        </div>
+        <div class="tab-section-title">Develop Settings<span class="tab-section-status" data-state="info">Atomic widgets</span></div>
+        <p class="tab-section-purpose">Recipe feedback, drift severity, and repricing thresholds. Toggle and dropdown changes save immediately.</p>
 
         <div id="makerSettingsContent" aria-live="polite">
           <div class="loading">Loading maker settings…</div>
         </div>
       </div>
 
-      <div id="settingsSubProduct" style="display:none;max-width:700px;">
-        <div style="margin-bottom:20px;">
-          <div style="font-size:1.15rem;font-weight:600;margin-bottom:4px;">Product Settings</div>
-          <p style="font-size:0.85rem;color:var(--warm-gray);margin:0;">Pricing defaults and markup strategy applied across your catalog.</p>
-        </div>
+      <div id="settingsSubProduct" style="display:none;max-width:720px;">
+        <div class="tab-section-title">Product Settings<span class="tab-section-status" data-state="info">Catalog defaults</span></div>
+        <p class="tab-section-purpose">Pricing defaults and markup strategy applied across your catalog.</p>
         <div id="productSettingsContent" aria-live="polite">
           <div class="loading">Loading product settings…</div>
         </div>
       </div>
 
-      <div id="settingsSubCostToServe" style="display:none;max-width:700px;">
-        <div style="margin-bottom:20px;">
-          <div style="font-size:1.15rem;font-weight:600;margin-bottom:4px;">Cost-to-Serve Defaults</div>
-          <p style="font-size:0.85rem;color:var(--warm-gray);margin:0;">Per-ticket and per-return costs used by the Customer Portfolio quadrant model to compute net contribution per customer. Lower these for self-serve customers; raise them for high-touch service models.</p>
-        </div>
+      <div id="settingsSubCostToServe" style="display:none;max-width:720px;">
+        <div class="tab-section-title">Cost-to-Serve Defaults<span class="tab-section-status" data-state="info">Portfolio model</span></div>
+        <p class="tab-section-purpose">Per-ticket and per-return costs used by the Customer Portfolio quadrant model to compute net contribution per customer. Lower these for self-serve customers; raise them for high-touch service models.</p>
         <div id="costToServeContent" aria-live="polite">
           <div class="loading">Loading cost-to-serve defaults…</div>
         </div>
@@ -9645,21 +9643,17 @@
 
       <!-- Close v3 (Idea -OtQH_uRXqz9jJBRsmrj, sub-task 3.5): Close Policy panel. -->
       <div id="settingsSubClosePolicy" style="display:none;max-width:720px;">
-        <div style="margin-bottom:20px;">
-          <div style="font-size:1.15rem;font-weight:600;margin-bottom:4px;">Close Policy</div>
-          <p style="font-size:0.85rem;color:var(--warm-gray);margin:0;">When and how monthly periods auto-close. Per-period extensions let you keep a specific month open past the auto-close date (e.g. for a delayed reconciliation).</p>
-        </div>
+        <div class="tab-section-title">Close Policy<span class="tab-section-status" data-state="info">Auto-close</span></div>
+        <p class="tab-section-purpose">When and how monthly periods auto-close. Per-period extensions let you keep a specific month open past the auto-close date (e.g. for a delayed reconciliation).</p>
         <div id="closePolicyContent" aria-live="polite">
           <div class="loading">Loading close policy…</div>
         </div>
       </div>
 
-      <div id="settingsSubWorkshop" style="display:none;max-width:500px;">
+      <div id="settingsSubWorkshop" style="display:none;max-width:720px;">
         <div class="form-group">
-          <label style="font-size:1.15rem;font-weight:600;">Operators</label>
-          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:16px;">
-            Workshop operators who work on production builds. These names appear in the operator selector when starting builds.
-          </p>
+          <div class="tab-section-title">Operators<span class="tab-section-status" data-state="info">Configured</span></div>
+          <p class="tab-section-purpose">Workshop operators who work on production builds. These names appear in the operator selector when starting builds.</p>
           <div id="operatorsList" style="margin-bottom:12px;"></div>
           <div style="display:flex;gap:8px;">
             <input type="text" id="newOperatorName" placeholder="Operator name..."
@@ -9671,10 +9665,8 @@
         <hr style="border:none;border-top:1px solid #eee;margin:24px 0;">
 
         <div class="form-group">
-          <label style="font-size:1.15rem;font-weight:600;">Studio Locations</label>
-          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:8px;">
-            Mark your studio and workshop locations. When using the PoS away from all studio locations, Studio Companion will detect you're at a remote event and offer to link sales.
-          </p>
+          <div class="tab-section-title">Studio Locations<span class="tab-section-status" data-state="info">GPS-aware</span></div>
+          <p class="tab-section-purpose">Mark your studio and workshop locations. When using the PoS away from all studio locations, Studio Companion will detect you're at a remote event and offer to link sales.</p>
           <div id="studioLocationsList" style="margin-bottom:12px;"></div>
           <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
             <input type="text" id="newStudioLocationName" placeholder="Location name (e.g. Home Studio)"
@@ -9690,10 +9682,8 @@
         <hr style="border:none;border-top:1px solid #eee;margin:24px 0;">
 
         <div class="form-group">
-          <label style="font-size:1.15rem;font-weight:600;">Inventory Locations</label>
-          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:8px;">
-            Track where inventory is stored. Each location gets a QR code for quick scanning during intake, packing, and moves. The "Home" location is created automatically and can't be archived.
-          </p>
+          <div class="tab-section-title">Inventory Locations<span class="tab-section-status" data-state="info">QR-tracked</span></div>
+          <p class="tab-section-purpose">Track where inventory is stored. Each location gets a QR code for quick scanning during intake, packing, and moves. The "Home" location is created automatically and can't be archived.</p>
           <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
             <select id="locationStatusFilter" onchange="renderLocationsList()" style="padding:6px 10px;border:1px solid var(--cream-dark);border-radius:6px;font-size:0.85rem;font-family:'DM Sans',sans-serif;">
               <option value="active">Active</option>
@@ -9718,20 +9708,16 @@
         <hr style="border:none;border-top:1px solid #eee;margin:24px 0;">
 
         <div class="form-group">
-          <label style="font-size:1.15rem;font-weight:600;">Build Media Storage</label>
-          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:16px;">
-            Photos captured during production builds are stored in Firebase Storage.
-          </p>
+          <div class="tab-section-title">Build Media Storage<span class="tab-section-status" data-state="info">Firebase Storage</span></div>
+          <p class="tab-section-purpose">Photos captured during production builds are stored in Firebase Storage.</p>
           <div id="storageInfo" style="font-size:0.85rem;color:var(--warm-gray);">Loading...</div>
         </div>
       </div>
       <!-- Trips Settings -->
-      <div id="settingsSubTrips" style="display:none;max-width:500px;">
+      <div id="settingsSubTrips" style="display:none;max-width:720px;">
         <div class="form-group">
-          <label style="font-size:1.15rem;font-weight:600;">IRS Mileage Rates</label>
-          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:12px;">
-            Standard mileage rates for tax deduction. Rate is locked to the year when a trip is created.
-          </p>
+          <div class="tab-section-title">IRS Mileage Rates<span class="tab-section-status" data-state="info">Year-locked</span></div>
+          <p class="tab-section-purpose">Standard mileage rates for tax deduction. Rate is locked to the year when a trip is created.</p>
           <div id="irsRatesList" style="margin-bottom:12px;"></div>
           <div style="display:flex;gap:8px;align-items:center;">
             <input type="number" id="newIrsYear" placeholder="Year" min="2020" max="2040"
@@ -9745,10 +9731,8 @@
         <hr style="border:none;border-top:1px solid #eee;margin:24px 0;">
 
         <div class="form-group">
-          <label style="font-size:1.15rem;font-weight:600;">Trip Locations</label>
-          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:12px;">
-            Saved locations used in trip origin/destination pickers. Locations are auto-added when new destinations are entered during trips.
-          </p>
+          <div class="tab-section-title">Trip Locations<span class="tab-section-status" data-state="info">Auto-saved</span></div>
+          <p class="tab-section-purpose">Saved locations used in trip origin/destination pickers. Locations are auto-added when new destinations are entered during trips.</p>
           <div id="tripLocationsList" style="margin-bottom:12px;"></div>
           <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
             <input type="text" id="newTripLocationName" placeholder="Location name"
@@ -9862,20 +9846,16 @@
       </div>
 
       <!-- Dashboard Card Settings -->
-      <div id="settingsSubDashboard" style="display:none;max-width:500px;">
+      <div id="settingsSubDashboard" style="display:none;max-width:720px;">
         <div class="form-group">
-          <label style="font-size:1.15rem;font-weight:600;">Dashboard Cards</label>
-          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:12px;">
-            Toggle cards on or off, and drag to reorder. Changes apply to your account only.
-          </p>
+          <div class="tab-section-title">Dashboard Cards<span class="tab-section-status" data-state="info">Per user</span></div>
+          <p class="tab-section-purpose">Toggle cards on or off, and drag to reorder. Changes apply to your account only.</p>
           <div id="dashCardSettingsList"></div>
         </div>
         <hr style="border:none;border-top:1px solid #eee;margin:24px 0;">
         <div class="form-group">
-          <label style="font-size:1.15rem;font-weight:600;">Quick Actions Count</label>
-          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:12px;">
-            Number of quick action tiles to show on the dashboard. Your most-used actions appear first.
-          </p>
+          <div class="tab-section-title">Quick Actions Count<span class="tab-section-status" data-state="info">Per user</span></div>
+          <p class="tab-section-purpose">Number of quick action tiles to show on the dashboard. Your most-used actions appear first.</p>
           <div style="display:flex;align-items:center;gap:12px;">
             <input type="number" id="quickActionCountInput" min="1" max="13" value="3"
               style="width:70px;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;">
@@ -9922,13 +9902,11 @@
         </div>
       </div>
       <!-- AI Integrations Settings -->
-      <div id="settingsSubAi" style="display:none;max-width:600px;">
+      <div id="settingsSubAi" style="display:none;max-width:720px;">
         <!-- BYO Anthropic — Ask AI Provider (F-M1a) -->
         <div class="form-group" style="background:var(--cream,#faf8f5);border:1px solid var(--cream-dark,#e8e0d4);border-radius:8px;padding:14px 16px;margin-bottom:24px;">
-          <label style="font-size:1.15rem;font-weight:600;display:block;margin-bottom:4px;">Ask AI Provider</label>
-          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:14px;">
-            Powers the in-admin Ask AI calls (cost previews, page-context summaries). Use Mast-managed (deducts tokens) or bring your own Anthropic API key.
-          </p>
+          <div class="tab-section-title">Ask AI Provider<span class="tab-section-status" data-state="info">Mast-managed</span></div>
+          <p class="tab-section-purpose">Powers the in-admin Ask AI calls (cost previews, page-context summaries). Use Mast-managed (deducts tokens) or bring your own Anthropic API key.</p>
 
           <!-- Pitch state: not connected -->
           <div id="byoAnthropicPitch" style="display:none;">
@@ -9975,10 +9953,8 @@
         </div>
 
         <div class="form-group">
-          <label style="font-size:1.15rem;font-weight:600;">AI Integrations</label>
-          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:16px;">
-            Connect AI tools (Claude, ChatGPT, Cursor) to manage your store through natural language. Generate an API key and add it to your AI tool's configuration.
-          </p>
+          <div class="tab-section-title">AI Integrations<span class="tab-section-status" data-state="info">MCP &amp; API keys</span></div>
+          <p class="tab-section-purpose">Connect AI tools (Claude, ChatGPT, Cursor) to manage your store through natural language. Generate an API key and add it to your AI tool's configuration.</p>
         </div>
 
         <!-- In-page Ask AI gating -->
@@ -10106,12 +10082,10 @@
         </div>
       </div>
       <!-- Engagement Settings (B6 — Entity Phase 1) -->
-      <div id="settingsSubEngagement" style="display:none;max-width:640px;">
+      <div id="settingsSubEngagement" style="display:none;max-width:720px;">
         <div class="form-group">
-          <label style="font-size:1.15rem;font-weight:600;">Engagement &amp; Navigation</label>
-          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:16px;">
-            Your engagement mode was captured during onboarding. You can change how Mast looks (surface) and which modules appear in the sidebar here.
-          </p>
+          <div class="tab-section-title">Engagement &amp; Navigation<span class="tab-section-status" data-state="info">Onboarding captured</span></div>
+          <p class="tab-section-purpose">Your engagement mode was captured during onboarding. You can change how Mast looks (surface) and which modules appear in the sidebar here.</p>
         </div>
         <div id="engagementBootstrapBanner" style="display:none;background:rgba(234,179,8,0.1);border:1px solid rgba(234,179,8,0.3);border-radius:8px;padding:12px 16px;margin-bottom:20px;font-size:0.9rem;color:var(--text,#fff);">
           <strong>&#128221; Bootstrapped setup</strong>
@@ -18194,7 +18168,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260525-171640-b1d3de5';
+var MAST_MODULES_V = '20260526-103927-eb3a7c0';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -18359,7 +18333,7 @@ function switchSettingsSubView(view) {
   // Lazy loads
   if (view === 'shipping') { loadShipProviderConfig(); if (typeof refreshShippingTabStatus === 'function') refreshShippingTabStatus(); }
   if (view === 'payments') { if (typeof refreshPaymentsTabStatus === 'function') refreshPaymentsTabStatus(); }
-  if (view === 'email') { loadEmailConfig(); loadEmailDomainSection(); loadResendWebhookSection(); }
+  if (view === 'email') { loadEmailConfig(); loadEmailDomainSection(); loadResendWebhookSection(); if (typeof refreshEmailTabStatus === 'function') refreshEmailTabStatus(); }
   if (view === 'integrations') { loadEtsyConfig(); loadShopifyConfig(); loadPlaidBanksForSettings(); if (typeof switchIntegrationsTab === 'function') switchIntegrationsTab(window.__integrationsActiveTab || 'googleMaps'); }
   if (view === 'trips') { MastAdmin.loadModule('trips').then(function() { if (typeof loadTripsSettings === 'function') loadTripsSettings(); }); }
   if (view === 'storefront') { loadShopDisplaySettings(); loadPrivacyUrlSettings(); if (typeof refreshDisplayTabStatus === 'function') refreshDisplayTabStatus(); }
@@ -18372,8 +18346,8 @@ function switchSettingsSubView(view) {
   // Close v3 (Idea -OtQH_uRXqz9jJBRsmrj): Close Policy panel.
   if (view === 'closePolicy') loadClosePolicySettings();
   if (view === 'about') renderAboutSettings();
-  if (view === 'notifications') loadNotificationsSettings();
-  if (view === 'pim') loadPimSettings();
+  if (view === 'notifications') { loadNotificationsSettings(); if (typeof refreshNotifTabStatus === 'function') refreshNotifTabStatus(); }
+  if (view === 'pim') { loadPimSettings(); if (typeof refreshPimTabStatus === 'function') refreshPimTabStatus(); }
   if (view === 'maker') loadMakerSettings();
   if (view === 'engagement') loadEngagementSettings();
   if (view === 'tax') { loadTaxLegalSettings(); if (typeof loadTaxRates === 'function') loadTaxRates(); if (typeof refreshTaxTabStatus === 'function') refreshTaxTabStatus(); }
@@ -20290,14 +20264,12 @@ function switchEmailInnerTab(tab) {
   if (providerEl) providerEl.style.display = tab === 'provider' ? '' : 'none';
   if (triggersEl) triggersEl.style.display = tab === 'triggers' ? '' : 'none';
   document.querySelectorAll('#emailInnerTabs .view-tab').forEach(function(btn) {
-    btn.classList.remove('active');
-  });
-  document.querySelectorAll('#emailInnerTabs .view-tab').forEach(function(btn) {
-    var onclick = btn.getAttribute('onclick') || '';
-    if (onclick.indexOf("'" + tab + "'") !== -1) btn.classList.add('active');
+    btn.classList.toggle('active', btn.dataset.tab === tab);
   });
   if (tab === 'triggers') { loadEmailTriggers(); }
+  if (typeof refreshEmailTabStatus === 'function') refreshEmailTabStatus();
 }
+window.switchEmailInnerTab = switchEmailInnerTab;
 
 // ============================================================
 // Email Triggers Settings
@@ -20349,10 +20321,12 @@ function loadEmailTriggers() {
     emailTriggerPrefs = val || {};
     emailTriggersLoaded = true;
     renderEmailTriggers();
+    if (typeof refreshEmailTabStatus === 'function') refreshEmailTabStatus();
   }).catch(function(err) {
     console.error('Failed to load email trigger prefs:', err);
     emailTriggersLoaded = true;
     renderEmailTriggers();
+    if (typeof refreshEmailTabStatus === 'function') refreshEmailTabStatus();
   });
 }
 
@@ -20663,14 +20637,14 @@ function switchNotifInnerTab(tab) {
   if (toastsEl)   toastsEl.style.display   = tab === 'toasts'   ? '' : 'none';
   if (renewalsEl) renewalsEl.style.display = tab === 'renewals' ? '' : 'none';
   document.querySelectorAll('#notifInnerTabs .view-tab').forEach(function(btn) {
-    // textContent includes badge count; compare just the leading word token.
-    var label = btn.textContent.trim().toLowerCase().split(/\s+/)[0];
-    btn.classList.toggle('active', label === tab);
+    btn.classList.toggle('active', btn.dataset.tab === tab);
   });
   if (tab === 'history')  loadAlertHistory();
   if (tab === 'toasts')   populateToastPrefsForm();
   if (tab === 'renewals') loadRenewalsNotificationSettings();
+  if (typeof refreshNotifTabStatus === 'function') refreshNotifTabStatus();
 }
+window.switchNotifInnerTab = switchNotifInnerTab;
 
 function populateToastPrefsForm() {
   loadMastToastPrefs(); // make sure we have the latest from localStorage
@@ -20750,6 +20724,7 @@ async function loadRenewalsNotificationSettings() {
   _loadRenewalsInAppNotifications();
 
   if (statusEl) statusEl.textContent = '';
+  if (typeof refreshNotifTabStatus === 'function') refreshNotifTabStatus();
 }
 
 function _renderRenewalsIcsState(settings) {
@@ -20806,6 +20781,7 @@ async function saveRenewalsNotificationSettings() {
     await MastDB.businessEntity.renewals.updateSettings(payload);
     if (statusEl) { statusEl.textContent = 'Saved.'; statusEl.style.color = 'var(--success,#22c55e)'; }
     if (window.showToast) showToast('Renewal settings saved');
+    if (typeof refreshNotifTabStatus === 'function') refreshNotifTabStatus();
   } catch (err) {
     if (statusEl) { statusEl.textContent = 'Save failed: ' + (err.message || 'unknown'); statusEl.style.color = 'var(--danger,#ef4444)'; }
   }
@@ -25576,6 +25552,7 @@ async function saveEmailConfig() {
     await updateConfigChecklist('email', true);
     await writeAudit('update', 'settings', 'emailConfig');
     loadEmailConfig();
+    if (typeof refreshEmailTabStatus === 'function') refreshEmailTabStatus();
     showToast('Email configuration saved.');
   } catch (err) {
     showToast('Error saving email config: ' + err.message, true);
@@ -25645,6 +25622,7 @@ function loadEmailConfig() {
     loadEmailDomainSection();
     // Refresh BYO Resend status (no-op when provider !== 'resend')
     loadByoResendStatus();
+    if (typeof refreshEmailTabStatus === 'function') refreshEmailTabStatus();
   }).catch(function(err) {
     console.warn('Email config read failed:', err.message);
     if (statusEl) statusEl.innerHTML = '<span style="color:var(--warm-gray-light);">Could not load config.</span>';
@@ -39561,6 +39539,99 @@ function refreshDisplayTabStatus() {
 }
 window.refreshDisplayTabStatus = refreshDisplayTabStatus;
 
+// ── Settings → Email: provider + triggers status pills.
+function refreshEmailTabStatus() {
+  function setDot(tabKey, state) {
+    var btn = document.getElementById('emailInnerTabBtn-' + tabKey);
+    if (!btn) return;
+    var dot = btn.querySelector('.tab-status-dot');
+    if (dot) dot.setAttribute('data-state', state);
+  }
+  function setPill(tabKey, state, label) {
+    var pill = document.getElementById('emailInnerStatus-' + tabKey);
+    if (!pill) return;
+    pill.setAttribute('data-state', state);
+    if (label != null) pill.textContent = label;
+  }
+  // Provider tab — configured if a provider is selected with required fields, or Mast-managed is the default.
+  var provEl = document.getElementById('emailProvider');
+  var prov = provEl ? (provEl.value || '') : '';
+  var fromEl = document.getElementById('emailFromEmail');
+  var hasFrom = !!(fromEl && fromEl.value && fromEl.value.trim());
+  var providerState = 'info';
+  var providerLabel = 'Mast-managed';
+  if (prov === '') { providerState = 'ok'; providerLabel = 'Mast-managed'; }
+  else if (prov === 'gmail') { providerState = hasFrom ? 'ok' : 'partial'; providerLabel = 'Gmail' + (hasFrom ? '' : ' — incomplete'); }
+  else if (prov === 'sendgrid') { var sg = document.getElementById('emailSendgridApiKey'); var ok = !!(sg && sg.value); providerState = ok ? 'ok' : 'missing'; providerLabel = 'SendGrid' + (ok ? '' : ' — key missing'); }
+  else if (prov === 'resend') { var re = document.getElementById('emailResendApiKey'); var ok2 = !!(re && re.value); providerState = ok2 ? 'ok' : 'partial'; providerLabel = 'Resend' + (ok2 ? '' : ' — key needed'); }
+  else if (prov === 'custom') { var ce = document.getElementById('emailCustomEndpoint'); var ck = document.getElementById('emailCustomApiKey'); var okc = !!(ce && ce.value) && !!(ck && ck.value); providerState = okc ? 'ok' : 'partial'; providerLabel = 'Custom' + (okc ? '' : ' — incomplete'); }
+  setDot('provider', providerState);
+  setPill('provider', providerState, providerLabel);
+  // Triggers tab — defaults unless preferences have been saved.
+  var prefs = (typeof emailTriggerPrefs === 'object' && emailTriggerPrefs) ? emailTriggerPrefs : {};
+  var customCount = Object.keys(prefs).length;
+  setDot('triggers', customCount > 0 ? 'ok' : 'info');
+  setPill('triggers', customCount > 0 ? 'ok' : 'info', customCount > 0 ? (customCount + ' customized') : 'Defaults');
+}
+window.refreshEmailTabStatus = refreshEmailTabStatus;
+
+// ── Settings → Notifications: alerts / history / renewals / toasts.
+function refreshNotifTabStatus() {
+  function setDot(tabKey, state) {
+    var btn = document.getElementById('notifInnerTabBtn-' + tabKey);
+    if (!btn) return;
+    var dot = btn.querySelector('.tab-status-dot');
+    if (dot) dot.setAttribute('data-state', state);
+  }
+  function setPill(tabKey, state, label) {
+    var pill = document.getElementById('notifInnerStatus-' + tabKey);
+    if (!pill) return;
+    pill.setAttribute('data-state', state);
+    if (label != null) pill.textContent = label;
+  }
+  // Alerts — informational/default.
+  setDot('alerts', 'info');
+  setPill('alerts', 'info', 'Configured');
+  // History — read-only.
+  setDot('history', 'info');
+  setPill('history', 'info', 'Read-only');
+  // Renewals — partial if any channel enabled.
+  var emailCb = document.getElementById('renewalsChannelEmail');
+  var inAppCb = document.getElementById('renewalsChannelInApp');
+  var on = (emailCb && emailCb.checked) || (inAppCb && inAppCb.checked);
+  setDot('renewals', on ? 'ok' : 'none');
+  setPill('renewals', on ? 'ok' : 'none', on ? 'On' : 'Off');
+  // Toasts — per device.
+  setDot('toasts', 'info');
+  setPill('toasts', 'info', 'Per device');
+}
+window.refreshNotifTabStatus = refreshNotifTabStatus;
+
+// ── Settings → PIM: drift queue / sync log / testing / rules.
+function refreshPimTabStatus() {
+  function setDot(tabKey, state) {
+    var btn = document.getElementById('pimTabBtn-' + tabKey);
+    if (!btn) return;
+    var dot = btn.querySelector('.tab-status-dot');
+    if (dot) dot.setAttribute('data-state', state);
+  }
+  function setPill(tabKey, state, label) {
+    var pill = document.getElementById('pimStatus-' + tabKey);
+    if (!pill) return;
+    pill.setAttribute('data-state', state);
+    if (label != null) pill.textContent = label;
+  }
+  setDot('drift', 'info');
+  setPill('drift', 'info', 'Open queue');
+  setDot('sync', 'info');
+  setPill('sync', 'info', 'Read-only');
+  setDot('testing', 'info');
+  setPill('testing', 'info', 'Dev tools');
+  setDot('rules', 'info');
+  setPill('rules', 'info', 'Defaults');
+}
+window.refreshPimTabStatus = refreshPimTabStatus;
+
 // ── Settings → Selling → Payments: single-page (selector-driven; section header + pill at top).
 function refreshPaymentsTabStatus() {
   var pill = document.getElementById('paymentsStatusPill');
@@ -39893,7 +39964,9 @@ function switchPimTab(tab) {
   if (tab === 'drift') openDriftReviewQueue();
   if (tab === 'sync') openSyncLog();
   if (tab === 'rules') openSyncRules();
+  if (typeof refreshPimTabStatus === 'function') refreshPimTabStatus();
 }
+window.switchPimTab = switchPimTab;
 
 function togglePimTesting() {
   var el = document.getElementById('pimTestingTools');
