@@ -18207,7 +18207,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260526-172616-619c320';
+var MAST_MODULES_V = '20260526-173002-74b8994';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -33367,6 +33367,13 @@ function productsTzDateStr(isoStr) {
 }
 
 function renderProducts() {
+  // If a product detail is currently open, skip the entire list re-render —
+  // it has no visible target (grid is hidden) and re-revealing the unnamed
+  // notice / inventory summary bar leaks list chrome onto the detail page.
+  var _detailEl = document.getElementById('productDetailView');
+  if (_detailEl && _detailEl.style.display !== 'none' && selectedProductPid) {
+    return;
+  }
   var cat = document.getElementById('productsCategory').value;
   // Unified product filter: 'develop' | 'catalog' | 'sell'. Sidebar entry
   // presets it; user can flip pills without leaving the section.
