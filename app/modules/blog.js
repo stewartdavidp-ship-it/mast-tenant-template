@@ -31,6 +31,24 @@
     if (TENANT_CONFIG && TENANT_CONFIG.brand && TENANT_CONFIG.brand.authors) {
       BLOG_AUTHORS = TENANT_CONFIG.brand.authors;
     }
+    // If no authors are configured in tenant brand config, seed an in-memory
+    // entry from the logged-in user so the editor shows the real person
+    // instead of the literal placeholder "author". Photo edits / future saves
+    // can persist this to public/config/brand/authors via blogChangeAuthorPhoto.
+    try {
+      var keys = Object.keys(BLOG_AUTHORS);
+      if (keys.length === 0 && typeof auth !== 'undefined' && auth.currentUser) {
+        var u = auth.currentUser;
+        var key = u.email || u.uid;
+        if (key) {
+          BLOG_AUTHORS[key] = {
+            name: u.displayName || (u.email ? u.email.split('@')[0] : 'Me'),
+            photoUrl: u.photoURL || '',
+            bio: ''
+          };
+        }
+      }
+    } catch (e) { /* auth not ready — fall through with empty BLOG_AUTHORS */ }
   }
 
   function blogGetUid() { return currentUser ? currentUser.uid : null; }
