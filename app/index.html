@@ -9926,10 +9926,19 @@
       </div>
       <!-- AI Integrations Settings -->
       <div id="settingsSubAi" style="display:none;max-width:720px;">
+        <!-- AI settings tab strip — inbound (your AI inside Mast) vs outbound (external AI tools managing your store). -->
+        <div class="view-tabs" id="aiTabBar" style="margin-bottom:20px;">
+          <button class="view-tab active" id="aiTabBtn-askProvider" data-tab="askProvider" onclick="switchAiTab('askProvider')"><span class="tab-status-dot" data-state="info"></span>Ask AI provider</button>
+          <button class="view-tab" id="aiTabBtn-integrations" data-tab="integrations" onclick="switchAiTab('integrations')"><span class="tab-status-dot" data-state="info"></span>AI integrations</button>
+        </div>
+
+        <!-- ── Ask AI provider ── -->
+        <div id="aiTab-askProvider" class="ai-tab-body">
+          <div class="tab-section-title">Ask AI provider<span class="tab-section-status" data-state="info" id="aiStatus-askProvider">Mast-managed</span></div>
+          <p class="tab-section-purpose">Powers the Ask AI features <em>inside</em> Mast admin &mdash; cost previews, page-context summaries, the ✨ Ask AI buttons. Default is Mast-managed (we use our platform Anthropic key and deduct tokens from your plan). You can switch to <strong>bring your own Anthropic key</strong> below to bill Anthropic directly and skip token deduction.</p>
+
         <!-- BYO Anthropic — Ask AI Provider (F-M1a) -->
         <div class="form-group" style="background:var(--cream,#faf8f5);border:1px solid var(--cream-dark,#e8e0d4);border-radius:8px;padding:14px 16px;margin-bottom:24px;">
-          <div class="tab-section-title">Ask AI Provider<span class="tab-section-status" data-state="info">Mast-managed</span></div>
-          <p class="tab-section-purpose">Powers the in-admin Ask AI calls (cost previews, page-context summaries). Use Mast-managed (deducts tokens) or bring your own Anthropic API key.</p>
 
           <!-- Pitch state: not connected -->
           <div id="byoAnthropicPitch" style="display:none;">
@@ -9974,11 +9983,12 @@
             <div id="askAiUsageBody" style="font-size:0.85rem;color:var(--warm-gray);">Loading…</div>
           </div>
         </div>
+        </div><!-- /aiTab-askProvider -->
 
-        <div class="form-group">
-          <div class="tab-section-title">AI Integrations<span class="tab-section-status" data-state="info">MCP &amp; API keys</span></div>
-          <p class="tab-section-purpose">Connect AI tools (Claude, ChatGPT, Cursor) to manage your store through natural language. Generate an API key and add it to your AI tool's configuration.</p>
-        </div>
+        <!-- ── AI integrations ── -->
+        <div id="aiTab-integrations" class="ai-tab-body" style="display:none;">
+          <div class="tab-section-title">AI integrations<span class="tab-section-status" data-state="info" id="aiStatus-integrations">MCP &amp; API keys</span></div>
+          <p class="tab-section-purpose">Let external AI tools (Claude.ai, Claude Code, Cursor, etc.) manage your store through natural language. This tab covers (1) the in-page ✨ Ask AI buttons that send page context to your AI tool, (2) API keys for tools that need bearer-token auth instead of OAuth, and (3) the MCP setup instructions and startup prompt.</p>
 
         <!-- In-page Ask AI gating -->
         <div class="form-group" style="background:var(--cream,#faf8f5);border:1px solid var(--cream-dark,#e8e0d4);border-radius:8px;padding:14px 16px;margin-bottom:24px;">
@@ -10103,6 +10113,7 @@
             Once pasted, just say <strong>"Startup Mast"</strong> in any conversation to get started.
           </p>
         </div>
+        </div><!-- /aiTab-integrations -->
       </div>
       <!-- Engagement Settings (B6 — Entity Phase 1) -->
       <div id="settingsSubEngagement" style="display:none;max-width:720px;">
@@ -18191,7 +18202,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260526-112549-e3cfe13';
+var MAST_MODULES_V = '20260526-112841-75c2e05';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -18362,7 +18373,7 @@ function switchSettingsSubView(view) {
   if (view === 'storefront') { loadShopDisplaySettings(); loadPrivacyUrlSettings(); if (typeof refreshDisplayTabStatus === 'function') refreshDisplayTabStatus(); }
   if (view === 'dashboard') renderDashCardSettings();
   if (view === 'domains') { loadDomainSettings(); if (typeof refreshDomainsTabStatus === 'function') refreshDomainsTabStatus(); }
-  if (view === 'ai') { loadAiIntegrations(); loadAskAiConfigUI(); loadByoAnthropicUI(); loadAskAiUsage(); }
+  if (view === 'ai') { loadAiIntegrations(); loadAskAiConfigUI(); loadByoAnthropicUI(); loadAskAiUsage(); if (typeof refreshAiTabStatus === 'function') refreshAiTabStatus(); }
   if (view === 'subscription') renderSubscriptionSettings();
   if (view === 'product') loadProductSettings();
   if (view === 'costToServe') loadCostToServeSettings();
@@ -40053,6 +40064,55 @@ function refreshTripsTabStatus() {
   setPill('locations', tlCount > 0 ? 'ok' : 'info', tlCount > 0 ? (tlCount + (tlCount === 1 ? ' location' : ' locations')) : 'None yet');
 }
 window.refreshTripsTabStatus = refreshTripsTabStatus;
+
+// ── Settings → Integrations → AI & API Keys: inbound (Ask AI inside Mast) vs outbound (external AI tools).
+var AI_TABS = ['askProvider','integrations'];
+
+function switchAiTab(tab) {
+  window.__aiActiveTab = tab;
+  AI_TABS.forEach(function(t) {
+    var body = document.getElementById('aiTab-' + t);
+    if (body) body.style.display = (t === tab) ? '' : 'none';
+  });
+  document.querySelectorAll('#aiTabBar .view-tab').forEach(function(btn) {
+    btn.classList.toggle('active', btn.dataset.tab === tab);
+  });
+}
+window.switchAiTab = switchAiTab;
+
+function refreshAiTabStatus() {
+  function setDot(tabKey, state) {
+    var btn = document.getElementById('aiTabBtn-' + tabKey);
+    if (!btn) return;
+    var dot = btn.querySelector('.tab-status-dot');
+    if (dot) dot.setAttribute('data-state', state);
+  }
+  function setPill(tabKey, state, label) {
+    var pill = document.getElementById('aiStatus-' + tabKey);
+    if (!pill) return;
+    pill.setAttribute('data-state', state);
+    if (label != null) pill.textContent = label;
+  }
+  // askProvider — BYO vs Mast-managed. If the BYO "connected" panel is visible, status is "Your key (Anthropic)";
+  // otherwise it's "Mast-managed" (always works, never a missing state).
+  var byoConnected = document.getElementById('byoAnthropicConnected');
+  var isByo = byoConnected && byoConnected.style.display !== 'none' && byoConnected.style.display !== '';
+  // The pitch starts display:none too — only "connected" being explicitly shown signals BYO mode.
+  isByo = !!(byoConnected && byoConnected.style.display === '');
+  setDot('askProvider', isByo ? 'ok' : 'info');
+  setPill('askProvider', isByo ? 'ok' : 'info', isByo ? 'Your key (Anthropic)' : 'Mast-managed');
+  // integrations — count rendered API keys.
+  var keysEl = document.getElementById('aiKeysList');
+  var keyCount = keysEl ? keysEl.querySelectorAll('.ai-key-row, [data-ai-key-id]').length : 0;
+  if (!keyCount && keysEl) {
+    // Heuristic: any element that isn't the .loading placeholder.
+    var loading = keysEl.querySelector('.loading');
+    keyCount = Math.max(0, keysEl.children.length - (loading ? 1 : 0));
+  }
+  setDot('integrations', keyCount > 0 ? 'ok' : 'info');
+  setPill('integrations', keyCount > 0 ? 'ok' : 'info', keyCount > 0 ? (keyCount + (keyCount === 1 ? ' key' : ' keys')) : 'No keys yet');
+}
+window.refreshAiTabStatus = refreshAiTabStatus;
 
 // Consolidated QBO surfaces — inner tab switcher for Settings → Integrations → QuickBooks.
 // Lazy-loads the accounting module then calls renderQboPanel(tab) into #qboPanelBody.
