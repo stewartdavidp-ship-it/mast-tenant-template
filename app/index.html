@@ -18197,7 +18197,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260526-113915-9031c47';
+var MAST_MODULES_V = '20260526-114140-6cf3779';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -49117,39 +49117,17 @@ function getOperatorNames() {
 // Storage Info (Settings)
 // ============================================================
 
-async function loadStorageInfo() {
+function loadStorageInfo() {
+  // The Workshop → Media storage tab's purpose is to confirm where build photos
+  // are saved. Real aggregate stats (photo count, total bytes) would require
+  // either iterating every build's subcollection (O(builds × media) reads —
+  // expensive) or denormalizing counters at write time (schema change in
+  // production.js → MastDB.buildMedia.set). Neither is worth doing for a
+  // confirmation tab — the bucket line is the answer to "where do my photos go?".
   var el = document.getElementById('storageInfo');
   if (!el) return;
-  // Bucket info is always known (read from local firebaseConfig) — show it first
-  // so even if the media-stats query fails (rules, missing path, etc.) the tab
-  // still confirms which backend is in use, which is the whole point of the tab.
   var bucket = (typeof firebaseConfig !== 'undefined' && firebaseConfig.storageBucket) ? firebaseConfig.storageBucket : 'unknown';
-  var bucketLine = '<div style="font-size:0.85rem;color:var(--warm-gray);">Bucket: <code style="font-size:0.85rem;">' + bucket + '</code></div>';
-  try {
-    var snap = await MastDB.buildMedia.ref().once('value');
-    var allMedia = snap.val() || {};
-    var totalPhotos = 0;
-    var totalBytes = 0;
-    Object.keys(allMedia).forEach(function(buildId) {
-      var media = allMedia[buildId] || {};
-      Object.values(media).forEach(function(m) {
-        totalPhotos++;
-        totalBytes += m.sizeBytes || 0;
-      });
-    });
-    var sizeMb = (totalBytes / (1024 * 1024)).toFixed(1);
-    el.innerHTML = '<div style="display:flex;gap:24px;flex-wrap:wrap;align-items:center;">' +
-      '<div>📷 <strong>' + totalPhotos + '</strong> photos</div>' +
-      '<div>💾 <strong>' + sizeMb + ' MB</strong> stored</div>' +
-      bucketLine +
-    '</div>';
-  } catch (err) {
-    // Stats unavailable — bucket info is still useful. Common cause: no buildMedia entries
-    // yet for this tenant, or the legacy RTDB compat shim can't reach the path.
-    try { console.warn('[storageInfo] media stats unavailable:', err && err.message); } catch(e) {}
-    el.innerHTML = bucketLine +
-      '<div style="font-size:0.78rem;color:var(--warm-gray-light);margin-top:6px;">Photo + size stats unavailable for this tenant (no build media logged yet, or stats path not provisioned). Bucket configuration above is correct.</div>';
-  }
+  el.innerHTML = '<div>Bucket: <code style="font-size:0.85rem;">' + bucket + '</code></div>';
 }
 
 // ============================================================
