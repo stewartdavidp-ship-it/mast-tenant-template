@@ -328,9 +328,15 @@
       return;
     }
 
-    // Author header card
+    // Author header card. The photo is click-to-change: opens the image
+    // library, writes the chosen URL to public/config/brand/authors/{key}/photoUrl
+    // (shared across every post by this author).
     html += '<div class="blog-author-card">' +
-      '<img class="blog-author-photo" id="blogAuthorPhoto" src="' + esc(author.photoUrl) + '" alt="' + esc(author.name) + '" />' +
+      '<div style="position:relative;cursor:pointer;display:inline-block;" onclick="blogChangeAuthorPhoto()" title="Click to change author photo">' +
+        '<img class="blog-author-photo" id="blogAuthorPhoto" src="' + esc(author.photoUrl || '') + '" alt="' + esc(author.name) + '" ' +
+          'onerror="this.style.background=\'var(--cream-dark,#e8e0d4)\';this.removeAttribute(\'src\');" />' +
+        '<span style="position:absolute;bottom:0;right:0;background:var(--teal,#2a7c6f);color:#fff;border-radius:999px;width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:0.72rem;border:2px solid var(--cream);" aria-hidden="true">✎</span>' +
+      '</div>' +
       '<div class="blog-author-info">' +
       '<select onchange="blogChangeAuthor(this.value)">' +
       Object.keys(BLOG_AUTHORS).map(function(k) { return '<option value="' + k + '"' + (post.author === k ? ' selected' : '') + '>' + esc(BLOG_AUTHORS[k].name || k) + '</option>'; }).join('') +
@@ -1772,6 +1778,35 @@
     });
   }
 
+  // Change the photo for the post's current author. Picks from the shared
+  // image library, persists URL to public/config/brand/authors/{key}/photoUrl,
+  // updates the in-memory BLOG_AUTHORS cache so this and future renders use it.
+  function blogChangeAuthorPhoto() {
+    if (!blogCurrentPost) return;
+    var key = blogCurrentPost.author || Object.keys(BLOG_AUTHORS)[0];
+    if (!key) { showToast('No author selected for this post.', true); return; }
+    openImagePicker(function(imgId, url, thumbnailUrl) {
+      if (!url && !thumbnailUrl) return;
+      var photoUrl = url || thumbnailUrl;
+      MastDB.set('public/config/brand/authors/' + key + '/photoUrl', photoUrl)
+        .then(function() {
+          if (!BLOG_AUTHORS[key]) BLOG_AUTHORS[key] = { name: key, photoUrl: '', bio: '' };
+          BLOG_AUTHORS[key].photoUrl = photoUrl;
+          // Mirror onto TENANT_CONFIG so any later reads pick it up without reload.
+          try {
+            if (window.TENANT_CONFIG && TENANT_CONFIG.brand) {
+              TENANT_CONFIG.brand.authors = TENANT_CONFIG.brand.authors || {};
+              TENANT_CONFIG.brand.authors[key] = TENANT_CONFIG.brand.authors[key] || {};
+              TENANT_CONFIG.brand.authors[key].photoUrl = photoUrl;
+            }
+          } catch (e) {}
+          showToast('Author photo updated.');
+          renderBlogEditor();
+        })
+        .catch(function(err) { showToast('Error saving author photo: ' + err.message, true); });
+    });
+  }
+
   function blogRemoveFeaturedImage() {
     if (!blogCurrentPost) return;
     blogCurrentPost.featuredImageId = null;
@@ -2112,6 +2147,7 @@
   window.blogApplyLink = blogApplyLink;
   window.blogRemoveLink = blogRemoveLink;
   window.blogSetFeaturedImage = blogSetFeaturedImage;
+  window.blogChangeAuthorPhoto = blogChangeAuthorPhoto;
   window.blogRemoveFeaturedImage = blogRemoveFeaturedImage;
   window.blogUpdateExcerpt = blogUpdateExcerpt;
   window.blogUpdateExcerptCount = blogUpdateExcerptCount;

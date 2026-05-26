@@ -18207,7 +18207,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260526-170954-5b66f29';
+var MAST_MODULES_V = '20260526-172616-619c320';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -20391,7 +20391,7 @@ function renderEmailTriggers() {
   var allOn = totalEnabled === totalTriggers;
   var pillEl = document.getElementById('emailTriggersGlobalPill');
   if (pillEl) {
-    var pillColor = totalEnabled === 0 ? 'rgba(156,163,175,0.3)' : allOn ? 'var(--teal)' : 'rgba(42,124,111,0.5)';
+    var pillColor = totalEnabled === 0 ? 'rgba(120,120,120,0.7)' : allOn ? 'var(--teal)' : 'rgba(42,124,111,0.5)';
     pillEl.innerHTML = '<span onclick="toggleAllEmailTriggers()" style="font-size:0.78rem;color:#fff;background:' + pillColor + ';padding:5px 14px;border-radius:12px;font-weight:600;cursor:pointer;transition:background 0.15s ease;user-select:none;" title="Toggle all email triggers">' + totalEnabled + '/' + totalTriggers + ' on</span>';
   }
 
@@ -20443,7 +20443,9 @@ function renderEmailTriggers() {
       h += '<div style="flex-shrink:0;padding-top:2px;">';
       h += '<label style="position:relative;display:inline-block;width:42px;height:22px;cursor:pointer;">';
       h += '<input type="checkbox" ' + (enabled ? 'checked' : '') + ' onchange="toggleEmailTrigger(\'' + t.id + '\', this.checked)" style="opacity:0;width:0;height:0;position:absolute;">';
-      h += '<span style="position:absolute;top:0;left:0;right:0;bottom:0;background:' + (enabled ? 'var(--teal)' : 'rgba(156,163,175,0.3)') + ';border-radius:22px;transition:background 0.2s ease;"></span>';
+      // Off-state track: bump opacity to 0.7 so the toggle reads as a toggle
+      // even when off (was 0.3 — the white thumb appeared to float on bare bg).
+      h += '<span style="position:absolute;top:0;left:0;right:0;bottom:0;background:' + (enabled ? 'var(--teal)' : 'rgba(120,120,120,0.7)') + ';border-radius:22px;transition:background 0.2s ease;"></span>';
       h += '<span style="position:absolute;top:2px;left:' + (enabled ? '21px' : '2px') + ';width:18px;height:18px;background:white;border-radius:50%;transition:left 0.2s ease;box-shadow:0 1px 3px rgba(0,0,0,0.15);"></span>';
       h += '</label>';
       h += '</div>';
