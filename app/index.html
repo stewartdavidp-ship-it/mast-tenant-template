@@ -8162,6 +8162,7 @@
               <button class="settings-nav-item" data-nav-key="dashboard" onclick="switchSettingsSubView('dashboard')">Dashboard</button>
               <button class="settings-nav-item" data-nav-key="engagement" onclick="switchSettingsSubView('engagement')">Engagement</button>
               <button class="settings-nav-item" data-nav-key="notifications" onclick="switchSettingsSubView('notifications')">Notifications <span id="settingsNotifBadge" class="sidebar-badge alert" style="display:none;margin-left:4px;"></span></button>
+              <button class="settings-nav-item" data-nav-key="adminPrefs" onclick="switchSettingsSubView('adminPrefs')">Preferences</button>
             </div>
           </div>
         </nav>
@@ -8177,10 +8178,7 @@
           <button class="view-tab" id="genTabBtn-activePages" data-tab="activePages" onclick="switchGeneralTab('activePages')"><span class="tab-status-dot" data-state="info"></span>Active pages</button>
           <button class="view-tab" id="genTabBtn-featurePages" data-tab="featurePages" style="display:none;" onclick="switchGeneralTab('featurePages')"><span class="tab-status-dot" data-state="partial"></span>Feature pages</button>
           <button class="view-tab" id="genTabBtn-homepageEvents" data-tab="homepageEvents" onclick="switchGeneralTab('homepageEvents')"><span class="tab-status-dot" data-state="ok"></span>Homepage events</button>
-          <button class="view-tab" id="genTabBtn-darkMode" data-tab="darkMode" onclick="switchGeneralTab('darkMode')"><span class="tab-status-dot" data-state="none"></span>Dark mode</button>
           <button class="view-tab" id="genTabBtn-publicFeedback" data-tab="publicFeedback" onclick="switchGeneralTab('publicFeedback')"><span class="tab-status-dot" data-state="none"></span>Public feedback</button>
-          <button class="view-tab" id="genTabBtn-errorReporting" data-tab="errorReporting" onclick="switchGeneralTab('errorReporting')"><span class="tab-status-dot" data-state="none"></span>Error reporting</button>
-          <button class="view-tab" id="genTabBtn-testingMode" data-tab="testingMode" onclick="switchGeneralTab('testingMode')"><span class="tab-status-dot" data-state="none"></span>Testing mode</button>
         </div>
 
         <!-- ── Business setup ── -->
@@ -8264,19 +8262,6 @@
           </div>
         </div>
 
-        <!-- ── Dark mode ── -->
-        <div id="genTab-darkMode" class="gen-tab-body" style="display:none;">
-          <div class="tab-section-title">Dark mode<span class="tab-section-status" data-state="none" id="genStatus-darkMode">Off</span></div>
-          <p class="tab-section-purpose">Switch the admin panel to a dark theme. This affects only the admin app you&rsquo;re looking at right now &mdash; it doesn&rsquo;t change anything customers see on your public site.</p>
-          <div class="form-group">
-            <label style="display:flex;align-items:center;gap:10px;cursor:pointer;">
-              <input type="checkbox" id="darkModeToggle" onchange="toggleDarkMode()"
-                style="width:18px;height:18px;cursor:pointer;">
-              <span>Enable dark mode</span>
-            </label>
-          </div>
-        </div>
-
         <!-- ── Public feedback ── -->
         <div id="genTab-publicFeedback" class="gen-tab-body" style="display:none;">
           <div class="tab-section-title">Public feedback widget<span class="tab-section-status" data-state="none" id="genStatus-publicFeedback">Off</span></div>
@@ -8291,32 +8276,42 @@
           </div>
         </div>
 
-        <!-- ── Automatic error reporting ── -->
-        <div id="genTab-errorReporting" class="gen-tab-body" style="display:none;">
-          <div class="tab-section-title">Automatic error reporting<span class="tab-section-status" data-state="none" id="genStatus-errorReporting">Off</span></div>
-          <p class="tab-section-purpose">When on, Mast automatically reports JS errors, failed asset loads, and spinner timeouts back to the platform. Helps us find and fix problems you might not notice. No manual action required &mdash; data is anonymized.</p>
-          <div class="form-group">
-            <label style="display:flex;align-items:center;gap:10px;cursor:pointer;">
-              <input type="checkbox" id="autoReportToggle" onchange="toggleAutoReport()"
-                style="width:18px;height:18px;cursor:pointer;">
-              <span>Automatically report detected errors</span>
-            </label>
-          </div>
+      </div>
+
+      <!-- Admin Site → Preferences — admin-panel toggles that don't affect the public site. -->
+      <div id="settingsSubAdminPrefs" style="display:none;max-width:720px;">
+        <div class="tab-section-title">Admin preferences<span class="tab-section-status" data-state="info">Per-admin</span></div>
+        <p class="tab-section-purpose">Settings for the admin app itself &mdash; what you see while working in Mast. These don&rsquo;t affect your customers or your public site at all. Dark mode is a per-device visual preference; Testing Mode and Error Reporting are per-tenant.</p>
+
+        <div class="form-group" style="margin-bottom:24px;">
+          <label style="font-size:1rem;font-weight:600;display:block;margin-bottom:4px;">Dark mode</label>
+          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:8px;">Switch the admin panel to a dark theme. Affects only the admin app.</p>
+          <label style="display:flex;align-items:center;gap:10px;cursor:pointer;">
+            <input type="checkbox" id="darkModeToggle" onchange="toggleDarkMode()"
+              style="width:18px;height:18px;cursor:pointer;">
+            <span>Enable dark mode</span>
+          </label>
         </div>
 
-        <!-- ── Testing mode ── -->
-        <div id="genTab-testingMode" class="gen-tab-body" style="display:none;">
-          <div class="tab-section-title">Testing mode<span class="tab-section-status" data-state="none" id="genStatus-testingMode">Off</span></div>
-          <p class="tab-section-purpose">Adds a Testing Mode panel to your admin sidebar with guided QA missions. Useful while you&rsquo;re still setting up the site and want a checklist of what to validate. Turn off once you&rsquo;re live.</p>
-          <div class="form-group">
-            <label style="display:flex;align-items:center;gap:10px;cursor:pointer;">
-              <input type="checkbox" id="testingModeVisibleToggle" onchange="toggleTestingModeVisibility()"
-                style="width:18px;height:18px;cursor:pointer;">
-              <span>Show Testing Mode in sidebar</span>
-            </label>
-          </div>
+        <div class="form-group" style="margin-bottom:24px;">
+          <label style="font-size:1rem;font-weight:600;display:block;margin-bottom:4px;">Automatic error reporting</label>
+          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:8px;">When on, Mast automatically reports JS errors, failed asset loads, and spinner timeouts back to the platform. Helps us find and fix problems you might not notice. No manual action required &mdash; data is anonymized.</p>
+          <label style="display:flex;align-items:center;gap:10px;cursor:pointer;">
+            <input type="checkbox" id="autoReportToggle" onchange="toggleAutoReport()"
+              style="width:18px;height:18px;cursor:pointer;">
+            <span>Automatically report detected errors</span>
+          </label>
         </div>
 
+        <div class="form-group">
+          <label style="font-size:1rem;font-weight:600;display:block;margin-bottom:4px;">Testing mode</label>
+          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:8px;">Adds a Testing Mode panel to your admin sidebar with guided QA missions. Useful while setting up the site and want a checklist of what to validate. Turn off once you&rsquo;re live.</p>
+          <label style="display:flex;align-items:center;gap:10px;cursor:pointer;">
+            <input type="checkbox" id="testingModeVisibleToggle" onchange="toggleTestingModeVisibility()"
+              style="width:18px;height:18px;cursor:pointer;">
+            <span>Show Testing Mode in sidebar</span>
+          </label>
+        </div>
       </div>
       <div id="settingsSubPayments" style="display:none;max-width:720px;">
         <div class="tab-section-title">Payment processor<span class="tab-section-status" data-state="info" id="paymentsStatusPill">Loading&hellip;</span></div>
@@ -18202,7 +18197,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260526-112947-86831cc';
+var MAST_MODULES_V = '20260526-113414-38ad85a';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -18271,7 +18266,7 @@ function getModuleForRouteManifest(route) {
 // ============================================================
 // Settings Sub-Tabs
 // ============================================================
-var settingsSubViews = ['general', 'payments', 'shipping', 'tax', 'compliance', 'operations', 'email', 'integrations', 'workshop', 'trips', 'storefront', 'dashboard', 'domains', 'ai', 'engagement', 'channels', 'notifications', 'pim', 'maker', 'product', 'costToServe', 'closePolicy'];
+var settingsSubViews = ['general', 'payments', 'shipping', 'tax', 'compliance', 'operations', 'email', 'integrations', 'workshop', 'trips', 'storefront', 'dashboard', 'domains', 'ai', 'engagement', 'channels', 'notifications', 'pim', 'maker', 'product', 'costToServe', 'closePolicy', 'adminPrefs'];
 
 var SETTINGS_VIEW_GROUP = {
   'general': 'storefront', 'storefront': 'storefront', 'domains': 'storefront',
@@ -39424,7 +39419,7 @@ window.switchIntegrationsTab = switchIntegrationsTab;
 
 // ── Settings → Storefront → General: tabbed view (canonical view-tabs pattern).
 // Each item in General is its own tab so the page can't become a long undifferentiated list.
-var GENERAL_TABS = ['businessSetup','githubPat','siteVisibility','activePages','featurePages','homepageEvents','darkMode','publicFeedback','errorReporting','testingMode'];
+var GENERAL_TABS = ['businessSetup','githubPat','siteVisibility','activePages','featurePages','homepageEvents','publicFeedback'];
 
 function switchGeneralTab(tab) {
   window.__generalActiveTab = tab;
@@ -39518,10 +39513,9 @@ function refreshGeneralTabStatus() {
     setDot(tabKey, on ? 'partial' : 'none');
     setPill(tabKey, on ? 'partial' : 'none', on ? 'On' : 'Off');
   }
-  syncToggle('darkMode', 'darkModeToggle');
+  // Public-site toggle (the others — Dark mode / Error reporting / Testing mode —
+  // moved to Settings → Admin Site → Preferences in commit 38ad85a follow-up).
   syncToggle('publicFeedback', 'publicFeedbackToggle');
-  syncToggle('errorReporting', 'autoReportToggle');
-  syncToggle('testingMode', 'testingModeVisibleToggle');
 }
 window.refreshGeneralTabStatus = refreshGeneralTabStatus;
 
