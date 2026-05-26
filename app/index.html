@@ -8488,7 +8488,7 @@
               <option value="">Select a studio location...</option>
             </select>
             <p style="font-size:0.78rem;color:var(--warm-gray);margin-top:4px;">
-              Only studios with a physical address are shown. <a href="#" onclick="event.preventDefault();switchSettingsSubView('workshop');setTimeout(function(){var el=document.getElementById('studioLocationsList');if(el)el.scrollIntoView({behavior:'smooth'});},200);" style="color:var(--teal);">Manage studio locations</a>
+              Only studios with a physical address are shown. <a href="#" onclick="event.preventDefault();switchSettingsSubView('workshop');setTimeout(function(){if(typeof switchWorkshopTab==='function')switchWorkshopTab('studioLocations');var el=document.getElementById('studioLocationsList');if(el)el.scrollIntoView({behavior:'smooth'});},200);" style="color:var(--teal);">Manage studio locations</a>
             </p>
           </div>
 
@@ -9651,66 +9651,80 @@
       </div>
 
       <div id="settingsSubWorkshop" style="display:none;max-width:720px;">
-        <div class="form-group">
-          <div class="tab-section-title">Operators<span class="tab-section-status" data-state="info">Configured</span></div>
-          <p class="tab-section-purpose">Workshop operators who work on production builds. These names appear in the operator selector when starting builds.</p>
-          <div id="operatorsList" style="margin-bottom:12px;"></div>
-          <div style="display:flex;gap:8px;">
-            <input type="text" id="newOperatorName" placeholder="Operator name..."
-              style="flex:1;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;">
-            <button class="btn btn-primary" onclick="addOperator()">Add</button>
+        <!-- Workshop settings tab strip — four distinct management surfaces (people, GPS places, QR storage, media backend). -->
+        <div class="view-tabs" id="workshopTabBar" style="margin-bottom:20px;">
+          <button class="view-tab active" id="workshopTabBtn-operators" data-tab="operators" onclick="switchWorkshopTab('operators')"><span class="tab-status-dot" data-state="info"></span>Operators</button>
+          <button class="view-tab" id="workshopTabBtn-studioLocations" data-tab="studioLocations" onclick="switchWorkshopTab('studioLocations')"><span class="tab-status-dot" data-state="info"></span>Studio locations</button>
+          <button class="view-tab" id="workshopTabBtn-inventoryLocations" data-tab="inventoryLocations" onclick="switchWorkshopTab('inventoryLocations')"><span class="tab-status-dot" data-state="info"></span>Inventory locations</button>
+          <button class="view-tab" id="workshopTabBtn-mediaStorage" data-tab="mediaStorage" onclick="switchWorkshopTab('mediaStorage')"><span class="tab-status-dot" data-state="info"></span>Media storage</button>
+        </div>
+
+        <!-- ── Operators ── -->
+        <div id="workshopTab-operators" class="workshop-tab-body">
+          <div class="tab-section-title">Operators<span class="tab-section-status" data-state="info" id="workshopStatus-operators">Loading&hellip;</span></div>
+          <p class="tab-section-purpose">People who work on production builds in your workshop. Names entered here appear in the operator selector when starting a build, on time-tracking entries, and on labor-cost reports. Add everyone who logs build time.</p>
+          <div class="form-group">
+            <div id="operatorsList" style="margin-bottom:12px;"></div>
+            <div style="display:flex;gap:8px;">
+              <input type="text" id="newOperatorName" placeholder="Operator name..."
+                style="flex:1;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;">
+              <button class="btn btn-primary" onclick="addOperator()">Add</button>
+            </div>
           </div>
         </div>
 
-        <hr style="border:none;border-top:1px solid #eee;margin:24px 0;">
-
-        <div class="form-group">
-          <div class="tab-section-title">Studio Locations<span class="tab-section-status" data-state="info">GPS-aware</span></div>
-          <p class="tab-section-purpose">Mark your studio and workshop locations. When using the PoS away from all studio locations, Studio Companion will detect you're at a remote event and offer to link sales.</p>
-          <div id="studioLocationsList" style="margin-bottom:12px;"></div>
-          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-            <input type="text" id="newStudioLocationName" placeholder="Location name (e.g. Home Studio)"
-              style="flex:1;min-width:160px;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;">
-            <button class="btn btn-primary" onclick="addStudioLocation()">📍 Add Current Location</button>
-          </div>
-          <p style="font-size:0.78rem;color:var(--warm-gray);margin-top:6px;">
-            Tap "Add Current Location" while at the studio — your GPS coordinates will be saved automatically. Detection radius: 500m.
-          </p>
-          <div id="studioLocationStatus" style="margin-top:8px;font-size:0.85rem;"></div>
-        </div>
-
-        <hr style="border:none;border-top:1px solid #eee;margin:24px 0;">
-
-        <div class="form-group">
-          <div class="tab-section-title">Inventory Locations<span class="tab-section-status" data-state="info">QR-tracked</span></div>
-          <p class="tab-section-purpose">Track where inventory is stored. Each location gets a QR code for quick scanning during intake, packing, and moves. The "Home" location is created automatically and can't be archived.</p>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
-            <select id="locationStatusFilter" onchange="renderLocationsList()" style="padding:6px 10px;border:1px solid var(--cream-dark);border-radius:6px;font-size:0.85rem;font-family:'DM Sans',sans-serif;">
-              <option value="active">Active</option>
-              <option value="all">All</option>
-              <option value="archived">Archived</option>
-            </select>
-          </div>
-          <div id="inventoryLocationsList" style="margin-bottom:12px;"></div>
-          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-            <input type="text" id="newLocationName" placeholder="Location name (e.g. Shelf A, Display Case)"
-              style="flex:1;min-width:160px;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;">
-            <select id="newLocationType" style="padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;">
-              <option value="storage">Storage/Display</option>
-              <option value="home">Home/Studio</option>
-              <option value="container">Container/Box</option>
-              <option value="other">Other</option>
-            </select>
-            <button class="btn btn-primary" onclick="createLocation()">+ Add Location</button>
+        <!-- ── Studio locations ── -->
+        <div id="workshopTab-studioLocations" class="workshop-tab-body" style="display:none;">
+          <div class="tab-section-title">Studio locations<span class="tab-section-status" data-state="info" id="workshopStatus-studioLocations">Loading&hellip;</span></div>
+          <p class="tab-section-purpose">Physical places where you work &mdash; home studio, rented space, etc. &mdash; with GPS coordinates. Studio Companion uses these to detect when you&rsquo;re at a known studio vs. a remote event; that controls whether a PoS sale auto-links to the studio or prompts you to tag a show. Detection radius is 500m.</p>
+          <div class="form-group">
+            <div id="studioLocationsList" style="margin-bottom:12px;"></div>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+              <input type="text" id="newStudioLocationName" placeholder="Location name (e.g. Home Studio)"
+                style="flex:1;min-width:160px;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;">
+              <button class="btn btn-primary" onclick="addStudioLocation()">📍 Add current location</button>
+            </div>
+            <p style="font-size:0.78rem;color:var(--warm-gray);margin-top:6px;">
+              Tap &ldquo;Add current location&rdquo; while you&rsquo;re physically at the studio &mdash; your GPS coordinates will be saved automatically.
+            </p>
+            <div id="studioLocationStatus" style="margin-top:8px;font-size:0.85rem;"></div>
           </div>
         </div>
 
-        <hr style="border:none;border-top:1px solid #eee;margin:24px 0;">
+        <!-- ── Inventory locations ── -->
+        <div id="workshopTab-inventoryLocations" class="workshop-tab-body" style="display:none;">
+          <div class="tab-section-title">Inventory locations<span class="tab-section-status" data-state="info" id="workshopStatus-inventoryLocations">Loading&hellip;</span></div>
+          <p class="tab-section-purpose">Storage spots where physical inventory lives &mdash; shelves, display cases, containers, etc. Each location gets a QR code for quick scanning during intake, packing, and moves. The &ldquo;Home&rdquo; location is created automatically and can&rsquo;t be archived.</p>
+          <div class="form-group">
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
+              <select id="locationStatusFilter" onchange="renderLocationsList()" style="padding:6px 10px;border:1px solid var(--cream-dark);border-radius:6px;font-size:0.85rem;font-family:'DM Sans',sans-serif;">
+                <option value="active">Active</option>
+                <option value="all">All</option>
+                <option value="archived">Archived</option>
+              </select>
+            </div>
+            <div id="inventoryLocationsList" style="margin-bottom:12px;"></div>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+              <input type="text" id="newLocationName" placeholder="Location name (e.g. Shelf A, Display Case)"
+                style="flex:1;min-width:160px;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;">
+              <select id="newLocationType" style="padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;">
+                <option value="storage">Storage/Display</option>
+                <option value="home">Home/Studio</option>
+                <option value="container">Container/Box</option>
+                <option value="other">Other</option>
+              </select>
+              <button class="btn btn-primary" onclick="createLocation()">+ Add location</button>
+            </div>
+          </div>
+        </div>
 
-        <div class="form-group">
-          <div class="tab-section-title">Build Media Storage<span class="tab-section-status" data-state="info">Firebase Storage</span></div>
-          <p class="tab-section-purpose">Photos captured during production builds are stored in Firebase Storage.</p>
-          <div id="storageInfo" style="font-size:0.85rem;color:var(--warm-gray);">Loading...</div>
+        <!-- ── Build media storage ── -->
+        <div id="workshopTab-mediaStorage" class="workshop-tab-body" style="display:none;">
+          <div class="tab-section-title">Build media storage<span class="tab-section-status" data-state="info">Firebase Storage</span></div>
+          <p class="tab-section-purpose">Where photos captured during production builds are saved. This is read-only platform configuration &mdash; build photos go to Firebase Storage under your tenant&rsquo;s scoped path. Nothing to change here; this tab confirms the backend.</p>
+          <div class="form-group">
+            <div id="storageInfo" style="font-size:0.85rem;color:var(--warm-gray);">Loading...</div>
+          </div>
         </div>
       </div>
       <!-- Trips Settings -->
@@ -17718,7 +17732,7 @@ function applyRoute(route) {
 }
 
 function lazyLoadForRoute(route) {
-  if (route === 'settings') { updateGitHubTokenStatus(); loadOperators(); loadStorageInfo(); loadStudioLocations(); loadLocations(); loadPublicFeedbackSetting(); loadEmailConfig(); loadEmailDomainSection(); loadResendWebhookSection(); applySettingsGating(); loadSiteVisibility(); loadActiveMastPages(); if (typeof applyGeneralTabGating === 'function') applyGeneralTabGating(); if (typeof refreshGeneralTabStatus === 'function') refreshGeneralTabStatus(); }
+  if (route === 'settings') { updateGitHubTokenStatus(); loadOperators(); loadStorageInfo(); loadStudioLocations(); loadLocations(); loadPublicFeedbackSetting(); loadEmailConfig(); loadEmailDomainSection(); loadResendWebhookSection(); applySettingsGating(); loadSiteVisibility(); loadActiveMastPages(); if (typeof applyGeneralTabGating === 'function') applyGeneralTabGating(); if (typeof refreshGeneralTabStatus === 'function') refreshGeneralTabStatus(); if (typeof refreshWorkshopTabStatus === 'function') refreshWorkshopTabStatus(); }
   if (route === 'analytics' && !analyticsLoaded) loadAnalytics();
   if (route === 'products') loadProducts();
   // orders lazy-load handled by orders module
@@ -18168,7 +18182,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260526-103927-eb3a7c0';
+var MAST_MODULES_V = '20260526-112001-8eed295';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -39933,6 +39947,60 @@ function refreshDomainsTabStatus() {
 }
 window.refreshDomainsTabStatus = refreshDomainsTabStatus;
 
+// ── Settings → Studio → Workshop: tabbed view (4 distinct management surfaces).
+var WORKSHOP_TABS = ['operators','studioLocations','inventoryLocations','mediaStorage'];
+
+function switchWorkshopTab(tab) {
+  window.__workshopActiveTab = tab;
+  WORKSHOP_TABS.forEach(function(t) {
+    var body = document.getElementById('workshopTab-' + t);
+    if (body) body.style.display = (t === tab) ? '' : 'none';
+  });
+  document.querySelectorAll('#workshopTabBar .view-tab').forEach(function(btn) {
+    btn.classList.toggle('active', btn.dataset.tab === tab);
+  });
+}
+window.switchWorkshopTab = switchWorkshopTab;
+
+function refreshWorkshopTabStatus() {
+  function setDot(tabKey, state) {
+    var btn = document.getElementById('workshopTabBtn-' + tabKey);
+    if (!btn) return;
+    var dot = btn.querySelector('.tab-status-dot');
+    if (dot) dot.setAttribute('data-state', state);
+  }
+  function setPill(tabKey, state, label) {
+    var pill = document.getElementById('workshopStatus-' + tabKey);
+    if (!pill) return;
+    pill.setAttribute('data-state', state);
+    if (label != null) pill.textContent = label;
+  }
+  // Operators — count entries in the rendered list.
+  var opEl = document.getElementById('operatorsList');
+  var opCount = opEl ? opEl.querySelectorAll('.operator-row, [data-operator-id]').length : 0;
+  if (!opCount && opEl) opCount = Math.max(0, opEl.children.length - (opEl.textContent && /no operators/i.test(opEl.textContent) ? 1 : 0));
+  setDot('operators', opCount > 0 ? 'ok' : 'info');
+  setPill('operators', opCount > 0 ? 'ok' : 'info', opCount > 0 ? (opCount + (opCount === 1 ? ' operator' : ' operators')) : 'None yet');
+
+  // Studio locations — count rendered rows.
+  var slEl = document.getElementById('studioLocationsList');
+  var slCount = slEl ? slEl.querySelectorAll('.studio-location-row, [data-studio-loc-id]').length : 0;
+  if (!slCount && slEl) slCount = Math.max(0, slEl.children.length - (slEl.textContent && /no studio/i.test(slEl.textContent) ? 1 : 0));
+  setDot('studioLocations', slCount > 0 ? 'ok' : 'info');
+  setPill('studioLocations', slCount > 0 ? 'ok' : 'info', slCount > 0 ? (slCount + (slCount === 1 ? ' location' : ' locations')) : 'None yet');
+
+  // Inventory locations — count rendered rows.
+  var ilEl = document.getElementById('inventoryLocationsList');
+  var ilCount = ilEl ? ilEl.querySelectorAll('.location-row, [data-location-id]').length : 0;
+  if (!ilCount && ilEl) ilCount = Math.max(0, ilEl.children.length);
+  setDot('inventoryLocations', ilCount > 0 ? 'ok' : 'info');
+  setPill('inventoryLocations', ilCount > 0 ? 'ok' : 'info', ilCount > 0 ? (ilCount + (ilCount === 1 ? ' location' : ' locations')) : 'None yet');
+
+  // Media storage — always Firebase Storage (read-only). Dot stays info.
+  setDot('mediaStorage', 'info');
+}
+window.refreshWorkshopTabStatus = refreshWorkshopTabStatus;
+
 // Consolidated QBO surfaces — inner tab switcher for Settings → Integrations → QuickBooks.
 // Lazy-loads the accounting module then calls renderQboPanel(tab) into #qboPanelBody.
 function switchQboInnerTab(tab) {
@@ -48892,6 +48960,7 @@ function renderOperatorsList() {
   var keys = Object.keys(operators);
   if (keys.length === 0) {
     el.innerHTML = '<p style="font-size:0.85rem;color:var(--warm-gray);font-style:italic;">No operators added yet.</p>';
+    if (typeof refreshWorkshopTabStatus === 'function') refreshWorkshopTabStatus();
     return;
   }
   var html = '';
@@ -48901,6 +48970,7 @@ function renderOperatorsList() {
       ' <span class="remove-op" onclick="removeOperator(\'' + esc(k) + '\')">&times;</span></span>';
   });
   el.innerHTML = html;
+  if (typeof refreshWorkshopTabStatus === 'function') refreshWorkshopTabStatus();
 }
 
 async function addOperator() {
@@ -48986,6 +49056,7 @@ function renderStudioLocations() {
   var keys = Object.keys(studioLocations);
   if (keys.length === 0) {
     el.innerHTML = '<div style="padding:12px;background:var(--cream);border-radius:6px;color:var(--warm-gray);font-size:0.85rem;">No studio locations set. Add your first one while at the studio.</div>';
+    if (typeof refreshWorkshopTabStatus === 'function') refreshWorkshopTabStatus();
     return;
   }
   var html = '';
@@ -49010,6 +49081,7 @@ function renderStudioLocations() {
     '</div>';
   });
   el.innerHTML = html;
+  if (typeof refreshWorkshopTabStatus === 'function') refreshWorkshopTabStatus();
 }
 
 async function _reverseGeocode(lat, lng) {
@@ -49300,6 +49372,7 @@ function renderLocationsList() {
 
   if (locs.length === 0) {
     el.innerHTML = '<div style="padding:12px;background:var(--cream);border-radius:6px;color:var(--warm-gray);font-size:0.85rem;">No locations found.</div>';
+    if (typeof refreshWorkshopTabStatus === 'function') refreshWorkshopTabStatus();
     return;
   }
 
@@ -49332,6 +49405,7 @@ function renderLocationsList() {
     '</div>';
   });
   el.innerHTML = html;
+  if (typeof refreshWorkshopTabStatus === 'function') refreshWorkshopTabStatus();
 }
 
 function getLocationItemCount(locationId) {
