@@ -712,7 +712,8 @@
     var config = loyaltyConfig || {};
     var exclusions = (config.loyaltyExclusions || []).join(', ');
 
-    var html = '<h3 style="margin-top:0;">Loyalty Program Settings</h3>' +
+    var html = '<div class="modal-body">' +
+      '<h3 style="margin-top:0;">Loyalty Program Settings</h3>' +
       '<div style="margin-bottom:16px;">' +
         '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.9rem;">' +
           '<input type="checkbox" id="loyaltyConfigEnabled" ' + (config.loyaltyEnabled ? 'checked' : '') + '>' +
@@ -746,7 +747,8 @@
       '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:20px;">' +
         '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
         '<button class="btn btn-primary" onclick="window._loyaltySaveConfig()">Save</button>' +
-      '</div>';
+      '</div>' +
+    '</div>';
 
     openModal(html);
   };
@@ -975,7 +977,8 @@
   window._membershipOpenConfig = function() {
     var c = membershipConfig || {};
 
-    var html = '<h3 style="margin-top:0;">Membership Settings</h3>' +
+    var html = '<div class="modal-body">' +
+      '<h3 style="margin-top:0;">Membership Settings</h3>' +
       // Enable toggle
       '<div style="margin-bottom:16px;">' +
         '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.9rem;">' +
@@ -1042,7 +1045,8 @@
       '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:20px;">' +
         '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
         '<button class="btn btn-primary" onclick="window._membershipSaveConfig()">Save</button>' +
-      '</div>';
+      '</div>' +
+    '</div>';
 
     openModal(html);
   };

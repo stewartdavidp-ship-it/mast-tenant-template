@@ -705,7 +705,12 @@
       // ── Actions ──
       '<div class="book-form-actions">' +
       '<button class="btn btn-primary" onclick="window._bookSaveClass(\'' + (classId || '') + '\')">Save Class</button>' +
-      '<button class="btn" onclick="window._bookBackToList()">Cancel</button>' +
+      // When editing an existing class, Cancel returns to that class's detail
+      // (so the user lands where they came from). Creating a new class still
+      // returns to the list since there is no detail to go back to.
+      (classId
+        ? '<button class="btn" onclick="window._bookViewClass(\'' + classId + '\')">Cancel</button>'
+        : '<button class="btn" onclick="window._bookBackToList()">Cancel</button>') +
       '</div>' +
       '</form>';
 

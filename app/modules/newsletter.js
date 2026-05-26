@@ -628,6 +628,7 @@
 
     // Actions bar
     html += '<div class="nl-compose-actions">' +
+      '<button class="btn btn-outline" onclick="nlPreview()">👁️ Preview</button>' +
       '<button class="btn btn-primary" onclick="nlExportHTML()">📥 Export HTML</button>' +
       '<button class="btn btn-outline" onclick="nlPublishToWebsite()">🌐 Publish to Website</button>' +
       '<button class="btn btn-primary" onclick="nlSendTest()">📨 Send Test</button>' +
@@ -1499,9 +1500,15 @@
     return '<div style="font-size:15px;line-height:1.7;color:#444;margin:0;">' + content + '</div>';
   }
 
-  function nlExportHTML() {
+  function nlPreview() { nlExportHTML('preview'); }
+
+  function nlExportHTML(mode) {
     if (!nlCurrentIssue) return;
-    if (!nlCurrentIssue.title || !nlCurrentIssue.title.trim()) { showToast('Add an issue title before exporting', true); return; }
+    var isPreview = mode === 'preview';
+    if (!nlCurrentIssue.title || !nlCurrentIssue.title.trim()) {
+      showToast(isPreview ? 'Add an issue title before previewing' : 'Add an issue title before exporting', true);
+      return;
+    }
 
     var sections = nlCurrentIssue.sections ? Object.values(nlCurrentIssue.sections)
       .filter(function(s) { return s.included; })
@@ -1611,6 +1618,17 @@
         '<button class="btn btn-primary" onclick="(function(){var ta=document.getElementById(\'nlExportTextarea\');ta.select();try{navigator.clipboard.writeText(ta.value).then(function(){showToast(\'Copied to clipboard! \u{1F4CB}\');});}catch(e){document.execCommand(\'copy\');showToast(\'Copied! \u{1F4CB}\');}})()">Copy to Clipboard</button>' +
       '</div>' +
       '</div>';
+    if (isPreview) {
+      // Open in a new tab as rendered HTML — closest thing to seeing the
+      // issue as a subscriber would, without actually sending the email.
+      var win = window.open('', '_blank');
+      if (!win) { showToast('Pop-up blocked — allow pop-ups to preview.', true); return; }
+      win.document.open();
+      win.document.write(emailHtml);
+      win.document.close();
+      try { win.document.title = 'Preview · ' + (nlCurrentIssue.title || 'Newsletter'); } catch (e) {}
+      return;
+    }
     openModal(modalHtml);
     var ta = document.getElementById('nlExportTextarea');
     if (ta) ta.value = emailHtml;
@@ -2203,6 +2221,7 @@
   window.nlSelectImage = nlSelectImage;
   window.nlRemoveImage = nlRemoveImage;
   window.nlExportHTML = nlExportHTML;
+  window.nlPreview = nlPreview;
   window.nlPublishToWebsite = nlPublishToWebsite;
   window.nlMarkAsSent = nlMarkAsSent;
   window.nlSendTest = nlSendTest;

@@ -2472,6 +2472,16 @@
   }
 
   function csBackToList() {
+    // If we got here from another surface (e.g. customer detail → ticket,
+    // or a custom-order detail → ticket), honor the MastNavStack and return
+    // to that origin instead of falling through to the ticket list.
+    if (window.MastNavStack && typeof MastNavStack.size === 'function' && MastNavStack.size() > 0) {
+      selectedTicketId = null;
+      threadMessages = [];
+      isInternalNote = false;
+      MastNavStack.popAndReturn();
+      return;
+    }
     viewMode = 'list';
     selectedTicketId = null;
     threadMessages = [];

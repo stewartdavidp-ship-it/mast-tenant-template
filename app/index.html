@@ -3138,6 +3138,16 @@
     body.dark-mode #membershipAdmin th { color: #999 !important; }
     /* Membership settings modal */
     body.dark-mode .modal input[style*="background:var(--cream)"] { background: #333 !important; color: #e0e0e0 !important; border-color: #555 !important; }
+    body.dark-mode .form-group input[type="text"],
+    body.dark-mode .form-group input[type="date"],
+    body.dark-mode .form-group input[type="url"],
+    body.dark-mode .form-group input[type="email"],
+    body.dark-mode .form-group input[type="tel"],
+    body.dark-mode .form-group input[type="number"],
+    body.dark-mode .form-group input[type="password"],
+    body.dark-mode .form-group input[type="search"],
+    body.dark-mode .form-group textarea,
+    body.dark-mode .form-group select { background: #333; color: #e0e0e0; border-color: #555; }
 
     /* ========== SIDEBAR GATING (Subscription Enforcement) ========== */
     .sidebar-section.locked .sidebar-items { display: none !important; }
@@ -18197,7 +18207,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260526-114140-6cf3779';
+var MAST_MODULES_V = '20260526-170954-5b66f29';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -25429,7 +25439,7 @@ async function saveTaxRates() {
   var nexusSel = document.getElementById('taxNexusState');
   var nexus = nexusSel ? nexusSel.value : '';
   try {
-    await MastDB.config.taxRates().set(rates);
+    await MastDB.config.setTaxRates(rates);
     if (nexus) await MastDB.config.settings().child('nexusState').set(nexus);
     await writeAudit('update', 'settings', 'taxRates');
     var count = Object.keys(rates).filter(function(k) { return rates[k] > 0; }).length;
@@ -25445,7 +25455,7 @@ async function clearTaxRates() {
   if (!hasPermission('settings', 'update')) { showToast('You do not have permission to update settings.', true); return; }
   if (!await mastConfirm('Clear all tax rates? Customers will not be charged tax until rates are re-configured.', { title: 'Clear Tax Rates', danger: true })) return;
   try {
-    await MastDB.config.taxRates().remove();
+    await MastDB.config.removeTaxRates();
     await writeAudit('update', 'settings', 'taxRates-cleared');
     renderTaxRatesTable({});
     document.getElementById('taxRatesStatus').innerHTML = '<span style="color:var(--warm-gray-light);">Tax rates cleared.</span>';
@@ -33658,16 +33668,30 @@ function renderProducts() {
 
     // W1-followup: data-attr + delegated listener (see top of file). Same
     // behavior as the prior inline onclick; closes the W1-side esc-into-JS gap.
-    html += '<tr style="cursor:pointer;" data-view-pid="' + esc(p.pid) + '">';
+    // Unnamed-only mode: swap the row into an inline name editor so the user
+    // can fix names without bouncing through the detail view.
+    var isUnnamedRow = window.productsUnnamedOnly === true && (!p.name || String(p.name).trim() === '');
+    html += '<tr ' + (isUnnamedRow ? '' : 'style="cursor:pointer;" data-view-pid="' + esc(p.pid) + '"') + '>';
     html += '<td>' +
       (thumb
         ? '<img src="' + esc(thumb) + '" alt="" style="width:56px;height:56px;object-fit:cover;border-radius:6px;display:block;">'
         : '<div style="width:56px;height:56px;border-radius:6px;background:var(--cream-dark,#e8e0d4);display:flex;align-items:center;justify-content:center;font-size:1.15rem;">📦</div>') +
       '</td>';
-    html += '<td>' +
-      '<div style="font-weight:600;color:var(--text,#2a2a2a);">' + esc(p.name || '') + '</div>' +
-      (catTxt ? '<div style="font-size:0.78rem;color:var(--warm-gray);">' + esc(catTxt) + '</div>' : '') +
-      '</td>';
+    if (isUnnamedRow) {
+      html += '<td>' +
+        '<div style="display:flex;gap:6px;align-items:center;">' +
+          '<input type="text" data-unnamed-name-pid="' + esc(p.pid) + '" placeholder="Name this product…" ' +
+            'style="flex:1;padding:6px 10px;border:1px solid var(--cream-dark,#e8e0d4);border-radius:6px;font-size:0.85rem;background:var(--cream);color:var(--charcoal,#2a2a2a);">' +
+          '<button type="button" data-unnamed-save-pid="' + esc(p.pid) + '" class="btn btn-primary btn-small" style="font-size:0.78rem;padding:6px 12px;">Save</button>' +
+        '</div>' +
+        (catTxt ? '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:4px;">' + esc(catTxt) + '</div>' : '') +
+        '</td>';
+    } else {
+      html += '<td>' +
+        '<div style="font-weight:600;color:var(--text,#2a2a2a);">' + esc(p.name || '') + '</div>' +
+        (catTxt ? '<div style="font-size:0.78rem;color:var(--warm-gray);">' + esc(catTxt) + '</div>' : '') +
+        '</td>';
+    }
     html += '<td>' + statusBadge + '</td>';
     html += '<td>' + variantCount + '</td>';
     html += '<td>' + recipeBadge + '</td>';
@@ -36572,6 +36596,46 @@ if (!window._mastViewProductDelegateAttached) {
     _mastViewProductFromEvent(ev);
   });
   window._mastViewProductDelegateAttached = true;
+}
+
+// Inline name save for the "unnamed products" filtered list. The row swaps
+// in an input + Save button; clicking Save (or pressing Enter in the input)
+// persists name to public/products/{pid}/name and re-renders.
+if (!window._mastUnnamedSaveDelegateAttached) {
+  async function _mastSaveUnnamedName(pid) {
+    if (!pid) return;
+    var inp = document.querySelector('[data-unnamed-name-pid="' + pid + '"]');
+    if (!inp) return;
+    var name = (inp.value || '').trim();
+    if (!name) { showToast && showToast('Enter a name first.', true); inp.focus(); return; }
+    var btn = document.querySelector('[data-unnamed-save-pid="' + pid + '"]');
+    if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+    try {
+      await MastDB.products.setField(pid, 'name', name);
+      var local = (productsData || []).find(function(p) { return p && p.pid === pid; });
+      if (local) local.name = name;
+      showToast && showToast('Product named.');
+      if (typeof renderProducts === 'function') renderProducts();
+    } catch (err) {
+      console.error('[unnamed save]', err);
+      if (btn) { btn.disabled = false; btn.textContent = 'Save'; }
+      showToast && showToast('Save failed: ' + (err && err.message ? err.message : 'unknown'), true);
+    }
+  }
+  document.addEventListener('click', function(ev) {
+    var b = ev.target.closest && ev.target.closest('[data-unnamed-save-pid]');
+    if (!b) return;
+    ev.preventDefault();
+    _mastSaveUnnamedName(b.getAttribute('data-unnamed-save-pid'));
+  });
+  document.addEventListener('keydown', function(ev) {
+    if (ev.key !== 'Enter') return;
+    var i = ev.target.closest && ev.target.closest('[data-unnamed-name-pid]');
+    if (!i) return;
+    ev.preventDefault();
+    _mastSaveUnnamedName(i.getAttribute('data-unnamed-name-pid'));
+  });
+  window._mastUnnamedSaveDelegateAttached = true;
 }
 
 // W1-followup OPEN -OtEkpFjIRwH_z-1CJuB: delegated handler for Forecast's
@@ -52043,7 +52107,7 @@ var ROUTE_ACTION_MAP = {
 var DASHBOARD_CARDS = [
   { id: 'quickActions', title: 'Quick Actions', containerId: 'dashCardQuickActions' },
   { id: 'setupShop',    title: 'Set Up Your Shop', containerId: 'dashCardSetupShop' },
-  { id: 'newInquiries', title: 'New Inquiries', containerId: 'dashCardNewInquiries', viewAllRoute: 'contacts' },
+  { id: 'newInquiries', title: 'New Inquiries', containerId: 'dashCardNewInquiries', viewAllRoute: 'inquiries' },
   { id: 'newOrders',    title: 'New Orders',    containerId: 'dashCardNewOrders',    viewAllRoute: 'orders' },
   { id: 'readyToShip',  title: 'Ready to Ship', containerId: 'dashCardReadyToShip',  viewAllRoute: 'ship' },
   { id: 'lowInventory', title: 'Low Inventory', containerId: 'dashCardLowInventory', viewAllRoute: 'inventory' },
@@ -52768,13 +52832,11 @@ function renderInquiriesAdmin() {
 }
 
 function openInquiryContact(el) {
-  var contactId = el.getAttribute('data-contact-id');
-  if (contactId) {
-    navigateTo('contacts');
-    setTimeout(function() { if (typeof viewContact === 'function') viewContact(contactId); }, 300);
-  } else {
-    navigateTo('contacts');
-  }
+  // Dashboard "New Inquiries" tile row click → land on the Inquiries admin
+  // view, not the Contacts list (the inquiries view has the Respond flow and
+  // the right tabular context). The contactId is preserved so the inquiries
+  // surface can scroll/highlight if it wants to.
+  navigateTo('inquiries');
 }
 
 // ─── Dashboard Card: Quick Actions ──────────────────────────

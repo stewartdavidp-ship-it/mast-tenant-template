@@ -72,7 +72,7 @@ function renderWholesaleAdmin() {
     wholesaleSubView = 'accounts';
   }
 
-  var html = '<div style="max-width:1100px;margin:0 auto;padding:24px;">' +
+  var html = '<div style="padding:24px;">' +
     '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">' +
       '<h2 style="font-size:1.6rem;font-weight:700;color:var(--charcoal);">Wholesale</h2>' +
     '</div>' +

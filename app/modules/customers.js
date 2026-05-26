@@ -1530,13 +1530,20 @@
       return (b.createdAt || '').localeCompare(a.createdAt || '');
     });
 
+    var classNames = cache.classNames || {};
     var rows = enrollments.map(function(en) {
-      var name = en.className || en.classTitle || en.classId || '—';
+      var name = en.className || en.classTitle || classNames[en.classId] || en.classId || '—';
       var sessionDate = en.sessionDate || en.sessionStartAt || en.scheduledFor || en.createdAt;
       var status = en.status || en.enrollmentStatus || '—';
       var price = (typeof en.priceCents === 'number') ? en.priceCents : (typeof en.amountCents === 'number' ? en.amountCents : null);
-      return '<tr>' +
-        '<td>' + esc(name) + '</td>' +
+      // Make the row clickable when we have a classId — opens the class detail
+      // in the book module via customersOpenActivityDrillIn (handles nav-stack
+      // push so "← Back" returns to this customer).
+      var clickable = en.classId
+        ? ' style="cursor:pointer;" onclick="customersOpenActivityDrillIn(\'classes\',\'' + esc(en.classId) + '\')"'
+        : '';
+      return '<tr' + clickable + '>' +
+        '<td>' + (en.classId ? '<a style="color:var(--teal,#2a7c6f);">' + esc(name) + '</a>' : esc(name)) + '</td>' +
         '<td style="color:var(--warm-gray);font-size:0.78rem;">' + esc(fmtDate(sessionDate)) + '</td>' +
         '<td><span class="status-badge">' + esc(status) + '</span></td>' +
         '<td>' + esc(price === null ? '—' : fmtMoney(price)) + '</td>' +
@@ -1588,6 +1595,21 @@
         if (currentView === 'detail' && selectedCustomerId === customerId &&
             (detailTab === 'classes' || detailTab === 'overview')) {
           renderPreservingEdits();
+        }
+        // Resolve raw classIds → className for display. One MastDB.classes.list
+        // call covers every enrollment (no per-row N+1). Re-renders when ready.
+        if (window.MastDB && MastDB.classes && typeof MastDB.classes.list === 'function') {
+          MastDB.classes.list(500).then(function(map) {
+            var names = {};
+            Object.keys(map || {}).forEach(function(cid) {
+              var cls = map[cid];
+              if (cls && (cls.name || cls.title)) names[cid] = cls.name || cls.title;
+            });
+            cache.classNames = names;
+            if (currentView === 'detail' && selectedCustomerId === customerId && detailTab === 'classes') {
+              renderPreservingEdits();
+            }
+          }).catch(function() { /* names stay empty — falls back to classId */ });
         }
       })
       .catch(function(e) {
@@ -1955,6 +1977,37 @@
       });
     }
     if (typeof navigateTo === 'function') navigateTo(route);
+    // After landing on the destination view, drill into the specific item so
+    // the user sees that ticket / review / order — not the bare list. Each
+    // surface has its own open-detail entrypoint; call it if available.
+    if (sourceId) {
+      var open = function() {
+        if (route === 'cs-tickets' && typeof window.csOpenThread === 'function') {
+          window.csOpenThread(sourceId);
+        } else if (route === 'cs-reviews' && typeof window.csOpenReview === 'function') {
+          window.csOpenReview(sourceId);
+        } else if (route === 'cs-surveys' && typeof window.csOpenSurveyResponse === 'function') {
+          window.csOpenSurveyResponse(sourceId);
+        } else if (route === 'orders' && typeof window.openOrderDetail === 'function') {
+          window.openOrderDetail(sourceId);
+        } else if (route === 'classes' && typeof window._bookViewClass === 'function') {
+          window._bookViewClass(sourceId);
+        }
+      };
+      // The module may need to load before its open-fn is wired; wait once.
+      if (typeof MastAdmin !== 'undefined' && typeof MastAdmin.loadModule === 'function') {
+        var mod = (route.indexOf('cs-') === 0) ? 'customer-service'
+                : (route === 'orders' ? 'orders'
+                : (route === 'classes' ? 'book' : null));
+        if (mod) {
+          MastAdmin.loadModule(mod).then(function() { setTimeout(open, 100); });
+        } else {
+          setTimeout(open, 200);
+        }
+      } else {
+        setTimeout(open, 200);
+      }
+    }
   }
 
   // ----- Wallet tab -----

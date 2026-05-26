@@ -3354,7 +3354,7 @@
     if (!msgs.length) {
       return '<div style="background:var(--cream);border-radius:8px;padding:24px;color:var(--warm-gray);font-size:0.9rem;">' +
         'Thread exists but has no messages yet. ' +
-        '<a href="#" onclick="event.preventDefault();viewCommissionTicket(\'' + _jsAttr(c.ticketId) + '\')" style="color:var(--teal);">Open in CS Tickets &rarr;</a>' +
+        '<a href="#" onclick="event.preventDefault();viewCommissionTicket(\'' + _jsAttr(c.ticketId) + '\',\'' + _jsAttr(commId) + '\')" style="color:var(--teal);">Open in CS Tickets &rarr;</a>' +
       '</div>';
     }
     var rows = msgs.map(function(m) {
@@ -3375,7 +3375,7 @@
     return '<div style="background:var(--cream);border-radius:8px;padding:24px;">' +
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">' +
         '<h4 style="margin:0;font-size:1rem;">CS Thread</h4>' +
-        '<a href="#" onclick="event.preventDefault();viewCommissionTicket(\'' + _jsAttr(c.ticketId) + '\')" style="color:var(--teal);font-size:0.85rem;">Open in CS Tickets &rarr;</a>' +
+        '<a href="#" onclick="event.preventDefault();viewCommissionTicket(\'' + _jsAttr(c.ticketId) + '\',\'' + _jsAttr(commId) + '\')" style="color:var(--teal);font-size:0.85rem;">Open in CS Tickets &rarr;</a>' +
       '</div>' +
       rows +
     '</div>';
@@ -3476,8 +3476,8 @@
     var defaultTmpl = COMMISSION_MILESTONE_STAGES[0].tmpl.replace('{customerName}', c.customerName || 'there');
     var hasEmail = c.customerContact && c.customerContact.indexOf('@') !== -1;
     var html =
-      '<div style="max-width:500px;">' +
-        '<h3>Post Milestone</h3>' +
+      '<div class="modal-body" style="max-width:500px;">' +
+        '<h3 style="margin-top:0;">Post Milestone</h3>' +
         '<div class="form-group">' +
           '<label>Stage</label>' +
           '<select id="commMilestoneStage" onchange="onCommMilestoneStageChange(\'' + _jsAttr(commId) + '\')">' + stageOpts + '</select>' +
@@ -4164,7 +4164,18 @@
     commDetailActiveTab = 'spec';
   }
 
-  function viewCommissionTicket(ticketId) {
+  function viewCommissionTicket(ticketId, commId) {
+    // Push the originating commission onto the nav stack so the ticket's
+    // "← Back" can return to the specific custom order, not the ticket list.
+    if (window.MastNavStack && typeof MastNavStack.push === 'function') {
+      var c = commId && commissionsData ? commissionsData[commId] : null;
+      MastNavStack.push({
+        route: 'commissions',
+        view: 'detail',
+        state: { commId: commId || null },
+        label: c ? ('Custom Order ' + (c.commissionNumber || commId)) : 'Custom Order'
+      });
+    }
     navigateTo('cs-tickets');
     var open = function() {
       if (typeof csOpenThread === 'function') csOpenThread(ticketId);
