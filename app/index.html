@@ -8085,6 +8085,7 @@
             <div class="settings-nav-items">
               <button class="settings-nav-item" data-nav-key="product" onclick="switchSettingsSubView('product')">Pricing Defaults</button>
               <button class="settings-nav-item" data-nav-key="pim" onclick="switchSettingsSubView('pim')">PIM</button>
+              <button class="settings-nav-item" data-nav-key="maker" onclick="switchSettingsSubView('maker')">Develop</button>
             </div>
           </div>
 
@@ -8128,7 +8129,6 @@
             <div class="settings-nav-items">
               <button class="settings-nav-item" data-nav-key="workshop" onclick="switchSettingsSubView('workshop')">Workshop</button>
               <button class="settings-nav-item" data-nav-key="trips" onclick="switchSettingsSubView('trips')">Trips</button>
-              <button class="settings-nav-item" data-nav-key="maker" onclick="switchSettingsSubView('maker')">Develop</button>
             </div>
           </div>
 
@@ -8139,7 +8139,6 @@
             </button>
             <div class="settings-nav-items">
               <button class="settings-nav-item" data-nav-key="email" onclick="switchSettingsSubView('email')">Email</button>
-              <button class="settings-nav-item" data-nav-key="notifications" onclick="switchSettingsSubView('notifications')">Notifications <span id="settingsNotifBadge" class="sidebar-badge alert" style="display:none;margin-left:4px;"></span></button>
             </div>
           </div>
 
@@ -8162,6 +8161,7 @@
             <div class="settings-nav-items">
               <button class="settings-nav-item" data-nav-key="dashboard" onclick="switchSettingsSubView('dashboard')">Dashboard</button>
               <button class="settings-nav-item" data-nav-key="engagement" onclick="switchSettingsSubView('engagement')">Engagement</button>
+              <button class="settings-nav-item" data-nav-key="notifications" onclick="switchSettingsSubView('notifications')">Notifications <span id="settingsNotifBadge" class="sidebar-badge alert" style="display:none;margin-left:4px;"></span></button>
             </div>
           </div>
         </nav>
@@ -9727,31 +9727,40 @@
           </div>
         </div>
       </div>
-      <!-- Trips Settings -->
+      <!-- Trips Settings — 2 tabs: IRS rates (tax-deduction table) vs Trip locations (address book). -->
       <div id="settingsSubTrips" style="display:none;max-width:720px;">
-        <div class="form-group">
-          <div class="tab-section-title">IRS Mileage Rates<span class="tab-section-status" data-state="info">Year-locked</span></div>
-          <p class="tab-section-purpose">Standard mileage rates for tax deduction. Rate is locked to the year when a trip is created.</p>
-          <div id="irsRatesList" style="margin-bottom:12px;"></div>
-          <div style="display:flex;gap:8px;align-items:center;">
-            <input type="number" id="newIrsYear" placeholder="Year" min="2020" max="2040"
-              style="width:90px;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;">
-            <input type="number" id="newIrsRate" placeholder="¢/mile" min="1" max="200" step="0.5"
-              style="width:100px;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;">
-            <button class="btn btn-primary" onclick="addIrsRate()">Add</button>
+        <div class="view-tabs" id="tripsTabBar" style="margin-bottom:20px;">
+          <button class="view-tab active" id="tripsTabBtn-irsRates" data-tab="irsRates" onclick="switchTripsTab('irsRates')"><span class="tab-status-dot" data-state="info"></span>IRS mileage rates</button>
+          <button class="view-tab" id="tripsTabBtn-locations" data-tab="locations" onclick="switchTripsTab('locations')"><span class="tab-status-dot" data-state="info"></span>Trip locations</button>
+        </div>
+
+        <!-- ── IRS mileage rates ── -->
+        <div id="tripsTab-irsRates" class="trips-tab-body">
+          <div class="tab-section-title">IRS mileage rates<span class="tab-section-status" data-state="info" id="tripsStatus-irsRates">Loading&hellip;</span></div>
+          <p class="tab-section-purpose">Standard IRS rates used to compute tax-deductible mileage on business trips. Each rate is year-keyed; when you create a trip, the rate for that year is locked in (so historical trips don&rsquo;t change when the IRS publishes a new rate). Add a new row each January when the IRS announces the year&rsquo;s rate.</p>
+          <div class="form-group">
+            <div id="irsRatesList" style="margin-bottom:12px;"></div>
+            <div style="display:flex;gap:8px;align-items:center;">
+              <input type="number" id="newIrsYear" placeholder="Year" min="2020" max="2040"
+                style="width:90px;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;">
+              <input type="number" id="newIrsRate" placeholder="¢/mile" min="1" max="200" step="0.5"
+                style="width:100px;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;">
+              <button class="btn btn-primary" onclick="addIrsRate()">Add</button>
+            </div>
           </div>
         </div>
 
-        <hr style="border:none;border-top:1px solid #eee;margin:24px 0;">
-
-        <div class="form-group">
-          <div class="tab-section-title">Trip Locations<span class="tab-section-status" data-state="info">Auto-saved</span></div>
-          <p class="tab-section-purpose">Saved locations used in trip origin/destination pickers. Locations are auto-added when new destinations are entered during trips.</p>
-          <div id="tripLocationsList" style="margin-bottom:12px;"></div>
-          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-            <input type="text" id="newTripLocationName" placeholder="Location name"
-              style="flex:1;min-width:160px;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;">
-            <button class="btn btn-primary" onclick="addTripLocationManual()">+ Add</button>
+        <!-- ── Trip locations ── -->
+        <div id="tripsTab-locations" class="trips-tab-body" style="display:none;">
+          <div class="tab-section-title">Trip locations<span class="tab-section-status" data-state="info" id="tripsStatus-locations">Loading&hellip;</span></div>
+          <p class="tab-section-purpose">Address book for trip origins and destinations &mdash; the named places that show up in the trip pickers (e.g. &ldquo;Studio&rdquo;, &ldquo;Glass Supply Co.&rdquo;, &ldquo;Salem Show&rdquo;). New destinations are auto-added when you log a trip to a new place, so this list grows on its own; use the form below to rename, archive, or add one manually.</p>
+          <div class="form-group">
+            <div id="tripLocationsList" style="margin-bottom:12px;"></div>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+              <input type="text" id="newTripLocationName" placeholder="Location name"
+                style="flex:1;min-width:160px;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;">
+              <button class="btn btn-primary" onclick="addTripLocationManual()">+ Add</button>
+            </div>
           </div>
         </div>
       </div>
@@ -18182,7 +18191,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260526-112001-8eed295';
+var MAST_MODULES_V = '20260526-112549-e3cfe13';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -18349,7 +18358,7 @@ function switchSettingsSubView(view) {
   if (view === 'payments') { if (typeof refreshPaymentsTabStatus === 'function') refreshPaymentsTabStatus(); }
   if (view === 'email') { loadEmailConfig(); loadEmailDomainSection(); loadResendWebhookSection(); if (typeof refreshEmailTabStatus === 'function') refreshEmailTabStatus(); }
   if (view === 'integrations') { loadEtsyConfig(); loadShopifyConfig(); loadPlaidBanksForSettings(); if (typeof switchIntegrationsTab === 'function') switchIntegrationsTab(window.__integrationsActiveTab || 'googleMaps'); }
-  if (view === 'trips') { MastAdmin.loadModule('trips').then(function() { if (typeof loadTripsSettings === 'function') loadTripsSettings(); }); }
+  if (view === 'trips') { MastAdmin.loadModule('trips').then(function() { if (typeof loadTripsSettings === 'function') loadTripsSettings(); if (typeof refreshTripsTabStatus === 'function') refreshTripsTabStatus(); }); }
   if (view === 'storefront') { loadShopDisplaySettings(); loadPrivacyUrlSettings(); if (typeof refreshDisplayTabStatus === 'function') refreshDisplayTabStatus(); }
   if (view === 'dashboard') renderDashCardSettings();
   if (view === 'domains') { loadDomainSettings(); if (typeof refreshDomainsTabStatus === 'function') refreshDomainsTabStatus(); }
@@ -40000,6 +40009,50 @@ function refreshWorkshopTabStatus() {
   setDot('mediaStorage', 'info');
 }
 window.refreshWorkshopTabStatus = refreshWorkshopTabStatus;
+
+// ── Settings → Studio → Trips: 2 distinct surfaces (IRS rate table, trip address book).
+var TRIPS_TABS = ['irsRates','locations'];
+
+function switchTripsTab(tab) {
+  window.__tripsActiveTab = tab;
+  TRIPS_TABS.forEach(function(t) {
+    var body = document.getElementById('tripsTab-' + t);
+    if (body) body.style.display = (t === tab) ? '' : 'none';
+  });
+  document.querySelectorAll('#tripsTabBar .view-tab').forEach(function(btn) {
+    btn.classList.toggle('active', btn.dataset.tab === tab);
+  });
+}
+window.switchTripsTab = switchTripsTab;
+
+function refreshTripsTabStatus() {
+  function setDot(tabKey, state) {
+    var btn = document.getElementById('tripsTabBtn-' + tabKey);
+    if (!btn) return;
+    var dot = btn.querySelector('.tab-status-dot');
+    if (dot) dot.setAttribute('data-state', state);
+  }
+  function setPill(tabKey, state, label) {
+    var pill = document.getElementById('tripsStatus-' + tabKey);
+    if (!pill) return;
+    pill.setAttribute('data-state', state);
+    if (label != null) pill.textContent = label;
+  }
+  // IRS rates — count rows rendered into #irsRatesList.
+  var irsEl = document.getElementById('irsRatesList');
+  var irsCount = irsEl ? irsEl.querySelectorAll('.irs-rate-row, [data-irs-year]').length : 0;
+  if (!irsCount && irsEl) irsCount = Math.max(0, irsEl.children.length - (irsEl.textContent && /no rates/i.test(irsEl.textContent) ? 1 : 0));
+  setDot('irsRates', irsCount > 0 ? 'ok' : 'info');
+  setPill('irsRates', irsCount > 0 ? 'ok' : 'info', irsCount > 0 ? (irsCount + (irsCount === 1 ? ' year' : ' years')) : 'None yet');
+
+  // Trip locations — count rows rendered into #tripLocationsList.
+  var tlEl = document.getElementById('tripLocationsList');
+  var tlCount = tlEl ? tlEl.querySelectorAll('.trip-location-row, [data-trip-loc-id]').length : 0;
+  if (!tlCount && tlEl) tlCount = Math.max(0, tlEl.children.length - (tlEl.textContent && /no locations/i.test(tlEl.textContent) ? 1 : 0));
+  setDot('locations', tlCount > 0 ? 'ok' : 'info');
+  setPill('locations', tlCount > 0 ? 'ok' : 'info', tlCount > 0 ? (tlCount + (tlCount === 1 ? ' location' : ' locations')) : 'None yet');
+}
+window.refreshTripsTabStatus = refreshTripsTabStatus;
 
 // Consolidated QBO surfaces — inner tab switcher for Settings → Integrations → QuickBooks.
 // Lazy-loads the accounting module then calls renderQboPanel(tab) into #qboPanelBody.

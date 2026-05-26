@@ -1285,17 +1285,19 @@
     var years = Object.keys(rates).sort().reverse();
     if (years.length === 0) {
       container.innerHTML = '<div style="padding:8px;color:var(--warm-gray);font-size:0.85rem;">No rates configured.</div>';
+      if (typeof window.refreshTripsTabStatus === 'function') window.refreshTripsTabStatus();
       return;
     }
     var html = '';
     years.forEach(function(y) {
-      html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:var(--cream,var(--cream));border-radius:6px;margin-bottom:6px;">' +
+      html += '<div class="irs-rate-row" data-irs-year="' + y + '" style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:var(--cream,var(--cream));border-radius:6px;margin-bottom:6px;">' +
         '<span style="font-weight:600;">' + y + '</span>' +
         '<span>' + rates[y] + '¢/mile</span>' +
         '<button class="btn btn-secondary" style="font-size:0.78rem;padding:4px 10px;color:#E53935;" onclick="removeIrsRate(\'' + y + '\')">Remove</button>' +
       '</div>';
     });
     container.innerHTML = html;
+    if (typeof window.refreshTripsTabStatus === 'function') window.refreshTripsTabStatus();
   }
 
   function addIrsRate() {
@@ -1335,12 +1337,13 @@
     keys.sort(function(a, b) { return (tripLocationsData[b].useCount || 0) - (tripLocationsData[a].useCount || 0); });
     if (keys.length === 0) {
       container.innerHTML = '<div style="padding:8px;color:var(--warm-gray);font-size:0.85rem;">No saved locations yet. Locations are auto-added when you start trips.</div>';
+      if (typeof window.refreshTripsTabStatus === 'function') window.refreshTripsTabStatus();
       return;
     }
     var html = '';
     keys.forEach(function(k) {
       var loc = tripLocationsData[k];
-      html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:var(--cream,var(--cream));border-radius:6px;margin-bottom:6px;">' +
+      html += '<div class="trip-location-row" data-trip-loc-id="' + k + '" style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:var(--cream,var(--cream));border-radius:6px;margin-bottom:6px;">' +
         '<div>' +
           '<div style="font-weight:600;font-size:0.9rem;">' + esc(loc.label || k) + '</div>' +
           '<div style="font-size:0.78rem;color:var(--warm-gray);">Used ' + (loc.useCount || 0) + ' times</div>' +
@@ -1349,6 +1352,7 @@
       '</div>';
     });
     container.innerHTML = html;
+    if (typeof window.refreshTripsTabStatus === 'function') window.refreshTripsTabStatus();
   }
 
   function addTripLocationManual() {
