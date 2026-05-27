@@ -3911,7 +3911,7 @@
     var changes = product.pendingChanges || {};
     var keys = Object.keys(changes);
     var html = '';
-    html += '<div class="mast-revision-banner" style="background:rgba(217,119,6,0.08);border:1px solid rgba(217,119,6,0.3);border-radius:8px;padding:12px 16px;margin:12px 0;">';
+    html += '<div class="mast-revision-banner" style="position:sticky;top:8px;z-index:50;background:rgba(217,119,6,0.18);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border:1px solid rgba(217,119,6,0.4);border-radius:8px;padding:12px 16px;margin:12px 0;box-shadow:0 2px 8px rgba(0,0,0,0.1);">';
     html += '<div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;">';
     html += '<div><strong style="color:#b45309;">Editing draft revision</strong>';
     html += '<div style="font-size:0.78rem;color:#b45309;margin-top:2px;">Changes are NOT live until you Apply.</div></div>';
