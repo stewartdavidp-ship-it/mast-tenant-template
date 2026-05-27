@@ -2001,13 +2001,30 @@
   function renderFaqs() {
     var tab = document.getElementById('csFaqsTab');
     if (!tab) return;
-    if (!policiesLoaded) { tab.innerHTML = '<div style="padding:40px;text-align:center;color:var(--warm-gray);">Loading policies…</div>'; return; }
-    var items = Object.values(policiesData).sort(function (a, b) { return (a.name || '') < (b.name || '') ? -1 : 1; });
+    if (!policiesLoaded) { tab.innerHTML = '<div style="padding:40px;text-align:center;color:var(--warm-gray);">Loading FAQs…</div>'; return; }
+    // D2 (2026-05-28): cs_policies is shared with the Sales → Policies route.
+    // The CS surface owns kind='faq' rows (Q&A help content); rows tagged
+    // kind='policy' are authored under Sales → Policies and hidden here.
+    // For legacy rows missing `kind`, infer from slug (privacy/terms/cookie/
+    // shipping-policy/return-policy etc. → policy; everything else → faq).
+    // The Sales filter uses the same inference so each row shows exactly once.
+    var _POLICY_SLUG_PATTERN = /(^|-)(privacy|terms|cookie|tos|t-c|shipping-policy|return-policy|security|ai-transparency|accessibility|gdpr|ccpa)(-|$)/;
+    var items = Object.values(policiesData)
+      .filter(function (p) {
+        if (!p) return false;
+        if (p.kind === 'faq') return true;
+        if (p.kind === 'policy') return false;
+        // No kind set — infer from slug.
+        var s = (p.slug || '').toLowerCase();
+        return !_POLICY_SLUG_PATTERN.test(s);
+      })
+      .sort(function (a, b) { return (a.name || '') < (b.name || '') ? -1 : 1; });
     var html = '<div style="padding:24px;">';
-    html += '<div class="section-header" style="margin-bottom:14px;"><h2 style="margin:0;">FAQs &amp; Policies</h2><button class="btn btn-secondary btn-small" onclick="csFaqsRefresh()">Refresh</button></div>';
-    html += showAddPolicy ? renderPolicyForm(null) : '<button class="btn btn-primary btn-small" onclick="csShowAddPolicy()" style="margin-bottom:14px;">+ New Policy</button>';
+    html += '<div class="section-header" style="margin-bottom:14px;"><h2 style="margin:0;">FAQs</h2><button class="btn btn-secondary btn-small" onclick="csFaqsRefresh()">Refresh</button></div>';
+    html += '<p style="font-size:0.85rem;color:var(--warm-gray);margin:0 0 14px;max-width:680px;">Common questions and your answers, shown on storefront and used by the AI helper. FAQs may reference your policies but don\'t create them — policies (Return / Privacy / T&amp;C / etc.) are authored under <a href="javascript:void(0)" onclick="navigateTo(\'terms\')" style="color:var(--teal);text-decoration:underline;">Sales → Policies</a>.</p>';
+    html += showAddPolicy ? renderPolicyForm(null) : '<button class="btn btn-primary btn-small" onclick="csShowAddPolicy()" style="margin-bottom:14px;">+ New FAQ</button>';
     if (!items.length && !showAddPolicy) {
-      html += '<div style="padding:24px;text-align:center;color:var(--warm-gray);border:1px dashed var(--cream-dark);border-radius:10px;">No policies yet. Create one to show on your storefront.</div>';
+      html += '<div style="padding:24px;text-align:center;color:var(--warm-gray);border:1px dashed var(--cream-dark);border-radius:10px;">No FAQs yet. Create one to show on your storefront.</div>';
     } else {
       html += '<div style="display:flex;flex-direction:column;gap:10px;">';
       items.forEach(function (p) {
@@ -2031,14 +2048,20 @@
 
   function renderPolicyForm(p) {
     var isEdit = !!p, id = isEdit ? _esc(p.id) : '';
+    // D2: form repurposed for FAQ Q&A. `name` carries the question; the
+    // existing `contentHtml` field carries the answer. `question` and
+    // `answer` are also persisted as canonical fields going forward; old
+    // rows continue to read from name/contentHtml.
+    var q = isEdit ? _esc(p.question || p.name || '') : '';
+    var a = isEdit ? _esc(p.answer || p.contentHtml || '') : '';
     var html = '<div style="border:2px solid var(--amber-light);border-radius:10px;padding:16px;background:var(--surface-card);margin-bottom:12px;">';
-    html += '<h4 style="margin:0 0 12px;">' + (isEdit ? 'Edit Policy' : 'New Policy') + '</h4>';
-    html += '<div style="margin-bottom:10px;"><label style="font-weight:600;font-size:0.9rem;display:block;margin-bottom:4px;">Name *</label>';
-    html += '<input id="csPName" class="form-input" style="width:100%;box-sizing:border-box;" value="' + (isEdit ? _esc(p.name || '') : '') + '" placeholder="e.g. Return Policy" oninput="csAutofillPolicySlug(this.value,' + (isEdit ? 'false' : 'true') + ')"></div>';
+    html += '<h4 style="margin:0 0 12px;">' + (isEdit ? 'Edit FAQ' : 'New FAQ') + '</h4>';
+    html += '<div style="margin-bottom:10px;"><label style="font-weight:600;font-size:0.9rem;display:block;margin-bottom:4px;">Question *</label>';
+    html += '<input id="csPName" class="form-input" style="width:100%;box-sizing:border-box;" value="' + q + '" placeholder="e.g. Do you accept returns on custom commissions?" oninput="csAutofillPolicySlug(this.value,' + (isEdit ? 'false' : 'true') + ')"></div>';
     html += '<div style="margin-bottom:10px;"><label style="font-weight:600;font-size:0.9rem;display:block;margin-bottom:4px;">Slug</label>';
-    html += '<input id="csPSlug" class="form-input" style="width:100%;box-sizing:border-box;" value="' + (isEdit ? _esc(p.slug || '') : '') + '" placeholder="return-policy"></div>';
-    html += '<div style="margin-bottom:10px;"><label style="font-weight:600;font-size:0.9rem;display:block;margin-bottom:4px;">Content (HTML)</label>';
-    html += '<textarea id="csPContent" class="form-input" rows="10" style="width:100%;box-sizing:border-box;font-family:monospace;font-size:0.85rem;">' + (isEdit ? _esc(p.contentHtml || '') : '') + '</textarea></div>';
+    html += '<input id="csPSlug" class="form-input" style="width:100%;box-sizing:border-box;" value="' + (isEdit ? _esc(p.slug || '') : '') + '" placeholder="returns-on-commissions"></div>';
+    html += '<div style="margin-bottom:10px;"><label style="font-weight:600;font-size:0.9rem;display:block;margin-bottom:4px;">Answer</label>';
+    html += '<textarea id="csPContent" class="form-input" rows="6" style="width:100%;box-sizing:border-box;font-family:inherit;font-size:0.9rem;" placeholder="Your answer. May reference your policy — e.g. &quot;Custom commissions are final sale, per our Return Policy.&quot;">' + a + '</textarea></div>';
     html += '<div style="margin-bottom:14px;display:flex;align-items:center;gap:8px;"><input type="checkbox" id="csPStorefront"' + (isEdit && p.storefrontEnabled ? ' checked' : '') + '><label for="csPStorefront" style="font-size:0.9rem;cursor:pointer;">Show on storefront</label></div>';
     html += '<div style="display:flex;gap:8px;"><button class="btn btn-primary btn-small" onclick="csSavePolicy(\'' + id + '\')">' + (isEdit ? 'Save' : 'Create') + '</button>';
     html += '<button class="btn btn-secondary btn-small" onclick="csCancelPolicy()">Cancel</button></div></div>';
@@ -2050,11 +2073,29 @@
     var slug = ((document.getElementById('csPSlug') || {}).value || '').trim();
     var content = (document.getElementById('csPContent') || {}).value || '';
     var sf = !!((document.getElementById('csPStorefront') || {}).checked);
-    if (!name) { showToast('Policy name is required', true); return; }
+    if (!name) { showToast('Question is required', true); return; }
     var slugVal = slug || name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    // D2: persist canonical question/answer fields alongside name/contentHtml
+    // for backward compat. New rows tagged kind='faq' so they stay on the CS
+    // surface; Sales → Policies route filters to kind='policy'.
+    var patch = {
+      name: name, slug: slugVal, contentHtml: content,
+      question: name, answer: content,
+      kind: 'faq',
+      storefrontEnabled: sf, updatedAt: nowIso()
+    };
     try {
-      if (id) { await MastDB.update('cs_policies/' + id, { name: name, slug: slugVal, contentHtml: content, storefrontEnabled: sf, updatedAt: nowIso() }); if (policiesData[id]) Object.assign(policiesData[id], { name: name, slug: slugVal, contentHtml: content, storefrontEnabled: sf }); policyEditId = null; showToast('Policy updated'); }
-      else { var nk = MastDB.newKey('cs_policies'); var doc = { id: nk, name: name, slug: slugVal, contentHtml: content, storefrontEnabled: sf, createdAt: nowIso(), updatedAt: nowIso() }; await MastDB.set('cs_policies/' + nk, doc); policiesData[nk] = doc; showAddPolicy = false; showToast('Policy created'); }
+      if (id) {
+        await MastDB.update('cs_policies/' + id, patch);
+        if (policiesData[id]) Object.assign(policiesData[id], patch);
+        policyEditId = null; showToast('FAQ updated');
+      } else {
+        var nk = MastDB.newKey('cs_policies');
+        var doc = Object.assign({ id: nk, createdAt: nowIso() }, patch);
+        await MastDB.set('cs_policies/' + nk, doc);
+        policiesData[nk] = doc;
+        showAddPolicy = false; showToast('FAQ created');
+      }
       renderFaqs();
     } catch (err) { showToast('Failed: ' + (err && err.message), true); }
   }

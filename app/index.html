@@ -6017,7 +6017,7 @@
         <div class="sidebar-item" data-route="lookbooks" onclick="navigateTo('lookbooks')">Look Books</div>
         <div class="sidebar-item" data-route="galleries" onclick="navigateTo('galleries')">Galleries &amp; Consignment</div>
         <div class="sidebar-item" data-route="receipts" onclick="navigateTo('receipts')">Day Close</div>
-        <div class="sidebar-item" data-route="terms" onclick="navigateTo('terms')">Terms &amp; Conditions</div>
+        <div class="sidebar-item" data-route="terms" onclick="navigateTo('terms')">Policies</div>
         <div class="sidebar-item" data-route="commission-terms" onclick="navigateTo('commission-terms')">Commission Terms</div>
         <div class="sidebar-item" data-route="pack" onclick="navigateTo('pack')">Pack</div>
         <div class="sidebar-item" data-route="ship" onclick="navigateTo('ship')">Ship</div>
@@ -7985,23 +7985,39 @@
       </div>
     </div>
 
-    <!-- ===== TERMS & CONDITIONS TAB ===== -->
+    <!-- ===== POLICIES TAB ===== -->
+    <!-- D2 (2026-05-28): renamed from "Terms & Conditions". Two-tab strip:
+         "Return Policy" = the existing structured return/refund/gift-card/
+         loyalty editor (kept as-is — it's a configuration form, not freeform
+         content). "Other Policies" = freeform list editor for Privacy, T&C,
+         Cookie, Shipping, AI Transparency, etc. (reads cs_policies where
+         kind='policy'). FAQs are authored under Customer Service → FAQs. -->
     <div id="termsTab" style="display:none;">
       <div class="section-header">
         <div style="display:flex;align-items:center;gap:12px;">
-          <h2>Terms &amp; Conditions</h2>
+          <h2>Policies</h2>
         </div>
-        <div style="display:flex;align-items:center;gap:8px;">
+        <div style="display:flex;align-items:center;gap:8px;" id="policiesHeaderActions">
           <button class="btn btn-secondary" onclick="window._generatePublicTerms()" id="termsPublishBtn" style="display:none;">Publish to Storefront</button>
           <button class="btn btn-primary" onclick="window._openTermsEditor()" id="termsEditBtn" style="display:none;">Edit</button>
         </div>
       </div>
-      <div id="termsLoading" class="loading">Loading...</div>
-      <div id="termsEmpty" class="empty-state" style="display:none;">
-        <div class="empty-icon">&#128220;</div>
-        <p>No terms configured yet. Click "Edit" to set up your return policy and terms.</p>
+      <div class="view-tabs" id="policiesTabBar" style="margin-bottom:16px;">
+        <button class="view-tab active" data-pol-tab="return" onclick="policiesSwitchTab('return')">Return Policy</button>
+        <button class="view-tab" data-pol-tab="other" onclick="policiesSwitchTab('other')">Other Policies</button>
       </div>
-      <div id="termsContent" style="display:none;"></div>
+      <div id="policiesTab-return">
+        <div id="termsLoading" class="loading">Loading...</div>
+        <div id="termsEmpty" class="empty-state" style="display:none;">
+          <div class="empty-icon">&#128220;</div>
+          <p>No return policy configured yet. Click "Edit" to set up your return policy, restocking fees, and category-specific rules.</p>
+        </div>
+        <div id="termsContent" style="display:none;"></div>
+      </div>
+      <div id="policiesTab-other" style="display:none;">
+        <p style="font-size:0.85rem;color:var(--warm-gray);margin:0 0 14px;max-width:680px;">Freeform policy documents — Privacy, Terms of Service, Cookie, Shipping, AI Transparency, etc. Each is published to <code>/policies/{slug}</code> on your storefront when "Show on storefront" is enabled.</p>
+        <div id="policiesOtherBody"><div class="loading">Loading...</div></div>
+      </div>
     </div>
 
     <!-- ===== INVENTORY INTAKE OVERLAY ===== -->
@@ -18593,7 +18609,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260527-142226-9cffe34';
+var MAST_MODULES_V = '20260527-144239-d125e0a';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.

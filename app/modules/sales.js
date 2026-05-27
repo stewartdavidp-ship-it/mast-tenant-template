@@ -2776,6 +2776,18 @@ async function exitPackingMode() {
       } },
       'terms': { tab: 'termsTab', setup: function() {
         if (!termsLoaded) loadTermsConfig();
+        // D2: ensure the policies tab strip lands on the Return Policy tab
+        // when entering the route — Other Policies is opt-in via tab click.
+        if (typeof window.policiesSwitchTab === 'function') {
+          window.policiesSwitchTab('return');
+        }
+      } },
+      'policies': { tab: 'termsTab', setup: function() {
+        // D2 alias — supports /policies links from other modules.
+        if (!termsLoaded) loadTermsConfig();
+        if (typeof window.policiesSwitchTab === 'function') {
+          window.policiesSwitchTab('return');
+        }
       } }
     },
     detachListeners: function() {
@@ -2790,5 +2802,163 @@ async function exitPackingMode() {
       liveSessionChannels = null;
     }
   });
+
+  // ============================================================
+  // D2 — Other Policies sub-tab (freeform policy authoring)
+  //   Sales → Policies → Other Policies. Reads cs_policies where
+  //   kind === 'policy'. Mirrors the (former) CS policy editor shape;
+  //   CS surface now hosts FAQs only.
+  // ============================================================
+
+  var _otherPoliciesData = {};
+  var _otherPoliciesLoaded = false;
+  var _otherPolEditId = null;
+  var _otherPolShowAdd = false;
+
+  function loadOtherPolicies() {
+    return MastDB.query('cs_policies').limitToLast(100).once()
+      .then(function(d) { _otherPoliciesData = d || {}; _otherPoliciesLoaded = true; })
+      .catch(function(err) {
+        console.warn('[policies] load failed:', err && err.message);
+        _otherPoliciesData = {}; _otherPoliciesLoaded = true;
+        if (typeof showToast === 'function') showToast('Failed to load policies', true);
+      });
+  }
+
+  function _esc(s) {
+    if (s == null) return '';
+    return String(s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
+  function renderOtherPolicies() {
+    var body = document.getElementById('policiesOtherBody');
+    if (!body) return;
+    if (!_otherPoliciesLoaded) { body.innerHTML = '<div class="loading">Loading...</div>'; return; }
+    // Show kind='policy' (or legacy rows w/ slug suggesting a policy).
+    var items = Object.values(_otherPoliciesData || {}).filter(function(p) {
+      if (!p) return false;
+      if (p.kind === 'policy') return true;
+      if (p.kind === 'faq') return false;
+      // Legacy: infer from slug.
+      var s = (p.slug || '').toLowerCase();
+      return /(^|-)(privacy|terms|cookie|tos|t-c|shipping-policy|return-policy|security|ai-transparency|accessibility|gdpr|ccpa)(-|$)/.test(s);
+    }).sort(function(a, b) { return (a.name || '') < (b.name || '') ? -1 : 1; });
+
+    var html = '';
+    html += _otherPolShowAdd ? renderOtherPolicyForm(null) : '<button class="btn btn-primary btn-small" onclick="window.policiesShowAdd()" style="margin-bottom:14px;">+ New Policy</button>';
+
+    if (!items.length && !_otherPolShowAdd) {
+      html += '<div style="padding:24px;text-align:center;color:var(--warm-gray);border:1px dashed var(--cream-dark);border-radius:10px;">No additional policies yet. Click "+ New Policy" to add Privacy, Terms of Service, Cookie, Shipping, or other documents.</div>';
+    } else {
+      html += '<div style="display:flex;flex-direction:column;gap:10px;">';
+      items.forEach(function(p) {
+        if (_otherPolEditId === p.id) { html += renderOtherPolicyForm(p); return; }
+        var live = !!p.storefrontEnabled;
+        html += '<div style="border:1px solid var(--cream-dark);border-radius:10px;padding:14px 16px;background:var(--cream);">';
+        html += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">';
+        html += '<span style="font-weight:600;">' + _esc(p.name) + '</span>';
+        html += '<span style="font-size:0.78rem;color:var(--warm-gray);font-family:monospace;">/' + _esc(p.slug || '') + '</span>';
+        html += '<span style="margin-left:auto;background:' + (live ? 'rgba(42,124,111,0.15)' : 'rgba(0,0,0,0.10)') + ';color:' + (live ? 'var(--teal)' : 'var(--warm-gray)') + ';padding:2px 10px;border-radius:12px;font-size:0.78rem;">' + (live ? 'live' : 'hidden') + '</span></div>';
+        if (p.contentHtml) {
+          var preview = p.contentHtml.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 100);
+          html += '<div style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:10px;">' + _esc(preview) + (preview.length === 100 ? '…' : '') + '</div>';
+        }
+        html += '<div style="display:flex;gap:8px;flex-wrap:wrap;">';
+        html += '<button class="btn btn-secondary btn-small" onclick="window.policiesToggleStorefront(\'' + _esc(p.id) + '\',' + (live ? 'false' : 'true') + ')">' + (live ? 'Hide from Storefront' : 'Show on Storefront') + '</button>';
+        html += '<button class="btn btn-secondary btn-small" onclick="window.policiesEdit(\'' + _esc(p.id) + '\')">Edit</button>';
+        html += '<button class="btn btn-danger btn-small" onclick="window.policiesDelete(\'' + _esc(p.id) + '\')">Delete</button>';
+        html += '</div></div>';
+      });
+      html += '</div>';
+    }
+    body.innerHTML = html;
+  }
+
+  function renderOtherPolicyForm(p) {
+    var isEdit = !!p, id = isEdit ? _esc(p.id) : '';
+    var html = '<div style="border:2px solid var(--amber-light);border-radius:10px;padding:16px;background:var(--cream);margin-bottom:12px;">';
+    html += '<h4 style="margin:0 0 12px;">' + (isEdit ? 'Edit Policy' : 'New Policy') + '</h4>';
+    html += '<div style="margin-bottom:10px;"><label style="font-weight:600;font-size:0.9rem;display:block;margin-bottom:4px;">Name *</label>';
+    html += '<input id="polName" class="form-input" style="width:100%;box-sizing:border-box;" value="' + (isEdit ? _esc(p.name || '') : '') + '" placeholder="e.g. Privacy Policy"></div>';
+    html += '<div style="margin-bottom:10px;"><label style="font-weight:600;font-size:0.9rem;display:block;margin-bottom:4px;">Slug</label>';
+    html += '<input id="polSlug" class="form-input" style="width:100%;box-sizing:border-box;" value="' + (isEdit ? _esc(p.slug || '') : '') + '" placeholder="privacy-policy"></div>';
+    html += '<div style="margin-bottom:10px;"><label style="font-weight:600;font-size:0.9rem;display:block;margin-bottom:4px;">Content (HTML)</label>';
+    html += '<textarea id="polContent" class="form-input" rows="14" style="width:100%;box-sizing:border-box;font-family:monospace;font-size:0.85rem;">' + (isEdit ? _esc(p.contentHtml || '') : '') + '</textarea></div>';
+    html += '<div style="margin-bottom:14px;display:flex;align-items:center;gap:8px;"><input type="checkbox" id="polStorefront"' + (isEdit && p.storefrontEnabled ? ' checked' : '') + '><label for="polStorefront" style="font-size:0.9rem;cursor:pointer;">Show on storefront</label></div>';
+    html += '<div style="display:flex;gap:8px;"><button class="btn btn-primary btn-small" onclick="window.policiesSave(\'' + id + '\')">' + (isEdit ? 'Save' : 'Create') + '</button>';
+    html += '<button class="btn btn-secondary btn-small" onclick="window.policiesCancelEdit()">Cancel</button></div></div>';
+    return html;
+  }
+
+  // ----- Window globals (inline onclick handlers) -----
+  window.policiesSwitchTab = function(which) {
+    var bar = document.getElementById('policiesTabBar');
+    if (bar) {
+      Array.prototype.forEach.call(bar.querySelectorAll('.view-tab'), function(b) {
+        if (b.getAttribute('data-pol-tab') === which) b.classList.add('active');
+        else b.classList.remove('active');
+      });
+    }
+    var ret = document.getElementById('policiesTab-return');
+    var oth = document.getElementById('policiesTab-other');
+    if (ret) ret.style.display = (which === 'return') ? '' : 'none';
+    if (oth) oth.style.display = (which === 'other') ? '' : 'none';
+    // The Edit/Publish header buttons belong to the Return Policy tab only.
+    var hdr = document.getElementById('policiesHeaderActions');
+    if (hdr) hdr.style.display = (which === 'return') ? '' : 'none';
+    if (which === 'other') {
+      if (!_otherPoliciesLoaded) loadOtherPolicies().then(renderOtherPolicies);
+      else renderOtherPolicies();
+    }
+  };
+  window.policiesShowAdd = function() { _otherPolShowAdd = true; _otherPolEditId = null; renderOtherPolicies(); };
+  window.policiesEdit = function(id) { _otherPolEditId = id; _otherPolShowAdd = false; renderOtherPolicies(); };
+  window.policiesCancelEdit = function() { _otherPolEditId = null; _otherPolShowAdd = false; renderOtherPolicies(); };
+  window.policiesSave = async function(id) {
+    var name = ((document.getElementById('polName') || {}).value || '').trim();
+    var slug = ((document.getElementById('polSlug') || {}).value || '').trim();
+    var content = (document.getElementById('polContent') || {}).value || '';
+    var sf = !!((document.getElementById('polStorefront') || {}).checked);
+    if (!name) { showToast('Policy name is required', true); return; }
+    var slugVal = slug || name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    var now = new Date().toISOString();
+    var patch = { name: name, slug: slugVal, contentHtml: content, kind: 'policy', storefrontEnabled: sf, updatedAt: now };
+    try {
+      if (id) {
+        await MastDB.update('cs_policies/' + id, patch);
+        if (_otherPoliciesData[id]) Object.assign(_otherPoliciesData[id], patch);
+        _otherPolEditId = null;
+        showToast('Policy updated');
+      } else {
+        var nk = MastDB.newKey('cs_policies');
+        var doc = Object.assign({ id: nk, createdAt: now }, patch);
+        await MastDB.set('cs_policies/' + nk, doc);
+        _otherPoliciesData[nk] = doc;
+        _otherPolShowAdd = false;
+        showToast('Policy created');
+      }
+      renderOtherPolicies();
+    } catch (err) { showToast('Failed: ' + (err && err.message), true); }
+  };
+  window.policiesToggleStorefront = async function(id, enabled) {
+    try {
+      await MastDB.update('cs_policies/' + id, { storefrontEnabled: enabled, updatedAt: new Date().toISOString() });
+      if (_otherPoliciesData[id]) _otherPoliciesData[id].storefrontEnabled = enabled;
+      showToast(enabled ? 'Policy now live on storefront' : 'Policy hidden from storefront');
+      renderOtherPolicies();
+    } catch (err) { showToast('Failed: ' + (err && err.message), true); }
+  };
+  window.policiesDelete = async function(id) {
+    var ok = await window.mastConfirm('Delete this policy? Customers visiting the URL will see a 404.', { title: 'Delete policy', confirmLabel: 'Delete', danger: true });
+    if (!ok) return;
+    try {
+      await MastDB.remove('cs_policies/' + id);
+      delete _otherPoliciesData[id];
+      showToast('Policy deleted');
+      renderOtherPolicies();
+    } catch (err) { showToast('Failed: ' + (err && err.message), true); }
+  };
 
 })();
