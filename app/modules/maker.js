@@ -3458,6 +3458,11 @@
       p.pendingChangesUpdatedAt = now;
       MastAdmin.writeAudit('enter_revision_mode', 'products', pid);
       MastAdmin.showToast('Revision mode on — edits stage until you Apply');
+      // Q1 follow-up: re-render so the banner + Apply/Discard bar appear
+      // immediately. Apply/discard siblings already do this; entering did not.
+      if (typeof window.renderProductDetail === 'function' && window.selectedProductPid === pid) {
+        window.renderProductDetail(pid);
+      }
       return true;
     } catch (err) {
       MastAdmin.showToast('Could not enter revision mode: ' + (err && err.message), true);
