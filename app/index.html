@@ -15789,6 +15789,137 @@ if (document.readyState === 'loading') {
 }
 
 // ────────────────────────────────────────────────────────────────
+// mastSlideOut — generic right-side detail panel (560px). Mirrors the
+// addToMastDrawer pattern (esc/scrim/× to close, focus management,
+// body scroll lock). Use this instead of inline row-expansion for
+// list-detail surfaces. See CLAUDE.md → list-detail rule.
+//
+//   window.mastSlideOut.open({
+//     title, subtitle?, bodyHtml | bodyNode, footerHtml?, onClose?
+//   });
+//   window.mastSlideOut.close();
+// ────────────────────────────────────────────────────────────────
+window.mastSlideOut = (function() {
+  var _state = { open: false, onClose: null, originator: null };
+  function ensureRoot() {
+    var ex = document.getElementById('mastSlideOutRoot');
+    if (ex) return ex;
+    var r = document.createElement('div');
+    r.id = 'mastSlideOutRoot';
+    r.setAttribute('aria-hidden', 'true');
+    r.style.cssText = 'display:none;position:fixed;inset:0;z-index:9000;';
+    r.innerHTML =
+      '<div id="mastSlideOutScrim" onclick="window.mastSlideOut.close()" ' +
+        'style="position:absolute;inset:0;background:rgba(0,0,0,0.5);opacity:0;transition:opacity 180ms ease;"></div>' +
+      '<aside id="mastSlideOutPanel" role="dialog" aria-modal="true" aria-labelledby="mastSlideOutTitle" ' +
+             'style="position:absolute;top:0;right:0;height:100%;width:min(560px,100%);background:var(--surface-card,#1a1a1a);' +
+             'box-shadow:-12px 0 32px rgba(0,0,0,0.35);display:flex;flex-direction:column;transform:translateX(100%);' +
+             'transition:transform 220ms ease;">' +
+        '<header style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:18px 20px 14px;' +
+                'border-bottom:1px solid var(--border,rgba(255,255,255,0.08));flex-shrink:0;">' +
+          '<div style="flex:1;min-width:0;">' +
+            '<h2 id="mastSlideOutTitle" style="font-size:1.15rem;margin:0 0 4px;color:var(--charcoal,var(--text));font-weight:600;"></h2>' +
+            '<div id="mastSlideOutSubtitle" style="font-size:0.85rem;color:var(--warm-gray);line-height:1.4;"></div>' +
+          '</div>' +
+          '<button type="button" id="mastSlideOutCloseBtn" onclick="window.mastSlideOut.close()" aria-label="Close" ' +
+                  'style="background:transparent;border:0;color:var(--warm-gray);font-size:1.6rem;line-height:1;cursor:pointer;padding:0 4px;flex-shrink:0;">&times;</button>' +
+        '</header>' +
+        '<div id="mastSlideOutBody" tabindex="0" style="flex:1;overflow-y:auto;padding:18px 20px 20px;"></div>' +
+        '<footer id="mastSlideOutFooter" style="padding:14px 20px;border-top:1px solid var(--border,rgba(255,255,255,0.08));' +
+                'display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-shrink:0;"></footer>' +
+      '</aside>';
+    document.body.appendChild(r);
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape' && _state.open) { e.preventDefault(); window.mastSlideOut.close(); }
+    });
+    return r;
+  }
+  return {
+    open: function(opts) {
+      opts = opts || {};
+      var root = ensureRoot();
+      var titleEl = document.getElementById('mastSlideOutTitle');
+      var subEl = document.getElementById('mastSlideOutSubtitle');
+      var bodyEl = document.getElementById('mastSlideOutBody');
+      var footEl = document.getElementById('mastSlideOutFooter');
+      var scrim = document.getElementById('mastSlideOutScrim');
+      var panel = document.getElementById('mastSlideOutPanel');
+      titleEl.textContent = opts.title || '';
+      subEl.textContent = opts.subtitle || '';
+      subEl.style.display = opts.subtitle ? '' : 'none';
+      if (opts.bodyNode) { bodyEl.innerHTML = ''; bodyEl.appendChild(opts.bodyNode); }
+      else { bodyEl.innerHTML = opts.bodyHtml || ''; }
+      footEl.innerHTML = opts.footerHtml || '';
+      footEl.style.display = opts.footerHtml ? '' : 'none';
+      _state.onClose = (typeof opts.onClose === 'function') ? opts.onClose : null;
+      _state.originator = document.activeElement;
+      root.style.display = 'block';
+      root.setAttribute('aria-hidden', 'false');
+      document.body.style.overflow = 'hidden';
+      requestAnimationFrame(function() {
+        scrim.style.opacity = '1';
+        panel.style.transform = 'translateX(0)';
+      });
+      _state.open = true;
+      setTimeout(function() { var cb = document.getElementById('mastSlideOutCloseBtn'); if (cb) cb.focus(); }, 220);
+    },
+    close: function() {
+      if (!_state.open) return;
+      var root = document.getElementById('mastSlideOutRoot');
+      var scrim = document.getElementById('mastSlideOutScrim');
+      var panel = document.getElementById('mastSlideOutPanel');
+      if (scrim) scrim.style.opacity = '0';
+      if (panel) panel.style.transform = 'translateX(100%)';
+      setTimeout(function() {
+        if (root) { root.style.display = 'none'; root.setAttribute('aria-hidden', 'true'); }
+        document.body.style.overflow = '';
+      }, 220);
+      _state.open = false;
+      if (_state.originator && typeof _state.originator.focus === 'function') {
+        try { _state.originator.focus(); } catch(e) {}
+      }
+      if (typeof _state.onClose === 'function') {
+        var fn = _state.onClose; _state.onClose = null; fn();
+      }
+    },
+    isOpen: function() { return _state.open; }
+  };
+})();
+
+// ────────────────────────────────────────────────────────────────
+// mastSortableTable — sort helper for list tables. Each list view
+// keeps its own sort state (key, dir) and emits sortable <th>s via
+// window.mastSortableTh(label, key, currentKey, currentDir, onClickFnName).
+// Use window.mastSortRows(rows, key, dir, optional getter) to sort.
+// ────────────────────────────────────────────────────────────────
+window.mastSortRows = function(rows, key, dir, getter) {
+  if (!key) return rows;
+  getter = getter || function(row, k) { return row && row[k]; };
+  var mult = (dir === 'desc') ? -1 : 1;
+  var sorted = rows.slice();
+  sorted.sort(function(a, b) {
+    var av = getter(a, key);
+    var bv = getter(b, key);
+    if (av == null && bv == null) return 0;
+    if (av == null) return 1;
+    if (bv == null) return -1;
+    if (typeof av === 'number' && typeof bv === 'number') return (av - bv) * mult;
+    return String(av).localeCompare(String(bv), undefined, { numeric: true }) * mult;
+  });
+  return sorted;
+};
+window.mastSortableTh = function(label, key, currentKey, currentDir, onClickFnName, extraStyle) {
+  var active = currentKey === key;
+  var arrow = !active ? '' : (currentDir === 'desc' ? ' ▼' : ' ▲');
+  var color = active ? 'var(--charcoal, var(--text))' : 'var(--warm-gray)';
+  var style = 'text-align:left;padding:8px 12px;font-size:0.78rem;color:' + color + ';' +
+              'border-bottom:1px solid rgba(255,255,255,0.06);cursor:pointer;user-select:none;' +
+              (extraStyle || '');
+  return '<th onclick="' + onClickFnName + '(\'' + key + '\')" style="' + style + '" title="Sort by ' +
+         label + '">' + label + arrow + '</th>';
+};
+
+// ────────────────────────────────────────────────────────────────
 // openMatchConfirmModal — W2a.1 shared operator-confirm modal
 // Contract: W2a-CONTRACTS.md C4.
 // Used by:
@@ -18452,7 +18583,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260527-094641-0f979d1';
+var MAST_MODULES_V = '20260527-095330-4d44515';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.

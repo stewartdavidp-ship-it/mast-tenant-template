@@ -19,6 +19,8 @@
   var emailPageSize = 50;
   var emailLastCreatedAt = null;
   var hasMoreEmails = false;
+  var emailSortKey = 'createdAt';
+  var emailSortDir = 'desc';
 
   // ============================================================
   // Badge Style Helpers
@@ -267,19 +269,33 @@
 
     // Table
     h += '<div style="overflow-x:auto;">';
+    // Sort filtered rows per current header state.
+    var sorted = (typeof window.mastSortRows === 'function')
+      ? window.mastSortRows(filtered, emailSortKey, emailSortDir, function(row, key) {
+          if (key === 'provider') return PROVIDER_LABELS[row.provider] || row.provider || '';
+          return row && row[key];
+        })
+      : filtered;
+
     h += '<table class="data-table" style="width:100%;border-collapse:collapse;">';
     h += '<thead><tr>';
-    h += '<th style="text-align:left;padding:8px 12px;font-size:0.78rem;color:var(--warm-gray);border-bottom:1px solid rgba(255,255,255,0.06);">Date</th>';
-    h += '<th style="text-align:left;padding:8px 12px;font-size:0.78rem;color:var(--warm-gray);border-bottom:1px solid rgba(255,255,255,0.06);">Recipient</th>';
-    h += '<th style="text-align:left;padding:8px 12px;font-size:0.78rem;color:var(--warm-gray);border-bottom:1px solid rgba(255,255,255,0.06);">Subject</th>';
-    h += '<th style="text-align:left;padding:8px 12px;font-size:0.78rem;color:var(--warm-gray);border-bottom:1px solid rgba(255,255,255,0.06);">Type</th>';
-    h += '<th style="text-align:left;padding:8px 12px;font-size:0.78rem;color:var(--warm-gray);border-bottom:1px solid rgba(255,255,255,0.06);">Status</th>';
-    h += '<th style="text-align:left;padding:8px 12px;font-size:0.78rem;color:var(--warm-gray);border-bottom:1px solid rgba(255,255,255,0.06);">Provider</th>';
+    if (typeof window.mastSortableTh === 'function') {
+      h += window.mastSortableTh('Date',      'createdAt', emailSortKey, emailSortDir, 'window._emailLogSort');
+      h += window.mastSortableTh('Recipient', 'to',        emailSortKey, emailSortDir, 'window._emailLogSort');
+      h += window.mastSortableTh('Subject',   'subject',   emailSortKey, emailSortDir, 'window._emailLogSort');
+      h += window.mastSortableTh('Type',      'emailType', emailSortKey, emailSortDir, 'window._emailLogSort');
+      h += window.mastSortableTh('Status',    'status',    emailSortKey, emailSortDir, 'window._emailLogSort');
+      h += window.mastSortableTh('Provider',  'provider',  emailSortKey, emailSortDir, 'window._emailLogSort');
+    } else {
+      // Helper not loaded — degrade to non-sortable headers.
+      ['Date','Recipient','Subject','Type','Status','Provider'].forEach(function(l) {
+        h += '<th style="text-align:left;padding:8px 12px;font-size:0.78rem;color:var(--warm-gray);border-bottom:1px solid rgba(255,255,255,0.06);">' + l + '</th>';
+      });
+    }
     h += '</tr></thead>';
     h += '<tbody>';
 
-    filtered.forEach(function(email) {
-      var isExpanded = selectedEmailId === email._key;
+    sorted.forEach(function(email) {
       var dateStr = email.createdAt ? formatEmailDate(email.createdAt) : '—';
       var recipient = email.to || '—';
       var subject = email.subject || '(no subject)';
@@ -287,7 +303,7 @@
       var status = email.status || 'unknown';
       var provider = PROVIDER_LABELS[email.provider] || email.provider || '—';
 
-      h += '<tr onclick="window._emailLogSelect(\'' + esc(email._key) + '\')" style="cursor:pointer;transition:background 0.15s;' + (isExpanded ? 'background:rgba(255,255,255,0.04);' : '') + '" onmouseover="this.style.background=\'rgba(255,255,255,0.04)\'" onmouseout="this.style.background=\'' + (isExpanded ? 'rgba(255,255,255,0.04)' : 'transparent') + '\'">';
+      h += '<tr onclick="window._emailLogSelect(\'' + esc(email._key) + '\')" style="cursor:pointer;transition:background 0.15s;" onmouseover="this.style.background=\'rgba(255,255,255,0.04)\'" onmouseout="this.style.background=\'transparent\'">';
       h += '<td style="padding:8px 12px;font-size:0.85rem;white-space:nowrap;">' + esc(dateStr) + '</td>';
       h += '<td style="padding:8px 12px;font-size:0.85rem;max-width:180px;overflow:hidden;text-overflow:ellipsis;">' + esc(recipient) + '</td>';
       h += '<td style="padding:8px 12px;font-size:0.85rem;max-width:250px;overflow:hidden;text-overflow:ellipsis;">' + esc(subject) + '</td>';
@@ -295,13 +311,6 @@
       h += '<td style="padding:8px 12px;"><span style="' + emailStatusBadgeStyle(status) + 'padding:2px 8px;border-radius:12px;font-size:0.78rem;font-weight:600;">' + esc(status) + '</span></td>';
       h += '<td style="padding:8px 12px;font-size:0.85rem;">' + esc(provider) + '</td>';
       h += '</tr>';
-
-      // Expanded detail row
-      if (isExpanded) {
-        h += '<tr><td colspan="6" style="padding:0;border-bottom:1px solid rgba(255,255,255,0.06);">';
-        h += renderEmailDetail(email);
-        h += '</td></tr>';
-      }
     });
 
     h += '</tbody></table>';
@@ -318,22 +327,23 @@
     if (window.mastInitFilterPills) window.mastInitFilterPills(container);
   }
 
-  function renderEmailDetail(email) {
+  function renderEmailDetailBody(email) {
+    // Body content for the mastSlideOut panel. Header (subject/recipient),
+    // close button, and Resend action live on the slide-out chrome — this
+    // function returns only the inner detail content.
     var h = '';
-    h += '<div style="padding:16px 24px;background:rgba(255,255,255,0.02);border-top:1px solid rgba(255,255,255,0.04);">';
-    h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">';
-    h += '<span style="font-size:0.78rem;font-weight:600;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.04em;">Email Detail</span>';
-    h += '<button onclick="event.stopPropagation();window._emailLogSelect(\'' + email._key + '\')" style="background:none;border:1px solid rgba(255,255,255,0.15);color:var(--warm-gray);padding:3px 10px;border-radius:4px;cursor:pointer;font-size:0.78rem;">&#x2715; Close</button>';
-    h += '</div>';
 
     // Meta info
-    h += '<div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(200px, 1fr));gap:12px;margin-bottom:16px;">';
+    h += '<div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(180px, 1fr));gap:12px;margin-bottom:16px;">';
     h += '<div><span style="font-size:0.78rem;color:var(--warm-gray);display:block;">From</span><span style="font-size:0.85rem;">' + esc(email.from || '—') + '</span></div>';
     h += '<div><span style="font-size:0.78rem;color:var(--warm-gray);display:block;">To</span><span style="font-size:0.85rem;">' + esc(email.to || '—') + '</span></div>';
     h += '<div><span style="font-size:0.78rem;color:var(--warm-gray);display:block;">Provider</span><span style="font-size:0.85rem;">' + esc(PROVIDER_LABELS[email.provider] || email.provider || '—') + '</span></div>';
     h += '<div><span style="font-size:0.78rem;color:var(--warm-gray);display:block;">Token Cost</span><span style="font-size:0.85rem;">' + (email.tokenCost || 0) + '</span></div>';
+    if (email.emailType) {
+      h += '<div><span style="font-size:0.78rem;color:var(--warm-gray);display:block;">Type</span><span style="' + emailTypeBadgeStyle(email.emailType) + 'padding:2px 8px;border-radius:12px;font-size:0.78rem;font-weight:600;">' + esc(email.emailType) + '</span></div>';
+    }
     if (email.orderId) {
-      h += '<div><span style="font-size:0.78rem;color:var(--warm-gray);display:block;">Order ID</span><span style="font-size:0.85rem;cursor:pointer;color:var(--teal);text-decoration:underline;" onclick="event.stopPropagation(); MastAdmin.navigateTo(\'orders\');">' + esc(email.orderId) + '</span></div>';
+      h += '<div><span style="font-size:0.78rem;color:var(--warm-gray);display:block;">Order ID</span><a href="#orders" style="font-size:0.85rem;color:var(--teal);text-decoration:underline;">' + esc(email.orderId) + '</a></div>';
     }
     if (email.error) {
       h += '<div style="grid-column:1/-1;"><span style="font-size:0.78rem;color:var(--warm-gray);display:block;">Error</span><span style="font-size:0.85rem;color:#EF5350;">' + esc(email.error) + '</span></div>';
@@ -344,19 +354,11 @@
     if (email.htmlSnapshot) {
       h += '<div style="margin-bottom:12px;">';
       h += '<span style="font-size:0.78rem;color:var(--warm-gray);display:block;margin-bottom:6px;">Email Preview <span style="font-weight:400;opacity:0.6;">(light theme — emails are designed for email client display)</span></span>';
-      h += '<div style="background:white;border-radius:6px;overflow:hidden;max-height:400px;">';
-      // Use srcdoc for sandboxed preview — no scripts, no navigation
-      h += '<iframe sandbox="" srcdoc="' + escAttr(email.htmlSnapshot) + '" style="width:100%;min-height:250px;max-height:400px;border:none;display:block;" onload="try{if(this.contentDocument&&this.contentDocument.body)this.style.height=Math.min(this.contentDocument.body.scrollHeight+20,400)+\'px\';}catch(e){}"></iframe>';
+      h += '<div style="background:white;border-radius:6px;overflow:hidden;max-height:480px;">';
+      h += '<iframe sandbox="" srcdoc="' + escAttr(email.htmlSnapshot) + '" style="width:100%;min-height:300px;max-height:480px;border:none;display:block;" onload="try{if(this.contentDocument&&this.contentDocument.body)this.style.height=Math.min(this.contentDocument.body.scrollHeight+20,480)+\'px\';}catch(e){}"></iframe>';
       h += '</div>';
       h += '</div>';
     }
-
-    // Resend button
-    h += '<div style="display:flex;gap:8px;">';
-    h += '<button class="btn btn-secondary" style="font-size:0.85rem;padding:6px 12px;" onclick="event.stopPropagation(); window._emailLogResend(\'' + esc(email._key) + '\')">Resend</button>';
-    h += '</div>';
-
-    h += '</div>';
     return h;
   }
 
@@ -396,7 +398,36 @@
   // ============================================================
 
   function selectEmail(key) {
-    selectedEmailId = (selectedEmailId === key) ? null : key;
+    var email = emailsData.find(function(e) { return e._key === key; });
+    if (!email) return;
+    selectedEmailId = key;
+    if (window.mastSlideOut && typeof window.mastSlideOut.open === 'function') {
+      var status = email.status || 'unknown';
+      var dateStr = email.createdAt ? formatEmailDate(email.createdAt) : '—';
+      var subtitle = (email.to || '—') + ' · ' + dateStr;
+      window.mastSlideOut.open({
+        title: email.subject || '(no subject)',
+        subtitle: subtitle,
+        bodyHtml: renderEmailDetailBody(email),
+        footerHtml: '<span style="' + emailStatusBadgeStyle(status) + 'padding:2px 8px;border-radius:12px;font-size:0.78rem;font-weight:600;margin-right:auto;">' + esc(status) + '</span>' +
+                    '<button class="btn btn-secondary" style="font-size:0.85rem;padding:6px 12px;" onclick="window._emailLogResend(\'' + esc(key) + '\')">Resend</button>',
+        onClose: function() { selectedEmailId = null; }
+      });
+    } else {
+      // Fallback (helper not loaded) — keep legacy inline-expand behavior.
+      selectedEmailId = (selectedEmailId === key) ? null : key;
+      renderEmailLog();
+    }
+  }
+
+  function sortBy(key) {
+    if (emailSortKey === key) {
+      emailSortDir = (emailSortDir === 'asc') ? 'desc' : 'asc';
+    } else {
+      emailSortKey = key;
+      // Default direction: dates start desc (newest first), text fields asc.
+      emailSortDir = (key === 'createdAt') ? 'desc' : 'asc';
+    }
     renderEmailLog();
   }
 
@@ -458,6 +489,7 @@
   // ============================================================
 
   window._emailLogSelect = selectEmail;
+  window._emailLogSort = sortBy;
   window._emailLogFilterStatus = filterStatus;
   window._emailLogFilterType = filterType;
   window._emailLogFilterCategory = filterCategory;
