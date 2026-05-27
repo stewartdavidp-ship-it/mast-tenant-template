@@ -2092,6 +2092,10 @@
       loadCustomerWallets(c.id, uids);
       return '<div class="loading">Loading wallet…</div>';
     }
+    // D4: parallel-load this customer's wallet-adjustment audit history.
+    // Independent of the wallet load — first paint can render the summary
+    // cards and replace the "Loading history…" stub when audit lands.
+    if (!cache.loaded.walletAudit) loadCustomerWalletAudit(c.id);
 
     var h = '';
     cache.wallets.forEach(function(w, idx) {
@@ -2101,25 +2105,74 @@
       var creditBalance = 0;
       if (w.credits) {
         Object.values(w.credits).forEach(function(cr) {
-          if (cr && typeof cr.amountCents === 'number' && cr.status !== 'redeemed') creditBalance += cr.amountCents;
+          if (cr && typeof cr.amountCents === 'number' && cr.status !== 'redeemed' && cr.status !== 'revoked') creditBalance += cr.amountCents;
         });
       }
-      var passCount = w.passes ? Object.keys(w.passes).length : 0;
+      var passCount = w.passes ? Object.keys(w.passes).filter(function(k){var p=w.passes[k];return p && p.status !== 'revoked';}).length : 0;
       var membershipTier = w.membership && (w.membership.tier || w.membership.tierName) || '—';
-      var loyaltyPoints = w.loyalty && (typeof w.loyalty.points === 'number' ? w.loyalty.points : (typeof w.loyalty.balance === 'number' ? w.loyalty.balance : '—'));
+      var loyaltyTotalPts = w.loyalty && (typeof w.loyalty.totalPoints === 'number' ? w.loyalty.totalPoints :
+                              (typeof w.loyalty.points === 'number' ? w.loyalty.points :
+                              (typeof w.loyalty.balance === 'number' ? w.loyalty.balance : 0)));
+      var uid = w.uid;
+      var cidSafe = _jsAttrSafe(c.id);
+      var uidSafe = _jsAttrSafe(uid);
 
       h += '<div style="display:grid;grid-template-columns:160px 1fr;gap:8px 16px;font-size:0.85rem;">';
       h += identityRow('Credits', esc(fmtMoney(creditBalance)) + ' <span style="color:var(--warm-gray);font-size:0.78rem;">(' + creditCount + ' record' + (creditCount === 1 ? '' : 's') + ')</span>');
       h += identityRow('Passes', String(passCount));
       h += identityRow('Membership', esc(String(membershipTier)));
-      h += identityRow('Loyalty', esc(String(loyaltyPoints)));
+      h += identityRow('Loyalty', String(loyaltyTotalPts) + ' pts');
       h += '</div>';
-      h += '<div style="margin-top:12px;font-size:0.78rem;">';
-      h += '<a href="#" onclick="navigateTo(\'wallet\');return false;" style="color:var(--teal);text-decoration:underline;">Edit in Wallet module →</a>';
+
+      // D4: inline action buttons. Each opens a modal that writes via the
+      // adjustCustomerWallet CF, which audits to admin/walletAdjustments.
+      h += '<div style="margin-top:14px;display:flex;flex-wrap:wrap;gap:6px;">';
+      h += '<button class="btn btn-secondary btn-small" onclick="customersOpenWalletAdjust(\'credit\',\'' + cidSafe + '\',\'' + uidSafe + '\')">+ Adjust credits</button>';
+      h += '<button class="btn btn-secondary btn-small" onclick="customersOpenWalletAdjust(\'pass\',\'' + cidSafe + '\',\'' + uidSafe + '\')">+ Grant pass</button>';
+      h += '<button class="btn btn-secondary btn-small" onclick="customersOpenWalletAdjust(\'membership\',\'' + cidSafe + '\',\'' + uidSafe + '\')">Change tier</button>';
+      h += '<button class="btn btn-secondary btn-small" onclick="customersOpenWalletAdjust(\'loyalty\',\'' + cidSafe + '\',\'' + uidSafe + '\')">Adjust loyalty</button>';
       h += '</div>';
       h += detailCardClose();
     });
+
+    // D4 inline audit timeline — this customer's wallet adjustments,
+    // ordered newest first. Global view (Wallet → History) shows the
+    // full tenant log; this is the per-customer slice.
+    h += '<div style="margin-top:20px;">';
+    h += '<div style="font-weight:600;font-size:0.85rem;margin-bottom:8px;">Adjustment history</div>';
+    if (!cache.loaded.walletAudit) {
+      h += '<div style="color:var(--warm-gray-light);font-size:0.78rem;">Loading history…</div>';
+    } else if (!cache.walletAudit || cache.walletAudit.length === 0) {
+      h += '<div style="color:var(--warm-gray-light);font-size:0.78rem;">No adjustments yet.</div>';
+    } else {
+      h += '<div style="display:flex;flex-direction:column;gap:6px;font-size:0.78rem;">';
+      cache.walletAudit.forEach(function(a) {
+        h += '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:6px;padding:8px 12px;">';
+        h += '<div style="display:flex;justify-content:space-between;gap:8px;">';
+        h += '<span><strong>' + esc(a.kind) + '</strong> · ' + esc(a.action);
+        if (typeof a.amountCents === 'number') h += ' · ' + esc(fmtMoney(a.amountCents));
+        if (typeof a.delta === 'number') h += ' · ' + (a.delta > 0 ? '+' : '') + esc(String(a.delta)) + ' pts';
+        if (a.tier) h += ' · tier=' + esc(a.tier);
+        if (a.passDefId) h += ' · pass=' + esc(a.passDefId);
+        h += '</span>';
+        h += '<span style="color:var(--warm-gray-light);">' + esc(relativeTime(a.createdAt)) + '</span>';
+        h += '</div>';
+        h += '<div style="color:var(--warm-gray);margin-top:2px;">' + esc(a.reason || '') + '</div>';
+        if (a.operatorName) h += '<div style="color:var(--warm-gray-light);font-size:0.72rem;margin-top:2px;">by ' + esc(a.operatorName) + '</div>';
+        h += '</div>';
+      });
+      h += '</div>';
+    }
+    h += '</div>';
+
     return h;
+  }
+
+  // D4 — escape a string for safe interpolation inside an inline onclick.
+  // Mirrors the existing pattern from accounting.js / finance.js: the caller
+  // wraps the result in their own quotes (onclick="fn('"+_jsAttrSafe(v)+"')").
+  function _jsAttrSafe(s) {
+    return String(s || '').replace(/[\\'"]/g, '\\$&');
   }
 
   // ----- Contacts tab (linked contact records — addresses/phones) -----
@@ -2349,6 +2402,209 @@
       cache.loaded.wallets = true;
       if (currentView === 'detail' && selectedCustomerId === customerId && detailTab === 'wallet') renderPreservingEdits();
     });
+  }
+
+  // D4 — load this customer's wallet-adjustment audit history (admin/walletAdjustments
+  // where customerId == c.id). Sorted newest-first. Read-only — writes happen
+  // exclusively through the adjustCustomerWallet CF.
+  function loadCustomerWalletAudit(customerId) {
+    var cache = getCache(customerId);
+    cache.walletAudit = [];
+    MastDB.query('admin/walletAdjustments')
+      .orderByChild('createdAt').limitToLast(200).once()
+      .then(function(snap) {
+        var data = (snap && snap.val && snap.val()) || (snap || {});
+        var rows = [];
+        Object.keys(data || {}).forEach(function(k) {
+          var r = data[k];
+          if (r && r.customerId === customerId) rows.push(r);
+        });
+        rows.sort(function(a, b) { return (b.createdAt || '').localeCompare(a.createdAt || ''); });
+        cache.walletAudit = rows;
+        cache.loaded.walletAudit = true;
+        if (currentView === 'detail' && selectedCustomerId === customerId && detailTab === 'wallet') renderPreservingEdits();
+      })
+      .catch(function(err) {
+        console.warn('[customers] wallet audit load failed:', err && err.message);
+        cache.walletAudit = [];
+        cache.loaded.walletAudit = true;
+        if (currentView === 'detail' && selectedCustomerId === customerId && detailTab === 'wallet') renderPreservingEdits();
+      });
+  }
+
+  // D4 — open the wallet-adjustment modal for a (kind, customerId, walletUid).
+  // Routes to the right form per kind. Each form collects payload + reason
+  // and submits to the adjustCustomerWallet CF.
+  function openWalletAdjustModal(kind, customerId, walletUid) {
+    var titleByKind = {
+      credit: 'Adjust store credit', pass: 'Grant a pass',
+      membership: 'Change membership tier', loyalty: 'Adjust loyalty points'
+    };
+    var bodyHtml;
+    if (kind === 'credit') {
+      bodyHtml =
+        '<div class="form-group"><label>Action</label>' +
+          '<select id="walletAdjAction" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;">' +
+            '<option value="grant">Grant new credit</option>' +
+            '<option value="adjust">Adjust existing credit</option>' +
+            '<option value="revoke">Revoke existing credit</option>' +
+          '</select></div>' +
+        '<div class="form-group" id="walletAdjCreditIdRow" style="display:none;"><label>Credit ID</label>' +
+          '<input type="text" id="walletAdjCreditId" placeholder="Credit record ID" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;"></div>' +
+        '<div class="form-group" id="walletAdjAmountRow"><label>Amount ($)</label>' +
+          '<input type="number" id="walletAdjAmount" min="0" step="0.01" placeholder="e.g. 25.00" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;"></div>' +
+        '<div class="form-group" id="walletAdjExpiryRow"><label>Expires (optional)</label>' +
+          '<input type="date" id="walletAdjExpiry" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;"></div>';
+    } else if (kind === 'pass') {
+      bodyHtml =
+        '<div class="form-group"><label>Action</label>' +
+          '<select id="walletAdjAction" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;">' +
+            '<option value="grant">Grant a pass</option>' +
+            '<option value="revoke">Revoke an existing pass</option>' +
+          '</select></div>' +
+        '<div class="form-group" id="walletAdjPassDefRow"><label>Pass definition ID</label>' +
+          '<input type="text" id="walletAdjPassDefId" placeholder="passDefId (Book → Passes)" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;"></div>' +
+        '<div class="form-group" id="walletAdjSessionsRow"><label>Sessions total (optional)</label>' +
+          '<input type="number" id="walletAdjSessions" min="1" step="1" placeholder="e.g. 10" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;"></div>' +
+        '<div class="form-group" id="walletAdjExpiryRow"><label>Expires (optional)</label>' +
+          '<input type="date" id="walletAdjExpiry" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;"></div>' +
+        '<div class="form-group" id="walletAdjPassIdRow" style="display:none;"><label>Pass ID (to revoke)</label>' +
+          '<input type="text" id="walletAdjPassId" placeholder="Pass record ID" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;"></div>';
+    } else if (kind === 'membership') {
+      bodyHtml =
+        '<div class="form-group"><label>New tier</label>' +
+          '<input type="text" id="walletAdjTier" placeholder="e.g. gold, silver, founder" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;"></div>' +
+        '<p style="font-size:0.78rem;color:var(--warm-gray);margin:0 0 12px;">No proration — billing settles on the next cycle.</p>';
+    } else if (kind === 'loyalty') {
+      bodyHtml =
+        '<div class="form-group"><label>Point delta (use negative to deduct)</label>' +
+          '<input type="number" id="walletAdjDelta" step="1" placeholder="e.g. 100 or -50" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;"></div>';
+    }
+    var html =
+      '<div class="modal-header"><h3>' + esc(titleByKind[kind] || 'Wallet adjustment') + '</h3></div>' +
+      '<div class="modal-body">' +
+        '<input type="hidden" id="walletAdjKind" value="' + esc(kind) + '">' +
+        '<input type="hidden" id="walletAdjCustomerId" value="' + esc(customerId) + '">' +
+        '<input type="hidden" id="walletAdjUid" value="' + esc(walletUid) + '">' +
+        bodyHtml +
+        '<div class="form-group"><label>Reason <span style="color:var(--danger);">*</span></label>' +
+          '<textarea id="walletAdjReason" rows="2" placeholder="Required. Shown in the audit trail." style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;"></textarea></div>' +
+        '<div id="walletAdjStatus" style="font-size:0.85rem;margin-top:8px;"></div>' +
+      '</div>' +
+      '<div class="modal-footer">' +
+        '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
+        '<button class="btn btn-primary" id="walletAdjSaveBtn" onclick="customersSubmitWalletAdjust()">Save</button>' +
+      '</div>';
+    if (typeof openModal === 'function') openModal(html);
+
+    // Wire up action-switch for credit + pass (changes visible field rows)
+    var actionEl = document.getElementById('walletAdjAction');
+    if (actionEl) {
+      var updateFields = function() {
+        var act = actionEl.value;
+        if (kind === 'credit') {
+          var cidRow = document.getElementById('walletAdjCreditIdRow');
+          var expRow = document.getElementById('walletAdjExpiryRow');
+          if (cidRow) cidRow.style.display = (act === 'grant') ? 'none' : '';
+          if (expRow) expRow.style.display = (act === 'grant') ? '' : 'none';
+        } else if (kind === 'pass') {
+          var defRow = document.getElementById('walletAdjPassDefRow');
+          var sesRow = document.getElementById('walletAdjSessionsRow');
+          var pexRow = document.getElementById('walletAdjExpiryRow');
+          var pidRow = document.getElementById('walletAdjPassIdRow');
+          if (defRow) defRow.style.display = (act === 'grant') ? '' : 'none';
+          if (sesRow) sesRow.style.display = (act === 'grant') ? '' : 'none';
+          if (pexRow) pexRow.style.display = (act === 'grant') ? '' : 'none';
+          if (pidRow) pidRow.style.display = (act === 'revoke') ? '' : 'none';
+        }
+      };
+      actionEl.addEventListener('change', updateFields);
+      updateFields();
+    }
+  }
+
+  // D4 — submit handler reads modal fields, validates, calls CF.
+  async function submitWalletAdjust() {
+    var kind = (document.getElementById('walletAdjKind') || {}).value;
+    var customerId = (document.getElementById('walletAdjCustomerId') || {}).value;
+    var walletUid = (document.getElementById('walletAdjUid') || {}).value;
+    var action = (document.getElementById('walletAdjAction') || {}).value || 'adjust';
+    var reason = ((document.getElementById('walletAdjReason') || {}).value || '').trim();
+    var statusEl = document.getElementById('walletAdjStatus');
+    var btn = document.getElementById('walletAdjSaveBtn');
+    var setStatus = function(msg, color) {
+      if (statusEl) { statusEl.textContent = msg; statusEl.style.color = color || 'var(--warm-gray)'; }
+    };
+    if (!reason || reason.length < 3) { setStatus('Reason is required.', 'var(--danger)'); return; }
+
+    var payload = {};
+    if (kind === 'credit') {
+      if (action === 'grant') {
+        var amt = parseFloat((document.getElementById('walletAdjAmount') || {}).value || '0');
+        if (!(amt > 0)) { setStatus('Enter an amount.', 'var(--danger)'); return; }
+        payload.amountCents = Math.round(amt * 100);
+        var exp = (document.getElementById('walletAdjExpiry') || {}).value;
+        if (exp) payload.expiresAt = exp;
+      } else {
+        payload.creditId = ((document.getElementById('walletAdjCreditId') || {}).value || '').trim();
+        if (!payload.creditId) { setStatus('Credit ID required.', 'var(--danger)'); return; }
+        if (action === 'adjust') {
+          var amt2 = parseFloat((document.getElementById('walletAdjAmount') || {}).value || '');
+          if (!Number.isFinite(amt2) || amt2 < 0) { setStatus('Enter a valid amount.', 'var(--danger)'); return; }
+          payload.amountCents = Math.round(amt2 * 100);
+        }
+      }
+    } else if (kind === 'pass') {
+      if (action === 'grant') {
+        payload.passDefId = ((document.getElementById('walletAdjPassDefId') || {}).value || '').trim();
+        if (!payload.passDefId) { setStatus('Pass definition ID required.', 'var(--danger)'); return; }
+        var sess = parseInt((document.getElementById('walletAdjSessions') || {}).value || '0', 10);
+        if (sess > 0) payload.sessionsTotal = sess;
+        var pexp = (document.getElementById('walletAdjExpiry') || {}).value;
+        if (pexp) payload.expiresAt = pexp;
+      } else {
+        payload.passId = ((document.getElementById('walletAdjPassId') || {}).value || '').trim();
+        if (!payload.passId) { setStatus('Pass ID required.', 'var(--danger)'); return; }
+      }
+    } else if (kind === 'membership') {
+      payload.tier = ((document.getElementById('walletAdjTier') || {}).value || '').trim();
+      if (!payload.tier) { setStatus('Tier required.', 'var(--danger)'); return; }
+      action = 'adjust';
+    } else if (kind === 'loyalty') {
+      var delta = parseInt((document.getElementById('walletAdjDelta') || {}).value || '0', 10);
+      if (!Number.isFinite(delta) || delta === 0) { setStatus('Enter a non-zero delta.', 'var(--danger)'); return; }
+      payload.delta = delta;
+      action = 'adjust';
+    }
+
+    if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+    setStatus('');
+    try {
+      var fn = firebase.functions().httpsCallable('adjustCustomerWallet');
+      var result = await fn({
+        tenantId: MastDB.tenantId(),
+        customerId: customerId,
+        walletUid: walletUid,
+        kind: kind,
+        action: action,
+        payload: payload,
+        reason: reason
+      });
+      if (!result || !result.data || result.data.ok !== true) {
+        throw new Error((result && result.data && result.data.message) || 'CF returned non-ok');
+      }
+      // Invalidate caches and re-render so the new state + audit row show.
+      var cache = getCache(customerId);
+      cache.loaded.wallets = false;
+      cache.loaded.walletAudit = false;
+      if (typeof closeModal === 'function') closeModal();
+      if (typeof showToast === 'function') showToast('Wallet adjustment recorded.');
+      renderPreservingEdits();
+    } catch (e) {
+      console.error('[customers] wallet adjust failed', e);
+      setStatus('Save failed: ' + (e && e.message), 'var(--danger)');
+      if (btn) { btn.disabled = false; btn.textContent = 'Save'; }
+    }
   }
 
   // ============================================================
@@ -2739,6 +2995,8 @@
   window.customersSwitchView = switchView;
   window.customersOpenDetail = openDetail;
   window.customersRender = renderTable;
+  window.customersOpenWalletAdjust = openWalletAdjustModal;
+  window.customersSubmitWalletAdjust = submitWalletAdjust;
   window._customersSort = function(key) {
     if (customersSortKey === key) customersSortDir = (customersSortDir === 'asc') ? 'desc' : 'asc';
     else {

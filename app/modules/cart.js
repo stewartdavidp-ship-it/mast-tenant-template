@@ -66,21 +66,138 @@
       var membershipEnabled = msConfig.enabled || false;
 
       container.innerHTML =
-        '<div style="margin-bottom:24px;">' +
-          '<p style="font-size:0.9rem;color:var(--warm-gray);margin-bottom:16px;">The wallet is a unified view of all customer financial instruments. Each instrument is managed in its own section.</p>' +
+        '<div class="view-tabs" id="walletDashTabBar" style="margin-bottom:16px;">' +
+          '<button class="view-tab active" data-tab="overview" onclick="walletDashSwitchTab(\'overview\')">Overview</button>' +
+          '<button class="view-tab" data-tab="history" onclick="walletDashSwitchTab(\'history\')">History</button>' +
         '</div>' +
-        '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px;">' +
-          renderInstrumentCard('&#128179;', 'Store Credits', 'Returns, admin grants, promotions. Never expire.', creditsEnabled ? 'Active' : 'Off', creditsEnabled) +
-          renderInstrumentCard('&#127873;', 'Gift Cards', 'eGift cards \u2014 purchase, send, redeem.', giftCardsEnabled ? 'Active' : 'Off', giftCardsEnabled, "navigateTo('gift-cards')") +
-          renderInstrumentCard('&#11088;', 'Loyalty Program', 'Points-based rewards for repeat customers.', loyaltyEnabled ? 'Active' : 'Off', loyaltyEnabled, "navigateTo('loyalty')") +
-          renderInstrumentCard('&#127941;', 'Membership', 'Subscription program with exclusive benefits.', membershipEnabled ? 'Active' : 'Off', membershipEnabled, "navigateTo('membership')") +
-          renderInstrumentCard('&#127915;', 'Coupons', 'Discount codes for customers.', 'Active', true, "navigateTo('coupons')") +
-          renderInstrumentCard('&#127991;', 'Sale Promotions', 'Seasonal sales, markdowns, clearance.', 'Active', true, "navigateTo('promotions')") +
+        '<div id="walletDashTab-overview">' +
+          '<div style="margin-bottom:24px;">' +
+            '<p style="font-size:0.9rem;color:var(--warm-gray);margin-bottom:16px;">The wallet is a unified view of all customer financial instruments. Each instrument is managed in its own section. Per-customer adjustments happen on the customer detail Wallet tab and write an audit row visible under the History tab.</p>' +
+          '</div>' +
+          '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px;">' +
+            renderInstrumentCard('&#128179;', 'Store Credits', 'Returns, admin grants, promotions. Never expire.', creditsEnabled ? 'Active' : 'Off', creditsEnabled) +
+            renderInstrumentCard('&#127873;', 'Gift Cards', 'eGift cards \u2014 purchase, send, redeem.', giftCardsEnabled ? 'Active' : 'Off', giftCardsEnabled, "navigateTo('gift-cards')") +
+            renderInstrumentCard('&#11088;', 'Loyalty Program', 'Points-based rewards for repeat customers.', loyaltyEnabled ? 'Active' : 'Off', loyaltyEnabled, "navigateTo('loyalty')") +
+            renderInstrumentCard('&#127941;', 'Membership', 'Subscription program with exclusive benefits.', membershipEnabled ? 'Active' : 'Off', membershipEnabled, "navigateTo('membership')") +
+            renderInstrumentCard('&#127915;', 'Coupons', 'Discount codes for customers.', 'Active', true, "navigateTo('coupons')") +
+            renderInstrumentCard('&#127991;', 'Sale Promotions', 'Seasonal sales, markdowns, clearance.', 'Active', true, "navigateTo('promotions')") +
+          '</div>' +
+        '</div>' +
+        '<div id="walletDashTab-history" style="display:none;">' +
+          renderWalletHistorySkeleton() +
         '</div>';
     }).catch(function(err) {
       container.innerHTML = '<div style="text-align:center;padding:40px 20px;color:var(--danger);">Error: ' + esc(err.message) + '</div>';
     });
   }
+
+  // D4 \u2014 Wallet History tab (global audit log of every wallet adjustment
+  // recorded by adjustCustomerWallet CF). Filters by kind/action and a
+  // customer search. Sorted newest-first.
+  var _walletHistoryLoaded = false;
+  var _walletHistoryRows = [];
+  var _walletHistoryFilter = { kind: 'all', action: 'all', search: '' };
+
+  function renderWalletHistorySkeleton() {
+    return '<div id="walletHistoryBody"><div class="loading">Loading wallet history\u2026</div></div>';
+  }
+
+  function loadWalletHistory() {
+    if (_walletHistoryLoaded) { renderWalletHistory(); return; }
+    var body = document.getElementById('walletHistoryBody');
+    if (body) body.innerHTML = '<div class="loading">Loading wallet history\u2026</div>';
+    MastDB.query('admin/walletAdjustments').orderByChild('createdAt').limitToLast(500).once()
+      .then(function(snap) {
+        var data = (snap && snap.val && snap.val()) || (snap || {});
+        var rows = [];
+        Object.keys(data || {}).forEach(function(k) { if (data[k]) rows.push(data[k]); });
+        rows.sort(function(a, b) { return (b.createdAt || '').localeCompare(a.createdAt || ''); });
+        _walletHistoryRows = rows;
+        _walletHistoryLoaded = true;
+        renderWalletHistory();
+      })
+      .catch(function(err) {
+        var b = document.getElementById('walletHistoryBody');
+        if (b) b.innerHTML = '<div style="color:var(--danger);font-size:0.85rem;">Failed to load history: ' + esc((err && err.message) || '') + '</div>';
+      });
+  }
+
+  function renderWalletHistory() {
+    var body = document.getElementById('walletHistoryBody');
+    if (!body) return;
+    var f = _walletHistoryFilter;
+    var filtered = _walletHistoryRows.filter(function(a) {
+      if (f.kind !== 'all' && a.kind !== f.kind) return false;
+      if (f.action !== 'all' && a.action !== f.action) return false;
+      if (f.search) {
+        var hay = ((a.customerId || '') + ' ' + (a.reason || '') + ' ' + (a.operatorName || '')).toLowerCase();
+        if (hay.indexOf(f.search.toLowerCase()) === -1) return false;
+      }
+      return true;
+    });
+    var h = '';
+    h += '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px;font-size:0.85rem;">';
+    h += '<input type="text" id="walletHistorySearch" placeholder="Search customer / reason / operator" oninput="walletHistoryOnFilter(\'search\', this.value)" style="flex:1;min-width:220px;padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.85rem;">';
+    h += '<select id="walletHistoryKind" onchange="walletHistoryOnFilter(\'kind\', this.value)" style="padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.85rem;">';
+    ['all','credit','pass','membership','loyalty'].forEach(function(k){ h += '<option value="' + k + '"' + (f.kind===k?' selected':'') + '>' + (k==='all'?'All kinds':k) + '</option>'; });
+    h += '</select>';
+    h += '<select id="walletHistoryAction" onchange="walletHistoryOnFilter(\'action\', this.value)" style="padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.85rem;">';
+    ['all','grant','revoke','adjust'].forEach(function(a){ h += '<option value="' + a + '"' + (f.action===a?' selected':'') + '>' + (a==='all'?'All actions':a) + '</option>'; });
+    h += '</select>';
+    h += '<span style="color:var(--warm-gray);font-size:0.78rem;margin-left:auto;">' + filtered.length + ' of ' + _walletHistoryRows.length + '</span>';
+    h += '</div>';
+
+    if (filtered.length === 0) {
+      h += '<div style="color:var(--warm-gray-light);font-size:0.85rem;padding:20px;text-align:center;">No matching adjustments.</div>';
+    } else {
+      h += '<table class="data-table" style="font-size:0.85rem;width:100%;">';
+      h += '<thead><tr><th>When</th><th>Customer</th><th>Kind</th><th>Action</th><th>Detail</th><th>Reason</th><th>Operator</th></tr></thead><tbody>';
+      filtered.forEach(function(a) {
+        var detail = '';
+        if (typeof a.amountCents === 'number') detail = '$' + (a.amountCents/100).toFixed(2);
+        else if (typeof a.delta === 'number') detail = (a.delta > 0 ? '+' : '') + a.delta + ' pts';
+        else if (a.tier) detail = 'tier=' + a.tier;
+        else if (a.passDefId) detail = 'pass=' + a.passDefId;
+        var custLink = a.customerId
+          ? '<a href="#" onclick="customersOpenDetail(\'' + esc(a.customerId) + '\');return false;" style="color:var(--teal);text-decoration:underline;">' + esc(a.customerId.slice(0,12)) + '\u2026</a>'
+          : '<span style="color:var(--warm-gray-light);">\u2014</span>';
+        h += '<tr>';
+        h += '<td>' + esc(a.createdAt || '').slice(0, 19).replace('T', ' ') + '</td>';
+        h += '<td>' + custLink + '</td>';
+        h += '<td>' + esc(a.kind || '') + '</td>';
+        h += '<td>' + esc(a.action || '') + '</td>';
+        h += '<td>' + esc(detail) + '</td>';
+        h += '<td style="max-width:280px;">' + esc(a.reason || '') + '</td>';
+        h += '<td>' + esc(a.operatorName || a.operatorUid || '') + '</td>';
+        h += '</tr>';
+      });
+      h += '</tbody></table>';
+    }
+    body.innerHTML = h;
+  }
+
+  function walletHistoryOnFilter(field, value) {
+    _walletHistoryFilter[field] = value;
+    renderWalletHistory();
+  }
+
+  function walletDashSwitchTab(tab) {
+    var bar = document.getElementById('walletDashTabBar');
+    if (bar) {
+      Array.prototype.forEach.call(bar.querySelectorAll('.view-tab'), function(b) {
+        if (b.getAttribute('data-tab') === tab) b.classList.add('active');
+        else b.classList.remove('active');
+      });
+    }
+    var ov = document.getElementById('walletDashTab-overview');
+    var hi = document.getElementById('walletDashTab-history');
+    if (ov) ov.style.display = (tab === 'overview') ? '' : 'none';
+    if (hi) hi.style.display = (tab === 'history') ? '' : 'none';
+    if (tab === 'history') loadWalletHistory();
+  }
+
+  window.walletDashSwitchTab = walletDashSwitchTab;
+  window.walletHistoryOnFilter = walletHistoryOnFilter;
 
   function renderInstrumentCard(icon, name, desc, statusLabel, isActive, onclick) {
     var clickAttr = onclick ? ' cursor:pointer;" onclick="' + onclick + '"' : '"';
