@@ -62,6 +62,8 @@
   var selectedCustomerId = null;
   var detailTab = 'overview'; // overview | orders | contacts | classes | interactions | wallet
   var customerEditMode = false;    // Paradigm A — read-only until user clicks Edit
+  var customersSortKey = 'lastOrderAt';
+  var customersSortDir = 'desc';
   // Per-customer cache: { customerId: { orders, enrollments, interactions, wallets, loaded:{...} } }
   var detailCache = {};
 
@@ -771,6 +773,23 @@
       if (filtered.length === 0) return;
     }
 
+    // Sortable: apply current sort key/dir.
+    if (typeof window.mastSortRows === 'function') {
+      filtered = window.mastSortRows(filtered, customersSortKey, customersSortDir, function(row, key) {
+        if (!row) return null;
+        var stats = row.stats || {};
+        if (key === 'displayName') return row.displayName || row.primaryEmail || '';
+        if (key === 'primaryEmail') return row.primaryEmail || '';
+        if (key === 'source') return row.source || '';
+        if (key === 'orderCount') return Number(stats.orderCount) || 0;
+        if (key === 'lifetimeSpendCents') return Number(stats.lifetimeSpendCents) || 0;
+        if (key === 'status') return row.status || '';
+        if (key === 'lastOrderAt') return stats.lastOrderAt || '';
+        if (key === 'updatedAt') return row.updatedAt || '';
+        return row[key];
+      });
+    }
+
     var rows = filtered.map(function(c) {
       var linked = c.linkedIds || {};
       var bits = [];
@@ -815,7 +834,19 @@
     html += '<div style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:8px;">Showing ' + filtered.length + ' of ' + nonMergedTotal + '</div>';
     html += '<div class="data-table"><table>';
     html += '<thead><tr>';
-    html += '<th>Name</th><th>Primary email</th><th>Source</th><th>Frequency</th><th>Spend</th><th>Status</th><th>Last order</th><th>Linked</th><th>Last activity</th>';
+    if (typeof window.mastSortableTh === 'function') {
+      html += window.mastSortableTh('Name',         'displayName',        customersSortKey, customersSortDir, 'window._customersSort');
+      html += window.mastSortableTh('Primary email','primaryEmail',       customersSortKey, customersSortDir, 'window._customersSort');
+      html += window.mastSortableTh('Source',       'source',             customersSortKey, customersSortDir, 'window._customersSort');
+      html += window.mastSortableTh('Frequency',    'orderCount',         customersSortKey, customersSortDir, 'window._customersSort');
+      html += window.mastSortableTh('Spend',        'lifetimeSpendCents', customersSortKey, customersSortDir, 'window._customersSort');
+      html += window.mastSortableTh('Status',       'status',             customersSortKey, customersSortDir, 'window._customersSort');
+      html += window.mastSortableTh('Last order',   'lastOrderAt',        customersSortKey, customersSortDir, 'window._customersSort');
+      html += '<th style="text-align:left;padding:8px 12px;font-size:0.78rem;color:var(--warm-gray);">Linked</th>';
+      html += window.mastSortableTh('Last activity','updatedAt',          customersSortKey, customersSortDir, 'window._customersSort');
+    } else {
+      html += '<th>Name</th><th>Primary email</th><th>Source</th><th>Frequency</th><th>Spend</th><th>Status</th><th>Last order</th><th>Linked</th><th>Last activity</th>';
+    }
     html += '</tr></thead>';
     html += '<tbody>' + rows + '</tbody>';
     html += '</table></div>';
@@ -2668,6 +2699,16 @@
   window.customersSwitchView = switchView;
   window.customersOpenDetail = openDetail;
   window.customersRender = renderTable;
+  window._customersSort = function(key) {
+    if (customersSortKey === key) customersSortDir = (customersSortDir === 'asc') ? 'desc' : 'asc';
+    else {
+      customersSortKey = key;
+      // Numeric/date defaults to desc; text defaults to asc.
+      var descKeys = { orderCount: 1, lifetimeSpendCents: 1, lastOrderAt: 1, updatedAt: 1 };
+      customersSortDir = descKeys[key] ? 'desc' : 'asc';
+    }
+    renderTable();
+  };
   window.clearCustomersFilter = function() {
     var p = (typeof window.getRouteParams === 'function') ? window.getRouteParams() : {};
     var next = {};

@@ -11,6 +11,8 @@ var wholesaleRequestsData = {};
 // W2a — accounts is the canonical commercial-terms record per buyer.
 var wholesaleAccountsData = {};
 var wholesaleSubView = 'orders'; // accounts | orders | users | requests | dormant
+var _wsArSortKey = 'daysOverdue';
+var _wsArSortDir = 'desc';
 var wholesaleQRLib = null; // lazy-loaded QRCode library
 
 // WHOLESALE_SEED and WHOLESALE_COLOR_UPDATES removed in unified pricing model Phase 4.
@@ -290,6 +292,11 @@ function viewWholesaleAccount(accountId) {
   location.hash = '#wholesale?subView=account&accountId=' + encodeURIComponent(accountId);
 }
 window.viewWholesaleAccount = viewWholesaleAccount;
+window._wsArSort = function(key) {
+  if (_wsArSortKey === key) _wsArSortDir = (_wsArSortDir === 'asc') ? 'desc' : 'asc';
+  else { _wsArSortKey = key; _wsArSortDir = ({ dueMs:1, daysOverdue:1, total:1 })[key] ? 'desc' : 'asc'; }
+  if (typeof renderWholesaleArAging === 'function') renderWholesaleArAging();
+};
 
 // ── Authorized Users sub-view ──
 
@@ -833,16 +840,44 @@ function renderWholesaleArAging() {
       return;
     }
 
-    rowsAll.sort(function(a, b) { return b.daysOverdue - a.daysOverdue; });
+    // Sortable: respect current sort key/dir (default daysOverdue desc).
+    if (typeof window.mastSortRows === 'function') {
+      rowsAll = window.mastSortRows(rowsAll, _wsArSortKey, _wsArSortDir, function(row, key) {
+        if (!row) return null;
+        var o = row.order || {};
+        if (key === 'orderId') return (window.getOrderDisplayNumber ? window.getOrderDisplayNumber(o) : row.id || '');
+        if (key === 'account') {
+          var acct = accounts[o.wholesaleAccountId];
+          return (acct ? acct.name : (o.buyerName || o.buyerEmail || '')) || '';
+        }
+        if (key === 'dueMs') return Number(row.dueMs) || 0;
+        if (key === 'daysOverdue') return Number(row.daysOverdue) || 0;
+        if (key === 'total') return Number(row.total) || 0;
+        return row[key];
+      });
+    } else {
+      rowsAll.sort(function(a, b) { return b.daysOverdue - a.daysOverdue; });
+    }
 
-    html += '<table style="width:100%;border-collapse:collapse;font-size:0.85rem;background:#fff;border:1px solid var(--cream-dark,#e8e0d4);border-radius:8px;overflow:hidden;">' +
-      '<thead><tr style="background:var(--cream);text-align:left;">' +
-        '<th style="padding:8px 10px;">Order</th>' +
-        '<th style="padding:8px 10px;">Account</th>' +
-        '<th style="padding:8px 10px;">Due</th>' +
-        '<th style="padding:8px 10px;" align="right">Days overdue</th>' +
-        '<th style="padding:8px 10px;" align="right">Total</th>' +
-      '</tr></thead><tbody>';
+    html += '<table style="width:100%;border-collapse:collapse;font-size:0.85rem;background:#fff;border:1px solid var(--cream-dark,#e8e0d4);border-radius:8px;overflow:hidden;">';
+    if (typeof window.mastSortableTh === 'function') {
+      var thS = 'padding:8px 10px;';
+      html += '<thead><tr style="background:var(--cream);text-align:left;">';
+      html += window.mastSortableTh('Order',        'orderId',     _wsArSortKey, _wsArSortDir, 'window._wsArSort', thS);
+      html += window.mastSortableTh('Account',      'account',     _wsArSortKey, _wsArSortDir, 'window._wsArSort', thS);
+      html += window.mastSortableTh('Due',          'dueMs',       _wsArSortKey, _wsArSortDir, 'window._wsArSort', thS);
+      html += window.mastSortableTh('Days overdue', 'daysOverdue', _wsArSortKey, _wsArSortDir, 'window._wsArSort', thS + 'text-align:right;');
+      html += window.mastSortableTh('Total',        'total',       _wsArSortKey, _wsArSortDir, 'window._wsArSort', thS + 'text-align:right;');
+      html += '</tr></thead><tbody>';
+    } else {
+      html += '<thead><tr style="background:var(--cream);text-align:left;">' +
+          '<th style="padding:8px 10px;">Order</th>' +
+          '<th style="padding:8px 10px;">Account</th>' +
+          '<th style="padding:8px 10px;">Due</th>' +
+          '<th style="padding:8px 10px;" align="right">Days overdue</th>' +
+          '<th style="padding:8px 10px;" align="right">Total</th>' +
+        '</tr></thead><tbody>';
+    }
     rowsAll.forEach(function(r) {
       var o = r.order;
       var num = (window.getOrderDisplayNumber ? window.getOrderDisplayNumber(o) : (r.id || '').substring(0, 8));

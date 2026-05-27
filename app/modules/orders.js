@@ -10,6 +10,8 @@
   // ============================================================
 
   var orderFilter = 'active';
+  var ordersSortKey = 'placedAt';
+  var ordersSortDir = 'desc';
   var orderSourceFilter = 'all';
   // W1.2: bulk selection state — keys of selected orders in current filtered view.
   var selectedOrderIds = Object.create(null);
@@ -508,6 +510,29 @@
     Object.keys(selectedOrderIds).forEach(function(k) {
       if (!_filteredKeys[k]) delete selectedOrderIds[k];
     });
+
+    // Sortable headers — re-rendered each cycle to reflect active sort.
+    var headEl = document.getElementById('ordersTableHead');
+    if (headEl && typeof window.mastSortableTh === 'function') {
+      var headHtml = '<th style="width:28px;"><input type="checkbox" id="ordersBulkSelectAll" onclick="toggleOrdersBulkSelectAll(this)" title="Select all visible"></th>';
+      headHtml += window.mastSortableTh('Order',    'orderId',   ordersSortKey, ordersSortDir, 'window._ordersSort');
+      headHtml += window.mastSortableTh('Customer', 'email',     ordersSortKey, ordersSortDir, 'window._ordersSort');
+      headHtml += '<th style="text-align:left;padding:8px 12px;font-size:0.78rem;color:var(--warm-gray);">Items</th>';
+      headHtml += window.mastSortableTh('Total',    'total',     ordersSortKey, ordersSortDir, 'window._ordersSort');
+      headHtml += window.mastSortableTh('Status',   'status',    ordersSortKey, ordersSortDir, 'window._ordersSort');
+      headHtml += '<th style="text-align:left;padding:8px 12px;font-size:0.78rem;color:var(--warm-gray);">Tracking</th>';
+      headHtml += window.mastSortableTh('Date',     'placedAt',  ordersSortKey, ordersSortDir, 'window._ordersSort');
+      headEl.innerHTML = headHtml;
+    }
+    // Sort the filtered set.
+    if (typeof window.mastSortRows === 'function') {
+      filtered = window.mastSortRows(filtered, ordersSortKey, ordersSortDir, function(row, key) {
+        if (key === 'orderId') return getOrderDisplayNumber(row);
+        if (key === 'placedAt') return row.placedAt || row.createdAt || '';
+        if (key === 'total') return Number(row.total) || 0;
+        return row && row[key];
+      });
+    }
 
     // Table rows
     var rowsHtml = '';
@@ -5251,6 +5276,11 @@
   window.setOrderFilter = setOrderFilter;
   window.toggleOrdersBulkSelect = toggleOrdersBulkSelect;
   window.toggleOrdersBulkSelectAll = toggleOrdersBulkSelectAll;
+  window._ordersSort = function(key) {
+    if (ordersSortKey === key) ordersSortDir = (ordersSortDir === 'asc') ? 'desc' : 'asc';
+    else { ordersSortKey = key; ordersSortDir = (key === 'placedAt' || key === 'total') ? 'desc' : 'asc'; }
+    renderOrders();
+  };
   window.bulkOrdersClear = bulkOrdersClear;
   window.bulkOrdersMarkShipped = bulkOrdersMarkShipped;
   window.bulkOrdersCancel = bulkOrdersCancel;

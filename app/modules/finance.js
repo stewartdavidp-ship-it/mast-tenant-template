@@ -12,7 +12,11 @@
 var _arData = null;
 var _apData = null;
 var _arFilter = 'all';
+var _arSortKey = 'daysOver';
+var _arSortDir = 'desc';
 var _apFilter = 'all';
+var _apSortKey = 'daysOver';
+var _apSortDir = 'desc';
 var _apGroupByVendor = false;
 var _apExpandedVendors = {};
 var _cfLoaded = false;
@@ -3240,14 +3244,41 @@ function renderArContent() {
     return h;
   }
 
+  // Sortable: apply current sort key/dir to filtered AR rows.
+  if (typeof window.mastSortRows === 'function') {
+    filtered = window.mastSortRows(filtered, _arSortKey, _arSortDir, function(row, key) {
+      if (!row) return null;
+      if (key === 'amtDue') return Number(row.amtDue) || 0;
+      if (key === 'daysOver') return Number(row.daysOver) || 0;
+      if (key === 'tier') return row.isWholesale ? 'wholesale' : 'direct';
+      if (key === 'dueDate') return row.dueDate || '';
+      if (key === 'status') return row.bucket || '';
+      if (key === 'customerName') return row.customerName || '';
+      return row[key];
+    });
+  }
+
   // Table
   // W1.7: Tier column. W1.10: per-row "Send Reminder" action.
   h += '<div style="overflow-x:auto;">';
   h += '<table style="width:100%;border-collapse:collapse;font-size:0.85rem;">';
   h += '<thead><tr style="border-bottom:1px solid rgba(255,255,255,0.1);">';
-  ['Customer','Tier','Invoice #','Order','Amount Due','Due Date','Age','Status',''].forEach(function(col) {
-    h += '<th style="text-align:left;padding:8px 10px;font-size:0.72rem;color:var(--warm-gray,#888);text-transform:uppercase;letter-spacing:0.5px;white-space:nowrap;">' + col + '</th>';
-  });
+  if (typeof window.mastSortableTh === 'function') {
+    var thStyle = 'font-size:0.72rem;color:var(--warm-gray,#888);text-transform:uppercase;letter-spacing:0.5px;white-space:nowrap;padding:8px 10px;';
+    h += window.mastSortableTh('Customer',    'customerName', _arSortKey, _arSortDir, 'window._arSort', thStyle);
+    h += window.mastSortableTh('Tier',        'tier',         _arSortKey, _arSortDir, 'window._arSort', thStyle);
+    h += '<th style="text-align:left;padding:8px 10px;' + thStyle + '">Invoice #</th>';
+    h += '<th style="text-align:left;padding:8px 10px;' + thStyle + '">Order</th>';
+    h += window.mastSortableTh('Amount Due',  'amtDue',       _arSortKey, _arSortDir, 'window._arSort', thStyle);
+    h += window.mastSortableTh('Due Date',    'dueDate',      _arSortKey, _arSortDir, 'window._arSort', thStyle);
+    h += window.mastSortableTh('Age',         'daysOver',     _arSortKey, _arSortDir, 'window._arSort', thStyle);
+    h += window.mastSortableTh('Status',      'status',       _arSortKey, _arSortDir, 'window._arSort', thStyle);
+    h += '<th style="padding:8px 10px;' + thStyle + '"></th>';
+  } else {
+    ['Customer','Tier','Invoice #','Order','Amount Due','Due Date','Age','Status',''].forEach(function(col) {
+      h += '<th style="text-align:left;padding:8px 10px;font-size:0.72rem;color:var(--warm-gray,#888);text-transform:uppercase;letter-spacing:0.5px;white-space:nowrap;">' + col + '</th>';
+    });
+  }
   h += '</tr></thead><tbody>';
 
   filtered.forEach(function(r) {
@@ -3786,12 +3817,39 @@ function renderApContent() {
 }
 
 function renderApFlat(filtered) {
+  // Sortable: apply current sort key/dir to AP rows.
+  if (typeof window.mastSortRows === 'function') {
+    filtered = window.mastSortRows(filtered, _apSortKey, _apSortDir, function(row, key) {
+      if (!row) return null;
+      if (key === 'totalCents') return Number(row.totalCents) || 0;
+      if (key === 'paidCents') return Number(row.paidCents) || 0;
+      if (key === 'amtDue') return Number(row.amtDue) || 0;
+      if (key === 'daysOver') return Number(row.daysOverdue) || 0;
+      if (key === 'dueDate') return row.dueDate || '';
+      if (key === 'status') return row.bucket || '';
+      if (key === 'vendorName') return row.vendorName || '';
+      return row[key];
+    });
+  }
   var h = '<div style="overflow-x:auto;">';
   h += '<table style="width:100%;border-collapse:collapse;font-size:0.85rem;">';
   h += '<thead><tr style="border-bottom:1px solid rgba(255,255,255,0.1);">';
-  ['Vendor','Ref','Total','Paid','Remaining','Due Date','Age','Status',''].forEach(function(col) {
-    h += '<th style="text-align:left;padding:8px 10px;font-size:0.72rem;color:var(--warm-gray,#888);text-transform:uppercase;letter-spacing:0.5px;white-space:nowrap;">' + col + '</th>';
-  });
+  if (typeof window.mastSortableTh === 'function') {
+    var thStyle = 'font-size:0.72rem;color:var(--warm-gray,#888);text-transform:uppercase;letter-spacing:0.5px;white-space:nowrap;padding:8px 10px;';
+    h += window.mastSortableTh('Vendor',    'vendorName', _apSortKey, _apSortDir, 'window._apSort', thStyle);
+    h += '<th style="text-align:left;padding:8px 10px;' + thStyle + '">Ref</th>';
+    h += window.mastSortableTh('Total',     'totalCents',_apSortKey, _apSortDir, 'window._apSort', thStyle);
+    h += window.mastSortableTh('Paid',      'paidCents', _apSortKey, _apSortDir, 'window._apSort', thStyle);
+    h += window.mastSortableTh('Remaining', 'amtDue',    _apSortKey, _apSortDir, 'window._apSort', thStyle);
+    h += window.mastSortableTh('Due Date',  'dueDate',   _apSortKey, _apSortDir, 'window._apSort', thStyle);
+    h += window.mastSortableTh('Age',       'daysOver',  _apSortKey, _apSortDir, 'window._apSort', thStyle);
+    h += window.mastSortableTh('Status',    'status',    _apSortKey, _apSortDir, 'window._apSort', thStyle);
+    h += '<th style="padding:8px 10px;' + thStyle + '"></th>';
+  } else {
+    ['Vendor','Ref','Total','Paid','Remaining','Due Date','Age','Status',''].forEach(function(col) {
+      h += '<th style="text-align:left;padding:8px 10px;font-size:0.72rem;color:var(--warm-gray,#888);text-transform:uppercase;letter-spacing:0.5px;white-space:nowrap;">' + col + '</th>';
+    });
+  }
   h += '</tr></thead><tbody>';
 
   filtered.forEach(function(r) {
@@ -6114,6 +6172,22 @@ window.loadPnl        = loadPnl;
 window.loadCashFlow   = loadCashFlow;
 window.loadArData     = loadArData;
 window.loadApData     = loadApData;
+window._arSort = function(key) {
+  if (_arSortKey === key) _arSortDir = (_arSortDir === 'asc') ? 'desc' : 'asc';
+  else { _arSortKey = key; _arSortDir = ({ amtDue:1, daysOver:1, dueDate:1 })[key] ? 'desc' : 'asc'; }
+  var el = document.getElementById('fArContent');
+  if (el) el.innerHTML = renderArContent();
+};
+window._apSort = function(key) {
+  if (_apSortKey === key) _apSortDir = (_apSortDir === 'asc') ? 'desc' : 'asc';
+  else { _apSortKey = key; _apSortDir = ({ totalCents:1, paidCents:1, amtDue:1, daysOver:1, dueDate:1 })[key] ? 'desc' : 'asc'; }
+  if (typeof renderApContent === 'function') {
+    var el = document.getElementById('fApContent');
+    if (el) el.innerHTML = renderApContent();
+  } else if (typeof loadApData === 'function') {
+    loadApData();
+  }
+};
 
 // ── W2.1 Finance Overview (#financials) ──────────────────────────────────────
 // Net-new landing dashboard for the Finance section. 6 KPI cards drawn from
