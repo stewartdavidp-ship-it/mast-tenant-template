@@ -15853,15 +15853,24 @@ window.mastSlideOut = (function() {
       footEl.style.display = opts.footerHtml ? '' : 'none';
       _state.onClose = (typeof opts.onClose === 'function') ? opts.onClose : null;
       _state.originator = document.activeElement;
+      // Reset to closed-state inline transforms so re-opens animate from
+      // the same starting point (display:none→block can otherwise skip
+      // the transition entirely).
+      panel.style.transform = 'translateX(100%)';
+      scrim.style.opacity = '0';
       root.style.display = 'block';
       root.setAttribute('aria-hidden', 'false');
       document.body.style.overflow = 'hidden';
+      // Double rAF: first frame applies display:block + the reset
+      // transforms, second frame starts the transition.
       requestAnimationFrame(function() {
-        scrim.style.opacity = '1';
-        panel.style.transform = 'translateX(0)';
+        requestAnimationFrame(function() {
+          scrim.style.opacity = '1';
+          panel.style.transform = 'translateX(0)';
+        });
       });
       _state.open = true;
-      setTimeout(function() { var cb = document.getElementById('mastSlideOutCloseBtn'); if (cb) cb.focus(); }, 220);
+      setTimeout(function() { var cb = document.getElementById('mastSlideOutCloseBtn'); if (cb) cb.focus(); }, 240);
     },
     close: function() {
       if (!_state.open) return;
@@ -18583,7 +18592,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260527-095330-4d44515';
+var MAST_MODULES_V = '20260527-095620-75a63bd';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
