@@ -7752,11 +7752,13 @@
 
       <!-- Sales List View -->
       <div id="salesListView">
-        <!-- Quick Actions -->
+        <!-- Quick Actions — Go Live launcher lives here; appears only when a
+             live-sale channel is configured. POS launch was removed (use the
+             sidebar's "Point of Sale ↗" entry instead — see feedback
+             FZc91mNe0HJ9Cvrj9J9w). -->
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin:12px 0;align-items:center;">
-          <a href="../pos/" target="_blank" class="btn btn-primary" style="font-size:0.85rem;text-decoration:none;">💰 Open Point of Sale</a>
           <button id="goLiveBtn" class="btn btn-secondary" onclick="goLiveStart()" style="font-size:0.85rem;display:none;">🔴 Go Live</button>
-          <span id="goLiveHint" style="font-size:0.78rem;color:var(--warm-gray);">Use the PoS app to start a transaction — works for studio sales, trade shows, or anywhere with a phone/tablet.</span>
+          <span id="goLiveHint" style="font-size:0.78rem;color:var(--warm-gray);"></span>
         </div>
 
         <!-- Live Session Banner -->
@@ -9586,7 +9588,7 @@
         <div class="view-tabs" id="pimTabBar" style="margin-bottom:20px;">
           <button class="view-tab active" id="pimTabBtn-drift" data-tab="drift" onclick="switchPimTab('drift')"><span class="tab-status-dot" data-state="none"></span>Drift Queue</button>
           <button class="view-tab" id="pimTabBtn-sync" data-tab="sync" onclick="switchPimTab('sync')"><span class="tab-status-dot" data-state="none"></span>Sync Log</button>
-          <button class="view-tab" id="pimTabBtn-testing" data-tab="testing" onclick="switchPimTab('testing')"><span class="tab-status-dot" data-state="info"></span>Testing</button>
+          <button class="view-tab" id="pimTabBtn-testing" data-tab="testing" data-platform-admin onclick="switchPimTab('testing')" style="display:none;" title="Platform admin only"><span class="tab-status-dot" data-state="info"></span>Testing</button>
           <button class="view-tab" id="pimTabBtn-rules" data-tab="rules" onclick="switchPimTab('rules')"><span class="tab-status-dot" data-state="info"></span>Rules</button>
         </div>
 
@@ -11243,11 +11245,16 @@ async function loadTenantConfig(tenantId) {
       TENANT_CONFIG.configChecklist = registry.configChecklist || {};
       if (registry.status) TENANT_CONFIG.tenantStatus = registry.status;
       if (registry.name) TENANT_CONFIG.registryName = registry.name;
+      // Successful registry read = platform admin. Used to gate the PIM
+      // Testing tab and any other [data-platform-admin] surfaces.
+      window._isPlatformAdmin = true;
     } catch (innerErr) {
       // Expected for non-platformAdmin users — publicConfig values are sufficient
       TENANT_CONFIG.secretPrefix = tenantId;
       TENANT_CONFIG.configChecklist = {};
+      window._isPlatformAdmin = false;
     }
+    if (typeof applyPlatformAdminGates === 'function') applyPlatformAdminGates();
   } catch (err) {
     console.warn('Tenant config load failed, using defaults:', err.message);
     TENANT_CONFIG.secretPrefix = tenantId;
@@ -15202,6 +15209,31 @@ function isStaff() {
 }
 
 /**
+ * Is the current user a platform admin (i.e., works for Mast itself, not a
+ * tenant)? Resolved during tenant config load by trying to read the full
+ * registry at mast-platform/tenants/{tid} — that path only succeeds for
+ * platform admins per the firestore rules. Used to gate dev-tool surfaces
+ * (e.g. PIM Testing tab) inside the tenant admin UI.
+ */
+function isPlatformAdmin() {
+  return window._isPlatformAdmin === true;
+}
+window.isPlatformAdmin = isPlatformAdmin;
+
+/**
+ * Toggle visibility of every element marked [data-platform-admin] based on
+ * the resolved isPlatformAdmin() flag. Called automatically once the tenant
+ * config load resolves; safe to call again any time.
+ */
+function applyPlatformAdminGates() {
+  var allow = isPlatformAdmin();
+  document.querySelectorAll('[data-platform-admin]').forEach(function(el) {
+    el.style.display = allow ? '' : 'none';
+  });
+}
+window.applyPlatformAdminGates = applyPlatformAdminGates;
+
+/**
  * Load user record from Firebase, auto-provision as guest if new.
  * Then load and cache the role's permission config.
  * Returns the role string ('admin', 'user', 'guest').
@@ -18353,7 +18385,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260526-223051-2c2cc0a';
+var MAST_MODULES_V = '20260526-230355-ba1c45d';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -32616,7 +32648,17 @@ function scorecardNavigate(route, subView) {
 }
 
 async function renderSetupScorecard() {
+  // Retired 2026-05-26 (feedback ODQHG7kBLXoQ4hPDtDno). The workspace
+  // scorecard duplicated 4 items already present in "Set Up Your Shop"
+  // (brand, payments, email, shipping). Its 4 unique items (business
+  // type, tax, pricing defaults, modules shown) were folded into
+  // NEXT_STEP_DEFINITIONS so the dashboard renders one checklist
+  // instead of two. The function is kept as a no-op so legacy callers
+  // (including renderDashboard) don't break.
   var container = document.getElementById('setupScorecard');
+  if (container) container.style.display = 'none';
+  return;
+  // ---- legacy implementation below, no longer reached ----
   if (!container) return;
 
   // Only show when setupProgress/completed = true
@@ -32775,7 +32817,13 @@ var NEXT_STEP_DEFINITIONS = [
   { id: 'add-job',        module: 'make',       icon: '\uD83D\uDD25', title: 'Start a production job',        desc: 'Track what you\'re making and when it needs to be done.',                 route: 'jobs',        check: function() { return false; } },
   { id: 'setup-shipping',  module: 'ship',      icon: '\uD83D\uDCE6', title: 'Set up shipping rates',         desc: 'Configure shipping methods and rates for your orders.',                   route: 'settings',    check: function() { return tenantConfigChecklist && tenantConfigChecklist.shippingRates; } },
   { id: 'social-post',    module: 'market',     icon: '\uD83D\uDCE3', title: 'Create your first post',        desc: 'Draft a social media post or blog entry to promote your work.',           route: 'social',      check: function() { return false; } },
-  { id: 'complete-migration', module: null,    icon: '\uD83D\uDD04', title: 'Complete your migration',       desc: 'Finish importing data and cutting over from your previous platform.',     route: 'migration',   check: function() { return window._migrationStatus === 'complete' || !window._migrationStatus; } }
+  { id: 'complete-migration', module: null,    icon: '\uD83D\uDD04', title: 'Complete your migration',       desc: 'Finish importing data and cutting over from your previous platform.',     route: 'migration',   check: function() { return window._migrationStatus === 'complete' || !window._migrationStatus; } },
+  // Folded in from the retired Setup Scorecard (feedback ODQHG7kBLXoQ4hPDtDno).
+  // These four were workspace-config items that didn't have a Shop equivalent.
+  { id: 'business-type',     module: null,    icon: '\uD83C\uDFE2', title: 'Choose your business type',     desc: 'Pick the business type so Mast tailors features and reports to how you operate.',                  route: 'settings', subView: 'general',     check: function() { return window._nextStepsCache && window._nextStepsCache.hasBusinessType; } },
+  { id: 'tax-settings',      module: null,    icon: '\uD83D\uDCB0', title: 'Configure tax settings',        desc: 'Set your nexus state so checkout calculates the right sales tax.',                                  route: 'settings', subView: 'tax',         check: function() { return window._nextStepsCache && window._nextStepsCache.hasTaxConfig; } },
+  { id: 'pricing-defaults',  module: null,    icon: '\uD83C\uDFF7\uFE0F', title: 'Set pricing defaults',    desc: 'Define a markup strategy so new products price themselves consistently.',                            route: 'settings', subView: 'product',     check: function() { return window._nextStepsCache && window._nextStepsCache.hasPricingDefaults; } },
+  { id: 'modules-shown',     module: null,    icon: '\uD83E\uDDE9', title: 'Choose which modules to show',  desc: 'Trim the sidebar to just the modules you actually use.',                                            route: 'settings', subView: 'engagement',  check: function() { return window._nextStepsCache && window._nextStepsCache.hasModulesShown; } }
 ];
 
 // Dismissed steps — persisted to Firebase
@@ -32958,7 +33006,11 @@ function renderDashCardSetupShop() {
 }
 
 // Cache for async checks (products, website, template, content)
-window._nextStepsCache = { hasProducts: false, hasWebsite: false, hasTemplate: false, hasContent: false, hasAiApiKey: false };
+window._nextStepsCache = {
+  hasProducts: false, hasWebsite: false, hasTemplate: false, hasContent: false, hasAiApiKey: false,
+  // Folded in from the retired Setup Scorecard (feedback ODQHG7kBLXoQ4hPDtDno):
+  hasBusinessType: false, hasTaxConfig: false, hasPricingDefaults: false, hasModulesShown: false
+};
 
 async function loadNextStepsCache() {
   try {
@@ -32989,6 +33041,26 @@ async function loadNextStepsCache() {
     var keysSnap = await MastDB.query('admin/config/aiIntegrations/keys').orderByChild('status').equalTo('active').limitToFirst(1).once('value');
     var keysVal = keysSnap && (typeof keysSnap.val === 'function' ? keysSnap.val() : keysSnap);
     window._nextStepsCache.hasAiApiKey = !!(keysVal && Object.keys(keysVal).length > 0);
+  } catch (e) { /* ignore */ }
+  // Folded in from the retired Setup Scorecard so the merged Set-Up-Your-Shop
+  // checklist can render the items that used to live in the Workspace card.
+  try {
+    var entityRes = await MastDB.businessEntity.get();
+    var ent = (entityRes && entityRes.data) || {};
+    window._nextStepsCache.hasBusinessType = !!(ent.identity && ent.identity.businessType);
+    window._nextStepsCache.hasTaxConfig = !!(ent.tax && ent.tax.state);
+    window._nextStepsCache.hasModulesShown = !!(ent.engagement && ent.engagement.modulesShown && Object.keys(ent.engagement.modulesShown).length > 0);
+  } catch (e) { /* ignore */ }
+  try {
+    var pricing = await MastDB.get('public/config/pricingDefaults');
+    window._nextStepsCache.hasPricingDefaults = !!(pricing && pricing.markupStrategy && pricing.markupStrategy !== 'none');
+  } catch (e) { /* ignore */ }
+  try {
+    // Tax can also be satisfied by setting the nexusState in config/settings.
+    if (!window._nextStepsCache.hasTaxConfig) {
+      var settingsSnap = await MastDB.get('config/settings');
+      if (settingsSnap && settingsSnap.nexusState) window._nextStepsCache.hasTaxConfig = true;
+    }
   } catch (e) { /* ignore */ }
 }
 
@@ -40341,6 +40413,10 @@ function switchQboInnerTab(tab) {
 window.switchQboInnerTab = switchQboInnerTab;
 
 function switchPimTab(tab) {
+  // Defense in depth: Testing tab is platform-admin-only. If a stale URL
+  // state or programmatic call lands on it for a tenant admin, bounce
+  // back to the default tab.
+  if (tab === 'testing' && !isPlatformAdmin()) tab = 'drift';
   window.__pimActiveTab = tab;
   ['drift', 'sync', 'testing', 'rules'].forEach(function(t) {
     var el = document.getElementById('pimTab_' + t);
