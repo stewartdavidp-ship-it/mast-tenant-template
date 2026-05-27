@@ -938,14 +938,17 @@
     if (filtersEl) {
       var currentYear = new Date().getFullYear();
       var currentMonth = new Date().getMonth();
-      filtersEl.innerHTML = '<select id="tripsMonthFilter" onchange="renderTripsList()" style="padding:6px 12px;border:1px solid #ddd;border-radius:6px;font-family:\'DM Sans\',sans-serif;font-size:0.85rem;">' +
-        '<option value="all">All Time</option>' +
-        '<option value="' + currentYear + '-' + (currentMonth + 1) + '" selected>This Month</option>' +
-        '<option value="' + currentYear + '-' + currentMonth + '">' + getMonthName(currentMonth - 1) + '</option>' +
-        '<option value="' + currentYear + '">This Year (' + currentYear + ')</option>' +
-        '<option value="' + (currentYear - 1) + '">' + (currentYear - 1) + '</option>' +
-      '</select>' +
-      (isAdmin() ? ' <label style="font-size:0.85rem;display:flex;align-items:center;gap:6px;"><input type="checkbox" id="tripsAllDrivers" onchange="loadAllDriversTrips()"> All Drivers</label>' : '');
+      filtersEl.innerHTML =
+        '<div class="order-filter-pills" data-filter-for="tripsMonthFilter" style="margin:0;"></div>' +
+        '<select id="tripsMonthFilter" onchange="renderTripsList()" style="display:none;">' +
+          '<option value="all">All Time</option>' +
+          '<option value="' + currentYear + '-' + (currentMonth + 1) + '" selected>This Month</option>' +
+          '<option value="' + currentYear + '-' + currentMonth + '">' + getMonthName(currentMonth - 1) + '</option>' +
+          '<option value="' + currentYear + '">This Year (' + currentYear + ')</option>' +
+          '<option value="' + (currentYear - 1) + '">' + (currentYear - 1) + '</option>' +
+        '</select>' +
+        (isAdmin() ? ' <label style="font-size:0.85rem;display:flex;align-items:center;gap:6px;"><input type="checkbox" id="tripsAllDrivers" onchange="loadAllDriversTrips()"> All Drivers</label>' : '');
+      if (window.mastInitFilterPills) window.mastInitFilterPills(filtersEl);
     }
 
     renderActiveTripBanner();
