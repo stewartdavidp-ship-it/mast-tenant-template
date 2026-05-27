@@ -26,6 +26,20 @@
   // Onboarding filter state
   var onboardingFilter = 'all';
 
+  // ========================================
+  // W3.2 / W3.3 — Labor Burden state
+  // (Idea -OtMKtFHnUZE2xD25BzV; Job -OteH2BLijKcyZ5U9YXe)
+  // Concepts: D-FIN-W3-3 (Labor Burden panel), D-FIN-W3-2 (Estimator settings).
+  // Backend contract from Agent A: recordBurdenEntry + seedStateSutaTable CFs.
+  // ========================================
+  var burdenSubView = 'entries';    // 'entries' | 'estimator'
+  var burdenSelectedEmployeeId = ''; // filters entries list
+  var burdenSelectedPeriodId = '';   // form state
+  var burdenBenefitRows = [];        // {type, amount} dollars; mirror of form
+  var burdenJobsCache = null;        // [{id, name}]
+  var burdenEntriesCache = {};       // {periodId: {employeeId: doc}}
+  var burdenEstimator = null;        // _meta.burdenSource snapshot
+
   // --- Constants ---
   var COMPLIANCE_FIELDS = [
     { key: 'i9', label: 'I-9' },
@@ -300,7 +314,7 @@
   function renderTeam(container) {
     var mgr = canManageTeam();
     // Restrict manager-only tabs
-    if (!mgr && (currentView === 'docs' || currentView === 'onboarding')) {
+    if (!mgr && (currentView === 'docs' || currentView === 'onboarding' || currentView === 'burden')) {
       currentView = 'roster';
     }
     var h = '';
@@ -309,6 +323,7 @@
     h += '<button class="view-tab' + (currentView === 'timeclock' ? ' active' : '') + '" onclick="teamSwitchView(\'timeclock\')">Time Clock</button>';
     h += '<button class="view-tab' + (currentView === 'pto' ? ' active' : '') + '" onclick="teamSwitchView(\'pto\')">PTO</button>';
     if (mgr) {
+      h += '<button class="view-tab' + (currentView === 'burden' ? ' active' : '') + '" onclick="teamSwitchView(\'burden\')">Labor Burden</button>';
       h += '<button class="view-tab' + (currentView === 'docs' ? ' active' : '') + '" onclick="teamSwitchView(\'docs\')">Documents</button>';
       h += '<button class="view-tab' + (currentView === 'onboarding' ? ' active' : '') + '" onclick="teamSwitchView(\'onboarding\')">Onboarding</button>';
     }
@@ -322,6 +337,8 @@
       h += renderTimeClock();
     } else if (currentView === 'pto') {
       h += renderPto();
+    } else if (currentView === 'burden') {
+      h += renderLaborBurden();
     } else if (currentView === 'docs') {
       h += renderComplianceDocs();
     } else if (currentView === 'onboarding') {
@@ -948,6 +965,801 @@
       var container = document.getElementById('teamTab');
       if (container) renderTeam(container);
     } catch (err) { showToast('Error: ' + esc(err.message), true); }
+  }
+
+  // ========================================
+  // Tab: Labor Burden (W3.3) + Estimator Settings (W3.2)
+  // Idea -OtMKtFHnUZE2xD25BzV, Job -OteH2BLijKcyZ5U9YXe
+  // Concept IDs: D-FIN-W3-3, D-FIN-W3-2 (UI portion).
+  // ----
+  // Note: spec called for the Estimator panel to live in settings.js. That file
+  // does not exist in this tenant template — Settings sub-views are static
+  // containers in app/index.html, which is owned by the pre-commit-hook
+  // version-bumper and out-of-bounds for parallel-agent edits. So we expose
+  // the Estimator as a second sub-tab inside the Labor Burden surface here in
+  // team.js. Orchestrator follow-up: optionally promote to Settings → Finance
+  // by adding a `settingsSubLaborBurden` container + nav button to index.html
+  // in a serialized commit.
+  // ========================================
+  var BURDEN_SOURCE_LABELS = {
+    'estimator': 'Estimator',
+    'manual': 'Manual',
+    'partner-check': 'Partner check',
+    'partner-gusto': 'Gusto'
+  };
+
+  function _burdenPeriodIdToLabel(pid) {
+    if (!pid || pid.indexOf('_') === -1) return pid || '';
+    var parts = pid.split('_');
+    return parts[0] + ' → ' + parts[1];
+  }
+  function _burdenIsoToday() { return new Date().toISOString().split('T')[0]; }
+  function _burdenSuggestDefaultPeriodId() {
+    // Default to the most-recent two-week pay period ending today.
+    var end = new Date();
+    var start = new Date(); start.setDate(end.getDate() - 13);
+    return start.toISOString().split('T')[0] + '_' + end.toISOString().split('T')[0];
+  }
+  function _burdenDollarsToCents(v) {
+    var n = parseFloat(v);
+    if (isNaN(n)) return 0;
+    return Math.round(n * 100);
+  }
+  function _burdenCentsToDollars(c) {
+    if (c == null || isNaN(c)) return '';
+    return (c / 100).toFixed(2);
+  }
+
+  function renderLaborBurden() {
+    var h = '';
+    h += '<div class="view-tabs" style="margin-bottom:16px;">';
+    h += '<button class="view-tab' + (burdenSubView === 'entries' ? ' active' : '') + '" onclick="teamBurdenSetSubView(\'entries\')">Entries</button>';
+    h += '<button class="view-tab' + (burdenSubView === 'estimator' ? ' active' : '') + '" onclick="teamBurdenSetSubView(\'estimator\')">Estimator Settings</button>';
+    h += '</div>';
+    if (burdenSubView === 'estimator') {
+      h += '<div id="burdenEstimatorWrap"><div class="loading">Loading estimator settings&hellip;</div></div>';
+      setTimeout(loadBurdenEstimatorPanel, 0);
+    } else {
+      h += renderBurdenEntriesPanel();
+    }
+    return h;
+  }
+
+  // ---- Entries panel (W3.3) ----
+  function renderBurdenEntriesPanel() {
+    var h = '';
+    h += '<div id="burdenFormWrap" style="display:none;background:var(--cream,var(--cream));border:1px solid var(--cream-dark,var(--cream-dark));border-radius:8px;padding:16px 20px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,0.08);"><div id="burdenFormInner"></div></div>';
+    h += '<div id="burdenBulkWrap" style="display:none;background:var(--cream,var(--cream));border:1px solid var(--cream-dark,var(--cream-dark));border-radius:8px;padding:16px 20px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,0.08);"><div id="burdenBulkInner"></div></div>';
+    h += '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px;">';
+    h += '<select id="burdenEmpFilter" onchange="teamBurdenFilterEmployee(this.value)" style="' + INPUT_STYLE + 'width:auto;min-width:200px;">';
+    h += '<option value="">All employees</option>';
+    employeesData.filter(function(e) { return (e.status || 'active') === 'active'; }).forEach(function(emp) {
+      h += '<option value="' + esc(emp._key) + '"' + (burdenSelectedEmployeeId === emp._key ? ' selected' : '') + '>' + esc(emp.fullName || '') + '</option>';
+    });
+    h += '</select>';
+    h += '<button class="btn btn-primary btn-small" onclick="teamBurdenOpenForm()">+ Record Burden</button>';
+    h += '<button class="btn btn-secondary btn-small" onclick="teamBurdenOpenBulk()">Bulk paste from payroll export</button>';
+    h += '</div>';
+    h += '<div id="burdenListWrap"><div class="loading">Loading burden entries&hellip;</div></div>';
+    setTimeout(loadBurdenEntries, 0);
+    return h;
+  }
+
+  async function loadBurdenEntries() {
+    var wrap = document.getElementById('burdenListWrap');
+    if (!wrap) return;
+    try {
+      var raw = await MastDB.get('admin/burdenedLaborCost').catch(function() { return null; }) || {};
+      burdenEntriesCache = raw;
+      // Flatten: each period maps to {employeeId: doc}
+      var rows = [];
+      Object.keys(raw).forEach(function(periodId) {
+        var byEmp = raw[periodId] || {};
+        Object.keys(byEmp).forEach(function(empId) {
+          var doc = byEmp[empId] || {};
+          if (burdenSelectedEmployeeId && empId !== burdenSelectedEmployeeId) return;
+          rows.push({
+            periodId: periodId,
+            employeeId: empId,
+            totalBurden: doc.totalBurden || 0,
+            source: doc.source || 'manual',
+            breakdown: doc.breakdown || {},
+            confidence: doc.confidence || null,
+            updatedAt: doc.updatedAt || doc.createdAt || ''
+          });
+        });
+      });
+      rows.sort(function(a, b) { return (b.periodId || '').localeCompare(a.periodId || ''); });
+
+      var h = '';
+      if (rows.length === 0) {
+        h += '<div style="text-align:center;padding:40px;color:var(--warm-gray);font-size:0.9rem;">No burden entries yet. Click <strong>+ Record Burden</strong> or paste a payroll export.</div>';
+      } else {
+        h += '<div style="overflow-x:auto;"><table style="width:100%;font-size:0.85rem;border-collapse:collapse;">';
+        h += '<thead><tr style="border-bottom:2px solid var(--cream-dark,var(--cream-dark));">';
+        h += '<th style="padding:8px 10px;text-align:left;font-weight:600;">Pay period</th>';
+        h += '<th style="padding:8px 10px;text-align:left;font-weight:600;">Employee</th>';
+        h += '<th style="padding:8px 10px;text-align:right;font-weight:600;">Total burden</th>';
+        h += '<th style="padding:8px 10px;text-align:left;font-weight:600;">Source</th>';
+        h += '<th style="padding:8px 10px;text-align:left;font-weight:600;">Confidence</th>';
+        h += '<th style="padding:8px 10px;text-align:right;font-weight:600;">Actions</th>';
+        h += '</tr></thead><tbody>';
+        rows.forEach(function(r) {
+          var emp = employeesData.find(function(e) { return e._key === r.employeeId; });
+          var empName = emp ? emp.fullName : r.employeeId;
+          var srcLabel = BURDEN_SOURCE_LABELS[r.source] || r.source;
+          var confChip = r.confidence
+            ? '<span style="background:rgba(34,197,94,0.15);color:#16a34a;padding:2px 8px;border-radius:10px;font-size:0.72rem;">' + esc(String(r.confidence)) + '</span>'
+            : '<span style="color:var(--warm-gray);font-size:0.72rem;">TBD (Agent D MCP)</span>';
+          h += '<tr style="border-bottom:1px solid var(--cream-dark,var(--cream-dark));cursor:pointer;" onclick="teamBurdenOpenDetail(\'' + esc(r.periodId) + '\',\'' + esc(r.employeeId) + '\')">';
+          h += '<td style="padding:8px 10px;">' + esc(_burdenPeriodIdToLabel(r.periodId)) + '</td>';
+          h += '<td style="padding:8px 10px;">' + esc(empName) + '</td>';
+          h += '<td style="padding:8px 10px;text-align:right;font-weight:600;">$' + (r.totalBurden / 100).toFixed(2) + '</td>';
+          h += '<td style="padding:8px 10px;"><span style="background:rgba(0,0,0,0.05);padding:2px 8px;border-radius:10px;font-size:0.72rem;">' + esc(srcLabel) + '</span></td>';
+          h += '<td style="padding:8px 10px;">' + confChip + '</td>';
+          h += '<td style="padding:8px 10px;text-align:right;" onclick="event.stopPropagation();">';
+          h += '<button class="btn btn-secondary btn-small" data-pid="' + esc(r.periodId) + '" data-eid="' + esc(r.employeeId) + '" onclick="teamBurdenEditEntry(this.dataset.pid, this.dataset.eid)">Edit</button>';
+          h += '</td></tr>';
+        });
+        h += '</tbody></table></div>';
+      }
+      wrap.innerHTML = h;
+    } catch (err) {
+      console.error('[burden] loadBurdenEntries:', err);
+      wrap.innerHTML = '<div style="color:var(--danger);padding:20px;">Error loading burden entries: ' + esc(err && err.message || String(err)) + '</div>';
+    }
+  }
+
+  function teamBurdenFilterEmployee(empId) {
+    burdenSelectedEmployeeId = empId || '';
+    loadBurdenEntries();
+  }
+  function teamBurdenSetSubView(v) {
+    burdenSubView = v;
+    var container = document.getElementById('teamTab');
+    if (container) renderTeam(container);
+  }
+
+  // ---- Wages estimation from time-clock ----
+  async function _burdenEstimateWagesCents(empId, periodId) {
+    if (!empId || !periodId || periodId.indexOf('_') === -1) return 0;
+    var parts = periodId.split('_');
+    var start = parts[0], end = parts[1];
+    var emp = employeesData.find(function(e) { return e._key === empId; });
+    if (!emp || !emp.payRate) return 0;
+    if (emp.payType === 'salary') {
+      // Salary is monthly-cents; pro-rate by period length / ~30.42 days.
+      var msPerDay = 24 * 60 * 60 * 1000;
+      var days = Math.max(1, Math.round((new Date(end) - new Date(start)) / msPerDay) + 1);
+      return Math.round(emp.payRate * (days / 30.4375));
+    }
+    // Hourly: sum hoursWorked across timeEntries in period.
+    try {
+      var raw = await MastDB.get('admin/timeEntries') || {};
+      var totalHrs = 0;
+      Object.values(raw).forEach(function(te) {
+        if (!te || te.employeeId !== empId) return;
+        var d = te.date || '';
+        if (d >= start && d <= end) totalHrs += (parseFloat(te.hoursWorked) || 0);
+      });
+      return Math.round(totalHrs * emp.payRate); // payRate is cents/hr
+    } catch (_) { return 0; }
+  }
+
+  // ---- Jobs picker source ----
+  async function _burdenLoadJobs() {
+    if (burdenJobsCache) return burdenJobsCache;
+    var out = [];
+    try {
+      var orders = await MastDB.get('admin/orders').catch(function() { return null; }) || {};
+      Object.entries(orders).slice(0, 200).forEach(function(e) {
+        var id = e[0], v = e[1] || {};
+        var label = v.orderNumber || v.name || id;
+        if (v.customerName) label = label + ' — ' + v.customerName;
+        out.push({ id: id, name: String(label).slice(0, 80) });
+      });
+    } catch (_) {}
+    out.sort(function(a, b) { return a.name.localeCompare(b.name); });
+    burdenJobsCache = out;
+    return out;
+  }
+
+  // ---- Per-entry form ----
+  async function openBurdenForm(prefillPeriodId, prefillEmpId) {
+    var formEl = document.getElementById('burdenFormWrap');
+    var innerEl = document.getElementById('burdenFormInner');
+    if (!formEl || !innerEl) return;
+    var bulkEl = document.getElementById('burdenBulkWrap');
+    if (bulkEl) bulkEl.style.display = 'none';
+
+    burdenSelectedPeriodId = prefillPeriodId || _burdenSuggestDefaultPeriodId();
+    var empId = prefillEmpId || (employeesData[0] && employeesData[0]._key) || '';
+    var existing = null;
+    if (prefillPeriodId && prefillEmpId) {
+      var p = burdenEntriesCache[prefillPeriodId];
+      if (p && p[prefillEmpId]) existing = p[prefillEmpId];
+    }
+    var bd = (existing && existing.breakdown) || {};
+    burdenBenefitRows = Array.isArray(bd.benefits) && bd.benefits.length
+      ? bd.benefits.map(function(b) { return { type: b.type || '', amount: _burdenCentsToDollars(b.amount) }; })
+      : [{ type: 'health', amount: '' }];
+    var jobs = await _burdenLoadJobs();
+
+    var h = '';
+    h += '<div style="font-weight:600;font-size:0.95rem;margin-bottom:14px;">' + (existing ? 'Edit' : 'Record') + ' Burdened Labor Cost</div>';
+    // Period + employee row
+    h += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;align-items:end;margin-bottom:12px;">';
+    var parts = burdenSelectedPeriodId.split('_');
+    h += labelField('burdenPStart', 'Pay period start', dateInput('burdenPStart', parts[0] || _burdenIsoToday()));
+    h += labelField('burdenPEnd', 'Pay period end', dateInput('burdenPEnd', parts[1] || _burdenIsoToday()));
+    var empOpts = employeesData.filter(function(e) { return (e.status || 'active') === 'active'; })
+      .map(function(e) { return { value: e._key, label: e.fullName + (e.employmentType ? ' (' + e.employmentType + ')' : '') }; });
+    h += labelField('burdenEmp', 'Employee', selectInput('burdenEmp', empOpts, empId));
+    h += '</div>';
+
+    // Wages row with auto-fill button
+    var wagesVal = existing ? _burdenCentsToDollars(bd.wages || 0) : '';
+    h += '<div style="display:grid;grid-template-columns:2fr 1fr;gap:12px;align-items:end;margin-bottom:12px;">';
+    h += labelField('burdenWages', 'Wages ($)', numberInput('burdenWages', wagesVal, '0.01', 'e.g. 3200.00'));
+    h += '<div><button class="btn btn-secondary btn-small" onclick="teamBurdenAutofillWages()" type="button">Auto-fill from time-clock</button></div>';
+    h += '</div>';
+    h += '<div id="burdenWagesHint" style="font-size:0.78rem;color:var(--warm-gray);margin-top:-6px;margin-bottom:12px;">Tip: click <strong>Auto-fill</strong> to pull <code>sum(hoursWorked) × payRate</code> from time-clock entries in the chosen period. Edit freely after.</div>';
+
+    // Statutory + benefits
+    h += '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:12px;">';
+    h += labelField('burdenFica', 'Employer FICA ($)', numberInput('burdenFica', _burdenCentsToDollars(bd.employerFica), '0.01', '7.65%'));
+    h += labelField('burdenFuta', 'FUTA ($)', numberInput('burdenFuta', _burdenCentsToDollars(bd.futa), '0.01', ''));
+    h += labelField('burdenSuta', 'SUTA ($)', numberInput('burdenSuta', _burdenCentsToDollars(bd.suta), '0.01', ''));
+    h += labelField('burdenWc', 'WC premium ($)', numberInput('burdenWc', _burdenCentsToDollars(bd.wcPremium), '0.01', ''));
+    h += labelField('burdenRet', 'Retirement ($)', numberInput('burdenRet', _burdenCentsToDollars(bd.retirement), '0.01', ''));
+    h += '</div>';
+
+    // Benefits repeating rows
+    h += '<div style="font-weight:600;font-size:0.85rem;margin-bottom:6px;">Benefits</div>';
+    h += '<div id="burdenBenefitsRows"></div>';
+    h += '<div style="margin-bottom:12px;"><button class="btn btn-secondary btn-small" onclick="teamBurdenAddBenefit()" type="button">+ Add benefit</button></div>';
+
+    // Optional jobId
+    var jobOpts = [{ value: '', label: 'Untagged — allocate to overhead' }]
+      .concat(jobs.map(function(j) { return { value: j.id, label: j.name }; }));
+    var existingJob = existing && existing.jobId ? existing.jobId : '';
+    h += '<div style="margin-bottom:12px;">';
+    h += labelField('burdenJob', 'Attribute to job (optional)', selectInput('burdenJob', jobOpts, existingJob));
+    h += '</div>';
+
+    // Live total
+    h += '<div id="burdenTotalLive" style="background:rgba(0,0,0,0.04);border-radius:6px;padding:10px 14px;font-size:0.95rem;margin-bottom:14px;">Total burden: <strong>$0.00</strong></div>';
+
+    h += '<div style="display:flex;gap:8px;">';
+    h += '<button class="btn btn-primary btn-small" onclick="teamBurdenSubmitForm()">' + (existing ? 'Save (re-submits, triggers re-allocation)' : 'Submit') + '</button>';
+    h += '<button class="btn btn-secondary btn-small" onclick="teamBurdenCancelForm()">Cancel</button>';
+    h += '</div>';
+
+    innerEl.innerHTML = h;
+    formEl.style.display = '';
+    _burdenRenderBenefitRows();
+    _burdenAttachLiveTotalListeners();
+    _burdenRecomputeLiveTotal();
+  }
+
+  function _burdenRenderBenefitRows() {
+    var wrap = document.getElementById('burdenBenefitsRows');
+    if (!wrap) return;
+    var BENEFIT_TYPES = ['health', 'dental', 'vision', 'life', 'disability', 'hsa', 'other'];
+    var h = '';
+    burdenBenefitRows.forEach(function(row, i) {
+      h += '<div style="display:grid;grid-template-columns:1fr 1fr auto;gap:10px;align-items:end;margin-bottom:8px;">';
+      h += labelField('burdenBenT' + i, 'Type', selectInput('burdenBenT' + i, BENEFIT_TYPES.map(function(t) { return { value: t, label: capitalize(t) }; }), row.type || 'health'));
+      h += labelField('burdenBenA' + i, 'Amount ($)', numberInput('burdenBenA' + i, row.amount || '', '0.01', '0.00'));
+      h += '<div><button class="btn btn-secondary btn-small" type="button" data-i="' + i + '" onclick="teamBurdenRemoveBenefit(this.dataset.i)">✕</button></div>';
+      h += '</div>';
+    });
+    wrap.innerHTML = h;
+    // Re-attach listeners on new fields.
+    _burdenAttachLiveTotalListeners();
+  }
+
+  function _burdenAttachLiveTotalListeners() {
+    var ids = ['burdenWages','burdenFica','burdenFuta','burdenSuta','burdenWc','burdenRet'];
+    ids.forEach(function(id) {
+      var el = document.getElementById(id);
+      if (el && !el._burdenListenerBound) { el.addEventListener('input', _burdenRecomputeLiveTotal); el._burdenListenerBound = true; }
+    });
+    burdenBenefitRows.forEach(function(_, i) {
+      var el = document.getElementById('burdenBenA' + i);
+      if (el && !el._burdenListenerBound) { el.addEventListener('input', _burdenRecomputeLiveTotal); el._burdenListenerBound = true; }
+    });
+  }
+
+  function _burdenSnapshotFormFields() {
+    function n(id) { return _burdenDollarsToCents((document.getElementById(id) || {}).value); }
+    var benefits = burdenBenefitRows.map(function(_, i) {
+      var t = (document.getElementById('burdenBenT' + i) || {}).value;
+      var a = n('burdenBenA' + i);
+      // Keep latest typed values in the in-memory row for re-renders.
+      burdenBenefitRows[i] = { type: t || 'other', amount: _burdenCentsToDollars(a) };
+      return { type: t || 'other', amount: a };
+    }).filter(function(b) { return b.amount > 0; });
+    return {
+      wages: n('burdenWages'),
+      employerFica: n('burdenFica'),
+      futa: n('burdenFuta'),
+      suta: n('burdenSuta'),
+      wcPremium: n('burdenWc'),
+      retirement: n('burdenRet'),
+      benefits: benefits
+    };
+  }
+
+  function _burdenRecomputeLiveTotal() {
+    var bd = _burdenSnapshotFormFields();
+    var total = bd.wages + bd.employerFica + bd.futa + bd.suta + bd.wcPremium + bd.retirement;
+    bd.benefits.forEach(function(b) { total += b.amount; });
+    var el = document.getElementById('burdenTotalLive');
+    if (el) el.innerHTML = 'Total burden: <strong>$' + (total / 100).toFixed(2) + '</strong>';
+  }
+
+  async function teamBurdenAutofillWages() {
+    var start = (document.getElementById('burdenPStart') || {}).value;
+    var end = (document.getElementById('burdenPEnd') || {}).value;
+    var empId = (document.getElementById('burdenEmp') || {}).value;
+    if (!start || !end || !empId) { showToast('Pick employee + period first.', true); return; }
+    var pid = start + '_' + end;
+    var cents = await _burdenEstimateWagesCents(empId, pid);
+    var wagesEl = document.getElementById('burdenWages');
+    if (wagesEl) {
+      wagesEl.value = _burdenCentsToDollars(cents);
+      _burdenRecomputeLiveTotal();
+    }
+    if (cents === 0) showToast('No time-clock hours found for that employee in that period. Enter wages manually.', true);
+    else showToast('Estimated wages: $' + (cents / 100).toFixed(2));
+  }
+
+  async function teamBurdenSubmitForm() {
+    var start = (document.getElementById('burdenPStart') || {}).value;
+    var end = (document.getElementById('burdenPEnd') || {}).value;
+    var empId = (document.getElementById('burdenEmp') || {}).value;
+    if (!start || !end) { showToast('Pay period dates required.', true); return; }
+    if (start > end) { showToast('Period start must be on/before end.', true); return; }
+    if (!empId) { showToast('Employee required.', true); return; }
+    var bd = _burdenSnapshotFormFields();
+    if (bd.wages <= 0) { showToast('Wages must be > $0.', true); return; }
+    var periodId = start + '_' + end;
+    var jobId = (document.getElementById('burdenJob') || {}).value || null;
+
+    var btn = event && event.target;
+    if (btn) { btn.disabled = true; btn.textContent = 'Submitting…'; }
+    try {
+      var payload = {
+        tenantId: MastDB.tenantId(),
+        periodId: periodId,
+        employeeId: empId,
+        breakdown: bd,
+        source: 'manual'
+      };
+      if (jobId) payload.jobId = jobId;
+      var fn = firebase.functions().httpsCallable('recordBurdenEntry');
+      var res = await fn(payload);
+      var data = (res && res.data) ? res.data : {};
+      if (!data || data.ok !== true) {
+        var msg = (data && (data.message || data.error || data.code)) || 'CF returned no ok flag';
+        showToast('Save failed: ' + msg, true);
+        return;
+      }
+      showToast('Burden recorded: $' + ((data.totalBurden || 0) / 100).toFixed(2)
+        + (data.allocationCfQueued ? ' — allocation queued.' : ''));
+      teamBurdenCancelForm();
+      loadBurdenEntries();
+    } catch (err) {
+      console.error('[burden] recordBurdenEntry threw:', err);
+      var msg2 = (err && err.message) || (err && err.code) || String(err) || 'unknown error';
+      if (err && err.details && err.details.code) msg2 += ' (' + err.details.code + ')';
+      showToast('Save failed: ' + msg2, true);
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = 'Submit'; }
+    }
+  }
+
+  function teamBurdenCancelForm() {
+    var el = document.getElementById('burdenFormWrap');
+    if (el) el.style.display = 'none';
+  }
+
+  function teamBurdenAddBenefit() {
+    // Pull current typed values before re-render so we don't lose them.
+    _burdenSnapshotFormFields();
+    burdenBenefitRows.push({ type: 'other', amount: '' });
+    _burdenRenderBenefitRows();
+  }
+  function teamBurdenRemoveBenefit(i) {
+    _burdenSnapshotFormFields();
+    var idx = parseInt(i, 10);
+    if (!isNaN(idx) && idx >= 0 && idx < burdenBenefitRows.length) {
+      burdenBenefitRows.splice(idx, 1);
+    }
+    if (burdenBenefitRows.length === 0) burdenBenefitRows.push({ type: 'health', amount: '' });
+    _burdenRenderBenefitRows();
+    _burdenRecomputeLiveTotal();
+  }
+
+  // ---- Bulk-paste panel ----
+  // Expected column order matches common payroll CSV exports
+  // (Gusto, QBO Payroll, Rippling, ADP RUN):
+  // Employee | Pay Period Start | Pay Period End | Wages | FICA | FUTA | SUTA | WC | Benefits | Retirement
+  function openBurdenBulk() {
+    var wrapEl = document.getElementById('burdenBulkWrap');
+    var innerEl = document.getElementById('burdenBulkInner');
+    if (!wrapEl || !innerEl) return;
+    var formEl = document.getElementById('burdenFormWrap');
+    if (formEl) formEl.style.display = 'none';
+
+    var h = '';
+    h += '<div style="font-weight:600;font-size:0.95rem;margin-bottom:10px;">Bulk paste — payroll export</div>';
+    h += '<div style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:8px;">Paste CSV or TSV (tab-separated). Header row optional. Expected columns:</div>';
+    h += '<code style="display:block;background:rgba(0,0,0,0.05);padding:8px 10px;border-radius:4px;font-size:0.78rem;margin-bottom:10px;">Employee, Period Start, Period End, Wages, FICA, FUTA, SUTA, WC, Benefits, Retirement</code>';
+    h += '<textarea id="burdenBulkText" placeholder="Jane Doe,2026-05-01,2026-05-14,3200,244.80,19.20,84.00,32.10,180.00,160.00" style="' + INPUT_STYLE + 'min-height:140px;font-family:monospace;font-size:0.82rem;"></textarea>';
+    h += '<div style="margin-top:8px;display:flex;gap:8px;">';
+    h += '<button class="btn btn-primary btn-small" onclick="teamBurdenBulkPreview()">Preview parse</button>';
+    h += '<button class="btn btn-secondary btn-small" onclick="teamBurdenBulkCancel()">Cancel</button>';
+    h += '</div>';
+    h += '<div id="burdenBulkPreview" style="margin-top:12px;"></div>';
+    innerEl.innerHTML = h;
+    wrapEl.style.display = '';
+  }
+
+  function teamBurdenBulkCancel() {
+    var el = document.getElementById('burdenBulkWrap');
+    if (el) el.style.display = 'none';
+  }
+
+  function _burdenParseBulk(txt) {
+    var lines = String(txt || '').split(/\r?\n/).map(function(l) { return l.trim(); }).filter(Boolean);
+    if (lines.length === 0) return { rows: [], errors: ['No input.'] };
+    // Strip header if it looks like one.
+    var first = lines[0].toLowerCase();
+    if (first.indexOf('employee') !== -1 && (first.indexOf('wages') !== -1 || first.indexOf('period') !== -1)) {
+      lines.shift();
+    }
+    var rows = [], errors = [];
+    lines.forEach(function(line, lineIdx) {
+      var cells = line.indexOf('\t') !== -1 ? line.split('\t') : line.split(',');
+      cells = cells.map(function(c) { return c.trim(); });
+      if (cells.length < 4) {
+        errors.push('Line ' + (lineIdx + 1) + ': need at least Employee, Start, End, Wages.');
+        return;
+      }
+      var nameRaw = cells[0];
+      var start = cells[1], end = cells[2];
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(start) || !/^\d{4}-\d{2}-\d{2}$/.test(end)) {
+        errors.push('Line ' + (lineIdx + 1) + ': dates must be YYYY-MM-DD (got "' + start + '", "' + end + '").');
+        return;
+      }
+      // Match employee: exact full-name, then loose, then ID.
+      var match = employeesData.filter(function(e) { return (e.status || 'active') === 'active' && (e.fullName || '').trim() === nameRaw; });
+      var ambiguous = match.length > 1;
+      var matchedEmpId = match.length === 1 ? match[0]._key : null;
+      if (!matchedEmpId) {
+        var loose = employeesData.filter(function(e) { return (e.fullName || '').trim().toLowerCase() === nameRaw.toLowerCase(); });
+        if (loose.length === 1) matchedEmpId = loose[0]._key;
+        else if (loose.length > 1) ambiguous = true;
+      }
+      if (!matchedEmpId) {
+        var byId = employeesData.find(function(e) { return e._key === nameRaw; });
+        if (byId) matchedEmpId = byId._key;
+      }
+      var breakdown = {
+        wages: _burdenDollarsToCents(cells[3]),
+        employerFica: _burdenDollarsToCents(cells[4]),
+        futa: _burdenDollarsToCents(cells[5]),
+        suta: _burdenDollarsToCents(cells[6]),
+        wcPremium: _burdenDollarsToCents(cells[7]),
+        benefits: cells[8] && _burdenDollarsToCents(cells[8]) > 0 ? [{ type: 'health', amount: _burdenDollarsToCents(cells[8]) }] : [],
+        retirement: _burdenDollarsToCents(cells[9])
+      };
+      if (breakdown.wages <= 0) {
+        errors.push('Line ' + (lineIdx + 1) + ': wages must be > $0.');
+        return;
+      }
+      var total = breakdown.wages + breakdown.employerFica + breakdown.futa + breakdown.suta + breakdown.wcPremium + breakdown.retirement;
+      breakdown.benefits.forEach(function(b) { total += b.amount; });
+      rows.push({
+        nameRaw: nameRaw,
+        employeeId: matchedEmpId,
+        ambiguous: ambiguous,
+        periodId: start + '_' + end,
+        breakdown: breakdown,
+        totalCents: total
+      });
+    });
+    return { rows: rows, errors: errors };
+  }
+
+  function teamBurdenBulkPreview() {
+    var txt = (document.getElementById('burdenBulkText') || {}).value;
+    var parsed = _burdenParseBulk(txt);
+    var prev = document.getElementById('burdenBulkPreview');
+    if (!prev) return;
+    var h = '';
+    if (parsed.errors.length) {
+      h += '<div style="background:rgba(220,38,38,0.08);border:1px solid rgba(220,38,38,0.3);border-radius:6px;padding:10px;margin-bottom:10px;color:#dc2626;font-size:0.82rem;">';
+      h += parsed.errors.map(function(e) { return esc(e); }).join('<br>');
+      h += '</div>';
+    }
+    if (parsed.rows.length === 0) {
+      h += '<div style="color:var(--warm-gray);font-size:0.85rem;">No valid rows to submit.</div>';
+      prev.innerHTML = h;
+      return;
+    }
+    h += '<div style="overflow-x:auto;"><table style="width:100%;font-size:0.82rem;border-collapse:collapse;">';
+    h += '<thead><tr style="border-bottom:1px solid var(--cream-dark,var(--cream-dark));"><th style="padding:6px 8px;text-align:left;">Row</th><th style="padding:6px 8px;text-align:left;">Employee</th><th style="padding:6px 8px;text-align:left;">Period</th><th style="padding:6px 8px;text-align:right;">Total</th><th style="padding:6px 8px;text-align:left;">Status</th></tr></thead><tbody>';
+    parsed.rows.forEach(function(r, i) {
+      var status;
+      if (r.ambiguous) status = '<span style="color:#d97706;">Ambiguous — pick:</span> <select data-row="' + i + '" class="burdenBulkPick" style="' + INPUT_STYLE + 'width:auto;font-size:0.78rem;padding:4px 8px;"><option value="">— select —</option>' + employeesData.filter(function(e) { return (e.fullName || '').toLowerCase() === r.nameRaw.toLowerCase(); }).map(function(e) { return '<option value="' + esc(e._key) + '">' + esc(e.fullName) + ' (' + esc(e._key.slice(0, 6)) + ')</option>'; }).join('') + '</select>';
+      else if (!r.employeeId) status = '<span style="color:#dc2626;">No match for "' + esc(r.nameRaw) + '"</span>';
+      else status = '<span style="color:#16a34a;">Matched</span>';
+      h += '<tr style="border-bottom:1px solid var(--cream-dark,var(--cream-dark));">';
+      h += '<td style="padding:6px 8px;">' + (i + 1) + '</td>';
+      h += '<td style="padding:6px 8px;">' + esc(r.nameRaw) + '</td>';
+      h += '<td style="padding:6px 8px;">' + esc(_burdenPeriodIdToLabel(r.periodId)) + '</td>';
+      h += '<td style="padding:6px 8px;text-align:right;">$' + (r.totalCents / 100).toFixed(2) + '</td>';
+      h += '<td style="padding:6px 8px;">' + status + '</td>';
+      h += '</tr>';
+    });
+    h += '</tbody></table></div>';
+    var submittable = parsed.rows.filter(function(r) { return r.employeeId && !r.ambiguous; }).length;
+    h += '<div style="margin-top:10px;display:flex;gap:8px;align-items:center;">';
+    h += '<button class="btn btn-primary btn-small" onclick="teamBurdenBulkSubmit()">Submit ' + submittable + ' rows</button>';
+    h += '<span style="font-size:0.78rem;color:var(--warm-gray);">' + (parsed.rows.length - submittable) + ' need resolution before submit.</span>';
+    h += '</div>';
+    prev.innerHTML = h;
+    // Cache parsed rows so submit can read them after operator picks ambiguous matches.
+    prev._burdenParsedRows = parsed.rows;
+  }
+
+  async function teamBurdenBulkSubmit() {
+    var prev = document.getElementById('burdenBulkPreview');
+    if (!prev || !prev._burdenParsedRows) { showToast('Click Preview first.', true); return; }
+    // Apply operator picks for ambiguous rows.
+    var picks = prev.querySelectorAll('.burdenBulkPick');
+    picks.forEach(function(sel) {
+      var rowIdx = parseInt(sel.getAttribute('data-row'), 10);
+      var val = sel.value;
+      if (!isNaN(rowIdx) && val) {
+        prev._burdenParsedRows[rowIdx].employeeId = val;
+        prev._burdenParsedRows[rowIdx].ambiguous = false;
+      }
+    });
+    var rows = prev._burdenParsedRows.filter(function(r) { return r.employeeId && !r.ambiguous; });
+    if (rows.length === 0) { showToast('Nothing to submit.', true); return; }
+    var fn = firebase.functions().httpsCallable('recordBurdenEntry');
+    var tid = MastDB.tenantId();
+    var ok = 0, fail = 0, errors = [];
+    for (var i = 0; i < rows.length; i++) {
+      var r = rows[i];
+      try {
+        var res = await fn({ tenantId: tid, periodId: r.periodId, employeeId: r.employeeId, breakdown: r.breakdown, source: 'manual' });
+        var data = (res && res.data) ? res.data : {};
+        if (data && data.ok === true) ok++;
+        else { fail++; errors.push('Row ' + (i + 1) + ': ' + ((data && (data.message || data.error)) || 'no ok flag')); }
+      } catch (err) {
+        fail++;
+        errors.push('Row ' + (i + 1) + ': ' + ((err && err.message) || String(err)));
+      }
+    }
+    showToast('Bulk submit: ' + ok + ' OK / ' + fail + ' failed' + (fail ? ' (see console)' : ''), fail > 0);
+    if (errors.length) console.error('[burden] bulk errors:', errors);
+    teamBurdenBulkCancel();
+    loadBurdenEntries();
+  }
+
+  // ---- Detail view ----
+  async function openBurdenDetail(periodId, empId) {
+    var period = burdenEntriesCache[periodId] || {};
+    var doc = period[empId];
+    if (!doc) { showToast('Entry not found in cache; reloading.', true); loadBurdenEntries(); return; }
+    var emp = employeesData.find(function(e) { return e._key === empId; });
+    var bd = doc.breakdown || {};
+    var lines = [
+      ['Wages', bd.wages],
+      ['Employer FICA', bd.employerFica],
+      ['FUTA', bd.futa],
+      ['SUTA', bd.suta],
+      ['WC premium', bd.wcPremium],
+      ['Retirement', bd.retirement]
+    ];
+    (bd.benefits || []).forEach(function(b) { lines.push(['Benefit: ' + (b.type || 'other'), b.amount]); });
+
+    // Per-job allocation summary
+    var alloc = [];
+    try {
+      var allocRaw = await MastDB.get('admin/burdenedLaborByJob/' + periodId).catch(function() { return null; }) || {};
+      Object.entries(allocRaw).forEach(function(e) {
+        var docByJob = e[1] || {};
+        if (docByJob.employeeId && docByJob.employeeId !== empId) return;
+        // Tolerate two shapes: doc-per-job-with-employees-map, or doc-per-(empId,jobId).
+        if (docByJob.employeeId === empId) {
+          alloc.push({ jobId: e[0], amount: docByJob.amount || docByJob.allocatedCents || 0 });
+        } else if (docByJob[empId]) {
+          alloc.push({ jobId: e[0], amount: docByJob[empId] || 0 });
+        }
+      });
+    } catch (_) {}
+
+    var h = '';
+    h += '<div style="font-weight:600;font-size:0.95rem;margin-bottom:10px;">Burden detail — ' + esc(emp ? emp.fullName : empId) + ' · ' + esc(_burdenPeriodIdToLabel(periodId)) + '</div>';
+    h += '<table style="width:100%;font-size:0.85rem;border-collapse:collapse;margin-bottom:14px;">';
+    lines.forEach(function(l) {
+      h += '<tr><td style="padding:4px 8px;color:var(--warm-gray);">' + esc(l[0]) + '</td><td style="padding:4px 8px;text-align:right;">$' + ((l[1] || 0) / 100).toFixed(2) + '</td></tr>';
+    });
+    h += '<tr style="border-top:1px solid var(--cream-dark,var(--cream-dark));"><td style="padding:6px 8px;font-weight:600;">Total burden</td><td style="padding:6px 8px;text-align:right;font-weight:700;">$' + ((doc.totalBurden || 0) / 100).toFixed(2) + '</td></tr>';
+    h += '</table>';
+    h += '<div style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:14px;">Source: <strong>' + esc(BURDEN_SOURCE_LABELS[doc.source] || doc.source || 'manual') + '</strong>'
+      + (doc.confidence ? ' · Confidence: ' + esc(String(doc.confidence)) : ' · Confidence: TBD (Agent D MCP)')
+      + (doc.jobId ? ' · Job: ' + esc(doc.jobId) : '')
+      + '</div>';
+    h += '<div style="font-weight:600;font-size:0.85rem;margin-bottom:6px;">Per-job allocation</div>';
+    if (alloc.length === 0) {
+      h += '<div style="font-size:0.82rem;color:var(--warm-gray);margin-bottom:14px;">No per-job allocations recorded for this period yet. Allocation CF runs after recordBurdenEntry.</div>';
+    } else {
+      h += '<table style="width:100%;font-size:0.82rem;border-collapse:collapse;margin-bottom:14px;">';
+      alloc.forEach(function(a) {
+        h += '<tr><td style="padding:4px 8px;">' + esc(a.jobId) + '</td><td style="padding:4px 8px;text-align:right;">$' + ((a.amount || 0) / 100).toFixed(2) + '</td></tr>';
+      });
+      h += '</table>';
+    }
+    h += '<div style="display:flex;gap:8px;">';
+    h += '<button class="btn btn-primary btn-small" data-pid="' + esc(periodId) + '" data-eid="' + esc(empId) + '" onclick="teamBurdenEditEntry(this.dataset.pid, this.dataset.eid)">Edit</button>';
+    h += '<button class="btn btn-secondary btn-small" onclick="teamBurdenCloseDetail()">Close</button>';
+    h += '</div>';
+
+    var modalEl = document.getElementById('burdenFormWrap');
+    var innerEl = document.getElementById('burdenFormInner');
+    if (modalEl && innerEl) {
+      innerEl.innerHTML = h;
+      modalEl.style.display = '';
+    }
+  }
+
+  function teamBurdenCloseDetail() {
+    var el = document.getElementById('burdenFormWrap');
+    if (el) el.style.display = 'none';
+  }
+
+  // ---- Estimator settings panel (W3.2) ----
+  async function loadBurdenEstimatorPanel() {
+    var wrap = document.getElementById('burdenEstimatorWrap');
+    if (!wrap) return;
+    try {
+      var meta = await MastDB.get('admin/integrations/_meta').catch(function() { return null; }) || {};
+      var src = meta.burdenSource || {};
+      burdenEstimator = src;
+      var mult = src.estimatorMultipliers || {};
+      var sutaByState = mult.sutaByState || {}; // {state: {rate, isOverride}}
+      var wcRate = mult.wcRate || 0;       // decimal e.g. 0.0123
+      var benefitsRate = mult.benefitsRate || 0;
+      var retirementRate = mult.retirementRate || 0;
+      var lastSeeded = src.lastSeededAt || null;
+      var lastFlipped = src.lastSourceFlippedAt || null;
+
+      // Pull registered states from admin/nexusRegistrations (closest existing source).
+      var nexus = await MastDB.get('admin/nexusRegistrations').catch(function() { return null; }) || {};
+      var states = Object.keys(nexus).sort();
+      if (states.length === 0) states = Object.keys(sutaByState).sort();
+
+      var h = '';
+      h += '<div style="font-weight:600;font-size:1rem;margin-bottom:6px;">Labor Burden Estimator</div>';
+      h += '<p style="font-size:0.82rem;color:var(--warm-gray);margin-bottom:14px;">Default rates used when no payroll-partner data is available. Operator overrides win over seeded defaults until you Force Reseed.</p>';
+
+      // SUTA per state
+      h += '<div style="font-weight:600;font-size:0.88rem;margin:14px 0 6px;">SUTA rate by state</div>';
+      if (states.length === 0) {
+        h += '<div style="font-size:0.82rem;color:var(--warm-gray);">No registered states found in <code>admin/nexusRegistrations</code>. Add nexus first or click <strong>Reseed defaults</strong> to seed all 50 states.</div>';
+      } else {
+        h += '<table style="width:100%;font-size:0.82rem;border-collapse:collapse;margin-bottom:10px;"><thead><tr style="border-bottom:1px solid var(--cream-dark,var(--cream-dark));"><th style="padding:6px 8px;text-align:left;">State</th><th style="padding:6px 8px;text-align:left;">Default %</th><th style="padding:6px 8px;text-align:left;">Override %</th></tr></thead><tbody>';
+        states.forEach(function(s) {
+          var row = sutaByState[s] || {};
+          var def = row.defaultRate != null ? (row.defaultRate * 100).toFixed(3) : (row.rate != null && !row.isOverride ? (row.rate * 100).toFixed(3) : '');
+          var ovr = row.isOverride && row.rate != null ? (row.rate * 100).toFixed(3) : '';
+          h += '<tr style="border-bottom:1px solid var(--cream-dark,var(--cream-dark));">';
+          h += '<td style="padding:6px 8px;font-weight:600;">' + esc(s) + '</td>';
+          h += '<td style="padding:6px 8px;color:var(--warm-gray);">' + esc(def) + '</td>';
+          h += '<td style="padding:6px 8px;"><input type="number" step="0.001" id="bSuta_' + esc(s) + '" value="' + esc(ovr) + '" placeholder="(use default)" style="' + INPUT_STYLE + 'width:120px;padding:4px 8px;font-size:0.82rem;"></td>';
+          h += '</tr>';
+        });
+        h += '</tbody></table>';
+      }
+
+      // Single-rate fields
+      h += '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:14px 0;">';
+      h += labelField('bWcRate', 'WC premium (% of wages)', '<input type="number" step="0.001" id="bWcRate" value="' + esc(wcRate ? (wcRate * 100).toFixed(3) : '') + '" placeholder="e.g. 1.2" style="' + INPUT_STYLE + '">');
+      h += labelField('bBenRate', 'Benefits load (% of wages)', '<input type="number" step="0.001" id="bBenRate" value="' + esc(benefitsRate ? (benefitsRate * 100).toFixed(3) : '') + '" placeholder="e.g. 8.0" style="' + INPUT_STYLE + '">');
+      h += labelField('bRetRate', 'Retirement match (% of wages)', '<input type="number" step="0.001" id="bRetRate" value="' + esc(retirementRate ? (retirementRate * 100).toFixed(3) : '') + '" placeholder="e.g. 3.0" style="' + INPUT_STYLE + '">');
+      h += '</div>';
+
+      h += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">';
+      h += '<button class="btn btn-primary btn-small" onclick="teamBurdenSaveEstimator()">Save</button>';
+      h += '<button class="btn btn-secondary btn-small" onclick="teamBurdenReseedSuta(false)">Reseed SUTA defaults</button>';
+      h += '<button class="btn btn-secondary btn-small" onclick="teamBurdenReseedSuta(true)" style="border-color:#dc2626;color:#dc2626;">Force reseed (overrides operator edits)</button>';
+      h += '</div>';
+
+      h += '<div style="margin-top:14px;font-size:0.78rem;color:var(--warm-gray);">';
+      h += 'Last seeded: <strong>' + esc(lastSeeded || 'never') + '</strong>';
+      h += ' · Last source flipped: <strong>' + esc(lastFlipped || 'never') + '</strong>';
+      h += '</div>';
+
+      wrap.innerHTML = h;
+    } catch (err) {
+      console.error('[burden] loadBurdenEstimatorPanel:', err);
+      wrap.innerHTML = '<div style="color:var(--danger);padding:20px;">Error loading estimator settings: ' + esc(err && err.message || String(err)) + '</div>';
+    }
+  }
+
+  async function teamBurdenSaveEstimator() {
+    try {
+      var existing = await MastDB.get('admin/integrations/_meta').catch(function() { return null; }) || {};
+      var src = existing.burdenSource || {};
+      var mult = (src.estimatorMultipliers && typeof src.estimatorMultipliers === 'object') ? Object.assign({}, src.estimatorMultipliers) : {};
+      var prevSuta = mult.sutaByState || {};
+      var newSuta = Object.assign({}, prevSuta);
+      // Collect every override input present on screen.
+      document.querySelectorAll('input[id^="bSuta_"]').forEach(function(inp) {
+        var state = inp.id.replace(/^bSuta_/, '');
+        var raw = inp.value;
+        var prev = prevSuta[state] || {};
+        if (raw === '' || raw == null) {
+          // Clear override, keep default.
+          newSuta[state] = Object.assign({}, prev, { isOverride: false, rate: prev.defaultRate != null ? prev.defaultRate : prev.rate });
+        } else {
+          var pct = parseFloat(raw);
+          if (!isNaN(pct)) {
+            newSuta[state] = Object.assign({}, prev, { rate: pct / 100, isOverride: true });
+            if (newSuta[state].defaultRate == null && prev.rate != null && !prev.isOverride) {
+              newSuta[state].defaultRate = prev.rate;
+            }
+          }
+        }
+      });
+      function pct(id) { var v = parseFloat((document.getElementById(id) || {}).value); return isNaN(v) ? 0 : v / 100; }
+      mult.sutaByState = newSuta;
+      mult.wcRate = pct('bWcRate');
+      mult.benefitsRate = pct('bBenRate');
+      mult.retirementRate = pct('bRetRate');
+      var nowIso = new Date().toISOString();
+      var patch = Object.assign({}, existing, {
+        burdenSource: Object.assign({}, src, {
+          estimatorMultipliers: mult,
+          updatedAt: nowIso,
+          updatedBy: (auth && auth.currentUser && auth.currentUser.uid) || null
+        })
+      });
+      await MastDB.set('admin/integrations/_meta', patch);
+      showToast('Estimator settings saved.');
+      loadBurdenEstimatorPanel();
+    } catch (err) {
+      console.error('[burden] save estimator failed:', err);
+      showToast('Save failed: ' + ((err && err.message) || String(err)), true);
+    }
+  }
+
+  async function teamBurdenReseedSuta(force) {
+    if (force) {
+      var msg = 'Force reseed will OVERWRITE every operator-edited SUTA rate with the seeded default. Proceed?';
+      var ok = typeof mastConfirm === 'function'
+        ? await mastConfirm(msg, { title: 'Force reseed?', confirmLabel: 'Force reseed', danger: true })
+        : window.confirm(msg);
+      if (!ok) return;
+    }
+    try {
+      var fn = firebase.functions().httpsCallable('seedStateSutaTable');
+      var res = await fn({ force: !!force });
+      var data = (res && res.data) ? res.data : {};
+      if (data && data.ok === false) { showToast('Reseed failed: ' + (data.message || 'unknown'), true); return; }
+      showToast('SUTA defaults' + (force ? ' force-' : ' ') + 'reseeded.');
+      loadBurdenEstimatorPanel();
+    } catch (err) {
+      console.error('[burden] seedStateSutaTable threw:', err);
+      showToast('Reseed failed: ' + ((err && err.message) || String(err)), true);
+    }
   }
 
   // ========================================
@@ -1948,7 +2760,7 @@
   window.loadTeam = loadTeam;
   window.teamSwitchView = function(view) {
     // docs and onboarding are manager-only; timeclock and pto show role-appropriate view
-    if ((view === 'docs' || view === 'onboarding') && !canManageTeam()) {
+    if ((view === 'docs' || view === 'onboarding' || view === 'burden') && !canManageTeam()) {
       if (typeof showToast === 'function') showToast('This tab requires Manager or Admin access.', true);
       view = 'roster';
     }
@@ -1959,6 +2771,7 @@
     if (view === 'pto') { ptoSelectedEmployeeId = null; }
     if (view === 'docs') { docFilterEmployee = ''; docFilterStatus = ''; }
     if (view === 'onboarding') { onboardingFilter = 'all'; }
+    if (view === 'burden') { burdenSubView = 'entries'; }
     var container = document.getElementById('teamTab');
     if (container) renderTeam(container);
   };
@@ -2073,6 +2886,25 @@
     if (container && typeof renderTeam === 'function') renderTeam(container);
   };
 
+  // W3 — Labor Burden exports (concepts D-FIN-W3-3, D-FIN-W3-2 UI portion).
+  window.teamBurdenSetSubView = teamBurdenSetSubView;
+  window.teamBurdenFilterEmployee = teamBurdenFilterEmployee;
+  window.teamBurdenOpenForm = function() { openBurdenForm(null, burdenSelectedEmployeeId || null); };
+  window.teamBurdenOpenBulk = openBurdenBulk;
+  window.teamBurdenBulkPreview = teamBurdenBulkPreview;
+  window.teamBurdenBulkSubmit = teamBurdenBulkSubmit;
+  window.teamBurdenBulkCancel = teamBurdenBulkCancel;
+  window.teamBurdenAutofillWages = teamBurdenAutofillWages;
+  window.teamBurdenSubmitForm = teamBurdenSubmitForm;
+  window.teamBurdenCancelForm = teamBurdenCancelForm;
+  window.teamBurdenAddBenefit = teamBurdenAddBenefit;
+  window.teamBurdenRemoveBenefit = teamBurdenRemoveBenefit;
+  window.teamBurdenOpenDetail = openBurdenDetail;
+  window.teamBurdenCloseDetail = teamBurdenCloseDetail;
+  window.teamBurdenEditEntry = function(pid, eid) { openBurdenForm(pid, eid); };
+  window.teamBurdenSaveEstimator = teamBurdenSaveEstimator;
+  window.teamBurdenReseedSuta = teamBurdenReseedSuta;
+
   // Register module
   MastAdmin.registerModule('team', {
     routes: {
@@ -2108,6 +2940,13 @@
       docFilterEmployee = '';
       docFilterStatus = '';
       onboardingFilter = 'all';
+      burdenSubView = 'entries';
+      burdenSelectedEmployeeId = '';
+      burdenSelectedPeriodId = '';
+      burdenBenefitRows = [];
+      burdenJobsCache = null;
+      burdenEntriesCache = {};
+      burdenEstimator = null;
     }
   });
 })();
