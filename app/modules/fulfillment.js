@@ -92,6 +92,8 @@
   // Bulk-buy shipping labels via the buyShippingLabels CF. Lists orders in
   // pack/packed status that don't yet have a tracking number.
   var _buyLabelsSelected = Object.create(null);
+  var _buyLabelsSortKey = 'orderId';
+  var _buyLabelsSortDir = 'desc';
 
   function _buyLabelsCandidates() {
     return _getOrdersArraySafe().filter(function(o) {
@@ -165,15 +167,39 @@
       '<button id="buyLabelsBtn" class="btn btn-primary" ' + (selCount === 0 ? 'disabled' : '') + ' style="font-size:0.85rem;padding:8px 16px;' + (selCount === 0 ? 'opacity:0.5;cursor:not-allowed;' : '') + '" onclick="buyLabelsSelected()">Buy Selected (' + selCount + ')</button>' +
     '</div>';
 
+    // Sortable: respect current sort key/dir (default: createdAt desc).
+    if (typeof window.mastSortRows === 'function') {
+      rows = window.mastSortRows(rows, _buyLabelsSortKey, _buyLabelsSortDir, function(row, key) {
+        if (!row) return null;
+        if (key === 'orderId') return window.getOrderDisplayNumber ? window.getOrderDisplayNumber(row) : (row._key || '');
+        if (key === 'buyer') return row.buyerName || row.customerName || row.buyerEmail || row.email || '';
+        if (key === 'shipTo') {
+          var s = row.shippingAddress || {};
+          return [s.city, s.state, s.zip].filter(Boolean).join(', ');
+        }
+        if (key === 'status') return row.status || '';
+        if (key === 'total') return (typeof row.total === 'number') ? row.total : ((row.totalCents || 0) / 100);
+        return row[key];
+      });
+    }
     html += '<table style="width:100%;border-collapse:collapse;font-size:0.85rem;background:#fff;border:1px solid var(--cream-dark,#e8e0d4);border-radius:8px;overflow:hidden;">' +
       '<thead><tr style="background:var(--cream);text-align:left;">' +
-        '<th style="padding:8px 10px;width:32px;"><input type="checkbox" id="buyLabelsSelectAll" onclick="toggleBuyLabelsSelectAll()"' + (selCount === rows.length && rows.length > 0 ? ' checked' : '') + '></th>' +
-        '<th style="padding:8px 10px;">Order</th>' +
-        '<th style="padding:8px 10px;">Buyer</th>' +
-        '<th style="padding:8px 10px;">Ship To</th>' +
-        '<th style="padding:8px 10px;">Status</th>' +
-        '<th style="padding:8px 10px;" align="right">Total</th>' +
-      '</tr></thead><tbody>';
+        '<th style="padding:8px 10px;width:32px;"><input type="checkbox" id="buyLabelsSelectAll" onclick="toggleBuyLabelsSelectAll()"' + (selCount === rows.length && rows.length > 0 ? ' checked' : '') + '></th>';
+    if (typeof window.mastSortableTh === 'function') {
+      var thS = 'padding:8px 10px;';
+      html += window.mastSortableTh('Order',  'orderId', _buyLabelsSortKey, _buyLabelsSortDir, 'window._buyLabelsSort', thS);
+      html += window.mastSortableTh('Buyer',  'buyer',   _buyLabelsSortKey, _buyLabelsSortDir, 'window._buyLabelsSort', thS);
+      html += window.mastSortableTh('Ship To','shipTo',  _buyLabelsSortKey, _buyLabelsSortDir, 'window._buyLabelsSort', thS);
+      html += window.mastSortableTh('Status', 'status',  _buyLabelsSortKey, _buyLabelsSortDir, 'window._buyLabelsSort', thS);
+      html += window.mastSortableTh('Total',  'total',   _buyLabelsSortKey, _buyLabelsSortDir, 'window._buyLabelsSort', thS + 'text-align:right;');
+    } else {
+      html += '<th style="padding:8px 10px;">Order</th>' +
+              '<th style="padding:8px 10px;">Buyer</th>' +
+              '<th style="padding:8px 10px;">Ship To</th>' +
+              '<th style="padding:8px 10px;">Status</th>' +
+              '<th style="padding:8px 10px;" align="right">Total</th>';
+    }
+    html += '</tr></thead><tbody>';
 
     rows.forEach(function(o) {
       var key = o._key || o.id;
@@ -1383,6 +1409,11 @@
   window.processManualScan = processManualScan;
   window.renderDeliverView = renderDeliverView;
   window.renderBuyLabelsView = renderBuyLabelsView;
+  window._buyLabelsSort = function(key) {
+    if (_buyLabelsSortKey === key) _buyLabelsSortDir = (_buyLabelsSortDir === 'asc') ? 'desc' : 'asc';
+    else { _buyLabelsSortKey = key; _buyLabelsSortDir = (key === 'total') ? 'desc' : 'asc'; }
+    renderBuyLabelsView();
+  };
   window.toggleBuyLabelsRow = toggleBuyLabelsRow;
   window.toggleBuyLabelsSelectAll = toggleBuyLabelsSelectAll;
   window.buyLabelsSelected = buyLabelsSelected;

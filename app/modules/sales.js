@@ -81,6 +81,8 @@ function filterSalesByDate() {
 
 // Tenant-TZ-aware date helpers for URL filter (timestamp is ISO).
 var _salesTenantTz = null;
+var _salesSortKey = 'timestamp';
+var _salesSortDir = 'desc';
 function salesEnsureTenantTz() {
   if (_salesTenantTz !== null) return Promise.resolve(_salesTenantTz);
   try {
@@ -239,6 +241,28 @@ function renderSales() {
   }
   if (emptyEl) emptyEl.style.display = 'none';
   if (tableWrap) tableWrap.style.display = '';
+
+  // Sortable headers + sort
+  var salesHead = document.getElementById('salesTableHead');
+  if (salesHead && typeof window.mastSortableTh === 'function') {
+    salesHead.innerHTML =
+      window.mastSortableTh('Time',    'timestamp',   _salesSortKey, _salesSortDir, 'window._salesSort') +
+      '<th style="text-align:left;padding:8px 12px;font-size:0.78rem;color:var(--warm-gray);">Items</th>' +
+      window.mastSortableTh('Payment', 'paymentType', _salesSortKey, _salesSortDir, 'window._salesSort') +
+      window.mastSortableTh('Amount',  'amount',      _salesSortKey, _salesSortDir, 'window._salesSort') +
+      window.mastSortableTh('Status',  'status',      _salesSortKey, _salesSortDir, 'window._salesSort') +
+      '<th style="text-align:left;padding:8px 12px;font-size:0.78rem;color:var(--warm-gray);">Actions</th>';
+  }
+  if (typeof window.mastSortRows === 'function') {
+    all = window.mastSortRows(all, _salesSortKey, _salesSortDir, function(row, key) {
+      if (!row) return null;
+      if (key === 'timestamp') return row.timestamp || row.createdAt || '';
+      if (key === 'amount') return Number(row.amount) || 0;
+      if (key === 'paymentType') return row.paymentType || '';
+      if (key === 'status') return row.status || '';
+      return row[key];
+    });
+  }
 
   // Table rows
   var rows = '';
@@ -2055,6 +2079,11 @@ async function exitPackingMode() {
   window.getSaleItemsLabel = getSaleItemsLabel;
   window.filterSalesByDate = filterSalesByDate;
   window.renderSales = renderSales;
+  window._salesSort = function(key) {
+    if (_salesSortKey === key) _salesSortDir = (_salesSortDir === 'asc') ? 'desc' : 'asc';
+    else { _salesSortKey = key; _salesSortDir = ({ timestamp:1, amount:1 })[key] ? 'desc' : 'asc'; }
+    renderSales();
+  };
   window.viewSaleDetail = viewSaleDetail;
   window.closeSaleDetail = closeSaleDetail;
   window.reconcileSale = reconcileSale;

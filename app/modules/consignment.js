@@ -35,6 +35,8 @@
   var galleryPayoutsListener = null;
   var currentPayoutId = null;
   var payoutsStatusFilter = 'all'; // all | open | partial | paid
+  var _payoutsSortKey = 'owedCents';
+  var _payoutsSortDir = 'desc';
 
   // Tenant-TZ-aware date helpers for URL filter (createdAt is ISO timestamp).
   var _tenantTz = null;
@@ -555,13 +557,33 @@
         html += '<div style="color:var(--warm-gray);padding:20px;text-align:center;font-size:0.85rem;">No galleries match this filter.</div>';
       }
     } else {
-      html += '<table style="width:100%;border-collapse:collapse;font-size:0.85rem;"><thead><tr style="text-align:left;color:var(--warm-gray);">' +
-        '<th style="padding:6px 8px;">Gallery</th>' +
-        '<th style="padding:6px 8px;" align="right">Gross sold</th>' +
-        '<th style="padding:6px 8px;" align="right">Gallery commission</th>' +
-        '<th style="padding:6px 8px;" align="right">Paid to date</th>' +
-        '<th style="padding:6px 8px;" align="right">Owed</th>' +
-      '</tr></thead><tbody>';
+      if (typeof window.mastSortRows === 'function') {
+        filtered = window.mastSortRows(filtered, _payoutsSortKey, _payoutsSortDir, function(row, key) {
+          if (!row) return null;
+          if (key === 'name') return (row.g && row.g.name) || '';
+          if (key === 'grossCents') return Number(row.grossCents) || 0;
+          if (key === 'commissionCents') return Number(row.commissionCents) || 0;
+          if (key === 'paidCents') return Number(row.paidCents) || 0;
+          if (key === 'owedCents') return Number(row.owedCents) || 0;
+          return row[key];
+        });
+      }
+      html += '<table style="width:100%;border-collapse:collapse;font-size:0.85rem;"><thead><tr style="text-align:left;color:var(--warm-gray);">';
+      if (typeof window.mastSortableTh === 'function') {
+        var thS = 'padding:6px 8px;';
+        html += window.mastSortableTh('Gallery',            'name',            _payoutsSortKey, _payoutsSortDir, 'window._payoutsSort', thS);
+        html += window.mastSortableTh('Gross sold',         'grossCents',      _payoutsSortKey, _payoutsSortDir, 'window._payoutsSort', thS + 'text-align:right;');
+        html += window.mastSortableTh('Gallery commission', 'commissionCents', _payoutsSortKey, _payoutsSortDir, 'window._payoutsSort', thS + 'text-align:right;');
+        html += window.mastSortableTh('Paid to date',       'paidCents',       _payoutsSortKey, _payoutsSortDir, 'window._payoutsSort', thS + 'text-align:right;');
+        html += window.mastSortableTh('Owed',               'owedCents',       _payoutsSortKey, _payoutsSortDir, 'window._payoutsSort', thS + 'text-align:right;');
+      } else {
+        html += '<th style="padding:6px 8px;">Gallery</th>' +
+                '<th style="padding:6px 8px;" align="right">Gross sold</th>' +
+                '<th style="padding:6px 8px;" align="right">Gallery commission</th>' +
+                '<th style="padding:6px 8px;" align="right">Paid to date</th>' +
+                '<th style="padding:6px 8px;" align="right">Owed</th>';
+      }
+      html += '</tr></thead><tbody>';
       filtered.forEach(function(r) {
         html += '<tr style="border-top:1px solid var(--cream-dark,#e8e0d4);cursor:pointer;" onclick="consignmentShowGalleryPayoutsDetail(\'' + _jsAttr(r.g._id) + '\')">' +
           '<td style="padding:8px;font-weight:600;">' + esc(r.g.name || '(unnamed)') + '</td>' +
@@ -2037,6 +2059,11 @@
     if (!galleriesLoaded) loadGalleries();
     if (!galleryPayoutsLoaded) loadGalleryPayouts(function() { renderCurrentView(); });
     else renderCurrentView();
+  };
+  window._payoutsSort = function(key) {
+    if (_payoutsSortKey === key) _payoutsSortDir = (_payoutsSortDir === 'asc') ? 'desc' : 'asc';
+    else { _payoutsSortKey = key; _payoutsSortDir = ({ grossCents:1, commissionCents:1, paidCents:1, owedCents:1 })[key] ? 'desc' : 'asc'; }
+    renderPayoutsList();
   };
   window.consignmentSetPayoutsFilter = function(val) {
     payoutsStatusFilter = val || 'all';

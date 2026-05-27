@@ -15,6 +15,10 @@
   var sessionsData = [];
   var enrollmentsData = [];
   var enrollmentsLoaded = false;
+  var _classListSortKey = 'name';
+  var _classListSortDir = 'asc';
+  var _enrollSortKey = 'createdAt';
+  var _enrollSortDir = 'desc';
   var allClassesMap = {}; // id → class for enrollment lookups
   var allSessionsMap = {}; // id → session for enrollment display
   var instructorsData = [];
@@ -363,9 +367,29 @@
       return;
     }
 
-    var html = '<table class="data-table"><thead><tr>' +
-      '<th>Name</th><th>Type</th><th>Schedule</th><th>Capacity</th><th>Price</th><th>Status</th><th>Actions</th>' +
-      '</tr></thead><tbody>';
+    if (typeof window.mastSortRows === 'function') {
+      filtered = window.mastSortRows(filtered, _classListSortKey, _classListSortDir, function(row, key) {
+        if (!row) return null;
+        if (key === 'price') return Number((row.seriesInfo && row.seriesInfo.seriesPriceCents) || row.priceCents) || 0;
+        if (key === 'capacity') return Number(row.capacity) || 0;
+        return row[key];
+      });
+    }
+
+    var html = '<table class="data-table"><thead><tr>';
+    if (typeof window.mastSortableTh === 'function') {
+      html +=
+        window.mastSortableTh('Name',     'name',     _classListSortKey, _classListSortDir, 'window._classListSort') +
+        window.mastSortableTh('Type',     'type',     _classListSortKey, _classListSortDir, 'window._classListSort') +
+        '<th>Schedule</th>' +
+        window.mastSortableTh('Capacity', 'capacity', _classListSortKey, _classListSortDir, 'window._classListSort') +
+        window.mastSortableTh('Price',    'price',    _classListSortKey, _classListSortDir, 'window._classListSort') +
+        window.mastSortableTh('Status',   'status',   _classListSortKey, _classListSortDir, 'window._classListSort') +
+        '<th>Actions</th>';
+    } else {
+      html += '<th>Name</th><th>Type</th><th>Schedule</th><th>Capacity</th><th>Price</th><th>Status</th><th>Actions</th>';
+    }
+    html += '</tr></thead><tbody>';
 
     filtered.forEach(function(c) {
       var schedSummary = '';
@@ -1069,22 +1093,47 @@
       }
     }
 
-    filtered.sort(function(a, b) {
-      // Waitlisted sort by position, everything else by date descending
-      if (a.status === 'waitlisted' && b.status === 'waitlisted') {
-        return (a.waitlistPosition || 999) - (b.waitlistPosition || 999);
-      }
-      return (b.enrolledAt || '').localeCompare(a.enrolledAt || '');
-    });
+    if (typeof window.mastSortRows === 'function') {
+      filtered = window.mastSortRows(filtered, _enrollSortKey, _enrollSortDir, function(row, key) {
+        if (!row) return null;
+        if (key === 'student') return row.studentName || row.studentEmail || '';
+        if (key === 'className') return (allClassesMap[row.classId] && allClassesMap[row.classId].name) || row.classId || '';
+        if (key === 'session') {
+          var s = allSessionsMap[row.sessionId];
+          return s ? (s.date || '') + ' ' + (s.startTime || '') : '';
+        }
+        if (key === 'paid') return row.paid ? 1 : 0;
+        if (key === 'status') return row.status || '';
+        if (key === 'createdAt') return row.enrolledAt || row.createdAt || '';
+        return row[key];
+      });
+    } else {
+      filtered.sort(function(a, b) {
+        if (a.status === 'waitlisted' && b.status === 'waitlisted') {
+          return (a.waitlistPosition || 999) - (b.waitlistPosition || 999);
+        }
+        return (b.enrolledAt || '').localeCompare(a.enrolledAt || '');
+      });
+    }
 
     if (filtered.length === 0) {
       table.innerHTML = bookEmptyState('\ud83d\udccb', 'No enrollments yet', 'Enrollments appear here when students book classes.');
       return;
     }
 
-    var html = '<table class="data-table"><thead><tr>' +
-      '<th>Student</th><th>Class</th><th>Session</th><th>Paid</th><th>Status</th><th>Actions</th>' +
-      '</tr></thead><tbody>';
+    var html = '<table class="data-table"><thead><tr>';
+    if (typeof window.mastSortableTh === 'function') {
+      html +=
+        window.mastSortableTh('Student',  'student',   _enrollSortKey, _enrollSortDir, 'window._enrollSort') +
+        window.mastSortableTh('Class',    'className', _enrollSortKey, _enrollSortDir, 'window._enrollSort') +
+        window.mastSortableTh('Session',  'session',   _enrollSortKey, _enrollSortDir, 'window._enrollSort') +
+        window.mastSortableTh('Paid',     'paid',      _enrollSortKey, _enrollSortDir, 'window._enrollSort') +
+        window.mastSortableTh('Status',   'status',    _enrollSortKey, _enrollSortDir, 'window._enrollSort') +
+        '<th>Actions</th>';
+    } else {
+      html += '<th>Student</th><th>Class</th><th>Session</th><th>Paid</th><th>Status</th><th>Actions</th>';
+    }
+    html += '</tr></thead><tbody>';
 
     filtered.forEach(function(e) {
       var className = allClassesMap[e.classId] ? allClassesMap[e.classId].name : e.classId;
@@ -1999,6 +2048,16 @@
 
   window._bookFilterType = function() { renderClassList(); };
   window._bookFilterStatus = function() { renderClassList(); };
+  window._classListSort = function(key) {
+    if (_classListSortKey === key) _classListSortDir = (_classListSortDir === 'asc') ? 'desc' : 'asc';
+    else { _classListSortKey = key; _classListSortDir = ({ price:1, capacity:1 })[key] ? 'desc' : 'asc'; }
+    renderClassList();
+  };
+  window._enrollSort = function(key) {
+    if (_enrollSortKey === key) _enrollSortDir = (_enrollSortDir === 'asc') ? 'desc' : 'asc';
+    else { _enrollSortKey = key; _enrollSortDir = ({ createdAt:1, paid:1 })[key] ? 'desc' : 'asc'; }
+    renderEnrollmentList();
+  };
   window._bookCreateClass = function() { showClassForm(null); };
   window._bookEditClass = function(id) { showClassForm(id); };
   window._bookViewClass = function(id) { loadClassDetail(id); };
