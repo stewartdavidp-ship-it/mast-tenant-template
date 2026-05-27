@@ -29,26 +29,58 @@
 
   function loadBlogAuthors() {
     if (TENANT_CONFIG && TENANT_CONFIG.brand && TENANT_CONFIG.brand.authors) {
+      // Brand-level fictional authors stay as-is (legacy fallback for posts
+      // whose author key doesn't match a real user).
       BLOG_AUTHORS = TENANT_CONFIG.brand.authors;
     }
-    // If no authors are configured in tenant brand config, seed an in-memory
-    // entry from the logged-in user so the editor shows the real person
-    // instead of the literal placeholder "author". Photo edits / future saves
-    // can persist this to public/config/brand/authors via blogChangeAuthorPhoto.
+    // Always seed an entry for the logged-in user, keyed by uid (the
+    // canonical identifier going forward). The resolveBlogAuthor() flow and
+    // the post-load enrichment below pull from admin/users/{uid}/profile
+    // first, so this seed is a startup-time placeholder until that data
+    // arrives. Profile photo edits write to admin/users/{uid}/profile.
     try {
-      var keys = Object.keys(BLOG_AUTHORS);
-      if (keys.length === 0 && typeof auth !== 'undefined' && auth.currentUser) {
+      if (typeof auth !== 'undefined' && auth.currentUser && auth.currentUser.uid) {
         var u = auth.currentUser;
-        var key = u.email || u.uid;
-        if (key) {
-          BLOG_AUTHORS[key] = {
+        if (!BLOG_AUTHORS[u.uid]) {
+          BLOG_AUTHORS[u.uid] = {
             name: u.displayName || (u.email ? u.email.split('@')[0] : 'Me'),
             photoUrl: u.photoURL || '',
             bio: ''
           };
         }
       }
-    } catch (e) { /* auth not ready — fall through with empty BLOG_AUTHORS */ }
+    } catch (e) { /* auth not ready — fall through */ }
+  }
+
+  // After post data loads, look up admin/users/{uid}/profile for every
+  // unique uid-looking author key and merge into BLOG_AUTHORS. Lets the
+  // existing synchronous render fallback (BLOG_AUTHORS[post.author]) show
+  // real names + photos for posts authored by other admins on the tenant.
+  function enrichBlogAuthorsFromPosts() {
+    if (typeof window.getUserProfile !== 'function') return;
+    var seen = {};
+    (blogPosts || []).forEach(function(p) {
+      if (!p || !p.author) return;
+      var key = String(p.author);
+      // Heuristic: uid-like keys are 20+ alphanumeric chars. Skip 'author',
+      // email addresses, and brand author handles.
+      if (BLOG_AUTHORS[key]) return;
+      if (!/^[A-Za-z0-9]{20,}$/.test(key)) return;
+      if (seen[key]) return;
+      seen[key] = true;
+      window.getUserProfile(key).then(function(profile) {
+        if (!profile) return;
+        BLOG_AUTHORS[key] = {
+          name: profile.displayName || key,
+          photoUrl: profile.photoUrl || '',
+          bio: profile.bio || ''
+        };
+        // Re-render if the editor is currently looking at a post by this author.
+        if (blogCurrentPost && blogCurrentPost.author === key && blogCurrentView === 'editor') {
+          renderBlogEditor();
+        }
+      });
+    });
   }
 
   function blogGetUid() { return currentUser ? currentUser.uid : null; }
@@ -63,6 +95,7 @@
       var postSnap = await MastDB.blog.posts.ref().orderByChild('createdAt').limitToLast(100).once('value');
       var postVal = postSnap.val();
       blogPosts = postVal ? Object.values(postVal).sort(function(a, b) { return (b.createdAt || '').localeCompare(a.createdAt || ''); }) : [];
+      enrichBlogAuthorsFromPosts();
 
       var ideaSnap = await MastDB.blog.ideas.ref().orderByChild('createdAt').limitToLast(50).once('value');
       var ideaVal = ideaSnap.val();
@@ -223,7 +256,12 @@
         postNumber: postNumber,
         title: initialTitle || '',
         slug: '',
-        author: Object.keys(BLOG_AUTHORS)[0] || 'author',
+        // Default to the logged-in user's uid (canonical going forward).
+        // Falls back to first BLOG_AUTHORS key (brand fictional author) or
+        // the legacy literal 'author' if neither exists.
+        author: (typeof auth !== 'undefined' && auth.currentUser && auth.currentUser.uid)
+          || Object.keys(BLOG_AUTHORS)[0]
+          || 'author',
         body: '',
         aiVersion: '',
         usedAI: false,
@@ -1796,21 +1834,41 @@
     });
   }
 
-  // Change the photo for the post's current author. Picks from the shared
-  // image library, persists URL to public/config/brand/authors/{key}/photoUrl,
-  // updates the in-memory BLOG_AUTHORS cache so this and future renders use it.
+  // Change the photo for the post's current author. If the author key is
+  // a real admin user (uid in adminUsers OR the current auth user), the
+  // photo persists to admin/users/{uid}/profile/photoUrl — the canonical
+  // store. Otherwise (brand fictional authors), falls back to the legacy
+  // public/config/brand/authors/{key}/photoUrl path for backward compat.
   function blogChangeAuthorPhoto() {
     if (!blogCurrentPost) return;
     var key = blogCurrentPost.author || Object.keys(BLOG_AUTHORS)[0];
     if (!key) { showToast('No author selected for this post.', true); return; }
+    var isRealUser = (typeof auth !== 'undefined' && auth.currentUser && auth.currentUser.uid === key)
+      || (window.adminUsers && window.adminUsers[key]);
     openImagePicker(function(imgId, url, thumbnailUrl) {
       if (!url && !thumbnailUrl) return;
       var photoUrl = url || thumbnailUrl;
-      MastDB.set('public/config/brand/authors/' + key + '/photoUrl', photoUrl)
-        .then(function() {
-          if (!BLOG_AUTHORS[key]) BLOG_AUTHORS[key] = { name: key, photoUrl: '', bio: '' };
-          BLOG_AUTHORS[key].photoUrl = photoUrl;
-          // Mirror onto TENANT_CONFIG so any later reads pick it up without reload.
+      var savePromise = isRealUser
+        ? MastDB.set('admin/users/' + key + '/profile/photoUrl', photoUrl)
+        : MastDB.set('public/config/brand/authors/' + key + '/photoUrl', photoUrl);
+      savePromise.then(function() {
+        if (!BLOG_AUTHORS[key]) BLOG_AUTHORS[key] = { name: key, photoUrl: '', bio: '' };
+        BLOG_AUTHORS[key].photoUrl = photoUrl;
+        if (isRealUser) {
+          // Invalidate the shared profile cache so other surfaces (header
+          // avatar, future operator-attribution displays) pick up the new
+          // photo on next read.
+          if (typeof window.invalidateUserProfileCache === 'function') {
+            window.invalidateUserProfileCache(key);
+          }
+          // If editing self, refresh the header avatar immediately.
+          if (typeof auth !== 'undefined' && auth.currentUser && auth.currentUser.uid === key) {
+            var av = document.getElementById('userAvatar');
+            if (av) av.src = photoUrl;
+          }
+        } else {
+          // Legacy brand-author path: mirror onto TENANT_CONFIG so any later
+          // reads from that path pick it up without reload.
           try {
             if (window.TENANT_CONFIG && TENANT_CONFIG.brand) {
               TENANT_CONFIG.brand.authors = TENANT_CONFIG.brand.authors || {};
@@ -1818,10 +1876,10 @@
               TENANT_CONFIG.brand.authors[key].photoUrl = photoUrl;
             }
           } catch (e) {}
-          showToast('Author photo updated.');
-          renderBlogEditor();
-        })
-        .catch(function(err) { showToast('Error saving author photo: ' + err.message, true); });
+        }
+        showToast('Author photo updated.');
+        renderBlogEditor();
+      }).catch(function(err) { showToast('Error saving author photo: ' + err.message, true); });
     });
   }
 

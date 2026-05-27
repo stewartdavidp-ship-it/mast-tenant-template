@@ -5831,7 +5831,7 @@
         🔔
         <span class="header-notif-badge" id="notificationBadge" style="display:none;"></span>
       </button>
-      <img class="header-avatar" id="userAvatar" src="" alt="User">
+      <img class="header-avatar" id="userAvatar" src="" alt="My Profile" title="Open my profile" style="cursor:pointer;" onclick="openMyProfile()">
       <button class="header-signout" onclick="signOut()">Sign Out</button>
     </div>
   </header>
@@ -10476,6 +10476,9 @@
           </table>
         </div>
       </div>
+
+      <!-- Detail Sub-View (per-user profile + permissions + activity) -->
+      <div id="empDetailView" style="display:none;"></div>
 
       <!-- Roles Sub-View -->
       <div id="empRolesView" style="display:none;">
@@ -16033,7 +16036,21 @@ auth.onAuthStateChanged(async function(user) {
     showModuleSelectionModal();
   }
 
-  document.getElementById('userAvatar').src = user.photoURL || '';
+  // Avatar source prefers admin/users/{uid}/profile/photoUrl (the canonical
+  // tenant-scoped profile photo) over auth.currentUser.photoURL (provider
+  // default). Falls back gracefully if the profile node is unset.
+  (function() {
+    var av = document.getElementById('userAvatar');
+    if (!av) return;
+    if (user && user.uid && typeof MastDB !== 'undefined' && MastDB.get) {
+      MastDB.get('admin/users/' + user.uid + '/profile/photoUrl').then(function(snap) {
+        var url = snap && typeof snap.val === 'function' ? snap.val() : null;
+        av.src = url || user.photoURL || '';
+      }).catch(function() { av.src = user.photoURL || ''; });
+    } else {
+      av.src = (user && user.photoURL) || '';
+    }
+  })();
 
   // Handle coin purchase return from Stripe BEFORE initial navigation
   var _coinPurchaseReturn = false;
@@ -17363,7 +17380,14 @@ var ROUTE_MAP = {
     // W2.4 — render tag-filter chip strip on every images-tab open.
     if (typeof renderImagesTagChipStrip === 'function') renderImagesTagChipStrip();
   } },
-  'employees':   { tab: 'employeesTab', setup: function() { switchEmployeesView('users'); } },
+  'employees':   { tab: 'employeesTab', setup: function() {
+    var p = (typeof getRouteParams === 'function') ? getRouteParams() : {};
+    if (p && p.view === 'detail' && p.uid) {
+      switchEmployeesView('detail', p.uid);
+    } else {
+      switchEmployeesView('users');
+    }
+  } },
   // contacts route handled by contacts module (lazy-loaded)
   'auditlog':    { tab: 'auditLogTab' },
   // financials route handled by finance module (W2.1 Overview dashboard)
@@ -18207,7 +18231,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260526-173244-e27db97';
+var MAST_MODULES_V = '20260526-221344-736e5e4';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -46186,18 +46210,33 @@ function loadRoles() {
   });
 }
 
-function switchEmployeesView(view) {
+function switchEmployeesView(view, uid) {
   var items = document.querySelectorAll('#empSubNav .view-tab');
   items.forEach(function(item) { item.classList.remove('active'); });
+  var usersV = document.getElementById('empUsersView');
+  var rolesV = document.getElementById('empRolesView');
+  var detailV = document.getElementById('empDetailView');
+  var subNav = document.getElementById('empSubNav');
+  if (view === 'detail') {
+    // Detail view replaces both sub-tabs; sub-nav is hidden so the user only
+    // sees the user-specific content and the "← Back to Users" affordance.
+    if (subNav) subNav.style.display = 'none';
+    if (usersV) usersV.style.display = 'none';
+    if (rolesV) rolesV.style.display = 'none';
+    if (detailV) { detailV.style.display = ''; renderUserDetail(uid); }
+    return;
+  }
+  if (subNav) subNav.style.display = '';
+  if (detailV) { detailV.style.display = 'none'; detailV.innerHTML = ''; }
   if (view === 'users') {
-    items[0].classList.add('active');
-    document.getElementById('empUsersView').style.display = '';
-    document.getElementById('empRolesView').style.display = 'none';
+    if (items[0]) items[0].classList.add('active');
+    if (usersV) usersV.style.display = '';
+    if (rolesV) rolesV.style.display = 'none';
     renderUsersList();
   } else {
-    items[1].classList.add('active');
-    document.getElementById('empUsersView').style.display = 'none';
-    document.getElementById('empRolesView').style.display = '';
+    if (items[1]) items[1].classList.add('active');
+    if (usersV) usersV.style.display = 'none';
+    if (rolesV) rolesV.style.display = '';
     renderPermissionMatrix();
   }
 }
@@ -46304,6 +46343,24 @@ function renderUsersList() {
     }
 
     var tr = document.createElement('tr');
+    // Row click → user detail view (admins only, since the Permissions
+    // screen is admin-gated anyway). Inner controls (selects, buttons)
+    // continue to fire their own handlers thanks to the BUTTON/SELECT/INPUT
+    // bail-out in the click listener.
+    if (hasPermission('users', 'update')) {
+      tr.style.cursor = 'pointer';
+      (function(rowUid, rowEl) {
+        rowEl.addEventListener('click', function(ev) {
+          var t = ev.target;
+          while (t && t !== rowEl) {
+            var tag = t.tagName;
+            if (tag === 'BUTTON' || tag === 'SELECT' || tag === 'INPUT' || tag === 'A' || tag === 'OPTION') return;
+            t = t.parentElement;
+          }
+          navigateTo('employees', { uid: rowUid, view: 'detail' });
+        });
+      })(uid, tr);
+    }
     tr.innerHTML = '<td>' + avatar + esc(u.displayName || 'Unnamed') + '</td>' +
       '<td>' + esc(u.email || '—') + '</td>' +
       '<td>' + roleCell + '</td>' +
@@ -46503,6 +46560,261 @@ function openUserPermissionsPanel(uid) {
   '</div>';
 
   openModal(html);
+}
+
+// ============================================================
+// User Profile + Detail View
+//
+// Routes:
+//   navigateTo('employees', {uid: X, view: 'detail'})  — opens user detail
+//   openMyProfile()                                     — opens detail for self
+//
+// Storage:
+//   admin/users/{uid}/profile/{displayName, photoUrl, bio, updatedAt}
+// ============================================================
+
+window._userProfileCache = {};
+
+// Cached per-uid profile lookup. Returns Promise<object|null>.
+// Used by blog (and any future surface that needs to render an operator/author).
+window.getUserProfile = function(uid) {
+  if (!uid) return Promise.resolve(null);
+  if (Object.prototype.hasOwnProperty.call(window._userProfileCache, uid)) {
+    return Promise.resolve(window._userProfileCache[uid]);
+  }
+  return MastDB.get('admin/users/' + uid + '/profile').then(function(snap) {
+    var val = (snap && typeof snap.val === 'function') ? snap.val() : null;
+    window._userProfileCache[uid] = val;
+    return val;
+  }).catch(function() { return null; });
+};
+
+window.invalidateUserProfileCache = function(uid) {
+  if (uid) delete window._userProfileCache[uid];
+  else window._userProfileCache = {};
+};
+
+var userDetailActiveTab = 'profile';
+
+function openMyProfile() {
+  if (!currentUser || !currentUser.uid) {
+    showToast('Sign in to open your profile.', true);
+    return;
+  }
+  navigateTo('employees', { uid: currentUser.uid, view: 'detail' });
+}
+window.openMyProfile = openMyProfile;
+
+function renderUserDetail(uid) {
+  var detailEl = document.getElementById('empDetailView');
+  if (!detailEl) return;
+  if (!uid) { switchEmployeesView('users'); return; }
+  var isSelf = currentUser && currentUser.uid === uid;
+  var canEditOthers = hasPermission('users', 'update');
+  if (!isSelf && !canEditOthers) {
+    detailEl.innerHTML = '<div class="empty-state" style="padding:24px;"><p>You do not have access to this profile.</p>' +
+      '<button class="btn btn-secondary" onclick="navigateTo(\'employees\')">&larr; Back to Users</button></div>';
+    return;
+  }
+  var u = adminUsers[uid] || {};
+  // Self may not be in adminUsers (e.g. very fresh login); pad from auth.
+  if (isSelf && !u.email && currentUser) {
+    u = {
+      email: currentUser.email || '',
+      displayName: currentUser.displayName || '',
+      photoURL: currentUser.photoURL || '',
+      role: currentUserRole || 'user'
+    };
+  }
+  window.invalidateUserProfileCache(uid); // force fresh read on re-render
+  window.getUserProfile(uid).then(function(profile) {
+    profile = profile || {};
+    var displayName = profile.displayName || u.displayName || u.email || 'Unnamed';
+    var photoUrl = profile.photoUrl || u.photoURL || '';
+    var bio = profile.bio || '';
+
+    var tabs = [
+      { value: 'profile', label: 'Profile', show: true },
+      { value: 'permissions', label: 'Permissions', show: canEditOthers },
+      { value: 'activity', label: 'Activity', show: canEditOthers }
+    ].filter(function(t) { return t.show; });
+
+    // Reset to profile if the active tab isn't visible to this viewer.
+    if (!tabs.some(function(t) { return t.value === userDetailActiveTab; })) {
+      userDetailActiveTab = 'profile';
+    }
+
+    var tabBar = '<div class="view-tabs" style="margin-bottom:16px;">' +
+      tabs.map(function(t) {
+        var active = userDetailActiveTab === t.value ? ' active' : '';
+        return '<button class="view-tab' + active + '" onclick="switchUserDetailTab(\'' + t.value + '\',\'' + esc(uid) + '\')">' + esc(t.label) + '</button>';
+      }).join('') +
+      '</div>';
+
+    var initial = ((displayName || '?').charAt(0) || '?').toUpperCase();
+    var photoEl = photoUrl
+      ? '<img src="' + esc(photoUrl) + '" alt="" style="width:56px;height:56px;border-radius:50%;object-fit:cover;border:1px solid var(--cream-dark);">'
+      : '<span style="width:56px;height:56px;border-radius:50%;background:var(--cream-dark);display:inline-flex;align-items:center;justify-content:center;font-size:1.6rem;color:var(--warm-gray);">' + esc(initial) + '</span>';
+
+    var header = '<div style="margin:0 0 12px;"><button class="detail-back" onclick="navigateTo(\'employees\')">&larr; Back to Users</button></div>' +
+      '<div style="display:flex;align-items:center;gap:16px;margin-bottom:16px;">' +
+        photoEl +
+        '<div><h2 style="margin:0;font-size:1.15rem;">' + esc(displayName) +
+          (isSelf ? ' <span style="font-size:0.78rem;color:var(--warm-gray);">(you)</span>' : '') +
+        '</h2>' +
+        '<div style="font-size:0.78rem;color:var(--warm-gray);">' + esc(u.email || '') +
+          (u.role ? ' &middot; ' + esc(u.role) : '') + '</div></div>' +
+      '</div>';
+
+    detailEl.innerHTML = header + tabBar + '<div id="userDetailTabContent"></div>';
+    _renderUserDetailTabContent(uid, u, profile);
+  });
+}
+window.renderUserDetail = renderUserDetail;
+
+function switchUserDetailTab(tab, uid) {
+  userDetailActiveTab = tab;
+  renderUserDetail(uid);
+}
+window.switchUserDetailTab = switchUserDetailTab;
+
+function _renderUserDetailTabContent(uid, u, profile) {
+  var container = document.getElementById('userDetailTabContent');
+  if (!container) return;
+  if (userDetailActiveTab === 'profile') {
+    _renderUserProfileTab(container, uid, u, profile);
+  } else if (userDetailActiveTab === 'permissions') {
+    _renderUserPermissionsTab(container, uid, u);
+  } else if (userDetailActiveTab === 'activity') {
+    _renderUserActivityTab(container, uid, u);
+  }
+}
+
+function _renderUserProfileTab(container, uid, u, profile) {
+  var isSelf = currentUser && currentUser.uid === uid;
+  var canEdit = isSelf || hasPermission('users', 'update');
+  var displayName = profile.displayName || u.displayName || '';
+  var photoUrl = profile.photoUrl || u.photoURL || '';
+  var bio = profile.bio || '';
+  var initial = ((displayName || '?').charAt(0) || '?').toUpperCase();
+  var disabledAttr = canEdit ? '' : ' disabled';
+  var photoPreview = photoUrl
+    ? '<img id="profilePhotoPreview" src="' + esc(photoUrl) + '" alt="" style="width:64px;height:64px;border-radius:50%;object-fit:cover;border:1px solid var(--cream-dark);">'
+    : '<span id="profilePhotoPreview" style="width:64px;height:64px;border-radius:50%;background:var(--cream-dark);display:inline-flex;align-items:center;justify-content:center;color:var(--warm-gray);font-size:1.6rem;">' + esc(initial) + '</span>';
+  var photoControls = canEdit
+    ? '<button type="button" class="btn btn-secondary" style="font-size:0.78rem;padding:6px 12px;" onclick="pickUserProfilePhoto(\'' + esc(uid) + '\')">Change Photo</button>' +
+      (photoUrl ? ' <button type="button" class="btn btn-secondary" style="font-size:0.78rem;padding:6px 12px;color:var(--danger);border-color:var(--danger);" onclick="clearUserProfilePhoto(\'' + esc(uid) + '\')">Remove</button>' : '')
+    : '';
+  container.innerHTML =
+    '<div style="padding:8px 0 16px;">' +
+      '<div class="form-group">' +
+        '<label>Display Name</label>' +
+        '<input type="text" id="profileDisplayName" value="' + esc(displayName) + '" placeholder="How your name appears in blog posts, audit log, etc."' + disabledAttr + '>' +
+      '</div>' +
+      '<div class="form-group">' +
+        '<label>Photo</label>' +
+        '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">' +
+          photoPreview + photoControls +
+        '</div>' +
+      '</div>' +
+      '<div class="form-group">' +
+        '<label>Bio</label>' +
+        '<textarea id="profileBio" rows="3" placeholder="Short bio shown on blog posts you author."' + disabledAttr + '>' + esc(bio) + '</textarea>' +
+      '</div>' +
+      (canEdit
+        ? '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px;">' +
+            '<button class="btn btn-primary" onclick="saveUserProfile(\'' + esc(uid) + '\')">Save Profile</button>' +
+          '</div>'
+        : '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:8px;">Read-only.</div>') +
+    '</div>';
+}
+
+function pickUserProfilePhoto(uid) {
+  if (typeof openImagePicker !== 'function') {
+    showToast('Image picker not available.', true);
+    return;
+  }
+  openImagePicker(function(imgId, url, thumbnailUrl) {
+    var photoUrl = url || thumbnailUrl;
+    if (!photoUrl) return;
+    MastDB.set('admin/users/' + uid + '/profile/photoUrl', photoUrl).then(function() {
+      window.invalidateUserProfileCache(uid);
+      _refreshAvatarIfSelf(uid, photoUrl);
+      showToast('Photo updated.');
+      renderUserDetail(uid);
+    }).catch(function(err) { showToast('Error saving photo: ' + (err && err.message), true); });
+  });
+}
+window.pickUserProfilePhoto = pickUserProfilePhoto;
+
+function clearUserProfilePhoto(uid) {
+  MastDB.remove('admin/users/' + uid + '/profile/photoUrl').then(function() {
+    window.invalidateUserProfileCache(uid);
+    _refreshAvatarIfSelf(uid, '');
+    showToast('Photo removed.');
+    renderUserDetail(uid);
+  }).catch(function(err) { showToast('Error: ' + (err && err.message), true); });
+}
+window.clearUserProfilePhoto = clearUserProfilePhoto;
+
+function saveUserProfile(uid) {
+  var isSelf = currentUser && currentUser.uid === uid;
+  if (!isSelf && !hasPermission('users', 'update')) {
+    showToast('You cannot edit this profile.', true);
+    return;
+  }
+  var dnEl = document.getElementById('profileDisplayName');
+  var bioEl = document.getElementById('profileBio');
+  var payload = {
+    displayName: (dnEl && dnEl.value || '').trim(),
+    bio: (bioEl && bioEl.value || '').trim(),
+    updatedAt: new Date().toISOString()
+  };
+  MastDB.update('admin/users/' + uid + '/profile', payload).then(function() {
+    window.invalidateUserProfileCache(uid);
+    showToast('Profile saved.');
+    renderUserDetail(uid);
+  }).catch(function(err) { showToast('Save failed: ' + (err && err.message), true); });
+}
+window.saveUserProfile = saveUserProfile;
+
+function _refreshAvatarIfSelf(uid, photoUrl) {
+  if (!currentUser || currentUser.uid !== uid) return;
+  var av = document.getElementById('userAvatar');
+  if (av) av.src = photoUrl || currentUser.photoURL || '';
+}
+
+function _renderUserPermissionsTab(container, uid, u) {
+  if (!hasPermission('users', 'update')) {
+    container.innerHTML = '<p style="color:var(--warm-gray);font-size:0.85rem;padding:16px 0;">You do not have permission to view or change permissions.</p>';
+    return;
+  }
+  var role = u.role || 'guest';
+  var overrides = u.permissionOverrides || {};
+  var overrideCount = 0;
+  Object.keys(overrides).forEach(function(e) { overrideCount += Object.keys(overrides[e] || {}).length; });
+  var roleName = (typeof ROLE_DISPLAY_NAMES !== 'undefined' && ROLE_DISPLAY_NAMES[role]) || role;
+  container.innerHTML =
+    '<div style="padding:8px 0 16px;">' +
+      '<p style="font-size:0.85rem;color:var(--warm-gray);margin:0 0 12px;">Current role: <strong>' + esc(roleName) + '</strong>' +
+        (overrideCount > 0 ? ' &middot; ' + overrideCount + ' permission override' + (overrideCount === 1 ? '' : 's') : ' &middot; using role defaults') +
+      '</p>' +
+      '<button class="btn btn-primary" onclick="openUserPermissionsPanel(\'' + esc(uid) + '\')">Edit Permissions</button>' +
+    '</div>';
+}
+
+function _renderUserActivityTab(container, uid, u) {
+  if (!hasPermission('users', 'update')) {
+    container.innerHTML = '<p style="color:var(--warm-gray);font-size:0.85rem;padding:16px 0;">You do not have permission to view this section.</p>';
+    return;
+  }
+  container.innerHTML =
+    '<div style="padding:8px 0 16px;">' +
+      '<p style="font-size:0.85rem;color:var(--warm-gray);margin:0 0 12px;">Recent actions, audit history, and last login for this user.</p>' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;">' +
+        '<button class="btn btn-secondary" onclick="viewUserAudit(\'' + esc(uid) + '\')">View Audit History</button>' +
+      '</div>' +
+    '</div>';
 }
 
 function toggleUserOverride(uid, entity, action, value) {
