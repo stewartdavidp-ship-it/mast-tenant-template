@@ -15,6 +15,7 @@
   var selectedEmailId = null;
   var emailFilter = 'all'; // all, sent, failed
   var emailTypeFilter = 'all';
+  var emailCategoryFilter = 'all'; // 'Orders' | 'Returns' | … | 'Other' | 'Unknown' | 'all'
   var emailPageSize = 50;
   var emailLastCreatedAt = null;
   var hasMoreEmails = false;
@@ -135,6 +136,20 @@
       filtered = filtered.filter(function(e) { return e.emailType === emailTypeFilter; });
     }
 
+    // Apply category filter (set by clicking a summary tile). Mutually
+    // exclusive with the per-type dropdown — selecting a category clears
+    // the type filter and vice versa, so the active narrowing is always
+    // obvious from a single control.
+    if (emailCategoryFilter !== 'all') {
+      var _registry = (typeof window.EMAIL_TRIGGER_REGISTRY !== 'undefined') ? window.EMAIL_TRIGGER_REGISTRY : [];
+      var _t2m = {};
+      _registry.forEach(function(t) { if (t.emailType && t.module) _t2m[t.emailType] = t.module; });
+      filtered = filtered.filter(function(e) {
+        var cat = (e.emailType && _t2m[e.emailType]) || (e.emailType ? 'Other' : 'Unknown');
+        return cat === emailCategoryFilter;
+      });
+    }
+
     var h = '';
     h += '<div class="section-header" style="display:flex;justify-content:space-between;align-items:center;">';
     h += '<h2>Email Log</h2>';
@@ -174,14 +189,26 @@
         Unknown:     { bg: 'rgba(120,120,120,0.10)', fg: 'var(--warm-gray,#888)' }
       };
 
+      // Tiles are click-to-filter. Total resets, category tiles narrow to
+      // that module's emails. Active tile gets a bright outline + scale.
       h += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">';
-      h += '<div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:10px 14px;min-width:90px;">' +
+      var totalActive = emailCategoryFilter === 'all';
+      h += '<div onclick="window._emailLogFilterCategory(\'all\')" title="Show all categories" ' +
+             'style="background:rgba(255,255,255,0.04);border:1px solid ' + (totalActive ? 'rgba(255,255,255,0.55)' : 'rgba(255,255,255,0.06)') + ';' +
+             'border-radius:10px;padding:10px 14px;min-width:90px;cursor:pointer;transition:transform 0.1s,border-color 0.1s;' + (totalActive ? 'transform:scale(1.03);' : '') + '" ' +
+             'onmouseover="this.style.borderColor=\'rgba(255,255,255,0.4)\'" onmouseout="this.style.borderColor=\'' + (totalActive ? 'rgba(255,255,255,0.55)' : 'rgba(255,255,255,0.06)') + '\'">' +
              '<div style="font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.5px;">Total</div>' +
              '<div style="font-size:1.15rem;font-weight:600;color:var(--text,#e0e0e0);">' + emailsData.length.toLocaleString() + '</div>' +
            '</div>';
       orderedCats.forEach(function(cat) {
         var c = TILE_COLORS[cat] || TILE_COLORS.Other;
-        h += '<div style="background:' + c.bg + ';border:1px solid ' + c.bg + ';border-radius:10px;padding:10px 14px;min-width:90px;">' +
+        var isActive = emailCategoryFilter === cat;
+        var activeBorder = isActive ? c.fg : c.bg;
+        var activeScale = isActive ? 'transform:scale(1.03);' : '';
+        h += '<div onclick="window._emailLogFilterCategory(\'' + esc(cat) + '\')" title="Filter to ' + esc(cat) + ' only" ' +
+               'style="background:' + c.bg + ';border:1px solid ' + activeBorder + ';border-radius:10px;padding:10px 14px;min-width:90px;' +
+               'cursor:pointer;transition:transform 0.1s,border-color 0.1s;' + activeScale + '" ' +
+               'onmouseover="this.style.borderColor=\'' + c.fg + '\'" onmouseout="this.style.borderColor=\'' + activeBorder + '\'">' +
                '<div style="font-size:0.72rem;color:' + c.fg + ';text-transform:uppercase;letter-spacing:0.5px;">' + esc(cat) + '</div>' +
                '<div style="font-size:1.15rem;font-weight:600;color:' + c.fg + ';">' + counts[cat].toLocaleString() + '</div>' +
              '</div>';
@@ -363,6 +390,16 @@
   function filterType() {
     var el = document.getElementById('emailTypeFilterSelect');
     emailTypeFilter = el ? el.value : 'all';
+    // Selecting a specific type from the dropdown clears the category tile
+    // filter — mutually exclusive narrowing controls (see renderEmailLog).
+    if (emailTypeFilter !== 'all') emailCategoryFilter = 'all';
+    renderEmailLog();
+  }
+
+  function filterCategory(cat) {
+    emailCategoryFilter = cat || 'all';
+    // Clear type dropdown to keep the active narrowing source obvious.
+    if (emailCategoryFilter !== 'all') emailTypeFilter = 'all';
     renderEmailLog();
   }
 
@@ -404,6 +441,7 @@
   window._emailLogSelect = selectEmail;
   window._emailLogFilterStatus = filterStatus;
   window._emailLogFilterType = filterType;
+  window._emailLogFilterCategory = filterCategory;
   window._emailLogRefresh = refreshEmails;
   window._emailLogLoadMore = loadMoreEmails;
   window._emailLogResend = resendEmail;
