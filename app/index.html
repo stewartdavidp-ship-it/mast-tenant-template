@@ -10712,14 +10712,16 @@
         <div class="section-header">
           <h2>Classes</h2>
           <div style="display:flex;gap:8px;align-items:center;">
-            <select id="bookFilterType" onchange="window._bookFilterType()" style="padding:6px 10px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text,#2a2a2a);font-size:0.85rem;">
+            <div class="order-filter-pills" data-filter-for="bookFilterType" style="margin:0;"></div>
+            <select id="bookFilterType" onchange="window._bookFilterType()" style="display:none;">
               <option value="all">All Types</option>
               <option value="series">Series</option>
               <option value="single">Single</option>
               <option value="dropin">Drop-in</option>
               <option value="private">Private</option>
             </select>
-            <select id="bookFilterStatus" onchange="window._bookFilterStatus()" style="padding:6px 10px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text,#2a2a2a);font-size:0.85rem;">
+            <div class="order-filter-pills" data-filter-for="bookFilterStatus" style="margin:0;"></div>
+            <select id="bookFilterStatus" onchange="window._bookFilterStatus()" style="display:none;">
               <option value="active">Active</option>
               <option value="draft">Draft</option>
               <option value="archived">Archived</option>
@@ -10744,7 +10746,8 @@
           <h2>Enrollments</h2>
           <div style="display:flex;gap:8px;align-items:center;">
             <span id="enrollmentsAskAiSlot"></span>
-            <select id="enrollFilterStatus" onchange="window._enrollFilterStatus()" style="padding:6px 10px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text,#2a2a2a);font-size:0.85rem;">
+            <div class="order-filter-pills" data-filter-for="enrollFilterStatus" style="margin:0;"></div>
+            <select id="enrollFilterStatus" onchange="window._enrollFilterStatus()" style="display:none;">
               <option value="all">All Status</option>
               <option value="confirmed">Confirmed</option>
               <option value="waitlisted">Waitlisted</option>
@@ -10776,7 +10779,8 @@
         <div class="section-header">
           <h2>Instructors</h2>
           <div style="display:flex;gap:8px;align-items:center;">
-            <select id="instrFilterStatus" onchange="window._instrFilterStatus()" style="padding:6px 10px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text,#2a2a2a);font-size:0.85rem;">
+            <div class="order-filter-pills" data-filter-for="instrFilterStatus" style="margin:0;"></div>
+            <select id="instrFilterStatus" onchange="window._instrFilterStatus()" style="display:none;">
               <option value="active">Active</option>
               <option value="inactive">Inactive</option>
               <option value="all">All</option>
@@ -10798,12 +10802,14 @@
         <div class="section-header">
           <h2>Resources</h2>
           <div style="display:flex;gap:8px;align-items:center;">
-            <select id="resFilterType" onchange="window._resFilterType()" style="padding:6px 10px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text,#2a2a2a);font-size:0.85rem;">
+            <div class="order-filter-pills" data-filter-for="resFilterType" style="margin:0;"></div>
+            <select id="resFilterType" onchange="window._resFilterType()" style="display:none;">
               <option value="all">All Types</option>
               <option value="room">Rooms</option>
               <option value="equipment">Equipment</option>
             </select>
-            <select id="resFilterStatus" onchange="window._resFilterStatus()" style="padding:6px 10px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text,#2a2a2a);font-size:0.85rem;">
+            <div class="order-filter-pills" data-filter-for="resFilterStatus" style="margin:0;"></div>
+            <select id="resFilterStatus" onchange="window._resFilterStatus()" style="display:none;">
               <option value="active">Active</option>
               <option value="inactive">Inactive</option>
               <option value="all">All</option>
@@ -10825,7 +10831,8 @@
         <div class="section-header">
           <h2>Pass Definitions</h2>
           <div style="display:flex;gap:8px;align-items:center;">
-            <select id="passFilterType" onchange="window._passFilterType()" style="padding:6px 10px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text,#2a2a2a);font-size:0.85rem;">
+            <div class="order-filter-pills" data-filter-for="passFilterType" style="margin:0;"></div>
+            <select id="passFilterType" onchange="window._passFilterType()" style="display:none;">
               <option value="all">All Types</option>
               <option value="drop-in">Drop-in</option>
               <option value="pack">Pack</option>
@@ -10834,7 +10841,8 @@
               <option value="series">Series</option>
               <option value="intro">Intro</option>
             </select>
-            <select id="passFilterStatus" onchange="window._passFilterStatus()" style="padding:6px 10px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text,#2a2a2a);font-size:0.85rem;">
+            <div class="order-filter-pills" data-filter-for="passFilterStatus" style="margin:0;"></div>
+            <select id="passFilterStatus" onchange="window._passFilterStatus()" style="display:none;">
               <option value="active">Active</option>
               <option value="draft">Draft</option>
               <option value="archived">Archived</option>
@@ -15722,6 +15730,59 @@ window.mastPrompt = mastPrompt;
 window.mastCopyFallback = mastCopyFallback;
 
 // ────────────────────────────────────────────────────────────────
+// mastFilterPills — Q6 standardization: a <select> with a parallel
+// pill row. Markup:
+//   <div class="order-filter-pills" data-filter-for="myFilterId"></div>
+//   <select id="myFilterId" onchange="..." style="display:none">…</select>
+// Pills mirror the select's options, sync with select.value, and dispatch
+// a change event on click so existing handlers keep working.
+// mastInitFilterPills() wires every container with data-filter-for.
+// ────────────────────────────────────────────────────────────────
+window.mastRenderFilterPills = function(container) {
+  if (!container) return;
+  var selId = container.getAttribute('data-filter-for');
+  var sel = document.getElementById(selId);
+  if (!sel || !sel.options || sel.options.length === 0) return;
+  var cur = sel.value;
+  var h = '';
+  for (var i = 0; i < sel.options.length; i++) {
+    var o = sel.options[i];
+    var active = (o.value === cur) ? ' active' : '';
+    h += '<button type="button" class="order-filter-pill' + active + '"'
+       + ' data-pill-value="' + (o.value || '').replace(/"/g, '&quot;') + '"'
+       + ' onclick="window.mastFilterPillClick(this)">'
+       + (o.textContent || o.value) + '</button>';
+  }
+  container.innerHTML = h;
+};
+window.mastFilterPillClick = function(btn) {
+  var container = btn.parentElement;
+  if (!container) return;
+  var selId = container.getAttribute('data-filter-for');
+  var sel = document.getElementById(selId);
+  if (!sel) return;
+  sel.value = btn.getAttribute('data-pill-value') || '';
+  window.mastRenderFilterPills(container);
+  sel.dispatchEvent(new Event('change', { bubbles: true }));
+};
+window.mastInitFilterPills = function(root) {
+  var scope = root || document;
+  var containers = scope.querySelectorAll('[data-filter-for]');
+  for (var i = 0; i < containers.length; i++) {
+    window.mastRenderFilterPills(containers[i]);
+  }
+};
+window.mastRefreshFilterPillsFor = function(selId) {
+  var container = document.querySelector('[data-filter-for="' + selId + '"]');
+  if (container) window.mastRenderFilterPills(container);
+};
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', function() { window.mastInitFilterPills(); });
+} else {
+  window.mastInitFilterPills();
+}
+
+// ────────────────────────────────────────────────────────────────
 // openMatchConfirmModal — W2a.1 shared operator-confirm modal
 // Contract: W2a-CONTRACTS.md C4.
 // Used by:
@@ -18385,7 +18446,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260527-081951-fd636c2';
+var MAST_MODULES_V = '20260527-083050-192c9a7';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
