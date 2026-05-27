@@ -1065,11 +1065,25 @@
     html += '</div></div>';
 
     html += '<div class="view-tabs" style="margin-bottom:18px;">';
-    // Build 7-Responses — new 5th subtab (within max-5 budget).
-    [['questions','Questions'],['groups','Groups'],['surveys','Surveys'],['triggers','Triggers'],['responses','Responses']].forEach(function (p) {
+    // D3 (2026-05-28): renamed user-facing label "Groups" -> "Question Sets"
+    // for industry alignment. Backend tab key + collection name stay 'groups'
+    // / cs_survey_groups for no-migration compatibility.
+    [['questions','Questions'],['groups','Question Sets'],['surveys','Surveys'],['triggers','Triggers'],['responses','Responses']].forEach(function (p) {
       html += '<button class="view-tab' + (surveysSubTab === p[0] ? ' active' : '') + '" onclick="csSurveysSwitchTab(\'' + p[0] + '\')">' + p[1] + '</button>';
     });
     html += '</div>';
+    // D3: one-line subtitle per sub-tab explaining its role in the
+    // Questions -> Question Sets -> Surveys -> Triggers flow.
+    var _subTabSubtitle = {
+      'questions':  'Reusable question items. Build your library here, then bundle into Question Sets.',
+      'groups':     'Bundle questions into a reusable template. Surveys reference Question Sets.',
+      'surveys':    'Pick a Question Set + add a trigger or token — this is what gets sent to customers.',
+      'triggers':   'Auto-send a Survey when something happens (order placed, class attended, etc.).',
+      'responses':  'Customer answers — click any row to see the full submission.'
+    }[surveysSubTab];
+    if (_subTabSubtitle) {
+      html += '<p style="font-size:0.85rem;color:var(--warm-gray);margin:-8px 0 14px;max-width:680px;">' + _esc(_subTabSubtitle) + '</p>';
+    }
     if (surveysSubTab === 'questions')       html += renderQuestionsTab();
     else if (surveysSubTab === 'groups')     html += renderGroupsTab();
     else if (surveysSubTab === 'surveys')    html += renderSurveysDefTab();
@@ -1209,8 +1223,8 @@
 
   function renderGroupsTab() {
     var items = Object.values(groupsData).sort(function (a, b) { return (a.createdAt || '') < (b.createdAt || '') ? -1 : 1; });
-    var html = showAddGroup ? renderGroupForm(null) : '<button class="btn btn-primary btn-small" onclick="csShowAddGroup()" style="margin-bottom:14px;">+ Add Group</button>';
-    if (!items.length && !showAddGroup) return html + '<div style="padding:24px;text-align:center;color:var(--warm-gray);border:1px dashed var(--cream-dark);border-radius:10px;">No groups yet.</div>';
+    var html = showAddGroup ? renderGroupForm(null) : '<button class="btn btn-primary btn-small" onclick="csShowAddGroup()" style="margin-bottom:14px;">+ Add Question Set</button>';
+    if (!items.length && !showAddGroup) return html + '<div style="padding:24px;text-align:center;color:var(--warm-gray);border:1px dashed var(--cream-dark);border-radius:10px;">No Question Sets yet.</div>';
     html += '<div style="display:flex;flex-direction:column;gap:8px;">';
     items.forEach(function (g) {
       if (groupEditId === g.id) { html += renderGroupForm(g); return; }
@@ -1230,7 +1244,7 @@
     var isEdit = !!g, id = isEdit ? _esc(g.id) : '', selectedIds = isEdit && g.questionIds ? g.questionIds : [];
     var qItems = Object.values(questionsData);
     var html = '<div style="border:2px solid var(--amber-light);border-radius:10px;padding:16px;background:var(--surface-card);margin-bottom:12px;">';
-    html += '<h4 style="margin:0 0 12px;">' + (isEdit ? 'Edit Group' : 'New Group') + '</h4>';
+    html += '<h4 style="margin:0 0 12px;">' + (isEdit ? 'Edit Question Set' : 'New Question Set') + '</h4>';
     html += '<div style="margin-bottom:10px;"><label style="font-weight:600;font-size:0.9rem;display:block;margin-bottom:4px;">Name *</label>';
     html += '<input id="csGName" class="form-input" style="width:100%;box-sizing:border-box;" value="' + (isEdit ? _esc(g.name || '') : '') + '" placeholder="e.g. Post-Purchase Survey"></div>';
     html += '<div style="margin-bottom:10px;"><label style="font-weight:600;font-size:0.9rem;display:block;margin-bottom:4px;">Event Type</label>';
@@ -1248,17 +1262,17 @@
   async function saveGroup(id) {
     var name = ((document.getElementById('csGName') || {}).value || '').trim();
     var et = ((document.getElementById('csGEventType') || {}).value || '').trim();
-    if (!name) { showToast('Group name is required', true); return; }
+    if (!name) { showToast('Question Set name is required', true); return; }
     var qIds = []; document.querySelectorAll('input[name="csGQIds"]:checked').forEach(function (cb) { qIds.push(cb.value); });
     try {
-      if (id) { await MastDB.update('cs_survey_groups/' + id, { name: name, eventType: et, questionIds: qIds, updatedAt: nowIso() }); if (groupsData[id]) Object.assign(groupsData[id], { name: name, eventType: et, questionIds: qIds }); groupEditId = null; showToast('Group updated'); }
-      else { var nk = MastDB.newKey('cs_survey_groups'); var doc = { id: nk, name: name, eventType: et, questionIds: qIds, isActive: true, createdAt: nowIso(), updatedAt: nowIso() }; await MastDB.set('cs_survey_groups/' + nk, doc); groupsData[nk] = doc; showAddGroup = false; showToast('Group added'); }
+      if (id) { await MastDB.update('cs_survey_groups/' + id, { name: name, eventType: et, questionIds: qIds, updatedAt: nowIso() }); if (groupsData[id]) Object.assign(groupsData[id], { name: name, eventType: et, questionIds: qIds }); groupEditId = null; showToast('Question Set updated'); }
+      else { var nk = MastDB.newKey('cs_survey_groups'); var doc = { id: nk, name: name, eventType: et, questionIds: qIds, isActive: true, createdAt: nowIso(), updatedAt: nowIso() }; await MastDB.set('cs_survey_groups/' + nk, doc); groupsData[nk] = doc; showAddGroup = false; showToast('Question Set added'); }
       renderSurveys();
     } catch (err) { showToast('Failed: ' + (err && err.message), true); }
   }
   async function deleteGroup(id) {
-    if (!confirm('Delete this group?')) return;
-    try { await MastDB.remove('cs_survey_groups/' + id); delete groupsData[id]; showToast('Group deleted'); renderSurveys(); }
+    if (!confirm('Delete this Question Set?')) return;
+    try { await MastDB.remove('cs_survey_groups/' + id); delete groupsData[id]; showToast('Question Set deleted'); renderSurveys(); }
     catch (err) { showToast('Failed: ' + (err && err.message), true); }
   }
 
@@ -1274,7 +1288,7 @@
       html += '<div style="border:1px solid var(--cream-dark);border-radius:8px;padding:12px 16px;background:var(--surface-card);">';
       html += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;"><span style="font-weight:600;">' + _esc(sv.name) + '</span>' + surveyBadge(isClosed ? 'closed' : sv.status);
       html += '<span style="font-size:0.78rem;color:var(--warm-gray);margin-left:auto;">' + relativeTime(sv.createdAt) + '</span></div>';
-      html += '<div style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:' + (sv.closesAt ? '4px' : '10px') + ';">Group: ' + _esc(grp ? grp.name : (sv.groupId || 'none')) + '</div>';
+      html += '<div style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:' + (sv.closesAt ? '4px' : '10px') + ';">Question Set: ' + _esc(grp ? grp.name : (sv.groupId || 'none')) + '</div>';
       if (sv.closesAt) { html += '<div style="font-size:0.85rem;color:' + (isClosed ? 'var(--danger)' : 'var(--warm-gray)') + ';margin-bottom:10px;">' + (isClosed ? 'Closed ' : 'Closes ') + relativeTime(sv.closesAt) + '</div>'; }
       html += '<div style="display:flex;gap:8px;flex-wrap:wrap;">';
       html += '<button class="btn btn-primary btn-small" onclick="csSendLink(\'' + _esc(sv.id) + '\')">Send Survey</button>';
@@ -1291,8 +1305,8 @@
     html += '<h4 style="margin:0 0 12px;">' + (isEdit ? 'Edit Survey' : 'New Survey') + '</h4>';
     html += '<div style="margin-bottom:10px;"><label style="font-weight:600;font-size:0.9rem;display:block;margin-bottom:4px;">Name *</label>';
     html += '<input id="csSvName" class="form-input" style="width:100%;box-sizing:border-box;" value="' + (isEdit ? _esc(sv.name || '') : '') + '" placeholder="Survey name"></div>';
-    html += '<div style="margin-bottom:10px;"><label style="font-weight:600;font-size:0.9rem;display:block;margin-bottom:4px;">Group *</label>';
-    html += '<select id="csSvGroup" class="form-select" style="width:100%;"><option value="">— select group —</option>';
+    html += '<div style="margin-bottom:10px;"><label style="font-weight:600;font-size:0.9rem;display:block;margin-bottom:4px;">Question Set *</label>';
+    html += '<select id="csSvGroup" class="form-select" style="width:100%;"><option value="">— select question set —</option>';
     Object.values(groupsData).forEach(function (g) { html += '<option value="' + _esc(g.id) + '"' + (isEdit && sv.groupId === g.id ? ' selected' : '') + '>' + _esc(g.name) + '</option>'; });
     html += '</select></div>';
     html += '<div style="margin-bottom:10px;"><label style="font-weight:600;font-size:0.9rem;display:block;margin-bottom:4px;">Status</label>';
@@ -1314,7 +1328,7 @@
     var closesAtRaw = ((document.getElementById('csSvClosesAt') || {}).value || '').trim();
     var closesAt = closesAtRaw ? new Date(closesAtRaw).toISOString() : null;
     if (!name) { showToast('Survey name is required', true); return; }
-    if (!groupId) { showToast('Please select a group', true); return; }
+    if (!groupId) { showToast('Please select a Question Set', true); return; }
     try {
       if (id) { await MastDB.update('cs_surveys/' + id, { name: name, groupId: groupId, status: status, closesAt: closesAt, updatedAt: nowIso() }); if (surveysDefData[id]) Object.assign(surveysDefData[id], { name: name, groupId: groupId, status: status, closesAt: closesAt }); surveyEditId = null; showToast('Survey updated'); }
       else { var nk = MastDB.newKey('cs_surveys'); var ts = genTokenSecret(); var doc = { id: nk, name: name, groupId: groupId, status: status, closesAt: closesAt, tokenSecret: ts, createdAt: nowIso(), updatedAt: nowIso() }; await MastDB.set('cs_surveys/' + nk, doc); var cached = Object.assign({}, doc); delete cached.tokenSecret; surveysDefData[nk] = cached; showAddSurvey = false; showToast('Survey created'); }
