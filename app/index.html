@@ -16044,8 +16044,8 @@ auth.onAuthStateChanged(async function(user) {
     if (!av) return;
     if (user && user.uid && typeof MastDB !== 'undefined' && MastDB.get) {
       MastDB.get('admin/users/' + user.uid + '/profile/photoUrl').then(function(snap) {
-        var url = snap && typeof snap.val === 'function' ? snap.val() : null;
-        av.src = url || user.photoURL || '';
+        var val = snap && (typeof snap.val === 'function' ? snap.val() : snap);
+        av.src = (typeof val === 'string' ? val : '') || user.photoURL || '';
       }).catch(function() { av.src = user.photoURL || ''; });
     } else {
       av.src = (user && user.photoURL) || '';
@@ -18231,7 +18231,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260526-221344-736e5e4';
+var MAST_MODULES_V = '20260526-221758-a1fec5f';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -46582,10 +46582,14 @@ window.getUserProfile = function(uid) {
   if (Object.prototype.hasOwnProperty.call(window._userProfileCache, uid)) {
     return Promise.resolve(window._userProfileCache[uid]);
   }
+  // MastDB.get may resolve to either a Firebase snapshot or the raw value
+  // depending on the underlying call. Defensively handle both — same
+  // pattern as line 32772.
   return MastDB.get('admin/users/' + uid + '/profile').then(function(snap) {
-    var val = (snap && typeof snap.val === 'function') ? snap.val() : null;
-    window._userProfileCache[uid] = val;
-    return val;
+    var val = snap && (typeof snap.val === 'function' ? snap.val() : snap);
+    var profile = (val && typeof val === 'object') ? val : null;
+    window._userProfileCache[uid] = profile;
+    return profile;
   }).catch(function() { return null; });
 };
 
