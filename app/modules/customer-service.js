@@ -179,6 +179,8 @@
       tab.innerHTML = renderCreate();
     } else {
       tab.innerHTML = renderList();
+      // Q6: dynamic filter-pill bars need a re-init after innerHTML swap.
+      if (window.mastInitFilterPills) window.mastInitFilterPills(tab);
     }
   }
 
@@ -265,8 +267,12 @@
 
     var html = '<div style="display:flex;gap:10px;align-items:center;margin-bottom:6px;flex-wrap:wrap;">';
 
+    // Q6 sweep: pills via mastFilterPills helper. Hidden <select> retains
+    // state so existing csSetStatusFilter(this.value) keeps working when
+    // the pill click dispatches a change event.
     html += '<label style="font-size:0.85rem;color:var(--warm-gray);">Status</label>';
-    html += '<select onchange="csSetStatusFilter(this.value)" style="' + selStyle + '">';
+    html += '<div class="order-filter-pills" data-filter-for="csStatusFilter" style="margin:0;"></div>';
+    html += '<select id="csStatusFilter" onchange="csSetStatusFilter(this.value)" style="display:none;">';
     statuses.forEach(function(s) {
       html += '<option value="' + s + '"' + (statusFilter === s ? ' selected' : '') + '>' +
         _esc(s === 'all' ? 'All Statuses' : (STATUS_LABELS[s] || s)) + '</option>';
@@ -274,7 +280,8 @@
     html += '</select>';
 
     html += '<label style="font-size:0.85rem;color:var(--warm-gray);">Priority</label>';
-    html += '<select onchange="csSetPriorityFilter(this.value)" style="' + selStyle + '">';
+    html += '<div class="order-filter-pills" data-filter-for="csPriorityFilter" style="margin:0;"></div>';
+    html += '<select id="csPriorityFilter" onchange="csSetPriorityFilter(this.value)" style="display:none;">';
     priorities.forEach(function(p) {
       html += '<option value="' + p + '"' + (priorityFilter === p ? ' selected' : '') + '>' +
         _esc(p === 'all' ? 'All Priorities' : (PRIORITY_LABELS[p] || p)) + '</option>';
