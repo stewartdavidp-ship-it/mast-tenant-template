@@ -48,6 +48,38 @@ var MastDB = (function() {
     return _fs.collection('tenants').doc(_tenantId);
   }
 
+  // Unified onSnapshot error handler — every onSnapshot() in this file must
+  // pass one (added 2026-05-28 to close sgtest15 permission-denied listener-storm
+  // cluster). Without it, Firestore re-throws the error per snapshot attempt and
+  // logs "Uncaught Error in snapshot listener" repeatedly, generating console
+  // bursts that trip the auto-detect feedback widget.
+  //
+  // Behavior:
+  // - permission-denied / unauthenticated: log once and stay silent. The
+  //   listener is effectively dead (Firestore won't retry permission errors),
+  //   so we just stop the noise.
+  // - unavailable / cancelled: transient — Firestore retries internally. Log
+  //   at debug-level only.
+  // - other codes: log warn so real bugs aren't silenced.
+  function _onSnapshotError(label) {
+    var loggedPermDenied = false;
+    return function(err) {
+      var code = (err && err.code) || '';
+      if (code === 'permission-denied' || code === 'unauthenticated') {
+        if (!loggedPermDenied) {
+          loggedPermDenied = true;
+          console.warn('[MastDB.subscribe] denied for ' + label + ' — listener detached. (' + code + ')');
+        }
+        return;
+      }
+      if (code === 'unavailable' || code === 'cancelled') {
+        // Transient — Firestore handles retry. Suppress.
+        return;
+      }
+      console.warn('[MastDB.subscribe] listener error for ' + label + ':', err && (err.message || err));
+    };
+  }
+
   function _parseCollectionPath(path) {
     // Split path into segments
     var segs = path.split('/').filter(Boolean);
@@ -203,7 +235,10 @@ var MastDB = (function() {
       limitToLast: function(n) { return extend({ limitToLast: n }); },
       once: function() { return _apply().get().then(_snapToObj); },
       subscribe: function(cb) {
-        return _apply().onSnapshot(function(snap) { cb(_snapToObj(snap)); });
+        return _apply().onSnapshot(
+          function(snap) { cb(_snapToObj(snap)); },
+          _onSnapshotError('query')
+        );
       }
     };
   }
@@ -300,17 +335,23 @@ var MastDB = (function() {
         var parsed = _parseCollectionPath(path);
         if (!parsed.docId) {
           // Collection subscription
-          return getCollRef(path).onSnapshot(function(snap) {
-            var result = {};
-            snap.forEach(function(doc) { result[doc.id] = doc.data(); });
-            cb(Object.keys(result).length > 0 ? result : null);
-          });
+          return getCollRef(path).onSnapshot(
+            function(snap) {
+              var result = {};
+              snap.forEach(function(doc) { result[doc.id] = doc.data(); });
+              cb(Object.keys(result).length > 0 ? result : null);
+            },
+            _onSnapshotError(path)
+          );
         }
-        return getDocRef(path).onSnapshot(function(doc) {
-          if (!doc.exists) { cb(null); return; }
-          var data = doc.data();
-          cb(data._v !== undefined ? data._v : data);
-        });
+        return getDocRef(path).onSnapshot(
+          function(doc) {
+            if (!doc.exists) { cb(null); return; }
+            var data = doc.data();
+            cb(data._v !== undefined ? data._v : data);
+          },
+          _onSnapshotError(path)
+        );
       },
       transaction: function(path, fn) {
         var ref = getDocRef(path);

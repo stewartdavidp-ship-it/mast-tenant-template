@@ -18593,7 +18593,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260527-114531-eed5cd8';
+var MAST_MODULES_V = '20260527-115845-1d26c58';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -22021,7 +22021,17 @@ function installAutoDetection() {
     var now = Date.now();
     var recent = (window._networkErrors || []).filter(function(e) {
       if (e.t < now - 30000) return false;
-      return e.status === 0 || e.status >= 500;
+      if (!(e.status === 0 || e.status >= 500)) return false;
+      // 2026-05-28: exclude Firestore reconnect chatter. The Listen/channel
+      // websocket-like stream naturally drops + reconnects on transient
+      // network blips, generating status:0 entries that aren't bugs.
+      // Firestore handles retry internally. Reflected in 17 sgtest15 stale
+      // network-burst records during yesterday's W2b session.
+      if (e.url && /firestore\.googleapis\.com/.test(e.url)) return false;
+      // Same shape for the auth-token refresh endpoint (gets dragged into
+      // the burst when Firestore reconnect happens to be mid-flight).
+      if (e.url && /securetoken\.googleapis\.com/.test(e.url)) return false;
+      return true;
     });
     if (recent.length >= 3 && now - _burstLastNetworkReport > 60000) {
       _burstLastNetworkReport = now;
@@ -22029,11 +22039,25 @@ function installAutoDetection() {
     }
   }, 15000);
 
-  // 5. Console error burst — 3+ errors within 10s
+  // 5. Console error burst — 3+ errors within 10s, excluding @firebase/firestore
+  //    internal chatter. The 'Uncaught Error in snapshot listener' and
+  //    'WebChannelConnection RPC Listen stream X transport errored' messages
+  //    are Firestore SDK internals that don't represent actionable bugs in
+  //    app code (the SDK self-recovers; permission-denied listeners are
+  //    handled at the MastDB.subscribe layer with an errHandler).
   setInterval(function() {
     if (!_autoReportEnabled()) return;
     var now = Date.now();
-    var recent = (window._consoleBuffer || []).filter(function(e) { return e.t >= now - 10000 && e.level === 'error'; });
+    var recent = (window._consoleBuffer || []).filter(function(e) {
+      if (e.t < now - 10000) return false;
+      if (e.level !== 'error') return false;
+      // 2026-05-28: exclude noisy @firebase/firestore internal log lines.
+      // These appeared in 6 sgtest15 console-burst records as the dominant
+      // signal without a corresponding actionable code path.
+      var msg = e.msg || '';
+      if (/@firebase\/firestore.*(Uncaught Error in snapshot listener|WebChannelConnection RPC|transport errored)/.test(msg)) return false;
+      return true;
+    });
     if (recent.length >= 3 && now - _burstLastConsoleReport > 60000) {
       _burstLastConsoleReport = now;
       fireAutoReport('console-burst', recent.length + ' console errors in 10s: ' + recent.map(function(e) { return e.msg; }).join(' | ').slice(0, 150));

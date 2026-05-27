@@ -658,8 +658,9 @@ var MastDB = (function() {
         limitToFirst: function(n) { return extend({ limitToFirst: n }); },
         limitToLast: function(n) { return extend({ limitToLast: n }); },
         once: function() { return _fsGet(_apply(), { source: 'server' }).then(_snapToObj).then(_wrapSnap); },
-        subscribe: function(cb) {
-          return _apply().onSnapshot(function(snap) { cb(_wrapSnap(_snapToObj(snap))); });
+        subscribe: function(cb, onErr) {
+          var errHandler = onErr || function(e) { console.warn('[MastDB.platform.query.subscribe]:', e && (e.message || e)); };
+          return _apply().onSnapshot(function(snap) { cb(_wrapSnap(_snapToObj(snap))); }, errHandler);
         }
       };
     }
