@@ -413,7 +413,7 @@
       learnMoreUrl: HELP_BASE + 'stories'
     },
     'homepage': {
-      label: 'Page Builder', section: 'marketing',
+      label: 'Page Builder', section: 'site',
       tagline: 'Customize your storefront homepage layout.',
       outcome: "Rearrange your homepage — hero image, featured products, story blocks — without touching code or hiring a designer.",
       goodFitWhen: "you want to refresh your storefront seasonally or test a new layout.",
@@ -429,8 +429,16 @@
     },
 
     // ── Retention ─────────────────────────────────────────────
+    // secondaryViability (schema, populated 2026-05-28 — D10): per-feature
+    // per-platform viability when Mast runs as secondary surface to an external
+    // primary site. Tier: 'full' | 'partial' | 'blocked' | 'tbd'. All retention
+    // features are Layer-3 (write-back to primary checkout). Sidebar visibility
+    // is gated separately via MODE_ROUTE_VISIBILITY.engagementHidden until the
+    // Secondary-Mode Viability Matrix Idea ships per-platform adapters.
     'wallet': {
       label: 'Wallet', section: 'retention',
+      viabilityLayer: 3,
+      secondaryViability: { shopify: 'partial', squarespace: 'blocked', wix: 'blocked', weebly: 'blocked', etsy: 'blocked', default: 'blocked' },
       tagline: 'Store credit, points, and pre-paid balances.',
       outcome: "Give customers store credit from a return, a loyalty bonus, or a deposit — and let them spend it at checkout.",
       goodFitWhen: "you issue refunds as store credit, run a loyalty program, or take deposits.",
@@ -446,6 +454,8 @@
     'gift-cards': {
       label:    'Gift Cards',
       section:  'retention',
+      viabilityLayer: 3,
+      secondaryViability: { shopify: 'partial', squarespace: 'blocked', wix: 'blocked', weebly: 'blocked', etsy: 'blocked', default: 'blocked' },
       tagline:  'Sell and redeem gift cards.',
       outcome:      "Sell gift cards online and in person, redeem them at checkout, and see what's still outstanding.",
       goodFitWhen:  "you want to capture holiday sales without picking out the actual gift, or your customers ask for them.",
@@ -471,6 +481,8 @@
       // attribution. Module tracks claim/usage count per code; no per-code
       // revenue surface exists. Trimmed claims to match.
       label: 'Coupons', section: 'retention',
+      viabilityLayer: 3,
+      secondaryViability: { shopify: 'full', squarespace: 'partial', wix: 'partial', weebly: 'partial', etsy: 'blocked', default: 'partial' },
       tagline: 'Discount codes for promotions.',
       outcome: "Create a discount code in 30 seconds for a holiday sale, a podcast sponsorship, or a friends-and-family run.",
       goodFitWhen: "you run promotions or partner with creators and want to know how many people claimed each code.",
@@ -487,6 +499,8 @@
     'loyalty': {
       label:    'Loyalty',
       section:  'retention',
+      viabilityLayer: 3,
+      secondaryViability: { shopify: 'partial', squarespace: 'blocked', wix: 'blocked', weebly: 'blocked', etsy: 'blocked', default: 'blocked' },
       tagline:  'Reward repeat customers with points.',
       outcome:      "Reward repeat customers with points — set up tier rewards and thresholds in ~10 minutes in Settings.",
       goodFitWhen:  "you have customers who buy more than once a year, and you're up for a short setup to get rewards live.",
@@ -513,6 +527,8 @@
     'membership': {
       label:    'Membership',
       section:  'retention',
+      viabilityLayer: 3,
+      secondaryViability: { shopify: 'partial', squarespace: 'blocked', wix: 'blocked', weebly: 'blocked', etsy: 'blocked', default: 'blocked' },
       tagline:  'Recurring subscription tiers with member perks.',
       outcome:      "Charge a monthly or annual fee for studio access, early drops, or member-only pricing, and collect it automatically.",
       goodFitWhen:  "you have a studio with regular open hours, or you'd offer member perks that work over time (early access, discounts, free pieces).",
@@ -538,6 +554,8 @@
     },
     'promotions': {
       label: 'Sale Promotions', section: 'retention',
+      viabilityLayer: 3,
+      secondaryViability: { shopify: 'full', squarespace: 'partial', wix: 'partial', weebly: 'blocked', etsy: 'blocked', default: 'partial' },
       tagline: 'Run sales and promotional campaigns.',
       outcome: "Run a Black Friday sale, a studio clearance, or a member-only preview without rebuilding prices by hand.",
       goodFitWhen: "you run scheduled sales, BOGO, or tiered discounts more than once a year.",
@@ -1095,7 +1113,7 @@
     },
     // Marketing (always-on)
     'website': {
-      label: 'Website Content', section: 'marketing',
+      label: 'Website Content', section: 'site',
       tagline: 'Public-facing storefront pages and copy.',
       outcome: "Edit your About page, contact info, and storefront copy without filing a ticket or learning HTML.",
       goodFitWhen: "this is on for everyone — every storefront has pages that need updating.",
@@ -1106,7 +1124,7 @@
       learnMoreUrl: HELP_BASE + 'website'
     },
     'brand': {
-      label: 'Brand', section: 'marketing',
+      label: 'Brand', section: 'site',
       tagline: 'Logo, colors, fonts, and brand identity.',
       outcome: "Set your colors, logo, and fonts once — they flow into your storefront, line sheets, emails, and packing slips.",
       goodFitWhen: "this is on for everyone — every shop has a brand identity, even a simple one.",
@@ -1117,7 +1135,7 @@
       learnMoreUrl: HELP_BASE + 'brand'
     },
     'images': {
-      label: 'Images', section: 'marketing',
+      label: 'Images', section: 'site',
       tagline: 'Image library and asset management.',
       outcome: "One library for every photo — products, process, behind-the-scenes — no more hunting through folders for a shot.",
       goodFitWhen: "this is on for everyone — every shop has photos to organize.",

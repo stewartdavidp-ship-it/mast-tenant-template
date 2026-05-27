@@ -467,6 +467,7 @@
       modes: modeList,
       overlays: Object.keys(overlays),
       cohortFlag: cohortFlag,
+      engagementMode: engagementMode,
       modeVersion: MODE_VERSION,
       derivedAt: new Date().toISOString(),
       derivedFrom: opts.derivedFrom || 'wizard'
@@ -687,12 +688,17 @@
     'homepage':           { modes: ['retail', 'maker'], overlays: ['event'] },  // "Page Builder"
 
     // === Retention section (not in matrix-v2.md; conservative defaults) ===
-    'wallet':             { modes: ['bookings', 'retail'] },
-    'gift-cards':         { modes: ['retail', 'bookings'] },
-    'coupons':            { modes: ['retail', 'bookings', 'maker'] },
-    'loyalty':            { modes: ['retail', 'bookings'] },
-    'membership':         { modes: ['bookings'] },
-    'promotions':         { modes: ['retail', 'maker'] },
+    // engagementHidden: hide entirely when Mast is secondary to an external
+    // primary site (sync-channels / back-office). These features require
+    // write-back into the primary checkout (Shopify Discounts API, Gift Card
+    // API, Functions, etc.) which is per-platform research. Re-enabled
+    // per-feature per-platform once the Secondary-Mode Viability Matrix lands.
+    'wallet':             { modes: ['bookings', 'retail'],           engagementHidden: ['sync-channels', 'back-office'] },
+    'gift-cards':         { modes: ['retail', 'bookings'],           engagementHidden: ['sync-channels', 'back-office'] },
+    'coupons':            { modes: ['retail', 'bookings', 'maker'],  engagementHidden: ['sync-channels', 'back-office'] },
+    'loyalty':            { modes: ['retail', 'bookings'],           engagementHidden: ['sync-channels', 'back-office'] },
+    'membership':         { modes: ['bookings'],                     engagementHidden: ['sync-channels', 'back-office'] },
+    'promotions':         { modes: ['retail', 'maker'],              engagementHidden: ['sync-channels', 'back-office'] },
 
     // === Events section (vendor-side Shows flow) — gated entirely by event overlay ===
     'show-find':          { overlays: ['event'] },
@@ -762,11 +768,23 @@
   function isRouteVisibleByDefault(routeId, modeSetDoc) {
     var rule = MODE_ROUTE_VISIBILITY[routeId];
     if (!rule) return false;                            // unknown route → soft-hidden
-    if (rule.alwaysOn) return true;
     modeSetDoc = modeSetDoc || {};
     var modes = Array.isArray(modeSetDoc.modes) ? modeSetDoc.modes : [];
     var overlays = Array.isArray(modeSetDoc.overlays) ? modeSetDoc.overlays : [];
     var cohortFlag = !!modeSetDoc.cohortFlag;
+    var engagementMode = modeSetDoc.engagementMode || null;
+
+    // engagementHidden: routes that hide entirely under specific engagement
+    // modes (e.g. retention features in secondary-site modes). Checked BEFORE
+    // alwaysOn so the engagement axis can override the universal tier — a
+    // tenant in sync-channels mode that can't write back to their primary
+    // checkout shouldn't see a "Wallet" entry just because it's alwaysOn.
+    if (engagementMode && Array.isArray(rule.engagementHidden) &&
+        rule.engagementHidden.indexOf(engagementMode) !== -1) {
+      return false;
+    }
+
+    if (rule.alwaysOn) return true;
 
     if (rule.cohortRequired && !cohortFlag) return false;
 
@@ -796,6 +814,12 @@
    */
   function isRouteVisible(routeId, modeSetDoc, modeOverridesDoc) {
     var rule = MODE_ROUTE_VISIBILITY[routeId];
+    // engagementHidden short-circuits even alwaysOn — see isRouteVisibleByDefault.
+    var engagementMode = modeSetDoc && modeSetDoc.engagementMode;
+    if (rule && engagementMode && Array.isArray(rule.engagementHidden) &&
+        rule.engagementHidden.indexOf(engagementMode) !== -1) {
+      return false;
+    }
     if (rule && rule.alwaysOn) return true;     // always-on overrides any user override
     if (modeOverridesDoc) {
       if (Array.isArray(modeOverridesDoc.disabledRoutes) &&

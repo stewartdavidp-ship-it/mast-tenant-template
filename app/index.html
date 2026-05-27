@@ -6040,9 +6040,22 @@
         <div class="sidebar-item" data-route="blog" onclick="navigateTo('blog')">Blog</div>
         <div class="sidebar-item" data-route="newsletter" onclick="navigateTo('newsletter')">Newsletter</div>
         <div class="sidebar-item" data-route="stories" onclick="navigateTo('stories')">Stories</div>
+      </div>
+    </div>
+    <!-- Site (D10 2026-05-28 — extracted from Marketing per IA-rename feedback
+         M30SJ8iaKC2UVaHVpiAF. "Site" is the neutral name that works whether
+         Mast is the primary public site or a secondary surface to an external
+         platform (Shopify/Squarespace/etc.). See CLAUDE.md → CONSTRAINTs. -->
+    <div class="sidebar-section" data-section="site">
+      <div class="sidebar-section-header" onclick="toggleSection('site')">
+        <span class="sidebar-section-icon">&#127760;</span>
+        <span class="sidebar-section-label">Site</span>
+        <span class="sidebar-section-arrow">&#9654;</span>
+      </div>
+      <div class="sidebar-items">
         <div class="sidebar-item" data-route="website" onclick="navigateTo('website')">Website Content</div>
-        <div class="sidebar-item" data-route="brand" onclick="navigateTo('brand')">Brand</div>
         <div class="sidebar-item" data-route="homepage" onclick="navigateTo('homepage')">Page Builder</div>
+        <div class="sidebar-item" data-route="brand" onclick="navigateTo('brand')">Brand</div>
         <div class="sidebar-item" data-route="images" onclick="navigateTo('images')">Images</div>
       </div>
     </div>
@@ -8177,7 +8190,7 @@
             </button>
             <div class="settings-nav-items">
               <button class="settings-nav-item active" data-nav-key="general" onclick="switchSettingsSubView('general')">General</button>
-              <button class="settings-nav-item" data-nav-key="storefront" onclick="switchSettingsSubView('storefront')">Display</button>
+              <button class="settings-nav-item" data-nav-key="storefront" onclick="switchSettingsSubView('storefront')">Product Page Display</button>
               <button class="settings-nav-item" data-nav-key="domains" onclick="switchSettingsSubView('domains')">Domains</button>
             </div>
           </div>
@@ -9880,6 +9893,7 @@
       </div>
       <!-- Storefront Display Settings -->
       <div id="settingsSubStorefront" style="display:none;max-width:720px;padding-top:16px;">
+        <p class="tab-section-purpose" style="margin-bottom:16px;">Controls how individual product pages render &mdash; lead time, badges, commission CTA, legal links. For site-wide content (homepage, About, Brand, image library), see the <a href="javascript:void(0)" onclick="navigateTo('website')" style="color:var(--teal);text-decoration:underline;">Site</a> section.</p>
         <!-- Display settings tab strip (view-tabs pattern). Each surface that affects what
              customers see on your storefront becomes its own tab. -->
         <div class="view-tabs" id="displayTabBar" style="margin-bottom:20px;">
@@ -12341,7 +12355,7 @@ var MODULE_REGISTRY = {
   sell:   { id: 'sell',   name: 'Sell',   icon: '\uD83D\uDCB0', description: 'Point of sale, orders, commissions, wholesale.', section: 'sales', navPosition: 3, purchasable: true, routes: ['pos', 'orders', 'commissions', 'rma', 'wholesale', 'galleries', 'receipts', 'coupons', 'promotions'], manageSettings: ['square'], synergies: ['ship', 'make'], status: 'active' },
   ship:   { id: 'ship',   name: 'Ship',   icon: '\uD83D\uDCE6', description: 'Pack orders, ship deliveries, track fulfillment.', section: 'sales', navPosition: 4, purchasable: true, routes: ['pack', 'ship'], manageSettings: ['shippingRates'], synergies: ['sell', 'show'], status: 'active' },
   run:    { id: 'run',    name: 'Run',    icon: '\uD83D\uDCCB', description: 'Trips, expenses, revenue, reports, contacts.', section: 'operations', navPosition: 5, purchasable: true, routes: ['trips', 'reports', 'financials', 'contacts', 'customers'], manageSettings: [], synergies: ['sell', 'show'], status: 'active' },
-  web:    { id: 'web',    name: 'Web',    icon: '\uD83C\uDF10', description: 'Website pages and content management.', section: 'marketing', navPosition: 6, purchasable: false, showInGrid: true, routes: ['website', 'gallery', 'images'], manageSettings: [], synergies: ['market', 'sell'], status: 'active' },
+  web:    { id: 'web',    name: 'Web',    icon: '\uD83C\uDF10', description: 'Website pages, page builder, brand, and image library.', section: 'site', navPosition: 6, purchasable: false, showInGrid: true, routes: ['website', 'homepage', 'brand', 'images', 'gallery'], manageSettings: [], synergies: ['market', 'sell'], status: 'active' },
   show:   { id: 'show',   name: 'Show',   icon: '\uD83C\uDFAA', description: 'Find, apply, prep, and execute craft fairs and events.', section: 'events', navPosition: 7, purchasable: true, routes: ['show', 'show-find', 'show-apply', 'show-prep', 'show-execute', 'show-history'], manageSettings: [], synergies: ['sell', 'ship', 'make'], status: 'active' },
   'show-light': { id: 'show-light', name: 'Show Light', icon: '\u2728', description: 'Vendor profile, image gallery, and AI-powered show application builder.', section: 'events', navPosition: 8, purchasable: false, showInGrid: true, routes: ['show-light-profile', 'show-light-gallery', 'show-light-shows', 'show-light-apply'], manageSettings: [], synergies: ['show', 'sell', 'market'], status: 'active' },
   events: { id: 'events', name: 'Events', icon: '\uD83C\uDFAB', description: 'Organize shows, manage booths, vendors, and floor plans.', section: 'events', navPosition: 9, purchasable: true, routes: ['events-shows', 'events-settings'], manageSettings: [], synergies: ['show', 'sell', 'market'], status: 'active' },
@@ -13643,7 +13657,7 @@ async function renderAddToMast() {
   var alwaysOnCount = 0;
 
   // Group by section, preserving sidebar order
-  var sectionOrder = ['products', 'sales', 'marketing', 'retention', 'events', 'classes', 'finance', 'operations', 'customer-service', 'admin'];
+  var sectionOrder = ['products', 'sales', 'marketing', 'site', 'retention', 'events', 'classes', 'finance', 'operations', 'customer-service', 'admin'];
   var grouped = {};
   for (var i = 0; i < allToggleable.length; i++) {
     var routeId = allToggleable[i];
@@ -18579,7 +18593,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260527-103356-3b5bdad';
+var MAST_MODULES_V = '20260527-114531-eed5cd8';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
