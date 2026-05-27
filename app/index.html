@@ -262,6 +262,120 @@
       border-color: white;
     }
 
+    /* ========== AVATAR MENU ========== */
+    .avatar-menu-trigger {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      cursor: pointer;
+      padding: 2px 4px;
+      border-radius: 6px;
+      transition: background 0.15s;
+      user-select: none;
+    }
+    .avatar-menu-trigger:hover { background: rgba(255,255,255,0.08); }
+    .avatar-menu-trigger:focus { outline: 2px solid var(--teal); outline-offset: 2px; }
+    .avatar-menu-chevron {
+      font-size: 0.72rem;
+      color: var(--warm-gray-light, #ccc);
+      transition: transform 0.15s;
+      line-height: 1;
+    }
+    .avatar-menu-trigger[aria-expanded="true"] .avatar-menu-chevron {
+      transform: rotate(180deg);
+    }
+    .avatar-menu {
+      position: absolute;
+      top: 52px;
+      right: 18px;
+      min-width: 240px;
+      background: var(--cream, #fff);
+      border: 1px solid var(--cream-dark, #e0e0e0);
+      border-radius: 8px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.18);
+      z-index: 1100;
+      font-family: 'DM Sans', sans-serif;
+      display: none;
+      overflow: hidden;
+    }
+    .avatar-menu.open { display: block; }
+    .avatar-menu-header {
+      padding: 12px 16px 10px;
+      border-bottom: 1px solid var(--cream-dark, #e8e0d4);
+    }
+    .avatar-menu-header-name {
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: var(--text, #2a2a2a);
+      margin: 0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .avatar-menu-header-email {
+      font-size: 0.78rem;
+      color: var(--warm-gray);
+      margin: 2px 0 0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .avatar-menu-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 9px 16px;
+      font-size: 0.85rem;
+      color: var(--text, #2a2a2a);
+      cursor: pointer;
+      background: none;
+      border: none;
+      text-align: left;
+      width: 100%;
+      font-family: inherit;
+      transition: background 0.1s;
+    }
+    .avatar-menu-item:hover,
+    .avatar-menu-item:focus { background: rgba(42,124,111,0.08); outline: none; }
+    .avatar-menu-item-suffix { color: var(--warm-gray); font-size: 0.78rem; }
+    .avatar-menu-item-toggle {
+      display: inline-block;
+      position: relative;
+      width: 32px;
+      height: 18px;
+      border-radius: 18px;
+      background: rgba(120,120,120,0.7);
+      transition: background 0.2s;
+      flex-shrink: 0;
+    }
+    .avatar-menu-item-toggle.on { background: var(--teal); }
+    .avatar-menu-item-toggle::after {
+      content: '';
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: #fff;
+      transition: left 0.2s;
+    }
+    .avatar-menu-item-toggle.on::after { left: 16px; }
+    .avatar-menu-divider {
+      height: 1px;
+      background: var(--cream-dark, #e8e0d4);
+      margin: 4px 0;
+    }
+    .avatar-menu-item-signout { color: var(--danger, #c62828); }
+    body.dark-mode .avatar-menu { background: #2a2a2a; border-color: #444; }
+    body.dark-mode .avatar-menu-header { border-bottom-color: #444; }
+    body.dark-mode .avatar-menu-header-name { color: #e0e0e0; }
+    body.dark-mode .avatar-menu-item { color: #e0e0e0; }
+    body.dark-mode .avatar-menu-item:hover,
+    body.dark-mode .avatar-menu-item:focus { background: rgba(212,160,83,0.15); }
+    body.dark-mode .avatar-menu-divider { background: #444; }
+
     /* ========== NOTIFICATION BELL ========== */
     .header-notif-btn {
       position: relative;
@@ -5831,8 +5945,11 @@
         🔔
         <span class="header-notif-badge" id="notificationBadge" style="display:none;"></span>
       </button>
-      <img class="header-avatar" id="userAvatar" src="" alt="My Profile" title="Open my profile" style="cursor:pointer;" onclick="openMyProfile()">
-      <button class="header-signout" onclick="signOut()">Sign Out</button>
+      <div class="avatar-menu-trigger" id="avatarMenuTrigger" onclick="toggleAvatarMenu(event)" tabindex="0" role="button" aria-haspopup="menu" aria-expanded="false" title="Account menu">
+        <img class="header-avatar" id="userAvatar" src="" alt="My Profile">
+        <span class="avatar-menu-chevron" aria-hidden="true">&#9662;</span>
+      </div>
+      <div class="avatar-menu" id="avatarMenu" role="menu" aria-hidden="true"></div>
     </div>
   </header>
 
@@ -8295,7 +8412,7 @@
 
         <div class="form-group" style="margin-bottom:24px;">
           <label style="font-size:1rem;font-weight:600;display:block;margin-bottom:4px;">Dark mode</label>
-          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:8px;">Switch the admin panel to a dark theme. Affects only the admin app.</p>
+          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:8px;">Your personal preference. Each user on this tenant can set their own — flip it here or from the avatar menu in the top-right.</p>
           <label style="display:flex;align-items:center;gap:10px;cursor:pointer;">
             <input type="checkbox" id="darkModeToggle" onchange="toggleDarkMode()"
               style="width:18px;height:18px;cursor:pointer;">
@@ -16052,6 +16169,11 @@ auth.onAuthStateChanged(async function(user) {
     }
   })();
 
+  // Apply per-user dark mode preference (overrides the pre-paint default).
+  if (typeof window.applyResolvedDarkMode === 'function') {
+    window.applyResolvedDarkMode();
+  }
+
   // Handle coin purchase return from Stripe BEFORE initial navigation
   var _coinPurchaseReturn = false;
   var _coinPurchaseAction = null;
@@ -18231,7 +18353,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260526-221758-a1fec5f';
+var MAST_MODULES_V = '20260526-223051-2c2cc0a';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -24209,14 +24331,10 @@ function loadSettings() {
     if (countInput && settings.homepageEventsCount) {
       countInput.value = settings.homepageEventsCount;
     }
-    // Dark mode — respect saved setting, or default to dark
-    var darkPref = settings.adminDarkMode;
-    if (darkPref === undefined || darkPref === null) {
-      darkPref = true;
-    }
-    document.body.classList.toggle('dark-mode', !!darkPref);
-    var toggle = document.getElementById('darkModeToggle');
-    if (toggle) toggle.checked = !!darkPref;
+    // Dark mode is per-user now (admin/users/{uid}/profile/darkMode). The
+    // resolver falls back to tenant adminDarkMode for users who haven't set
+    // a personal preference yet, then to default-dark.
+    if (typeof window.applyResolvedDarkMode === 'function') window.applyResolvedDarkMode();
     // Auto-report toggle — driven by localStorage, not Firebase
     var autoToggle = document.getElementById('autoReportToggle');
     if (autoToggle) autoToggle.checked = _autoReportEnabled();
@@ -24232,15 +24350,13 @@ function loadSettings() {
 }
 
 async function toggleDarkMode() {
+  // Personal preference (per-user), not tenant-level. The Settings UI toggle
+  // and the avatar-menu Dark mode item both write to admin/users/{uid}/
+  // profile/darkMode so they share one source of truth.
   var toggle = document.getElementById('darkModeToggle');
   var enabled = toggle.checked;
-  document.body.classList.toggle('dark-mode', enabled);
-  try {
-    await MastDB.config.settingsField('adminDarkMode').set(enabled);
-    await writeAudit('update', 'settings', 'adminDarkMode');
-  } catch (err) {
-    showToast('Error saving dark mode: ' + err.message, true);
-  }
+  window.setPersonalDarkMode(enabled);
+  try { await writeAudit('update', 'settings', 'darkMode (personal)'); } catch (err) {}
   if (typeof refreshGeneralTabStatus === 'function') refreshGeneralTabStatus();
 }
 
@@ -46608,6 +46724,242 @@ function openMyProfile() {
   navigateTo('employees', { uid: currentUser.uid, view: 'detail' });
 }
 window.openMyProfile = openMyProfile;
+
+// ============================================================
+// Avatar dropdown menu — replaces the standalone Sign Out button.
+// Items: My Profile · My Coins · Switch Tenant (if >1) · Subscription
+//        Dark mode · Send Feedback · About · Sign Out
+// ============================================================
+
+var _avatarMenuOpen = false;
+
+function toggleAvatarMenu(ev) {
+  if (ev) ev.stopPropagation();
+  if (_avatarMenuOpen) closeAvatarMenu(); else openAvatarMenu();
+}
+window.toggleAvatarMenu = toggleAvatarMenu;
+
+function openAvatarMenu() {
+  var menu = document.getElementById('avatarMenu');
+  var trigger = document.getElementById('avatarMenuTrigger');
+  if (!menu || !trigger) return;
+  renderAvatarMenu();
+  menu.classList.add('open');
+  menu.setAttribute('aria-hidden', 'false');
+  trigger.setAttribute('aria-expanded', 'true');
+  _avatarMenuOpen = true;
+  // Defer listener attach by a tick so the same click that opened the menu
+  // doesn't immediately fall through to the outside-click handler.
+  setTimeout(function() {
+    document.addEventListener('click', _avatarMenuOutsideClick, true);
+    document.addEventListener('keydown', _avatarMenuKeydown, true);
+  }, 0);
+}
+
+function closeAvatarMenu() {
+  var menu = document.getElementById('avatarMenu');
+  var trigger = document.getElementById('avatarMenuTrigger');
+  if (menu) { menu.classList.remove('open'); menu.setAttribute('aria-hidden', 'true'); }
+  if (trigger) trigger.setAttribute('aria-expanded', 'false');
+  _avatarMenuOpen = false;
+  document.removeEventListener('click', _avatarMenuOutsideClick, true);
+  document.removeEventListener('keydown', _avatarMenuKeydown, true);
+}
+window.closeAvatarMenu = closeAvatarMenu;
+
+function _avatarMenuOutsideClick(ev) {
+  var menu = document.getElementById('avatarMenu');
+  var trigger = document.getElementById('avatarMenuTrigger');
+  if (menu && menu.contains(ev.target)) return;
+  if (trigger && trigger.contains(ev.target)) return;
+  closeAvatarMenu();
+}
+function _avatarMenuKeydown(ev) {
+  if (ev.key === 'Escape') closeAvatarMenu();
+}
+
+function _avatarMenuItemHtml(label, opts) {
+  opts = opts || {};
+  var suffix = '';
+  if (opts.balance != null) {
+    suffix = '<span class="avatar-menu-item-suffix">' + esc(String(opts.balance)) + '</span>';
+  } else if (opts.chevron) {
+    suffix = '<span class="avatar-menu-item-suffix">&#9656;</span>';
+  } else if (opts.toggle) {
+    suffix = '<span class="avatar-menu-item-toggle' + (opts.toggleOn ? ' on' : '') + '" aria-hidden="true"></span>';
+  }
+  var cls = 'avatar-menu-item' + (opts.danger ? ' avatar-menu-item-signout' : '');
+  var onclickAttr = opts.onclick ? ' onclick="' + opts.onclick + '"' : '';
+  return '<button type="button" class="' + cls + '" role="menuitem"' + onclickAttr + '>' +
+    '<span>' + esc(label) + '</span>' + suffix +
+    '</button>';
+}
+
+function renderAvatarMenu() {
+  var menu = document.getElementById('avatarMenu');
+  if (!menu) return;
+
+  // Header: prefer cached profile.displayName, fall back to auth.
+  var displayName = '';
+  var email = '';
+  if (currentUser) {
+    displayName = currentUser.displayName || (currentUser.email ? currentUser.email.split('@')[0] : '');
+    email = currentUser.email || '';
+  }
+  var cached = (window._userProfileCache && currentUser) ? window._userProfileCache[currentUser.uid] : null;
+  if (cached && cached.displayName) displayName = cached.displayName;
+
+  var header = '<div class="avatar-menu-header">' +
+    '<p class="avatar-menu-header-name">' + esc(displayName || 'My Account') + '</p>' +
+    (email ? '<p class="avatar-menu-header-email">' + esc(email) + '</p>' : '') +
+    '</div>';
+
+  var personal = '';
+  personal += _avatarMenuItemHtml('My Profile', { onclick: 'closeAvatarMenu();openMyProfile();' });
+
+  // My Coins — show wallet balance if available.
+  var balance = null;
+  try {
+    var w = (typeof getTokenWallet === 'function') ? getTokenWallet() : null;
+    if (w && w.status && w.status !== 'unknown') {
+      var bal = (w.currentBalance != null ? w.currentBalance : 0);
+      balance = bal.toLocaleString() + ' ⚡';
+    }
+  } catch (e) {}
+  personal += _avatarMenuItemHtml('My Coins', {
+    onclick: 'closeAvatarMenu();navigateTo(\'coins\');',
+    balance: balance
+  });
+
+  // Switch Tenant — only when the user has access to >1 tenant.
+  if (window._avatarMenuTenants && window._avatarMenuTenants.length > 1) {
+    personal += _avatarMenuItemHtml('Switch Tenant', {
+      onclick: 'openAvatarMenuTenantSwitcher();',
+      chevron: true
+    });
+  } else if (typeof window._avatarMenuTenantsLoaded === 'undefined') {
+    _loadAvatarMenuTenants();
+  }
+
+  personal += _avatarMenuItemHtml('Subscription', { onclick: 'closeAvatarMenu();navigateTo(\'subscription\');' });
+
+  var prefs = '';
+  var isDark = document.body.classList.contains('dark-mode');
+  prefs += _avatarMenuItemHtml('Dark mode', {
+    onclick: 'setPersonalDarkMode(!document.body.classList.contains(\'dark-mode\'));renderAvatarMenu();',
+    toggle: true,
+    toggleOn: isDark
+  });
+  prefs += _avatarMenuItemHtml('Send Feedback', {
+    onclick: 'closeAvatarMenu();if (typeof openFeedbackDialog === \'function\') openFeedbackDialog();'
+  });
+  prefs += _avatarMenuItemHtml('About', { onclick: 'closeAvatarMenu();navigateTo(\'about\');' });
+
+  var signout = _avatarMenuItemHtml('Sign Out', {
+    onclick: 'closeAvatarMenu();signOut();',
+    danger: true
+  });
+
+  menu.innerHTML = header + personal +
+    '<div class="avatar-menu-divider"></div>' + prefs +
+    '<div class="avatar-menu-divider"></div>' + signout;
+}
+window.renderAvatarMenu = renderAvatarMenu;
+
+function _loadAvatarMenuTenants() {
+  window._avatarMenuTenantsLoaded = true;
+  if (!currentUser || !MastDB.platform || typeof MastDB.platform.get !== 'function') {
+    window._avatarMenuTenants = [];
+    return;
+  }
+  MastDB.platform.get('mast-platform/userTenantMap/' + currentUser.uid).then(function(map) {
+    var tids = (map && typeof map === 'object')
+      ? Object.keys(map).filter(function(k) { return !!map[k]; })
+      : [];
+    if (tids.length <= 1) {
+      window._avatarMenuTenants = tids.map(function(t) { return { tid: t, name: t }; });
+      return;
+    }
+    return Promise.all(tids.map(function(tid) {
+      return MastDB.platform.get('mast-platform/tenantPublicConfigs/' + tid)
+        .then(function(pc) {
+          var nm = (pc && (pc.name || pc.brandName)) || tid;
+          return { tid: tid, name: nm };
+        })
+        .catch(function() { return { tid: tid, name: tid }; });
+    })).then(function(rows) {
+      window._avatarMenuTenants = rows;
+      // Re-render if menu still open so the row appears now that data is in.
+      if (_avatarMenuOpen) renderAvatarMenu();
+    });
+  }).catch(function() { window._avatarMenuTenants = []; });
+}
+
+function openAvatarMenuTenantSwitcher() {
+  var menu = document.getElementById('avatarMenu');
+  if (!menu || !window._avatarMenuTenants) return;
+  var currentTid = (typeof MastDB.tenantId === 'function') ? MastDB.tenantId() : null;
+  var html = '<div class="avatar-menu-header">' +
+    '<p class="avatar-menu-header-name">Switch Tenant</p>' +
+    '<p class="avatar-menu-header-email">Open another tenant\'s admin</p>' +
+    '</div>' +
+    _avatarMenuItemHtml('← Back', { onclick: 'renderAvatarMenu();' }) +
+    '<div class="avatar-menu-divider"></div>';
+  window._avatarMenuTenants.forEach(function(t) {
+    var isCurrent = t.tid === currentTid;
+    var label = t.name + (isCurrent ? ' (current)' : '');
+    var click = isCurrent
+      ? 'closeAvatarMenu();'
+      : 'window.location.href=\'https://' + t.tid + '.runmast.com/app\';';
+    html += _avatarMenuItemHtml(label, { onclick: click });
+  });
+  menu.innerHTML = html;
+}
+window.openAvatarMenuTenantSwitcher = openAvatarMenuTenantSwitcher;
+
+// ============================================================
+// Per-user dark mode preference
+// Priority: admin/users/{uid}/profile/darkMode > tenant adminDarkMode > true
+// Both the avatar-menu toggle and the Settings UI toggle write to the
+// per-user path so they share one source of truth.
+// ============================================================
+
+window.resolveDarkModePreference = function() {
+  if (!currentUser || !currentUser.uid || typeof MastDB === 'undefined') {
+    return Promise.resolve(true);
+  }
+  return MastDB.get('admin/users/' + currentUser.uid + '/profile/darkMode').then(function(snap) {
+    var val = snap && (typeof snap.val === 'function' ? snap.val() : snap);
+    if (typeof val === 'boolean') return val;
+    // Fall back to tenant-level adminDarkMode (legacy default for the tenant).
+    return MastDB.config.settingsField('adminDarkMode').once('value').then(function(s) {
+      var v = s && typeof s.val === 'function' ? s.val() : null;
+      return (typeof v === 'boolean') ? v : true;
+    }).catch(function() { return true; });
+  }).catch(function() { return true; });
+};
+
+window.applyResolvedDarkMode = function() {
+  return window.resolveDarkModePreference().then(function(enabled) {
+    document.body.classList.toggle('dark-mode', !!enabled);
+    var toggle = document.getElementById('darkModeToggle');
+    if (toggle) toggle.checked = !!enabled;
+    return enabled;
+  });
+};
+
+window.setPersonalDarkMode = function(enabled) {
+  enabled = !!enabled;
+  document.body.classList.toggle('dark-mode', enabled);
+  var toggle = document.getElementById('darkModeToggle');
+  if (toggle) toggle.checked = enabled;
+  if (!currentUser || !currentUser.uid) return;
+  MastDB.set('admin/users/' + currentUser.uid + '/profile/darkMode', enabled).then(function() {
+    window.invalidateUserProfileCache(currentUser.uid);
+  }).catch(function(err) {
+    showToast('Error saving dark mode: ' + (err && err.message), true);
+  });
+};
 
 function renderUserDetail(uid) {
   var detailEl = document.getElementById('empDetailView');
