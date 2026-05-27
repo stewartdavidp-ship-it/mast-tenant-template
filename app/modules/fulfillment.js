@@ -104,6 +104,32 @@
     });
   }
 
+  // Cache the shipping-config-present state so the banner doesn't flicker
+  // between renders. Set by _checkShippoConnected; null = not-yet-checked.
+  var _shippoConnectedCache = null;
+
+  function _checkShippoConnected() {
+    if (_shippoConnectedCache !== null) return Promise.resolve(_shippoConnectedCache);
+    if (typeof firebase === 'undefined' || !firebase.functions) {
+      _shippoConnectedCache = false;
+      return Promise.resolve(false);
+    }
+    return firebase.functions().httpsCallable('secretsManager')({
+      action: 'read', service: 'shippo', tenantId: MastDB.tenantId()
+    }).then(function(r) {
+      var cfg = r && r.data;
+      var connected = !!(cfg && (cfg.connected || cfg.apiKey || cfg.apiToken));
+      _shippoConnectedCache = connected;
+      return connected;
+    }).catch(function() {
+      // On error, leave the cache as null so we don't show a misleading banner.
+      // The Cloud Function still returns a clear error on the actual Buy click.
+      return true;
+    });
+  }
+  // Expose so renderBuyLabelsView can re-fire when the check resolves.
+  window._fulfRecheckShippo = function() { _shippoConnectedCache = null; renderBuyLabelsView(); };
+
   function renderBuyLabelsView() {
     var el = document.getElementById('fulfBuyLabelsView');
     if (!el) return;
@@ -115,7 +141,26 @@
       return;
     }
 
-    var html = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:12px;flex-wrap:wrap;">' +
+    // Setup banner: surface the "Shippo not configured" precondition BEFORE
+    // the user clicks Buy and hits a Cloud Function error. Cache primes on
+    // first render; subsequent renders are sync. (feedback 6p1moBwxgbvth7cCOaUN)
+    var setupBanner = '';
+    if (_shippoConnectedCache === false) {
+      setupBanner =
+        '<div style="background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.35);border-radius:8px;padding:12px 16px;margin-bottom:12px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">' +
+          '<span style="font-size:1.15rem;">&#9888;&#65039;</span>' +
+          '<div style="flex:1;min-width:200px;">' +
+            '<div style="font-weight:600;font-size:0.85rem;color:var(--text);">Shipping provider not connected</div>' +
+            '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:2px;">Buy Label needs a Shippo API key + ship-from address. Set them up in Settings, then come back here.</div>' +
+          '</div>' +
+          '<button class="btn btn-primary" style="font-size:0.78rem;padding:6px 14px;" onclick="navigateTo(\'settings\');setTimeout(function(){switchSettingsSubView(\'shipping\');},50);">Open Shipping Settings</button>' +
+        '</div>';
+    } else if (_shippoConnectedCache === null) {
+      // Kick off the async check; renderBuyLabelsView re-fires when it resolves.
+      _checkShippoConnected().then(function() { renderBuyLabelsView(); });
+    }
+
+    var html = setupBanner + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:12px;flex-wrap:wrap;">' +
       '<div style="font-size:0.85rem;color:var(--warm-gray);">' + rows.length + ' order' + (rows.length === 1 ? '' : 's') + ' ready &middot; ' + selCount + ' selected</div>' +
       '<button id="buyLabelsBtn" class="btn btn-primary" ' + (selCount === 0 ? 'disabled' : '') + ' style="font-size:0.85rem;padding:8px 16px;' + (selCount === 0 ? 'opacity:0.5;cursor:not-allowed;' : '') + '" onclick="buyLabelsSelected()">Buy Selected (' + selCount + ')</button>' +
     '</div>';
@@ -174,6 +219,19 @@
     if (ids.length === 0) return;
     var btn = document.getElementById('buyLabelsBtn');
     if (btn) { btn.disabled = true; btn.textContent = 'Buying ' + ids.length + ' label(s)…'; }
+    // Pre-check: bail with a friendly toast if Shippo isn't configured rather
+    // than letting the CF throw failed-precondition (feedback
+    // 6p1moBwxgbvth7cCOaUN). The banner in renderBuyLabelsView covers the
+    // discoverability case; this catches the race where the cache hadn't
+    // resolved yet when the user clicked.
+    try {
+      var connected = await _checkShippoConnected();
+      if (!connected) {
+        showToast('Connect Shippo in Settings → Shipping before buying labels.', true);
+        if (btn) { btn.disabled = false; btn.textContent = 'Buy Selected (' + ids.length + ')'; }
+        return;
+      }
+    } catch (_) { /* don't block on a transient pre-check failure */ }
     try {
       var tenantId = (typeof window.TENANT_ID === 'string' && window.TENANT_ID) || (window.TENANT_CONFIG && window.TENANT_CONFIG.tenantId);
       var fn = firebase.functions().httpsCallable('buyShippingLabels');
@@ -184,7 +242,17 @@
       _buyLabelsSelected = Object.create(null);
       renderBuyLabelsView();
     } catch (e) {
-      showToast('Buy labels failed: ' + (e && e.message ? e.message : String(e)), true);
+      var msg = e && e.message ? e.message : String(e);
+      // Translate the backend's precondition error into an actionable
+      // pointer; otherwise the user sees "No shipping config found at
+      // tenants/{tid}/admin/config/shipping. Run setShippingApiKey…" which
+      // mentions an internal path.
+      if (/No shipping config found|setShippingApiKey/i.test(msg) || (e && e.code === 'functions/failed-precondition')) {
+        msg = 'Shipping provider not connected. Open Settings → Shipping to add your Shippo API key and ship-from address.';
+        _shippoConnectedCache = false; // surface the banner on next render
+        renderBuyLabelsView();
+      }
+      showToast('Buy labels failed: ' + msg, true);
       if (btn) { btn.disabled = false; btn.textContent = 'Buy Selected (' + ids.length + ')'; }
     }
   }

@@ -18385,7 +18385,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260526-230355-ba1c45d';
+var MAST_MODULES_V = '20260526-232528-82d37b5';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -27943,6 +27943,28 @@ async function syncEtsyOrders() {
     btn.innerHTML = '<span class="spinner-small"></span> Syncing...';
   }
 
+  // Pre-check connection state before triggering the Cloud Function. The
+  // backend etsyOrderSync throws INTERNAL with no detail when no Etsy
+  // config exists, which surfaces to the user as a cryptic error
+  // (feedback DjwV3af6X39LsBCaq8lY). Catch the not-connected case in the
+  // client so we can point the user at Settings instead.
+  try {
+    var cfgRes = await firebase.functions().httpsCallable('secretsManager')({
+      action: 'read', service: 'etsy', tenantId: MastDB.tenantId()
+    });
+    var cfg = cfgRes && cfgRes.data;
+    if (!cfg || !cfg.connected || !cfg.shopId) {
+      showToast('Etsy isn\'t connected yet. Open Settings → Integrations → Etsy to connect your shop.', true);
+      if (btn) { btn.disabled = false; btn.innerHTML = '&#x21bb; Sync Etsy'; }
+      return;
+    }
+  } catch (precheckErr) {
+    // Pre-check itself failed (network / permissions). Fall through to the
+    // real sync attempt — its error surface will at least surface something
+    // actionable, and we don't want to block a legitimate sync on a transient
+    // secretsManager hiccup.
+  }
+
   try {
     var result = await firebase.functions().httpsCallable('etsyOrderSync')({});
     var data = result.data;
@@ -27952,7 +27974,13 @@ async function syncEtsyOrders() {
     // Refresh last sync time in settings
     loadEtsyConfig();
   } catch (err) {
-    showToast('Etsy sync error: ' + err.message, true);
+    var msg = err && err.message ? err.message : 'unknown error';
+    // INTERNAL with no detail is the generic Cloud Function wrapper — point
+    // the user at where to look rather than printing the opaque code.
+    if (/^INTERNAL$/i.test(msg) || (err && err.code === 'functions/internal')) {
+      msg = 'Sync failed server-side. Check the Sync Log in Settings → Integrations → PIM for details, and verify your Etsy connection is still authorized.';
+    }
+    showToast('Etsy sync error: ' + msg, true);
   } finally {
     if (btn) {
       btn.disabled = false;

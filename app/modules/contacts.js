@@ -374,13 +374,22 @@ async function loadContacts() {
     contactsData = val ? Object.values(val) : [];
     contactsData.sort(function(a, b) { return (a.name || '').localeCompare(b.name || ''); });
 
-    // Pre-fetch last interaction for each contact
+    // Derive last interaction from the already-loaded subtree.
+    //
+    // Pre-fix: this loop awaited a SEPARATE listInteractions() query per
+    // contact (~100ms each × N contacts = 5s+ load on a 50-contact tenant
+    // — see feedback PdnZPlO5zf2OiJIGeCdN). MastDB.contacts.list() reads
+    // the full admin/contacts subtree, so each contact's `interactions`
+    // child is already in memory; absence of the key means no interactions
+    // exist (Firebase RTDB never creates empty nodes). Zero extra queries,
+    // instant pass.
     for (var i = 0; i < contactsData.length; i++) {
       var c = contactsData[i];
-      try {
-        var iVal = await MastDB.contacts.listInteractions(c.id, { orderBy: 'date', limit: 1 });
-        c._lastInteraction = iVal ? Object.values(iVal)[0] : null;
-      } catch (e) {
+      if (c.interactions) {
+        var ints = Object.values(c.interactions);
+        ints.sort(function(a, b) { return (b.date || '').localeCompare(a.date || ''); });
+        c._lastInteraction = ints[0] || null;
+      } else {
         c._lastInteraction = null;
       }
     }
