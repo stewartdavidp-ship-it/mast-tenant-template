@@ -218,7 +218,10 @@
 
     // Filter bar
     h += '<div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;align-items:center;">';
-    h += '<select id="emailStatusFilter" onchange="window._emailLogFilterStatus()" style="padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.85rem;">';
+    // Q6 sweep: status as pills (3 bounded options). Email Type stays as
+    // dropdown below — unbounded option set (one per distinct emailType).
+    h += '<div class="order-filter-pills" data-filter-for="emailStatusFilter" style="margin:0;"></div>';
+    h += '<select id="emailStatusFilter" onchange="window._emailLogFilterStatus()" style="display:none;">';
     h += '<option value="all"' + (emailFilter === 'all' ? ' selected' : '') + '>All Status</option>';
     h += '<option value="sent"' + (emailFilter === 'sent' ? ' selected' : '') + '>Sent</option>';
     h += '<option value="failed"' + (emailFilter === 'failed' ? ' selected' : '') + '>Failed</option>';
@@ -238,12 +241,14 @@
     if (!emailsLoaded) {
       h += '<p style="color:var(--warm-gray);font-size:0.9rem;">Loading...</p>';
       container.innerHTML = h;
+      if (window.mastInitFilterPills) window.mastInitFilterPills(container);
       return;
     }
 
     if (filtered.length === 0) {
       h += '<p style="color:var(--warm-gray);font-size:0.9rem;">No emails found' + (emailFilter !== 'all' || emailTypeFilter !== 'all' ? ' matching filters' : '') + '.</p>';
       container.innerHTML = h;
+      if (window.mastInitFilterPills) window.mastInitFilterPills(container);
       return;
     }
 
@@ -297,6 +302,7 @@
     }
 
     container.innerHTML = h;
+    if (window.mastInitFilterPills) window.mastInitFilterPills(container);
   }
 
   function renderEmailDetail(email) {
