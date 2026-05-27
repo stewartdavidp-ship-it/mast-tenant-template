@@ -1028,9 +1028,13 @@
   // ---- Entries panel (W3.3) ----
   function renderBurdenEntriesPanel() {
     var h = '';
-    h += '<div id="burdenFormWrap" style="display:none;background:var(--cream,var(--cream));border:1px solid var(--cream-dark,var(--cream-dark));border-radius:8px;padding:16px 20px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,0.08);"><div id="burdenFormInner"></div></div>';
-    h += '<div id="burdenBulkWrap" style="display:none;background:var(--cream,var(--cream));border:1px solid var(--cream-dark,var(--cream-dark));border-radius:8px;padding:16px 20px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,0.08);"><div id="burdenBulkInner"></div></div>';
-    h += '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px;">';
+    // R2-M8: form/bulk render as overlay modals (fixed-position scrim) instead
+    // of inline-above-table. Keeps "+ Record Burden" button visible without
+    // showing a stale duplicate when the form is open. The wraps themselves
+    // are positioned by _burdenShowAsModal / hidden by display:none.
+    h += '<div id="burdenFormWrap" style="display:none;"><div id="burdenFormInner"></div></div>';
+    h += '<div id="burdenBulkWrap" style="display:none;"><div id="burdenBulkInner"></div></div>';
+    h += '<div id="burdenToolbar" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px;">';
     h += '<select id="burdenEmpFilter" onchange="teamBurdenFilterEmployee(this.value)" style="' + INPUT_STYLE + 'width:auto;min-width:200px;">';
     h += '<option value="">All employees</option>';
     employeesData.filter(function(e) { return (e.status || 'active') === 'active'; }).forEach(function(emp) {
@@ -1111,15 +1115,29 @@
         rows.forEach(function(r) {
           var emp = employeesData.find(function(e) { return e._key === r.employeeId; });
           var empName = emp ? emp.fullName : r.employeeId;
-          var srcLabel = BURDEN_SOURCE_LABELS[r.source] || r.source;
-          var confChip = r.confidence
-            ? '<span style="background:rgba(34,197,94,0.15);color:#16a34a;padding:2px 8px;border-radius:10px;font-size:0.72rem;">' + esc(String(r.confidence)) + '</span>'
-            : '<span style="color:var(--warm-gray);font-size:0.72rem;">TBD (Agent D MCP)</span>';
+          // R2-M5: branded source-tag chip via shared helper (Agent C exposed
+          // at window.MastFinanceW3.renderSourceTagChip / window.renderSourceTagChip).
+          // Manual entries are HIGH confidence by definition (operator-entered);
+          // estimator entries inherit doc.confidence (HIGH/MED/LOW computed by CF).
+          var effectiveConf = r.confidence || (r.source === 'manual' ? 'HIGH' : null);
+          var srcChip = (window.MastFinanceW3 && window.MastFinanceW3.renderSourceTagChip)
+            ? window.MastFinanceW3.renderSourceTagChip(r.source, effectiveConf)
+            : '<span style="background:rgba(0,0,0,0.05);padding:2px 8px;border-radius:10px;font-size:0.72rem;">' + esc(BURDEN_SOURCE_LABELS[r.source] || r.source) + '</span>';
+          var confChip;
+          if (effectiveConf) {
+            var confBg, confFg;
+            if (effectiveConf === 'HIGH')      { confBg = 'rgba(34,197,94,0.15)';  confFg = '#16a34a'; }
+            else if (effectiveConf === 'LOW')  { confBg = 'rgba(239,68,68,0.15)';  confFg = '#ef4444'; }
+            else                                { confBg = 'rgba(245,158,11,0.15)'; confFg = '#b45309'; }
+            confChip = '<span style="background:' + confBg + ';color:' + confFg + ';padding:2px 8px;border-radius:10px;font-size:0.72rem;font-weight:600;">' + esc(String(effectiveConf)) + '</span>';
+          } else {
+            confChip = '<span style="color:var(--warm-gray);font-size:0.72rem;">—</span>';
+          }
           h += '<tr style="border-bottom:1px solid var(--cream-dark,var(--cream-dark));cursor:pointer;" onclick="teamBurdenOpenDetail(\'' + esc(r.periodId) + '\',\'' + esc(r.employeeId) + '\')">';
           h += '<td style="padding:8px 10px;">' + esc(_burdenPeriodIdToLabel(r.periodId)) + '</td>';
           h += '<td style="padding:8px 10px;">' + esc(empName) + '</td>';
           h += '<td style="padding:8px 10px;text-align:right;font-weight:600;">$' + (r.totalBurden / 100).toFixed(2) + '</td>';
-          h += '<td style="padding:8px 10px;"><span style="background:rgba(0,0,0,0.05);padding:2px 8px;border-radius:10px;font-size:0.72rem;">' + esc(srcLabel) + '</span></td>';
+          h += '<td style="padding:8px 10px;">' + srcChip + '</td>';
           h += '<td style="padding:8px 10px;">' + confChip + '</td>';
           h += '<td style="padding:8px 10px;text-align:right;" onclick="event.stopPropagation();">';
           h += '<button class="btn btn-secondary btn-small" data-pid="' + esc(r.periodId) + '" data-eid="' + esc(r.employeeId) + '" onclick="teamBurdenEditEntry(this.dataset.pid, this.dataset.eid)">Edit</button>';
@@ -1231,9 +1249,12 @@
 
     // Statutory + benefits
     h += '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:12px;">';
-    h += labelField('burdenFica', 'Employer FICA ($)', numberInput('burdenFica', _burdenCentsToDollars(bd.employerFica), '0.01', '7.65%'));
-    h += labelField('burdenFuta', 'FUTA ($)', numberInput('burdenFuta', _burdenCentsToDollars(bd.futa), '0.01', ''));
-    h += labelField('burdenSuta', 'SUTA ($)', numberInput('burdenSuta', _burdenCentsToDollars(bd.suta), '0.01', ''));
+    // R2-M6: dollar placeholders + auto-compute hints. Auto-fill on Wages blur,
+    // user can override after. We tag computed values with data-auto="1" so we
+    // know whether to overwrite or respect an explicit edit.
+    h += labelField('burdenFica', 'Employer FICA ($)', numberInput('burdenFica', _burdenCentsToDollars(bd.employerFica), '0.01', 'e.g. 244.80'));
+    h += labelField('burdenFuta', 'FUTA ($)', numberInput('burdenFuta', _burdenCentsToDollars(bd.futa), '0.01', 'e.g. 19.20'));
+    h += labelField('burdenSuta', 'SUTA ($)', numberInput('burdenSuta', _burdenCentsToDollars(bd.suta), '0.01', 'e.g. 84.00'));
     h += labelField('burdenWc', 'WC premium ($)', numberInput('burdenWc', _burdenCentsToDollars(bd.wcPremium), '0.01', ''));
     h += labelField('burdenRet', 'Retirement ($)', numberInput('burdenRet', _burdenCentsToDollars(bd.retirement), '0.01', ''));
     h += '</div>';
@@ -1260,7 +1281,7 @@
     h += '</div>';
 
     innerEl.innerHTML = h;
-    formEl.style.display = '';
+    _burdenShowAsModal(formEl);
     _burdenRenderBenefitRows();
     _burdenAttachLiveTotalListeners();
     _burdenRecomputeLiveTotal();
@@ -1293,6 +1314,56 @@
       var el = document.getElementById('burdenBenA' + i);
       if (el && !el._burdenListenerBound) { el.addEventListener('input', _burdenRecomputeLiveTotal); el._burdenListenerBound = true; }
     });
+    // R2-M6: mark dependent fields as "user-edited" once they receive input,
+    // so wages-blur auto-compute won't clobber an explicit override.
+    ['burdenFica','burdenFuta','burdenSuta'].forEach(function(id) {
+      var el = document.getElementById(id);
+      if (el && !el._burdenUserEditBound) {
+        el.addEventListener('input', function() { el.dataset.userEdited = '1'; });
+        el._burdenUserEditBound = true;
+      }
+    });
+    // Auto-compute statutory taxes when wages changes (operator can still override).
+    var w = document.getElementById('burdenWages');
+    if (w && !w._burdenAutoComputeBound) {
+      w.addEventListener('blur', _burdenAutoComputeStatutory);
+      w._burdenAutoComputeBound = true;
+    }
+  }
+
+  function _burdenAutoComputeStatutory() {
+    var wagesCents = _burdenDollarsToCents((document.getElementById('burdenWages') || {}).value);
+    if (!wagesCents || wagesCents <= 0) return;
+    function _setIfAuto(id, cents) {
+      var el = document.getElementById(id);
+      if (!el) return;
+      if (el.dataset.userEdited === '1') return; // respect operator override
+      el.value = (cents / 100).toFixed(2);
+    }
+    // FICA employer share = 7.65% of wages.
+    _setIfAuto('burdenFica', Math.round(wagesCents * 0.0765));
+    // FUTA = 0.6% of wages capped at $7,000 (700000 cents) per employee per year.
+    // We don't have YTD-paid context in the form, so apply the per-period cap as
+    // a reasonable upper bound (operator overrides for partial-cap periods).
+    _setIfAuto('burdenFuta', Math.round(Math.min(wagesCents, 700000) * 0.006));
+    // SUTA: use estimator config if available (tenant's operating state rate).
+    // burdenEstimator is loaded by loadBurdenEstimatorPanel; for the entry form
+    // path we may not have it cached, so default to 2.7% (federal credit-reduction
+    // baseline) as a placeholder the operator should tune. Mark as autoComputed.
+    var sutaRate = 0.027;
+    try {
+      var mult = (burdenEstimator && burdenEstimator.estimatorMultipliers) || {};
+      var sutaMap = mult.suta || {};
+      // Pick the first non-default state rate; if none, fall back to 2.7%.
+      var keys = Object.keys(sutaMap);
+      if (keys.length === 1) {
+        var v = sutaMap[keys[0]];
+        if (typeof v === 'number') sutaRate = v;
+        else if (v && typeof v.rate === 'number') sutaRate = v.rate;
+      }
+    } catch (_) {}
+    _setIfAuto('burdenSuta', Math.round(wagesCents * sutaRate));
+    _burdenRecomputeLiveTotal();
   }
 
   function _burdenSnapshotFormFields() {
@@ -1321,6 +1392,37 @@
     bd.benefits.forEach(function(b) { total += b.amount; });
     var el = document.getElementById('burdenTotalLive');
     if (el) el.innerHTML = 'Total burden: <strong>$' + (total / 100).toFixed(2) + '</strong>';
+  }
+
+  // R2-M8: render the burden form/bulk/detail wrap as a centered modal
+  // overlay so the entries-table toolbar (with its duplicate "+ Record Burden"
+  // button) doesn't sit behind/below the inline form.
+  function _burdenShowAsModal(wrapEl) {
+    if (!wrapEl) return;
+    // Wrap the inner content in a modal card with scrim. We toggle the wrap
+    // from "invisible inline div" to "fixed-position scrim+card" via direct
+    // style writes — no re-templating of the inner HTML required.
+    wrapEl.style.cssText =
+      'display:flex;position:fixed;inset:0;z-index:9000;' +
+      'background:rgba(0,0,0,0.55);' +
+      'align-items:flex-start;justify-content:center;' +
+      'padding:48px 20px 20px;overflow-y:auto;';
+    // The first child (inner content) becomes the card.
+    var inner = wrapEl.firstElementChild;
+    if (inner) {
+      inner.style.cssText =
+        'background:var(--cream,#f8f4ec);border:1px solid var(--cream-dark,#e8e0d4);' +
+        'border-radius:10px;padding:20px 24px;max-width:780px;width:100%;' +
+        'box-shadow:0 20px 50px rgba(0,0,0,0.4);max-height:calc(100vh - 68px);' +
+        'overflow-y:auto;';
+    }
+    // Click-on-scrim dismisses (matches MastAskAi pattern).
+    if (!wrapEl._burdenModalScrimBound) {
+      wrapEl.addEventListener('click', function(ev) {
+        if (ev.target === wrapEl) { wrapEl.style.display = 'none'; }
+      });
+      wrapEl._burdenModalScrimBound = true;
+    }
   }
 
   async function teamBurdenAutofillWages() {
@@ -1428,7 +1530,7 @@
     h += '</div>';
     h += '<div id="burdenBulkPreview" style="margin-top:12px;"></div>';
     innerEl.innerHTML = h;
-    wrapEl.style.display = '';
+    _burdenShowAsModal(wrapEl);
   }
 
   function teamBurdenBulkCancel() {
@@ -1624,16 +1726,23 @@
     var doc = period[empId];
     if (!doc) { showToast('Entry not found in cache; reloading.', true); loadBurdenEntries(); return; }
     var emp = employeesData.find(function(e) { return e._key === empId; });
+    // R2-H3: Firestore writes flat fields (wages/employerFica/futa/suta/wcPremium/
+    // retirement/benefits) on the doc; legacy/MCP path may nest under `breakdown`.
+    // Read flat first, fall back to breakdown.
     var bd = doc.breakdown || {};
+    function _bdField(name) {
+      return doc[name] != null ? doc[name] : bd[name];
+    }
     var lines = [
-      ['Wages', bd.wages],
-      ['Employer FICA', bd.employerFica],
-      ['FUTA', bd.futa],
-      ['SUTA', bd.suta],
-      ['WC premium', bd.wcPremium],
-      ['Retirement', bd.retirement]
+      ['Wages', _bdField('wages')],
+      ['Employer FICA', _bdField('employerFica')],
+      ['FUTA', _bdField('futa')],
+      ['SUTA', _bdField('suta')],
+      ['WC premium', _bdField('wcPremium')],
+      ['Retirement', _bdField('retirement')]
     ];
-    (bd.benefits || []).forEach(function(b) { lines.push(['Benefit: ' + (b.type || 'other'), b.amount]); });
+    var benefitsList = Array.isArray(doc.benefits) ? doc.benefits : (Array.isArray(bd.benefits) ? bd.benefits : []);
+    benefitsList.forEach(function(b) { lines.push(['Benefit: ' + (b.type || 'other'), b.amount]); });
 
     // Per-job allocation summary — flat collection (post-rework).
     var alloc = [];
@@ -1661,9 +1770,16 @@
     });
     h += '<tr style="border-top:1px solid var(--cream-dark,var(--cream-dark));"><td style="padding:6px 8px;font-weight:600;">Total burden</td><td style="padding:6px 8px;text-align:right;font-weight:700;">$' + ((doc.totalBurden || 0) / 100).toFixed(2) + '</td></tr>';
     h += '</table>';
-    h += '<div style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:14px;">Source: <strong>' + esc(BURDEN_SOURCE_LABELS[doc.source] || doc.source || 'manual') + '</strong>'
-      + (doc.confidence ? ' · Confidence: ' + esc(String(doc.confidence)) : ' · Confidence: TBD (Agent D MCP)')
-      + (doc.jobId ? ' · Job: ' + esc(doc.jobId) : '')
+    // R2-M5: detail header uses branded source-tag chip + dash for unknown confidence.
+    var _detailSrc = doc.source || 'manual';
+    var _detailConf = doc.confidence || (_detailSrc === 'manual' ? 'HIGH' : null);
+    var _srcChipHtml = (window.MastFinanceW3 && window.MastFinanceW3.renderSourceTagChip)
+      ? window.MastFinanceW3.renderSourceTagChip(_detailSrc, _detailConf)
+      : '<strong>' + esc(BURDEN_SOURCE_LABELS[_detailSrc] || _detailSrc) + '</strong>';
+    h += '<div style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:14px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">'
+      + '<span>Source:</span> ' + _srcChipHtml
+      + (_detailConf ? ' <span>· Confidence: <strong>' + esc(String(_detailConf)) + '</strong></span>' : ' <span>· Confidence: —</span>')
+      + (doc.jobId ? ' <span>· Job: ' + esc(doc.jobId) + '</span>' : '')
       + '</div>';
     h += '<div style="font-weight:600;font-size:0.85rem;margin-bottom:6px;">Per-job allocation</div>';
     if (alloc.length === 0) {
@@ -1684,7 +1800,7 @@
     var innerEl = document.getElementById('burdenFormInner');
     if (modalEl && innerEl) {
       innerEl.innerHTML = h;
-      modalEl.style.display = '';
+      _burdenShowAsModal(modalEl);
     }
   }
 
@@ -1850,7 +1966,7 @@
     }
     try {
       var fn = firebase.functions().httpsCallable('seedStateSutaTable');
-      var res = await fn({ force: !!force });
+      var res = await fn({ tid: MastDB.tenantId(), force: !!force });
       var data = (res && res.data) ? res.data : {};
       if (data && data.ok === false) { showToast('Reseed failed: ' + (data.message || 'unknown'), true); return; }
       showToast('SUTA defaults' + (force ? ' force-' : ' ') + 'reseeded.');

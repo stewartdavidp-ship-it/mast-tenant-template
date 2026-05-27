@@ -7175,21 +7175,38 @@ async function _w3LoadFlat() {
 
 async function _w3PeriodsForRange(startDate, endDate) {
   if (!startDate || !endDate) return [];
+  // R2-H2: Enumerate periodIds from the actual collection (parse from composite
+  // doc IDs `{periodId}__{employeeId}`) — not from a derived cache that may
+  // miss recently-written entries. We deduplicate via a Set since multiple
+  // employees share a periodId.
   var listing = _w3PeriodIdListCache;
-  if (!listing || (Date.now() - listing.fetchedAt) > 30000) {
-    var flat = await _w3LoadFlat();
-    var keys = Object.keys(flat.byPeriod || {});
-    listing = { periodIds: keys, fetchedAt: Date.now() };
+  var fresh = listing && (Date.now() - listing.fetchedAt) < 30000;
+  if (!fresh) {
+    var periodSet = {};
+    try {
+      var allBurden = (await MastDB.get('admin/burdenedLaborCost')) || {};
+      Object.keys(allBurden).forEach(function(compositeId) {
+        var rec = allBurden[compositeId] || {};
+        // Prefer denormalized periodId; fall back to parsing the composite ID.
+        var pid = rec.periodId;
+        if (!pid) {
+          var sep = compositeId.indexOf('__');
+          if (sep > 0) pid = compositeId.slice(0, sep);
+        }
+        if (pid && _W3_PERIOD_ID_RE.test(pid)) periodSet[pid] = true;
+      });
+    } catch (_) {}
+    listing = { periodIds: Object.keys(periodSet), fetchedAt: Date.now() };
     _w3PeriodIdListCache = listing;
   }
   var out = [];
   for (var i = 0; i < listing.periodIds.length; i++) {
-    var pid = listing.periodIds[i];
-    var m = _W3_PERIOD_ID_RE.exec(pid);
+    var pid2 = listing.periodIds[i];
+    var m = _W3_PERIOD_ID_RE.exec(pid2);
     if (!m) continue;
     var pStart = m[1], pEnd = m[2];
     // Overlap test on ISO YYYY-MM-DD strings — lexicographic compare is correct.
-    if (pStart <= endDate && pEnd >= startDate) out.push(pid);
+    if (pStart <= endDate && pEnd >= startDate) out.push(pid2);
     if (out.length > 200) break; // safety
   }
   return out;
