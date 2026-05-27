@@ -490,6 +490,28 @@
     h += '</select>';
     h += '</div>';
 
+    // D5 (2026-05-28) — orthogonal signal toggles. The dropdowns above filter
+    // by *origin* (source) and *purchase shape* (last order, min spend).
+    // These checkboxes filter by *current state*:
+    //  - newsletterOnly: customers with marketing.newsletterOptIn === true,
+    //    independent of how they arrived. Answers "who's subscribed to my
+    //    newsletter right now?" (the source dropdown's 'newsletter' option
+    //    only catches customers whose origin was newsletter signup, not
+    //    customers who opted in later via the toggle on their record).
+    //  - leadsOnly: customers with stats.orderCount === 0. Uses the existing
+    //    f._noOrders builtin flag. Mast auto-creates customers for newsletter
+    //    signups (mast-customer-resolver pkg, status='active' but no orders).
+    h += '<div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-bottom:16px;font-size:0.85rem;color:var(--warm-gray);">';
+    h += '<label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;">' +
+         '<input type="checkbox" id="customersNewsletterOnly" onchange="customersRender()" style="accent-color:var(--teal);">' +
+         ' Newsletter subscribers' +
+         '</label>';
+    h += '<label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;">' +
+         '<input type="checkbox" id="customersLeadsOnly" onchange="customersRender()" style="accent-color:var(--teal);">' +
+         ' Leads (no orders yet)' +
+         '</label>';
+    h += '</div>';
+
     h += '<div id="customersTableWrap"></div>';
 
     return h;
@@ -505,7 +527,9 @@
       tag:              (document.getElementById('customersTagFilter')         || {}).value || '',
       lastOrderBefore:  (document.getElementById('customersLastOrderBefore')   || {}).value || '',
       minSpendDollars:  (document.getElementById('customersMinSpend')          || {}).value || '',
-      sortBy:           (document.getElementById('customersSortBy')            || {}).value || 'updatedAt'
+      sortBy:           (document.getElementById('customersSortBy')            || {}).value || 'updatedAt',
+      newsletterOnly:   !!(document.getElementById('customersNewsletterOnly')  || {}).checked,
+      leadsOnly:        !!(document.getElementById('customersLeadsOnly')       || {}).checked
     };
   }
 
@@ -560,6 +584,14 @@
     if (f.minSpendDollars !== '' && f.minSpendDollars != null) {
       var minCents = Math.round(parseFloat(f.minSpendDollars) * 100);
       if (!isNaN(minCents) && (stats.lifetimeSpendCents || 0) < minCents) return false;
+    }
+
+    // D5: orthogonal-signal toggles from the filter bar.
+    if (f.newsletterOnly) {
+      if (!(c.marketing && c.marketing.newsletterOptIn)) return false;
+    }
+    if (f.leadsOnly) {
+      if ((stats.orderCount || 0) > 0) return false;
     }
 
     // Built-in segment flags
@@ -745,7 +777,9 @@
       (fActSnap.source && fActSnap.source !== 'all') ||
       fActSnap.tag ||
       fActSnap.lastOrderBefore ||
-      fActSnap.minSpendDollars
+      fActSnap.minSpendDollars ||
+      fActSnap.newsletterOnly ||
+      fActSnap.leadsOnly
     );
     if (filtered.length === 0 && customersData.length > 0) {
       var rawNonMerged = customersData.filter(function(c) { return c && c.status !== 'merged'; });
@@ -2561,6 +2595,8 @@
     var lob = document.getElementById('customersLastOrderBefore'); if (lob) lob.value = f.lastOrderBefore || '';
     var min = document.getElementById('customersMinSpend');     if (min) min.value = (typeof f.minSpendCents === 'number') ? (f.minSpendCents / 100) : '';
     var srch = document.getElementById('customersSearch');      if (srch && typeof f.search === 'string') srch.value = f.search;
+    var nl  = document.getElementById('customersNewsletterOnly'); if (nl) nl.checked = !!f.newsletterOnly;
+    var ld  = document.getElementById('customersLeadsOnly');      if (ld) ld.checked = !!f.leadsOnly;
 
     renderTable();
   }
@@ -2578,6 +2614,8 @@
       if (!isNaN(n)) snap.minSpendCents = n;
     }
     if (f.search) snap.search = f.search;
+    if (f.newsletterOnly) snap.newsletterOnly = true;
+    if (f.leadsOnly) snap.leadsOnly = true;
     return snap;
   }
 
@@ -2686,6 +2724,8 @@
     if (f.lastOrderBefore) bits.push('last order before ' + f.lastOrderBefore);
     if (typeof f.minSpendCents === 'number') bits.push('min spend $' + (f.minSpendCents / 100).toFixed(2));
     if (f.search) bits.push('search "' + f.search + '"');
+    if (f.newsletterOnly) bits.push('newsletter subscribers');
+    if (f.leadsOnly) bits.push('leads only');
     if (f._newThisWeek) bits.push('new this week');
     if (f._noOrders) bits.push('no orders yet');
     return bits.length ? bits.join(' · ') : 'no filters';
@@ -2724,6 +2764,10 @@
      'customersTagFilter', 'customersLastOrderBefore', 'customersMinSpend'].forEach(function(id) {
       var el = document.getElementById(id);
       if (el) el.value = '';
+    });
+    ['customersNewsletterOnly', 'customersLeadsOnly'].forEach(function(id) {
+      var el = document.getElementById(id);
+      if (el) el.checked = false;
     });
     if (typeof navigateTo === 'function') navigateTo('customers', next);
     // Belt-and-suspenders synchronous re-render — the navigateTo→setup→rAF
