@@ -12,15 +12,45 @@
 
   var emailsData = [];
   var emailsLoaded = false;
+  var emailsLoading = false; // in-flight Firebase fetch — drives button spinner
   var selectedEmailId = null;
   var emailFilter = 'all'; // all, sent, failed
   var emailTypeFilter = 'all';
   var emailCategoryFilter = 'all'; // 'Orders' | 'Returns' | … | 'Other' | 'Unknown' | 'all'
-  var emailPageSize = 50;
-  var emailLastCreatedAt = null;
-  var hasMoreEmails = false;
+  var emailMaxPerRange = 500;
+  // Date-range model: operator picks From/To; we fetch every email between
+  // those instants up to emailMaxPerRange. Default is last 30 days. To widen
+  // backwards in one click without picking a new date, the "Load older 30d"
+  // button shifts emailDateFrom 30 days earlier and re-fetches.
+  var emailDateFrom = _defaultFromDate();
+  var emailDateTo   = _todayDate();
+  var hitRangeCap = false; // true when last fetch returned exactly emailMaxPerRange
   var emailSortKey = 'createdAt';
   var emailSortDir = 'desc';
+
+  function _todayDate() {
+    var d = new Date();
+    return d.toISOString().slice(0, 10); // YYYY-MM-DD
+  }
+  function _defaultFromDate() {
+    var d = new Date();
+    d.setDate(d.getDate() - 30);
+    return d.toISOString().slice(0, 10);
+  }
+  function _shiftFromBack30() {
+    var d = new Date(emailDateFrom + 'T00:00:00Z');
+    d.setUTCDate(d.getUTCDate() - 30);
+    emailDateFrom = d.toISOString().slice(0, 10);
+  }
+  function _fmtRange(from, to) {
+    function f(s) {
+      try {
+        var d = new Date(s + 'T00:00:00Z');
+        return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+      } catch (e) { return s; }
+    }
+    return f(from) + ' → ' + f(to);
+  }
 
   // ============================================================
   // Badge Style Helpers
@@ -64,16 +94,21 @@
   // Data Loading
   // ============================================================
 
-  function loadEmails(append) {
-    var ref = MastDB.query('emails');
-    var query = ref.orderByChild('createdAt').limitToLast(emailPageSize + 1);
-    if (append && emailLastCreatedAt) {
-      query = ref.orderByChild('createdAt').endAt(emailLastCreatedAt).limitToLast(emailPageSize + 1);
-    }
+  function loadEmails() {
+    // Date-range query: fetch every email whose createdAt falls between
+    // [emailDateFrom 00:00Z, emailDateTo 23:59:59.999Z], capped at
+    // emailMaxPerRange. Operator narrows the range to see fewer rows or
+    // widens it (via the date pickers or the "Load older 30d" button) to
+    // see more. No more 50-at-a-time paging.
+    emailsLoading = true;
+    renderEmailLog();
+    var startIso = emailDateFrom + 'T00:00:00.000Z';
+    var endIso   = emailDateTo   + 'T23:59:59.999Z';
+    var query = MastDB.query('emails').orderByChild('createdAt')
+      .startAt(startIso).endAt(endIso).limitToLast(emailMaxPerRange + 1);
 
     query.once('value').then(function(snap) {
       var val = snap.val() || {};
-      // Firestore auto IDs aren't time-ordered, so sort docs by createdAt DESC for newest-first display.
       var keys = Object.keys(val).sort(function(a, b) {
         var ca = (val[a] && val[a].createdAt) || '';
         var cb = (val[b] && val[b].createdAt) || '';
@@ -81,40 +116,18 @@
         if (cb > ca) return 1;
         return 0;
       });
-
-      // Check if there are more pages
-      if (keys.length > emailPageSize) {
-        hasMoreEmails = true;
-        keys = keys.slice(0, emailPageSize);
-      } else {
-        hasMoreEmails = false;
-      }
-
-      if (keys.length > 0) {
-        var oldest = val[keys[keys.length - 1]];
-        emailLastCreatedAt = (oldest && oldest.createdAt) || null;
-      }
-
-      var newItems = keys.map(function(k) {
-        var item = val[k];
-        item._key = k;
-        return item;
+      hitRangeCap = keys.length > emailMaxPerRange;
+      if (hitRangeCap) keys = keys.slice(0, emailMaxPerRange);
+      emailsData = keys.map(function(k) {
+        var item = val[k]; item._key = k; return item;
       });
-
-      if (append) {
-        // Remove any duplicate of the first item from previous page
-        if (emailsData.length > 0 && newItems.length > 0 && newItems[0]._key === emailsData[emailsData.length - 1]._key) {
-          newItems.shift();
-        }
-        emailsData = emailsData.concat(newItems);
-      } else {
-        emailsData = newItems;
-      }
-
       emailsLoaded = true;
+      emailsLoading = false;
       renderEmailLog();
     }).catch(function(err) {
       console.error('Failed to load emails:', err);
+      emailsLoading = false;
+      renderEmailLog();
       showToast('Failed to load email log: ' + err.message, true);
     });
   }
@@ -152,29 +165,21 @@
     // Apply status filter on top of the scoped set.
     var filtered = (emailFilter === 'all') ? scoped : scoped.filter(function(e) { return e.status === emailFilter; });
 
-    // Date range covered by the loaded set — emails are ordered desc by
-    // createdAt; the OLDEST loaded record's date is the back edge of the
-    // window. Surfaces "what does 50 emails actually cover?" without
-    // forcing the user to scroll to the bottom.
-    var sinceLabel = '';
-    if (emailsLoaded && emailsData.length > 0) {
-      var oldest = emailsData[emailsData.length - 1];
-      if (oldest && oldest.createdAt) {
-        try {
-          var od = new Date(oldest.createdAt);
-          sinceLabel = ' · since ' + od.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-        } catch (e) {}
-      }
-    }
+    // Header: title + range summary + Load older button (spinner during fetch).
+    var rangeLabel = _fmtRange(emailDateFrom, emailDateTo);
+    var loadingDisabled = emailsLoading ? ' disabled' : '';
+    var loadBtnLabel = emailsLoading ? 'Loading…' : '← Load older 30d';
+    var capWarning = hitRangeCap
+      ? '<span style="font-size:0.78rem;color:#f59e0b;background:rgba(245,158,11,0.15);border:1px solid rgba(245,158,11,0.4);border-radius:10px;padding:2px 8px;" title="Range matched more than ' + emailMaxPerRange + ' emails — narrow the dates to see all.">capped at ' + emailMaxPerRange + '</span>'
+      : '';
 
     var h = '';
     h += '<div class="section-header" style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">';
     h += '<h2>Email Log</h2>';
-    h += '<div style="display:flex;align-items:center;gap:12px;">';
-    h += '<span style="font-size:0.85rem;color:var(--warm-gray);">' + emailsData.length + ' loaded' + esc(sinceLabel) + '</span>';
-    if (hasMoreEmails) {
-      h += '<button class="btn btn-secondary" style="font-size:0.85rem;padding:6px 14px;" onclick="window._emailLogLoadMore()">Load More</button>';
-    }
+    h += '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">';
+    h += '<span style="font-size:0.85rem;color:var(--warm-gray);">' + emailsData.length + ' emails · ' + esc(rangeLabel) + '</span>';
+    h += capWarning;
+    h += '<button class="btn btn-secondary" style="font-size:0.85rem;padding:6px 12px;" onclick="window._emailLogLoadMore()"' + loadingDisabled + '>' + esc(loadBtnLabel) + '</button>';
     h += '</div>';
     h += '</div>';
 
@@ -242,6 +247,14 @@
 
     // Filter bar
     h += '<div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;align-items:center;">';
+    // Date-range — primary fetch control. Changing either bound triggers a
+    // re-fetch (loadEmails). Inputs disabled while a fetch is in flight to
+    // avoid back-pressure on Firebase.
+    var dInpStyle = 'padding:5px 8px;border:1px solid #ddd;border-radius:6px;font-size:0.85rem;font-family:inherit;';
+    h += '<label style="font-size:0.85rem;color:var(--warm-gray);">From</label>';
+    h += '<input type="date" value="' + esc(emailDateFrom) + '" max="' + esc(emailDateTo) + '" onchange="window._emailLogSetDateFrom(this.value)"' + loadingDisabled + ' style="' + dInpStyle + '">';
+    h += '<label style="font-size:0.85rem;color:var(--warm-gray);">To</label>';
+    h += '<input type="date" value="' + esc(emailDateTo) + '" min="' + esc(emailDateFrom) + '" max="' + esc(_todayDate()) + '" onchange="window._emailLogSetDateTo(this.value)"' + loadingDisabled + ' style="' + dInpStyle + '">';
     // Q6 sweep: status as pills (3 bounded options). Email Type stays as
     // dropdown below — unbounded option set (one per distinct emailType).
     h += '<div class="order-filter-pills" data-filter-for="emailStatusFilter" style="margin:0;"></div>';
@@ -281,7 +294,10 @@
     }
 
     if (filtered.length === 0) {
-      h += '<p style="color:var(--warm-gray);font-size:0.9rem;">No emails found' + (emailFilter !== 'all' || emailTypeFilter !== 'all' ? ' matching filters' : '') + '.</p>';
+      var emptyMsg = (emailFilter !== 'all' || emailTypeFilter !== 'all' || emailCategoryFilter !== 'all')
+        ? 'No emails match the current filters in this date range.'
+        : 'No emails in this date range. Widen the dates or click "← Load older 30d".';
+      h += '<p style="color:var(--warm-gray);font-size:0.9rem;">' + esc(emptyMsg) + '</p>';
       container.innerHTML = h;
       if (window.mastInitFilterPills) window.mastInitFilterPills(container);
       return;
@@ -470,14 +486,25 @@
 
   function refreshEmails() {
     emailsData = [];
-    emailLastCreatedAt = null;
-    hasMoreEmails = false;
     selectedEmailId = null;
-    loadEmails(false);
+    loadEmails();
   }
 
   function loadMoreEmails() {
-    loadEmails(true);
+    // "Older 30 days" — shifts the From date back without making the
+    // operator pick a new date. Cheaper than blind paging because the
+    // operator can also tighten the To if they only want the older part.
+    if (emailsLoading) return;
+    _shiftFromBack30();
+    loadEmails();
+  }
+  function setDateFrom(v) {
+    emailDateFrom = v || _defaultFromDate();
+    loadEmails();
+  }
+  function setDateTo(v) {
+    emailDateTo = v || _todayDate();
+    loadEmails();
   }
 
   async function resendEmail(key) {
@@ -510,6 +537,8 @@
   window._emailLogFilterCategory = filterCategory;
   window._emailLogRefresh = refreshEmails;
   window._emailLogLoadMore = loadMoreEmails;
+  window._emailLogSetDateFrom = setDateFrom;
+  window._emailLogSetDateTo = setDateTo;
   window._emailLogResend = resendEmail;
 
   // ============================================================
@@ -518,14 +547,14 @@
 
   MastAdmin.registerModule('emailLog', {
     routes: {
-      'email-log': { tab: 'emailLogTab', setup: function() { if (!emailsLoaded) loadEmails(false); } }
+      'email-log': { tab: 'emailLogTab', setup: function() { if (!emailsLoaded) loadEmails(); } }
     },
     detachListeners: function() {
       emailsData = [];
       emailsLoaded = false;
+      emailsLoading = false;
       selectedEmailId = null;
-      emailLastCreatedAt = null;
-      hasMoreEmails = false;
+      hitRangeCap = false;
     }
   });
 
