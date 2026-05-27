@@ -1049,12 +1049,32 @@
     var wrap = document.getElementById('burdenListWrap');
     if (!wrap) return;
     try {
+      // Post-rework: flat collection — map keyed by `{periodId}__{employeeId}`.
       var raw = await MastDB.get('admin/burdenedLaborCost').catch(function() { return null; }) || {};
-      burdenEntriesCache = raw;
-      // Flatten: each period maps to {employeeId: doc}
+      // Rehydrate burdenEntriesCache into the legacy {periodId: {empId: doc}}
+      // shape so the rest of the team-burden code (detail view, edit) keeps
+      // working without a deeper refactor.
+      var grouped = {};
+      Object.keys(raw).forEach(function(compositeId) {
+        var doc = raw[compositeId];
+        if (!doc || typeof doc !== 'object') return;
+        var pid = doc.periodId;
+        var eid = doc.employeeId;
+        if (!pid || !eid) {
+          var sep = compositeId.indexOf('__');
+          if (sep > 0) {
+            if (!pid) pid = compositeId.slice(0, sep);
+            if (!eid) eid = compositeId.slice(sep + 2);
+          }
+        }
+        if (!pid || !eid) return;
+        if (!grouped[pid]) grouped[pid] = {};
+        grouped[pid][eid] = doc;
+      });
+      burdenEntriesCache = grouped;
       var rows = [];
-      Object.keys(raw).forEach(function(periodId) {
-        var byEmp = raw[periodId] || {};
+      Object.keys(grouped).forEach(function(periodId) {
+        var byEmp = grouped[periodId] || {};
         Object.keys(byEmp).forEach(function(empId) {
           var doc = byEmp[empId] || {};
           if (burdenSelectedEmployeeId && empId !== burdenSelectedEmployeeId) return;
@@ -1063,7 +1083,11 @@
             employeeId: empId,
             totalBurden: doc.totalBurden || 0,
             source: doc.source || 'manual',
-            breakdown: doc.breakdown || {},
+            breakdown: doc.breakdown || {
+              wages: doc.wages, employerFica: doc.employerFica, futa: doc.futa,
+              suta: doc.suta, wcPremium: doc.wcPremium, retirement: doc.retirement,
+              benefits: doc.benefits
+            },
             confidence: doc.confidence || null,
             updatedAt: doc.updatedAt || doc.createdAt || ''
           });
@@ -1534,20 +1558,62 @@
     var fn = firebase.functions().httpsCallable('recordBurdenEntry');
     var tid = MastDB.tenantId();
     var ok = 0, fail = 0, errors = [];
-    for (var i = 0; i < rows.length; i++) {
-      var r = rows[i];
+    var total = rows.length;
+    var done = 0;
+
+    // M4 fix-up: Promise.allSettled with concurrency cap 5 (was sequential
+    // for-await — N CF calls in series was 20×slower for typical 20-row pastes).
+    // Progress UI updates after each row settles.
+    function setProgress(n) {
+      var prog = document.getElementById('burdenBulkProgress');
+      if (prog) prog.textContent = 'Submitting ' + n + ' of ' + total + '…';
+    }
+    var progEl = document.getElementById('burdenBulkProgress');
+    if (!progEl) {
+      var prevWrap = document.getElementById('burdenBulkPreview');
+      if (prevWrap) {
+        var p = document.createElement('div');
+        p.id = 'burdenBulkProgress';
+        p.style.cssText = 'margin-top:10px;font-size:0.78rem;color:var(--warm-gray);';
+        prevWrap.appendChild(p);
+      }
+    }
+    setProgress(0);
+
+    var CONCURRENCY = 5;
+    var idx = 0;
+    async function runOne(rowIdx) {
+      var r = rows[rowIdx];
       try {
         var res = await fn({ tenantId: tid, periodId: r.periodId, employeeId: r.employeeId, breakdown: r.breakdown, source: 'manual' });
         var data = (res && res.data) ? res.data : {};
         if (data && data.ok === true) ok++;
-        else { fail++; errors.push('Row ' + (i + 1) + ': ' + ((data && (data.message || data.error)) || 'no ok flag')); }
+        else { fail++; errors.push('Row ' + (rowIdx + 1) + ': ' + ((data && (data.message || data.error)) || 'no ok flag')); }
       } catch (err) {
         fail++;
-        errors.push('Row ' + (i + 1) + ': ' + ((err && err.message) || String(err)));
+        errors.push('Row ' + (rowIdx + 1) + ': ' + ((err && err.message) || String(err)));
+      } finally {
+        done++;
+        setProgress(done);
       }
     }
+    async function worker() {
+      while (true) {
+        var myIdx = idx++;
+        if (myIdx >= rows.length) return;
+        await runOne(myIdx);
+      }
+    }
+    var workers = [];
+    for (var w = 0; w < Math.min(CONCURRENCY, rows.length); w++) workers.push(worker());
+    await Promise.allSettled(workers);
+
     showToast('Bulk submit: ' + ok + ' OK / ' + fail + ' failed' + (fail ? ' (see console)' : ''), fail > 0);
     if (errors.length) console.error('[burden] bulk errors:', errors);
+    // Invalidate finance W3 caches so the next P&L re-render reflects the write.
+    if (window.MastFinanceW3 && typeof window.MastFinanceW3.invalidateMetaCache === 'function') {
+      try { window.MastFinanceW3.invalidateMetaCache(); } catch (_) {}
+    }
     teamBurdenBulkCancel();
     loadBurdenEntries();
   }
@@ -1569,19 +1635,21 @@
     ];
     (bd.benefits || []).forEach(function(b) { lines.push(['Benefit: ' + (b.type || 'other'), b.amount]); });
 
-    // Per-job allocation summary
+    // Per-job allocation summary — flat collection (post-rework).
     var alloc = [];
     try {
-      var allocRaw = await MastDB.get('admin/burdenedLaborByJob/' + periodId).catch(function() { return null; }) || {};
-      Object.entries(allocRaw).forEach(function(e) {
-        var docByJob = e[1] || {};
-        if (docByJob.employeeId && docByJob.employeeId !== empId) return;
-        // Tolerate two shapes: doc-per-job-with-employees-map, or doc-per-(empId,jobId).
-        if (docByJob.employeeId === empId) {
-          alloc.push({ jobId: e[0], amount: docByJob.amount || docByJob.allocatedCents || 0 });
-        } else if (docByJob[empId]) {
-          alloc.push({ jobId: e[0], amount: docByJob[empId] || 0 });
+      var allocRaw = await MastDB.get('admin/burdenedLaborByJob').catch(function() { return null; }) || {};
+      Object.keys(allocRaw).forEach(function(compositeId) {
+        var docByJob = allocRaw[compositeId] || {};
+        if (docByJob.periodId !== periodId) return;
+        if (docByJob.employeeId !== empId) return;
+        var jid = docByJob.jobId;
+        if (!jid) {
+          var parts = compositeId.split('__');
+          if (parts.length >= 3) jid = parts[parts.length - 1];
         }
+        if (!jid) return;
+        alloc.push({ jobId: jid, amount: docByJob.allocatedBurden || docByJob.amount || docByJob.allocatedCents || 0 });
       });
     } catch (_) {}
 
@@ -1720,19 +1788,50 @@
         }
       });
       function pct(id) { var v = parseFloat((document.getElementById(id) || {}).value); return isNaN(v) ? 0 : v / 100; }
+      // Build canonical multiplier payload — canonical field names are
+      // `wc` / `benefits` / `retirement` (NOT wcRate/benefitsRate). We
+      // keep sutaByState in the existing shape (UI-owned) AND derive the
+      // canonical `suta` map ({state: rate}) that the CF + advisor + MCP
+      // consume; UI continues to read sutaByState for override metadata.
       mult.sutaByState = newSuta;
-      mult.wcRate = pct('bWcRate');
-      mult.benefitsRate = pct('bBenRate');
-      mult.retirementRate = pct('bRetRate');
-      var nowIso = new Date().toISOString();
-      var patch = Object.assign({}, existing, {
-        burdenSource: Object.assign({}, src, {
-          estimatorMultipliers: mult,
-          updatedAt: nowIso,
-          updatedBy: (auth && auth.currentUser && auth.currentUser.uid) || null
-        })
+      var sutaMap = {};
+      Object.keys(newSuta).forEach(function(s) {
+        var r = newSuta[s] || {};
+        if (typeof r.rate === 'number') sutaMap[s] = r.rate;
       });
-      await MastDB.set('admin/integrations/_meta', patch);
+      mult.suta = sutaMap;
+      mult.wc = pct('bWcRate');
+      mult.benefits = pct('bBenRate');
+      mult.retirement = pct('bRetRate');
+      // Drop the legacy *Rate aliases if present — single source of truth.
+      delete mult.wcRate; delete mult.benefitsRate; delete mult.retirementRate;
+
+      // H5 rework: prefer routing through setBurdenEstimatorConfig CF for
+      // audit-consistent writes. Falls back to direct admin write if the CF
+      // call fails (admin still has write permission on _meta).
+      var routedOk = false;
+      try {
+        var setFn = firebase.functions().httpsCallable('setBurdenEstimatorConfig');
+        var resp = await setFn({ tenantId: MastDB.tenantId(), multipliers: mult });
+        var data = (resp && resp.data) || {};
+        if (data.ok === true) routedOk = true;
+      } catch (cfErr) {
+        console.warn('[burden] setBurdenEstimatorConfig CF failed; falling back to direct write:', cfErr && cfErr.message);
+      }
+      if (!routedOk) {
+        var nowIso = new Date().toISOString();
+        var patch = Object.assign({}, existing, {
+          burdenSource: Object.assign({}, src, {
+            estimatorMultipliers: mult,
+            updatedAt: nowIso,
+            updatedBy: (auth && auth.currentUser && auth.currentUser.uid) || null
+          })
+        });
+        await MastDB.set('admin/integrations/_meta', patch);
+      }
+      if (window.MastFinanceW3 && typeof window.MastFinanceW3.invalidateMetaCache === 'function') {
+        try { window.MastFinanceW3.invalidateMetaCache(); } catch (_) {}
+      }
       showToast('Estimator settings saved.');
       loadBurdenEstimatorPanel();
     } catch (err) {

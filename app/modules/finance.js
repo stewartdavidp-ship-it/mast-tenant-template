@@ -7079,48 +7079,106 @@ window.finAmendmentSubmit = window.finAmendmentOpenSubmit; // alias
 // R-FIN-W3-1 (mixed-source surfaces lowest-confidence chip),
 // D-FIN-W3-12 (confidence heuristic).
 //
-// Reads (Agent A contract, branch feat/finance-w3-agent-a-backend):
-//   admin/burdenedLaborCost/{periodId}/{employeeId}  → { totalBurden, source, ... }
-//   admin/burdenedLaborByJob/{periodId}/{jobId}/{employeeId__jobId}
-//     → { allocatedBurden, jobId, employeeId, source }
-//   admin/integrations/_meta/burdenSource → { defaults, ..., bannerState }
+// POST-REWORK (W3-rework H1+cross-repo): flat-collection convention.
+//   admin_burdenedLaborCost/{periodId}__{employeeId}
+//     → { periodId, employeeId, totalBurden, source, payPeriodStart/End,
+//         wages, employerFica, futa, suta, wcPremium, retirement, benefits[] }
+//   admin_burdenedLaborByJob/{periodId}__{employeeId}__{jobId}
+//     → { periodId, employeeId, jobId, allocatedBurden, hoursOnJob,
+//         allocationMethod, computedAt }
+//   admin_integrations/_meta.burdenSource → { defaultMode, estimatorMultipliers,
+//                                             lastSeededAt, bannerState }
+//
+// MastDB.get('admin/burdenedLaborCost') translates to the flat collection and
+// returns a map keyed by COMPOSITE ID. We group by `periodId` field (always
+// denormalized) and key the per-period byEmployee map by `employeeId` field
+// for downstream callers that still expect that shape.
 //
 // periodId is 'YYYY-MM-DD_YYYY-MM-DD' (Agent A canonical: pay-period range
 // matching PERIOD_ID_RE in mast-architecture/functions/labor-burden.js).
 // _overhead is a reserved jobId for un-attributable hours.
 
 var _w3BurdenCache = {};       // { periodId: { byEmployee, byJob, fetchedAt } }
+var _w3FlatCache = null;       // { byPeriod: {periodId: {byEmp, byJobByJobId}}, fetchedAt }
 var _w3MetaCache  = null;
 var _w3ConfidenceCache = null;
 var _w3PeriodIdListCache = null; // { periodIds:[], fetchedAt }
 
 var _W3_PERIOD_ID_RE = /^(\d{4}-\d{2}-\d{2})_(\d{4}-\d{2}-\d{2})$/;
 
-// Integration fix #1 (W3-INT-1): Agent C originally returned 'YYYY-MM' keys
-// here; Agent A actually writes 'YYYY-MM-DD_YYYY-MM-DD' (arbitrary pay-period
-// ranges, not calendar months). Approach: list all child periodIds at
-// admin/burdenedLaborCost (MastDB.get on the parent returns a map keyed by
-// periodId), parse via the canonical regex, and include any whose [start,end]
-// overlaps the requested [startDate,endDate]. Listing is cached for 30s to
-// keep this off the per-render hot path. Limitation: when no W3 burden data
-// has ever been written for the tenant, the list is empty and the helper
-// returns []. That's fine — it just means no enrichment until the first
-// burden entry lands.
+// M3 fix-up: single helper for invalidating every W3 cache layer at once.
+// Mutation paths (banner enable/dismiss, estimator-config save, burden-entry
+// write via MCP) all call this so a stale layer doesn't leak past a write.
+function _w3InvalidateMetaCache() {
+  _w3MetaCache = null;
+  _w3BurdenCache = {};
+  _w3FlatCache = null;
+  _w3PeriodIdListCache = null;
+  _w3ConfidenceCache = null;
+}
+
+// Load the entire flat collection ONCE, group by periodId. Cached for 30s.
+async function _w3LoadFlat() {
+  if (_w3FlatCache && (Date.now() - _w3FlatCache.fetchedAt) < 30000) return _w3FlatCache;
+  var byPeriod = {};
+  try {
+    var allBurden = (await MastDB.get('admin/burdenedLaborCost')) || {};
+    Object.keys(allBurden).forEach(function(compositeId) {
+      var rec = allBurden[compositeId];
+      if (!rec || typeof rec !== 'object') return;
+      var pid = rec.periodId;
+      var eid = rec.employeeId;
+      // Tolerate legacy/older docs without denormalized fields by parsing
+      // the composite id (periodId is YYYY-MM-DD_YYYY-MM-DD, contains no __).
+      if (!pid || !eid) {
+        var sep = compositeId.indexOf('__');
+        if (sep > 0) {
+          if (!pid) pid = compositeId.slice(0, sep);
+          if (!eid) eid = compositeId.slice(sep + 2);
+        }
+      }
+      if (!pid || !eid) return;
+      if (!byPeriod[pid]) byPeriod[pid] = { byEmployee: {}, byJob: {} };
+      byPeriod[pid].byEmployee[eid] = rec;
+    });
+  } catch (_) {}
+  try {
+    var allByJob = (await MastDB.get('admin/burdenedLaborByJob')) || {};
+    Object.keys(allByJob).forEach(function(compositeId) {
+      var rec = allByJob[compositeId];
+      if (!rec || typeof rec !== 'object') return;
+      var pid = rec.periodId;
+      var eid = rec.employeeId;
+      var jid = rec.jobId;
+      if (!pid || !eid || !jid) {
+        // Parse composite id `{periodId}__{employeeId}__{jobId}`.
+        // periodId contains no __; employeeId could (defensively split from end).
+        var parts = compositeId.split('__');
+        if (parts.length >= 3) {
+          if (!pid) pid = parts[0];
+          if (!jid) jid = parts[parts.length - 1];
+          if (!eid) eid = parts.slice(1, parts.length - 1).join('__');
+        }
+      }
+      if (!pid || !jid) return;
+      if (!byPeriod[pid]) byPeriod[pid] = { byEmployee: {}, byJob: {} };
+      if (!byPeriod[pid].byJob[jid]) byPeriod[pid].byJob[jid] = {};
+      // Key by `{employeeId}__{jobId}` row id so summarize can iterate
+      // multiple employees per (period, job) tuple without colliding.
+      var rowId = (eid || '_unknown') + '__' + jid;
+      byPeriod[pid].byJob[jid][rowId] = rec;
+    });
+  } catch (_) {}
+  _w3FlatCache = { byPeriod: byPeriod, fetchedAt: Date.now() };
+  return _w3FlatCache;
+}
+
 async function _w3PeriodsForRange(startDate, endDate) {
   if (!startDate || !endDate) return [];
   var listing = _w3PeriodIdListCache;
   if (!listing || (Date.now() - listing.fetchedAt) > 30000) {
-    var keys = [];
-    try {
-      var allBurden = (await MastDB.get('admin/burdenedLaborCost')) || {};
-      keys = Object.keys(allBurden).filter(function(k) { return k && k.charAt(0) !== '_'; });
-    } catch (_) { keys = []; }
-    try {
-      var allByJob = (await MastDB.get('admin/burdenedLaborByJob')) || {};
-      Object.keys(allByJob).forEach(function(k) {
-        if (k && k.charAt(0) !== '_' && keys.indexOf(k) === -1) keys.push(k);
-      });
-    } catch (_) {}
+    var flat = await _w3LoadFlat();
+    var keys = Object.keys(flat.byPeriod || {});
     listing = { periodIds: keys, fetchedAt: Date.now() };
     _w3PeriodIdListCache = listing;
   }
@@ -7139,16 +7197,9 @@ async function _w3PeriodsForRange(startDate, endDate) {
 
 async function _w3LoadBurdenForPeriod(periodId) {
   if (_w3BurdenCache[periodId]) return _w3BurdenCache[periodId];
-  var byEmployee = {}, byJob = {};
-  try {
-    var emp = await MastDB.get('admin/burdenedLaborCost/' + periodId);
-    byEmployee = emp || {};
-  } catch (_) {}
-  try {
-    var jobs = await MastDB.get('admin/burdenedLaborByJob/' + periodId);
-    byJob = jobs || {};
-  } catch (_) {}
-  var entry = { byEmployee: byEmployee, byJob: byJob, fetchedAt: Date.now() };
+  var flat = await _w3LoadFlat();
+  var p = (flat.byPeriod || {})[periodId] || { byEmployee: {}, byJob: {} };
+  var entry = { byEmployee: p.byEmployee || {}, byJob: p.byJob || {}, fetchedAt: Date.now() };
   _w3BurdenCache[periodId] = entry;
   return entry;
 }
@@ -7168,20 +7219,57 @@ async function _w3LoadMeta() {
 }
 
 // D-FIN-W3-12 local confidence heuristic. Mirrors what Agent D's MCP tool
-// finance_get_burden_estimator_config() will eventually return. Start HIGH,
-// drop one level for each weakness: WC=0 with W2 employees, benefits=0 with
-// W2 employees, SUTA = seeded default. Floor LOW.
+// finance_get_burden_estimator_config() returns. Start HIGH, drop one level
+// per weakness: WC=0 with W2 employees, benefits=0 with W2 employees,
+// SUTA = seeded default. Floor LOW.
+//
+// Post-rework (W3-rework cross-repo): canonical multiplier field names are
+// `wc`, `benefits`, `retirement` (NOT `wcRate`/`benefitsRate`). `sutaIsDefault`
+// is a COMPUTED signal — never persisted; we derive it locally by comparing
+// the suta map to the seed table. Seed table is embedded here (synced annually
+// with mast-architecture/functions/state-suta-seed.js STATE_SUTA_DEFAULT_RATES;
+// next sync due 2027 January).
+var _W3_STATE_SUTA_SEED = Object.freeze({
+  AL: 0.0270, AK: 0.0231, AZ: 0.0200, AR: 0.0270, CA: 0.0340,
+  CO: 0.0170, CT: 0.0250, DE: 0.0180, DC: 0.0270, FL: 0.0270,
+  GA: 0.0264, HI: 0.0300, ID: 0.0097, IL: 0.0375, IN: 0.0250,
+  IA: 0.0100, KS: 0.0260, KY: 0.0270, LA: 0.0119, ME: 0.0212,
+  MD: 0.0260, MA: 0.0237, MI: 0.0270, MN: 0.0110, MS: 0.0120,
+  MO: 0.0227, MT: 0.0130, NE: 0.0125, NV: 0.0295, NH: 0.0270,
+  NJ: 0.0280, NM: 0.0100, NY: 0.04025, NC: 0.0100, ND: 0.0119,
+  OH: 0.0270, OK: 0.0150, OR: 0.0240, PA: 0.03689, RI: 0.0098,
+  SC: 0.0042, SD: 0.0120, TN: 0.0270, TX: 0.0270, UT: 0.0150,
+  VT: 0.0100, VA: 0.0250, WA: 0.0118, WV: 0.0270, WI: 0.0305,
+  WY: 0.0146
+});
+function _w3IsSutaDefault(sutaMap) {
+  if (!sutaMap || typeof sutaMap !== 'object') return true;
+  var keys = Object.keys(sutaMap);
+  if (keys.length === 0) return true;
+  for (var i = 0; i < keys.length; i++) {
+    var k = keys[i];
+    // team.js writes shape {state: {rate, isOverride, defaultRate?}}; Agent A's
+    // canonical estimatorMultipliers.suta is {state: rate}. Tolerate both.
+    var v = sutaMap[k];
+    if (v && typeof v === 'object' && v.isOverride) return false;
+    var seedVal = _W3_STATE_SUTA_SEED[k];
+    var cur = (v && typeof v === 'object') ? Number(v.rate) : Number(v);
+    if (typeof seedVal !== 'number' || !isFinite(cur)) continue;
+    if (Math.abs(seedVal - cur) > 1e-9) return false;
+  }
+  return true;
+}
 function _w3ComputeConfidence(meta, hasW2) {
   if (!meta) return 'LOW';
   var levels = ['HIGH', 'MED', 'LOW'];
   var idx = 0;
-  var d = meta.defaults || meta;
-  var wc = +d.wcRate || 0;
-  var benefits = +d.benefitsRate || 0;
-  var sutaSeeded = !!d.sutaIsDefault || !!d.sutaSeeded;
+  var mults = meta.estimatorMultipliers || meta.defaults || meta;
+  var wc = +(mults.wc != null ? mults.wc : mults.wcRate) || 0;
+  var benefits = +(mults.benefits != null ? mults.benefits : mults.benefitsRate) || 0;
+  var sutaIsDefault = _w3IsSutaDefault(mults.suta || mults.sutaByState);
   if (hasW2 && wc <= 0) idx += 1;
   if (hasW2 && benefits <= 0) idx += 1;
-  if (sutaSeeded) idx += 1;
+  if (sutaIsDefault) idx += 1;
   if (idx >= 2) idx = 2;
   return levels[idx];
 }
@@ -7238,25 +7326,11 @@ function _w3SummarizeBurden(rangeResult) {
   var totalBurden = 0, overheadBurden = 0, allocatedBurden = 0;
   var byEmployee = {}, byJob = {};
   var sources = {};
-  var hasW2 = false;
   var hasData = false;
   rangeResult.perPeriod.forEach(function(p) {
     Object.keys(p.byEmployee || {}).forEach(function(eid) {
       var rec = p.byEmployee[eid] || {};
       var b = +rec.totalBurden || 0;
-      // Integration fix #2 (W3-INT-2): hasW2 must match team.js employee
-      // schema. Burden recs DO NOT carry classification/empClass — that data
-      // lives on the employee record under admin/employees/{eid} (W2 indicator
-      // is employmentType ∈ {'full-time','part-time'} AND status !== 'terminated').
-      // Burden records are written per-employee with the employeeId in the
-      // collection key — we set hasW2=true any time a burden row exists, then
-      // narrow at the call-site by looking up the employee. For the local
-      // confidence heuristic on the FINANCE side, presence of a burden row is
-      // a strong-enough W2 signal (only W2-classified employees get burden
-      // entries written). Agent D's MCP tool (finance-burden.ts:_hasAnyW2Employee)
-      // does the authoritative check by reading admin/employees and matching
-      // employmentType ∈ {'full-time','part-time'} && status !== 'terminated'.
-      if (b > 0) hasW2 = true;
       if (b > 0) { hasData = true; }
       totalBurden += b;
       byEmployee[eid] = (byEmployee[eid] || 0) + b;
@@ -7284,8 +7358,29 @@ function _w3SummarizeBurden(rangeResult) {
     totalBurden: totalBurden, overheadBurden: overheadBurden,
     allocatedBurden: allocatedBurden, byEmployee: byEmployee, byJob: byJob,
     sources: sourceList, mixedSource: mixedSource,
-    dominantSource: dominantSource, hasData: hasData, hasW2: hasW2
+    dominantSource: dominantSource, hasData: hasData
+    // hasW2 now computed in _w3EnrichPnlWithBurden via _w3HasW2Employees
+    // (cross-repo fix: read admin/employees, match employmentType ∈
+    // {full-time,part-time} && status !== 'terminated' — same heuristic as
+    // MCP _hasAnyW2Employee). Old heuristic (presence of burden record)
+    // labeled tenants LOW for W2 employees who hadn't yet entered burden.
   };
+}
+
+// Authoritative W2-employee check. Mirrors MCP _hasAnyW2Employee:
+// employmentType ∈ {full-time, part-time} AND status !== 'terminated'.
+async function _w3HasW2Employees() {
+  try {
+    var emps = (await MastDB.get('admin/employees')) || {};
+    var keys = Object.keys(emps);
+    for (var i = 0; i < keys.length; i++) {
+      var e = emps[keys[i]];
+      if (!e) continue;
+      var t = e.employmentType;
+      if ((t === 'full-time' || t === 'part-time') && e.status !== 'terminated') return true;
+    }
+  } catch (_) {}
+  return false;
 }
 
 // Banner state helpers — admin/integrations/_meta/burdenSource.bannerState.
@@ -7313,7 +7408,7 @@ async function w3EnableAccurateMargins() {
     var path = 'admin/integrations/_meta/burdenSource/bannerState';
     var now = new Date().toISOString();
     await MastDB.update(path, { enabledAt: now });
-    _w3MetaCache = null;
+    _w3InvalidateMetaCache();
     showToast('Accurate margins enabled — burdened labor now appears in COGS');
     if (typeof renderFinanceOverview === 'function') renderFinanceOverview();
   } catch (err) {
@@ -7329,7 +7424,7 @@ async function w3DismissBurdenBanner() {
     var bs = (meta && meta.bannerState) || {};
     var count = (+bs.dismissCount || 0) + 1;
     await MastDB.update(path, { dismissedAt: new Date().toISOString(), dismissCount: count });
-    _w3MetaCache = null;
+    _w3InvalidateMetaCache();
     var el = document.getElementById('w3BurdenBanner');
     if (el) el.style.display = 'none';
   } catch (err) {
@@ -7392,13 +7487,15 @@ async function _w3RenderBurdenBannerHtml() {
 async function _w3EnrichPnlWithBurden(pnl, startDate, endDate) {
   if (!pnl) return pnl;
   try {
-    var [rangeResult, ack, meta] = await Promise.all([
+    var [rangeResult, ack, meta, hasW2] = await Promise.all([
       _w3LoadBurdenForRange(startDate, endDate),
       _w3IsAcknowledged(),
-      _w3LoadMeta()
+      _w3LoadMeta(),
+      _w3HasW2Employees()
     ]);
     var summary = _w3SummarizeBurden(rangeResult);
-    var confidence = _w3ComputeConfidence(meta, summary.hasW2);
+    summary.hasW2 = hasW2; // back-compat for callers that still read this field
+    var confidence = _w3ComputeConfidence(meta, hasW2);
     pnl._burden = {
       acknowledged: ack,
       hasData: summary.hasData,
@@ -7467,6 +7564,8 @@ window.MastFinanceW3 = {
   loadBurdenForRange: _w3LoadBurdenForRange,
   loadBurdenForPeriod: _w3LoadBurdenForPeriod,
   loadMeta: _w3LoadMeta,
+  invalidateMetaCache: _w3InvalidateMetaCache,  // M3 fix: exposed for team.js
+  hasW2Employees: _w3HasW2Employees,            // cross-repo: authoritative check
   summarize: _w3SummarizeBurden,
   computeConfidence: _w3ComputeConfidence,
   renderSourceTagChip: renderSourceTagChip,
