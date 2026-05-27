@@ -2804,26 +2804,59 @@ async function exitPackingMode() {
   });
 
   // ============================================================
-  // D2 — Other Policies sub-tab (freeform policy authoring)
-  //   Sales → Policies → Other Policies. Reads cs_policies where
-  //   kind === 'policy'. Mirrors the (former) CS policy editor shape;
-  //   CS surface now hosts FAQs only.
+  // D2 — Other Policies sub-tab (slot-catalog model)
+  //   Pre-defined catalog of common e-commerce policy slots. Each slot
+  //   has three modes: mast-hosted (operator-edited plain text rendered
+  //   on the storefront), external-url (link out to operator's own page),
+  //   or disabled (hidden from storefront).
+  //
+  //   Industry-standard pattern (matches Shopify / Squarespace / Etsy):
+  //   pre-defined slot list with templates, NOT open-ended CRUD with
+  //   slug+HTML fields. Replaces the open-ended CRUD shipped earlier
+  //   in this commit cycle — see Idea -OtejcgDy3gfQRqEF6xZ for context.
+  //
+  //   Storage: same cs_policies collection. Each slot maps to a row by
+  //   slug (one row per slot). Storefront serves at /policies/{slug}.
+  //   Refund/Return Policy is NOT in this catalog — that slot uses the
+  //   structured editor on the sibling "Return Policy" tab.
   // ============================================================
 
-  var _otherPoliciesData = {};
-  var _otherPoliciesLoaded = false;
-  var _otherPolEditId = null;
-  var _otherPolShowAdd = false;
+  // Catalog of pre-defined policy slots. Templates are intentionally
+  // short starters with [bracket] placeholders that operators must
+  // replace — not legal-grade docs. Real tenants should review with a
+  // lawyer before publishing.
+  var POLICY_SLOTS = [
+    { id: 'privacy', name: 'Privacy Policy',
+      description: 'How you collect, use, and protect customer data.',
+      legallyRequired: true,
+      template: 'At [Your Shop Name], we respect your privacy. This policy explains what information we collect, how we use it, and your rights.\n\nWhat we collect\nWhen you place an order or sign up, we collect: name, email, shipping address, phone number, and payment information (processed securely by our payment provider — we never see your full card number).\n\nHow we use it\nWe use this information to fulfill your orders, send you order updates, and respond to your questions. With your permission, we may also send occasional newsletters or promotions.\n\nWho we share it with\nWe share only what is necessary with our shipping carrier, payment processor, and email provider. We do not sell your information.\n\nYour rights\nYou can request a copy of the information we hold about you, ask us to correct anything wrong, or request deletion of your account. Email us at [your-email@example.com].\n\nLast updated: [date]' },
+    { id: 'terms-of-service', name: 'Terms of Service',
+      description: 'Rules customers agree to by using your site or buying from you.',
+      template: 'These terms apply to anyone who buys from or uses [Your Shop Name].\n\nOrders\nAll orders are subject to acceptance and availability. We reserve the right to cancel any order and issue a refund.\n\nPrices and payment\nPrices are in [USD] and include applicable taxes where required. Payment is processed at checkout.\n\nIntellectual property\nAll product images, descriptions, and content on this site belong to [Your Shop Name] unless otherwise noted.\n\nReturns and refunds\nSee our Refund Policy.\n\nLiability\nWe are not liable for indirect or consequential damages arising from your use of this site or our products, except where required by law.\n\nLast updated: [date]' },
+    { id: 'shipping', name: 'Shipping Policy',
+      description: 'Delivery times, costs, and shipping methods.',
+      template: 'How long will my order take?\nOrders are typically processed within [1-3] business days. Shipping times depend on your location:\n\n- US Domestic: [3-7] business days\n- International: [7-21] business days\n\nShipping costs\nShipping is calculated at checkout based on your address and the items you order. Free shipping is available on orders over [$X].\n\nInternational orders\nInternational customers are responsible for any customs duties or import taxes charged by their country.\n\nLost or damaged packages\nIf your order arrives damaged or doesn\'t arrive within the expected window, contact us at [your-email@example.com] within [14] days.\n\nLast updated: [date]' },
+    { id: 'cookie', name: 'Cookie Policy',
+      description: 'How your site uses cookies and tracking.',
+      legallyRequired: false,
+      template: 'This site uses cookies to remember your cart, keep you signed in, and understand how visitors use our store.\n\nWhat cookies do\nCookies are small text files stored on your device. We use:\n\n- Essential cookies (cart, sign-in) — required for the site to work\n- Analytics cookies — help us understand which pages are popular\n\nManaging cookies\nYou can disable cookies in your browser settings. Note that some features (like adding items to your cart) won\'t work without essential cookies.\n\nLast updated: [date]' },
+    { id: 'accessibility', name: 'Accessibility Statement',
+      description: 'How your site supports customers with disabilities.',
+      template: 'We want everyone to be able to shop with us.\n\nOur commitment\n[Your Shop Name] aims to meet WCAG 2.1 Level AA accessibility standards. We continue to test and improve our site.\n\nWhat we\'ve done\n- Color contrast that meets accessibility guidelines\n- Keyboard navigation for product browsing and checkout\n- Alt text on product images\n- Text resizing support\n\nGet help\nIf you have trouble using any part of our site, please email us at [your-email@example.com] — we\'re happy to take your order by email, phone, or whichever way works for you.\n\nLast updated: [date]' },
+    { id: 'ai-transparency', name: 'AI Transparency',
+      description: 'Where and how AI is used in your customer interactions.',
+      template: 'We use AI in a few specific places. Here\'s where and how.\n\nWhat we use AI for\n- Suggesting products you might like, based on what you\'ve viewed\n- Helping us write product descriptions (always reviewed by a human before publishing)\n- Auto-responding to common questions (a human follows up if you need more help)\n\nWhat we don\'t use AI for\n- Deciding whether to accept your order\n- Setting your prices differently from other customers\n- Anything that affects your refund or return eligibility\n\nQuestions? Email us at [your-email@example.com].\n\nLast updated: [date]' }
+  ];
 
-  function loadOtherPolicies() {
-    return MastDB.query('cs_policies').limitToLast(100).once()
-      .then(function(d) { _otherPoliciesData = d || {}; _otherPoliciesLoaded = true; })
-      .catch(function(err) {
-        console.warn('[policies] load failed:', err && err.message);
-        _otherPoliciesData = {}; _otherPoliciesLoaded = true;
-        if (typeof showToast === 'function') showToast('Failed to load policies', true);
-      });
+  function _slotById(id) {
+    for (var i = 0; i < POLICY_SLOTS.length; i++) if (POLICY_SLOTS[i].id === id) return POLICY_SLOTS[i];
+    return null;
   }
+
+  // In-memory state for the slot UI.
+  var _slotRowsBySlug = {}; // slug -> cs_policies row (or null if not set up yet)
+  var _slotsLoaded = false;
+  var _slotEditingId = null; // currently-open slot.id in the editor modal
 
   function _esc(s) {
     if (s == null) return '';
@@ -2832,67 +2865,252 @@ async function exitPackingMode() {
       .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   }
 
+  // Convert plain text with blank-line paragraph breaks to safe HTML for
+  // storefront rendering. We escape first, then split on \n{2,} to wrap
+  // paragraphs in <p>. Single newlines inside a paragraph become <br>.
+  // No markdown / no inline formatting — keeps the operator UX dead simple.
+  function _plainTextToHtml(text) {
+    var safe = _esc(text || '');
+    var paras = safe.split(/\n{2,}/);
+    return paras.map(function(p) { return '<p>' + p.replace(/\n/g, '<br>') + '</p>'; }).join('\n');
+  }
+
+  // Reverse of _plainTextToHtml — strip <p>/</p>/<br> and unescape HTML
+  // entities so the editor textarea shows the plain text the operator
+  // originally typed. Best-effort; gracefully degrades for content
+  // authored before the slot pivot (which may contain other HTML tags
+  // — we strip those too, with a console warning).
+  function _htmlToPlainText(html) {
+    if (!html) return '';
+    var s = String(html)
+      .replace(/<\/p>\s*<p>/gi, '\n\n')
+      .replace(/<p>/gi, '')
+      .replace(/<\/p>/gi, '')
+      .replace(/<br\s*\/?>/gi, '\n');
+    // Strip any other tags — legacy content. Log so we know if real
+    // tenants had richer content that needs migration.
+    if (/<[^>]+>/.test(s)) {
+      console.info('[policies] stripping legacy HTML tags from slot content');
+      s = s.replace(/<[^>]+>/g, '');
+    }
+    return s
+      .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+  }
+
+  function loadOtherPolicies() {
+    _slotsLoaded = false;
+    return MastDB.query('cs_policies').limitToLast(100).once()
+      .then(function(d) {
+        var data = d || {};
+        _slotRowsBySlug = {};
+        Object.keys(data).forEach(function(k) {
+          var row = data[k];
+          if (!row) return;
+          // Skip explicit FAQ rows
+          if (row.kind === 'faq') return;
+          // Slot match by slug
+          var slot = _slotById((row.slug || '').toLowerCase());
+          if (slot) _slotRowsBySlug[slot.id] = row;
+        });
+        _slotsLoaded = true;
+      })
+      .catch(function(err) {
+        console.warn('[policies] load failed:', err && err.message);
+        _slotRowsBySlug = {}; _slotsLoaded = true;
+        if (typeof showToast === 'function') showToast('Failed to load policies', true);
+      });
+  }
+
+  // Compute the current "status" + label per slot for the list view.
+  // Determines which action buttons appear on the slot card.
+  function _slotStatus(slot) {
+    var row = _slotRowsBySlug[slot.id];
+    if (!row) return { state: 'not-set-up', label: 'Not set up', color: '#9ca3af' };
+    if (row.externalUrl && (row.source === 'external-url' || /^https?:/i.test(row.externalUrl))) {
+      return { state: 'external-url', label: 'External URL', color: '#6366f1' };
+    }
+    if (row.storefrontEnabled === false) {
+      return { state: 'disabled', label: 'Disabled', color: '#9ca3af' };
+    }
+    // Has Mast-hosted content
+    return { state: 'mast-hosted', label: 'Customized', color: 'var(--teal)' };
+  }
+
   function renderOtherPolicies() {
     var body = document.getElementById('policiesOtherBody');
     if (!body) return;
-    if (!_otherPoliciesLoaded) { body.innerHTML = '<div class="loading">Loading...</div>'; return; }
-    // Show kind='policy' (or legacy rows w/ slug suggesting a policy).
-    var items = Object.values(_otherPoliciesData || {}).filter(function(p) {
-      if (!p) return false;
-      if (p.kind === 'policy') return true;
-      if (p.kind === 'faq') return false;
-      // Legacy: infer from slug.
-      var s = (p.slug || '').toLowerCase();
-      return /(^|-)(privacy|terms|cookie|tos|t-c|shipping-policy|return-policy|security|ai-transparency|accessibility|gdpr|ccpa)(-|$)/.test(s);
-    }).sort(function(a, b) { return (a.name || '') < (b.name || '') ? -1 : 1; });
+    if (!_slotsLoaded) { body.innerHTML = '<div class="loading">Loading...</div>'; return; }
 
     var html = '';
-    html += _otherPolShowAdd ? renderOtherPolicyForm(null) : '<button class="btn btn-primary btn-small" onclick="window.policiesShowAdd()" style="margin-bottom:14px;">+ New Policy</button>';
-
-    if (!items.length && !_otherPolShowAdd) {
-      html += '<div style="padding:24px;text-align:center;color:var(--warm-gray);border:1px dashed var(--cream-dark);border-radius:10px;">No additional policies yet. Click "+ New Policy" to add Privacy, Terms of Service, Cookie, Shipping, or other documents.</div>';
-    } else {
-      html += '<div style="display:flex;flex-direction:column;gap:10px;">';
-      items.forEach(function(p) {
-        if (_otherPolEditId === p.id) { html += renderOtherPolicyForm(p); return; }
-        var live = !!p.storefrontEnabled;
-        html += '<div style="border:1px solid var(--cream-dark);border-radius:10px;padding:14px 16px;background:var(--cream);">';
-        html += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">';
-        html += '<span style="font-weight:600;">' + _esc(p.name) + '</span>';
-        html += '<span style="font-size:0.78rem;color:var(--warm-gray);font-family:monospace;">/' + _esc(p.slug || '') + '</span>';
-        html += '<span style="margin-left:auto;background:' + (live ? 'rgba(42,124,111,0.15)' : 'rgba(0,0,0,0.10)') + ';color:' + (live ? 'var(--teal)' : 'var(--warm-gray)') + ';padding:2px 10px;border-radius:12px;font-size:0.78rem;">' + (live ? 'live' : 'hidden') + '</span></div>';
-        if (p.contentHtml) {
-          var preview = p.contentHtml.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 100);
-          html += '<div style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:10px;">' + _esc(preview) + (preview.length === 100 ? '…' : '') + '</div>';
-        }
-        html += '<div style="display:flex;gap:8px;flex-wrap:wrap;">';
-        html += '<button class="btn btn-secondary btn-small" onclick="window.policiesToggleStorefront(\'' + _esc(p.id) + '\',' + (live ? 'false' : 'true') + ')">' + (live ? 'Hide from Storefront' : 'Show on Storefront') + '</button>';
-        html += '<button class="btn btn-secondary btn-small" onclick="window.policiesEdit(\'' + _esc(p.id) + '\')">Edit</button>';
-        html += '<button class="btn btn-danger btn-small" onclick="window.policiesDelete(\'' + _esc(p.id) + '\')">Delete</button>';
-        html += '</div></div>';
-      });
+    html += '<p style="font-size:0.85rem;color:var(--warm-gray);margin:0 0 14px;max-width:680px;">Set up the policies most stores need. Mast provides a template for each — edit the text to match your shop, or link to a policy you already host elsewhere.</p>';
+    html += '<div style="display:flex;flex-direction:column;gap:10px;">';
+    POLICY_SLOTS.forEach(function(slot) {
+      var status = _slotStatus(slot);
+      var row = _slotRowsBySlug[slot.id];
+      html += '<div style="border:1px solid var(--cream-dark);border-radius:10px;padding:14px 16px;background:var(--cream);">';
+      html += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:4px;">';
+      html += '<span style="font-weight:600;">' + _esc(slot.name) + '</span>';
+      if (slot.legallyRequired) {
+        html += '<span style="font-size:0.72rem;background:rgba(220,53,69,0.12);color:#dc3545;padding:2px 8px;border-radius:10px;">Required</span>';
+      }
+      html += '<span style="margin-left:auto;background:' + (status.color === 'var(--teal)' ? 'rgba(42,124,111,0.15)' : 'rgba(0,0,0,0.08)') + ';color:' + status.color + ';padding:2px 10px;border-radius:12px;font-size:0.78rem;">' + _esc(status.label) + '</span>';
       html += '</div>';
-    }
+      html += '<div style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:10px;">' + _esc(slot.description) + '</div>';
+      html += '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">';
+      html += '<button class="btn btn-primary btn-small" onclick="window.policiesOpenSlotEditor(\'' + _esc(slot.id) + '\')">' + (status.state === 'not-set-up' ? 'Set up' : 'Edit') + '</button>';
+      if (row && status.state !== 'not-set-up') {
+        html += '<span style="font-size:0.78rem;color:var(--warm-gray-light);">Shown at <code style="font-family:monospace;">/policies/' + _esc(slot.id) + '</code></span>';
+      }
+      html += '</div>';
+      html += '</div>';
+    });
+    html += '</div>';
     body.innerHTML = html;
   }
 
-  function renderOtherPolicyForm(p) {
-    var isEdit = !!p, id = isEdit ? _esc(p.id) : '';
-    var html = '<div style="border:2px solid var(--amber-light);border-radius:10px;padding:16px;background:var(--cream);margin-bottom:12px;">';
-    html += '<h4 style="margin:0 0 12px;">' + (isEdit ? 'Edit Policy' : 'New Policy') + '</h4>';
-    html += '<div style="margin-bottom:10px;"><label style="font-weight:600;font-size:0.9rem;display:block;margin-bottom:4px;">Name *</label>';
-    html += '<input id="polName" class="form-input" style="width:100%;box-sizing:border-box;" value="' + (isEdit ? _esc(p.name || '') : '') + '" placeholder="e.g. Privacy Policy"></div>';
-    html += '<div style="margin-bottom:10px;"><label style="font-weight:600;font-size:0.9rem;display:block;margin-bottom:4px;">Slug</label>';
-    html += '<input id="polSlug" class="form-input" style="width:100%;box-sizing:border-box;" value="' + (isEdit ? _esc(p.slug || '') : '') + '" placeholder="privacy-policy"></div>';
-    html += '<div style="margin-bottom:10px;"><label style="font-weight:600;font-size:0.9rem;display:block;margin-bottom:4px;">Content (HTML)</label>';
-    html += '<textarea id="polContent" class="form-input" rows="14" style="width:100%;box-sizing:border-box;font-family:monospace;font-size:0.85rem;">' + (isEdit ? _esc(p.contentHtml || '') : '') + '</textarea></div>';
-    html += '<div style="margin-bottom:14px;display:flex;align-items:center;gap:8px;"><input type="checkbox" id="polStorefront"' + (isEdit && p.storefrontEnabled ? ' checked' : '') + '><label for="polStorefront" style="font-size:0.9rem;cursor:pointer;">Show on storefront</label></div>';
-    html += '<div style="display:flex;gap:8px;"><button class="btn btn-primary btn-small" onclick="window.policiesSave(\'' + id + '\')">' + (isEdit ? 'Save' : 'Create') + '</button>';
-    html += '<button class="btn btn-secondary btn-small" onclick="window.policiesCancelEdit()">Cancel</button></div></div>';
-    return html;
-  }
+  // Open the per-slot editor as a modal. Shows source toggle
+  // (Mast-hosted | External URL | Disabled) + the right input for
+  // each mode. No slug field. No HTML.
+  window.policiesOpenSlotEditor = function(slotId) {
+    var slot = _slotById(slotId);
+    if (!slot) return;
+    _slotEditingId = slotId;
+    var row = _slotRowsBySlug[slotId] || {};
+    var currentText = _htmlToPlainText(row.contentHtml || '');
+    var currentUrl = row.externalUrl || '';
+    // Mode: external-url if URL is set, otherwise mast-hosted.
+    // 'disabled' is a checkbox alongside the mode (not a third radio) so
+    // it can apply to either source without confusing the operator.
+    var mode = currentUrl ? 'external-url' : 'mast-hosted';
+    var enabled = row.storefrontEnabled !== false;
 
-  // ----- Window globals (inline onclick handlers) -----
+    var html = '';
+    html += '<div class="modal-header"><h3>' + _esc(slot.name) + '</h3></div>';
+    html += '<div class="modal-body">';
+    html += '<p style="font-size:0.85rem;color:var(--warm-gray);margin:0 0 14px;">' + _esc(slot.description) + '</p>';
+    html += '<p style="font-size:0.78rem;color:var(--warm-gray-light);margin:0 0 14px;">Shown at <code style="font-family:monospace;">/policies/' + _esc(slot.id) + '</code> on your storefront.</p>';
+
+    // Source mode picker
+    html += '<div class="form-group" style="margin-bottom:14px;">';
+    html += '<label style="font-weight:600;font-size:0.9rem;display:block;margin-bottom:6px;">How is this policy served?</label>';
+    html += '<div style="display:flex;gap:10px;flex-wrap:wrap;">';
+    html += '<label style="font-size:0.9rem;cursor:pointer;display:inline-flex;align-items:center;gap:6px;"><input type="radio" name="slotMode" value="mast-hosted"' + (mode === 'mast-hosted' ? ' checked' : '') + ' onchange="window.policiesSwitchSlotMode(this.value)"> Mast hosts the page</label>';
+    html += '<label style="font-size:0.9rem;cursor:pointer;display:inline-flex;align-items:center;gap:6px;"><input type="radio" name="slotMode" value="external-url"' + (mode === 'external-url' ? ' checked' : '') + ' onchange="window.policiesSwitchSlotMode(this.value)"> I host it elsewhere</label>';
+    html += '</div>';
+    html += '</div>';
+
+    // Mast-hosted: plain text editor
+    html += '<div id="slotEditorMastBody" style="' + (mode === 'mast-hosted' ? '' : 'display:none;') + '">';
+    html += '<div class="form-group" style="margin-bottom:14px;">';
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">';
+    html += '<label style="font-weight:600;font-size:0.9rem;">Policy text</label>';
+    html += '<button class="btn btn-secondary btn-small" onclick="window.policiesLoadTemplate(\'' + _esc(slot.id) + '\')">Use template</button>';
+    html += '</div>';
+    html += '<p style="font-size:0.78rem;color:var(--warm-gray);margin:0 0 8px;">Write in plain English. Blank lines separate paragraphs. No need for HTML.</p>';
+    html += '<textarea id="slotEditorText" rows="18" style="width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid var(--cream-dark);border-radius:6px;font-family:inherit;font-size:0.9rem;line-height:1.5;" placeholder="Write or paste your ' + _esc(slot.name.toLowerCase()) + ' here.">' + _esc(currentText) + '</textarea>';
+    html += '</div>';
+    html += '</div>';
+
+    // External URL mode
+    html += '<div id="slotEditorUrlBody" style="' + (mode === 'external-url' ? '' : 'display:none;') + '">';
+    html += '<div class="form-group" style="margin-bottom:14px;">';
+    html += '<label style="font-weight:600;font-size:0.9rem;display:block;margin-bottom:6px;">URL to your hosted policy</label>';
+    html += '<input type="url" id="slotEditorUrl" class="form-input" style="width:100%;box-sizing:border-box;" value="' + _esc(currentUrl) + '" placeholder="https://yoursite.com/privacy">';
+    html += '<p style="font-size:0.78rem;color:var(--warm-gray);margin:6px 0 0;">When customers click this policy on your Mast storefront, they\'ll be sent to this URL.</p>';
+    html += '</div>';
+    html += '</div>';
+
+    // Storefront-visible toggle (applies to either mode)
+    html += '<div class="form-group" style="margin-bottom:8px;display:flex;align-items:center;gap:8px;">';
+    html += '<input type="checkbox" id="slotEditorEnabled"' + (enabled ? ' checked' : '') + '>';
+    html += '<label for="slotEditorEnabled" style="font-size:0.9rem;cursor:pointer;">Show on storefront</label>';
+    html += '</div>';
+
+    html += '<div id="slotEditorStatus" style="font-size:0.85rem;margin-top:8px;"></div>';
+    html += '</div>';
+    html += '<div class="modal-footer">';
+    html += '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>';
+    html += '<button class="btn btn-primary" id="slotEditorSaveBtn" onclick="window.policiesSaveSlot()">Save</button>';
+    html += '</div>';
+
+    if (typeof openModal === 'function') openModal(html);
+  };
+
+  window.policiesSwitchSlotMode = function(mode) {
+    var m = document.getElementById('slotEditorMastBody');
+    var u = document.getElementById('slotEditorUrlBody');
+    if (m) m.style.display = (mode === 'mast-hosted') ? '' : 'none';
+    if (u) u.style.display = (mode === 'external-url') ? '' : 'none';
+  };
+
+  window.policiesLoadTemplate = function(slotId) {
+    var slot = _slotById(slotId);
+    if (!slot || !slot.template) return;
+    var ta = document.getElementById('slotEditorText');
+    if (!ta) return;
+    if (ta.value && ta.value.trim()) {
+      // Confirm overwrite if there's existing content.
+      if (!confirm('Replace the current text with the template?')) return;
+    }
+    ta.value = slot.template;
+  };
+
+  window.policiesSaveSlot = async function() {
+    var slotId = _slotEditingId;
+    var slot = _slotById(slotId);
+    if (!slot) return;
+    var btn = document.getElementById('slotEditorSaveBtn');
+    var statusEl = document.getElementById('slotEditorStatus');
+    var setStatus = function(msg, isErr) {
+      if (statusEl) { statusEl.textContent = msg; statusEl.style.color = isErr ? 'var(--danger)' : 'var(--warm-gray)'; }
+    };
+    var mode = ((document.querySelector('input[name="slotMode"]:checked') || {}).value) || 'mast-hosted';
+    var enabled = !!((document.getElementById('slotEditorEnabled') || {}).checked);
+    var patch = {
+      name: slot.name,
+      slug: slot.id,
+      kind: 'policy',
+      storefrontEnabled: enabled,
+      updatedAt: new Date().toISOString()
+    };
+    if (mode === 'mast-hosted') {
+      var text = ((document.getElementById('slotEditorText') || {}).value || '').trim();
+      if (!text) { setStatus('Add some policy text or switch to "I host it elsewhere".', true); return; }
+      patch.contentHtml = _plainTextToHtml(text);
+      patch.source = 'mast-hosted';
+      patch.externalUrl = null;
+    } else {
+      var url = ((document.getElementById('slotEditorUrl') || {}).value || '').trim();
+      if (!/^https?:\/\//i.test(url)) { setStatus('Enter a full URL starting with https://', true); return; }
+      patch.externalUrl = url;
+      patch.source = 'external-url';
+      // Keep any prior contentHtml so switching back doesn't lose work.
+    }
+    if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+    try {
+      var existing = _slotRowsBySlug[slotId];
+      if (existing && existing.id) {
+        await MastDB.update('cs_policies/' + existing.id, patch);
+        Object.assign(existing, patch);
+      } else {
+        var nk = MastDB.newKey('cs_policies');
+        var doc = Object.assign({ id: nk, createdAt: new Date().toISOString() }, patch);
+        await MastDB.set('cs_policies/' + nk, doc);
+        _slotRowsBySlug[slotId] = doc;
+      }
+      if (typeof closeModal === 'function') closeModal();
+      if (typeof showToast === 'function') showToast(slot.name + ' saved');
+      renderOtherPolicies();
+    } catch (err) {
+      console.error('[policies] save slot failed:', err);
+      setStatus('Save failed: ' + (err && err.message), true);
+      if (btn) { btn.disabled = false; btn.textContent = 'Save'; }
+    }
+  };
+
+  // Tab switcher (unchanged from earlier — kept for the Return Policy
+  // vs Other Policies view-tabs strip).
   window.policiesSwitchTab = function(which) {
     var bar = document.getElementById('policiesTabBar');
     if (bar) {
@@ -2905,60 +3123,12 @@ async function exitPackingMode() {
     var oth = document.getElementById('policiesTab-other');
     if (ret) ret.style.display = (which === 'return') ? '' : 'none';
     if (oth) oth.style.display = (which === 'other') ? '' : 'none';
-    // The Edit/Publish header buttons belong to the Return Policy tab only.
     var hdr = document.getElementById('policiesHeaderActions');
     if (hdr) hdr.style.display = (which === 'return') ? '' : 'none';
     if (which === 'other') {
-      if (!_otherPoliciesLoaded) loadOtherPolicies().then(renderOtherPolicies);
+      if (!_slotsLoaded) loadOtherPolicies().then(renderOtherPolicies);
       else renderOtherPolicies();
     }
-  };
-  window.policiesShowAdd = function() { _otherPolShowAdd = true; _otherPolEditId = null; renderOtherPolicies(); };
-  window.policiesEdit = function(id) { _otherPolEditId = id; _otherPolShowAdd = false; renderOtherPolicies(); };
-  window.policiesCancelEdit = function() { _otherPolEditId = null; _otherPolShowAdd = false; renderOtherPolicies(); };
-  window.policiesSave = async function(id) {
-    var name = ((document.getElementById('polName') || {}).value || '').trim();
-    var slug = ((document.getElementById('polSlug') || {}).value || '').trim();
-    var content = (document.getElementById('polContent') || {}).value || '';
-    var sf = !!((document.getElementById('polStorefront') || {}).checked);
-    if (!name) { showToast('Policy name is required', true); return; }
-    var slugVal = slug || name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-    var now = new Date().toISOString();
-    var patch = { name: name, slug: slugVal, contentHtml: content, kind: 'policy', storefrontEnabled: sf, updatedAt: now };
-    try {
-      if (id) {
-        await MastDB.update('cs_policies/' + id, patch);
-        if (_otherPoliciesData[id]) Object.assign(_otherPoliciesData[id], patch);
-        _otherPolEditId = null;
-        showToast('Policy updated');
-      } else {
-        var nk = MastDB.newKey('cs_policies');
-        var doc = Object.assign({ id: nk, createdAt: now }, patch);
-        await MastDB.set('cs_policies/' + nk, doc);
-        _otherPoliciesData[nk] = doc;
-        _otherPolShowAdd = false;
-        showToast('Policy created');
-      }
-      renderOtherPolicies();
-    } catch (err) { showToast('Failed: ' + (err && err.message), true); }
-  };
-  window.policiesToggleStorefront = async function(id, enabled) {
-    try {
-      await MastDB.update('cs_policies/' + id, { storefrontEnabled: enabled, updatedAt: new Date().toISOString() });
-      if (_otherPoliciesData[id]) _otherPoliciesData[id].storefrontEnabled = enabled;
-      showToast(enabled ? 'Policy now live on storefront' : 'Policy hidden from storefront');
-      renderOtherPolicies();
-    } catch (err) { showToast('Failed: ' + (err && err.message), true); }
-  };
-  window.policiesDelete = async function(id) {
-    var ok = await window.mastConfirm('Delete this policy? Customers visiting the URL will see a 404.', { title: 'Delete policy', confirmLabel: 'Delete', danger: true });
-    if (!ok) return;
-    try {
-      await MastDB.remove('cs_policies/' + id);
-      delete _otherPoliciesData[id];
-      showToast('Policy deleted');
-      renderOtherPolicies();
-    } catch (err) { showToast('Failed: ' + (err && err.message), true); }
   };
 
 })();
