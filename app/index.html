@@ -18385,7 +18385,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260527-080708-851fd85';
+var MAST_MODULES_V = '20260527-081530-3c2843f';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -37073,17 +37073,32 @@ function loadProductCustomerSignal(pid) {
 
   el.innerHTML = '<div class="loading" style="padding:20px;color:var(--warm-gray);">Loading customer signal…</div>';
 
-  Promise.all([
-    MastDB.query('cs_reviews').orderByChild('createdAt').limitToLast(500).once()
-      .then(function(s) { return (s && s.val()) || {}; }).catch(function() { return {}; }),
-    MastDB.query('cs_tickets').limitToLast(500).once()
-      .then(function(s) { return (s && s.val()) || {}; }).catch(function() { return {}; }),
-    MastDB.query('orders').orderByChild('createdAt').limitToLast(2000).once()
-      .then(function(s) { return (s && s.val()) || {}; }).catch(function() { return {}; }),
-    // Devon B: parallel admin/rma read for the Returns block.
-    MastDB.query('admin/rma').limitToLast(500).once()
-      .then(function(s) { return (s && s.val()) || {}; }).catch(function() { return {}; })
+  // Q2 (HZPrKoFW6N8qcJsfLJgL): hard 3s cap so a hanging .once() can't
+  // strand the spinner past the 8s watchdog. Per-promise .catch handles
+  // rejections; this handles never-settling reads.
+  var _pdcsTimeout = {};
+  Promise.race([
+    Promise.all([
+      MastDB.query('cs_reviews').orderByChild('createdAt').limitToLast(500).once()
+        .then(function(s) { return (s && s.val()) || {}; }).catch(function() { return {}; }),
+      MastDB.query('cs_tickets').limitToLast(500).once()
+        .then(function(s) { return (s && s.val()) || {}; }).catch(function() { return {}; }),
+      MastDB.query('orders').orderByChild('createdAt').limitToLast(2000).once()
+        .then(function(s) { return (s && s.val()) || {}; }).catch(function() { return {}; }),
+      // Devon B: parallel admin/rma read for the Returns block.
+      MastDB.query('admin/rma').limitToLast(500).once()
+        .then(function(s) { return (s && s.val()) || {}; }).catch(function() { return {}; })
+    ]),
+    new Promise(function(resolve) { setTimeout(function() { resolve(_pdcsTimeout); }, 3000); })
   ]).then(function(results) {
+    if (results === _pdcsTimeout) {
+      var w = document.getElementById('pdCustomerSignal');
+      var c = document.getElementById('pdCustomerSignalContent');
+      if (w && c && w.dataset.pid === pid) {
+        c.innerHTML = '<div style="padding:16px;color:var(--warm-gray);font-size:0.85rem;">Customer signal unavailable (load timed out).</div>';
+      }
+      return;
+    }
     var freshWrapper = document.getElementById('pdCustomerSignal');
     if (!freshWrapper || freshWrapper.dataset.pid !== pid) return; // navigated away
     var freshEl = document.getElementById('pdCustomerSignalContent');
