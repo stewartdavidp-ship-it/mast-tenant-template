@@ -141,6 +141,54 @@
     h += '<span style="font-size:0.85rem;color:var(--warm-gray);">' + emailsData.length + ' emails loaded</span>';
     h += '</div>';
 
+    // Category summary tiles — count emails per module (feedback 5TI5LpdU4QpbQlm6RkB4).
+    // emailType → module mapping comes from EMAIL_TRIGGER_REGISTRY (global on
+    // window). Unknown types bucket into "Other" so nothing is hidden.
+    if (emailsLoaded && emailsData.length > 0) {
+      var typeToModule = {};
+      var registry = (typeof window.EMAIL_TRIGGER_REGISTRY !== 'undefined') ? window.EMAIL_TRIGGER_REGISTRY : [];
+      registry.forEach(function(t) { if (t.emailType && t.module) typeToModule[t.emailType] = t.module; });
+
+      var counts = {};
+      emailsData.forEach(function(e) {
+        var cat = (e.emailType && typeToModule[e.emailType]) || (e.emailType ? 'Other' : 'Unknown');
+        counts[cat] = (counts[cat] || 0) + 1;
+      });
+
+      // Stable display order: known modules first (alpha), then Other/Unknown.
+      var knownCats = Object.keys(counts).filter(function(c) { return c !== 'Other' && c !== 'Unknown'; }).sort();
+      var tailCats = ['Other', 'Unknown'].filter(function(c) { return counts[c] != null; });
+      var orderedCats = knownCats.concat(tailCats);
+
+      // Tile colors keyed by category for instant scanability.
+      var TILE_COLORS = {
+        Orders:      { bg: 'rgba(42,124,111,0.12)',  fg: 'var(--teal,#2a7c6f)' },
+        Returns:     { bg: 'rgba(220,53,69,0.12)',   fg: '#f49aa3' },
+        Booking:     { bg: 'rgba(196,133,60,0.18)',  fg: 'var(--amber-light,#fbcc70)' },
+        Commissions: { bg: 'rgba(168,85,247,0.15)',  fg: '#c8a8f5' },
+        Contacts:    { bg: 'rgba(99,102,241,0.15)',  fg: '#a5a8f5' },
+        POS:         { bg: 'rgba(245,158,11,0.12)',  fg: '#f59e0b' },
+        Team:        { bg: 'rgba(59,130,246,0.15)',  fg: '#3b82f6' },
+        Waivers:     { bg: 'rgba(120,120,120,0.18)', fg: 'var(--text-secondary,#a09890)' },
+        Other:       { bg: 'rgba(120,120,120,0.12)', fg: 'var(--warm-gray,#888)' },
+        Unknown:     { bg: 'rgba(120,120,120,0.10)', fg: 'var(--warm-gray,#888)' }
+      };
+
+      h += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">';
+      h += '<div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:10px 14px;min-width:90px;">' +
+             '<div style="font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.5px;">Total</div>' +
+             '<div style="font-size:1.15rem;font-weight:600;color:var(--text,#e0e0e0);">' + emailsData.length.toLocaleString() + '</div>' +
+           '</div>';
+      orderedCats.forEach(function(cat) {
+        var c = TILE_COLORS[cat] || TILE_COLORS.Other;
+        h += '<div style="background:' + c.bg + ';border:1px solid ' + c.bg + ';border-radius:10px;padding:10px 14px;min-width:90px;">' +
+               '<div style="font-size:0.72rem;color:' + c.fg + ';text-transform:uppercase;letter-spacing:0.5px;">' + esc(cat) + '</div>' +
+               '<div style="font-size:1.15rem;font-weight:600;color:' + c.fg + ';">' + counts[cat].toLocaleString() + '</div>' +
+             '</div>';
+      });
+      h += '</div>';
+    }
+
     // Filter bar
     h += '<div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;align-items:center;">';
     h += '<select id="emailStatusFilter" onchange="window._emailLogFilterStatus()" style="padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.85rem;">';
