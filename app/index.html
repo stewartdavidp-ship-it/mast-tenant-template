@@ -18446,7 +18446,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260527-085914-cf1e6f0';
+var MAST_MODULES_V = '20260527-090118-0bbcb5f';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -40759,14 +40759,16 @@ function renderSyncLog() {
     return true;
   });
 
-  // Filter bar — design system form inputs
+  // Filter bar — design system form inputs (Q6 sweep: dropdowns→pills)
   var html = '<div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;align-items:center;">';
-  html += '<select style="padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.85rem;" onchange="window.__mastSyncLogFilters.direction=this.value;renderSyncLog()">';
+  html += '<div class="order-filter-pills" data-filter-for="syncLogDirection" style="margin:0;"></div>';
+  html += '<select id="syncLogDirection" style="display:none;" onchange="window.__mastSyncLogFilters.direction=this.value;renderSyncLog()">';
   html += '<option value="all"' + (f.direction === 'all' ? ' selected' : '') + '>All directions</option>';
   html += '<option value="push"' + (f.direction === 'push' ? ' selected' : '') + '>Push only</option>';
   html += '<option value="pull"' + (f.direction === 'pull' ? ' selected' : '') + '>Pull only</option>';
   html += '</select>';
-  html += '<select style="padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.85rem;" onchange="window.__mastSyncLogFilters.trigger=this.value;renderSyncLog()">';
+  html += '<div class="order-filter-pills" data-filter-for="syncLogTrigger" style="margin:0;"></div>';
+  html += '<select id="syncLogTrigger" style="display:none;" onchange="window.__mastSyncLogFilters.trigger=this.value;renderSyncLog()">';
   html += '<option value="all"' + (f.trigger === 'all' ? ' selected' : '') + '>All triggers</option>';
   ['manual', 'auto-sync', 'overwrite-drift', 'accept-drift', 'undo', 'bulk', 'rule'].forEach(function(t) {
     html += '<option value="' + t + '"' + (f.trigger === t ? ' selected' : '') + '>' + t + '</option>';
@@ -40821,6 +40823,7 @@ function renderSyncLog() {
   }
 
   container.innerHTML = html;
+  if (window.mastInitFilterPills) window.mastInitFilterPills(container);
 }
 
 async function undoSyncEntry(logId) {
