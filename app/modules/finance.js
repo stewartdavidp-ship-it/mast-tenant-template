@@ -7085,24 +7085,54 @@ window.finAmendmentSubmit = window.finAmendmentOpenSubmit; // alias
 //     → { allocatedBurden, jobId, employeeId, source }
 //   admin/integrations/_meta/burdenSource → { defaults, ..., bannerState }
 //
-// periodId is 'YYYY-MM'. _overhead is a reserved jobId for un-attributable hours.
+// periodId is 'YYYY-MM-DD_YYYY-MM-DD' (Agent A canonical: pay-period range
+// matching PERIOD_ID_RE in mast-architecture/functions/labor-burden.js).
+// _overhead is a reserved jobId for un-attributable hours.
 
 var _w3BurdenCache = {};       // { periodId: { byEmployee, byJob, fetchedAt } }
 var _w3MetaCache  = null;
 var _w3ConfidenceCache = null;
+var _w3PeriodIdListCache = null; // { periodIds:[], fetchedAt }
 
-function _w3PeriodsForRange(startDate, endDate) {
-  // Returns array of 'YYYY-MM' covering the inclusive range.
+var _W3_PERIOD_ID_RE = /^(\d{4}-\d{2}-\d{2})_(\d{4}-\d{2}-\d{2})$/;
+
+// Integration fix #1 (W3-INT-1): Agent C originally returned 'YYYY-MM' keys
+// here; Agent A actually writes 'YYYY-MM-DD_YYYY-MM-DD' (arbitrary pay-period
+// ranges, not calendar months). Approach: list all child periodIds at
+// admin/burdenedLaborCost (MastDB.get on the parent returns a map keyed by
+// periodId), parse via the canonical regex, and include any whose [start,end]
+// overlaps the requested [startDate,endDate]. Listing is cached for 30s to
+// keep this off the per-render hot path. Limitation: when no W3 burden data
+// has ever been written for the tenant, the list is empty and the helper
+// returns []. That's fine — it just means no enrichment until the first
+// burden entry lands.
+async function _w3PeriodsForRange(startDate, endDate) {
+  if (!startDate || !endDate) return [];
+  var listing = _w3PeriodIdListCache;
+  if (!listing || (Date.now() - listing.fetchedAt) > 30000) {
+    var keys = [];
+    try {
+      var allBurden = (await MastDB.get('admin/burdenedLaborCost')) || {};
+      keys = Object.keys(allBurden).filter(function(k) { return k && k.charAt(0) !== '_'; });
+    } catch (_) { keys = []; }
+    try {
+      var allByJob = (await MastDB.get('admin/burdenedLaborByJob')) || {};
+      Object.keys(allByJob).forEach(function(k) {
+        if (k && k.charAt(0) !== '_' && keys.indexOf(k) === -1) keys.push(k);
+      });
+    } catch (_) {}
+    listing = { periodIds: keys, fetchedAt: Date.now() };
+    _w3PeriodIdListCache = listing;
+  }
   var out = [];
-  if (!startDate || !endDate) return out;
-  var s = new Date(startDate + 'T00:00:00.000Z');
-  var e2 = new Date(endDate + 'T00:00:00.000Z');
-  var y = s.getUTCFullYear(), m = s.getUTCMonth();
-  var ey = e2.getUTCFullYear(), em = e2.getUTCMonth();
-  while (y < ey || (y === ey && m <= em)) {
-    out.push(y + '-' + (m + 1 < 10 ? '0' + (m + 1) : (m + 1)));
-    m += 1; if (m > 11) { m = 0; y += 1; }
-    if (out.length > 60) break; // safety
+  for (var i = 0; i < listing.periodIds.length; i++) {
+    var pid = listing.periodIds[i];
+    var m = _W3_PERIOD_ID_RE.exec(pid);
+    if (!m) continue;
+    var pStart = m[1], pEnd = m[2];
+    // Overlap test on ISO YYYY-MM-DD strings — lexicographic compare is correct.
+    if (pStart <= endDate && pEnd >= startDate) out.push(pid);
+    if (out.length > 200) break; // safety
   }
   return out;
 }
@@ -7124,7 +7154,7 @@ async function _w3LoadBurdenForPeriod(periodId) {
 }
 
 async function _w3LoadBurdenForRange(startDate, endDate) {
-  var periods = _w3PeriodsForRange(startDate, endDate);
+  var periods = await _w3PeriodsForRange(startDate, endDate);
   var all = await Promise.all(periods.map(_w3LoadBurdenForPeriod));
   return { periods: periods, perPeriod: all };
 }
@@ -7214,7 +7244,19 @@ function _w3SummarizeBurden(rangeResult) {
     Object.keys(p.byEmployee || {}).forEach(function(eid) {
       var rec = p.byEmployee[eid] || {};
       var b = +rec.totalBurden || 0;
-      if (rec.classification === 'W2' || rec.empClass === 'W2') hasW2 = true;
+      // Integration fix #2 (W3-INT-2): hasW2 must match team.js employee
+      // schema. Burden recs DO NOT carry classification/empClass — that data
+      // lives on the employee record under admin/employees/{eid} (W2 indicator
+      // is employmentType ∈ {'full-time','part-time'} AND status !== 'terminated').
+      // Burden records are written per-employee with the employeeId in the
+      // collection key — we set hasW2=true any time a burden row exists, then
+      // narrow at the call-site by looking up the employee. For the local
+      // confidence heuristic on the FINANCE side, presence of a burden row is
+      // a strong-enough W2 signal (only W2-classified employees get burden
+      // entries written). Agent D's MCP tool (finance-burden.ts:_hasAnyW2Employee)
+      // does the authoritative check by reading admin/employees and matching
+      // employmentType ∈ {'full-time','part-time'} && status !== 'terminated'.
+      if (b > 0) hasW2 = true;
       if (b > 0) { hasData = true; }
       totalBurden += b;
       byEmployee[eid] = (byEmployee[eid] || 0) + b;
