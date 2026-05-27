@@ -7434,7 +7434,8 @@
             <span class="products-stat" id="ordersCount"></span>
           </div>
           <div style="display:flex;align-items:center;gap:8px;">
-            <select id="orderSourceFilter" onchange="filterOrdersBySource()" style="padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.85rem;">
+            <div class="order-filter-pills" data-filter-for="orderSourceFilter" style="margin:0;"></div>
+            <select id="orderSourceFilter" onchange="filterOrdersBySource()" style="display:none;">
               <option value="all">All Sources</option>
               <option value="direct">Direct Only</option>
               <option value="etsy">Etsy Only</option>
@@ -7740,7 +7741,8 @@
           <button class="btn btn-secondary" id="squarePaymentsToggle" onclick="toggleSquarePayments()" style="font-size:0.78rem;padding:4px 12px;">💳 Day Close</button>
           <div id="salesFilterControls" style="display:flex;align-items:center;gap:8px;">
             <input type="date" id="salesDateFilter" onchange="filterSalesByDate()" style="padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.85rem;">
-            <select id="salesStatusFilter" onchange="renderSales()" style="padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.85rem;">
+            <div class="order-filter-pills" data-filter-for="salesStatusFilter" style="margin:0;"></div>
+            <select id="salesStatusFilter" onchange="renderSales()" style="display:none;">
               <option value="all">All Status</option>
               <option value="captured">Captured</option>
               <option value="reconciled">Reconciled</option>
@@ -7843,7 +7845,8 @@
           <div id="squarePaymentsSummary" style="display:flex;gap:16px;flex-wrap:wrap;"></div>
         </div>
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
-          <select id="squarePaymentsFilter" onchange="renderSquarePayments()" style="padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.85rem;">
+          <div class="order-filter-pills" data-filter-for="squarePaymentsFilter" style="margin:0;"></div>
+          <select id="squarePaymentsFilter" onchange="renderSquarePayments()" style="display:none;">
             <option value="unmatched">Unmatched Only</option>
             <option value="matched">Matched Only</option>
             <option value="all">All Payments</option>
@@ -7880,7 +7883,8 @@
           <span class="products-stat" id="salesEventsCount"></span>
         </div>
         <div style="display:flex;align-items:center;gap:8px;">
-          <select id="salesEventsStatusFilter" onchange="renderSalesEvents()" style="padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.85rem;">
+          <div class="order-filter-pills" data-filter-for="salesEventsStatusFilter" style="margin:0;"></div>
+          <select id="salesEventsStatusFilter" onchange="renderSalesEvents()" style="display:none;">
             <option value="all">All Status</option>
             <option value="planning">Planning</option>
             <option value="packed">Packed</option>
@@ -8155,7 +8159,8 @@
         </div>
         <!-- Stories filter -->
         <div style="display:flex;gap:8px;align-items:center;margin-bottom:16px;flex-wrap:wrap;">
-          <select id="storiesStatusFilter" onchange="renderStoriesList()" style="padding:6px 10px;border:1px solid var(--cream-dark);border-radius:6px;font-size:0.85rem;background:white;">
+          <div class="order-filter-pills" data-filter-for="storiesStatusFilter" style="margin:0;"></div>
+          <select id="storiesStatusFilter" onchange="renderStoriesList()" style="display:none;">
             <option value="all">All Stories</option>
             <option value="draft">Drafts</option>
             <option value="published">Published</option>
@@ -9821,7 +9826,8 @@
           <p class="tab-section-purpose">Storage spots where physical inventory lives &mdash; shelves, display cases, containers, etc. Each location gets a QR code for quick scanning during intake, packing, and moves. The &ldquo;Home&rdquo; location is created automatically and can&rsquo;t be archived.</p>
           <div class="form-group">
             <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
-              <select id="locationStatusFilter" onchange="renderLocationsList()" style="padding:6px 10px;border:1px solid var(--cream-dark);border-radius:6px;font-size:0.85rem;font-family:'DM Sans',sans-serif;">
+              <div class="order-filter-pills" data-filter-for="locationStatusFilter" style="margin:0;"></div>
+              <select id="locationStatusFilter" onchange="renderLocationsList()" style="display:none;">
                 <option value="active">Active</option>
                 <option value="all">All</option>
                 <option value="archived">Archived</option>
@@ -18446,7 +18452,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260527-090118-0bbcb5f';
+var MAST_MODULES_V = '20260527-090505-33fd51c';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.

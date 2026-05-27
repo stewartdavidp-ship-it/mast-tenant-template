@@ -520,7 +520,8 @@
       '</div>' +
       '<div style="display:flex;gap:6px;align-items:center;">' +
         '<label style="font-size:0.85rem;color:var(--warm-gray);">Status:</label>' +
-        '<select id="payoutsStatusFilter" onchange="consignmentSetPayoutsFilter(this.value)" style="padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.85rem;">' +
+        '<div class="order-filter-pills" data-filter-for="payoutsStatusFilter" style="margin:0;"></div>' +
+        '<select id="payoutsStatusFilter" onchange="consignmentSetPayoutsFilter(this.value)" style="display:none;">' +
           '<option value="all"' + (payoutsStatusFilter === 'all' ? ' selected' : '') + '>All</option>' +
           '<option value="open"' + (payoutsStatusFilter === 'open' ? ' selected' : '') + '>Open</option>' +
           '<option value="partial"' + (payoutsStatusFilter === 'partial' ? ' selected' : '') + '>Partial</option>' +
@@ -614,6 +615,7 @@
     html += '</section>';
 
     tab.innerHTML = html;
+    if (window.mastInitFilterPills) window.mastInitFilterPills(tab);
   }
 
   function renderPayoutDetail(galleryId) {
