@@ -18452,7 +18452,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260527-090505-33fd51c';
+var MAST_MODULES_V = '20260527-094641-0f979d1';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -20561,23 +20561,32 @@ window.switchEmailInnerTab = switchEmailInnerTab;
 
 var EMAIL_TRIGGER_REGISTRY = [
   // ---- Orders ----
-  { id: 'order_confirmed', module: 'Orders', name: 'Order Confirmation', description: 'Sent when an order is confirmed after payment.', auto: true, emailType: 'confirmed' },
-  { id: 'order_shipped', module: 'Orders', name: 'Order Shipped', description: 'Sent automatically when order status changes to shipped.', auto: true, emailType: 'shipped' },
-  { id: 'order_delivered', module: 'Orders', name: 'Order Delivered', description: 'Sent when order is marked as delivered.', auto: false, emailType: 'delivered' },
-  { id: 'order_cancelled', module: 'Orders', name: 'Order Cancelled', description: 'Sent when an order is cancelled.', auto: true, emailType: 'cancelled' },
+  // emailType values match what writeEmailLog actually persists (full
+  // 'order_*' names, not the historical short 'confirmed'/'shipped' aliases).
+  { id: 'order_confirmed', module: 'Orders', name: 'Order Confirmation', description: 'Sent when an order is confirmed after payment.', auto: true, emailType: 'order_confirmed' },
+  { id: 'order_shipped', module: 'Orders', name: 'Order Shipped', description: 'Sent automatically when order status changes to shipped.', auto: true, emailType: 'order_shipped' },
+  { id: 'order_delivered', module: 'Orders', name: 'Order Delivered', description: 'Sent when order is marked as delivered.', auto: false, emailType: 'order_delivered' },
+  { id: 'order_cancelled', module: 'Orders', name: 'Order Cancelled', description: 'Sent when an order is cancelled.', auto: true, emailType: 'order_cancelled' },
   // ---- Returns / RMA ----
   { id: 'rma_approved', module: 'Returns', name: 'Return Approved', description: 'Sent when a return request is approved with return instructions.', auto: true, emailType: 'rma_approved' },
   { id: 'rma_refund', module: 'Returns', name: 'Refund Issued', description: 'Sent when a refund is processed for a return.', auto: true, emailType: 'rma_refund' },
-  // ---- Booking / Classes ----
-  { id: 'enrollment_confirmed', module: 'Booking', name: 'Enrollment Confirmation', description: 'Sent when a student enrolls in a class.', auto: true, emailType: 'enrollment_confirmed' },
-  { id: 'session_cancelled', module: 'Booking', name: 'Session Cancelled', description: 'Sent to all enrolled students when a class session is cancelled.', auto: true, emailType: 'session_cancelled' },
-  { id: 'enrollment_cancelled', module: 'Booking', name: 'Enrollment Cancelled', description: 'Sent when a student\'s enrollment is cancelled.', auto: true, emailType: 'enrollment_cancelled' },
-  { id: 'waitlist_promoted', module: 'Booking', name: 'Waitlist Promoted', description: 'Sent when a waitlisted student gets a spot in a class.', auto: true, emailType: 'waitlist_promoted' },
-  { id: 'session_rescheduled', module: 'Booking', name: 'Session Rescheduled', description: 'Sent to enrolled students when a class session date/time changes.', auto: true, emailType: 'session_rescheduled' },
-  { id: 'walkin_confirmed', module: 'Booking', name: 'Walk-In Confirmation', description: 'Sent to walk-in students after being added to a class.', auto: true, emailType: 'walkin_confirmed' },
+  // ---- Classes (formerly "Booking") ----
+  { id: 'enrollment_confirmed', module: 'Classes', name: 'Enrollment Confirmation', description: 'Sent when a student enrolls in a class.', auto: true, emailType: 'enrollment_confirmed' },
+  { id: 'session_cancelled', module: 'Classes', name: 'Session Cancelled', description: 'Sent to all enrolled students when a class session is cancelled.', auto: true, emailType: 'session_cancelled' },
+  { id: 'enrollment_cancelled', module: 'Classes', name: 'Enrollment Cancelled', description: 'Sent when a student\'s enrollment is cancelled.', auto: true, emailType: 'enrollment_cancelled' },
+  { id: 'enrollment_noshow', module: 'Classes', name: 'No-Show Notification', description: 'Sent when a student is marked as no-show for a class session.', auto: true, emailType: 'enrollment_noshow' },
+  { id: 'waitlist_promoted', module: 'Classes', name: 'Waitlist Promoted', description: 'Sent when a waitlisted student gets a spot in a class.', auto: true, emailType: 'waitlist_promoted' },
+  { id: 'session_rescheduled', module: 'Classes', name: 'Session Rescheduled', description: 'Sent to enrolled students when a class session date/time changes.', auto: true, emailType: 'session_rescheduled' },
+  { id: 'walkin_confirmed', module: 'Classes', name: 'Walk-In Confirmation', description: 'Sent to walk-in students after being added to a class.', auto: true, emailType: 'walkin_confirmed' },
+  { id: 'class_reminder', module: 'Classes', name: 'Class Reminder', description: 'Sent to enrolled students before a class session as a reminder.', auto: true, emailType: 'class_reminder' },
   // ---- Commissions ----
   { id: 'commission_inquiry', module: 'Commissions', name: 'Commission Inquiry', description: 'Sent to the shop owner when a customer submits a commission request.', auto: true, emailType: 'commission_inquiry' },
   { id: 'commission_proposal', module: 'Commissions', name: 'Commission Proposal', description: 'Sent to the customer with pricing and details for a commission piece.', auto: false, emailType: 'commission_proposal' },
+  { id: 'commission_notify', module: 'Commissions', name: 'Commission Update', description: 'Sent to the customer when there is an update on their commission piece.', auto: true, emailType: 'commission_notify' },
+  // ---- Reviews ----
+  { id: 'review_submitted', module: 'Reviews', name: 'Review Submitted', description: 'Acknowledgement sent to the customer after they submit a product review.', auto: true, emailType: 'review_submitted' },
+  // ---- Surveys ----
+  { id: 'survey_invite', module: 'Surveys', name: 'Survey Invitation', description: 'Sent to invite a customer to complete a satisfaction or feedback survey.', auto: true, emailType: 'survey_invite' },
   // ---- Contacts ----
   { id: 'inquiry_response', module: 'Contacts', name: 'Inquiry Response', description: 'Manual reply sent to a customer who submitted a contact form inquiry.', auto: false, emailType: 'inquiry_response' },
   // ---- POS ----

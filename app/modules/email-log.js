@@ -179,8 +179,10 @@
       var TILE_COLORS = {
         Orders:      { bg: 'rgba(42,124,111,0.12)',  fg: 'var(--teal,#2a7c6f)' },
         Returns:     { bg: 'rgba(220,53,69,0.12)',   fg: '#f49aa3' },
-        Booking:     { bg: 'rgba(196,133,60,0.18)',  fg: 'var(--amber-light,#fbcc70)' },
+        Classes:     { bg: 'rgba(196,133,60,0.18)',  fg: 'var(--amber-light,#fbcc70)' },
         Commissions: { bg: 'rgba(168,85,247,0.15)',  fg: '#c8a8f5' },
+        Reviews:     { bg: 'rgba(234,179,8,0.15)',   fg: '#eab308' },
+        Surveys:     { bg: 'rgba(20,184,166,0.15)',  fg: '#5eead4' },
         Contacts:    { bg: 'rgba(99,102,241,0.15)',  fg: '#a5a8f5' },
         POS:         { bg: 'rgba(245,158,11,0.12)',  fg: '#f59e0b' },
         Team:        { bg: 'rgba(59,130,246,0.15)',  fg: '#3b82f6' },
@@ -235,6 +237,17 @@
       h += '<option value="' + esc(t) + '"' + (emailTypeFilter === t ? ' selected' : '') + '>' + esc(t) + '</option>';
     });
     h += '</select>';
+    // Active-filter chip — surfaces the category tile filter inside the pill
+    // row so the active narrowing is visible from a single eye-line. Click
+    // the × to clear the category filter (returns to Total).
+    if (emailCategoryFilter !== 'all') {
+      var chipColors = (typeof TILE_COLORS !== 'undefined' ? TILE_COLORS : null);
+      var chipC = chipColors && chipColors[emailCategoryFilter] ? chipColors[emailCategoryFilter] : { bg: 'rgba(120,120,120,0.18)', fg: 'var(--warm-gray,#888)' };
+      h += '<span style="display:inline-flex;align-items:center;gap:6px;background:' + chipC.bg + ';color:' + chipC.fg + ';border:1px solid ' + chipC.fg + ';border-radius:14px;padding:4px 10px;font-size:0.78rem;font-weight:500;">' +
+             'Filtering: ' + esc(emailCategoryFilter) +
+             '<button type="button" onclick="window._emailLogFilterCategory(\'all\')" title="Clear category filter" style="background:transparent;border:0;color:inherit;cursor:pointer;font-size:0.9rem;line-height:1;padding:0 0 0 2px;">×</button>' +
+           '</span>';
+    }
     h += '<button class="btn btn-secondary" style="font-size:0.85rem;padding:6px 12px;" onclick="window._emailLogRefresh()">&#x21bb; Refresh</button>';
     h += '</div>';
 
