@@ -329,6 +329,7 @@
     }
 
     container.innerHTML = h;
+    if (window.mastInitFilterPills) window.mastInitFilterPills(container);
   }
 
   // ========================================
@@ -828,7 +829,10 @@
     h += '<select id="docFiltEmp" onchange="teamDocFilter()" style="' + INPUT_STYLE + 'width:auto;min-width:160px;"><option value="">All employees</option>';
     active.forEach(function(emp) { h += '<option value="' + esc(emp._key) + '"' + (docFilterEmployee === emp._key ? ' selected' : '') + '>' + esc(emp.fullName || '') + '</option>'; });
     h += '</select>';
-    h += '<select id="docFiltStatus" onchange="teamDocFilter()" style="' + INPUT_STYLE + 'width:auto;min-width:140px;"><option value="">All statuses</option><option value="completed"' + (docFilterStatus === 'completed' ? ' selected' : '') + '>On File</option><option value="missing"' + (docFilterStatus === 'missing' ? ' selected' : '') + '>Missing</option><option value="expired"' + (docFilterStatus === 'expired' ? ' selected' : '') + '>Expired</option></select>';
+    // Q6 sweep: Status as pills (4 bounded options). Employee filter stays
+    // as dropdown — unbounded option set (one per active employee).
+    h += '<div class="order-filter-pills" data-filter-for="docFiltStatus" style="margin:0;"></div>';
+    h += '<select id="docFiltStatus" onchange="teamDocFilter()" style="display:none;"><option value="">All statuses</option><option value="completed"' + (docFilterStatus === 'completed' ? ' selected' : '') + '>On File</option><option value="missing"' + (docFilterStatus === 'missing' ? ' selected' : '') + '>Missing</option><option value="expired"' + (docFilterStatus === 'expired' ? ' selected' : '') + '>Expired</option></select>';
     h += '</div>';
     h += '<div id="docTableContainer">' + buildComplianceTable(active) + '</div>';
     h += '<div id="teamComplianceForm" style="display:none;margin-top:16px;"></div>';
