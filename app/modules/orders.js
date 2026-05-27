@@ -1046,11 +1046,20 @@
         } else if (prStatus === 'fulfilled') {
           prActions = '<span style="font-size:0.72rem;color:var(--warm-gray);">Fulfilled' + (pr.fulfilledBy ? ' by ' + esc(pr.fulfilledBy) : '') + '</span>';
         }
+        // W3.6 (D-FIN-W3-6): per-job burdened labor cell. Filled async via
+        // _w3FillOrderLaborCells() after detail renders. Only meaningful when
+        // pr.jobId is set; otherwise renders 'No job'.
+        var laborCellId = 'w3LaborCell_' + esc(k);
+        var laborCell = pr.jobId
+          ? '<span id="' + laborCellId + '" data-w3-job-id="' + esc(pr.jobId) + '" ' +
+            'style="font-size:0.72rem;color:var(--warm-gray);">Loading labor…</span>'
+          : '<span style="font-size:0.72rem;color:var(--warm-gray);">No job</span>';
         prRows += '<div class="production-request-row">' +
           '<div>' +
             '<strong>' + esc(pr.productName || '') + '</strong>' +
             (pr.options ? ' <span style="color:var(--warm-gray);font-size:0.78rem;">(' + esc(Object.values(pr.options).join(', ')) + ')</span>' : '') +
             ' x' + (pr.qty || 1) +
+            '<div style="margin-top:4px;">' + laborCell + '</div>' +
           '</div>' +
           '<div style="display:flex;align-items:center;gap:8px;">' +
             '<span class="status-badge" style="' + prodRequestBadgeStyle(prStatus) + '">' + prStatus.replace('-', ' ') + '</span>' +
@@ -1061,6 +1070,7 @@
       productionRequestsHtml = '<div class="order-detail-section">' +
         '<div class="order-detail-section-title">Production Requests</div>' +
         prRows +
+        '<div id="w3OrderLaborBanner_' + esc(orderId) + '"></div>' +
       '</div>';
     }
 
@@ -1142,6 +1152,67 @@
 
     // Load email history async
     loadOrderEmails(orderId, emailSectionId);
+    // W3.6: fill per-job burdened-labor cells async (no-throw).
+    try { _w3FillOrderLaborCells(orderId, o); } catch (_) {}
+  }
+
+  // W3.6 — Per-job burdened labor surface for order detail.
+  // For each Production Request with a jobId, look up the burden allocated to
+  // that job in the order's period window and render "Base | Burdened | Δ | Source"
+  // in the production-request row. When all jobs roll up to _overhead only,
+  // surface the per-job info banner (time-clock lacks jobId today).
+  async function _w3FillOrderLaborCells(orderId, order) {
+    if (!window.MastFinanceW3) return;
+    var W3 = window.MastFinanceW3;
+    var orderDate = (order && (order.placedAt || order.createdAt || order.confirmedAt)) || null;
+    if (!orderDate) return;
+    var dateStr = String(orderDate).slice(0, 10);
+    // Use a 90-day window ending at the order date to give us coverage of the
+    // jobs that produced the order even when work spanned earlier periods.
+    var d = new Date(dateStr + 'T00:00:00.000Z');
+    var startDate = new Date(d.getTime() - 90 * 86400000).toISOString().slice(0, 10);
+    var bannerEl = document.getElementById('w3OrderLaborBanner_' + orderId);
+    var cells = document.querySelectorAll('[id^="w3LaborCell_"][data-w3-job-id]');
+    if (!cells || !cells.length) {
+      if (bannerEl) bannerEl.innerHTML = '';
+      return;
+    }
+    var anyAllocated = false;
+    var anyOverheadOnly = false;
+    var totalAllocated = 0;
+    for (var i = 0; i < cells.length; i++) {
+      var cell = cells[i];
+      var jobId = cell.getAttribute('data-w3-job-id');
+      if (!jobId) continue;
+      try {
+        var jb = await W3.getJobBurden(jobId, startDate, dateStr);
+        if (!jb || !jb.allocatedBurden) {
+          cell.innerHTML = '<span style="color:var(--warm-gray);">No burdened labor recorded</span>';
+          anyOverheadOnly = true;
+          continue;
+        }
+        anyAllocated = true;
+        totalAllocated += jb.allocatedBurden;
+        var chip = W3.renderSourceTagChip(jb.dominantSource,
+          jb.dominantSource === 'mixed' ? 'LOW' : null);
+        cell.innerHTML =
+          '<span style="font-size:0.72rem;color:var(--warm-gray);">Burdened labor (job):</span> ' +
+          '<strong style="font-size:0.78rem;">$' + (jb.allocatedBurden / 100).toFixed(2) + '</strong> ' +
+          chip;
+      } catch (err) {
+        cell.innerHTML = '<span style="color:var(--warm-gray);">Labor unavailable</span>';
+      }
+    }
+    if (!bannerEl) return;
+    if (!anyAllocated && cells.length > 0) {
+      bannerEl.innerHTML = W3.perJobOverheadBanner();
+    } else if (anyOverheadOnly && anyAllocated) {
+      bannerEl.innerHTML = '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:8px;">' +
+        'Some jobs on this order have no per-job labor attribution — those hours are absorbed in ' +
+        '<em>Fixed Overhead</em> rather than the per-job line.</div>';
+    } else {
+      bannerEl.innerHTML = '';
+    }
   }
 
   // ============================================================
