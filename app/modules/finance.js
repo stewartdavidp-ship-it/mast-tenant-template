@@ -1712,6 +1712,12 @@ async function loadPnl() {
       computePnlLocal(start, end),
       computePnlLocal(prior.start, prior.end)
     ]);
+    // W3.5: enrich both periods with burdened-labor signal so renderPnl can
+    // fold into COGS + show Fixed Overhead line + source-tag chip.
+    await Promise.all([
+      _w3EnrichPnlWithBurden(curr, start, end),
+      _w3EnrichPnlWithBurden(prev, prior.start, prior.end)
+    ]);
     el.innerHTML = renderPnl(curr, prev, start, end, prior);
   } catch (err) {
     el.innerHTML = '<div style="color:var(--danger,#dc2626);padding:12px;">' + e(err.message) + '</div>';
@@ -1874,6 +1880,34 @@ function deltaBadge(curr, prev) {
 function renderPnl(curr, prev, start, end, prior) {
   var h = '';
 
+  // W3.5: fold burdened labor into COGS (gated on operator acknowledgement
+  // per D-FIN-W3-9). Done at render time so the W1 R3-BLOCKER cogsMissing
+  // gate in computePnlLocal is preserved untouched. Mutates curr/prev so
+  // every downstream section (cards, statement, footer CSV, prior-period
+  // comparison) sees consistent numbers.
+  function _applyBurdenToPnl(p) {
+    if (!p || !p._burden) return;
+    var addCogs = p._burden.effectiveLaborCogsCents || 0;
+    var fixedOh = p._burden.fixedOverheadCents || 0;
+    if (addCogs > 0) {
+      p.cogs = (p.cogs || 0) + addCogs;
+      p.grossProfit = p.revenue - p.cogs;
+    }
+    if (fixedOh > 0) {
+      // Fixed Overhead lands in opex as its own bucket — D-FIN-W3-11 (always
+      // separate, no per-tenant absorb-vs-separate setting).
+      p.opex = (p.opex || 0) + fixedOh;
+      p.opexByCategory = p.opexByCategory || {};
+      p.opexByCategory['Fixed Overhead (burdened labor)'] =
+        (p.opexByCategory['Fixed Overhead (burdened labor)'] || 0) + fixedOh;
+      p.netProfit = p.grossProfit - p.opex;
+    } else if (addCogs > 0) {
+      p.netProfit = p.grossProfit - p.opex;
+    }
+  }
+  _applyBurdenToPnl(curr);
+  _applyBurdenToPnl(prev);
+
   // W1.5 carry-forward: test-data inclusion chip — same UX as Revenue tab so
   // the user sees consistent toggle state across Finance surfaces. Toggle
   // flips _includeTestData via window.toggleFinanceTestData(); P&L re-loads
@@ -1908,7 +1942,19 @@ function renderPnl(curr, prev, start, end, prior) {
     h += statCard('Gross Profit', '—', 'var(--warm-gray,#888)', 'Set product cost in Maker module');
     h += statCard('Net Profit', '—', 'var(--warm-gray,#888)', null);
   } else {
-    h += statCard('COGS',    fmt$(curr.cogs),    '#f59e0b', _sanityWrap(deltaBadge(-curr.cogs, -prev.cogs), -curr.cogs, -prev.cogs));
+    // W3.5: COGS card carries the burden source-tag chip when burdened labor
+    // is folded in (or when fallback message applies). R-FIN-W3-1.
+    var cogsSub = _sanityWrap(deltaBadge(-curr.cogs, -prev.cogs), -curr.cogs, -prev.cogs);
+    if (curr._burden && curr._burden.acknowledged) {
+      cogsSub = (cogsSub || '') + ' ' + _w3BurdenChipFor(curr._burden);
+    } else if (curr._burden && curr._burden.hasData) {
+      // Has data but operator hasn't acknowledged yet — show a soft hint chip.
+      cogsSub = (cogsSub || '') + ' <span title="Burdened labor is available but not yet ' +
+        'folded into COGS — click \'Enable accurate margins\' in the banner above." ' +
+        'style="background:rgba(20,184,166,0.15);color:#14b8a6;padding:2px 8px;border-radius:999px;' +
+        'font-size:0.72rem;font-weight:600;">Burden ready</span>';
+    }
+    h += statCard('COGS',    fmt$(curr.cogs),    '#f59e0b', cogsSub);
     h += statCard('Gross Profit', fmt$(curr.grossProfit), curr.grossProfit >= 0 ? '#22c55e' : '#ef4444', grossMarginPct !== null ? grossMarginPct + '% margin' : null);
     h += statCard('Net Profit', fmt$(curr.netProfit), curr.netProfit >= 0 ? '#22c55e' : '#ef4444', netMarginPct !== null ? netMarginPct + '% net margin' : null);
   }
@@ -1946,6 +1992,29 @@ function renderPnl(curr, prev, start, end, prior) {
       '</div>';
   } else {
     h += plRow('COGS', curr.cogs, false, true, '-');
+    // W3.5: COGS sub-breakdown — Materials vs Burdened Labor — when burdened
+    // labor was folded in. Materials = COGS minus the labor add-in we applied.
+    if (curr._burden && curr._burden.acknowledged && curr._burden.effectiveLaborCogsCents > 0) {
+      var laborCents = curr._burden.effectiveLaborCogsCents;
+      var materialsCents = curr.cogs - laborCents;
+      h += plRow('Materials & cost-of-goods', materialsCents, true, false, '-');
+      h += '<div style="display:flex;justify-content:space-between;padding:5px 0 5px 16px;">' +
+        '<span style="font-size:0.9rem;color:var(--warm-gray,#888);">Burdened labor (allocated to jobs) ' +
+          _w3BurdenChipFor(curr._burden) + '</span>' +
+        '<span style="font-size:0.9rem;font-weight:400;color:' + (laborCents <= 0 ? '#22c55e' : '#ef4444') +
+          ';">' + fmt$(laborCents) + '</span>' +
+        '</div>';
+    } else if (curr._burden && !curr._burden.acknowledged && curr._burden.hasData) {
+      h += '<div style="display:flex;justify-content:space-between;padding:5px 0 5px 16px;font-size:0.78rem;color:var(--warm-gray,#888);">' +
+        '<span>Burdened labor available but not yet folded into COGS — see banner above.</span>' +
+        '<span></span>' +
+        '</div>';
+    } else if (curr._burden && curr._burden.acknowledged && !curr._burden.hasData) {
+      h += '<div style="display:flex;justify-content:space-between;padding:5px 0 5px 16px;font-size:0.78rem;color:var(--warm-gray,#888);">' +
+        '<span>No burden data for this period — using base pay × hours (fallback).</span>' +
+        '<span></span>' +
+        '</div>';
+    }
   }
 
   h += '<div style="display:flex;justify-content:space-between;padding:9px 0;border-top:1px solid rgba(255,255,255,0.15);margin-top:4px;">';
@@ -2013,6 +2082,10 @@ function renderPnl(curr, prev, start, end, prior) {
       rows.push(['  ' + ch, (curr.revByChannel[ch] / 100).toFixed(2)]);
     });
     rows.push(['COGS', cogsMissing ? 'N/A (no product cost)' : (curr.cogs / 100).toFixed(2)]);
+    if (curr._burden && curr._burden.acknowledged && curr._burden.effectiveLaborCogsCents > 0) {
+      rows.push(['  Burdened labor (allocated)', (curr._burden.effectiveLaborCogsCents / 100).toFixed(2)]);
+      rows.push(['  Burdened labor source', (curr._burden.dominantSource || '') + ' (' + (curr._burden.confidence || '') + ')']);
+    }
     rows.push(['Gross Profit', cogsMissing ? 'N/A' : (curr.grossProfit / 100).toFixed(2)]);
     rows.push(['Operating Expenses', (curr.opex / 100).toFixed(2)]);
     opexCats.forEach(function(cat) {
@@ -6233,7 +6306,9 @@ async function _loadFinanceOverview() {
       MastDB.query('admin/purchaseReceipts').orderByChild('paymentStatus').equalTo('partial').limitToLast(500).once().catch(function() { return {}; }),
       _loadRevenueAggregate(period.start, period.end).catch(function() { return null; }),
       _loadRevenueAggregate(prior.start, prior.end).catch(function() { return null; }),
-      computePnlLocal(period.start, period.end).catch(function() { return null; }),
+      computePnlLocal(period.start, period.end)
+        .then(function(p) { return _w3EnrichPnlWithBurden(p, period.start, period.end); })
+        .catch(function() { return null; }),
       // W2a.5: Integrations health card data sources.
       MastDB.get('admin/integrations/_meta').catch(function() { return null; }),
       MastDB.get('admin/integrations/qbo').catch(function() { return null; }),
@@ -6280,6 +6355,21 @@ async function _loadFinanceOverview() {
     // selector state. W2 R3 fix: gate on cogsLineMissingCount > 0, not just
     // `cogs <= 0` — earlier check let QTD/FYTD show 99.9% when some line
     // items had snapshot cogsCents and others didn't.
+    // W3.5: when burden is acknowledged + present, fold labor into COGS for
+    // the Margin card too (mirrors renderPnl behavior). Mutate pnlPeriod so
+    // downstream cards/exporters stay consistent.
+    if (pnlPeriod && pnlPeriod._burden && pnlPeriod._burden.acknowledged) {
+      var addLab = pnlPeriod._burden.effectiveLaborCogsCents || 0;
+      var addOh  = pnlPeriod._burden.fixedOverheadCents || 0;
+      if (addLab > 0) {
+        pnlPeriod.cogs = (pnlPeriod.cogs || 0) + addLab;
+        pnlPeriod.grossProfit = pnlPeriod.revenue - pnlPeriod.cogs;
+      }
+      if (addOh > 0) {
+        pnlPeriod.opex = (pnlPeriod.opex || 0) + addOh;
+        pnlPeriod.netProfit = pnlPeriod.grossProfit - pnlPeriod.opex;
+      }
+    }
     var marginCard;
     var cogsVal = pnlPeriod ? pnlPeriod.cogs : null;
     var revVal = pnlPeriod ? pnlPeriod.revenue : 0;
@@ -6343,7 +6433,12 @@ async function _loadFinanceOverview() {
       revSub = sign + Math.abs(Math.round(revDeltaPct)) + '% vs prior ' + periodTag;
     }
 
-    var h = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;">';
+    // W3.9: one-time release banner (operator-acknowledged). Inserted ABOVE
+    // the cards so it sits at the top of the page. Best-effort; no-throw.
+    var w3Banner = '';
+    try { w3Banner = await _w3RenderBurdenBannerHtml(); } catch (_) { w3Banner = ''; }
+
+    var h = w3Banner + '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;">';
     h += card('Cash on Hand', cashVal, cashColor, cashSub, null);
     h += card('AR Outstanding', fmt$(arOutstandingCents), '#3b82f6', arCount + ' open invoice' + (arCount === 1 ? '' : 's'), 'finance-ar');
     h += card('AP Owed', fmt$(apOwedCents), '#f97316', apCount + ' open bill' + (apCount === 1 ? '' : 's'), 'finance-ap');
@@ -6976,6 +7071,428 @@ window.finAmendmentOpenSubmit = function() {
   });
 };
 window.finAmendmentSubmit = window.finAmendmentOpenSubmit; // alias
+
+// ─────────────────────────────────────────────────────────────────────────────
+// W3 — Burdened Labor Cost (Agent C surface)
+// Concepts: D-FIN-W3-5 (COGS rollup), D-FIN-W3-6 (per-job/per-product surface),
+// D-FIN-W3-9 (release-note banner), D-FIN-W3-11 (Fixed Overhead line),
+// R-FIN-W3-1 (mixed-source surfaces lowest-confidence chip),
+// D-FIN-W3-12 (confidence heuristic).
+//
+// Reads (Agent A contract, branch feat/finance-w3-agent-a-backend):
+//   admin/burdenedLaborCost/{periodId}/{employeeId}  → { totalBurden, source, ... }
+//   admin/burdenedLaborByJob/{periodId}/{jobId}/{employeeId__jobId}
+//     → { allocatedBurden, jobId, employeeId, source }
+//   admin/integrations/_meta/burdenSource → { defaults, ..., bannerState }
+//
+// periodId is 'YYYY-MM'. _overhead is a reserved jobId for un-attributable hours.
+
+var _w3BurdenCache = {};       // { periodId: { byEmployee, byJob, fetchedAt } }
+var _w3MetaCache  = null;
+var _w3ConfidenceCache = null;
+
+function _w3PeriodsForRange(startDate, endDate) {
+  // Returns array of 'YYYY-MM' covering the inclusive range.
+  var out = [];
+  if (!startDate || !endDate) return out;
+  var s = new Date(startDate + 'T00:00:00.000Z');
+  var e2 = new Date(endDate + 'T00:00:00.000Z');
+  var y = s.getUTCFullYear(), m = s.getUTCMonth();
+  var ey = e2.getUTCFullYear(), em = e2.getUTCMonth();
+  while (y < ey || (y === ey && m <= em)) {
+    out.push(y + '-' + (m + 1 < 10 ? '0' + (m + 1) : (m + 1)));
+    m += 1; if (m > 11) { m = 0; y += 1; }
+    if (out.length > 60) break; // safety
+  }
+  return out;
+}
+
+async function _w3LoadBurdenForPeriod(periodId) {
+  if (_w3BurdenCache[periodId]) return _w3BurdenCache[periodId];
+  var byEmployee = {}, byJob = {};
+  try {
+    var emp = await MastDB.get('admin/burdenedLaborCost/' + periodId);
+    byEmployee = emp || {};
+  } catch (_) {}
+  try {
+    var jobs = await MastDB.get('admin/burdenedLaborByJob/' + periodId);
+    byJob = jobs || {};
+  } catch (_) {}
+  var entry = { byEmployee: byEmployee, byJob: byJob, fetchedAt: Date.now() };
+  _w3BurdenCache[periodId] = entry;
+  return entry;
+}
+
+async function _w3LoadBurdenForRange(startDate, endDate) {
+  var periods = _w3PeriodsForRange(startDate, endDate);
+  var all = await Promise.all(periods.map(_w3LoadBurdenForPeriod));
+  return { periods: periods, perPeriod: all };
+}
+
+async function _w3LoadMeta() {
+  if (_w3MetaCache) return _w3MetaCache;
+  try {
+    _w3MetaCache = (await MastDB.get('admin/integrations/_meta/burdenSource')) || {};
+  } catch (_) { _w3MetaCache = {}; }
+  return _w3MetaCache;
+}
+
+// D-FIN-W3-12 local confidence heuristic. Mirrors what Agent D's MCP tool
+// finance_get_burden_estimator_config() will eventually return. Start HIGH,
+// drop one level for each weakness: WC=0 with W2 employees, benefits=0 with
+// W2 employees, SUTA = seeded default. Floor LOW.
+function _w3ComputeConfidence(meta, hasW2) {
+  if (!meta) return 'LOW';
+  var levels = ['HIGH', 'MED', 'LOW'];
+  var idx = 0;
+  var d = meta.defaults || meta;
+  var wc = +d.wcRate || 0;
+  var benefits = +d.benefitsRate || 0;
+  var sutaSeeded = !!d.sutaIsDefault || !!d.sutaSeeded;
+  if (hasW2 && wc <= 0) idx += 1;
+  if (hasW2 && benefits <= 0) idx += 1;
+  if (sutaSeeded) idx += 1;
+  if (idx >= 2) idx = 2;
+  return levels[idx];
+}
+
+// Reusable source-tag chip — Agent B and Agent E will copy this visual pattern.
+// Signature: renderSourceTagChip(source, confidence) → HTML string.
+// `source`: 'estimator' | 'manual' | 'partner-check' | 'partner-gusto' |
+//           'partner-cutover' | 'mixed' | null
+// `confidence`: 'HIGH' | 'MED' | 'LOW' (only meaningful for estimator + mixed)
+function renderSourceTagChip(source, confidence) {
+  var label, bg, fg, title = '';
+  if (!source || source === 'none') {
+    label = 'No data'; bg = 'rgba(107,114,128,0.15)'; fg = '#9ca3af';
+  } else if (source === 'manual') {
+    label = 'Entered'; bg = 'rgba(59,130,246,0.15)'; fg = '#3b82f6';
+    title = 'Operator-entered burden value';
+  } else if (source === 'partner-check') {
+    label = 'From Check'; bg = 'rgba(34,197,94,0.15)'; fg = '#22c55e';
+    title = 'Sourced from Check payroll integration';
+  } else if (source === 'partner-gusto') {
+    label = 'From Gusto'; bg = 'rgba(34,197,94,0.15)'; fg = '#22c55e';
+    title = 'Sourced from Gusto payroll integration';
+  } else if (source === 'partner-cutover') {
+    label = 'Locked (historical)'; bg = 'rgba(168,85,247,0.15)'; fg = '#a855f7';
+    title = 'Pre-partner-integration value — locked at cutover (estimator-locks-historical)';
+  } else {
+    // estimator or mixed → confidence-tinted
+    var c = (confidence || 'MED').toUpperCase();
+    var prefix = (source === 'mixed') ? 'Mixed' : 'Est.';
+    if (c === 'HIGH') {
+      label = prefix + ' (high)'; bg = 'rgba(107,114,128,0.18)'; fg = '#cbd5e1';
+    } else if (c === 'LOW') {
+      label = prefix + ' (low — configure for accuracy)';
+      bg = 'rgba(239,68,68,0.15)'; fg = '#ef4444';
+      title = 'Low-confidence burden estimate. Configure WC, benefits, SUTA in Team → Settings.';
+    } else {
+      label = prefix + ' (med)'; bg = 'rgba(245,158,11,0.15)'; fg = '#f59e0b';
+      title = 'Estimator missing one input. Configure for higher confidence.';
+    }
+  }
+  return '<span title="' + e(title) + '" style="background:' + bg + ';color:' + fg +
+    ';padding:2px 8px;border-radius:999px;font-size:0.72rem;font-weight:600;' +
+    'white-space:nowrap;vertical-align:middle;">' + e(label) + '</span>';
+}
+
+// Aggregate burden across a range. Returns:
+//   { totalBurden, byEmployee, byJob, overheadBurden, allocatedBurden,
+//     sources (Set), mixedSource (bool), hasData (bool), hasW2 }
+// Per O-FIN-W3-4 working assumption: estimator-locks-historical means historical
+// periods keep their estimator values forever. Cutover values (source ===
+// 'partner-cutover') represent the locked-historical bridge and ARE counted
+// (they are real money paid). Operator option to exclude not yet wired.
+function _w3SummarizeBurden(rangeResult) {
+  var totalBurden = 0, overheadBurden = 0, allocatedBurden = 0;
+  var byEmployee = {}, byJob = {};
+  var sources = {};
+  var hasW2 = false;
+  var hasData = false;
+  rangeResult.perPeriod.forEach(function(p) {
+    Object.keys(p.byEmployee || {}).forEach(function(eid) {
+      var rec = p.byEmployee[eid] || {};
+      var b = +rec.totalBurden || 0;
+      if (rec.classification === 'W2' || rec.empClass === 'W2') hasW2 = true;
+      if (b > 0) { hasData = true; }
+      totalBurden += b;
+      byEmployee[eid] = (byEmployee[eid] || 0) + b;
+      if (rec.source) sources[rec.source] = true;
+    });
+    Object.keys(p.byJob || {}).forEach(function(jid) {
+      var jobBucket = p.byJob[jid] || {};
+      Object.keys(jobBucket).forEach(function(rowId) {
+        var rec = jobBucket[rowId] || {};
+        var a = +rec.allocatedBurden || 0;
+        if (a <= 0) return;
+        byJob[jid] = (byJob[jid] || 0) + a;
+        if (jid === '_overhead') overheadBurden += a;
+        else allocatedBurden += a;
+        if (rec.source) sources[rec.source] = true;
+      });
+    });
+  });
+  var sourceList = Object.keys(sources);
+  var mixedSource = sourceList.length > 1;
+  // R-FIN-W3-1: when mixed, surface lowest-confidence flavor.
+  var dominantSource = sourceList.length === 0 ? null
+    : (mixedSource ? 'mixed' : sourceList[0]);
+  return {
+    totalBurden: totalBurden, overheadBurden: overheadBurden,
+    allocatedBurden: allocatedBurden, byEmployee: byEmployee, byJob: byJob,
+    sources: sourceList, mixedSource: mixedSource,
+    dominantSource: dominantSource, hasData: hasData, hasW2: hasW2
+  };
+}
+
+// Banner state helpers — admin/integrations/_meta/burdenSource.bannerState.
+// { enabledAt, dismissedAt, dismissCount }. Until enabledAt is set, Finance
+// READS both base-pay and burdened (computePnlLocal carries both) but
+// DISPLAYS base-pay (preserves W1/W2 behavior).
+async function _w3IsAcknowledged() {
+  var meta = await _w3LoadMeta();
+  var bs = (meta && meta.bannerState) || {};
+  return !!bs.enabledAt;
+}
+
+async function _w3ShouldShowBanner() {
+  var meta = await _w3LoadMeta();
+  var bs = (meta && meta.bannerState) || {};
+  if (bs.enabledAt) return false;
+  if (!bs.dismissedAt) return true;
+  // Re-prompt 30 days after last dismissal.
+  var ms = Date.now() - new Date(bs.dismissedAt).getTime();
+  return ms > (30 * 24 * 3600 * 1000);
+}
+
+async function w3EnableAccurateMargins() {
+  try {
+    var path = 'admin/integrations/_meta/burdenSource/bannerState';
+    var now = new Date().toISOString();
+    await MastDB.update(path, { enabledAt: now });
+    _w3MetaCache = null;
+    showToast('Accurate margins enabled — burdened labor now appears in COGS');
+    if (typeof renderFinanceOverview === 'function') renderFinanceOverview();
+  } catch (err) {
+    showToast('Failed to enable: ' + (err.message || err), true);
+  }
+}
+window.w3EnableAccurateMargins = w3EnableAccurateMargins;
+
+async function w3DismissBurdenBanner() {
+  try {
+    var path = 'admin/integrations/_meta/burdenSource/bannerState';
+    var meta = await _w3LoadMeta();
+    var bs = (meta && meta.bannerState) || {};
+    var count = (+bs.dismissCount || 0) + 1;
+    await MastDB.update(path, { dismissedAt: new Date().toISOString(), dismissCount: count });
+    _w3MetaCache = null;
+    var el = document.getElementById('w3BurdenBanner');
+    if (el) el.style.display = 'none';
+  } catch (err) {
+    showToast('Failed to dismiss: ' + (err.message || err), true);
+  }
+}
+window.w3DismissBurdenBanner = w3DismissBurdenBanner;
+
+// Render release-note banner. Inserted at top of Finance overview on first
+// render after deploy. AI-personalized body fetched async via askAiProxy.
+async function _w3RenderBurdenBannerHtml() {
+  try {
+    var show = await _w3ShouldShowBanner();
+    if (!show) return '';
+  } catch (_) { return ''; }
+  var bannerId = 'w3BurdenBanner';
+  // Kick off AI body fetch (best-effort; stub copy below renders immediately).
+  setTimeout(function() {
+    try {
+      var tid = (MastDB.tenantId && MastDB.tenantId()) || window.TENANT_ID || null;
+      var fn = (window.functions && window.functions.httpsCallable)
+        ? window.functions.httpsCallable('askAiProxy') : null;
+      if (!fn) return;
+      var today = todayStr();
+      fn({
+        role: 'release-note-co-writer',
+        context: { tenantId: tid, periodWindow: { end: today } }
+      }).then(function(res) {
+        var body = res && res.data && (res.data.body || res.data.text);
+        if (!body) return;
+        var el = document.getElementById(bannerId + '-body');
+        if (el) el.innerHTML = e(body);
+      }).catch(function() {});
+    } catch (_) {}
+  }, 50);
+  return '<div id="' + bannerId + '" style="background:linear-gradient(135deg,rgba(20,184,166,0.10),rgba(59,130,246,0.10));' +
+    'border:1px solid rgba(20,184,166,0.35);border-radius:10px;padding:14px 18px;margin-bottom:16px;">' +
+    '<div style="display:flex;align-items:flex-start;gap:12px;">' +
+    '<div style="flex:1;">' +
+    '<div style="font-weight:700;font-size:0.95rem;margin-bottom:6px;color:#14b8a6;">' +
+      'Mast now uses burdened labor cost for accurate margins.' +
+    '</div>' +
+    '<div id="' + bannerId + '-body" style="font-size:0.85rem;color:var(--text,#e5e7eb);line-height:1.45;margin-bottom:10px;">' +
+      'Wages + employer taxes + benefits + workers&rsquo; comp are now included in COGS. ' +
+      'Your gross margin will look more conservative — and more accurate. ' +
+      '<em style="color:var(--warm-gray,#888);">Loading personalized explanation…</em>' +
+    '</div>' +
+    '<div style="display:flex;gap:8px;">' +
+    '<button class="btn btn-primary btn-small" onclick="w3EnableAccurateMargins()">Enable accurate margins</button>' +
+    '<button class="btn btn-secondary btn-small" onclick="w3DismissBurdenBanner()">Dismiss (re-prompt in 30 days)</button>' +
+    '</div>' +
+    '</div>' +
+    '</div>' +
+    '</div>';
+}
+
+// W3.5 — augment computePnlLocal output with burdened labor signal so renderPnl
+// can fold it into COGS + render Fixed Overhead. Wrapper rather than inline
+// rewrite to keep W1 R3-BLOCKER COGS gate logic untouched.
+async function _w3EnrichPnlWithBurden(pnl, startDate, endDate) {
+  if (!pnl) return pnl;
+  try {
+    var [rangeResult, ack, meta] = await Promise.all([
+      _w3LoadBurdenForRange(startDate, endDate),
+      _w3IsAcknowledged(),
+      _w3LoadMeta()
+    ]);
+    var summary = _w3SummarizeBurden(rangeResult);
+    var confidence = _w3ComputeConfidence(meta, summary.hasW2);
+    pnl._burden = {
+      acknowledged: ack,
+      hasData: summary.hasData,
+      totalBurden: summary.totalBurden,
+      overheadBurden: summary.overheadBurden,
+      allocatedBurden: summary.allocatedBurden,
+      byEmployee: summary.byEmployee,
+      byJob: summary.byJob,
+      sources: summary.sources,
+      mixedSource: summary.mixedSource,
+      dominantSource: summary.dominantSource,
+      confidence: confidence,
+      // What the UI should actually display:
+      displayMode: ack ? 'burdened' : 'base-pay',
+      // Effective COGS labor add: only counted when acknowledged AND has data.
+      effectiveLaborCogsCents: (ack && summary.hasData) ? (summary.allocatedBurden || 0) : 0,
+      // Fixed overhead is its own P&L line (D-FIN-W3-11), always separate.
+      fixedOverheadCents: (ack && summary.hasData) ? (summary.overheadBurden || 0) : 0,
+      // Fallback diagnostic when burden data is empty.
+      fallback: !summary.hasData
+    };
+  } catch (err) {
+    pnl._burden = { error: err.message || String(err), acknowledged: false, hasData: false,
+      displayMode: 'base-pay', effectiveLaborCogsCents: 0, fixedOverheadCents: 0, fallback: true };
+  }
+  return pnl;
+}
+
+// Helper used by renderPnl to display the burden chip + line items.
+function _w3BurdenChipFor(burden) {
+  if (!burden) return '';
+  if (!burden.hasData) {
+    return '<span title="No burden data for this period — using base pay × hours fallback" ' +
+      'style="background:rgba(107,114,128,0.15);color:#9ca3af;padding:2px 8px;border-radius:999px;' +
+      'font-size:0.72rem;font-weight:600;vertical-align:middle;">No burden data — base pay × hours</span>';
+  }
+  // R-FIN-W3-1: mixed sources → render with confidence chip at the lowest tier.
+  return renderSourceTagChip(burden.dominantSource, burden.confidence);
+}
+
+// Per-job/per-product info banner — when only _overhead is allocated (the
+// VERIFIED schema reality: time-clock lacks jobId today).
+function _w3PerJobOverheadBanner() {
+  return '<div style="background:rgba(245,158,11,0.10);border:1px solid rgba(245,158,11,0.30);' +
+    'color:#f59e0b;padding:10px 14px;border-radius:8px;margin:8px 0;font-size:0.82rem;line-height:1.45;">' +
+    '<strong>Per-job labor allocation is not yet available.</strong> ' +
+    'Time-clock entries do not capture job attribution today, so all labor cost is currently rolled ' +
+    'into <em>Fixed Overhead</em>. To populate per-job profitability, add Job tagging to time-clock ' +
+    '(future enhancement) or use the per-employee manual entry form in Team → Burden to attribute ' +
+    'burden to specific jobs.' +
+    '</div>';
+}
+
+function _w3PerProductCaveatNote() {
+  return '<div style="background:rgba(107,114,128,0.10);border:1px solid rgba(107,114,128,0.25);' +
+    'color:var(--warm-gray,#9ca3af);padding:8px 12px;border-radius:6px;margin:6px 0;' +
+    'font-size:0.78rem;line-height:1.4;">' +
+    'Per-product labor cost requires per-job time-clock attribution, which is not yet captured. ' +
+    'Labor for this SKU is absorbed in tenant-level <em>Fixed Overhead</em> until time-clock job ' +
+    'tagging ships or manual per-job burden entries are made in Team → Burden.' +
+    '</div>';
+}
+
+// Public surface for orders.js / products surfaces / external callers.
+window.MastFinanceW3 = {
+  loadBurdenForRange: _w3LoadBurdenForRange,
+  loadBurdenForPeriod: _w3LoadBurdenForPeriod,
+  loadMeta: _w3LoadMeta,
+  summarize: _w3SummarizeBurden,
+  computeConfidence: _w3ComputeConfidence,
+  renderSourceTagChip: renderSourceTagChip,
+  perJobOverheadBanner: _w3PerJobOverheadBanner,
+  perProductCaveatNote: _w3PerProductCaveatNote,
+  periodsForRange: _w3PeriodsForRange,
+  isAcknowledged: _w3IsAcknowledged,
+  // Per-job lookup convenience: returns { allocatedBurden, sources, mixed,
+  // dominantSource, employees: [{employeeId, allocatedBurden, source}] }
+  getJobBurden: async function(jobId, startDate, endDate) {
+    var r = await _w3LoadBurdenForRange(startDate, endDate);
+    var total = 0;
+    var sources = {};
+    var employees = [];
+    r.perPeriod.forEach(function(p) {
+      var jb = (p.byJob || {})[jobId] || {};
+      Object.keys(jb).forEach(function(rowId) {
+        var rec = jb[rowId] || {};
+        var a = +rec.allocatedBurden || 0;
+        if (a <= 0) return;
+        total += a;
+        if (rec.source) sources[rec.source] = true;
+        employees.push({ employeeId: rec.employeeId || rowId.split('__')[0],
+          allocatedBurden: a, source: rec.source || null });
+      });
+    });
+    var sourceList = Object.keys(sources);
+    return {
+      allocatedBurden: total,
+      sources: sourceList,
+      mixedSource: sourceList.length > 1,
+      dominantSource: sourceList.length === 0 ? null
+        : (sourceList.length > 1 ? 'mixed' : sourceList[0]),
+      employees: employees
+    };
+  },
+  // Per-product convenience: aggregates over the product's job set. Returns
+  // null when no linkage (caller renders perProductCaveatNote()).
+  getProductLaborCost: async function(productId, productJobIds, startDate, endDate) {
+    if (!productJobIds || !productJobIds.length) return null;
+    var r = await _w3LoadBurdenForRange(startDate, endDate);
+    var total = 0;
+    var sources = {};
+    productJobIds.forEach(function(jid) {
+      r.perPeriod.forEach(function(p) {
+        var jb = (p.byJob || {})[jid] || {};
+        Object.keys(jb).forEach(function(rowId) {
+          var rec = jb[rowId] || {};
+          var a = +rec.allocatedBurden || 0;
+          if (a <= 0) return;
+          total += a;
+          if (rec.source) sources[rec.source] = true;
+        });
+      });
+    });
+    var sourceList = Object.keys(sources);
+    return {
+      productId: productId,
+      laborCogsCents: total,
+      sources: sourceList,
+      mixedSource: sourceList.length > 1,
+      dominantSource: sourceList.length === 0 ? null
+        : (sourceList.length > 1 ? 'mixed' : sourceList[0])
+    };
+  }
+};
+// Also expose chip helper at top level for Agent B/E reuse.
+window.renderSourceTagChip = renderSourceTagChip;
 
 // ── Module registration ───────────────────────────────────────────────────────
 
