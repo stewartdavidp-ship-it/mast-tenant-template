@@ -126,36 +126,56 @@
   function renderEmailLog() {
     var container = document.getElementById('emailLogContent');
     if (!container) return;
-    var filtered = emailsData;
 
-    // Apply status filter
-    if (emailFilter !== 'all') {
-      filtered = filtered.filter(function(e) { return e.status === emailFilter; });
-    }
-
-    // Apply type filter
+    // Apply category + type filters first to define the "scoped" set, then
+    // derive Sent/Failed counts from that scope so the pill counts reflect
+    // what's currently being shown (e.g. Classes 26 → Sent 24 / Failed 2).
+    var scoped = emailsData;
     if (emailTypeFilter !== 'all') {
-      filtered = filtered.filter(function(e) { return e.emailType === emailTypeFilter; });
+      scoped = scoped.filter(function(e) { return e.emailType === emailTypeFilter; });
     }
-
-    // Apply category filter (set by clicking a summary tile). Mutually
-    // exclusive with the per-type dropdown — selecting a category clears
-    // the type filter and vice versa, so the active narrowing is always
-    // obvious from a single control.
     if (emailCategoryFilter !== 'all') {
       var _registry = (typeof window.EMAIL_TRIGGER_REGISTRY !== 'undefined') ? window.EMAIL_TRIGGER_REGISTRY : [];
       var _t2m = {};
       _registry.forEach(function(t) { if (t.emailType && t.module) _t2m[t.emailType] = t.module; });
-      filtered = filtered.filter(function(e) {
+      scoped = scoped.filter(function(e) {
         var cat = (e.emailType && _t2m[e.emailType]) || (e.emailType ? 'Other' : 'Unknown');
         return cat === emailCategoryFilter;
       });
     }
+    var statusCounts = { all: scoped.length, sent: 0, failed: 0 };
+    scoped.forEach(function(e) {
+      if (e.status === 'sent') statusCounts.sent++;
+      else if (e.status === 'failed') statusCounts.failed++;
+    });
+
+    // Apply status filter on top of the scoped set.
+    var filtered = (emailFilter === 'all') ? scoped : scoped.filter(function(e) { return e.status === emailFilter; });
+
+    // Date range covered by the loaded set — emails are ordered desc by
+    // createdAt; the OLDEST loaded record's date is the back edge of the
+    // window. Surfaces "what does 50 emails actually cover?" without
+    // forcing the user to scroll to the bottom.
+    var sinceLabel = '';
+    if (emailsLoaded && emailsData.length > 0) {
+      var oldest = emailsData[emailsData.length - 1];
+      if (oldest && oldest.createdAt) {
+        try {
+          var od = new Date(oldest.createdAt);
+          sinceLabel = ' · since ' + od.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+        } catch (e) {}
+      }
+    }
 
     var h = '';
-    h += '<div class="section-header" style="display:flex;justify-content:space-between;align-items:center;">';
+    h += '<div class="section-header" style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">';
     h += '<h2>Email Log</h2>';
-    h += '<span style="font-size:0.85rem;color:var(--warm-gray);">' + emailsData.length + ' emails loaded</span>';
+    h += '<div style="display:flex;align-items:center;gap:12px;">';
+    h += '<span style="font-size:0.85rem;color:var(--warm-gray);">' + emailsData.length + ' loaded' + esc(sinceLabel) + '</span>';
+    if (hasMoreEmails) {
+      h += '<button class="btn btn-secondary" style="font-size:0.85rem;padding:6px 14px;" onclick="window._emailLogLoadMore()">Load More</button>';
+    }
+    h += '</div>';
     h += '</div>';
 
     // Category summary tiles — count emails per module (feedback 5TI5LpdU4QpbQlm6RkB4).
@@ -226,9 +246,9 @@
     // dropdown below — unbounded option set (one per distinct emailType).
     h += '<div class="order-filter-pills" data-filter-for="emailStatusFilter" style="margin:0;"></div>';
     h += '<select id="emailStatusFilter" onchange="window._emailLogFilterStatus()" style="display:none;">';
-    h += '<option value="all"' + (emailFilter === 'all' ? ' selected' : '') + '>All Status</option>';
-    h += '<option value="sent"' + (emailFilter === 'sent' ? ' selected' : '') + '>Sent</option>';
-    h += '<option value="failed"' + (emailFilter === 'failed' ? ' selected' : '') + '>Failed</option>';
+    h += '<option value="all"' + (emailFilter === 'all' ? ' selected' : '') + '>All Status (' + statusCounts.all + ')</option>';
+    h += '<option value="sent"' + (emailFilter === 'sent' ? ' selected' : '') + '>Sent (' + statusCounts.sent + ')</option>';
+    h += '<option value="failed"' + (emailFilter === 'failed' ? ' selected' : '') + '>Failed (' + statusCounts.failed + ')</option>';
     h += '</select>';
     h += '<select id="emailTypeFilterSelect" onchange="window._emailLogFilterType()" style="padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.85rem;">';
     h += '<option value="all"' + (emailTypeFilter === 'all' ? ' selected' : '') + '>All Types</option>';
@@ -315,13 +335,8 @@
 
     h += '</tbody></table>';
     h += '</div>';
-
-    // Load more button
-    if (hasMoreEmails) {
-      h += '<div style="text-align:center;margin-top:16px;">';
-      h += '<button class="btn btn-secondary" onclick="window._emailLogLoadMore()" style="font-size:0.85rem;padding:8px 20px;">Load More</button>';
-      h += '</div>';
-    }
+    // Load More moved to the section header top-right (next to the
+    // loaded-count label) — see renderEmailLog header block above.
 
     container.innerHTML = h;
     if (window.mastInitFilterPills) window.mastInitFilterPills(container);
