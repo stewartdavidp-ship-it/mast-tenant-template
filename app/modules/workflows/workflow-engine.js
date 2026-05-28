@@ -650,9 +650,18 @@
       if (p.key === current) currentIdx = i;
     });
 
+    // Off-backbone terminal states render as a single pill, not a progression
+    // step. 'failure' (declined/canceled) is red; 'retired' (archived) is a
+    // muted gray — the progression doesn't apply once the record is retired,
+    // but it isn't a failure either.
     if (ev.isTerminal && ev.terminalKind === 'failure') {
       return '<div style="margin-top:14px;padding:10px 14px;border-radius:8px;background:rgba(220,38,38,0.08);color:var(--danger,#b81d1d);font-size:0.85rem;font-weight:600;display:inline-flex;align-items:center;gap:6px;">' +
         '✕ ' + _esc(ev.currentPhase.label) +
+      '</div>';
+    }
+    if (ev.isTerminal && ev.terminalKind === 'retired') {
+      return '<div style="margin-top:14px;padding:10px 14px;border-radius:8px;background:rgba(0,0,0,0.05);color:var(--warm-gray,#777);font-size:0.85rem;font-weight:600;display:inline-flex;align-items:center;gap:6px;">' +
+        '⊘ ' + _esc(ev.currentPhase.label) +
       '</div>';
     }
 
@@ -695,6 +704,13 @@
     return html;
   }
 
+  // Off-backbone terminals (failure/retired) render as a standalone pill when
+  // the record is IN them — they must not appear as progression steps in the
+  // stepper. Terminal 'success' stays on the backbone (it's the goal state).
+  function _isOffBackbone(p) {
+    return p.terminal === 'failure' || p.terminal === 'retired';
+  }
+
   /**
    * Build the linear visible chain of phases. If currentBranch is set, the
    * branch's phases get spliced between the branch point and convergesAt.
@@ -702,9 +718,10 @@
   function _resolveDisplayChain(def, currentBranch) {
     if (!def.branches || !currentBranch) {
       // Filter out phases that belong to non-default branches (entry phases
-      // of branch choices) so the default backbone shows by itself.
+      // of branch choices) and off-backbone terminals so the default
+      // forward backbone shows by itself.
       var branchedPhases = _allBranchedPhaseKeys(def);
-      return def.phases.filter(function(p) { return !branchedPhases[p.key]; });
+      return def.phases.filter(function(p) { return !branchedPhases[p.key] && !_isOffBackbone(p); });
     }
     // Find the branch point + the matching choice; splice its phases in.
     var bpKey, choice;
@@ -713,14 +730,14 @@
       var ch = (b.choices || []).filter(function(c) { return c.key === currentBranch; })[0];
       if (ch) { bpKey = k; choice = ch; }
     });
-    if (!bpKey || !choice) return def.phases.slice();
+    if (!bpKey || !choice) return def.phases.filter(function(p) { return !_isOffBackbone(p); });
     var branchedPhases = _allBranchedPhaseKeys(def);
     var bpIdx = _phaseIndex(def, bpKey);
     var convKey = def.branches[bpKey].convergesAt;
     var convIdx = _phaseIndex(def, convKey);
 
-    var head = def.phases.slice(0, bpIdx + 1).filter(function(p) { return !branchedPhases[p.key]; });
-    var tail = def.phases.slice(convIdx).filter(function(p) { return !branchedPhases[p.key]; });
+    var head = def.phases.slice(0, bpIdx + 1).filter(function(p) { return !branchedPhases[p.key] && !_isOffBackbone(p); });
+    var tail = def.phases.slice(convIdx).filter(function(p) { return !branchedPhases[p.key] && !_isOffBackbone(p); });
     var branchChain = _walkBranchChain(def, choice, bpKey, convKey);
     return head.concat(branchChain).concat(tail);
   }

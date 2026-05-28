@@ -18687,7 +18687,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260528-152536-e8b5625';
+var MAST_MODULES_V = '20260528-160612-a2419f3';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -18749,7 +18749,8 @@ homepage: { src: 'modules/homepage.js', routes: ['homepage'] },
   // before they render. See docs/workflow-engine-design.md.
   workflowEngine: { src: 'modules/workflows/workflow-engine.js', routes: [] },
   commissionsWorkflow: { src: 'modules/workflows/commissions.workflow.js', routes: [] },
-  pickshipWorkflow: { src: 'modules/workflows/pickship.workflow.js', routes: [] }
+  pickshipWorkflow: { src: 'modules/workflows/pickship.workflow.js', routes: [] },
+  productsWorkflow: { src: 'modules/workflows/products.workflow.js', routes: [] }
 };
 
 // Reverse lookup: route → moduleId (built from MODULE_MANIFEST)
