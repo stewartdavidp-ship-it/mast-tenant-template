@@ -2125,6 +2125,7 @@ async function exitPackingMode() {
   // ============================================================
 
   window.loadSales = loadSales;
+  window.ensureSalesData = ensureSalesData;
   window.getSalesArray = getSalesArray;
   window.formatSaleTime = formatSaleTime;
   window.formatSaleDate = formatSaleDate;
