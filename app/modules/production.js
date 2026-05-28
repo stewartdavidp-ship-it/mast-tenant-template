@@ -2376,9 +2376,9 @@ function renderStoryDetail(storyId) {
   } else {
     html += '<div class="prod-detail-section">' +
       '<p style="font-size:0.85rem;color:var(--warm-gray);font-style:italic;">No entries yet. ' +
-        (jobId
-          ? 'Click <strong>📸 Add photos · Edit</strong> above to pick build photos and add captions.'
-          : 'Link this story to a completed production job to add photos.') +
+        'Click <strong>📸 Add photos · Edit</strong> above to ' +
+        (jobId ? 'pick build photos, upload new ones, ' : 'upload photos ') +
+        'and add captions.' +
       '</p>' +
     '</div>';
   }
