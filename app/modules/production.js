@@ -3071,6 +3071,16 @@ async function uploadStoryMediaFromInput(input, storyId) {
     var m = (file.name || '').match(/\.([a-z0-9]{1,8})$/i);
     return m ? m[1].toLowerCase() : 'jpg';
   }
+  // Authoritative contentType for the stored object. Storage serves whatever
+  // we set here; if it's wrong, browsers may refuse to render inline (Safari
+  // in particular silently shows a "?" placeholder for an SVG served as
+  // application/octet-stream). Prefer file.type when it's a real image MIME,
+  // otherwise map from the inferred extension.
+  function _contentTypeForFile(file, ext) {
+    if (file && file.type && /^image\//.test(file.type)) return file.type;
+    var map = { svg: 'image/svg+xml', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', gif: 'image/gif' };
+    return map[ext] || 'application/octet-stream';
+  }
 
   var progressEl = document.getElementById('storyUploadProgress');
   var uploadedCount = 0;
@@ -3097,9 +3107,10 @@ async function uploadStoryMediaFromInput(input, storyId) {
         }
       }
       var ext = _extForFile(file);
+      var contentType = _contentTypeForFile(file, ext);
       var path = MastDB.storagePath('storyMedia/' + storyId + '/' + mediaId + '.' + ext);
       var ref = storage.ref(path);
-      var task = ref.put(blob, { contentType: file.type || 'application/octet-stream' });
+      var task = ref.put(blob, { contentType: contentType });
       await new Promise(function(resolve, reject) {
         task.on('state_changed',
           function(snap) {
