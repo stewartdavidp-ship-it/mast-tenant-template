@@ -5144,6 +5144,42 @@
     }
     .perm-matrix tr:hover { background: rgba(196,133,60,0.04); }
 
+    /* Per-module write gate (Phase E5) — dim+disable write affordances when
+       the current user has view-only or no-delete access to a module. */
+    .module-readonly-edit .btn-primary,
+    .module-readonly-delete .btn-danger {
+      opacity: 0.45;
+      pointer-events: none;
+      cursor: not-allowed;
+    }
+    .module-access-banner {
+      margin: 0 0 12px;
+      padding: 8px 14px;
+      background: color-mix(in srgb, var(--amber, #c4853c) 12%, transparent);
+      border: 1px solid color-mix(in srgb, var(--amber, #c4853c) 30%, transparent);
+      border-radius: 8px;
+      font-size: 0.78rem;
+      color: var(--text, #2a2a2a);
+    }
+    body.dark-mode .module-access-banner { color: #e8e8e8; }
+
+    /* Module Access accordion (Phase E5) */
+    .mod-access-group { border: 1px solid var(--cream-dark); border-radius: 8px; margin-bottom: 8px; overflow: hidden; }
+    .mod-access-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 12px; cursor: pointer; background: rgba(196,133,60,0.05);
+      font-weight: 600; font-size: 0.85rem;
+    }
+    .mod-access-header:hover { background: rgba(196,133,60,0.1); }
+    .mod-access-bulk { display: flex; gap: 14px; align-items: center; font-weight: 400; font-size: 0.72rem; color: var(--warm-gray); }
+    .mod-access-bulk label { display: inline-flex; gap: 4px; align-items: center; cursor: pointer; }
+    .mod-access-body { display: none; }
+    .mod-access-group.open .mod-access-body { display: block; }
+    .mod-access-caret { transition: transform 0.15s; display: inline-block; margin-right: 6px; }
+    .mod-access-group.open .mod-access-caret { transform: rotate(90deg); }
+    body.dark-mode .mod-access-group { border-color: #444; }
+    body.dark-mode .mod-access-header { background: rgba(196,133,60,0.12); }
+
     .user-list-table { margin-top: 12px; }
     .user-list-table table { width: 100%; border-collapse: collapse; }
     .user-list-table th {
@@ -10702,6 +10738,7 @@
           </table>
         </div>
         <div id="funcPermSection" style="margin-top:20px;"></div>
+        <div id="moduleAccessSection" style="margin-top:24px;"></div>
         <div style="margin-top:16px;display:flex;gap:10px;justify-content:flex-end;" id="permMatrixActions">
           <button class="btn btn-secondary" onclick="resetPermissionMatrix()">Reset</button>
           <button class="btn btn-primary" onclick="savePermissionMatrix()">Save Permissions</button>
@@ -11937,6 +11974,9 @@ MastDB.roles = {
   },
   setPermissions: function(roleKey, permissions) {
     return MastDB.set('admin/roles/' + roleKey + '/permissions', permissions);
+  },
+  setModulePermissions: function(roleKey, modulePermissions) {
+    return MastDB.set('admin/roles/' + roleKey + '/modulePermissions', modulePermissions);
   }
 };
 
@@ -15107,6 +15147,128 @@ var DEFAULT_NAV_SECTIONS = {
   user:    ['sales', 'products', 'classes', 'customer-service'],
   guest:   ['sales', 'classes']
 };
+
+// ============================================================
+// Per-module access layer (Phase E5)
+// ============================================================
+// Adds per-module View/Edit/Delete granularity on top of the coarse
+// 11-section navSections gate. Stored as a SEPARATE map on each role
+// (role.modulePermissions) so the existing 18-entity CRUD permissions and
+// every hasPermission() call site are untouched (zero regression).
+//
+//   role.modulePermissions = { '<routeId>': { view, edit, delete }, ... }
+//
+// Composition (per design decision): per-module visibility is authoritative.
+// navSections is the SEED/bulk default — when a role has no explicit
+// modulePermissions entry for a route, the axis falls back to whether the
+// role can see the route's sidebar section (canViewSection). So unedited
+// roles behave exactly as before; gating only tightens once an operator
+// explicitly unchecks a module in the matrix.
+//
+// Granularity: View / Edit / Delete (create+update collapse into "Edit").
+// Per-user module overrides are read here (currentUserModuleOverrides) for
+// forward-compat; the editing surface this phase is the role matrix.
+var currentUserModuleOverrides = {};  // moduleOverrides from current user's record
+
+// Memoized registry built from SECTION_ROUTES (the authoritative sidebar
+// grouping that canViewSection already uses), labels from MODE_MODULE_INFO.
+// 'migration' is intentionally excluded (system-managed). Routes that appear
+// in two sections (e.g. 'products' in both products + admin) are de-duped to
+// their first section in display order.
+var _modulePermRegistry = null;
+var _modulePermRouteSet = null;
+function getModulePermRegistry() {
+  if (_modulePermRegistry) return _modulePermRegistry;
+  var order = ['products', 'sales', 'marketing', 'retention', 'events',
+               'classes', 'finance', 'operations', 'customer-service', 'admin'];
+  var info = (typeof window !== 'undefined' && window.MODE_MODULE_INFO) || {};
+  var secLabels = (typeof window !== 'undefined' && window.MODE_SECTION_LABELS) || {};
+  // Labels for routes not present in MODE_MODULE_INFO.
+  var labelOverrides = {
+    'marketing-calendar': 'Marketing Calendar', 'composer': 'Composer',
+    'engagement-inbox': 'Engagement Inbox', 'campaigns': 'Campaigns',
+    'commission-terms': 'Commission Terms', 'financials': 'Finance Overview',
+    'finance-period-close': 'Period Close', 'finance-amendments': 'Amendments'
+  };
+  function pretty(s) {
+    return String(s).split('-').map(function(w) {
+      return w.charAt(0).toUpperCase() + w.slice(1);
+    }).join(' ');
+  }
+  var seen = {};
+  var groups = [];
+  order.forEach(function(sec) {
+    var routes = (SECTION_ROUTES[sec] || []).filter(function(r) {
+      if (seen[r]) return false;
+      seen[r] = true;
+      return true;
+    });
+    if (!routes.length) return;
+    groups.push({
+      section: sec,
+      label: secLabels[sec] || pretty(sec),
+      routes: routes.map(function(r) {
+        return { route: r, label: (info[r] && info[r].label) || labelOverrides[r] || pretty(r) };
+      })
+    });
+  });
+  _modulePermRegistry = groups;
+  _modulePermRouteSet = {};
+  groups.forEach(function(g) { g.routes.forEach(function(m) { _modulePermRouteSet[m.route] = true; }); });
+  return groups;
+}
+function isModulePermRoute(route) { getModulePermRegistry(); return !!_modulePermRouteSet[route]; }
+
+// Runtime resolution for the CURRENT user. Order: per-user override →
+// role.modulePermissions → navSections-derived default (canViewSection).
+function _resolveModuleAxis(route, axis) {
+  if (currentUserModuleOverrides && currentUserModuleOverrides[route] &&
+      currentUserModuleOverrides[route][axis] !== undefined) {
+    return currentUserModuleOverrides[route][axis] === true;
+  }
+  var rm = currentRoleConfig && currentRoleConfig.modulePermissions;
+  if (rm && rm[route] && rm[route][axis] !== undefined) return rm[route][axis] === true;
+  return canViewSection(route); // back-compat fallback (no explicit module perms)
+}
+function canViewModule(route) {
+  if (currentUserRole === 'admin' || !currentUserRole) return true;
+  return _resolveModuleAxis(route, 'view');
+}
+function canEditModule(route) {
+  if (currentUserRole === 'admin' || !currentUserRole) return true;
+  if (!canViewModule(route)) return false; // can't edit what you can't see
+  return _resolveModuleAxis(route, 'edit');
+}
+function canDeleteModule(route) {
+  if (currentUserRole === 'admin' || !currentUserRole) return true;
+  if (!canViewModule(route)) return false;
+  return _resolveModuleAxis(route, 'delete');
+}
+window.canViewModule = canViewModule;
+window.canEditModule = canEditModule;
+window.canDeleteModule = canDeleteModule;
+
+// Section-visibility default for a GIVEN role (used by the matrix to show the
+// correct unedited checkbox state). Mirrors _resolveModuleAxis's fallback but
+// keyed by an explicit roleKey rather than the current user.
+function _moduleSectionFor(route) {
+  for (var s in SECTION_ROUTES) {
+    if (s === 'migration') continue;
+    if (SECTION_ROUTES[s].indexOf(route) >= 0) return s;
+  }
+  return null;
+}
+function defaultModuleAxisForRole(roleKey, route) {
+  if (roleKey === 'admin') return true;
+  var rc = (typeof rolesData !== 'undefined' && rolesData[roleKey]) || DEFAULT_ROLES[roleKey];
+  var allowed = (rc && rc.navSections) ? rc.navSections
+              : (DEFAULT_NAV_SECTIONS[roleKey] !== undefined ? DEFAULT_NAV_SECTIONS[roleKey] : null);
+  if (allowed === null || allowed === undefined) return true; // null = no filter
+  var sec = _moduleSectionFor(route);
+  if (!sec) return true; // route not in any section → allow
+  return allowed.indexOf(sec) >= 0;
+}
+
 var imageLibrary = {};
 var imageLibraryLoaded = false;
 var imageLibraryListener = null;
@@ -15435,6 +15597,7 @@ async function loadUserRole(uid) {
 
     currentUserRole = userData.role || 'guest';
     currentUserOverrides = userData.permissionOverrides || {};
+    currentUserModuleOverrides = userData.moduleOverrides || {};
     currentUserRecord = userData;
 
     // Check guest expiry before any RBAC read that would fail for the guest claim.
@@ -16517,6 +16680,7 @@ auth.onAuthStateChanged(async function(user) {
   showSidebar();
   applyOrganizerMode(TENANT_CONFIG && TENANT_CONFIG.organizerMode === true);
   applyRoleFilter(currentUserRole, currentRoleConfig);
+  applyModuleFilter();
 
   // Check if user needs to choose modules (launch/operate tier first login)
   if (needsModuleSelection()) {
@@ -18194,6 +18358,15 @@ function navigateTo(route, params) {
     }
     route = 'dashboard';
   }
+  // Per-module visibility gate (Phase E5) — generalizes the hardcoded
+  // route gates above. If an operator has turned off this module's View for
+  // the user's role (or via per-user override), block it. Unedited roles fall
+  // back to section visibility, so this is a no-op until a module is hidden.
+  if (isModulePermRoute(route) && !canViewModule(route)) {
+    var modLabel = (window.MODE_MODULE_INFO && window.MODE_MODULE_INFO[route] && window.MODE_MODULE_INFO[route].label) || route;
+    showToast('You do not have access to ' + modLabel + '.', true);
+    route = 'dashboard';
+  }
   // Track quick action frequency from sidebar navigation (skip if triggered from tile click)
   if (window._skipRouteTrack) {
     window._skipRouteTrack = false;
@@ -18270,6 +18443,37 @@ function trackAdminEvent(eventType, action) {
 }
 window.trackAdminEvent = trackAdminEvent;
 
+// Per-module write gate (Phase E5). When the current user can view but not
+// edit/delete a module, mark the route's tab container with CSS classes that
+// dim+disable the design-system write affordances (.btn-primary for edit,
+// .btn-danger for delete) and show an informational banner. CSS-based so it
+// also covers buttons rendered asynchronously after this runs. This is a UX
+// affordance gate — authoritative enforcement stays in Firebase rules / CFs,
+// consistent with the rest of the RBAC model.
+function applyModuleWriteGate(route) {
+  // Clear any prior gate state across all tabs.
+  document.querySelectorAll('.module-readonly-edit, .module-readonly-delete').forEach(function(el) {
+    el.classList.remove('module-readonly-edit', 'module-readonly-delete');
+  });
+  document.querySelectorAll('.module-access-banner').forEach(function(b) { b.remove(); });
+  if (currentUserRole === 'admin' || !currentUserRole) return;
+  if (!isModulePermRoute(route)) return;
+  var config = ROUTE_MAP[route];
+  var tab = config && config.tab && document.getElementById(config.tab);
+  if (!tab) return;
+  var canEdit = canEditModule(route);
+  var canDel = canDeleteModule(route);
+  if (canEdit && canDel) return;
+  if (!canEdit) tab.classList.add('module-readonly-edit');
+  if (!canDel) tab.classList.add('module-readonly-delete');
+  var banner = document.createElement('div');
+  banner.className = 'module-access-banner';
+  banner.textContent = !canEdit
+    ? 'View-only access — you can browse this module but cannot make changes.'
+    : 'Limited access — you can edit but cannot delete in this module.';
+  tab.insertBefore(banner, tab.firstChild);
+}
+
 function applyRoute(route) {
   var config = ROUTE_MAP[route];
   if (!config) return;
@@ -18299,6 +18503,9 @@ function applyRoute(route) {
 
   // Update sidebar active state
   updateSidebarActive(route);
+
+  // Per-module write gate (view-only / no-delete affordance dimming)
+  applyModuleWriteGate(route);
 }
 
 function lazyLoadForRoute(route) {
@@ -18435,6 +18642,29 @@ function applyRoleFilter(role, roleConfig) {
     var el = document.querySelector('.sidebar-section[data-section="' + section + '"]');
     if (!el) return;
     el.style.display = allowed.indexOf(section) >= 0 ? '' : 'none';
+  });
+}
+
+// Per-module sidebar filter — layered on top of applyRoleFilter's section
+// filter. Hides individual sidebar items whose module the current user can't
+// view, then hides any section left with no visible items. Admin is never
+// filtered. Call AFTER applyRoleFilter so section-level hiding runs first.
+function applyModuleFilter() {
+  if (currentUserRole === 'admin' || !currentUserRole) return;
+  getModulePermRegistry();
+  Object.keys(_modulePermRouteSet).forEach(function(route) {
+    var vis = canViewModule(route);
+    document.querySelectorAll('.sidebar-item[data-route="' + route + '"]').forEach(function(el) {
+      el.style.display = vis ? '' : 'none';
+    });
+  });
+  // Collapse sections that have no visible items left.
+  document.querySelectorAll('.sidebar-section[data-section]').forEach(function(sec) {
+    if (sec.style.display === 'none') return; // already hidden by role filter
+    var items = sec.querySelectorAll('.sidebar-item');
+    if (!items.length) return;
+    var anyVisible = Array.prototype.some.call(items, function(it) { return it.style.display !== 'none'; });
+    sec.style.display = anyVisible ? '' : 'none';
   });
 }
 
@@ -18752,7 +18982,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260528-165242-3603d56';
+var MAST_MODULES_V = '20260528-195938-18ca073';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -47108,6 +47338,7 @@ var adminUsersLoaded = false;
 var rolesData = {};
 var rolesLoaded = false;
 var editingPermissions = {};     // temp state for role matrix edits (Roles tab)
+var editingModulePermissions = {}; // temp state for per-module access matrix (Phase E5)
 var editingUserOverrides = {};   // temp state for per-user override editor (Section 2)
 
 // Compute the fully merged permission set: code defaults → Firebase role config → per-user overrides.
@@ -48395,9 +48626,135 @@ function renderPermissionMatrix() {
       '<table class="perm-matrix" style="width:100%;"><thead><tr><th>Function</th><th>Allowed</th></tr></thead><tbody>' + frows + '</tbody></table>';
   }
 
+  // Per-module access matrix (Phase E5)
+  renderModuleAccessMatrix(roleKey, role);
+
   // Show/hide save buttons based on editability
   var actionsEl = document.getElementById('permMatrixActions');
   actionsEl.style.display = hasPermission('roles', 'update') ? '' : 'none';
+}
+
+// ============================================================
+// Per-module Access Matrix (Phase E5)
+// ============================================================
+function renderModuleAccessMatrix(roleKey, role) {
+  var wrap = document.getElementById('moduleAccessSection');
+  if (!wrap) return;
+  var isAdminRole = role.isDefault && roleKey === 'admin';
+  var groups = getModulePermRegistry();
+  var src = role.modulePermissions || {};
+
+  // Seed editing buffer: explicit role value if present, else the role's
+  // section-derived default (so unedited roles show their effective state).
+  editingModulePermissions = {};
+  groups.forEach(function(g) {
+    g.routes.forEach(function(m) {
+      var s = src[m.route] || {};
+      var def = isAdminRole ? true : defaultModuleAxisForRole(roleKey, m.route);
+      editingModulePermissions[m.route] = {
+        view:   s.view   !== undefined ? !!s.view   : def,
+        edit:   s.edit   !== undefined ? !!s.edit   : def,
+        'delete': s['delete'] !== undefined ? !!s['delete'] : def
+      };
+    });
+  });
+
+  var dis = isAdminRole ? ' disabled title="Admin has full access"' : '';
+  var html = '<h4 style="font-size:0.9rem;margin:0 0 4px;">Module Access</h4>' +
+    '<p style="font-size:0.72rem;color:var(--warm-gray);margin:0 0 10px;">Per-module View / Edit / Delete. <strong>View</strong> controls whether the module appears in the sidebar and can be opened. <strong>Edit</strong> covers create + update; <strong>Delete</strong> is destructive actions. Unchecking View greys out Edit/Delete for that module.</p>';
+
+  groups.forEach(function(g) {
+    // Section roll-up: are all/some modules in this section viewable?
+    var total = g.routes.length, viewOn = 0;
+    g.routes.forEach(function(m) { if (editingModulePermissions[m.route].view) viewOn++; });
+    var summary = viewOn + '/' + total + ' visible';
+
+    html += '<div class="mod-access-group" data-mod-section="' + esc(g.section) + '">' +
+      '<div class="mod-access-header" onclick="toggleModuleAccordion(\'' + esc(g.section) + '\')">' +
+        '<span><span class="mod-access-caret">›</span>' + esc(g.label) +
+          ' <span style="font-weight:400;color:var(--warm-gray);font-size:0.72rem;">(' + summary + ')</span></span>' +
+        '<span class="mod-access-bulk" onclick="event.stopPropagation();">' +
+          ['view', 'edit', 'delete'].map(function(axis) {
+            return '<label>' + axis.charAt(0).toUpperCase() + axis.slice(1) +
+              '<input type="checkbox"' + dis +
+              ' onchange="bulkToggleModuleSection(\'' + esc(g.section) + '\',\'' + axis + '\',this.checked)"></label>';
+          }).join('') +
+        '</span>' +
+      '</div>' +
+      '<div class="mod-access-body"><table class="perm-matrix" style="width:100%;min-width:0;">' +
+        '<thead><tr><th>Module</th><th>View</th><th>Edit</th><th>Delete</th></tr></thead><tbody>';
+
+    g.routes.forEach(function(m) {
+      var ep = editingModulePermissions[m.route];
+      var viewOff = !ep.view;
+      html += '<tr data-mod-route="' + esc(m.route) + '">' +
+        '<td>' + esc(m.label) + '</td>' +
+        ['view', 'edit', 'delete'].map(function(axis) {
+          var checked = ep[axis] ? ' checked' : '';
+          var axisDis = dis || ((axis !== 'view' && viewOff) ? ' disabled' : '');
+          return '<td><input type="checkbox" data-mod-axis="' + axis + '"' + checked + axisDis +
+            ' onchange="toggleModulePermission(\'' + esc(m.route) + '\',\'' + axis + '\',this.checked)"></td>';
+        }).join('') +
+      '</tr>';
+    });
+
+    html += '</tbody></table></div></div>';
+  });
+
+  wrap.innerHTML = html;
+}
+
+function toggleModuleAccordion(section) {
+  var el = document.querySelector('.mod-access-group[data-mod-section="' + section + '"]');
+  if (el) el.classList.toggle('open');
+}
+
+function toggleModulePermission(route, axis, value) {
+  if (!editingModulePermissions[route]) editingModulePermissions[route] = { view: false, edit: false, 'delete': false };
+  editingModulePermissions[route][axis] = value;
+  // Toggling View off implies edit/delete are moot — disable+uncheck them in-row.
+  if (axis === 'view') {
+    var row = document.querySelector('tr[data-mod-route="' + route + '"]');
+    if (row) {
+      ['edit', 'delete'].forEach(function(a) {
+        var cb = row.querySelector('input[data-mod-axis="' + a + '"]');
+        if (cb) {
+          cb.disabled = !value;
+          if (!value) { cb.checked = false; editingModulePermissions[route][a] = false; }
+        }
+      });
+    }
+  }
+}
+
+function bulkToggleModuleSection(section, axis, value) {
+  var groups = getModulePermRegistry();
+  var grp = null;
+  groups.forEach(function(g) { if (g.section === section) grp = g; });
+  if (!grp) return;
+  grp.routes.forEach(function(m) {
+    if (!editingModulePermissions[m.route]) editingModulePermissions[m.route] = { view: false, edit: false, 'delete': false };
+    editingModulePermissions[m.route][axis] = value;
+    if (axis === 'view' && !value) {
+      editingModulePermissions[m.route].edit = false;
+      editingModulePermissions[m.route]['delete'] = false;
+    }
+  });
+  // Repaint this section's rows + checkboxes to reflect the bulk change.
+  var groupEl = document.querySelector('.mod-access-group[data-mod-section="' + section + '"]');
+  if (groupEl) {
+    grp.routes.forEach(function(m) {
+      var row = groupEl.querySelector('tr[data-mod-route="' + m.route + '"]');
+      if (!row) return;
+      var ep = editingModulePermissions[m.route];
+      ['view', 'edit', 'delete'].forEach(function(a) {
+        var cb = row.querySelector('input[data-mod-axis="' + a + '"]');
+        if (!cb) return;
+        cb.checked = !!ep[a];
+        if (a !== 'view') cb.disabled = !ep.view;
+      });
+    });
+  }
 }
 
 function togglePermission(entity, action, value) {
@@ -48415,13 +48772,19 @@ async function savePermissionMatrix() {
 
   try {
     await MastDB.roles.setPermissions(roleKey, editingPermissions);
+    await MastDB.roles.setModulePermissions(roleKey, editingModulePermissions);
+    if (!rolesData[roleKey]) rolesData[roleKey] = {};
     rolesData[roleKey].permissions = editingPermissions;
+    rolesData[roleKey].modulePermissions = editingModulePermissions;
     await writeAudit('update', 'roles', roleKey);
     showToast('Permissions saved for ' + (rolesData[roleKey].name || roleKey) + '.');
 
-    // If editing own role, reload config
+    // If editing own role, reload config + re-apply per-module gates live.
     if (roleKey === currentUserRole) {
       currentRoleConfig.permissions = editingPermissions;
+      currentRoleConfig.modulePermissions = editingModulePermissions;
+      applyModuleFilter();
+      applyModuleWriteGate(currentRoute);
     }
   } catch (err) {
     console.error('Save permissions failed:', err);
@@ -49492,6 +49855,8 @@ function viewLibraryImage(imageId) {
     ? '<video src="' + esc(img.url) + '" controls style="max-width:100%;max-height:300px;border-radius:8px;" preload="metadata"></video>'
     : '<img src="' + esc(img.url || img.thumbnailUrl) + '" style="max-width:100%;max-height:300px;border-radius:8px;" loading="lazy">';
 
+  var _detailLocality = _imageStorageLocality(img);
+
   var html =
     '<div class="modal-header">' +
       '<h3>' + (isVideo ? 'Video' : 'Image') + ' Details</h3>' +
@@ -49512,7 +49877,7 @@ function viewLibraryImage(imageId) {
         '<span style="color:var(--warm-gray);">Storage</span><span>' + (function() {
           var loc = _imageStorageLocality(img);
           if (loc === 'local') return '<span style="color:var(--teal,#2a7c6f);font-weight:600;">Local</span> <span style="color:var(--warm-gray);font-size:0.78rem;">— in your Firebase Storage</span>';
-          if (loc === 'remote') return '<span style="color:#9a3412;font-weight:600;">Remote</span> <span style="color:var(--warm-gray);font-size:0.78rem;">— hot-linked from external origin (a move-to-local action is a tracked follow-up)</span>';
+          if (loc === 'remote') return '<span style="color:#9a3412;font-weight:600;">Remote</span> <span style="color:var(--warm-gray);font-size:0.78rem;">— hot-linked from external origin; use “Move to Local Storage” below to copy it into your Firebase Storage</span>';
           return '<span style="color:var(--warm-gray);">unknown</span>';
         })() + '</span>' +
         '<span style="color:var(--warm-gray);">Dimensions</span><span>' + (img.resolution || dims) + '</span>' +
@@ -49546,6 +49911,9 @@ function viewLibraryImage(imageId) {
       '</div>' +
     '</div>' +
     '<div class="modal-footer">' +
+      (_detailLocality === 'remote' && !isVideo
+        ? '<button class="btn btn-secondary" id="moveToLocalBtn" onclick="moveImageToLocal(\'' + esc(imageId) + '\')" title="Copy this image into your Firebase Storage so it no longer depends on the external origin">Move to Local Storage</button>'
+        : '') +
       '<button class="btn btn-secondary" onclick="closeModal()">Close</button>' +
     '</div>';
   openModal(html);
@@ -49555,6 +49923,45 @@ function viewLibraryImage(imageId) {
     renderImageDetailBackrefs(imageId);
   }, 0);
 }
+
+// GiexZyM — Move a Remote (hot-linked) image into this tenant's Firebase
+// Storage. The actual fetch+upload runs server-side in the
+// moveImageToLocalStorage CF (browsers can't reliably copy a cross-origin
+// image due to CORS/canvas-taint). Only the image record's url is rewritten;
+// URL-based references elsewhere (product images[], gallery) are a tracked
+// follow-up. The imageLibrary listener refreshes the grid on success.
+async function moveImageToLocal(imageId) {
+  var btn = document.getElementById('moveToLocalBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Moving…'; }
+  try {
+    var token = await auth.currentUser.getIdToken();
+    var resp = await callCF('/moveImageToLocalStorage', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify({ imageId: imageId })
+    });
+    var result = await resp.json();
+    if (!resp.ok || !result.success) {
+      showToast((result && result.error) || 'Move failed.', true);
+      if (btn) { btn.disabled = false; btn.textContent = 'Move to Local Storage'; }
+      return;
+    }
+    // Reflect the new URL locally so a re-open shows Local immediately even
+    // before the listener fires.
+    if (imageLibrary[imageId]) {
+      imageLibrary[imageId].url = result.url;
+      imageLibrary[imageId].thumbnailUrl = result.thumbnailUrl;
+      imageLibrary[imageId].source = 'migrated-local';
+    }
+    showToast('Image moved to your Firebase Storage.');
+    viewLibraryImage(imageId);
+  } catch (err) {
+    console.error('moveImageToLocal failed:', err);
+    showToast('Move failed: ' + (err && err.message ? err.message : 'unknown error'), true);
+    if (btn) { btn.disabled = false; btn.textContent = 'Move to Local Storage'; }
+  }
+}
+window.moveImageToLocal = moveImageToLocal;
 
 // ============================================================
 // W2.4 — Image Library v2: tags / collections / backrefs
