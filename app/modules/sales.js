@@ -172,6 +172,59 @@ function renderSales() {
     if (statusFilter !== 'all') {
       all = all.filter(function(s) { return s.status === statusFilter; });
     }
+
+    // Filter-audit Tier-1 — Channel filter. The dropdown options are
+    // dynamically populated from the distinct channelId values seen on the
+    // current sales set (plus a "Direct" bucket for untagged sales), so the
+    // operator only sees channels actually represented in their data.
+    var channelSel = document.getElementById('salesChannelFilter');
+    if (channelSel) {
+      var prevValue = channelSel.value || 'all';
+      var distinctChannelIds = Object.create(null);
+      var hasDirect = false;
+      getSalesArray().forEach(function(s) {
+        if (s.channelId) distinctChannelIds[s.channelId] = true;
+        else hasDirect = true;
+      });
+      var channelMeta = window._mastSalesChannelMeta || {};
+      if (!window._mastSalesChannelMetaLoading && !window._mastSalesChannelMeta) {
+        window._mastSalesChannelMetaLoading = true;
+        MastDB.get('admin/channels').then(function(m) {
+          var meta = {};
+          Object.keys(m || {}).forEach(function(cid) { meta[cid] = (m[cid] && m[cid].name) || cid; });
+          window._mastSalesChannelMeta = meta;
+          window._mastSalesChannelMetaLoading = false;
+          // Re-render so the labels swap from raw IDs to friendly names.
+          if (document.getElementById('salesChannelFilter')) renderSales();
+        }).catch(function() {
+          window._mastSalesChannelMeta = {};
+          window._mastSalesChannelMetaLoading = false;
+        });
+      }
+      var newOpts = '<option value="all">All Channels</option>';
+      if (hasDirect) newOpts += '<option value="__direct">Direct</option>';
+      Object.keys(distinctChannelIds).sort(function(a, b) {
+        var an = (channelMeta[a] || a).toLowerCase();
+        var bn = (channelMeta[b] || b).toLowerCase();
+        return an < bn ? -1 : an > bn ? 1 : 0;
+      }).forEach(function(cid) {
+        newOpts += '<option value="' + cid + '">' + (channelMeta[cid] || cid) + '</option>';
+      });
+      // Only repaint the option list if the set changed, to avoid resetting the
+      // user's current selection mid-interaction.
+      if (channelSel.innerHTML !== newOpts) {
+        channelSel.innerHTML = newOpts;
+        // Re-select previous if still valid, else fall back to All.
+        var stillValid = (prevValue === 'all') || (prevValue === '__direct' && hasDirect) || !!distinctChannelIds[prevValue];
+        channelSel.value = stillValid ? prevValue : 'all';
+      }
+      var channelFilter = channelSel.value || 'all';
+      if (channelFilter === '__direct') {
+        all = all.filter(function(s) { return !s.channelId; });
+      } else if (channelFilter !== 'all') {
+        all = all.filter(function(s) { return s.channelId === channelFilter; });
+      }
+    }
   }
 
   // URL-filter banner — surfaces active MCP-link filters with Clear button.
