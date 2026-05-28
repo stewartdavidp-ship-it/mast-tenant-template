@@ -1908,16 +1908,15 @@
   }
 
   // ============================================================
-  // B8 — Instructor Read-Only Detail View
+  // Instructor Read-Only Detail View
+  // Mirrors the loadClassDetail pattern: header row (back + name + badge +
+  // Edit) followed by a stack of bookCollapsibleSection blocks built from
+  // _detailField + book-responsive-grid + data-table primitives. No bordered
+  // card grids — matches the established detail-surface look for this module.
   // ============================================================
   function _renderInstructorDetailView(instr) {
-    // Read skills[] (structured slugs into the catalog). Legacy specialties[]
-    // remains on the doc as a frozen rollback rope but isn't shown post-migration.
-    // Single uniform chip style — same as the original specialties chips and as
-    // the class-detail required-skills chips, so the visual idiom is one thing
-    // across the module.
     var skillSlugs = Array.isArray(instr.skills) ? instr.skills.filter(Boolean) : [];
-    var specChips = skillSlugs.length
+    var skillChips = skillSlugs.length
       ? skillSlugs.map(function(slug) {
           return '<span style="display:inline-block;background:rgba(42,124,111,0.12);color:var(--teal,#2a7c6f);padding:3px 10px;border-radius:14px;font-size:0.78rem;margin:2px 4px 2px 0;">' + _esc(_skillLabel(slug)) + '</span>';
         }).join('')
@@ -1947,43 +1946,63 @@
         '<td><span style="' + badgeStyle(STATUS_BADGE_COLORS, c.status) + '">' + esc(c.status || '') + '</span></td>' +
       '</tr>';
     }
-    function _classTable(rows, emptyMsg) {
-      if (rows.length === 0) return '<div style="color:var(--warm-gray);font-size:0.9rem;padding:8px 0;">' + emptyMsg + '</div>';
-      return '<table class="data-table" style="margin-top:6px;">' +
-        '<thead><tr><th>Name</th><th>Type</th><th>Schedule</th><th>Status</th></tr></thead>' +
-        '<tbody>' + rows.map(_classRow).join('') + '</tbody>' +
-      '</table>';
-    }
 
-    return '<div style="padding:8px 0 24px;">' +
-      '<div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap;">' +
+    // ── Header row (matches loadClassDetail header) ──
+    var html = '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:1.5rem;">' +
+      '<div>' +
+      '<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">' +
         '<button class="btn btn-secondary btn-small" onclick="window._instrViewBack()" title="Back to list">← Back</button>' +
-        '<h3 style="margin:0;flex:1;min-width:200px;">' + esc(instr.name || 'Instructor') + '</h3>' +
-        '<span style="' + badgeStyle(STATUS_BADGE_COLORS, instr.status) + '">' + esc(instr.status || '') + '</span>' +
-        '<button class="btn btn-primary btn-small" onclick="window._instrEdit(\'' + esc(instr.id) + '\')">Edit</button>' +
       '</div>' +
-      '<div style="display:grid;grid-template-columns:1fr 2fr;gap:24px;align-items:start;">' +
-        '<div style="border:1px solid var(--cream-dark);border-radius:10px;padding:16px;background:var(--surface-card,#fff);">' +
-          '<h4 style="margin:0 0 12px;font-size:0.9rem;font-weight:600;">Profile</h4>' +
-          (instr.email ? '<div style="font-size:0.9rem;margin-bottom:6px;"><span style="color:var(--warm-gray);">Email</span><br>' + esc(instr.email) + '</div>' : '') +
-          (instr.phone ? '<div style="font-size:0.9rem;margin-bottom:6px;"><span style="color:var(--warm-gray);">Phone</span><br>' + esc(instr.phone) + '</div>' : '') +
-          (instr.bio ? '<div style="font-size:0.9rem;margin-bottom:6px;"><span style="color:var(--warm-gray);">Bio</span><br><span style="white-space:pre-wrap;">' + esc(instr.bio) + '</span></div>' : '') +
-          '<div style="font-size:0.9rem;margin-top:10px;">' +
-            '<div style="color:var(--warm-gray);font-size:0.78rem;text-transform:uppercase;letter-spacing:0.04em;font-weight:600;margin-bottom:6px;">Skills</div>' +
-            '<div>' + specChips + '</div>' +
-          '</div>' +
-        '</div>' +
-        '<div style="border:1px solid var(--cream-dark);border-radius:10px;padding:16px;background:var(--surface-card,#fff);">' +
-          '<h4 style="margin:0 0 12px;font-size:0.9rem;font-weight:600;">Classes</h4>' +
-          '<div style="font-size:0.78rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.04em;font-weight:600;margin-bottom:6px;">Active (' + activeClasses.length + ')</div>' +
-          _classTable(activeClasses, 'No active classes assigned to this instructor.') +
-          (inactiveClasses.length > 0
-            ? '<div style="font-size:0.78rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.04em;font-weight:600;margin:14px 0 6px;">Other (' + inactiveClasses.length + ')</div>' +
-              _classTable(inactiveClasses, '')
-            : '') +
-        '</div>' +
+      '<h2 style="margin:0 0 6px;font-size:1.6rem;">' + esc(instr.name || 'Instructor') + '</h2>' +
+      '<div style="display:flex;gap:8px;align-items:center;">' +
+        '<span style="' + badgeStyle(STATUS_BADGE_COLORS, instr.status) + '">' + esc(instr.status || '') + '</span>' +
+      '</div>' +
+      '</div>' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;">' +
+        '<button class="btn btn-primary" onclick="window._instrEdit(\'' + esc(instr.id) + '\')">Edit</button>' +
       '</div>' +
     '</div>';
+
+    // ── Profile section ──
+    var profileHtml = '<div class="book-responsive-grid">' +
+      _detailField('Email', instr.email || '—') +
+      _detailField('Phone', instr.phone || '—') +
+      '</div>' +
+      (instr.bio
+        ? '<div style="margin-top:0.75rem;">' +
+            '<div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:0.05em;color:var(--warm-gray);margin-bottom:4px;">Bio</div>' +
+            '<div style="font-size:0.9rem;color:var(--text);white-space:pre-wrap;">' + esc(instr.bio) + '</div>' +
+          '</div>'
+        : '');
+    html += bookCollapsibleSection('instrProfile', 'Profile', profileHtml);
+
+    // ── Skills section ──
+    var skillsHtml = '<div>' + skillChips + '</div>';
+    html += bookCollapsibleSection('instrSkills', 'Skills', skillsHtml);
+
+    // ── Classes section (active + other tables, matches Sessions in class detail) ──
+    var classesHtml = '';
+    if (activeClasses.length > 0) {
+      classesHtml += '<div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:0.05em;color:var(--warm-gray);margin-bottom:4px;">Active (' + activeClasses.length + ')</div>' +
+        '<table class="data-table">' +
+          '<thead><tr><th>Name</th><th>Type</th><th>Schedule</th><th>Status</th></tr></thead>' +
+          '<tbody>' + activeClasses.map(_classRow).join('') + '</tbody>' +
+        '</table>';
+    }
+    if (inactiveClasses.length > 0) {
+      classesHtml += '<div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:0.05em;color:var(--warm-gray);margin:14px 0 4px;">Other (' + inactiveClasses.length + ')</div>' +
+        '<table class="data-table">' +
+          '<thead><tr><th>Name</th><th>Type</th><th>Schedule</th><th>Status</th></tr></thead>' +
+          '<tbody>' + inactiveClasses.map(_classRow).join('') + '</tbody>' +
+        '</table>';
+    }
+    if (!activeClasses.length && !inactiveClasses.length) {
+      classesHtml = '<p style="color:var(--warm-gray);margin:0;">No classes assigned to this instructor.</p>';
+    }
+    var classesBadge = '<span style="font-size:0.72rem;padding:1px 6px;border-radius:4px;background:rgba(196,133,60,0.15);color:var(--amber);">' + assignedClasses.length + '</span>';
+    html += bookCollapsibleSection('instrClasses', 'Classes', classesHtml, { badge: classesBadge });
+
+    return html;
   }
 
   // ============================================================
