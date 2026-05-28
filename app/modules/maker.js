@@ -2488,6 +2488,7 @@
   }
 
   function closeDefineView() {
+    _teardownProductWorkflowSub();
     defineState = null;
     defineMode = null;
     defineProductId = null;
@@ -2527,8 +2528,9 @@
     html += '<button class="btn btn-primary btn-small" onclick="makerRecalcCostShape()">Recalculate Cost</button>';
     html += '</div></div>';
 
-    // Readiness checklist (Checkpoint E)
-    html += renderReadinessChecklistPanel(p);
+    // MastFlow workflow header — replaces the hand-rolled readiness panel +
+    // D7 stepper. Populated async by _initProductWorkflowHeader after render.
+    html += '<div id="productWorkflowHeader" style="margin:14px 0;font-size:0.85rem;color:var(--warm-gray,#777);">Loading workflow…</div>';
     // Checkpoint F — version-link + revision banners
     html += renderVersionLinkBanner(p);
     html += renderRevisionBanner(p);
@@ -2605,6 +2607,7 @@
     html += '</div>';
 
     tab.innerHTML = html;
+    _initProductWorkflowHeader(defineState && defineState.pid);
   }
 
   // ----- Resell Define view ---------------------------------------------------
@@ -2628,8 +2631,9 @@
     html += '<button class="btn btn-primary btn-small" onclick="makerRecalcCostShape()">Recalculate Cost</button>';
     html += '</div></div>';
 
-    // Readiness checklist (Checkpoint E)
-    html += renderReadinessChecklistPanel(p);
+    // MastFlow workflow header — replaces the hand-rolled readiness panel +
+    // D7 stepper. Populated async by _initProductWorkflowHeader after render.
+    html += '<div id="productWorkflowHeader" style="margin:14px 0;font-size:0.85rem;color:var(--warm-gray,#777);">Loading workflow…</div>';
     // Checkpoint F — version-link + revision banners
     html += renderVersionLinkBanner(p);
     html += renderRevisionBanner(p);
@@ -2675,6 +2679,7 @@
     html += '</div></div>';
 
     tab.innerHTML = html;
+    _initProductWorkflowHeader(defineState && defineState.pid);
   }
 
   function resellField(label, type, value, path, step) {
@@ -3331,6 +3336,156 @@
     if (!anchor) return;
     var el = document.querySelector('[data-readiness-section="' + anchor + '"]');
     if (el && el.scrollIntoView) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  // ===== MastFlow integration (products workflow) =====
+  // Replaces renderReadinessChecklistPanel + the D7 stepper with the unified
+  // MastFlow header. Advance is intercepted to call the existing
+  // promoteToReady / launchToActive (which keep their confirm dialogs +
+  // channel-sync side-effects). See feedback 6wOENiU3rfuBj3H5nwXq.
+  var _mfProductResolversRegistered = false;
+  var _mfProductSub = null;  // { pid, off }
+
+  function _initProductWorkflowHeader(pid) {
+    if (!pid || !window.MastAdmin || typeof MastAdmin.loadModule !== 'function') return;
+    // Sequential load — engine must register window.MastFlow before the spec runs.
+    MastAdmin.loadModule('workflowEngine').then(function() {
+      return MastAdmin.loadModule('productsWorkflow');
+    }).then(function() {
+      if (!window.MastFlow) return;
+      _registerProductTargetResolvers();
+      _subscribeProductRecord(pid);
+      _renderProductWorkflowHeaderInto(pid);
+    }).catch(function(err) {
+      console.error('[maker] MastFlow init failed:', err);
+      var host = document.getElementById('productWorkflowHeader');
+      if (host) host.innerHTML = '<span style="color:var(--danger,#b81d1d);">Workflow header failed to load.</span>';
+    });
+  }
+
+  function _findProductByPid(pid) {
+    return (window.productsData || []).find(function(p) { return p.pid === pid; }) || null;
+  }
+
+  function _registerProductTargetResolvers() {
+    if (_mfProductResolversRegistered || !window.MastFlow) return;
+    // Map spec target ids → the existing readiness section anchors.
+    var ANCHORS = {
+      'define-section': 'define-section',
+      'markup-section': 'markup-section',
+      'channels-section': 'channels-section',
+      'capacity-section': 'capacity-section',
+      'listing-section': 'listing-section'
+    };
+    Object.keys(ANCHORS).forEach(function(tid) {
+      MastFlow.registerTargetResolver('products', tid, function() {
+        scrollToReadinessSection(ANCHORS[tid]);
+      });
+    });
+    // chooseMode action — the define view is already mode-specific, so the
+    // mode is set by the time the operator is here; scroll to the define
+    // section where mode + definition live.
+    MastFlow.registerActionHandler('products', 'chooseMode', function() {
+      scrollToReadinessSection('define-section');
+    });
+    _mfProductResolversRegistered = true;
+  }
+
+  function _subscribeProductRecord(pid) {
+    if (_mfProductSub && _mfProductSub.off) {
+      try { _mfProductSub.off(); } catch (e) {}
+    }
+    var off = MastDB.subscribe('public/products/' + pid, function(val) {
+      if (!val) return;
+      // Keep the productsData array element fresh so the header re-render +
+      // readiness predicates see current data.
+      var arr = window.productsData || [];
+      var idx = arr.findIndex(function(p) { return p.pid === pid; });
+      if (idx >= 0) { arr[idx] = Object.assign({}, arr[idx], val, { pid: pid }); }
+      // Also keep defineState in sync if it's the same product being edited.
+      if (defineState && defineState.pid === pid) {
+        defineState = Object.assign({}, defineState, val, { pid: pid });
+      }
+      _renderProductWorkflowHeaderInto(pid);
+    });
+    _mfProductSub = { pid: pid, off: off };
+  }
+
+  function _renderProductWorkflowHeaderInto(pid) {
+    var host = document.getElementById('productWorkflowHeader');
+    if (!host || !window.MastFlow) return;
+    // Prefer defineState (the live in-edit copy) so unsaved edits reflect;
+    // fall back to the productsData array element.
+    var p = (defineState && defineState.pid === pid) ? defineState : _findProductByPid(pid);
+    if (!p) return;
+    p.id = pid;
+    MastFlow.renderHeader('products', p, {
+      onAdvance: function(targetPhaseKey) {
+        // Intercept to the existing transition handlers (they keep confirm
+        // dialogs + channel-sync). promoteToReady: draft→ready;
+        // launchToActive: ready→active.
+        if (targetPhaseKey === 'ready' && typeof promoteToReady === 'function') {
+          promoteToReady(pid);
+        } else if (targetPhaseKey === 'active' && typeof launchToActive === 'function') {
+          launchToActive(pid);
+        } else {
+          _doProductTransition(pid, targetPhaseKey, { expectedFromPhase: p.__workflow && p.__workflow.phase || null });
+        }
+      },
+      onBack: function(targetPhaseKey) {
+        _doProductTransition(pid, targetPhaseKey, { expectedFromPhase: p.__workflow && p.__workflow.phase || null });
+      },
+      onForce: function() {
+        var reason = window.prompt('Force-advance reason (will be audited):');
+        if (!reason) return;
+        MastFlow.evaluate('products', p).then(function(ev) {
+          var target = ev.nextPhases[0];
+          if (!target) { MastAdmin.showToast('No next phase to force.'); return; }
+          _doProductTransition(pid, target, {
+            expectedFromPhase: ev.currentPhase ? ev.currentPhase.key : null,
+            force: true, reason: reason
+          });
+        });
+      }
+    }).then(function(res) {
+      host.innerHTML = res.html;
+      var rp = (typeof window.getRouteParams === 'function') ? window.getRouteParams() : {};
+      if (rp && rp.focus) MastFlow.focusPhase('productWorkflowHeader', rp.focus);
+    }).catch(function(err) {
+      console.error('[maker] renderHeader failed:', err);
+      host.innerHTML = '<span style="color:var(--danger,#b81d1d);">Workflow header error.</span>';
+    });
+  }
+
+  function _doProductTransition(pid, targetPhaseKey, opts) {
+    var p = _findProductByPid(pid);
+    if (!p) return;
+    p.id = pid;
+    opts = Object.assign({ recordId: pid }, opts || {});
+    MastFlow.transition('products', p, targetPhaseKey, opts).then(function(res) {
+      MastAdmin.showToast('Product → ' + res.to);
+      // Re-render whichever define view is open.
+      if (typeof renderDefineView === 'function' && piecesView === 'define') renderDefineView();
+    }).catch(function(err) {
+      if (err.code === 'STALE_STATE') {
+        MastAdmin.showToast('Another editor changed this product — refreshing.', true);
+        if (typeof renderDefineView === 'function' && piecesView === 'define') renderDefineView();
+      } else if (err.code === 'REQUIREMENTS_UNMET') {
+        MastAdmin.showToast('Requirements not met — see checklist.', true);
+      } else if (err.code === 'SPEC_MISMATCH') {
+        MastAdmin.showToast('Workflow updated — manual review needed.', true);
+      } else {
+        console.error('[maker] product transition failed:', err);
+        MastAdmin.showToast('Transition failed: ' + (err.message || err), true);
+      }
+    });
+  }
+
+  function _teardownProductWorkflowSub() {
+    if (_mfProductSub && _mfProductSub.off) {
+      try { _mfProductSub.off(); } catch (e) {}
+      _mfProductSub = null;
+    }
   }
 
   // ----- Markup config UI (VAR/Resell) -------------------------------------
