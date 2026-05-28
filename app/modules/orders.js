@@ -3391,11 +3391,11 @@
       '</div>' +
     '</div>';
 
-    // D6 — horizontal phase stepper above the tabs. Collapses the 16-value
-    // c.status enum into 7 phases so the operator can see at a glance what's
-    // done, what's current, and what's left. Terminal-failure states render
-    // a single pill instead of a progressed stepper.
-    var stepperHtml = _renderCommissionPhaseStepper(c);
+    // MastFlow-managed workflow header (stepper + checklist + Advance/Back).
+    // Rendered async after this innerHTML write — see _initCommissionWorkflowHeader.
+    // The legacy _renderCommissionPhaseStepper is now unused but retained
+    // for back-compat until pick/ship validates the MastFlow abstraction.
+    var stepperHtml = '<div id="commWorkflowHeader" style="margin-top:14px;font-size:0.85rem;color:var(--warm-gray);">Loading workflow…</div>';
 
     var tabs = [
       { key: 'spec',       label: 'Spec' },
@@ -3440,6 +3440,174 @@
     } else if (commDetailActiveTab === 'milestones') {
       _loadCommissionMilestones(commId);
     }
+
+    // MastFlow workflow header — async init (loads engine + spec on first
+    // open, registers target resolvers, subscribes to record, renders).
+    _initCommissionWorkflowHeader(commId);
+  }
+
+  // ===== MastFlow integration =====
+  // One-time flags so we don't re-register resolvers / re-load modules
+  // every time the detail view re-renders.
+  var _mfResolversRegistered = false;
+  var _mfActiveSubscription = null;  // { commId, off }
+
+  function _initCommissionWorkflowHeader(commId) {
+    if (!window.MastAdmin || typeof MastAdmin.loadModule !== 'function') return;
+    Promise.all([
+      MastAdmin.loadModule('workflowEngine'),
+      MastAdmin.loadModule('commissionsWorkflow')
+    ]).then(function() {
+      if (!window.MastFlow) return;
+      _registerCommissionTargetResolvers();
+      _subscribeCommissionRecord(commId);
+      _renderWorkflowHeaderInto(commId);
+    }).catch(function(err) {
+      console.error('[commissions] MastFlow init failed:', err);
+      var host = document.getElementById('commWorkflowHeader');
+      if (host) host.innerHTML = '<span style="color:var(--danger,#b81d1d);">Workflow header failed to load.</span>';
+    });
+  }
+
+  function _registerCommissionTargetResolvers() {
+    if (_mfResolversRegistered || !window.MastFlow) return;
+    // Each target id from commissions.workflow.js maps to a focus behavior.
+    // Tab IDs map to setCommissionDetailTab + scroll.
+    var TAB_TARGETS = {
+      'header-contact':           { tab: 'spec', scrollTo: null },
+      'header-notes':             { tab: 'spec', scrollTo: null },
+      'spec-tab-proposal-price':  { tab: 'spec', scrollTo: 'commProposalPrice' },
+      'spec-tab-proposal-spec':   { tab: 'spec', scrollTo: 'commProposalSpec' },
+      'spec-tab-proposal-timeline': { tab: 'spec', scrollTo: 'commProposalTimeline' },
+      'spec-tab-proposal-send':   { tab: 'spec', scrollTo: 'commProposalStatus' },
+      'spec-tab-create-job':      { tab: 'spec', scrollTo: null },
+      'spec-tab-tracking':        { tab: 'spec', scrollTo: null },
+      'money-tab':                { tab: 'money', scrollTo: null },
+      'money-tab-send-invoice':   { tab: 'money', scrollTo: null },
+      'money-tab-record-payment': { tab: 'money', scrollTo: null },
+      'milestones-tab':           { tab: 'milestones', scrollTo: null },
+      'thread-tab':               { tab: 'thread', scrollTo: null }
+    };
+    Object.keys(TAB_TARGETS).forEach(function(tid) {
+      MastFlow.registerTargetResolver('commissions', tid, function() {
+        var t = TAB_TARGETS[tid];
+        var currentCommId = _mfActiveSubscription && _mfActiveSubscription.commId;
+        if (!currentCommId) return;
+        if (t.tab && t.tab !== commDetailActiveTab) {
+          setCommissionDetailTab(currentCommId, t.tab);
+        }
+        if (t.scrollTo) {
+          setTimeout(function() {
+            var el = document.getElementById(t.scrollTo);
+            if (el) {
+              el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              if (typeof el.focus === 'function') el.focus();
+            }
+          }, 50);
+        }
+      });
+    });
+    _mfResolversRegistered = true;
+  }
+
+  function _subscribeCommissionRecord(commId) {
+    // Replace any prior subscription.
+    if (_mfActiveSubscription && _mfActiveSubscription.off) {
+      try { _mfActiveSubscription.off(); } catch (e) {}
+    }
+    var off = MastDB.subscribe('admin/commissions/' + commId, function(snapValue) {
+      if (!snapValue) return;
+      var prev = commissionsData[commId] || {};
+      // Merge — preserve client-only fields like _milestonesCount.
+      var merged = Object.assign({}, prev, snapValue, { id: commId });
+      commissionsData[commId] = merged;
+      // Only re-render the workflow header on live updates (don't blow away
+      // the whole detail view — the user could be typing in a field).
+      _renderWorkflowHeaderInto(commId);
+    });
+    _mfActiveSubscription = { commId: commId, off: off };
+  }
+
+  function _renderWorkflowHeaderInto(commId) {
+    var c = commissionsData[commId];
+    if (!c || !window.MastFlow) return;
+    c.id = commId;
+    var host = document.getElementById('commWorkflowHeader');
+    if (!host) return;
+    MastFlow.renderHeader('commissions', c, {
+      onAdvance: function(targetPhaseKey) {
+        _doCommissionTransition(commId, targetPhaseKey, { expectedFromPhase: c.__workflow && c.__workflow.phase || null });
+      },
+      onBack: function(targetPhaseKey) {
+        _doCommissionTransition(commId, targetPhaseKey, { expectedFromPhase: c.__workflow && c.__workflow.phase || null });
+      },
+      onForce: function() {
+        var reason = window.prompt('Force-advance reason (will be audited):');
+        if (!reason) return;
+        // Force-advance to the next phase if there is one.
+        MastFlow.evaluate('commissions', c).then(function(ev) {
+          var target = ev.nextPhases[0];
+          if (!target) { showToast('No next phase available to force.'); return; }
+          _doCommissionTransition(commId, target, {
+            expectedFromPhase: ev.currentPhase ? ev.currentPhase.key : null,
+            force: true,
+            reason: reason
+          });
+        });
+      }
+    }).then(function(res) {
+      host.innerHTML = res.html;
+    }).catch(function(err) {
+      console.error('[commissions] renderHeader failed:', err);
+      host.innerHTML = '<span style="color:var(--danger,#b81d1d);">Workflow header error.</span>';
+    });
+  }
+
+  function _doCommissionTransition(commId, targetPhaseKey, opts) {
+    var c = commissionsData[commId];
+    if (!c) return;
+    c.id = commId;
+    opts = Object.assign({ recordId: commId }, opts || {});
+    MastFlow.transition('commissions', c, targetPhaseKey, opts).then(function(res) {
+      showToast('Advanced to ' + res.to);
+      emitTestingEvent('commissionPhase', { from: res.from, to: res.to, forced: !!opts.force });
+      // Also fire the legacy CS-thread system message that the old
+      // updateCommissionStatus did, since callers downstream depend on it.
+      var c2 = commissionsData[commId];
+      if (c2 && c2.ticketId && c2.status && COMMISSION_STATUS_MESSAGES[c2.status]) {
+        var now = new Date().toISOString();
+        var msgId = 'msg_' + Date.now().toString(36);
+        MastDB.set('cs_tickets/' + c2.ticketId + '/messages/' + msgId, {
+          id: msgId,
+          body: COMMISSION_STATUS_MESSAGES[c2.status],
+          direction: 'outbound',
+          isInternal: false,
+          authorName: 'System',
+          authorEmail: null,
+          createdAt: now
+        }).then(function() {
+          return MastDB.update('cs_tickets/' + c2.ticketId, { updatedAt: now });
+        }).catch(function(e) { console.error('[commissions] thread msg post failed:', e); });
+      }
+      // Re-render the detail view (also re-renders header via subscription).
+      viewCommissionDetail(commId);
+    }).catch(function(err) {
+      if (err.code === 'STALE_STATE') {
+        showToast('Another operator changed this order — refreshed.', true);
+        // Re-load the record + re-render.
+        MastDB.commissions.get(commId).then(function(fresh) {
+          if (fresh) commissionsData[commId] = Object.assign({}, fresh, { id: commId });
+          viewCommissionDetail(commId);
+        });
+      } else if (err.code === 'REQUIREMENTS_UNMET') {
+        showToast('Requirements not met — see checklist.', true);
+      } else if (err.code === 'SPEC_MISMATCH') {
+        showToast('Workflow updated — manual review needed.', true);
+      } else {
+        console.error('[commissions] transition failed:', err);
+        showToast('Transition failed: ' + (err.message || err), true);
+      }
+    });
   }
 
   // ===== D6 — Phase stepper above commission detail tabs =====
@@ -3623,9 +3791,17 @@
       commMilestonesCache[commId] = [];
     }
     var c = commissionsData[commId];
+    // Feed denormalized count onto the record so the MastFlow "milestone
+    // posted" requirement predicate can evaluate synchronously without
+    // re-reading Firebase.
+    if (c) c._milestonesCount = (commMilestonesCache[commId] || []).length;
     if (c && commDetailActiveTab === 'milestones') {
       var bodyEl = document.getElementById('commTabBody');
       if (bodyEl) bodyEl.innerHTML = _renderCommissionMilestonesTab(commId, c);
+    }
+    // Milestone count changed → re-render workflow header so the chip + checklist update.
+    if (c && window.MastFlow && _mfActiveSubscription && _mfActiveSubscription.commId === commId) {
+      _renderWorkflowHeaderInto(commId);
     }
   }
 
@@ -4324,6 +4500,12 @@
     document.getElementById('commissionsListView').style.display = '';
     // W2.1: reset tab so next detail open starts on Spec.
     commDetailActiveTab = 'spec';
+    // MastFlow: tear down the per-record subscription so we don't leak
+    // listeners across detail-view opens.
+    if (_mfActiveSubscription && _mfActiveSubscription.off) {
+      try { _mfActiveSubscription.off(); } catch (e) {}
+      _mfActiveSubscription = null;
+    }
   }
 
   function viewCommissionTicket(ticketId, commId) {
