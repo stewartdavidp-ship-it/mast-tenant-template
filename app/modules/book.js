@@ -2527,9 +2527,10 @@
     var now = Date.now();
     var s = inst.status;
     var isActive = s === 'active';
-    var expiresAt = inst.expiresAt ? Date.parse(inst.expiresAt) : null;
-    var lastUsedAt = inst.lastUsedAt ? Date.parse(inst.lastUsedAt) : null;
-    var activatedAt = inst.activatedAt ? Date.parse(inst.activatedAt) : null;
+    var toMs = function(v) { if (v == null) return null; if (typeof v === 'number') return v; var n = Date.parse(v); return isNaN(n) ? null : n; };
+    var expiresAt = toMs(inst.expiresAt);
+    var lastUsedAt = toMs(inst.lastUsedAt);
+    var activatedAt = toMs(inst.activatedAt);
     var sinceLastEngagement = lastUsedAt || activatedAt;
     var hasRemaining = inst.visitsRemaining == null || inst.visitsRemaining > 0;
     switch (cohortKey) {
