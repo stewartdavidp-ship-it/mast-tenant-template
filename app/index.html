@@ -12225,6 +12225,9 @@ MastDB.instructors = Object.assign(_makeEntity('public/instructors', 100), {
     return MastDB.query('public/instructors').orderByChild('status').equalTo(status).once();
   }
 });
+// Tenant-scoped skill catalog. Slugs are the doc IDs so lookups are O(1) and
+// duplicate prevention happens at the path layer. Labels preserve original casing.
+MastDB.skillCatalog = _makeEntity('admin/skillCatalog', 200);
 MastDB.resources = Object.assign(_makeEntity('admin/resources', 100), {
   byType: function(type) {
     return MastDB.query('admin/resources').orderByChild('type').equalTo(type).once();
@@ -18671,7 +18674,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260527-225844-fd3cb1d';
+var MAST_MODULES_V = '20260527-235055-e02c42d';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.

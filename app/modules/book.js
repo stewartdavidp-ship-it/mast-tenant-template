@@ -35,6 +35,438 @@
   var resourcesMap = {}; // id → resource
   var currentSubTab = 'classes';
 
+  // ── Skill catalog (admin/skillCatalog) ──
+  // Slugs are the doc IDs so duplicate prevention happens at the path layer.
+  // skillCatalogMap[slug] → { slug, label, status, createdAt, ... }. Loaded
+  // alongside instructors. Migration is one-shot per instructor via the
+  // instructor.migration.skillsFromSpecialties flag.
+  var skillCatalogMap = {};
+  var skillCatalogLoaded = false;
+
+  function _skillSlug(raw) {
+    if (!raw) return '';
+    return String(raw)
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+  }
+
+  function _skillLabel(slug) {
+    var entry = skillCatalogMap[slug];
+    if (entry && entry.label) return entry.label;
+    // Orphan: slug not in catalog. Title-case the slug as a fallback so the
+    // operator can still see something meaningful and recover via the
+    // instructor-detail "Add to catalog" affordance.
+    return slug ? slug.replace(/-/g, ' ').replace(/\b\w/g, function(c){ return c.toUpperCase(); }) : '';
+  }
+
+  // Ensure a catalog entry exists for the given label. Returns the slug.
+  // Idempotent — safe to call repeatedly. Writes only when missing.
+  async function ensureSkillInCatalog(label, firstUsedBy) {
+    var slug = _skillSlug(label);
+    if (!slug) return null;
+    if (skillCatalogMap[slug]) return slug;
+    var now = new Date().toISOString();
+    var entry = {
+      slug: slug,
+      label: String(label).trim(),
+      status: 'active',
+      firstUsedBy: firstUsedBy || 'unknown',
+      createdAt: now,
+      updatedAt: now
+    };
+    try {
+      await MastDB.skillCatalog.set(slug, entry);
+      skillCatalogMap[slug] = entry;
+    } catch (err) {
+      console.error('[Book] ensureSkillInCatalog failed:', err);
+    }
+    return slug;
+  }
+
+  async function loadSkillCatalog() {
+    try {
+      var data = (await MastDB.skillCatalog.list(200)) || {};
+      skillCatalogMap = {};
+      Object.keys(data).forEach(function(slug) {
+        var entry = data[slug] || {};
+        entry.slug = slug;
+        skillCatalogMap[slug] = entry;
+      });
+      skillCatalogLoaded = true;
+    } catch (err) {
+      console.error('[Book] Failed to load skill catalog:', err);
+      skillCatalogMap = {};
+      skillCatalogLoaded = true; // soft-fail so dependent UI still renders
+    }
+  }
+
+  // One-shot migration: for any instructor with specialties[] populated and
+  // no skills[] AND no migration.skillsFromSpecialties flag, slugify each
+  // specialty, ensure catalog entry, write skills[] + flag.
+  async function _migrateInstructorSkillsIfNeeded(instructors) {
+    var toMigrate = (instructors || []).filter(function(i) {
+      if (!i) return false;
+      if (i.migration && i.migration.skillsFromSpecialties) return false;
+      if (Array.isArray(i.skills) && i.skills.length) return false;
+      if (!Array.isArray(i.specialties) || i.specialties.length === 0) return false;
+      return true;
+    });
+    if (toMigrate.length === 0) return;
+    for (var n = 0; n < toMigrate.length; n++) {
+      var instr = toMigrate[n];
+      var slugs = [];
+      for (var s = 0; s < instr.specialties.length; s++) {
+        var raw = instr.specialties[s];
+        if (!raw) continue;
+        var slug = await ensureSkillInCatalog(raw, 'instructor');
+        if (slug && slugs.indexOf(slug) === -1) slugs.push(slug);
+      }
+      try {
+        await MastDB.instructors.update(instr.id, {
+          skills: slugs,
+          migration: Object.assign({}, instr.migration || {}, { skillsFromSpecialties: true }),
+          updatedAt: new Date().toISOString()
+        });
+        instr.skills = slugs;
+        instr.migration = Object.assign({}, instr.migration || {}, { skillsFromSpecialties: true });
+      } catch (err) {
+        console.error('[Book] Instructor skills migration failed for', instr.id, err);
+      }
+    }
+  }
+
+  // Returns array of missing skill slugs for the given instructor against
+  // the given required slugs. Empty array = qualified.
+  function _missingSkills(instructor, requiredSlugs) {
+    if (!requiredSlugs || requiredSlugs.length === 0) return [];
+    var have = (instructor && Array.isArray(instructor.skills)) ? instructor.skills : [];
+    var haveSet = Object.create(null);
+    have.forEach(function(s) { haveSet[s] = true; });
+    return requiredSlugs.filter(function(s) { return !haveSet[s]; });
+  }
+
+  function _isQualified(instructor, requiredSlugs) {
+    return _missingSkills(instructor, requiredSlugs).length === 0;
+  }
+
+  // ── Reusable skill chip-input picker ──
+  // Mount with renderSkillPickerHtml(pickerId, initialSlugs) to get the
+  // initial HTML. After insertion call initSkillPicker(pickerId, opts) to
+  // register state. Read current selection via getSkillPickerSlugs(pickerId).
+  window._skillPickers = window._skillPickers || {};
+
+  function renderSkillPickerHtml(pickerId, initialSlugs, placeholder) {
+    var safeId = pickerId.replace(/[^a-zA-Z0-9_-]/g, '');
+    var ph = placeholder || 'Type a skill name…';
+    return '<div class="skill-picker" id="' + safeId + '-wrap" data-picker-id="' + safeId + '"' +
+      ' style="border:1px solid var(--cream-dark,#e5e0d8);border-radius:8px;padding:6px 8px;background:var(--surface-card,#fff);">' +
+      '<div id="' + safeId + '-chips" class="skill-picker-chips" style="display:flex;flex-wrap:wrap;gap:4px;"></div>' +
+      '<input type="text" id="' + safeId + '-input" class="skill-picker-input" autocomplete="off"' +
+        ' placeholder="' + ph + '"' +
+        ' oninput="window._skillPickerInput(\'' + safeId + '\')"' +
+        ' onkeydown="window._skillPickerKeydown(\'' + safeId + '\', event)"' +
+        ' onblur="window._skillPickerBlur(\'' + safeId + '\')"' +
+        ' onfocus="window._skillPickerInput(\'' + safeId + '\')"' +
+        ' style="border:0;outline:0;background:transparent;width:100%;font-size:0.9rem;padding:6px 2px;">' +
+      '<div id="' + safeId + '-suggest" class="skill-picker-suggest" style="display:none;position:relative;"></div>' +
+      '</div>';
+  }
+
+  function initSkillPicker(pickerId, opts) {
+    opts = opts || {};
+    window._skillPickers[pickerId] = {
+      slugs: (opts.initialSlugs || []).filter(Boolean),
+      onChange: typeof opts.onChange === 'function' ? opts.onChange : null,
+      firstUsedBy: opts.firstUsedBy || 'unknown'
+    };
+    _renderSkillPickerChips(pickerId);
+  }
+
+  function getSkillPickerSlugs(pickerId) {
+    var state = window._skillPickers[pickerId];
+    return state ? state.slugs.slice() : [];
+  }
+
+  function _renderSkillPickerChips(pickerId) {
+    var state = window._skillPickers[pickerId];
+    var chipsEl = document.getElementById(pickerId + '-chips');
+    if (!state || !chipsEl) return;
+    if (state.slugs.length === 0) { chipsEl.innerHTML = ''; return; }
+    chipsEl.innerHTML = state.slugs.map(function(slug) {
+      var label = _skillLabel(slug);
+      var orphan = !skillCatalogMap[slug];
+      var orphanHint = orphan ? ' title="Not in skill catalog"' : '';
+      var bg = orphan ? 'rgba(245,158,11,0.15)' : 'rgba(42,124,111,0.12)';
+      var color = orphan ? '#B45309' : 'var(--teal,#2a7c6f)';
+      return '<span class="skill-chip"' + orphanHint +
+        ' style="display:inline-flex;align-items:center;gap:6px;background:' + bg +
+        ';color:' + color + ';padding:3px 4px 3px 10px;border-radius:14px;font-size:0.78rem;">' +
+        (orphan ? '<span aria-hidden="true">?</span>' : '') +
+        '<span>' + _esc(label) + '</span>' +
+        '<button type="button" aria-label="Remove ' + _esc(label) + '"' +
+          ' onclick="window._skillPickerRemove(\'' + pickerId + '\', \'' + _esc(slug) + '\')"' +
+          ' style="background:transparent;border:0;color:inherit;cursor:pointer;padding:0 4px;font-size:1rem;line-height:1;">×</button>' +
+        '</span>';
+    }).join('');
+  }
+
+  function _esc(s) {
+    if (s === null || s === undefined) return '';
+    return String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  window._skillPickerInput = function(pickerId) {
+    var state = window._skillPickers[pickerId];
+    var input = document.getElementById(pickerId + '-input');
+    var suggest = document.getElementById(pickerId + '-suggest');
+    if (!state || !input || !suggest) return;
+    var raw = (input.value || '').trim();
+    var slug = _skillSlug(raw);
+    var selected = Object.create(null);
+    state.slugs.forEach(function(s) { selected[s] = true; });
+
+    var entries = Object.keys(skillCatalogMap)
+      .map(function(s) { return skillCatalogMap[s]; })
+      .filter(function(e) {
+        if (!e || e.status === 'archived') return false;
+        if (selected[e.slug]) return false;
+        if (!raw) return true;
+        return (e.label || '').toLowerCase().indexOf(raw.toLowerCase()) !== -1;
+      })
+      .sort(function(a, b) {
+        // Prefix matches sort first, then alpha.
+        if (!raw) return (a.label || '').localeCompare(b.label || '');
+        var ai = (a.label || '').toLowerCase().indexOf(raw.toLowerCase());
+        var bi = (b.label || '').toLowerCase().indexOf(raw.toLowerCase());
+        if (ai !== bi) return ai - bi;
+        return (a.label || '').localeCompare(b.label || '');
+      })
+      .slice(0, 8);
+
+    var exactMatch = entries.some(function(e) { return (e.label || '').toLowerCase() === raw.toLowerCase(); }) ||
+                     (slug && skillCatalogMap[slug]);
+
+    var html = '';
+    if (entries.length > 0) {
+      html += '<div style="position:absolute;top:4px;left:0;right:0;z-index:50;background:var(--surface-card,#fff);' +
+              'border:1px solid var(--cream-dark,#e5e0d8);border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.08);' +
+              'max-height:240px;overflow-y:auto;">';
+      // Suggestions (strong styling — the default action).
+      entries.forEach(function(e) {
+        html += '<button type="button" onmousedown="event.preventDefault();window._skillPickerAdd(\'' + pickerId + '\', \'' + _esc(e.slug) + '\')"' +
+          ' style="display:block;width:100%;text-align:left;padding:8px 12px;background:transparent;border:0;cursor:pointer;font-size:0.9rem;color:var(--text,inherit);">' +
+          '<strong>' + _esc(e.label) + '</strong>' +
+          '</button>';
+      });
+      // Create-new affordance — visually demoted: smaller, muted, with separator.
+      if (raw && !exactMatch && slug) {
+        html += '<div style="border-top:1px solid var(--cream-dark,#e5e0d8);"></div>' +
+                '<button type="button" onmousedown="event.preventDefault();window._skillPickerCreate(\'' + pickerId + '\', \'' + _esc(raw) + '\')"' +
+                ' style="display:block;width:100%;text-align:left;padding:6px 12px;background:transparent;border:0;cursor:pointer;font-size:0.78rem;color:var(--warm-gray,#888);">' +
+                '+ Create new skill: <em>' + _esc(raw) + '</em>' +
+                '</button>';
+      }
+      html += '</div>';
+    } else if (raw && !exactMatch && slug) {
+      html += '<div style="position:absolute;top:4px;left:0;right:0;z-index:50;background:var(--surface-card,#fff);' +
+              'border:1px solid var(--cream-dark,#e5e0d8);border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.08);">' +
+              '<button type="button" onmousedown="event.preventDefault();window._skillPickerCreate(\'' + pickerId + '\', \'' + _esc(raw) + '\')"' +
+              ' style="display:block;width:100%;text-align:left;padding:8px 12px;background:transparent;border:0;cursor:pointer;font-size:0.85rem;color:var(--warm-gray,#888);">' +
+              '+ Create new skill: <em>' + _esc(raw) + '</em>' +
+              '</button>' +
+              '</div>';
+    }
+
+    if (html) { suggest.innerHTML = html; suggest.style.display = ''; }
+    else { suggest.innerHTML = ''; suggest.style.display = 'none'; }
+  };
+
+  window._skillPickerKeydown = function(pickerId, ev) {
+    if (ev.key === 'Enter') {
+      ev.preventDefault();
+      var input = document.getElementById(pickerId + '-input');
+      var raw = (input.value || '').trim();
+      if (!raw) return;
+      var slug = _skillSlug(raw);
+      if (!slug) return;
+      // Prefer existing catalog entry if exact label match.
+      var existing = Object.keys(skillCatalogMap).find(function(k) {
+        var e = skillCatalogMap[k];
+        return e && (e.label || '').toLowerCase() === raw.toLowerCase();
+      });
+      if (existing) window._skillPickerAdd(pickerId, existing);
+      else if (skillCatalogMap[slug]) window._skillPickerAdd(pickerId, slug);
+      else window._skillPickerCreate(pickerId, raw);
+    } else if (ev.key === 'Backspace') {
+      var inp = document.getElementById(pickerId + '-input');
+      if (inp && !inp.value) {
+        var state = window._skillPickers[pickerId];
+        if (state && state.slugs.length > 0) {
+          ev.preventDefault();
+          var last = state.slugs[state.slugs.length - 1];
+          window._skillPickerRemove(pickerId, last);
+        }
+      }
+    } else if (ev.key === 'Escape') {
+      var sug = document.getElementById(pickerId + '-suggest');
+      if (sug) { sug.innerHTML = ''; sug.style.display = 'none'; }
+    }
+  };
+
+  window._skillPickerBlur = function(pickerId) {
+    // Hide suggestions after a short delay so click handlers can fire.
+    setTimeout(function() {
+      var sug = document.getElementById(pickerId + '-suggest');
+      if (sug) { sug.innerHTML = ''; sug.style.display = 'none'; }
+    }, 150);
+  };
+
+  window._skillPickerAdd = function(pickerId, slug) {
+    var state = window._skillPickers[pickerId];
+    if (!state || !slug) return;
+    if (state.slugs.indexOf(slug) === -1) {
+      state.slugs.push(slug);
+      _renderSkillPickerChips(pickerId);
+      if (state.onChange) state.onChange(state.slugs);
+    }
+    var input = document.getElementById(pickerId + '-input');
+    if (input) { input.value = ''; input.focus(); }
+    window._skillPickerInput(pickerId);
+  };
+
+  window._skillPickerRemove = function(pickerId, slug) {
+    var state = window._skillPickers[pickerId];
+    if (!state) return;
+    state.slugs = state.slugs.filter(function(s) { return s !== slug; });
+    _renderSkillPickerChips(pickerId);
+    if (state.onChange) state.onChange(state.slugs);
+    window._skillPickerInput(pickerId);
+  };
+
+  window._skillPickerCreate = async function(pickerId, rawLabel) {
+    var state = window._skillPickers[pickerId];
+    if (!state || !rawLabel) return;
+    var slug = await ensureSkillInCatalog(rawLabel, state.firstUsedBy);
+    if (!slug) return;
+    window._skillPickerAdd(pickerId, slug);
+  };
+
+  // Renders an instructor <select> grouped by qualified/unqualified against
+  // requiredSlugs. When requiredSlugs is empty, falls back to the original
+  // flat list. Unqualified options show a marker + tooltip naming missing skills.
+  function _renderClassInstructorSelect(selectedId, requiredSlugs) {
+    var active = instructorsData.filter(function(i) { return i.status === 'active'; });
+    function _opt(i, marker, title) {
+      var sel = i.id === selectedId ? ' selected' : '';
+      var t = title ? ' title="' + _esc(title) + '"' : '';
+      return '<option value="' + _esc(i.id) + '"' + sel + t + '>' + _esc((marker || '') + (i.name || '')) + '</option>';
+    }
+    if (!requiredSlugs || requiredSlugs.length === 0) {
+      return '<select id="bcfInstructor" class="form-input"><option value="">None</option>' +
+        active.map(function(i) { return _opt(i); }).join('') +
+      '</select>';
+    }
+    var qualified = [];
+    var unqualified = [];
+    active.forEach(function(i) {
+      var missing = _missingSkills(i, requiredSlugs);
+      if (missing.length === 0) qualified.push(i);
+      else unqualified.push({ instr: i, missing: missing });
+    });
+    var html = '<select id="bcfInstructor" class="form-input"><option value="">None</option>';
+    if (qualified.length > 0) {
+      html += '<optgroup label="✓ Qualified (' + qualified.length + ')">' +
+        qualified.map(function(i) { return _opt(i); }).join('') +
+      '</optgroup>';
+    }
+    if (unqualified.length > 0) {
+      html += '<optgroup label="Other (' + unqualified.length + ')">' +
+        unqualified.map(function(u) {
+          var labels = u.missing.map(_skillLabel).join(', ');
+          return _opt(u.instr, '⚠ ', 'Missing: ' + labels);
+        }).join('') +
+      '</optgroup>';
+    }
+    html += '</select>';
+    return html;
+  }
+
+  // Renders coverage warning HTML for a class against requiredSlugs. Empty
+  // when no skills required or when at least one active instructor qualifies.
+  function _renderCoverageWarning(requiredSlugs) {
+    if (!requiredSlugs || requiredSlugs.length === 0) return '';
+    var active = instructorsData.filter(function(i) { return i.status === 'active'; });
+    var anyQualified = active.some(function(i) { return _isQualified(i, requiredSlugs); });
+    if (anyQualified) return '';
+    var labels = requiredSlugs.map(_skillLabel).join(', ');
+    return '<div style="background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.35);' +
+      'color:#B45309;padding:8px 12px;border-radius:6px;font-size:0.85rem;display:flex;align-items:center;gap:8px;">' +
+      '<span style="font-size:1rem;">⚠</span>' +
+      '<span>No active instructor has all of: <strong>' + _esc(labels) + '</strong>. ' +
+      'Add these skills to an existing instructor (Bookings → Instructors) or adjust this class\'s required skills.</span>' +
+      '</div>';
+  }
+
+  // Class detail: renders the read-only required-skills chip row.
+  function _classDetailReqSkillsBlock(cls) {
+    var arr = (cls && Array.isArray(cls.requiredSkills)) ? cls.requiredSkills : [];
+    var chips = arr.length === 0
+      ? '<span style="color:var(--warm-gray);font-size:0.85rem;">None</span>'
+      : arr.map(function(slug) {
+          var orphan = !skillCatalogMap[slug];
+          var bg = orphan ? 'rgba(245,158,11,0.15)' : 'rgba(42,124,111,0.12)';
+          var color = orphan ? '#B45309' : 'var(--teal,#2a7c6f)';
+          return '<span style="display:inline-block;background:' + bg + ';color:' + color +
+            ';padding:3px 10px;border-radius:14px;font-size:0.78rem;margin:2px 4px 2px 0;">' +
+            (orphan ? '? ' : '') + _esc(_skillLabel(slug)) + '</span>';
+        }).join('');
+    return '<div style="margin-top:0.75rem;">' +
+      '<div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:0.05em;color:var(--warm-gray);margin-bottom:4px;">Required skills</div>' +
+      '<div>' + chips + '</div>' +
+    '</div>';
+  }
+
+  // Class detail: persistent coverage banner. Fires when class has requiredSkills
+  // AND no active instructor has all of them. Catches drift over time — instructor
+  // was deactivated, or skill set changed since the class was last edited.
+  function _classDetailCoverageBanner(cls) {
+    var arr = (cls && Array.isArray(cls.requiredSkills)) ? cls.requiredSkills : [];
+    if (arr.length === 0) return '';
+    var anyQual = instructorsData.some(function(i) {
+      return i.status === 'active' && _isQualified(i, arr);
+    });
+    if (anyQual) return '';
+    return '<div style="background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.35);' +
+      'color:#B45309;padding:10px 14px;border-radius:6px;font-size:0.9rem;margin-bottom:12px;display:flex;align-items:flex-start;gap:10px;">' +
+      '<span style="font-size:1.15rem;line-height:1;">⚠</span>' +
+      '<div><strong>No qualified instructor.</strong> No active instructor has all required skills (' +
+      _esc(arr.map(_skillLabel).join(', ')) + '). ' +
+      'Add the missing skills to an existing instructor, hire one, or revise the requirements.</div>' +
+      '</div>';
+  }
+
+  // Re-render class-form instructor select + coverage warning when the
+  // requiredSkills picker changes. Preserves any current selection.
+  function _refreshClassFormAssignment() {
+    var slugs = getSkillPickerSlugs('clsReqSkillPicker');
+    var wrap = document.getElementById('bcfInstructorWrap');
+    var warnEl = document.getElementById('clsCoverageWarning');
+    if (wrap) {
+      var current = (document.getElementById('bcfInstructor') || {}).value || '';
+      wrap.innerHTML = _renderClassInstructorSelect(current, slugs);
+    }
+    if (warnEl) {
+      warnEl.innerHTML = _renderCoverageWarning(slugs);
+    }
+  }
+
   var CLASS_TYPES = ['series', 'single', 'dropin', 'private'];
   var CLASS_STATUSES = ['draft', 'active', 'published', 'completed', 'archived'];
   var ENROLLMENT_STATUSES = ['confirmed', 'waitlisted', 'cancelled', 'no-show', 'completed', 'late'];
@@ -309,6 +741,9 @@
 
   async function loadClasses() {
     try {
+      // Ensure skill catalog is available for requiredSkills chips, coverage
+      // warnings, and instructor-picker grouping on class form/detail.
+      if (!skillCatalogLoaded) await loadSkillCatalog();
       var data = (await MastDB.classes.list(200)) || {};
       classesData = Object.keys(data).map(function(id) {
         var c = data[id];
@@ -528,7 +963,8 @@
       _detailField('Materials', cls.materialsIncluded ? (cls.materialsNote || 'Included') : (cls.materialsCostCents ? formatPrice(cls.materialsCostCents) + ' fee' + (cls.materialsNote ? ' \u2014 ' + esc(cls.materialsNote) : '') : 'Not included')) +
       _detailField('Instructor', cls.instructorName || '—') +
       _detailField('Resource', cls.resourceName || '—') +
-      '</div>';
+      '</div>' + _classDetailReqSkillsBlock(cls);
+    schedHtml = _classDetailCoverageBanner(cls) + schedHtml;
     html += bookCollapsibleSection('classSchedule', 'Schedule & Assignment', schedHtml);
 
     // ── Description ──
@@ -720,13 +1156,14 @@
       // ── Assignment ──
       '<div class="book-form-section">' +
       '<div class="book-form-section-title">Assignment</div>' +
+      '<div class="book-field"><label class="form-label">Required skills</label>' +
+      renderSkillPickerHtml('clsReqSkillPicker', (cls && Array.isArray(cls.requiredSkills)) ? cls.requiredSkills : [], 'Add skills this class requires — leave empty for none') +
+      '<div id="clsCoverageWarning" style="margin-top:6px;"></div>' +
+      '<div class="book-field-hint">Used to filter qualified instructors when assigning. Operator can still pick anyone — the filter is a guide, not a block.</div></div>' +
       '<div class="book-responsive-grid">' +
-      '<div class="book-field"><label class="form-label">Instructor</label><select id="bcfInstructor" class="form-input">' +
-      '<option value="">None</option>' +
-      instructorsData.filter(function(i) { return i.status === 'active'; }).map(function(i) {
-        return '<option value="' + esc(i.id) + '"' + (cls && cls.instructorId === i.id ? ' selected' : '') + '>' + esc(i.name) + '</option>';
-      }).join('') +
-      '</select></div>' +
+      '<div class="book-field"><label class="form-label">Instructor</label>' +
+      '<div id="bcfInstructorWrap">' + _renderClassInstructorSelect(cls && cls.instructorId ? cls.instructorId : '', (cls && Array.isArray(cls.requiredSkills)) ? cls.requiredSkills : []) + '</div>' +
+      '</div>' +
       '<div class="book-field"><label class="form-label">Resource</label><select id="bcfResource" class="form-input">' +
       '<option value="">None</option>' +
       resourcesData.filter(function(r) { return r.status === 'active'; }).map(function(r) {
@@ -766,6 +1203,15 @@
     window._bookToggleSchedType();
     // Load waiver templates if waiver is required
     if (cls && cls.requiresWaiver) _bookLoadWaiverTemplateOptions();
+
+    // Initialize the requiredSkills picker. onChange re-renders the instructor
+    // <select> grouping + the coverage warning so the operator sees impact live.
+    initSkillPicker('clsReqSkillPicker', {
+      initialSlugs: (cls && Array.isArray(cls.requiredSkills)) ? cls.requiredSkills : [],
+      firstUsedBy: 'class',
+      onChange: _refreshClassFormAssignment
+    });
+    _refreshClassFormAssignment();
   }
 
   // ============================================================
@@ -832,6 +1278,7 @@
     data.instructorName = instrId && instructorsMap[instrId] ? instructorsMap[instrId].name : null;
     data.resourceId = resId;
     data.resourceName = resId && resourcesMap[resId] ? resourcesMap[resId].name : null;
+    data.requiredSkills = getSkillPickerSlugs('clsReqSkillPicker');
 
     // Series info
     if (type === 'series') {
@@ -1457,12 +1904,17 @@
 
   async function loadInstructors() {
     try {
+      // Load catalog first so migration can ensure entries without a second pass.
+      if (!skillCatalogLoaded) await loadSkillCatalog();
       var data = (await MastDB.instructors.list(100)) || {};
       instructorsData = Object.keys(data).map(function(id) {
         var i = data[id];
         i.id = id;
         return i;
       });
+      // One-shot, idempotent. Per-instructor migration.skillsFromSpecialties
+      // flag prevents re-runs. Safe on cold reload.
+      await _migrateInstructorSkillsIfNeeded(instructorsData);
       instructorsMap = {};
       instructorsData.forEach(function(i) { instructorsMap[i.id] = i; });
       instructorsLoaded = true;
@@ -1531,12 +1983,18 @@
     // B8 — card click now opens the read-only detail view. Pencil shortcut
     // removed; detail view has its own Edit button (matches D9 / B9 pattern).
     filtered.forEach(function(i) {
-      var specs = (i.specialties || []).join(', ') || '';
+      // Prefer the structured skills[] (post-migration); fall back to legacy
+      // specialties[] only for instructors not yet migrated (defensive — load-time
+      // migration should always have run by this point).
+      var skillSlugs = Array.isArray(i.skills) ? i.skills : [];
+      var skillsText = skillSlugs.length
+        ? skillSlugs.map(_skillLabel).join(', ')
+        : ((i.specialties || []).join(', ') || '');
       html += '<div class="book-card" onclick="window._instrView(\'' + esc(i.id) + '\')" style="cursor:pointer;">' +
         '<div style="display:flex;justify-content:space-between;align-items:center;">' +
         '<div>' +
         '<div style="font-weight:600;">' + esc(i.name) + '</div>' +
-        (specs ? '<div style="font-size:0.85rem;color:var(--warm-gray);margin-top:2px;">' + esc(specs) + '</div>' : '') +
+        (skillsText ? '<div style="font-size:0.85rem;color:var(--warm-gray);margin-top:2px;">' + esc(skillsText) + '</div>' : '') +
         (i.email ? '<div style="font-size:0.78rem;color:var(--warm-gray-light,var(--warm-gray-light));margin-top:2px;">' + esc(i.email) + '</div>' : '') +
         '</div>' +
         '<div style="display:flex;align-items:center;gap:8px;">' +
@@ -1552,12 +2010,25 @@
   // B8 — Instructor Read-Only Detail View
   // ============================================================
   function _renderInstructorDetailView(instr) {
-    var specs = Array.isArray(instr.specialties) ? instr.specialties.filter(Boolean) : [];
-    var specChips = specs.length
-      ? specs.map(function(s) {
-          return '<span style="display:inline-block;background:rgba(42,124,111,0.12);color:var(--teal,#2a7c6f);padding:3px 10px;border-radius:14px;font-size:0.78rem;margin:2px 4px 2px 0;">' + esc(s) + '</span>';
+    // Read skills[] (structured slugs into the catalog). Legacy specialties[]
+    // remains on the doc as a frozen rollback rope but isn't shown post-migration.
+    var skillSlugs = Array.isArray(instr.skills) ? instr.skills.filter(Boolean) : [];
+    var specChips = skillSlugs.length
+      ? skillSlugs.map(function(slug) {
+          var orphan = !skillCatalogMap[slug];
+          var label = _skillLabel(slug);
+          if (!orphan) {
+            return '<span style="display:inline-block;background:rgba(42,124,111,0.12);color:var(--teal,#2a7c6f);padding:3px 10px;border-radius:14px;font-size:0.78rem;margin:2px 4px 2px 0;">' + _esc(label) + '</span>';
+          }
+          // Orphan: slug not in catalog (catalog entry archived or deleted). Show
+          // amber chip + one-click "Add to catalog" so operator can recover.
+          return '<span style="display:inline-flex;align-items:center;gap:6px;background:rgba(245,158,11,0.15);color:#B45309;padding:3px 4px 3px 10px;border-radius:14px;font-size:0.78rem;margin:2px 4px 2px 0;" title="Not in skill catalog">' +
+            '<span aria-hidden="true">?</span><span>' + _esc(label) + '</span>' +
+            '<button type="button" onclick="window._instrRecoverSkill(\'' + _esc(instr.id) + '\', \'' + _esc(slug) + '\', \'' + _esc(label) + '\')" ' +
+            'style="background:transparent;border:0;color:inherit;cursor:pointer;padding:0 4px;font-size:0.85rem;" title="Add to catalog">+</button>' +
+            '</span>';
         }).join('')
-      : '<span style="color:var(--warm-gray);font-size:0.85rem;">No specialties listed.</span>';
+      : '<span style="color:var(--warm-gray);font-size:0.85rem;">No skills listed.</span>';
 
     // Classes currently taught/assigned to this instructor. Active + non-active
     // separated so the operator sees teaching today vs historical assignments.
@@ -1655,9 +2126,9 @@
       '<div class="book-form-section-title">Details</div>' +
       '<div class="book-field"><label class="form-label">Bio</label>' +
       '<textarea id="ifBio" class="form-input" rows="3" placeholder="Teaching background and experience...">' + esc(instr ? instr.bio : '') + '</textarea></div>' +
-      '<div class="book-field"><label class="form-label">Specialties</label>' +
-      '<input type="text" id="ifSpecialties" class="form-input" value="' + esc(instr && instr.specialties ? instr.specialties.join(', ') : '') + '" placeholder="e.g. Wheel Throwing, Glazing, Hand Building">' +
-      '<div class="book-field-hint">Separate multiple specialties with commas</div></div>' +
+      '<div class="book-field"><label class="form-label">Skills · capabilities</label>' +
+      renderSkillPickerHtml('instrSkillPicker', (instr && Array.isArray(instr.skills)) ? instr.skills : [], 'Type a skill — e.g. Wheel Throwing') +
+      '<div class="book-field-hint">Used to match instructors to classes that require specific skills. Type to search the catalog; create new entries when needed.</div></div>' +
       '</div>' +
 
       // ── Contact ──
@@ -1685,14 +2156,17 @@
       '</div></form>';
 
     content.innerHTML = html;
+    initSkillPicker('instrSkillPicker', {
+      initialSlugs: (instr && Array.isArray(instr.skills)) ? instr.skills : [],
+      firstUsedBy: 'instructor'
+    });
   }
 
   async function saveInstructor(instrId) {
     var name = document.getElementById('ifName').value.trim();
     if (!name) { MastAdmin.showToast('Name is required', true); return; }
 
-    var specialtiesStr = document.getElementById('ifSpecialties').value.trim();
-    var specialties = specialtiesStr ? specialtiesStr.split(',').map(function(s) { return s.trim(); }).filter(Boolean) : [];
+    var skills = getSkillPickerSlugs('instrSkillPicker');
 
     var payRate = parseFloat(document.getElementById('ifPayRate').value);
 
@@ -1700,7 +2174,7 @@
       name: name,
       slug: name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''),
       bio: document.getElementById('ifBio').value.trim() || null,
-      specialties: specialties,
+      skills: skills,
       email: document.getElementById('ifEmail').value.trim() || null,
       phone: document.getElementById('ifPhone').value.trim() || null,
       payRateCents: isNaN(payRate) ? null : Math.round(payRate * 100),
@@ -1715,8 +2189,13 @@
       if (isNew) {
         instrId = MastDB.instructors.newKey();
         data.createdAt = data.updatedAt;
+        await MastDB.instructors.set(instrId, data);
+      } else {
+        // PATCH-style write (matches saveClass at saveClass) so server-owned
+        // fields the form doesn't render — createdAt, migration flag, frozen
+        // legacy specialties — survive edits.
+        await MastDB.instructors.update(instrId, data);
       }
-      await MastDB.instructors.set(instrId, data);
       MastAdmin.showToast(isNew ? 'Instructor created!' : 'Instructor updated!');
       instructorsLoaded = false;
       await loadInstructors();
@@ -2309,8 +2788,15 @@
   // Conflict Detection
   // ============================================================
 
-  async function checkConflicts(date, startTime, endTime, instructorId, resourceId, excludeSessionId) {
-    if (!instructorId && !resourceId) return [];
+  async function checkConflicts(date, startTime, endTime, instructorId, resourceId, excludeSessionId, additionalStaff) {
+    additionalStaff = Array.isArray(additionalStaff) ? additionalStaff : [];
+    // Collect every instructor id we need to check for overlap on this date —
+    // the primary plus any additional-staff entries that link to an instructor
+    // record. Freeform names have no schedule so they don't conflict.
+    var extraStaffIds = additionalStaff
+      .map(function(e) { return e && e.instructorId; })
+      .filter(Boolean);
+    if (!instructorId && !resourceId && extraStaffIds.length === 0) return [];
     var conflicts = [];
 
     try {
@@ -2334,6 +2820,23 @@
           var resName = resourcesMap[resourceId] ? resourcesMap[resourceId].name : 'Resource';
           conflicts.push(resName + ' is already booked at ' + formatTime(s.startTime) + ' on ' + formatDate(date));
         }
+        // Additional-staff conflicts: a given instructor can't be primary on
+        // another session AND additional-staff here at the same time. Soft
+        // warning — surfaced like resource/instructor conflicts above.
+        extraStaffIds.forEach(function(sid) {
+          if (s.instructorId === sid) {
+            var n = instructorsMap[sid] ? instructorsMap[sid].name : 'Staff member';
+            conflicts.push(n + ' (additional staff) is the primary instructor on another session at ' + formatTime(s.startTime) + ' on ' + formatDate(date));
+          }
+          // Also: same person listed as additional-staff on another overlapping session.
+          if (Array.isArray(s.additionalStaff)) {
+            var dup = s.additionalStaff.some(function(e) { return e && e.instructorId === sid; });
+            if (dup) {
+              var n2 = instructorsMap[sid] ? instructorsMap[sid].name : 'Staff member';
+              conflicts.push(n2 + ' (additional staff) is already booked on another session at ' + formatTime(s.startTime) + ' on ' + formatDate(date));
+            }
+          }
+        });
       });
     } catch (err) {
       console.warn('[Book] Conflict check failed:', err);
@@ -2354,28 +2857,137 @@
     var session = sessionsData.find(function(s) { return s.id === sessionId; });
     if (!session) return;
 
-    var instrOpts = '<option value="">None</option>' +
-      instructorsData.filter(function(i) { return i.status === 'active'; }).map(function(i) {
-        return '<option value="' + esc(i.id) + '"' + (session.instructorId === i.id ? ' selected' : '') + '>' + esc(i.name) + '</option>';
-      }).join('');
+    // Group by qualified/unqualified against the parent class's requiredSkills.
+    // Operator can still pick anyone — this is a guide, not a block. Substitute
+    // teachers, trainees shadowing, and co-teaches all need the override path.
+    var parentClass = session && session.classId ? allClassesMap[session.classId] : null;
+    var sessReqSkills = (parentClass && Array.isArray(parentClass.requiredSkills)) ? parentClass.requiredSkills : [];
+    var activeInstrs = instructorsData.filter(function(i) { return i.status === 'active'; });
+    function _sessOpt(i, marker, title) {
+      var sel = session.instructorId === i.id ? ' selected' : '';
+      var t = title ? ' title="' + _esc(title) + '"' : '';
+      return '<option value="' + _esc(i.id) + '"' + sel + t + '>' + _esc((marker || '') + (i.name || '')) + '</option>';
+    }
+    var instrOpts;
+    if (sessReqSkills.length === 0) {
+      instrOpts = '<option value="">None</option>' + activeInstrs.map(function(i) { return _sessOpt(i); }).join('');
+    } else {
+      var qual = [], unqual = [];
+      activeInstrs.forEach(function(i) {
+        var missing = _missingSkills(i, sessReqSkills);
+        (missing.length === 0 ? qual : unqual).push({ instr: i, missing: missing });
+      });
+      instrOpts = '<option value="">None</option>';
+      if (qual.length) {
+        instrOpts += '<optgroup label="✓ Qualified (' + qual.length + ')">' +
+          qual.map(function(o) { return _sessOpt(o.instr); }).join('') + '</optgroup>';
+      }
+      if (unqual.length) {
+        instrOpts += '<optgroup label="Other (' + unqual.length + ')">' +
+          unqual.map(function(o) {
+            return _sessOpt(o.instr, '⚠ ', 'Missing: ' + o.missing.map(_skillLabel).join(', '));
+          }).join('') + '</optgroup>';
+      }
+    }
 
     var resOpts = '<option value="">None</option>' +
       resourcesData.filter(function(r) { return r.status === 'active'; }).map(function(r) {
         return '<option value="' + esc(r.id) + '"' + (session.resourceId === r.id ? ' selected' : '') + '>' + esc(r.name) + ' (' + esc(r.type) + ')</option>';
       }).join('');
 
+    // Seed module-level state for the additional-staff editor. Cloned so cancel
+    // doesn't mutate the on-disk record.
+    _assignStaffState = Array.isArray(session.additionalStaff)
+      ? JSON.parse(JSON.stringify(session.additionalStaff))
+      : [];
+
     var html = '<div style="position:fixed;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:9999;" id="assignOverlay">' +
-      '<div style="background:var(--surface-dark);border:1px solid var(--border);border-radius:12px;padding:1.5rem;max-width:400px;width:90%;">' +
+      '<div style="background:var(--surface-dark);border:1px solid var(--border);border-radius:12px;padding:1.5rem;max-width:560px;width:90%;max-height:90vh;overflow-y:auto;">' +
       '<h3 style="margin:0 0 1rem;">Assign Session — ' + formatDate(session.date) + '</h3>' +
       '<div style="margin-bottom:1rem;"><label class="form-label">Instructor</label><select id="assignInstr" class="form-input">' + instrOpts + '</select></div>' +
-      '<div style="margin-bottom:1.5rem;"><label class="form-label">Resource</label><select id="assignRes" class="form-input">' + resOpts + '</select></div>' +
+      '<div style="margin-bottom:1rem;"><label class="form-label">Resource</label><select id="assignRes" class="form-input">' + resOpts + '</select></div>' +
+      '<div style="margin-bottom:1.5rem;">' +
+        '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">' +
+          '<label class="form-label" style="margin:0;">Additional staff</label>' +
+          '<button type="button" class="btn btn-secondary" style="font-size:0.78rem;padding:4px 10px;" onclick="window._assignAddStaffRow()">+ Add staff</button>' +
+        '</div>' +
+        '<div id="assignStaffList"></div>' +
+        '<div class="book-field-hint">Track shadows, assistants, co-teachers, and observers. Only the primary instructor above is checked against required skills.</div>' +
+      '</div>' +
       '<div style="display:flex;gap:8px;">' +
       '<button class="btn btn-primary" onclick="window._assignSave(\'' + esc(sessionId) + '\',\'' + esc(classId) + '\')">Save</button>' +
       '<button class="btn" onclick="document.getElementById(\'assignOverlay\').remove()">Cancel</button>' +
       '</div></div></div>';
 
     document.body.insertAdjacentHTML('beforeend', html);
+    _renderAssignStaffList();
   }
+
+  // ── Session additionalStaff editor ──
+  // Module-level scratch state for the open assign overlay. Cleared when the
+  // modal is dismissed (save or cancel).
+  var _assignStaffState = [];
+  var STAFF_ROLES = ['shadow', 'assist', 'co-teach', 'observer'];
+
+  function _renderAssignStaffList() {
+    var list = document.getElementById('assignStaffList');
+    if (!list) return;
+    if (_assignStaffState.length === 0) {
+      list.innerHTML = '<div style="color:var(--warm-gray);font-size:0.85rem;padding:6px 0;">No additional staff.</div>';
+      return;
+    }
+    var activeInstrs = instructorsData.filter(function(i) { return i.status === 'active'; });
+    list.innerHTML = _assignStaffState.map(function(entry, idx) {
+      var instrOpts = '<option value="">— Freeform name —</option>' +
+        activeInstrs.map(function(i) {
+          return '<option value="' + _esc(i.id) + '"' + (entry.instructorId === i.id ? ' selected' : '') + '>' + _esc(i.name) + '</option>';
+        }).join('');
+      var roleOpts = STAFF_ROLES.map(function(r) {
+        return '<option value="' + r + '"' + (entry.role === r ? ' selected' : '') + '>' + r + '</option>';
+      }).join('');
+      var freeformHidden = entry.instructorId ? ' style="display:none;"' : '';
+      return '<div data-staff-idx="' + idx + '" style="border:1px solid var(--cream-dark,#e5e0d8);border-radius:8px;padding:8px 10px;margin-bottom:6px;background:var(--surface-card,#fff);">' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr auto;gap:6px;align-items:center;">' +
+          '<select class="form-input" style="font-size:0.85rem;" onchange="window._assignStaffField(' + idx + ',\'instructorId\',this.value)">' + instrOpts + '</select>' +
+          '<select class="form-input" style="font-size:0.85rem;" onchange="window._assignStaffField(' + idx + ',\'role\',this.value)">' + roleOpts + '</select>' +
+          '<button type="button" aria-label="Remove" onclick="window._assignStaffRemove(' + idx + ')" style="background:transparent;border:0;color:var(--warm-gray);cursor:pointer;font-size:1.15rem;padding:0 6px;">×</button>' +
+        '</div>' +
+        '<input type="text" class="form-input" style="margin-top:6px;font-size:0.85rem;' + (entry.instructorId ? 'display:none;' : '') + '"' +
+          ' placeholder="Name (for ad-hoc staff not in the instructor list)" value="' + _esc(entry.freeformName || '') + '"' +
+          ' oninput="window._assignStaffField(' + idx + ',\'freeformName\',this.value)" data-staff-freeform>' +
+        '<input type="text" class="form-input" style="margin-top:6px;font-size:0.78rem;"' +
+          ' placeholder="Notes (optional)" value="' + _esc(entry.notes || '') + '"' +
+          ' oninput="window._assignStaffField(' + idx + ',\'notes\',this.value)">' +
+        '</div>';
+    }).join('');
+  }
+
+  window._assignAddStaffRow = function() {
+    _assignStaffState.push({ instructorId: null, freeformName: '', role: 'assist', notes: '' });
+    _renderAssignStaffList();
+  };
+  window._assignStaffRemove = function(idx) {
+    _assignStaffState.splice(idx, 1);
+    _renderAssignStaffList();
+  };
+  window._assignStaffField = function(idx, field, value) {
+    if (!_assignStaffState[idx]) return;
+    if (field === 'instructorId') {
+      _assignStaffState[idx].instructorId = value || null;
+      // Picking a real instructor implies we should clear the freeform name.
+      // Picking "freeform" again surfaces the name field.
+      if (value) _assignStaffState[idx].freeformName = '';
+      // Toggle the freeform input row visibility without a full re-render to
+      // preserve focus/cursor in other fields the operator may be editing.
+      var row = document.querySelector('[data-staff-idx="' + idx + '"]');
+      if (row) {
+        var freeform = row.querySelector('[data-staff-freeform]');
+        if (freeform) freeform.style.display = value ? 'none' : '';
+      }
+    } else {
+      _assignStaffState[idx][field] = value;
+    }
+  };
 
   async function saveSessionAssignment(sessionId, classId) {
     var instrId = document.getElementById('assignInstr').value || null;
@@ -2384,8 +2996,20 @@
     var session = sessionsData.find(function(s) { return s.id === sessionId; });
     if (!session) return;
 
-    // Conflict check
-    var conflicts = await checkConflicts(session.date, session.startTime, session.endTime, instrId, resId, sessionId);
+    // Normalize additional-staff editor state into a clean array.
+    // Drop entries with neither an instructorId nor a freeform name.
+    var cleanedStaff = (_assignStaffState || []).map(function(e) {
+      var entry = {
+        instructorId: e.instructorId || null,
+        freeformName: e.instructorId ? null : (e.freeformName || '').trim() || null,
+        role: STAFF_ROLES.indexOf(e.role) !== -1 ? e.role : 'assist',
+        notes: (e.notes || '').trim() || null
+      };
+      return entry;
+    }).filter(function(e) { return e.instructorId || e.freeformName; });
+
+    // Conflict check — primary + additional staff with linked instructorIds.
+    var conflicts = await checkConflicts(session.date, session.startTime, session.endTime, instrId, resId, sessionId, cleanedStaff);
     if (conflicts.length > 0) {
       MastAdmin.showToast('Warning: ' + conflicts[0], true);
       // Non-blocking — proceed anyway
@@ -2395,7 +3019,8 @@
       instructorId: instrId,
       instructorName: instrId && instructorsMap[instrId] ? instructorsMap[instrId].name : null,
       resourceId: resId,
-      resourceName: resId && resourcesMap[resId] ? resourcesMap[resId].name : null
+      resourceName: resId && resourcesMap[resId] ? resourcesMap[resId].name : null,
+      additionalStaff: cleanedStaff
     };
 
     try {
@@ -2816,6 +3441,13 @@
   window._instrView = function(id) { _instrViewId = id; renderInstructorList(); };
   window._instrViewBack = function() { _instrViewId = null; renderInstructorList(); };
   window._instrSave = function(id) { saveInstructor(id || null); };
+  window._instrRecoverSkill = async function(instrId, slug, label) {
+    // Orphan recovery: catalog entry for this slug was archived/deleted. Re-create
+    // it (idempotent) using the displayed label so future lookups resolve.
+    await ensureSkillInCatalog(label, 'instructor');
+    renderInstructorList();
+    MastAdmin.showToast('Skill added back to catalog');
+  };
   window._instrBackToList = function() { switchSubTab('instructors'); };
 
   // Resource callbacks
@@ -3106,9 +3738,18 @@
       html += '</div>';
 
       // ── Session info bar ──
-      html += '<div style="display:flex;gap:12px;align-items:center;margin-bottom:1rem;font-size:0.85rem;color:var(--warm-gray);">';
+      html += '<div style="display:flex;gap:12px;align-items:center;margin-bottom:1rem;font-size:0.85rem;color:var(--warm-gray);flex-wrap:wrap;">';
       if (session.instructorName) html += '<span>Instructor: ' + esc(session.instructorName) + '</span>';
       if (session.resourceName) html += '<span>Room: ' + esc(session.resourceName) + '</span>';
+      if (Array.isArray(session.additionalStaff) && session.additionalStaff.length > 0) {
+        var staffSummary = session.additionalStaff.map(function(e) {
+          var nm = e.instructorId && instructorsMap[e.instructorId]
+            ? instructorsMap[e.instructorId].name
+            : (e.freeformName || 'Unnamed');
+          return _esc(nm) + ' (' + _esc(e.role || 'assist') + ')';
+        }).join(', ');
+        html += '<span>Also: ' + staffSummary + '</span>';
+      }
       html += '<span style="margin-left:auto;">' + students.length + ' student' + (students.length !== 1 ? 's' : '') + '</span>';
       html += '</div>';
 
