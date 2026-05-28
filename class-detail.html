@@ -817,7 +817,7 @@
 
     var user = window.MastCart.getCurrentUser();
     if (user && !user.isAnonymous) {
-      addSeriesToCart();
+      _cdCheckCertEligibility(classId, className, addSeriesToCart);
       return;
     }
 
@@ -826,7 +826,7 @@
     var fbApp = window.MastCart.getFirebaseApp();
     if (!fbApp) return;
     var unsubscribe = fbApp.auth().onAuthStateChanged(function(u) {
-      if (u && !u.isAnonymous) { unsubscribe(); addSeriesToCart(); }
+      if (u && !u.isAnonymous) { unsubscribe(); _cdCheckCertEligibility(classId, className, addSeriesToCart); }
     });
   };
 
@@ -1173,7 +1173,7 @@
     // Auth gate: require signed-in (non-anonymous) user for class bookings
     var user = window.MastCart.getCurrentUser();
     if (user && !user.isAnonymous) {
-      checkPassAndBook();
+      _cdCheckCertEligibility(classId, className, checkPassAndBook);
       return;
     }
 
@@ -1231,11 +1231,65 @@
       var unsubscribe = fbApp.auth().onAuthStateChanged(function(u) {
         if (u && !u.isAnonymous) {
           unsubscribe();
-          checkPassAndBook();
+          _cdCheckCertEligibility(classId, className, checkPassAndBook);
         }
       });
     };
   };
+
+  // ── Phase 2B — class-eligibility gate ─────────────────────────────────
+  // Calls checkClassEligibility CF. If the class has no requiredCertTypeIds,
+  // or the caller holds all required certs, runs onAllow(). Otherwise renders
+  // a blocking modal explaining what's missing.
+  window._cdCheckCertEligibility = function(classId, className, onAllow) {
+    if (!classId || typeof onAllow !== 'function') return;
+    var fbApp = window.MastCart && window.MastCart.getFirebaseApp ? window.MastCart.getFirebaseApp() : null;
+    if (!fbApp || !fbApp.functions) { onAllow(); return; }
+    try {
+      var fn = fbApp.functions().httpsCallable('checkClassEligibility');
+      fn({ tenantId: TENANT_ID, classId: classId }).then(function(res) {
+        var d = (res && res.data) || {};
+        if (d.ok) { onAllow(); return; }
+        _cdShowEligibilityBlocked(className, d);
+      }).catch(function(err) {
+        // Fail-open on transient errors — don't block bookings on a CF outage.
+        // The admin will see a missed cert grant via the customer-detail page.
+        console.warn('[class-detail] checkClassEligibility failed, allowing booking:', err && err.message);
+        onAllow();
+      });
+    } catch (e) {
+      console.warn('[class-detail] eligibility gate setup failed:', e && e.message);
+      onAllow();
+    }
+  };
+
+  function _cdShowEligibilityBlocked(className, result) {
+    var names = Array.isArray(result.missingNames) && result.missingNames.length
+      ? result.missingNames
+      : (Array.isArray(result.missing) ? result.missing : []);
+    var listHtml = names.map(function(n) {
+      return '<li style="margin:4px 0;">' + esc(n) + '</li>';
+    }).join('');
+    var explainer = result.reason === 'no-customer-record'
+      ? 'We don\'t see a customer record linked to this account yet. Please contact the studio so they can set you up.'
+      : 'This class requires certifications you don\'t hold yet. Please contact the studio to arrange the prerequisites.';
+
+    var overlay = document.createElement('div');
+    overlay.className = 'cd-auth-overlay';
+    overlay.setAttribute('role', 'dialog');
+    overlay.setAttribute('aria-modal', 'true');
+    overlay.innerHTML =
+      '<div class="cd-auth-modal" style="max-width:440px;">' +
+        '<h3 style="margin-top:0;">Certification required</h3>' +
+        '<p style="font-size:0.9rem;">' + esc(explainer) + '</p>' +
+        (listHtml ? '<p style="font-size:0.85rem;margin-bottom:6px;"><strong>You need:</strong></p><ul style="margin:0 0 16px 20px;font-size:0.9rem;">' + listHtml + '</ul>' : '') +
+        '<button class="cd-auth-cancel-btn" id="cdEligDismiss">Got it</button>' +
+      '</div>';
+    document.body.appendChild(overlay);
+    function close() { overlay.remove(); }
+    document.getElementById('cdEligDismiss').onclick = close;
+    overlay.onclick = function(e) { if (e.target === overlay) close(); };
+  }
 })();
 </script>
 <script src="cart.js"></script>

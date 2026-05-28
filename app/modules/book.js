@@ -960,6 +960,10 @@
     // Ensure instructors/resources loaded for dropdowns
     if (!instructorsLoaded) await loadInstructors();
     if (!resourcesLoaded) await loadResources();
+    // Cert types for the "Required certifications" multi-select.
+    var _certTypesForClassForm = {};
+    try { _certTypesForClassForm = (await MastDB.get('admin/certTypes')) || {}; }
+    catch (_e) { _certTypesForClassForm = {}; }
 
     // Check if sessions exist (locks Type field on edit)
     var hasSessions = false;
@@ -1082,7 +1086,27 @@
       '<div class="book-field-hint">Leave blank for immediately open</div></div>' +
       '<div class="book-field"><label class="form-label">Enrollment Closes</label><input type="date" id="bcfEnrollClose" class="form-input" value="' + esc(cls && cls.enrollmentCloseDate ? cls.enrollmentCloseDate : '') + '">' +
       '<div class="book-field-hint">Leave blank for no cutoff</div></div>' +
-      '</div></div>' +
+      '</div>' +
+      // ── Required certifications (Phase 2B gating) ──
+      '<div class="book-field" style="margin-top:12px;">' +
+        '<label class="form-label">Required certifications</label>' +
+        '<div id="bcfRequiredCertsWrap" style="border:1px solid var(--cream-dark);border-radius:6px;padding:8px;max-height:160px;overflow-y:auto;">' +
+          (function() {
+            var existing = {};
+            if (cls && Array.isArray(cls.requiredCertTypeIds)) cls.requiredCertTypeIds.forEach(function(tid) { existing[tid] = true; });
+            var typeIds = Object.keys(_certTypesForClassForm).filter(function(tid) { return !_certTypesForClassForm[tid].archivedAt; });
+            if (!typeIds.length) return '<div style="color:var(--warm-gray);font-size:0.85rem;">No cert types defined. Add one at Book → Settings → Certification Types.</div>';
+            return typeIds.map(function(tid) {
+              var t = _certTypesForClassForm[tid];
+              return '<label style="display:flex;align-items:center;gap:6px;padding:4px 0;font-size:0.85rem;">' +
+                '<input type="checkbox" name="bcfRequiredCert" value="' + esc(tid) + '"' + (existing[tid] ? ' checked' : '') + '> ' + esc(t.name || tid) +
+              '</label>';
+            }).join('');
+          })() +
+        '</div>' +
+        '<div class="book-field-hint">Students must hold all checked certifications to enroll. Leave empty to allow any student.</div>' +
+      '</div>' +
+      '</div>' +
 
       // ── Assignment ──
       '<div class="book-form-section">' +
@@ -1211,6 +1235,13 @@
     data.resourceId = resId;
     data.resourceName = resId && resourcesMap[resId] ? resourcesMap[resId].name : null;
     data.requiredSkills = getSkillPickerSlugs('clsReqSkillPicker');
+
+    // Phase 2B — required certifications for booking eligibility.
+    var requiredCertTypeIds = [];
+    document.querySelectorAll('input[name="bcfRequiredCert"]:checked').forEach(function(el) {
+      requiredCertTypeIds.push(el.value);
+    });
+    data.requiredCertTypeIds = requiredCertTypeIds;
 
     // Series info
     if (type === 'series') {
