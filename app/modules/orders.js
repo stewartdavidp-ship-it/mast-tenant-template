@@ -3404,7 +3404,8 @@
       { key: 'money',      label: 'Money' },
       { key: 'terms',      label: 'Terms' }
     ];
-    var tabBarHtml = stepperHtml + '<div style="display:flex;gap:4px;margin-top:16px;border-bottom:1px solid var(--cream-dark,#e8e0d4);">';
+    var phaseActionsHtml = _renderCommissionPhaseActions(c, commId);
+    var tabBarHtml = stepperHtml + phaseActionsHtml + '<div style="display:flex;gap:4px;margin-top:16px;border-bottom:1px solid var(--cream-dark,#e8e0d4);">';
     tabs.forEach(function(t) {
       var isActive = commDetailActiveTab === t.key;
       tabBarHtml += '<button type="button" style="background:none;border:none;border-bottom:2px solid ' +
@@ -3500,6 +3501,56 @@
     });
     html += '</div>';
     return html;
+  }
+
+  // ===== Per-phase guidance + Back/Advance buttons =====
+  // Each phase has a short "what to do here" hint and a canonical entry status
+  // that the Advance button writes when the operator moves forward. The fine-
+  // grained status dropdown in the header stays for sub-statuses within a
+  // phase (e.g. deposit-paid, in-fabrication, cold-shop).
+  var COMMISSION_PHASE_GUIDE = {
+    inquiry:   { entry: 'new',               hint: 'Capture customer requirements. Confirm contact, notes, reference images, and inspiration pieces in the header above. Advance to <b>Quoted</b> when you\'re ready to draft a price &amp; timeline.' },
+    quoted:    { entry: 'quoted',            hint: 'Fill in <b>Price</b>, <b>Timeline</b>, and <b>Spec / Design Notes</b> on the Spec tab, then Save and Send Proposal. Advance to <b>Accepted</b> when the customer agrees.' },
+    accepted:  { entry: 'accepted',          hint: 'Collect deposit (Money tab), lock the design spec, and create the Production Job from the Spec tab. Advance to <b>In progress</b> when the build starts.' },
+    making:    { entry: 'design-locked',     hint: 'Track build progress in <b>Milestones</b>. Use the status dropdown above for sub-stages (design-locked / in-fabrication / cold-shop). Advance to <b>Invoiced</b> when the piece is ready to bill.' },
+    invoiced:  { entry: 'balance-invoiced',  hint: 'Send the balance invoice from the <b>Money</b> tab and confirm payment received. Advance to <b>Shipped</b> when the piece leaves the studio.' },
+    shipped:   { entry: 'shipped',           hint: 'Record tracking info on the Spec tab and notify the customer. Advance to <b>Delivered</b> once the customer confirms receipt.' },
+    delivered: { entry: 'delivered',         hint: 'Wrap up: optional thank-you follow-up and review request. Use the status dropdown to mark <b>completed</b> when there\'s nothing left to do.' }
+  };
+  function _renderCommissionPhaseActions(c, commId) {
+    var status = c.status || 'new';
+    if (status === 'declined' || status === 'canceled') {
+      return '<div style="margin-top:10px;padding:10px 14px;border-radius:8px;background:rgba(220,38,38,0.06);color:var(--warm-gray);font-size:0.85rem;">' +
+        'This commission is closed. Use the status dropdown to reopen if needed.' +
+      '</div>';
+    }
+    var idx = _commissionPhaseIndex(status);
+    if (idx < 0) idx = 0;
+    var phase = COMMISSION_PHASES[idx];
+    var guide = COMMISSION_PHASE_GUIDE[phase.key] || {};
+    var prevPhase = idx > 0 ? COMMISSION_PHASES[idx - 1] : null;
+    var nextPhase = idx < COMMISSION_PHASES.length - 1 ? COMMISSION_PHASES[idx + 1] : null;
+    var prevBtn = prevPhase ?
+      '<button type="button" class="btn btn-secondary" style="font-size:0.85rem;" ' +
+        'onclick="updateCommissionStatus(\'' + _jsAttr(commId) + '\',\'' + _jsAttr((COMMISSION_PHASE_GUIDE[prevPhase.key] || {}).entry || prevPhase.statuses[0]) + '\')">' +
+        '&larr; Back to ' + esc(prevPhase.label) +
+      '</button>' : '';
+    var nextBtn = nextPhase ?
+      '<button type="button" class="btn btn-primary" style="font-size:0.85rem;" ' +
+        'onclick="updateCommissionStatus(\'' + _jsAttr(commId) + '\',\'' + _jsAttr((COMMISSION_PHASE_GUIDE[nextPhase.key] || {}).entry || nextPhase.statuses[0]) + '\')">' +
+        'Advance to ' + esc(nextPhase.label) + ' &rarr;' +
+      '</button>' : '';
+    return '<div style="margin-top:10px;background:var(--cream,#f5f0e8);border-radius:8px;padding:14px 18px;">' +
+      '<div style="display:flex;flex-wrap:wrap;align-items:flex-start;gap:14px;">' +
+        '<div style="flex:1 1 320px;min-width:0;">' +
+          '<div style="font-size:0.78rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Current phase: ' + esc(phase.label) + '</div>' +
+          '<div style="font-size:0.85rem;line-height:1.45;">' + (guide.hint || '') + '</div>' +
+        '</div>' +
+        '<div style="display:flex;gap:8px;flex-shrink:0;align-items:center;">' +
+          prevBtn + nextBtn +
+        '</div>' +
+      '</div>' +
+    '</div>';
   }
 
   // ===== W2.1: Thread tab — inline CS-ticket messages =====
