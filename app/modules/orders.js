@@ -718,23 +718,11 @@
     var status = o.status || 'placed';
     var num = esc(getOrderDisplayNumber(o));
 
-    // Action buttons — single next-action button per status + cancel
+    // Workflow-orthogonal action buttons only. Forward motion through the
+    // workflow (Confirm / Build / Pack / Packed / Shipped / Delivered) now
+    // lives in the MastFlow header below — those status-specific buttons
+    // were removed when the pick/ship workflow was migrated to MastFlow.
     var actionsHtml = '';
-    if (status === 'placed') {
-      actionsHtml += '<button class="btn btn-primary" onclick="openTriageDialog(\'' + esc(orderId) + '\')">Confirm Order</button>';
-    } else if (status === 'confirmed') {
-      actionsHtml += '<button class="btn btn-secondary" onclick="transitionOrder(\'' + esc(orderId) + '\', \'building\')">Build</button>';
-      actionsHtml += '<button class="btn btn-primary" onclick="packAndNavigate(\'' + esc(orderId) + '\')">Pack</button>';
-    } else if (status === 'building') {
-      actionsHtml += '<button class="btn btn-primary" onclick="packAndNavigate(\'' + esc(orderId) + '\')">Pack</button>';
-    } else if (status === 'pack' || status === 'packing') {
-      actionsHtml += '<button class="btn btn-primary" onclick="transitionOrder(\'' + esc(orderId) + '\', \'packed\')">Packed</button>';
-    } else if (status === 'packed') {
-      actionsHtml += '<button class="btn btn-primary" onclick="openSimpleShipDialog(\'' + esc(orderId) + '\')">Shipped</button>';
-    } else if (status === 'shipped') {
-      actionsHtml += '<button class="btn btn-primary" onclick="transitionOrder(\'' + esc(orderId) + '\', \'delivered\')">Delivered</button>';
-    }
-    // Cancel available for non-terminal statuses
     var canCancel = (ORDER_VALID_TRANSITIONS[status] || []).indexOf('cancelled') !== -1;
     if (canCancel) {
       actionsHtml += '<button class="btn btn-danger" onclick="openCancelOrderModal(\'' + esc(orderId) + '\')">Cancel Order</button>';
@@ -1128,11 +1116,12 @@
         '</div>' +
         '<div class="order-actions">' + actionsHtml + '</div>' +
       '</div>' +
-      renderOrderProgress(status) +
       // MastFlow workflow header — populated async by _initOrderWorkflowHeader.
-      // Renders stepper + checklist + Advance/Back/branch buttons. Lives in
-      // parallel with the existing inline action buttons (above) and the
-      // legacy renderOrderProgress widget; convergence is future work.
+      // This is now the only workflow surface — the legacy renderOrderProgress
+      // stepper + status-specific inline action buttons have been removed.
+      // Forward motion (Confirm Order → Build → Pack → Ship → Deliver) goes
+      // through the Advance button below; specialized dialogs (triage,
+      // shipping) are intercepted onAdvance for the relevant target phases.
       '<div id="orderWorkflowHeader" style="margin:14px 0;font-size:0.85rem;color:var(--warm-gray);">Loading workflow…</div>' +
       '<div class="order-detail-section">' +
         '<div class="order-detail-section-title">Items</div>' +
@@ -1242,6 +1231,23 @@
     if (!host) return;
     MastFlow.renderHeader('pickship', o, {
       onAdvance: function(targetPhaseKey) {
+        // Intercept specific transitions to open the existing rich-capture
+        // dialogs instead of doing a plain status write. The dialogs write
+        // their fields directly (fulfillment, tracking, label, etc.); the
+        // MastFlow record subscription picks up the status change and
+        // re-renders. This keeps existing complex flows intact while
+        // making the engine the operator's primary surface.
+        //   - confirmed: triage dialog drives per-item inventory decision
+        //     and writes o.fulfillment.
+        //   - shipped:  ship dialog captures tracking + label + carrier.
+        if (targetPhaseKey === 'confirmed' && !o.fulfillment && typeof openTriageDialog === 'function') {
+          openTriageDialog(orderId);
+          return;
+        }
+        if (targetPhaseKey === 'shipped' && !(o.shipping && (o.shipping.trackingNumber || o.shipping.tracking_number)) && typeof openSimpleShipDialog === 'function') {
+          openSimpleShipDialog(orderId);
+          return;
+        }
         _doOrderTransition(orderId, targetPhaseKey, { expectedFromPhase: o.__workflow && o.__workflow.phase || null });
       },
       onBack: function(targetPhaseKey) {
