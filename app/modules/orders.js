@@ -1163,10 +1163,11 @@
 
   function _initOrderWorkflowHeader(orderId) {
     if (!window.MastAdmin || typeof MastAdmin.loadModule !== 'function') return;
-    Promise.all([
-      MastAdmin.loadModule('workflowEngine'),
-      MastAdmin.loadModule('pickshipWorkflow')
-    ]).then(function() {
+    // Sequential: engine first (it must register window.MastFlow before the
+    // spec's IIFE checks for it), then the spec.
+    MastAdmin.loadModule('workflowEngine').then(function() {
+      return MastAdmin.loadModule('pickshipWorkflow');
+    }).then(function() {
       if (!window.MastFlow) return;
       _registerOrderTargetResolvers();
       _subscribeOrderRecord(orderId);
@@ -3606,10 +3607,13 @@
 
   function _initCommissionWorkflowHeader(commId) {
     if (!window.MastAdmin || typeof MastAdmin.loadModule !== 'function') return;
-    Promise.all([
-      MastAdmin.loadModule('workflowEngine'),
-      MastAdmin.loadModule('commissionsWorkflow')
-    ]).then(function() {
+    // Sequential load: engine must finish parsing (so window.MastFlow is set)
+    // BEFORE the spec runs, because the spec's IIFE bails early if MastFlow
+    // isn't on window yet. Parallel Promise.all() races on small specs that
+    // load faster than the engine.
+    MastAdmin.loadModule('workflowEngine').then(function() {
+      return MastAdmin.loadModule('commissionsWorkflow');
+    }).then(function() {
       if (!window.MastFlow) return;
       _registerCommissionTargetResolvers();
       _subscribeCommissionRecord(commId);
