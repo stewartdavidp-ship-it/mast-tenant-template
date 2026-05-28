@@ -187,7 +187,8 @@
         return Promise.resolve({ req: r, satisfied: false, value: '(test-error: ' + e.message + ')' });
       }
       return Promise.resolve(result).then(function(ok) {
-        return { req: r, satisfied: !!ok, value: undefined };
+        // value:null (not undefined) — Firestore rejects undefined in setDoc().
+        return { req: r, satisfied: !!ok, value: null };
       }, function(err) {
         console.error('[MastFlow] async requirement test rejected:', r.key, err);
         return { req: r, satisfied: false, value: '(test-error)' };
