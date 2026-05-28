@@ -3391,6 +3391,12 @@
       '</div>' +
     '</div>';
 
+    // D6 — horizontal phase stepper above the tabs. Collapses the 16-value
+    // c.status enum into 7 phases so the operator can see at a glance what's
+    // done, what's current, and what's left. Terminal-failure states render
+    // a single pill instead of a progressed stepper.
+    var stepperHtml = _renderCommissionPhaseStepper(c);
+
     var tabs = [
       { key: 'spec',       label: 'Spec' },
       { key: 'thread',     label: 'Thread' + (c.ticketId ? '' : ' (—)') },
@@ -3398,7 +3404,7 @@
       { key: 'money',      label: 'Money' },
       { key: 'terms',      label: 'Terms' }
     ];
-    var tabBarHtml = '<div style="display:flex;gap:4px;margin-top:16px;border-bottom:1px solid var(--cream-dark,#e8e0d4);">';
+    var tabBarHtml = stepperHtml + '<div style="display:flex;gap:4px;margin-top:16px;border-bottom:1px solid var(--cream-dark,#e8e0d4);">';
     tabs.forEach(function(t) {
       var isActive = commDetailActiveTab === t.key;
       tabBarHtml += '<button type="button" style="background:none;border:none;border-bottom:2px solid ' +
@@ -3434,6 +3440,66 @@
     } else if (commDetailActiveTab === 'milestones') {
       _loadCommissionMilestones(commId);
     }
+  }
+
+  // ===== D6 — Phase stepper above commission detail tabs =====
+  // Maps the 16-value c.status enum into 7 visible phases. Each phase lists
+  // every status that should light it up; the first phase whose statuses
+  // include c.status is the current one.
+  var COMMISSION_PHASES = [
+    { key: 'inquiry',    label: 'Inquiry',    statuses: ['new', 'in-discussion'] },
+    { key: 'quoted',     label: 'Quoted',     statuses: ['quoted'] },
+    { key: 'accepted',   label: 'Accepted',   statuses: ['accepted', 'deposit-paid'] },
+    { key: 'making',     label: 'In progress', statuses: ['design-locked', 'in-fabrication', 'cold-shop'] },
+    { key: 'invoiced',   label: 'Invoiced',   statuses: ['balance-invoiced'] },
+    { key: 'shipped',    label: 'Shipped',    statuses: ['shipped', 'built'] },
+    { key: 'delivered',  label: 'Delivered',  statuses: ['delivered', 'followed-up', 'completed'] }
+  ];
+  function _commissionPhaseIndex(status) {
+    if (!status) return 0;
+    for (var i = 0; i < COMMISSION_PHASES.length; i++) {
+      if (COMMISSION_PHASES[i].statuses.indexOf(status) !== -1) return i;
+    }
+    return -1; // unknown / terminal-failure status
+  }
+  function _renderCommissionPhaseStepper(c) {
+    var status = c.status || 'new';
+    // Terminal-failure states get a single pill instead of a stepper.
+    if (status === 'declined' || status === 'canceled') {
+      var label = status.charAt(0).toUpperCase() + status.slice(1);
+      return '<div style="margin-top:14px;padding:10px 14px;border-radius:8px;background:rgba(220,38,38,0.08);color:var(--danger,#b81d1d);font-size:0.85rem;font-weight:600;display:inline-flex;align-items:center;gap:6px;">' +
+        '✕ ' + label +
+      '</div>';
+    }
+    var currentIdx = _commissionPhaseIndex(status);
+    var html = '<div style="margin-top:14px;display:flex;align-items:center;gap:0;overflow-x:auto;padding-bottom:4px;" aria-label="Commission progress" role="list">';
+    COMMISSION_PHASES.forEach(function(p, i) {
+      var state = i < currentIdx ? 'done' : (i === currentIdx ? 'current' : 'upcoming');
+      var dotBg, dotColor, dotBorder, labelColor, labelWeight;
+      if (state === 'done') {
+        dotBg = 'var(--teal)'; dotColor = '#fff'; dotBorder = 'var(--teal)';
+        labelColor = 'var(--teal)'; labelWeight = '600';
+      } else if (state === 'current') {
+        dotBg = '#fff'; dotColor = 'var(--teal)'; dotBorder = 'var(--teal)';
+        labelColor = 'var(--teal)'; labelWeight = '700';
+      } else {
+        dotBg = 'transparent'; dotColor = 'var(--warm-gray)'; dotBorder = 'var(--cream-dark)';
+        labelColor = 'var(--warm-gray)'; labelWeight = '500';
+      }
+      // Connector line to the next phase (skip after last).
+      var connector = '';
+      if (i < COMMISSION_PHASES.length - 1) {
+        var lineColor = i < currentIdx ? 'var(--teal)' : 'var(--cream-dark)';
+        connector = '<div style="flex:1;height:2px;background:' + lineColor + ';min-width:18px;"></div>';
+      }
+      var glyph = state === 'done' ? '✓' : String(i + 1);
+      html += '<div role="listitem" style="display:flex;align-items:center;gap:6px;flex-shrink:0;" title="' + esc(p.label) + '">' +
+        '<div style="width:22px;height:22px;border-radius:50%;background:' + dotBg + ';color:' + dotColor + ';border:2px solid ' + dotBorder + ';display:inline-flex;align-items:center;justify-content:center;font-size:0.72rem;font-weight:700;flex-shrink:0;">' + glyph + '</div>' +
+        '<span style="font-size:0.78rem;color:' + labelColor + ';font-weight:' + labelWeight + ';white-space:nowrap;">' + esc(p.label) + '</span>' +
+      '</div>' + connector;
+    });
+    html += '</div>';
+    return html;
   }
 
   // ===== W2.1: Thread tab — inline CS-ticket messages =====
