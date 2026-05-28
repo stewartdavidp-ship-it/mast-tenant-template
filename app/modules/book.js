@@ -39,6 +39,13 @@
   var PASS_PRIORITIES = ['high', 'medium', 'low'];
   var passDefsData = [];
   var passDefsLoaded = false;
+  // B9 — passes read-view state. When set, renderPassDefList renders the
+  // read-only detail view for that pass def instead of the list.
+  var _passViewPid = null;
+  // Cache of per-pass-def aggregate history { bought, unused, used }, keyed
+  // by passDefId. Lazy-populated on first detail-view open per session.
+  var _passHistoryByDef = {};
+  var _passHistoryLoadingFor = null;
 
   // Calendar state
   var calendarYear = new Date().getFullYear();
@@ -1661,6 +1668,13 @@
     var container = document.getElementById('bookPassesTable');
     if (!container) return;
 
+    // B9 — when a pass is selected, render the read-only detail view instead.
+    if (_passViewPid) {
+      var p = passDefsData.find(function(pd) { return pd.id === _passViewPid; });
+      if (!p) { _passViewPid = null; /* fall through to list */ }
+      else { container.innerHTML = _renderPassDetailView(p); _kickPassHistoryLoad(p.id); return; }
+    }
+
     // URL-driven filters from MCP admin links (#passes?...)
     var rp = (typeof window.getRouteParams === 'function') ? window.getRouteParams() : {};
     var urlStatus = (rp && typeof rp.status === 'string') ? rp.status : '';
@@ -1710,14 +1724,17 @@
       return;
     }
 
+    // B9 — list now: row click → read-only detail view. Pencil/Actions
+    // column dropped (matches D9 Book classes pattern). Detail view has its
+    // own Edit button.
     html += '<table class="data-table"><thead><tr>' +
-      '<th>Name</th><th>Type</th><th>Price</th><th>Visits</th><th>Validity</th><th>Priority</th><th>Status</th><th>Actions</th>' +
+      '<th>Name</th><th>Type</th><th>Price</th><th>Visits</th><th>Validity</th><th>Priority</th><th>Status</th>' +
       '</tr></thead><tbody>';
 
     filtered.forEach(function(p) {
       var visits = p.visitCount ? p.visitCount + ' visits' : 'Unlimited';
       var validity = p.validityDays ? p.validityDays + ' days' : 'No limit';
-      html += '<tr>' +
+      html += '<tr style="cursor:pointer;" onclick="window._passView(\'' + esc(p.id) + '\')">' +
         '<td><strong>' + esc(p.name) + '</strong>' + (p.introOnly ? '<br><span style="font-size:0.78rem;color:var(--amber);">Intro only</span>' : '') + '</td>' +
         '<td><span style="' + badgeStyle(PASS_TYPE_BADGE_COLORS, p.type) + '">' + esc(p.type) + '</span></td>' +
         '<td>' + formatPrice(p.priceCents) + (p.autoRenew ? '<br><span style="font-size:0.78rem;color:var(--warm-gray);">/' + (p.renewFrequency || 'month') + '</span>' : '') + '</td>' +
@@ -1725,12 +1742,110 @@
         '<td>' + esc(validity) + '</td>' +
         '<td><span style="font-size:0.78rem;">' + esc(p.priority || 'medium') + '</span></td>' +
         '<td><span style="' + badgeStyle(STATUS_BADGE_COLORS, p.status) + '">' + esc(p.status) + '</span></td>' +
-        '<td><div class="event-actions"><button class="btn-icon" onclick="window._passEdit(\'' + esc(p.id) + '\')" title="Edit">&#9998;</button></div></td>' +
         '</tr>';
     });
 
     html += '</tbody></table>';
     container.innerHTML = html;
+  }
+
+  // ============================================================
+  // B9 — Pass Definition Read-Only Detail View
+  // ============================================================
+  function _renderPassDetailView(p) {
+    var visits = p.visitCount ? (p.visitCount + ' visits') : 'Unlimited';
+    var validity = p.validityDays ? (p.validityDays + ' days') : 'No limit';
+    var price = formatPrice(p.priceCents) + (p.autoRenew ? ' /' + (p.renewFrequency || 'month') : '');
+    function _row(label, val) {
+      return '<div style="display:grid;grid-template-columns:160px 1fr;gap:8px 16px;padding:8px 0;border-bottom:1px solid var(--cream-dark);">' +
+        '<span style="font-size:0.78rem;color:var(--warm-gray);font-weight:600;letter-spacing:0.04em;text-transform:uppercase;">' + label + '</span>' +
+        '<span style="font-size:0.9rem;">' + val + '</span>' +
+      '</div>';
+    }
+    var hist = _passHistoryByDef[p.id];
+    var historyBlock;
+    if (hist) {
+      historyBlock = '<div style="display:flex;gap:12px;flex-wrap:wrap;">' +
+        _kpiBox('Sold', hist.bought, 'instances purchased') +
+        _kpiBox('Active', hist.unused, 'unused / available') +
+        _kpiBox('Used', hist.used, 'fully consumed') +
+        (hist.revoked > 0 ? _kpiBox('Revoked', hist.revoked, 'admin-revoked') : '') +
+      '</div>' +
+      (hist.scannedAccounts != null
+        ? '<div style="font-size:0.72rem;color:var(--warm-gray);margin-top:8px;">scanned ' + hist.scannedAccounts + ' customer accounts</div>'
+        : '');
+    } else if (_passHistoryLoadingFor === p.id) {
+      historyBlock = '<div style="color:var(--warm-gray);font-size:0.9rem;">Loading instance history…</div>';
+    } else {
+      historyBlock = '<div style="color:var(--warm-gray);font-size:0.9rem;">History not yet computed.</div>';
+    }
+    return '<div style="padding:8px 0 24px;">' +
+      '<div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap;">' +
+        '<button class="btn btn-secondary btn-small" onclick="window._passBackToList()" title="Back to list">← Back</button>' +
+        '<h3 style="margin:0;flex:1;min-width:200px;">' + esc(p.name) + '</h3>' +
+        '<span style="' + badgeStyle(PASS_TYPE_BADGE_COLORS, p.type) + '">' + esc(p.type) + '</span>' +
+        '<span style="' + badgeStyle(STATUS_BADGE_COLORS, p.status) + '">' + esc(p.status) + '</span>' +
+        '<button class="btn btn-primary btn-small" onclick="window._passEdit(\'' + esc(p.id) + '\')">Edit</button>' +
+      '</div>' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:start;">' +
+        '<div style="border:1px solid var(--cream-dark);border-radius:10px;padding:16px;background:var(--surface-card,#fff);">' +
+          '<h4 style="margin:0 0 12px;font-size:0.9rem;font-weight:600;">Definition</h4>' +
+          _row('Price', price) +
+          _row('Visits', esc(visits)) +
+          _row('Validity', esc(validity)) +
+          _row('Priority', esc(p.priority || 'medium')) +
+          (p.introOnly ? _row('Intro only', '<span style="color:var(--amber);">Yes</span>') : '') +
+          (p.autoRenew ? _row('Auto-renew', 'Yes · ' + esc(p.renewFrequency || 'month')) : '') +
+          (p.description ? _row('Description', '<span style="white-space:pre-wrap;">' + esc(p.description) + '</span>') : '') +
+        '</div>' +
+        '<div style="border:1px solid var(--cream-dark);border-radius:10px;padding:16px;background:var(--surface-card,#fff);">' +
+          '<h4 style="margin:0 0 12px;font-size:0.9rem;font-weight:600;">Instance history</h4>' +
+          historyBlock +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  }
+
+  function _kpiBox(label, val, sub) {
+    return '<div style="flex:1;min-width:90px;padding:10px 12px;border:1px solid var(--cream-dark);border-radius:8px;background:var(--cream,#fbf6ee);">' +
+      '<div style="font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.04em;font-weight:600;">' + esc(label) + '</div>' +
+      '<div style="font-size:1.6rem;font-weight:700;font-family:monospace;">' + (val == null ? '—' : String(val)) + '</div>' +
+      (sub ? '<div style="font-size:0.72rem;color:var(--warm-gray);">' + esc(sub) + '</div>' : '') +
+    '</div>';
+  }
+
+  // One-shot scan of public/accounts to count pass instances for this def.
+  // v1: scans every customer account (small/medium tenants only). For larger
+  // tenants a denormalized index per pass def would replace this. Cached for
+  // the session in _passHistoryByDef.
+  function _kickPassHistoryLoad(passDefId) {
+    if (_passHistoryByDef[passDefId]) return;
+    if (_passHistoryLoadingFor === passDefId) return;
+    _passHistoryLoadingFor = passDefId;
+    MastDB.get('public/accounts').then(function(accs) {
+      var bought = 0, unused = 0, used = 0, revoked = 0;
+      var scanned = 0;
+      Object.keys(accs || {}).forEach(function(uid) {
+        scanned++;
+        var pmap = accs[uid] && accs[uid].passes;
+        if (!pmap) return;
+        Object.keys(pmap).forEach(function(pid) {
+          var inst = pmap[pid];
+          if (!inst || inst.passDefId !== passDefId) return;
+          bought++;
+          if (inst.status === 'revoked') revoked++;
+          else if (inst.status === 'used' || (typeof inst.visitsRemaining === 'number' && inst.visitsRemaining <= 0)) used++;
+          else unused++;
+        });
+      });
+      _passHistoryByDef[passDefId] = { bought: bought, unused: unused, used: used, revoked: revoked, scannedAccounts: scanned };
+    }).catch(function() {
+      _passHistoryByDef[passDefId] = { bought: 0, unused: 0, used: 0, revoked: 0, scannedAccounts: 0 };
+    }).then(function() {
+      _passHistoryLoadingFor = null;
+      // Re-render only if the same pass is still in view.
+      if (_passViewPid === passDefId) renderPassDefList();
+    });
   }
 
   // ============================================================
@@ -2443,6 +2558,8 @@
   window._passFilterStatus = function() { renderPassDefList(); };
   window._passCreate = function() { showPassDefForm(null); };
   window._passEdit = function(id) { showPassDefForm(id); };
+  window._passView = function(id) { _passViewPid = id; renderPassDefList(); };
+  window._passBackToList = function() { _passViewPid = null; renderPassDefList(); };
   window._passSave = function(id) { savePassDefinition(id || null); };
   window._passBackToList = function() { switchSubTab('passes'); };
   window._passToggleFields = function() {
