@@ -2330,13 +2330,12 @@ function renderStoryDetail(storyId) {
     }).sort(function(a, b) { return (a.order || 0) - (b.order || 0); });
   }
 
-  // Action buttons. OvA5VhvI — operator feedback was "don't see way to add
-  // photos". Photos on stories come from production-build media (see
-  // openStoryCuration); the relabeled button surfaces the path clearly.
+  // Action bar — Add photos · Edit always available (the unified editor
+  // supports job-linked, composer-spawned, and freeform-orphan stories).
+  // Routes through openStoryEditor which resolves the right context from
+  // the story doc itself.
   var actions = '<button class="btn btn-secondary" style="font-size:0.78rem;padding:4px 10px;" onclick="previewStory(\'' + esc(storyId) + '\')">👁 Preview</button> ';
-  if (jobId) {
-    actions += '<button class="btn btn-primary" style="font-size:0.78rem;padding:4px 10px;" onclick="openStoryCuration(\'' + esc(jobId) + '\')">📸 Add photos · Edit</button> ';
-  }
+  actions += '<button class="btn btn-primary" style="font-size:0.78rem;padding:4px 10px;" onclick="openStoryEditor(\'' + esc(storyId) + '\')">📸 Add photos · Edit</button> ';
   if (story.status === 'published') {
     actions += '<button class="btn btn-secondary" style="font-size:0.78rem;padding:4px 10px;" onclick="unpublishStoryFromDetail(\'' + esc(storyId) + '\')">Unpublish</button>';
   } else if (story.status === 'draft' && entryCount > 0) {
@@ -2353,18 +2352,7 @@ function renderStoryDetail(storyId) {
       '<span style="font-size:0.85rem;color:var(--warm-gray);">' + entryCount + ' entr' + (entryCount === 1 ? 'y' : 'ies') + '</span>' +
       (story.publishedAt ? '<span style="font-size:0.85rem;color:var(--warm-gray);">Published ' + getTimeAgo(story.publishedAt) + '</span>' : '') +
     '</div>' +
-    '<div style="display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap;">' + actions + '</div>' +
-    // OvA5VhvI — surface the photo-source model directly on the detail
-    // surface so operators stop hunting for a non-existent "add photo"
-    // affordance. When the story has a linked job, point at the button.
-    // When it doesn't, explain the constraint and offer the path forward.
-    (jobId
-      ? '<div style="font-size:0.78rem;color:var(--warm-gray);background:var(--cream,#fbf6ee);border:1px solid var(--cream-dark);border-radius:6px;padding:8px 12px;margin-bottom:16px;">' +
-          '📷 Photos on this story come from media captured during the linked production job\'s builds. Use <strong>📸 Add photos · Edit</strong> above to pick which build photos appear and add captions / milestones.' +
-        '</div>'
-      : '<div style="font-size:0.85rem;color:var(--text);background:rgba(245,158,11,0.10);border:1px solid rgba(245,158,11,0.35);border-radius:6px;padding:10px 14px;margin-bottom:16px;">' +
-          '⚠️ This story isn\'t linked to a production job, so there\'s no way to add photos directly. Stories are curated from build media — to add photos here, either link this story to a completed job (set <code>jobId</code> on the story doc) or create a new story from a job via <strong>Curate Story</strong> on the job detail surface.' +
-        '</div>');
+    '<div style="display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap;">' + actions + '</div>';
 
   // Show entries
   if (entries.length > 0) {
@@ -2661,42 +2649,101 @@ async function loadJobStoryStatus(jobId) {
   }
 }
 
-async function openStoryCuration(jobId) {
-  storyCurationJobId = jobId;
-  var job = productionJobs[jobId];
-  if (!job) return;
+// Unified editor entry point for orphan + composer-spawned stories (no jobId).
+// Loads the story doc, resolves jobId / sourceContentId from it, and routes to
+// openStoryCuration with the right context. When there's no jobId the editor
+// renders without the build-media section but with content-images (if
+// sourceContentId is set) and the freeform upload section (always).
+async function openStoryEditor(storyId) {
+  var story = storiesData[storyId];
+  if (!story) {
+    if (typeof showToast === 'function') showToast('Story not found', true);
+    return;
+  }
+  if (story.jobId) {
+    // Job-linked path — preserves existing behaviour. queryByJob picks the
+    // same story up so editing-by-job and editing-by-story land in the same
+    // editor state.
+    return openStoryCuration(story.jobId);
+  }
+  // Orphan / composer-spawned path — no job context, no build media.
+  return openStoryCuration(null, { story: story, storyId: storyId });
+}
+
+async function openStoryCuration(jobId, opts) {
+  opts = opts || {};
+  storyCurationJobId = jobId || null;
 
   // Determine if we should render inline (on stories tab) or in modal
   var isInline = currentRoute === 'stories';
 
-  // Load all media from all builds for this job
-  var builds = job.builds || {};
+  var job = jobId ? productionJobs[jobId] : null;
+  if (jobId && !job) return; // unknown job id — preserve prior fail-safe
+
+  // Load all media from all builds for this job (only when job-linked).
+  var builds = job ? (job.builds || {}) : {};
   var buildKeys = Object.keys(builds).sort(function(a, b) {
     return (builds[a].buildNumber || 0) - (builds[b].buildNumber || 0);
   });
 
   var allMedia = {};
-  for (var i = 0; i < buildKeys.length; i++) {
-    var bk = buildKeys[i];
-    try {
-      var media = await MastDB.buildMedia.get(bk);
-      if (media) allMedia[bk] = media;
-    } catch (e) { /* skip */ }
+  if (jobId) {
+    for (var i = 0; i < buildKeys.length; i++) {
+      var bk = buildKeys[i];
+      try {
+        var media = await MastDB.buildMedia.get(bk);
+        if (media) allMedia[bk] = media;
+      } catch (e) { /* skip */ }
+    }
   }
 
-  // Load existing story draft if any
-  var existingStory = null;
-  var existingStoryId = null;
-  try {
-    var stories = (await MastDB.stories.queryByJob(jobId)) || {};
-    var sKeys = Object.keys(stories);
-    if (sKeys.length > 0) {
-      existingStoryId = sKeys[0];
-      existingStory = stories[sKeys[0]];
-    }
-  } catch (e) { /* no existing story */ }
+  // Resolve existing story: from explicit opts (orphan path) or via queryByJob
+  // (job-linked path). queryByJob returns the first existing story for the
+  // job, which preserves the prior "one story per job" assumption.
+  var existingStory = opts.story || null;
+  var existingStoryId = opts.storyId || null;
+  if (jobId && !existingStory) {
+    try {
+      var stories = (await MastDB.stories.queryByJob(jobId)) || {};
+      var sKeys = Object.keys(stories);
+      if (sKeys.length > 0) {
+        existingStoryId = sKeys[0];
+        existingStory = stories[sKeys[0]];
+      }
+    } catch (e) { /* no existing story */ }
+  }
 
-  var html = buildStoryCurationHtml(job, builds, buildKeys, allMedia, existingStory, existingStoryId, isInline);
+  // Resolve content-doc images for composer-spawned stories so the editor
+  // can show them as a selectable source. Lazy — only fetch if the story
+  // has sourceContentId set.
+  var contentImages = [];
+  if (existingStory && existingStory.sourceContentId) {
+    try {
+      var content = await MastDB.get('admin/content/' + existingStory.sourceContentId);
+      if (content && Array.isArray(content.images)) {
+        contentImages = content.images.filter(function(im) {
+          return im && (typeof im === 'string' ? im : im.url);
+        }).map(function(im) {
+          return typeof im === 'string' ? { url: im } : im;
+        });
+      }
+    } catch (e) { /* content gone — leave empty */ }
+  }
+  // Composer-spawned stories may have inherited images on the story doc
+  // itself (story.images[]) before any entries were built. Merge those in
+  // alongside content-doc images so the operator can promote them.
+  if (existingStory && Array.isArray(existingStory.images)) {
+    existingStory.images.forEach(function(im) {
+      if (!im) return;
+      var url = typeof im === 'string' ? im : im.url;
+      if (!url) return;
+      if (!contentImages.some(function(c) { return c.url === url; })) {
+        contentImages.push({ url: url });
+      }
+    });
+  }
+
+  var html = buildStoryCurationHtml(job, builds, buildKeys, allMedia, existingStory, existingStoryId, isInline, contentImages);
 
   emitTestingEvent('openStoryCuration', {});
 
@@ -2743,9 +2790,10 @@ async function openStoryCuration(jobId) {
   renderStoryEntries();
 }
 
-function buildStoryCurationHtml(job, builds, buildKeys, allMedia, existingStory, existingStoryId, isInline) {
-  var totalPhotos = 0;
-  buildKeys.forEach(function(bk) { totalPhotos += Object.keys(allMedia[bk] || {}).length; });
+function buildStoryCurationHtml(job, builds, buildKeys, allMedia, existingStory, existingStoryId, isInline, contentImages) {
+  contentImages = contentImages || [];
+  var totalBuildPhotos = 0;
+  buildKeys.forEach(function(bk) { totalBuildPhotos += Object.keys(allMedia[bk] || {}).length; });
 
   var html = '';
 
@@ -2756,32 +2804,45 @@ function buildStoryCurationHtml(job, builds, buildKeys, allMedia, existingStory,
     html += '<button class="detail-back" onclick="backToStoriesList()">← Back to Stories</button>';
   }
 
+  // Header — provenance label varies by story source. Job-linked, content-
+  // spawned, and freeform orphan all use the same editor; the label tells the
+  // operator where photos can come from.
+  var provenance = '';
+  if (job) provenance = 'From job: <strong style="color:var(--text);">' + esc(job.name || 'Untitled') + '</strong>';
+  else if (existingStory && existingStory.sourceContentId) provenance = 'From content composer';
+  else provenance = 'Freeform story';
+
   html += '<div class="section-header" style="margin-bottom:4px;">' +
     '<h2>' + (existingStory ? 'Edit Story' : 'Create Story') + '</h2>' +
   '</div>' +
-  '<div style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:20px;">From job: <strong style="color:var(--text);">' + esc(job.name || 'Untitled') + '</strong></div>';
+  '<div style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:20px;">' + provenance + '</div>';
 
   // Title input
+  var defaultTitle = '';
+  if (existingStory) defaultTitle = existingStory.title || '';
+  else if (job) defaultTitle = job.name || '';
   html += '<div class="form-group" style="margin-bottom:20px;">' +
     '<label style="font-weight:600;font-size:0.85rem;margin-bottom:4px;display:block;">Story Title</label>' +
-    '<input type="text" id="storyTitle" value="' + esc(existingStory ? existingStory.title : job.name || '') + '" placeholder="Give your story a title..." style="font-size:1rem;width:100%;padding:10px 14px;border:1px solid var(--cream-dark);border-radius:8px;box-sizing:border-box;">' +
+    '<input type="text" id="storyTitle" value="' + esc(defaultTitle) + '" placeholder="Give your story a title..." style="font-size:1rem;width:100%;padding:10px 14px;border:1px solid var(--cream-dark);border-radius:8px;box-sizing:border-box;">' +
   '</div>';
 
-  // Photo selection per build
-  if (totalPhotos > 0) {
+  // Track which photos are already in the draft so source pickers can show
+  // selection state consistently across all three sources.
+  var selectedMediaIds = {};
+  if (existingStory && existingStory.entries) {
+    Object.values(existingStory.entries).forEach(function(e) {
+      if (e.mediaUrl) selectedMediaIds[e.mediaUrl] = true;
+    });
+  }
+
+  // ── Source 1: Build media (when job-linked) ──
+  if (job && totalBuildPhotos > 0) {
     html += '<div class="prod-detail-section">' +
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">' +
-        '<strong>Select Photos</strong>' +
-        '<span style="font-size:0.78rem;color:var(--warm-gray);">' + totalPhotos + ' available</span>' +
+        '<strong>From build media</strong>' +
+        '<span style="font-size:0.78rem;color:var(--warm-gray);">' + totalBuildPhotos + ' available</span>' +
       '</div>' +
       '<p style="font-size:0.85rem;color:var(--warm-gray);margin:0 0 12px;">Tap photos to add or remove them from the story.</p>';
-
-    var selectedMediaIds = {};
-    if (existingStory && existingStory.entries) {
-      Object.values(existingStory.entries).forEach(function(e) {
-        if (e.mediaUrl) selectedMediaIds[e.mediaUrl] = true;
-      });
-    }
 
     buildKeys.forEach(function(bk) {
       var b = builds[bk];
@@ -2796,7 +2857,7 @@ function buildStoryCurationHtml(job, builds, buildKeys, allMedia, existingStory,
       mKeys.forEach(function(mk) {
         var m = media[mk];
         var sel = selectedMediaIds[m.url] ? ' selected' : '';
-        html += '<div class="media-select-thumb' + sel + '" data-url="' + esc(m.url) + '" data-buildid="' + esc(bk) + '" data-mediaid="' + esc(mk) + '" onclick="toggleStoryMediaSelect(this)">' +
+        html += '<div class="media-select-thumb' + sel + '" data-url="' + esc(m.url) + '" data-buildid="' + esc(bk) + '" data-mediaid="' + esc(mk) + '" data-source="build" onclick="toggleStoryMediaSelect(this)">' +
           '<img src="' + esc(m.url) + '" alt="">' +
           '<div class="check-overlay">✓</div>' +
         '</div>';
@@ -2805,10 +2866,51 @@ function buildStoryCurationHtml(job, builds, buildKeys, allMedia, existingStory,
     });
 
     html += '</div>';
-  } else {
+  }
+
+  // ── Source 2: Content images (composer-spawned stories) ──
+  if (contentImages.length > 0) {
     html += '<div class="prod-detail-section">' +
-      '<strong>Photos</strong>' +
-      '<p style="font-size:0.85rem;color:var(--warm-gray);font-style:italic;margin:8px 0 0;">No build photos found for this job. Add photos during a build session, or add text-only entries below.</p>' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">' +
+        '<strong>From content composer</strong>' +
+        '<span style="font-size:0.78rem;color:var(--warm-gray);">' + contentImages.length + ' available</span>' +
+      '</div>' +
+      '<div class="media-select-grid">';
+    contentImages.forEach(function(im) {
+      var sel = selectedMediaIds[im.url] ? ' selected' : '';
+      html += '<div class="media-select-thumb' + sel + '" data-url="' + esc(im.url) + '" data-source="content" onclick="toggleStoryMediaSelect(this)">' +
+        '<img src="' + esc(im.url) + '" alt="">' +
+        '<div class="check-overlay">✓</div>' +
+      '</div>';
+    });
+    html += '</div></div>';
+  }
+
+  // ── Source 3: Upload new (always available) ──
+  // Always shown — closes the operator's reported gap (orphan stories had no
+  // way to add photos). Uploads land in a story-scoped Storage path and are
+  // appended to the draft as entries with source='upload'.
+  html += '<div class="prod-detail-section">' +
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">' +
+      '<strong>Upload new</strong>' +
+      '<label class="btn btn-secondary" style="font-size:0.78rem;padding:4px 10px;cursor:pointer;">' +
+        '<input type="file" accept="image/*" multiple style="display:none;" onchange="uploadStoryMediaFromInput(this, \'' + esc(existingStoryId || '') + '\')">' +
+        '+ Add photos' +
+      '</label>' +
+    '</div>' +
+    '<p style="font-size:0.85rem;color:var(--warm-gray);margin:0;">Photos you upload here are tied to this story.' +
+      (existingStoryId ? '' : ' (Save the draft first, then upload — uploads need a story ID.)') +
+    '</p>' +
+    '<div id="storyUploadProgress" style="margin-top:8px;"></div>' +
+  '</div>';
+
+  // When there are no available photos from any source AND no entries yet,
+  // hint at the upload action (replaces the prior dead-end "no photos" message).
+  if (!job && contentImages.length === 0) {
+    // Nothing else inferred here — the Upload new section already invites action.
+  } else if (job && totalBuildPhotos === 0 && contentImages.length === 0) {
+    html += '<div class="prod-detail-section">' +
+      '<p style="font-size:0.85rem;color:var(--warm-gray);font-style:italic;margin:0;">No build photos for this job yet. Upload photos above, capture them during a build session, or add text-only entries below.</p>' +
     '</div>';
   }
 
@@ -2834,11 +2936,13 @@ function buildStoryCurationHtml(job, builds, buildKeys, allMedia, existingStory,
 function toggleStoryMediaSelect(el) {
   el.classList.toggle('selected');
   var url = el.getAttribute('data-url');
-  var buildId = el.getAttribute('data-buildid');
+  var buildId = el.getAttribute('data-buildid') || '';
+  var source = el.getAttribute('data-source') || 'build';
   if (el.classList.contains('selected')) {
-    // Add entry
+    // Add entry — source preserves where the photo came from so future
+    // editor opens can highlight the right section.
     var id = MastDB.newKey('_ids');
-    storyDraft.push({ id: id, mediaUrl: url, milestone: '', caption: '', buildId: buildId, order: storyDraft.length });
+    storyDraft.push({ id: id, mediaUrl: url, milestone: '', caption: '', buildId: buildId, source: source, order: storyDraft.length });
   } else {
     // Remove entry
     storyDraft = storyDraft.filter(function(e) { return e.mediaUrl !== url; });
@@ -2916,7 +3020,11 @@ function getStoryData(storyId) {
       mediaUrl: e.mediaUrl,
       mediaType: e.mediaUrl ? 'photo' : 'text',
       caption: e.caption,
-      buildId: e.buildId
+      buildId: e.buildId,
+      // Source preserved so the editor and downstream consumers can tell
+      // build-media photos apart from content-spawn or freeform-upload.
+      // Backward-compat: entries without source default to 'build' on read.
+      source: e.source || 'build'
     };
   });
   return {
@@ -2925,6 +3033,68 @@ function getStoryData(storyId) {
     entries: entries
   };
 }
+
+// Freeform upload — file picker → compress → Storage write → append entry.
+// Mirrors the production-job uploadBuildMedia path (see line ~1957) so quotas
+// and lifecycle look the same.
+async function uploadStoryMediaFromInput(input, storyId) {
+  var files = Array.from(input.files || []);
+  if (files.length === 0) return;
+  input.value = ''; // allow re-selecting the same file later
+
+  if (!storyId) {
+    if (typeof showToast === 'function') showToast('Save the draft first, then upload photos.', true);
+    return;
+  }
+  if (typeof storage === 'undefined') {
+    if (typeof showToast === 'function') showToast('Storage not ready', true);
+    return;
+  }
+
+  var progressEl = document.getElementById('storyUploadProgress');
+  for (var i = 0; i < files.length; i++) {
+    var file = files[i];
+    if (!/^image\//.test(file.type)) continue;
+    var mediaId = MastDB.newKey('_ids');
+    var pidNode = null;
+    if (progressEl) {
+      pidNode = document.createElement('div');
+      pidNode.style.cssText = 'font-size:0.78rem;color:var(--warm-gray);margin-bottom:4px;';
+      pidNode.textContent = 'Uploading ' + file.name + '…';
+      progressEl.appendChild(pidNode);
+    }
+    try {
+      var compressed = await compressImage(file);
+      var path = MastDB.storagePath('storyMedia/' + storyId + '/' + mediaId + '.jpg');
+      var ref = storage.ref(path);
+      var task = ref.put(compressed);
+      await new Promise(function(resolve, reject) {
+        task.on('state_changed',
+          function(snap) {
+            if (pidNode) {
+              var pct = Math.round((snap.bytesTransferred / snap.totalBytes) * 100);
+              pidNode.textContent = 'Uploading ' + file.name + '… ' + pct + '%';
+            }
+          },
+          function(err) { reject(err); },
+          function() { resolve(); }
+        );
+      });
+      var url = await task.snapshot.ref.getDownloadURL();
+      // Append entry to the in-memory draft and re-render. Save Draft button
+      // is still required to persist — operator stays in control of when the
+      // story doc is updated.
+      var id = MastDB.newKey('_ids');
+      storyDraft.push({ id: id, mediaUrl: url, milestone: '', caption: '', buildId: '', source: 'upload', order: storyDraft.length });
+      renderStoryEntries();
+      if (pidNode) pidNode.textContent = '✓ ' + file.name;
+    } catch (err) {
+      if (pidNode) pidNode.textContent = '✗ ' + file.name + ' — ' + (err && err.message);
+    }
+  }
+  if (typeof showToast === 'function') showToast(files.length + ' photo' + (files.length === 1 ? '' : 's') + ' uploaded — save the draft to keep changes.');
+}
+window.uploadStoryMediaFromInput = uploadStoryMediaFromInput;
 
 async function saveDraftStory(existingId) {
   try {
@@ -3216,6 +3386,7 @@ async function linkProductToBuild(jobId, lineItemId) {
   window.publishStoryFromDetail = publishStoryFromDetail;
   window.unpublishStoryFromDetail = unpublishStoryFromDetail;
   window.openStoryCuration = openStoryCuration;
+  window.openStoryEditor = openStoryEditor;
   window.buildStoryCurationHtml = buildStoryCurationHtml;
   window.toggleStoryMediaSelect = toggleStoryMediaSelect;
   window.addTextOnlyEntry = addTextOnlyEntry;
