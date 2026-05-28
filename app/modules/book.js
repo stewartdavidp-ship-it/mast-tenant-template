@@ -22,6 +22,9 @@
   var allClassesMap = {}; // id → class for enrollment lookups
   var allSessionsMap = {}; // id → session for enrollment display
   var instructorsData = [];
+  // B8 — instructor read-view state. When set, renderInstructorList renders
+  // the read-only detail for that instructor instead of the list.
+  var _instrViewId = null;
   var instructorsLoaded = false;
   var instructorsMap = {}; // id → instructor
   var resourcesData = [];
@@ -1290,6 +1293,13 @@
     var container = document.getElementById('bookInstructorsTable');
     if (!container) return;
 
+    // B8 — when an instructor is selected, render the read-only detail view.
+    if (_instrViewId) {
+      var instr = instructorsData.find(function(x) { return x.id === _instrViewId; });
+      if (!instr) { _instrViewId = null; /* fall through to list */ }
+      else { container.innerHTML = _renderInstructorDetailView(instr); return; }
+    }
+
     // URL-driven filters from MCP admin links (#instructors?...)
     var rp = (typeof window.getRouteParams === 'function') ? window.getRouteParams() : {};
     var urlStatus = (rp && typeof rp.status === 'string') ? rp.status : '';
@@ -1334,9 +1344,11 @@
       return;
     }
 
+    // B8 — card click now opens the read-only detail view. Pencil shortcut
+    // removed; detail view has its own Edit button (matches D9 / B9 pattern).
     filtered.forEach(function(i) {
       var specs = (i.specialties || []).join(', ') || '';
-      html += '<div class="book-card" onclick="window._instrEdit(\'' + esc(i.id) + '\')">' +
+      html += '<div class="book-card" onclick="window._instrView(\'' + esc(i.id) + '\')" style="cursor:pointer;">' +
         '<div style="display:flex;justify-content:space-between;align-items:center;">' +
         '<div>' +
         '<div style="font-weight:600;">' + esc(i.name) + '</div>' +
@@ -1345,12 +1357,85 @@
         '</div>' +
         '<div style="display:flex;align-items:center;gap:8px;">' +
         '<span style="' + badgeStyle(STATUS_BADGE_COLORS, i.status) + '">' + esc(i.status) + '</span>' +
-        '<button class="btn-icon" onclick="event.stopPropagation();window._instrEdit(\'' + esc(i.id) + '\')" title="Edit">&#9998;</button>' +
         '</div>' +
         '</div></div>';
     });
 
     container.innerHTML = html;
+  }
+
+  // ============================================================
+  // B8 — Instructor Read-Only Detail View
+  // ============================================================
+  function _renderInstructorDetailView(instr) {
+    var specs = Array.isArray(instr.specialties) ? instr.specialties.filter(Boolean) : [];
+    var specChips = specs.length
+      ? specs.map(function(s) {
+          return '<span style="display:inline-block;background:rgba(42,124,111,0.12);color:var(--teal);padding:3px 10px;border-radius:14px;font-size:0.78rem;margin:2px 4px 2px 0;">' + esc(s) + '</span>';
+        }).join('')
+      : '<span style="color:var(--warm-gray);font-size:0.85rem;">No specialties listed.</span>';
+
+    // Classes currently taught/assigned to this instructor. Active + non-active
+    // separated so the operator sees teaching today vs historical assignments.
+    var assignedClasses = (classesData || []).filter(function(c) { return c && c.instructorId === instr.id; });
+    var activeClasses = assignedClasses.filter(function(c) { return c.status === 'active'; });
+    var inactiveClasses = assignedClasses.filter(function(c) { return c.status !== 'active'; });
+
+    function _classRow(c) {
+      var schedSummary = '';
+      if (c.schedule) {
+        if (c.schedule.type === 'recurring' && c.schedule.days) {
+          schedSummary = c.schedule.days.map(function(d) { return (typeof DAY_LABELS !== 'undefined' && DAY_LABELS[d]) || d; }).join(', ');
+          if (c.schedule.startTime) schedSummary += ' ' + (typeof formatTime === 'function' ? formatTime(c.schedule.startTime) : c.schedule.startTime);
+        } else if (c.schedule.type === 'once') {
+          schedSummary = (typeof formatDate === 'function' ? formatDate(c.schedule.date || c.schedule.startDate) : (c.schedule.date || c.schedule.startDate || ''));
+          if (c.schedule.startTime) schedSummary += ' ' + (typeof formatTime === 'function' ? formatTime(c.schedule.startTime) : c.schedule.startTime);
+        }
+      }
+      return '<tr style="cursor:pointer;" onclick="window._bookViewClass(\'' + esc(c.id) + '\')">' +
+        '<td><strong>' + esc(c.name || '') + '</strong></td>' +
+        '<td><span style="' + badgeStyle(TYPE_BADGE_COLORS, c.type) + '">' + esc(c.type || '') + '</span></td>' +
+        '<td>' + esc(schedSummary || '—') + '</td>' +
+        '<td><span style="' + badgeStyle(STATUS_BADGE_COLORS, c.status) + '">' + esc(c.status || '') + '</span></td>' +
+      '</tr>';
+    }
+    function _classTable(rows, emptyMsg) {
+      if (rows.length === 0) return '<div style="color:var(--warm-gray);font-size:0.9rem;padding:8px 0;">' + emptyMsg + '</div>';
+      return '<table class="data-table" style="margin-top:6px;">' +
+        '<thead><tr><th>Name</th><th>Type</th><th>Schedule</th><th>Status</th></tr></thead>' +
+        '<tbody>' + rows.map(_classRow).join('') + '</tbody>' +
+      '</table>';
+    }
+
+    return '<div style="padding:8px 0 24px;">' +
+      '<div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap;">' +
+        '<button class="btn btn-secondary btn-small" onclick="window._instrViewBack()" title="Back to list">← Back</button>' +
+        '<h3 style="margin:0;flex:1;min-width:200px;">' + esc(instr.name || 'Instructor') + '</h3>' +
+        '<span style="' + badgeStyle(STATUS_BADGE_COLORS, instr.status) + '">' + esc(instr.status || '') + '</span>' +
+        '<button class="btn btn-primary btn-small" onclick="window._instrEdit(\'' + esc(instr.id) + '\')">Edit</button>' +
+      '</div>' +
+      '<div style="display:grid;grid-template-columns:1fr 2fr;gap:24px;align-items:start;">' +
+        '<div style="border:1px solid var(--cream-dark);border-radius:10px;padding:16px;background:var(--surface-card,#fff);">' +
+          '<h4 style="margin:0 0 12px;font-size:0.9rem;font-weight:600;">Profile</h4>' +
+          (instr.email ? '<div style="font-size:0.9rem;margin-bottom:6px;"><span style="color:var(--warm-gray);">Email</span><br>' + esc(instr.email) + '</div>' : '') +
+          (instr.phone ? '<div style="font-size:0.9rem;margin-bottom:6px;"><span style="color:var(--warm-gray);">Phone</span><br>' + esc(instr.phone) + '</div>' : '') +
+          (instr.bio ? '<div style="font-size:0.9rem;margin-bottom:6px;"><span style="color:var(--warm-gray);">Bio</span><br><span style="white-space:pre-wrap;">' + esc(instr.bio) + '</span></div>' : '') +
+          '<div style="font-size:0.9rem;margin-top:10px;">' +
+            '<div style="color:var(--warm-gray);font-size:0.78rem;text-transform:uppercase;letter-spacing:0.04em;font-weight:600;margin-bottom:6px;">Specialties · capabilities</div>' +
+            '<div>' + specChips + '</div>' +
+          '</div>' +
+        '</div>' +
+        '<div style="border:1px solid var(--cream-dark);border-radius:10px;padding:16px;background:var(--surface-card,#fff);">' +
+          '<h4 style="margin:0 0 12px;font-size:0.9rem;font-weight:600;">Classes</h4>' +
+          '<div style="font-size:0.78rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.04em;font-weight:600;margin-bottom:6px;">Active (' + activeClasses.length + ')</div>' +
+          _classTable(activeClasses, 'No active classes assigned to this instructor.') +
+          (inactiveClasses.length > 0
+            ? '<div style="font-size:0.78rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.04em;font-weight:600;margin:14px 0 6px;">Other (' + inactiveClasses.length + ')</div>' +
+              _classTable(inactiveClasses, '')
+            : '') +
+        '</div>' +
+      '</div>' +
+    '</div>';
   }
 
   // ============================================================
@@ -2542,6 +2627,8 @@
   window._instrFilterStatus = function() { renderInstructorList(); };
   window._instrCreate = function() { showInstructorForm(null); };
   window._instrEdit = function(id) { showInstructorForm(id); };
+  window._instrView = function(id) { _instrViewId = id; renderInstructorList(); };
+  window._instrViewBack = function() { _instrViewId = null; renderInstructorList(); };
   window._instrSave = function(id) { saveInstructor(id || null); };
   window._instrBackToList = function() { switchSubTab('instructors'); };
 
