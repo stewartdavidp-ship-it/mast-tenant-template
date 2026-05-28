@@ -865,16 +865,207 @@
   }
 
   // ============================================================
-  // Stub: J14 on-ask audit modal
+  // J14 — on-ask audit modal
   // ============================================================
+  //
+  // POSTs to the askListingAi CF with a bearer Firebase ID token. Renders
+  // a modal with question textarea → strengths / issues / generalGuidance.
+  // All model-generated text is interpolated via esc() because the response
+  // body can echo the user's untrusted question or upstream listing copy.
 
-  // J13 ships the CTA; J14 ships the modal. We register a no-op stub on
-  // window so J14 can replace it without coordinating with this module.
-  if (typeof window !== 'undefined' && typeof window.openOnAskAudit !== 'function') {
-    window.openOnAskAudit = function(productId) {
-      toast('Listing audit (J14) ships soon. Product: ' + (productId || '(unknown)'), false);
-    };
+  var ASK_AI_CF_BASE = (window.TENANT_FIREBASE_CONFIG && window.TENANT_FIREBASE_CONFIG.cloudFunctionsBase)
+                    || 'https://us-central1-mast-platform-prod.cloudfunctions.net';
+
+  function _askAiUrl() { return ASK_AI_CF_BASE + '/askListingAi'; }
+
+  function _renderAskAiModalShell(productId) {
+    var productTitle = getProductTitle(productId);
+    var overlay = document.createElement('div');
+    overlay.className = 'modal-overlay open';
+    overlay.id = 'onAskAuditOverlay';
+    overlay.setAttribute('role', 'dialog');
+    overlay.setAttribute('aria-modal', 'true');
+    overlay.setAttribute('aria-labelledby', 'onAskAuditTitle');
+    overlay.style.zIndex = '220';
+    overlay.innerHTML = [
+      '<div class="modal" style="max-width:640px;width:92%;padding:0;">',
+      '  <div style="padding:18px 20px 12px;border-bottom:1px solid var(--cream-dark);">',
+      '    <h2 id="onAskAuditTitle" style="margin:0;font-size:1.15rem;color:var(--charcoal);">Ask Mast to audit this listing</h2>',
+      '    <div style="font-size:0.85rem;color:var(--warm-gray);margin-top:4px;">' + esc(productTitle) + '</div>',
+      '  </div>',
+      '  <div style="padding:18px 20px;">',
+      '    <label for="onAskAuditQuestion" style="display:block;font-size:0.85rem;color:var(--charcoal);margin-bottom:6px;">Your question</label>',
+      '    <textarea id="onAskAuditQuestion" rows="3" maxlength="1000"',
+      '              style="width:100%;padding:9px 12px;border:1px solid var(--cream-dark);border-radius:6px;',
+      '                     font-family:\'DM Sans\',sans-serif;font-size:0.9rem;background:var(--cream);color:inherit;resize:vertical;"',
+      '              placeholder="Ask about this listing… e.g. how do I rank higher on Etsy?"></textarea>',
+      '    <div id="onAskAuditError" role="alert" aria-live="polite" style="display:none;margin-top:10px;padding:10px 12px;border-radius:6px;font-size:0.85rem;background:rgba(220,38,38,0.10);border:1px solid rgba(220,38,38,0.4);color:var(--danger,#f87171);"></div>',
+      '    <div id="onAskAuditResult" style="display:none;margin-top:14px;"></div>',
+      '  </div>',
+      '  <div style="padding:12px 20px 18px;display:flex;justify-content:flex-end;gap:8px;border-top:1px solid var(--cream-dark);">',
+      '    <button type="button" class="btn btn-secondary" id="onAskAuditCancel">Close</button>',
+      '    <button type="button" class="btn btn-primary" id="onAskAuditSubmit">Submit</button>',
+      '  </div>',
+      '</div>'
+    ].join('');
+    document.body.appendChild(overlay);
+    return overlay;
   }
+
+  function _renderAskAiResult(container, payload) {
+    var html = [];
+    var strengths = Array.isArray(payload.strengths) ? payload.strengths : [];
+    var issues = Array.isArray(payload.issues) ? payload.issues : [];
+    var guidance = typeof payload.generalGuidance === 'string' ? payload.generalGuidance : '';
+
+    if (strengths.length) {
+      html.push('<div style="margin-bottom:14px;">');
+      html.push('  <h3 style="margin:0 0 6px;font-size:0.9rem;color:var(--charcoal);">Strengths</h3>');
+      html.push('  <ul style="margin:0;padding-left:18px;color:var(--charcoal);font-size:0.85rem;">');
+      strengths.forEach(function(s) {
+        html.push('    <li style="margin-bottom:4px;">' + esc(s) + '</li>');
+      });
+      html.push('  </ul>');
+      html.push('</div>');
+    }
+
+    if (issues.length) {
+      html.push('<div style="margin-bottom:14px;">');
+      html.push('  <h3 style="margin:0 0 6px;font-size:0.9rem;color:var(--charcoal);">Issues</h3>');
+      html.push('  <div style="display:flex;flex-direction:column;gap:8px;">');
+      issues.forEach(function(iss) {
+        if (!iss || typeof iss !== 'object') return;
+        var sev = (iss.severity === 'high' || iss.severity === 'medium' || iss.severity === 'low') ? iss.severity : 'medium';
+        var dot = severityDot(sev);
+        html.push('<div style="border:1px solid var(--cream-dark);border-radius:6px;padding:10px 12px;">');
+        html.push('  <div style="display:flex;align-items:center;gap:8px;font-size:0.85rem;color:var(--charcoal);">');
+        html.push('    ' + dot);
+        html.push('    <span>' + esc(iss.description || '') + '</span>');
+        html.push('  </div>');
+        if (iss.suggestedAction) {
+          html.push('  <div style="margin-top:6px;padding:6px 8px;background:rgba(0,0,0,0.04);border-radius:4px;font-size:0.85rem;color:var(--charcoal);">');
+          html.push('    <span style="font-weight:600;">Suggested: </span>' + esc(iss.suggestedAction));
+          html.push('  </div>');
+        }
+        if (iss.ruleId) {
+          html.push('  <div style="margin-top:4px;font-size:0.78rem;color:var(--warm-gray);">Rule ' + esc(iss.ruleId) + '</div>');
+        }
+        html.push('</div>');
+      });
+      html.push('  </div>');
+      html.push('</div>');
+    }
+
+    if (guidance) {
+      html.push('<div>');
+      html.push('  <h3 style="margin:0 0 6px;font-size:0.9rem;color:var(--charcoal);">General guidance</h3>');
+      html.push('  <p style="margin:0;color:var(--charcoal);font-size:0.85rem;white-space:pre-wrap;">' + esc(guidance) + '</p>');
+      html.push('</div>');
+    }
+
+    if (!strengths.length && !issues.length && !guidance) {
+      html.push('<div style="color:var(--warm-gray);font-size:0.85rem;">No findings returned.</div>');
+    }
+
+    container.innerHTML = html.join('');
+    container.style.display = '';
+  }
+
+  function _showAskAiError(errEl, message) {
+    errEl.textContent = message;
+    errEl.style.display = '';
+  }
+
+  function _hideAskAiError(errEl) {
+    errEl.textContent = '';
+    errEl.style.display = 'none';
+  }
+
+  async function _askListingAi(productId, question) {
+    var auth = window.firebase && window.firebase.auth && window.firebase.auth();
+    var user = auth && auth.currentUser;
+    if (!user) {
+      var err = new Error('Not signed in.');
+      err._status = 401;
+      throw err;
+    }
+    var idToken = await user.getIdToken();
+    var resp = await fetch(_askAiUrl(), {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Bearer ' + idToken,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ productId: productId, question: question })
+    });
+    var body = null;
+    try { body = await resp.json(); } catch (e) { /* leave null */ }
+    if (!resp.ok) {
+      var e = new Error((body && body.error) || ('Request failed (' + resp.status + ')'));
+      e._status = resp.status;
+      throw e;
+    }
+    return body;
+  }
+
+  function _closeAskAiModal() {
+    var ov = document.getElementById('onAskAuditOverlay');
+    if (ov && ov.parentNode) ov.parentNode.removeChild(ov);
+  }
+
+  window.openOnAskAudit = function(productId) {
+    if (!productId) { toast('No product selected.', true); return; }
+    // Idempotent open — close any prior instance first.
+    _closeAskAiModal();
+    var overlay = _renderAskAiModalShell(productId);
+
+    var questionEl = overlay.querySelector('#onAskAuditQuestion');
+    var submitBtn = overlay.querySelector('#onAskAuditSubmit');
+    var cancelBtn = overlay.querySelector('#onAskAuditCancel');
+    var errEl = overlay.querySelector('#onAskAuditError');
+    var resultEl = overlay.querySelector('#onAskAuditResult');
+
+    cancelBtn.addEventListener('click', _closeAskAiModal);
+    overlay.addEventListener('click', function(e) {
+      if (e.target === overlay) _closeAskAiModal();
+    });
+
+    submitBtn.addEventListener('click', async function() {
+      var q = (questionEl.value || '').trim();
+      if (!q) { _showAskAiError(errEl, 'Enter a question first.'); return; }
+      _hideAskAiError(errEl);
+      resultEl.style.display = 'none';
+      resultEl.innerHTML = '';
+      submitBtn.disabled = true;
+      var origLabel = submitBtn.textContent;
+      submitBtn.textContent = 'Asking…';
+      try {
+        var data = await _askListingAi(productId, q);
+        _renderAskAiResult(resultEl, (data && data.response) || {});
+      } catch (err) {
+        var status = err._status || 0;
+        if (status === 402) {
+          _showAskAiError(errEl, (err.message || 'Out of tokens.') + ' Upgrade your plan or top up to continue.');
+        } else if (status === 429) {
+          _showAskAiError(errEl, 'Too many requests. Try again in a minute.');
+        } else if (status === 401) {
+          _showAskAiError(errEl, 'Session expired — sign in again.');
+        } else if (status === 404) {
+          _showAskAiError(errEl, 'Listing not found for this product.');
+        } else if (status === 400) {
+          _showAskAiError(errEl, err.message || 'Invalid request.');
+        } else {
+          // Transient / upstream — keep modal open, suggest retry.
+          _showAskAiError(errEl, (err.message || 'Request failed.') + ' Try again.');
+        }
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = origLabel;
+      }
+    });
+
+    setTimeout(function() { questionEl.focus(); }, 0);
+  };
 
   // ============================================================
   // Category browse view (secondary axis)
