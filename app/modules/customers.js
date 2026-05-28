@@ -2195,7 +2195,12 @@
         label: label
       });
     }
-    if (typeof navigateTo === 'function') navigateTo(route);
+    // Some "routes" used here are logical surface IDs that don't map 1:1 to
+    // a registered hash route — e.g. 'classes' is owned by the book module
+    // (route id: 'book'). Map before navigating; otherwise we land on a
+    // "Page not found" screen before the per-surface drill-in can fire.
+    var navRoute = (route === 'classes') ? 'book' : route;
+    if (typeof navigateTo === 'function') navigateTo(navRoute);
     // After landing on the destination view, drill into the specific item so
     // the user sees that ticket / review / order — not the bare list. Each
     // surface has its own open-detail entrypoint; call it if available.

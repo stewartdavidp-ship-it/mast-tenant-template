@@ -6217,6 +6217,7 @@
         <div class="sidebar-item" data-route="employees" onclick="navigateTo('employees')">Permissions</div>
         <div class="sidebar-item" data-route="analytics" onclick="navigateTo('analytics')">Analytics</div>
         <div class="sidebar-item" data-route="auditlog" onclick="navigateTo('auditlog')">Audit Log</div>
+        <div class="sidebar-item" data-route="suppressions" onclick="navigateTo('suppressions')">Audit Suppressions</div>
         <div class="sidebar-item" data-route="settings" onclick="navigateTo('settings')">Settings <span id="sidebarAlertBadge" class="sidebar-badge alert" style="display:none;"></span> <span id="settingsSandboxBadge" style="display:none;background:#f59e0b;color:#fff;font-size:0.72rem;padding:2px 6px;border-radius:4px;margin-left:4px;font-weight:700;vertical-align:middle;">SANDBOX</span></div>
         <div class="sidebar-item" data-route="subscription" onclick="navigateTo('subscription')">Subscription</div>
         <div class="sidebar-item" data-route="coins" onclick="navigateTo('coins')">Coins</div>
@@ -10538,6 +10539,11 @@
         <h2>Change my business setup</h2>
       </div>
       <div id="businessSetupContent"></div>
+    </div>
+
+    <!-- Admin: Audit Suppressions Tab (J12 — tenant feedback on Mast audit findings) -->
+    <div id="auditSuppressionsTab" style="display:none;">
+      <div id="auditSuppressionsContent"></div>
     </div>
 
     <!-- Admin: Audit Log Tab -->
@@ -17963,7 +17969,7 @@ var ROUTE_ALIASES = {
   'consignment': 'galleries'
 };
 
-var ALL_TAB_IDS = ['inquiriesTab', 'scheduleTab', 'galleryTab', 'homepageTab', 'brandTab', 'productsTab', 'ordersTab', 'salesTab', 'salesEventsTab', 'productionTab', 'forecastTab', 'couponsTab', 'analyticsTab', 'settingsTab', 'imagesTab', 'auditLogTab', 'employeesTab', 'contactsTab', 'customersTab', 'packTab', 'shipTab', 'commissionsTab', 'rmaTab', 'socialMediaTab', 'blogTab', 'newsletterTab', 'placeholderTab', 'inventoryTab', 'storiesTab', 'dashboardTab', 'tripsTab', 'wholesaleTab', 'showTab', 'financialsTab', 'eventsAdminTab', 'websiteTab', 'showLightTab', 'emailLogTab', 'materialsTab', 'piecesTab', 'galleriesTab', 'lookbooksTab', 'promotionsTab', 'bookTab', 'subscriptionTab', 'coinsTab', 'askAiTab', 'aboutTab', 'walletTab', 'giftCardsTab', 'loyaltyTab', 'membershipTab', 'termsTab', 'advisorTab', 'studioTab', 'teamTab', 'studentsTab', 'migrationDashTab', 'migrationConfirmTab', 'migrationPlanTab', 'migrationImportTab', 'historicalOrdersTab', 'channelsTab', 'businessTab', 'myFeedbackTab', 'procurementTab', 'csInboxTab', 'csTicketsTab', 'csSurveysTab', 'csReviewsTab', 'csFaqsTab', 'csMembersTab', 'financeRevenueTab', 'financeExpensesTab', 'financePlTab', 'financeCashFlowTab', 'financeArTab', 'financeApTab', 'financeTaxTab', 'financeReportsTab', 'customerPortfolioTab', 'financeOverviewTab', 'financePeriodCloseTab', 'financeAmendmentsTab',
+var ALL_TAB_IDS = ['inquiriesTab', 'scheduleTab', 'galleryTab', 'homepageTab', 'brandTab', 'productsTab', 'ordersTab', 'salesTab', 'salesEventsTab', 'productionTab', 'forecastTab', 'couponsTab', 'analyticsTab', 'settingsTab', 'imagesTab', 'auditLogTab', 'employeesTab', 'contactsTab', 'customersTab', 'packTab', 'shipTab', 'commissionsTab', 'rmaTab', 'socialMediaTab', 'blogTab', 'newsletterTab', 'placeholderTab', 'inventoryTab', 'auditSuppressionsTab', 'storiesTab', 'dashboardTab', 'tripsTab', 'wholesaleTab', 'showTab', 'financialsTab', 'eventsAdminTab', 'websiteTab', 'showLightTab', 'emailLogTab', 'materialsTab', 'piecesTab', 'galleriesTab', 'lookbooksTab', 'promotionsTab', 'bookTab', 'subscriptionTab', 'coinsTab', 'askAiTab', 'aboutTab', 'walletTab', 'giftCardsTab', 'loyaltyTab', 'membershipTab', 'termsTab', 'advisorTab', 'studioTab', 'teamTab', 'studentsTab', 'migrationDashTab', 'migrationConfirmTab', 'migrationPlanTab', 'migrationImportTab', 'historicalOrdersTab', 'channelsTab', 'businessTab', 'myFeedbackTab', 'procurementTab', 'csInboxTab', 'csTicketsTab', 'csSurveysTab', 'csReviewsTab', 'csFaqsTab', 'csMembersTab', 'financeRevenueTab', 'financeExpensesTab', 'financePlTab', 'financeCashFlowTab', 'financeArTab', 'financeApTab', 'financeTaxTab', 'financeReportsTab', 'customerPortfolioTab', 'financeOverviewTab', 'financePeriodCloseTab', 'financeAmendmentsTab',
 // M3 + M6 (Idea -OtADygKA_JhRmk1wUqN): Mast modes tabs — must be in this list
 // so applyRoute correctly hides them when navigating away.
 // W1.8: Sales by Product (PM/Operator doorway) — same reason.
@@ -18675,7 +18681,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260528-125950-d185565';
+var MAST_MODULES_V = '20260528-135754-1dbb734';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -18723,7 +18729,10 @@ homepage: { src: 'modules/homepage.js', routes: ['homepage'] },
   composer: { src: 'modules/composer.js', routes: ['composer'] },
   // W2.3 — Commission terms editor (admin-side; storefront accept flow is
   // separate and lives on the public side).
-  commissionTerms: { src: 'modules/commission-terms.js', routes: ['commission-terms'] }
+  commissionTerms: { src: 'modules/commission-terms.js', routes: ['commission-terms'] },
+  // J12 — Tenant feedback on Mast audit findings (suppression management page;
+  // menus exposed via window.AuditFeedbackUI for J13 to wire into surfaces).
+  auditFeedback: { src: 'modules/audit-feedback.js', routes: ['suppressions'] }
 };
 
 // Reverse lookup: route → moduleId (built from MODULE_MANIFEST)
