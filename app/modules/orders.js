@@ -681,6 +681,11 @@
   }
 
   function backToOrders() {
+    // MastFlow: tear down per-order subscription on close.
+    if (_mfOrderActiveSubscription && _mfOrderActiveSubscription.off) {
+      try { _mfOrderActiveSubscription.off(); } catch (e) {}
+      _mfOrderActiveSubscription = null;
+    }
     // MastNavStack-aware: if there's a stacked entry, return to that context.
     if (window.MastNavStack && MastNavStack.size() > 0) {
       selectedOrderId = null;
@@ -1124,6 +1129,11 @@
         '<div class="order-actions">' + actionsHtml + '</div>' +
       '</div>' +
       renderOrderProgress(status) +
+      // MastFlow workflow header — populated async by _initOrderWorkflowHeader.
+      // Renders stepper + checklist + Advance/Back/branch buttons. Lives in
+      // parallel with the existing inline action buttons (above) and the
+      // legacy renderOrderProgress widget; convergence is future work.
+      '<div id="orderWorkflowHeader" style="margin:14px 0;font-size:0.85rem;color:var(--warm-gray);">Loading workflow…</div>' +
       '<div class="order-detail-section">' +
         '<div class="order-detail-section-title">Items</div>' +
         itemsHtml +
@@ -1154,6 +1164,142 @@
     loadOrderEmails(orderId, emailSectionId);
     // W3.6: fill per-job burdened-labor cells async (no-throw).
     try { _w3FillOrderLaborCells(orderId, o); } catch (_) {}
+    // MastFlow workflow header — second engine surface (after commissions).
+    _initOrderWorkflowHeader(orderId);
+  }
+
+  // ===== MastFlow integration for orders (pickship workflow) =====
+  var _mfOrderResolversRegistered = false;
+  var _mfOrderActiveSubscription = null;  // { orderId, off }
+
+  function _initOrderWorkflowHeader(orderId) {
+    if (!window.MastAdmin || typeof MastAdmin.loadModule !== 'function') return;
+    Promise.all([
+      MastAdmin.loadModule('workflowEngine'),
+      MastAdmin.loadModule('pickshipWorkflow')
+    ]).then(function() {
+      if (!window.MastFlow) return;
+      _registerOrderTargetResolvers();
+      _subscribeOrderRecord(orderId);
+      _renderOrderWorkflowHeaderInto(orderId);
+    }).catch(function(err) {
+      console.error('[orders] MastFlow init failed:', err);
+      var host = document.getElementById('orderWorkflowHeader');
+      if (host) host.innerHTML = '<span style="color:var(--danger,#b81d1d);">Workflow header failed to load.</span>';
+    });
+  }
+
+  function _registerOrderTargetResolvers() {
+    if (_mfOrderResolversRegistered || !window.MastFlow) return;
+    var SECTION_TARGETS = {
+      'detail-customer': 'order-detail-meta',
+      'detail-items': 'order-items',
+      'detail-payment': 'order-summary',
+      'detail-shipping': 'order-shipping',
+      'buy-labels': null  // navigates to fulfillment buy-labels route
+    };
+    Object.keys(SECTION_TARGETS).forEach(function(tid) {
+      MastFlow.registerTargetResolver('pickship', tid, function() {
+        if (tid === 'buy-labels') {
+          if (typeof navigateTo === 'function') navigateTo('ship');
+          return;
+        }
+        // Scroll to the closest section header matching the target.
+        var sectionTitles = document.querySelectorAll('.order-detail-section-title');
+        for (var i = 0; i < sectionTitles.length; i++) {
+          var t = (sectionTitles[i].textContent || '').toLowerCase();
+          if ((tid === 'detail-items' && t.indexOf('items') !== -1) ||
+              (tid === 'detail-payment' && t.indexOf('summary') !== -1) ||
+              (tid === 'detail-shipping' && t.indexOf('address') !== -1) ||
+              (tid === 'detail-customer' && t.indexOf('order') !== -1)) {
+            sectionTitles[i].scrollIntoView({ behavior: 'smooth', block: 'center' });
+            return;
+          }
+        }
+      });
+    });
+    _mfOrderResolversRegistered = true;
+  }
+
+  function _subscribeOrderRecord(orderId) {
+    if (_mfOrderActiveSubscription && _mfOrderActiveSubscription.off) {
+      try { _mfOrderActiveSubscription.off(); } catch (e) {}
+    }
+    var off = MastDB.subscribe('admin/orders/' + orderId, function(snapValue) {
+      if (!snapValue) return;
+      var prev = orders[orderId] || {};
+      orders[orderId] = Object.assign({}, prev, snapValue, { _key: orderId });
+      _renderOrderWorkflowHeaderInto(orderId);
+    });
+    _mfOrderActiveSubscription = { orderId: orderId, off: off };
+  }
+
+  function _renderOrderWorkflowHeaderInto(orderId) {
+    var o = orders[orderId];
+    if (!o || !window.MastFlow) return;
+    o.id = orderId;
+    var host = document.getElementById('orderWorkflowHeader');
+    if (!host) return;
+    MastFlow.renderHeader('pickship', o, {
+      onAdvance: function(targetPhaseKey) {
+        _doOrderTransition(orderId, targetPhaseKey, { expectedFromPhase: o.__workflow && o.__workflow.phase || null });
+      },
+      onBack: function(targetPhaseKey) {
+        _doOrderTransition(orderId, targetPhaseKey, { expectedFromPhase: o.__workflow && o.__workflow.phase || null });
+      },
+      onBranch: function(branchChoiceKey, entryPhaseKey) {
+        _doOrderTransition(orderId, entryPhaseKey, {
+          expectedFromPhase: o.__workflow && o.__workflow.phase || null,
+          branchChoice: branchChoiceKey
+        });
+      },
+      onForce: function() {
+        var reason = window.prompt('Force-advance reason (will be audited):');
+        if (!reason) return;
+        MastFlow.evaluate('pickship', o).then(function(ev) {
+          var target = ev.nextPhases[0];
+          if (!target) { showToast('No next phase to force.'); return; }
+          _doOrderTransition(orderId, target, {
+            expectedFromPhase: ev.currentPhase ? ev.currentPhase.key : null,
+            force: true, reason: reason
+          });
+        });
+      }
+    }).then(function(res) {
+      host.innerHTML = res.html;
+    }).catch(function(err) {
+      console.error('[orders] renderHeader failed:', err);
+      host.innerHTML = '<span style="color:var(--danger,#b81d1d);">Workflow header error.</span>';
+    });
+  }
+
+  function _doOrderTransition(orderId, targetPhaseKey, opts) {
+    var o = orders[orderId];
+    if (!o) return;
+    o.id = orderId;
+    opts = Object.assign({ recordId: orderId }, opts || {});
+    MastFlow.transition('pickship', o, targetPhaseKey, opts).then(function(res) {
+      showToast('Order advanced to ' + res.to);
+      emitTestingEvent('orderPhase', { from: res.from, to: res.to, forced: !!opts.force });
+      renderOrderDetail(orderId);
+    }).catch(function(err) {
+      if (err.code === 'STALE_STATE') {
+        showToast('Another operator changed this order — refreshed.', true);
+        MastDB.orders.get(orderId).then(function(fresh) {
+          if (fresh) orders[orderId] = Object.assign({}, fresh, { _key: orderId });
+          renderOrderDetail(orderId);
+        });
+      } else if (err.code === 'REQUIREMENTS_UNMET') {
+        showToast('Requirements not met — see checklist.', true);
+      } else if (err.code === 'BRANCH_CHOICE_REQUIRED') {
+        showToast('Choose a fulfillment method first.', true);
+      } else if (err.code === 'SPEC_MISMATCH') {
+        showToast('Workflow updated — manual review needed.', true);
+      } else {
+        console.error('[orders] transition failed:', err);
+        showToast('Transition failed: ' + (err.message || err), true);
+      }
+    });
   }
 
   // W3.6 — Per-job burdened labor surface for order detail.
