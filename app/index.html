@@ -18665,7 +18665,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260527-224030-7b88507';
+var MAST_MODULES_V = '20260527-224214-4bb2b91';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -48902,11 +48902,14 @@ function _imageStorageLocality(img) {
   if (!img) return 'unknown';
   var url = img.url || img.thumbnailUrl || '';
   if (!url || typeof url !== 'string') return 'unknown';
-  // Firebase Storage CDN domains. Includes the legacy gs:// prefix used by
-  // some upload paths that haven't been resolved to a download URL yet.
   if (/^gs:\/\//.test(url)) return 'local';
-  if (/(^|\.)firebasestorage\.googleapis\.com/.test(url)) return 'local';
-  if (/(^|\.)storage\.googleapis\.com/.test(url)) return 'local';
+  // Extract host from "scheme://host/path". The original anchored regex
+  // /(^|\.)firebasestorage.../ misclassified normal https URLs because the
+  // `://` separator sits between the protocol and the host.
+  var hostMatch = url.match(/^[a-z]+:\/\/([^\/?#]+)/i);
+  var host = hostMatch ? hostMatch[1].toLowerCase() : '';
+  if (host === 'firebasestorage.googleapis.com' || host.endsWith('.firebasestorage.googleapis.com')) return 'local';
+  if (host === 'storage.googleapis.com' || host.endsWith('.storage.googleapis.com')) return 'local';
   return 'remote';
 }
 
