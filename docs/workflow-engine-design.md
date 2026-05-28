@@ -513,7 +513,16 @@ records are mid-branch.
    with note pointing to the engine + commissions spec.
 5. **Pick/ship spec + detail view migration** — second surface that
    validates the abstraction. Done as a follow-up job, not jammed into the
-   commissions feedback close.
+   commissions feedback close. **SHIPPED** (orders.js + pickship.workflow.js).
+   Surfaced branches, line-item aggregation, and external (webhook-style)
+   advancement. Also drove the full pick/ship UI replacement + routing
+   cancellation through the engine.
+5b. **Products spec + detail view migration** — third surface (feedback
+   6wOENiU3rfuBj3H5nwXq). **SHIPPED** (maker.js + products.workflow.js).
+   Converged two pre-existing hand-rolled surfaces (renderReadinessChecklistPanel
+   + the D7 stepper) onto one MastFlow header. Validated: acquisition mode
+   as a phase ATTRIBUTE (not a branch), reuse of an external predicate source
+   (computeReadinessChecklist), and the off-backbone "retired" terminal kind.
 6. **Doc this as the new pattern** in `mast-tenant-template/CLAUDE.md` so
    future workflow surfaces (RMA, returns, fulfillment) use the engine
    instead of inventing their own steppers.
