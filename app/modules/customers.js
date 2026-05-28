@@ -1585,11 +1585,22 @@
     var cache = getCache(c.id);
     if (!cache.loaded.enrollments) {
       loadCustomerEnrollments(c.id);
-      return '<div class="loading">Loading enrollments…</div>';
     }
-    var enrollments = cache.enrollments;
+    if (!cache.loaded.certs) {
+      loadCustomerCerts(c.id);
+    }
+
+    var h = '';
+    h += renderCertsSubsection(c, cache);
+
+    if (!cache.loaded.enrollments) {
+      h += '<div class="loading">Loading enrollments…</div>';
+      return h;
+    }
+    var enrollments = cache.enrollments || [];
     if (!enrollments.length) {
-      return '<div style="text-align:center;padding:40px 20px;color:var(--warm-gray);">No class enrollments linked to this customer.</div>';
+      h += '<div style="text-align:center;padding:40px 20px;color:var(--warm-gray);">No class enrollments linked to this customer.</div>';
+      return h;
     }
     enrollments = enrollments.slice().sort(function(a, b) {
       return (b.createdAt || '').localeCompare(a.createdAt || '');
@@ -1601,9 +1612,6 @@
       var sessionDate = en.sessionDate || en.sessionStartAt || en.scheduledFor || en.createdAt;
       var status = en.status || en.enrollmentStatus || '—';
       var price = (typeof en.priceCents === 'number') ? en.priceCents : (typeof en.amountCents === 'number' ? en.amountCents : null);
-      // Make the row clickable when we have a classId — opens the class detail
-      // in the book module via customersOpenActivityDrillIn (handles nav-stack
-      // push so "← Back" returns to this customer).
       var clickable = en.classId
         ? ' style="cursor:pointer;" onclick="customersOpenActivityDrillIn(\'classes\',\'' + esc(en.classId) + '\')"'
         : '';
@@ -1615,7 +1623,6 @@
       '</tr>';
     }).join('');
 
-    var h = '';
     h += '<div style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:8px;">' + enrollments.length + ' enrollment' + (enrollments.length === 1 ? '' : 's') + '</div>';
     h += '<div class="data-table"><table>';
     h += '<thead><tr><th>Class</th><th>Session</th><th>Status</th><th>Price</th></tr></thead>';
@@ -1623,6 +1630,153 @@
     h += '</table></div>';
     return h;
   }
+
+  function renderCertsSubsection(c, cache) {
+    var h = '<div style="margin-bottom:20px;">';
+    h += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">';
+    h += '<h4 style="margin:0;font-size:0.85rem;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;color:var(--warm-gray);">Certifications</h4>';
+    h += '<button class="btn btn-link" onclick="window.customersGrantCertOpen(\'' + esc(c.id) + '\')">+ Grant cert</button>';
+    h += '</div>';
+    if (!cache.loaded.certs) {
+      h += '<div style="color:var(--warm-gray);font-size:0.85rem;">Loading…</div></div>';
+      return h;
+    }
+    var certs = cache.certs || [];
+    var types = cache.certTypes || {};
+    var now = new Date().toISOString();
+    var active = certs.filter(function(c) {
+      if (!c) return false;
+      if (c.revokedAt) return false;
+      if (c.expiresAt && c.expiresAt < now) return false;
+      return true;
+    });
+    if (!active.length) {
+      h += '<div style="color:var(--warm-gray);font-size:0.85rem;padding:8px 0;">No active certifications.</div></div>';
+      return h;
+    }
+    var rows = active.map(function(cert) {
+      var typeName = (types[cert.typeId] && types[cert.typeId].name) || cert.typeId;
+      var attestor = cert.instructorOfRecord && cert.instructorOfRecord.displayName
+        ? cert.instructorOfRecord.displayName
+        : (cert.grantedBy || '—');
+      var grantedDate = cert.grantedAt ? fmtDate(cert.grantedAt) : '—';
+      var expires = cert.expiresAt ? fmtDate(cert.expiresAt) : 'Lifetime';
+      return '<tr>' +
+        '<td><strong>' + esc(typeName) + '</strong></td>' +
+        '<td style="font-size:0.78rem;color:var(--warm-gray);">Attested by ' + esc(attestor) + '</td>' +
+        '<td style="font-size:0.78rem;">' + esc(grantedDate) + '</td>' +
+        '<td style="font-size:0.78rem;">' + esc(expires) + '</td>' +
+        '<td style="text-align:right;"><button class="btn btn-link" onclick="window.customersRevokeCert(\'' + esc(c.id) + '\',\'' + esc(cert.id) + '\')">Revoke</button></td>' +
+      '</tr>';
+    }).join('');
+    h += '<div class="data-table"><table>';
+    h += '<thead><tr><th>Certification</th><th>Attestor</th><th>Granted</th><th>Expires</th><th></th></tr></thead>';
+    h += '<tbody>' + rows + '</tbody>';
+    h += '</table></div>';
+    h += '</div>';
+    return h;
+  }
+
+  function loadCustomerCerts(customerId) {
+    var cache = getCache(customerId);
+    Promise.all([
+      MastDB.get('admin/customers/' + customerId + '/certifications'),
+      MastDB.get('admin/certTypes')
+    ]).then(function(results) {
+      var data = results[0] || {};
+      var types = results[1] || {};
+      cache.certs = Object.keys(data).map(function(k) {
+        var c = data[k] || {};
+        c.id = k;
+        return c;
+      });
+      cache.certTypes = types;
+      cache.loaded.certs = true;
+      if (currentView === 'detail' && selectedCustomerId === customerId && detailTab === 'classes') {
+        renderPreservingEdits();
+      }
+    }).catch(function(e) {
+      console.error('[customers] certs load failed', e);
+      cache.certs = [];
+      cache.certTypes = {};
+      cache.loaded.certs = true;
+      if (currentView === 'detail' && selectedCustomerId === customerId && detailTab === 'classes') {
+        renderPreservingEdits();
+      }
+    });
+  }
+
+  window.customersGrantCertOpen = async function(customerId) {
+    var types = (await MastDB.get('admin/certTypes')) || {};
+    var activeIds = Object.keys(types).filter(function(t) { return !types[t].archivedAt; });
+    if (!activeIds.length) {
+      window.MastAdmin && MastAdmin.showToast('No cert types defined. Add one in Book → Settings.', true);
+      return;
+    }
+    var options = activeIds.map(function(tid) {
+      return '<option value="' + esc(tid) + '">' + esc(types[tid].name || tid) + '</option>';
+    }).join('');
+    if (!window.mastSlideOut || !window.mastSlideOut.open) {
+      window.MastAdmin && MastAdmin.showToast('Slide-out unavailable', true);
+      return;
+    }
+    window.mastSlideOut.open({
+      title: 'Grant Certification',
+      subtitle: null,
+      bodyHtml:
+        '<div class="book-field"><label class="form-label">Certification Type</label>' +
+          '<select id="custGrantTypeSel" class="form-input">' + options + '</select></div>',
+      footerHtml: '<button class="btn btn-primary" onclick="window.customersGrantCertConfirm(\'' + esc(customerId) + '\')">Grant</button>',
+      onClose: function() {}
+    });
+  };
+
+  window.customersGrantCertConfirm = async function(customerId) {
+    var sel = document.getElementById('custGrantTypeSel');
+    if (!sel || !sel.value) return;
+    var typeId = sel.value;
+    if (!window._bookGrantCert) {
+      // Lazy-load book module to get the grant helper
+      if (window.MastAdmin && MastAdmin.loadModule) {
+        try { await MastAdmin.loadModule('book'); } catch (e) {}
+      }
+    }
+    if (!window._bookGrantCert) {
+      window.MastAdmin && MastAdmin.showToast('Cert helper unavailable', true);
+      return;
+    }
+    var result = await window._bookGrantCert({
+      typeId: typeId,
+      customerId: customerId,
+      sourceClassId: null,
+      sourceEnrollmentId: null
+    });
+    if (result) {
+      window.mastSlideOut && window.mastSlideOut.close && window.mastSlideOut.close();
+      // Invalidate certs cache + re-render
+      var cache = getCache(customerId);
+      cache.loaded.certs = false;
+      loadCustomerCerts(customerId);
+    }
+  };
+
+  window.customersRevokeCert = async function(customerId, certId) {
+    var reason = prompt('Revoke this certification? Enter a reason (optional):');
+    if (reason === null) return; // cancel
+    try {
+      await MastDB.update('admin/customers/' + customerId + '/certifications/' + certId, {
+        revokedAt: new Date().toISOString(),
+        revokedBy: (window.MastAdmin && MastAdmin.currentUser && MastAdmin.currentUser.uid) || 'admin',
+        revokeReason: reason || null
+      });
+      window.MastAdmin && MastAdmin.showToast('Certification revoked');
+      var cache = getCache(customerId);
+      cache.loaded.certs = false;
+      loadCustomerCerts(customerId);
+    } catch (err) {
+      window.MastAdmin && MastAdmin.showToast('Revoke failed', true);
+    }
+  };
 
   function loadCustomerEnrollments(customerId) {
     var cache = getCache(customerId);

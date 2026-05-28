@@ -1716,7 +1716,9 @@
     var usedPassesChip = openCust
       ? _chip('Used passes', '<span id="' + slotId + '_passesUsed">··</span>', null, openCust, 'Open full student profile')
       : _disabledChip('Used passes', '<span id="' + slotId + '_passesUsed">··</span>', 'No linked customer record');
-    var certChip = _disabledChip('Certifications', '—', 'Certifications are not yet tracked — separate feedback item planned to define the data model.');
+    var certChip = openCust
+      ? _chip('Certifications', '<span id="' + slotId + '_certifications">··</span>', null, openCust, 'Open full student profile')
+      : _disabledChip('Certifications', '<span id="' + slotId + '_certifications">··</span>', 'No linked customer record');
 
     var chipsHtml = '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;">' +
       classesChip + surveysChip + reviewsChip + activePassesChip + usedPassesChip + certChip +
@@ -1837,13 +1839,21 @@
       }
       var uids = Object.keys(linkedUidSet);
 
+      var certCustomerId = customerId || resolvedId;
+      var certPromise = certCustomerId
+        ? MastDB.get('admin/customers/' + certCustomerId + '/certifications')
+            .then(function(c) { return c || {}; })
+            .catch(function() { return {}; })
+        : Promise.resolve({});
+
       var promises = [
         MastDB.query('cs_survey_responses').limitToLast(500).once()
           .then(function(s) { return (s && s.val && s.val()) || (s && typeof s === 'object' ? s : {}); })
           .catch(function() { return {}; }),
         MastDB.query('cs_reviews').limitToLast(500).once()
           .then(function(s) { return (s && s.val && s.val()) || (s && typeof s === 'object' ? s : {}); })
-          .catch(function() { return {}; })
+          .catch(function() { return {}; }),
+        certPromise
       ];
       uids.forEach(function(u) {
         promises.push(MastDB.get('public/accounts/' + u + '/wallet/passes').then(function(p) { return p || {}; }).catch(function() { return {}; }));
@@ -1852,12 +1862,22 @@
       Promise.all(promises).then(function(results) {
         var responses = results[0] || {};
         var reviews = results[1] || {};
+        var certs = results[2] || {};
         var surveyCount = 0, reviewCount = 0;
         Object.keys(responses).forEach(function(k) { if (csMatches(responses[k])) surveyCount++; });
         Object.keys(reviews).forEach(function(k) { if (csMatches(reviews[k], 'authorUid')) reviewCount++; });
 
+        var nowIso = new Date().toISOString();
+        var certCount = 0;
+        Object.keys(certs).forEach(function(cid) {
+          var c = certs[cid];
+          if (!c || c.revokedAt) return;
+          if (c.expiresAt && c.expiresAt < nowIso) return;
+          certCount++;
+        });
+
         var activePasses = 0, usedPasses = 0;
-        for (var i = 2; i < results.length; i++) {
+        for (var i = 3; i < results.length; i++) {
           var passes = results[i] || {};
           Object.keys(passes).forEach(function(pid) {
             var p = passes[pid];
@@ -1869,11 +1889,13 @@
 
         setText(slotId + '_surveys', String(surveyCount));
         setText(slotId + '_reviews', String(reviewCount));
+        setText(slotId + '_certifications', String(certCount));
         setText(slotId + '_passesActive', String(activePasses));
         setText(slotId + '_passesUsed', String(usedPasses));
       }).catch(function() {
         setText(slotId + '_surveys', '?');
         setText(slotId + '_reviews', '?');
+        setText(slotId + '_certifications', '?');
         setText(slotId + '_passesActive', '?');
         setText(slotId + '_passesUsed', '?');
       });
@@ -1903,6 +1925,10 @@
             contactName: enrollment.studentName || enrollment.customerName || null
           }).catch(function(_e) { console.warn('[book] triggerSurveyOnClassAttended failed:', _e); });
         }
+        // Cert auto-grant prompt — fires if any cert type lists this class
+        // in autoGrantOnClassIds. Instructor confirms (not silent) per Decision 11.
+        _maybePromptGrantCertForEnrollment(enrollment)
+          .catch(function(e) { console.warn('[book] cert grant prompt failed:', e); });
       }
 
       // Update session enrolled count
@@ -5182,7 +5208,7 @@
       var cancelHours = config.cancellationWindowHours != null ? config.cancellationWindowHours : 48;
 
       container.innerHTML =
-        '<div style="max-width:600px;">' +
+        '<div style="max-width:720px;">' +
           '<div class="book-form-section">' +
             '<h3 style="margin:0 0 16px;font-size:1rem;">Cancellation Policy</h3>' +
             '<div class="book-field">' +
@@ -5190,16 +5216,328 @@
               '<input type="number" id="bsCancelWindow" class="form-input" min="0" max="720" step="1" value="' + cancelHours + '" style="max-width:120px;">' +
               '<div class="book-field-hint">Cancellations within this window before class start require admin review. Outside this window, refunds are issued automatically (store credit for paid bookings, pass restore for pass bookings).</div>' +
             '</div>' +
+            '<div style="margin-top:12px;">' +
+              '<button class="btn btn-primary" onclick="window._saveBookSettings()">Save Settings</button>' +
+            '</div>' +
           '</div>' +
-          '<div style="margin-top:24px;">' +
-            '<button class="btn btn-primary" onclick="window._saveBookSettings()">Save Settings</button>' +
+          '<div class="book-form-section" style="margin-top:24px;">' +
+            '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">' +
+              '<h3 style="margin:0;font-size:1rem;">Certification Types</h3>' +
+              '<button class="btn btn-secondary" onclick="window._certTypeNew()">+ New Type</button>' +
+            '</div>' +
+            '<div class="book-field-hint" style="margin-bottom:12px;">Define the credentials your studio grants — instructor-attested or auto-granted on class completion. Archived types stay valid on existing student records.</div>' +
+            '<div id="bsCertTypesList">Loading…</div>' +
           '</div>' +
         '</div>';
+
+      _loadCertTypesIntoSettings();
     } catch (err) {
       console.error('[Book] Failed to load settings:', err);
       container.innerHTML = '<p style="color:var(--warm-gray);padding:1rem;">Failed to load settings.</p>';
     }
   }
+
+  // ============================================================
+  // Certification Types — catalog UI inside Book Settings
+  // ============================================================
+
+  var _certTypesCache = null;
+
+  async function _loadCertTypesIntoSettings() {
+    var list = document.getElementById('bsCertTypesList');
+    if (!list) return;
+    try {
+      var data = (await MastDB.get('admin/certTypes')) || {};
+      _certTypesCache = data;
+      var ids = Object.keys(data);
+      if (!ids.length) {
+        list.innerHTML = '<div style="color:var(--warm-gray);font-size:0.85rem;padding:12px;background:var(--cream-light);border-radius:6px;">No certification types defined yet. Click <strong>+ New Type</strong> to add one.</div>';
+        return;
+      }
+      var rows = ids.map(function(id) {
+        var t = data[id] || {};
+        var classCount = (t.autoGrantOnClassIds || []).length;
+        var validity = t.validityDays ? (t.validityDays + 'd') : 'Lifetime';
+        var status = t.archivedAt
+          ? '<span style="color:var(--warm-gray);font-size:0.72rem;">Archived</span>'
+          : '<span style="color:var(--teal,#2a7c6f);font-size:0.72rem;">Active</span>';
+        return '<tr>' +
+          '<td><strong>' + esc(t.name || id) + '</strong>' + (t.description ? '<div style="color:var(--warm-gray);font-size:0.78rem;">' + esc(t.description) + '</div>' : '') + '</td>' +
+          '<td>' + esc(validity) + '</td>' +
+          '<td>' + classCount + ' class' + (classCount === 1 ? '' : 'es') + '</td>' +
+          '<td>' + status + '</td>' +
+          '<td style="text-align:right;"><button class="btn btn-link" onclick="window._certTypeEdit(\'' + esc(id) + '\')">Edit</button>' +
+            (t.archivedAt
+              ? '<button class="btn btn-link" onclick="window._certTypeUnarchive(\'' + esc(id) + '\')">Unarchive</button>'
+              : '<button class="btn btn-link" onclick="window._certTypeArchive(\'' + esc(id) + '\')">Archive</button>') +
+          '</td>' +
+        '</tr>';
+      }).join('');
+      list.innerHTML = '<table class="data-table"><thead><tr><th>Name</th><th>Validity</th><th>Auto-grant on</th><th>Status</th><th></th></tr></thead><tbody>' + rows + '</tbody></table>';
+    } catch (err) {
+      console.error('[Book] Failed to load cert types:', err);
+      list.innerHTML = '<div style="color:var(--warm-gray);">Failed to load cert types.</div>';
+    }
+  }
+
+  function _renderCertTypeForm(existing) {
+    var t = existing || {};
+    var name = t.name || '';
+    var desc = t.description || '';
+    var validity = t.validityDays != null ? t.validityDays : '';
+    var selected = {};
+    (t.autoGrantOnClassIds || []).forEach(function(cid) { selected[cid] = true; });
+    var classOptions = (classesData || []).map(function(c) {
+      var checked = selected[c.id] ? ' checked' : '';
+      return '<label style="display:flex;align-items:center;gap:6px;padding:4px 0;font-size:0.85rem;">' +
+        '<input type="checkbox" name="ctAutoGrant" value="' + esc(c.id) + '"' + checked + '> ' + esc(c.name || c.id) +
+      '</label>';
+    }).join('') || '<div style="color:var(--warm-gray);font-size:0.85rem;">No classes loaded.</div>';
+
+    return '<div style="display:flex;flex-direction:column;gap:14px;">' +
+      '<div class="book-field"><label class="form-label">Name</label>' +
+        '<input type="text" id="ctName" class="form-input" value="' + esc(name) + '" placeholder="e.g. Solo Torch Access"></div>' +
+      '<div class="book-field"><label class="form-label">Description (optional)</label>' +
+        '<textarea id="ctDesc" class="form-input" rows="2" placeholder="What does earning this cert mean?">' + esc(desc) + '</textarea></div>' +
+      '<div class="book-field"><label class="form-label">Validity (days, blank = lifetime)</label>' +
+        '<input type="number" id="ctValidity" class="form-input" min="1" step="1" value="' + esc(String(validity)) + '" style="max-width:140px;">' +
+        '<div class="book-field-hint">If set, the cert expires this many days after grant. Lifetime certs never expire.</div></div>' +
+      '<div class="book-field"><label class="form-label">Auto-grant on completion of these classes</label>' +
+        '<div style="max-height:200px;overflow-y:auto;border:1px solid var(--cream-dark);border-radius:6px;padding:8px;">' + classOptions + '</div>' +
+        '<div class="book-field-hint">When a student completes one of these classes, you\'ll be prompted to grant this cert.</div></div>' +
+    '</div>';
+  }
+
+  window._certTypeNew = function() {
+    if (!window.mastSlideOut || !window.mastSlideOut.open) {
+      window.MastAdmin && MastAdmin.showToast('Slide-out unavailable', true);
+      return;
+    }
+    window.mastSlideOut.open({
+      title: 'New Certification Type',
+      subtitle: null,
+      bodyHtml: _renderCertTypeForm(null),
+      footerHtml: '<button class="btn btn-primary" onclick="window._certTypeSave(null)">Create</button>',
+      onClose: function() {}
+    });
+  };
+
+  window._certTypeEdit = function(typeId) {
+    if (!_certTypesCache || !_certTypesCache[typeId]) return;
+    var t = _certTypesCache[typeId];
+    if (!window.mastSlideOut || !window.mastSlideOut.open) return;
+    window.mastSlideOut.open({
+      title: 'Edit ' + (t.name || typeId),
+      subtitle: null,
+      bodyHtml: _renderCertTypeForm(t),
+      footerHtml: '<button class="btn btn-primary" onclick="window._certTypeSave(\'' + typeId.replace(/'/g, "\\'") + '\')">Save</button>',
+      onClose: function() {}
+    });
+  };
+
+  window._certTypeSave = async function(typeId) {
+    var name = (document.getElementById('ctName') || {}).value;
+    if (!name || !name.trim()) {
+      MastAdmin && MastAdmin.showToast('Name is required', true);
+      return;
+    }
+    var desc = (document.getElementById('ctDesc') || {}).value || '';
+    var validityRaw = (document.getElementById('ctValidity') || {}).value || '';
+    var validity = null;
+    if (validityRaw !== '' && !isNaN(parseInt(validityRaw, 10))) {
+      validity = Math.max(1, parseInt(validityRaw, 10));
+    }
+    var autoGrantIds = [];
+    document.querySelectorAll('input[name="ctAutoGrant"]:checked').forEach(function(el) {
+      autoGrantIds.push(el.value);
+    });
+    var now = new Date().toISOString();
+    try {
+      if (typeId) {
+        await MastDB.update('admin/certTypes/' + typeId, {
+          name: name.trim(),
+          description: desc.trim() || null,
+          validityDays: validity,
+          autoGrantOnClassIds: autoGrantIds,
+          updatedAt: now
+        });
+        MastAdmin && MastAdmin.showToast('Cert type updated');
+      } else {
+        var newId = 'cert_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+        await MastDB.set('admin/certTypes/' + newId, {
+          id: newId,
+          name: name.trim(),
+          description: desc.trim() || null,
+          validityDays: validity,
+          autoGrantOnClassIds: autoGrantIds,
+          expiryNoticeDays: [30, 7, 0],
+          archivedAt: null,
+          createdAt: now,
+          updatedAt: now
+        });
+        MastAdmin && MastAdmin.showToast('Cert type created');
+      }
+      window.mastSlideOut && window.mastSlideOut.close && window.mastSlideOut.close();
+      _loadCertTypesIntoSettings();
+    } catch (err) {
+      console.error('[Book] Failed to save cert type:', err);
+      MastAdmin && MastAdmin.showToast('Save failed: ' + (err.message || err), true);
+    }
+  };
+
+  window._certTypeArchive = async function(typeId) {
+    if (!confirm('Archive this cert type? Existing student certs remain valid; the type just hides from new grants.')) return;
+    try {
+      await MastDB.update('admin/certTypes/' + typeId, { archivedAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
+      MastAdmin && MastAdmin.showToast('Archived');
+      _loadCertTypesIntoSettings();
+    } catch (err) {
+      MastAdmin && MastAdmin.showToast('Archive failed', true);
+    }
+  };
+
+  window._certTypeUnarchive = async function(typeId) {
+    try {
+      await MastDB.update('admin/certTypes/' + typeId, { archivedAt: null, updatedAt: new Date().toISOString() });
+      MastAdmin && MastAdmin.showToast('Restored');
+      _loadCertTypesIntoSettings();
+    } catch (err) {
+      MastAdmin && MastAdmin.showToast('Restore failed', true);
+    }
+  };
+
+  // ============================================================
+  // Cert Grant Prompt (fires on enrollment-complete)
+  // ============================================================
+
+  async function _maybePromptGrantCertForEnrollment(enrollment) {
+    var classId = enrollment.classId;
+    if (!classId) return;
+    var allTypes = (await MastDB.get('admin/certTypes')) || {};
+    var matchedTypeId = null;
+    var matchedType = null;
+    Object.keys(allTypes).forEach(function(tid) {
+      var t = allTypes[tid];
+      if (!t || t.archivedAt) return;
+      if (Array.isArray(t.autoGrantOnClassIds) && t.autoGrantOnClassIds.indexOf(classId) !== -1) {
+        matchedTypeId = tid;
+        matchedType = t;
+      }
+    });
+    if (!matchedTypeId) return;
+    return _promptGrantCertOnComplete(enrollment, matchedTypeId, matchedType);
+  }
+
+  async function _promptGrantCertOnComplete(enrollment, typeId, certType) {
+    if (!certType || certType.archivedAt) {
+      console.warn('[book] cert type missing or archived:', typeId);
+      return;
+    }
+
+    // Resolve customerId — required for the cert path. Try direct field, then
+    // email-index resolver (same pattern as commit 8426f70).
+    var customerId = enrollment.customerId || null;
+    var email = (enrollment.studentEmail || enrollment.customerEmail || '').toLowerCase().trim();
+    if (!customerId && email) {
+      var indexKey = email.replace(/[.#$[\]/]/g, ',');
+      customerId = await MastDB.get('admin/customerIndexes/byEmail/' + indexKey).catch(function() { return null; });
+    }
+    if (!customerId) {
+      MastAdmin && MastAdmin.showToast('Cert grant skipped: no customer record linked to enrollment', true);
+      return;
+    }
+
+    var studentName = enrollment.studentName || enrollment.customerName || email || 'this student';
+
+    var ok = confirm('Class completed. Grant "' + certType.name + '" certification to ' + studentName + '?');
+    if (!ok) return;
+
+    await _grantCert({
+      typeId: typeId,
+      customerId: customerId,
+      sourceClassId: enrollment.classId || null,
+      sourceEnrollmentId: enrollment.id || enrollment._id || null,
+      certType: certType
+    });
+  }
+
+  async function _grantCert(input) {
+    var customerId = input.customerId;
+    var typeId = input.typeId;
+    var certType = input.certType || (await MastDB.get('admin/certTypes/' + typeId));
+    if (!certType || certType.archivedAt) {
+      MastAdmin && MastAdmin.showToast('Cannot grant: cert type missing or archived', true);
+      return null;
+    }
+
+    var now = new Date().toISOString();
+    var expiresAt = (typeof certType.validityDays === 'number' && certType.validityDays > 0)
+      ? new Date(Date.now() + certType.validityDays * 86400000).toISOString()
+      : null;
+
+    var grantedByEmpId = (window.MastAdmin && MastAdmin.currentUser && MastAdmin.currentUser.uid) || 'system';
+    var grantedByName = (window.MastAdmin && MastAdmin.currentUser && (MastAdmin.currentUser.displayName || MastAdmin.currentUser.email)) || 'system';
+
+    // Idempotent re-grant: find existing non-revoked instance with same typeId.
+    var existing = (await MastDB.get('admin/customers/' + customerId + '/certifications')) || {};
+    var existingId = null;
+    var existingRec = null;
+    Object.keys(existing).forEach(function(cid) {
+      var c = existing[cid];
+      if (c && c.typeId === typeId && !c.revokedAt) {
+        existingId = cid;
+        existingRec = c;
+      }
+    });
+
+    var instructorSnap = { empId: grantedByEmpId, displayName: grantedByName };
+
+    if (existingId && existingRec) {
+      var history = Array.isArray(existingRec.history) ? existingRec.history.slice() : [];
+      history.push({
+        grantedAt: existingRec.grantedAt,
+        grantedBy: existingRec.grantedBy,
+        sourceClassId: existingRec.sourceClassId,
+        sourceEnrollmentId: existingRec.sourceEnrollmentId,
+        instructorOfRecord: existingRec.instructorOfRecord,
+        expiresAt: existingRec.expiresAt
+      });
+      await MastDB.update('admin/customers/' + customerId + '/certifications/' + existingId, {
+        grantedAt: now,
+        grantedBy: grantedByEmpId,
+        sourceClassId: input.sourceClassId || null,
+        sourceEnrollmentId: input.sourceEnrollmentId || null,
+        instructorOfRecord: instructorSnap,
+        expiresAt: expiresAt,
+        expiryNoticesSent: [],
+        history: history
+      });
+      MastAdmin && MastAdmin.showToast('Certification re-granted');
+      return { certId: existingId, regranted: true };
+    }
+
+    var newId = 'cert_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+    await MastDB.set('admin/customers/' + customerId + '/certifications/' + newId, {
+      id: newId,
+      typeId: typeId,
+      grantedAt: now,
+      grantedBy: grantedByEmpId,
+      sourceClassId: input.sourceClassId || null,
+      sourceEnrollmentId: input.sourceEnrollmentId || null,
+      instructorOfRecord: instructorSnap,
+      expiresAt: expiresAt,
+      expiryNoticesSent: [],
+      revokedAt: null,
+      revokedBy: null,
+      revokeReason: null,
+      history: []
+    });
+    MastAdmin && MastAdmin.showToast('Certification granted');
+    return { certId: newId, regranted: false };
+  }
+
+  // Exposed for customers module (manual grant from customer detail).
+  window._bookGrantCert = _grantCert;
 
   window._saveBookSettings = async function() {
     var cancelInput = document.getElementById('bsCancelWindow');
