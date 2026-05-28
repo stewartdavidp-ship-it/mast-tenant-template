@@ -251,8 +251,8 @@
       '<h2>Gift Cards</h2>' +
       '<div style="display:flex;gap:8px;">' +
         '<button class="btn btn-secondary btn-small" onclick="window._gcOpenConfig()">&#9881; Settings</button>' +
-        '<button class="btn btn-secondary btn-small" onclick="window._gcOpenPromoCredit()">&#127873; Promo Credit</button>' +
-        '<button class="btn btn-primary btn-small" onclick="window._gcOpenManualIssue()">+ Issue Gift Card</button>' +
+        (hasPermission('wallet', 'grantCredit') ? '<button class="btn btn-secondary btn-small" onclick="window._gcOpenPromoCredit()">&#127873; Promo Credit</button>' : '') +
+        (hasPermission('giftCards', 'issue') ? '<button class="btn btn-primary btn-small" onclick="window._gcOpenManualIssue()">+ Issue Gift Card</button>' : '') +
       '</div>' +
     '</div>';
 
@@ -512,7 +512,7 @@
   };
 
   window._gcIssueCard = async function() {
-    if (!isAdmin()) { showToast('Admin access required.', true); return; }
+    if (!hasPermission('giftCards', 'issue')) { showToast('You do not have permission to issue gift cards.', true); return; }
     var amountVal = parseFloat(document.getElementById('gcIssueAmount').value);
     if (!amountVal || amountVal <= 0) {
       showToast('Enter a valid amount.', true);
@@ -604,7 +604,7 @@
   };
 
   window._gcIssuePromo = async function() {
-    if (!isAdmin()) { showToast('Admin access required.', true); return; }
+    if (!hasPermission('wallet', 'grantCredit')) { showToast('You do not have permission to grant promo credit.', true); return; }
     var amountVal = parseFloat(document.getElementById('gcPromoAmount').value);
     if (!amountVal || amountVal <= 0) {
       showToast('Enter a valid amount.', true);

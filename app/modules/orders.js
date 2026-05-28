@@ -5225,6 +5225,8 @@
     var simpleActions = { 'requested': ['approved', 'declined'], 'approved': ['shipped-back'], 'shipped-back': ['received'] };
     var simpleNext = simpleActions[status] || [];
     simpleNext.forEach(function(ns) {
+      // Approving an RMA is a sensitive function gated by rma.approve.
+      if (ns === 'approved' && !hasPermission('rma', 'approve')) return;
       var label = { 'approved': 'Approve', 'declined': 'Decline', 'shipped-back': 'Mark Shipped Back', 'received': 'Mark Received' }[ns] || ns.replace(/-/g, ' ');
       var btnClass = ns === 'declined' ? 'btn btn-danger' : 'btn btn-primary';
       actionsHtml += '<button class="' + btnClass + '" style="font-size:0.78rem;padding:6px 14px;" onclick="transitionRma(\'' + esc(rmaId) + '\', \'' + esc(ns) + '\')">' + label + '</button>';
@@ -5463,6 +5465,11 @@
       'received': 'mark-received'
     };
     var action = actionMap[actionOrStatus] || actionOrStatus;
+
+    if (action === 'approve' && !hasPermission('rma', 'approve')) {
+      showToast('You do not have permission to approve returns.', true);
+      return;
+    }
 
     try {
       showToast('Processing...');

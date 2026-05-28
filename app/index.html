@@ -10701,6 +10701,7 @@
             <tbody id="permMatrixBody"></tbody>
           </table>
         </div>
+        <div id="funcPermSection" style="margin-top:20px;"></div>
         <div style="margin-top:16px;display:flex;gap:10px;justify-content:flex-end;" id="permMatrixActions">
           <button class="btn btn-secondary" onclick="resetPermissionMatrix()">Reset</button>
           <button class="btn btn-primary" onclick="savePermissionMatrix()">Save Permissions</button>
@@ -15065,6 +15066,40 @@ var DEFAULT_ROLES = {
     navSections: ['sales', 'classes']
   }
 };
+// ============================================================
+// Function-level (sensitive-action) permissions — Phase E4
+// ============================================================
+// Each entry is a non-CRUD capability gated via hasPermission(entity, action),
+// independent of the create/read/update/delete grid. This list is the single
+// source of truth: defaults seed DEFAULT_ROLES, the role matrix + per-user
+// override editor render a "Sensitive Functions" section from it, and each
+// module calls hasPermission(entity, action) at the real action site. To add a
+// new sensitive function: add an entry here AND a gate at the call site — it
+// auto-populates the permission UI.
+var FUNCTION_PERMISSIONS = [
+  { entity: 'giftCards', action: 'issue',            label: 'Issue gift card',            description: 'Manually issue a gift card (compensation, promotions).', roleDefaults: { admin: true, manager: true,  user: false, guest: false } },
+  { entity: 'wallet',    action: 'grantCredit',      label: 'Grant store / promo credit', description: 'Grant or adjust customer store credit.',                 roleDefaults: { admin: true, manager: false, user: false, guest: false } },
+  { entity: 'rma',       action: 'approve',          label: 'Approve RMA / return',       description: 'Approve a customer return request (RMA).',               roleDefaults: { admin: true, manager: true,  user: false, guest: false } },
+  { entity: 'finance',   action: 'approveAmendment', label: 'Approve finance amendment',  description: 'Approve an amendment in the Day-Close amendments queue.', roleDefaults: { admin: true, manager: false, user: false, guest: false } }
+];
+
+// Seed function-permission defaults into DEFAULT_ROLES so hasPermission has a
+// base value and loadUserRole's backfill covers existing stored roles. Never
+// overwrites an explicitly-set default (e.g. finance.approveAmendment already
+// declared above).
+(function seedFunctionPermissionDefaults() {
+  FUNCTION_PERMISSIONS.forEach(function(fp) {
+    CANONICAL_ROLES.forEach(function(roleKey) {
+      var role = DEFAULT_ROLES[roleKey];
+      if (!role || !role.permissions) return;
+      if (!role.permissions[fp.entity]) role.permissions[fp.entity] = {};
+      if (role.permissions[fp.entity][fp.action] === undefined) {
+        role.permissions[fp.entity][fp.action] = !!fp.roleDefaults[roleKey];
+      }
+    });
+  });
+})();
+
 var DEFAULT_NAV_SECTIONS = {
   admin:   null,  // null = no filter, sees everything
   manager: ['products', 'sales', 'marketing', 'retention', 'events',
@@ -15429,6 +15464,16 @@ async function loadUserRole(uid) {
       Object.keys(defaultPerms).forEach(function(entity) {
         if (!currentRoleConfig.permissions[entity]) {
           currentRoleConfig.permissions[entity] = defaultPerms[entity];
+        }
+      });
+      // Action-level backfill for function-level permissions: a stored role
+      // config may already have the entity (e.g. 'finance') but lack a
+      // newly-added sensitive action. Fill those from defaults too.
+      FUNCTION_PERMISSIONS.forEach(function(fp) {
+        if (!currentRoleConfig.permissions[fp.entity]) currentRoleConfig.permissions[fp.entity] = {};
+        if (currentRoleConfig.permissions[fp.entity][fp.action] === undefined) {
+          currentRoleConfig.permissions[fp.entity][fp.action] =
+            (defaultPerms[fp.entity] && defaultPerms[fp.entity][fp.action]) === true;
         }
       });
     }
@@ -18707,7 +18752,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260528-163959-7da52ef';
+var MAST_MODULES_V = '20260528-164603-330c38f';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -47461,6 +47506,37 @@ function openUserPermissionsPanel(uid) {
     matrixRows += '<tr>' + cells + '</tr>';
   });
 
+  // Sensitive Functions section — one toggle per FUNCTION_PERMISSIONS entry,
+  // using the same elevation/reduction logic as the CRUD grid above.
+  var funcRows = '';
+  FUNCTION_PERMISSIONS.forEach(function(fp) {
+    var ep2 = effective[fp.entity] || {};
+    var overrideVal = (editingUserOverrides[fp.entity] && editingUserOverrides[fp.entity][fp.action] !== undefined)
+      ? editingUserOverrides[fp.entity][fp.action]
+      : null;
+    var effectiveVal = overrideVal !== null ? overrideVal : ep2[fp.action];
+    var isElevation = isAdminGrantedElevation(fp.entity, fp.action, role, roleConfig);
+    var isReduced = !isElevation && overrideVal === false;
+    var cellStyle = '';
+    var disabledAttr = '';
+    var titleAttr = '';
+    if (isElevation && overrideVal === true) {
+      cellStyle = 'background:rgba(245,158,11,0.12);';
+      if (!isEditorAdmin) { disabledAttr = ' disabled'; titleAttr = ' title="Owner-granted — cannot be removed by Manager"'; }
+    } else if (isElevation && !isEditorAdmin) {
+      disabledAttr = ' disabled';
+      titleAttr = ' title="Below role ceiling — only Owner can grant this"';
+    } else if (isReduced) {
+      cellStyle = 'background:rgba(239,68,68,0.12);';
+    }
+    funcRows += '<tr>' +
+      '<td style="font-size:0.85rem;"><strong>' + esc(fp.label) + '</strong>' +
+        '<div style="font-size:0.72rem;color:var(--warm-gray);">' + esc(fp.description) + '</div></td>' +
+      '<td style="text-align:center;' + cellStyle + '"><input type="checkbox"' + (effectiveVal ? ' checked' : '') + disabledAttr + titleAttr +
+        ' onchange="toggleUserOverride(\'' + uid + '\',\'' + fp.entity + '\',\'' + fp.action + '\',this.checked)"></td>' +
+    '</tr>';
+  });
+
   var guestExpiryField = '';
   if (role === 'guest') {
     var expiryVal = u.accessExpiry ? u.accessExpiry.substring(0, 10) : '';
@@ -47492,13 +47568,20 @@ function openUserPermissionsPanel(uid) {
       '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:8px;line-height:1.5;">' +
         'Each row in this matrix is one <strong>capability</strong> (an entity like <em>orders</em> + an action like <em>delete</em>). The <strong>grants</strong> (which roles or users have which capabilities) are fully dynamic — edit any cell here and save.' +
         '<br><br>The <strong>catalog of capabilities</strong> itself is currently defined in the app code (<code>ENTITY_LABELS</code> + <code>DEFAULT_ROLES</code>) and used at every gate via <code>hasPermission(entity, action)</code>. When a new feature ships, the developer adds the new entity/action and a gate; that release auto-populates here for assignment. It does NOT update by configuration alone.' +
-        '<br><br>Finer-grained controls (e.g. "approve gift card refund", "redeem promo credit", "approve RMA") are tracked as a separate feature ask &mdash; making the capability catalog itself editable from this surface.' +
+        '<br><br>Finer-grained controls (e.g. "issue gift card", "grant store credit", "approve RMA") live in the <strong>Sensitive Functions</strong> section below — toggle them per role (Team &rarr; Roles) or per user here.' +
       '</div>' +
     '</details>' +
     '<div style="overflow-x:auto;">' +
     '<table class="perm-matrix" style="width:100%;">' +
       '<thead><tr><th>Entity</th><th>Create</th><th>Read</th><th>Update</th><th>Delete</th></tr></thead>' +
       '<tbody>' + matrixRows + '</tbody>' +
+    '</table></div>' +
+    '<div style="overflow-x:auto;margin-top:16px;">' +
+    '<h4 style="font-size:0.9rem;margin:0 0 4px;">Sensitive Functions</h4>' +
+    '<p style="font-size:0.72rem;color:var(--warm-gray);margin:0 0 8px;">High-trust actions gated independently of the grid above.</p>' +
+    '<table class="perm-matrix" style="width:100%;">' +
+      '<thead><tr><th>Function</th><th>Allowed</th></tr></thead>' +
+      '<tbody>' + funcRows + '</tbody>' +
     '</table></div>' +
     '<div style="margin-top:12px;display:flex;justify-content:space-between;align-items:center;">' +
       '<button class="btn btn-secondary" style="font-size:0.78rem;" onclick="resetUserOverrides(\'' + uid + '\')">Reset to Role Defaults</button>' +
@@ -48285,6 +48368,32 @@ function renderPermissionMatrix() {
     tr.innerHTML = cells;
     tbody.appendChild(tr);
   });
+
+  // Sensitive Functions section — non-CRUD capabilities from FUNCTION_PERMISSIONS.
+  var funcWrap = document.getElementById('funcPermSection');
+  if (funcWrap) {
+    var isAdminRole = role.isDefault && roleKey === 'admin';
+    var frows = FUNCTION_PERMISSIONS.map(function(fp) {
+      if (!editingPermissions[fp.entity]) editingPermissions[fp.entity] = {};
+      var cur = editingPermissions[fp.entity][fp.action];
+      if (cur === undefined) {
+        var dr = DEFAULT_ROLES[roleKey] && DEFAULT_ROLES[roleKey].permissions[fp.entity];
+        cur = (dr && dr[fp.action]) === true;
+        editingPermissions[fp.entity][fp.action] = cur;
+      }
+      var fdisabled = isAdminRole ? ' disabled title="Admin has full access"' : '';
+      return '<tr>' +
+        '<td style="font-size:0.85rem;"><strong>' + esc(fp.label) + '</strong>' +
+          '<div style="font-size:0.72rem;color:var(--warm-gray);">' + esc(fp.description) + '</div></td>' +
+        '<td style="text-align:center;"><input type="checkbox"' + (cur ? ' checked' : '') + fdisabled +
+          ' onchange="togglePermission(\'' + fp.entity + '\', \'' + fp.action + '\', this.checked)"></td>' +
+      '</tr>';
+    }).join('');
+    funcWrap.innerHTML =
+      '<h4 style="font-size:0.9rem;margin:0 0 4px;">Sensitive Functions</h4>' +
+      '<p style="font-size:0.72rem;color:var(--warm-gray);margin:0 0 8px;">High-trust actions gated independently of the create/read/update/delete grid above.</p>' +
+      '<table class="perm-matrix" style="width:100%;"><thead><tr><th>Function</th><th>Allowed</th></tr></thead><tbody>' + frows + '</tbody></table>';
+  }
 
   // Show/hide save buttons based on editability
   var actionsEl = document.getElementById('permMatrixActions');

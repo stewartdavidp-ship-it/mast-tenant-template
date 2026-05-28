@@ -2375,7 +2375,9 @@
       // D4: inline action buttons. Each opens a modal that writes via the
       // adjustCustomerWallet CF, which audits to admin/walletAdjustments.
       h += '<div style="margin-top:14px;display:flex;flex-wrap:wrap;gap:6px;">';
-      h += '<button class="btn btn-secondary btn-small" onclick="customersOpenWalletAdjust(\'credit\',\'' + cidSafe + '\',\'' + uidSafe + '\')">+ Adjust credits</button>';
+      if (hasPermission('wallet', 'grantCredit')) {
+        h += '<button class="btn btn-secondary btn-small" onclick="customersOpenWalletAdjust(\'credit\',\'' + cidSafe + '\',\'' + uidSafe + '\')">+ Adjust credits</button>';
+      }
       h += '<button class="btn btn-secondary btn-small" onclick="customersOpenWalletAdjust(\'pass\',\'' + cidSafe + '\',\'' + uidSafe + '\')">+ Grant pass</button>';
       h += '<button class="btn btn-secondary btn-small" onclick="customersOpenWalletAdjust(\'membership\',\'' + cidSafe + '\',\'' + uidSafe + '\')">Change tier</button>';
       h += '<button class="btn btn-secondary btn-small" onclick="customersOpenWalletAdjust(\'loyalty\',\'' + cidSafe + '\',\'' + uidSafe + '\')">Adjust loyalty</button>';
@@ -2787,6 +2789,7 @@
 
     var payload = {};
     if (kind === 'credit') {
+      if (!hasPermission('wallet', 'grantCredit')) { setStatus('You do not have permission to grant store credit.', 'var(--danger)'); return; }
       if (action === 'grant') {
         var amt = parseFloat((document.getElementById('walletAdjAmount') || {}).value || '0');
         if (!(amt > 0)) { setStatus('Enter an amount.', 'var(--danger)'); return; }
