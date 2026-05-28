@@ -7745,6 +7745,14 @@
           <button class="btn btn-secondary" id="squarePaymentsToggle" onclick="toggleSquarePayments()" style="font-size:0.78rem;padding:4px 12px;">💳 Day Close</button>
           <div id="salesFilterControls" style="display:flex;align-items:center;gap:8px;">
             <input type="date" id="salesDateFilter" onchange="filterSalesByDate()" style="padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.85rem;">
+            <!-- Filter-audit Tier-1: channel selector. Populated dynamically by
+                 renderSales() from the distinct channelId values on current
+                 sales rows (+ "Direct" bucket for untagged sales). Stays as a
+                 dropdown rather than pills because the option set is unbounded
+                 (one option per channel doc). -->
+            <select id="salesChannelFilter" onchange="renderSales()" style="padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.85rem;">
+              <option value="all">All Channels</option>
+            </select>
             <div class="order-filter-pills" data-filter-for="salesStatusFilter" style="margin:0;"></div>
             <select id="salesStatusFilter" onchange="renderSales()" style="display:none;">
               <option value="all">All Status</option>
@@ -18608,7 +18616,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260527-212845-3b3ff85';
+var MAST_MODULES_V = '20260527-214428-8148e22';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
