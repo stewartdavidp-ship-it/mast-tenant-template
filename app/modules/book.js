@@ -1658,23 +1658,26 @@
         '<span style="font-size:0.78rem;color:var(--warm-gray);font-weight:600;text-transform:uppercase;letter-spacing:0.04em;margin-right:4px;">Actions</span>' +
         actionsHtml +
       '</div>' +
-      // 1GpeRGn — student history. Cross-references enrollmentsData by
-      // email or UID to surface every other class this student is/was in,
-      // so the operator gets the full picture from the enrollment surface.
-      _renderEnrollmentStudentHistory(e) +
+      // 1GpeRGn — student signals card. Compact chip row across five surfaces
+      // (classes / surveys / reviews / passes / certifications) + a recent
+      // enrollments strip + drill-out link to the full customer detail page.
+      _renderEnrollmentStudentSignals(e) +
     '</div>';
   }
 
-  // Full-width student-history card placed below the 4-card grid + Actions row.
-  // Filters enrollmentsData by matching email (case-insensitive) or studentUid,
-  // excludes the current enrollment, sorts newest-first. No remote fetch —
-  // works off in-memory enrollmentsData already loaded for the list.
-  function _renderEnrollmentStudentHistory(current) {
+  // Compact "signals" card: dense chip row + 3 most-recent enrollments + a
+  // drill-out link to the canonical customer detail page. Classes count and
+  // recent strip are computed synchronously from in-memory enrollmentsData;
+  // surveys / reviews / passes counts populate asynchronously and replace
+  // their placeholder chips when the reads return.
+  function _renderEnrollmentStudentSignals(current) {
     var emailKey = (current.studentEmail || current.customerEmail || '').toLowerCase().trim();
     var uid = current.studentUid || null;
-    if (!emailKey && !uid) {
-      return '<div style="margin-top:18px;padding:14px 16px;border:1px dashed var(--cream-dark);border-radius:10px;color:var(--warm-gray);font-size:0.85rem;">No student email or UID on this enrollment — cannot build history.</div>';
+    var customerId = current.customerId || null;
+    if (!emailKey && !uid && !customerId) {
+      return '<div style="margin-top:18px;padding:14px 16px;border:1px dashed var(--cream-dark);border-radius:10px;color:var(--warm-gray);font-size:0.85rem;">No student email, UID, or customer link on this enrollment — cannot build student signals.</div>';
     }
+
     var others = (enrollmentsData || []).filter(function(r) {
       if (!r || r.id === current.id) return false;
       var rEmail = (r.studentEmail || r.customerEmail || '').toLowerCase().trim();
@@ -1685,31 +1688,45 @@
       return (b.enrolledAt || '').localeCompare(a.enrolledAt || '');
     });
 
-    // Aggregate counts for the header chip row.
-    var byStatus = {};
-    others.forEach(function(r) { byStatus[r.status] = (byStatus[r.status] || 0) + 1; });
-    var totalSpend = others.reduce(function(sum, r) { return sum + (r.pricePaidCents || r.pricePaid || 0); }, 0);
+    var slotId = 'enrollSignals_' + Math.random().toString(36).slice(2, 10);
 
-    function _chip(label, val, color) {
-      return '<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:12px;background:rgba(42,124,111,0.10);color:' + (color || 'var(--teal,#2a7c6f)') + ';font-size:0.78rem;font-weight:600;">' +
-        esc(label) + ' <span style="font-family:monospace;">' + esc(String(val)) + '</span></span>';
+    function _chip(label, valHtml, color, onclick, title) {
+      var attrs = onclick ? ' style="cursor:pointer;" onclick="' + onclick + '"' : '';
+      var titleAttr = title ? ' title="' + esc(title) + '"' : '';
+      var c = color || 'var(--teal,#2a7c6f)';
+      return '<span' + attrs + titleAttr + ' data-chip="' + esc(label.toLowerCase()) + '" style="display:inline-flex;align-items:center;gap:4px;padding:4px 12px;border-radius:14px;background:rgba(42,124,111,0.10);color:' + c + ';font-size:0.78rem;font-weight:600;' + (onclick ? '' : '') + '">' +
+        esc(label) + ' <span style="font-family:monospace;">' + valHtml + '</span></span>';
+    }
+    function _disabledChip(label, valHtml, title) {
+      return '<span title="' + esc(title || '') + '" data-chip="' + esc(label.toLowerCase()) + '" style="display:inline-flex;align-items:center;gap:4px;padding:4px 12px;border-radius:14px;background:var(--cream-dark);color:var(--warm-gray);font-size:0.78rem;font-weight:600;">' +
+        esc(label) + ' <span style="font-family:monospace;">' + valHtml + '</span></span>';
     }
 
-    var chipsHtml = '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;">' +
-      _chip('Total', others.length) +
-      (byStatus.completed ? _chip('Completed', byStatus.completed) : '') +
-      (byStatus.confirmed ? _chip('Confirmed', byStatus.confirmed) : '') +
-      (byStatus.waitlisted ? _chip('Waitlisted', byStatus.waitlisted, 'var(--amber,#b45309)') : '') +
-      (byStatus['no-show'] ? _chip('No-show', byStatus['no-show'], 'var(--danger,#b81d1d)') : '') +
-      (byStatus.cancelled ? _chip('Cancelled', byStatus.cancelled, 'var(--warm-gray,#888)') : '') +
-      (totalSpend > 0 ? _chip('Lifetime', formatPrice(totalSpend)) : '') +
+    var openCust = customerId ? "window.location.hash='#customers?id=" + esc(customerId) + "'" : null;
+    var classesChip = _chip('Classes', String(others.length), null, openCust, 'Open full student profile');
+    var surveysChip = openCust
+      ? _chip('Surveys', '<span id="' + slotId + '_surveys">··</span>', null, openCust, 'Open full student profile')
+      : _disabledChip('Surveys', '<span id="' + slotId + '_surveys">··</span>', 'No linked customer record');
+    var reviewsChip = openCust
+      ? _chip('Reviews', '<span id="' + slotId + '_reviews">··</span>', null, openCust, 'Open full student profile')
+      : _disabledChip('Reviews', '<span id="' + slotId + '_reviews">··</span>', 'No linked customer record');
+    var activePassesChip = openCust
+      ? _chip('Active passes', '<span id="' + slotId + '_passesActive">··</span>', null, openCust, 'Open full student profile')
+      : _disabledChip('Active passes', '<span id="' + slotId + '_passesActive">··</span>', 'No linked customer record');
+    var usedPassesChip = openCust
+      ? _chip('Used passes', '<span id="' + slotId + '_passesUsed">··</span>', null, openCust, 'Open full student profile')
+      : _disabledChip('Used passes', '<span id="' + slotId + '_passesUsed">··</span>', 'No linked customer record');
+    var certChip = _disabledChip('Certifications', '—', 'Certifications are not yet tracked — separate feedback item planned to define the data model.');
+
+    var chipsHtml = '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;">' +
+      classesChip + surveysChip + reviewsChip + activePassesChip + usedPassesChip + certChip +
     '</div>';
 
-    var listHtml;
+    var recentStrip;
     if (others.length === 0) {
-      listHtml = '<div style="color:var(--warm-gray);font-size:0.9rem;padding:8px 0;">This student has no other enrollments in the system yet.</div>';
+      recentStrip = '<div style="color:var(--warm-gray);font-size:0.85rem;padding:6px 0;">No other enrollments yet.</div>';
     } else {
-      var rows = others.slice(0, 50).map(function(r) {
+      var rows = others.slice(0, 3).map(function(r) {
         var className = (allClassesMap[r.classId] && allClassesMap[r.classId].name) || r.classId || '—';
         var sess = r.sessionId ? allSessionsMap[r.sessionId] : null;
         var when = sess
@@ -1725,24 +1742,118 @@
           '<td><span style="' + badgeStyle(STATUS_BADGE_COLORS, r.status) + '">' + esc(statusLabel) + '</span></td>' +
         '</tr>';
       }).join('');
-      listHtml = '<table class="data-table" style="margin-top:4px;">' +
+      var moreNote = others.length > 3
+        ? '<div style="font-size:0.72rem;color:var(--warm-gray);margin-top:4px;">' + (others.length - 3) + ' more — see full student profile for the rest.</div>'
+        : '';
+      recentStrip = '<div style="font-weight:600;font-size:0.78rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.04em;margin-top:4px;margin-bottom:6px;">Recent enrollments</div>' +
+        '<table class="data-table" style="margin-top:0;">' +
         '<thead><tr><th>Class</th><th>When</th><th>Paid</th><th>Status</th></tr></thead>' +
         '<tbody>' + rows + '</tbody>' +
-      '</table>' +
-      (others.length > 50 ? '<div style="font-size:0.72rem;color:var(--warm-gray);margin-top:6px;">Showing 50 most recent of ' + others.length + '.</div>' : '');
+        '</table>' + moreNote;
     }
 
-    return '<div style="margin-top:18px;border:1px solid var(--cream-dark);border-radius:10px;padding:16px;background:var(--surface-card,#fff);">' +
-      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap;">' +
-        '<h4 style="margin:0;font-size:0.9rem;font-weight:600;">Student history</h4>' +
-        '<span style="color:var(--warm-gray);font-size:0.78rem;">all other enrollments by this student</span>' +
+    var drillLinkHtml = customerId
+      ? '<a href="#customers?id=' + esc(customerId) + '" style="color:var(--teal,#2a7c6f);font-weight:600;font-size:0.85rem;text-decoration:none;">View full student profile →</a>'
+      : '<span style="color:var(--warm-gray);font-size:0.78rem;">No linked customer record on this enrollment — only enrollment-derived data is available.</span>';
+
+    // Schedule async load to populate surveys/reviews/passes counts.
+    setTimeout(function() { _loadEnrollSignals(slotId, customerId, emailKey, uid); }, 0);
+
+    return '<div id="' + slotId + '" style="margin-top:18px;border:1px solid var(--cream-dark);border-radius:10px;padding:16px;background:var(--surface-card,#fff);">' +
+      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap;justify-content:space-between;">' +
+        '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">' +
+          '<h4 style="margin:0;font-size:0.9rem;font-weight:600;">Student signals</h4>' +
+          '<span style="color:var(--warm-gray);font-size:0.78rem;">click any chip or the link to drill into the full profile</span>' +
+        '</div>' +
+        drillLinkHtml +
       '</div>' +
       chipsHtml +
-      listHtml +
-      '<div style="font-size:0.72rem;color:var(--warm-gray-light,var(--warm-gray));margin-top:10px;">' +
-        'Survey responses, certifications, and pass-usage detail are tracked separately and not yet aggregated here — that\'s a follow-up.' +
-      '</div>' +
+      recentStrip +
     '</div>';
+  }
+
+  // Async chip populator. Reads cs_survey_responses + cs_reviews + the customer
+  // doc (for linkedIds.uids) + each linked account's wallet.passes, matches by
+  // customerId / email / contactId / uid (mirrors the customer-detail Activity
+  // matcher), and replaces the placeholder spans in the signals card.
+  function _loadEnrollSignals(slotId, customerId, emailKey, studentUid) {
+    function setText(id, text) {
+      var el = document.getElementById(id);
+      if (el) el.textContent = text;
+    }
+
+    // Build the match-key set up front.
+    var linkedEmails = {};
+    if (emailKey) linkedEmails[emailKey] = true;
+    var linkedUidSet = {};
+    if (studentUid) linkedUidSet[studentUid] = true;
+    var linkedContactSet = {};
+
+    function csMatches(rec, uidField) {
+      if (!rec) return false;
+      if (customerId && rec.customerId === customerId) return true;
+      var em = String(rec.contactEmail || rec.authorEmail || rec.email || '').toLowerCase();
+      if (em && linkedEmails[em]) return true;
+      if (rec.contactId && linkedContactSet[rec.contactId]) return true;
+      if (uidField && rec[uidField] && linkedUidSet[rec[uidField]]) return true;
+      return false;
+    }
+
+    var custPromise = customerId
+      ? MastDB.get('admin/customers/' + customerId).then(function(c) { return c || null; }).catch(function() { return null; })
+      : Promise.resolve(null);
+
+    custPromise.then(function(cust) {
+      if (cust) {
+        ((cust.emails) || []).forEach(function(e) { if (e) linkedEmails[String(e).toLowerCase()] = true; });
+        if (cust.primaryEmail) linkedEmails[String(cust.primaryEmail).toLowerCase()] = true;
+        var linkedC = cust.linkedIds || {};
+        (linkedC.contactIds || []).forEach(function(id) { linkedContactSet[id] = true; });
+        (linkedC.uids || []).forEach(function(u) { linkedUidSet[u] = true; });
+      }
+      var uids = Object.keys(linkedUidSet);
+
+      var promises = [
+        MastDB.query('cs_survey_responses').limitToLast(500).once()
+          .then(function(s) { return (s && s.val && s.val()) || (s && typeof s === 'object' ? s : {}); })
+          .catch(function() { return {}; }),
+        MastDB.query('cs_reviews').limitToLast(500).once()
+          .then(function(s) { return (s && s.val && s.val()) || (s && typeof s === 'object' ? s : {}); })
+          .catch(function() { return {}; })
+      ];
+      uids.forEach(function(u) {
+        promises.push(MastDB.get('public/accounts/' + u + '/wallet/passes').then(function(p) { return p || {}; }).catch(function() { return {}; }));
+      });
+
+      Promise.all(promises).then(function(results) {
+        var responses = results[0] || {};
+        var reviews = results[1] || {};
+        var surveyCount = 0, reviewCount = 0;
+        Object.keys(responses).forEach(function(k) { if (csMatches(responses[k])) surveyCount++; });
+        Object.keys(reviews).forEach(function(k) { if (csMatches(reviews[k], 'authorUid')) reviewCount++; });
+
+        var activePasses = 0, usedPasses = 0;
+        for (var i = 2; i < results.length; i++) {
+          var passes = results[i] || {};
+          Object.keys(passes).forEach(function(pid) {
+            var p = passes[pid];
+            if (!p || p.status === 'revoked') return;
+            if (p.visitsUsed && p.visitsUsed > 0) usedPasses++;
+            else if (p.status === 'active') activePasses++;
+          });
+        }
+
+        setText(slotId + '_surveys', String(surveyCount));
+        setText(slotId + '_reviews', String(reviewCount));
+        setText(slotId + '_passesActive', String(activePasses));
+        setText(slotId + '_passesUsed', String(usedPasses));
+      }).catch(function() {
+        setText(slotId + '_surveys', '?');
+        setText(slotId + '_reviews', '?');
+        setText(slotId + '_passesActive', '?');
+        setText(slotId + '_passesUsed', '?');
+      });
+    });
   }
 
   async function updateEnrollmentStatus(enrollmentId, newStatus) {
