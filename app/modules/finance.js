@@ -7414,10 +7414,54 @@ async function _w3ShouldShowBanner() {
   var meta = await _w3LoadMeta();
   var bs = (meta && meta.bannerState) || {};
   if (bs.enabledAt) return false;
-  if (!bs.dismissedAt) return true;
-  // Re-prompt 30 days after last dismissal.
-  var ms = Date.now() - new Date(bs.dismissedAt).getTime();
-  return ms > (30 * 24 * 3600 * 1000);
+  if (bs.dismissedAt) {
+    // Re-prompt 30 days after last dismissal.
+    var ms = Date.now() - new Date(bs.dismissedAt).getTime();
+    if (ms <= (30 * 24 * 3600 * 1000)) return false;
+  }
+  // W3.5-4: New tenants created after W3 deploy date never had base-pay COGS,
+  // so we silently auto-enable burdened margins for them and skip the banner
+  // entirely. Legacy tenants (created before the deploy) still see the
+  // opt-in prompt to preserve their existing P&L numbers until they ratify.
+  try {
+    var W3_DEPLOY_DATE = new Date('2026-05-27T00:00:00Z').getTime();
+    var tenantCreatedAt = null;
+    if (window.MastDB && typeof window.MastDB.tenantCreatedAt === 'function') {
+      tenantCreatedAt = window.MastDB.tenantCreatedAt();
+    }
+    if (!tenantCreatedAt) {
+      // Fallback: read admin/businessEntity/createdAt — canonical creation
+      // timestamp stamped by the entity-form save flow (shared/mastdb.js).
+      var be = await MastDB.get('admin/businessEntity/createdAt').catch(function() { return null; });
+      if (be) tenantCreatedAt = be;
+    }
+    if (tenantCreatedAt) {
+      var tenantCreated = new Date(tenantCreatedAt).getTime();
+      if (!isNaN(tenantCreated) && tenantCreated > W3_DEPLOY_DATE) {
+        // Fire-and-forget; never block the banner check on this write.
+        _w3AutoEnableForNewTenant();
+        return false;
+      }
+    }
+  } catch (e) {
+    console.warn('[W3.5] tenant-age check failed; falling back to banner:', e);
+  }
+  // Legacy path: show if never dismissed, or if last dismissal was >30d ago
+  // (the early-return above already filtered out within-30d dismissals).
+  return true;
+}
+
+async function _w3AutoEnableForNewTenant() {
+  try {
+    var nowIso = new Date().toISOString();
+    await MastDB.update('admin/integrations/_meta', {
+      'burdenSource.bannerState.enabledAt': nowIso,
+      'burdenSource.bannerState.autoEnabled': true
+    });
+    _w3InvalidateMetaCache();
+  } catch (e) {
+    console.warn('[W3.5] _w3AutoEnableForNewTenant failed:', e);
+  }
 }
 
 async function w3EnableAccurateMargins() {

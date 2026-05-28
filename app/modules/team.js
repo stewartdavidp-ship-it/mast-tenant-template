@@ -1810,6 +1810,38 @@
   }
 
   // ---- Estimator settings panel (W3.2) ----
+  // W3.5-2: NAICS-source provenance hint shown beneath the WC premium input.
+  // Reads burdenSource.wcSource set by the seedSutaOnTeamEnable CF.
+  //   - 'naics-X-${classCode}' → "Pre-filled from NAICS {code} ({className}) — confirm or override"
+  //   - 'manufacturing-average' → "Default for manufacturing (3.5%) — set your actual rate for accuracy"
+  //   - 'operator-*' / absent → no hint (operator-set or unknown)
+  function _renderWcSourceHint(src) {
+    try {
+      var ws = (src && src.wcSource) || '';
+      if (!ws) return '';
+      if (ws.indexOf('operator-') === 0) return '';
+      var hintStyle = 'display:block;margin-top:4px;font-style:italic;font-size:0.78rem;color:var(--warm-gray);';
+      if (ws.indexOf('naics-') === 0) {
+        // Format: naics-{naicsCode}-{classCode}
+        // We display naicsCode + a human-readable className. The className is
+        // not stamped on wcSource directly, so we read it from a sibling field
+        // (burdenSource.wcClassName) if present; otherwise fall back to the
+        // class code alone.
+        var rest = ws.substring('naics-'.length);
+        var dashIdx = rest.indexOf('-');
+        var naicsCode = dashIdx >= 0 ? rest.substring(0, dashIdx) : rest;
+        var classCode = dashIdx >= 0 ? rest.substring(dashIdx + 1) : '';
+        var className = (src && src.wcClassName) || classCode || '';
+        var label = className ? (naicsCode + ' (' + className + ')') : naicsCode;
+        return '<span style="' + hintStyle + '">Pre-filled from NAICS ' + esc(label) + ' &mdash; confirm or override</span>';
+      }
+      if (ws === 'manufacturing-average') {
+        return '<span style="' + hintStyle + '">Default for manufacturing (3.5%) &mdash; set your actual rate for accuracy</span>';
+      }
+      return '';
+    } catch (_) { return ''; }
+  }
+
   async function loadBurdenEstimatorPanel() {
     var wrap = document.getElementById('burdenEstimatorWrap');
     if (!wrap) return;
@@ -1855,7 +1887,7 @@
 
       // Single-rate fields
       h += '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:14px 0;">';
-      h += labelField('bWcRate', 'WC premium (% of wages)', '<input type="number" step="0.001" id="bWcRate" value="' + esc(wcRate ? (wcRate * 100).toFixed(3) : '') + '" placeholder="e.g. 1.2" style="' + INPUT_STYLE + '">');
+      h += labelField('bWcRate', 'WC premium (% of wages)', '<input type="number" step="0.001" id="bWcRate" value="' + esc(wcRate ? (wcRate * 100).toFixed(3) : '') + '" placeholder="e.g. 1.2" style="' + INPUT_STYLE + '">' + _renderWcSourceHint(src));
       h += labelField('bBenRate', 'Benefits load (% of wages)', '<input type="number" step="0.001" id="bBenRate" value="' + esc(benefitsRate ? (benefitsRate * 100).toFixed(3) : '') + '" placeholder="e.g. 8.0" style="' + INPUT_STYLE + '">');
       h += labelField('bRetRate', 'Retirement match (% of wages)', '<input type="number" step="0.001" id="bRetRate" value="' + esc(retirementRate ? (retirementRate * 100).toFixed(3) : '') + '" placeholder="e.g. 3.0" style="' + INPUT_STYLE + '">');
       h += '</div>';
