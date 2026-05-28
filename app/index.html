@@ -18671,7 +18671,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260527-225214-a165e0c';
+var MAST_MODULES_V = '20260527-225536-457ff1b';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -47188,6 +47188,18 @@ function openUserPermissionsPanel(uid) {
     guestExpiryField +
     '<p style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:12px;">Highlighted cells differ from role defaults. ' +
       (isEditorAdmin ? 'As Owner, you can freely elevate or reduce any permission.' : 'As Manager, you can reduce permissions from role defaults. Yellow cells are Owner-granted and cannot be changed.') + '</p>' +
+    // 1d3QQTw — explainer about how the capability catalog is wired so
+    // operators stop wondering "do I have to add a row for every new
+    // feature?". Short, on-surface, points at the bigger ask
+    // (OjJRSJuaZgg6e79g6236) which IS the dynamic-catalog build.
+    '<details style="margin-bottom:14px;background:var(--cream,#fbf6ee);border:1px solid var(--cream-dark);border-radius:6px;padding:8px 12px;">' +
+      '<summary style="cursor:pointer;font-size:0.78rem;color:var(--text);font-weight:600;">ℹ️ How this list stays in sync with new features</summary>' +
+      '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:8px;line-height:1.5;">' +
+        'Each row in this matrix is one <strong>capability</strong> (an entity like <em>orders</em> + an action like <em>delete</em>). The <strong>grants</strong> (which roles or users have which capabilities) are fully dynamic — edit any cell here and save.' +
+        '<br><br>The <strong>catalog of capabilities</strong> itself is currently defined in the app code (<code>ENTITY_LABELS</code> + <code>DEFAULT_ROLES</code>) and used at every gate via <code>hasPermission(entity, action)</code>. When a new feature ships, the developer adds the new entity/action and a gate; that release auto-populates here for assignment. It does NOT update by configuration alone.' +
+        '<br><br>Finer-grained controls (e.g. "approve gift card refund", "redeem promo credit", "approve RMA") are tracked as a separate feature ask &mdash; making the capability catalog itself editable from this surface.' +
+      '</div>' +
+    '</details>' +
     '<div style="overflow-x:auto;">' +
     '<table class="perm-matrix" style="width:100%;">' +
       '<thead><tr><th>Entity</th><th>Create</th><th>Read</th><th>Update</th><th>Delete</th></tr></thead>' +
