@@ -3051,7 +3051,29 @@ async function uploadStoryMediaFromInput(input, storyId) {
     return;
   }
 
+  // compressImage uses createImageBitmap which is raster-only. Skip
+  // compression for SVG (and any other vector / not-decodable type) and
+  // upload the original blob. The contentType is preserved so the storefront
+  // renders the right MIME.
+  function _shouldCompress(file) {
+    if (!file || !file.type) return false;
+    if (file.type === 'image/svg+xml') return false;
+    if (file.type === 'image/gif') return false; // preserve animation
+    return /^image\//.test(file.type);
+  }
+  function _extForFile(file) {
+    if (!file) return 'bin';
+    if (file.type === 'image/svg+xml') return 'svg';
+    if (file.type === 'image/png') return 'png';
+    if (file.type === 'image/webp') return 'webp';
+    if (file.type === 'image/gif') return 'gif';
+    // Fallback: pull extension from the filename when we can't infer from MIME.
+    var m = (file.name || '').match(/\.([a-z0-9]{1,8})$/i);
+    return m ? m[1].toLowerCase() : 'jpg';
+  }
+
   var progressEl = document.getElementById('storyUploadProgress');
+  var uploadedCount = 0;
   for (var i = 0; i < files.length; i++) {
     var file = files[i];
     if (!/^image\//.test(file.type)) continue;
@@ -3064,10 +3086,20 @@ async function uploadStoryMediaFromInput(input, storyId) {
       progressEl.appendChild(pidNode);
     }
     try {
-      var compressed = await compressImage(file);
-      var path = MastDB.storagePath('storyMedia/' + storyId + '/' + mediaId + '.jpg');
+      // Compress when we can; fall back to the original blob if compression
+      // fails (covers SVG, exotic formats, browsers without createImageBitmap).
+      var blob = file;
+      if (_shouldCompress(file)) {
+        try { blob = await compressImage(file); }
+        catch (compressErr) {
+          console.warn('[story-upload] compressImage failed, uploading original:', compressErr && compressErr.message);
+          blob = file;
+        }
+      }
+      var ext = _extForFile(file);
+      var path = MastDB.storagePath('storyMedia/' + storyId + '/' + mediaId + '.' + ext);
       var ref = storage.ref(path);
-      var task = ref.put(compressed);
+      var task = ref.put(blob, { contentType: file.type || 'application/octet-stream' });
       await new Promise(function(resolve, reject) {
         task.on('state_changed',
           function(snap) {
@@ -3081,18 +3113,20 @@ async function uploadStoryMediaFromInput(input, storyId) {
         );
       });
       var url = await task.snapshot.ref.getDownloadURL();
-      // Append entry to the in-memory draft and re-render. Save Draft button
-      // is still required to persist — operator stays in control of when the
-      // story doc is updated.
       var id = MastDB.newKey('_ids');
       storyDraft.push({ id: id, mediaUrl: url, milestone: '', caption: '', buildId: '', source: 'upload', order: storyDraft.length });
       renderStoryEntries();
       if (pidNode) pidNode.textContent = '✓ ' + file.name;
+      uploadedCount++;
     } catch (err) {
       if (pidNode) pidNode.textContent = '✗ ' + file.name + ' — ' + (err && err.message);
     }
   }
-  if (typeof showToast === 'function') showToast(files.length + ' photo' + (files.length === 1 ? '' : 's') + ' uploaded — save the draft to keep changes.');
+  if (uploadedCount > 0 && typeof showToast === 'function') {
+    showToast(uploadedCount + ' photo' + (uploadedCount === 1 ? '' : 's') + ' uploaded — save the draft to keep changes.');
+  } else if (uploadedCount === 0 && typeof showToast === 'function') {
+    showToast('Upload failed for all files. Check the messages above the section.', true);
+  }
 }
 window.uploadStoryMediaFromInput = uploadStoryMediaFromInput;
 
