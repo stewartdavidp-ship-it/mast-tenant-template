@@ -370,7 +370,7 @@
         throw new Error('force transition requires reason');
       }
       if (opts.force && typeof def.canForce === 'function') {
-        if (!def.canForce(actor, window.currentUserRole)) {
+        if (!def.canForce(actor, _currentRole())) {
           throw new Error('force not permitted for this user');
         }
       }
@@ -487,11 +487,22 @@
   }
 
   function _defaultActor() {
-    var u = window.currentUser;
+    // The bare `currentUser` var in app/index.html is NOT attached to window
+    // (verified on sgtest15 — window.currentUser is undefined while signed
+    // in). MastAdmin.currentUser is the reliable accessor; fall back to
+    // window.currentUser for any context that exposes it that way.
+    var u = (window.MastAdmin && window.MastAdmin.currentUser) || window.currentUser;
     if (u && u.uid) {
       return { uid: u.uid, displayName: u.displayName || u.email || u.uid };
     }
     return { system: 'unknown' };
+  }
+
+  function _currentRole() {
+    // Same accessor pattern as _defaultActor — currentUserRole isn't on
+    // window either.
+    if (window.MastAdmin && window.MastAdmin.currentUserRole) return window.MastAdmin.currentUserRole;
+    return window.currentUserRole || null;
   }
 
   // ============================================================
