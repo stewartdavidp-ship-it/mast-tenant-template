@@ -313,21 +313,93 @@
   // ---- Pack Queue ----
   // W1.3: pack queue selection state. Keys of selected order IDs.
   var packSelectedIds = Object.create(null);
+  // Filter-audit Tier-1 — Pack Queue search + channel filter.
+  // Pack-stage filter (sub-status within the pack lifecycle): 'all' default;
+  // channel filter: 'all' | 'dtc' | 'wholesale'; search: order #, customer
+  // name, item name, all lowercased contains.
+  var packQueueFilters = { stage: 'all', channel: 'all', search: '' };
+  function _packQueueOrderChannel(o) {
+    if (!o) return 'dtc';
+    if (o.isWholesale === true || o.orderType === 'wholesale' || o.type === 'wholesale') return 'wholesale';
+    return 'dtc';
+  }
+  function _packQueueRowMatches(o) {
+    if (packQueueFilters.stage !== 'all' && o.status !== packQueueFilters.stage) return false;
+    if (packQueueFilters.channel !== 'all' && _packQueueOrderChannel(o) !== packQueueFilters.channel) return false;
+    var q = (packQueueFilters.search || '').toLowerCase().trim();
+    if (!q) return true;
+    if (String(getOrderDisplayNumber(o) || '').toLowerCase().indexOf(q) >= 0) return true;
+    if (o.shipping && o.shipping.name && String(o.shipping.name).toLowerCase().indexOf(q) >= 0) return true;
+    var items = o.items || [];
+    for (var i = 0; i < items.length; i++) {
+      if (items[i] && items[i].name && String(items[i].name).toLowerCase().indexOf(q) >= 0) return true;
+    }
+    return false;
+  }
+  window.packQueueSetFilter = function(dim, value) {
+    if (!packQueueFilters.hasOwnProperty(dim)) return;
+    packQueueFilters[dim] = value;
+    renderPackQueue();
+  };
+  window.packQueueSetSearch = function(value) {
+    packQueueFilters.search = value || '';
+    renderPackQueue();
+  };
 
   function renderPackQueue() {
     var el = document.getElementById('fulfPackView');
-    var packable = _getOrdersArraySafe().filter(function(o) {
+    var packableAll = _getOrdersArraySafe().filter(function(o) {
       return o.status === 'packing' || o.status === 'pack' || o.status === 'packed';
     });
+    var packable = packableAll.filter(_packQueueRowMatches);
+
+    // Filter bar — always rendered so operators can find what they need even
+    // when current filters return zero matches. Counts on stage pills reflect
+    // the pre-filter set so operators can see what each stage holds.
+    var stageCounts = { pack: 0, packing: 0, packed: 0 };
+    packableAll.forEach(function(o) { if (stageCounts[o.status] !== undefined) stageCounts[o.status]++; });
+    function _pillBtn(dim, value, label) {
+      var active = packQueueFilters[dim] === value;
+      return '<button type="button" class="filter-pill' + (active ? ' active' : '') + '" ' +
+        'onclick="packQueueSetFilter(\'' + dim + '\', \'' + value + '\')" ' +
+        'style="background:' + (active ? 'var(--teal)' : 'var(--surface-card,#fff)') + ';' +
+        'color:' + (active ? '#fff' : 'var(--text)') + ';border:1px solid ' + (active ? 'var(--teal)' : 'var(--cream-dark)') +
+        ';padding:4px 12px;border-radius:14px;font-size:0.78rem;cursor:pointer;font-weight:' + (active ? '600' : '500') + ';">' +
+        label + '</button>';
+    }
+    var filterBarHtml = '<div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-bottom:12px;padding:10px 12px;background:var(--cream,#fbf6ee);border-radius:8px;">' +
+      '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">' +
+        '<span style="font-size:0.72rem;color:var(--warm-gray);font-weight:600;text-transform:uppercase;letter-spacing:0.05em;">Stage</span>' +
+        _pillBtn('stage', 'all', 'All (' + packableAll.length + ')') +
+        _pillBtn('stage', 'pack', 'Pack (' + stageCounts.pack + ')') +
+        _pillBtn('stage', 'packing', 'Packing (' + stageCounts.packing + ')') +
+        _pillBtn('stage', 'packed', 'Packed (' + stageCounts.packed + ')') +
+      '</div>' +
+      '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">' +
+        '<span style="font-size:0.72rem;color:var(--warm-gray);font-weight:600;text-transform:uppercase;letter-spacing:0.05em;">Channel</span>' +
+        _pillBtn('channel', 'all', 'All') +
+        _pillBtn('channel', 'dtc', 'DTC') +
+        _pillBtn('channel', 'wholesale', 'Wholesale') +
+      '</div>' +
+      '<div style="flex:1;min-width:200px;display:flex;justify-content:flex-end;">' +
+        '<input type="search" id="packQueueSearch" placeholder="Search order # / customer / item" ' +
+          'value="' + esc(packQueueFilters.search || '') + '" ' +
+          'oninput="packQueueSetSearch(this.value)" ' +
+          'style="width:100%;max-width:280px;padding:6px 10px;border:1px solid var(--cream-dark);border-radius:6px;font-size:0.85rem;background:var(--surface-card,#fff);">' +
+      '</div>' +
+    '</div>';
 
     if (packable.length === 0) {
-      el.innerHTML = '<div class="empty-state"><div class="empty-icon">&#128230;</div><p>No orders ready for packing.</p></div>';
+      var emptyMsg = packableAll.length === 0
+        ? '<p>No orders ready for packing.</p>'
+        : '<p>No orders match the current filters. <button class="btn btn-secondary btn-small" onclick="packQueueSetFilter(\'stage\',\'all\');packQueueSetFilter(\'channel\',\'all\');packQueueSetSearch(\'\');">Clear filters</button></p>';
+      el.innerHTML = filterBarHtml + '<div class="empty-state"><div class="empty-icon">&#128230;</div>' + emptyMsg + '</div>';
       return;
     }
 
     // W1.3: print toolbar — Pick List for selected, Packing Slip per-row.
     var selectedCount = Object.keys(packSelectedIds).length;
-    var html = '<div style="margin-top:12px;">';
+    var html = filterBarHtml + '<div style="margin-top:12px;">';
     html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap;">' +
       '<label style="font-size:0.85rem;display:flex;align-items:center;gap:6px;cursor:pointer;">' +
         '<input type="checkbox" id="packSelectAll" onchange="togglePackSelectAll(this.checked)"> Select all' +
