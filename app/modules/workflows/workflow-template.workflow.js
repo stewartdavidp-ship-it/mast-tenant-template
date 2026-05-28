@@ -46,6 +46,20 @@
  *   [ ] STALE_STATE / REQUIREMENTS_UNMET / SPEC_MISMATCH / BRANCH_CHOICE_REQUIRED
  *       error codes are handled with operator-visible toasts
  *   [ ] Target resolvers cover every target id used in the spec
+ *   [ ] Deep-link: after renderHeader resolves, read getRouteParams().focus
+ *       and call MastFlow.focusPhase(hostId, focus) so dashboard/queue links
+ *       can land the operator on a specific phase
+ *
+ * GOTCHAS (learned the hard way during commissions + pickship rollout):
+ *   - Load engine BEFORE spec, sequentially — parallel Promise.all races and
+ *     the spec's IIFE bails if window.MastFlow isn't set yet.
+ *   - recordPath() must match the record's REAL Firebase path. Check the
+ *     MastDB entity's PATH constant (orders live at root 'orders/', not
+ *     'admin/orders/').
+ *   - Resolve the actor via MastAdmin.currentUser — the bare currentUser var
+ *     is not attached to window, so window.currentUser is undefined.
+ *   - Never put undefined in any field the engine writes to the audit row;
+ *     Firestore's setDoc rejects undefined. Use null.
  */
 (function() {
   'use strict';

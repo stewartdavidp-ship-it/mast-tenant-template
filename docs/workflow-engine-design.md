@@ -561,10 +561,14 @@ records are mid-branch.
 - Engine global renamed **`MastFlow`** to avoid collision with the existing
   `mast_workflows` MCP tool.
 
-**Still open — flag if you want different:**
-- Deep-linking to a phase (`?focus=quoted`) — easy to add in §6 UI; in
-  scope unless you want to defer.
-- A `workflow-template.workflow.js` skeleton + author checklist shipped
+**Shipped (were "still open" in the v1 review, ratified + built):**
+- Deep-linking to a phase (`?focus=<phaseKey>`) — shipped. Each stepper
+  step carries `data-mf-phase`; `MastFlow.focusPhase(hostElOrId, phaseKey)`
+  scrolls the header into view and pulses the target step. Commissions and
+  orders detail inits read `getRouteParams().focus` after renderHeader
+  resolves and call it. Enables dashboard links like "orders stuck in
+  Picked >7d" → opens the order with that step highlighted.
+- A `workflow-template.workflow.js` skeleton + author checklist — shipped
   alongside the engine, so the next workflow surface doesn't copy quirks.
 
 ---

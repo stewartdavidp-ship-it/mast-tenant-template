@@ -1274,6 +1274,10 @@
       }
     }).then(function(res) {
       host.innerHTML = res.html;
+      // Deep-link: ?focus=<phaseKey> scrolls the header into view + pulses
+      // the target step (e.g. from a "stuck in Picked" fulfillment-queue link).
+      var rp = (typeof window.getRouteParams === 'function') ? window.getRouteParams() : {};
+      if (rp && rp.focus) MastFlow.focusPhase('orderWorkflowHeader', rp.focus);
     }).catch(function(err) {
       console.error('[orders] renderHeader failed:', err);
       host.innerHTML = '<span style="color:var(--danger,#b81d1d);">Workflow header error.</span>';
@@ -3749,6 +3753,10 @@
       }
     }).then(function(res) {
       host.innerHTML = res.html;
+      // Deep-link: ?focus=<phaseKey> scrolls the header into view + pulses
+      // the target step (e.g. from a "stuck in Quoted" dashboard link).
+      var rp = (typeof window.getRouteParams === 'function') ? window.getRouteParams() : {};
+      if (rp && rp.focus) MastFlow.focusPhase('commWorkflowHeader', rp.focus);
     }).catch(function(err) {
       console.error('[commissions] renderHeader failed:', err);
       host.innerHTML = '<span style="color:var(--danger,#b81d1d);">Workflow header error.</span>';

@@ -684,7 +684,9 @@
           chip = ' <span style="background:rgba(220,38,38,0.10);color:var(--danger,#b81d1d);padding:1px 6px;border-radius:8px;font-size:0.72rem;font-weight:700;">' + unmetHard + ' to do</span>';
         }
       }
-      html += '<div role="listitem" style="display:flex;align-items:center;gap:6px;flex-shrink:0;" title="' + _esc(p.label) + '">' +
+      // data-mf-phase makes each step targetable by MastFlow.focusPhase()
+      // for deep-linking (e.g. a dashboard "stuck in Quoted" link → ?focus=quoted).
+      html += '<div role="listitem" data-mf-phase="' + _esc(p.key) + '" style="display:flex;align-items:center;gap:6px;flex-shrink:0;border-radius:6px;transition:background 0.4s;" title="' + _esc(p.label) + '">' +
         '<div style="width:22px;height:22px;border-radius:50%;background:' + dotBg + ';color:' + dotColor + ';border:2px solid ' + dotBorder + ';display:inline-flex;align-items:center;justify-content:center;font-size:0.72rem;font-weight:700;flex-shrink:0;">' + glyph + '</div>' +
         '<span style="font-size:0.78rem;color:' + labelColor + ';font-weight:' + labelWeight + ';white-space:nowrap;">' + _esc(p.label) + chip + '</span>' +
       '</div>' + connector;
@@ -860,6 +862,29 @@
   }
 
   // ============================================================
+  // Deep-link to a phase
+  // ============================================================
+
+  /**
+   * focusPhase(hostElOrId, phaseKey) — deep-link affordance. Scrolls the
+   * workflow header into view and briefly pulses the target stepper step.
+   * Consuming detail views call this after renderHeader resolves when the
+   * route carries a ?focus=<phaseKey> param. Safe no-op if the host or the
+   * step isn't found.
+   */
+  function focusPhase(hostElOrId, phaseKey) {
+    var host = (typeof hostElOrId === 'string') ? document.getElementById(hostElOrId) : hostElOrId;
+    if (!host || !phaseKey) return;
+    host.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    var step = host.querySelector('[data-mf-phase="' + (window.CSS && CSS.escape ? CSS.escape(phaseKey) : phaseKey) + '"]');
+    if (!step) return;
+    // Brief highlight pulse so the operator's eye lands on the right step.
+    var prevBg = step.style.background;
+    step.style.background = 'rgba(42,157,143,0.18)';
+    setTimeout(function() { step.style.background = prevBg || ''; }, 1400);
+  }
+
+  // ============================================================
   // Export
   // ============================================================
 
@@ -872,6 +897,7 @@
     transition: transition,
     diagnose: diagnose,
     renderHeader: renderHeader,
+    focusPhase: focusPhase,
     // Internal UI bridge — referenced by rendered HTML's inline onclick handlers.
     // Not part of the documented API surface; do not call from surface code.
     __ui: ui
