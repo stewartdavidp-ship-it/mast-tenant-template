@@ -18675,7 +18675,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260528-111446-0754f4e';
+var MAST_MODULES_V = '20260528-112636-fcf2452';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -22532,6 +22532,10 @@ async function renderV1RevenueAndNextTier(platformTenant) {
   var tierKey = v1ResolveTierKey(v1sub ? v1sub.plan : (platformTenant && platformTenant.currentTier));
   var idx = V1_TIERS.findIndex(function(t) { return t.key === tierKey; });
   var nextTier = (idx >= 0 && idx < V1_TIERS.length - 1) ? V1_TIERS[idx + 1] : null;
+  var prevTier = (idx > 0) ? V1_TIERS[idx - 1] : null;
+  var currentTier = (idx >= 0) ? V1_TIERS[idx] : null;
+  var currentFloor = currentTier ? currentTier.revenueFloor : 0;
+  var downgradeEligible = !!(prevTier && currentFloor > 0 && present >= 3 && avgCents < currentFloor);
 
   var h = '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:20px;">';
   h += '<div style="font-weight:600;font-family:\'Cormorant Garamond\',serif;font-size:1.15rem;color:var(--charcoal);margin-bottom:4px;">Trailing 3-month revenue</div>';
@@ -22561,6 +22565,15 @@ async function renderV1RevenueAndNextTier(platformTenant) {
   } else {
     h += '<div style="margin-top:14px;font-size:0.85rem;color:var(--warm-gray);">You’re on the top tier (' + esc(V1_TIERS[V1_TIERS.length - 1].label) + ').</div>';
   }
+
+  if (downgradeEligible) {
+    var shortfall = currentFloor - avgCents;
+    h += '<div style="margin-top:14px;padding:12px 14px;border:1px solid #c084fc;background:#faf5ff;border-radius:6px;">';
+    h += '<div style="font-size:0.9rem;font-weight:600;color:#6b21a8;margin-bottom:4px;">Downgrade eligible</div>';
+    h += '<div style="font-size:0.85rem;color:var(--charcoal);">Your trailing 3-month average is ' + esc(v1FormatCents(shortfall)) + '/mo below the ' + esc(currentTier.label) + ' tier floor (' + esc(v1FormatCents(currentFloor)) + '/mo). You can move down to <strong>' + esc(prevTier.label) + '</strong> via the Stripe Customer Portal — plan changes prorate automatically.</div>';
+    h += '</div>';
+  }
+
   h += '</div>';
   el.innerHTML = h;
 }
@@ -22584,6 +22597,7 @@ function renderV1TierComparison(platformTenant) {
     h += '<div style="font-size:0.78rem;color:var(--warm-gray);">' + t.tokens.toLocaleString() + ' tokens/mo</div>';
     h += '<div style="font-size:0.78rem;color:var(--warm-gray);">+' + t.bonusPct + '% coin bonus</div>';
     h += '<div style="font-size:0.78rem;color:var(--warm-gray);">' + t.plaidCap + ' Plaid account' + (t.plaidCap === 1 ? '' : 's') + '</div>';
+    h += '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:4px;padding-top:6px;border-top:1px dashed var(--cream-dark);">' + (t.revenueFloor > 0 ? 'Floor: ' + esc(v1FormatCents(t.revenueFloor)) + '/mo' : 'No revenue floor') + '</div>';
     h += '</div>';
   });
   h += '</div>';
