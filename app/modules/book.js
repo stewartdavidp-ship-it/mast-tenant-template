@@ -59,6 +59,14 @@
   var calendarSessions = [];
   var calendarClassesMap = {};
   var calendarLoaded = false;
+  // IcrLjht — calendar multi-select filters. Each set holds the IDs the
+  // operator has TOGGLED IN; empty set = no filter on that dimension. A
+  // session must match all 3 dimensions to show (intersection).
+  var _calFilterClasses = Object.create(null);
+  var _calFilterInstructors = Object.create(null);
+  var _calFilterResources = Object.create(null);
+  var _calInstructorsMap = {};
+  var _calResourcesMap = {};
   var selectedCalendarDay = null;
 
   // Class form image state (single image)
@@ -3605,15 +3613,26 @@
     if (!calendarLoaded) {
       grid.innerHTML = LOADING_HTML;
       try {
-        var [sessSnap, clsSnap] = await Promise.all([
+        // IcrLjht — also pull instructors + resources so the multi-select
+        // filter chips can label each dimension by friendly name and so the
+        // intersection filter has the data it needs without re-fetching.
+        var [sessSnap, clsSnap, instrSnap, resSnap] = await Promise.all([
           MastDB.classSessions.list(2000),
-          MastDB.classes.list(200)
+          MastDB.classes.list(200),
+          MastDB.instructors ? MastDB.instructors.list(200).catch(function(){ return {}; }) : Promise.resolve({}),
+          MastDB.resources   ? MastDB.resources.list(200).catch(function(){ return {}; })   : Promise.resolve({})
         ]);
         var sessData = (sessSnap && typeof sessSnap.val === 'function') ? (sessSnap.val() || {}) : (sessSnap || {});
         calendarSessions = Object.keys(sessData).map(function(id) { var s = sessData[id]; s.id = id; return s; });
         var clsData = (clsSnap && typeof clsSnap.val === 'function') ? (clsSnap.val() || {}) : (clsSnap || {});
         calendarClassesMap = {};
         Object.keys(clsData).forEach(function(id) { calendarClassesMap[id] = clsData[id]; });
+        var instrData = (instrSnap && typeof instrSnap.val === 'function') ? (instrSnap.val() || {}) : (instrSnap || {});
+        _calInstructorsMap = {};
+        Object.keys(instrData).forEach(function(id) { _calInstructorsMap[id] = instrData[id]; });
+        var resData = (resSnap && typeof resSnap.val === 'function') ? (resSnap.val() || {}) : (resSnap || {});
+        _calResourcesMap = {};
+        Object.keys(resData).forEach(function(id) { _calResourcesMap[id] = resData[id]; });
         calendarLoaded = true;
       } catch (err) {
         grid.innerHTML = '<p style="color:' + DANGER_COLOR + ';padding:2rem;">Failed to load calendar data.</p>';
@@ -3633,10 +3652,32 @@
     var daysInMonth = new Date(calendarYear, calendarMonth + 1, 0).getDate();
     var today = todayStr();
 
-    // Group sessions by date
+    // IcrLjht — paint the filter bar above the grid. Returns true if any
+    // filter dimension is active so we can show a Clear-all action.
+    var anyFilter = _renderCalendarFilterBar();
+
+    // Group sessions by date, applying multi-select intersection filters.
+    // A session shows iff ALL THREE of its dimensions either have no filter
+    // active OR have the session's id in the filter set.
+    function _sessionMatches(s) {
+      var clsKeys = Object.keys(_calFilterClasses);
+      var insKeys = Object.keys(_calFilterInstructors);
+      var resKeys = Object.keys(_calFilterResources);
+      // Pull the session's effective values. Sessions may not carry instructor
+      // or resource themselves — fall back to the parent class's value.
+      var cls = s.classId ? calendarClassesMap[s.classId] : null;
+      var sInstr = s.instructorId || (cls && cls.instructorId) || null;
+      var sRes = s.resourceId || (cls && cls.resourceId) || null;
+      if (clsKeys.length && !_calFilterClasses[s.classId]) return false;
+      if (insKeys.length && !(sInstr && _calFilterInstructors[sInstr])) return false;
+      if (resKeys.length && !(sRes && _calFilterResources[sRes])) return false;
+      return true;
+    }
+
     var sessionsByDate = {};
     calendarSessions.forEach(function(s) {
       if (!s.date) return;
+      if (!_sessionMatches(s)) return;
       var parts = s.date.split('-');
       if (parseInt(parts[0]) === calendarYear && parseInt(parts[1]) - 1 === calendarMonth) {
         if (!sessionsByDate[s.date]) sessionsByDate[s.date] = [];
@@ -3716,6 +3757,65 @@
     }
   }
 
+  // IcrLjht — render the multi-select filter bar above the calendar grid.
+  // Derives the option set for each dimension from the IDs actually present
+  // on calendarSessions (so the operator only sees options that have data).
+  function _renderCalendarFilterBar() {
+    var host = document.getElementById('bookCalendarFilters');
+    if (!host) return false;
+    // Derive distinct IDs for each dimension from the session set.
+    var clsIds = Object.create(null);
+    var insIds = Object.create(null);
+    var resIds = Object.create(null);
+    calendarSessions.forEach(function(s) {
+      if (s.classId) clsIds[s.classId] = true;
+      var cls = s.classId ? calendarClassesMap[s.classId] : null;
+      var sInstr = s.instructorId || (cls && cls.instructorId);
+      var sRes = s.resourceId || (cls && cls.resourceId);
+      if (sInstr) insIds[sInstr] = true;
+      if (sRes) resIds[sRes] = true;
+    });
+
+    function _chipRow(label, dim, options, labelLookup, activeSet) {
+      var entries = Object.keys(options).map(function(id) {
+        return { id: id, label: labelLookup(id) || id };
+      }).sort(function(a, b) {
+        return String(a.label).toLowerCase().localeCompare(String(b.label).toLowerCase());
+      });
+      if (entries.length === 0) return '';
+      var activeCount = Object.keys(activeSet).length;
+      var hdr = '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap;">' +
+        '<span style="font-size:0.72rem;color:var(--warm-gray);font-weight:600;text-transform:uppercase;letter-spacing:0.05em;">' + esc(label) + '</span>' +
+        (activeCount > 0
+          ? '<button type="button" onclick="window._calClearFilter(\'' + dim + '\')" style="font-size:0.72rem;background:transparent;border:1px solid var(--cream-dark);color:var(--warm-gray);padding:1px 8px;border-radius:10px;cursor:pointer;">Clear (' + activeCount + ')</button>'
+          : '') +
+      '</div>';
+      var chips = entries.map(function(e) {
+        var active = !!activeSet[e.id];
+        return '<button type="button" onclick="window._calToggleFilter(\'' + dim + '\',\'' + esc(e.id) + '\')" ' +
+          'style="font-size:0.78rem;padding:3px 10px;border-radius:14px;cursor:pointer;margin:2px;' +
+          (active
+            ? 'background:var(--teal,#2a7c6f);color:#fff;border:1px solid var(--teal,#2a7c6f);font-weight:600;'
+            : 'background:transparent;color:var(--text);border:1px solid var(--cream-dark);font-weight:500;') +
+          '">' + esc(String(e.label)) + '</button>';
+      }).join('');
+      return '<div style="margin-bottom:8px;">' + hdr + '<div style="display:flex;flex-wrap:wrap;gap:0;">' + chips + '</div></div>';
+    }
+
+    var anyActive = (Object.keys(_calFilterClasses).length + Object.keys(_calFilterInstructors).length + Object.keys(_calFilterResources).length) > 0;
+
+    host.innerHTML =
+      '<div style="border:1px solid var(--cream-dark);border-radius:10px;padding:10px 12px;background:var(--cream,#fbf6ee);">' +
+        _chipRow('Class', 'class', clsIds, function(id) { return calendarClassesMap[id] && calendarClassesMap[id].name; }, _calFilterClasses) +
+        _chipRow('Instructor', 'instructor', insIds, function(id) { return _calInstructorsMap[id] && _calInstructorsMap[id].name; }, _calFilterInstructors) +
+        _chipRow('Resource', 'resource', resIds, function(id) { return _calResourcesMap[id] && _calResourcesMap[id].name; }, _calFilterResources) +
+        (anyActive
+          ? '<div style="display:flex;justify-content:flex-end;margin-top:4px;"><button type="button" onclick="window._calClearAllFilters()" style="font-size:0.78rem;background:transparent;border:1px solid var(--warm-gray);color:var(--warm-gray);padding:2px 10px;border-radius:10px;cursor:pointer;">Clear all filters</button></div>'
+          : '') +
+      '</div>';
+    return anyActive;
+  }
+
   function renderCalendarDayDetail(dateStr) {
     var panel = document.getElementById('bookCalendarDayDetail');
     if (!panel) return;
@@ -3755,6 +3855,28 @@
   window._calNext = function() { calendarMonth++; if (calendarMonth > 11) { calendarMonth = 0; calendarYear++; } selectedCalendarDay = null; renderCalendar(); };
   window._calToday = function() { var d = new Date(); calendarYear = d.getFullYear(); calendarMonth = d.getMonth(); selectedCalendarDay = todayStr(); renderCalendar(); };
   window._calSelectDay = function(dateStr) { selectedCalendarDay = dateStr; renderCalendar(); };
+  // IcrLjht — multi-select filter handlers
+  window._calToggleFilter = function(dim, id) {
+    var set = dim === 'class' ? _calFilterClasses
+            : dim === 'instructor' ? _calFilterInstructors
+            : dim === 'resource' ? _calFilterResources
+            : null;
+    if (!set) return;
+    if (set[id]) delete set[id]; else set[id] = true;
+    renderCalendar();
+  };
+  window._calClearFilter = function(dim) {
+    if (dim === 'class') _calFilterClasses = Object.create(null);
+    else if (dim === 'instructor') _calFilterInstructors = Object.create(null);
+    else if (dim === 'resource') _calFilterResources = Object.create(null);
+    renderCalendar();
+  };
+  window._calClearAllFilters = function() {
+    _calFilterClasses = Object.create(null);
+    _calFilterInstructors = Object.create(null);
+    _calFilterResources = Object.create(null);
+    renderCalendar();
+  };
   // Phase 10: cross-screen nav from calendar → class detail with stack push so back returns to the calendar
   window._calOpenClass = function(classId, label) {
     if (window.MastNavStack && typeof MastNavStack.push === 'function') {
