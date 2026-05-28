@@ -377,6 +377,9 @@
     }
 
     var html = '<table class="data-table"><thead><tr>';
+    // D9 — drop the pencil-icon Actions column. Row click → detail view; the
+    // detail view's Edit button is the only edit affordance now. Matches the
+    // passes/instructors pattern.
     if (typeof window.mastSortableTh === 'function') {
       html +=
         window.mastSortableTh('Name',     'name',     _classListSortKey, _classListSortDir, 'window._classListSort') +
@@ -384,10 +387,9 @@
         '<th>Schedule</th>' +
         window.mastSortableTh('Capacity', 'capacity', _classListSortKey, _classListSortDir, 'window._classListSort') +
         window.mastSortableTh('Price',    'price',    _classListSortKey, _classListSortDir, 'window._classListSort') +
-        window.mastSortableTh('Status',   'status',   _classListSortKey, _classListSortDir, 'window._classListSort') +
-        '<th>Actions</th>';
+        window.mastSortableTh('Status',   'status',   _classListSortKey, _classListSortDir, 'window._classListSort');
     } else {
-      html += '<th>Name</th><th>Type</th><th>Schedule</th><th>Capacity</th><th>Price</th><th>Status</th><th>Actions</th>';
+      html += '<th>Name</th><th>Type</th><th>Schedule</th><th>Capacity</th><th>Price</th><th>Status</th>';
     }
     html += '</tr></thead><tbody>';
 
@@ -415,7 +417,6 @@
         '<td>' + (c.capacity || '—') + '</td>' +
         '<td>' + priceStr + '</td>' +
         '<td><span style="' + badgeStyle(STATUS_BADGE_COLORS, c.status) + '">' + esc(c.status) + '</span></td>' +
-        '<td><div class="event-actions"><button class="btn-icon" onclick="event.stopPropagation();window._bookEditClass(\'' + esc(c.id) + '\')" title="Edit">&#9998;</button></div></td>' +
         '</tr>';
     });
 
