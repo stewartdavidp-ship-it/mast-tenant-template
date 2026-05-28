@@ -3235,10 +3235,17 @@
         tab: 'customersTab',
         setup: function() {
           // Detail-view restoration is now handled by MastNavStack restorer.
+          // Deep-link: ?id=X opens detail directly so cross-module links
+          // (e.g. enrollment signals card, pass cohort drill) land on the
+          // canonical customer detail page instead of the list.
+          var rp = (typeof window.getRouteParams === 'function') ? window.getRouteParams() : {};
+          var deepLinkId = rp && typeof rp.id === 'string' ? rp.id : '';
           if (!customersLoaded) {
             currentView = 'list';
             selectedCustomerId = null;
-            loadCustomers();
+            loadCustomers().then(function() {
+              if (deepLinkId && typeof openDetail === 'function') openDetail(deepLinkId);
+            });
           } else {
             currentView = 'list';
             selectedCustomerId = null;
@@ -3251,6 +3258,7 @@
             // any layout-dependent measurements.
             try { renderTable(); } catch (_e) {}
             requestAnimationFrame(renderTable);
+            if (deepLinkId && typeof openDetail === 'function') openDetail(deepLinkId);
           }
         }
       }
