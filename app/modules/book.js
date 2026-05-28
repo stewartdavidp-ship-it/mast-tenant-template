@@ -14,6 +14,9 @@
   var selectedClassId = null;
   var sessionsData = [];
   var enrollmentsData = [];
+  // CQ1Urw — enrollment detail-view state. When set, renderEnrollments swaps
+  // the table for the detail panel.
+  var _enrollViewId = null;
   var enrollmentsLoaded = false;
   var _classListSortKey = 'name';
   var _classListSortDir = 'asc';
@@ -1042,6 +1045,14 @@
     var table = document.getElementById('bookEnrollmentsTable');
     if (!table) return;
 
+    // CQ1Urw — when an enrollment is selected, render the read-only detail
+    // view in the same container instead of the list table.
+    if (_enrollViewId) {
+      var enr = enrollmentsData.find(function(x) { return x.id === _enrollViewId; });
+      if (!enr) { _enrollViewId = null; /* fall through */ }
+      else { table.innerHTML = _renderEnrollmentDetailView(enr); return; }
+    }
+
     // URL-driven filters from MCP admin links: status, classId, sessionId, dateFrom, dateTo, enrollmentIds.
     var rp = (typeof window.getRouteParams === 'function') ? window.getRouteParams() : {};
     var urlStatus = (rp && typeof rp.status === 'string') ? rp.status : '';
@@ -1151,8 +1162,10 @@
       var statusLabel = e.status === 'waitlisted' && e.waitlistPosition
         ? e.status + ' #' + e.waitlistPosition : e.status;
 
+      // CQ1Urw — student name is the click affordance into the detail view.
+      // Row-level quick-action buttons stay live; the link only opens detail.
       html += '<tr>' +
-        '<td><strong>' + esc(e.studentName || e.customerName || '—') + '</strong><br><span style="font-size:0.78rem;color:var(--warm-gray);">' + esc(e.studentEmail || e.customerEmail || '') + '</span></td>' +
+        '<td><a href="#" onclick="event.preventDefault();window._enrollView(\'' + esc(e.id) + '\')" style="color:var(--teal);font-weight:600;text-decoration:none;">' + esc(e.studentName || e.customerName || '—') + '</a><br><span style="font-size:0.78rem;color:var(--warm-gray);">' + esc(e.studentEmail || e.customerEmail || '') + '</span></td>' +
         '<td>' + esc(className) + '</td>' +
         '<td>' + (function() {
           if (!e.sessionId) return '—';
@@ -1180,6 +1193,85 @@
 
     html += '</tbody></table>';
     table.innerHTML = html;
+  }
+
+  // ============================================================
+  // CQ1Urw — Enrollment Read-Only Detail View
+  // ============================================================
+  function _renderEnrollmentDetailView(e) {
+    var cls = e.classId ? allClassesMap[e.classId] : null;
+    var sess = e.sessionId ? allSessionsMap[e.sessionId] : null;
+    var className = cls ? cls.name : (e.classId || '—');
+    var sessionLabel = sess ? (formatDate(sess.date) + (sess.startTime ? ' ' + formatTime(sess.startTime) : '')) : '—';
+    var statusLabel = e.status === 'waitlisted' && e.waitlistPosition
+      ? e.status + ' #' + e.waitlistPosition
+      : (e.status || '—');
+    function _row(label, val) {
+      return '<div style="display:grid;grid-template-columns:140px 1fr;gap:8px 16px;padding:6px 0;border-bottom:1px solid var(--cream-dark);">' +
+        '<span style="font-size:0.72rem;color:var(--warm-gray);font-weight:600;letter-spacing:0.04em;text-transform:uppercase;">' + label + '</span>' +
+        '<span style="font-size:0.9rem;">' + val + '</span>' +
+      '</div>';
+    }
+
+    var actionsHtml = '';
+    if (e.status === 'confirmed') {
+      actionsHtml +=
+        '<button class="btn btn-secondary btn-small" onclick="window._bookMarkAttended(\'' + esc(e.id) + '\')">✓ Mark attended</button>' +
+        '<button class="btn btn-secondary btn-small" onclick="window._bookMarkLate(\'' + esc(e.id) + '\')">⏰ Mark late</button>' +
+        '<button class="btn btn-secondary btn-small" onclick="window._bookMarkNoShow(\'' + esc(e.id) + '\')">🚫 Mark no-show</button>' +
+        '<button class="btn btn-danger btn-small" onclick="window._bookCancelEnrollment(\'' + esc(e.id) + '\')">Cancel enrollment</button>';
+    } else if (e.status === 'waitlisted') {
+      actionsHtml +=
+        '<button class="btn btn-primary btn-small" onclick="window._bookPromoteWaitlist(\'' + esc(e.id) + '\')">▲ Promote</button>' +
+        '<button class="btn btn-danger btn-small" onclick="window._bookCancelEnrollment(\'' + esc(e.id) + '\')">Cancel enrollment</button>';
+    } else {
+      actionsHtml = '<span style="color:var(--warm-gray);font-size:0.85rem;">No actions available for status <strong>' + esc(e.status || '—') + '</strong>.</span>';
+    }
+
+    return '<div style="padding:8px 0 24px;">' +
+      '<div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap;">' +
+        '<button class="btn btn-secondary btn-small" onclick="window._enrollViewBack()" title="Back to list">← Back</button>' +
+        '<h3 style="margin:0;flex:1;min-width:200px;">' + esc(e.studentName || e.customerName || 'Enrollment') + '</h3>' +
+        '<span style="' + badgeStyle(STATUS_BADGE_COLORS, e.status) + '">' + esc(statusLabel) + '</span>' +
+      '</div>' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:start;">' +
+        '<div style="border:1px solid var(--cream-dark);border-radius:10px;padding:16px;background:var(--surface-card,#fff);">' +
+          '<h4 style="margin:0 0 12px;font-size:0.9rem;font-weight:600;">Student</h4>' +
+          _row('Name', esc(e.studentName || e.customerName || '—')) +
+          _row('Email', esc(e.studentEmail || e.customerEmail || '—')) +
+          (e.studentPhone || e.phone ? _row('Phone', esc(e.studentPhone || e.phone)) : '') +
+          (e.customerId ? _row('Customer', '<a href="#customers?id=' + esc(e.customerId) + '" style="color:var(--teal);">' + esc(e.customerId) + ' →</a>') : '') +
+          (e.studentUid ? _row('UID', '<span style="font-family:monospace;font-size:0.78rem;">' + esc(e.studentUid) + '</span>') : '') +
+        '</div>' +
+        '<div style="border:1px solid var(--cream-dark);border-radius:10px;padding:16px;background:var(--surface-card,#fff);">' +
+          '<h4 style="margin:0 0 12px;font-size:0.9rem;font-weight:600;">Class &amp; session</h4>' +
+          _row('Class', cls
+            ? '<a href="#" onclick="event.preventDefault();window._bookViewClass(\'' + esc(e.classId) + '\')" style="color:var(--teal);">' + esc(className) + ' →</a>'
+            : esc(className)) +
+          _row('Session', esc(sessionLabel)) +
+          (sess && sess.capacity ? _row('Capacity', esc(String(sess.capacity))) : '') +
+          (e.passId ? _row('Pass used', '<span style="font-family:monospace;font-size:0.78rem;">' + esc(e.passId) + '</span>') : '') +
+        '</div>' +
+        '<div style="border:1px solid var(--cream-dark);border-radius:10px;padding:16px;background:var(--surface-card,#fff);">' +
+          '<h4 style="margin:0 0 12px;font-size:0.9rem;font-weight:600;">Payment</h4>' +
+          _row('Amount', formatPrice(e.pricePaidCents || e.pricePaid)) +
+          (e.paymentMethod ? _row('Method', esc(e.paymentMethod)) : '') +
+          (e.paymentRef ? _row('Reference', '<span style="font-family:monospace;font-size:0.78rem;">' + esc(e.paymentRef) + '</span>') : '') +
+          (e.notes ? _row('Notes', '<span style="white-space:pre-wrap;">' + esc(e.notes) + '</span>') : '') +
+        '</div>' +
+        '<div style="border:1px solid var(--cream-dark);border-radius:10px;padding:16px;background:var(--surface-card,#fff);">' +
+          '<h4 style="margin:0 0 12px;font-size:0.9rem;font-weight:600;">Lifecycle</h4>' +
+          _row('Enrolled', e.enrolledAt ? esc(new Date(e.enrolledAt).toLocaleString()) : '—') +
+          (e.attendedAt ? _row('Attended', esc(new Date(e.attendedAt).toLocaleString())) : '') +
+          (e.cancelledAt ? _row('Cancelled', esc(new Date(e.cancelledAt).toLocaleString())) : '') +
+          (e.waitlistPosition ? _row('Waitlist #', esc(String(e.waitlistPosition))) : '') +
+        '</div>' +
+      '</div>' +
+      '<div style="margin-top:18px;padding:14px 16px;background:var(--cream,#fbf6ee);border-radius:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">' +
+        '<span style="font-size:0.78rem;color:var(--warm-gray);font-weight:600;text-transform:uppercase;letter-spacing:0.04em;margin-right:4px;">Actions</span>' +
+        actionsHtml +
+      '</div>' +
+    '</div>';
   }
 
   async function updateEnrollmentStatus(enrollmentId, newStatus) {
@@ -2317,6 +2409,8 @@
   window._bookCancelSession = function(id) { cancelSession(id); };
   window._bookCompleteSession = function(id) { completeSession(id); };
   window._bookViewSessionEnrollments = function(sessionId, classId) { loadEnrollments(sessionId, classId); };
+  window._enrollView = function(id) { _enrollViewId = id; renderEnrollmentList(); };
+  window._enrollViewBack = function() { _enrollViewId = null; renderEnrollmentList(); };
   window._bookMarkAttended = function(id) { updateEnrollmentStatus(id, 'completed'); };
   window._bookMarkLate = function(id) { updateEnrollmentStatus(id, 'late'); };
   window._bookMarkNoShow = function(id) { updateEnrollmentStatus(id, 'no-show'); };
