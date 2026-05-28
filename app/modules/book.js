@@ -1781,7 +1781,7 @@
     }
     return '<div style="padding:8px 0 24px;">' +
       '<div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap;">' +
-        '<button class="btn btn-secondary btn-small" onclick="window._passBackToList()" title="Back to list">← Back</button>' +
+        '<button class="btn btn-secondary btn-small" onclick="window._passViewBack()" title="Back to list">← Back</button>' +
         '<h3 style="margin:0;flex:1;min-width:200px;">' + esc(p.name) + '</h3>' +
         '<span style="' + badgeStyle(PASS_TYPE_BADGE_COLORS, p.type) + '">' + esc(p.type) + '</span>' +
         '<span style="' + badgeStyle(STATUS_BADGE_COLORS, p.status) + '">' + esc(p.status) + '</span>' +
@@ -2559,9 +2559,13 @@
   window._passCreate = function() { showPassDefForm(null); };
   window._passEdit = function(id) { showPassDefForm(id); };
   window._passView = function(id) { _passViewPid = id; renderPassDefList(); };
-  window._passBackToList = function() { _passViewPid = null; renderPassDefList(); };
+  // _passViewBack — distinct from _passBackToList (assigned below for the form
+  // Cancel button) to avoid an assignment collision. Both effectively go
+  // back to the list, but the read-view's path also clears the detail state
+  // so the next renderPassDefList doesn't bounce back into detail.
+  window._passViewBack = function() { _passViewPid = null; renderPassDefList(); };
   window._passSave = function(id) { savePassDefinition(id || null); };
-  window._passBackToList = function() { switchSubTab('passes'); };
+  window._passBackToList = function() { _passViewPid = null; switchSubTab('passes'); };
   window._passToggleFields = function() {
     var type = document.getElementById('pdfType');
     var visitWrap = document.getElementById('pdfVisitCountWrap');
