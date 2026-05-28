@@ -3984,6 +3984,60 @@
     }
   }
 
+  // H4kGZi6 — Class workflow explainer. Operator asked "need to better
+  // understand the workflow for a class, and what screens an instructor /
+  // admin / student goes to. Also, do we have an online location for
+  // student to fill in information". Rendered as a collapsible panel at the
+  // top of Class Reports so the answer lives next to where they asked.
+  function _renderClassWorkflowExplainer() {
+    return '<details style="margin-bottom:18px;background:var(--cream,#fbf6ee);border:1px solid var(--cream-dark);border-radius:8px;padding:10px 14px;">' +
+      '<summary style="cursor:pointer;font-size:0.9rem;font-weight:600;color:var(--text);">📋 Class workflow — who does what, and where</summary>' +
+      '<div style="margin-top:12px;font-size:0.85rem;line-height:1.55;color:var(--text);">' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-bottom:14px;">' +
+          // Admin column
+          '<div style="border-radius:6px;padding:10px 12px;background:var(--surface-card,#fff);border:1px solid var(--cream-dark);">' +
+            '<div style="font-weight:600;font-size:0.78rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--teal,#2a7c6f);margin-bottom:6px;">Admin / Studio</div>' +
+            '<ol style="margin:0 0 0 18px;padding:0;font-size:0.85rem;">' +
+              '<li>Create class definition (<a href="#classes" style="color:var(--teal,#2a7c6f);text-decoration:underline;">Bookings → Classes</a>)</li>' +
+              '<li>Add sessions (single or recurring) on the class detail surface</li>' +
+              '<li>Assign instructor &amp; resource per session</li>' +
+              '<li>Day-of: monitor enrollments via <a href="#enrollments" style="color:var(--teal,#2a7c6f);text-decoration:underline;">Bookings → Enrollments</a></li>' +
+              '<li>Mark attendance per enrollment row (✓ attended / ⏰ late / 🚫 no-show)</li>' +
+              '<li>Review outcomes here on <strong>Class Reports</strong></li>' +
+            '</ol>' +
+          '</div>' +
+          // Instructor column
+          '<div style="border-radius:6px;padding:10px 12px;background:var(--surface-card,#fff);border:1px solid var(--cream-dark);">' +
+            '<div style="font-weight:600;font-size:0.78rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--amber,#b45309);margin-bottom:6px;">Instructor</div>' +
+            '<ol style="margin:0 0 0 18px;padding:0;font-size:0.85rem;">' +
+              '<li>See assigned classes on <a href="#instructors" style="color:var(--teal,#2a7c6f);text-decoration:underline;">Bookings → Instructors</a> (click name → read view)</li>' +
+              '<li>Use the day-of session ops panel for the roster &amp; attendance entry (admin can also mark)</li>' +
+              '<li>Capability/specialty list lives on the instructor read view</li>' +
+            '</ol>' +
+            '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:6px;">Instructor-self-service screens (instructor logs in, marks attendance themselves) are not yet built — admin marks attendance for now.</div>' +
+          '</div>' +
+          // Student column
+          '<div style="border-radius:6px;padding:10px 12px;background:var(--surface-card,#fff);border:1px solid var(--cream-dark);">' +
+            '<div style="font-weight:600;font-size:0.78rem;text-transform:uppercase;letter-spacing:0.04em;color:#9a3412;margin-bottom:6px;">Student (public)</div>' +
+            '<ol style="margin:0 0 0 18px;padding:0;font-size:0.85rem;">' +
+              '<li><code>/classes</code> — browse class catalog on the storefront</li>' +
+              '<li><code>/class-detail?id=…</code> — view class details &amp; pick a session</li>' +
+              '<li>Enroll → checkout (Stripe or pass redemption)</li>' +
+              '<li><code>/waiver</code> — sign waiver (linked from confirmation email if required)</li>' +
+              '<li><code>/my-classes</code> — student\'s own enrollments (cancel, manage)</li>' +
+              '<li><code>/cancel-booking</code> &amp; <code>/manage-seats</code> — flow surfaces invoked via email link</li>' +
+            '</ol>' +
+          '</div>' +
+        '</div>' +
+        '<div style="font-size:0.85rem;background:rgba(42,124,111,0.08);border-left:3px solid var(--teal,#2a7c6f);padding:8px 12px;border-radius:0 6px 6px 0;">' +
+          '<strong>Yes</strong> &mdash; students have an online location to fill in their info. ' +
+          'The storefront flow at <code>/class-detail?id=…</code> captures name + email + phone at enrollment, the optional <code>/waiver</code> page captures emergency contact / medical / signature, and the post-purchase <code>/my-classes</code> dashboard lets them manage their own enrollments. ' +
+          'Custom intake forms beyond waiver fields would need a build.' +
+        '</div>' +
+      '</div>' +
+    '</details>';
+  }
+
   function renderReports(sessions, classes, enrollments, orders, sessionLogs, allIncidents) {
     var content = document.getElementById('bookReportsContent');
     if (!content) return;
@@ -4218,7 +4272,9 @@
       html = '<p style="' + EMPTY_STATE_STYLE + '">No session data for the selected time period.</p>';
     }
 
-    content.innerHTML = html;
+    // H4kGZi6 — prepend the workflow explainer so operators landing on
+    // Class Reports get the full who-does-what-where map up front.
+    content.innerHTML = _renderClassWorkflowExplainer() + html;
   }
 
   function _reportCard(label, value, color) {
