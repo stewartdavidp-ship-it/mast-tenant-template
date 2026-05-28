@@ -603,10 +603,30 @@
   var csReviewProductIndex = {};   // productId -> { name, thumbnailUrl }
   var csReviewCustomerByEmail = {}; // emailLower -> { id, displayName, stats }
 
+  // Response audit history grouped by reviewId. Populated alongside reviewsData.
+  var reviewResponseHistoryByReview = {}; // reviewId → [{revId, action, body, prevBody, authorName, createdAt}, ...] (chronological)
+  var reviewHistoryExpanded = {}; // reviewId → boolean (UI state for expanded audit-log view)
+
   function loadReviews() {
     var reviewsP = MastDB.query('cs_reviews').limitToLast(100).once()
       .then(function (d) { reviewsData = d || {}; reviewsLoaded = true; })
       .catch(function (err) { console.warn('[cs-reviews]', err && err.message); if (typeof showToast === 'function') showToast('Failed to load reviews', true); });
+    // Append-only audit log for response edits/deletes. Always loaded — small
+    // collection (one row per response transition, not per review).
+    var historyP = MastDB.query('cs_review_responses').limitToLast(500).once()
+      .then(function (d) {
+        reviewResponseHistoryByReview = {};
+        Object.keys(d || {}).forEach(function (revId) {
+          var row = d[revId]; if (!row || !row.reviewId) return;
+          (reviewResponseHistoryByReview[row.reviewId] = reviewResponseHistoryByReview[row.reviewId] || [])
+            .push(Object.assign({ revId: revId }, row));
+        });
+        // Chronological order per review (oldest first).
+        Object.keys(reviewResponseHistoryByReview).forEach(function (rid) {
+          reviewResponseHistoryByReview[rid].sort(function (a, b) { return (a.createdAt || '') < (b.createdAt || '') ? -1 : 1; });
+        });
+      })
+      .catch(function () { reviewResponseHistoryByReview = {}; });
     // D1 — load the reviews policy doc. Absent doc → defaults (anon blocked).
     var cfgP = MastDB.get('cs_config/reviews').then(function (d) {
       reviewsConfig = {
@@ -649,7 +669,7 @@
         };
       });
     }).catch(function() {});
-    return Promise.all([reviewsP, cfgP, custP, prodP]).then(function() {});
+    return Promise.all([reviewsP, historyP, cfgP, custP, prodP]).then(function() {});
   }
 
   function loadSurveysAll() {
@@ -802,7 +822,12 @@
           html += '<button class="btn btn-secondary btn-small" style="margin-left:auto;" onclick="csEditReviewResponse(\'' + _esc(r.id) + '\')">Edit</button>';
           html += '</div>';
           html += '<div style="font-size:0.9rem;">' + _esc(resp.body) + '</div>';
+          html += _renderResponseHistoryFooter(r.id);
           html += '</div>';
+        } else {
+          // Even when the response is currently null (delete), surface the
+          // audit log so deleted responses don't vanish without trace.
+          html += _renderResponseHistoryFooter(r.id, /*standalone*/ true);
         }
 
         html += '<div style="display:flex;gap:8px;flex-wrap:wrap;">';
@@ -990,6 +1015,79 @@
     reviewsRespondDraft = '';
     renderReviews();
   }
+  // Audit-log footer rendered under a published response (or, when the most
+  // recent action was a delete, standalone in place of the response). Shows
+  // an "Edited N times" toggle link when there's >1 transition or a delete;
+  // expanding lists every transition with body excerpt + who + when.
+  function _renderResponseHistoryFooter(reviewId, standalone) {
+    var hist = reviewResponseHistoryByReview[reviewId] || [];
+    if (hist.length === 0) return '';
+    var transitions = hist.length;
+    var hasDelete = hist.some(function (h) { return h.action === 'deleted'; });
+    // Don't surface anything for a single create transition — that's just the
+    // initial post and adds noise. Show only when there's edit/delete activity.
+    if (transitions === 1 && !hasDelete) return '';
+    var expanded = !!reviewHistoryExpanded[reviewId];
+    var label;
+    if (hasDelete && standalone) label = 'Response was deleted · view history (' + transitions + ')';
+    else if (hasDelete) label = 'Edited ' + (transitions - 1) + ' time' + (transitions - 1 === 1 ? '' : 's') + ' · includes deletion';
+    else label = 'Edited ' + (transitions - 1) + ' time' + (transitions - 1 === 1 ? '' : 's');
+    var wrapStyle = standalone
+      ? 'border-left:3px solid var(--warm-gray);padding:10px 12px;margin-bottom:10px;background:rgba(0,0,0,0.03);border-radius:0 8px 8px 0;'
+      : 'margin-top:8px;padding-top:6px;border-top:1px dashed var(--cream-dark);';
+    var out = '<div style="' + wrapStyle + '">';
+    out += '<button type="button" onclick="csToggleResponseHistory(\'' + _esc(reviewId) + '\')"' +
+      ' style="background:transparent;border:0;color:var(--warm-gray);cursor:pointer;font-size:0.78rem;padding:0;">' +
+      (expanded ? '▾ ' : '▸ ') + _esc(label) + '</button>';
+    if (expanded) {
+      out += '<div style="margin-top:8px;font-size:0.78rem;">';
+      hist.forEach(function (h) {
+        var when = h.createdAt ? (relativeTime(h.createdAt) || '') : '';
+        var who = h.authorName || 'Shop';
+        var actionLabel = h.action === 'created' ? 'Posted'
+          : h.action === 'edited' ? 'Edited'
+          : h.action === 'deleted' ? 'Deleted'
+          : h.action;
+        out += '<div style="margin-bottom:6px;padding-left:8px;border-left:2px solid var(--cream-dark);">';
+        out += '<div style="color:var(--warm-gray);margin-bottom:2px;">' + _esc(actionLabel) + ' by ' + _esc(who) + (when ? ' · ' + _esc(when) : '') + '</div>';
+        if (h.action === 'deleted') {
+          out += '<div style="color:var(--text);font-style:italic;">Removed: "' + _esc((h.prevBody || '').slice(0, 280)) + (h.prevBody && h.prevBody.length > 280 ? '…' : '') + '"</div>';
+        } else if (h.body) {
+          out += '<div style="color:var(--text);">' + _esc(h.body.slice(0, 280)) + (h.body.length > 280 ? '…' : '') + '</div>';
+          if (h.action === 'edited' && h.prevBody) {
+            out += '<div style="color:var(--warm-gray);font-style:italic;margin-top:2px;">Was: "' + _esc(h.prevBody.slice(0, 200)) + (h.prevBody.length > 200 ? '…' : '') + '"</div>';
+          }
+        }
+        out += '</div>';
+      });
+      out += '</div>';
+    }
+    out += '</div>';
+    return out;
+  }
+
+  // Append-only audit log. Every response create/edit/delete writes one row
+  // to cs_review_responses/{revId}. cs_reviews/{id}.response stays the
+  // "latest visible" pointer so the storefront read path doesn't change.
+  // Operator can edit/delete in the admin freely — the audit row preserves
+  // what was actually published and for how long.
+  async function _appendResponseHistory(reviewId, action, body, prevResponse) {
+    var revId = MastDB.newKey('cs_review_responses');
+    var now = nowIso();
+    var entry = {
+      reviewId: reviewId,
+      action: action, // 'created' | 'edited' | 'deleted'
+      body: body, // null for delete
+      authorName: (window.currentUser && (window.currentUser.displayName || window.currentUser.email)) || 'Shop',
+      authorUid: (window.currentUser && window.currentUser.uid) || null,
+      prevBody: (prevResponse && prevResponse.body) || null,
+      prevCreatedAt: (prevResponse && prevResponse.createdAt) || null,
+      createdAt: now
+    };
+    try { await MastDB.set('cs_review_responses/' + revId, entry); }
+    catch (err) { console.warn('[cs_review_responses] history write failed:', err && err.message); }
+  }
+
   async function saveReviewResponse(id) {
     var r = reviewsData[id];
     if (!r) { showToast('Review not found', true); return; }
@@ -1008,6 +1106,11 @@
     };
     try {
       await MastDB.update('cs_reviews/' + id, { response: payload, updatedAt: now });
+      // Audit append happens after the main write so the on-doc state is
+      // authoritative even if the history append fails. History write failure
+      // is logged but not surfaced — losing one audit row is bad but not
+      // fatal; losing the publicly-visible response would be worse.
+      await _appendResponseHistory(id, existing ? 'edited' : 'created', body, existing);
       if (reviewsData[id]) { reviewsData[id].response = payload; reviewsData[id].updatedAt = now; }
       reviewsRespondingId = null;
       reviewsRespondDraft = '';
@@ -1019,8 +1122,11 @@
   }
   async function deleteReviewResponse(id) {
     if (!confirm('Delete this response? The original review will remain.')) return;
+    var r = reviewsData[id];
+    var prev = r && r.response ? r.response : null;
     try {
       await MastDB.update('cs_reviews/' + id, { response: null, updatedAt: nowIso() });
+      await _appendResponseHistory(id, 'deleted', null, prev);
       if (reviewsData[id]) reviewsData[id].response = null;
       reviewsRespondingId = null;
       reviewsRespondDraft = '';
@@ -2551,6 +2657,10 @@
   window.csCancelReviewResponse = cancelReviewResponse;
   window.csSaveReviewResponse = saveReviewResponse;
   window.csDeleteReviewResponse = deleteReviewResponse;
+  window.csToggleResponseHistory = function (reviewId) {
+    reviewHistoryExpanded[reviewId] = !reviewHistoryExpanded[reviewId];
+    renderReviews();
+  };
   window.csDraftSocialFromReview = draftSocialFromReview;
   window.csAskForUgcPhoto = askForUgcPhoto;
   window.csSurveysRefresh = function () {
