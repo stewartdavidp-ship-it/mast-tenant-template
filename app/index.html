@@ -18608,7 +18608,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260527-211016-3d78bd0';
+var MAST_MODULES_V = '20260527-211425-ef59c8e';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -35866,11 +35866,14 @@ async function saveInlineAdjust(pid) {
 }
 
 function toggleInventoryExpand(pid) {
-  // If product has no variants, navigate to detail instead
+  // D8 — both variant and non-variant rows now open the inline adjust panel
+  // so a row click is consistent (was: non-variant rows navigated away to
+  // product detail). The "View Detail →" link in the name cell is the
+  // explicit escape hatch when the operator wants the full product surface.
   var product = productsData.find(function(p) { return p.pid === pid; });
   var variantInfo = product ? getProductVariantCombos(product) : { combos: [] };
   if (!variantInfo.combos.length) {
-    viewProductFromInventory(pid);
+    toggleInlineAdjust(pid);
     return;
   }
   expandedInventoryPid = (expandedInventoryPid === pid) ? null : pid;
