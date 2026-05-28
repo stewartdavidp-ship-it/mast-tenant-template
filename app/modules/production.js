@@ -2330,10 +2330,12 @@ function renderStoryDetail(storyId) {
     }).sort(function(a, b) { return (a.order || 0) - (b.order || 0); });
   }
 
-  // Action buttons
+  // Action buttons. OvA5VhvI — operator feedback was "don't see way to add
+  // photos". Photos on stories come from production-build media (see
+  // openStoryCuration); the relabeled button surfaces the path clearly.
   var actions = '<button class="btn btn-secondary" style="font-size:0.78rem;padding:4px 10px;" onclick="previewStory(\'' + esc(storyId) + '\')">👁 Preview</button> ';
   if (jobId) {
-    actions += '<button class="btn btn-primary" style="font-size:0.78rem;padding:4px 10px;" onclick="openStoryCuration(\'' + esc(jobId) + '\')">✏️ Edit Story</button> ';
+    actions += '<button class="btn btn-primary" style="font-size:0.78rem;padding:4px 10px;" onclick="openStoryCuration(\'' + esc(jobId) + '\')">📸 Add photos · Edit</button> ';
   }
   if (story.status === 'published') {
     actions += '<button class="btn btn-secondary" style="font-size:0.78rem;padding:4px 10px;" onclick="unpublishStoryFromDetail(\'' + esc(storyId) + '\')">Unpublish</button>';
@@ -2351,7 +2353,18 @@ function renderStoryDetail(storyId) {
       '<span style="font-size:0.85rem;color:var(--warm-gray);">' + entryCount + ' entr' + (entryCount === 1 ? 'y' : 'ies') + '</span>' +
       (story.publishedAt ? '<span style="font-size:0.85rem;color:var(--warm-gray);">Published ' + getTimeAgo(story.publishedAt) + '</span>' : '') +
     '</div>' +
-    '<div style="display:flex;gap:8px;margin-bottom:20px;">' + actions + '</div>';
+    '<div style="display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap;">' + actions + '</div>' +
+    // OvA5VhvI — surface the photo-source model directly on the detail
+    // surface so operators stop hunting for a non-existent "add photo"
+    // affordance. When the story has a linked job, point at the button.
+    // When it doesn't, explain the constraint and offer the path forward.
+    (jobId
+      ? '<div style="font-size:0.78rem;color:var(--warm-gray);background:var(--cream,#fbf6ee);border:1px solid var(--cream-dark);border-radius:6px;padding:8px 12px;margin-bottom:16px;">' +
+          '📷 Photos on this story come from media captured during the linked production job\'s builds. Use <strong>📸 Add photos · Edit</strong> above to pick which build photos appear and add captions / milestones.' +
+        '</div>'
+      : '<div style="font-size:0.85rem;color:var(--text);background:rgba(245,158,11,0.10);border:1px solid rgba(245,158,11,0.35);border-radius:6px;padding:10px 14px;margin-bottom:16px;">' +
+          '⚠️ This story isn\'t linked to a production job, so there\'s no way to add photos directly. Stories are curated from build media — to add photos here, either link this story to a completed job (set <code>jobId</code> on the story doc) or create a new story from a job via <strong>Curate Story</strong> on the job detail surface.' +
+        '</div>');
 
   // Show entries
   if (entries.length > 0) {
@@ -2374,7 +2387,11 @@ function renderStoryDetail(storyId) {
     html += '</div>';
   } else {
     html += '<div class="prod-detail-section">' +
-      '<p style="font-size:0.85rem;color:var(--warm-gray);font-style:italic;">No entries yet. Click <strong>Edit Story</strong> to add photos and narrative.</p>' +
+      '<p style="font-size:0.85rem;color:var(--warm-gray);font-style:italic;">No entries yet. ' +
+        (jobId
+          ? 'Click <strong>📸 Add photos · Edit</strong> above to pick build photos and add captions.'
+          : 'Link this story to a completed production job to add photos.') +
+      '</p>' +
     '</div>';
   }
 
