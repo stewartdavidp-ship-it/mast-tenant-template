@@ -1754,7 +1754,7 @@
 
     var drillLinkHtml = customerId
       ? '<a href="#customers?id=' + esc(customerId) + '" style="color:var(--teal,#2a7c6f);font-weight:600;font-size:0.85rem;text-decoration:none;">View full student profile →</a>'
-      : '<span style="color:var(--warm-gray);font-size:0.78rem;">No linked customer record on this enrollment — only enrollment-derived data is available.</span>';
+      : '<span id="' + slotId + '_drillLink" style="color:var(--warm-gray);font-size:0.78rem;">Looking up customer record…</span>';
 
     // Schedule async load to populate surveys/reviews/passes counts.
     setTimeout(function() { _loadEnrollSignals(slotId, customerId, emailKey, uid); }, 0);
@@ -1799,11 +1799,35 @@
       return false;
     }
 
-    var custPromise = customerId
-      ? MastDB.get('admin/customers/' + customerId).then(function(c) { return c || null; }).catch(function() { return null; })
-      : Promise.resolve(null);
+    // If the enrollment has no customerId, try to resolve one via the
+    // email→customerId index so the drill link still routes to the canonical
+    // customer detail page for legacy enrollments.
+    var custPromise;
+    if (customerId) {
+      custPromise = MastDB.get('admin/customers/' + customerId).then(function(c) { return { id: customerId, cust: c || null }; }).catch(function() { return { id: customerId, cust: null }; });
+    } else if (emailKey) {
+      var indexKey = emailKey.replace(/\./g, ',');
+      custPromise = MastDB.get('admin/customerIndexes/byEmail/' + indexKey).then(function(resolvedId) {
+        if (!resolvedId) return { id: null, cust: null };
+        return MastDB.get('admin/customers/' + resolvedId).then(function(c) { return { id: resolvedId, cust: c || null }; });
+      }).catch(function() { return { id: null, cust: null }; });
+    } else {
+      custPromise = Promise.resolve({ id: null, cust: null });
+    }
 
-    custPromise.then(function(cust) {
+    custPromise.then(function(resolved) {
+      var cust = resolved.cust;
+      var resolvedId = resolved.id;
+      // Replace the drill-link placeholder once we have a customer id.
+      if (!customerId && resolvedId) {
+        var ph = document.getElementById(slotId + '_drillLink');
+        if (ph) {
+          ph.outerHTML = '<a href="#customers?id=' + resolvedId.replace(/[<>&"']/g, function(ch) { return { '<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;' }[ch]; }) + '" style="color:var(--teal,#2a7c6f);font-weight:600;font-size:0.85rem;text-decoration:none;">View full student profile →</a>';
+        }
+      } else if (!customerId && !resolvedId) {
+        var ph2 = document.getElementById(slotId + '_drillLink');
+        if (ph2) ph2.textContent = 'No linked customer record — only enrollment-derived data is available.';
+      }
       if (cust) {
         ((cust.emails) || []).forEach(function(e) { if (e) linkedEmails[String(e).toLowerCase()] = true; });
         if (cust.primaryEmail) linkedEmails[String(cust.primaryEmail).toLowerCase()] = true;
