@@ -268,8 +268,9 @@
       var t = title ? ' title="' + _esc(title) + '"' : '';
       return '<option value="' + _esc(i.id) + '"' + sel + t + '>' + _esc((marker || '') + (i.name || '')) + '</option>';
     }
+    var selectAttrs = ' onchange="window._bookRefreshClassFormAssignment && window._bookRefreshClassFormAssignment()"';
     if (!requiredSlugs || requiredSlugs.length === 0) {
-      return '<select id="bcfInstructor" class="form-input"><option value="">None</option>' +
+      return '<select id="bcfInstructor" class="form-input"' + selectAttrs + '><option value="">None</option>' +
         active.map(function(i) { return _opt(i); }).join('') +
       '</select>';
     }
@@ -280,7 +281,7 @@
       if (missing.length === 0) qualified.push(i);
       else unqualified.push({ instr: i, missing: missing });
     });
-    var html = '<select id="bcfInstructor" class="form-input"><option value="">None</option>';
+    var html = '<select id="bcfInstructor" class="form-input"' + selectAttrs + '><option value="">None</option>';
     if (qualified.length > 0) {
       html += '<optgroup label="Qualified (' + qualified.length + ')">' +
         qualified.map(function(i) { return _opt(i); }).join('') +
@@ -353,20 +354,41 @@
       '</div>';
   }
 
+  // Selection-specific warning. Distinct from the system-level coverage
+  // warning (which says "no instructor at all qualifies"). This one fires
+  // when the SELECTED instructor specifically is missing required skills —
+  // catches the silent case where the operator picks (or has carried over)
+  // an unqualified instructor and the closed <select> doesn't visually flag
+  // the mismatch.
+  function _renderInstructorSelectionWarning(selectedId, requiredSlugs) {
+    if (!selectedId || !requiredSlugs || requiredSlugs.length === 0) return '';
+    var instr = instructorsData.find(function(i) { return i.id === selectedId; });
+    if (!instr) return '';
+    var missing = _missingSkills(instr, requiredSlugs);
+    if (missing.length === 0) return '';
+    return '<div style="background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.35);' +
+      'color:#F59E0B;padding:6px 10px;border-radius:6px;font-size:0.78rem;">' +
+      'Selected instructor is missing: ' + _esc(missing.map(_skillLabel).join(', ')) +
+    '</div>';
+  }
+
   // Re-render class-form instructor select + coverage warning when the
-  // requiredSkills picker changes. Preserves any current selection.
+  // requiredSkills picker OR the selected instructor changes. Preserves
+  // selection across re-render. Also exposes a window handle so the
+  // <select> onchange can call it without leaking module internals.
   function _refreshClassFormAssignment() {
     var slugs = getSkillPickerSlugs('clsReqSkillPicker');
     var wrap = document.getElementById('bcfInstructorWrap');
     var warnEl = document.getElementById('clsCoverageWarning');
-    if (wrap) {
-      var current = (document.getElementById('bcfInstructor') || {}).value || '';
-      wrap.innerHTML = _renderClassInstructorSelect(current, slugs);
-    }
-    if (warnEl) {
-      warnEl.innerHTML = _renderCoverageWarning(slugs);
-    }
+    var selWarnEl = document.getElementById('bcfInstructorSelectionWarning');
+    var current = (document.getElementById('bcfInstructor') || {}).value || '';
+    if (wrap) wrap.innerHTML = _renderClassInstructorSelect(current, slugs);
+    if (warnEl) warnEl.innerHTML = _renderCoverageWarning(slugs);
+    // Selection warning reads the (just-re-rendered) select value.
+    var currentAfter = (document.getElementById('bcfInstructor') || {}).value || '';
+    if (selWarnEl) selWarnEl.innerHTML = _renderInstructorSelectionWarning(currentAfter, slugs);
   }
+  window._bookRefreshClassFormAssignment = _refreshClassFormAssignment;
 
   var CLASS_TYPES = ['series', 'single', 'dropin', 'private'];
   var CLASS_STATUSES = ['draft', 'active', 'published', 'completed', 'archived'];
@@ -1064,6 +1086,7 @@
       '<div class="book-responsive-grid">' +
       '<div class="book-field"><label class="form-label">Instructor</label>' +
       '<div id="bcfInstructorWrap">' + _renderClassInstructorSelect(cls && cls.instructorId ? cls.instructorId : '', (cls && Array.isArray(cls.requiredSkills)) ? cls.requiredSkills : []) + '</div>' +
+      '<div id="bcfInstructorSelectionWarning" style="margin-top:6px;"></div>' +
       '</div>' +
       '<div class="book-field"><label class="form-label">Resource</label><select id="bcfResource" class="form-input">' +
       '<option value="">None</option>' +
