@@ -3074,13 +3074,49 @@
         await writeAudit('update', 'buildJobs', reqKeys[i]);
       }
 
+      // Write only the cancellation-specific fields here; let MastFlow.transition
+      // own the status flip + statusHistory append + workflow audit row, so the
+      // timeline has exactly one entry per transition (not one from here AND
+      // one from recordExtraPatch).
       await MastDB.orders.update(orderId, {
-        status: 'cancelled',
         cancelledAt: now,
-        cancelReason: reason || null,
-        statusHistory: history
+        cancelReason: reason || null
       });
       await writeAudit('update', 'orders', orderId);
+
+      // Route the workflow transition through MastFlow so the audit row at
+      // admin/workflowTransitions/order/{orderId}/{txId} fires. force:true
+      // bypasses requirement gating (operator's already decided);
+      // expectedFromPhase is omitted to skip the optimistic-lock (this is
+      // an admin-initiated cancellation, not a contested transition).
+      var cancelledRec = orders[orderId] || {};
+      cancelledRec.id = orderId;
+      // Seed statusHistory snapshot so recordExtraPatch appends to the
+      // current history, not an empty one (it reads from the live record).
+      cancelledRec.statusHistory = history;
+      try {
+        if (window.MastFlow && MastFlow.getDefinition('pickship')) {
+          await MastFlow.transition('pickship', cancelledRec, 'closed', {
+            recordId: orderId,
+            force: true,
+            reason: reason || 'admin cancellation'
+          });
+        } else {
+          // Engine not loaded (e.g. order list cancel without detail-view
+          // ever having opened) — fall back to the legacy write so the
+          // status flip still lands. Cancellation audit row is lost.
+          await MastDB.orders.update(orderId, {
+            status: 'cancelled',
+            statusHistory: history
+          });
+        }
+      } catch (mfErr) {
+        console.error('[orders] MastFlow cancellation transition failed; falling back to legacy write:', mfErr);
+        await MastDB.orders.update(orderId, {
+          status: 'cancelled',
+          statusHistory: history
+        });
+      }
 
       closeModal();
       showToast('Order cancelled');
