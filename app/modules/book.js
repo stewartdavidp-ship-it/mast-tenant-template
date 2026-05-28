@@ -3804,11 +3804,38 @@
 
     var anyActive = (Object.keys(_calFilterClasses).length + Object.keys(_calFilterInstructors).length + Object.keys(_calFilterResources).length) > 0;
 
+    // Fallback lookups: if the instructor / resource doc is missing (deleted
+    // or seeded ad-hoc), walk classes referencing this id and pull the
+    // denormalized instructorName / resourceName off the class. Keeps the
+    // chip label readable when sgtest15-style legacy IDs orphan-reference a
+    // since-deleted instructor.
+    function _lookupClassName(id) {
+      return (calendarClassesMap[id] && calendarClassesMap[id].name) || null;
+    }
+    function _lookupInstructorName(id) {
+      if (_calInstructorsMap[id] && _calInstructorsMap[id].name) return _calInstructorsMap[id].name;
+      var cids = Object.keys(calendarClassesMap);
+      for (var i = 0; i < cids.length; i++) {
+        var c = calendarClassesMap[cids[i]];
+        if (c && c.instructorId === id && c.instructorName) return c.instructorName;
+      }
+      return null;
+    }
+    function _lookupResourceName(id) {
+      if (_calResourcesMap[id] && _calResourcesMap[id].name) return _calResourcesMap[id].name;
+      var cids = Object.keys(calendarClassesMap);
+      for (var i = 0; i < cids.length; i++) {
+        var c = calendarClassesMap[cids[i]];
+        if (c && c.resourceId === id && c.resourceName) return c.resourceName;
+      }
+      return null;
+    }
+
     host.innerHTML =
       '<div style="border:1px solid var(--cream-dark);border-radius:10px;padding:10px 12px;background:var(--cream,#fbf6ee);">' +
-        _chipRow('Class', 'class', clsIds, function(id) { return calendarClassesMap[id] && calendarClassesMap[id].name; }, _calFilterClasses) +
-        _chipRow('Instructor', 'instructor', insIds, function(id) { return _calInstructorsMap[id] && _calInstructorsMap[id].name; }, _calFilterInstructors) +
-        _chipRow('Resource', 'resource', resIds, function(id) { return _calResourcesMap[id] && _calResourcesMap[id].name; }, _calFilterResources) +
+        _chipRow('Class', 'class', clsIds, _lookupClassName, _calFilterClasses) +
+        _chipRow('Instructor', 'instructor', insIds, _lookupInstructorName, _calFilterInstructors) +
+        _chipRow('Resource', 'resource', resIds, _lookupResourceName, _calFilterResources) +
         (anyActive
           ? '<div style="display:flex;justify-content:flex-end;margin-top:4px;"><button type="button" onclick="window._calClearAllFilters()" style="font-size:0.78rem;background:transparent;border:1px solid var(--warm-gray);color:var(--warm-gray);padding:2px 10px;border-radius:10px;cursor:pointer;">Clear all filters</button></div>'
           : '') +
