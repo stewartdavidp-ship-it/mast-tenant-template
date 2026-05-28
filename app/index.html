@@ -10782,7 +10782,12 @@
               <option value="completed">Completed</option>
               <option value="no-show">No-Show</option>
             </select>
-            <select id="enrollFilterClass" onchange="window._enrollFilterClass()" style="padding:6px 10px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text,#2a2a2a);font-size:0.85rem;">
+            <!-- max-width clamps the native <select>'s intrinsic auto-size
+                 so a single absurdly-long class name (e.g. an operator stress
+                 test) can't stretch the section-header into a 4000px+ flex
+                 row and squeeze the sibling status pills into one-per-line
+                 wrapping. -->
+            <select id="enrollFilterClass" onchange="window._enrollFilterClass()" style="padding:6px 10px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text,#2a2a2a);font-size:0.85rem;max-width:240px;flex:0 0 auto;">
               <option value="all">All Classes</option>
             </select>
           </div>
@@ -18630,7 +18635,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260527-223021-1ceec55';
+var MAST_MODULES_V = '20260527-223352-768b9d7';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.

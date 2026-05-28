@@ -1271,6 +1271,90 @@
         '<span style="font-size:0.78rem;color:var(--warm-gray);font-weight:600;text-transform:uppercase;letter-spacing:0.04em;margin-right:4px;">Actions</span>' +
         actionsHtml +
       '</div>' +
+      // 1GpeRGn — student history. Cross-references enrollmentsData by
+      // email or UID to surface every other class this student is/was in,
+      // so the operator gets the full picture from the enrollment surface.
+      _renderEnrollmentStudentHistory(e) +
+    '</div>';
+  }
+
+  // Full-width student-history card placed below the 4-card grid + Actions row.
+  // Filters enrollmentsData by matching email (case-insensitive) or studentUid,
+  // excludes the current enrollment, sorts newest-first. No remote fetch —
+  // works off in-memory enrollmentsData already loaded for the list.
+  function _renderEnrollmentStudentHistory(current) {
+    var emailKey = (current.studentEmail || current.customerEmail || '').toLowerCase().trim();
+    var uid = current.studentUid || null;
+    if (!emailKey && !uid) {
+      return '<div style="margin-top:18px;padding:14px 16px;border:1px dashed var(--cream-dark);border-radius:10px;color:var(--warm-gray);font-size:0.85rem;">No student email or UID on this enrollment — cannot build history.</div>';
+    }
+    var others = (enrollmentsData || []).filter(function(r) {
+      if (!r || r.id === current.id) return false;
+      var rEmail = (r.studentEmail || r.customerEmail || '').toLowerCase().trim();
+      var rUid = r.studentUid || null;
+      return (emailKey && rEmail === emailKey) || (uid && rUid === uid);
+    });
+    others.sort(function(a, b) {
+      return (b.enrolledAt || '').localeCompare(a.enrolledAt || '');
+    });
+
+    // Aggregate counts for the header chip row.
+    var byStatus = {};
+    others.forEach(function(r) { byStatus[r.status] = (byStatus[r.status] || 0) + 1; });
+    var totalSpend = others.reduce(function(sum, r) { return sum + (r.pricePaidCents || r.pricePaid || 0); }, 0);
+
+    function _chip(label, val, color) {
+      return '<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:12px;background:rgba(42,124,111,0.10);color:' + (color || 'var(--teal,#2a7c6f)') + ';font-size:0.78rem;font-weight:600;">' +
+        esc(label) + ' <span style="font-family:monospace;">' + esc(String(val)) + '</span></span>';
+    }
+
+    var chipsHtml = '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;">' +
+      _chip('Total', others.length) +
+      (byStatus.completed ? _chip('Completed', byStatus.completed) : '') +
+      (byStatus.confirmed ? _chip('Confirmed', byStatus.confirmed) : '') +
+      (byStatus.waitlisted ? _chip('Waitlisted', byStatus.waitlisted, 'var(--amber,#b45309)') : '') +
+      (byStatus['no-show'] ? _chip('No-show', byStatus['no-show'], 'var(--danger,#b81d1d)') : '') +
+      (byStatus.cancelled ? _chip('Cancelled', byStatus.cancelled, 'var(--warm-gray,#888)') : '') +
+      (totalSpend > 0 ? _chip('Lifetime', formatPrice(totalSpend)) : '') +
+    '</div>';
+
+    var listHtml;
+    if (others.length === 0) {
+      listHtml = '<div style="color:var(--warm-gray);font-size:0.9rem;padding:8px 0;">This student has no other enrollments in the system yet.</div>';
+    } else {
+      var rows = others.slice(0, 50).map(function(r) {
+        var className = (allClassesMap[r.classId] && allClassesMap[r.classId].name) || r.classId || '—';
+        var sess = r.sessionId ? allSessionsMap[r.sessionId] : null;
+        var when = sess
+          ? (formatDate(sess.date) + (sess.startTime ? ' ' + formatTime(sess.startTime) : ''))
+          : (r.enrolledAt ? new Date(r.enrolledAt).toLocaleDateString() : '—');
+        var statusLabel = r.status === 'waitlisted' && r.waitlistPosition
+          ? r.status + ' #' + r.waitlistPosition
+          : (r.status || '—');
+        return '<tr style="cursor:pointer;" onclick="window._enrollView(\'' + esc(r.id) + '\')">' +
+          '<td><strong>' + esc(className) + '</strong></td>' +
+          '<td>' + esc(when) + '</td>' +
+          '<td>' + formatPrice(r.pricePaidCents || r.pricePaid) + '</td>' +
+          '<td><span style="' + badgeStyle(STATUS_BADGE_COLORS, r.status) + '">' + esc(statusLabel) + '</span></td>' +
+        '</tr>';
+      }).join('');
+      listHtml = '<table class="data-table" style="margin-top:4px;">' +
+        '<thead><tr><th>Class</th><th>When</th><th>Paid</th><th>Status</th></tr></thead>' +
+        '<tbody>' + rows + '</tbody>' +
+      '</table>' +
+      (others.length > 50 ? '<div style="font-size:0.72rem;color:var(--warm-gray);margin-top:6px;">Showing 50 most recent of ' + others.length + '.</div>' : '');
+    }
+
+    return '<div style="margin-top:18px;border:1px solid var(--cream-dark);border-radius:10px;padding:16px;background:var(--surface-card,#fff);">' +
+      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap;">' +
+        '<h4 style="margin:0;font-size:0.9rem;font-weight:600;">Student history</h4>' +
+        '<span style="color:var(--warm-gray);font-size:0.78rem;">all other enrollments by this student</span>' +
+      '</div>' +
+      chipsHtml +
+      listHtml +
+      '<div style="font-size:0.72rem;color:var(--warm-gray-light,var(--warm-gray));margin-top:10px;">' +
+        'Survey responses, certifications, and pass-usage detail are tracked separately and not yet aggregated here — that\'s a follow-up.' +
+      '</div>' +
     '</div>';
   }
 
