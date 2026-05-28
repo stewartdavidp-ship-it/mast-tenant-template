@@ -416,6 +416,11 @@
         '</div>';
     }
 
+    // J06 — Disconnected-channel banner. Placeholder div; populated async by
+    // renderDisconnectedBanner() so the channels list paints immediately and
+    // the Firestore reads for channel_config don't block first paint.
+    h += '<div id="channelsDisconnectedBanner" style="margin-bottom:12px;"></div>';
+
     // Header
     h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">';
     h += '<h3 style="font-family:\'Cormorant Garamond\',serif;font-size:1.6rem;font-weight:500;margin:0;">Channels</h3>';
@@ -489,7 +494,92 @@
     }
 
     tab.innerHTML = h;
+
+    // J06 — asynchronously populate the disconnected-channel banner.
+    // Reads channel_config/{channel}._tokenStatus for every platform-backed
+    // channel and renders a steady-state "Disconnected — reconnect to resume
+    // audit" card per disconnected platform. Not a toast; persists until the
+    // admin reconnects.
+    renderDisconnectedBanner(channels);
   }
+
+  // ============================================================
+  // J06 — Disconnected-channel banner
+  // ============================================================
+
+  function renderDisconnectedBanner(channels) {
+    var holder = document.getElementById('channelsDisconnectedBanner');
+    if (!holder) return;
+    if (typeof window === 'undefined' || !window.ChannelConnection) {
+      holder.innerHTML = '';
+      return;
+    }
+
+    // Collect unique platforms from the channel list, skipping 'manual'.
+    var platformSet = Object.create(null);
+    channels.forEach(function(ch) {
+      var p = getChannelPlatform(ch);
+      if (p && p !== 'manual') platformSet[p] = true;
+    });
+    var platforms = Object.keys(platformSet);
+    if (!platforms.length) { holder.innerHTML = ''; return; }
+
+    Promise.all(platforms.map(function(p) {
+      return window.ChannelConnection.getChannelTokenStatus(p).then(function(status) {
+        return { platform: p, status: status };
+      });
+    })).then(function(results) {
+      var disconnected = results.filter(function(r) { return r.status !== 'ok'; });
+      if (!disconnected.length) { holder.innerHTML = ''; return; }
+
+      var html = '';
+      disconnected.forEach(function(d) {
+        var pLabel = (PLATFORMS[d.platform] && PLATFORMS[d.platform].label) || d.platform;
+        var msg = d.status === 'revoked'
+          ? 'Disconnected — reconnect to resume audit'
+          : 'Token expired — automatic refresh in progress';
+        var actionLabel = d.status === 'revoked' ? 'Reconnect' : 'Reconnect now';
+        html += '<div style="background:rgba(220,38,38,0.10);border:1px solid rgba(220,38,38,0.45);' +
+          'color:#FCA5A5;padding:12px 16px;margin-bottom:8px;border-radius:8px;' +
+          'display:flex;align-items:center;gap:12px;font-size:0.9rem;">' +
+          '<span style="font-size:1.15rem;">⚠</span>' +
+          '<div style="flex:1;">' +
+            '<div style="font-weight:500;color:#F87171;">' + esc(pLabel) + ' · ' + esc(msg) + '</div>' +
+            '<div style="font-size:0.78rem;color:#999;margin-top:2px;">' +
+              'Drift checks paused until reconnected.' +
+            '</div>' +
+          '</div>' +
+          '<button type="button" onclick="channelReconnect(\'' + esc(d.platform) + '\')"' +
+          ' style="background:#C4853C;border:none;color:#1a1a1a;padding:8px 16px;' +
+          'border-radius:6px;cursor:pointer;font-weight:500;font-size:0.85rem;">' +
+          esc(actionLabel) + '</button>' +
+          '</div>';
+      });
+      holder.innerHTML = html;
+    }).catch(function() {
+      holder.innerHTML = '';
+    });
+  }
+
+  // Reconnect handler — routes to the per-platform OAuth start endpoint.
+  // The actual OAuth flow lives in the per-platform CF (etsyOAuthStart,
+  // shopifyOAuthStart, etc.); we just navigate there with the tenant context.
+  window.channelReconnect = function(platform) {
+    if (!platform) return;
+    // Find the first channel for this platform so the OAuth start endpoint
+    // can resume context (account binding, route, etc.).
+    var ch = Object.values(channelsData).find(function(c) {
+      return getChannelPlatform(c) === platform;
+    });
+    if (typeof window.startChannelOAuth === 'function') {
+      window.startChannelOAuth(platform, ch && ch.channelId);
+    } else if (ch && ch.channelId) {
+      // Fall back to opening the channel detail settings tab.
+      channelOpenDetail(ch.channelId);
+    } else {
+      alert('Reconnect handler not configured for ' + platform + '. Open the channel detail page to reconnect.');
+    }
+  };
 
   // ============================================================
   // Onboarding — Quick-add flow for first-time setup
