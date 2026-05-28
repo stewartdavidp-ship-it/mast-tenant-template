@@ -310,10 +310,13 @@
   }
 
   // ---- Record path ----
-  // Orders live at admin/orders/{id} (per MastDB.orders pattern in
-  // app/index.html — see existing MastDB.orders.update calls).
+  // Orders live at the ROOT `orders/{id}` (NOT `admin/orders/`). Confirmed
+  // via MastDB.orders.PATH = 'orders' in app/index.html:12163. Verification
+  // on sgtest15 caught this — earlier draft used 'admin/orders/' which
+  // caused MastFlow.transition writes to silently land at a sibling path
+  // (or fail security rules), aborting the audit-row write.
   function recordPath(orderId) {
-    return 'admin/orders/' + orderId;
+    return 'orders/' + orderId;
   }
 
   // ---- Extra patch on transition ----
