@@ -12240,12 +12240,12 @@ MastDB.accounts = {
   set: function(uid, data) { return MastDB.set('public/accounts/' + uid, data); },
   update: function(uid, data) { return MastDB.update('public/accounts/' + uid, data); },
   getPass: function(uid, passId) {
-    return MastDB.get('public/accounts/' + uid + '/passes' + (passId ? '/' + passId : ''));
+    return MastDB.get('public/accounts/' + uid + '/wallet/passes' + (passId ? '/' + passId : ''));
   },
   listPasses: function(uid, limit) {
-    return MastDB.query('public/accounts/' + uid + '/passes').limitToLast(limit || 50).once();
+    return MastDB.query('public/accounts/' + uid + '/wallet/passes').limitToLast(limit || 50).once();
   },
-  newPassKey: function(uid) { return MastDB.newKey('public/accounts/' + uid + '/passes'); },
+  newPassKey: function(uid) { return MastDB.newKey('public/accounts/' + uid + '/wallet/passes'); },
   getWalletCredit: function(uid, creditId) {
     return MastDB.get('public/accounts/' + uid + '/wallet/credits' + (creditId ? '/' + creditId : ''));
   },
@@ -18675,7 +18675,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260528-100618-6d8aa09';
+var MAST_MODULES_V = '20260528-101513-517a4cc';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -54612,7 +54612,7 @@ function approveRefund(enrollmentId, paymentType) {
       // Restore pass visit
       MastDB.get('admin/enrollments/' + enrollmentId).then(function(enr) {
         if (enr && enr.passId && enr.studentUid) {
-          var passRef = MastDB.query('public/accounts/' + enr.studentUid + '/passes/' + enr.passId);
+          var passRef = MastDB.query('public/accounts/' + enr.studentUid + '/wallet/passes/' + enr.passId);
           passRef.once('value').then(function(passSnap) {
             var pass = passSnap;
             if (pass && Object.keys(pass).length > 0) {

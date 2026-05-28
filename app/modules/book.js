@@ -403,10 +403,18 @@
   // B9 — passes read-view state. When set, renderPassDefList renders the
   // read-only detail view for that pass def instead of the list.
   var _passViewPid = null;
-  // Cache of per-pass-def aggregate history { bought, unused, used }, keyed
-  // by passDefId. Lazy-populated on first detail-view open per session.
-  var _passHistoryByDef = {};
-  var _passHistoryLoadingFor = null;
+  // Aggregate doc cache (admin/passDefinitionAggregates/{id}), keyed by passDefId.
+  var _passAggregateByDef = {};
+  // Per-instance index cache (admin/passInstances filtered by passDefId), keyed
+  // by passDefId. Loaded once per detail-view open. Cohort filters are
+  // computed client-side from this list so time-dependent cohorts
+  // (expiringIn7d, lapsedNd) always reflect "right now."
+  var _passInstancesByDef = {};
+  var _passLoadingFor = null;
+  // Selected cohort key for the drill-down section.
+  var _passSelectedCohort = 'active';
+  var _passInstanceSortKey = 'customerName';
+  var _passInstanceSortDir = 'asc';
 
   // Calendar state
   var calendarYear = new Date().getFullYear();
@@ -2359,7 +2367,7 @@
     if (_passViewPid) {
       var p = passDefsData.find(function(pd) { return pd.id === _passViewPid; });
       if (!p) { _passViewPid = null; /* fall through to list */ }
-      else { container.innerHTML = _renderPassDetailView(p); _kickPassHistoryLoad(p.id); return; }
+      else { container.innerHTML = _renderPassDetailView(p); _kickPassDetailLoad(p.id); return; }
     }
 
     // URL-driven filters from MCP admin links (#passes?...)
@@ -2449,23 +2457,27 @@
         '<span style="font-size:0.9rem;">' + val + '</span>' +
       '</div>';
     }
-    var hist = _passHistoryByDef[p.id];
+    // Tiles read aggregate doc (admin/passDefinitionAggregates/{id}) maintained
+    // by the indexPassAggregate CF trigger. No full-accounts scan.
+    var agg = _passAggregateByDef[p.id];
+    var loading = _passLoadingFor === p.id;
     var historyBlock;
-    if (hist) {
+    if (agg) {
+      var sold = agg.sold || 0, active = agg.active || 0, used = agg.used || 0;
+      var expired = agg.expired || 0, revoked = agg.revoked || 0;
       historyBlock = '<div style="display:flex;gap:12px;flex-wrap:wrap;">' +
-        _kpiBox('Sold', hist.bought, 'instances purchased') +
-        _kpiBox('Active', hist.unused, 'unused / available') +
-        _kpiBox('Used', hist.used, 'fully consumed') +
-        (hist.revoked > 0 ? _kpiBox('Revoked', hist.revoked, 'admin-revoked') : '') +
-      '</div>' +
-      (hist.scannedAccounts != null
-        ? '<div style="font-size:0.72rem;color:var(--warm-gray);margin-top:8px;">scanned ' + hist.scannedAccounts + ' customer accounts</div>'
-        : '');
-    } else if (_passHistoryLoadingFor === p.id) {
-      historyBlock = '<div style="color:var(--warm-gray);font-size:0.9rem;">Loading instance history…</div>';
+        _kpiBox('Sold', sold, 'instances purchased') +
+        _kpiBox('Active', active, 'currently usable') +
+        _kpiBox('Used', used, 'fully consumed') +
+        (expired > 0 ? _kpiBox('Expired', expired, 'timed out') : '') +
+        (revoked > 0 ? _kpiBox('Revoked', revoked, 'admin-revoked') : '') +
+      '</div>';
+    } else if (loading) {
+      historyBlock = '<div style="color:var(--warm-gray);font-size:0.9rem;">Loading…</div>';
     } else {
-      historyBlock = '<div style="color:var(--warm-gray);font-size:0.9rem;">History not yet computed.</div>';
+      historyBlock = '<div style="color:var(--warm-gray);font-size:0.9rem;">Aggregate not yet computed. (Run backfill if this is a fresh tenant.)</div>';
     }
+    var cohortBlock = _renderPassCohortBlock(p.id);
     return '<div style="padding:8px 0 24px;">' +
       '<div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap;">' +
         '<button class="btn btn-secondary btn-small" onclick="window._passViewBack()" title="Back to list">← Back</button>' +
@@ -2486,10 +2498,130 @@
           (p.description ? _row('Description', '<span style="white-space:pre-wrap;">' + esc(p.description) + '</span>') : '') +
         '</div>' +
         '<div style="border:1px solid var(--cream-dark);border-radius:10px;padding:16px;background:var(--surface-card,#fff);">' +
-          '<h4 style="margin:0 0 12px;font-size:0.9rem;font-weight:600;">Instance history</h4>' +
+          '<h4 style="margin:0 0 12px;font-size:0.9rem;font-weight:600;">Instance counts</h4>' +
           historyBlock +
         '</div>' +
       '</div>' +
+      cohortBlock +
+    '</div>';
+  }
+
+  // ── Cohort drill-down ──
+  // Time-dependent cohorts (expiring/lapsed) are computed client-side from the
+  // per-instance index, so they always reflect "right now" regardless of when
+  // the index doc was last written.
+
+  var PASS_COHORTS = [
+    { key: 'active',      label: 'Active' },
+    { key: 'expiring7d',  label: 'Expiring ≤7d' },
+    { key: 'expiring30d', label: 'Expiring ≤30d' },
+    { key: 'lapsed30d',   label: 'Lapsed 30d' },
+    { key: 'lapsed60d',   label: 'Lapsed 60d' },
+    { key: 'unused',      label: 'Unused' },
+    { key: 'used',        label: 'Used' },
+    { key: 'revoked',     label: 'Revoked' }
+  ];
+
+  function _passInstanceMatches(inst, cohortKey) {
+    if (!inst) return false;
+    var now = Date.now();
+    var s = inst.status;
+    var isActive = s === 'active';
+    var expiresAt = inst.expiresAt ? Date.parse(inst.expiresAt) : null;
+    var lastUsedAt = inst.lastUsedAt ? Date.parse(inst.lastUsedAt) : null;
+    var activatedAt = inst.activatedAt ? Date.parse(inst.activatedAt) : null;
+    var sinceLastEngagement = lastUsedAt || activatedAt;
+    var hasRemaining = inst.visitsRemaining == null || inst.visitsRemaining > 0;
+    switch (cohortKey) {
+      case 'active':      return isActive;
+      case 'expiring7d':  return isActive && expiresAt && expiresAt > now && expiresAt <= now + 7 * 86400000;
+      case 'expiring30d': return isActive && expiresAt && expiresAt > now && expiresAt <= now + 30 * 86400000;
+      case 'lapsed30d':   return isActive && !!sinceLastEngagement && (now - sinceLastEngagement) >= 30 * 86400000 && hasRemaining;
+      case 'lapsed60d':   return isActive && !!sinceLastEngagement && (now - sinceLastEngagement) >= 60 * 86400000 && hasRemaining;
+      case 'unused':      return isActive && !lastUsedAt && (!inst.visitsUsed || inst.visitsUsed === 0);
+      case 'used':        return s === 'used' || s === 'exhausted' || s === 'expired';
+      case 'revoked':     return s === 'revoked';
+      default: return false;
+    }
+  }
+
+  function _passInstanceSortGetter(row, key) {
+    if (key === 'visitsRemaining') return row.visitsRemaining != null ? row.visitsRemaining : -1;
+    return row[key];
+  }
+
+  function _renderPassCohortBlock(passDefId) {
+    var instances = _passInstancesByDef[passDefId];
+    if (!instances) {
+      return '<div style="margin-top:24px;border:1px solid var(--cream-dark);border-radius:10px;padding:16px;background:var(--surface-card,#fff);">' +
+        '<h4 style="margin:0 0 12px;font-size:0.9rem;font-weight:600;">Cohorts</h4>' +
+        (_passLoadingFor === passDefId
+          ? '<div style="color:var(--warm-gray);font-size:0.9rem;">Loading instances…</div>'
+          : '<div style="color:var(--warm-gray);font-size:0.9rem;">No instances loaded.</div>') +
+      '</div>';
+    }
+    var chips = PASS_COHORTS.map(function(c) {
+      var count = instances.filter(function(inst) { return _passInstanceMatches(inst, c.key); }).length;
+      var isSel = c.key === _passSelectedCohort;
+      var bg = isSel ? 'var(--accent, var(--primary))' : 'transparent';
+      var fg = isSel ? '#fff' : 'var(--text)';
+      var border = isSel ? 'var(--accent, var(--primary))' : 'var(--cream-dark)';
+      return '<button type="button" onclick="window._passCohortPick(\'' + esc(c.key) + '\')" ' +
+        'style="background:' + bg + ';color:' + fg + ';border:1px solid ' + border + ';padding:6px 12px;border-radius:999px;font-size:0.85rem;cursor:pointer;display:inline-flex;align-items:center;gap:6px;">' +
+        esc(c.label) + ' <span style="background:rgba(0,0,0,0.12);padding:1px 6px;border-radius:999px;font-size:0.72rem;font-weight:600;">' + count + '</span>' +
+      '</button>';
+    }).join(' ');
+    var matched = instances.filter(function(inst) { return _passInstanceMatches(inst, _passSelectedCohort); });
+    if (window.mastSortRows) matched = window.mastSortRows(matched, _passInstanceSortKey, _passInstanceSortDir, _passInstanceSortGetter);
+    var tableBlock;
+    if (matched.length === 0) {
+      tableBlock = '<div style="padding:24px;color:var(--warm-gray);font-size:0.85rem;text-align:center;">No instances match this cohort.</div>';
+    } else {
+      var th = function(label, key) {
+        return window.mastSortableTh
+          ? window.mastSortableTh(label, key, _passInstanceSortKey, _passInstanceSortDir, 'window._passInstanceSort')
+          : '<th>' + esc(label) + '</th>';
+      };
+      var rowsHtml = matched.map(function(inst) {
+        var total = (typeof inst.visitsUsed === 'number' && typeof inst.visitsRemaining === 'number') ? (inst.visitsUsed + inst.visitsRemaining) : null;
+        var visits = (inst.visitsRemaining != null ? inst.visitsRemaining : '—') + ' / ' + (total != null ? total : '—');
+        var exp = inst.expiresAt ? new Date(inst.expiresAt).toLocaleDateString() : '—';
+        var lastUse = inst.lastUsedAt ? new Date(inst.lastUsedAt).toLocaleDateString() : '—';
+        var act = inst.activatedAt ? new Date(inst.activatedAt).toLocaleDateString() : '—';
+        var openCust = inst.customerId
+          ? 'onclick="window._passOpenCustomer(\'' + esc(inst.customerId) + '\')" style="cursor:pointer;"'
+          : '';
+        return '<tr ' + openCust + '>' +
+          '<td><strong>' + esc(inst.customerName || '—') + '</strong></td>' +
+          '<td>' + esc(inst.customerEmail || '—') + '</td>' +
+          '<td><span style="' + badgeStyle(STATUS_BADGE_COLORS, inst.status || 'unknown') + '">' + esc(inst.status || '—') + '</span></td>' +
+          '<td style="font-family:monospace;font-size:0.85rem;">' + esc(visits) + '</td>' +
+          '<td>' + esc(act) + '</td>' +
+          '<td>' + esc(exp) + '</td>' +
+          '<td>' + esc(lastUse) + '</td>' +
+        '</tr>';
+      }).join('');
+      tableBlock = '<table class="data-table" style="margin-top:12px;"><thead><tr>' +
+        th('Customer', 'customerName') +
+        th('Email', 'customerEmail') +
+        th('Status', 'status') +
+        th('Visits (rem/total)', 'visitsRemaining') +
+        th('Activated', 'activatedAt') +
+        th('Expires', 'expiresAt') +
+        th('Last used', 'lastUsedAt') +
+      '</tr></thead><tbody>' + rowsHtml + '</tbody></table>';
+    }
+    var emails = matched.map(function(i) { return i.customerEmail; }).filter(Boolean);
+    var exportBar = '<div style="display:flex;gap:8px;align-items:center;margin-top:12px;">' +
+      '<button class="btn btn-secondary btn-small" onclick="window._passCohortCopyEmails()"' + (emails.length ? '' : ' disabled') + '>Copy emails (' + emails.length + ')</button>' +
+      '<button class="btn btn-secondary btn-small" onclick="window._passCohortDownloadCsv()"' + (matched.length ? '' : ' disabled') + '>Download CSV</button>' +
+      '<span style="font-size:0.78rem;color:var(--warm-gray);margin-left:auto;">' + matched.length + ' instance' + (matched.length === 1 ? '' : 's') + '</span>' +
+    '</div>';
+    return '<div style="margin-top:24px;border:1px solid var(--cream-dark);border-radius:10px;padding:16px;background:var(--surface-card,#fff);">' +
+      '<h4 style="margin:0 0 12px;font-size:0.9rem;font-weight:600;">Cohorts</h4>' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">' + chips + '</div>' +
+      tableBlock +
+      exportBar +
     '</div>';
   }
 
@@ -2501,36 +2633,24 @@
     '</div>';
   }
 
-  // One-shot scan of public/accounts to count pass instances for this def.
-  // v1: scans every customer account (small/medium tenants only). For larger
-  // tenants a denormalized index per pass def would replace this. Cached for
-  // the session in _passHistoryByDef.
-  function _kickPassHistoryLoad(passDefId) {
-    if (_passHistoryByDef[passDefId]) return;
-    if (_passHistoryLoadingFor === passDefId) return;
-    _passHistoryLoadingFor = passDefId;
-    MastDB.get('public/accounts').then(function(accs) {
-      var bought = 0, unused = 0, used = 0, revoked = 0;
-      var scanned = 0;
-      Object.keys(accs || {}).forEach(function(uid) {
-        scanned++;
-        var pmap = accs[uid] && accs[uid].passes;
-        if (!pmap) return;
-        Object.keys(pmap).forEach(function(pid) {
-          var inst = pmap[pid];
-          if (!inst || inst.passDefId !== passDefId) return;
-          bought++;
-          if (inst.status === 'revoked') revoked++;
-          else if (inst.status === 'used' || (typeof inst.visitsRemaining === 'number' && inst.visitsRemaining <= 0)) used++;
-          else unused++;
-        });
-      });
-      _passHistoryByDef[passDefId] = { bought: bought, unused: unused, used: used, revoked: revoked, scannedAccounts: scanned };
-    }).catch(function() {
-      _passHistoryByDef[passDefId] = { bought: 0, unused: 0, used: 0, revoked: 0, scannedAccounts: 0 };
+  // Loads aggregate doc + per-instance index for the given pass def from
+  // derived-data collections maintained by indexPassAggregate CF. Cached for
+  // the session; opening the same detail view is a no-op. Re-renders on data.
+  function _kickPassDetailLoad(passDefId) {
+    if (_passAggregateByDef[passDefId] && _passInstancesByDef[passDefId]) return;
+    if (_passLoadingFor === passDefId) return;
+    _passLoadingFor = passDefId;
+    var aggP = MastDB.get('admin/passDefinitionAggregates/' + passDefId).catch(function() { return null; });
+    var instP = MastDB.query('admin/passInstances').orderByChild('passDefId').equalTo(passDefId).once()
+      .then(function(map) {
+        return Object.keys(map || {}).map(function(k) { var v = map[k] || {}; v.__indexId = k; return v; });
+      })
+      .catch(function(err) { console.warn('[passes] instance load failed:', err && err.message); return []; });
+    Promise.all([aggP, instP]).then(function(out) {
+      _passAggregateByDef[passDefId] = out[0] || { passDefId: passDefId, sold: 0, active: 0, used: 0, expired: 0, revoked: 0 };
+      _passInstancesByDef[passDefId] = out[1] || [];
     }).then(function() {
-      _passHistoryLoadingFor = null;
-      // Re-render only if the same pass is still in view.
+      _passLoadingFor = null;
       if (_passViewPid === passDefId) renderPassDefList();
     });
   }
@@ -3400,6 +3520,61 @@
   window._passViewBack = function() { _passViewPid = null; renderPassDefList(); };
   window._passSave = function(id) { savePassDefinition(id || null); };
   window._passBackToList = function() { _passViewPid = null; switchSubTab('passes'); };
+
+  // Cohort drill-down callbacks (read aggregate + index docs maintained by
+  // indexPassAggregate CF; cohort filters computed client-side from instances).
+  window._passCohortPick = function(key) {
+    _passSelectedCohort = key;
+    renderPassDefList();
+  };
+  window._passInstanceSort = function(key) {
+    if (_passInstanceSortKey === key) {
+      _passInstanceSortDir = _passInstanceSortDir === 'asc' ? 'desc' : 'asc';
+    } else {
+      _passInstanceSortKey = key;
+      _passInstanceSortDir = (key === 'expiresAt' || key === 'activatedAt' || key === 'lastUsedAt') ? 'desc' : 'asc';
+    }
+    renderPassDefList();
+  };
+  window._passOpenCustomer = function(customerId) {
+    if (!customerId) return;
+    window.location.hash = '#customers?id=' + encodeURIComponent(customerId);
+  };
+  function _passCohortMatchedInstances() {
+    var list = _passInstancesByDef[_passViewPid] || [];
+    return list.filter(function(inst) { return _passInstanceMatches(inst, _passSelectedCohort); });
+  }
+  window._passCohortCopyEmails = function() {
+    var emails = _passCohortMatchedInstances().map(function(i) { return i.customerEmail; }).filter(Boolean);
+    var text = emails.join(', ');
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function() {
+        if (window.mastToast) window.mastToast('Copied ' + emails.length + ' email' + (emails.length === 1 ? '' : 's'));
+      });
+    } else {
+      window.prompt('Copy emails:', text);
+    }
+  };
+  window._passCohortDownloadCsv = function() {
+    var rows = _passCohortMatchedInstances();
+    if (!rows.length) return;
+    var header = ['customerName', 'customerEmail', 'status', 'visitsRemaining', 'visitsUsed', 'activatedAt', 'expiresAt', 'lastUsedAt'];
+    var lines = [header.join(',')];
+    rows.forEach(function(r) {
+      lines.push(header.map(function(k) {
+        var v = r[k] == null ? '' : String(r[k]);
+        if (v.indexOf(',') >= 0 || v.indexOf('"') >= 0 || v.indexOf('\n') >= 0) v = '"' + v.replace(/"/g, '""') + '"';
+        return v;
+      }).join(','));
+    });
+    var blob = new Blob([lines.join('\n')], { type: 'text/csv' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = 'pass-cohort-' + _passViewPid + '-' + _passSelectedCohort + '.csv';
+    a.click();
+    setTimeout(function() { URL.revokeObjectURL(url); }, 1000);
+  };
   window._passToggleFields = function() {
     var type = document.getElementById('pdfType');
     var visitWrap = document.getElementById('pdfVisitCountWrap');
