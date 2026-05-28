@@ -17796,7 +17796,21 @@ var ROUTE_MAP = {
   'events-show-detail': { tab: null, setup: function() { window.open('../events/', '_blank'); } },
   // Legacy routes for backward compatibility
   'schedule':    { tab: 'scheduleTab' },
-  'sales':       { tab: 'salesTab' },  // legacy route — sales module handles rendering
+  // The 'sales' legacy route used to declare only the tab and no setup. That
+  // left the salesLoading spinner sitting forever on tenants where the sales
+  // module had been lazy-loaded but renderSales() hadn't fired yet (e.g.
+  // empty tenants where the listener still pumps but the route hits the tab
+  // before the first snapshot resolves). Auto-detect on sgtest15 caught this
+  // as a spinner-timeout. Defensive fix: route setup primes the data path
+  // (if module is loaded) and hides the spinner unconditionally — the
+  // listener will repaint when it lands.
+  'sales':       { tab: 'salesTab', setup: function() {
+    var l = document.getElementById('salesLoading');
+    if (l) l.style.display = 'none';
+    if (typeof window.ensureSalesData === 'function') window.ensureSalesData();
+    else if (typeof window.loadSales === 'function') window.loadSales();
+    if (typeof window.renderSales === 'function') window.renderSales();
+  } },
   'salesEvents': { tab: 'salesEventsTab' },  // legacy route — sales module handles rendering
   'gallery':     { tab: 'galleryTab' },
   'coupons':     { tab: 'couponsTab' },
@@ -18616,7 +18630,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260527-214428-8148e22';
+var MAST_MODULES_V = '20260527-214908-9e097f3';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
