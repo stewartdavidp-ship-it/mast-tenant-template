@@ -18630,7 +18630,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260527-214908-9e097f3';
+var MAST_MODULES_V = '20260527-215649-201436a';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -55115,9 +55115,17 @@ async function renderDashboardTodos() {
     return h;
   }
 
+  // Defensive Array.isArray on every constants read. Without it, an early
+  // call into label functions (before BusinessEntityConstants finishes
+  // loading, or if a constant ever ships as non-array) throws
+  // "list.filter is not a function" and tanks the whole render.
+  // Caught by auto-detect on customers screen (feedback 2uxHr7aBYBgw5od6e7nr).
+  function _bzListOrEmpty(key) {
+    var c = window.BusinessEntityConstants && window.BusinessEntityConstants[key];
+    return Array.isArray(c) ? c : [];
+  }
   function archetypeLabel(v) {
-    var list = (window.BusinessEntityConstants && BusinessEntityConstants.ARCHETYPES) || [];
-    var m = list.filter(function(a){ return a.value === v; })[0];
+    var m = _bzListOrEmpty('ARCHETYPES').filter(function(a){ return a.value === v; })[0];
     return m ? m.label : (v || '');
   }
   function goalLabel(v) {
@@ -55125,23 +55133,19 @@ async function renderDashboardTodos() {
     return map[v] || v;
   }
   function channelLabel(v) {
-    var list = (window.BusinessEntityConstants && BusinessEntityConstants.DECLARED_CHANNELS) || [];
-    var m = list.filter(function(c){ return c.value === v; })[0];
+    var m = _bzListOrEmpty('DECLARED_CHANNELS').filter(function(c){ return c.value === v; })[0];
     return m ? m.label : v;
   }
   function modeLabel(v) {
-    var list = (window.BusinessEntityConstants && BusinessEntityConstants.ENGAGEMENT_MODE_CARDS) || [];
-    var m = list.filter(function(c){ return c.value === v; })[0];
+    var m = _bzListOrEmpty('ENGAGEMENT_MODE_CARDS').filter(function(c){ return c.value === v; })[0];
     return m ? m.title : (v || '');
   }
   function roleLabel(v) {
-    var list = (window.BusinessEntityConstants && BusinessEntityConstants.PRIMARY_CONTACT_ROLES) || [];
-    var m = list.filter(function(c){ return c.value === v; })[0];
+    var m = _bzListOrEmpty('PRIMARY_CONTACT_ROLES').filter(function(c){ return c.value === v; })[0];
     return m ? m.label : (v || '');
   }
   function teamSizeLabel(v) {
-    var list = (window.BusinessEntityConstants && BusinessEntityConstants.TEAM_SIZE_BANDS) || [];
-    var m = list.filter(function(c){ return c.value === v; })[0];
+    var m = _bzListOrEmpty('TEAM_SIZE_BANDS').filter(function(c){ return c.value === v; })[0];
     return m ? m.label : (v || '');
   }
 
