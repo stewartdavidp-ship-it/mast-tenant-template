@@ -5785,6 +5785,13 @@
     var params = (typeof window.getRouteParams === 'function') ? window.getRouteParams() : {};
     orderFilter = (params && typeof params.status === 'string' && params.status) ? params.status : 'active';
     orderSourceFilter = (params && typeof params.source === 'string' && params.source) ? params.source : 'all';
+    // Defensive: hide the legacy ordersLoading spinner up-front. renderOrders
+    // already hides it, but if the orders listener takes >8s to first-fire
+    // (slow network, large tenant) the spinner sits past the auto-detect
+    // threshold (feedback 7D5FOKTGdGaVTjstHLqk). The empty/data state will
+    // repaint when the listener lands.
+    var loadingEl = document.getElementById('ordersLoading');
+    if (loadingEl) loadingEl.style.display = 'none';
     // Warm the tenant timezone cache so date display + filter use it.
     // First render may run before this resolves; once it does, re-render.
     var tzAlreadyKnown = _tenantTz !== null;
