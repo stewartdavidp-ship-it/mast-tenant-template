@@ -1126,7 +1126,7 @@
         dirGlyph = '↑';
         dirTip = 'Push';
       }
-      var directionChip = '<span title="' + esc(dirTip) + '" style="display:inline-block;padding:1px 6px;border-radius:8px;background:' + dirBg + ';color:' + dirFg + ';font-size:0.66rem;font-weight:700;margin-right:6px;">' + esc(dirGlyph) + '</span>';
+      var directionChip = '<span title="' + esc(dirTip) + '" style="display:inline-block;padding:1px 6px;border-radius:8px;background:' + dirBg + ';color:' + dirFg + ';font-size:0.72rem;font-weight:700;margin-right:6px;">' + esc(dirGlyph) + '</span>';
       var retryHtml = '<button class="btn btn-secondary" disabled title="Retry available after retryQboSync CF deploys" style="font-size:0.78rem;padding:2px 8px;opacity:0.5;">Retry</button>';
       if (r.status === 'failed' && requestId) {
         retryHtml = '<button class="btn btn-secondary" onclick="window._qboRetrySync &amp;&amp; window._qboRetrySync(&#39;' + jsAttr(requestId) + '&#39;)" style="font-size:0.78rem;padding:2px 8px;">Retry</button>';

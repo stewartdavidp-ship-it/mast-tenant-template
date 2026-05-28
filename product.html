@@ -2340,22 +2340,29 @@
     return s;
   }
 
+  // D1 — reviews policy from public/config/reviews. Defaults match the CF gate
+  // (anonymous blocked). Cached on window so toggleReviewForm + submit can read.
+  window._reviewsPolicy = { anonymousAllowed: false };
   function loadAndRenderReviews(pid, productName) {
     var db = firebase.app().firestore();
-    db.collection('tenants/' + TENANT_ID + '/cs_reviews')
+    var revsP = db.collection('tenants/' + TENANT_ID + '/cs_reviews')
       .where('productId', '==', pid)
       .where('status', '==', 'approved')
       .orderBy('createdAt', 'desc')
       .limit(20)
-      .get()
-      .then(function(snap) {
-        var reviews = [];
-        snap.forEach(function(doc) { reviews.push(doc.data()); });
-        renderReviewsSection(reviews, pid, productName);
-      })
-      .catch(function(err) {
-        console.warn('[reviews] load error:', err.message);
-      });
+      .get();
+    var cfgP = db.doc('tenants/' + TENANT_ID + '/public/config/reviews').get()
+      .then(function(d) { return (d && d.exists) ? d.data() : null; })
+      .catch(function() { return null; });
+    Promise.all([revsP, cfgP]).then(function(results) {
+      var snap = results[0]; var cfg = results[1];
+      window._reviewsPolicy.anonymousAllowed = !!(cfg && cfg.anonymousAllowed);
+      var reviews = [];
+      snap.forEach(function(doc) { reviews.push(doc.data()); });
+      renderReviewsSection(reviews, pid, productName);
+    }).catch(function(err) {
+      console.warn('[reviews] load error:', err.message);
+    });
   }
 
   function renderReviewsSection(reviews, pid, productName) {
@@ -2384,20 +2391,42 @@
         html += '<div>';
         html += '<span class="reviews-stars" style="font-size:0.95rem;">' + renderStars(r.rating) + '</span>';
         html += '<br><span class="review-author">' + escR(r.authorName) + '</span>';
-        if (r.verified) html += '<span class="review-verified">✓ Verified</span>';
+        // D1 — verifiedBuyer (order-matched) is the strong badge; legacy
+        // `verified` (just-signed-in) is shown as a weaker indicator.
+        if (r.verifiedBuyer) html += '<span class="review-verified" title="Confirmed buyer of this product">✓ Verified buyer</span>';
+        else if (r.verified) html += '<span class="review-verified">✓ Verified</span>';
         html += '</div>';
         html += '<span class="review-date">' + escR(dateStr) + '</span>';
         html += '</div>';
         if (r.title) html += '<div class="review-title">' + escR(r.title) + '</div>';
         if (r.body) html += '<div class="review-body">' + escR(r.body) + '</div>';
+        // D1 — operator response, if present.
+        if (r.response && r.response.body) {
+          var rWho = r.response.authorName || 'Shop response';
+          html += '<div class="review-response" style="margin-top:10px;padding:10px 12px;border-left:3px solid var(--accent,#5a9);background:rgba(90,153,153,0.06);border-radius:0 6px 6px 0;">';
+          html += '<div style="font-weight:600;font-size:0.85rem;color:var(--accent,#5a9);margin-bottom:4px;">↳ ' + escR(rWho) + '</div>';
+          html += '<div style="font-size:0.9rem;">' + escR(r.response.body) + '</div>';
+          html += '</div>';
+        }
         html += '</div>';
       });
     } else {
       html += '<p style="color:var(--warm-gray,#888);font-size:0.9rem;margin:0 0 1rem;">No reviews yet. Be the first!</p>';
     }
 
-    html += '<button class="review-write-btn" onclick="toggleReviewForm()">Write a Review</button>';
-    html += '<div id="reviewFormWrap" style="display:none;">' + buildReviewForm() + '</div>';
+    // D1 — anonymous policy gate. When anon is blocked AND the visitor isn't
+    // signed in, show a sign-in CTA instead of the write-a-review button.
+    var anonAllowed = !!(window._reviewsPolicy && window._reviewsPolicy.anonymousAllowed);
+    var signedIn = !!(firebase.auth && firebase.auth().currentUser);
+    if (!anonAllowed && !signedIn) {
+      html += '<div style="padding:14px 16px;border:1px dashed var(--cream-dark,#d6cfc0);border-radius:8px;background:rgba(0,0,0,0.02);margin-top:8px;">';
+      html += '<div style="font-size:0.9rem;margin-bottom:8px;">Sign in to write a review. Reviews from confirmed buyers get a <strong>Verified buyer</strong> badge.</div>';
+      html += '<a href="/orders.html" class="review-write-btn" style="display:inline-block;text-decoration:none;">Sign in</a>';
+      html += '</div>';
+    } else {
+      html += '<button class="review-write-btn" onclick="toggleReviewForm()">Write a Review</button>';
+      html += '<div id="reviewFormWrap" style="display:none;">' + buildReviewForm() + '</div>';
+    }
     html += '</div>';
 
     el.innerHTML = html;

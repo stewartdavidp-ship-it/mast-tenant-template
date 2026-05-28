@@ -519,6 +519,14 @@
   var reviewsData = {};
   var reviewsLoaded = false;
   var reviewsFilter = 'pending';
+  // D1 — reviews settings (anonymous policy). Defaults match the CF gate:
+  // anonymous reviews are blocked unless the operator flips this on. requireApproval
+  // is captured for future auto-publish support but stays true today (no toggle).
+  var reviewsConfig = { anonymousAllowed: false, requireApproval: true };
+  var reviewsConfigLoaded = false;
+  // D1 — which review is in respond-edit mode + the draft text.
+  var reviewsRespondingId = null;
+  var reviewsRespondDraft = '';
 
   var surveysSubTab = 'questions';
   var questionsData = {};
@@ -599,6 +607,14 @@
     var reviewsP = MastDB.query('cs_reviews').limitToLast(100).once()
       .then(function (d) { reviewsData = d || {}; reviewsLoaded = true; })
       .catch(function (err) { console.warn('[cs-reviews]', err && err.message); if (typeof showToast === 'function') showToast('Failed to load reviews', true); });
+    // D1 — load the reviews policy doc. Absent doc → defaults (anon blocked).
+    var cfgP = MastDB.get('cs_config/reviews').then(function (d) {
+      reviewsConfig = {
+        anonymousAllowed: !!(d && d.anonymousAllowed),
+        requireApproval: d && typeof d.requireApproval === 'boolean' ? d.requireApproval : true
+      };
+      reviewsConfigLoaded = true;
+    }).catch(function () { reviewsConfigLoaded = true; });
     // Best-effort prefetch of customer + product indexes for resolution. Failures are non-fatal.
     var custP = MastDB.get('admin/customers').then(function(cMap) {
       cMap = cMap || {};
@@ -633,7 +649,7 @@
         };
       });
     }).catch(function() {});
-    return Promise.all([reviewsP, custP, prodP]).then(function() {});
+    return Promise.all([reviewsP, cfgP, custP, prodP]).then(function() {});
   }
 
   function loadSurveysAll() {
@@ -674,6 +690,13 @@
       ? '<button class="btn btn-secondary btn-small" onclick="MastAskAi.open(\'cs-reviews\')" title="Ask Claude about your reviews">✨ Ask AI</button>'
       : '';
     html += '<div class="section-header" style="margin-bottom:14px;"><h2 style="margin:0;">Reviews</h2><div style="display:flex;gap:8px;">' + askAi + '<button class="btn btn-secondary btn-small" onclick="csReviewsRefresh()">Refresh</button></div></div>';
+    // D1 — settings card: anonymous-review policy toggle. Default off (sign-in required).
+    var anonOn = !!reviewsConfig.anonymousAllowed;
+    html += '<div style="border:1px solid var(--cream-dark);border-radius:10px;padding:14px 16px;background:var(--surface-card);margin-bottom:16px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;">';
+    html += '<div style="flex:1;min-width:220px;"><div style="font-weight:600;margin-bottom:2px;">Allow anonymous reviews</div>';
+    html += '<div style="font-size:0.78rem;color:var(--warm-gray);">When off, the storefront review form requires sign-in. Signed-in reviewers who have actually bought the product are marked <strong>Verified buyer</strong>.</div></div>';
+    html += '<label style="display:inline-flex;align-items:center;gap:8px;cursor:pointer;"><input type="checkbox" id="csReviewsAnonToggle"' + (anonOn ? ' checked' : '') + ' onchange="csReviewsSetAnonymousAllowed(this.checked)" /> <span style="font-size:0.85rem;">' + (anonOn ? 'Allowed' : 'Sign-in required') + '</span></label>';
+    html += '</div>';
     html += '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:18px;">';
     html += kpiCard('Pending', String(pending), 'awaiting review');
     html += kpiCard('Approved', String(approved), 'live on site');
@@ -722,6 +745,14 @@
           }
         }
         html += '<span style="color:var(--amber-light);letter-spacing:0.04em;">' + starsHtml(r.rating) + '</span>';
+        // D1 — verified-buyer chip. CF stamps `verifiedBuyer:true` when the
+        // reviewer is signed-in AND has an order containing this productId.
+        // Legacy `verified:true` (just-signed-in) shows as a weaker "Signed in" chip.
+        if (r.verifiedBuyer === true) {
+          html += '<span class="status-badge pill" title="Confirmed by an order in this tenant for this product" style="background:rgba(42,124,111,0.18);color:var(--teal);font-size:0.72rem;font-weight:600;">✓ Verified buyer</span>';
+        } else if (r.verified === true) {
+          html += '<span class="status-badge pill" title="Reviewer was signed in, but no matching order was found for this product" style="background:rgba(212,162,69,0.14);color:var(--amber);font-size:0.72rem;">Signed in</span>';
+        }
         if (reviewEmail) html += '<span style="font-size:0.78rem;color:var(--warm-gray);">' + _esc(reviewEmail) + '</span>';
         html += '<span style="font-size:0.78rem;color:var(--warm-gray);margin-left:auto;">' + relativeTime(r.createdAt) + '</span>';
         html += reviewBadge(r.status) + '</div>';
@@ -744,6 +775,36 @@
 
         if (r.body) html += '<div style="font-size:0.9rem;margin-bottom:10px;">' + _esc(r.body) + '</div>';
 
+        // D1 — response section. Approved reviews can carry a single operator
+        // response { body, authorName, createdAt, updatedAt }. Render mode toggles
+        // between view (response exists) / edit (drafting or editing) / empty (no
+        // response yet on an approved review).
+        var resp = r.response || null;
+        var isEditingResp = reviewsRespondingId === r.id;
+        if (isEditingResp) {
+          var draft = reviewsRespondDraft != null ? reviewsRespondDraft : (resp && resp.body) || '';
+          html += '<div style="border-left:3px solid var(--teal);padding:10px 12px;margin-bottom:10px;background:rgba(42,124,111,0.05);border-radius:0 8px 8px 0;">';
+          html += '<div style="font-weight:600;font-size:0.85rem;margin-bottom:6px;">Your response</div>';
+          html += '<textarea id="csReviewRespDraft_' + _esc(r.id) + '" rows="3" style="width:100%;font-family:inherit;font-size:0.9rem;padding:8px;border:1px solid var(--cream-dark);border-radius:6px;background:var(--surface-card);color:var(--text);box-sizing:border-box;" placeholder="Reply on behalf of the shop. Shown publicly under the review.">' + _esc(draft) + '</textarea>';
+          html += '<div style="display:flex;gap:8px;margin-top:8px;">';
+          html += '<button class="btn btn-primary btn-small" onclick="csSaveReviewResponse(\'' + _esc(r.id) + '\')">Save</button>';
+          html += '<button class="btn btn-secondary btn-small" onclick="csCancelReviewResponse()">Cancel</button>';
+          if (resp) html += '<button class="btn btn-danger btn-small" style="margin-left:auto;" onclick="csDeleteReviewResponse(\'' + _esc(r.id) + '\')">Delete response</button>';
+          html += '</div></div>';
+        } else if (resp && resp.body) {
+          var respWho = resp.authorName || 'Shop response';
+          var respWhen = resp.updatedAt || resp.createdAt;
+          var respRel = respWhen ? (relativeTime(respWhen) || '') : '';
+          html += '<div style="border-left:3px solid var(--teal);padding:10px 12px;margin-bottom:10px;background:rgba(42,124,111,0.05);border-radius:0 8px 8px 0;">';
+          html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">';
+          html += '<span style="font-weight:600;font-size:0.85rem;color:var(--teal);">↳ ' + _esc(respWho) + '</span>';
+          if (respRel) html += '<span style="font-size:0.78rem;color:var(--warm-gray);">' + _esc(respRel) + '</span>';
+          html += '<button class="btn btn-secondary btn-small" style="margin-left:auto;" onclick="csEditReviewResponse(\'' + _esc(r.id) + '\')">Edit</button>';
+          html += '</div>';
+          html += '<div style="font-size:0.9rem;">' + _esc(resp.body) + '</div>';
+          html += '</div>';
+        }
+
         html += '<div style="display:flex;gap:8px;flex-wrap:wrap;">';
         if (r.status === 'pending') {
           html += '<button class="btn btn-primary btn-small" onclick="csApproveReview(\'' + _esc(r.id) + '\')">Approve</button>';
@@ -755,6 +816,10 @@
           // W1.8 round-3: reflect featuredOnSite state visibly on the row so
           // operators see the toggle took effect (was: button label never changed,
           // no "Featured" chip).
+          // D1 — Respond button on approved reviews with no existing response.
+          if (!r.response && reviewsRespondingId !== r.id) {
+            html += '<button class="btn btn-secondary btn-small" onclick="csEditReviewResponse(\'' + _esc(r.id) + '\')" title="Reply to this review publicly">💬 Respond</button>';
+          }
           if (r.featuredOnSite) {
             var featRel = r.featuredAt ? (relativeTime(r.featuredAt) || '') : '';
             var featTitle = r.featuredAt ? new Date(r.featuredAt).toLocaleString() : 'Featured on site';
@@ -877,6 +942,89 @@
         }
       } catch (_e) { /* non-fatal */ }
       showToast('Removed from homepage Testimonials section.');
+      renderReviews();
+    } catch (err) {
+      showToast('Failed: ' + (err && err.message), true);
+    }
+  }
+
+  // D1 — anonymous-review policy toggle. Persists the setting to cs_config/reviews
+  // (admin source of truth) AND mirrors to public/config/reviews so storefront
+  // product.html can read the policy without a rules widen on cs_config.
+  async function setReviewsAnonymousAllowed(allowed) {
+    var prev = !!reviewsConfig.anonymousAllowed;
+    reviewsConfig.anonymousAllowed = !!allowed;
+    try {
+      await MastDB.set('cs_config/reviews', {
+        anonymousAllowed: !!allowed,
+        requireApproval: true,
+        updatedAt: nowIso(),
+        updatedBy: (window.currentUser && window.currentUser.uid) || null
+      });
+      try {
+        await MastDB.set('public/config/reviews', { anonymousAllowed: !!allowed, updatedAt: nowIso() });
+      } catch (_e) { /* non-fatal — storefront will fall back to CF enforcement */ }
+      showToast(allowed ? 'Anonymous reviews allowed' : 'Reviews now require sign-in');
+      renderReviews();
+    } catch (err) {
+      reviewsConfig.anonymousAllowed = prev;
+      showToast('Failed: ' + (err && err.message), true);
+      renderReviews();
+    }
+  }
+
+  // D1 — Respond to a review. Toggles the row into edit mode; render uses
+  // reviewsRespondingId / reviewsRespondDraft to swap the response card layout.
+  function editReviewResponse(id) {
+    reviewsRespondingId = id;
+    reviewsRespondDraft = null;
+    renderReviews();
+    // Focus the textarea after render.
+    setTimeout(function () {
+      var ta = document.getElementById('csReviewRespDraft_' + id);
+      if (ta) { ta.focus(); ta.selectionStart = ta.selectionEnd = ta.value.length; }
+    }, 0);
+  }
+  function cancelReviewResponse() {
+    reviewsRespondingId = null;
+    reviewsRespondDraft = '';
+    renderReviews();
+  }
+  async function saveReviewResponse(id) {
+    var r = reviewsData[id];
+    if (!r) { showToast('Review not found', true); return; }
+    var ta = document.getElementById('csReviewRespDraft_' + id);
+    var body = ta ? ta.value.trim() : '';
+    if (!body) { showToast('Response can\'t be empty.', true); return; }
+    if (body.length > 4000) { showToast('Response too long (max 4000 chars).', true); return; }
+    var now = nowIso();
+    var existing = r.response || null;
+    var payload = {
+      body: body,
+      authorName: (window.currentUser && (window.currentUser.displayName || window.currentUser.email)) || 'Shop',
+      authorUid: (window.currentUser && window.currentUser.uid) || null,
+      createdAt: existing && existing.createdAt ? existing.createdAt : now,
+      updatedAt: now
+    };
+    try {
+      await MastDB.update('cs_reviews/' + id, { response: payload, updatedAt: now });
+      if (reviewsData[id]) { reviewsData[id].response = payload; reviewsData[id].updatedAt = now; }
+      reviewsRespondingId = null;
+      reviewsRespondDraft = '';
+      showToast(existing ? 'Response updated' : 'Response posted');
+      renderReviews();
+    } catch (err) {
+      showToast('Failed: ' + (err && err.message), true);
+    }
+  }
+  async function deleteReviewResponse(id) {
+    if (!confirm('Delete this response? The original review will remain.')) return;
+    try {
+      await MastDB.update('cs_reviews/' + id, { response: null, updatedAt: nowIso() });
+      if (reviewsData[id]) reviewsData[id].response = null;
+      reviewsRespondingId = null;
+      reviewsRespondDraft = '';
+      showToast('Response deleted');
       renderReviews();
     } catch (err) {
       showToast('Failed: ' + (err && err.message), true);
@@ -2398,6 +2546,11 @@
   window.csDeleteReview = deleteReview;
   window.csFeatureReviewOnSite = featureReviewOnSite;
   window.csUnfeatureReviewOnSite = unfeatureReviewOnSite;
+  window.csReviewsSetAnonymousAllowed = setReviewsAnonymousAllowed;
+  window.csEditReviewResponse = editReviewResponse;
+  window.csCancelReviewResponse = cancelReviewResponse;
+  window.csSaveReviewResponse = saveReviewResponse;
+  window.csDeleteReviewResponse = deleteReviewResponse;
   window.csDraftSocialFromReview = draftSocialFromReview;
   window.csAskForUgcPhoto = askForUgcPhoto;
   window.csSurveysRefresh = function () {

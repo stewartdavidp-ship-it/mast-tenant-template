@@ -32,6 +32,7 @@
     'products':         'Products',
     'sales':            'Sales',
     'marketing':        'Marketing',
+    'site':             'Site',
     'retention':        'Retention',
     'events':           'Shows & Markets',
     'classes':          'Bookings & Classes',

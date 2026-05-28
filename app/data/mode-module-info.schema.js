@@ -57,7 +57,7 @@
 
   var VALID_SETUP_DEPTH = ['quick', 'moderate', 'heavy'];
 
-  var VALID_SECTIONS = ['products', 'sales', 'marketing', 'retention',
+  var VALID_SECTIONS = ['products', 'sales', 'marketing', 'site', 'retention',
                         'events', 'classes', 'finance', 'operations',
                         'customer-service', 'admin'];
 

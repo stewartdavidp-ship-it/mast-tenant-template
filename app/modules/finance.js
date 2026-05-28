@@ -3382,7 +3382,7 @@ function renderArContent() {
     // when no conflict pending (most rows).
     var arConflict = (typeof window._qboFindConflict === 'function') ? window._qboFindConflict('invoice', r.orderId) : null;
     var arConflictChip = arConflict
-      ? ' <button class="btn btn-danger" style="font-size:0.66rem;padding:1px 6px;margin-left:4px;" onclick="window.openQboConflictModal(\'' + _jsAttrSafe(arConflict.conflictId || '') + '\')" title="QBO has different values for this invoice — click to resolve">⚠ Conflict</button>'
+      ? ' <button class="btn btn-danger" style="font-size:0.72rem;padding:1px 6px;margin-left:4px;" onclick="window.openQboConflictModal(\'' + _jsAttrSafe(arConflict.conflictId || '') + '\')" title="QBO has different values for this invoice — click to resolve">⚠ Conflict</button>'
       : '';
     h += '<td style="padding:10px;"><span style="background:rgba(241,164,0,0.15);color:#f59e0b;padding:2px 8px;border-radius:4px;font-size:0.72rem;font-weight:600;">' + e(r.invoiceStatus) + '</span>' + arConflictChip + '</td>';
     h += '<td style="padding:10px;white-space:nowrap;">';
@@ -3943,7 +3943,7 @@ function renderApFlat(filtered) {
     // conflict (entityType='bill'). receiptId is the mast-side id.
     var apConflict = (typeof window._qboFindConflict === 'function') ? window._qboFindConflict('bill', r.receiptId) : null;
     var apConflictChip = apConflict
-      ? ' <button class="btn btn-danger" style="font-size:0.66rem;padding:1px 6px;margin-left:4px;" onclick="window.openQboConflictModal(\'' + _jsAttrSafe(apConflict.conflictId || '') + '\')" title="QBO has different values for this bill — click to resolve">⚠ Conflict</button>'
+      ? ' <button class="btn btn-danger" style="font-size:0.72rem;padding:1px 6px;margin-left:4px;" onclick="window.openQboConflictModal(\'' + _jsAttrSafe(apConflict.conflictId || '') + '\')" title="QBO has different values for this bill — click to resolve">⚠ Conflict</button>'
       : '';
     h += '<td style="padding:10px;"><span style="background:' + (r.paymentStatus === 'partial' ? 'rgba(234,179,8,0.15)' : 'rgba(239,68,68,0.12)') + ';color:' + (r.paymentStatus === 'partial' ? '#eab308' : '#ef4444') + ';padding:2px 8px;border-radius:4px;font-size:0.72rem;font-weight:600;">' + e(r.paymentStatus) + '</span>' + apConflictChip + '</td>';
     h += '<td style="padding:10px;white-space:nowrap;display:flex;gap:4px;">';
@@ -7481,7 +7481,7 @@ async function _w3RenderBurdenBannerHtml() {
     'border:1px solid rgba(20,184,166,0.35);border-radius:10px;padding:14px 18px;margin-bottom:16px;">' +
     '<div style="display:flex;align-items:flex-start;gap:12px;">' +
     '<div style="flex:1;">' +
-    '<div style="font-weight:700;font-size:0.95rem;margin-bottom:6px;color:#14b8a6;">' +
+    '<div style="font-weight:700;font-size:0.9rem;margin-bottom:6px;color:#14b8a6;">' +
       'Mast now uses burdened labor cost for accurate margins.' +
     '</div>' +
     '<div id="' + bannerId + '-body" style="font-size:0.85rem;color:var(--text,#e5e7eb);line-height:1.45;margin-bottom:10px;">' +
@@ -7557,7 +7557,7 @@ function _w3BurdenChipFor(burden) {
 // VERIFIED schema reality: time-clock lacks jobId today).
 function _w3PerJobOverheadBanner() {
   return '<div style="background:rgba(245,158,11,0.10);border:1px solid rgba(245,158,11,0.30);' +
-    'color:#f59e0b;padding:10px 14px;border-radius:8px;margin:8px 0;font-size:0.82rem;line-height:1.45;">' +
+    'color:#f59e0b;padding:10px 14px;border-radius:8px;margin:8px 0;font-size:0.85rem;line-height:1.45;">' +
     '<strong>Per-job labor allocation is not yet available.</strong> ' +
     'Time-clock entries do not capture job attribution today, so all labor cost is currently rolled ' +
     'into <em>Fixed Overhead</em>. To populate per-job profitability, add Job tagging to time-clock ' +

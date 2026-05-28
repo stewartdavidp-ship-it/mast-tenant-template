@@ -1228,7 +1228,7 @@
     var jobs = await _burdenLoadJobs();
 
     var h = '';
-    h += '<div style="font-weight:600;font-size:0.95rem;margin-bottom:14px;">' + (existing ? 'Edit' : 'Record') + ' Burdened Labor Cost</div>';
+    h += '<div style="font-weight:600;font-size:0.9rem;margin-bottom:14px;">' + (existing ? 'Edit' : 'Record') + ' Burdened Labor Cost</div>';
     // Period + employee row
     h += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;align-items:end;margin-bottom:12px;">';
     var parts = burdenSelectedPeriodId.split('_');
@@ -1273,7 +1273,7 @@
     h += '</div>';
 
     // Live total
-    h += '<div id="burdenTotalLive" style="background:rgba(0,0,0,0.04);border-radius:6px;padding:10px 14px;font-size:0.95rem;margin-bottom:14px;">Total burden: <strong>$0.00</strong></div>';
+    h += '<div id="burdenTotalLive" style="background:rgba(0,0,0,0.04);border-radius:6px;padding:10px 14px;font-size:0.9rem;margin-bottom:14px;">Total burden: <strong>$0.00</strong></div>';
 
     h += '<div style="display:flex;gap:8px;">';
     h += '<button class="btn btn-primary btn-small" onclick="teamBurdenSubmitForm()">' + (existing ? 'Save (re-submits, triggers re-allocation)' : 'Submit') + '</button>';
@@ -1520,10 +1520,10 @@
     if (formEl) formEl.style.display = 'none';
 
     var h = '';
-    h += '<div style="font-weight:600;font-size:0.95rem;margin-bottom:10px;">Bulk paste — payroll export</div>';
+    h += '<div style="font-weight:600;font-size:0.9rem;margin-bottom:10px;">Bulk paste — payroll export</div>';
     h += '<div style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:8px;">Paste CSV or TSV (tab-separated). Header row optional. Expected columns:</div>';
     h += '<code style="display:block;background:rgba(0,0,0,0.05);padding:8px 10px;border-radius:4px;font-size:0.78rem;margin-bottom:10px;">Employee, Period Start, Period End, Wages, FICA, FUTA, SUTA, WC, Benefits, Retirement</code>';
-    h += '<textarea id="burdenBulkText" placeholder="Jane Doe,2026-05-01,2026-05-14,3200,244.80,19.20,84.00,32.10,180.00,160.00" style="' + INPUT_STYLE + 'min-height:140px;font-family:monospace;font-size:0.82rem;"></textarea>';
+    h += '<textarea id="burdenBulkText" placeholder="Jane Doe,2026-05-01,2026-05-14,3200,244.80,19.20,84.00,32.10,180.00,160.00" style="' + INPUT_STYLE + 'min-height:140px;font-family:monospace;font-size:0.85rem;"></textarea>';
     h += '<div style="margin-top:8px;display:flex;gap:8px;">';
     h += '<button class="btn btn-primary btn-small" onclick="teamBurdenBulkPreview()">Preview parse</button>';
     h += '<button class="btn btn-secondary btn-small" onclick="teamBurdenBulkCancel()">Cancel</button>';
@@ -1607,7 +1607,7 @@
     if (!prev) return;
     var h = '';
     if (parsed.errors.length) {
-      h += '<div style="background:rgba(220,38,38,0.08);border:1px solid rgba(220,38,38,0.3);border-radius:6px;padding:10px;margin-bottom:10px;color:#dc2626;font-size:0.82rem;">';
+      h += '<div style="background:rgba(220,38,38,0.08);border:1px solid rgba(220,38,38,0.3);border-radius:6px;padding:10px;margin-bottom:10px;color:#dc2626;font-size:0.85rem;">';
       h += parsed.errors.map(function(e) { return esc(e); }).join('<br>');
       h += '</div>';
     }
@@ -1616,7 +1616,7 @@
       prev.innerHTML = h;
       return;
     }
-    h += '<div style="overflow-x:auto;"><table style="width:100%;font-size:0.82rem;border-collapse:collapse;">';
+    h += '<div style="overflow-x:auto;"><table style="width:100%;font-size:0.85rem;border-collapse:collapse;">';
     h += '<thead><tr style="border-bottom:1px solid var(--cream-dark,var(--cream-dark));"><th style="padding:6px 8px;text-align:left;">Row</th><th style="padding:6px 8px;text-align:left;">Employee</th><th style="padding:6px 8px;text-align:left;">Period</th><th style="padding:6px 8px;text-align:right;">Total</th><th style="padding:6px 8px;text-align:left;">Status</th></tr></thead><tbody>';
     parsed.rows.forEach(function(r, i) {
       var status;
@@ -1763,7 +1763,7 @@
     } catch (_) {}
 
     var h = '';
-    h += '<div style="font-weight:600;font-size:0.95rem;margin-bottom:10px;">Burden detail — ' + esc(emp ? emp.fullName : empId) + ' · ' + esc(_burdenPeriodIdToLabel(periodId)) + '</div>';
+    h += '<div style="font-weight:600;font-size:0.9rem;margin-bottom:10px;">Burden detail — ' + esc(emp ? emp.fullName : empId) + ' · ' + esc(_burdenPeriodIdToLabel(periodId)) + '</div>';
     h += '<table style="width:100%;font-size:0.85rem;border-collapse:collapse;margin-bottom:14px;">';
     lines.forEach(function(l) {
       h += '<tr><td style="padding:4px 8px;color:var(--warm-gray);">' + esc(l[0]) + '</td><td style="padding:4px 8px;text-align:right;">$' + ((l[1] || 0) / 100).toFixed(2) + '</td></tr>';
@@ -1783,9 +1783,9 @@
       + '</div>';
     h += '<div style="font-weight:600;font-size:0.85rem;margin-bottom:6px;">Per-job allocation</div>';
     if (alloc.length === 0) {
-      h += '<div style="font-size:0.82rem;color:var(--warm-gray);margin-bottom:14px;">No per-job allocations recorded for this period yet. Allocation CF runs after recordBurdenEntry.</div>';
+      h += '<div style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:14px;">No per-job allocations recorded for this period yet. Allocation CF runs after recordBurdenEntry.</div>';
     } else {
-      h += '<table style="width:100%;font-size:0.82rem;border-collapse:collapse;margin-bottom:14px;">';
+      h += '<table style="width:100%;font-size:0.85rem;border-collapse:collapse;margin-bottom:14px;">';
       alloc.forEach(function(a) {
         h += '<tr><td style="padding:4px 8px;">' + esc(a.jobId) + '</td><td style="padding:4px 8px;text-align:right;">$' + ((a.amount || 0) / 100).toFixed(2) + '</td></tr>';
       });
@@ -1832,14 +1832,14 @@
 
       var h = '';
       h += '<div style="font-weight:600;font-size:1rem;margin-bottom:6px;">Labor Burden Estimator</div>';
-      h += '<p style="font-size:0.82rem;color:var(--warm-gray);margin-bottom:14px;">Default rates used when no payroll-partner data is available. Operator overrides win over seeded defaults until you Force Reseed.</p>';
+      h += '<p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:14px;">Default rates used when no payroll-partner data is available. Operator overrides win over seeded defaults until you Force Reseed.</p>';
 
       // SUTA per state
-      h += '<div style="font-weight:600;font-size:0.88rem;margin:14px 0 6px;">SUTA rate by state</div>';
+      h += '<div style="font-weight:600;font-size:0.9rem;margin:14px 0 6px;">SUTA rate by state</div>';
       if (states.length === 0) {
-        h += '<div style="font-size:0.82rem;color:var(--warm-gray);">No registered states found in <code>admin/nexusRegistrations</code>. Add nexus first or click <strong>Reseed defaults</strong> to seed all 50 states.</div>';
+        h += '<div style="font-size:0.85rem;color:var(--warm-gray);">No registered states found in <code>admin/nexusRegistrations</code>. Add nexus first or click <strong>Reseed defaults</strong> to seed all 50 states.</div>';
       } else {
-        h += '<table style="width:100%;font-size:0.82rem;border-collapse:collapse;margin-bottom:10px;"><thead><tr style="border-bottom:1px solid var(--cream-dark,var(--cream-dark));"><th style="padding:6px 8px;text-align:left;">State</th><th style="padding:6px 8px;text-align:left;">Default %</th><th style="padding:6px 8px;text-align:left;">Override %</th></tr></thead><tbody>';
+        h += '<table style="width:100%;font-size:0.85rem;border-collapse:collapse;margin-bottom:10px;"><thead><tr style="border-bottom:1px solid var(--cream-dark,var(--cream-dark));"><th style="padding:6px 8px;text-align:left;">State</th><th style="padding:6px 8px;text-align:left;">Default %</th><th style="padding:6px 8px;text-align:left;">Override %</th></tr></thead><tbody>';
         states.forEach(function(s) {
           var row = sutaByState[s] || {};
           var def = row.defaultRate != null ? (row.defaultRate * 100).toFixed(3) : (row.rate != null && !row.isOverride ? (row.rate * 100).toFixed(3) : '');
@@ -1847,7 +1847,7 @@
           h += '<tr style="border-bottom:1px solid var(--cream-dark,var(--cream-dark));">';
           h += '<td style="padding:6px 8px;font-weight:600;">' + esc(s) + '</td>';
           h += '<td style="padding:6px 8px;color:var(--warm-gray);">' + esc(def) + '</td>';
-          h += '<td style="padding:6px 8px;"><input type="number" step="0.001" id="bSuta_' + esc(s) + '" value="' + esc(ovr) + '" placeholder="(use default)" style="' + INPUT_STYLE + 'width:120px;padding:4px 8px;font-size:0.82rem;"></td>';
+          h += '<td style="padding:6px 8px;"><input type="number" step="0.001" id="bSuta_' + esc(s) + '" value="' + esc(ovr) + '" placeholder="(use default)" style="' + INPUT_STYLE + 'width:120px;padding:4px 8px;font-size:0.85rem;"></td>';
           h += '</tr>';
         });
         h += '</tbody></table>';
