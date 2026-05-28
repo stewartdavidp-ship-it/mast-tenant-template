@@ -4712,6 +4712,28 @@
       grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
       gap: 20px;
     }
+    /* DK3P6XFS — Compact mode. Wraps the existing one-row-per-product table
+       and squeezes vertical padding, hides the category subtitle, and
+       shrinks thumbnails so operators can scan 2–3× more rows per screen. */
+    .products-grid.products-dense .data-table table { border-spacing: 0; }
+    .products-grid.products-dense .data-table td,
+    .products-grid.products-dense .data-table th {
+      padding-top: 4px;
+      padding-bottom: 4px;
+      font-size: 0.78rem;
+    }
+    .products-grid.products-dense .data-table img {
+      width: 28px !important;
+      height: 28px !important;
+      border-radius: 4px !important;
+    }
+    .products-grid.products-dense .data-table td:first-child > div {
+      width: 28px !important;
+      height: 28px !important;
+      font-size: 0.85rem !important;
+    }
+    /* Hide the secondary category subtitle under the product name in compact. */
+    .products-grid.products-dense .data-table td > div + div { display: none; }
     .product-card {
       background: var(--cream);
       border-radius: 10px;
@@ -7425,7 +7447,15 @@
           <!-- W1.7: demoted from primary `btn btn-secondary` to a small ghost
                link-style action. Most tenants won't use this; promoting it on
                the header tax'd visual attention. Full "More" dropdown deferred. -->
-          <button id="bulkPublishShopifyBtn" style="margin-left:auto;font-size:0.78rem;padding:3px 10px;background:transparent;border:1px solid var(--warm-gray,#666);border-radius:999px;color:var(--warm-gray,#888);cursor:pointer;display:none;" onclick="bulkPublishToShopify()" title="Sync all active products to your Shopify store">Publish all to Shopify</button>
+          <!-- DK3P6XFS: density toggle. Cycles between Comfortable (default,
+               56px thumb + secondary category subtitle) and Compact (28px
+               thumb, single line per row, tighter padding) so operators can
+               cram more products into the viewport. Persisted in
+               localStorage as 'mast.productsDense'. -->
+          <button id="productsDensityToggle" type="button"
+            style="margin-left:auto;font-size:0.78rem;padding:3px 10px;background:transparent;border:1px solid var(--warm-gray,#666);border-radius:999px;color:var(--warm-gray,#888);cursor:pointer;"
+            onclick="window.toggleProductsDensity()" title="Toggle dense / comfortable mode">▦ Compact</button>
+          <button id="bulkPublishShopifyBtn" style="font-size:0.78rem;padding:3px 10px;background:transparent;border:1px solid var(--warm-gray,#666);border-radius:999px;color:var(--warm-gray,#888);cursor:pointer;display:none;" onclick="bulkPublishToShopify()" title="Sync all active products to your Shopify store">Publish all to Shopify</button>
           <button class="btn btn-primary" style="font-size:0.85rem;padding:6px 16px;" onclick="developCreateNewProduct()">+ New Product</button>
         </div>
       </div>
@@ -18635,7 +18665,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260527-223352-768b9d7';
+var MAST_MODULES_V = '20260527-223808-8230874';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -33859,6 +33889,16 @@ function handleProductsCategoryChange() {
   renderProducts();
 }
 
+// DK3P6XFS — toggle compact/comfortable mode on the products list. Persists
+// to localStorage; renderProducts() reads it back on every paint and toggles
+// the .products-dense class on #productsGrid.
+window.toggleProductsDensity = function() {
+  var cur = false;
+  try { cur = localStorage.getItem('mast.productsDense') === 'true'; } catch (e) {}
+  try { localStorage.setItem('mast.productsDense', cur ? 'false' : 'true'); } catch (e) {}
+  renderProducts();
+};
+
 
 // Tenant business timezone helpers — lazy fetch from businessEntity, used
 // by URL-driven date filtering so admin agrees with MCP regardless of
@@ -34249,7 +34289,18 @@ function renderProducts() {
       : (statusFilter === 'archived')
         ? '<div class="empty-state"><div class="empty-icon">&#128230;</div><p>No archived products.</p></div>'
         : '<div class="empty-state"><div class="empty-icon">&#127912;</div><p>No active products.</p></div>';
-  document.getElementById('productsGrid').innerHTML = filtered.length ? html : emptyHtml;
+  var _productsGridEl = document.getElementById('productsGrid');
+  _productsGridEl.innerHTML = filtered.length ? html : emptyHtml;
+  // DK3P6XFS — apply persisted density preference + sync the toggle button label.
+  var _denseOn = false;
+  try { _denseOn = localStorage.getItem('mast.productsDense') === 'true'; } catch (e) {}
+  if (_denseOn) _productsGridEl.classList.add('products-dense');
+  else _productsGridEl.classList.remove('products-dense');
+  var _denseBtn = document.getElementById('productsDensityToggle');
+  if (_denseBtn) {
+    _denseBtn.textContent = _denseOn ? '▤ Comfortable' : '▦ Compact';
+    _denseBtn.title = _denseOn ? 'Switch to comfortable view (larger thumbnails + category subtitles)' : 'Switch to compact view (smaller thumbnails, more rows per screen)';
+  }
 
   // Inventory pill bar — replaces the old "N products · low · out of stock"
   // banner. Pills filter the list. Counts respect the active category +
