@@ -1631,6 +1631,9 @@
     return h;
   }
 
+  // Per-customer toggle: show revoked/expired certs in the sub-section.
+  var _certsShowInactive = {};
+
   function renderCertsSubsection(c, cache) {
     var h = '<div style="margin-bottom:20px;">';
     h += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">';
@@ -1644,38 +1647,87 @@
     var certs = cache.certs || [];
     var types = cache.certTypes || {};
     var now = new Date().toISOString();
-    var active = certs.filter(function(c) {
-      if (!c) return false;
-      if (c.revokedAt) return false;
-      if (c.expiresAt && c.expiresAt < now) return false;
+    var showInactive = !!_certsShowInactive[c.id];
+
+    function isActive(cert) {
+      if (!cert) return false;
+      if (cert.revokedAt) return false;
+      if (cert.expiresAt && cert.expiresAt < now) return false;
       return true;
-    });
-    if (!active.length) {
-      h += '<div style="color:var(--warm-gray);font-size:0.85rem;padding:8px 0;">No active certifications.</div></div>';
-      return h;
     }
-    var rows = active.map(function(cert) {
+    var active = certs.filter(isActive);
+    var inactive = certs.filter(function(x) { return x && !isActive(x); });
+
+    function statusBadge(cert) {
+      if (cert.revokedAt) return '<span style="font-size:0.72rem;color:#b91c1c;">Revoked</span>';
+      if (cert.expiresAt && cert.expiresAt < now) return '<span style="font-size:0.72rem;color:var(--warm-gray);">Expired</span>';
+      return '<span style="font-size:0.72rem;color:var(--teal,#2a7c6f);">Active</span>';
+    }
+
+    function rowFor(cert, isInactiveRow) {
       var typeName = (types[cert.typeId] && types[cert.typeId].name) || cert.typeId;
       var attestor = cert.instructorOfRecord && cert.instructorOfRecord.displayName
         ? cert.instructorOfRecord.displayName
         : (cert.grantedBy || '—');
       var grantedDate = cert.grantedAt ? fmtDate(cert.grantedAt) : '—';
       var expires = cert.expiresAt ? fmtDate(cert.expiresAt) : 'Lifetime';
-      return '<tr>' +
+      var lastCol = isInactiveRow
+        ? (cert.revokedAt
+            ? '<span style="font-size:0.72rem;color:var(--warm-gray);" title="' + esc(cert.revokeReason || '') + '">' + esc(_revokeReasonLabel(cert.revokeReason)) + '</span>'
+            : '')
+        : '<button class="btn btn-link" onclick="window.customersRevokeCert(\'' + esc(c.id) + '\',\'' + esc(cert.id) + '\')">Revoke</button>';
+      return '<tr' + (isInactiveRow ? ' style="opacity:0.6;"' : '') + '>' +
         '<td><strong>' + esc(typeName) + '</strong></td>' +
+        '<td>' + statusBadge(cert) + '</td>' +
         '<td style="font-size:0.78rem;color:var(--warm-gray);">Attested by ' + esc(attestor) + '</td>' +
         '<td style="font-size:0.78rem;">' + esc(grantedDate) + '</td>' +
         '<td style="font-size:0.78rem;">' + esc(expires) + '</td>' +
-        '<td style="text-align:right;"><button class="btn btn-link" onclick="window.customersRevokeCert(\'' + esc(c.id) + '\',\'' + esc(cert.id) + '\')">Revoke</button></td>' +
+        '<td style="text-align:right;">' + lastCol + '</td>' +
       '</tr>';
-    }).join('');
+    }
+
+    if (!active.length && !(showInactive && inactive.length)) {
+      h += '<div style="color:var(--warm-gray);font-size:0.85rem;padding:8px 0;">No active certifications.</div>';
+      if (inactive.length) {
+        h += '<button class="btn btn-link" style="font-size:0.78rem;" onclick="window.customersToggleRevokedCerts(\'' + esc(c.id) + '\')">Show ' + inactive.length + ' revoked/expired</button>';
+      }
+      h += '</div>';
+      return h;
+    }
+
+    var rows = active.map(function(cert) { return rowFor(cert, false); }).join('');
+    if (showInactive) {
+      rows += inactive.map(function(cert) { return rowFor(cert, true); }).join('');
+    }
+
     h += '<div class="data-table"><table>';
-    h += '<thead><tr><th>Certification</th><th>Attestor</th><th>Granted</th><th>Expires</th><th></th></tr></thead>';
+    h += '<thead><tr><th>Certification</th><th>Status</th><th>Attestor</th><th>Granted</th><th>Expires</th><th></th></tr></thead>';
     h += '<tbody>' + rows + '</tbody>';
     h += '</table></div>';
+    if (inactive.length) {
+      h += '<button class="btn btn-link" style="font-size:0.78rem;margin-top:4px;" onclick="window.customersToggleRevokedCerts(\'' + esc(c.id) + '\')">' +
+        (showInactive ? 'Hide revoked/expired' : 'Show ' + inactive.length + ' revoked/expired') + '</button>';
+    }
     h += '</div>';
     return h;
   }
+
+  function _revokeReasonLabel(reason) {
+    var map = {
+      'mistake': 'Granted in error',
+      'violation': 'Policy violation',
+      'expired-by-policy': 'Expired by policy',
+      'other': 'Other'
+    };
+    return map[reason] || (reason ? reason : 'Revoked');
+  }
+
+  window.customersToggleRevokedCerts = function(customerId) {
+    _certsShowInactive[customerId] = !_certsShowInactive[customerId];
+    if (currentView === 'detail' && selectedCustomerId === customerId && detailTab === 'classes') {
+      renderPreservingEdits();
+    }
+  };
 
   function loadCustomerCerts(customerId) {
     var cache = getCache(customerId);
@@ -1760,16 +1812,52 @@
     }
   };
 
-  window.customersRevokeCert = async function(customerId, certId) {
-    var reason = prompt('Revoke this certification? Enter a reason (optional):');
-    if (reason === null) return; // cancel
+  window.customersRevokeCert = function(customerId, certId) {
+    var cache = getCache(customerId);
+    var cert = (cache.certs || []).find(function(x) { return x && x.id === certId; });
+    var types = cache.certTypes || {};
+    var typeName = cert && types[cert.typeId] && types[cert.typeId].name ? types[cert.typeId].name : (cert ? cert.typeId : 'this certification');
+
+    if (!window.mastSlideOut || !window.mastSlideOut.open) {
+      window.MastAdmin && MastAdmin.showToast('Slide-out unavailable', true);
+      return;
+    }
+    var reasonOptions = [
+      { v: 'mistake', l: 'Granted in error' },
+      { v: 'violation', l: 'Policy violation' },
+      { v: 'expired-by-policy', l: 'Expired by policy' },
+      { v: 'other', l: 'Other' }
+    ];
+    var optsHtml = reasonOptions.map(function(o) {
+      return '<option value="' + esc(o.v) + '">' + esc(o.l) + '</option>';
+    }).join('');
+
+    window.mastSlideOut.open({
+      title: 'Revoke certification',
+      subtitle: typeName,
+      bodyHtml:
+        '<div class="book-field"><label class="form-label">Reason</label>' +
+          '<select id="custRevokeReasonSel" class="form-input">' + optsHtml + '</select></div>' +
+        '<div class="book-field" style="margin-top:10px;"><label class="form-label">Note (optional)</label>' +
+          '<textarea id="custRevokeNote" class="form-input" rows="2" placeholder="Visible in the cert history"></textarea></div>' +
+        '<p style="color:var(--warm-gray);font-size:0.78rem;margin-top:10px;">The certification stays on the record as <strong>revoked</strong> — it is not deleted, so the history is preserved.</p>',
+      footerHtml: '<button class="btn btn-danger" onclick="window.customersRevokeCertConfirm(\'' + esc(customerId) + '\',\'' + esc(certId) + '\')">Revoke</button>',
+      onClose: function() {}
+    });
+  };
+
+  window.customersRevokeCertConfirm = async function(customerId, certId) {
+    var reason = (document.getElementById('custRevokeReasonSel') || {}).value || 'other';
+    var note = (document.getElementById('custRevokeNote') || {}).value || '';
     try {
       await MastDB.update('admin/customers/' + customerId + '/certifications/' + certId, {
         revokedAt: new Date().toISOString(),
         revokedBy: (window.MastAdmin && MastAdmin.currentUser && MastAdmin.currentUser.uid) || 'admin',
-        revokeReason: reason || null
+        revokeReason: reason,
+        revokeNote: note.trim() || null
       });
       window.MastAdmin && MastAdmin.showToast('Certification revoked');
+      window.mastSlideOut && window.mastSlideOut.close && window.mastSlideOut.close();
       var cache = getCache(customerId);
       cache.loaded.certs = false;
       loadCustomerCerts(customerId);
