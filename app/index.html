@@ -18674,7 +18674,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260528-000330-00deba1';
+var MAST_MODULES_V = '20260528-000635-77649a9';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -43905,6 +43905,59 @@ function renderProductDetail(pid) {
       '</div>' +
     '</div>';
 
+    // Audit & Coaching Wedge V1 — structured dimensions/weight + technique/subtype +
+    // intent-declared channels + canonicalSource placeholder (J03). Structured
+    // fields live alongside the legacy flat ones above; readers prefer structured
+    // and fall back to legacy weightOz/lengthIn/widthIn/heightIn.
+    var dims = product.dimensions || {};
+    var pw = product.weight || {};
+    var intended = Array.isArray(product.intendedChannels) ? product.intendedChannels : [];
+    var subtypeGated = (typeof window.playbookSubtypeRequired === 'function')
+      ? !!window.playbookSubtypeRequired((window.identity && window.identity.archetype) || null)
+      : false;
+    prodHtml += '<div class="product-detail-section">' +
+      '<div class="product-detail-section-title">Audit Schema (Wedge V1)</div>' +
+      '<div style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:8px;">Structured fields the audit rules read. Legacy fields above stay as a fallback.</div>' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:12px;align-items:end;">' +
+        '<div class="form-group"><label>Length</label><input type="number" id="pdDimL" min="0" step="0.1" value="' + (dims.l != null ? dims.l : '') + '"></div>' +
+        '<div class="form-group"><label>Width</label><input type="number" id="pdDimW" min="0" step="0.1" value="' + (dims.w != null ? dims.w : '') + '"></div>' +
+        '<div class="form-group"><label>Height</label><input type="number" id="pdDimH" min="0" step="0.1" value="' + (dims.h != null ? dims.h : '') + '"></div>' +
+        '<div class="form-group"><label>Unit</label><select id="pdDimUnit">' +
+          '<option value="in"' + ((dims.unit || 'in') === 'in' ? ' selected' : '') + '>in</option>' +
+          '<option value="cm"' + (dims.unit === 'cm' ? ' selected' : '') + '>cm</option>' +
+        '</select></div>' +
+      '</div>' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:8px;">' +
+        '<div class="form-group"><label>Weight</label><input type="number" id="pdWeightValue" min="0" step="0.01" value="' + (pw.value != null ? pw.value : '') + '"></div>' +
+        '<div class="form-group"><label>Weight Unit</label><select id="pdWeightUnit">' +
+          '<option value="g"' + ((pw.unit || 'g') === 'g' ? ' selected' : '') + '>g</option>' +
+          '<option value="oz"' + (pw.unit === 'oz' ? ' selected' : '') + '>oz</option>' +
+          '<option value="lb"' + (pw.unit === 'lb' ? ' selected' : '') + '>lb</option>' +
+          '<option value="kg"' + (pw.unit === 'kg' ? ' selected' : '') + '>kg</option>' +
+        '</select></div>' +
+      '</div>' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:8px;">' +
+        '<div class="form-group"><label>Technique</label>' +
+          '<input type="text" id="pdTechnique" value="' + esc(product.technique || '') + '" placeholder="free-text until playbook ships (J09)">' +
+        '</div>' +
+        '<div class="form-group"><label>Product Subtype' + (subtypeGated ? ' <span style="color:var(--accent);">*required</span>' : '') + '</label>' +
+          '<input type="text" id="pdProductSubtype" value="' + esc(product.productSubtype || '') + '" placeholder="free-text until playbook ships (J09)"' + (subtypeGated ? ' data-required="true"' : '') + '>' +
+        '</div>' +
+      '</div>' +
+      '<div style="margin-top:12px;">' +
+        '<label style="display:block;margin-bottom:4px;font-size:0.85rem;">Intended Channels</label>' +
+        '<div style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:6px;">Each row declares your intent for one channel. DR-06 reads these.</div>' +
+        '<div id="pdIntendedChannelsList">' +
+          (intended.length ? intended.map(window.pdIntendedChannelRowHtml).join('') : '') +
+        '</div>' +
+        '<button type="button" class="btn btn-secondary" style="font-size:0.78rem;padding:4px 10px;margin-top:4px;" onclick="pdAddIntendedChannelRow()">+ Add channel intent</button>' +
+      '</div>' +
+      '<div style="margin-top:12px;font-size:0.78rem;color:var(--warm-gray);">' +
+        '<label>Canonical Source</label>' +
+        '<div style="padding:6px 0;">V1: managed by system (always null). V2 master-of-truth graduation will populate.</div>' +
+      '</div>' +
+    '</div>';
+
     // Price history (read-only display)
     var priceHistory = product.priceHistory || [];
     if (priceHistory.length > 0) {
@@ -43944,6 +43997,28 @@ function renderProductDetail(pid) {
       if (maRo.productionTime) prodHtml += '<span style="color:var(--warm-gray);">Production Time</span><span>' + esc(maRo.productionTime) + '</span>';
       if (maRo.edition) prodHtml += '<span style="color:var(--warm-gray);">Edition</span><span>' + esc(maRo.edition) + '</span>';
       prodHtml += '</div></div></div>';
+    }
+
+    // J03 wedge fields — read-only display when any are populated.
+    var dimsRo = product.dimensions || null;
+    var pwRo = product.weight || null;
+    var icRo = Array.isArray(product.intendedChannels) ? product.intendedChannels : [];
+    var hasWedge = dimsRo || pwRo || product.technique || product.productSubtype || icRo.length;
+    if (hasWedge) {
+      prodHtml += '<div class="product-detail-section"><div class="product-detail-section-title">Audit Schema (Wedge V1)</div>' +
+        '<div style="display:grid;grid-template-columns:160px 1fr;gap:8px 16px;font-size:0.85rem;">';
+      if (dimsRo) {
+        var dimsStr = [dimsRo.l, dimsRo.w, dimsRo.h].map(function(n) { return n != null ? n : '—'; }).join(' × ') + ' ' + (dimsRo.unit || 'in');
+        prodHtml += '<span style="color:var(--warm-gray);">Dimensions</span><span>' + esc(dimsStr) + '</span>';
+      }
+      if (pwRo) prodHtml += '<span style="color:var(--warm-gray);">Weight</span><span>' + esc(pwRo.value + ' ' + (pwRo.unit || 'g')) + '</span>';
+      if (product.technique) prodHtml += '<span style="color:var(--warm-gray);">Technique</span><span>' + esc(product.technique) + '</span>';
+      if (product.productSubtype) prodHtml += '<span style="color:var(--warm-gray);">Subtype</span><span>' + esc(product.productSubtype) + '</span>';
+      if (icRo.length) {
+        var icStr = icRo.map(function(r) { return r.channelKey + ': ' + r.intent; }).join(', ');
+        prodHtml += '<span style="color:var(--warm-gray);">Intended Channels</span><span>' + esc(icStr) + '</span>';
+      }
+      prodHtml += '</div></div>';
     }
   }
   prodHtml += '</div>';
@@ -44209,6 +44284,57 @@ function renderProductDetail(pid) {
     window._pdStickyObserver = null;
   }
 }
+
+// Audit & Coaching Wedge V1 (J03) — playbook gate stub. J09 (playbook content
+// repo) hasn't shipped yet; this always returns false so productSubtype is
+// optional everywhere. When J09 publishes per-archetype enums, swap this for
+// a lookup against the playbook signal and the create form auto-gates.
+window.playbookSubtypeRequired = function(_archetype) { return false; };
+
+// Render one row of the intendedChannels editor. Kept on window so the
+// product detail render call site can build the initial list and the
+// "+ Add" button below can append more without re-running the render.
+window.pdIntendedChannelRowHtml = function(row) {
+  var INTENDED_PLATFORMS = ['manual','shopify','etsy','square','squarespace','amazon','tiktok','instagram','consignment'];
+  var ck = (row && row.channelKey) || '';
+  var it = (row && row.intent) || 'plan-to-list';
+  var opts = INTENDED_PLATFORMS.map(function(k) {
+    return '<option value="' + esc(k) + '"' + (ck === k ? ' selected' : '') + '>' + esc(k) + '</option>';
+  }).join('');
+  return '<div class="pd-intended-channel-row" style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:center;margin-bottom:6px;">' +
+    '<select class="pd-intended-channel-key">' +
+      '<option value=""' + (!ck ? ' selected' : '') + '>— channel —</option>' + opts +
+    '</select>' +
+    '<select class="pd-intended-channel-intent">' +
+      '<option value="plan-to-list"' + (it === 'plan-to-list' ? ' selected' : '') + '>plan-to-list (expected; missing listing = violation)</option>' +
+      '<option value="wholesale-only"' + (it === 'wholesale-only' ? ' selected' : '') + '>wholesale-only (never expected on retail channels)</option>' +
+      '<option value="retired"' + (it === 'retired' ? ' selected' : '') + '>retired (auto-suppress listing-drift)</option>' +
+      '<option value="in-development"' + (it === 'in-development' ? ' selected' : '') + '>in-development (snoozes audit 90d)</option>' +
+    '</select>' +
+    '<button type="button" class="btn btn-secondary" style="padding:4px 10px;font-size:0.78rem;" onclick="this.closest(\'.pd-intended-channel-row\').remove()">Remove</button>' +
+  '</div>';
+};
+
+window.pdAddIntendedChannelRow = function() {
+  var list = document.getElementById('pdIntendedChannelsList');
+  if (!list) return;
+  list.insertAdjacentHTML('beforeend', window.pdIntendedChannelRowHtml(null));
+};
+
+// Read the intendedChannels editor and return the array (empty if no rows or
+// no rows have a channelKey selected). Drops rows missing a channelKey.
+window.pdCollectIntendedChannels = function() {
+  var rows = document.querySelectorAll('#pdIntendedChannelsList .pd-intended-channel-row');
+  var out = [];
+  rows.forEach(function(row) {
+    var keyEl = row.querySelector('.pd-intended-channel-key');
+    var intentEl = row.querySelector('.pd-intended-channel-intent');
+    var k = keyEl ? (keyEl.value || '').trim() : '';
+    var i = intentEl ? (intentEl.value || '').trim() : '';
+    if (k && i) out.push({ channelKey: k, intent: i });
+  });
+  return out;
+};
 
 // Snapshot all live pd* form inputs in the product detail view so we can
 // restore them after a re-render triggered by an image upload or other
@@ -44775,8 +44901,71 @@ async function saveProduct(pid) {
         };
       })(),
       seoTitle: (document.getElementById('pdSeoTitle') || {}).value.trim() || null,
-      seoDescription: (document.getElementById('pdSeoDescription') || {}).value.trim() || null
+      seoDescription: (document.getElementById('pdSeoDescription') || {}).value.trim() || null,
+      // Audit & Coaching Wedge V1 (J03) — structured fields the audit rules read.
+      // Each block falls back to existing values when its inputs aren't rendered
+      // (e.g. saves triggered from surfaces that don't surface the audit section).
+      dimensions: (function() {
+        var lEl = document.getElementById('pdDimL');
+        if (!lEl) return existing && existing.dimensions ? existing.dimensions : null;
+        var l = lEl.value !== '' ? parseFloat(lEl.value) : null;
+        var w = (document.getElementById('pdDimW') || {}).value;
+        var h = (document.getElementById('pdDimH') || {}).value;
+        var unit = ((document.getElementById('pdDimUnit') || {}).value) || 'in';
+        var wN = w !== '' && w != null ? parseFloat(w) : null;
+        var hN = h !== '' && h != null ? parseFloat(h) : null;
+        if (l == null && wN == null && hN == null) return null;
+        var out = { unit: unit };
+        if (l != null) out.l = l;
+        if (wN != null) out.w = wN;
+        if (hN != null) out.h = hN;
+        return out;
+      })(),
+      weight: (function() {
+        var vEl = document.getElementById('pdWeightValue');
+        if (!vEl) return existing && existing.weight ? existing.weight : null;
+        var v = vEl.value !== '' ? parseFloat(vEl.value) : null;
+        if (v == null) return null;
+        var unit = ((document.getElementById('pdWeightUnit') || {}).value) || 'g';
+        return { value: v, unit: unit };
+      })(),
+      technique: (function() {
+        var el = document.getElementById('pdTechnique');
+        if (!el) return existing ? (existing.technique || null) : null;
+        var v = (el.value || '').trim();
+        return v || null;
+      })(),
+      productSubtype: (function() {
+        var el = document.getElementById('pdProductSubtype');
+        if (!el) return existing ? (existing.productSubtype || null) : null;
+        var v = (el.value || '').trim();
+        return v || null;
+      })(),
+      intendedChannels: (function() {
+        if (!document.getElementById('pdIntendedChannelsList')) {
+          return existing && Array.isArray(existing.intendedChannels) ? existing.intendedChannels : [];
+        }
+        return (typeof window.pdCollectIntendedChannels === 'function')
+          ? window.pdCollectIntendedChannels()
+          : [];
+      })(),
+      // V1: always null. V2 master-of-truth graduation will populate.
+      // Preserve any value an external migration may have written.
+      canonicalSource: existing && existing.canonicalSource ? existing.canonicalSource : null
     };
+
+    // Audit & Coaching Wedge V1 (J03) — create-form gate. When the active
+    // archetype's playbook declares a non-empty productSubtype enum,
+    // submission requires a value. J09 hasn't shipped, so the gate stub
+    // returns false today; the wiring lands in production now so it
+    // activates the day J09 publishes per-archetype enums.
+    if (isCreate && typeof window.playbookSubtypeRequired === 'function') {
+      var arch = (window.identity && window.identity.archetype) || null;
+      if (window.playbookSubtypeRequired(arch) && !productData.productSubtype) {
+        showToast('Product subtype is required for this archetype.', true);
+        return;
+      }
+    }
 
     // Preserve existing fields we don't edit here
     if (existing) {
@@ -44903,7 +45092,10 @@ async function saveProduct(pid) {
         'etsyListingId', 'buildTime', 'costToBuild', 'materials', 'shippingCategory',
         'weightOz', 'lengthIn', 'widthIn', 'heightIn', 'businessLine',
         'introducedAt', 'sku', 'processingDays', 'personalization',
-        'seoTitle', 'seoDescription', 'makerAttributes', 'availability'
+        'seoTitle', 'seoDescription', 'makerAttributes', 'availability',
+        // J03 wedge fields — seller-declared, audit rules read them.
+        'dimensions', 'weight', 'technique', 'productSubtype',
+        'intendedChannels', 'canonicalSource'
       ];
       var staged = {};
       var nonRevDirect = {};
