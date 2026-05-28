@@ -18665,7 +18665,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260527-223808-8230874';
+var MAST_MODULES_V = '20260527-224030-7b88507';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -48895,6 +48895,21 @@ function computeImageUsage() {
   return usage;
 }
 
+// GiexZyM — Detect whether an image asset is stored in this tenant's Firebase
+// Storage (local) or hot-linked from an external origin (remote). Returns
+// 'local' | 'remote' | 'unknown' so render code can branch cleanly.
+function _imageStorageLocality(img) {
+  if (!img) return 'unknown';
+  var url = img.url || img.thumbnailUrl || '';
+  if (!url || typeof url !== 'string') return 'unknown';
+  // Firebase Storage CDN domains. Includes the legacy gs:// prefix used by
+  // some upload paths that haven't been resolved to a download URL yet.
+  if (/^gs:\/\//.test(url)) return 'local';
+  if (/(^|\.)firebasestorage\.googleapis\.com/.test(url)) return 'local';
+  if (/(^|\.)storage\.googleapis\.com/.test(url)) return 'local';
+  return 'remote';
+}
+
 function renderImageLibrary() {
   var grid = document.getElementById('imageLibraryGrid');
   var statsEl = document.getElementById('imageLibraryStats');
@@ -49020,6 +49035,16 @@ function renderImageLibrary() {
     if (u.onWebsite) html += '<span class="img-lib-badge website">Website</span>';
     if (u.products.length > 0) html += '<span class="img-lib-badge product">Product</span>';
     if (img.source && img.source !== 'admin-upload') html += '<span class="img-lib-badge source">' + esc(img.source) + '</span>';
+    // GiexZyM — Local vs Remote storage indicator. Firebase Storage URLs
+    // come from firebasestorage.googleapis.com or storage.googleapis.com;
+    // anything else is hot-linked from a remote origin. Showing this on the
+    // card makes it obvious which assets the tenant owns vs depends on.
+    var _locality = _imageStorageLocality(img);
+    if (_locality === 'local') {
+      html += '<span class="img-lib-badge" style="background:rgba(42,124,111,0.15);color:var(--teal,#2a7c6f);" title="Stored in this tenant\'s Firebase Storage">Local</span>';
+    } else if (_locality === 'remote') {
+      html += '<span class="img-lib-badge" style="background:rgba(180,83,9,0.18);color:#9a3412;" title="Hot-linked from an external origin — consider moving to local storage">Remote</span>';
+    }
     html += '</div>' +
         (date ? '<div style="font-size:0.72rem;color:var(--warm-gray-light);margin-top:2px;">' + date + '</div>' : '') +
       '</div>' +
@@ -49055,6 +49080,16 @@ function viewLibraryImage(imageId) {
       '<div style="display:grid;grid-template-columns:auto 1fr;gap:6px 12px;font-size:0.9rem;">' +
         '<span style="color:var(--warm-gray);">Type</span><span>' + (isVideo ? 'Video' + (img.duration ? ' (' + img.duration + 's)' : '') : 'Image') + '</span>' +
         '<span style="color:var(--warm-gray);">Source</span><span>' + esc(img.source || 'unknown') + (img.instagramUrl ? ' <a href="' + esc(img.instagramUrl) + '" target="_blank" style="color:var(--amber);">View on IG</a>' : '') + '</span>' +
+        // GiexZyM — Storage locality row. Helps the operator see at a glance
+        // whether the asset is hot-linked from an external origin (risk:
+        // origin can break / change without notice / count against another
+        // service's bandwidth) vs hosted in this tenant's Firebase Storage.
+        '<span style="color:var(--warm-gray);">Storage</span><span>' + (function() {
+          var loc = _imageStorageLocality(img);
+          if (loc === 'local') return '<span style="color:var(--teal,#2a7c6f);font-weight:600;">Local</span> <span style="color:var(--warm-gray);font-size:0.78rem;">— in your Firebase Storage</span>';
+          if (loc === 'remote') return '<span style="color:#9a3412;font-weight:600;">Remote</span> <span style="color:var(--warm-gray);font-size:0.78rem;">— hot-linked from external origin (a move-to-local action is a tracked follow-up)</span>';
+          return '<span style="color:var(--warm-gray);">unknown</span>';
+        })() + '</span>' +
         '<span style="color:var(--warm-gray);">Dimensions</span><span>' + (img.resolution || dims) + '</span>' +
         '<span style="color:var(--warm-gray);">Tags</span><span>' + esc(tags) + '</span>' +
         '<span style="color:var(--warm-gray);">Uploaded</span><span>' + (img.uploadedAt ? new Date(img.uploadedAt).toLocaleString() : (img.uploadDate || 'unknown')) + '</span>' +
