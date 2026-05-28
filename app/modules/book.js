@@ -1947,12 +1947,16 @@
       '</tr>';
     }
 
-    // ── Header row (matches loadClassDetail header) ──
-    var html = '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:1.5rem;">' +
+    // Standard back link — matches the `.detail-back` button that sits above
+    // class detail (#bookDetailView) and the instructor edit form
+    // (#bookInstructorDetailView). The read-only view renders into the list
+    // table container, so the back link gets prepended here rather than
+    // hardcoded in app/index.html like the other views.
+    var html = '<button class="detail-back" onclick="window._instrViewBack()">&#8592; Back to Instructors</button>';
+
+    // ── Header row (matches loadClassDetail header — no inline back) ──
+    html += '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:1.5rem;">' +
       '<div>' +
-      '<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">' +
-        '<button class="btn btn-secondary btn-small" onclick="window._instrViewBack()" title="Back to list">← Back</button>' +
-      '</div>' +
       '<h2 style="margin:0 0 6px;font-size:1.6rem;">' + esc(instr.name || 'Instructor') + '</h2>' +
       '<div style="display:flex;gap:8px;align-items:center;">' +
         '<span style="' + badgeStyle(STATUS_BADGE_COLORS, instr.status) + '">' + esc(instr.status || '') + '</span>' +
