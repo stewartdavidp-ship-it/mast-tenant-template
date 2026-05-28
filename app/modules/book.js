@@ -5767,7 +5767,13 @@
   MastAdmin.registerModule('book', {
     routes: {
       'book': { tab: 'bookTab', setup: function() { loadClasses(); switchSubTab('classes'); } },
-      'book-detail': { tab: 'bookTab', setup: function(id) { if (id) { loadClassDetail(id); } else { loadClasses(); switchSubTab('classes'); } } },
+      'book-detail': { tab: 'bookTab', setup: function() {
+        // The framework calls setup() without args. Read the classId from the
+        // hash params so deep-links like #book-detail?id=abc work — this is
+        // also the entrypoint customersOpenActivityDrillIn('classes', id) uses.
+        var id = (typeof window.getRouteParams === 'function') ? (window.getRouteParams().id || null) : null;
+        if (id) { loadClassDetail(id); } else { loadClasses(); switchSubTab('classes'); }
+      } },
       'enrollments': { tab: 'bookTab', setup: function() { switchSubTab('enrollments'); } },
       'instructors': { tab: 'bookTab', setup: function() { switchSubTab('instructors'); } },
       'instructor-detail': { tab: 'bookTab', setup: function(id) { if (id) { showInstructorForm(id); } else { switchSubTab('instructors'); } } },

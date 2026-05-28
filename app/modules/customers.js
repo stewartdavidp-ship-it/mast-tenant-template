@@ -2196,14 +2196,18 @@
       });
     }
     // Some "routes" used here are logical surface IDs that don't map 1:1 to
-    // a registered hash route — e.g. 'classes' is owned by the book module
-    // (route id: 'book'). Map before navigating; otherwise we land on a
-    // "Page not found" screen before the per-surface drill-in can fire.
-    var navRoute = (route === 'classes') ? 'book' : route;
-    if (typeof navigateTo === 'function') navigateTo(navRoute);
-    // After landing on the destination view, drill into the specific item so
-    // the user sees that ticket / review / order — not the bare list. Each
-    // surface has its own open-detail entrypoint; call it if available.
+    // a registered hash route. For 'classes' specifically, the book module
+    // ships a purpose-built 'book-detail' route that accepts an id param —
+    // navigating directly to it eliminates the navigate-then-setTimeout
+    // race we hit when the body was still rendering the previous view.
+    if (route === 'classes' && sourceId) {
+      if (typeof navigateTo === 'function') navigateTo('book-detail', { id: sourceId });
+      return;
+    }
+
+    // All other drills: navigate to the list route, then call the per-surface
+    // open-detail entrypoint once the module has been lazy-loaded.
+    if (typeof navigateTo === 'function') navigateTo(route);
     if (sourceId) {
       var open = function() {
         if (route === 'cs-tickets' && typeof window.csOpenThread === 'function') {
@@ -2214,15 +2218,12 @@
           window.csOpenSurveyResponse(sourceId);
         } else if (route === 'orders' && typeof window.openOrderDetail === 'function') {
           window.openOrderDetail(sourceId);
-        } else if (route === 'classes' && typeof window._bookViewClass === 'function') {
-          window._bookViewClass(sourceId);
         }
       };
       // The module may need to load before its open-fn is wired; wait once.
       if (typeof MastAdmin !== 'undefined' && typeof MastAdmin.loadModule === 'function') {
         var mod = (route.indexOf('cs-') === 0) ? 'customer-service'
-                : (route === 'orders' ? 'orders'
-                : (route === 'classes' ? 'book' : null));
+                : (route === 'orders' ? 'orders' : null);
         if (mod) {
           MastAdmin.loadModule(mod).then(function() { setTimeout(open, 100); });
         } else {
