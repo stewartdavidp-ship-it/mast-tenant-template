@@ -235,21 +235,22 @@
     }
 
     return _evaluateRequirements(phase, record, resolved.legacyOverrides).then(function(ev) {
-      var idx = _phaseIndex(def, phase.key);
       var nextPhases = [];
       var isBranchPoint = !!(def.branches && def.branches[phase.key]);
       var branchChoices = isBranchPoint ? def.branches[phase.key].choices.slice() : [];
       if (!phase.terminal && !isBranchPoint) {
-        // Linear successor
-        var br = record && record.__workflow && record.__workflow.branch;
-        if (br) {
-          // Walking inside a branch — successor is the next phase in this
-          // branch's chain (declared as ordinary phases in def.phases with
-          // keys the branch's choices entryPhase chain into).
-          var nextIdx = idx + 1;
-          if (nextIdx < def.phases.length) nextPhases.push(def.phases[nextIdx].key);
-        } else if (idx + 1 < def.phases.length) {
-          nextPhases.push(def.phases[idx + 1].key);
+        // Walk the *display chain* (not the raw phases[] declaration order)
+        // so the successor accounts for which branch the record is on. If
+        // __workflow.branch isn't set on a legacy record, infer it from the
+        // current phase's home branch.
+        var branchKey = (record && record.__workflow && record.__workflow.branch) ||
+                         _inferBranchFromPhase(def, phase.key);
+        var chain = _resolveDisplayChain(def, branchKey);
+        for (var i = 0; i < chain.length; i++) {
+          if (chain[i].key === phase.key && i + 1 < chain.length) {
+            nextPhases.push(chain[i + 1].key);
+            break;
+          }
         }
       }
       var recordedVersion = record && record.__workflow && record.__workflow.specVersion;
@@ -446,6 +447,28 @@
     });
   }
 
+  /**
+   * Given a phase key, return the branch choice key whose chain contains
+   * this phase, or null if the phase is on the linear backbone (or is
+   * itself a branch point / convergence). Used by evaluate() + renderHeader
+   * to infer the active branch for legacy records that don't yet have
+   * __workflow.branch set.
+   */
+  function _inferBranchFromPhase(def, phaseKey) {
+    if (!def.branches) return null;
+    var found = null;
+    Object.keys(def.branches).forEach(function(bpKey) {
+      var b = def.branches[bpKey];
+      (b.choices || []).forEach(function(c) {
+        var chain = _walkBranchChain(def, c, bpKey, b.convergesAt);
+        for (var i = 0; i < chain.length; i++) {
+          if (chain[i].key === phaseKey) { found = c.key; return; }
+        }
+      });
+    });
+    return found;
+  }
+
   function _findBranchPointFor(def, currentPhaseKey, record) {
     if (!def.branches) return null;
     // If currentPhase IS a branch point, return it.
@@ -602,8 +625,12 @@
   function _renderStepper(def, record, ev) {
     // Render the linear backbone. If we're in a branch, show the chosen
     // branch's phases inline between the branch point and convergence.
+    // Falls back to inferring the branch from the current phase (for legacy
+    // records without __workflow.branch yet) so the stepper draws the right
+    // chain even on first read.
     var current = ev.currentPhase ? ev.currentPhase.key : null;
-    var currentBranch = record && record.__workflow && record.__workflow.branch;
+    var currentBranch = (record && record.__workflow && record.__workflow.branch) ||
+                        _inferBranchFromPhase(def, current);
     var displayPhases = _resolveDisplayChain(def, currentBranch);
 
     var currentIdx = -1;
@@ -680,7 +707,7 @@
 
     var head = def.phases.slice(0, bpIdx + 1).filter(function(p) { return !branchedPhases[p.key]; });
     var tail = def.phases.slice(convIdx).filter(function(p) { return !branchedPhases[p.key]; });
-    var branchChain = _walkBranchChain(def, choice.entryPhase, convKey);
+    var branchChain = _walkBranchChain(def, choice, bpKey, convKey);
     return head.concat(branchChain).concat(tail);
   }
 
@@ -689,30 +716,46 @@
     if (!def.branches) return out;
     Object.keys(def.branches).forEach(function(bpKey) {
       (def.branches[bpKey].choices || []).forEach(function(c) {
-        // Walk from entryPhase until convergesAt; mark all as branched.
-        var seen = Object.create(null);
-        var idx = _phaseIndex(def, c.entryPhase);
-        var stop = def.branches[bpKey].convergesAt;
-        while (idx >= 0 && idx < def.phases.length) {
-          var p = def.phases[idx];
-          if (p.key === stop) break;
-          if (seen[p.key]) break;
-          seen[p.key] = true;
-          out[p.key] = true;
-          idx++;
-        }
+        var chain = _walkBranchChain(def, c, bpKey, def.branches[bpKey].convergesAt);
+        chain.forEach(function(p) { out[p.key] = true; });
       });
     });
     return out;
   }
 
-  function _walkBranchChain(def, entryPhaseKey, stopKey) {
+  /**
+   * Walk the phase chain for a specific branch choice. If the choice
+   * declares `phases: [...]` explicitly, use those (recommended; avoids
+   * declaration-order coupling). Otherwise fall back to walking phases[]
+   * from entryPhase forward until stopKey, skipping phases that belong to
+   * SIBLING branches (so a pack-ship walk doesn't accidentally include
+   * pickup-ready phases that happen to come next in declaration order).
+   */
+  function _walkBranchChain(def, choice, branchPointKey, stopKey) {
     var out = [];
-    var idx = _phaseIndex(def, entryPhaseKey);
+    if (choice && Array.isArray(choice.phases)) {
+      choice.phases.forEach(function(k) {
+        var p = _phaseByKey(def, k);
+        if (p) out.push(p);
+      });
+      return out;
+    }
+    // Fallback: collect sibling-branch phase keys so we can skip them.
+    var siblings = Object.create(null);
+    if (def.branches && branchPointKey && def.branches[branchPointKey]) {
+      (def.branches[branchPointKey].choices || []).forEach(function(other) {
+        if (other === choice) return;
+        if (Array.isArray(other.phases)) {
+          other.phases.forEach(function(k) { siblings[k] = true; });
+        }
+      });
+    }
+    var idx = _phaseIndex(def, choice ? choice.entryPhase : null);
     var seen = Object.create(null);
     while (idx >= 0 && idx < def.phases.length) {
       var p = def.phases[idx];
       if (p.key === stopKey) break;
+      if (siblings[p.key]) break;  // hit a sibling branch — end of our chain
       if (seen[p.key]) break;
       seen[p.key] = true;
       out.push(p);
@@ -764,7 +807,9 @@
     var buttonsHtml = '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;justify-content:flex-end;margin-top:8px;">';
 
     // Back button — to the previous phase in the display chain.
-    var displayChain = _resolveDisplayChain(def, record && record.__workflow && record.__workflow.branch);
+    var currentBranch = (record && record.__workflow && record.__workflow.branch) ||
+                        _inferBranchFromPhase(def, phase.key);
+    var displayChain = _resolveDisplayChain(def, currentBranch);
     var displayIdx = -1;
     displayChain.forEach(function(p, i) { if (p.key === phase.key) displayIdx = i; });
     if (displayIdx > 0) {

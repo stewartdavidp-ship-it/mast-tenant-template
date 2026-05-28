@@ -267,9 +267,14 @@
     'picked': {
       label: 'How is this order fulfilling?',
       choices: [
-        { key: 'pack-ship', label: 'Pack & ship', entryPhase: 'packing' },
-        { key: 'pickup',    label: 'Customer pickup', entryPhase: 'pickup-ready' },
-        { key: 'dropship',  label: 'Vendor dropship', entryPhase: 'dropship-pending' }
+        // Each choice declares its full phase chain explicitly. The engine
+        // uses these arrays to build the stepper, find sibling-branch
+        // boundaries, and compute successors — instead of relying on
+        // phases[] declaration order (which couples spec layout to behavior
+        // and breaks when multiple branches' phases interleave).
+        { key: 'pack-ship', label: 'Pack & ship',     entryPhase: 'packing',          phases: ['packing', 'labeled', 'shipped'] },
+        { key: 'pickup',    label: 'Customer pickup', entryPhase: 'pickup-ready',     phases: ['pickup-ready', 'picked-up'] },
+        { key: 'dropship',  label: 'Vendor dropship', entryPhase: 'dropship-pending', phases: ['dropship-pending', 'dropship-confirmed'] }
       ],
       convergesAt: 'delivered'
     }
