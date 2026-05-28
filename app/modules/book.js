@@ -1165,7 +1165,7 @@
       // CQ1Urw — student name is the click affordance into the detail view.
       // Row-level quick-action buttons stay live; the link only opens detail.
       html += '<tr>' +
-        '<td><a href="#" onclick="event.preventDefault();window._enrollView(\'' + esc(e.id) + '\')" style="color:var(--teal);font-weight:600;text-decoration:none;">' + esc(e.studentName || e.customerName || '—') + '</a><br><span style="font-size:0.78rem;color:var(--warm-gray);">' + esc(e.studentEmail || e.customerEmail || '') + '</span></td>' +
+        '<td><a href="#" onclick="event.preventDefault();window._enrollView(\'' + esc(e.id) + '\')" style="color:var(--teal,#2a7c6f);font-weight:600;text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:2px;">' + esc(e.studentName || e.customerName || '—') + '</a><br><span style="font-size:0.78rem;color:var(--warm-gray);">' + esc(e.studentEmail || e.customerEmail || '') + '</span></td>' +
         '<td>' + esc(className) + '</td>' +
         '<td>' + (function() {
           if (!e.sessionId) return '—';
@@ -1240,13 +1240,13 @@
           _row('Name', esc(e.studentName || e.customerName || '—')) +
           _row('Email', esc(e.studentEmail || e.customerEmail || '—')) +
           (e.studentPhone || e.phone ? _row('Phone', esc(e.studentPhone || e.phone)) : '') +
-          (e.customerId ? _row('Customer', '<a href="#customers?id=' + esc(e.customerId) + '" style="color:var(--teal);">' + esc(e.customerId) + ' →</a>') : '') +
+          (e.customerId ? _row('Customer', '<a href="#customers?id=' + esc(e.customerId) + '" style="color:var(--teal,#2a7c6f);text-decoration:underline;">' + esc(e.customerId) + ' →</a>') : '') +
           (e.studentUid ? _row('UID', '<span style="font-family:monospace;font-size:0.78rem;">' + esc(e.studentUid) + '</span>') : '') +
         '</div>' +
         '<div style="border:1px solid var(--cream-dark);border-radius:10px;padding:16px;background:var(--surface-card,#fff);">' +
           '<h4 style="margin:0 0 12px;font-size:0.9rem;font-weight:600;">Class &amp; session</h4>' +
           _row('Class', cls
-            ? '<a href="#" onclick="event.preventDefault();window._bookViewClass(\'' + esc(e.classId) + '\')" style="color:var(--teal);">' + esc(className) + ' →</a>'
+            ? '<a href="#" onclick="event.preventDefault();window._bookViewClass(\'' + esc(e.classId) + '\')" style="color:var(--teal,#2a7c6f);text-decoration:underline;">' + esc(className) + ' →</a>'
             : esc(className)) +
           _row('Session', esc(sessionLabel)) +
           (sess && sess.capacity ? _row('Capacity', esc(String(sess.capacity))) : '') +
@@ -1463,7 +1463,7 @@
     var specs = Array.isArray(instr.specialties) ? instr.specialties.filter(Boolean) : [];
     var specChips = specs.length
       ? specs.map(function(s) {
-          return '<span style="display:inline-block;background:rgba(42,124,111,0.12);color:var(--teal);padding:3px 10px;border-radius:14px;font-size:0.78rem;margin:2px 4px 2px 0;">' + esc(s) + '</span>';
+          return '<span style="display:inline-block;background:rgba(42,124,111,0.12);color:var(--teal,#2a7c6f);padding:3px 10px;border-radius:14px;font-size:0.78rem;margin:2px 4px 2px 0;">' + esc(s) + '</span>';
         }).join('')
       : '<span style="color:var(--warm-gray);font-size:0.85rem;">No specialties listed.</span>';
 
