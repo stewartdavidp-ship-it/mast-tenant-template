@@ -809,6 +809,7 @@
     return [
       '<div style="padding:0 24px 24px;display:flex;gap:12px;flex-wrap:wrap;">',
       '  <button type="button" class="btn btn-secondary" data-audit-action="open-suppressions">Suppressed rules</button>',
+      '  <button type="button" class="btn btn-secondary" data-audit-action="open-digest-prefs">Digest preferences</button>',
       '</div>'
     ].join('');
   }
@@ -852,6 +853,8 @@
           }
         } else if (action === 'open-suppressions') {
           if (typeof window.navigateTo === 'function') window.navigateTo('suppressions');
+        } else if (action === 'open-digest-prefs') {
+          openDigestPrefsSlideout();
         } else if (action === 'reconnect') {
           var ch = el.getAttribute('data-channel');
           if (typeof window.channelReconnect === 'function') {
@@ -1284,6 +1287,160 @@
           });
         }
       });
+    });
+  }
+
+  // ============================================================
+  // J15 — Digest preferences slideout
+  // ============================================================
+  //
+  // Reads/writes tenants/{tid}/admin/digestPref. The CF scheduler
+  // (digestEmailScheduler) consumes this doc per-tenant per hourly
+  // tick. Shape:
+  //   { cadence: 'weekly'|'monthly'|'quarterly'|'off',
+  //     dayOfWeek: 0..6, hourLocal: 0..23, timezone: string,
+  //     unsubscribed: bool, lastSentAt: ISO, recipients?: string[] }
+
+  var DIGEST_PREF_PATH = 'admin/digestPref';
+  var DIGEST_DEFAULTS = {
+    cadence:     'weekly',
+    dayOfWeek:   1,
+    hourLocal:   7,
+    timezone:    'America/New_York',
+    unsubscribed: false
+  };
+
+  function loadDigestPref() {
+    if (!window.MastDB || typeof window.MastDB.get !== 'function') {
+      return Promise.resolve(Object.assign({}, DIGEST_DEFAULTS));
+    }
+    return window.MastDB.get(DIGEST_PREF_PATH).then(function(raw) {
+      return Object.assign({}, DIGEST_DEFAULTS, raw || {});
+    }).catch(function() { return Object.assign({}, DIGEST_DEFAULTS); });
+  }
+
+  function saveDigestPref(pref) {
+    if (!window.MastDB || typeof window.MastDB.set !== 'function') return Promise.resolve();
+    return window.MastDB.set(DIGEST_PREF_PATH, pref);
+  }
+
+  function browserTimezone() {
+    try { return Intl.DateTimeFormat().resolvedOptions().timeZone || DIGEST_DEFAULTS.timezone; }
+    catch (_e) { return DIGEST_DEFAULTS.timezone; }
+  }
+
+  function renderDigestPrefsBody(pref) {
+    var DOW = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+    var cadenceOpts = [
+      ['weekly',    'Weekly'],
+      ['monthly',   'Monthly'],
+      ['quarterly', 'Quarterly'],
+      ['off',       'Off (no digest)']
+    ];
+    var html = [];
+    html.push('<div style="padding:20px 24px;display:flex;flex-direction:column;gap:18px;">');
+
+    html.push('<div>');
+    html.push('  <label style="display:block;font-size:0.85rem;font-weight:600;color:var(--charcoal);margin-bottom:6px;">Cadence</label>');
+    html.push('  <select id="digestPrefCadence" class="form-control" style="width:100%;">');
+    cadenceOpts.forEach(function(opt) {
+      var sel = (pref.cadence === opt[0]) ? ' selected' : '';
+      html.push('    <option value="' + esc(opt[0]) + '"' + sel + '>' + esc(opt[1]) + '</option>');
+    });
+    html.push('  </select>');
+    html.push('  <div style="font-size:0.78rem;color:var(--warm-gray);margin-top:4px;">Off honors at the cadence boundary AND inside the aggregator — defense in depth.</div>');
+    html.push('</div>');
+
+    html.push('<div id="digestPrefWeeklyRow">');
+    html.push('  <label style="display:block;font-size:0.85rem;font-weight:600;color:var(--charcoal);margin-bottom:6px;">Send on</label>');
+    html.push('  <select id="digestPrefDow" class="form-control" style="width:100%;">');
+    for (var i = 0; i < 7; i++) {
+      var s = (pref.dayOfWeek === i) ? ' selected' : '';
+      html.push('    <option value="' + i + '"' + s + '>' + esc(DOW[i]) + '</option>');
+    }
+    html.push('  </select>');
+    html.push('</div>');
+
+    html.push('<div>');
+    html.push('  <label style="display:block;font-size:0.85rem;font-weight:600;color:var(--charcoal);margin-bottom:6px;">Timezone</label>');
+    html.push('  <input id="digestPrefTz" type="text" class="form-control" style="width:100%;" value="' + esc(pref.timezone || browserTimezone()) + '" />');
+    html.push('  <div style="font-size:0.78rem;color:var(--warm-gray);margin-top:4px;">Digests fire only inside your local 06:00&ndash;09:00 window.</div>');
+    html.push('</div>');
+
+    var lastSent = pref.lastSentAt
+      ? 'Last digest queued: ' + esc(new Date(pref.lastSentAt).toLocaleString())
+      : 'No digest sent yet.';
+    html.push('<div style="font-size:0.78rem;color:var(--warm-gray);">' + lastSent + '</div>');
+
+    html.push('</div>');
+    return html.join('');
+  }
+
+  function renderDigestPrefsFooter() {
+    return [
+      '<div style="padding:14px 24px;display:flex;gap:10px;justify-content:flex-end;border-top:1px solid var(--cream-dark);">',
+      '  <button type="button" class="btn btn-secondary" data-digest-action="cancel">Cancel</button>',
+      '  <button type="button" class="btn btn-primary" data-digest-action="save">Save</button>',
+      '</div>'
+    ].join('');
+  }
+
+  function wireDigestPrefsHandlers(current) {
+    // Hide/show weekly DoW row when cadence != weekly.
+    function syncWeeklyRow() {
+      var sel = document.getElementById('digestPrefCadence');
+      var row = document.getElementById('digestPrefWeeklyRow');
+      if (sel && row) row.style.display = (sel.value === 'weekly') ? '' : 'none';
+    }
+    var sel = document.getElementById('digestPrefCadence');
+    if (sel) sel.addEventListener('change', syncWeeklyRow);
+    syncWeeklyRow();
+
+    Array.prototype.forEach.call(document.querySelectorAll('[data-digest-action]'), function(btn) {
+      btn.addEventListener('click', function() {
+        var action = btn.getAttribute('data-digest-action');
+        if (action === 'cancel') {
+          if (window.mastSlideOut && typeof window.mastSlideOut.close === 'function') window.mastSlideOut.close();
+          return;
+        }
+        if (action === 'save') {
+          var cadenceEl = document.getElementById('digestPrefCadence');
+          var dowEl     = document.getElementById('digestPrefDow');
+          var tzEl      = document.getElementById('digestPrefTz');
+          var cadence = cadenceEl ? cadenceEl.value : 'weekly';
+          var pref = Object.assign({}, current, {
+            cadence:     cadence,
+            dayOfWeek:   dowEl ? parseInt(dowEl.value, 10) : 1,
+            timezone:    (tzEl && tzEl.value && tzEl.value.trim()) || browserTimezone(),
+            unsubscribed: cadence === 'off'  // 'off' implies unsubscribed; lets the CF honor both gates uniformly
+          });
+          saveDigestPref(pref).then(function() {
+            toast('Digest preferences saved');
+            if (window.mastSlideOut && typeof window.mastSlideOut.close === 'function') window.mastSlideOut.close();
+          }).catch(function(err) {
+            toast('Save failed: ' + (err && err.message || err), true);
+          });
+        }
+      });
+    });
+  }
+
+  function openDigestPrefsSlideout() {
+    loadDigestPref().then(function(pref) {
+      var bodyHtml   = renderDigestPrefsBody(pref);
+      var footerHtml = renderDigestPrefsFooter();
+      if (window.mastSlideOut && typeof window.mastSlideOut.open === 'function') {
+        window.mastSlideOut.open({
+          title:    'Digest preferences',
+          subtitle: 'Cadence and timing for the listing-health digest email',
+          bodyHtml: bodyHtml,
+          footerHtml: footerHtml,
+          onClose:  function() { /* no-op */ }
+        });
+        setTimeout(function() { wireDigestPrefsHandlers(pref); }, 0);
+      } else {
+        toast('Slide-out helper missing — digest preferences UI unavailable', true);
+      }
     });
   }
 
