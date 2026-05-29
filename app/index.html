@@ -18719,8 +18719,17 @@ function applyOrganizerMode(isOrganizer) {
 }
 
 function applyRoleFilter(role, roleConfig) {
-  // Owner sees everything — never filter
-  if (role === 'admin' || !role) return;
+  // Owner (or no-role during load) sees everything. Don't just early-return —
+  // an SPA login switch from a lower-privilege account leaves stale
+  // display:none on sections this filter set last time, and admin must RESET
+  // them (sections are only ever hidden via this filter's style.display). Skip
+  // migration (own visibility logic).
+  if (role === 'admin' || !role) {
+    document.querySelectorAll('.sidebar-section[data-section]').forEach(function(el) {
+      if (el.getAttribute('data-section') !== 'migration') el.style.display = '';
+    });
+    return;
+  }
 
   // Firebase config takes precedence over code defaults
   var allowed = (roleConfig && roleConfig.navSections)
@@ -18746,8 +18755,22 @@ function applyRoleFilter(role, roleConfig) {
 // view, then hides any section left with no visible items. Admin is never
 // filtered. Call AFTER applyRoleFilter so section-level hiding runs first.
 function applyModuleFilter() {
-  if (currentUserRole === 'admin' || !currentUserRole) return;
   getModulePermRegistry();
+  if (currentUserRole === 'admin' || !currentUserRole) {
+    // Admin/no-role: clear RBAC-driven item hiding left by a prior session
+    // (registry items only — not arbitrary items). Sections are reset by
+    // applyRoleFilter. Then re-apply organizer mode, which hides events-shows/
+    // events-settings via the same display mechanism and must win.
+    Object.keys(_modulePermRouteSet).forEach(function(route) {
+      document.querySelectorAll('.sidebar-item[data-route="' + route + '"]').forEach(function(el) {
+        el.style.display = '';
+      });
+    });
+    if (typeof TENANT_CONFIG !== 'undefined') {
+      applyOrganizerMode(TENANT_CONFIG && TENANT_CONFIG.organizerMode === true);
+    }
+    return;
+  }
   Object.keys(_modulePermRouteSet).forEach(function(route) {
     var vis = canViewModule(route);
     document.querySelectorAll('.sidebar-item[data-route="' + route + '"]').forEach(function(el) {
@@ -19078,7 +19101,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260529-000410-dcf552c';
+var MAST_MODULES_V = '20260529-004908-04940db';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
