@@ -814,6 +814,108 @@
     body.dark-mode .auth-screen p { color: #999; }
     body.dark-mode .btn-google { background: #2a2a2a; border-color: #444; color: #e0e0e0; }
     body.dark-mode .btn-google:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
+
+    /* Email sign-in form (V1 email-auth) — sits alongside the Google button.
+       Reuses auth tokens so it inverts correctly in dark mode. */
+    .auth-email-form {
+      width: 100%;
+      max-width: 320px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      text-align: left;
+    }
+    .auth-email-form label {
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: var(--charcoal);
+      margin-bottom: 2px;
+    }
+    .auth-email-form input {
+      width: 100%;
+      padding: 11px 12px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 0.9rem;
+      background: var(--cream);
+      color: var(--charcoal);
+      box-sizing: border-box;
+    }
+    .auth-email-form input:focus {
+      outline: none;
+      border-color: var(--teal);
+      box-shadow: 0 0 0 2px rgba(42, 124, 111, 0.18);
+    }
+    .auth-email-form .auth-error {
+      color: var(--danger);
+      font-size: 0.78rem;
+      min-height: 1.1em;
+      margin: -2px 0 2px;
+    }
+    .auth-email-row {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .auth-divider {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+      max-width: 320px;
+      color: var(--warm-gray);
+      font-size: 0.78rem;
+    }
+    .auth-divider::before,
+    .auth-divider::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: #ddd;
+    }
+    .auth-link-btn {
+      background: none;
+      border: none;
+      padding: 0;
+      color: var(--teal);
+      font-family: 'DM Sans', sans-serif;
+      font-size: 0.78rem;
+      cursor: pointer;
+      text-decoration: underline;
+    }
+    .auth-secondary-btn {
+      width: 100%;
+      max-width: 320px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      background: var(--cream);
+      border: 1px solid #ddd;
+      padding: 11px 16px;
+      border-radius: 6px;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 0.9rem;
+      cursor: pointer;
+      color: var(--charcoal);
+      box-sizing: border-box;
+    }
+    .auth-secondary-btn:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.12); }
+    .auth-email-links {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      width: 100%;
+      max-width: 320px;
+      flex-wrap: wrap;
+    }
+    body.dark-mode .auth-email-form label { color: #e0e0e0; }
+    body.dark-mode .auth-email-form input { background: #2a2a2a; border-color: #444; color: #e0e0e0; }
+    body.dark-mode .auth-secondary-btn { background: #2a2a2a; border-color: #444; color: #e0e0e0; }
+    body.dark-mode .auth-secondary-btn:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
+    body.dark-mode .auth-divider::before,
+    body.dark-mode .auth-divider::after { background: #444; }
     body.dark-mode .wizard-step-dot { background: #333; color: #999; border-color: #444; }
     body.dark-mode .wizard-step-dot.active { background: var(--teal); color: white; border-color: var(--teal); }
     body.dark-mode .wizard-step-dot.completed { background: #1a3a34; color: var(--teal-light); border-color: var(--teal); }
@@ -6945,6 +7047,43 @@
         <svg viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.27-4.74 3.27-8.1z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
         Sign in with Google
       </button>
+
+      <!-- Email sign-in controls (password + email-link). Hidden as a group
+           when the email-link "check your inbox" confirmation is shown. -->
+      <div id="authEmailControls" style="display:contents;">
+        <div class="auth-divider">or</div>
+
+        <!-- Email + password sign-in (V1 email-auth) -->
+        <form class="auth-email-form" id="authEmailForm" novalidate onsubmit="emailPasswordSignIn(event)">
+          <div class="auth-email-row">
+            <label for="authEmailInput">Email</label>
+            <input id="authEmailInput" type="email" autocomplete="email" required placeholder="you@example.com" />
+          </div>
+          <div class="auth-email-row">
+            <label for="authPasswordInput">Password</label>
+            <input id="authPasswordInput" type="password" autocomplete="current-password" required placeholder="••••••••" />
+          </div>
+          <div class="auth-error" id="authEmailError" role="alert" aria-live="assertive"></div>
+          <button type="submit" class="btn btn-primary" id="authEmailSubmit" style="width:100%;">Sign in</button>
+        </form>
+
+        <div class="auth-email-links">
+          <button type="button" class="auth-link-btn" onclick="authForgotPassword()">Forgot password?</button>
+          <button type="button" class="auth-link-btn" onclick="authResendVerification()">Resend verification email</button>
+        </div>
+
+        <!-- Passwordless email-link sign-in (V1 email-auth) -->
+        <button type="button" class="auth-secondary-btn" id="authEmailLinkBtn" onclick="emailLinkSignIn()">
+          ✉️ Email me a sign-in link
+        </button>
+      </div>
+
+      <!-- Email-link "check your inbox" confirmation (hidden until a link is sent) -->
+      <div id="authEmailLinkSent" style="display:none;flex-direction:column;align-items:center;gap:12px;max-width:340px;">
+        <p style="margin:0;font-weight:600;color:var(--charcoal);">Check your email</p>
+        <p style="margin:0;color:var(--warm-gray);">We sent a sign-in link to <strong id="authEmailLinkSentTo"></strong>. Click the link to finish signing in. (Check your spam folder if you don't see it.)</p>
+        <button type="button" class="auth-secondary-btn" onclick="authResetSignInScreen()">Back to sign in</button>
+      </div>
     </div>
 
     <!-- Auth: Loading (shown immediately after Google sign-in while boot sequence runs) -->
@@ -16470,7 +16609,13 @@ window.saveShow = function() {
 // ============================================================
 // Auth
 // ============================================================
+// Tracks which method initiated the current sign-in attempt, so the
+// authorized-path audit hook can record it. Purely informational — does not
+// alter any auth flow. Values: 'google' | 'password' | 'email-link'.
+window.__lastAuthMethod = null;
+
 function googleSignIn() {
+  window.__lastAuthMethod = 'google';
   var provider = new firebase.auth.GoogleAuthProvider();
   // Mobile Safari blocks popups — use redirect instead
   var isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
@@ -16491,6 +16636,192 @@ function googleSignIn() {
 function signOut() {
   googleOAuthTokens = {};
   auth.signOut();
+}
+
+// ============================================================
+// Email auth (V1) — email/password + passwordless email-link login.
+// These are ADDITIVE entry points. On success they do nothing: the existing
+// auth.onAuthStateChanged funnel takes over (tenant resolution, RBAC, app
+// load). On failure they map codes to friendly copy and surface inline.
+// ============================================================
+
+// localStorage key for the email entered during email-link sign-in (so we can
+// complete it on the return visit without re-prompting on the same device).
+var MAST_ADMIN_EMAIL_FOR_SIGNIN = 'mast_admin_emailForSignIn';
+
+function isValidAuthEmail(s) {
+  return typeof s === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s.trim());
+}
+
+// Maps a Firebase Auth error code to friendly, non-enumerating copy.
+function friendlyAuthError(err) {
+  var code = (err && err.code) || '';
+  switch (code) {
+    case 'auth/invalid-credential':
+    case 'auth/wrong-password':
+    case 'auth/user-not-found':
+      return 'Email or password is incorrect.';
+    case 'auth/invalid-email':
+      return 'That email address looks invalid.';
+    case 'auth/too-many-requests':
+      return 'Too many attempts. Try again in a few minutes.';
+    case 'auth/user-disabled':
+      return 'This account is disabled.';
+    case 'auth/operation-not-allowed':
+      return "Email sign-in isn't enabled yet.";
+    default:
+      return 'Sign-in failed. Please try again.';
+  }
+}
+
+function setAuthEmailError(msg) {
+  var el = document.getElementById('authEmailError');
+  if (el) el.textContent = msg || '';
+}
+
+// Email + password sign-in. On success the onAuthStateChanged funnel handles
+// everything; we only need to surface errors here.
+function emailPasswordSignIn(event) {
+  if (event && typeof event.preventDefault === 'function') event.preventDefault();
+  setAuthEmailError('');
+  var emailEl = document.getElementById('authEmailInput');
+  var passEl = document.getElementById('authPasswordInput');
+  var submitBtn = document.getElementById('authEmailSubmit');
+  var email = emailEl ? (emailEl.value || '').trim() : '';
+  var password = passEl ? (passEl.value || '') : '';
+
+  if (!isValidAuthEmail(email)) {
+    setAuthEmailError('Please enter a valid email address.');
+    return;
+  }
+  if (!password) {
+    setAuthEmailError('Please enter your password.');
+    return;
+  }
+
+  window.__lastAuthMethod = 'password';
+  if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Signing in…'; }
+
+  auth.signInWithEmailAndPassword(email, password).then(function() {
+    // Success: do nothing. onAuthStateChanged drives the rest. (Leave the
+    // button disabled — the auth screen is about to be swapped for loading.)
+  }).catch(function(err) {
+    console.warn('Email/password sign-in failed:', err && err.code, err && err.message);
+    var msg = friendlyAuthError(err);
+    setAuthEmailError(msg);
+    showToast(msg, true);
+    if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Sign in'; }
+  });
+}
+
+// Passwordless email-link sign-in. Sends a sign-in link to the entered email
+// and shows a "check your inbox" confirmation. Completion happens on the
+// return visit via completeEmailLinkSignInIfPresent() (wired in
+// FIREBASE_INIT_READY below).
+function emailLinkSignIn() {
+  setAuthEmailError('');
+  var emailEl = document.getElementById('authEmailInput');
+  var email = emailEl ? (emailEl.value || '').trim() : '';
+
+  if (!isValidAuthEmail(email)) {
+    setAuthEmailError('Enter your email above first, then request a sign-in link.');
+    if (emailEl) emailEl.focus();
+    return;
+  }
+
+  var btn = document.getElementById('authEmailLinkBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
+
+  // Land back on this same /app page; Firebase routes through its own
+  // /__/auth/action handler first, then redirects here. handleCodeInApp is
+  // required for the in-page completion path.
+  var actionCodeSettings = {
+    url: window.location.origin + window.location.pathname,
+    handleCodeInApp: true
+  };
+
+  window.__lastAuthMethod = 'email-link';
+  auth.sendSignInLinkToEmail(email, actionCodeSettings).then(function() {
+    try { window.localStorage.setItem(MAST_ADMIN_EMAIL_FOR_SIGNIN, email); } catch (e) { /* private browsing */ }
+    var sentTo = document.getElementById('authEmailLinkSentTo');
+    if (sentTo) sentTo.textContent = email;
+    var controls = document.getElementById('authEmailControls');
+    if (controls) controls.style.display = 'none';
+    var sent = document.getElementById('authEmailLinkSent');
+    if (sent) sent.style.display = 'flex';
+  }).catch(function(err) {
+    console.warn('Email-link send failed:', err && err.code, err && err.message);
+    var msg = friendlyAuthError(err);
+    setAuthEmailError(msg);
+    showToast(msg, true);
+  }).then(function() {
+    if (btn) { btn.disabled = false; btn.textContent = '✉️ Email me a sign-in link'; }
+  });
+}
+
+// Restores the default sign-in controls from the email-link confirmation view.
+function authResetSignInScreen() {
+  var sent = document.getElementById('authEmailLinkSent');
+  if (sent) sent.style.display = 'none';
+  var controls = document.getElementById('authEmailControls');
+  if (controls) controls.style.display = 'contents';
+  setAuthEmailError('');
+}
+
+// Stubs — wired in later phases. Visually real; no-op for V1.
+function authForgotPassword() { showToast('Coming soon'); }
+function authResendVerification() { showToast('Coming soon'); }
+
+// Email-link completion. Runs once on page load when Firebase is ready. If the
+// current URL is a sign-in link, complete the auth; the onAuthStateChanged
+// funnel handles everything after. Mirrors cart.js's cross-device prompt.
+function completeEmailLinkSignInIfPresent() {
+  if (typeof auth === 'undefined' || !auth) return;
+  try {
+    if (!auth.isSignInWithEmailLink(window.location.href)) return;
+  } catch (e) {
+    return;
+  }
+  window.__lastAuthMethod = 'email-link';
+  var email = null;
+  try { email = window.localStorage.getItem(MAST_ADMIN_EMAIL_FOR_SIGNIN); } catch (e) { /* ignore */ }
+
+  function proceed(emailValue) {
+    if (!emailValue) return;
+    auth.signInWithEmailLink(emailValue, window.location.href).then(function() {
+      try { window.localStorage.removeItem(MAST_ADMIN_EMAIL_FOR_SIGNIN); } catch (e) { /* ignore */ }
+      // Strip the OOB params so a refresh doesn't re-trigger completion.
+      try {
+        var url = new URL(window.location.href);
+        ['oobCode', 'mode', 'apiKey', 'lang', 'tenantId', 'continueUrl'].forEach(function(k) {
+          url.searchParams.delete(k);
+        });
+        window.history.replaceState({}, document.title, url.pathname + (url.search || '') + url.hash);
+      } catch (e) { /* ignore */ }
+      // Success: onAuthStateChanged funnel takes over.
+    }).catch(function(err) {
+      console.warn('Email-link sign-in failed:', err && err.code, err && err.message);
+      // Clear the stored email so a stale value doesn't linger after a failed
+      // (expired/used/invalid) link attempt.
+      try { window.localStorage.removeItem(MAST_ADMIN_EMAIL_FOR_SIGNIN); } catch (e) { /* ignore */ }
+      var msg = (err && err.code === 'auth/expired-action-code')
+        ? 'That sign-in link has expired. Please request a new one.'
+        : 'Sign-in failed. The link may be invalid or already used. Please request a new one.';
+      showToast(msg, true);
+    });
+  }
+
+  if (email) {
+    proceed(email);
+  } else {
+    // Cross-device: the link was clicked on a different browser/profile than
+    // where the email was entered. Prompt for it. (window.prompt is OS-level
+    // and ignores theme, but admin login has no styled dialog helper here in
+    // V1 — acceptable for the rare cross-device case; revisit if needed.)
+    var entered = null;
+    try { entered = window.prompt('Confirm the email address you used to request this sign-in link:'); } catch (e) { /* ignore */ }
+    if (entered) proceed(entered.trim());
+  }
 }
 
 function showExpiredScreen(expiryDate) {
@@ -16548,11 +16879,21 @@ if (TEST_MODE && new URLSearchParams(window.location.search).get('testmode') ===
 }
 
 // Handle redirect result from mobile sign-in
-auth.getRedirectResult().catch(function(err) {
+auth.getRedirectResult().then(function(result) {
+  // Mobile Google sign-in returns here after a full page reload, so the
+  // in-memory __lastAuthMethod set in googleSignIn() is gone. Re-set it on a
+  // genuine redirect completion so the login audit records the method.
+  if (result && result.user) window.__lastAuthMethod = 'google';
+}).catch(function(err) {
   if (err.code && err.code !== 'auth/credential-already-in-use') {
     showToast('Sign-in redirect failed: ' + err.message, true);
   }
 });
+
+// Email-link (passwordless) admin login: if this page load is the return from
+// a sign-in link, complete it now. On success, onAuthStateChanged fires below
+// and drives the rest (tenant resolution, RBAC, app load) unchanged.
+try { completeEmailLinkSignInIfPresent(); } catch (e) { console.warn('Email-link completion check failed:', e); }
 
 auth.onAuthStateChanged(async function(user) {
   if (TEST_MODE && new URLSearchParams(window.location.search).get('testmode') === '1') return; // Already handled above
@@ -16795,6 +17136,22 @@ auth.onAuthStateChanged(async function(user) {
   applyOrganizerMode(TENANT_CONFIG && TENANT_CONFIG.organizerMode === true);
   applyRoleFilter(currentUserRole, currentRoleConfig);
   applyModuleFilter();
+
+  // Login audit (V1 email-auth, FRESH sign-in only). __lastAuthMethod is set
+  // only by an actual sign-in action in this JS context — password/email-link
+  // (here), google (googleSignIn), or the mobile-redirect return
+  // (getRedirectResult above). It is null on a plain page refresh of an
+  // existing session, so we skip then — no audit row on every reload.
+  // Non-blocking and fully guarded — must never break the funnel.
+  if (window.__lastAuthMethod) {
+    try {
+      var _authMethod = window.__lastAuthMethod;
+      window.__lastAuthMethod = null; // consume so a later state change doesn't re-log
+      writeAudit('login', 'auth', 'login:' + _authMethod);
+    } catch (e) {
+      console.warn('Login audit failed (non-fatal):', e);
+    }
+  }
 
   // Check if user needs to choose modules (launch/operate tier first login)
   if (needsModuleSelection()) {
@@ -19103,7 +19460,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260529-073840-4f63bab';
+var MAST_MODULES_V = '20260529-103330-a7b96c8';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
