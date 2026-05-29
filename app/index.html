@@ -19885,7 +19885,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260529-134234-83809df';
+var MAST_MODULES_V = '20260529-140238-ea65598';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -49322,6 +49322,7 @@ function showInviteUserModal() {
     '<div class="form-group">' +
       '<label for="inviteRole">Role</label>' +
       '<select id="inviteRole" onchange="toggleInviteGuestExpiry()" style="width:100%;padding:8px;border:1px solid var(--cream-dark);border-radius:6px;">' + roleOpts + '</select>' +
+      '<p style="font-size:0.72rem;color:var(--warm-gray);margin-top:4px;">They\'ll receive an email to set their own password, then sign in to claim this role.</p>' +
     '</div>' +
     '<div class="form-group" id="inviteGuestExpiryGroup" style="display:none;">' +
       '<label for="inviteGuestExpiry">Access Expires On <span class="field-required">*</span></label>' +
@@ -49509,19 +49510,32 @@ async function sendUserInvite() {
     var roleName = ROLE_DISPLAY_NAMES[role] || role;
     loadPendingInvites();
 
-    // Send invite email via cloud function
+    // Production set-password invite flow:
+    //   1. inviteTenantUser ensures a Firebase Auth account exists (server picks a
+    //      throwaway random password — the admin never sees or sets one).
+    //   2. sendPasswordResetEmail sends Firebase's built-in "set your password"
+    //      link. The user sets their OWN password, signs in, and the email-keyed
+    //      pending invite (written above) grants their role on first login.
+    // Step 1 failure: no Auth account, so report the error and don't claim success.
     try {
-      var inviterName = currentUser.displayName || currentUser.email || '';
-      await firebase.functions().httpsCallable('sendInviteEmail')({
+      await firebase.functions().httpsCallable('inviteTenantUser')({
         tenantId: MastDB.tenantId(),
-        toEmail: email,
-        role: role,
-        inviterName: inviterName
+        email: email
       });
-      showToast('Invite sent to ' + email + '. They\'ll be assigned the ' + roleName + ' role when they sign in.');
+    } catch (inviteErr) {
+      console.error('inviteTenantUser failed:', inviteErr);
+      showToast((inviteErr && inviteErr.message) ? inviteErr.message : 'Could not create the invite.', true);
+      emitTestingEvent('inviteUser', {});
+      return;
+    }
+    // Step 2 failure is recoverable — the pending invite + Auth account exist, so
+    // the invitee can use "Forgot password" on the login screen to set it.
+    try {
+      await auth.sendPasswordResetEmail(email);
+      showToast('Invite sent — ' + email + ' will get an email to set their password, then they can sign in as ' + roleName + '.');
     } catch (emailErr) {
-      console.error('Invite email failed:', emailErr);
-      showToast('Invite recorded but email failed to send. Ask them to sign in with their Google account.', true);
+      console.error('sendPasswordResetEmail failed:', emailErr);
+      showToast('Invite recorded, but the set-password email could not be sent. They can use “Forgot password” on the login screen to set it.', true);
     }
     emitTestingEvent('inviteUser', {});
   } catch (err) {
