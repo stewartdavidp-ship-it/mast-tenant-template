@@ -858,6 +858,11 @@
       flex-direction: column;
       gap: 2px;
     }
+    /* Live confirm-match indicator (force-change + Add-User) — FIX 3 */
+    .input-mismatch { border-color: var(--danger, #c0392b) !important; }
+    .pw-confirm-hint { font-size: 0.72rem; line-height: 1.5; min-height: 1.1em; margin-top: 2px; }
+    .pw-confirm-hint.mismatch { color: var(--danger, #c0392b); }
+    .pw-confirm-hint.match { color: var(--success, #2e7d32); }
     .auth-divider {
       display: flex;
       align-items: center;
@@ -912,6 +917,31 @@
     }
     body.dark-mode .auth-email-form label { color: #e0e0e0; }
     body.dark-mode .auth-email-form input { background: #2a2a2a; border-color: #444; color: #e0e0e0; }
+    /* FIX 5 — keep password/auth inputs dark when typed into, focused, or
+       autofilled. Without these the browser forces a light background on
+       :-webkit-autofill (and a focused field can flash white). Force-change
+       form inputs and the Add-User password inputs don't inherit the
+       .auth-email-form dark rule, so give them explicit dark-mode bg/text too.
+       Light mode is unchanged. Tokens match the existing #2a2a2a / #e0e0e0. */
+    body.dark-mode .auth-email-form input:focus { background: #2a2a2a; color: #e0e0e0; }
+    body.dark-mode #mustChangePasswordScreen input,
+    body.dark-mode #invitePassword,
+    body.dark-mode #invitePasswordConfirm { background: #2a2a2a !important; border-color: #444 !important; color: #e0e0e0 !important; }
+    body.dark-mode #mustChangePasswordScreen input:focus,
+    body.dark-mode #invitePassword:focus,
+    body.dark-mode #invitePasswordConfirm:focus { background: #2a2a2a !important; color: #e0e0e0 !important; }
+    body.dark-mode .auth-email-form input:-webkit-autofill,
+    body.dark-mode .auth-email-form input:-webkit-autofill:hover,
+    body.dark-mode .auth-email-form input:-webkit-autofill:focus,
+    body.dark-mode #mustChangePasswordScreen input:-webkit-autofill,
+    body.dark-mode #invitePassword:-webkit-autofill,
+    body.dark-mode #invitePasswordConfirm:-webkit-autofill {
+      -webkit-box-shadow: 0 0 0 1000px #2a2a2a inset !important;
+      box-shadow: 0 0 0 1000px #2a2a2a inset !important;
+      -webkit-text-fill-color: #e0e0e0 !important;
+      caret-color: #e0e0e0;
+      transition: background-color 9999s ease-in-out 0s;
+    }
     body.dark-mode .auth-secondary-btn { background: #2a2a2a; border-color: #444; color: #e0e0e0; }
     body.dark-mode .auth-secondary-btn:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
     body.dark-mode .auth-divider::before,
@@ -7117,14 +7147,22 @@
       <h2>Set a new password</h2>
       <p>You're using a temporary password. Choose a new one to continue.</p>
       <form class="auth-email-form" id="mustChangePasswordForm" novalidate onsubmit="submitMustChangePassword(event)">
+        <!-- Readonly username field — lets password managers capture the new
+             password against the right account (FIX 2). Visible + dimmed (not
+             display:none, which managers skip); doubles as UX clarity. -->
+        <div class="auth-email-row">
+          <label for="mcpUsername">Setting a new password for</label>
+          <input id="mcpUsername" type="email" autocomplete="username" readonly tabindex="-1" aria-readonly="true" style="opacity:0.7;background:var(--cream,#f6f1e9);cursor:default;" />
+        </div>
         <div class="auth-email-row">
           <label for="mcpNewPassword">New password</label>
-          <input id="mcpNewPassword" type="password" autocomplete="new-password" required placeholder="12+ chars with upper, lower, number &amp; symbol" oninput="renderPasswordPolicyChecklist('mcpPwChecklist', this.value)" />
+          <input id="mcpNewPassword" type="password" autocomplete="new-password" required placeholder="12+ chars with upper, lower, number &amp; symbol" oninput="renderPasswordPolicyChecklist('mcpPwChecklist', this.value); checkPasswordConfirm('mcpNewPassword','mcpConfirmPassword','mcpConfirmHint')" />
           <div id="mcpPwChecklist" aria-live="polite" style="margin-top:6px;"></div>
         </div>
         <div class="auth-email-row">
           <label for="mcpConfirmPassword">Confirm new password</label>
-          <input id="mcpConfirmPassword" type="password" autocomplete="new-password" required placeholder="Re-enter new password" />
+          <input id="mcpConfirmPassword" type="password" autocomplete="new-password" required placeholder="Re-enter new password" oninput="checkPasswordConfirm('mcpNewPassword','mcpConfirmPassword','mcpConfirmHint')" />
+          <div id="mcpConfirmHint" class="pw-confirm-hint" aria-live="polite"></div>
         </div>
         <div class="auth-error" id="mcpError" role="alert" aria-live="assertive"></div>
         <button type="submit" class="btn btn-primary" id="mcpSubmit" style="width:100%;">Set password</button>
@@ -16850,9 +16888,146 @@ function authResetSignInScreen() {
   setAuthEmailError('');
 }
 
-// Stubs — wired in later phases. Visually real; no-op for V1.
-function authForgotPassword() { showToast('Coming soon'); }
+// FIX 1 — Self-serve password reset (the safety net). Enumeration-safe: on
+// success we show the SAME generic message whether or not the account exists,
+// and we map auth/user-not-found to that same generic copy so we never reveal
+// account existence. Uses Firebase's built-in reset action handler (no custom
+// page). Never throws uncaught.
+function authForgotPassword() {
+  setAuthEmailError('');
+  var emailEl = document.getElementById('authEmailInput');
+  var email = emailEl ? (emailEl.value || '').trim() : '';
+
+  if (!isValidAuthEmail(email)) {
+    setAuthEmailError('Enter your email above, then click Forgot password.');
+    if (emailEl) emailEl.focus();
+    return;
+  }
+
+  // Same message on success AND on "account doesn't exist" — no enumeration.
+  var GENERIC = "If an account exists for that email, we've sent a password reset link. Check your inbox and spam.";
+
+  auth.sendPasswordResetEmail(email).then(function() {
+    setAuthEmailError(GENERIC);
+    showToast(GENERIC);
+  }).catch(function(err) {
+    var code = (err && err.code) || '';
+    var msg;
+    if (code === 'auth/invalid-email') {
+      msg = 'That email looks invalid.';
+    } else if (code === 'auth/missing-email') {
+      msg = 'Enter your email above, then click Forgot password.';
+      setAuthEmailError(msg);
+      if (emailEl) emailEl.focus();
+      return;
+    } else if (code === 'auth/too-many-requests') {
+      msg = 'Too many attempts — try again in a few minutes.';
+    } else {
+      // Includes auth/user-not-found — fall through to the generic copy so we
+      // never leak whether the account exists.
+      msg = GENERIC;
+    }
+    setAuthEmailError(msg);
+    showToast(msg, code !== 'auth/user-not-found');
+  });
+}
+
+// Stub — wired in a later phase. Visually real; no-op for V1.
 function authResendVerification() { showToast('Coming soon'); }
+
+// FIX 3 — Shared live confirm-match indicator for the force-change form and the
+// Add-User modal. Neutral while confirm is empty; red border + "Passwords don't
+// match" when non-empty and mismatched; green "Passwords match ✓" on exact
+// match. Re-evaluated on input of BOTH the new-password and confirm fields.
+function checkPasswordConfirm(pwId, confirmId, hintId) {
+  var confirmEl = document.getElementById(confirmId);
+  var hintEl = document.getElementById(hintId);
+  if (!confirmEl) return;
+  var pwEl = document.getElementById(pwId);
+  var pw = pwEl ? (pwEl.value || '') : '';
+  var confirm = confirmEl.value || '';
+  if (!confirm) {
+    confirmEl.classList.remove('input-mismatch');
+    if (hintEl) { hintEl.textContent = ''; hintEl.className = 'pw-confirm-hint'; }
+    return;
+  }
+  if (confirm !== pw) {
+    confirmEl.classList.add('input-mismatch');
+    if (hintEl) { hintEl.textContent = "Passwords don't match"; hintEl.className = 'pw-confirm-hint mismatch'; }
+  } else {
+    confirmEl.classList.remove('input-mismatch');
+    if (hintEl) { hintEl.textContent = 'Passwords match ✓'; hintEl.className = 'pw-confirm-hint match'; }
+  }
+}
+window.checkPasswordConfirm = checkPasswordConfirm;
+
+// FIX 4 — Auto-generated memorable temp password, policy-compliant BY
+// CONSTRUCTION. Format: Capitalized-Capitalized-Capitalized-NN! — three random
+// curated words (first letter upper, the rest lower), joined by '-', then a
+// 2-digit number (10–99) and one symbol. This guarantees length >= 12 plus an
+// uppercase, lowercase, number, and special char (the '-' and the symbol). All
+// randomness uses crypto.getRandomValues (not Math.random).
+var MAST_MEMORABLE_WORDS = [
+  'cedar','river','otter','maple','stone','amber','quiet','brave','spark','frost',
+  'cloud','ember','grove','heron','ivory','lemon','meadow','noble','ocean','pearl',
+  'quill','raven','sable','tiger','umber','vivid','willow','zephyr','acorn','birch',
+  'coral','dusk','elder','fable','glade','harbor','indigo','jasper','kettle','linen',
+  'mango','nectar','olive','pebble','quartz','ripple','silver','timber','velvet','walnut',
+  'anchor','breeze','canyon','dapple','echo','feather','garden','hazel','island','jungle',
+  'kindle','lagoon','marble','nimble','orchard','prairie','quiver','ribbon','summit','thicket',
+  'upland','valley','wander','yonder','almond','beacon','copper','dazzle','effort','flicker',
+  'gentle','hollow','jovial','kindly','lively','mellow','nestle','orbit','plume','quaint',
+  'rustic','simple','tidal','useful','vibrant','warmth','yellow','aspen','bloom','citrus',
+  'dapper','eager','frolic','gleam','honest','jubilee','kayak','ladder','mosaic','nutmeg',
+  'opal','poplar','quokka','rocket','sienna','tulip','unity','vista','wattle','yarrow',
+  'arbor','basil','cobble','dune','flint','fennel','ginger','heath','jetty','kelp',
+  'lilac','moss','nook','onyx','pine','reef','sage','thyme','vine','wheat',
+  'beryl','cove','dingo','fjord','glow','haven','ledge','mint','peak','swift'
+];
+
+window.generateMemorablePassword = function() {
+  var symbols = '!?@#$%&*';
+  // crypto-backed uniform int in [0, n)
+  var randInt = function(n) {
+    var max = Math.floor(0xFFFFFFFF / n) * n; // rejection sampling for uniformity
+    var buf = new Uint32Array(1);
+    var v;
+    do { (window.crypto || window.msCrypto).getRandomValues(buf); v = buf[0]; } while (v >= max);
+    return v % n;
+  };
+  var cap = function(w) { return w.charAt(0).toUpperCase() + w.slice(1).toLowerCase(); };
+  var build = function() {
+    var w1 = cap(MAST_MEMORABLE_WORDS[randInt(MAST_MEMORABLE_WORDS.length)]);
+    var w2 = cap(MAST_MEMORABLE_WORDS[randInt(MAST_MEMORABLE_WORDS.length)]);
+    var w3 = cap(MAST_MEMORABLE_WORDS[randInt(MAST_MEMORABLE_WORDS.length)]);
+    var num = 10 + randInt(90); // 10–99
+    var sym = symbols.charAt(randInt(symbols.length));
+    return w1 + '-' + w2 + '-' + w3 + '-' + num + sym;
+  };
+  // Compliant by construction; defensively regenerate if the policy ever fails.
+  var pw = build();
+  var guard = 0;
+  while (validatePasswordPolicy(pw).length && guard++ < 10) { pw = build(); }
+  return pw;
+};
+
+// FIX 4 — Add-User "Set password now": generate + fill + checklist + copy.
+function generateInvitePassword() {
+  var value = window.generateMemorablePassword();
+  var pwEl = document.getElementById('invitePassword');
+  var pw2El = document.getElementById('invitePasswordConfirm');
+  if (pwEl) pwEl.value = value;
+  if (pw2El) pw2El.value = value;
+  renderPasswordPolicyChecklist('invitePwChecklist', value);
+  checkPasswordConfirm('invitePassword', 'invitePasswordConfirm', 'invitePwConfirmHint');
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(value).catch(function() { /* clipboard blocked — value is still in the field */ });
+    }
+  } catch (e) { /* no clipboard API */ }
+  showToast('Temporary password generated & copied. Save it before creating the user.');
+}
+window.generateInvitePassword = generateInvitePassword;
 
 // Email-link completion. Runs once on page load when Firebase is ready. If the
 // current URL is a sign-in link, complete the auth; the onAuthStateChanged
@@ -16936,7 +17111,18 @@ function showMustChangePasswordScreen() {
   hideAdminTabs();
   var err = document.getElementById('mcpError');
   if (err) err.textContent = '';
+  // Populate the readonly username field (FIX 2) so password managers capture
+  // the new password against the signed-in account.
+  var uEl = document.getElementById('mcpUsername');
+  if (uEl) {
+    var cu = firebase.auth().currentUser;
+    uEl.value = (cu && cu.email) ? cu.email : '';
+  }
   renderPasswordPolicyChecklist('mcpPwChecklist', '');
+  var cHint = document.getElementById('mcpConfirmHint');
+  if (cHint) { cHint.textContent = ''; cHint.className = 'pw-confirm-hint'; }
+  var cEl = document.getElementById('mcpConfirmPassword');
+  if (cEl) cEl.classList.remove('input-mismatch');
   setTimeout(function() {
     var f = document.getElementById('mcpNewPassword');
     if (f) f.focus();
@@ -19645,7 +19831,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260529-115005-dbc78df';
+var MAST_MODULES_V = '20260529-122219-3a11467';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -49100,11 +49286,15 @@ function showInviteUserModal() {
       '<p style="font-size:0.72rem;color:var(--warm-gray);margin-top:4px;">Dev/test tenant only. Creates an active account that can sign in immediately with email + password — no email invite. For reviewer/test accounts.</p>' +
     '</div>' +
     '<div class="form-group" id="invitePwGroup" style="display:none;">' +
-      '<label for="invitePassword">Password <span class="field-required">*</span></label>' +
-      '<input type="password" id="invitePassword" autocomplete="new-password" placeholder="12+ chars with upper, lower, number &amp; symbol" oninput="renderPasswordPolicyChecklist(\'invitePwChecklist\', this.value)" style="width:100%;padding:8px;border:1px solid var(--cream-dark);border-radius:6px;">' +
+      '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">' +
+        '<label for="invitePassword" style="margin:0;">Password <span class="field-required">*</span></label>' +
+        '<button type="button" class="btn btn-secondary" onclick="generateInvitePassword()" style="padding:4px 10px;font-size:0.78rem;">Generate</button>' +
+      '</div>' +
+      '<input type="password" id="invitePassword" autocomplete="new-password" placeholder="12+ chars with upper, lower, number &amp; symbol" oninput="renderPasswordPolicyChecklist(\'invitePwChecklist\', this.value); checkPasswordConfirm(\'invitePassword\',\'invitePasswordConfirm\',\'invitePwConfirmHint\')" style="width:100%;padding:8px;border:1px solid var(--cream-dark);border-radius:6px;">' +
       '<div id="invitePwChecklist" aria-live="polite" style="margin-top:6px;"></div>' +
       '<label for="invitePasswordConfirm" style="margin-top:8px;">Confirm Password <span class="field-required">*</span></label>' +
-      '<input type="password" id="invitePasswordConfirm" autocomplete="new-password" style="width:100%;padding:8px;border:1px solid var(--cream-dark);border-radius:6px;">' +
+      '<input type="password" id="invitePasswordConfirm" autocomplete="new-password" oninput="checkPasswordConfirm(\'invitePassword\',\'invitePasswordConfirm\',\'invitePwConfirmHint\')" style="width:100%;padding:8px;border:1px solid var(--cream-dark);border-radius:6px;">' +
+      '<div id="invitePwConfirmHint" class="pw-confirm-hint" aria-live="polite"></div>' +
       '<label style="display:flex;align-items:center;gap:8px;font-size:0.85rem;cursor:pointer;margin-top:10px;">' +
         '<input type="checkbox" id="inviteTempPw" style="width:auto;margin:0;">' +
         'Temporary (force change on first login)' +
