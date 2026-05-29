@@ -5173,6 +5173,12 @@
     .mod-access-header:hover { background: rgba(196,133,60,0.1); }
     .mod-access-bulk { display: flex; gap: 14px; align-items: center; font-weight: 400; font-size: 0.72rem; color: var(--warm-gray); }
     .mod-access-bulk label { display: inline-flex; gap: 4px; align-items: center; cursor: pointer; }
+    .mod-level-select {
+      font-size: 0.78rem; padding: 3px 8px; border: 1px solid var(--cream-dark);
+      border-radius: 6px; background: var(--surface, #fff); color: var(--text, #2a2a2a); cursor: pointer;
+    }
+    .mod-level-select:disabled { opacity: 0.55; cursor: not-allowed; }
+    body.dark-mode .mod-level-select { background: #2a2a2a; color: #e8e8e8; border-color: #444; }
     .mod-access-body { display: none; }
     .mod-access-group.open .mod-access-body { display: block; }
     .mod-access-caret { transition: transform 0.15s; display: inline-block; margin-right: 6px; }
@@ -10723,22 +10729,10 @@
           </div>
         </div>
         <div id="roleDescription" style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:12px;"></div>
-        <div class="perm-matrix-container" id="permMatrixWrap">
-          <table class="perm-matrix" id="permMatrixTable">
-            <thead>
-              <tr>
-                <th>Entity</th>
-                <th>Create</th>
-                <th>Read</th>
-                <th>Update</th>
-                <th>Delete</th>
-              </tr>
-            </thead>
-            <tbody id="permMatrixBody"></tbody>
-          </table>
-        </div>
-        <div id="funcPermSection" style="margin-top:20px;"></div>
-        <div id="moduleAccessSection" style="margin-top:24px;"></div>
+        <!-- E6: single module-access matrix (levels) + sensitive-actions list.
+             The old Entity CRUD grid was removed. -->
+        <div id="moduleAccessSection"></div>
+        <div id="funcPermSection" style="margin-top:24px;"></div>
         <div style="margin-top:16px;display:flex;gap:10px;justify-content:flex-end;" id="permMatrixActions">
           <button class="btn btn-secondary" onclick="resetPermissionMatrix()">Reset</button>
           <button class="btn btn-primary" onclick="savePermissionMatrix()">Save Permissions</button>
@@ -11977,6 +11971,9 @@ MastDB.roles = {
   },
   setModulePermissions: function(roleKey, modulePermissions) {
     return MastDB.set('admin/roles/' + roleKey + '/modulePermissions', modulePermissions);
+  },
+  setSensitiveActions: function(roleKey, sensitiveActions) {
+    return MastDB.set('admin/roles/' + roleKey + '/sensitiveActions', sensitiveActions);
   }
 };
 
@@ -14984,161 +14981,161 @@ var currentUserOverrides = {};   // permissionOverrides from current user's own 
 var currentUserRecord = null;    // Full admin_users record; set by loadUserRole()
 var rbacReady = false;           // True once role + permissions loaded
 
-// Default role definitions — seeded on first admin bootstrap
+// ============================================================
+// RBAC model (Phase E6) — module-anchored, single source of truth
+// ============================================================
+// Permissions are expressed PER MODULE as a {view, edit, delete} triad. The
+// triad is the canonical storage; the UI presents it as an access "level"
+// (None / View / Edit / Full) which is just a projection — see
+// levelToTriad/triadToLevel. Storing the triad (not a level enum) keeps the
+// model maximally granular: an Advanced disclosure can expose view/edit/delete
+// independently later with NO data migration.
+//
+//   role.modulePermissions = { '<routeId>': { view, edit, delete }, ... }
+//   role.sensitiveActions  = { '<entity>.<action>': bool, ... }   (high-trust verbs)
+//
+// There is NO per-entity CRUD map anymore. Every former hasPermission(entity,
+// action) CRUD call site is replaced by can(routeId, axis). hasPermission() is
+// retained ONLY for sensitive actions (FUNCTION_PERMISSIONS).
+var MODULE_AXES = ['view', 'edit', 'delete'];
+var MODULE_LEVELS = ['none', 'view', 'edit', 'full'];
+
+// Level → triad projection. Note: 'edit' grants view+edit (not delete); 'full'
+// grants all three. View is always a prerequisite for edit/delete at resolve
+// time, but delete is stored independently of edit so Advanced mode can later
+// express delete-without-edit without a migration.
+function levelToTriad(level) {
+  switch (level) {
+    case 'full': return { view: true,  edit: true,  'delete': true  };
+    case 'edit': return { view: true,  edit: true,  'delete': false };
+    case 'view': return { view: true,  edit: false, 'delete': false };
+    default:     return { view: false, edit: false, 'delete': false };
+  }
+}
+// Triad → level (for the UI picker). Returns 'custom' when the triad doesn't
+// match a clean level (e.g. delete-without-edit set via Advanced).
+function triadToLevel(t) {
+  if (!t) return 'none';
+  var v = !!t.view, e = !!t.edit, d = !!t['delete'];
+  if (!v && !e && !d) return 'none';
+  if (v && !e && !d)  return 'view';
+  if (v && e && !d)   return 'edit';
+  if (v && e && d)    return 'full';
+  return 'custom';
+}
+
+// Default role definitions. Levels are declared intentionally per role via
+// ROLE_DEFAULT_LEVELS (below) rather than a 344-cell triad table; the seed/
+// resolver materializes triads from it. navSections is retained as the sidebar
+// section grouping the role may expand (admin: null = all).
 var DEFAULT_ROLES = {
-  admin: {
-    name: 'Admin',
-    description: 'Full access to all system functions.',
-    isDefault: true,
-    permissions: {
-      orders:       { create: true, read: true, update: true, delete: true },
-      products:     { create: true, read: true, update: true, delete: true },
-      inventory:    { create: true, read: true, update: true, delete: true },
-      jobs:         { create: true, read: true, update: true, delete: true },
-      buildJobs:    { create: true, read: true, update: true, delete: true },
-      salesEvents:  { create: true, read: true, update: true, delete: true },
-      shows:        { create: true, read: true, update: true, delete: true },
-      gallery:      { create: true, read: true, update: true, delete: true },
-      schedule:     { create: true, read: true, update: true, delete: true },
-      locations:    { create: true, read: true, update: true, delete: true },
-      coupons:      { create: true, read: true, update: true, delete: true },
-      settings:     { create: true, read: true, update: true, delete: true },
-      users:        { create: true, read: true, update: true, delete: true },
-      roles:        { create: true, read: true, update: true, delete: true },
-      auditLog:     { create: false, read: true, update: false, delete: false },
-      pos:          { create: true, read: true, update: true, delete: true },
-      receipts:     { create: true, read: true, update: true, delete: true },
-      contacts:     { create: true, read: true, update: true, delete: true },
-      forecast:     { create: false, read: true, update: false, delete: false },
-      // Close v3: 'approveAmendment' is a NON-CRUD action that gates the
-      // Approve button in the Amendments queue. Admin gets it by default;
-      // manager/user/guest do NOT (operator-grantable via per-user overrides).
-      finance:          { create: true, read: true, update: true, delete: true, approveAmendment: true },
-      financeSensitive: { create: true, read: true, update: true, delete: true }
+  admin:   { name: 'Admin',   description: 'Full access to all system functions.', isDefault: true, navSections: null },
+  manager: { name: 'Manager', description: 'Operational access — PoS, inventory, fulfillment, shows. No pricing, settings, sensitive finance, or user management.', isDefault: true,
+             navSections: ['products', 'sales', 'marketing', 'retention', 'events', 'classes', 'finance', 'operations', 'customer-service', 'admin'] },
+  user:    { name: 'User',    description: 'Basic operational access — POS, sales, classes, customer service.', isDefault: true,
+             navSections: ['sales', 'products', 'classes', 'customer-service'] },
+  guest:   { name: 'Guest',   description: 'Read-only guest access — limited visibility into sales and classes.', isDefault: true,
+             navSections: ['sales', 'classes'] }
+};
+
+// Per-role default access LEVELS, resolved per module. Resolution order:
+// byModule[route] → bySection[sectionOf(route)] → fallback. admin is always
+// 'full'. Authored intentionally (the rethink) — not a port of the old CRUD.
+var ROLE_DEFAULT_LEVELS = {
+  admin: { fallback: 'full' },
+  manager: {
+    fallback: 'none',
+    bySection: {
+      products: 'view', sales: 'full', marketing: 'edit', retention: 'edit',
+      events: 'full', classes: 'full', finance: 'view', operations: 'edit',
+      'customer-service': 'full', admin: 'none'
+    },
+    // Exceptions within the above sections.
+    byModule: {
+      'finance-pl': 'none', 'finance-tax': 'none', 'finance-reports': 'none', 'financials': 'none',
+      'settings': 'none', 'employees': 'none', 'auditlog': 'none', 'subscription': 'none',
+      'products': 'view'
     }
   },
-  manager: {
-    name: 'Manager',
-    description: 'Operational access — PoS, inventory, fulfillment. No pricing, settings, or user management.',
-    isDefault: true,
-    permissions: {
-      orders:           { create: true, read: true, update: true, delete: false },
-      products:         { create: false, read: true, update: false, delete: false },
-      inventory:        { create: true, read: true, update: true, delete: false },
-      jobs:             { create: true, read: true, update: true, delete: false },
-      buildJobs:        { create: true, read: true, update: true, delete: false },
-      salesEvents:      { create: false, read: true, update: true, delete: false },
-      shows:            { create: true, read: true, update: true, delete: false },
-      gallery:          { create: false, read: true, update: false, delete: false },
-      schedule:         { create: false, read: true, update: false, delete: false },
-      locations:        { create: false, read: true, update: false, delete: false },
-      coupons:          { create: false, read: true, update: false, delete: false },
-      settings:         { create: false, read: false, update: false, delete: false },
-      users:            { create: false, read: false, update: false, delete: false },
-      roles:            { create: false, read: false, update: false, delete: false },
-      auditLog:         { create: false, read: false, update: false, delete: false },
-      pos:              { create: true, read: true, update: true, delete: false },
-      receipts:         { create: true, read: true, update: false, delete: false },
-      contacts:         { create: true, read: true, update: true, delete: false },
-      forecast:         { create: false, read: true, update: false, delete: false },
-      finance:          { create: false, read: true, update: false, delete: false, approveAmendment: false },
-      financeSensitive: { create: false, read: false, update: false, delete: false }
-    },
-    navSections: ['products', 'sales', 'marketing', 'retention', 'events',
-                  'classes', 'finance', 'operations', 'customer-service', 'admin']
-  },
   user: {
-    name: 'User',
-    description: 'Basic operational access — POS, inventory, and fulfillment.',
-    isDefault: true,
-    permissions: {
-      orders:       { create: false, read: true, update: false, delete: false },
-      products:     { create: false, read: true, update: false, delete: false },
-      inventory:    { create: false, read: false, update: false, delete: false },
-      jobs:         { create: false, read: false, update: false, delete: false },
-      buildJobs:    { create: false, read: false, update: false, delete: false },
-      salesEvents:  { create: false, read: false, update: false, delete: false },
-      shows:        { create: false, read: true, update: false, delete: false },
-      gallery:      { create: false, read: false, update: false, delete: false },
-      schedule:     { create: false, read: true, update: false, delete: false },
-      locations:    { create: false, read: false, update: false, delete: false },
-      coupons:      { create: false, read: false, update: false, delete: false },
-      settings:     { create: false, read: false, update: false, delete: false },
-      users:        { create: false, read: false, update: false, delete: false },
-      roles:        { create: false, read: false, update: false, delete: false },
-      auditLog:     { create: false, read: false, update: false, delete: false },
-      pos:          { create: false, read: false, update: false, delete: false },
-      receipts:     { create: false, read: false, update: false, delete: false },
-      contacts:     { create: false, read: false, update: false, delete: false },
-      forecast:         { create: false, read: false, update: false, delete: false },
-      finance:          { create: false, read: false, update: false, delete: false, approveAmendment: false },
-      financeSensitive: { create: false, read: false, update: false, delete: false }
+    fallback: 'none',
+    bySection: {
+      sales: 'edit', products: 'view', classes: 'edit', 'customer-service': 'edit'
     },
-    navSections: ['sales', 'products', 'classes', 'customer-service', 'team']
+    byModule: {
+      // Sales section is broad; keep destructive/admin-ish surfaces lighter.
+      'receipts': 'view', 'terms': 'view', 'commission-terms': 'view'
+    }
   },
   guest: {
-    name: 'Guest',
-    description: 'Read-only guest access. Limited visibility into orders and schedule.',
-    isDefault: true,
-    permissions: {
-      orders:           { create: false, read: true, update: false, delete: false },
-      products:         { create: false, read: true, update: false, delete: false },
-      inventory:        { create: false, read: false, update: false, delete: false },
-      jobs:             { create: false, read: false, update: false, delete: false },
-      buildJobs:        { create: false, read: false, update: false, delete: false },
-      salesEvents:      { create: false, read: false, update: false, delete: false },
-      shows:            { create: false, read: true, update: false, delete: false },
-      gallery:          { create: false, read: false, update: false, delete: false },
-      schedule:         { create: false, read: true, update: false, delete: false },
-      locations:        { create: false, read: false, update: false, delete: false },
-      coupons:          { create: false, read: false, update: false, delete: false },
-      settings:         { create: false, read: false, update: false, delete: false },
-      users:            { create: false, read: false, update: false, delete: false },
-      roles:            { create: false, read: false, update: false, delete: false },
-      auditLog:         { create: false, read: false, update: false, delete: false },
-      pos:              { create: false, read: false, update: false, delete: false },
-      receipts:         { create: false, read: false, update: false, delete: false },
-      contacts:         { create: false, read: false, update: false, delete: false },
-      forecast:         { create: false, read: false, update: false, delete: false },
-      finance:          { create: false, read: false, update: false, delete: false, approveAmendment: false },
-      financeSensitive: { create: false, read: false, update: false, delete: false }
-    },
-    navSections: ['sales', 'classes']
+    fallback: 'none',
+    bySection: { sales: 'view', classes: 'view' }
   }
 };
-// ============================================================
-// Function-level (sensitive-action) permissions — Phase E4
-// ============================================================
-// Each entry is a non-CRUD capability gated via hasPermission(entity, action),
-// independent of the create/read/update/delete grid. This list is the single
-// source of truth: defaults seed DEFAULT_ROLES, the role matrix + per-user
-// override editor render a "Sensitive Functions" section from it, and each
-// module calls hasPermission(entity, action) at the real action site. To add a
-// new sensitive function: add an entry here AND a gate at the call site — it
-// auto-populates the permission UI.
-var FUNCTION_PERMISSIONS = [
-  { entity: 'giftCards', action: 'issue',            label: 'Issue gift card',            description: 'Manually issue a gift card (compensation, promotions).', roleDefaults: { admin: true, manager: true,  user: false, guest: false } },
-  { entity: 'wallet',    action: 'grantCredit',      label: 'Grant store / promo credit', description: 'Grant or adjust customer store credit.',                 roleDefaults: { admin: true, manager: false, user: false, guest: false } },
-  { entity: 'rma',       action: 'approve',          label: 'Approve RMA / return',       description: 'Approve a customer return request (RMA).',               roleDefaults: { admin: true, manager: true,  user: false, guest: false } },
-  { entity: 'finance',   action: 'approveAmendment', label: 'Approve finance amendment',  description: 'Approve an amendment in the Day-Close amendments queue.', roleDefaults: { admin: true, manager: false, user: false, guest: false } }
-];
 
-// Seed function-permission defaults into DEFAULT_ROLES so hasPermission has a
-// base value and loadUserRole's backfill covers existing stored roles. Never
-// overwrites an explicitly-set default (e.g. finance.approveAmendment already
-// declared above).
-(function seedFunctionPermissionDefaults() {
+// ============================================================
+// Sensitive (high-trust) actions — kept distinct from module access.
+// Gated via hasPermission(entity, action) at the call site (unchanged sites).
+// Stored on the role as role.sensitiveActions['<entity>.<action>'] and
+// overridable per-user via currentUserOverrides (same shape).
+// To add one: add an entry here AND a hasPermission() gate at the call site.
+var FUNCTION_PERMISSIONS = [
+  { entity: 'giftCards', action: 'issue',            module: 'gift-cards',        label: 'Issue gift card',            description: 'Manually issue a gift card (compensation, promotions).', roleDefaults: { admin: true, manager: true,  user: false, guest: false } },
+  { entity: 'wallet',    action: 'grantCredit',      module: 'wallet',            label: 'Grant store / promo credit', description: 'Grant or adjust customer store credit.',                 roleDefaults: { admin: true, manager: false, user: false, guest: false } },
+  { entity: 'rma',       action: 'approve',          module: 'rma',               label: 'Approve RMA / return',       description: 'Approve a customer return request (RMA).',               roleDefaults: { admin: true, manager: true,  user: false, guest: false } },
+  { entity: 'finance',   action: 'approveAmendment', module: 'finance-amendments', label: 'Approve finance amendment',  description: 'Approve an amendment in the Day-Close amendments queue.', roleDefaults: { admin: true, manager: false, user: false, guest: false } }
+];
+function _sensitiveKey(entity, action) { return entity + '.' + action; }
+// Default sensitive-action grants for a role (used by seed + resolver fallback).
+function defaultSensitiveActionsForRole(roleKey) {
+  var out = {};
   FUNCTION_PERMISSIONS.forEach(function(fp) {
-    CANONICAL_ROLES.forEach(function(roleKey) {
-      var role = DEFAULT_ROLES[roleKey];
-      if (!role || !role.permissions) return;
-      if (!role.permissions[fp.entity]) role.permissions[fp.entity] = {};
-      if (role.permissions[fp.entity][fp.action] === undefined) {
-        role.permissions[fp.entity][fp.action] = !!fp.roleDefaults[roleKey];
-      }
+    out[_sensitiveKey(fp.entity, fp.action)] = !!fp.roleDefaults[roleKey];
+  });
+  return out;
+}
+
+// Materialize a role's full new-model permission maps from defaults — an
+// explicit {modulePermissions:{route:triad}, sensitiveActions:{key:bool}} for
+// every module in the registry. Used when seeding/reseeding role docs so the
+// stored state is explicit (the resolver also falls back to defaults, so this
+// is for clarity + the matrix, not correctness).
+function materializeRolePermissions(roleKey) {
+  var modulePermissions = {};
+  getModulePermRegistry().forEach(function(g) {
+    g.routes.forEach(function(m) {
+      modulePermissions[m.route] = levelToTriad(defaultModuleLevelForRole(roleKey, m.route));
     });
   });
-})();
+  return { modulePermissions: modulePermissions, sensitiveActions: defaultSensitiveActionsForRole(roleKey) };
+}
+// Build a complete role doc (metadata + materialized perms) for seeding.
+function buildDefaultRoleDoc(roleKey) {
+  var base = DEFAULT_ROLES[roleKey] || {};
+  var mat = materializeRolePermissions(roleKey);
+  return {
+    name: base.name || roleKey,
+    description: base.description || '',
+    isDefault: true,
+    navSections: base.navSections !== undefined ? base.navSections : null,
+    modulePermissions: mat.modulePermissions,
+    sensitiveActions: mat.sensitiveActions
+  };
+}
+// Clean-cutover reseed: overwrite the four built-in role docs with fresh
+// new-model defaults. Admin-only. Returns count written.
+async function reseedDefaultRoles() {
+  if (currentUserRole !== 'admin') { showToast('Admin only.', true); return 0; }
+  var keys = Object.keys(DEFAULT_ROLES);
+  await Promise.all(keys.map(function(k) { return MastDB.roles.set(k, buildDefaultRoleDoc(k)); }));
+  if (typeof rolesData !== 'undefined') keys.forEach(function(k) { rolesData[k] = buildDefaultRoleDoc(k); });
+  if (DEFAULT_ROLES[currentUserRole]) {
+    currentRoleConfig = rolesData ? rolesData[currentUserRole] : buildDefaultRoleDoc(currentUserRole);
+  }
+  showToast('Reseeded ' + keys.length + ' default roles in the new model.');
+  return keys.length;
+}
+window.reseedDefaultRoles = reseedDefaultRoles;
 
 var DEFAULT_NAV_SECTIONS = {
   admin:   null,  // null = no filter, sees everything
@@ -15219,38 +15216,7 @@ function getModulePermRegistry() {
 }
 function isModulePermRoute(route) { getModulePermRegistry(); return !!_modulePermRouteSet[route]; }
 
-// Runtime resolution for the CURRENT user. Order: per-user override →
-// role.modulePermissions → navSections-derived default (canViewSection).
-function _resolveModuleAxis(route, axis) {
-  if (currentUserModuleOverrides && currentUserModuleOverrides[route] &&
-      currentUserModuleOverrides[route][axis] !== undefined) {
-    return currentUserModuleOverrides[route][axis] === true;
-  }
-  var rm = currentRoleConfig && currentRoleConfig.modulePermissions;
-  if (rm && rm[route] && rm[route][axis] !== undefined) return rm[route][axis] === true;
-  return canViewSection(route); // back-compat fallback (no explicit module perms)
-}
-function canViewModule(route) {
-  if (currentUserRole === 'admin' || !currentUserRole) return true;
-  return _resolveModuleAxis(route, 'view');
-}
-function canEditModule(route) {
-  if (currentUserRole === 'admin' || !currentUserRole) return true;
-  if (!canViewModule(route)) return false; // can't edit what you can't see
-  return _resolveModuleAxis(route, 'edit');
-}
-function canDeleteModule(route) {
-  if (currentUserRole === 'admin' || !currentUserRole) return true;
-  if (!canViewModule(route)) return false;
-  return _resolveModuleAxis(route, 'delete');
-}
-window.canViewModule = canViewModule;
-window.canEditModule = canEditModule;
-window.canDeleteModule = canDeleteModule;
-
-// Section-visibility default for a GIVEN role (used by the matrix to show the
-// correct unedited checkbox state). Mirrors _resolveModuleAxis's fallback but
-// keyed by an explicit roleKey rather than the current user.
+// Which sidebar section a route belongs to (migration excluded).
 function _moduleSectionFor(route) {
   for (var s in SECTION_ROUTES) {
     if (s === 'migration') continue;
@@ -15258,15 +15224,64 @@ function _moduleSectionFor(route) {
   }
   return null;
 }
-function defaultModuleAxisForRole(roleKey, route) {
-  if (roleKey === 'admin') return true;
-  var rc = (typeof rolesData !== 'undefined' && rolesData[roleKey]) || DEFAULT_ROLES[roleKey];
-  var allowed = (rc && rc.navSections) ? rc.navSections
-              : (DEFAULT_NAV_SECTIONS[roleKey] !== undefined ? DEFAULT_NAV_SECTIONS[roleKey] : null);
-  if (allowed === null || allowed === undefined) return true; // null = no filter
+
+// Default access LEVEL for a (role, route) from ROLE_DEFAULT_LEVELS.
+function defaultModuleLevelForRole(roleKey, route) {
+  if (roleKey === 'admin') return 'full';
+  var spec = ROLE_DEFAULT_LEVELS[roleKey];
+  if (!spec) return 'none';
+  if (spec.byModule && spec.byModule[route] !== undefined) return spec.byModule[route];
   var sec = _moduleSectionFor(route);
-  if (!sec) return true; // route not in any section → allow
-  return allowed.indexOf(sec) >= 0;
+  if (sec && spec.bySection && spec.bySection[sec] !== undefined) return spec.bySection[sec];
+  return spec.fallback || 'none';
+}
+// Effective triad for a GIVEN role+route: explicit role.modulePermissions
+// entry wins, else the default level's triad. Used by the matrix UI and the
+// current-user resolver.
+function roleModuleTriad(roleKey, roleConfig, route) {
+  var rm = roleConfig && roleConfig.modulePermissions;
+  if (rm && rm[route]) {
+    var t = rm[route];
+    return { view: !!t.view, edit: !!t.edit, 'delete': !!t['delete'] };
+  }
+  return levelToTriad(defaultModuleLevelForRole(roleKey, route));
+}
+// Current-user triad: role triad with per-user overrides layered on top.
+function _currentModuleTriad(route) {
+  var base = roleModuleTriad(currentUserRole, currentRoleConfig, route);
+  var o = currentUserModuleOverrides && currentUserModuleOverrides[route];
+  if (o) {
+    if (o.view !== undefined)     base.view = o.view === true;
+    if (o.edit !== undefined)     base.edit = o.edit === true;
+    if (o['delete'] !== undefined) base['delete'] = o['delete'] === true;
+  }
+  return base;
+}
+
+// PRIMARY module-access gate. Replaces the old entity-CRUD hasPermission for
+// all module access. view is a prerequisite for edit/delete; delete is
+// independent of edit (Advanced may grant delete-without-edit). Fails closed.
+function can(route, axis) {
+  if (currentUserRole === 'admin' || !currentUserRole) return true;
+  if (!rbacReady) return false;
+  var t = _currentModuleTriad(route);
+  if (axis === 'view')   return !!t.view;
+  if (axis === 'edit')   return !!t.view && !!t.edit;
+  if (axis === 'delete') return !!t.view && !!t['delete'];
+  return false;
+}
+window.can = can;
+function canViewModule(route)   { return can(route, 'view'); }
+function canEditModule(route)   { return can(route, 'edit'); }
+function canDeleteModule(route) { return can(route, 'delete'); }
+window.canViewModule = canViewModule;
+window.canEditModule = canEditModule;
+window.canDeleteModule = canDeleteModule;
+
+// Legacy thin wrapper (view-axis bool) retained until the matrix UI rewrite
+// (task: single matrix) swaps to roleModuleTriad/levels directly.
+function defaultModuleAxisForRole(roleKey, route) {
+  return !!levelToTriad(defaultModuleLevelForRole(roleKey, route)).view;
 }
 
 var imageLibrary = {};
@@ -15475,21 +15490,26 @@ function formatFileSize(bytes) {
 // ============================================================
 
 /**
- * Check if the current user has permission for an entity+action.
- * Returns false if RBAC not loaded yet or permission not found (default deny).
+ * Sensitive-action gate (high-trust verbs only — see FUNCTION_PERMISSIONS).
+ * Module access is NOT checked here anymore — use can(route, axis) for that.
+ * Resolution: per-user override → role.sensitiveActions → role default.
+ * Returns false if RBAC not loaded (default deny). Admin always true.
  *
- * Usage: if (hasPermission('orders', 'delete')) { ... }
+ * Usage: if (hasPermission('giftCards', 'issue')) { ... }
  */
 function hasPermission(entity, action) {
-  if (!rbacReady || !currentRoleConfig || !currentRoleConfig.permissions) return false;
-  var entityPerms = currentRoleConfig.permissions[entity];
-  if (!entityPerms) return false;
-  var base = entityPerms[action] === true;
-  // Apply per-user overrides if present (admin users have no overrides — no behaviour change)
-  if (currentUserOverrides && currentUserOverrides[entity] && currentUserOverrides[entity][action] !== undefined) {
-    return currentUserOverrides[entity][action] === true;
+  if (currentUserRole === 'admin') return true;
+  if (!rbacReady || !currentRoleConfig) return false;
+  var key = _sensitiveKey(entity, action);
+  // Per-user override wins.
+  if (currentUserOverrides && currentUserOverrides[key] !== undefined) {
+    return currentUserOverrides[key] === true;
   }
-  return base;
+  var sa = currentRoleConfig.sensitiveActions;
+  if (sa && sa[key] !== undefined) return sa[key] === true;
+  // Fall back to the role default declared in FUNCTION_PERMISSIONS.
+  var def = defaultSensitiveActionsForRole(currentUserRole);
+  return def[key] === true;
 }
 
 /** Convenience: is current user an admin? */
@@ -15621,24 +15641,13 @@ async function loadUserRole(uid) {
     if (!currentRoleConfig && DEFAULT_ROLES[currentUserRole]) {
       currentRoleConfig = DEFAULT_ROLES[currentUserRole];
     }
-    // Merge any missing permission entities from defaults (handles newly added entities like 'shows')
-    if (currentRoleConfig && currentRoleConfig.permissions && DEFAULT_ROLES[currentUserRole]) {
-      var defaultPerms = DEFAULT_ROLES[currentUserRole].permissions;
-      Object.keys(defaultPerms).forEach(function(entity) {
-        if (!currentRoleConfig.permissions[entity]) {
-          currentRoleConfig.permissions[entity] = defaultPerms[entity];
-        }
-      });
-      // Action-level backfill for function-level permissions: a stored role
-      // config may already have the entity (e.g. 'finance') but lack a
-      // newly-added sensitive action. Fill those from defaults too.
-      FUNCTION_PERMISSIONS.forEach(function(fp) {
-        if (!currentRoleConfig.permissions[fp.entity]) currentRoleConfig.permissions[fp.entity] = {};
-        if (currentRoleConfig.permissions[fp.entity][fp.action] === undefined) {
-          currentRoleConfig.permissions[fp.entity][fp.action] =
-            (defaultPerms[fp.entity] && defaultPerms[fp.entity][fp.action]) === true;
-        }
-      });
+    // New model (E6): no per-entity merge. modulePermissions + sensitiveActions
+    // resolve lazily via roleModuleTriad()/hasPermission() with built-in
+    // defaults as fallback, so a stored role lacking either map (or seeded in
+    // the old model) still behaves correctly. Just ensure navSections is
+    // present for the sidebar section filter.
+    if (currentRoleConfig && !currentRoleConfig.navSections && DEFAULT_ROLES[currentUserRole]) {
+      currentRoleConfig.navSections = DEFAULT_ROLES[currentUserRole].navSections;
     }
 
     rbacReady = true;
@@ -15665,9 +15674,9 @@ async function seedRolesAndAdminUser() {
       return false;
     }
 
-    // Seed all three default roles — must set each doc individually (Firestore doesn't support collection-level set)
+    // Seed all default roles with materialized new-model permission maps.
     await Promise.all(Object.keys(DEFAULT_ROLES).map(function(k) {
-      return MastDB.roles.set(k, DEFAULT_ROLES[k]);
+      return MastDB.roles.set(k, buildDefaultRoleDoc(k));
     }));
 
     // Create admin user record for current user (must be the original admin)
@@ -18301,28 +18310,12 @@ function navigateTo(route, params) {
     showToast('Settings is restricted to admin users.', true);
     route = 'dashboard';
   }
-  // Forecast + Sales by Product are Owner/Manager only — Staff lacks
-  // forecast:read. W1.8's Sales by Product surfaces the same Demand
-  // Overview data as Forecast, so the role gate must apply to both.
-  if ((route === 'forecast' || route === 'sales-by-product') && !hasPermission('forecast', 'read')) {
-    showToast('Sales analytics are restricted to Owner and Manager roles.', true);
-    route = 'dashboard';
-  }
-  // Finance sensitive tabs (P&L, Tax, Reports, Overview) are Admin-only —
-  // manager lacks financeSensitive:read. W2.1 adds 'financials' (Overview)
-  // since it surfaces Margin + Runway = sensitive aggregates.
-  if (['finance-pl', 'finance-tax', 'finance-reports', 'financials'].indexOf(route) >= 0 && !hasPermission('financeSensitive', 'read')) {
-    showToast('This report is restricted to Admin users.', true);
-    route = 'dashboard';
-  }
-  // Close v3 (Idea -OtQH_uRXqz9jJBRsmrj): Period Close + Amendments require
-  // finance:update (the "write" gate per existing role bundles). Replicates the
-  // [[feedback_parallel_route_role_gate]] pattern — RBAC is route-level only,
-  // so the route gate IS the data gate.
-  if (['finance-period-close', 'finance-amendments'].indexOf(route) >= 0 && !hasPermission('finance', 'update')) {
-    showToast('Finance write access required.', true);
-    route = 'dashboard';
-  }
+  // E6: Forecast/Sales-by-Product, sensitive finance reports (P&L/Tax/Reports/
+  // Overview), and Period Close/Amendments no longer need special route gates —
+  // the generic per-module view gate below (canViewModule) blocks any role whose
+  // level on those modules is None, and the write-gate dims edit/delete for
+  // view-only roles. Default levels encode the old policy (manager: finance-pl/
+  // tax/reports = none; user/guest: finance = none).
   // W2.3 — Engagement Inbox surfaces cs_reviews + cs_tickets data. The
   // cs-* routes themselves rely on section-level access (the
   // 'customer-service' nav section in role.navSections) rather than an
@@ -18982,7 +18975,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260528-201709-9eb934a';
+var MAST_MODULES_V = '20260528-223254-1751e57';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -24112,7 +24105,7 @@ function renderDomainsList() {
 }
 
 async function addCustomDomain() {
-  if (!hasPermission('settings', 'update')) { showToast('You do not have permission to update settings.', true); return; }
+  if (!can('settings', 'edit')) { showToast('You do not have permission to update settings.', true); return; }
 
   var domainInput = document.getElementById('customDomainInput');
   var domain = domainInput.value.trim().toLowerCase();
@@ -24284,7 +24277,7 @@ async function verifyDomainStatus(domain) {
 }
 
 async function removeCustomDomain(domain) {
-  if (!hasPermission('settings', 'update')) { showToast('You do not have permission to update settings.', true); return; }
+  if (!can('settings', 'edit')) { showToast('You do not have permission to update settings.', true); return; }
   if (!await mastConfirm('Remove domain "' + domain + '"? This will disconnect it from your storefront.', { title: 'Remove Domain', danger: true })) return;
 
   try {
@@ -24314,7 +24307,7 @@ async function removeCustomDomain(domain) {
 // GitHub Token Management
 // ============================================================
 async function saveGitHubToken() {
-  if (!hasPermission('settings', 'update')) { showToast('You do not have permission to update settings.', true); return; }
+  if (!can('settings', 'edit')) { showToast('You do not have permission to update settings.', true); return; }
   var token = document.getElementById('githubTokenInput').value.trim();
   if (!token) {
     showToast('Please enter a token.', true);
@@ -24683,7 +24676,7 @@ function _markCostToServeDirty() {
 // admin UI converged on a single source of truth. See
 // `mast-tenant-mcp-server/src/shared/tools/analytics.ts` ~ Build 6b.
 async function saveCostToServe() {
-  if (!hasPermission('settings', 'update')) { showToast('You do not have permission to update settings.', true); return; }
+  if (!can('settings', 'edit')) { showToast('You do not have permission to update settings.', true); return; }
   var ticketEl = document.getElementById('ctsPerTicket');
   var returnEl = document.getElementById('ctsPerReturn');
   if (!ticketEl || !returnEl) return;
@@ -24850,7 +24843,7 @@ window.cpUpdateExtension = function(idx, field, val) {
 };
 
 async function saveClosePolicy() {
-  if (!hasPermission('finance', 'update')) { showToast('Finance write access required.', true); return; }
+  if (!can('finance-period-close', 'edit')) { showToast('Finance write access required.', true); return; }
   var dayEl = document.getElementById('cpAutoCloseDay');
   if (!dayEl) return;
   var autoCloseDay = parseInt(dayEl.value, 10);
@@ -24923,7 +24916,7 @@ async function loadShopDisplaySettings() {
 }
 
 async function saveShopDisplaySettings() {
-  if (!hasPermission('settings', 'update')) { showToast('You do not have permission to update settings.', true); return; }
+  if (!can('settings', 'edit')) { showToast('You do not have permission to update settings.', true); return; }
   try {
     var cfg = {
       showLeadTime: !!document.getElementById('sdShowLeadTime').checked,
@@ -24970,7 +24963,7 @@ async function loadPrivacyUrlSettings() {
 }
 
 async function savePrivacyUrlSettings() {
-  if (!hasPermission('settings', 'update')) { showToast('You do not have permission to update settings.', true); return; }
+  if (!can('settings', 'edit')) { showToast('You do not have permission to update settings.', true); return; }
   try {
     function norm(v) {
       v = (v || '').trim();
@@ -24999,7 +24992,7 @@ async function savePrivacyUrlSettings() {
 
 // Events count setting
 async function saveSiteVisibility(isPublic) {
-  if (!hasPermission('settings', 'update')) { showToast('You do not have permission to update settings.', true); return; }
+  if (!can('settings', 'edit')) { showToast('You do not have permission to update settings.', true); return; }
   try {
     // Write to publicConfig.searchable field on platform_tenants/{tid}
     var tenantId = MastDB.tenantId();
@@ -25031,7 +25024,7 @@ function loadSiteVisibility() {
 }
 
 async function saveEventsCount() {
-  if (!hasPermission('settings', 'update')) { showToast('You do not have permission to update settings.', true); return; }
+  if (!can('settings', 'edit')) { showToast('You do not have permission to update settings.', true); return; }
   var count = parseInt(document.getElementById('eventsCountInput').value, 10);
   if (isNaN(count) || count < 1 || count > 20) {
     showToast('Enter a number between 1 and 20.', true);
@@ -25290,7 +25283,7 @@ async function loadAiIntegrations() {
   }
 
   // Load existing keys
-  if (!hasPermission('settings', 'update')) {
+  if (!can('settings', 'edit')) {
     var listEl = document.getElementById('aiKeysList');
     if (listEl) listEl.innerHTML = '<p style="font-size:0.85rem;color:var(--warm-gray);">You need admin permissions to manage API keys.</p>';
     var genSection = document.getElementById('aiGenerateSection');
@@ -25338,7 +25331,7 @@ function renderAiKeys(keys) {
 }
 
 async function generateAiApiKey() {
-  if (!hasPermission('settings', 'update')) {
+  if (!can('settings', 'edit')) {
     showToast('You need admin permissions to generate API keys.', true);
     return;
   }
@@ -25376,7 +25369,7 @@ async function generateAiApiKey() {
 
 async function revokeAiApiKey(keyId) {
   if (!await mastConfirm('Revoke this API key? Any AI tools using it will immediately lose access.', { title: 'Revoke API Key', danger: true })) return;
-  if (!hasPermission('settings', 'update')) {
+  if (!can('settings', 'edit')) {
     showToast('You need admin permissions to revoke API keys.', true);
     return;
   }
@@ -25491,7 +25484,7 @@ function getFieldValue(inputId) {
 }
 
 async function saveSquareConfig() {
-  if (!hasPermission('settings', 'update')) { showToast('You do not have permission to update settings.', true); return; }
+  if (!can('settings', 'edit')) { showToast('You do not have permission to update settings.', true); return; }
   var env = document.getElementById('squareEnvironment').value;
 
   var sandboxToken = getFieldValue('sqSandboxToken');
@@ -25697,7 +25690,7 @@ function loadStripeConfig() {
 }
 
 async function saveStripeConfig() {
-  if (!hasPermission('settings', 'update')) { showToast('You do not have permission to update settings.', true); return; }
+  if (!can('settings', 'edit')) { showToast('You do not have permission to update settings.', true); return; }
 
   var secretKey = getFieldValue('stripeSecretKey');
   var publishableKey = (document.getElementById('stripePublishableKey') || {}).value || '';
@@ -26134,7 +26127,7 @@ function buildRuleSetFromUI(type) {
 }
 
 async function saveShippingConfig() {
-  if (!hasPermission('settings', 'update')) { showToast('You do not have permission to update settings.', true); return; }
+  if (!can('settings', 'edit')) { showToast('You do not have permission to update settings.', true); return; }
 
   var config = {
     shippingRules: {
@@ -26297,7 +26290,7 @@ function loadDefaultTaxRates() {
 }
 
 async function saveTaxRates() {
-  if (!hasPermission('settings', 'update')) { showToast('You do not have permission to update settings.', true); return; }
+  if (!can('settings', 'edit')) { showToast('You do not have permission to update settings.', true); return; }
   var inputs = document.querySelectorAll('#taxRatesTableBody input[data-state]');
   if (inputs.length === 0) { showToast('No tax rates to save. Load defaults first.', true); return; }
   var rates = {};
@@ -26323,7 +26316,7 @@ async function saveTaxRates() {
 }
 
 async function clearTaxRates() {
-  if (!hasPermission('settings', 'update')) { showToast('You do not have permission to update settings.', true); return; }
+  if (!can('settings', 'edit')) { showToast('You do not have permission to update settings.', true); return; }
   if (!await mastConfirm('Clear all tax rates? Customers will not be charged tax until rates are re-configured.', { title: 'Clear Tax Rates', danger: true })) return;
   try {
     await MastDB.config.removeTaxRates();
@@ -26341,7 +26334,7 @@ async function clearTaxRates() {
 // Google Maps API Key Management
 // ============================================================
 async function saveGoogleConfig() {
-  if (!hasPermission('settings', 'update')) { showToast('You do not have permission to update settings.', true); return; }
+  if (!can('settings', 'edit')) { showToast('You do not have permission to update settings.', true); return; }
   var key = getFieldValue('googleMapsApiKey');
   if (!key) { showToast('API key is required.', true); return; }
 
@@ -26402,7 +26395,7 @@ function onEmailProviderChange() {
 }
 
 async function saveEmailConfig() {
-  if (!hasPermission('settings', 'update')) { showToast('You do not have permission to update settings.', true); return; }
+  if (!can('settings', 'edit')) { showToast('You do not have permission to update settings.', true); return; }
 
   var provider = document.getElementById('emailProvider').value || null;
   var fromEmail = document.getElementById('emailFromEmail').value.trim();
@@ -26569,7 +26562,7 @@ function loadByoResendStatus() {
 }
 
 async function disconnectByoResend() {
-  if (!hasPermission('settings', 'update')) { showToast('You do not have permission.', true); return; }
+  if (!can('settings', 'edit')) { showToast('You do not have permission.', true); return; }
   if (!confirm('Disconnect Resend? Email will revert to Mast-managed (uses tokens). Your stored key is retained for audit.')) return;
   try {
     await firebase.functions().httpsCallable('byoResendDisconnect')({});
@@ -26581,7 +26574,7 @@ async function disconnectByoResend() {
 }
 
 async function sendTestEmailFromSettings() {
-  if (!hasPermission('settings', 'update')) { showToast('You do not have permission.', true); return; }
+  if (!can('settings', 'edit')) { showToast('You do not have permission.', true); return; }
   var ownerEmail = document.getElementById('emailOwnerEmail').value.trim();
   var fromEmail = document.getElementById('emailFromEmail').value.trim();
   var toEmail = ownerEmail || fromEmail;
@@ -26732,7 +26725,7 @@ function loadEmailDomainSection() {
 }
 
 async function addEmailDomain() {
-  if (!hasPermission('settings', 'update')) { showToast('You do not have permission.', true); return; }
+  if (!can('settings', 'edit')) { showToast('You do not have permission.', true); return; }
   var domainInput = document.getElementById('emailDomainInput');
   var domain = domainInput ? domainInput.value.trim() : '';
   if (!domain) { showToast('Enter a domain name.', true); return; }
@@ -26763,7 +26756,7 @@ async function addEmailDomain() {
 }
 
 async function checkEmailDomainStatus() {
-  if (!hasPermission('settings', 'update')) { showToast('You do not have permission.', true); return; }
+  if (!can('settings', 'edit')) { showToast('You do not have permission.', true); return; }
   var statusEl = document.getElementById('emailDomainStatus');
   if (statusEl) statusEl.innerHTML = '<span style="color:var(--warm-gray);">Checking verification status...</span>';
 
@@ -26785,7 +26778,7 @@ async function checkEmailDomainStatus() {
 }
 
 async function removeEmailDomain() {
-  if (!hasPermission('settings', 'update')) { showToast('You do not have permission.', true); return; }
+  if (!can('settings', 'edit')) { showToast('You do not have permission.', true); return; }
   if (!await mastConfirm('Remove email domain? This will delete the domain from Resend.', { title: 'Remove Email Domain', danger: true })) return;
 
   var statusEl = document.getElementById('emailDomainStatus');
@@ -26948,7 +26941,7 @@ function switchShopifyMethod(method) {
 }
 
 async function saveShopifyClientCredentials() {
-  if (!hasPermission('settings', 'update')) { showToast('You do not have permission to update settings.', true); return; }
+  if (!can('settings', 'edit')) { showToast('You do not have permission to update settings.', true); return; }
   var statusEl = document.getElementById('shopifyConfigStatus');
   var domain = (document.getElementById('shopifyCC_Domain').value || '').trim().toLowerCase();
   var clientId = (document.getElementById('shopifyCC_ClientId').value || '').trim();
@@ -27344,7 +27337,7 @@ async function loadByoAnthropicUI() {
 }
 
 async function connectByoAnthropic() {
-  if (!hasPermission('settings', 'update')) { showToast('You do not have permission.', true); return; }
+  if (!can('settings', 'edit')) { showToast('You do not have permission.', true); return; }
   var input = document.getElementById('byoAnthropicApiKey');
   var btn = document.getElementById('byoAnthropicConnectBtn');
   var statusEl = document.getElementById('byoAnthropicConnectStatus');
@@ -27381,7 +27374,7 @@ function replaceByoAnthropic() {
 }
 
 async function disconnectByoAnthropic() {
-  if (!hasPermission('settings', 'update')) { showToast('You do not have permission.', true); return; }
+  if (!can('settings', 'edit')) { showToast('You do not have permission.', true); return; }
   if (!confirm('Disconnect your Anthropic key? Ask AI will revert to Mast-managed (deducts tokens). Your stored key is retained for audit.')) return;
   try {
     await firebase.functions().httpsCallable('byoAnthropicDisconnect')({});
@@ -27604,7 +27597,7 @@ var _inventoryAskAiConfig = {
 
 window.saveAskAiConfig = async function() {
   if (!window.MastAskAi) return;
-  if (!hasPermission('settings', 'update')) { showToast('You do not have permission to update settings.', true); return; }
+  if (!can('settings', 'edit')) { showToast('You do not have permission to update settings.', true); return; }
   var sub = document.getElementById('askAiSubscriptionSel').value;
   var mcp = document.getElementById('askAiMcpConfiguredCb').checked;
   var statusEl = document.getElementById('askAiConfigStatus');
@@ -28012,7 +28005,7 @@ window.MastAskAi = (function() {
 })();
 
 async function saveShopifyConfig() {
-  if (!hasPermission('settings', 'update')) { showToast('You do not have permission to update settings.', true); return; }
+  if (!can('settings', 'edit')) { showToast('You do not have permission to update settings.', true); return; }
   var rawDomain = (getFieldValue('shopifyShopDomain') || '').trim().toLowerCase();
   var token = getFieldValue('shopifyAccessToken') || '';
 
@@ -28241,7 +28234,7 @@ function loadShopifyWebhookStatus() {
 // Shopify Test Harness — Phase 1 (read-only)
 // ============================================================
 async function runShopifyHarness() {
-  if (!hasPermission('settings', 'update')) { showToast('You do not have permission to run the harness.', true); return; }
+  if (!can('settings', 'edit')) { showToast('You do not have permission to run the harness.', true); return; }
   var btn = document.getElementById('shopifyHarnessRunBtn');
   var statusEl = document.getElementById('shopifyHarnessStatus');
   var reportEl = document.getElementById('shopifyHarnessReport');
@@ -28268,7 +28261,7 @@ async function runShopifyHarness() {
 }
 
 async function runShopifySeed() {
-  if (!hasPermission('settings', 'update')) { showToast('You do not have permission to run the seed.', true); return; }
+  if (!can('settings', 'edit')) { showToast('You do not have permission to run the seed.', true); return; }
   var confirmed = await mastConfirm(
     'Create 3 sample products (Mast Seed — T-Shirt, Mug, Art Print) in your Shopify store? They will be marked as DRAFT (not visible on the storefront) and tagged "mast-seed-data" so they can be removed later with the Clean Up button. This is a real write to your store.',
     { title: 'Seed sample products?', confirmLabel: 'Seed', cancelLabel: 'Cancel' }
@@ -28300,7 +28293,7 @@ async function runShopifySeed() {
 }
 
 async function runShopifyCleanup() {
-  if (!hasPermission('settings', 'update')) { showToast('You do not have permission to run cleanup.', true); return; }
+  if (!can('settings', 'edit')) { showToast('You do not have permission to run cleanup.', true); return; }
   var confirmed = await mastConfirm(
     'Delete every product in your Shopify store tagged "mast-seed-data"? This cannot be undone — Shopify does not restore deleted products. Only products created by the Mast seed action will be removed.',
     { title: 'Clean up seed data?', confirmLabel: 'Delete', cancelLabel: 'Cancel', danger: true }
@@ -28361,7 +28354,7 @@ function renderShopifySeedReport(data, kind) {
 }
 
 async function runShopifyPhase2() {
-  if (!hasPermission('settings', 'update')) { showToast('You do not have permission to run Phase 2.', true); return; }
+  if (!can('settings', 'edit')) { showToast('You do not have permission to run Phase 2.', true); return; }
   var confirmed = await mastConfirm(
     'Run Phase 2 write/revert test? This creates a metafield on one of your seed products, verifies it, then deletes it. Every step is audited. If any step fails, the run halts and a recovery report is written with the original data so you can restore by hand.',
     { title: 'Run Phase 2?', confirmLabel: 'Run', cancelLabel: 'Cancel' }
@@ -28404,7 +28397,7 @@ async function runShopifyPhase2() {
 }
 
 async function runShopifyPhase3() {
-  if (!hasPermission('settings', 'update')) { showToast('You do not have permission to run Phase 3.', true); return; }
+  if (!can('settings', 'edit')) { showToast('You do not have permission to run Phase 3.', true); return; }
   var confirmed = await mastConfirm(
     'Run Phase 3 write/revert test? This updates the seed product\'s title and body_html, verifies, then reverts to the captured pre-state with a full PUT. Every step is audited. If any step fails, the run halts and a recovery report is written with the original data.',
     { title: 'Run Phase 3?', confirmLabel: 'Run', cancelLabel: 'Cancel' }
@@ -28449,7 +28442,7 @@ async function runShopifyPhase3() {
 
 // Generic handler for Phases 4–8. All share the same UI flow and report shape.
 async function runShopifyGenericPhase(cfg) {
-  if (!hasPermission('settings', 'update')) { showToast('You do not have permission to run ' + cfg.phaseLabel + '.', true); return; }
+  if (!can('settings', 'edit')) { showToast('You do not have permission to run ' + cfg.phaseLabel + '.', true); return; }
   var confirmed = await mastConfirm(cfg.confirmText, {
     title: 'Run ' + cfg.phaseLabel + '?', confirmLabel: 'Run', cancelLabel: 'Cancel'
   });
@@ -35462,7 +35455,7 @@ function openForecastJobModal(pid, suggestedQty) {
 }
 
 async function doCreateForecastJob(pid, suggestedQty, purpose) {
-  if (!hasPermission('jobs', 'create')) {
+  if (!can('jobs', 'edit')) {
     showToast('You do not have permission to create production jobs.', true);
     return;
   }
@@ -38459,7 +38452,7 @@ function showBulkPublishButton() {
 // ---------------------------------------------------------------------------
 // Channel-First Phase 1c (D38) — Create a new recipe linked to a product, then jump to maker.
 async function addRecipeForProduct(pid) {
-  if (!hasPermission('products', 'update')) { showToast('You do not have permission to update products.', true); return; }
+  if (!can('products', 'edit')) { showToast('You do not have permission to update products.', true); return; }
   if (typeof window.makerCreateRecipe !== 'function') { showToast('Develop module not loaded — open the Develop tab first, then try again.', true); return; }
   var product = (window.productsData || []).find(function(p) { return p.pid === pid; });
   if (!product) { showToast('Product not found', true); return; }
@@ -38490,7 +38483,7 @@ async function addRecipeForProduct(pid) {
 // Open a picker that lists unlinked / orphan recipes and links the chosen one to this product.
 // Two-way bind: product.recipeId = recipeId and recipe.productId = pid.
 function openLinkRecipeDialog(pid) {
-  if (!hasPermission('products', 'update')) { showToast('You do not have permission to update products.', true); return; }
+  if (!can('products', 'edit')) { showToast('You do not have permission to update products.', true); return; }
   var product = (window.productsData || []).find(function(p) { return p.pid === pid; });
   if (!product) { showToast('Product not found', true); return; }
   if (product.recipeId) { showToast('Product already has a linked recipe', true); return; }
@@ -38574,7 +38567,7 @@ async function executeLinkRecipe(pid) {
 async function backfillVariantIds(opts) {
   opts = opts || {};
   var dryRun = !!opts.dryRun;
-  if (!hasPermission('products', 'update')) { showToast('You do not have permission to update products.', true); return; }
+  if (!can('products', 'edit')) { showToast('You do not have permission to update products.', true); return; }
   var all = (await MastDB.products.get()) || {};
   var pids = Object.keys(all);
   var report = { total: pids.length, productsTouched: 0, variantsAssigned: 0, productsSkipped: 0, errors: [] };
@@ -38609,7 +38602,7 @@ async function backfillVariantIds(opts) {
 window.backfillVariantIds = backfillVariantIds;
 
 async function bulkPublishToShopify() {
-  if (!hasPermission('products', 'update')) { showToast('You do not have permission to publish products.', true); return; }
+  if (!can('products', 'edit')) { showToast('You do not have permission to publish products.', true); return; }
   // Get all active products
   var active = productsData.filter(function(p) { return p.status === 'active'; });
   if (active.length === 0) { showToast('No active products to publish.', true); return; }
@@ -42421,7 +42414,7 @@ function renderVariantChannelsTab(product, variant, channels) {
 }
 
 async function excludeVariantFromChannel(pid, channelId, variantId) {
-  if (!hasPermission('products', 'update')) { showToast('You do not have permission to update products.', true); return; }
+  if (!can('products', 'edit')) { showToast('You do not have permission to update products.', true); return; }
   try {
     var product = productsData.find(function(p) { return p.pid === pid; });
     if (!product) { showToast('Product not found', true); return; }
@@ -42443,7 +42436,7 @@ async function excludeVariantFromChannel(pid, channelId, variantId) {
 }
 
 async function includeVariantOnChannel(pid, channelId, variantId) {
-  if (!hasPermission('products', 'update')) { showToast('You do not have permission to update products.', true); return; }
+  if (!can('products', 'edit')) { showToast('You do not have permission to update products.', true); return; }
   try {
     var product = productsData.find(function(p) { return p.pid === pid; });
     if (!product) { showToast('Product not found', true); return; }
@@ -42565,7 +42558,7 @@ function cancelEditVariantInventory() {
 }
 
 async function saveVariantInventory(pid, variantId) {
-  if (!hasPermission('inventory', 'update')) { showToast('You do not have permission to update inventory.', true); return; }
+  if (!can('inventory', 'edit')) { showToast('You do not have permission to update inventory.', true); return; }
   try {
     var product = productsData.find(function(p) { return p.pid === pid; });
     if (!product) { showToast('Product not found', true); return; }
@@ -42967,7 +42960,7 @@ function renderVariantExpanded(product, variant, recipe, pricing, channels) {
 // Bind a variant to a specific image from the product's images[].
 // imageIndex = -1 means "no specific image" (variant uses the product hero).
 async function bindVariantImage(pid, variantId, imageIndex) {
-  if (!hasPermission('products', 'update')) { showToast('You do not have permission to update products.', true); return; }
+  if (!can('products', 'edit')) { showToast('You do not have permission to update products.', true); return; }
   var product = (window.productsData || []).find(function(p) { return p.pid === pid; });
   if (!product) { showToast('Product not found', true); return; }
   var canon = (typeof getProductVariantsForRender === 'function') ? getProductVariantsForRender(product) : [];
@@ -43107,7 +43100,7 @@ function _allCombos(options) {
 }
 
 function openAddVariantDialog(pid) {
-  if (!hasPermission('products', 'update')) { showToast('You do not have permission to update products.', true); return; }
+  if (!can('products', 'edit')) { showToast('You do not have permission to update products.', true); return; }
   var product = (window.productsData || []).find(function(p) { return p.pid === pid; });
   if (!product) { showToast('Product not found', true); return; }
   var options = Array.isArray(product.options) ? product.options : [];
@@ -43158,7 +43151,7 @@ function openAddVariantDialog(pid) {
 }
 
 async function addVariantToProduct(pid, comboSig) {
-  if (!hasPermission('products', 'update')) { showToast('You do not have permission to update products.', true); return; }
+  if (!can('products', 'edit')) { showToast('You do not have permission to update products.', true); return; }
   var product = (window.productsData || []).find(function(p) { return p.pid === pid; });
   if (!product) { showToast('Product not found', true); return; }
 
@@ -43228,7 +43221,7 @@ function syncVariantPriceMarkup(tier, variantId, source) {
 // Active tier — which price the storefront sells at. Persists on the recipe
 // (recipe.activePriceTier) since it lives across the cost+pricing model.
 async function setActivePricingTier(pid, tier) {
-  if (!hasPermission('products', 'update')) { showToast('You do not have permission.', true); return; }
+  if (!can('products', 'edit')) { showToast('You do not have permission.', true); return; }
   if (tier !== 'wholesale' && tier !== 'direct' && tier !== 'retail') return;
   try {
     var product = productsData.find(function(p) { return p.pid === pid; });
@@ -43251,7 +43244,7 @@ async function setActivePricingTier(pid, tier) {
 // Minimum margin floor — product-level setting that the active-tier margin
 // must stay above. UI shows a warning when violated.
 async function setMinMarginFloor(pid, value) {
-  if (!hasPermission('products', 'update')) { showToast('You do not have permission.', true); return; }
+  if (!can('products', 'edit')) { showToast('You do not have permission.', true); return; }
   var num = (value === '' || value == null) ? null : parseFloat(value);
   if (num != null && (isNaN(num) || num < 0 || num > 100)) {
     showToast('Min margin must be 0-100', true); return;
@@ -43269,7 +43262,7 @@ async function setMinMarginFloor(pid, value) {
 // Re-derive prices from new cost using the recipe's existing markups.
 // Replaces the recipe-side Stage flow: now it lives where the prices live.
 async function rederivePricesFromCost(pid, variantId) {
-  if (!hasPermission('products', 'update')) { showToast('You do not have permission.', true); return; }
+  if (!can('products', 'edit')) { showToast('You do not have permission.', true); return; }
   try {
     var product = productsData.find(function(p) { return p.pid === pid; });
     if (!product || !product.recipeId) return;
@@ -43301,7 +43294,7 @@ async function rederivePricesFromCost(pid, variantId) {
 // Accept the current cost as the new baseline without changing prices.
 // Dismisses the "cost changed" notice.
 async function acceptCostBaseline(pid, variantId) {
-  if (!hasPermission('products', 'update')) { showToast('You do not have permission.', true); return; }
+  if (!can('products', 'edit')) { showToast('You do not have permission.', true); return; }
   try {
     var product = productsData.find(function(p) { return p.pid === pid; });
     if (!product || !product.recipeId) return;
@@ -43319,7 +43312,7 @@ async function acceptCostBaseline(pid, variantId) {
 }
 
 async function saveVariantPricing(pid, variantId) {
-  if (!hasPermission('products', 'update')) { showToast('You do not have permission to update products.', true); return; }
+  if (!can('products', 'edit')) { showToast('You do not have permission to update products.', true); return; }
   function readNum(id) {
     var el = document.getElementById(id);
     if (!el) return null;
@@ -45024,7 +45017,7 @@ function pdUpdateWholesaleVariantColumn(show) {
 }
 
 async function saveProduct(pid) {
-  if (!hasPermission('products', 'update')) { showToast('You do not have permission to update products.', true); return; }
+  if (!can('products', 'edit')) { showToast('You do not have permission to update products.', true); return; }
   try {
     var name = document.getElementById('pdName').value.trim();
     if (!validateRequired([{ el: 'pdName', msg: 'Product name is required' }])) {
@@ -45739,7 +45732,7 @@ function pdRecalcTotal() {
 }
 
 async function saveProductSettings(pid) {
-  if (!hasPermission('inventory', 'update')) { showToast('You do not have permission to update inventory.', true); return; }
+  if (!can('inventory', 'edit')) { showToast('You do not have permission to update inventory.', true); return; }
   try {
     var stockType = document.getElementById('pdStockType').value;
     var leadTime = parseInt(document.getElementById('pdLeadTime').value) || 0;
@@ -47101,7 +47094,7 @@ function _auditTimeMs(entry) {
 }
 
 function loadAuditLog() {
-  if (!hasPermission('auditLog', 'read')) {
+  if (!can('auditlog', 'view')) {
     document.getElementById('auditEmpty').style.display = '';
     document.getElementById('auditEmpty').innerHTML = '<p>You do not have permission to view the audit log.</p>';
     return;
@@ -47292,7 +47285,7 @@ function clearAuditFilters() {
  * Usage: var historyHtml = await renderRecordHistory('orders', orderId);
  */
 async function renderRecordHistory(entity, entityId) {
-  if (!hasPermission('auditLog', 'read') || !entityId) return '';
+  if (!can('auditlog', 'view') || !entityId) return '';
   try {
     var snap = await MastDB.auditIndex.ref(entity, entityId)
       .orderByChild('time').limitToLast(20).once('value');
@@ -47337,8 +47330,10 @@ var adminUsers = {};
 var adminUsersLoaded = false;
 var rolesData = {};
 var rolesLoaded = false;
-var editingPermissions = {};     // temp state for role matrix edits (Roles tab)
-var editingModulePermissions = {}; // temp state for per-module access matrix (Phase E5)
+var editingModulePermissions = {}; // temp {route:{view,edit,delete}} for the role matrix
+var editingSensitiveActions = {};  // temp {key:bool} for the sensitive-actions list
+var _permRoleKey = null;           // role currently shown in the matrix
+var _permIsAdmin = false;          // is that role the built-in admin (read-only matrix)
 var editingUserOverrides = {};   // temp state for per-user override editor (Section 2)
 
 // Compute the fully merged permission set: code defaults → Firebase role config → per-user overrides.
@@ -47389,13 +47384,13 @@ function isAdminGrantedElevation(entity, action, role, roleConfig) {
 
 function loadAdminUsers() {
   if (adminUsersLoaded) { renderUsersList(); loadPendingInvites(); return; }
-  if (!hasPermission('users', 'read')) {
+  if (!can('employees', 'view')) {
     document.getElementById('usersEmpty').style.display = '';
     document.getElementById('usersEmpty').innerHTML = '<p>You do not have permission to manage users.</p>';
     return;
   }
   // Pre-load roles so openUserPermissionsPanel always has Firebase role config
-  if (!rolesLoaded && hasPermission('roles', 'read')) loadRoles();
+  if (!rolesLoaded && can('employees', 'view')) loadRoles();
   document.getElementById('usersLoading').style.display = '';
   MastDB.adminUsers.list().then(function(snap) {
     adminUsers = snap || {};
@@ -47411,7 +47406,7 @@ function loadAdminUsers() {
 
 function loadRoles() {
   if (rolesLoaded) { populateRoleSelector(); return; }
-  if (!hasPermission('roles', 'read')) return;
+  if (!can('employees', 'view')) return;
   MastDB.roles.get().then(function(snap) {
     rolesData = snap || DEFAULT_ROLES;
     rolesLoaded = true;
@@ -47512,7 +47507,7 @@ function renderUsersList() {
       : '<span style="display:inline-block;width:32px;height:32px;border-radius:50%;background:var(--cream-dark);text-align:center;line-height:32px;font-size:0.85rem;margin-right:8px;">' + (u.displayName || '?').charAt(0).toUpperCase() + '</span>';
 
     var roleCell;
-    if (hasPermission('users', 'update') && !isSelf) {
+    if (can('employees', 'edit') && !isSelf) {
       var opts = '';
       var selectClass = 'user-role-select';
       // Finding A fix: if the stored role is not in the canonical/known set,
@@ -47551,7 +47546,7 @@ function renderUsersList() {
     var actionsCell = '';
     if (!isSelf) {
       actionsCell += '<button class="btn btn-secondary" style="font-size:0.72rem;padding:3px 8px;" onclick="viewUserAudit(\'' + uid + '\')">History</button>';
-      if (hasPermission('users', 'update')) {
+      if (can('employees', 'edit')) {
         actionsCell += ' <button class="btn btn-secondary" style="font-size:0.72rem;padding:3px 8px;" onclick="openUserPermissionsPanel(\'' + uid + '\')">Edit Permissions</button>';
       }
     }
@@ -47561,7 +47556,7 @@ function renderUsersList() {
     // screen is admin-gated anyway). Inner controls (selects, buttons)
     // continue to fire their own handlers thanks to the BUTTON/SELECT/INPUT
     // bail-out in the click listener.
-    if (hasPermission('users', 'update')) {
+    if (can('employees', 'edit')) {
       tr.style.cursor = 'pointer';
       (function(rowUid, rowEl) {
         rowEl.addEventListener('click', function(ev) {
@@ -47603,7 +47598,7 @@ function renderUsersList() {
 }
 
 async function changeUserRole(uid, newRole) {
-  if (!hasPermission('users', 'update')) {
+  if (!can('employees', 'edit')) {
     showToast('You do not have permission to change user roles.', true);
     return;
   }
@@ -47676,7 +47671,7 @@ function viewUserAudit(uid) {
 // Per-User Permission Override Editor (RBAC Phase 1 — Section 2)
 // ============================================================
 function openUserPermissionsPanel(uid) {
-  if (!hasPermission('users', 'update')) {
+  if (!can('employees', 'edit')) {
     showToast('You do not have permission to edit user permissions.', true);
     return;
   }
@@ -47798,7 +47793,7 @@ function openUserPermissionsPanel(uid) {
       '<summary style="cursor:pointer;font-size:0.78rem;color:var(--text);font-weight:600;">ℹ️ How this list stays in sync with new features</summary>' +
       '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:8px;line-height:1.5;">' +
         'Each row in this matrix is one <strong>capability</strong> (an entity like <em>orders</em> + an action like <em>delete</em>). The <strong>grants</strong> (which roles or users have which capabilities) are fully dynamic — edit any cell here and save.' +
-        '<br><br>The <strong>catalog of capabilities</strong> itself is currently defined in the app code (<code>ENTITY_LABELS</code> + <code>DEFAULT_ROLES</code>) and used at every gate via <code>hasPermission(entity, action)</code>. When a new feature ships, the developer adds the new entity/action and a gate; that release auto-populates here for assignment. It does NOT update by configuration alone.' +
+        '<br><br>The <strong>catalog of modules</strong> itself is defined in the app code (the sidebar route registry) and gated at every surface via <code>can(module, axis)</code>. When a new module ships, the developer registers its route and gates; that release auto-populates here for assignment. It does NOT update by configuration alone.' +
         '<br><br>Finer-grained controls (e.g. "issue gift card", "grant store credit", "approve RMA") live in the <strong>Sensitive Functions</strong> section below — toggle them per role (Team &rarr; Roles) or per user here.' +
       '</div>' +
     '</details>' +
@@ -48114,7 +48109,7 @@ function renderUserDetail(uid) {
   if (!detailEl) return;
   if (!uid) { switchEmployeesView('users'); return; }
   var isSelf = currentUser && currentUser.uid === uid;
-  var canEditOthers = hasPermission('users', 'update');
+  var canEditOthers = can('employees', 'edit');
   if (!isSelf && !canEditOthers) {
     detailEl.innerHTML = '<div class="empty-state" style="padding:24px;"><p>You do not have access to this profile.</p>' +
       '<button class="btn btn-secondary" onclick="navigateTo(\'employees\')">&larr; Back to Users</button></div>';
@@ -48196,7 +48191,7 @@ function _renderUserDetailTabContent(uid, u, profile) {
 
 function _renderUserProfileTab(container, uid, u, profile) {
   var isSelf = currentUser && currentUser.uid === uid;
-  var canEdit = isSelf || hasPermission('users', 'update');
+  var canEdit = isSelf || can('employees', 'edit');
   var displayName = profile.displayName || u.displayName || '';
   var photoUrl = profile.photoUrl || u.photoURL || '';
   var bio = profile.bio || '';
@@ -48263,7 +48258,7 @@ window.clearUserProfilePhoto = clearUserProfilePhoto;
 
 function saveUserProfile(uid) {
   var isSelf = currentUser && currentUser.uid === uid;
-  if (!isSelf && !hasPermission('users', 'update')) {
+  if (!isSelf && !can('employees', 'edit')) {
     showToast('You cannot edit this profile.', true);
     return;
   }
@@ -48289,7 +48284,7 @@ function _refreshAvatarIfSelf(uid, photoUrl) {
 }
 
 function _renderUserPermissionsTab(container, uid, u) {
-  if (!hasPermission('users', 'update')) {
+  if (!can('employees', 'edit')) {
     container.innerHTML = '<p style="color:var(--warm-gray);font-size:0.85rem;padding:16px 0;">You do not have permission to view or change permissions.</p>';
     return;
   }
@@ -48308,7 +48303,7 @@ function _renderUserPermissionsTab(container, uid, u) {
 }
 
 function _renderUserActivityTab(container, uid, u) {
-  if (!hasPermission('users', 'update')) {
+  if (!can('employees', 'edit')) {
     container.innerHTML = '<p style="color:var(--warm-gray);font-size:0.85rem;padding:16px 0;">You do not have permission to view this section.</p>';
     return;
   }
@@ -48392,7 +48387,7 @@ async function saveUserPermissionOverrides(uid) {
 // User Invite Flow
 // ============================================================
 function showInviteUserModal() {
-  if (!hasPermission('users', 'create')) {
+  if (!can('employees', 'edit')) {
     showToast('You do not have permission to add users.', true);
     return;
   }
@@ -48564,144 +48559,111 @@ function renderPermissionMatrix() {
   var descEl = document.getElementById('roleDescription');
   descEl.textContent = role.description || '';
 
-  // Clone permissions for editing
-  editingPermissions = {};
-  var perms = role.permissions || {};
-  Object.keys(perms).forEach(function(entity) {
-    editingPermissions[entity] = {};
-    Object.keys(perms[entity]).forEach(function(action) {
-      editingPermissions[entity][action] = perms[entity][action];
+  var isAdminRole = role.isDefault && roleKey === 'admin';
+  _permRoleKey = roleKey;
+  _permIsAdmin = isAdminRole;
+
+  // Seed editing buffers from the role's stored values, else its default-level
+  // triad / default sensitive grants. The triad is canonical; the UI projects
+  // it to a Level picker.
+  editingModulePermissions = {};
+  getModulePermRegistry().forEach(function(g) {
+    g.routes.forEach(function(m) {
+      editingModulePermissions[m.route] = roleModuleTriad(roleKey, role, m.route);
     });
   });
-
-  // Build matrix
-  var tbody = document.getElementById('permMatrixBody');
-  tbody.innerHTML = '';
-  var entities = Object.keys(ENTITY_LABELS);
-  // Add users, roles, auditLog if they exist in permissions
-  ['users', 'roles', 'auditLog', 'receipts'].forEach(function(extra) {
-    if (perms[extra] && !entities.includes(extra)) entities.push(extra);
+  editingSensitiveActions = {};
+  FUNCTION_PERMISSIONS.forEach(function(fp) {
+    var k = _sensitiveKey(fp.entity, fp.action);
+    var sa = role.sensitiveActions;
+    editingSensitiveActions[k] = (sa && sa[k] !== undefined) ? !!sa[k] : !!fp.roleDefaults[roleKey];
   });
 
-  entities.forEach(function(entity) {
-    var ep = editingPermissions[entity] || { create: false, read: false, update: false, delete: false };
-    if (!editingPermissions[entity]) editingPermissions[entity] = ep;
-    var label = ENTITY_LABELS[entity] || entity;
+  // Legacy Entity grid removed — clear its table body if the element lingers.
+  var oldBody = document.getElementById('permMatrixBody');
+  if (oldBody) oldBody.innerHTML = '';
 
-    var tr = document.createElement('tr');
-    var actions = ['create', 'read', 'update', 'delete'];
-    var cells = '<td>' + label + '</td>';
-    actions.forEach(function(action) {
-      var checked = ep[action] ? ' checked' : '';
-      var disabled = (role.isDefault && roleKey === 'admin' && entity !== 'auditLog') ? ' disabled title="Admin has full access"' : '';
-      cells += '<td><input type="checkbox"' + checked + disabled + ' onchange="togglePermission(\'' + entity + '\', \'' + action + '\', this.checked)"></td>';
-    });
-    tr.innerHTML = cells;
-    tbody.appendChild(tr);
-  });
-
-  // Sensitive Functions section — non-CRUD capabilities from FUNCTION_PERMISSIONS.
-  var funcWrap = document.getElementById('funcPermSection');
-  if (funcWrap) {
-    var isAdminRole = role.isDefault && roleKey === 'admin';
-    var frows = FUNCTION_PERMISSIONS.map(function(fp) {
-      if (!editingPermissions[fp.entity]) editingPermissions[fp.entity] = {};
-      var cur = editingPermissions[fp.entity][fp.action];
-      if (cur === undefined) {
-        var dr = DEFAULT_ROLES[roleKey] && DEFAULT_ROLES[roleKey].permissions[fp.entity];
-        cur = (dr && dr[fp.action]) === true;
-        editingPermissions[fp.entity][fp.action] = cur;
-      }
-      var fdisabled = isAdminRole ? ' disabled title="Admin has full access"' : '';
-      return '<tr>' +
-        '<td style="font-size:0.85rem;"><strong>' + esc(fp.label) + '</strong>' +
-          '<div style="font-size:0.72rem;color:var(--warm-gray);">' + esc(fp.description) + '</div></td>' +
-        '<td style="text-align:center;"><input type="checkbox"' + (cur ? ' checked' : '') + fdisabled +
-          ' onchange="togglePermission(\'' + fp.entity + '\', \'' + fp.action + '\', this.checked)"></td>' +
-      '</tr>';
-    }).join('');
-    funcWrap.innerHTML =
-      '<h4 style="font-size:0.9rem;margin:0 0 4px;">Sensitive Functions</h4>' +
-      '<p style="font-size:0.72rem;color:var(--warm-gray);margin:0 0 8px;">High-trust actions gated independently of the create/read/update/delete grid above.</p>' +
-      '<table class="perm-matrix" style="width:100%;"><thead><tr><th>Function</th><th>Allowed</th></tr></thead><tbody>' + frows + '</tbody></table>';
-  }
-
-  // Per-module access matrix (Phase E5)
-  renderModuleAccessMatrix(roleKey, role);
+  renderModuleAccessMatrix();
+  renderSensitiveActions();
 
   // Show/hide save buttons based on editability
   var actionsEl = document.getElementById('permMatrixActions');
-  actionsEl.style.display = hasPermission('roles', 'update') ? '' : 'none';
+  actionsEl.style.display = can('employees', 'edit') ? '' : 'none';
 }
 
 // ============================================================
-// Per-module Access Matrix (Phase E5)
+// Module Access matrix (E6) — ONE matrix, per-module access LEVEL
+// (None / View / Edit / Full, or Custom) projected from the canonical
+// {view,edit,delete} triad in editingModulePermissions.
 // ============================================================
-function renderModuleAccessMatrix(roleKey, role) {
+function _levelLabel(lv) { return lv.charAt(0).toUpperCase() + lv.slice(1); }
+
+// A level <select>. For a section bulk picker, key is "__section__:<id>" and
+// the selected option is the "Set all…" placeholder.
+function _levelSelectHtml(key, currentLevel, dis) {
+  var isBulk = key.indexOf('__section__:') === 0;
+  var opts = isBulk ? '<option value="" selected>Set all…</option>' : '';
+  ['none', 'view', 'edit', 'full'].forEach(function(lv) {
+    opts += '<option value="' + lv + '"' + (!isBulk && lv === currentLevel ? ' selected' : '') + '>' + _levelLabel(lv) + '</option>';
+  });
+  if (!isBulk && currentLevel === 'custom') opts += '<option value="custom" selected>Custom</option>';
+  return '<select class="mod-level-select"' + dis + ' onchange="onModuleLevelChange(\'' + esc(key) + '\', this.value)">' + opts + '</select>';
+}
+
+function renderModuleAccessMatrix() {
   var wrap = document.getElementById('moduleAccessSection');
   if (!wrap) return;
-  var isAdminRole = role.isDefault && roleKey === 'admin';
-  var groups = getModulePermRegistry();
-  var src = role.modulePermissions || {};
-
-  // Seed editing buffer: explicit role value if present, else the role's
-  // section-derived default (so unedited roles show their effective state).
-  editingModulePermissions = {};
-  groups.forEach(function(g) {
-    g.routes.forEach(function(m) {
-      var s = src[m.route] || {};
-      var def = isAdminRole ? true : defaultModuleAxisForRole(roleKey, m.route);
-      editingModulePermissions[m.route] = {
-        view:   s.view   !== undefined ? !!s.view   : def,
-        edit:   s.edit   !== undefined ? !!s.edit   : def,
-        'delete': s['delete'] !== undefined ? !!s['delete'] : def
-      };
-    });
-  });
-
-  var dis = isAdminRole ? ' disabled title="Admin has full access"' : '';
+  var dis = _permIsAdmin ? ' disabled title="Admin has full access to every module"' : '';
   var html = '<h4 style="font-size:0.9rem;margin:0 0 4px;">Module Access</h4>' +
-    '<p style="font-size:0.72rem;color:var(--warm-gray);margin:0 0 10px;">Per-module View / Edit / Delete. <strong>View</strong> controls whether the module appears in the sidebar and can be opened. <strong>Edit</strong> covers create + update; <strong>Delete</strong> is destructive actions. Unchecking View greys out Edit/Delete for that module.</p>';
+    '<p style="font-size:0.72rem;color:var(--warm-gray);margin:0 0 10px;">One access level per module. ' +
+      '<strong>None</strong> hides it; <strong>View</strong> opens it read-only; <strong>Edit</strong> adds create + update; ' +
+      '<strong>Full</strong> adds delete. Use a section’s <em>Set all</em> to bulk-apply.</p>';
 
-  groups.forEach(function(g) {
-    // Section roll-up: are all/some modules in this section viewable?
-    var total = g.routes.length, viewOn = 0;
-    g.routes.forEach(function(m) { if (editingModulePermissions[m.route].view) viewOn++; });
-    var summary = viewOn + '/' + total + ' visible';
+  getModulePermRegistry().forEach(function(g) {
+    var counts = { none: 0, view: 0, edit: 0, full: 0, custom: 0 };
+    g.routes.forEach(function(m) { counts[triadToLevel(editingModulePermissions[m.route])]++; });
+    var parts = [];
+    ['full', 'edit', 'view', 'custom', 'none'].forEach(function(lv) { if (counts[lv]) parts.push(counts[lv] + ' ' + _levelLabel(lv)); });
 
     html += '<div class="mod-access-group" data-mod-section="' + esc(g.section) + '">' +
       '<div class="mod-access-header" onclick="toggleModuleAccordion(\'' + esc(g.section) + '\')">' +
         '<span><span class="mod-access-caret">›</span>' + esc(g.label) +
-          ' <span style="font-weight:400;color:var(--warm-gray);font-size:0.72rem;">(' + summary + ')</span></span>' +
-        '<span class="mod-access-bulk" onclick="event.stopPropagation();">' +
-          ['view', 'edit', 'delete'].map(function(axis) {
-            return '<label>' + axis.charAt(0).toUpperCase() + axis.slice(1) +
-              '<input type="checkbox"' + dis +
-              ' onchange="bulkToggleModuleSection(\'' + esc(g.section) + '\',\'' + axis + '\',this.checked)"></label>';
-          }).join('') +
-        '</span>' +
+          ' <span style="font-weight:400;color:var(--warm-gray);font-size:0.72rem;">(' + parts.join(' · ') + ')</span></span>' +
+        '<span class="mod-access-bulk" onclick="event.stopPropagation();">Set all ' + _levelSelectHtml('__section__:' + g.section, '', dis) + '</span>' +
       '</div>' +
-      '<div class="mod-access-body"><table class="perm-matrix" style="width:100%;min-width:0;">' +
-        '<thead><tr><th>Module</th><th>View</th><th>Edit</th><th>Delete</th></tr></thead><tbody>';
+      '<div class="mod-access-body"><table class="perm-matrix" style="width:100%;min-width:0;"><tbody>';
 
     g.routes.forEach(function(m) {
-      var ep = editingModulePermissions[m.route];
-      var viewOff = !ep.view;
+      var lv = triadToLevel(editingModulePermissions[m.route]);
       html += '<tr data-mod-route="' + esc(m.route) + '">' +
         '<td>' + esc(m.label) + '</td>' +
-        ['view', 'edit', 'delete'].map(function(axis) {
-          var checked = ep[axis] ? ' checked' : '';
-          var axisDis = dis || ((axis !== 'view' && viewOff) ? ' disabled' : '');
-          return '<td><input type="checkbox" data-mod-axis="' + axis + '"' + checked + axisDis +
-            ' onchange="toggleModulePermission(\'' + esc(m.route) + '\',\'' + axis + '\',this.checked)"></td>';
-        }).join('') +
+        '<td style="text-align:right;">' + _levelSelectHtml(m.route, lv, dis) + '</td>' +
       '</tr>';
     });
-
     html += '</tbody></table></div></div>';
   });
-
   wrap.innerHTML = html;
+}
+
+function onModuleLevelChange(key, level) {
+  var expandSection;
+  if (key.indexOf('__section__:') === 0) {
+    var section = key.slice('__section__:'.length);
+    if (!level) return; // "Set all…" placeholder
+    var grp = null;
+    getModulePermRegistry().forEach(function(g) { if (g.section === section) grp = g; });
+    if (grp) grp.routes.forEach(function(m) { editingModulePermissions[m.route] = levelToTriad(level); });
+    expandSection = section;
+  } else {
+    if (level === 'custom') return; // not a selectable target
+    editingModulePermissions[key] = levelToTriad(level);
+    expandSection = _moduleSectionFor(key);
+  }
+  renderModuleAccessMatrix();
+  if (expandSection) {
+    var el = document.querySelector('.mod-access-group[data-mod-section="' + expandSection + '"]');
+    if (el) el.classList.add('open');
+  }
 }
 
 function toggleModuleAccordion(section) {
@@ -48709,61 +48671,32 @@ function toggleModuleAccordion(section) {
   if (el) el.classList.toggle('open');
 }
 
-function toggleModulePermission(route, axis, value) {
-  if (!editingModulePermissions[route]) editingModulePermissions[route] = { view: false, edit: false, 'delete': false };
-  editingModulePermissions[route][axis] = value;
-  // Toggling View off implies edit/delete are moot — disable+uncheck them in-row.
-  if (axis === 'view') {
-    var row = document.querySelector('tr[data-mod-route="' + route + '"]');
-    if (row) {
-      ['edit', 'delete'].forEach(function(a) {
-        var cb = row.querySelector('input[data-mod-axis="' + a + '"]');
-        if (cb) {
-          cb.disabled = !value;
-          if (!value) { cb.checked = false; editingModulePermissions[route][a] = false; }
-        }
-      });
-    }
-  }
+// Sensitive (high-trust) actions — boolean Allowed toggles, kept distinct from
+// module access. Rendered below the module matrix.
+function renderSensitiveActions() {
+  var wrap = document.getElementById('funcPermSection');
+  if (!wrap) return;
+  var dis = _permIsAdmin ? ' disabled title="Admin has full access"' : '';
+  var rows = FUNCTION_PERMISSIONS.map(function(fp) {
+    var k = _sensitiveKey(fp.entity, fp.action);
+    var modLabel = (window.MODE_MODULE_INFO && MODE_MODULE_INFO[fp.module] && MODE_MODULE_INFO[fp.module].label) || fp.module;
+    return '<tr>' +
+      '<td style="font-size:0.85rem;"><strong>' + esc(fp.label) + '</strong>' +
+        '<div style="font-size:0.72rem;color:var(--warm-gray);">' + esc(fp.description) + ' · ' + esc(modLabel) + '</div></td>' +
+      '<td style="text-align:center;"><input type="checkbox"' + (editingSensitiveActions[k] ? ' checked' : '') + dis +
+        ' onchange="toggleSensitiveAction(\'' + esc(k) + '\', this.checked)"></td>' +
+    '</tr>';
+  }).join('');
+  wrap.innerHTML =
+    '<h4 style="font-size:0.9rem;margin:0 0 4px;">Sensitive Actions</h4>' +
+    '<p style="font-size:0.72rem;color:var(--warm-gray);margin:0 0 8px;">High-trust verbs, gated independently of module access.</p>' +
+    '<table class="perm-matrix" style="width:100%;"><thead><tr><th>Action</th><th>Allowed</th></tr></thead><tbody>' + rows + '</tbody></table>';
 }
 
-function bulkToggleModuleSection(section, axis, value) {
-  var groups = getModulePermRegistry();
-  var grp = null;
-  groups.forEach(function(g) { if (g.section === section) grp = g; });
-  if (!grp) return;
-  grp.routes.forEach(function(m) {
-    if (!editingModulePermissions[m.route]) editingModulePermissions[m.route] = { view: false, edit: false, 'delete': false };
-    editingModulePermissions[m.route][axis] = value;
-    if (axis === 'view' && !value) {
-      editingModulePermissions[m.route].edit = false;
-      editingModulePermissions[m.route]['delete'] = false;
-    }
-  });
-  // Repaint this section's rows + checkboxes to reflect the bulk change.
-  var groupEl = document.querySelector('.mod-access-group[data-mod-section="' + section + '"]');
-  if (groupEl) {
-    grp.routes.forEach(function(m) {
-      var row = groupEl.querySelector('tr[data-mod-route="' + m.route + '"]');
-      if (!row) return;
-      var ep = editingModulePermissions[m.route];
-      ['view', 'edit', 'delete'].forEach(function(a) {
-        var cb = row.querySelector('input[data-mod-axis="' + a + '"]');
-        if (!cb) return;
-        cb.checked = !!ep[a];
-        if (a !== 'view') cb.disabled = !ep.view;
-      });
-    });
-  }
-}
-
-function togglePermission(entity, action, value) {
-  if (!editingPermissions[entity]) editingPermissions[entity] = {};
-  editingPermissions[entity][action] = value;
-}
+function toggleSensitiveAction(key, value) { editingSensitiveActions[key] = value === true; }
 
 async function savePermissionMatrix() {
-  if (!hasPermission('roles', 'update')) {
+  if (!can('employees', 'edit')) {
     showToast('You do not have permission to edit roles.', true);
     return;
   }
@@ -48771,18 +48704,18 @@ async function savePermissionMatrix() {
   if (!roleKey) return;
 
   try {
-    await MastDB.roles.setPermissions(roleKey, editingPermissions);
     await MastDB.roles.setModulePermissions(roleKey, editingModulePermissions);
+    await MastDB.roles.setSensitiveActions(roleKey, editingSensitiveActions);
     if (!rolesData[roleKey]) rolesData[roleKey] = {};
-    rolesData[roleKey].permissions = editingPermissions;
     rolesData[roleKey].modulePermissions = editingModulePermissions;
+    rolesData[roleKey].sensitiveActions = editingSensitiveActions;
     await writeAudit('update', 'roles', roleKey);
     showToast('Permissions saved for ' + (rolesData[roleKey].name || roleKey) + '.');
 
     // If editing own role, reload config + re-apply per-module gates live.
     if (roleKey === currentUserRole) {
-      currentRoleConfig.permissions = editingPermissions;
       currentRoleConfig.modulePermissions = editingModulePermissions;
+      currentRoleConfig.sensitiveActions = editingSensitiveActions;
       applyModuleFilter();
       applyModuleWriteGate(currentRoute);
     }
@@ -48798,7 +48731,7 @@ function resetPermissionMatrix() {
 }
 
 function openCreateRoleModal() {
-  if (!hasPermission('roles', 'create')) {
+  if (!can('employees', 'edit')) {
     showToast('You do not have permission to create roles.', true);
     return;
   }
@@ -48843,17 +48776,22 @@ async function saveNewRole() {
     return;
   }
 
-  // Start with guest-like permissions (all false)
-  var perms = {};
-  Object.keys(ENTITY_LABELS).concat(['users', 'roles', 'auditLog', 'receipts']).forEach(function(entity) {
-    perms[entity] = { create: false, read: false, update: false, delete: false };
+  // New custom roles start locked down (every module None, no sensitive
+  // actions); the operator builds access up in the matrix.
+  var modulePermissions = {};
+  getModulePermRegistry().forEach(function(g) {
+    g.routes.forEach(function(m) { modulePermissions[m.route] = levelToTriad('none'); });
   });
+  var sensitiveActions = {};
+  FUNCTION_PERMISSIONS.forEach(function(fp) { sensitiveActions[_sensitiveKey(fp.entity, fp.action)] = false; });
 
   var roleData = {
     name: name,
     description: desc,
     isDefault: false,
-    permissions: perms
+    navSections: null,
+    modulePermissions: modulePermissions,
+    sensitiveActions: sensitiveActions
   };
 
   try {

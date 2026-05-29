@@ -445,9 +445,9 @@ function renderShowDetail(showId) {
   if (s.aiGenerated) h += ' <span style="font-size:0.78rem;background:var(--teal, var(--teal));color:white;padding:2px 6px;border-radius:4px;">AI Found</span>';
   h += '</div>';
   h += '<div style="display:flex;gap:8px;">';
-  if (hasPermission('shows', 'update') && s.websiteUrl) h += '<button id="deepDiveBtn-' + showId + '" class="btn btn-sm" onclick="runShowDeepDive(\'' + showId + '\')" style="background:var(--teal, var(--teal));color:white;border:none;">Deep Dive</button>';
-  if (hasPermission('shows', 'update')) h += '<button class="btn btn-secondary btn-sm" onclick="openCreateShowModal(\'' + showId + '\')">Edit</button>';
-  if (hasPermission('shows', 'delete')) h += '<button class="btn btn-sm" onclick="archiveShow(\'' + showId + '\')" style="background:#dc2626;color:white;border:none;">Delete</button>';
+  if (can('show-prep', 'edit') && s.websiteUrl) h += '<button id="deepDiveBtn-' + showId + '" class="btn btn-sm" onclick="runShowDeepDive(\'' + showId + '\')" style="background:var(--teal, var(--teal));color:white;border:none;">Deep Dive</button>';
+  if (can('show-prep', 'edit')) h += '<button class="btn btn-secondary btn-sm" onclick="openCreateShowModal(\'' + showId + '\')">Edit</button>';
+  if (can('show-prep', 'delete')) h += '<button class="btn btn-sm" onclick="archiveShow(\'' + showId + '\')" style="background:#dc2626;color:white;border:none;">Delete</button>';
   h += '</div>';
   h += '</div>';
 
@@ -551,7 +551,7 @@ function renderShowDetailPrep(showId, s) {
   h += '<div style="margin-bottom:32px;">';
   h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">';
   h += '<h3 style="margin:0;">Staffing</h3>';
-  if (hasPermission('shows', 'update')) {
+  if (can('show-prep', 'edit')) {
     h += '<button class="btn btn-sm" onclick="openShowStaffingModal(\'' + showId + '\')" style="background:var(--primary, var(--teal));color:white;border:none;">+ Assign Staff</button>';
   }
   h += '</div>';
@@ -569,7 +569,7 @@ function renderShowDetailPrep(showId, s) {
       h += '<div style="font-weight:600;font-size:0.9rem;">' + esc(entry.name || 'Unknown') + '</div>';
       h += '<span style="font-size:0.78rem;background:' + roleBadgeColor + ';color:white;padding:2px 8px;border-radius:4px;">' + esc((entry.showRole || 'support').charAt(0).toUpperCase() + (entry.showRole || 'support').slice(1)) + '</span>';
       h += '</div>';
-      if (hasPermission('shows', 'update')) {
+      if (can('show-prep', 'edit')) {
         h += '<button onclick="removeShowStaff(\'' + showId + '\', \'' + uid + '\')" style="background:none;border:none;color:var(--text-secondary, #888);cursor:pointer;font-size:1.15rem;" title="Remove">&times;</button>';
       }
       h += '</div>';
@@ -582,7 +582,7 @@ function renderShowDetailPrep(showId, s) {
   h += '<div style="margin-bottom:32px;">';
   h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">';
   h += '<h3 style="margin:0;">Inventory Pull List</h3>';
-  if (hasPermission('shows', 'update')) {
+  if (can('show-prep', 'edit')) {
     h += '<button class="btn btn-sm" onclick="addShowInventoryItem(\'' + showId + '\')" style="background:var(--primary, var(--teal));color:white;border:none;">+ Add Item</button>';
   }
   h += '</div>';
@@ -605,7 +605,7 @@ function renderShowDetailPrep(showId, s) {
       if (item.linkedMakeJob) meta.push('<span style="color:var(--primary, var(--teal));font-size:0.78rem;">🔗 Linked to Make</span>');
       if (meta.length) h += '<div style="font-size:0.78rem;color:var(--text-secondary, #888);">' + meta.join(' · ') + '</div>';
       h += '</div>';
-      if (hasPermission('shows', 'update')) {
+      if (can('show-prep', 'edit')) {
         h += '<button onclick="editShowInventoryItem(\'' + showId + '\', \'' + itemId + '\')" style="background:none;border:none;color:var(--text-secondary, #888);cursor:pointer;font-size:0.85rem;" title="Edit">✏️</button>';
         h += '<button onclick="removeShowInventoryItem(\'' + showId + '\', \'' + itemId + '\')" style="background:none;border:none;color:var(--text-secondary, #888);cursor:pointer;font-size:1.15rem;" title="Remove">&times;</button>';
       }
@@ -622,7 +622,7 @@ function renderShowDetailPrep(showId, s) {
   h += '<div style="margin-bottom:32px;">';
   h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">';
   h += '<h3 style="margin:0;">Logistics</h3>';
-  if (hasPermission('shows', 'update')) {
+  if (can('show-prep', 'edit')) {
     h += '<button class="btn btn-sm" onclick="editShowLogistics(\'' + showId + '\')" style="background:var(--primary, var(--teal));color:white;border:none;">Edit</button>';
   }
   h += '</div>';
@@ -733,7 +733,7 @@ function renderShowDetailExecute(showId, s) {
   h += '<div style="margin-bottom:32px;">';
   h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">';
   h += '<h3 style="margin:0;">Sales Log</h3>';
-  if (hasPermission('shows', 'update')) {
+  if (can('show-prep', 'edit')) {
     h += '<button class="btn btn-sm" onclick="openShowSaleModal(\'' + showId + '\')" style="background:var(--primary, var(--teal));color:white;border:none;">+ Record Sale</button>';
   }
   h += '</div>';
@@ -795,7 +795,7 @@ function renderShowDetailExecute(showId, s) {
       h += '<div style="font-size:0.78rem;color:var(--text-secondary, #888);">' + time + ' ' + methodBadge + '</div>';
       h += '</div>';
       h += '<div style="font-weight:700;font-size:0.9rem;">$' + ((sl.priceCents || 0) / 100).toFixed(2) + '</div>';
-      if (hasPermission('shows', 'update')) {
+      if (can('show-prep', 'edit')) {
         h += '<button onclick="editShowSale(\'' + showId + '\', \'' + sl._key + '\')" style="background:none;border:none;color:var(--text-secondary, #888);cursor:pointer;font-size:0.85rem;" title="Edit">&#9998;</button>';
         h += '<button onclick="deleteShowSale(\'' + showId + '\', \'' + sl._key + '\')" style="background:none;border:none;color:var(--text-secondary, #888);cursor:pointer;font-size:1.15rem;" title="Delete">&times;</button>';
       }
@@ -863,7 +863,7 @@ function renderShowDetailExecute(showId, s) {
       h += '<div style="font-size:0.78rem;color:var(--text-secondary, #888);">Brought: ' + qty + ' | Accounted: ' + accounted + '</div>';
       h += '</div>';
       h += '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">';
-      if (hasPermission('shows', 'update')) {
+      if (can('show-prep', 'edit')) {
         h += reconCounterButton(showId, itemId, 'sold', rec.sold || 0, '#16a34a');
         h += reconCounterButton(showId, itemId, 'returned', rec.returned || 0, '#2563eb');
         h += reconCounterButton(showId, itemId, 'damaged', rec.damaged || 0, '#dc2626');
@@ -886,7 +886,7 @@ function renderShowDetailExecute(showId, s) {
   h += '<div style="margin-bottom:32px;">';
   h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">';
   h += '<h3 style="margin:0;">Show Notes</h3>';
-  if (hasPermission('shows', 'update')) {
+  if (can('show-prep', 'edit')) {
     h += '<button class="btn btn-sm" onclick="editShowNotes(\'' + showId + '\')" style="background:var(--primary, var(--teal));color:white;border:none;">Edit Notes</button>';
   }
   h += '</div>';
@@ -1268,7 +1268,7 @@ function renderShowDetailHistory(showId, s) {
   h += '<div style="margin-bottom:32px;">';
   h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">';
   h += '<h3 style="margin:0;">Profit &amp; Loss</h3>';
-  if (hasPermission('shows', 'update')) {
+  if (can('show-prep', 'edit')) {
     h += '<div style="display:flex;gap:8px;">';
     h += '<button class="btn btn-sm" onclick="openShowExpenseModal(\'' + showId + '\')" style="background:var(--primary, var(--teal));color:white;border:none;">+ Add Expense</button>';
     // W1 — first-class entry point for "I drove to this show." Previously the
@@ -1334,7 +1334,7 @@ function renderShowDetailHistory(showId, s) {
     h += '<span style="font-size:0.9rem;">' + esc(exp.description || 'Expense') + '</span>';
     h += '<div style="display:flex;align-items:center;gap:8px;">';
     h += '<span style="font-weight:600;color:#dc2626;">-$' + ((exp.amountCents || 0) / 100).toFixed(2) + '</span>';
-    if (hasPermission('shows', 'update')) {
+    if (can('show-prep', 'edit')) {
       h += '<button onclick="editShowExpense(\'' + showId + '\', \'' + k + '\')" style="background:none;border:none;color:var(--text-secondary, #888);cursor:pointer;font-size:0.85rem;" title="Edit">&#9998;</button>';
       h += '<button onclick="deleteShowExpense(\'' + showId + '\', \'' + k + '\')" style="background:none;border:none;color:var(--text-secondary, #888);cursor:pointer;font-size:1.15rem;" title="Delete">&times;</button>';
     }
@@ -1358,7 +1358,7 @@ function renderShowDetailHistory(showId, s) {
   h += '<div style="margin-bottom:32px;">';
   h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">';
   h += '<h3 style="margin:0;">Show Review</h3>';
-  if (hasPermission('shows', 'update')) {
+  if (can('show-prep', 'edit')) {
     h += '<button class="btn btn-sm" onclick="openShowReviewModal(\'' + showId + '\')" style="background:var(--primary, var(--teal));color:white;border:none;">Edit Review</button>';
   }
   h += '</div>';
@@ -1961,7 +1961,7 @@ async function autoPublishShow(showId, showData) {
 }
 
 async function archiveShow(showId) {
-  if (!hasPermission('shows', 'delete')) { showToast('You do not have permission to delete shows.', true); return; }
+  if (!can('show-prep', 'delete')) { showToast('You do not have permission to delete shows.', true); return; }
   if (!await mastConfirm('Delete this show? This cannot be undone.', { title: 'Delete Show', danger: true })) return;
   try {
     await MastDB.shows.remove(showId);

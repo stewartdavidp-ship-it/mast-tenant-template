@@ -307,7 +307,7 @@
   // Returns true if the current user has operational management access (Admin or Manager).
   // Used to gate Team tabs that are not self-service (Time Clock, PTO, Documents, Onboarding).
   function canManageTeam() {
-    return typeof hasPermission === 'function' ? hasPermission('jobs', 'read') : true;
+    return typeof can === 'function' ? can('team', 'edit') : true;
   }
 
   // --- Main Render ---

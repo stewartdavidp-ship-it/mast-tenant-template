@@ -1418,7 +1418,7 @@ function showManualSaleModal(eventId) {
 }
 
 async function saveManualSale(eventId) {
-  if (!hasPermission('sales', 'create')) {
+  if (!can('pos', 'edit')) {
     showToast('You do not have permission to record sales.', true);
     return;
   }
