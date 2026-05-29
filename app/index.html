@@ -7089,18 +7089,30 @@
       <div id="authEmailControls" style="display:contents;">
         <div class="auth-divider">or</div>
 
-        <!-- Email + password sign-in (V1 email-auth) -->
-        <form class="auth-email-form" id="authEmailForm" novalidate onsubmit="emailPasswordSignIn(event)">
+        <!-- Email + password sign-in (V1 email-auth).
+             This form intentionally NEVER fires a submit event. Chrome's
+             password-save heuristic triggers on a login form's submit event
+             (verified live in Chrome) — and preventDefault() does NOT stop it,
+             the event firing at all is enough. On a temporary first-login
+             password that means Chrome offers to save the temp password, which
+             then collides with / suppresses the new-password save on the
+             force-change screen. So sign-in is wired through a type="button"
+             click + an Enter-key handler (preventDefault on Enter blocks the
+             implicit submit). The legitimate password save is done by the
+             deferred navigator.credentials.store() in the onAuthStateChanged
+             funnel (skipped for temp accounts). The <form> element is kept so
+             the browser still groups username+password for autofill. -->
+        <form class="auth-email-form" id="authEmailForm" novalidate onsubmit="return false;">
           <div class="auth-email-row">
             <label for="authEmailInput">Email</label>
-            <input id="authEmailInput" type="email" autocomplete="email" required placeholder="you@example.com" />
+            <input id="authEmailInput" type="email" autocomplete="email" required placeholder="you@example.com" onkeydown="if(event.key==='Enter'){event.preventDefault();emailPasswordSignIn();}" />
           </div>
           <div class="auth-email-row">
             <label for="authPasswordInput">Password</label>
-            <input id="authPasswordInput" type="password" autocomplete="current-password" required placeholder="••••••••" />
+            <input id="authPasswordInput" type="password" autocomplete="current-password" required placeholder="••••••••" onkeydown="if(event.key==='Enter'){event.preventDefault();emailPasswordSignIn();}" />
           </div>
           <div class="auth-error" id="authEmailError" role="alert" aria-live="assertive"></div>
-          <button type="submit" class="btn btn-primary" id="authEmailSubmit" style="width:100%;">Sign in</button>
+          <button type="button" class="btn btn-primary" id="authEmailSubmit" style="width:100%;" onclick="emailPasswordSignIn()">Sign in</button>
         </form>
 
         <div class="auth-email-links">
@@ -19913,7 +19925,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260529-152818-c3a6ae3';
+var MAST_MODULES_V = '20260529-155535-30bee69';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
