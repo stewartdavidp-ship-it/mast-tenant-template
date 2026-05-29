@@ -120,7 +120,7 @@
     /* Pre-paint dark mode on html element to prevent flash before body exists */
     html.dark-mode { background: var(--charcoal); }
     /* ADA: lock root font-size to 100% so rem scales with OS font preference */
-    html { font-size: 100%; }
+    html { font-size: 100%; overscroll-behavior-x: none; }
     /* ADA: honor prefers-reduced-motion — kill animations/transitions for users who ask for them */
     @media (prefers-reduced-motion: reduce) {
       *, *::before, *::after {
@@ -161,6 +161,7 @@
       background: var(--cream);
       color: var(--charcoal);
       min-height: 100vh;
+      overscroll-behavior-x: none;
     }
 
     h1, h2, h3, h4, h5 {
@@ -19355,6 +19356,10 @@ function applyModuleWriteGate(route) {
 }
 
 function applyRoute(route) {
+  // While a forced password change is pending, block ALL route rendering
+  // (Back button, swipe-back, hashchange, direct nav) so the app can't be
+  // reached or bleed through behind the "Set a new password" screen.
+  if (window.__mustChangePassword) { showMustChangePasswordScreen(); return; }
   var config = ROUTE_MAP[route];
   if (!config) return;
 
@@ -19885,7 +19890,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260529-140238-ea65598';
+var MAST_MODULES_V = '20260529-141158-f002527';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
