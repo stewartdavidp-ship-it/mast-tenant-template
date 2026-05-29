@@ -16823,8 +16823,15 @@ function emailPasswordSignIn(event) {
   if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Signing in…'; }
 
   auth.signInWithEmailAndPassword(email, password).then(function() {
-    // Success: do nothing. onAuthStateChanged drives the rest. (Leave the
-    // button disabled — the auth screen is about to be swapped for loading.)
+    // SPA has no real form submit, so explicitly ask the browser's password
+    // manager to save/update this credential (Chrome/Blink; guarded for others).
+    try {
+      if (window.PasswordCredential && navigator.credentials) {
+        navigator.credentials.store(new window.PasswordCredential({ id: email, password: password }));
+      }
+    } catch (e) { /* unsupported — ignore */ }
+    // Success: onAuthStateChanged drives the rest. (Leave the button disabled —
+    // the auth screen is about to be swapped for loading.)
   }).catch(function(err) {
     console.warn('Email/password sign-in failed:', err && err.code, err && err.message);
     var msg = friendlyAuthError(err);
@@ -17170,6 +17177,12 @@ function submitMustChangePassword(event) {
       tenantId: MastDB.tenantId()
     });
   }).then(function() {
+    // Update the browser's saved password to the new one (SPA — no form submit).
+    try {
+      if (window.PasswordCredential && navigator.credentials && user.email) {
+        navigator.credentials.store(new window.PasswordCredential({ id: user.email, password: pw }));
+      }
+    } catch (e) { /* unsupported — ignore */ }
     window.__mustChangePassword = false;
     var screen = document.getElementById('mustChangePasswordScreen');
     if (screen) screen.style.display = 'none';
@@ -17280,6 +17293,17 @@ auth.onAuthStateChanged(async function(user) {
     deniedScreen.style.display = 'none';
     var mcpScreen = document.getElementById('mustChangePasswordScreen');
     if (mcpScreen) mcpScreen.style.display = 'none';
+    // Reset the email/password sign-in form so a stuck "Signing in…" button
+    // (intentionally left disabled after a prior successful login) doesn't
+    // block re-login after sign-out. Also restore from the email-link "sent"
+    // panel and clear the password field.
+    var _sb = document.getElementById('authEmailSubmit');
+    if (_sb) { _sb.disabled = false; _sb.textContent = 'Sign in'; }
+    var _elb = document.getElementById('authEmailLinkBtn');
+    if (_elb) { _elb.disabled = false; _elb.textContent = '✉️ Email me a sign-in link'; }
+    var _pwIn = document.getElementById('authPasswordInput');
+    if (_pwIn) _pwIn.value = '';
+    if (typeof authResetSignInScreen === 'function') authResetSignInScreen();
     header.style.display = 'none';
     hideSidebar();
     hideAdminTabs();
@@ -19831,7 +19855,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260529-122219-3a11467';
+var MAST_MODULES_V = '20260529-123815-46d21f1';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
