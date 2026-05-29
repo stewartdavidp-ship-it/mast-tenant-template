@@ -925,15 +925,20 @@
        Light mode is unchanged. Tokens match the existing #2a2a2a / #e0e0e0. */
     body.dark-mode .auth-email-form input:focus { background: #2a2a2a !important; color: #e0e0e0 !important; }
     body.dark-mode #mustChangePasswordScreen input,
+    body.dark-mode #inviteEmail,
     body.dark-mode #invitePassword,
     body.dark-mode #invitePasswordConfirm { background: #2a2a2a !important; border-color: #444 !important; color: #e0e0e0 !important; }
     body.dark-mode #mustChangePasswordScreen input:focus,
+    body.dark-mode #inviteEmail:focus,
     body.dark-mode #invitePassword:focus,
     body.dark-mode #invitePasswordConfirm:focus { background: #2a2a2a !important; color: #e0e0e0 !important; }
     body.dark-mode .auth-email-form input:-webkit-autofill,
     body.dark-mode .auth-email-form input:-webkit-autofill:hover,
     body.dark-mode .auth-email-form input:-webkit-autofill:focus,
     body.dark-mode #mustChangePasswordScreen input:-webkit-autofill,
+    body.dark-mode #inviteEmail:-webkit-autofill,
+    body.dark-mode #inviteEmail:-webkit-autofill:hover,
+    body.dark-mode #inviteEmail:-webkit-autofill:focus,
     body.dark-mode #invitePassword:-webkit-autofill,
     body.dark-mode #invitePasswordConfirm:-webkit-autofill {
       -webkit-box-shadow: 0 0 0 1000px #2a2a2a inset !important;
@@ -19880,7 +19885,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260529-133403-5a109c6';
+var MAST_MODULES_V = '20260529-134234-83809df';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
