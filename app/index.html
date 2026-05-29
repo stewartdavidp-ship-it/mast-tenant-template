@@ -9536,33 +9536,50 @@
             Connect your Shopify store so Mast can read your catalog and publish product changes back to Shopify. Your access token is stored in encrypted secret storage — Mast staff never see it.
           </p>
 
-          <details style="margin-bottom:16px;background:var(--cream);border:1px solid var(--cream-dark);border-radius:6px;padding:10px 14px;">
-            <summary style="cursor:pointer;font-size:0.85rem;font-weight:600;">How to get your Shopify token (5 minutes)</summary>
-            <ol style="font-size:0.85rem;color:var(--warm-gray);margin:10px 0 4px;padding-left:20px;line-height:1.55;">
-              <li>Log in to your Shopify admin at <code>admin.shopify.com</code>.</li>
-              <li>Click <strong>Settings</strong> (gear icon, bottom left) → <strong>Apps and sales channels</strong> → <strong>Develop apps</strong>.</li>
-              <li>If prompted, click <strong>Allow custom app development</strong> and confirm.</li>
-              <li>Click <strong>Create an app</strong> → name it <code>Mast Integration</code> → <strong>Create app</strong>.</li>
-              <li>Open the <strong>Configuration</strong> tab → under Admin API access scopes, click <strong>Configure</strong>. Check these boxes:
-                <ul style="margin:6px 0;">
-                  <li><code>read_products</code>, <code>write_products</code></li>
-                  <li><code>read_product_listings</code></li>
-                  <li><code>read_inventory</code>, <code>write_inventory</code></li>
-                  <li><code>read_orders</code></li>
-                  <li><code>read_locations</code></li>
-                  <li><code>read_content</code> (optional)</li>
-                </ul>
-                Click <strong>Save</strong>.
-              </li>
-              <li>Open the <strong>API credentials</strong> tab → click <strong>Install app</strong> at the top → confirm <strong>Install</strong>.</li>
-              <li>Under <strong>Admin API access token</strong>, click <strong>Reveal token once</strong> and copy it. It starts with <code>shpat_</code>. You can only view it once.</li>
-              <li>Paste it into the token field below and click <strong>Save &amp; Test</strong>.</li>
-            </ol>
-          </details>
-
           <div id="shopifyConfigStatus" style="margin-bottom:12px;font-size:0.85rem;"></div>
 
           <div id="shopifyDisconnected" style="display:none;">
+            <!-- PRIMARY: Shopify OAuth connect (public-app install flow). Merchant enters their
+                 shop subdomain, approves the requested scopes in Shopify, and is returned here. -->
+            <div id="shopifyMethodOAuth" style="background:var(--cream,#faf8f5);border:1px solid #e8e0d4;border-radius:8px;padding:16px;margin-bottom:12px;">
+              <label style="font-size:0.85rem;font-weight:600;margin-bottom:4px;display:block;">Shop Subdomain</label>
+              <p style="font-size:0.78rem;color:var(--warm-gray);margin:0 0 8px;">Enter your store's <code>.myshopify.com</code> subdomain, then click <strong>Connect Shopify</strong> to approve the requested permissions in Shopify — you'll be brought right back here.</p>
+              <div style="display:flex;align-items:center;gap:6px;margin-bottom:12px;">
+                <input type="text" id="shopifyOAuth_Domain" placeholder="your-shop-name"
+                  style="flex:1;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;box-sizing:border-box;">
+                <span style="font-size:0.85rem;color:var(--warm-gray);">.myshopify.com</span>
+              </div>
+              <button class="btn btn-primary" onclick="connectShopifyOAuth()">Connect Shopify</button>
+              <div id="shopifyOAuthNote" style="display:none;margin-top:10px;font-size:0.85rem;"></div>
+            </div>
+
+            <!-- SECONDARY: manual API-credential setup (legacy custom apps / test stores). -->
+            <details style="margin-bottom:12px;">
+              <summary style="cursor:pointer;font-size:0.85rem;font-weight:600;color:var(--warm-gray);">Advanced: connect with API credentials instead</summary>
+              <div style="margin-top:12px;">
+                <details style="margin-bottom:16px;background:var(--cream);border:1px solid var(--cream-dark);border-radius:6px;padding:10px 14px;">
+                  <summary style="cursor:pointer;font-size:0.85rem;font-weight:600;">How to create a custom app (5 minutes)</summary>
+                  <ol style="font-size:0.85rem;color:var(--warm-gray);margin:10px 0 4px;padding-left:20px;line-height:1.55;">
+                    <li>Log in to your Shopify admin at <code>admin.shopify.com</code>.</li>
+                    <li>Click <strong>Settings</strong> (gear icon, bottom left) → <strong>Apps and sales channels</strong> → <strong>Develop apps</strong>.</li>
+                    <li>If prompted, click <strong>Allow custom app development</strong> and confirm.</li>
+                    <li>Click <strong>Create an app</strong> → name it <code>Mast Integration</code> → <strong>Create app</strong>.</li>
+                    <li>Open the <strong>Configuration</strong> tab → under Admin API access scopes, click <strong>Configure</strong>. Check these boxes:
+                      <ul style="margin:6px 0;">
+                        <li><code>read_products</code>, <code>write_products</code></li>
+                        <li><code>read_product_listings</code></li>
+                        <li><code>read_inventory</code>, <code>write_inventory</code></li>
+                        <li><code>read_orders</code></li>
+                        <li><code>read_locations</code></li>
+                        <li><code>read_content</code> (optional)</li>
+                      </ul>
+                      Click <strong>Save</strong>.
+                    </li>
+                    <li>Open the <strong>API credentials</strong> tab → click <strong>Install app</strong> at the top → confirm <strong>Install</strong>.</li>
+                    <li>Under <strong>Admin API access token</strong>, click <strong>Reveal token once</strong> and copy it. It starts with <code>shpat_</code>. You can only view it once.</li>
+                    <li>Paste it into the token field below and click <strong>Save &amp; Test</strong>.</li>
+                  </ol>
+                </details>
             <div style="display:flex;gap:0;margin-bottom:12px;">
               <button class="btn btn-secondary shopify-method-tab" id="shopifyTabClientCreds" onclick="switchShopifyMethod('clientCreds')" style="border-radius:6px 0 0 6px;font-size:0.85rem;padding:7px 14px;border-right:none;">Client Credentials</button>
               <button class="btn btn-secondary shopify-method-tab" id="shopifyTabAccessToken" onclick="switchShopifyMethod('accessToken')" style="border-radius:0 6px 6px 0;font-size:0.85rem;padding:7px 14px;opacity:0.6;">Access Token (Legacy)</button>
@@ -9634,6 +9651,8 @@
                 <button class="btn btn-primary" onclick="saveShopifyConfig()">Save &amp; Test</button>
               </div>
             </div>
+              </div>
+            </details>
           </div>
 
           <div id="shopifyConnected" style="display:none;">
@@ -19059,7 +19078,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260528-230426-ca998fa';
+var MAST_MODULES_V = '20260529-000410-dcf552c';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -27076,6 +27095,55 @@ async function saveShopifyClientCredentials() {
   } catch (e) {
     statusEl.innerHTML = '<span style="color:#ef4444;">&#10007; ' + esc(e.message) + '</span>';
     showToast('Error: ' + e.message, 'error');
+  }
+}
+
+// Primary, public-app "Connect Shopify" action. Initiates merchant OAuth via the
+// shopifyOAuthStart callable (returns an authorize URL), opens Shopify's consent
+// screen, then bounded-polls for the channel record the OAuth callback writes
+// (config/shopify + admin/businessEntity/channels/shopify) and refreshes the UI.
+async function connectShopifyOAuth() {
+  if (!can('settings', 'edit')) { showToast('You do not have permission to update settings.', true); return; }
+  var noteEl = document.getElementById('shopifyOAuthNote');
+  function setNote(text, isErr) {
+    if (!noteEl) return;
+    noteEl.style.display = text ? 'block' : 'none';
+    noteEl.innerHTML = text ? ('<span style="color:' + (isErr ? '#ef4444' : 'var(--warm-gray)') + ';">' + esc(text) + '</span>') : '';
+  }
+  var domain = (document.getElementById('shopifyOAuth_Domain').value || '').trim().toLowerCase();
+  domain = domain.replace(/^https?:\/\//, '').replace(/\/+$/, '').replace(/\.myshopify\.com$/, '');
+  if (!/^[a-z0-9]([a-z0-9-]{0,58}[a-z0-9])?$/.test(domain)) {
+    showToast('Enter a valid Shopify subdomain (e.g. "my-store").', 'error');
+    return;
+  }
+  setNote('Starting secure connection…');
+  try {
+    var result = await firebase.functions().httpsCallable('shopifyOAuthStart')({ tenantId: MastDB.tenantId(), shopDomain: domain });
+    var data = (result && result.data) || {};
+    if (!data.authUrl) throw new Error('Could not start Shopify authorization.');
+    window.open(data.authUrl, '_blank', 'noopener');
+    setNote('Approve the requested permissions in the new tab. This page updates automatically once you’re connected.');
+    // Bounded poll for connected status — no persistent listener (per the no-unbounded-listeners rule).
+    var tries = 0;
+    if (window.__shopifyOAuthPoll) clearInterval(window.__shopifyOAuthPoll);
+    window.__shopifyOAuthPoll = setInterval(function() {
+      tries++;
+      if (tries > 20) { clearInterval(window.__shopifyOAuthPoll); window.__shopifyOAuthPoll = null; return; }
+      firebase.functions().httpsCallable('secretsManager')({ action: 'read', service: 'shopify', tenantId: MastDB.tenantId() })
+        .then(function(r) {
+          var cfg = (r && r.data) || {};
+          if (cfg.connected && cfg.shopDomain) {
+            clearInterval(window.__shopifyOAuthPoll); window.__shopifyOAuthPoll = null;
+            showToast('Shopify connected!', 'success');
+            writeAudit('update', 'settings', 'shopifyConfig');
+            loadShopifyConfig();
+          }
+        }).catch(function() {});
+    }, 4000);
+  } catch (err) {
+    var msg = (err && err.message) || String(err);
+    setNote('Connect failed: ' + msg, true);
+    showToast('Shopify connect failed: ' + msg, 'error');
   }
 }
 
