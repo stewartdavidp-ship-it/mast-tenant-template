@@ -15278,11 +15278,95 @@ window.canViewModule = canViewModule;
 window.canEditModule = canEditModule;
 window.canDeleteModule = canDeleteModule;
 
-// Legacy thin wrapper (view-axis bool) retained until the matrix UI rewrite
-// (task: single matrix) swaps to roleModuleTriad/levels directly.
+// Legacy thin wrapper (view-axis bool) retained for any external callers.
 function defaultModuleAxisForRole(roleKey, route) {
   return !!levelToTriad(defaultModuleLevelForRole(roleKey, route)).view;
 }
+
+// ============================================================
+// In-app RBAC self-test (E6) — backbone regression suite.
+// Run in console: __rbacSelfTest()  → { passed, failed, failures:[...] }
+// Pure resolver assertions (no DOM, no Firebase). Swaps the current-user
+// globals to synthetic values and restores them, so it is side-effect free.
+// ============================================================
+function __rbacSelfTest() {
+  var results = [], passed = 0, failed = 0;
+  function check(name, got, want) {
+    var ok = JSON.stringify(got) === JSON.stringify(want);
+    if (ok) passed++; else { failed++; results.push({ test: name, got: got, want: want }); }
+  }
+  // Snapshot + restore current-user globals.
+  var snap = { role: currentUserRole, cfg: currentRoleConfig, ready: rbacReady, mo: currentUserModuleOverrides, so: currentUserOverrides };
+  function setUser(role, cfg, modOv, senOv) {
+    currentUserRole = role; currentRoleConfig = cfg || {}; rbacReady = true;
+    currentUserModuleOverrides = modOv || {}; currentUserOverrides = senOv || {};
+  }
+  try {
+    // 1. level ↔ triad round-trips
+    ['none','view','edit','full'].forEach(function(lv){ check('triadToLevel('+lv+')', triadToLevel(levelToTriad(lv)), lv); });
+    check('custom triad', triadToLevel({view:true,edit:false,'delete':true}), 'custom');
+
+    // 2. default levels per role
+    check('admin default settings', defaultModuleLevelForRole('admin','settings'), 'full');
+    check('manager default pos', defaultModuleLevelForRole('manager','pos'), 'full');
+    check('manager default products', defaultModuleLevelForRole('manager','products'), 'view');
+    check('manager default finance-pl', defaultModuleLevelForRole('manager','finance-pl'), 'none');
+    check('manager default settings', defaultModuleLevelForRole('manager','settings'), 'none');
+    check('user default pos', defaultModuleLevelForRole('user','pos'), 'edit');
+    check('user default finance-pl', defaultModuleLevelForRole('user','finance-pl'), 'none');
+    check('guest default pos', defaultModuleLevelForRole('guest','pos'), 'view');
+
+    // 3. can() under role defaults
+    setUser('admin', {});
+    check('admin can delete anything', [can('finance-pl','view'),can('settings','delete')], [true,true]);
+    setUser('manager', { navSections: DEFAULT_ROLES.manager.navSections });
+    check('manager pos full', [can('pos','view'),can('pos','edit'),can('pos','delete')], [true,true,true]);
+    check('manager products view-only', [can('products','view'),can('products','edit')], [true,false]);
+    check('manager finance-pl hidden', can('finance-pl','view'), false);
+    check('manager settings hidden', can('settings','view'), false);
+    setUser('user', { navSections: DEFAULT_ROLES.user.navSections });
+    check('user pos edit not delete', [can('pos','view'),can('pos','edit'),can('pos','delete')], [true,true,false]);
+    check('user finance hidden', can('finance-pl','view'), false);
+    setUser('guest', { navSections: DEFAULT_ROLES.guest.navSections });
+    check('guest pos view-only', [can('pos','view'),can('pos','edit')], [true,false]);
+
+    // 4. axis hierarchy: edit/delete require view
+    setUser('user', { modulePermissions: { 'pos': { view:false, edit:true, 'delete':true } } });
+    check('edit needs view', [can('pos','view'),can('pos','edit'),can('pos','delete')], [false,false,false]);
+
+    // 5. explicit role.modulePermissions beats default
+    setUser('user', { modulePermissions: { 'finance-pl': { view:true, edit:true, 'delete':false } } });
+    check('explicit role perm wins', [can('finance-pl','view'),can('finance-pl','edit'),can('finance-pl','delete')], [true,true,false]);
+
+    // 6. per-user module override beats role
+    setUser('manager', { navSections: DEFAULT_ROLES.manager.navSections }, { 'pos': { view:false }, 'finance-pl': { view:true } });
+    check('user override deny pos', can('pos','view'), false);
+    check('user override grant finance-pl', can('finance-pl','view'), true);
+
+    // 7. sensitive actions
+    setUser('admin', {});
+    check('admin sensitive', hasPermission('wallet','grantCredit'), true);
+    setUser('manager', {});
+    check('manager giftCards.issue default', hasPermission('giftCards','issue'), true);
+    check('manager grantCredit default', hasPermission('wallet','grantCredit'), false);
+    setUser('manager', { sensitiveActions: { 'wallet.grantCredit': true } });
+    check('role sensitive grant', hasPermission('wallet','grantCredit'), true);
+    setUser('manager', {}, {}, { 'wallet.grantCredit': true });
+    check('user sensitive override', hasPermission('wallet','grantCredit'), true);
+
+    // 8. roleModuleTriad explicit vs default
+    check('roleModuleTriad default', triadToLevel(roleModuleTriad('user', {}, 'pos')), 'edit');
+    check('roleModuleTriad explicit', triadToLevel(roleModuleTriad('user', { modulePermissions:{ pos:{view:true,edit:false,'delete':false} } }, 'pos')), 'view');
+  } finally {
+    currentUserRole = snap.role; currentRoleConfig = snap.cfg; rbacReady = snap.ready;
+    currentUserModuleOverrides = snap.mo; currentUserOverrides = snap.so;
+  }
+  var summary = { passed: passed, failed: failed, failures: results };
+  if (failed) console.error('[__rbacSelfTest] ' + failed + ' FAILED', results);
+  else console.log('[__rbacSelfTest] all ' + passed + ' assertions passed');
+  return summary;
+}
+window.__rbacSelfTest = __rbacSelfTest;
 
 var imageLibrary = {};
 var imageLibraryLoaded = false;
@@ -18975,7 +19059,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260528-223254-1751e57';
+var MAST_MODULES_V = '20260528-230426-ca998fa';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -47334,53 +47418,24 @@ var editingModulePermissions = {}; // temp {route:{view,edit,delete}} for the ro
 var editingSensitiveActions = {};  // temp {key:bool} for the sensitive-actions list
 var _permRoleKey = null;           // role currently shown in the matrix
 var _permIsAdmin = false;          // is that role the built-in admin (read-only matrix)
-var editingUserOverrides = {};   // temp state for per-user override editor (Section 2)
+var editingUserModuleLevels = {}; // temp {route: level} effective levels in the per-user editor
+var editingUserSensitive = {};    // temp {key: bool} effective sensitive grants in the per-user editor
+var _userPanelUid = null;         // uid currently shown in the per-user editor
 
-// Compute the fully merged permission set: code defaults → Firebase role config → per-user overrides.
-function computeEffectivePermissions(role, roleConfig, overrides) {
-  var base = {};
-  var def = DEFAULT_ROLES[role];
-  if (def && def.permissions) {
-    Object.keys(def.permissions).forEach(function(entity) {
-      base[entity] = Object.assign({}, def.permissions[entity]);
-    });
-  }
-  if (roleConfig && roleConfig.permissions) {
-    Object.keys(roleConfig.permissions).forEach(function(entity) {
-      base[entity] = Object.assign({}, base[entity] || {}, roleConfig.permissions[entity]);
-    });
-  }
-  if (overrides) {
-    Object.keys(overrides).forEach(function(entity) {
-      base[entity] = Object.assign({}, base[entity] || {}, overrides[entity]);
-    });
-  }
-  return base;
+// ---- Per-user override helpers (E6, module + sensitive) ----
+// A role's default access LEVEL for a module (clean level or 'custom').
+function roleDefaultModuleLevel(role, roleConfig, route) {
+  return triadToLevel(roleModuleTriad(role, roleConfig, route));
 }
-
-// Returns only the entries in overrides that actually differ from the computed role default.
-function computePermissionDiff(role, roleConfig, overrides) {
-  if (!overrides || Object.keys(overrides).length === 0) return {};
-  var defaults = computeEffectivePermissions(role, roleConfig, {});
-  var diff = {};
-  Object.keys(overrides).forEach(function(entity) {
-    var entityOverrides = overrides[entity];
-    Object.keys(entityOverrides).forEach(function(action) {
-      var defaultVal = defaults[entity] ? defaults[entity][action] : false;
-      if (entityOverrides[action] !== defaultVal) {
-        if (!diff[entity]) diff[entity] = {};
-        diff[entity][action] = entityOverrides[action];
-      }
-    });
-  });
-  return diff;
+// A role's default sensitive-action grant.
+function roleDefaultSensitive(role, roleConfig, key) {
+  var sa = roleConfig && roleConfig.sensitiveActions;
+  if (sa && sa[key] !== undefined) return sa[key] === true;
+  return defaultSensitiveActionsForRole(role)[key] === true;
 }
-
-// Returns true if the role default for entity+action is false — meaning only Admin could elevate it.
-function isAdminGrantedElevation(entity, action, role, roleConfig) {
-  var defaults = computeEffectivePermissions(role, roleConfig, {});
-  return !(defaults[entity] && defaults[entity][action] === true);
-}
+// Manager ceiling: a level index for comparison (custom treated as full so a
+// manager is never blocked from matching an admin-set custom default).
+function _lvlIdx(lv) { var i = MODULE_LEVELS.indexOf(lv); return i < 0 ? MODULE_LEVELS.length - 1 : i; }
 
 function loadAdminUsers() {
   if (adminUsersLoaded) { renderUsersList(); loadPendingInvites(); return; }
@@ -47536,9 +47591,7 @@ function renderUsersList() {
     }
 
     // Customized badge: show when user has active permission overrides
-    var overrideDiff = computePermissionDiff(role, rolesData[role] || DEFAULT_ROLES[role], u.permissionOverrides || {});
-    var overrideCount = 0;
-    Object.keys(overrideDiff).forEach(function(e) { overrideCount += Object.keys(overrideDiff[e]).length; });
+    var overrideCount = userOverrideCount(u);
     if (overrideCount > 0) {
       roleCell += ' <span class="status-badge" style="font-size:0.72rem;background:rgba(245,158,11,0.15);color:#b45309;border:1px solid rgba(245,158,11,0.3);">customized (' + overrideCount + ')</span>';
     }
@@ -47670,98 +47723,91 @@ function viewUserAudit(uid) {
 // ============================================================
 // Per-User Permission Override Editor (RBAC Phase 1 — Section 2)
 // ============================================================
-function openUserPermissionsPanel(uid) {
+// E6 per-user editor: per-module access LEVEL overrides + sensitive-action
+// overrides, relative to the user's role defaults. Manager ceiling: can reduce
+// below the role default but not elevate above it (CF re-enforces server-side).
+// seedMode 'stored' (default) seeds from the user's saved overrides; 'defaults'
+// resets every module/action to the role default (the Reset button).
+function _userLevelSelectHtml(route, currentLevel, defaultLevel, isAdmin) {
+  var ceiling = isAdmin ? (MODULE_LEVELS.length - 1) : _lvlIdx(defaultLevel);
+  // Admin-granted elevation already above the manager's ceiling → lock the select.
+  var locked = (!isAdmin && _lvlIdx(currentLevel) > ceiling);
+  var opts = '';
+  MODULE_LEVELS.forEach(function(lv, i) {
+    var dis = (!locked && i > ceiling) ? ' disabled' : '';
+    opts += '<option value="' + lv + '"' + (lv === currentLevel ? ' selected' : '') + dis + '>' + _levelLabel(lv) + '</option>';
+  });
+  if (currentLevel === 'custom') opts += '<option value="custom" selected>Custom</option>';
+  return '<select class="mod-level-select"' + (locked ? ' disabled title="Owner-granted — cannot be changed by Manager"' : '') +
+    ' onchange="setUserModuleLevel(\'' + esc(route) + '\', this.value)">' + opts + '</select>';
+}
+
+function openUserPermissionsPanel(uid, seedMode) {
   if (!can('employees', 'edit')) {
     showToast('You do not have permission to edit user permissions.', true);
     return;
   }
   var u = adminUsers[uid];
   if (!u) return;
+  _userPanelUid = uid;
 
   var role = u.role || 'guest';
   var roleConfig = rolesData[role] || DEFAULT_ROLES[role];
-  var overrides = u.permissionOverrides || {};
-  var effective = computeEffectivePermissions(role, roleConfig, {});
+  var modOv = (seedMode === 'defaults') ? {} : (u.moduleOverrides || {});
+  var senOv = (seedMode === 'defaults') ? {} : (u.permissionOverrides || {});
   var isEditorAdmin = (currentUserRole === 'admin');
-
-  editingUserOverrides = {};
-  // Deep-copy current overrides into editingUserOverrides
-  Object.keys(overrides).forEach(function(entity) {
-    editingUserOverrides[entity] = Object.assign({}, overrides[entity]);
-  });
-
   var roleName = ROLE_DISPLAY_NAMES[role] || (roleConfig ? roleConfig.name : role);
-  var entities = Object.keys(ENTITY_LABELS);
-  ['users', 'roles', 'auditLog', 'receipts'].forEach(function(extra) {
-    if (effective[extra] !== undefined && entities.indexOf(extra) === -1) entities.push(extra);
-  });
 
-  var matrixRows = '';
-  entities.forEach(function(entity) {
-    var ep = effective[entity] || { create: false, read: false, update: false, delete: false };
-    var label = ENTITY_LABELS[entity] || entity;
-    var cells = '<td style="font-size:0.85rem;">' + label + '</td>';
-    ['create', 'read', 'update', 'delete'].forEach(function(action) {
-      var overrideVal = (editingUserOverrides[entity] && editingUserOverrides[entity][action] !== undefined)
-        ? editingUserOverrides[entity][action]
-        : null;
-      var effectiveVal = overrideVal !== null ? overrideVal : ep[action];
-      var isElevation = isAdminGrantedElevation(entity, action, role, roleConfig);
-      var isReduced = !isElevation && overrideVal === false;
-      var cellStyle = '';
-      var disabledAttr = '';
-      var titleAttr = '';
-
-      if (isElevation && overrideVal === true) {
-        // Admin-granted elevation — locked for managers
-        cellStyle = 'background:rgba(245,158,11,0.12);';
-        if (!isEditorAdmin) { disabledAttr = ' disabled'; titleAttr = ' title="Owner-granted — cannot be removed by Manager"'; }
-      } else if (isElevation && !isEditorAdmin) {
-        // Role default false — managers cannot enable
-        disabledAttr = ' disabled';
-        titleAttr = ' title="Below role ceiling — only Owner can grant this"';
-      } else if (isReduced) {
-        cellStyle = 'background:rgba(239,68,68,0.12);';
-      }
-
-      cells += '<td style="text-align:center;' + cellStyle + '">' +
-        '<input type="checkbox"' + (effectiveVal ? ' checked' : '') + disabledAttr + titleAttr +
-        ' onchange="toggleUserOverride(\'' + uid + '\',\'' + entity + '\',\'' + action + '\',this.checked)">' +
-        '</td>';
+  // Seed effective buffers (override if set, else role default).
+  editingUserModuleLevels = {};
+  getModulePermRegistry().forEach(function(g) {
+    g.routes.forEach(function(m) {
+      editingUserModuleLevels[m.route] = (modOv[m.route]) ? triadToLevel(modOv[m.route]) : roleDefaultModuleLevel(role, roleConfig, m.route);
     });
-    matrixRows += '<tr>' + cells + '</tr>';
+  });
+  editingUserSensitive = {};
+  FUNCTION_PERMISSIONS.forEach(function(fp) {
+    var k = _sensitiveKey(fp.entity, fp.action);
+    editingUserSensitive[k] = (senOv[k] !== undefined) ? senOv[k] === true : roleDefaultSensitive(role, roleConfig, k);
   });
 
-  // Sensitive Functions section — one toggle per FUNCTION_PERMISSIONS entry,
-  // using the same elevation/reduction logic as the CRUD grid above.
-  var funcRows = '';
-  FUNCTION_PERMISSIONS.forEach(function(fp) {
-    var ep2 = effective[fp.entity] || {};
-    var overrideVal = (editingUserOverrides[fp.entity] && editingUserOverrides[fp.entity][fp.action] !== undefined)
-      ? editingUserOverrides[fp.entity][fp.action]
-      : null;
-    var effectiveVal = overrideVal !== null ? overrideVal : ep2[fp.action];
-    var isElevation = isAdminGrantedElevation(fp.entity, fp.action, role, roleConfig);
-    var isReduced = !isElevation && overrideVal === false;
-    var cellStyle = '';
-    var disabledAttr = '';
-    var titleAttr = '';
-    if (isElevation && overrideVal === true) {
-      cellStyle = 'background:rgba(245,158,11,0.12);';
-      if (!isEditorAdmin) { disabledAttr = ' disabled'; titleAttr = ' title="Owner-granted — cannot be removed by Manager"'; }
-    } else if (isElevation && !isEditorAdmin) {
-      disabledAttr = ' disabled';
-      titleAttr = ' title="Below role ceiling — only Owner can grant this"';
-    } else if (isReduced) {
-      cellStyle = 'background:rgba(239,68,68,0.12);';
-    }
-    funcRows += '<tr>' +
-      '<td style="font-size:0.85rem;"><strong>' + esc(fp.label) + '</strong>' +
-        '<div style="font-size:0.72rem;color:var(--warm-gray);">' + esc(fp.description) + '</div></td>' +
-      '<td style="text-align:center;' + cellStyle + '"><input type="checkbox"' + (effectiveVal ? ' checked' : '') + disabledAttr + titleAttr +
-        ' onchange="toggleUserOverride(\'' + uid + '\',\'' + fp.entity + '\',\'' + fp.action + '\',this.checked)"></td>' +
-    '</tr>';
+  // Module accordion (collapsed; per-section override count).
+  var modulesHtml = '';
+  getModulePermRegistry().forEach(function(g) {
+    var overrideCount = 0;
+    var rows = g.routes.map(function(m) {
+      var def = roleDefaultModuleLevel(role, roleConfig, m.route);
+      var cur = editingUserModuleLevels[m.route];
+      var isOv = cur !== def;
+      if (isOv) overrideCount++;
+      return '<tr data-mod-route="' + esc(m.route) + '"' + (isOv ? ' style="background:rgba(245,158,11,0.10);"' : '') + '>' +
+        '<td>' + esc(m.label) + (isOv ? ' <span style="font-size:0.72rem;color:var(--warm-gray);">role: ' + def + '</span>' : '') + '</td>' +
+        '<td style="text-align:right;">' + _userLevelSelectHtml(m.route, cur, def, isEditorAdmin) + '</td>' +
+      '</tr>';
+    }).join('');
+    modulesHtml += '<div class="mod-access-group" data-mod-section="' + esc(g.section) + '">' +
+      '<div class="mod-access-header" onclick="toggleModuleAccordion(\'' + esc(g.section) + '\')">' +
+        '<span><span class="mod-access-caret">›</span>' + esc(g.label) +
+          (overrideCount ? ' <span style="color:var(--amber,#c4853c);font-size:0.72rem;font-weight:600;">(' + overrideCount + ' override' + (overrideCount > 1 ? 's' : '') + ')</span>' : '') + '</span>' +
+      '</div>' +
+      '<div class="mod-access-body"><table class="perm-matrix" style="width:100%;min-width:0;"><tbody>' + rows + '</tbody></table></div>' +
+    '</div>';
   });
+
+  // Sensitive actions.
+  var funcRows = FUNCTION_PERMISSIONS.map(function(fp) {
+    var k = _sensitiveKey(fp.entity, fp.action);
+    var def = roleDefaultSensitive(role, roleConfig, k);
+    var cur = editingUserSensitive[k];
+    var isOv = cur !== def;
+    var disabledAttr = (!isEditorAdmin && !def) ? ' disabled title="Below role ceiling — only Owner can grant this"' : '';
+    return '<tr' + (isOv ? ' style="background:rgba(245,158,11,0.10);"' : '') + '>' +
+      '<td style="font-size:0.85rem;"><strong>' + esc(fp.label) + '</strong>' +
+        '<div style="font-size:0.72rem;color:var(--warm-gray);">' + esc(fp.description) + (isOv ? ' · role: ' + (def ? 'allowed' : 'denied') : '') + '</div></td>' +
+      '<td style="text-align:center;"><input type="checkbox"' + (cur ? ' checked' : '') + disabledAttr +
+        ' onchange="toggleUserSensitive(\'' + esc(k) + '\', this.checked)"></td>' +
+    '</tr>';
+  }).join('');
 
   var guestExpiryField = '';
   if (role === 'guest') {
@@ -47778,42 +47824,24 @@ function openUserPermissionsPanel(uid) {
     '<button class="modal-close" onclick="closeModal()">&times;</button>' +
   '</div>' +
   '<div class="modal-body" style="max-height:70vh;overflow-y:auto;">' +
-    '<div style="display:flex;gap:12px;align-items:center;margin-bottom:16px;flex-wrap:wrap;">' +
+    '<div style="display:flex;gap:12px;align-items:center;margin-bottom:12px;flex-wrap:wrap;">' +
       '<span style="font-size:0.85rem;color:var(--warm-gray);">' + esc(u.email || '') + '</span>' +
       '<span class="status-badge role-badge ' + esc(role) + '" style="font-size:0.72rem;">' + esc(roleName) + '</span>' +
     '</div>' +
     guestExpiryField +
-    '<p style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:12px;">Highlighted cells differ from role defaults. ' +
-      (isEditorAdmin ? 'As Owner, you can freely elevate or reduce any permission.' : 'As Manager, you can reduce permissions from role defaults. Yellow cells are Owner-granted and cannot be changed.') + '</p>' +
-    // 1d3QQTw — explainer about how the capability catalog is wired so
-    // operators stop wondering "do I have to add a row for every new
-    // feature?". Short, on-surface, points at the bigger ask
-    // (OjJRSJuaZgg6e79g6236) which IS the dynamic-catalog build.
-    '<details style="margin-bottom:14px;background:var(--cream,#fbf6ee);border:1px solid var(--cream-dark);border-radius:6px;padding:8px 12px;">' +
-      '<summary style="cursor:pointer;font-size:0.78rem;color:var(--text);font-weight:600;">ℹ️ How this list stays in sync with new features</summary>' +
-      '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:8px;line-height:1.5;">' +
-        'Each row in this matrix is one <strong>capability</strong> (an entity like <em>orders</em> + an action like <em>delete</em>). The <strong>grants</strong> (which roles or users have which capabilities) are fully dynamic — edit any cell here and save.' +
-        '<br><br>The <strong>catalog of modules</strong> itself is defined in the app code (the sidebar route registry) and gated at every surface via <code>can(module, axis)</code>. When a new module ships, the developer registers its route and gates; that release auto-populates here for assignment. It does NOT update by configuration alone.' +
-        '<br><br>Finer-grained controls (e.g. "issue gift card", "grant store credit", "approve RMA") live in the <strong>Sensitive Functions</strong> section below — toggle them per role (Team &rarr; Roles) or per user here.' +
-      '</div>' +
-    '</details>' +
-    '<div style="overflow-x:auto;">' +
-    '<table class="perm-matrix" style="width:100%;">' +
-      '<thead><tr><th>Entity</th><th>Create</th><th>Read</th><th>Update</th><th>Delete</th></tr></thead>' +
-      '<tbody>' + matrixRows + '</tbody>' +
-    '</table></div>' +
-    '<div style="overflow-x:auto;margin-top:16px;">' +
-    '<h4 style="font-size:0.9rem;margin:0 0 4px;">Sensitive Functions</h4>' +
-    '<p style="font-size:0.72rem;color:var(--warm-gray);margin:0 0 8px;">High-trust actions gated independently of the grid above.</p>' +
-    '<table class="perm-matrix" style="width:100%;">' +
-      '<thead><tr><th>Function</th><th>Allowed</th></tr></thead>' +
-      '<tbody>' + funcRows + '</tbody>' +
-    '</table></div>' +
-    '<div style="margin-top:12px;display:flex;justify-content:space-between;align-items:center;">' +
-      '<button class="btn btn-secondary" style="font-size:0.78rem;" onclick="resetUserOverrides(\'' + uid + '\')">Reset to Role Defaults</button>' +
+    '<p style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:12px;">Overrides for this user, relative to the <strong>' + esc(roleName) + '</strong> role. Highlighted rows differ from the role default. ' +
+      (isEditorAdmin ? 'As Owner you can set any level.' : 'As Manager you can reduce below the role default but not elevate above it.') + '</p>' +
+    '<div id="userPanelModules">' + modulesHtml + '</div>' +
+    '<div style="margin-top:20px;">' +
+      '<h4 style="font-size:0.9rem;margin:0 0 4px;">Sensitive Actions</h4>' +
+      '<p style="font-size:0.72rem;color:var(--warm-gray);margin:0 0 8px;">High-trust verbs, gated independently of module access.</p>' +
+      '<table class="perm-matrix" style="width:100%;"><thead><tr><th>Action</th><th>Allowed</th></tr></thead><tbody>' + funcRows + '</tbody></table>' +
+    '</div>' +
+    '<div style="margin-top:14px;display:flex;justify-content:space-between;align-items:center;">' +
+      '<button class="btn btn-secondary" style="font-size:0.78rem;" onclick="resetUserOverrides(\'' + esc(uid) + '\')">Reset to Role Defaults</button>' +
       '<div style="display:flex;gap:8px;">' +
         '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
-        '<button class="btn btn-primary" onclick="saveUserPermissionOverrides(\'' + uid + '\')">Save</button>' +
+        '<button class="btn btn-primary" onclick="saveUserPermissionOverrides(\'' + esc(uid) + '\')">Save</button>' +
       '</div>' +
     '</div>' +
   '</div>';
@@ -48289,9 +48317,7 @@ function _renderUserPermissionsTab(container, uid, u) {
     return;
   }
   var role = u.role || 'guest';
-  var overrides = u.permissionOverrides || {};
-  var overrideCount = 0;
-  Object.keys(overrides).forEach(function(e) { overrideCount += Object.keys(overrides[e] || {}).length; });
+  var overrideCount = userOverrideCount(u);
   var roleName = (typeof ROLE_DISPLAY_NAMES !== 'undefined' && ROLE_DISPLAY_NAMES[role]) || role;
   container.innerHTML =
     '<div style="padding:8px 0 16px;">' +
@@ -48316,27 +48342,20 @@ function _renderUserActivityTab(container, uid, u) {
     '</div>';
 }
 
-function toggleUserOverride(uid, entity, action, value) {
-  var u = adminUsers[uid];
-  if (!u) return;
-  var role = u.role || 'guest';
-  var roleConfig = rolesData[role] || DEFAULT_ROLES[role];
-  var defaults = computeEffectivePermissions(role, roleConfig, {});
-  var defaultVal = defaults[entity] ? defaults[entity][action] : false;
-
-  if (!editingUserOverrides[entity]) editingUserOverrides[entity] = {};
-  if (value === defaultVal) {
-    // Matches default — remove the entry (no noise)
-    delete editingUserOverrides[entity][action];
-    if (Object.keys(editingUserOverrides[entity]).length === 0) delete editingUserOverrides[entity];
-  } else {
-    editingUserOverrides[entity][action] = value;
-  }
+// Count of a user's active overrides (module + sensitive).
+function userOverrideCount(u) {
+  if (!u) return 0;
+  return Object.keys(u.moduleOverrides || {}).length + Object.keys(u.permissionOverrides || {}).length;
 }
 
+function setUserModuleLevel(route, level) {
+  if (level === 'custom') return;
+  editingUserModuleLevels[route] = level;
+}
+function toggleUserSensitive(key, value) { editingUserSensitive[key] = value === true; }
+
 function resetUserOverrides(uid) {
-  editingUserOverrides = {};
-  openUserPermissionsPanel(uid);
+  openUserPermissionsPanel(uid, 'defaults');
 }
 
 async function saveUserPermissionOverrides(uid) {
@@ -48345,34 +48364,45 @@ async function saveUserPermissionOverrides(uid) {
   var role = u.role || 'guest';
   var roleConfig = rolesData[role] || DEFAULT_ROLES[role];
 
-  // Compute minimal diff — only store entries that differ from role default
-  var minimalDiff = computePermissionDiff(role, roleConfig, editingUserOverrides);
+  // Build minimal diffs vs role defaults: module level overrides + sensitive.
+  var moduleOverrides = {};
+  getModulePermRegistry().forEach(function(g) {
+    g.routes.forEach(function(m) {
+      var def = roleDefaultModuleLevel(role, roleConfig, m.route);
+      var cur = editingUserModuleLevels[m.route];
+      if (cur && cur !== 'custom' && cur !== def) moduleOverrides[m.route] = levelToTriad(cur);
+    });
+  });
+  var sensitiveOverrides = {};
+  FUNCTION_PERMISSIONS.forEach(function(fp) {
+    var k = _sensitiveKey(fp.entity, fp.action);
+    var def = roleDefaultSensitive(role, roleConfig, k);
+    if (editingUserSensitive[k] !== def) sensitiveOverrides[k] = editingUserSensitive[k] === true;
+  });
 
   var accessExpiry;
   var expiryInput = document.getElementById('userPanelExpiry');
-  if (expiryInput) {
-    accessExpiry = expiryInput.value ? expiryInput.value : null;
-  }
+  if (expiryInput) accessExpiry = expiryInput.value ? expiryInput.value : null;
 
   try {
     var token = await auth.currentUser.getIdToken();
     var resp = await callCF('/updateUserPermissions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-      body: JSON.stringify({ targetUid: uid, overrides: minimalDiff, accessExpiry: accessExpiry })
+      body: JSON.stringify({ targetUid: uid, moduleOverrides: moduleOverrides, sensitiveOverrides: sensitiveOverrides, accessExpiry: accessExpiry })
     });
     var result = await resp.json();
     if (!resp.ok) {
       showToast((result && result.error) || 'Failed to save permissions.', true);
       return;
     }
-    // Update local cache with validated overrides returned from CF
-    adminUsers[uid].permissionOverrides = result.overrides || minimalDiff;
+    // Update local cache with validated values returned from the CF.
+    adminUsers[uid].moduleOverrides = result.moduleOverrides || moduleOverrides;
+    adminUsers[uid].permissionOverrides = result.sensitiveOverrides || sensitiveOverrides;
     if (expiryInput) adminUsers[uid].accessExpiry = result.accessExpiry !== undefined ? result.accessExpiry : accessExpiry;
     closeModal();
     var displayName = u.displayName || u.email || 'User';
-    var diffCount = 0;
-    Object.keys(result.overrides || minimalDiff).forEach(function(e) { diffCount += Object.keys((result.overrides || minimalDiff)[e]).length; });
+    var diffCount = userOverrideCount(adminUsers[uid]);
     showToast(diffCount > 0
       ? 'Permissions updated for ' + displayName + ' (' + diffCount + ' override' + (diffCount !== 1 ? 's' : '') + ').'
       : 'Permissions reset to role defaults for ' + displayName + '.');
