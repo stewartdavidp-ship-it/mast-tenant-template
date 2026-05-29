@@ -916,14 +916,14 @@
       flex-wrap: wrap;
     }
     body.dark-mode .auth-email-form label { color: #e0e0e0; }
-    body.dark-mode .auth-email-form input { background: #2a2a2a; border-color: #444; color: #e0e0e0; }
+    body.dark-mode .auth-email-form input { background: #2a2a2a !important; border-color: #444 !important; color: #e0e0e0 !important; }
     /* FIX 5 — keep password/auth inputs dark when typed into, focused, or
        autofilled. Without these the browser forces a light background on
        :-webkit-autofill (and a focused field can flash white). Force-change
        form inputs and the Add-User password inputs don't inherit the
        .auth-email-form dark rule, so give them explicit dark-mode bg/text too.
        Light mode is unchanged. Tokens match the existing #2a2a2a / #e0e0e0. */
-    body.dark-mode .auth-email-form input:focus { background: #2a2a2a; color: #e0e0e0; }
+    body.dark-mode .auth-email-form input:focus { background: #2a2a2a !important; color: #e0e0e0 !important; }
     body.dark-mode #mustChangePasswordScreen input,
     body.dark-mode #invitePassword,
     body.dark-mode #invitePasswordConfirm { background: #2a2a2a !important; border-color: #444 !important; color: #e0e0e0 !important; }
@@ -7153,6 +7153,10 @@
         <div class="auth-email-row">
           <label for="mcpUsername">Setting a new password for</label>
           <input id="mcpUsername" type="email" autocomplete="username" readonly tabindex="-1" aria-readonly="true" style="opacity:0.7;background:var(--cream,#f6f1e9);cursor:default;" />
+        </div>
+        <div class="auth-email-row">
+          <label for="mcpCurrentPassword">Current (temporary) password</label>
+          <input id="mcpCurrentPassword" type="password" autocomplete="current-password" required placeholder="The temporary password you signed in with" />
         </div>
         <div class="auth-email-row">
           <label for="mcpNewPassword">New password</label>
@@ -17130,8 +17134,11 @@ function showMustChangePasswordScreen() {
   if (cHint) { cHint.textContent = ''; cHint.className = 'pw-confirm-hint'; }
   var cEl = document.getElementById('mcpConfirmPassword');
   if (cEl) cEl.classList.remove('input-mismatch');
+  ['mcpCurrentPassword', 'mcpNewPassword', 'mcpConfirmPassword'].forEach(function(id) {
+    var el = document.getElementById(id); if (el) el.value = '';
+  });
   setTimeout(function() {
-    var f = document.getElementById('mcpNewPassword');
+    var f = document.getElementById('mcpCurrentPassword');
     if (f) f.focus();
   }, 50);
 }
@@ -17145,12 +17152,18 @@ function submitMustChangePassword(event) {
   var setErr = function(msg) { if (errEl) errEl.textContent = msg || ''; };
   setErr('');
 
+  var curEl = document.getElementById('mcpCurrentPassword');
   var pwEl = document.getElementById('mcpNewPassword');
   var pw2El = document.getElementById('mcpConfirmPassword');
   var btn = document.getElementById('mcpSubmit');
+  var curPw = curEl ? (curEl.value || '') : '';
   var pw = pwEl ? (pwEl.value || '') : '';
   var pw2 = pw2El ? (pw2El.value || '') : '';
 
+  if (!curPw) {
+    setErr('Enter your current (temporary) password.');
+    return;
+  }
   var unmet = validatePasswordPolicy(pw);
   if (unmet.length) {
     var msg = 'Password needs: ' + _passwordPolicyUnmetSentence(unmet) + '.';
@@ -17164,20 +17177,27 @@ function submitMustChangePassword(event) {
   }
 
   var user = firebase.auth().currentUser;
-  if (!user) {
+  if (!user || !user.email) {
     setErr('Your session has ended. Please sign in again.');
     return;
   }
 
   if (btn) { btn.disabled = true; btn.textContent = 'Setting…'; }
 
-  user.updatePassword(pw).then(function() {
+  // Reauthenticate with the current (temporary) password, then set the new one.
+  // The username + current-password + new-password form shape is also what the
+  // browser password manager recognizes as a change-password form, so it can
+  // offer to UPDATE the saved credential old → new.
+  var cred = firebase.auth.EmailAuthProvider.credential(user.email, curPw);
+  user.reauthenticateWithCredential(cred).then(function() {
+    return user.updatePassword(pw);
+  }).then(function() {
     // Clear the server-side flag for the caller's own record.
     return firebase.functions().httpsCallable('clearMustChangePassword')({
       tenantId: MastDB.tenantId()
     });
   }).then(function() {
-    // Update the browser's saved password to the new one (SPA — no form submit).
+    // Belt-and-suspenders: also push to the Credential Management API.
     try {
       if (window.PasswordCredential && navigator.credentials && user.email) {
         navigator.credentials.store(new window.PasswordCredential({ id: user.email, password: pw }));
@@ -17186,6 +17206,7 @@ function submitMustChangePassword(event) {
     window.__mustChangePassword = false;
     var screen = document.getElementById('mustChangePasswordScreen');
     if (screen) screen.style.display = 'none';
+    if (curEl) curEl.value = '';
     if (pwEl) pwEl.value = '';
     if (pw2El) pw2El.value = '';
     showToast('Password updated.');
@@ -17194,8 +17215,12 @@ function submitMustChangePassword(event) {
     console.warn('Set-new-password failed:', err && err.code);
     var code = (err && err.code) || '';
     var msg;
-    if (code === 'auth/weak-password') {
+    if (code === 'auth/wrong-password' || code === 'auth/invalid-credential') {
+      msg = 'Your current (temporary) password is incorrect.';
+    } else if (code === 'auth/weak-password') {
       msg = 'Choose a stronger password (12+ characters).';
+    } else if (code === 'auth/too-many-requests') {
+      msg = 'Too many attempts — try again in a few minutes.';
     } else if (code === 'auth/requires-recent-login') {
       msg = 'Please sign out and sign in again, then set your new password.';
     } else {
@@ -19855,7 +19880,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260529-123815-46d21f1';
+var MAST_MODULES_V = '20260529-133403-5a109c6';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
