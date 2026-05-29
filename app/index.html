@@ -7112,6 +7112,24 @@
       <button class="btn btn-secondary" onclick="signOut()">Sign Out</button>
     </div>
 
+    <!-- Auth: Force Password Change (V1.1 temporary password) -->
+    <div class="auth-screen" id="mustChangePasswordScreen" style="display:none;">
+      <h2>Set a new password</h2>
+      <p>You're using a temporary password. Choose a new one to continue.</p>
+      <form class="auth-email-form" id="mustChangePasswordForm" novalidate onsubmit="submitMustChangePassword(event)">
+        <div class="auth-email-row">
+          <label for="mcpNewPassword">New password</label>
+          <input id="mcpNewPassword" type="password" autocomplete="new-password" required placeholder="At least 12 characters" />
+        </div>
+        <div class="auth-email-row">
+          <label for="mcpConfirmPassword">Confirm new password</label>
+          <input id="mcpConfirmPassword" type="password" autocomplete="new-password" required placeholder="Re-enter new password" />
+        </div>
+        <div class="auth-error" id="mcpError" role="alert" aria-live="assertive"></div>
+        <button type="submit" class="btn btn-primary" id="mcpSubmit" style="width:100%;">Set password</button>
+      </form>
+    </div>
+
     <!-- Module Selection Modal — shown after first login when tier requires module choice -->
     <div id="moduleSelectionOverlay" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);overflow-y:auto;">
       <div style="max-width:720px;margin:60px auto 40px;padding:0 24px;">
@@ -15863,6 +15881,9 @@ async function loadUserRole(uid) {
     currentUserOverrides = userData.permissionOverrides || {};
     currentUserModuleOverrides = userData.moduleOverrides || {};
     currentUserRecord = userData;
+    // V1.1: capture the force-password-change flag. The funnel gates on this
+    // before entering the app (forces the "Set a new password" screen).
+    window.__mustChangePassword = userData.mustChangePassword === true;
 
     // Check guest expiry before any RBAC read that would fail for the guest claim.
     // Guests can read their own admin_users doc but cannot write or read admin_roles.
@@ -16838,9 +16859,95 @@ function showExpiredScreen(expiryDate) {
   hideAdminTabs();
 }
 
+// V1.1: shows the forced "Set a new password" screen and hides all other auth
+// surfaces + the app chrome (mirrors showExpiredScreen). The funnel gates on
+// window.__mustChangePassword and calls this before entering the app.
+function showMustChangePasswordScreen() {
+  ['authScreen', 'loadingScreen', 'deniedScreen', 'expiredScreen'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.style.display = 'none';
+  });
+  var screen = document.getElementById('mustChangePasswordScreen');
+  if (screen) screen.style.display = '';
+  var header = document.getElementById('header');
+  if (header) header.style.display = 'none';
+  hideSidebar();
+  hideAdminTabs();
+  var err = document.getElementById('mcpError');
+  if (err) err.textContent = '';
+  setTimeout(function() {
+    var f = document.getElementById('mcpNewPassword');
+    if (f) f.focus();
+  }, 50);
+}
+
+// V1.1: validates and applies a new password for a user on a temporary
+// password, then clears the server-side mustChangePassword flag and enters the
+// app. Never logs the password.
+function submitMustChangePassword(event) {
+  if (event && typeof event.preventDefault === 'function') event.preventDefault();
+  var errEl = document.getElementById('mcpError');
+  var setErr = function(msg) { if (errEl) errEl.textContent = msg || ''; };
+  setErr('');
+
+  var pwEl = document.getElementById('mcpNewPassword');
+  var pw2El = document.getElementById('mcpConfirmPassword');
+  var btn = document.getElementById('mcpSubmit');
+  var pw = pwEl ? (pwEl.value || '') : '';
+  var pw2 = pw2El ? (pw2El.value || '') : '';
+
+  if (pw.length < 12) {
+    setErr('Password must be at least 12 characters.');
+    return;
+  }
+  if (pw !== pw2) {
+    setErr('Passwords do not match.');
+    return;
+  }
+
+  var user = firebase.auth().currentUser;
+  if (!user) {
+    setErr('Your session has ended. Please sign in again.');
+    return;
+  }
+
+  if (btn) { btn.disabled = true; btn.textContent = 'Setting…'; }
+
+  user.updatePassword(pw).then(function() {
+    // Clear the server-side flag for the caller's own record.
+    return firebase.functions().httpsCallable('clearMustChangePassword')({
+      tenantId: MastDB.tenantId()
+    });
+  }).then(function() {
+    window.__mustChangePassword = false;
+    var screen = document.getElementById('mustChangePasswordScreen');
+    if (screen) screen.style.display = 'none';
+    if (pwEl) pwEl.value = '';
+    if (pw2El) pw2El.value = '';
+    showToast('Password updated.');
+    enterAuthorizedState();
+  }).catch(function(err) {
+    console.warn('Set-new-password failed:', err && err.code);
+    var code = (err && err.code) || '';
+    var msg;
+    if (code === 'auth/weak-password') {
+      msg = 'Choose a stronger password (12+ characters).';
+    } else if (code === 'auth/requires-recent-login') {
+      msg = 'Please sign out and sign in again, then set your new password.';
+    } else {
+      msg = (err && err.message) ? err.message : 'Could not set your new password. Please try again.';
+    }
+    setErr(msg);
+    showToast(msg, true);
+    if (btn) { btn.disabled = false; btn.textContent = 'Set password'; }
+  });
+}
+
 function enterAuthorizedState() {
   document.getElementById('authScreen').style.display = 'none';
   document.getElementById('deniedScreen').style.display = 'none';
+  var mcp = document.getElementById('mustChangePasswordScreen');
+  if (mcp) mcp.style.display = 'none';
   document.getElementById('header').style.display = 'flex';
   showSidebar();
 
@@ -16920,6 +17027,8 @@ auth.onAuthStateChanged(async function(user) {
     authScreen.style.display = '';
     loadingScreen.style.display = 'none';
     deniedScreen.style.display = 'none';
+    var mcpScreen = document.getElementById('mustChangePasswordScreen');
+    if (mcpScreen) mcpScreen.style.display = 'none';
     header.style.display = 'none';
     hideSidebar();
     hideAdminTabs();
@@ -16928,6 +17037,7 @@ auth.onAuthStateChanged(async function(user) {
     currentUserRole = null;
     currentRoleConfig = null;
     rbacReady = false;
+    window.__mustChangePassword = false;
     return;
   }
 
@@ -17125,6 +17235,16 @@ auth.onAuthStateChanged(async function(user) {
       initSetupWizard();
       return;
     }
+  }
+
+  // --- V1.1: force temporary-password change before entering the app ---
+  // If the user record carries mustChangePassword, show the "Set a new password"
+  // screen and stop here. They cannot reach any app surface until they clear it
+  // (updatePassword + clearMustChangePassword CF).
+  if (window.__mustChangePassword) {
+    loadingScreen.style.display = 'none';
+    showMustChangePasswordScreen();
+    return;
   }
 
   // Staff (Admin or User) — enter authorized state
@@ -19460,7 +19580,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260529-103330-a7b96c8';
+var MAST_MODULES_V = '20260529-113041-cbef571';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -48919,6 +49039,10 @@ function showInviteUserModal() {
       '<input type="password" id="invitePassword" autocomplete="new-password" placeholder="At least 12 characters" style="width:100%;padding:8px;border:1px solid var(--cream-dark);border-radius:6px;">' +
       '<label for="invitePasswordConfirm" style="margin-top:8px;">Confirm Password <span class="field-required">*</span></label>' +
       '<input type="password" id="invitePasswordConfirm" autocomplete="new-password" style="width:100%;padding:8px;border:1px solid var(--cream-dark);border-radius:6px;">' +
+      '<label style="display:flex;align-items:center;gap:8px;font-size:0.85rem;cursor:pointer;margin-top:10px;">' +
+        '<input type="checkbox" id="inviteTempPw" style="width:auto;margin:0;">' +
+        'Temporary (force change on first login)' +
+      '</label>' +
     '</div>') : '') +
   '</div>' +
   '<div class="modal-footer">' +
@@ -48981,6 +49105,7 @@ async function createUserWithPassword() {
   var role = document.getElementById('inviteRole').value || 'user';
   var pw = (document.getElementById('invitePassword') || {}).value || '';
   var pw2 = (document.getElementById('invitePasswordConfirm') || {}).value || '';
+  var tempPw = !!((document.getElementById('inviteTempPw') || {}).checked);
   if (!email || !email.includes('@')) {
     showToast('Please enter a valid email address.', true);
     return;
@@ -49000,7 +49125,8 @@ async function createUserWithPassword() {
       tenantId: MastDB.tenantId(),
       email: email,
       role: role,
-      password: pw
+      password: pw,
+      temporaryPassword: tempPw
     });
     var data = (res && res.data) || {};
     closeModal();
