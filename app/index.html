@@ -11382,11 +11382,13 @@ async function loadTenantConfig(tenantId) {
     TENANT_CONFIG.tenantStatus = pc.tenantStatus || 'active';
     TENANT_CONFIG.plan = pc.plan || 'publish';
     TENANT_CONFIG.registryName = pc.name || pc.brandName || '';
+    TENANT_CONFIG.pod = pc.pod || '';  // dev/test gate signal (mirrored from registry below if readable)
 
     // Try full registry (platformAdmins only — will fail silently for tenant admins)
     try {
       var registry = (await MastDB.platform.get('mast-platform/tenants/' + tenantId)) || {};
       TENANT_CONFIG.secretPrefix = registry.secretPrefix || tenantId;
+      if (registry.pod) TENANT_CONFIG.pod = registry.pod;
       TENANT_CONFIG.configChecklist = registry.configChecklist || {};
       if (registry.status) TENANT_CONFIG.tenantStatus = registry.status;
       if (registry.name) TENANT_CONFIG.registryName = registry.name;
@@ -19101,7 +19103,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260529-004908-04940db';
+var MAST_MODULES_V = '20260529-073840-4f63bab';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -48544,13 +48546,120 @@ function showInviteUserModal() {
       '<input type="date" id="inviteGuestExpiry" style="width:100%;padding:8px;border:1px solid var(--cream-dark);border-radius:6px;background:var(--surface);color:var(--text,#2a2a2a);">' +
       '<p style="font-size:0.72rem;color:var(--warm-gray);margin-top:4px;">Stored for display — enforcement is Phase 3.</p>' +
     '</div>' +
+    // DEV/TEST-ONLY: "Set password now" mode. Rendered only on dev/test tenants
+    // (isDevTestTenant); production admins never see it. The Cloud Function
+    // (createTenantUserWithPassword) enforces the dev/test gate authoritatively.
+    (isDevTestTenant() ?
+    ('<div class="form-group" style="border-top:1px solid var(--cream-dark);padding-top:12px;margin-top:4px;">' +
+      '<label style="display:flex;align-items:center;gap:8px;font-size:0.85rem;cursor:pointer;font-weight:600;">' +
+        '<input type="checkbox" id="invitePwMode" onchange="toggleInvitePwMode()" style="width:auto;margin:0;">' +
+        'Set password now (test only)' +
+      '</label>' +
+      '<p style="font-size:0.72rem;color:var(--warm-gray);margin-top:4px;">Dev/test tenant only. Creates an active account that can sign in immediately with email + password — no email invite. For reviewer/test accounts.</p>' +
+    '</div>' +
+    '<div class="form-group" id="invitePwGroup" style="display:none;">' +
+      '<label for="invitePassword">Password <span class="field-required">*</span></label>' +
+      '<input type="password" id="invitePassword" autocomplete="new-password" placeholder="At least 12 characters" style="width:100%;padding:8px;border:1px solid var(--cream-dark);border-radius:6px;">' +
+      '<label for="invitePasswordConfirm" style="margin-top:8px;">Confirm Password <span class="field-required">*</span></label>' +
+      '<input type="password" id="invitePasswordConfirm" autocomplete="new-password" style="width:100%;padding:8px;border:1px solid var(--cream-dark);border-radius:6px;">' +
+    '</div>') : '') +
   '</div>' +
   '<div class="modal-footer">' +
     '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
-    '<button class="btn btn-primary" onclick="sendUserInvite()">Send Invite</button>' +
+    '<button class="btn btn-primary" id="addUserSubmitBtn" onclick="submitAddUser()">Send Invite</button>' +
   '</div>';
   openModal(html);
   setTimeout(function() { document.getElementById('inviteEmail').focus(); }, 100);
+}
+
+// DEV/TEST-ONLY gate (UI mirror of the server's positive test signal). Cosmetic
+// only — the createTenantUserWithPassword CF enforces the authoritative gate.
+function isDevTestTenant() {
+  try {
+    if (typeof TENANT_CONFIG !== 'undefined' && TENANT_CONFIG) {
+      // Dev pod is entirely test data. (Only readable client-side for platform
+      // admins; tenant-only admins fall back to the id/flag checks below — the
+      // server gate is authoritative either way.)
+      if (TENANT_CONFIG.pod === 'dev') return true;
+      if (TENANT_CONFIG.env === 'test' || TENANT_CONFIG.isTest === true || TENANT_CONFIG.sandbox === true) return true;
+    }
+    var tid = (typeof MastDB !== 'undefined' && MastDB.tenantId) ? (MastDB.tenantId() || '') : '';
+    if (/^dev$/.test(tid) || /^sgtest/.test(tid) || /^e2e/.test(tid)) return true;
+  } catch (e) { /* default-deny */ }
+  return false;
+}
+
+// Toggle between email-invite mode and the dev/test "set password" mode.
+function toggleInvitePwMode() {
+  var cb = document.getElementById('invitePwMode');
+  var on = !!(cb && cb.checked);
+  var grp = document.getElementById('invitePwGroup');
+  if (grp) grp.style.display = on ? '' : 'none';
+  var btn = document.getElementById('addUserSubmitBtn');
+  if (btn) btn.textContent = on ? 'Create User' : 'Send Invite';
+  // Guest expiry only applies to email invites.
+  var ge = document.getElementById('inviteGuestExpiryGroup');
+  if (on) { if (ge) ge.style.display = 'none'; }
+  else if (typeof toggleInviteGuestExpiry === 'function') { toggleInviteGuestExpiry(); }
+}
+
+// Dispatcher for the Add-User modal primary button.
+function submitAddUser() {
+  var cb = document.getElementById('invitePwMode');
+  if (isDevTestTenant() && cb && cb.checked) return createUserWithPassword();
+  return sendUserInvite();
+}
+
+// DEV/TEST-ONLY: create an immediately-usable account with an admin-set password.
+async function createUserWithPassword() {
+  if (!can('employees', 'edit')) {
+    showToast('You do not have permission to add users.', true);
+    return;
+  }
+  if (!isDevTestTenant()) {
+    showToast('Setting a password is only available on dev/test tenants.', true);
+    return;
+  }
+  var email = (document.getElementById('inviteEmail').value || '').trim().toLowerCase();
+  var role = document.getElementById('inviteRole').value || 'user';
+  var pw = (document.getElementById('invitePassword') || {}).value || '';
+  var pw2 = (document.getElementById('invitePasswordConfirm') || {}).value || '';
+  if (!email || !email.includes('@')) {
+    showToast('Please enter a valid email address.', true);
+    return;
+  }
+  if (pw.length < 12) {
+    showToast('Password must be at least 12 characters.', true);
+    return;
+  }
+  if (pw !== pw2) {
+    showToast('Passwords do not match.', true);
+    return;
+  }
+  var btn = document.getElementById('addUserSubmitBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Creating…'; }
+  try {
+    var res = await firebase.functions().httpsCallable('createTenantUserWithPassword')({
+      tenantId: MastDB.tenantId(),
+      email: email,
+      role: role,
+      password: pw
+    });
+    var data = (res && res.data) || {};
+    closeModal();
+    var roleName = ROLE_DISPLAY_NAMES[role] || role;
+    showToast((data.created === false ? 'Password set for existing user ' : 'Created ') + email +
+      ' as ' + roleName + '. They can sign in now with email + password.');
+    // Reload users (and pending invites — a stuck invite may have been reconciled).
+    adminUsersLoaded = false;
+    if (typeof loadAdminUsers === 'function') loadAdminUsers();
+    else if (typeof loadPendingInvites === 'function') loadPendingInvites();
+    emitTestingEvent('createUserWithPassword', {});
+  } catch (err) {
+    console.error('createTenantUserWithPassword failed:', err);
+    showToast((err && err.message) ? err.message : 'Failed to create user.', true);
+    if (btn) { btn.disabled = false; btn.textContent = 'Create User'; }
+  }
 }
 
 function toggleInviteGuestExpiry() {
