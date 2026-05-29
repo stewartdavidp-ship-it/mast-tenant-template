@@ -46,3 +46,5 @@ jobs:
         run: node scripts/lint-design-tokens.js
       - name: Mode module info lint
         run: node scripts/lint-module-info.js
+      - name: RBAC coverage guard
+        run: node scripts/lint-rbac.js
