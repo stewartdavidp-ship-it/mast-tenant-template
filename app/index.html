@@ -16833,16 +16833,13 @@ function emailPasswordSignIn(event) {
   if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Signing in…'; }
 
   auth.signInWithEmailAndPassword(email, password).then(function() {
-    // Defer the password-manager save instead of calling store() here. If this
-    // account is on a temporary first-login password, saving it NOW would (a)
-    // prompt Chrome to save a credential the user is about to replace, and (b)
-    // collide with the new-password save on the force-change screen — Chrome
-    // won't cleanly show a second "Save password?" for the same account, so the
-    // new-password save gets masked/lost. We stash the credential and let the
-    // onAuthStateChanged funnel store it ONLY on a normal login, or
-    // showMustChangePasswordScreen() discard it on a forced change. The new
-    // password is stored by submitMustChangePassword().
-    window.__pendingPasswordCred = { id: email, password: password };
+    // SPA has no real form submit, so explicitly ask the browser's password
+    // manager to save/update this credential (Chrome/Blink; guarded for others).
+    try {
+      if (window.PasswordCredential && navigator.credentials) {
+        navigator.credentials.store(new window.PasswordCredential({ id: email, password: password }));
+      }
+    } catch (e) { /* unsupported — ignore */ }
     // Success: onAuthStateChanged drives the rest. (Leave the button disabled —
     // the auth screen is about to be swapped for loading.)
   }).catch(function(err) {
@@ -17119,11 +17116,6 @@ function showExpiredScreen(expiryDate) {
 // surfaces + the app chrome (mirrors showExpiredScreen). The funnel gates on
 // window.__mustChangePassword and calls this before entering the app.
 function showMustChangePasswordScreen() {
-  // Discard any stashed login credential. The password the user just signed in
-  // with is a temporary first-login password and must NEVER be saved to the
-  // browser password manager — it's about to be replaced, and saving it would
-  // both autofill a dead password later and mask the new-password save.
-  window.__pendingPasswordCred = null;
   ['authScreen', 'loadingScreen', 'deniedScreen', 'expiredScreen'].forEach(function(id) {
     var el = document.getElementById(id);
     if (el) el.style.display = 'none';
@@ -17352,7 +17344,6 @@ auth.onAuthStateChanged(async function(user) {
     currentRoleConfig = null;
     rbacReady = false;
     window.__mustChangePassword = false;
-    window.__pendingPasswordCred = null;
     return;
   }
 
@@ -17587,20 +17578,6 @@ auth.onAuthStateChanged(async function(user) {
       console.warn('Login audit failed (non-fatal):', e);
     }
   }
-
-  // Normal-login password save (deferred from emailPasswordSignIn). We only reach
-  // this block on a normal authorized entry — the forced-change path returned
-  // above and showMustChangePasswordScreen() already discarded the stash. So if a
-  // stashed credential survives to here, it's a real password the user signed in
-  // with and we ask the browser's password manager to save it (Chrome/Blink;
-  // guarded for others — Safari/Firefox fall back to their own heuristics).
-  try {
-    var _pendingCred = window.__pendingPasswordCred;
-    if (_pendingCred && window.PasswordCredential && navigator.credentials) {
-      navigator.credentials.store(new window.PasswordCredential({ id: _pendingCred.id, password: _pendingCred.password }));
-    }
-  } catch (e) { /* unsupported — ignore */ }
-  window.__pendingPasswordCred = null;
 
   // Check if user needs to choose modules (launch/operate tier first login)
   if (needsModuleSelection()) {
@@ -19913,7 +19890,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260529-152818-c3a6ae3';
+var MAST_MODULES_V = '20260529-141158-f002527';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
