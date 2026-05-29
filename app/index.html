@@ -7119,7 +7119,8 @@
       <form class="auth-email-form" id="mustChangePasswordForm" novalidate onsubmit="submitMustChangePassword(event)">
         <div class="auth-email-row">
           <label for="mcpNewPassword">New password</label>
-          <input id="mcpNewPassword" type="password" autocomplete="new-password" required placeholder="At least 12 characters" />
+          <input id="mcpNewPassword" type="password" autocomplete="new-password" required placeholder="12+ chars with upper, lower, number &amp; symbol" oninput="renderPasswordPolicyChecklist('mcpPwChecklist', this.value)" />
+          <div id="mcpPwChecklist" aria-live="polite" style="margin-top:6px;"></div>
         </div>
         <div class="auth-email-row">
           <label for="mcpConfirmPassword">Confirm new password</label>
@@ -16700,6 +16701,66 @@ function setAuthEmailError(msg) {
   if (el) el.textContent = msg || '';
 }
 
+// ============================================================
+// Password complexity policy (V1.2) — shared client-side validator.
+// Identical to the server check in mast-architecture
+// functions/tenant-functions.js (createTenantUserWithPassword): min 12 chars,
+// AND >=1 uppercase, >=1 lowercase, >=1 number, >=1 special (non-alphanumeric,
+// non-whitespace: [^A-Za-z0-9\s]). All five must pass.
+// Exported on window so future signup/reset surfaces can reuse it.
+// ============================================================
+
+// Ordered list of policy rules for live UI rendering. Each rule has a short
+// label and a boolean test(pw). The order here drives the checklist display.
+function passwordPolicyRules() {
+  return [
+    { label: 'At least 12 characters', test: function(p) { return (p || '').length >= 12; } },
+    { label: 'An uppercase letter', test: function(p) { return /[A-Z]/.test(p || ''); } },
+    { label: 'A lowercase letter', test: function(p) { return /[a-z]/.test(p || ''); } },
+    { label: 'A number', test: function(p) { return /[0-9]/.test(p || ''); } },
+    { label: 'A symbol (e.g. !?@#$)', test: function(p) { return /[^A-Za-z0-9\s]/.test(p || ''); } }
+  ];
+}
+
+// Returns an array of unmet-requirement labels. Empty array = password valid.
+function validatePasswordPolicy(pw) {
+  var unmet = [];
+  passwordPolicyRules().forEach(function(rule) {
+    if (!rule.test(pw)) unmet.push(rule.label);
+  });
+  return unmet;
+}
+
+// Lowercase the first letter of each unmet label for inline sentences like
+// "Password needs: an uppercase letter, a symbol".
+function _passwordPolicyUnmetSentence(unmet) {
+  return unmet.map(function(s) {
+    return s ? s.charAt(0).toLowerCase() + s.slice(1) : s;
+  }).join(', ');
+}
+
+// Renders the live requirements checklist into a container element. Each row
+// shows met (✓) vs unmet (◦). Dark-mode safe (uses theme tokens), font sizes
+// snap to the 7-step rem scale. aria-live is set on the container by callers.
+function renderPasswordPolicyChecklist(containerId, pw) {
+  var el = document.getElementById(containerId);
+  if (!el) return;
+  var html = passwordPolicyRules().map(function(rule) {
+    var ok = rule.test(pw);
+    var mark = ok ? '✓' : '◦';
+    var color = ok ? 'var(--success, #2e7d32)' : 'var(--warm-gray, #8a8a8a)';
+    return '<div style="display:flex;align-items:center;gap:6px;font-size:0.72rem;color:' + color + ';line-height:1.5;">' +
+      '<span aria-hidden="true" style="width:0.9rem;display:inline-block;text-align:center;font-size:0.78rem;">' + mark + '</span>' +
+      '<span>' + esc(rule.label) + (ok ? ' — met' : '') + '</span>' +
+    '</div>';
+  }).join('');
+  el.innerHTML = html;
+}
+
+window.passwordPolicyRules = passwordPolicyRules;
+window.validatePasswordPolicy = validatePasswordPolicy;
+window.renderPasswordPolicyChecklist = renderPasswordPolicyChecklist;
+
 // Email + password sign-in. On success the onAuthStateChanged funnel handles
 // everything; we only need to surface errors here.
 function emailPasswordSignIn(event) {
@@ -16875,6 +16936,7 @@ function showMustChangePasswordScreen() {
   hideAdminTabs();
   var err = document.getElementById('mcpError');
   if (err) err.textContent = '';
+  renderPasswordPolicyChecklist('mcpPwChecklist', '');
   setTimeout(function() {
     var f = document.getElementById('mcpNewPassword');
     if (f) f.focus();
@@ -16896,8 +16958,11 @@ function submitMustChangePassword(event) {
   var pw = pwEl ? (pwEl.value || '') : '';
   var pw2 = pw2El ? (pw2El.value || '') : '';
 
-  if (pw.length < 12) {
-    setErr('Password must be at least 12 characters.');
+  var unmet = validatePasswordPolicy(pw);
+  if (unmet.length) {
+    var msg = 'Password needs: ' + _passwordPolicyUnmetSentence(unmet) + '.';
+    setErr(msg);
+    showToast(msg, true);
     return;
   }
   if (pw !== pw2) {
@@ -19580,7 +19645,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260529-113041-cbef571';
+var MAST_MODULES_V = '20260529-115005-dbc78df';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -49036,7 +49101,8 @@ function showInviteUserModal() {
     '</div>' +
     '<div class="form-group" id="invitePwGroup" style="display:none;">' +
       '<label for="invitePassword">Password <span class="field-required">*</span></label>' +
-      '<input type="password" id="invitePassword" autocomplete="new-password" placeholder="At least 12 characters" style="width:100%;padding:8px;border:1px solid var(--cream-dark);border-radius:6px;">' +
+      '<input type="password" id="invitePassword" autocomplete="new-password" placeholder="12+ chars with upper, lower, number &amp; symbol" oninput="renderPasswordPolicyChecklist(\'invitePwChecklist\', this.value)" style="width:100%;padding:8px;border:1px solid var(--cream-dark);border-radius:6px;">' +
+      '<div id="invitePwChecklist" aria-live="polite" style="margin-top:6px;"></div>' +
       '<label for="invitePasswordConfirm" style="margin-top:8px;">Confirm Password <span class="field-required">*</span></label>' +
       '<input type="password" id="invitePasswordConfirm" autocomplete="new-password" style="width:100%;padding:8px;border:1px solid var(--cream-dark);border-radius:6px;">' +
       '<label style="display:flex;align-items:center;gap:8px;font-size:0.85rem;cursor:pointer;margin-top:10px;">' +
@@ -49076,6 +49142,10 @@ function toggleInvitePwMode() {
   var on = !!(cb && cb.checked);
   var grp = document.getElementById('invitePwGroup');
   if (grp) grp.style.display = on ? '' : 'none';
+  if (on) {
+    var pwField = document.getElementById('invitePassword');
+    renderPasswordPolicyChecklist('invitePwChecklist', (pwField && pwField.value) || '');
+  }
   var btn = document.getElementById('addUserSubmitBtn');
   if (btn) btn.textContent = on ? 'Create User' : 'Send Invite';
   // Guest expiry only applies to email invites.
@@ -49110,8 +49180,9 @@ async function createUserWithPassword() {
     showToast('Please enter a valid email address.', true);
     return;
   }
-  if (pw.length < 12) {
-    showToast('Password must be at least 12 characters.', true);
+  var unmet = validatePasswordPolicy(pw);
+  if (unmet.length) {
+    showToast('Password needs: ' + _passwordPolicyUnmetSentence(unmet) + '.', true);
     return;
   }
   if (pw !== pw2) {
