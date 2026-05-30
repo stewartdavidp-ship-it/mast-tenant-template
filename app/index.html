@@ -16290,6 +16290,85 @@ function showToast(message, isError) {
 }
 
 // Dark-mode-compliant confirm dialog (replaces native confirm())
+// ============================================================
+// MastOverlayNav — Back/swipe overlay guard (Phase 2)
+// ------------------------------------------------------------
+// Makes the browser Back button / macOS two-finger swipe-back CLOSE the
+// topmost open overlay (modal, slide-out, confirm/alert/prompt) instead of
+// changing the SPA route or leaving the document and losing form values.
+// Pairs with the CSS overscroll-behavior hardening (which only blunts the
+// *gesture* in Chrome). This guard is cross-browser: it works in Safari too,
+// where overscroll-behavior is ignored for swipe-nav.
+//
+// Model — SINGLE SENTINEL: whenever >=1 overlay is open, exactly one extra
+// history entry (pushed with the SAME url, so it fires no hashchange and
+// changes no route) sits on top. Back pops it -> we close the topmost
+// overlay. Normal closes (button/Esc/backdrop) consume the sentinel lazily
+// on a microtask, guarded by an href check so a synchronous re-open
+// (modal-over-modal) or a route navigation right after close never races the
+// history.back(). Interception only happens while an overlay is open; with
+// none open, Back falls straight through to the normal hashchange router.
+//
+// Wiring a NEW overlay: call MastOverlayNav.push(id, closeFn) when it opens
+// and MastOverlayNav.pop(id) when it closes by normal means. Hand-rolled
+// module overlays (e.g. wholesale #wsAccountModal) are wired in Phase 2b.
+// ============================================================
+var _mastDlgSeq = 0;
+var MastOverlayNav = (function () {
+  var stack = [];               // [{ id, close }]  LIFO
+  var sentinelActive = false;   // is our sentinel the intended top history entry?
+  var consumingSelf = false;    // true while WE call history.back() to consume
+
+  function arm() {
+    if (sentinelActive) return;
+    try { history.pushState({ __mastOverlay: true }, '', location.href); sentinelActive = true; }
+    catch (e) { /* history unavailable -> degrade to CSS-only */ }
+  }
+  function topIndexOf(id) {
+    for (var i = stack.length - 1; i >= 0; i--) if (stack[i].id === id) return i;
+    return -1;
+  }
+
+  function push(id, closeFn) {
+    stack.push({ id: id, close: (typeof closeFn === 'function') ? closeFn : function () {} });
+    arm();
+  }
+
+  function pop(id) {
+    var idx = topIndexOf(id);
+    if (idx === -1) return;          // already removed (closed via Back) -> no-op
+    stack.splice(idx, 1);
+    if (stack.length === 0 && sentinelActive) {
+      var hrefAtSchedule = location.href;
+      // Defer one microtask: a synchronous re-open or a route navigation may
+      // run right after the close handler. Re-check before consuming so we
+      // never history.back() over a freshly-pushed entry.
+      Promise.resolve().then(function () {
+        if (stack.length !== 0 || !sentinelActive) return;                       // re-opened
+        if (location.href !== hrefAtSchedule) { sentinelActive = false; return; } // navigated -> bury sentinel
+        consumingSelf = true; sentinelActive = false;
+        try { history.back(); } catch (e) { consumingSelf = false; }
+      });
+    }
+  }
+
+  window.addEventListener('popstate', function () {
+    if (consumingSelf) { consumingSelf = false; return; }   // our own .back()
+    if (!sentinelActive || stack.length === 0) return;      // no overlay -> normal route Back
+    sentinelActive = false;
+    var top = stack.pop();
+    try { top.close(); } catch (e) {}
+    if (stack.length) arm();                                // re-arm for the next layer
+  });
+
+  return {
+    push: push, pop: pop,
+    isOpen: function () { return stack.length > 0; },
+    _debug: function () { return { depth: stack.length, sentinelActive: sentinelActive }; }
+  };
+})();
+window.MastOverlayNav = MastOverlayNav;
+
 function showConfirmDialog(title, message, onConfirm, options) {
   mastConfirm(message, { title: title, confirmLabel: (options && options.confirmLabel) || 'OK', cancelLabel: (options && options.cancelLabel) || 'Cancel' }).then(function(ok) { if (ok) onConfirm(); });
 }
@@ -16315,7 +16394,9 @@ function mastConfirm(message, options) {
     h += '</div></div>';
     overlay.innerHTML = h;
     document.body.appendChild(overlay);
-    function close(result) { if (overlay.parentNode) overlay.parentNode.removeChild(overlay); resolve(result); }
+    var _navId = 'dlg' + (++_mastDlgSeq);
+    function close(result) { if (window.MastOverlayNav) MastOverlayNav.pop(_navId); if (overlay.parentNode) overlay.parentNode.removeChild(overlay); resolve(result); }
+    if (window.MastOverlayNav) MastOverlayNav.push(_navId, function () { close(false); });
     overlay.querySelector('#mastDialogCancel').addEventListener('click', function() { close(false); });
     overlay.querySelector('#mastDialogOK').addEventListener('click', function() { close(true); });
     overlay.addEventListener('click', function(e) { if (e.target === overlay) close(false); });
@@ -16340,7 +16421,9 @@ function mastAlert(message, options) {
     h += '</div></div>';
     overlay.innerHTML = h;
     document.body.appendChild(overlay);
-    function close() { if (overlay.parentNode) overlay.parentNode.removeChild(overlay); resolve(); }
+    var _navId = 'dlg' + (++_mastDlgSeq);
+    function close() { if (window.MastOverlayNav) MastOverlayNav.pop(_navId); if (overlay.parentNode) overlay.parentNode.removeChild(overlay); resolve(); }
+    if (window.MastOverlayNav) MastOverlayNav.push(_navId, function () { close(); });
     overlay.querySelector('#mastDialogOK').addEventListener('click', close);
     overlay.addEventListener('click', function(e) { if (e.target === overlay) close(); });
     overlay.addEventListener('keydown', function(e) { if (e.key === 'Escape') { e.stopImmediatePropagation(); close(); } });
@@ -16369,10 +16452,12 @@ function mastPrompt(message, options) {
     h += '</div></div>';
     overlay.innerHTML = h;
     document.body.appendChild(overlay);
+    var _navId = 'dlg' + (++_mastDlgSeq);
     var input = overlay.querySelector('#mastDialogInput');
     input.focus();
     if (opts.defaultValue) input.select();
-    function close(result) { if (overlay.parentNode) overlay.parentNode.removeChild(overlay); resolve(result); }
+    function close(result) { if (window.MastOverlayNav) MastOverlayNav.pop(_navId); if (overlay.parentNode) overlay.parentNode.removeChild(overlay); resolve(result); }
+    if (window.MastOverlayNav) MastOverlayNav.push(_navId, function () { close(null); });
     overlay.querySelector('#mastDialogCancel').addEventListener('click', function() { close(null); });
     overlay.querySelector('#mastDialogOK').addEventListener('click', function() { close(input.value); });
     input.addEventListener('keydown', function(e) { if (e.key === 'Enter') { e.preventDefault(); close(input.value); } });
@@ -16393,10 +16478,12 @@ function mastCopyFallback(label, text) {
   h += '</div></div>';
   overlay.innerHTML = h;
   document.body.appendChild(overlay);
+  var _navId = 'dlg' + (++_mastDlgSeq);
   var input = overlay.querySelector('#mastCopyInput');
   input.focus();
   input.select();
-  function close() { if (overlay.parentNode) overlay.parentNode.removeChild(overlay); }
+  function close() { if (window.MastOverlayNav) MastOverlayNav.pop(_navId); if (overlay.parentNode) overlay.parentNode.removeChild(overlay); }
+  if (window.MastOverlayNav) MastOverlayNav.push(_navId, function () { close(); });
   overlay.querySelector('#mastCopyClose').addEventListener('click', close);
   overlay.addEventListener('click', function(e) { if (e.target === overlay) close(); });
   overlay.addEventListener('keydown', function(e) { if (e.key === 'Escape') { e.stopImmediatePropagation(); close(); } });
@@ -16546,6 +16633,7 @@ window.mastSlideOut = (function() {
         panel.style.transform = 'translateX(0)';
       }, 0);
       _state.open = true;
+      if (window.MastOverlayNav) MastOverlayNav.push('slideout', window.mastSlideOut.close);
       setTimeout(function() { var cb = document.getElementById('mastSlideOutCloseBtn'); if (cb) cb.focus(); }, 240);
     },
     close: function() {
@@ -16560,6 +16648,7 @@ window.mastSlideOut = (function() {
         document.body.style.overflow = '';
       }, 220);
       _state.open = false;
+      if (window.MastOverlayNav) MastOverlayNav.pop('slideout');
       if (_state.originator && typeof _state.originator.focus === 'function') {
         try { _state.originator.focus(); } catch(e) {}
       }
@@ -20105,7 +20194,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260529-231434-4f8620d';
+var MAST_MODULES_V = '20260529-232504-2d76cca';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -48218,8 +48307,13 @@ function toggleSectionPanel(sectionId) {
 // Modal
 // ============================================================
 function openModal(html) {
+  var ov = document.getElementById('modalOverlay');
+  var wasOpen = ov.classList.contains('open');
   document.getElementById('modalContent').innerHTML = html;
-  document.getElementById('modalOverlay').classList.add('open');
+  ov.classList.add('open');
+  // Arm the Back/swipe guard only on a fresh open — re-calling openModal to
+  // swap content while already open must not double-push a sentinel.
+  if (!wasOpen && window.MastOverlayNav) MastOverlayNav.push('modal', closeModal);
 }
 
 function closeModal() {
@@ -48227,8 +48321,11 @@ function closeModal() {
     nlCloseCardEditor(nlEditingCardId);
     return;
   }
-  document.getElementById('modalOverlay').classList.remove('open');
+  var ov = document.getElementById('modalOverlay');
+  var wasOpen = ov.classList.contains('open');
+  ov.classList.remove('open');
   document.getElementById('modalContent').innerHTML = '';
+  if (wasOpen && window.MastOverlayNav) MastOverlayNav.pop('modal');
 }
 
 // Close on backdrop click
