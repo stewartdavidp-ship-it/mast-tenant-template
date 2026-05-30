@@ -17,13 +17,16 @@
    1. Deploy to the shared site (or per-pod shared site if working on a non-default pod): `mast_hosting(action: "deploy", tenantId: "shared")` (or `npx mast-deploy storefront-shared --pod=<id>` once fixed).
    2. Hard refresh `<tenant>.runmast.com` (cache-bust: ⌘⇧R, or append `?v=<timestamp>`). The worker will proxy to the shared origin and serve the new code.
    3. **If the KV entry for that tenant points to a per-tenant site** (legacy/pinned), the shared deploy will not show up — you must also deploy to that tenant's specific site with `mast_hosting(action: "deploy", tenantId: "<tenantId>")`, or update the KV entry to fall back to shared. Check the KV in the Cloudflare dashboard (KV namespace `podRouting`) when in doubt.
-5. **Module cache-bust auto-bump (one-time setup per clone).** The admin app lazy-loads `app/modules/*.js` with a `?v=<MAST_MODULES_V>` query suffix (declared in `app/index.html`). Browsers cache by URL — if the suffix doesn't change, customers with the admin tab already open will keep serving stale JS even after a no-cache-headered redeploy (see [feedback_mast_cache_bust_process_gap.md](~/.claude/projects/-Users-davidstewart-Downloads/memory/feedback_mast_cache_bust_process_gap.md)). To prevent this, install the version-controlled pre-commit hook once per clone:
+5. **Module cache-bust (`MAST_MODULES_V`) — CI-enforced, committed in the PR.** The admin app lazy-loads `app/modules/*.js` with a `?v=<MAST_MODULES_V>` query suffix (declared in `app/index.html`). Browsers cache by URL — if the suffix doesn't change, customers with the admin tab already open keep serving stale JS even after a no-cache-headered redeploy (see [feedback_mast_cache_bust_process_gap.md](~/.claude/projects/-Users-davidstewart-Downloads/memory/feedback_mast_cache_bust_process_gap.md)).
+
+   **The bump must be committed in your PR.** A deploy ships the *committed* GitHub tarball at the merged SHA (`mast_hosting` downloads `/tarball/<sha>`, not your local tree), so the fresh suffix only reaches customers if it's on `main`. This is enforced by the **required `lint` CI check** (`scripts/lint-cache-bust.js`): any PR that changes `app/index.html` or `app/modules/*.js` **without** bumping `MAST_MODULES_V` fails and cannot merge (Build 5, `docs/release-model.md`). To satisfy it, run the bumper and commit the result:
 
    ```bash
-   ./scripts/install-hooks.sh
+   ./scripts/bump-modules-version.sh   # rewrites MAST_MODULES_V to YYYYMMDD-HHMMSS-<short-sha>
+   git add app/index.html && git commit
    ```
 
-   This wires `core.hooksPath` to `.githooks/`. From then on, any commit that touches `app/index.html` or `app/modules/*.js` auto-bumps `MAST_MODULES_V` to `YYYYMMDD-<short-sha>` and re-stages the file. If you ever need to bump manually (e.g. CI deploy from a non-hooked env), run `./scripts/bump-modules-version.sh` directly — it's idempotent.
+   **Optional dev convenience:** `./scripts/install-hooks.sh` wires a local pre-commit hook (`core.hooksPath` → `.githooks/`) that runs the bumper automatically whenever you commit admin JS/HTML, so you never hit the gate. It is *not* required (the CI check is the real gate) and is safe — CI never bumps, so there's no double-bump. A historical opt-in hook used to be the only enforcement; that gap is now closed by the CI check.
 
 6. **After context compaction** — Re-read this bootstrap section, ARCHITECTURE.md, and memory files. Never improvise from summary alone.
 

@@ -36,10 +36,20 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # Full history so the cache-bust guard can diff the PR against its
+          # base branch (git diff origin/<base>...HEAD).
+          fetch-depth: 0
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+      # Cache-bust guard: fail a PR that changes admin JS/HTML without bumping
+      # MAST_MODULES_V. Build 5 (docs/release-model.md) — replaces the opt-in
+      # local pre-commit hook as the authoritative, un-skippable enforcement.
+      # No-ops on push/dispatch (only meaningful with a PR base to diff).
+      - name: Cache-bust bump guard
+        run: node scripts/lint-cache-bust.js
       - name: MastDB access lint
         run: node scripts/lint-mastdb.js
       - name: Design token lint (advisory)
