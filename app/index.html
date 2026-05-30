@@ -20616,7 +20616,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260530-123449-0fb5ece';
+var MAST_MODULES_V = '20260530-133130-a0c214a';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -45361,7 +45361,7 @@ function _renderProductStagePanel(product) {
   var checklistItems = (status === 'ready') ? crit.readyToActive : crit.draftToReady;
   var incomplete = checklistItems.filter(function(c) { return !c.met; });
 
-  var html = '<div style="background:var(--surface-dark);border:1px solid var(--charcoal-light,var(--border));border-radius:8px;padding:10px 14px;margin-bottom:14px;">';
+  var html = '<div style="background:var(--surface-card);border:1px solid var(--border);border-radius:8px;padding:10px 14px;margin-bottom:14px;">';
   // Row 1: stage label + badge + transition button
   html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">';
   html += '<div style="display:flex;align-items:center;gap:10px;">' +
@@ -45381,12 +45381,12 @@ function _renderProductStagePanel(product) {
   if (status === 'draft' || status === 'ready') {
     html += '<div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:5px;">';
     if (incomplete.length === 0) {
-      html += '<span style="font-size:0.72rem;color:#6ee7b7;">✓ Ready to ' + (status === 'draft' ? 'review' : 'publish') + '</span>';
+      html += '<span style="font-size:0.72rem;color:var(--success);">✓ Ready to ' + (status === 'draft' ? 'review' : 'publish') + '</span>';
     } else {
       checklistItems.forEach(function(c) {
         var met = c.met;
         html += '<span style="font-size:0.72rem;padding:2px 7px;border-radius:4px;' +
-          (met ? 'background:rgba(5,150,105,0.15);color:#6ee7b7;' : 'background:rgba(239,68,68,0.12);color:#f87171;') + '">' +
+          (met ? 'background:rgba(5,150,105,0.15);color:var(--success);' : 'background:rgba(239,68,68,0.12);color:var(--danger);') + '">' +
           (met ? '✓ ' : '✗ ') + c.label + '</span>';
       });
     }
@@ -45400,7 +45400,7 @@ function _renderProductStagePanel(product) {
       html += '<div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:5px;align-items:center;">';
       html += '<span style="font-size:0.72rem;color:var(--warm-gray,#888);margin-right:2px;">Suggested:</span>';
       nudges.forEach(function(g) {
-        html += '<span style="font-size:0.72rem;padding:2px 7px;border-radius:4px;background:rgba(245,158,11,0.12);color:#fbbf24;">⚠ ' + g.label + '</span>';
+        html += '<span style="font-size:0.72rem;padding:2px 7px;border-radius:4px;background:rgba(245,158,11,0.12);color:var(--warning);">⚠ ' + g.label + '</span>';
       });
       html += '</div>';
     }

@@ -5088,7 +5088,7 @@
     html += '</div></div>';
 
     // ---- TOTAL COST (the result) ----
-    html += '<div style="background:var(--surface-dark);color:white;border-radius:10px;padding:22px 24px;margin-bottom:18px;">';
+    html += '<div style="background:var(--surface-card);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:22px 24px;margin-bottom:18px;">';
     html += '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:24px;flex-wrap:wrap;">';
     html += '<div>';
     html += '<div style="font-size:0.78rem;text-transform:uppercase;letter-spacing:0.08em;opacity:0.7;font-weight:600;margin-bottom:4px;">Total Cost Per Unit</div>';
