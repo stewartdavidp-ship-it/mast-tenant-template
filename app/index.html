@@ -35503,25 +35503,69 @@ async function loadNextStepsCache() {
     var keysSnap = await MastDB.query('admin/config/aiIntegrations/keys').orderByChild('status').equalTo('active').limitToFirst(1).once('value');
     var keysVal = keysSnap && (typeof keysSnap.val === 'function' ? keysSnap.val() : keysSnap);
     window._nextStepsCache.hasAiApiKey = !!(keysVal && Object.keys(keysVal).length > 0);
+    // Defensive fallback: the indexed status=='active' query (which mirrors the
+    // UI reader at loadAiIntegrations) returns nothing if minted keys lack an
+    // explicit status:'active' field (older keys / CF status-value drift). In
+    // that case, re-read all keys and count any that aren't explicitly revoked,
+    // so a tenant that genuinely has a usable key still sees the step complete.
+    if (!window._nextStepsCache.hasAiApiKey) {
+      var allKeysSnap = await MastDB.query('admin/config/aiIntegrations/keys').limitToFirst(20).once('value');
+      var allKeys = allKeysSnap && (typeof allKeysSnap.val === 'function' ? allKeysSnap.val() : allKeysSnap);
+      if (allKeys) {
+        var hasUsable = Object.keys(allKeys).some(function(k) {
+          var rec = allKeys[k] || {};
+          return rec.status !== 'revoked' && rec.revoked !== true;
+        });
+        window._nextStepsCache.hasAiApiKey = hasUsable;
+      }
+    }
   } catch (e) { /* ignore */ }
   // Folded in from the retired Setup Scorecard so the merged Set-Up-Your-Shop
   // checklist can render the items that used to live in the Workspace card.
   try {
-    var entityRes = await MastDB.businessEntity.get();
-    var ent = (entityRes && entityRes.data) || {};
-    window._nextStepsCache.hasBusinessType = !!(ent.identity && ent.identity.businessType);
+    // NOTE: businessEntity.get() returns the FULL entity at the top level
+    // (identity/tax/engagement are direct properties), NOT under a `.data`
+    // wrapper — `.data` is only present on single-section reads like
+    // businessEntity.get('engagement'). The original `(entityRes.data) || {}`
+    // therefore always read `{}` here, so all three flags below were stuck
+    // false. Read the entity directly.
+    var ent = (await MastDB.businessEntity.get()) || {};
+    // Business type: the wizard (wizardConfirmBizIdentity) writes
+    // identity.businessType + identity.effectiveBusinessType + identity.archetype,
+    // but the Settings "Change my business setup" save (bsApplyChanges) writes
+    // identity.category. Accept any of them so the step flips no matter which
+    // surface persisted the choice (read/write field-name fork).
+    var ident = (ent && ent.identity) || {};
+    window._nextStepsCache.hasBusinessType = !!(ident.businessType || ident.category ||
+      ident.effectiveBusinessType || ident.businessCategory || ident.archetype);
+    // Tax: businessEntity has no first-class `tax` section (the Tax tab writes
+    // nexusState to config/settings and rates to public/taxRates). Keep the
+    // legacy ent.tax.state read for forward-compat, then fall through to the
+    // real persistence paths below.
     window._nextStepsCache.hasTaxConfig = !!(ent.tax && ent.tax.state);
-    window._nextStepsCache.hasModulesShown = !!(ent.engagement && ent.engagement.modulesShown && Object.keys(ent.engagement.modulesShown).length > 0);
+    // Modules: saveEngagementModulesShown writes engagement.modulesShown as an
+    // ARRAY. Firebase round-trips a non-empty array as an array (Object.keys =
+    // indices) or, for sparse/large maps, as an object — handle both, plus the
+    // wizard's identical array write.
+    var ms = (ent.engagement && ent.engagement.modulesShown) || null;
+    window._nextStepsCache.hasModulesShown = !!(ms && (Array.isArray(ms) ? ms.length > 0 : Object.keys(ms).length > 0));
   } catch (e) { /* ignore */ }
   try {
     var pricing = await MastDB.get('public/config/pricingDefaults');
     window._nextStepsCache.hasPricingDefaults = !!(pricing && pricing.markupStrategy && pricing.markupStrategy !== 'none');
   } catch (e) { /* ignore */ }
   try {
-    // Tax can also be satisfied by setting the nexusState in config/settings.
+    // Tax is really satisfied by the Tax tab's actual writes:
+    //   - nexusState → config/settings.nexusState  (saveTaxRates)
+    //   - rates      → public/taxRates             (MastDB.config.setTaxRates)
+    // Read both; either one present means tax has been configured.
     if (!window._nextStepsCache.hasTaxConfig) {
       var settingsSnap = await MastDB.get('config/settings');
       if (settingsSnap && settingsSnap.nexusState) window._nextStepsCache.hasTaxConfig = true;
+    }
+    if (!window._nextStepsCache.hasTaxConfig) {
+      var taxRatesSnap = await MastDB.get('public/taxRates');
+      if (taxRatesSnap && Object.keys(taxRatesSnap).length > 0) window._nextStepsCache.hasTaxConfig = true;
     }
   } catch (e) { /* ignore */ }
 }
