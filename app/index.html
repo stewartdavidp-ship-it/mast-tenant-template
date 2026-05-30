@@ -20510,7 +20510,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260530-104951-b74309e';
+var MAST_MODULES_V = '20260530-110727-41e3c28';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -49665,6 +49665,10 @@ function renderAvatarMenu() {
     onclick: 'setPersonalDarkMode(!document.body.classList.contains(\'dark-mode\'));renderAvatarMenu();',
     toggle: true,
     toggleOn: isDark
+  });
+  prefs += _avatarMenuItemHtml('Accessibility', {
+    onclick: 'closeAvatarMenu();navigateTo(\'settings\');setTimeout(function(){switchSettingsSubView(\'accessibility\');},100);',
+    chevron: true
   });
   prefs += _avatarMenuItemHtml('Send Feedback', {
     onclick: 'closeAvatarMenu();if (typeof openFeedbackDialog === \'function\') openFeedbackDialog();'
