@@ -16369,6 +16369,59 @@ var MastOverlayNav = (function () {
 })();
 window.MastOverlayNav = MastOverlayNav;
 
+// ------------------------------------------------------------
+// Phase 2b — generic coverage for hand-rolled module overlays.
+// Bespoke overlays (wholesale #wsAccountModal, fulfillment, trips, shows,
+// image lightboxes, etc.) don't route through openModal/mastSlideOut/
+// mastConfirm, so they can't call MastOverlayNav.push/pop themselves. A
+// MutationObserver on <body> adopts any full-viewport fixed scrim that gets
+// appended (and isn't a first-party overlay — those carry data-mn-managed,
+// and #modalOverlay/#mastSlideOutRoot are excluded), arming the Back/swipe
+// guard. When the scrim is removed (the overlay's own close), it disarms. On
+// Back, the guard closer simulates a backdrop click — which runs the overlay's
+// own close path — with a node-removal fallback for scrims that only close via
+// a button. DOM presence is the open/close signal, so no per-overlay wiring.
+(function () {
+  function isBespokeScrim(node) {
+    if (!node || node.nodeType !== 1) return false;
+    if (node.id === 'modalOverlay' || node.id === 'mastSlideOutRoot') return false;
+    if (node.getAttribute && node.getAttribute('data-mn-managed')) return false;
+    if (!node.firstElementChild) return false;            // a scrim wraps a content card
+    var cs; try { cs = getComputedStyle(node); } catch (e) { return false; }
+    if (cs.position !== 'fixed' || cs.display === 'none' || cs.visibility === 'hidden') return false;
+    var r = node.getBoundingClientRect();
+    return r.width >= window.innerWidth * 0.9 && r.height >= window.innerHeight * 0.9;
+  }
+  var tracked = new WeakMap();   // scrim node -> overlay nav id
+  var seq = 0;
+  function install() {
+    if (!document.body || typeof MutationObserver === 'undefined') return;
+    new MutationObserver(function (muts) {
+      for (var i = 0; i < muts.length; i++) {
+        var added = muts[i].addedNodes, removed = muts[i].removedNodes, j, n;
+        for (j = 0; j < added.length; j++) {
+          n = added[j];
+          if (tracked.has(n) || !isBespokeScrim(n)) continue;
+          (function (node) {
+            var id = 'ov' + (++seq);
+            tracked.set(node, id);
+            MastOverlayNav.push(id, function () {
+              try { node.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true })); } catch (e) {}
+              if (node.isConnected && node.parentNode) { try { node.parentNode.removeChild(node); } catch (e) {} }
+            });
+          })(n);
+        }
+        for (j = 0; j < removed.length; j++) {
+          n = removed[j];
+          if (tracked.has(n)) { var id2 = tracked.get(n); tracked.delete(n); MastOverlayNav.pop(id2); }
+        }
+      }
+    }).observe(document.body, { childList: true });
+  }
+  if (document.body) install();
+  else document.addEventListener('DOMContentLoaded', install);
+})();
+
 function showConfirmDialog(title, message, onConfirm, options) {
   mastConfirm(message, { title: title, confirmLabel: (options && options.confirmLabel) || 'OK', cancelLabel: (options && options.cancelLabel) || 'Cancel' }).then(function(ok) { if (ok) onConfirm(); });
 }
@@ -16394,7 +16447,7 @@ function mastConfirm(message, options) {
     h += '</div></div>';
     overlay.innerHTML = h;
     document.body.appendChild(overlay);
-    var _navId = 'dlg' + (++_mastDlgSeq);
+    var _navId = 'dlg' + (++_mastDlgSeq); overlay.setAttribute('data-mn-managed', '1');
     function close(result) { if (window.MastOverlayNav) MastOverlayNav.pop(_navId); if (overlay.parentNode) overlay.parentNode.removeChild(overlay); resolve(result); }
     if (window.MastOverlayNav) MastOverlayNav.push(_navId, function () { close(false); });
     overlay.querySelector('#mastDialogCancel').addEventListener('click', function() { close(false); });
@@ -16421,7 +16474,7 @@ function mastAlert(message, options) {
     h += '</div></div>';
     overlay.innerHTML = h;
     document.body.appendChild(overlay);
-    var _navId = 'dlg' + (++_mastDlgSeq);
+    var _navId = 'dlg' + (++_mastDlgSeq); overlay.setAttribute('data-mn-managed', '1');
     function close() { if (window.MastOverlayNav) MastOverlayNav.pop(_navId); if (overlay.parentNode) overlay.parentNode.removeChild(overlay); resolve(); }
     if (window.MastOverlayNav) MastOverlayNav.push(_navId, function () { close(); });
     overlay.querySelector('#mastDialogOK').addEventListener('click', close);
@@ -16452,7 +16505,7 @@ function mastPrompt(message, options) {
     h += '</div></div>';
     overlay.innerHTML = h;
     document.body.appendChild(overlay);
-    var _navId = 'dlg' + (++_mastDlgSeq);
+    var _navId = 'dlg' + (++_mastDlgSeq); overlay.setAttribute('data-mn-managed', '1');
     var input = overlay.querySelector('#mastDialogInput');
     input.focus();
     if (opts.defaultValue) input.select();
@@ -16478,7 +16531,7 @@ function mastCopyFallback(label, text) {
   h += '</div></div>';
   overlay.innerHTML = h;
   document.body.appendChild(overlay);
-  var _navId = 'dlg' + (++_mastDlgSeq);
+  var _navId = 'dlg' + (++_mastDlgSeq); overlay.setAttribute('data-mn-managed', '1');
   var input = overlay.querySelector('#mastCopyInput');
   input.focus();
   input.select();
@@ -20194,7 +20247,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260529-234243-e72c50a';
+var MAST_MODULES_V = '20260529-234956-7caebd7';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
