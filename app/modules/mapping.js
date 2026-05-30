@@ -1485,6 +1485,20 @@
     var deltaProds = unmatchedProducts.length;
 
     var lastRun = flowState && (flowState.completedAt || flowState.lastRunAt);
+    if (!lastRun) {
+      // Fallback: a tenant with confirmed mappings shouldn't read "never" just
+      // because the mappingFlowState doc lacks a completedAt stamp (it's only
+      // written at the end of the full interstitial flow). Derive the most
+      // recent confirmed-mapping verification time instead. Stays "never" only
+      // when there are genuinely no mappings.
+      var latestMs = 0;
+      Object.keys(mappedListingIds).forEach(function(id) {
+        var m = mappedListingIds[id];
+        var t = m && (m.lastVerifiedAt || m.createdAt);
+        if (t) { var ms = new Date(t).getTime(); if (ms > latestMs) latestMs = ms; }
+      });
+      if (latestMs > 0) lastRun = new Date(latestMs).toISOString();
+    }
     var sinceText = lastRun ? relativeDateAgo(lastRun) : 'never';
 
     var deltaHtml = '';
