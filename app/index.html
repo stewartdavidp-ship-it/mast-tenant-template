@@ -8805,6 +8805,11 @@
               style="width:18px;height:18px;cursor:pointer;">
             <span>Show Testing Mode in sidebar</span>
           </label>
+          <label style="display:flex;align-items:center;gap:10px;cursor:pointer;margin-top:8px;">
+            <input type="checkbox" id="testingModeDeviceHideToggle" onchange="toggleTestingModeDeviceHide()"
+              style="width:18px;height:18px;cursor:pointer;">
+            <span>Hide Testing Mode on this device only <span style="color:var(--warm-gray);font-size:0.78rem;">(for screen recording &mdash; doesn&rsquo;t affect your team)</span></span>
+          </label>
         </div>
       </div>
       <div id="settingsSubPayments" style="display:none;max-width:720px;">
@@ -11322,7 +11327,10 @@
   <div class="testing-mode-panel" id="testingModePanel">
     <div class="tm-header">
       <h3>🧪 Testing Mode</h3>
-      <button class="tm-close" onclick="toggleTestingMode()">&times;</button>
+      <div style="display:flex;align-items:center;gap:6px;">
+        <button class="tm-close" onclick="hideTestingModeOnDevice()" title="Hide Testing Mode on this device (e.g. for recording). Restore in Settings → General." aria-label="Hide on this device" style="font-size:0.72rem;width:auto;padding:2px 8px;">Hide here</button>
+        <button class="tm-close" onclick="toggleTestingMode()" aria-label="Close">&times;</button>
+      </div>
     </div>
     <div style="padding:4px 16px 8px;font-size:0.78rem;color:var(--warm-gray);line-height:1.4;">Tap <span style="display:inline-block;width:18px;height:18px;line-height:18px;text-align:center;border-radius:50%;background:var(--amber);color:white;font-size:0.72rem;font-weight:700;vertical-align:middle;">?</span> on any task to ask the Studio Assistant for a hint.</div>
     <div class="tm-body" id="testingModeBody"></div>
@@ -20395,7 +20403,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260530-082244-e6bf9dc';
+var MAST_MODULES_V = '20260530-084527-d70cc0e';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -47437,6 +47445,43 @@ var ACTION_LABELS = {
 
 var PAGE_LABELS = { home: 'Home', about: 'About', shop: 'Shop', schedule: 'Schedule' };
 
+// Friendly labels for composite interaction prefixes (the part before ':').
+var ACTION_PREFIX_LABELS = {
+  cart_add: 'Add to cart', add_to_cart: 'Add to cart', cart_remove: 'Remove from cart',
+  product_view: 'Product view', buy_now: 'Buy now', wishlist_add: 'Wishlist add',
+  quick_view: 'Quick view', view_product: 'Product view'
+};
+
+// Resolve a product id (Firebase push id == product.pid) to its name. Falls
+// back to a trimmed id so a raw push id never fills the label.
+function _analyticsProductName(id) {
+  if (!id) return '';
+  try {
+    var list = window.productsData || [];
+    var p = list.find(function(pp) { return pp && (pp.pid === id || pp.id === id); });
+    if (p && (p.name || p.title)) return p.name || p.title;
+  } catch (e) {}
+  if (/^-[A-Za-z0-9_-]{12,}$/.test(id)) return id.slice(0, 8) + '…';
+  return id;
+}
+
+// Humanize a raw interaction action. Resolves composite "type:targetId" values
+// (e.g. "cart_add:-Ooa73tvVja…") to "<label> — <product name>" rather than
+// showing the raw Firebase id.
+function analyticsActionLabel(raw) {
+  if (raw == null || raw === '') return 'Click';
+  if (ACTION_LABELS[raw]) return ACTION_LABELS[raw];
+  var s = String(raw);
+  var ci = s.indexOf(':');
+  if (ci === -1) return s;
+  var prefix = s.slice(0, ci);
+  var target = s.slice(ci + 1);
+  var prefixLabel = ACTION_LABELS[prefix] || ACTION_PREFIX_LABELS[prefix] ||
+    prefix.replace(/_/g, ' ').replace(/\b\w/g, function(c) { return c.toUpperCase(); });
+  var name = _analyticsProductName(target);
+  return name ? (prefixLabel + ' — ' + name) : prefixLabel;
+}
+
 // ============================================================
 // W2.5 — Traffic & Revenue by Source
 // ============================================================
@@ -47849,7 +47894,7 @@ function renderAnalyticsInteractions(hits) {
     sorted.slice(0, 15).forEach(function(entry) {
       var pct = Math.round((entry[1] / max) * 100);
       html += '<div class="analytics-bar-row">' +
-        '<div class="analytics-bar-label">' + esc(ACTION_LABELS[entry[0]] || entry[0]) + '</div>' +
+        '<div class="analytics-bar-label">' + esc(analyticsActionLabel(entry[0])) + '</div>' +
         '<div class="analytics-bar-track"><div class="analytics-bar-fill" style="width:' + pct + '%"></div></div>' +
         '<div class="analytics-bar-count">' + entry[1] + '</div>' +
         '</div>';
@@ -47902,7 +47947,7 @@ function renderAnalyticsRecent(hits) {
       var icon = h.t === 'pv' ? 'pv' : 'ev';
       var iconText = h.t === 'pv' ? '\u{1F441}' : '\u{1F517}';
       var pageLabel = PAGE_LABELS[h.p] || h.p;
-      var desc = h.t === 'pv' ? 'Page view' : (ACTION_LABELS[h.a] || h.a || 'Click');
+      var desc = h.t === 'pv' ? 'Page view' : analyticsActionLabel(h.a);
       var time = formatTimeAgo(h.ts);
       var ipStr = h.ip ? ' <span class="analytics-ip">' + esc(h.ip) + '</span>' : '';
 
@@ -55176,12 +55221,53 @@ function loadTestingModeVisibility() {
   });
 }
 
+// Per-device suppression. Lets someone hide the Testing Mode handle/panel on
+// THIS device (e.g. while screen-recording a demo) without flipping the
+// tenant-wide `config/testingModeVisible` flag for the whole team.
+var TESTING_MODE_DEVICE_HIDE_KEY = 'mast_testingMode_hiddenOnDevice';
+function isTestingModeHiddenOnDevice() {
+  try { return window.localStorage && window.localStorage.getItem(TESTING_MODE_DEVICE_HIDE_KEY) === '1'; }
+  catch (e) { return false; }
+}
+
 function applyTestingModeVisibility() {
-  var show = _testingModeVisible && isStaff();
+  var show = _testingModeVisible && isStaff() && !isTestingModeHiddenOnDevice();
   var tmItem = document.getElementById('testingModeItem');
   if (tmItem) tmItem.style.display = show ? '' : 'none';
   var tmHandle = document.getElementById('testingModeHandle');
   if (tmHandle) tmHandle.style.display = show ? '' : 'none';
+  // If hidden on this device, also make sure an open panel is closed.
+  if (!show && testingModeState && testingModeState.open) {
+    var panel = document.getElementById('testingModePanel');
+    var handle = document.getElementById('testingModeHandle');
+    if (panel) panel.classList.remove('open');
+    if (handle) handle.classList.add('hidden');
+    testingModeState.open = false;
+  }
+  // Sync the per-device restore toggle in Settings if present.
+  var devToggle = document.getElementById('testingModeDeviceHideToggle');
+  if (devToggle) devToggle.checked = isTestingModeHiddenOnDevice();
+}
+
+// Hide on this device (persists in localStorage). Called from the panel header.
+function hideTestingModeOnDevice() {
+  try { if (window.localStorage) window.localStorage.setItem(TESTING_MODE_DEVICE_HIDE_KEY, '1'); } catch (e) {}
+  applyTestingModeVisibility();
+  showToast('Testing Mode hidden on this device. Re-enable it in Settings → General.');
+}
+
+// Settings toggle: restore Testing Mode on this device.
+function toggleTestingModeDeviceHide() {
+  var toggle = document.getElementById('testingModeDeviceHideToggle');
+  var hide = toggle ? toggle.checked : false;
+  try {
+    if (window.localStorage) {
+      if (hide) window.localStorage.setItem(TESTING_MODE_DEVICE_HIDE_KEY, '1');
+      else window.localStorage.removeItem(TESTING_MODE_DEVICE_HIDE_KEY);
+    }
+  } catch (e) {}
+  applyTestingModeVisibility();
+  showToast(hide ? 'Testing Mode hidden on this device' : 'Testing Mode restored on this device');
 }
 
 function toggleTestingModeVisibility() {
