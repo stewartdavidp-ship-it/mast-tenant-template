@@ -17494,6 +17494,13 @@ if (!__resetLinkHandled) {
 
 auth.onAuthStateChanged(async function(user) {
   if (TEST_MODE && new URLSearchParams(window.location.search).get('testmode') === '1') return; // Already handled above
+  // A same-origin password-reset link is being handled (?mode=resetPassword&oobCode=).
+  // It owns the screen regardless of who is currently signed in — an admin who
+  // clicks an invite/reset link for ANOTHER account must NOT see the app render
+  // underneath the "Set your password" screen. completePasswordResetIfPresent
+  // shows the reset screen; submitPasswordReset clears __passwordResetMode just
+  // before it signs the target account in, so normal rendering resumes then.
+  if (window.__passwordResetMode) { currentUser = user; return; }
   currentUser = user;
   if (user) {
     try { loadMastToastPrefs(); } catch (e) {}
@@ -17514,10 +17521,6 @@ auth.onAuthStateChanged(async function(user) {
   const header = document.getElementById('header');
 
   if (!user) {
-    // A same-origin password-reset link is being handled (verify → set-password
-    // screen). completePasswordResetIfPresent owns the screen state here; don't
-    // flash the login screen underneath it.
-    if (window.__passwordResetMode) return;
     authScreen.style.display = '';
     loadingScreen.style.display = 'none';
     deniedScreen.style.display = 'none';
@@ -20089,7 +20092,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260529-223228-8d204db';
+var MAST_MODULES_V = '20260529-225249-c9d960b';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
