@@ -25,26 +25,30 @@ const fileArg = (process.argv.find(a => a.startsWith('--file=')) || '').slice(7)
 
 // ---- APPLY rules: [label, regex, replacement] (regex must capture a leading
 //      property anchor so we only touch the right CSS property) ----
+// (?<![-\w]) ensures we match a real CSS PROPERTY, never a custom-property
+// DEFINITION like `--border:` or `--wiz-border:` (the `-` is a word boundary
+// for \b, which previously let the border rule corrupt token definitions).
+const P = '(?<![-\\w])';
 const RULES = [
   // text grays (light-on-dark only; never on colored buttons)
-  ['color #e0e0e0 → --text',        /(\bcolor:\s*)#e0e0e0\b/gi, '$1var(--text)'],
-  ['color #e8e4df → --text',        /(\bcolor:\s*)#e8e4df\b/gi, '$1var(--text)'],
-  ['color #ccc → --warm-gray-light',/(\bcolor:\s*)#ccc(ccc)?\b/gi, '$1var(--warm-gray-light)'],
-  ['color #aaa → --warm-gray-light',/(\bcolor:\s*)#aaa(aaa)?\b/gi, '$1var(--warm-gray-light)'],
-  ['color #999 → --warm-gray',      /(\bcolor:\s*)#999(999)?\b/gi, '$1var(--warm-gray)'],
-  ['color #888 → --warm-gray',      /(\bcolor:\s*)#888(888)?\b/gi, '$1var(--warm-gray)'],
+  ['color #e0e0e0 → --text',        new RegExp(`(${P}color:\\s*)#e0e0e0\\b`, 'gi'), '$1var(--text)'],
+  ['color #e8e4df → --text',        new RegExp(`(${P}color:\\s*)#e8e4df\\b`, 'gi'), '$1var(--text)'],
+  ['color #ccc → --warm-gray-light',new RegExp(`(${P}color:\\s*)#ccc(ccc)?\\b`, 'gi'), '$1var(--warm-gray-light)'],
+  ['color #aaa → --warm-gray-light',new RegExp(`(${P}color:\\s*)#aaa(aaa)?\\b`, 'gi'), '$1var(--warm-gray-light)'],
+  ['color #999 → --warm-gray',      new RegExp(`(${P}color:\\s*)#999(999)?\\b`, 'gi'), '$1var(--warm-gray)'],
+  ['color #888 → --warm-gray',      new RegExp(`(${P}color:\\s*)#888(888)?\\b`, 'gi'), '$1var(--warm-gray)'],
   // dark fills (always dark panels)
-  ['bg #1a1a1a → --bg-primary',     /(\bbackground(?:-color)?:\s*)#1a1a1a\b/gi, '$1var(--bg-primary)'],
-  ['bg #1a1d26 → --bg',             /(\bbackground(?:-color)?:\s*)#1a1d26\b/gi, '$1var(--bg)'],
-  ['bg #232323 → --bg-secondary',   /(\bbackground(?:-color)?:\s*)#232323\b/gi, '$1var(--bg-secondary)'],
-  ['bg #252a35 → --surface-card',   /(\bbackground(?:-color)?:\s*)#252a35\b/gi, '$1var(--surface-card)'],
-  ['bg #2a2a2a → --card-bg',        /(\bbackground(?:-color)?:\s*)#2a2a2a\b/gi, '$1var(--card-bg)'],
-  ['bg #333 → --bg-tertiary',       /(\bbackground(?:-color)?:\s*)#333(333)?\b/gi, '$1var(--bg-tertiary)'],
+  ['bg #1a1a1a → --bg-primary',     new RegExp(`(${P}background(?:-color)?:\\s*)#1a1a1a\\b`, 'gi'), '$1var(--bg-primary)'],
+  ['bg #1a1d26 → --bg',             new RegExp(`(${P}background(?:-color)?:\\s*)#1a1d26\\b`, 'gi'), '$1var(--bg)'],
+  ['bg #232323 → --bg-secondary',   new RegExp(`(${P}background(?:-color)?:\\s*)#232323\\b`, 'gi'), '$1var(--bg-secondary)'],
+  ['bg #252a35 → --surface-card',   new RegExp(`(${P}background(?:-color)?:\\s*)#252a35\\b`, 'gi'), '$1var(--surface-card)'],
+  ['bg #2a2a2a → --card-bg',        new RegExp(`(${P}background(?:-color)?:\\s*)#2a2a2a\\b`, 'gi'), '$1var(--card-bg)'],
+  ['bg #333 → --bg-tertiary',       new RegExp(`(${P}background(?:-color)?:\\s*)#333(333)?\\b`, 'gi'), '$1var(--bg-tertiary)'],
   // borders (color inside a border shorthand — dark separators)
-  ['border #444 → --border',        /(\bborder(?:-(?:top|right|bottom|left))?(?:-color)?:\s*[^;"'}]*?)#444(444)?\b/gi, '$1var(--border)'],
-  ['border #3a3a3a → --border',     /(\bborder(?:-(?:top|right|bottom|left))?(?:-color)?:\s*[^;"'}]*?)#3a3a3a\b/gi, '$1var(--border)'],
-  ['border #333 → --border',        /(\bborder(?:-(?:top|right|bottom|left))?(?:-color)?:\s*[^;"'}]*?)#333(333)?\b/gi, '$1var(--border)'],
-  ['border rgba(255*) → --border',  /(\bborder(?:-(?:top|right|bottom|left))?(?:-color)?:\s*[^;"'}]*?)rgba\(\s*255\s*,\s*255\s*,\s*255\s*,\s*0?\.\d+\s*\)/gi, '$1var(--border)'],
+  ['border #444 → --border',        new RegExp(`(${P}border(?:-(?:top|right|bottom|left))?(?:-color)?:\\s*[^;"'}]*?)#444(444)?\\b`, 'gi'), '$1var(--border)'],
+  ['border #3a3a3a → --border',     new RegExp(`(${P}border(?:-(?:top|right|bottom|left))?(?:-color)?:\\s*[^;"'}]*?)#3a3a3a\\b`, 'gi'), '$1var(--border)'],
+  ['border #333 → --border',        new RegExp(`(${P}border(?:-(?:top|right|bottom|left))?(?:-color)?:\\s*[^;"'}]*?)#333(333)?\\b`, 'gi'), '$1var(--border)'],
+  ['border rgba(255*) → --border',  new RegExp(`(${P}border(?:-(?:top|right|bottom|left))?(?:-color)?:\\s*[^;"'}]*?)rgba\\(\\s*255\\s*,\\s*255\\s*,\\s*255\\s*,\\s*0?\\.\\d+\\s*\\)`, 'gi'), '$1var(--border)'],
 ];
 
 // ---- FLAG patterns: ambiguous, surfaced for manual review ----
