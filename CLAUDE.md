@@ -77,7 +77,7 @@ Canonical model: **[docs/release-model.md](docs/release-model.md)**. The essenti
 - **Verify through `<tenant>.runmast.com`** (through the worker — covers Cloudflare edge cache + browser cache), never just the `.web.app` origin. Reason in **pods + hostnames**; site names are internal plumbing.
 - **KV `podRouting` decides who serves from a site.** "Where does tenant X serve from?" is a KV lookup, never a pod-table guess. A deploy lands code on a site; KV decides who reads it.
 
-> **Migration status (2026-05-30):** sgtest15 is still KV-pinned to its own site `mast-sgtest15.web.app` (legacy drift, un-pin pending). Until un-pinned, a deploy to `mast-tenant-shared` does NOT reach sgtest15 — deploy to sgtest15's own site to test it. The target-aware gate and auto-merge CI are also pending builds; see the roadmap in [docs/release-model.md](docs/release-model.md).
+> **Migration status (2026-05-30):** ✅ sgtest15 is **un-pinned** — its `podRouting` KV now points at `mast-tenant-shared`, so it rides the shared dev site like every other dev tenant (dev pod = one site). ✅ `main` is **protected**: ruleset requires a PR + the `lint` check, blocks direct push/force-push, auto-merges on green. ⏳ Still pending: the **target-aware deploy gate** — today the deploy gate still prompts for *all* targets including dev (Build 2). See the roadmap in [docs/release-model.md](docs/release-model.md).
 
 ## RULEs — Do not violate these.
 

@@ -130,9 +130,11 @@ A gated deploy is *one* deliberate "yes." Everything around it stays frictionles
    Reserve the shared checkout for trivial single-shot edits where you know you're the only session.
 2. **PR to main — consistently.** No fast-forward straight to main. PRs run CI (lint / RBAC /
    design-token / mastDB / module-info) *before* code reaches main and auto-deploys. **Auto-merge
-   on green** for routine changes (near-FF velocity, nothing broken lands). **Required human
-   review** for PRs touching the gated tier (prod config, RBAC, migrations, schema).
-   **Delete-on-merge** to keep branch count sane.
+   on green** for routine changes (near-FF velocity, nothing broken lands). **Delete-on-merge** to
+   keep branch count sane. **No merge-time human review:** this is a single-account repo (one owner
+   + AI sessions) and GitHub won't let you approve your own PR, so merge-time required review is
+   structurally impossible. CI green is the merge gate; the human checkpoint for customer-facing
+   change lives at the **prod deploy gate** (Build 2), not at merge.
 3. **CI auto-deploys dev on merge to main.** `origin/main` *is* what's live on dev — no
    deploy-from-local-HEAD, no git/prod divergence. Do **not** hand-deploy dev from a local HEAD.
 4. **Test post-merge, fix-forward (B1).** Merge → it deploys to dev → verify on
@@ -245,9 +247,9 @@ only.
 
 | Item | Today | Target |
 |---|---|---|
-| sgtest15 routing | KV-pinned to its own site `mast-sgtest15.web.app` (legacy drift) | un-pinned → rides `mast-tenant-shared`; dev pod = one site |
-| Deploy gate | fires on action-type, target-blind (dev deploys prompt like prod) | target-aware: silent for dev, single-confirm for gated |
-| Merge path | mixed (direct-to-main + auto-sync PR fallback) | consistent PR-to-main + auto-merge-on-green |
+| sgtest15 routing | ✅ **DONE (2026-05-30)** — un-pinned, rides `mast-tenant-shared`; dev pod = one site | — |
+| Deploy gate | fires on action-type, **target-blind (dev deploys still prompt like prod)** | target-aware: silent for dev, single-confirm for gated (Build 2 — pending) |
+| Merge path | ✅ **DONE (2026-05-30)** — ruleset on `main`: require PR + `lint`, auto-merge-on-green, delete-on-merge, no direct push | — |
 | Cache-bust (`MAST_MODULES_V`) | opt-in local pre-commit hook (skippable) | bumped in CI so it can't be skipped |
 | Tenant freeze | none (sgtest15 pin is the accidental version) | bounded, labeled, auto-expiring (v1 build) |
 | Storefront prod release | manual operator deploy | pod-sequential + verify (canary-for-free); full pipeline deferred |
@@ -264,14 +266,14 @@ Sequenced cheapest-highest-leverage first. Cross-repo work is noted. Revised 202
 release-manager review (added gate-zero, split the gate build, added the KV-write tool and rollback
 lever, fixed the cache-bust collision).
 
-**0. Gate-zero — GitHub branch protection.** Verify the repos' GitHub plan supports rulesets /
-   required-status-checks / auto-merge (the branch-protection API reportedly 403s — likely needs
-   Pro). Builds 4 *enforcement* depends on this. If unavailable, "required CI / auto-merge" is
-   convention with zero teeth — resolve before committing to that track. *(GitHub / admin)*
+**0. Gate-zero — GitHub branch protection.** ✅ **DONE (2026-05-30).** Repo is **public**, so
+   rulesets / required-status-checks / auto-merge are available for free — the earlier "needs Pro"
+   worry was about *private* repos and does not apply here. *(GitHub / admin)*
 
-1. **Un-pin sgtest15** — one dev-tier KV edit; sgtest15 rides `mast-tenant-shared`. KV-lookup +
-   record the old value first (instant revert), do it at a low-traffic hour, verify through the
-   worker after. Removes the #1 routing-confusion class. *(KV / `podRouting`)*
+1. **Un-pin sgtest15** — ✅ **DONE (2026-05-30).** KV `sgtest15.runmast.com` set to
+   `{"podId":"dev","originHost":"mast-tenant-shared.web.app"}` (was `mast-sgtest15.web.app`).
+   Verified via worker: HTTP 200, serves the shared build, no regression. Rollback: restore
+   `originHost` to `mast-sgtest15.web.app`. *(KV / `podRouting`)*
 
 2a. **Arg-aware gate engine** — move the confirm from whole-tool to **argument-level** (inspect
    `pod`/`tenantId`/action before issuing a token). Preserve the frozen-arg anti-bait-and-switch
@@ -286,9 +288,11 @@ lever, fixed the cache-bust collision).
    write. This is what makes "prod KV edits" actually gateable (2b) **and** unblocks the freeze (6).
    *(mast-mcp-server + mast-architecture)*
 
-4. **PR-to-main + auto-merge-on-green** — required CI; auto-merge routine PRs on green; **path-scoped
-   required review** (CODEOWNERS: RBAC files, `declared-state.schema.yaml`, `mode-module-info.js`,
-   migrations); delete-on-merge. Depends on build 0. *(GitHub Actions / repo settings)*
+4. **PR-to-main + auto-merge-on-green** — ✅ **DONE (2026-05-30).** Ruleset `17068215` on `main`:
+   require PR + require `lint` check + block force-push/deletion, **no bypass**; `allow_auto_merge`
+   + `delete_branch_on_merge` enabled. **Path-scoped required review was dropped** — single-account
+   repo can't self-approve (see Dev workflow §2); the human checkpoint moved to the deploy-time gate
+   (Build 2). *(GitHub Actions / repo settings)*
 
 5. **Cache-bust + tarball-pin in CI** — bump `MAST_MODULES_V` as a **build-time, uncommitted**
    substitution **before** the verify-SHA is computed (the bump edits `app/index.html`, so a
