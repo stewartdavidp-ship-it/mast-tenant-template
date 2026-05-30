@@ -250,7 +250,7 @@ only.
 | sgtest15 routing | ✅ **DONE (2026-05-30)** — un-pinned, rides `mast-tenant-shared`; dev pod = one site | — |
 | Deploy gate | fires on action-type, **target-blind (dev deploys still prompt like prod)** | target-aware: silent for dev, single-confirm for gated (Build 2 — pending) |
 | Merge path | ✅ **DONE (2026-05-30)** — ruleset on `main`: require PR + `lint`, auto-merge-on-green, delete-on-merge, no direct push | — |
-| Cache-bust (`MAST_MODULES_V`) | opt-in local pre-commit hook (skippable) | bumped in CI so it can't be skipped |
+| Cache-bust (`MAST_MODULES_V`) | ✅ **DONE (2026-05-30, PR #70)** — enforced by required `lint` check (committed bump); local pre-commit hook now optional/dev-only | enforced by required `lint` check (committed bump) |
 | Tenant freeze | none (sgtest15 pin is the accidental version) | bounded, labeled, auto-expiring (v1 build) |
 | Storefront prod release | manual operator deploy | pod-sequential + verify (canary-for-free); full pipeline deferred |
 | KV `podRouting` writes | raw `fetch` to Cloudflare API inside a control-plane CF; no tool, no audit, no gate | gateable + audited KV-write tool (unblocks gating + freeze) |
@@ -294,12 +294,18 @@ lever, fixed the cache-bust collision).
    repo can't self-approve (see Dev workflow §2); the human checkpoint moved to the deploy-time gate
    (Build 2). *(GitHub Actions / repo settings)*
 
-5. **Cache-bust + tarball-pin in CI** — bump `MAST_MODULES_V` as a **build-time, uncommitted**
-   substitution **before** the verify-SHA is computed (the bump edits `app/index.html`, so a
-   post-hoc bump would break SHA-verify by construction). **Retire/disable the local pre-commit
-   hook** so it can't double-bump or trigger a bot-commit→redeploy loop. While here, **pin the
-   tarball fetch to the merged SHA** in `mast-deploy` (the 2026-05-22 silent-success fix).
-   *(CI + `scripts/bump-modules-version.sh` + mast-deploy)*
+5. **Cache-bust gate + tarball-pin in CI** — ✅ **DONE (2026-05-30, PR #70).** Enforce
+   `MAST_MODULES_V` via a **required `lint` CI check** (`scripts/lint-cache-bust.js`): any PR that
+   touches `app/index.html` or `app/modules/*.js` **without a committed `MAST_MODULES_V` bump fails
+   CI** and can't merge. The local pre-commit hook is now **optional/dev-only** (a convenience that
+   auto-bumps locally; no longer the enforcement point). *Note: the originally-planned "build-time,
+   uncommitted substitution in `deploy.yml`" approach was found architecturally impossible — a
+   deploy ships the committed GitHub tarball at the merged SHA (`mast_hosting` fetches
+   `/tarball/<sha>`), not the CI checkout, so an uncommitted CI bump never reaches users and would
+   break the verify-SHA step; branch protection has no bypass, so CI also can't bot-commit the bump.
+   A committed-bump gate is the only design that actually ships.* The **tarball SHA-pin** was
+   already shipped separately in `mast-deploy` `d9163ae` (v0.7.4; `deploy.yml` pins v0.7.5) — the
+   2026-05-22 silent-success fix. *(CI + `scripts/lint-cache-bust.js` + mast-deploy)*
 
 6. **Tenant freeze v1** — depends on **2** (gate) + **3** (KV tool). Freeze command (snapshot→preview
    channel with TTL ≥ `lockedUntil`; labeled KV override) + reconciler auto-lift (per-pod
