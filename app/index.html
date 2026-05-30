@@ -6390,6 +6390,7 @@
         <div class="sidebar-item" data-route="team" onclick="navigateTo('team')">Team</div>
         <div class="sidebar-item" data-route="business" onclick="navigateTo('business')">Business</div>
         <div class="sidebar-item" data-route="channels" onclick="navigateTo('channels')">Channels</div>
+        <div class="sidebar-item" data-route="mapping" onclick="navigateTo('mapping')">Listing Mapping</div>
         <div class="sidebar-item" data-route="contacts" onclick="navigateTo('contacts')">Contacts</div>
         <div class="sidebar-item" data-route="customers" onclick="navigateTo('customers')">Customers</div>
       </div>
@@ -12983,6 +12984,7 @@ function getTokenWallet() {
 
 function loadTokenWallet() {
   if (_tokenWalletListener) return; // already listening
+  loadHideTokenIndicatorFlag(); // resolve per-tenant visibility flag, then re-render
   _tokenWalletListener = MastDB.tokenWallet.listen(function(snap) {
     _tokenWallet = snap.val();
     renderTokenBalanceIndicator();
@@ -12991,9 +12993,29 @@ function loadTokenWallet() {
   });
 }
 
+// Per-tenant flag to hide the header token/coins indicator (gamification surface).
+// Defaults to showing it (flag absent/false === current behavior). Read from
+// `config/featureFlags/hideTokenIndicator`; cached on window. A per-browser
+// localStorage override mirrors the unifiedDriftUI flag idiom for dev/demo use.
+function loadHideTokenIndicatorFlag() {
+  if (window.__mastHideTokenIndicator !== undefined) return;
+  try {
+    var ls = (typeof localStorage !== 'undefined') ? localStorage.getItem('mastHideTokenIndicator') : null;
+    if (ls === '1' || ls === 'true')  { window.__mastHideTokenIndicator = true;  renderTokenBalanceIndicator(); return; }
+    if (ls === '0' || ls === 'false') { window.__mastHideTokenIndicator = false; renderTokenBalanceIndicator(); return; }
+  } catch (_) { /* localStorage unavailable — fall through to RTDB */ }
+  MastDB.get('config/featureFlags/hideTokenIndicator').then(function(val) {
+    window.__mastHideTokenIndicator = (val === true);
+    renderTokenBalanceIndicator();
+  }).catch(function() {
+    window.__mastHideTokenIndicator = false;
+  });
+}
+
 function renderTokenBalanceIndicator() {
   var el = document.getElementById('tokenBalanceIndicator');
   if (!el) return;
+  if (window.__mastHideTokenIndicator === true) { el.style.display = 'none'; return; }
   var w = getTokenWallet();
   if (!w || w.status === 'unknown') {
     el.style.display = 'none';
@@ -20403,7 +20425,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260530-085818-9828a06';
+var MAST_MODULES_V = '20260530-105105-b74309e';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.

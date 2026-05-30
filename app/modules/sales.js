@@ -268,7 +268,7 @@ function renderSales() {
       '<div style="flex:1;min-width:140px;background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:12px 16px;">' +
         '<div style="font-size:0.78rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.5px;">Total</div>' +
         '<div style="font-size:1.6rem;font-weight:600;font-family:Cormorant Garamond,serif;">' + formatCents(totalAmount) + '</div>' +
-        '<div style="font-size:0.78rem;color:var(--warm-gray);">' + all.filter(function(s){return s.status !== 'voided';}).length + ' sales</div>' +
+        '<div style="font-size:0.78rem;color:var(--warm-gray);">' + (function(n){return n + (n === 1 ? ' sale' : ' sales');})(all.filter(function(s){return s.status !== 'voided';}).length) + '</div>' +
       '</div>' +
       '<div style="flex:1;min-width:140px;background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:12px 16px;">' +
         '<div style="font-size:0.78rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.5px;">Cash</div>' +

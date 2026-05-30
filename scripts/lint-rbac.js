@@ -37,6 +37,7 @@ const UNGATED_ALLOWLIST = new Set([
   'ask-ai',       // global AskAI surface
   'audit',        // audit viewer sub-route (the gateable 'auditlog' module is in SECTION_ROUTES)
   'coins',        // token/credits balance surface
+  'mapping',      // channel product↔listing mapping re-entry surface (sub-surface of Channels)
   'suppressions', // audit-suppressions admin sub-surface
 ]);
 
