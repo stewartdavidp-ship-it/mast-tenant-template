@@ -130,6 +130,14 @@
         scroll-behavior: auto !important;
       }
     }
+    /* ADA: manual reduce-motion override (Settings → Accessibility) for users who
+       haven't set the OS preference. Mirrors the media query above under a body class. */
+    body.mast-reduce-motion *, body.mast-reduce-motion *::before, body.mast-reduce-motion *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
     :root {
       --amber: var(--amber);
       --amber-light: var(--amber-light);
@@ -8657,6 +8665,7 @@
               <button class="settings-nav-item" data-nav-key="engagement" onclick="switchSettingsSubView('engagement')">Engagement</button>
               <button class="settings-nav-item" data-nav-key="notifications" onclick="switchSettingsSubView('notifications')">Notifications <span id="settingsNotifBadge" class="sidebar-badge alert" style="display:none;margin-left:4px;"></span></button>
               <button class="settings-nav-item" data-nav-key="adminPrefs" onclick="switchSettingsSubView('adminPrefs')">Preferences</button>
+              <button class="settings-nav-item" data-nav-key="accessibility" onclick="switchSettingsSubView('accessibility')">Accessibility</button>
             </div>
           </div>
         </nav>
@@ -8810,6 +8819,61 @@
               style="width:18px;height:18px;cursor:pointer;">
             <span>Hide Testing Mode on this device only <span style="color:var(--warm-gray);font-size:0.78rem;">(for screen recording &mdash; doesn&rsquo;t affect your team)</span></span>
           </label>
+        </div>
+      </div>
+      <div id="settingsSubAccessibility" style="display:none;max-width:720px;">
+        <div class="tab-section-title">Accessibility<span class="tab-section-status" data-state="info">Per device</span></div>
+        <p class="tab-section-purpose">Make Mast easier to see and use. The controls here adjust the admin app itself and are saved on this device. Below them are tips for your computer&rsquo;s and browser&rsquo;s own accessibility tools, which work on every site &mdash; not just Mast.</p>
+
+        <!-- Text size — scales the whole admin via the root font-size (rem architecture). -->
+        <div class="form-group" style="margin-bottom:24px;">
+          <label for="a11yTextSize" style="font-size:1rem;font-weight:600;display:block;margin-bottom:4px;">Text size</label>
+          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:8px;">Scales all text and controls across the admin app. Larger sizes are easier to read on small or high-resolution laptop screens. Takes effect immediately.</p>
+          <select id="a11yTextSize" onchange="onA11yTextSizeChange()" style="width:100%;max-width:280px;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;">
+            <option value="normal">Normal (default)</option>
+            <option value="large">Large</option>
+            <option value="xl">Extra large</option>
+            <option value="xxl">Largest</option>
+          </select>
+        </div>
+
+        <!-- Reduce motion — manual override of the prefers-reduced-motion media query. -->
+        <div class="form-group" style="margin-bottom:24px;">
+          <label style="font-size:1rem;font-weight:600;display:block;margin-bottom:4px;">Reduce motion</label>
+          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:8px;">Minimizes animations and transitions throughout the admin app. Mast already follows your operating system&rsquo;s &ldquo;reduce motion&rdquo; setting automatically &mdash; turn this on if you want to reduce motion only in Mast.</p>
+          <label style="display:flex;align-items:center;gap:10px;cursor:pointer;">
+            <input type="checkbox" id="a11yReduceMotion" onchange="onA11yReduceMotionChange()"
+              style="width:18px;height:18px;cursor:pointer;">
+            <span>Reduce motion in the admin app</span>
+          </label>
+        </div>
+
+        <div style="margin-bottom:28px;">
+          <button class="btn btn-small btn-secondary" onclick="resetMastA11yPrefs()">Reset to defaults</button>
+        </div>
+
+        <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:28px;">Looking for dark mode? It lives in <a href="javascript:void(0)" onclick="switchSettingsSubView('adminPrefs')" style="color:var(--teal);text-decoration:underline;">Preferences</a>.</p>
+
+        <!-- Guidance: OS / browser tools. Applies to every site, persists across sign-ins. -->
+        <div class="tab-section-title" style="margin-top:8px;">More ways to make Mast easier to read<span class="tab-section-status" data-state="info">Your device</span></div>
+        <p class="tab-section-purpose">These use your computer&rsquo;s and browser&rsquo;s built-in accessibility features. They apply to every website and app, not just Mast.</p>
+        <div style="display:flex;flex-direction:column;gap:16px;font-size:0.85rem;line-height:1.55;">
+          <div>
+            <div style="font-weight:600;margin-bottom:2px;">Zoom the whole page in your browser</div>
+            <div style="color:var(--warm-gray);">Mac: press <strong>&#8984; +</strong> to zoom in, <strong>&#8984; &minus;</strong> to zoom out, <strong>&#8984; 0</strong> to reset. Windows / Linux: use <strong>Ctrl</strong> in place of &#8984;. Chrome and Edge remember zoom <em>per site</em>, so you can keep Mast enlarged without affecting other sites.</div>
+          </div>
+          <div>
+            <div style="font-weight:600;margin-bottom:2px;">Increase your browser&rsquo;s default font size</div>
+            <div style="color:var(--warm-gray);">Chrome / Edge: Settings &rsaquo; Appearance &rsaquo; Font size. Safari: Settings &rsaquo; Websites &rsaquo; Page Zoom. Firefox: Settings &rsaquo; General &rsaquo; Fonts &amp; Colors. Because Mast&rsquo;s text scales with this setting, larger text reflows cleanly instead of just magnifying.</div>
+          </div>
+          <div>
+            <div style="font-weight:600;margin-bottom:2px;">Make everything on your screen bigger (operating system)</div>
+            <div style="color:var(--warm-gray);">Mac: System Settings &rsaquo; Displays &rsaquo; choose a <em>Larger Text</em> scaled resolution. Windows: Settings &rsaquo; Accessibility &rsaquo; Text size, or Display &rsaquo; Scale. Good for small built-in laptop screens.</div>
+          </div>
+          <div>
+            <div style="font-weight:600;margin-bottom:2px;">Use your operating system&rsquo;s magnifier</div>
+            <div style="color:var(--warm-gray);">Mac: System Settings &rsaquo; Accessibility &rsaquo; Zoom (e.g. hold <strong>Ctrl</strong> and scroll to magnify under the pointer). Windows: press <strong>&#8862; +</strong> to open Magnifier. Handy for spot-reading fine print.</div>
+          </div>
         </div>
       </div>
       <div id="settingsSubPayments" style="display:none;max-width:720px;">
@@ -16236,6 +16300,48 @@ function saveMastToastPrefs(next) {
   if (container) container.setAttribute('data-position', window.MastToastPrefs.position);
 }
 
+// ============================================================
+// Accessibility preferences (Settings → Accessibility)
+// Stored per-uid in localStorage, like MastToastPrefs / dark mode.
+// textSize scales the whole admin via the root font-size (rem architecture);
+// reduceMotion is a manual override of the prefers-reduced-motion media query.
+// ============================================================
+window.MastA11yPrefs = {
+  textSize: 'normal',   // normal | large | xl | xxl
+  reduceMotion: false,
+};
+var MAST_TEXT_SIZE_PCT = { normal: '100%', large: '112.5%', xl: '125%', xxl: '140%' };
+
+function mastA11yPrefsKey() {
+  var uid = (window.currentUser && window.currentUser.uid) || (firebase.auth().currentUser && firebase.auth().currentUser.uid) || 'anon';
+  return 'mastA11yPrefs:' + uid;
+}
+function applyMastA11yPrefs() {
+  var pct = MAST_TEXT_SIZE_PCT[window.MastA11yPrefs.textSize] || '100%';
+  // Inline style on <html> overrides the `html { font-size: 100% }` rule; all rem scales from here.
+  document.documentElement.style.fontSize = pct;
+  if (document.body) document.body.classList.toggle('mast-reduce-motion', !!window.MastA11yPrefs.reduceMotion);
+}
+function loadMastA11yPrefs() {
+  try {
+    var raw = localStorage.getItem(mastA11yPrefsKey());
+    if (raw) {
+      var parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object') {
+        if (parsed.textSize) window.MastA11yPrefs.textSize = parsed.textSize;
+        if (typeof parsed.reduceMotion === 'boolean') window.MastA11yPrefs.reduceMotion = parsed.reduceMotion;
+      }
+    }
+  } catch (e) {}
+  applyMastA11yPrefs();
+}
+function saveMastA11yPrefs(next) {
+  if (next.textSize) window.MastA11yPrefs.textSize = next.textSize;
+  if (typeof next.reduceMotion === 'boolean') window.MastA11yPrefs.reduceMotion = next.reduceMotion;
+  try { localStorage.setItem(mastA11yPrefsKey(), JSON.stringify(window.MastA11yPrefs)); } catch (e) {}
+  applyMastA11yPrefs();
+}
+
 function showToast(message, isError) {
   if (isError) {
     if (!window._toastBuffer) window._toastBuffer = [];
@@ -17793,6 +17899,7 @@ auth.onAuthStateChanged(async function(user) {
   currentUser = user;
   if (user) {
     try { loadMastToastPrefs(); } catch (e) {}
+    try { loadMastA11yPrefs(); } catch (e) {}
     // Clear any stranded sign-in error toasts now that auth succeeded.
     // Belt-and-suspenders alongside auto-dismiss in showToast — keeps a
     // failure toast from any prior attempt from following the user into
@@ -20403,7 +20510,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260530-085818-9828a06';
+var MAST_MODULES_V = '20260530-104951-b74309e';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -20492,7 +20599,7 @@ function getModuleForRouteManifest(route) {
 // ============================================================
 // Settings Sub-Tabs
 // ============================================================
-var settingsSubViews = ['general', 'payments', 'shipping', 'tax', 'compliance', 'operations', 'email', 'integrations', 'workshop', 'trips', 'storefront', 'dashboard', 'domains', 'ai', 'engagement', 'channels', 'notifications', 'pim', 'maker', 'product', 'costToServe', 'closePolicy', 'adminPrefs'];
+var settingsSubViews = ['general', 'payments', 'shipping', 'tax', 'compliance', 'operations', 'email', 'integrations', 'workshop', 'trips', 'storefront', 'dashboard', 'domains', 'ai', 'engagement', 'channels', 'notifications', 'pim', 'maker', 'product', 'costToServe', 'closePolicy', 'adminPrefs', 'accessibility'];
 
 var SETTINGS_VIEW_GROUP = {
   'general': 'storefront', 'storefront': 'storefront', 'domains': 'storefront',
@@ -20505,7 +20612,7 @@ var SETTINGS_VIEW_GROUP = {
   'workshop': 'studio', 'trips': 'studio', 'maker': 'studio',
   'email': 'communications', 'notifications': 'communications',
   'integrations': 'integrations', 'ai': 'integrations',
-  'dashboard': 'admin', 'engagement': 'admin'
+  'dashboard': 'admin', 'engagement': 'admin', 'adminPrefs': 'admin', 'accessibility': 'admin'
 };
 
 function toggleSettingsGroup(group) {
@@ -20609,6 +20716,7 @@ function switchSettingsSubView(view) {
   if (view === 'compliance') { loadComplianceSettings(); if (typeof refreshComplianceTabStatus === 'function') refreshComplianceTabStatus(); }
   if (view === 'operations') { loadOperationsSettings(); if (typeof refreshOperationsTabStatus === 'function') refreshOperationsTabStatus(); }
   if (view === 'channels') { loadChannelsSettings(); loadChannelsConnectCards(); if (typeof refreshChannelsTabStatus === 'function') refreshChannelsTabStatus(); }
+  if (view === 'accessibility') { if (typeof populateA11yPrefsForm === 'function') populateA11yPrefsForm(); }
 }
 
 // ============================================================
@@ -22939,6 +23047,30 @@ function resetMastToastPrefs() {
 }
 function testMastToast() {
   showToast('This is a test toast');
+}
+
+// --- Accessibility preferences form (Settings → Accessibility) ---
+function populateA11yPrefsForm() {
+  loadMastA11yPrefs(); // pull latest from localStorage and re-apply
+  var t = document.getElementById('a11yTextSize');
+  var rm = document.getElementById('a11yReduceMotion');
+  if (t) t.value = window.MastA11yPrefs.textSize;
+  if (rm) rm.checked = !!window.MastA11yPrefs.reduceMotion;
+}
+function onA11yTextSizeChange() {
+  var t = document.getElementById('a11yTextSize');
+  saveMastA11yPrefs({ textSize: t ? t.value : undefined });
+  showToast('Text size updated');
+}
+function onA11yReduceMotionChange() {
+  var rm = document.getElementById('a11yReduceMotion');
+  saveMastA11yPrefs({ reduceMotion: rm ? rm.checked : false });
+  showToast('Motion preference saved');
+}
+function resetMastA11yPrefs() {
+  saveMastA11yPrefs({ textSize: 'normal', reduceMotion: false });
+  populateA11yPrefsForm();
+  showToast('Accessibility settings reset');
 }
 
 // ============================================================
