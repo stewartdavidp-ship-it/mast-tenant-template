@@ -247,7 +247,7 @@
   function loadChannels() {
     if (channelsLoaded) { renderCurrentView(); return; }
     var tab = document.getElementById('channelsTab');
-    if (tab) tab.innerHTML = '<div style="text-align:center;padding:40px;color:#999;font-size:0.9rem;">Loading channels...</div>';
+    if (tab) tab.innerHTML = '<div style="text-align:center;padding:40px;color:var(--warm-gray);font-size:0.9rem;">Loading channels...</div>';
 
     MastDB.get('admin/channels').then(function(snapVal) {
       channelsData = snapVal || {};
@@ -434,9 +434,9 @@
     h += '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:16px;">';
     h += '<input type="text" id="chSearchInput" placeholder="Search channels\u2026" oninput="channelRerender()"' +
       ' value="' + esc(searchVal) + '"' +
-      ' style="flex:1;min-width:200px;padding:9px 12px;border:1px solid #444;border-radius:6px;background:#333;color:#e0e0e0;font-family:\'DM Sans\',sans-serif;font-size:0.9rem;">';
+      ' style="flex:1;min-width:200px;padding:9px 12px;border:1px solid var(--border);border-radius:6px;background:var(--bg-tertiary);color:var(--text);font-family:\'DM Sans\',sans-serif;font-size:0.9rem;">';
     h += '<select id="chTypeFilter" onchange="channelRerender()"' +
-      ' style="padding:9px 12px;border:1px solid #444;border-radius:6px;background:#333;color:#e0e0e0;font-family:\'DM Sans\',sans-serif;font-size:0.9rem;">';
+      ' style="padding:9px 12px;border:1px solid var(--border);border-radius:6px;background:var(--bg-tertiary);color:var(--text);font-family:\'DM Sans\',sans-serif;font-size:0.9rem;">';
     h += '<option value="">All types</option>';
     Object.keys(CHANNEL_TYPES).forEach(function(key) {
       var sel = typeVal === key ? ' selected' : '';
@@ -447,19 +447,19 @@
 
     // Channel cards
     if (!filtered.length) {
-      h += '<div style="text-align:center;padding:30px;color:#999;font-size:0.85rem;">No channels match your filters.</div>';
+      h += '<div style="text-align:center;padding:30px;color:var(--warm-gray);font-size:0.85rem;">No channels match your filters.</div>';
     } else {
       h += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px;">';
       filtered.forEach(function(ch) {
         var pCount = productCountForChannel(ch.channelId);
-        h += '<div style="background:#2a2a2a;border:1px solid #444;border-radius:8px;padding:16px;cursor:pointer;transition:border-color 0.15s;"' +
+        h += '<div style="background:var(--card-bg);border:1px solid var(--border);border-radius:8px;padding:16px;cursor:pointer;transition:border-color 0.15s;"' +
           ' onmouseenter="this.style.borderColor=\'#C4853C\'" onmouseleave="this.style.borderColor=\'var(--warm-gray-light)\'"' +
           ' onclick="channelOpenDetail(\'' + esc(ch.channelId) + '\')" role="button" tabindex="0"' +
           ' onkeydown="if(event.key===\'Enter\')channelOpenDetail(\'' + esc(ch.channelId) + '\')">';
 
         // Row 1: name + status
         h += '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">';
-        h += '<div style="font-weight:500;font-size:0.9rem;color:#e0e0e0;">' + esc(ch.name) + '</div>';
+        h += '<div style="font-weight:500;font-size:0.9rem;color:var(--text);">' + esc(ch.name) + '</div>';
         h += statusDot(ch.isActive);
         h += '</div>';
 
@@ -471,14 +471,14 @@
         var rowAcct = getChannelPlatformAccountId(ch);
         if (rowPlat && rowPlat !== 'manual') {
           var platLabel = (PLATFORMS[rowPlat] && PLATFORMS[rowPlat].label) || rowPlat;
-          h += '<span style="font-size:0.72rem;color:#999;">' + esc(platLabel) + (rowAcct ? ' · ' + esc(rowAcct) : '') + '</span>';
+          h += '<span style="font-size:0.72rem;color:var(--warm-gray);">' + esc(platLabel) + (rowAcct ? ' · ' + esc(rowAcct) : '') + '</span>';
         } else if (ch.externalPlatform) {
-          h += '<span style="font-size:0.72rem;color:#999;">' + esc(ch.externalPlatform) + '</span>';
+          h += '<span style="font-size:0.72rem;color:var(--warm-gray);">' + esc(ch.externalPlatform) + '</span>';
         }
         h += '</div>';
 
         // Row 3: stats
-        h += '<div style="display:flex;gap:16px;font-size:0.78rem;color:#999;">';
+        h += '<div style="display:flex;gap:16px;font-size:0.78rem;color:var(--warm-gray);">';
         h += '<span>' + feeSummary(ch) + '</span>';
         h += '<span>' + pCount + ' product' + (pCount !== 1 ? 's' : '') + '</span>';
         h += '</div>';
@@ -545,7 +545,7 @@
           '<span style="font-size:1.15rem;">⚠</span>' +
           '<div style="flex:1;">' +
             '<div style="font-weight:500;color:#F87171;">' + esc(pLabel) + ' · ' + esc(msg) + '</div>' +
-            '<div style="font-size:0.78rem;color:#999;margin-top:2px;">' +
+            '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:2px;">' +
               'Drift checks paused until reconnected.' +
             '</div>' +
           '</div>' +
@@ -619,7 +619,7 @@
       // Header row: icon + name + checkbox
       h += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">';
       h += '<span style="font-size:1.15rem;" aria-hidden="true">' + (meta.icon || '') + '</span>';
-      h += '<span style="font-weight:500;font-size:0.9rem;color:#e0e0e0;flex:1;">' + esc(ct.label) + '</span>';
+      h += '<span style="font-weight:500;font-size:0.9rem;color:var(--text);flex:1;">' + esc(ct.label) + '</span>';
       // Visual checkbox
       h += '<span style="width:20px;height:20px;border-radius:4px;border:2px solid ' + (isSelected ? ct.color : '#666') + ';' +
         'display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;' +
@@ -638,8 +638,8 @@
     // Inline config for selected types
     var selectedTypes = Object.keys(onboardingSelections);
     if (selectedTypes.length) {
-      h += '<div style="border-top:1px solid #444;padding-top:20px;margin-bottom:24px;">';
-      h += '<h4 style="font-family:\'DM Sans\',sans-serif;font-size:1.0rem;font-weight:500;margin:0 0 16px 0;color:#e0e0e0;">Configure Selected Channels</h4>';
+      h += '<div style="border-top:1px solid var(--border);padding-top:20px;margin-bottom:24px;">';
+      h += '<h4 style="font-family:\'DM Sans\',sans-serif;font-size:1.0rem;font-weight:500;margin:0 0 16px 0;color:var(--text);">Configure Selected Channels</h4>';
 
       selectedTypes.forEach(function(type) {
         var ct = CHANNEL_TYPES[type] || {};
@@ -647,7 +647,7 @@
         var sel = onboardingSelections[type];
         var prefix = 'ob_' + type + '_';
 
-        h += '<div style="background:var(--bg-secondary, #232323);border:1px solid #444;border-radius:8px;padding:16px;margin-bottom:12px;">';
+        h += '<div style="background:var(--bg-secondary, #232323);border:1px solid var(--border);border-radius:8px;padding:16px;margin-bottom:12px;">';
 
         // Section header with type badge
         h += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">';
@@ -660,27 +660,27 @@
 
         // Channel name
         h += '<div>';
-        h += '<label style="font-size:0.78rem;color:#999;display:block;margin-bottom:4px;" for="' + prefix + 'name">Channel Name *</label>';
+        h += '<label style="font-size:0.78rem;color:var(--warm-gray);display:block;margin-bottom:4px;" for="' + prefix + 'name">Channel Name *</label>';
         h += '<input type="text" id="' + prefix + 'name" value="' + esc(sel.name || '') + '"' +
           ' placeholder="e.g. ' + esc(meta.defaultName || ct.label) + '"' +
           ' onchange="channelUpdateOnboarding(\'' + type + '\',\'name\',this.value)"' +
-          ' style="width:100%;padding:9px 12px;border:1px solid #444;border-radius:6px;background:#333;color:#e0e0e0;font-family:\'DM Sans\',sans-serif;font-size:0.9rem;">';
+          ' style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:6px;background:var(--bg-tertiary);color:var(--text);font-family:\'DM Sans\',sans-serif;font-size:0.9rem;">';
         h += '</div>';
 
         // Fee percent
         h += '<div>';
-        h += '<label style="font-size:0.78rem;color:#999;display:block;margin-bottom:4px;" for="' + prefix + 'fee">Fee (%)</label>';
+        h += '<label style="font-size:0.78rem;color:var(--warm-gray);display:block;margin-bottom:4px;" for="' + prefix + 'fee">Fee (%)</label>';
         h += '<input type="number" id="' + prefix + 'fee" value="' + (sel.feePercent || 0) + '" min="0" step="0.1"' +
           ' onchange="channelUpdateOnboarding(\'' + type + '\',\'feePercent\',this.value)"' +
-          ' style="width:100%;padding:9px 12px;border:1px solid #444;border-radius:6px;background:#333;color:#e0e0e0;font-family:\'DM Sans\',sans-serif;font-size:0.9rem;">';
+          ' style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:6px;background:var(--bg-tertiary);color:var(--text);font-family:\'DM Sans\',sans-serif;font-size:0.9rem;">';
         h += '</div>';
 
         // Fixed fee
         h += '<div>';
-        h += '<label style="font-size:0.78rem;color:#999;display:block;margin-bottom:4px;" for="' + prefix + 'fixed">Fixed Fee (cents)</label>';
+        h += '<label style="font-size:0.78rem;color:var(--warm-gray);display:block;margin-bottom:4px;" for="' + prefix + 'fixed">Fixed Fee (cents)</label>';
         h += '<input type="number" id="' + prefix + 'fixed" value="' + (sel.feeFixed || 0) + '" min="0"' +
           ' onchange="channelUpdateOnboarding(\'' + type + '\',\'feeFixed\',this.value)"' +
-          ' style="width:100%;padding:9px 12px;border:1px solid #444;border-radius:6px;background:#333;color:#e0e0e0;font-family:\'DM Sans\',sans-serif;font-size:0.9rem;">';
+          ' style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:6px;background:var(--bg-tertiary);color:var(--text);font-family:\'DM Sans\',sans-serif;font-size:0.9rem;">';
         h += '</div>';
 
         h += '</div>'; // end config grid
@@ -688,11 +688,11 @@
         // External platform for marketplace and social_live
         if (type === 'marketplace' || type === 'social_live') {
           h += '<div style="margin-top:12px;">';
-          h += '<label style="font-size:0.78rem;color:#999;display:block;margin-bottom:4px;" for="' + prefix + 'ext">External Platform</label>';
+          h += '<label style="font-size:0.78rem;color:var(--warm-gray);display:block;margin-bottom:4px;" for="' + prefix + 'ext">External Platform</label>';
           h += '<input type="text" id="' + prefix + 'ext" value="' + esc(sel.extPlatform || '') + '"' +
             ' placeholder="e.g. ' + (type === 'marketplace' ? 'Etsy, Shopify, Amazon' : 'TikTok, Instagram') + '"' +
             ' onchange="channelUpdateOnboarding(\'' + type + '\',\'extPlatform\',this.value)"' +
-            ' style="max-width:320px;width:100%;padding:9px 12px;border:1px solid #444;border-radius:6px;background:#333;color:#e0e0e0;font-family:\'DM Sans\',sans-serif;font-size:0.9rem;">';
+            ' style="max-width:320px;width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:6px;background:var(--bg-tertiary);color:var(--text);font-family:\'DM Sans\',sans-serif;font-size:0.9rem;">';
           h += '</div>';
         }
 
@@ -857,9 +857,9 @@
     var hdrAcct = getChannelPlatformAccountId(ch);
     if (hdrPlat && hdrPlat !== 'manual') {
       var hdrPlatLabel = (PLATFORMS[hdrPlat] && PLATFORMS[hdrPlat].label) || hdrPlat;
-      h += '<span style="font-size:0.78rem;color:#999;">' + esc(hdrPlatLabel) + (hdrAcct ? ' · ' + esc(hdrAcct) : '') + '</span>';
+      h += '<span style="font-size:0.78rem;color:var(--warm-gray);">' + esc(hdrPlatLabel) + (hdrAcct ? ' · ' + esc(hdrAcct) : '') + '</span>';
     } else if (ch.externalPlatform) {
-      h += '<span style="font-size:0.78rem;color:#999;">' + esc(ch.externalPlatform) + '</span>';
+      h += '<span style="font-size:0.78rem;color:var(--warm-gray);">' + esc(ch.externalPlatform) + '</span>';
     }
     h += '</div>';
     h += '</div>';
@@ -914,10 +914,10 @@
     var h = '';
 
     // Fee profile card
-    h += '<div style="background:#2a2a2a;border:1px solid #444;border-radius:8px;padding:16px;margin-bottom:16px;">';
-    h += '<div style="font-size:0.85rem;font-weight:600;color:#e0e0e0;margin-bottom:12px;">Fee Profile</div>';
+    h += '<div style="background:var(--card-bg);border:1px solid var(--border);border-radius:8px;padding:16px;margin-bottom:16px;">';
+    h += '<div style="font-size:0.85rem;font-weight:600;color:var(--text);margin-bottom:12px;">Fee Profile</div>';
     h += '<div style="font-size:1.15rem;font-weight:500;color:#C4853C;">' + esc(feeSummary(ch)) + '</div>';
-    h += '<div style="display:flex;gap:24px;margin-top:12px;font-size:0.78rem;color:#999;">';
+    h += '<div style="display:flex;gap:24px;margin-top:12px;font-size:0.78rem;color:var(--warm-gray);">';
     h += '<div><span style="color:#666;">Ownership:</span> ' + esc(ch.ownershipModel || '—') + '</div>';
     h += '<div><span style="color:#666;">Pricing:</span> ' + esc(ch.pricingModel || '—') + '</div>';
     h += '<div><span style="color:#666;">Inventory:</span> ' + esc(ch.inventoryModel || '—') + '</div>';
@@ -925,32 +925,32 @@
     // Phase 2a (D23) — uses shim. Always render so user sees what tier this
     // channel resolves to, even when no override is set.
     var ovUsesTier = getChannelUsesTier(ch);
-    h += '<div style="margin-top:8px;font-size:0.78rem;color:#999;"><span style="color:#666;">Uses tier:</span> ' + esc(ovUsesTier) + '</div>';
+    h += '<div style="margin-top:8px;font-size:0.78rem;color:var(--warm-gray);"><span style="color:#666;">Uses tier:</span> ' + esc(ovUsesTier) + '</div>';
     h += '</div>';
 
     // Contact info
     if (ch.contactName || ch.contactEmail || ch.contactPhone) {
-      h += '<div style="background:#2a2a2a;border:1px solid #444;border-radius:8px;padding:16px;margin-bottom:16px;">';
-      h += '<div style="font-size:0.85rem;font-weight:600;color:#e0e0e0;margin-bottom:8px;">Contact</div>';
-      if (ch.contactName) h += '<div style="font-size:0.9rem;color:#e0e0e0;">' + esc(ch.contactName) + '</div>';
-      if (ch.contactEmail) h += '<div style="font-size:0.78rem;color:#999;margin-top:2px;">' + esc(ch.contactEmail) + '</div>';
-      if (ch.contactPhone) h += '<div style="font-size:0.78rem;color:#999;margin-top:2px;">' + esc(ch.contactPhone) + '</div>';
+      h += '<div style="background:var(--card-bg);border:1px solid var(--border);border-radius:8px;padding:16px;margin-bottom:16px;">';
+      h += '<div style="font-size:0.85rem;font-weight:600;color:var(--text);margin-bottom:8px;">Contact</div>';
+      if (ch.contactName) h += '<div style="font-size:0.9rem;color:var(--text);">' + esc(ch.contactName) + '</div>';
+      if (ch.contactEmail) h += '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:2px;">' + esc(ch.contactEmail) + '</div>';
+      if (ch.contactPhone) h += '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:2px;">' + esc(ch.contactPhone) + '</div>';
       h += '</div>';
     }
 
     // Relationship notes
     if (ch.relationshipNotes) {
-      h += '<div style="background:#2a2a2a;border:1px solid #444;border-radius:8px;padding:16px;margin-bottom:16px;">';
-      h += '<div style="font-size:0.85rem;font-weight:600;color:#e0e0e0;margin-bottom:8px;">Notes</div>';
-      h += '<div style="font-size:0.85rem;color:#999;white-space:pre-wrap;">' + esc(ch.relationshipNotes) + '</div>';
+      h += '<div style="background:var(--card-bg);border:1px solid var(--border);border-radius:8px;padding:16px;margin-bottom:16px;">';
+      h += '<div style="font-size:0.85rem;font-weight:600;color:var(--text);margin-bottom:8px;">Notes</div>';
+      h += '<div style="font-size:0.85rem;color:var(--warm-gray);white-space:pre-wrap;">' + esc(ch.relationshipNotes) + '</div>';
       h += '</div>';
     }
 
     // Contract terms
     if (ch.contractTerms) {
-      h += '<div style="background:#2a2a2a;border:1px solid #444;border-radius:8px;padding:16px;margin-bottom:16px;">';
-      h += '<div style="font-size:0.85rem;font-weight:600;color:#e0e0e0;margin-bottom:8px;">Contract Terms</div>';
-      h += '<div style="font-size:0.85rem;color:#999;white-space:pre-wrap;">' + esc(ch.contractTerms) + '</div>';
+      h += '<div style="background:var(--card-bg);border:1px solid var(--border);border-radius:8px;padding:16px;margin-bottom:16px;">';
+      h += '<div style="font-size:0.85rem;font-weight:600;color:var(--text);margin-bottom:8px;">Contract Terms</div>';
+      h += '<div style="font-size:0.85rem;color:var(--warm-gray);white-space:pre-wrap;">' + esc(ch.contractTerms) + '</div>';
       h += '</div>';
     }
 
@@ -971,22 +971,22 @@
     // hit the right branch.
     var chType = getChannelType(ch);
     if (chType === 'consignment') {
-      h += '<div style="background:#2a2a2a;border:1px solid #444;border-radius:8px;padding:16px;margin-bottom:16px;">';
-      h += '<div style="font-size:0.85rem;font-weight:600;color:#e0e0e0;margin-bottom:8px;">Consignment Details</div>';
-      h += '<div style="font-size:0.85rem;color:#999;">Settlement tracking available in Galleries &amp; Consignment module.</div>';
+      h += '<div style="background:var(--card-bg);border:1px solid var(--border);border-radius:8px;padding:16px;margin-bottom:16px;">';
+      h += '<div style="font-size:0.85rem;font-weight:600;color:var(--text);margin-bottom:8px;">Consignment Details</div>';
+      h += '<div style="font-size:0.85rem;color:var(--warm-gray);">Settlement tracking available in Galleries &amp; Consignment module.</div>';
       h += '</div>';
     } else if (chType === 'marketplace') {
-      h += '<div style="background:#2a2a2a;border:1px solid #444;border-radius:8px;padding:16px;margin-bottom:16px;">';
-      h += '<div style="font-size:0.85rem;font-weight:600;color:#e0e0e0;margin-bottom:8px;">Marketplace</div>';
-      h += '<div style="font-size:0.85rem;color:#999;">Platform: ' + esc(ch.externalPlatform || 'Not set') + '</div>';
+      h += '<div style="background:var(--card-bg);border:1px solid var(--border);border-radius:8px;padding:16px;margin-bottom:16px;">';
+      h += '<div style="font-size:0.85rem;font-weight:600;color:var(--text);margin-bottom:8px;">Marketplace</div>';
+      h += '<div style="font-size:0.85rem;color:var(--warm-gray);">Platform: ' + esc(ch.externalPlatform || 'Not set') + '</div>';
 
       // Inventory sync status section
-      h += '<div id="channelSyncStatus" style="margin-top:12px;padding-top:12px;border-top:1px solid #444;">';
+      h += '<div id="channelSyncStatus" style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);">';
       h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">';
-      h += '<div style="font-size:0.85rem;font-weight:500;color:#e0e0e0;">Inventory Sync</div>';
+      h += '<div style="font-size:0.85rem;font-weight:500;color:var(--text);">Inventory Sync</div>';
       h += '<button class="btn btn-secondary btn-small" onclick="channelSyncNow(\'' + esc(ch.channelId) + '\')" id="syncNowBtn">Sync Now</button>';
       h += '</div>';
-      h += '<div id="syncStatusContent" style="font-size:0.78rem;color:#999;">';
+      h += '<div id="syncStatusContent" style="font-size:0.78rem;color:var(--warm-gray);">';
       h += '<span style="color:#666;">Loading sync status\u2026</span>';
       h += '</div>';
       h += '</div>';
@@ -996,9 +996,9 @@
       // Kick off async load of sync status
       setTimeout(function() { loadSyncStatus(); }, 0);
     } else if (chType === 'mobile_events') {
-      h += '<div style="background:#2a2a2a;border:1px solid #444;border-radius:8px;padding:16px;margin-bottom:16px;">';
+      h += '<div style="background:var(--card-bg);border:1px solid var(--border);border-radius:8px;padding:16px;margin-bottom:16px;">';
       h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">';
-      h += '<div style="font-size:0.85rem;font-weight:600;color:#e0e0e0;">Craft Fairs &amp; Events</div>';
+      h += '<div style="font-size:0.85rem;font-weight:600;color:var(--text);">Craft Fairs &amp; Events</div>';
       if (!salesEventsLoaded) {
         h += '<button class="btn btn-secondary btn-small" onclick="channelLoadEventComparison()">Show Comparison</button>';
       }
@@ -1007,20 +1007,20 @@
       if (salesEventsLoaded) {
         h += renderEventComparisonTable(ch);
       } else {
-        h += '<div style="font-size:0.85rem;color:#999;">Click &ldquo;Show Comparison&rdquo; to see per-show P&amp;L rankings.</div>';
+        h += '<div style="font-size:0.85rem;color:var(--warm-gray);">Click &ldquo;Show Comparison&rdquo; to see per-show P&amp;L rankings.</div>';
       }
       h += '</div>';
       h += '</div>';
     } else if (chType === 'wholesale_prebuy' || chType === 'retail_prebuy') {
-      h += '<div style="background:#2a2a2a;border:1px solid #444;border-radius:8px;padding:16px;margin-bottom:16px;">';
-      h += '<div style="font-size:0.85rem;font-weight:600;color:#e0e0e0;margin-bottom:8px;">Wholesale</div>';
-      h += '<div style="font-size:0.85rem;color:#999;">Uses tier: ' + esc(getChannelUsesTier(ch)) + '</div>';
+      h += '<div style="background:var(--card-bg);border:1px solid var(--border);border-radius:8px;padding:16px;margin-bottom:16px;">';
+      h += '<div style="font-size:0.85rem;font-weight:600;color:var(--text);margin-bottom:8px;">Wholesale</div>';
+      h += '<div style="font-size:0.85rem;color:var(--warm-gray);">Uses tier: ' + esc(getChannelUsesTier(ch)) + '</div>';
       h += '<div style="font-size:0.78rem;color:#666;margin-top:4px;">Wholesale orders managed via the Wholesale module.</div>';
       h += '</div>';
     } else if (chType === 'social_live') {
-      h += '<div style="background:#2a2a2a;border:1px solid #444;border-radius:8px;padding:16px;margin-bottom:16px;">';
+      h += '<div style="background:var(--card-bg);border:1px solid var(--border);border-radius:8px;padding:16px;margin-bottom:16px;">';
       h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">';
-      h += '<div style="font-size:0.85rem;font-weight:600;color:#e0e0e0;">Live Sale Sessions</div>';
+      h += '<div style="font-size:0.85rem;font-weight:600;color:var(--text);">Live Sale Sessions</div>';
       if (!liveSessionsLoaded) {
         h += '<button class="btn btn-secondary btn-small" onclick="channelLoadLiveSessions()">Show History</button>';
       }
@@ -1029,7 +1029,7 @@
       if (liveSessionsLoaded) {
         h += renderLiveSessionHistory(ch);
       } else {
-        h += '<div style="font-size:0.85rem;color:#999;">Click &ldquo;Show History&rdquo; to see past live sale sessions.</div>';
+        h += '<div style="font-size:0.85rem;color:var(--warm-gray);">Click &ldquo;Show History&rdquo; to see past live sale sessions.</div>';
       }
       h += '</div>';
       h += '</div>';
@@ -1043,7 +1043,7 @@
 
   function loadEventComparison() {
     var el = document.getElementById('channelEventComparison');
-    if (el) el.innerHTML = '<div style="font-size:0.85rem;color:#999;text-align:center;padding:12px;">Loading event data\u2026</div>';
+    if (el) el.innerHTML = '<div style="font-size:0.85rem;color:var(--warm-gray);text-align:center;padding:12px;">Loading event data\u2026</div>';
     loadSalesEvents().then(function() {
       renderPreservingEdits();
     });
@@ -1117,7 +1117,7 @@
     var showing = linked.length > 0 ? linked : events;
 
     if (!showing.length) {
-      return '<div style="font-size:0.85rem;color:#999;">No events recorded yet. Create events in the Shows module.</div>';
+      return '<div style="font-size:0.85rem;color:var(--warm-gray);">No events recorded yet. Create events in the Shows module.</div>';
     }
 
     // Sort
@@ -1241,7 +1241,7 @@
 
   function loadLiveSessions() {
     var el = document.getElementById('channelLiveSessions');
-    if (el) el.innerHTML = '<div style="font-size:0.85rem;color:#999;text-align:center;padding:12px;">Loading session data\u2026</div>';
+    if (el) el.innerHTML = '<div style="font-size:0.85rem;color:var(--warm-gray);text-align:center;padding:12px;">Loading session data\u2026</div>';
     MastDB.get('admin/liveSessions').then(function(snapVal) {
       liveSessionsData = snapVal || {};
       liveSessionsLoaded = true;
@@ -1271,7 +1271,7 @@
     });
 
     if (!sessions.length) {
-      return '<div style="font-size:0.85rem;color:#999;">No live sessions recorded yet. Use &ldquo;Go Live&rdquo; in the Sales tab to start one.</div>';
+      return '<div style="font-size:0.85rem;color:var(--warm-gray);">No live sessions recorded yet. Use &ldquo;Go Live&rdquo; in the Sales tab to start one.</div>';
     }
 
     // Sort by startTime descending
@@ -1404,22 +1404,22 @@
     overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.6);z-index:9999;display:flex;align-items:center;justify-content:center;';
 
     var modal = document.createElement('div');
-    modal.style.cssText = 'background:#1e1e1e;border:1px solid #444;border-radius:10px;padding:24px;max-width:500px;width:90%;max-height:70vh;display:flex;flex-direction:column;';
+    modal.style.cssText = 'background:#1e1e1e;border:1px solid var(--border);border-radius:10px;padding:24px;max-width:500px;width:90%;max-height:70vh;display:flex;flex-direction:column;';
 
     var h = '';
     h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">';
-    h += '<h4 style="font-family:\'Cormorant Garamond\',serif;font-size:1.15rem;font-weight:500;margin:0;color:#e0e0e0;">Add Products to ' + esc(ch.name) + '</h4>';
-    h += '<button onclick="channelCloseAddProducts()" style="background:none;border:none;color:#999;font-size:1.15rem;cursor:pointer;padding:4px;">&times;</button>';
+    h += '<h4 style="font-family:\'Cormorant Garamond\',serif;font-size:1.15rem;font-weight:500;margin:0;color:var(--text);">Add Products to ' + esc(ch.name) + '</h4>';
+    h += '<button onclick="channelCloseAddProducts()" style="background:none;border:none;color:var(--warm-gray);font-size:1.15rem;cursor:pointer;padding:4px;">&times;</button>';
     h += '</div>';
     h += '<div style="margin-bottom:12px;">';
-    h += '<label style="display:flex;align-items:center;gap:6px;font-size:0.85rem;color:#e0e0e0;cursor:pointer;">';
+    h += '<label style="display:flex;align-items:center;gap:6px;font-size:0.85rem;color:var(--text);cursor:pointer;">';
     h += '<input type="checkbox" id="chAddSelectAll" onchange="channelToggleSelectAll(this.checked)"> Select all (' + available.length + ')';
     h += '</label>';
     h += '</div>';
-    h += '<div style="overflow-y:auto;flex:1;border:1px solid #333;border-radius:6px;">';
+    h += '<div style="overflow-y:auto;flex:1;border:1px solid var(--border);border-radius:6px;">';
     available.forEach(function(p) {
       var pid = p.pid || p.id || '';
-      h += '<label style="display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid #333;cursor:pointer;font-size:0.85rem;color:#e0e0e0;"' +
+      h += '<label style="display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid var(--border);cursor:pointer;font-size:0.85rem;color:var(--text);"' +
         ' onmouseenter="this.style.background=\'rgba(196,133,60,0.04)\'" onmouseleave="this.style.background=\'none\'">';
       h += '<input type="checkbox" class="chAddProductCb" value="' + esc(pid) + '">';
       h += '<span>' + esc(p.name || pid) + '</span>';
@@ -1556,13 +1556,13 @@
     if (!channelOrders.length) {
       // Try loading orders if not loaded yet
       if (!Object.keys(ordersData).length) {
-        h += '<div style="text-align:center;padding:30px;color:#999;">';
+        h += '<div style="text-align:center;padding:30px;color:var(--warm-gray);">';
         h += '<div style="font-size:0.9rem;margin-bottom:8px;">Loading activity...</div>';
         h += '<button class="btn btn-secondary btn-small" onclick="channelLoadActivity()">Load Orders</button>';
         h += '</div>';
         return h;
       }
-      h += '<div style="text-align:center;padding:30px;color:#999;">';
+      h += '<div style="text-align:center;padding:30px;color:var(--warm-gray);">';
       h += '<div style="font-size:0.9rem;">No orders attributed to this channel yet.</div>';
       h += '<div style="font-size:0.78rem;color:#666;margin-top:4px;">Orders are attributed via autoMatchSources or channelId.</div>';
       h += '</div>';
@@ -1601,18 +1601,18 @@
     h += '<div style="display:grid;gap:16px;">';
 
     // Phase 2b (D23, D25) — Route + Platform + PlatformAccountId + UsesTier
-    h += '<div style="background:#2a2a2a;border:1px solid #444;border-radius:8px;padding:16px;">';
-    h += '<div style="font-size:0.85rem;font-weight:600;color:#e0e0e0;margin-bottom:12px;">Channel Shape</div>';
+    h += '<div style="background:var(--card-bg);border:1px solid var(--border);border-radius:8px;padding:16px;">';
+    h += '<div style="font-size:0.85rem;font-weight:600;color:var(--text);margin-bottom:12px;">Channel Shape</div>';
     h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">';
     // Route
     var curRoute = getChannelRoute(ch) || '';
     h += '<div>';
-    h += '<label style="font-size:0.78rem;color:#999;display:block;margin-bottom:4px;" for="chRoute">Route</label>';
+    h += '<label style="font-size:0.78rem;color:var(--warm-gray);display:block;margin-bottom:4px;" for="chRoute">Route</label>';
     if (ro) {
       var routeLabel = (ROUTES[curRoute] && ROUTES[curRoute].label) || curRoute || '\u2014';
-      h += '<div style="font-size:0.9rem;color:#e0e0e0;padding:9px 0;">' + esc(routeLabel) + '</div>';
+      h += '<div style="font-size:0.9rem;color:var(--text);padding:9px 0;">' + esc(routeLabel) + '</div>';
     } else {
-      h += '<select id="chRoute" style="width:100%;padding:9px 12px;border:1px solid #444;border-radius:6px;background:#333;color:#e0e0e0;font-family:\'DM Sans\',sans-serif;font-size:0.9rem;">';
+      h += '<select id="chRoute" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:6px;background:var(--bg-tertiary);color:var(--text);font-family:\'DM Sans\',sans-serif;font-size:0.9rem;">';
       h += '<option value="">\u2014</option>';
       Object.keys(ROUTES).forEach(function(k) {
         h += '<option value="' + k + '"' + (curRoute === k ? ' selected' : '') + '>' + esc(ROUTES[k].label) + '</option>';
@@ -1623,12 +1623,12 @@
     // Platform
     var curPlat = getChannelPlatform(ch) || '';
     h += '<div>';
-    h += '<label style="font-size:0.78rem;color:#999;display:block;margin-bottom:4px;" for="chPlatform">Platform</label>';
+    h += '<label style="font-size:0.78rem;color:var(--warm-gray);display:block;margin-bottom:4px;" for="chPlatform">Platform</label>';
     if (ro) {
       var platLabel = (PLATFORMS[curPlat] && PLATFORMS[curPlat].label) || curPlat || '\u2014';
-      h += '<div style="font-size:0.9rem;color:#e0e0e0;padding:9px 0;">' + esc(platLabel) + '</div>';
+      h += '<div style="font-size:0.9rem;color:var(--text);padding:9px 0;">' + esc(platLabel) + '</div>';
     } else {
-      h += '<select id="chPlatform" style="width:100%;padding:9px 12px;border:1px solid #444;border-radius:6px;background:#333;color:#e0e0e0;font-family:\'DM Sans\',sans-serif;font-size:0.9rem;">';
+      h += '<select id="chPlatform" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:6px;background:var(--bg-tertiary);color:var(--text);font-family:\'DM Sans\',sans-serif;font-size:0.9rem;">';
       h += '<option value="">\u2014</option>';
       Object.keys(PLATFORMS).forEach(function(k) {
         h += '<option value="' + k + '"' + (curPlat === k ? ' selected' : '') + '>' + esc(PLATFORMS[k].label) + '</option>';
@@ -1638,17 +1638,17 @@
     h += '</div>';
     // Platform Account ID
     h += '<div>';
-    h += '<label style="font-size:0.78rem;color:#999;display:block;margin-bottom:4px;" for="chPlatformAccount">Platform Account ID</label>';
+    h += '<label style="font-size:0.78rem;color:var(--warm-gray);display:block;margin-bottom:4px;" for="chPlatformAccount">Platform Account ID</label>';
     h += fieldGroupRaw('chPlatformAccount', getChannelPlatformAccountId(ch) || '', ro, 'text', 'e.g. shop.myshopify.com');
     h += '</div>';
     // Uses Tier
     var curUsesTier = getChannelUsesTier(ch);
     h += '<div>';
-    h += '<label style="font-size:0.78rem;color:#999;display:block;margin-bottom:4px;" for="chUsesTier">Uses tier</label>';
+    h += '<label style="font-size:0.78rem;color:var(--warm-gray);display:block;margin-bottom:4px;" for="chUsesTier">Uses tier</label>';
     if (ro) {
-      h += '<div style="font-size:0.9rem;color:#e0e0e0;padding:9px 0;">' + esc(curUsesTier) + '</div>';
+      h += '<div style="font-size:0.9rem;color:var(--text);padding:9px 0;">' + esc(curUsesTier) + '</div>';
     } else {
-      h += '<select id="chUsesTier" style="width:100%;padding:9px 12px;border:1px solid #444;border-radius:6px;background:#333;color:#e0e0e0;font-family:\'DM Sans\',sans-serif;font-size:0.9rem;">';
+      h += '<select id="chUsesTier" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:6px;background:var(--bg-tertiary);color:var(--text);font-family:\'DM Sans\',sans-serif;font-size:0.9rem;">';
       ['retail','direct','wholesale'].forEach(function(t) {
         h += '<option value="' + t + '"' + (curUsesTier === t ? ' selected' : '') + '>' + t.charAt(0).toUpperCase() + t.slice(1) + '</option>';
       });
@@ -1659,8 +1659,8 @@
     h += '</div>'; // end card
 
     // Fee profile
-    h += '<div style="background:#2a2a2a;border:1px solid #444;border-radius:8px;padding:16px;">';
-    h += '<div style="font-size:0.85rem;font-weight:600;color:#e0e0e0;margin-bottom:12px;">Fee Profile</div>';
+    h += '<div style="background:var(--card-bg);border:1px solid var(--border);border-radius:8px;padding:16px;">';
+    h += '<div style="font-size:0.85rem;font-weight:600;color:var(--text);margin-bottom:12px;">Fee Profile</div>';
     h += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">';
     h += fieldGroup('Percent Fee (%)', 'chFeePercent', ch.percentFee || '', ro, 'number', '0', '0.1');
     h += fieldGroup('Fixed Fee / Order (cents)', 'chFeeFixed', ch.fixedFeePerOrderCents || '', ro, 'number', '0');
@@ -1669,13 +1669,13 @@
     h += '</div>';
 
     // Auto-match sources
-    h += '<div style="background:#2a2a2a;border:1px solid #444;border-radius:8px;padding:16px;">';
-    h += '<div style="font-size:0.85rem;font-weight:600;color:#e0e0e0;margin-bottom:8px;">Auto-Match Sources</div>';
+    h += '<div style="background:var(--card-bg);border:1px solid var(--border);border-radius:8px;padding:16px;">';
+    h += '<div style="font-size:0.85rem;font-weight:600;color:var(--text);margin-bottom:8px;">Auto-Match Sources</div>';
     var srcs = ch.autoMatchSources || [];
     if (srcs.length) {
       h += '<div style="display:flex;flex-wrap:wrap;gap:6px;">';
       srcs.forEach(function(s) {
-        h += '<span style="background:var(--warm-gray-light);color:#e0e0e0;padding:2px 8px;border-radius:4px;font-size:0.78rem;">' + esc(s) + '</span>';
+        h += '<span style="background:var(--warm-gray-light);color:var(--text);padding:2px 8px;border-radius:4px;font-size:0.78rem;">' + esc(s) + '</span>';
       });
       h += '</div>';
     } else {
@@ -1684,11 +1684,11 @@
     h += '</div>';
 
     // Default eligibility toggle (atomic widget — saves on action)
-    h += '<div style="background:#2a2a2a;border:1px solid #444;border-radius:8px;padding:16px;">';
+    h += '<div style="background:var(--card-bg);border:1px solid var(--border);border-radius:8px;padding:16px;">';
     h += '<div style="display:flex;justify-content:space-between;align-items:center;">';
     h += '<div>';
-    h += '<div style="font-size:0.85rem;font-weight:600;color:#e0e0e0;">Default Eligibility</div>';
-    h += '<div style="font-size:0.78rem;color:#999;margin-top:2px;">' +
+    h += '<div style="font-size:0.85rem;font-weight:600;color:var(--text);">Default Eligibility</div>';
+    h += '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:2px;">' +
       (ch.defaultEligibility === 'opt-in' ? 'Opt-in: products must be explicitly added to this channel.' : 'Opt-out: new products are automatically eligible for this channel.') +
       '</div>';
     h += '</div>';
@@ -1705,8 +1705,8 @@
     h += '</div>';
 
     // Contact fields
-    h += '<div style="background:#2a2a2a;border:1px solid #444;border-radius:8px;padding:16px;">';
-    h += '<div style="font-size:0.85rem;font-weight:600;color:#e0e0e0;margin-bottom:12px;">Contact</div>';
+    h += '<div style="background:var(--card-bg);border:1px solid var(--border);border-radius:8px;padding:16px;">';
+    h += '<div style="font-size:0.85rem;font-weight:600;color:var(--text);margin-bottom:12px;">Contact</div>';
     h += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">';
     h += fieldGroup('Name', 'chContactName', ch.contactName || '', ro);
     h += fieldGroup('Email', 'chContactEmail', ch.contactEmail || '', ro, 'email');
@@ -1715,7 +1715,7 @@
     h += '</div>';
 
     // Revenue target
-    h += '<div style="background:#2a2a2a;border:1px solid #444;border-radius:8px;padding:16px;">';
+    h += '<div style="background:var(--card-bg);border:1px solid var(--border);border-radius:8px;padding:16px;">';
     h += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">';
     h += fieldGroup('Revenue Target (cents)', 'chRevenueTarget', ch.revenueTarget || '', ro, 'number', '0');
     h += fieldGroup('External Platform', 'chExtPlatform', ch.externalPlatform || '', ro);
@@ -1723,12 +1723,12 @@
     h += '</div>';
 
     // Notes
-    h += '<div style="background:#2a2a2a;border:1px solid #444;border-radius:8px;padding:16px;">';
-    h += '<div style="font-size:0.85rem;font-weight:600;color:#e0e0e0;margin-bottom:8px;">Notes</div>';
+    h += '<div style="background:var(--card-bg);border:1px solid var(--border);border-radius:8px;padding:16px;">';
+    h += '<div style="font-size:0.85rem;font-weight:600;color:var(--text);margin-bottom:8px;">Notes</div>';
     if (ro) {
-      h += '<div style="font-size:0.85rem;color:#999;white-space:pre-wrap;">' + esc(ch.notes || 'No notes.') + '</div>';
+      h += '<div style="font-size:0.85rem;color:var(--warm-gray);white-space:pre-wrap;">' + esc(ch.notes || 'No notes.') + '</div>';
     } else {
-      h += '<textarea id="chNotes" rows="3" style="width:100%;padding:9px 12px;border:1px solid #444;border-radius:6px;background:#333;color:#e0e0e0;font-family:\'DM Sans\',sans-serif;font-size:0.85rem;resize:vertical;">' +
+      h += '<textarea id="chNotes" rows="3" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:6px;background:var(--bg-tertiary);color:var(--text);font-family:\'DM Sans\',sans-serif;font-size:0.85rem;resize:vertical;">' +
         esc(ch.notes || '') + '</textarea>';
     }
     h += '</div>';
@@ -1746,23 +1746,23 @@
   // Phase 2b — like fieldGroup but no <label> wrapper (caller already rendered one).
   function fieldGroupRaw(id, value, readOnly, type, placeholder) {
     if (readOnly) {
-      return '<div style="font-size:0.9rem;color:#e0e0e0;padding:9px 0;">' + esc(String(value || '\u2014')) + '</div>';
+      return '<div style="font-size:0.9rem;color:var(--text);padding:9px 0;">' + esc(String(value || '\u2014')) + '</div>';
     }
     return '<input type="' + (type || 'text') + '" id="' + id + '" value="' + esc(String(value || '')) + '"' +
       (placeholder ? ' placeholder="' + esc(placeholder) + '"' : '') +
-      ' style="width:100%;padding:9px 12px;border:1px solid #444;border-radius:6px;background:#333;color:#e0e0e0;font-family:\'DM Sans\',sans-serif;font-size:0.9rem;">';
+      ' style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:6px;background:var(--bg-tertiary);color:var(--text);font-family:\'DM Sans\',sans-serif;font-size:0.9rem;">';
   }
 
   function fieldGroup(label, id, value, readOnly, type, min, step) {
     var h = '<div>';
-    h += '<label style="font-size:0.78rem;color:#999;display:block;margin-bottom:4px;" for="' + id + '">' + esc(label) + '</label>';
+    h += '<label style="font-size:0.78rem;color:var(--warm-gray);display:block;margin-bottom:4px;" for="' + id + '">' + esc(label) + '</label>';
     if (readOnly) {
-      h += '<div style="font-size:0.9rem;color:#e0e0e0;padding:9px 0;">' + esc(value || '—') + '</div>';
+      h += '<div style="font-size:0.9rem;color:var(--text);padding:9px 0;">' + esc(value || '—') + '</div>';
     } else {
       h += '<input type="' + (type || 'text') + '" id="' + id + '" value="' + esc(String(value)) + '"' +
         (min !== undefined ? ' min="' + min + '"' : '') +
         (step ? ' step="' + step + '"' : '') +
-        ' style="width:100%;padding:9px 12px;border:1px solid #444;border-radius:6px;background:#333;color:#e0e0e0;font-family:\'DM Sans\',sans-serif;font-size:0.9rem;">';
+        ' style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:6px;background:var(--bg-tertiary);color:var(--text);font-family:\'DM Sans\',sans-serif;font-size:0.9rem;">';
     }
     h += '</div>';
     return h;
@@ -1785,17 +1785,17 @@
 
     // Name
     h += '<div>';
-    h += '<label style="font-size:0.78rem;color:#999;display:block;margin-bottom:4px;" for="newChName">Channel Name *</label>';
-    h += '<input type="text" id="newChName" placeholder="e.g. Etsy, Gallery Blue, TikTok Shop" style="width:100%;padding:9px 12px;border:1px solid #444;border-radius:6px;background:#333;color:#e0e0e0;font-family:\'DM Sans\',sans-serif;font-size:0.9rem;">';
+    h += '<label style="font-size:0.78rem;color:var(--warm-gray);display:block;margin-bottom:4px;" for="newChName">Channel Name *</label>';
+    h += '<input type="text" id="newChName" placeholder="e.g. Etsy, Gallery Blue, TikTok Shop" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:6px;background:var(--bg-tertiary);color:var(--text);font-family:\'DM Sans\',sans-serif;font-size:0.9rem;">';
     h += '</div>';
 
     // Phase 2b (D25) — Quick presets: the 8 legacy CHANNEL_TYPES become
     // shortcuts that pre-fill route + platform. Custom combinations are
     // permitted by editing the Route / Platform pickers below directly.
     h += '<div>';
-    h += '<label style="font-size:0.78rem;color:#999;display:block;margin-bottom:4px;">Quick preset (optional)</label>';
+    h += '<label style="font-size:0.78rem;color:var(--warm-gray);display:block;margin-bottom:4px;">Quick preset (optional)</label>';
     h += '<select id="newChType" onchange="channelTypeChanged()"' +
-      ' style="width:100%;padding:9px 12px;border:1px solid #444;border-radius:6px;background:#333;color:#e0e0e0;font-family:\'DM Sans\',sans-serif;font-size:0.9rem;">';
+      ' style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:6px;background:var(--bg-tertiary);color:var(--text);font-family:\'DM Sans\',sans-serif;font-size:0.9rem;">';
     h += '<option value="">Custom (no preset)</option>';
     Object.keys(CHANNEL_TYPES).forEach(function(key) {
       var t = CHANNEL_TYPES[key];
@@ -1808,9 +1808,9 @@
 
     // Phase 2b (D25) — Route picker (required)
     h += '<div>';
-    h += '<label style="font-size:0.78rem;color:#999;display:block;margin-bottom:4px;" for="newChRoute">Route *</label>';
+    h += '<label style="font-size:0.78rem;color:var(--warm-gray);display:block;margin-bottom:4px;" for="newChRoute">Route *</label>';
     h += '<select id="newChRoute" onchange="channelRouteChanged()"' +
-      ' style="width:100%;padding:9px 12px;border:1px solid #444;border-radius:6px;background:#333;color:#e0e0e0;font-family:\'DM Sans\',sans-serif;font-size:0.9rem;">';
+      ' style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:6px;background:var(--bg-tertiary);color:var(--text);font-family:\'DM Sans\',sans-serif;font-size:0.9rem;">';
     h += '<option value="">Select a route...</option>';
     Object.keys(ROUTES).forEach(function(key) {
       h += '<option value="' + key + '">' + esc(ROUTES[key].label) + ' \u2014 ' + esc(ROUTES[key].desc) + '</option>';
@@ -1820,9 +1820,9 @@
 
     // Phase 2b (D25) — Platform picker (required)
     h += '<div>';
-    h += '<label style="font-size:0.78rem;color:#999;display:block;margin-bottom:4px;" for="newChPlatform">Platform *</label>';
+    h += '<label style="font-size:0.78rem;color:var(--warm-gray);display:block;margin-bottom:4px;" for="newChPlatform">Platform *</label>';
     h += '<select id="newChPlatform"' +
-      ' style="width:100%;padding:9px 12px;border:1px solid #444;border-radius:6px;background:#333;color:#e0e0e0;font-family:\'DM Sans\',sans-serif;font-size:0.9rem;">';
+      ' style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:6px;background:var(--bg-tertiary);color:var(--text);font-family:\'DM Sans\',sans-serif;font-size:0.9rem;">';
     h += '<option value="">Select a platform...</option>';
     Object.keys(PLATFORMS).forEach(function(key) {
       h += '<option value="' + key + '">' + esc(PLATFORMS[key].label) + '</option>';
@@ -1832,17 +1832,17 @@
 
     // Phase 2b (D25) — Platform Account ID (optional, free text)
     h += '<div>';
-    h += '<label style="font-size:0.78rem;color:#999;display:block;margin-bottom:4px;" for="newChPlatformAccount">Platform Account ID</label>';
+    h += '<label style="font-size:0.78rem;color:var(--warm-gray);display:block;margin-bottom:4px;" for="newChPlatformAccount">Platform Account ID</label>';
     h += '<input type="text" id="newChPlatformAccount" placeholder="e.g. shop-domain.myshopify.com, etsy_user_id, square_merchant_id"' +
-      ' style="width:100%;padding:9px 12px;border:1px solid #444;border-radius:6px;background:#333;color:#e0e0e0;font-family:\'DM Sans\',sans-serif;font-size:0.9rem;">';
+      ' style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:6px;background:var(--bg-tertiary);color:var(--text);font-family:\'DM Sans\',sans-serif;font-size:0.9rem;">';
     h += '<div style="font-size:0.72rem;color:#666;margin-top:4px;">Stable per external connection. Used in Phase 3 by webhooks to reverse-route to this channel. Multiple channels can share a platform with different account IDs.</div>';
     h += '</div>';
 
     // Phase 2b (D23) — Uses Tier picker
     h += '<div>';
-    h += '<label style="font-size:0.78rem;color:#999;display:block;margin-bottom:4px;" for="newChUsesTier">Uses tier</label>';
+    h += '<label style="font-size:0.78rem;color:var(--warm-gray);display:block;margin-bottom:4px;" for="newChUsesTier">Uses tier</label>';
     h += '<select id="newChUsesTier"' +
-      ' style="width:100%;padding:9px 12px;border:1px solid #444;border-radius:6px;background:#333;color:#e0e0e0;font-family:\'DM Sans\',sans-serif;font-size:0.9rem;">';
+      ' style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:6px;background:var(--bg-tertiary);color:var(--text);font-family:\'DM Sans\',sans-serif;font-size:0.9rem;">';
     ['retail','direct','wholesale'].forEach(function(t) {
       h += '<option value="' + t + '">' + t.charAt(0).toUpperCase() + t.slice(1) + '</option>';
     });
@@ -1851,7 +1851,7 @@
     h += '</div>';
 
     // Auto-filled classification (shown after preset selected)
-    h += '<div id="newChClassification" style="display:none;font-size:0.78rem;color:#999;padding:8px 12px;background:#2a2a2a;border:1px solid #444;border-radius:6px;"></div>';
+    h += '<div id="newChClassification" style="display:none;font-size:0.78rem;color:var(--warm-gray);padding:8px 12px;background:var(--card-bg);border:1px solid var(--border);border-radius:6px;"></div>';
 
     // Fee fields
     h += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">';
@@ -1862,15 +1862,15 @@
 
     // External platform
     h += '<div id="newChExtPlatformWrap">';
-    h += '<label style="font-size:0.78rem;color:#999;display:block;margin-bottom:4px;" for="newChExtPlatform">External Platform</label>';
-    h += '<input type="text" id="newChExtPlatform" placeholder="e.g. Etsy, Shopify, TikTok" style="width:100%;padding:9px 12px;border:1px solid #444;border-radius:6px;background:#333;color:#e0e0e0;font-family:\'DM Sans\',sans-serif;font-size:0.9rem;">';
+    h += '<label style="font-size:0.78rem;color:var(--warm-gray);display:block;margin-bottom:4px;" for="newChExtPlatform">External Platform</label>';
+    h += '<input type="text" id="newChExtPlatform" placeholder="e.g. Etsy, Shopify, TikTok" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:6px;background:var(--bg-tertiary);color:var(--text);font-family:\'DM Sans\',sans-serif;font-size:0.9rem;">';
     h += '</div>';
 
     // Default eligibility
     h += '<div style="display:flex;align-items:center;gap:12px;">';
-    h += '<label style="font-size:0.85rem;color:#e0e0e0;" for="newChOptOut">New products auto-eligible</label>';
+    h += '<label style="font-size:0.85rem;color:var(--text);" for="newChOptOut">New products auto-eligible</label>';
     h += '<input type="checkbox" id="newChOptOut" checked style="accent-color:#2A7C6F;">';
-    h += '<span style="font-size:0.72rem;color:#999;">(opt-out = checked, opt-in = unchecked)</span>';
+    h += '<span style="font-size:0.72rem;color:var(--warm-gray);">(opt-out = checked, opt-in = unchecked)</span>';
     h += '</div>';
 
     // Contact
@@ -1882,8 +1882,8 @@
 
     // Notes
     h += '<div>';
-    h += '<label style="font-size:0.78rem;color:#999;display:block;margin-bottom:4px;" for="newChNotes">Notes</label>';
-    h += '<textarea id="newChNotes" rows="3" placeholder="Optional notes about this channel..." style="width:100%;padding:9px 12px;border:1px solid #444;border-radius:6px;background:#333;color:#e0e0e0;font-family:\'DM Sans\',sans-serif;font-size:0.85rem;resize:vertical;"></textarea>';
+    h += '<label style="font-size:0.78rem;color:var(--warm-gray);display:block;margin-bottom:4px;" for="newChNotes">Notes</label>';
+    h += '<textarea id="newChNotes" rows="3" placeholder="Optional notes about this channel..." style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:6px;background:var(--bg-tertiary);color:var(--text);font-family:\'DM Sans\',sans-serif;font-size:0.85rem;resize:vertical;"></textarea>';
     h += '</div>';
 
     // Buttons
@@ -2508,7 +2508,7 @@
     currentView = 'dashboard';
     channelEditMode = false;
     var tab = document.getElementById('channelsTab');
-    if (tab) tab.innerHTML = '<div style="text-align:center;padding:40px;color:#999;font-size:0.9rem;">Loading dashboard\u2026</div>';
+    if (tab) tab.innerHTML = '<div style="text-align:center;padding:40px;color:var(--warm-gray);font-size:0.9rem;">Loading dashboard\u2026</div>';
     loadDashboardData().then(function() { renderDashboard(); });
   }
 
