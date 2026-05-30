@@ -15,6 +15,10 @@ const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 
+// Resolve relative paths from the repo root regardless of the caller's cwd
+// (the PostToolUse hook may invoke this from another directory).
+process.chdir(path.resolve(__dirname, '..'));
+
 const ROOT = process.env.CLAUDE_PROJECT_DIR || process.cwd();
 
 const DATA_FILE   = path.join(ROOT, 'app/data/mode-module-info.js');

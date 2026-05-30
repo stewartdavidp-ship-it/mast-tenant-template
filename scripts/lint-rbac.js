@@ -26,6 +26,10 @@
 const fs = require('fs');
 const path = require('path');
 
+// Resolve relative paths from the repo root regardless of the caller's cwd
+// (the PostToolUse hook may invoke this from another directory).
+process.chdir(path.resolve(__dirname, '..'));
+
 const CRUD_ACTIONS = new Set(['create', 'read', 'update', 'delete']);
 
 // Sidebar routes that intentionally have NO per-module permission entry.

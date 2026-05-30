@@ -1674,7 +1674,7 @@
     // Filter pills (All first, then status states)
     html += '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;">';
     ['all', 'active', 'draft', 'archived'].forEach(function(f) {
-      var active = materialsFilter === f ? ' style="background:var(--charcoal);color:white;border-color:var(--charcoal);"' : '';
+      var active = materialsFilter === f ? ' style="background:var(--surface-dark);color:white;border-color:var(--charcoal);"' : '';
       html += '<button class="order-filter-pill"' + active + ' onclick="makerFilterMaterials(\'' + f + '\')">' + f.charAt(0).toUpperCase() + f.slice(1) + '</button>';
     });
     html += '</div>';
@@ -1682,9 +1682,9 @@
     // Category filter
     if (categories.length > 0) {
       html += '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px;">';
-      html += '<button class="order-filter-pill"' + (materialsCategoryFilter === 'all' ? ' style="background:var(--charcoal);color:white;border-color:var(--charcoal);"' : '') + ' onclick="makerFilterMaterialsCategory(\'all\')">All Categories</button>';
+      html += '<button class="order-filter-pill"' + (materialsCategoryFilter === 'all' ? ' style="background:var(--surface-dark);color:white;border-color:var(--charcoal);"' : '') + ' onclick="makerFilterMaterialsCategory(\'all\')">All Categories</button>';
       categories.forEach(function(cat) {
-        var active = materialsCategoryFilter === cat ? ' style="background:var(--charcoal);color:white;border-color:var(--charcoal);"' : '';
+        var active = materialsCategoryFilter === cat ? ' style="background:var(--surface-dark);color:white;border-color:var(--charcoal);"' : '';
         html += '<button class="order-filter-pill"' + active + ' data-cat="' + esc(cat) + '" onclick="makerFilterMaterialsCategory(this.dataset.cat)">' + esc(cat) + '</button>';
       });
       html += '</div>';
@@ -5088,7 +5088,7 @@
     html += '</div></div>';
 
     // ---- TOTAL COST (the result) ----
-    html += '<div style="background:var(--charcoal);color:white;border-radius:10px;padding:22px 24px;margin-bottom:18px;">';
+    html += '<div style="background:var(--surface-dark);color:white;border-radius:10px;padding:22px 24px;margin-bottom:18px;">';
     html += '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:24px;flex-wrap:wrap;">';
     html += '<div>';
     html += '<div style="font-size:0.78rem;text-transform:uppercase;letter-spacing:0.08em;opacity:0.7;font-weight:600;margin-bottom:4px;">Total Cost Per Unit</div>';

@@ -372,7 +372,7 @@
     var currentVariant = tc[variantKey] || m[variantKey] || options[0].id;
     var defaultVariant = m[variantKey] || options[0].id;
 
-    var html = '<select onclick="event.stopPropagation();" onchange="hpUpdateThemeField(\'' + variantKey + '\', this.value)" style="font-size:0.78rem;padding:3px 6px;border-radius:6px;background:var(--charcoal-light, #333);color:var(--text-primary, #e0e0e0);border:1px solid var(--charcoal-light, #444);cursor:pointer;min-width:100px;">';
+    var html = '<select onclick="event.stopPropagation();" onchange="hpUpdateThemeField(\'' + variantKey + '\', this.value)" style="font-size:0.78rem;padding:3px 6px;border-radius:6px;background:var(--surface-dark-muted);color:var(--text-primary, #e0e0e0);border:1px solid var(--charcoal-light, #444);cursor:pointer;min-width:100px;">';
     options.forEach(function(opt) {
       var selected = currentVariant === opt.id ? ' selected' : '';
       html += '<option value="' + opt.id + '"' + selected + ' title="' + esc(opt.desc) + '">' + esc(opt.label) + '</option>';
@@ -516,7 +516,7 @@
 
       html += '<div class="gallery-card">';
       if (isVidEntry) {
-        html += '<div class="gallery-card-img" style="display:flex;align-items:center;justify-content:center;background:var(--charcoal);color:var(--amber);font-size:1.6rem;min-height:120px;">&#9654;</div>';
+        html += '<div class="gallery-card-img" style="display:flex;align-items:center;justify-content:center;background:var(--surface-dark);color:var(--amber);font-size:1.6rem;min-height:120px;">&#9654;</div>';
       } else if (img.url) {
         var fitStyle = img.imageFit ? ' style="object-fit:' + img.imageFit + ';"' : '';
         html += '<img class="gallery-card-img" src="' + esc(img.url) + '" alt="' + esc(img.alt || '') + '"' + fitStyle + ' onerror="this.classList.add(\'broken\')">';

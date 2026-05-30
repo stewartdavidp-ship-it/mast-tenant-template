@@ -538,7 +538,7 @@
     });
     html += '</div></div>';
 
-    html += '<div style="background:var(--charcoal-light, #333);border-radius:8px;padding:12px;display:flex;justify-content:center;overflow:hidden;">';
+    html += '<div style="background:var(--surface-dark-muted);border-radius:8px;padding:12px;display:flex;justify-content:center;overflow:hidden;">';
     html += '<iframe src="' + esc(siteUrl) + '" style="width:' + iframeWidth + ';max-width:100%;height:' + viewportHeight + ';border:none;border-radius:6px;background:#fff;" sandbox="allow-scripts allow-same-origin allow-popups"></iframe>';
     html += '</div>';
 
@@ -861,7 +861,7 @@
     templateManifest.colorSchemes.forEach(function(scheme) {
       var isActive = !showCustomColors && currentSchemeId === scheme.id;
       var c = scheme.colors;
-      html += '<div class="wp-scheme-card' + (isActive ? ' selected' : '') + '" onclick="wpSelectScheme(\'' + esc(scheme.id) + '\')" style="cursor:pointer;padding:12px;border-radius:10px;border:2px solid ' + (isActive ? 'var(--accent)' : 'var(--charcoal-light, #333)') + ';background:var(--charcoal, var(--charcoal));transition:border-color 0.2s;">';
+      html += '<div class="wp-scheme-card' + (isActive ? ' selected' : '') + '" onclick="wpSelectScheme(\'' + esc(scheme.id) + '\')" style="cursor:pointer;padding:12px;border-radius:10px;border:2px solid ' + (isActive ? 'var(--accent)' : 'var(--charcoal-light, #333)') + ';background:var(--surface-dark);transition:border-color 0.2s;">';
       // Color circles row
       html += '<div style="display:flex;gap:6px;margin-bottom:8px;">';
       html += '<div style="width:28px;height:28px;border-radius:50%;background:' + esc(c.primaryColor) + ';border:2px solid rgba(255,255,255,0.15);" title="Primary"></div>';
@@ -877,7 +877,7 @@
     });
 
     // Custom option card
-    html += '<div class="wp-scheme-card' + (showCustomColors ? ' selected' : '') + '" onclick="wpSelectSchemeCustom()" style="cursor:pointer;padding:12px;border-radius:10px;border:2px solid ' + (showCustomColors ? 'var(--accent)' : 'var(--charcoal-light, #333)') + ';background:var(--charcoal, var(--charcoal));transition:border-color 0.2s;">';
+    html += '<div class="wp-scheme-card' + (showCustomColors ? ' selected' : '') + '" onclick="wpSelectSchemeCustom()" style="cursor:pointer;padding:12px;border-radius:10px;border:2px solid ' + (showCustomColors ? 'var(--accent)' : 'var(--charcoal-light, #333)') + ';background:var(--surface-dark);transition:border-color 0.2s;">';
     html += '<div style="display:flex;gap:6px;margin-bottom:8px;">';
     html += '<div style="width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg, #ff6b6b, #4ecdc4, #45b7d1);border:2px solid rgba(255,255,255,0.15);"></div>';
     html += '</div>';
@@ -899,7 +899,7 @@
 
     templateManifest.fontPairs.forEach(function(fp) {
       var isActive = currentFontPair === fp.id;
-      html += '<div class="wp-font-card' + (isActive ? ' selected' : '') + '" onclick="wpSelectFontPair(\'' + esc(fp.id) + '\')" style="cursor:pointer;padding:14px;border-radius:10px;border:2px solid ' + (isActive ? 'var(--accent)' : 'var(--charcoal-light, #333)') + ';background:var(--charcoal, var(--charcoal));transition:border-color 0.2s;">';
+      html += '<div class="wp-font-card' + (isActive ? ' selected' : '') + '" onclick="wpSelectFontPair(\'' + esc(fp.id) + '\')" style="cursor:pointer;padding:14px;border-radius:10px;border:2px solid ' + (isActive ? 'var(--accent)' : 'var(--charcoal-light, #333)') + ';background:var(--surface-dark);transition:border-color 0.2s;">';
       html += '<div style="font-family:\'' + esc(fp.heading) + '\', serif;font-size:1.15rem;font-weight:600;margin-bottom:4px;line-height:1.2;">' + esc(fp.name) + '</div>';
       html += '<div style="font-family:\'' + esc(fp.body) + '\', sans-serif;font-size:0.78rem;color:var(--warm-gray);line-height:1.4;">' + esc(fp.heading) + ' + ' + esc(fp.body) + '</div>';
       if (fp.default) {
@@ -918,7 +918,7 @@
     var primaryColor = tc.primaryColor || '#8B7355';
     var accentColor = tc.accentColor || '#2D5F5D';
     var html = '';
-    html += '<div style="margin-top:12px;padding:16px;background:var(--charcoal, var(--charcoal));border-radius:10px;border:1px solid var(--charcoal-light, #333);">';
+    html += '<div style="margin-top:12px;padding:16px;background:var(--surface-dark);border-radius:10px;border:1px solid var(--charcoal-light, #333);">';
     html += '<div class="wp-color-row" style="margin-bottom:0;">';
     html += '<div class="wp-field-group" style="flex:1;">';
     html += '<label>Primary Color</label>';
@@ -1042,7 +1042,7 @@
           html += '<strong style="font-size:0.9rem;">' + esc(cat.label) + '</strong>';
           html += '<span style="font-size:0.78rem;color:var(--warm-gray);font-family:monospace;">' + esc(cat.id) + '</span>';
           if (cat.wholesaleGroup) {
-            html += '<span style="font-size:0.72rem;background:var(--charcoal-light, #333);padding:2px 8px;border-radius:4px;color:var(--warm-gray);">wholesale: ' + esc(cat.wholesaleGroup) + '</span>';
+            html += '<span style="font-size:0.72rem;background:var(--surface-dark-muted);padding:2px 8px;border-radius:4px;color:var(--warm-gray);">wholesale: ' + esc(cat.wholesaleGroup) + '</span>';
           }
           html += '</div>';
           html += '<div style="display:flex;gap:4px;">';

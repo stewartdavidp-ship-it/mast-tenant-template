@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" style="background:var(--charcoal)">
+<html lang="en" style="background:var(--surface-dark)">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -87,9 +87,16 @@
   })();
   </script>
   <script>
-    // Admin app is ALWAYS dark mode. Apply immediately before any external scripts load.
-    document.documentElement.style.colorScheme = 'dark';
-    document.documentElement.classList.add('dark-mode');
+    // Admin defaults to dark, but honors the cached per-device preference for
+    // the first paint so light-mode users don't see a dark flash before the
+    // Firebase-resolved preference applies.
+    (function () {
+      var pref = null;
+      try { pref = localStorage.getItem('mast-admin-dark'); } catch (e) {}
+      var dark = pref === null ? true : pref === '1';
+      document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
+      document.documentElement.classList.toggle('dark-mode', dark);
+    })();
   </script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -118,7 +125,7 @@
   <script src="../tenant-brand.js?v=2"></script>
   <style>
     /* Pre-paint dark mode on html element to prevent flash before body exists */
-    html.dark-mode { background: var(--charcoal); }
+    html.dark-mode { background: var(--surface-dark); }
     /* ADA: lock root font-size to 100% so rem scales with OS font preference */
     html { font-size: 100%; overscroll-behavior-x: none; }
     /* ADA: honor prefers-reduced-motion — kill animations/transitions for users who ask for them */
@@ -138,24 +145,69 @@
       transition-duration: 0.01ms !important;
       scroll-behavior: auto !important;
     }
+    /* ===================================================================
+       THEME TOKEN FOUNDATION  (light default; body.dark-mode flips it)
+       Token classes:
+         BRAND      — constant identity colors (brightened in dark)
+         STATE      — semantic success/warning/danger
+         THEME      — surfaces + text that INVERT by mode
+         INK        — primary text color (inverts: dark on light, light on dark)
+         FIXED-DARK — chrome surfaces that stay dark in BOTH modes
+       NOTE: --charcoal is now INK (text) and inverts. Dark *surfaces* that
+       used to (mis)use --charcoal were repointed to --surface-dark. */
     :root {
-      --amber: var(--amber);
-      --amber-light: var(--amber-light);
-      --amber-glow: var(--amber-glow);
-      --teal: var(--teal);
-      --teal-deep: var(--teal-deep);
-      --teal-light: var(--teal-light);
-      --cream: var(--cream);
-      --cream-dark: var(--cream-dark);
-      --charcoal: var(--charcoal);
-      --warm-gray: var(--warm-gray);
-      --warm-gray-light: var(--warm-gray-light);
-      --danger: var(--danger);
+      color-scheme: light;
+
+      /* BRAND */
+      --amber: #C4853C;
+      --amber-light: #E8B679;
+      --amber-glow: #F5D5A8;
+      --primary: #C4853C;
+      --gold: #C4853C;
+      --teal: #2A7C6F;
+      --teal-deep: #1B5C52;
+      --teal-light: #A8D5CE;
+      --accent: #2A7C6F;
+      --sage: #8a9a7b;
+
+      /* STATE */
+      --danger: #dc3545;
       --danger-hover: #c82333;
-      --gold: var(--amber);
-      --dark-brown: #5C3D2E;
+      --text-danger: #c0392b;
+      --success: #2e7d4f;
+      --warning: #b8860b;
+
+      /* THEME — surfaces */
+      --cream: #FAF6F0;
+      --cream-dark: #F0E8DB;
+      --bg: #FAF6F0;
+      --surface-card: #fff;
+      --surface-card-border: #F0E8DB;
+      --card-bg: #fff;
+      --bg-primary: #fff;
       --bg-secondary: #f5f5f5;
       --bg-tertiary: #e8e2d8;
+      --border: #e8e2d8;
+      --border-color: #e8e2d8;
+      --hover-bg: #f0ece4;
+
+      /* THEME — text */
+      --text: #1A1A1A;
+      --text-primary: #1A1A1A;
+      --text-secondary: #6B6560;
+      --warm-gray: #6B6560;
+      --warm-gray-light: #9B958E;
+      --warm-gray-dark: #4a4540;
+
+      /* INK — primary text color (inverts). --charcoal is the legacy name. */
+      --charcoal: #1A1A1A;
+      --charcoal-light: #333333;
+
+      /* FIXED-DARK — chrome that stays dark in both modes */
+      --surface-dark: #1A1A1A;
+      --surface-dark-muted: #252525;
+      --on-dark: #fff;
+      --dark-brown: #5C3D2E;
     }
 
     * {
@@ -183,7 +235,7 @@
       left: 0;
       right: 0;
       z-index: 100;
-      background: var(--charcoal);
+      background: var(--surface-dark);
       color: white;
       display: flex;
       align-items: center;
@@ -517,7 +569,7 @@
       left: 0;
       bottom: 0;
       width: 240px;
-      background: var(--charcoal);
+      background: var(--surface-dark);
       color: white;
       overflow-y: auto;
       z-index: 99;
@@ -1039,7 +1091,7 @@
     .wp-cat-reorder .btn-icon { width: 24px; height: 20px; font-size: 0.72rem; padding: 0; }
     body.dark-mode .wp-cat-row { border-color: #444; }
 
-    .wp-template-card { padding: 16px; border-radius: 8px; border: 2px solid var(--charcoal-light, #333); background: var(--charcoal, var(--charcoal)); transition: border-color 0.2s, transform 0.1s; position: relative; }
+    .wp-template-card { padding: 16px; border-radius: 8px; border: 2px solid var(--charcoal-light, #333); background: var(--surface-dark); transition: border-color 0.2s, transform 0.1s; position: relative; }
     .wp-template-card:hover { transform: translateY(-2px); border-color: var(--warm-gray, #666); }
     .wp-template-card.active { border-color: var(--accent, var(--teal)); }
     .wp-template-card .wp-tpl-badge { position: absolute; top: 10px; right: 10px; font-size: 0.72rem; padding: 2px 8px; border-radius: 4px; background: var(--accent, var(--teal)); color: #fff; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
@@ -1048,7 +1100,7 @@
     .wp-template-card .wp-tpl-meta { display: flex; gap: 12px; font-size: 0.78rem; color: var(--warm-gray, #888); }
     .wp-tpl-flow-preview { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 8px; }
     .wp-tpl-flow-chip { font-size: 0.72rem; padding: 2px 6px; border-radius: 3px; background: rgba(255,255,255,0.08); color: var(--warm-gray, #aaa); }
-    .wp-switch-dialog { padding: 20px; background: var(--charcoal, var(--charcoal)); border-radius: 8px; border: 1px solid var(--charcoal-light, #333); }
+    .wp-switch-dialog { padding: 20px; background: var(--surface-dark); border-radius: 8px; border: 1px solid var(--charcoal-light, #333); }
     .wp-switch-section { margin-bottom: 14px; }
     .wp-switch-section h4 { font-size: 0.85rem; margin-bottom: 6px; font-weight: 600; }
     .wp-switch-section ul { list-style: none; padding: 0; margin: 0; }
@@ -1554,7 +1606,7 @@
     body.dark-mode .ev-modal-box { background: #2a2a2a; }
     body.dark-mode .ev-form-input,
     body.dark-mode .ev-form-select,
-    body.dark-mode .ev-form-textarea { background: var(--charcoal); border-color: #3a3a3a; color: #e0e0e0; }
+    body.dark-mode .ev-form-textarea { background: var(--surface-dark); border-color: #3a3a3a; color: #e0e0e0; }
 
 
     /* ========== GALLERY SECTION GROUPS ========== */
@@ -2181,7 +2233,7 @@
     .toast-container[data-position="top-left"]      { top: 76px; left: 24px;  align-items: flex-start; }
 
     .toast {
-      background: var(--charcoal);
+      background: var(--surface-dark);
       color: white;
       padding: 14px 28px;
       border-radius: 10px;
@@ -2715,7 +2767,7 @@
     }
 
     /* Testing mode dark mode */
-    body.dark-mode .testing-mode-panel { background: var(--charcoal); color: #e0e0e0; }
+    body.dark-mode .testing-mode-panel { background: var(--surface-dark); color: #e0e0e0; }
     body.dark-mode .tm-mission-card { background: #2a2a2a; border-color: #444; color: #e0e0e0; }
     body.dark-mode .tm-mission-card.accomplished { border-left-color: var(--teal); }
     body.dark-mode .tm-mission-title { color: #f0f0f0; }
@@ -3121,27 +3173,49 @@
 
     /* ========= DARK MODE ========= */
     body.dark-mode {
+      color-scheme: dark;
+
+      /* BRAND — brightened for contrast on dark */
+      --amber: #d4a053;
+      --primary: #d4a053;
+      --gold: #d4a053;
+      --teal: #3a9d8c;
+      --accent: #3a9d8c;
+
+      /* STATE */
+      --danger: #ff6b6b;
+      --danger-hover: #ff8787;
+      --text-danger: #ff6b6b;
+      --success: #5cba7d;
+      --warning: #e0a93a;
+
+      /* THEME — surfaces */
       --cream: #2a2a2a;
       --cream-dark: #3a3a3a;
-      --warm-gray: #888;
-      --warm-gray-light: #aaa;
+      --bg: #1a1d26;
       --bg-secondary: #2a2a2a;
       --bg-tertiary: #333;
-      /* Mirror storefront.css html.dark overrides so admin ad-hoc inline
-         styles that reference these tokens flip correctly in dark mode. */
       --surface-card: #252a35;
       --surface-card-border: #3a3f4a;
       --card-bg: #2a2a2a;
       --border: #3a3a3a;
-      --text: #e8e4df;
-      --text-secondary: #a09890;
-      /* Tokens used by recently-shipped modules (shows.js, advisor.js,
-         engagement-inbox.js) — ensure they resolve in dark mode so
-         var(--bg-primary, #fff) / var(--text-danger, #c00) fallbacks
-         never paint cream-on-dark. */
+      --border-color: #3a3a3a;
+      --hover-bg: #333;
       --bg-primary: #1a1a1a;
-      --text-danger: #ff6b6b;
-      background: var(--charcoal);
+
+      /* THEME — text */
+      --text: #e8e4df;
+      --text-primary: #e8e4df;
+      --text-secondary: #a09890;
+      --warm-gray: #888;
+      --warm-gray-light: #aaa;
+      --warm-gray-dark: #bbb;
+
+      /* INK inverts to light; FIXED-DARK (--surface-dark) stays dark */
+      --charcoal: #e8e4df;
+      --charcoal-light: #cccccc;
+
+      background: var(--surface-dark);
       color: #e0e0e0;
     }
     body.dark-mode .header {
@@ -3778,7 +3852,7 @@
       font-family: 'DM Sans', sans-serif;
     }
     .order-filter-pill:hover { border-color: var(--amber); color: var(--charcoal); }
-    .order-filter-pill.active { background: var(--charcoal); color: white; border-color: var(--charcoal); }
+    .order-filter-pill.active { background: var(--surface-dark); color: white; border-color: var(--charcoal); }
     .order-filter-pill .pill-count {
       font-size: 0.72rem;
       opacity: 0.7;
@@ -5732,7 +5806,7 @@
     body.dark-mode .nl-format-toolbar { background:#2a2a2a; border-color:#444; }
     body.dark-mode .nl-section-editable { background:#2a2a2a; border-color:#444; color:#eee; }
     body.dark-mode .nl-compose-header input { background:#2a2a2a; border-color:#444; color:#eee; }
-    body.dark-mode .nl-sub-nav { background:var(--charcoal); }
+    body.dark-mode .nl-sub-nav { background:var(--surface-dark); }
     body.dark-mode .nl-ai-panel { background:#1e1e1e; border-color:#444; }
     body.dark-mode .nl-img-picker { background:#1e1e1e; }
     body.dark-mode .nl-section-prompt { background:rgba(196,133,60,0.08); }
@@ -5824,7 +5898,7 @@
     .blog-excerpt-input:focus { outline:none; border-color:var(--amber); }
     /* Blog Social Card Preview */
     .blog-social-card { border:1px solid var(--border); border-radius:12px; overflow:hidden; max-width:500px; }
-    .blog-social-card-image { height:160px; overflow:hidden; background:var(--charcoal); display:flex; align-items:center; justify-content:center; }
+    .blog-social-card-image { height:160px; overflow:hidden; background:var(--surface-dark); display:flex; align-items:center; justify-content:center; }
     .blog-social-card-image img { max-width:100%; max-height:100%; object-fit:contain; }
     .blog-social-card-image.blog-social-card-noimg { display:flex; flex-direction:column; align-items:center; justify-content:center; color:var(--text-secondary); font-size:0.78rem; gap:4px; border-bottom:1px solid var(--border); }
     .blog-social-card-content { padding:12px 16px; }
@@ -5987,7 +6061,7 @@
     .sl-form-group { margin-bottom:16px; }
     .sl-form-group label { display:block; font-size:0.78rem; color:var(--warm-gray); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:4px; }
     .sl-form-group input, .sl-form-group textarea, .sl-form-group select { width:100%; padding:10px 14px; border:1px solid var(--cream-dark, #E8DFD1); border-radius:8px; font-size:0.9rem; font-family:'DM Sans', sans-serif; background:white; }
-    body.dark-mode .sl-form-group input, body.dark-mode .sl-form-group textarea, body.dark-mode .sl-form-group select { background:var(--charcoal); border-color:#444; color:#e0e0e0; }
+    body.dark-mode .sl-form-group input, body.dark-mode .sl-form-group textarea, body.dark-mode .sl-form-group select { background:var(--surface-dark); border-color:#444; color:#e0e0e0; }
 
     .sl-gallery-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(140px, 1fr)); gap:12px; }
     .sl-gallery-item { position:relative; border-radius:10px; overflow:hidden; aspect-ratio:1; cursor:pointer; border:2px solid transparent; transition:border-color 0.2s; }
@@ -6162,7 +6236,7 @@
 <script>
   // Apply dark mode immediately (before auth/tenant resolution)
   // so login + wizard screens render dark. loadSettings() can override with saved pref later.
-  document.body.classList.add('dark-mode');
+  document.body.classList.toggle('dark-mode', document.documentElement.classList.contains('dark-mode'));
 </script>
 
   <!-- ===== TOP BAR ===== -->
@@ -8309,7 +8383,7 @@
       </div>
 
       <!-- Packing Mode Overlay -->
-      <div id="packingModeOverlay" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:var(--charcoal);z-index:1000;overflow-y:auto;">
+      <div id="packingModeOverlay" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:var(--surface-dark);z-index:1000;overflow-y:auto;">
         <div style="padding:16px;max-width:600px;margin:0 auto;">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
             <h3 style="margin:0;color:white;" id="packingModeTitle">Packing Mode</h3>
@@ -9637,7 +9711,7 @@
 
       <!-- Email Preview Drawer (slide-out from right) -->
       <div id="emailPreviewBackdrop" onclick="closeEmailPreviewDrawer()" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.4);z-index:9998;transition:opacity 0.25s ease;opacity:0;"></div>
-      <div id="emailPreviewDrawer" style="position:fixed;top:0;right:-520px;width:500px;max-width:90vw;height:100vh;background:var(--charcoal);border-left:1px solid rgba(255,255,255,0.1);z-index:9999;transition:right 0.3s ease;display:flex;flex-direction:column;box-shadow:-4px 0 24px rgba(0,0,0,0.3);">
+      <div id="emailPreviewDrawer" style="position:fixed;top:0;right:-520px;width:500px;max-width:90vw;height:100vh;background:var(--surface-dark);border-left:1px solid rgba(255,255,255,0.1);z-index:9999;transition:right 0.3s ease;display:flex;flex-direction:column;box-shadow:-4px 0 24px rgba(0,0,0,0.3);">
         <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid rgba(255,255,255,0.1);flex-shrink:0;">
           <div>
             <span id="emailPreviewDrawerTitle" style="font-family:'Cormorant Garamond',serif;font-size:1.15rem;color:var(--cream);font-weight:600;">Email Preview</span>
@@ -10663,7 +10737,7 @@
             <div style="padding:12px;background:var(--cream,#faf8f5);border-radius:6px;margin-top:4px;">
               <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:8px;">Add to your <code>.mcp.json</code> or Claude Code settings. Uses API key auth:</p>
               <div style="position:relative;">
-                <pre id="aiSetupClaudeCode" style="background:var(--charcoal);color:#e0e0e0;padding:12px;padding-right:60px;border-radius:6px;font-size:0.78rem;overflow-x:auto;white-space:pre-wrap;"></pre>
+                <pre id="aiSetupClaudeCode" style="background:var(--surface-dark);color:#e0e0e0;padding:12px;padding-right:60px;border-radius:6px;font-size:0.78rem;overflow-x:auto;white-space:pre-wrap;"></pre>
                 <button class="btn btn-secondary btn-small" onclick="copyAiSnippet('aiSetupClaudeCode',this)" style="position:absolute;top:8px;right:8px;font-size:0.78rem;padding:4px 10px;">Copy</button>
               </div>
             </div>
@@ -10673,7 +10747,7 @@
             <div style="padding:12px;background:var(--cream,#faf8f5);border-radius:6px;margin-top:4px;">
               <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:8px;">Add to your <code>settings.json</code> under MCP servers. Uses API key auth:</p>
               <div style="position:relative;">
-                <pre id="aiSetupCursor" style="background:var(--charcoal);color:#e0e0e0;padding:12px;padding-right:60px;border-radius:6px;font-size:0.78rem;overflow-x:auto;white-space:pre-wrap;"></pre>
+                <pre id="aiSetupCursor" style="background:var(--surface-dark);color:#e0e0e0;padding:12px;padding-right:60px;border-radius:6px;font-size:0.78rem;overflow-x:auto;white-space:pre-wrap;"></pre>
                 <button class="btn btn-secondary btn-small" onclick="copyAiSnippet('aiSetupCursor',this)" style="position:absolute;top:8px;right:8px;font-size:0.78rem;padding:4px 10px;">Copy</button>
               </div>
             </div>
@@ -10695,7 +10769,7 @@
             After connecting your AI tool, paste this prompt into your <strong>project instructions</strong> (Claude.ai) or <strong>custom instructions</strong> (other tools). This teaches your AI assistant how to work with your store.
           </p>
           <div style="position:relative;">
-            <pre id="aiStartupPrompt" style="background:var(--charcoal);color:#e0e0e0;padding:12px;padding-right:60px;border-radius:6px;font-size:0.78rem;overflow-x:auto;white-space:pre-wrap;"></pre>
+            <pre id="aiStartupPrompt" style="background:var(--surface-dark);color:#e0e0e0;padding:12px;padding-right:60px;border-radius:6px;font-size:0.78rem;overflow-x:auto;white-space:pre-wrap;"></pre>
             <button class="btn btn-secondary btn-small" onclick="copyStartupPrompt()" id="copyStartupPromptBtn"
               style="position:absolute;top:8px;right:8px;font-size:0.78rem;padding:4px 10px;">Copy</button>
           </div>
@@ -20542,7 +20616,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260530-112808-eddb751';
+var MAST_MODULES_V = '20260530-122436-27afa95';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -26037,7 +26111,7 @@ function _renderProductSettingsContent() {
 }
 
 function _renderMarkupRow(prefix, retail, direct, wholesale) {
-  var fStyle = 'width:90px;padding:7px 10px;background:var(--charcoal,#252525);border:1px solid var(--charcoal-light,#333);border-radius:6px;color:var(--text-primary,#fff);font-size:0.85rem;text-align:right;';
+  var fStyle = 'width:90px;padding:7px 10px;background:var(--surface-dark);border:1px solid var(--charcoal-light,#333);border-radius:6px;color:var(--text-primary,#fff);font-size:0.85rem;text-align:right;';
   function fmt(v) { return (v != null && v !== '') ? v : ''; }
   return '<div style="display:flex;gap:16px;flex-wrap:wrap;align-items:center;">' +
     '<div><label style="font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.06em;display:block;margin-bottom:4px;">Retail × cost</label>' +
@@ -26055,7 +26129,7 @@ function _renderBucketMarkupTable(strategyType) {
   var label = strategyType === 'business-line' ? 'Business Line' : 'Category';
 
   if (!buckets || buckets.length === 0) {
-    return '<div style="background:var(--charcoal,#252525);border-radius:8px;padding:16px;color:var(--warm-gray);font-size:0.9rem;">No ' + label.toLowerCase() + 's configured yet. Add them first.</div>';
+    return '<div style="background:var(--surface-dark);border-radius:8px;padding:16px;color:var(--warm-gray);font-size:0.9rem;">No ' + label.toLowerCase() + 's configured yet. Add them first.</div>';
   }
 
   var html = '<div class="form-group" style="margin-bottom:24px;">';
@@ -26215,7 +26289,7 @@ function _renderCostToServeRead(d) {
 }
 
 function _renderCostToServeEdit(d) {
-  var inputStyle = 'width:140px;padding:9px 12px;background:var(--charcoal);border:1px solid var(--charcoal,#252525);border-radius:6px;color:var(--cream);font-family:\'DM Sans\',sans-serif;font-size:0.9rem;text-align:right;';
+  var inputStyle = 'width:140px;padding:9px 12px;background:var(--surface-dark);border:1px solid var(--charcoal,#252525);border-radius:6px;color:var(--cream);font-family:\'DM Sans\',sans-serif;font-size:0.9rem;text-align:right;';
   var labelStyle = 'font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.06em;display:block;margin-bottom:6px;';
   var rowStyle   = 'display:flex;gap:24px;flex-wrap:wrap;margin-bottom:18px;';
 
@@ -38961,7 +39035,7 @@ function _renderBusinessLinesEditor() {
   // Add row
   html += '<div style="display:flex;gap:8px;margin-bottom:16px;">' +
     '<input type="text" id="blNewLabel" placeholder="New business line name (e.g. Sculpture)" ' +
-      'style="flex:1;padding:8px 10px;background:var(--charcoal,#252525);border:1px solid var(--charcoal-light,#333);border-radius:6px;color:var(--text-primary,#fff);font-size:0.85rem;" ' +
+      'style="flex:1;padding:8px 10px;background:var(--surface-dark);border:1px solid var(--charcoal-light,#333);border-radius:6px;color:var(--text-primary,#fff);font-size:0.85rem;" ' +
       'onkeydown="if(event.key===\'Enter\')blAdd();">' +
     '<button class="btn btn-primary btn-small" onclick="blAdd()">Add</button>' +
     '</div>';
@@ -38978,7 +39052,7 @@ function _renderBusinessLinesEditor() {
         '</div>' +
         '<div id="blEditRow_' + bl.id + '" style="display:none;">' +
           '<input type="text" id="blEditInput_' + bl.id + '" value="' + bl.label.replace(/"/g, '&quot;') + '" ' +
-            'style="width:100%;padding:4px 8px;background:var(--charcoal,#252525);border:1px solid var(--teal,#2a7c6f);border-radius:4px;color:var(--text-primary,#fff);font-size:0.85rem;" ' +
+            'style="width:100%;padding:4px 8px;background:var(--surface-dark);border:1px solid var(--teal,#2a7c6f);border-radius:4px;color:var(--text-primary,#fff);font-size:0.85rem;" ' +
             'onkeydown="if(event.key===\'Enter\')blSaveEdit(\'' + bl.id + '\');if(event.key===\'Escape\')blCancelEdit(\'' + bl.id + '\');">' +
         '</div>' +
       '</div>';
@@ -45243,7 +45317,7 @@ function _renderProductStagePanel(product) {
   var checklistItems = (status === 'ready') ? crit.readyToActive : crit.draftToReady;
   var incomplete = checklistItems.filter(function(c) { return !c.met; });
 
-  var html = '<div style="background:var(--charcoal,#252525);border:1px solid var(--charcoal-light,#333);border-radius:8px;padding:10px 14px;margin-bottom:14px;">';
+  var html = '<div style="background:var(--surface-dark);border:1px solid var(--charcoal-light,#333);border-radius:8px;padding:10px 14px;margin-bottom:14px;">';
   // Row 1: stage label + badge + transition button
   html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">';
   html += '<div style="display:flex;align-items:center;gap:10px;">' +
@@ -48667,7 +48741,7 @@ function renderGallery() {
         html += '<div class="gallery-card">';
         var isVidEntry = img.videoUrl || /\.(mp4|mov|webm)/i.test(img.url || '');
         if (isVidEntry) {
-          html += '<div class="gallery-card-img" style="display:flex;align-items:center;justify-content:center;background:var(--charcoal);color:var(--amber);font-size:1.6rem;min-height:120px;">&#9654;</div>';
+          html += '<div class="gallery-card-img" style="display:flex;align-items:center;justify-content:center;background:var(--surface-dark);color:var(--amber);font-size:1.6rem;min-height:120px;">&#9654;</div>';
         } else if (img.url) {
           var fitOverride = img.imageFit === 'cover' ? ' style="object-fit:cover;"' : '';
           html += '<img class="gallery-card-img" src="' + esc(img.url) + '" alt="' + esc(img.alt || '') + '"' + fitOverride + ' onerror="this.classList.add(\'broken\')">';
@@ -49824,20 +49898,29 @@ window.resolveDarkModePreference = function() {
   }).catch(function() { return true; });
 };
 
+// Sync every DOM surface that reflects dark mode: body + html class (CSS),
+// documentElement color-scheme (native canvas/scrollbars/form controls), the
+// settings toggle, and a localStorage hint for flash-free early paint.
+window._syncDarkModeDom = function(enabled) {
+  enabled = !!enabled;
+  document.body.classList.toggle('dark-mode', enabled);
+  document.documentElement.classList.toggle('dark-mode', enabled);
+  document.documentElement.style.colorScheme = enabled ? 'dark' : 'light';
+  try { localStorage.setItem('mast-admin-dark', enabled ? '1' : '0'); } catch (e) {}
+  var toggle = document.getElementById('darkModeToggle');
+  if (toggle) toggle.checked = enabled;
+};
+
 window.applyResolvedDarkMode = function() {
   return window.resolveDarkModePreference().then(function(enabled) {
-    document.body.classList.toggle('dark-mode', !!enabled);
-    var toggle = document.getElementById('darkModeToggle');
-    if (toggle) toggle.checked = !!enabled;
+    window._syncDarkModeDom(!!enabled);
     return enabled;
   });
 };
 
 window.setPersonalDarkMode = function(enabled) {
   enabled = !!enabled;
-  document.body.classList.toggle('dark-mode', enabled);
-  var toggle = document.getElementById('darkModeToggle');
-  if (toggle) toggle.checked = enabled;
+  window._syncDarkModeDom(enabled);
   if (!currentUser || !currentUser.uid) return;
   MastDB.set('admin/users/' + currentUser.uid + '/profile/darkMode', enabled).then(function() {
     window.invalidateUserProfileCache(currentUser.uid);
@@ -50952,7 +51035,7 @@ function openImageModal(imageId, defaultSection) {
         '</select>' +
       '</div>' +
       '<div id="imgVideoTimingGroup"' + (!showVideoUrl ? ' style="display:none;"' : '') + '>' +
-        (videoDuration ? '<div style="background:var(--charcoal);border-radius:6px;padding:8px 12px;margin-bottom:12px;display:flex;align-items:center;gap:8px;"><span style="font-size:1.15rem;">&#9202;</span><span style="color:var(--warm-gray-light);font-size:0.85rem;">Video duration: <strong style="color:var(--amber-light);">' + videoDuration.toFixed(1) + 's</strong></span></div>' : '') +
+        (videoDuration ? '<div style="background:var(--surface-dark);border-radius:6px;padding:8px 12px;margin-bottom:12px;display:flex;align-items:center;gap:8px;"><span style="font-size:1.15rem;">&#9202;</span><span style="color:var(--warm-gray-light);font-size:0.85rem;">Video duration: <strong style="color:var(--amber-light);">' + videoDuration.toFixed(1) + 's</strong></span></div>' : '') +
         '<div style="display:flex;gap:12px;">' +
           '<div class="form-group" style="flex:1;">' +
             '<label for="imgVideoStart">Start Time (seconds)</label>' +
@@ -51642,7 +51725,7 @@ function renderImageLibrary() {
     html += '<div class="img-lib-card" onclick="viewLibraryImage(\'' + esc(id) + '\')">' +
       (thumb
         ? '<img src="' + esc(thumb) + '" alt="" loading="lazy" onerror="this.style.display=\'none\'">'
-        : '<div style="height:120px;display:flex;align-items:center;justify-content:center;background:var(--charcoal);color:var(--warm-gray-light);font-size:1.6rem;">' +
+        : '<div style="height:120px;display:flex;align-items:center;justify-content:center;background:var(--surface-dark);color:var(--warm-gray-light);font-size:1.6rem;">' +
           (isVideo ? '\u25B6' : '\u{1F5BC}') + '</div>') +
       '<div class="img-lib-card-body">' +
         (tags ? '<div class="img-lib-card-tags">' + esc(tags) + '</div>' : '') +
@@ -51933,7 +52016,7 @@ async function loadAndRenderImageCollections() {
     var thumb = cover ? (cover.thumbnailUrl || cover.url) : '';
     html += '<div class="img-lib-card" onclick="openCollectionEditor(\'' + esc(cid) + '\')" style="cursor:pointer;">' +
       (thumb ? '<img src="' + esc(thumb) + '" loading="lazy" onerror="this.style.display=\'none\'">' :
-        '<div style="height:120px;display:flex;align-items:center;justify-content:center;background:var(--charcoal);color:var(--warm-gray-light);font-size:1.6rem;">&#128194;</div>') +
+        '<div style="height:120px;display:flex;align-items:center;justify-content:center;background:var(--surface-dark);color:var(--warm-gray-light);font-size:1.6rem;">&#128194;</div>') +
       '<div class="img-lib-card-body">' +
         '<div style="font-weight:600;font-size:0.9rem;">' + esc(c.name || '(untitled)') + '</div>' +
         '<div style="font-size:0.78rem;color:var(--warm-gray);">' + count + ' image' + (count !== 1 ? 's' : '') + '</div>' +
@@ -51964,7 +52047,7 @@ function openCollectionEditor(cid) {
             var sel = imageIds.indexOf(id) !== -1;
             return '<label style="position:relative;cursor:pointer;">' +
               '<input type="checkbox" class="coll-img-cb" data-img-id="' + esc(id) + '"' + (sel ? ' checked' : '') + ' style="position:absolute;top:2px;left:2px;z-index:1;">' +
-              (th ? '<img src="' + esc(th) + '" style="width:100%;height:60px;object-fit:cover;border-radius:3px;' + (sel ? 'outline:2px solid var(--amber);' : '') + '">' : '<div style="height:60px;background:var(--charcoal);"></div>') +
+              (th ? '<img src="' + esc(th) + '" style="width:100%;height:60px;object-fit:cover;border-radius:3px;' + (sel ? 'outline:2px solid var(--amber);' : '') + '">' : '<div style="height:60px;background:var(--surface-dark);"></div>') +
               '</label>';
           }).join('') +
         '</div>' +
@@ -52410,7 +52493,7 @@ function openImagePicker(callback, options) {
       html += '<div class="img-picker-item" data-imgid="' + esc(id) + '" data-tags="' + esc(tagStr) + '" onclick="togglePickerItem(this)">' +
         (thumb
           ? '<img src="' + esc(thumb) + '" alt="" loading="lazy">'
-          : '<div style="height:100%;display:flex;align-items:center;justify-content:center;background:var(--charcoal);color:var(--warm-gray-light);font-size:1.6rem;min-height:80px;">' +
+          : '<div style="height:100%;display:flex;align-items:center;justify-content:center;background:var(--surface-dark);color:var(--warm-gray-light);font-size:1.6rem;min-height:80px;">' +
             (isVid ? '\u25B6' : '\u{1F5BC}') + '</div>') +
         '<div class="picker-check">&#10003;</div>' +
       '</div>';
@@ -52527,7 +52610,7 @@ function openGalleryMetadataModal(sectionId, imageUrl, libraryImageId, libImg) {
       '</div>' : '') +
       (showVideoUrl ? '<div class="form-group"><label for="galVideoUrl">Video URL' + (isVideo ? ' (auto-filled from library)' : '') + '</label><input type="text" id="galVideoUrl" value="' + esc(videoUrlDefault) + '" placeholder="https://...video.mp4"></div>' +
         '<div class="form-group"><label for="galPlaybackSpeed">Playback Speed</label><select id="galPlaybackSpeed"><option value="0.25">0.25x (very slow)</option><option value="0.5">0.5x (slow)</option><option value="0.75">0.75x</option><option value="1" selected>1x (normal)</option><option value="1.25">1.25x</option><option value="1.5">1.5x</option><option value="2">2x (fast)</option></select></div>' +
-        (isVideo && libImg.duration ? '<div style="background:var(--charcoal);border-radius:6px;padding:8px 12px;margin-bottom:12px;display:flex;align-items:center;gap:8px;"><span style="font-size:1.15rem;">&#9202;</span><span style="color:var(--warm-gray-light);font-size:0.85rem;">Video duration: <strong style="color:var(--amber-light);">' + libImg.duration.toFixed(1) + 's</strong></span></div>' : '') +
+        (isVideo && libImg.duration ? '<div style="background:var(--surface-dark);border-radius:6px;padding:8px 12px;margin-bottom:12px;display:flex;align-items:center;gap:8px;"><span style="font-size:1.15rem;">&#9202;</span><span style="color:var(--warm-gray-light);font-size:0.85rem;">Video duration: <strong style="color:var(--amber-light);">' + libImg.duration.toFixed(1) + 's</strong></span></div>' : '') +
         '<div style="display:flex;gap:12px;"><div class="form-group" style="flex:1;"><label for="galVideoStart">Start Time (sec)</label><input type="number" id="galVideoStart" value="0" min="0" step="0.5" placeholder="0"' + (libImg.duration ? ' max="' + libImg.duration + '"' : '') + '></div><div class="form-group" style="flex:1;"><label for="galVideoEnd">End Time (sec)</label><input type="number" id="galVideoEnd" min="0" step="0.5" placeholder="End of video"' + (libImg.duration ? ' max="' + libImg.duration + '"' : '') + '></div></div>' +
         '<p style="font-size:0.78rem;color:var(--warm-gray);margin-top:-8px;margin-bottom:12px;">Leave end time empty to play to end of video</p>' : '') +
       (showCategory ? '<div class="form-group"><label for="galCategory">Category</label><select id="galCategory" onchange="handleGalCategoryChange(this)">' + categoryOptions + '</select></div>' : '') +

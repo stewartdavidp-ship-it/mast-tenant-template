@@ -453,7 +453,7 @@
           '<div style="flex:1;">' +
             '<p style="font-size:0.85rem;color:var(--warm-gray);margin:0 0 8px;">Describe this product for show applications. This text will auto-fill the product description field whenever this photo is used.</p>' +
             (img.productName ? '<div style="font-size:0.78rem;color:var(--amber);margin-bottom:8px;">Linked to: ' + esc(img.productName) + '</div>' : '') +
-            '<textarea id="slAppDescInput" rows="4" style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--warm-gray);background:var(--charcoal);color:var(--cream);font-size:0.85rem;resize:vertical;" placeholder="e.g. Hand-blown glass octopus figurine, 4-6 inches tall, made with borosilicate glass...">' + esc(existing) + '</textarea>' +
+            '<textarea id="slAppDescInput" rows="4" style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--warm-gray);background:var(--surface-dark);color:var(--cream);font-size:0.85rem;resize:vertical;" placeholder="e.g. Hand-blown glass octopus figurine, 4-6 inches tall, made with borosilicate glass...">' + esc(existing) + '</textarea>' +
           '</div>' +
         '</div>' +
       '</div>' +
@@ -1260,7 +1260,7 @@
       // Product dropdown
       h += '<label style="font-size:0.78rem;color:var(--warm-gray);display:block;margin-bottom:4px;">Link to Product</label>';
       h += '<select id="slProdSelect_' + idx + '" onchange="slLinkProduct(' + idx + ', this.value)" ' +
-        'style="width:100%;padding:8px 10px;border-radius:8px;border:1px solid rgba(255,255,255,0.15);background:var(--charcoal);color:var(--cream);font-size:0.85rem;margin-bottom:12px;cursor:pointer;">';
+        'style="width:100%;padding:8px 10px;border-radius:8px;border:1px solid rgba(255,255,255,0.15);background:var(--surface-dark);color:var(--cream);font-size:0.85rem;margin-bottom:12px;cursor:pointer;">';
       h += '<option value="">— Select a product —</option>';
       prodOptions.forEach(function(prod) {
         var sel = prod.pid === currentPid ? ' selected' : '';
@@ -1272,7 +1272,7 @@
       // Application description
       h += '<label style="font-size:0.78rem;color:var(--warm-gray);display:block;margin-bottom:4px;">Application Description</label>';
       h += '<textarea id="slAppDesc_' + idx + '" rows="4" placeholder="Describe this product for show applications. Select a product above to pre-fill..." ' +
-        'style="width:100%;padding:10px 12px;border-radius:8px;border:1px solid rgba(255,255,255,0.15);background:var(--charcoal);color:var(--cream);font-size:0.9rem;line-height:1.4;resize:vertical;" ' +
+        'style="width:100%;padding:10px 12px;border-radius:8px;border:1px solid rgba(255,255,255,0.15);background:var(--surface-dark);color:var(--cream);font-size:0.9rem;line-height:1.4;resize:vertical;" ' +
         'onblur="slSaveSlotDesc(' + idx + ', this.value)">' + esc(appDesc) + '</textarea>';
       h += '</div>';
       h += '</div>';
@@ -1459,7 +1459,7 @@
     h += '<div class="sl-card-header"><span class="sl-card-title">Step 5: Application Assistant</span></div>';
 
     // Show header
-    h += '<div style="background:var(--charcoal, #2A2A2A);color:white;padding:16px;border-radius:8px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;">';
+    h += '<div style="background:var(--surface-dark);color:white;padding:16px;border-radius:8px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;">';
     h += '<div>';
     h += '<div style="font-family:\'Cormorant Garamond\', serif;font-size:1.15rem;font-weight:600;">' + esc(show.name || 'Show') + '</div>';
     if (show.date) h += '<div style="font-size:0.85rem;opacity:0.8;">' + esc(show.date) + '</div>';

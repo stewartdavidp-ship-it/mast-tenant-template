@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mast Admin — Theme Sanity Harness</title>
+<style>
+/* =========================================================================
+   PROPOSED TOKEN FOUNDATION  (candidate replacement for app/index.html :root)
+   Goal: prove a coherent LIGHT + DARK palette from one token set.
+   Structure:
+     1. BRAND      — constant (lightly tuned brighter in dark)
+     2. STATE      — semantic success/warning/danger (invert lightness)
+     3. THEME      — surfaces + text that INVERT by mode
+     4. FIXED-DARK — surfaces meant to stay dark in both modes (top bar, etc.)
+   ========================================================================= */
+:root {
+  color-scheme: light;                 /* paired with body.dark-mode -> dark */
+
+  /* 1. BRAND (constant) */
+  --amber:#C4853C; --amber-light:#E8B679; --amber-glow:#F5D5A8;
+  --primary:#C4853C; --gold:#C4853C;
+  --teal:#2A7C6F; --teal-deep:#1B5C52; --teal-light:#A8D5CE; --accent:#2A7C6F;
+  --sage:#8a9a7b;
+
+  /* 2. STATE */
+  --danger:#dc3545; --danger-hover:#c82333; --text-danger:#c0392b;
+  --success:#2e7d4f; --warning:#b8860b;
+
+  /* 3. THEME — surfaces + text (these INVERT in dark) */
+  --cream:#FAF6F0; --cream-dark:#F0E8DB;
+  --bg:#FAF6F0;
+  --surface-card:#fff; --surface-card-border:#F0E8DB; --card-bg:#fff;
+  --bg-primary:#fff; --bg-secondary:#f5f5f5; --bg-tertiary:#e8e2d8;
+  --border:#e8e2d8; --border-color:#e8e2d8; --hover-bg:#f0ece4;
+  --text:#1A1A1A; --text-primary:#1A1A1A; --text-secondary:#6B6560;
+  --warm-gray:#6B6560; --warm-gray-light:#9B958E; --warm-gray-dark:#4a4540;
+
+  /* INK — primary text color. SPLIT OUT FROM --charcoal so text can invert.
+     (In the real migration, text uses of --charcoal become --ink.) */
+  --ink:#1A1A1A; --charcoal-light:#333;
+
+  /* 4. FIXED-DARK — never invert (top bar, intentionally-dark chrome) */
+  --charcoal:#1A1A1A;          /* dark SURFACE token only after migration */
+  --surface-dark:#1A1A1A; --on-dark:#fff;
+  --dark-brown:#5C3D2E;
+}
+
+body.dark-mode {
+  color-scheme: dark;
+
+  /* BRAND — brighter for contrast on dark */
+  --amber:#d4a053; --primary:#d4a053; --gold:#d4a053;
+  --teal:#3a9d8c; --accent:#3a9d8c;
+
+  /* STATE */
+  --danger:#ff6b6b; --text-danger:#ff6b6b; --success:#5cba7d; --warning:#e0a93a;
+
+  /* THEME (invert) */
+  --cream:#2a2a2a; --cream-dark:#3a3a3a; --bg:#1a1d26;
+  --surface-card:#252a35; --surface-card-border:#3a3f4a; --card-bg:#2a2a2a;
+  --bg-primary:#1a1a1a; --bg-secondary:#2a2a2a; --bg-tertiary:#333;
+  --border:#3a3a3a; --border-color:#3a3a3a; --hover-bg:#333;
+  --text:#e8e4df; --text-primary:#e8e4df; --text-secondary:#a09890;
+  --warm-gray:#888; --warm-gray-light:#aaa; --warm-gray-dark:#bbb;
+
+  /* INK inverts to light; FIXED-DARK --charcoal/--surface-dark stay dark */
+  --ink:#e8e4df; --charcoal-light:#ccc;
+}
+
+/* ---- generic page chrome ---- */
+* { box-sizing:border-box; margin:0; padding:0; }
+body { font-family:'DM Sans',system-ui,sans-serif; background:var(--bg); color:var(--ink); padding:0 0 80px; transition:background .2s,color .2s; }
+.wrap { max-width:1100px; margin:0 auto; padding:24px; }
+h1,h2,h3 { font-family:'Cormorant Garamond',Georgia,serif; color:var(--ink); }
+h2 { margin:32px 0 4px; font-size:1.6rem; }
+.muted { color:var(--warm-gray); font-size:0.85rem; }
+.grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(230px,1fr)); gap:14px; margin-top:14px; }
+
+/* ---- representative REAL admin components (token-driven) ---- */
+.header { background:var(--charcoal); color:var(--on-dark); height:60px; display:flex; align-items:center; padding:0 24px; gap:18px; border-radius:6px; }
+.header .nav-btn { color:#ccc; background:none; border:none; font-size:0.85rem; cursor:pointer; }
+.header .nav-btn.active { color:var(--amber); border-bottom:2px solid var(--amber); }
+
+.card { background:var(--surface-card); border:1px solid var(--surface-card-border); border-radius:8px; padding:16px; }
+.card h3 { font-size:1.1rem; margin-bottom:6px; }
+.card p { color:var(--text-secondary); font-size:0.85rem; }
+
+.input { width:100%; padding:9px 12px; border:1px solid var(--border); border-radius:6px; background:var(--bg-primary); color:var(--text); font-size:0.85rem; }
+label { display:block; font-size:0.72rem; text-transform:uppercase; letter-spacing:.1em; color:var(--warm-gray); margin-bottom:6px; }
+
+.btn { padding:9px 18px; border-radius:6px; font-size:0.78rem; border:1px solid transparent; cursor:pointer; }
+.btn-primary { background:var(--amber); color:#fff; }
+.btn-teal { background:var(--teal); color:#fff; }
+.btn-outline { background:transparent; color:var(--ink); border-color:var(--border); }
+.btn-danger { background:var(--danger); color:#fff; }
+
+table { width:100%; border-collapse:collapse; margin-top:10px; background:var(--surface-card); border-radius:8px; overflow:hidden; }
+th,td { text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); font-size:0.85rem; color:var(--text); }
+th { color:var(--warm-gray); text-transform:uppercase; font-size:0.7rem; letter-spacing:.08em; }
+
+.badge { display:inline-block; padding:3px 10px; border-radius:999px; font-size:0.72rem; }
+.badge-success { background:color-mix(in srgb,var(--success) 18%,transparent); color:var(--success); }
+.badge-warning { background:color-mix(in srgb,var(--warning) 18%,transparent); color:var(--warning); }
+.badge-danger  { background:color-mix(in srgb,var(--danger) 18%,transparent); color:var(--danger); }
+
+/* ---- OFFENDER PANEL: deliberately-hardcoded patterns from real modules.
+        These should look FINE in dark, BROKEN in light — proving migration targets. ---- */
+.offender { padding:14px; border-radius:8px; }
+.offender--darkfill { background:#2a2a2a; color:#e0e0e0; border:1px solid #444; }          /* channels.js / finance.js pattern */
+.offender--whitetext { background:var(--surface-card); }
+.offender--whitetext .v { color:#fff; }                                                     /* var(--text,#fff) collapse pattern */
+.offender--rgbaborder { background:var(--surface-card); border:1px solid rgba(255,255,255,0.15); padding:14px; } /* invisible border in light */
+.offender--charcoaltext { background:var(--surface-card); }
+.offender--charcoaltext .v { color:var(--charcoal); }     /* CURRENT overload: dark-on-dark in dark mode if --charcoal defined */
+
+.note { background:color-mix(in srgb,var(--amber) 12%,transparent); border-left:3px solid var(--amber); padding:12px 14px; border-radius:0 6px 6px 0; font-size:0.85rem; margin-top:10px; }
+
+#toggle { position:fixed; top:14px; right:14px; z-index:99; background:var(--surface-card); color:var(--ink); border:1px solid var(--border); border-radius:999px; padding:8px 16px; cursor:pointer; font-size:0.8rem; box-shadow:0 4px 16px rgba(0,0,0,.25); }
+</style>
+</head>
+<body class="dark-mode">
+<button id="toggle" onclick="document.body.classList.toggle('dark-mode')">Toggle light/dark</button>
+<div class="wrap">
+  <h1 style="font-size:2rem;">Mast Admin — Theme Sanity Harness</h1>
+  <p class="muted">Proposed token foundation rendered with representative real components. Toggle to verify both modes are coherent.</p>
+
+  <h2>Top bar (fixed-dark chrome)</h2>
+  <p class="muted">Uses <code>--charcoal</code> as a SURFACE — stays dark in both modes by design.</p>
+  <div class="header">
+    <strong style="color:var(--on-dark)">⛵ Mast</strong>
+    <button class="nav-btn active">Orders</button>
+    <button class="nav-btn">Products</button>
+    <button class="nav-btn">Finance</button>
+  </div>
+
+  <h2>Cards + text + inputs</h2>
+  <div class="grid">
+    <div class="card"><h3>Revenue</h3><p>Surfaces, borders and secondary text invert via theme tokens.</p></div>
+    <div class="card"><h3>Field</h3><label>Email</label><input class="input" value="maker@studio.com"></div>
+    <div class="card"><h3>Buttons</h3>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
+        <button class="btn btn-primary">Primary</button>
+        <button class="btn btn-teal">Teal</button>
+        <button class="btn btn-outline">Outline</button>
+        <button class="btn btn-danger">Delete</button>
+      </div>
+    </div>
+    <div class="card"><h3>Status</h3><div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;">
+      <span class="badge badge-success">Paid</span><span class="badge badge-warning">Pending</span><span class="badge badge-danger">Overdue</span>
+    </div></div>
+  </div>
+
+  <h2>Table</h2>
+  <table>
+    <thead><tr><th>Order</th><th>Customer</th><th>Total</th><th>Status</th></tr></thead>
+    <tbody>
+      <tr><td>#1042</td><td>A. Rivera</td><td>$184.00</td><td><span class="badge badge-success">Paid</span></td></tr>
+      <tr><td>#1041</td><td>J. Okafor</td><td>$52.50</td><td><span class="badge badge-warning">Pending</span></td></tr>
+    </tbody>
+  </table>
+
+  <h2 style="color:var(--danger)">⚠ Offender panel — known hardcoded patterns</h2>
+  <p class="muted">These mirror real module code. They look OK in DARK and BREAK in LIGHT — this is the migration target inventory, made visible.</p>
+  <div class="grid">
+    <div class="offender offender--darkfill"><strong>#2a2a2a fill + #e0e0e0 text</strong><br><span>channels.js / finance.js — dark island on a light page</span></div>
+    <div class="offender offender--whitetext"><strong>var(--text,#fff) fallback</strong><br><span class="v">white text — invisible on light card</span></div>
+    <div class="offender offender--rgbaborder"><strong>rgba(255,255,255,.15) border</strong><br><span>border vanishes on light bg</span></div>
+    <div class="offender offender--charcoaltext"><strong>var(--charcoal) as text</strong><br><span class="v">THE OVERLOAD: dark-on-dark in dark mode if --charcoal is naively defined</span></div>
+  </div>
+
+  <div class="note"><strong>Sanity verdict:</strong> token-driven components above stay coherent in both modes ⇒ both modes ARE supportable. The offender panel shows the bounded, mechanical migration work. The <code>--charcoal</code> text overload (345 refs) is the one structural item requiring a token <em>split</em> (<code>--ink</code> vs surface) — handled here by routing text through <code>--ink</code>.</div>
+</div>
+</body>
+</html>

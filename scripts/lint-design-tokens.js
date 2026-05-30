@@ -20,6 +20,15 @@
 const fs = require('fs');
 const path = require('path');
 
+// Resolve paths from the repo root regardless of the caller's cwd, so the
+// PostToolUse hook (which may run from a different directory) and manual/CI
+// invocations all behave identically.
+process.chdir(path.resolve(__dirname, '..'));
+
+// --report: print a per-file worklist of color-literal density (advisory; for
+// the light/dark theming migration) instead of the normal pass/fail summary.
+const REPORT = process.argv.includes('--report');
+
 const ALLOWED_REM = new Set(['0.72', '0.78', '0.85', '0.9', '1.0', '1', '1.15', '1.6']);
 const REM_RE = /font-size:\s*(\d+\.?\d*)rem/g;
 const HEX_RE = /#[0-9A-Fa-f]{3}(?:[0-9A-Fa-f]{3})?\b/g;
@@ -46,6 +55,11 @@ let fontErrors = 0;
 let hexWarnings = 0;
 const violations = [];
 
+// Per-file census for the migration worklist (report mode).
+const perFile = {};
+const tally = (file) => (perFile[file] = perFile[file] ||
+  { hex: 0, whiteOverlay: 0, whiteText: 0, darkFill: 0 });
+
 for (const file of targets) {
   const src = fs.readFileSync(file, 'utf8');
   const lines = src.split('\n');
@@ -70,13 +84,50 @@ for (const file of targets) {
       while ((m = HEX_RE.exec(line)) !== null) {
         if (!HEX_WHITELIST.has(m[0])) {
           hexWarnings++;
+          tally(file).hex++;
           if (hexWarnings <= 30) {
             violations.push(`HEX   ${file}:${lineNo}  ${m[0]}  (prefer CSS var)`);
           }
         }
       }
     }
+
+    // Dark-assuming pattern census (report mode only) — these are what break
+    // in light mode: white text/overlays and dark fills hardcoded into modules.
+    if (REPORT) {
+      const wo = (line.match(/rgba\(\s*255\s*,\s*255\s*,\s*255/g) || []).length;
+      const wt = (line.match(/#fff\b|#ffffff\b|#e0e0e0\b|#e8e4df\b/gi) || []).length;
+      const df = (line.match(/#1a1a1a\b|#2a2a2a\b|#252a35\b|#232323\b|#333\b|#444\b/gi) || []).length;
+      if (wo || wt || df) {
+        const t = tally(file);
+        t.whiteOverlay += wo; t.whiteText += wt; t.darkFill += df;
+      }
+    }
   });
+}
+
+if (REPORT) {
+  const rows = Object.entries(perFile)
+    .map(([f, t]) => ({ f, ...t, darkAssuming: t.whiteOverlay + t.whiteText + t.darkFill }))
+    .sort((a, b) => b.darkAssuming - a.darkAssuming);
+  const pad = (s, n) => String(s).padEnd(n);
+  const num = (s, n) => String(s).padStart(n);
+  console.log('Light/dark migration worklist — modules ranked by dark-assuming literals');
+  console.log('(whiteOverlay = rgba(255,255,255,*); whiteText = #fff/#e0e0e0; darkFill = #1a1a1a/#2a2a2a/#333/#444)');
+  console.log('');
+  console.log('  ' + pad('module', 34) + num('hex', 6) + num('wOvl', 6) + num('wTxt', 6) + num('dFill', 6) + num('DARK', 6));
+  console.log('  ' + '-'.repeat(64));
+  let tot = { hex: 0, whiteOverlay: 0, whiteText: 0, darkFill: 0, darkAssuming: 0 };
+  rows.forEach(r => {
+    if (!r.darkAssuming && !r.hex) return;
+    console.log('  ' + pad(r.f.replace('app/modules/', ''), 34) +
+      num(r.hex, 6) + num(r.whiteOverlay, 6) + num(r.whiteText, 6) + num(r.darkFill, 6) + num(r.darkAssuming, 6));
+    Object.keys(tot).forEach(k => tot[k] += r[k]);
+  });
+  console.log('  ' + '-'.repeat(64));
+  console.log('  ' + pad('TOTAL', 34) + num(tot.hex, 6) + num(tot.whiteOverlay, 6) +
+    num(tot.whiteText, 6) + num(tot.darkFill, 6) + num(tot.darkAssuming, 6));
+  process.exit(0);
 }
 
 console.log('Design token lint — ' + targets.length + ' files scanned');

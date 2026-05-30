@@ -393,7 +393,7 @@
         var sel = selected.indexOf(url) !== -1;
         html += '<label style="position:relative;cursor:pointer;">' +
           '<input type="checkbox" class="composer-img-cb" data-url="' + esc(url) + '"' + (sel ? ' checked' : '') + ' style="position:absolute;top:2px;left:2px;z-index:1;">' +
-          (th ? '<img src="' + esc(th) + '" style="width:100%;height:70px;object-fit:cover;border-radius:3px;' + (sel ? 'outline:2px solid var(--amber);' : '') + '">' : '<div style="height:70px;background:var(--charcoal);"></div>') +
+          (th ? '<img src="' + esc(th) + '" style="width:100%;height:70px;object-fit:cover;border-radius:3px;' + (sel ? 'outline:2px solid var(--amber);' : '') + '">' : '<div style="height:70px;background:var(--surface-dark);"></div>') +
         '</label>';
       });
       html += '</div>';
