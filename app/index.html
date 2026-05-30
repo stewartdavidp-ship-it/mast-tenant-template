@@ -20194,7 +20194,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260529-232504-2d76cca';
+var MAST_MODULES_V = '20260529-234243-e72c50a';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -36695,7 +36695,7 @@ function openForecastJobModal(pid, suggestedQty) {
     return '<button class="btn btn-secondary" style="font-size:0.85rem;padding:8px 14px;margin:4px;" data-create-job-pid="' + esc(pid) + '" data-create-job-qty="' + suggestedQty + '" data-create-job-purpose="' + esc(key) + '">' +
       PURPOSE_LABELS[key] + '</button>';
   }).join('');
-  var html = '<div style="max-width:450px;">' +
+  var html = '<div style="max-width:450px;padding:24px;">' +
     '<h3>New Production Job</h3>' +
     '<div class="form-group">' +
       '<label class="field-required">Job Name</label>' +
@@ -37750,7 +37750,7 @@ function openRecountModal() {
     catOptions += '<option value="' + esc(c) + '">' + esc(c) + '</option>';
   });
 
-  var html = '<div style="max-width:600px;">' +
+  var html = '<div style="max-width:600px;padding:24px;">' +
     '<h3>Start Inventory Recount</h3>' +
     '<p style="color:var(--warm-gray);font-size:0.85rem;margin:8px 0 16px;">Select which products to count. Only stock-tracked products (strict and stock-to-build) are shown.</p>' +
     '<div style="display:flex;gap:10px;align-items:center;margin-bottom:12px;">' +
@@ -37842,7 +37842,7 @@ function renderRecountForm() {
   var counted = recountProducts.filter(function(p) { return p.physicalCount !== null; }).length;
   var total = recountProducts.length;
 
-  var html = '<div style="max-width:700px;">' +
+  var html = '<div style="max-width:700px;padding:24px;">' +
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">' +
       '<h3>Counting Inventory</h3>' +
       '<span style="font-size:0.85rem;color:var(--warm-gray);">' + counted + ' / ' + total + ' counted</span>' +
@@ -38009,7 +38009,7 @@ function openHoldStockModal(pid) {
   var product = productsData.find(function(p) { return p.pid === pid; });
   var inv = inventory[pid] || {};
   var totals = getInventoryTotals(inv);
-  var html = '<div style="max-width:400px;">' +
+  var html = '<div style="max-width:400px;padding:24px;">' +
     '<h3>Hold Stock: ' + esc(product ? product.name : pid) + '</h3>' +
     '<p style="color:var(--warm-gray);font-size:0.85rem;margin:8px 0 16px;">Held stock is removed from available inventory but stays on hand. Use for safety stock, personal use, or quality holds.</p>' +
     '<div style="margin-bottom:8px;font-size:0.85rem;">Available to hold: <strong>' + totals.available + '</strong></div>' +
@@ -38072,7 +38072,7 @@ function openReleaseHoldModal(pid) {
   var product = productsData.find(function(p) { return p.pid === pid; });
   var inv = inventory[pid] || {};
   var totals = getInventoryTotals(inv);
-  var html = '<div style="max-width:400px;">' +
+  var html = '<div style="max-width:400px;padding:24px;">' +
     '<h3>Release Hold: ' + esc(product ? product.name : pid) + '</h3>' +
     '<p style="color:var(--warm-gray);font-size:0.85rem;margin:8px 0 16px;">Release held stock back to available inventory.</p>' +
     '<div style="margin-bottom:8px;font-size:0.85rem;">Currently held: <strong>' + totals.held + '</strong></div>' +
@@ -47048,7 +47048,7 @@ function openAdjustStockModal(pid) {
   var stock = (inv && inv.stock) ? inv.stock : {};
 
   var isSculpture = product.businessLine === 'sculpture';
-  var html = '<div style="max-width:560px;">' +
+  var html = '<div style="max-width:560px;padding:24px;">' +
     '<h3 style="margin:0 0 16px 0;">Adjust Stock: ' + esc(product.name) + '</h3>' +
     (isSculpture ? '<div style="background:var(--teal-light,#e0f2ef);border:1px solid var(--teal);border-radius:6px;padding:8px 12px;margin-bottom:12px;font-size:0.85rem;color:var(--teal-deep,var(--teal));">Sculpture — max 1 unit in stock</div>' : '') +
     '<div style="display:flex;gap:0;margin-bottom:16px;">' +
@@ -52722,7 +52722,7 @@ async function removeStudioLocation(locId) {
 function _openAddressConfirmation(locId, geocodedAddr) {
   var loc = studioLocations[locId] || {};
   var addr = geocodedAddr || {};
-  var html = '<div style="max-width:400px;">' +
+  var html = '<div style="max-width:400px;padding:24px;">' +
     '<h3 style="font-family:\'Cormorant Garamond\',serif;font-size:1.15rem;font-weight:500;margin:0 0 4px;">Confirm Ship-From Address</h3>' +
     '<p style="font-size:0.85rem;color:var(--warm-gray);margin:0 0 16px;">' + esc(loc.name || 'Location') + ' — review and correct if needed, then save.</p>' +
     '<div class="form-group"><label>Address Line 1</label><input type="text" id="slAddr1" value="' + esc(addr.address1 || '') + '" placeholder="123 Main St"></div>' +
@@ -52743,7 +52743,7 @@ function _openAddressConfirmation(locId, geocodedAddr) {
 
 function editStudioLocationAddress(locId) {
   var loc = studioLocations[locId] || {};
-  var html = '<div style="max-width:400px;">' +
+  var html = '<div style="max-width:400px;padding:24px;">' +
     '<h3 style="font-family:\'Cormorant Garamond\',serif;font-size:1.15rem;font-weight:500;margin:0 0 16px;">Ship-From Address: ' + esc(loc.name || 'Location') + '</h3>' +
     '<div class="form-group"><label>Address Line 1</label><input type="text" id="slAddr1" value="' + esc(loc.address1 || '') + '" placeholder="123 Main St"></div>' +
     '<div class="form-group"><label>Address Line 2</label><input type="text" id="slAddr2" value="' + esc(loc.address2 || '') + '" placeholder="Suite 100"></div>' +
@@ -53255,7 +53255,7 @@ function openMoveItemsModal(prefillPid, prefillVariant, prefillFrom) {
     locationOptions += '<option value="' + esc(loc.id) + '">' + typeIcon + ' ' + esc(loc.name) + '</option>';
   });
 
-  var html = '<div style="max-width:480px;">' +
+  var html = '<div style="max-width:480px;padding:24px;">' +
     '<h3 style="margin:0 0 16px 0;">Move Items Between Locations</h3>' +
     '<div class="form-group">' +
       '<label>Product</label>' +

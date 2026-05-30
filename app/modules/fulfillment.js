@@ -1330,7 +1330,7 @@
       '</div>';
     });
 
-    openModal('<div style="max-width:400px;">' +
+    openModal('<div style="max-width:400px;padding:24px;">' +
       '<h3>Confirm All Delivered</h3>' +
       '<p style="font-size:0.85rem;color:var(--warm-gray);">Uncheck any packages NOT handed to the carrier.</p>' +
       checklistHtml +

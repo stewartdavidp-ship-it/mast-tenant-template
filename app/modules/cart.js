@@ -489,7 +489,8 @@
   // ---- Manual Gift Card Issue Modal (Step 2.7) ----
 
   window._gcOpenManualIssue = function() {
-    var html = '<h3 style="margin-top:0;">Issue Gift Card</h3>' +
+    var html = '<div style="padding:24px;">' +
+      '<h3 style="margin-top:0;">Issue Gift Card</h3>' +
       '<p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:16px;">Manually issue a gift card (e.g., for compensation or promotions).</p>' +
       '<div style="margin-bottom:16px;">' +
         '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Amount ($)</label>' +
@@ -506,6 +507,7 @@
       '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:20px;">' +
         '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
         '<button class="btn btn-primary" onclick="window._gcIssueCard()">Issue Gift Card</button>' +
+      '</div>' +
       '</div>';
 
     openModal(html);
@@ -571,7 +573,8 @@
   // Promotional credits are gift cards with type 'promotion' and short expiration.
 
   window._gcOpenPromoCredit = function() {
-    var html = '<h3 style="margin-top:0;">Create Promotional Credit</h3>' +
+    var html = '<div style="padding:24px;">' +
+      '<h3 style="margin-top:0;">Create Promotional Credit</h3>' +
       '<p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:16px;">Issue a promotional gift card (e.g., sign-up bonus, birthday credit, compensation).</p>' +
       '<div style="margin-bottom:16px;">' +
         '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Amount ($)</label>' +
@@ -598,6 +601,7 @@
       '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:20px;">' +
         '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
         '<button class="btn btn-primary" onclick="window._gcIssuePromo()">Create Promo Credit</button>' +
+      '</div>' +
       '</div>';
 
     openModal(html);
@@ -689,7 +693,8 @@
 
     var balance = gc.balanceCents != null ? gc.balanceCents : (gc.amountCents || 0);
 
-    var html = '<h3 style="margin-top:0;">Gift Card Details</h3>' +
+    var html = '<div style="padding:24px;">' +
+      '<h3 style="margin-top:0;">Gift Card Details</h3>' +
       '<div style="text-align:center;margin-bottom:16px;">' +
         '<div style="font-family:monospace;font-size:1.6rem;letter-spacing:2px;color:var(--charcoal);margin-bottom:8px;">' + esc(code) + '</div>' +
         gcStatusBadge(gc.status) +
@@ -710,6 +715,7 @@
       '</div>' +
       '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:20px;">' +
         '<button class="btn btn-secondary" onclick="closeModal()">Close</button>' +
+      '</div>' +
       '</div>';
 
     openModal(html);
@@ -1230,7 +1236,8 @@
   // ---- Grant / Revoke / Reactivate ----
 
   window._membershipGrantModal = function() {
-    var html = '<h3 style="margin-top:0;">Grant Membership</h3>' +
+    var html = '<div style="padding:24px;">' +
+      '<h3 style="margin-top:0;">Grant Membership</h3>' +
       '<div style="margin-bottom:16px;">' +
         '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Customer UID</label>' +
         '<input type="text" id="msGrantUid" placeholder="Firebase UID" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);font-family:\'DM Sans\';font-size:0.9rem;">' +
@@ -1239,6 +1246,7 @@
       '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:20px;">' +
         '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
         '<button class="btn btn-primary" onclick="window._membershipGrant()">Grant</button>' +
+      '</div>' +
       '</div>';
     openModal(html);
   };

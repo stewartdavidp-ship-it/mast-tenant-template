@@ -608,7 +608,7 @@
       return;
     }
     var html =
-      '<div style="max-width:480px;">' +
+      '<div style="max-width:480px;padding:24px;">' +
         '<h3>Share &ldquo;' + esc(doc.title || 'Untitled') + '&rdquo; with a buyer</h3>' +
         '<div class="form-group">' +
           '<label>Buyer name</label>' +

@@ -2365,7 +2365,7 @@
       _shippingState.step = 'configure';
       _renderShippingPanel();
     } catch (err) {
-      openModal('<div style="max-width:400px;"><h3>Shipping Error</h3><p style="color:var(--danger);">' + esc(err.message) + '</p><button class="btn btn-secondary" onclick="closeModal()">Close</button></div>');
+      openModal('<div style="max-width:400px;padding:24px;"><h3>Shipping Error</h3><p style="color:var(--danger);">' + esc(err.message) + '</p><button class="btn btn-secondary" onclick="closeModal()">Close</button></div>');
     }
   }
 
@@ -2375,7 +2375,7 @@
       '<div style="background:rgba(241,100,30,0.15);border:1px solid rgba(241,100,30,0.4);border-radius:6px;padding:8px 12px;margin-bottom:16px;font-size:0.85rem;color:#fdba74;">' +
         '<strong>Etsy Order</strong> — Tracking will be pushed to Etsy automatically when you mark shipped.' +
       '</div>' : '';
-    var html = '<div style="max-width:400px;">' +
+    var html = '<div style="max-width:400px;padding:24px;">' +
       '<h3>Mark as Shipped</h3>' +
       etsyNote +
       '<div class="form-group">' +
@@ -2451,7 +2451,7 @@
     var autoWeightNote = s.autoWeight > 0 ? ' (auto-calculated from products: ' + s.autoWeight + ' oz)' : '';
     var currentWeight = s.manualWeight || s.autoWeight || '';
 
-    var configHtml = '<div style="max-width:500px;">' +
+    var configHtml = '<div style="max-width:500px;padding:24px;">' +
       '<h3 style="margin:0 0 16px;">Ship Order ' + esc(num) + '</h3>' +
       noAddressWarning +
 
@@ -2510,7 +2510,7 @@
     var order = orders[s.orderId];
     var num = order ? getOrderDisplayNumber(order) : s.orderId;
 
-    var html = '<div style="max-width:550px;">' +
+    var html = '<div style="max-width:550px;padding:24px;">' +
       '<h3 style="margin:0 0 4px;">Shipping Rates — ' + esc(num) + '</h3>' +
       '<p style="color:var(--warm-gray);font-size:0.85rem;margin:0 0 16px;">Select a rate to purchase a shipping label</p>';
 
@@ -2747,7 +2747,7 @@
     var order = orders[orderId];
     var carrier = (order && order.tracking && order.tracking.carrier) || '';
     var isMobile = window.innerWidth < 600;
-    var html = '<div style="max-width:400px;text-align:center;">' +
+    var html = '<div style="max-width:400px;text-align:center;padding:24px;">' +
       '<div style="font-size:1.6rem;margin-bottom:8px;">&#x2705;</div>' +
       '<h3 style="margin:0 0 8px;">Label Ready</h3>' +
       '<p style="color:var(--warm-gray);font-size:0.9rem;margin:0 0 16px;">Your shipping label has been purchased and tracking is set.</p>' +
@@ -2911,7 +2911,7 @@
   function openSimpleShipDialog(orderId) {
     var order = orders[orderId];
     var num = order ? getOrderDisplayNumber(order) : orderId;
-    var html = '<div style="max-width:420px;">' +
+    var html = '<div style="max-width:420px;padding:24px;">' +
       '<h3 style="margin:0 0 16px;">Ship Order ' + esc(num) + '</h3>' +
       '<div style="display:flex;gap:12px;flex-wrap:wrap;">' +
         '<div class="form-group" style="flex:1;min-width:140px;">' +
@@ -3028,7 +3028,7 @@
   function openCancelOrderModal(orderId) {
     var o = orders[orderId];
     var num = o ? getOrderDisplayNumber(o) : orderId;
-    var html = '<div style="max-width:400px;">' +
+    var html = '<div style="max-width:400px;padding:24px;">' +
       '<h3>Cancel Order</h3>' +
       '<p style="margin:12px 0;color:var(--warm-gray);">Are you sure you want to cancel order <strong>' + esc(num) + '</strong>? ' +
       'This will release committed inventory and cancel any open production requests.</p>' +
@@ -4344,7 +4344,7 @@
 
   function openCommissionDocLinkModal(commId) {
     var html =
-      '<div style="max-width:450px;">' +
+      '<div style="max-width:450px;padding:24px;">' +
         '<h3>Link Google Doc</h3>' +
         '<div class="form-group">' +
           '<label>Google Drive URL</label>' +
@@ -4388,7 +4388,7 @@
 
   function openCommissionDocUploadModal(commId) {
     var html =
-      '<div style="max-width:450px;">' +
+      '<div style="max-width:450px;padding:24px;">' +
         '<h3>Upload File</h3>' +
         '<div class="form-group">' +
           '<label>Select File</label>' +

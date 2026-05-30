@@ -764,6 +764,7 @@
     }).join('');
 
     var html =
+      '<div style="padding:24px;">' +
       '<h3 style="font-size:1.15rem;font-weight:500;margin:0 0 16px;">Record Payout</h3>' +
       '<form id="recordGalleryPayoutForm" onsubmit="event.preventDefault();consignmentConfirmGalleryPayout();return false;">' +
         '<div style="margin-bottom:12px;">' +
@@ -806,7 +807,8 @@
           '<button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
           '<button type="submit" class="btn btn-primary">Record payout</button>' +
         '</div>' +
-      '</form>';
+      '</form>' +
+      '</div>';
     openModal(html);
 
     // Pre-fill from selected gallery.
@@ -1599,6 +1601,7 @@
     if (!p) return;
 
     var html =
+      '<div style="padding:24px;">' +
       '<h3 style="font-size:1.15rem;font-weight:500;margin:0 0 16px;">Edit Location</h3>' +
       '<div class="form-group" style="margin-bottom:16px;">' +
         '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Location Name</label>' +
@@ -1623,6 +1626,7 @@
       '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:20px;">' +
         '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
         '<button class="btn btn-primary" onclick="consignmentSaveLocation(\'' + esc(placementId) + '\')">Save</button>' +
+      '</div>' +
       '</div>';
 
     openModal(html);
@@ -1657,6 +1661,7 @@
   function recordSaleModal(placementId, lineItemId, maxQty) {
     if (maxQty <= 0) { showToast('No items on hand to sell', 'error'); return; }
     var html =
+      '<div style="padding:24px;">' +
       '<h3 style="font-size:1.15rem;font-weight:500;margin:0 0 16px;">Record Sale</h3>' +
       '<div class="form-group" style="margin-bottom:16px;">' +
         '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Quantity Sold</label>' +
@@ -1666,6 +1671,7 @@
       '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:20px;">' +
         '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
         '<button class="btn btn-primary" onclick="consignmentConfirmSale(\'' + esc(placementId) + '\',\'' + esc(lineItemId) + '\')">Record Sale</button>' +
+      '</div>' +
       '</div>';
     openModal(html);
   }
@@ -1682,6 +1688,7 @@
   function recordReturnModal(placementId, lineItemId, maxQty) {
     if (maxQty <= 0) { showToast('No items on hand to return', 'error'); return; }
     var html =
+      '<div style="padding:24px;">' +
       '<h3 style="font-size:1.15rem;font-weight:500;margin:0 0 16px;">Record Return</h3>' +
       '<div class="form-group" style="margin-bottom:16px;">' +
         '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Quantity Returned</label>' +
@@ -1691,6 +1698,7 @@
       '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:20px;">' +
         '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
         '<button class="btn btn-primary" onclick="consignmentConfirmReturn(\'' + esc(placementId) + '\',\'' + esc(lineItemId) + '\')">Record Return</button>' +
+      '</div>' +
       '</div>';
     openModal(html);
   }
@@ -1838,6 +1846,7 @@
     });
 
     var html =
+      '<div style="padding:24px;">' +
       '<h3 style="font-size:1.15rem;font-weight:500;margin:0 0 16px;">Add Item to Placement</h3>' +
       '<div class="form-group" style="margin-bottom:16px;">' +
         '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Product</label>' +
@@ -1858,6 +1867,7 @@
       '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:20px;">' +
         '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
         '<button class="btn btn-primary" onclick="consignmentConfirmAddLineItem(\'' + esc(placementId) + '\')">Add Item</button>' +
+      '</div>' +
       '</div>';
     openModal(html);
   }
@@ -1988,6 +1998,7 @@
         '<input data-gal-contact="role" data-i="0" placeholder="Role" style="padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.85rem;">' +
       '</div>';
     var html =
+      '<div style="padding:24px;">' +
       '<h3 style="font-size:1.15rem;font-weight:500;margin:0 0 16px;">New Gallery</h3>' +
       '<form id="newGalleryModalForm" onsubmit="event.preventDefault();consignmentSaveGalleryModal();return false;">' +
         '<div style="margin-bottom:12px;"><label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Name *</label>' +
@@ -2012,7 +2023,8 @@
           '<button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
           '<button type="submit" class="btn btn-primary">Create gallery</button>' +
         '</div>' +
-      '</form>';
+      '</form>' +
+      '</div>';
     openModal(html);
   };
 

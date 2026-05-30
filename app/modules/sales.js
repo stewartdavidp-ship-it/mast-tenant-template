@@ -1198,7 +1198,7 @@ function openEventReconciliationModal(eventId) {
 
   var allocs = ev.allocations;
   var pids = Object.keys(allocs);
-  var html = '<div style="max-width:700px;">' +
+  var html = '<div style="max-width:700px;padding:24px;">' +
     '<h3>Reconcile & Close Event</h3>' +
     '<p style="color:var(--warm-gray);font-size:0.85rem;margin:8px 0 16px;">Account for all packed items. Sold counts are pre-filled from POS. Enter returned and damaged counts.</p>' +
     '<div style="max-height:400px;overflow-y:auto;">' +

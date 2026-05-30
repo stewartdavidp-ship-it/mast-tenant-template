@@ -173,7 +173,7 @@ function openFulfillModal(requestId, orderId) {
   var opOptions = getOperatorNames().map(function(name) {
     return '<option value="' + esc(name) + '">' + esc(name) + '</option>';
   }).join('');
-  var html = '<div style="max-width:400px;">' +
+  var html = '<div style="max-width:400px;padding:24px;">' +
     '<h3>Fulfill Production Request</h3>' +
     '<p style="margin:8px 0;font-size:0.85rem;color:var(--warm-gray);">' +
       '<strong>' + esc(pr.productName || '') + '</strong> x' + (pr.qty || 1) +
@@ -224,7 +224,7 @@ function openAssignToJobModal(requestId) {
     return '<option value="' + esc(k) + '">' + esc(j.name || 'Untitled') + ' (' + (j.status || '') + ')</option>';
   }).join('');
 
-  var html = '<div style="max-width:450px;">' +
+  var html = '<div style="max-width:450px;padding:24px;">' +
     '<h3>Assign to Production Job</h3>' +
     '<p style="margin:8px 0;font-size:0.85rem;color:var(--warm-gray);">' +
       '<strong>' + esc(pr.productName || '') + '</strong> x' + (pr.qty || 1) +
@@ -550,7 +550,7 @@ function openNewJobModal() {
     return '<button class="btn btn-secondary" style="font-size:0.85rem;padding:8px 14px;margin:4px;" onclick="doCreateJob(\'' + key + '\')">' +
       PURPOSE_LABELS[key] + '</button>';
   }).join('');
-  var html = '<div style="max-width:450px;">' +
+  var html = '<div style="max-width:450px;padding:24px;">' +
     '<h3>New Production Job</h3>' +
     '<div class="form-group">' +
       '<label class="field-required">Job Name</label>' +
@@ -982,7 +982,7 @@ function openEditJobModal(jobId) {
   var purposeOptions = Object.keys(PURPOSE_LABELS).map(function(k) {
     return '<option value="' + k + '"' + (job.purpose === k ? ' selected' : '') + '>' + PURPOSE_LABELS[k] + '</option>';
   }).join('');
-  var html = '<div style="max-width:450px;">' +
+  var html = '<div style="max-width:450px;padding:24px;">' +
     '<h3>Edit Job</h3>' +
     '<div class="form-group"><label>Name</label><input type="text" id="editJobName" value="' + esc(job.name || '') + '"></div>' +
     '<div class="form-group"><label>Description</label><textarea id="editJobDesc" rows="2">' + esc(job.description || '') + '</textarea></div>' +
@@ -1038,7 +1038,7 @@ function openAddLineItemModal(jobId) {
       }
     });
   }
-  var html = '<div style="max-width:400px;">' +
+  var html = '<div style="max-width:400px;padding:24px;">' +
     '<h3>Add Line Item</h3>' +
     '<div class="form-group"><label>Product</label><select id="liProductPicker" onchange="onLineItemProductSelect()" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:\'DM Sans\',sans-serif;font-size:0.9rem;">' + productOptions + '</select></div>' +
     '<div class="form-group"><label>Product Name</label><input type="text" id="liProductName" placeholder="Product name"></div>' +
@@ -1513,7 +1513,7 @@ function formatTime(isoStr) {
 }
 
 function addBuildNote(jobId, buildId) {
-  var html = '<div style="max-width:400px;">' +
+  var html = '<div style="max-width:400px;padding:24px;">' +
     '<h3>Add Note</h3>' +
     '<textarea id="buildNoteText" rows="4" placeholder="Kiln conditions, techniques, observations..." style="font-size:1rem;"></textarea>' +
     '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px;">' +
@@ -1543,7 +1543,7 @@ async function doAddBuildNote(jobId, buildId) {
 }
 
 function addBuildMilestone(jobId, buildId) {
-  var html = '<div style="max-width:400px;">' +
+  var html = '<div style="max-width:400px;padding:24px;">' +
     '<h3>Add Milestone</h3>' +
     '<input type="text" id="milestoneText" placeholder="e.g. body formed, first anneal..." style="font-size:1rem;">' +
     '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px;">' +
@@ -1593,7 +1593,7 @@ function openCompleteBuild(jobId, buildId) {
   var mediaCount = currentBuildMedia ? Object.keys(currentBuildMedia).length : 0;
   var mediaNote = mediaCount > 0 ? '<p style="font-size:0.85rem;color:var(--teal);margin-bottom:12px;">📷 This build has ' + mediaCount + ' photo' + (mediaCount !== 1 ? 's' : '') + '</p>' : '';
 
-  var html = '<div style="max-width:500px;">' +
+  var html = '<div style="max-width:500px;padding:24px;">' +
     '<h3>Complete Build</h3>' +
     mediaNote +
     (liKeys.length > 0 ? '<p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:16px;">Record output for each line item:</p>' + outputFields :

@@ -884,7 +884,7 @@
 
   function openNewVendorModal() {
     if (typeof openModal !== 'function') return;
-    var html = '<div style="max-width:560px;">' +
+    var html = '<div style="max-width:560px;padding:24px;">' +
       '<h3 style="margin:0 0 14px 0;">New Vendor</h3>' +
       '<div class="form-group"><label for="nvName">Name (required)</label><input id="nvName" type="text"></div>' +
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">' +
@@ -1085,7 +1085,7 @@
   function _renderNewPoModal() {
     var vendors = Object.values(vendorsData).filter(function(v) { return v.active !== false; });
     vendors.sort(function(a, b) { return (a.name || '').localeCompare(b.name || ''); });
-    var html = '<div style="max-width:760px;">' +
+    var html = '<div style="max-width:760px;padding:24px;">' +
       '<h3 style="margin:0 0 14px 0;">New Purchase Order</h3>';
     if (vendors.length === 0) {
       html += '<div style="padding:16px;border:1px dashed var(--cream-dark);border-radius:8px;color:var(--text);opacity:0.8;">No vendors yet. Create one first via Vendors → + New Vendor.</div>' +
@@ -1259,7 +1259,7 @@
   function _renderRecordReceiptModal() {
     var po = purchaseOrdersData[receiveDraft.poId];
     var v = vendorsData[po.vendorId] || {};
-    var html = '<div style="max-width:760px;">' +
+    var html = '<div style="max-width:760px;padding:24px;">' +
       '<h3 style="margin:0 0 4px 0;">Record Receipt</h3>' +
       '<div style="font-size:0.85rem;color:var(--text);opacity:0.7;margin-bottom:14px;">' + esc(po.poNumber || po.poId.slice(0, 8)) + ' · ' + esc(v.name || '—') + '</div>';
     html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">' +
