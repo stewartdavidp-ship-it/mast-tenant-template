@@ -1272,6 +1272,7 @@
     if (window.firebase && firebase.functions) {
       var fn = firebase.functions().httpsCallable('confirmListingMapping');
       return fn({
+        tenantId: window.TENANT_ID || (window.MastDB && MastDB.tenantId && MastDB.tenantId()),
         productId: String(productId),
         channel: channel,
         externalId: externalId,
@@ -1614,6 +1615,7 @@
           var unlinkPromise;
           if (window.firebase && firebase.functions && us > 0) {
             unlinkPromise = firebase.functions().httpsCallable('deleteListingMapping')({
+              tenantId: window.TENANT_ID || (window.MastDB && MastDB.tenantId && MastDB.tenantId()),
               channel: mid.slice(0, us),
               externalId: mid.slice(us + 1)
             });
