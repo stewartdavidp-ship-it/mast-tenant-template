@@ -1234,10 +1234,33 @@
     if (!isValidConfidence(confidence)) {
       return Promise.reject(new Error('invalid confidence: ' + confidence));
     }
-    if (!window.MastDB || typeof window.MastDB.set !== 'function') return Promise.resolve();
-    var docId = mapDocId(listing._channel, listing._externalId);
+    var channel = String(listing._channel);
+    var externalId = String(listing._externalId);
+    var docId = mapDocId(channel, externalId);
     var doc = buildMapDoc(productId, listing, confidence);
-    // Idempotent: set() with deterministic doc id; safe to retry / double-click.
+    // WS2: route through the confirmListingMapping CF (→ upsertMapping →
+    // projectRelationship) instead of writing product_listing_map directly. The
+    // old direct MastDB.set bypassed the projection, so the legacy Drive fields
+    // (channelBindings[] / channelId-keyed externalRefs / reverse index) and the
+    // product↔recipe back-link never populated on the human mapping path — only
+    // the auto-import consumer ran it. map ≠ bind: confirming does NOT bind (no
+    // bind flag is sent; the CF preserves any prior bind state). Idempotent:
+    // deterministic doc id server-side, safe to retry / double-click.
+    if (window.firebase && firebase.functions) {
+      var fn = firebase.functions().httpsCallable('confirmListingMapping');
+      return fn({
+        productId: String(productId),
+        channel: channel,
+        externalId: externalId,
+        confidence: confidence,
+        batchId: sessionBatchId || null
+      }).then(function() {
+        mappedListingIds[docId] = doc;
+      });
+    }
+    // Fallback when the Functions SDK is unavailable (e.g. test shells): legacy
+    // direct write keeps the UI working but skips the projection.
+    if (!window.MastDB || typeof window.MastDB.set !== 'function') return Promise.resolve();
     return window.MastDB.set('product_listing_map/' + docId, doc).then(function() {
       mappedListingIds[docId] = doc;
     });
@@ -1559,7 +1582,22 @@
         } else if (action === 'unlink') {
           var mid = el.getAttribute('data-map-id');
           if (!mid) return;
-          window.MastDB.remove('product_listing_map/' + mid).then(function() {
+          // WS2: route unlink through deleteListingMapping (tears down the Drive
+          // projection — binding + reverse index — before removing the identity
+          // row) instead of a raw MastDB.remove that would strand a binding the
+          // oversell Drive keeps pushing to. mid is `${channel}_${externalId}`;
+          // channel never contains '_', externalId may, so split on the FIRST '_'.
+          var us = mid.indexOf('_');
+          var unlinkPromise;
+          if (window.firebase && firebase.functions && us > 0) {
+            unlinkPromise = firebase.functions().httpsCallable('deleteListingMapping')({
+              channel: mid.slice(0, us),
+              externalId: mid.slice(us + 1)
+            });
+          } else {
+            unlinkPromise = window.MastDB.remove('product_listing_map/' + mid);
+          }
+          unlinkPromise.then(function() {
             delete mappedListingIds[mid];
             existingMaps = existingMaps.filter(function(m) { return m.id !== mid; });
             renderReentryView();
