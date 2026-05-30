@@ -16937,7 +16937,7 @@ function friendlyAuthError(err) {
     case 'auth/too-many-requests':
       return 'Too many attempts. Try again in a few minutes.';
     case 'auth/user-disabled':
-      return 'This account is disabled.';
+      return 'This account has been archived and can no longer sign in. Contact an admin.';
     case 'auth/operation-not-allowed':
       return "Email sign-in isn't enabled yet.";
     default:
@@ -17843,6 +17843,20 @@ auth.onAuthStateChanged(async function(user) {
 
   if (!role) {
     // RBAC load failed — fail closed
+    loadingScreen.style.display = 'none';
+    authScreen.style.display = 'none';
+    deniedScreen.style.display = '';
+    header.style.display = 'none';
+    hideSidebar();
+    hideAdminTabs();
+    detachListeners();
+    return;
+  }
+
+  // Archived users: the setUserArchived CF disables the Auth account + revokes
+  // refresh tokens (the real block), but belt-and-suspenders here for an active
+  // session whose ID token hasn't refreshed yet — deny and don't render the app.
+  if (currentUserRecord && currentUserRecord.archived === true) {
     loadingScreen.style.display = 'none';
     authScreen.style.display = 'none';
     deniedScreen.style.display = '';
@@ -19717,6 +19731,10 @@ function applyRoute(route) {
   // (Back button, swipe-back, hashchange, direct nav) so the app can't be
   // reached or bleed through behind the "Set a new password" screen.
   if (window.__mustChangePassword) { showMustChangePasswordScreen(); return; }
+  // L3 (Security Posture Review 2026-05-29): symmetric guard while a same-origin
+  // password-reset link is being handled — block route rendering so the app
+  // can't bleed through behind the "Set your password" screen.
+  if (window.__passwordResetMode) { showPasswordResetScreen(window.__passwordResetEmail || ''); return; }
   var config = ROUTE_MAP[route];
   if (!config) return;
 
@@ -20247,7 +20265,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260529-234956-7caebd7';
+var MAST_MODULES_V = '20260530-001250-5e16959';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -48657,6 +48675,7 @@ async function renderRecordHistory(entity, entityId) {
 // ============================================================
 var adminUsers = {};
 var adminUsersLoaded = false;
+var showArchivedUsers = false; // Permissions list: hide archived users by default
 var rolesData = {};
 var rolesLoaded = false;
 var editingModulePermissions = {}; // temp {route:{view,edit,delete}} for the role matrix
@@ -48755,7 +48774,32 @@ function renderUsersList() {
   var emptyEl = document.getElementById('usersEmpty');
   var tableEl = document.getElementById('usersTableWrap');
   var roleOrder = { admin: 0, manager: 1, user: 2, guest: 3 };
-  var users = Object.entries(adminUsers).sort(function(a, b) {
+  // Archive: hide archived users by default; a "Show archived (N)" toggle
+  // (injected above the table) reveals them. Archived users stay in the data
+  // (history preserved) — just filtered out of the default view.
+  var allEntries = Object.entries(adminUsers);
+  var archivedCount = allEntries.filter(function(p) { return p[1] && p[1].archived === true; }).length;
+  (function() {
+    var tog = document.getElementById('usersArchivedToggle');
+    if (!tog && tableEl && tableEl.parentNode) {
+      tog = document.createElement('div');
+      tog.id = 'usersArchivedToggle';
+      tog.style.cssText = 'margin:0 0 12px;font-size:0.85rem;';
+      tableEl.parentNode.insertBefore(tog, tableEl);
+    }
+    if (tog) {
+      if (archivedCount === 0) { tog.style.display = 'none'; tog.innerHTML = ''; }
+      else {
+        tog.style.display = '';
+        tog.innerHTML = '<label style="cursor:pointer;display:inline-flex;align-items:center;gap:6px;color:var(--warm-gray);">' +
+          '<input type="checkbox"' + (showArchivedUsers ? ' checked' : '') + ' onchange="window.toggleShowArchivedUsers(this.checked)"> ' +
+          'Show archived (' + archivedCount + ')</label>';
+      }
+    }
+  })();
+  var users = allEntries.filter(function(p) {
+    return showArchivedUsers || !(p[1] && p[1].archived === true);
+  }).sort(function(a, b) {
     var ra = roleOrder[a[1].role] !== undefined ? roleOrder[a[1].role] : 99;
     var rb = roleOrder[b[1].role] !== undefined ? roleOrder[b[1].role] : 99;
     if (ra !== rb) return ra - rb;
@@ -48840,16 +48884,25 @@ function renderUsersList() {
     if (overrideCount > 0) {
       roleCell += ' <span class="status-badge" style="font-size:0.72rem;background:rgba(245,158,11,0.15);color:#b45309;border:1px solid rgba(245,158,11,0.3);">customized (' + overrideCount + ')</span>';
     }
+    if (u.archived === true) {
+      roleCell += ' <span class="status-badge" style="font-size:0.72rem;background:rgba(120,120,120,0.18);color:#9aa0a6;border:1px solid rgba(120,120,120,0.35);">Archived</span>';
+    }
 
     var actionsCell = '';
     if (!isSelf) {
       actionsCell += '<button class="btn btn-secondary" style="font-size:0.72rem;padding:3px 8px;" onclick="viewUserAudit(\'' + uid + '\')">History</button>';
       if (can('employees', 'edit')) {
         actionsCell += ' <button class="btn btn-secondary" style="font-size:0.72rem;padding:3px 8px;" onclick="openUserPermissionsPanel(\'' + uid + '\')">Edit Permissions</button>';
+        if (u.archived === true) {
+          actionsCell += ' <button class="btn btn-secondary" style="font-size:0.72rem;padding:3px 8px;" onclick="archiveUser(\'' + uid + '\', false)">Unarchive</button>';
+        } else {
+          actionsCell += ' <button class="btn btn-secondary" style="font-size:0.72rem;padding:3px 8px;color:#C62828;" onclick="archiveUser(\'' + uid + '\', true)">Archive</button>';
+        }
       }
     }
 
     var tr = document.createElement('tr');
+    if (u.archived === true) tr.style.opacity = '0.55';
     // Row click → user detail view (admins only, since the Permissions
     // screen is admin-gated anyway). Inner controls (selects, buttons)
     // continue to fire their own handlers thanks to the BUTTON/SELECT/INPUT
@@ -48938,6 +48991,46 @@ async function changeUserRole(uid, newRole) {
     renderUsersList();
   }
 }
+
+// Archive (soft-disable) / unarchive a user. Archiving disables their Firebase
+// Auth account + revokes sessions (server-side, via setUserArchived) so they can
+// no longer sign in, while keeping their record + history. Unarchive reverses it.
+async function archiveUser(uid, archived) {
+  if (!can('employees', 'edit')) {
+    showToast('You do not have permission to archive users.', true);
+    return;
+  }
+  var user = adminUsers[uid];
+  if (!user) return;
+  if (currentUser && uid === currentUser.uid) {
+    showToast('You cannot archive your own account.', true);
+    return;
+  }
+  var name = user.displayName || user.email || uid;
+  if (archived) {
+    var ok = await mastConfirm('Archive ' + name + '? They will be signed out and can no longer log in. Their history is kept, and you can unarchive them anytime.', { title: 'Archive User', danger: true });
+    if (!ok) return;
+  }
+  try {
+    await firebase.functions().httpsCallable('setUserArchived')({
+      tenantId: MastDB.tenantId(),
+      uid: uid,
+      archived: archived
+    });
+    if (adminUsers[uid]) adminUsers[uid].archived = archived;
+    showToast(name + (archived ? ' archived — they can no longer sign in.' : ' unarchived.'));
+    renderUsersList();
+  } catch (err) {
+    console.error('setUserArchived failed:', err);
+    showToast((err && err.message) ? err.message : ('Failed to ' + (archived ? 'archive' : 'unarchive') + ' user.'), true);
+  }
+}
+window.archiveUser = archiveUser;
+
+window.toggleShowArchivedUsers = function(checked) {
+  showArchivedUsers = !!checked;
+  renderUsersList();
+};
 
 var auditLogFromEmployees = false;
 function viewUserAudit(uid) {
@@ -49894,11 +49987,18 @@ async function sendUserInvite() {
         tenantId: MastDB.tenantId(),
         email: email
       });
-      var emailSent = !!(inviteRes && inviteRes.data && inviteRes.data.emailSent);
-      if (emailSent) {
+      var inviteData = (inviteRes && inviteRes.data) || {};
+      var emailSent = !!inviteData.emailSent;
+      var existingAccount = !!inviteData.existingAccount;
+      if (existingAccount) {
+        // M1 (SPR 2026-05-29): the account already exists, so no setup email is
+        // sent. They sign in with their existing password; the invite grants the
+        // role on first login.
+        showToast(email + ' already has a Mast account — they can sign in with their existing password, and the invite grants them ' + roleName + ' on first login.');
+      } else if (emailSent) {
         showToast('Invite sent — ' + email + ' will get an email to set their password, then they can sign in as ' + roleName + '.');
       } else {
-        // Auth account is ready but the setup email didn't go out — recoverable
+        // New account created but the setup email didn't go out — recoverable
         // via "Forgot password" on the login screen.
         showToast('Invite recorded, but the set-password email could not be sent. They can use “Forgot password” on the login screen to set it.', true);
       }
