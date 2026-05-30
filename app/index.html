@@ -16385,12 +16385,23 @@ window.MastOverlayNav = MastOverlayNav;
   function isBespokeScrim(node) {
     if (!node || node.nodeType !== 1) return false;
     if (node.id === 'modalOverlay' || node.id === 'mastSlideOutRoot') return false;
-    if (node.getAttribute && node.getAttribute('data-mn-managed')) return false;
+    // Opt-outs: first-party overlays (data-mn-managed) and any full-page fixed
+    // surface that is NOT a dismissible modal (data-mn-ignore — use this on
+    // future full-screen view containers so the guard never adopts/removes them).
+    if (node.getAttribute && (node.getAttribute('data-mn-managed') || node.getAttribute('data-mn-ignore'))) return false;
     if (!node.firstElementChild) return false;            // a scrim wraps a content card
     var cs; try { cs = getComputedStyle(node); } catch (e) { return false; }
     if (cs.position !== 'fixed' || cs.display === 'none' || cs.visibility === 'hidden') return false;
     var r = node.getBoundingClientRect();
-    return r.width >= window.innerWidth * 0.9 && r.height >= window.innerHeight * 0.9;
+    if (r.width < window.innerWidth * 0.9 || r.height < window.innerHeight * 0.9) return false;
+    // Require a POSITIVE modal signal so a transparent full-page layout/view
+    // container (not a dialog) is never adopted: either a (semi-)opaque backdrop,
+    // or explicit dialog semantics on the node or a descendant.
+    var bg = cs.backgroundColor;
+    var hasBackdrop = !!bg && bg !== 'transparent' && bg !== 'rgba(0, 0, 0, 0)';
+    var isDialog = node.getAttribute('role') === 'dialog' || node.hasAttribute('aria-modal') ||
+      !!node.querySelector('[role="dialog"],[aria-modal="true"]');
+    return hasBackdrop || isDialog;
   }
   var tracked = new WeakMap();   // scrim node -> overlay nav id
   var seq = 0;
@@ -16406,8 +16417,19 @@ window.MastOverlayNav = MastOverlayNav;
             var id = 'ov' + (++seq);
             tracked.set(node, id);
             MastOverlayNav.push(id, function () {
+              // Prefer the overlay's OWN teardown so its cleanup (scroll-lock
+              // release, listener/focus-trap teardown) runs: try its backdrop
+              // close (e.target===scrim), then Escape.
               try { node.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true })); } catch (e) {}
-              if (node.isConnected && node.parentNode) { try { node.parentNode.removeChild(node); } catch (e) {} }
+              if (!node.isConnected) return;
+              try { node.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); } catch (e) {}
+              if (!node.isConnected) return;
+              // Last resort for button-only overlays with no backdrop/Escape
+              // handler: hard-remove, then defensively undo a body scroll-lock
+              // if no other overlay still needs it (bespoke overlays commonly
+              // set body.style.overflow='hidden' and rely on their own close).
+              try { if (node.parentNode) node.parentNode.removeChild(node); } catch (e) {}
+              if (!MastOverlayNav.isOpen()) { try { document.body.style.overflow = ''; } catch (e) {} }
             });
           })(n);
         }
@@ -20265,7 +20287,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260530-001250-5e16959';
+var MAST_MODULES_V = '20260530-001435-78dac00';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
