@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
 # Pre-commit hook: auto-bump MAST_MODULES_V when admin JS / HTML changes.
 #
+# OPTIONAL / DEV-ONLY. The authoritative enforcement is now the required `lint`
+# CI check (scripts/lint-cache-bust.js, Build 5) — a PR that touches admin
+# JS/HTML without bumping MAST_MODULES_V cannot merge. This hook is just a local
+# convenience that bumps automatically so you never hit that gate; installing it
+# is no longer required. It is safe alongside the CI check: CI never bumps, so
+# there is no double-bump or bot-commit→redeploy loop.
+#
 # Triggers on any staged change to:
 #   - app/index.html
 #   - app/modules/*.js
@@ -8,7 +15,7 @@
 # When triggered, runs scripts/bump-modules-version.sh and re-stages
 # app/index.html so the bump is included in the same commit.
 #
-# Setup (one-time per clone):
+# Setup (optional, one-time per clone):
 #   git config core.hooksPath .githooks
 #
 # Or run: scripts/install-hooks.sh
