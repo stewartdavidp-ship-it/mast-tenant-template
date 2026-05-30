@@ -45,6 +45,27 @@ var _arStatementState = {};
 // resolved ISO dates (YYYY-MM-DD). Custom mode keeps whatever start/end the
 // user typed; segmented modes recompute on click. Initial default: MTD.
 window._finPeriod = window._finPeriod || { mode: 'mtd', start: null, end: null };
+
+// ── Shared order-money normalization ──────────────────────────────────────────
+// Mast orders arrive from two writers with different monetary conventions:
+//   - MCP / newer storefront orders write the canonical `totalCents` (integer
+//     CENTS). Some also carry a `total` that ALREADY holds cents (e.g. SGTE-0187
+//     /0188: total:102000 AND totalCents:102000, both = $1,020.00).
+//   - Legacy storefront orders stored `total` in DOLLARS and omitted `totalCents`
+//     (e.g. SGTE-0079: total:119.53, no totalCents).
+// Rule (mirrors mast-tenant-mcp-server src/shared/tools/order-money.ts
+// orderRevenueCents — the SAME normalizer the channel P&L / compare_channels
+// reader uses): prefer `totalCents` when present; otherwise `total` is dollars →
+// ×100. Reading `total` as dollars unconditionally inflated MTD Revenue 100×
+// for orders whose `total` already held cents (sgtest15 read $280,957.50 against
+// a true gross of ~$10,522). Returns integer cents.
+function _orderRevenueCents(o) {
+  if (!o) return 0;
+  if (typeof o.totalCents === 'number') return o.totalCents;
+  if (typeof o.total === 'number') return Math.round(o.total * 100);
+  return 0;
+}
+
 function _finResolvePeriod(p) {
   if (!p) p = window._finPeriod || { mode: 'mtd' };
   var s, e2;
@@ -514,7 +535,7 @@ async function _loadRevenueAggregate(start, end) {
   var txnCount = 0;
   orders.forEach(function(o) {
     if (o.status === 'cancelled') return;
-    var cents = Math.round((o.total || 0) * 100);
+    var cents = _orderRevenueCents(o);
     if (cents <= 0) return;
     if (isTestOrder(o) && !_includeTestData) return;
     var ch = o.source || 'direct';
@@ -577,7 +598,7 @@ async function loadRevenue() {
     }
     orders.forEach(function(o) {
       if (o.status === 'cancelled') return;
-      var cents = Math.round((o.total || 0) * 100);
+      var cents = _orderRevenueCents(o);
       if (cents <= 0) return;
       var ch = o.source || 'direct';
       var isTest = isTestOrder(o);
@@ -1758,7 +1779,7 @@ async function computePnlLocal(startDate, endDate) {
   var testTxnCount = 0;
   orders.forEach(function(o) {
     if (o.status === 'cancelled') return;
-    var c = Math.round((o.total || 0) * 100); if (c <= 0) return;
+    var c = _orderRevenueCents(o); if (c <= 0) return;
     var ch = o.source || 'direct';
     if (isTestOrder(o) && !_includeTestData) {
       testRevenue += c;
@@ -1802,7 +1823,7 @@ async function computePnlLocal(startDate, endDate) {
   // to `revenue` above (cancelled / test-excluded already filtered).
   orders.forEach(function(o) {
     if (o.status === 'cancelled') return;
-    var c = Math.round((o.total || 0) * 100); if (c <= 0) return;
+    var c = _orderRevenueCents(o); if (c <= 0) return;
     if (isTestOrder(o) && !_includeTestData) return;
     var items = o.items || o.lineItems || [];
     if (!items.length) return;
@@ -2858,7 +2879,7 @@ async function loadCashFlow() {
     var arTotal = 0, arDueHorizon = 0, arCount = 0;
     var arWholesaleHorizon = 0, arDirectHorizon = 0;
     Object.values(allOrders).forEach(function(o) {
-      var cents = Math.round((o.total || 0) * 100);
+      var cents = _orderRevenueCents(o);
       var paid  = o.invoicePaidAmount || 0;
       var due   = cents - paid;
       if (due <= 0) return;
@@ -3197,7 +3218,7 @@ async function loadArData() {
 
     Object.entries(allOrders).forEach(function(kv) {
       var orderId = kv[0], o = kv[1];
-      var totalCents = Math.round((o.total || 0) * 100);
+      var totalCents = _orderRevenueCents(o);
       var paidCents  = o.invoicePaidAmount || 0;
       var amtDue     = totalCents - paidCents;
       if (amtDue <= 0) return;
@@ -4627,7 +4648,7 @@ async function loadTaxNexus() {
     orders.forEach(function(o) {
       if (o.status === 'cancelled') return;
       var state = o.taxState || o.shippingState; if (!state) return;
-      var cents = o.totalCents || Math.round((o.total || 0) * 100);
+      var cents = _orderRevenueCents(o);
       if (!byState[state]) byState[state] = { revenue: 0, count: 0 };
       byState[state].revenue += cents;
       byState[state].count++;
@@ -4979,7 +5000,7 @@ window.finReportArAgingSnapshot = async function() {
     Object.entries(Object.assign({}, sentRaw || {}, overdueRaw || {})).forEach(function(kv) {
       var orderId = kv[0], o = kv[1];
       if (!o) return;
-      var c = Math.round((o.total || 0) * 100);
+      var c = _orderRevenueCents(o);
       var paid = o.invoicePaidAmount || 0;
       var due = c - paid;
       if (due <= 0) return;
@@ -5112,7 +5133,7 @@ window.finReportStatementExport = async function() {
     var rows = [['Date','Order #','Description','Charges (USD)','Payments (USD)','Balance (USD)','Invoice Status']];
     var balanceCents = 0;
     orders.forEach(function(o) {
-      var totalCents = Math.round((o.total || 0) * 100);
+      var totalCents = _orderRevenueCents(o);
       var paidCents = o.invoicePaidAmount || 0;
       balanceCents += (totalCents - paidCents);
       rows.push([
@@ -5752,7 +5773,7 @@ function portfolioComputeTrend(ordersRaw, customersRaw, ticketsRaw, rmaRaw, c2s,
     if (idx === undefined) return;
     var cid = o.customerId || o.linkedCustomerId || null;
     if (!cid) return;
-    var amt = typeof o.totalCents === 'number' ? o.totalCents : (typeof o.total === 'number' ? o.total : 0);
+    var amt = _orderRevenueCents(o);
     revByCust[idx][cid] = (revByCust[idx][cid] || 0) + amt;
     activeSet[idx][cid] = true;
   });
@@ -6326,7 +6347,7 @@ async function _loadFinanceOverview() {
     var arOutstandingCents = 0, arCount = 0;
     Object.values(Object.assign({}, sentRaw || {}, overdueRaw || {})).forEach(function(o) {
       if (!o) return;
-      var c = Math.round((o.total || 0) * 100);
+      var c = _orderRevenueCents(o);
       var paid = o.invoicePaidAmount || 0;
       var due = c - paid;
       if (due <= 0) return;
