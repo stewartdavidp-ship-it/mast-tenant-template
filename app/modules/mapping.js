@@ -57,6 +57,10 @@
 
   var STATE_PATH = 'admin/mappingFlowState';
 
+  // sessionStorage key used to suppress auto-launch of the interstitial for the
+  // remainder of the current browser session (see checkAndMaybeShow).
+  var SESSION_SUPPRESS_KEY = 'mast_mappingFlow_autoShown';
+
   // Fuzzy-match thresholds.
   var TITLE_SIM_HIGH = 0.70;   // title-similarity floor for heuristic-high
   var TITLE_SIM_LOW  = 0.50;   // title-similarity floor for heuristic-low
@@ -633,6 +637,16 @@
   // ============================================================
 
   function checkAndMaybeShow() {
+    // Per-session suppression: once the interstitial has been auto-shown (or
+    // dismissed) in this browser session, never auto-take-over again — it must
+    // not pop on every page load / hard refresh. Cross-session suppression is
+    // handled separately by flowState.dismissedAt (7-day) below. sessionStorage
+    // is per-origin, so it's already scoped to this tenant subdomain.
+    try {
+      if (window.sessionStorage && window.sessionStorage.getItem(SESSION_SUPPRESS_KEY) === '1') {
+        return Promise.resolve(false);
+      }
+    } catch (e) {}
     return loadAll(false).then(function() {
       // Don't fire if user already completed or dismissed this session.
       if (flowState && flowState.completedAt) return false;
@@ -651,6 +665,9 @@
       computeMatches();
       var pending = skuMatchPairs.length + fuzzyQueue.length + unmatchedListings.length + skuCollisions.length;
       if (pending === 0) return false;
+      // Mark suppressed for the rest of this session before showing, so a
+      // mid-flow navigation / refresh doesn't re-trigger the takeover.
+      try { if (window.sessionStorage) window.sessionStorage.setItem(SESSION_SUPPRESS_KEY, '1'); } catch (e) {}
       openInterstitial();
       return true;
     }).catch(function(e) {
@@ -673,7 +690,12 @@
     host.setAttribute('aria-labelledby', 'mappingInterstitialTitle');
     host.style.cssText = [
       'position:fixed', 'inset:0', 'z-index:9000',
-      'background:var(--bg)', 'overflow-y:auto',
+      // Opaque full-screen takeover. `--bg` is NOT defined in the admin app
+      // (only --bg-secondary/--bg-tertiary), so the old `var(--bg)` resolved
+      // to its initial value `transparent` and the page bled through. Match
+      // the admin body background (`--cream`, which inverts light/dark) with a
+      // concrete dark fallback so it's always solid.
+      'background:var(--cream, #1a1a1a)', 'overflow-y:auto',
       'font-size:0.9rem'
     ].join(';');
     document.body.appendChild(host);
@@ -1093,6 +1115,7 @@
           case 'dismiss':
           case 'skip':
             _saveState({ dismissedAt: nowIso() });
+            try { if (window.sessionStorage) window.sessionStorage.setItem(SESSION_SUPPRESS_KEY, '1'); } catch (e2) {}
             closeInterstitial(false);
             break;
           case 'start-matching':

@@ -603,6 +603,19 @@
   var csReviewProductIndex = {};   // productId -> { name, thumbnailUrl }
   var csReviewCustomerByEmail = {}; // emailLower -> { id, displayName, stats }
 
+  // True for a Firebase push-id (e.g. "-Ooa73tvVja…"). Used so we never paint a
+  // raw id where a human-readable product name belongs.
+  function csIsRawId(s) { return typeof s === 'string' && /^-[A-Za-z0-9_-]{15,}$/.test(s); }
+
+  // Best human label for a review's product: snapshotted productName → product
+  // index name → "(product)" when only a raw push-id remains. Never leaks an id.
+  function csReviewProductLabel(r) {
+    var prodInfo = r && r.productId ? csReviewProductIndex[r.productId] : null;
+    var label = (r && r.productName) || (prodInfo && prodInfo.name) || '';
+    if (!label || csIsRawId(label)) return '(product)';
+    return label;
+  }
+
   // Response audit history grouped by reviewId. Populated alongside reviewsData.
   var reviewResponseHistoryByReview = {}; // reviewId → [{revId, action, body, prevBody, authorName, createdAt}, ...] (chronological)
   var reviewHistoryExpanded = {}; // reviewId → boolean (UI state for expanded audit-log view)
@@ -787,7 +800,7 @@
           html += '<div>';
           if (r.headline) html += '<strong>' + _esc(r.headline) + '</strong> ';
           if (r.productId) {
-            var prodLabel = r.productName || (prodInfo && prodInfo.name) || r.productId;
+            var prodLabel = csReviewProductLabel(r);
             html += '<span style="color:var(--warm-gray);">Product: ' + _esc(prodLabel) + '</span>';
           }
           html += '</div></div>';
