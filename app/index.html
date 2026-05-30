@@ -12956,6 +12956,13 @@ async function hydrateEngagementSurface() {
         }
       : { enabledRoutes: [], disabledRoutes: [] };
 
+    // Apply engagement-surface nav filter (ui-first modulesShown trim). This
+    // was defined but never wired — engagement filtering only ran on manual
+    // console call, so cold loads rendered the full sidebar. Call it here
+    // beside applyModeNavFilter (same stable-DOM, post-hydration spot); it
+    // fail-opens for hybrid surface or null _engagementSurface. Touches a
+    // disjoint class set (.engagement-hidden) so order vs the mode filter is moot.
+    if (typeof applyEngagementNavFiltering === 'function') applyEngagementNavFiltering();
     // Apply mode-based nav filter (fail-open if modeSet missing — legacy tenants
     // pre-M1 backfill see full nav; new tenants always have modeSet from M1).
     if (typeof applyModeNavFilter === 'function') applyModeNavFilter();
@@ -20542,7 +20549,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260530-112808-eddb751';
+var MAST_MODULES_V = '20260530-142115-358b84d';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
