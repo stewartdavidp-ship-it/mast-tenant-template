@@ -1938,17 +1938,23 @@
       gap: 10px;
     }
 
-    /* ── Swipe-back hardening (Phase 1). Pairs with the root-level
+    /* ── Swipe-back hardening (Phase 1 + 1.5). Pairs with the root-level
        overscroll-behavior-x:none on html/body and the popstate overlay
-       guard (Phase 2). A horizontal trackpad swipe captured over an
-       overlay's OWN scroll box (e.g. an open modal: .modal is
-       overflow-y:auto/max-height:90vh) was bubbling to a browser
-       history-back and tearing down the modal mid-edit. The root-level
-       rule only covers the viewport scroller, not these nested scroll
-       containers — so contain overscroll on every overlay scroll box to
-       stop the gesture at its source (Chrome). Note: WebKit/Safari ignores
-       overscroll-behavior for the swipe-nav gesture, which is why Phase 2's
-       JS history guard is still required for full cross-browser coverage. */
+       guard (Phase 2). A horizontal trackpad swipe captured over a nested
+       scroll box (an open modal, a slide-out, or a bespoke module overlay
+       such as #wsAccountModal / #wsUserModal in wholesale.js, which are
+       themselves position:fixed;overflow-y:auto) bubbled up to a browser
+       history-back and tore the surface down mid-edit. The root-level rule
+       only covers the viewport scroller, not nested scroll containers, and
+       targeting them by class/role missed the hand-rolled module overlays
+       (no .modal / [role=dialog]). So contain horizontal overscroll on
+       EVERY element: it is inert on non-scrollers and vertical-only
+       scrollers, and on horizontal scrollers it only stops edge-chaining /
+       swipe-nav (scrolling within still works) — no more per-modal hunting.
+       Note: WebKit/Safari ignores overscroll-behavior for the swipe-nav
+       gesture, so Phase 2's JS history guard is still required for full
+       cross-browser coverage. */
+    * { overscroll-behavior-x: contain; }
     .modal,
     .modal-body,
     #mastSlideOutBody,
@@ -20099,7 +20105,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260529-230227-b18cb5d';
+var MAST_MODULES_V = '20260529-231434-4f8620d';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
