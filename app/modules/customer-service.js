@@ -1240,7 +1240,7 @@
       '<h3 style="margin:0 0 6px;font-size:1.15rem;">📸 Ask for a photo</h3>' +
       '<p style="margin:0 0 16px;font-size:0.9rem;color:var(--warm-gray,#888);">Sends a one-time, 7-day signed upload link to <strong>' + _esc(recipientEmail) + '</strong>.</p>' +
       '<label style="display:block;font-size:0.85rem;font-weight:500;margin-bottom:6px;">Subject</label>' +
-      '<input id="csUgcAskSubject" type="text" value="' + _esc(defaultSubject) + '" style="width:100%;padding:8px 10px;border:1px solid var(--border,#3a3a3a);border-radius:6px;font-size:0.9rem;margin-bottom:14px;">' +
+      '<input id="csUgcAskSubject" type="text" value="' + _esc(defaultSubject) + '" style="width:100%;padding:8px 10px;border:1px solid var(--border,var(--border));border-radius:6px;font-size:0.9rem;margin-bottom:14px;">' +
       '<label style="display:block;font-size:0.85rem;font-weight:500;margin-bottom:6px;">Preview</label>' +
       '<pre id="csUgcAskBody" style="white-space:pre-wrap;font-family:inherit;font-size:0.85rem;line-height:1.5;background:var(--surface-card,#2a2a2a);padding:12px 14px;border-radius:6px;max-height:280px;overflow:auto;margin:0 0 16px;"></pre>' +
       '<div style="display:flex;gap:8px;justify-content:flex-end;">' +

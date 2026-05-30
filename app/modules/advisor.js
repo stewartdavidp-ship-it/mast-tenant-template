@@ -62,7 +62,7 @@
       '.advisor-review-card:hover { background:var(--hover-bg,#2a2a2a); }',
       '.advisor-review-header { display:flex;justify-content:space-between;align-items:center;margin-bottom:4px; }',
       '.advisor-review-type { display:inline-block;padding:2px 8px;border-radius:4px;font-size:0.72rem;font-weight:600;text-transform:uppercase;background:rgba(42,124,111,0.15);color:var(--teal,var(--teal)); }',
-      '.advisor-review-detail { display:none;margin-top:12px;padding-top:12px;border-top:1px solid var(--hover-bg,#333); }',
+      '.advisor-review-detail { display:none;margin-top:12px;padding-top:12px;border-top:1px solid var(--hover-bg,var(--border)); }',
       '.advisor-review-detail.open { display:block; }',
       '.advisor-action-item { display:flex;align-items:center;gap:8px;padding:6px 0;font-size:0.85rem; }',
       '.advisor-action-status { width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:0.72rem;flex-shrink:0; }',
@@ -85,7 +85,7 @@
       '.advisor-renewal-actions, .advisor-pdoc-actions { display:flex;gap:6px;flex-wrap:wrap;align-items:center; }',
       '.advisor-renewal-actions button, .advisor-pdoc-actions button, .advisor-pdoc-actions select { font-size:0.72rem;padding:4px 8px; }',
       '.advisor-renewal-card .inline-date { font-size:0.78rem;padding:4px 6px;background:var(--bg-primary,var(--charcoal));color:var(--text,#fff);border:1px solid var(--teal,#2a9d8f);border-radius:4px; }',
-      '.advisor-pdoc-card select { background:var(--bg-primary,var(--charcoal));color:var(--text,#fff);border:1px solid rgba(255,255,255,0.2);border-radius:4px;padding:4px 6px; }',
+      '.advisor-pdoc-card select { background:var(--bg-primary,var(--charcoal));color:var(--text,#fff);border:1px solid var(--border);border-radius:4px;padding:4px 6px; }',
       // P2D-S1 (Entity Phase 2): conversational capture pending-review cards
       '.advisor-capture-card { background:var(--bg-secondary,#232323);border:1px solid rgba(129,140,248,0.25);border-radius:10px;padding:12px 14px;margin-bottom:10px;display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap; }',
       '.advisor-capture-card .title { font-size:0.9rem;font-weight:600;margin-bottom:2px; }',
@@ -96,12 +96,12 @@
       '.advisor-capture-actions button { font-size:0.72rem;padding:4px 8px; }',
       // Diff-review modal (opens when user clicks Review)
       '.capture-modal-backdrop { position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9000;display:flex;align-items:center;justify-content:center;padding:20px; }',
-      '.capture-modal { background:var(--bg-primary,#1a1a1a);border:1px solid rgba(255,255,255,0.1);border-radius:14px;max-width:720px;width:100%;max-height:85vh;overflow:auto;padding:24px;color:var(--text,#fff);box-shadow:0 20px 60px rgba(0,0,0,0.5); }',
+      '.capture-modal { background:var(--bg-primary,#1a1a1a);border:1px solid var(--border);border-radius:14px;max-width:720px;width:100%;max-height:85vh;overflow:auto;padding:24px;color:var(--text,#fff);box-shadow:0 20px 60px rgba(0,0,0,0.5); }',
       '.capture-modal h2 { margin:0 0 4px 0;font-size:1.15rem;display:flex;align-items:center;gap:8px; }',
       '.capture-modal .modal-sub { font-size:0.85rem;color:var(--warm-gray,#888);margin-bottom:16px; }',
       '.capture-modal .modal-escape { margin-bottom:16px;padding:10px 12px;background:rgba(234,179,8,0.08);border:1px solid rgba(234,179,8,0.25);border-radius:8px;font-size:0.85rem;display:flex;justify-content:space-between;align-items:center;gap:12px; }',
       '.capture-modal .modal-escape a { color:#eab308;text-decoration:underline;cursor:pointer; }',
-      '.capture-modal .diff-row { border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:12px;margin-bottom:10px;background:var(--bg-secondary,#232323); }',
+      '.capture-modal .diff-row { border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:10px;background:var(--bg-secondary,#232323); }',
       '.capture-modal .diff-row.unknown { opacity:0.55; }',
       '.capture-modal .diff-row-header { display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:8px; }',
       '.capture-modal .diff-row-field { font-family:var(--mono, monospace);font-size:0.85rem;font-weight:600;color:var(--teal,#2a9d8f); }',
@@ -115,8 +115,8 @@
       '.capture-modal .diff-pane.unknown-sentinel { color:#eab308;font-style:italic; }',
       '.capture-modal .diff-label { font-size:0.72rem;text-transform:uppercase;letter-spacing:0.5px;color:var(--warm-gray-light,#666);margin-bottom:4px; }',
       '.capture-modal .modal-toggles { display:flex;gap:8px;margin-bottom:14px; }',
-      '.capture-modal .modal-actions { display:flex;justify-content:flex-end;gap:10px;margin-top:20px;padding-top:16px;border-top:1px solid rgba(255,255,255,0.06); }',
-      '.capture-modal .modal-reject-reason { width:100%;box-sizing:border-box;background:var(--bg-primary,var(--charcoal));color:var(--text,#fff);border:1px solid rgba(255,255,255,0.15);border-radius:6px;padding:6px 8px;font-size:0.85rem;font-family:inherit;margin-top:8px;display:none; }',
+      '.capture-modal .modal-actions { display:flex;justify-content:flex-end;gap:10px;margin-top:20px;padding-top:16px;border-top:1px solid var(--border); }',
+      '.capture-modal .modal-reject-reason { width:100%;box-sizing:border-box;background:var(--bg-primary,var(--charcoal));color:var(--text,#fff);border:1px solid var(--border);border-radius:6px;padding:6px 8px;font-size:0.85rem;font-family:inherit;margin-top:8px;display:none; }',
       '.capture-modal .modal-reject-reason.open { display:block; }',
     ].join('\n');
     document.head.appendChild(style);

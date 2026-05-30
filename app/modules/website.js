@@ -864,9 +864,9 @@
       html += '<div class="wp-scheme-card' + (isActive ? ' selected' : '') + '" onclick="wpSelectScheme(\'' + esc(scheme.id) + '\')" style="cursor:pointer;padding:12px;border-radius:10px;border:2px solid ' + (isActive ? 'var(--accent)' : 'var(--charcoal-light, #333)') + ';background:var(--surface-dark);transition:border-color 0.2s;">';
       // Color circles row
       html += '<div style="display:flex;gap:6px;margin-bottom:8px;">';
-      html += '<div style="width:28px;height:28px;border-radius:50%;background:' + esc(c.primaryColor) + ';border:2px solid rgba(255,255,255,0.15);" title="Primary"></div>';
-      html += '<div style="width:28px;height:28px;border-radius:50%;background:' + esc(c.accentColor) + ';border:2px solid rgba(255,255,255,0.15);" title="Accent"></div>';
-      html += '<div style="width:28px;height:28px;border-radius:50%;background:' + esc(c.bgColor) + ';border:2px solid rgba(255,255,255,0.15);" title="Background"></div>';
+      html += '<div style="width:28px;height:28px;border-radius:50%;background:' + esc(c.primaryColor) + ';border:2px solid var(--border);" title="Primary"></div>';
+      html += '<div style="width:28px;height:28px;border-radius:50%;background:' + esc(c.accentColor) + ';border:2px solid var(--border);" title="Accent"></div>';
+      html += '<div style="width:28px;height:28px;border-radius:50%;background:' + esc(c.bgColor) + ';border:2px solid var(--border);" title="Background"></div>';
       html += '</div>';
       // Name
       html += '<strong style="font-size:0.85rem;">' + esc(scheme.name) + '</strong>';
@@ -879,7 +879,7 @@
     // Custom option card
     html += '<div class="wp-scheme-card' + (showCustomColors ? ' selected' : '') + '" onclick="wpSelectSchemeCustom()" style="cursor:pointer;padding:12px;border-radius:10px;border:2px solid ' + (showCustomColors ? 'var(--accent)' : 'var(--charcoal-light, #333)') + ';background:var(--surface-dark);transition:border-color 0.2s;">';
     html += '<div style="display:flex;gap:6px;margin-bottom:8px;">';
-    html += '<div style="width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg, #ff6b6b, #4ecdc4, #45b7d1);border:2px solid rgba(255,255,255,0.15);"></div>';
+    html += '<div style="width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg, #ff6b6b, #4ecdc4, #45b7d1);border:2px solid var(--border);"></div>';
     html += '</div>';
     html += '<strong style="font-size:0.85rem;">Custom</strong>';
     html += '<span style="font-size:0.72rem;color:var(--warm-gray);margin-left:6px;">Pick your own</span>';
@@ -918,7 +918,7 @@
     var primaryColor = tc.primaryColor || '#8B7355';
     var accentColor = tc.accentColor || '#2D5F5D';
     var html = '';
-    html += '<div style="margin-top:12px;padding:16px;background:var(--surface-dark);border-radius:10px;border:1px solid var(--charcoal-light, #333);">';
+    html += '<div style="margin-top:12px;padding:16px;background:var(--surface-dark);border-radius:10px;border:1px solid var(--charcoal-light, var(--border));">';
     html += '<div class="wp-color-row" style="margin-bottom:0;">';
     html += '<div class="wp-field-group" style="flex:1;">';
     html += '<label>Primary Color</label>';
@@ -1057,7 +1057,7 @@
     }
 
     // Add new category form
-    html += '<div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--charcoal-light, #333);">';
+    html += '<div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--charcoal-light, var(--border));">';
     html += '<h4 style="font-size:0.9rem;margin-bottom:8px;">Add Category</h4>';
     html += '<div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;">';
     html += '<div class="wp-field-group" style="flex:2;min-width:140px;margin:0;">';
@@ -2818,14 +2818,14 @@
     overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center;';
 
     var dialog = document.createElement('div');
-    dialog.style.cssText = 'background:var(--surface-dark,#1a1a1a);border:1px solid var(--charcoal-light,#333);border-radius:12px;width:min(560px,95vw);max-height:80vh;display:flex;flex-direction:column;overflow:hidden;';
+    dialog.style.cssText = 'background:var(--surface-dark,#1a1a1a);border:1px solid var(--charcoal-light,var(--border));border-radius:12px;width:min(560px,95vw);max-height:80vh;display:flex;flex-direction:column;overflow:hidden;';
 
-    var header = '<div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--charcoal-light,#333);">' +
+    var header = '<div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--charcoal-light,var(--border));">' +
       '<h3 style="margin:0;font-size:1rem;font-weight:600;">Manage Categories</h3>' +
       '<button onclick="closeCatMgrDialog()" style="background:none;border:none;color:var(--warm-gray);font-size:1.15rem;cursor:pointer;padding:4px;">✕</button>' +
       '</div>';
     var body = '<div id="catMgrBody" style="flex:1;overflow-y:auto;padding:20px;">' + renderCategoriesTab() + '</div>';
-    var footer = '<div style="padding:12px 20px;border-top:1px solid var(--charcoal-light,#333);display:flex;justify-content:flex-end;">' +
+    var footer = '<div style="padding:12px 20px;border-top:1px solid var(--charcoal-light,var(--border));display:flex;justify-content:flex-end;">' +
       '<button class="btn btn-primary" onclick="closeCatMgrDialog()">Done</button>' +
       '</div>';
 

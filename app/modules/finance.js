@@ -106,16 +106,16 @@ function renderFinancePeriodBar() {
     return '<button type="button" class="btn btn-' + (active ? 'primary' : 'secondary') +
       ' btn-small" onclick="finGlobalPeriod(\'' + mode + '\')">' + label + '</button>';
   };
-  var h = '<div id="finPeriodBar" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;padding:10px 14px;background:var(--bg-secondary,#232323);border-radius:8px;margin-bottom:14px;border:1px solid rgba(255,255,255,0.06);">';
+  var h = '<div id="finPeriodBar" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;padding:10px 14px;background:var(--bg-secondary,#232323);border-radius:8px;margin-bottom:14px;border:1px solid var(--border);">';
   h += '<span style="font-size:0.72rem;color:var(--warm-gray,#888);text-transform:uppercase;letter-spacing:0.5px;margin-right:4px;">Period</span>';
   h += btn('mtd', 'MTD');
   h += btn('qtd', 'QTD');
   h += btn('fy', 'FYTD');
   h += btn('custom', 'Custom');
   if (p.mode === 'custom') {
-    h += '<input type="date" id="finGlobalStart" value="' + e(p.start) + '" onchange="finGlobalCustom()" style="background:var(--bg-primary,#1a1a1a);border:1px solid rgba(255,255,255,0.15);border-radius:6px;color:var(--text,#fff);padding:4px 8px;font-size:0.85rem;">';
+    h += '<input type="date" id="finGlobalStart" value="' + e(p.start) + '" onchange="finGlobalCustom()" style="background:var(--bg-primary,#1a1a1a);border:1px solid var(--border);border-radius:6px;color:var(--text,#fff);padding:4px 8px;font-size:0.85rem;">';
     h += '<span style="color:var(--warm-gray,#888);font-size:0.85rem;">to</span>';
-    h += '<input type="date" id="finGlobalEnd" value="' + e(p.end) + '" onchange="finGlobalCustom()" style="background:var(--bg-primary,#1a1a1a);border:1px solid rgba(255,255,255,0.15);border-radius:6px;color:var(--text,#fff);padding:4px 8px;font-size:0.85rem;">';
+    h += '<input type="date" id="finGlobalEnd" value="' + e(p.end) + '" onchange="finGlobalCustom()" style="background:var(--bg-primary,#1a1a1a);border:1px solid var(--border);border-radius:6px;color:var(--text,#fff);padding:4px 8px;font-size:0.85rem;">';
   }
   h += '<span style="margin-left:auto;font-size:0.72rem;color:var(--warm-gray,#888);">' + e(_finPeriodLabel(p)) + '</span>';
   h += '</div>';
@@ -364,9 +364,9 @@ function periodPicker(pfx, start, end) {
     '<button class="btn btn-secondary btn-small" onclick="finPeriod(\'' + pfx + '\',\'last\')">Last Month</button>' +
     '<button class="btn btn-secondary btn-small" onclick="finPeriod(\'' + pfx + '\',\'qtr\')">This Quarter</button>' +
     '<button class="btn btn-secondary btn-small" onclick="finPeriod(\'' + pfx + '\',\'ytd\')">YTD</button>' +
-    '<input type="date" id="' + pfx + 'S" value="' + start + '" style="background:var(--bg-secondary,#232323);border:1px solid rgba(255,255,255,0.15);border-radius:6px;color:var(--text,#fff);padding:5px 8px;font-size:0.85rem;">' +
+    '<input type="date" id="' + pfx + 'S" value="' + start + '" style="background:var(--bg-secondary,#232323);border:1px solid var(--border);border-radius:6px;color:var(--text,#fff);padding:5px 8px;font-size:0.85rem;">' +
     '<span style="color:var(--warm-gray,#888);font-size:0.85rem;">to</span>' +
-    '<input type="date" id="' + pfx + 'E" value="' + end + '" style="background:var(--bg-secondary,#232323);border:1px solid rgba(255,255,255,0.15);border-radius:6px;color:var(--text,#fff);padding:5px 8px;font-size:0.85rem;">' +
+    '<input type="date" id="' + pfx + 'E" value="' + end + '" style="background:var(--bg-secondary,#232323);border:1px solid var(--border);border-radius:6px;color:var(--text,#fff);padding:5px 8px;font-size:0.85rem;">' +
     '<button class="btn btn-primary btn-small" onclick="finLoad(\'' + pfx + '\')">Load</button>' +
     '</div>';
 }
@@ -456,7 +456,7 @@ function _finFooter(viewName, periodLabel, basisLabel) {
     try { pl = _finPeriodLabel(window._finPeriod); } catch (x) { pl = '—'; }
   }
   var periodLine = 'Period: ' + (pl || '—') + ' · Basis: ' + (basisLabel || '—');
-  var h = '<div style="margin-top:18px;padding-top:12px;border-top:1px solid rgba(255,255,255,0.08);display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">';
+  var h = '<div style="margin-top:18px;padding-top:12px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">';
   h += '<div style="font-size:0.72rem;color:var(--warm-gray,#888);">' + e(periodLine) + '</div>';
   h += '<button class="btn btn-secondary btn-small" onclick="window._finExportView(\'' + (window._jsAttr ? window._jsAttr(viewName) : viewName) + '\')" title="Download CSV">⬇ Export CSV</button>';
   h += '</div>';
@@ -1123,7 +1123,7 @@ function renderFinExpenses(expenses, start, end) {
   h += '</div>';
 
   // Filter row + Ask AI
-  var filterSelStyle = 'padding:7px 10px;border:1px solid rgba(255,255,255,0.1);border-radius:6px;font-family:inherit;font-size:0.85rem;background:var(--bg,#1a1a1a);color:var(--text,#fff);';
+  var filterSelStyle = 'padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-family:inherit;font-size:0.85rem;background:var(--bg,#1a1a1a);color:var(--text,#fff);';
   h += '<div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap;">';
   h += '<select onchange="setFinExpFilter(\'status\', this.value)" style="' + filterSelStyle + '">';
   h += '<option value="all"' + (finExpFilters.status === 'all' ? ' selected' : '') + '>All</option>';
@@ -1388,7 +1388,7 @@ function renderFinExpDetailPanel(ex) {
   var amountColor = ex.amount >= 0 ? 'inherit' : '#16a34a';
   var sourceLabel = ex.source === 'plaid' ? 'Plaid' : ex.source === 'csv_import' ? 'CSV Import' : 'Manual';
   var sourceIcon = ex.source === 'plaid' ? '🏦' : ex.source === 'csv_import' ? '📄' : '✍️';
-  var inputStyle = 'width:100%;padding:9px 12px;border:1px solid rgba(255,255,255,0.12);border-radius:6px;background:var(--bg,#1a1a1a);color:var(--text,#fff);font-family:inherit;font-size:0.9rem;box-sizing:border-box;';
+  var inputStyle = 'width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:6px;background:var(--bg,#1a1a1a);color:var(--text,#fff);font-family:inherit;font-size:0.9rem;box-sizing:border-box;';
   var labelStyle = 'font-size:0.72rem;color:var(--warm-gray,#888);text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:6px;font-weight:600;';
   var idEsc = e(ex._id);
 
@@ -1399,7 +1399,7 @@ function renderFinExpDetailPanel(ex) {
   h += '<div style="width:480px;max-width:100%;background:var(--bg-secondary,#232323);overflow:auto;box-shadow:-8px 0 24px rgba(0,0,0,0.4);" onclick="event.stopPropagation()">';
 
   // Header
-  h += '<div style="padding:16px 20px;border-bottom:1px solid rgba(255,255,255,0.08);display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">';
+  h += '<div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">';
   h += '<div style="flex:1;min-width:0;">';
   h += '<div style="font-size:1rem;font-weight:700;">' + sourceIcon + ' ' + e(ex.merchantName || ex.description || 'Expense') + '</div>';
   h += '<div style="font-size:0.78rem;color:var(--warm-gray,#888);margin-top:2px;">' + e(ex.date || '') + ' · ' + sourceLabel + (ex.pending ? ' · pending' : '') + '</div>';
@@ -1432,7 +1432,7 @@ function renderFinExpDetailPanel(ex) {
   h += '</select></div>';
 
   // Studio overhead
-  h += '<label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;margin-bottom:14px;padding:10px 12px;background:var(--bg,#1a1a1a);border-radius:6px;border:1px solid rgba(255,255,255,0.06);">';
+  h += '<label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;margin-bottom:14px;padding:10px 12px;background:var(--bg,#1a1a1a);border-radius:6px;border:1px solid var(--border);">';
   h += '<input type="checkbox"' + (ex.isStudioOverhead ? ' checked' : '') + ' onchange="finExpUpdateField(\'' + idEsc + '\',\'isStudioOverhead\',this.checked)" style="width:18px;height:18px;margin-top:1px;accent-color:var(--amber,#c4853c);">';
   h += '<div><div style="font-size:0.85rem;font-weight:600;">Fixed studio overhead</div>';
   h += '<div style="font-size:0.78rem;color:var(--warm-gray,#888);margin-top:2px;">Recurring costs to keep your studio running (rent, insurance, subscriptions).</div></div></label>';
@@ -1459,7 +1459,7 @@ function renderFinExpDetailPanel(ex) {
   h += '</div></details>';
 
   // Action row
-  h += '<div style="margin-top:20px;padding-top:16px;border-top:1px solid rgba(255,255,255,0.08);display:flex;gap:8px;flex-wrap:wrap;align-items:center;">';
+  h += '<div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border);display:flex;gap:8px;flex-wrap:wrap;align-items:center;">';
   if (!ex.reviewed) {
     h += '<button class="btn btn-primary btn-small" onclick="finExpDetailApprove(\'' + idEsc + '\')">Approve</button>';
     h += '<button class="btn btn-secondary btn-small" onclick="finExpDetailPersonal(\'' + idEsc + '\')">Personal</button>';
@@ -1996,7 +1996,7 @@ function renderPnl(curr, prev, start, end, prior) {
     if (sign === '-') color = cents <= 0 ? '#22c55e' : '#ef4444';
     return '<div style="display:flex;justify-content:space-between;padding:5px 0;' +
       (indent ? 'padding-left:16px;' : '') +
-      (bold ? 'border-top:1px solid rgba(255,255,255,0.08);margin-top:4px;padding-top:9px;' : '') + '">' +
+      (bold ? 'border-top:1px solid var(--border);margin-top:4px;padding-top:9px;' : '') + '">' +
       '<span style="font-size:0.9rem;' + (bold ? 'font-weight:600;' : 'color:var(--warm-gray,#888);') + '">' + label + '</span>' +
       '<span style="font-size:0.9rem;font-weight:' + (bold ? '700' : '400') + ';color:' + color + ';">' + fmt$(cents) + '</span>' +
       '</div>';
@@ -2007,7 +2007,7 @@ function renderPnl(curr, prev, start, end, prior) {
   revChs.forEach(function(ch) { h += plRow(ch.charAt(0).toUpperCase() + ch.slice(1), curr.revByChannel[ch], true, false, '+'); });
 
   if (cogsMissing) {
-    h += '<div style="display:flex;justify-content:space-between;padding:5px 0;border-top:1px solid rgba(255,255,255,0.08);margin-top:4px;padding-top:9px;">' +
+    h += '<div style="display:flex;justify-content:space-between;padding:5px 0;border-top:1px solid var(--border);margin-top:4px;padding-top:9px;">' +
       '<span style="font-size:0.9rem;font-weight:600;">COGS</span>' +
       '<span style="font-size:0.9rem;font-weight:700;color:var(--warm-gray,#888);">—</span>' +
       '</div>';
@@ -2038,7 +2038,7 @@ function renderPnl(curr, prev, start, end, prior) {
     }
   }
 
-  h += '<div style="display:flex;justify-content:space-between;padding:9px 0;border-top:1px solid rgba(255,255,255,0.15);margin-top:4px;">';
+  h += '<div style="display:flex;justify-content:space-between;padding:9px 0;border-top:1px solid var(--border);margin-top:4px;">';
   h += '<span style="font-size:1rem;font-weight:700;">Gross Profit</span>';
   if (cogsMissing) {
     h += '<span style="font-size:1rem;font-weight:700;color:var(--warm-gray,#888);">—</span>';
@@ -2059,7 +2059,7 @@ function renderPnl(curr, prev, start, end, prior) {
     h += '<div style="padding-left:16px;padding:4px 16px;font-size:0.72rem;color:var(--warm-gray,#888);">Payroll & Adjustments included above</div>';
   }
 
-  h += '<div style="display:flex;justify-content:space-between;padding:9px 0;border-top:2px solid rgba(255,255,255,0.2);margin-top:8px;">';
+  h += '<div style="display:flex;justify-content:space-between;padding:9px 0;border-top:2px solid var(--border);margin-top:8px;">';
   h += '<span style="font-size:1.15rem;font-weight:700;">Net Profit</span>';
   if (cogsMissing) {
     h += '<span style="font-size:1.15rem;font-weight:700;color:var(--warm-gray,#888);">—</span>';
@@ -2238,7 +2238,7 @@ async function renderDayCloseV2(dateParam) {
     h += '<div style="font-size:0.78rem;color:var(--warm-gray,#888);margin-top:3px;">' + lastLine + '</div></div>';
     h += '<div style="display:flex;gap:6px;align-items:center;">';
     h += '<label style="font-size:0.78rem;color:var(--warm-gray,#888);">Date:</label>';
-    h += '<input type="date" id="dcDate" value="' + e(date) + '" onchange="finDayCloseChangeDate(this.value)" style="background:var(--bg-secondary,#232323);border:1px solid rgba(255,255,255,0.15);border-radius:6px;color:var(--text,#fff);padding:5px 8px;font-size:0.85rem;">';
+    h += '<input type="date" id="dcDate" value="' + e(date) + '" onchange="finDayCloseChangeDate(this.value)" style="background:var(--bg-secondary,#232323);border:1px solid var(--border);border-radius:6px;color:var(--text,#fff);padding:5px 8px;font-size:0.85rem;">';
     h += '</div></div>';
 
     // Read-only banner when viewing a superseded version
@@ -2280,7 +2280,7 @@ async function renderDayCloseV2(dateParam) {
         var vts = v.savedAt ? String(v.savedAt).replace('T',' ').slice(0,16) : '';
         var vvar = v.varianceCents != null ? fmt$(v.varianceCents) : '—';
         var isLatest = latest && v.id === latest.id;
-        h += '<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.06);font-size:0.78rem;">';
+        h += '<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border);font-size:0.78rem;">';
         h += '<div><span style="color:var(--warm-gray,#888);font-weight:700;">v' + v.version + '</span>';
         if (isLatest) h += ' <span style="color:#22c55e;font-weight:700;">(latest)</span>';
         h += ' &middot; ' + vopCell + (vts ? ' &middot; ' + e(vts) : '') + ' &middot; variance ' + e(vvar) + '</div>';
@@ -2316,7 +2316,7 @@ async function renderDayCloseV2(dateParam) {
     // Notes
     h += '<div style="background:var(--bg-secondary,#232323);border-radius:10px;padding:16px;margin-bottom:14px;">';
     h += '<div style="font-size:0.85rem;font-weight:700;margin-bottom:10px;">Notes</div>';
-    h += '<textarea id="dcNotes" rows="3" style="width:100%;background:var(--bg-primary,#1a1a1a);border:1px solid rgba(255,255,255,0.15);border-radius:6px;color:var(--text,#fff);padding:8px 10px;font-size:0.85rem;font-family:inherit;box-sizing:border-box;" placeholder="Anything unusual? Shortages, overages, deposits, etc.">' + e(notes) + '</textarea>';
+    h += '<textarea id="dcNotes" rows="3" style="width:100%;background:var(--bg-primary,#1a1a1a);border:1px solid var(--border);border-radius:6px;color:var(--text,#fff);padding:8px 10px;font-size:0.85rem;font-family:inherit;box-sizing:border-box;" placeholder="Anything unusual? Shortages, overages, deposits, etc.">' + e(notes) + '</textarea>';
     h += '</div>';
 
     // Action buttons — Close v3 CTA state machine:
@@ -2400,11 +2400,11 @@ function _dcRenderCheckRows() {
       // accepts legacy `payor` as fallback for in-flight drafts.
       var payerVal = (c.payerName != null) ? c.payerName : (c.payor || '');
       h += '<div style="display:grid;grid-template-columns:90px 110px 1fr 1fr 90px 32px;gap:8px;align-items:center;margin-bottom:6px;">';
-      h += '<input type="text" placeholder="Check #" value="' + e(c.number || '') + '" onchange="finDayCloseUpdateCheck(' + i + ',\'number\',this.value)" style="background:var(--bg-primary,#1a1a1a);border:1px solid rgba(255,255,255,0.15);border-radius:6px;color:var(--text,#fff);padding:5px 8px;font-size:0.85rem;">';
-      h += '<input type="number" step="0.01" placeholder="Amount" value="' + e(c.amount != null ? c.amount : '') + '" onchange="finDayCloseUpdateCheck(' + i + ',\'amount\',this.value)" style="background:var(--bg-primary,#1a1a1a);border:1px solid rgba(255,255,255,0.15);border-radius:6px;color:var(--text,#fff);padding:5px 8px;font-size:0.85rem;">';
-      h += '<input type="text" placeholder="Payer name" value="' + e(payerVal) + '" onchange="finDayCloseUpdateCheck(' + i + ',\'payerName\',this.value)" style="background:var(--bg-primary,#1a1a1a);border:1px solid rgba(255,255,255,0.15);border-radius:6px;color:var(--text,#fff);padding:5px 8px;font-size:0.85rem;">';
-      h += '<input type="text" placeholder="Memo / applied invoice" value="' + e(c.memo || '') + '" onchange="finDayCloseUpdateCheck(' + i + ',\'memo\',this.value)" style="background:var(--bg-primary,#1a1a1a);border:1px solid rgba(255,255,255,0.15);border-radius:6px;color:var(--text,#fff);padding:5px 8px;font-size:0.85rem;">';
-      h += '<input type="text" placeholder="Invoice #" value="' + e(c.invoiceRef || '') + '" onchange="finDayCloseUpdateCheck(' + i + ',\'invoiceRef\',this.value)" style="background:var(--bg-primary,#1a1a1a);border:1px solid rgba(255,255,255,0.15);border-radius:6px;color:var(--text,#fff);padding:5px 8px;font-size:0.85rem;">';
+      h += '<input type="text" placeholder="Check #" value="' + e(c.number || '') + '" onchange="finDayCloseUpdateCheck(' + i + ',\'number\',this.value)" style="background:var(--bg-primary,#1a1a1a);border:1px solid var(--border);border-radius:6px;color:var(--text,#fff);padding:5px 8px;font-size:0.85rem;">';
+      h += '<input type="number" step="0.01" placeholder="Amount" value="' + e(c.amount != null ? c.amount : '') + '" onchange="finDayCloseUpdateCheck(' + i + ',\'amount\',this.value)" style="background:var(--bg-primary,#1a1a1a);border:1px solid var(--border);border-radius:6px;color:var(--text,#fff);padding:5px 8px;font-size:0.85rem;">';
+      h += '<input type="text" placeholder="Payer name" value="' + e(payerVal) + '" onchange="finDayCloseUpdateCheck(' + i + ',\'payerName\',this.value)" style="background:var(--bg-primary,#1a1a1a);border:1px solid var(--border);border-radius:6px;color:var(--text,#fff);padding:5px 8px;font-size:0.85rem;">';
+      h += '<input type="text" placeholder="Memo / applied invoice" value="' + e(c.memo || '') + '" onchange="finDayCloseUpdateCheck(' + i + ',\'memo\',this.value)" style="background:var(--bg-primary,#1a1a1a);border:1px solid var(--border);border-radius:6px;color:var(--text,#fff);padding:5px 8px;font-size:0.85rem;">';
+      h += '<input type="text" placeholder="Invoice #" value="' + e(c.invoiceRef || '') + '" onchange="finDayCloseUpdateCheck(' + i + ',\'invoiceRef\',this.value)" style="background:var(--bg-primary,#1a1a1a);border:1px solid var(--border);border-radius:6px;color:var(--text,#fff);padding:5px 8px;font-size:0.85rem;">';
       h += '<button class="btn btn-secondary btn-small" onclick="finDayCloseRemoveCheck(' + i + ')" title="Remove">✕</button>';
       h += '</div>';
     });
@@ -2705,11 +2705,11 @@ function _dcRenderDiff(latest, next) {
   row('Notes', (latest.notes || '(empty)'), (next.notes || '(empty)'));
   if (rows.length === 0) return '<div style="color:var(--warm-gray,#888);font-size:0.85rem;">No changes detected. Re-closing will still create a new version row for audit.</div>';
   var h = '<table style="width:100%;border-collapse:collapse;font-size:0.85rem;">';
-  h += '<thead><tr><th style="text-align:left;padding:6px 8px;border-bottom:1px solid rgba(255,255,255,0.15);">Field</th><th style="text-align:left;padding:6px 8px;border-bottom:1px solid rgba(255,255,255,0.15);">v' + latest.version + ' (current)</th><th style="text-align:left;padding:6px 8px;border-bottom:1px solid rgba(255,255,255,0.15);">v' + (latest.version + 1) + ' (proposed)</th></tr></thead><tbody>';
+  h += '<thead><tr><th style="text-align:left;padding:6px 8px;border-bottom:1px solid var(--border);">Field</th><th style="text-align:left;padding:6px 8px;border-bottom:1px solid var(--border);">v' + latest.version + ' (current)</th><th style="text-align:left;padding:6px 8px;border-bottom:1px solid var(--border);">v' + (latest.version + 1) + ' (proposed)</th></tr></thead><tbody>';
   rows.forEach(function(r) {
-    h += '<tr><td style="padding:6px 8px;border-bottom:1px solid rgba(255,255,255,0.06);font-weight:600;">' + e(r.label) + '</td>';
-    h += '<td style="padding:6px 8px;border-bottom:1px solid rgba(255,255,255,0.06);color:#eab308;">' + e(r.before) + '</td>';
-    h += '<td style="padding:6px 8px;border-bottom:1px solid rgba(255,255,255,0.06);color:#22c55e;">' + e(r.after) + '</td></tr>';
+    h += '<tr><td style="padding:6px 8px;border-bottom:1px solid var(--border);font-weight:600;">' + e(r.label) + '</td>';
+    h += '<td style="padding:6px 8px;border-bottom:1px solid var(--border);color:#eab308;">' + e(r.before) + '</td>';
+    h += '<td style="padding:6px 8px;border-bottom:1px solid var(--border);color:#22c55e;">' + e(r.after) + '</td></tr>';
   });
   h += '</tbody></table>';
   return h;
@@ -3079,7 +3079,7 @@ async function renderArDunningSettings() {
         '<input type="checkbox" id="dun_' + kl[0] + '"' + (cadence[kl[0]] !== false ? ' checked' : '') + '>' +
         '<span style="font-size:0.85rem;">' + e(kl[1]) + '</span></label>';
     });
-    h += '<div style="margin-top:18px;padding-top:14px;border-top:1px solid rgba(255,255,255,0.08);display:flex;justify-content:flex-end;gap:8px;">';
+    h += '<div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px;">';
     h += '<button class="btn btn-secondary btn-small" onclick="location.hash=\'#finance-ar\'">Cancel</button>';
     h += '<button class="btn btn-primary btn-small" onclick="finArSaveDunningSettings()">Save Settings</button>';
     h += '</div></div>';
@@ -3134,13 +3134,13 @@ async function renderArAuditLog() {
       h += '<div style="text-align:center;padding:40px;color:var(--warm-gray,#888);">No reminders sent yet. Use the Send Reminder action on the AR aging view.</div>';
     } else {
       h += '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:0.85rem;">';
-      h += '<thead><tr style="border-bottom:1px solid rgba(255,255,255,0.1);">';
+      h += '<thead><tr style="border-bottom:1px solid var(--border);">';
       ['Sent','Invoice #','Customer Email','Amount Due','Status','Sent By'].forEach(function(c) {
         h += '<th style="text-align:left;padding:8px 10px;font-size:0.72rem;color:var(--warm-gray,#888);text-transform:uppercase;letter-spacing:0.5px;">' + c + '</th>';
       });
       h += '</tr></thead><tbody>';
       rows.forEach(function(r) {
-        h += '<tr style="border-bottom:1px solid rgba(255,255,255,0.06);">';
+        h += '<tr style="border-bottom:1px solid var(--border);">';
         h += '<td style="padding:8px 10px;font-size:0.78rem;">' + e((r.sentAt || '').replace('T', ' ').slice(0, 16)) + '</td>';
         h += '<td style="padding:8px 10px;font-size:0.78rem;">' + e(r.invoiceNumber || (r.invoiceId ? r.invoiceId.slice(-8) : '—')) + '</td>';
         h += '<td style="padding:8px 10px;font-size:0.78rem;">' + e(r.customerEmail || '—') + '</td>';
@@ -3356,7 +3356,7 @@ function renderArContent() {
   // W1.7: Tier column. W1.10: per-row "Send Reminder" action.
   h += '<div style="overflow-x:auto;">';
   h += '<table style="width:100%;border-collapse:collapse;font-size:0.85rem;">';
-  h += '<thead><tr style="border-bottom:1px solid rgba(255,255,255,0.1);">';
+  h += '<thead><tr style="border-bottom:1px solid var(--border);">';
   if (typeof window.mastSortableTh === 'function') {
     var thStyle = 'font-size:0.72rem;color:var(--warm-gray,#888);text-transform:uppercase;letter-spacing:0.5px;white-space:nowrap;padding:8px 10px;';
     h += window.mastSortableTh('Customer',    'customerName', _arSortKey, _arSortDir, 'window._arSort', thStyle);
@@ -3385,7 +3385,7 @@ function renderArContent() {
     var customerIdAttr = r.customerId ? (window._jsAttr ? window._jsAttr(r.customerId) : r.customerId) : '';
     var customerEmailAttr = (window._jsAttr ? window._jsAttr(r.customerEmail || '') : (r.customerEmail || ''));
     var customerNameAttr = (window._jsAttr ? window._jsAttr(r.customerName || '') : (r.customerName || ''));
-    h += '<tr style="border-bottom:1px solid rgba(255,255,255,0.06);">';
+    h += '<tr style="border-bottom:1px solid var(--border);">';
     h += '<td style="padding:10px;">' + e(r.customerName) + '</td>';
     // W1.7 Tier badge
     if (r.isWholesale) {
@@ -3883,7 +3883,7 @@ function renderApContent() {
   }
 
   // Partial payment modal placeholder (shown inline below a row when triggered)
-  h += '<div id="fApPartialModal" style="display:none;background:var(--bg-secondary,#232323);border:1px solid rgba(255,255,255,0.1);border-radius:10px;padding:14px;margin-bottom:12px;"></div>';
+  h += '<div id="fApPartialModal" style="display:none;background:var(--bg-secondary,#232323);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:12px;"></div>';
 
   if (_apGroupByVendor) {
     h += renderApGrouped(filtered);
@@ -3927,7 +3927,7 @@ function renderApFlat(filtered) {
   }
   var h = '<div style="overflow-x:auto;">';
   h += '<table style="width:100%;border-collapse:collapse;font-size:0.85rem;">';
-  h += '<thead><tr style="border-bottom:1px solid rgba(255,255,255,0.1);">';
+  h += '<thead><tr style="border-bottom:1px solid var(--border);">';
   if (typeof window.mastSortableTh === 'function') {
     var thStyle = 'font-size:0.72rem;color:var(--warm-gray,#888);text-transform:uppercase;letter-spacing:0.5px;white-space:nowrap;padding:8px 10px;';
     h += window.mastSortableTh('Vendor',    'vendorName', _apSortKey, _apSortDir, 'window._apSort', thStyle);
@@ -3947,7 +3947,7 @@ function renderApFlat(filtered) {
   h += '</tr></thead><tbody>';
 
   filtered.forEach(function(r) {
-    h += '<tr style="border-bottom:1px solid rgba(255,255,255,0.06);">';
+    h += '<tr style="border-bottom:1px solid var(--border);">';
     // W2.2: clickable vendor name → detail
     if (r.vendorId) {
       h += '<td style="padding:10px;font-weight:600;"><a href="javascript:void(0)" onclick="finApOpenVendor(\'' + (window._jsAttr ? window._jsAttr(r.vendorId) : r.vendorId) + '\')" style="color:var(--teal,#2a9d8f);text-decoration:none;">' + e(r.vendorName) + '</a></td>';
@@ -4007,7 +4007,7 @@ function renderApGrouped(filtered) {
     var worstColor = bucketColor(g.worstBucket);
     var dueDateStr = g.oldestDueDate ? new Date(g.oldestDueDate).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : '—';
 
-    h += '<div style="border:1px solid rgba(255,255,255,0.1);border-radius:8px;overflow:hidden;">';
+    h += '<div style="border:1px solid var(--border);border-radius:8px;overflow:hidden;">';
 
     // Vendor summary row (clickable)
     h += '<button type="button" onclick="finApToggleVendorExpand(' + JSON.stringify(k) + ')" ' +
@@ -4027,7 +4027,7 @@ function renderApGrouped(filtered) {
 
     // Expanded receipt rows
     if (isExpanded) {
-      h += '<div style="border-top:1px solid rgba(255,255,255,0.08);">';
+      h += '<div style="border-top:1px solid var(--border);">';
       h += '<table style="width:100%;border-collapse:collapse;font-size:0.85rem;">';
       h += '<thead><tr style="background:rgba(255,255,255,0.03);">';
       ['Ref','Total','Paid','Remaining','Due Date','Age','Status',''].forEach(function(col) {
@@ -4035,7 +4035,7 @@ function renderApGrouped(filtered) {
       });
       h += '</tr></thead><tbody>';
       g.rows.forEach(function(r) {
-        h += '<tr style="border-top:1px solid rgba(255,255,255,0.06);">';
+        h += '<tr style="border-top:1px solid var(--border);">';
         h += '<td style="padding:8px 10px;color:var(--warm-gray,#888);">' + e(r.vendorInvoiceRef || r.receiptId.slice(-8)) + '</td>';
         h += '<td style="padding:8px 10px;">' + fmt$(r.totalCents) + '</td>';
         h += '<td style="padding:8px 10px;color:#22c55e;">' + fmt$(r.paidCents) + '</td>';
@@ -4102,7 +4102,7 @@ window.finApShowPartial = function(receiptId, currentPaid, totalCents) {
     '<div style="font-size:0.85rem;color:var(--warm-gray,#888);margin-bottom:8px;">Outstanding: ' + fmt$(remaining) + ' · Currently paid: ' + fmt$(currentPaid) + '</div>' +
     '<div style="display:flex;gap:8px;align-items:center;">' +
     '<span style="font-size:0.85rem;">$</span>' +
-    '<input type="number" id="fApPartialAmt" min="0.01" step="0.01" max="' + (remaining/100).toFixed(2) + '" placeholder="Amount paid" style="background:var(--bg-primary,#1a1a1a);border:1px solid rgba(255,255,255,0.2);border-radius:6px;color:var(--text,#fff);padding:6px 10px;font-size:0.85rem;width:120px;">' +
+    '<input type="number" id="fApPartialAmt" min="0.01" step="0.01" max="' + (remaining/100).toFixed(2) + '" placeholder="Amount paid" style="background:var(--bg-primary,#1a1a1a);border:1px solid var(--border);border-radius:6px;color:var(--text,#fff);padding:6px 10px;font-size:0.85rem;width:120px;">' +
     '<button class="btn btn-primary btn-small" data-rid="' + e(receiptId) + '" data-paid="' + currentPaid + '" data-total="' + totalCents + '" onclick="finApSubmitPartial(this.dataset.rid, parseInt(this.dataset.paid), parseInt(this.dataset.total))">Apply</button>' +
     '<button class="btn btn-secondary btn-small" onclick="document.getElementById(\'fApPartialModal\').style.display=\'none\'">Cancel</button>' +
     '</div>';
@@ -4150,7 +4150,7 @@ function _finOpenModal(title, bodyHtml) {
   overlay.id = 'finW22Modal';
   overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
   overlay.innerHTML =
-    '<div onclick="event.stopPropagation()" style="background:var(--bg-primary,#1a1a1a);border:1px solid rgba(255,255,255,0.12);border-radius:12px;padding:20px;max-width:520px;width:100%;max-height:90vh;overflow:auto;">' +
+    '<div onclick="event.stopPropagation()" style="background:var(--bg-primary,#1a1a1a);border:1px solid var(--border);border-radius:12px;padding:20px;max-width:520px;width:100%;max-height:90vh;overflow:auto;">' +
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">' +
     '<div style="font-size:1rem;font-weight:700;">' + e(title) + '</div>' +
     '<button class="btn btn-secondary btn-small" onclick="finCloseModal()">✕</button>' +
@@ -4189,7 +4189,7 @@ window.finApNewVendor = function(presetId) {
 
 function _fInput(id, label, val, type) {
   return '<label style="display:flex;flex-direction:column;gap:4px;font-size:0.78rem;color:var(--warm-gray,#888);">' + e(label) +
-    '<input type="' + (type || 'text') + '" id="' + id + '" value="' + e(val || '') + '" style="background:var(--bg-secondary,#232323);border:1px solid rgba(255,255,255,0.15);border-radius:6px;color:var(--text,#fff);padding:7px 10px;font-size:0.85rem;">' +
+    '<input type="' + (type || 'text') + '" id="' + id + '" value="' + e(val || '') + '" style="background:var(--bg-secondary,#232323);border:1px solid var(--border);border-radius:6px;color:var(--text,#fff);padding:7px 10px;font-size:0.85rem;">' +
     '</label>';
 }
 function _fSelect(id, label, opts, selVal) {
@@ -4199,7 +4199,7 @@ function _fSelect(id, label, opts, selVal) {
     optHtml += '<option value="' + e(v) + '"' + (v === selVal ? ' selected' : '') + '>' + e(l) + '</option>';
   });
   return '<label style="display:flex;flex-direction:column;gap:4px;font-size:0.78rem;color:var(--warm-gray,#888);">' + e(label) +
-    '<select id="' + id + '" style="background:var(--bg-secondary,#232323);border:1px solid rgba(255,255,255,0.15);border-radius:6px;color:var(--text,#fff);padding:7px 10px;font-size:0.85rem;">' + optHtml + '</select>' +
+    '<select id="' + id + '" style="background:var(--bg-secondary,#232323);border:1px solid var(--border);border-radius:6px;color:var(--text,#fff);padding:7px 10px;font-size:0.85rem;">' + optHtml + '</select>' +
     '</label>';
 }
 
@@ -4268,7 +4268,7 @@ window.finApNewBill = function(presetBillId) {
       _fInput('bDueDate', 'Due Date', (bill.dueDate || ''), 'date') +
       _fSelect('bStatus', 'Status', [['unpaid', 'Unpaid'], ['partial', 'Partially Paid'], ['paid', 'Paid']], bill.paymentStatus || 'unpaid') +
       '<label style="display:flex;flex-direction:column;gap:4px;font-size:0.78rem;color:var(--warm-gray,#888);">Notes' +
-      '<textarea id="bNotes" rows="2" style="background:var(--bg-secondary,#232323);border:1px solid rgba(255,255,255,0.15);border-radius:6px;color:var(--text,#fff);padding:7px 10px;font-size:0.85rem;font-family:inherit;">' + e(bill.notes || '') + '</textarea>' +
+      '<textarea id="bNotes" rows="2" style="background:var(--bg-secondary,#232323);border:1px solid var(--border);border-radius:6px;color:var(--text,#fff);padding:7px 10px;font-size:0.85rem;font-family:inherit;">' + e(bill.notes || '') + '</textarea>' +
       '</label>' +
       '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px;">' +
       (isEdit ? '<button class="btn btn-secondary btn-small" onclick="finApDeleteBill(\'' + (window._jsAttr ? window._jsAttr(presetBillId) : presetBillId) + '\')">Delete</button>' : '') +
@@ -4393,13 +4393,13 @@ async function renderApVendorDetail(vendorId) {
       h += '<div style="text-align:center;padding:30px;color:var(--warm-gray,#888);">No bills for this vendor yet.</div>';
     } else {
       h += '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:0.85rem;">';
-      h += '<thead><tr style="border-bottom:1px solid rgba(255,255,255,0.1);">';
+      h += '<thead><tr style="border-bottom:1px solid var(--border);">';
       ['Received','Invoice Ref','Amount','Paid','Status','Due Date',''].forEach(function(col) {
         h += '<th style="text-align:left;padding:8px 10px;font-size:0.72rem;color:var(--warm-gray,#888);text-transform:uppercase;letter-spacing:0.5px;">' + col + '</th>';
       });
       h += '</tr></thead><tbody>';
       receipts.forEach(function(r) {
-        h += '<tr style="border-bottom:1px solid rgba(255,255,255,0.06);">';
+        h += '<tr style="border-bottom:1px solid var(--border);">';
         h += '<td style="padding:8px 10px;">' + e((r.receivedAt || '').slice(0, 10)) + '</td>';
         h += '<td style="padding:8px 10px;">' + e(r.vendorInvoiceRef || r._id.slice(-8)) + '</td>';
         h += '<td style="padding:8px 10px;font-weight:600;">' + fmt$(r.amountCents || 0) + '</td>';
@@ -4571,7 +4571,7 @@ function renderTaxSalesTax(byState, nexus, start, end) {
   }
 
   h += '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:0.85rem;">';
-  h += '<thead><tr style="border-bottom:1px solid rgba(255,255,255,0.1);">';
+  h += '<thead><tr style="border-bottom:1px solid var(--border);">';
   ['State', 'Nexus Status', 'Tax Collected', 'Orders'].forEach(function(col) {
     h += '<th style="text-align:left;padding:8px 10px;font-size:0.72rem;color:var(--warm-gray,#888);text-transform:uppercase;letter-spacing:0.5px;">' + col + '</th>';
   });
@@ -4585,7 +4585,7 @@ function renderTaxSalesTax(byState, nexus, start, end) {
     } else {
       badge = '<span style="background:rgba(156,163,175,0.12);color:#9ca3af;padding:2px 8px;border-radius:4px;font-size:0.72rem;font-weight:600;">Not Registered</span>';
     }
-    h += '<tr style="border-bottom:1px solid rgba(255,255,255,0.06);">';
+    h += '<tr style="border-bottom:1px solid var(--border);">';
     h += '<td style="padding:10px;font-weight:600;">' + e(state) + '</td>';
     h += '<td style="padding:10px;">' + badge + '</td>';
     h += '<td style="padding:10px;font-weight:700;color:#16a34a;">' + fmt$(d.taxCollected) + '</td>';
@@ -4730,7 +4730,7 @@ function renderTaxNexus(states, byState, nexus, overrides, startDate, endDate) {
   // W2.5: thresholds vary per state — show that explicitly.
   h += '<div style="font-size:0.78rem;color:var(--warm-gray,#888);margin-bottom:10px;">Per-state economic-nexus thresholds (CA/TX/NY $500K · FL $100K · WA $100K+200tx · default $100K+200tx). Sorted by closest to trigger. Tenant override: <code style="background:var(--bg-secondary,#232323);padding:1px 4px;border-radius:3px;">admin/config/taxNexusThresholds</code>. Verify at avalara.com state-by-state guide before filing.</div>';
   h += '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:0.85rem;">';
-  h += '<thead><tr style="border-bottom:1px solid rgba(255,255,255,0.1);">';
+  h += '<thead><tr style="border-bottom:1px solid var(--border);">';
   ['State', 'Revenue (12mo)', 'Transactions', 'Threshold', '% to Trigger', 'Status'].forEach(function(col) {
     h += '<th style="text-align:left;padding:8px 10px;font-size:0.72rem;color:var(--warm-gray,#888);text-transform:uppercase;letter-spacing:0.5px;">' + col + '</th>';
   });
@@ -4758,7 +4758,7 @@ function renderTaxNexus(states, byState, nexus, overrides, startDate, endDate) {
     if (t.txnCount != null) threshLabel += (threshLabel ? ' + ' : '') + t.txnCount + 'tx';
     if (!threshLabel) threshLabel = '—';
 
-    h += '<tr style="border-bottom:1px solid rgba(255,255,255,0.06);">';
+    h += '<tr style="border-bottom:1px solid var(--border);">';
     h += '<td style="padding:10px;font-weight:600;">' + e(state) + '</td>';
     h += '<td style="padding:10px;font-weight:700;">' + fmt$(d.revenue) + '</td>';
     h += '<td style="padding:10px;">' + d.count + '</td>';
@@ -4786,7 +4786,7 @@ function loadTax1099() {
   }
   var h = '<div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">';
   h += '<span style="font-size:0.85rem;color:var(--warm-gray,#888);">Tax Year:</span>';
-  h += '<select id="f1099Year" onchange="fin1099ChangeYear(this.value)" style="background:var(--bg-secondary,#232323);border:1px solid rgba(255,255,255,0.15);border-radius:6px;color:var(--text,#fff);padding:5px 10px;font-size:0.85rem;">' + yearOpts + '</select>';
+  h += '<select id="f1099Year" onchange="fin1099ChangeYear(this.value)" style="background:var(--bg-secondary,#232323);border:1px solid var(--border);border-radius:6px;color:var(--text,#fff);padding:5px 10px;font-size:0.85rem;">' + yearOpts + '</select>';
   h += '<button class="btn btn-secondary btn-small" onclick="loadTax1099Data()">Load</button>';
   h += '</div>';
   h += '<div id="f1099Content">' + skeletonTable(5,4) + '</div>';
@@ -4881,7 +4881,7 @@ function render1099(contractors, year) {
   h += '<button class="btn btn-secondary btn-small" onclick="fin1099Export()">Export CSV</button></div>';
 
   h += '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:0.85rem;">';
-  h += '<thead><tr style="border-bottom:1px solid rgba(255,255,255,0.1);">';
+  h += '<thead><tr style="border-bottom:1px solid var(--border);">';
   ['Contractor', 'Tax ID', 'Total Paid', '1099 Required'].forEach(function(col) {
     h += '<th style="text-align:left;padding:8px 10px;font-size:0.72rem;color:var(--warm-gray,#888);text-transform:uppercase;letter-spacing:0.5px;">' + col + '</th>';
   });
@@ -4891,7 +4891,7 @@ function render1099(contractors, year) {
       ? '<span style="font-family:monospace;font-size:0.78rem;">' + e(c.maskedTaxId) + '</span>'
       : '<span style="color:#ef4444;font-size:0.78rem;font-weight:600;">Missing — action required</span>';
     var border = c.hasTaxId ? '' : 'border-left:3px solid #ef4444;';
-    h += '<tr style="border-bottom:1px solid rgba(255,255,255,0.06);' + border + '">';
+    h += '<tr style="border-bottom:1px solid var(--border);' + border + '">';
     h += '<td style="padding:10px;font-weight:600;">' + e(c.name) + '</td>';
     h += '<td style="padding:10px;">' + tidCell + '</td>';
     h += '<td style="padding:10px;font-weight:700;">' + fmt$(c.totalPaid) + '</td>';
@@ -4948,7 +4948,7 @@ function setupReportsTab() {
   h += '<div><div style="font-size:1rem;font-weight:700;margin-bottom:4px;">Year-End Tax Package</div>';
   h += '<div style="font-size:0.85rem;color:var(--warm-gray,#888);">Everything your CPA needs for Schedule C and state filings. Export CSVs or print the full package.</div></div>';
   h += '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">';
-  h += '<select id="fReportYear" onchange="finSetReportYear(this.value)" style="background:var(--bg-primary,#1a1a1a);border:1px solid rgba(255,255,255,0.15);border-radius:6px;color:var(--text,#fff);padding:4px 8px;font-size:0.85rem;">' + yearOpts + '</select>';
+  h += '<select id="fReportYear" onchange="finSetReportYear(this.value)" style="background:var(--bg-primary,#1a1a1a);border:1px solid var(--border);border-radius:6px;color:var(--text,#fff);padding:4px 8px;font-size:0.85rem;">' + yearOpts + '</select>';
   h += '<button class="btn btn-secondary btn-small" onclick="loadYearEndReport()">Generate</button></div></div>';
   h += '<div id="fYearEndContent"></div></div>';
 
@@ -5104,7 +5104,7 @@ window.finReportStatementOfAccount = async function() {
     picker.innerHTML =
       '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">' +
       '<label style="font-size:0.78rem;color:var(--warm-gray,#888);">Customer:</label>' +
-      '<select id="fW29CustomerSelect" style="background:var(--bg-primary,#1a1a1a);border:1px solid rgba(255,255,255,0.15);border-radius:6px;color:var(--text,#fff);padding:5px 8px;font-size:0.85rem;min-width:240px;">' + opts + '</select>' +
+      '<select id="fW29CustomerSelect" style="background:var(--bg-primary,#1a1a1a);border:1px solid var(--border);border-radius:6px;color:var(--text,#fff);padding:5px 8px;font-size:0.85rem;min-width:240px;">' + opts + '</select>' +
       '<button class="btn btn-primary btn-small" onclick="finReportStatementExport()">Export Statement CSV</button>' +
       '</div>';
   } catch (err) {
@@ -5174,7 +5174,7 @@ window.finReportVendor1099Prep = async function() {
     picker.innerHTML =
       '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">' +
       '<label style="font-size:0.78rem;color:var(--warm-gray,#888);">Contractor:</label>' +
-      '<select id="fW29VendorSelect" style="background:var(--bg-primary,#1a1a1a);border:1px solid rgba(255,255,255,0.15);border-radius:6px;color:var(--text,#fff);padding:5px 8px;font-size:0.85rem;min-width:240px;">' + opts + '</select>' +
+      '<select id="fW29VendorSelect" style="background:var(--bg-primary,#1a1a1a);border:1px solid var(--border);border-radius:6px;color:var(--text,#fff);padding:5px 8px;font-size:0.85rem;min-width:240px;">' + opts + '</select>' +
       '<button class="btn btn-primary btn-small" onclick="finReportVendor1099Export()">Export 1099-Prep CSV</button>' +
       '</div>';
   } catch (err) {
@@ -5372,7 +5372,7 @@ function renderLoanReport(monthly, bankTotal, startDate, endDate) {
   h += '<div style="font-size:0.78rem;font-weight:600;color:var(--warm-gray,#888);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px;">P&L Summary</div>';
   h += '<div style="background:var(--bg-secondary,#232323);border-radius:8px;padding:16px;">';
   function lrRow(label, cents, bold, color) {
-    return '<div style="display:flex;justify-content:space-between;padding:4px 0' + (bold?';border-top:1px solid rgba(255,255,255,0.1);margin-top:4px;padding-top:8px;':'') + '">' +
+    return '<div style="display:flex;justify-content:space-between;padding:4px 0' + (bold?';border-top:1px solid var(--border);margin-top:4px;padding-top:8px;':'') + '">' +
       '<span style="font-size:0.9rem;' + (bold?'font-weight:600;':'color:var(--warm-gray,#888);') + '">' + label + '</span>' +
       '<span style="font-size:0.9rem;font-weight:' + (bold?'700':'400') + ';color:' + (color||'var(--text,#fff)') + ';">' + fmt$(cents) + '</span></div>';
   }
@@ -5392,7 +5392,7 @@ function renderLoanReport(monthly, bankTotal, startDate, endDate) {
     h += '</div>';
   }
 
-  h += '<div style="font-size:0.72rem;color:var(--warm-gray,#888);border-top:1px solid rgba(255,255,255,0.08);padding-top:10px;margin-top:8px;">Generated by Mast · ' + reportDate + '</div>';
+  h += '<div style="font-size:0.72rem;color:var(--warm-gray,#888);border-top:1px solid var(--border);padding-top:10px;margin-top:8px;">Generated by Mast · ' + reportDate + '</div>';
   h += '</div>'; // end printable
   return h;
 }
@@ -5512,7 +5512,7 @@ function renderYearEndReport(pnlData, taxData, contractors, mileage, year) {
   h += '<div style="background:var(--bg-primary,#1a1a1a);border-radius:8px;padding:16px;margin-bottom:16px;">';
   h += '<div style="font-size:0.9rem;font-weight:700;margin-bottom:10px;">P&L Summary — Schedule C · ' + year + '</div>';
   function yeRow(label, cents, bold) {
-    return '<div style="display:flex;justify-content:space-between;padding:4px 0' + (bold?';border-top:1px solid rgba(255,255,255,0.08);margin-top:4px;padding-top:8px;':'') + '">' +
+    return '<div style="display:flex;justify-content:space-between;padding:4px 0' + (bold?';border-top:1px solid var(--border);margin-top:4px;padding-top:8px;':'') + '">' +
       '<span style="font-size:0.85rem;' + (bold?'font-weight:600;':'color:var(--warm-gray,#888);') + '">' + label + '</span>' +
       '<span style="font-size:0.85rem;font-weight:' + (bold?'600':'400') + ';">' + fmt$(cents) + '</span></div>';
   }
@@ -5545,7 +5545,7 @@ function renderYearEndReport(pnlData, taxData, contractors, mileage, year) {
     h += '<div style="background:var(--bg-primary,#1a1a1a);border-radius:8px;padding:16px;margin-bottom:16px;">';
     h += '<div style="font-size:0.9rem;font-weight:700;margin-bottom:10px;">Sales Tax by State · ' + year + '</div>';
     h += '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:0.85rem;">';
-    h += '<thead><tr style="border-bottom:1px solid rgba(255,255,255,0.1);">';
+    h += '<thead><tr style="border-bottom:1px solid var(--border);">';
     ['State','Tax Collected','Orders','Registered'].forEach(function(c) {
       h += '<th style="text-align:left;padding:6px 10px;font-size:0.72rem;color:var(--warm-gray,#888);text-transform:uppercase;">' + c + '</th>';
     });
@@ -5553,7 +5553,7 @@ function renderYearEndReport(pnlData, taxData, contractors, mileage, year) {
     stateKeys.forEach(function(state) {
       var d = taxData.byState[state];
       var reg = taxData.nexus[state]&&taxData.nexus[state].registered;
-      h += '<tr style="border-bottom:1px solid rgba(255,255,255,0.05);">';
+      h += '<tr style="border-bottom:1px solid var(--border);">';
       h += '<td style="padding:7px 10px;font-weight:600;">' + e(state) + '</td>';
       h += '<td style="padding:7px 10px;">' + fmt$(d.taxCollected) + '</td>';
       h += '<td style="padding:7px 10px;">' + d.orderCount + '</td>';
@@ -5568,13 +5568,13 @@ function renderYearEndReport(pnlData, taxData, contractors, mileage, year) {
     h += '<div style="background:var(--bg-primary,#1a1a1a);border-radius:8px;padding:16px;margin-bottom:16px;">';
     h += '<div style="font-size:0.9rem;font-weight:700;margin-bottom:10px;">1099 Summary · ' + year + '</div>';
     h += '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:0.85rem;">';
-    h += '<thead><tr style="border-bottom:1px solid rgba(255,255,255,0.1);">';
+    h += '<thead><tr style="border-bottom:1px solid var(--border);">';
     ['Contractor','Tax ID','Total Paid','1099 Required'].forEach(function(c) {
       h += '<th style="text-align:left;padding:6px 10px;font-size:0.72rem;color:var(--warm-gray,#888);text-transform:uppercase;">' + c + '</th>';
     });
     h += '</tr></thead><tbody>';
     contractors.forEach(function(c) {
-      h += '<tr style="border-bottom:1px solid rgba(255,255,255,0.05);">';
+      h += '<tr style="border-bottom:1px solid var(--border);">';
       h += '<td style="padding:7px 10px;font-weight:600;">' + e(c.name) + '</td>';
       h += '<td style="padding:7px 10px;font-size:0.78rem;">' + (c.hasTaxId?'<span style="font-family:monospace;">XXX-XX-'+String(c.taxId||'').replace(/[^0-9]/g,'').slice(-4)+'</span>':'<span style="color:#ef4444;">Missing</span>') + '</td>';
       h += '<td style="padding:7px 10px;font-weight:700;">' + fmt$(c.totalPaid) + '</td>';
@@ -6427,7 +6427,7 @@ async function _loadFinanceOverview() {
 
     function card(label, value, color, sub, onclickRoute) {
       var clickAttr = onclickRoute ? ' onclick="navigateTo(\'' + onclickRoute + '\')" style="cursor:pointer;"' : '';
-      return '<div' + clickAttr + ' style="background:var(--bg-secondary,#232323);border-radius:10px;padding:18px;border:1px solid rgba(255,255,255,0.06);' + (onclickRoute ? 'transition:border-color 0.15s;' : '') + '">' +
+      return '<div' + clickAttr + ' style="background:var(--bg-secondary,#232323);border-radius:10px;padding:18px;border:1px solid var(--border);' + (onclickRoute ? 'transition:border-color 0.15s;' : '') + '">' +
         '<div style="font-size:0.72rem;color:var(--warm-gray,#888);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">' + e(label) + '</div>' +
         '<div style="font-size:1.6rem;font-weight:700;color:' + (color || 'var(--text,#fff)') + ';margin-bottom:6px;">' + value + '</div>' +
         '<div style="font-size:0.72rem;color:var(--warm-gray,#888);">' + sub + '</div>' +
@@ -6547,7 +6547,7 @@ function _integrationPill(label, lastSyncIso, status, _ignoredLegacyRouteHash, e
       '</div>';
   }
   var pillHtml =
-    '<div style="display:inline-flex;align-items:center;gap:8px;background:var(--bg-secondary,#232323);border:1px solid rgba(255,255,255,0.08);border-radius:999px;padding:6px 14px;font-size:0.78rem;">' +
+    '<div style="display:inline-flex;align-items:center;gap:8px;background:var(--bg-secondary,#232323);border:1px solid var(--border);border-radius:999px;padding:6px 14px;font-size:0.78rem;">' +
       '<span style="font-weight:600;color:var(--text,#fff);">' + e(label) + '</span>' +
       '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:' + color + ';"></span>' +
       '<span style="color:var(--warm-gray,#888);">' + e(pillText) + '</span>' +
@@ -6573,7 +6573,7 @@ function renderIntegrationsHealthCard(integMeta, qboConn, xeroConn) {
   var pills =
     _integrationPill('QuickBooks', lastMap.qbo || null, qboStatus, 'settings', qboExtras) +
     _integrationPill('Xero', lastMap.xero || null, xeroStatus, 'settings', xeroExtras);
-  return '<div style="background:var(--bg-secondary,#232323);border-radius:10px;padding:18px;margin-top:14px;border:1px solid rgba(255,255,255,0.06);">' +
+  return '<div style="background:var(--bg-secondary,#232323);border-radius:10px;padding:18px;margin-top:14px;border:1px solid var(--border);">' +
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">' +
       '<div style="font-size:0.72rem;color:var(--warm-gray,#888);text-transform:uppercase;letter-spacing:0.5px;">Integrations health</div>' +
       '<div style="font-size:0.72rem;color:var(--warm-gray,#888);">Push · Poll · Webhook timestamps per provider · click to open Settings</div>' +
@@ -6650,12 +6650,12 @@ async function renderPeriodClose() {
     h += '<div style="font-size:0.78rem;color:var(--warm-gray,#888);margin-bottom:14px;">Closing a period locks all day closes in the month. Day closes can still be re-closed (creates new versions) until the period is closed.</div>';
     h += '<table style="width:100%;border-collapse:collapse;font-size:0.85rem;">';
     h += '<thead><tr style="text-align:left;color:var(--warm-gray,#888);font-size:0.78rem;">';
-    h += '<th style="padding:8px 10px;border-bottom:1px solid rgba(255,255,255,0.12);">Month</th>';
-    h += '<th style="padding:8px 10px;border-bottom:1px solid rgba(255,255,255,0.12);">Status</th>';
-    h += '<th style="padding:8px 10px;border-bottom:1px solid rgba(255,255,255,0.12);text-align:right;">Opening cash</th>';
-    h += '<th style="padding:8px 10px;border-bottom:1px solid rgba(255,255,255,0.12);text-align:right;">Closing cash</th>';
-    h += '<th style="padding:8px 10px;border-bottom:1px solid rgba(255,255,255,0.12);text-align:right;">Variance</th>';
-    h += '<th style="padding:8px 10px;border-bottom:1px solid rgba(255,255,255,0.12);"></th>';
+    h += '<th style="padding:8px 10px;border-bottom:1px solid var(--border);">Month</th>';
+    h += '<th style="padding:8px 10px;border-bottom:1px solid var(--border);">Status</th>';
+    h += '<th style="padding:8px 10px;border-bottom:1px solid var(--border);text-align:right;">Opening cash</th>';
+    h += '<th style="padding:8px 10px;border-bottom:1px solid var(--border);text-align:right;">Closing cash</th>';
+    h += '<th style="padding:8px 10px;border-bottom:1px solid var(--border);text-align:right;">Variance</th>';
+    h += '<th style="padding:8px 10px;border-bottom:1px solid var(--border);"></th>';
     h += '</tr></thead><tbody>';
     months.forEach(function(monthStr) {
       var range = _pcMonthRange(monthStr);
@@ -6684,12 +6684,12 @@ async function renderPeriodClose() {
       }
       var rowClickAttr = (pc ? 'onclick="finPeriodCloseDrillDown(\'' + _jsAttrSafe(monthStr) + '\')" style="cursor:pointer;"' : '');
       h += '<tr ' + rowClickAttr + '>';
-      h += '<td style="padding:8px 10px;border-bottom:1px solid rgba(255,255,255,0.06);font-weight:600;">' + e(_pcMonthLabel(monthStr)) + '</td>';
-      h += '<td style="padding:8px 10px;border-bottom:1px solid rgba(255,255,255,0.06);">' + statusChip + '</td>';
-      h += '<td style="padding:8px 10px;border-bottom:1px solid rgba(255,255,255,0.06);text-align:right;">' + e(fmt$(openingSum)) + '</td>';
-      h += '<td style="padding:8px 10px;border-bottom:1px solid rgba(255,255,255,0.06);text-align:right;">' + e(fmt$(closingSum)) + '</td>';
-      h += '<td style="padding:8px 10px;border-bottom:1px solid rgba(255,255,255,0.06);text-align:right;color:' + (varianceSum === 0 ? 'var(--warm-gray,#888)' : (Math.abs(varianceSum) < 500 ? '#22c55e' : '#eab308')) + ';">' + e(fmt$(varianceSum)) + '</td>';
-      h += '<td style="padding:8px 10px;border-bottom:1px solid rgba(255,255,255,0.06);text-align:right;">';
+      h += '<td style="padding:8px 10px;border-bottom:1px solid var(--border);font-weight:600;">' + e(_pcMonthLabel(monthStr)) + '</td>';
+      h += '<td style="padding:8px 10px;border-bottom:1px solid var(--border);">' + statusChip + '</td>';
+      h += '<td style="padding:8px 10px;border-bottom:1px solid var(--border);text-align:right;">' + e(fmt$(openingSum)) + '</td>';
+      h += '<td style="padding:8px 10px;border-bottom:1px solid var(--border);text-align:right;">' + e(fmt$(closingSum)) + '</td>';
+      h += '<td style="padding:8px 10px;border-bottom:1px solid var(--border);text-align:right;color:' + (varianceSum === 0 ? 'var(--warm-gray,#888)' : (Math.abs(varianceSum) < 500 ? '#22c55e' : '#eab308')) + ';">' + e(fmt$(varianceSum)) + '</td>';
+      h += '<td style="padding:8px 10px;border-bottom:1px solid var(--border);text-align:right;">';
       if (!pc) {
         h += '<button class="btn btn-primary btn-small" onclick="event.stopPropagation();finPeriodCloseRun(\'' + _jsAttrSafe(monthStr) + '\')">Close ' + e(_pcMonthLabel(monthStr).split(' ')[0]) + '</button>';
       } else {
@@ -6764,7 +6764,7 @@ window.finPeriodCloseDrillDown = async function(monthStr) {
     inner += '</div>';
     inner += '<div style="max-height:280px;overflow-y:auto;">';
     inner += '<table style="width:100%;font-size:0.78rem;border-collapse:collapse;">';
-    inner += '<thead><tr><th style="text-align:left;padding:4px 6px;border-bottom:1px solid rgba(255,255,255,0.12);">Date</th><th style="text-align:right;padding:4px 6px;border-bottom:1px solid rgba(255,255,255,0.12);">Variance</th><th style="padding:4px 6px;border-bottom:1px solid rgba(255,255,255,0.12);"></th></tr></thead><tbody>';
+    inner += '<thead><tr><th style="text-align:left;padding:4px 6px;border-bottom:1px solid var(--border);">Date</th><th style="text-align:right;padding:4px 6px;border-bottom:1px solid var(--border);">Variance</th><th style="padding:4px 6px;border-bottom:1px solid var(--border);"></th></tr></thead><tbody>';
     rows.forEach(function(v) {
       inner += '<tr><td style="padding:4px 6px;">' + e(v.date) + ' <span style="color:var(--warm-gray,#888);">v' + e(String(v.version || 1)) + '</span></td>';
       inner += '<td style="padding:4px 6px;text-align:right;">' + e(fmt$(v.varianceCents || 0)) + '</td>';
@@ -6890,7 +6890,7 @@ async function renderAmendments() {
           h += '<div style="font-size:0.78rem;color:var(--warm-gray,#888);margin-bottom:10px;">No field-level diff captured.</div>';
         } else {
           h += '<table style="width:100%;font-size:0.78rem;border-collapse:collapse;margin-bottom:10px;">';
-          h += '<thead><tr><th style="text-align:left;padding:4px 6px;border-bottom:1px solid rgba(255,255,255,0.12);">Field</th><th style="text-align:left;padding:4px 6px;border-bottom:1px solid rgba(255,255,255,0.12);">Before</th><th style="text-align:left;padding:4px 6px;border-bottom:1px solid rgba(255,255,255,0.12);">After</th></tr></thead><tbody>';
+          h += '<thead><tr><th style="text-align:left;padding:4px 6px;border-bottom:1px solid var(--border);">Field</th><th style="text-align:left;padding:4px 6px;border-bottom:1px solid var(--border);">Before</th><th style="text-align:left;padding:4px 6px;border-bottom:1px solid var(--border);">After</th></tr></thead><tbody>';
           diffs.forEach(function(d) {
             h += '<tr><td style="padding:4px 6px;font-weight:600;">' + e(d.field) + '</td>';
             h += '<td style="padding:4px 6px;color:#eab308;">' + e(d.before || '(empty)') + '</td>';
@@ -7016,7 +7016,7 @@ window.finAmendmentOpenSubmit = function() {
   var optHtml = collections.map(function(c) {
     return '<option value="' + e(c.id) + '">' + e(c.label) + ' (' + e(c.id) + ')</option>';
   }).join('');
-  var inputCss = 'background:var(--bg-primary,#1a1a1a);border:1px solid rgba(255,255,255,0.15);border-radius:6px;color:var(--text,#fff);padding:6px 8px;font-size:0.85rem;width:100%;box-sizing:border-box;font-family:inherit;';
+  var inputCss = 'background:var(--bg-primary,#1a1a1a);border:1px solid var(--border);border-radius:6px;color:var(--text,#fff);padding:6px 8px;font-size:0.85rem;width:100%;box-sizing:border-box;font-family:inherit;';
   var h = '<div style="background:var(--bg-secondary,#232323);border-radius:10px;max-width:640px;width:96%;padding:22px 24px;box-shadow:0 8px 30px rgba(0,0,0,0.4);color:var(--text,#fff);">';
   h += '<div style="font-size:1rem;font-weight:700;margin-bottom:10px;">Submit amendment</div>';
   h += '<div style="font-size:0.78rem;color:var(--warm-gray,#888);margin-bottom:14px;">';

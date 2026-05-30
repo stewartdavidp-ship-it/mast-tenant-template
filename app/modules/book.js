@@ -522,23 +522,23 @@
         /* Form section cards — theme-adaptive */
         '.book-form-section{background:var(--cream,var(--cream));border:1px solid var(--cream-dark,#ddd);' +
           'border-radius:12px;padding:1.25rem 1.5rem;margin-bottom:1.25rem;}' +
-        'body.dark-mode .book-form-section{background:var(--surface-card,#2a2a2a);border-color:var(--border,#444);}' +
+        'body.dark-mode .book-form-section{background:var(--surface-card,#2a2a2a);border-color:var(--border,var(--border));}' +
         '.book-form-section-title{font-size:0.78rem;font-weight:700;text-transform:uppercase;' +
           'letter-spacing:0.06em;color:var(--primary,var(--amber));margin:0 0 1rem;padding-bottom:0.6rem;' +
           'border-bottom:1px solid var(--cream-dark,#ddd);display:flex;align-items:center;gap:8px;}' +
-        'body.dark-mode .book-form-section-title{border-bottom-color:var(--border,#444);}' +
+        'body.dark-mode .book-form-section-title{border-bottom-color:var(--border,var(--border));}' +
 
         /* Card list items — theme-adaptive */
         '.book-card{background:var(--cream,var(--cream));border:1px solid var(--cream-dark,#ddd);' +
           'border-radius:8px;padding:12px 16px;margin-bottom:8px;cursor:pointer;transition:border-color 0.15s;}' +
         '.book-card:hover{border-color:var(--amber,var(--amber));}' +
-        'body.dark-mode .book-card{background:var(--surface-card,#2a2a2a);border-color:var(--border,#444);}' +
+        'body.dark-mode .book-card{background:var(--surface-card,#2a2a2a);border-color:var(--border,var(--border));}' +
         'body.dark-mode .book-card:hover{border-color:var(--amber,var(--amber));}' +
 
         /* Collapsible sections — detail views */
         '.book-collapse{background:var(--cream,var(--cream));border:1px solid var(--cream-dark,#ddd);' +
           'border-radius:12px;margin-bottom:1.25rem;overflow:hidden;}' +
-        'body.dark-mode .book-collapse{background:var(--surface-card,#2a2a2a);border-color:var(--border,#444);}' +
+        'body.dark-mode .book-collapse{background:var(--surface-card,#2a2a2a);border-color:var(--border,var(--border));}' +
         '.book-collapse-header{display:flex;justify-content:space-between;align-items:center;' +
           'padding:1rem 1.5rem;cursor:pointer;user-select:none;}' +
         '.book-collapse-header:hover{opacity:0.85;}' +
@@ -580,20 +580,20 @@
 
         /* Form action buttons area */
         '.book-form-actions{display:flex;gap:10px;margin-top:1.5rem;padding-top:1.25rem;border-top:1px solid var(--cream-dark,#ddd);}' +
-        'body.dark-mode .book-form-actions{border-top-color:var(--border,#444);}' +
+        'body.dark-mode .book-form-actions{border-top-color:var(--border,var(--border));}' +
 
         /* Day-of-week pill selector */
         '.book-day-pills{display:flex;flex-wrap:wrap;gap:6px;}' +
         '.book-day-pill{display:inline-flex;align-items:center;gap:4px;padding:6px 12px;border-radius:20px;' +
-          'border:1px solid var(--border,#444);background:transparent;color:var(--text,#e0e0e0);' +
+          'border:1px solid var(--border,var(--border));background:transparent;color:var(--text,#e0e0e0);' +
           'font-size:0.78rem;cursor:pointer;transition:all 0.2s;}' +
         '.book-day-pill:has(input:checked){background:var(--primary,var(--amber));color:#fff;border-color:var(--primary,var(--amber));}' +
         '.book-day-pill input{display:none;}' +
 
         /* Override for schedule radio */
-        '.book-sched-toggle{display:flex;gap:0;border:1px solid var(--border,#444);border-radius:8px;overflow:hidden;}' +
+        '.book-sched-toggle{display:flex;gap:0;border:1px solid var(--border,var(--border));border-radius:8px;overflow:hidden;}' +
         '.book-sched-toggle label{padding:8px 20px;cursor:pointer;font-size:0.85rem;color:var(--text,#e0e0e0);' +
-          'transition:all 0.2s;border-right:1px solid var(--border,#444);}' +
+          'transition:all 0.2s;border-right:1px solid var(--border,var(--border));}' +
         '.book-sched-toggle label:last-child{border-right:none;}' +
         '.book-sched-toggle label:has(input:checked){background:var(--primary,var(--amber));color:#fff;}' +
         '.book-sched-toggle input{display:none;}' +
@@ -2099,7 +2099,7 @@
 
     if (filtered.length === 0) {
       container.innerHTML = html + (hasUrlFilter
-        ? '<div style="text-align:center;padding:30px;color:#999;font-size:0.85rem;">No instructors match the filter.</div>'
+        ? '<div style="text-align:center;padding:30px;color:var(--warm-gray);font-size:0.85rem;">No instructors match the filter.</div>'
         : bookEmptyState('\ud83d\udc69\u200d\ud83c\udfeb', 'No instructors yet', 'Click + New Instructor to add one.'));
       return;
     }
@@ -2415,7 +2415,7 @@
 
     if (filtered.length === 0) {
       container.innerHTML = html + (hasUrlFilter
-        ? '<div style="text-align:center;padding:30px;color:#999;font-size:0.85rem;">No resources match the filter.</div>'
+        ? '<div style="text-align:center;padding:30px;color:var(--warm-gray);font-size:0.85rem;">No resources match the filter.</div>'
         : bookEmptyState('\ud83c\udfe0', 'No resources yet', 'Click + New Resource to add one.'));
       return;
     }
@@ -2606,7 +2606,7 @@
 
     if (filtered.length === 0) {
       container.innerHTML = html + (hasUrlFilter
-        ? '<div style="text-align:center;padding:30px;color:#999;font-size:0.85rem;">No definitions match the filter.</div>'
+        ? '<div style="text-align:center;padding:30px;color:var(--warm-gray);font-size:0.85rem;">No definitions match the filter.</div>'
         : bookEmptyState('\ud83c\udf9f\ufe0f', 'No passes yet', 'Click + New Pass to create one.'));
       return;
     }

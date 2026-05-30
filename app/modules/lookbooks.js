@@ -266,7 +266,7 @@
       '</div>';
 
     if (!docs.length) {
-      html += '<div style="text-align:center;padding:30px;color:#999;font-size:0.85rem;">No documents match the filter.</div>';
+      html += '<div style="text-align:center;padding:30px;color:var(--warm-gray);font-size:0.85rem;">No documents match the filter.</div>';
       tab.innerHTML = html;
       return;
     }

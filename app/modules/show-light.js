@@ -824,7 +824,7 @@
         h += '<div style="margin-bottom:12px;">';
         h += '<div style="font-size:0.78rem;font-weight:600;color:var(--cream);margin-bottom:6px;">Application Fields (' + (reqs.fields || []).length + ')</div>';
         (reqs.fields || []).forEach(function(f, idx) {
-          h += '<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;font-size:0.85rem;border-bottom:1px solid rgba(255,255,255,0.05);">';
+          h += '<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;font-size:0.85rem;border-bottom:1px solid var(--border);">';
           h += '<span>' + esc(f.name) + (f.required ? ' <span style="color:var(--danger);font-size:0.72rem;">required</span>' : '') + '</span>';
           h += '<button onclick="slRemoveParsedField(' + idx + ')" style="background:none;border:none;color:var(--warm-gray);cursor:pointer;font-size:0.78rem;">&times;</button>';
           h += '</div>';
@@ -836,7 +836,7 @@
         h += '<div style="margin-bottom:12px;">';
         h += '<div style="font-size:0.78rem;font-weight:600;color:var(--cream);margin-bottom:6px;">Photo Requirements (' + (reqs.photos || []).length + ')</div>';
         (reqs.photos || []).forEach(function(p, idx) {
-          h += '<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;font-size:0.85rem;border-bottom:1px solid rgba(255,255,255,0.05);">';
+          h += '<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;font-size:0.85rem;border-bottom:1px solid var(--border);">';
           h += '<span>' + esc(p.slot) + (p.dimensions ? ' <span style="color:var(--warm-gray);font-size:0.78rem;">' + esc(p.dimensions) + '</span>' : '') + '</span>';
           h += '<button onclick="slRemoveParsedPhoto(' + idx + ')" style="background:none;border:none;color:var(--warm-gray);cursor:pointer;font-size:0.78rem;">&times;</button>';
           h += '</div>';
@@ -1250,7 +1250,7 @@
         .slice() // don't mutate original
         .sort(function(a, b) { return (a.name || '').localeCompare(b.name || ''); });
 
-      h += '<div style="margin-top:16px;padding:16px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.1);border-radius:10px;position:relative;">';
+      h += '<div style="margin-top:16px;padding:16px;background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:10px;position:relative;">';
       h += '<button onclick="slAssignImage(' + idx + ', null)" style="position:absolute;top:8px;right:8px;background:none;border:none;color:var(--warm-gray);font-size:1.15rem;cursor:pointer;padding:4px 8px;line-height:1;" title="Remove image">&times;</button>';
       h += '<div style="display:flex;gap:16px;align-items:flex-start;">';
       h += '<img src="' + esc(img.thumbnailUrl || img.url || '') + '" style="width:100px;height:100px;object-fit:cover;border-radius:8px;flex-shrink:0;" />';
@@ -1260,7 +1260,7 @@
       // Product dropdown
       h += '<label style="font-size:0.78rem;color:var(--warm-gray);display:block;margin-bottom:4px;">Link to Product</label>';
       h += '<select id="slProdSelect_' + idx + '" onchange="slLinkProduct(' + idx + ', this.value)" ' +
-        'style="width:100%;padding:8px 10px;border-radius:8px;border:1px solid rgba(255,255,255,0.15);background:var(--surface-dark);color:var(--cream);font-size:0.85rem;margin-bottom:12px;cursor:pointer;">';
+        'style="width:100%;padding:8px 10px;border-radius:8px;border:1px solid var(--border);background:var(--surface-dark);color:var(--cream);font-size:0.85rem;margin-bottom:12px;cursor:pointer;">';
       h += '<option value="">— Select a product —</option>';
       prodOptions.forEach(function(prod) {
         var sel = prod.pid === currentPid ? ' selected' : '';
@@ -1272,7 +1272,7 @@
       // Application description
       h += '<label style="font-size:0.78rem;color:var(--warm-gray);display:block;margin-bottom:4px;">Application Description</label>';
       h += '<textarea id="slAppDesc_' + idx + '" rows="4" placeholder="Describe this product for show applications. Select a product above to pre-fill..." ' +
-        'style="width:100%;padding:10px 12px;border-radius:8px;border:1px solid rgba(255,255,255,0.15);background:var(--surface-dark);color:var(--cream);font-size:0.9rem;line-height:1.4;resize:vertical;" ' +
+        'style="width:100%;padding:10px 12px;border-radius:8px;border:1px solid var(--border);background:var(--surface-dark);color:var(--cream);font-size:0.9rem;line-height:1.4;resize:vertical;" ' +
         'onblur="slSaveSlotDesc(' + idx + ', this.value)">' + esc(appDesc) + '</textarea>';
       h += '</div>';
       h += '</div>';
@@ -1521,7 +1521,7 @@
         } else if (assigned) {
           img = (imageLibrary || {})[assigned];
         }
-        h += '<div style="text-align:center;padding:12px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.1);border-radius:8px;">';
+        h += '<div style="text-align:center;padding:12px;background:rgba(255,255,255,0.02);border:1px solid var(--border);border-radius:8px;">';
         if (img && img.url) {
           h += '<img src="' + esc(img.url) + '" style="width:100%;aspect-ratio:1;object-fit:cover;border-radius:6px;margin-bottom:8px;">';
           h += '<div style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:6px;">' + esc(p.slot || 'Photo ' + (idx + 1)) + '</div>';

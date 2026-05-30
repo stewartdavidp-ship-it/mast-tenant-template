@@ -1672,7 +1672,7 @@ async function capturePackingPhoto() {
         '</div>' +
         '<div style="display:flex;gap:8px;align-items:center;">' +
           '<label style="color:var(--cream);font-size:0.85rem;">Quantity:</label>' +
-          '<input type="number" id="packQtyInput" value="1" min="1" style="width:60px;padding:6px;border-radius:4px;border:1px solid rgba(255,255,255,0.3);background:rgba(255,255,255,0.1);color:white;text-align:center;">' +
+          '<input type="number" id="packQtyInput" value="1" min="1" style="width:60px;padding:6px;border-radius:4px;border:1px solid var(--border);background:rgba(255,255,255,0.1);color:white;text-align:center;">' +
           '<button class="btn btn-primary" data-pid="' + esc(data.productId) + '" data-pname="' + esc(prodName) + '" onclick="confirmPackItem(this.dataset.pid, this.dataset.pname)">Add to Pack</button>' +
           '<button class="btn btn-secondary" onclick="openManualPackPicker()">Wrong? Pick Manually</button>' +
         '</div>' +
@@ -1772,7 +1772,7 @@ function filterPackProducts() {
     var name = p.name || pid;
     if (query && name.toLowerCase().indexOf(query) === -1 && (p.category || '').toLowerCase().indexOf(query) === -1) return;
 
-    html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px;border-bottom:1px solid rgba(255,255,255,0.1);cursor:pointer;" data-pid="' + esc(pid) + '" data-pname="' + esc(name) + '" onclick="selectManualPackProduct(this.dataset.pid, this.dataset.pname)">' +
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px;border-bottom:1px solid var(--border);cursor:pointer;" data-pid="' + esc(pid) + '" data-pname="' + esc(name) + '" onclick="selectManualPackProduct(this.dataset.pid, this.dataset.pname)">' +
       '<span style="color:white;">' + esc(name) + '</span>' +
       '<span style="color:var(--cream);font-size:0.78rem;">' + esc(p.category || '') + '</span>' +
     '</div>';
@@ -1789,7 +1789,7 @@ function selectManualPackProduct(productId, productName) {
     '<div style="font-weight:700;font-size:1.15rem;margin-bottom:8px;">' + esc(productName) + '</div>' +
     '<div style="display:flex;gap:8px;align-items:center;">' +
       '<label style="color:var(--cream);font-size:0.85rem;">Quantity:</label>' +
-      '<input type="number" id="packQtyInput" value="1" min="1" style="width:60px;padding:6px;border-radius:4px;border:1px solid rgba(255,255,255,0.3);background:rgba(255,255,255,0.1);color:white;text-align:center;">' +
+      '<input type="number" id="packQtyInput" value="1" min="1" style="width:60px;padding:6px;border-radius:4px;border:1px solid var(--border);background:rgba(255,255,255,0.1);color:white;text-align:center;">' +
       '<button class="btn btn-primary" data-pid="' + esc(productId) + '" data-pname="' + esc(productName) + '" onclick="confirmPackItem(this.dataset.pid, this.dataset.pname)">Add to Pack</button>' +
     '</div>' +
   '</div>';
@@ -1905,7 +1905,7 @@ async function exitPackingMode() {
   function startLiveSession(channelId) {
     closeLiveModal();
     var banner = document.getElementById('liveSessionBanner');
-    if (banner) banner.innerHTML = '<div style="text-align:center;padding:12px;color:#999;font-size:0.85rem;">Starting live session\u2026</div>';
+    if (banner) banner.innerHTML = '<div style="text-align:center;padding:12px;color:var(--warm-gray);font-size:0.85rem;">Starting live session\u2026</div>';
     if (banner) banner.style.display = '';
 
     var now = new Date().toISOString();
@@ -1976,7 +1976,7 @@ async function exitPackingMode() {
     h += '</div>';
 
     // Right: end button
-    h += '<button class="btn" onclick="endLiveSession()" style="background:rgba(255,255,255,0.2);color:#fff;border:1px solid rgba(255,255,255,0.4);font-size:0.85rem;padding:8px 16px;">End Session</button>';
+    h += '<button class="btn" onclick="endLiveSession()" style="background:rgba(255,255,255,0.2);color:#fff;border:1px solid var(--border);font-size:0.85rem;padding:8px 16px;">End Session</button>';
 
     h += '</div>';
 
@@ -2090,9 +2090,9 @@ async function exitPackingMode() {
     var banner = document.getElementById('liveSessionBanner');
     if (!banner) return;
 
-    var h = '<div style="background:#1a1a2e;border:1px solid #333;border-radius:10px;padding:20px;margin-bottom:12px;">';
+    var h = '<div style="background:#1a1a2e;border:1px solid var(--border);border-radius:10px;padding:20px;margin-bottom:12px;">';
     h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">';
-    h += '<div style="font-size:0.9rem;font-weight:600;color:#e0e0e0;">Live Session Complete</div>';
+    h += '<div style="font-size:0.9rem;font-weight:600;color:var(--text);">Live Session Complete</div>';
     h += '<button onclick="dismissLiveSummary()" style="background:none;border:none;color:var(--warm-gray,#999);cursor:pointer;font-size:1.15rem;">&times;</button>';
     h += '</div>';
 
@@ -2633,7 +2633,7 @@ async function exitPackingMode() {
     var printHtml = '<!DOCTYPE html><html><head><title>Packing List — ' + esc(ev.name || 'Event') + '</title>' +
       '<style>body{font-family:system-ui,sans-serif;padding:24px;max-width:600px;margin:0 auto;color:#333;}' +
       'table{width:100%;border-collapse:collapse;margin-top:16px;}' +
-      'th{text-align:left;padding:8px 12px;border-bottom:2px solid #333;font-size:0.85rem;}' +
+      'th{text-align:left;padding:8px 12px;border-bottom:2px solid var(--border);font-size:0.85rem;}' +
       '@media print{body{padding:12px;}button{display:none!important;}}</style></head><body>' +
       '<h2 style="margin:0 0 4px;">' + esc(ev.name || 'Event') + '</h2>' +
       (ev.date ? '<p style="color:#666;margin:0 0 4px;">' + esc(ev.date) + '</p>' : '') +
@@ -2641,7 +2641,7 @@ async function exitPackingMode() {
       '<p style="font-size:0.9rem;"><strong>' + totalPacked + '</strong> items across <strong>' + pids.length + '</strong> products</p>' +
       '<table><thead><tr><th>Product</th><th style="text-align:center;">Qty</th><th style="text-align:center;width:60px;">Check</th></tr></thead>' +
       '<tbody>' + lines + '</tbody></table>' +
-      '<p style="margin-top:24px;font-size:0.78rem;color:#999;">Generated ' + new Date().toLocaleDateString() + '</p>' +
+      '<p style="margin-top:24px;font-size:0.78rem;color:var(--warm-gray);">Generated ' + new Date().toLocaleDateString() + '</p>' +
       '<button onclick="window.print()" style="margin-top:12px;padding:8px 16px;cursor:pointer;">Print</button>' +
       '</body></html>';
 

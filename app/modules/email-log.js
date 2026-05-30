@@ -325,7 +325,7 @@
     } else {
       // Helper not loaded — degrade to non-sortable headers.
       ['Date','Recipient','Subject','Type','Status','Provider'].forEach(function(l) {
-        h += '<th style="text-align:left;padding:8px 12px;font-size:0.78rem;color:var(--warm-gray);border-bottom:1px solid rgba(255,255,255,0.06);">' + l + '</th>';
+        h += '<th style="text-align:left;padding:8px 12px;font-size:0.78rem;color:var(--warm-gray);border-bottom:1px solid var(--border);">' + l + '</th>';
       });
     }
     h += '</tr></thead>';

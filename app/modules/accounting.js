@@ -266,7 +266,7 @@
       }
       ageLine = 'Last webhook event: ' + new Date(lastMs).toLocaleString() + '.';
     }
-    return '<div style="background:var(--bg-secondary,#1a1a1a);border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:12px 14px;margin-bottom:16px;">' +
+    return '<div style="background:var(--bg-secondary,#1a1a1a);border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin-bottom:16px;">' +
       '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap;">' +
         '<div style="font-size:0.9rem;font-weight:600;color:var(--text,#fff);">Webhook (real-time pull)</div>' +
         '<span style="display:inline-flex;align-items:center;gap:4px;padding:2px 10px;border-radius:10px;background:' + pillBg + ';color:' + pillFg + ';font-size:0.72rem;font-weight:600;">' +
@@ -328,7 +328,7 @@
     var btnAttrs = disabled
       ? ' disabled title="' + esc(disabledReason) + '" style="opacity:0.55;"'
       : ' title="Pull historical invoices, bills, payments from QBO"';
-    return '<div style="background:var(--bg-secondary,#1a1a1a);border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:12px 14px;margin-bottom:16px;">' +
+    return '<div style="background:var(--bg-secondary,#1a1a1a);border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin-bottom:16px;">' +
       '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">' +
         '<div>' +
           '<div style="font-size:0.9rem;font-weight:600;color:var(--text,#fff);">Bulk backfill historical data</div>' +
@@ -1096,7 +1096,7 @@
 
     var html =
       '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:0.85rem;">' +
-        '<thead><tr style="border-bottom:1px solid rgba(255,255,255,0.1);">' +
+        '<thead><tr style="border-bottom:1px solid var(--border);">' +
           '<th style="text-align:left;padding:8px 10px;font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.5px;">Timestamp</th>' +
           '<th style="text-align:left;padding:8px 10px;font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.5px;">Entity</th>' +
           '<th style="text-align:left;padding:8px 10px;font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.5px;">Mast ID</th>' +
@@ -1133,7 +1133,7 @@
       }
       var copyBtn = qboId ? ' <button onclick="navigator.clipboard &amp;&amp; navigator.clipboard.writeText(&#39;' + jsAttr(qboId) + '&#39;);" title="Copy QBO ID" style="background:none;border:none;cursor:pointer;color:var(--warm-gray);font-size:0.78rem;">⧉</button>' : '';
       html +=
-        '<tr style="border-bottom:1px solid rgba(255,255,255,0.05);">' +
+        '<tr style="border-bottom:1px solid var(--border);">' +
           '<td style="padding:8px 10px;white-space:nowrap;">' + esc(tsFmt(r.createdAt)) + '</td>' +
           '<td style="padding:8px 10px;">' + directionChip + esc(entityType || '—') + '</td>' +
           '<td style="padding:8px 10px;font-family:monospace;font-size:0.78rem;">' + esc(truncate(mastId, 24)) + '</td>' +
@@ -1362,7 +1362,7 @@
         actionHtml = '<button class="btn btn-primary" style="font-size:0.78rem;padding:3px 10px;" onclick="window.openQboConflictModal(\'' + _jsAttrSafe(c.conflictId || '') + '\')">Resolve</button>';
       }
       rowsHtml +=
-        '<tr style="border-bottom:1px solid rgba(255,255,255,0.05);">' +
+        '<tr style="border-bottom:1px solid var(--border);">' +
           '<td style="padding:8px 10px;font-size:0.85rem;">' + esc(c.entityType || '—') + '</td>' +
           '<td style="padding:8px 10px;font-family:monospace;font-size:0.78rem;">' + esc(String(c.mastId || '').slice(-12) || '—') + '</td>' +
           '<td style="padding:8px 10px;font-family:monospace;font-size:0.78rem;">' + esc(String(c.qboId || '').slice(-12) || '—') + '</td>' +
@@ -1374,7 +1374,7 @@
     });
     body.innerHTML = intro +
       '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:0.85rem;">' +
-        '<thead><tr style="border-bottom:1px solid rgba(255,255,255,0.1);">' +
+        '<thead><tr style="border-bottom:1px solid var(--border);">' +
           ['Entity', 'Mast ID', 'QBO ID', 'Diverged fields', 'Detected', 'By', 'Action'].map(function(c) {
             var align = (c === 'Action') ? 'right' : 'left';
             return '<th style="text-align:' + align + ';padding:8px 10px;font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.5px;">' + esc(c) + '</th>';

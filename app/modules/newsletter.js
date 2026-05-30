@@ -1738,7 +1738,7 @@
     }) : [];
     var headerHtml = '<table width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td style="background:#0f1014;padding:20px 24px;color:#f5f0eb;font-family:sans-serif;">' +
       '<div style="font-size:20px;font-weight:700;">' + nlEscHtml(brand.name || 'Newsletter') + '</div>' +
-      (brand.tagline ? '<div style="font-size:12px;color:#aaa;margin-top:4px;">' + nlEscHtml(brand.tagline) + '</div>' : '') +
+      (brand.tagline ? '<div style="font-size:12px;color:var(--warm-gray-light);margin-top:4px;">' + nlEscHtml(brand.tagline) + '</div>' : '') +
       '</td></tr></table>';
     var body = sections.map(function(sec) {
       var content = sec.finalContent || sec.rawInput || '';

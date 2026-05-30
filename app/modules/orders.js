@@ -1780,7 +1780,7 @@
 
     if (effectiveStatus === 'draft') {
       // Full preview panel
-      h += '<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:16px;margin-bottom:12px;">';
+      h += '<div style="background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:8px;padding:16px;margin-bottom:12px;">';
 
       // Header row
       h += '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;flex-wrap:wrap;gap:8px;">';
@@ -1805,7 +1805,7 @@
       h += '</div>';
 
       // Line items
-      h += '<div style="border-top:1px solid rgba(255,255,255,0.08);padding-top:12px;margin-bottom:12px;">';
+      h += '<div style="border-top:1px solid var(--border);padding-top:12px;margin-bottom:12px;">';
       h += '<div style="display:flex;gap:8px;margin-bottom:6px;font-size:0.72rem;color:var(--warm-gray-light);text-transform:uppercase;letter-spacing:0.5px;">';
       h += '<div style="flex:1;">Item</div><div style="width:50px;text-align:center;">Qty</div><div style="width:70px;text-align:right;">Unit</div><div style="width:70px;text-align:right;">Total</div>';
       h += '</div>';
@@ -1813,7 +1813,7 @@
         var qty = item.qty || 1;
         var unitCents = item.priceCents || 0;
         var lineCents = unitCents * qty;
-        h += '<div style="display:flex;gap:8px;padding:4px 0;font-size:0.85rem;border-bottom:1px solid rgba(255,255,255,0.05);">';
+        h += '<div style="display:flex;gap:8px;padding:4px 0;font-size:0.85rem;border-bottom:1px solid var(--border);">';
         h += '<div style="flex:1;">' + esc(item.name) + '</div>';
         h += '<div style="width:50px;text-align:center;">' + qty + '</div>';
         h += '<div style="width:70px;text-align:right;">$' + (unitCents / 100).toFixed(2) + '</div>';
@@ -1831,7 +1831,7 @@
       h += '</div>';
 
       // Payment instructions
-      h += '<div style="font-size:0.78rem;color:var(--warm-gray);border-top:1px solid rgba(255,255,255,0.08);padding-top:10px;">Payment due by ' + esc(o.invoiceDueDate || '—') + '</div>';
+      h += '<div style="font-size:0.78rem;color:var(--warm-gray);border-top:1px solid var(--border);padding-top:10px;">Payment due by ' + esc(o.invoiceDueDate || '—') + '</div>';
 
       h += '</div>';
 

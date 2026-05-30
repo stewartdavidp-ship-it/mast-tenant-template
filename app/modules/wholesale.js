@@ -1296,7 +1296,7 @@ function renderWholesaleRequests() {
     }
 
     if (requests.length === 0) {
-      html += '<div style="text-align:center;padding:30px;color:#999;font-size:0.85rem;">No requests match the filter.</div>';
+      html += '<div style="text-align:center;padding:30px;color:var(--warm-gray);font-size:0.85rem;">No requests match the filter.</div>';
       container.innerHTML = html;
       return;
     }
