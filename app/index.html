@@ -926,10 +926,12 @@
        Light mode is unchanged. Tokens match the existing #2a2a2a / #e0e0e0. */
     body.dark-mode .auth-email-form input:focus { background: #2a2a2a !important; color: #e0e0e0 !important; }
     body.dark-mode #mustChangePasswordScreen input,
+    body.dark-mode #passwordResetScreen input,
     body.dark-mode #inviteEmail,
     body.dark-mode #invitePassword,
     body.dark-mode #invitePasswordConfirm { background: #2a2a2a !important; border-color: #444 !important; color: #e0e0e0 !important; }
     body.dark-mode #mustChangePasswordScreen input:focus,
+    body.dark-mode #passwordResetScreen input:focus,
     body.dark-mode #inviteEmail:focus,
     body.dark-mode #invitePassword:focus,
     body.dark-mode #invitePasswordConfirm:focus { background: #2a2a2a !important; color: #e0e0e0 !important; }
@@ -937,6 +939,7 @@
     body.dark-mode .auth-email-form input:-webkit-autofill:hover,
     body.dark-mode .auth-email-form input:-webkit-autofill:focus,
     body.dark-mode #mustChangePasswordScreen input:-webkit-autofill,
+    body.dark-mode #passwordResetScreen input:-webkit-autofill,
     body.dark-mode #inviteEmail:-webkit-autofill,
     body.dark-mode #inviteEmail:-webkit-autofill:hover,
     body.dark-mode #inviteEmail:-webkit-autofill:focus,
@@ -7176,6 +7179,38 @@
         </div>
         <div class="auth-error" id="mcpError" role="alert" aria-live="assertive"></div>
         <button type="submit" class="btn btn-primary" id="mcpSubmit" style="width:100%;">Set password</button>
+      </form>
+    </div>
+
+    <!-- Auth: Password Reset / first-time setup from an emailed link.
+         Reached when the URL carries ?mode=resetPassword&oobCode=… — handled by
+         completePasswordResetIfPresent() at boot, BEFORE the auth gate. This
+         screen lives on the tenant's OWN origin (<tenant>.runmast.com) so the
+         browser saves the new password under runmast.com and offers it at the
+         next login. The previous flow used Firebase's hosted reset page on
+         firebaseapp.com (cross-origin), whose saved password never autofilled
+         here. username(readonly)+new-password is the shape browsers recognize
+         as a password-creation form. -->
+    <div class="auth-screen" id="passwordResetScreen" style="display:none;">
+      <h2>Set your password</h2>
+      <p id="prsSubtitle">Choose a password to finish setting up your account.</p>
+      <form class="auth-email-form" id="passwordResetForm" novalidate onsubmit="submitPasswordReset(event)">
+        <div class="auth-email-row">
+          <label for="prsUsername">Account</label>
+          <input id="prsUsername" type="email" autocomplete="username" readonly tabindex="-1" aria-readonly="true" style="opacity:0.7;background:var(--cream,#f6f1e9);cursor:default;" />
+        </div>
+        <div class="auth-email-row">
+          <label for="prsNewPassword">New password</label>
+          <input id="prsNewPassword" type="password" autocomplete="new-password" required placeholder="12+ chars with upper, lower, number &amp; symbol" oninput="renderPasswordPolicyChecklist('prsPwChecklist', this.value); checkPasswordConfirm('prsNewPassword','prsConfirmPassword','prsConfirmHint')" />
+          <div id="prsPwChecklist" aria-live="polite" style="margin-top:6px;"></div>
+        </div>
+        <div class="auth-email-row">
+          <label for="prsConfirmPassword">Confirm password</label>
+          <input id="prsConfirmPassword" type="password" autocomplete="new-password" required placeholder="Re-enter new password" oninput="checkPasswordConfirm('prsNewPassword','prsConfirmPassword','prsConfirmHint')" />
+          <div id="prsConfirmHint" class="pw-confirm-hint" aria-live="polite"></div>
+        </div>
+        <div class="auth-error" id="prsError" role="alert" aria-live="assertive"></div>
+        <button type="submit" class="btn btn-primary" id="prsSubmit" style="width:100%;">Set password &amp; sign in</button>
       </form>
     </div>
 
@@ -17098,6 +17133,139 @@ function completeEmailLinkSignInIfPresent() {
   }
 }
 
+// ── Same-origin password reset / first-time setup (companion to
+// completeEmailLinkSignInIfPresent). If the URL carries
+// ?mode=resetPassword&oobCode=…, verify the code and show a "Set your password"
+// screen ON THE TENANT'S OWN ORIGIN, then confirmPasswordReset + sign in.
+// Same-origin = the browser saves the new password under runmast.com and offers
+// it at the next login (Firebase's hosted reset page on firebaseapp.com saved
+// it cross-origin, where it never autofilled here). Returns true if a reset
+// link was detected. Sets window.__passwordResetMode so the onAuthStateChanged
+// signed-out branch keeps this screen instead of flashing the login screen.
+function completePasswordResetIfPresent() {
+  if (typeof auth === 'undefined' || !auth) return false;
+  var params;
+  try { params = new URLSearchParams(window.location.search); } catch (e) { return false; }
+  if (params.get('mode') !== 'resetPassword' || !params.get('oobCode')) return false;
+  var oob = params.get('oobCode');
+  window.__passwordResetMode = true;
+  window.__passwordResetOob = oob;
+  // Show loading while we verify the code (avoids a login-screen flash).
+  try {
+    ['authScreen', 'deniedScreen', 'expiredScreen', 'mustChangePasswordScreen', 'passwordResetScreen'].forEach(function(id) {
+      var el = document.getElementById(id); if (el) el.style.display = 'none';
+    });
+    var ls = document.getElementById('loadingScreen'); if (ls) ls.style.display = '';
+    var lm = document.getElementById('loadingScreenMsg'); if (lm) lm.textContent = 'Verifying your link…';
+  } catch (e) { /* ignore */ }
+  auth.verifyPasswordResetCode(oob).then(function(email) {
+    window.__passwordResetEmail = email || '';
+    showPasswordResetScreen(email || '');
+  }).catch(function(err) {
+    console.warn('verifyPasswordResetCode failed:', err && err.code);
+    window.__passwordResetMode = false;
+    window.__passwordResetOob = null;
+    _stripResetParams();
+    var msg = (err && err.code === 'auth/expired-action-code')
+      ? 'That password link has expired. Use “Forgot password?” to request a new one.'
+      : 'That password link is invalid or already used. Use “Forgot password?” to request a new one.';
+    var ls2 = document.getElementById('loadingScreen'); if (ls2) ls2.style.display = 'none';
+    var a = document.getElementById('authScreen'); if (a) a.style.display = '';
+    if (typeof setAuthEmailError === 'function') setAuthEmailError(msg);
+    showToast(msg, true);
+  });
+  return true;
+}
+
+function showPasswordResetScreen(email) {
+  ['authScreen', 'loadingScreen', 'deniedScreen', 'expiredScreen', 'mustChangePasswordScreen'].forEach(function(id) {
+    var el = document.getElementById(id); if (el) el.style.display = 'none';
+  });
+  var screen = document.getElementById('passwordResetScreen');
+  if (screen) screen.style.display = '';
+  var header = document.getElementById('header'); if (header) header.style.display = 'none';
+  if (typeof hideSidebar === 'function') hideSidebar();
+  if (typeof hideAdminTabs === 'function') hideAdminTabs();
+  var u = document.getElementById('prsUsername'); if (u) u.value = email || '';
+  var err = document.getElementById('prsError'); if (err) err.textContent = '';
+  renderPasswordPolicyChecklist('prsPwChecklist', '');
+  var cHint = document.getElementById('prsConfirmHint'); if (cHint) { cHint.textContent = ''; cHint.className = 'pw-confirm-hint'; }
+  ['prsNewPassword', 'prsConfirmPassword'].forEach(function(id) { var e = document.getElementById(id); if (e) e.value = ''; });
+  setTimeout(function() { var f = document.getElementById('prsNewPassword'); if (f) f.focus(); }, 50);
+}
+
+function _stripResetParams() {
+  try {
+    var url = new URL(window.location.href);
+    ['oobCode', 'mode', 'apiKey', 'lang', 'tenantId', 'continueUrl'].forEach(function(k) { url.searchParams.delete(k); });
+    window.history.replaceState({}, document.title, url.pathname + (url.search || '') + url.hash);
+  } catch (e) { /* ignore */ }
+}
+
+// Validate + apply the new password via confirmPasswordReset, then sign in.
+function submitPasswordReset(event) {
+  if (event && typeof event.preventDefault === 'function') event.preventDefault();
+  var errEl = document.getElementById('prsError');
+  var setErr = function(m) { if (errEl) errEl.textContent = m || ''; };
+  setErr('');
+  var pwEl = document.getElementById('prsNewPassword');
+  var pw2El = document.getElementById('prsConfirmPassword');
+  var btn = document.getElementById('prsSubmit');
+  var pw = pwEl ? (pwEl.value || '') : '';
+  var pw2 = pw2El ? (pw2El.value || '') : '';
+  var oob = window.__passwordResetOob;
+  var email = window.__passwordResetEmail || (document.getElementById('prsUsername') || {}).value || '';
+  if (!oob) { setErr('This reset session has expired — request a new link.'); return; }
+  var unmet = validatePasswordPolicy(pw);
+  if (unmet.length) { var m = 'Password needs: ' + _passwordPolicyUnmetSentence(unmet) + '.'; setErr(m); showToast(m, true); return; }
+  if (pw !== pw2) { setErr('Passwords do not match.'); return; }
+  if (btn) { btn.disabled = true; btn.textContent = 'Setting…'; }
+  var confirmed = false;
+  auth.confirmPasswordReset(oob, pw).then(function() {
+    // Reset succeeded — clear state + strip the OOB params (so a refresh can't
+    // re-trigger), then sign in with the new password. The sign-in is what
+    // enters the app; the same-origin form + this credential let the browser
+    // persist the password under runmast.com.
+    confirmed = true;
+    window.__passwordResetMode = false;
+    window.__passwordResetOob = null;
+    _stripResetParams();
+    window.__lastAuthMethod = 'password';
+    return auth.signInWithEmailAndPassword(email, pw);
+  }).then(function() {
+    try {
+      if (window.PasswordCredential && navigator.credentials && email) {
+        navigator.credentials.store(new window.PasswordCredential({ id: email, password: pw }));
+      }
+    } catch (e) { /* unsupported — ignore */ }
+    showToast('Password set — signing you in…');
+    // onAuthStateChanged funnel takes over (leave the button disabled; the
+    // screen is about to swap to loading).
+  }).catch(function(err) {
+    console.warn('confirmPasswordReset/sign-in failed:', err && err.code);
+    if (confirmed) {
+      // Password WAS set; only the auto-sign-in failed. Send them to login
+      // with the email prefilled so they can sign in with their new password.
+      var prs = document.getElementById('passwordResetScreen'); if (prs) prs.style.display = 'none';
+      var a = document.getElementById('authScreen'); if (a) a.style.display = '';
+      var emailIn = document.getElementById('authEmailInput'); if (emailIn) emailIn.value = email;
+      if (typeof setAuthEmailError === 'function') setAuthEmailError('Your password is set — please sign in.');
+      showToast('Your password is set. Please sign in.');
+      if (btn) { btn.disabled = false; btn.textContent = 'Set password & sign in'; }
+      return;
+    }
+    var code = (err && err.code) || '';
+    var msg;
+    if (code === 'auth/expired-action-code') msg = 'That password link has expired. Use “Forgot password?” to request a new one.';
+    else if (code === 'auth/invalid-action-code') msg = 'That password link is invalid or already used. Request a new one.';
+    else if (code === 'auth/weak-password') msg = 'Choose a stronger password (12+ characters).';
+    else msg = (err && err.message) ? err.message : 'Could not set your password. Please try again.';
+    setErr(msg); showToast(msg, true);
+    if (btn) { btn.disabled = false; btn.textContent = 'Set password & sign in'; }
+  });
+}
+window.submitPasswordReset = submitPasswordReset;
+
 function showExpiredScreen(expiryDate) {
   var msg = document.getElementById('expiredScreenMessage');
   if (msg && expiryDate) {
@@ -17292,10 +17460,19 @@ auth.getRedirectResult().then(function(result) {
   }
 });
 
+// Password reset / first-time setup: if this page load is the return from a
+// reset link (?mode=resetPassword&oobCode=…), handle it on the tenant's OWN
+// origin (see completePasswordResetIfPresent). Mutually exclusive with the
+// email-link check below (they differ by `mode`), so skip that if handled.
+var __resetLinkHandled = false;
+try { __resetLinkHandled = completePasswordResetIfPresent(); } catch (e) { console.warn('Password-reset completion check failed:', e); }
+
 // Email-link (passwordless) admin login: if this page load is the return from
 // a sign-in link, complete it now. On success, onAuthStateChanged fires below
 // and drives the rest (tenant resolution, RBAC, app load) unchanged.
-try { completeEmailLinkSignInIfPresent(); } catch (e) { console.warn('Email-link completion check failed:', e); }
+if (!__resetLinkHandled) {
+  try { completeEmailLinkSignInIfPresent(); } catch (e) { console.warn('Email-link completion check failed:', e); }
+}
 
 auth.onAuthStateChanged(async function(user) {
   if (TEST_MODE && new URLSearchParams(window.location.search).get('testmode') === '1') return; // Already handled above
@@ -17319,6 +17496,10 @@ auth.onAuthStateChanged(async function(user) {
   const header = document.getElementById('header');
 
   if (!user) {
+    // A same-origin password-reset link is being handled (verify → set-password
+    // screen). completePasswordResetIfPresent owns the screen state here; don't
+    // flash the login screen underneath it.
+    if (window.__passwordResetMode) return;
     authScreen.style.display = '';
     loadingScreen.style.display = 'none';
     deniedScreen.style.display = 'none';
@@ -19890,7 +20071,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260529-161817-634924b';
+var MAST_MODULES_V = '20260529-220327-1d6ed69';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -49515,32 +49696,33 @@ async function sendUserInvite() {
     var roleName = ROLE_DISPLAY_NAMES[role] || role;
     loadPendingInvites();
 
-    // Production set-password invite flow:
-    //   1. inviteTenantUser ensures a Firebase Auth account exists (server picks a
-    //      throwaway random password — the admin never sees or sets one).
-    //   2. sendPasswordResetEmail sends Firebase's built-in "set your password"
-    //      link. The user sets their OWN password, signs in, and the email-keyed
-    //      pending invite (written above) grants their role on first login.
-    // Step 1 failure: no Auth account, so report the error and don't claim success.
+    // Production set-password invite flow (single call):
+    //   inviteTenantUser ensures a Firebase Auth account exists (server picks a
+    //   throwaway random password the admin never sees) AND sends a branded
+    //   "set your password" email via Resend whose link lands on THIS tenant's
+    //   OWN origin (so the browser saves the new password under runmast.com and
+    //   offers it at the next login — the old Firebase hosted reset page was
+    //   cross-origin on firebaseapp.com and never autofilled here). The user
+    //   sets their OWN password, signs in, and the email-keyed pending invite
+    //   (written above) grants their role on first login.
     try {
-      await firebase.functions().httpsCallable('inviteTenantUser')({
+      var inviteRes = await firebase.functions().httpsCallable('inviteTenantUser')({
         tenantId: MastDB.tenantId(),
         email: email
       });
+      var emailSent = !!(inviteRes && inviteRes.data && inviteRes.data.emailSent);
+      if (emailSent) {
+        showToast('Invite sent — ' + email + ' will get an email to set their password, then they can sign in as ' + roleName + '.');
+      } else {
+        // Auth account is ready but the setup email didn't go out — recoverable
+        // via "Forgot password" on the login screen.
+        showToast('Invite recorded, but the set-password email could not be sent. They can use “Forgot password” on the login screen to set it.', true);
+      }
     } catch (inviteErr) {
       console.error('inviteTenantUser failed:', inviteErr);
       showToast((inviteErr && inviteErr.message) ? inviteErr.message : 'Could not create the invite.', true);
       emitTestingEvent('inviteUser', {});
       return;
-    }
-    // Step 2 failure is recoverable — the pending invite + Auth account exist, so
-    // the invitee can use "Forgot password" on the login screen to set it.
-    try {
-      await auth.sendPasswordResetEmail(email);
-      showToast('Invite sent — ' + email + ' will get an email to set their password, then they can sign in as ' + roleName + '.');
-    } catch (emailErr) {
-      console.error('sendPasswordResetEmail failed:', emailErr);
-      showToast('Invite recorded, but the set-password email could not be sent. They can use “Forgot password” on the login screen to set it.', true);
     }
     emitTestingEvent('inviteUser', {});
   } catch (err) {
