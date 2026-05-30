@@ -6398,6 +6398,7 @@
         <div class="sidebar-item" data-route="team" onclick="navigateTo('team')">Team</div>
         <div class="sidebar-item" data-route="business" onclick="navigateTo('business')">Business</div>
         <div class="sidebar-item" data-route="channels" onclick="navigateTo('channels')">Channels</div>
+        <div class="sidebar-item" data-route="mapping" onclick="navigateTo('mapping')">Listing Mapping</div>
         <div class="sidebar-item" data-route="contacts" onclick="navigateTo('contacts')">Contacts</div>
         <div class="sidebar-item" data-route="customers" onclick="navigateTo('customers')">Customers</div>
       </div>
@@ -8793,6 +8794,16 @@
             <input type="checkbox" id="darkModeToggle" onchange="toggleDarkMode()"
               style="width:18px;height:18px;cursor:pointer;">
             <span>Enable dark mode</span>
+          </label>
+        </div>
+
+        <div class="form-group" style="margin-bottom:24px;">
+          <label style="font-size:1rem;font-weight:600;display:block;margin-bottom:4px;">Rewards coins</label>
+          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:8px;">Hide the rewards coins / token counter from the top-right header and the account menu. Display-only &mdash; doesn&rsquo;t affect your balance or usage. Applies to everyone on this tenant.</p>
+          <label style="display:flex;align-items:center;gap:10px;cursor:pointer;">
+            <input type="checkbox" id="hideTokenIndicatorToggle" onchange="toggleHideTokenIndicator()"
+              style="width:18px;height:18px;cursor:pointer;">
+            <span>Hide rewards coins / token counter</span>
           </label>
         </div>
 
@@ -13047,6 +13058,7 @@ function getTokenWallet() {
 
 function loadTokenWallet() {
   if (_tokenWalletListener) return; // already listening
+  loadHideTokenIndicatorFlag(); // resolve per-tenant visibility flag, then re-render
   _tokenWalletListener = MastDB.tokenWallet.listen(function(snap) {
     _tokenWallet = snap.val();
     renderTokenBalanceIndicator();
@@ -13055,9 +13067,29 @@ function loadTokenWallet() {
   });
 }
 
+// Per-tenant flag to hide the header token/coins indicator (gamification surface).
+// Defaults to showing it (flag absent/false === current behavior). Read from
+// `config/featureFlags/hideTokenIndicator`; cached on window. A per-browser
+// localStorage override mirrors the unifiedDriftUI flag idiom for dev/demo use.
+function loadHideTokenIndicatorFlag() {
+  if (window.__mastHideTokenIndicator !== undefined) return;
+  try {
+    var ls = (typeof localStorage !== 'undefined') ? localStorage.getItem('mastHideTokenIndicator') : null;
+    if (ls === '1' || ls === 'true')  { window.__mastHideTokenIndicator = true;  renderTokenBalanceIndicator(); return; }
+    if (ls === '0' || ls === 'false') { window.__mastHideTokenIndicator = false; renderTokenBalanceIndicator(); return; }
+  } catch (_) { /* localStorage unavailable — fall through to RTDB */ }
+  MastDB.get('config/featureFlags/hideTokenIndicator').then(function(val) {
+    window.__mastHideTokenIndicator = (val === true);
+    renderTokenBalanceIndicator();
+  }).catch(function() {
+    window.__mastHideTokenIndicator = false;
+  });
+}
+
 function renderTokenBalanceIndicator() {
   var el = document.getElementById('tokenBalanceIndicator');
   if (!el) return;
+  if (window.__mastHideTokenIndicator === true) { el.style.display = 'none'; return; }
   var w = getTokenWallet();
   if (!w || w.status === 'unknown') {
     el.style.display = 'none';
@@ -20510,7 +20542,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260530-110727-41e3c28';
+var MAST_MODULES_V = '20260530-112808-eddb751';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -23917,6 +23949,24 @@ function toggleAutoReport() {
   if (typeof refreshGeneralTabStatus === 'function') refreshGeneralTabStatus();
 }
 
+// Display preference — hide the header/account-menu rewards coins indicator.
+// Persists per-tenant to config/featureFlags/hideTokenIndicator (same flag the
+// header indicator + avatar menu read), updates the cached window flag, and
+// re-renders both surfaces immediately so the change is visible without reload.
+function toggleHideTokenIndicator() {
+  var toggle = document.getElementById('hideTokenIndicatorToggle');
+  if (!toggle) return;
+  var hide = !!toggle.checked;
+  window.__mastHideTokenIndicator = hide;
+  if (typeof renderTokenBalanceIndicator === 'function') renderTokenBalanceIndicator();
+  if (typeof window.renderAvatarMenu === 'function') window.renderAvatarMenu();
+  MastDB.set('config/featureFlags/hideTokenIndicator', hide).then(function() {
+    try { writeAudit('update', 'settings', 'hideTokenIndicator=' + hide); } catch (e) {}
+  }).catch(function(err) {
+    if (typeof showToast === 'function') showToast('Could not save preference: ' + (err && err.message || 'unknown error'), true);
+  });
+}
+
 // Install detection listeners — called once after MastDB is ready
 function installAutoDetection() {
   // 1. Unhandled JS exceptions
@@ -26622,6 +26672,17 @@ function loadSettings() {
     if (autoToggle) autoToggle.checked = _autoReportEnabled();
     if (typeof refreshGeneralTabStatus === 'function') refreshGeneralTabStatus();
   });
+  // Hide-rewards-coins toggle — reflects config/featureFlags/hideTokenIndicator.
+  // Read directly so the checkbox is correct even when the wallet listener (which
+  // warms window.__mastHideTokenIndicator) hasn't run for this user/role.
+  var hideCoinsToggle = document.getElementById('hideTokenIndicatorToggle');
+  if (hideCoinsToggle) {
+    MastDB.get('config/featureFlags/hideTokenIndicator').then(function(val) {
+      hideCoinsToggle.checked = (val === true);
+    }).catch(function() {
+      hideCoinsToggle.checked = (window.__mastHideTokenIndicator === true);
+    });
+  }
   loadPaymentProcessor();
   loadShippingConfig();
   loadShipProviderConfig();
@@ -49633,19 +49694,23 @@ function renderAvatarMenu() {
   var personal = '';
   personal += _avatarMenuItemHtml('My Profile', { onclick: 'closeAvatarMenu();openMyProfile();' });
 
-  // My Coins — show wallet balance if available.
-  var balance = null;
-  try {
-    var w = (typeof getTokenWallet === 'function') ? getTokenWallet() : null;
-    if (w && w.status && w.status !== 'unknown') {
-      var bal = (w.currentBalance != null ? w.currentBalance : 0);
-      balance = bal.toLocaleString() + ' ⚡';
-    }
-  } catch (e) {}
-  personal += _avatarMenuItemHtml('My Coins', {
-    onclick: 'closeAvatarMenu();navigateTo(\'coins\');',
-    balance: balance
-  });
+  // My Coins — show wallet balance if available. Gated by the same per-tenant
+  // hideTokenIndicator flag as the header indicator (window.__mastHideTokenIndicator).
+  // Checked at render time — the menu is rebuilt on every open and on toggle.
+  if (window.__mastHideTokenIndicator !== true) {
+    var balance = null;
+    try {
+      var w = (typeof getTokenWallet === 'function') ? getTokenWallet() : null;
+      if (w && w.status && w.status !== 'unknown') {
+        var bal = (w.currentBalance != null ? w.currentBalance : 0);
+        balance = bal.toLocaleString() + ' ⚡';
+      }
+    } catch (e) {}
+    personal += _avatarMenuItemHtml('My Coins', {
+      onclick: 'closeAvatarMenu();navigateTo(\'coins\');',
+      balance: balance
+    });
+  }
 
   // Switch Tenant — only when the user has access to >1 tenant.
   if (window._avatarMenuTenants && window._avatarMenuTenants.length > 1) {
