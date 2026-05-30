@@ -574,6 +574,18 @@
   margin-bottom: 8px;
 }
 
+/* ========= DARK MODE ADJUSTMENTS =========
+   Additive only — light appearance is unchanged. Error reds get more contrast
+   on dark; the light-peach test-mode banner becomes dark-amber-tinted. */
+html.dark .checkout-input.error { border-color: #ff6b6b; }
+html.dark .checkout-error-msg,
+html.dark .coupon-error { color: #ff6b6b; }
+html.dark .test-mode-banner {
+  background: rgba(245, 166, 35, 0.12);
+  border-color: #F5A623;
+  color: #F5C77E;
+}
+
 /* ========= GOOGLE PLACES AUTOCOMPLETE ========= */
 .pac-container {
   font-family: 'DM Sans', sans-serif;

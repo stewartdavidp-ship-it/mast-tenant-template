@@ -30,6 +30,12 @@
   --on-dark-muted: rgba(255,255,255,0.7);
   --on-dark-faint: rgba(255,255,255,0.45);
 
+  /* Semantic state tokens — invert by mode. Light values; dark overrides below. */
+  --success: #2e7d4f;
+  --danger: #c0392b;
+  --warning: #b8860b;
+  --info: #2563eb;
+
   /* Legacy aliases — existing code references these names.
      They resolve to the generic tokens above, so overriding
      --primary also changes --amber, etc. */
@@ -57,6 +63,10 @@
     --text-light: #706860;
     --surface-card: #252a35;
     --surface-card-border: #3a3f4a;
+    --success: #5cba7d;
+    --danger: #ff6b6b;
+    --warning: #e0a93a;
+    --info: #90CAF9;
   }
 }
 
@@ -68,6 +78,10 @@ html.dark {
   --text-light: #706860;
   --surface-card: #252a35;
   --surface-card-border: #3a3f4a;
+  --success: #5cba7d;
+  --danger: #ff6b6b;
+  --warning: #e0a93a;
+  --info: #90CAF9;
 }
 
 html.light {
@@ -78,6 +92,10 @@ html.light {
   --text-light: #9B958E;
   --surface-card: #fff;
   --surface-card-border: #F0E8DB;
+  --success: #2e7d4f;
+  --danger: #c0392b;
+  --warning: #b8860b;
+  --info: #2563eb;
 }
 
 /* ========= DESIGN SCALE TOKENS ========= */
