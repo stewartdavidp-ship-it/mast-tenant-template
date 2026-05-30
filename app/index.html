@@ -17256,6 +17256,7 @@ function submitPasswordReset(event) {
         navigator.credentials.store(new window.PasswordCredential({ id: email, password: pw }));
       }
     } catch (e) { /* unsupported — ignore */ }
+    var _prs = document.getElementById('passwordResetScreen'); if (_prs) _prs.style.display = 'none';
     showToast('Password set — signing you in…');
     // onAuthStateChanged funnel takes over (leave the button disabled; the
     // screen is about to swap to loading).
@@ -17429,6 +17430,8 @@ function enterAuthorizedState() {
   document.getElementById('deniedScreen').style.display = 'none';
   var mcp = document.getElementById('mustChangePasswordScreen');
   if (mcp) mcp.style.display = 'none';
+  var prs = document.getElementById('passwordResetScreen');
+  if (prs) prs.style.display = 'none';
   document.getElementById('header').style.display = 'flex';
   showSidebar();
 
@@ -17526,6 +17529,8 @@ auth.onAuthStateChanged(async function(user) {
     deniedScreen.style.display = 'none';
     var mcpScreen = document.getElementById('mustChangePasswordScreen');
     if (mcpScreen) mcpScreen.style.display = 'none';
+    var prsScreen = document.getElementById('passwordResetScreen');
+    if (prsScreen) prsScreen.style.display = 'none';
     // Reset the email/password sign-in form so a stuck "Signing in…" button
     // (intentionally left disabled after a prior successful login) doesn't
     // block re-login after sign-out. Also restore from the email-link "sent"
@@ -17759,6 +17764,8 @@ auth.onAuthStateChanged(async function(user) {
   loadingScreen.style.display = 'none';
   authScreen.style.display = 'none';
   deniedScreen.style.display = 'none';
+  var _prsAuthed = document.getElementById('passwordResetScreen');
+  if (_prsAuthed) _prsAuthed.style.display = 'none';
   header.style.display = 'flex';
   showSidebar();
   applyOrganizerMode(TENANT_CONFIG && TENANT_CONFIG.organizerMode === true);
@@ -20092,7 +20099,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260529-225249-c9d960b';
+var MAST_MODULES_V = '20260529-230227-b18cb5d';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
