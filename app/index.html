@@ -1938,6 +1938,24 @@
       gap: 10px;
     }
 
+    /* ── Swipe-back hardening (Phase 1). Pairs with the root-level
+       overscroll-behavior-x:none on html/body and the popstate overlay
+       guard (Phase 2). A horizontal trackpad swipe captured over an
+       overlay's OWN scroll box (e.g. an open modal: .modal is
+       overflow-y:auto/max-height:90vh) was bubbling to a browser
+       history-back and tearing down the modal mid-edit. The root-level
+       rule only covers the viewport scroller, not these nested scroll
+       containers — so contain overscroll on every overlay scroll box to
+       stop the gesture at its source (Chrome). Note: WebKit/Safari ignores
+       overscroll-behavior for the swipe-nav gesture, which is why Phase 2's
+       JS history guard is still required for full cross-browser coverage. */
+    .modal,
+    .modal-body,
+    #mastSlideOutBody,
+    [role="dialog"] {
+      overscroll-behavior: contain;
+    }
+
     /* ========== FORM ========== */
     .form-group {
       margin-bottom: 16px;
@@ -20071,7 +20089,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260529-220327-1d6ed69';
+var MAST_MODULES_V = '20260529-223228-8d204db';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
