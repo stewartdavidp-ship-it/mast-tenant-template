@@ -1091,7 +1091,7 @@
     .wp-cat-reorder .btn-icon { width: 24px; height: 20px; font-size: 0.72rem; padding: 0; }
     body.dark-mode .wp-cat-row { border-color: var(--border); }
 
-    .wp-template-card { padding: 16px; border-radius: 8px; border: 2px solid var(--charcoal-light, var(--border)); background: var(--surface-dark); transition: border-color 0.2s, transform 0.1s; position: relative; }
+    .wp-template-card { padding: 16px; border-radius: 8px; border: 2px solid var(--charcoal-light, var(--border)); background: var(--surface-card); transition: border-color 0.2s, transform 0.1s; position: relative; }
     .wp-template-card:hover { transform: translateY(-2px); border-color: var(--warm-gray, #666); }
     .wp-template-card.active { border-color: var(--accent, var(--teal)); }
     .wp-template-card .wp-tpl-badge { position: absolute; top: 10px; right: 10px; font-size: 0.72rem; padding: 2px 8px; border-radius: 4px; background: var(--accent, var(--teal)); color: #fff; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
@@ -1100,7 +1100,7 @@
     .wp-template-card .wp-tpl-meta { display: flex; gap: 12px; font-size: 0.78rem; color: var(--warm-gray, #888); }
     .wp-tpl-flow-preview { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 8px; }
     .wp-tpl-flow-chip { font-size: 0.72rem; padding: 2px 6px; border-radius: 3px; background: rgba(255,255,255,0.08); color: var(--warm-gray, #aaa); }
-    .wp-switch-dialog { padding: 20px; background: var(--surface-dark); border-radius: 8px; border: 1px solid var(--charcoal-light, var(--border)); }
+    .wp-switch-dialog { padding: 20px; background: var(--surface-card); border-radius: 8px; border: 1px solid var(--charcoal-light, var(--border)); }
     .wp-switch-section { margin-bottom: 14px; }
     .wp-switch-section h4 { font-size: 0.85rem; margin-bottom: 6px; font-weight: 600; }
     .wp-switch-section ul { list-style: none; padding: 0; margin: 0; }
@@ -5898,7 +5898,7 @@
     .blog-excerpt-input:focus { outline:none; border-color:var(--amber); }
     /* Blog Social Card Preview */
     .blog-social-card { border:1px solid var(--border); border-radius:12px; overflow:hidden; max-width:500px; }
-    .blog-social-card-image { height:160px; overflow:hidden; background:var(--surface-dark); display:flex; align-items:center; justify-content:center; }
+    .blog-social-card-image { height:160px; overflow:hidden; background:var(--bg-tertiary); display:flex; align-items:center; justify-content:center; }
     .blog-social-card-image img { max-width:100%; max-height:100%; object-fit:contain; }
     .blog-social-card-image.blog-social-card-noimg { display:flex; flex-direction:column; align-items:center; justify-content:center; color:var(--text-secondary); font-size:0.78rem; gap:4px; border-bottom:1px solid var(--border); }
     .blog-social-card-content { padding:12px 16px; }
@@ -10737,7 +10737,7 @@
             <div style="padding:12px;background:var(--cream,#faf8f5);border-radius:6px;margin-top:4px;">
               <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:8px;">Add to your <code>.mcp.json</code> or Claude Code settings. Uses API key auth:</p>
               <div style="position:relative;">
-                <pre id="aiSetupClaudeCode" style="background:var(--surface-dark);color:var(--text);padding:12px;padding-right:60px;border-radius:6px;font-size:0.78rem;overflow-x:auto;white-space:pre-wrap;"></pre>
+                <pre id="aiSetupClaudeCode" style="background:var(--bg-tertiary);color:var(--text);padding:12px;padding-right:60px;border-radius:6px;font-size:0.78rem;overflow-x:auto;white-space:pre-wrap;"></pre>
                 <button class="btn btn-secondary btn-small" onclick="copyAiSnippet('aiSetupClaudeCode',this)" style="position:absolute;top:8px;right:8px;font-size:0.78rem;padding:4px 10px;">Copy</button>
               </div>
             </div>
@@ -10747,7 +10747,7 @@
             <div style="padding:12px;background:var(--cream,#faf8f5);border-radius:6px;margin-top:4px;">
               <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:8px;">Add to your <code>settings.json</code> under MCP servers. Uses API key auth:</p>
               <div style="position:relative;">
-                <pre id="aiSetupCursor" style="background:var(--surface-dark);color:var(--text);padding:12px;padding-right:60px;border-radius:6px;font-size:0.78rem;overflow-x:auto;white-space:pre-wrap;"></pre>
+                <pre id="aiSetupCursor" style="background:var(--bg-tertiary);color:var(--text);padding:12px;padding-right:60px;border-radius:6px;font-size:0.78rem;overflow-x:auto;white-space:pre-wrap;"></pre>
                 <button class="btn btn-secondary btn-small" onclick="copyAiSnippet('aiSetupCursor',this)" style="position:absolute;top:8px;right:8px;font-size:0.78rem;padding:4px 10px;">Copy</button>
               </div>
             </div>
@@ -10769,7 +10769,7 @@
             After connecting your AI tool, paste this prompt into your <strong>project instructions</strong> (Claude.ai) or <strong>custom instructions</strong> (other tools). This teaches your AI assistant how to work with your store.
           </p>
           <div style="position:relative;">
-            <pre id="aiStartupPrompt" style="background:var(--surface-dark);color:var(--text);padding:12px;padding-right:60px;border-radius:6px;font-size:0.78rem;overflow-x:auto;white-space:pre-wrap;"></pre>
+            <pre id="aiStartupPrompt" style="background:var(--bg-tertiary);color:var(--text);padding:12px;padding-right:60px;border-radius:6px;font-size:0.78rem;overflow-x:auto;white-space:pre-wrap;"></pre>
             <button class="btn btn-secondary btn-small" onclick="copyStartupPrompt()" id="copyStartupPromptBtn"
               style="position:absolute;top:8px;right:8px;font-size:0.78rem;padding:4px 10px;">Copy</button>
           </div>
@@ -20616,7 +20616,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260530-133130-a0c214a';
+var MAST_MODULES_V = '20260530-134215-f002e7b';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -26111,7 +26111,7 @@ function _renderProductSettingsContent() {
 }
 
 function _renderMarkupRow(prefix, retail, direct, wholesale) {
-  var fStyle = 'width:90px;padding:7px 10px;background:var(--surface-dark);border:1px solid var(--charcoal-light,var(--border));border-radius:6px;color:var(--text-primary,#fff);font-size:0.85rem;text-align:right;';
+  var fStyle = 'width:90px;padding:7px 10px;background:var(--bg-primary);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:0.85rem;text-align:right;';
   function fmt(v) { return (v != null && v !== '') ? v : ''; }
   return '<div style="display:flex;gap:16px;flex-wrap:wrap;align-items:center;">' +
     '<div><label style="font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.06em;display:block;margin-bottom:4px;">Retail × cost</label>' +
@@ -26129,7 +26129,7 @@ function _renderBucketMarkupTable(strategyType) {
   var label = strategyType === 'business-line' ? 'Business Line' : 'Category';
 
   if (!buckets || buckets.length === 0) {
-    return '<div style="background:var(--surface-dark);border-radius:8px;padding:16px;color:var(--warm-gray);font-size:0.9rem;">No ' + label.toLowerCase() + 's configured yet. Add them first.</div>';
+    return '<div style="background:var(--surface-card);border:1px solid var(--border);border-radius:8px;padding:16px;color:var(--warm-gray);font-size:0.9rem;">No ' + label.toLowerCase() + 's configured yet. Add them first.</div>';
   }
 
   var html = '<div class="form-group" style="margin-bottom:24px;">';
@@ -26289,7 +26289,7 @@ function _renderCostToServeRead(d) {
 }
 
 function _renderCostToServeEdit(d) {
-  var inputStyle = 'width:140px;padding:9px 12px;background:var(--surface-dark);border:1px solid var(--charcoal,#252525);border-radius:6px;color:var(--cream);font-family:\'DM Sans\',sans-serif;font-size:0.9rem;text-align:right;';
+  var inputStyle = 'width:140px;padding:9px 12px;background:var(--bg-primary);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:\'DM Sans\',sans-serif;font-size:0.9rem;text-align:right;';
   var labelStyle = 'font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.06em;display:block;margin-bottom:6px;';
   var rowStyle   = 'display:flex;gap:24px;flex-wrap:wrap;margin-bottom:18px;';
 
@@ -39079,7 +39079,7 @@ function _renderBusinessLinesEditor() {
   // Add row
   html += '<div style="display:flex;gap:8px;margin-bottom:16px;">' +
     '<input type="text" id="blNewLabel" placeholder="New business line name (e.g. Sculpture)" ' +
-      'style="flex:1;padding:8px 10px;background:var(--surface-dark);border:1px solid var(--charcoal-light,var(--border));border-radius:6px;color:var(--text-primary,#fff);font-size:0.85rem;" ' +
+      'style="flex:1;padding:8px 10px;background:var(--bg-primary);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:0.85rem;" ' +
       'onkeydown="if(event.key===\'Enter\')blAdd();">' +
     '<button class="btn btn-primary btn-small" onclick="blAdd()">Add</button>' +
     '</div>';
@@ -39096,7 +39096,7 @@ function _renderBusinessLinesEditor() {
         '</div>' +
         '<div id="blEditRow_' + bl.id + '" style="display:none;">' +
           '<input type="text" id="blEditInput_' + bl.id + '" value="' + bl.label.replace(/"/g, '&quot;') + '" ' +
-            'style="width:100%;padding:4px 8px;background:var(--surface-dark);border:1px solid var(--teal,#2a7c6f);border-radius:4px;color:var(--text-primary,#fff);font-size:0.85rem;" ' +
+            'style="width:100%;padding:4px 8px;background:var(--bg-primary);border:1px solid var(--teal,#2a7c6f);border-radius:4px;color:var(--text);font-size:0.85rem;" ' +
             'onkeydown="if(event.key===\'Enter\')blSaveEdit(\'' + bl.id + '\');if(event.key===\'Escape\')blCancelEdit(\'' + bl.id + '\');">' +
         '</div>' +
       '</div>';
@@ -48785,7 +48785,7 @@ function renderGallery() {
         html += '<div class="gallery-card">';
         var isVidEntry = img.videoUrl || /\.(mp4|mov|webm)/i.test(img.url || '');
         if (isVidEntry) {
-          html += '<div class="gallery-card-img" style="display:flex;align-items:center;justify-content:center;background:var(--surface-dark);color:var(--amber);font-size:1.6rem;min-height:120px;">&#9654;</div>';
+          html += '<div class="gallery-card-img" style="display:flex;align-items:center;justify-content:center;background:var(--bg-tertiary);color:var(--amber);font-size:1.6rem;min-height:120px;">&#9654;</div>';
         } else if (img.url) {
           var fitOverride = img.imageFit === 'cover' ? ' style="object-fit:cover;"' : '';
           html += '<img class="gallery-card-img" src="' + esc(img.url) + '" alt="' + esc(img.alt || '') + '"' + fitOverride + ' onerror="this.classList.add(\'broken\')">';
@@ -51079,7 +51079,7 @@ function openImageModal(imageId, defaultSection) {
         '</select>' +
       '</div>' +
       '<div id="imgVideoTimingGroup"' + (!showVideoUrl ? ' style="display:none;"' : '') + '>' +
-        (videoDuration ? '<div style="background:var(--surface-dark);border-radius:6px;padding:8px 12px;margin-bottom:12px;display:flex;align-items:center;gap:8px;"><span style="font-size:1.15rem;">&#9202;</span><span style="color:var(--warm-gray-light);font-size:0.85rem;">Video duration: <strong style="color:var(--amber-light);">' + videoDuration.toFixed(1) + 's</strong></span></div>' : '') +
+        (videoDuration ? '<div style="background:var(--bg-tertiary);border-radius:6px;padding:8px 12px;margin-bottom:12px;display:flex;align-items:center;gap:8px;"><span style="font-size:1.15rem;">&#9202;</span><span style="color:var(--warm-gray-light);font-size:0.85rem;">Video duration: <strong style="color:var(--amber-light);">' + videoDuration.toFixed(1) + 's</strong></span></div>' : '') +
         '<div style="display:flex;gap:12px;">' +
           '<div class="form-group" style="flex:1;">' +
             '<label for="imgVideoStart">Start Time (seconds)</label>' +
@@ -51769,7 +51769,7 @@ function renderImageLibrary() {
     html += '<div class="img-lib-card" onclick="viewLibraryImage(\'' + esc(id) + '\')">' +
       (thumb
         ? '<img src="' + esc(thumb) + '" alt="" loading="lazy" onerror="this.style.display=\'none\'">'
-        : '<div style="height:120px;display:flex;align-items:center;justify-content:center;background:var(--surface-dark);color:var(--warm-gray-light);font-size:1.6rem;">' +
+        : '<div style="height:120px;display:flex;align-items:center;justify-content:center;background:var(--bg-tertiary);color:var(--warm-gray-light);font-size:1.6rem;">' +
           (isVideo ? '\u25B6' : '\u{1F5BC}') + '</div>') +
       '<div class="img-lib-card-body">' +
         (tags ? '<div class="img-lib-card-tags">' + esc(tags) + '</div>' : '') +
@@ -52060,7 +52060,7 @@ async function loadAndRenderImageCollections() {
     var thumb = cover ? (cover.thumbnailUrl || cover.url) : '';
     html += '<div class="img-lib-card" onclick="openCollectionEditor(\'' + esc(cid) + '\')" style="cursor:pointer;">' +
       (thumb ? '<img src="' + esc(thumb) + '" loading="lazy" onerror="this.style.display=\'none\'">' :
-        '<div style="height:120px;display:flex;align-items:center;justify-content:center;background:var(--surface-dark);color:var(--warm-gray-light);font-size:1.6rem;">&#128194;</div>') +
+        '<div style="height:120px;display:flex;align-items:center;justify-content:center;background:var(--bg-tertiary);color:var(--warm-gray-light);font-size:1.6rem;">&#128194;</div>') +
       '<div class="img-lib-card-body">' +
         '<div style="font-weight:600;font-size:0.9rem;">' + esc(c.name || '(untitled)') + '</div>' +
         '<div style="font-size:0.78rem;color:var(--warm-gray);">' + count + ' image' + (count !== 1 ? 's' : '') + '</div>' +
@@ -52091,7 +52091,7 @@ function openCollectionEditor(cid) {
             var sel = imageIds.indexOf(id) !== -1;
             return '<label style="position:relative;cursor:pointer;">' +
               '<input type="checkbox" class="coll-img-cb" data-img-id="' + esc(id) + '"' + (sel ? ' checked' : '') + ' style="position:absolute;top:2px;left:2px;z-index:1;">' +
-              (th ? '<img src="' + esc(th) + '" style="width:100%;height:60px;object-fit:cover;border-radius:3px;' + (sel ? 'outline:2px solid var(--amber);' : '') + '">' : '<div style="height:60px;background:var(--surface-dark);"></div>') +
+              (th ? '<img src="' + esc(th) + '" style="width:100%;height:60px;object-fit:cover;border-radius:3px;' + (sel ? 'outline:2px solid var(--amber);' : '') + '">' : '<div style="height:60px;background:var(--bg-tertiary);"></div>') +
               '</label>';
           }).join('') +
         '</div>' +
@@ -52537,7 +52537,7 @@ function openImagePicker(callback, options) {
       html += '<div class="img-picker-item" data-imgid="' + esc(id) + '" data-tags="' + esc(tagStr) + '" onclick="togglePickerItem(this)">' +
         (thumb
           ? '<img src="' + esc(thumb) + '" alt="" loading="lazy">'
-          : '<div style="height:100%;display:flex;align-items:center;justify-content:center;background:var(--surface-dark);color:var(--warm-gray-light);font-size:1.6rem;min-height:80px;">' +
+          : '<div style="height:100%;display:flex;align-items:center;justify-content:center;background:var(--bg-tertiary);color:var(--warm-gray-light);font-size:1.6rem;min-height:80px;">' +
             (isVid ? '\u25B6' : '\u{1F5BC}') + '</div>') +
         '<div class="picker-check">&#10003;</div>' +
       '</div>';
@@ -52654,7 +52654,7 @@ function openGalleryMetadataModal(sectionId, imageUrl, libraryImageId, libImg) {
       '</div>' : '') +
       (showVideoUrl ? '<div class="form-group"><label for="galVideoUrl">Video URL' + (isVideo ? ' (auto-filled from library)' : '') + '</label><input type="text" id="galVideoUrl" value="' + esc(videoUrlDefault) + '" placeholder="https://...video.mp4"></div>' +
         '<div class="form-group"><label for="galPlaybackSpeed">Playback Speed</label><select id="galPlaybackSpeed"><option value="0.25">0.25x (very slow)</option><option value="0.5">0.5x (slow)</option><option value="0.75">0.75x</option><option value="1" selected>1x (normal)</option><option value="1.25">1.25x</option><option value="1.5">1.5x</option><option value="2">2x (fast)</option></select></div>' +
-        (isVideo && libImg.duration ? '<div style="background:var(--surface-dark);border-radius:6px;padding:8px 12px;margin-bottom:12px;display:flex;align-items:center;gap:8px;"><span style="font-size:1.15rem;">&#9202;</span><span style="color:var(--warm-gray-light);font-size:0.85rem;">Video duration: <strong style="color:var(--amber-light);">' + libImg.duration.toFixed(1) + 's</strong></span></div>' : '') +
+        (isVideo && libImg.duration ? '<div style="background:var(--bg-tertiary);border-radius:6px;padding:8px 12px;margin-bottom:12px;display:flex;align-items:center;gap:8px;"><span style="font-size:1.15rem;">&#9202;</span><span style="color:var(--warm-gray-light);font-size:0.85rem;">Video duration: <strong style="color:var(--amber-light);">' + libImg.duration.toFixed(1) + 's</strong></span></div>' : '') +
         '<div style="display:flex;gap:12px;"><div class="form-group" style="flex:1;"><label for="galVideoStart">Start Time (sec)</label><input type="number" id="galVideoStart" value="0" min="0" step="0.5" placeholder="0"' + (libImg.duration ? ' max="' + libImg.duration + '"' : '') + '></div><div class="form-group" style="flex:1;"><label for="galVideoEnd">End Time (sec)</label><input type="number" id="galVideoEnd" min="0" step="0.5" placeholder="End of video"' + (libImg.duration ? ' max="' + libImg.duration + '"' : '') + '></div></div>' +
         '<p style="font-size:0.78rem;color:var(--warm-gray);margin-top:-8px;margin-bottom:12px;">Leave end time empty to play to end of video</p>' : '') +
       (showCategory ? '<div class="form-group"><label for="galCategory">Category</label><select id="galCategory" onchange="handleGalCategoryChange(this)">' + categoryOptions + '</select></div>' : '') +
