@@ -16377,11 +16377,49 @@ window.MastOverlayNav = MastOverlayNav;
 // MutationObserver on <body> adopts any full-viewport fixed scrim that gets
 // appended (and isn't a first-party overlay — those carry data-mn-managed,
 // and #modalOverlay/#mastSlideOutRoot are excluded), arming the Back/swipe
-// guard. When the scrim is removed (the overlay's own close), it disarms. On
-// Back, the guard closer simulates a backdrop click — which runs the overlay's
-// own close path — with a node-removal fallback for scrims that only close via
-// a button. DOM presence is the open/close signal, so no per-overlay wiring.
+// guard. When the scrim is removed (the overlay's own close), it disarms.
+//
+// Adopt heuristic (isBespokeScrim) requires a POSITIVE overlay signal after the
+// geometry test, so a plain full-page fixed *view* container (e.g. a future
+// full-screen surface holding unsaved inputs) is never mistaken for a scrim and
+// destroyed on Back: it must be an ARIA dialog (role=dialog/alertdialog or
+// aria-modal on the node or a descendant) OR paint a TRANSLUCENT / backdrop-
+// filtered veil. A fully OPAQUE background is treated as a solid page surface,
+// NOT a scrim — every bespoke scrim in this codebase uses rgba(0,0,0,0.x), so
+// requiring translucency rejects opaque full-page views while still adopting
+// every real overlay. (Wrongly rejecting an overlay just falls back to route
+// Back — annoying; wrongly adopting a view destroys unsaved data.)
+//
+// Opt-out conventions for full-page surfaces rendered into <body>:
+//   • data-mn-managed — first-party overlay that wires push/pop itself.
+//   • data-mn-ignore  — a non-overlay full-page view that must NEVER be adopted
+//                       (carry this on any full-screen surface with unsaved state).
+// Bespoke overlays that DO want Back-to-close should close on the
+// `e.target===scrim` backdrop pattern and/or expose an internal close control
+// matching [data-mn-close],[data-close],.modal-close,.close-modal,.close, or
+// [aria-label*="close"], so the guard can run the overlay's OWN teardown.
+//
+// On Back, closeBespoke() runs the overlay's own close path in order:
+// (1) dispatch a backdrop click on the scrim; (2) if still open, click its own
+// close control; (3) if still open, dispatch Escape — so scroll-lock release /
+// listener / focus-trap teardown runs instead of being bypassed; (4) only as a
+// last resort force-remove the node (deferred a tick so an animated/async self-
+// close can finish) and defensively release the body scroll-lock the bypassed
+// teardown would have cleared. DOM presence is the open/close signal — no wiring.
 (function () {
+  var SCRIM_MIN = 0.9;   // a scrim must cover >= this fraction of the viewport
+  function looksLikeBackdrop(cs) {
+    // A scrim dims the page: a translucent background color (0 < alpha < 1) or a
+    // backdrop-filter. Fully opaque (alpha===1) is a solid page, not a veil;
+    // fully transparent (alpha===0) dims nothing.
+    var bf = cs.backdropFilter || cs.webkitBackdropFilter || '';
+    if (bf && bf !== 'none') return true;
+    var m = (cs.backgroundColor || '').match(/rgba?\(([^)]+)\)/);
+    if (!m) return false;
+    var parts = m[1].split(',');
+    var alpha = parts.length >= 4 ? parseFloat(parts[3]) : 1;
+    return alpha > 0 && alpha < 1;
+  }
   function isBespokeScrim(node) {
     if (!node || node.nodeType !== 1) return false;
     if (node.id === 'modalOverlay' || node.id === 'mastSlideOutRoot') return false;
@@ -16393,15 +16431,41 @@ window.MastOverlayNav = MastOverlayNav;
     var cs; try { cs = getComputedStyle(node); } catch (e) { return false; }
     if (cs.position !== 'fixed' || cs.display === 'none' || cs.visibility === 'hidden') return false;
     var r = node.getBoundingClientRect();
-    if (r.width < window.innerWidth * 0.9 || r.height < window.innerHeight * 0.9) return false;
-    // Require a POSITIVE modal signal so a transparent full-page layout/view
-    // container (not a dialog) is never adopted: either a (semi-)opaque backdrop,
-    // or explicit dialog semantics on the node or a descendant.
-    var bg = cs.backgroundColor;
-    var hasBackdrop = !!bg && bg !== 'transparent' && bg !== 'rgba(0, 0, 0, 0)';
-    var isDialog = node.getAttribute('role') === 'dialog' || node.hasAttribute('aria-modal') ||
+    if (r.width < window.innerWidth * SCRIM_MIN || r.height < window.innerHeight * SCRIM_MIN) return false;
+    // Require a POSITIVE overlay signal (see header) so a full-page view container
+    // is never adopted: explicit dialog semantics on the node or a descendant, or
+    // a translucent / backdrop-filtered veil. Opaque backgrounds are not scrims.
+    var role = (node.getAttribute('role') || '').toLowerCase();
+    var isDialog = role === 'dialog' || role === 'alertdialog' || node.hasAttribute('aria-modal') ||
       !!node.querySelector('[role="dialog"],[aria-modal="true"]');
-    return hasBackdrop || isDialog;
+    return isDialog || looksLikeBackdrop(cs);
+  }
+  // Run the overlay's OWN close path so its teardown (scroll-lock release,
+  // listener/focus-trap cleanup) executes; force-remove only as a last resort.
+  // opts.sync force-removes immediately (for the synchronous self-test) rather
+  // than deferring it a tick (which lets an animated/async self-close finish).
+  function closeBespoke(node, opts) {
+    if (!node) return;
+    // 1. Backdrop-close path: overlays that close on `e.target===scrim` tear down here.
+    try { node.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true })); } catch (e) {}
+    if (!node.isConnected) return;
+    // 2. Button-only overlays: click their OWN close control so teardown runs.
+    var btn = null;
+    try { btn = node.querySelector('[data-mn-close],[data-close],.modal-close,.close-modal,.close,[aria-label*="close" i]'); } catch (e) {}
+    if (btn) { try { btn.click(); } catch (e) {} if (!node.isConnected) return; }
+    // 3. Escape, for overlays whose only dismiss path is a keydown handler.
+    try { node.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); } catch (e) {}
+    if (!node.isConnected) return;
+    // 4. Last resort: nothing closed it. Force-remove (deferred so an animated/
+    //    async self-close can finish) and defensively release the scroll-lock the
+    //    bypassed teardown would have cleared, when no other overlay still needs it.
+    var hardRemove = function () {
+      if (!node.isConnected || !node.parentNode) return;
+      try { node.parentNode.removeChild(node); } catch (e) {}
+      if (!MastOverlayNav.isOpen()) { try { document.body.style.overflow = ''; } catch (e) {} }
+    };
+    if (opts && opts.sync) hardRemove();
+    else { try { setTimeout(hardRemove, 80); } catch (e) { hardRemove(); } }
   }
   var tracked = new WeakMap();   // scrim node -> overlay nav id
   var seq = 0;
@@ -16416,21 +16480,7 @@ window.MastOverlayNav = MastOverlayNav;
           (function (node) {
             var id = 'ov' + (++seq);
             tracked.set(node, id);
-            MastOverlayNav.push(id, function () {
-              // Prefer the overlay's OWN teardown so its cleanup (scroll-lock
-              // release, listener/focus-trap teardown) runs: try its backdrop
-              // close (e.target===scrim), then Escape.
-              try { node.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true })); } catch (e) {}
-              if (!node.isConnected) return;
-              try { node.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); } catch (e) {}
-              if (!node.isConnected) return;
-              // Last resort for button-only overlays with no backdrop/Escape
-              // handler: hard-remove, then defensively undo a body scroll-lock
-              // if no other overlay still needs it (bespoke overlays commonly
-              // set body.style.overflow='hidden' and rely on their own close).
-              try { if (node.parentNode) node.parentNode.removeChild(node); } catch (e) {}
-              if (!MastOverlayNav.isOpen()) { try { document.body.style.overflow = ''; } catch (e) {} }
-            });
+            MastOverlayNav.push(id, function () { closeBespoke(node); });
           })(n);
         }
         for (j = 0; j < removed.length; j++) {
@@ -16442,7 +16492,65 @@ window.MastOverlayNav = MastOverlayNav;
   }
   if (document.body) install();
   else document.addEventListener('DOMContentLoaded', install);
+  // Testing hooks for __mnSelfTest() (see below).
+  MastOverlayNav._isBespokeScrim = isBespokeScrim;
+  MastOverlayNav._closeBespoke = closeBespoke;
 })();
+
+// __mnSelfTest() — console self-test for the Phase 2b overlay-adoption heuristic
+// and the Back closer. Run with NO overlays open: __mnSelfTest() → {passed,failed}.
+function __mnSelfTest() {
+  var results = [], passed = 0, failed = 0;
+  function assert(name, cond, detail) {
+    if (cond) { passed++; results.push({ name: name, ok: true }); }
+    else { failed++; results.push({ name: name, ok: false, detail: detail || '' }); }
+  }
+  var probe = window.MastOverlayNav && MastOverlayNav._isBespokeScrim;
+  var closeFn = window.MastOverlayNav && MastOverlayNav._closeBespoke;
+  if (!probe || !closeFn) { console.error('[__mnSelfTest] Phase 2b testing hooks missing'); return { passed: 0, failed: 1 }; }
+  var FULL = 'position:fixed;top:0;left:0;right:0;bottom:0;', nodes = [];
+  function mk(css, attrs, noChild) {
+    var el = document.createElement('div');
+    el.style.cssText = css;
+    if (attrs) for (var k in attrs) el.setAttribute(k, attrs[k]);
+    if (!noChild) el.appendChild(document.createElement('div'));
+    document.body.appendChild(el); nodes.push(el); return el;
+  }
+  // Fix B-2 — positive adoption vs false-positive rejection.
+  assert('adopts translucent full-page scrim', probe(mk(FULL + 'background:rgba(0,0,0,0.5);')) === true);
+  assert('rejects opaque full-page view container', probe(mk(FULL + 'background:#fff;')) === false);
+  assert('rejects bare full-page view container', probe(mk(FULL)) === false);
+  assert('adopts role=dialog full-page surface', probe(mk(FULL + 'background:#fff;', { role: 'dialog' })) === true);
+  assert('adopts aria-modal full-page surface', probe(mk(FULL + 'background:#fff;', { 'aria-modal': 'true' })) === true);
+  assert('adopts scrim with role=dialog descendant', (function () { var s = mk(FULL + 'background:#fff;'); s.firstElementChild.setAttribute('role', 'dialog'); return probe(s); })() === true);
+  assert('honors data-mn-ignore opt-out', probe(mk(FULL + 'background:rgba(0,0,0,0.5);', { 'data-mn-ignore': '1' })) === false);
+  assert('excludes data-mn-managed first-party overlay', probe(mk(FULL + 'background:rgba(0,0,0,0.5);', { 'data-mn-managed': '1' })) === false);
+  assert('rejects sub-viewport translucent box', probe(mk('position:fixed;top:0;left:0;width:40px;height:40px;background:rgba(0,0,0,0.5);')) === false);
+  assert('rejects childless full-page scrim', probe(mk(FULL + 'background:rgba(0,0,0,0.5);', null, true)) === false);
+  // Fix B-1 — button-only overlay: closer fires its OWN close control + releases scroll-lock.
+  document.body.style.overflow = 'hidden';
+  var fired = { v: false }, btnOverlay = mk(FULL + 'background:rgba(0,0,0,0.5);');
+  var btn = document.createElement('button'); btn.setAttribute('data-mn-close', '1');
+  btn.addEventListener('click', function () { fired.v = true; btnOverlay.remove(); document.body.style.overflow = ''; });
+  btnOverlay.appendChild(btn);
+  closeFn(btnOverlay, { sync: true });
+  assert('button-only overlay: own close control fired', fired.v === true);
+  assert('button-only overlay: node removed', !btnOverlay.isConnected);
+  assert('button-only overlay: scroll-lock released', document.body.style.overflow === '');
+  // Fix B-1 — no-handler overlay: force-remove restores the scroll-lock defensively.
+  document.body.style.overflow = 'hidden';
+  var dead = mk(FULL + 'background:rgba(0,0,0,0.5);');
+  closeFn(dead, { sync: true });
+  assert('no-handler overlay: force-removed', !dead.isConnected);
+  assert('no-handler overlay: scroll-lock restored', document.body.style.overflow === '');
+  // cleanup
+  document.body.style.overflow = '';
+  nodes.forEach(function (el) { if (el && el.parentNode) el.parentNode.removeChild(el); });
+  if (failed) console.error('[__mnSelfTest] ' + failed + ' FAILED', results);
+  else console.log('[__mnSelfTest] all ' + passed + ' assertions passed');
+  return { passed: passed, failed: failed, results: results };
+}
+window.__mnSelfTest = __mnSelfTest;
 
 function showConfirmDialog(title, message, onConfirm, options) {
   mastConfirm(message, { title: title, confirmLabel: (options && options.confirmLabel) || 'OK', cancelLabel: (options && options.cancelLabel) || 'Cancel' }).then(function(ok) { if (ok) onConfirm(); });
@@ -20287,7 +20395,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260530-001435-78dac00';
+var MAST_MODULES_V = '20260530-002318-891ee27';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
