@@ -141,3 +141,63 @@ jobs:
           echo "::error::deployed origin never converged to commit ${{ github.sha }} (expected sha256 ${EXPECTED})"
           echo "::error::silent-success class of failure — mast_hosting likely served a stale GitHub tarball"
           exit 1
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # Build 8 §3 — merge = enroll (release adoption, 2026-05-30).
+  #
+  # On push to main, append this merged PR to mast-tenant-template's single
+  # always-open release bucket via the `mast_platform_release` `enroll` MCP
+  # action. The behavioral flip — merge = enroll, not merge = deploy: the
+  # `deploy` job above (dev shared storefront) is transitional and will later
+  # deploy the *cut* release (Build 8 §5, deferred). Decoupled from `deploy` (no
+  # `needs:`) so the merge is recorded even if the dev deploy is removed/failing.
+  #
+  # One-time operator setup (no-ops with a ::notice:: until both are set):
+  #   - repo variable MAST_MCP_SERVER_URL  → the platform MCP server /mcp endpoint
+  #   - repo secret   MAST_ENROLL_API_KEY  → a `mast_` API key whose uid holds
+  #     platformOps (enroll is ungated but platformOps-gated in-handler)
+  #
+  # Slice-1 posture: non-blocking — a failed enroll logs ::warning:: but does not
+  # red-X the merge during rollout. Follow-up: fail-the-job + parse JSON-RPC
+  # result for tool-level isError.
+  enroll:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Enroll merged PR in the open release
+        env:
+          MCP_URL: ${{ vars.MAST_MCP_SERVER_URL }}
+          ENROLL_KEY: ${{ secrets.MAST_ENROLL_API_KEY }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          COMPONENT: mast-tenant-template
+          MERGE_SHA: ${{ github.sha }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          if [ -z "${MCP_URL:-}" ] || [ -z "${ENROLL_KEY:-}" ]; then
+            echo "::notice::enroll skipped — MAST_MCP_SERVER_URL / MAST_ENROLL_API_KEY not yet configured (Build 8 §3 one-time setup pending)."
+            exit 0
+          fi
+          # Resolve the PR that produced this merge commit (squash/merge commit).
+          PRS=$(gh api "repos/${REPO}/commits/${MERGE_SHA}/pulls" --jq '[.[] | {number, title}]' 2>/dev/null || echo '[]')
+          PR_NUMBER=$(echo "$PRS" | jq -r '.[0].number // empty')
+          PR_TITLE=$(echo "$PRS" | jq -r '.[0].title // empty')
+          if [ -z "$PR_NUMBER" ]; then
+            echo "::notice::enroll skipped — no PR associated with ${MERGE_SHA} (direct push to main?)."
+            exit 0
+          fi
+          REQ=$(jq -nc --arg c "$COMPONENT" --argjson pr "$PR_NUMBER" --arg sha "$MERGE_SHA" --arg t "$PR_TITLE" \
+            '{jsonrpc:"2.0",id:1,method:"tools/call",params:{name:"mast_platform_release",arguments:{action:"enroll",component:$c,prNumber:$pr,mergeSha:$sha,title:$t}}}')
+          echo "enroll → ${COMPONENT} PR #${PR_NUMBER} (${MERGE_SHA:0:7}): ${PR_TITLE}"
+          HTTP=$(curl -sS -o /tmp/enroll-resp -w '%{http_code}' -X POST "$MCP_URL" \
+            -H "Authorization: Bearer ${ENROLL_KEY}" \
+            -H "Content-Type: application/json" \
+            -H "Accept: application/json, text/event-stream" \
+            --data "$REQ" || echo "000")
+          echo "MCP HTTP ${HTTP}"; cat /tmp/enroll-resp 2>/dev/null || true; echo
+          if [ "$HTTP" != "200" ]; then
+            echo "::warning::enroll call to MCP returned HTTP ${HTTP} — merge NOT enrolled. Re-run this job after fixing, or enroll manually via mast_platform_release {action:enroll}."
+          fi
