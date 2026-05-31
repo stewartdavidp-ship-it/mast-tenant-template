@@ -8,7 +8,10 @@
 (function () {
   'use strict';
   function flagOn() {
-    try { if (localStorage.getItem('mastUiRedesign') === '1') return true; } catch (e) {}
+    try {
+      if (/[?&#]ui=1\b/.test(location.href)) { localStorage.setItem('mastUiRedesign', '1'); return true; }
+      if (localStorage.getItem('mastUiRedesign') === '1') return true;
+    } catch (e) {}
     return !!(window.MAST_FEATURE_FLAGS && window.MAST_FEATURE_FLAGS.uiRedesign);
   }
   if (!window.MastAdmin || !window.MastEntity) return;
