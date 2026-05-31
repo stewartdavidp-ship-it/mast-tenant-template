@@ -30,16 +30,16 @@
     label: 'Order', labelPlural: 'Orders', size: 'lg',
     recordId: function (o) { return o._key || o.id; },
     fields: [
-      { name: 'orderNumber', label: 'Order', type: 'text', list: true, required: true, group: 'Order' },
-      { name: 'email', label: 'Customer', type: 'text', list: true, group: 'Order' },
+      { name: 'orderNumber', label: 'Order', type: 'text', list: true, required: true, group: 'Order', readOnly: true },
+      { name: 'email', label: 'Customer', type: 'text', list: true, group: 'Order', readOnly: true },
       { name: 'items', label: 'Items', type: 'number', list: true, group: 'Order',
         get: function (o) { return Array.isArray(o.items) ? o.items.reduce(function (s, li) { return s + (li.qty || 1); }, 0) : (o.itemCount || 0); } },
       { name: 'total', label: 'Total', type: 'money', list: true, group: 'Order' },
       { name: 'status', label: 'Status', type: 'status', list: true, group: 'Order',
         tone: function (v) { return STATUS_TONE[String(v || '').toLowerCase()] || 'neutral'; } },
       { name: 'tracking', label: 'Tracking', type: 'text', list: true, group: 'Fulfillment' },
-      { name: 'source', label: 'Source', type: 'text', group: 'Order' },
-      { name: 'placedAt', label: 'Placed', type: 'date', group: 'Order' }
+      { name: 'source', label: 'Source', type: 'text', group: 'Order', readOnly: true },
+      { name: 'placedAt', label: 'Placed', type: 'date', group: 'Order', readOnly: true }
     ],
     onSave: function (rec, mode) {
       var id = rec._key || rec.id;

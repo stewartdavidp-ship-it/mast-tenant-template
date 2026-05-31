@@ -143,10 +143,15 @@
           html += '<div class="form-group" style="margin-bottom:10px;">' +
                   (showLabel ? '<div class="form-label" style="font-size:0.78rem;color:var(--warm-gray);">' + esc(f.label) + '</div>' : '') +
                   '<div style="font-size:0.9rem;color:var(--charcoal,var(--text));">' + displayCell(f, record) + '</div></div>';
+        } else if (f.readOnly || typeof f.get === 'function') {
+          // Computed/read-only fields show their value (not an editable input) —
+          // avoids "[object Object]" for derived fields and uneditable identity fields.
+          html += '<div class="form-group" style="margin-bottom:12px;"><div class="form-label" style="font-size:0.78rem;color:var(--warm-gray);">' + esc(f.label) + '</div>' +
+                  '<div style="font-size:0.9rem;color:var(--charcoal,var(--text));">' + displayCell(f, record) + '</div></div>';
         } else {
-          var ro = f.readOnly ? ' disabled' : '';
+          var sval = (v == null) ? '' : (typeof v === 'object' ? canonicalGet(f, record) : v);
           html += '<div class="form-group" style="margin-bottom:12px;"><label class="form-label">' + esc(f.label) + (f.required ? ' *' : '') + '</label>' +
-                  '<input class="form-input" name="' + esc(f.name) + '" value="' + esc(v == null ? '' : v) + '"' + ro + ' style="width:100%;"></div>';
+                  '<input class="form-input" name="' + esc(f.name) + '" value="' + esc(sval) + '" style="width:100%;"></div>';
         }
       });
       html += '</div>';
@@ -180,7 +185,9 @@
       },
       onSave: function () {
         var panel = document.getElementById('mastSlideOutBody');
-        var rec = {};
+        // Start from the original record so read-only/required fields (not
+        // rendered as inputs) are still present for validation + persistence.
+        var rec = Object.assign({}, record || {});
         panel.querySelectorAll('input[name]').forEach(function (i) { rec[i.name] = i.value; });
         var v = validate(key, rec);
         if (!v.ok) { if (window.showToast) showToast(v.errors[0], true); return false; }
