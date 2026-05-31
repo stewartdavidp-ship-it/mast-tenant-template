@@ -187,6 +187,16 @@
       };
       hdr.insertBefore(b, hdr.lastElementChild);
     }
+    // Feedback access — the global feedback FAB is covered by the panel, so
+    // surface it in the header (wired to the existing openFeedbackDialog).
+    if (hdr && !hdr.querySelector('.mast-feedback-btn') && typeof window.openFeedbackDialog === 'function') {
+      var fb = document.createElement('button');
+      fb.type = 'button'; fb.className = 'mast-feedback-btn'; fb.title = 'Send feedback'; fb.setAttribute('aria-label', 'Send feedback');
+      fb.style.cssText = 'background:transparent;border:0;color:var(--warm-gray);cursor:pointer;padding:0 4px;flex-shrink:0;display:inline-flex;align-items:center;';
+      fb.innerHTML = '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"/></svg>';
+      fb.onclick = function () { try { window.openFeedbackDialog(); } catch (e) {} };
+      hdr.insertBefore(fb, hdr.lastElementChild);
+    }
   }
 
   function _footer(mode, opts) {
@@ -373,6 +383,8 @@
       '.mu-pane[hidden]{display:none;} .mu-grid2{display:grid;grid-template-columns:1.4fr 1fr;gap:18px;} @media(max-width:720px){.mu-grid2{grid-template-columns:1fr;}}',
       '.mu-crumb{margin:-4px -4px 14px;padding:9px 4px;border-bottom:1px solid var(--border,rgba(127,127,127,.2));} .mu-crumb button{background:transparent;border:0;color:var(--teal,#2A7C6F);font:inherit;font-size:0.85rem;cursor:pointer;font-weight:500;}',
       '.mu-link{color:var(--teal,#2A7C6F);cursor:pointer;font-weight:500;} .mu-link:hover{text-decoration:underline;}',
+      '.feedback-overlay{z-index:12001 !important;}', // above the slide-out (9000) so the feedback dialog opens on top',
+      '.mast-feedback-btn:hover{color:var(--charcoal,var(--text)) !important;}',
       '.mu-li{display:flex;align-items:center;gap:11px;} .mu-sub{color:var(--warm-gray);font-size:0.78rem;} .mu-totrow{display:flex;justify-content:space-between;padding:6px 0;color:var(--warm-gray);font-size:0.9rem;} .mu-totrow.grand{border-top:1px solid var(--border,rgba(127,127,127,.2));margin-top:6px;padding-top:10px;color:var(--charcoal,var(--text));font-weight:700;font-size:1.0rem;}'
     ].join('\n');
     var s = document.createElement('style'); s.id = 'mast-ui-styles'; s.textContent = css; document.head.appendChild(s);
