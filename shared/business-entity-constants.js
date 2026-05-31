@@ -734,6 +734,7 @@
     'studio':             { modes: ['maker'] },
     'business':           { alwaysOn: true },  // entity setup — bookkeeping always available
     'channels':           { modes: ['maker', 'retail'] },
+    'mapping':            { modes: ['maker', 'retail'] },  // Listing Mapping — sibling of channels; same visibility
 
     // === Customer Service section (conservative) ===
     'cs-inbox':           { modes: ['retail', 'bookings', 'maker'] },

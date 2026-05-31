@@ -997,6 +997,32 @@
       learnMoreUrl: HELP_BASE + 'channels'
     },
 
+    'mapping': {
+      label:    'Listing Mapping',
+      section:  'operations',
+      tagline:  'Match every channel listing to one product record.',
+      outcome:      "Every channel listing is matched to one product record, so your catalog reconciles to a single source of truth.",
+      goodFitWhen:  "you have the same piece listed on more than one channel and want one place that knows they're the same product.",
+      notAFitWhen:  "Mast is your only storefront and there are no external listings to map.",
+      automates: [
+        "Matching Etsy listings to Shopify products by hand",
+        "Spotting unmapped or duplicate listings by eye"
+      ],
+      replacesTools:    ["Cross-channel SKU spreadsheets"],
+      complementsTools: ["Etsy", "Shopify"],
+      prerequisites: [
+        "Channels module enabled",
+        "At least one connected external channel"
+      ],
+      pairsWith:  ["channels", "products", "inventory"],
+      setupDepth: "moderate",
+      preview: {
+        url: ASSET_BASE + 'mapping.png',
+        alt: "Channel mapping screen showing listings matched to canonical products across Etsy and Shopify"
+      },
+      learnMoreUrl: HELP_BASE + 'mapping'
+    },
+
     // ── Customer Service ──────────────────────────────────────
     'cs-inbox': {
       label: 'Inbox', section: 'customer-service',
