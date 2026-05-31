@@ -40,8 +40,9 @@
       { name: 'items', label: 'Items', type: 'number', list: true, group: 'Order',
         get: function (o) { return Array.isArray(o.items) ? o.items.reduce(function (s, li) { return s + (li.qty || 1); }, 0) : (o.itemCount || 0); } },
       { name: 'total', label: 'Total', type: 'money', list: true, group: 'Order',
-        get: function (o) { return (o.totalCents != null ? o.totalCents / 100 : o.total); } },
+        get: function (o) { return window.MastUI.Num.moneyVal(o, 'totalCents', 'total'); } },
       { name: 'status', label: 'Status', type: 'status', list: true, group: 'Order',
+        options: ['placed', 'confirmed', 'building', 'packed', 'shipped', 'delivered', 'cancelled', 'refunded', 'payment_failed'],
         tone: function (v) { return STATUS_TONE[String(v || '').toLowerCase()] || 'neutral'; } },
       // Item-type tags so you can see what kinds of items an order contains.
       { name: 'contents', label: 'Contents', type: 'tags', list: true, sortable: false, group: 'Order',
@@ -64,21 +65,26 @@
       template: 'transaction',
       customerEntity: 'customers-v2',
       tiles: function (r) {
+        var N = window.MastUI.Num;
         var n = Array.isArray(r.items) ? r.items.reduce(function (s, li) { return s + (li.qty || 1); }, 0) : 0;
         return [
-          { k: 'Total', v: window.MastUI.Num.money((r.totalCents || 0) / 100), hero: true },
+          { k: 'Total', v: N.money(N.moneyVal(r, 'totalCents', 'total')) || '—', hero: true },
           { k: 'Items', v: n },
           { k: 'Payment', v: r.paymentMethod || '—' },
           { k: 'Source', v: r.source || '—' }
         ];
       },
       lineItems: function (r) {
+        var N = window.MastUI.Num;
         return (r.items || []).map(function (it) {
-          return { name: it.productName || it.name || 'Item', qty: it.qty, price: (it.priceCents || 0) / 100, total: (it.lineTotal || 0) / 100 };
+          return { name: it.productName || it.name || 'Item', qty: it.qty,
+            price: N.moneyVal(it, 'priceCents', 'price'), total: N.moneyVal(it, 'lineTotalCents', 'lineTotal') };
         });
       },
       totals: function (r) {
-        return { subtotal: (r.subtotalCents || 0) / 100, shipping: (r.shippingCents || 0) / 100, tax: (r.taxCents || 0) / 100, total: (r.totalCents || 0) / 100 };
+        var N = window.MastUI.Num;
+        return { subtotal: N.moneyVal(r, 'subtotalCents', 'subtotal'), shipping: N.moneyVal(r, 'shippingCents', 'shipping'),
+          tax: N.moneyVal(r, 'taxCents', 'tax'), total: N.moneyVal(r, 'totalCents', 'total') };
       },
       customer: function (r) {
         var sh = r.shipping || {};

@@ -34,6 +34,7 @@
       { name: 'totalSpend', label: 'Spend', type: 'money', list: true, group: 'Activity',
         get: function (c) { return (stat(c, 'lifetimeSpendCents') || 0) / 100; } },
       { name: 'status', label: 'Status', type: 'status', list: true, group: 'Activity',
+        options: ['active', 'lapsed', 'lead', 'vip'],
         tone: function (v) { return STATUS_TONE[String(v || '').toLowerCase()] || 'neutral'; } },
       { name: 'phone', label: 'Phone', type: 'text', group: 'Contact' },
       { name: 'createdAt', label: 'Created', type: 'date', group: 'Identity', readOnly: true }
@@ -49,7 +50,10 @@
         if (MastDB.orders && MastDB.orders.list) {
           jobs.push(Promise.resolve(MastDB.orders.list()).then(function (m) {
             var arr = [];
-            Object.keys(m || {}).forEach(function (k) { var o = m[k]; if (o && (o.customerId === id || o.email === c.primaryEmail)) arr.push(Object.assign({ _key: k }, o)); });
+            // Match on customerId ONLY — never email. Real customers can share
+            // an email (the Duplicates tab merges them); an email match would
+            // leak one customer's orders onto another's detail panel.
+            Object.keys(m || {}).forEach(function (k) { var o = m[k]; if (o && o.customerId === id) arr.push(Object.assign({ _key: k }, o)); });
             arr.sort(function (a, b) { return String(b.placedAt || '').localeCompare(String(a.placedAt || '')); });
             c._recentOrders = arr.slice(0, 8);
           }).catch(function () {}));
@@ -79,8 +83,9 @@
       },
       contact: function (r) { return { email: r.primaryEmail, location: r._contactLocation || null, contactId: r._contactId || null }; },
       relatedOrders: function (r) {
+        var N = window.MastUI.Num;
         return (r._recentOrders || []).map(function (o) {
-          return { id: o._key, number: o.orderNumber, date: window.MastUI.Num.date(o.placedAt), total: (o.totalCents || 0) / 100, status: o.status, tone: STATUS_TONE[String(o.status || '').toLowerCase()] || 'neutral' };
+          return { id: o._key, number: o.orderNumber, date: N.date(o.placedAt), total: N.moneyVal(o, 'totalCents', 'total'), status: o.status, tone: STATUS_TONE[String(o.status || '').toLowerCase()] || 'neutral' };
         });
       },
       segments: function (r) {

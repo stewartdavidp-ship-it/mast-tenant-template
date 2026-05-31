@@ -41,6 +41,20 @@
       var v = (opts && opts.cents) ? n / 100 : n;
       return v.toFixed(2);
     },
+    // Canonical dollar amount from a record that stores EITHER integer cents
+    // (centsField) OR a dollar number (dollarField). Cents wins when present +
+    // numeric; else the dollar field; else null. The single money source of
+    // truth for list + detail + export so cents- and dollar-denominated records
+    // render identically (fixes the $0.00-in-detail P0: most real orders are
+    // dollar-denominated and carry no *Cents fields).
+    moneyVal: function (rec, centsField, dollarField) {
+      if (!rec) return null;
+      var c = centsField ? rec[centsField] : undefined;
+      if (c != null && c !== '' && !isNaN(c)) return Number(c) / 100;
+      var d = dollarField ? rec[dollarField] : undefined;
+      if (d != null && d !== '' && !isNaN(d)) return Number(d);
+      return null;
+    },
     // date display: ISO/Date -> "May 1, 2026"; dateRaw -> "2026-05-01"
     date: function (d) {
       var dt = (d instanceof Date) ? d : new Date(d);
@@ -131,7 +145,12 @@
     var body = '';
     rows.forEach(function (r) {
       var id = rowId(r);
-      var click = cfg.onRowClickFnName ? ' onclick="' + cfg.onRowClickFnName + '(\'' + esc(id) + '\')" style="cursor:pointer;"' : '';
+      // Keyboard/AT: a clickable row is a real button — focusable + Enter/Space.
+      var click = cfg.onRowClickFnName
+        ? ' onclick="' + cfg.onRowClickFnName + '(\'' + esc(id) + '\')"' +
+          ' onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();' + cfg.onRowClickFnName + '(\'' + esc(id) + '\')}"' +
+          ' tabindex="0" role="button" style="cursor:pointer;"'
+        : '';
       body += '<tr class="mast-row"' + click + '>';
       cols.forEach(function (c) {
         var align = c.align === 'right' ? 'text-align:right;font-variant-numeric:tabular-nums;' :
@@ -382,7 +401,9 @@
       '.mu-ptabs button{background:transparent;border:0;border-bottom:2px solid transparent;color:var(--warm-gray);font:inherit;font-size:0.9rem;padding:11px 14px;cursor:pointer;white-space:nowrap;} .mu-ptabs button.on{border-bottom-color:var(--amber,#C4853C);color:var(--charcoal,var(--text));font-weight:600;}',
       '.mu-pane[hidden]{display:none;} .mu-grid2{display:grid;grid-template-columns:1.4fr 1fr;gap:18px;} @media(max-width:720px){.mu-grid2{grid-template-columns:1fr;}}',
       '.mu-crumb{margin:-4px -4px 14px;padding:9px 4px;border-bottom:1px solid var(--border,rgba(127,127,127,.2));} .mu-crumb button{background:transparent;border:0;color:var(--teal,#2A7C6F);font:inherit;font-size:0.85rem;cursor:pointer;font-weight:500;}',
-      '.mu-link{color:var(--teal,#2A7C6F);cursor:pointer;font-weight:500;} .mu-link:hover{text-decoration:underline;}',
+      '.mu-link{display:inline;color:var(--teal,#2A7C6F);background:none;border:0;padding:0;font:inherit;cursor:pointer;font-weight:500;} .mu-link:hover{text-decoration:underline;}',
+      // Visible keyboard focus (06-B / a11y) — no :focus-visible rings existed before.
+      '.mast-row:focus-visible{outline:2px solid var(--amber,var(--teal));outline-offset:-2px;} .mu-link:focus-visible,.mu-crumb button:focus-visible{outline:2px solid var(--amber,var(--teal));outline-offset:2px;border-radius:3px;}',
       '.feedback-overlay{z-index:12001 !important;}', // above the slide-out (9000) so the feedback dialog opens on top',
       '.mast-feedback-btn:hover{color:var(--charcoal,var(--text)) !important;}',
       '.mu-li{display:flex;align-items:center;gap:11px;} .mu-sub{color:var(--warm-gray);font-size:0.78rem;} .mu-totrow{display:flex;justify-content:space-between;padding:6px 0;color:var(--warm-gray);font-size:0.9rem;} .mu-totrow.grand{border-top:1px solid var(--border,rgba(127,127,127,.2));margin-top:6px;padding-top:10px;color:var(--charcoal,var(--text));font-weight:700;font-size:1.0rem;}'
