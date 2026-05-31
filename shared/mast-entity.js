@@ -98,27 +98,30 @@
 
   // ── Display helpers (browser; degrade gracefully without MastUI) ─────
   function esc(s) { return (window.MastUI && window.MastUI._esc) ? window.MastUI._esc(s) : String(s == null ? '' : s); }
+  var DASH = '<span style="color:var(--warm-gray);">—</span>';   // one em-dash for every empty scalar
   function displayCell(f, row) {
     var v = fieldValue(f, row);
     var N = window.MastUI && window.MastUI.Num;
-    if (f.type === 'money') return N ? N.money(v) : ('$' + (v || 0));
-    if (f.type === 'date') return N ? N.date(v) : esc(v);
-    if (f.type === 'number') return N ? N.count(v) : esc(v);
+    var empty = (v == null || v === '');
+    if (f.type === 'money') { var m = N ? N.money(v) : (empty ? '' : '$' + v); return m === '' ? DASH : m; }
+    if (f.type === 'date') { var d = N ? N.date(v) : esc(v); return d === '' ? DASH : d; }
+    if (f.type === 'number') return empty ? DASH : (N ? N.count(v) : esc(v));
     if ((f.type === 'status' || f.tone) && window.MastUI) {
+      if (empty) return DASH;
       var tone = (typeof f.tone === 'function') ? f.tone(v) : 'neutral';
-      return window.MastUI.badge(v == null ? '' : v, tone);
+      return window.MastUI.badge(v, tone);
     }
     if (f.type === 'tags') {
       var arr = Array.isArray(v) ? v : (v ? [v] : []);
-      if (!arr.length) return '<span style="color:var(--warm-gray);">—</span>';
+      if (!arr.length) return DASH;
       return arr.map(function (x) {
         return '<span style="display:inline-block;font-size:0.72rem;padding:2px 8px;border-radius:999px;background:var(--bg-secondary,rgba(127,127,127,.1));border:1px solid var(--border,rgba(127,127,127,.2));color:var(--warm-gray);margin:1px 4px 1px 0;">' + esc(x) + '</span>';
       }).join('');
     }
     // Defensive: never render a raw object as "[object Object]". A field whose
     // value is an object must declare a get()/render that returns a string.
-    if (v && typeof v === 'object') return '—';
-    return esc(v);
+    if (v && typeof v === 'object') return DASH;
+    return empty ? DASH : esc(v);
   }
 
   // ── DOM: list + record surface (compose v2 primitives) ──────────────
@@ -159,6 +162,17 @@
           // avoids "[object Object]" for derived fields and uneditable identity fields.
           html += '<div class="form-group" style="margin-bottom:12px;"><div class="form-label" style="font-size:0.78rem;color:var(--warm-gray);">' + esc(f.label) + '</div>' +
                   '<div style="font-size:0.9rem;color:var(--charcoal,var(--text));">' + displayCell(f, record) + '</div></div>';
+        } else if ((f.type === 'select' || f.type === 'status') && Array.isArray(f.options) && f.options.length) {
+          // Enum fields edit as a constrained <select> (not a free-text input
+          // that accepts "banana"). options: ['a',...] or [{value,label},...].
+          var cur = (v == null ? '' : String(v));
+          var optsHtml = f.options.map(function (o) {
+            var ov = (o && typeof o === 'object') ? o.value : o;
+            var ol = (o && typeof o === 'object') ? (o.label || o.value) : o;
+            return '<option value="' + esc(ov) + '"' + (String(ov) === cur ? ' selected' : '') + '>' + esc(ol) + '</option>';
+          }).join('');
+          html += '<div class="form-group" style="margin-bottom:12px;"><label class="form-label">' + esc(f.label) + (f.required ? ' *' : '') + '</label>' +
+                  '<select class="form-input" name="' + esc(f.name) + '" style="width:100%;">' + optsHtml + '</select></div>';
         } else {
           var sval = (v == null) ? '' : (typeof v === 'object' ? canonicalGet(f, record) : v);
           html += '<div class="form-group" style="margin-bottom:12px;"><label class="form-label">' + esc(f.label) + (f.required ? ' *' : '') + '</label>' +
@@ -192,9 +206,10 @@
     return _formHtml(s.key, r, 'read');
   }
   function drillLink(entityKey, id, text) {
-    return '<span class="mu-link" onclick="MastEntity.drill(\'' + entityKey + '\',\'' + esc(String(id)) + '\')">' + esc(text) + '</span>';
+    return '<button type="button" class="mu-link" onclick="MastEntity.drill(\'' + entityKey + '\',\'' + esc(String(id)) + '\')">' + esc(text) + '</button>';
   }
   function renderTransaction(U, d, r) {
+    var m = function (x) { return U.Num.money(x) || '—'; };   // absent money → em-dash; genuine 0 → $0.00
     var cust = d.customer ? d.customer(r) : null;
     var custBlock = cust ? (
       '<div style="font-weight:600;">' + (cust.id ? drillLink(d.customerEntity || 'customers-v2', cust.id, cust.name || cust.email) : esc(cust.name || cust.email)) + '</div>' +
@@ -204,14 +219,14 @@
     var items = (d.lineItems ? d.lineItems(r) : []) || [];
     var itemRows = items.map(function (it) {
       return '<tr><td><div class="mu-li">' + U.imageThumb(it.name || '') + '<div>' + esc(it.name || '') + (it.variant ? '<div class="mu-sub">' + esc(it.variant) + '</div>' : '') + '</div></div></td>' +
-        '<td class="r">' + esc(it.qty) + '</td><td class="r">' + U.Num.money(it.price) + '</td><td class="r">' + U.Num.money(it.total) + '</td></tr>';
+        '<td class="r">' + esc(it.qty) + '</td><td class="r">' + m(it.price) + '</td><td class="r">' + m(it.total) + '</td></tr>';
     }).join('');
     var itemsTable = '<table class="mu-rel"><thead><tr><th>Product</th><th class="r">Qty</th><th class="r">Price</th><th class="r">Total</th></tr></thead><tbody>' + itemRows + '</tbody></table>';
     var t = (d.totals ? d.totals(r) : {}) || {};
-    var totalsHtml = '<div class="mu-totrow"><span>Subtotal</span><span>' + U.Num.money(t.subtotal) + '</span></div>' +
-      '<div class="mu-totrow"><span>Shipping</span><span>' + U.Num.money(t.shipping) + '</span></div>' +
-      '<div class="mu-totrow"><span>Tax</span><span>' + U.Num.money(t.tax) + '</span></div>' +
-      '<div class="mu-totrow grand"><span>Total</span><span>' + U.Num.money(t.total) + '</span></div>';
+    var totalsHtml = '<div class="mu-totrow"><span>Subtotal</span><span>' + m(t.subtotal) + '</span></div>' +
+      '<div class="mu-totrow"><span>Shipping</span><span>' + m(t.shipping) + '</span></div>' +
+      '<div class="mu-totrow"><span>Tax</span><span>' + m(t.tax) + '</span></div>' +
+      '<div class="mu-totrow grand"><span>Total</span><span>' + m(t.total) + '</span></div>';
     var ful = (d.fulfillment ? d.fulfillment(r) : {}) || {};
     var fulHtml = U.kv([{ k: 'Status', v: U.badge(ful.status || '—', ful.tone || 'neutral') }, { k: 'Tracking', v: ful.tracking || '—' }]);
     return U.paneTabsBar([{ key: 'ov', label: 'Overview' }, { key: 'items', label: 'Items' }, { key: 'ful', label: 'Fulfillment' }, { key: 'act', label: 'Activity' }], 'ov') +
@@ -229,7 +244,7 @@
     var ordersTable = U.relatedTable([
       { label: 'Order', render: function (o) { return drillLink(oe, o.id, o.number || o.id); } },
       { label: 'Date', render: function (o) { return '<span class="mu-sub">' + esc(o.date) + '</span>'; } },
-      { label: 'Total', align: 'right', render: function (o) { return U.Num.money(o.total); } },
+      { label: 'Total', align: 'right', render: function (o) { return U.Num.money(o.total) || '—'; } },
       { label: 'Status', render: function (o) { return U.badge(o.status, o.tone); } }
     ], orders);
     var notes = (d.notes ? d.notes(r) : '') || '';
@@ -281,6 +296,9 @@
     // Prefix the title with the object type ("Order: SGTE-0188") so it's always
     // clear which kind of record you're on — important when drilling across types.
     var _recName = (record && record[s.fields[0].name]) || '';
+    // Fall back to a stable identifier when the lead field is empty, so the
+    // title is never a bare "Customer" with no id (empty-value handling).
+    if (!_recName && record) _recName = record.email || record.primaryEmail || record.orderNumber || s.recordId(record) || '';
     var titleText = (mode === 'create') ? ('New ' + (s.label || key))
       : (_recName ? ((s.label ? s.label + ': ' : '') + _recName) : (s.label || key));
     _current = { key: key, id: s.recordId(record), label: titleText, record: record };
@@ -299,7 +317,7 @@
         var panel = document.getElementById('mastSlideOutBody');
         if (!panel) return false;
         var cur = {};
-        panel.querySelectorAll('input[name]').forEach(function (i) { cur[i.name] = i.value; });
+        panel.querySelectorAll('input[name],select[name],textarea[name]').forEach(function (i) { cur[i.name] = i.value; });
         var snap = JSON.parse(baseline);
         return s.fields.some(function (f) { return (f.name in cur) && String(cur[f.name]) !== String(snap[f.name] == null ? '' : snap[f.name]); });
       },
@@ -308,7 +326,7 @@
         // Start from the original record so read-only/required fields (not
         // rendered as inputs) are still present for validation + persistence.
         var rec = Object.assign({}, record || {});
-        panel.querySelectorAll('input[name]').forEach(function (i) { rec[i.name] = i.value; });
+        panel.querySelectorAll('input[name],select[name],textarea[name]').forEach(function (i) { rec[i.name] = i.value; });
         var v = validate(key, rec);
         if (!v.ok) { if (window.showToast) showToast(v.errors[0], true); return false; }
         return s.onSave ? s.onSave(rec, mode) : true;

@@ -50,4 +50,11 @@ t('list renders rows with row-click + right-align numerics', () => {
 });
 t('list loading state', () => assert.ok(list({ loading: true }).includes('Loading')));
 
+// moneyVal — canonical dollar amount (the P0 fix): cents wins, dollar fallback,
+// genuine zero kept, absent → null (so the UI can render an em-dash not $0.00).
+t('moneyVal prefers cents field when present', () => assert.strictEqual(Num.moneyVal({ totalCents: 102000, total: 5 }, 'totalCents', 'total'), 1020));
+t('moneyVal falls back to dollar field when no cents (the P0 case)', () => assert.strictEqual(Num.moneyVal({ total: 49.5 }, 'totalCents', 'total'), 49.5));
+t('moneyVal genuine zero cents → 0 (not the dollar fallback)', () => assert.strictEqual(Num.moneyVal({ shippingCents: 0, shipping: 9 }, 'shippingCents', 'shipping'), 0));
+t('moneyVal absent on both → null (renders em-dash, not $0.00)', () => assert.strictEqual(Num.moneyVal({}, 'totalCents', 'total'), null));
+
 console.log('\n' + pass + ' passed');

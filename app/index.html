@@ -17157,6 +17157,17 @@ if (document.readyState === 'loading') {
 // ────────────────────────────────────────────────────────────────
 window.mastSlideOut = (function() {
   var _state = { open: false, onClose: null, originator: null };
+  // a11y: while open, disable + hide the background so keyboard/AT stay inside
+  // the dialog (mirrors addToMastDrawer). #mastSlideOutRoot is a body child, so
+  // the panel itself stays interactive.
+  function _setBackgroundInert(on) {
+    ['mainContent', 'sidebar'].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (!el) return;
+      if (on) { el.setAttribute('inert', ''); el.setAttribute('aria-hidden', 'true'); }
+      else { el.removeAttribute('inert'); el.removeAttribute('aria-hidden'); }
+    });
+  }
   function ensureRoot() {
     var ex = document.getElementById('mastSlideOutRoot');
     if (ex) return ex;
@@ -17229,7 +17240,21 @@ window.mastSlideOut = (function() {
         panel.style.transform = 'translateX(0)';
       }, 0);
       _state.open = true;
+      _state.gen = (_state.gen || 0) + 1;            // close-race guard: a re-open invalidates a pending close
+      if (root) root.removeAttribute('aria-hidden');
+      _setBackgroundInert(true);
       if (window.MastOverlayNav) MastOverlayNav.push('slideout', window.mastSlideOut.close);
+      // Focus trap — keep Tab within the panel while open (mirrors addToMastDrawer).
+      _state.keyHandler = function(e) {
+        if (!_state.open || e.key !== 'Tab') return;
+        var tp = document.getElementById('mastSlideOutPanel'); if (!tp) return;
+        var f = tp.querySelectorAll('a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])');
+        if (!f.length) return;
+        var first = f[0], last = f[f.length - 1];
+        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+      };
+      document.addEventListener('keydown', _state.keyHandler);
       setTimeout(function() { var cb = document.getElementById('mastSlideOutCloseBtn'); if (cb) cb.focus(); }, 240);
     },
     close: function() {
@@ -17239,11 +17264,19 @@ window.mastSlideOut = (function() {
       var panel = document.getElementById('mastSlideOutPanel');
       if (scrim) scrim.style.opacity = '0';
       if (panel) panel.style.transform = 'translateX(100%)';
+      var _g = (_state.gen || 0);
       setTimeout(function() {
+        // A re-open within this 220ms exit window bumps _state.gen; if so, this
+        // stale close must NOT hide the freshly-opened panel (the recurring
+        // "panel vanished but isOpen() true" race).
+        if ((_state.gen || 0) !== _g) return;
         if (root) { root.style.display = 'none'; root.setAttribute('aria-hidden', 'true'); }
         document.body.style.overflow = '';
       }, 220);
       _state.open = false;
+      // Tear down the focus trap + restore the background before focus moves out.
+      if (_state.keyHandler) { document.removeEventListener('keydown', _state.keyHandler); _state.keyHandler = null; }
+      _setBackgroundInert(false);
       if (window.MastOverlayNav) MastOverlayNav.pop('slideout');
       if (_state.originator && typeof _state.originator.focus === 'function') {
         try { _state.originator.focus(); } catch(e) {}
@@ -20809,7 +20842,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260531-175621-9650e83';
+var MAST_MODULES_V = '20260531-182449-b366bdf';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
