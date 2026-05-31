@@ -155,14 +155,20 @@
 
   // ── Deep-link helper (?id= in the hash) ─────────────────────────────
   var deepLink = {
+    // Use history.replaceState (NOT location.hash=) so updating the deep-link
+    // does not fire `hashchange` → the SPA router would otherwise re-run and tear
+    // down the just-opened slide-out. Silent URL update only.
     set: function (id) {
       try {
         var h = location.hash.replace(/^#/, '').split('?')[0];
-        location.hash = h + '?id=' + encodeURIComponent(id);
+        history.replaceState(null, '', '#' + h + '?id=' + encodeURIComponent(id));
       } catch (e) {}
     },
     clear: function () {
-      try { location.hash = location.hash.replace(/^#/, '').split('?')[0]; } catch (e) {}
+      try {
+        var h = location.hash.replace(/^#/, '').split('?')[0];
+        history.replaceState(null, '', '#' + h);
+      } catch (e) {}
     },
     get: function () {
       var m = /[?&]id=([^&]+)/.exec(location.hash);
