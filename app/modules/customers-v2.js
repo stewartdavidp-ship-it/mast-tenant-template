@@ -49,12 +49,17 @@
     return out;
   }
   function load() {
-    if (!window.MastDB) return;
+    var c = window.MastDB && MastDB.customers;
     var apply = function (tree) {
       V2.rows = toRows(tree); V2.byId = {}; V2.rows.forEach(function (r) { V2.byId[r._key] = r; }); render();
     };
-    if (MastDB.subscribe) V2.off = MastDB.subscribe('admin/customers', apply);
-    else if (MastDB.list) MastDB.list('admin/customers').then(apply);
+    // Prefer the customers entity accessor; fall back to the raw path.
+    if (c && typeof c.list === 'function') {
+      Promise.resolve(c.list()).then(apply).catch(function (e) { console.error('[customers-v2] list', e); });
+      if (typeof c.listen === 'function') { try { V2.off = c.listen(apply); } catch (e) {} }
+    } else if (window.MastDB && MastDB.list) {
+      MastDB.list('admin/customers').then(apply).catch(function (e) { console.error('[customers-v2] list', e); });
+    }
   }
 
   function visibleRows() {
@@ -75,8 +80,8 @@
   function ensureTab() {
     var el = document.getElementById('customersV2Tab');
     if (el) return el;
-    el = document.createElement('section'); el.id = 'customersV2Tab'; el.className = 'tab-content'; el.style.display = 'none';
-    (document.querySelector('main') || document.getElementById('content') || document.body).appendChild(el);
+    el = document.createElement('div'); el.id = 'customersV2Tab'; el.className = 'tab-content'; el.style.display = 'none';
+    (document.getElementById('content') || document.body).appendChild(el);
     return el;
   }
 
@@ -109,6 +114,6 @@
   };
 
   MastAdmin.registerModule('customers-v2', {
-    routes: { 'customers-v2': { tab: 'customersV2Tab', setup: function () { ensureTab(); if (!V2.off) load(); else render(); } } }
+    routes: { 'customers-v2': { tab: 'customersV2Tab', setup: function () { ensureTab(); render(); load(); } } }
   });
 })();
