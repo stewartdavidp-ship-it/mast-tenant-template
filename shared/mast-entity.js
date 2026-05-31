@@ -159,22 +159,112 @@
     return html;
   }
 
+  // ── Designed detail templates (read mode) ──────────────────────────
+  var _current = null; // {route,id,label} of the open record, for drill-back
+
+  function chips(labels) {
+    return '<div style="display:flex;flex-wrap:wrap;gap:6px;">' + (labels || []).map(function (l) {
+      return '<span style="font-size:0.72rem;padding:3px 10px;border-radius:999px;background:var(--bg-secondary,rgba(127,127,127,.08));border:1px solid var(--border,rgba(127,127,127,.2));color:var(--warm-gray);">' + esc(l) + '</span>';
+    }).join('') + '</div>';
+  }
+  function crumbHtml() {
+    if (window.MastNavStack && MastNavStack.size && MastNavStack.size() > 0) {
+      return '<div class="mu-crumb"><button onclick="MastEntity.back()">← ' + esc(MastNavStack.label() || 'Back') + '</button></div>';
+    }
+    return '';
+  }
+  function renderDetail(s, r) {
+    var d = s.detail || {};
+    if (d.template === 'transaction') return renderTransaction(window.MastUI, d, r);
+    if (d.template === 'party') return renderParty(window.MastUI, d, r);
+    return _formHtml(s.key, r, 'read');
+  }
+  function drillLink(entityKey, id, text) {
+    return '<span class="mu-link" onclick="MastEntity.drill(\'' + entityKey + '\',\'' + esc(String(id)) + '\')">' + esc(text) + '</span>';
+  }
+  function renderTransaction(U, d, r) {
+    var cust = d.customer ? d.customer(r) : null;
+    var custBlock = cust ? (
+      '<div style="font-weight:600;">' + (cust.id ? drillLink(d.customerEntity || 'customers-v2', cust.id, cust.name || cust.email) : esc(cust.name || cust.email)) + '</div>' +
+      '<div class="mu-sub" style="margin:2px 0 10px;">' + esc(cust.email || '') + '</div>' +
+      (cust.address ? '<div style="font-size:0.85rem;color:var(--warm-gray);line-height:1.5;">' + cust.address + '</div>' : '')
+    ) : '<span class="mu-sub">—</span>';
+    var items = (d.lineItems ? d.lineItems(r) : []) || [];
+    var itemRows = items.map(function (it) {
+      return '<tr><td><div class="mu-li">' + U.imageThumb(it.name || '') + '<div>' + esc(it.name || '') + (it.variant ? '<div class="mu-sub">' + esc(it.variant) + '</div>' : '') + '</div></div></td>' +
+        '<td class="r">' + esc(it.qty) + '</td><td class="r">' + U.Num.money(it.price) + '</td><td class="r">' + U.Num.money(it.total) + '</td></tr>';
+    }).join('');
+    var itemsTable = '<table class="mu-rel"><thead><tr><th>Product</th><th class="r">Qty</th><th class="r">Price</th><th class="r">Total</th></tr></thead><tbody>' + itemRows + '</tbody></table>';
+    var t = (d.totals ? d.totals(r) : {}) || {};
+    var totalsHtml = '<div class="mu-totrow"><span>Subtotal</span><span>' + U.Num.money(t.subtotal) + '</span></div>' +
+      '<div class="mu-totrow"><span>Shipping</span><span>' + U.Num.money(t.shipping) + '</span></div>' +
+      '<div class="mu-totrow"><span>Tax</span><span>' + U.Num.money(t.tax) + '</span></div>' +
+      '<div class="mu-totrow grand"><span>Total</span><span>' + U.Num.money(t.total) + '</span></div>';
+    var ful = (d.fulfillment ? d.fulfillment(r) : {}) || {};
+    var fulHtml = U.kv([{ k: 'Status', v: U.badge(ful.status || '—', ful.tone || 'neutral') }, { k: 'Tracking', v: ful.tracking || '—' }]);
+    return U.paneTabsBar([{ key: 'ov', label: 'Overview' }, { key: 'items', label: 'Items' }, { key: 'ful', label: 'Fulfillment' }, { key: 'act', label: 'Activity' }], 'ov') +
+      '<div class="mu-pane" data-pane="ov">' + U.tiles(d.tiles ? d.tiles(r) : []) + U.card('Customer & shipping', custBlock) + '</div>' +
+      '<div class="mu-pane" data-pane="items" hidden>' + U.cardTable('Items', itemsTable) + U.card('Summary', totalsHtml) + '</div>' +
+      '<div class="mu-pane" data-pane="ful" hidden>' + U.card('Fulfillment', fulHtml) + '</div>' +
+      '<div class="mu-pane" data-pane="act" hidden>' + U.card('Timeline', U.timeline(d.timeline ? d.timeline(r) : [])) + '</div>';
+  }
+  function renderParty(U, d, r) {
+    var c = (d.contact ? d.contact(r) : {}) || {};
+    var loc = c.location ? (c.contactId ? drillLink(d.contactEntity || 'contacts-v2', c.contactId, c.location) : esc(c.location)) : '—';
+    var contactHtml = U.kv([{ k: 'Email', v: esc(c.email || '') }, { k: 'Location', v: loc }]);
+    var orders = (d.relatedOrders ? d.relatedOrders(r) : []) || [];
+    var oe = d.orderEntity || 'orders-v2';
+    var ordersTable = U.relatedTable([
+      { label: 'Order', render: function (o) { return drillLink(oe, o.id, o.number || o.id); } },
+      { label: 'Date', render: function (o) { return '<span class="mu-sub">' + esc(o.date) + '</span>'; } },
+      { label: 'Total', align: 'right', render: function (o) { return U.Num.money(o.total); } },
+      { label: 'Status', render: function (o) { return U.badge(o.status, o.tone); } }
+    ], orders);
+    var notes = (d.notes ? d.notes(r) : '') || '';
+    return U.paneTabsBar([{ key: 'ov', label: 'Overview' }, { key: 'orders', label: 'Orders' }, { key: 'notes', label: 'Notes' }], 'ov') +
+      '<div class="mu-pane" data-pane="ov">' + U.tiles(d.tiles ? d.tiles(r) : []) + U.card('Contact', contactHtml) + U.card('Segments', chips(d.segments ? d.segments(r) : [])) + '</div>' +
+      '<div class="mu-pane" data-pane="orders" hidden>' + U.cardTable('Orders (' + orders.length + ')', ordersTable) + '</div>' +
+      '<div class="mu-pane" data-pane="notes" hidden>' + U.card('Notes', notes ? '<div style="font-size:0.85rem;color:var(--warm-gray);line-height:1.5;">' + esc(notes) + '</div>' : '<span class="mu-sub">No notes</span>') + '</div>';
+  }
+
+  // Drill to another object: push caller context (for back), fetch + open target.
+  function drill(targetKey, id) {
+    var ts = _registry[targetKey];
+    if (!ts || typeof ts.fetch !== 'function') { if (window.showToast) showToast('Cannot open ' + targetKey + ' (not available)', true); return; }
+    if (window.MastNavStack && _current) {
+      MastNavStack.push({ route: _current.route, view: 'detail', state: { id: _current.id }, label: _current.label });
+    }
+    Promise.resolve(ts.fetch(id)).then(function (rec) { if (rec) openRecord(targetKey, rec, 'read'); else if (window.showToast) showToast('Not found', true); })
+      .catch(function (e) { console.error('[MastEntity.drill]', e); if (window.showToast) showToast('Could not open record', true); });
+  }
+  function back() { if (window.MastNavStack) MastNavStack.popAndReturn(); }
+
   function openRecord(key, record, mode) {
     var s = _registry[key]; if (!s) return;
     mode = mode || 'read';
+    // register a restorer once so drill-back can re-open this entity by id
+    if (s.route && typeof s.fetch === 'function' && window.MastNavStack && !s._restorerSet) {
+      s._restorerSet = true;
+      MastNavStack.registerRestorer(s.route, function (view, state) {
+        if (state && state.id) Promise.resolve(s.fetch(state.id)).then(function (rec) { if (rec) openRecord(key, rec, 'read'); });
+      });
+    }
     var statusField = s.fields.filter(function (f) { return f.type === 'status'; })[0];
     var badges = (statusField && record) ? [{ label: record[statusField.name], tone: (statusField.tone ? statusField.tone(record[statusField.name]) : 'neutral') }] : [];
     var baseline = JSON.stringify(record || {});
+    var titleText = (mode === 'create' ? 'New ' + (s.label || key) : (record && (record[s.fields[0].name])) || (s.label || key));
+    _current = { route: s.route || key, id: s.recordId(record), label: titleText };
     window.MastUI.slideOut.open({
       id: s.recordId(record) || 'new',
-      title: (mode === 'create' ? 'New ' + (s.label || key) : (record && (record[s.fields[0].name])) || (s.label || key)),
+      title: titleText,
       size: s.size || 'md',
       mode: mode,
       badges: badges,
       // Read mode offers Edit (→ in-place edit mode) when the entity is editable.
       actions: (mode === 'read' && typeof s.onSave === 'function')
         ? [{ label: 'Edit', primary: true, onClickFnName: 'MastUI.slideOut.edit' }] : undefined,
-      render: function (ctx) { return _formHtml(key, record, ctx.mode); },
+      // Read mode → designed category template (if declared); else the form.
+      render: function (ctx) { return (ctx.mode === 'read' && s.detail) ? (crumbHtml() + renderDetail(s, record)) : _formHtml(key, record, ctx.mode); },
       isDirty: function () {
         var panel = document.getElementById('mastSlideOutBody');
         if (!panel) return false;
@@ -203,7 +293,8 @@
   var api = {
     define: define, get: get, listColumns: listColumns, exportColumns: exportColumns,
     canonicalGet: canonicalGet, validate: validate,
-    renderList: renderList, openRecord: openRecord, exportRows: exportRows
+    renderList: renderList, openRecord: openRecord, exportRows: exportRows,
+    drill: drill, back: back
   };
   if (typeof window !== 'undefined') window.MastEntity = api;
   if (typeof module !== 'undefined' && module.exports) {
