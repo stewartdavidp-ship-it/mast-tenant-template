@@ -154,21 +154,12 @@
   }
 
   // ── Deep-link helper (?id= in the hash) ─────────────────────────────
-  var deepLink = {
-    set: function (id) {
-      try {
-        var h = location.hash.replace(/^#/, '').split('?')[0];
-        location.hash = h + '?id=' + encodeURIComponent(id);
-      } catch (e) {}
-    },
-    clear: function () {
-      try { location.hash = location.hash.replace(/^#/, '').split('?')[0]; } catch (e) {}
-    },
-    get: function () {
-      var m = /[?&]id=([^&]+)/.exec(location.hash);
-      return m ? decodeURIComponent(m[1]) : null;
-    }
-  };
+  // Deep-link DISABLED: writing `?id=` to location.hash fires `hashchange`,
+  // which the SPA router treats as navigation and tears down the open slide-out
+  // (broke drilling Order→Customer). Drill/back work via MastNavStack +
+  // MastOverlayNav without a URL id; a shareable ?id= can be re-added later via
+  // history.replaceState + a router guard. No-op for now.
+  var deepLink = { set: function () {}, clear: function () {}, get: function () { return null; } };
 
   // ── slideOut v2 — the one record surface (05/08/12) ─────────────────
   // Wraps window.mastSlideOut (v1) adding: width tiers + expand, modes
