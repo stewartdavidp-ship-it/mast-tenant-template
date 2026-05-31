@@ -26,9 +26,9 @@ Plus: rubric re-grade ≥ B; deep-link `?id=`; dirty-guard on close/backdrop/Esc
 |---|---|---|---|
 | 0a Tokens & light-mode fix | index.html | — | ✅ done (`feat/admin-light-dark-foundation`; supersession later) |
 | 0b mastSlideOut v2 + tabs/list/badge/number-fmt | `shared/mast-ui.js` | `mastSlideOut`(L16905), `MastDirty`(L11554), `MastOverlayNav`(L16477), `mastSortRows`(L17012), `mastConfirm`(L16725) | 🟡 core landed + 15 unit tests pass (`test/mast-ui.test.js`); filter-bar + form helpers + dev-pod verify of slideOut v2 pending |
-| 0b Image/file/OS controls | `shared/mast-media.js` | `camera.js`, PapaParse/SheetJS | ⬜ |
-| 0b Exporter + import wizard | `shared/mast-io.js` | PapaParse/SheetJS | ⬜ |
-| 0c Entity Engine | `shared/mast-entity.js` | 0b | ⬜ keystone |
+| 0b Image/file/OS controls | `shared/mast-media.js` | `camera.js`, PapaParse/SheetJS | ⬜ deferred (not needed for orders/customers proof; build when a media module converts) |
+| 0b Exporter + import parse | `shared/mast-io.js` | PapaParse/SheetJS | ✅ done — toCsv (RFC-4180 + injection guard), filename convention, download, parse; 9 unit tests pass |
+| 0c Entity Engine | `shared/mast-entity.js` | 0b | ✅ done — schema → listColumns/exportColumns/validate/renderList/openRecord(read·edit·create)/exportRows; 13 unit tests pass |
 | 0d Report Engine | `shared/mast-report.js` | 0b | ⬜ fast-follow |
 
 ## Proof (Phase 1 — HARD GATE)
@@ -60,4 +60,6 @@ Per module: flag default on → monitor → remove legacy module + flag. Then pl
 
 ## Live log
 - 2026-05-30 — Control plane initialized. Light/dark foundation committed. Audit docs → PR #75. Worktree `feat/ui-redesign-foundation` created off main. Primitives located.
-- 2026-05-30 — `shared/mast-ui.js` core authored (Num formatting, soft-tint badge, tabs, standard list, slideOut v2 w/ tiers+expand+modes+dirty-guard+deep-link) on the v1 globals. `test/mast-ui.test.js`: 15/15 pass. design-tokens lint clean (no hex). **Next: `shared/mast-io.js` (exporter+import) + `shared/mast-media.js`, then `mast-entity.js` (0c).**
+- 2026-05-30 — `shared/mast-ui.js` core authored (Num formatting, soft-tint badge, tabs, standard list, slideOut v2 w/ tiers+expand+modes+dirty-guard+deep-link) on the v1 globals. `test/mast-ui.test.js`: 15/15 pass. design-tokens lint clean.
+- 2026-05-30 — Enforcement ratchet `scripts/lint-ux-standards.js` + baseline (42 files / 2806) wired into CI (`lint.yml`). Drift blocked; proven. Doc 16.
+- 2026-05-30 — `shared/mast-io.js` (9 tests) + **`shared/mast-entity.js` keystone (13 tests)** authored. Engine triad: **37 unit tests green**, ratchet clean. **Next: Phase 1 proof — `orders-v2.js` + `customers-v2.js` as schemas, behind `uiRedesign` flag → HARD GATE.**
