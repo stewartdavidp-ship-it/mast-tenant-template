@@ -13796,7 +13796,7 @@ async function removeRoutesFromMast(routeIds, context) {
     for (var i = 0; i < routeIds.length; i++) {
       var rid = routeIds[i];
       var rule = BEC.MODE_ROUTE_VISIBILITY && BEC.MODE_ROUTE_VISIBILITY[rid];
-      if (rule && rule.alwaysOn) continue;                                  // can't hide always-on
+      if (rule && rule.anchor) continue;                                    // can't hide the recovery anchor
       if (!BEC.isRouteVisible(rid, _modeSetSnapshot, nextOverrides)) continue; // already hidden
       nextOverrides = BEC.setRouteVisibilityOverride(nextOverrides, rid, false, _modeSetSnapshot);
       toRemove.push(rid);
@@ -13829,8 +13829,8 @@ async function removeRouteFromMast(routeId, context) {
       return { success: false, error: 'BEC not loaded' };
     }
     var rule = BEC.MODE_ROUTE_VISIBILITY && BEC.MODE_ROUTE_VISIBILITY[routeId];
-    if (rule && rule.alwaysOn) {
-      return { success: false, alwaysOn: true, error: 'Always-on route cannot be removed' };
+    if (rule && rule.anchor) {
+      return { success: false, anchor: true, error: 'The recovery anchor (Add to Mast) cannot be removed' };
     }
     var current = _modeOverridesSnapshot || { enabledRoutes: [], disabledRoutes: [] };
     if (!BEC.isRouteVisible(routeId, _modeSetSnapshot, current)) {
@@ -13900,7 +13900,7 @@ function _getSoftHiddenRoutes(modeSet, overrides) {
   for (var routeId in matrix) {
     if (!Object.prototype.hasOwnProperty.call(matrix, routeId)) continue;
     var rule = matrix[routeId];
-    if (rule && rule.alwaysOn) continue;
+    if (rule && rule.anchor) continue;
     if (BEC.isRouteVisible(routeId, modeSet, overrides)) continue;
     result.push(routeId);
   }
@@ -13909,8 +13909,8 @@ function _getSoftHiddenRoutes(modeSet, overrides) {
 window._getSoftHiddenRoutes = _getSoftHiddenRoutes;
 
 // Inverse of _getSoftHiddenRoutes: routes the owner could hide right now —
-// currently visible, not always-on, and known to the module manager (has info).
-// Drives the "Hide all" bulk controls.
+// currently visible, not the recovery anchor, and known to the module manager
+// (has info). Drives the "Hide all" bulk controls.
 function _getVisibleToggleableRoutes(modeSet, overrides) {
   var BEC = window.BusinessEntityConstants;
   if (!BEC || !BEC.MODE_ROUTE_VISIBILITY) return [];
@@ -13919,7 +13919,7 @@ function _getVisibleToggleableRoutes(modeSet, overrides) {
   for (var routeId in matrix) {
     if (!Object.prototype.hasOwnProperty.call(matrix, routeId)) continue;
     var rule = matrix[routeId];
-    if (rule && (rule.alwaysOn || rule.systemManaged)) continue;
+    if (rule && (rule.anchor || rule.systemManaged)) continue;
     if (routeId === 'add-to-mast') continue;
     if (!MODE_MODULE_INFO[routeId]) continue;               // not represented in the manager
     if (!BEC.isRouteVisible(routeId, modeSet, overrides)) continue; // already hidden
@@ -13946,6 +13946,55 @@ function _sidebarLabelFor(routeId) {
     return t || null;
   } catch (e) { return null; }
 }
+
+// Build a non-blocking advisory after the owner hides one or more modules:
+// names the still-visible modules that DEPEND on something just hidden, so they
+// know those surfaces will be in the sidebar without their data. Advisory only —
+// the hide already happened; this never blocks. Returns '' when nothing depends
+// on the hidden set. e.g. hide Channels → "Heads up: Listing Mapping relies on
+// Channels — re-add it if you still need that view."
+function _dependencyHideAdvisory(hiddenRouteIds) {
+  try {
+    var BEC = window.BusinessEntityConstants;
+    if (!BEC || typeof BEC.dependentsOf !== 'function') return '';
+    var hiddenSet = {};
+    (hiddenRouteIds || []).forEach(function(r) { hiddenSet[r] = true; });
+    var overrides = (typeof getModeOverrides === 'function') ? getModeOverrides() : null;
+    var modeSet = (typeof getModeSet === 'function') ? getModeSet() : null;
+    function labelOf(routeId) {
+      var sb = _sidebarLabelFor(routeId);
+      if (sb) return sb;
+      var info = (window.MODE_MODULE_INFO || {})[routeId];
+      return (info && info.label) || routeId;
+    }
+    // affected: visible modules that require one of the just-hidden routes.
+    var affected = {};   // dependentRoute -> [requiredRoute,...]
+    (hiddenRouteIds || []).forEach(function(hidden) {
+      BEC.dependentsOf(hidden).forEach(function(dep) {
+        if (hiddenSet[dep]) return;                                   // it was hidden too — no orphan
+        if (!BEC.isRouteVisible(dep, modeSet, overrides)) return;     // dependent isn't visible — no issue
+        (affected[dep] = affected[dep] || []).push(hidden);
+      });
+    });
+    var depRoutes = Object.keys(affected);
+    if (depRoutes.length === 0) return '';
+    // Phrase up to two dependents explicitly; summarize the rest.
+    var names = depRoutes.map(labelOf);
+    var reqNames = {};
+    depRoutes.forEach(function(d) { affected[d].forEach(function(r) { reqNames[r] = labelOf(r); }); });
+    var reqList = Object.keys(reqNames).map(function(k) { return reqNames[k]; });
+    var subject;
+    if (names.length === 1) subject = names[0] + ' relies on';
+    else if (names.length === 2) subject = names[0] + ' and ' + names[1] + ' rely on';
+    else subject = names.slice(0, 2).join(', ') + ' and ' + (names.length - 2) + ' more rely on';
+    var object = reqList.length === 1 ? reqList[0] : reqList.slice(0, 2).join(' / ');
+    return 'Heads up: ' + subject + ' ' + object + ' — re-add ' + (reqList.length === 1 ? 'it' : 'them') + ' if you still need ' + (names.length === 1 ? 'that view' : 'those views') + '.';
+  } catch (e) {
+    console.warn('[_dependencyHideAdvisory] failed:', e && e.message);
+    return '';
+  }
+}
+window._dependencyHideAdvisory = _dependencyHideAdvisory;
 
 // Routes shown on the Add-to-Mast page. Includes always-on items so owners
 // see every sidebar item represented (rendered as informational "Always on"
@@ -14139,12 +14188,12 @@ function openAddToMastDetails(routeId) {
     var BEC = window.BusinessEntityConstants;
     var rule = (BEC && BEC.MODE_ROUTE_VISIBILITY && BEC.MODE_ROUTE_VISIBILITY[routeId]) || {};
     var overrides = (typeof getModeOverrides === 'function') ? getModeOverrides() : { enabledRoutes: [], disabledRoutes: [] };
-    var isAlwaysOn = !!rule.alwaysOn;
-    var isVisible  = isAlwaysOn || (BEC && BEC.isRouteVisible ? BEC.isRouteVisible(routeId, modeSet, overrides) : false);
+    var isAnchor = !!rule.anchor;
+    var isVisible  = isAnchor || (BEC && BEC.isRouteVisible ? BEC.isRouteVisible(routeId, modeSet, overrides) : false);
 
     var footerHtml = '';
-    if (isAlwaysOn) {
-      footerHtml += '<span style="font-size:0.78rem;color:var(--warm-gray);margin-right:auto;">Always on &mdash; can&rsquo;t be hidden.</span>';
+    if (isAnchor) {
+      footerHtml += '<span style="font-size:0.78rem;color:var(--warm-gray);margin-right:auto;">Always available &mdash; this is how you re-add modules.</span>';
       footerHtml += '<button type="button" class="btn btn-secondary btn-small" onclick="closeAddToMastDetails()">Close</button>';
     } else if (isVisible) {
       footerHtml += '<button type="button" class="btn btn-secondary btn-small" onclick="closeAddToMastDetails()">Close</button>';
@@ -14281,9 +14330,13 @@ async function renderAddToMast() {
     var info = MODE_MODULE_INFO[routeId];
     if (!info) continue;  // unknown route, skip silently
     var rule = BEC.MODE_ROUTE_VISIBILITY[routeId] || {};
-    var isAlwaysOn = !!rule.alwaysOn;
+    // 'isAlwaysOn' now means "the recovery anchor" (add-to-mast) — the only
+    // route with no toggle. Every former always-on module is a normal,
+    // removable card. (add-to-mast is excluded from this list upstream, so in
+    // practice this is always false here; kept defensively.)
+    var isAlwaysOn = !!rule.anchor;
     var visible = isAlwaysOn || BEC.isRouteVisible(routeId, modeSet, overrides);
-    // Track three buckets: alwaysOn (informational, no toggle), visible-toggleable, hidden
+    // Track three buckets: anchor (informational, no toggle), visible-toggleable, hidden
     if (isAlwaysOn) alwaysOnCount++;
     else if (visible) visibleCount++;
     else hiddenCount++;
@@ -14392,6 +14445,17 @@ async function renderAddToMast() {
       // tagline (new schema field) falls back to legacy `desc` via the
       // back-compat shim in data/mode-module-info.js.
       html += '<div style="font-size:0.78rem;color:var(--warm-gray);line-height:1.45;flex-grow:1;">' + esc(it.info.tagline || it.info.desc || '') + '</div>';
+      // Dependency note: if this module is VISIBLE but something it needs is
+      // currently HIDDEN, flag it so the owner knows the surface will be empty.
+      if (it.visible && BEC && typeof BEC.requiresOf === 'function') {
+        var missing = BEC.requiresOf(it.routeId).filter(function(req) {
+          return !BEC.isRouteVisible(req, modeSet, overrides);
+        });
+        if (missing.length > 0) {
+          var missLabels = missing.map(function(req) { return _sidebarLabelFor(req) || ((MODE_MODULE_INFO[req] && MODE_MODULE_INFO[req].label) || req); });
+          html += '<div style="font-size:0.72rem;color:var(--warn,#b3752f);display:flex;align-items:center;gap:4px;margin-top:2px;">&#9888; Needs ' + esc(missLabels.join(' & ')) + ' (hidden)</div>';
+        }
+      }
       // E1: chip row — setupDepth + Details toggle (only when card is enriched).
       var isEnriched = !!it.info.outcome;
       var hasChips   = !!it.info.setupDepth;
@@ -14473,13 +14537,16 @@ async function removeFromMastClick(routeId) {
     var result = await removeRouteFromMast(routeId, 'remove_from_mast_page');
     if (result && result.success) {
       if (typeof showToast === 'function') {
-        showToast(result.alreadyHidden
-          ? label + ' was already hidden.'
-          : label + ' removed from your Mast.');
+        if (result.alreadyHidden) {
+          showToast(label + ' was already hidden.');
+        } else {
+          var advisory = _dependencyHideAdvisory([routeId]);
+          showToast(label + ' removed from your Mast.' + (advisory ? '  ' + advisory : ''));
+        }
       }
       renderAddToMast();
-    } else if (result && result.alwaysOn) {
-      if (typeof showToast === 'function') showToast(label + ' is always on and can’t be hidden.', true);
+    } else if (result && result.anchor) {
+      if (typeof showToast === 'function') showToast(label + ' is always available — it’s how you re-add modules, so it can’t be hidden.', true);
     } else {
       if (typeof showToast === 'function') {
         showToast('Could not remove ' + label + ': ' + ((result && result.error) || 'unknown error'), true);
@@ -14633,7 +14700,8 @@ async function removeAllFromMastClick() {
     var result = await removeRoutesFromMast(visible, 'remove_all_from_mast_page');
     if (result && result.success) {
       if (typeof showToast === 'function') {
-        showToast(result.removedCount + ' module' + (result.removedCount === 1 ? '' : 's') + ' hidden from your Mast.');
+        var advisory = _dependencyHideAdvisory(visible);
+        showToast(result.removedCount + ' module' + (result.removedCount === 1 ? '' : 's') + ' hidden from your Mast.' + (advisory ? '  ' + advisory : ''));
       }
       renderAddToMast();
     } else {
@@ -14667,7 +14735,8 @@ async function removeAllInSectionClick(sectionKey) {
     if (result && result.success) {
       var sectionLabel = MODE_SECTION_LABELS[sectionKey] || sectionKey;
       if (typeof showToast === 'function') {
-        showToast(result.removedCount + ' ' + sectionLabel + ' module' + (result.removedCount === 1 ? '' : 's') + ' hidden.');
+        var advisory = _dependencyHideAdvisory(inSection);
+        showToast(result.removedCount + ' ' + sectionLabel + ' module' + (result.removedCount === 1 ? '' : 's') + ' hidden.' + (advisory ? '  ' + advisory : ''));
       }
       renderAddToMast();
     } else {
@@ -20740,7 +20809,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260531-165338-6a00bf2';
+var MAST_MODULES_V = '20260531-175621-9650e83';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.

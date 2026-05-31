@@ -619,13 +619,16 @@
   // or enables them on the Add-to-Mast page (M3).
   //
   // Entry shapes:
-  //   { alwaysOn: true }                       — universal, ignores modeSet
+  //   { anchor: true }                         — never hideable (recovery floor); only add-to-mast
+  //   { alwaysOn: true }                       — default-ON in every mode, but REMOVABLE by the user
   //   { modes: ['maker', ...] }                — visible if any listed mode active
   //   { overlays: ['event', ...] }             — visible if any listed overlay active
   //   { modes: [...], cohortRequired: true }   — also requires cohortFlag=true
   //   {}                                        — soft-hidden in all modes
   var MODE_ROUTE_VISIBILITY = {
-    // === Always-on tier (12 universal items per matrix-v2.md) ===
+    // === Default-ON tier (formerly "always on"). Visible in every mode for a
+    // sensible day-one sidebar, but now USER-REMOVABLE — hiding any of these is
+    // the owner's choice (see the recovery anchor 'add-to-mast' below). ===
     'receipts':           { alwaysOn: true },
     'terms':              { alwaysOn: true },
     'website':            { alwaysOn: true },
@@ -639,10 +642,13 @@
     'team':               { alwaysOn: true },
     'settings':           { alwaysOn: true },
 
-    // === Unlock surface — always visible (M3 route, special) ===
-    // Not counted in the matrix-v2.md "12 universal" tier (which is content
-    // routes); 'add-to-mast' is the meta-route that exposes everything else.
-    'add-to-mast':        { alwaysOn: true },
+    // === Unlock surface — the RECOVERY ANCHOR (the one route that can never
+    // be hidden). 'anchor: true' means: always visible AND not user-hideable,
+    // so an owner can never lock themselves out of the module manager. This is
+    // the ONLY anchor — every other route (including the former always-on tier:
+    // Settings, Revenue, Day Close, Policies…) is now removable by user choice.
+    // (alwaysOn here only preserves default-on visibility; anchor does the lock.)
+    'add-to-mast':        { alwaysOn: true, anchor: true },
 
     // === Migration section — system-managed, conditionally shown ===
     // The sidebar Migration section has display:none unless an active
@@ -753,6 +759,87 @@
     'email-log':          { alwaysOn: true }
   };
 
+  // ============================================================
+  // Module dependency map — "route X needs route Y to be useful."
+  // ============================================================
+  // Now that every module is user-hideable, hiding a module that others rely
+  // on (e.g. hiding Channels while Listing Mapping is shown) leaves the
+  // dependents in the sidebar with no data behind them. This map powers a
+  // non-blocking advisory when that happens. It does NOT block hiding — the
+  // owner's choice always wins; we just name what they may want to keep.
+  //
+  // Seeded from the human-readable `prerequisites` ("X module enabled") already
+  // declared per module in app/data/mode-module-info.js, formalized to route
+  // ids. Keep this in sync when prerequisites change. Shape: route -> [requiredRouteId, ...].
+  var MODULE_DEPENDENCIES = {
+    'develop-products':  ['products'],
+    'forecast':          ['products'],
+    'jobs':              ['products'],
+    'procurement':       ['materials'],
+    'inventory':         ['products'],
+    'sales-by-product':  ['products'],
+    'pos':               ['products'],
+    'orders':            ['products'],
+    'commissions':       ['products'],
+    'rma':               ['orders'],
+    'wholesale':         ['products'],
+    'galleries':         ['products'],
+    'lookbooks':         ['products'],
+    'pack':              ['orders'],
+    'channels':          ['products'],
+    'mapping':           ['channels'],
+    'wallet':            ['customers'],
+    'loyalty':           ['customers'],
+    'promotions':        ['products'],
+    'customer-portfolio':['customers'],
+    'cs-surveys':        ['customers'],
+    'cs-reviews':        ['products'],
+    'show-execute':      ['show-prep', 'products'],
+    'calendar':          ['classes'],
+    'enrollments':       ['classes'],
+    'passes':            ['classes'],
+    'resources':         ['classes'],
+    'students':          ['classes'],
+    'instructors':       ['classes'],
+    'book-reports':      ['classes']
+  };
+
+  // What does this route require to be useful? -> [routeId, ...]
+  function requiresOf(routeId) {
+    var reqs = MODULE_DEPENDENCIES[routeId];
+    return Array.isArray(reqs) ? reqs.slice() : [];
+  }
+
+  // Which routes depend on this one? (inverse map) -> [routeId, ...]
+  function dependentsOf(routeId) {
+    var out = [];
+    for (var r in MODULE_DEPENDENCIES) {
+      if (!Object.prototype.hasOwnProperty.call(MODULE_DEPENDENCIES, r)) continue;
+      if (MODULE_DEPENDENCIES[r].indexOf(routeId) !== -1) out.push(r);
+    }
+    return out;
+  }
+
+  // Self-tests for the dependency map. Returns { passed, failed, failures }.
+  function _runDependencySelfTests() {
+    var failures = [];
+    function eq(name, a, b) { if (JSON.stringify(a) !== JSON.stringify(b)) failures.push({ name: name, expected: b, actual: a }); }
+    // The canonical example: Listing Mapping needs Channels.
+    eq('mapping requires channels', requiresOf('mapping'), ['channels']);
+    eq('channels is depended on by mapping', dependentsOf('channels'), ['mapping']);
+    // products is a hub — many dependents, list is non-empty and includes pos.
+    var prodDeps = dependentsOf('products');
+    if (prodDeps.indexOf('pos') === -1) failures.push({ name: 'products dependents include pos', expected: 'includes pos', actual: prodDeps });
+    // unknown route → empty both ways
+    eq('unknown route requires nothing', requiresOf('nonexistent'), []);
+    eq('unknown route has no dependents', dependentsOf('nonexistent'), []);
+    // No self-referential edge.
+    for (var r in MODULE_DEPENDENCIES) {
+      if (MODULE_DEPENDENCIES[r].indexOf(r) !== -1) failures.push({ name: 'no self-dependency: ' + r, expected: 'no ' + r, actual: 'self' });
+    }
+    return { passed: (6 - failures.length) + Object.keys(MODULE_DEPENDENCIES).length, failed: failures.length, failures: failures };
+  }
+
   /**
    * Decide whether a single sidebar route is visible by default for a tenant.
    * Pure function. Per-tenant manual enables (modeOverrides) are merged by the
@@ -804,7 +891,8 @@
 
   /**
    * Resolved visibility for a route, including per-tenant manual overrides.
-   * Always-on routes are never hidden (universal tier wins over user overrides).
+   * Only the anchor route (add-to-mast) is never hidden; every other route —
+   * including the default-on tier — respects an explicit user-hide override.
    *
    * @param {string} routeId
    * @param {Object} modeSetDoc        - { modes, overlays, cohortFlag }
@@ -821,7 +909,7 @@
         rule.engagementHidden.indexOf(engagementMode) !== -1) {
       return false;
     }
-    if (rule && rule.alwaysOn) return true;     // always-on overrides any user override
+    if (rule && rule.anchor) return true;       // anchor (add-to-mast) is never hideable; all else respects user override
     if (modeOverridesDoc) {
       if (Array.isArray(modeOverridesDoc.disabledRoutes) &&
           modeOverridesDoc.disabledRoutes.indexOf(routeId) !== -1) {
@@ -841,8 +929,8 @@
    * entry only if the target state diverges from the mode-default. Keeps the
    * persisted overrides as small as possible (no redundant entries).
    *
-   * Always-on routes are no-op (you can't remove Settings) — returns the
-   * overrides unchanged.
+   * The anchor route (add-to-mast) is a no-op — returns the overrides
+   * unchanged. Every other route (incl. the default-on tier) is toggleable.
    *
    * @param {Object} overrides     - current { enabledRoutes: [], disabledRoutes: [] }
    * @param {string} routeId
@@ -853,8 +941,8 @@
   function setRouteVisibilityOverride(overrides, routeId, targetVisible, modeSetDoc) {
     overrides = overrides || {};
     var rule = MODE_ROUTE_VISIBILITY[routeId];
-    if (rule && rule.alwaysOn) {
-      // No-op — always-on can't be toggled
+    if (rule && rule.anchor) {
+      // No-op — the recovery anchor (add-to-mast) can't be toggled
       return {
         enabledRoutes: (overrides.enabledRoutes || []).slice(),
         disabledRoutes: (overrides.disabledRoutes || []).slice()
@@ -1103,9 +1191,14 @@
       { name: 'disabledRoutes forces hidden for default-visible route',
         route: 'pos', modeSet: ms(['retail']),
         overrides: { disabledRoutes: ['pos'] }, expect: false, useResolved: true },
-      { name: 'disabledRoutes does NOT hide always-on routes',
+      // NEW contract: the default-on tier is now user-hideable; only the
+      // recovery anchor (add-to-mast) ignores a user-hide override.
+      { name: 'default-on route IS now user-hideable (settings)',
         route: 'settings', modeSet: ms(['retail']),
-        overrides: { disabledRoutes: ['settings'] }, expect: true, useResolved: true },
+        overrides: { disabledRoutes: ['settings'] }, expect: false, useResolved: true },
+      { name: 'anchor (add-to-mast) ignores user-hide override',
+        route: 'add-to-mast', modeSet: ms(['retail']),
+        overrides: { disabledRoutes: ['add-to-mast'] }, expect: true, useResolved: true },
       { name: 'enabled wins over default-hidden when both lists touch different routes',
         route: 'blog', modeSet: ms(['standard']),
         overrides: { enabledRoutes: ['blog'], disabledRoutes: ['pos'] }, expect: true, useResolved: true },
@@ -1650,6 +1743,11 @@
     isRouteVisible: isRouteVisible,
     setRouteVisibilityOverride: setRouteVisibilityOverride,
     _runVisibilitySelfTests: _runVisibilitySelfTests,
+    // Module dependency map — advisory "X needs Y" warnings on hide
+    MODULE_DEPENDENCIES: MODULE_DEPENDENCIES,
+    requiresOf: requiresOf,
+    dependentsOf: dependentsOf,
+    _runDependencySelfTests: _runDependencySelfTests,
     MODE_LABEL_OVERRIDES: MODE_LABEL_OVERRIDES,
     labelFor: labelFor,
     _clearLabelCache: _clearLabelCache,
