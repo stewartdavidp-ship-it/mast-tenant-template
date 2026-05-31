@@ -20560,7 +20560,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260531-082501-1cce8ab';
+var MAST_MODULES_V = '20260531-082749-2d67f72';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -20582,6 +20582,7 @@ var MODULE_MANIFEST = {
   customers: { src: 'modules/customers.js', routes: ['customers'] },
   orders: { src: 'modules/orders.js', routes: ['orders', 'commissions', 'rma'] },
   'orders-v2': { src: 'modules/orders-v2.js', routes: ['orders-v2'] }, // UI-redesign proof (flag-gated, side-by-side)
+  'customers-v2': { src: 'modules/customers-v2.js', routes: ['customers-v2'] }, // UI-redesign proof (flag-gated, side-by-side)
   sales: { src: 'modules/sales.js', routes: ['pos', 'receipts', 'events', 'salesEvents', 'terms'] },
   fulfillment: { src: 'modules/fulfillment.js', routes: ['pack', 'ship', 'fulfillment'] },
   eventsAdmin: { src: 'modules/events.js', routes: ['events-shows', 'events-settings'] },

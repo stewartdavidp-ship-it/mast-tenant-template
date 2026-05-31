@@ -35,7 +35,7 @@ Plus: rubric re-grade ≥ B; deep-link `?id=`; dirty-guard on close/backdrop/Esc
 | Module | Target | Status |
 |---|---|---|
 | orders → `orders-v2.js` | mastEntity schema (lg/expand) | 🟡 authored, flag-gated side-by-side route `#orders-v2`; passes ratchet (0 violations) + font-scale + syntax. **Dev-pod verify pending** (both modes, dirty-guard, sort/filter/export, parity). |
-| customers → `customers-v2.js` | mastEntity schema (md, read→edit) | ⬜ quick follow (after orders look) |
+| customers → `customers-v2.js` | mastEntity schema (md, read→edit) | 🟡 authored, flag-gated route `#customers-v2`; search + read→edit + export; passes ratchet (0) + font-scale + syntax. **Dev-pod verify pending.** |
 **→ HARD GATE (now): review the orders-v2 proof on a dev pod, finalize the engine API + look, before any fan-out.**
 
 ## Fan-out backlog (Phase 2 — after gate; seeded from doc 09)
