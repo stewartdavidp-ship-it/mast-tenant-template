@@ -248,13 +248,13 @@ only.
 | Item | Today | Target |
 |---|---|---|
 | sgtest15 routing | ✅ **DONE (2026-05-30)** — un-pinned, rides `mast-tenant-shared`; dev pod = one site | — |
-| Deploy gate | fires on action-type, **target-blind (dev deploys still prompt like prod)** | target-aware: silent for dev, single-confirm for gated (Build 2 — pending) |
+| Deploy gate | ✅ **DONE (2026-05-31, Build 2)** — target-aware, deployed all prod pods: silent for dev, single-confirm for gated targets | — |
 | Merge path | ✅ **DONE (2026-05-30)** — ruleset on `main`: require PR + `lint`, auto-merge-on-green, delete-on-merge, no direct push | — |
 | Cache-bust (`MAST_MODULES_V`) | ✅ **DONE (2026-05-30, PR #70)** — enforced by required `lint` check (committed bump); local pre-commit hook now optional/dev-only | enforced by required `lint` check (committed bump) |
-| Tenant freeze | none (sgtest15 pin is the accidental version) | bounded, labeled, auto-expiring (v1 build) |
-| Storefront prod release | manual operator deploy | pod-sequential + verify (canary-for-free); full pipeline deferred |
-| KV `podRouting` writes | raw `fetch` to Cloudflare API inside a control-plane CF; no tool, no audit, no gate | gateable + audited KV-write tool (unblocks gating + freeze) |
-| Prod rollback | none / ad-hoc | redeploy prior Hosting version id (or KV repoint to preserved channel) + revert-PR rule |
+| Tenant freeze | ✅ **DONE (2026-05-30/31, Build 6)** — bounded, labeled, auto-expiring; `manageRouting` + `freezeReconciler` deployed | — |
+| Storefront prod release | ⏳ manual pod-sequential deploy today (merge → deploy = continuous push) | **Build 8 (RATIFIED 2026-05-30)** — adopt the existing release pipeline: enroll → cut → stage → promote as a unit; see roadmap §8 + `mast-architecture/docs/release-adoption-build8-proposal.md` |
+| KV `podRouting` writes | ✅ **DONE (2026-05-30/31, Build 3)** — gateable + audited `manageRouting` CF + `mast_routing` tool, deployed (IAM-restricted) | — |
+| Prod rollback | ✅ **DONE (2026-05-30/31, Build 7)** — `mast_hosting` redeploy-by-version (gated for prod) + revert-PR rule | — |
 | Deploy verification | CI checks origin-SHA only | origin-SHA then worker-SHA (what users actually see) |
 | Cross-repo ordering | unspecified | Functions-first/storefront-second rule; storefront PR names its CF dependency |
 
@@ -313,9 +313,30 @@ lever, fixed the cache-bust collision).
    override that **re-snapshots** onto a patched channel. *(mast-mcp-server + mast-architecture
    reconciler + KV)*
 
-7. **Prod rollback lever** — confirm/extend `mast_hosting` to redeploy a prior Hosting version id
-   (`list_versions` exists; redeploy-by-version may need a flag); document the revert-PR-before-next-
-   deploy rule. Pairs with the Rollback section above. *(mast-mcp-server)*
+7. **Prod rollback lever** — ✅ DONE (#74, deployed). `mast_hosting` redeploy-by-version (gated for prod) + the revert-PR-before-next-deploy rule. *(mast-mcp-server)*
 
-**Deferred** (revisit when fleet size justifies): within-pod canary cohorts; full storefront-prod
-release pipeline (`mast_platform_release_*` propose→approve); lift-notification on freeze expiry.
+8. **Release adoption — targeted releases (RATIFIED 2026-05-30).** The targeted-release pipeline
+   ALREADY EXISTS and is wired to deploys — it's just **bypassed via `releaseId:null`** on everyday
+   deploys (`mast-platform-registry/releases/{id}` + `mast_platform_release` tool + `mast-deploy
+   releases promote` + `pipelineExecutor` tick + `deploy_events.releaseId` FK). So this is **adoption,
+   not construction** (~80% reuse). The change:
+   - **(a) Auto-enroll** — exactly one always-`open` release per component; merge-to-`main` enrolls
+     the PR. Flips "merge = deploy" into "merge = enroll."
+   - **(b) Cut → stage → promote** — operator cuts (freeze + pin gitSha = `propose`+name) → approve
+     + schedule → `pipelineExecutor` promotes to **dev + east canary**, soaks (≥10 min, the doc's
+     criteria) → on green, the **same release** promotes to **west as a unit**. No per-merge deploys.
+   - **(c) Gate enforcement** — the **Build 2 gate is the enforcement point**: a gated-surface deploy
+     (prod pod / `mast-platform-prod` functions / runmast.com / prod KV) requires a `releaseId` for an
+     **approved** release, else an explicit **`--emergency`** break-glass (stamped on `deploy_events`).
+     "No untracked prod deploys" lives here. Direct per-merge deploys become break-glass only.
+   - **Ratified decisions:** enrollment via a step in each component repo's `deploy.yml`; **manual**
+     operator cut for v1 (weekly cron later); **sequence = gate-rule + enrollment FIRST** (stops the
+     push-to-prod bleeding), **UI after**.
+   - Full proposal (finding, reuse-vs-net-new, capability-gap table, open follow-ups):
+     `mast-architecture/docs/release-adoption-build8-proposal.md`.
+   *(mast-platform-registry releases schema + mast-mcp-server gate + mast-deploy cut/promote/break-glass
+   + component-repo `deploy.yml` enrollment; UI later in `mast-platform-admin`)*
+
+**Deferred** (revisit when fleet size justifies): within-pod canary cohorts; **Build 8 UI surfaces**
+(Releases tab / per-PR "where did my change ship") until gate+enrollment land; weekly-cron auto-cut;
+lift-notification on freeze expiry.
