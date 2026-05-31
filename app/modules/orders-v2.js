@@ -63,14 +63,18 @@
     return out;
   }
   function load() {
-    if (!window.MastDB) return;
+    var o = window.MastDB && MastDB.orders;
+    if (!o) return;
     var apply = function (tree) {
       V2.rows = toRows(tree);
       V2.byId = {}; V2.rows.forEach(function (r) { V2.byId[r._key] = r; });
       render();
     };
-    if (MastDB.subscribe) { V2.off = MastDB.subscribe('admin/orders', apply); }
-    else if (MastDB.list) { MastDB.list('admin/orders').then(apply); }
+    // Real source = the orders entity accessor (53 records), NOT raw admin/orders
+    // (which holds only QBO-webhook test docs). list() for initial paint; listen()
+    // for live updates where available.
+    if (typeof o.list === 'function') Promise.resolve(o.list()).then(apply).catch(function (e) { console.error('[orders-v2] list', e); });
+    if (typeof o.listen === 'function') { try { V2.off = o.listen(apply); } catch (e) {} }
   }
 
   function visibleRows() {
@@ -91,13 +95,13 @@
   }
 
   function ensureTab() {
-    var id = 'ordersV2Tab';
-    var el = document.getElementById(id);
+    // Container now lives in index.html (matches every other module); fall back
+    // to dynamic creation only if absent.
+    var el = document.getElementById('ordersV2Tab');
     if (el) return el;
-    el = document.createElement('section');
-    el.id = id; el.className = 'tab-content'; el.style.display = 'none';
-    var host = document.querySelector('main') || document.getElementById('content') || document.body;
-    host.appendChild(el);
+    el = document.createElement('div');
+    el.id = 'ordersV2Tab'; el.className = 'tab-content'; el.style.display = 'none';
+    (document.getElementById('content') || document.body).appendChild(el);
     return el;
   }
 
@@ -141,6 +145,6 @@
 
   // ── Register the side-by-side route ─────────────────────────────────
   MastAdmin.registerModule('orders-v2', {
-    routes: { 'orders-v2': { tab: 'ordersV2Tab', setup: function () { ensureTab(); if (!V2.off) load(); else render(); } } }
+    routes: { 'orders-v2': { tab: 'ordersV2Tab', setup: function () { ensureTab(); render(); load(); } } }
   });
 })();
