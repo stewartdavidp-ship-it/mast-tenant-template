@@ -108,6 +108,10 @@
   <script src="../shared/customer-resolver.js?v=1"></script>
   <script src="../shared/brand-sync.js?v=1"></script>
   <script src="../shared/channel-connection.js?v=1"></script>
+  <!-- UI redesign engines (docs/ux-audit): shared primitives + Entity Engine. -->
+  <script src="../shared/mast-ui.js?v=1"></script>
+  <script src="../shared/mast-io.js?v=1"></script>
+  <script src="../shared/mast-entity.js?v=1"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Pod-specific runtime config — sets window.MAST_POD_PLATFORM_PROJECT so
@@ -20556,7 +20560,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260530-204842-b32b786';
+var MAST_MODULES_V = '20260531-082501-1cce8ab';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -20577,6 +20581,7 @@ var MODULE_MANIFEST = {
   contacts: { src: 'modules/contacts.js', routes: ['contacts'] },
   customers: { src: 'modules/customers.js', routes: ['customers'] },
   orders: { src: 'modules/orders.js', routes: ['orders', 'commissions', 'rma'] },
+  'orders-v2': { src: 'modules/orders-v2.js', routes: ['orders-v2'] }, // UI-redesign proof (flag-gated, side-by-side)
   sales: { src: 'modules/sales.js', routes: ['pos', 'receipts', 'events', 'salesEvents', 'terms'] },
   fulfillment: { src: 'modules/fulfillment.js', routes: ['pack', 'ship', 'fulfillment'] },
   eventsAdmin: { src: 'modules/events.js', routes: ['events-shows', 'events-settings'] },

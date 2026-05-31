@@ -34,9 +34,9 @@ Plus: rubric re-grade ≥ B; deep-link `?id=`; dirty-guard on close/backdrop/Esc
 ## Proof (Phase 1 — HARD GATE)
 | Module | Target | Status |
 |---|---|---|
-| orders → `orders-v2.js` | mastEntity schema (lg/expand) | ⬜ |
-| customers → `customers-v2.js` | mastEntity schema (md, read→edit) | ⬜ |
-**→ Human gate: review proof, finalize engine API + look, before fan-out.**
+| orders → `orders-v2.js` | mastEntity schema (lg/expand) | 🟡 authored, flag-gated side-by-side route `#orders-v2`; passes ratchet (0 violations) + font-scale + syntax. **Dev-pod verify pending** (both modes, dirty-guard, sort/filter/export, parity). |
+| customers → `customers-v2.js` | mastEntity schema (md, read→edit) | ⬜ quick follow (after orders look) |
+**→ HARD GATE (now): review the orders-v2 proof on a dev pod, finalize the engine API + look, before any fan-out.**
 
 ## Fan-out backlog (Phase 2 — after gate; seeded from doc 09)
 Status legend: ⬜ queued · 🟡 doing · 🔁 review · ✅ merged.
@@ -62,4 +62,5 @@ Per module: flag default on → monitor → remove legacy module + flag. Then pl
 - 2026-05-30 — Control plane initialized. Light/dark foundation committed. Audit docs → PR #75. Worktree `feat/ui-redesign-foundation` created off main. Primitives located.
 - 2026-05-30 — `shared/mast-ui.js` core authored (Num formatting, soft-tint badge, tabs, standard list, slideOut v2 w/ tiers+expand+modes+dirty-guard+deep-link) on the v1 globals. `test/mast-ui.test.js`: 15/15 pass. design-tokens lint clean.
 - 2026-05-30 — Enforcement ratchet `scripts/lint-ux-standards.js` + baseline (42 files / 2806) wired into CI (`lint.yml`). Drift blocked; proven. Doc 16.
-- 2026-05-30 — `shared/mast-io.js` (9 tests) + **`shared/mast-entity.js` keystone (13 tests)** authored. Engine triad: **37 unit tests green**, ratchet clean. **Next: Phase 1 proof — `orders-v2.js` + `customers-v2.js` as schemas, behind `uiRedesign` flag → HARD GATE.**
+- 2026-05-30 — `shared/mast-io.js` (9 tests) + **`shared/mast-entity.js` keystone (13 tests)** authored. Engine triad: **37 unit tests green**, ratchet clean.
+- 2026-05-30 — **PROOF: `app/modules/orders-v2.js`** — the Orders screen rebuilt as a MastEntity schema (no bespoke list/modal/dirty/CSV). Flag-gated side-by-side route `#orders-v2`. Passes ratchet (born 0 violations vs legacy's 108 hex + window.confirm), font-scale lint, syntax. **⛔ HARD GATE: needs dev-pod verification + review before fan-out. STOPPED here per proof-first.**
