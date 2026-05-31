@@ -23,7 +23,7 @@ Plus: rubric re-grade ≥ B; deep-link `?id=`; dirty-guard on close/backdrop/Esc
 | Item | File | Builds on | Status |
 |---|---|---|---|
 | 0a Tokens & light-mode fix | index.html | — | ✅ done (`feat/admin-light-dark-foundation`; supersession later) |
-| 0b mastSlideOut v2 + tabs/list/form/filter/badge/number-fmt | `shared/mast-ui.js` | `mastSlideOut`(L16905), `MastDirty`(L11554), `MastOverlayNav`(L16477), `mastSortRows`(L17012), `mastConfirm`(L16725) | ⬜ next |
+| 0b mastSlideOut v2 + tabs/list/badge/number-fmt | `shared/mast-ui.js` | `mastSlideOut`(L16905), `MastDirty`(L11554), `MastOverlayNav`(L16477), `mastSortRows`(L17012), `mastConfirm`(L16725) | 🟡 core landed + 15 unit tests pass (`test/mast-ui.test.js`); filter-bar + form helpers + dev-pod verify of slideOut v2 pending |
 | 0b Image/file/OS controls | `shared/mast-media.js` | `camera.js`, PapaParse/SheetJS | ⬜ |
 | 0b Exporter + import wizard | `shared/mast-io.js` | PapaParse/SheetJS | ⬜ |
 | 0c Entity Engine | `shared/mast-entity.js` | 0b | ⬜ keystone |
@@ -57,4 +57,5 @@ Status legend: ⬜ queued · 🟡 doing · 🔁 review · ✅ merged.
 Per module: flag default on → monitor → remove legacy module + flag. Then platform polish sweep (doc 06) + drive doc-01 grep counts to 0.
 
 ## Live log
-- 2026-05-30 — Control plane initialized. Light/dark foundation committed. Audit docs → PR #75. Worktree `feat/ui-redesign-foundation` created off main. Primitives located. **Next: author `shared/mast-ui.js` (0b).**
+- 2026-05-30 — Control plane initialized. Light/dark foundation committed. Audit docs → PR #75. Worktree `feat/ui-redesign-foundation` created off main. Primitives located.
+- 2026-05-30 — `shared/mast-ui.js` core authored (Num formatting, soft-tint badge, tabs, standard list, slideOut v2 w/ tiers+expand+modes+dirty-guard+deep-link) on the v1 globals. `test/mast-ui.test.js`: 15/15 pass. design-tokens lint clean (no hex). **Next: `shared/mast-io.js` (exporter+import) + `shared/mast-media.js`, then `mast-entity.js` (0c).**
