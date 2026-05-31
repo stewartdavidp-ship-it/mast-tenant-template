@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mast — Orders (North-Star Mock)</title>
+<!--
+  STATIC REFERENCE MOCK — not app code, not wired to data.
+  Purpose: the visual "north star" for the polish pass (see 06-professional-polish.md + 07-orders-north-star.md).
+  Open in a browser; use the Dark/Light toggle (top-right) to confirm BOTH modes are clean.
+  Faithful to Mast's real tokens (amber #C4853C, teal #2A7C6F, charcoal #1A1A1A, warm-grays) and font pairing
+  (Cormorant Garamond headings / DM Sans body / Archivo brand). Demonstrates: line icons (not emoji),
+  Intl-formatted + right-aligned money, one refined soft-tint badge, polished table, skeleton + empty states.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@800&family=Cormorant+Garamond:wght@500;600&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  /* ---- Tokens: defined for BOTH modes. Foreground & background always move together. ---- */
+  :root{
+    --amber:#C4853C; --amber-light:#E8B679; --teal:#2A7C6F; --teal-deep:#1B5C52;
+    --danger:#C0392B; --success:#2e7d4f; --warning:#b8860b; --info:#2f6f9f;
+    /* light theme surfaces/text */
+    --bg:#FAF6F0; --surface:#ffffff; --surface-2:#F4EEE5; --rail:#F4EEE5;
+    --text:#1A1A1A; --text-muted:#6B6560; --text-faint:#9B958E;
+    --border:#E6DECE; --row-hover:rgba(196,133,60,.06);
+    --shadow:0 1px 3px rgba(0,0,0,.06), 0 8px 24px rgba(0,0,0,.04);
+    /* spacing + radius scale */
+    --r-sm:6px; --r-md:8px; --r-lg:12px;
+    --on-accent:#1A1A1A;
+  }
+  body.dark{
+    --bg:#1A1A1A; --surface:#1e1e1e; --surface-2:#252525; --rail:#171717;
+    --text:#F2EFEA; --text-muted:#A8A29B; --text-faint:#736E68;
+    --border:#333030; --row-hover:rgba(196,133,60,.10);
+    --shadow:0 1px 3px rgba(0,0,0,.4), 0 8px 30px rgba(0,0,0,.25);
+    --on-accent:#1A1A1A;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;height:100%;}
+  body{
+    font-family:"DM Sans",sans-serif; font-weight:400; font-size:14px;
+    color:var(--text); background:var(--bg);
+    -webkit-font-smoothing:antialiased; transition:background .2s ease,color .2s ease;
+  }
+  h1,h2,h3{font-family:"Cormorant Garamond",serif; font-weight:600; margin:0;}
+  .app{display:grid; grid-template-columns:248px 1fr; height:100vh;}
+
+  /* ---- Top brand bar ---- */
+  .topbar{grid-column:1/3; display:flex; align-items:center; gap:10px; padding:0 22px; height:60px;
+    border-bottom:1px solid var(--border); background:var(--surface);}
+  .brand{font-family:"Archivo",sans-serif; font-weight:800; letter-spacing:-.02em; font-size:18px;}
+  .brand .mark{color:var(--amber); margin-right:2px;}
+  .tenant{font-family:"Cormorant Garamond",serif; font-size:24px; font-weight:600;}
+  .sep{color:var(--text-faint);}
+  .mode-toggle{margin-left:auto; display:flex; align-items:center; gap:8px; cursor:pointer;
+    border:1px solid var(--border); background:var(--surface-2); color:var(--text-muted);
+    border-radius:999px; padding:6px 12px; font-size:12.5px; font-family:inherit;}
+  .mode-toggle:hover{color:var(--text);}
+
+  /* ---- Sidebar (LINE ICONS, not emoji; inherit currentColor) ---- */
+  .rail{background:var(--rail); border-right:1px solid var(--border); padding:14px 10px; overflow:auto;}
+  .nav-item{display:flex; align-items:center; gap:11px; padding:9px 12px; border-radius:var(--r-sm);
+    color:var(--text-muted); cursor:pointer; font-weight:500; letter-spacing:.02em; user-select:none;}
+  .nav-item svg{width:17px; height:17px; flex:0 0 17px; stroke:currentColor; fill:none; stroke-width:1.8;}
+  .nav-item:hover{background:var(--row-hover); color:var(--text);}
+  .nav-item.active{background:color-mix(in srgb,var(--teal) 16%, transparent); color:var(--text);}
+  .nav-item.section{text-transform:uppercase; font-size:12px; letter-spacing:.06em;}
+  .nav-item .chev{margin-left:auto; color:var(--text-faint);}
+  .nav-sub{margin:2px 0 8px 0;}
+  .nav-sub .nav-item{padding-left:40px; font-weight:400; color:var(--text-muted);}
+  .nav-sub .nav-item.current{color:var(--text); background:var(--surface-2); font-weight:600;}
+  .nav-badge{margin-left:auto; background:var(--surface-2); color:var(--text-muted); border:1px solid var(--border);
+    border-radius:999px; font-size:11px; padding:1px 8px; font-variant-numeric:tabular-nums;}
+
+  /* ---- Main ---- */
+  .main{overflow:auto; padding:22px 26px;}
+  .page-head{display:flex; align-items:baseline; gap:12px; margin-bottom:4px;}
+  .page-head h1{font-size:30px;}
+  .count{color:var(--text-muted); font-size:14px;}
+  .head-actions{margin-left:auto; display:flex; gap:8px;}
+  .hint{color:var(--text-faint); font-size:13px; margin:6px 0 16px;}
+
+  /* segmented control */
+  .seg{display:inline-flex; background:var(--surface-2); border:1px solid var(--border); border-radius:999px; padding:3px;}
+  .seg button{border:0; background:transparent; color:var(--text-muted); font:inherit; font-size:13px;
+    padding:5px 14px; border-radius:999px; cursor:pointer;}
+  .seg button.on{background:var(--amber); color:var(--on-accent); font-weight:600;}
+
+  /* buttons */
+  .btn{display:inline-flex; align-items:center; gap:7px; border:1px solid var(--border); background:var(--surface);
+    color:var(--text); font:inherit; font-size:13px; padding:7px 13px; border-radius:var(--r-sm); cursor:pointer;}
+  .btn svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.8;}
+  .btn:hover{border-color:var(--text-faint);}
+  .btn-primary{background:var(--amber); border-color:var(--amber); color:var(--on-accent); font-weight:600;}
+  .btn-ai{color:var(--teal); border-color:color-mix(in srgb,var(--teal) 40%,transparent);}
+
+  /* filter pills */
+  .pills{display:flex; flex-wrap:wrap; gap:8px; margin:14px 0;}
+  .pill{border:1px solid var(--border); background:var(--surface); color:var(--text-muted);
+    border-radius:999px; padding:6px 13px; font-size:13px; cursor:pointer; font-variant-numeric:tabular-nums;}
+  .pill .n{color:var(--text-faint); margin-left:5px;}
+  .pill:hover{color:var(--text);}
+  .pill.on{background:color-mix(in srgb,var(--amber) 18%,transparent); border-color:color-mix(in srgb,var(--amber) 45%,transparent); color:var(--text); font-weight:600;}
+  .pill.on .n{color:var(--amber);}
+
+  /* toolbar */
+  .toolbar{display:flex; gap:10px; align-items:center; margin-bottom:6px;}
+  .search{flex:1; max-width:340px; display:flex; align-items:center; gap:8px; background:var(--surface);
+    border:1px solid var(--border); border-radius:var(--r-sm); padding:8px 12px; color:var(--text-faint);}
+  .search svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.8;}
+  .search input{border:0;background:transparent;color:var(--text);font:inherit;width:100%;outline:none;}
+
+  /* ---- Table ---- */
+  .card{background:var(--surface); border:1px solid var(--border); border-radius:var(--r-lg); box-shadow:var(--shadow); overflow:hidden;}
+  table{width:100%; border-collapse:collapse;}
+  thead th{position:sticky; top:0; background:var(--surface); text-align:left; font-size:11.5px; letter-spacing:.06em;
+    text-transform:uppercase; color:var(--text-faint); font-weight:600; padding:13px 16px; border-bottom:1px solid var(--border); user-select:none;}
+  thead th.num{text-align:right;}
+  thead th.sortable{cursor:pointer;}
+  thead th.sortable .arrow{color:var(--amber); margin-left:4px;}
+  tbody td{padding:14px 16px; border-bottom:1px solid var(--border); vertical-align:middle;}
+  tbody tr:last-child td{border-bottom:0;}
+  tbody tr:hover{background:var(--row-hover); cursor:pointer;}
+  .ordno{font-weight:600; font-variant-numeric:tabular-nums;}
+  .sub{color:var(--text-faint); font-size:12.5px;}
+  td.num{text-align:right; font-variant-numeric:tabular-nums lining-nums; font-feature-settings:"tnum";}
+  .chk{width:15px;height:15px;accent-color:var(--amber);}
+
+  /* ONE refined badge: soft tint bg + readable fg, sentence case, both-mode safe via color-mix */
+  .badge{display:inline-flex; align-items:center; gap:6px; font-size:12px; font-weight:600; letter-spacing:.01em;
+    padding:3px 10px; border-radius:999px; line-height:1.4;
+    background:color-mix(in srgb, var(--c) 16%, transparent); color:var(--c); border:1px solid color-mix(in srgb,var(--c) 30%,transparent);}
+  .badge::before{content:""; width:6px;height:6px;border-radius:50%; background:var(--c);}
+  .b-placed{--c:var(--amber);} .b-confirmed{--c:var(--info);} .b-refunded{--c:var(--danger);}
+  .b-delivered{--c:var(--success);} .b-cancelled{--c:var(--text-faint);}
+  .chip-src{font-size:10.5px; font-weight:700; letter-spacing:.04em; color:var(--text-muted);
+    border:1px solid var(--border); border-radius:4px; padding:1px 6px; margin-left:8px; vertical-align:middle;}
+
+  /* skeleton + empty (shown below the table as references) */
+  .ref{margin-top:26px;}
+  .ref h3{font-size:18px; margin-bottom:8px; color:var(--text);}
+  .sk{height:14px; border-radius:5px; background:linear-gradient(90deg,var(--surface-2),var(--border),var(--surface-2));
+    background-size:200% 100%; animation:sh 1.2s linear infinite;}
+  @keyframes sh{0%{background-position:200% 0}100%{background-position:-200% 0}}
+  .empty{text-align:center; padding:46px 20px; color:var(--text-muted);}
+  .empty svg{width:34px;height:34px;stroke:var(--text-faint);fill:none;stroke-width:1.5;margin-bottom:10px;}
+  .empty h3{font-size:20px;margin-bottom:4px;}
+  .empty p{margin:0 0 16px; color:var(--text-faint);}
+  .annot{font-size:12px; color:var(--text-faint); margin:18px 0 6px; border-left:2px solid var(--amber); padding-left:10px;}
+</style>
+</head>
+<body class="dark">
+<div class="app">
+  <!-- top bar -->
+  <div class="topbar">
+    <span class="brand"><span class="mark">⚑</span>Mast</span>
+    <span class="sep">/</span>
+    <span class="tenant">Shir Glassworks</span>
+    <button class="mode-toggle" onclick="document.body.classList.toggle('dark'); this.querySelector('span').textContent=document.body.classList.contains('dark')?'Dark':'Light';">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 12.8A9 9 0 1111.2 3 7 7 0 0021 12.8z"/></svg>
+      <span>Dark</span> mode
+    </button>
+  </div>
+
+  <!-- sidebar: line icons, not emoji -->
+  <nav class="rail">
+    <div class="nav-item section">
+      <svg viewBox="0 0 24 24"><path d="M3 10.5L12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/></svg> Dashboard
+    </div>
+    <div class="nav-item section">
+      <svg viewBox="0 0 24 24"><path d="M20.6 13.4L12 22l-9-9V4a1 1 0 011-1h8z"/><circle cx="7.5" cy="7.5" r="1.3"/></svg> Products
+      <svg class="chev" viewBox="0 0 24 24" width="14" height="14"><path d="M9 6l6 6-6 6"/></svg>
+    </div>
+    <div class="nav-item section active">
+      <svg viewBox="0 0 24 24"><path d="M3 7h18v11a1 1 0 01-1 1H4a1 1 0 01-1-1z"/><path d="M3 7l2-3h14l2 3"/><path d="M9 11a3 3 0 006 0"/></svg> Sales
+      <svg class="chev" viewBox="0 0 24 24" width="14" height="14"><path d="M6 9l6 6 6-6"/></svg>
+    </div>
+    <div class="nav-sub">
+      <div class="nav-item">Sales Ledger</div>
+      <div class="nav-item">Point of Sale</div>
+      <div class="nav-item current">Retail Orders <span class="nav-badge">3</span></div>
+      <div class="nav-item">Custom Orders</div>
+      <div class="nav-item">Returns</div>
+      <div class="nav-item">Wholesale</div>
+      <div class="nav-item">Look Books</div>
+      <div class="nav-item">Galleries &amp; Consignment</div>
+      <div class="nav-item">Day Close</div>
+      <div class="nav-item">Policies</div>
+    </div>
+  </nav>
+
+  <!-- main -->
+  <main class="main">
+    <div class="page-head">
+      <h1>Orders</h1>
+      <span class="count">19 orders</span>
+      <div class="head-actions">
+        <span class="seg">
+          <button class="on">All sources</button><button>Direct</button><button>Etsy</button>
+        </span>
+        <button class="btn btn-ai"><svg viewBox="0 0 24 24"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5L18 18"/></svg>Ask AI</button>
+        <button class="btn"><svg viewBox="0 0 24 24"><path d="M12 3v12M8 11l4 4 4-4M5 21h14"/></svg>Export</button>
+      </div>
+    </div>
+    <div class="hint">Click an order to view details, update status, add tracking, or manage production.</div>
+
+    <div class="pills">
+      <span class="pill on">Active<span class="n">19</span></span>
+      <span class="pill">Today<span class="n">0</span></span>
+      <span class="pill">This week<span class="n">2</span></span>
+      <span class="pill">All<span class="n">53</span></span>
+      <span class="pill">Placed<span class="n">3</span></span>
+      <span class="pill">Confirmed<span class="n">2</span></span>
+      <span class="pill">Building<span class="n">2</span></span>
+      <span class="pill">Packed<span class="n">3</span></span>
+      <span class="pill">Shipped<span class="n">0</span></span>
+      <span class="pill">Delivered<span class="n">32</span></span>
+      <span class="pill">Cancelled<span class="n">2</span></span>
+    </div>
+
+    <div class="toolbar">
+      <span class="search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg><input placeholder="Search orders…"></span>
+    </div>
+
+    <div class="card">
+      <table>
+        <thead>
+          <tr>
+            <th style="width:38px;"><input type="checkbox" class="chk"></th>
+            <th class="sortable">Order</th>
+            <th class="sortable">Customer</th>
+            <th class="num sortable">Items</th>
+            <th class="num sortable">Total <span class="arrow">▼</span></th>
+            <th>Status</th>
+            <th>Tracking</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><input type="checkbox" class="chk"></td>
+            <td><span class="ordno">SGTE-0188</span><span class="chip-src">Etsy</span></td>
+            <td>test-188@example.com</td>
+            <td class="num">12</td>
+            <td class="num">$102,000.00</td>
+            <td><span class="badge b-placed">Placed</span></td>
+            <td class="sub">—</td>
+          </tr>
+          <tr>
+            <td><input type="checkbox" class="chk"></td>
+            <td><span class="ordno">SGTE-0187</span></td>
+            <td>test-187@example.com</td>
+            <td class="num">12</td>
+            <td class="num">$102,000.00</td>
+            <td><span class="badge b-placed">Placed</span></td>
+            <td class="sub">—</td>
+          </tr>
+          <tr>
+            <td><input type="checkbox" class="chk"></td>
+            <td><span class="ordno">SGTE-0171</span></td>
+            <td>stewartdavidp@gmail.com</td>
+            <td class="num">1</td>
+            <td class="num">$22.50</td>
+            <td><span class="badge b-placed">Placed</span></td>
+            <td class="sub">—</td>
+          </tr>
+          <tr>
+            <td><input type="checkbox" class="chk"></td>
+            <td><span class="ordno">SGTE-0167</span></td>
+            <td>harness-l3-coastal@example.com</td>
+            <td class="num">3</td>
+            <td class="num">$7,500.00</td>
+            <td><span class="badge b-refunded">Refunded</span></td>
+            <td class="sub">—</td>
+          </tr>
+          <tr>
+            <td><input type="checkbox" class="chk"></td>
+            <td><span class="ordno">SGTE-0164</span></td>
+            <td>test-164@example.com</td>
+            <td class="num">1</td>
+            <td class="num">$45.00</td>
+            <td><span class="badge b-confirmed">Confirmed</span></td>
+            <td class="sub">1Z 999 AA1…</td>
+          </tr>
+          <tr>
+            <td><input type="checkbox" class="chk"></td>
+            <td><span class="ordno">SGTE-0142</span></td>
+            <td>amelia@example.com</td>
+            <td class="num">2</td>
+            <td class="num">$1,240.00</td>
+            <td><span class="badge b-delivered">Delivered</span></td>
+            <td class="sub">1Z 999 BB2…</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- reference: skeleton + empty states (not part of the live list; shown for the spec) -->
+    <div class="ref">
+      <div class="annot">Loading state — skeleton rows that match the table shape (replaces "Loading…" text)</div>
+      <div class="card" style="padding:14px 16px;">
+        <div style="display:grid;grid-template-columns:1fr 1.4fr .5fr .8fr .8fr;gap:16px;align-items:center;">
+          <div class="sk" style="width:80%"></div><div class="sk" style="width:70%"></div><div class="sk" style="width:50%"></div><div class="sk" style="width:60%"></div><div class="sk" style="width:55%"></div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1.4fr .5fr .8fr .8fr;gap:16px;align-items:center;margin-top:18px;">
+          <div class="sk" style="width:70%"></div><div class="sk" style="width:80%"></div><div class="sk" style="width:40%"></div><div class="sk" style="width:55%"></div><div class="sk" style="width:60%"></div>
+        </div>
+      </div>
+
+      <div class="annot">Empty state — icon + guidance + CTA (replaces inline "no orders" text)</div>
+      <div class="card empty">
+        <svg viewBox="0 0 24 24"><path d="M3 7h18v11a1 1 0 01-1 1H4a1 1 0 01-1-1z"/><path d="M3 7l2-3h14l2 3"/><path d="M9 11a3 3 0 006 0"/></svg>
+        <h3>No orders match these filters</h3>
+        <p>Try widening the date range or clearing filters.</p>
+        <button class="btn btn-primary">Clear filters</button>
+      </div>
+    </div>
+  </main>
+</div>
+</body>
+</html>
