@@ -171,7 +171,8 @@
   }
 
   // ── Designed detail templates (read mode) ──────────────────────────
-  var _current = null; // {route,id,label} of the open record, for drill-back
+  var _current = null;     // {key,id,label,record} of the open record
+  var _panelStack = [];    // ancestors for in-panel drill-back: [{key,record,label}]
 
   function chips(labels) {
     return '<div style="display:flex;flex-wrap:wrap;gap:6px;">' + (labels || []).map(function (l) {
@@ -179,8 +180,8 @@
     }).join('') + '</div>';
   }
   function crumbHtml() {
-    if (window.MastNavStack && MastNavStack.size && MastNavStack.size() > 0) {
-      return '<div class="mu-crumb"><button onclick="MastEntity.back()">← ' + esc(MastNavStack.label() || 'Back') + '</button></div>';
+    if (_panelStack.length) {
+      return '<div class="mu-crumb"><button onclick="MastEntity.back()">← ' + esc(_panelStack[_panelStack.length - 1].label || 'Back') + '</button></div>';
     }
     return '';
   }
@@ -238,12 +239,14 @@
       '<div class="mu-pane" data-pane="notes" hidden>' + U.card('Notes', notes ? '<div style="font-size:0.85rem;color:var(--warm-gray);line-height:1.5;">' + esc(notes) + '</div>' : '<span class="mu-sub">No notes</span>') + '</div>';
   }
 
-  // Drill to another object: push caller context (for back), fetch + open target.
+  // Drill to another object: re-render the SAME panel with the target record and
+  // push the current record onto a PANEL-LOCAL stack for back. No route change —
+  // route-level nav (MastNavStack) would swap the list underneath and race the
+  // overlay-close. The panel stays open across the whole chain.
   function drill(targetKey, id, _retried) {
     var ts = _registry[targetKey];
     // The target entity's schema lives in its module, which may not be loaded
-    // yet (e.g. drilling Order→Customer from the orders page). Lazy-load it once,
-    // then retry — the module registers its schema on load.
+    // yet (e.g. drilling Order→Customer from the orders page). Lazy-load once, retry.
     if (!ts) {
       if (!_retried && window.MastAdmin && typeof MastAdmin.loadModule === 'function') {
         MastAdmin.loadModule(targetKey).then(function () { drill(targetKey, id, true); })
@@ -254,24 +257,24 @@
       return;
     }
     if (typeof ts.fetch !== 'function') { if (window.showToast) showToast('Cannot open ' + targetKey + ' (not available)', true); return; }
-    if (window.MastNavStack && _current) {
-      MastNavStack.push({ route: _current.route, view: 'detail', state: { id: _current.id }, label: _current.label });
-    }
-    Promise.resolve(ts.fetch(id)).then(function (rec) { if (rec) openRecord(targetKey, rec, 'read'); else if (window.showToast) showToast('Not found', true); })
-      .catch(function (e) { console.error('[MastEntity.drill]', e); if (window.showToast) showToast('Could not open record', true); });
+    if (_current) _panelStack.push({ key: _current.key, record: _current.record, label: _current.label });
+    Promise.resolve(ts.fetch(id)).then(function (rec) {
+      if (rec) openRecord(targetKey, rec, 'read', true);
+      else { _panelStack.pop(); if (window.showToast) showToast('Not found', true); }
+    }).catch(function (e) { _panelStack.pop(); console.error('[MastEntity.drill]', e); if (window.showToast) showToast('Could not open record', true); });
   }
-  function back() { if (window.MastNavStack) MastNavStack.popAndReturn(); }
+  // Back one level in the panel-local drill chain — re-render the previous record
+  // in place (no route nav, panel stays open).
+  function back() {
+    var prev = _panelStack.pop();
+    if (prev) openRecord(prev.key, prev.record, 'read', true);
+  }
 
-  function openRecord(key, record, mode) {
+  function openRecord(key, record, mode, _internal) {
     var s = _registry[key]; if (!s) return;
     mode = mode || 'read';
-    // register a restorer once so drill-back can re-open this entity by id
-    if (s.route && typeof s.fetch === 'function' && window.MastNavStack && !s._restorerSet) {
-      s._restorerSet = true;
-      MastNavStack.registerRestorer(s.route, function (view, state) {
-        if (state && state.id) Promise.resolve(s.fetch(state.id)).then(function (rec) { if (rec) openRecord(key, rec, 'read'); });
-      });
-    }
+    // A fresh open (from a list) resets the drill chain; drill/back pass _internal.
+    if (!_internal) _panelStack = [];
     var statusField = s.fields.filter(function (f) { return f.type === 'status'; })[0];
     var badges = (statusField && record) ? [{ label: record[statusField.name], tone: (statusField.tone ? statusField.tone(record[statusField.name]) : 'neutral') }] : [];
     var baseline = JSON.stringify(record || {});
@@ -280,7 +283,7 @@
     var _recName = (record && record[s.fields[0].name]) || '';
     var titleText = (mode === 'create') ? ('New ' + (s.label || key))
       : (_recName ? ((s.label ? s.label + ': ' : '') + _recName) : (s.label || key));
-    _current = { route: s.route || key, id: s.recordId(record), label: titleText };
+    _current = { key: key, id: s.recordId(record), label: titleText, record: record };
     window.MastUI.slideOut.open({
       id: s.recordId(record) || 'new',
       title: titleText,
