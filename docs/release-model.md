@@ -130,9 +130,11 @@ A gated deploy is *one* deliberate "yes." Everything around it stays frictionles
    Reserve the shared checkout for trivial single-shot edits where you know you're the only session.
 2. **PR to main — consistently.** No fast-forward straight to main. PRs run CI (lint / RBAC /
    design-token / mastDB / module-info) *before* code reaches main and auto-deploys. **Auto-merge
-   on green** for routine changes (near-FF velocity, nothing broken lands). **Required human
-   review** for PRs touching the gated tier (prod config, RBAC, migrations, schema).
-   **Delete-on-merge** to keep branch count sane.
+   on green** for routine changes (near-FF velocity, nothing broken lands). **Delete-on-merge** to
+   keep branch count sane. **No merge-time human review:** this is a single-account repo (one owner
+   + AI sessions) and GitHub won't let you approve your own PR, so merge-time required review is
+   structurally impossible. CI green is the merge gate; the human checkpoint for customer-facing
+   change lives at the **prod deploy gate** (Build 2), not at merge.
 3. **CI auto-deploys dev on merge to main.** `origin/main` *is* what's live on dev — no
    deploy-from-local-HEAD, no git/prod divergence. Do **not** hand-deploy dev from a local HEAD.
 4. **Test post-merge, fix-forward (B1).** Merge → it deploys to dev → verify on
@@ -245,14 +247,14 @@ only.
 
 | Item | Today | Target |
 |---|---|---|
-| sgtest15 routing | KV-pinned to its own site `mast-sgtest15.web.app` (legacy drift) | un-pinned → rides `mast-tenant-shared`; dev pod = one site |
-| Deploy gate | fires on action-type, target-blind (dev deploys prompt like prod) | target-aware: silent for dev, single-confirm for gated |
-| Merge path | mixed (direct-to-main + auto-sync PR fallback) | consistent PR-to-main + auto-merge-on-green |
-| Cache-bust (`MAST_MODULES_V`) | opt-in local pre-commit hook (skippable) | bumped in CI so it can't be skipped |
-| Tenant freeze | none (sgtest15 pin is the accidental version) | bounded, labeled, auto-expiring (v1 build) |
-| Storefront prod release | manual operator deploy | pod-sequential + verify (canary-for-free); full pipeline deferred |
-| KV `podRouting` writes | raw `fetch` to Cloudflare API inside a control-plane CF; no tool, no audit, no gate | gateable + audited KV-write tool (unblocks gating + freeze) |
-| Prod rollback | none / ad-hoc | redeploy prior Hosting version id (or KV repoint to preserved channel) + revert-PR rule |
+| sgtest15 routing | ✅ **DONE (2026-05-30)** — un-pinned, rides `mast-tenant-shared`; dev pod = one site | — |
+| Deploy gate | ✅ **DONE (2026-05-31, Build 2)** — target-aware, deployed all prod pods: silent for dev, single-confirm for gated targets | — |
+| Merge path | ✅ **DONE (2026-05-30)** — ruleset on `main`: require PR + `lint`, auto-merge-on-green, delete-on-merge, no direct push | — |
+| Cache-bust (`MAST_MODULES_V`) | ✅ **DONE (2026-05-30, PR #70)** — enforced by required `lint` check (committed bump); local pre-commit hook now optional/dev-only | enforced by required `lint` check (committed bump) |
+| Tenant freeze | ✅ **DONE (2026-05-30/31, Build 6)** — bounded, labeled, auto-expiring; `manageRouting` + `freezeReconciler` deployed | — |
+| Storefront prod release | ⏳ manual pod-sequential deploy today (merge → deploy = continuous push) | **Build 8 (RATIFIED 2026-05-30)** — adopt the existing release pipeline: enroll → cut → stage → promote as a unit; see roadmap §8 + `mast-architecture/docs/release-adoption-build8-proposal.md` |
+| KV `podRouting` writes | ✅ **DONE (2026-05-30/31, Build 3)** — gateable + audited `manageRouting` CF + `mast_routing` tool, deployed (IAM-restricted) | — |
+| Prod rollback | ✅ **DONE (2026-05-30/31, Build 7)** — `mast_hosting` redeploy-by-version (gated for prod) + revert-PR rule | — |
 | Deploy verification | CI checks origin-SHA only | origin-SHA then worker-SHA (what users actually see) |
 | Cross-repo ordering | unspecified | Functions-first/storefront-second rule; storefront PR names its CF dependency |
 
@@ -264,14 +266,14 @@ Sequenced cheapest-highest-leverage first. Cross-repo work is noted. Revised 202
 release-manager review (added gate-zero, split the gate build, added the KV-write tool and rollback
 lever, fixed the cache-bust collision).
 
-**0. Gate-zero — GitHub branch protection.** Verify the repos' GitHub plan supports rulesets /
-   required-status-checks / auto-merge (the branch-protection API reportedly 403s — likely needs
-   Pro). Builds 4 *enforcement* depends on this. If unavailable, "required CI / auto-merge" is
-   convention with zero teeth — resolve before committing to that track. *(GitHub / admin)*
+**0. Gate-zero — GitHub branch protection.** ✅ **DONE (2026-05-30).** Repo is **public**, so
+   rulesets / required-status-checks / auto-merge are available for free — the earlier "needs Pro"
+   worry was about *private* repos and does not apply here. *(GitHub / admin)*
 
-1. **Un-pin sgtest15** — one dev-tier KV edit; sgtest15 rides `mast-tenant-shared`. KV-lookup +
-   record the old value first (instant revert), do it at a low-traffic hour, verify through the
-   worker after. Removes the #1 routing-confusion class. *(KV / `podRouting`)*
+1. **Un-pin sgtest15** — ✅ **DONE (2026-05-30).** KV `sgtest15.runmast.com` set to
+   `{"podId":"dev","originHost":"mast-tenant-shared.web.app"}` (was `mast-sgtest15.web.app`).
+   Verified via worker: HTTP 200, serves the shared build, no regression. Rollback: restore
+   `originHost` to `mast-sgtest15.web.app`. *(KV / `podRouting`)*
 
 2a. **Arg-aware gate engine** — move the confirm from whole-tool to **argument-level** (inspect
    `pod`/`tenantId`/action before issuing a token). Preserve the frozen-arg anti-bait-and-switch
@@ -286,16 +288,24 @@ lever, fixed the cache-bust collision).
    write. This is what makes "prod KV edits" actually gateable (2b) **and** unblocks the freeze (6).
    *(mast-mcp-server + mast-architecture)*
 
-4. **PR-to-main + auto-merge-on-green** — required CI; auto-merge routine PRs on green; **path-scoped
-   required review** (CODEOWNERS: RBAC files, `declared-state.schema.yaml`, `mode-module-info.js`,
-   migrations); delete-on-merge. Depends on build 0. *(GitHub Actions / repo settings)*
+4. **PR-to-main + auto-merge-on-green** — ✅ **DONE (2026-05-30).** Ruleset `17068215` on `main`:
+   require PR + require `lint` check + block force-push/deletion, **no bypass**; `allow_auto_merge`
+   + `delete_branch_on_merge` enabled. **Path-scoped required review was dropped** — single-account
+   repo can't self-approve (see Dev workflow §2); the human checkpoint moved to the deploy-time gate
+   (Build 2). *(GitHub Actions / repo settings)*
 
-5. **Cache-bust + tarball-pin in CI** — bump `MAST_MODULES_V` as a **build-time, uncommitted**
-   substitution **before** the verify-SHA is computed (the bump edits `app/index.html`, so a
-   post-hoc bump would break SHA-verify by construction). **Retire/disable the local pre-commit
-   hook** so it can't double-bump or trigger a bot-commit→redeploy loop. While here, **pin the
-   tarball fetch to the merged SHA** in `mast-deploy` (the 2026-05-22 silent-success fix).
-   *(CI + `scripts/bump-modules-version.sh` + mast-deploy)*
+5. **Cache-bust gate + tarball-pin in CI** — ✅ **DONE (2026-05-30, PR #70).** Enforce
+   `MAST_MODULES_V` via a **required `lint` CI check** (`scripts/lint-cache-bust.js`): any PR that
+   touches `app/index.html` or `app/modules/*.js` **without a committed `MAST_MODULES_V` bump fails
+   CI** and can't merge. The local pre-commit hook is now **optional/dev-only** (a convenience that
+   auto-bumps locally; no longer the enforcement point). *Note: the originally-planned "build-time,
+   uncommitted substitution in `deploy.yml`" approach was found architecturally impossible — a
+   deploy ships the committed GitHub tarball at the merged SHA (`mast_hosting` fetches
+   `/tarball/<sha>`), not the CI checkout, so an uncommitted CI bump never reaches users and would
+   break the verify-SHA step; branch protection has no bypass, so CI also can't bot-commit the bump.
+   A committed-bump gate is the only design that actually ships.* The **tarball SHA-pin** was
+   already shipped separately in `mast-deploy` `d9163ae` (v0.7.4; `deploy.yml` pins v0.7.5) — the
+   2026-05-22 silent-success fix. *(CI + `scripts/lint-cache-bust.js` + mast-deploy)*
 
 6. **Tenant freeze v1** — depends on **2** (gate) + **3** (KV tool). Freeze command (snapshot→preview
    channel with TTL ≥ `lockedUntil`; labeled KV override) + reconciler auto-lift (per-pod
@@ -303,9 +313,30 @@ lever, fixed the cache-bust collision).
    override that **re-snapshots** onto a patched channel. *(mast-mcp-server + mast-architecture
    reconciler + KV)*
 
-7. **Prod rollback lever** — confirm/extend `mast_hosting` to redeploy a prior Hosting version id
-   (`list_versions` exists; redeploy-by-version may need a flag); document the revert-PR-before-next-
-   deploy rule. Pairs with the Rollback section above. *(mast-mcp-server)*
+7. **Prod rollback lever** — ✅ DONE (#74, deployed). `mast_hosting` redeploy-by-version (gated for prod) + the revert-PR-before-next-deploy rule. *(mast-mcp-server)*
 
-**Deferred** (revisit when fleet size justifies): within-pod canary cohorts; full storefront-prod
-release pipeline (`mast_platform_release_*` propose→approve); lift-notification on freeze expiry.
+8. **Release adoption — targeted releases (RATIFIED 2026-05-30).** The targeted-release pipeline
+   ALREADY EXISTS and is wired to deploys — it's just **bypassed via `releaseId:null`** on everyday
+   deploys (`mast-platform-registry/releases/{id}` + `mast_platform_release` tool + `mast-deploy
+   releases promote` + `pipelineExecutor` tick + `deploy_events.releaseId` FK). So this is **adoption,
+   not construction** (~80% reuse). The change:
+   - **(a) Auto-enroll** — exactly one always-`open` release per component; merge-to-`main` enrolls
+     the PR. Flips "merge = deploy" into "merge = enroll."
+   - **(b) Cut → stage → promote** — operator cuts (freeze + pin gitSha = `propose`+name) → approve
+     + schedule → `pipelineExecutor` promotes to **dev + east canary**, soaks (≥10 min, the doc's
+     criteria) → on green, the **same release** promotes to **west as a unit**. No per-merge deploys.
+   - **(c) Gate enforcement** — the **Build 2 gate is the enforcement point**: a gated-surface deploy
+     (prod pod / `mast-platform-prod` functions / runmast.com / prod KV) requires a `releaseId` for an
+     **approved** release, else an explicit **`--emergency`** break-glass (stamped on `deploy_events`).
+     "No untracked prod deploys" lives here. Direct per-merge deploys become break-glass only.
+   - **Ratified decisions:** enrollment via a step in each component repo's `deploy.yml`; **manual**
+     operator cut for v1 (weekly cron later); **sequence = gate-rule + enrollment FIRST** (stops the
+     push-to-prod bleeding), **UI after**.
+   - Full proposal (finding, reuse-vs-net-new, capability-gap table, open follow-ups):
+     `mast-architecture/docs/release-adoption-build8-proposal.md`.
+   *(mast-platform-registry releases schema + mast-mcp-server gate + mast-deploy cut/promote/break-glass
+   + component-repo `deploy.yml` enrollment; UI later in `mast-platform-admin`)*
+
+**Deferred** (revisit when fleet size justifies): within-pod canary cohorts; **Build 8 UI surfaces**
+(Releases tab / per-PR "where did my change ship") until gate+enrollment land; weekly-cron auto-cut;
+lift-notification on freeze expiry.

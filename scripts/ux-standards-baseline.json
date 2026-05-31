@@ -1,0 +1,159 @@
+{
+  "app/modules/accounting.js": {
+    "nativeDialogs": 3,
+    "rogueOverlays": 1,
+    "hardcodedHex": 63
+  },
+  "app/modules/advisor.js": {
+    "nativeDialogs": 4,
+    "rogueOverlays": 1,
+    "hardcodedHex": 94
+  },
+  "app/modules/audit-feedback.js": {
+    "nativeDialogs": 2
+  },
+  "app/modules/audit.js": {
+    "hardcodedHex": 7
+  },
+  "app/modules/blog.js": {
+    "hardcodedHex": 24
+  },
+  "app/modules/book.js": {
+    "nativeDialogs": 3,
+    "rogueOverlays": 1,
+    "hardcodedHex": 129
+  },
+  "app/modules/brand.js": {
+    "hardcodedHex": 4
+  },
+  "app/modules/campaigns.js": {
+    "nativeDialogs": 3,
+    "hardcodedHex": 1
+  },
+  "app/modules/cart.js": {
+    "hardcodedHex": 54
+  },
+  "app/modules/channels.js": {
+    "nativeDialogs": 2,
+    "rogueOverlays": 1,
+    "hardcodedHex": 273
+  },
+  "app/modules/commission-terms.js": {
+    "hardcodedHex": 9
+  },
+  "app/modules/composer.js": {
+    "nativeDialogs": 1
+  },
+  "app/modules/consignment.js": {
+    "hardcodedHex": 102
+  },
+  "app/modules/contacts.js": {
+    "hardcodedHex": 33
+  },
+  "app/modules/customer-service.js": {
+    "nativeDialogs": 7,
+    "rogueOverlays": 3,
+    "hardcodedHex": 21
+  },
+  "app/modules/customers.js": {
+    "hardcodedHex": 40
+  },
+  "app/modules/email-log.js": {
+    "hardcodedHex": 30
+  },
+  "app/modules/engagement-inbox.js": {
+    "nativeDialogs": 1,
+    "rogueOverlays": 1,
+    "hardcodedHex": 6
+  },
+  "app/modules/events.js": {
+    "hardcodedHex": 51
+  },
+  "app/modules/finance.js": {
+    "nativeDialogs": 3,
+    "rogueOverlays": 5,
+    "hardcodedHex": 560
+  },
+  "app/modules/financials.js": {
+    "hardcodedHex": 38
+  },
+  "app/modules/fulfillment.js": {
+    "rogueOverlays": 1,
+    "hardcodedHex": 33
+  },
+  "app/modules/homepage.js": {
+    "hardcodedHex": 3
+  },
+  "app/modules/lookbooks.js": {
+    "hardcodedHex": 15
+  },
+  "app/modules/maker.js": {
+    "nativeDialogs": 2,
+    "rogueOverlays": 7,
+    "hardcodedHex": 106
+  },
+  "app/modules/mapping.js": {
+    "rogueOverlays": 2,
+    "hardcodedHex": 1
+  },
+  "app/modules/marketing-calendar.js": {
+    "hardcodedHex": 8
+  },
+  "app/modules/newsletter.js": {
+    "nativeDialogs": 1,
+    "hardcodedHex": 36
+  },
+  "app/modules/orders.js": {
+    "nativeDialogs": 4,
+    "rogueOverlays": 2,
+    "hardcodedHex": 110
+  },
+  "app/modules/procurement.js": {
+    "hardcodedHex": 3
+  },
+  "app/modules/production.js": {
+    "hardcodedHex": 25
+  },
+  "app/modules/promotions.js": {
+    "hardcodedHex": 12
+  },
+  "app/modules/sales.js": {
+    "nativeDialogs": 1,
+    "rogueOverlays": 2,
+    "hardcodedHex": 59
+  },
+  "app/modules/show-light.js": {
+    "hardcodedHex": 2
+  },
+  "app/modules/shows.js": {
+    "rogueOverlays": 7,
+    "hardcodedHex": 395
+  },
+  "app/modules/social.js": {
+    "hardcodedHex": 28
+  },
+  "app/modules/students.js": {
+    "rogueOverlays": 1,
+    "hardcodedHex": 60
+  },
+  "app/modules/studio.js": {
+    "hardcodedHex": 3
+  },
+  "app/modules/team.js": {
+    "nativeDialogs": 2,
+    "rogueOverlays": 1,
+    "hardcodedHex": 55
+  },
+  "app/modules/trips.js": {
+    "rogueOverlays": 3,
+    "hardcodedHex": 55
+  },
+  "app/modules/website.js": {
+    "rogueOverlays": 1,
+    "hardcodedHex": 54
+  },
+  "app/modules/wholesale.js": {
+    "rogueOverlays": 2,
+    "hardcodedHex": 123
+  }
+}

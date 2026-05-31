@@ -108,6 +108,10 @@
   <script src="../shared/customer-resolver.js?v=1"></script>
   <script src="../shared/brand-sync.js?v=1"></script>
   <script src="../shared/channel-connection.js?v=1"></script>
+  <!-- UI redesign engines (docs/ux-audit): shared primitives + Entity Engine. -->
+  <script src="../shared/mast-ui.js?v=1"></script>
+  <script src="../shared/mast-io.js?v=1"></script>
+  <script src="../shared/mast-entity.js?v=1"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Pod-specific runtime config — sets window.MAST_POD_PLATFORM_PROJECT so
@@ -9858,9 +9862,16 @@
           <div id="etsyDisconnected" style="display:none;">
             <label style="font-size:0.85rem;font-weight:600;margin-bottom:4px;display:block;">API Key (Keystring)</label>
             <p style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:4px;">
-              From your Etsy Developer app dashboard
+              From your Etsy Developer app dashboard (Your Apps)
             </p>
             <input type="text" id="etsyApiKey" placeholder="abc123def456..."
+              style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;margin-bottom:16px;box-sizing:border-box;">
+
+            <label style="font-size:0.85rem;font-weight:600;margin-bottom:4px;display:block;">Shared Secret</label>
+            <p style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:4px;">
+              Listed next to the Keystring in your Etsy app. Required by Etsy since Feb 2026 — both are needed to sync.
+            </p>
+            <input type="password" id="etsySharedSecret" placeholder="••••••••••" autocomplete="off"
               style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;margin-bottom:16px;box-sizing:border-box;">
 
             <div style="display:flex;gap:8px;">
@@ -11160,6 +11171,8 @@
 
     <!-- Admin: Customers Tab — rendered entirely from app/modules/customers.js -->
     <div id="customersTab" style="display:none;"></div>
+    <div id="ordersV2Tab" class="tab-content" style="display:none;"></div><!-- UI-redesign proof -->
+    <div id="customersV2Tab" class="tab-content" style="display:none;"></div><!-- UI-redesign proof -->
 
     <!-- Admin: Procurement Tab — rendered entirely from app/modules/procurement.js -->
     <div id="procurementTab" style="display:none;"></div>
@@ -12956,6 +12969,13 @@ async function hydrateEngagementSurface() {
         }
       : { enabledRoutes: [], disabledRoutes: [] };
 
+    // Apply engagement-surface nav filter (ui-first modulesShown trim). This
+    // was defined but never wired — engagement filtering only ran on manual
+    // console call, so cold loads rendered the full sidebar. Call it here
+    // beside applyModeNavFilter (same stable-DOM, post-hydration spot); it
+    // fail-opens for hybrid surface or null _engagementSurface. Touches a
+    // disjoint class set (.engagement-hidden) so order vs the mode filter is moot.
+    if (typeof applyEngagementNavFiltering === 'function') applyEngagementNavFiltering();
     // Apply mode-based nav filter (fail-open if modeSet missing — legacy tenants
     // pre-M1 backfill see full nav; new tenants always have modeSet from M1).
     if (typeof applyModeNavFilter === 'function') applyModeNavFilter();
@@ -20571,6 +20591,8 @@ var MODULE_MANIFEST = {
   contacts: { src: 'modules/contacts.js', routes: ['contacts'] },
   customers: { src: 'modules/customers.js', routes: ['customers'] },
   orders: { src: 'modules/orders.js', routes: ['orders', 'commissions', 'rma'] },
+  'orders-v2': { src: 'modules/orders-v2.js', routes: ['orders-v2'] }, // UI-redesign proof (flag-gated, side-by-side)
+  'customers-v2': { src: 'modules/customers-v2.js', routes: ['customers-v2'] }, // UI-redesign proof (flag-gated, side-by-side)
   sales: { src: 'modules/sales.js', routes: ['pos', 'receipts', 'events', 'salesEvents', 'terms'] },
   fulfillment: { src: 'modules/fulfillment.js', routes: ['pack', 'ship', 'fulfillment'] },
   eventsAdmin: { src: 'modules/events.js', routes: ['events-shows', 'events-settings'] },
@@ -21401,10 +21423,15 @@ async function _connectEtsyFlow() {
   if (!apiKey) return;
   apiKey = apiKey.trim();
   if (apiKey.length < 10) { alert('API keystring looks too short. Double-check and try again.'); return; }
+  // Etsy v3 (since 2026-02-09) also requires the shared secret in the x-api-key header.
+  var sharedSecret = prompt('Enter your Etsy app Shared Secret:\n\n(Listed next to the Keystring in Your Apps. Required by Etsy to sync.)');
+  if (!sharedSecret) return;
+  sharedSecret = sharedSecret.trim();
+  if (sharedSecret.length < 8) { alert('Shared secret looks too short. Double-check and try again.'); return; }
   try {
     _setChannelNote('etsy', 'Storing credentials\u2026');
     var setFn = firebase.functions().httpsCallable('setChannelCredentialsCallable');
-    await setFn({ tenantId: MastDB.tenantId(), platform: 'etsy', credentials: { apiKey: apiKey } });
+    await setFn({ tenantId: MastDB.tenantId(), platform: 'etsy', credentials: { apiKey: apiKey, sharedSecret: sharedSecret } });
     var startFn = firebase.functions().httpsCallable('etsyOAuthStart');
     var result = await startFn({ tenantId: MastDB.tenantId() });
     var data = (result && result.data) || {};
@@ -28434,29 +28461,41 @@ async function removeEmailDomain() {
 // ============================================================
 async function connectEtsy() {
   var apiKey = document.getElementById('etsyApiKey').value.trim();
+  var sharedSecretEl = document.getElementById('etsySharedSecret');
+  var sharedSecret = sharedSecretEl ? sharedSecretEl.value.trim() : '';
   if (!apiKey) {
     showToast('Enter your Etsy API Key (keystring) first.', true);
     return;
   }
+  // Etsy v3 (since 2026-02-09) requires the shared secret in the x-api-key
+  // header (keystring:secret) — without it every data call 403s after connect.
+  if (!sharedSecret) {
+    showToast('Enter your Etsy Shared Secret too — Etsy requires it to sync.', true);
+    return;
+  }
 
-  // Save API key via Secret Manager
+  // Save keystring + shared secret via Secret Manager
+  var tid = MastDB.tenantId();
   try {
     await firebase.functions().httpsCallable('secretsManager')({
       action: 'write',
       service: 'etsy',
-      tenantId: MastDB.tenantId(),
-      secrets: { [MastDB.tenantId() + '-etsy-api-key']: apiKey }
+      tenantId: tid,
+      secrets: {
+        [tid + '-etsy-api-key']: apiKey,
+        [tid + '-etsy-shared-secret']: sharedSecret
+      }
     });
     await writeAudit('update', 'settings', 'etsyApiKey');
   } catch (err) {
-    showToast('Error saving API key: ' + err.message, true);
+    showToast('Error saving Etsy credentials: ' + err.message, true);
     return;
   }
 
   showToast('Starting Etsy authorization...');
 
   try {
-    var result = await firebase.functions().httpsCallable('etsyOAuthStart')({});
+    var result = await firebase.functions().httpsCallable('etsyOAuthStart')({ tenantId: tid });
     if (result.data && result.data.authUrl) {
       window.open(result.data.authUrl, '_blank');
     } else {

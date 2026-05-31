@@ -37,3 +37,6 @@ wholesale-images/
 
 # Downloaded repo tarballs (duplicates of this repo)
 stewartdavidp-ship-it-mast-tenant-template-*/
+
+# Session-rules card is shared (read by the SessionStart hook), not local
+!.claude/session-rules.md
