@@ -14,9 +14,11 @@ The orchestrator for the engine-first, strangler redesign. Plan: `~/.claude/plan
 ## Verification gate (every PR)
 ```
 node scripts/lint-design-tokens.js && node scripts/lint-rbac.js && node scripts/lint-mastdb.js
-node test/*.test.js
-node scripts/capture-modes.js   # both-mode screenshots, attach to PR
+node scripts/lint-ux-standards.js   # conformance RATCHET — blocks drift (doc 16)
+node test/*.test.js && node test/mast-ui.test.js
+node scripts/capture-modes.js       # both-mode screenshots, attach to PR
 ```
+Enforcement is **maintained**, not one-time — see `16-enforcement-and-guardrails.md`. Ratchet baseline: **42 files / 2806 violations** (live debt KPI → drive to 0). After converting a module, `node scripts/lint-ux-standards.js --update` re-locks its lower counts.
 Plus: rubric re-grade ≥ B; deep-link `?id=`; dirty-guard on close/backdrop/Esc/Back/nav; export↔import round-trip; signal-grep (doc 01) → 0 new `window.confirm`/`position:fixed`/`translateX`/hardcoded hex in the converted module. Deploy dev pod → smoke a dev tenant before prod cutover (operator).
 
 ## Foundation (Phase 0 — engines, `shared/*.js`)
