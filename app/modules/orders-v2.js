@@ -34,13 +34,53 @@
       { name: 'email', label: 'Customer', type: 'text', list: true, group: 'Order', readOnly: true },
       { name: 'items', label: 'Items', type: 'number', list: true, group: 'Order',
         get: function (o) { return Array.isArray(o.items) ? o.items.reduce(function (s, li) { return s + (li.qty || 1); }, 0) : (o.itemCount || 0); } },
-      { name: 'total', label: 'Total', type: 'money', list: true, group: 'Order' },
+      { name: 'total', label: 'Total', type: 'money', list: true, group: 'Order',
+        get: function (o) { return (o.totalCents != null ? o.totalCents / 100 : o.total); } },
       { name: 'status', label: 'Status', type: 'status', list: true, group: 'Order',
         tone: function (v) { return STATUS_TONE[String(v || '').toLowerCase()] || 'neutral'; } },
       { name: 'tracking', label: 'Tracking', type: 'text', list: true, group: 'Fulfillment' },
       { name: 'source', label: 'Source', type: 'text', group: 'Order', readOnly: true },
       { name: 'placedAt', label: 'Placed', type: 'date', group: 'Order', readOnly: true }
     ],
+    // Drill target + restorer source (fetch by id).
+    route: 'orders-v2',
+    fetch: function (id) { return MastDB.orders.get(id).then(function (o) { return o ? Object.assign({ _key: id }, o) : null; }); },
+    // Designed Transaction detail (read mode) — all from real fields (doc 17).
+    detail: {
+      template: 'transaction',
+      customerEntity: 'customers-v2',
+      tiles: function (r) {
+        var n = Array.isArray(r.items) ? r.items.reduce(function (s, li) { return s + (li.qty || 1); }, 0) : 0;
+        return [
+          { k: 'Total', v: window.MastUI.Num.money((r.totalCents || 0) / 100), hero: true },
+          { k: 'Items', v: n },
+          { k: 'Payment', v: r.paymentMethod || '—' },
+          { k: 'Source', v: r.source || '—' }
+        ];
+      },
+      lineItems: function (r) {
+        return (r.items || []).map(function (it) {
+          return { name: it.productName || it.name || 'Item', qty: it.qty, price: (it.priceCents || 0) / 100, total: (it.lineTotal || 0) / 100 };
+        });
+      },
+      totals: function (r) {
+        return { subtotal: (r.subtotalCents || 0) / 100, shipping: (r.shippingCents || 0) / 100, tax: (r.taxCents || 0) / 100, total: (r.totalCents || 0) / 100 };
+      },
+      customer: function (r) {
+        var sh = r.shipping || {};
+        var addr = [sh.address1 || sh.line1, (sh.city ? sh.city + (sh.state ? ', ' + sh.state : '') : '')].filter(Boolean).join('<br>');
+        return { id: r.customerId, name: r.customerName || r.email, email: r.email, address: addr };
+      },
+      fulfillment: function (r) {
+        return { status: r.status, tone: STATUS_TONE[String(r.status || '').toLowerCase()] || 'neutral', tracking: r.tracking || null };
+      },
+      timeline: function (r) {
+        var ev = [{ label: 'Placed', at: window.MastUI.Num.date(r.placedAt), done: true }];
+        var st = String(r.status || '').toLowerCase();
+        if (st && st !== 'placed') ev.push({ label: st.charAt(0).toUpperCase() + st.slice(1), at: window.MastUI.Num.date(r.updatedAt), done: true });
+        return ev;
+      }
+    },
     onSave: function (rec, mode) {
       var id = rec._key || rec.id;
       if (!id || !window.MastDB || !MastDB.orders) return true;

@@ -15,6 +15,9 @@
   if (!flagOn()) return;
 
   var STATUS_TONE = { active: 'success', lapsed: 'danger', lead: 'info', vip: 'amber' };
+  // Customer stats live under `stats.*` (nested), but some records also carry
+  // flattened "stats.x" keys — read nested first, fall back to dotted (doc 17).
+  function stat(c, k) { return (c && c.stats && c.stats[k] != null) ? c.stats[k] : (c ? c['stats.' + k] : undefined); }
   MastEntity.define('customers-v2', {
     label: 'Customer', labelPlural: 'Customers', size: 'md',
     recordId: function (c) { return c._key || c.id; },
@@ -24,14 +27,68 @@
       { name: 'source', label: 'Source', type: 'text', list: true, group: 'Identity', readOnly: true,
         tone: function () { return 'teal'; } },
       { name: 'orderCount', label: 'Orders', type: 'number', list: true, group: 'Activity',
-        get: function (c) { return c.orderCount != null ? c.orderCount : (Array.isArray(c.orders) ? c.orders.length : 0); } },
+        get: function (c) { return stat(c, 'orderCount') || 0; } },
       { name: 'totalSpend', label: 'Spend', type: 'money', list: true, group: 'Activity',
-        get: function (c) { return c.totalSpend != null ? c.totalSpend : (c.spend != null ? c.spend : c.lifetimeValue); } },
+        get: function (c) { return (stat(c, 'lifetimeSpendCents') || 0) / 100; } },
       { name: 'status', label: 'Status', type: 'status', list: true, group: 'Activity',
         tone: function (v) { return STATUS_TONE[String(v || '').toLowerCase()] || 'neutral'; } },
       { name: 'phone', label: 'Phone', type: 'text', group: 'Contact' },
       { name: 'createdAt', label: 'Created', type: 'date', group: 'Identity', readOnly: true }
     ],
+    // Drill target + restorer source; fetch loads the customer + linked-contact
+    // location + recent orders so the Party detail has real data.
+    route: 'customers-v2',
+    fetch: function (id) {
+      return MastDB.get('admin/customers/' + id).then(function (c) {
+        if (!c) return null;
+        c = Object.assign({ _key: id }, c);
+        var jobs = [];
+        if (MastDB.orders && MastDB.orders.list) {
+          jobs.push(Promise.resolve(MastDB.orders.list()).then(function (m) {
+            var arr = [];
+            Object.keys(m || {}).forEach(function (k) { var o = m[k]; if (o && (o.customerId === id || o.email === c.primaryEmail)) arr.push(Object.assign({ _key: k }, o)); });
+            arr.sort(function (a, b) { return String(b.placedAt || '').localeCompare(String(a.placedAt || '')); });
+            c._recentOrders = arr.slice(0, 8);
+          }).catch(function () {}));
+        }
+        var cid = c.linkedIds && c.linkedIds.contactIds && c.linkedIds.contactIds[0];
+        if (cid && MastDB.contacts && MastDB.contacts.get) {
+          c._contactId = cid;
+          jobs.push(Promise.resolve(MastDB.contacts.get(cid)).then(function (ct) {
+            if (ct) c._contactLocation = ct.city ? (ct.city + (ct.state ? ', ' + ct.state : '')) : (ct.location || ct.address || null);
+          }).catch(function () {}));
+        }
+        return Promise.all(jobs).then(function () { return c; });
+      });
+    },
+    detail: {
+      template: 'party',
+      orderEntity: 'orders-v2',
+      contactEntity: 'contacts-v2',
+      tiles: function (r) {
+        var spend = (stat(r, 'lifetimeSpendCents') || 0) / 100, n = stat(r, 'orderCount') || 0;
+        return [
+          { k: 'Lifetime spend', v: window.MastUI.Num.money(spend), hero: true },
+          { k: 'Orders', v: n },
+          { k: 'Avg order', v: window.MastUI.Num.money(n ? spend / n : 0) },
+          { k: 'Last order', v: stat(r, 'lastOrderAt') ? window.MastUI.Num.date(stat(r, 'lastOrderAt')) : '—' }
+        ];
+      },
+      contact: function (r) { return { email: r.primaryEmail, location: r._contactLocation || null, contactId: r._contactId || null }; },
+      relatedOrders: function (r) {
+        return (r._recentOrders || []).map(function (o) {
+          return { id: o._key, number: o.orderNumber, date: window.MastUI.Num.date(o.placedAt), total: (o.totalCents || 0) / 100, status: o.status, tone: STATUS_TONE[String(o.status || '').toLowerCase()] || 'neutral' };
+        });
+      },
+      segments: function (r) {
+        var out = [];
+        if (r.marketing && r.marketing.newsletterOptIn) out.push('Newsletter');
+        if (r.marketing && r.marketing.smsOptIn) out.push('SMS');
+        if (r.stats && r.stats.portfolioQuadrant) out.push(r.stats.portfolioQuadrant);
+        return out;
+      },
+      notes: function (r) { return r.notes || ''; }
+    },
     onSave: function (rec) {
       var id = rec._key || rec.id;
       if (!id || !window.MastDB || !MastDB.update) return true;
@@ -40,6 +97,26 @@
         .then(function () { return true; });
     }
   });
+
+  // Minimal Contact schema (Party category) so a customer's Location drills to
+  // its linked contact in the same template.
+  if (!MastEntity.get('contacts-v2')) {
+    MastEntity.define('contacts-v2', {
+      label: 'Contact', size: 'md',
+      recordId: function (c) { return c._key || c.id; },
+      fields: [{ name: 'displayName', label: 'Name', type: 'text', list: true }, { name: 'email', label: 'Email', type: 'text' }],
+      route: 'contacts-v2',
+      fetch: function (id) { return MastDB.contacts.get(id).then(function (c) { return c ? Object.assign({ _key: id }, c) : null; }); },
+      detail: {
+        template: 'party',
+        tiles: function (r) { return [{ k: 'Type', v: r.type || 'Contact' }, { k: 'Tags', v: (r.tags && r.tags.length) || 0 }]; },
+        contact: function (r) { return { email: r.email || r.primaryEmail || '', location: r.city ? (r.city + (r.state ? ', ' + r.state : '')) : (r.location || '') }; },
+        relatedOrders: function () { return []; },
+        segments: function (r) { return r.tags || []; },
+        notes: function (r) { return r.notes || ''; }
+      }
+    });
+  }
 
   var V2 = { rows: [], byId: {}, sortKey: 'displayName', sortDir: 'asc', off: null, q: '' };
 
@@ -109,7 +186,13 @@
       render();
     },
     search: function (v) { V2.q = v || ''; render(); },
-    open: function (id) { var rec = V2.byId[id]; if (rec) window.MastEntity.openRecord('customers-v2', rec, 'read'); },
+    open: function (id) {
+      // Go through the schema fetch so the linked-contact location + recent
+      // orders are loaded before the Party detail renders.
+      window.MastEntity.get('customers-v2').fetch(id).then(function (rec) {
+        if (rec) window.MastEntity.openRecord('customers-v2', rec, 'read');
+      });
+    },
     exportCsv: function () { return window.MastEntity.exportRows('customers-v2', visibleRows(), 'all'); }
   };
 
