@@ -16065,6 +16065,11 @@ async function loadUserRole(uid) {
         displayName: currentUser.displayName || '',
         email: currentUser.email || '',
         photoURL: currentUser.photoURL || '',
+        // Sign-in providers (e.g. ['google.com'] or ['password']) — surfaced as a
+        // chip in the Users table so an admin can see at a glance that a user is
+        // Google-SSO-only (no password), the failure mode behind the
+        // russelljonesjewelry login ticket.
+        providers: (currentUser.providerData || []).map(function(p) { return p.providerId; }),
         role: initialRole,
         accessExpiry: initialExpiry,
         permissionOverrides: {},
@@ -16082,6 +16087,9 @@ async function loadUserRole(uid) {
       // Update lastLoginAt — non-fatal: guests cannot write if isMember() fails,
       // and we never want a write error to prevent the expiry screen from showing.
       var loginUpdate = { lastLoginAt: MastDB.serverTimestamp() };
+      // Refresh providers on every login — backfills existing users (who predate
+      // this field) with their sign-in method on their next sign-in.
+      loginUpdate.providers = (currentUser.providerData || []).map(function(p) { return p.providerId; });
       if (userData.permissionOverrides === undefined) loginUpdate.permissionOverrides = {};
       if (userData.accessExpiry === undefined) loginUpdate.accessExpiry = null;
       MastDB.adminUsers.update(uid, loginUpdate).catch(function(e) {
@@ -20542,7 +20550,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260530-112808-eddb751';
+var MAST_MODULES_V = '20260531-124103-0c4969e';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -49305,6 +49313,12 @@ function renderUsersList() {
       actionsCell += '<button class="btn btn-secondary" style="font-size:0.72rem;padding:3px 8px;" onclick="viewUserAudit(\'' + uid + '\')">History</button>';
       if (can('employees', 'edit')) {
         actionsCell += ' <button class="btn btn-secondary" style="font-size:0.72rem;padding:3px 8px;" onclick="openUserPermissionsPanel(\'' + uid + '\')">Edit Permissions</button>';
+        // Send password reset — for a locked-out password user. For a Google-SSO
+        // user it's the wrong fix (they have no password); the confirm dialog
+        // surfaces their provider so the admin doesn't fire a pointless reset.
+        if (u.archived !== true) {
+          actionsCell += ' <button class="btn btn-secondary" style="font-size:0.72rem;padding:3px 8px;" onclick="sendUserPasswordReset(\'' + uid + '\')">Send password reset</button>';
+        }
         if (u.archived === true) {
           actionsCell += ' <button class="btn btn-secondary" style="font-size:0.72rem;padding:3px 8px;" onclick="archiveUser(\'' + uid + '\', false)">Unarchive</button>';
         } else {
@@ -49333,8 +49347,25 @@ function renderUsersList() {
         });
       })(uid, tr);
     }
+    // Sign-in provider chip. A "Google" (only) chip is the at-a-glance signal
+    // that the user has no password and must use "Sign in with Google".
+    var provChip = '';
+    if (Array.isArray(u.providers) && u.providers.length) {
+      var hasGoogle = u.providers.indexOf('google.com') !== -1;
+      var hasPassword = u.providers.indexOf('password') !== -1;
+      var provLabel = (hasGoogle && hasPassword) ? 'Google + Password'
+        : (hasGoogle ? 'Google' : (hasPassword ? 'Password' : u.providers.join(', ')));
+      var googleOnly = hasGoogle && !hasPassword;
+      var provStyle = googleOnly
+        ? 'background:rgba(66,133,244,0.14);color:#1a73e8;border:1px solid rgba(66,133,244,0.3);'
+        : 'background:var(--cream-dark);color:var(--warm-gray);';
+      var provTitle = googleOnly
+        ? "Signs in with Google only — no password. This user must use “Sign in with Google” (a password reset won't help)."
+        : 'Sign-in method';
+      provChip = ' <span class="status-badge" style="font-size:0.72rem;' + provStyle + '" title="' + esc(provTitle) + '">' + esc(provLabel) + '</span>';
+    }
     tr.innerHTML = '<td>' + avatar + esc(u.displayName || 'Unnamed') + '</td>' +
-      '<td>' + esc(u.email || '—') + '</td>' +
+      '<td>' + esc(u.email || '—') + provChip + '</td>' +
       '<td>' + roleCell + '</td>' +
       '<td>' + lastLogin + '</td>' +
       '<td>' + actionsCell + '</td>';
@@ -49354,7 +49385,8 @@ function renderUsersList() {
         '<td>' + esc(inv.email) + '</td>' +
         '<td><span class="status-badge">' + esc(roleName) + '</span></td>' +
         '<td>Invited ' + new Date(inv.invitedAt).toLocaleDateString() + '</td>' +
-        '<td><button class="btn btn-secondary" style="font-size:0.72rem;padding:3px 8px;" onclick="cancelInvite(\'' + invKey + '\')">Cancel</button></td>';
+        '<td><button class="btn btn-secondary" style="font-size:0.72rem;padding:3px 8px;" onclick="resendInvite(\'' + invKey + '\')">Resend</button>' +
+        ' <button class="btn btn-secondary" style="font-size:0.72rem;padding:3px 8px;" onclick="cancelInvite(\'' + invKey + '\')">Cancel</button></td>';
       tbody.appendChild(tr);
     });
   }
@@ -50457,6 +50489,71 @@ function cancelInvite(emailKey) {
       showToast('Failed to cancel invite.', true);
     }
   }, { confirmLabel: 'Cancel Invite', cancelLabel: 'Keep' });
+}
+
+// Resend a pending invite — re-runs the inviteTenantUser CF so the "set your
+// password" setup email goes out again (e.g. the first one was lost). The CF is
+// idempotent: if the account already exists it sends nothing and reports back
+// (M1 anti-phishing rule), in which case we tell the admin they can just sign in.
+function resendInvite(emailKey) {
+  if (!can('employees', 'edit')) {
+    showToast('You do not have permission to manage invites.', true);
+    return;
+  }
+  var inv = pendingInvites[emailKey];
+  var email = inv ? inv.email : emailKey.replace(/,/g, '.');
+  var roleName = (inv && (ROLE_DISPLAY_NAMES[inv.role] || inv.role)) || 'their role';
+  showConfirmDialog('Resend Invite', 'Resend the setup email to ' + email + '?', async function() {
+    try {
+      var res = await firebase.functions().httpsCallable('inviteTenantUser')({
+        tenantId: MastDB.tenantId(),
+        email: email
+      });
+      var data = (res && res.data) || {};
+      if (data.existingAccount) {
+        showToast(email + ' already has a Mast account — no email needed. They sign in with their existing password (or “Sign in with Google”), and the invite grants ' + roleName + ' on first login.');
+      } else if (data.emailSent) {
+        showToast('Setup email resent to ' + email + '.');
+      } else {
+        showToast('Invite is recorded, but the setup email could not be sent. They can use “Forgot password” on the login screen.', true);
+      }
+    } catch (err) {
+      console.error('resendInvite failed:', err);
+      showToast((err && err.message) ? err.message : 'Could not resend the invite.', true);
+    }
+  }, { confirmLabel: 'Resend', cancelLabel: 'Cancel' });
+}
+
+// Send a password-reset email to a user who is locked out. Uses the same
+// Firebase reset flow as the login screen's "Forgot password" (same-origin
+// handler). For a Google-SSO-only user this is the WRONG fix — they have no
+// password — so the confirm dialog warns and points to "Sign in with Google".
+function sendUserPasswordReset(uid) {
+  if (!can('employees', 'edit')) {
+    showToast('You do not have permission to manage users.', true);
+    return;
+  }
+  var u = adminUsers[uid];
+  if (!u || !u.email) {
+    showToast('No email on file for this user — cannot send a reset.', true);
+    return;
+  }
+  var providers = Array.isArray(u.providers) ? u.providers : [];
+  var googleOnly = providers.indexOf('google.com') !== -1 && providers.indexOf('password') === -1;
+  var msg = googleOnly
+    ? u.email + ' signs in with Google and has no password, so a reset email is not the fix — they should use “Sign in with Google”. Send a reset link anyway (it would let them create a password)?'
+    : 'Send a password-reset email to ' + u.email + '? They\'ll get a link to set a new password and sign in.';
+  showConfirmDialog('Send Password Reset', msg, function() {
+    auth.sendPasswordResetEmail(u.email).then(function() {
+      showToast('Password-reset email sent to ' + u.email + '.');
+    }).catch(function(err) {
+      var code = (err && err.code) || '';
+      var t = (code === 'auth/too-many-requests')
+        ? 'Too many attempts — try again in a few minutes.'
+        : ((err && err.message) ? err.message : 'Could not send the reset email.');
+      showToast(t, true);
+    });
+  }, { confirmLabel: 'Send Reset', cancelLabel: 'Cancel' });
 }
 
 // ============================================================
