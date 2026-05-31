@@ -137,7 +137,11 @@
       groups[g].forEach(function (f) {
         var v = record ? record[f.name] : '';
         if (mode === 'read') {
-          html += '<div class="form-group" style="margin-bottom:10px;"><div class="form-label" style="font-size:0.78rem;color:var(--warm-gray);">' + esc(f.label) + '</div>' +
+          // Suppress the field label when it duplicates its group header (e.g.
+          // group "Order" + field "Order") — avoids the double-label.
+          var showLabel = String(f.label).toLowerCase() !== String(g).toLowerCase();
+          html += '<div class="form-group" style="margin-bottom:10px;">' +
+                  (showLabel ? '<div class="form-label" style="font-size:0.78rem;color:var(--warm-gray);">' + esc(f.label) + '</div>' : '') +
                   '<div style="font-size:0.9rem;color:var(--charcoal,var(--text));">' + displayCell(f, record) + '</div></div>';
         } else {
           var ro = f.readOnly ? ' disabled' : '';
@@ -162,6 +166,9 @@
       size: s.size || 'md',
       mode: mode,
       badges: badges,
+      // Read mode offers Edit (→ in-place edit mode) when the entity is editable.
+      actions: (mode === 'read' && typeof s.onSave === 'function')
+        ? [{ label: 'Edit', primary: true, onClickFnName: 'MastUI.slideOut.edit' }] : undefined,
       render: function (ctx) { return _formHtml(key, record, ctx.mode); },
       isDirty: function () {
         var panel = document.getElementById('mastSlideOutBody');

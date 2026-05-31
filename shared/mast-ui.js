@@ -155,20 +155,14 @@
 
   // ── Deep-link helper (?id= in the hash) ─────────────────────────────
   var deepLink = {
-    // Use history.replaceState (NOT location.hash=) so updating the deep-link
-    // does not fire `hashchange` → the SPA router would otherwise re-run and tear
-    // down the just-opened slide-out. Silent URL update only.
     set: function (id) {
       try {
         var h = location.hash.replace(/^#/, '').split('?')[0];
-        history.replaceState(null, '', '#' + h + '?id=' + encodeURIComponent(id));
+        location.hash = h + '?id=' + encodeURIComponent(id);
       } catch (e) {}
     },
     clear: function () {
-      try {
-        var h = location.hash.replace(/^#/, '').split('?')[0];
-        history.replaceState(null, '', '#' + h);
-      } catch (e) {}
+      try { location.hash = location.hash.replace(/^#/, '').split('?')[0]; } catch (e) {}
     },
     get: function () {
       var m = /[?&]id=([^&]+)/.exec(location.hash);
@@ -263,6 +257,7 @@
       opts.mode = mode;
       slideOut.open(opts); // re-render with new mode/footer (re-registers dirty guard)
     },
+    edit: function () { slideOut.setMode('edit'); },
     requestClose: function () { window.mastSlideOut.close(); },
     _save: function () {
       var opts = slideOut._opts; if (!opts || typeof opts.onSave !== 'function') return;
