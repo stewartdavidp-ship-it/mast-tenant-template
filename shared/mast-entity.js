@@ -59,6 +59,7 @@
       case 'number': return isNaN(v) ? '' : String(Number(v));
       case 'date': { var d = new Date(v); return isNaN(d.getTime()) ? '' : d.toISOString().slice(0, 10); }
       case 'bool': return v ? 'true' : 'false';
+      case 'tags': return Array.isArray(v) ? v.join('; ') : String(v);
       default: return String(v);
     }
   }
@@ -106,6 +107,13 @@
     if ((f.type === 'status' || f.tone) && window.MastUI) {
       var tone = (typeof f.tone === 'function') ? f.tone(v) : 'neutral';
       return window.MastUI.badge(v == null ? '' : v, tone);
+    }
+    if (f.type === 'tags') {
+      var arr = Array.isArray(v) ? v : (v ? [v] : []);
+      if (!arr.length) return '<span style="color:var(--warm-gray);">—</span>';
+      return arr.map(function (x) {
+        return '<span style="display:inline-block;font-size:0.72rem;padding:2px 8px;border-radius:999px;background:var(--bg-secondary,rgba(127,127,127,.1));border:1px solid var(--border,rgba(127,127,127,.2));color:var(--warm-gray);margin:1px 4px 1px 0;">' + esc(x) + '</span>';
+      }).join('');
     }
     // Defensive: never render a raw object as "[object Object]". A field whose
     // value is an object must declare a get()/render that returns a string.
