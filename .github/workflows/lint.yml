@@ -45,7 +45,7 @@ jobs:
         with:
           node-version: '20'
       # Cache-bust guard: fail a PR that changes admin JS/HTML without bumping
-      # MAST_MODULES_V. Build 5 (docs/release-model.md) — replaces the opt-in
+      # MAST_MODULES_V. Build 5 (internal release model — private repo) — replaces the opt-in
       # local pre-commit hook as the authoritative, un-skippable enforcement.
       # No-ops on push/dispatch (only meaningful with a PR base to diff).
       - name: Cache-bust bump guard

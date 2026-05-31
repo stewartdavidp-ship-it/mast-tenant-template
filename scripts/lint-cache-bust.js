@@ -29,7 +29,7 @@
 // Exits 0 if clean (or N/A), 1 if a bump is required but missing.
 // Wired as a step in the required `lint` job in .github/workflows/lint.yml.
 //
-// Release-model Build 5 (docs/release-model.md). See also CLAUDE.md bootstrap
+// Release-model Build 5 (internal release model — private repo). See also CLAUDE.md bootstrap
 // step 5 and feedback_mast_cache_bust_process_gap.
 
 'use strict';

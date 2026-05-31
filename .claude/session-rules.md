@@ -1,7 +1,7 @@
 # SESSION RULES — read before writing any code in this repo
 
 You are working in **mast-tenant-template**. These are non-negotiable. Where anything
-conflicts, **`docs/release-model.md` wins** (it supersedes older memory notes).
+conflicts, **the internal release model (private repo) wins** (it supersedes older memory notes).
 
 ## Git & deploys
 1. **Work in your OWN git worktree + feature branch** — never the shared checkout.
@@ -31,4 +31,4 @@ conflicts, **`docs/release-model.md` wins** (it supersedes older memory notes).
 
 ---
 *Injected at session start by the `SessionStart` hook in `.claude/settings.json`.
-Full model + rationale: `docs/release-model.md`.*
+Full model + rationale: the internal release model (private repo).*
