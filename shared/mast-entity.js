@@ -267,7 +267,11 @@
     var statusField = s.fields.filter(function (f) { return f.type === 'status'; })[0];
     var badges = (statusField && record) ? [{ label: record[statusField.name], tone: (statusField.tone ? statusField.tone(record[statusField.name]) : 'neutral') }] : [];
     var baseline = JSON.stringify(record || {});
-    var titleText = (mode === 'create' ? 'New ' + (s.label || key) : (record && (record[s.fields[0].name])) || (s.label || key));
+    // Prefix the title with the object type ("Order: SGTE-0188") so it's always
+    // clear which kind of record you're on — important when drilling across types.
+    var _recName = (record && record[s.fields[0].name]) || '';
+    var titleText = (mode === 'create') ? ('New ' + (s.label || key))
+      : (_recName ? ((s.label ? s.label + ': ' : '') + _recName) : (s.label || key));
     _current = { route: s.route || key, id: s.recordId(record), label: titleText };
     window.MastUI.slideOut.open({
       id: s.recordId(record) || 'new',
