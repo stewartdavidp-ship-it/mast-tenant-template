@@ -9858,9 +9858,16 @@
           <div id="etsyDisconnected" style="display:none;">
             <label style="font-size:0.85rem;font-weight:600;margin-bottom:4px;display:block;">API Key (Keystring)</label>
             <p style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:4px;">
-              From your Etsy Developer app dashboard
+              From your Etsy Developer app dashboard (Your Apps)
             </p>
             <input type="text" id="etsyApiKey" placeholder="abc123def456..."
+              style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;margin-bottom:16px;box-sizing:border-box;">
+
+            <label style="font-size:0.85rem;font-weight:600;margin-bottom:4px;display:block;">Shared Secret</label>
+            <p style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:4px;">
+              Listed next to the Keystring in your Etsy app. Required by Etsy since Feb 2026 — both are needed to sync.
+            </p>
+            <input type="password" id="etsySharedSecret" placeholder="••••••••••" autocomplete="off"
               style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;margin-bottom:16px;box-sizing:border-box;">
 
             <div style="display:flex;gap:8px;">
@@ -20549,7 +20556,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260530-144800-e79bcb1';
+var MAST_MODULES_V = '20260530-204842-b32b786';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -21400,10 +21407,15 @@ async function _connectEtsyFlow() {
   if (!apiKey) return;
   apiKey = apiKey.trim();
   if (apiKey.length < 10) { alert('API keystring looks too short. Double-check and try again.'); return; }
+  // Etsy v3 (since 2026-02-09) also requires the shared secret in the x-api-key header.
+  var sharedSecret = prompt('Enter your Etsy app Shared Secret:\n\n(Listed next to the Keystring in Your Apps. Required by Etsy to sync.)');
+  if (!sharedSecret) return;
+  sharedSecret = sharedSecret.trim();
+  if (sharedSecret.length < 8) { alert('Shared secret looks too short. Double-check and try again.'); return; }
   try {
     _setChannelNote('etsy', 'Storing credentials\u2026');
     var setFn = firebase.functions().httpsCallable('setChannelCredentialsCallable');
-    await setFn({ tenantId: MastDB.tenantId(), platform: 'etsy', credentials: { apiKey: apiKey } });
+    await setFn({ tenantId: MastDB.tenantId(), platform: 'etsy', credentials: { apiKey: apiKey, sharedSecret: sharedSecret } });
     var startFn = firebase.functions().httpsCallable('etsyOAuthStart');
     var result = await startFn({ tenantId: MastDB.tenantId() });
     var data = (result && result.data) || {};
@@ -28433,29 +28445,41 @@ async function removeEmailDomain() {
 // ============================================================
 async function connectEtsy() {
   var apiKey = document.getElementById('etsyApiKey').value.trim();
+  var sharedSecretEl = document.getElementById('etsySharedSecret');
+  var sharedSecret = sharedSecretEl ? sharedSecretEl.value.trim() : '';
   if (!apiKey) {
     showToast('Enter your Etsy API Key (keystring) first.', true);
     return;
   }
+  // Etsy v3 (since 2026-02-09) requires the shared secret in the x-api-key
+  // header (keystring:secret) — without it every data call 403s after connect.
+  if (!sharedSecret) {
+    showToast('Enter your Etsy Shared Secret too — Etsy requires it to sync.', true);
+    return;
+  }
 
-  // Save API key via Secret Manager
+  // Save keystring + shared secret via Secret Manager
+  var tid = MastDB.tenantId();
   try {
     await firebase.functions().httpsCallable('secretsManager')({
       action: 'write',
       service: 'etsy',
-      tenantId: MastDB.tenantId(),
-      secrets: { [MastDB.tenantId() + '-etsy-api-key']: apiKey }
+      tenantId: tid,
+      secrets: {
+        [tid + '-etsy-api-key']: apiKey,
+        [tid + '-etsy-shared-secret']: sharedSecret
+      }
     });
     await writeAudit('update', 'settings', 'etsyApiKey');
   } catch (err) {
-    showToast('Error saving API key: ' + err.message, true);
+    showToast('Error saving Etsy credentials: ' + err.message, true);
     return;
   }
 
   showToast('Starting Etsy authorization...');
 
   try {
-    var result = await firebase.functions().httpsCallable('etsyOAuthStart')({});
+    var result = await firebase.functions().httpsCallable('etsyOAuthStart')({ tenantId: tid });
     if (result.data && result.data.authUrl) {
       window.open(result.data.authUrl, '_blank');
     } else {
