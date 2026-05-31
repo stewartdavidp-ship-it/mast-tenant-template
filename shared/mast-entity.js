@@ -107,6 +107,9 @@
       var tone = (typeof f.tone === 'function') ? f.tone(v) : 'neutral';
       return window.MastUI.badge(v == null ? '' : v, tone);
     }
+    // Defensive: never render a raw object as "[object Object]". A field whose
+    // value is an object must declare a get()/render that returns a string.
+    if (v && typeof v === 'object') return '—';
     return esc(v);
   }
 

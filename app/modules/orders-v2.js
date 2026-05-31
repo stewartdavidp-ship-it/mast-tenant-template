@@ -43,7 +43,8 @@
         get: function (o) { return (o.totalCents != null ? o.totalCents / 100 : o.total); } },
       { name: 'status', label: 'Status', type: 'status', list: true, group: 'Order',
         tone: function (v) { return STATUS_TONE[String(v || '').toLowerCase()] || 'neutral'; } },
-      { name: 'tracking', label: 'Tracking', type: 'text', list: true, group: 'Fulfillment' },
+      { name: 'tracking', label: 'Tracking', type: 'text', list: true, group: 'Fulfillment',
+        get: function (o) { var t = o.tracking; if (!t) return ''; if (typeof t === 'string') return t; return [t.carrier, t.trackingNumber].filter(Boolean).join(' '); } },
       { name: 'source', label: 'Source', type: 'text', group: 'Order', readOnly: true },
       { name: 'placedAt', label: 'Placed', type: 'date', group: 'Order', readOnly: true }
     ],
@@ -77,7 +78,12 @@
         return { id: r.customerId, name: r.customerName || r.email, email: r.email, address: addr };
       },
       fulfillment: function (r) {
-        return { status: r.status, tone: STATUS_TONE[String(r.status || '').toLowerCase()] || 'neutral', tracking: r.tracking || null };
+        var t = r.tracking, track = null;
+        if (t && typeof t === 'object') {
+          var label = [t.carrier, t.trackingNumber].filter(Boolean).join(' ');
+          track = t.trackingUrl ? '<a href="' + t.trackingUrl + '" target="_blank" rel="noopener" style="color:var(--teal);">' + label + '</a>' : label;
+        } else if (typeof t === 'string') { track = t; }
+        return { status: r.status, tone: STATUS_TONE[String(r.status || '').toLowerCase()] || 'neutral', tracking: track || null };
       },
       timeline: function (r) {
         var ev = [{ label: 'Placed', at: window.MastUI.Num.date(r.placedAt), done: true }];
