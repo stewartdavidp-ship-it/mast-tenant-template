@@ -43,6 +43,14 @@
         get: function (o) { return (o.totalCents != null ? o.totalCents / 100 : o.total); } },
       { name: 'status', label: 'Status', type: 'status', list: true, group: 'Order',
         tone: function (v) { return STATUS_TONE[String(v || '').toLowerCase()] || 'neutral'; } },
+      // Item-type tags so you can see what kinds of items an order contains.
+      { name: 'contents', label: 'Contents', type: 'tags', list: true, sortable: false, group: 'Order',
+        get: function (o) {
+          var lbl = { 'product': 'Product', 'gift-card': 'Gift Card', 'class': 'Class', 'class-materials': 'Materials', 'pass': 'Pass' };
+          var seen = {}, out = [];
+          (o.items || []).forEach(function (it) { var t = it.itemType || 'product'; if (!seen[t]) { seen[t] = 1; out.push(lbl[t] || t); } });
+          return out;
+        } },
       { name: 'tracking', label: 'Tracking', type: 'text', list: true, group: 'Fulfillment',
         get: function (o) { var t = o.tracking; if (!t) return ''; if (typeof t === 'string') return t; return [t.carrier, t.trackingNumber].filter(Boolean).join(' '); } },
       { name: 'source', label: 'Source', type: 'text', group: 'Order', readOnly: true },
