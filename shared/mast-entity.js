@@ -228,9 +228,21 @@
   }
 
   // Drill to another object: push caller context (for back), fetch + open target.
-  function drill(targetKey, id) {
+  function drill(targetKey, id, _retried) {
     var ts = _registry[targetKey];
-    if (!ts || typeof ts.fetch !== 'function') { if (window.showToast) showToast('Cannot open ' + targetKey + ' (not available)', true); return; }
+    // The target entity's schema lives in its module, which may not be loaded
+    // yet (e.g. drilling Order→Customer from the orders page). Lazy-load it once,
+    // then retry — the module registers its schema on load.
+    if (!ts) {
+      if (!_retried && window.MastAdmin && typeof MastAdmin.loadModule === 'function') {
+        MastAdmin.loadModule(targetKey).then(function () { drill(targetKey, id, true); })
+          .catch(function () { if (window.showToast) showToast('Could not load ' + targetKey, true); });
+        return;
+      }
+      if (window.showToast) showToast('Cannot open ' + targetKey + ' (not available)', true);
+      return;
+    }
+    if (typeof ts.fetch !== 'function') { if (window.showToast) showToast('Cannot open ' + targetKey + ' (not available)', true); return; }
     if (window.MastNavStack && _current) {
       MastNavStack.push({ route: _current.route, view: 'detail', state: { id: _current.id }, label: _current.label });
     }
