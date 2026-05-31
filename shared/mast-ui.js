@@ -222,6 +222,11 @@
       var bodyHtml = (typeof opts.render === 'function') ? opts.render({ mode: mode }) : (opts.bodyHtml || '');
       var subtitle = (opts.subtitle || '') + (badgesHtml ? ' ' : '');
 
+      // Set the deep-link URL BEFORE opening — the shell's history wrapper
+      // (MastOverlayNav) closes the active overlay when the URL changes while
+      // one is open, so the ?id= must be in place before the panel arms.
+      // setMode re-opens with the same id, so no URL change then either.
+      if (opts.id && opts.deepLink !== false) deepLink.set(opts.id);
       window.mastSlideOut.open({
         title: opts.title || '',
         subtitle: opts.subtitle || '',
@@ -236,7 +241,6 @@
         }
       });
       _applySize(opts.size || 'md', opts.expandable !== false && (opts.size === 'lg'));
-      if (opts.id && opts.deepLink !== false) deepLink.set(opts.id);
 
       // Dirty guard: in edit/create, route the underlying close through
       // MastDirty.checkAndExit so backdrop/Esc/close-button all prompt.
