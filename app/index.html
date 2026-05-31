@@ -13774,6 +13774,51 @@ async function addRoutesToMast(routeIds, context) {
 }
 window.addRoutesToMast = addRoutesToMast;
 
+// Bulk: remove (hide) multiple routes in one write. Inverse of addRoutesToMast.
+// Skips always-on routes and routes already hidden. One businessEntity write +
+// one applyModeNavFilter at the end (not per-route).
+async function removeRoutesFromMast(routeIds, context) {
+  context = context || 'remove_from_mast_bulk';
+  if (!Array.isArray(routeIds) || routeIds.length === 0) {
+    return { success: true, removedCount: 0, alreadyHidden: true };
+  }
+  try {
+    var BEC = window.BusinessEntityConstants;
+    if (!BEC || typeof BEC.setRouteVisibilityOverride !== 'function') {
+      return { success: false, error: 'BEC not loaded' };
+    }
+    var current = _modeOverridesSnapshot || { enabledRoutes: [], disabledRoutes: [] };
+    var nextOverrides = {
+      enabledRoutes: (current.enabledRoutes || []).slice(),
+      disabledRoutes: (current.disabledRoutes || []).slice()
+    };
+    var toRemove = [];
+    for (var i = 0; i < routeIds.length; i++) {
+      var rid = routeIds[i];
+      var rule = BEC.MODE_ROUTE_VISIBILITY && BEC.MODE_ROUTE_VISIBILITY[rid];
+      if (rule && rule.alwaysOn) continue;                                  // can't hide always-on
+      if (!BEC.isRouteVisible(rid, _modeSetSnapshot, nextOverrides)) continue; // already hidden
+      nextOverrides = BEC.setRouteVisibilityOverride(nextOverrides, rid, false, _modeSetSnapshot);
+      toRemove.push(rid);
+    }
+    if (toRemove.length === 0) {
+      return { success: true, removedCount: 0, alreadyHidden: true };
+    }
+    if (window.MastDB && window.MastDB.businessEntity) {
+      await window.MastDB.businessEntity.update('modeOverrides', nextOverrides);
+    }
+    _modeOverridesSnapshot = nextOverrides;
+    // Stub clickstream — mast.modes.module_disabled is a future event type
+    console.log('[modes] removeRoutesFromMast:', toRemove.join(','), '(context: ' + context + ')');
+    applyModeNavFilter();
+    return { success: true, removedCount: toRemove.length };
+  } catch (err) {
+    console.warn('[modes] removeRoutesFromMast failed:', err && err.message);
+    return { success: false, error: err && err.message };
+  }
+}
+window.removeRoutesFromMast = removeRoutesFromMast;
+
 // Remove a single route from the tenant's visible sidebar. Always-on routes
 // can't be removed (helper no-ops cleanly). Mirrors addRouteToMast semantics.
 async function removeRouteFromMast(routeId, context) {
@@ -13862,6 +13907,45 @@ function _getSoftHiddenRoutes(modeSet, overrides) {
   return result;
 }
 window._getSoftHiddenRoutes = _getSoftHiddenRoutes;
+
+// Inverse of _getSoftHiddenRoutes: routes the owner could hide right now —
+// currently visible, not always-on, and known to the module manager (has info).
+// Drives the "Hide all" bulk controls.
+function _getVisibleToggleableRoutes(modeSet, overrides) {
+  var BEC = window.BusinessEntityConstants;
+  if (!BEC || !BEC.MODE_ROUTE_VISIBILITY) return [];
+  var matrix = BEC.MODE_ROUTE_VISIBILITY;
+  var result = [];
+  for (var routeId in matrix) {
+    if (!Object.prototype.hasOwnProperty.call(matrix, routeId)) continue;
+    var rule = matrix[routeId];
+    if (rule && (rule.alwaysOn || rule.systemManaged)) continue;
+    if (routeId === 'add-to-mast') continue;
+    if (!MODE_MODULE_INFO[routeId]) continue;               // not represented in the manager
+    if (!BEC.isRouteVisible(routeId, modeSet, overrides)) continue; // already hidden
+    result.push(routeId);
+  }
+  return result;
+}
+window._getVisibleToggleableRoutes = _getVisibleToggleableRoutes;
+
+// 1:1 label source: the exact text shown in the live sidebar for this route
+// (direct text nodes only, so hidden badge <span>s like the orders/rma/settings
+// alert pills don't leak into the label). Returns null when the route has no
+// rendered sidebar item, so callers fall back to the module-info label.
+function _sidebarLabelFor(routeId) {
+  try {
+    var sel = '.sidebar-item[data-route="' + ((window.CSS && CSS.escape) ? CSS.escape(routeId) : routeId) + '"]';
+    var el = document.querySelector(sel);
+    if (!el) return null;
+    var t = '';
+    for (var n = 0; n < el.childNodes.length; n++) {
+      if (el.childNodes[n].nodeType === 3) t += el.childNodes[n].nodeValue;
+    }
+    t = t.replace(/\s+/g, ' ').trim();
+    return t || null;
+  } catch (e) { return null; }
+}
 
 // Routes shown on the Add-to-Mast page. Includes always-on items so owners
 // see every sidebar item represented (rendered as informational "Always on"
@@ -14221,12 +14305,15 @@ async function renderAddToMast() {
   // Header buttons: "Reset to default" (only when overrides exist) + "+ Add all".
   var ovr = _modeOverridesSnapshot || { enabledRoutes: [], disabledRoutes: [] };
   var overrideCount = ((ovr.enabledRoutes || []).length) + ((ovr.disabledRoutes || []).length);
-  if (hiddenCount > 0 || overrideCount > 0) {
+  if (hiddenCount > 0 || visibleCount > 0 || overrideCount > 0) {
     html += '<div style="display:flex;gap:8px;flex-shrink:0;align-self:flex-start;flex-wrap:wrap;">';
     if (overrideCount > 0) {
       html += '<button class="btn btn-secondary" onclick="resetModeOverridesClick()" ' +
               'aria-label="Reset sidebar to default — undoes ' + overrideCount + ' override' + (overrideCount === 1 ? '' : 's') + '" ' +
               'title="Restore your sidebar to what your business setup prescribes.">Reset to default</button>';
+    }
+    if (visibleCount > 0) {
+      html += '<button class="btn btn-secondary" onclick="removeAllFromMastClick()" aria-label="Hide all ' + visibleCount + ' removable modules from my Mast" title="Hide every module you can hide. Always-on modules stay.">Hide all (' + visibleCount + ')</button>';
     }
     if (hiddenCount > 0) {
       html += '<button class="btn btn-primary" onclick="addAllToMastClick()" aria-label="Add all ' + hiddenCount + ' hidden modules to my Mast">+ Add all (' + hiddenCount + ')</button>';
@@ -14254,8 +14341,15 @@ async function renderAddToMast() {
     html += '<div class="add-to-mast-section" style="padding:0 24px 24px;">';
     html += '<div style="display:flex;align-items:baseline;justify-content:space-between;gap:16px;border-bottom:1px solid var(--border,#e5e0d8);padding-bottom:8px;margin:16px 0 12px;">';
     html += '<h3 style="font-size:1.0rem;margin:0;color:var(--charcoal,var(--text));">' + esc(sectionLabel) + ' <span style="font-weight:400;color:var(--warm-gray);font-size:0.85rem;">(' + sectionVisibleTotal + '/' + items.length + ' visible)</span></h3>';
-    if (sectionHiddenCount > 0) {
-      html += '<button class="btn btn-secondary btn-small" data-amt-action="section-add" data-amt-section="' + esc(sectionKey) + '" aria-label="Add all ' + sectionHiddenCount + ' hidden modules in ' + esc(sectionLabel) + ' to my Mast">+ Add all ' + sectionHiddenCount + ' hidden</button>';
+    if (sectionHiddenCount > 0 || sectionVisibleCount > 0) {
+      html += '<div style="display:flex;gap:8px;flex-shrink:0;flex-wrap:wrap;">';
+      if (sectionVisibleCount > 0) {
+        html += '<button class="btn btn-secondary btn-small" data-amt-action="section-hide" data-amt-section="' + esc(sectionKey) + '" aria-label="Hide all ' + sectionVisibleCount + ' removable modules in ' + esc(sectionLabel) + '">Hide all ' + sectionVisibleCount + '</button>';
+      }
+      if (sectionHiddenCount > 0) {
+        html += '<button class="btn btn-secondary btn-small" data-amt-action="section-add" data-amt-section="' + esc(sectionKey) + '" aria-label="Add all ' + sectionHiddenCount + ' hidden modules in ' + esc(sectionLabel) + ' to my Mast">+ Add all ' + sectionHiddenCount + ' hidden</button>';
+      }
+      html += '</div>';
     }
     html += '</div>';
     html += '<div class="add-to-mast-cards" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;">';
@@ -14270,9 +14364,13 @@ async function renderAddToMast() {
 
     for (var k = 0; k < items.length; k++) {
       var it = items[k];
-      var displayLabel = (typeof BEC.labelFor === 'function')
-        ? BEC.labelFor(it.routeId, modeSet, it.info.label)
-        : it.info.label;
+      // 1:1 with the sidebar: prefer the exact label the nav shows for this
+      // route, so the card never says "Receipts" while the sidebar says
+      // "Day Close". Fall back to the mode-aware label, then the info label.
+      var displayLabel = _sidebarLabelFor(it.routeId)
+        || ((typeof BEC.labelFor === 'function')
+              ? BEC.labelFor(it.routeId, modeSet, it.info.label)
+              : it.info.label);
 
       // Three card states:
       //   hidden       → full opacity, "+ Add to my Mast" primary button
@@ -14511,6 +14609,78 @@ async function addAllInSectionClick(sectionKey) {
   }
 }
 window.addAllInSectionClick = addAllInSectionClick;
+
+// Bulk: hide every removable module across the whole page. Inverse of
+// addAllToMastClick. Behind a confirm — it's a big change (clears the sidebar
+// down to always-on modules). Always-on modules are unaffected.
+async function removeAllFromMastClick() {
+  var modeSet = (typeof getModeSet === 'function') ? getModeSet() : null;
+  var overrides = (typeof getModeOverrides === 'function') ? getModeOverrides() : { enabledRoutes: [], disabledRoutes: [] };
+  var visible = _getVisibleToggleableRoutes(modeSet, overrides);
+  if (visible.length === 0) {
+    if (typeof showToast === 'function') showToast('Nothing left to hide — only always-on modules remain.');
+    return;
+  }
+  var prompt = 'Hide all ' + visible.length + ' removable modules? Your sidebar will show only the always-on modules. You can re-add any of them at any time from this page.';
+  var ok;
+  if (typeof mastConfirm === 'function') {
+    ok = await mastConfirm(prompt, { title: 'Hide all modules', confirmLabel: 'Hide all (' + visible.length + ')' });
+  } else {
+    ok = window.confirm(prompt);
+  }
+  if (!ok) return;
+  try {
+    var result = await removeRoutesFromMast(visible, 'remove_all_from_mast_page');
+    if (result && result.success) {
+      if (typeof showToast === 'function') {
+        showToast(result.removedCount + ' module' + (result.removedCount === 1 ? '' : 's') + ' hidden from your Mast.');
+      }
+      renderAddToMast();
+    } else {
+      if (typeof showToast === 'function') {
+        showToast('Could not hide all modules: ' + ((result && result.error) || 'unknown error'), true);
+      }
+    }
+  } catch (err) {
+    console.warn('[removeAllFromMastClick] failed:', err && err.message);
+    if (typeof showToast === 'function') showToast('Could not hide all modules.', true);
+  }
+}
+window.removeAllFromMastClick = removeAllFromMastClick;
+
+// Bulk: hide every removable module in a single section. Mirrors
+// addAllInSectionClick — no confirm (typical section is 4-8 modules).
+async function removeAllInSectionClick(sectionKey) {
+  var modeSet = (typeof getModeSet === 'function') ? getModeSet() : null;
+  var overrides = (typeof getModeOverrides === 'function') ? getModeOverrides() : { enabledRoutes: [], disabledRoutes: [] };
+  var visible = _getVisibleToggleableRoutes(modeSet, overrides);
+  var inSection = visible.filter(function(routeId) {
+    var info = MODE_MODULE_INFO[routeId];
+    return info && info.section === sectionKey;
+  });
+  if (inSection.length === 0) {
+    if (typeof showToast === 'function') showToast('Nothing left to hide in this section.');
+    return;
+  }
+  try {
+    var result = await removeRoutesFromMast(inSection, 'remove_all_in_section');
+    if (result && result.success) {
+      var sectionLabel = MODE_SECTION_LABELS[sectionKey] || sectionKey;
+      if (typeof showToast === 'function') {
+        showToast(result.removedCount + ' ' + sectionLabel + ' module' + (result.removedCount === 1 ? '' : 's') + ' hidden.');
+      }
+      renderAddToMast();
+    } else {
+      if (typeof showToast === 'function') {
+        showToast('Could not hide section: ' + ((result && result.error) || 'unknown error'), true);
+      }
+    }
+  } catch (err) {
+    console.warn('[removeAllInSectionClick] failed:', err && err.message);
+    if (typeof showToast === 'function') showToast('Could not hide section modules.', true);
+  }
+}
+window.removeAllInSectionClick = removeAllInSectionClick;
 
 // ============================================================
 // M6 (Idea -OtADygKA_JhRmk1wUqN): Change-my-business-setup flow
@@ -20570,7 +20740,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260531-160556-133deb4';
+var MAST_MODULES_V = '20260531-165338-6a00bf2';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -39393,7 +39563,7 @@ if (!window._mastCreateJobDelegateAttached) {
 // says don't interpolate IDs into JS regardless of source.
 //
 // Attribute scheme:
-//   data-amt-action     — add | remove | details | section-add
+//   data-amt-action     — add | remove | details | section-add | section-hide
 //   data-amt-route      — routeId (for add/remove/details)
 //   data-amt-section    — sectionKey (for section-add)
 //   data-amt-close-drawer — "1" to close the details drawer after
@@ -39415,6 +39585,8 @@ if (!window._mastAddToMastDelegateAttached) {
       openAddToMastDetails(route);
     } else if (action === 'section-add' && section && typeof addAllInSectionClick === 'function') {
       addAllInSectionClick(section);
+    } else if (action === 'section-hide' && section && typeof removeAllInSectionClick === 'function') {
+      removeAllInSectionClick(section);
     } else {
       return;
     }
