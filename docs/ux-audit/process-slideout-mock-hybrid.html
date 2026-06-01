@@ -1,0 +1,342 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Process slide-out — HYBRID mock (SGTE-0164)</title>
+<!--
+  PROCESS SLIDE-OUT — "hybrid" variant (static mock, NOT wired).
+  Subject: order SGTE-0164 (real data, status=confirmed).
+
+  Unifies the two earlier mocks (tabs + book):
+    - The TABS are the record (the container). Facets: Process / Items /
+      Customer / History.
+    - ONE tab IS the Process — it holds the book/pages workflow (stepper as
+      page index; lean current page; flip back to history; forward preview).
+    - Process is the DEFAULT tab, so opening the order lands you on the lean
+      current step with the guarded Advance right there.
+    - A slim PINNED identity bar (order # · status · customer · total) sits
+      above the tabs so "where it is" is always visible regardless of tab.
+
+  Resolves earlier opens: email/notes -> History tab; items/money -> Items tab;
+  customer/addresses -> Customer tab. Each facet gets a real home.
+
+  Compare against:
+    - process-slideout-mock.html        (tabs-only; data-domain tabs)
+    - process-slideout-mock-book.html   (book-only; collapsible cover)
+  Tokens approximate the admin dark theme; illustrative, not source of truth.
+-->
+<style>
+  :root {
+    --bg: #221f1d; --surface-dark: #1b1917; --surface-card: #2a2623; --surface-card-2: #322d29;
+    --border: rgba(255,255,255,0.08); --border-strong: rgba(255,255,255,0.14);
+    --text: #ece7e0; --charcoal: #ece7e0; --warm-gray: #9c948b; --warm-gray-light: #b9b1a8;
+    --amber: #d8a657; --teal: #5fb4a8; --success: #5aa86f; --danger: #c95f55; --warning: #d8a657; --info: #6ea8d8;
+    /* 7-step rem scale: 0.72 0.78 0.85 0.9 1.0 1.15 1.6 */
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: var(--bg); color: var(--text); -webkit-font-smoothing: antialiased; }
+
+  .page-behind { position: fixed; inset: 0; padding: 28px 36px; overflow: hidden; filter: saturate(0.85); }
+  .pb-topbar { display:flex; align-items:center; gap:10px; font-size:1.0rem; color: var(--warm-gray-light); margin-bottom: 28px; }
+  .pb-topbar b { color: var(--text); }
+  .pb-h1 { font-size: 1.6rem; margin: 0 0 4px; }
+  .pb-sub { color: var(--warm-gray); font-size: 0.9rem; margin-bottom: 20px; }
+  .pb-rows { border:1px solid var(--border); border-radius:12px; overflow:hidden; max-width: 760px; }
+  .pb-row { display:grid; grid-template-columns: 130px 1fr 90px 110px; gap:12px; padding:14px 16px; border-bottom:1px solid var(--border); font-size:0.9rem; color: var(--warm-gray-light); }
+  .pb-row:last-child { border-bottom:0; } .pb-row.hi { color: var(--text); }
+
+  .scrim { position: fixed; inset: 0; background: rgba(0,0,0,0.55); animation: fade .18s ease; }
+  @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+
+  .panel { position: fixed; top: 0; right: 0; bottom: 0; width: min(1140px, 100%); background: var(--bg); border-left: 1px solid var(--border-strong); box-shadow: -24px 0 60px rgba(0,0,0,0.45); display: flex; flex-direction: column; animation: slide .22s cubic-bezier(.2,.7,.2,1); }
+  .panel.expanded { width: 100%; }
+  @keyframes slide { from { transform: translateX(40px); opacity: .4; } to { transform: none; opacity: 1; } }
+
+  .ph { display:flex; align-items:center; gap:14px; padding: 16px 22px; border-bottom:1px solid var(--border); background: var(--surface-dark); }
+  .ph-back { background:transparent; border:0; color: var(--teal); font: inherit; font-size:0.85rem; cursor:pointer; padding:0; display:flex; align-items:center; gap:6px; flex-shrink:0; }
+  .ph-titlewrap { display:flex; align-items:center; gap:12px; min-width:0; }
+  .ph-title { font-size:1.15rem; font-weight:600; white-space:nowrap; }
+  .ph-spacer { flex:1; }
+  .ph-icon { background:transparent; border:0; color: var(--warm-gray); font-size:1.15rem; cursor:pointer; padding:0 4px; line-height:1; flex-shrink:0; }
+  .ph-icon:hover { color: var(--text); }
+
+  .badge { display:inline-flex; align-items:center; gap:6px; font-size:0.72rem; font-weight:600; padding:3px 10px; border-radius:999px; line-height:1.4; white-space:nowrap; }
+  .badge .dot { width:6px; height:6px; border-radius:50%; flex:0 0 6px; }
+  .badge.info { background:color-mix(in srgb, var(--info) 16%, transparent); color:var(--info); border:1px solid color-mix(in srgb, var(--info) 30%, transparent); } .badge.info .dot { background: var(--info); }
+  .badge.teal { background:color-mix(in srgb, var(--teal) 16%, transparent); color:var(--teal); border:1px solid color-mix(in srgb, var(--teal) 30%, transparent); } .badge.teal .dot { background: var(--teal); }
+  .badge.gray { background:color-mix(in srgb, var(--warm-gray) 16%, transparent); color:var(--warm-gray); border:1px solid color-mix(in srgb, var(--warm-gray) 30%, transparent); } .badge.gray .dot { background: var(--warm-gray); }
+
+  .pbody { flex:1; overflow-y:auto; }
+
+  /* ===== PINNED: identity bar + tabs ===== */
+  .pinned { position: sticky; top: 0; z-index: 5; background: var(--bg); padding: 16px 22px 0; border-bottom: 1px solid var(--border); }
+  .idbar { display:flex; align-items:center; gap:0; margin-bottom: 14px; }
+  .hl { padding-right: 22px; margin-right: 22px; border-right:1px solid var(--border); }
+  .hl:last-child { border-right:0; }
+  .hl .k { font-size:0.72rem; text-transform:uppercase; letter-spacing:.05em; color: var(--warm-gray); margin-bottom:3px; }
+  .hl .v { font-size:1.0rem; color: var(--text); }
+  .hl .v.big { font-size:1.15rem; font-weight:600; }
+
+  .tabs { display:flex; gap:4px; }
+  .tab { background:transparent; border:0; border-bottom:2px solid transparent; color: var(--warm-gray); font: inherit; font-size:0.9rem; padding:10px 16px; cursor:pointer; white-space:nowrap; display:flex; align-items:center; gap:7px; }
+  .tab.active { color: var(--text); font-weight:600; border-bottom-color: var(--amber); }
+  .tab .count { color: var(--warm-gray); font-size:0.78rem; }
+  .tab .pct { width:7px; height:7px; border-radius:50%; background: var(--amber); display:inline-block; } /* "you are mid-process" dot on Process tab */
+
+  /* ===== Tab panels ===== */
+  .panels { padding: 20px 22px 40px; }
+  .tabpanel { display:none; } .tabpanel.active { display:block; }
+  .section-title { font-size:0.72rem; text-transform:uppercase; letter-spacing:.05em; color: var(--warm-gray); margin: 0 0 10px; }
+  .card { background: var(--surface-card); border:1px solid var(--border); border-radius:12px; padding:16px 18px; margin-bottom:18px; }
+  .card.lean { border-color: color-mix(in srgb, var(--amber) 28%, var(--border)); }
+
+  /* ----- Process tab = the book ----- */
+  .spine-label { font-size:0.72rem; text-transform:uppercase; letter-spacing:.06em; color: var(--warm-gray); margin-bottom:10px; }
+  .stepper { display:flex; align-items:center; gap:0; margin-bottom: 18px; }
+  .step { display:flex; align-items:center; gap:9px; flex-shrink:0; background:transparent; border:0; font:inherit; padding:0; }
+  .step.nav { cursor:pointer; } .step.nav:hover .lbl { color: var(--text); }
+  .step .node { width:24px; height:24px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:0.72rem; font-weight:600; flex-shrink:0; }
+  .step.done .node { background: var(--teal); color:#15201e; }
+  .step.current .node { background: var(--amber); color:#211800; box-shadow:0 0 0 4px color-mix(in srgb, var(--amber) 22%, transparent); }
+  .step.todo .node { background: transparent; border:1.5px solid var(--border-strong); color: var(--warm-gray); }
+  .step.viewing .node { outline:2px solid var(--teal); outline-offset:2px; }
+  .step .lbl { font-size:0.85rem; white-space:nowrap; }
+  .step.done .lbl { color: var(--warm-gray-light); } .step.current .lbl { color: var(--text); font-weight:600; } .step.todo .lbl { color: var(--warm-gray); }
+  .step-line { height:1.5px; background: var(--border-strong); flex:1 1 auto; min-width:24px; margin:0 12px; }
+  .step-line.done { background: color-mix(in srgb, var(--teal) 60%, transparent); }
+
+  .page { display:none; animation: pageIn .2s ease; } .page.active { display:block; }
+  @keyframes pageIn { from { transform: translateX(20px); opacity:0; } to { transform:none; opacity:1; } }
+  .page-crumb { display:none; align-items:center; gap:8px; margin-bottom:14px; font-size:0.78rem; }
+  .page.is-nav .page-crumb { display:flex; }
+  .page-crumb button { background:transparent; border:0; color: var(--teal); font:inherit; font-size:0.78rem; cursor:pointer; padding:0; }
+  .page-head { display:flex; align-items:center; gap:10px; margin-bottom: 4px; }
+  .page-title { font-size:1.15rem; font-weight:600; }
+  .page-meta { font-size:0.78rem; color: var(--warm-gray); margin-bottom:16px; }
+  .hist-note { font-size:0.78rem; color: var(--warm-gray); margin-bottom:14px; font-style: italic; }
+  .preview-note { font-size:0.9rem; color: var(--warm-gray-light); line-height:1.6; } .preview-note b { color: var(--text); }
+
+  .gate-intro { font-size:0.85rem; color: var(--warm-gray-light); margin-bottom:14px; }
+  .checklist { display:flex; flex-direction:column; gap:10px; margin-bottom:18px; }
+  .ck { display:flex; align-items:center; gap:10px; font-size:0.9rem; }
+  .ck .mark { width:18px; height:18px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:0.72rem; flex-shrink:0; }
+  .ck.met .mark { background: color-mix(in srgb, var(--success) 22%, transparent); color: var(--success); } .ck.met .txt { color: var(--warm-gray-light); }
+  .ck.unmet .mark { background: color-mix(in srgb, var(--warning) 20%, transparent); color: var(--warning); } .ck.unmet .txt { color: var(--text); }
+  .ck .soft { color: var(--warm-gray); font-size:0.78rem; }
+  .ck .go { margin-left:auto; color: var(--teal); font-size:0.78rem; text-decoration:none; cursor:pointer; }
+  .ck .when { margin-left:auto; color: var(--warm-gray); font-size:0.78rem; }
+  .gate-actions { display:flex; align-items:center; gap:10px; }
+  .btn { font: inherit; font-size:0.85rem; font-weight:600; padding:9px 16px; border-radius:9px; cursor:pointer; border:1px solid transparent; white-space:nowrap; }
+  .btn-primary { background: var(--amber); color:#211800; } .btn-primary:hover { filter: brightness(1.05); }
+  .btn-secondary { background: transparent; color: var(--warm-gray-light); border-color: var(--border-strong); } .btn-secondary:hover { color: var(--text); }
+  .btn-ghost { background:transparent; border:0; color: var(--warm-gray); font-size:1.0rem; padding:6px 8px; cursor:pointer; }
+  .gate-actions .spacer { flex:1; }
+
+  /* ----- record facet tabs ----- */
+  .lineitem { display:flex; align-items:center; gap:14px; padding:12px 0; border-bottom:1px solid var(--border); }
+  .lineitem:last-child { border-bottom:0; }
+  .thumb { width:48px; height:48px; border-radius:8px; background: var(--surface-card-2); display:flex; align-items:center; justify-content:center; font-size:0.78rem; flex-shrink:0; border:1px solid var(--border); color: var(--warm-gray); }
+  .li-main { flex:1; min-width:0; } .li-name { font-size:0.9rem; color: var(--text); } .li-sku { font-size:0.78rem; color: var(--warm-gray); margin-top:2px; }
+  .li-qty { font-size:0.85rem; color: var(--warm-gray-light); width:42px; text-align:center; }
+  .li-price { font-size:0.9rem; color: var(--text); width:80px; text-align:right; font-variant-numeric: tabular-nums; }
+  .money { width:100%; border-collapse:collapse; }
+  .money td { padding:7px 0; font-size:0.9rem; } .money td.k { color: var(--warm-gray); } .money td.v { text-align:right; font-variant-numeric: tabular-nums; }
+  .money tr.total td { border-top:1px solid var(--border); padding-top:12px; font-size:1.0rem; font-weight:600; color: var(--text); } .money td.free { color: var(--success); text-align:right; }
+  .kv { display:grid; grid-template-columns: 130px 1fr; gap:8px 16px; font-size:0.9rem; } .kv .k { color: var(--warm-gray); } .kv .v { color: var(--text); }
+  .addr { display:grid; grid-template-columns: 1fr 1fr; gap:20px; }
+  .addr .lbl { font-size:0.72rem; text-transform:uppercase; letter-spacing:.05em; color: var(--warm-gray); margin-bottom:6px; } .addr .body { font-size:0.9rem; color: var(--warm-gray-light); line-height:1.5; }
+  .tl { position:relative; padding-left:22px; } .tl::before { content:""; position:absolute; left:6px; top:4px; bottom:4px; width:1.5px; background: var(--border-strong); }
+  .tl-item { position:relative; padding-bottom:16px; } .tl-item:last-child { padding-bottom:0; }
+  .tl-dot { position:absolute; left:-22px; top:3px; width:9px; height:9px; border-radius:50%; background: var(--teal); border:2px solid var(--bg); }
+  .tl-when { font-size:0.78rem; color: var(--warm-gray); margin-bottom:2px; } .tl-what { font-size:0.9rem; color: var(--text); }
+  .empty-note { font-size:0.85rem; color: var(--warm-gray); }
+
+  .mock-flag { position: fixed; left:14px; bottom:14px; z-index:50; font-size:0.72rem; color: var(--warm-gray); background: var(--surface-dark); border:1px solid var(--border); border-radius:8px; padding:6px 11px; } .mock-flag b { color: var(--amber); }
+</style>
+</head>
+<body>
+
+<div class="page-behind" aria-hidden="true">
+  <div class="pb-topbar">⚓ <b>Mast</b> / Shir Glassworks</div>
+  <div class="pb-h1">Orders</div><div class="pb-sub">19 orders</div>
+  <div class="pb-rows">
+    <div class="pb-row"><span>SGTE-0188</span><span>test-188@example.com</span><span>12 items</span><span>$102,000.00</span></div>
+    <div class="pb-row hi"><span>SGTE-0164</span><span>test-164@example.com</span><span>1 item</span><span>$45.00</span></div>
+    <div class="pb-row"><span>SGTE-0163</span><span>test-163@example.com</span><span>1 item</span><span>$45.00</span></div>
+  </div>
+</div>
+
+<div class="scrim"></div>
+
+<div class="panel" id="panel">
+  <div class="ph">
+    <button class="ph-back">&#8592; Back to Orders</button>
+    <div class="ph-titlewrap"><span class="ph-title">SGTE-0164</span><span class="badge info"><span class="dot"></span>Confirmed</span></div>
+    <div class="ph-spacer"></div>
+    <button class="ph-icon" id="expandBtn" title="Expand to full width">&#10530;</button>
+    <button class="ph-icon" title="Close">&#10005;</button>
+  </div>
+
+  <div class="pbody">
+    <!-- PINNED: identity bar + tabs -->
+    <div class="pinned">
+      <div class="idbar">
+        <div class="hl"><div class="k">Customer</div><div class="v">test-164@example.com</div></div>
+        <div class="hl"><div class="k">Total</div><div class="v big">$45.00</div></div>
+        <div class="hl"><div class="k">Items</div><div class="v">1 item</div></div>
+        <div class="hl"><div class="k">Placed</div><div class="v">Apr 30, 7:55 PM</div></div>
+      </div>
+      <!-- Step indicator hoisted into the pinned header: the process position is
+           always visible, regardless of which tab is active. Clicking a step
+           jumps to the Process tab and that page. -->
+      <div class="spine-label">Process · step 2 of 4 · tap a completed step to review it</div>
+      <div class="stepper">
+        <button class="step done nav" data-page="received"><span class="node">&#10003;</span><span class="lbl">Received</span></button>
+        <div class="step-line done"></div>
+        <button class="step current nav" data-page="confirmed"><span class="node">2</span><span class="lbl">Confirmed</span></button>
+        <div class="step-line"></div>
+        <button class="step todo nav" data-page="picked"><span class="node">3</span><span class="lbl">Ready to fulfill</span></button>
+        <div class="step-line"></div>
+        <button class="step todo" data-page="delivered" disabled><span class="node">4</span><span class="lbl">Delivered</span></button>
+      </div>
+      <div class="tabs" role="tablist">
+        <button class="tab active" data-tab="process"><span class="pct"></span>Process <span class="count">Confirmed</span></button>
+        <button class="tab" data-tab="items">Items <span class="count">1</span></button>
+        <button class="tab" data-tab="customer">Customer</button>
+        <button class="tab" data-tab="history">History</button>
+      </div>
+    </div>
+
+    <div class="panels">
+
+      <!-- ===== PROCESS tab = the book ===== -->
+      <div class="tabpanel active" data-panel="process">
+        <!-- The stepper lives in the pinned header (always visible). This tab
+             body just holds the current step's page (or a flipped history /
+             preview page driven by the header stepper). -->
+        <!-- current page -->
+        <div class="page active" data-page="confirmed">
+          <div class="page-head"><span class="page-title">Confirmed</span></div>
+          <div class="page-meta">Current step · what you need to do now</div>
+          <div class="card lean">
+            <div class="gate-intro">To advance to <b style="color:var(--text);">Ready to fulfill</b>:</div>
+            <div class="checklist">
+              <div class="ck met"><span class="mark">&#10003;</span><span class="txt">Shipping info captured</span></div>
+              <div class="ck unmet"><span class="mark">!</span><span class="txt">Per-item fulfillment plan locked <span class="soft">(recommended)</span></span><a class="go">Lock plan &#8594;</a></div>
+            </div>
+            <div class="gate-actions">
+              <button class="btn btn-secondary">&#8592; Back to Received</button>
+              <span class="spacer"></span>
+              <button class="btn btn-primary">Advance to Ready to fulfill &#8594;</button>
+              <button class="btn-ghost" title="More actions">&#8943;</button>
+            </div>
+          </div>
+        </div>
+        <!-- history page -->
+        <div class="page is-nav" data-page="received">
+          <div class="page-crumb"><button data-goto="confirmed">&#8592; Back to current step (Confirmed)</button></div>
+          <div class="page-head"><span class="page-title">Received</span><span class="badge teal"><span class="dot"></span>Completed</span></div>
+          <div class="page-meta">Apr 30, 7:55 PM · what was captured at this step</div>
+          <div class="hist-note">Read-only history. This step is done — shown for reference.</div>
+          <div class="card">
+            <div class="checklist">
+              <div class="ck met"><span class="mark">&#10003;</span><span class="txt">Customer / contact captured</span><span class="when">test-164@example.com</span></div>
+              <div class="ck met"><span class="mark">&#10003;</span><span class="txt">At least one line item</span><span class="when">Solid Sculptured Cardinal ×1</span></div>
+              <div class="ck met"><span class="mark">&#10003;</span><span class="txt">Payment cleared</span><span class="when">Apr 30, 7:55 PM</span></div>
+            </div>
+          </div>
+        </div>
+        <!-- forward preview page -->
+        <div class="page is-nav" data-page="picked">
+          <div class="page-crumb"><button data-goto="confirmed">&#8592; Back to current step (Confirmed)</button></div>
+          <div class="page-head"><span class="page-title">Ready to fulfill</span><span class="badge gray"><span class="dot"></span>Upcoming</span></div>
+          <div class="page-meta">Not started — preview of what this step will ask</div>
+          <div class="card">
+            <div class="preview-note">When you advance here, you'll <b>choose how this order fulfills</b>, then the book branches:<br><br>
+            • <b>Pack &amp; ship</b> → Packing → Labeled → Shipped<br>
+            • <b>Customer pickup</b> → Pickup ready → Picked up<br>
+            • <b>Vendor dropship</b> → Dropship pending → Dropship confirmed<br><br>
+            All three converge at <b>Delivered</b>.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== ITEMS tab ===== -->
+      <div class="tabpanel" data-panel="items">
+        <div class="section-title">Line items</div>
+        <div class="card">
+          <div class="lineitem">
+            <div class="thumb">IMG</div>
+            <div class="li-main"><div class="li-name">Solid Sculptured Cardinal</div><div class="li-sku">SKU SCC-001 · Glass · Made to order</div></div>
+            <div class="li-qty">&#215;1</div><div class="li-price">$45.00</div>
+          </div>
+        </div>
+        <div class="section-title">Money</div>
+        <div class="card">
+          <table class="money">
+            <tr><td class="k">Subtotal</td><td class="v">$45.00</td></tr>
+            <tr><td class="k">Shipping (Standard)</td><td class="free">Free</td></tr>
+            <tr><td class="k">Tax</td><td class="v">$0.00</td></tr>
+            <tr class="total"><td>Total</td><td class="v">$45.00</td></tr>
+          </table>
+        </div>
+      </div>
+
+      <!-- ===== CUSTOMER tab ===== -->
+      <div class="tabpanel" data-panel="customer">
+        <div class="section-title">Customer</div>
+        <div class="card">
+          <div class="kv">
+            <div class="k">Email</div><div class="v">test-164@example.com</div>
+            <div class="k">Name</div><div class="v">—</div>
+            <div class="k">Orders</div><div class="v">1</div>
+            <div class="k">Lifetime spend</div><div class="v">$45.00</div>
+            <div class="k">Source</div><div class="v">Direct</div>
+          </div>
+        </div>
+        <div class="section-title">Addresses</div>
+        <div class="card">
+          <div class="addr">
+            <div><div class="lbl">Shipping</div><div class="body">harness-l3-rpu-1777603618-D</div></div>
+            <div><div class="lbl">Billing</div><div class="body">Same as shipping</div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== HISTORY tab ===== -->
+      <div class="tabpanel" data-panel="history">
+        <div class="section-title">Timeline</div>
+        <div class="card"><div class="tl"><div class="tl-item"><span class="tl-dot"></span><div class="tl-when">Apr 30, 7:55 PM</div><div class="tl-what">Placed — manual order created via MCP</div></div></div></div>
+        <div class="section-title">Email history</div>
+        <div class="card"><div class="empty-note">No emails sent for this order yet.</div></div>
+        <div class="section-title">Notes</div>
+        <div class="card"><div class="empty-note">No notes.</div></div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<div class="mock-flag"><b>MOCK</b> · Process slide-out · HYBRID (tabs + book) · SGTE-0164 · not wired</div>
+
+<script>
+  // tabs
+  function activateTab(key) {
+    document.querySelectorAll('.tab').forEach(function (x) { x.classList.toggle('active', x.getAttribute('data-tab') === key); });
+    document.querySelectorAll('.tabpanel').forEach(function (p) { p.classList.toggle('active', p.getAttribute('data-panel') === key); });
+  }
+  document.querySelectorAll('.tab').forEach(function (t) { t.addEventListener('click', function () { activateTab(t.getAttribute('data-tab')); }); });
+  // book pages within the Process tab — driven by the header stepper
+  function showPage(key) {
+    document.querySelectorAll('.tabpanel[data-panel="process"] .page').forEach(function (p) { p.classList.toggle('active', p.getAttribute('data-page') === key); });
+    document.querySelectorAll('.stepper .step').forEach(function (s) { s.classList.toggle('viewing', s.getAttribute('data-page') === key); });
+  }
+  // clicking a step in the header jumps to the Process tab and that page
+  document.querySelectorAll('.stepper .step.nav').forEach(function (s) { s.addEventListener('click', function () { activateTab('process'); showPage(s.getAttribute('data-page')); }); });
+  document.querySelectorAll('[data-goto]').forEach(function (b) { b.addEventListener('click', function () { showPage(b.getAttribute('data-goto')); }); });
+  document.getElementById('expandBtn').addEventListener('click', function () { document.getElementById('panel').classList.toggle('expanded'); });
+</script>
+</body>
+</html>

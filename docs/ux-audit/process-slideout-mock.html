@@ -1,0 +1,466 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Process slide-out — mock (SGTE-0164)</title>
+<!--
+  PROCESS SLIDE-OUT — static mock (NOT wired; design artifact, committed).
+  Subject: order SGTE-0164 (real data from sgtest15, status=confirmed).
+
+  Purpose: agree the LOOK of the "Process" interior variant before building
+  renderProcess in the engine. See docs/ux-audit/REGROUP-HANDOFF.md and the
+  agreed model:
+    - One shell, swappable interiors. Shell = MastUI.slideOut (animation,
+      scrim, header+back-crumb, deep-link, dirty-guard, focus-trap, tokens,
+      7-step type scale). This mock reuses that shell's chrome.
+    - Process interior = pinned [workflow header (MastFlow) + headline strip]
+      ABOVE tabs [Overview / Items / Customer / History].
+    - Width: wide-but-margined (~1140px), scrim still framing it; expand-to-100%
+      available (⤢).
+    - Workflow header is faithful to pickship.workflow.js: phase=confirmed,
+      checklist = shipping-info (hard, met) + fulfillment-plan (soft, unmet),
+      guarded Back/Advance. Money shown CORRECT (legacy showed Subtotal $0.00).
+
+  Tokens below approximate the admin dark theme so the mock reads in-context.
+  This is a mock: colors/spacing are illustrative, not the source of truth.
+-->
+<style>
+  :root {
+    --bg: #221f1d;
+    --surface-dark: #1b1917;
+    --surface-card: #2a2623;
+    --surface-card-2: #322d29;
+    --border: rgba(255,255,255,0.08);
+    --border-strong: rgba(255,255,255,0.14);
+    --text: #ece7e0;
+    --charcoal: #ece7e0;
+    --warm-gray: #9c948b;
+    --warm-gray-light: #b9b1a8;
+    --amber: #d8a657;
+    --teal: #5fb4a8;
+    --success: #5aa86f;
+    --danger: #c95f55;
+    --warning: #d8a657;
+    --info: #6ea8d8;
+    /* 7-step rem scale: 0.72 0.78 0.85 0.9 1.0 1.15 1.6 */
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg); color: var(--text);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ---- Dimmed page behind (just enough to prove the slide-out context) ---- */
+  .page-behind {
+    position: fixed; inset: 0; padding: 28px 36px; overflow: hidden;
+    filter: saturate(0.85);
+  }
+  .pb-topbar { display:flex; align-items:center; gap:10px; font-size:1.0rem; color: var(--warm-gray-light); margin-bottom: 28px; }
+  .pb-topbar b { color: var(--text); }
+  .pb-h1 { font-size: 1.6rem; margin: 0 0 4px; }
+  .pb-sub { color: var(--warm-gray); font-size: 0.9rem; margin-bottom: 20px; }
+  .pb-rows { border:1px solid var(--border); border-radius:12px; overflow:hidden; max-width: 880px; }
+  .pb-row { display:grid; grid-template-columns: 130px 1fr 90px 110px; gap:12px; padding:14px 16px;
+            border-bottom:1px solid var(--border); font-size:0.9rem; color: var(--warm-gray-light); }
+  .pb-row:last-child { border-bottom:0; }
+  .pb-row.hi { color: var(--text); }
+
+  /* ---- Scrim ---- */
+  .scrim {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.55);
+    animation: fade .18s ease;
+  }
+  @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+
+  /* ---- The slide-out panel: wide-but-margined ---- */
+  .panel {
+    position: fixed; top: 0; right: 0; bottom: 0;
+    width: min(1140px, 100%);
+    background: var(--bg);
+    border-left: 1px solid var(--border-strong);
+    box-shadow: -24px 0 60px rgba(0,0,0,0.45);
+    display: flex; flex-direction: column;
+    animation: slide .22s cubic-bezier(.2,.7,.2,1);
+  }
+  .panel.expanded { width: 100%; }
+  @keyframes slide { from { transform: translateX(40px); opacity: .4; } to { transform: none; opacity: 1; } }
+
+  /* ---- Panel header (shell chrome — identical to standard slide-out) ---- */
+  .ph {
+    display:flex; align-items:center; gap:14px;
+    padding: 16px 22px; border-bottom:1px solid var(--border);
+    background: var(--surface-dark);
+  }
+  .ph-back {
+    background:transparent; border:0; color: var(--teal); font: inherit; font-size:0.85rem;
+    cursor:pointer; padding:0; display:flex; align-items:center; gap:6px; flex-shrink:0;
+  }
+  .ph-titlewrap { display:flex; align-items:center; gap:12px; min-width:0; }
+  .ph-title { font-size:1.15rem; font-weight:600; letter-spacing:.01em; white-space:nowrap; }
+  .ph-spacer { flex:1; }
+  .ph-icon {
+    background:transparent; border:0; color: var(--warm-gray); font-size:1.15rem;
+    cursor:pointer; padding:0 4px; line-height:1; flex-shrink:0;
+  }
+  .ph-icon:hover { color: var(--text); }
+
+  /* ---- Badge (MastUI soft-tint dot-badge) ---- */
+  .badge {
+    display:inline-flex; align-items:center; gap:6px; font-size:0.72rem; font-weight:600;
+    padding:3px 10px; border-radius:999px; line-height:1.4; white-space:nowrap;
+  }
+  .badge .dot { width:6px; height:6px; border-radius:50%; flex:0 0 6px; }
+  .badge.info   { background:color-mix(in srgb, var(--info) 16%, transparent);   color:var(--info);   border:1px solid color-mix(in srgb, var(--info) 30%, transparent); }
+  .badge.info   .dot { background: var(--info); }
+  .badge.teal   { background:color-mix(in srgb, var(--teal) 16%, transparent);   color:var(--teal);   border:1px solid color-mix(in srgb, var(--teal) 30%, transparent); }
+  .badge.teal   .dot { background: var(--teal); }
+  .badge.amber  { background:color-mix(in srgb, var(--amber) 16%, transparent);  color:var(--amber);  border:1px solid color-mix(in srgb, var(--amber) 30%, transparent); }
+  .badge.amber  .dot { background: var(--amber); }
+
+  /* ---- Scroll body ---- */
+  .pbody { flex:1; overflow-y:auto; }
+
+  /* ---- PINNED region (workflow header + headline) — sticky above tabs ---- */
+  .pinned {
+    position: sticky; top: 0; z-index: 5;
+    background: var(--bg);
+    padding: 20px 22px 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  /* Stepper */
+  .stepper { display:flex; align-items:center; gap:0; margin-bottom: 18px; }
+  .step { display:flex; align-items:center; gap:9px; flex-shrink:0; }
+  .step .node {
+    width:22px; height:22px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+    font-size:0.72rem; font-weight:600; flex-shrink:0;
+  }
+  .step.done .node { background: var(--teal); color:#15201e; }
+  .step.current .node { background: var(--amber); color:#211800; box-shadow:0 0 0 4px color-mix(in srgb, var(--amber) 22%, transparent); }
+  .step.todo .node { background: transparent; border:1.5px solid var(--border-strong); color: var(--warm-gray); }
+  .step .lbl { font-size:0.85rem; white-space:nowrap; }
+  .step.done .lbl { color: var(--warm-gray-light); }
+  .step.current .lbl { color: var(--text); font-weight:600; }
+  .step.todo .lbl { color: var(--warm-gray); }
+  .step-line { height:1.5px; background: var(--border-strong); flex:1 1 auto; min-width:26px; margin:0 12px; }
+  .step-line.done { background: color-mix(in srgb, var(--teal) 60%, transparent); }
+  .branch-hint { font-size:0.72rem; color: var(--warm-gray); margin:-8px 0 16px; padding-left:2px; }
+  .branch-hint b { color: var(--warm-gray-light); font-weight:600; }
+
+  /* Current-phase card: checklist + guarded actions */
+  .phasecard {
+    background: var(--surface-card); border:1px solid var(--border); border-radius:12px;
+    padding:16px 18px; margin-bottom: 16px;
+  }
+  .phasecard .pc-head { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:12px; }
+  .pc-eyebrow { font-size:0.72rem; text-transform:uppercase; letter-spacing:.06em; color: var(--warm-gray); }
+  .checklist { display:flex; flex-direction:column; gap:9px; margin-bottom:16px; }
+  .ck { display:flex; align-items:center; gap:10px; font-size:0.9rem; }
+  .ck .mark { width:18px; height:18px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:0.72rem; flex-shrink:0; }
+  .ck.met .mark { background: color-mix(in srgb, var(--success) 22%, transparent); color: var(--success); }
+  .ck.met .txt { color: var(--warm-gray-light); }
+  .ck.unmet .mark { background: color-mix(in srgb, var(--warning) 20%, transparent); color: var(--warning); }
+  .ck.unmet .txt { color: var(--text); }
+  .ck .soft { color: var(--warm-gray); font-size:0.78rem; }
+  .ck .go { margin-left:auto; color: var(--teal); font-size:0.78rem; text-decoration:none; cursor:pointer; }
+  .pc-actions { display:flex; align-items:center; gap:10px; }
+  .btn {
+    font: inherit; font-size:0.85rem; font-weight:600; padding:9px 16px; border-radius:9px;
+    cursor:pointer; border:1px solid transparent; white-space:nowrap;
+  }
+  .btn-primary { background: var(--amber); color:#211800; }
+  .btn-primary:hover { filter: brightness(1.05); }
+  .btn-secondary { background: transparent; color: var(--warm-gray-light); border-color: var(--border-strong); }
+  .btn-secondary:hover { color: var(--text); }
+  .btn-ghost { background:transparent; border:0; color: var(--warm-gray); font-size:1.0rem; padding:6px 8px; }
+  .pc-actions .spacer { flex:1; }
+
+  /* Headline strip */
+  .headline { display:flex; gap:0; margin: 0 0 16px; }
+  .hl { padding-right: 28px; margin-right: 28px; border-right:1px solid var(--border); }
+  .hl:last-child { border-right:0; }
+  .hl .k { font-size:0.72rem; text-transform:uppercase; letter-spacing:.05em; color: var(--warm-gray); margin-bottom:3px; }
+  .hl .v { font-size:1.0rem; color: var(--text); }
+  .hl .v.big { font-size:1.15rem; font-weight:600; }
+
+  /* Tabs (MastUI.tabs) */
+  .tabs { display:flex; gap:4px; }
+  .tab {
+    background:transparent; border:0; border-bottom:2px solid transparent;
+    color: var(--warm-gray); font: inherit; font-size:0.9rem; padding:10px 16px; cursor:pointer; white-space:nowrap;
+  }
+  .tab.active { color: var(--text); font-weight:600; border-bottom-color: var(--amber); }
+  .tab .count { color: var(--warm-gray); font-size:0.78rem; margin-left:5px; }
+
+  /* Tab panels */
+  .panels { padding: 20px 22px 40px; }
+  .tabpanel { display:none; }
+  .tabpanel.active { display:block; }
+  .section-title { font-size:0.78rem; text-transform:uppercase; letter-spacing:.05em; color: var(--warm-gray); margin: 0 0 10px; }
+  .card { background: var(--surface-card); border:1px solid var(--border); border-radius:12px; padding:16px 18px; margin-bottom:18px; }
+
+  /* Items */
+  .lineitem { display:flex; align-items:center; gap:14px; padding:12px 0; border-bottom:1px solid var(--border); }
+  .lineitem:last-child { border-bottom:0; }
+  .thumb { width:48px; height:48px; border-radius:8px; background: var(--surface-card-2); display:flex; align-items:center; justify-content:center; font-size:1.15rem; flex-shrink:0; border:1px solid var(--border); }
+  .li-main { flex:1; min-width:0; }
+  .li-name { font-size:0.9rem; color: var(--text); }
+  .li-sku { font-size:0.78rem; color: var(--warm-gray); margin-top:2px; }
+  .li-qty { font-size:0.85rem; color: var(--warm-gray-light); width:42px; text-align:center; }
+  .li-price { font-size:0.9rem; color: var(--text); width:80px; text-align:right; font-variant-numeric: tabular-nums; }
+
+  /* Money summary */
+  .money { width:100%; border-collapse:collapse; }
+  .money td { padding:7px 0; font-size:0.9rem; }
+  .money td.k { color: var(--warm-gray); }
+  .money td.v { text-align:right; font-variant-numeric: tabular-nums; }
+  .money tr.total td { border-top:1px solid var(--border); padding-top:12px; font-size:1.0rem; font-weight:600; color: var(--text); }
+  .money td.free { color: var(--success); text-align:right; }
+
+  /* KV grid */
+  .kv { display:grid; grid-template-columns: 130px 1fr; gap:8px 16px; font-size:0.9rem; }
+  .kv .k { color: var(--warm-gray); }
+  .kv .v { color: var(--text); }
+  .addr { display:grid; grid-template-columns: 1fr 1fr; gap:20px; }
+  .addr .lbl { font-size:0.72rem; text-transform:uppercase; letter-spacing:.05em; color: var(--warm-gray); margin-bottom:6px; }
+  .addr .body { font-size:0.9rem; color: var(--warm-gray-light); line-height:1.5; }
+
+  /* Timeline */
+  .tl { position:relative; padding-left:22px; }
+  .tl::before { content:""; position:absolute; left:6px; top:4px; bottom:4px; width:1.5px; background: var(--border-strong); }
+  .tl-item { position:relative; padding-bottom:16px; }
+  .tl-item:last-child { padding-bottom:0; }
+  .tl-dot { position:absolute; left:-22px; top:3px; width:9px; height:9px; border-radius:50%; background: var(--teal); border:2px solid var(--bg); }
+  .tl-when { font-size:0.78rem; color: var(--warm-gray); margin-bottom:2px; }
+  .tl-what { font-size:0.9rem; color: var(--text); }
+  .empty-note { font-size:0.85rem; color: var(--warm-gray); padding:8px 0; }
+
+  /* mock caption */
+  .mock-flag {
+    position: fixed; left:14px; bottom:14px; z-index:50;
+    font-size:0.72rem; color: var(--warm-gray); background: var(--surface-dark);
+    border:1px solid var(--border); border-radius:8px; padding:6px 11px;
+  }
+  .mock-flag b { color: var(--amber); }
+</style>
+</head>
+<body>
+
+<!-- ===== Dimmed page behind (the Orders list the panel opened over) ===== -->
+<div class="page-behind" aria-hidden="true">
+  <div class="pb-topbar">⚓ <b>Mast</b> / Shir Glassworks</div>
+  <div class="pb-h1">Orders</div>
+  <div class="pb-sub">19 orders</div>
+  <div class="pb-rows">
+    <div class="pb-row"><span>SGTE-0188</span><span>test-188@example.com</span><span>12 items</span><span>$102,000.00</span></div>
+    <div class="pb-row hi"><span>SGTE-0164</span><span>test-164@example.com</span><span>1 item</span><span>$45.00</span></div>
+    <div class="pb-row"><span>SGTE-0163</span><span>test-163@example.com</span><span>1 item</span><span>$45.00</span></div>
+    <div class="pb-row"><span>SGTE-0171</span><span>stewartdavidp@gmail.com</span><span>1 item</span><span>$22.50</span></div>
+  </div>
+</div>
+
+<!-- ===== Scrim ===== -->
+<div class="scrim"></div>
+
+<!-- ===== Process slide-out panel ===== -->
+<div class="panel" id="panel">
+
+  <!-- Shell chrome: back-crumb · title · status · expand · close -->
+  <div class="ph">
+    <button class="ph-back">&#8592; Back to Orders</button>
+    <div class="ph-titlewrap">
+      <span class="ph-title">SGTE-0164</span>
+      <span class="badge info"><span class="dot"></span>Confirmed</span>
+    </div>
+    <div class="ph-spacer"></div>
+    <button class="ph-icon" id="expandBtn" title="Expand to full width">&#10530;</button>
+    <button class="ph-icon" title="Close">&#10005;</button>
+  </div>
+
+  <div class="pbody">
+
+    <!-- ===== PINNED: workflow header + headline + tabs bar ===== -->
+    <div class="pinned">
+
+      <!-- Stepper -->
+      <div class="stepper">
+        <div class="step done"><span class="node">&#10003;</span><span class="lbl">Received</span></div>
+        <div class="step-line done"></div>
+        <div class="step current"><span class="node">2</span><span class="lbl">Confirmed</span></div>
+        <div class="step-line"></div>
+        <div class="step todo"><span class="node">3</span><span class="lbl">Ready to fulfill</span></div>
+        <div class="step-line"></div>
+        <div class="step todo"><span class="node">4</span><span class="lbl">Delivered</span></div>
+      </div>
+      <div class="branch-hint">At <b>Ready to fulfill</b>, this order branches: Pack &amp; ship · Customer pickup · Vendor dropship — all converge at Delivered.</div>
+
+      <!-- Current-phase card -->
+      <div class="phasecard">
+        <div class="pc-head">
+          <span class="pc-eyebrow">Current phase · Confirmed</span>
+          <span class="pc-eyebrow">1 of 2 checks · 1 recommended remaining</span>
+        </div>
+        <div class="checklist">
+          <div class="ck met">
+            <span class="mark">&#10003;</span>
+            <span class="txt">Shipping info captured</span>
+          </div>
+          <div class="ck unmet">
+            <span class="mark">!</span>
+            <span class="txt">Per-item fulfillment plan locked <span class="soft">(recommended)</span></span>
+            <a class="go">Go &#8594;</a>
+          </div>
+        </div>
+        <div class="pc-actions">
+          <button class="btn btn-secondary">&#8592; Back to Received</button>
+          <span class="spacer"></span>
+          <button class="btn btn-primary">Advance to Ready to fulfill &#8594;</button>
+          <button class="btn-ghost" title="More actions">&#8943;</button>
+        </div>
+      </div>
+
+      <!-- Headline strip -->
+      <div class="headline">
+        <div class="hl"><div class="k">Customer</div><div class="v">test-164@example.com</div></div>
+        <div class="hl"><div class="k">Total</div><div class="v big">$45.00</div></div>
+        <div class="hl"><div class="k">Items</div><div class="v">1 item</div></div>
+        <div class="hl"><div class="k">Placed</div><div class="v">Apr 30, 7:55 PM</div></div>
+        <div class="hl"><div class="k">Source</div><div class="v"><span class="badge teal"><span class="dot"></span>Direct</span></div></div>
+      </div>
+
+      <!-- Tabs -->
+      <div class="tabs" role="tablist">
+        <button class="tab active" data-tab="overview">Overview</button>
+        <button class="tab" data-tab="items">Items <span class="count">1</span></button>
+        <button class="tab" data-tab="customer">Customer</button>
+        <button class="tab" data-tab="history">History</button>
+      </div>
+    </div>
+
+    <!-- ===== Tab panels ===== -->
+    <div class="panels">
+
+      <!-- Overview -->
+      <div class="tabpanel active" data-panel="overview">
+        <div class="section-title">Summary</div>
+        <div class="card">
+          <table class="money">
+            <tr><td class="k">Subtotal</td><td class="v">$45.00</td></tr>
+            <tr><td class="k">Shipping (Standard)</td><td class="free">Free</td></tr>
+            <tr><td class="k">Tax</td><td class="v">$0.00</td></tr>
+            <tr class="total"><td>Total</td><td class="v">$45.00</td></tr>
+          </table>
+        </div>
+
+        <div class="section-title">Items</div>
+        <div class="card">
+          <div class="lineitem">
+            <div class="thumb">&#127812;</div>
+            <div class="li-main">
+              <div class="li-name">Solid Sculptured Cardinal</div>
+              <div class="li-sku">SKU SCC-001 · Direct</div>
+            </div>
+            <div class="li-qty">&#215;1</div>
+            <div class="li-price">$45.00</div>
+          </div>
+        </div>
+
+        <div class="section-title">Addresses</div>
+        <div class="card">
+          <div class="addr">
+            <div>
+              <div class="lbl">Shipping</div>
+              <div class="body">harness-l3-rpu-1777603618-D<br>—</div>
+            </div>
+            <div>
+              <div class="lbl">Billing</div>
+              <div class="body">Same as shipping</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Items -->
+      <div class="tabpanel" data-panel="items">
+        <div class="section-title">Line items</div>
+        <div class="card">
+          <div class="lineitem">
+            <div class="thumb">&#127812;</div>
+            <div class="li-main">
+              <div class="li-name">Solid Sculptured Cardinal</div>
+              <div class="li-sku">SKU SCC-001 · Glass · Made to order</div>
+            </div>
+            <div class="li-qty">&#215;1</div>
+            <div class="li-price">$45.00</div>
+          </div>
+        </div>
+        <div class="section-title">Fulfillment plan</div>
+        <div class="card">
+          <div class="empty-note">No per-item fulfillment plan locked yet. <a class="go" style="color:var(--teal);">Lock plan &#8594;</a> (recommended before advancing).</div>
+        </div>
+      </div>
+
+      <!-- Customer -->
+      <div class="tabpanel" data-panel="customer">
+        <div class="section-title">Customer</div>
+        <div class="card">
+          <div class="kv">
+            <div class="k">Email</div><div class="v">test-164@example.com</div>
+            <div class="k">Name</div><div class="v">—</div>
+            <div class="k">Orders</div><div class="v">1</div>
+            <div class="k">Lifetime spend</div><div class="v">$45.00</div>
+            <div class="k">Source</div><div class="v">Direct</div>
+          </div>
+        </div>
+        <div class="empty-note">Open full customer record &#8594; (drills as a Party slide-out, keeping this order on the back-crumb).</div>
+      </div>
+
+      <!-- History -->
+      <div class="tabpanel" data-panel="history">
+        <div class="section-title">Timeline</div>
+        <div class="card">
+          <div class="tl">
+            <div class="tl-item">
+              <span class="tl-dot"></span>
+              <div class="tl-when">Apr 30, 7:55 PM</div>
+              <div class="tl-what">Placed — manual order created via MCP</div>
+            </div>
+          </div>
+        </div>
+        <div class="section-title">Email history</div>
+        <div class="card">
+          <div class="empty-note">No emails sent for this order yet.</div>
+        </div>
+        <div class="section-title">Notes</div>
+        <div class="card">
+          <div class="empty-note">No notes.</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<div class="mock-flag"><b>MOCK</b> · Process slide-out · SGTE-0164 · not wired</div>
+
+<script>
+  // Tab switching (mock only)
+  document.querySelectorAll('.tab').forEach(function (t) {
+    t.addEventListener('click', function () {
+      var key = t.getAttribute('data-tab');
+      document.querySelectorAll('.tab').forEach(function (x) { x.classList.toggle('active', x === t); });
+      document.querySelectorAll('.tabpanel').forEach(function (p) {
+        p.classList.toggle('active', p.getAttribute('data-panel') === key);
+      });
+    });
+  });
+  // Expand-to-full toggle (mirrors the shell's ⤢ control)
+  document.getElementById('expandBtn').addEventListener('click', function () {
+    document.getElementById('panel').classList.toggle('expanded');
+  });
+</script>
+</body>
+</html>
