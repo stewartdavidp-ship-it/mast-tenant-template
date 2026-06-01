@@ -41,8 +41,10 @@
         get: function (o) { return Array.isArray(o.items) ? o.items.reduce(function (s, li) { return s + (li.qty || 1); }, 0) : (o.itemCount || 0); } },
       { name: 'total', label: 'Total', type: 'money', list: true, group: 'Order',
         get: function (o) { return window.MastUI.Num.moneyVal(o, 'totalCents', 'total'); } },
-      { name: 'status', label: 'Status', type: 'status', list: true, group: 'Fulfillment',
-        options: ['placed', 'confirmed', 'building', 'packed', 'shipped', 'delivered', 'cancelled', 'refunded', 'payment_failed'],
+      // Status is GOVERNED BY THE WORKFLOW (detail.flow), not edited as a field —
+      // readOnly so the form never offers a status dropdown (doc 17 §2). It still
+      // drives the list badge + the slide-out header badge.
+      { name: 'status', label: 'Status', type: 'status', list: true, group: 'Fulfillment', readOnly: true,
         tone: function (v) { return STATUS_TONE[String(v || '').toLowerCase()] || 'neutral'; } },
       // Item-type tags so you can see what kinds of items an order contains.
       { name: 'contents', label: 'Contents', type: 'tags', list: true, sortable: false, group: 'Order',
@@ -61,8 +63,12 @@
     route: 'orders-v2',
     fetch: function (id) { return MastDB.orders.get(id).then(function (o) { return o ? Object.assign({ _key: id }, o) : null; }); },
     // Designed Transaction detail (read mode) — all from real fields (doc 17).
+    // detail.flow composes the MastFlow pickship lifecycle: the Process pane
+    // hosts the stepper + checklist + guarded Advance (NOT a status dropdown).
     detail: {
       template: 'transaction',
+      flow: 'pickship',
+      flowModule: 'pickshipWorkflow',
       customerEntity: 'customers-v2',
       tiles: function (r) {
         var N = window.MastUI.Num;
@@ -109,8 +115,9 @@
     onSave: function (rec, mode) {
       var id = rec._key || rec.id;
       if (!id || !window.MastDB || !MastDB.orders) return true;
-      // Edit mode persists only the operator-editable fields (status, tracking).
-      return MastDB.orders.update(id, { status: rec.status, tracking: rec.tracking })
+      // Status is governed by the workflow (Process pane), so edit persists only
+      // tracking. Status advances through MastFlow, never a form write.
+      return MastDB.orders.update(id, { tracking: rec.tracking })
         .then(function () { return true; });
     }
   });
