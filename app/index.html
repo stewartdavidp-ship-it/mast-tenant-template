@@ -113,9 +113,9 @@
        scripts/bump-modules-version.sh (these are static <head> tags loaded
        before the JS var exists, so they can't read it at runtime). Without
        this, the engines were frozen at ?v=1 and never cache-busted on deploy. -->
-  <script src="../shared/mast-ui.js?v=20260601-100028-2907fe5"></script>
-  <script src="../shared/mast-io.js?v=20260601-100028-2907fe5"></script>
-  <script src="../shared/mast-entity.js?v=20260601-100028-2907fe5"></script>
+  <script src="../shared/mast-ui.js?v=20260601-103156-3e79c8d"></script>
+  <script src="../shared/mast-io.js?v=20260601-103156-3e79c8d"></script>
+  <script src="../shared/mast-entity.js?v=20260601-103156-3e79c8d"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Pod-specific runtime config — sets window.MAST_POD_PLATFORM_PROJECT so
@@ -20133,6 +20133,33 @@ function buildHash(route, params) {
 // Section modules call this on render to read incoming filter params.
 window.getRouteParams = function() { return currentRouteParams || {}; };
 
+// ── Legacy UI toggle (Profile dropdown) ──────────────────────────────
+// Default: Legacy UI ON (the established admin). When the operator turns it
+// OFF, the redesigned V2 twin is used for every object that has one — the
+// legacy route is remapped to its v2 route at navigation. Stored in
+// localStorage so it survives reloads; flipping reloads the page so the
+// flag-gated v2 modules (which read mastUiRedesign at load) register cleanly.
+var MAST_V2_ROUTE_MAP = {
+  orders: 'orders-v2', customers: 'customers-v2', promotions: 'promotions-v2',
+  trips: 'trips-v2', team: 'team-v2', procurement: 'procurement-v2',
+  materials: 'materials-v2', 'finance-expenses': 'finance-expenses-v2',
+  'cs-tickets': 'cs-tickets-v2', terms: 'terms-v2', wallet: 'wallet-v2',
+  brand: 'brand-v2', homepage: 'homepage-v2'
+};
+function mastLegacyUiOn() {
+  try { return localStorage.getItem('mastLegacyUI') !== '0'; } catch (e) { return true; }
+}
+function mastUseV2Routes() { return !mastLegacyUiOn(); }
+function setLegacyUI(on) {
+  try {
+    if (on) { localStorage.setItem('mastLegacyUI', '1'); localStorage.removeItem('mastUiRedesign'); }
+    else { localStorage.setItem('mastLegacyUI', '0'); localStorage.setItem('mastUiRedesign', '1'); }
+  } catch (e) {}
+  location.reload();
+}
+window.setLegacyUI = setLegacyUI;
+window.mastLegacyUiOn = mastLegacyUiOn;
+
 function navigateTo(route, params) {
   // Retired-route redirect: #accounting and its subViews were consolidated
   // into Settings → Integrations → QuickBooks tab (2026-05-25). Redirect
@@ -20142,6 +20169,10 @@ function navigateTo(route, params) {
     window.__integrationsActiveTab = 'qbo';
     window.__qboInnerActiveTab = (qboInner === 'connect') ? 'connection' : qboInner;
     return navigateTo('settings');
+  }
+  // Legacy UI off → use the redesigned V2 twin for any object that has one.
+  if (mastUseV2Routes() && MAST_V2_ROUTE_MAP[route]) {
+    route = MAST_V2_ROUTE_MAP[route];
   }
   // Top-level nav (sidebar click, dashboard tile, in-page button) consults
   // the unsaved-changes registry and resets the back-nav stack. Programmatic
@@ -20877,7 +20908,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260601-100028-2907fe5';
+var MAST_MODULES_V = '20260601-103156-3e79c8d';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -50168,6 +50199,11 @@ function renderAvatarMenu() {
     onclick: 'setPersonalDarkMode(!document.body.classList.contains(\'dark-mode\'));renderAvatarMenu();',
     toggle: true,
     toggleOn: isDark
+  });
+  prefs += _avatarMenuItemHtml('Legacy UI', {
+    onclick: 'setLegacyUI(!mastLegacyUiOn());',
+    toggle: true,
+    toggleOn: mastLegacyUiOn()
   });
   prefs += _avatarMenuItemHtml('Accessibility', {
     onclick: 'closeAvatarMenu();navigateTo(\'settings\');setTimeout(function(){switchSettingsSubView(\'accessibility\');},100);',
