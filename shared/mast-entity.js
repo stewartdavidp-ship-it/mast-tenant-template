@@ -137,48 +137,94 @@
     });
   }
 
+  // Is this field an editable control in edit/create mode? (computed/read-only
+  // and status-in-read are NOT). Mirrors the branch logic below.
+  function _isEditable(f) {
+    return !(f.readOnly || typeof f.get === 'function');
+  }
+
+  // One read-only label→value row (group header carries the section name, so a
+  // field label equal to the group is suppressed to avoid the doubled label).
+  function _roRow(f, record, group) {
+    var showLabel = String(f.label).toLowerCase() !== String(group || '').toLowerCase();
+    return '<div class="form-group" style="margin-bottom:10px;">' +
+      (showLabel ? '<div class="form-label" style="font-size:0.78rem;color:var(--warm-gray);">' + esc(f.label) + '</div>' : '') +
+      '<div style="font-size:0.9rem;color:var(--charcoal,var(--text));">' + displayCell(f, record) + '</div></div>';
+  }
+
+  // One editable control (select for enums, text input otherwise).
+  function _editControl(f, record) {
+    var v = record ? record[f.name] : '';
+    if ((f.type === 'select' || f.type === 'status') && Array.isArray(f.options) && f.options.length) {
+      var cur = (v == null ? '' : String(v));
+      var optsHtml = f.options.map(function (o) {
+        var ov = (o && typeof o === 'object') ? o.value : o;
+        var ol = (o && typeof o === 'object') ? (o.label || o.value) : o;
+        return '<option value="' + esc(ov) + '"' + (String(ov) === cur ? ' selected' : '') + '>' + esc(ol) + '</option>';
+      }).join('');
+      return '<div class="form-group" style="margin-bottom:12px;"><label class="form-label">' + esc(f.label) + (f.required ? ' *' : '') + '</label>' +
+        '<select class="form-input" name="' + esc(f.name) + '" style="width:100%;">' + optsHtml + '</select></div>';
+    }
+    var sval = (v == null) ? '' : (typeof v === 'object' ? canonicalGet(f, record) : v);
+    return '<div class="form-group" style="margin-bottom:12px;"><label class="form-label">' + esc(f.label) + (f.required ? ' *' : '') + '</label>' +
+      '<input class="form-input" name="' + esc(f.name) + '" value="' + esc(sval) + '" style="width:100%;"></div>';
+  }
+
+  // Edit/create form (designed). Leads with the editable fields in cards (one
+  // per group that has any), then a single quiet read-only "Details" card with
+  // the remaining context — so the thing you can change is never buried under
+  // greyed-out values (the old flat-stack edit panel). Read mode still uses the
+  // simple value layout via _readFormHtml.
   function _formHtml(key, record, mode) {
     var s = _registry[key];
-    var groups = {};
+    var card = window.MastUI.card;   // section card (title + bordered body)
+    if (mode === 'read') return _readFormHtml(s, record);
+
+    // Partition fields into editable (status included in edit/create) and
+    // read-only context, preserving declaration order within each group.
+    var editGroups = {}, editOrder = [], roFields = [];
     s.fields.forEach(function (f) {
-      if (f.type === 'status' && mode !== 'edit' && mode !== 'create') return;
+      if (_isEditable(f)) {
+        var g = f.group || 'Details';
+        if (!editGroups[g]) { editGroups[g] = []; editOrder.push(g); }
+        editGroups[g].push(f);
+      } else {
+        roFields.push(f);
+      }
+    });
+
+    var html = '<div class="mu-editbar"><span class="mu-editpill">' +
+      (mode === 'create' ? 'NEW' : 'EDITING') + '</span>' +
+      esc(editOrder.length ? ('Update ' + editOrder.map(function (g) { return g.toLowerCase(); }).join(' & ')) : 'Edit this record') +
+      '</div>';
+
+    editOrder.forEach(function (g) {
+      var inner = editGroups[g].map(function (f) { return _editControl(f, record); }).join('');
+      html += card(g, inner);
+    });
+
+    // Always-visible read-only context (Option C). Skip in create (no context yet).
+    if (mode !== 'create' && roFields.length) {
+      var rows = roFields.map(function (f) { return _roRow(f, record, 'Details'); }).join('');
+      html += card('Details', rows);
+    }
+    return html;
+  }
+
+  // Read-mode fallback form (when no designed detail template) — grouped
+  // value rows, label suppressed when it duplicates the group header.
+  function _readFormHtml(s, record) {
+    var groups = {}, order = [];
+    s.fields.forEach(function (f) {
+      if (f.type === 'status') return;   // status shown as the header badge in read
       var g = f.group || 'Details';
-      (groups[g] = groups[g] || []).push(f);
+      if (!groups[g]) { groups[g] = []; order.push(g); }
+      groups[g].push(f);
     });
     var html = '';
-    Object.keys(groups).forEach(function (g) {
+    order.forEach(function (g) {
       html += '<div style="margin-bottom:18px;"><div style="font-size:0.78rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:8px;">' + esc(g) + '</div>';
-      groups[g].forEach(function (f) {
-        var v = record ? record[f.name] : '';
-        if (mode === 'read') {
-          // Suppress the field label when it duplicates its group header (e.g.
-          // group "Order" + field "Order") — avoids the double-label.
-          var showLabel = String(f.label).toLowerCase() !== String(g).toLowerCase();
-          html += '<div class="form-group" style="margin-bottom:10px;">' +
-                  (showLabel ? '<div class="form-label" style="font-size:0.78rem;color:var(--warm-gray);">' + esc(f.label) + '</div>' : '') +
-                  '<div style="font-size:0.9rem;color:var(--charcoal,var(--text));">' + displayCell(f, record) + '</div></div>';
-        } else if (f.readOnly || typeof f.get === 'function') {
-          // Computed/read-only fields show their value (not an editable input) —
-          // avoids "[object Object]" for derived fields and uneditable identity fields.
-          html += '<div class="form-group" style="margin-bottom:12px;"><div class="form-label" style="font-size:0.78rem;color:var(--warm-gray);">' + esc(f.label) + '</div>' +
-                  '<div style="font-size:0.9rem;color:var(--charcoal,var(--text));">' + displayCell(f, record) + '</div></div>';
-        } else if ((f.type === 'select' || f.type === 'status') && Array.isArray(f.options) && f.options.length) {
-          // Enum fields edit as a constrained <select> (not a free-text input
-          // that accepts "banana"). options: ['a',...] or [{value,label},...].
-          var cur = (v == null ? '' : String(v));
-          var optsHtml = f.options.map(function (o) {
-            var ov = (o && typeof o === 'object') ? o.value : o;
-            var ol = (o && typeof o === 'object') ? (o.label || o.value) : o;
-            return '<option value="' + esc(ov) + '"' + (String(ov) === cur ? ' selected' : '') + '>' + esc(ol) + '</option>';
-          }).join('');
-          html += '<div class="form-group" style="margin-bottom:12px;"><label class="form-label">' + esc(f.label) + (f.required ? ' *' : '') + '</label>' +
-                  '<select class="form-input" name="' + esc(f.name) + '" style="width:100%;">' + optsHtml + '</select></div>';
-        } else {
-          var sval = (v == null) ? '' : (typeof v === 'object' ? canonicalGet(f, record) : v);
-          html += '<div class="form-group" style="margin-bottom:12px;"><label class="form-label">' + esc(f.label) + (f.required ? ' *' : '') + '</label>' +
-                  '<input class="form-input" name="' + esc(f.name) + '" value="' + esc(sval) + '" style="width:100%;"></div>';
-        }
-      });
+      groups[g].forEach(function (f) { html += _roRow(f, record, g); });
       html += '</div>';
     });
     return html;
