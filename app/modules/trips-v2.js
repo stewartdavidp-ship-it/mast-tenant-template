@@ -111,7 +111,10 @@
   function load() {
     var uid = currentUid();
     if (!uid) { V2.rows = []; render(); return; }
-    Promise.resolve(MastDB.trips.list(uid, { orderBy: 'startTime', limit: 200 })).then(function (snap) {
+    // NB: do NOT pass orderBy — orderByChild('startTime') returns 0 rows in the
+    // Firestore-compat layer for this path (verified on sgtest15). Fetch the
+    // user's recent trips and sort client-side (visibleRows defaults to date desc).
+    Promise.resolve(MastDB.trips.list(uid, { limit: 200 })).then(function (snap) {
       var val = (snap && typeof snap.val === 'function') ? snap.val() : snap;
       var out = [];
       Object.keys(val || {}).forEach(function (k) {
