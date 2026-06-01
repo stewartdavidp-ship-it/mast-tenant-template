@@ -278,8 +278,9 @@
     // stepper + checklist + guarded Advance, wired async by _initEntityFlow.
     // No status dropdown; status moves through the workflow.
     if (d.flow) {
-      return U.paneTabsBar([{ key: 'process', label: 'Process' }, { key: 'items', label: 'Items' }, { key: 'customer', label: 'Customer' }, { key: 'history', label: 'History' }], 'process') +
-        '<div class="mu-pane" data-pane="process">' + U.tiles(d.tiles ? d.tiles(r) : []) +
+      return U.stickyHead(U.tiles(d.tiles ? d.tiles(r) : []),
+        U.paneTabsBar([{ key: 'process', label: 'Process' }, { key: 'items', label: 'Items' }, { key: 'customer', label: 'Customer' }, { key: 'history', label: 'History' }], 'process')) +
+        '<div class="mu-pane" data-pane="process">' +
           '<div id="muFlowHost" style="font-size:0.85rem;color:var(--warm-gray);">Loading workflow…</div></div>' +
         '<div class="mu-pane" data-pane="items" hidden>' + U.cardTable('Items', itemsTable) + U.card('Summary', totalsHtml) + '</div>' +
         '<div class="mu-pane" data-pane="customer" hidden>' + U.card('Customer & shipping', custBlock) + '</div>' +
@@ -306,8 +307,9 @@
       { label: 'Status', render: function (o) { return U.badge(o.status, o.tone); } }
     ], orders);
     var notes = (d.notes ? d.notes(r) : '') || '';
-    return U.paneTabsBar([{ key: 'ov', label: 'Overview' }, { key: 'orders', label: 'Orders' }, { key: 'notes', label: 'Notes' }], 'ov') +
-      '<div class="mu-pane" data-pane="ov">' + U.tiles(d.tiles ? d.tiles(r) : []) + U.card('Contact', contactHtml) + U.card('Segments', chips(d.segments ? d.segments(r) : [])) + '</div>' +
+    return U.stickyHead(U.tiles(d.tiles ? d.tiles(r) : []),
+      U.paneTabsBar([{ key: 'ov', label: 'Overview' }, { key: 'orders', label: 'Orders' }, { key: 'notes', label: 'Notes' }], 'ov')) +
+      '<div class="mu-pane" data-pane="ov">' + U.card('Contact', contactHtml) + U.card('Segments', chips(d.segments ? d.segments(r) : [])) + '</div>' +
       '<div class="mu-pane" data-pane="orders" hidden>' + U.cardTable('Orders (' + orders.length + ')', ordersTable) + '</div>' +
       '<div class="mu-pane" data-pane="notes" hidden>' + U.card('Notes', notes ? '<div style="font-size:0.85rem;color:var(--warm-gray);line-height:1.5;">' + esc(notes) + '</div>' : '<span class="mu-sub">No notes</span>') + '</div>';
   }
@@ -354,7 +356,7 @@
     var d = s.detail;
     if (!d || !d.flow || !window.MastAdmin || typeof MastAdmin.loadModule !== 'function') return;
     record.id = record.id || s.recordId(record);
-    _flow = { schema: s, record: record, flowKey: d.flow, fromPhase: null };
+    _flow = { key: s.key, schema: s, record: record, flowKey: d.flow, fromPhase: null };
     // Engine first (it registers window.MastFlow before the spec IIFE checks for it), then the spec.
     MastAdmin.loadModule('workflowEngine')
       .then(function () { return d.flowModule ? MastAdmin.loadModule(d.flowModule) : null; })
@@ -387,14 +389,15 @@
     var opts = { recordId: rec.id, expectedFromPhase: _flow.fromPhase };
     if (branchChoice) opts.branchChoice = branchChoice;
     window.MastFlow.transition(fk, rec, targetPhaseKey, opts).then(function () {
-      // Re-read so status/__workflow reflect the write, then re-render the header.
+      if (window.showToast) showToast('Advanced to ' + String(targetPhaseKey).replace(/[-_]/g, ' '));
+      // Re-open the whole panel from fresh data so the header status badge + all
+      // panes reflect the new phase (not just the flow host). Re-inits the flow.
       if (typeof s.fetch === 'function') {
         return Promise.resolve(s.fetch(rec.id)).then(function (fresh) {
-          if (fresh) { fresh.id = fresh.id || s.recordId(fresh); _flow.record = fresh; }
+          if (fresh) { fresh.id = fresh.id || s.recordId(fresh); openRecord(_flow.key, fresh, 'read', true); }
+          else _flowRender();
         });
       }
-    }).then(function () {
-      if (window.showToast) showToast('Advanced to ' + String(targetPhaseKey).replace(/[-_]/g, ' '));
       _flowRender();
     }).catch(function (e) {
       console.error('[MastEntity] transition', e);
