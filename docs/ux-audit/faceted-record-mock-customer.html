@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Faceted Record slide-out — CUSTOMER mock</title>
+<!--
+  FACETED RECORD slide-out — the "regular" SO (static mock, NOT wired).
+  Subject: customer stewartdavidp@gmail.com (real list row: 41 orders, $319.20,
+  LAPSED) on sgtest15.
+
+  Demonstrates that the regular SO and the Process SO are the SAME shell:
+  expandable headline (cover) at top + tabs. The ONLY things this mock lacks vs
+  the Process mock (process-slideout-mock-hybrid.html) are the process-state
+  stepper and the Process tab — because a customer has no governed lifecycle
+  (status is derived: active/lapsed/lead/vip). See 17-process-slideout-variant.md
+  §1a (Process-vs-Record test) and §7 (this is the Faceted Record reference).
+
+  Tabs = the legacy 5-facet relationship hub: Overview / Orders / Activity /
+  Classes / Wallet. The flat customers-v2 (name/email/spend/status only) drops all
+  of these — this is what it should be rebuilt into.
+-->
+<style>
+  :root {
+    --bg: #221f1d; --surface-dark: #1b1917; --surface-card: #2a2623; --surface-card-2: #322d29;
+    --border: rgba(255,255,255,0.08); --border-strong: rgba(255,255,255,0.14);
+    --text: #ece7e0; --charcoal: #ece7e0; --warm-gray: #9c948b; --warm-gray-light: #b9b1a8;
+    --amber: #d8a657; --teal: #5fb4a8; --success: #5aa86f; --danger: #c95f55; --warning: #d8a657; --info: #6ea8d8;
+    /* 7-step rem scale: 0.72 0.78 0.85 0.9 1.0 1.15 1.6 */
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: var(--bg); color: var(--text); -webkit-font-smoothing: antialiased; }
+
+  .page-behind { position: fixed; inset: 0; padding: 28px 36px; overflow: hidden; filter: saturate(0.85); }
+  .pb-topbar { display:flex; align-items:center; gap:10px; font-size:1.0rem; color: var(--warm-gray-light); margin-bottom: 28px; } .pb-topbar b { color: var(--text); }
+  .pb-h1 { font-size: 1.6rem; margin: 0 0 4px; } .pb-sub { color: var(--warm-gray); font-size: 0.9rem; margin-bottom: 20px; }
+  .pb-rows { border:1px solid var(--border); border-radius:12px; overflow:hidden; max-width: 760px; }
+  .pb-row { display:grid; grid-template-columns: 1.4fr 1.6fr 90px 90px; gap:12px; padding:14px 16px; border-bottom:1px solid var(--border); font-size:0.9rem; color: var(--warm-gray-light); }
+  .pb-row:last-child { border-bottom:0; } .pb-row.hi { color: var(--text); }
+
+  .scrim { position: fixed; inset: 0; background: rgba(0,0,0,0.55); animation: fade .18s ease; }
+  @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+
+  .panel { position: fixed; top: 0; right: 0; bottom: 0; width: min(1140px, 100%); background: var(--bg); border-left: 1px solid var(--border-strong); box-shadow: -24px 0 60px rgba(0,0,0,0.45); display: flex; flex-direction: column; animation: slide .22s cubic-bezier(.2,.7,.2,1); }
+  @keyframes slide { from { transform: translateX(40px); opacity: .4; } to { transform: none; opacity: 1; } }
+
+  .ph { display:flex; align-items:center; gap:14px; padding: 16px 22px; border-bottom:1px solid var(--border); background: var(--surface-dark); }
+  .ph-back { background:transparent; border:0; color: var(--teal); font: inherit; font-size:0.85rem; cursor:pointer; padding:0; display:flex; align-items:center; gap:6px; flex-shrink:0; }
+  .ph-titlewrap { display:flex; align-items:center; gap:12px; min-width:0; }
+  .ph-title { font-size:1.15rem; font-weight:600; white-space:nowrap; }
+  .ph-spacer { flex:1; }
+  .ph-icon { background:transparent; border:0; color: var(--warm-gray); font-size:1.15rem; cursor:pointer; padding:0 4px; line-height:1; flex-shrink:0; } .ph-icon:hover { color: var(--text); }
+
+  .badge { display:inline-flex; align-items:center; gap:6px; font-size:0.72rem; font-weight:600; padding:3px 10px; border-radius:999px; line-height:1.4; white-space:nowrap; }
+  .badge .dot { width:6px; height:6px; border-radius:50%; flex:0 0 6px; }
+  .badge.danger { background:color-mix(in srgb, var(--danger) 16%, transparent); color:var(--danger); border:1px solid color-mix(in srgb, var(--danger) 30%, transparent); } .badge.danger .dot { background: var(--danger); }
+  .badge.teal { background:color-mix(in srgb, var(--teal) 16%, transparent); color:var(--teal); border:1px solid color-mix(in srgb, var(--teal) 30%, transparent); } .badge.teal .dot { background: var(--teal); }
+  .badge.amber { background:color-mix(in srgb, var(--amber) 16%, transparent); color:var(--amber); border:1px solid color-mix(in srgb, var(--amber) 30%, transparent); } .badge.amber .dot { background: var(--amber); }
+  .badge.info { background:color-mix(in srgb, var(--info) 16%, transparent); color:var(--info); border:1px solid color-mix(in srgb, var(--info) 30%, transparent); } .badge.info .dot { background: var(--info); }
+
+  .pbody { flex:1; overflow-y:auto; }
+
+  /* ===== PINNED: expandable headline (cover) + tabs ===== */
+  .pinned { position: sticky; top: 0; z-index: 5; background: var(--bg); border-bottom: 1px solid var(--border); }
+  .cover-head { display:flex; align-items:center; gap:0; padding:16px 22px 14px; cursor:pointer; }
+  .cover-head:hover { background: color-mix(in srgb, var(--surface-card-2) 30%, transparent); }
+  .hl { padding-right: 22px; margin-right: 22px; border-right:1px solid var(--border); }
+  .hl:last-of-type { border-right:0; }
+  .hl .k { font-size:0.72rem; text-transform:uppercase; letter-spacing:.05em; color: var(--warm-gray); margin-bottom:3px; }
+  .hl .v { font-size:1.0rem; color: var(--text); } .hl .v.big { font-size:1.15rem; font-weight:600; }
+  .cover-toggle { margin-left:auto; display:flex; align-items:center; gap:7px; color: var(--warm-gray); font-size:0.78rem; }
+  .chev { display:inline-block; transition: transform .18s ease; } .pinned.open .chev { transform: rotate(90deg); }
+  .cover-detail { display:none; padding: 0 22px 16px; }
+  .pinned.open .cover-detail { display:block; }
+  .vitals { display:grid; grid-template-columns: repeat(4, 1fr); gap:14px 24px; padding:14px 0 4px; border-top:1px solid var(--border); }
+  .vital .k { font-size:0.72rem; text-transform:uppercase; letter-spacing:.05em; color: var(--warm-gray); margin-bottom:3px; }
+  .vital .v { font-size:0.9rem; color: var(--text); }
+  .vital .v.warn { color: var(--danger); }
+
+  .tabs { display:flex; gap:4px; padding: 0 22px; }
+  .tab { background:transparent; border:0; border-bottom:2px solid transparent; color: var(--warm-gray); font: inherit; font-size:0.9rem; padding:10px 16px; cursor:pointer; white-space:nowrap; }
+  .tab.active { color: var(--text); font-weight:600; border-bottom-color: var(--amber); }
+  .tab .count { color: var(--warm-gray); font-size:0.78rem; margin-left:5px; }
+
+  .panels { padding: 20px 22px 40px; }
+  .tabpanel { display:none; } .tabpanel.active { display:block; }
+  .section-title { font-size:0.72rem; text-transform:uppercase; letter-spacing:.05em; color: var(--warm-gray); margin: 0 0 10px; }
+  .card { background: var(--surface-card); border:1px solid var(--border); border-radius:12px; padding:16px 18px; margin-bottom:18px; }
+  .stat-grid { display:grid; grid-template-columns: repeat(4, 1fr); gap:14px; margin-bottom:18px; }
+  .stat { background: var(--surface-card); border:1px solid var(--border); border-radius:12px; padding:14px 16px; }
+  .stat .k { font-size:0.72rem; text-transform:uppercase; letter-spacing:.05em; color: var(--warm-gray); margin-bottom:6px; }
+  .stat .v { font-size:1.15rem; font-weight:600; } .stat .v.warn { color: var(--danger); }
+  .row-actions { display:flex; gap:10px; margin-bottom:18px; }
+  .btn { font: inherit; font-size:0.85rem; font-weight:600; padding:9px 16px; border-radius:9px; cursor:pointer; border:1px solid transparent; white-space:nowrap; }
+  .btn-primary { background: var(--amber); color:#211800; }
+  .btn-secondary { background: transparent; color: var(--warm-gray-light); border-color: var(--border-strong); } .btn-secondary:hover { color: var(--text); }
+
+  table.t { width:100%; border-collapse:collapse; }
+  table.t th { text-align:left; font-size:0.72rem; text-transform:uppercase; letter-spacing:.04em; color: var(--warm-gray); padding:8px 12px; border-bottom:1px solid var(--border); }
+  table.t td { padding:12px; font-size:0.9rem; border-bottom:1px solid var(--border); }
+  table.t tr:last-child td { border-bottom:0; }
+  td.r, th.r { text-align:right; font-variant-numeric: tabular-nums; }
+
+  .chips { display:flex; gap:8px; margin-bottom:14px; flex-wrap:wrap; }
+  .chip { font-size:0.78rem; padding:5px 12px; border-radius:999px; border:1px solid var(--border-strong); color: var(--warm-gray-light); cursor:pointer; background:transparent; }
+  .chip.active { background: color-mix(in srgb, var(--amber) 16%, transparent); color: var(--amber); border-color: color-mix(in srgb, var(--amber) 30%, transparent); }
+
+  .tl { position:relative; padding-left:22px; } .tl::before { content:""; position:absolute; left:6px; top:4px; bottom:4px; width:1.5px; background: var(--border-strong); }
+  .tl-item { position:relative; padding-bottom:16px; } .tl-item:last-child { padding-bottom:0; }
+  .tl-dot { position:absolute; left:-22px; top:3px; width:9px; height:9px; border-radius:50%; background: var(--teal); border:2px solid var(--bg); }
+  .tl-dot.order { background: var(--teal); } .tl-dot.note { background: var(--warm-gray); } .tl-dot.enroll { background: var(--info); }
+  .tl-when { font-size:0.78rem; color: var(--warm-gray); margin-bottom:2px; } .tl-what { font-size:0.9rem; color: var(--text); }
+  .empty-note { font-size:0.85rem; color: var(--warm-gray); }
+  .kv { display:grid; grid-template-columns: 150px 1fr; gap:8px 16px; font-size:0.9rem; } .kv .k { color: var(--warm-gray); } .kv .v { color: var(--text); }
+
+  .mock-flag { position: fixed; left:14px; bottom:14px; z-index:50; font-size:0.72rem; color: var(--warm-gray); background: var(--surface-dark); border:1px solid var(--border); border-radius:8px; padding:6px 11px; } .mock-flag b { color: var(--amber); }
+</style>
+</head>
+<body>
+
+<div class="page-behind" aria-hidden="true">
+  <div class="pb-topbar">⚓ <b>Mast</b> / Shir Glassworks</div>
+  <div class="pb-h1">Customers</div><div class="pb-sub">86 total</div>
+  <div class="pb-rows">
+    <div class="pb-row"><span>COGS Demo Etsy</span><span>test-188@example.com</span><span>1 order</span><span>$1,020</span></div>
+    <div class="pb-row hi"><span>stewartdavidp@gmail.com</span><span>stewartdavidp@gmail.com</span><span>41 orders</span><span>$319.20</span></div>
+    <div class="pb-row"><span>COGS Demo Online</span><span>test-187@example.com</span><span>1 order</span><span>$1,020</span></div>
+  </div>
+</div>
+
+<div class="scrim"></div>
+
+<div class="panel">
+  <div class="ph">
+    <button class="ph-back">&#8592; Back to Customers</button>
+    <div class="ph-titlewrap"><span class="ph-title">stewartdavidp@gmail.com</span><span class="badge danger"><span class="dot"></span>Lapsed</span></div>
+    <div class="ph-spacer"></div>
+    <button class="ph-icon" title="Expand to full width">&#10530;</button>
+    <button class="ph-icon" title="Close">&#10005;</button>
+  </div>
+
+  <div class="pbody">
+    <!-- PINNED: expandable headline (cover) + tabs — SAME as the Process SO, minus the stepper -->
+    <div class="pinned" id="pinned">
+      <div class="cover-head" id="coverHead">
+        <div class="hl"><div class="k">Email</div><div class="v">stewartdavidp@gmail.com</div></div>
+        <div class="hl"><div class="k">Spend</div><div class="v big">$319.20</div></div>
+        <div class="hl"><div class="k">Orders</div><div class="v">41</div></div>
+        <div class="hl"><div class="k">Status</div><div class="v"><span class="badge danger"><span class="dot"></span>Lapsed</span></div></div>
+        <div class="cover-toggle"><span id="coverToggleText">Vitals</span> <span class="chev">&#9656;</span></div>
+      </div>
+      <div class="cover-detail">
+        <div class="vitals">
+          <div class="vital"><div class="k">Lifetime value</div><div class="v">$319.20</div></div>
+          <div class="vital"><div class="k">Avg order</div><div class="v">$7.79</div></div>
+          <div class="vital"><div class="k">First order</div><div class="v">Mar 2, 2024</div></div>
+          <div class="vital"><div class="k">Last order</div><div class="v warn">Jan 14, 2026 · 138d ago</div></div>
+          <div class="vital"><div class="k">Frequency</div><div class="v">~every 17 days</div></div>
+          <div class="vital"><div class="k">Source</div><div class="v">Order</div></div>
+          <div class="vital"><div class="k">Tags</div><div class="v">repeat-buyer</div></div>
+          <div class="vital"><div class="k">Marketing</div><div class="v">Newsletter ✓ · SMS —</div></div>
+        </div>
+      </div>
+      <div class="tabs" role="tablist">
+        <button class="tab active" data-tab="overview">Overview</button>
+        <button class="tab" data-tab="orders">Orders <span class="count">41</span></button>
+        <button class="tab" data-tab="activity">Activity</button>
+        <button class="tab" data-tab="classes">Classes <span class="count">2</span></button>
+        <button class="tab" data-tab="wallet">Wallet</button>
+      </div>
+    </div>
+
+    <div class="panels">
+
+      <!-- OVERVIEW -->
+      <div class="tabpanel active" data-panel="overview">
+        <div class="stat-grid">
+          <div class="stat"><div class="k">Lifetime spend</div><div class="v">$319.20</div></div>
+          <div class="stat"><div class="k">Orders</div><div class="v">41</div></div>
+          <div class="stat"><div class="k">Frequency</div><div class="v">17d</div></div>
+          <div class="stat"><div class="k">Last order</div><div class="v warn">138d ago</div></div>
+        </div>
+        <div class="row-actions">
+          <button class="btn btn-primary">Send win-back email</button>
+          <button class="btn btn-secondary">Add note</button>
+          <button class="btn btn-secondary">Merge…</button>
+        </div>
+        <div class="section-title">Linked contacts</div>
+        <div class="card">
+          <div class="kv">
+            <div class="k">Primary email</div><div class="v">stewartdavidp@gmail.com</div>
+            <div class="k">Linked account UID</div><div class="v">oUt4ba0…JKjr1</div>
+            <div class="k">Contact records</div><div class="v">1 (drill out →)</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ORDERS -->
+      <div class="tabpanel" data-panel="orders">
+        <div class="section-title">Orders · 41</div>
+        <div class="card" style="padding:0;">
+          <table class="t">
+            <thead><tr><th>Order</th><th>Date</th><th>Status</th><th class="r">Total</th></tr></thead>
+            <tbody>
+              <tr><td>SGTE-0171</td><td>Jan 14, 2026</td><td><span class="badge info"><span class="dot"></span>Placed</span></td><td class="r">$22.50</td></tr>
+              <tr><td>SGTE-0150</td><td>Dec 28, 2025</td><td><span class="badge teal"><span class="dot"></span>Delivered</span></td><td class="r">$8.00</td></tr>
+              <tr><td>SGTE-0142</td><td>Dec 11, 2025</td><td><span class="badge teal"><span class="dot"></span>Delivered</span></td><td class="r">$8.00</td></tr>
+              <tr><td>SGTE-0128</td><td>Nov 24, 2025</td><td><span class="badge teal"><span class="dot"></span>Delivered</span></td><td class="r">$7.50</td></tr>
+              <tr><td colspan="4" style="color:var(--warm-gray);">…37 more</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ACTIVITY (merged timeline) -->
+      <div class="tabpanel" data-panel="activity">
+        <div class="chips">
+          <button class="chip active">All</button><button class="chip">Orders</button><button class="chip">Enrollments</button>
+          <button class="chip">Contacts</button><button class="chip">Notes</button><button class="chip">Tickets</button><button class="chip">Reviews</button>
+        </div>
+        <div class="card">
+          <div class="tl">
+            <div class="tl-item"><span class="tl-dot order"></span><div class="tl-when">Jan 14, 2026</div><div class="tl-what">Placed order SGTE-0171 · $22.50</div></div>
+            <div class="tl-item"><span class="tl-dot note"></span><div class="tl-when">Jan 2, 2026</div><div class="tl-what">Note added — "asked about custom cardinal commission"</div></div>
+            <div class="tl-item"><span class="tl-dot enroll"></span><div class="tl-when">Nov 8, 2025</div><div class="tl-what">Enrolled — Intro to Glassblowing (Session 2)</div></div>
+            <div class="tl-item"><span class="tl-dot order"></span><div class="tl-when">Nov 24, 2025</div><div class="tl-what">Delivered order SGTE-0128 · $7.50</div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- CLASSES -->
+      <div class="tabpanel" data-panel="classes">
+        <div class="section-title">Enrollments · 2</div>
+        <div class="card" style="padding:0;">
+          <table class="t">
+            <thead><tr><th>Class</th><th>Session</th><th>Status</th></tr></thead>
+            <tbody>
+              <tr><td>Intro to Glassblowing</td><td>Nov 8, 2025</td><td><span class="badge teal"><span class="dot"></span>Attended</span></td></tr>
+              <tr><td>Ornament Workshop</td><td>Dec 13, 2025</td><td><span class="badge teal"><span class="dot"></span>Attended</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- WALLET -->
+      <div class="tabpanel" data-panel="wallet">
+        <div class="stat-grid" style="grid-template-columns:repeat(3,1fr);">
+          <div class="stat"><div class="k">Store credit</div><div class="v">$0.00</div></div>
+          <div class="stat"><div class="k">Gift card balance</div><div class="v">$15.00</div></div>
+          <div class="stat"><div class="k">Loyalty points</div><div class="v">319</div></div>
+        </div>
+        <div class="section-title">Wallet activity</div>
+        <div class="card"><div class="empty-note">Gift card GC-0042 redeemed $10.00 on Dec 28, 2025 · balance $15.00 remaining.</div></div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<div class="mock-flag"><b>MOCK</b> · Faceted Record (regular SO) · customer · not wired</div>
+
+<script>
+  document.querySelectorAll('.tab').forEach(function (t) {
+    t.addEventListener('click', function () {
+      var key = t.getAttribute('data-tab');
+      document.querySelectorAll('.tab').forEach(function (x) { x.classList.toggle('active', x === t); });
+      document.querySelectorAll('.tabpanel').forEach(function (p) { p.classList.toggle('active', p.getAttribute('data-panel') === key); });
+    });
+  });
+  document.getElementById('coverHead').addEventListener('click', function () {
+    var c = document.getElementById('pinned'); c.classList.toggle('open');
+    document.getElementById('coverToggleText').textContent = c.classList.contains('open') ? 'Hide vitals' : 'Vitals';
+  });
+  document.querySelectorAll('.chip').forEach(function (ch) {
+    ch.addEventListener('click', function () { document.querySelectorAll('.chip').forEach(function (x){x.classList.toggle('active', x===ch);}); });
+  });
+</script>
+</body>
+</html>
