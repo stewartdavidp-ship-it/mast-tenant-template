@@ -58,6 +58,8 @@ jobs:
         run: node scripts/lint-module-info.js
       - name: RBAC coverage guard
         run: node scripts/lint-rbac.js
+      - name: Customer email-identity write guard
+        run: node scripts/lint-customer-writes.js
       # UX-standard conformance ratchet (UI redesign). Freezes current per-module
       # violation counts (native dialogs / rogue overlays / translateX / hardcoded
       # hex) and FAILS any PR that increases them — so the redesign standards

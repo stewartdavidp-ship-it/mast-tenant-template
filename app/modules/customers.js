@@ -1248,11 +1248,15 @@
       updates['admin/customers/' + loserId + '/mergedInto'] = winnerId;
       updates['admin/customers/' + loserId + '/updatedAt'] = now;
 
-      // Reindex byEmail/byUid/byContactId for loser → winner
-      function emailKey(e) { return e ? String(e).trim().toLowerCase().replace(/[.#$\[\]\/]/g, ',') : null; }
+      // Reindex byEmail/byUid/byContactId for loser → winner. Use the shared
+      // canonical key (gmail dot/+tag aware) so merged keys match the resolver.
+      function emailKey(e) {
+        if (window.MastCustomerResolver) return window.MastCustomerResolver.emailKey(e);
+        return e ? String(e).trim().toLowerCase().replace(/[.#$\[\]\/]/g, ',') : null;
+      }
       (loser.emails || []).forEach(function(e) {
         var k = emailKey(e);
-        if (k) updates['admin/customerIndexes/byEmail/' + k] = winnerId;
+        if (k) updates['admin/customerIndexes/byEmail/' + k] = winnerId; // lint-customer-writes-ok: merge re-points loser's byEmail key to winner
       });
       (loserLinked.uids || []).forEach(function(u) {
         updates['admin/customerIndexes/byUid/' + u] = winnerId;

@@ -1839,7 +1839,8 @@
     if (customerId) {
       custPromise = MastDB.get('admin/customers/' + customerId).then(function(c) { return { id: customerId, cust: c || null }; }).catch(function() { return { id: customerId, cust: null }; });
     } else if (emailKey) {
-      var indexKey = emailKey.replace(/\./g, ',');
+      // Canonical key (gmail dot/+tag aware) so lookups match the resolver's index.
+      var indexKey = (window.MastCustomerResolver && window.MastCustomerResolver.emailKey(emailKey)) || emailKey.replace(/[.#$[\]/]/g, ',');
       custPromise = MastDB.get('admin/customerIndexes/byEmail/' + indexKey).then(function(resolvedId) {
         if (!resolvedId) return { id: null, cust: null };
         return MastDB.get('admin/customers/' + resolvedId).then(function(c) { return { id: resolvedId, cust: c || null }; });
@@ -5470,7 +5471,8 @@
     var customerId = enrollment.customerId || null;
     var email = (enrollment.studentEmail || enrollment.customerEmail || '').toLowerCase().trim();
     if (!customerId && email) {
-      var indexKey = email.replace(/[.#$[\]/]/g, ',');
+      // Canonical key (gmail dot/+tag aware) so lookups match the resolver's index.
+      var indexKey = (window.MastCustomerResolver && window.MastCustomerResolver.emailKey(email)) || email.replace(/[.#$[\]/]/g, ',');
       customerId = await MastDB.get('admin/customerIndexes/byEmail/' + indexKey).catch(function() { return null; });
     }
     if (!customerId) {

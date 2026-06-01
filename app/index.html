@@ -105,7 +105,7 @@
        Eager-loaded — module labels are referenced by sidebar rendering at boot, not just on the Add-to-Mast page. -->
   <script src="data/mode-module-info.schema.js?v=1"></script>
   <script src="data/mode-module-info.js?v=1"></script>
-  <script src="../shared/customer-resolver.js?v=1"></script>
+  <script src="../shared/customer-resolver.js?v=2"></script>
   <script src="../shared/brand-sync.js?v=1"></script>
   <script src="../shared/channel-connection.js?v=1"></script>
   <!-- UI redesign engines (docs/ux-audit): shared primitives + Entity Engine.
@@ -113,9 +113,9 @@
        scripts/bump-modules-version.sh (these are static <head> tags loaded
        before the JS var exists, so they can't read it at runtime). Without
        this, the engines were frozen at ?v=1 and never cache-busted on deploy. -->
-  <script src="../shared/mast-ui.js?v=20260601-002915-cb0134c"></script>
-  <script src="../shared/mast-io.js?v=20260601-002915-cb0134c"></script>
-  <script src="../shared/mast-entity.js?v=20260601-002915-cb0134c"></script>
+  <script src="../shared/mast-ui.js?v=20260601-003503-710260e"></script>
+  <script src="../shared/mast-io.js?v=20260601-003503-710260e"></script>
+  <script src="../shared/mast-entity.js?v=20260601-003503-710260e"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Pod-specific runtime config — sets window.MAST_POD_PLATFORM_PROJECT so
@@ -11665,6 +11665,23 @@ var MastCustomers = (function() {
         },
         pushKey: function(path) {
           return MastDB.newKey(path.indexOf(prefix) === 0 ? path.slice(prefix.length) : path);
+        },
+        // Atomic create-only claim of an index key (Firestore transaction).
+        // Returns the winning id: `value` if we claimed an empty key, else the
+        // pre-existing id (we lost the race). Index scalars are stored as
+        // {_v: id} by MastDB, so unwrap on read-back.
+        claim: function(path, value) {
+          var rel = path.indexOf(prefix) === 0 ? path.slice(prefix.length) : path;
+          function unwrap(v) {
+            return (v && typeof v === 'object' && v._v !== undefined) ? v._v : (v || null);
+          }
+          return MastDB.transaction(rel, function(current) {
+            if (unwrap(current)) return undefined; // already held — don't overwrite
+            return value;                          // claim the empty key
+          }).then(function(res) {
+            if (res && res.committed) return value;
+            return unwrap(res && res.value) || value;
+          });
         }
       }
     };
@@ -20846,7 +20863,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260601-002915-cb0134c';
+var MAST_MODULES_V = '20260601-003503-710260e';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
