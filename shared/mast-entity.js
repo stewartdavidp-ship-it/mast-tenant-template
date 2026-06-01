@@ -179,6 +179,10 @@
     var s = _registry[key];
     var card = window.MastUI.card;   // section card (title + bordered body)
     if (mode === 'read') return _readFormHtml(s, record);
+    // Custom edit/create interior — the symmetric opt-in to detail.render (read).
+    // For records whose editable controls exceed the generic field form (dates,
+    // checkboxes, a multi-select scope picker). The schema's onSave reads the DOM.
+    if (s.detail && typeof s.detail.editRender === 'function') return s.detail.editRender(record, mode);
 
     // Partition fields into editable (status included in edit/create) and
     // read-only context, preserving declaration order within each group.
@@ -249,6 +253,11 @@
     var d = s.detail || {};
     if (d.template === 'transaction') return renderTransaction(window.MastUI, d, r);
     if (d.template === 'party') return renderParty(window.MastUI, d, r);
+    // Custom read interior (doc 17 §1: "write an interior renderer + let a schema
+    // opt into it"). The renderer composes the same MastUI primitives the built-in
+    // templates use — so it inherits the shell and can't drift. Used by records
+    // that fit neither stock template (e.g. a promotion: config + product scope).
+    if (typeof d.render === 'function') return d.render(window.MastUI, r);
     return _formHtml(s.key, r, 'read');
   }
   function drillLink(entityKey, id, text) {
