@@ -47,11 +47,13 @@
     label: 'Trip', labelPlural: 'Trips', size: 'lg',
     route: 'trips-v2',
     recordId: function (t) { return t.id; },
+    // fields[0] is the slide-out title source (the engine reads record[name]
+    // directly, no get()), so it must be a real string property — `dest` is
+    // materialized onto each row in load(). Date stays the default sort column.
     fields: [
+      { name: 'dest', label: 'Destination', type: 'text', list: true, readOnly: true },
       { name: 'date', label: 'Date', type: 'date', list: true, readOnly: true, group: 'Trip',
         get: function (t) { return t.startTime || t.tripDate || null; } },
-      { name: 'destination', label: 'Destination', type: 'text', list: true, readOnly: true,
-        get: function (t) { return locLabel(t.destination); } },
       { name: 'purpose', label: 'Purpose', type: 'text', list: true, readOnly: true,
         get: function (t) { return purposeText(t); } },
       { name: 'miles', label: 'Miles', type: 'number', list: true, readOnly: true,
@@ -121,7 +123,12 @@
       var val = (snap && typeof snap.val === 'function') ? snap.val() : snap;
       var out = [];
       Object.keys(val || {}).forEach(function (k) {
-        var t = val[k]; if (t && typeof t === 'object' && t.status === 'completed') out.push(Object.assign({ id: k }, t));
+        var t = val[k];
+        if (t && typeof t === 'object' && t.status === 'completed') {
+          var r = Object.assign({ id: k }, t);
+          r.dest = locLabel(t.destination);   // real string for the title + list column
+          out.push(r);
+        }
       });
       V2.rows = out; V2.byId = {}; out.forEach(function (r) { V2.byId[r.id] = r; });
       V2.loaded = true; render();
