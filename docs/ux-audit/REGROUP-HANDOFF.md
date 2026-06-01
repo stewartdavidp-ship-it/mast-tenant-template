@@ -1,8 +1,30 @@
 # UI Redesign — Regroup Handoff (read this fully before touching anything)
 
 **Date:** 2026-05-31. Written after a session that shipped real fixes but then went
-down a rathole on the order edit screen. A new session should do a **deep context
-dive** before writing code. This doc is the source of truth for *why we stopped*.
+down a rathole on the order edit screen. This doc is the source of truth for *why we
+stopped*.
+
+---
+
+## ⏸️ START HERE — do a REVIEW WITH THE USER first. Do NOT write code.
+
+The user wants the next session to **open with a review together**, not a code dive.
+Read this whole doc first, then walk the user through three things and agree before
+building anything:
+
+1. **What we've built** — the engines (MastEntity / MastUI / MastIO / MastFlow), the
+   Tier-1 fixes (good), and the orders-v2 proof (wrong model — status dropdown
+   instead of the MastFlow workflow). Show, don't tell: pull up legacy `#orders`
+   (workflow stepper) vs `?ui=1#orders-v2` (flat dropdown) live.
+2. **The go-forward objective** — redo the order screen + flow from intent
+   (workflow + checklist + guarded actions + rich context, progressively disclosed),
+   and re-examine whether the "few category templates" thesis even holds.
+3. **How we proceed** — agree the model and the first concrete step together BEFORE
+   any building. Confirm scope/lane explicitly (UI vs process-flow) so we don't drift.
+
+Keep it conversational and short. No long multiple-choice popups — the user found
+those hard to parse. Discuss in plain text; reserve structured questions for genuine
+either/or forks.
 
 ---
 
