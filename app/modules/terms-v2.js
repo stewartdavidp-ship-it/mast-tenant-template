@@ -76,12 +76,24 @@
         var publishAction = '<div style="display:flex;gap:8px;flex-wrap:wrap;">' +
           '<button class="btn btn-secondary" onclick="TermsV2.classic()">Publish to storefront (classic view) →</button></div>';
 
-        return UI.card('Return policy', returnKv) +
-          UI.cardTable('Category-specific rules', catBody) +
-          termsCard('Gift card terms', c.giftCardTerms) +
-          termsCard('Loyalty program terms', c.loyaltyTerms) +
-          termsCard('Additional terms', c.additionalTerms) +
-          UI.card('Publish', published + publishAction);
+        // Labeled facet tabs (the standard detail shape — scan + jump, no long
+        // scroll), with a thin headline strip above. Matches orders/customers/etc.;
+        // terms-v2 was the lone flat-stack outlier.
+        var tiles = UI.tiles([
+          { k: 'Return window', v: esc(String(c.returnWindowDays != null ? c.returnWindowDays : 30)) + ' days', hero: true },
+          { k: 'Restocking', v: esc(String(c.restockingFeePercent || 0)) + '%' },
+          { k: 'Last published', v: c.lastPublishedAt ? N.date(c.lastPublishedAt) : '—' }
+        ]);
+        var tabsBar = UI.paneTabsBar([
+          { key: 'returns', label: 'Returns' }, { key: 'giftcard', label: 'Gift card' },
+          { key: 'loyalty', label: 'Loyalty' }, { key: 'additional', label: 'Additional' }, { key: 'publish', label: 'Publish' }
+        ], 'returns');
+        return tiles + tabsBar +
+          '<div class="mu-pane" data-pane="returns">' + UI.card('Return policy', returnKv) + UI.cardTable('Category-specific rules', catBody) + '</div>' +
+          '<div class="mu-pane" data-pane="giftcard" hidden>' + termsCard('Gift card terms', c.giftCardTerms) + '</div>' +
+          '<div class="mu-pane" data-pane="loyalty" hidden>' + termsCard('Loyalty program terms', c.loyaltyTerms) + '</div>' +
+          '<div class="mu-pane" data-pane="additional" hidden>' + termsCard('Additional terms', c.additionalTerms) + '</div>' +
+          '<div class="mu-pane" data-pane="publish" hidden>' + UI.card('Publish', published + publishAction) + '</div>';
       },
       editRender: function (c) {
         c = c || {};
