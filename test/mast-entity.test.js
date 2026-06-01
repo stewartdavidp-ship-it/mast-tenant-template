@@ -90,4 +90,29 @@ t('canonicalGet uses get() for a computed column', () => {
 });
 t('validate requires name on the sale schema', () => assert.strictEqual(E.validate('sale', { discountValue: 5 }).ok, false));
 
+// ── read-only Faceted Record (trips-v2): all columns computed via get(), a
+//    detail.render custom interior, and NO onSave (view-only surface). ──
+const TRIP = {
+  label: 'Trip', labelPlural: 'Trips',
+  recordId: t => t.id,
+  fields: [
+    { name: 'date', label: 'Date', type: 'date', list: true, readOnly: true, get: t => t.startTime },
+    { name: 'destination', label: 'Destination', type: 'text', list: true, readOnly: true, get: t => (t.destination && t.destination.label) || '—' },
+    { name: 'miles', label: 'Miles', type: 'number', list: true, readOnly: true, get: t => t.miles || 0 },
+    { name: 'deductible', label: 'Deductible', type: 'money', list: true, readOnly: true, get: t => t.deductibleValue || 0 },
+  ],
+  detail: { render: () => '<trip-read>' },
+};
+E.define('trip', TRIP);
+t('read-only schema: computed date column + money align, custom render, no onSave', () => {
+  const cols = E.listColumns('trip');
+  assert.deepStrictEqual(cols.map(c => c.key), ['date', 'destination', 'miles', 'deductible']);
+  assert.strictEqual(cols.find(c => c.key === 'deductible').align, 'right');
+  assert.strictEqual(typeof E.get('trip').detail.render, 'function');
+  assert.strictEqual(E.get('trip').onSave, undefined);
+});
+t('canonicalGet formats a computed money column from get()', () => {
+  assert.strictEqual(E.canonicalGet(TRIP.fields[3], { deductibleValue: 12.5 }), '12.50');
+});
+
 console.log('\n' + pass + ' passed');
