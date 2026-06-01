@@ -49,8 +49,17 @@ awk -v new="$NEW_VALUE" '
     print "var MAST_MODULES_V = '\''" new "'\'';"
     next
   }
+  # Shared UI-redesign engines are static <head> tags loaded before the JS var
+  # exists, so they cannot read MAST_MODULES_V at runtime. Keep their ?v= suffix
+  # in lockstep here, otherwise they freeze (historically at ?v=1) and never
+  # cache-bust on deploy — clients keep stale engine JS until a hard reload.
+  /shared\/mast-(ui|io|entity)\.js\?v=/ {
+    gsub(/\?v=[^"]*/, "?v=" new)
+    print
+    next
+  }
   { print }
 ' "$INDEX_HTML" > "$TMP_FILE"
 mv "$TMP_FILE" "$INDEX_HTML"
 
-echo "MAST_MODULES_V: $CURRENT_VALUE → $NEW_VALUE"
+echo "MAST_MODULES_V: $CURRENT_VALUE → $NEW_VALUE (+ shared engine tags)"
