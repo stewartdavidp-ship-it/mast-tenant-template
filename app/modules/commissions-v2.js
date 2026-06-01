@@ -75,11 +75,20 @@
         var t = String(targetId || '');
         var tab = /money/.test(t) ? 'money' : (/thread/.test(t) ? 'thread'
           : (/milestone/.test(t) ? 'milestones' : (/spec|production/.test(t) ? 'spec' : null)));
-        if (typeof navigateTo === 'function') navigateTo('commissions');
-        setTimeout(function () {
-          if (window.viewCommissionDetail) window.viewCommissionDetail(id);
-          if (tab && window.setCommissionDetailTab) setTimeout(function () { window.setCommissionDetailTab(id, tab); }, 80);
-        }, 90);
+        // The legacy commission detail (viewCommissionDetail) lives in orders.js,
+        // which may not be loaded in a fresh commissions-v2 session. Load it first
+        // so navigateTo('commissions') resolves and the detail opener exists
+        // (avoids the cold-load race), then open the record at the relevant tab.
+        function open() {
+          if (typeof navigateTo === 'function') navigateTo('commissions');
+          setTimeout(function () {
+            if (window.viewCommissionDetail) window.viewCommissionDetail(id);
+            if (tab && window.setCommissionDetailTab) setTimeout(function () { window.setCommissionDetailTab(id, tab); }, 90);
+          }, 120);
+        }
+        if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') {
+          MastAdmin.loadModule('orders').then(open).catch(open);
+        } else { open(); }
         return true;   // handled
       },
       tiles: function (c) {
