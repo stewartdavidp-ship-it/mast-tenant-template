@@ -111,10 +111,13 @@
   function load() {
     var uid = currentUid();
     if (!uid) { V2.rows = []; render(); return; }
-    // NB: do NOT pass orderBy — orderByChild('startTime') returns 0 rows in the
-    // Firestore-compat layer for this path (verified on sgtest15). Fetch the
-    // user's recent trips and sort client-side (visibleRows defaults to date desc).
-    Promise.resolve(MastDB.trips.list(uid, { limit: 200 })).then(function (snap) {
+    // Read via the RTDB-compat ref keyed at trips/{uid} (the legacy #trips path),
+    // NOT MastDB.trips.list()/MastDB.query() — verified on sgtest15 that query()
+    // mishandles the trips/{uid} path (returns driver-uid docs, not the trips) and
+    // that orderByChild('startTime')/limitToLast drop rows in the compat layer.
+    // .once('value') is a one-shot read (satisfies the no-unbounded-listener rule);
+    // a user's trip history is bounded, and we sort client-side (date desc default).
+    Promise.resolve(MastDB.trips.ref(uid).once('value')).then(function (snap) {
       var val = (snap && typeof snap.val === 'function') ? snap.val() : snap;
       var out = [];
       Object.keys(val || {}).forEach(function (k) {
