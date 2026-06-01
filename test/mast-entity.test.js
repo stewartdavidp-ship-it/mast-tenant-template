@@ -220,4 +220,29 @@ t('material schema: dollar unit cost, required name, custom interiors + delegati
   assert.strictEqual(typeof E.get('material').onSave, 'function');
 });
 
+// ── Faceted Record with an interactive thread interior, no onSave (cs-tickets-v2):
+//    status is a free-select attribute (not gated), all columns computed. ──
+const TICKET = {
+  label: 'Ticket', labelPlural: 'Tickets',
+  recordId: t => t.id,
+  fields: [
+    { name: 'subject', label: 'Subject', type: 'text', list: true, readOnly: true, get: t => t.subject || 'No subject' },
+    { name: 'from', label: 'From', type: 'text', list: true, readOnly: true, get: t => t.contactName || t.contactEmail || 'Unknown' },
+    { name: 'status', label: 'Status', type: 'status', list: true, readOnly: true,
+      options: ['open', 'in_progress', 'waiting', 'resolved', 'closed'], get: t => t.status || 'open',
+      tone: v => v === 'resolved' ? 'success' : v === 'in_progress' ? 'amber' : 'info' },
+    { name: 'updated', label: 'Updated', type: 'date', list: true, readOnly: true, get: t => t.updatedAt || t.createdAt || null },
+  ],
+  detail: { render: () => '<ticket-thread>' },
+};
+E.define('ticket', TICKET);
+t('ticket schema: computed subject/from/status columns, interactive thread render, no onSave', () => {
+  const cols = E.listColumns('ticket');
+  assert.deepStrictEqual(cols.map(c => c.key), ['subject', 'from', 'status', 'updated']);
+  assert.strictEqual(E.get('ticket').fields.find(f => f.name === 'status').get({}), 'open');   // default
+  assert.strictEqual(E.get('ticket').fields.find(f => f.name === 'subject').get({}), 'No subject');
+  assert.strictEqual(typeof E.get('ticket').detail.render, 'function');
+  assert.strictEqual(E.get('ticket').onSave, undefined);   // mutations are inline, not via the edit form
+});
+
 console.log('\n' + pass + ' passed');
