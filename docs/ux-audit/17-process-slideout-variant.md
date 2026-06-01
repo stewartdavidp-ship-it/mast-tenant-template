@@ -399,3 +399,55 @@ Wizard (mapping/onboarding/day-close).
 - **Read the file on `main` before building** — the engine on `main` was more evolved than an early-branch
   read suggested (it already had the `transaction`/`party` templates). Verify, don't assume (see §8 correction).
 - Minor open: `customers-v2` search re-renders the tab innerHTML per keystroke → input loses focus after 1 char.
+
+## 13. The global shape decision — presenter vs producer (2026-06-01, ratified)
+
+The whole-app model collapses to one rule:
+
+> **The slide-out is the universal *presenter* of an object. The control is a
+> pluggable *producer* of objects. Whatever produces an object — a list, a
+> calendar, a board, cards, or (for a singleton) a launcher — the slide-out
+> presents and edits it.**
+
+§10 said the index layer is pluggable and a control is validated by its output.
+§13 takes that to its conclusion: *consistency is automatic* because every object,
+regardless of how it was produced, lands in the **same shell**. There is nothing
+bespoke to make screen B look foreign after screen A. A new screen is "pick a
+producer + reuse the presenter," never "design a new screen."
+
+**Producers (interchangeable):** `table/list` · `calendar` · `board/grouped` ·
+`cards` · **`launcher`** (the degenerate producer for a *config singleton* — one
+object, no index; you land on a launcher card and click to open it).
+
+**Singletons are objects, not a special case.** A T&C/policies, studio, brand,
+wallet-instruments, or homepage config is *an object* → it is defined as a normal
+`MastEntity` schema and **presented in the slide-out**, reached via a launcher card
+instead of a list. No second presenter, no "config-page chrome." (Reference build:
+`terms-v2` — launcher card → slide-out object, read + edit + a publish action.)
+
+### 13a. The qualifier is load-bearing: "assuming it is an object"
+The slide-out presents *objects*. The three sibling engines (§11) stay exceptions
+**because they are not single objects being presented**:
+- **Report / Dashboard** — a terminal aggregate, not an object you open.
+- **Builder / Canvas** — you author on a canvas, not manage an object's fields.
+- **Wizard** — a multi-step task, not an object.
+
+### 13b. The exceptions keep their own *shape* but MUST conform to the global *look & feel*
+A report/builder/wizard has its own structure, but it is still the same app. It
+must use the global design system, not a bespoke one:
+- **Color tokens** — `var(--…)`, never hardcoded hex. *(enforced: `lint-design-tokens`)*
+- **Type scale** — the 7-step rem scale. *(enforced: `lint-design-tokens`)*
+- **No rogue overlays / native dialogs** — `mastSlideOut` / `mastConfirm`. *(enforced: `lint-ux-standards`)*
+- **Shared button components + consistent button *language*** — the same `btn`/
+  `btn-primary`/`btn-secondary`/`btn-danger` classes, and consistent verbs
+  ("Save", "Publish", "Delete", "Back to …"). *(convention — not yet linted)*
+- **A standard back control whenever the screen is reachable by drilling in from
+  somewhere other than the nav** — the full-page equivalent of the slide-out's
+  back-crumb / `MastNavStack`, so you can always return to where you came from.
+  *(convention — not yet linted)*
+- **Standard page header** — `MastUI.pageHeader({title, count?, subtitle?,
+  actionsHtml?})` (the title/actions strip every list + launcher uses), so the top
+  of every screen matches.
+
+The two conventions (button language, drill-in back control) are documented here as
+standards; a lint can be added if they drift.

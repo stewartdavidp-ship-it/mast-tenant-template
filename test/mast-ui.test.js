@@ -3,7 +3,7 @@
  * Run: node test/mast-ui.test.js
  */
 const assert = require('assert');
-const { Num, badge, tabs, list, esc } = require('../shared/mast-ui.js');
+const { Num, badge, tabs, list, esc, pageHeader } = require('../shared/mast-ui.js');
 
 let pass = 0;
 function t(name, fn) { fn(); pass++; console.log('  ✓ ' + name); }
@@ -56,5 +56,14 @@ t('moneyVal prefers cents field when present', () => assert.strictEqual(Num.mone
 t('moneyVal falls back to dollar field when no cents (the P0 case)', () => assert.strictEqual(Num.moneyVal({ total: 49.5 }, 'totalCents', 'total'), 49.5));
 t('moneyVal genuine zero cents → 0 (not the dollar fallback)', () => assert.strictEqual(Num.moneyVal({ shippingCents: 0, shipping: 9 }, 'shippingCents', 'shipping'), 0));
 t('moneyVal absent on both → null (renders em-dash, not $0.00)', () => assert.strictEqual(Num.moneyVal({}, 'totalCents', 'total'), null));
+
+// pageHeader — the shared title/actions strip (doc 17 §13)
+t('pageHeader renders the title in an h1', () => assert.ok(pageHeader({ title: 'Policies' }).indexOf('<h1') >= 0 && pageHeader({ title: 'Policies' }).indexOf('Policies') >= 0));
+t('pageHeader shows count when given, omits otherwise', () => {
+  assert.ok(pageHeader({ title: 'X', count: '3 open' }).indexOf('3 open') >= 0);
+  assert.ok(pageHeader({ title: 'X' }).indexOf('span') === -1 || pageHeader({ title: 'X' }).indexOf('margin-left:auto') === -1);
+});
+t('pageHeader escapes the title', () => assert.ok(pageHeader({ title: '<b>x</b>' }).indexOf('&lt;b&gt;') >= 0));
+t('pageHeader places actions right-aligned', () => assert.ok(pageHeader({ title: 'X', actionsHtml: '<button>Go</button>' }).indexOf('margin-left:auto') >= 0));
 
 console.log('\n' + pass + ' passed');

@@ -317,6 +317,17 @@
     }).join('') + '</div>';
   }
   function card(title, inner) { return '<div class="mu-card"><h3>' + esc(title) + '</h3><div class="mu-cc">' + (inner || '') + '</div></div>'; }
+  // Standard page header — the title/count/actions strip every list-control and
+  // launcher screen shares, so moving from any screen to any other doesn't look
+  // foreign (doc 17 §13). cfg: { title, count?, subtitle?, actionsHtml? }.
+  function pageHeader(cfg) {
+    cfg = cfg || {};
+    var meta = (cfg.count != null) ? ('<span style="color:var(--warm-gray);font-size:0.9rem;">' + esc(cfg.count) + '</span>') : '';
+    var sub = cfg.subtitle ? ('<span style="color:var(--warm-gray);font-size:0.9rem;">' + esc(cfg.subtitle) + '</span>') : '';
+    var actions = cfg.actionsHtml ? ('<span style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap;">' + cfg.actionsHtml + '</span>') : '';
+    return '<div style="display:flex;align-items:baseline;gap:12px;margin-bottom:6px;flex-wrap:wrap;">' +
+      '<h1 style="font-size:1.6rem;margin:0;">' + esc(cfg.title || '') + '</h1>' + meta + sub + actions + '</div>';
+  }
   function cardTable(title, inner) { return '<div class="mu-card"><h3>' + esc(title) + '</h3>' + (inner || '') + '</div>'; }
   function kv(rows) { // [{k, v}] v is html
     return '<div class="mu-kv">' + (rows || []).map(function (r) {
@@ -497,12 +508,12 @@
       Num: Num, badge: badge, tabs: tabs, list: list, slideOut: slideOut, deepLink: deepLink, _esc: esc,
       tiles: tiles, card: card, cardTable: cardTable, kv: kv, timeline: timeline, relatedTable: relatedTable,
       imageThumb: imageThumb, openImg: openImg, panelTab: panelTab, paneTabsBar: paneTabsBar,
-      stickyHead: stickyHead, toggleCover: toggleCover, calendar: calendar
+      stickyHead: stickyHead, toggleCover: toggleCover, calendar: calendar, pageHeader: pageHeader
     };
   }
 
   // CommonJS export for node-based unit tests of the pure helpers.
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { Num: Num, badge: badge, tabs: tabs, list: list, esc: esc, tiles: tiles, kv: kv, timeline: timeline, relatedTable: relatedTable };
+    module.exports = { Num: Num, badge: badge, tabs: tabs, list: list, esc: esc, tiles: tiles, kv: kv, timeline: timeline, relatedTable: relatedTable, pageHeader: pageHeader };
   }
 })();
