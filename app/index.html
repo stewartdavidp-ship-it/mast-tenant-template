@@ -113,9 +113,9 @@
        scripts/bump-modules-version.sh (these are static <head> tags loaded
        before the JS var exists, so they can't read it at runtime). Without
        this, the engines were frozen at ?v=1 and never cache-busted on deploy. -->
-  <script src="../shared/mast-ui.js?v=20260601-104451-56dfc88"></script>
-  <script src="../shared/mast-io.js?v=20260601-104451-56dfc88"></script>
-  <script src="../shared/mast-entity.js?v=20260601-104451-56dfc88"></script>
+  <script src="../shared/mast-ui.js?v=20260601-111648-d91b614"></script>
+  <script src="../shared/mast-io.js?v=20260601-111648-d91b614"></script>
+  <script src="../shared/mast-entity.js?v=20260601-111648-d91b614"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Pod-specific runtime config — sets window.MAST_POD_PLATFORM_PROJECT so
@@ -11191,6 +11191,7 @@
     <div id="brandV2Tab" class="tab-content" style="display:none;"></div><!-- UI-redesign config shape: brand read-on-page -->
     <div id="homepageV2Tab" class="tab-content" style="display:none;"></div><!-- UI-redesign config shape: homepage read-on-page -->
     <div id="settingsV2Tab" class="tab-content" style="display:none;"></div><!-- UI-redesign Settings producer surface -->
+    <div id="commissionsV2Tab" class="tab-content" style="display:none;"></div><!-- UI-redesign Process surface: commissions -->
 
     <!-- Admin: Procurement Tab — rendered entirely from app/modules/procurement.js -->
     <div id="procurementTab" style="display:none;"></div>
@@ -20158,7 +20159,7 @@ var MAST_V2_ROUTE_MAP = {
   trips: 'trips-v2', team: 'team-v2', procurement: 'procurement-v2',
   materials: 'materials-v2', 'finance-expenses': 'finance-expenses-v2',
   'cs-tickets': 'cs-tickets-v2', terms: 'terms-v2', wallet: 'wallet-v2',
-  brand: 'brand-v2', homepage: 'homepage-v2'
+  brand: 'brand-v2', homepage: 'homepage-v2', commissions: 'commissions-v2'
 };
 function mastLegacyUiOn() {
   try { return localStorage.getItem('mastLegacyUI') !== '0'; } catch (e) { return true; }
@@ -20913,7 +20914,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260601-104451-56dfc88';
+var MAST_MODULES_V = '20260601-111648-d91b614';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -20950,6 +20951,7 @@ var MODULE_MANIFEST = {
   'brand-v2': { src: 'modules/brand-v2.js', routes: ['brand-v2'] }, // UI-redesign config shape: brand read-on-page (read-focused, edit→classic) (flag-gated)
   'homepage-v2': { src: 'modules/homepage-v2.js', routes: ['homepage-v2'] }, // UI-redesign config shape: homepage read-on-page (read-focused, edit→classic) (flag-gated)
   'settings-v2': { src: 'modules/settings-v2.js', routes: ['settings-v2'] }, // UI-redesign Settings producer surface: launcher grid over config areas (flag-gated)
+  'commissions-v2': { src: 'modules/commissions-v2.js', routes: ['commissions-v2'] }, // UI-redesign Process surface: commissions lifecycle (flag-gated, side-by-side)
   sales: { src: 'modules/sales.js', routes: ['pos', 'receipts', 'events', 'salesEvents', 'terms'] },
   fulfillment: { src: 'modules/fulfillment.js', routes: ['pack', 'ship', 'fulfillment'] },
   eventsAdmin: { src: 'modules/events.js', routes: ['events-shows', 'events-settings'] },
