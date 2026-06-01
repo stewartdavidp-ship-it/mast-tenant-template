@@ -40,13 +40,14 @@ These are engine-level and correct. The new session should NOT revisit them.
 the order **edit** screen redesign. It is conceptually broken and the user flagged
 it. Two layers of wrongness:
 
-1. **It does not match its own approved mock.** The user approved an "Option C" mock
-   (editable card first + read-only context as a compact key→value grid, title
-   "Edit order · SGTE-0029", crisp cards). What shipped: title still "Order:", the
-   read-only context renders as a tall stacked list (same as the old ugly panel),
-   cards are nearly borderless, casing wrong. The Option C mock is recreated at
-   `docs/ux-audit/editform-mock.html` (committed this time — see below) — it is the
-   visual target IF we keep an edit form at all.
+1. **The "Option C" edit-form mock is OBSOLETE — do not build to it.** Mid-session
+   the user approved an Option C edit-form mock, and I shipped a version that didn't
+   even match it. But that is now moot: **the user has decided the whole order screen
+   and flow need to be redone**, not the edit form polished. Option C was solving the
+   wrong problem — polishing an "edit order" form that should not exist as a form.
+   The mock is kept at `docs/ux-audit/editform-mock.html` only as a historical
+   artifact of the rathole; **it is NOT the target.** The order screen redesign
+   should start from the workflow/intent model below, not from this mock.
 
 2. **THE DEEPER PROBLEM (this is why we stopped):** orders-v2 modeled order **status
    as a plain editable dropdown field**. But the existing/legacy order screen does
@@ -131,22 +132,37 @@ Fix: make those 3 `<script>` tags use `?v=<MAST_MODULES_V>`. This bit us this se
 
 ## RECOMMENDED first moves for the new session
 
+**The order screen + flow is being REDONE from the ground up** (user's decision).
+Not "polish the edit form" — rethink the whole screen around its real intent
+(workflow state + checklist + guarded actions + rich context, progressively
+disclosed). orders-v2 as it stands (status dropdown + edit form) is a dead end.
+
 1. **Deep-dive context, don't build.** Read: this doc; legacy `app/modules/orders.js`
    (esp. the MastFlow header `_initOrderWorkflowHeader` ~L1160 + render ~L1119);
-   `app/modules/workflows/pickship.workflow.js`; `shared/mast-entity.js`
-   (`renderTransaction`); the Option C mock at `docs/ux-audit/editform-mock.html`.
-   Look at BOTH live screens: legacy `?cb=x#orders` (the workflow stepper) vs the v2
-   `?ui=1#orders-v2` (the flat dropdown). Understand what intent v2 dropped.
-2. **Rethink the category model with the user** before more building. Key question:
-   how does a "Transaction template" compose MastEntity (record) + MastFlow
-   (lifecycle) + progressive disclosure, so it stays consistent WITHOUT flattening
-   the screen's intent? The order screen is the test case.
-3. Only after the model is agreed: rework orders-v2 to surface pickship MastFlow for
-   status (kill the dropdown), then re-skin to the agreed look, then re-verify live.
-4. Fix the `?v=1` cache-bust gap (cheap, high-value, independent).
+   `app/modules/workflows/pickship.workflow.js` (the order lifecycle: phases,
+   branches, checklists, guarded transitions); `shared/mast-entity.js`
+   (`renderTransaction`). Look at BOTH live screens: legacy `?cb=x#orders` (the
+   workflow stepper/checklist/Advance — what an order screen SHOULD convey) vs the v2
+   `?ui=1#orders-v2` (the flat dropdown — what we wrongly built). Internalize what
+   intent v2 dropped.
+2. **Redesign the order screen with the user, from intent — not from a template or
+   the obsolete mock.** Start from: what does an operator need to see and do on an
+   order? (where it is in the pipeline, what's blocking the next step, the guarded
+   next action, line items, money, customer, fulfillment, history.) THEN figure out
+   how to surface that with progressive disclosure (simple first glance, expand for
+   detail). Only after that, ask how/whether it generalizes to a reusable
+   "Transaction" category — the order is the test case for whether categorization
+   even holds. **Compose MastEntity (record) + MastFlow (lifecycle); do not flatten
+   lifecycle into a field.**
+3. Re-examine the whole "few category templates" thesis in light of this. It may
+   need to become "a small set of composable building blocks (record card, workflow
+   header, related-records, progressive sections)" rather than rigid full-screen
+   templates. Discuss with the user before committing to the model.
+4. Fix the `?v=1` cache-bust gap (cheap, high-value, independent of all the above).
 
 ## Status of branches/PRs this session
 - main @ 14d3838. Tier-1 (#96) + edit-form (#99, the wrong one) merged + deployed.
 - Open worktrees (clean up): `/tmp/mast-tt-editform`, `/tmp/mast-tt-editform2`,
   `/tmp/mast-tt-handoff` (this doc).
-- This doc + the recreated Option C mock are the deliverables of the regroup.
+- This doc is the deliverable of the regroup. The Option C mock is committed only as
+  a historical artifact — NOT a target. The order screen is being redone ground-up.
