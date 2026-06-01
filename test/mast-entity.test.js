@@ -115,4 +115,35 @@ t('canonicalGet formats a computed money column from get()', () => {
   assert.strictEqual(E.canonicalGet(TRIP.fields[3], { deductibleValue: 12.5 }), '12.50');
 });
 
+// ── Faceted Record with a materialized status badge + custom interiors + onSave
+//    (finance-expenses-v2). status is a real property (engine reads it directly
+//    for the header badge), amount is cents→dollars via get(). ──
+const EXPENSE = {
+  label: 'Expense', labelPlural: 'Expenses',
+  recordId: e => e._id,
+  fields: [
+    { name: 'merchant', label: 'Merchant', type: 'text', list: true, readOnly: true },
+    { name: 'date', label: 'Date', type: 'date', list: true, readOnly: true, get: e => e.date },
+    { name: 'status', label: 'Status', type: 'status', list: true, readOnly: true,
+      options: ['approved', 'review'], tone: v => v === 'approved' ? 'success' : 'amber' },
+    { name: 'amount', label: 'Amount', type: 'money', list: true, readOnly: true, get: e => (e.amount || 0) / 100 },
+  ],
+  detail: { render: () => '<exp-read>', editRender: () => '<exp-edit>' },
+  onSave: () => true,
+};
+E.define('expense', EXPENSE);
+t('expense schema: single status field, cents→dollars money, custom interiors + onSave', () => {
+  const s = E.get('expense');
+  const cols = E.listColumns('expense');
+  assert.deepStrictEqual(cols.map(c => c.key), ['merchant', 'date', 'status', 'amount']);
+  assert.strictEqual(cols.find(c => c.key === 'amount').align, 'right');
+  assert.strictEqual(E.canonicalGet(EXPENSE.fields[3], { amount: 4250 }), '42.50');
+  assert.strictEqual(typeof s.detail.editRender, 'function');
+  assert.strictEqual(typeof s.onSave, 'function');
+});
+t('expense status tone resolves from the materialized value', () => {
+  assert.strictEqual(EXPENSE.fields[2].tone('approved'), 'success');
+  assert.strictEqual(EXPENSE.fields[2].tone('review'), 'amber');
+});
+
 console.log('\n' + pass + ' passed');
