@@ -307,11 +307,43 @@
       { label: 'Status', render: function (o) { return U.badge(o.status, o.tone); } }
     ], orders);
     var notes = (d.notes ? d.notes(r) : '') || '';
-    return U.stickyHead(U.tiles(d.tiles ? d.tiles(r) : []),
-      U.paneTabsBar([{ key: 'ov', label: 'Overview' }, { key: 'orders', label: 'Orders' }, { key: 'notes', label: 'Notes' }], 'ov')) +
-      '<div class="mu-pane" data-pane="ov">' + U.card('Contact', contactHtml) + U.card('Segments', chips(d.segments ? d.segments(r) : [])) + '</div>' +
-      '<div class="mu-pane" data-pane="orders" hidden>' + U.cardTable('Orders (' + orders.length + ')', ordersTable) + '</div>' +
-      '<div class="mu-pane" data-pane="notes" hidden>' + U.card('Notes', notes ? '<div style="font-size:0.85rem;color:var(--warm-gray);line-height:1.5;">' + esc(notes) + '</div>' : '<span class="mu-sub">No notes</span>') + '</div>';
+
+    // Base facets: Overview + Orders. Optional facets (Activity/Classes/Wallet)
+    // render only when the schema supplies their data fn — so a sparse party
+    // record stays simple. Notes is always last.
+    var tabs = [{ key: 'ov', label: 'Overview' }, { key: 'orders', label: 'Orders' }];
+    var panes = '<div class="mu-pane" data-pane="ov">' + U.card('Contact', contactHtml) + U.card('Segments', chips(d.segments ? d.segments(r) : [])) + '</div>' +
+      '<div class="mu-pane" data-pane="orders" hidden>' + U.cardTable('Orders (' + orders.length + ')', ordersTable) + '</div>';
+
+    if (typeof d.activity === 'function') {
+      var acts = d.activity(r) || [];
+      tabs.push({ key: 'activity', label: 'Activity' });
+      panes += '<div class="mu-pane" data-pane="activity" hidden>' +
+        U.card('Activity', acts.length ? U.timeline(acts) : '<span class="mu-sub">No activity yet</span>') + '</div>';
+    }
+    if (typeof d.classes === 'function') {
+      var cls = d.classes(r) || [];
+      tabs.push({ key: 'classes', label: 'Classes' });
+      var clsBody = cls.length ? U.cardTable('Enrollments (' + cls.length + ')', U.relatedTable([
+        { label: 'Class', render: function (e) { return esc(e.name || '—'); } },
+        { label: 'Session', render: function (e) { return '<span class="mu-sub">' + esc(e.session || '') + '</span>'; } },
+        { label: 'Status', render: function (e) { return U.badge(e.status || '—', e.tone || 'neutral'); } }
+      ], cls)) : U.card('Enrollments', '<span class="mu-sub">No enrollments</span>');
+      panes += '<div class="mu-pane" data-pane="classes" hidden>' + clsBody + '</div>';
+    }
+    if (typeof d.wallet === 'function') {
+      var w = d.wallet(r) || {};
+      tabs.push({ key: 'wallet', label: 'Wallet' });
+      var walletInner = w.linked
+        ? U.kv([{ k: 'Store credit', v: w.credit }, { k: 'Passes', v: w.passes }, { k: 'Membership', v: w.membership }, { k: 'Loyalty points', v: w.loyalty }])
+        : '<span class="mu-sub">No linked account — wallet, passes, membership and loyalty live on a customer-facing account. This customer hasn\'t signed in yet.</span>';
+      panes += '<div class="mu-pane" data-pane="wallet" hidden>' + U.card('Wallet', walletInner) + '</div>';
+    }
+
+    tabs.push({ key: 'notes', label: 'Notes' });
+    panes += '<div class="mu-pane" data-pane="notes" hidden>' + U.card('Notes', notes ? '<div style="font-size:0.85rem;color:var(--warm-gray);line-height:1.5;">' + esc(notes) + '</div>' : '<span class="mu-sub">No notes</span>') + '</div>';
+
+    return U.stickyHead(U.tiles(d.tiles ? d.tiles(r) : []), U.paneTabsBar(tabs, 'ov')) + panes;
   }
 
   // Drill to another object: re-render the SAME panel with the target record and
