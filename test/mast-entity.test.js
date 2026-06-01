@@ -170,4 +170,30 @@ t('employee schema: explicit align overrides type default, custom render, no onS
   assert.strictEqual(E.get('employee').onSave, undefined);
 });
 
+// ── read-only transaction-shaped record with a computed status column derived
+//    from line quantities (procurement-v2). status get() collapses to 'partial';
+//    total get() sums line items (dollars). ──
+const PO = {
+  label: 'Purchase order', labelPlural: 'Procurement',
+  recordId: po => po.poId,
+  fields: [
+    { name: 'poNumber', label: 'PO #', type: 'text', list: true, readOnly: true },
+    { name: 'status', label: 'Status', type: 'status', list: true, readOnly: true,
+      options: ['draft', 'partially_received', 'received'],
+      get: po => po.status === 'partially_received' ? 'partial' : po.status,
+      tone: v => v === 'received' ? 'success' : v === 'partial' ? 'amber' : 'neutral' },
+    { name: 'total', label: 'Total', type: 'money', list: true, readOnly: true,
+      get: po => (po.lines || []).reduce((s, l) => s + (l.qtyOrdered || 0) * (l.unitCost || 0), 0) },
+  ],
+  detail: { render: () => '<po-read>' },
+};
+E.define('po', PO);
+t('PO schema: derived status column collapses partially_received→partial, total sums lines', () => {
+  const f = PO.fields[1];
+  assert.strictEqual(f.get({ status: 'partially_received' }), 'partial');
+  assert.strictEqual(f.tone('partial'), 'amber');
+  assert.strictEqual(E.canonicalGet(PO.fields[2], { lines: [{ qtyOrdered: 3, unitCost: 12.5 }, { qtyOrdered: 2, unitCost: 5 }] }), '47.50');
+  assert.strictEqual(E.get('po').onSave, undefined);
+});
+
 console.log('\n' + pass + ' passed');
