@@ -448,8 +448,16 @@
     });
   }
 
-  // Checklist "Go →" target → switch to the relevant detail pane.
+  // Checklist "Go →" target → switch to the relevant detail pane. A schema may
+  // supply detail.onFlowTarget(targetId, record) to route its own requirement
+  // targets (e.g. deep-link a side-effect-bearing capture to the legacy detail);
+  // returning anything other than false marks the target handled. Falls back to
+  // the built-in transaction-pane map (orders) when no schema hook claims it.
   function _flowGoTarget(targetId) {
+    var sc = _flow && _flow.schema;
+    if (sc && sc.detail && typeof sc.detail.onFlowTarget === 'function') {
+      if (sc.detail.onFlowTarget(targetId, _flow.record) !== false) return;
+    }
     var map = { 'detail-items': 'items', 'detail-payment': 'items', 'detail-customer': 'customer', 'detail-shipping': 'customer' };
     var pane = map[targetId];
     if (!pane) { if (targetId === 'buy-labels' && typeof navigateTo === 'function') navigateTo('ship'); return; }
