@@ -185,7 +185,7 @@
   // (read/edit/create), Cancel/Save footer, MastDirty guard on every exit,
   // and ?id= deep-link. Dirty-guard works by routing the underlying close
   // through MastDirty.checkAndExit for the panel's lifetime.
-  var _SIZE = { sm: '420px', md: '640px', lg: '900px' };
+  var _SIZE = { sm: '420px', md: '640px', lg: '900px', xl: '1140px' };
   var _v2 = { dirtyKey: null, origClose: null, expanded: false };
 
   function _panel() { return document.getElementById('mastSlideOutPanel'); }
@@ -265,7 +265,7 @@
           if (typeof opts.onClose === 'function') opts.onClose();
         }
       });
-      _applySize(opts.size || 'md', opts.expandable !== false && (opts.size === 'lg'));
+      _applySize(opts.size || 'md', opts.expandable !== false && (opts.size === 'lg' || opts.size === 'xl'));
 
       // Dirty guard: in edit/create, route the underlying close through
       // MastDirty.checkAndExit so backdrop/Esc/close-button all prompt.
@@ -376,6 +376,19 @@
       return '<button class="' + (t.key === activeKey ? 'on' : '') + '" onclick="MastUI.panelTab(this,\'' + t.key + '\')">' + esc(t.label) + '</button>';
     }).join('') + '</div>';
   }
+  // Collapsible headline cover (doc 17 §3a) — pinned vitals above the tabs, on
+  // every pane; collapse to declutter. Wrap with the tabs in a sticky head so
+  // both stay visible while a pane scrolls.
+  function stickyHead(coverInner, tabsBar) {
+    return '<div class="mu-stickyhead">' +
+      (coverInner ? ('<div class="mu-cover" id="muCover">' +
+        '<div class="mu-cover-body">' + coverInner + '</div>' +
+        '<button class="mu-cover-toggle" onclick="MastUI.toggleCover()" aria-label="Toggle details"><span class="mu-chev">▾</span></button>' +
+      '</div>') : '') + tabsBar + '</div>';
+  }
+  function toggleCover() {
+    var c = document.getElementById('muCover'); if (c) c.classList.toggle('collapsed');
+  }
 
   // ── One injected, tokenized stylesheet (both-mode safe) ──
   function injectStyles() {
@@ -414,7 +427,15 @@
       '.mast-row:focus-visible{outline:2px solid var(--amber,var(--teal));outline-offset:-2px;} .mu-link:focus-visible,.mu-crumb button:focus-visible{outline:2px solid var(--amber,var(--teal));outline-offset:2px;border-radius:3px;}',
       '.feedback-overlay{z-index:12001 !important;}', // above the slide-out (9000) so the feedback dialog opens on top',
       '.mast-feedback-btn:hover{color:var(--charcoal,var(--text)) !important;}',
-      '.mu-li{display:flex;align-items:center;gap:11px;} .mu-sub{color:var(--warm-gray);font-size:0.78rem;} .mu-totrow{display:flex;justify-content:space-between;padding:6px 0;color:var(--warm-gray);font-size:0.9rem;} .mu-totrow.grand{border-top:1px solid var(--border,rgba(127,127,127,.2));margin-top:6px;padding-top:10px;color:var(--charcoal,var(--text));font-weight:700;font-size:1.0rem;}'
+      '.mu-li{display:flex;align-items:center;gap:11px;} .mu-sub{color:var(--warm-gray);font-size:0.78rem;} .mu-totrow{display:flex;justify-content:space-between;padding:6px 0;color:var(--warm-gray);font-size:0.9rem;} .mu-totrow.grand{border-top:1px solid var(--border,rgba(127,127,127,.2));margin-top:6px;padding-top:10px;color:var(--charcoal,var(--text));font-weight:700;font-size:1.0rem;}',
+      // Sticky head = collapsible vitals cover + the pane tabs (doc 17 §3a).
+      '.mu-stickyhead{position:sticky;top:0;z-index:3;background:var(--surface-card,var(--card-bg,#1e1e1e));margin:-4px -4px 16px;}',
+      '.mu-stickyhead .mu-ptabs{position:static;margin:0;}',
+      '.mu-cover{position:relative;padding:12px 30px 12px 4px;border-bottom:1px solid var(--border,rgba(127,127,127,.2));}',
+      '.mu-cover .mu-tiles{margin:0;}',
+      '.mu-cover.collapsed .mu-cover-body{display:none;} .mu-cover.collapsed{padding-top:6px;padding-bottom:6px;}',
+      '.mu-cover-toggle{position:absolute;top:8px;right:2px;background:transparent;border:0;color:var(--warm-gray);cursor:pointer;padding:2px 4px;line-height:1;}',
+      '.mu-chev{display:inline-block;transition:transform .15s ease;font-size:0.9rem;} .mu-cover.collapsed .mu-chev{transform:rotate(-90deg);}'
     ].join('\n');
     var s = document.createElement('style'); s.id = 'mast-ui-styles'; s.textContent = css; document.head.appendChild(s);
   }
@@ -424,7 +445,8 @@
     window.MastUI = {
       Num: Num, badge: badge, tabs: tabs, list: list, slideOut: slideOut, deepLink: deepLink, _esc: esc,
       tiles: tiles, card: card, cardTable: cardTable, kv: kv, timeline: timeline, relatedTable: relatedTable,
-      imageThumb: imageThumb, openImg: openImg, panelTab: panelTab, paneTabsBar: paneTabsBar
+      imageThumb: imageThumb, openImg: openImg, panelTab: panelTab, paneTabsBar: paneTabsBar,
+      stickyHead: stickyHead, toggleCover: toggleCover
     };
   }
 

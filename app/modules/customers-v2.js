@@ -22,7 +22,7 @@
   // flattened "stats.x" keys — read nested first, fall back to dotted (doc 17).
   function stat(c, k) { return (c && c.stats && c.stats[k] != null) ? c.stats[k] : (c ? c['stats.' + k] : undefined); }
   MastEntity.define('customers-v2', {
-    label: 'Customer', labelPlural: 'Customers', size: 'md',
+    label: 'Customer', labelPlural: 'Customers', size: 'xl',
     recordId: function (c) { return c._key || c.id; },
     fields: [
       { name: 'displayName', label: 'Name', type: 'text', list: true, required: true, group: 'Identity' },

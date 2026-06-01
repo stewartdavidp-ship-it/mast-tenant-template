@@ -32,7 +32,7 @@
     payment_failed: 'danger'
   };
   MastEntity.define('orders-v2', {
-    label: 'Order', labelPlural: 'Orders', size: 'lg',
+    label: 'Order', labelPlural: 'Orders', size: 'xl',
     recordId: function (o) { return o._key || o.id; },
     fields: [
       { name: 'orderNumber', label: 'Order', type: 'text', list: true, required: true, group: 'Order', readOnly: true },
