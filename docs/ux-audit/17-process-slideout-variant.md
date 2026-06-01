@@ -246,3 +246,74 @@ not an attribute of one.* Each flag is a pair (`customerIdA`/`customerIdB`) + re
 slide-out — shell + a comparison interior + a guarded decision bar. Candidate reuse
 for other reconciliation queues (drift alerts, merge conflicts, approvals). Catalogue
 as it recurs; do not force it into the variant taxonomy yet.
+
+## 10. The index layer is pluggable too (controls validated by output)
+
+The variant taxonomy (§1) describes the **detail** layer. A whole-app sweep
+(2026-06-01, all 44 modules) showed the engine also has a pluggable **index**
+layer — the *control* used to browse records — and that **a control is validated by
+its output**: the control is just a lens; what matters is the record a click hands
+you. If that output is a record the detail layer can manage, any control drops in.
+
+**Calendar is the proof.** It is not a detail variant — it is an alternate *index*
+renderer over the same records. In `book.js`, the month grid plots **session
+occurrences**; a click resolves to the parent **Class** record. So: a control
+outputs a record (or an occurrence that resolves to one), and the detail layer
+manages it. The only calendar-specific schema work is **generating occurrences from
+a record's schedule and resolving a click to the right output** — and the legacy
+flow gets that output wrong (clicking an occurrence opens the parent *template*, not
+the session you clicked; the redesign should output the session, parent linked).
+
+So the engine has two independent, composable axes:
+- **Index layer (controls):** `table` · `cards` · `calendar` · `grouped/board`.
+- **Detail layer (variants):** `Flat Record` · `Faceted Record` · `Process` · `Resolve`.
+A control feeds a record; the variant manages it. Any (control × variant) pair is valid.
+
+## 11. Whole-app coverage map + the engine boundary
+
+The same sweep mapped every module. The model holds across the app — and, just as
+importantly, it shows where the entity engine **stops** and three sibling engines
+begin. Decide this boundary BEFORE building so a finance dashboard or a blog editor
+is never forced through `renderProcess`.
+
+### In scope — the entity engine (4 controls × 4 variants)
+Covers the **majority** of modules. Index control → output record → detail variant:
+- **table** → orders (Process), customers (Faceted), contacts (Flat), enrollments,
+  payouts, suppressions, sales, fulfillment queue, wholesale, …
+- **cards** → channels, consignment galleries, student/team rosters, shows.
+- **calendar** → book classes / sessions, marketing-calendar (occurrence→record).
+- **grouped/board** → audit rule-group buckets, production queue.
+- Variants seen in the wild: **Flat** (contacts, instructors, payouts), **Faceted**
+  (customer, wholesale account, channel, vendor ledger, student, team, audit
+  product, class), **Process** (order, commission, RMA, production job, maker piece,
+  session-ops, sales event, shows lifecycle), **Resolve** (duplicates, audit
+  violations, mapping fuzzy-match, accounting conflicts, CS review moderation).
+
+### Out of scope — three sibling engines (already anticipated; now scoped)
+Outputs that are **not a manageable record**. Do NOT route these through the entity engine:
+1. **Report / Dashboard (terminal, no drill)** → a **Report engine**. finance
+   (revenue, P&L, cash-flow, tax, overview, portfolio), financials, Day Close,
+   channels dashboard, wholesale AR-aging, campaigns attribution, advisor. *Largest cluster.*
+2. **Builder / Canvas (content authoring)** → a **Builder** (bespoke + shared
+   components). blog editor, newsletter `nl-grid-canvas`, lookbook builder,
+   composer, social capture. *Author on a canvas, not manage fields.*
+3. **Wizard / multi-step task** → a **Wizard engine**. mapping setup, channel
+   onboarding, Day Close v2, accounting backfill, retroactive trip, show-light apply
+   builder, fulfillment scan, sales packing.
+
+### Oddballs (explicit call needed, small)
+- **Map / floor plan** (events) — spatial; a pin click is an assign *action*, not a record.
+- **engagement-inbox** — looks like an inbox but a row click is a bulk *action* /
+  lightbox, not a record. Fold into **Resolve** (it is a moderation queue) or give it a queue pattern.
+- **Form-only config singletons** (studio, homepage, website, brand, wallet
+  instruments) — a record with **no index**; open directly (Flat/Faceted, no list control).
+
+### Conversion backlog (fits the model, wrong detail surface — not engine gaps)
+Record surfaces that already match the model but use a pre-slide-out detail and need
+conversion: promotions (modal), procurement (inline row-expansion), maker-materials
+(inline), trips (inline expansion), finance-expenses (overlay), team (in-pane swap),
+commission-terms (inline editor), CS ticket-thread (full-pane swap).
+
+**Bottom line:** nothing in the app needs a control or output the model can't place.
+Entity engine = 4 controls × 4 variants; Report / Builder / Wizard are separate; two
+oddballs get a deliberate call; the rest is conversion work.
