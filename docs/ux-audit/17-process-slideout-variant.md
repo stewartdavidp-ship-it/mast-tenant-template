@@ -451,3 +451,66 @@ must use the global design system, not a bespoke one:
 
 The two conventions (button language, drill-in back control) are documented here as
 standards; a lint can be added if they drift.
+
+## 14. Shipped state, the scannability rule, and what's next (2026-06-01)
+
+### 14a. Shipped — the conversion backlog is done (PRs #114–126, all flag-gated `?ui=1`, born-0, live-verified)
+Every backlog item converted to the engine, side-by-side with legacy (legacy untouched):
+
+| Surface | Module / route | Variant | PR |
+|---|---|---|---|
+| promotions | `promotions-v2` `#promotions-v2` | Faceted (CRUD) | #114 |
+| trips history | `trips-v2` `#trips-v2` | read Faceted | #115 (+116/117/118) |
+| finance-expenses | `finance-expenses-v2` `#finance-expenses-v2` | Faceted + review actions | #119 |
+| team roster/employee | `team-v2` `#team-v2` | read Faceted (gated on `can('team','view')`) | #120 |
+| procurement (POs) | `procurement-v2` `#procurement-v2` | read Faceted | #121 |
+| maker materials | `materials-v2` `#materials-v2` | Faceted, writes **delegated** via `window.MakerMaterialsBridge` | #122 (+123) |
+| CS tickets/thread | `cs-tickets-v2` `#cs-tickets-v2` | Faceted, interactive thread interior | #124 |
+| **config singleton** (Policies/T&C) | `terms-v2` `#terms-v2` | object via **launcher** → slide-out (the §13 reference build) | #125 (+126) |
+
+**Doc "Process" scorecard:** of the 5 backlog items the earlier draft tagged "Process,"
+**0 were actually gated Processes** — expenses/procurement/cs-tickets are derived-status
+or free-select Faceted Records; commission-terms is a config singleton. Only `orders`
+(shipped pre-backlog) is genuine MastFlow Process. **Always re-run the §1a test against
+the real transition code; don't trust a "Process" label.**
+
+**Patterns proven** (reuse these): the §1 `detail.render`/`detail.editRender` hooks
+(#114); **read-focused** (re-host the view, leave heavy editing on legacy — trips/team/
+procurement); **delegate writes via a `window` bridge** when the domain logic is tangled
+and side-effect-bearing (maker — keeps cost-history/recipes-dirty single-sourced);
+**replicate simple side-effect-free writes** (promotions/expenses/cs); **interactive
+read interior** (duplicates/cs-tickets). Post-save reads must mutate the **live**
+`V2.byId[id]` (the engine passes `onSave` a copy — #123).
+
+### 14b. Scannability rule (PR #126)
+**Inside the slide-out: use labeled facet tabs when the interior would scroll; keep it
+flat only when it all fits on one screen.** Scan the tab labels and jump, never scroll
+to find a section. Every detail (orders/customers/materials/procurement/…) is tabbed;
+`terms-v2` was the lone flat-stack outlier and was conformed.
+
+**Same logic at the page level** (the producer surface for *multiple* items): use a
+compact launcher grid/list, and **organize early — group with tabs as soon as it would
+scroll (~6–8 items, not 15)**. Page-level tabs **group producers** (each tab a short
+launcher list → slide-out presents); **never** a page-level tab whose body is one
+object's inline form (that re-introduces a second presenter — the §13 trap). Tabs are
+correct in exactly two places: (1) facet tabs *inside* the slide-out for one object;
+(2) page-level grouping of producers.
+
+### 14c. What's next (no new design needed — mechanical follow-through)
+1. **Apply the singleton template** (`terms-v2`) to the other config singletons —
+   studio, brand, wallet-instruments, homepage — each a launcher → slide-out object.
+2. **Build the Settings producer surface** — a compact cards-grid (grouped by tabs only
+   if it grows past one screen) of launchers over those singletons → slide-out. `terms-v2`
+   is the first entry.
+3. **The three sibling engines (§11/§13b)** — Report (finance dashboards), Builder
+   (blog/newsletter/lookbook canvases), Wizard (mapping/onboarding/day-close): they keep
+   their own shape but must conform to the global look & feel (tokens + 7-step scale +
+   `MastUI.pageHeader` + shared buttons + consistent button language + a drill-in back
+   control). Scope each separately.
+4. **Optional dedupe:** retrofit the engine list modules to call `MastUI.pageHeader`
+   (they currently hand-copy the header markup).
+5. **GA rollout** (separate decision): the `?ui=1` twins are dev-only previews. Promoting
+   any to GA / replacing legacy is its own track (route registration, RBAC route-gate,
+   removing the legacy module) — not started.
+
+Running session log (richer, cross-session): `~/.claude/projects/-Users-davidstewart-Downloads-mast-tenant-template/memory/project_ux_redesign_control.md`.
