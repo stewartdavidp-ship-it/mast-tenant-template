@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Duplicate-flag resolve slide-out — mock</title>
+<!--
+  DUPLICATE FLAG — resolve slide-out (static mock, NOT wired).
+
+  Fixes the legacy IA confusion: today "Duplicates" is a top-level view-tab that
+  sits as a false PEER of a single customer detail (clicking it from a customer
+  detail ejects you to a global queue). See 17-process-slideout-variant.md.
+
+  Decision (user: "go B"): a duplicate is a RELATIONSHIP between two customers,
+  not an attribute of one. So model the FLAG as a first-class record with a
+  focused resolve slide-out:
+    - The QUEUE is a list-level surface (a "Duplicates (N)" queue reached only
+      from the Customers list — shown dimmed behind this panel).
+    - Each FLAG opens this focused slide-out: the two candidates side-by-side
+      with vitals, the detection reason, and a guarded decision
+      (Keep A / Keep B / Not a duplicate). The merge decision stays in ONE place
+      instead of bouncing between two customer details.
+    - The per-customer half is a contextual banner inside the customer SO (not
+      mocked here) — "Possible duplicate of X — Review".
+
+  IA heuristic this encodes: list-level concerns live on the list; record-level
+  concerns live in the record's slide-out. A control that persists from list into
+  a record detail conflates the two levels.
+
+  Tokens approximate the admin dark theme; illustrative, not source of truth.
+-->
+<style>
+  :root {
+    --bg: #221f1d; --surface-dark: #1b1917; --surface-card: #2a2623; --surface-card-2: #322d29;
+    --border: rgba(255,255,255,0.08); --border-strong: rgba(255,255,255,0.14);
+    --text: #ece7e0; --warm-gray: #9c948b; --warm-gray-light: #b9b1a8;
+    --amber: #d8a657; --teal: #5fb4a8; --success: #5aa86f; --danger: #c95f55; --warning: #d8a657; --info: #6ea8d8;
+    /* 7-step rem scale: 0.72 0.78 0.85 0.9 1.0 1.15 1.6 */
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: var(--bg); color: var(--text); -webkit-font-smoothing: antialiased; }
+
+  /* dimmed page behind = the list-level Duplicates QUEUE */
+  .page-behind { position: fixed; inset: 0; padding: 28px 36px; overflow: hidden; filter: saturate(0.85); }
+  .pb-topbar { display:flex; align-items:center; gap:10px; font-size:1.0rem; color: var(--warm-gray-light); margin-bottom: 22px; } .pb-topbar b { color: var(--text); }
+  .pb-tabs { display:flex; gap:18px; border-bottom:1px solid var(--border); margin-bottom:18px; }
+  .pb-tab { font-size:0.9rem; color: var(--warm-gray); padding-bottom:10px; }
+  .pb-tab.active { color: var(--text); font-weight:600; border-bottom:2px solid var(--amber); }
+  .pb-h1 { font-size: 1.6rem; margin: 0 0 4px; } .pb-sub { color: var(--warm-gray); font-size: 0.9rem; margin-bottom: 18px; }
+  .pb-flag { border:1px solid var(--border); border-radius:10px; padding:14px 18px; margin-bottom:10px; max-width:760px; display:flex; justify-content:space-between; align-items:center; }
+  .pb-flag.hi { border-color: color-mix(in srgb, var(--amber) 40%, var(--border)); }
+  .pb-flag .r { color: var(--warm-gray); font-size:0.78rem; }
+  .pb-flag .who { font-size:0.9rem; color: var(--warm-gray-light); }
+  .pb-flag .who b { color: var(--text); }
+
+  .scrim { position: fixed; inset: 0; background: rgba(0,0,0,0.55); animation: fade .18s ease; }
+  @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+
+  /* focused resolve slide-out — narrower than faceted/process (a decision, not a hub) */
+  .panel { position: fixed; top: 0; right: 0; bottom: 0; width: min(860px, 100%); background: var(--bg); border-left: 1px solid var(--border-strong); box-shadow: -24px 0 60px rgba(0,0,0,0.45); display: flex; flex-direction: column; animation: slide .22s cubic-bezier(.2,.7,.2,1); }
+  @keyframes slide { from { transform: translateX(40px); opacity: .4; } to { transform: none; opacity: 1; } }
+
+  .ph { display:flex; align-items:center; gap:14px; padding: 16px 22px; border-bottom:1px solid var(--border); background: var(--surface-dark); }
+  .ph-back { background:transparent; border:0; color: var(--teal); font: inherit; font-size:0.85rem; cursor:pointer; padding:0; display:flex; align-items:center; gap:6px; flex-shrink:0; }
+  .ph-title { font-size:1.15rem; font-weight:600; white-space:nowrap; }
+  .ph-spacer { flex:1; }
+  .ph-icon { background:transparent; border:0; color: var(--warm-gray); font-size:1.15rem; cursor:pointer; padding:0 4px; line-height:1; flex-shrink:0; } .ph-icon:hover { color: var(--text); }
+
+  .badge { display:inline-flex; align-items:center; gap:6px; font-size:0.72rem; font-weight:600; padding:3px 10px; border-radius:999px; line-height:1.4; white-space:nowrap; }
+  .badge .dot { width:6px; height:6px; border-radius:50%; flex:0 0 6px; }
+  .badge.danger { background:color-mix(in srgb, var(--danger) 16%, transparent); color:var(--danger); border:1px solid color-mix(in srgb, var(--danger) 30%, transparent); } .badge.danger .dot { background: var(--danger); }
+  .badge.success { background:color-mix(in srgb, var(--success) 16%, transparent); color:var(--success); border:1px solid color-mix(in srgb, var(--success) 30%, transparent); } .badge.success .dot { background: var(--success); }
+  .badge.warning { background:color-mix(in srgb, var(--warning) 16%, transparent); color:var(--warning); border:1px solid color-mix(in srgb, var(--warning) 30%, transparent); } .badge.warning .dot { background: var(--warning); }
+
+  .pbody { flex:1; overflow-y:auto; padding: 20px 22px 30px; }
+
+  /* reason banner */
+  .reason { background: color-mix(in srgb, var(--warning) 12%, var(--surface-card)); border:1px solid color-mix(in srgb, var(--warning) 30%, var(--border)); border-radius:10px; padding:12px 16px; margin-bottom:20px; font-size:0.9rem; color: var(--warm-gray-light); display:flex; gap:10px; }
+  .reason .ic { color: var(--warning); }
+  .reason b { color: var(--text); }
+
+  .compare-head { display:grid; grid-template-columns: 150px 1fr 1fr; gap:0; margin-bottom:4px; }
+  .ch { padding:0 14px 10px; }
+  .ch.title { display:flex; align-items:center; gap:8px; }
+  .ch .name { font-size:1.0rem; font-weight:600; }
+  .ch .keep-pick { font-size:0.72rem; color: var(--warm-gray); }
+  .compare { border:1px solid var(--border); border-radius:12px; overflow:hidden; }
+  .crow { display:grid; grid-template-columns: 150px 1fr 1fr; border-bottom:1px solid var(--border); }
+  .crow:last-child { border-bottom:0; }
+  .crow .k { padding:11px 14px; font-size:0.78rem; color: var(--warm-gray); text-transform:uppercase; letter-spacing:.04em; background: var(--surface-dark); display:flex; align-items:center; }
+  .crow .v { padding:11px 14px; font-size:0.9rem; color: var(--text); display:flex; align-items:center; gap:8px; }
+  .crow .v.diff { background: color-mix(in srgb, var(--warning) 9%, transparent); }
+  .crow .v.win { color: var(--text); }
+  .pill-win { font-size:0.66rem; font-weight:700; color: var(--success); border:1px solid color-mix(in srgb, var(--success) 35%, transparent); border-radius:999px; padding:1px 7px; }
+
+  .merge-preview { margin-top:20px; background: var(--surface-card); border:1px solid var(--border); border-radius:12px; padding:16px 18px; }
+  .mp-title { font-size:0.78rem; text-transform:uppercase; letter-spacing:.05em; color: var(--warm-gray); margin-bottom:10px; }
+  .mp-line { font-size:0.9rem; color: var(--warm-gray-light); margin-bottom:6px; display:flex; gap:9px; }
+  .mp-line .ic { color: var(--success); }
+  .mp-line b { color: var(--text); }
+
+  /* footer decision bar */
+  .footer { border-top:1px solid var(--border); background: var(--surface-dark); padding: 14px 22px; display:flex; align-items:center; gap:10px; }
+  .footer .hint { font-size:0.78rem; color: var(--warm-gray); }
+  .footer .spacer { flex:1; }
+  .btn { font: inherit; font-size:0.85rem; font-weight:600; padding:9px 16px; border-radius:9px; cursor:pointer; border:1px solid transparent; white-space:nowrap; }
+  .btn-primary { background: var(--amber); color:#211800; } .btn-primary:hover { filter: brightness(1.05); }
+  .btn-secondary { background: transparent; color: var(--warm-gray-light); border-color: var(--border-strong); } .btn-secondary:hover { color: var(--text); }
+  .btn-ghost { background:transparent; border:0; color: var(--warm-gray); font-size:0.85rem; cursor:pointer; }
+
+  .mock-flag { position: fixed; left:14px; bottom:14px; z-index:50; font-size:0.72rem; color: var(--warm-gray); background: var(--surface-dark); border:1px solid var(--border); border-radius:8px; padding:6px 11px; } .mock-flag b { color: var(--amber); }
+</style>
+</head>
+<body>
+
+<!-- dimmed behind: the list-level Duplicates queue -->
+<div class="page-behind" aria-hidden="true">
+  <div class="pb-topbar">⚓ <b>Mast</b> / Shir Glassworks</div>
+  <div class="pb-tabs"><span class="pb-tab">Customers</span><span class="pb-tab active">Duplicates 2</span></div>
+  <div class="pb-h1">Duplicate flags</div>
+  <div class="pb-sub">2 pending · a uid + email resolved to two different customers</div>
+  <div class="pb-flag hi">
+    <div class="who"><b>stewartdavidp@gmail.com</b> &harr; <b>stewart.davidp@gmail.com</b><div class="r">Shared account UID · emails differ by a dot</div></div>
+    <div class="r">3d ago</div>
+  </div>
+  <div class="pb-flag">
+    <div class="who"><b>COGS Demo Etsy</b> &harr; <b>COGS Demo Online</b><div class="r">Same name, two sources</div></div>
+    <div class="r">6d ago</div>
+  </div>
+</div>
+
+<div class="scrim"></div>
+
+<div class="panel">
+  <div class="ph">
+    <button class="ph-back">&#8592; Back to Duplicates</button>
+    <span class="ph-title">Duplicate flag</span>
+    <span class="badge warning"><span class="dot"></span>Pending</span>
+    <div class="ph-spacer"></div>
+    <button class="ph-icon" title="Expand">&#10530;</button>
+    <button class="ph-icon" title="Close">&#10005;</button>
+  </div>
+
+  <div class="pbody">
+    <div class="reason">
+      <span class="ic">&#9888;</span>
+      <div>Account UID <b>oUt4ba0…JKjr1</b> is linked to <b>both</b> records, but their primary emails differ by a dot. Detected by the identity resolver <b>3 days ago</b>. Pick which record to keep — the other merges into it (orders, enrollments, wallet, notes move over).</div>
+    </div>
+
+    <!-- side-by-side compare; recommended winner = A (more history) -->
+    <div class="compare-head">
+      <div class="ch"></div>
+      <div class="ch title"><div><div class="name">Customer A</div><div class="keep-pick">stewartdavidp@gmail.com</div></div> <span class="pill-win">RECOMMENDED</span></div>
+      <div class="ch title"><div><div class="name">Customer B</div><div class="keep-pick">stewart.davidp@gmail.com</div></div></div>
+    </div>
+    <div class="compare">
+      <div class="crow"><div class="k">Name</div><div class="v">David Stewart</div><div class="v">David Stewart</div></div>
+      <div class="crow"><div class="k">Email</div><div class="v diff">stewartdavidp@gmail.com</div><div class="v diff">stewart.davidp@gmail.com</div></div>
+      <div class="crow"><div class="k">Orders</div><div class="v diff win">41 <span class="pill-win">keeps history</span></div><div class="v diff">3</div></div>
+      <div class="crow"><div class="k">Lifetime spend</div><div class="v diff">$319.20</div><div class="v diff">$58.00</div></div>
+      <div class="crow"><div class="k">Status</div><div class="v"><span class="badge danger"><span class="dot"></span>Lapsed</span></div><div class="v"><span class="badge success"><span class="dot"></span>Active</span></div></div>
+      <div class="crow"><div class="k">First seen</div><div class="v diff">Mar 2, 2024</div><div class="v diff">Jan 9, 2026</div></div>
+      <div class="crow"><div class="k">Source</div><div class="v diff">Order</div><div class="v diff">Account</div></div>
+      <div class="crow"><div class="k">Newsletter</div><div class="v">Opted in</div><div class="v">Opted in</div></div>
+    </div>
+
+    <div class="merge-preview">
+      <div class="mp-title">If you keep A</div>
+      <div class="mp-line"><span class="ic">&#10003;</span><div><b>44 orders</b> combined under stewartdavidp@gmail.com (41 + 3)</div></div>
+      <div class="mp-line"><span class="ic">&#10003;</span><div><b>$377.20</b> lifetime spend combined</div></div>
+      <div class="mp-line"><span class="ic">&#10003;</span><div>B's email kept as a <b>secondary email</b> on A (no data lost)</div></div>
+      <div class="mp-line"><span class="ic">&#10003;</span><div>Status recomputed from the merged order cadence</div></div>
+    </div>
+  </div>
+
+  <div class="footer">
+    <button class="btn-ghost">Not a duplicate — dismiss</button>
+    <span class="spacer"></span>
+    <span class="hint">Merge is reversible for 30 days ·</span>
+    <button class="btn btn-secondary">Keep B</button>
+    <button class="btn btn-primary">Keep A — merge B in</button>
+  </div>
+</div>
+
+<div class="mock-flag"><b>MOCK</b> · Duplicate-flag resolve SO · not wired</div>
+
+</body>
+</html>

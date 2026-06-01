@@ -205,3 +205,44 @@ mocking the customer screen.
 machinery (expandable headline + `regions:` facet tabs) as the shared base; Process
 adds the pinned stepper + the `flow:`-driven Process tab on top. Customer then needs
 **no new interior** — just a schema with `regions` and no `flow`.
+
+## 9. List-vs-record levels — the Customers/Duplicates fix
+
+**The IA heuristic (pairs with §1a):** *list-level concerns live on the list;
+record-level concerns live in the record's slide-out.* A tab or control that
+**persists from the list into a record detail** conflates the two levels — that's
+the smell.
+
+**The legacy bug:** the customers module is one pane with `currentView = list |
+detail | duplicates` that always draws two view-tabs (**Customers** / **Duplicates**),
+with "Customers" active for *both* list and detail. So while you're drilled into a
+customer **detail**, the **Duplicates** tab sits there as a false **peer** — clicking
+it destroys the detail and ejects you to a global queue. "Customers" secretly holds
+two levels; "Duplicates" is a list-level admin queue. They are rendered as siblings
+but are not siblings.
+
+**The modeling correction:** *a duplicate is a relationship between two customers,
+not an attribute of one.* Each flag is a pair (`customerIdA`/`customerIdB`) + reason
++ a Keep-A/Keep-B merge. So it has two homes, and "a tab on one customer" is neither:
+
+1. **List-level queue.** Duplicates is a **queue of flag-records** reached only from
+   the Customers list level (not a peer of a record). In the slide-out model the
+   queue sits on the list screen, behind the scrim while a record is open — so it is
+   structurally impossible to hit "Duplicates" from inside a customer.
+2. **Flag = a first-class record with a focused "resolve" slide-out** (decision B,
+   ratified). Narrower than a hub (~860px). Contents: reason banner; **side-by-side
+   compare** of the two candidates with differences highlighted + a recommended
+   winner ("keeps history"); a **merge preview** ("if you keep A: 44 orders combined,
+   B's email kept as secondary, status recomputed"); a decision bar
+   (**Keep A / Keep B / Not a duplicate**), reversible. The pair comparison lives in
+   **one** place instead of bouncing between two customer details. Mock:
+   `duplicate-flag-mock.html`.
+3. **Per-customer contextual banner.** When the open customer is involved in a
+   pending flag, the customer slide-out shows a banner — "⚠ Possible duplicate of
+   <other> — Review" — linking to the flag's resolve SO. That is the record-level
+   half, and it lives **in** the record.
+
+**New micro-surface (not a full variant):** the **resolve / compare-and-decide**
+slide-out — shell + a comparison interior + a guarded decision bar. Candidate reuse
+for other reconciliation queues (drift alerts, merge conflicts, approvals). Catalogue
+as it recurs; do not force it into the variant taxonomy yet.
