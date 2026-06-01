@@ -201,10 +201,27 @@ or Overview stays a tab and the headline shows a thinner vitals strip. Resolve w
 mocking the customer screen.
 
 ## 8. Engine consequence
-`renderProcess` is **`renderFacetedRecord` + the process spine.** Build the faceted
-machinery (expandable headline + `regions:` facet tabs) as the shared base; Process
-adds the pinned stepper + the `flow:`-driven Process tab on top. Customer then needs
-**no new interior** — just a schema with `regions` and no `flow`.
+
+> **Correction (2026-06-01):** earlier drafts said the engine had "only a flat
+> renderer" and that `renderTransaction`/`renderParty` didn't exist — that came
+> from a stale read of an old branch. On `main` the engine **already** has tabbed
+> detail templates: `transaction` (Overview/Items/Fulfillment/Activity, used by
+> `orders-v2`) and `party` (Overview/Orders/Notes, used by `customers-v2`), plus
+> cross-entity drill. So the build *evolves* these templates; it does not build a
+> faceted interior from scratch.
+
+The Process variant = the tabbed record template **+ the MastFlow lifecycle spine**.
+A schema opts in with `detail.flow` (the MastFlow key) + `detail.flowModule` (the
+spec module to lazy-load). When present, the engine swaps the flat "Fulfillment"
+status for a **Process pane (default)** that hosts `MastFlow.renderHeader` — the
+stepper + phase checklist + ONE guarded Advance — and routes Advance/Back/Branch
+through `MastFlow.transition` (optimistic-locked via `expectedFromPhase`). Status is
+**read-only as a field** (workflow-governed) — exactly the §2 fix.
+
+**Shipped (Phase 2, this build):** `detail.flow` wiring in `mast-entity.js`
+(`_initEntityFlow` / `_flowRender` / `_flowTransition`) + `orders-v2` on `pickship`.
+**Still pending:** the expandable headline cover above the tabs (Faceted polish),
+richer customer tabs (Activity/Classes/Wallet), and the Resolve + Calendar work.
 
 ## 9. List-vs-record levels — the Customers/Duplicates fix
 

@@ -273,6 +273,18 @@
       '<div class="mu-totrow"><span>Shipping</span><span>' + m(t.shipping) + '</span></div>' +
       '<div class="mu-totrow"><span>Tax</span><span>' + m(t.tax) + '</span></div>' +
       '<div class="mu-totrow grand"><span>Total</span><span>' + m(t.total) + '</span></div>';
+    // Process variant (doc 17 §3c): when the schema declares detail.flow, the
+    // lifecycle is governed by MastFlow — the Process pane (default) hosts the
+    // stepper + checklist + guarded Advance, wired async by _initEntityFlow.
+    // No status dropdown; status moves through the workflow.
+    if (d.flow) {
+      return U.paneTabsBar([{ key: 'process', label: 'Process' }, { key: 'items', label: 'Items' }, { key: 'customer', label: 'Customer' }, { key: 'history', label: 'History' }], 'process') +
+        '<div class="mu-pane" data-pane="process">' + U.tiles(d.tiles ? d.tiles(r) : []) +
+          '<div id="muFlowHost" style="font-size:0.85rem;color:var(--warm-gray);">Loading workflow…</div></div>' +
+        '<div class="mu-pane" data-pane="items" hidden>' + U.cardTable('Items', itemsTable) + U.card('Summary', totalsHtml) + '</div>' +
+        '<div class="mu-pane" data-pane="customer" hidden>' + U.card('Customer & shipping', custBlock) + '</div>' +
+        '<div class="mu-pane" data-pane="history" hidden>' + U.card('Timeline', U.timeline(d.timeline ? d.timeline(r) : [])) + '</div>';
+    }
     var ful = (d.fulfillment ? d.fulfillment(r) : {}) || {};
     var fulHtml = U.kv([{ k: 'Status', v: U.badge(ful.status || '—', ful.tone || 'neutral') }, { k: 'Tracking', v: ful.tracking || '—' }]);
     return U.paneTabsBar([{ key: 'ov', label: 'Overview' }, { key: 'items', label: 'Items' }, { key: 'ful', label: 'Fulfillment' }, { key: 'act', label: 'Activity' }], 'ov') +
@@ -331,6 +343,77 @@
     if (prev) openRecord(prev.key, prev.record, 'read', true);
   }
 
+  // ── MastFlow integration (Process variant; doc 17 §2/§3c) ───────────
+  // A schema with detail.flow composes the existing process-flow engine instead
+  // of modelling status as a field: the Process pane hosts MastFlow.renderHeader
+  // (stepper + phase checklist + ONE guarded Advance). Mirrors legacy
+  // orders.js _initOrderWorkflowHeader, but generic over any flow-bearing entity.
+  var _flow = null;  // { schema, record, flowKey, fromPhase } — one panel open at a time
+
+  function _initEntityFlow(s, record) {
+    var d = s.detail;
+    if (!d || !d.flow || !window.MastAdmin || typeof MastAdmin.loadModule !== 'function') return;
+    record.id = record.id || s.recordId(record);
+    _flow = { schema: s, record: record, flowKey: d.flow, fromPhase: null };
+    // Engine first (it registers window.MastFlow before the spec IIFE checks for it), then the spec.
+    MastAdmin.loadModule('workflowEngine')
+      .then(function () { return d.flowModule ? MastAdmin.loadModule(d.flowModule) : null; })
+      .then(function () { if (!window.MastFlow) throw new Error('MastFlow not loaded'); _flowRender(); })
+      .catch(function (e) {
+        console.error('[MastEntity] flow init failed', e);
+        var host = document.getElementById('muFlowHost');
+        if (host) host.innerHTML = '<span style="color:var(--danger,#b81d1d);">Workflow failed to load.</span>';
+      });
+  }
+
+  function _flowRender() {
+    if (!_flow || !window.MastFlow) return;
+    var fk = _flow.flowKey;
+    window.MastFlow.renderHeader(fk, _flow.record, {
+      onAdvance: function (target) { _flowTransition(target); },
+      onBack: function (target) { _flowTransition(target); },
+      onBranch: function (choiceKey, entryPhase) { _flowTransition(entryPhase, choiceKey); },
+      onTarget: function (targetId) { _flowGoTarget(targetId); }
+    }).then(function (res) {
+      var host = document.getElementById('muFlowHost');
+      if (host) host.innerHTML = res.html;
+      _flow.fromPhase = (res.evaluation && res.evaluation.currentPhase) ? res.evaluation.currentPhase.key : null;
+    }).catch(function (e) { console.error('[MastEntity] renderHeader', e); });
+  }
+
+  function _flowTransition(targetPhaseKey, branchChoice) {
+    if (!_flow || !window.MastFlow) return;
+    var s = _flow.schema, rec = _flow.record, fk = _flow.flowKey;
+    var opts = { recordId: rec.id, expectedFromPhase: _flow.fromPhase };
+    if (branchChoice) opts.branchChoice = branchChoice;
+    window.MastFlow.transition(fk, rec, targetPhaseKey, opts).then(function () {
+      // Re-read so status/__workflow reflect the write, then re-render the header.
+      if (typeof s.fetch === 'function') {
+        return Promise.resolve(s.fetch(rec.id)).then(function (fresh) {
+          if (fresh) { fresh.id = fresh.id || s.recordId(fresh); _flow.record = fresh; }
+        });
+      }
+    }).then(function () {
+      if (window.showToast) showToast('Advanced to ' + String(targetPhaseKey).replace(/[-_]/g, ' '));
+      _flowRender();
+    }).catch(function (e) {
+      console.error('[MastEntity] transition', e);
+      var msg = (e && e.code === 'STALE_STATE') ? 'Record changed elsewhere — reopen to continue'
+        : ('Could not advance: ' + (e && e.message || e));
+      if (window.showToast) showToast(msg, true);
+    });
+  }
+
+  // Checklist "Go →" target → switch to the relevant detail pane.
+  function _flowGoTarget(targetId) {
+    var map = { 'detail-items': 'items', 'detail-payment': 'items', 'detail-customer': 'customer', 'detail-shipping': 'customer' };
+    var pane = map[targetId];
+    if (!pane) { if (targetId === 'buy-labels' && typeof navigateTo === 'function') navigateTo('ship'); return; }
+    var body = document.getElementById('mastSlideOutBody'); if (!body) return;
+    var btn = body.querySelector('.mu-ptabs button[onclick*="\'' + pane + '\'"]');
+    if (btn) btn.click();
+  }
+
   function openRecord(key, record, mode, _internal) {
     var s = _registry[key]; if (!s) return;
     mode = mode || 'read';
@@ -358,7 +441,15 @@
       actions: (mode === 'read' && typeof s.onSave === 'function')
         ? [{ label: 'Edit', primary: true, onClickFnName: 'MastUI.slideOut.edit' }] : undefined,
       // Read mode → designed category template (if declared); else the form.
-      render: function (ctx) { return (ctx.mode === 'read' && s.detail) ? (crumbHtml() + renderDetail(s, record)) : _formHtml(key, record, ctx.mode); },
+      // A flow-bearing schema wires its MastFlow header after the DOM lands
+      // (covers first open + edit→read re-render; loadModule is cached).
+      render: function (ctx) {
+        if (ctx.mode === 'read' && s.detail) {
+          if (s.detail.flow) setTimeout(function () { _initEntityFlow(s, record); }, 0);
+          return crumbHtml() + renderDetail(s, record);
+        }
+        return _formHtml(key, record, ctx.mode);
+      },
       isDirty: function () {
         var panel = document.getElementById('mastSlideOutBody');
         if (!panel) return false;
