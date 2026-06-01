@@ -113,9 +113,9 @@
        scripts/bump-modules-version.sh (these are static <head> tags loaded
        before the JS var exists, so they can't read it at runtime). Without
        this, the engines were frozen at ?v=1 and never cache-busted on deploy. -->
-  <script src="../shared/mast-ui.js?v=20260601-094008-a478f58"></script>
-  <script src="../shared/mast-io.js?v=20260601-094008-a478f58"></script>
-  <script src="../shared/mast-entity.js?v=20260601-094008-a478f58"></script>
+  <script src="../shared/mast-ui.js?v=20260601-094736-4926254"></script>
+  <script src="../shared/mast-io.js?v=20260601-094736-4926254"></script>
+  <script src="../shared/mast-entity.js?v=20260601-094736-4926254"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Pod-specific runtime config — sets window.MAST_POD_PLATFORM_PROJECT so
@@ -11188,6 +11188,7 @@
     <div id="csTicketsV2Tab" class="tab-content" style="display:none;"></div><!-- UI-redesign conversion: CS tickets -->
     <div id="termsV2Tab" class="tab-content" style="display:none;"></div><!-- UI-redesign config-singleton shape: policies/terms -->
     <div id="walletV2Tab" class="tab-content" style="display:none;"></div><!-- UI-redesign config-singleton shape: wallet/instruments -->
+    <div id="brandV2Tab" class="tab-content" style="display:none;"></div><!-- UI-redesign config shape: brand read-on-page -->
 
     <!-- Admin: Procurement Tab — rendered entirely from app/modules/procurement.js -->
     <div id="procurementTab" style="display:none;"></div>
@@ -20874,7 +20875,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260601-094008-a478f58';
+var MAST_MODULES_V = '20260601-094736-4926254';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -20908,6 +20909,7 @@ var MODULE_MANIFEST = {
   'cs-tickets-v2': { src: 'modules/cs-tickets-v2.js', routes: ['cs-tickets-v2'] }, // UI-redesign conversion: CS tickets/thread (flag-gated, side-by-side)
   'terms-v2': { src: 'modules/terms-v2.js', routes: ['terms-v2'] }, // UI-redesign config-singleton shape: policies/terms launcher→slide-out (flag-gated)
   'wallet-v2': { src: 'modules/wallet-v2.js', routes: ['wallet-v2'] }, // UI-redesign config-singleton shape: wallet/instruments launcher→slide-out (flag-gated)
+  'brand-v2': { src: 'modules/brand-v2.js', routes: ['brand-v2'] }, // UI-redesign config shape: brand read-on-page (read-focused, edit→classic) (flag-gated)
   sales: { src: 'modules/sales.js', routes: ['pos', 'receipts', 'events', 'salesEvents', 'terms'] },
   fulfillment: { src: 'modules/fulfillment.js', routes: ['pack', 'ship', 'fulfillment'] },
   eventsAdmin: { src: 'modules/events.js', routes: ['events-shows', 'events-settings'] },
