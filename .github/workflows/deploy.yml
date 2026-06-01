@@ -102,7 +102,7 @@ jobs:
           # 0.7.5: alignment bump (no functional change for storefront-shared;
           # 0.7.5 also adds the kv-sync subcommand used by operator workflows).
           NODE_AUTH_TOKEN="${{ secrets.MAST_GHA_PAT }}" \
-            npx --yes -p '@stewartdavidp-ship-it/mast-deploy@0.7.7' \
+            npx --yes -p '@stewartdavidp-ship-it/mast-deploy@0.7.8' \
               mast-deploy storefront-shared --pod="${POD}" $DRY_RUN_FLAG
 
       # Verification: confirm the deployed origin actually serves THIS commit's
