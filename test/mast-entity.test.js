@@ -146,4 +146,28 @@ t('expense status tone resolves from the materialized value', () => {
   assert.strictEqual(EXPENSE.fields[2].tone('review'), 'amber');
 });
 
+// ── read-only Faceted Record with an explicit right-aligned TEXT column
+//    (team-v2 'pay' is text but align:'right') + materialized status, no onSave. ──
+const EMPLOYEE = {
+  label: 'Employee', labelPlural: 'Team',
+  recordId: e => e._key,
+  fields: [
+    { name: 'fullName', label: 'Name', type: 'text', list: true, readOnly: true },
+    { name: 'jobTitle', label: 'Title', type: 'text', list: true, readOnly: true, get: e => e.jobTitle || '—' },
+    { name: 'pay', label: 'Pay', type: 'text', list: true, readOnly: true, align: 'right', get: e => e.payRate ? '$' + e.payRate : 'not set' },
+    { name: 'status', label: 'Status', type: 'status', list: true, readOnly: true,
+      options: ['active', 'terminated'], tone: v => v === 'terminated' ? 'danger' : 'success' },
+  ],
+  detail: { render: () => '<emp-read>' },
+};
+E.define('employee', EMPLOYEE);
+t('employee schema: explicit align overrides type default, custom render, no onSave', () => {
+  const cols = E.listColumns('employee');
+  // a text column normally left-aligns; explicit align:'right' must win
+  assert.strictEqual(cols.find(c => c.key === 'pay').align, 'right');
+  assert.strictEqual(cols.find(c => c.key === 'fullName').align, 'left');
+  assert.strictEqual(typeof E.get('employee').detail.render, 'function');
+  assert.strictEqual(E.get('employee').onSave, undefined);
+});
+
 console.log('\n' + pass + ' passed');
