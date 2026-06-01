@@ -59,7 +59,7 @@
 
   // ── editable instrument objects (each edits its slice of walletConfig) ──
   MastEntity.define('gift-cards-v2', {
-    label: 'Gift Cards', labelPlural: 'Gift Cards', size: 'md', route: 'wallet-v2',
+    label: 'Wallet', labelPlural: 'Wallet', size: 'md', route: 'wallet-v2',
     recordId: function () { return 'config'; },
     fields: [{ name: '_gcName', label: 'Instrument', type: 'text', readOnly: true }],
     fetch: function () { return Promise.resolve(V2.cfg); },
@@ -99,7 +99,7 @@
   });
 
   MastEntity.define('loyalty-v2', {
-    label: 'Loyalty program', labelPlural: 'Loyalty', size: 'md', route: 'wallet-v2',
+    label: 'Wallet', labelPlural: 'Wallet', size: 'md', route: 'wallet-v2',
     recordId: function () { return 'config'; },
     fields: [{ name: '_loyName', label: 'Instrument', type: 'text', readOnly: true }],
     fetch: function () { return Promise.resolve(V2.cfg); },
