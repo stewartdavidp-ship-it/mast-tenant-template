@@ -334,3 +334,68 @@ commission-terms (inline editor), CS ticket-thread (full-pane swap).
 **Bottom line:** nothing in the app needs a control or output the model can't place.
 Entity engine = 4 controls × 4 variants; Report / Builder / Wizard are separate; two
 oddballs get a deliberate call; the rest is conversion work.
+
+## 12. Engine — shipped state + conversion playbook (2026-06-01)
+
+The engine (Phases 1–4) is **built, deployed, and live-verified** on sgtest15.
+Four reference modules, all flag-gated (`?ui=1` or `localStorage.mastUiRedesign`),
+side-by-side with their legacy counterparts:
+
+| Variant / control | Module | Route | What it proves |
+|---|---|---|---|
+| **Process** | `app/modules/orders-v2.js` | `#orders-v2` | `transaction` template + `detail.flow` → MastFlow spine (stepper/checklist/guarded Advance) |
+| **Faceted Record** | `app/modules/customers-v2.js` | `#customers-v2` | `party` template + headline cover + Activity/Classes/Wallet facets |
+| **Resolve** | `app/modules/duplicates-v2.js` | `#duplicates-v2` | list-level queue + compare-and-decide slide-out (delegates merge to `window.customersMerge`) |
+| **Calendar (index)** | `app/modules/calendar-v2.js` | `#calendar-v2` | `MastUI.calendar` month-grid; click an occurrence → outputs the session, parent linked |
+
+### Engine API a converter needs
+- **`MastEntity.define(key, schema)`** — `schema = { label, labelPlural, size:'md'|'lg'|'xl',
+  recordId(r), fields:[…], detail?, fetch(id), onSave(rec,mode) }`.
+- **fields:** `{ name, label, type:'text|number|money|date|bool|select|status|tags',
+  group?, list?, required?, readOnly?, align?, get?(r), tone?(v), options? }`. Money via
+  `MastUI.Num.moneyVal(r,'xCents','x')`. At most one `status` field (→ header badge).
+- **detail templates** (read mode): `template:'transaction'` (Process — slots `tiles, lineItems,
+  totals, customer, timeline`; add `flow:'<MastFlowKey>'` + `flowModule:'<moduleId>'` for the
+  process spine; make `status` field `readOnly`) and `template:'party'` (Faceted — slots `tiles,
+  contact, relatedOrders, segments, notes` + optional `activity, classes, wallet` facet fns).
+- **list + open:** `MastEntity.renderList(key,{rows,sortKey,sortDir,onSortFnName,onRowClickFnName,
+  empty})`; row click → `MastEntity.openRecord(key, rec, 'read')`; cross-entity drill →
+  `MastEntity.drill(targetKey,id)`; CSV → `MastEntity.exportRows`.
+- **MastUI primitives** (`shared/mast-ui.js`): `slideOut`, `tiles, card, cardTable, kv, badge,
+  timeline, relatedTable, paneTabsBar, stickyHead, calendar`, `Num`.
+- **Resolve / Calendar** are module-level micro-surfaces (no schema) — copy `duplicates-v2.js` /
+  `calendar-v2.js`; they use `MastUI.slideOut` + `MastUI.calendar` directly.
+
+### Module pattern (copy a reference module)
+`flagOn()` gate → `MastEntity.define(...)` (or build the micro-surface) → `load()` data →
+`render()` (`renderList` or `MastUI.calendar`) → `window.<Module>` handlers → `MastAdmin.registerModule({routes})`.
+Then in `app/index.html`: add a **manifest entry** (`'<x>-v2': { src:'modules/<x>-v2.js', routes:['<x>-v2'] }`)
+and a **container div** (`<div id="<x>V2Tab" class="tab-content" style="display:none;"></div>`).
+
+### Process (per conversion)
+Fresh worktree off `origin/main`; flag-gated `#<route>-v2` side-by-side (never touch legacy);
+**bump `MAST_MODULES_V`** (`./scripts/bump-modules-version.sh`); run lints (`lint-ux-standards`
+ratchet — new module must be **0**; `lint-design-tokens` — fonts on the 7-step rem scale, **no hex
+in `app/modules/*`** — use `var(--…)`; `lint-rbac`, `lint-mastdb`); engine tests (`test/mast-*.test.js`);
+PR → auto-merge on green → CI deploys the dev pod; **live-verify** `?ui=1#<route>-v2` on sgtest15.
+Choose the variant with the §1a test (governed lifecycle → Process; derived attribute → Record;
+relationship-between-two → Resolve; time-shaped index → Calendar).
+
+### Conversion backlog (record surfaces that fit the model but use a pre-slide-out detail)
+`promotions` (modal), `procurement` open-POs (inline row-expansion), `maker` materials (inline edit),
+`trips` history (inline-expansion), `finance-expenses` (custom overlay — has an approve lifecycle →
+likely Process), `team` employee (in-pane swap), `commission-terms` (inline editor — publish lifecycle),
+`customer-service` ticket-thread (full-pane `viewMode` swap → Process w/ status lifecycle). **Out of
+scope** (separate engines, §11): Report (finance dashboards), Builder (blog/newsletter/lookbook canvases),
+Wizard (mapping/onboarding/day-close).
+
+### Gotchas (cost real time)
+- The sgtest15 admin **session logs out** intermittently — live-verify needs the operator signed in
+  (the assistant must not enter credentials). The duplicate-flag queue verifies by injecting a dev
+  `admin/customerDuplicates` row, then deleting it.
+- The Chrome MCP **screenshot is a fixed resolution** wider than the viewport, so content near the right
+  edge can *look* clipped when it isn't — confirm with DOM measurements (`getBoundingClientRect`) before
+  "fixing" a clip.
+- **Read the file on `main` before building** — the engine on `main` was more evolved than an early-branch
+  read suggested (it already had the `transaction`/`party` templates). Verify, don't assume (see §8 correction).
+- Minor open: `customers-v2` search re-renders the tab innerHTML per keystroke → input loses focus after 1 char.
