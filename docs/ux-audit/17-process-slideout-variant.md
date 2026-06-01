@@ -466,7 +466,12 @@ Every backlog item converted to the engine, side-by-side with legacy (legacy unt
 | procurement (POs) | `procurement-v2` `#procurement-v2` | read Faceted | #121 |
 | maker materials | `materials-v2` `#materials-v2` | Faceted, writes **delegated** via `window.MakerMaterialsBridge` | #122 (+123) |
 | CS tickets/thread | `cs-tickets-v2` `#cs-tickets-v2` | Faceted, interactive thread interior | #124 |
-| **config singleton** (Policies/T&C) | `terms-v2` `#terms-v2` | object via **launcher** → slide-out (the §13 reference build) | #125 (+126) |
+| **config singleton** (Policies/T&C) | `terms-v2` `#terms-v2` | config — see §15 (launcher→slide-out in #125/#126, **refactored to read-on-page in #132**) | #125 (+126, #132) |
+
+> ⚠️ The "launcher card → slide-out *read* → Edit" shape that #125/#126 introduced for
+> `terms-v2` was **superseded by the read-on-page model (§15, 2026-06-01)**. The current
+> config surfaces (wallet/terms/brand/homepage/settings) follow §15, not the original
+> launcher→slide-out framing. Read §15 before building or copying a config surface.
 
 **Doc "Process" scorecard:** of the 5 backlog items the earlier draft tagged "Process,"
 **0 were actually gated Processes** — expenses/procurement/cs-tickets are derived-status
@@ -497,11 +502,13 @@ correct in exactly two places: (1) facet tabs *inside* the slide-out for one obj
 (2) page-level grouping of producers.
 
 ### 14c. What's next (no new design needed — mechanical follow-through)
-1. **Apply the singleton template** (`terms-v2`) to the other config singletons —
-   studio, brand, wallet-instruments, homepage — each a launcher → slide-out object.
-2. **Build the Settings producer surface** — a compact cards-grid (grouped by tabs only
-   if it grows past one screen) of launchers over those singletons → slide-out. `terms-v2`
-   is the first entry.
+1. ~~**Apply the singleton template to the other config singletons.**~~ ✅ **DONE** —
+   wallet-instruments (#128/#129/#131), terms (#132), brand (#133), homepage (#134/#135).
+   Shape evolved mid-flight from launcher→slide-out to **read-on-page (§15)**. `studio` is
+   NOT a singleton (multi-list LPE); `website` is the §11 Builder (out of scope).
+2. ~~**Build the Settings producer surface.**~~ ✅ **DONE** — `settings-v2` `#settings-v2`
+   (#136): a launcher grid over the four config areas, each card a live status summary →
+   navigates to that area's read-on-page route (§15).
 3. **The three sibling engines (§11/§13b)** — Report (finance dashboards), Builder
    (blog/newsletter/lookbook canvases), Wizard (mapping/onboarding/day-close): they keep
    their own shape but must conform to the global look & feel (tokens + 7-step scale +
@@ -512,5 +519,65 @@ correct in exactly two places: (1) facet tabs *inside* the slide-out for one obj
 5. **GA rollout** (separate decision): the `?ui=1` twins are dev-only previews. Promoting
    any to GA / replacing legacy is its own track (route registration, RBAC route-gate,
    removing the legacy module) — not started.
+
+## 15. The read-on-page model for config surfaces (ratified 2026-06-01)
+
+While shipping the config singletons the operator refined the §13 "launcher → slide-out"
+shape into a single global rule that covers every object kind:
+
+> **NAV takes you to a READ-ONLY view** — a list, a calendar, or (for config) a set of
+> read-only fields/cards showing the current settings at a glance. **Clicking an item takes
+> you to DETAIL mode** (the read slide-out, with Edit secondary) **for most objects, or
+> STRAIGHT TO EDIT for a config object** — because the page already *is* the read view.
+
+This supersedes the original config framing where you navigated to a near-empty launcher
+card, opened a slide-out in *read* mode, and only then found Edit. The problems that drove
+the change (operator, reviewing `wallet-v2`): (1) navigating to a launcher that showed
+nothing, then meeting "Edit" before any data; (2) distinct instruments crammed into one
+object's facet tabs, which vanish in edit mode and leave a flat wall of fields.
+
+**The rule, by object kind:**
+- **List / record surfaces** (orders, customers, the conversion backlog): NAV → list
+  (read) → click a row → **detail slide-out** (read, Edit secondary). Read lives in the
+  slide-out because the page is a list of *many*. Unchanged.
+- **Config surfaces** (wallet, terms, brand, homepage): NAV → **the page is the read view**
+  (a grid of cards showing live settings) → click → **slide-out opens straight into EDIT**
+  for that item. Read lives on the page; the slide-out is purely the editor.
+
+**Object granularity (the §13 "is it one object?" test, applied to config):**
+- **wallet-v2** — Gift Cards / Loyalty / Store Credit are *distinct instruments* (separate
+  enable + domain) → each is its **own** `MastEntity` object; its card opens its own editor.
+  Several share the one `admin/walletConfig` record (each merge-saves its slice) but they are
+  modeled as separate objects.
+- **terms-v2** — Terms is **one** document (`admin/termsConfig`), so its areas are *slices of
+  one object*, not separate objects. Split into a couple of editable slices (Return policy /
+  Store terms) only to keep each editor small; both merge into the one record.
+- The test is "distinct identity + lifecycle," not "lives in a separate Firebase node."
+
+**Read-focused config** (brand, homepage): when *every* edit path is storefront-coupled
+(writes a public mirror, uses a Cloud Function, or paints the live site), there is no
+side-effect-free slice to replicate, so the twin is **read-only on the page with every edit
+routed to the classic view** (same exception as terms' Publish; same pattern as trips/team).
+Verify each write before replicating — not side-effect-free → leave on legacy.
+
+**Settings producer surface** (`settings-v2`): because each config area is now its own
+read-on-page route, Settings is a **nav index** — a launcher grid where each card shows the
+area's live status and *navigates* to its page (not a launcher that opens a slide-out). The
+§14b grouping threshold still applies (flat grid under roughly 6–8 areas).
+
+**Engine notes for a config editor:** `MastEntity.openRecord(key, rec, 'edit')` opens straight
+into edit (no read step). After a successful save the shell flips to read mode, so a config
+entity should still supply a `detail.render` (used as the post-save confirmation). Materialize
+the slide-out title source (`fields[0]`) as a real string; set the entity `label` to the area
+name so the header reads "Area: Item" rather than a duplicate. Mutate the live fetched record
+in `onSave` so the post-save read re-render is fresh (the engine passes `onSave` a copy).
+
+**Build-hygiene note (cost a fix PR, #134 → #135):** a literal comment-terminator inside a
+JSDoc block — e.g. a wildcard path written with an asterisk-then-slash — closes the comment
+early and breaks the module with a `SyntaxError`. The repo's text-scan lints
+(`lint-ux-standards`, `lint-design-tokens`) and the engine tests do **not** parse a module, so
+this ships silently (a flag-gated route just bounces to the dashboard). **Run
+`node --check app/modules/<x>.js` before every PR** — it is the only check that actually parses
+the file — and avoid writing literal comment delimiters inside comments (reword wildcard paths).
 
 Running session log (richer, cross-session): `~/.claude/projects/-Users-davidstewart-Downloads-mast-tenant-template/memory/project_ux_redesign_control.md`.
