@@ -113,9 +113,9 @@
        scripts/bump-modules-version.sh (these are static <head> tags loaded
        before the JS var exists, so they can't read it at runtime). Without
        this, the engines were frozen at ?v=1 and never cache-busted on deploy. -->
-  <script src="../shared/mast-ui.js?v=20260601-080047-4541549"></script>
-  <script src="../shared/mast-io.js?v=20260601-080047-4541549"></script>
-  <script src="../shared/mast-entity.js?v=20260601-080047-4541549"></script>
+  <script src="../shared/mast-ui.js?v=20260601-080929-8b1b73d"></script>
+  <script src="../shared/mast-io.js?v=20260601-080929-8b1b73d"></script>
+  <script src="../shared/mast-entity.js?v=20260601-080929-8b1b73d"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Pod-specific runtime config — sets window.MAST_POD_PLATFORM_PROJECT so
@@ -11185,6 +11185,7 @@
     <div id="teamV2Tab" class="tab-content" style="display:none;"></div><!-- UI-redesign conversion: team -->
     <div id="procurementV2Tab" class="tab-content" style="display:none;"></div><!-- UI-redesign conversion: procurement -->
     <div id="materialsV2Tab" class="tab-content" style="display:none;"></div><!-- UI-redesign conversion: maker materials -->
+    <div id="csTicketsV2Tab" class="tab-content" style="display:none;"></div><!-- UI-redesign conversion: CS tickets -->
 
     <!-- Admin: Procurement Tab — rendered entirely from app/modules/procurement.js -->
     <div id="procurementTab" style="display:none;"></div>
@@ -20871,7 +20872,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260601-080047-4541549';
+var MAST_MODULES_V = '20260601-080929-8b1b73d';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -20902,6 +20903,7 @@ var MODULE_MANIFEST = {
   'team-v2': { src: 'modules/team-v2.js', routes: ['team-v2'] }, // UI-redesign conversion: team roster/employee (flag-gated, side-by-side)
   'procurement-v2': { src: 'modules/procurement-v2.js', routes: ['procurement-v2'] }, // UI-redesign conversion: purchase orders (flag-gated, side-by-side)
   'materials-v2': { src: 'modules/materials-v2.js', routes: ['materials-v2'] }, // UI-redesign conversion: maker materials (flag-gated, side-by-side)
+  'cs-tickets-v2': { src: 'modules/cs-tickets-v2.js', routes: ['cs-tickets-v2'] }, // UI-redesign conversion: CS tickets/thread (flag-gated, side-by-side)
   sales: { src: 'modules/sales.js', routes: ['pos', 'receipts', 'events', 'salesEvents', 'terms'] },
   fulfillment: { src: 'modules/fulfillment.js', routes: ['pack', 'ship', 'fulfillment'] },
   eventsAdmin: { src: 'modules/events.js', routes: ['events-shows', 'events-settings'] },
