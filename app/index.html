@@ -113,9 +113,9 @@
        scripts/bump-modules-version.sh (these are static <head> tags loaded
        before the JS var exists, so they can't read it at runtime). Without
        this, the engines were frozen at ?v=1 and never cache-busted on deploy. -->
-  <script src="../shared/mast-ui.js?v=20260601-021944-3abc5b9"></script>
-  <script src="../shared/mast-io.js?v=20260601-021944-3abc5b9"></script>
-  <script src="../shared/mast-entity.js?v=20260601-021944-3abc5b9"></script>
+  <script src="../shared/mast-ui.js?v=20260601-022918-f80aa88"></script>
+  <script src="../shared/mast-io.js?v=20260601-022918-f80aa88"></script>
+  <script src="../shared/mast-entity.js?v=20260601-022918-f80aa88"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Pod-specific runtime config — sets window.MAST_POD_PLATFORM_PROJECT so
@@ -11181,6 +11181,7 @@
     <div id="calendarV2Tab" class="tab-content" style="display:none;"></div><!-- UI-redesign Calendar -->
     <div id="promotionsV2Tab" class="tab-content" style="display:none;"></div><!-- UI-redesign conversion: promotions -->
     <div id="tripsV2Tab" class="tab-content" style="display:none;"></div><!-- UI-redesign conversion: trips -->
+    <div id="financeExpensesV2Tab" class="tab-content" style="display:none;"></div><!-- UI-redesign conversion: finance-expenses -->
 
     <!-- Admin: Procurement Tab — rendered entirely from app/modules/procurement.js -->
     <div id="procurementTab" style="display:none;"></div>
@@ -20867,7 +20868,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260601-021944-3abc5b9';
+var MAST_MODULES_V = '20260601-022918-f80aa88';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -20894,6 +20895,7 @@ var MODULE_MANIFEST = {
   'calendar-v2': { src: 'modules/calendar-v2.js', routes: ['calendar-v2'] }, // UI-redesign Calendar index control (flag-gated)
   'promotions-v2': { src: 'modules/promotions-v2.js', routes: ['promotions-v2'] }, // UI-redesign conversion: promotions (flag-gated, side-by-side)
   'trips-v2': { src: 'modules/trips-v2.js', routes: ['trips-v2'] }, // UI-redesign conversion: trips history (flag-gated, side-by-side)
+  'finance-expenses-v2': { src: 'modules/finance-expenses-v2.js', routes: ['finance-expenses-v2'] }, // UI-redesign conversion: expenses (flag-gated, side-by-side)
   sales: { src: 'modules/sales.js', routes: ['pos', 'receipts', 'events', 'salesEvents', 'terms'] },
   fulfillment: { src: 'modules/fulfillment.js', routes: ['pack', 'ship', 'fulfillment'] },
   eventsAdmin: { src: 'modules/events.js', routes: ['events-shows', 'events-settings'] },
