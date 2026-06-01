@@ -203,8 +203,11 @@
       if (mode !== 'create' && id) {
         op = Promise.resolve(MastDB.promotions.update(id, data)).then(function () {
           if (window.writeAudit) writeAudit('update', 'sale-promotion', id);
-          // Mutate the open record in place so the read re-render shows fresh data.
-          Object.assign(rec, data); rec.status = computeStatus(rec); rec._products = resolveProducts(pids);
+          // Mutate the LIVE cached record (=== the slide-out's read closure, since
+          // fetch returns V2.byId[id]) so the post-save read re-render shows fresh
+          // data. Mutating the `rec` copy the engine passes here would not.
+          var live = V2.byId[id] || rec;
+          Object.assign(live, data); live.status = computeStatus(live); live._products = resolveProducts(pids);
           showToast('Sale updated');
         });
       } else {

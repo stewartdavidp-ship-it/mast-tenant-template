@@ -146,7 +146,9 @@
       if (rec.category !== category) updates.categorySource = 'user';
       return Promise.resolve(MastDB.expenses.update(id, updates)).then(function () {
         if (window.writeAudit) writeAudit('update', 'expense', id);
-        Object.assign(rec, updates);   // keep the open record fresh for the read re-render
+        // Mutate the LIVE cached record (=== the slide-out's read closure, since
+        // fetch returns V2.byId[id]); the engine passes a copy to onSave.
+        Object.assign(V2.byId[id] || rec, updates);
         if (window.showToast) showToast('Expense updated');
         return true;
       }).catch(function (e) { console.error('[finance-expenses-v2] save', e); if (window.showToast) showToast('Update failed', true); return false; });
