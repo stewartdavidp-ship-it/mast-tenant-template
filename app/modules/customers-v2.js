@@ -65,6 +65,22 @@
             if (ct) c._contactLocation = ct.city ? (ct.city + (ct.state ? ', ' + ct.state : '')) : (ct.location || ct.address || null);
           }).catch(function () {}));
         }
+        // Enrollments → Classes + Activity facets (match on customerId).
+        if (window.MastDB && typeof MastDB.query === 'function') {
+          jobs.push(Promise.resolve(MastDB.query('admin/enrollments').orderByChild('customerId').equalTo(id).once('value'))
+            .then(function (snap) {
+              var v = (snap && typeof snap.val === 'function') ? snap.val() : snap; var arr = [];
+              Object.keys(v || {}).forEach(function (k) { var e = v[k]; if (e && typeof e === 'object') arr.push(Object.assign({ _key: k }, e)); });
+              c._enrollments = arr;
+            }).catch(function () {}));
+        }
+        // Wallet facet — only when a customer-facing account (uid) is linked.
+        var uid = c.linkedIds && c.linkedIds.uids && c.linkedIds.uids[0];
+        if (uid && window.MastDB && MastDB.get) {
+          c._walletUid = uid;
+          jobs.push(Promise.resolve(MastDB.get('public/accounts/' + uid + '/wallet'))
+            .then(function (w) { c._wallet = w || null; }).catch(function () {}));
+        }
         return Promise.all(jobs).then(function () { return c; });
       });
     },
@@ -95,7 +111,41 @@
         if (r.stats && r.stats.portfolioQuadrant) out.push(r.stats.portfolioQuadrant);
         return out;
       },
-      notes: function (r) { return r.notes || ''; }
+      notes: function (r) { return r.notes || ''; },
+      classes: function (r) {
+        var N = window.MastUI.Num;
+        return (r._enrollments || []).map(function (e) {
+          var st = String(e.status || 'enrolled').toLowerCase();
+          var tone = (st === 'attended' || st === 'completed') ? 'success'
+            : (st === 'cancelled' || st === 'no_show' || st === 'no-show') ? 'danger' : 'info';
+          var when = e.sessionDate || e.sessionStartAt || e.scheduledFor || e.createdAt;
+          return { name: e.className || e.classTitle || e.classId || '—', session: when ? N.date(when) : '', status: st, tone: tone };
+        });
+      },
+      activity: function (r) {
+        var N = window.MastUI.Num, ev = [];
+        (r._recentOrders || []).forEach(function (o) {
+          ev.push({ label: 'Order ' + (o.orderNumber || o._key) + ' · ' + (N.money(N.moneyVal(o, 'totalCents', 'total')) || ''), at: N.date(o.placedAt), _t: o.placedAt });
+        });
+        (r._enrollments || []).forEach(function (e) {
+          var when = e.sessionDate || e.createdAt;
+          ev.push({ label: 'Enrolled — ' + (e.className || e.classTitle || 'class'), at: when ? N.date(when) : '', _t: when });
+        });
+        if (r.notes) ev.push({ label: 'Note on file', at: r.updatedAt ? N.date(r.updatedAt) : '', _t: r.updatedAt });
+        ev.sort(function (a, b) { return String(b._t || '').localeCompare(String(a._t || '')); });
+        return ev.map(function (x) { return { label: x.label, at: x.at, done: true }; });
+      },
+      wallet: function (r) {
+        if (!r._walletUid) return { linked: false };
+        var N = window.MastUI.Num, w = r._wallet || {};
+        var creditCents = 0;
+        if (w.credits) Object.keys(w.credits).forEach(function (k) { var cr = w.credits[k]; creditCents += (cr && (cr.balanceCents || cr.amountCents)) || 0; });
+        var passes = w.passes ? Object.keys(w.passes).filter(function (k) { var p = w.passes[k]; return p && p.status !== 'revoked'; }).length : 0;
+        var membership = (w.membership && (w.membership.tier || w.membership.tierName)) || '—';
+        var loyalty = (w.loyalty && (w.loyalty.totalPoints != null ? w.loyalty.totalPoints
+          : (w.loyalty.points != null ? w.loyalty.points : (w.loyalty.balance != null ? w.loyalty.balance : 0)))) || 0;
+        return { linked: true, credit: N.money(creditCents / 100), passes: passes, membership: membership, loyalty: loyalty };
+      }
     },
     onSave: function (rec) {
       var id = rec._key || rec.id;
