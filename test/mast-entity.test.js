@@ -57,4 +57,37 @@ t('validate flags missing required', () => {
 t('validate flags non-numeric money', () => assert.strictEqual(E.validate('order', { number: 'A1', total: 'abc' }).ok, false));
 t('validate passes a good record', () => assert.strictEqual(E.validate('order', { number: 'SGTE-1', total: 45 }).ok, true));
 
+// ── conversion-backlog schema: a Faceted Record with computed columns + custom
+//    interiors (promotions-v2). Exercises get()-driven list columns + that a
+//    schema may declare detail.render/editRender without breaking derivations. ──
+const SALE = {
+  label: 'Sale', labelPlural: 'Promotions',
+  recordId: s => s._key || s.id,
+  fields: [
+    { name: 'name', label: 'Name', type: 'text', list: true, required: true },
+    { name: 'discount', label: 'Discount', type: 'text', list: true, readOnly: true,
+      get: s => s.discountType === 'percent' ? s.discountValue + '% off' : '$' + (s.discountValue / 100).toFixed(2) + ' off' },
+    { name: 'productCount', label: 'Products', type: 'number', list: true, readOnly: true,
+      get: s => (s.products || []).length },
+    { name: 'status', label: 'Status', type: 'status', list: true, readOnly: true, options: ['active', 'scheduled', 'ended'] },
+  ],
+  detail: { render: () => '<custom-read>', editRender: () => '<custom-edit>' },
+};
+E.define('sale', SALE);
+t('schema with detail.render/editRender registers and keeps derivations', () => {
+  const s = E.get('sale');
+  assert.strictEqual(typeof s.detail.render, 'function');
+  assert.strictEqual(typeof s.detail.editRender, 'function');
+});
+t('list columns honor get() for computed fields', () => {
+  const cols = E.listColumns('sale');
+  assert.deepStrictEqual(cols.map(c => c.key), ['name', 'discount', 'productCount', 'status']);
+  assert.strictEqual(cols.find(c => c.key === 'productCount').align, 'right');
+});
+t('canonicalGet uses get() for a computed column', () => {
+  const f = SALE.fields[1];
+  assert.strictEqual(E.canonicalGet(f, { discountType: 'percent', discountValue: 20 }), '20% off');
+});
+t('validate requires name on the sale schema', () => assert.strictEqual(E.validate('sale', { discountValue: 5 }).ok, false));
+
 console.log('\n' + pass + ' passed');
