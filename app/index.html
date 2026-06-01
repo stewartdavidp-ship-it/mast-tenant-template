@@ -113,9 +113,9 @@
        scripts/bump-modules-version.sh (these are static <head> tags loaded
        before the JS var exists, so they can't read it at runtime). Without
        this, the engines were frozen at ?v=1 and never cache-busted on deploy. -->
-  <script src="../shared/mast-ui.js?v=20260601-103156-3e79c8d"></script>
-  <script src="../shared/mast-io.js?v=20260601-103156-3e79c8d"></script>
-  <script src="../shared/mast-entity.js?v=20260601-103156-3e79c8d"></script>
+  <script src="../shared/mast-ui.js?v=20260601-104451-56dfc88"></script>
+  <script src="../shared/mast-io.js?v=20260601-104451-56dfc88"></script>
+  <script src="../shared/mast-entity.js?v=20260601-104451-56dfc88"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Pod-specific runtime config — sets window.MAST_POD_PLATFORM_PROJECT so
@@ -20094,6 +20094,20 @@ var ALL_TAB_IDS = ['mappingTab', 'inquiriesTab', 'scheduleTab', 'galleryTab', 'h
 // W2.3 — Commission Terms admin editor
 'commissionTermsTab'];
 
+// Hide every routed tab before showing the target. Covers the fixed legacy list
+// (ALL_TAB_IDS) PLUS the redesign's `*-v2` tabs, which are created dynamically by
+// the flag-gated v2 modules and are NOT in ALL_TAB_IDS. Without the v2 sweep a
+// lingering v2 tab (e.g. ordersV2Tab) bleeds through when you navigate to a legacy
+// route — visible once the Legacy-UI toggle lets you mix v2 + legacy in one session.
+function hideAllRoutedTabs() {
+  ALL_TAB_IDS.forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.style.display = 'none';
+  });
+  var v2 = document.querySelectorAll('.tab-content[id$="V2Tab"]');
+  for (var i = 0; i < v2.length; i++) v2[i].style.display = 'none';
+}
+
 var currentRoute = 'dashboard';
 var currentRouteParams = {};
 
@@ -20382,10 +20396,7 @@ function applyRoute(route) {
   if (!config) return;
 
   // Hide all tabs
-  ALL_TAB_IDS.forEach(function(id) {
-    var el = document.getElementById(id);
-    if (el) el.style.display = 'none';
-  });
+  hideAllRoutedTabs();
 
   // Show placeholder or real tab
   if (config.placeholder) {
@@ -20461,10 +20472,7 @@ function renderPlaceholder(config) {
 // and gives the user a way out. Previously these silently redirected to the dashboard,
 // which made any typo or stale link look identical to a successful navigation.
 function renderUnknownRoutePlaceholder(attemptedRoute) {
-  ALL_TAB_IDS.forEach(function(id) {
-    var el = document.getElementById(id);
-    if (el) el.style.display = 'none';
-  });
+  hideAllRoutedTabs();
 
   var attempted = String(attemptedRoute || '').toLowerCase();
   var knownSet = {};
@@ -20725,10 +20733,7 @@ function switchTab(tab) {
 }
 
 function hideAdminTabs() {
-  ALL_TAB_IDS.forEach(function(id) {
-    var el = document.getElementById(id);
-    if (el) el.style.display = 'none';
-  });
+  hideAllRoutedTabs();
 }
 
 function showSidebar() {
@@ -20908,7 +20913,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260601-103156-3e79c8d';
+var MAST_MODULES_V = '20260601-104451-56dfc88';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
