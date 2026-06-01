@@ -162,7 +162,11 @@
       }
       var id = rec._key || rec.materialId || rec.id;
       return Promise.resolve(window.MakerMaterialsBridge.update(id, data)).then(function () {
-        Object.assign(rec, data);   // fresh read re-render
+        // Mutate the LIVE cached record (=== the slide-out's read closure, since
+        // fetch returns V2.byId[id]); the engine passes a copy to onSave. Shows the
+        // edited fields immediately; reloadSoon() then refreshes server-computed
+        // fields (bookCost/costHistory) into the cache for the next open.
+        Object.assign(V2.byId[id] || rec, data);
         if (window.showToast) showToast('Material updated'); reloadSoon(); return true;
       }).catch(function (e) { console.error('[materials-v2] update', e); if (window.showToast) showToast('Update failed', true); return false; });
     }
