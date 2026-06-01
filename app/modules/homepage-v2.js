@@ -3,8 +3,8 @@
  *
  * Global model (operator, 2026-06-01): NAV → a READ-ONLY view of the current
  * settings. Homepage editing is storefront-coupled (section toggles write
- * public/config/nav/sections/*, theme writes public/config/theme/*, testimonial
- * visibility writes public/testimonials/*/visible — all paint the live homepage),
+ * the public nav-sections config, theme writes the public theme config, testimonial
+ * visibility writes the public testimonials — all paint the live homepage),
  * so editing stays on legacy (read-focused twin, like brand/trips/team). This twin
  * PRESENTS the homepage configuration read-on-page and routes every edit to the
  * classic Homepage view; homepage.js untouched.
