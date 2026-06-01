@@ -238,7 +238,12 @@
       slideOut._opts = opts;
       _v2.expanded = false;
       var mode = opts.mode || 'read';
-      var badgesHtml = (opts.badges || []).map(function (b) { return badge(b.label, b.tone); }).join(' ');
+      // Status badges belong to READ mode only — in edit/create the status is
+      // an editable control inside the form, so the read-mode pill would be a
+      // stale duplicate (it lingered at the top of the old edit panel).
+      var badgesHtml = (mode === 'read')
+        ? (opts.badges || []).map(function (b) { return badge(b.label, b.tone); }).join(' ')
+        : '';
       var bodyHtml = (typeof opts.render === 'function') ? opts.render({ mode: mode }) : (opts.bodyHtml || '');
       var subtitle = (opts.subtitle || '') + (badgesHtml ? ' ' : '');
 
@@ -402,6 +407,9 @@
       '.mu-pane[hidden]{display:none;} .mu-grid2{display:grid;grid-template-columns:1.4fr 1fr;gap:18px;} @media(max-width:720px){.mu-grid2{grid-template-columns:1fr;}}',
       '.mu-crumb{margin:-4px -4px 14px;padding:9px 4px;border-bottom:1px solid var(--border,rgba(127,127,127,.2));} .mu-crumb button{background:transparent;border:0;color:var(--teal,#2A7C6F);font:inherit;font-size:0.85rem;cursor:pointer;font-weight:500;}',
       '.mu-link{display:inline;color:var(--teal,#2A7C6F);background:none;border:0;padding:0;font:inherit;cursor:pointer;font-weight:500;} .mu-link:hover{text-decoration:underline;}',
+      // Edit-mode affordance bar (designed edit form): "EDITING — update …".
+      '.mu-editbar{display:flex;align-items:center;gap:9px;font-size:0.85rem;color:var(--warm-gray);margin:2px 2px 14px;}',
+      '.mu-editpill{font-size:0.68rem;font-weight:600;letter-spacing:.04em;padding:2px 9px;border-radius:999px;background:color-mix(in srgb,var(--amber,#C4853C) 16%,transparent);color:var(--amber,#C4853C);border:1px solid color-mix(in srgb,var(--amber,#C4853C) 30%,transparent);}',
       // Visible keyboard focus (06-B / a11y) — no :focus-visible rings existed before.
       '.mast-row:focus-visible{outline:2px solid var(--amber,var(--teal));outline-offset:-2px;} .mu-link:focus-visible,.mu-crumb button:focus-visible{outline:2px solid var(--amber,var(--teal));outline-offset:2px;border-radius:3px;}',
       '.feedback-overlay{z-index:12001 !important;}', // above the slide-out (9000) so the feedback dialog opens on top',

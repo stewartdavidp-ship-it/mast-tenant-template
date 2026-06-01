@@ -41,7 +41,7 @@
         get: function (o) { return Array.isArray(o.items) ? o.items.reduce(function (s, li) { return s + (li.qty || 1); }, 0) : (o.itemCount || 0); } },
       { name: 'total', label: 'Total', type: 'money', list: true, group: 'Order',
         get: function (o) { return window.MastUI.Num.moneyVal(o, 'totalCents', 'total'); } },
-      { name: 'status', label: 'Status', type: 'status', list: true, group: 'Order',
+      { name: 'status', label: 'Status', type: 'status', list: true, group: 'Fulfillment',
         options: ['placed', 'confirmed', 'building', 'packed', 'shipped', 'delivered', 'cancelled', 'refunded', 'payment_failed'],
         tone: function (v) { return STATUS_TONE[String(v || '').toLowerCase()] || 'neutral'; } },
       // Item-type tags so you can see what kinds of items an order contains.
