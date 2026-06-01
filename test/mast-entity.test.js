@@ -196,4 +196,28 @@ t('PO schema: derived status column collapses partially_received→partial, tota
   assert.strictEqual(E.get('po').onSave, undefined);
 });
 
+// ── Faceted Record with custom interiors + a delegating onSave (materials-v2);
+//    unitCost is dollars, required name, status badge. ──
+const MATERIAL = {
+  label: 'Material', labelPlural: 'Materials',
+  recordId: m => m._key,
+  fields: [
+    { name: 'name', label: 'Name', type: 'text', list: true, required: true },
+    { name: 'unitCost', label: 'Unit cost', type: 'money', list: true, readOnly: true, get: m => m.unitCost || 0 },
+    { name: 'onHand', label: 'On hand', type: 'number', list: true, readOnly: true, get: m => m.onHandQty || 0 },
+    { name: 'status', label: 'Status', type: 'status', list: true, readOnly: true,
+      options: ['active', 'archived'], tone: v => v === 'archived' ? 'neutral' : 'success' },
+  ],
+  detail: { render: () => '<mat-read>', editRender: () => '<mat-edit>' },
+  onSave: () => true,
+};
+E.define('material', MATERIAL);
+t('material schema: dollar unit cost, required name, custom interiors + delegating onSave', () => {
+  assert.strictEqual(E.canonicalGet(MATERIAL.fields[1], { unitCost: 18.5 }), '18.50');
+  assert.strictEqual(E.validate('material', { unitCost: 5 }).ok, false);   // name required
+  assert.strictEqual(E.validate('material', { name: 'Gold wire' }).ok, true);
+  assert.strictEqual(typeof E.get('material').detail.editRender, 'function');
+  assert.strictEqual(typeof E.get('material').onSave, 'function');
+});
+
 console.log('\n' + pass + ' passed');

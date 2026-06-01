@@ -6647,4 +6647,21 @@
   loadMaterials();
   loadRecipes();
 
+  // Bridge for the materials-v2 redesign twin (flag-gated #materials-v2). It
+  // delegates create/update/archive here so the cost-history append, dual-basis
+  // (bookCost/replacementCost) sync, and recipes-dirty recompute stay
+  // single-sourced — the twin never reimplements that logic. Additive; no
+  // behavior change to the legacy surface. update() self-heals materialsData[id]
+  // (cold-open race) so the cost diff is always computed against the old value.
+  window.MakerMaterialsBridge = {
+    create: function (data) { return createMaterial(data); },
+    update: async function (id, updates) {
+      if (!materialsData[id]) {
+        try { var m = await MastDB.materials.get(id); if (m) materialsData[id] = m; } catch (e) {}
+      }
+      return updateMaterial(id, updates);
+    },
+    archive: function (id) { return archiveMaterial(id); }
+  };
+
 })();
