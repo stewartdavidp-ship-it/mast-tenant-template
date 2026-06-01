@@ -390,6 +390,45 @@
     var c = document.getElementById('muCover'); if (c) c.classList.toggle('collapsed');
   }
 
+  // ── Calendar: a pluggable INDEX control (doc 17 §10) ────────────────
+  // Plots entries on a month grid; a click outputs a record id (the occurrence)
+  // — the same index→detail handoff a table gives, with a different lens.
+  // cfg: { year, month(0-11), entriesByDate:{'YYYY-MM-DD':[{id,label,time?,tone?}]},
+  //        onEntryFnName('id'), onNavFnName('prev'|'today'|'next') }
+  var _CAL_MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  var _CAL_DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  function _pad2(n) { return (n < 10 ? '0' : '') + n; }
+  function calendar(cfg) {
+    cfg = cfg || {};
+    var year = cfg.year, month = cfg.month, byDate = cfg.entriesByDate || {};
+    var onEntry = cfg.onEntryFnName, onNav = cfg.onNavFnName;
+    var startDow = new Date(year, month, 1).getDay();
+    var daysInMonth = new Date(year, month + 1, 0).getDate();
+    var head = '<div class="mu-cal-head"><div class="mu-cal-title">' + _CAL_MONTHS[month] + ' ' + year + '</div>' +
+      '<div class="mu-cal-nav">' +
+        '<button onclick="' + onNav + '(\'prev\')">&#8249; Prev</button>' +
+        '<button onclick="' + onNav + '(\'today\')">Today</button>' +
+        '<button onclick="' + onNav + '(\'next\')">Next &#8250;</button>' +
+      '</div></div>';
+    var grid = '<div class="mu-cal-grid">';
+    _CAL_DOW.forEach(function (d) { grid += '<div class="mu-cal-dow">' + d + '</div>'; });
+    for (var i = 0; i < startDow; i++) grid += '<div class="mu-cal-cell empty"></div>';
+    for (var day = 1; day <= daysInMonth; day++) {
+      var ds = year + '-' + _pad2(month + 1) + '-' + _pad2(day);
+      var es = byDate[ds] || [];
+      var evs = es.slice(0, 3).map(function (e) {
+        var c = 'var(' + (_toneVar[e.tone] || _toneVar.neutral) + ', var(--warm-gray))';
+        return '<button class="mu-cal-ev" onclick="' + onEntry + '(\'' + esc(e.id) + '\')">' +
+          '<span class="mu-cal-dot" style="background:' + c + ';"></span>' +
+          (e.time ? '<span class="mu-cal-t">' + esc(e.time) + '</span> ' : '') + esc(e.label) + '</button>';
+      }).join('');
+      var more = es.length > 3 ? '<div class="mu-cal-more">+' + (es.length - 3) + ' more</div>' : '';
+      grid += '<div class="mu-cal-cell' + (es.length ? ' has' : '') + '"><div class="mu-cal-day">' + day + '</div>' + evs + more + '</div>';
+    }
+    grid += '</div>';
+    return '<div class="mu-cal">' + head + grid + '</div>';
+  }
+
   // ── One injected, tokenized stylesheet (both-mode safe) ──
   function injectStyles() {
     if (typeof document === 'undefined' || document.getElementById('mast-ui-styles')) return;
@@ -435,7 +474,19 @@
       '.mu-cover .mu-tiles{margin:0;}',
       '.mu-cover.collapsed .mu-cover-body{display:none;} .mu-cover.collapsed{padding-top:6px;padding-bottom:6px;}',
       '.mu-cover-toggle{position:absolute;top:8px;right:2px;background:transparent;border:0;color:var(--warm-gray);cursor:pointer;padding:2px 4px;line-height:1;}',
-      '.mu-chev{display:inline-block;transition:transform .15s ease;font-size:0.9rem;} .mu-cover.collapsed .mu-chev{transform:rotate(-90deg);}'
+      '.mu-chev{display:inline-block;transition:transform .15s ease;font-size:0.9rem;} .mu-cover.collapsed .mu-chev{transform:rotate(-90deg);}',
+      // Calendar index control (doc 17 §10).
+      '.mu-cal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}',
+      '.mu-cal-title{font-size:1.15rem;font-weight:600;color:var(--charcoal,var(--text));}',
+      '.mu-cal-nav button{background:transparent;border:1px solid var(--border,rgba(127,127,127,.2));color:var(--warm-gray);border-radius:8px;padding:6px 12px;font:inherit;font-size:0.85rem;cursor:pointer;margin-left:6px;} .mu-cal-nav button:hover{color:var(--charcoal,var(--text));}',
+      '.mu-cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:1px;background:var(--border,rgba(127,127,127,.15));border:1px solid var(--border,rgba(127,127,127,.15));border-radius:12px;overflow:hidden;}',
+      '.mu-cal-dow{background:var(--surface-dark,var(--bg-secondary,rgba(127,127,127,.05)));padding:8px 9px;font-size:0.72rem;text-transform:uppercase;letter-spacing:.04em;color:var(--warm-gray);}',
+      '.mu-cal-cell{background:var(--surface-card,var(--card-bg,#1e1e1e));min-height:104px;padding:6px 7px;display:flex;flex-direction:column;gap:2px;}',
+      '.mu-cal-cell.empty{background:transparent;}',
+      '.mu-cal-day{font-size:0.78rem;color:var(--warm-gray);} .mu-cal-cell.has .mu-cal-day{color:var(--charcoal,var(--text));font-weight:600;}',
+      '.mu-cal-ev{display:flex;align-items:center;gap:5px;width:100%;text-align:left;background:transparent;border:0;color:var(--charcoal,var(--text));font:inherit;font-size:0.72rem;padding:2px 3px;border-radius:4px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;} .mu-cal-ev:hover{background:color-mix(in srgb,var(--amber,#C4853C) 14%,transparent);}',
+      '.mu-cal-dot{width:6px;height:6px;border-radius:50%;flex:0 0 6px;} .mu-cal-t{color:var(--warm-gray);}',
+      '.mu-cal-more{font-size:0.72rem;color:var(--warm-gray);padding:1px 3px;}'
     ].join('\n');
     var s = document.createElement('style'); s.id = 'mast-ui-styles'; s.textContent = css; document.head.appendChild(s);
   }
@@ -446,7 +497,7 @@
       Num: Num, badge: badge, tabs: tabs, list: list, slideOut: slideOut, deepLink: deepLink, _esc: esc,
       tiles: tiles, card: card, cardTable: cardTable, kv: kv, timeline: timeline, relatedTable: relatedTable,
       imageThumb: imageThumb, openImg: openImg, panelTab: panelTab, paneTabsBar: paneTabsBar,
-      stickyHead: stickyHead, toggleCover: toggleCover
+      stickyHead: stickyHead, toggleCover: toggleCover, calendar: calendar
     };
   }
 
