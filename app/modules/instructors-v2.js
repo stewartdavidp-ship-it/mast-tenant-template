@@ -1,0 +1,255 @@
+/**
+ * instructors-v2.js — read-focused Faceted Record twin of the legacy Instructors
+ * surface (doc 17 §11/§12; conversion playbook).
+ *
+ * Legacy book.js (#instructors, owned by the Book module) hosts the roster as a
+ * stack of cards and swaps the pane in-place to a read-only instructor detail
+ * (_renderInstructorDetailView: Profile / Skills / Classes sections) with its own
+ * Edit button. This twin re-hosts that VIEW on the Entity Engine: a schema-driven
+ * list + a read-focused Faceted Record slide-out (Overview / Classes facets).
+ *
+ * Variant (doc 17 §1a): an instructor is a person record (profile + skills they
+ * teach + the classes assigned to them) with no governed lifecycle — its status
+ * (active / inactive) is an assigned attribute → Faceted Record, NOT Process/
+ * MastFlow.
+ *
+ * Read-focused: creating/editing an instructor is a multi-section bespoke form
+ * (skill picker, pay rate, photo, internal notes) coupled to the legacy Book
+ * module and stays single-sourced on legacy #instructors via a "manage in
+ * classic view" link. This twin re-hosts the VIEW only — no onSave, no edit form.
+ * Flag-gated (?ui=1) at #instructors-v2, side-by-side; never touches book.js.
+ *
+ * Data: instructors live at public/instructors (MastDB.instructors → that path);
+ * classes-taught is derived from public/classes (class.instructorId); skill slugs
+ * resolve to labels via admin/skillCatalog — all one-shot reads loaded together.
+ */
+(function () {
+  'use strict';
+  function flagOn() {
+    try {
+      if (/[?&#]ui=1\b/.test(location.href)) { localStorage.setItem('mastUiRedesign', '1'); return true; }
+      if (localStorage.getItem('mastUiRedesign') === '1') return true;
+    } catch (e) {}
+    return !!(window.MAST_FEATURE_FLAGS && window.MAST_FEATURE_FLAGS.uiRedesign);
+  }
+  if (!window.MastAdmin || !window.MastEntity || !window.MastUI) return;
+  if (!flagOn()) return;
+
+  var U = window.MastUI, N = U.Num, esc = U._esc;
+
+  var STATUS_LABEL = { active: 'Active', inactive: 'Inactive' };
+  var STATUS_TONE = { active: 'success', inactive: 'neutral' };
+
+  function instrName(i) { return (i && i.name) || '(unnamed)'; }
+  function statusOf(i) { return (i && i.status) || 'active'; }
+  // Prefer the structured skills[] (post-migration); fall back to legacy
+  // specialties[] for instructors not yet migrated (mirrors book.js).
+  function skillSlugs(i) { return (i && Array.isArray(i.skills)) ? i.skills.filter(Boolean) : []; }
+  function skillLabel(slug) {
+    var entry = V2.skillCatalog[slug];
+    if (entry && entry.label) return entry.label;
+    // Orphan slug not in catalog: title-case it (mirrors book.js _skillLabel).
+    return slug ? String(slug).replace(/-/g, ' ').replace(/\b\w/g, function (c) { return c.toUpperCase(); }) : '';
+  }
+  function skillLabels(i) {
+    var slugs = skillSlugs(i);
+    if (slugs.length) return slugs.map(skillLabel);
+    return (i && Array.isArray(i.specialties)) ? i.specialties.filter(Boolean) : [];
+  }
+  function skillsText(i) { return skillLabels(i).join(', '); }
+  function skillsCount(i) { return skillLabels(i).length; }
+  function payRate(i) {
+    // payRateCents → "$X.XX/hr"; absent → em-dash handled by callers.
+    var v = N.moneyVal(i, 'payRateCents', null);
+    return v == null ? null : (N.money(v) + '/hr');
+  }
+  // Classes assigned to this instructor (cheap: one-shot public/classes read).
+  function classesFor(i) {
+    var id = i && (i._key || i.id);
+    if (!id) return [];
+    return V2.classes.filter(function (c) { return c && c.instructorId === id; });
+  }
+
+  // ── schema (read-only Faceted Record) ───────────────────────────────
+  MastEntity.define('instructors-v2', {
+    label: 'Instructor', labelPlural: 'Instructors', size: 'md',
+    route: 'instructors-v2',
+    recordId: function (i) { return i._key || i.id; },
+    fields: [
+      // fields[0] (the slide-out title source) materializes a real name string.
+      { name: 'name', label: 'Name', type: 'text', list: true, readOnly: true, group: 'Profile', get: instrName },
+      { name: 'email', label: 'Email', type: 'text', list: true, readOnly: true, get: function (i) { return i.email || '—'; } },
+      { name: 'skills', label: 'Skills', type: 'text', list: true, readOnly: true, sortable: false, get: function (i) { return skillsText(i) || '—'; } },
+      { name: 'classCount', label: 'Classes', type: 'number', list: true, readOnly: true, align: 'right', get: function (i) { return classesFor(i).length; } },
+      { name: 'status', label: 'Status', type: 'status', list: true, readOnly: true,
+        options: ['active', 'inactive'],
+        get: statusOf,
+        tone: function (v) { return STATUS_TONE[v] || 'neutral'; } }
+    ],
+    fetch: function (id) { return Promise.resolve(V2.byId[id] || null); },
+    detail: {
+      render: function (UI, i) {
+        var classes = classesFor(i);
+        var tiles = UI.tiles([
+          { k: 'Status', v: UI.badge(STATUS_LABEL[statusOf(i)] || 'Active', STATUS_TONE[statusOf(i)] || 'neutral'), hero: true },
+          { k: 'Classes', v: N.count(classes.length) },
+          { k: 'Skills', v: N.count(skillsCount(i)) },
+          { k: 'Pay rate', v: esc(payRate(i) || '—') }
+        ]);
+        var tabsBar = UI.paneTabsBar([
+          { key: 'ov', label: 'Overview' }, { key: 'classes', label: 'Classes' }
+        ], 'ov');
+
+        // Overview — contact + profile + skills + pay + notes.
+        var contact = UI.kv([
+          { k: 'Email', v: i.email ? esc(i.email) : '—' },
+          { k: 'Phone', v: i.phone ? esc(i.phone) : '—' },
+          { k: 'Status', v: UI.badge(STATUS_LABEL[statusOf(i)] || 'Active', STATUS_TONE[statusOf(i)] || 'neutral') },
+          { k: 'Pay rate', v: esc(payRate(i) || '—') }
+        ]);
+        var bioBody = i.bio
+          ? '<div style="font-size:0.85rem;color:var(--warm-gray);line-height:1.5;white-space:pre-wrap;">' + esc(i.bio) + '</div>'
+          : '<span class="mu-sub">No bio.</span>';
+        var labels = skillLabels(i);
+        var skillsBody = labels.length
+          ? '<div style="display:flex;flex-wrap:wrap;gap:6px;">' + labels.map(function (l) {
+              return '<span style="font-size:0.72rem;padding:3px 10px;border-radius:999px;background:color-mix(in srgb,var(--teal,teal) 12%,transparent);color:var(--teal,teal);">' + esc(l) + '</span>';
+            }).join('') + '</div>'
+          : '<span class="mu-sub">No skills listed.</span>';
+        var notesBody = i.notes
+          ? '<div style="font-size:0.85rem;color:var(--warm-gray);line-height:1.5;white-space:pre-wrap;">' + esc(i.notes) + '</div>'
+          : '<span class="mu-sub">No internal notes.</span>';
+        // Multi-section instructor editing stays on legacy #instructors. Use
+        // navigateToClassic so the V2 route remap doesn't loop us back to this twin.
+        var manage = '<div style="margin-top:14px;"><button class="btn btn-secondary" onclick="InstructorsV2.classic()">Manage in classic view →</button></div>';
+
+        // Classes — active first, then other (mirrors legacy detail grouping).
+        var active = classes.filter(function (c) { return c.status === 'active'; });
+        var other = classes.filter(function (c) { return c.status !== 'active'; });
+        function classCols() {
+          return [
+            { label: 'Class', render: function (c) { return esc(c.name || '—'); } },
+            { label: 'Type', render: function (c) { return c.type ? '<span class="mu-sub">' + esc(c.type) + '</span>' : '<span class="mu-sub">—</span>'; } },
+            { label: 'Status', render: function (c) { return UI.badge(c.status || '—', c.status === 'active' ? 'success' : 'neutral'); } }
+          ];
+        }
+        var classesBody;
+        if (!classes.length) {
+          classesBody = '<span class="mu-sub">No classes assigned to this instructor.</span>';
+        } else {
+          classesBody = '';
+          if (active.length) classesBody += '<div class="mu-sub" style="margin:0 0 6px;">Active (' + active.length + ')</div>' + UI.relatedTable(classCols(), active);
+          if (other.length) classesBody += '<div class="mu-sub" style="margin:' + (active.length ? '14px' : '0') + ' 0 6px;">Other (' + other.length + ')</div>' + UI.relatedTable(classCols(), other);
+        }
+
+        return tiles + tabsBar +
+          '<div class="mu-pane" data-pane="ov">' +
+            UI.card('Contact', contact) +
+            UI.card('Bio', bioBody) +
+            UI.card('Skills', skillsBody) +
+            UI.card('Internal notes', notesBody + manage) +
+          '</div>' +
+          '<div class="mu-pane" data-pane="classes" hidden>' + UI.cardTable('Classes (' + classes.length + ')', classesBody) + '</div>';
+      }
+    }
+    // No onSave → no Edit button (instructor editing stays on legacy #instructors).
+  });
+
+  // ── module state + data ─────────────────────────────────────────────
+  var V2 = { rows: [], byId: {}, classes: [], skillCatalog: {}, sortKey: 'name', sortDir: 'asc', q: '', statusFilter: 'all', loaded: false };
+
+  function load() {
+    // Instructors + classes (for the Classes facet/count) + skill catalog (for
+    // slug→label) load together; all one-shot keyed-object reads.
+    Promise.all([
+      Promise.resolve(MastDB.get('public/instructors')).catch(function () { return null; }),
+      Promise.resolve(MastDB.get('public/classes')).catch(function () { return null; }),
+      Promise.resolve(MastDB.get('admin/skillCatalog')).catch(function () { return null; })
+    ]).then(function (res) {
+      var iv = res[0] || {}, cv = res[1] || {}, sv = res[2] || {};
+      var out = [];
+      Object.keys(iv).forEach(function (k) {
+        var i = iv[k];
+        if (i && typeof i === 'object') { i = Object.assign({ _key: k }, i); i.status = i.status || 'active'; out.push(i); }
+      });
+      V2.rows = out; V2.byId = {}; out.forEach(function (r) { V2.byId[r._key] = r; });
+      V2.classes = Object.keys(cv).map(function (k) { var c = cv[k] || {}; c.id = c.id || k; return c; });
+      V2.skillCatalog = sv || {};
+      V2.loaded = true; render();
+    }).catch(function (e) { console.error('[instructors-v2] load', e); render(); });
+  }
+
+  function visibleRows() {
+    var rows = V2.rows;
+    if (V2.statusFilter !== 'all') rows = rows.filter(function (i) { return statusOf(i) === V2.statusFilter; });
+    if (V2.q) {
+      var q = V2.q.toLowerCase();
+      rows = rows.filter(function (i) {
+        return String(i.name || '').toLowerCase().indexOf(q) >= 0 ||
+               String(i.email || '').toLowerCase().indexOf(q) >= 0 ||
+               skillsText(i).toLowerCase().indexOf(q) >= 0;
+      });
+    }
+    return window.mastSortRows(rows, V2.sortKey, V2.sortDir, function (r, k) {
+      var f = MastEntity.get('instructors-v2').fields.filter(function (x) { return x.name === k; })[0];
+      return (f && f.get) ? f.get(r) : r[k];
+    });
+  }
+
+  function ensureTab() {
+    var el = document.getElementById('instructorsV2Tab');
+    if (el) return el;
+    el = document.createElement('div'); el.id = 'instructorsV2Tab'; el.className = 'tab-content'; el.style.display = 'none';
+    (document.getElementById('content') || document.body).appendChild(el);
+    return el;
+  }
+
+  function render() {
+    var tab = ensureTab();
+    var filters = [['all', 'All'], ['active', 'Active'], ['inactive', 'Inactive']]
+      .map(function (f) {
+        var on = V2.statusFilter === f[0];
+        return '<button class="btn btn-small ' + (on ? 'btn-primary' : 'btn-secondary') + '" onclick="InstructorsV2.filter(\'' + f[0] + '\')">' + f[1] + '</button>';
+      }).join(' ');
+    tab.innerHTML =
+      U.pageHeader({
+        title: 'Instructors',
+        count: N.count(V2.rows.length) + ' instructor' + (V2.rows.length === 1 ? '' : 's'),
+        actionsHtml: '<button class="btn btn-secondary" onclick="InstructorsV2.exportCsv()">↓ Export</button>'
+      }) +
+      '<div style="display:flex;gap:6px;flex-wrap:wrap;margin:12px 0;">' + filters + '</div>' +
+      '<div style="margin:14px 0;"><input class="form-input" placeholder="Search name, email or skill…" value="' + esc(V2.q) +
+        '" oninput="InstructorsV2.search(this.value)" style="max-width:340px;font-size:0.9rem;"></div>' +
+      MastEntity.renderList('instructors-v2', {
+        rows: visibleRows(), sortKey: V2.sortKey, sortDir: V2.sortDir,
+        onSortFnName: 'InstructorsV2.sort', onRowClickFnName: 'InstructorsV2.open',
+        empty: { title: 'No instructors', message: V2.loaded ? 'Add instructors in the classic Instructors view.' : 'Loading…' }
+      });
+  }
+
+  window.InstructorsV2 = {
+    sort: function (key) {
+      if (V2.sortKey === key) V2.sortDir = (V2.sortDir === 'asc' ? 'desc' : 'asc');
+      else { V2.sortKey = key; V2.sortDir = (key === 'classCount' ? 'desc' : 'asc'); }
+      render();
+    },
+    filter: function (f) { V2.statusFilter = f; render(); },
+    search: function (v) { V2.q = v || ''; render(); },
+    open: function (id) {
+      MastEntity.get('instructors-v2').fetch(id).then(function (rec) {
+        if (rec) MastEntity.openRecord('instructors-v2', rec, 'read');
+      });
+    },
+    // Multi-section instructor editing → classic Instructors view. Use
+    // navigateToClassic so the V2 route remap doesn't loop us back to this twin.
+    classic: function () {
+      if (typeof navigateToClassic === 'function') navigateToClassic('instructors');
+      else if (typeof navigateTo === 'function') navigateTo('instructors');
+    },
+    exportCsv: function () { return MastEntity.exportRows('instructors-v2', visibleRows(), 'all'); }
+  };
+
+  MastAdmin.registerModule('instructors-v2', {
+    routes: { 'instructors-v2': { tab: 'instructorsV2Tab', setup: function () { ensureTab(); render(); load(); } } }
+  });
+})();

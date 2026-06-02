@@ -113,9 +113,9 @@
        scripts/bump-modules-version.sh (these are static <head> tags loaded
        before the JS var exists, so they can't read it at runtime). Without
        this, the engines were frozen at ?v=1 and never cache-busted on deploy. -->
-  <script src="../shared/mast-ui.js?v=20260601-223515-6079c13"></script>
-  <script src="../shared/mast-io.js?v=20260601-223515-6079c13"></script>
-  <script src="../shared/mast-entity.js?v=20260601-223515-6079c13"></script>
+  <script src="../shared/mast-ui.js?v=20260601-223614-915c46c"></script>
+  <script src="../shared/mast-io.js?v=20260601-223614-915c46c"></script>
+  <script src="../shared/mast-entity.js?v=20260601-223614-915c46c"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Pod-specific runtime config — sets window.MAST_POD_PLATFORM_PROJECT so
@@ -11195,6 +11195,7 @@
     <div id="wholesaleV2Tab" class="tab-content" style="display:none;"></div><!-- UI-redesign conversion: wholesale accounts (read-focused) -->
     <div id="studentsV2Tab" class="tab-content" style="display:none;"></div><!-- UI-redesign conversion: students roster (read-focused) -->
     <div id="galleriesV2Tab" class="tab-content" style="display:none;"></div><!-- UI-redesign conversion: galleries & consignment (read-focused) -->
+    <div id="instructorsV2Tab" class="tab-content" style="display:none;"></div><!-- UI-redesign conversion: instructors roster (read-focused) -->
 
     <!-- Admin: Procurement Tab — rendered entirely from app/modules/procurement.js -->
     <div id="procurementTab" style="display:none;"></div>
@@ -20163,7 +20164,7 @@ var MAST_V2_ROUTE_MAP = {
   materials: 'materials-v2', 'finance-expenses': 'finance-expenses-v2',
   'cs-tickets': 'cs-tickets-v2', terms: 'terms-v2', wallet: 'wallet-v2',
   brand: 'brand-v2', homepage: 'homepage-v2', commissions: 'commissions-v2',
-  wholesale: 'wholesale-v2', students: 'students-v2', galleries: 'galleries-v2'
+  wholesale: 'wholesale-v2', students: 'students-v2', galleries: 'galleries-v2', instructors: 'instructors-v2'
 };
 function mastLegacyUiOn() {
   try { return localStorage.getItem('mastLegacyUI') !== '0'; } catch (e) { return true; }
@@ -20931,7 +20932,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260601-223515-6079c13';
+var MAST_MODULES_V = '20260601-223614-915c46c';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -20971,6 +20972,7 @@ var MODULE_MANIFEST = {
   'commissions-v2': { src: 'modules/commissions-v2.js', routes: ['commissions-v2'] }, // UI-redesign Process surface: commissions lifecycle (flag-gated, side-by-side)
   'students-v2': { src: 'modules/students-v2.js', routes: ['students-v2'] }, // UI-redesign conversion: students roster (read-focused Faceted Record)
   'galleries-v2': { src: 'modules/galleries-v2.js', routes: ['galleries-v2'] }, // UI-redesign conversion: galleries & consignment read detail (flag-gated, side-by-side)
+  'instructors-v2': { src: 'modules/instructors-v2.js', routes: ['instructors-v2'] }, // UI-redesign conversion: instructors roster read detail (flag-gated, side-by-side)
   'wholesale-v2': { src: 'modules/wholesale-v2.js', routes: ['wholesale-v2'] }, // UI-redesign conversion: wholesale accounts read detail (flag-gated, side-by-side)
   sales: { src: 'modules/sales.js', routes: ['pos', 'receipts', 'events', 'salesEvents', 'terms'] },
   fulfillment: { src: 'modules/fulfillment.js', routes: ['pack', 'ship', 'fulfillment'] },
