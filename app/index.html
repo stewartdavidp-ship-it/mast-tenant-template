@@ -113,9 +113,9 @@
        scripts/bump-modules-version.sh (these are static <head> tags loaded
        before the JS var exists, so they can't read it at runtime). Without
        this, the engines were frozen at ?v=1 and never cache-busted on deploy. -->
-  <script src="../shared/mast-ui.js?v=20260602-104727-f7fe23a"></script>
-  <script src="../shared/mast-io.js?v=20260602-104727-f7fe23a"></script>
-  <script src="../shared/mast-entity.js?v=20260602-104727-f7fe23a"></script>
+  <script src="../shared/mast-ui.js?v=20260602-115417-e5490e1"></script>
+  <script src="../shared/mast-io.js?v=20260602-115417-e5490e1"></script>
+  <script src="../shared/mast-entity.js?v=20260602-115417-e5490e1"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Pod-specific runtime config — sets window.MAST_POD_PLATFORM_PROJECT so
@@ -20964,7 +20964,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260602-104727-f7fe23a';
+var MAST_MODULES_V = '20260602-115417-e5490e1';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -24151,7 +24151,10 @@ function formatNotifTime(iso) {
 
 function escapeHtml(str) {
   if (!str) return '';
-  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  // SECURITY (E-02, 2026-06-01 audit): also escape ' so output is safe inside
+  // single-quoted HTML attributes and inline on*-handler JS-string args, not just
+  // text nodes. Without it a value like  x');alert(1)//  breaks out of attributes.
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
 
 // ============================================================
@@ -48905,7 +48908,11 @@ function esc(str) {
   if (!str) return '';
   var div = document.createElement('div');
   div.textContent = str;
-  return div.innerHTML;
+  // SECURITY (E-02, 2026-06-01 audit): textContent->innerHTML entity-encodes
+  // < > & but NOT quotes, so esc() output was unsafe inside HTML attributes and
+  // inline on*-handler JS-string args (a value like  x');alert(1)//  broke out).
+  // Escape both quote types so esc() is safe in every output context.
+  return div.innerHTML.replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
 
 // ============================================================
