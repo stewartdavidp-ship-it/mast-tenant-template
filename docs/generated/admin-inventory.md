@@ -5,8 +5,8 @@
 Source-of-truth counts for the admin app, generated from the code so docs
 cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 
-- **Core shell:** `app/index.html` — **58,600** lines
-- **Feature modules:** **88** files in `app/modules/` (**81** routed), **102,302** lines combined
+- **Core shell:** `app/index.html` — **58,605** lines
+- **Feature modules:** **88** files in `app/modules/` (**81** routed), **102,252** lines combined
 
 | Module file | Lines | Routes |
 |---|---:|---|
@@ -38,7 +38,7 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/cs-tickets-v2.js` | 254 | cs-tickets-v2 |
 | `modules/customer-service.js` | 3,229 | cs-inbox, cs-tickets, cs-surveys, cs-reviews, cs-faqs, cs-members |
 | `modules/customers-v2.js` | 260 | customers-v2 |
-| `modules/customers.js` | 3,535 | customers |
+| `modules/customers.js` | 3,485 | customers |
 | `modules/duplicates-v2.js` | 175 | duplicates-v2 |
 | `modules/email-log.js` | 561 | email-log |
 | `modules/engagement-inbox.js` | 485 | engagement-inbox |

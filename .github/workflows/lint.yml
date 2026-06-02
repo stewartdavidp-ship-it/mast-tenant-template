@@ -81,4 +81,5 @@ jobs:
           node test/mast-io.test.js &&
           node test/mast-ui.test.js &&
           node test/mast-entity.test.js &&
-          node test/finance-order-money.test.js
+          node test/finance-order-money.test.js &&
+          node test/customer-filters.test.js
