@@ -103,7 +103,7 @@
 
   window.HomepageV2 = {
     // Storefront-coupled edits → classic Homepage view (read-focused twin).
-    classic: function () { if (typeof navigateTo === 'function') navigateTo('homepage'); },
+    classic: function () { if (typeof navigateToClassic === 'function') navigateToClassic('homepage'); else if (typeof navigateTo === 'function') navigateTo('homepage'); },
     refresh: function () { render(); }
   };
 

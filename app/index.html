@@ -113,9 +113,9 @@
        scripts/bump-modules-version.sh (these are static <head> tags loaded
        before the JS var exists, so they can't read it at runtime). Without
        this, the engines were frozen at ?v=1 and never cache-busted on deploy. -->
-  <script src="../shared/mast-ui.js?v=20260601-213022-d73d936"></script>
-  <script src="../shared/mast-io.js?v=20260601-213022-d73d936"></script>
-  <script src="../shared/mast-entity.js?v=20260601-213022-d73d936"></script>
+  <script src="../shared/mast-ui.js?v=20260601-215952-b793a92"></script>
+  <script src="../shared/mast-io.js?v=20260601-215952-b793a92"></script>
+  <script src="../shared/mast-entity.js?v=20260601-215952-b793a92"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Pod-specific runtime config — sets window.MAST_POD_PLATFORM_PROJECT so
@@ -20174,6 +20174,16 @@ function setLegacyUI(on) {
 }
 window.setLegacyUI = setLegacyUI;
 window.mastLegacyUiOn = mastLegacyUiOn;
+// Navigate to a LEGACY route while BYPASSING the V2 remap. Used by "manage in
+// classic view" escape hatches and Process deep-links to legacy capture surfaces:
+// these must reach legacy even when the user has Legacy UI off — otherwise the
+// remap below loops them straight back to the v2 twin. Consume-once flag, read
+// and cleared at the remap point so a single classic nav isn't itself remapped.
+function navigateToClassic(route, params) {
+  window._skipV2RemapOnce = true;
+  return navigateTo(route, params);
+}
+window.navigateToClassic = navigateToClassic;
 
 function navigateTo(route, params) {
   // Retired-route redirect: #accounting and its subViews were consolidated
@@ -20186,7 +20196,10 @@ function navigateTo(route, params) {
     return navigateTo('settings');
   }
   // Legacy UI off → use the redesigned V2 twin for any object that has one.
-  if (mastUseV2Routes() && MAST_V2_ROUTE_MAP[route]) {
+  // navigateToClassic() sets _skipV2RemapOnce to reach a legacy route regardless
+  // (consume-once, so only that single navigation bypasses the remap).
+  var _skipRemap = window._skipV2RemapOnce; window._skipV2RemapOnce = false;
+  if (!_skipRemap && mastUseV2Routes() && MAST_V2_ROUTE_MAP[route]) {
     route = MAST_V2_ROUTE_MAP[route];
   }
   // Top-level nav (sidebar click, dashboard tile, in-page button) consults
@@ -20914,7 +20927,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260601-213022-d73d936';
+var MAST_MODULES_V = '20260601-215952-b793a92';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.

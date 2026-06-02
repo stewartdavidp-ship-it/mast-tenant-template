@@ -194,7 +194,7 @@
         MastEntity.openRecord(key, V2.cfg, 'edit');
       });
     },
-    classic: function () { if (typeof navigateTo === 'function') navigateTo('terms'); },
+    classic: function () { if (typeof navigateToClassic === 'function') navigateToClassic('terms'); else if (typeof navigateTo === 'function') navigateTo('terms'); },
     refresh: function () { render(); }
   };
 

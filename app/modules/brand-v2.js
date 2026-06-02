@@ -80,7 +80,7 @@
 
   window.BrandV2 = {
     // Storefront-coupled edits → classic Brand view (read-focused twin).
-    classic: function () { if (typeof navigateTo === 'function') navigateTo('brand'); },
+    classic: function () { if (typeof navigateToClassic === 'function') navigateToClassic('brand'); else if (typeof navigateTo === 'function') navigateTo('brand'); },
     refresh: function () { render(); }
   };
 

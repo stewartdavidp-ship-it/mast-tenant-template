@@ -213,7 +213,7 @@
         MastEntity.openRecord(key, V2.cfg, 'edit');
       });
     },
-    classic: function (route) { if (typeof navigateTo === 'function') navigateTo(route || 'wallet'); },
+    classic: function (route) { if (typeof navigateToClassic === 'function') navigateToClassic(route || 'wallet'); else if (typeof navigateTo === 'function') navigateTo(route || 'wallet'); },
     refresh: function () { render(); }
   };
 
