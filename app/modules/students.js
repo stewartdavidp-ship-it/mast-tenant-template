@@ -408,7 +408,7 @@
     h += '</div>';
     // Per-student signed waiver link (anti-forge): generates a tokened link tied
     // to THIS student. Signing it flips only this student. Audit 2026-06-01 P2.
-    h += '<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--cream-dark,#ddd);">';
+    h += '<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--cream-dark);">';
     h += '<button class="btn" onclick="studentsCopyStudentWaiverLink(\'' + esc(stu._key) + '\')">🔗 Copy waiver link</button>';
     h += ' <span style="font-size:0.78rem;color:var(--warm-gray);">Signed link tied to this student — send it to them to sign.</span>';
     h += '</div>';
