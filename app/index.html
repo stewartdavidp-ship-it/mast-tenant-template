@@ -113,9 +113,9 @@
        scripts/bump-modules-version.sh (these are static <head> tags loaded
        before the JS var exists, so they can't read it at runtime). Without
        this, the engines were frozen at ?v=1 and never cache-busted on deploy. -->
-  <script src="../shared/mast-ui.js?v=20260601-232100-1a2b456"></script>
-  <script src="../shared/mast-io.js?v=20260601-232100-1a2b456"></script>
-  <script src="../shared/mast-entity.js?v=20260601-232100-1a2b456"></script>
+  <script src="../shared/mast-ui.js?v=20260601-233807-f2fb7ae"></script>
+  <script src="../shared/mast-io.js?v=20260601-233807-f2fb7ae"></script>
+  <script src="../shared/mast-entity.js?v=20260601-233807-f2fb7ae"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Pod-specific runtime config — sets window.MAST_POD_PLATFORM_PROJECT so
@@ -11197,6 +11197,11 @@
     <div id="classesV2Tab" class="tab-content" style="display:none;"></div><!-- UI-redesign conversion: classes -->
     <div id="vendorsV2Tab" class="tab-content" style="display:none;"></div><!-- UI-redesign conversion: vendors -->
     <div id="membershipV2Tab" class="tab-content" style="display:none;"></div><!-- UI-redesign conversion: membership -->
+    <div id="csReviewsV2Tab" class="tab-content" style="display:none;"></div><!-- UI-redesign conversion: cs reviews -->
+    <div id="csFaqsV2Tab" class="tab-content" style="display:none;"></div><!-- UI-redesign conversion: cs faqs -->
+    <div id="loyaltyV2Tab" class="tab-content" style="display:none;"></div><!-- UI-redesign conversion: loyalty members -->
+    <div id="storiesV2Tab" class="tab-content" style="display:none;"></div><!-- UI-redesign conversion: stories -->
+    <div id="csMembersV2Tab" class="tab-content" style="display:none;"></div><!-- UI-redesign conversion: cs members -->
     <div id="wholesaleV2Tab" class="tab-content" style="display:none;"></div><!-- UI-redesign conversion: wholesale accounts (read-focused) -->
     <div id="studentsV2Tab" class="tab-content" style="display:none;"></div><!-- UI-redesign conversion: students roster (read-focused) -->
     <div id="galleriesV2Tab" class="tab-content" style="display:none;"></div><!-- UI-redesign conversion: galleries & consignment (read-focused) -->
@@ -20177,7 +20182,8 @@ var MAST_V2_ROUTE_MAP = {
   wholesale: 'wholesale-v2', students: 'students-v2', galleries: 'galleries-v2', instructors: 'instructors-v2',
   contacts: 'contacts-v2', enrollments: 'enrollments-v2', passes: 'passes-v2',
   resources: 'resources-v2', newsletter: 'newsletter-v2',
-  'gift-cards': 'gift-cards-v2', coupons: 'coupons-v2', book: 'classes-v2', membership: 'membership-v2'
+  'gift-cards': 'gift-cards-v2', coupons: 'coupons-v2', book: 'classes-v2', membership: 'membership-v2',
+  'cs-reviews': 'cs-reviews-v2', 'cs-faqs': 'cs-faqs-v2', loyalty: 'loyalty-v2', stories: 'stories-v2', 'cs-members': 'cs-members-v2'
 };
 function mastLegacyUiOn() {
   try { return localStorage.getItem('mastLegacyUI') !== '0'; } catch (e) { return true; }
@@ -20945,7 +20951,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260601-232100-1a2b456';
+var MAST_MODULES_V = '20260601-233807-f2fb7ae';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -20988,6 +20994,11 @@ var MODULE_MANIFEST = {
   'classes-v2': { src: 'modules/classes-v2.js', routes: ['classes-v2'] }, // UI-redesign conversion: classes catalog read detail (flag-gated)
   'vendors-v2': { src: 'modules/vendors-v2.js', routes: ['vendors-v2'] }, // UI-redesign conversion: vendors read detail (flag-gated)
   'membership-v2': { src: 'modules/membership-v2.js', routes: ['membership-v2'] }, // UI-redesign conversion: membership members read detail (flag-gated)
+  'cs-reviews-v2': { src: 'modules/cs-reviews-v2.js', routes: ['cs-reviews-v2'] }, // UI-redesign conversion: CS reviews read detail (flag-gated)
+  'cs-faqs-v2': { src: 'modules/cs-faqs-v2.js', routes: ['cs-faqs-v2'] }, // UI-redesign conversion: CS FAQs read detail (flag-gated)
+  'loyalty-v2': { src: 'modules/loyalty-v2.js', routes: ['loyalty-v2'] }, // UI-redesign conversion: loyalty members read detail (flag-gated)
+  'stories-v2': { src: 'modules/stories-v2.js', routes: ['stories-v2'] }, // UI-redesign conversion: stories read detail (flag-gated)
+  'cs-members-v2': { src: 'modules/cs-members-v2.js', routes: ['cs-members-v2'] }, // UI-redesign conversion: CS members read detail (flag-gated)
   'students-v2': { src: 'modules/students-v2.js', routes: ['students-v2'] }, // UI-redesign conversion: students roster (read-focused Faceted Record)
   'galleries-v2': { src: 'modules/galleries-v2.js', routes: ['galleries-v2'] }, // UI-redesign conversion: galleries & consignment read detail (flag-gated, side-by-side)
   'instructors-v2': { src: 'modules/instructors-v2.js', routes: ['instructors-v2'] }, // UI-redesign conversion: instructors roster read detail (flag-gated, side-by-side)
