@@ -77,10 +77,13 @@
           : (/milestone/.test(t) ? 'milestones' : (/spec|production/.test(t) ? 'spec' : null)));
         // The legacy commission detail (viewCommissionDetail) lives in orders.js,
         // which may not be loaded in a fresh commissions-v2 session. Load it first
-        // so navigateTo('commissions') resolves and the detail opener exists
-        // (avoids the cold-load race), then open the record at the relevant tab.
+        // so the legacy route resolves and the detail opener exists (avoids the
+        // cold-load race), then open the record at the relevant tab.
+        // navigateToClassic bypasses the V2 remap so this reaches LEGACY even when
+        // the user has Legacy UI off (otherwise 'commissions' loops to this twin).
         function open() {
-          if (typeof navigateTo === 'function') navigateTo('commissions');
+          if (typeof navigateToClassic === 'function') navigateToClassic('commissions');
+          else if (typeof navigateTo === 'function') navigateTo('commissions');
           setTimeout(function () {
             if (window.viewCommissionDetail) window.viewCommissionDetail(id);
             if (tab && window.setCommissionDetailTab) setTimeout(function () { window.setCommissionDetailTab(id, tab); }, 90);
