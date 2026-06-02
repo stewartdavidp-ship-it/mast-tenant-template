@@ -406,6 +406,12 @@
     h += '<div><span style="font-size:0.78rem;color:var(--warm-gray);">Safety Orientation</span><div style="font-weight:600;color:' + (safetyOk ? '#16a34a' : '#d97706') + ';">' + (safetyOk ? '\u2713 Completed' : '\u26a0 Not completed') + '</div></div>';
     h += '<div><span style="font-size:0.78rem;color:var(--warm-gray);">Photo Waiver</span><div style="font-weight:600;">' + capitalize(stu.photoWaiverStatus || 'pending') + '</div></div>';
     h += '</div>';
+    // Per-student signed waiver link (anti-forge): generates a tokened link tied
+    // to THIS student. Signing it flips only this student. Audit 2026-06-01 P2.
+    h += '<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--cream-dark);">';
+    h += '<button class="btn" onclick="studentsCopyStudentWaiverLink(\'' + esc(stu._key) + '\')">🔗 Copy waiver link</button>';
+    h += ' <span style="font-size:0.78rem;color:var(--warm-gray);">Signed link tied to this student — send it to them to sign.</span>';
+    h += '</div>';
     h += '</div>';
 
     // Profile Section
@@ -1396,6 +1402,30 @@
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(url).then(function() { showToast('Waiver link copied'); });
     } else { mastCopyFallback('Copy this link', url); }
+  };
+  // Per-student signed waiver link (anti-forge, audit 2026-06-01 P2). Calls the
+  // admin-gated generateWaiverLink CF, which mints an HMAC token bound to this
+  // studentId. submitWaiverSignature flips only token.studentId; a tokenless
+  // submission is create-new-only. The browser cannot hold the signing key, so
+  // minting is server-side.
+  window.studentsCopyStudentWaiverLink = async function(studentId) {
+    var tid = (typeof MastDB !== 'undefined' && MastDB.tenantId && MastDB.tenantId()) || window.TENANT_ID || '';
+    try {
+      if (window.showToast) showToast('Generating waiver link…');
+      var fn = firebase.functions().httpsCallable('generateWaiverLink');
+      var res = await fn({ tenantId: tid, studentId: studentId });
+      var url = (res && res.data && res.data.url) || '';
+      if (!url) throw new Error('No link returned');
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(url);
+        if (window.showToast) showToast('Per-student waiver link copied');
+      } else {
+        mastCopyFallback('Copy this waiver link', url);
+      }
+    } catch (err) {
+      var msg = (err && (err.message || (err.details && err.details.message))) || 'Failed to generate link';
+      if (window.showToast) showToast('Could not generate waiver link: ' + msg, true);
+    }
   };
   window.studentsViewSignatures = function(templateId) {
     viewingSignaturesTemplateId = templateId; currentView = 'waiverSignatures';

@@ -113,9 +113,9 @@
        scripts/bump-modules-version.sh (these are static <head> tags loaded
        before the JS var exists, so they can't read it at runtime). Without
        this, the engines were frozen at ?v=1 and never cache-busted on deploy. -->
-  <script src="../shared/mast-ui.js?v=20260602-140924-6d783d5"></script>
-  <script src="../shared/mast-io.js?v=20260602-140924-6d783d5"></script>
-  <script src="../shared/mast-entity.js?v=20260602-140924-6d783d5"></script>
+  <script src="../shared/mast-ui.js?v=20260602-142138-f36b93e"></script>
+  <script src="../shared/mast-io.js?v=20260602-142138-f36b93e"></script>
+  <script src="../shared/mast-entity.js?v=20260602-142138-f36b93e"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Pod-specific runtime config — sets window.MAST_POD_PLATFORM_PROJECT so
@@ -20960,7 +20960,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260602-140924-6d783d5';
+var MAST_MODULES_V = '20260602-142138-f36b93e';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
