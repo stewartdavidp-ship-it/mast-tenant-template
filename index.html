@@ -2244,43 +2244,25 @@ window.submitContactForm = function() {
   btn.textContent = 'Sending...';
 
   var name = first + (last ? ' ' + last : '');
-  var now = new Date().toISOString();
 
-  // 1. Save inquiry record
-  var inqKey = MastDB.newKey('inquiries');
-  var contactId = 'contact_' + Date.now().toString(36);
-  var inquiryData = {
-    id: inqKey, name: name, email: email, phone: phone || null,
-    type: type, message: message, status: 'new',
-    contactId: contactId,
-    source: 'website-contact-form', createdAt: now
-  };
-
-  // 2. Auto-create a Contact record with first interaction (atomic write)
-  var interactionId = 'int_' + Date.now().toString(36);
-  var contactData = {
-    id: contactId, name: name, email: email, phone: phone || null,
-    company: null, category: 'Other', website: null, address: null,
-    notes: null,
-    googleContactId: null, driveFolderLink: null,
-    tags: ['website-inquiry', type.toLowerCase().replace(/\s+/g, '-')],
-    createdAt: now, createdBy: 'website-form', updatedAt: now,
-    interactions: {}
-  };
-  contactData.interactions[interactionId] = {
-    id: interactionId,
-    date: now.slice(0, 10),
-    type: 'Web Inquiry',
-    notes: type + ': ' + message,
-    documents: [],
-    loggedBy: 'website-form',
-    createdAt: now
-  };
-
-  Promise.all([
-    MastDB.set('inquiries/' + inqKey, inquiryData),
-    MastDB.set('admin/contacts/' + contactId, contactData)
-  ]).then(function() {
+  // Public contact form routes through the submitPublicForm CF, which resolves
+  // the tenant and builds the inquiry + the rich Contact record (incl. tags +
+  // the Web-Inquiry interaction) server-side via the Admin SDK. (The direct
+  // inquiries/contacts create rules are being locked down to admin-only — see
+  // mast-architecture #110 / #111.) The CF derives ids, status, source and
+  // timestamps server-side.
+  var cfBase = (typeof TENANT_FIREBASE_CONFIG !== 'undefined' && TENANT_FIREBASE_CONFIG.cloudFunctionsBase)
+    ? TENANT_FIREBASE_CONFIG.cloudFunctionsBase
+    : 'https://us-central1-mast-platform-prod.cloudfunctions.net';
+  fetch(cfBase + '/submitPublicForm', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Tenant-ID': typeof TENANT_ID !== 'undefined' ? TENANT_ID : ''
+    },
+    body: JSON.stringify({ formType: 'contact', name: name, email: email, phone: phone || null, type: type, message: message })
+  }).then(function(resp) {
+    if (!resp.ok) throw new Error('submit-failed-' + resp.status);
     var formSection = document.querySelector('#contact .contact-form');
     formSection.innerHTML =
       '<div style="text-align:center;padding:40px 20px;">' +
