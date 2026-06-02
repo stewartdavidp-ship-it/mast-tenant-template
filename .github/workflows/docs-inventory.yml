@@ -1,0 +1,25 @@
+name: docs-inventory
+# Freshness gate: if admin code changes, the generated inventory must be regenerated
+# and committed (same UX as the cache-bust lint gate). Keeps ARCHITECTURE-type docs
+# from silently drifting on module/line counts. See docs/generated/admin-inventory.md.
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'app/index.html'
+      - 'app/modules/**'
+      - 'scripts/gen-inventory.mjs'
+      - 'docs/generated/admin-inventory.md'
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: inventory is fresh
+        run: node scripts/gen-inventory.mjs --check
