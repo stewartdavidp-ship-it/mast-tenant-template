@@ -3,7 +3,7 @@
 //   node scripts/lint-rbac.js
 // Exits 0 if clean, 1 if violations found.
 //
-// Catches the two ways the unified permission model can silently drift as
+// Catches the three ways the unified permission model can silently drift as
 // features are added (see MEMORY: "RBAC unified into one module-anchored model"):
 //
 //   CHECK A — no CRUD hasPermission() (BLOCKING)
@@ -20,6 +20,29 @@
 //     New modules MUST be added to SECTION_ROUTES. Intentionally-unpermissioned
 //     surfaces are listed in UNGATED_ALLOWLIST below (adding one is a conscious
 //     acknowledgement, not an escape hatch).
+//
+//   CHECK C — routable write-modules must be RBAC action-gated (RATCHET)
+//     CHECK A/B gate the permission *matrix* and the *route* surfaces, but
+//     neither looks at whether a module's write/delete *handlers* are gated. A
+//     module can own a route (be listed in MODULE_MANIFEST with a non-empty
+//     routes:[]), perform MastDB write verbs (set|update|remove|push|newKey),
+//     and reference can()/hasPermission() ZERO times — i.e. ship DB-mutating
+//     actions with no RBAC action gate. That gap let production / students /
+//     studio / trips / website / show-light (and ~30 more — far past the 6 the
+//     first audit named) ship ungated writes while A and B stayed green. The
+//     gated convention lives in shows.js: a render-gate (the Delete button is
+//     emitted only inside can('show-prep','delete') ~L450) plus a handler-gate
+//     (archiveShow() checks can('show-prep','delete') before MastDB.shows.remove
+//     ~L1964). orders.js / sales.js / cart.js gate via hasPermission() instead.
+//
+//     This signal is COARSE (module-level, not per-handler) and is enforced as
+//     a RATCHET, mirroring scripts/lint-ux-standards.js: every module ungated
+//     TODAY is frozen in MODULE_GATE_BASELINE and only WARNS, so CI and the
+//     PostToolUse hook stay green. A NEW ungated write-module — one NOT in the
+//     baseline — is a BLOCKING violation, so the gap cannot reopen. As each
+//     baselined module gains real gates the lint prints a "stale baseline"
+//     nudge; drop it from the set. When the set is empty the warning becomes a
+//     hard failure for everyone (the end-state hard gate).
 //
 // Scope: app/index.html + app/modules/*.js
 
@@ -39,6 +62,26 @@ const UNGATED_ALLOWLIST = new Set([
   'coins',        // token/credits balance surface
   'mapping',      // channel product↔listing mapping re-entry surface (sub-surface of Channels)
   'suppressions', // audit-suppressions admin sub-surface
+]);
+
+// CHECK C ratchet baseline. Modules that own a route AND perform MastDB writes
+// AND ship ZERO can()/hasPermission() action gates — captured as of origin/main
+// so they only WARN. This is acknowledged RBAC debt, NOT a permanent allowlist:
+// it shrinks toward empty. When you add real gates to one of these, the lint
+// prints a "stale baseline" nudge — delete it from this set then. A new ungated
+// write-module that is NOT listed here FAILS the build (see CHECK C above).
+const MODULE_GATE_BASELINE = new Set([
+  // The canonical 6 the original RBAC-gap audit named:
+  'production.js', 'students.js', 'studio.js', 'trips.js', 'website.js', 'show-light.js',
+  // Other legacy feature modules with the same gap (routed, write, 0 gates):
+  'audit-feedback.js', 'audit.js', 'blog.js', 'book.js', 'brand.js', 'campaigns.js',
+  'channels.js', 'commission-terms.js', 'composer.js', 'consignment.js', 'contacts.js',
+  'customer-service.js', 'engagement-inbox.js', 'events.js', 'fulfillment.js',
+  'homepage.js', 'lookbooks.js', 'maker.js', 'mapping.js', 'newsletter.js',
+  'procurement.js', 'promotions.js', 'social.js', 'wholesale.js',
+  // UI-redesign (?ui=1) proof modules — flag-gated; gate or retire as they graduate:
+  'customers-v2.js', 'orders-v2.js', 'cs-tickets-v2.js', 'duplicates-v2.js',
+  'finance-expenses-v2.js', 'promotions-v2.js', 'terms-v2.js', 'wallet-v2.js',
 ]);
 
 const html = fs.readFileSync('app/index.html', 'utf8');
@@ -82,12 +125,64 @@ if (!secBlock) {
   });
 }
 
+// ---- CHECK C: routable write-modules must be RBAC action-gated (ratchet) ----
+// Coarse, module-level: a module that owns a route (non-empty routes:[] in
+// MODULE_MANIFEST) AND performs MastDB writes AND references can()/hasPermission()
+// ZERO times has shipped ungated write actions. Baselined ones warn; a new one
+// (not baselined) is blocking. MODULE_MANIFEST is the route oracle (not
+// SECTION_ROUTES) so modules whose routes never made the matrix — e.g. show-light
+// — are still covered.
+const MODULE_WRITE_RE = /MastDB(?:\.[A-Za-z0-9_]+)*\.(?:set|update|remove|push|newKey)\(/;
+const MODULE_GATE_RE = /\b(?:can|hasPermission)\(/;
+const manBlock = html.match(/var MODULE_MANIFEST = \{[\s\S]*?\n\};/);
+const moduleGateWarnings = [];
+const staleBaseline = [];
+let moduleGateNew = 0;
+if (!manBlock) {
+  violations.push('REGISTRY  app/index.html  could not locate `var MODULE_MANIFEST = {...}` block → CHECK C cannot run');
+} else {
+  const routedModules = new Set();
+  for (const m of manBlock[0].matchAll(/src:\s*'modules\/([^']+)'\s*,\s*routes:\s*\[([^\]]*)\]/g)) {
+    if (/['"]/.test(m[2])) routedModules.add(path.basename(m[1])); // non-empty routes:[]
+  }
+  moduleFiles.forEach(file => {
+    const base = path.basename(file);
+    const baselined = MODULE_GATE_BASELINE.has(base);
+    // Each early-out also self-heals the baseline: if a listed module no longer
+    // fits the ungated-writer profile, flag it stale so the set can shrink.
+    if (!routedModules.has(base)) { if (baselined) staleBaseline.push(base + ' — no longer owns a manifest route'); return; }
+    const text = fs.readFileSync(file, 'utf8');
+    if (!MODULE_WRITE_RE.test(text)) { if (baselined) staleBaseline.push(base + ' — no longer performs MastDB writes'); return; }
+    if (MODULE_GATE_RE.test(text)) { if (baselined) staleBaseline.push(base + ' — now references can()/hasPermission()'); return; }
+    if (baselined) {
+      moduleGateWarnings.push(`MODULE-UNGATED(baseline)  ${file}  routed + MastDB writes, 0 can()/hasPermission() — RBAC retrofit pending`);
+    } else {
+      moduleGateNew++;
+      violations.push(`MODULE-UNGATED  ${file}  is routed + performs MastDB writes (set|update|remove|push|newKey) but has 0 can()/hasPermission() gates → gate write/delete handlers with can('<route>','edit'|'delete') (see shows.js archiveShow ~L1964). If intentionally ungated, add '${base}' to MODULE_GATE_BASELINE.`);
+    }
+  });
+}
+
 // ---- Report ----
+const verbose = process.argv.includes('--verbose');
 console.log('RBAC coverage guard — ' + (1 + moduleFiles.length) + ' files scanned');
 console.log('  CRUD hasPermission() regressions (blocking): ' + crudCalls);
 console.log('  Ungated sidebar routes (blocking):           ' + ungatedCount);
+console.log('  New ungated write-modules (blocking):        ' + moduleGateNew);
+console.log('  Baselined ungated write-modules (warn):      ' + moduleGateWarnings.length);
 if (violations.length) {
   console.log('');
   violations.forEach(v => console.log('  ' + v));
+}
+// Per-module CHECK C warnings are quiet by default (this lint also runs as a
+// PostToolUse hook after every edit) — the count above is the always-on signal.
+// Pass --verbose to dump the full list.
+if (moduleGateWarnings.length && (verbose || violations.length)) {
+  console.log('\n  CHECK C warnings (non-blocking RBAC action-gate debt' + (verbose ? '' : ' — re-run with --verbose to list') + '):');
+  if (verbose) moduleGateWarnings.forEach(w => console.log('  ' + w));
+}
+if (staleBaseline.length) {
+  console.log('\n  stale MODULE_GATE_BASELINE entries (now gated / unrouted / non-writing — remove from the set):');
+  staleBaseline.forEach(s => console.log('  - ' + s));
 }
 process.exit(violations.length ? 1 : 0);
