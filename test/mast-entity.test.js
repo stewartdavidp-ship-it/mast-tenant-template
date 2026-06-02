@@ -245,4 +245,25 @@ t('ticket schema: computed subject/from/status columns, interactive thread rende
   assert.strictEqual(E.get('ticket').onSave, undefined);   // mutations are inline, not via the edit form
 });
 
+// ── recordTitle: lead-field title with get() fallback (engine hardening) ──
+const TITLED = { label: 'Account', recordId: r => r.id, fields: [
+  { name: 'name', label: 'Account', type: 'text', list: true, get: a => a.name || '(unnamed)' },
+], detail: { render: () => '' } };
+E.define('titled', TITLED);
+const TS = E.get('titled');
+t('recordTitle: raw lead property wins → "Label: Value"', () => {
+  assert.strictEqual(E.recordTitle(TS, { id: 'x1', name: 'Bluestone' }, 'read', 'titled'), 'Account: Bluestone');
+});
+t('recordTitle: empty lead property falls back to get() (the fix), not the bare id', () => {
+  assert.strictEqual(E.recordTitle(TS, { id: 'x1' }, 'read', 'titled'), 'Account: (unnamed)');
+});
+t('recordTitle: empty lead + no get → stable id fallback', () => {
+  const NOGET = { label: 'Thing', recordId: r => r.id, fields: [{ name: 'name', label: 'N', type: 'text' }], detail: { render: () => '' } };
+  E.define('noget', NOGET);
+  assert.strictEqual(E.recordTitle(E.get('noget'), { id: 'abc' }, 'read', 'noget'), 'Thing: abc');
+});
+t('recordTitle: create mode → "New Label"', () => {
+  assert.strictEqual(E.recordTitle(TS, { id: 'x1' }, 'create', 'titled'), 'New Account');
+});
+
 console.log('\n' + pass + ' passed');

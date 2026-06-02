@@ -466,6 +466,23 @@
     if (btn) btn.click();
   }
 
+  // Resolve the slide-out title ("Order: SGTE-0188"). The lead field (fields[0])
+  // is read from the RAW record property; when that's empty but the field is
+  // computed via get(), fall back to get() — so a schema whose title source is
+  // materialized via get() (a name with a default, a derived label) titles
+  // properly instead of as a bare id. Then fall back to a stable identifier so
+  // the title is never just the bare type label. Pure → unit-tested.
+  function recordTitle(s, record, mode, key) {
+    if (mode === 'create') return 'New ' + (s.label || key);
+    var f0 = s.fields[0];
+    var name = (record && record[f0.name]) || '';
+    if (!name && record && typeof f0.get === 'function') {
+      try { name = f0.get(record) || ''; } catch (e) {}
+    }
+    if (!name && record) name = record.email || record.primaryEmail || record.orderNumber || s.recordId(record) || '';
+    return name ? ((s.label ? s.label + ': ' : '') + name) : (s.label || key);
+  }
+
   function openRecord(key, record, mode, _internal) {
     var s = _registry[key]; if (!s) return;
     mode = mode || 'read';
@@ -476,12 +493,7 @@
     var baseline = JSON.stringify(record || {});
     // Prefix the title with the object type ("Order: SGTE-0188") so it's always
     // clear which kind of record you're on — important when drilling across types.
-    var _recName = (record && record[s.fields[0].name]) || '';
-    // Fall back to a stable identifier when the lead field is empty, so the
-    // title is never a bare "Customer" with no id (empty-value handling).
-    if (!_recName && record) _recName = record.email || record.primaryEmail || record.orderNumber || s.recordId(record) || '';
-    var titleText = (mode === 'create') ? ('New ' + (s.label || key))
-      : (_recName ? ((s.label ? s.label + ': ' : '') + _recName) : (s.label || key));
+    var titleText = recordTitle(s, record, mode, key);
     _current = { key: key, id: s.recordId(record), label: titleText, record: record };
     window.MastUI.slideOut.open({
       id: s.recordId(record) || 'new',
@@ -535,6 +547,6 @@
   };
   if (typeof window !== 'undefined') window.MastEntity = api;
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { define: define, get: get, listColumns: listColumns, exportColumns: exportColumns, canonicalGet: canonicalGet, validate: validate };
+    module.exports = { define: define, get: get, listColumns: listColumns, exportColumns: exportColumns, canonicalGet: canonicalGet, validate: validate, recordTitle: recordTitle };
   }
 })();
