@@ -113,9 +113,9 @@
        scripts/bump-modules-version.sh (these are static <head> tags loaded
        before the JS var exists, so they can't read it at runtime). Without
        this, the engines were frozen at ?v=1 and never cache-busted on deploy. -->
-  <script src="../shared/mast-ui.js?v=20260602-071055-1ec79b7"></script>
-  <script src="../shared/mast-io.js?v=20260602-071055-1ec79b7"></script>
-  <script src="../shared/mast-entity.js?v=20260602-071055-1ec79b7"></script>
+  <script src="../shared/mast-ui.js?v=20260602-104727-f7fe23a"></script>
+  <script src="../shared/mast-io.js?v=20260602-104727-f7fe23a"></script>
+  <script src="../shared/mast-entity.js?v=20260602-104727-f7fe23a"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Pod-specific runtime config — sets window.MAST_POD_PLATFORM_PROJECT so
@@ -19471,7 +19471,14 @@ window.triggerPostCutoverRerun = function() {
   var tenantId = MastDB.tenantId();
   if (!tenantId) return;
   var cfBase = (window.TENANT_FIREBASE_CONFIG && TENANT_FIREBASE_CONFIG.cloudFunctionsBase) || 'https://us-central1-mast-platform-prod.cloudfunctions.net';
-  fetch(cfBase + '/runPostCutoverChecks?tenantId=' + encodeURIComponent(tenantId))
+  // SEC (audit 2026-06-01): attach the admin's Firebase ID token so the CF can authorize the caller.
+  var _u = firebase.auth().currentUser;
+  if (!_u) { showToast('Not signed in', true); return; }
+  _u.getIdToken().then(function(idToken) {
+    return fetch(cfBase + '/runPostCutoverChecks?tenantId=' + encodeURIComponent(tenantId), {
+      headers: { 'Authorization': 'Bearer ' + idToken }
+    });
+  })
     .then(function(r) { return r.json(); })
     .then(function(result) {
       if (result.success) {
@@ -20957,7 +20964,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260602-071055-1ec79b7';
+var MAST_MODULES_V = '20260602-104727-f7fe23a';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
