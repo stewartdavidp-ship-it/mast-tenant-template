@@ -56,12 +56,8 @@
       { k: 'Variants', v: vs.length ? esc(vs.map(function (x) { return x.label; }).join(', ')) : 'None' },
       { k: 'Placements', v: placementsSet().length ? (placementsSet().length + ' set') : 'None' }
     ]);
-    return '<div class="mu-card" style="margin:0;height:100%;">' +
-        '<h3 style="margin:0 0 10px;">Logo</h3>' +
-        '<div class="mu-cc">' + preview + '<div style="margin-top:12px;">' + rows + '</div>' +
-          '<div class="mu-sub" style="margin-top:12px;"><button class="btn btn-secondary" onclick="BrandV2.classic()">Manage logos &amp; placements (classic view) →</button></div>' +
-        '</div>' +
-      '</div>';
+    return U.card('Logo', preview + '<div style="margin-top:12px;">' + rows + '</div>' +
+      '<div class="mu-sub" style="margin-top:12px;"><button class="btn btn-secondary" onclick="BrandV2.classic()">Manage logos &amp; placements (classic view) →</button></div>', { fill: true });
   }
 
   function voiceCard() {
@@ -70,22 +66,16 @@
       return '<div style="margin-bottom:12px;"><div class="mu-sub" style="margin-bottom:3px;">' + esc(label) + '</div>' +
         (text ? '<div style="font-size:0.9rem;color:var(--charcoal,var(--text));line-height:1.5;white-space:pre-wrap;">' + esc(text) + '</div>' : '<span class="mu-sub">Not set.</span>') + '</div>';
     }
-    return '<div class="mu-card" style="margin:0;height:100%;">' +
-        '<h3 style="margin:0 0 10px;">Brand voice</h3>' +
-        '<div class="mu-cc">' +
-          '<div class="mu-sub" style="margin-bottom:12px;">Words &amp; tone used across storefront SEO, newsletter, and social drafts.</div>' +
-          block('Tagline', v.tagline) + block('Positioning one-liner', v.positioningOneLiner) + block('Voice rules', v.voiceRules) +
-          '<div class="mu-sub" style="margin-top:4px;"><button class="btn btn-secondary" onclick="BrandV2.classic(\'voice\')">Edit brand voice (classic view) →</button></div>' +
-        '</div>' +
-      '</div>';
+    return U.card('Brand voice',
+      '<div class="mu-sub" style="margin-bottom:12px;">Words &amp; tone used across storefront SEO, newsletter, and social drafts.</div>' +
+      block('Tagline', v.tagline) + block('Positioning one-liner', v.positioningOneLiner) + block('Voice rules', v.voiceRules) +
+      '<div class="mu-sub" style="margin-top:4px;"><button class="btn btn-secondary" onclick="BrandV2.classic(\'voice\')">Edit brand voice (classic view) →</button></div>', { fill: true });
   }
 
   function render() {
     var tab = ensureTab();
     if (!V2.loaded) { tab.innerHTML = U.pageHeader({ title: 'Brand', subtitle: 'Logo & brand voice' }) + '<div class="loading" style="margin-top:14px;">Loading…</div>'; return; }
-    var grid = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px;margin-top:14px;align-items:start;">' +
-      logoCard() + voiceCard() + '</div>';
-    tab.innerHTML = U.pageHeader({ title: 'Brand', subtitle: 'Logo & brand voice' }) + grid;
+    tab.innerHTML = U.pageHeader({ title: 'Brand', subtitle: 'Logo & brand voice' }) + U.cardGrid([logoCard(), voiceCard()]);
   }
 
   window.BrandV2 = {

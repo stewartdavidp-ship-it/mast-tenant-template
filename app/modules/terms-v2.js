@@ -157,13 +157,7 @@
     var summary = rows.map(function (r) {
       return '<div class="mu-sub" style="display:flex;justify-content:space-between;gap:12px;"><span>' + esc(r.k) + '</span><span style="color:var(--charcoal,var(--text));text-align:right;">' + (r.v == null || r.v === '' ? '—' : r.v) + '</span></div>';
     }).join('');
-    return '<button type="button" onclick="TermsV2.edit(\'' + key + '\')" style="all:unset;display:block;cursor:pointer;box-sizing:border-box;">' +
-      '<div class="mu-card" style="margin:0;height:100%;">' +
-        '<h3 style="margin:0;">' + esc(title) + '</h3>' +
-        '<div class="mu-cc" style="margin-top:8px;">' + summary +
-          '<div class="mu-sub" style="margin-top:10px;text-align:right;color:var(--teal);font-weight:600;">Edit →</div>' +
-        '</div>' +
-      '</div></button>';
+    return U.launchCard({ title: title, body: summary, onClickFnName: 'TermsV2.edit', arg: key, arrow: 'Edit →' });
   }
 
   function render() {
@@ -184,15 +178,10 @@
     var published = c.lastPublishedAt
       ? '<div style="font-size:0.9rem;color:var(--charcoal,var(--text));">Last published ' + N.date(c.lastPublishedAt) + '.</div>'
       : '<div style="font-size:0.9rem;color:var(--charcoal,var(--text));">Not yet published to the storefront.</div>';
-    var publish = '<div class="mu-card" style="margin:0;height:100%;">' +
-        '<h3 style="margin:0;">Publish</h3>' +
-        '<div class="mu-cc" style="margin-top:8px;">' + published +
-          '<div class="mu-sub" style="margin-top:10px;"><button class="btn btn-secondary" onclick="TermsV2.classic()">Publish to storefront (classic view) →</button></div>' +
-        '</div>' +
-      '</div>';
+    var publish = U.card('Publish', published +
+      '<div class="mu-sub" style="margin-top:10px;"><button class="btn btn-secondary" onclick="TermsV2.classic()">Publish to storefront (classic view) →</button></div>', { fill: true });
 
-    var grid = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;margin-top:14px;align-items:stretch;">' +
-      returns + terms + publish + '</div>';
+    var grid = U.cardGrid([returns, terms, publish]);
     tab.innerHTML = U.pageHeader({ title: 'Policies', subtitle: 'Store policies & terms' }) + grid;
   }
 

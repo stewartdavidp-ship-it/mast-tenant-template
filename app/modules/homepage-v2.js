@@ -68,12 +68,8 @@
         (peek ? '<div class="mu-sub" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:240px;">' + esc(peek) + '</div>' : '') + '</div>' +
         onPill(on) + '</div>';
     }).join('');
-    return '<div class="mu-card" style="margin:0;height:100%;">' +
-        '<h3 style="margin:0 0 6px;">Homepage sections</h3>' +
-        '<div class="mu-cc">' + rows +
-          '<div class="mu-sub" style="margin-top:12px;"><button class="btn btn-secondary" onclick="HomepageV2.classic()">Edit sections (classic view) →</button></div>' +
-        '</div>' +
-      '</div>';
+    return U.card('Homepage sections', rows +
+      '<div class="mu-sub" style="margin-top:12px;"><button class="btn btn-secondary" onclick="HomepageV2.classic()">Edit sections (classic view) →</button></div>', { fill: true });
   }
 
   function themeCard() {
@@ -84,35 +80,25 @@
       { k: 'Color scheme', v: esc(scheme) },
       { k: 'Font pair', v: t.fontPair ? esc(titleCase(t.fontPair)) : 'Default' }
     ]);
-    return '<div class="mu-card" style="margin:0;height:100%;">' +
-        '<h3 style="margin:0 0 6px;">Theme</h3>' +
-        '<div class="mu-cc">' + rows +
-          '<div class="mu-sub" style="margin-top:12px;"><button class="btn btn-secondary" onclick="HomepageV2.classic()">Edit theme (classic view) →</button></div>' +
-        '</div>' +
-      '</div>';
+    return U.card('Theme', rows +
+      '<div class="mu-sub" style="margin-top:12px;"><button class="btn btn-secondary" onclick="HomepageV2.classic()">Edit theme (classic view) →</button></div>', { fill: true });
   }
 
   function testimonialsCard() {
     var data = V2.testimonials || {};
     var all = Object.keys(data).map(function (k) { return data[k]; }).filter(Boolean);
     var visible = all.filter(function (t) { return t.visible !== false; }).length;
-    return '<div class="mu-card" style="margin:0;height:100%;">' +
-        '<h3 style="margin:0 0 6px;">Testimonials</h3>' +
-        '<div class="mu-cc">' + U.kv([
-          { k: 'Total', v: String(all.length) },
-          { k: 'Visible on homepage', v: String(visible) }
-        ]) +
-          '<div class="mu-sub" style="margin-top:12px;"><button class="btn btn-secondary" onclick="HomepageV2.classic()">Manage testimonials (classic view) →</button></div>' +
-        '</div>' +
-      '</div>';
+    return U.card('Testimonials', U.kv([
+      { k: 'Total', v: String(all.length) },
+      { k: 'Visible on homepage', v: String(visible) }
+    ]) +
+      '<div class="mu-sub" style="margin-top:12px;"><button class="btn btn-secondary" onclick="HomepageV2.classic()">Manage testimonials (classic view) →</button></div>', { fill: true });
   }
 
   function render() {
     var tab = ensureTab();
     if (!V2.loaded) { tab.innerHTML = U.pageHeader({ title: 'Homepage', subtitle: 'Sections, theme & testimonials' }) + '<div class="loading" style="margin-top:14px;">Loading…</div>'; return; }
-    var grid = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px;margin-top:14px;align-items:start;">' +
-      sectionsCard() + themeCard() + testimonialsCard() + '</div>';
-    tab.innerHTML = U.pageHeader({ title: 'Homepage', subtitle: 'Sections, theme & testimonials' }) + grid;
+    tab.innerHTML = U.pageHeader({ title: 'Homepage', subtitle: 'Sections, theme & testimonials' }) + U.cardGrid([sectionsCard(), themeCard(), testimonialsCard()]);
   }
 
   window.HomepageV2 = {

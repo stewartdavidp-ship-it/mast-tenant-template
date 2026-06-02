@@ -38,6 +38,12 @@ const METRICS = {
   rogueOverlays: /position\s*:\s*fixed/gi,
   translateX: /translateX/g,
   hardcodedHex: /#[0-9a-fA-F]{6}\b|#[0-9a-fA-F]{3}\b/g,
+  // Hand-rolled engine chrome: a module writing the engine's OWN structural classes
+  // as HTML literals (instead of calling MastUI.card/kv/tiles/timeline/relatedTable/
+  // paneTabsBar/stickyHead/launchCard). The slide-out / card shape must come from the
+  // engine so it can't drift (doc 17 §13/§14b). NOTE: mu-pane/mu-sub/mu-editbar/
+  // mu-editpill/mu-arrow/mu-launch have NO primitive (composed by hand by design) — excluded.
+  handRolledChrome: /class="[^"]*\bmu-(card|cc|kv|tiles|tile|tl|rel|ptabs|stickyhead)\b/g,
 };
 
 function countFile(file) {
@@ -109,5 +115,6 @@ function hint(m) {
     rogueOverlays: 'use mastSlideOut / openModal',
     translateX: 'use the shared slide-out',
     hardcodedHex: 'use var(--…) tokens',
+    handRolledChrome: 'extend/use a MastUI primitive (card/kv/tiles/launchCard/cardGrid) — do not hand-write mu-* chrome',
   }[m];
 }

@@ -316,7 +316,28 @@
       return '<div class="mu-tile' + (t.hero ? ' hero' : '') + '"><div class="mu-tk">' + esc(t.k) + '</div><div class="mu-tv">' + (t.v == null ? '' : t.v) + '</div></div>';
     }).join('') + '</div>';
   }
-  function card(title, inner) { return '<div class="mu-card"><h3>' + esc(title) + '</h3><div class="mu-cc">' + (inner || '') + '</div></div>'; }
+  // opts: { fill?, headerRight? } — fill = grid-cell card (margin:0;height:100%);
+  // headerRight = HTML rendered right-aligned in the header (e.g. an on/off badge).
+  function card(title, inner, opts) {
+    opts = opts || {};
+    var cls = 'mu-card' + (opts.fill ? ' mu-card-fill' : '');
+    var head = opts.headerRight
+      ? '<h3 class="mu-cardhead"><span>' + esc(title) + '</span>' + opts.headerRight + '</h3>'
+      : '<h3>' + esc(title) + '</h3>';
+    return '<div class="' + cls + '">' + head + '<div class="mu-cc">' + (inner || '') + '</div></div>';
+  }
+  // Clickable, grid-cell card — the producer/launcher + read-on-page edit-card shape
+  // (doc 17 §13/§15). cfg: { title, body, onClickFnName, arg?, arrow?, headerRight? }.
+  // The arrow (e.g. 'Open →' / 'Edit →') is appended bottom-right; clicking fires
+  // onClickFnName(arg). Use this instead of hand-rolling a <button>+mu-card.
+  function launchCard(cfg) {
+    cfg = cfg || {};
+    var arrow = cfg.arrow ? ('<div class="mu-arrow" style="margin-top:10px;text-align:right;">' + esc(cfg.arrow) + '</div>') : '';
+    var onclick = cfg.onClickFnName ? (' onclick="' + cfg.onClickFnName + '(' + (cfg.arg != null ? "'" + esc(String(cfg.arg)) + "'" : '') + ')"') : '';
+    return '<button type="button" class="mu-launch"' + onclick + '>' + card(cfg.title, (cfg.body || '') + arrow, { fill: true, headerRight: cfg.headerRight }) + '</button>';
+  }
+  // Responsive grid of fill-cards/launchers — the standard producer-surface layout.
+  function cardGrid(items) { return '<div class="mu-cardgrid">' + (Array.isArray(items) ? items.join('') : (items || '')) + '</div>'; }
   // Standard page header — the title/count/actions strip every list-control and
   // launcher screen shares, so moving from any screen to any other doesn't look
   // foreign (doc 17 §13). cfg: { title, count?, subtitle?, actionsHtml? }.
@@ -452,6 +473,14 @@
       '.mu-card{border:1px solid var(--border,rgba(127,127,127,.2));border-radius:12px;overflow:hidden;margin-bottom:16px;}',
       '.mu-card>h3{font-size:0.72rem;letter-spacing:.05em;text-transform:uppercase;color:var(--warm-gray);margin:0;padding:13px 16px;border-bottom:1px solid var(--border,rgba(127,127,127,.2));background:var(--bg-secondary,rgba(127,127,127,.05));font-weight:600;}',
       '.mu-cc{padding:14px 16px;}',
+      // Grid-cell card + clickable launcher/edit card (producer surfaces + read-on-page
+      // config grids). Use MastUI.card(t,i,{fill:true}) / MastUI.launchCard(...) /
+      // MastUI.cardGrid(...) — never hand-write these classes (lint-ux-standards enforces).
+      '.mu-card-fill{margin:0;height:100%;}',
+      '.mu-launch{all:unset;display:block;box-sizing:border-box;height:100%;cursor:pointer;} .mu-launch:focus-visible .mu-card{box-shadow:0 0 0 2px var(--amber,#C4853C);} .mu-launch:hover .mu-card{border-color:var(--amber,#C4853C);}',
+      '.mu-launch .mu-arrow{color:var(--teal,#2A7C6F);font-weight:600;}',
+      '.mu-cardgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;margin-top:14px;align-items:stretch;}',
+      '.mu-card>h3.mu-cardhead{display:flex;align-items:center;justify-content:space-between;gap:10px;}',
       '.mu-kv{display:grid;grid-template-columns:auto 1fr;gap:8px 16px;font-size:0.9rem;}',
       '.mu-kv .mu-k{color:var(--warm-gray);} .mu-kv .mu-v{text-align:right;}',
       '.mu-rel{width:100%;border-collapse:collapse;} .mu-rel thead th{text-align:left;font-size:0.72rem;letter-spacing:.04em;text-transform:uppercase;color:var(--warm-gray);font-weight:600;padding:0 16px 8px;} .mu-rel th.r,.mu-rel td.r{text-align:right;}',
@@ -508,12 +537,13 @@
       Num: Num, badge: badge, tabs: tabs, list: list, slideOut: slideOut, deepLink: deepLink, _esc: esc,
       tiles: tiles, card: card, cardTable: cardTable, kv: kv, timeline: timeline, relatedTable: relatedTable,
       imageThumb: imageThumb, openImg: openImg, panelTab: panelTab, paneTabsBar: paneTabsBar,
-      stickyHead: stickyHead, toggleCover: toggleCover, calendar: calendar, pageHeader: pageHeader
+      stickyHead: stickyHead, toggleCover: toggleCover, calendar: calendar, pageHeader: pageHeader,
+      launchCard: launchCard, cardGrid: cardGrid
     };
   }
 
   // CommonJS export for node-based unit tests of the pure helpers.
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { Num: Num, badge: badge, tabs: tabs, list: list, esc: esc, tiles: tiles, kv: kv, timeline: timeline, relatedTable: relatedTable, pageHeader: pageHeader };
+    module.exports = { Num: Num, badge: badge, tabs: tabs, list: list, esc: esc, tiles: tiles, kv: kv, timeline: timeline, relatedTable: relatedTable, pageHeader: pageHeader, card: card, launchCard: launchCard, cardGrid: cardGrid };
   }
 })();
