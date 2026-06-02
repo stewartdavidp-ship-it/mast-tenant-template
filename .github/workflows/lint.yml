@@ -67,3 +67,18 @@ jobs:
       # must be clean (baseline 0).
       - name: UX standards ratchet
         run: node scripts/lint-ux-standards.js
+      # Unit tests: the shared engines (mast-io / mast-ui / mast-entity — ~63 pure-helper
+      # assertions: CSV formula-injection guard, money/date formatting, the schema engine)
+      # plus the finance dollars-vs-cents normalizer (the ~27x MTD-revenue regression guard,
+      # extracted live from app/modules/finance.js so it fails if that function regresses).
+      # Hermetic, no network, sub-second. Lives in the `lint` job so it inherits the
+      # required-check merge-block. Run per-file with plain `node`, chained on `&&` so any
+      # non-zero exit fails the gate. NOTE: do NOT switch to `node --test test/` — it
+      # mis-handles the hand-rolled assert-throw files and reports a spurious failure on a
+      # green suite (verified 2026-06-01); plain per-file `node` is correct for this suite.
+      - name: Unit tests (shared engines + finance money normalizer)
+        run: |
+          node test/mast-io.test.js &&
+          node test/mast-ui.test.js &&
+          node test/mast-entity.test.js &&
+          node test/finance-order-money.test.js
