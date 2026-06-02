@@ -3,7 +3,7 @@
  * Run: node test/mast-ui.test.js
  */
 const assert = require('assert');
-const { Num, badge, tabs, list, esc, pageHeader } = require('../shared/mast-ui.js');
+const { Num, badge, tabs, list, esc, pageHeader, card, launchCard, cardGrid } = require('../shared/mast-ui.js');
 
 let pass = 0;
 function t(name, fn) { fn(); pass++; console.log('  ✓ ' + name); }
@@ -65,5 +65,19 @@ t('pageHeader shows count when given, omits otherwise', () => {
 });
 t('pageHeader escapes the title', () => assert.ok(pageHeader({ title: '<b>x</b>' }).indexOf('&lt;b&gt;') >= 0));
 t('pageHeader places actions right-aligned', () => assert.ok(pageHeader({ title: 'X', actionsHtml: '<button>Go</button>' }).indexOf('margin-left:auto') >= 0));
+
+// card / launchCard / cardGrid — the producer-surface + grid-card primitives (doc 17 §13/§14b)
+t('card renders mu-card with title + body', () => { const h = card('Logo', 'x'); assert.ok(h.indexOf('class="mu-card"') >= 0 && h.indexOf('Logo') >= 0 && h.indexOf('>x<') >= 0); });
+t('card fill adds mu-card-fill', () => assert.ok(card('T', 'x', { fill: true }).indexOf('mu-card-fill') >= 0));
+t('card headerRight renders a flex header with the right HTML', () => { const h = card('T', 'x', { headerRight: '<b>ON</b>' }); assert.ok(h.indexOf('mu-cardhead') >= 0 && h.indexOf('<b>ON</b>') >= 0); });
+t('card escapes the title', () => assert.ok(card('<i>x</i>', '').indexOf('&lt;i&gt;') >= 0));
+t('launchCard is a clickable fill-card with onClick(arg) + arrow', () => {
+  const h = launchCard({ title: 'Gift Cards', body: 'b', onClickFnName: 'WalletV2.edit', arg: 'gc', arrow: 'Edit →' });
+  assert.ok(h.indexOf('class="mu-launch"') >= 0 && h.indexOf("WalletV2.edit('gc')") >= 0 && h.indexOf('mu-card-fill') >= 0 && h.indexOf('Edit →') >= 0);
+});
+t('cardGrid wraps items (array or string) in mu-cardgrid', () => {
+  assert.ok(cardGrid(['<a>', '<b>']).indexOf('class="mu-cardgrid"') >= 0 && cardGrid(['<a>', '<b>']).indexOf('<a><b>') >= 0);
+  assert.ok(cardGrid('<c>').indexOf('<c>') >= 0);
+});
 
 console.log('\n' + pass + ' passed');

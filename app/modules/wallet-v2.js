@@ -170,24 +170,14 @@
     var summary = rows.map(function (r) {
       return '<div class="mu-sub" style="display:flex;justify-content:space-between;gap:12px;"><span>' + esc(r.k) + '</span><span style="color:var(--charcoal,var(--text));text-align:right;">' + (r.v == null || r.v === '' ? '—' : r.v) + '</span></div>';
     }).join('');
-    return '<button type="button" onclick="WalletV2.edit(\'' + key + '\')" style="all:unset;display:block;cursor:pointer;box-sizing:border-box;">' +
-      '<div class="mu-card" style="margin:0;height:100%;">' +
-        '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;"><h3 style="margin:0;">' + esc(title) + '</h3>' + onPill(statusOn) + '</div>' +
-        '<div class="mu-cc" style="margin-top:8px;">' + summary +
-          '<div class="mu-sub" style="margin-top:10px;text-align:right;color:var(--teal);font-weight:600;">Edit →</div>' +
-        '</div>' +
-      '</div></button>';
+    return U.launchCard({ title: title, body: summary, onClickFnName: 'WalletV2.edit', arg: key, arrow: 'Edit →', headerRight: onPill(statusOn) });
   }
 
   // A read-only card with no editable settings here (link out to classic).
   function infoCard(title, statusOn, desc, classicRoute, classicLabel) {
-    return '<div class="mu-card" style="margin:0;height:100%;">' +
-        '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;"><h3 style="margin:0;">' + esc(title) + '</h3>' + onPill(statusOn) + '</div>' +
-        '<div class="mu-cc" style="margin-top:8px;">' +
-          '<div style="font-size:0.9rem;color:var(--charcoal,var(--text));line-height:1.5;">' + esc(desc) + '</div>' +
-          '<div class="mu-sub" style="margin-top:10px;"><button class="btn btn-secondary" onclick="WalletV2.classic(\'' + classicRoute + '\')">' + esc(classicLabel) + ' →</button></div>' +
-        '</div>' +
-      '</div>';
+    var body = '<div style="font-size:0.9rem;color:var(--charcoal,var(--text));line-height:1.5;">' + esc(desc) + '</div>' +
+      '<div class="mu-sub" style="margin-top:10px;"><button class="btn btn-secondary" onclick="WalletV2.classic(\'' + classicRoute + '\')">' + esc(classicLabel) + ' →</button></div>';
+    return U.card(title, body, { fill: true, headerRight: onPill(statusOn) });
   }
 
   function render() {
@@ -211,9 +201,7 @@
       'Subscription program with exclusive benefits. Managed as its own program.',
       'membership', 'Open membership');
 
-    var grid = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(248px,1fr));gap:16px;margin-top:14px;align-items:stretch;">' +
-      gc + loy + credit + member + '</div>';
-    tab.innerHTML = U.pageHeader({ title: 'Wallet & instruments', subtitle: 'Gift cards, loyalty & store credit' }) + grid;
+    tab.innerHTML = U.pageHeader({ title: 'Wallet & instruments', subtitle: 'Gift cards, loyalty & store credit' }) + U.cardGrid([gc, loy, credit, member]);
   }
 
   window.WalletV2 = {

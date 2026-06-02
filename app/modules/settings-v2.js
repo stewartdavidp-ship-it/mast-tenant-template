@@ -67,23 +67,14 @@
 
   function launcher(area) {
     var sub = V2.loaded ? esc(area.summary()) : 'Loading…';
-    return '<button type="button" onclick="SettingsV2.open(\'' + area.route + '\')" style="all:unset;display:block;cursor:pointer;box-sizing:border-box;">' +
-      '<div class="mu-card" style="margin:0;height:100%;">' +
-        '<h3 style="margin:0;">' + esc(area.title) + '</h3>' +
-        '<div class="mu-cc" style="margin-top:8px;">' +
-          '<div style="font-size:0.9rem;color:var(--charcoal,var(--text));">' + esc(area.desc) + '</div>' +
-          '<div class="mu-sub" style="margin-top:8px;display:flex;justify-content:space-between;align-items:center;gap:12px;">' +
-            '<span>' + sub + '</span><span style="color:var(--teal);font-weight:600;">Open →</span>' +
-          '</div>' +
-        '</div>' +
-      '</div></button>';
+    var body = '<div style="font-size:0.9rem;color:var(--charcoal,var(--text));">' + esc(area.desc) + '</div>' +
+      '<div class="mu-sub" style="margin-top:8px;">' + sub + '</div>';
+    return U.launchCard({ title: area.title, body: body, onClickFnName: 'SettingsV2.open', arg: area.route, arrow: 'Open →' });
   }
 
   function render() {
     var tab = ensureTab();
-    var grid = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;margin-top:14px;align-items:stretch;">' +
-      AREAS.map(launcher).join('') + '</div>';
-    tab.innerHTML = U.pageHeader({ title: 'Settings', subtitle: 'Store configuration' }) + grid;
+    tab.innerHTML = U.pageHeader({ title: 'Settings', subtitle: 'Store configuration' }) + U.cardGrid(AREAS.map(launcher));
   }
 
   window.SettingsV2 = {
