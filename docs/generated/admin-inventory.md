@@ -5,8 +5,8 @@
 Source-of-truth counts for the admin app, generated from the code so docs
 cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 
-- **Core shell:** `app/index.html` — **58,579** lines
-- **Feature modules:** **83** files in `app/modules/` (**76** routed), **100,882** lines combined
+- **Core shell:** `app/index.html` — **58,590** lines
+- **Feature modules:** **88** files in `app/modules/` (**81** routed), **102,268** lines combined
 
 | Module file | Lines | Routes |
 |---|---:|---|
@@ -14,6 +14,7 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/advisor.js` | 1,401 | advisor |
 | `modules/audit-feedback.js` | 816 | suppressions |
 | `modules/audit.js` | 1,717 | audit |
+| `modules/blog-v2.js` | 329 | blog-v2 |
 | `modules/blog.js` | 2,333 | blog |
 | `modules/book.js` | 5,848 | book, book-detail, enrollments, instructors, instructor-detail, resources, resource-detail, passes, pass-detail, calendar, book-reports |
 | `modules/brand-v2.js` | 101 | brand-v2 |
@@ -27,6 +28,7 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/commissions-v2.js` | 191 | commissions-v2 |
 | `modules/composer.js` | 434 | composer |
 | `modules/consignment.js` | 2,146 | galleries |
+| `modules/consignments-v2.js` | 278 | consignments-v2 |
 | `modules/contacts-v2.js` | 290 | contacts-v2 |
 | `modules/contacts.js` | 1,597 | contacts |
 | `modules/coupons-v2.js` | 255 | coupons-v2 |
@@ -50,6 +52,7 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/gift-cards-v2.js` | 215 | gift-cards-v2 |
 | `modules/homepage-v2.js` | 125 | homepage-v2 |
 | `modules/homepage.js` | 681 | homepage |
+| `modules/inquiries-v2.js` | 225 | inquiries-v2 |
 | `modules/instructors-v2.js` | 255 | instructors-v2 |
 | `modules/lookbooks.js` | 822 | lookbooks |
 | `modules/loyalty-v2.js` | 347 | loyalty-v2 |
@@ -69,7 +72,9 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/promotions-v2.js` | 389 | promotions-v2 |
 | `modules/promotions.js` | 529 | promotions |
 | `modules/resources-v2.js` | 249 | resources-v2 |
+| `modules/sales-events-v2.js` | 280 | sales-events-v2 |
 | `modules/sales.js` | 3,188 | pos, receipts, events, salesEvents, terms |
+| `modules/sessions-v2.js` | 274 | sessions-v2 |
 | `modules/settings-v2.js` | 105 | settings-v2 |
 | `modules/show-light.js` | 1,718 | show-light-profile, show-light-gallery, show-light-shows, show-light-apply |
 | `modules/shows.js` | 3,580 | show, show-find, show-apply, show-prep, show-execute, show-history |
