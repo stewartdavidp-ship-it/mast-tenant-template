@@ -136,9 +136,12 @@ window.TENANT_READY = new Promise(function(resolve, reject) {
       etsyUrl: publicConfig.etsyUrl || ''
     };
 
-    // Platform-level Google Maps API key for checkout address autocomplete
-    // Client-side key, restricted by HTTP referrer (*.web.app, *.runmast.com)
-    window.MAST_GOOGLE_MAPS_KEY = publicConfig.googleMapsApiKey || 'AIzaSyBVvmq3xHDnSHFY8KrypURwwYC4Th69P3U';
+    // Per-tenant Google Maps API key for checkout address autocomplete (client-side,
+    // referrer-restricted). SECURITY (I-01, 2026-06-01 audit): no hardcoded platform-key
+    // fallback — that literal shipped in the PUBLIC repo + every storefront bundle, a
+    // shared-key denial-of-wallet target. When absent, checkout.js loadGooglePlaces()
+    // degrades gracefully to a plain address field (the tenant key comes only from config).
+    window.MAST_GOOGLE_MAPS_KEY = publicConfig.googleMapsApiKey || '';
 
     // B2: expose payments-accepting flag for cart/checkout upfront guard.
     // Default to true when absent so existing tenants (no flag set yet) keep
