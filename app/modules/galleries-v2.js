@@ -64,14 +64,16 @@
       return false;
     });
   }
-  // Totals for one placement (mirrors consignment.js `calculatePlacementTotals`);
-  // line-item money is in DOLLARS here (retailPrice), as legacy computes it.
+  // Totals for one placement (mirrors consignment.js `calculatePlacementTotals`).
+  // line-item retailPrice is stored in CENTS (writer: Math.round($ * 100)); convert
+  // to dollars via N.moneyVal so retail/sold/earnings line up with N.money (dollars)
+  // and the amountReceivedCents/100 settlement math in payoutsDue.
   function placementTotals(p) {
     var lineItems = p.lineItems || {};
     var retail = 0, sold = 0, placed = 0;
     Object.keys(lineItems).forEach(function (k) {
       var li = lineItems[k];
-      var qty = li.qty || 0, qtySold = li.qtySold || 0, price = li.retailPrice || 0;
+      var qty = li.qty || 0, qtySold = li.qtySold || 0, price = N.moneyVal(li, 'retailPrice', null) || 0;
       retail += qty * price; sold += qtySold * price; placed += qty;
     });
     var rate = p.commissionRate || 0;

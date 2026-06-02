@@ -20,9 +20,10 @@
  * only — no onSave, no edit form, no sale/return/settlement tooling. Flag-gated
  * (?ui=1) at #consignments-v2, side-by-side; never touches consignment.js.
  *
- * Money units: placement line-item money (retailPrice) is treated as DOLLARS,
- * matching the sibling galleries-v2 placementTotals so the two v2 twins render
- * the same placement records identically; settlements are CENTS (amountReceivedCents).
+ * Money units: placement line-item retailPrice is stored in CENTS (writer:
+ * Math.round($ * 100)); both v2 twins convert it to dollars via N.moneyVal so they
+ * render placements identically to the legacy consignment.js detail view;
+ * settlements are CENTS (amountReceivedCents).
  */
 (function () {
   'use strict';
@@ -58,13 +59,14 @@
   }
 
   // Per-placement totals (mirror consignment.js calculatePlacementTotals AND the
-  // sibling galleries-v2 placementTotals): line-item money is in DOLLARS here.
+  // sibling galleries-v2 placementTotals): retailPrice is stored in CENTS, converted
+  // to dollars via N.moneyVal so totals match N.money (dollars) + settlement math.
   function placementTotals(p) {
     var lineItems = (p && p.lineItems) || {};
     var retail = 0, sold = 0, placed = 0, soldUnits = 0, returnedUnits = 0;
     Object.keys(lineItems).forEach(function (k) {
       var li = lineItems[k] || {};
-      var qty = li.qty || 0, qtySold = li.qtySold || 0, qtyReturned = li.qtyReturned || 0, price = li.retailPrice || 0;
+      var qty = li.qty || 0, qtySold = li.qtySold || 0, qtyReturned = li.qtyReturned || 0, price = N.moneyVal(li, 'retailPrice', null) || 0;
       retail += qty * price; sold += qtySold * price; placed += qty;
       soldUnits += qtySold; returnedUnits += qtyReturned;
     });
@@ -155,7 +157,7 @@
         var lineItems = (p.lineItems && typeof p.lineItems === 'object') ? p.lineItems : {};
         var rows = Object.keys(lineItems).map(function (k) {
           var li = lineItems[k] || {};
-          var qty = li.qty || 0, qtySold = li.qtySold || 0, qtyReturned = li.qtyReturned || 0, price = li.retailPrice || 0;
+          var qty = li.qty || 0, qtySold = li.qtySold || 0, qtyReturned = li.qtyReturned || 0, price = N.moneyVal(li, 'retailPrice', null) || 0;
           return {
             name: li.productName || 'Unknown',
             placed: qty, sold: qtySold,
