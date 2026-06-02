@@ -1675,6 +1675,16 @@
 <script>
 window.TENANT_READY.then(function() {
   if (!firebase.apps.length) firebase.initializeApp(TENANT_FIREBASE_CONFIG);
+  // ── App Check (Phase 2 — GATED on provider setup) ───────────────────────────
+  // submitPublicForm verifies App Check opportunistically and will ENFORCE it
+  // (APP_CHECK_ENFORCE=1) once the storefront mints tokens. Enable this once a
+  // reCAPTCHA v3 / Enterprise site key is provisioned (ops/console dependency)
+  // and the firebase-app-check compat SDK is loaded on the page:
+  //   firebase.appCheck().activate(
+  //     new firebase.appCheck.ReCaptchaV3Provider(TENANT_FIREBASE_CONFIG.appCheckSiteKey),
+  //     /* isTokenAutoRefreshEnabled */ true
+  //   );
+  // Until then App Check stays INERT server-side (no client tokens minted).
   MastDB.init({ firestore: firebase.firestore(), tenantId: TENANT_ID });
 
   // Helper: escape for safe innerHTML
@@ -2186,13 +2196,23 @@ window.nlSubmitSignup = function() {
   btn.disabled = true;
   btn.textContent = 'Subscribing...';
 
-  var subKey = MastDB.newKey('newsletter/subscribers');
-  var token = subKey + '-' + Date.now().toString(36);
-  MastDB.set('newsletter/subscribers/' + subKey, {
-    id: subKey, name: name, email: email, notes: null,
-    subscribedAt: new Date().toISOString(), source: 'website-form',
-    status: 'active', unsubscribeToken: token, unsubscribedAt: null
-  }).then(function() {
+  // Public newsletter signup routes through the submitPublicForm CF, which
+  // resolves the tenant + stamps subscribedAt server-side and writes via the
+  // Admin SDK. (The direct newsletter_subscribers create rule is being locked
+  // down to admin-only — see mast-architecture #110 / #111.) The CF derives id,
+  // unsubscribeToken, status and source server-side.
+  var cfBase = (typeof TENANT_FIREBASE_CONFIG !== 'undefined' && TENANT_FIREBASE_CONFIG.cloudFunctionsBase)
+    ? TENANT_FIREBASE_CONFIG.cloudFunctionsBase
+    : 'https://us-central1-mast-platform-prod.cloudfunctions.net';
+  fetch(cfBase + '/submitPublicForm', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Tenant-ID': typeof TENANT_ID !== 'undefined' ? TENANT_ID : ''
+    },
+    body: JSON.stringify({ formType: 'newsletter', name: name, email: email })
+  }).then(function(resp) {
+    if (!resp.ok) throw new Error('submit-failed-' + resp.status);
     document.getElementById('nlSignupForm').innerHTML =
       '<p style="color:var(--amber-light);font-size:0.95rem;">You\'re subscribed! Thanks for joining.</p>';
   }).catch(function(err) {
