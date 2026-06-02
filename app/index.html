@@ -113,9 +113,9 @@
        scripts/bump-modules-version.sh (these are static <head> tags loaded
        before the JS var exists, so they can't read it at runtime). Without
        this, the engines were frozen at ?v=1 and never cache-busted on deploy. -->
-  <script src="../shared/mast-ui.js?v=20260601-225950-1940d2d"></script>
-  <script src="../shared/mast-io.js?v=20260601-225950-1940d2d"></script>
-  <script src="../shared/mast-entity.js?v=20260601-225950-1940d2d"></script>
+  <script src="../shared/mast-ui.js?v=20260601-230524-473d630"></script>
+  <script src="../shared/mast-io.js?v=20260601-230524-473d630"></script>
+  <script src="../shared/mast-entity.js?v=20260601-230524-473d630"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Pod-specific runtime config — sets window.MAST_POD_PLATFORM_PROJECT so
@@ -20170,11 +20170,8 @@ var MAST_V2_ROUTE_MAP = {
   'cs-tickets': 'cs-tickets-v2', terms: 'terms-v2', wallet: 'wallet-v2',
   brand: 'brand-v2', homepage: 'homepage-v2', commissions: 'commissions-v2',
   wholesale: 'wholesale-v2', students: 'students-v2', galleries: 'galleries-v2', instructors: 'instructors-v2',
-  contacts: 'contacts-v2'
-  enrollments: 'enrollments-v2'
-  passes: 'passes-v2'
-  resources: 'resources-v2'
-  newsletter: 'newsletter-v2'
+  contacts: 'contacts-v2', enrollments: 'enrollments-v2', passes: 'passes-v2',
+  resources: 'resources-v2', newsletter: 'newsletter-v2'
 };
 function mastLegacyUiOn() {
   try { return localStorage.getItem('mastLegacyUI') !== '0'; } catch (e) { return true; }
@@ -20942,7 +20939,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260601-225950-1940d2d';
+var MAST_MODULES_V = '20260601-230524-473d630';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
