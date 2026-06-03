@@ -1,0 +1,21 @@
+{
+  "app/index.html": {
+    "unboundedList": 27,
+    "onSnapshot": 1
+  },
+  "app/modules/accounting.js": {
+    "onSnapshot": 1
+  },
+  "app/modules/campaigns.js": {
+    "unboundedList": 1
+  },
+  "app/modules/composer.js": {
+    "unboundedList": 2
+  },
+  "app/modules/customers-v2.js": {
+    "unboundedList": 1
+  },
+  "app/modules/marketing-calendar.js": {
+    "unboundedList": 3
+  }
+}
