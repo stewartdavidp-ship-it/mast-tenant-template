@@ -130,6 +130,10 @@
         var emergency = UI.kv([{ k: 'Emergency contact', v: emerg }]);
         // Bespoke student editing (identity, profile, onboarding, checklist) stays on legacy #students.
         var manage = '<div style="margin-top:14px;"><button class="btn btn-secondary" onclick="StudentsV2.classic()">Manage in classic view →</button></div>';
+        // Per-student signed waiver link (anti-forge, audit 2026-06-01 P2): mints a
+        // tokened link bound to THIS student via generateWaiverLink. Signing it
+        // flips only this student; a tokenless submission is create-new-only.
+        var waiverLinkBtn = '<div style="margin-top:12px;"><button class="btn btn-secondary" onclick="StudentsV2.copyWaiverLink(\'' + esc(s._key) + '\')">🔗 Copy waiver link</button> <span class="mu-sub">Signed link tied to this student — send it to them to sign.</span></div>';
 
         // Clearances — active + expired, with cleared-by / expiry.
         var clr = clearancesOf(s);
@@ -170,7 +174,7 @@
 
         return tiles + tabsBar +
           '<div class="mu-pane" data-pane="ov">' +
-            UI.card('Profile', profile) + UI.card('Onboarding', onboarding) + UI.card('Emergency contact', emergency + manage) + '</div>' +
+            UI.card('Profile', profile) + UI.card('Onboarding', onboarding + waiverLinkBtn) + UI.card('Emergency contact', emergency + manage) + '</div>' +
           '<div class="mu-pane" data-pane="clearances" hidden>' +
             UI.cardTable('Clearances (' + activeClearances(s).length + ' active · ' + clr.length + ' total)', clearancesBody) + '</div>' +
           '<div class="mu-pane" data-pane="documents" hidden>' +
@@ -261,6 +265,27 @@
     classic: function () {
       if (typeof navigateToClassic === 'function') navigateToClassic('students');
       else if (typeof navigateTo === 'function') navigateTo('students');
+    },
+    // Mint + copy a signed per-student waiver link (anti-forge, audit 2026-06-01
+    // P2). Calls the admin-gated generateWaiverLink CF; the returned URL carries
+    // an HMAC token bound to studentId so submitWaiverSignature flips only that
+    // student. The browser can't hold the signing key, so minting is server-side.
+    copyWaiverLink: function (id) {
+      var tid = (window.MastDB && MastDB.tenantId && MastDB.tenantId()) || window.TENANT_ID || '';
+      if (window.showToast) showToast('Generating waiver link…');
+      return firebase.functions().httpsCallable('generateWaiverLink')({ tenantId: tid, studentId: id })
+        .then(function (res) {
+          var url = res && res.data && res.data.url;
+          if (!url) throw new Error('No link returned');
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            return navigator.clipboard.writeText(url).then(function () { if (window.showToast) showToast('Per-student waiver link copied'); });
+          }
+          if (typeof mastCopyFallback === 'function') mastCopyFallback('Copy this waiver link', url);
+        })
+        .catch(function (err) {
+          var msg = (err && (err.message || (err.details && err.details.message))) || 'Failed to generate link';
+          if (window.showToast) showToast('Could not generate waiver link: ' + msg, true);
+        });
     },
     exportCsv: function () { return MastEntity.exportRows('students-v2', visibleRows(), V2.statusFilter); }
   };
