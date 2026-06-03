@@ -1,0 +1,8 @@
+{
+  "app/index.html": {
+    "piiConsole": 6
+  },
+  "app/modules/customer-service.js": {
+    "piiConsole": 1
+  }
+}

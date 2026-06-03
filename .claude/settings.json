@@ -34,6 +34,24 @@
             "command": "[ ! -f \"$CLAUDE_PROJECT_DIR/scripts/lint-rbac.js\" ] || node \"$CLAUDE_PROJECT_DIR/scripts/lint-rbac.js\" >&2 || exit 2",
             "timeout": 10,
             "statusMessage": "RBAC coverage guard"
+          },
+          {
+            "type": "command",
+            "command": "[ ! -f \"$CLAUDE_PROJECT_DIR/scripts/lint-no-debug-pii-console.js\" ] || node \"$CLAUDE_PROJECT_DIR/scripts/lint-no-debug-pii-console.js\" >&2 || exit 2",
+            "timeout": 10,
+            "statusMessage": "debug/PII console ratchet"
+          },
+          {
+            "type": "command",
+            "command": "[ ! -f \"$CLAUDE_PROJECT_DIR/scripts/lint-no-hardcoded-ids.js\" ] || node \"$CLAUDE_PROJECT_DIR/scripts/lint-no-hardcoded-ids.js\" >&2 || exit 2",
+            "timeout": 10,
+            "statusMessage": "hardcoded-ids ratchet"
+          },
+          {
+            "type": "command",
+            "command": "[ ! -f \"$CLAUDE_PROJECT_DIR/scripts/lint-unbounded-read.js\" ] || node \"$CLAUDE_PROJECT_DIR/scripts/lint-unbounded-read.js\" >&2 || exit 2",
+            "timeout": 10,
+            "statusMessage": "unbounded-read ratchet"
           }
         ]
       }
