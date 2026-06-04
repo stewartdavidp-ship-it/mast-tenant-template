@@ -19,13 +19,22 @@ name: CI lint
 # font-size lint is now BLOCKING again — any rem value outside the 7-scale
 # (0.72/0.78/0.85/0.9/1.0/1.15/1.6) fails the build. Hex-color lint remains
 # advisory pending its own cleanup pass.
+#
+# CI cost (ci-actions-cost-reduction.md): dropped the redundant `push:[main]`
+# trigger — every change already runs this lint on its PR (the branch-protection
+# merge gate), so re-running it on the identical merged commit was pure waste
+# (this was the single biggest GitHub Actions consumer). Mirrors the same change
+# made to mast-architecture's Build Check. Added `concurrency` to cancel
+# superseded PR runs (safe — a lint run, not a deploy).
 
 on:
-  push:
-    branches: ["main"]
   pull_request:
     branches: ["main"]
   workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
