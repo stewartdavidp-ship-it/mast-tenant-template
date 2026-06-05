@@ -6802,6 +6802,32 @@
     } catch (e) { return { ok: false, error: (e && e.message) || 'Failed' }; }
   }
 
+  // Bind a variant's image to product.images[imageIndex] (or clear, with
+  // imageIndex < 0 / null → variant inherits the product hero). Mirrors the
+  // legacy bindVariantImage data model (variant.imageIndex), fresh-read +
+  // identity-by-variant-id, written live (a photo binding is operational).
+  async function bridgeSetVariantImageIndex(pid, variantId, imageIndex) {
+    try {
+      var variants = await MastDB.get('public/products/' + pid + '/variants');
+      if (!Array.isArray(variants)) return { ok: false, error: 'Product has no variants' };
+      var slot = -1;
+      for (var i = 0; i < variants.length; i++) {
+        var vid = (variants[i] && variants[i].id) || ('v' + i); // mirror products-v2 realVariants id
+        if (vid === variantId) { slot = i; break; }
+      }
+      if (slot < 0) return { ok: false, error: 'Variant not found' };
+      var next = variants.slice();
+      next[slot] = Object.assign({}, next[slot]);
+      if (typeof imageIndex === 'number' && imageIndex >= 0) next[slot].imageIndex = imageIndex;
+      else delete next[slot].imageIndex;
+      await MastDB.set('public/products/' + pid + '/variants', next);
+      await MastDB.set('public/products/' + pid + '/updatedAt', new Date().toISOString());
+      var p = findProduct(pid); if (p) p.variants = next;
+      MastAdmin.writeAudit('update', 'products', pid);
+      return { ok: true, variants: next, imageIndex: (typeof imageIndex === 'number' && imageIndex >= 0) ? imageIndex : null };
+    } catch (e) { return { ok: false, error: (e && e.message) || 'Failed' }; }
+  }
+
   // Remove the image identified by URL (fresh-read; index-safe).
   async function bridgeRemoveProductImage(pid, url) {
     try {
@@ -6830,7 +6856,9 @@
     addImage: function (pid, file) { return bridgeAddProductImage(pid, file); },
     setImages: function (pid, images, imageIds) { return bridgeSetProductImages(pid, images, imageIds); },
     makeImagePrimary: function (pid, url) { return bridgeMakeImagePrimary(pid, url); },
-    removeImage: function (pid, url) { return bridgeRemoveProductImage(pid, url); }
+    removeImage: function (pid, url) { return bridgeRemoveProductImage(pid, url); },
+    // Bind a variant to one of the product's images (imageIndex), or clear (<0).
+    setVariantImageIndex: function (pid, variantId, imageIndex) { return bridgeSetVariantImageIndex(pid, variantId, imageIndex); }
   };
 
 })();

@@ -46,6 +46,18 @@
   }
   function price(p) { return N.moneyVal(p, 'priceCents', 'price'); }
   function firstImage(p) { return (Array.isArray(p.images) && p.images.length) ? p.images[0] : ''; }
+  // A variant's image is a BINDING into the product's gallery: variant.imageIndex
+  // (canonical model — matches legacy bindVariantImage). Absent / -1 → the variant
+  // inherits the product's primary image.
+  function variantHasOwnImage(v) { return !!(v && typeof v.imageIndex === 'number' && v.imageIndex >= 0); }
+  function variantImageSrc(p, v) {
+    var imgs = Array.isArray(p.images) ? p.images : [];
+    if (variantHasOwnImage(v) && v.imageIndex < imgs.length) {
+      var im = imgs[v.imageIndex];
+      return (typeof im === 'string') ? im : (im && im.url) || firstImage(p);
+    }
+    return firstImage(p);
+  }
   function stamp(p, id) { p._key = id || p.pid || p._key; p._title = p.name || ('Product ' + (p._key || '')); return p; }
 
   function variantLabel(v) {
@@ -408,9 +420,9 @@
         var tabs = [{ key: 'v-pricing', label: 'Pricing' }, { key: 'v-recipe', label: 'Recipe' }, { key: 'v-channels', label: 'Channels' }, { key: 'v-inventory', label: 'Inventory' }, { key: 'v-image', label: 'Image' }];
         function pane(key, html, active) { return '<div class="mu-pane" data-pane="' + key + '"' + (active ? '' : ' hidden') + '>' + html + '</div>'; }
         var ctx = '<div class="pv2-pnote">A variant uses the Default’s values for anything it doesn’t set itself. It has no lifecycle of its own — it follows the product.</div>';
-        // Header strip: variant image (its own if set, else the product's) +
-        // the variant switcher pill (current = this variant).
-        var vimg = (v.image || v.imageUrl) || firstImage(p);
+        // Header strip: variant image (its own binding if set, else the product's
+        // primary) + the variant switcher pill (current = this variant).
+        var vimg = variantImageSrc(p, v);
         return headerStrip(p, vimg, (p.name || 'Variant') + ' — ' + variantLabel(v), v.id) + UU.stickyHead(tiles, UU.paneTabsBar(tabs, 'v-pricing')) +
           pane('v-pricing', UU.card('Pricing', row('Retail price', N.money(variantPrice(p, v)) || '—', ov ? 'custom for this variant' : 'same as Default', ov, 'Set a custom price') + row('SKU', esc(v.sku || '—'), v.sku ? 'set for this variant' : 'uses the Default', !!v.sku, 'Set a SKU')) + ctx, true) +
           pane('v-recipe', UU.card('Recipe', row('Recipe', 'Product recipe', 'shared with the product', false, 'Give it its own recipe')) + '<div class="pv2-pnote">This variant uses the product’s recipe. Give it its own only if it’s actually made differently.</div>') +
@@ -421,10 +433,35 @@
             { k: 'Reorder at', v: (v.reorderAt != null ? String(v.reorderAt) : '—') }
           ]) + '<div style="margin-top:10px;"><button class="btn btn-secondary btn-small" onclick="ProductsV2.editVariantTodo()">Set this variant’s stock</button></div>' +
             '<div class="pv2-pnote">Each variant tracks its <strong>own</strong> stock — inventory is never shared with or inherited from the Default.</div>')) +
-          pane('v-image', UU.card('Image', row('Image', 'Product image', 'same as the product', false, 'Set a variant image')));
+          pane('v-image', variantImagePane(UU, p, v));
       }
     }
   });
+  // Variant Image pane: a variant's image is BOUND from the product's gallery
+  // (not uploaded). Pick one of the product's images to give this variant its own,
+  // or fall back to the product's primary. Light in-pane selection (the heavy
+  // multi-image management lives in the product's image drill SO).
+  function variantImagePane(UU, p, v) {
+    var pid = p._key || p.pid;
+    var imgs = Array.isArray(p.images) ? p.images : [];
+    var resolve = function (im) { return (typeof im === 'string') ? im : (im && im.url) || ''; };
+    if (!imgs.length) {
+      return UU.card('Image · this variant', '<div style="text-align:center;padding:20px 16px;color:var(--warm-gray);font-size:0.9rem;">This product has no images yet. Add images on the product’s Image tab, then bind one to this variant here.</div>');
+    }
+    var own = variantHasOwnImage(v);
+    var curIdx = own ? v.imageIndex : -1;
+    var grid = '<div class="pv2-imggrid">' + imgs.map(function (im, i) {
+      var url = resolve(im); if (!url) return '';
+      var sel = i === curIdx;
+      var badge = sel ? '<span class="pv2-imgbadge">This variant</span>'
+        : (i === 0 && !own ? '<span class="pv2-imgbadge pv2-imgbadge-muted">Product default</span>' : '');
+      return '<div class="pv2-imgcellwrap"><button class="pv2-imgcell pv2-imgpick' + (sel ? ' on' : '') + '" style="background-image:url(' + esc(url) + ');" title="Bind image ' + (i + 1) + ' to this variant" onclick="ProductsV2.setVariantImage(\'' + esc(pid) + '\',\'' + esc(v.id) + '\',' + i + ')">' + badge + '</button></div>';
+    }).join('') + '</div>';
+    var note = own
+      ? '<div class="pv2-pnote">This variant uses image #' + (curIdx + 1) + '. <button class="btn btn-secondary btn-small" onclick="ProductsV2.setVariantImage(\'' + esc(pid) + '\',\'' + esc(v.id) + '\',-1)">Use product default</button></div>'
+      : '<div class="pv2-pnote">This variant uses the product’s primary image. Click one above to give it its own.</div>';
+    return UU.card('Image · this variant', grid + note);
+  }
 
   // ════════════════ Entity: a recipe (stacked SO, drilled from the product) ════════════════
   // The "tab summary → edit opens its own full-size SO → Back collapses to the
@@ -520,8 +557,7 @@
     if (vid) {
       var v = realVariants(p).filter(function (x) { return x.id === vid; })[0];
       label += ' — ' + variantLabel(v || { combo: {} });
-      var vimg = v && (v.image || v.imageUrl);
-      if (vimg) { var fi = imgs.indexOf(vimg); if (fi >= 0) focus = fi; else { imgs.unshift(vimg); focus = 0; } }
+      if (variantHasOwnImage(v) && v.imageIndex < imgs.length) focus = v.imageIndex;
     }
     if (focusUrl) { var fu = imgs.indexOf(focusUrl); if (fu >= 0) focus = fu; }
     return { _key: id, _title: label + ' · Images', product: p, images: imgs, focus: focus };
@@ -635,6 +671,8 @@
       '.pv2-imgcellwrap{display:flex;flex-direction:column;gap:6px;}',
       '.pv2-imgcell{position:relative;aspect-ratio:1;border-radius:10px;background-size:cover;background-position:center;border:1px solid var(--border);}',
       '.pv2-imgbadge{position:absolute;top:6px;left:6px;background:var(--teal);color:white;font-size:0.72rem;font-weight:600;padding:3px 8px;border-radius:6px;letter-spacing:.04em;}',
+      '.pv2-imgbadge-muted{background:var(--warm-gray);}',
+      '.pv2-imgpick{cursor:pointer;padding:0;width:100%;} .pv2-imgpick:hover{box-shadow:0 0 0 2px var(--amber);} .pv2-imgpick.on{box-shadow:0 0 0 3px var(--teal);}',
       '.pv2-imgacts{display:flex;gap:4px;flex-wrap:wrap;}',
       '.pv2-pnote{font-size:0.78rem;color:var(--warm-gray);margin-top:6px;} .pv2-temp{font-size:0.72rem;color:var(--warm-gray);margin-left:8px;}',
       '.pv2-inh{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--border);font-size:0.9rem;} .pv2-inh:last-child{border-bottom:0;}',
@@ -728,6 +766,17 @@
     openVariant: function (key) { var rec = buildVariantRecord(key); if (rec) MastEntity.openRecord('product-variant-v2', rec, 'read'); },
     addVariant: function (id) { var p = V2.byId[id]; MastAdmin.showToast('Add variant for "' + (p ? p.name : id) + '" — write flow (inherits the Default) lands in P4.'); },
     editVariantTodo: function () { MastAdmin.showToast('Per-variant override editing lands in P4.'); },
+    // Bind a variant to product.images[idx] (idx<0 → clear, use product default).
+    setVariantImage: function (pid, variantId, idx) {
+      if (!window.MakerProductBridge) { if (window.MastAdmin && MastAdmin.loadModule) MastAdmin.loadModule('maker'); MastAdmin.showToast('Still loading…'); return; }
+      Promise.resolve(window.MakerProductBridge.setVariantImageIndex(pid, variantId, idx)).then(function (res) {
+        if (!res || !res.ok) { MastAdmin.showToast('Failed: ' + ((res && res.error) || 'unknown'), true); return; }
+        var rec = V2.byId[pid]; if (rec) rec.variants = res.variants; // keep parent/list cache fresh
+        var vr = buildVariantRecord(pid + '::' + variantId);
+        if (vr) MastEntity.openRecord('product-variant-v2', vr, 'read', true); // re-render in place
+        MastAdmin.showToast(idx >= 0 ? 'Variant image set' : 'Variant image cleared');
+      }, function (e) { console.error('[products-v2] setVariantImage', e); MastAdmin.showToast('Failed', true); });
+    },
     // ── Info tab edit (P4 pilot) ──────────────────────────────────────
     editInfo: function (pid) { V2.editInfo = pid; rerenderInfoPane(pid); },
     cancelInfo: function (pid) { V2.editInfo = null; rerenderInfoPane(pid); },
