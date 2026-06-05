@@ -6,7 +6,7 @@ Source-of-truth counts for the admin app, generated from the code so docs
 cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 
 - **Core shell:** `app/index.html` — **58,639** lines
-- **Feature modules:** **94** files in `app/modules/` (**87** routed), **106,267** lines combined
+- **Feature modules:** **94** files in `app/modules/` (**87** routed), **106,472** lines combined
 
 | Module file | Lines | Routes |
 |---|---:|---|
@@ -17,7 +17,7 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/audit.js` | 1,717 | audit |
 | `modules/blog-v2.js` | 329 | blog-v2 |
 | `modules/blog.js` | 2,333 | blog |
-| `modules/book.js` | 5,998 | book, book-detail, enrollments, instructors, instructor-detail, resources, resource-detail, passes, pass-detail, calendar, book-reports |
+| `modules/book.js` | 6,073 | book, book-detail, enrollments, instructors, instructor-detail, resources, resource-detail, passes, pass-detail, calendar, book-reports |
 | `modules/brand-v2.js` | 101 | brand-v2 |
 | `modules/brand.js` | 582 | brand |
 | `modules/calendar-v2.js` | 119 | calendar-v2 |
@@ -26,7 +26,7 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/cart.js` | 1,392 | wallet, gift-cards, loyalty, membership |
 | `modules/channels-v2.js` | 382 | channels-v2 |
 | `modules/channels.js` | 2,797 | channels |
-| `modules/classes-v2.js` | 339 | classes-v2 |
+| `modules/classes-v2.js` | 469 | classes-v2 |
 | `modules/commission-terms.js` | 317 | commission-terms |
 | `modules/commissions-v2.js` | 191 | commissions-v2 |
 | `modules/composer.js` | 434 | composer |
