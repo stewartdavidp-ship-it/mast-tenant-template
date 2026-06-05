@@ -152,6 +152,10 @@
     detail: {
       flow: 'products',
       flowModule: 'productsWorkflow',
+      // Pilot the ratified lean guided-record header (clickable step rail +
+      // checklist-into-tabs, no Advance button). Opt-in flag read by
+      // mast-entity._flowRender; orders/commissions stay on renderHeader.
+      guidedHeader: true,
       // Advance runs the REAL promote/launch (gates + confirm + Shopify publish on
       // launch), not the engine's generic status transition — via the additive
       // onFlowAdvance hook. Mirrors maker.js's own onAdvance interception.
@@ -167,10 +171,30 @@
         });
         return true; // handled
       },
-      // Checklist "Go →" targets → the capture (recipe / costing / listing / channels)
-      // deep-links to the legacy define view (temp; native surfaces land per phase).
+      // Checklist "Go →" targets → focus the relevant V2 pane in place (the
+      // record stays open; the requirement points INTO the live record, per the
+      // guided-record model). Spec requirement targets → V2 pane key:
+      //   define-section   (mode-chosen / defined)  → Recipe
+      //   markup-section   (costed)                 → Pricing
+      //   listing-section  (listingReady)           → Image
+      //   channels-section (channeled)              → Channels
+      // capacity-section has no v2 pane yet → fall back to the legacy define
+      // deep-link below.
       onFlowTarget: function (targetId, rec) {
         var pid = rec._key || rec.id || rec.pid;
+        var PANE = {
+          'define-section': 'recipe',
+          'markup-section': 'pricing',
+          'listing-section': 'image',
+          'channels-section': 'channels'
+        };
+        var pane = PANE[targetId];
+        if (pane) {
+          var body = document.getElementById('mastSlideOutBody');
+          var btn = body && body.querySelector('.mu-ptabs button[onclick*="\'' + pane + '\'"]');
+          if (btn) { btn.click(); if (typeof btn.scrollIntoView === 'function') btn.scrollIntoView({ block: 'nearest' }); return true; }
+        }
+        // Fallback: no matching v2 pane (e.g. capacity) → legacy define deep-link.
         ensureMaker(function () {
           if (typeof navigateToClassic === 'function') navigateToClassic('products');
           setTimeout(function () {
