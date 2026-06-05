@@ -298,17 +298,12 @@
     var variantEl = document.getElementById('brandPlacement_' + placementKey + '_variant');
     var heightEl = document.getElementById('brandPlacement_' + placementKey + '_height');
     if (!variantEl) return;
-    try {
-      await MastDB.set('config/brand/logo/placements/' + placementKey, {
-        variantKey: variantEl.value,
-        maxHeight: parseInt(heightEl ? heightEl.value : '48', 10) || 48
-      });
-      await resolvePublicPlacements();
-      showToast('Placement saved: ' + placementKey);
-      await loadBrandData();
-    } catch (err) {
-      showToast('Failed to save placement: ' + err.message, true);
-    }
+    var ok = await window.BrandBridge.savePlacement(placementKey, {
+      variantKey: variantEl.value,
+      maxHeight: parseInt(heightEl ? heightEl.value : '48', 10) || 48
+    });
+    if (ok) { showToast('Placement saved: ' + placementKey); await loadBrandData(); }
+    else { showToast('Failed to save placement', true); }
   };
 
   window.brandGenerateVariant = async function(type) {
@@ -379,44 +374,14 @@
     closeModal();
     showToast('Saving...');
 
-    try {
-      // URL-paste path stores the source URL directly. No re-host through the
-      // uploadImage Cloud Function — re-hosting a URL the user already trusts
-      // adds no value. The image stays at the source URL the user pasted.
-      var formatMatch = url.match(/\.([a-z0-9]+)(?:\?|$)/i);
-      var config = {
-        url: url,
-        storagePath: '',
-        format: formatMatch ? formatMatch[1].toLowerCase() : 'png',
-        hasTransparency: false,
-        dimensions: null
-      };
-
-      if (targetType === 'primary') {
-        // Single writer — MastBrandSync.setLogo writes canonical config/brand/logo/primary
-        // PLUS fans out to all legacy mirror paths (public/config/nav/logoUrl,
-        // platform publicConfig.brandLogoUrl, etc.).
-        if (window.MastBrandSync && typeof window.MastBrandSync.setLogo === 'function') {
-          await window.MastBrandSync.setLogo(config);
-        } else {
-          // Fallback for stale loads where brand-sync.js hasn't loaded
-          config.uploadedAt = new Date().toISOString();
-          await MastDB.set('config/brand/logo/primary', config);
-          await MastDB.set('public/config/nav/logoUrl', uploadResult.url);
-        }
-      } else {
-        config.generatedFrom = 'manual';
-        config.createdAt = new Date().toISOString();
-        await MastDB.set('config/brand/logo/variants/' + targetType, config);
-      }
-
-      await resolvePublicPlacements();
+    var ok = await window.BrandBridge.setLogoFromUrl(targetType, url);
+    if (ok) {
       showToast('Uploaded successfully');
       selectedType = targetType;
       brandLoaded = false;
       await loadBrandData();
-    } catch (err) {
-      showToast('Upload failed: ' + err.message, true);
+    } else {
+      showToast('Upload failed', true);
     }
   };
 
@@ -543,25 +508,146 @@
     var rulesEl = document.getElementById('brandVoiceRules');
     var msg = document.getElementById('brandVoiceSaveMsg');
     if (!taglineEl) return;
-    var payload = {
-      tagline: (taglineEl.value || '').slice(0, 80).trim(),
-      positioningOneLiner: (positioningEl ? positioningEl.value || '' : '').slice(0, 160).trim(),
-      voiceRules: (rulesEl ? rulesEl.value || '' : '').trim(),
-      updatedAt: new Date().toISOString()
-    };
-    try {
-      await MastDB.set('config/brand/voice', payload);
-      // Also mirror tagline + positioning to public/ so storefront-tenant can read them.
-      await MastDB.multiUpdate({
-        'public/config/brand/tagline': payload.tagline || null,
-        'public/config/brand/positioningOneLiner': payload.positioningOneLiner || null
-      });
-      voiceConfig = payload;
+    var payload = await window.BrandBridge.saveVoice({
+      tagline: taglineEl.value || '',
+      positioningOneLiner: positioningEl ? positioningEl.value || '' : '',
+      voiceRules: rulesEl ? rulesEl.value || '' : ''
+    });
+    if (payload) {
       if (msg) { msg.textContent = 'Saved.'; setTimeout(function() { if (msg) msg.textContent = ''; }, 2000); }
       if (typeof showToast === 'function') showToast('Brand voice saved.');
-    } catch (err) {
-      if (typeof showToast === 'function') showToast('Save failed: ' + err.message, true);
+    } else {
+      if (typeof showToast === 'function') showToast('Save failed', true);
       else if (msg) msg.textContent = 'Save failed.';
+    }
+  };
+
+  // ─── Bridge for the brand-v2 redesign twin (flag-gated #brand-v2) ───
+  // The twin delegates voice/logo/variant/placement WRITES here so the
+  // MastBrandSync.setLogo fan-out (canonical config/brand/logo/primary PLUS
+  // public/config/nav/logoUrl + platform publicConfig.brandLogoUrl mirrors), the
+  // public-mirror writes for voice, the variant config shape, and the
+  // resolvePublicPlacements re-derivation stay single-sourced — the twin never
+  // reimplements that logic. These mirror the EXACT writes the legacy DOM
+  // handlers (brandSaveVoice / brandUploadLogoFromUrl / brandSavePlacement /
+  // brandGenerateVariant) make, parameterized by a data object (the legacy
+  // handlers read the modal/panel DOM, so they can't be called directly).
+  // Additive; no behavior change to the legacy #brand surface. Mirrors
+  // window.ContactsBridge / window.MakerMaterialsBridge / window.GiftCardsBridge.
+  //
+  // NOTE on logos: the URL-paste path stores the source URL directly (no re-host
+  // through the uploadImage Cloud Function — re-hosting a URL the user already
+  // trusts adds no value), exactly as the legacy handler did. setLogoFromUrl is
+  // the URL-only capability the legacy surface supports. The uploadImage CF /
+  // Storage write is reachable only via brandPickFromLibrary's image-library
+  // path, which is genuinely library-coupled and stays classic-only.
+  window.BrandBridge = {
+    // Mirrors brandSaveVoice: 80/160-char clamps, config/brand/voice set +
+    // public/config/brand/{tagline,positioningOneLiner} mirror for the storefront
+    // <title>/OG/meta. data: { tagline, positioningOneLiner, voiceRules }.
+    // Returns the saved payload on success, null on failure.
+    saveVoice: async function(data) {
+      data = data || {};
+      var payload = {
+        tagline: (data.tagline || '').slice(0, 80).trim(),
+        positioningOneLiner: (data.positioningOneLiner || '').slice(0, 160).trim(),
+        voiceRules: (data.voiceRules || '').trim(),
+        updatedAt: new Date().toISOString()
+      };
+      try {
+        await MastDB.set('config/brand/voice', payload);
+        await MastDB.multiUpdate({
+          'public/config/brand/tagline': payload.tagline || null,
+          'public/config/brand/positioningOneLiner': payload.positioningOneLiner || null
+        });
+        voiceConfig = payload;
+        return payload;
+      } catch (err) {
+        console.error('[brand] saveVoice', err);
+        return null;
+      }
+    },
+    // Mirrors brandUploadLogoFromUrl: builds the URL-source config (format from
+    // extension), routes primary through MastBrandSync.setLogo (canonical write +
+    // legacy-mirror fan-out) with a stale-load fallback, variants to
+    // config/brand/logo/variants/<type>, then resolvePublicPlacements.
+    // targetType: 'primary' | variant-key. Returns true on success.
+    setLogoFromUrl: async function(targetType, url) {
+      targetType = targetType || 'primary';
+      url = (url || '').trim();
+      if (!url) return false;
+      try {
+        var formatMatch = url.match(/\.([a-z0-9]+)(?:\?|$)/i);
+        var config = {
+          url: url,
+          storagePath: '',
+          format: formatMatch ? formatMatch[1].toLowerCase() : 'png',
+          hasTransparency: false,
+          dimensions: null
+        };
+        if (targetType === 'primary') {
+          if (window.MastBrandSync && typeof window.MastBrandSync.setLogo === 'function') {
+            await window.MastBrandSync.setLogo(config);
+          } else {
+            config.uploadedAt = new Date().toISOString();
+            await MastDB.set('config/brand/logo/primary', config);
+            await MastDB.set('public/config/nav/logoUrl', url);
+          }
+        } else {
+          config.generatedFrom = 'manual';
+          config.createdAt = new Date().toISOString();
+          await MastDB.set('config/brand/logo/variants/' + targetType, config);
+        }
+        await resolvePublicPlacements();
+        return true;
+      } catch (err) {
+        console.error('[brand] setLogoFromUrl', err);
+        return false;
+      }
+    },
+    // Mirrors brandSavePlacement: config/brand/logo/placements/<key> set +
+    // resolvePublicPlacements re-derivation. data: { variantKey, maxHeight }.
+    savePlacement: async function(placementKey, data) {
+      data = data || {};
+      try {
+        await MastDB.set('config/brand/logo/placements/' + placementKey, {
+          variantKey: data.variantKey,
+          maxHeight: parseInt(data.maxHeight, 10) || 48
+        });
+        await resolvePublicPlacements();
+        return true;
+      } catch (err) {
+        console.error('[brand] savePlacement', err);
+        return false;
+      }
+    },
+    // Mirrors brandDeleteVariant's write half (no confirm — the caller confirms):
+    // remove the variant config + repoint any placements that referenced it back
+    // to primary, then resolvePublicPlacements.
+    deleteVariant: async function(type) {
+      try {
+        await MastDB.remove('config/brand/logo/variants/' + type);
+        var placements = (await MastDB.get('config/brand/logo/placements')) || {};
+        for (var key in placements) {
+          if (placements[key] && placements[key].variantKey === type) {
+            await MastDB.set('config/brand/logo/placements/' + key + '/variantKey', 'primary');
+          }
+        }
+        await resolvePublicPlacements();
+        return true;
+      } catch (err) {
+        console.error('[brand] deleteVariant', err);
+        return false;
+      }
+    },
+    // Read-through so the twin can refresh after a write without re-reading the
+    // module's private caches.
+    getConfig: async function() {
+      return {
+        logo: (await MastDB.get('config/brand/logo').catch(function () { return null; })) || null,
+        legacyLogoUrl: (await MastDB.get('public/config/nav/logoUrl').catch(function () { return null; })) || null,
+        voice: (await MastDB.get('config/brand/voice').catch(function () { return null; })) || null
+      };
     }
   };
 
