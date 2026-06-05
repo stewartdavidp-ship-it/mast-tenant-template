@@ -98,14 +98,30 @@
   function headerStrip(p, imgSrc, imgName, currentVid) {
     var pid = p._key || p.pid;
     var drillId = currentVid ? (pid + '::' + currentVid) : pid;
-    // The thumbnail drills into the image slide-out (all the product's images,
-    // this object's image in large focus) — a stacked SO with Back, not a lightbox.
-    var thumb = imgSrc
-      ? '<button class="pv2-hthumb" onclick="MastEntity.drill(\'product-images-v2\',\'' + esc(drillId) + '\')" style="background-image:url(' + esc(imgSrc) + ');" title="View all images"><span class="mu-zoom">⤢</span></button>'
-      : '';
+    var thumb;
+    if (imgSrc) {
+      // The thumbnail drills into the image slide-out (all the product's images,
+      // this object's image in large focus) — a stacked SO with Back, not a lightbox.
+      thumb = '<button class="pv2-hthumb" onclick="MastEntity.drill(\'product-images-v2\',\'' + esc(drillId) + '\')" style="background-image:url(' + esc(imgSrc) + ');" title="View all images"><span class="mu-zoom">⤢</span></button>';
+    } else if (!currentVid) {
+      // No image on the Default → an explicit "+ Upload image" placeholder that
+      // opens the file picker in place (P4 read-item b). Variants don't get it
+      // (a variant's image is bound from the product's gallery, not uploaded here).
+      thumb = '<label class="pv2-hthumb pv2-hthumb-add" title="Upload product image"><input type="file" accept="image/*" style="display:none;" onchange="ProductsV2.uploadImage(\'' + esc(pid) + '\',this)"><span>+ Upload<br>image</span></label>';
+    } else {
+      thumb = '';
+    }
     var sw = variantSwitcherHtml(p, currentVid);
-    if (!thumb && !sw) return '';
-    return '<div style="display:flex;align-items:center;gap:12px;margin:0 0 12px;flex-wrap:wrap;">' + thumb + sw + '</div>';
+    var inner = thumb + sw;
+    // Always render the (id'd) container so a post-upload re-render has a target.
+    return '<div id="pv2HeaderStrip" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;' + (inner ? 'margin:0 0 12px;' : '') + '">' + inner + '</div>';
+  }
+  // Re-render the Default header strip in place after an image upload swaps the
+  // placeholder for a real thumbnail.
+  function rerenderHeaderStrip(pid) {
+    var rec = V2.byId[pid]; if (!rec) return;
+    var el = document.getElementById('pv2HeaderStrip');
+    if (el) el.outerHTML = headerStrip(rec, firstImage(rec), rec.name || 'Product', null);
   }
 
   // ── Maker integration ───────────────────────────────────────────────
@@ -173,10 +189,33 @@
     ]));
   }
   function imagePane(p) {
-    var imgs = Array.isArray(p.images) ? p.images : [];
-    var thumbs = imgs.slice(0, 8).map(function (src) { return '<img class="pv2-galimg" src="' + esc(src) + '" alt="">'; }).join('') || '<span style="color:var(--warm-gray);">No images.</span>';
+    var pid = p._key || p.pid;
+    var imgs = (Array.isArray(p.images) ? p.images : []);
+    var resolve = function (im) { return (typeof im === 'string') ? im : (im && im.url) || ''; };
+    var uploadBtn = '<label class="btn btn-secondary btn-small" style="cursor:pointer;margin:0;"><input type="file" accept="image/*" style="display:none;" onchange="ProductsV2.uploadImage(\'' + esc(pid) + '\',this)">Upload image</label>';
+    var body;
+    if (!imgs.length) {
+      body = '<div style="text-align:center;padding:22px 16px;color:var(--warm-gray);font-size:0.9rem;">No images yet. Upload one — the first image is the product’s primary.</div>';
+    } else {
+      body = '<div class="pv2-imggrid">' + imgs.map(function (im, idx) {
+        var url = resolve(im); if (!url) return '';
+        var badge = idx === 0 ? '<span class="pv2-imgbadge">Primary</span>' : '';
+        var actions = '<div class="pv2-imgacts">' +
+          (idx !== 0 ? '<button class="btn btn-secondary btn-small" onclick="ProductsV2.makePrimary(\'' + esc(pid) + '\',' + idx + ')">Make primary</button>' : '') +
+          '<button class="btn btn-secondary btn-small" onclick="ProductsV2.removeImage(\'' + esc(pid) + '\',' + idx + ')">Remove</button>' +
+          '</div>';
+        return '<div class="pv2-imgcellwrap"><div class="pv2-imgcell" style="background-image:url(' + esc(url) + ');">' + badge + '</div>' + actions + '</div>';
+      }).join('') + '</div>';
+    }
     var d = p.description ? '<div style="font-size:0.85rem;color:var(--warm-gray);line-height:1.55;">' + esc(String(p.description).slice(0, 300)) + '</div>' : '';
-    return U.card('Images (' + imgs.length + ')', '<div style="display:flex;flex-wrap:wrap;">' + thumbs + '</div>') + (d ? U.card('Description', d) : '');
+    return U.card('Images (' + imgs.length + ')', body, { headerRight: uploadBtn }) + (d ? U.card('Description', d) : '');
+  }
+  // Re-render the Image pane in place (after upload / primary / remove).
+  function rerenderImagePane(pid) {
+    var rec = V2.byId[pid]; if (!rec) return;
+    var body = document.getElementById('mastSlideOutBody');
+    var paneEl = body && body.querySelector('.mu-pane[data-pane="image"]');
+    if (paneEl) paneEl.innerHTML = imagePane(rec);
   }
   function infoPane(p) {
     var pid = p._key || p.pid;
@@ -554,6 +593,13 @@
       '.pv2-mk.met{background:color-mix(in srgb,var(--teal) 22%,transparent);color:var(--teal);} .pv2-mk.unmet{background:color-mix(in srgb,var(--amber) 20%,transparent);color:var(--amber);}',
       '.pv2-opt{font-size:0.72rem;text-transform:uppercase;color:var(--warm-gray);margin-left:4px;}',
       '.pv2-galimg{width:84px;height:84px;border-radius:8px;object-fit:cover;border:1px solid var(--border);margin:0 8px 8px 0;}',
+      '.pv2-hthumb-add{display:flex;align-items:center;justify-content:center;text-align:center;border-style:dashed;background:transparent;color:var(--warm-gray);font-size:0.72rem;line-height:1.2;cursor:pointer;}',
+      '.pv2-hthumb-add:hover{box-shadow:0 0 0 2px var(--amber);color:var(--amber);}',
+      '.pv2-imggrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:12px;}',
+      '.pv2-imgcellwrap{display:flex;flex-direction:column;gap:6px;}',
+      '.pv2-imgcell{position:relative;aspect-ratio:1;border-radius:10px;background-size:cover;background-position:center;border:1px solid var(--border);}',
+      '.pv2-imgbadge{position:absolute;top:6px;left:6px;background:var(--teal);color:white;font-size:0.72rem;font-weight:600;padding:3px 8px;border-radius:6px;letter-spacing:.04em;}',
+      '.pv2-imgacts{display:flex;gap:4px;flex-wrap:wrap;}',
       '.pv2-pnote{font-size:0.78rem;color:var(--warm-gray);margin-top:6px;} .pv2-temp{font-size:0.72rem;color:var(--warm-gray);margin-left:8px;}',
       '.pv2-inh{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--border);font-size:0.9rem;} .pv2-inh:last-child{border-bottom:0;}',
       '.pv2-inh .il{color:var(--warm-gray);width:120px;flex-shrink:0;} .pv2-inh .iv{color:var(--text);} .pv2-inh .from{color:var(--warm-gray);font-size:0.78rem;} .pv2-inh .ov{margin-left:auto;}',
@@ -680,6 +726,60 @@
         rerenderInfoPane(pid);
         MastAdmin.showToast(res.staged ? 'Staged ' + res.changed + ' change' + (res.changed === 1 ? '' : 's') + ' (Apply to go live)' : 'Saved');
       }, function (e) { console.error('[products-v2] saveInfo', e); MastAdmin.showToast('Save failed', true); });
+    },
+    // ── Image tab edit (P4) ───────────────────────────────────────────
+    // Shared guard for every image bridge call (the §1.B silent-failure class).
+    uploadImage: function (pid, inputEl) {
+      var file = inputEl && inputEl.files && inputEl.files[0];
+      if (inputEl) inputEl.value = ''; // allow re-selecting the same file later
+      if (!file) return;
+      if (!window.MakerProductBridge) {
+        if (window.MastAdmin && MastAdmin.loadModule) MastAdmin.loadModule('maker');
+        MastAdmin.showToast('Still loading… try again in a moment.');
+        return;
+      }
+      MastAdmin.showToast('Uploading image…');
+      Promise.resolve(window.MakerProductBridge.addImage(pid, file)).then(function (res) {
+        if (!res || !res.ok) { MastAdmin.showToast('Upload failed: ' + ((res && res.error) || 'unknown'), true); return; }
+        var rec = V2.byId[pid]; if (rec) { rec.images = res.images; rec.imageIds = res.imageIds; }
+        rerenderImagePane(pid); rerenderHeaderStrip(pid);
+        MastAdmin.showToast('Image uploaded');
+      }, function (e) { console.error('[products-v2] uploadImage', e); MastAdmin.showToast('Upload failed', true); });
+    },
+    makePrimary: function (pid, idx) {
+      if (!window.MakerProductBridge) { if (window.MastAdmin && MastAdmin.loadModule) MastAdmin.loadModule('maker'); MastAdmin.showToast('Still loading…'); return; }
+      var rec = V2.byId[pid]; if (!rec) return;
+      var images = (Array.isArray(rec.images) ? rec.images : []).slice();
+      var imageIds = (Array.isArray(rec.imageIds) ? rec.imageIds : []).slice();
+      if (idx <= 0 || idx >= images.length) return;
+      images.unshift(images.splice(idx, 1)[0]);
+      if (imageIds.length === (Array.isArray(rec.images) ? rec.images.length : 0)) imageIds.unshift(imageIds.splice(idx, 1)[0]);
+      Promise.resolve(window.MakerProductBridge.setImages(pid, images, imageIds)).then(function (res) {
+        if (!res || !res.ok) { MastAdmin.showToast('Failed: ' + ((res && res.error) || 'unknown'), true); return; }
+        rec.images = res.images; if (res.imageIds) rec.imageIds = res.imageIds;
+        rerenderImagePane(pid); rerenderHeaderStrip(pid);
+        MastAdmin.showToast('Primary image updated');
+      }, function (e) { console.error('[products-v2] makePrimary', e); MastAdmin.showToast('Failed', true); });
+    },
+    removeImage: function (pid, idx) {
+      if (!window.MakerProductBridge) { if (window.MastAdmin && MastAdmin.loadModule) MastAdmin.loadModule('maker'); MastAdmin.showToast('Still loading…'); return; }
+      var rec = V2.byId[pid]; if (!rec) return;
+      function go() {
+        var images = (Array.isArray(rec.images) ? rec.images : []).slice();
+        var imageIds = (Array.isArray(rec.imageIds) ? rec.imageIds : []).slice();
+        if (idx < 0 || idx >= images.length) return;
+        var hadIds = imageIds.length === images.length;
+        images.splice(idx, 1);
+        if (hadIds) imageIds.splice(idx, 1);
+        Promise.resolve(window.MakerProductBridge.setImages(pid, images, hadIds ? imageIds : undefined)).then(function (res) {
+          if (!res || !res.ok) { MastAdmin.showToast('Failed: ' + ((res && res.error) || 'unknown'), true); return; }
+          rec.images = res.images; if (res.imageIds) rec.imageIds = res.imageIds;
+          rerenderImagePane(pid); rerenderHeaderStrip(pid);
+          MastAdmin.showToast('Image removed');
+        }, function (e) { console.error('[products-v2] removeImage', e); MastAdmin.showToast('Failed', true); });
+      }
+      if (window.mastConfirm) Promise.resolve(window.mastConfirm('Remove this image?', { title: 'Remove image', confirmText: 'Remove' })).then(function (ok) { if (ok) go(); });
+      else go();
     },
     // Image SO: click a gallery thumbnail to swap the large focused image.
     focusImage: function (src, btn) {

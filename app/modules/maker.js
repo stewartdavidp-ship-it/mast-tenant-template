@@ -6725,6 +6725,59 @@
     return { ok: true, staged: false, changed: keys.length };
   }
 
+  // Product images. These write LIVE on every status — matching the legacy
+  // uploadProductImage(): swapping a product photo is operational, not a spec
+  // revision (images is technically a revisionable field, but the established
+  // behaviour is a live write, and we preserve it). Persist via the core
+  // MastDB.set primitive (no dependency on legacy DOM rerenders).
+  function bridgeReadImg(im) { return (typeof im === 'string') ? im : (im && im.url) || ''; }
+
+  async function bridgeAddProductImage(pid, file) {
+    if (!file) return { ok: false, error: 'No file' };
+    var base64;
+    try {
+      base64 = await new Promise(function (res, rej) {
+        var r = new FileReader();
+        r.onload = function (e) { res(String(e.target.result).split(',')[1]); };
+        r.onerror = function () { rej(new Error('Could not read file')); };
+        r.readAsDataURL(file);
+      });
+    } catch (e) { return { ok: false, error: e.message }; }
+    try {
+      var authObj = window.auth || (typeof firebase !== 'undefined' && firebase.auth ? firebase.auth() : null);
+      var token = await authObj.currentUser.getIdToken();
+      var resp = await window.callCF('/uploadImage', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+        body: JSON.stringify({ image: base64, tags: [], source: 'admin-upload' })
+      });
+      var result = await resp.json();
+      if (!result.success) return { ok: false, error: result.error || 'Upload failed' };
+      var p = await bridgeEnsureProduct(pid);
+      var images = (p && Array.isArray(p.images)) ? p.images.slice() : [];
+      var imageIds = (p && Array.isArray(p.imageIds)) ? p.imageIds.slice() : [];
+      images.push(result.url);
+      imageIds.push(result.imageId);
+      await MastDB.set('public/products/' + pid + '/images', images);
+      await MastDB.set('public/products/' + pid + '/imageIds', imageIds);
+      if (p) { p.images = images; p.imageIds = imageIds; }
+      MastAdmin.writeAudit('update', 'products', pid);
+      return { ok: true, url: result.url, images: images, imageIds: imageIds };
+    } catch (e) { return { ok: false, error: (e && e.message) || 'Upload failed' }; }
+  }
+
+  // Reorder/remove: caller passes the new images[] (and optional imageIds[]).
+  async function bridgeSetProductImages(pid, images, imageIds) {
+    try {
+      await MastDB.set('public/products/' + pid + '/images', images || []);
+      if (Array.isArray(imageIds)) await MastDB.set('public/products/' + pid + '/imageIds', imageIds);
+      var p = findProduct(pid);
+      if (p) { p.images = images || []; if (Array.isArray(imageIds)) p.imageIds = imageIds; }
+      MastAdmin.writeAudit('update', 'products', pid);
+      return { ok: true, images: images || [], imageIds: imageIds };
+    } catch (e) { return { ok: false, error: (e && e.message) || 'Save failed' }; }
+  }
+
   window.MakerProductBridge = {
     // Write a {field: value, ...} patch of top-level product fields. Returns
     // { ok, staged, changed } — staged===true means it went to a pending
@@ -6732,7 +6785,11 @@
     setFields: function (pid, patch) { return bridgeSetProductFields(pid, patch); },
     setField: function (pid, field, value) { var o = {}; o[field] = value; return bridgeSetProductFields(pid, o); },
     // Whether edits to this product stage as a revision (Active) vs write live.
-    isGuarded: function (pid) { return isProductGuarded(findProduct(pid)); }
+    isGuarded: function (pid) { return isProductGuarded(findProduct(pid)); },
+    // Images (live writes; see note above). addImage uploads via the existing
+    // /uploadImage CF; setImages persists a reordered/pruned images[] array.
+    addImage: function (pid, file) { return bridgeAddProductImage(pid, file); },
+    setImages: function (pid, images, imageIds) { return bridgeSetProductImages(pid, images, imageIds); }
   };
 
 })();
