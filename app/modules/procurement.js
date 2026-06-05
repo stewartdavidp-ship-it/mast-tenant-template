@@ -1302,35 +1302,29 @@
     if (!receiveDraft || !receiveDraft.lines[idx]) return;
     receiveDraft.lines[idx][field] = value;
   }
-  async function saveReceipt() {
-    if (!receiveDraft) return;
-    var po = purchaseOrdersData[receiveDraft.poId];
-    if (!po) return;
-    // Read DOM (single-source for invoice / receivedAt / addl)
-    var receivedAt = ((document.getElementById('rrReceived') || {}).value || receiveDraft.receivedAt) + 'T00:00:00.000Z';
-    var invoiceRef = ((document.getElementById('rrInvoice') || {}).value || '').trim() || null;
-    var addlLabel = ((document.getElementById('rrAddlLabel') || {}).value || '').trim();
-    var addlAmount = parseFloat((document.getElementById('rrAddlAmount') || {}).value || '');
-    // Collect non-zero lines
-    var receiveLines = [];
-    (po.lines || []).forEach(function(l, idx) {
-      var d = receiveDraft.lines[idx];
-      var qty = Number(d.qtyReceivedNow) || 0;
-      if (!(qty > 0)) return;
-      var unitOverride = parseFloat(d.unitCostHomeCurrency);
-      var unitCost = (!isNaN(unitOverride) && unitOverride > 0) ? unitOverride : (Number(l.unitCost) || 0);
-      receiveLines.push({
-        poLineId: l.lineId,
-        qtyReceivedNow: qty,
-        unitCostHomeCurrency: unitCost,
-        lotNumber: (d.lotNumber || '').trim() || null,
-        _line: l
-      });
-    });
-    if (receiveLines.length === 0) {
-      if (typeof showToast === 'function') showToast('Enter at least one qty > 0', true);
-      return;
-    }
+  // ── receipt write core (split out of saveReceipt) ─────────────────────
+  //
+  // saveReceipt() reads the receive-form DOM, then calls _buildReceiptWrite
+  // (pure: builds the multiUpdate + receipt/lots/PO-status/price-history) and
+  // _commitReceiptWrite (atomic write + QBO best-effort + local cache refresh).
+  // ProcurementBridge.receive() calls the SAME two cores from a data object,
+  // so the receive flow has ONE write path (mirrors saveStudent→buildStudentFields
+  // /writeStudent and saveGallery→_writeGalleryRecord). Domain logic — receipt
+  // shape, lot materialization, PO-status derivation, AP handoff, supplier
+  // priceHistory — lives ONLY here and is byte-for-byte the original saveReceipt
+  // body; the only change is the source of `receivedAt/invoiceRef/addl*/receiveLines`
+  // (DOM vs object). No business-logic change.
+
+  // input: { receivedAt (ISO string), invoiceRef (string|null), addlLabel (string),
+  //          addlAmount (number|NaN), receiveLines: [{poLineId, qtyReceivedNow,
+  //          unitCostHomeCurrency, lotNumber (string|null), _line }] }
+  // returns { receiptId, receipt, updates, generatedLots, nextLines, nextStatus }
+  function _buildReceiptWrite(po, input) {
+    var receivedAt = input.receivedAt;
+    var invoiceRef = input.invoiceRef;
+    var addlLabel = input.addlLabel;
+    var addlAmount = input.addlAmount;
+    var receiveLines = input.receiveLines;
 
     var now = new Date().toISOString();
     var receiptId = MastDB.newKey('admin/purchaseReceipts');
@@ -1456,30 +1450,72 @@
       });
     });
 
+    return { receiptId: receiptId, receipt: receipt, updates: updates, generatedLots: generatedLots, nextLines: nextLines, nextStatus: nextStatus, now: now };
+  }
+
+  // Atomic write + QBO best-effort + local-cache refresh. UNCHANGED from the
+  // original saveReceipt tail except: throws on failure (callers own the toast)
+  // and does NOT touch the receive-form modal / re-render (those are caller UI).
+  async function _commitReceiptWrite(po, built) {
+    var updates = built.updates, receipt = built.receipt, receiptId = built.receiptId, generatedLots = built.generatedLots;
+    await MastDB.multiUpdate(updates);
+    // W1 final wire (Accounting Idea -OtKxQEhTDampnjEBjvS): new AP bill
+    // (purchaseReceipt) → QBO push (best-effort).
     try {
-      await MastDB.multiUpdate(updates);
-      // W1 final wire (Accounting Idea -OtKxQEhTDampnjEBjvS): new AP bill
-      // (purchaseReceipt) → QBO push (best-effort).
-      try {
-        if (typeof firebase !== 'undefined' && firebase.functions) {
-          var _trigger = firebase.functions().httpsCallable('triggerQboPush');
-          _trigger({ tid: MastDB.tenantId(), entityType: 'apBill', mastId: receiptId })
-            .catch(function(e) { console.warn('[qbo-push] apBill trigger failed:', e && e.message); });
-        }
-      } catch (_e) { console.warn('[qbo-push] apBill trigger error:', _e && _e.message); }
-      // Local cache refresh
-      purchaseReceiptsData[receiptId] = receipt;
-      generatedLots.forEach(function(g) {
-        var lot = updates[(g.kind === 'material' ? 'admin/materialLots' : 'admin/productLots') + '/' + g.lotId];
-        if (g.kind === 'material') materialLotsData[g.lotId] = lot;
-        else productLotsData[g.lotId] = lot;
+      if (typeof firebase !== 'undefined' && firebase.functions) {
+        var _trigger = firebase.functions().httpsCallable('triggerQboPush');
+        _trigger({ tid: MastDB.tenantId(), entityType: 'apBill', mastId: receiptId })
+          .catch(function(e) { console.warn('[qbo-push] apBill trigger failed:', e && e.message); });
+      }
+    } catch (_e) { console.warn('[qbo-push] apBill trigger error:', _e && _e.message); }
+    // Local cache refresh
+    purchaseReceiptsData[receiptId] = receipt;
+    generatedLots.forEach(function(g) {
+      var lot = updates[(g.kind === 'material' ? 'admin/materialLots' : 'admin/productLots') + '/' + g.lotId];
+      if (g.kind === 'material') materialLotsData[g.lotId] = lot;
+      else productLotsData[g.lotId] = lot;
+    });
+    po.lines = built.nextLines;
+    po.status = built.nextStatus;
+    po.updatedAt = built.now;
+    return built;
+  }
+
+  async function saveReceipt() {
+    if (!receiveDraft) return;
+    var po = purchaseOrdersData[receiveDraft.poId];
+    if (!po) return;
+    // Read DOM (single-source for invoice / receivedAt / addl)
+    var receivedAt = ((document.getElementById('rrReceived') || {}).value || receiveDraft.receivedAt) + 'T00:00:00.000Z';
+    var invoiceRef = ((document.getElementById('rrInvoice') || {}).value || '').trim() || null;
+    var addlLabel = ((document.getElementById('rrAddlLabel') || {}).value || '').trim();
+    var addlAmount = parseFloat((document.getElementById('rrAddlAmount') || {}).value || '');
+    // Collect non-zero lines (resolve unit-cost override → number here, in the DOM reader)
+    var receiveLines = [];
+    (po.lines || []).forEach(function(l, idx) {
+      var d = receiveDraft.lines[idx];
+      var qty = Number(d.qtyReceivedNow) || 0;
+      if (!(qty > 0)) return;
+      var unitOverride = parseFloat(d.unitCostHomeCurrency);
+      var unitCost = (!isNaN(unitOverride) && unitOverride > 0) ? unitOverride : (Number(l.unitCost) || 0);
+      receiveLines.push({
+        poLineId: l.lineId,
+        qtyReceivedNow: qty,
+        unitCostHomeCurrency: unitCost,
+        lotNumber: (d.lotNumber || '').trim() || null,
+        _line: l
       });
-      po.lines = nextLines;
-      po.status = nextStatus;
-      po.updatedAt = now;
+    });
+    if (receiveLines.length === 0) {
+      if (typeof showToast === 'function') showToast('Enter at least one qty > 0', true);
+      return;
+    }
+    var built = _buildReceiptWrite(po, { receivedAt: receivedAt, invoiceRef: invoiceRef, addlLabel: addlLabel, addlAmount: addlAmount, receiveLines: receiveLines });
+    try {
+      await _commitReceiptWrite(po, built);
       receiveDraft = null;
       closeModal();
-      if (typeof showToast === 'function') showToast('Receipt recorded · ' + generatedLots.length + ' lot' + (generatedLots.length === 1 ? '' : 's') + ' created');
+      if (typeof showToast === 'function') showToast('Receipt recorded · ' + built.generatedLots.length + ' lot' + (built.generatedLots.length === 1 ? '' : 's') + ' created');
       render();
     } catch (err) {
       if (typeof showToast === 'function') showToast('Failed to record receipt: ' + (err && err.message), true);
@@ -1716,6 +1752,74 @@
   window.procurementSaveReceipt       = saveReceipt;
 
   window.procurementApplyLandedCosts  = applyLandedCosts;
+
+  // ============================================================
+  // ProcurementBridge — data-object entry to the SAME write cores
+  // ============================================================
+  //
+  // The procurement-v2 redesign twin (flag-gated #procurement-v2) is read-focused
+  // and must NOT reimplement the receive/cancel domain logic. This bridge exposes
+  // those write actions parameterized by data (the legacy handlers read the form
+  // DOM, so they can't be called with an object). It mirrors window.StudentsBridge
+  // / window.GalleriesBridge: thin, additive, delegates to the shared cores
+  // (_buildReceiptWrite + _commitReceiptWrite for receive; cancelPo for cancel).
+  // It changes NO behavior on the legacy surface.
+
+  function _ensureLoaded() {
+    // The write cores compute against the in-memory caches (purchaseReceiptsData
+    // for PO-status rollup, productSuppliersData for priceHistory). When the twin
+    // drives the flow, legacy loadAll() may not have run — ensure it has so the
+    // derived writes are computed against real data, exactly like the legacy path.
+    return dataLoaded ? Promise.resolve() : Promise.resolve(loadAll());
+  }
+
+  window.ProcurementBridge = {
+    // receive(poId, lines, meta?) → resolves to the new receiptId.
+    //   lines: [{ poLineId, qtyReceivedNow, unitCostOverride?, lotNumber? }]
+    //   meta:  { receivedAt? (YYYY-MM-DD), invoiceRef?, addlLabel?, addlAmount? }
+    // Normalizes the same way the receive-form DOM reader (saveReceipt) does:
+    // unit-cost override > 0 wins else the PO line's unitCost; date → ISO; then
+    // runs the shared build + commit cores. No business-logic fork.
+    receive: async function (poId, lines, meta) {
+      await _ensureLoaded();
+      var po = purchaseOrdersData[poId];
+      if (!po) throw new Error('Purchase order not found');
+      meta = meta || {};
+      var dateStr = (meta.receivedAt || new Date().toISOString().slice(0, 10));
+      var receivedAt = dateStr + 'T00:00:00.000Z';
+      var invoiceRef = (meta.invoiceRef || '').trim() || null;
+      var addlLabel = (meta.addlLabel || '').trim();
+      var addlAmount = parseFloat(meta.addlAmount);
+      var byLineId = {};
+      (po.lines || []).forEach(function (l) { byLineId[l.lineId] = l; });
+      var receiveLines = [];
+      (lines || []).forEach(function (d) {
+        var l = byLineId[d.poLineId];
+        if (!l) return;
+        var qty = Number(d.qtyReceivedNow) || 0;
+        if (!(qty > 0)) return;
+        var unitOverride = parseFloat(d.unitCostOverride);
+        var unitCost = (!isNaN(unitOverride) && unitOverride > 0) ? unitOverride : (Number(l.unitCost) || 0);
+        receiveLines.push({
+          poLineId: l.lineId,
+          qtyReceivedNow: qty,
+          unitCostHomeCurrency: unitCost,
+          lotNumber: (d.lotNumber || '').trim() || null,
+          _line: l
+        });
+      });
+      if (receiveLines.length === 0) throw new Error('Enter at least one qty > 0');
+      var built = _buildReceiptWrite(po, { receivedAt: receivedAt, invoiceRef: invoiceRef, addlLabel: addlLabel, addlAmount: addlAmount, receiveLines: receiveLines });
+      await _commitReceiptWrite(po, built);
+      return built.receiptId;
+    },
+    // cancel(poId) → wraps the existing cancelPo (confirm + status:cancelled
+    // write). cancelPo owns its own mastConfirm + cache update + legacy render;
+    // the twin reloads its own data afterward.
+    cancel: function (poId) {
+      return _ensureLoaded().then(function () { return cancelPo(poId); });
+    }
+  };
 
   // ============================================================
   // MastNavStack restorer + module registration

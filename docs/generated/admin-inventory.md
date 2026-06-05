@@ -6,7 +6,7 @@ Source-of-truth counts for the admin app, generated from the code so docs
 cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 
 - **Core shell:** `app/index.html` — **58,639** lines
-- **Feature modules:** **94** files in `app/modules/` (**87** routed), **106,472** lines combined
+- **Feature modules:** **94** files in `app/modules/` (**87** routed), **106,976** lines combined
 
 | Module file | Lines | Routes |
 |---|---:|---|
@@ -23,7 +23,7 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/calendar-v2.js` | 119 | calendar-v2 |
 | `modules/campaigns-v2.js` | 385 | campaigns-v2 |
 | `modules/campaigns.js` | 527 | campaigns |
-| `modules/cart.js` | 1,392 | wallet, gift-cards, loyalty, membership |
+| `modules/cart.js` | 1,526 | wallet, gift-cards, loyalty, membership |
 | `modules/channels-v2.js` | 382 | channels-v2 |
 | `modules/channels.js` | 2,797 | channels |
 | `modules/classes-v2.js` | 469 | classes-v2 |
@@ -53,7 +53,7 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/financials.js` | 350 | — |
 | `modules/fulfillment.js` | 1,524 | pack, ship, fulfillment |
 | `modules/galleries-v2.js` | 399 | galleries-v2 |
-| `modules/gift-cards-v2.js` | 215 | gift-cards-v2 |
+| `modules/gift-cards-v2.js` | 293 | gift-cards-v2 |
 | `modules/homepage-v2.js` | 125 | homepage-v2 |
 | `modules/homepage.js` | 681 | homepage |
 | `modules/inquiries-v2.js` | 225 | inquiries-v2 |
@@ -64,15 +64,15 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/mapping.js` | 1,768 | mapping |
 | `modules/marketing-calendar-v2.js` | 216 | marketing-calendar-v2 |
 | `modules/marketing-calendar.js` | 270 | marketing-calendar |
-| `modules/materials-v2.js` | 286 | materials-v2 |
+| `modules/materials-v2.js` | 337 | materials-v2 |
 | `modules/membership-v2.js` | 237 | membership-v2 |
 | `modules/newsletter-v2.js` | 289 | newsletter-v2 |
 | `modules/newsletter.js` | 2,336 | newsletter |
 | `modules/orders-v2.js` | 222 | orders-v2 |
 | `modules/orders.js` | 6,262 | orders, commissions, rma |
 | `modules/passes-v2.js` | 423 | passes-v2 |
-| `modules/procurement-v2.js` | 230 | procurement-v2 |
-| `modules/procurement.js` | 1,979 | procurement |
+| `modules/procurement-v2.js` | 367 | procurement-v2 |
+| `modules/procurement.js` | 2,083 | procurement |
 | `modules/production.js` | 3,553 | jobs, production, stories, forecast |
 | `modules/products-v2.js` | 439 | products-v2 |
 | `modules/promotions-v2.js` | 389 | promotions-v2 |

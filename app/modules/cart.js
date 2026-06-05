@@ -685,6 +685,140 @@
     }
   };
 
+  // ---- Bridge for the gift-cards-v2 redesign twin (flag-gated #gift-cards-v2) ----
+  // The twin delegates manual issuance + promo-credit creation here so the
+  // gift-card write, the client-side code generation, the 'issued' / promotion
+  // object shape, the permission gate, and the writeAudit call stay single-
+  // sourced — the twin never reimplements that logic. Additive; no behavior
+  // change to the legacy #gift-cards surface. These mirror the EXACT client
+  // writes _gcIssueCard() / _gcIssuePromo() make, parameterized by a data object
+  // (the legacy handlers read the modal DOM, so they can't be called directly).
+  // Mirrors window.ContactsBridge / window.MakerMaterialsBridge.
+  window.GiftCardsBridge = {
+    // Mirrors _gcIssueCard: hasPermission('giftCards','issue') gate, 16-char
+    // CHARSET code in XXXX-XXXX-XXXX-XXXX form, 2-year expiry, 'issued' shape
+    // with isManualIssue, MastDB.giftCards.set(code, gcData) +
+    // writeAudit('create','gift-card',code). data: { amountVal($), email, note }.
+    issue: async function(data) {
+      if (!hasPermission('giftCards', 'issue')) { showToast('You do not have permission to issue gift cards.', true); return null; }
+      var amountVal = parseFloat(data && data.amountVal);
+      if (!amountVal || amountVal <= 0) { showToast('Enter a valid amount.', true); return null; }
+      var amountCents = Math.round(amountVal * 100);
+      var email = ((data && data.email) || '').trim();
+      var note = ((data && data.note) || '').trim();
+      var currentUser = firebase.auth().currentUser;
+      var adminUid = currentUser ? currentUser.uid : 'admin';
+
+      var CHARSET = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
+      var raw = '';
+      for (var i = 0; i < 16; i++) {
+        raw += CHARSET[Math.floor(Math.random() * CHARSET.length)];
+      }
+      var code = raw.slice(0, 4) + '-' + raw.slice(4, 8) + '-' + raw.slice(8, 12) + '-' + raw.slice(12, 16);
+
+      var now = new Date().toISOString();
+      var expiresAt = new Date();
+      expiresAt.setFullYear(expiresAt.getFullYear() + 2);
+
+      var gcData = {
+        code: code,
+        amountCents: amountCents,
+        balanceCents: amountCents,
+        purchasedBy: adminUid,
+        recipientEmail: email,
+        senderMessage: '',
+        senderName: '',
+        orderId: null,
+        orderNumber: null,
+        productId: null,
+        status: 'issued',
+        issuedAt: now,
+        expiresAt: expiresAt.toISOString(),
+        claimedBy: null,
+        claimedAt: null,
+        adminNote: note,
+        isManualIssue: true
+      };
+
+      await MastDB.giftCards.set(code, gcData);
+      writeAudit('create', 'gift-card', code);
+      showToast('Gift card ' + code + ' issued for ' + formatMoney(amountCents));
+      return { code: code, gcData: gcData };
+    },
+    // Mirrors _gcIssuePromo: hasPermission('wallet','grantCredit') gate, custom-
+    // code OR random-code generation (custom: dup-check via giftCards.get, format
+    // XXXX-XXXX… when >8 chars), N-day expiry, promotion shape with isPromotion +
+    // promotionExpiryDays, MastDB.giftCards.set(code, gcData) +
+    // writeAudit('create','gift-card-promo',code). data: { amountVal($), days,
+    // customCode, email, note }.
+    issuePromo: async function(data) {
+      if (!hasPermission('wallet', 'grantCredit')) { showToast('You do not have permission to grant promo credit.', true); return null; }
+      var amountVal = parseFloat(data && data.amountVal);
+      if (!amountVal || amountVal <= 0) { showToast('Enter a valid amount.', true); return null; }
+      var amountCents = Math.round(amountVal * 100);
+      var days = parseInt(data && data.days, 10) || 30;
+      var customCode = ((data && data.customCode) || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+      var email = ((data && data.email) || '').trim();
+      var note = ((data && data.note) || '').trim();
+      var currentUser = firebase.auth().currentUser;
+      var adminUid = currentUser ? currentUser.uid : 'admin';
+
+      var code;
+      if (customCode && customCode.length >= 4) {
+        if (customCode.length <= 8) {
+          code = customCode;
+        } else {
+          code = customCode.match(/.{1,4}/g).join('-');
+        }
+        try {
+          var existing = await MastDB.giftCards.get(code);
+          if (existing) {
+            showToast('Code "' + code + '" already exists. Choose a different one.', true);
+            return null;
+          }
+        } catch (e) { /* ok */ }
+      } else {
+        var CHARSET = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
+        var raw = '';
+        for (var i = 0; i < 16; i++) {
+          raw += CHARSET[Math.floor(Math.random() * CHARSET.length)];
+        }
+        code = raw.slice(0, 4) + '-' + raw.slice(4, 8) + '-' + raw.slice(8, 12) + '-' + raw.slice(12, 16);
+      }
+
+      var now = new Date().toISOString();
+      var expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + days);
+
+      var gcData = {
+        code: code,
+        amountCents: amountCents,
+        balanceCents: amountCents,
+        purchasedBy: adminUid,
+        recipientEmail: email,
+        senderMessage: '',
+        senderName: '',
+        orderId: null,
+        orderNumber: null,
+        productId: null,
+        status: 'issued',
+        issuedAt: now,
+        expiresAt: expiresAt.toISOString(),
+        claimedBy: null,
+        claimedAt: null,
+        adminNote: note,
+        isManualIssue: true,
+        isPromotion: true,
+        promotionExpiryDays: days
+      };
+
+      await MastDB.giftCards.set(code, gcData);
+      writeAudit('create', 'gift-card-promo', code);
+      showToast('Promo credit ' + code + ' created for ' + formatMoney(amountCents) + ' (expires in ' + days + ' days)');
+      return { code: code, gcData: gcData };
+    }
+  };
+
   // ---- Gift Card Detail Modal ----
 
   window._gcViewDetail = function(code) {

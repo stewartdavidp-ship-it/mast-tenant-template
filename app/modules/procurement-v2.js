@@ -12,11 +12,17 @@
  * submit/cancel/close actions. No exit-checklists, no guarded advance → it is a
  * Faceted Record, NOT Process/MastFlow.
  *
- * Read-focused: the Receive / Submit / Cancel / Close actions carry heavy domain
- * logic (receipt + inventory-lot + supplier price-history writes) coupled to the
- * legacy pane — those stay on legacy #procurement. This twin re-hosts the VIEW
- * (PO list + line items + receiving progress + receipt history). Flag-gated
- * (?ui=1) at #procurement-v2, side-by-side; never touches procurement.js.
+ * Receive / Cancel are now NATIVE here. The heavy domain logic (receipt +
+ * inventory-lot + PO-status + supplier price-history writes) was split out of
+ * legacy saveReceipt into shared cores (_buildReceiptWrite + _commitReceiptWrite)
+ * and exposed as window.ProcurementBridge.{receive,cancel}; this twin captures
+ * per-line received quantities and delegates to that ONE write path — it never
+ * reimplements the domain logic. (No Submit/Close: legacy procurement.js has no
+ * write that sets 'submitted'/'closed' — they are inbound-only data states.)
+ *
+ * Still legacy-only (ProcurementV2.classic escape hatch): New PO, Apply Landed
+ * Costs, Vendors, and Lots management. Flag-gated (?ui=1) at #procurement-v2,
+ * side-by-side. Writes go ONLY through the Bridge — no direct MastDB write here.
  */
 (function () {
   'use strict';
@@ -33,6 +39,21 @@
   var U = window.MastUI, N = U.Num, esc = U._esc;
   var STATUS_TONE = { draft: 'neutral', submitted: 'info', partially_received: 'amber', received: 'success', closed: 'neutral', cancelled: 'danger' };
   function statusLabel(s) { return s === 'partially_received' ? 'partial' : (s || 'draft'); }
+  function canEdit() { return typeof window.can === 'function' ? window.can('procurement', 'edit') : true; }
+  function outstanding(l) { return (Number(l.qtyOrdered) || 0) - (Number(l.qtyReceived) || 0); }
+  // Mirror legacy renderPoExpand gating (procurement.js): Receive when there is
+  // an open status with outstanding qty; Cancel when status is draft/submitted/
+  // partially_received. (No Submit/Close: legacy procurement.js has NO write that
+  // sets 'submitted'/'closed' — those are inbound-only data states.)
+  function canReceivePo(po) {
+    if (!canEdit()) return false;
+    var open = po.status === 'submitted' || po.status === 'partially_received' || po.status === 'draft';
+    return open && (po.lines || []).some(function (l) { return outstanding(l) > 0; });
+  }
+  function canCancelPo(po) {
+    if (!canEdit()) return false;
+    return po.status === 'draft' || po.status === 'submitted' || po.status === 'partially_received';
+  }
 
   // helpers (mirror procurement.js)
   function poTotal(po) {
@@ -95,7 +116,13 @@
           { k: 'Total', v: N.money(poTotal(po)) || '$0.00' },
           { k: 'Received', v: esc(recvSummary(po)) }
         ]);
-        var manage = '<div style="margin-top:14px;"><button class="btn btn-secondary" onclick="ProcurementV2.classic()">Record receipt / manage in classic view →</button></div>';
+        // Native actions — delegate to ProcurementBridge (the shared write cores
+        // in procurement.js). No classic-view crutch. Status-gated like legacy.
+        var actionBtns = '';
+        if (canReceivePo(po)) actionBtns += '<button class="btn btn-primary btn-small" onclick="ProcurementV2.receive(\'' + esc(po.poId) + '\')">Record receipt</button> ';
+        if (canCancelPo(po)) actionBtns += '<button class="btn btn-secondary btn-small" style="color:var(--danger);" onclick="ProcurementV2.cancel(\'' + esc(po.poId) + '\')">Cancel PO</button>';
+        if (!actionBtns) actionBtns = '<span class="mu-sub">No actions available for this status.</span>';
+        var manage = '<div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">' + actionBtns + '</div>';
 
         var lines = po.lines || [];
         var linesTable = lines.length ? UI.relatedTable([
@@ -134,7 +161,7 @@
   var OPEN = { draft: true, submitted: true, partially_received: true };
 
   function load() {
-    Promise.all([
+    return Promise.all([
       Promise.resolve(MastDB.get('admin/purchaseOrders')),
       Promise.resolve(MastDB.get('admin/vendors')),
       Promise.resolve(MastDB.get('admin/purchaseReceipts'))
@@ -220,9 +247,119 @@
         if (rec) MastEntity.openRecord('procurement-v2', rec, 'read');
       });
     },
+    // navigateToClassic — retained ONLY as an escape hatch. Everything in this
+    // module's PO flow (view + receive + cancel) is native; there is no classic
+    // procurement surface a user must fall back to for the PO lifecycle.
     classic: function () { if (typeof navigateTo === 'function') navigateTo('procurement'); },
-    exportCsv: function () { return MastEntity.exportRows('procurement-v2', visibleRows(), 'all'); }
+    exportCsv: function () { return MastEntity.exportRows('procurement-v2', visibleRows(), 'all'); },
+
+    // ── Receive capture (delegates to ProcurementBridge.receive) ──────────
+    receive: function (id) {
+      var po = V2.byId[id];
+      if (!po || !canReceivePo(po)) return;
+      openReceiveForm(po);
+    },
+    submitReceive: function (poId) {
+      var body = document.getElementById('mastSlideOutBody');
+      if (!body) return false;
+      var dateEl = body.querySelector('[data-rv="receivedAt"]');
+      var invEl = body.querySelector('[data-rv="invoiceRef"]');
+      var addlLabelEl = body.querySelector('[data-rv="addlLabel"]');
+      var addlAmountEl = body.querySelector('[data-rv="addlAmount"]');
+      var lines = [];
+      body.querySelectorAll('[data-poline]').forEach(function (row) {
+        var poLineId = row.getAttribute('data-poline');
+        var qtyEl = row.querySelector('[data-rl="qty"]');
+        var costEl = row.querySelector('[data-rl="cost"]');
+        var lotEl = row.querySelector('[data-rl="lot"]');
+        lines.push({
+          poLineId: poLineId,
+          qtyReceivedNow: parseFloat(qtyEl && qtyEl.value) || 0,
+          unitCostOverride: costEl && costEl.value,
+          lotNumber: lotEl && lotEl.value
+        });
+      });
+      var meta = {
+        receivedAt: (dateEl && dateEl.value) || undefined,
+        invoiceRef: invEl && invEl.value,
+        addlLabel: addlLabelEl && addlLabelEl.value,
+        addlAmount: addlAmountEl && addlAmountEl.value
+      };
+      // Drive the whole exit ourselves (write → force-close the receive form →
+      // reload + re-open the PO on fresh data), then return false so the engine's
+      // create-mode _save handler does NOTHING further (no duplicate toast/close).
+      window.ProcurementBridge.receive(poId, lines, meta).then(function (receiptId) {
+        if (window.showToast) showToast('Receipt recorded');
+        U.slideOut.requestCloseForce();
+        return reloadThenOpen(poId);
+      }).catch(function (e) {
+        if (window.showToast) showToast('Failed to record receipt: ' + (e && e.message || e), true);
+      });
+      return false;
+    },
+
+    // ── Cancel (delegates to ProcurementBridge.cancel → legacy cancelPo) ───
+    cancel: function (id) {
+      var po = V2.byId[id];
+      if (!po || !canCancelPo(po)) return;
+      // cancelPo owns its own mastConfirm; reload + re-open the PO after.
+      window.ProcurementBridge.cancel(id).then(function () { reloadThenOpen(id); });
+    }
   };
+
+  // Reload v2 data from Firebase, then re-open the PO slide-out on fresh data so
+  // the Receipts/Lines facets + status reflect the write. (The Bridge mutated the
+  // LEGACY caches; this twin keeps its own — so reload rather than read across.)
+  function reloadThenOpen(poId) {
+    return load().then(function () {
+      var rec = V2.byId[poId];
+      if (rec) MastEntity.openRecord('procurement-v2', rec, 'read');
+    });
+  }
+
+  // Receive form — a per-line capture surface on the shared slide-out. Each open
+  // PO line → received-qty / unit-cost-override / lot inputs (mirrors the legacy
+  // Record Receipt modal). Composed with MastUI.card; no hand-rolled chrome.
+  function openReceiveForm(po) {
+    var open = (po.lines || []).filter(function (l) { return outstanding(l) > 0; });
+    var rows = open.map(function (l) {
+      var label = l.descriptionSnapshot || l.targetId || '—';
+      var out = outstanding(l);
+      return '<div data-poline="' + esc(l.lineId) + '" style="display:grid;grid-template-columns:2fr 0.8fr 1fr 1fr 1.2fr;gap:8px;padding:8px 0;border-top:1px solid var(--cream-dark,rgba(127,127,127,.2));align-items:center;font-size:0.85rem;">' +
+        '<span>' + esc(label) + (l.kind ? ' <span class="mu-sub">· ' + esc(l.kind) + '</span>' : '') + '</span>' +
+        '<span style="font-family:monospace;">' + out + (l.unitOfMeasure ? ' ' + esc(l.unitOfMeasure) : '') + '</span>' +
+        '<input class="form-input" data-rl="qty" type="number" min="0" max="' + out + '" step="0.01" value="' + out + '" style="font-size:0.85rem;">' +
+        '<input class="form-input" data-rl="cost" type="number" min="0" step="0.01" placeholder="' + (Number(l.unitCost) || 0).toFixed(2) + '" style="font-size:0.85rem;">' +
+        '<input class="form-input" data-rl="lot" type="text" placeholder="LOT-…" style="font-size:0.85rem;">' +
+      '</div>';
+    }).join('');
+    var head = '<div style="display:grid;grid-template-columns:2fr 0.8fr 1fr 1fr 1.2fr;gap:8px;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.05em;font-weight:600;color:var(--warm-gray);padding-bottom:4px;">' +
+      '<span>Target</span><span>Outstanding</span><span>Receive now</span><span>Unit cost (override)</span><span>Lot #</span></div>';
+    var today = new Date().toISOString().slice(0, 10);
+    var metaRow = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">' +
+        '<label style="font-size:0.78rem;color:var(--warm-gray);">Received date<input class="form-input" data-rv="receivedAt" type="date" value="' + today + '" style="font-size:0.9rem;margin-top:2px;"></label>' +
+        '<label style="font-size:0.78rem;color:var(--warm-gray);">Vendor invoice #<input class="form-input" data-rv="invoiceRef" type="text" style="font-size:0.9rem;margin-top:2px;"></label>' +
+      '</div>';
+    var addlRow = '<div style="display:grid;grid-template-columns:1fr 0.8fr;gap:10px;margin-top:12px;">' +
+        '<label style="font-size:0.78rem;color:var(--warm-gray);">Additional cost label (e.g. freight)<input class="form-input" data-rv="addlLabel" type="text" style="font-size:0.9rem;margin-top:2px;"></label>' +
+        '<label style="font-size:0.78rem;color:var(--warm-gray);">Amount<input class="form-input" data-rv="addlAmount" type="number" min="0" step="0.01" style="font-size:0.9rem;margin-top:2px;"></label>' +
+      '</div>' +
+      '<div class="mu-sub" style="margin-top:4px;">Captured here; allocate via the classic "Apply landed" once received.</div>';
+    var bodyHtml = U.card('Record receipt — ' + esc(po.poNumber || String(po.poId).slice(0, 8)),
+      metaRow + head + rows + addlRow);
+    U.slideOut.open({
+      id: 'receive-' + po.poId,
+      title: 'Record receipt',
+      subtitle: esc(po._vendor || ''),
+      size: 'lg',
+      mode: 'create',
+      deepLink: false,
+      createLabel: 'Record',
+      render: function () { return bodyHtml; },
+      isDirty: function () { return true; },
+      onSave: function () { return window.ProcurementV2.submitReceive(po.poId); }
+    });
+  }
 
   MastAdmin.registerModule('procurement-v2', {
     routes: { 'procurement-v2': { tab: 'procurementV2Tab', setup: function () { ensureTab(); render(); load(); } } }
