@@ -459,7 +459,7 @@
       var sel = i === curIdx;
       var badge = sel ? '<span class="pv2-imgbadge">✓ This variant</span>'
         : (i === 0 && !own ? '<span class="pv2-imgbadge pv2-imgbadge-muted">Product default</span>' : '');
-      var cap = sel ? '<div style="font-size:0.72rem;color:var(--amber);text-align:center;font-weight:600;">✓ Selected</div>'
+      var cap = sel ? '<div style="font-size:0.72rem;color:var(--amber,goldenrod);text-align:center;font-weight:600;">✓ Selected</div>'
         : '<div style="font-size:0.72rem;color:var(--warm-gray);text-align:center;">Image #' + (i + 1) + '</div>';
       return '<div class="pv2-imgcellwrap"><button class="pv2-imgcell pv2-imgpick' + (sel ? ' on' : '') + '" style="background-image:url(' + esc(url) + ');" title="Use image ' + (i + 1) + ' for this variant" onclick="ProductsV2.setVariantImage(\'' + esc(pid) + '\',\'' + esc(v.id) + '\',' + i + ')">' + badge + '</button>' + cap + '</div>';
     }).join('') + '</div>';
@@ -649,12 +649,12 @@
       '.pv2-vitem[aria-current="true"]{color:var(--teal);font-weight:600;}',
       '.vchk{display:inline-block;width:12px;color:var(--teal);font-size:0.72rem;flex-shrink:0;}',
       '.pv2-hthumb{width:64px;height:64px;border-radius:9px;border:1px solid var(--border);background-size:cover;background-position:center;padding:0;position:relative;cursor:zoom-in;flex:0 0 64px;}',
-      '.pv2-hthumb:hover{box-shadow:0 0 0 2px var(--amber);} .pv2-hthumb .mu-zoom{position:absolute;right:3px;bottom:3px;width:16px;height:16px;border-radius:4px;background:rgba(0,0,0,.55);color:white;font-size:0.72rem;display:flex;align-items:center;justify-content:center;opacity:0;} .pv2-hthumb:hover .mu-zoom{opacity:1;}',
+      '.pv2-hthumb:hover{box-shadow:0 0 0 2px var(--amber,goldenrod);} .pv2-hthumb .mu-zoom{position:absolute;right:3px;bottom:3px;width:16px;height:16px;border-radius:4px;background:rgba(0,0,0,.55);color:white;font-size:0.72rem;display:flex;align-items:center;justify-content:center;opacity:0;} .pv2-hthumb:hover .mu-zoom{opacity:1;}',
       '.pv2-imgfocus{display:flex;align-items:center;justify-content:center;background:color-mix(in srgb,black 22%,transparent);border-radius:10px;padding:12px;}',
       '.pv2-imgfocus img{max-width:100%;max-height:min(58vh,440px);object-fit:contain;border-radius:8px;}',
       '.pv2-imgstrip{display:flex;flex-wrap:wrap;gap:8px;}',
       '.pv2-imgthumb{width:62px;height:62px;border-radius:8px;overflow:hidden;border:2px solid transparent;background:none;padding:0;cursor:pointer;}',
-      '.pv2-imgthumb.on{border-color:var(--amber);} .pv2-imgthumb img{width:100%;height:100%;object-fit:cover;}',
+      '.pv2-imgthumb.on{border-color:var(--amber,goldenrod);} .pv2-imgthumb img{width:100%;height:100%;object-fit:cover;}',
       '.pv2-list{border:1px solid var(--border);border-radius:12px;overflow:hidden;}',
       '.pv2-row{display:grid;grid-template-columns:26px 44px 1fr 120px 96px 96px;gap:12px;align-items:center;padding:11px 14px;border-bottom:1px solid var(--border);cursor:pointer;font-size:0.9rem;}',
       '.pv2-row:last-child{border-bottom:0;} .pv2-row:hover{background:color-mix(in srgb,var(--amber) 6%,transparent);}',
@@ -680,14 +680,17 @@
       '.pv2-opt{font-size:0.72rem;text-transform:uppercase;color:var(--warm-gray);margin-left:4px;}',
       '.pv2-galimg{width:84px;height:84px;border-radius:8px;object-fit:cover;border:1px solid var(--border);margin:0 8px 8px 0;}',
       '.pv2-hthumb-add{display:flex;align-items:center;justify-content:center;text-align:center;border-style:dashed;background:transparent;color:var(--warm-gray);font-size:0.72rem;line-height:1.2;cursor:pointer;}',
-      '.pv2-hthumb-add:hover{box-shadow:0 0 0 2px var(--amber);color:var(--amber);}',
+      '.pv2-hthumb-add:hover{box-shadow:0 0 0 2px var(--amber,goldenrod);color:var(--amber);}',
       '.pv2-imggrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:12px;}',
       '.pv2-imgcellwrap{display:flex;flex-direction:column;gap:6px;}',
       '.pv2-imgcell{position:relative;aspect-ratio:1;border-radius:10px;background-size:cover;background-position:center;border:1px solid var(--border);}',
-      '.pv2-imgbadge{position:absolute;top:6px;left:6px;background:var(--teal);color:white;font-size:0.72rem;font-weight:600;padding:3px 8px;border-radius:6px;letter-spacing:.04em;}',
-      '.pv2-imgbadge-muted{background:var(--warm-gray);}',
-      '.pv2-imgpick{cursor:pointer;padding:0;width:100%;transition:box-shadow .12s,opacity .12s,transform .12s;} .pv2-imgpick:hover{box-shadow:0 0 0 2px var(--amber);}',
-      '.pv2-imgpick.on{box-shadow:0 0 0 4px var(--amber);transform:scale(1.03);position:relative;z-index:1;}',
+      // Keyword fallbacks: --teal/--amber/--warm-gray aren't defined in the
+      // slide-out scope, so these vars resolve empty here — without a fallback the
+      // badge bg goes transparent and the highlight ring drops to none.
+      '.pv2-imgbadge{position:absolute;top:6px;left:6px;background:var(--teal,teal);color:white;font-size:0.72rem;font-weight:600;padding:3px 8px;border-radius:6px;letter-spacing:.04em;}',
+      '.pv2-imgbadge-muted{background:var(--warm-gray,gray);}',
+      '.pv2-imgpick{cursor:pointer;padding:0;width:100%;transition:box-shadow .12s,opacity .12s,transform .12s;} .pv2-imgpick:hover{box-shadow:0 0 0 2px var(--amber,goldenrod);}',
+      '.pv2-imgpick.on{box-shadow:0 0 0 4px var(--amber,goldenrod);transform:scale(1.03);position:relative;z-index:1;}',
       // When a variant image is chosen, fade the rest so the selected one pops.
       '.pv2-imggrid-sel .pv2-imgpick:not(.on){opacity:.45;} .pv2-imggrid-sel .pv2-imgpick:not(.on):hover{opacity:1;}',
       '.pv2-imgacts{display:flex;gap:4px;flex-wrap:wrap;}',
