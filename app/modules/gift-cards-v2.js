@@ -15,12 +15,20 @@
  * ASSIGNED attribute — no governed lifecycle → Faceted Record, NOT Process/
  * MastFlow. A single Overview facet is correct here; the record is flat.
  *
- * Read-focused: issuing a card (manual issue, promo credit) and the gift-card
- * config are storefront-coupled and stay single-sourced on legacy #gift-cards
- * via a "manage in classic view" link. This twin re-hosts the VIEW only — no
- * onSave, no edit form, no issue/config tooling.
+ * Issuance is NATIVE here: two header actions — "Issue gift card" and "Promo
+ * credit" — open a focused create form in the slide-out (kind-switched
+ * editRender). onSave delegates to window.GiftCardsBridge.issue / .issuePromo
+ * (added in cart.js), thin shims that replicate the EXACT legacy _gcIssueCard /
+ * _gcIssuePromo writes (client-side code gen, the 'issued' / promotion object
+ * shape, the permission gate, MastDB.giftCards.set + writeAudit) — this twin
+ * reimplements NO issuance logic and adds NO direct MastDB write. Amounts are
+ * entered in DOLLARS; the Bridge converts to amountCents = Math.round($*100).
+ * The gift-card SETTINGS (denominations, enable toggle) are a different surface
+ * already covered by wallet-v2, so the classic-view crutch is gone — every
+ * capability this twin needs (view + issue + promo) now has a V2 home.
  *
- * Flag-gated (?ui=1) at #gift-cards-v2, side-by-side; never touches cart.js.
+ * Flag-gated (?ui=1) at #gift-cards-v2, side-by-side; reads issuance logic from
+ * cart.js's GiftCardsBridge but never edits cart.js behavior.
  *
  * Data: issued cards live at admin/giftCards (MastDB.giftCards → that path);
  * the most reliable one-shot is MastDB.get('admin/giftCards') (keyed object,
@@ -109,18 +117,20 @@
         var noteBody = gc.adminNote
           ? '<div style="font-size:0.85rem;color:var(--warm-gray);line-height:1.5;white-space:pre-wrap;">' + esc(gc.adminNote) + '</div>'
           : '<span class="mu-sub">No note.</span>';
-        // Issuing + gift-card config are storefront-coupled → classic #gift-cards.
-        var manage = '<div style="margin-top:14px;"><button class="btn btn-secondary" onclick="GiftCardsV2.classic()">Manage in classic view →</button></div>';
 
         return tiles + tabsBar +
           '<div class="mu-pane" data-pane="ov">' +
             UI.card('Gift card', card) +
             UI.card('People & order', people) +
-            UI.card('Note', noteBody + manage) +
+            UI.card('Note', noteBody) +
           '</div>';
       }
     }
-    // No onSave → no Edit button (issuing/config stays on legacy #gift-cards).
+    // No schema onSave → an ISSUED card has no Edit affordance (matching legacy
+    // _gcViewDetail, which is read-only; there is no legacy per-card edit write
+    // to delegate to). Creation (issue / promo) is a separate create-mode slide-
+    // out driven by GiftCardsV2.issue() / .promo() — see below — so the read
+    // detail stays Edit-free while issuance is still native.
   });
 
   // ── module state + data ─────────────────────────────────────────────
@@ -138,6 +148,13 @@
       V2.loaded = true; render();
     }).catch(function (e) { console.error('[gift-cards-v2] load', e); render(); });
   }
+  function reloadSoon() { V2.loaded = false; setTimeout(load, 250); }   // let the write settle, then re-read admin/giftCards
+
+  // Can the operator issue? Mirror the engine-first RBAC convention (coupons-v2:
+  // can('<route>','edit')). The authoritative gate still lives in the Bridge
+  // (hasPermission giftCards/issue + wallet/grantCredit); this just hides the
+  // header actions when the operator can't issue, so they never see a dead form.
+  function canIssue() { return typeof window.can === 'function' ? window.can('gift-cards', 'edit') : true; }
 
   function visibleRows() {
     var rows = V2.rows;
@@ -175,7 +192,10 @@
       U.pageHeader({
         title: 'Gift cards',
         count: N.count(V2.rows.length) + ' card' + (V2.rows.length === 1 ? '' : 's'),
-        actionsHtml: '<button class="btn btn-secondary" onclick="GiftCardsV2.exportCsv()">↓ Export</button>'
+        actionsHtml:
+          (canIssue() ? '<button class="btn btn-primary" onclick="GiftCardsV2.issue()">+ Issue gift card</button>' +
+            '<button class="btn btn-secondary" onclick="GiftCardsV2.promo()">+ Promo credit</button>' : '') +
+          '<button class="btn btn-secondary" onclick="GiftCardsV2.exportCsv()">↓ Export</button>'
       }) +
       '<div style="display:flex;gap:6px;flex-wrap:wrap;margin:12px 0;">' + filters + '</div>' +
       '<div style="margin:14px 0;"><input class="form-input" placeholder="Search code, buyer or recipient…" value="' + esc(V2.q) +
@@ -183,7 +203,7 @@
       MastEntity.renderList('gift-cards-v2', {
         rows: visibleRows(), sortKey: V2.sortKey, sortDir: V2.sortDir,
         onSortFnName: 'GiftCardsV2.sort', onRowClickFnName: 'GiftCardsV2.open',
-        empty: { title: 'No gift cards', message: V2.loaded ? 'Gift cards appear here when purchased or issued in the classic Gift Cards view.' : 'Loading…' }
+        empty: { title: 'No gift cards', message: V2.loaded ? 'Gift cards appear here when purchased at checkout or issued with “Issue gift card”.' : 'Loading…' }
       });
   }
 
@@ -200,14 +220,72 @@
         if (rec) MastEntity.openRecord('gift-cards-v2', rec, 'read');
       });
     },
-    // Issuing + gift-card config → classic Gift Cards view. Use navigateToClassic
-    // so the V2 route remap doesn't loop us back to this twin.
-    classic: function () {
-      if (typeof navigateToClassic === 'function') navigateToClassic('gift-cards');
-      else if (typeof navigateTo === 'function') navigateTo('gift-cards');
-    },
+    // Native issuance — a create-mode slide-out (the SAME MastUI.slideOut the
+    // Entity Engine drives) whose onSave delegates to GiftCardsBridge in cart.js.
+    // Driven here (not via the engine schema's onSave) so an ISSUED card keeps
+    // no Edit affordance. 'issue' mirrors _gcOpenManualIssue; 'promo' mirrors
+    // _gcOpenPromoCredit. Amounts in DOLLARS (the Bridge does Math.round($*100)).
+    issue: function () { openCreate('issue'); },
+    promo: function () { openCreate('promo'); },
     exportCsv: function () { return MastEntity.exportRows('gift-cards-v2', visibleRows(), 'all'); }
   };
+
+  // Build the create form (engine form primitives only — form-group/-label/-input,
+  // mu-editbar/-editpill, mu-sub). kind: 'issue' | 'promo'.
+  function createFormHtml(kind) {
+    function fg(label, inner, hint) {
+      return '<div class="form-group"><label class="form-label">' + esc(label) + '</label>' + inner +
+        (hint ? '<div class="mu-sub" style="margin-top:2px;">' + esc(hint) + '</div>' : '') + '</div>';
+    }
+    var bar = '<div class="mu-editbar"><span class="mu-editpill">NEW</span>' +
+      (kind === 'promo' ? 'New promotional credit' : 'Issue a gift card') + '</div>';
+    if (kind === 'promo') {
+      return bar +
+        fg('Amount ($)', '<input class="form-input" type="number" id="gcV2PromoAmount" min="1" step="0.01" placeholder="10.00" style="width:100%;">') +
+        fg('Expires in (days)', '<input class="form-input" type="number" id="gcV2PromoDays" min="1" max="365" value="30" style="width:100%;">', 'Short expiration encourages quick redemption.') +
+        fg('Promo code (optional)', '<input class="form-input" id="gcV2PromoCode" placeholder="Auto-generated if blank" style="width:100%;text-transform:uppercase;">', 'Custom promo code for marketing (e.g. WELCOME10). Leave blank for random.') +
+        fg('Recipient email', '<input class="form-input" type="email" id="gcV2PromoEmail" placeholder="customer@example.com" style="width:100%;">') +
+        fg('Note (internal)', '<input class="form-input" id="gcV2PromoNote" placeholder="e.g. Welcome bonus for new subscriber" style="width:100%;">');
+    }
+    return bar +
+      fg('Amount ($)', '<input class="form-input" type="number" id="gcV2IssueAmount" min="1" step="0.01" placeholder="50.00" style="width:100%;">') +
+      fg('Recipient email (optional)', '<input class="form-input" type="email" id="gcV2IssueEmail" placeholder="customer@example.com" style="width:100%;">') +
+      fg('Note (internal)', '<input class="form-input" id="gcV2IssueNote" placeholder="Reason for issuance" style="width:100%;">');
+  }
+
+  function openCreate(kind) {
+    if (!canIssue()) { if (window.showToast) showToast('You do not have permission to issue gift cards.', true); return; }
+    var promo = kind === 'promo';
+    U.slideOut.open({
+      id: 'new', deepLink: false,
+      title: promo ? 'New promotional credit' : 'Issue gift card',
+      size: 'md', mode: 'create',
+      createLabel: promo ? 'Create credit' : 'Issue card',
+      render: function () { return createFormHtml(kind); },
+      isDirty: function () {
+        var ids = promo ? ['gcV2PromoAmount', 'gcV2PromoCode', 'gcV2PromoEmail', 'gcV2PromoNote']
+                        : ['gcV2IssueAmount', 'gcV2IssueEmail', 'gcV2IssueNote'];
+        return ids.some(function (id) { var el = document.getElementById(id); return el && el.value && el.value.trim() !== ''; });
+      },
+      onSave: function () {
+        var bridge = window.GiftCardsBridge;
+        if (!bridge) { if (window.showToast) showToast('Gift card issuance is unavailable.', true); return false; }
+        function val(id) { var el = document.getElementById(id); return el ? el.value : ''; }
+        var p = promo
+          ? bridge.issuePromo({ amountVal: val('gcV2PromoAmount'), days: val('gcV2PromoDays'), customCode: val('gcV2PromoCode'), email: val('gcV2PromoEmail'), note: val('gcV2PromoNote') })
+          : bridge.issue({ amountVal: val('gcV2IssueAmount'), email: val('gcV2IssueEmail'), note: val('gcV2IssueNote') });
+        return Promise.resolve(p).then(function (res) {
+          if (!res || !res.code) return false;   // Bridge already toasted the reason (perms / bad amount / dup code)
+          // Optimistic cache add so the card shows immediately; then a settle-
+          // delayed reload re-reads admin/giftCards authoritatively.
+          var row = Object.assign({ _key: res.code }, res.gcData);
+          V2.byId[res.code] = row; V2.rows.unshift(row);
+          reloadSoon();
+          return true;
+        }).catch(function (e) { console.error('[gift-cards-v2] issue', e); if (window.showToast) showToast('Failed to issue gift card.', true); return false; });
+      }
+    });
+  }
 
   MastAdmin.registerModule('gift-cards-v2', {
     routes: { 'gift-cards-v2': { tab: 'giftCardsV2Tab', setup: function () { ensureTab(); render(); load(); } } }
