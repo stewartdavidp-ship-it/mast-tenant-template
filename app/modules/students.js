@@ -684,6 +684,72 @@
     container.innerHTML = h;
   }
 
+  // Build the student `fields` write object from a plain data bag, applying the
+  // isMinor auto-compute. Single-sourced so saveStudent() (DOM) and the
+  // StudentsBridge create/update (data object, used by the students-v2 twin)
+  // produce the IDENTICAL shape. `data` keys mirror the form field set.
+  function buildStudentFields(data, isNew) {
+    data = data || {};
+    var birthDate = data.birthDate || null;
+    var fields = {
+      displayName: (data.displayName || '').trim(),
+      contactId: (data.contactId || '').trim() || null,
+      birthDate: birthDate || null,
+      guardianContactId: data.guardianContactId || null,
+      photoWaiverStatus: data.photoWaiverStatus || 'pending',
+      emergencyContact: {
+        name: (data.emergencyContact && data.emergencyContact.name) || null,
+        phone: (data.emergencyContact && data.emergencyContact.phone) || null,
+        relationship: (data.emergencyContact && data.emergencyContact.relationship) || null,
+      },
+      allergies: data.allergies || null,
+      medicalNotes: data.medicalNotes || null,
+      waiverStatus: data.waiverStatus || 'pending',
+      waiverSignedAt: data.waiverSignedAt || null,
+      safetyOrientationCompleted: data.safetyOrientationCompleted === true,
+      safetyOrientationDate: data.safetyOrientationDate || null,
+      instructorNotes: data.instructorNotes || null,
+    };
+    // isMinor: 'true'/'false' manual override, else auto-compute from birthDate.
+    var isMinorSelect = data.isMinor;
+    if (isMinorSelect === true || isMinorSelect === 'true') fields.isMinor = true;
+    else if (isMinorSelect === false || isMinorSelect === 'false') fields.isMinor = false;
+    else if (birthDate) {
+      var birth = new Date(birthDate);
+      var now = new Date();
+      var age = now.getFullYear() - birth.getFullYear();
+      var m = now.getMonth() - birth.getMonth();
+      if (m < 0 || (m === 0 && now.getDate() < birth.getDate())) age--;
+      fields.isMinor = age < 18;
+    }
+    if (!isNew && data.status) fields.status = data.status || 'active';
+    return fields;
+  }
+
+  // Make the EXACT write saveStudent() makes: a full `set` for a new student
+  // (seeding status/clearances/documents/onboardingChecklist) or a partial
+  // `update` for an existing one. Returns the student id.
+  async function writeStudent(id, fields, isNew) {
+    if (isNew) {
+      id = MastDB.newKey('students');
+      fields.createdAt = new Date().toISOString();
+      fields.status = 'active';
+      fields.clearances = [];
+      fields.documents = [];
+      fields.onboardingChecklist = {
+        liabilityWaiver: { status: fields.waiverStatus === 'signed' ? 'completed' : 'pending' },
+        safetyOrientation: { status: fields.safetyOrientationCompleted ? 'completed' : 'pending' },
+        photoRelease: { status: fields.photoWaiverStatus === 'accepted' ? 'completed' : 'pending' },
+        guardianConsent: { status: fields.isMinor ? 'pending' : 'not-applicable' },
+      };
+      await MastDB.set('students/' + id, fields);
+    } else {
+      fields.updatedAt = new Date().toISOString();
+      await MastDB.update('students/' + id, fields);
+    }
+    return id;
+  }
+
   async function saveStudent() {
     var id = editingStudentId;
     var isNew = !id;
@@ -693,13 +759,11 @@
     if (!name.trim()) { showToast('Display name is required', true); return; }
     if (isNew && !contactId.trim()) { showToast('Contact ID is required for new students', true); return; }
 
-    var isMinorSelect = (document.getElementById('stuIsMinor') || {}).value;
-    var birthDate = (document.getElementById('stuBirthDate') || {}).value || null;
-
-    var fields = {
-      displayName: name.trim(),
-      contactId: contactId.trim() || null,
-      birthDate: birthDate || null,
+    var fields = buildStudentFields({
+      displayName: name,
+      contactId: contactId,
+      birthDate: (document.getElementById('stuBirthDate') || {}).value || null,
+      isMinor: (document.getElementById('stuIsMinor') || {}).value,
       guardianContactId: (document.getElementById('stuGuardianId') || {}).value || null,
       photoWaiverStatus: (document.getElementById('stuPhotoWaiver') || {}).value || 'pending',
       emergencyContact: {
@@ -714,42 +778,11 @@
       safetyOrientationCompleted: (document.getElementById('stuSafetyCompleted') || {}).value === 'true',
       safetyOrientationDate: (document.getElementById('stuSafetyDate') || {}).value || null,
       instructorNotes: (document.getElementById('stuInstructorNotes') || {}).value || null,
-    };
-
-    // isMinor: auto-compute from birthDate or manual override
-    if (isMinorSelect === 'true') fields.isMinor = true;
-    else if (isMinorSelect === 'false') fields.isMinor = false;
-    else if (birthDate) {
-      var birth = new Date(birthDate);
-      var now = new Date();
-      var age = now.getFullYear() - birth.getFullYear();
-      var m = now.getMonth() - birth.getMonth();
-      if (m < 0 || (m === 0 && now.getDate() < birth.getDate())) age--;
-      fields.isMinor = age < 18;
-    }
-
-    if (id) {
-      fields.status = (document.getElementById('stuStatus') || {}).value || 'active';
-    }
+      status: id ? ((document.getElementById('stuStatus') || {}).value || 'active') : undefined,
+    }, isNew);
 
     try {
-      if (isNew) {
-        id = MastDB.newKey('students');
-        fields.createdAt = new Date().toISOString();
-        fields.status = 'active';
-        fields.clearances = [];
-        fields.documents = [];
-        fields.onboardingChecklist = {
-          liabilityWaiver: { status: fields.waiverStatus === 'signed' ? 'completed' : 'pending' },
-          safetyOrientation: { status: fields.safetyOrientationCompleted ? 'completed' : 'pending' },
-          photoRelease: { status: fields.photoWaiverStatus === 'accepted' ? 'completed' : 'pending' },
-          guardianConsent: { status: fields.isMinor ? 'pending' : 'not-applicable' },
-        };
-        await MastDB.set('students/' + id, fields);
-      } else {
-        fields.updatedAt = new Date().toISOString();
-        await MastDB.update('students/' + id, fields);
-      }
+      id = await writeStudent(id, fields, isNew);
 
       showToast(isNew ? 'Student created' : 'Student saved');
       editingStudentId = null;
@@ -1469,6 +1502,28 @@
       var container = document.getElementById('studentsTab');
       if (container && typeof renderStudents === 'function') renderStudents(container);
     }, 0);
+  };
+
+  // Bridge for the students-v2 redesign twin (flag-gated #students-v2). It
+  // delegates create/update here so the student write + onboardingChecklist
+  // seeding + isMinor compute stay single-sourced — the twin never reimplements
+  // that logic. Additive; no behavior change to the legacy surface. These make
+  // the EXACT writes saveStudent() makes (buildStudentFields + writeStudent),
+  // parameterized by data (the legacy handler reads the form DOM, so it can't be
+  // called with an object). Mirrors window.ContactsBridge.
+  window.StudentsBridge = {
+    create: async function (data) {
+      var fields = buildStudentFields(data, true);
+      var id = await writeStudent(null, fields, true);
+      studentsLoaded = false;
+      return id;
+    },
+    update: async function (id, data) {
+      var fields = buildStudentFields(data, false);
+      await writeStudent(id, fields, false);
+      studentsLoaded = false;
+      return id;
+    }
   };
 
   // --- Module Registration ---
