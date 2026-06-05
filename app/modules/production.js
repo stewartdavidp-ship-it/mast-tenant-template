@@ -1209,14 +1209,14 @@ function renderCostTracking(jobId, job) {
       '<td style="text-align:right;padding:6px 8px;font-family:monospace;font-size:0.85rem;">$' + (budMatCents / 100).toFixed(2) + '</td>' +
       '<td style="text-align:right;padding:6px 8px;">' +
         '<input type="number" step="0.01" min="0" value="' + (actMatCents / 100).toFixed(2) + '" ' + actMatOverride +
-        ' style="width:80px;text-align:right;padding:3px 6px;border:1px solid var(--cream-dark);border-radius:4px;font-family:monospace;font-size:0.85rem;background:var(--cream);color:var(--charcoal);"' +
+        ' style="width:80px;text-align:right;padding:3px 6px;border:1px solid var(--cream-dark);border-radius:4px;font-family:monospace;font-size:0.85rem;background:var(--cream);color:var(--text-primary);"' +
         ' onchange="setLineItemActual(\'' + esc(jobId) + '\',\'' + esc(k) + '\',\'material\',this.value)"' +
         ' title="Actual material cost. Defaults to forecast × completed; type to override.">' +
       '</td>' +
       '<td style="text-align:right;padding:6px 8px;font-family:monospace;font-size:0.85rem;">$' + (budLabCents / 100).toFixed(2) + '</td>' +
       '<td style="text-align:right;padding:6px 8px;">' +
         '<input type="number" step="0.01" min="0" value="' + (actLabCents / 100).toFixed(2) + '" ' + actLabOverride +
-        ' style="width:80px;text-align:right;padding:3px 6px;border:1px solid var(--cream-dark);border-radius:4px;font-family:monospace;font-size:0.85rem;background:var(--cream);color:var(--charcoal);"' +
+        ' style="width:80px;text-align:right;padding:3px 6px;border:1px solid var(--cream-dark);border-radius:4px;font-family:monospace;font-size:0.85rem;background:var(--cream);color:var(--text-primary);"' +
         ' onchange="setLineItemActual(\'' + esc(jobId) + '\',\'' + esc(k) + '\',\'labor\',this.value)"' +
         ' title="Actual labor cost. Defaults to forecast × completed; type to override.">' +
       '</td>' +

@@ -239,9 +239,9 @@
     // Slim KPI band (the CS lens) built from on-standard cards — active /
     // payment issues / renewing-in-30d, mirroring the legacy renderMembersAllActive.
     var kpis = U.cardGrid([
-      U.card('Active members', '<div style="font-size:1.6rem;font-weight:600;color:var(--charcoal,var(--text));">' + N.count(counts.active) + '</div><div style="font-size:0.78rem;color:var(--warm-gray);">current subscriptions</div>', { fill: true }),
-      U.card('Payment issues', '<div style="font-size:1.6rem;font-weight:600;color:var(--charcoal,var(--text));">' + N.count(counts.paymentIssues) + '</div><div style="font-size:0.78rem;color:var(--warm-gray);">failed payments</div>', { fill: true }),
-      U.card('Renewing in 30d', '<div style="font-size:1.6rem;font-weight:600;color:var(--charcoal,var(--text));">' + N.count(counts.renewingSoon) + '</div><div style="font-size:0.78rem;color:var(--warm-gray);">upcoming renewals</div>', { fill: true })
+      U.card('Active members', '<div style="font-size:1.6rem;font-weight:600;color:var(--text-primary);">' + N.count(counts.active) + '</div><div style="font-size:0.78rem;color:var(--warm-gray);">current subscriptions</div>', { fill: true }),
+      U.card('Payment issues', '<div style="font-size:1.6rem;font-weight:600;color:var(--text-primary);">' + N.count(counts.paymentIssues) + '</div><div style="font-size:0.78rem;color:var(--warm-gray);">failed payments</div>', { fill: true }),
+      U.card('Renewing in 30d', '<div style="font-size:1.6rem;font-weight:600;color:var(--text-primary);">' + N.count(counts.renewingSoon) + '</div><div style="font-size:0.78rem;color:var(--warm-gray);">upcoming renewals</div>', { fill: true })
     ]);
 
     var filters = [

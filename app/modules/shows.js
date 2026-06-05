@@ -720,7 +720,7 @@ function renderShowDetailExecute(showId, s) {
       h += '<button class="btn btn-small exec-day-btn' + (isSelected ? ' active' : '') + '" onclick="switchExecuteDate(\'' + showId + '\', \'' + dt + '\')" style="' +
         'border:1px solid ' + (isSelected ? 'var(--teal, var(--teal))' : '#ddd') + ';' +
         'background:' + (isSelected ? 'var(--teal, var(--teal))' : 'var(--cream, var(--cream))') + ';' +
-        'color:' + (isSelected ? 'white' : 'var(--charcoal, var(--charcoal))') + ';font-weight:' + (isSelected ? '600' : '400') + ';">' +
+        'color:' + (isSelected ? 'white' : 'var(--text-primary)') + ';font-weight:' + (isSelected ? '600' : '400') + ';">' +
         dayLabel + (isToday ? ' (Today)' : '') + '</button>';
     });
     h += '</div></div>';
@@ -1552,7 +1552,7 @@ function openShowReviewModal(showId) {
     h += '<button class="btn btn-small review-attend-btn" data-value="' + val + '" onclick="setReviewAttend(\'' + val + '\')" style="' +
       'border:1px solid ' + (isSelected ? colors[val] : '#ddd') + ';' +
       'background:' + (isSelected ? colors[val] : 'var(--cream, var(--cream))') + ';' +
-      'color:' + (isSelected ? 'white' : 'var(--charcoal, var(--charcoal))') + ';font-weight:' + (isSelected ? '600' : '400') + ';">' + label + '</button>';
+      'color:' + (isSelected ? 'white' : 'var(--text-primary)') + ';font-weight:' + (isSelected ? '600' : '400') + ';">' + label + '</button>';
   });
   h += '</div>';
   h += '<input type="hidden" id="reviewAttend" value="' + (review.wouldAttendAgain || '') + '">';
@@ -1594,7 +1594,7 @@ function setReviewAttend(val) {
     var bv = btn.getAttribute('data-value');
     var isSelected = bv === val;
     btn.style.background = isSelected ? colors[bv] : 'var(--cream, var(--cream))';
-    btn.style.color = isSelected ? 'white' : 'var(--charcoal, var(--charcoal))';
+    btn.style.color = isSelected ? 'white' : 'var(--text-primary)';
     btn.style.borderColor = isSelected ? colors[bv] : '#ddd';
     btn.style.fontWeight = isSelected ? '600' : '400';
   });

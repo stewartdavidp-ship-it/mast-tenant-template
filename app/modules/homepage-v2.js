@@ -134,7 +134,7 @@
         right = onPill(on);
       }
       return '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:7px 0;border-top:1px solid var(--surface-card,var(--charcoal-light));">' +
-        '<div style="min-width:0;"><div style="font-size:0.9rem;color:var(--charcoal,var(--text));">' + esc(sec.label) + ' ' + onPill(on) + '</div>' +
+        '<div style="min-width:0;"><div style="font-size:0.9rem;color:var(--text-primary);">' + esc(sec.label) + ' ' + onPill(on) + '</div>' +
         (peek ? '<div class="mu-sub" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:240px;">' + esc(peek) + '</div>' : '') + '</div>' +
         '<div style="display:flex;gap:6px;align-items:center;flex-shrink:0;">' + right + '</div></div>';
     }).join('');
@@ -234,7 +234,7 @@
           ? '<button class="btn btn-secondary" style="font-size:0.78rem;padding:3px 10px;flex-shrink:0;" onclick="HomepageV2.testimonial(\'' + k + '\',' + (t.visible ? 'false' : 'true') + ')">' + (t.visible ? 'Hide' : 'Show') + '</button>'
           : onPill(t.visible);
         return '<div style="display:flex;gap:10px;align-items:flex-start;justify-content:space-between;padding:7px 0;border-top:1px solid var(--surface-card,var(--charcoal-light));">' +
-          '<div style="min-width:0;"><div style="font-size:0.85rem;color:var(--charcoal,var(--text));white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:300px;">' + esc(t.quote) + '</div>' +
+          '<div style="min-width:0;"><div style="font-size:0.85rem;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:300px;">' + esc(t.quote) + '</div>' +
           (t.author ? '<div class="mu-sub">' + esc('— ' + t.author) + '</div>' : '') + '</div>' + toggle + '</div>';
       }).join('') + '</div>';
     } else {

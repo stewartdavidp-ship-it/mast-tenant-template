@@ -67,7 +67,7 @@
 
   function launcher(area) {
     var sub = V2.loaded ? esc(area.summary()) : 'Loading…';
-    var body = '<div style="font-size:0.9rem;color:var(--charcoal,var(--text));">' + esc(area.desc) + '</div>' +
+    var body = '<div style="font-size:0.9rem;color:var(--text-primary);">' + esc(area.desc) + '</div>' +
       '<div class="mu-sub" style="margin-top:8px;">' + sub + '</div>';
     return U.launchCard({ title: area.title, body: body, onClickFnName: 'SettingsV2.open', arg: area.route, arrow: 'Open →' });
   }

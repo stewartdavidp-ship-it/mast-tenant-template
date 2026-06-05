@@ -365,21 +365,21 @@
       '<div class="lb-builder-section">' +
         '<div class="form-group" style="margin-bottom:16px;">' +
           '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Title *</label>' +
-          '<input type="text" id="lbTitle" value="' + esc(title) + '" placeholder="e.g. Spring 2026 Wholesale Catalog" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.9rem;">' +
+          '<input type="text" id="lbTitle" value="' + esc(title) + '" placeholder="e.g. Spring 2026 Wholesale Catalog" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--text-primary);font-family:\'DM Sans\';font-size:0.9rem;">' +
         '</div>' +
 
         // Type + Tier
         '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">' +
           '<div class="form-group">' +
             '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Document Type</label>' +
-            '<select id="lbType" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.9rem;">' +
+            '<select id="lbType" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--text-primary);font-family:\'DM Sans\';font-size:0.9rem;">' +
               '<option value="linesheet"' + (type === 'linesheet' ? ' selected' : '') + '>Line Sheet (compact, data-focused)</option>' +
               '<option value="lookbook"' + (type === 'lookbook' ? ' selected' : '') + '>Look Book (visual, editorial)</option>' +
             '</select>' +
           '</div>' +
           '<div class="form-group">' +
             '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Price Tier</label>' +
-            '<select id="lbPriceTier" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.9rem;">' +
+            '<select id="lbPriceTier" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--text-primary);font-family:\'DM Sans\';font-size:0.9rem;">' +
               '<option value="wholesale"' + (priceTier === 'wholesale' ? ' selected' : '') + '>Wholesale</option>' +
               '<option value="direct"' + (priceTier === 'direct' ? ' selected' : '') + '>Direct</option>' +
               '<option value="retail"' + (priceTier === 'retail' ? ' selected' : '') + '>Retail</option>' +
@@ -402,11 +402,11 @@
         '<div style="font-size:1rem;font-weight:500;margin-bottom:12px;">Header & Footer</div>' +
         '<div class="form-group" style="margin-bottom:16px;">' +
           '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Header Text</label>' +
-          '<input type="text" id="lbHeader" value="' + esc(headerText) + '" placeholder="Brand name / tagline" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.9rem;">' +
+          '<input type="text" id="lbHeader" value="' + esc(headerText) + '" placeholder="Brand name / tagline" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--text-primary);font-family:\'DM Sans\';font-size:0.9rem;">' +
         '</div>' +
         '<div class="form-group" style="margin-bottom:0;">' +
           '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Footer Text</label>' +
-          '<textarea id="lbFooter" rows="2" placeholder="Contact info, ordering instructions" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.9rem;">' + esc(footerText) + '</textarea>' +
+          '<textarea id="lbFooter" rows="2" placeholder="Contact info, ordering instructions" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--text-primary);font-family:\'DM Sans\';font-size:0.9rem;">' + esc(footerText) + '</textarea>' +
         '</div>' +
       '</div>';
 
@@ -444,7 +444,7 @@
     html += '</div>';
     html +=
       '<div style="margin-top:8px;">' +
-        '<select id="lbExcludeSelect" style="padding:6px 10px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.85rem;">' +
+        '<select id="lbExcludeSelect" style="padding:6px 10px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--text-primary);font-family:\'DM Sans\';font-size:0.85rem;">' +
           '<option value="">Add exclusion...</option>';
     products.forEach(function(p) {
       if (p.status === 'archived') return;

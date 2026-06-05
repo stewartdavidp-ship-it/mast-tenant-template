@@ -936,12 +936,12 @@
       var pinned = boothsList.filter(function(b) { return pins[b.id]; });
       if (unpinned.length > 0) {
         html += '<div class="ev-card"><h4 style="font-size:0.78rem;text-transform:uppercase;color:var(--warm-gray);margin:0 0 10px;">Unplaced</h4>';
-        for (var u = 0; u < unpinned.length; u++) html += '<button onclick="evStartPinPlacement(\'' + esc(showId) + '\', \'' + esc(unpinned[u].id) + '\', \'' + esc(unpinned[u].name) + '\')" style="display:block;width:100%;text-align:left;padding:6px 10px;font-size:0.85rem;background:none;border:none;border-radius:4px;cursor:pointer;color:var(--charcoal);">' + esc(unpinned[u].name) + '</button>';
+        for (var u = 0; u < unpinned.length; u++) html += '<button onclick="evStartPinPlacement(\'' + esc(showId) + '\', \'' + esc(unpinned[u].id) + '\', \'' + esc(unpinned[u].name) + '\')" style="display:block;width:100%;text-align:left;padding:6px 10px;font-size:0.85rem;background:none;border:none;border-radius:4px;cursor:pointer;color:var(--text-primary);">' + esc(unpinned[u].name) + '</button>';
         html += '</div>';
       }
       if (pinned.length > 0) {
         html += '<div class="ev-card"><h4 style="font-size:0.78rem;text-transform:uppercase;color:var(--warm-gray);margin:0 0 10px;">Placed</h4>';
-        for (var p2 = 0; p2 < pinned.length; p2++) html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 10px;font-size:0.85rem;"><button onclick="evStartPinPlacement(\'' + esc(showId) + '\', \'' + esc(pinned[p2].id) + '\', \'' + esc(pinned[p2].name) + '\')" style="background:none;border:none;cursor:pointer;color:var(--charcoal);font-size:0.85rem;">' + esc(pinned[p2].name) + '</button><button onclick="evRemovePin(\'' + esc(showId) + '\', \'' + esc(pinned[p2].id) + '\')" style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:0.78rem;font-family:\'DM Sans\';">Remove</button></div>';
+        for (var p2 = 0; p2 < pinned.length; p2++) html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 10px;font-size:0.85rem;"><button onclick="evStartPinPlacement(\'' + esc(showId) + '\', \'' + esc(pinned[p2].id) + '\', \'' + esc(pinned[p2].name) + '\')" style="background:none;border:none;cursor:pointer;color:var(--text-primary);font-size:0.85rem;">' + esc(pinned[p2].name) + '</button><button onclick="evRemovePin(\'' + esc(showId) + '\', \'' + esc(pinned[p2].id) + '\')" style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:0.78rem;font-family:\'DM Sans\';">Remove</button></div>';
         html += '</div>';
       }
       html += '</div></div>';
@@ -1089,7 +1089,7 @@
           '<td style="font-size:0.78rem;">' + esc(v.category || '—') + '</td>' +
           '<td>' + esc(boothName) + '</td>' +
           '<td>' + evBadgeHtml(v.paymentStatus || 'pending') + '</td>' +
-          '<td><select style="font-size:0.78rem;padding:2px 6px;border-radius:4px;border:1px solid var(--cream-dark);background:var(--cream);color:var(--charcoal);" onchange="evUpdateVendorStatus(\'' + esc(showId) + '\', \'' + esc(v.id) + '\', this.value)">';
+          '<td><select style="font-size:0.78rem;padding:2px 6px;border-radius:4px;border:1px solid var(--cream-dark);background:var(--cream);color:var(--text-primary);" onchange="evUpdateVendorStatus(\'' + esc(showId) + '\', \'' + esc(v.id) + '\', this.value)">';
         for (var si = 0; si < VENDOR_STATUSES.length; si++) {
           html += '<option value="' + VENDOR_STATUSES[si] + '"' + (VENDOR_STATUSES[si] === (v.status || 'pending') ? ' selected' : '') + '>' + VENDOR_STATUSES[si] + '</option>';
         }

@@ -168,14 +168,14 @@
   // click target into edit (operator: config objects go straight to edit).
   function editCard(key, title, statusOn, rows) {
     var summary = rows.map(function (r) {
-      return '<div class="mu-sub" style="display:flex;justify-content:space-between;gap:12px;"><span>' + esc(r.k) + '</span><span style="color:var(--charcoal,var(--text));text-align:right;">' + (r.v == null || r.v === '' ? '—' : r.v) + '</span></div>';
+      return '<div class="mu-sub" style="display:flex;justify-content:space-between;gap:12px;"><span>' + esc(r.k) + '</span><span style="color:var(--text-primary);text-align:right;">' + (r.v == null || r.v === '' ? '—' : r.v) + '</span></div>';
     }).join('');
     return U.launchCard({ title: title, body: summary, onClickFnName: 'WalletV2.edit', arg: key, arrow: 'Edit →', headerRight: onPill(statusOn) });
   }
 
   // A read-only card with no editable settings here (link out to classic).
   function infoCard(title, statusOn, desc, classicRoute, classicLabel) {
-    var body = '<div style="font-size:0.9rem;color:var(--charcoal,var(--text));line-height:1.5;">' + esc(desc) + '</div>' +
+    var body = '<div style="font-size:0.9rem;color:var(--text-primary);line-height:1.5;">' + esc(desc) + '</div>' +
       '<div class="mu-sub" style="margin-top:10px;"><button class="btn btn-secondary" onclick="WalletV2.classic(\'' + classicRoute + '\')">' + esc(classicLabel) + ' →</button></div>';
     return U.card(title, body, { fill: true, headerRight: onPill(statusOn) });
   }

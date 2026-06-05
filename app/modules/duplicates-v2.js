@@ -73,12 +73,12 @@
     if (!DUP.flags.length) {
       tab.innerHTML = head + '<div style="padding:46px 20px;text-align:center;color:var(--warm-gray);">' +
         '<div style="font-size:1.6rem;margin-bottom:8px;">✓</div>' +
-        '<div style="font-size:1.15rem;color:var(--charcoal,var(--text));">No pending duplicates</div>' +
+        '<div style="font-size:1.15rem;color:var(--text-primary);">No pending duplicates</div>' +
         '<div style="font-size:0.85rem;margin-top:4px;">When the resolver flags a conflict, it shows up here.</div></div>';
       return;
     }
     var rows = DUP.flags.map(function (f) {
-      return '<button class="mast-row" style="display:flex;width:100%;text-align:left;align-items:center;gap:12px;background:var(--surface-card,var(--card-bg));border:1px solid var(--border,rgba(127,127,127,.2));border-radius:10px;padding:14px 18px;margin-bottom:10px;cursor:pointer;color:var(--charcoal,var(--text));font:inherit;" onclick="DuplicatesV2.open(\'' + esc(f.id) + '\')">' +
+      return '<button class="mast-row" style="display:flex;width:100%;text-align:left;align-items:center;gap:12px;background:var(--surface-card,var(--card-bg));border:1px solid var(--border,rgba(127,127,127,.2));border-radius:10px;padding:14px 18px;margin-bottom:10px;cursor:pointer;color:var(--text-primary);font:inherit;" onclick="DuplicatesV2.open(\'' + esc(f.id) + '\')">' +
         '<div style="flex:1;min-width:0;"><div style="font-size:0.9rem;"><strong>' + esc(label(f.customerIdA)) + '</strong> &harr; <strong>' + esc(label(f.customerIdB)) + '</strong></div>' +
         '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:2px;">' + esc(f.reason || 'duplicate detected') + '</div></div>' +
         '<div style="font-size:0.78rem;color:var(--warm-gray);flex-shrink:0;">' + esc(f.detectedAt ? N.date(f.detectedAt) : '') + '</div>' +

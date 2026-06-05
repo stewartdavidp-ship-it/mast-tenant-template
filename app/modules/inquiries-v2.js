@@ -112,7 +112,7 @@
         ]);
 
         var messageBody = q.message
-          ? '<div style="font-size:0.9rem;color:var(--charcoal,var(--text));line-height:1.55;white-space:pre-wrap;word-break:break-word;">' + esc(q.message) + '</div>'
+          ? '<div style="font-size:0.9rem;color:var(--text-primary);line-height:1.55;white-space:pre-wrap;word-break:break-word;">' + esc(q.message) + '</div>'
           : '<span class="mu-sub">No message.</span>';
 
         // Replying / status changes stay on the legacy Inquiries surface (the email

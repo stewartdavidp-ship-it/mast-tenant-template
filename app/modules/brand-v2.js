@@ -108,7 +108,7 @@
     var v = V2.voice || {};
     function block(label, text) {
       return '<div style="margin-bottom:12px;"><div class="mu-sub" style="margin-bottom:3px;">' + esc(label) + '</div>' +
-        (text ? '<div style="font-size:0.9rem;color:var(--charcoal,var(--text));line-height:1.5;white-space:pre-wrap;">' + esc(text) + '</div>' : '<span class="mu-sub">Not set.</span>') + '</div>';
+        (text ? '<div style="font-size:0.9rem;color:var(--text-primary);line-height:1.5;white-space:pre-wrap;">' + esc(text) + '</div>' : '<span class="mu-sub">Not set.</span>') + '</div>';
     }
     return U.card('Brand voice',
       '<div class="mu-sub" style="margin-bottom:12px;">Words &amp; tone used across storefront SEO, newsletter, and social drafts.</div>' +

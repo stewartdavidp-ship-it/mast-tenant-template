@@ -1046,15 +1046,15 @@
 
     var html = '<div style="display:flex;gap:16px;margin-bottom:16px;flex-wrap:wrap;">' +
       '<div class="trip-stat-card" style="background:var(--cream,var(--cream));border-radius:8px;padding:12px 18px;flex:1;min-width:120px;text-align:center;">' +
-        '<div class="trip-stat-value" style="font-size:1.6rem;font-weight:700;color:var(--charcoal);">' + completed.length + '</div>' +
+        '<div class="trip-stat-value" style="font-size:1.6rem;font-weight:700;color:var(--text-primary);">' + completed.length + '</div>' +
         '<div class="trip-stat-label" style="font-size:0.78rem;color:var(--warm-gray);">Trips</div>' +
       '</div>' +
       '<div class="trip-stat-card" style="background:var(--cream,var(--cream));border-radius:8px;padding:12px 18px;flex:1;min-width:120px;text-align:center;">' +
-        '<div class="trip-stat-value" style="font-size:1.6rem;font-weight:700;color:var(--charcoal);">' + totalMiles.toFixed(1) + '</div>' +
+        '<div class="trip-stat-value" style="font-size:1.6rem;font-weight:700;color:var(--text-primary);">' + totalMiles.toFixed(1) + '</div>' +
         '<div class="trip-stat-label" style="font-size:0.78rem;color:var(--warm-gray);">Miles</div>' +
       '</div>' +
       '<div class="trip-stat-card" style="background:var(--cream,var(--cream));border-radius:8px;padding:12px 18px;flex:1;min-width:120px;text-align:center;">' +
-        '<div class="trip-stat-value" style="font-size:1.6rem;font-weight:700;color:var(--charcoal);">$' + totalDeductible.toFixed(2) + '</div>' +
+        '<div class="trip-stat-value" style="font-size:1.6rem;font-weight:700;color:var(--text-primary);">$' + totalDeductible.toFixed(2) + '</div>' +
         '<div class="trip-stat-label" style="font-size:0.78rem;color:var(--warm-gray);">Deductible</div>' +
       '</div>' +
     '</div>';

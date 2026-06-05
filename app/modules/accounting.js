@@ -419,7 +419,7 @@
       overlay.innerHTML =
         '<div style="background:var(--cream,#fff);border-radius:10px;max-width:520px;width:96%;box-shadow:0 8px 30px rgba(0,0,0,0.2);">' +
           '<div style="padding:20px 24px 12px;border-bottom:1px solid rgba(0,0,0,0.08);">' +
-            '<div style="font-family:\'Cormorant Garamond\',serif;font-size:1.15rem;font-weight:600;color:var(--charcoal,#1f2937);">' + esc(opts.title || 'Backfill from QBO') + '</div>' +
+            '<div style="font-family:\'Cormorant Garamond\',serif;font-size:1.15rem;font-weight:600;color:var(--text-primary);">' + esc(opts.title || 'Backfill from QBO') + '</div>' +
             '<div style="font-size:0.85rem;color:var(--warm-gray);margin-top:6px;">Preview of historical entities QBO will return. Confirm to start the bulk pull.</div>' +
           '</div>' +
           '<div style="padding:16px 24px;">' +
@@ -456,7 +456,7 @@
       overlay.innerHTML =
         '<div style="background:var(--cream,#fff);border-radius:10px;max-width:520px;width:96%;box-shadow:0 8px 30px rgba(0,0,0,0.2);">' +
           '<div style="padding:20px 24px 12px;border-bottom:1px solid rgba(0,0,0,0.08);">' +
-            '<div style="font-family:\'Cormorant Garamond\',serif;font-size:1.15rem;font-weight:600;color:var(--charcoal,#1f2937);">Backfill in progress</div>' +
+            '<div style="font-family:\'Cormorant Garamond\',serif;font-size:1.15rem;font-weight:600;color:var(--text-primary);">Backfill in progress</div>' +
             '<div style="font-size:0.85rem;color:var(--warm-gray);margin-top:6px;">Job ID: <code>' + esc(jobId || '?') + '</code></div>' +
           '</div>' +
           '<div id="qboBackfillProgressBody" style="padding:16px 24px;">' +

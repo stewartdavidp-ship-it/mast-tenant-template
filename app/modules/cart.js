@@ -206,7 +206,7 @@
         '<span style="font-size:1.15rem;">' + icon + '</span>' +
         '<span class="status-badge" style="background:' + (isActive ? '#16a34a' : '#9ca3af') + ';color:white;">' + esc(statusLabel) + '</span>' +
       '</div>' +
-      '<div style="font-size:0.9rem;font-weight:500;color:var(--charcoal);margin-bottom:4px;">' + esc(name) + '</div>' +
+      '<div style="font-size:0.9rem;font-weight:500;color:var(--text-primary);margin-bottom:4px;">' + esc(name) + '</div>' +
       '<div style="font-size:0.78rem;color:var(--warm-gray);">' + esc(desc) + '</div>' +
     '</div>';
   }
@@ -276,11 +276,11 @@
 
     // Status banner
     if (!enabled) {
-      html += '<div style="padding:12px 16px;background:rgba(196,133,60,0.12);border-radius:6px;margin-bottom:16px;font-size:0.85rem;color:var(--charcoal);">' +
+      html += '<div style="padding:12px 16px;background:rgba(196,133,60,0.12);border-radius:6px;margin-bottom:16px;font-size:0.85rem;color:var(--text-primary);">' +
         '&#9888; Gift cards are <strong>disabled</strong>. Enable them in Settings to make the storefront page visible.' +
       '</div>';
     } else {
-      html += '<div style="padding:12px 16px;background:rgba(22,163,74,0.1);border-radius:6px;margin-bottom:16px;font-size:0.85rem;color:var(--charcoal);">' +
+      html += '<div style="padding:12px 16px;background:rgba(22,163,74,0.1);border-radius:6px;margin-bottom:16px;font-size:0.85rem;color:var(--text-primary);">' +
         '&#10003; Gift cards are <strong>enabled</strong>. Denominations: ' +
         (denominations.length > 0 ? denominations.map(function(c) { return formatMoney(c); }).join(', ') : 'none configured') +
         (customEnabled ? ' + custom (' + formatMoney(customMin) + '\u2013' + formatMoney(customMax) + ')' : '') +
@@ -982,7 +982,7 @@
     var html = '<div style="padding:24px;">' +
       '<h3 style="margin-top:0;">Gift Card Details</h3>' +
       '<div style="text-align:center;margin-bottom:16px;">' +
-        '<div style="font-family:monospace;font-size:1.6rem;letter-spacing:2px;color:var(--charcoal);margin-bottom:8px;">' + esc(code) + '</div>' +
+        '<div style="font-family:monospace;font-size:1.6rem;letter-spacing:2px;color:var(--text-primary);margin-bottom:8px;">' + esc(code) + '</div>' +
         gcStatusBadge(gc.status) +
         (gc.source === 'migrated' ? ' <span class="status-badge" style="background:#7c3aed;color:white;">MIGRATED</span>' : '') +
       '</div>' +
@@ -1066,25 +1066,25 @@
         // Earn rate card
         '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:16px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">' +
           '<div style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:4px;">Earn Rate</div>' +
-          '<div style="font-size:1.6rem;font-weight:500;color:var(--charcoal);">' + earnRate + ' ' + esc(pointName) + '</div>' +
+          '<div style="font-size:1.6rem;font-weight:500;color:var(--text-primary);">' + earnRate + ' ' + esc(pointName) + '</div>' +
           '<div style="font-size:0.78rem;color:var(--warm-gray);">per $1 spent</div>' +
         '</div>' +
         // Redemption rate card
         '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:16px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">' +
           '<div style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:4px;">Redemption</div>' +
-          '<div style="font-size:1.6rem;font-weight:500;color:var(--charcoal);">' + redeemRate + ' ' + esc(pointName) + '</div>' +
+          '<div style="font-size:1.6rem;font-weight:500;color:var(--text-primary);">' + redeemRate + ' ' + esc(pointName) + '</div>' +
           '<div style="font-size:0.78rem;color:var(--warm-gray);">= $1.00 off</div>' +
         '</div>' +
         // Expiry card
         '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:16px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">' +
           '<div style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:4px;">Expiry Window</div>' +
-          '<div style="font-size:1.6rem;font-weight:500;color:var(--charcoal);">' + expiryDays + ' days</div>' +
+          '<div style="font-size:1.6rem;font-weight:500;color:var(--text-primary);">' + expiryDays + ' days</div>' +
           '<div style="font-size:0.78rem;color:var(--warm-gray);">of inactivity</div>' +
         '</div>' +
         // Point name card
         '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:16px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">' +
           '<div style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:4px;">Point Name</div>' +
-          '<div style="font-size:1.6rem;font-weight:500;color:var(--charcoal);">' + esc(pointName) + '</div>' +
+          '<div style="font-size:1.6rem;font-weight:500;color:var(--text-primary);">' + esc(pointName) + '</div>' +
           '<div style="font-size:0.78rem;color:var(--warm-gray);">Customer-facing label</div>' +
         '</div>' +
       '</div>';
@@ -1102,7 +1102,7 @@
 
       // How it works summary
       html += '<div style="padding:16px;background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;">' +
-        '<div style="font-size:0.85rem;font-weight:500;margin-bottom:8px;color:var(--charcoal);">How it works for customers</div>' +
+        '<div style="font-size:0.85rem;font-weight:500;margin-bottom:8px;color:var(--text-primary);">How it works for customers</div>' +
         '<div style="font-size:0.85rem;color:var(--warm-gray);line-height:1.6;">' +
           '1. Customers earn <strong>' + earnRate + ' ' + esc(pointName) + '</strong> per $1 of eligible spend at checkout.<br>' +
           '2. At checkout, they can redeem all their points: <strong>' + redeemRate + ' ' + esc(pointName) + ' = $1.00 off</strong> (all-or-nothing).<br>' +
@@ -1283,7 +1283,7 @@
     function summaryCard(label, value, detail) {
       return '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:14px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">' +
         '<div style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:4px;">' + esc(label) + '</div>' +
-        '<div style="font-size:1.15rem;font-weight:500;color:var(--charcoal);">' + esc(value) + '</div>' +
+        '<div style="font-size:1.15rem;font-weight:500;color:var(--text-primary);">' + esc(value) + '</div>' +
         (detail ? '<div style="font-size:0.78rem;color:var(--warm-gray);">' + esc(detail) + '</div>' : '') +
       '</div>';
     }
@@ -1328,7 +1328,7 @@
 
     // Member list
     html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">' +
-      '<div style="font-size:0.9rem;font-weight:500;color:var(--charcoal);">Members (' + membershipMembers.length + ')</div>' +
+      '<div style="font-size:0.9rem;font-weight:500;color:var(--text-primary);">Members (' + membershipMembers.length + ')</div>' +
       '<button class="btn btn-outline btn-small" onclick="window._membershipGrantModal()">+ Grant</button>' +
     '</div>';
 

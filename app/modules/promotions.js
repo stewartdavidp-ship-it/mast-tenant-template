@@ -293,8 +293,8 @@
             '<input type="checkbox" id="promoKeepAfterEnd"' + (sale && sale.keepAfterEnd ? ' checked' : '') + ' /> Keep after end (prevent auto-archiving)</label></div>' +
           '<div class="form-group"><label>Products</label>' +
             '<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap;">' +
-              '<input type="text" id="promoProductSearch" placeholder="Search products..." oninput="promoFilterProducts()" style="flex:1;min-width:120px;padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.85rem;background:var(--cream);color:var(--charcoal);">' +
-              '<select id="promoProductCategory" onchange="promoFilterProducts()" style="padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.85rem;background:var(--cream);color:var(--charcoal);">' + catOptions + '</select>' +
+              '<input type="text" id="promoProductSearch" placeholder="Search products..." oninput="promoFilterProducts()" style="flex:1;min-width:120px;padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.85rem;background:var(--cream);color:var(--text-primary);">' +
+              '<select id="promoProductCategory" onchange="promoFilterProducts()" style="padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.85rem;background:var(--cream);color:var(--text-primary);">' + catOptions + '</select>' +
               '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:0.85rem;white-space:nowrap;">' +
                 '<input type="checkbox" id="promoSelectAll" onchange="promoSelectAllToggle()" /> Select All' +
               '</label>' +

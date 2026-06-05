@@ -110,7 +110,7 @@
        Shared by customers.js (list/export) and customer-service.js (survey
        bulk-send) so the segment matcher cannot drift. ?v= kept in lockstep
        with MAST_MODULES_V by scripts/bump-modules-version.sh. -->
-  <script src="../shared/customer-filters.js?v=20260605-180753-9b761c0"></script>
+  <script src="../shared/customer-filters.js?v=20260605-180940-d1a498c"></script>
   <script src="../shared/brand-sync.js?v=1"></script>
   <script src="../shared/channel-connection.js?v=1"></script>
   <!-- UI redesign engines (docs/ux-audit): shared primitives + Entity Engine.
@@ -118,9 +118,9 @@
        scripts/bump-modules-version.sh (these are static <head> tags loaded
        before the JS var exists, so they can't read it at runtime). Without
        this, the engines were frozen at ?v=1 and never cache-busted on deploy. -->
-  <script src="../shared/mast-ui.js?v=20260605-180753-9b761c0"></script>
-  <script src="../shared/mast-io.js?v=20260605-180753-9b761c0"></script>
-  <script src="../shared/mast-entity.js?v=20260605-180753-9b761c0"></script>
+  <script src="../shared/mast-ui.js?v=20260605-180940-d1a498c"></script>
+  <script src="../shared/mast-io.js?v=20260605-180940-d1a498c"></script>
+  <script src="../shared/mast-entity.js?v=20260605-180940-d1a498c"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Pod-specific runtime config — sets window.MAST_POD_PLATFORM_PROJECT so
@@ -152,23 +152,38 @@
       scroll-behavior: auto !important;
     }
     :root {
-      --amber: var(--amber);
-      --amber-light: var(--amber-light);
-      --amber-glow: var(--amber-glow);
-      --teal: var(--teal);
-      --teal-deep: var(--teal-deep);
-      --teal-light: var(--teal-light);
-      --cream: var(--cream);
-      --cream-dark: var(--cream-dark);
-      --charcoal: var(--charcoal);
-      --warm-gray: var(--warm-gray);
-      --warm-gray-light: var(--warm-gray-light);
-      --danger: var(--danger);
+      --amber: #C4853C;
+      --amber-light: #E8B679;
+      --amber-glow: #F5D5A8;
+      --teal: #2A7C6F;
+      --teal-deep: #1B5C52;
+      --teal-light: #A8D5CE;
+      --cream: #FAF6F0;
+      --cream-dark: #F0E8DB;
+      /* --charcoal is the genuinely-dark SURFACE token (dark header/sidebar bg in
+         BOTH themes). It stays #1A1A1A and is NOT flipped in dark mode. Text that
+         must flip light/dark uses --text-primary below, NOT --charcoal.
+         The "--charcoal split": commit feac5f5 had clobbered this whole block into
+         self-references (--charcoal: var(--charcoal)) which resolve to empty and
+         broke light mode app-wide. */
+      --charcoal: #1A1A1A;
+      --warm-gray: #6B6560;
+      --warm-gray-light: #9B958E;
+      --danger: #DC3545;
       --danger-hover: #c82333;
-      --gold: var(--amber);
+      --gold: #C4853C;
       --dark-brown: #5C3D2E;
       --bg-secondary: #f5f5f5;
       --bg-tertiary: #e8e2d8;
+      /* Primary text color — FLIPS with theme (dark on light, light on dark; see
+         body.dark-mode override). Split out from --charcoal so the dark-surface
+         token and the body-text token are no longer overloaded. */
+      --text-primary: #1A1A1A;
+      /* Light-theme card/panel surface (slide-out, cards). Dark theme overrides to
+         #252a35 in body.dark-mode. Without a :root value the slide-out panel fell
+         back to its inline #1a1a1a and stayed dark in light mode. */
+      --surface-card: #FFFFFF;
+      --surface-card-border: #E5E0D8;
     }
 
     * {
@@ -180,7 +195,7 @@
     body {
       font-family: 'DM Sans', sans-serif;
       background: var(--cream);
-      color: var(--charcoal);
+      color: var(--text-primary);
       min-height: 100vh;
       overscroll-behavior-x: none;
     }
@@ -670,7 +685,7 @@
       font-family: 'Cormorant Garamond', serif;
       font-size: 1.6rem;
       font-weight: 500;
-      color: var(--charcoal);
+      color: var(--text-primary);
       margin-bottom: 8px;
     }
     .placeholder-desc {
@@ -713,7 +728,7 @@
 
     .auth-screen h2 {
       font-size: 1.6rem;
-      color: var(--charcoal);
+      color: var(--text-primary);
     }
 
     .auth-screen p {
@@ -733,7 +748,7 @@
       font-size: 1rem;
       cursor: pointer;
       transition: box-shadow 0.2s;
-      color: var(--charcoal);
+      color: var(--text-primary);
     }
 
     .btn-google:hover {
@@ -806,7 +821,7 @@
       background: var(--cream-dark, var(--cream-dark)); border: 1px solid #e8e0d4;
       border-radius: 8px; padding: 20px; text-align: center;
     }
-    .feature-gate-callout h3 { font-size: 1.15rem; margin-bottom: 8px; color: var(--charcoal); }
+    .feature-gate-callout h3 { font-size: 1.15rem; margin-bottom: 8px; color: var(--text-primary); }
     .feature-gate-callout p { color: var(--warm-gray); font-size: 0.9rem; margin-bottom: 12px; }
     .feature-gate-callout .btn { font-size: 0.85rem; }
 
@@ -850,7 +865,7 @@
     .auth-email-form label {
       font-size: 0.78rem;
       font-weight: 600;
-      color: var(--charcoal);
+      color: var(--text-primary);
       margin-bottom: 2px;
     }
     .auth-email-form input {
@@ -861,7 +876,7 @@
       font-family: 'DM Sans', sans-serif;
       font-size: 0.9rem;
       background: var(--cream);
-      color: var(--charcoal);
+      color: var(--text-primary);
       box-sizing: border-box;
     }
     .auth-email-form input:focus {
@@ -925,7 +940,7 @@
       font-family: 'DM Sans', sans-serif;
       font-size: 0.9rem;
       cursor: pointer;
-      color: var(--charcoal);
+      color: var(--text-primary);
       box-sizing: border-box;
     }
     .auth-secondary-btn:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.12); }
@@ -1052,7 +1067,7 @@
     .wp-cat-reorder .btn-icon { width: 24px; height: 20px; font-size: 0.72rem; padding: 0; }
     body.dark-mode .wp-cat-row { border-color: #444; }
 
-    .wp-template-card { padding: 16px; border-radius: 8px; border: 2px solid var(--charcoal-light, #333); background: var(--charcoal, var(--charcoal)); transition: border-color 0.2s, transform 0.1s; position: relative; }
+    .wp-template-card { padding: 16px; border-radius: 8px; border: 2px solid var(--charcoal-light, #333); background: var(--text-primary); transition: border-color 0.2s, transform 0.1s; position: relative; }
     .wp-template-card:hover { transform: translateY(-2px); border-color: var(--warm-gray, #666); }
     .wp-template-card.active { border-color: var(--accent, var(--teal)); }
     .wp-template-card .wp-tpl-badge { position: absolute; top: 10px; right: 10px; font-size: 0.72rem; padding: 2px 8px; border-radius: 4px; background: var(--accent, var(--teal)); color: #fff; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
@@ -1061,7 +1076,7 @@
     .wp-template-card .wp-tpl-meta { display: flex; gap: 12px; font-size: 0.78rem; color: var(--warm-gray, #888); }
     .wp-tpl-flow-preview { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 8px; }
     .wp-tpl-flow-chip { font-size: 0.72rem; padding: 2px 6px; border-radius: 3px; background: rgba(255,255,255,0.08); color: var(--warm-gray, #aaa); }
-    .wp-switch-dialog { padding: 20px; background: var(--charcoal, var(--charcoal)); border-radius: 8px; border: 1px solid var(--charcoal-light, #333); }
+    .wp-switch-dialog { padding: 20px; background: var(--text-primary); border-radius: 8px; border: 1px solid var(--charcoal-light, #333); }
     .wp-switch-section { margin-bottom: 14px; }
     .wp-switch-section h4 { font-size: 0.85rem; margin-bottom: 6px; font-weight: 600; }
     .wp-switch-section ul { list-style: none; padding: 0; margin: 0; }
@@ -1089,7 +1104,7 @@
       align-items: center;
       gap: 6px;
       background: var(--cream);
-      color: var(--charcoal);
+      color: var(--text-primary);
     }
 
     .btn:disabled {
@@ -1116,7 +1131,7 @@
 
     .btn-secondary {
       background: var(--cream);
-      color: var(--charcoal);
+      color: var(--text-primary);
       border: 1px solid #ccc;
     }
 
@@ -1256,7 +1271,7 @@
       transition: all 0.15s;
       white-space: nowrap;
     }
-    .view-tab:hover { color: var(--charcoal); }
+    .view-tab:hover { color: var(--text-primary); }
     .view-tab.active {
       color: var(--amber);
       font-weight: 600;
@@ -1335,7 +1350,7 @@
       padding: 18px 12px 5px 16px;
       font-size: 0.78rem;
       font-weight: 600;
-      color: var(--charcoal);
+      color: var(--text-primary);
       background: none;
       border: none;
       cursor: pointer;
@@ -1368,7 +1383,7 @@
       transition: color 0.12s, background 0.12s;
       white-space: nowrap;
     }
-    .settings-nav-item:hover { color: var(--charcoal); background: rgba(0,0,0,0.03); }
+    .settings-nav-item:hover { color: var(--text-primary); background: rgba(0,0,0,0.03); }
     .settings-nav-item.active { color: var(--amber); border-left-color: var(--amber); font-weight: 600; background: rgba(245,158,11,0.05); }
     .settings-content-area { flex: 1; min-width: 0; padding: 0 0 40px 28px; }
     body.dark-mode .settings-sidebar-nav { border-right-color: #333; }
@@ -1723,7 +1738,7 @@
       font-size: 0.9rem;
       font-weight: 500;
       margin-bottom: 4px;
-      color: var(--charcoal);
+      color: var(--text-primary);
     }
 
     .gallery-card-meta {
@@ -1876,7 +1891,7 @@
     .img-lib-badge.product { background: rgba(133,100,4,0.2); color: #FFD54F; border: 1px solid rgba(133,100,4,0.35); }
     .img-lib-badge.source { background: rgba(158,158,158,0.15); color: #BDBDBD; border: 1px solid rgba(158,158,158,0.25); }
     .img-lib-stats { display: flex; gap: 16px; padding: 8px 0 12px; font-size: 0.85rem; color: var(--warm-gray); }
-    .img-lib-stat-num { font-weight: 600; color: var(--charcoal); }
+    .img-lib-stat-num { font-weight: 600; color: var(--text-primary); }
 
     /* ========== IMAGE PICKER MODAL ========== */
     .img-picker-grid {
@@ -1945,7 +1960,7 @@
     }
 
     .modal-close:hover {
-      color: var(--charcoal);
+      color: var(--text-primary);
     }
 
     .modal-body {
@@ -1993,7 +2008,7 @@
       font-size: 0.85rem;
       font-weight: 500;
       margin-bottom: 5px;
-      color: var(--charcoal);
+      color: var(--text-primary);
     }
 
     .form-group input[type="text"],
@@ -2014,7 +2029,7 @@
       font-size: 0.9rem;
       transition: border-color 0.2s, box-shadow 0.2s;
       background: var(--cream);
-      color: var(--charcoal);
+      color: var(--text-primary);
     }
 
     .form-group input:focus,
@@ -2085,7 +2100,7 @@
       font-family: 'DM Sans', sans-serif;
       font-size: 0.9rem;
       background: var(--cream);
-      color: var(--charcoal);
+      color: var(--text-primary);
       transition: border-color 0.2s, box-shadow 0.2s;
       box-sizing: border-box;
     }
@@ -2167,7 +2182,7 @@
     .confirm-body p {
       font-size: 1rem;
       margin-bottom: 20px;
-      color: var(--charcoal);
+      color: var(--text-primary);
     }
 
     .confirm-body .confirm-actions {
@@ -2371,7 +2386,7 @@
       font-size: 0.85rem;
       font-weight: 600;
       margin-bottom: 5px;
-      color: var(--charcoal);
+      color: var(--text-primary);
     }
     .feedback-screenshot-label {
       display: flex;
@@ -2408,7 +2423,7 @@
       justify-content: space-between;
       align-items: center;
     }
-    .feedback-debug-toggle:hover { color: var(--charcoal); }
+    .feedback-debug-toggle:hover { color: var(--text-primary); }
     .feedback-debug-rows {
       padding: 4px 12px 10px;
       border-top: 1px solid var(--border, #374151);
@@ -2424,7 +2439,7 @@
       display: flex;
       align-items: center;
       gap: 8px;
-      color: var(--charcoal);
+      color: var(--text-primary);
     }
     .feedback-debug-row-right {
       color: var(--text-muted, #9ca3af);
@@ -2464,7 +2479,7 @@
       bottom: 0;
       width: 340px;
       background: var(--cream);
-      color: var(--charcoal);
+      color: var(--text-primary);
       transform: translateX(100%);
       transition: transform 0.25s ease;
       z-index: 100;
@@ -2490,7 +2505,7 @@
       color: var(--warm-gray);
       padding: 0 4px;
     }
-    .tm-close:hover { color: var(--charcoal); }
+    .tm-close:hover { color: var(--text-primary); }
     .tm-body {
       flex: 1;
       overflow-y: auto;
@@ -2524,7 +2539,7 @@
       font-size: 0.78rem;
       font-weight: 600;
       margin-bottom: 6px;
-      color: var(--charcoal);
+      color: var(--text-primary);
     }
     .tm-prompt-area textarea {
       width: 100%;
@@ -2600,7 +2615,7 @@
       font-size: 0.85rem;
       line-height: 1.5;
       margin-bottom: 8px;
-      color: var(--charcoal);
+      color: var(--text-primary);
     }
     .tm-assistant-input-row {
       display: flex;
@@ -2794,7 +2809,7 @@
     }
     .quick-action-tile:hover { border-color:var(--amber-glow,var(--amber));box-shadow:0 2px 8px rgba(0,0,0,0.06);transform:translateY(-1px); }
     .quick-action-tile .qa-icon { font-size:1.6rem;margin-bottom:6px; }
-    .quick-action-tile .qa-label { font-size:0.78rem;font-weight:600;color:var(--charcoal,var(--charcoal)); }
+    .quick-action-tile .qa-label { font-size:0.78rem;font-weight:600;color:var(--text-primary); }
     body.dark-mode .quick-action-tile { background:var(--dm-card,#1e1e1e);border-color:var(--dm-border,#333); }
     body.dark-mode .quick-action-tile .qa-label { color:#e0e0e0; }
     body.dark-mode .purpose-chip { background:var(--dm-card,#1e1e1e);border-color:var(--dm-border,#333);color:#e0e0e0; }
@@ -3154,6 +3169,9 @@
          never paint cream-on-dark. */
       --bg-primary: #1a1a1a;
       --text-danger: #ff6b6b;
+      /* Flip primary text light. --charcoal is deliberately NOT overridden here —
+         it stays #1A1A1A for the genuinely-dark surfaces (header/sidebar). */
+      --text-primary: #e8e4df;
       background: var(--charcoal);
       color: #e0e0e0;
     }
@@ -3373,17 +3391,17 @@
 
     /* ========== SUBSCRIPTION BILLING INFO ========== */
     body.dark-mode #subscriptionBillingInfo div[style*="background:var(--cream)"] { background: #2a2a2a !important; border-color: #444 !important; }
-    body.dark-mode #subscriptionBillingInfo div[style*="color:var(--charcoal)"],
-    body.dark-mode #subscriptionBillingInfo span[style*="color:var(--charcoal)"] { color: #e0e0e0 !important; }
+    body.dark-mode #subscriptionBillingInfo div[style*="color:var(--text-primary)"],
+    body.dark-mode #subscriptionBillingInfo span[style*="color:var(--text-primary)"] { color: #e0e0e0 !important; }
     body.dark-mode #subscriptionBillingInfo div[style*="color:var(--warm-gray)"],
     body.dark-mode #subscriptionBillingInfo span[style*="color:var(--warm-gray)"] { color: #aaa !important; }
     body.dark-mode #subscriptionBillingInfo div[style*="background:#fef3c7"] { background: #3d2e00 !important; border-color: #6b5300 !important; color: #fbbf24 !important; }
 
     /* ========== CANCEL SUBSCRIPTION MODAL ========== */
     body.dark-mode #cancelSubscriptionOverlay > div { background: #2a2a2a !important; }
-    body.dark-mode #cancelSubscriptionOverlay div[style*="color:var(--charcoal)"],
-    body.dark-mode #cancelSubscriptionOverlay span[style*="color:var(--charcoal)"],
-    body.dark-mode #cancelSubscriptionOverlay p[style*="color:var(--charcoal)"] { color: #e0e0e0 !important; }
+    body.dark-mode #cancelSubscriptionOverlay div[style*="color:var(--text-primary)"],
+    body.dark-mode #cancelSubscriptionOverlay span[style*="color:var(--text-primary)"],
+    body.dark-mode #cancelSubscriptionOverlay p[style*="color:var(--text-primary)"] { color: #e0e0e0 !important; }
     body.dark-mode #cancelSubscriptionOverlay div[style*="color:var(--warm-gray)"],
     body.dark-mode #cancelSubscriptionOverlay p[style*="color:var(--warm-gray)"] { color: #aaa !important; }
     body.dark-mode #cancelSubscriptionOverlay div[style*="background:var(--cream-dark)"] { background: #333 !important; border-color: var(--amber) !important; }
@@ -3393,7 +3411,7 @@
     body.dark-mode #cancelSubscriptionOverlay label { color: #e0e0e0 !important; }
 
     /* ========== ABOUT SETTINGS ========== */
-    body.dark-mode #aboutContent h3[style*="color:var(--charcoal)"] { color: #e0e0e0 !important; }
+    body.dark-mode #aboutContent h3[style*="color:var(--text-primary)"] { color: #e0e0e0 !important; }
     body.dark-mode #aboutContent div[style*="background:var(--cream)"] { background: #2a2a2a !important; border-color: #444 !important; }
     body.dark-mode #aboutContent .about-value { color: #e0e0e0 !important; }
 
@@ -3413,7 +3431,7 @@
 
     /* ========== CONFIRM DIALOG (reusable) ========== */
     body.dark-mode #confirmDialogOverlay > div { background: #2a2a2a !important; }
-    body.dark-mode #confirmDialogOverlay div[style*="color:var(--charcoal)"] { color: #e0e0e0 !important; }
+    body.dark-mode #confirmDialogOverlay div[style*="color:var(--text-primary)"] { color: #e0e0e0 !important; }
     body.dark-mode #confirmDialogOverlay p[style*="color:var(--warm-gray)"] { color: #aaa !important; }
 
     /* ========== MODULE SELECTION (Subscription Settings) ========== */
@@ -3433,7 +3451,7 @@
 
     /* ========== MEMBERSHIP ADMIN (Cart module) ========== */
     body.dark-mode #membershipAdmin div[style*="background:var(--cream)"] { background: #2a2a2a !important; border-color: #444 !important; }
-    body.dark-mode #membershipAdmin div[style*="color:var(--charcoal)"] { color: #e0e0e0 !important; }
+    body.dark-mode #membershipAdmin div[style*="color:var(--text-primary)"] { color: #e0e0e0 !important; }
     body.dark-mode #membershipAdmin button[style*="background:var(--cream)"] { background: #2a2a2a !important; border-color: #444 !important; color: #999 !important; }
     body.dark-mode #membershipAdmin tr[style*="border-bottom"] { border-color: #444 !important; }
     body.dark-mode #membershipAdmin th { color: #999 !important; }
@@ -3491,7 +3509,7 @@
       background: rgba(42,124,111,0.08);
       border-bottom: 1px solid rgba(42,124,111,0.18);
       font-size: 0.85rem;
-      color: var(--charcoal, var(--text));
+      color: var(--text-primary);
     }
     #modesBannerSlot .modes-banner-message { flex: 1; line-height: 1.45; }
     #modesBannerSlot .modes-banner-actions { display: flex; gap: 8px; flex-shrink: 0; }
@@ -3534,7 +3552,7 @@
       text-align: center;
     }
     .locked-module-card .lmc-icon { font-size: 1.6rem; margin-bottom: 12px; }
-    .locked-module-card .lmc-name { font-size: 1.15rem; font-weight: 700; font-family: 'Cormorant Garamond', serif; color: var(--charcoal, var(--charcoal)); margin-bottom: 6px; }
+    .locked-module-card .lmc-name { font-size: 1.15rem; font-weight: 700; font-family: 'Cormorant Garamond', serif; color: var(--text-primary); margin-bottom: 6px; }
     .locked-module-card .lmc-desc { font-size: 0.9rem; color: var(--warm-gray, var(--warm-gray)); line-height: 1.5; margin-bottom: 12px; }
     .locked-module-card .lmc-synergy { font-size: 0.85rem; color: var(--teal, var(--teal)); font-style: italic; margin-bottom: 16px; }
     .locked-module-card .lmc-cta {
@@ -3771,7 +3789,7 @@
     .inv-variant-edit { display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap; margin-top: 6px; }
     .inv-variant-edit select, .inv-variant-edit input {
       font-size: 0.78rem; padding: 4px 6px; border: 1px solid #ddd; border-radius: 4px;
-      background: var(--cream); color: var(--charcoal); font-family: 'DM Sans';
+      background: var(--cream); color: var(--text-primary); font-family: 'DM Sans';
     }
     body.dark-mode .inv-variant-edit select, body.dark-mode .inv-variant-edit input {
       background: #2a2a2a; border-color: #444; color: #e0e0e0;
@@ -3796,7 +3814,7 @@
       transition: all 0.2s;
       font-family: 'DM Sans', sans-serif;
     }
-    .order-filter-pill:hover { border-color: var(--amber); color: var(--charcoal); }
+    .order-filter-pill:hover { border-color: var(--amber); color: var(--text-primary); }
     .order-filter-pill.active { background: var(--charcoal); color: white; border-color: var(--charcoal); }
     .order-filter-pill .pill-count {
       font-size: 0.72rem;
@@ -4180,7 +4198,7 @@
       padding-top: 8px;
       font-weight: 600;
       font-size: 1rem;
-      color: var(--charcoal);
+      color: var(--text-primary);
     }
     .order-summary-row.total .order-summary-value { color: var(--amber); }
 
@@ -4238,7 +4256,7 @@
       color: var(--warm-gray-light);
     }
     .order-timeline-text {
-      color: var(--charcoal);
+      color: var(--text-primary);
       margin-top: 2px;
     }
 
@@ -4597,7 +4615,7 @@
       font-size: 1.15rem;
       font-weight: 600;
       margin: 0;
-      color: var(--charcoal);
+      color: var(--text-primary);
     }
     .setup-scorecard-dismiss {
       background: none;
@@ -4668,7 +4686,7 @@
     .setup-scorecard-label {
       flex: 1;
       font-size: 0.85rem;
-      color: var(--charcoal);
+      color: var(--text-primary);
     }
     .setup-scorecard-item.complete .setup-scorecard-label {
       text-decoration: line-through;
@@ -4732,7 +4750,7 @@
     }
     body.dark-mode .order-filter-pill.active {
       background: #d4a053;
-      color: var(--charcoal);
+      color: var(--text-primary);
       border-color: #d4a053;
     }
     body.dark-mode .order-timeline::before { background: #3a3a3a; }
@@ -4791,7 +4809,7 @@
       font-size: 1rem;
       font-weight: 600;
       margin-bottom: 12px;
-      color: var(--charcoal);
+      color: var(--text-primary);
     }
     .analytics-bar-row {
       display: flex;
@@ -4825,7 +4843,7 @@
       text-align: right;
       font-size: 0.85rem;
       font-weight: 600;
-      color: var(--charcoal);
+      color: var(--text-primary);
       flex-shrink: 0;
     }
     .analytics-feed-item {
@@ -4876,7 +4894,7 @@
       padding: 8px 10px;
       border-bottom: 2px solid #e0e0e0;
       font-weight: 600;
-      color: var(--charcoal);
+      color: var(--text-primary);
       font-size: 0.78rem;
       text-transform: uppercase;
       letter-spacing: 0.03em;
@@ -4884,7 +4902,7 @@
     .analytics-visitors-table td {
       padding: 8px 10px;
       border-bottom: 1px solid #f0f0f0;
-      color: var(--charcoal);
+      color: var(--text-primary);
     }
     .analytics-visitors-table code {
       background: #f5f5f5;
@@ -4951,7 +4969,7 @@
       font-size: 1.15rem;
       font-weight: 600;
       margin-bottom: 4px;
-      color: var(--charcoal);
+      color: var(--text-primary);
     }
     .product-card-price {
       font-size: 0.9rem;
@@ -4984,7 +5002,7 @@
     }
     .product-card-options span {
       font-weight: 500;
-      color: var(--charcoal);
+      color: var(--text-primary);
     }
     .product-card-images-count {
       font-size: 0.78rem;
@@ -5105,7 +5123,7 @@
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      color: var(--charcoal);
+      color: var(--text-primary);
       transition: background 0.15s;
     }
     .btn-adj:hover { background: var(--cream-dark); }
@@ -5176,7 +5194,7 @@
       border-radius: 6px;
       font-size: 0.85rem;
       background: var(--cream);
-      color: var(--charcoal);
+      color: var(--text-primary);
     }
     .audit-table { margin-top: 12px; }
     .audit-table table { width: 100%; border-collapse: collapse; }
@@ -5210,7 +5228,7 @@
       border-radius: 4px;
       font-size: 0.72rem;
       background: var(--cream-dark);
-      color: var(--charcoal);
+      color: var(--text-primary);
     }
     .audit-gps-badge {
       display: inline-block;
@@ -5257,7 +5275,7 @@
       color: var(--warm-gray);
     }
     .audit-stat strong {
-      color: var(--charcoal);
+      color: var(--text-primary);
     }
 
     /* Record history inline component */
@@ -5270,7 +5288,7 @@
       font-size: 0.85rem;
       font-weight: 600;
       margin-bottom: 10px;
-      color: var(--charcoal);
+      color: var(--text-primary);
     }
     .record-history-item {
       display: flex;
@@ -5403,7 +5421,7 @@
       border-radius: 6px;
       font-size: 0.85rem;
       background: var(--cream);
-      color: var(--charcoal);
+      color: var(--text-primary);
     }
     .user-avatar {
       width: 32px;
@@ -5488,7 +5506,7 @@
     .interaction-card:hover { border-color:var(--amber-light); }
     .interaction-header { display:flex; align-items:center; gap:10px; margin-bottom:6px; flex-wrap:wrap; }
     .interaction-date { font-weight:600; font-size:0.9rem; }
-    .interaction-notes { font-size:0.9rem; color:var(--charcoal); white-space:pre-wrap; }
+    .interaction-notes { font-size:0.9rem; color:var(--text-primary); white-space:pre-wrap; }
     .interaction-docs { margin-top:8px; display:flex; flex-direction:column; gap:4px; }
     .interaction-doc-link { display:flex; align-items:center; gap:6px; font-size:0.85rem; color:var(--teal); text-decoration:none; }
     .interaction-doc-link:hover { text-decoration:underline; }
@@ -5527,13 +5545,13 @@
     .sm-post-title { font-weight:500; font-size:0.9rem; }
     .sm-post-date { font-size:0.78rem; color:var(--warm-gray-light); margin-top:2px; }
     .sm-post-badges { display:flex; gap:6px; align-items:center; flex-shrink:0; }
-    .sm-post-caption-expand { padding:12px 0 0; font-size:0.85rem; color:var(--charcoal); line-height:1.5; border-top:1px solid #e8e2d8; margin-top:12px; white-space:pre-wrap; }
+    .sm-post-caption-expand { padding:12px 0 0; font-size:0.85rem; color:var(--text-primary); line-height:1.5; border-top:1px solid #e8e2d8; margin-top:12px; white-space:pre-wrap; }
 
 
     /* Quick Stats */
     .sm-stats-bar { display:flex; gap:16px; margin-bottom:24px; }
     .sm-stat-card { flex:1; background:var(--cream); border:1px solid #e8e2d8; border-radius:8px; padding:14px 18px; text-align:center; }
-    .sm-stat-value { font-size:1.6rem; font-weight:700; color:var(--charcoal); }
+    .sm-stat-value { font-size:1.6rem; font-weight:700; color:var(--text-primary); }
     .sm-stat-label { font-size:0.78rem; color:var(--warm-gray-light); margin-top:2px; }
 
     /* New Post / Enhancement Dialog */
@@ -5564,7 +5582,7 @@
     /* Destination Chips */
     .sm-dest-chips { display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; }
     .sm-dest-chip { padding:8px 16px; border:2px solid #e8e2d8; border-radius:20px; font-size:0.85rem; font-weight:500; cursor:pointer; transition:all 0.2s; user-select:none; }
-    .sm-dest-chip.selected { border-color:var(--amber); background:rgba(196,133,60,0.1); color:var(--charcoal); }
+    .sm-dest-chip.selected { border-color:var(--amber); background:rgba(196,133,60,0.1); color:var(--text-primary); }
     .sm-dest-chip.disabled { opacity:0.45; cursor:not-allowed; }
 
     /* Readiness Score */
@@ -5578,7 +5596,7 @@
     .sm-caption-card:hover { border-color:var(--amber-light); }
     .sm-caption-card.selected { border-color:var(--amber); background:rgba(196,133,60,0.04); }
     .sm-caption-style { font-weight:600; font-size:0.85rem; color:var(--amber); margin-bottom:6px; }
-    .sm-caption-text { font-size:0.9rem; line-height:1.5; color:var(--charcoal); }
+    .sm-caption-text { font-size:0.9rem; line-height:1.5; color:var(--text-primary); }
     .sm-caption-edit { width:100%; min-height:100px; margin-top:8px; padding:10px; border:1px solid #ddd; border-radius:6px; font-family:'DM Sans',sans-serif; font-size:0.9rem; resize:vertical; }
 
     /* Posting Guide Steps */
@@ -5592,7 +5610,7 @@
     /* Hashtag Tiers */
     .sm-hashtag-tier { margin-bottom:10px; }
     .sm-hashtag-tier-label { font-size:0.78rem; font-weight:600; color:var(--warm-gray); margin-bottom:4px; }
-    .sm-hashtag-list { font-size:0.85rem; color:var(--charcoal); line-height:1.6; word-break:break-all; }
+    .sm-hashtag-list { font-size:0.85rem; color:var(--text-primary); line-height:1.6; word-break:break-all; }
 
     /* Shoot Card */
     .sm-shoot-card { max-width:480px; margin:20px auto; text-align:center; }
@@ -5612,7 +5630,7 @@
 
     /* Enhancement form sections */
     .sm-enhance-section { margin-bottom:24px; }
-    .sm-enhance-section-label { font-weight:600; font-size:0.9rem; margin-bottom:10px; color:var(--charcoal); }
+    .sm-enhance-section-label { font-weight:600; font-size:0.9rem; margin-bottom:10px; color:var(--text-primary); }
 
     /* Dark mode — Social Media */
     body.dark-mode .sm-clip-card { background:#1e1e1e; border-color:#333; }
@@ -7171,7 +7189,7 @@
 
       <!-- Email-link "check your inbox" confirmation (hidden until a link is sent) -->
       <div id="authEmailLinkSent" style="display:none;flex-direction:column;align-items:center;gap:12px;max-width:340px;">
-        <p style="margin:0;font-weight:600;color:var(--charcoal);">Check your email</p>
+        <p style="margin:0;font-weight:600;color:var(--text-primary);">Check your email</p>
         <p style="margin:0;color:var(--warm-gray);">We sent a sign-in link to <strong id="authEmailLinkSentTo"></strong>. Click the link to finish signing in. (Check your spam folder if you don't see it.)</p>
         <button type="button" class="auth-secondary-btn" onclick="authResetSignInScreen()">Back to sign in</button>
       </div>
@@ -7272,7 +7290,7 @@
         <div style="background:var(--cream, var(--cream));border-radius:16px;padding:32px;box-shadow:0 8px 32px rgba(0,0,0,0.2);">
           <div style="text-align:center;margin-bottom:24px;">
             <div style="font-size:1.6rem;margin-bottom:8px;">&#x1F3AF;</div>
-            <h2 id="moduleSelectionTitle" style="font-family:'Cormorant Garamond', serif;font-size:1.6rem;font-weight:700;color:var(--charcoal, var(--charcoal));margin:0 0 8px;">Choose Your Modules</h2>
+            <h2 id="moduleSelectionTitle" style="font-family:'Cormorant Garamond', serif;font-size:1.6rem;font-weight:700;color:var(--text-primary);margin:0 0 8px;">Choose Your Modules</h2>
             <p id="moduleSelectionSubtitle" style="font-size:0.9rem;color:var(--warm-gray, var(--warm-gray));margin:0;"></p>
           </div>
           <div id="moduleSelectionModalCards"></div>
@@ -10650,7 +10668,7 @@
         <!-- New key reveal (shown once after generation) -->
         <div id="aiNewKeyReveal" style="display:none;margin-top:16px;">
           <div style="background:var(--cream,#faf8f5);border:2px solid var(--amber);border-radius:8px;padding:16px;">
-            <div style="font-weight:600;margin-bottom:8px;color:var(--charcoal);">Your API Key</div>
+            <div style="font-weight:600;margin-bottom:8px;color:var(--text-primary);">Your API Key</div>
             <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:12px;">
               Copy this key now — it won't be shown again.
             </p>
@@ -10664,17 +10682,17 @@
         <!-- Setup Instructions (collapsible) -->
         <div style="margin-top:24px;">
           <hr style="border:none;border-top:1px solid var(--border,#eee);margin:24px 0;">
-          <div style="font-weight:600;margin-bottom:4px;color:var(--charcoal);">Setup Instructions</div>
+          <div style="font-weight:600;margin-bottom:4px;color:var(--text-primary);">Setup Instructions</div>
           <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:12px;">
             Create a new MCP connector called <strong>"Mast Tenant MCP"</strong> in your AI tool and add the server URL below.
           </p>
           <div style="display:flex;gap:8px;align-items:center;margin-bottom:16px;">
-            <div style="font-size:0.85rem;font-weight:500;color:var(--charcoal);">Server URL:</div>
+            <div style="font-size:0.85rem;font-weight:500;color:var(--text-primary);">Server URL:</div>
             <code id="aiSetupServerUrl" style="user-select:all;font-size:0.85rem;background:var(--cream,#faf8f5);padding:4px 8px;border-radius:4px;border:1px solid var(--cream-dark,#e8e0d4);"></code>
             <button class="btn btn-secondary btn-small" onclick="copyMcpUrl()" id="copyMcpUrlBtn" style="font-size:0.78rem;padding:4px 10px;">Copy</button>
           </div>
           <details style="margin-bottom:12px;">
-            <summary style="cursor:pointer;font-size:0.9rem;font-weight:500;color:var(--charcoal);padding:8px 0;">Claude.ai</summary>
+            <summary style="cursor:pointer;font-size:0.9rem;font-weight:500;color:var(--text-primary);padding:8px 0;">Claude.ai</summary>
             <div style="padding:12px;background:var(--cream,#faf8f5);border-radius:6px;margin-top:4px;">
               <ol style="font-size:0.85rem;color:var(--warm-gray);margin:0;padding-left:20px;">
                 <li>Go to <strong>Settings &gt; Connectors &gt; Add MCP</strong></li>
@@ -10685,7 +10703,7 @@
             </div>
           </details>
           <details style="margin-bottom:12px;">
-            <summary style="cursor:pointer;font-size:0.9rem;font-weight:500;color:var(--charcoal);padding:8px 0;">Claude Code</summary>
+            <summary style="cursor:pointer;font-size:0.9rem;font-weight:500;color:var(--text-primary);padding:8px 0;">Claude Code</summary>
             <div style="padding:12px;background:var(--cream,#faf8f5);border-radius:6px;margin-top:4px;">
               <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:8px;">Add to your <code>.mcp.json</code> or Claude Code settings. Uses API key auth:</p>
               <div style="position:relative;">
@@ -10695,7 +10713,7 @@
             </div>
           </details>
           <details style="margin-bottom:12px;">
-            <summary style="cursor:pointer;font-size:0.9rem;font-weight:500;color:var(--charcoal);padding:8px 0;">Cursor / VS Code</summary>
+            <summary style="cursor:pointer;font-size:0.9rem;font-weight:500;color:var(--text-primary);padding:8px 0;">Cursor / VS Code</summary>
             <div style="padding:12px;background:var(--cream,#faf8f5);border-radius:6px;margin-top:4px;">
               <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:8px;">Add to your <code>settings.json</code> under MCP servers. Uses API key auth:</p>
               <div style="position:relative;">
@@ -10705,7 +10723,7 @@
             </div>
           </details>
           <details style="margin-bottom:12px;">
-            <summary style="cursor:pointer;font-size:0.9rem;font-weight:500;color:var(--charcoal);padding:8px 0;">Other AI Tools</summary>
+            <summary style="cursor:pointer;font-size:0.9rem;font-weight:500;color:var(--text-primary);padding:8px 0;">Other AI Tools</summary>
             <div style="padding:12px;background:var(--cream,#faf8f5);border-radius:6px;margin-top:4px;">
               <p style="font-size:0.85rem;color:var(--warm-gray);">
                 If your AI tool supports MCP connectors, add the server URL above. If it supports OAuth, just sign in — no API key needed. Otherwise, generate an API key above and add it as a <code>Bearer</code> token in the <code>Authorization</code> header.
@@ -10716,7 +10734,7 @@
         <!-- Startup Prompt -->
         <div style="margin-top:0;">
           <hr style="border:none;border-top:1px solid var(--border,#eee);margin:24px 0;">
-          <div style="font-weight:600;margin-bottom:4px;color:var(--charcoal);">Startup Prompt</div>
+          <div style="font-weight:600;margin-bottom:4px;color:var(--text-primary);">Startup Prompt</div>
           <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:12px;">
             After connecting your AI tool, paste this prompt into your <strong>project instructions</strong> (Claude.ai) or <strong>custom instructions</strong> (other tools). This teaches your AI assistant how to work with your store.
           </p>
@@ -10920,10 +10938,10 @@
         </div>
       </div>
       <!-- Fallback banner (hidden until needed) -->
-      <div id="askAiFallbackBanner" style="display:none;margin-bottom:12px;padding:10px 12px;background:rgba(255,193,7,0.12);border:1px solid rgba(255,193,7,0.3);border-radius:6px;font-size:0.85rem;color:var(--charcoal);"></div>
+      <div id="askAiFallbackBanner" style="display:none;margin-bottom:12px;padding:10px 12px;background:rgba(255,193,7,0.12);border:1px solid rgba(255,193,7,0.3);border-radius:6px;font-size:0.85rem;color:var(--text-primary);"></div>
       <!-- Token-exhausted CTA (hidden until needed) -->
       <div id="askAiOutOfTokens" style="display:none;margin-bottom:12px;padding:14px 16px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.25);border-radius:6px;font-size:0.85rem;">
-        <strong style="color:var(--charcoal);">You're out of tokens.</strong>
+        <strong style="color:var(--text-primary);">You're out of tokens.</strong>
         <p style="margin:6px 0 8px;color:var(--warm-gray);">Buy coins to keep using Ask AI, or connect your own Anthropic key in Settings → AI to bypass Mast tokens.</p>
         <button class="btn btn-primary btn-small" onclick="navigateTo('coins')" style="font-size:0.78rem;padding:6px 12px;">Buy coins</button>
         <button class="btn btn-secondary btn-small" onclick="navigateTo('settings'); setTimeout(function(){switchSettingsSubView('ai')},100);" style="font-size:0.78rem;padding:6px 12px;margin-left:6px;">Settings → AI</button>
@@ -14108,7 +14126,7 @@ function _renderNavProfilesBar() {
       h += '<span style="display:inline-flex;align-items:center;background:var(--bg-soft,rgba(0,0,0,0.06));border-radius:999px;padding:2px 4px 2px 4px;">';
       h += '<button type="button" data-amt-action="profile-apply" data-amt-profile="' + esc(p.id) + '" ' +
            'title="Apply this profile" aria-label="Apply profile ' + esc(p.name) + '" ' +
-           'style="background:transparent;border:0;color:var(--charcoal,var(--text));font-size:0.85rem;font-weight:600;cursor:pointer;padding:2px 8px;border-radius:999px;">' +
+           'style="background:transparent;border:0;color:var(--text-primary);font-size:0.85rem;font-weight:600;cursor:pointer;padding:2px 8px;border-radius:999px;">' +
            esc(p.name) + ' <span style="font-weight:400;opacity:0.6;">(' + n + ')</span></button>';
       h += '<button type="button" data-amt-action="profile-delete" data-amt-profile="' + esc(p.id) + '" ' +
            'title="Delete profile" aria-label="Delete profile ' + esc(p.name) + '" ' +
@@ -14121,7 +14139,7 @@ function _renderNavProfilesBar() {
        'title="Save the current sidebar layout as a named profile">+ Save current setup</button>';
   h += '<span id="navProfileSaveForm" style="display:none;align-items:center;gap:6px;">';
   h += '<input id="navProfileNameInput" type="text" maxlength="40" placeholder="Profile name" ' +
-       'style="font-size:0.85rem;padding:5px 8px;border-radius:6px;border:1px solid var(--border,#cfc8bd);background:var(--bg,#fff);color:var(--charcoal,var(--text));min-width:160px;" />';
+       'style="font-size:0.85rem;padding:5px 8px;border-radius:6px;border:1px solid var(--border,#cfc8bd);background:var(--bg,#fff);color:var(--text-primary);min-width:160px;" />';
   h += '<button type="button" class="btn btn-primary btn-small" data-amt-action="profile-save-confirm">Save</button>';
   h += '<button type="button" class="btn btn-secondary btn-small" data-amt-action="profile-save-cancel">Cancel</button>';
   h += '</span>';
@@ -14367,9 +14385,9 @@ function _getToggleableRoutes() {
 
 // Build the drawer body content for one module entry.
 function renderAddToMastDrawerBody(info) {
-  var BASE_TXT = 'font-size:0.85rem;color:var(--charcoal,var(--text));line-height:1.5;';
+  var BASE_TXT = 'font-size:0.85rem;color:var(--text-primary);line-height:1.5;';
   var LABEL    = 'font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.06em;font-weight:600;margin-top:18px;margin-bottom:6px;';
-  var CHIP     = 'display:inline-block;font-size:0.78rem;color:var(--charcoal,var(--text));background:var(--bg-soft,rgba(0,0,0,0.06));border-radius:999px;padding:4px 10px;margin-right:6px;margin-bottom:6px;';
+  var CHIP     = 'display:inline-block;font-size:0.78rem;color:var(--text-primary);background:var(--bg-soft,rgba(0,0,0,0.06));border-radius:999px;padding:4px 10px;margin-right:6px;margin-bottom:6px;';
 
   var out = '';
 
@@ -14467,7 +14485,7 @@ function ensureAddToMastDrawer() {
       '<header style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:18px 20px 14px;' +
               'border-bottom:1px solid var(--border,rgba(255,255,255,0.08));flex-shrink:0;">' +
         '<div style="flex:1;min-width:0;">' +
-          '<h2 id="addToMastDrawerTitle" style="font-size:1.15rem;margin:0 0 4px;color:var(--charcoal,var(--text));font-weight:600;"></h2>' +
+          '<h2 id="addToMastDrawerTitle" style="font-size:1.15rem;margin:0 0 4px;color:var(--text-primary);font-weight:600;"></h2>' +
           '<div id="addToMastDrawerTagline" style="font-size:0.85rem;color:var(--warm-gray);line-height:1.4;"></div>' +
           '<div id="addToMastDrawerChips" style="margin-top:8px;"></div>' +
         '</div>' +
@@ -14767,7 +14785,7 @@ async function renderAddToMast() {
 
     html += '<div class="add-to-mast-section" style="padding:0 24px 24px;">';
     html += '<div style="display:flex;align-items:baseline;justify-content:space-between;gap:16px;border-bottom:1px solid var(--border,#e5e0d8);padding-bottom:8px;margin:16px 0 12px;">';
-    html += '<h3 style="font-size:1.0rem;margin:0;color:var(--charcoal,var(--text));">' + esc(sectionLabel) + ' <span style="font-weight:400;color:var(--warm-gray);font-size:0.85rem;">(' + sectionVisibleTotal + '/' + items.length + ' visible)</span></h3>';
+    html += '<h3 style="font-size:1.0rem;margin:0;color:var(--text-primary);">' + esc(sectionLabel) + ' <span style="font-weight:400;color:var(--warm-gray);font-size:0.85rem;">(' + sectionVisibleTotal + '/' + items.length + ' visible)</span></h3>';
     if (sectionHiddenCount > 0 || sectionVisibleCount > 0) {
       html += '<div style="display:flex;gap:8px;flex-shrink:0;flex-wrap:wrap;">';
       if (sectionVisibleCount > 0) {
@@ -14823,7 +14841,7 @@ async function renderAddToMast() {
 
       html += '<div class="add-to-mast-card" data-route-id="' + esc(it.routeId) + '" data-visible="' + (it.visible ? 'true' : 'false') + '" data-always-on="' + (it.alwaysOn ? 'true' : 'false') + '" style="' + cardStyle + '">';
       html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">';
-      html += '<div style="font-size:0.9rem;font-weight:600;color:var(--charcoal,var(--text));">' + esc(displayLabel) + '</div>';
+      html += '<div style="font-size:0.9rem;font-weight:600;color:var(--text-primary);">' + esc(displayLabel) + '</div>';
       if (it.alwaysOn) {
         html += '<span style="font-size:0.72rem;color:var(--warm-gray);font-weight:600;text-transform:uppercase;letter-spacing:0.05em;">Always on</span>';
       } else if (surfaceHidden) {
@@ -15209,7 +15227,7 @@ async function renderBusinessSetup() {
 
   // === Business category ===
   html += '<div style="margin-bottom:20px;">';
-  html += '<label style="display:block;font-size:0.85rem;font-weight:600;margin-bottom:6px;color:var(--charcoal,var(--text));">Business category</label>';
+  html += '<label style="display:block;font-size:0.85rem;font-weight:600;margin-bottom:6px;color:var(--text-primary);">Business category</label>';
   html += '<select id="bsCategory" onchange="bsUpdateField(\'category\', this.value)" style="width:100%;max-width:360px;padding:8px;font-size:0.9rem;border:1px solid var(--border,#e5e0d8);border-radius:6px;background:var(--surface-card,#fff);">';
   html += '<option value="">— choose —</option>';
   var cats = BEC.BUSINESS_CATEGORIES || [];
@@ -15223,7 +15241,7 @@ async function renderBusinessSetup() {
 
   // === Revenue channels (multi-select checkboxes) ===
   html += '<div style="margin-bottom:20px;">';
-  html += '<label style="display:block;font-size:0.85rem;font-weight:600;margin-bottom:6px;color:var(--charcoal,var(--text));">How do you sell today? <span style="font-weight:400;color:var(--warm-gray);">(check all that apply)</span></label>';
+  html += '<label style="display:block;font-size:0.85rem;font-weight:600;margin-bottom:6px;color:var(--text-primary);">How do you sell today? <span style="font-weight:400;color:var(--warm-gray);">(check all that apply)</span></label>';
   var channels = BEC.REVENUE_CHANNELS || [];
   html += '<div style="display:flex;flex-direction:column;gap:6px;">';
   for (var c = 0; c < channels.length; c++) {
@@ -15238,7 +15256,7 @@ async function renderBusinessSetup() {
 
   // === Engagement mode (radio) ===
   html += '<div style="margin-bottom:20px;">';
-  html += '<label style="display:block;font-size:0.85rem;font-weight:600;margin-bottom:6px;color:var(--charcoal,var(--text));">How do you want to use Mast?</label>';
+  html += '<label style="display:block;font-size:0.85rem;font-weight:600;margin-bottom:6px;color:var(--text-primary);">How do you want to use Mast?</label>';
   var modes = BEC.ENGAGEMENT_MODE_CARDS || [];
   html += '<div style="display:flex;flex-direction:column;gap:6px;">';
   for (var m = 0; m < modes.length; m++) {
@@ -15265,7 +15283,7 @@ async function renderBusinessSetup() {
     { value: 'customer-service', label: 'Customer service (inbox, tickets, reviews)' }
   ];
   html += '<div style="margin-bottom:20px;">';
-  html += '<label style="display:block;font-size:0.85rem;font-weight:600;margin-bottom:6px;color:var(--charcoal,var(--text));">Modules you want enabled <span style="font-weight:400;color:var(--warm-gray);">(check all that apply)</span></label>';
+  html += '<label style="display:block;font-size:0.85rem;font-weight:600;margin-bottom:6px;color:var(--text-primary);">Modules you want enabled <span style="font-weight:400;color:var(--warm-gray);">(check all that apply)</span></label>';
   html += '<div style="display:flex;flex-direction:column;gap:6px;">';
   for (var n = 0; n < moduleOpts.length; n++) {
     var mo = moduleOpts[n];
@@ -15293,7 +15311,7 @@ async function renderBusinessSetup() {
     var overrides = (typeof getModeOverrides === 'function') ? getModeOverrides() : { enabledRoutes: [], disabledRoutes: [] };
     var diff = BEC.diffModeSets(currentModeSet, derivedNext, overrides);
 
-    html += '<div style="margin-bottom:12px;font-size:0.9rem;color:var(--charcoal,var(--text));">';
+    html += '<div style="margin-bottom:12px;font-size:0.9rem;color:var(--text-primary);">';
     html += '<strong>New mode-set:</strong> ' + esc(derivedNext.modes.join(', '));
     if (derivedNext.overlays.length) html += ' <span style="color:var(--warm-gray);">+ ' + esc(derivedNext.overlays.join(', ')) + ' overlay</span>';
     if (derivedNext.cohortFlag) html += ' <span style="color:var(--warm-gray);">+ cohort flag</span>';
@@ -15302,13 +15320,13 @@ async function renderBusinessSetup() {
     var hasAny = (diff.becomingVisible.length + diff.becomingHidden.length) > 0;
 
     if (!hasAny) {
-      html += '<div style="padding:12px;background:rgba(42,124,111,0.08);border-radius:6px;font-size:0.9rem;color:var(--charcoal,var(--text));margin-bottom:12px;">';
+      html += '<div style="padding:12px;background:rgba(42,124,111,0.08);border-radius:6px;font-size:0.9rem;color:var(--text-primary);margin-bottom:12px;">';
       html += 'Nothing will change &mdash; your new selections produce the same visible sidebar as today.';
       html += '</div>';
     } else {
       if (diff.becomingVisible.length) {
         html += '<div style="margin-bottom:12px;">';
-        html += '<div style="font-size:0.85rem;font-weight:600;color:var(--charcoal,var(--text));margin-bottom:4px;">These modules will become visible (' + diff.becomingVisible.length + '):</div>';
+        html += '<div style="font-size:0.85rem;font-weight:600;color:var(--text-primary);margin-bottom:4px;">These modules will become visible (' + diff.becomingVisible.length + '):</div>';
         html += '<ul style="margin:0;padding-left:20px;font-size:0.85rem;color:var(--warm-gray);line-height:1.6;">';
         for (var v = 0; v < diff.becomingVisible.length; v++) {
           var rv = diff.becomingVisible[v];
@@ -15320,7 +15338,7 @@ async function renderBusinessSetup() {
       }
       if (diff.becomingHidden.length) {
         html += '<div style="margin-bottom:12px;">';
-        html += '<div style="font-size:0.85rem;font-weight:600;color:var(--charcoal,var(--text));margin-bottom:4px;">These will be soft-hidden (you can still add them anytime):</div>';
+        html += '<div style="font-size:0.85rem;font-weight:600;color:var(--text-primary);margin-bottom:4px;">These will be soft-hidden (you can still add them anytime):</div>';
         html += '<ul style="margin:0;padding-left:20px;font-size:0.85rem;color:var(--warm-gray);line-height:1.6;">';
         for (var h = 0; h < diff.becomingHidden.length; h++) {
           var rh = diff.becomingHidden[h];
@@ -15653,7 +15671,7 @@ function renderModuleSelectionModalCards() {
     }
 
     h += '<div style="font-size:1.6rem;margin-bottom:4px;">' + mod.icon + '</div>';
-    h += '<div style="font-size:1.0rem;font-weight:700;font-family:\'Cormorant Garamond\', serif;color:var(--charcoal, var(--charcoal));margin-bottom:3px;">' + esc(mod.name) + '</div>';
+    h += '<div style="font-size:1.0rem;font-weight:700;font-family:\'Cormorant Garamond\', serif;color:var(--text-primary);margin-bottom:3px;">' + esc(mod.name) + '</div>';
     h += '<div style="font-size:0.85rem;color:var(--warm-gray, var(--warm-gray));line-height:1.4;">' + esc(mod.description) + '</div>';
     h += '</div>';
   });
@@ -15779,7 +15797,7 @@ function renderDashCardWithGating(cardConfig, renderFn) {
     var synergy = getSynergyMessage(moduleId);
     var discoverHtml = '<div style="padding:16px;text-align:center;">';
     discoverHtml += '<div style="font-size:1.6rem;margin-bottom:8px;">' + mod.icon + '</div>';
-    discoverHtml += '<div style="font-weight:600;color:var(--charcoal,var(--charcoal));margin-bottom:4px;">' + esc(mod.name) + '</div>';
+    discoverHtml += '<div style="font-weight:600;color:var(--text-primary);margin-bottom:4px;">' + esc(mod.name) + '</div>';
     discoverHtml += '<div style="font-size:0.85rem;color:var(--warm-gray,var(--warm-gray));margin-bottom:8px;">' + esc(mod.description) + '</div>';
     if (synergy) {
       discoverHtml += '<div style="font-size:0.78rem;color:var(--teal,var(--teal));font-style:italic;margin-bottom:8px;">' + esc(synergy) + '</div>';
@@ -17368,7 +17386,7 @@ function mastConfirm(message, options) {
     overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;';
     var btnClass = opts.danger ? 'btn btn-danger' : 'btn btn-primary';
     var h = '<div style="background:var(--cream);border-radius:10px;max-width:420px;width:90%;padding:24px 28px;box-shadow:0 8px 30px rgba(0,0,0,0.2);">';
-    if (opts.title) h += '<div style="font-family:\'Cormorant Garamond\',serif;font-size:1.15rem;font-weight:600;color:var(--charcoal);margin-bottom:12px;">' + esc(opts.title) + '</div>';
+    if (opts.title) h += '<div style="font-family:\'Cormorant Garamond\',serif;font-size:1.15rem;font-weight:600;color:var(--text-primary);margin-bottom:12px;">' + esc(opts.title) + '</div>';
     h += '<p style="font-size:0.9rem;color:var(--warm-gray);line-height:1.5;margin-bottom:20px;white-space:pre-line;">' + esc(message) + '</p>';
     h += '<div style="display:flex;justify-content:flex-end;gap:8px;">';
     h += '<button class="btn btn-secondary" id="mastDialogCancel">' + esc(opts.cancelLabel || 'Cancel') + '</button>';
@@ -17396,7 +17414,7 @@ function mastAlert(message, options) {
     var overlay = document.createElement('div');
     overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;';
     var h = '<div style="background:var(--cream);border-radius:10px;max-width:420px;width:90%;padding:24px 28px;box-shadow:0 8px 30px rgba(0,0,0,0.2);">';
-    if (opts.title) h += '<div style="font-family:\'Cormorant Garamond\',serif;font-size:1.15rem;font-weight:600;color:var(--charcoal);margin-bottom:12px;">' + esc(opts.title) + '</div>';
+    if (opts.title) h += '<div style="font-family:\'Cormorant Garamond\',serif;font-size:1.15rem;font-weight:600;color:var(--text-primary);margin-bottom:12px;">' + esc(opts.title) + '</div>';
     h += '<p style="font-size:0.9rem;color:var(--warm-gray);line-height:1.5;margin-bottom:20px;white-space:pre-line;">' + esc(message) + '</p>';
     h += '<div style="display:flex;justify-content:flex-end;">';
     h += '<button class="btn btn-primary" id="mastDialogOK">' + esc(opts.confirmLabel || 'OK') + '</button>';
@@ -17425,7 +17443,7 @@ function mastPrompt(message, options) {
     // on top of, not behind, the parent modal.
     overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:11000;display:flex;align-items:center;justify-content:center;padding:16px;';
     var h = '<div style="background:var(--cream);border-radius:10px;max-width:420px;width:90%;padding:24px 28px;box-shadow:0 8px 30px rgba(0,0,0,0.2);">';
-    if (opts.title) h += '<div style="font-family:\'Cormorant Garamond\',serif;font-size:1.15rem;font-weight:600;color:var(--charcoal);margin-bottom:12px;">' + esc(opts.title) + '</div>';
+    if (opts.title) h += '<div style="font-family:\'Cormorant Garamond\',serif;font-size:1.15rem;font-weight:600;color:var(--text-primary);margin-bottom:12px;">' + esc(opts.title) + '</div>';
     h += '<p style="font-size:0.9rem;color:var(--warm-gray);line-height:1.5;margin-bottom:12px;">' + esc(message) + '</p>';
     h += '<input type="text" id="mastDialogInput" class="form-input" style="width:100%;margin-bottom:20px;" value="' + esc(opts.defaultValue || '') + '" placeholder="' + esc(opts.placeholder || '') + '">';
     h += '<div style="display:flex;justify-content:flex-end;gap:8px;">';
@@ -17453,7 +17471,7 @@ function mastCopyFallback(label, text) {
   var overlay = document.createElement('div');
   overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;';
   var h = '<div style="background:var(--cream);border-radius:10px;max-width:420px;width:90%;padding:24px 28px;box-shadow:0 8px 30px rgba(0,0,0,0.2);">';
-  h += '<div style="font-family:\'Cormorant Garamond\',serif;font-size:1.15rem;font-weight:600;color:var(--charcoal);margin-bottom:12px;">' + esc(label) + '</div>';
+  h += '<div style="font-family:\'Cormorant Garamond\',serif;font-size:1.15rem;font-weight:600;color:var(--text-primary);margin-bottom:12px;">' + esc(label) + '</div>';
   h += '<input type="text" id="mastCopyInput" class="form-input" style="width:100%;margin-bottom:20px;" value="' + esc(text) + '" readonly>';
   h += '<div style="display:flex;justify-content:flex-end;">';
   h += '<button class="btn btn-primary" id="mastCopyClose">Close</button>';
@@ -17571,7 +17589,7 @@ window.mastSlideOut = (function() {
         '<header style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:18px 20px 14px;' +
                 'border-bottom:1px solid var(--border,rgba(255,255,255,0.08));flex-shrink:0;">' +
           '<div style="flex:1;min-width:0;">' +
-            '<h2 id="mastSlideOutTitle" style="font-size:1.15rem;margin:0 0 4px;color:var(--charcoal,var(--text));font-weight:600;"></h2>' +
+            '<h2 id="mastSlideOutTitle" style="font-size:1.15rem;margin:0 0 4px;color:var(--text-primary);font-weight:600;"></h2>' +
             '<div id="mastSlideOutSubtitle" style="font-size:0.85rem;color:var(--warm-gray);line-height:1.4;"></div>' +
           '</div>' +
           '<button type="button" id="mastSlideOutCloseBtn" onclick="window.mastSlideOut.close()" aria-label="Close" ' +
@@ -17700,7 +17718,7 @@ window.mastSortRows = function(rows, key, dir, getter) {
 window.mastSortableTh = function(label, key, currentKey, currentDir, onClickFnName, extraStyle) {
   var active = currentKey === key;
   var arrow = !active ? '' : (currentDir === 'desc' ? ' ▼' : ' ▲');
-  var color = active ? 'var(--charcoal, var(--text))' : 'var(--warm-gray)';
+  var color = active ? 'var(--text-primary)' : 'var(--warm-gray)';
   var style = 'text-align:left;padding:8px 12px;font-size:0.78rem;color:' + color + ';' +
               'border-bottom:1px solid rgba(255,255,255,0.06);cursor:pointer;user-select:none;' +
               (extraStyle || '');
@@ -17762,7 +17780,7 @@ function openMatchConfirmModal(opts) {
   var html =
     '<div style="background:var(--cream,#fff);border-radius:10px;max-width:540px;width:96%;max-height:88vh;display:flex;flex-direction:column;box-shadow:0 8px 30px rgba(0,0,0,0.2);">' +
       '<div style="padding:20px 24px 12px;border-bottom:1px solid rgba(0,0,0,0.08);">' +
-        '<div style="font-family:\'Cormorant Garamond\',serif;font-size:1.15rem;font-weight:600;color:var(--charcoal,#1f2937);">' + esc(opts.title || 'Confirm match') + '</div>' +
+        '<div style="font-family:\'Cormorant Garamond\',serif;font-size:1.15rem;font-weight:600;color:var(--text-primary);">' + esc(opts.title || 'Confirm match') + '</div>' +
         (opts.description ? '<div style="font-size:0.85rem;color:var(--warm-gray);margin-top:6px;line-height:1.4;">' + esc(opts.description) + '</div>' : '') +
       '</div>' +
       '<div style="padding:16px 24px;overflow-y:auto;flex:1;">' + rowsHtml + '</div>' +
@@ -21289,7 +21307,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260605-180753-9b761c0';
+var MAST_MODULES_V = '20260605-180940-d1a498c';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -23810,19 +23828,19 @@ function renderAboutSettings() {
   var modules = (sub.modules || []).filter(function(m) { return m !== 'web'; }).join(', ') || 'none';
   var h = '';
   h += '<div style="max-width:480px;">';
-  h += '<h3 style="font-family:\'Cormorant Garamond\',serif;font-size:1.6rem;color:var(--charcoal);margin-bottom:16px;">About Mast</h3>';
+  h += '<h3 style="font-family:\'Cormorant Garamond\',serif;font-size:1.6rem;color:var(--text-primary);margin-bottom:16px;">About Mast</h3>';
   h += '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:12px;padding:20px;">';
   h += '<div style="display:grid;grid-template-columns:auto 1fr;gap:8px 16px;font-size:0.9rem;">';
   h += '<span style="color:var(--warm-gray);font-weight:600;">Build</span>';
-  h += '<span class="about-value" style="color:var(--charcoal);font-family:monospace;">' + MAST_BUILD_V + '</span>';
+  h += '<span class="about-value" style="color:var(--text-primary);font-family:monospace;">' + MAST_BUILD_V + '</span>';
   h += '<span style="color:var(--warm-gray);font-weight:600;">Modules</span>';
-  h += '<span class="about-value" style="color:var(--charcoal);font-family:monospace;">' + MAST_MODULES_V + '</span>';
+  h += '<span class="about-value" style="color:var(--text-primary);font-family:monospace;">' + MAST_MODULES_V + '</span>';
   h += '<span style="color:var(--warm-gray);font-weight:600;">Tenant</span>';
-  h += '<span class="about-value" style="color:var(--charcoal);">' + esc(tenantId) + '</span>';
+  h += '<span class="about-value" style="color:var(--text-primary);">' + esc(tenantId) + '</span>';
   h += '<span style="color:var(--warm-gray);font-weight:600;">Tier</span>';
-  h += '<span class="about-value" style="color:var(--charcoal);text-transform:capitalize;">' + esc(tier) + '</span>';
+  h += '<span class="about-value" style="color:var(--text-primary);text-transform:capitalize;">' + esc(tier) + '</span>';
   h += '<span style="color:var(--warm-gray);font-weight:600;">Active Modules</span>';
-  h += '<span class="about-value" style="color:var(--charcoal);text-transform:capitalize;">' + esc(modules) + '</span>';
+  h += '<span class="about-value" style="color:var(--text-primary);text-transform:capitalize;">' + esc(modules) + '</span>';
   h += '</div>';
   h += '</div>';
   h += '<p style="margin-top:16px;font-size:0.78rem;color:var(--warm-gray);">Powered by Mast &mdash; runmast.com</p>';
@@ -25003,7 +25021,7 @@ async function renderWizardFeeProjection() {
   }
 
   var h = '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:10px;padding:16px;">';
-  h += '<div style="font-family:\'Cormorant Garamond\',serif;font-weight:700;font-size:1.15rem;color:var(--charcoal);margin-bottom:6px;">Your monthly software fee</div>';
+  h += '<div style="font-family:\'Cormorant Garamond\',serif;font-weight:700;font-size:1.15rem;color:var(--text-primary);margin-bottom:6px;">Your monthly software fee</div>';
 
   if (!bracket) {
     h += '<div style="font-size:0.9rem;color:var(--warm-gray);">' +
@@ -25020,11 +25038,11 @@ async function renderWizardFeeProjection() {
     h += '<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:10px 0 12px;">';
     h += '<div style="background:var(--cream-dark);border-radius:8px;padding:10px 12px;">' +
       '<div style="font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.05em;">Est. monthly revenue</div>' +
-      '<div style="font-family:\'Cormorant Garamond\',serif;font-size:1.15rem;font-weight:700;color:var(--charcoal);">' +
+      '<div style="font-family:\'Cormorant Garamond\',serif;font-size:1.15rem;font-weight:700;color:var(--text-primary);">' +
       esc(_revenueMeterFormatCents(monthlyNet)) + '</div></div>';
     h += '<div style="background:var(--cream-dark);border-radius:8px;padding:10px 12px;">' +
       '<div style="font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.05em;">Capped + rounded net</div>' +
-      '<div style="font-family:\'Cormorant Garamond\',serif;font-size:1.15rem;font-weight:700;color:var(--charcoal);">' +
+      '<div style="font-family:\'Cormorant Garamond\',serif;font-size:1.15rem;font-weight:700;color:var(--text-primary);">' +
       esc(_revenueMeterFormatCents(rounded)) + '</div></div>';
     h += '<div style="background:var(--cream-dark);border-radius:8px;padding:10px 12px;">' +
       '<div style="font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.05em;">Monthly software fee</div>' +
@@ -25143,7 +25161,7 @@ function renderV1UpgradeOfferBanner(platformTenant) {
   if (!tier) { el.innerHTML = ''; return; }
   var avgDollars = offer.avgCents ? ('$' + Math.round(offer.avgCents / 100)) : '';
   var h = '<div style="background:rgba(255,193,7,0.1);border:1px solid rgba(255,193,7,0.35);border-radius:8px;padding:16px 20px;">';
-  h += '<div style="font-weight:600;font-family:\'Cormorant Garamond\',serif;font-size:1.15rem;color:var(--charcoal);margin-bottom:4px;">You qualified for the ' + esc(tier.label) + ' tier</div>';
+  h += '<div style="font-weight:600;font-family:\'Cormorant Garamond\',serif;font-size:1.15rem;color:var(--text-primary);margin-bottom:4px;">You qualified for the ' + esc(tier.label) + ' tier</div>';
   h += '<div style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:12px;">Trailing 3-month average revenue ' + (avgDollars ? '(' + esc(avgDollars) + '/mo) ' : '') + 'crossed the ' + esc(tier.label) + ' threshold. Connect a payment method to upgrade and unlock ' + tier.tokens.toLocaleString() + ' tokens/mo + ' + tier.bonusPct + '% coin bonus.</div>';
   h += '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">';
   h += '<button class="btn btn-primary" onclick="upgradeFreeTenant(\'' + esc(offer.targetTier) + '\', \'month\')">Upgrade to ' + esc(tier.label) + ' (monthly)</button>';
@@ -25200,14 +25218,14 @@ function renderV1TierCard(platformTenant) {
   if (interval === 'year') priceText = v1FormatCents(tier.priceMonthly * 10) + '/yr (2 months free)';
 
   var h = '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:20px;">';
-  h += '<div style="font-weight:600;font-family:\'Cormorant Garamond\',serif;font-size:1.15rem;color:var(--charcoal);margin-bottom:4px;">Current tier</div>';
+  h += '<div style="font-weight:600;font-family:\'Cormorant Garamond\',serif;font-size:1.15rem;color:var(--text-primary);margin-bottom:4px;">Current tier</div>';
   h += '<div style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:14px;">Your V1 plan determines monthly token allowance, coin-purchase bonus, and connected-account caps.</div>';
   h += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px 24px;">';
-  h += '<div><div style="font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;">Plan</div><div style="font-size:1.15rem;font-weight:600;color:var(--charcoal);">' + esc(tier.label) + '</div></div>';
+  h += '<div><div style="font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;">Plan</div><div style="font-size:1.15rem;font-weight:600;color:var(--text-primary);">' + esc(tier.label) + '</div></div>';
   h += '<div><div style="font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;">Price</div><div style="font-size:1.15rem;font-weight:600;color:var(--amber);">' + esc(priceText) + '</div></div>';
-  h += '<div><div style="font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;">Monthly tokens</div><div style="font-size:1rem;font-weight:600;color:var(--charcoal);">' + tier.tokens.toLocaleString() + '</div></div>';
-  h += '<div><div style="font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;">Coin bonus</div><div style="font-size:1rem;font-weight:600;color:var(--charcoal);">+' + tier.bonusPct + '%</div></div>';
-  h += '<div><div style="font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;">Plaid accounts</div><div style="font-size:1rem;font-weight:600;color:var(--charcoal);">' + (tier.plaidCap || '0') + ' cap</div></div>';
+  h += '<div><div style="font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;">Monthly tokens</div><div style="font-size:1rem;font-weight:600;color:var(--text-primary);">' + tier.tokens.toLocaleString() + '</div></div>';
+  h += '<div><div style="font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;">Coin bonus</div><div style="font-size:1rem;font-weight:600;color:var(--text-primary);">+' + tier.bonusPct + '%</div></div>';
+  h += '<div><div style="font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;">Plaid accounts</div><div style="font-size:1rem;font-weight:600;color:var(--text-primary);">' + (tier.plaidCap || '0') + ' cap</div></div>';
   h += '</div>';
   h += '</div>';
   el.innerHTML = h;
@@ -25228,18 +25246,18 @@ function renderV1UsageCard(platformTenant) {
   var coinSurplus = w.coinTokenSurplus || 0;
 
   var h = '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:20px;">';
-  h += '<div style="font-weight:600;font-family:\'Cormorant Garamond\',serif;font-size:1.15rem;color:var(--charcoal);margin-bottom:4px;">Current period usage</div>';
+  h += '<div style="font-weight:600;font-family:\'Cormorant Garamond\',serif;font-size:1.15rem;color:var(--text-primary);margin-bottom:4px;">Current period usage</div>';
   h += '<div style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:14px;">Resets on the 1st of each month at 00:00 UTC.</div>';
   h += '<div style="font-size:0.85rem;margin-bottom:6px;"><strong>' + used.toLocaleString() + '</strong> / ' + alloc.toLocaleString() + ' tokens used (' + pct + '%)</div>';
   h += '<div style="background:var(--cream-dark);border-radius:6px;height:10px;overflow:hidden;margin-bottom:14px;">';
   h += '<div style="background:var(--amber);height:100%;width:' + pct + '%;"></div>';
   h += '</div>';
   h += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px 24px;font-size:0.85rem;">';
-  h += '<div><span style="color:var(--warm-gray);">Coins:</span> <span style="color:var(--charcoal);font-weight:600;">' + coinBalance + '</span></div>';
+  h += '<div><span style="color:var(--warm-gray);">Coins:</span> <span style="color:var(--text-primary);font-weight:600;">' + coinBalance + '</span></div>';
   if (coinSurplus > 0) {
-    h += '<div><span style="color:var(--warm-gray);">Coin token surplus:</span> <span style="color:var(--charcoal);font-weight:600;">' + coinSurplus + '</span></div>';
+    h += '<div><span style="color:var(--warm-gray);">Coin token surplus:</span> <span style="color:var(--text-primary);font-weight:600;">' + coinSurplus + '</span></div>';
   }
-  h += '<div><span style="color:var(--warm-gray);">Tokens remaining:</span> <span style="color:var(--charcoal);font-weight:600;">' + current.toLocaleString() + '</span></div>';
+  h += '<div><span style="color:var(--warm-gray);">Tokens remaining:</span> <span style="color:var(--text-primary);font-weight:600;">' + current.toLocaleString() + '</span></div>';
   h += '</div>';
   h += '</div>';
   el.innerHTML = h;
@@ -25281,7 +25299,7 @@ async function renderV1RevenueAndNextTier(platformTenant) {
   var downgradeEligible = !!(prevTier && currentFloor > 0 && present >= 1 && avgCents < currentFloor);
 
   var h = '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:20px;">';
-  h += '<div style="font-weight:600;font-family:\'Cormorant Garamond\',serif;font-size:1.15rem;color:var(--charcoal);margin-bottom:4px;">Trailing 3-month revenue</div>';
+  h += '<div style="font-weight:600;font-family:\'Cormorant Garamond\',serif;font-size:1.15rem;color:var(--text-primary);margin-bottom:4px;">Trailing 3-month revenue</div>';
   h += '<div style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:14px;">Net revenue across all channels for the past 3 closed months.</div>';
   h += '<div style="display:flex;align-items:baseline;gap:20px;flex-wrap:wrap;">';
   h += '<div><div style="font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;">' + (present > 0 ? present : 3) + '-month avg net</div><div style="font-family:\'Cormorant Garamond\',serif;font-size:1.6rem;font-weight:700;color:var(--amber);">' + esc(v1FormatCents(avgCents)) + '/mo</div></div>';
@@ -25298,7 +25316,7 @@ async function renderV1RevenueAndNextTier(platformTenant) {
       var atOrAbove = avgCents >= Math.round(effectiveFloor * 0.8);
       var rampNote = rampMult > 1 ? ' (' + rampMult.toFixed(1) + '× floor while you\'re in month ' + ma + ' of 3)' : '';
       h += '<div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--cream-dark);">';
-      h += '<div style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:6px;">Next tier: <strong style="color:var(--charcoal);">' + esc(nextTier.label) + '</strong> — upgrade trigger this month is ' + esc(v1FormatCents(effectiveFloor)) + '/mo trailing avg' + rampNote + ' (' + pct + '%).</div>';
+      h += '<div style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:6px;">Next tier: <strong style="color:var(--text-primary);">' + esc(nextTier.label) + '</strong> — upgrade trigger this month is ' + esc(v1FormatCents(effectiveFloor)) + '/mo trailing avg' + rampNote + ' (' + pct + '%).</div>';
       h += '<div style="background:var(--cream-dark);border-radius:6px;height:8px;overflow:hidden;">';
       h += '<div style="background:' + (atOrAbove ? '#16a34a' : 'var(--amber)') + ';height:100%;width:' + pct + '%;"></div>';
       h += '</div>';
@@ -25316,7 +25334,7 @@ async function renderV1RevenueAndNextTier(platformTenant) {
     var shortfall = currentFloor - avgCents;
     h += '<div style="margin-top:14px;padding:14px 16px;border:1px solid #c084fc;background:#faf5ff;border-radius:6px;">';
     h += '<div style="font-size:0.9rem;font-weight:600;color:#6b21a8;margin-bottom:4px;">Downgrade eligible</div>';
-    h += '<div style="font-size:0.85rem;color:var(--charcoal);margin-bottom:10px;">Your trailing avg is ' + esc(v1FormatCents(shortfall)) + '/mo below the ' + esc(currentTier.label) + ' tier floor (' + esc(v1FormatCents(currentFloor)) + '/mo). Plan changes prorate automatically.</div>';
+    h += '<div style="font-size:0.85rem;color:var(--text-primary);margin-bottom:10px;">Your trailing avg is ' + esc(v1FormatCents(shortfall)) + '/mo below the ' + esc(currentTier.label) + ' tier floor (' + esc(v1FormatCents(currentFloor)) + '/mo). Plan changes prorate automatically.</div>';
     h += '<button class="btn btn-secondary btn-small" onclick="openBillingPortal()">Request downgrade to ' + esc(prevTier.label) + '</button>';
     h += '</div>';
   }
@@ -25359,14 +25377,14 @@ function renderV1TierComparison(platformTenant) {
   var currentKey = v1ResolveTierKey(v1sub ? v1sub.plan : (platformTenant && platformTenant.currentTier));
 
   var h = '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:20px;">';
-  h += '<div style="font-weight:600;font-family:\'Cormorant Garamond\',serif;font-size:1.15rem;color:var(--charcoal);margin-bottom:4px;">All tiers</div>';
+  h += '<div style="font-weight:600;font-family:\'Cormorant Garamond\',serif;font-size:1.15rem;color:var(--text-primary);margin-bottom:4px;">All tiers</div>';
   h += '<div style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:14px;">Compare and switch via the Stripe Customer Portal. Plan changes prorate automatically.</div>';
   h += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;">';
   V1_TIERS.forEach(function(t) {
     var isCurrent = t.key === currentKey;
     var border = isCurrent ? '2px solid var(--amber)' : '1px solid var(--cream-dark)';
     h += '<div style="background:#fff;border:' + border + ';border-radius:8px;padding:14px;display:flex;flex-direction:column;gap:6px;">';
-    h += '<div style="font-weight:600;font-size:1rem;color:var(--charcoal);">' + esc(t.label) + (isCurrent ? ' <span style="color:var(--amber);font-size:0.72rem;text-transform:uppercase;">Current</span>' : '') + '</div>';
+    h += '<div style="font-weight:600;font-size:1rem;color:var(--text-primary);">' + esc(t.label) + (isCurrent ? ' <span style="color:var(--amber);font-size:0.72rem;text-transform:uppercase;">Current</span>' : '') + '</div>';
     h += '<div style="font-family:\'Cormorant Garamond\',serif;font-size:1.15rem;font-weight:700;color:var(--amber);">' + esc(v1FormatCents(t.priceMonthly)) + '<span style="font-size:0.78rem;color:var(--warm-gray);font-weight:400;font-family:inherit;">/mo</span></div>';
     h += '<div style="font-size:0.78rem;color:var(--warm-gray);">' + t.tokens.toLocaleString() + ' tokens/mo</div>';
     h += '<div style="font-size:0.78rem;color:var(--warm-gray);">+' + t.bonusPct + '% coin bonus</div>';
@@ -25383,7 +25401,7 @@ function renderV1ManageBlock() {
   var el = document.getElementById('subscriptionManageBlock');
   if (!el) return;
   var h = '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:20px;">';
-  h += '<div style="font-weight:600;font-family:\'Cormorant Garamond\',serif;font-size:1.15rem;color:var(--charcoal);margin-bottom:4px;">Manage subscription</div>';
+  h += '<div style="font-weight:600;font-family:\'Cormorant Garamond\',serif;font-size:1.15rem;color:var(--text-primary);margin-bottom:4px;">Manage subscription</div>';
   h += '<div style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:14px;">Open the Stripe Customer Portal to change plan, update payment method, or download invoices.</div>';
   h += '<button class="btn btn-primary" onclick="openBillingPortal()" id="billingPortalBtn">Manage subscription</button>';
   h += '<span id="billingPortalStatus" style="margin-left:12px;font-size:0.85rem;"></span>';
@@ -25442,12 +25460,12 @@ function renderCoinsBalanceCard(platformTenant) {
   var coinSurplus = w.coinTokenSurplus || 0;
   var totalCoinTokens = (coinBalance * 100) + coinSurplus;
   var h = '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:20px;">';
-  h += '<div style="font-weight:600;font-family:\'Cormorant Garamond\',serif;font-size:1.15rem;color:var(--charcoal);margin-bottom:4px;">Coin balance</div>';
+  h += '<div style="font-weight:600;font-family:\'Cormorant Garamond\',serif;font-size:1.15rem;color:var(--text-primary);margin-bottom:4px;">Coin balance</div>';
   h += '<div style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:14px;">Coins purchase additional tokens beyond your monthly allocation. 1 coin = $1 = 100 tokens (plus your tier bonus at time of purchase).</div>';
   h += '<div style="display:flex;align-items:baseline;gap:24px;flex-wrap:wrap;">';
   h += '<div><div style="font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;">Coins</div><div style="font-family:\'Cormorant Garamond\',serif;font-size:1.6rem;font-weight:700;color:var(--amber);">' + coinBalance + '</div></div>';
-  h += '<div><div style="font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;">Surplus tokens</div><div style="font-size:1.15rem;font-weight:600;color:var(--charcoal);">' + coinSurplus.toLocaleString() + '</div></div>';
-  h += '<div><div style="font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;">Total token value</div><div style="font-size:1.15rem;font-weight:600;color:var(--charcoal);">' + totalCoinTokens.toLocaleString() + '</div></div>';
+  h += '<div><div style="font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;">Surplus tokens</div><div style="font-size:1.15rem;font-weight:600;color:var(--text-primary);">' + coinSurplus.toLocaleString() + '</div></div>';
+  h += '<div><div style="font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;">Total token value</div><div style="font-size:1.15rem;font-weight:600;color:var(--text-primary);">' + totalCoinTokens.toLocaleString() + '</div></div>';
   h += '</div>';
   h += '</div>';
   el.innerHTML = h;
@@ -25462,7 +25480,7 @@ function renderCoinsPackList(platformTenant) {
   var bonusPct = tier.bonusPct;
 
   var h = '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:20px;">';
-  h += '<div style="font-weight:600;font-family:\'Cormorant Garamond\',serif;font-size:1.15rem;color:var(--charcoal);margin-bottom:4px;">Buy coins</div>';
+  h += '<div style="font-weight:600;font-family:\'Cormorant Garamond\',serif;font-size:1.15rem;color:var(--text-primary);margin-bottom:4px;">Buy coins</div>';
   h += '<div style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:14px;">Your ' + esc(tier.label) + ' tier earns a <strong>+' + bonusPct + '%</strong> bonus on every purchase. The bonus rate locks at the time of purchase.</div>';
   h += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;">';
   V1_COIN_PACKS.forEach(function(p) {
@@ -25470,8 +25488,8 @@ function renderCoinsPackList(platformTenant) {
     var bonusTokens = Math.floor(baseTokens * (bonusPct / 100));
     var totalTokens = baseTokens + bonusTokens;
     h += '<div style="background:#fff;border:1px solid var(--cream-dark);border-radius:8px;padding:14px;display:flex;flex-direction:column;gap:6px;">';
-    h += '<div style="font-family:\'Cormorant Garamond\',serif;font-size:1.15rem;font-weight:700;color:var(--charcoal);">' + esc(p.label) + '</div>';
-    h += '<div style="font-size:0.85rem;color:var(--charcoal);">' + totalTokens.toLocaleString() + ' tokens</div>';
+    h += '<div style="font-family:\'Cormorant Garamond\',serif;font-size:1.15rem;font-weight:700;color:var(--text-primary);">' + esc(p.label) + '</div>';
+    h += '<div style="font-size:0.85rem;color:var(--text-primary);">' + totalTokens.toLocaleString() + ' tokens</div>';
     if (bonusTokens > 0) {
       h += '<div style="font-size:0.78rem;color:var(--teal);">' + baseTokens.toLocaleString() + ' base + ' + bonusTokens.toLocaleString() + ' bonus</div>';
     } else {
@@ -25527,7 +25545,7 @@ async function renderCoinsRecentList() {
     rows = rows.slice(0, 10);
 
     var h = '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:20px;">';
-    h += '<div style="font-weight:600;font-family:\'Cormorant Garamond\',serif;font-size:1.15rem;color:var(--charcoal);margin-bottom:4px;">Recent purchases</div>';
+    h += '<div style="font-weight:600;font-family:\'Cormorant Garamond\',serif;font-size:1.15rem;color:var(--text-primary);margin-bottom:4px;">Recent purchases</div>';
     h += '<div style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:14px;">Last 10 coin purchases — bonus rate locked at the time of purchase.</div>';
     if (!rows.length) {
       h += '<div style="font-size:0.85rem;color:var(--warm-gray);">No coin purchases yet.</div>';
@@ -25629,7 +25647,7 @@ function _askAiMessageHtml(m) {
   var border = m.role === 'user' ? 'rgba(42,124,111,0.2)' : 'var(--cream-dark)';
   var h = '<div style="margin-bottom:10px;padding:10px 12px;background:' + bg + ';border:1px solid ' + border + ';border-radius:8px;">';
   h += '<div style="font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:4px;">' + role + '</div>';
-  h += '<div style="font-size:0.9rem;color:var(--charcoal);white-space:pre-wrap;">' + esc(m.text || '') + '</div>';
+  h += '<div style="font-size:0.9rem;color:var(--text-primary);white-space:pre-wrap;">' + esc(m.text || '') + '</div>';
   if (m.cost) {
     h += '<div style="margin-top:6px;font-size:0.72rem;color:var(--warm-gray);">' + esc(m.cost) + '</div>';
   }
@@ -25864,7 +25882,7 @@ async function renderRevenueMeter() {
   var h = '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:20px;">';
 
   if (!data) {
-    h += '<div style="font-weight:600;font-family:\'Cormorant Garamond\',serif;font-size:1.15rem;color:var(--charcoal);margin-bottom:4px;">Revenue meter</div>';
+    h += '<div style="font-weight:600;font-family:\'Cormorant Garamond\',serif;font-size:1.15rem;color:var(--text-primary);margin-bottom:4px;">Revenue meter</div>';
     h += '<div style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:14px;">Software subscription priced by revenue &mdash; 1% of net, capped at ' + esc(_revenueMeterFormatCents(PRICING_MODEL.maxFeeCents)) + '/mo.</div>';
     h += '<div style="font-size:0.85rem;color:var(--warm-gray);">No revenue recorded yet for <strong>' + esc(monthKey) + '</strong>. Your meter will populate as sales are received.</div>';
     h += '</div>';
@@ -25894,7 +25912,7 @@ async function renderRevenueMeter() {
   // Header with net-to-date summary
   h += '<div style="display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:10px;">';
   h += '<div>';
-  h += '<div style="font-weight:600;font-family:\'Cormorant Garamond\',serif;font-size:1.15rem;color:var(--charcoal);">Revenue meter</div>';
+  h += '<div style="font-weight:600;font-family:\'Cormorant Garamond\',serif;font-size:1.15rem;color:var(--text-primary);">Revenue meter</div>';
   h += '<div style="font-size:0.85rem;color:var(--warm-gray);">Software subscription priced by revenue &mdash; <strong>' + esc(monthKey) + '</strong></div>';
   h += '</div>';
   h += '<div style="text-align:right;">';
@@ -25913,7 +25931,7 @@ async function renderRevenueMeter() {
     anyChannel = true;
     h += '<div style="background:var(--cream-dark);border-radius:6px;padding:10px 12px;">';
     h += '<div style="font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.04em;">' + esc(channelLabels[ch] || ch) + '</div>';
-    h += '<div style="font-weight:600;color:var(--charcoal);">' + esc(_revenueMeterFormatCents(bucket.grossCents)) + '</div>';
+    h += '<div style="font-weight:600;color:var(--text-primary);">' + esc(_revenueMeterFormatCents(bucket.grossCents)) + '</div>';
     var count = bucket.count || 0;
     h += '<div style="font-size:0.78rem;color:var(--warm-gray);">' + String(count) + ' entr' + (count === 1 ? 'y' : 'ies') + '</div>';
     h += '</div>';
@@ -25927,12 +25945,12 @@ async function renderRevenueMeter() {
   h += '<div style="border-top:1px solid var(--cream-dark);padding-top:12px;margin-top:14px;">';
   h += '<div style="font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">Deductions applied</div>';
   h += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:6px 20px;font-size:0.85rem;">';
-  h += '<div><span style="color:var(--warm-gray);">Gross:</span> <span style="color:var(--charcoal);font-weight:500;">' + esc(_revenueMeterFormatCents(gross)) + '</span></div>';
-  h += '<div><span style="color:var(--warm-gray);">Sales tax:</span> <span style="color:var(--charcoal);font-weight:500;">&minus;' + esc(_revenueMeterFormatCents(salesTax)) + '</span></div>';
-  h += '<div><span style="color:var(--warm-gray);">Refunds:</span> <span style="color:var(--charcoal);font-weight:500;">&minus;' + esc(_revenueMeterFormatCents(refunds)) + '</span></div>';
-  h += '<div><span style="color:var(--warm-gray);">Processor fees:</span> <span style="color:var(--charcoal);font-weight:500;">&minus;' + esc(_revenueMeterFormatCents(processor)) + '</span></div>';
-  h += '<div><span style="color:var(--warm-gray);">Marketplace fees:</span> <span style="color:var(--charcoal);font-weight:500;">&minus;' + esc(_revenueMeterFormatCents(marketplace)) + '</span></div>';
-  h += '<div><span style="color:var(--warm-gray);">Shipping (excluded):</span> <span style="color:var(--charcoal);font-weight:500;">&minus;' + esc(_revenueMeterFormatCents(shipping)) + '</span></div>';
+  h += '<div><span style="color:var(--warm-gray);">Gross:</span> <span style="color:var(--text-primary);font-weight:500;">' + esc(_revenueMeterFormatCents(gross)) + '</span></div>';
+  h += '<div><span style="color:var(--warm-gray);">Sales tax:</span> <span style="color:var(--text-primary);font-weight:500;">&minus;' + esc(_revenueMeterFormatCents(salesTax)) + '</span></div>';
+  h += '<div><span style="color:var(--warm-gray);">Refunds:</span> <span style="color:var(--text-primary);font-weight:500;">&minus;' + esc(_revenueMeterFormatCents(refunds)) + '</span></div>';
+  h += '<div><span style="color:var(--warm-gray);">Processor fees:</span> <span style="color:var(--text-primary);font-weight:500;">&minus;' + esc(_revenueMeterFormatCents(processor)) + '</span></div>';
+  h += '<div><span style="color:var(--warm-gray);">Marketplace fees:</span> <span style="color:var(--text-primary);font-weight:500;">&minus;' + esc(_revenueMeterFormatCents(marketplace)) + '</span></div>';
+  h += '<div><span style="color:var(--warm-gray);">Shipping (excluded):</span> <span style="color:var(--text-primary);font-weight:500;">&minus;' + esc(_revenueMeterFormatCents(shipping)) + '</span></div>';
   h += '</div>';
   h += '</div>';
 
@@ -25953,7 +25971,7 @@ async function renderMonthlyBill() {
   var suppressed = net < PRICING_MODEL.thresholdCents;
 
   var h = '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:20px;">';
-  h += '<div style="font-weight:600;font-family:\'Cormorant Garamond\',serif;font-size:1.15rem;color:var(--charcoal);margin-bottom:4px;">Your monthly software fee</div>';
+  h += '<div style="font-weight:600;font-family:\'Cormorant Garamond\',serif;font-size:1.15rem;color:var(--text-primary);margin-bottom:4px;">Your monthly software fee</div>';
   h += '<div style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:14px;">Software subscription priced by revenue &mdash; 1% of net, rounded to the nearest ' + esc(_revenueMeterFormatCents(PRICING_MODEL.roundToCents)) + ' of net and capped at ' + esc(_revenueMeterFormatCents(PRICING_MODEL.maxFeeCents)) + '/mo.</div>';
 
   h += '<div style="display:flex;align-items:baseline;gap:20px;flex-wrap:wrap;margin-bottom:12px;">';
@@ -25969,7 +25987,7 @@ async function renderMonthlyBill() {
   h += '</div>';
 
   h += '<div style="font-size:0.85rem;color:var(--warm-gray);">';
-  h += 'Net this month: <span style="color:var(--charcoal);font-weight:500;">' + esc(_revenueMeterFormatCents(net)) + '</span>. ';
+  h += 'Net this month: <span style="color:var(--text-primary);font-weight:500;">' + esc(_revenueMeterFormatCents(net)) + '</span>. ';
   if (suppressed) {
     h += 'No invoice &mdash; your software subscription is suppressed below ' + esc(_revenueMeterFormatCents(PRICING_MODEL.thresholdCents)) + ' of net.';
   } else if (atCap) {
@@ -25994,7 +26012,7 @@ async function renderBillHistory() {
   var docs = await Promise.all(keys.map(function(k) { return _revenueMeterFetchMonth(k); }));
 
   var h = '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:20px;">';
-  h += '<div style="font-weight:600;font-family:\'Cormorant Garamond\',serif;font-size:1.15rem;color:var(--charcoal);margin-bottom:4px;">Bill history</div>';
+  h += '<div style="font-weight:600;font-family:\'Cormorant Garamond\',serif;font-size:1.15rem;color:var(--text-primary);margin-bottom:4px;">Bill history</div>';
   h += '<div style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:14px;">Last 6 months of your monthly software fee.</div>';
 
   h += '<div style="max-height:260px;overflow-y:auto;border-top:1px solid var(--cream-dark);">';
@@ -26009,7 +26027,7 @@ async function renderBillHistory() {
     var k = keys[i];
     var doc = docs[i];
     if (!doc) {
-      h += '<div style="color:var(--charcoal);">' + esc(k) + '</div>';
+      h += '<div style="color:var(--text-primary);">' + esc(k) + '</div>';
       h += '<div style="color:var(--warm-gray);text-align:right;">&mdash;</div>';
       h += '<div style="color:var(--warm-gray);text-align:right;">&mdash;</div>';
       h += '<div style="color:var(--warm-gray);font-size:0.78rem;">No data</div>';
@@ -26021,8 +26039,8 @@ async function renderBillHistory() {
     var invoiced = !!doc.invoiceIssued;
     var statusText = invoiced ? 'Invoiced' : (isFinal ? 'Closed' : 'Open');
     var statusColor = invoiced ? '#16a34a' : (isFinal ? 'var(--teal)' : '#f59e0b');
-    h += '<div style="color:var(--charcoal);font-weight:500;">' + esc(k) + '</div>';
-    h += '<div style="color:var(--charcoal);text-align:right;">' + esc(_revenueMeterFormatCents(doc.netCents || 0)) + '</div>';
+    h += '<div style="color:var(--text-primary);font-weight:500;">' + esc(k) + '</div>';
+    h += '<div style="color:var(--text-primary);text-align:right;">' + esc(_revenueMeterFormatCents(doc.netCents || 0)) + '</div>';
     h += '<div style="color:var(--amber);font-weight:600;text-align:right;">' + esc(_revenueMeterFormatCents(finalFee)) + '</div>';
     h += '<div><span class="status-badge" style="background:' + statusColor + ';color:white;font-size:0.72rem;">' + esc(statusText) + '</span></div>';
   }
@@ -26091,7 +26109,7 @@ function renderSubscriptionBillingInfo(sub) {
 
   // Row 1: Plan name + status + price
   h += '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px;">';
-  h += '<div style="font-weight:600;font-family:\'Cormorant Garamond\',serif;font-size:1.15rem;color:var(--charcoal);">' + esc(planName) + '</div>';
+  h += '<div style="font-weight:600;font-family:\'Cormorant Garamond\',serif;font-size:1.15rem;color:var(--text-primary);">' + esc(planName) + '</div>';
   h += '<span class="status-badge" style="background:' + statusColor + ';color:white;">' + statusText + '</span>';
   h += '<span style="font-size:0.9rem;color:var(--amber);font-weight:600;">' + esc(priceStr) + intervalStr + '</span>';
   h += '</div>';
@@ -26103,21 +26121,21 @@ function renderSubscriptionBillingInfo(sub) {
     var renewDate = new Date(details.currentPeriodEnd);
     var renewStr = renewDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
     if (details.cancelAtPeriodEnd) {
-      h += '<div><span style="color:var(--warm-gray);">Access until:</span> <span style="color:var(--charcoal);font-weight:500;">' + renewStr + '</span></div>';
+      h += '<div><span style="color:var(--warm-gray);">Access until:</span> <span style="color:var(--text-primary);font-weight:500;">' + renewStr + '</span></div>';
     } else {
-      h += '<div><span style="color:var(--warm-gray);">Next renewal:</span> <span style="color:var(--charcoal);font-weight:500;">' + renewStr + '</span></div>';
+      h += '<div><span style="color:var(--warm-gray);">Next renewal:</span> <span style="color:var(--text-primary);font-weight:500;">' + renewStr + '</span></div>';
     }
   }
 
   if (details && details.paymentMethod) {
     var pm = details.paymentMethod;
     var brandName = pm.brand ? pm.brand.charAt(0).toUpperCase() + pm.brand.slice(1) : 'Card';
-    h += '<div><span style="color:var(--warm-gray);">Payment:</span> <span style="color:var(--charcoal);font-weight:500;">' + esc(brandName) + ' ending ' + esc(pm.last4) + '</span></div>';
+    h += '<div><span style="color:var(--warm-gray);">Payment:</span> <span style="color:var(--text-primary);font-weight:500;">' + esc(brandName) + ' ending ' + esc(pm.last4) + '</span></div>';
   }
 
   if (sub.effectiveDate) {
     var memberDate = new Date(sub.effectiveDate);
-    h += '<div><span style="color:var(--warm-gray);">Member since:</span> <span style="color:var(--charcoal);font-weight:500;">' + memberDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) + '</span></div>';
+    h += '<div><span style="color:var(--warm-gray);">Member since:</span> <span style="color:var(--text-primary);font-weight:500;">' + memberDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) + '</span></div>';
   }
 
   h += '</div>';
@@ -26265,7 +26283,7 @@ function cancelSubscriptionUI() {
   // Header
   h += '<div style="text-align:center;margin-bottom:20px;">';
   h += '<div style="font-size:1.6rem;margin-bottom:8px;">😔</div>';
-  h += '<div style="font-family:\'Cormorant Garamond\',serif;font-size:1.15rem;font-weight:600;color:var(--charcoal);">We\'re sorry to see you go</div>';
+  h += '<div style="font-family:\'Cormorant Garamond\',serif;font-size:1.15rem;font-weight:600;color:var(--text-primary);">We\'re sorry to see you go</div>';
   h += '<p style="font-size:0.85rem;color:var(--warm-gray);margin-top:6px;">Before you cancel, we\'d love to understand how we can do better.</p>';
   h += '</div>';
 
@@ -26274,8 +26292,8 @@ function cancelSubscriptionUI() {
 
   // Feedback
   h += '<div style="margin-bottom:16px;">';
-  h += '<label style="font-size:0.85rem;font-weight:600;color:var(--charcoal);display:block;margin-bottom:8px;">What\'s the main reason you\'re leaving?</label>';
-  h += '<select id="cancelReasonSelect" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\',sans-serif;font-size:0.9rem;">';
+  h += '<label style="font-size:0.85rem;font-weight:600;color:var(--text-primary);display:block;margin-bottom:8px;">What\'s the main reason you\'re leaving?</label>';
+  h += '<select id="cancelReasonSelect" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--text-primary);font-family:\'DM Sans\',sans-serif;font-size:0.9rem;">';
   h += '<option value="">Select a reason...</option>';
   h += '<option value="too_expensive">Too expensive</option>';
   h += '<option value="not_using">Not using it enough</option>';
@@ -26288,7 +26306,7 @@ function cancelSubscriptionUI() {
   h += '</div>';
 
   h += '<div style="margin-bottom:20px;">';
-  h += '<textarea id="cancelFeedbackText" placeholder="Anything else you\'d like us to know? (optional)" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\',sans-serif;font-size:0.85rem;min-height:60px;resize:vertical;box-sizing:border-box;"></textarea>';
+  h += '<textarea id="cancelFeedbackText" placeholder="Anything else you\'d like us to know? (optional)" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--text-primary);font-family:\'DM Sans\',sans-serif;font-size:0.85rem;min-height:60px;resize:vertical;box-sizing:border-box;"></textarea>';
   h += '</div>';
 
   // What happens next
@@ -27002,7 +27020,7 @@ function _renderCostToServeContent() {
 
 function _renderCostToServeRead(d) {
   var labelStyle = 'font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.06em;display:block;margin-bottom:6px;';
-  var valStyle   = 'font-size:1.15rem;font-weight:600;color:var(--charcoal);';
+  var valStyle   = 'font-size:1.15rem;font-weight:600;color:var(--text-primary);';
   var cardStyle  = 'background:var(--cream);border:1px solid var(--cream-dark,#e6dfd3);border-radius:10px;padding:16px 18px;flex:1;min-width:180px;';
   var sourceLabel = _costToServeHasOverride
     ? '<span style="font-size:0.78rem;color:var(--warm-gray);">Tenant override active</span>'
@@ -27035,7 +27053,7 @@ function _renderCostToServeEdit(d) {
 
   var html = '';
   html += '<div id="costToServeDirtyBanner" style="display:' + (_costToServeDirty ? 'flex' : 'none') + ';align-items:center;justify-content:space-between;background:rgba(245,158,11,0.15);border:1px solid rgba(245,158,11,0.4);border-radius:8px;padding:10px 14px;margin-bottom:18px;gap:12px;">' +
-            '<span style="font-size:0.9rem;color:var(--charcoal);">Unsaved changes</span>' +
+            '<span style="font-size:0.9rem;color:var(--text-primary);">Unsaved changes</span>' +
             '<button class="btn btn-primary btn-small" onclick="saveCostToServe()">Save</button>' +
           '</div>';
   html += '<div style="' + rowStyle + '">';
@@ -27753,7 +27771,7 @@ function renderAiKeys(keys) {
     var lastUsed = key.lastUsedAt ? new Date(key.lastUsedAt).toLocaleDateString() : 'Never';
     h += '<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;background:var(--cream,#faf8f5);border:1px solid var(--cream-dark,#e8e0d4);border-radius:8px;margin-bottom:8px;">';
     h += '<div>';
-    h += '<div style="font-family:monospace;font-size:0.9rem;color:var(--charcoal);">' + esc(key.keyPreview || 'mast_...') + '</div>';
+    h += '<div style="font-family:monospace;font-size:0.9rem;color:var(--text-primary);">' + esc(key.keyPreview || 'mast_...') + '</div>';
     h += '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:2px;">Created ' + esc(created) + ' &middot; Last used: ' + esc(lastUsed) + '</div>';
     h += '</div>';
     h += '<button class="btn btn-danger btn-small" onclick="revokeAiApiKey(\'' + esc(key._id) + '\')">Revoke</button>';
@@ -33571,7 +33589,7 @@ function wizardShowSitePathPicker(data) {
     var parts = [];
     if (productCount > 0) parts.push(productCount + ' product' + (productCount !== 1 ? 's' : ''));
     if (brandName) parts.push('brand info for <strong>' + esc(brandName) + '</strong>');
-    foundHtml = '<div style="background:rgba(42,124,111,0.08);border:1px solid var(--teal);border-radius:8px;padding:12px 14px;margin-bottom:16px;font-size:0.9rem;color:var(--charcoal,#2a2a2a);">' +
+    foundHtml = '<div style="background:rgba(42,124,111,0.08);border:1px solid var(--teal);border-radius:8px;padding:12px 14px;margin-bottom:16px;font-size:0.9rem;color:var(--text-primary);">' +
       '&#10003; Found ' + parts.join(' and ') + ' — ready to import.' +
       '</div>';
   }
@@ -33701,7 +33719,7 @@ async function wizardAnalyzeSite() {
     if (corrections.length > 0 && corrected !== url) {
       var statusEl = document.getElementById('wizardAnalysisStatus');
       statusEl.innerHTML = '<div style="background:var(--cream);border:1px solid var(--amber);border-radius:8px;padding:16px;margin-top:12px;">' +
-        '<p style="margin:0 0 8px;font-weight:600;color:var(--charcoal);">Did you mean?</p>' +
+        '<p style="margin:0 0 8px;font-weight:600;color:var(--text-primary);">Did you mean?</p>' +
         '<p style="margin:0 0 12px;font-size:0.9rem;color:var(--warm-gray);">We noticed a typo (' + esc(corrections.join(', ')) + ')</p>' +
         '<div style="display:flex;gap:10px;align-items:center;">' +
         '<code style="flex:1;background:var(--cream-dark);padding:8px 12px;border-radius:6px;font-size:0.9rem;">' + esc(corrected) + '</code>' +
@@ -36200,7 +36218,7 @@ function renderDashCardSetupShop() {
     return '<div onclick="' + clickAction + '" style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:8px;cursor:pointer;transition:background 0.15s;margin-bottom:4px;" onmouseover="this.style.background=\'var(--hover-bg, var(--cream-dark, var(--cream-dark)))\'" onmouseout="this.style.background=\'transparent\'">' +
       '<span style="font-size:1.6rem;flex-shrink:0;">' + step.icon + '</span>' +
       '<div style="flex:1;min-width:0;">' +
-        '<div style="font-size:0.9rem;font-weight:600;color:var(--text, var(--charcoal, var(--charcoal)));">' + esc(step.title) + '</div>' +
+        '<div style="font-size:0.9rem;font-weight:600;color:var(--text, var(--text-primary));">' + esc(step.title) + '</div>' +
         '<div style="font-size:0.85rem;color:var(--warm-gray, var(--warm-gray));">' + esc(step.desc) + '</div>' +
       '</div>' +
       '<button onclick="event.stopPropagation();dismissNextStep(\'' + step.id + '\');" style="background:none;border:1px solid var(--cream-dark, #ddd);border-radius:50%;width:24px;height:24px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--warm-gray);font-size:0.72rem;transition:all 0.15s;" onmouseover="this.style.borderColor=\'var(--teal)\';this.style.color=\'var(--teal)\';" onmouseout="this.style.borderColor=\'var(--cream-dark, #ddd)\';this.style.color=\'var(--warm-gray)\';" title="Mark as done">&#10003;</button>' +
@@ -37080,7 +37098,7 @@ function renderProducts() {
     if (unnamed.length === 0 && window.productsUnnamedOnly !== true) return;
     var notice = document.createElement('div');
     notice.id = 'productsUnnamedNotice';
-    notice.style.cssText = 'margin:6px 0 10px 0;padding:8px 12px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.35);border-radius:6px;font-size:0.85rem;color:var(--charcoal,var(--text));display:flex;justify-content:space-between;align-items:center;gap:12px;';
+    notice.style.cssText = 'margin:6px 0 10px 0;padding:8px 12px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.35);border-radius:6px;font-size:0.85rem;color:var(--text-primary);display:flex;justify-content:space-between;align-items:center;gap:12px;';
     if (window.productsUnnamedOnly === true) {
       notice.innerHTML =
         '<span>Showing <strong>' + unnamed.length + '</strong> unnamed product' + (unnamed.length === 1 ? '' : 's') + ' — give each a name to remove placeholders from co-buy lists.</span>' +
@@ -37188,7 +37206,7 @@ function renderProducts() {
       html += '<td>' +
         '<div style="display:flex;gap:6px;align-items:center;">' +
           '<input type="text" data-unnamed-name-pid="' + esc(p.pid) + '" placeholder="Name this product…" ' +
-            'style="flex:1;padding:6px 10px;border:1px solid var(--cream-dark,#e8e0d4);border-radius:6px;font-size:0.85rem;background:var(--cream);color:var(--charcoal,#2a2a2a);">' +
+            'style="flex:1;padding:6px 10px;border:1px solid var(--cream-dark,#e8e0d4);border-radius:6px;font-size:0.85rem;background:var(--cream);color:var(--text-primary);">' +
           '<button type="button" data-unnamed-save-pid="' + esc(p.pid) + '" class="btn btn-primary btn-small" style="font-size:0.78rem;padding:6px 12px;">Save</button>' +
         '</div>' +
         (catTxt ? '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:4px;">' + esc(catTxt) + '</div>' : '') +
@@ -40494,7 +40512,7 @@ function loadProductCustomerSignal(pid) {
       : function(c) { return '$' + (c / 100).toFixed(2); };
 
     var html = '<div class="detail-card" style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:14px 18px;">';
-    html += '<h4 style="font-size:0.85rem;font-weight:600;color:var(--charcoal);margin:0 0 12px 0;text-transform:uppercase;letter-spacing:0.04em;">Customer signal</h4>';
+    html += '<h4 style="font-size:0.85rem;font-weight:600;color:var(--text-primary);margin:0 0 12px 0;text-transform:uppercase;letter-spacing:0.04em;">Customer signal</h4>';
     if (totalBuyers === 0 && reviews.length === 0 && tickets.length === 0) {
       html += '<div style="font-size:0.85rem;color:var(--warm-gray);">No customer signal yet. Reviews, support tickets, and repurchase data will appear here as buyers interact with this SKU.</div>';
     } else {
@@ -40738,7 +40756,7 @@ function loadProductCustomerSignal(pid) {
           html += '<span style="color:var(--warm-gray);font-size:0.78rem;">' + esc(author) + (author && dateStr ? ' &middot; ' : '') + esc(dateStr) + orderLink + '</span>';
           html += '</div>';
           if (body) {
-            html += '<div style="margin-top:4px;color:var(--charcoal,var(--text));line-height:1.4;">&ldquo;' + esc(String(body).slice(0, 280)) + (String(body).length > 280 ? '&hellip;' : '') + '&rdquo;</div>';
+            html += '<div style="margin-top:4px;color:var(--text-primary);line-height:1.4;">&ldquo;' + esc(String(body).slice(0, 280)) + (String(body).length > 280 ? '&hellip;' : '') + '&rdquo;</div>';
           }
           html += '</div>';
         });
@@ -40789,7 +40807,7 @@ function loadProductCustomerSignal(pid) {
             orderLink = '<a href="#" data-pd-cs-action="open-order" data-pd-cs-order-id="' + esc(String(nn.orderId)) + '" style="color:var(--warm-gray);text-decoration:underline;">Order</a>';
           }
           html += '<div style="padding:8px 0;border-top:1px solid var(--cream-dark);font-size:0.85rem;">';
-          html += '<div style="color:var(--charcoal,var(--text));line-height:1.4;">&ldquo;' + esc(nn.note.slice(0, 280)) + (nn.note.length > 280 ? '&hellip;' : '') + '&rdquo;</div>';
+          html += '<div style="color:var(--text-primary);line-height:1.4;">&ldquo;' + esc(nn.note.slice(0, 280)) + (nn.note.length > 280 ? '&hellip;' : '') + '&rdquo;</div>';
           html += '<div style="margin-top:4px;color:var(--warm-gray);font-size:0.78rem;">' + esc(nn.customerName) + (nn.customerName && dateStr ? ' &middot; ' : '') + esc(dateStr) + (orderLink ? ' &middot; ' + orderLink : '') + '</div>';
           html += '</div>';
         });
@@ -42193,7 +42211,7 @@ function renderDriftReviewQueueUnified(tab) {
     html += '<button class="btn ' + (active ? 'btn-primary' : 'btn-secondary') + ' btn-small" ' +
       'onclick="renderDriftReviewQueueUnified(\'' + t + '\')">' + label + '</button>';
   });
-  html += '<select aria-label="Filter by channel" style="padding:6px 10px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.78rem;" onchange="window.__mastDriftQueueChannelFilter=this.value;renderDriftReviewQueueUnified(window.__mastDriftQueueTab)">';
+  html += '<select aria-label="Filter by channel" style="padding:6px 10px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--text-primary);font-family:\'DM Sans\';font-size:0.78rem;" onchange="window.__mastDriftQueueChannelFilter=this.value;renderDriftReviewQueueUnified(window.__mastDriftQueueTab)">';
   html += '<option value="all"' + (channelFilter === 'all' ? ' selected' : '') + '>All channels</option>';
   filterKeys.forEach(function(k) {
     html += '<option value="' + esc(k) + '"' + (channelFilter === k ? ' selected' : '') + '>' + esc(filterMap[k]) + '</option>';
@@ -42201,7 +42219,7 @@ function renderDriftReviewQueueUnified(tab) {
   html += '</select>';
   // Phase 6b.2: page-size selector. Changing size re-fetches from the newest record.
   var currentPageSize = window.__mastDriftQueuePageSize || 100;
-  html += '<select aria-label="Page size" style="padding:6px 10px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.78rem;" onchange="setDriftQueuePageSize(this.value)">';
+  html += '<select aria-label="Page size" style="padding:6px 10px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--text-primary);font-family:\'DM Sans\';font-size:0.78rem;" onchange="setDriftQueuePageSize(this.value)">';
   [25, 50, 100, 200].forEach(function(n) {
     html += '<option value="' + n + '"' + (currentPageSize === n ? ' selected' : '') + '>Show ' + n + '</option>';
   });
@@ -42368,7 +42386,7 @@ function renderSyncRulesUnified() {
       html += '<td style="padding:10px 12px;font-weight:500;">' + esc(MAST_PHASE4_FIELD_LABELS[field] || field) + '</td>';
       html += '<td style="padding:10px 12px;"><span class="status-badge" style="background:' + sv.bg + ';color:' + sv.label + ';border:1px solid ' + sv.border + ';">' + esc(sev) + '</span></td>';
       html += '<td style="padding:10px 12px;">';
-      html += '<select aria-label="Action for ' + esc(field) + ' on ' + esc(c.name || cid) + '" style="padding:6px 10px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\',sans-serif;font-size:0.85rem;" onchange="saveUnifiedSyncRule(\'' + esc(cid) + '\', \'' + esc(field) + '\', this.value)">';
+      html += '<select aria-label="Action for ' + esc(field) + ' on ' + esc(c.name || cid) + '" style="padding:6px 10px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--text-primary);font-family:\'DM Sans\',sans-serif;font-size:0.85rem;" onchange="saveUnifiedSyncRule(\'' + esc(cid) + '\', \'' + esc(field) + '\', this.value)">';
       MAST_PHASE4_ACTIONS.forEach(function(action) {
         html += '<option value="' + action + '"' + (action === currentAction ? ' selected' : '') + '>' + MAST_PHASE4_ACTION_LABELS[action] + '</option>';
       });
@@ -42796,7 +42814,7 @@ function renderMakerSettings() {
   html += '<label for="mkCadence" style="font-size:0.9rem;font-weight:500;">Recalc cadence</label>';
   html += '<p style="font-size:0.78rem;color:var(--warm-gray);margin:2px 0 0;">How often the 03:00 UTC cron recomputes estimated cost against current materials.</p>';
   html += '</div>';
-  html += '<select id="mkCadence" aria-label="Recipe recalc cadence" onchange="onMakerCadenceChange(this.value)" style="padding:6px 10px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.85rem;min-width:140px;">';
+  html += '<select id="mkCadence" aria-label="Recipe recalc cadence" onchange="onMakerCadenceChange(this.value)" style="padding:6px 10px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--text-primary);font-family:\'DM Sans\';font-size:0.85rem;min-width:140px;">';
   ['off', 'weekly', 'monthly'].forEach(function(v) {
     var label = v.charAt(0).toUpperCase() + v.slice(1);
     html += '<option value="' + v + '"' + (s.recipeRecalcCadence === v ? ' selected' : '') + '>' + label + '</option>';
@@ -42834,7 +42852,7 @@ function renderMakerSettings() {
     html += '<p style="font-size:0.78rem;color:var(--warm-gray);margin:2px 0 0;">Platform default: <em>' + esc(platformDefault) + '</em>' + (hasOverride ? ' · Currently overridden to <strong>' + esc(override) + '</strong>' : '') + '</p>';
     html += '</div>';
     html += '<div style="display:flex;gap:8px;align-items:center;">';
-    html += '<select id="' + rowId + '" aria-label="Severity for ' + esc(label) + '" onchange="onMakerSeverityChange(\'' + esc(field) + '\', this.value)" style="padding:6px 10px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.85rem;">';
+    html += '<select id="' + rowId + '" aria-label="Severity for ' + esc(label) + '" onchange="onMakerSeverityChange(\'' + esc(field) + '\', this.value)" style="padding:6px 10px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--text-primary);font-family:\'DM Sans\';font-size:0.85rem;">';
     ['critical', 'warning', 'info'].forEach(function(sv) {
       html += '<option value="' + sv + '"' + (effective === sv ? ' selected' : '') + '>' + sv.charAt(0).toUpperCase() + sv.slice(1) + '</option>';
     });
@@ -44006,7 +44024,7 @@ function renderSyncLog() {
     html += '<option value="' + t + '"' + (f.trigger === t ? ' selected' : '') + '>' + t + '</option>';
   });
   html += '</select>';
-  html += '<input type="text" placeholder="Filter by product\u2026" style="padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.85rem;width:180px;" value="' + esc(f.product) + '" oninput="window.__mastSyncLogFilters.product=this.value;renderSyncLog()">';
+  html += '<input type="text" placeholder="Filter by product\u2026" style="padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--text-primary);font-family:\'DM Sans\';font-size:0.85rem;width:180px;" value="' + esc(f.product) + '" oninput="window.__mastSyncLogFilters.product=this.value;renderSyncLog()">';
   html += '<span style="font-size:0.78rem;color:var(--warm-gray);">' + filtered.length + ' of ' + data.length + '</span>';
   html += '</div>';
 
@@ -44133,7 +44151,7 @@ function renderSyncRulesLegacy() {
     html += '<td style="padding:10px 12px;font-weight:500;text-transform:capitalize;">' + esc(field) + '</td>';
     html += '<td style="padding:10px 12px;color:var(--warm-gray);">Shopify</td>';
     html += '<td style="padding:10px 12px;">';
-    html += '<select style="padding:6px 10px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\',sans-serif;font-size:0.85rem;" onchange="saveSyncRule(\'' + esc(field) + '\', this.value)">';
+    html += '<select style="padding:6px 10px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--text-primary);font-family:\'DM Sans\',sans-serif;font-size:0.85rem;" onchange="saveSyncRule(\'' + esc(field) + '\', this.value)">';
     SYNC_RULE_ACTIONS.forEach(function(action) {
       html += '<option value="' + action + '"' + (action === currentAction ? ' selected' : '') + '>' + SYNC_RULE_ACTION_LABELS[action] + '</option>';
     });
@@ -47168,7 +47186,7 @@ function renderProductDetail(pid) {
     ? '<div id="pdCustomerSignal" data-pid="' + esc(pid) + '"' + expandedAttr + ' style="padding:16px 0;">' +
         '<div onclick="toggleProductCustomerSignal(\'' + esc(pid) + '\')" role="button" tabindex="0" aria-expanded="' + (isExpanded ? 'true' : 'false') + '" aria-label="Toggle customer signal" style="border:1px solid var(--border,#e5e0d8);border-radius:8px;padding:14px 18px;display:flex;align-items:center;justify-content:space-between;gap:16px;background:var(--surface-card,#fff);cursor:pointer;user-select:none;">' +
           '<div>' +
-            '<div style="font-size:0.85rem;font-weight:600;color:var(--charcoal,var(--text));text-transform:uppercase;letter-spacing:0.04em;">Customer Signal</div>' +
+            '<div style="font-size:0.85rem;font-weight:600;color:var(--text-primary);text-transform:uppercase;letter-spacing:0.04em;">Customer Signal</div>' +
             '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:4px;">Reviews, repurchase rate, return reasons, and often-bought-together &mdash; per this product.</div>' +
           '</div>' +
           '<span id="pdCustomerSignalChevron" aria-hidden="true" style="font-size:1.0rem;color:var(--warm-gray);flex-shrink:0;transition:transform 0.15s;">' + chevronInitial + '</span>' +
@@ -50778,6 +50796,11 @@ window.applyResolvedDarkMode = function() {
 window.setPersonalDarkMode = function(enabled) {
   enabled = !!enabled;
   document.body.classList.toggle('dark-mode', enabled);
+  // Keep <html> in sync. The first-paint script (in <head>) adds .dark-mode to
+  // documentElement unconditionally; without removing it for light users the
+  // `html.dark-mode { background: var(--charcoal) }` rule would paint a dark
+  // overscroll edge behind the light body (--charcoal is the static dark surface).
+  document.documentElement.classList.toggle('dark-mode', enabled);
   var toggle = document.getElementById('darkModeToggle');
   if (toggle) toggle.checked = enabled;
   if (!currentUser || !currentUser.uid) return;
@@ -55190,8 +55213,8 @@ window.MastCouponCard = (function() {
         '<tr><td style="background:var(--cream);border:1px solid var(--cream-dark);border-top:none;border-radius:0 0 8px 8px;padding:24px 20px;text-align:center;">' +
           '<table cellpadding="0" cellspacing="0" border="0" width="100%">' +
             '<tr><td style="font-size:28px;font-weight:700;color:var(--teal);text-align:center;padding-bottom:4px;">' + esc(val) + '</td></tr>' +
-            (desc ? '<tr><td style="font-size:14px;color:var(--charcoal);text-align:center;padding-bottom:8px;">' + esc(desc) + '</td></tr>' : '') +
-            '<tr><td style="text-align:center;padding:8px 0;"><span style="display:inline-block;font-family:monospace;font-size:16px;font-weight:600;letter-spacing:2px;padding:6px 16px;border:1px dashed var(--teal);border-radius:6px;background:rgba(42,124,111,0.08);color:var(--charcoal);">' + esc(code) + '</span></td></tr>' +
+            (desc ? '<tr><td style="font-size:14px;color:var(--text-primary);text-align:center;padding-bottom:8px;">' + esc(desc) + '</td></tr>' : '') +
+            '<tr><td style="text-align:center;padding:8px 0;"><span style="display:inline-block;font-family:monospace;font-size:16px;font-weight:600;letter-spacing:2px;padding:6px 16px;border:1px dashed var(--teal);border-radius:6px;background:rgba(42,124,111,0.08);color:var(--text-primary);">' + esc(code) + '</span></td></tr>' +
             detailRows +
             ctaRow +
           '</table>' +

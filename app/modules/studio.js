@@ -33,7 +33,7 @@
     return { monthlyCostToOwn: monthlyCostToOwn, totalMonthlyCost: totalMonthlyCost, costPerUnit: costPerUnit };
   }
   // Standard input style (dark mode aware)
-  var INPUT_STYLE = 'width:100%;padding:9px 12px;border:1px solid var(--cream-dark,#ddd);border-radius:6px;font-family:\'DM Sans\',sans-serif;font-size:0.9rem;background:var(--cream,var(--cream));color:var(--charcoal,var(--charcoal));box-sizing:border-box;';
+  var INPUT_STYLE = 'width:100%;padding:9px 12px;border:1px solid var(--cream-dark,#ddd);border-radius:6px;font-family:\'DM Sans\',sans-serif;font-size:0.9rem;background:var(--cream,var(--cream));color:var(--text-primary);box-sizing:border-box;';
 
   // --- Load ---
   async function loadStudio() {

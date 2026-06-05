@@ -5294,11 +5294,11 @@
       refundHtml += '<div style="margin-top:0.75rem;">' +
         '<label style="font-size:0.72rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--warm-gray-light);">Override Refund Method</label>' +
         '<div style="display:flex;gap:8px;margin-top:4px;">' +
-          '<select id="rmaRefundMethodOverride" style="padding:4px 8px;border:1px solid var(--cream-dark);border-radius:4px;font-size:0.85rem;background:var(--cream);color:var(--charcoal);">' +
+          '<select id="rmaRefundMethodOverride" style="padding:4px 8px;border:1px solid var(--cream-dark);border-radius:4px;font-size:0.85rem;background:var(--cream);color:var(--text-primary);">' +
             '<option value="original_payment"' + (r.refundMethod === 'original_payment' ? ' selected' : '') + '>Original Payment</option>' +
             '<option value="store_credit"' + (r.refundMethod === 'store_credit' ? ' selected' : '') + '>Store Credit</option>' +
           '</select>' +
-          '<input type="number" id="rmaRefundAmountOverride" value="' + ((r.refundAmountCents || 0) / 100).toFixed(2) + '" step="0.01" min="0" style="width:100px;padding:4px 8px;border:1px solid var(--cream-dark);border-radius:4px;font-size:0.85rem;background:var(--cream);color:var(--charcoal);">' +
+          '<input type="number" id="rmaRefundAmountOverride" value="' + ((r.refundAmountCents || 0) / 100).toFixed(2) + '" step="0.01" min="0" style="width:100px;padding:4px 8px;border:1px solid var(--cream-dark);border-radius:4px;font-size:0.85rem;background:var(--cream);color:var(--text-primary);">' +
           '<button class="btn btn-secondary" style="font-size:0.78rem;padding:4px 10px;" onclick="overrideRmaRefund(\'' + esc(rmaId) + '\')">Update</button>' +
         '</div>' +
       '</div>';
@@ -5398,14 +5398,14 @@
         '<div class="order-detail-section-title" style="color:var(--teal);">Inspection</div>' +
         '<div style="margin-bottom:0.75rem;">' +
           '<label style="font-size:0.72rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--warm-gray-light);display:block;margin-bottom:4px;">Result</label>' +
-          '<select id="rmaInspectResult" style="padding:6px 10px;border:1px solid var(--cream-dark);border-radius:4px;font-size:0.85rem;background:var(--cream);color:var(--charcoal);">' +
+          '<select id="rmaInspectResult" style="padding:6px 10px;border:1px solid var(--cream-dark);border-radius:4px;font-size:0.85rem;background:var(--cream);color:var(--text-primary);">' +
             '<option value="pass">Pass</option>' +
             '<option value="fail">Fail</option>' +
           '</select>' +
         '</div>' +
         '<div style="margin-bottom:0.75rem;">' +
           '<label style="font-size:0.72rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--warm-gray-light);display:block;margin-bottom:4px;">Notes</label>' +
-          '<textarea id="rmaInspectNotes" placeholder="Inspection notes..." style="width:100%;padding:6px 10px;border:1px solid var(--cream-dark);border-radius:4px;font-size:0.85rem;background:var(--cream);color:var(--charcoal);min-height:60px;"></textarea>' +
+          '<textarea id="rmaInspectNotes" placeholder="Inspection notes..." style="width:100%;padding:6px 10px;border:1px solid var(--cream-dark);border-radius:4px;font-size:0.85rem;background:var(--cream);color:var(--text-primary);min-height:60px;"></textarea>' +
         '</div>' +
         '<button class="btn btn-primary" style="font-size:0.78rem;padding:6px 14px;" onclick="submitInspection(\'' + esc(rmaId) + '\')">Complete Inspection</button>' +
       '</div>' : '') +
@@ -5421,7 +5421,7 @@
         '<div id="rmaDispositionPaymentSummary" style="margin-bottom:0.75rem;"></div>' +
         '<div style="margin-bottom:0.75rem;">' +
           '<label style="font-size:0.72rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--warm-gray-light);display:block;margin-bottom:4px;">What happens to the item?</label>' +
-          '<select id="rmaDisposition" style="padding:6px 10px;border:1px solid var(--cream-dark);border-radius:4px;font-size:0.85rem;background:var(--cream);color:var(--charcoal);width:100%;">' +
+          '<select id="rmaDisposition" style="padding:6px 10px;border:1px solid var(--cream-dark);border-radius:4px;font-size:0.85rem;background:var(--cream);color:var(--text-primary);width:100%;">' +
             '<option value="restock">Restock — Return to full inventory</option>' +
             '<option value="seconds">Seconds — Move to clearance</option>' +
             '<option value="repair">Repair — Queue for repair</option>' +
@@ -5430,15 +5430,15 @@
         '</div>' +
         '<div style="margin-bottom:0.75rem;">' +
           '<label style="font-size:0.72rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--warm-gray-light);display:block;margin-bottom:4px;">Refund Method</label>' +
-          '<select id="rmaDisposRefundMethod" style="padding:6px 10px;border:1px solid var(--cream-dark);border-radius:4px;font-size:0.85rem;background:var(--cream);color:var(--charcoal);">' +
+          '<select id="rmaDisposRefundMethod" style="padding:6px 10px;border:1px solid var(--cream-dark);border-radius:4px;font-size:0.85rem;background:var(--cream);color:var(--text-primary);">' +
             '<option value="store-credit"' + (r.refundMethod === 'store_credit' ? ' selected' : '') + '>Store Credit</option>' +
             '<option value="credit-card"' + (r.refundMethod === 'original_payment' ? ' selected' : '') + '>Original Payment</option>' +
           '</select>' +
-          '<input type="number" id="rmaDisposRefundAmount" value="' + ((r.refundAmountCents || 0) / 100).toFixed(2) + '" step="0.01" min="0" style="margin-left:8px;width:100px;padding:6px 10px;border:1px solid var(--cream-dark);border-radius:4px;font-size:0.85rem;background:var(--cream);color:var(--charcoal);">' +
+          '<input type="number" id="rmaDisposRefundAmount" value="' + ((r.refundAmountCents || 0) / 100).toFixed(2) + '" step="0.01" min="0" style="margin-left:8px;width:100px;padding:6px 10px;border:1px solid var(--cream-dark);border-radius:4px;font-size:0.85rem;background:var(--cream);color:var(--text-primary);">' +
         '</div>' +
         '<div style="margin-bottom:0.75rem;">' +
           '<label style="font-size:0.72rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--warm-gray-light);display:block;margin-bottom:4px;">Notes</label>' +
-          '<textarea id="rmaDisposNotes" placeholder="Disposition notes..." style="width:100%;padding:6px 10px;border:1px solid var(--cream-dark);border-radius:4px;font-size:0.85rem;background:var(--cream);color:var(--charcoal);min-height:40px;"></textarea>' +
+          '<textarea id="rmaDisposNotes" placeholder="Disposition notes..." style="width:100%;padding:6px 10px;border:1px solid var(--cream-dark);border-radius:4px;font-size:0.85rem;background:var(--cream);color:var(--text-primary);min-height:40px;"></textarea>' +
         '</div>' +
         '<button class="btn btn-primary" style="font-size:0.78rem;padding:6px 14px;" onclick="completeRma(\'' + esc(rmaId) + '\')">Complete RMA &amp; Issue Refund</button>' +
       '</div>' : '') +
@@ -5651,8 +5651,8 @@
         return '<option value="' + esc(c) + '"' + (c === code ? ' selected' : '') + '>' + esc(_humanizeReason(c)) + '</option>';
       }).join('');
       return '<div style="display:flex;flex-direction:column;gap:8px;">' +
-        '<select id="rmaReasonCodeEdit_' + esc(rmaId) + '" style="padding:6px 10px;border:1px solid var(--cream-dark);border-radius:4px;font-size:0.85rem;background:var(--cream);color:var(--charcoal);max-width:280px;">' + opts + '</select>' +
-        '<textarea id="rmaReasonDetailEdit_' + esc(rmaId) + '" placeholder="Additional detail (optional)" style="padding:6px 10px;border:1px solid var(--cream-dark);border-radius:4px;font-size:0.85rem;background:var(--cream);color:var(--charcoal);min-height:60px;">' + esc(detail) + '</textarea>' +
+        '<select id="rmaReasonCodeEdit_' + esc(rmaId) + '" style="padding:6px 10px;border:1px solid var(--cream-dark);border-radius:4px;font-size:0.85rem;background:var(--cream);color:var(--text-primary);max-width:280px;">' + opts + '</select>' +
+        '<textarea id="rmaReasonDetailEdit_' + esc(rmaId) + '" placeholder="Additional detail (optional)" style="padding:6px 10px;border:1px solid var(--cream-dark);border-radius:4px;font-size:0.85rem;background:var(--cream);color:var(--text-primary);min-height:60px;">' + esc(detail) + '</textarea>' +
         '<div style="display:flex;gap:8px;">' +
           '<button class="btn btn-primary" style="font-size:0.78rem;padding:6px 14px;" onclick="saveRmaReason(\'' + esc(rmaId) + '\')">Save</button>' +
           '<button class="btn btn-outline" style="font-size:0.78rem;padding:6px 14px;" onclick="cancelRmaReasonEdit(\'' + esc(rmaId) + '\')">Cancel</button>' +

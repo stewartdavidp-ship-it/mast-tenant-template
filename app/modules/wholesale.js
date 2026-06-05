@@ -76,7 +76,7 @@ function renderWholesaleAdmin() {
 
   var html = '<div style="padding:24px;">' +
     '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">' +
-      '<h2 style="font-size:1.6rem;font-weight:700;color:var(--charcoal);">Wholesale</h2>' +
+      '<h2 style="font-size:1.6rem;font-weight:700;color:var(--text-primary);">Wholesale</h2>' +
     '</div>' +
     '<div style="background:rgba(42,124,111,0.08);border:1px solid rgba(42,124,111,0.2);border-radius:8px;padding:14px 16px;margin-bottom:20px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;">' +
       '<div style="font-weight:600;font-size:0.85rem;">PDF Catalog</div>' +
@@ -576,7 +576,7 @@ function renderWholesaleAccounts() {
         var creditStr = a.creditLimitCents ? '$' + (a.creditLimitCents / 100).toLocaleString() : '—';
         html += '<div onclick="viewWholesaleAccount(\'' + esc(a._id) + '\')" style="background:#fff;border:1px solid var(--cream-dark,#e8e0d4);border-radius:8px;padding:14px 16px;cursor:pointer;display:flex;align-items:center;gap:16px;">';
         html += '<div style="flex:1;min-width:0;">';
-        html += '<div style="font-weight:600;font-size:0.9rem;color:var(--charcoal);">' + esc(a.name || '(unnamed)') + '</div>';
+        html += '<div style="font-weight:600;font-size:0.9rem;color:var(--text-primary);">' + esc(a.name || '(unnamed)') + '</div>';
         html += '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:2px;">' + esc(typeLabel) + (typeLabel && a.territory ? ' · ' : '') + esc(a.territory || '') + (a.salesRepName ? ' · Rep: ' + esc(a.salesRepName) : '') + '</div>';
         html += '</div>';
         html += '<div style="text-align:right;font-size:0.78rem;color:var(--warm-gray);min-width:120px;">';
@@ -884,7 +884,7 @@ function renderWholesaleArAging() {
       var acct = accounts[o.wholesaleAccountId];
       var acctName = acct ? acct.name : (o.buyerName || o.buyerEmail || '—');
       var dueStr = new Date(r.dueMs).toLocaleDateString();
-      var color = r.daysOverdue <= 0 ? 'var(--charcoal)'
+      var color = r.daysOverdue <= 0 ? 'var(--text-primary)'
         : r.daysOverdue <= 30 ? '#ca8a04'
         : r.daysOverdue <= 60 ? '#F59E0B'
         : r.daysOverdue <= 90 ? '#ea580c' : '#dc2626';
@@ -1149,7 +1149,7 @@ function renderWholesaleDormant() {
         var lastOrderStr = r.lastOrderAt ? new Date(r.lastOrderAt).toLocaleDateString() : '—';
         html += '<div onclick="editWholesaleAccount(\'' + esc(r.id) + '\')" style="background:#fff;border:1px solid var(--cream-dark,#e8e0d4);border-radius:8px;padding:14px 16px;cursor:pointer;display:flex;align-items:center;gap:16px;">';
         html += '<div style="flex:1;min-width:0;">';
-        html += '<div style="font-weight:600;font-size:0.9rem;color:var(--charcoal);">' + esc(r.account.name || '(unnamed)') + '</div>';
+        html += '<div style="font-weight:600;font-size:0.9rem;color:var(--text-primary);">' + esc(r.account.name || '(unnamed)') + '</div>';
         html += '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:2px;">' + r.orderCount + ' order' + (r.orderCount !== 1 ? 's' : '') + ' &middot; Last: ' + esc(lastOrderStr) + '</div>';
         html += '</div>';
         html += '<span style="font-size:0.72rem;font-weight:600;padding:3px 10px;border-radius:10px;background:' + dormantBadge.color + '22;color:' + dormantBadge.color + ';border:1px solid ' + dormantBadge.color + '55;">' + esc(dormantBadge.label) + '</span>';
@@ -1306,7 +1306,7 @@ function renderWholesaleRequests() {
     var resolved = requests.filter(function(r) { return r.status !== 'pending'; });
 
     if (pending.length > 0) {
-      html += '<div style="font-weight:600;font-size:0.85rem;margin-bottom:12px;color:var(--charcoal);">Pending (' + pending.length + ')</div>';
+      html += '<div style="font-weight:600;font-size:0.85rem;margin-bottom:12px;color:var(--text-primary);">Pending (' + pending.length + ')</div>';
       html += '<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:24px;">';
       pending.forEach(function(r) {
         html += '<div style="background:#fff;border:1px solid #e8e0d4;border-radius:8px;padding:16px;">' +

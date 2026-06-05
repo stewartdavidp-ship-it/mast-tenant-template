@@ -32,7 +32,7 @@
   var WAIVER_STATUSES = ['pending', 'signed', 'expired'];
   var PHOTO_WAIVER_STATUSES = ['pending', 'accepted', 'declined'];
 
-  var INPUT_STYLE = 'width:100%;padding:9px 12px;border:1px solid var(--cream-dark,#ddd);border-radius:6px;font-size:0.9rem;background:var(--cream,var(--cream));box-sizing:border-box;font-family:DM Sans,sans-serif;color:var(--charcoal,var(--charcoal));';
+  var INPUT_STYLE = 'width:100%;padding:9px 12px;border:1px solid var(--cream-dark,#ddd);border-radius:6px;font-size:0.9rem;background:var(--cream,var(--cream));box-sizing:border-box;font-family:DM Sans,sans-serif;color:var(--text-primary);';
 
   // --- Helpers ---
   function capitalize(s) { return s ? s.charAt(0).toUpperCase() + s.slice(1).replace(/-/g, ' ') : ''; }
@@ -1208,7 +1208,7 @@
     h += '<span style="flex:1;"></span>';
     h += '<button type="button" onclick="studentsToggleWaiverPreview()" id="wtPreviewBtn" style="padding:4px 10px;border:1px solid var(--cream-dark,#ddd);border-radius:4px;background:var(--cream,var(--cream));cursor:pointer;font-size:0.78rem;">Preview</button>';
     h += '</div>';
-    h += '<div id="wtEditor" contenteditable="true" style="min-height:200px;max-height:400px;overflow-y:auto;padding:12px;border:1px solid var(--cream-dark,#ddd);border-top:none;border-radius:0 0 6px 6px;background:#fff;font-size:0.9rem;line-height:1.6;outline:none;font-family:DM Sans,sans-serif;color:var(--charcoal,var(--charcoal));">' + (wt.bodyHtml || '') + '</div>';
+    h += '<div id="wtEditor" contenteditable="true" style="min-height:200px;max-height:400px;overflow-y:auto;padding:12px;border:1px solid var(--cream-dark,#ddd);border-top:none;border-radius:0 0 6px 6px;background:#fff;font-size:0.9rem;line-height:1.6;outline:none;font-family:DM Sans,sans-serif;color:var(--charcoal);">' + (wt.bodyHtml || '') + '</div>';
     h += '<div id="wtPreview" style="display:none;min-height:200px;max-height:400px;overflow-y:auto;padding:12px;border:1px solid var(--cream-dark,#ddd);border-top:none;border-radius:0 0 6px 6px;background:var(--cream,var(--cream));font-size:0.9rem;line-height:1.6;"></div>';
     h += '</div>';
 

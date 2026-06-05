@@ -1348,13 +1348,13 @@
     html += '<div style="border-top:1px dashed var(--cream-dark);padding-top:14px;">';
     html += '<h4 style="font-size:0.9rem;font-weight:600;margin:0 0 8px;">Add channel</h4>';
     html += '<div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap;">';
-    html += '<input id="newChannelName" type="text" placeholder="Name (e.g. Etsy)" style="flex:1;min-width:140px;padding:7px 10px;border:1px solid #ddd;border-radius:5px;font-size:0.85rem;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';">';
-    html += '<input id="newChannelPct" type="number" step="0.01" min="0" placeholder="% fee" style="width:80px;padding:7px 10px;border:1px solid #ddd;border-radius:5px;font-size:0.85rem;font-family:monospace;background:var(--cream);color:var(--charcoal);">';
-    html += '<input id="newChannelFixed" type="number" step="0.01" min="0" placeholder="$/order" style="width:90px;padding:7px 10px;border:1px solid #ddd;border-radius:5px;font-size:0.85rem;font-family:monospace;background:var(--cream);color:var(--charcoal);">';
-    html += '<input id="newChannelMonthly" type="number" step="0.01" min="0" placeholder="$/month" style="width:90px;padding:7px 10px;border:1px solid #ddd;border-radius:5px;font-size:0.85rem;font-family:monospace;background:var(--cream);color:var(--charcoal);">';
+    html += '<input id="newChannelName" type="text" placeholder="Name (e.g. Etsy)" style="flex:1;min-width:140px;padding:7px 10px;border:1px solid #ddd;border-radius:5px;font-size:0.85rem;background:var(--cream);color:var(--text-primary);font-family:\'DM Sans\';">';
+    html += '<input id="newChannelPct" type="number" step="0.01" min="0" placeholder="% fee" style="width:80px;padding:7px 10px;border:1px solid #ddd;border-radius:5px;font-size:0.85rem;font-family:monospace;background:var(--cream);color:var(--text-primary);">';
+    html += '<input id="newChannelFixed" type="number" step="0.01" min="0" placeholder="$/order" style="width:90px;padding:7px 10px;border:1px solid #ddd;border-radius:5px;font-size:0.85rem;font-family:monospace;background:var(--cream);color:var(--text-primary);">';
+    html += '<input id="newChannelMonthly" type="number" step="0.01" min="0" placeholder="$/month" style="width:90px;padding:7px 10px;border:1px solid #ddd;border-radius:5px;font-size:0.85rem;font-family:monospace;background:var(--cream);color:var(--text-primary);">';
     html += '</div>';
     html += '<div style="display:flex;gap:8px;align-items:center;">';
-    html += '<input id="newChannelAutoMatch" type="text" placeholder="Auto-match sources (comma sep, e.g. etsy,etsy-mobile)" style="flex:1;padding:7px 10px;border:1px solid #ddd;border-radius:5px;font-size:0.85rem;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';">';
+    html += '<input id="newChannelAutoMatch" type="text" placeholder="Auto-match sources (comma sep, e.g. etsy,etsy-mobile)" style="flex:1;padding:7px 10px;border:1px solid #ddd;border-radius:5px;font-size:0.85rem;background:var(--cream);color:var(--text-primary);font-family:\'DM Sans\';">';
     html += '<button class="btn btn-primary btn-small" onclick="makerCreateChannelFromForm()">Add</button>';
     html += '</div>';
     html += '</div>';
@@ -1812,14 +1812,14 @@
     // Name
     html += '<div style="margin-bottom:16px;">';
     html += '<label style="display:block;font-size:0.85rem;font-weight:600;margin-bottom:4px;">Name *</label>';
-    html += '<input id="matName" type="text" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.9rem;box-sizing:border-box;" value="' + esc(m ? m.name : '') + '" placeholder="e.g. 14K Gold Wire">';
+    html += '<input id="matName" type="text" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--text-primary);font-family:\'DM Sans\';font-size:0.9rem;box-sizing:border-box;" value="' + esc(m ? m.name : '') + '" placeholder="e.g. 14K Gold Wire">';
     html += '</div>';
 
     // Category (dropdown + add new)
     html += '<div style="margin-bottom:16px;">';
     html += '<label style="display:block;font-size:0.85rem;font-weight:600;margin-bottom:4px;">Category</label>';
     html += '<div style="display:flex;gap:8px;">';
-    html += '<select id="matCategory" style="flex:1;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.9rem;">';
+    html += '<select id="matCategory" style="flex:1;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--text-primary);font-family:\'DM Sans\';font-size:0.9rem;">';
     html += '<option value="">Select category</option>';
     categories.forEach(function(cat) {
       var sel = m && m.category === cat ? ' selected' : '';
@@ -1835,7 +1835,7 @@
 
     html += '<div style="flex:1;">';
     html += '<label style="display:block;font-size:0.85rem;font-weight:600;margin-bottom:4px;">Unit of Measure *</label>';
-    html += '<select id="matUom" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.9rem;">';
+    html += '<select id="matUom" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--text-primary);font-family:\'DM Sans\';font-size:0.9rem;">';
     UOM_OPTIONS.forEach(function(opt) {
       var sel = m && m.unitOfMeasure === opt.value ? ' selected' : '';
       html += '<option value="' + opt.value + '"' + sel + '>' + esc(opt.label) + '</option>';
@@ -1855,7 +1855,7 @@
     // materialId (Firebase push key, safe even raw); data-fanout-oldcost
     // carries the numeric prior cost.
     var matIdAttr = (isEdit && m && m.materialId) ? ' data-fanout-mid="' + esc(m.materialId) + '" data-fanout-oldcost="' + (typeof m.unitCost === 'number' ? m.unitCost : 0) + '"' : '';
-    html += '<input id="matCost" type="number" step="0.01" min="0"' + matIdAttr + ' style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.9rem;box-sizing:border-box;" value="' + (m ? m.unitCost || '' : '') + '" placeholder="0.00">';
+    html += '<input id="matCost" type="number" step="0.01" min="0"' + matIdAttr + ' style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--text-primary);font-family:\'DM Sans\';font-size:0.9rem;box-sizing:border-box;" value="' + (m ? m.unitCost || '' : '') + '" placeholder="0.00">';
     if (isEdit && m && m.materialId) {
       html += '<div id="matFanOutReadout" style="font-size:0.78rem;margin-top:4px;min-height:1.2em;"></div>';
     }
@@ -1872,16 +1872,16 @@
     html += '</label>';
     html += '<div id="matSpotFields" style="display:' + (isSpot ? 'flex' : 'none') + ';gap:8px;margin-top:10px;">';
     html += '<div style="flex:1;"><label style="display:block;font-size:0.78rem;font-weight:600;margin-bottom:2px;">Metal</label>';
-    html += '<select id="matSpotMetal" style="width:100%;padding:7px 10px;border:1px solid #ddd;border-radius:5px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.85rem;">';
+    html += '<select id="matSpotMetal" style="width:100%;padding:7px 10px;border:1px solid #ddd;border-radius:5px;background:var(--cream);color:var(--text-primary);font-family:\'DM Sans\';font-size:0.85rem;">';
     ['gold','silver','platinum'].forEach(function(mt) {
       var sel = m && m.spotMetal === mt ? ' selected' : '';
       html += '<option value="' + mt + '"' + sel + '>' + mt.charAt(0).toUpperCase() + mt.slice(1) + '</option>';
     });
     html += '</select></div>';
     html += '<div style="flex:1;"><label style="display:block;font-size:0.78rem;font-weight:600;margin-bottom:2px;">Purity</label>';
-    html += '<input id="matPurity" type="number" step="0.001" min="0" max="1" placeholder="e.g. 0.585 (14k)" style="width:100%;padding:7px 10px;border:1px solid #ddd;border-radius:5px;font-size:0.85rem;font-family:monospace;background:var(--cream);color:var(--charcoal);box-sizing:border-box;" value="' + (m && m.purity != null ? m.purity : '') + '"></div>';
+    html += '<input id="matPurity" type="number" step="0.001" min="0" max="1" placeholder="e.g. 0.585 (14k)" style="width:100%;padding:7px 10px;border:1px solid #ddd;border-radius:5px;font-size:0.85rem;font-family:monospace;background:var(--cream);color:var(--text-primary);box-sizing:border-box;" value="' + (m && m.purity != null ? m.purity : '') + '"></div>';
     html += '<div style="flex:1;"><label style="display:block;font-size:0.78rem;font-weight:600;margin-bottom:2px;">Markup %</label>';
-    html += '<input id="matMarkupSpot" type="number" step="0.1" min="0" placeholder="e.g. 8" style="width:100%;padding:7px 10px;border:1px solid #ddd;border-radius:5px;font-size:0.85rem;font-family:monospace;background:var(--cream);color:var(--charcoal);box-sizing:border-box;" value="' + (m && m.markupOverSpot != null ? m.markupOverSpot : '') + '"></div>';
+    html += '<input id="matMarkupSpot" type="number" step="0.1" min="0" placeholder="e.g. 8" style="width:100%;padding:7px 10px;border:1px solid #ddd;border-radius:5px;font-size:0.85rem;font-family:monospace;background:var(--cream);color:var(--text-primary);box-sizing:border-box;" value="' + (m && m.markupOverSpot != null ? m.markupOverSpot : '') + '"></div>';
     html += '</div>';
     html += '<p style="font-size:0.72rem;color:var(--warm-gray);margin:8px 0 0;">Unit Cost auto-updates daily: spot × purity × (1 + markup%) ÷ unitConversion. Set purity (e.g. 0.999 fine, 0.925 sterling, 0.585 14k) and supplier markup.</p>';
     html += '</div>';
@@ -1892,8 +1892,8 @@
     html += '<div style="padding:0 12px 12px;">';
     html += '<p style="font-size:0.78rem;color:var(--warm-gray);margin:6px 0 10px;">Add freight, customs, or supplier fees to your unit cost. Enter the extra charge and the qty it covers — we will prorate per unit and update Unit Cost above.</p>';
     html += '<div style="display:flex;gap:8px;align-items:flex-end;">';
-    html += '<div style="flex:1;"><label style="display:block;font-size:0.78rem;font-weight:600;margin-bottom:2px;">Extra charge ($)</label><input id="matLandedExtra" type="number" step="0.01" min="0" placeholder="e.g. 25.00" style="width:100%;padding:7px 10px;border:1px solid #ddd;border-radius:5px;font-size:0.85rem;font-family:monospace;background:var(--cream);color:var(--charcoal);box-sizing:border-box;"></div>';
-    html += '<div style="flex:1;"><label style="display:block;font-size:0.78rem;font-weight:600;margin-bottom:2px;">Qty covered</label><input id="matLandedQty" type="number" step="0.01" min="0" placeholder="e.g. 100" style="width:100%;padding:7px 10px;border:1px solid #ddd;border-radius:5px;font-size:0.85rem;font-family:monospace;background:var(--cream);color:var(--charcoal);box-sizing:border-box;"></div>';
+    html += '<div style="flex:1;"><label style="display:block;font-size:0.78rem;font-weight:600;margin-bottom:2px;">Extra charge ($)</label><input id="matLandedExtra" type="number" step="0.01" min="0" placeholder="e.g. 25.00" style="width:100%;padding:7px 10px;border:1px solid #ddd;border-radius:5px;font-size:0.85rem;font-family:monospace;background:var(--cream);color:var(--text-primary);box-sizing:border-box;"></div>';
+    html += '<div style="flex:1;"><label style="display:block;font-size:0.78rem;font-weight:600;margin-bottom:2px;">Qty covered</label><input id="matLandedQty" type="number" step="0.01" min="0" placeholder="e.g. 100" style="width:100%;padding:7px 10px;border:1px solid #ddd;border-radius:5px;font-size:0.85rem;font-family:monospace;background:var(--cream);color:var(--text-primary);box-sizing:border-box;"></div>';
     html += '<button type="button" class="btn btn-secondary btn-small" style="font-size:0.78rem;" onclick="makerApplyLandedCost()">Apply</button>';
     html += '</div>';
     html += '</div></details>';
@@ -1912,7 +1912,7 @@
       if (history.length > 0) {
         var recent = history.slice(-5).reverse();
         html += '<div style="background:rgba(42,124,111,0.06);border:1px solid rgba(42,124,111,0.15);border-radius:6px;padding:10px 12px;margin-bottom:16px;font-size:0.78rem;color:var(--warm-gray);">';
-        html += '<div style="font-weight:600;margin-bottom:6px;color:var(--charcoal);">Cost History <span style="font-weight:400;color:var(--warm-gray-light);">(most recent ' + recent.length + ' of ' + history.length + ')</span></div>';
+        html += '<div style="font-weight:600;margin-bottom:6px;color:var(--text-primary);">Cost History <span style="font-weight:400;color:var(--warm-gray-light);">(most recent ' + recent.length + ' of ' + history.length + ')</span></div>';
         recent.forEach(function(h) {
           var when = h.changedAt ? new Date(h.changedAt).toLocaleDateString() : '—';
           html += '<div style="display:flex;justify-content:space-between;padding:2px 0;"><span>' + when + '</span><span style="font-family:monospace;">$' + (h.cost || 0).toFixed(2) + '</span></div>';
@@ -1926,7 +1926,7 @@
 
     html += '<div style="flex:1;">';
     html += '<label style="display:block;font-size:0.85rem;font-weight:600;margin-bottom:4px;">Purchase UOM <span style="font-weight:400;color:var(--warm-gray);">(optional)</span></label>';
-    html += '<select id="matPurchaseUOM" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.9rem;">';
+    html += '<select id="matPurchaseUOM" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--text-primary);font-family:\'DM Sans\';font-size:0.9rem;">';
     html += '<option value="">Same as above</option>';
     UOM_OPTIONS.forEach(function(opt) {
       var sel = m && m.purchaseUOM === opt.value ? ' selected' : '';
@@ -1937,7 +1937,7 @@
 
     html += '<div style="flex:1;">';
     html += '<label style="display:block;font-size:0.85rem;font-weight:600;margin-bottom:4px;">Conversion Factor</label>';
-    html += '<input id="matConvFactor" type="number" step="0.0001" min="0" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.9rem;box-sizing:border-box;" value="' + (m && m.conversionFactor ? m.conversionFactor : '') + '" placeholder="e.g. 20 (1 oz = 20 dwt)">';
+    html += '<input id="matConvFactor" type="number" step="0.0001" min="0" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--text-primary);font-family:\'DM Sans\';font-size:0.9rem;box-sizing:border-box;" value="' + (m && m.conversionFactor ? m.conversionFactor : '') + '" placeholder="e.g. 20 (1 oz = 20 dwt)">';
     html += '</div>';
 
     html += '</div>';
@@ -1947,12 +1947,12 @@
 
     html += '<div style="flex:1;">';
     html += '<label style="display:block;font-size:0.85rem;font-weight:600;margin-bottom:4px;">On Hand Qty</label>';
-    html += '<input id="matOnHand" type="number" step="0.01" min="0" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.9rem;box-sizing:border-box;" value="' + (m ? m.onHandQty || '' : '') + '" placeholder="0">';
+    html += '<input id="matOnHand" type="number" step="0.01" min="0" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--text-primary);font-family:\'DM Sans\';font-size:0.9rem;box-sizing:border-box;" value="' + (m ? m.onHandQty || '' : '') + '" placeholder="0">';
     html += '</div>';
 
     html += '<div style="flex:1;">';
     html += '<label style="display:block;font-size:0.85rem;font-weight:600;margin-bottom:4px;">Reorder Threshold</label>';
-    html += '<input id="matReorder" type="number" step="0.01" min="0" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.9rem;box-sizing:border-box;" value="' + (m ? m.reorderThreshold || '' : '') + '" placeholder="0">';
+    html += '<input id="matReorder" type="number" step="0.01" min="0" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--text-primary);font-family:\'DM Sans\';font-size:0.9rem;box-sizing:border-box;" value="' + (m ? m.reorderThreshold || '' : '') + '" placeholder="0">';
     html += '</div>';
 
     html += '</div>';
@@ -1961,7 +1961,7 @@
     if (isEdit) {
       html += '<div style="margin-bottom:16px;">';
       html += '<label style="display:block;font-size:0.85rem;font-weight:600;margin-bottom:4px;">Status</label>';
-      html += '<select id="matStatus" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.9rem;">';
+      html += '<select id="matStatus" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--text-primary);font-family:\'DM Sans\';font-size:0.9rem;">';
       ['active', 'draft', 'archived'].forEach(function(s) {
         var sel = m.status === s ? ' selected' : '';
         html += '<option value="' + s + '"' + sel + '>' + s.charAt(0).toUpperCase() + s.slice(1) + '</option>';
@@ -1973,7 +1973,7 @@
     // Notes
     html += '<div style="margin-bottom:16px;">';
     html += '<label style="display:block;font-size:0.85rem;font-weight:600;margin-bottom:4px;">Notes</label>';
-    html += '<textarea id="matNotes" rows="2" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.9rem;resize:vertical;box-sizing:border-box;">' + esc(m ? m.notes : '') + '</textarea>';
+    html += '<textarea id="matNotes" rows="2" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--text-primary);font-family:\'DM Sans\';font-size:0.9rem;resize:vertical;box-sizing:border-box;">' + esc(m ? m.notes : '') + '</textarea>';
     html += '</div>';
 
     // Footer
@@ -4294,7 +4294,7 @@
     var defaultCutoff = isoToDateInput(defaultReturnsCutoffIso());
 
     var html = '';
-    html += '<div style="font-size:0.85rem;line-height:1.5;color:var(--charcoal);">';
+    html += '<div style="font-size:0.85rem;line-height:1.5;color:var(--text-primary);">';
     html += '<p style="margin:0 0 12px;">Choose how this product winds down. Forward-only — to revive, clone for redesign.</p>';
 
     [['discontinuing', true], ['selling-through', false], ['returns-only', false]].forEach(function(pair) {
@@ -4646,17 +4646,17 @@
     // Step 2 — Name
     html += '<div style="margin-bottom:16px;">';
     html += '<label style="display:block;font-size:0.85rem;font-weight:600;margin-bottom:4px;">Name *</label>';
-    html += '<input id="newPieceName" type="text" autofocus style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.9rem;box-sizing:border-box;" placeholder="e.g. Cobalt Pendant">';
+    html += '<input id="newPieceName" type="text" autofocus style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--text-primary);font-family:\'DM Sans\';font-size:0.9rem;box-sizing:border-box;" placeholder="e.g. Cobalt Pendant">';
     html += '</div>';
 
     // Category — dropdown of existing + free-text fallback
     html += '<div style="margin-bottom:20px;">';
     html += '<label style="display:block;font-size:0.85rem;font-weight:600;margin-bottom:4px;">Category</label>';
-    html += '<select id="newPieceCategorySelect" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.9rem;margin-bottom:6px;box-sizing:border-box;" onchange="makerNewPieceCategoryChange()">';
+    html += '<select id="newPieceCategorySelect" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--text-primary);font-family:\'DM Sans\';font-size:0.9rem;margin-bottom:6px;box-sizing:border-box;" onchange="makerNewPieceCategoryChange()">';
     catList.forEach(function(c) { html += '<option value="' + esc(c) + '">' + esc(c) + '</option>'; });
     html += '<option value="__other__">+ New category…</option>';
     html += '</select>';
-    html += '<input id="newPieceCategoryCustom" type="text" style="display:none;width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.9rem;box-sizing:border-box;" placeholder="New category name">';
+    html += '<input id="newPieceCategoryCustom" type="text" style="display:none;width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--text-primary);font-family:\'DM Sans\';font-size:0.9rem;box-sizing:border-box;" placeholder="New category name">';
     html += '</div>';
 
     // Buttons
@@ -5016,8 +5016,8 @@
         }
         html += '<tr>';
         html += '<td style="padding:8px;font-size:0.85rem;border-bottom:1px solid var(--cream-dark);">' + esc(li.materialName || '') + subBadge + lockChip + '</td>';
-        html += '<td style="text-align:right;padding:8px;border-bottom:1px solid var(--cream-dark);"><input type="number" step="0.01" min="0" value="' + (li.quantity || 0) + '" style="width:90px;text-align:right;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;font-family:monospace;background:var(--cream);color:var(--charcoal);" onchange="makerUpdateLineItemQty(\'' + esc(liId) + '\', this.value)">' + (scrapPct > 0 ? '<div style="font-size:0.72rem;color:var(--warm-gray);text-align:right;margin-top:2px;">eff: ' + effQty.toFixed(2) + '</div>' : '') + '</td>';
-        html += '<td style="text-align:right;padding:8px;border-bottom:1px solid var(--cream-dark);"><input type="number" step="1" min="0" max="200" value="' + scrapPct + '" style="width:80px;text-align:right;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;font-family:monospace;background:var(--cream);color:var(--charcoal);" onchange="makerUpdateLineItemScrap(\'' + esc(liId) + '\', this.value)"></td>';
+        html += '<td style="text-align:right;padding:8px;border-bottom:1px solid var(--cream-dark);"><input type="number" step="0.01" min="0" value="' + (li.quantity || 0) + '" style="width:90px;text-align:right;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;font-family:monospace;background:var(--cream);color:var(--text-primary);" onchange="makerUpdateLineItemQty(\'' + esc(liId) + '\', this.value)">' + (scrapPct > 0 ? '<div style="font-size:0.72rem;color:var(--warm-gray);text-align:right;margin-top:2px;">eff: ' + effQty.toFixed(2) + '</div>' : '') + '</td>';
+        html += '<td style="text-align:right;padding:8px;border-bottom:1px solid var(--cream-dark);"><input type="number" step="1" min="0" max="200" value="' + scrapPct + '" style="width:80px;text-align:right;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;font-family:monospace;background:var(--cream);color:var(--text-primary);" onchange="makerUpdateLineItemScrap(\'' + esc(liId) + '\', this.value)"></td>';
         html += '<td style="text-align:center;padding:8px;font-size:0.85rem;color:var(--warm-gray);border-bottom:1px solid var(--cream-dark);">' + esc(li.unitOfMeasure || '') + '</td>';
         html += '<td style="text-align:right;padding:8px;font-family:monospace;font-size:0.85rem;border-bottom:1px solid var(--cream-dark);">$' + (li.unitCost || 0).toFixed(2) + '</td>';
         html += '<td style="text-align:right;padding:8px;font-family:monospace;font-size:0.85rem;font-weight:600;border-bottom:1px solid var(--cream-dark);">$' + ext.toFixed(2) + '</td>';
@@ -5039,12 +5039,12 @@
 
     html += '<div style="flex:1;">';
     html += '<label style="display:block;font-size:0.85rem;font-weight:600;margin-bottom:4px;">Rate ($/hr)</label>';
-    html += '<input type="number" step="0.01" min="0" value="' + (bs.laborRatePerHour || 0) + '" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.85rem;font-family:monospace;background:var(--cream);color:var(--charcoal);box-sizing:border-box;" onchange="makerUpdateBuilderField(\'laborRatePerHour\', parseFloat(this.value) || 0)">';
+    html += '<input type="number" step="0.01" min="0" value="' + (bs.laborRatePerHour || 0) + '" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.85rem;font-family:monospace;background:var(--cream);color:var(--text-primary);box-sizing:border-box;" onchange="makerUpdateBuilderField(\'laborRatePerHour\', parseFloat(this.value) || 0)">';
     html += '</div>';
 
     html += '<div style="flex:1;">';
     html += '<label style="display:block;font-size:0.85rem;font-weight:600;margin-bottom:4px;">Time (minutes)' + (fieldMeta.laborMinutes.inherited ? ' <span style="font-weight:400;color:var(--warm-gray-light);">(inherited)</span>' : '') + '</label>';
-    html += '<input type="number" step="1" min="0" value="' + (activeData.laborMinutes || 0) + '" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.85rem;font-family:monospace;background:var(--cream);color:var(--charcoal);box-sizing:border-box;' + (fieldMeta.laborMinutes.inherited ? 'font-style:italic;opacity:0.7;' : '') + '" onchange="makerUpdateBuilderField(\'laborMinutes\', parseFloat(this.value) || 0)">';
+    html += '<input type="number" step="1" min="0" value="' + (activeData.laborMinutes || 0) + '" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.85rem;font-family:monospace;background:var(--cream);color:var(--text-primary);box-sizing:border-box;' + (fieldMeta.laborMinutes.inherited ? 'font-style:italic;opacity:0.7;' : '') + '" onchange="makerUpdateBuilderField(\'laborMinutes\', parseFloat(this.value) || 0)">';
     html += '</div>';
 
     html += '<div style="flex:1;text-align:right;">';
@@ -5061,12 +5061,12 @@
 
     html += '<div style="flex:1;">';
     html += '<label style="display:block;font-size:0.85rem;font-weight:600;margin-bottom:4px;">Amount ($)' + (fieldMeta.otherCost.inherited ? ' <span style="font-weight:400;color:var(--warm-gray-light);">(inherited)</span>' : '') + '</label>';
-    html += '<input type="number" step="0.01" min="0" value="' + (activeData.otherCost || 0) + '" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.85rem;font-family:monospace;background:var(--cream);color:var(--charcoal);box-sizing:border-box;' + (fieldMeta.otherCost.inherited ? 'font-style:italic;opacity:0.7;' : '') + '" onchange="makerUpdateBuilderField(\'otherCost\', parseFloat(this.value) || 0)">';
+    html += '<input type="number" step="0.01" min="0" value="' + (activeData.otherCost || 0) + '" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.85rem;font-family:monospace;background:var(--cream);color:var(--text-primary);box-sizing:border-box;' + (fieldMeta.otherCost.inherited ? 'font-style:italic;opacity:0.7;' : '') + '" onchange="makerUpdateBuilderField(\'otherCost\', parseFloat(this.value) || 0)">';
     html += '</div>';
 
     html += '<div style="flex:2;">';
     html += '<label style="display:block;font-size:0.85rem;font-weight:600;margin-bottom:4px;">Note</label>';
-    html += '<input type="text" value="' + esc(bs.otherCostNote || '') + '" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.85rem;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';box-sizing:border-box;" onchange="makerUpdateBuilderField(\'otherCostNote\', this.value)" placeholder="e.g. packaging, shipping supplies">';
+    html += '<input type="text" value="' + esc(bs.otherCostNote || '') + '" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.85rem;background:var(--cream);color:var(--text-primary);font-family:\'DM Sans\';box-sizing:border-box;" onchange="makerUpdateBuilderField(\'otherCostNote\', this.value)" placeholder="e.g. packaging, shipping supplies">';
     html += '</div>';
 
     html += '</div>';
@@ -5075,11 +5075,11 @@
     html += '<div style="display:flex;gap:12px;margin-top:12px;padding-top:12px;border-top:1px dashed var(--cream-dark);">';
     html += '<div style="flex:1;">';
     html += '<label style="display:block;font-size:0.85rem;font-weight:600;margin-bottom:4px;">Setup Cost ($) <span style="font-weight:400;color:var(--warm-gray-light);">amortized</span></label>';
-    html += '<input type="number" step="0.01" min="0" value="' + (bs.setupCost || 0) + '" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.85rem;font-family:monospace;background:var(--cream);color:var(--charcoal);box-sizing:border-box;" onchange="makerUpdateBuilderField(\'setupCost\', parseFloat(this.value) || 0)">';
+    html += '<input type="number" step="0.01" min="0" value="' + (bs.setupCost || 0) + '" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.85rem;font-family:monospace;background:var(--cream);color:var(--text-primary);box-sizing:border-box;" onchange="makerUpdateBuilderField(\'setupCost\', parseFloat(this.value) || 0)">';
     html += '</div>';
     html += '<div style="flex:1;">';
     html += '<label style="display:block;font-size:0.85rem;font-weight:600;margin-bottom:4px;">Batch Size <span style="font-weight:400;color:var(--warm-gray-light);">units per setup</span></label>';
-    html += '<input type="number" step="1" min="1" value="' + (bs.batchSize || 1) + '" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.85rem;font-family:monospace;background:var(--cream);color:var(--charcoal);box-sizing:border-box;" onchange="makerUpdateBuilderField(\'batchSize\', Math.max(1, parseInt(this.value) || 1))">';
+    html += '<input type="number" step="1" min="1" value="' + (bs.batchSize || 1) + '" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.85rem;font-family:monospace;background:var(--cream);color:var(--text-primary);box-sizing:border-box;" onchange="makerUpdateBuilderField(\'batchSize\', Math.max(1, parseInt(this.value) || 1))">';
     html += '</div>';
     html += '<div style="flex:1;text-align:right;">';
     html += '<label style="display:block;font-size:0.85rem;font-weight:600;margin-bottom:4px;">Per Unit</label>';
@@ -5109,7 +5109,7 @@
     // ---- NOTES ----
     html += '<div style="margin-bottom:16px;">';
     html += '<label style="display:block;font-size:0.85rem;font-weight:600;margin-bottom:4px;">Recipe Notes</label>';
-    html += '<textarea rows="2" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.85rem;resize:vertical;box-sizing:border-box;" onchange="makerUpdateBuilderField(\'notes\', this.value)">' + esc(bs.notes || '') + '</textarea>';
+    html += '<textarea rows="2" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--text-primary);font-family:\'DM Sans\';font-size:0.85rem;resize:vertical;box-sizing:border-box;" onchange="makerUpdateBuilderField(\'notes\', this.value)">' + esc(bs.notes || '') + '</textarea>';
     html += '</div>';
 
     tab.innerHTML = html;
@@ -5487,7 +5487,7 @@
       ['gold','silver','platinum'].forEach(function(metal) {
         html += '<div style="flex:1;">';
         html += '<label style="display:block;font-size:0.72rem;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--warm-gray);margin-bottom:4px;">' + metal.charAt(0).toUpperCase() + metal.slice(1) + ' shift %</label>';
-        html += '<input id="whatIf_' + metal + '" type="number" step="1" value="0" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-family:monospace;background:var(--cream);color:var(--charcoal);box-sizing:border-box;" oninput="makerRunWhatIf()">';
+        html += '<input id="whatIf_' + metal + '" type="number" step="1" value="0" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-family:monospace;background:var(--cream);color:var(--text-primary);box-sizing:border-box;" oninput="makerRunWhatIf()">';
         html += '<div style="font-size:0.72rem;color:var(--warm-gray-light);margin-top:2px;">spot $' + (spotPricesCurrent[metal] || 0).toFixed(2) + '/oz</div>';
         html += '</div>';
       });
@@ -5741,9 +5741,9 @@
     // Kind toggle (Material vs Sub-assembly)
     html += '<div style="display:flex;gap:0;margin-bottom:14px;border:1px solid var(--cream-dark);border-radius:6px;overflow:hidden;">';
     var matBg = addPartKind === 'material' ? 'var(--teal)' : 'var(--cream)';
-    var matFg = addPartKind === 'material' ? 'white' : 'var(--charcoal)';
+    var matFg = addPartKind === 'material' ? 'white' : 'var(--text-primary)';
     var subBg = addPartKind === 'recipe' ? 'var(--teal)' : 'var(--cream)';
-    var subFg = addPartKind === 'recipe' ? 'white' : 'var(--charcoal)';
+    var subFg = addPartKind === 'recipe' ? 'white' : 'var(--text-primary)';
     html += '<button style="flex:1;padding:8px 12px;border:none;background:' + matBg + ';color:' + matFg + ';font-size:0.85rem;font-weight:600;cursor:pointer;font-family:\'DM Sans\';" onclick="makerSetAddPartKind(\'material\')">Material</button>';
     html += '<button style="flex:1;padding:8px 12px;border:none;background:' + subBg + ';color:' + subFg + ';font-size:0.85rem;font-weight:600;cursor:pointer;font-family:\'DM Sans\';" onclick="makerSetAddPartKind(\'recipe\')">Sub-assembly</button>';
     html += '</div>';
@@ -5754,7 +5754,7 @@
       } else {
         html += '<div style="margin-bottom:12px;">';
         html += '<label style="display:block;font-size:0.85rem;font-weight:600;margin-bottom:4px;">Material</label>';
-        html += '<select id="addPartMaterialId" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.9rem;">';
+        html += '<select id="addPartMaterialId" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--text-primary);font-family:\'DM Sans\';font-size:0.9rem;">';
         html += '<option value="">Select material...</option>';
         activeMaterials.forEach(function(m) {
           html += '<option value="' + esc(m.materialId) + '">' + esc(m.name) + ' (' + esc(m.unitOfMeasure) + ' @ $' + (m.unitCost || 0).toFixed(2) + ')</option>';
@@ -5764,7 +5764,7 @@
 
         html += '<div style="margin-bottom:16px;">';
         html += '<label style="display:block;font-size:0.85rem;font-weight:600;margin-bottom:4px;">Quantity</label>';
-        html += '<input id="addPartQty" type="number" step="0.01" min="0" value="1" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.9rem;box-sizing:border-box;">';
+        html += '<input id="addPartQty" type="number" step="0.01" min="0" value="1" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--text-primary);font-family:\'DM Sans\';font-size:0.9rem;box-sizing:border-box;">';
         html += '</div>';
       }
     } else {
@@ -5773,7 +5773,7 @@
       } else {
         html += '<div style="margin-bottom:12px;">';
         html += '<label style="display:block;font-size:0.85rem;font-weight:600;margin-bottom:4px;">Sub-recipe</label>';
-        html += '<select id="addPartRecipeId" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.9rem;">';
+        html += '<select id="addPartRecipeId" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--text-primary);font-family:\'DM Sans\';font-size:0.9rem;">';
         html += '<option value="">Select recipe...</option>';
         eligibleRecipes.forEach(function(r) {
           html += '<option value="' + esc(r.recipeId) + '">' + esc(r.name || 'Untitled') + ' (cost $' + (r.totalCost || 0).toFixed(2) + ')</option>';
@@ -5783,7 +5783,7 @@
 
         html += '<div style="margin-bottom:16px;">';
         html += '<label style="display:block;font-size:0.85rem;font-weight:600;margin-bottom:4px;">Quantity</label>';
-        html += '<input id="addPartQty" type="number" step="0.01" min="0" value="1" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.9rem;box-sizing:border-box;">';
+        html += '<input id="addPartQty" type="number" step="0.01" min="0" value="1" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--text-primary);font-family:\'DM Sans\';font-size:0.9rem;box-sizing:border-box;">';
         html += '</div>';
 
         html += '<p style="font-size:0.78rem;color:var(--warm-gray-light);margin:0 0 12px;">Sub-assembly cost = sub-recipe total cost (no markup compounding). Max nesting depth ' + SUB_ASSEMBLY_MAX_DEPTH + '.</p>';
@@ -6342,7 +6342,7 @@
       var isAutoMapped = mapped !== undefined;
       html += '<div style="display:flex;gap:12px;align-items:center;margin-bottom:12px;padding:8px 12px;border-radius:6px;background:' + (isAutoMapped ? 'rgba(42,124,111,0.06)' : 'transparent') + ';">';
       html += '<div style="min-width:140px;font-size:0.85rem;font-weight:500;">' + field.label + (field.required ? ' *' : '') + '</div>';
-      html += '<select data-field="' + field.key + '" onchange="makerUpdateMapping(\'' + field.key + '\', this.value)" style="flex:1;padding:7px 10px;border:1px solid ' + (isAutoMapped ? 'var(--teal)' : '#ddd') + ';border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.85rem;">';
+      html += '<select data-field="' + field.key + '" onchange="makerUpdateMapping(\'' + field.key + '\', this.value)" style="flex:1;padding:7px 10px;border:1px solid ' + (isAutoMapped ? 'var(--teal)' : '#ddd') + ';border-radius:6px;background:var(--cream);color:var(--text-primary);font-family:\'DM Sans\';font-size:0.85rem;">';
       html += '<option value="">— Don\'t import —</option>';
       importState.headers.forEach(function(h, i) {
         html += '<option value="' + i + '"' + (mapped === i ? ' selected' : '') + '>' + esc(h) + '</option>';
@@ -6355,7 +6355,7 @@
     if (importState.type === 'materials') {
       html += '<div style="margin-top:16px;padding:12px;background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;">';
       html += '<div style="font-size:0.85rem;font-weight:500;margin-bottom:8px;">Default Unit of Measure (if not mapped)</div>';
-      html += '<select onchange="makerSetImportDefault(\'defaultUom\', this.value)" style="padding:7px 10px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.85rem;">';
+      html += '<select onchange="makerSetImportDefault(\'defaultUom\', this.value)" style="padding:7px 10px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--text-primary);font-family:\'DM Sans\';font-size:0.85rem;">';
       html += '<option value="">—</option>';
       UOM_OPTIONS.forEach(function(u) {
         html += '<option value="' + u.value + '"' + (importState.defaultUom === u.value ? ' selected' : '') + '>' + esc(u.label) + '</option>';
@@ -6366,7 +6366,7 @@
     // Default category
     html += '<div style="margin-top:12px;padding:12px;background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;">';
     html += '<div style="font-size:0.85rem;font-weight:500;margin-bottom:8px;">Default Category (if not mapped)</div>';
-    html += '<input type="text" value="' + esc(importState.defaultCategory || '') + '" placeholder="e.g. Imported" onchange="makerSetImportDefault(\'defaultCategory\', this.value)" style="padding:7px 10px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.85rem;">';
+    html += '<input type="text" value="' + esc(importState.defaultCategory || '') + '" placeholder="e.g. Imported" onchange="makerSetImportDefault(\'defaultCategory\', this.value)" style="padding:7px 10px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--text-primary);font-family:\'DM Sans\';font-size:0.85rem;">';
     html += '</div>';
 
     html += '<div style="display:flex;justify-content:space-between;margin-top:20px;">';
