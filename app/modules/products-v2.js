@@ -169,12 +169,49 @@
     });
   }
   function pricingPane(p) {
+    var pid = p._key || p.pid;
+    if (V2.editPricing === pid) return pricingEditForm(p);
+    var guarded = String(p.status || '').toLowerCase() === 'active';
+    var editBtn = '<button class="btn btn-secondary btn-small" onclick="ProductsV2.editPricing(\'' + esc(pid) + '\')">' + (guarded ? 'Revise' : 'Edit') + '</button>';
     var rows = [{ k: 'Retail price', v: N.money(price(p)) || '—' }];
     if (typeof p.wholesalePriceCents === 'number' && p.wholesalePriceCents > 0) rows.push({ k: 'Wholesale', v: N.money(p.wholesalePriceCents / 100) });
     rows.push({ k: 'Cost basis', v: p.recipeId ? 'From recipe (see Recipe tab)' : 'Manually priced' });
     var nOv = realVariants(p).filter(function (v) { return variantOverridden(p, v); }).length;
     rows.push({ k: 'Variant overrides', v: nOv ? (nOv + ' variant' + (nOv > 1 ? 's' : '')) : 'none' });
-    return U.card('Pricing · Default (base)', U.kv(rows)) + '<div class="pv2-pnote">Base price propagates to every non-overridden variant. Editing lands in P3.</div>';
+    return U.card('Pricing · Default (base)', U.kv(rows), { headerRight: editBtn }) + '<div class="pv2-pnote">Base price propagates to every non-overridden variant. Set a variant’s own price on its Pricing tab.</div>';
+  }
+  // Inline edit of the customer-facing price (direct priceCents — the model most
+  // products use; markupConfig is vestigial). Delegates to the revision-aware
+  // setFields bridge, same as Info. Cost basis (recipe) stays read-only.
+  function pricingEditForm(p) {
+    var pid = p._key || p.pid;
+    var guarded = String(p.status || '').toLowerCase() === 'active';
+    var retail = (typeof p.priceCents === 'number') ? (p.priceCents / 100) : (typeof p.price === 'number' ? p.price : '');
+    var wholesale = (typeof p.wholesalePriceCents === 'number' && p.wholesalePriceCents > 0) ? (p.wholesalePriceCents / 100) : '';
+    function money(label, id, val, hint) {
+      return '<label style="display:block;margin-bottom:12px;font-size:0.85rem;color:var(--warm-gray);">' + esc(label) +
+        '<div style="display:flex;align-items:center;gap:6px;margin-top:4px;"><span style="font-size:0.9rem;">$</span>' +
+        '<input id="' + id + '" type="number" step="0.01" min="0" value="' + esc(val === '' ? '' : String(val)) +
+        '" style="flex:1;padding:7px 9px;border:1px solid var(--cream-dark);border-radius:6px;font-size:0.9rem;background:var(--cream);color:inherit;box-sizing:border-box;"></div>' +
+        (hint ? '<span style="font-size:0.72rem;color:var(--warm-gray);">' + esc(hint) + '</span>' : '') + '</label>';
+    }
+    var note = guarded ? '<div class="pv2-pnote">This product is Published — your edits stage as a pending revision and go live when you Apply.</div>' : '';
+    var costNote = p.recipeId ? '<div class="pv2-pnote">Cost basis comes from the linked recipe (Recipe tab); this sets the customer-facing price directly.</div>' : '';
+    var body = note +
+      money('Retail price', 'pv2PriceRetail', retail) +
+      money('Wholesale price (optional)', 'pv2PriceWholesale', wholesale, 'Leave blank if you don’t sell this wholesale.') +
+      costNote +
+      '<div style="display:flex;gap:8px;margin-top:4px;">' +
+      '<button class="btn btn-primary btn-small" onclick="ProductsV2.savePricing(\'' + esc(pid) + '\')">' + (guarded ? 'Stage changes' : 'Save') + '</button>' +
+      '<button class="btn btn-secondary btn-small" onclick="ProductsV2.cancelPricing(\'' + esc(pid) + '\')">Cancel</button>' +
+      '</div>';
+    return U.card('Edit pricing · Default (base)', body);
+  }
+  function rerenderPricingPane(pid) {
+    var rec = V2.byId[pid]; if (!rec) return;
+    var body = document.getElementById('mastSlideOutBody');
+    var paneEl = body && body.querySelector('.mu-pane[data-pane="pricing"]');
+    if (paneEl) paneEl.innerHTML = pricingPane(rec);
   }
   function recipePane(p) {
     if (p.recipeId) {
@@ -611,7 +648,7 @@
   }
 
   // ── State + data ────────────────────────────────────────────────────
-  var V2 = { rows: [], byId: {}, sortKey: '_title', sortDir: 'asc', filter: 'all', expanded: {}, editInfo: null, q: '' };
+  var V2 = { rows: [], byId: {}, sortKey: '_title', sortDir: 'asc', filter: 'all', expanded: {}, editInfo: null, editPricing: null, q: '' };
 
   function toRows(map) {
     var out = []; map = map || {};
@@ -832,6 +869,32 @@
           rerenderVariantImagePane(pid, variantId);
           MastAdmin.showToast(idx >= 0 ? 'Image #' + (idx + 1) + ' set for this variant' : 'Variant image cleared');
         }, function (e) { console.error('[products-v2] setVariantImage', e); MastAdmin.showToast('Failed', true); });
+      });
+    },
+    // ── Pricing tab edit (direct price; revision-aware via setFields) ──
+    editPricing: function (pid) { V2.editPricing = pid; rerenderPricingPane(pid); },
+    cancelPricing: function (pid) { V2.editPricing = null; rerenderPricingPane(pid); },
+    savePricing: function (pid) {
+      var rec = V2.byId[pid] || {};
+      function num(id) { var el = document.getElementById(id); if (!el) return null; var s = el.value.trim(); if (s === '') return ''; var n = Number(s); return (isFinite(n) && n >= 0) ? n : null; }
+      var retail = num('pv2PriceRetail'), wholesale = num('pv2PriceWholesale');
+      if (retail === '' || retail === null) { MastAdmin.showToast('Enter a valid retail price', true); return; }
+      if (wholesale === null) { MastAdmin.showToast('Wholesale price isn’t valid', true); return; }
+      var changed = {};
+      var curRetail = (typeof rec.priceCents === 'number') ? rec.priceCents : (typeof rec.price === 'number' ? Math.round(rec.price * 100) : null);
+      var newRetail = Math.round(retail * 100);
+      if (newRetail !== curRetail) changed.priceCents = newRetail;
+      var curWh = (typeof rec.wholesalePriceCents === 'number') ? rec.wholesalePriceCents : null;
+      var newWh = (wholesale === '') ? null : Math.round(wholesale * 100);
+      if (newWh !== curWh) changed.wholesalePriceCents = newWh;
+      if (!Object.keys(changed).length) { V2.editPricing = null; rerenderPricingPane(pid); MastAdmin.showToast('No changes'); return; }
+      withProductBridge(function () {
+        Promise.resolve(window.MakerProductBridge.setFields(pid, changed)).then(function (res) {
+          if (!res || !res.ok) { MastAdmin.showToast('Save failed: ' + ((res && res.error) || 'unknown'), true); return; }
+          if (!res.staged) Object.assign(rec, changed);
+          V2.editPricing = null; rerenderPricingPane(pid);
+          MastAdmin.showToast(res.staged ? 'Staged ' + res.changed + ' change' + (res.changed === 1 ? '' : 's') + ' (Apply to go live)' : 'Saved');
+        }, function (e) { console.error('[products-v2] savePricing', e); MastAdmin.showToast('Save failed', true); });
       });
     },
     // ── Info tab edit (P4 pilot) ──────────────────────────────────────
