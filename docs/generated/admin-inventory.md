@@ -6,7 +6,7 @@ Source-of-truth counts for the admin app, generated from the code so docs
 cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 
 - **Core shell:** `app/index.html` — **58,639** lines
-- **Feature modules:** **94** files in `app/modules/` (**87** routed), **104,924** lines combined
+- **Feature modules:** **94** files in `app/modules/` (**87** routed), **105,669** lines combined
 
 | Module file | Lines | Routes |
 |---|---:|---|
@@ -17,12 +17,12 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/audit.js` | 1,717 | audit |
 | `modules/blog-v2.js` | 329 | blog-v2 |
 | `modules/blog.js` | 2,333 | blog |
-| `modules/book.js` | 5,897 | book, book-detail, enrollments, instructors, instructor-detail, resources, resource-detail, passes, pass-detail, calendar, book-reports |
+| `modules/book.js` | 5,957 | book, book-detail, enrollments, instructors, instructor-detail, resources, resource-detail, passes, pass-detail, calendar, book-reports |
 | `modules/brand-v2.js` | 101 | brand-v2 |
 | `modules/brand.js` | 582 | brand |
 | `modules/calendar-v2.js` | 119 | calendar-v2 |
-| `modules/campaigns-v2.js` | 267 | campaigns-v2 |
-| `modules/campaigns.js` | 456 | campaigns |
+| `modules/campaigns-v2.js` | 385 | campaigns-v2 |
+| `modules/campaigns.js` | 527 | campaigns |
 | `modules/cart.js` | 1,392 | wallet, gift-cards, loyalty, membership |
 | `modules/channels-v2.js` | 382 | channels-v2 |
 | `modules/channels.js` | 2,797 | channels |
@@ -34,12 +34,12 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/consignments-v2.js` | 280 | consignments-v2 |
 | `modules/contacts-v2.js` | 363 | contacts-v2 |
 | `modules/contacts.js` | 1,656 | contacts |
-| `modules/coupons-v2.js` | 255 | coupons-v2 |
-| `modules/cs-faqs-v2.js` | 238 | cs-faqs-v2 |
+| `modules/coupons-v2.js` | 388 | coupons-v2 |
+| `modules/cs-faqs-v2.js` | 308 | cs-faqs-v2 |
 | `modules/cs-members-v2.js` | 302 | cs-members-v2 |
 | `modules/cs-reviews-v2.js` | 269 | cs-reviews-v2 |
 | `modules/cs-tickets-v2.js` | 254 | cs-tickets-v2 |
-| `modules/customer-service.js` | 3,229 | cs-inbox, cs-tickets, cs-surveys, cs-reviews, cs-faqs, cs-members |
+| `modules/customer-service.js` | 3,265 | cs-inbox, cs-tickets, cs-surveys, cs-reviews, cs-faqs, cs-members |
 | `modules/customers-v2.js` | 260 | customers-v2 |
 | `modules/customers.js` | 3,485 | customers |
 | `modules/duplicates-v2.js` | 175 | duplicates-v2 |
@@ -70,7 +70,7 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/newsletter.js` | 2,336 | newsletter |
 | `modules/orders-v2.js` | 222 | orders-v2 |
 | `modules/orders.js` | 6,262 | orders, commissions, rma |
-| `modules/passes-v2.js` | 277 | passes-v2 |
+| `modules/passes-v2.js` | 423 | passes-v2 |
 | `modules/procurement-v2.js` | 230 | procurement-v2 |
 | `modules/procurement.js` | 1,979 | procurement |
 | `modules/production.js` | 3,553 | jobs, production, stories, forecast |
@@ -78,8 +78,8 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/promotions-v2.js` | 389 | promotions-v2 |
 | `modules/promotions.js` | 529 | promotions |
 | `modules/resources-v2.js` | 249 | resources-v2 |
-| `modules/sales-events-v2.js` | 280 | sales-events-v2 |
-| `modules/sales.js` | 3,188 | pos, receipts, events, salesEvents, terms |
+| `modules/sales-events-v2.js` | 351 | sales-events-v2 |
+| `modules/sales.js` | 3,228 | pos, receipts, events, salesEvents, terms |
 | `modules/sessions-v2.js` | 274 | sessions-v2 |
 | `modules/settings-v2.js` | 105 | settings-v2 |
 | `modules/show-light.js` | 1,718 | show-light-profile, show-light-gallery, show-light-shows, show-light-apply |
