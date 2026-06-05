@@ -454,12 +454,12 @@
     var status = own
       ? '<div style="font-size:0.9rem;margin-bottom:10px;">Using <strong>image #' + (curIdx + 1) + '</strong> for this variant. <button class="btn btn-secondary btn-small" onclick="ProductsV2.setVariantImage(\'' + esc(pid) + '\',\'' + esc(v.id) + '\',-1)">Use product default</button></div>'
       : '<div style="font-size:0.9rem;margin-bottom:10px;color:var(--warm-gray);">Using the <strong>product’s primary</strong> image. Tap one below to give this variant its own.</div>';
-    var grid = '<div class="pv2-imggrid">' + imgs.map(function (im, i) {
+    var grid = '<div class="pv2-imggrid' + (own ? ' pv2-imggrid-sel' : '') + '">' + imgs.map(function (im, i) {
       var url = resolve(im); if (!url) return '';
       var sel = i === curIdx;
       var badge = sel ? '<span class="pv2-imgbadge">✓ This variant</span>'
         : (i === 0 && !own ? '<span class="pv2-imgbadge pv2-imgbadge-muted">Product default</span>' : '');
-      var cap = sel ? '<div style="font-size:0.72rem;color:var(--teal);text-align:center;font-weight:600;">Selected</div>'
+      var cap = sel ? '<div style="font-size:0.72rem;color:var(--amber);text-align:center;font-weight:600;">✓ Selected</div>'
         : '<div style="font-size:0.72rem;color:var(--warm-gray);text-align:center;">Image #' + (i + 1) + '</div>';
       return '<div class="pv2-imgcellwrap"><button class="pv2-imgcell pv2-imgpick' + (sel ? ' on' : '') + '" style="background-image:url(' + esc(url) + ');" title="Use image ' + (i + 1) + ' for this variant" onclick="ProductsV2.setVariantImage(\'' + esc(pid) + '\',\'' + esc(v.id) + '\',' + i + ')">' + badge + '</button>' + cap + '</div>';
     }).join('') + '</div>';
@@ -686,7 +686,10 @@
       '.pv2-imgcell{position:relative;aspect-ratio:1;border-radius:10px;background-size:cover;background-position:center;border:1px solid var(--border);}',
       '.pv2-imgbadge{position:absolute;top:6px;left:6px;background:var(--teal);color:white;font-size:0.72rem;font-weight:600;padding:3px 8px;border-radius:6px;letter-spacing:.04em;}',
       '.pv2-imgbadge-muted{background:var(--warm-gray);}',
-      '.pv2-imgpick{cursor:pointer;padding:0;width:100%;} .pv2-imgpick:hover{box-shadow:0 0 0 2px var(--amber);} .pv2-imgpick.on{box-shadow:0 0 0 3px var(--teal);}',
+      '.pv2-imgpick{cursor:pointer;padding:0;width:100%;transition:box-shadow .12s,opacity .12s,transform .12s;} .pv2-imgpick:hover{box-shadow:0 0 0 2px var(--amber);}',
+      '.pv2-imgpick.on{box-shadow:0 0 0 4px var(--amber);transform:scale(1.03);position:relative;z-index:1;}',
+      // When a variant image is chosen, fade the rest so the selected one pops.
+      '.pv2-imggrid-sel .pv2-imgpick:not(.on){opacity:.45;} .pv2-imggrid-sel .pv2-imgpick:not(.on):hover{opacity:1;}',
       '.pv2-imgacts{display:flex;gap:4px;flex-wrap:wrap;}',
       '.pv2-pnote{font-size:0.78rem;color:var(--warm-gray);margin-top:6px;} .pv2-temp{font-size:0.72rem;color:var(--warm-gray);margin-left:8px;}',
       '.pv2-inh{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--border);font-size:0.9rem;} .pv2-inh:last-child{border-bottom:0;}',
