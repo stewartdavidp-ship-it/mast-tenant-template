@@ -383,13 +383,64 @@
       '</div>';
     return U.card('Edit info · product-level', body);
   }
-  // Re-render just the Info pane in place (keeps the user on the Info tab and
-  // preserves scroll/guided-header state — no full SO re-open).
+  // The Info tab hosts two cards: Info (top-level fields) + Fulfillment (how the
+  // product ships). Both re-render together so editing one doesn't wipe the other.
+  function infoPaneFull(p) { return infoPane(p) + fulfillmentPane(p); }
+  // Re-render the whole Info tab in place (both cards) — keeps the user on the
+  // Info tab; no full SO re-open.
   function rerenderInfoPane(pid) {
     var rec = V2.byId[pid]; if (!rec) return;
     var body = document.getElementById('mastSlideOutBody');
     var paneEl = body && body.querySelector('.mu-pane[data-pane="info"]');
-    if (paneEl) paneEl.innerHTML = infoPane(rec);
+    if (paneEl) paneEl.innerHTML = infoPaneFull(rec);
+  }
+  // ── Fulfillment (how the product ships) ───────────────────────────────
+  // stockType + lead time live on the inventory record (admin/inventory); the
+  // "second" flag is membership in the 'seconds' category (existing storefront
+  // logic: seconds only sell from on-hand stock, never built).
+  var STOCK_MODES = [
+    { v: 'in-stock', l: 'In stock — track inventory, ship only what’s on hand' },
+    { v: 'limited', l: 'Limited — track inventory, ship only what’s on hand' },
+    { v: 'strict', l: 'Strict — track inventory, never oversell' },
+    { v: 'stock-to-build', l: 'Stock to build — keep some on hand, rebuild when low' },
+    { v: 'made-to-order', l: 'Made to order — built per order (uses lead time)' },
+    { v: 'build-to-order', l: 'Build to order — built per order (uses lead time)' }
+  ];
+  function stockModeLabel(t) { for (var i = 0; i < STOCK_MODES.length; i++) if (STOCK_MODES[i].v === t) return STOCK_MODES[i].l; return t || '—'; }
+  function productIsSecond(p) { return Array.isArray(p.categories) && p.categories.indexOf('seconds') >= 0; }
+  function fulfillmentPane(p) {
+    var pid = p._key || p.pid;
+    if (V2.editFulfill === pid) return fulfillmentEditForm(p);
+    var si = p.stockInfo || {};
+    var editBtn = '<button class="btn btn-secondary btn-small" onclick="ProductsV2.editFulfillment(\'' + esc(pid) + '\')">Edit</button>';
+    var lead = (si.productionLeadTimeDays != null ? si.productionLeadTimeDays + ' day' + (si.productionLeadTimeDays === 1 ? '' : 's') : '—');
+    return U.card('Fulfillment', U.kv([
+      { k: 'Stock mode', v: (si.stockType ? esc(si.stockType) : '—') },
+      { k: 'Lead time to build', v: lead },
+      { k: 'Is a second', v: productIsSecond(p) ? U.badge('Second / B-grade', 'amber') : '<span class="from">no</span>' }
+    ]), { headerRight: editBtn });
+  }
+  function fulfillmentEditForm(p) {
+    var pid = p._key || p.pid;
+    var si = p.stockInfo || {};
+    var curMode = si.stockType || 'made-to-order';
+    var opts = STOCK_MODES.map(function (m) { return '<option value="' + esc(m.v) + '"' + (m.v === curMode ? ' selected' : '') + '>' + esc(m.l) + '</option>'; }).join('');
+    var lead = (si.productionLeadTimeDays != null ? si.productionLeadTimeDays : '');
+    var isSec = productIsSecond(p);
+    var body =
+      '<label style="display:block;margin-bottom:12px;font-size:0.85rem;color:var(--warm-gray);">Stock mode' +
+      '<select id="pv2FulStockMode" style="display:block;width:100%;margin-top:4px;padding:7px 9px;border:1px solid var(--cream-dark);border-radius:6px;font-size:0.9rem;background:var(--cream);color:inherit;box-sizing:border-box;">' + opts + '</select>' +
+      '<span style="font-size:0.72rem;color:var(--warm-gray);">Made/Build-to-order never go “out of stock” — they ship on the lead time. Tracked modes ship only what’s on hand.</span></label>' +
+      '<label style="display:block;margin-bottom:12px;font-size:0.85rem;color:var(--warm-gray);">Lead time to build (days)' +
+      '<input id="pv2FulLead" type="number" min="0" step="1" value="' + esc(lead === '' ? '' : String(lead)) + '" style="display:block;width:140px;margin-top:4px;padding:7px 9px;border:1px solid var(--cream-dark);border-radius:6px;font-size:0.9rem;background:var(--cream);color:inherit;box-sizing:border-box;"></label>' +
+      '<label style="display:flex;align-items:center;gap:8px;margin-bottom:12px;font-size:0.9rem;cursor:pointer;">' +
+      '<input id="pv2FulSecond" type="checkbox"' + (isSec ? ' checked' : '') + ' style="width:16px;height:16px;cursor:pointer;">This is a second / B-grade</label>' +
+      '<div class="pv2-pnote">Seconds only sell from on-hand stock (never built) and hide on the storefront when out of stock.</div>' +
+      '<div style="display:flex;gap:8px;margin-top:8px;">' +
+      '<button class="btn btn-primary btn-small" onclick="ProductsV2.saveFulfillment(\'' + esc(pid) + '\')">Save</button>' +
+      '<button class="btn btn-secondary btn-small" onclick="ProductsV2.cancelFulfillment(\'' + esc(pid) + '\')">Cancel</button>' +
+      '</div>';
+    return U.card('Edit fulfillment', body);
   }
 
   // ════════════════ Entity: the product / Default ════════════════
@@ -497,7 +548,7 @@
           pane('inventory', inventoryPane(p)) +
           pane('channels', channelsPane(p)) +
           pane('image', imagePane(p)) +
-          pane('info', infoPane(p));
+          pane('info', infoPaneFull(p));
       }
     }
   });
@@ -794,7 +845,7 @@
   }
 
   // ── State + data ────────────────────────────────────────────────────
-  var V2 = { rows: [], byId: {}, sortKey: '_title', sortDir: 'asc', filter: 'all', expanded: {}, editInfo: null, editPricing: null, editVarPricing: null, editInv: null, editVarInv: null, q: '' };
+  var V2 = { rows: [], byId: {}, sortKey: '_title', sortDir: 'asc', filter: 'all', expanded: {}, editInfo: null, editFulfill: null, editPricing: null, editVarPricing: null, editInv: null, editVarInv: null, q: '' };
 
   function toRows(map) {
     var out = []; map = map || {};
@@ -1142,6 +1193,37 @@
       }
       if (window.mastConfirm) Promise.resolve(window.mastConfirm('Unlink this recipe from the product? The recipe itself isn’t deleted.', { title: 'Unlink recipe', confirmText: 'Unlink' })).then(function (ok) { if (ok) go(); });
       else go();
+    },
+    // ── Fulfillment (stock mode + lead time + 'second'; in the Info tab) ──
+    editFulfillment: function (pid) { V2.editFulfill = pid; rerenderInfoPane(pid); },
+    cancelFulfillment: function (pid) { V2.editFulfill = null; rerenderInfoPane(pid); },
+    saveFulfillment: function (pid) {
+      var rec = V2.byId[pid] || {};
+      var modeEl = document.getElementById('pv2FulStockMode'), leadEl = document.getElementById('pv2FulLead'), secEl = document.getElementById('pv2FulSecond');
+      var stockType = modeEl ? modeEl.value : null;
+      var ls = leadEl ? leadEl.value.trim() : '';
+      var lead = (ls === '') ? null : Number(ls);
+      if (lead !== null && (!isFinite(lead) || lead < 0)) { MastAdmin.showToast('Enter a valid lead time', true); return; }
+      var wantSecond = !!(secEl && secEl.checked);
+      var isSecond = Array.isArray(rec.categories) && rec.categories.indexOf('seconds') >= 0;
+      withProductBridge(function () {
+        // 1) inventory config (stock mode + lead time) — written live
+        Promise.resolve(window.MakerProductBridge.setInventoryConfig(pid, { stockType: stockType, productionLeadTimeDays: lead })).then(function (res) {
+          if (!res || !res.ok) { MastAdmin.showToast('Failed: ' + ((res && res.error) || 'unknown'), true); return; }
+          if (rec && res.stockInfo) rec.stockInfo = res.stockInfo;
+          // 2) 'second' = membership in the 'seconds' category (only if it changed)
+          function finish() { V2.editFulfill = null; rerenderInfoPane(pid); MastAdmin.showToast('Fulfillment updated'); }
+          if (wantSecond !== isSecond) {
+            var cats = Array.isArray(rec.categories) ? rec.categories.slice() : [];
+            if (wantSecond) { if (cats.indexOf('seconds') < 0) cats.push('seconds'); }
+            else { cats = cats.filter(function (c) { return c !== 'seconds'; }); }
+            Promise.resolve(window.MakerProductBridge.setFields(pid, { categories: cats })).then(function (r2) {
+              if (r2 && r2.ok && !r2.staged) rec.categories = cats;
+              finish();
+            }, function () { finish(); });
+          } else { finish(); }
+        }, function (e) { console.error('[products-v2] saveFulfillment', e); MastAdmin.showToast('Failed', true); });
+      });
     },
     // ── Info tab edit (P4 pilot) ──────────────────────────────────────
     editInfo: function (pid) { V2.editInfo = pid; rerenderInfoPane(pid); },

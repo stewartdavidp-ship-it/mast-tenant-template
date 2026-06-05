@@ -6885,6 +6885,30 @@
     } catch (e) { return { ok: false, error: (e && e.message) || 'Failed' }; }
   }
 
+  // Set product-level inventory config (stockType, productionLeadTimeDays,
+  // lowStockThreshold, stockFulfillmentDays) on admin/inventory/{pid}, then
+  // resync the denormalized stockInfo. null clears a key.
+  async function bridgeSetInventoryConfig(pid, patch) {
+    try {
+      var keys = Object.keys(patch || {});
+      for (var i = 0; i < keys.length; i++) {
+        var k = keys[i], v = patch[k];
+        if (v === null || v === undefined) await MastDB.remove('admin/inventory/' + pid + '/' + k);
+        else await MastDB.set('admin/inventory/' + pid + '/' + k, v);
+      }
+      var inv = (await MastDB.inventory.get(pid)) || {};
+      if (window.inventory && typeof window.inventory === 'object') window.inventory[pid] = inv;
+      await bridgeEnsureProduct(pid);
+      if (typeof window.syncStockInfoToPublic === 'function') {
+        try { await window.syncStockInfoToPublic(pid); } catch (e) { console.warn('[bridge] inv-config sync', e); }
+      }
+      var fresh = await MastDB.get('public/products/' + pid + '/stockInfo');
+      var p = findProduct(pid); if (p && fresh) p.stockInfo = fresh;
+      MastAdmin.writeAudit('update', 'inventory', pid);
+      return { ok: true, stockInfo: fresh };
+    } catch (e) { return { ok: false, error: (e && e.message) || 'Failed' }; }
+  }
+
   // Remove the image identified by URL (fresh-read; index-safe).
   async function bridgeRemoveProductImage(pid, url) {
     try {
@@ -6954,6 +6978,8 @@
     setVariantFields: function (pid, variantId, patch) { return bridgeSetVariantFields(pid, variantId, patch); },
     // Set on-hand stock (separate inventory collection + stockInfo resync).
     setStock: function (pid, variantKey, onHand) { return bridgeSetStock(pid, variantKey, onHand); },
+    // Product-level inventory config (stockType / lead time / thresholds).
+    setInventoryConfig: function (pid, patch) { return bridgeSetInventoryConfig(pid, patch); },
     // Recipe link (building itself stays in the legacy builder).
     createRecipeForProduct: function (pid, name) { return bridgeCreateRecipeForProduct(pid, name); },
     linkRecipe: function (pid, recipeId) { return bridgeLinkRecipe(pid, recipeId); },
