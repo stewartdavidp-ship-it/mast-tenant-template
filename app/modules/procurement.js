@@ -1634,6 +1634,68 @@
       doBack();
     }
   };
+  // Bridge for the vendors-v2 redesign twin (flag-gated #vendors-v2). It delegates
+  // create/update here so the vendor write (admin/vendors/{id} + roleFlags + active
+  // + lead-time coercion) stays single-sourced — the twin never reimplements that
+  // logic. Additive; no behavior change to the legacy surface. These mirror the
+  // EXACT client writes saveNewVendor()/saveVendor() make, parameterized by data
+  // (the legacy handlers read the DOM, so they can't be called with an object).
+  // Mirrors window.ContactsBridge.
+  window.VendorsBridge = {
+    create: async function (data) {
+      var lead = (data.defaultLeadTimeDays == null ? '' : String(data.defaultLeadTimeDays)).trim();
+      var now = new Date().toISOString();
+      var record = {
+        name: (data.name || '').trim(),
+        legalName: null,
+        vendorCode: data.vendorCode || null,
+        contactName: data.contactName || null,
+        email: data.email || null,
+        phone: data.phone || null,
+        addresses: [],
+        defaultCurrency: data.defaultCurrency || null,
+        defaultPaymentTerms: data.defaultPaymentTerms || null,
+        defaultLeadTimeDays: lead === '' ? null : parseInt(lead, 10),
+        defaultShipMethod: data.defaultShipMethod || null,
+        taxId: data.taxId || null,
+        accountNumber: data.accountNumber || null,
+        website: data.website || null,
+        notes: data.notes || null,
+        roleFlags: { isSupplier: true, isCustomer: false },
+        active: true,
+        createdAt: now,
+        updatedAt: now
+      };
+      var vendorId = MastDB.newKey('admin/vendors');
+      record.vendorId = vendorId;
+      await MastDB.set('admin/vendors/' + vendorId, record);
+      vendorsData[vendorId] = record;
+      return vendorId;
+    },
+    update: async function (id, data) {
+      var lead = (data.defaultLeadTimeDays == null ? '' : String(data.defaultLeadTimeDays)).trim();
+      var updates = {
+        name: (data.name || '').trim(),
+        vendorCode: data.vendorCode || null,
+        contactName: data.contactName || null,
+        email: data.email || null,
+        phone: data.phone || null,
+        website: data.website || null,
+        defaultCurrency: data.defaultCurrency || null,
+        defaultPaymentTerms: data.defaultPaymentTerms || null,
+        defaultLeadTimeDays: lead === '' ? null : parseInt(lead, 10),
+        defaultShipMethod: data.defaultShipMethod || null,
+        taxId: data.taxId || null,
+        accountNumber: data.accountNumber || null,
+        notes: data.notes || null,
+        updatedAt: new Date().toISOString()
+      };
+      await MastDB.update('admin/vendors/' + id, updates);
+      if (vendorsData[id]) Object.assign(vendorsData[id], updates);
+      return id;
+    }
+  };
+
   window.procurementVendorTab = function(t) { vendorDetailTab = t; render(); };
   window.procurementEnterVendorEdit  = enterVendorEdit;
   window.procurementCancelVendorEdit = cancelVendorEdit;

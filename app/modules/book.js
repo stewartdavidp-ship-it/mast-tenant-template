@@ -2346,6 +2346,55 @@
     }
   }
 
+  // Bridge for the instructors-v2 redesign twin (flag-gated #instructors-v2).
+  // It delegates create/update here so the instructor write (id minting, slug
+  // derivation, payRateCents conversion, create-vs-update PATCH semantics) stays
+  // single-sourced — the twin never reimplements that logic. Additive; no
+  // behavior change to the legacy surface. These mirror the EXACT client writes
+  // saveInstructor() makes, parameterized by data (the legacy handler reads the
+  // form DOM + the bespoke skill picker, so it can't be called with an object).
+  // Skills stay on the legacy skill-picker (catalog-coupled) — the twin omits
+  // them so the PATCH-style update preserves an instructor's existing skills[]
+  // and migration flag, exactly like saveInstructor's update branch. Mirrors
+  // window.ContactsBridge.
+  function _instrBridgeData(data) {
+    var name = (data.name || '').trim();
+    var payRate = parseFloat(data.payRate);
+    return {
+      name: name,
+      slug: name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''),
+      bio: (data.bio || '').trim() || null,
+      email: (data.email || '').trim() || null,
+      phone: (data.phone || '').trim() || null,
+      payRateCents: isNaN(payRate) ? null : Math.round(payRate * 100),
+      photoUrl: (data.photoUrl || '').trim() || null,
+      notes: (data.notes || '').trim() || null,
+      status: data.status || 'active',
+      updatedAt: new Date().toISOString()
+    };
+  }
+  window.InstructorsBridge = {
+    create: async function (data) {
+      var rec = _instrBridgeData(data);
+      var id = MastDB.instructors.newKey();
+      rec.createdAt = rec.updatedAt;
+      // Create-time skills default empty (added via the classic skill picker).
+      rec.skills = [];
+      await MastDB.instructors.set(id, rec);
+      instructorsLoaded = false;
+      return id;
+    },
+    update: async function (id, data) {
+      // PATCH-style write (matches saveInstructor's update branch) so server-
+      // owned fields the twin doesn't render — createdAt, skills[], migration
+      // flag, frozen legacy specialties — survive edits.
+      var rec = _instrBridgeData(data);
+      await MastDB.instructors.update(id, rec);
+      instructorsLoaded = false;
+      return id;
+    }
+  };
+
   // ============================================================
   // Resources — Load & Render
   // ============================================================

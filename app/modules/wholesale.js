@@ -1826,6 +1826,27 @@ window.closeWholesaleAccountModal = closeWholesaleAccountModal;
 window.editWholesaleAccount = editWholesaleAccount;
 window.deleteWholesaleAccount = deleteWholesaleAccount;
 window.saveWholesaleAccount = saveWholesaleAccount;
+
+// Bridge for the wholesale-v2 redesign twin (flag-gated #wholesale-v2). It
+// delegates create/update here so the account write stays single-sourced — the
+// twin never reimplements that logic. Additive; no behavior change to the legacy
+// surface. These mirror the EXACT client writes saveWholesaleAccount() makes,
+// parameterized by data (the legacy handler reads the modal DOM, so it can't be
+// called with an object). Mirrors window.ContactsBridge.
+window.WholesaleBridge = {
+  create: async function (data) {
+    var now = new Date().toISOString();
+    var rec = Object.assign({}, data, { createdAt: now, updatedAt: now });
+    var id = MastDB.wholesaleAccounts.newKey();
+    await MastDB.wholesaleAccounts.set(id, rec);
+    return id;
+  },
+  update: async function (id, data) {
+    var rec = Object.assign({}, data, { updatedAt: new Date().toISOString() });
+    await MastDB.wholesaleAccounts.update(id, rec);
+    return id;
+  }
+};
 // W2c — wholesale-side invoice action bridge
 window.generateInvoiceForWholesale = generateInvoiceForWholesale;
 // W2d — authorized-user → account linkage

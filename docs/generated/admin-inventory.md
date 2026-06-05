@@ -6,7 +6,7 @@ Source-of-truth counts for the admin app, generated from the code so docs
 cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 
 - **Core shell:** `app/index.html` — **58,639** lines
-- **Feature modules:** **94** files in `app/modules/` (**87** routed), **104,218** lines combined
+- **Feature modules:** **94** files in `app/modules/` (**87** routed), **104,924** lines combined
 
 | Module file | Lines | Routes |
 |---|---:|---|
@@ -17,7 +17,7 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/audit.js` | 1,717 | audit |
 | `modules/blog-v2.js` | 329 | blog-v2 |
 | `modules/blog.js` | 2,333 | blog |
-| `modules/book.js` | 5,848 | book, book-detail, enrollments, instructors, instructor-detail, resources, resource-detail, passes, pass-detail, calendar, book-reports |
+| `modules/book.js` | 5,897 | book, book-detail, enrollments, instructors, instructor-detail, resources, resource-detail, passes, pass-detail, calendar, book-reports |
 | `modules/brand-v2.js` | 101 | brand-v2 |
 | `modules/brand.js` | 582 | brand |
 | `modules/calendar-v2.js` | 119 | calendar-v2 |
@@ -57,7 +57,7 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/homepage-v2.js` | 125 | homepage-v2 |
 | `modules/homepage.js` | 681 | homepage |
 | `modules/inquiries-v2.js` | 225 | inquiries-v2 |
-| `modules/instructors-v2.js` | 255 | instructors-v2 |
+| `modules/instructors-v2.js` | 339 | instructors-v2 |
 | `modules/lookbooks.js` | 822 | lookbooks |
 | `modules/loyalty-v2.js` | 347 | loyalty-v2 |
 | `modules/maker.js` | 6,667 | materials, products |
@@ -66,13 +66,13 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/marketing-calendar.js` | 270 | marketing-calendar |
 | `modules/materials-v2.js` | 286 | materials-v2 |
 | `modules/membership-v2.js` | 237 | membership-v2 |
-| `modules/newsletter-v2.js` | 214 | newsletter-v2 |
-| `modules/newsletter.js` | 2,286 | newsletter |
+| `modules/newsletter-v2.js` | 289 | newsletter-v2 |
+| `modules/newsletter.js` | 2,336 | newsletter |
 | `modules/orders-v2.js` | 222 | orders-v2 |
 | `modules/orders.js` | 6,262 | orders, commissions, rma |
 | `modules/passes-v2.js` | 277 | passes-v2 |
 | `modules/procurement-v2.js` | 230 | procurement-v2 |
-| `modules/procurement.js` | 1,917 | procurement |
+| `modules/procurement.js` | 1,979 | procurement |
 | `modules/production.js` | 3,553 | jobs, production, stories, forecast |
 | `modules/products-v2.js` | 439 | products-v2 |
 | `modules/promotions-v2.js` | 389 | promotions-v2 |
@@ -86,19 +86,19 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/shows.js` | 3,580 | show, show-find, show-apply, show-prep, show-execute, show-history |
 | `modules/social.js` | 1,441 | social |
 | `modules/stories-v2.js` | 249 | stories-v2 |
-| `modules/students-v2.js` | 296 | students-v2 |
-| `modules/students.js` | 1,508 | students |
+| `modules/students-v2.js` | 406 | students-v2 |
+| `modules/students.js` | 1,563 | students |
 | `modules/studio.js` | 788 | studio |
 | `modules/team-v2.js` | 230 | team-v2 |
 | `modules/team.js` | 3,199 | team |
 | `modules/terms-v2.js` | 211 | terms-v2 |
 | `modules/trips-v2.js` | 214 | trips-v2 |
 | `modules/trips.js` | 2,157 | trips |
-| `modules/vendors-v2.js` | 285 | vendors-v2 |
+| `modules/vendors-v2.js` | 370 | vendors-v2 |
 | `modules/wallet-v2.js` | 234 | wallet-v2 |
 | `modules/website.js` | 3,072 | website |
-| `modules/wholesale-v2.js` | 222 | wholesale-v2 |
-| `modules/wholesale.js` | 1,852 | wholesale |
+| `modules/wholesale-v2.js` | 337 | wholesale-v2 |
+| `modules/wholesale.js` | 1,873 | wholesale |
 | `modules/workflows/commissions.workflow.js` | 266 | — |
 | `modules/workflows/pickship.workflow.js` | 344 | — |
 | `modules/workflows/products.workflow.js` | 165 | — |
