@@ -13,10 +13,12 @@
  * Writes DELEGATE to window.MakerMaterialsBridge (exposed in maker.js) so the
  * cost-history append, dual-basis (bookCost/replacementCost) sync, and
  * recipes-dirty recompute stay single-sourced — the twin never reimplements that
- * domain logic. The spot-pricing config (spot-linked metal/purity/markup), the
- * landed-cost helper and purchase-UOM conversion are advanced setup that stays on
- * legacy #materials; this twin edits the common fields (a partial update
- * preserves the rest). Flag-gated (?ui=1) at #materials-v2, side-by-side.
+ * domain logic. The per-material spot-pricing config (mode / metal / purity /
+ * markup) is now edited natively here — onSave delegates it to the bridge, which
+ * carries pricingMode/spotMetal to updateMaterial (the spot-linked rule:
+ * replacementCost stays auto-managed by the daily spot job, never written here).
+ * Only the landed-cost helper and purchase-UOM conversion remain legacy-only
+ * (the "→ classic" link). Flag-gated (?ui=1) at #materials-v2, side-by-side.
  */
 (function () {
   'use strict';
@@ -37,6 +39,7 @@
     { value: 'oz', label: 'Ounce (oz)' }, { value: 'sqin', label: 'Square Inch' }, { value: 'ml', label: 'Milliliter' }, { value: 'each', label: 'Each' }
   ];
   var UOM_LABEL = {}; UOM_OPTIONS.forEach(function (o) { UOM_LABEL[o.value] = o.label; });
+  var SPOT_METALS = ['gold', 'silver', 'platinum'];   // mirror legacy maker.js options
 
   function num(v) { return (v == null || v === '') ? null : (isNaN(Number(v)) ? null : Number(v)); }
 
@@ -84,7 +87,7 @@
         ]);
         var actions = '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;">' +
           (m.status !== 'archived' ? '<button class="btn btn-secondary" onclick="MaterialsV2.archive(\'' + esc(m._key) + '\')">Archive</button>' : '') +
-          '<button class="btn btn-secondary" onclick="MaterialsV2.classic()">Spot pricing / landed cost in classic view →</button>' +
+          '<button class="btn btn-secondary" onclick="MaterialsV2.classic()">Landed cost / UOM conversion in classic view →</button>' +
           '</div>';
 
         var hist = (m.costHistory || []).slice().reverse().map(function (h) {
@@ -111,6 +114,10 @@
         }).join('');
         var uomOpts = UOM_OPTIONS.map(function (o) { return '<option value="' + esc(o.value) + '"' + (m.unitOfMeasure === o.value ? ' selected' : '') + '>' + esc(o.label) + '</option>'; }).join('');
         var statusOpts = ['active', 'archived'].map(function (s) { return '<option value="' + s + '"' + ((m.status || 'active') === s ? ' selected' : '') + '>' + s + '</option>'; }).join('');
+        var isSpot = m.pricingMode === 'spot-linked';
+        var modeOpts = [{ v: 'fixed', l: 'Fixed (manual unit cost)' }, { v: 'spot-linked', l: 'Spot-linked (daily metals market)' }]
+          .map(function (o) { return '<option value="' + o.v + '"' + ((isSpot ? 'spot-linked' : 'fixed') === o.v ? ' selected' : '') + '>' + o.l + '</option>'; }).join('');
+        var metalOpts = SPOT_METALS.map(function (mt) { return '<option value="' + mt + '"' + (m.spotMetal === mt ? ' selected' : '') + '>' + (mt.charAt(0).toUpperCase() + mt.slice(1)) + '</option>'; }).join('');
         function row2(a, b) { return '<div style="display:flex;gap:12px;flex-wrap:wrap;">' + a + b + '</div>'; }
         function fg(label, inner, flex) { return '<div class="form-group"' + (flex ? ' style="flex:1;min-width:150px;"' : '') + '><label class="form-label">' + label + '</label>' + inner + '</div>'; }
 
@@ -120,10 +127,21 @@
             fg('Category', '<select class="form-input" id="matV2Category" style="width:100%;">' + catOpts + '</select>', true),
             fg('Unit of measure', '<select class="form-input" id="matV2Uom" style="width:100%;">' + uomOpts + '</select>', true)
           ) +
+          fg('Pricing mode', '<select class="form-input" id="matV2PricingMode" style="width:100%;" onchange="MaterialsV2.toggleSpot(this.value)">' + modeOpts + '</select>') +
           row2(
-            fg('Unit cost ($)', '<input class="form-input" type="number" step="0.01" min="0" id="matV2Cost" value="' + (m.unitCost != null ? esc(m.unitCost) : '') + '" style="width:100%;" placeholder="0.00">', true),
+            // Fixed: editable unit cost. Spot-linked: read-only (auto-managed by the spot job).
+            '<div id="matV2CostFixed" class="form-group" style="flex:1;min-width:150px;display:' + (isSpot ? 'none' : 'block') + ';"><label class="form-label">Unit cost ($)</label><input class="form-input" type="number" step="0.01" min="0" id="matV2Cost" value="' + (m.unitCost != null ? esc(m.unitCost) : '') + '" style="width:100%;" placeholder="0.00"></div>' +
+            '<div id="matV2CostSpot" class="form-group" style="flex:1;min-width:150px;display:' + (isSpot ? 'block' : 'none') + ';"><label class="form-label">Unit cost (auto)</label><input class="form-input" type="number" value="' + (m.unitCost != null ? esc(m.unitCost) : '') + '" style="width:100%;" disabled></div>' +
             fg('On hand', '<input class="form-input" type="number" step="0.01" min="0" id="matV2OnHand" value="' + (m.onHandQty != null ? esc(m.onHandQty) : '') + '" style="width:100%;" placeholder="0">', true)
           ) +
+          '<div id="matV2SpotFields" style="display:' + (isSpot ? 'block' : 'none') + ';">' +
+            row2(
+              fg('Spot metal', '<select class="form-input" id="matV2SpotMetal" style="width:100%;">' + metalOpts + '</select>', true),
+              fg('Purity (fraction)', '<input class="form-input" type="number" step="0.001" min="0" max="1" id="matV2Purity" value="' + (m.purity != null ? esc(m.purity) : '') + '" style="width:100%;" placeholder="e.g. 0.585 (14k)">', true)
+            ) +
+            fg('Markup over spot (%)', '<input class="form-input" type="number" step="0.1" min="0" id="matV2Markup" value="' + (m.markupOverSpot != null ? esc(m.markupOverSpot) : '') + '" style="width:100%;" placeholder="e.g. 8">') +
+            '<div class="mu-sub" style="margin-top:6px;">⚡ Auto-managed daily: spot × purity × (1 + markup%). Unit cost &amp; replacement cost are set by the spot-price job — not from this form.</div>' +
+          '</div>' +
           row2(
             fg('Reorder threshold', '<input class="form-input" type="number" step="0.01" min="0" id="matV2ReorderThreshold" value="' + (m.reorderThreshold != null ? esc(m.reorderThreshold) : '') + '" style="width:100%;">', true),
             fg('Reorder qty', '<input class="form-input" type="number" step="0.01" min="0" id="matV2ReorderQty" value="' + (m.reorderQty != null ? esc(m.reorderQty) : '') + '" style="width:100%;">', true)
@@ -133,8 +151,7 @@
             fg('Lead time (days)', '<input class="form-input" type="number" step="1" min="0" id="matV2LeadTime" value="' + (m.leadTimeDays != null ? esc(m.leadTimeDays) : '') + '" style="width:100%;">', true)
           ) +
           (mode === 'create' ? '' : fg('Status', '<select class="form-input" id="matV2Status" style="width:100%;">' + statusOpts + '</select>')) +
-          fg('Notes', '<textarea class="form-input" id="matV2Notes" rows="3" style="width:100%;resize:vertical;">' + esc(m.notes || '') + '</textarea>') +
-          (m.pricingMode === 'spot-linked' ? '<div class="mu-sub" style="margin-top:6px;">⚡ Spot-linked — replacement cost is auto-managed by the spot-price job. Edit spot config in the classic view.</div>' : '');
+          fg('Notes', '<textarea class="form-input" id="matV2Notes" rows="3" style="width:100%;resize:vertical;">' + esc(m.notes || '') + '</textarea>');
       }
     },
     onSave: function (rec, mode) {
@@ -143,7 +160,6 @@
         name: (document.getElementById('matV2Name') || {}).value || '',
         category: (document.getElementById('matV2Category') || {}).value || '',
         unitOfMeasure: (document.getElementById('matV2Uom') || {}).value || 'each',
-        unitCost: num((document.getElementById('matV2Cost') || {}).value) || 0,
         onHandQty: num((document.getElementById('matV2OnHand') || {}).value) || 0,
         reorderThreshold: num((document.getElementById('matV2ReorderThreshold') || {}).value) || 0,
         reorderQty: num((document.getElementById('matV2ReorderQty') || {}).value) || 0,
@@ -152,6 +168,32 @@
         notes: (document.getElementById('matV2Notes') || {}).value || ''
       };
       if (!data.name.trim()) { if (window.showToast) showToast('Name is required', true); return false; }
+
+      // Pricing mode (per-material spot config). Delegated to the bridge → updateMaterial,
+      // which honors the spot-linked rule: replacementCost is auto-managed by the daily
+      // spot job, so we never write unitCost/replacementCost for spot-linked here.
+      var isSpot = ((document.getElementById('matV2PricingMode') || {}).value) === 'spot-linked';
+      if (isSpot) {
+        var purity = num((document.getElementById('matV2Purity') || {}).value);
+        // Friendly karat auto-correct (mirror legacy maker.js): 14 → 0.583, 24 → 1.
+        if (purity != null && purity > 1 && purity <= 24) purity = Math.round((purity / 24) * 1000) / 1000;
+        if (!(purity > 0) || purity > 1) {
+          if (window.showToast) showToast('Purity must be a fraction between 0 and 1 (e.g. 0.585 for 14k, 0.925 sterling, 0.999 fine)', true);
+          return false;
+        }
+        var markup = num((document.getElementById('matV2Markup') || {}).value);
+        data.pricingMode = 'spot-linked';
+        data.spotMetal = (document.getElementById('matV2SpotMetal') || {}).value || 'gold';
+        data.purity = purity;
+        data.markupOverSpot = markup == null ? 0 : markup;
+        // No unitCost / replacementCost — the spot-price job owns those for spot-linked.
+      } else {
+        data.pricingMode = 'fixed';
+        data.spotMetal = null;
+        data.purity = null;
+        data.markupOverSpot = null;
+        data.unitCost = num((document.getElementById('matV2Cost') || {}).value) || 0;
+      }
       var statusEl = document.getElementById('matV2Status');
       if (statusEl) data.status = statusEl.value;
 
@@ -258,6 +300,15 @@
       render();
     },
     search: function (v) { V2.q = v || ''; render(); },
+    toggleSpot: function (mode) {
+      var on = mode === 'spot-linked';
+      var spotFields = document.getElementById('matV2SpotFields');
+      var costFixed = document.getElementById('matV2CostFixed');
+      var costSpot = document.getElementById('matV2CostSpot');
+      if (spotFields) spotFields.style.display = on ? 'block' : 'none';
+      if (costFixed) costFixed.style.display = on ? 'none' : 'block';
+      if (costSpot) costSpot.style.display = on ? 'block' : 'none';
+    },
     toggleArchived: function (on) { V2.showArchived = !!on; render(); },
     open: function (id) {
       MastEntity.get('materials-v2').fetch(id).then(function (rec) { if (rec) MastEntity.openRecord('materials-v2', rec, 'read'); });
