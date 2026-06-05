@@ -649,7 +649,8 @@
         if (clickIdx === -1 || curIdx === -1) return;
 
         if (clickIdx === curIdx) {
-          _focusGuidedChecklist(ctxId);
+          // Click the current step → toggle the "what's left" panel (pull, not push).
+          _toggleGuidedChecklist(ctxId);
           return;
         }
         if (clickIdx < curIdx) {
@@ -663,28 +664,41 @@
           if (ctx.callbacks.onAdvance) ctx.callbacks.onAdvance(phaseKey);
           return;
         }
-        // Not reachable yet — never a silent no-op. Focus the current phase's
-        // checklist and toast the remaining hard-requirement count.
-        _focusGuidedChecklist(ctxId);
+        // Not reachable yet — never a silent no-op. Reveal the current phase's
+        // remaining items and toast the hard-requirement count.
+        _showGuidedChecklist(ctxId);
         var unmetHard = ev.missing.filter(function(m) { return m.req.hard; }).length;
         var n = unmetHard || 1;
         var msg = n + ' item' + (n === 1 ? '' : 's') + ' left in ' + (ev.currentPhase.label || 'this step');
         if (window.showToast) window.showToast(msg, true);
         else if (window.MastAdmin && typeof MastAdmin.showToast === 'function') MastAdmin.showToast(msg);
       }).catch(function(e) { console.error('[MastFlow] phaseStep', e); });
+    },
+    // "Show N completed" — completed setup items are history, revealed only on
+    // request. Flips the hidden _done block + the link label.
+    toggleDone: function(ctxId) {
+      var d = document.getElementById(ctxId + '_done'); if (!d) return;
+      var link = document.getElementById(ctxId + '_donetoggle');
+      var show = d.style.display === 'none';
+      d.style.display = show ? 'flex' : 'none';
+      if (link) link.textContent = show ? 'Hide completed' : (link.getAttribute('data-show') || 'Show completed');
     }
   };
 
-  // Reveal + briefly flash the guided checklist so a blocked/current click
-  // lands the operator's eye on the remaining requirements.
-  function _focusGuidedChecklist(ctxId) {
+  // The checklist is collapsed by default. Clicking the current step toggles it;
+  // a blocked-forward click ensures it's shown. Completed items stay hidden
+  // inside until "Show N completed" is clicked (ui.toggleDone).
+  function _toggleGuidedChecklist(ctxId) {
     var el = document.getElementById(ctxId + '_checklist');
     if (!el) return;
+    el.style.display = (el.style.display === 'none') ? 'flex' : 'none';
+    if (el.style.display !== 'none') el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+  function _showGuidedChecklist(ctxId) {
+    var el = document.getElementById(ctxId + '_checklist');
+    if (!el) return;
+    el.style.display = 'flex';
     el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    var prev = el.style.boxShadow;
-    el.style.boxShadow = '0 0 0 2px color-mix(in srgb,var(--amber) 70%,transparent)';
-    el.style.borderRadius = '8px';
-    setTimeout(function() { el.style.boxShadow = prev || ''; }, 1100);
   }
 
   // ---- Renderers (HTML strings) ----
@@ -1041,9 +1055,13 @@
       // A locked future phase shows the reason (mirrors the prototype's "· needs
       // Connect" / "· N to do"). For the immediate-next phase the blocker is the
       // current phase's unmet hard reqs.
+      // Default header = the rail ALONE. The setup checklist is pulled, not
+      // pushed: the CURRENT phase carries a quiet "· N to set up ▾" cue; clicking
+      // the step reveals only what's LEFT (completed items are history, on
+      // request). Locked future steps just read as locked — no count noise.
       var reasonHtml = '';
-      if (locked && i === currentIdx + 1 && unmetHard > 0) {
-        reasonHtml = ' <span style="font-size:0.72rem;color:var(--warm-gray);">· ' + unmetHard + ' to do</span>';
+      if (state === 'current' && unmetHard > 0) {
+        reasonHtml = ' <span style="font-size:0.72rem;color:var(--warm-gray);">· ' + unmetHard + ' to set up ▾</span>';
       }
 
       // onclick → MastFlow.__ui.phaseStep(ctx, phaseKey). The handler decides
@@ -1069,17 +1087,14 @@
   // met ✓ teal / unmet, each unmet target rendered as a "Go →" into the record.
   function _renderGuidedChecklist(def, record, ev, ctxId) {
     if (ev.specMismatch || ev.isTerminal) return '';
-    var allReqs = ev.satisfied.concat(ev.missing);
-    if (!allReqs.length) return '';
+    var unmet = ev.missing, doneReqs = ev.satisfied;
+    if (!unmet.length && !doneReqs.length) return '';
 
-    var html = '<div id="' + ctxId + '_checklist" style="display:flex;flex-direction:column;gap:5px;margin:11px 0 2px;">';
-    allReqs.forEach(function(r) {
-      var sat = ev.satisfied.indexOf(r) !== -1;
+    function itemHtml(r, sat) {
       var icon, iconBg, iconColor;
       if (sat) { icon = '✓'; iconBg = 'color-mix(in srgb,var(--teal) 16%,transparent)'; iconColor = 'var(--teal)'; }
       else if (r.req.hard) { icon = '✕'; iconBg = 'color-mix(in srgb,var(--danger) 12%,transparent)'; iconColor = 'var(--danger)'; }
       else { icon = '!'; iconBg = 'color-mix(in srgb,var(--amber) 16%,transparent)'; iconColor = 'var(--amber)'; }
-
       var goHtml = '';
       if (!sat && r.req.target) {
         goHtml = ' <a href="#" onclick="event.preventDefault();MastFlow.__ui.target(\'' + ctxId + '\',\'' + _esc(r.req.target) + '\')" style="color:var(--teal);font-size:0.78rem;margin-left:8px;text-decoration:underline;">Go &rarr;</a>';
@@ -1089,12 +1104,29 @@
         actionHtml = ' <button type="button" onclick="MastFlow.__ui.action(\'' + ctxId + '\',\'' + _esc(r.req.action.handler) + '\')" style="margin-left:8px;background:var(--teal);color:var(--surface-card);border:none;border-radius:5px;padding:2px 10px;font-size:0.78rem;cursor:pointer;">' + _esc(r.req.action.label) + '</button>';
       }
       var recHtml = r.req.hard ? '' : ' <em style="color:var(--warm-gray);font-size:0.78rem;font-style:normal;">· recommended</em>';
-      html += '<div style="display:flex;align-items:center;gap:8px;font-size:0.85rem;">' +
+      return '<div style="display:flex;align-items:center;gap:8px;font-size:0.85rem;">' +
         '<span style="display:inline-flex;width:18px;height:18px;border-radius:50%;background:' + iconBg + ';color:' + iconColor + ';align-items:center;justify-content:center;font-weight:700;font-size:0.72rem;flex-shrink:0;">' + icon + '</span>' +
         '<span style="color:' + (sat ? 'var(--warm-gray)' : 'var(--text)') + ';' + (sat ? 'text-decoration:line-through;' : '') + '">' + _esc(r.req.label) + recHtml + '</span>' +
         goHtml + actionHtml +
       '</div>';
-    });
+    }
+
+    // COLLAPSED BY DEFAULT — the header is the rail alone. Clicking the current
+    // step toggles this open, and it shows only what's LEFT. Completed items are
+    // history: hidden behind "Show N completed", never shown unasked.
+    var html = '<div id="' + ctxId + '_checklist" style="display:none;flex-direction:column;gap:5px;margin:11px 0 2px;">';
+    html += unmet.length
+      ? unmet.map(function(r) { return itemHtml(r, false); }).join('')
+      : '<div style="font-size:0.82rem;color:var(--teal);">✓ Everything in this step is set up.</div>';
+    if (doneReqs.length) {
+      var showLbl = 'Show ' + doneReqs.length + ' completed';
+      html += '<a href="#" id="' + ctxId + '_donetoggle" data-show="' + showLbl + '" ' +
+        'onclick="event.preventDefault();MastFlow.__ui.toggleDone(\'' + ctxId + '\')" ' +
+        'style="color:var(--warm-gray);font-size:0.78rem;margin-top:4px;text-decoration:underline;align-self:flex-start;">' + showLbl + '</a>' +
+        '<div id="' + ctxId + '_done" style="display:none;flex-direction:column;gap:5px;margin-top:2px;">' +
+          doneReqs.map(function(r) { return itemHtml(r, true); }).join('') +
+        '</div>';
+    }
     html += '</div>';
     return html;
   }
