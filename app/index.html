@@ -110,7 +110,7 @@
        Shared by customers.js (list/export) and customer-service.js (survey
        bulk-send) so the segment matcher cannot drift. ?v= kept in lockstep
        with MAST_MODULES_V by scripts/bump-modules-version.sh. -->
-  <script src="../shared/customer-filters.js?v=20260605-164432-e16dc0b"></script>
+  <script src="../shared/customer-filters.js?v=20260605-164945-655bc5c"></script>
   <script src="../shared/brand-sync.js?v=1"></script>
   <script src="../shared/channel-connection.js?v=1"></script>
   <!-- UI redesign engines (docs/ux-audit): shared primitives + Entity Engine.
@@ -118,9 +118,9 @@
        scripts/bump-modules-version.sh (these are static <head> tags loaded
        before the JS var exists, so they can't read it at runtime). Without
        this, the engines were frozen at ?v=1 and never cache-busted on deploy. -->
-  <script src="../shared/mast-ui.js?v=20260605-164432-e16dc0b"></script>
-  <script src="../shared/mast-io.js?v=20260605-164432-e16dc0b"></script>
-  <script src="../shared/mast-entity.js?v=20260605-164432-e16dc0b"></script>
+  <script src="../shared/mast-ui.js?v=20260605-164945-655bc5c"></script>
+  <script src="../shared/mast-io.js?v=20260605-164945-655bc5c"></script>
+  <script src="../shared/mast-entity.js?v=20260605-164945-655bc5c"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Pod-specific runtime config — sets window.MAST_POD_PLATFORM_PROJECT so
@@ -10774,7 +10774,7 @@
         <div class="form-group" style="margin-top:24px;" id="engagementModulesGroup">
           <label style="font-weight:600;">Modules shown in sidebar</label>
           <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:8px;">
-            Select which sidebar sections appear when surface is <strong>UI-first</strong>. Dashboard and Manage are always visible. Ignored in AI-first and Hybrid modes.
+            Choose which modules people see in the sidebar. Modules you turn off are hidden from the UI but stay available through the AI assistant. Dashboard and Admin are always shown.
           </p>
           <div id="engagementModulesList" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px;">
             <div style="color:var(--warm-gray);font-size:0.85rem;">Loading...</div>
@@ -21289,7 +21289,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260605-164432-e16dc0b';
+var MAST_MODULES_V = '20260605-164945-655bc5c';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -21615,30 +21615,39 @@ async function loadEngagementSettings() {
 function renderEngagementModulesCheckboxes(modulesShown) {
   var listEl = document.getElementById('engagementModulesList');
   if (!listEl) return;
-  // Union of all archetype defaults + sidebar data-sections to produce a
-  // reasonable master list. Users can add/remove anything they have access to.
-  var defaults = (_engagementSettingsArchetype && MastDB.businessEntity.archetypeDefaults && MastDB.businessEntity.archetypeDefaults(_engagementSettingsArchetype)) || null;
-  var archetypeModules = (defaults && Array.isArray(defaults.modulesShown)) ? defaults.modulesShown : [];
-  var sectionNames = [];
-  document.querySelectorAll('.sidebar-section[data-section]').forEach(function(el) {
-    var n = el.getAttribute('data-section');
-    if (n && n !== 'admin') sectionNames.push(n);
-  });
-  var universe = {};
-  archetypeModules.forEach(function(m) { universe[m] = 1; });
-  sectionNames.forEach(function(n) { universe[n] = 1; });
+  // List ONLY the top-level sidebar groups (one row per nav module), in nav
+  // order, with their human label. The old union pulled in archetype defaults +
+  // raw saved tokens, which leaked sub-route ids (e.g. "develop-products") and
+  // kebab section keys into the list — confusing and not the top-level objects.
+  // We standardize on section-name tokens here; the nav filter
+  // (applyEngagementNavFiltering) matches section names directly.
+  var labels = window.MODE_SECTION_LABELS || {};
   var current = Array.isArray(modulesShown) ? modulesShown : [];
-  current.forEach(function(m) { universe[m] = 1; });
-  var keys = Object.keys(universe).sort();
-  if (!keys.length) {
+  var sections = [];
+  document.querySelectorAll('.sidebar-section[data-section]').forEach(function(el) {
+    var name = el.getAttribute('data-section');
+    // Skip system groups: admin is always visible; migration is a system flow.
+    if (!name || name === 'admin' || name === 'migration') return;
+    // Checked when the section name is selected OR — for back-compat with older
+    // configs that stored sub-route ids — any route inside it is selected
+    // (mirrors applyEngagementNavFiltering's dual-match).
+    var checked = current.indexOf(name) !== -1;
+    if (!checked) {
+      var items = el.querySelectorAll('.sidebar-item[data-route]');
+      for (var i = 0; i < items.length; i++) {
+        if (current.indexOf(items[i].getAttribute('data-route')) !== -1) { checked = true; break; }
+      }
+    }
+    sections.push({ name: name, label: labels[name] || name, checked: checked });
+  });
+  if (!sections.length) {
     listEl.innerHTML = '<div style="color:var(--warm-gray);font-size:0.85rem;">No modules available.</div>';
     return;
   }
-  listEl.innerHTML = keys.map(function(k) {
-    var checked = current.indexOf(k) !== -1;
+  listEl.innerHTML = sections.map(function(s) {
     return '<label style="display:flex;align-items:center;gap:8px;font-size:0.9rem;cursor:pointer;">' +
-      '<input type="checkbox" data-engagement-module="' + esc(k) + '" ' + (checked ? 'checked' : '') + '>' +
-      '<span>' + esc(k) + '</span>' +
+      '<input type="checkbox" data-engagement-module="' + esc(s.name) + '" ' + (s.checked ? 'checked' : '') + '>' +
+      '<span>' + esc(s.label) + '</span>' +
       '</label>';
   }).join('');
 }
