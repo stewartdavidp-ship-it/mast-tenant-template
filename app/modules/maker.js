@@ -6778,6 +6778,44 @@
     } catch (e) { return { ok: false, error: (e && e.message) || 'Save failed' }; }
   }
 
+  // Read the product's CURRENT images straight from the DB (not a possibly-stale
+  // in-memory cache) so a reorder/remove can never persist a stale array and
+  // silently drop an image. Returns parallel images[]/imageIds[].
+  async function bridgeFetchProductImages(pid) {
+    var imgs = await MastDB.get('public/products/' + pid + '/images');
+    var ids = await MastDB.get('public/products/' + pid + '/imageIds');
+    return { images: Array.isArray(imgs) ? imgs : [], imageIds: Array.isArray(ids) ? ids : [] };
+  }
+  function bridgeImgEq(a, url) { return ((typeof a === 'string') ? a : (a && a.url) || '') === url; }
+
+  // Move the image identified by URL to index 0 (= primary). Identity-by-URL,
+  // not index, so a stale caller index can't move the wrong image.
+  async function bridgeMakeImagePrimary(pid, url) {
+    try {
+      var cur = await bridgeFetchProductImages(pid);
+      var i = cur.images.findIndex(function (im) { return bridgeImgEq(im, url); });
+      if (i <= 0) return { ok: true, images: cur.images, imageIds: cur.imageIds }; // already primary / absent
+      var images = cur.images.slice(); images.unshift(images.splice(i, 1)[0]);
+      var imageIds = cur.imageIds.slice();
+      if (imageIds.length === cur.images.length) imageIds.unshift(imageIds.splice(i, 1)[0]);
+      return bridgeSetProductImages(pid, images, imageIds.length ? imageIds : undefined);
+    } catch (e) { return { ok: false, error: (e && e.message) || 'Failed' }; }
+  }
+
+  // Remove the image identified by URL (fresh-read; index-safe).
+  async function bridgeRemoveProductImage(pid, url) {
+    try {
+      var cur = await bridgeFetchProductImages(pid);
+      var i = cur.images.findIndex(function (im) { return bridgeImgEq(im, url); });
+      if (i < 0) return { ok: true, images: cur.images, imageIds: cur.imageIds };
+      var images = cur.images.slice(); images.splice(i, 1);
+      var imageIds = cur.imageIds.slice();
+      var hadIds = imageIds.length === cur.images.length;
+      if (hadIds) imageIds.splice(i, 1);
+      return bridgeSetProductImages(pid, images, hadIds ? imageIds : undefined);
+    } catch (e) { return { ok: false, error: (e && e.message) || 'Failed' }; }
+  }
+
   window.MakerProductBridge = {
     // Write a {field: value, ...} patch of top-level product fields. Returns
     // { ok, staged, changed } — staged===true means it went to a pending
@@ -6787,9 +6825,12 @@
     // Whether edits to this product stage as a revision (Active) vs write live.
     isGuarded: function (pid) { return isProductGuarded(findProduct(pid)); },
     // Images (live writes; see note above). addImage uploads via the existing
-    // /uploadImage CF; setImages persists a reordered/pruned images[] array.
+    // /uploadImage CF; setImages persists a reordered/pruned images[] array;
+    // makeImagePrimary / removeImage are fresh-read + URL-keyed (index-safe).
     addImage: function (pid, file) { return bridgeAddProductImage(pid, file); },
-    setImages: function (pid, images, imageIds) { return bridgeSetProductImages(pid, images, imageIds); }
+    setImages: function (pid, images, imageIds) { return bridgeSetProductImages(pid, images, imageIds); },
+    makeImagePrimary: function (pid, url) { return bridgeMakeImagePrimary(pid, url); },
+    removeImage: function (pid, url) { return bridgeRemoveProductImage(pid, url); }
   };
 
 })();
