@@ -6842,6 +6842,40 @@
     } catch (e) { return { ok: false, error: (e && e.message) || 'Failed' }; }
   }
 
+  // ── Recipe link (P4) ─────────────────────────────────────────────────
+  // Recipe building stays in the legacy builder (separate surface — gated drill
+  // from the v2 UI). The bridge only handles the product↔recipe LINK, which is a
+  // simple recipeId write (applyRecipeToProduct is a different, price-applying op
+  // — not used here). createRecipe is maker's own writer (sets recipe.productId);
+  // we additionally set product.recipeId, matching the legacy create-recipe flow.
+  async function bridgeCreateRecipeForProduct(pid, name) {
+    try {
+      var rec = await createRecipe({ productId: pid, name: name || 'Recipe', status: 'draft' });
+      var rid = rec && rec.recipeId;
+      if (!rid) return { ok: false, error: 'Recipe creation failed' };
+      await MastDB.set('public/products/' + pid + '/recipeId', rid);
+      var p = findProduct(pid); if (p) p.recipeId = rid;
+      MastAdmin.writeAudit('create', 'recipe', rid);
+      return { ok: true, recipeId: rid };
+    } catch (e) { return { ok: false, error: (e && e.message) || 'Failed' }; }
+  }
+  async function bridgeLinkRecipe(pid, recipeId) {
+    try {
+      await MastDB.set('public/products/' + pid + '/recipeId', recipeId);
+      var p = findProduct(pid); if (p) p.recipeId = recipeId;
+      MastAdmin.writeAudit('update', 'products', pid);
+      return { ok: true, recipeId: recipeId };
+    } catch (e) { return { ok: false, error: (e && e.message) || 'Failed' }; }
+  }
+  async function bridgeUnlinkRecipe(pid) {
+    try {
+      await MastDB.set('public/products/' + pid + '/recipeId', null);
+      var p = findProduct(pid); if (p) p.recipeId = null;
+      MastAdmin.writeAudit('update', 'products', pid);
+      return { ok: true };
+    } catch (e) { return { ok: false, error: (e && e.message) || 'Failed' }; }
+  }
+
   window.MakerProductBridge = {
     // Write a {field: value, ...} patch of top-level product fields. Returns
     // { ok, staged, changed } — staged===true means it went to a pending
@@ -6858,7 +6892,11 @@
     makeImagePrimary: function (pid, url) { return bridgeMakeImagePrimary(pid, url); },
     removeImage: function (pid, url) { return bridgeRemoveProductImage(pid, url); },
     // Bind a variant to one of the product's images (imageIndex), or clear (<0).
-    setVariantImageIndex: function (pid, variantId, imageIndex) { return bridgeSetVariantImageIndex(pid, variantId, imageIndex); }
+    setVariantImageIndex: function (pid, variantId, imageIndex) { return bridgeSetVariantImageIndex(pid, variantId, imageIndex); },
+    // Recipe link (building itself stays in the legacy builder).
+    createRecipeForProduct: function (pid, name) { return bridgeCreateRecipeForProduct(pid, name); },
+    linkRecipe: function (pid, recipeId) { return bridgeLinkRecipe(pid, recipeId); },
+    unlinkRecipe: function (pid) { return bridgeUnlinkRecipe(pid); }
   };
 
 })();

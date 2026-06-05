@@ -214,12 +214,37 @@
     if (paneEl) paneEl.innerHTML = pricingPane(rec);
   }
   function recipePane(p) {
+    var pid = p._key || p.pid;
     if (p.recipeId) {
-      return U.card('Recipe', U.kv([{ k: 'Status', v: 'Linked' }, { k: 'Recipe id', v: p.recipeId }])) +
+      var body = U.kv([{ k: 'Status', v: 'Linked' }, { k: 'Recipe id', v: p.recipeId }]) +
+        '<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">' +
         '<button class="btn btn-secondary btn-small" onclick="MastEntity.drill(\'recipe-v2\',\'' + esc(p.recipeId) + '\')">Open recipe →</button>' +
-        '<span class="pv2-temp"> opens as its own stacked SO — Back returns here</span>';
+        '<button class="btn btn-secondary btn-small" onclick="ProductsV2.recipeEditInBuilder(\'' + esc(p.recipeId) + '\')">Edit in builder ↗</button>' +
+        '<button class="btn btn-secondary btn-small" onclick="ProductsV2.recipeUnlink(\'' + esc(pid) + '\')">Unlink</button>' +
+        '</div>';
+      return U.card('Recipe', body) + '<div class="pv2-pnote">“Open recipe” reads it here (Back returns); “Edit in builder” opens the full recipe builder — a separate surface.</div>';
     }
-    return U.card('Recipe', '<span style="color:var(--warm-gray);">No recipe linked.</span>');
+    return U.card('Recipe', '<div style="color:var(--warm-gray);font-size:0.9rem;margin-bottom:10px;">No recipe linked. A recipe tracks the materials, labor, and cost behind this product.</div>' +
+      '<button class="btn btn-secondary btn-small" onclick="ProductsV2.recipeCreate(\'' + esc(pid) + '\')">+ Create a recipe</button>');
+  }
+  function rerenderRecipePane(pid) {
+    var rec = V2.byId[pid]; if (!rec) return;
+    var body = document.getElementById('mastSlideOutBody');
+    var pane = body && body.querySelector('.mu-pane[data-pane="recipe"]');
+    if (pane) pane.innerHTML = recipePane(rec);
+  }
+  // Open the legacy recipe builder (sanctioned separate surface — not reimplemented
+  // in v2). It hijacks the legacy pieces tab, so navigate there first.
+  function openRecipeBuilderGated(recipeId) {
+    withProductBridge(function () {
+      MastAdmin.showToast('Opening recipe builder…');
+      if (typeof navigateToClassic === 'function') navigateToClassic('products');
+      else if (window.navigateTo) window.navigateTo('products');
+      setTimeout(function () {
+        if (window.makerOpenRecipeBuilder) window.makerOpenRecipeBuilder(recipeId);
+        else MastAdmin.showToast('Recipe builder unavailable', true);
+      }, 320);
+    });
   }
   function inventoryPane(p) {
     var si = p.stockInfo || {};
@@ -896,6 +921,32 @@
           MastAdmin.showToast(res.staged ? 'Staged ' + res.changed + ' change' + (res.changed === 1 ? '' : 's') + ' (Apply to go live)' : 'Saved');
         }, function (e) { console.error('[products-v2] savePricing', e); MastAdmin.showToast('Save failed', true); });
       });
+    },
+    // ── Recipe tab (link/create; building stays in the legacy builder) ─
+    recipeCreate: function (pid) {
+      withProductBridge(function () {
+        var rec = V2.byId[pid] || {};
+        MastAdmin.showToast('Creating recipe…');
+        Promise.resolve(window.MakerProductBridge.createRecipeForProduct(pid, rec.name || 'Recipe')).then(function (res) {
+          if (!res || !res.ok) { MastAdmin.showToast('Failed: ' + ((res && res.error) || 'unknown'), true); return; }
+          if (rec) rec.recipeId = res.recipeId;
+          openRecipeBuilderGated(res.recipeId); // straight into the builder to fill it in
+        }, function (e) { console.error('[products-v2] recipeCreate', e); MastAdmin.showToast('Failed', true); });
+      });
+    },
+    recipeEditInBuilder: function (recipeId) { openRecipeBuilderGated(recipeId); },
+    recipeUnlink: function (pid) {
+      function go() {
+        withProductBridge(function () {
+          Promise.resolve(window.MakerProductBridge.unlinkRecipe(pid)).then(function (res) {
+            if (!res || !res.ok) { MastAdmin.showToast('Failed: ' + ((res && res.error) || 'unknown'), true); return; }
+            var rec = V2.byId[pid]; if (rec) rec.recipeId = null;
+            rerenderRecipePane(pid); MastAdmin.showToast('Recipe unlinked');
+          }, function (e) { console.error('[products-v2] recipeUnlink', e); MastAdmin.showToast('Failed', true); });
+        });
+      }
+      if (window.mastConfirm) Promise.resolve(window.mastConfirm('Unlink this recipe from the product? The recipe itself isn’t deleted.', { title: 'Unlink recipe', confirmText: 'Unlink' })).then(function (ok) { if (ok) go(); });
+      else go();
     },
     // ── Info tab edit (P4 pilot) ──────────────────────────────────────
     editInfo: function (pid) { V2.editInfo = pid; rerenderInfoPane(pid); },
