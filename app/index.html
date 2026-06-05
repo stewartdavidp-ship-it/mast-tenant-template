@@ -110,7 +110,7 @@
        Shared by customers.js (list/export) and customer-service.js (survey
        bulk-send) so the segment matcher cannot drift. ?v= kept in lockstep
        with MAST_MODULES_V by scripts/bump-modules-version.sh. -->
-  <script src="../shared/customer-filters.js?v=20260605-065122-e861af7"></script>
+  <script src="../shared/customer-filters.js?v=20260605-093940-64265b9"></script>
   <script src="../shared/brand-sync.js?v=1"></script>
   <script src="../shared/channel-connection.js?v=1"></script>
   <!-- UI redesign engines (docs/ux-audit): shared primitives + Entity Engine.
@@ -118,9 +118,9 @@
        scripts/bump-modules-version.sh (these are static <head> tags loaded
        before the JS var exists, so they can't read it at runtime). Without
        this, the engines were frozen at ?v=1 and never cache-busted on deploy. -->
-  <script src="../shared/mast-ui.js?v=20260605-065122-e861af7"></script>
-  <script src="../shared/mast-io.js?v=20260605-065122-e861af7"></script>
-  <script src="../shared/mast-entity.js?v=20260605-065122-e861af7"></script>
+  <script src="../shared/mast-ui.js?v=20260605-093940-64265b9"></script>
+  <script src="../shared/mast-io.js?v=20260605-093940-64265b9"></script>
+  <script src="../shared/mast-entity.js?v=20260605-093940-64265b9"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Pod-specific runtime config — sets window.MAST_POD_PLATFORM_PROJECT so
@@ -11222,6 +11222,11 @@
     <div id="passesV2Tab" class="tab-content" style="display:none;"></div><!-- UI-redesign conversion: class passes (read-focused Faceted Record) -->
     <div id="resourcesV2Tab" class="tab-content" style="display:none;"></div><!-- UI-redesign conversion: class resources (read-focused) -->
     <div id="newsletterV2Tab" class="tab-content" style="display:none;"></div><!-- UI-redesign conversion: newsletter subscribers (read-focused) -->
+    <div id="campaignsV2Tab" class="tab-content" style="display:none;"></div><!-- UI-redesign conversion: marketing campaigns (read-focused) -->
+    <div id="emailLogV2Tab" class="tab-content" style="display:none;"></div><!-- UI-redesign conversion: email log (read-only) -->
+    <div id="marketingCalendarV2Tab" class="tab-content" style="display:none;"></div><!-- UI-redesign conversion: marketing calendar (index control) -->
+    <div id="channelsV2Tab" class="tab-content" style="display:none;"></div><!-- UI-redesign conversion: sales channels (read-focused) -->
+    <div id="auditSuppressionsV2Tab" class="tab-content" style="display:none;"></div><!-- UI-redesign conversion: audit suppressions (read-only) -->
 
     <!-- Admin: Procurement Tab — rendered entirely from app/modules/procurement.js -->
     <div id="procurementTab" style="display:none;"></div>
@@ -20198,7 +20203,8 @@ var MAST_V2_ROUTE_MAP = {
   resources: 'resources-v2', newsletter: 'newsletter-v2',
   'gift-cards': 'gift-cards-v2', coupons: 'coupons-v2', book: 'classes-v2', membership: 'membership-v2',
   'cs-reviews': 'cs-reviews-v2', 'cs-faqs': 'cs-faqs-v2', loyalty: 'loyalty-v2', stories: 'stories-v2', 'cs-members': 'cs-members-v2',
-  blog: 'blog-v2', salesEvents: 'sales-events-v2', inquiries: 'inquiries-v2'
+  blog: 'blog-v2', salesEvents: 'sales-events-v2', inquiries: 'inquiries-v2',
+  campaigns: 'campaigns-v2', 'email-log': 'email-log-v2', 'marketing-calendar': 'marketing-calendar-v2', channels: 'channels-v2', suppressions: 'audit-suppressions-v2'
 };
 function mastLegacyUiOn() {
   try { return localStorage.getItem('mastLegacyUI') !== '0'; } catch (e) { return true; }
@@ -20966,7 +20972,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260605-065122-e861af7';
+var MAST_MODULES_V = '20260605-093940-64265b9';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -21024,6 +21030,11 @@ var MODULE_MANIFEST = {
   'galleries-v2': { src: 'modules/galleries-v2.js', routes: ['galleries-v2'] }, // UI-redesign conversion: galleries & consignment read detail (flag-gated, side-by-side)
   'instructors-v2': { src: 'modules/instructors-v2.js', routes: ['instructors-v2'] }, // UI-redesign conversion: instructors roster read detail (flag-gated, side-by-side)
   'wholesale-v2': { src: 'modules/wholesale-v2.js', routes: ['wholesale-v2'] }, // UI-redesign conversion: wholesale accounts read detail (flag-gated, side-by-side)
+  'campaigns-v2': { src: 'modules/campaigns-v2.js', routes: ['campaigns-v2'] }, // UI-redesign conversion: marketing campaigns read detail (flag-gated, side-by-side)
+  'email-log-v2': { src: 'modules/email-log-v2.js', routes: ['email-log-v2'] }, // UI-redesign conversion: email send log (read-only Flat Record)
+  'marketing-calendar-v2': { src: 'modules/marketing-calendar-v2.js', routes: ['marketing-calendar-v2'] }, // UI-redesign conversion: marketing calendar (index control)
+  'channels-v2': { src: 'modules/channels-v2.js', routes: ['channels-v2'] }, // UI-redesign conversion: sales channels read detail (flag-gated, side-by-side)
+  'audit-suppressions-v2': { src: 'modules/audit-suppressions-v2.js', routes: ['audit-suppressions-v2'] }, // UI-redesign conversion: audit suppressions (read-only Flat Record)
   'contacts-v2': { src: 'modules/contacts-v2.js', routes: ['contacts-v2'] }, // UI-redesign conversion: contacts (CRM) read detail (flag-gated, side-by-side)
   'enrollments-v2': { src: 'modules/enrollments-v2.js', routes: ['enrollments-v2'] }, // UI-redesign conversion: enrollments roster read detail (read-focused Faceted Record)
   'passes-v2': { src: 'modules/passes-v2.js', routes: ['passes-v2'] }, // UI-redesign conversion: class passes read detail (flag-gated, side-by-side)

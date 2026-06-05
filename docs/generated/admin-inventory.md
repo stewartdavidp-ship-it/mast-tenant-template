@@ -5,14 +5,15 @@
 Source-of-truth counts for the admin app, generated from the code so docs
 cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 
-- **Core shell:** `app/index.html` — **58,628** lines
-- **Feature modules:** **89** files in `app/modules/` (**82** routed), **102,746** lines combined
+- **Core shell:** `app/index.html` — **58,639** lines
+- **Feature modules:** **94** files in `app/modules/` (**87** routed), **104,086** lines combined
 
 | Module file | Lines | Routes |
 |---|---:|---|
 | `modules/accounting.js` | 1,551 | — |
 | `modules/advisor.js` | 1,401 | advisor |
 | `modules/audit-feedback.js` | 816 | suppressions |
+| `modules/audit-suppressions-v2.js` | 223 | audit-suppressions-v2 |
 | `modules/audit.js` | 1,717 | audit |
 | `modules/blog-v2.js` | 329 | blog-v2 |
 | `modules/blog.js` | 2,333 | blog |
@@ -20,8 +21,10 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/brand-v2.js` | 101 | brand-v2 |
 | `modules/brand.js` | 582 | brand |
 | `modules/calendar-v2.js` | 119 | calendar-v2 |
+| `modules/campaigns-v2.js` | 267 | campaigns-v2 |
 | `modules/campaigns.js` | 456 | campaigns |
 | `modules/cart.js` | 1,392 | wallet, gift-cards, loyalty, membership |
+| `modules/channels-v2.js` | 382 | channels-v2 |
 | `modules/channels.js` | 2,797 | channels |
 | `modules/classes-v2.js` | 339 | classes-v2 |
 | `modules/commission-terms.js` | 317 | commission-terms |
@@ -40,6 +43,7 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/customers-v2.js` | 260 | customers-v2 |
 | `modules/customers.js` | 3,485 | customers |
 | `modules/duplicates-v2.js` | 175 | duplicates-v2 |
+| `modules/email-log-v2.js` | 252 | email-log-v2 |
 | `modules/email-log.js` | 561 | email-log |
 | `modules/engagement-inbox.js` | 485 | engagement-inbox |
 | `modules/enrollments-v2.js` | 288 | enrollments-v2 |
@@ -58,6 +62,7 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/loyalty-v2.js` | 347 | loyalty-v2 |
 | `modules/maker.js` | 6,667 | materials, products |
 | `modules/mapping.js` | 1,768 | mapping |
+| `modules/marketing-calendar-v2.js` | 216 | marketing-calendar-v2 |
 | `modules/marketing-calendar.js` | 270 | marketing-calendar |
 | `modules/materials-v2.js` | 286 | materials-v2 |
 | `modules/membership-v2.js` | 237 | membership-v2 |
