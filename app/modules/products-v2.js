@@ -263,9 +263,11 @@
         return true;
       },
       render: function (UU, p) {
+        var prTile = priceRange(p) || '—';
         var tiles = UU.tiles([
           { k: 'Status', v: statusLabel(p.status), hero: true },
-          { k: (variantCount(p) > 0 ? 'Price range' : 'Price'), v: priceRange(p) || '—' },
+          // "Price range" only when it's actually a range; uniform variants → "Price".
+          { k: (prTile.indexOf('–') >= 0 ? 'Price range' : 'Price'), v: prTile },
           { k: 'Variants', v: variantCount(p) || 'Default only' },
           { k: 'On hand', v: ((p.stockInfo && p.stockInfo.totalOnHand) != null ? String(p.stockInfo.totalOnHand) : '—') }
         ]);
