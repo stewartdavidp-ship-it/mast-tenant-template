@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<!--
+  guided-record-mock.html — DESIGN PROTOTYPE (discussion only, not production)
+
+  The "guided checklist over a live, fully-editable record" model — our answer to
+  the brittle-wizard problem. NOT a linear script; a requirements checklist laid
+  over the real object, in the standard slide-out shell.
+
+  Demonstrates, on a channels-onboarding example:
+   • The step rail is a MAP, not a track — click any unblocked step in any order.
+   • Steps point INTO the live record (the tabs); there is no separate wizard form.
+   • Only GENUINE prerequisites gate (Choose-what-syncs is blocked-until-Connect,
+     shown as such with the reason). Everything else is freely reorderable.
+   • Write-as-you-go: editing the record satisfies steps; the checklist recomputes.
+   • No "finish wall" — Activate lights up when the required items are met.
+   • Degrades to the plain record: ignore the rail and edit any tab directly.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Guided record — prototype</title>
+<style>
+  :root {
+    --bg:#221f1d; --surface-dark:#1b1917; --surface-card:#2a2623; --surface-card-2:#322d29;
+    --border:rgba(255,255,255,0.08); --border-strong:rgba(255,255,255,0.14);
+    --text:#ece7e0; --warm-gray:#9c948b; --warm-gray-light:#b9b1a8;
+    --amber:#d8a657; --teal:#5fb4a8; --success:#5aa86f; --danger:#c95f55; --info:#6ea8d8;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:var(--bg); color:var(--text); -webkit-font-smoothing:antialiased; font-size:15px; }
+  .stage { padding:22px 26px; color:var(--warm-gray-light); }
+  .stage h1 { font-size:1.15rem; margin:0 0 4px; color:var(--text); font-weight:600; }
+  .stage p { font-size:0.85rem; margin:0 0 4px; color:var(--warm-gray); max-width:760px; line-height:1.5; }
+  .toggle-notes { margin-top:10px; background:transparent; border:1px solid var(--border-strong); color:var(--amber);
+    border-radius:8px; padding:6px 12px; font:inherit; font-size:0.8rem; cursor:pointer; }
+
+  /* ---- slide-out shell (same as the system) ---- */
+  .panel { margin:18px auto; width:min(1080px,96%); background:var(--bg); border:1px solid var(--border-strong);
+    border-radius:14px; box-shadow:0 24px 60px rgba(0,0,0,0.45); overflow:hidden; }
+
+  /* ---- pinned header: identity + the lean guided step-rail (the spine) ---- */
+  .ph { padding:16px 22px 14px; border-bottom:1px solid var(--border); background:var(--surface-dark); }
+  .ph-top { display:flex; align-items:center; gap:12px; }
+  .ph-title { font-size:1.05rem; font-weight:600; }
+  .ph-sub { color:var(--warm-gray); font-size:0.82rem; }
+  .pill { font-size:0.72rem; padding:3px 10px; border-radius:999px; font-weight:600; letter-spacing:.02em; }
+  .pill.setup { background:rgba(216,166,87,0.16); color:var(--amber); }
+  .pill.ready { background:rgba(95,180,168,0.16); color:var(--teal); }
+  .ph-x { margin-left:auto; color:var(--warm-gray); font-size:1.2rem; cursor:pointer; background:none; border:0; }
+
+  /* the step rail */
+  .rail { display:flex; align-items:center; gap:0; margin-top:14px; flex-wrap:wrap; }
+  .step { display:flex; align-items:center; gap:7px; padding:6px 9px; border-radius:8px; cursor:pointer;
+    transition:background .15s; flex-shrink:0; }
+  .step:hover:not(.blocked) { background:rgba(255,255,255,0.04); }
+  .step.active { background:rgba(216,166,87,0.10); }
+  .dot { width:21px; height:21px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center;
+    font-size:0.72rem; font-weight:700; flex-shrink:0; border:1.5px solid var(--border-strong); color:var(--warm-gray); }
+  .step.done .dot { background:var(--teal); border-color:var(--teal); color:#16211f; }
+  .step.active .dot { border-color:var(--amber); color:var(--amber); }
+  .step.blocked .dot { border-style:dashed; }
+  .step .lbl { font-size:0.85rem; color:var(--warm-gray-light); white-space:nowrap; }
+  .step.done .lbl { color:var(--teal); }
+  .step.active .lbl { color:var(--text); font-weight:600; }
+  .step.blocked { cursor:not-allowed; opacity:0.85; }
+  .step.blocked .lbl { color:var(--warm-gray); }
+  .step .opt { font-size:0.68rem; color:var(--warm-gray); text-transform:uppercase; letter-spacing:.04em; }
+  .lock { font-size:0.72rem; color:var(--warm-gray); }
+  .conn { flex:0 0 22px; height:1.5px; background:var(--border); margin:0 2px; }
+  .conn.done { background:rgba(95,180,168,0.5); }
+  .rail-hint { margin-top:9px; font-size:0.76rem; color:var(--warm-gray); }
+  .rail-hint b { color:var(--warm-gray-light); font-weight:600; }
+
+  /* ---- tabs = the live record ---- */
+  .tabs { display:flex; gap:2px; padding:0 22px; border-bottom:1px solid var(--border); background:var(--surface-dark); }
+  .tab { padding:11px 14px 10px; font-size:0.85rem; color:var(--warm-gray); cursor:pointer; border-bottom:2px solid transparent; }
+  .tab:hover { color:var(--warm-gray-light); }
+  .tab.on { color:var(--text); border-bottom-color:var(--amber); font-weight:600; }
+  .body { padding:20px 22px 8px; min-height:300px; }
+
+  .card { border:1px solid var(--border); border-radius:11px; padding:15px 17px; margin-bottom:14px; background:var(--surface-card); }
+  .card h3 { margin:0 0 12px; font-size:0.78rem; text-transform:uppercase; letter-spacing:.05em; color:var(--warm-gray); font-weight:600; }
+  .kv { display:flex; justify-content:space-between; padding:7px 0; border-bottom:1px solid var(--border); font-size:0.88rem; }
+  .kv:last-child { border-bottom:0; } .kv .k { color:var(--warm-gray); } .kv .v { color:var(--text); }
+  .focusable { border-radius:9px; transition:box-shadow .3s, background .3s; padding:2px; margin:-2px; }
+  .flash { box-shadow:0 0 0 2px var(--amber); background:rgba(216,166,87,0.06); }
+
+  .field-label { font-size:0.8rem; color:var(--warm-gray-light); margin:0 0 7px; }
+  .seg { display:inline-flex; border:1px solid var(--border-strong); border-radius:9px; overflow:hidden; }
+  .seg button { background:transparent; border:0; color:var(--warm-gray-light); font:inherit; font-size:0.85rem;
+    padding:8px 14px; cursor:pointer; border-right:1px solid var(--border); }
+  .seg button:last-child { border-right:0; }
+  .seg button.sel { background:var(--amber); color:#231d10; font-weight:600; }
+  .seg button:disabled { opacity:0.4; cursor:not-allowed; }
+
+  .blockmsg { font-size:0.82rem; color:var(--warm-gray); background:rgba(255,255,255,0.03); border:1px dashed var(--border-strong);
+    border-radius:9px; padding:11px 13px; display:flex; align-items:center; gap:8px; }
+  .blockmsg a { color:var(--teal); cursor:pointer; text-decoration:underline; }
+
+  .btn { font:inherit; font-size:0.85rem; border-radius:8px; padding:8px 15px; cursor:pointer; border:1px solid var(--border-strong); background:transparent; color:var(--warm-gray-light); }
+  .btn.primary { background:var(--amber); color:#231d10; border-color:var(--amber); font-weight:600; }
+  .btn.primary:disabled { background:transparent; color:var(--warm-gray); border-color:var(--border); cursor:not-allowed; font-weight:400; }
+  .btn.teal { background:var(--teal); color:#16211f; border-color:var(--teal); font-weight:600; }
+
+  .prodrow { display:flex; align-items:center; gap:11px; padding:9px 0; border-bottom:1px solid var(--border); font-size:0.88rem; }
+  .prodrow:last-child { border-bottom:0; }
+  .prodrow input { width:16px; height:16px; accent-color:var(--teal); }
+  .prodrow .ext { margin-left:auto; color:var(--warm-gray); font-size:0.8rem; }
+
+  /* ---- footer ---- */
+  .foot { display:flex; align-items:center; gap:12px; padding:13px 22px; border-top:1px solid var(--border); background:var(--surface-dark); }
+  .foot .spacer { flex:1; }
+  .foot .note { font-size:0.78rem; color:var(--warm-gray); }
+
+  /* ---- design-note callouts ---- */
+  .note-cl { display:none; font-size:0.76rem; color:var(--amber); background:rgba(216,166,87,0.07);
+    border:1px dashed rgba(216,166,87,0.4); border-radius:8px; padding:7px 10px; margin:8px 0; line-height:1.45; }
+  body.notes .note-cl { display:block; }
+  .note-inline { display:none; font-size:0.72rem; color:var(--amber); margin-left:8px; font-style:italic; }
+  body.notes .note-inline { display:inline; }
+
+  .toast { position:fixed; bottom:24px; left:50%; transform:translateX(-50%); background:var(--surface-card-2);
+    border:1px solid var(--border-strong); color:var(--text); padding:10px 16px; border-radius:9px; font-size:0.85rem;
+    opacity:0; transition:opacity .2s; pointer-events:none; box-shadow:0 8px 24px rgba(0,0,0,0.4); }
+  .toast.show { opacity:1; }
+</style>
+</head>
+<body>
+<div class="stage">
+  <h1>Guided record — prototype</h1>
+  <p>The model we discussed: a <b>guided checklist over a live, fully-editable record</b> — not a linear wizard.
+  Channels-onboarding example. The step rail is a map (click steps in any order); only a <b>real</b> prerequisite
+  gates; steps point <i>into</i> the record below; editing the record satisfies steps; Activate lights up when ready.</p>
+  <button class="toggle-notes" onclick="document.body.classList.toggle('notes')">Show / hide design notes</button>
+</div>
+
+<div class="panel">
+  <!-- pinned header: identity + the lean step rail -->
+  <div class="ph">
+    <div class="ph-top">
+      <span class="ph-title">Channel: Shopify</span>
+      <span class="ph-sub">shir-glassworks.myshopify.com</span>
+      <span id="statePill" class="pill setup">Setup</span>
+      <button class="ph-x">✕</button>
+    </div>
+    <div class="note-cl">Header = identity + the checklist spine. Lean: no "CURRENT PHASE:" label, no big Advance button.
+      The rail IS the control — you click a step, you don't press a button to progress.</div>
+    <div id="rail" class="rail"></div>
+    <div class="rail-hint"><b>Do these in any order.</b> One is locked until Connect (a real dependency) — the rest aren't.
+      Or ignore the rail entirely and edit any tab directly.</div>
+  </div>
+
+  <!-- tabs = the live record -->
+  <div class="tabs" id="tabs">
+    <div class="tab on" data-tab="overview">Overview</div>
+    <div class="tab" data-tab="sync">Sync</div>
+    <div class="tab" data-tab="products">Products</div>
+    <div class="tab" data-tab="activity">Activity</div>
+  </div>
+
+  <div class="body" id="body"></div>
+
+  <div class="foot">
+    <span class="note" id="footNote"></span>
+    <span class="spacer"></span>
+    <button class="btn">Save draft</button>
+    <button class="btn primary" id="activateBtn" disabled onclick="activate()">Activate channel</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ── the live record (a real object, not a wizard's answer-bucket) ──
+const ch = {
+  platform:'Shopify', account:'shir-glassworks.myshopify.com',
+  connected:false, syncDir:null, cadence:null,
+  products:[
+    {name:'Amber Pendant', sku:'AP-01', mapped:false},
+    {name:'Teal Tumbler', sku:'TT-04', mapped:false},
+    {name:'Raw Honey Drop', sku:'RH-09', mapped:false},
+    {name:'Clear Rod Set', sku:'CR-12', mapped:false},
+  ],
+};
+
+// ── steps = requirements computed FROM the record (not an author script) ──
+const STEPS = [
+  { key:'connect',  label:'Connect',            required:true,  tab:'overview', focus:'connect',
+    done:()=>ch.connected, blockedBy:null },
+  { key:'sync',     label:'Choose what syncs',  required:true,  tab:'sync',     focus:'dir',
+    done:()=>!!ch.syncDir, blockedBy:'connect' },               // REAL dependency
+  { key:'cadence',  label:'Sync cadence',       required:true,  tab:'sync',     focus:'cadence',
+    done:()=>!!ch.cadence, blockedBy:null },                    // NOT gated — set it whenever
+  { key:'map',      label:'Map products',       required:false, tab:'products', focus:'prod',
+    done:()=>ch.products.some(p=>p.mapped), blockedBy:null },   // recommended, not required
+];
+let activeStep = 'connect';
+
+function isBlocked(s){ if(!s.blockedBy) return false; const dep=STEPS.find(x=>x.key===s.blockedBy); return dep && !dep.done(); }
+function reqDone(){ return STEPS.filter(s=>s.required && s.done()).length; }
+function reqTotal(){ return STEPS.filter(s=>s.required).length; }
+function allReqMet(){ return STEPS.filter(s=>s.required).every(s=>s.done()); }
+
+function renderRail(){
+  const rail=document.getElementById('rail'); rail.innerHTML='';
+  STEPS.forEach((s,i)=>{
+    const done=s.done(), blocked=isBlocked(s), active=activeStep===s.key;
+    const el=document.createElement('div');
+    el.className='step'+(done?' done':'')+(blocked?' blocked':'')+(active?' active':'');
+    el.onclick=()=>clickStep(s.key);
+    const glyph = done?'✓' : blocked?'🔒' : (i+1);
+    el.innerHTML='<span class="dot">'+glyph+'</span><span class="lbl">'+s.label+
+      (s.required?'':' <span class="opt">· optional</span>')+
+      (blocked?' <span class="lock">· needs Connect</span>':'')+'</span>';
+    rail.appendChild(el);
+    if(i<STEPS.length-1){ const c=document.createElement('div'); c.className='conn'+(done?' done':''); rail.appendChild(c); }
+  });
+  // header pill + footer + activate
+  const pill=document.getElementById('statePill');
+  if(allReqMet()){ pill.className='pill ready'; pill.textContent='Ready to activate'; }
+  else { pill.className='pill setup'; pill.textContent='Setup · '+reqDone()+' of '+reqTotal()+' required'; }
+  document.getElementById('activateBtn').disabled=!allReqMet();
+  document.getElementById('footNote').textContent = allReqMet()
+    ? 'All required steps met — Activate is available (nothing forces you; activate when you choose).'
+    : (reqTotal()-reqDone())+' required step(s) left. Recommended steps are optional.';
+}
+
+function clickStep(key){
+  const s=STEPS.find(x=>x.key===key);
+  if(isBlocked(s)){ toast('“'+s.label+'” needs Connect first — that’s a real prerequisite (the token must exist).'); return; }
+  activeStep=key; switchTab(s.tab); renderRail(); flash(s.focus);
+}
+
+function flash(id){
+  setTimeout(()=>{ const el=document.getElementById('focus-'+id); if(!el) return;
+    el.classList.add('flash'); setTimeout(()=>el.classList.remove('flash'),1100); },60);
+}
+
+// ── tabs / panes (the live, always-editable record) ──
+function switchTab(tab){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on',t.dataset.tab===tab));
+  renderBody(tab);
+}
+document.getElementById('tabs').onclick=e=>{ const t=e.target.closest('.tab'); if(t){ activeStep=null; switchTab(t.dataset.tab); renderRail(); } };
+
+function renderBody(tab){
+  const b=document.getElementById('body');
+  if(tab==='overview'){
+    b.innerHTML=
+      '<div class="note-cl">A step points you HERE, into the real record — there is no separate wizard form. '+
+      'Connecting in the record satisfies the “Connect” step and recomputes the rail.</div>'+
+      '<div class="card"><h3>Connection</h3>'+
+        '<div class="kv"><span class="k">Platform</span><span class="v">Shopify</span></div>'+
+        '<div class="kv"><span class="k">Store</span><span class="v">shir-glassworks.myshopify.com</span></div>'+
+        '<div class="kv"><span class="k">Status</span><span class="v">'+(ch.connected?'<span style="color:var(--teal)">Connected</span>':'<span style="color:var(--amber)">Not connected</span>')+'</span></div>'+
+        '<div id="focus-connect" class="focusable" style="margin-top:13px;">'+
+          (ch.connected
+            ? '<span style="color:var(--teal);font-size:0.85rem;">✓ OAuth token stored. Webhooks subscribed.</span> <button class="btn" style="margin-left:8px;" onclick="disconnect()">Disconnect</button>'
+            : '<button class="btn teal" onclick="connect()">Connect Shopify →</button> <span class="note-inline">→ kicks the existing OAuth-initiate; the write delegates to the legacy/CF path, UI-only</span>')+
+        '</div>'+
+      '</div>'+
+      '<div class="card"><h3>Fees & terms</h3>'+
+        '<div class="kv"><span class="k">Platform fee</span><span class="v">2.9% + 30¢</span></div>'+
+        '<div class="kv"><span class="k">Ownership</span><span class="v">Owned</span></div>'+
+        '<div class="note-cl">Ordinary record fields — editable any time, unrelated to any step. The record is the substance; the rail is just guidance.</div>'+
+      '</div>';
+  }
+  else if(tab==='sync'){
+    const blocked = !ch.connected;
+    b.innerHTML=
+      '<div class="card"><h3>What syncs</h3>'+
+        '<div id="focus-dir" class="focusable">'+
+          '<div class="field-label">Direction</div>'+
+          (blocked
+            ? '<div class="blockmsg">🔒 Choose what syncs is locked until you <a onclick="clickStep(\'connect\')">Connect</a>. '+
+              '<span class="note-inline">a GENUINE prerequisite — shown with the reason, not hidden or faked</span></div>'
+            : seg('syncDir',[['pull','Pull only'],['push','Push only'],['both','Both ways']]))+
+        '</div>'+
+      '</div>'+
+      '<div class="card"><h3>Cadence</h3>'+
+        '<div id="focus-cadence" class="focusable">'+
+          '<div class="field-label">How often <span class="note-inline">NOT gated — no real dependency, so you can set it before connecting</span></div>'+
+          seg('cadence',[['realtime','Realtime'],['hourly','Hourly'],['daily','Daily']])+
+        '</div>'+
+      '</div>';
+  }
+  else if(tab==='products'){
+    b.innerHTML=
+      '<div class="note-cl">“Map products” is a RECOMMENDED step (optional) — Activate doesn’t require it. The rail shows required vs recommended honestly.</div>'+
+      '<div id="focus-prod" class="card focusable"><h3>Product mapping ('+ch.products.filter(p=>p.mapped).length+' of '+ch.products.length+')</h3>'+
+        ch.products.map((p,i)=>'<label class="prodrow"><input type="checkbox" '+(p.mapped?'checked':'')+' onchange="toggleMap('+i+')"> '+p.name+
+          ' <span class="ext">'+p.sku+(p.mapped?' · mapped':'')+'</span></label>').join('')+
+      '</div>';
+  }
+  else { b.innerHTML='<div class="card"><h3>Activity</h3><div class="note" style="color:var(--warm-gray);font-size:0.85rem;">No events yet. Connection + sync events will appear here.</div></div>'; }
+}
+
+function seg(field,opts){
+  return '<div class="seg">'+opts.map(([v,l])=>'<button class="'+(ch[field]===v?'sel':'')+'" onclick="setField(\''+field+'\',\''+v+'\')">'+l+'</button>').join('')+'</div>';
+}
+
+// ── write-as-you-go: editing the record satisfies steps + recomputes ──
+function setField(f,v){ ch[f]=v; renderBody(document.querySelector('.tab.on').dataset.tab); renderRail();
+  toast(f==='syncDir'?'Sync direction set → “Choose what syncs” ✓':'Cadence set → “Sync cadence” ✓'); }
+function toggleMap(i){ ch.products[i].mapped=!ch.products[i].mapped; renderBody('products'); renderRail(); }
+function connect(){ ch.connected=true; renderBody('overview'); renderRail();
+  toast('Connected → “Connect” ✓, and “Choose what syncs” just unlocked (its prerequisite is met).'); }
+function disconnect(){ ch.connected=false; ch.syncDir=null; renderBody('overview'); renderRail();
+  toast('Disconnected — “Choose what syncs” re-locks. The checklist always reflects the real record.'); }
+function activate(){ toast('Activate → delegates to the existing channel-activate write. (Prototype: no real write.)'); }
+
+let toastT;
+function toast(m){ const t=document.getElementById('toast'); t.textContent=m; t.classList.add('show'); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'),3200); }
+
+renderRail(); renderBody('overview');
+</script>
+</body>
+</html>
