@@ -114,18 +114,22 @@
   // ── State + data (same source as legacy: public/products) ───────────
   var V2 = { rows: [], byId: {}, sortKey: '_title', sortDir: 'asc', filter: 'all' };
 
-  function toRows(list) {
+  // public/products is a keyed map (pid → product). Mirror legacy loadProducts:
+  // MastDB.products.get() returns the whole map; the value carries its own pid,
+  // with the map key as a fallback.
+  function toRows(map) {
     var out = [];
-    (list || []).forEach(function (p) {
-      if (!p || typeof p !== 'object') return;
-      out.push(stamp(Object.assign({}, p), p.pid));
+    map = map || {};
+    Object.keys(map).forEach(function (k) {
+      var p = map[k]; if (!p || typeof p !== 'object') return;
+      out.push(stamp(Object.assign({}, p), p.pid || k));
     });
     return out;
   }
   function load() {
     if (!window.MastDB || !MastDB.products) return;
-    Promise.resolve(MastDB.products.list()).then(function (list) {
-      V2.rows = toRows(list);
+    Promise.resolve(MastDB.products.get()).then(function (map) {
+      V2.rows = toRows(map);
       V2.byId = {}; V2.rows.forEach(function (r) { V2.byId[r._key] = r; });
       render();
     }).catch(function (e) { console.error('[products-v2] load', e); render(); });
