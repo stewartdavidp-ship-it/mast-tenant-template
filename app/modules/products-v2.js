@@ -235,16 +235,30 @@
   }
   // Open the legacy recipe builder (sanctioned separate surface — not reimplemented
   // in v2). It hijacks the legacy pieces tab, so navigate there first.
-  function openRecipeBuilderGated(recipeId) {
+  function openRecipeBuilderGated(recipeId, variantId) {
     withProductBridge(function () {
       MastAdmin.showToast('Opening recipe builder…');
       if (typeof navigateToClassic === 'function') navigateToClassic('products');
       else if (window.navigateTo) window.navigateTo('products');
       setTimeout(function () {
-        if (window.makerOpenRecipeBuilder) window.makerOpenRecipeBuilder(recipeId);
+        // makerOpenRecipeBuilder(recipeId, variantId) focuses the variant's slot
+        // (a variant's "own recipe" = its independent slot in the product recipe).
+        if (window.makerOpenRecipeBuilder) window.makerOpenRecipeBuilder(recipeId, variantId);
         else MastAdmin.showToast('Recipe builder unavailable', true);
       }, 320);
     });
+  }
+  // A variant's recipe is its independent slot within the product's recipe. The
+  // builder is the (legacy) edit surface; here we just route into it focused on
+  // this variant, creating the product recipe first if there isn't one yet.
+  function variantRecipePane(UU, p, v) {
+    var pid = p._key || p.pid, vid = v.id;
+    var hasRecipe = !!p.recipeId;
+    var btnLabel = hasRecipe ? 'Edit this variant’s recipe ↗' : 'Give it its own recipe ↗';
+    var statusV = hasRecipe ? 'Shares the product recipe (open to give this variant its own materials)' : 'Uses the product recipe';
+    var body = UU.kv([{ k: 'Recipe', v: statusV }]) +
+      '<div style="margin-top:12px;"><button class="btn btn-secondary btn-small" onclick="ProductsV2.variantOwnRecipe(\'' + esc(pid) + '\',\'' + esc(vid) + '\')">' + btnLabel + '</button></div>';
+    return UU.card('Recipe', body) + '<div class="pv2-pnote">A variant can have its own materials within the product recipe. Give it its own only if it’s actually made differently.</div>';
   }
   function inventoryPane(p) {
     var pid = p._key || p.pid;
@@ -521,7 +535,7 @@
         var vimg = variantImageSrc(p, v);
         return headerStrip(p, vimg, (p.name || 'Variant') + ' — ' + variantLabel(v), v.id) + UU.stickyHead(tiles, UU.paneTabsBar(tabs, 'v-pricing')) +
           pane('v-pricing', variantPricingPane(UU, p, v) + ctx, true) +
-          pane('v-recipe', UU.card('Recipe', row('Recipe', 'Product recipe', 'shared with the product', false, 'Give it its own recipe')) + '<div class="pv2-pnote">This variant uses the product’s recipe. Give it its own only if it’s actually made differently.</div>') +
+          pane('v-recipe', variantRecipePane(UU, p, v)) +
           pane('v-channels', UU.card('Channels', row('Shopify', 'Live', 'same as the product', false, 'Map separately'))) +
           pane('v-inventory', variantInventoryPane(UU, p, v)) +
           pane('v-image', variantImagePane(UU, p, v));
@@ -1102,6 +1116,20 @@
       });
     },
     recipeEditInBuilder: function (recipeId) { openRecipeBuilderGated(recipeId); },
+    // Variant "Give it its own recipe" → open the builder focused on this variant
+    // (creating the product recipe first if needed). Replaces the editVariantTodo stub.
+    variantOwnRecipe: function (pid, vid) {
+      withProductBridge(function () {
+        var rec = V2.byId[pid] || {};
+        if (rec.recipeId) { openRecipeBuilderGated(rec.recipeId, vid); return; }
+        MastAdmin.showToast('Creating recipe…');
+        Promise.resolve(window.MakerProductBridge.createRecipeForProduct(pid, rec.name || 'Recipe')).then(function (res) {
+          if (!res || !res.ok) { MastAdmin.showToast('Failed: ' + ((res && res.error) || 'unknown'), true); return; }
+          if (rec) rec.recipeId = res.recipeId;
+          openRecipeBuilderGated(res.recipeId, vid);
+        }, function (e) { console.error('[products-v2] variantOwnRecipe', e); MastAdmin.showToast('Failed', true); });
+      });
+    },
     recipeUnlink: function (pid) {
       function go() {
         withProductBridge(function () {
