@@ -1,6 +1,17 @@
 # products-v2 — Build Plan
 
-Status: **design ratified** (mock: `products-v2-mock.html`). Pre-build. Flag-gated `#products-v2`, side-by-side with legacy, retire legacy product screens once at parity.
+Status: **READ page built & live on sgtest15** (P0a–P2). Flag-gated `#products-v2` + Legacy-UI-off route map. Editing (P3–P5, the write phase) deliberately left for a supervised session.
+
+### Progress (2026-06-05)
+- ✅ **P0a** list + read SO (PR 180 / 181 — data reads `MastDB.products.get()` keyed map)
+- ✅ route-map wire (PR 182 — Legacy-UI-off preview; GA flip still P5)
+- ✅ **P0b** variant-expanding list (Default + variants + Add-variant) + `product-variant-v2` SO (PR 183)
+- ✅ **P1** Default SO: read lifecycle stepper + Process readiness + 7-tab flow on real data (PR 184)
+- ✅ **P2** tabbed variant SO + `recipe-v2` stacked drill SO (real BOM/cost) (PR 185)
+- ⬜ **P3** edit-in-V2 via `MakerProductBridge` + real Advance (`detail.onFlowAdvance` engine hook → `makerPromoteToReady`/`makerLaunchToActive`, incl. Shopify publish) + native recipe edit (clears recipe temp-link)
+- ⬜ **P4** add-variant write + per-variant overrides · ⬜ **P5** Revising loop, flip default, retire legacy
+
+Everything in the live surface is **read**; every edit affordance is a toast or a temp legacy deep-link (debt register below). The write phase touches the shared engine + maker.js — supervised work.
 
 ## The ratified model (one paragraph)
 
