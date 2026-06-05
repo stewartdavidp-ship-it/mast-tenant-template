@@ -110,7 +110,7 @@
        Shared by customers.js (list/export) and customer-service.js (survey
        bulk-send) so the segment matcher cannot drift. ?v= kept in lockstep
        with MAST_MODULES_V by scripts/bump-modules-version.sh. -->
-  <script src="../shared/customer-filters.js?v=20260605-161053-27c17dc"></script>
+  <script src="../shared/customer-filters.js?v=20260605-162337-0623849"></script>
   <script src="../shared/brand-sync.js?v=1"></script>
   <script src="../shared/channel-connection.js?v=1"></script>
   <!-- UI redesign engines (docs/ux-audit): shared primitives + Entity Engine.
@@ -118,9 +118,9 @@
        scripts/bump-modules-version.sh (these are static <head> tags loaded
        before the JS var exists, so they can't read it at runtime). Without
        this, the engines were frozen at ?v=1 and never cache-busted on deploy. -->
-  <script src="../shared/mast-ui.js?v=20260605-161053-27c17dc"></script>
-  <script src="../shared/mast-io.js?v=20260605-161053-27c17dc"></script>
-  <script src="../shared/mast-entity.js?v=20260605-161053-27c17dc"></script>
+  <script src="../shared/mast-ui.js?v=20260605-162337-0623849"></script>
+  <script src="../shared/mast-io.js?v=20260605-162337-0623849"></script>
+  <script src="../shared/mast-entity.js?v=20260605-162337-0623849"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Pod-specific runtime config — sets window.MAST_POD_PLATFORM_PROJECT so
@@ -14680,6 +14680,20 @@ async function renderAddToMast() {
     grouped[info.section].push({ routeId: routeId, info: info, visible: visible, alwaysOn: isAlwaysOn });
   }
 
+  // Surface-excluded summary: count curatable modules sitting in groups that the
+  // engagement Surface trims entirely (whole-group hide via applyEngagementNavFiltering,
+  // already stamped on the live sidebar as .engagement-hidden). These can't be
+  // revealed from this page — the Surface setting governs them — so the header
+  // links straight to it.
+  var surfaceExcludedCount = 0;
+  for (var se = 0; se < sectionOrder.length; se++) {
+    var _sk = sectionOrder[se];
+    if (!grouped[_sk] || !grouped[_sk].length) continue;
+    var _secEl2 = document.querySelector('.sidebar-section[data-section="' + _sk + '"]');
+    if (_secEl2 && _secEl2.classList.contains('engagement-hidden')) surfaceExcludedCount += grouped[_sk].length;
+  }
+  var canEditSettingsHdr = (typeof can === 'function') ? can('settings', 'edit') : true;
+
   // Page header: counts + bulk "+ Add all hidden" control
   var html = '';
   html += '<div style="padding:0 24px 16px;display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;">';
@@ -14690,7 +14704,18 @@ async function renderAddToMast() {
   html += '<strong>' + (visibleCount + alwaysOnCount) + '</strong> in your sidebar &middot; ' +
           '<strong>' + hiddenCount + '</strong> available to add' +
           (alwaysOnCount > 0 ? ' &middot; <strong>' + alwaysOnCount + '</strong> always on' : '') + '.';
-  html += '</div></div>';
+  html += '</div>';
+  // Surface-excluded pointer: whole groups trimmed by the Engagement surface
+  // can't be shown from here — point the owner at the control that governs them.
+  if (surfaceExcludedCount > 0) {
+    html += '<div style="margin-top:6px;font-size:0.85rem;">';
+    html += '<strong style="color:var(--warn,#b3752f);">' + surfaceExcludedCount + '</strong> module' + (surfaceExcludedCount === 1 ? '' : 's') + ' excluded by your Engagement surface';
+    if (canEditSettingsHdr) {
+      html += ' &middot; <button type="button" data-amt-action="open-engagement-settings" style="background:transparent;border:0;color:var(--teal,#2a7c6f);font-weight:600;font-size:0.85rem;cursor:pointer;padding:0;text-decoration:underline;">Manage in Settings &rarr; Engagement</button>';
+    }
+    html += '.</div>';
+  }
+  html += '</div>';
   // Header buttons: "Reset to default" (only when overrides exist) + "+ Add all".
   var ovr = _modeOverridesSnapshot || { enabledRoutes: [], disabledRoutes: [] };
   var overrideCount = ((ovr.enabledRoutes || []).length) + ((ovr.disabledRoutes || []).length);
@@ -21264,7 +21289,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260605-161053-27c17dc';
+var MAST_MODULES_V = '20260605-162337-0623849';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
