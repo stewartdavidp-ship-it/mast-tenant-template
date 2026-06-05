@@ -17,12 +17,15 @@
  * the engine's single status-typed field → it becomes the header badge + a list
  * badge. → Faceted Record, NOT Process/MastFlow.
  *
- * Read-focused: creating/editing a contact and logging interactions are bespoke
- * forms + modals coupled to the legacy Contacts module (inline edit toggle, Log
- * Interaction, inquiry Respond, Google/Drive sync). Those stay single-sourced on
- * legacy #contacts via a "manage in classic view" link. This twin re-hosts the
- * VIEW only — no onSave, no edit form. Flag-gated (?ui=1) at #contacts-v2,
- * side-by-side; never touches contacts.js.
+ * Create + edit are NATIVE here: a custom detail.editRender (the identity field
+ * set, grouped like the legacy modal/detail) + an onSave that DELEGATES to
+ * window.ContactsBridge (exposed in contacts.js) so the contact write, the
+ * create/update audit, and the background Google-Contact create/push stay
+ * single-sourced — this twin never reimplements that logic (mirrors the
+ * materials-v2 / MakerMaterialsBridge precedent). Logging interactions, inquiry
+ * Respond, and Google/Drive *sync setup* remain bespoke modals coupled to legacy
+ * #contacts and keep a "manage in classic view" link. Flag-gated (?ui=1) at
+ * #contacts-v2, side-by-side.
  *
  * Data: contacts live at admin/contacts (MastDB.contacts.list → that subtree);
  * each contact's interactions are nested under contact.interactions (already in
@@ -82,7 +85,7 @@
     recordId: function (c) { return c._key || c.id; },
     fields: [
       // fields[0] (the slide-out title source) materializes a real name string.
-      { name: 'name', label: 'Name', type: 'text', list: true, readOnly: true, group: 'Identity', get: contactName },
+      { name: 'name', label: 'Name', type: 'text', list: true, required: true, group: 'Identity', get: contactName },
       { name: 'company', label: 'Company', type: 'text', list: true, readOnly: true, get: function (c) { return c.company || '—'; } },
       { name: 'email', label: 'Email', type: 'text', list: true, readOnly: true, get: function (c) { return c.email || '—'; } },
       { name: 'phone', label: 'Phone', type: 'text', list: true, readOnly: true, sortable: false, get: function (c) { return c.phone || '—'; } },
@@ -151,9 +154,11 @@
           { k: 'Created by', v: c.createdBy ? esc(c.createdBy) : '—' },
           { k: 'Updated', v: fmtDT(c.updatedAt) }
         ]);
-        // Identity / linked-customer / interaction editing stays on legacy
-        // #contacts. navigateToClassic so the V2 route remap doesn't loop back here.
-        var manage = '<div style="margin-top:14px;"><button class="btn btn-secondary" onclick="ContactsV2.classic()">Manage in classic view →</button></div>';
+        // Identity editing is NATIVE now (the Edit button on this slide-out).
+        // What still has NO V2 home: logging interactions, inquiry Respond, and
+        // Google/Drive sync SETUP — those stay bespoke on legacy #contacts.
+        // navigateToClassic so the V2 route remap doesn't loop back here.
+        var manage = '<div style="margin-top:14px;"><button class="btn btn-secondary" onclick="ContactsV2.classic()">Log interaction / sync in classic view →</button></div>';
 
         // ── Interactions facet — the cheap in-memory related collection ──
         var intCols = [
@@ -186,15 +191,74 @@
           '<div class="mu-pane" data-pane="notes" hidden>' +
             UI.card('Notes', notesBody) +
           '</div>';
+      },
+      // Native edit form — the legacy modal/detail identity field set, grouped.
+      // Field set mirrors contacts.js openAddContactModal / renderContactDetail:
+      // name (required), email, phone, company, category (required), website,
+      // address, notes, driveFolderLink. Spot Google/Drive *sync* setup stays on
+      // legacy (not edited here — a partial update preserves googleContactId etc).
+      editRender: function (c, mode) {
+        c = c || {};
+        var catOpts = CONTACT_CATEGORIES.map(function (cat) {
+          return '<option value="' + esc(cat) + '"' + (categoryOf(c) === cat ? ' selected' : '') + '>' + esc(cat) + '</option>';
+        }).join('');
+        function fg(label, inner, flex) { return '<div class="form-group"' + (flex ? ' style="flex:1;min-width:150px;"' : '') + '><label class="form-label">' + label + '</label>' + inner + '</div>'; }
+        function row2(a, b) { return '<div style="display:flex;gap:12px;flex-wrap:wrap;">' + a + b + '</div>'; }
+        return '<div class="mu-editbar"><span class="mu-editpill">' + (mode === 'create' ? 'NEW' : 'EDITING') + '</span>' + (mode === 'create' ? 'New contact' : 'Edit this contact') + '</div>' +
+          fg('Name *', '<input class="form-input" id="ctV2Name" value="' + esc(c.name || '') + '" style="width:100%;" placeholder="Company or person name">') +
+          row2(
+            fg('Email', '<input class="form-input" type="email" id="ctV2Email" value="' + esc(c.email || '') + '" style="width:100%;" placeholder="email@example.com">', true),
+            fg('Phone', '<input class="form-input" type="tel" id="ctV2Phone" value="' + esc(c.phone || '') + '" style="width:100%;" placeholder="(555) 123-4567">', true)
+          ) +
+          fg('Company / Organization', '<input class="form-input" id="ctV2Company" value="' + esc(c.company || '') + '" style="width:100%;">') +
+          row2(
+            fg('Category *', '<select class="form-input" id="ctV2Category" style="width:100%;">' + catOpts + '</select>', true),
+            fg('Website', '<input class="form-input" type="url" id="ctV2Website" value="' + esc(c.website || '') + '" style="width:100%;" placeholder="https://...">', true)
+          ) +
+          fg('Address', '<input class="form-input" id="ctV2Address" value="' + esc(c.address || '') + '" style="width:100%;" placeholder="Street, City, State ZIP">') +
+          fg('Notes', '<textarea class="form-input" id="ctV2Notes" rows="3" style="width:100%;resize:vertical;">' + esc(c.notes || '') + '</textarea>') +
+          fg('Drive folder link', '<input class="form-input" id="ctV2Drive" value="' + esc(c.driveFolderLink || '') + '" style="width:100%;" placeholder="https://drive.google.com/drive/folders/...">');
       }
+    },
+    onSave: function (rec, mode) {
+      if (!window.ContactsBridge) { if (window.showToast) showToast('Contacts engine still loading — try again', true); return false; }
+      var data = {
+        name: (document.getElementById('ctV2Name') || {}).value || '',
+        email: ((document.getElementById('ctV2Email') || {}).value || '').trim() || null,
+        phone: ((document.getElementById('ctV2Phone') || {}).value || '').trim() || null,
+        company: ((document.getElementById('ctV2Company') || {}).value || '').trim() || null,
+        category: (document.getElementById('ctV2Category') || {}).value || 'Other',
+        website: ((document.getElementById('ctV2Website') || {}).value || '').trim() || null,
+        address: ((document.getElementById('ctV2Address') || {}).value || '').trim() || null,
+        notes: ((document.getElementById('ctV2Notes') || {}).value || '').trim() || null,
+        driveFolderLink: ((document.getElementById('ctV2Drive') || {}).value || '').trim() || null
+      };
+      if (!data.name.trim()) { if (window.showToast) showToast('Contact name is required.', true); return false; }
+
+      if (mode === 'create') {
+        return Promise.resolve(window.ContactsBridge.create(data)).then(function () {
+          if (window.showToast) showToast('Contact created.'); reloadSoon(); return true;
+        }).catch(function (e) { console.error('[contacts-v2] create', e); if (window.showToast) showToast('Error saving contact.', true); return false; });
+      }
+      var id = rec._key || rec.id;
+      return Promise.resolve(window.ContactsBridge.update(id, data)).then(function () {
+        // Mutate the LIVE cached record (=== the slide-out's read closure, since
+        // fetch returns V2.byId[id]); the engine passes a copy to onSave. Shows
+        // the edited fields immediately on the post-save read re-render;
+        // reloadSoon() then refreshes the cache for the next open.
+        Object.assign(V2.byId[id] || rec, data);
+        if (window.showToast) showToast('Contact updated.'); reloadSoon(); return true;
+      }).catch(function (e) { console.error('[contacts-v2] update', e); if (window.showToast) showToast('Error updating contact.', true); return false; });
     }
-    // No onSave → no Edit button (contact editing stays on legacy #contacts).
   });
 
   // ── module state + data ─────────────────────────────────────────────
   var V2 = { rows: [], byId: {}, byContactId: {}, sortKey: 'name', sortDir: 'asc', q: '', categoryFilter: 'all', loaded: false };
 
   function load() {
+    // Ensure the legacy contacts module is loaded so window.ContactsBridge
+    // (the delegated write path) exists — mirrors materials-v2.
+    if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('contacts'); } catch (e) {} }
     // Contacts (with nested interactions) + the contact→customer index load
     // together; both one-shot keyed-object reads (no listeners).
     Promise.all([
@@ -212,6 +276,7 @@
       V2.loaded = true; render();
     }).catch(function (e) { console.error('[contacts-v2] load', e); render(); });
   }
+  function reloadSoon() { V2.loaded = false; setTimeout(load, 250); }   // let the legacy write settle, then refresh
 
   function visibleRows() {
     var rows = V2.rows;
@@ -250,7 +315,8 @@
       U.pageHeader({
         title: 'Contacts',
         count: N.count(V2.rows.length) + ' contact' + (V2.rows.length === 1 ? '' : 's'),
-        actionsHtml: '<button class="btn btn-secondary" onclick="ContactsV2.exportCsv()">↓ Export</button>'
+        actionsHtml: '<button class="btn btn-primary" onclick="ContactsV2.create()">+ New contact</button>' +
+          '<button class="btn btn-secondary" onclick="ContactsV2.exportCsv()">↓ Export</button>'
       }) +
       '<div style="display:flex;gap:6px;flex-wrap:wrap;margin:12px 0;">' + filters + '</div>' +
       '<div style="margin:14px 0;"><input class="form-input" placeholder="Search name, email or company…" value="' + esc(V2.q) +
@@ -258,7 +324,7 @@
       MastEntity.renderList('contacts-v2', {
         rows: visibleRows(), sortKey: V2.sortKey, sortDir: V2.sortDir,
         onSortFnName: 'ContactsV2.sort', onRowClickFnName: 'ContactsV2.open',
-        empty: { title: 'No contacts', message: V2.loaded ? 'Add contacts in the classic Contacts view.' : 'Loading…' }
+        empty: { title: 'No contacts', message: V2.loaded ? 'Add a contact to get started.' : 'Loading…' }
       });
   }
 
@@ -275,7 +341,14 @@
         if (rec) MastEntity.openRecord('contacts-v2', rec, 'read');
       });
     },
-    // Bespoke contact edit + interaction logging → classic Contacts view. Use
+    create: function () {
+      // Ensure the legacy module (and thus window.ContactsBridge) is loaded
+      // before opening the create form — mirrors MaterialsV2.create.
+      if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('contacts'); } catch (e) {} }
+      MastEntity.openRecord('contacts-v2', {}, 'create');
+    },
+    // Interaction logging, inquiry Respond, and Google/Drive sync setup are still
+    // bespoke on legacy #contacts (no V2 home). Identity create/edit is native.
     // navigateToClassic so the V2 route remap doesn't loop back to this twin.
     classic: function () {
       if (typeof navigateToClassic === 'function') navigateToClassic('contacts');

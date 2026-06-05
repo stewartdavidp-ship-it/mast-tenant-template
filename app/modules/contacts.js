@@ -1572,6 +1572,65 @@ async function doSyncGoogleContacts() {
     });
   }
 
+  // Bridge for the contacts-v2 redesign twin (flag-gated #contacts-v2). It
+  // delegates create/update here so the contact write, the create-time audit +
+  // background Google-Contact create, and the edit-time audit + Google-Contact
+  // push stay single-sourced — the twin never reimplements that logic. Additive;
+  // no behavior change to the legacy surface. These mirror the EXACT client
+  // writes saveNewContact()/saveContactEditMode() make, parameterized by data
+  // (the legacy handlers read the modal/detail DOM, so they can't be called with
+  // an object). The twin has no pending customer-link, so create takes the plain
+  // branch (no atomic linkedIds multi-update). Mirrors window.MakerMaterialsBridge.
+  window.ContactsBridge = {
+    create: async function (data) {
+      var id = 'contact_' + Date.now().toString(36);
+      var now = new Date().toISOString();
+      var contactData = {
+        id: id,
+        name: (data.name || '').trim(),
+        email: data.email || null,
+        phone: data.phone || null,
+        company: data.company || null,
+        category: data.category || 'Other',
+        website: data.website || null,
+        address: data.address || null,
+        notes: data.notes || null,
+        googleContactId: null,
+        driveFolderLink: data.driveFolderLink || null,
+        createdAt: now,
+        createdBy: currentUser ? currentUser.uid : 'unknown',
+        updatedAt: now
+      };
+      await MastDB.contacts.set(id, contactData);
+      await writeAudit('create', 'contacts', id);
+      emitTestingEvent('createContact', {});
+      contactsLoaded = false;
+      createGoogleContact(contactData); // background; mirrors saveNewContact
+      return id;
+    },
+    update: async function (id, data) {
+      var updates = {
+        name: (data.name || '').trim(),
+        email: data.email || null,
+        phone: data.phone || null,
+        company: data.company || null,
+        category: data.category || 'Other',
+        website: data.website || null,
+        address: data.address || null,
+        notes: data.notes || null,
+        driveFolderLink: data.driveFolderLink || null,
+        updatedAt: new Date().toISOString()
+      };
+      await MastDB.contacts.update(id, updates);
+      await writeAudit('update', 'contacts', id);
+      contactsLoaded = false;
+      // Push to Google in background — mirrors saveContactEditMode.
+      var contact = await MastDB.contacts.get(id);
+      if (contact && contact.googleContactId) pushContactToGoogle(contact);
+      return id;
+    }
+  };
+
   MastAdmin.registerModule('contacts', {
     routes: {
       'contacts': { tab: 'contactsTab', setup: function() {
