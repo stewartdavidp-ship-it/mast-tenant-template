@@ -248,25 +248,28 @@
         var ov = variantOverridden(p, v);
         var tiles = UU.tiles([
           { k: 'Price', v: N.money(variantPrice(p, v)) || '—', hero: true },
-          { k: 'Source', v: ov ? 'Override' : 'Inherits Default' },
+          { k: 'Source', v: ov ? 'Custom price' : 'Same as Default' },
           { k: 'Product', v: p.name || '—' },
-          { k: 'Status', v: statusLabel(p.status) + ' (product)' }
+          { k: 'Status', v: statusLabel(p.status) + ' (follows product)' }
         ]);
-        function inhRow(label, val, from, overridden) {
-          return '<div class="pv2-inh"><span class="il">' + esc(label) + '</span><span class="iv"' + (overridden ? ' style="color:var(--amber);font-weight:600;"' : '') + '>' + val + ' <span class="from">· ' + esc(from) + '</span></span>' +
-            '<span class="ov"><button class="btn btn-secondary btn-small" onclick="ProductsV2.editVariantTodo()">' + (overridden ? 'Edit' : 'Override') + '</button></span></div>';
+        // One row: a variant USES the Default for anything it doesn't set itself.
+        // "custom" = this variant has its own value. setVerb = the call to action
+        // when it's still shared (no "override" framing). Editing lands in P4.
+        function row(label, value, state, isCustom, setVerb) {
+          var btn = isCustom ? 'Edit' : (setVerb || 'Customize');
+          return '<div class="pv2-inh"><span class="il">' + esc(label) + '</span>' +
+            '<span class="iv"' + (isCustom ? ' style="color:var(--amber);font-weight:600;"' : '') + '>' + value + ' <span class="from">· ' + esc(state) + '</span></span>' +
+            '<span class="ov"><button class="btn btn-secondary btn-small" onclick="ProductsV2.editVariantTodo()">' + esc(btn) + '</button></span></div>';
         }
         var tabs = [{ key: 'v-pricing', label: 'Pricing' }, { key: 'v-recipe', label: 'Recipe' }, { key: 'v-channels', label: 'Channels' }, { key: 'v-inventory', label: 'Inventory' }, { key: 'v-image', label: 'Image' }];
         function pane(key, html, active) { return '<div class="mu-pane" data-pane="' + key + '"' + (active ? '' : ' hidden') + '>' + html + '</div>'; }
-        var back = '<div style="margin:14px 0 0;"><button class="btn btn-secondary btn-small" onclick="ProductsV2.open(\'' + esc(p._key || p.pid) + '\')">← Back to Default (' + esc(p.name || 'product') + ')</button></div>';
-        var ctx = '<div class="pv2-pnote">Inherits the Default unless overridden — a variant has no process, it follows the product.</div>';
+        var ctx = '<div class="pv2-pnote">A variant uses the Default’s values for anything it doesn’t set itself. It has no lifecycle of its own — it follows the product.</div>';
         return UU.stickyHead(tiles, UU.paneTabsBar(tabs, 'v-pricing')) +
-          pane('v-pricing', UU.card('Pricing', inhRow('Retail price', N.money(variantPrice(p, v)) || '—', ov ? 'overridden' : 'inherited from Default', ov) + inhRow('SKU', esc(v.sku || '—'), v.sku ? 'set' : 'not set', !!v.sku)) + ctx, true) +
-          pane('v-recipe', UU.card('Recipe', inhRow('Recipe / cost', '—', 'inherits the base recipe', false))) +
-          pane('v-channels', UU.card('Channels', inhRow('Shopify', 'Live', 'inherits product mapping', false))) +
-          pane('v-inventory', UU.card('Inventory', inhRow('Stock type', 'Build to order', 'inherited', false) + inhRow('On hand', '—', 'build to order', false))) +
-          pane('v-image', UU.card('Image', inhRow('Variant image', 'Shared product image', 'inherited', false))) +
-          back;
+          pane('v-pricing', UU.card('Pricing', row('Retail price', N.money(variantPrice(p, v)) || '—', ov ? 'custom for this variant' : 'same as Default', ov, 'Set a custom price') + row('SKU', esc(v.sku || '—'), v.sku ? 'set for this variant' : 'uses the Default', !!v.sku, 'Set a SKU')) + ctx, true) +
+          pane('v-recipe', UU.card('Recipe', row('Recipe', 'Product recipe', 'shared with the product', false, 'Give it its own recipe')) + '<div class="pv2-pnote">This variant uses the product’s recipe. Give it its own only if it’s actually made differently.</div>') +
+          pane('v-channels', UU.card('Channels', row('Shopify', 'Live', 'same as the product', false, 'Map separately'))) +
+          pane('v-inventory', UU.card('Inventory', row('Stock type', 'Build to order', 'same as Default', false, 'Customize') + row('On hand', '—', 'build to order', false, 'Track separately'))) +
+          pane('v-image', UU.card('Image', row('Image', 'Product image', 'same as the product', false, 'Set a variant image')));
       }
     }
   });

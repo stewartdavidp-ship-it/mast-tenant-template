@@ -435,6 +435,20 @@
       var host = document.getElementById('muFlowHost');
       if (host) host.innerHTML = res.html;
       _flow.fromPhase = (res.evaluation && res.evaluation.currentPhase) ? res.evaluation.currentPhase.key : null;
+      // Tucked live/active end-state (guided header): the rail is hidden — make
+      // the slide-out status pill reveal it on click ("once Active the process
+      // bar goes away; click the Active pill and it shows up").
+      if (res.tucked && res.railWrapId) {
+        var pill = document.querySelector('#mastSlideOutBody .mast-badge');
+        if (pill) {
+          pill.style.cursor = 'pointer';
+          pill.title = 'Show lifecycle';
+          pill.onclick = function () {
+            var w = document.getElementById(res.railWrapId);
+            if (w) w.style.display = (w.style.display === 'none') ? 'block' : 'none';
+          };
+        }
+      }
     }).catch(function (e) { console.error('[MastEntity] renderHeader', e); });
   }
 
