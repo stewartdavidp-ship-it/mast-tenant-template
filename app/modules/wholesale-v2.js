@@ -15,12 +15,14 @@
  * (active / on_hold / closed) is an assigned attribute → Faceted Record, NOT
  * Process/MastFlow.
  *
- * Read-focused: editing a B2B account is complex and storefront-coupled (pricing
- * tiers, NET-terms versioning, credit/MOQ rules, resale-cert/tax-exempt handling,
- * authorized-user links) and stays single-sourced on legacy #wholesale via a
- * "manage in classic view" link. This twin re-hosts the VIEW only — no onSave,
- * no edit form, no orders/AR/cadence sub-tools (those stay on legacy too).
- * Flag-gated (?ui=1) at #wholesale-v2, side-by-side; never touches wholesale.js.
+ * Create + edit are NATIVE here: a custom detail.editRender (the account field
+ * set, grouped like the legacy modal) + an onSave that DELEGATES to
+ * window.WholesaleBridge (exposed in wholesale.js) so the account write stays
+ * single-sourced — this twin never reimplements that logic (mirrors the
+ * contacts-v2 / ContactsBridge precedent). The orders / AR aging / cadence /
+ * authorized-users / requests / dormant sub-tools remain bespoke surfaces coupled
+ * to legacy #wholesale and keep a "manage in classic view" link.
+ * Flag-gated (?ui=1) at #wholesale-v2, side-by-side.
  */
 (function () {
   'use strict';
@@ -43,6 +45,23 @@
   var STATUS_LABEL = { active: 'Active', on_hold: 'On hold', closed: 'Closed' };
   var STATUS_TONE = { active: 'success', on_hold: 'amber', closed: 'neutral' };
 
+  // Option arrays for the native edit form — mirror wholesale.js WS_* tables
+  // ({v,l} ordered) so the selects match the legacy modal exactly.
+  var WS_NET_TERMS = [
+    { v: 'DUE_ON_RECEIPT', l: 'Due on receipt' }, { v: 'NET_15', l: 'NET-15' },
+    { v: 'NET_30', l: 'NET-30' }, { v: 'NET_45', l: 'NET-45' }, { v: 'NET_60', l: 'NET-60' }
+  ];
+  var WS_ACCOUNT_TYPES = [
+    { v: 'retailer', l: 'Retailer / Boutique' }, { v: 'gallery', l: 'Gallery' },
+    { v: 'museum_store', l: 'Museum store' }, { v: 'rep_agency', l: 'Sales rep agency' }, { v: 'other', l: 'Other' }
+  ];
+  var WS_PAYMENT_METHODS = [
+    { v: 'check', l: 'Check' }, { v: 'card', l: 'Card' }, { v: 'ach', l: 'ACH / bank transfer' }
+  ];
+  var WS_ACCOUNT_STATUSES = [
+    { v: 'active', l: 'Active' }, { v: 'on_hold', l: 'On hold' }, { v: 'closed', l: 'Closed' }
+  ];
+
   function netLabel(a) { return NET_TERMS[a.netTerms] || '—'; }
   function typeLabel(a) { return ACCOUNT_TYPES[a.accountType] || ''; }
   function payLabel(a) { return PAYMENT_METHODS[a.paymentMethodDefault] || '—'; }
@@ -61,7 +80,7 @@
     recordId: function (a) { return a._key || a.id; },
     fields: [
       // fields[0] (the slide-out title source) materializes a real name string.
-      { name: 'name', label: 'Account', type: 'text', list: true, readOnly: true, group: 'Account', get: accountName },
+      { name: 'name', label: 'Account', type: 'text', list: true, required: true, group: 'Account', get: accountName },
       { name: 'typeTerritory', label: 'Type / territory', type: 'text', list: true, readOnly: true, sortable: false, get: typeTerritory },
       { name: 'creditLimit', label: 'Credit limit', type: 'money', list: true, readOnly: true, align: 'right',
         get: function (a) { return N.moneyVal(a, 'creditLimitCents', null); } },
@@ -103,8 +122,12 @@
           { k: 'Tax-exempt', v: (a.taxExempt !== false) ? 'Yes' : 'No' },
           { k: 'Resale cert', v: a.resaleCertNumber ? esc(a.resaleCertNumber) : '—' }
         ]);
-        // Storefront-coupled B2B pricing/terms editing stays on legacy #wholesale.
-        var manage = '<div style="margin-top:14px;"><button class="btn btn-secondary" onclick="WholesaleV2.classic()">Manage in classic view →</button></div>';
+        // Account create/edit is NATIVE now (the Edit button on this slide-out).
+        // What still has NO V2 home: orders, AR aging, cadence, authorized-user
+        // links, access requests, and dormant tooling — those stay bespoke on
+        // legacy #wholesale. navigateToClassic so the V2 route remap doesn't loop
+        // back here.
+        var manage = '<div style="margin-top:14px;"><button class="btn btn-secondary" onclick="WholesaleV2.classic()">Orders / AR / users in classic view →</button></div>';
 
         // Contacts — primary + all contacts on file.
         var contacts = contactsOf(a);
@@ -125,15 +148,97 @@
           '<div class="mu-pane" data-pane="ov">' + UI.card('Account', account) + UI.card('Terms & credit', terms) + UI.card('Tax & resale', taxResale + manage) + '</div>' +
           '<div class="mu-pane" data-pane="contacts" hidden>' + UI.cardTable('Contacts (' + contacts.length + ')', contactsBody) + '</div>' +
           '<div class="mu-pane" data-pane="notes" hidden>' + UI.card('Notes', notesBody) + '</div>';
+      },
+      // Native edit form — the legacy modal field set (openNewWholesaleAccountModal),
+      // grouped. Mirrors saveWholesaleAccount inputs: name (required), account type,
+      // status, NET terms, default payment, credit limit / opener min / reorder min
+      // ($ → cents), sales rep, territory, resale cert, tax-exempt, notes.
+      editRender: function (a, mode) {
+        a = a || {};
+        function sel(id, opts, selected) {
+          var o = opts.map(function (x) { return '<option value="' + esc(x.v) + '"' + (x.v === selected ? ' selected' : '') + '>' + esc(x.l) + '</option>'; }).join('');
+          return '<select class="form-input" id="' + id + '" style="width:100%;">' + o + '</select>';
+        }
+        function fg(label, inner, flex) { return '<div class="form-group"' + (flex ? ' style="flex:1;min-width:150px;"' : '') + '><label class="form-label">' + label + '</label>' + inner + '</div>'; }
+        function row(parts) { return '<div style="display:flex;gap:12px;flex-wrap:wrap;">' + parts.join('') + '</div>'; }
+        function dollars(cents) { return (cents || cents === 0) ? (cents / 100) : ''; }
+        return '<div class="mu-editbar"><span class="mu-editpill">' + (mode === 'create' ? 'NEW' : 'EDITING') + '</span>' + (mode === 'create' ? 'New wholesale account' : 'Edit this account') + '</div>' +
+          fg('Account name *', '<input class="form-input" id="wsV2Name" value="' + esc(a.name || '') + '" style="width:100%;" placeholder="Coastal Home Boutique">') +
+          row([
+            fg('Type', sel('wsV2Type', WS_ACCOUNT_TYPES, a.accountType || 'retailer'), true),
+            fg('Status', sel('wsV2Status', WS_ACCOUNT_STATUSES, a.status || 'active'), true)
+          ]) +
+          row([
+            fg('NET terms', sel('wsV2NetTerms', WS_NET_TERMS, a.netTerms || 'NET_30'), true),
+            fg('Default payment', sel('wsV2PaymentMethod', WS_PAYMENT_METHODS, a.paymentMethodDefault || 'check'), true)
+          ]) +
+          row([
+            fg('Credit limit ($)', '<input class="form-input" type="number" min="0" step="1" id="wsV2CreditLimit" value="' + esc(dollars(a.creditLimitCents)) + '" style="width:100%;" placeholder="5000">', true),
+            fg('Opener min ($)', '<input class="form-input" type="number" min="0" step="1" id="wsV2Opener" value="' + esc(dollars(a.minimumOpenerCents)) + '" style="width:100%;" placeholder="500">', true),
+            fg('Reorder min ($)', '<input class="form-input" type="number" min="0" step="1" id="wsV2Reorder" value="' + esc(dollars(a.minimumReorderCents)) + '" style="width:100%;" placeholder="250">', true)
+          ]) +
+          row([
+            fg('Sales rep', '<input class="form-input" id="wsV2Rep" value="' + esc(a.salesRepName || '') + '" style="width:100%;" placeholder="Jane Doe">', true),
+            fg('Territory', '<input class="form-input" id="wsV2Territory" value="' + esc(a.territory || '') + '" style="width:100%;" placeholder="Northeast">', true)
+          ]) +
+          row([
+            fg('Resale cert number', '<input class="form-input" id="wsV2ResaleCert" value="' + esc(a.resaleCertNumber || '') + '" style="width:100%;" placeholder="(optional)">', true),
+            fg('Tax-exempt', '<label style="display:flex;align-items:center;gap:8px;font-size:0.85rem;cursor:pointer;"><input id="wsV2TaxExempt" type="checkbox"' + (a.taxExempt !== false ? ' checked' : '') + '> Tax-exempt</label>', true)
+          ]) +
+          fg('Notes', '<textarea class="form-input" id="wsV2Notes" rows="2" style="width:100%;resize:vertical;">' + esc(a.notes || '') + '</textarea>');
       }
+    },
+    onSave: function (rec, mode) {
+      if (!window.WholesaleBridge) { if (window.showToast) showToast('Wholesale engine still loading — try again', true); return false; }
+      function val(id) { var el = document.getElementById(id); return el ? el.value : ''; }
+      function toCents(id) {
+        var v = (val(id) || '').trim();
+        if (!v) return null;
+        var n = parseFloat(v);
+        return isNaN(n) ? null : Math.round(n * 100);
+      }
+      var name = (val('wsV2Name') || '').trim();
+      if (!name) { if (window.showToast) showToast('Name is required', true); return false; }
+      // Mirror the EXACT shape saveWholesaleAccount() builds.
+      var data = {
+        name: name,
+        accountType: val('wsV2Type'),
+        status: val('wsV2Status'),
+        netTerms: val('wsV2NetTerms'),
+        paymentMethodDefault: val('wsV2PaymentMethod'),
+        creditLimitCents: toCents('wsV2CreditLimit'),
+        minimumOpenerCents: toCents('wsV2Opener'),
+        minimumReorderCents: toCents('wsV2Reorder'),
+        salesRepName: (val('wsV2Rep') || '').trim() || null,
+        territory: (val('wsV2Territory') || '').trim() || null,
+        resaleCertNumber: (val('wsV2ResaleCert') || '').trim() || null,
+        taxExempt: !!(document.getElementById('wsV2TaxExempt') || {}).checked,
+        notes: (val('wsV2Notes') || '').trim() || null
+      };
+      if (mode === 'create') {
+        return Promise.resolve(window.WholesaleBridge.create(data)).then(function () {
+          if (window.showToast) showToast('Account created.'); reloadSoon(); return true;
+        }).catch(function (e) { console.error('[wholesale-v2] create', e); if (window.showToast) showToast('Error saving account.', true); return false; });
+      }
+      var id = rec._key || rec.id;
+      return Promise.resolve(window.WholesaleBridge.update(id, data)).then(function () {
+        // Mutate the LIVE cached record (=== the slide-out's read closure, since
+        // fetch returns V2.byId[id]); the engine passes a copy to onSave. Shows
+        // the edited fields immediately on the post-save read re-render;
+        // reloadSoon() then refreshes the cache for the next open.
+        Object.assign(V2.byId[id] || rec, data);
+        if (window.showToast) showToast('Account updated.'); reloadSoon(); return true;
+      }).catch(function (e) { console.error('[wholesale-v2] update', e); if (window.showToast) showToast('Error updating account.', true); return false; });
     }
-    // No onSave → no Edit button (B2B pricing/terms editing stays on legacy #wholesale).
   });
 
   // ── module state + data ─────────────────────────────────────────────
   var V2 = { rows: [], byId: {}, sortKey: 'name', sortDir: 'asc', q: '', statusFilter: 'all', loaded: false };
 
   function load() {
+    // Ensure the legacy wholesale module is loaded so window.WholesaleBridge
+    // (the delegated write path) exists — mirrors contacts-v2.
+    if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('wholesale'); } catch (e) {} }
     Promise.resolve(MastDB.wholesaleAccounts.list(500)).then(function (snap) {
       var val = (snap && typeof snap.val === 'function') ? snap.val() : snap;
       var out = [];
@@ -145,6 +250,7 @@
       V2.loaded = true; render();
     }).catch(function (e) { console.error('[wholesale-v2] load', e); render(); });
   }
+  function reloadSoon() { V2.loaded = false; setTimeout(load, 250); }   // let the legacy write settle, then refresh
 
   function visibleRows() {
     var rows = V2.rows;
@@ -182,7 +288,8 @@
       U.pageHeader({
         title: 'Wholesale',
         count: N.count(V2.rows.length) + ' account' + (V2.rows.length === 1 ? '' : 's'),
-        actionsHtml: '<button class="btn btn-secondary" onclick="WholesaleV2.exportCsv()">↓ Export</button>'
+        actionsHtml: '<button class="btn btn-primary" onclick="WholesaleV2.create()">+ New account</button>' +
+          '<button class="btn btn-secondary" onclick="WholesaleV2.exportCsv()">↓ Export</button>'
       }) +
       '<div style="display:flex;gap:6px;flex-wrap:wrap;margin:12px 0;">' + filters + '</div>' +
       '<div style="margin:14px 0;"><input class="form-input" placeholder="Search name, territory or rep…" value="' + esc(V2.q) +
@@ -190,7 +297,7 @@
       MastEntity.renderList('wholesale-v2', {
         rows: visibleRows(), sortKey: V2.sortKey, sortDir: V2.sortDir,
         onSortFnName: 'WholesaleV2.sort', onRowClickFnName: 'WholesaleV2.open',
-        empty: { title: 'No wholesale accounts', message: V2.loaded ? 'Add boutiques, galleries or rep agencies in the classic Wholesale view.' : 'Loading…' }
+        empty: { title: 'No wholesale accounts', message: V2.loaded ? 'Add a boutique, gallery or rep agency to get started.' : 'Loading…' }
       });
   }
 
@@ -207,8 +314,16 @@
         if (rec) MastEntity.openRecord('wholesale-v2', rec, 'read');
       });
     },
-    // Storefront-coupled B2B editing → classic Wholesale view. Use
-    // navigateToClassic so the V2 route remap doesn't loop us back to this twin.
+    create: function () {
+      // Ensure the legacy module (and thus window.WholesaleBridge) is loaded
+      // before opening the create form — mirrors ContactsV2.create.
+      if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('wholesale'); } catch (e) {} }
+      MastEntity.openRecord('wholesale-v2', {}, 'create');
+    },
+    // Orders, AR aging, cadence, authorized-user links, access requests, and
+    // dormant tooling are still bespoke on legacy #wholesale (no V2 home).
+    // Account create/edit is native. navigateToClassic so the V2 route remap
+    // doesn't loop us back to this twin.
     classic: function () {
       if (typeof navigateToClassic === 'function') navigateToClassic('wholesale');
       else if (typeof navigateTo === 'function') navigateTo('wholesale');
