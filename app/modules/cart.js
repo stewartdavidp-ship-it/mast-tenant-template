@@ -819,6 +819,157 @@
     }
   };
 
+  // ---- Membership bridge (thin shim for membership-v2.js) ----
+  // Re-hosts the exact CLIENT writes the legacy #membership handlers make
+  // (window._membershipSaveConfig / _membershipGrant / _membershipRevoke /
+  // _membershipReactivate), parameterized by data so the V2 twin can drive them
+  // without reimplementing the write. None of these is Cloud-Function-backed —
+  // each is a plain MastDB write + writeAudit, so all four are delegate-able.
+  // Mirrors window.GiftCardsBridge / window.CsReviewsBridge.
+  window.MembershipBridge = {
+    // Latest program config (read context for the V2 page + edit form). Mirrors
+    // loadMembershipAdmin's `MastDB.get('admin/membership/config')`.
+    getConfig: function() { return Promise.resolve(MastDB.get('admin/membership/config')); },
+
+    // Mirrors _membershipSaveConfig EXACTLY: builds the same config record (same
+    // field set, same `enabled && price <= 0` guard, same 0–100 percentage guard,
+    // same updatedAt), then MastDB.update('admin/membership/config', data) +
+    // writeAudit('update','membership-config','settings'). data: {
+    //   enabled, programName, annualPrice, productDiscountPct, serviceDiscountPct,
+    //   classSeatDiscountPct, classMaterialsDiscountPct, freeShippingThreshold,
+    //   loyaltyPointMultiplier, priorityEnrollmentDays, earlyProductAccessHours,
+    //   allowPromoStack }. Returns the persisted config object.
+    saveConfig: async function(d) {
+      d = d || {};
+      var enabled = !!d.enabled;
+      var name = (d.programName || '').trim() || 'Membership';
+      var price = parseFloat(d.annualPrice) || 0;
+      var prodPct = d.productDiscountPct != null && d.productDiscountPct !== '' ? parseFloat(d.productDiscountPct) : null;
+      var svcPct = d.serviceDiscountPct != null && d.serviceDiscountPct !== '' ? parseFloat(d.serviceDiscountPct) : null;
+      var classPct = d.classSeatDiscountPct != null && d.classSeatDiscountPct !== '' ? parseFloat(d.classSeatDiscountPct) : null;
+      var matPct = d.classMaterialsDiscountPct != null && d.classMaterialsDiscountPct !== '' ? parseFloat(d.classMaterialsDiscountPct) : null;
+      var shipThresh = d.freeShippingThreshold;
+      var loyaltyMult = d.loyaltyPointMultiplier != null && d.loyaltyPointMultiplier !== '' ? parseFloat(d.loyaltyPointMultiplier) : null;
+      var priorityDays = d.priorityEnrollmentDays != null && d.priorityEnrollmentDays !== '' ? parseInt(d.priorityEnrollmentDays, 10) : null;
+      var earlyHrs = d.earlyProductAccessHours != null && d.earlyProductAccessHours !== '' ? parseInt(d.earlyProductAccessHours, 10) : null;
+      var promoStack = !!d.allowPromoStack;
+
+      if (enabled && price <= 0) { showToast('Annual price must be greater than $0 when enabled.', true); return null; }
+      var bad = [prodPct, svcPct, classPct, matPct].some(function(v) { return v !== null && (v < 0 || v > 100); });
+      if (bad) { showToast('Discount percentages must be between 0 and 100.', true); return null; }
+
+      var data = {
+        enabled: enabled,
+        programName: name,
+        annualPrice: price,
+        productDiscountPct: prodPct,
+        serviceDiscountPct: svcPct,
+        classSeatDiscountPct: classPct,
+        classMaterialsDiscountPct: matPct,
+        freeShippingThreshold: (shipThresh !== '' && shipThresh != null) ? parseFloat(shipThresh) : null,
+        loyaltyPointMultiplier: loyaltyMult,
+        priorityEnrollmentDays: priorityDays,
+        earlyProductAccessHours: earlyHrs,
+        allowPromoStack: promoStack,
+        updatedAt: new Date().toISOString()
+      };
+      var tenantId = MastDB.tenantId();
+      if (!db || !tenantId) { showToast('Not connected.', true); return null; }
+      try {
+        await MastDB.update('admin/membership/config', data);
+        writeAudit('update', 'membership-config', 'settings');
+        membershipConfig = Object.assign(membershipConfig || {}, data);
+        showToast('Membership settings saved');
+        return data;
+      } catch (err) {
+        showToast('Failed to save: ' + err.message, true);
+        return null;
+      }
+    },
+
+    // Mirrors _membershipGrant EXACTLY: same memberData shape (status active,
+    // startDate today, 1-year renewal/expiry, processor manual, plan manual-grant),
+    // both client writes (public wallet mirror + customers/<uid>/membership) +
+    // writeAudit('create','membership-grant',uid). uid: customer UID string.
+    grant: async function(uid) {
+      uid = (uid || '').trim();
+      if (!uid) { showToast('UID is required.', true); return false; }
+      var tenantId = MastDB.tenantId();
+      if (!db || !tenantId) { showToast('Not connected.', true); return false; }
+      var now = new Date().toISOString();
+      var oneYear = new Date(Date.now() + 365 * 86400000).toISOString().slice(0, 10);
+      var memberData = {
+        status: 'active',
+        startDate: now.slice(0, 10),
+        renewalDate: oneYear,
+        expiryDate: oneYear,
+        processor: 'manual',
+        processorSubscriptionId: null,
+        processorCustomerId: null,
+        plan: 'manual-grant',
+        paymentStatus: null,
+        updatedAt: now
+      };
+      try {
+        await MastDB.set('public/accounts/' + uid + '/wallet/membership', memberData);
+        await MastDB.set('customers/' + uid + '/membership', memberData);
+        writeAudit('create', 'membership-grant', uid);
+        showToast('Membership granted');
+        return true;
+      } catch (err) { showToast('Failed: ' + err.message, true); return false; }
+    },
+
+    // Mirrors _membershipRevoke EXACTLY: same update set (status expired,
+    // expiredAt, paymentStatus null), both client writes + writeAudit. NOTE: the
+    // mastConfirm prompt is the V2 caller's responsibility (mirrors cs-reviews-v2,
+    // where the bridge is write-only and the twin owns the confirm UX).
+    revoke: async function(uid) {
+      uid = (uid || '').trim();
+      if (!uid) return false;
+      var tenantId = MastDB.tenantId();
+      if (!db || !tenantId) { showToast('Not connected.', true); return false; }
+      var now = new Date().toISOString();
+      var updates = { status: 'expired', expiredAt: now, updatedAt: now, paymentStatus: null };
+      try {
+        await MastDB.update('public/accounts/' + uid + '/wallet/membership', updates);
+        await MastDB.update('customers/' + uid + '/membership', updates);
+        writeAudit('update', 'membership-revoke', uid);
+        showToast('Membership revoked');
+        return true;
+      } catch (err) { showToast('Failed: ' + err.message, true); return false; }
+    },
+
+    // Mirrors _membershipReactivate EXACTLY: same update set (status active, fresh
+    // start/renewal/expiry, cancelledAt/expiredAt cleared), both client writes +
+    // writeAudit.
+    reactivate: async function(uid) {
+      uid = (uid || '').trim();
+      if (!uid) return false;
+      var tenantId = MastDB.tenantId();
+      if (!db || !tenantId) { showToast('Not connected.', true); return false; }
+      var now = new Date().toISOString();
+      var oneYear = new Date(Date.now() + 365 * 86400000).toISOString().slice(0, 10);
+      var updates = {
+        status: 'active',
+        startDate: now.slice(0, 10),
+        renewalDate: oneYear,
+        expiryDate: oneYear,
+        processor: 'manual',
+        paymentStatus: null,
+        cancelledAt: null,
+        expiredAt: null,
+        updatedAt: now
+      };
+      try {
+        await MastDB.update('public/accounts/' + uid + '/wallet/membership', updates);
+        await MastDB.update('customers/' + uid + '/membership', updates);
+        writeAudit('update', 'membership-reactivate', uid);
+        showToast('Membership reactivated');
+        return true;
+      } catch (err) { showToast('Failed: ' + err.message, true); return false; }
+    }
+  };
+
   // ---- Gift Card Detail Modal ----
 
   window._gcViewDetail = function(code) {
@@ -1309,61 +1460,26 @@
   };
 
   window._membershipSaveConfig = async function() {
-    var enabled = document.getElementById('msConfigEnabled').checked;
-    var name = (document.getElementById('msConfigName').value || '').trim() || 'Membership';
-    var price = parseFloat(document.getElementById('msConfigPrice').value) || 0;
-    var prodPct = parseFloat(document.getElementById('msConfigProdPct').value) || null;
-    var svcPct = parseFloat(document.getElementById('msConfigSvcPct').value) || null;
-    var classPct = parseFloat(document.getElementById('msConfigClassPct').value) || null;
-    var matPct = parseFloat(document.getElementById('msConfigMatPct').value) || null;
+    // Single-sourced through MembershipBridge.saveConfig (same write + audit);
+    // this handler just collects the modal DOM, then closes + reloads on success.
     var shipThresh = document.getElementById('msConfigShipThresh').value;
-    var loyaltyMult = parseFloat(document.getElementById('msConfigLoyaltyMult').value) || null;
-    var priorityDays = parseInt(document.getElementById('msConfigPriorityDays').value) || null;
-    var earlyHrs = parseInt(document.getElementById('msConfigEarlyHrs').value) || null;
-    var promoStack = document.getElementById('msConfigPromoStack').checked;
-
-    if (enabled && price <= 0) {
-      showToast('Annual price must be greater than $0 when enabled.', true);
-      return;
-    }
-
-    // Validate percentages 0-100
-    [prodPct, svcPct, classPct, matPct].forEach(function(v) {
-      if (v !== null && (v < 0 || v > 100)) {
-        showToast('Discount percentages must be between 0 and 100.', true);
-        return;
-      }
+    var saved = await window.MembershipBridge.saveConfig({
+      enabled: document.getElementById('msConfigEnabled').checked,
+      programName: document.getElementById('msConfigName').value,
+      annualPrice: document.getElementById('msConfigPrice').value,
+      productDiscountPct: document.getElementById('msConfigProdPct').value,
+      serviceDiscountPct: document.getElementById('msConfigSvcPct').value,
+      classSeatDiscountPct: document.getElementById('msConfigClassPct').value,
+      classMaterialsDiscountPct: document.getElementById('msConfigMatPct').value,
+      freeShippingThreshold: shipThresh,
+      loyaltyPointMultiplier: document.getElementById('msConfigLoyaltyMult').value,
+      priorityEnrollmentDays: document.getElementById('msConfigPriorityDays').value,
+      earlyProductAccessHours: document.getElementById('msConfigEarlyHrs').value,
+      allowPromoStack: document.getElementById('msConfigPromoStack').checked
     });
-
-    var data = {
-      enabled: enabled,
-      programName: name,
-      annualPrice: price,
-      productDiscountPct: prodPct,
-      serviceDiscountPct: svcPct,
-      classSeatDiscountPct: classPct,
-      classMaterialsDiscountPct: matPct,
-      freeShippingThreshold: shipThresh !== '' ? parseFloat(shipThresh) : null,
-      loyaltyPointMultiplier: loyaltyMult,
-      priorityEnrollmentDays: priorityDays,
-      earlyProductAccessHours: earlyHrs,
-      allowPromoStack: promoStack,
-      updatedAt: new Date().toISOString()
-    };
-
-    var tenantId = MastDB.tenantId();
-    if (!db || !tenantId) return;
-    if (!db || !tenantId) return;
-
-    try {
-      await MastDB.update('admin/membership/config', data);
-      writeAudit('update', 'membership-config', 'settings');
-      membershipConfig = Object.assign(membershipConfig || {}, data);
+    if (saved) {
       closeModal();
-      showToast('Membership settings saved');
       loadMembershipAdmin();
-    } catch (err) {
-      showToast('Failed to save: ' + err.message, true);
     }
   };
 
@@ -1386,89 +1502,23 @@
   };
 
   window._membershipGrant = async function() {
+    // Single-sourced through MembershipBridge.grant (same writes + audit).
     var uid = (document.getElementById('msGrantUid').value || '').trim();
-    if (!uid) { showToast('UID is required.', true); return; }
-
-    var tenantId = MastDB.tenantId();
-    if (!db || !tenantId) return;
-    if (!db || !tenantId) return;
-
-    var now = new Date().toISOString();
-    var oneYear = new Date(Date.now() + 365 * 86400000).toISOString().slice(0, 10);
-    var memberData = {
-      status: 'active',
-      startDate: now.slice(0, 10),
-      renewalDate: oneYear,
-      expiryDate: oneYear,
-      processor: 'manual',
-      processorSubscriptionId: null,
-      processorCustomerId: null,
-      plan: 'manual-grant',
-      paymentStatus: null,
-      updatedAt: now
-    };
-
-    try {
-      await MastDB.set('public/accounts/' + uid + '/wallet/membership', memberData);
-      await MastDB.set('customers/' + uid + '/membership', memberData);
-      writeAudit('create', 'membership-grant', uid);
+    if (await window.MembershipBridge.grant(uid)) {
       closeModal();
-      showToast('Membership granted');
       loadMembershipAdmin();
-    } catch (err) {
-      showToast('Failed: ' + err.message, true);
     }
   };
 
   window._membershipRevoke = async function(uid) {
     if (!await mastConfirm('Revoke this membership? The customer will lose all benefits immediately.', { title: 'Revoke Membership', danger: true })) return;
-
-    var tenantId = MastDB.tenantId();
-    if (!db || !tenantId) return;
-    if (!db || !tenantId) return;
-
-    var now = new Date().toISOString();
-    var updates = { status: 'expired', expiredAt: now, updatedAt: now, paymentStatus: null };
-
-    try {
-      await MastDB.update('public/accounts/' + uid + '/wallet/membership', updates);
-      await MastDB.update('customers/' + uid + '/membership', updates);
-      writeAudit('update', 'membership-revoke', uid);
-      showToast('Membership revoked');
-      loadMembershipAdmin();
-    } catch (err) {
-      showToast('Failed: ' + err.message, true);
-    }
+    // Single-sourced through MembershipBridge.revoke (same writes + audit).
+    if (await window.MembershipBridge.revoke(uid)) loadMembershipAdmin();
   };
 
   window._membershipReactivate = async function(uid) {
-    var tenantId = MastDB.tenantId();
-    if (!db || !tenantId) return;
-    if (!db || !tenantId) return;
-
-    var now = new Date().toISOString();
-    var oneYear = new Date(Date.now() + 365 * 86400000).toISOString().slice(0, 10);
-    var updates = {
-      status: 'active',
-      startDate: now.slice(0, 10),
-      renewalDate: oneYear,
-      expiryDate: oneYear,
-      processor: 'manual',
-      paymentStatus: null,
-      cancelledAt: null,
-      expiredAt: null,
-      updatedAt: now
-    };
-
-    try {
-      await MastDB.update('public/accounts/' + uid + '/wallet/membership', updates);
-      await MastDB.update('customers/' + uid + '/membership', updates);
-      writeAudit('update', 'membership-reactivate', uid);
-      showToast('Membership reactivated');
-      loadMembershipAdmin();
-    } catch (err) {
-      showToast('Failed: ' + err.message, true);
-    }
+    // Single-sourced through MembershipBridge.reactivate (same writes + audit).
+    if (await window.MembershipBridge.reactivate(uid)) loadMembershipAdmin();
   };
 
   // ============================================================
