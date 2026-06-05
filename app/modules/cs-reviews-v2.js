@@ -286,7 +286,9 @@
     if (V2.busy) return Promise.resolve();
     var bridge = window.CsReviewsBridge;
     if (!bridge || typeof bridge[action] !== 'function') {
-      if (window.showToast) showToast('Moderation unavailable', true);
+      // Bridge lives in the legacy customer-service module; kick a load + ask to retry.
+      if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('customer-service'); } catch (e) {} }
+      if (window.showToast) showToast('Moderation still loading — try again', true);
       return Promise.resolve();
     }
     V2.busy = true;
@@ -350,6 +352,11 @@
   };
 
   MastAdmin.registerModule('cs-reviews-v2', {
-    routes: { 'cs-reviews-v2': { tab: 'csReviewsV2Tab', setup: function () { ensureTab(); render(); load(); } } }
+    routes: { 'cs-reviews-v2': { tab: 'csReviewsV2Tab', setup: function () {
+      // Ensure the legacy customer-service module is loaded so window.CsReviewsBridge
+      // (the moderation write shim) exists before the operator acts.
+      if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('customer-service'); } catch (e) {} }
+      ensureTab(); render(); load();
+    } } }
   });
 })();
