@@ -59,42 +59,25 @@
     return (Array.isArray(p.variants) ? p.variants : []).map(function (v, i) { return Object.assign({ id: v.id || ('v' + i) }, v); });
   }
 
-  // ── Process (read) — stepper + stage readiness (P1) ─────────────────
-  function phaseOf(p) {
-    var s = String(p.status || 'draft').toLowerCase();
-    return (s === 'archived' || s === 'active' || s === 'ready') ? s : 'draft';
+  // ── Maker integration ───────────────────────────────────────────────
+  // The engine MastFlow process model (detail.flow) needs maker loaded:
+  // products.workflow's readiness predicates call window.makerComputeReadinessChecklist,
+  // and Advance routes to the side-effect-bearing window.makerPromoteToReady /
+  // makerLaunchToActive. Lazy-loaded before a product SO opens so the MastFlow
+  // header renders with live readiness + the real handlers are available.
+  function ensureMaker(cb) {
+    if (window.makerComputeReadinessChecklist && window.makerPromoteToReady) return cb();
+    if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') MastAdmin.loadModule('maker').then(cb).catch(cb);
+    else cb();
   }
-  function readStepper(p) {
-    var s = phaseOf(p);
-    if (s === 'archived') return '<div class="pv2-archived">Archived</div>';
-    var order = { draft: 0, ready: 1, active: 2 };
-    var cur = order[s] != null ? order[s] : 0;
-    var phases = ['Draft', 'Review', 'Published'];
-    var html = '<div class="pv2-step">';
-    phases.forEach(function (lbl, i) {
-      var st = i < cur ? 'done' : (i === cur ? 'cur' : 'todo');
-      html += '<span style="display:inline-flex;align-items:center;"><span class="nd ' + st + '">' + (st === 'done' ? '✓' : (i + 1)) + '</span><span class="lb" style="' + (st === 'todo' ? 'color:var(--warm-gray);' : 'color:var(--text);') + (st === 'cur' ? 'font-weight:600;' : '') + '">' + lbl + '</span></span>';
-      if (i < phases.length - 1) html += '<span class="ln ' + (i < cur ? 'done' : '') + '"></span>';
+  // After a real advance, re-open the v2 SO from fresh data (the legacy handlers
+  // re-render legacy views, not ours) so the stepper/badge reflect the new phase.
+  function reopenProduct(pid) {
+    Promise.resolve(MastDB.products.get(pid)).then(function (p) {
+      if (!p) return;
+      var rec = stamp(Object.assign({}, p), pid); V2.byId[pid] = rec;
+      MastEntity.openRecord('products-v2', rec, 'read');
     });
-    return html + '</div>';
-  }
-  function processPane(p) {
-    var s = phaseOf(p), r = p.readinessChecklist || {};
-    var nextLabel = s === 'draft' ? 'Review' : (s === 'ready' ? 'Published' : null);
-    function todo(key, label, optional) {
-      var met = !!r[key];
-      return '<div class="pv2-todo"><span class="pv2-mk ' + (met ? 'met' : 'unmet') + '">' + (met ? '✓' : '!') + '</span>' +
-        '<span style="color:' + (met ? 'var(--warm-gray)' : 'var(--text)') + ';">' + esc(label) + (optional ? ' <span class="pv2-opt">optional</span>' : '') + '</span></div>';
-    }
-    var hard = [['defined', 'Defined (recipe / components / supplier)'], ['costed', 'Costed & priced'], ['listingReady', 'Listing ready (name + image + description)']];
-    var soft = [['channeled', 'Channel mapping'], ['capacityPlanned', 'Capacity planned']];
-    var items = hard.map(function (h) { return todo(h[0], h[1], false); }).join('') + soft.map(function (h) { return todo(h[0], h[1], true); }).join('');
-    var hardMet = hard.every(function (h) { return r[h[0]]; });
-    var advance = nextLabel
-      ? '<div style="display:flex;justify-content:flex-end;margin-top:12px;"><button class="btn btn-primary btn-small"' + (hardMet ? '' : ' disabled') + ' onclick="ProductsV2.promoteTodo(\'' + esc(p._key) + '\')">Send to ' + nextLabel + ' →</button></div>'
-      : (s === 'active' ? '<div style="font-size:0.85rem;color:var(--teal);margin-top:10px;">Published — live on your channels.</div>' : '');
-    var intro = '<div style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:8px;">Stage <b style="color:var(--text);">' + esc(statusLabel(p.status)) + '</b>' + (nextLabel ? ' — to advance to ' + nextLabel + ', complete the required items:' : '') + '</div>';
-    return U.card('Process', intro + items + advance);
   }
   function pricingPane(p) {
     var rows = [{ k: 'Retail price', v: N.money(price(p)) || '—' }];
@@ -162,8 +145,41 @@
       { name: 'price', label: 'Price', type: 'money', list: true, group: 'Money', readOnly: true, align: 'right', get: price }
     ],
     fetch: function (id) { return Promise.resolve(MastDB.products.get(id)).then(function (p) { return p ? stamp(Object.assign({}, p), id) : null; }); },
-    // Default/product SO: process header (read stepper + stage readiness) + the tab flow.
+    // Default/product SO: the ENGINE MastFlow process model. detail.flow makes the
+    // engine render the real process header (stepper + readiness checklist + guarded
+    // Advance) into #muFlowHost — the process is the pinned STRUCTURE, not a tab
+    // (matches the ratified mock + the orders/commissions engine standard).
     detail: {
+      flow: 'products',
+      flowModule: 'productsWorkflow',
+      // Advance runs the REAL promote/launch (gates + confirm + Shopify publish on
+      // launch), not the engine's generic status transition — via the additive
+      // onFlowAdvance hook. Mirrors maker.js's own onAdvance interception.
+      onFlowAdvance: function (target, rec) {
+        var pid = rec._key || rec.id || rec.pid;
+        var fn = target === 'active' ? 'makerLaunchToActive' : (target === 'ready' ? 'makerPromoteToReady' : null);
+        if (!fn) return false; // back/branch → generic transition
+        ensureMaker(function () {
+          if (!window[fn]) { MastAdmin.showToast('Maker not available'); return; }
+          Promise.resolve(window.loadProducts ? window.loadProducts() : null).then(function () {
+            Promise.resolve(window[fn](pid)).then(function () { reopenProduct(pid); }, function () { reopenProduct(pid); });
+          });
+        });
+        return true; // handled
+      },
+      // Checklist "Go →" targets → the capture (recipe / costing / listing / channels)
+      // deep-links to the legacy define view (temp; native surfaces land per phase).
+      onFlowTarget: function (targetId, rec) {
+        var pid = rec._key || rec.id || rec.pid;
+        ensureMaker(function () {
+          if (typeof navigateToClassic === 'function') navigateToClassic('products');
+          setTimeout(function () {
+            if (window.makerOpenDefineForProduct) window.makerOpenDefineForProduct(pid);
+            if (window.makerScrollToReadinessSection) setTimeout(function () { window.makerScrollToReadinessSection(targetId); }, 220);
+          }, 160);
+        });
+        return true;
+      },
       render: function (UU, p) {
         var tiles = UU.tiles([
           { k: 'Status', v: statusLabel(p.status), hero: true },
@@ -172,13 +188,15 @@
           { k: 'On hand', v: ((p.stockInfo && p.stockInfo.totalOnHand) != null ? String(p.stockInfo.totalOnHand) : '—') }
         ]);
         var tabs = [
-          { key: 'process', label: 'Process' }, { key: 'pricing', label: 'Pricing' }, { key: 'recipe', label: 'Recipe' },
-          { key: 'inventory', label: 'Inventory' }, { key: 'channels', label: 'Channels' }, { key: 'image', label: 'Image' }, { key: 'info', label: 'Info' }
+          { key: 'pricing', label: 'Pricing' }, { key: 'recipe', label: 'Recipe' }, { key: 'inventory', label: 'Inventory' },
+          { key: 'channels', label: 'Channels' }, { key: 'image', label: 'Image' }, { key: 'info', label: 'Info' }
         ];
         function pane(key, html, active) { return '<div class="mu-pane" data-pane="' + key + '"' + (active ? '' : ' hidden') + '>' + html + '</div>'; }
-        return UU.stickyHead(tiles + readStepper(p), UU.paneTabsBar(tabs, 'process')) +
-          pane('process', processPane(p), true) +
-          pane('pricing', pricingPane(p)) +
+        // #muFlowHost: the engine injects the MastFlow process header here (the structure).
+        return UU.stickyHead(tiles, '') +
+          '<div id="muFlowHost" class="pv2-flowhost">Loading workflow…</div>' +
+          UU.paneTabsBar(tabs, 'pricing') +
+          pane('pricing', pricingPane(p), true) +
           pane('recipe', recipePane(p)) +
           pane('inventory', inventoryPane(p)) +
           pane('channels', channelsPane(p)) +
@@ -343,7 +361,8 @@
       '.pv2-inh{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--border);font-size:0.9rem;} .pv2-inh:last-child{border-bottom:0;}',
       '.pv2-inh .il{color:var(--warm-gray);width:120px;flex-shrink:0;} .pv2-inh .iv{color:var(--text);} .pv2-inh .from{color:var(--warm-gray);font-size:0.78rem;} .pv2-inh .ov{margin-left:auto;}',
       '.pv2-archived{display:inline-block;font-size:0.72rem;text-transform:uppercase;letter-spacing:.04em;background:color-mix(in srgb,var(--warm-gray) 18%,transparent);color:var(--warm-gray);padding:4px 11px;border-radius:8px;margin:8px 0;}',
-      '.pv2-bom{width:100%;border-collapse:collapse;} .pv2-bom th{text-align:left;font-size:0.72rem;color:var(--warm-gray);padding:0 0 8px;font-weight:600;} .pv2-bom th.r,.pv2-bom td.r{text-align:right;font-variant-numeric:tabular-nums;} .pv2-bom td{padding:7px 0;font-size:0.85rem;border-top:1px solid var(--border);}'
+      '.pv2-bom{width:100%;border-collapse:collapse;} .pv2-bom th{text-align:left;font-size:0.72rem;color:var(--warm-gray);padding:0 0 8px;font-weight:600;} .pv2-bom th.r,.pv2-bom td.r{text-align:right;font-variant-numeric:tabular-nums;} .pv2-bom td{padding:7px 0;font-size:0.85rem;border-top:1px solid var(--border);}',
+      '.pv2-flowhost{margin:6px 0 16px;}'
     ].join('');
     document.head.appendChild(s);
   }
@@ -405,19 +424,12 @@
   window.ProductsV2 = {
     setFilter: function (s) { V2.filter = s; render(); },
     toggle: function (id) { V2.expanded[id] = !V2.expanded[id]; render(); },
-    open: function (id) { var rec = V2.byId[id]; if (rec) MastEntity.openRecord('products-v2', rec, 'read'); },
+    // Preload maker before the SO opens so the MastFlow process header renders with
+    // live readiness (products.workflow predicates call makerComputeReadinessChecklist).
+    open: function (id) { var rec = V2.byId[id]; if (rec) ensureMaker(function () { MastEntity.openRecord('products-v2', rec, 'read'); }); },
     openVariant: function (key) { var rec = buildVariantRecord(key); if (rec) MastEntity.openRecord('product-variant-v2', rec, 'read'); },
     addVariant: function (id) { var p = V2.byId[id]; MastAdmin.showToast('Add variant for "' + (p ? p.name : id) + '" — write flow (inherits the Default) lands in P4.'); },
-    editVariantTodo: function () { MastAdmin.showToast('Per-variant override editing lands in P2/P3.'); },
-    promoteTodo: function () { MastAdmin.showToast('Advance runs the real MastFlow promote/launch (incl. Shopify publish) — wired in P3.'); },
-    // Temp deep-link to the legacy recipe builder (debt: becomes a native stacked recipe SO in P3).
-    openRecipe: function (rid) {
-      function go() {
-        if (typeof navigateToClassic === 'function') navigateToClassic('products');
-        setTimeout(function () { if (window.makerOpenRecipeBuilder) window.makerOpenRecipeBuilder(rid); }, 160);
-      }
-      if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') MastAdmin.loadModule('maker').then(go).catch(go); else go();
-    },
+    editVariantTodo: function () { MastAdmin.showToast('Per-variant override editing lands in P4.'); },
     exportCsv: function () { return MastEntity.exportRows('products-v2', visibleRows(), V2.filter); }
   };
 
