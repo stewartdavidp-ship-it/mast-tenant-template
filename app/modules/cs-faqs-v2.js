@@ -24,10 +24,20 @@
  * name), answer (= answer || contentHtml), slug, storefrontEnabled, createdAt,
  * updatedAt. There is no category and no sort-order field in the real data.
  *
- * Read-focused: editing an FAQ (question/answer/slug/storefront toggle, create,
- * delete) stays single-sourced on legacy #cs-faqs via a "manage in classic
- * view" link — no onSave, no edit form here. Flag-gated (?ui=1) at #cs-faqs-v2,
- * side-by-side; never touches customer-service.js.
+ * NATIVE create + edit: question / answer / slug / storefront-visibility are
+ * authored here on an Entity-Engine edit form. onSave DELEGATES to
+ * window.CsFaqsBridge (exposed in customer-service.js) so the cs_policies write,
+ * the kind='faq' partition tag, and slug autogen stay single-sourced — the twin
+ * never reimplements that logic (mirrors the contacts-v2 / ContactsBridge and
+ * students-v2 / StudentsBridge precedent). The kind='faq' tag is preserved
+ * exactly so created/edited rows stay FAQs and don't pollute the shared
+ * cs_policies set (the Sales -> Policies route owns kind='policy').
+ *
+ * Authoring that has NO V2 home — the storefront publish/hide toggle and delete
+ * — stays single-sourced on legacy #cs-faqs via a "Manage in classic view"
+ * link (storefrontEnabled IS settable from the create/edit form here; the
+ * one-click toggle + delete are not yet re-hosted). Flag-gated (?ui=1) at
+ * #cs-faqs-v2, side-by-side.
  */
 (function () {
   'use strict';
@@ -122,22 +132,74 @@
         // Authoring (edit / publish-toggle / delete / create) stays on legacy
         // #cs-faqs. navigateToClassic bypasses the V2 route remap so it reaches
         // legacy even with Legacy UI off (else the remap loops back here).
-        var manage = '<div style="margin-top:14px;"><button class="btn btn-secondary" onclick="CsFaqsV2.classic()">Manage in classic view →</button></div>';
+        // Publish/hide toggle + delete have no V2 home yet — keep them on
+        // legacy #cs-faqs. (Editing the FAQ, incl. the storefront checkbox, is
+        // native via the Edit button.)
+        var manage = '<div style="margin-top:14px;"><button class="btn btn-secondary" onclick="CsFaqsV2.classic()">Publish / delete in classic view →</button></div>';
 
         return tiles + tabsBar +
           '<div class="mu-pane" data-pane="ov">' +
             UI.card('Question & answer', question + answer) +
             UI.card('Details', meta + manage) +
           '</div>';
+      },
+      // Native edit form (mirrors legacy renderPolicyForm fields: question,
+      // slug, answer, storefront checkbox). Engine-rendered chrome only.
+      // Signature is (record, mode) — the engine calls editRender(record, mode).
+      editRender: function (p, mode) {
+        p = p || {};
+        function fg(label, inner) { return '<div class="form-group"><label class="form-label">' + label + '</label>' + inner + '</div>'; }
+        var qVal = mode === 'create' ? '' : esc(questionOf(p) === '(untitled FAQ)' ? '' : questionOf(p));
+        var aVal = mode === 'create' ? '' : esc(answerHtmlOf(p));
+        var slugVal = mode === 'create' ? '' : esc(p.slug || '');
+        var sfChecked = (mode === 'create' ? false : !!p.storefrontEnabled) ? ' checked' : '';
+        return '<div class="mu-editbar"><span class="mu-editpill">' + (mode === 'create' ? 'NEW' : 'EDITING') + '</span>' + (mode === 'create' ? 'New FAQ' : 'Edit this FAQ') + '</div>' +
+          fg('Question *', '<input class="form-input" id="faqV2Q" value="' + qVal + '" style="width:100%;" placeholder="e.g. Do you accept returns on custom commissions?">') +
+          fg('Slug', '<input class="form-input" id="faqV2Slug" value="' + slugVal + '" style="width:100%;" placeholder="returns-on-commissions (auto from question if blank)">') +
+          fg('Answer', '<textarea class="form-input" id="faqV2A" rows="6" style="width:100%;resize:vertical;" placeholder="Your answer.">' + aVal + '</textarea>') +
+          '<div class="form-group" style="display:flex;align-items:center;gap:8px;"><input type="checkbox" id="faqV2Sf"' + sfChecked + '><label for="faqV2Sf" class="form-label" style="margin:0;cursor:pointer;">Show on storefront</label></div>';
       }
+    },
+    onSave: function (rec, mode) {
+      if (!window.CsFaqsBridge) { if (window.showToast) showToast('FAQs engine still loading — try again', true); return false; }
+      var data = {
+        question: ((document.getElementById('faqV2Q') || {}).value || ''),
+        slug: ((document.getElementById('faqV2Slug') || {}).value || '').trim(),
+        answer: (document.getElementById('faqV2A') || {}).value || '',
+        storefrontEnabled: !!((document.getElementById('faqV2Sf') || {}).checked)
+      };
+      // Mirror legacy savePolicy validation: question is required.
+      if (!data.question.trim()) { if (window.showToast) showToast('Question is required', true); return false; }
+
+      if (mode === 'create') {
+        return Promise.resolve(window.CsFaqsBridge.create(data)).then(function () {
+          if (window.showToast) showToast('FAQ created'); reloadSoon(); return true;
+        }).catch(function (e) { console.error('[cs-faqs-v2] create', e); if (window.showToast) showToast('Failed to create FAQ', true); return false; });
+      }
+      var id = rec._key || rec.id;
+      return Promise.resolve(window.CsFaqsBridge.update(id, data)).then(function () {
+        // Mutate the LIVE cached record (=== the slide-out read closure, since
+        // fetch returns V2.byId[id]); the engine passes a copy to onSave. Shows
+        // the edit on the post-save read re-render; reloadSoon() then refreshes
+        // the cache (canonical question/answer/slug + storefront state).
+        var live = V2.byId[id] || rec;
+        var q = data.question.trim();
+        live.question = q; live.name = q;
+        live.answer = data.answer; live.contentHtml = data.answer;
+        live.slug = data.slug || q.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+        live.storefrontEnabled = data.storefrontEnabled;
+        if (window.showToast) showToast('FAQ updated'); reloadSoon(); return true;
+      }).catch(function (e) { console.error('[cs-faqs-v2] update', e); if (window.showToast) showToast('Failed to update FAQ', true); return false; });
     }
-    // No onSave -> no Edit button (FAQ authoring stays on legacy #cs-faqs).
   });
 
   // ── module state + data ─────────────────────────────────────────────
   var V2 = { rows: [], byId: {}, sortKey: 'question', sortDir: 'asc', q: '', statusFilter: 'all', loaded: false };
 
   function load() {
+    // Ensure the legacy customer-service module is loaded so window.CsFaqsBridge
+    // (the delegated write path) exists — mirrors contacts-v2 / students-v2.
+    if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('customer-service'); } catch (e) {} }
     // Bounded read (mirrors legacy loadPolicies: cs_policies limitToLast(50)).
     Promise.resolve(MastDB.query('cs_policies').limitToLast(50).once()).then(function (val) {
       var out = [];
@@ -155,6 +217,7 @@
       V2.loaded = true; render();
     }).catch(function (e) { console.error('[cs-faqs-v2] load', e); render(); });
   }
+  function reloadSoon() { V2.loaded = false; setTimeout(load, 250); }   // let the legacy write settle, then refresh
 
   function visibleRows() {
     var rows = V2.rows;
@@ -197,7 +260,7 @@
         title: 'FAQs',
         count: N.count(liveCount) + ' live · ' + N.count(V2.rows.length) + ' total',
         actionsHtml:
-          '<button class="btn btn-secondary" onclick="CsFaqsV2.classic()">+ New FAQ</button>' +
+          '<button class="btn btn-primary" onclick="CsFaqsV2.create()">+ New FAQ</button>' +
           '<button class="btn btn-secondary" onclick="CsFaqsV2.exportCsv()">↓ Export</button>'
       }) +
       '<div style="display:flex;gap:6px;flex-wrap:wrap;margin:12px 0;">' + filters + '</div>' +
@@ -206,7 +269,7 @@
       MastEntity.renderList('cs-faqs-v2', {
         rows: visibleRows(), sortKey: V2.sortKey, sortDir: V2.sortDir,
         onSortFnName: 'CsFaqsV2.sort', onRowClickFnName: 'CsFaqsV2.open',
-        empty: { title: 'No FAQs', message: V2.loaded ? 'Add common questions and answers in the classic FAQs view.' : 'Loading…' }
+        empty: { title: 'No FAQs', message: V2.loaded ? 'Click “+ New FAQ” to add a question and answer.' : 'Loading…' }
       });
   }
 
@@ -223,7 +286,14 @@
         if (rec) MastEntity.openRecord('cs-faqs-v2', rec, 'read');
       });
     },
-    // FAQ authoring (create/edit/delete/publish) -> classic FAQs view. Use
+    create: function () {
+      // Ensure the legacy module (and thus window.CsFaqsBridge) is loaded
+      // before opening the create form — mirrors ContactsV2.create.
+      if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('customer-service'); } catch (e) {} }
+      MastEntity.openRecord('cs-faqs-v2', {}, 'create');
+    },
+    // Storefront publish/hide toggle + delete have no V2 home yet -> classic
+    // FAQs view. (Create/edit, incl. the storefront checkbox, are native here.)
     // navigateToClassic so the V2 route remap doesn't loop us back to this twin.
     classic: function () {
       if (typeof navigateToClassic === 'function') navigateToClassic('cs-faqs');
