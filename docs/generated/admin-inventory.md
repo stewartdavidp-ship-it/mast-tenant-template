@@ -6,7 +6,7 @@ Source-of-truth counts for the admin app, generated from the code so docs
 cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 
 - **Core shell:** `app/index.html` — **58,639** lines
-- **Feature modules:** **94** files in `app/modules/` (**87** routed), **105,669** lines combined
+- **Feature modules:** **94** files in `app/modules/` (**87** routed), **106,267** lines combined
 
 | Module file | Lines | Routes |
 |---|---:|---|
@@ -17,7 +17,7 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/audit.js` | 1,717 | audit |
 | `modules/blog-v2.js` | 329 | blog-v2 |
 | `modules/blog.js` | 2,333 | blog |
-| `modules/book.js` | 5,957 | book, book-detail, enrollments, instructors, instructor-detail, resources, resource-detail, passes, pass-detail, calendar, book-reports |
+| `modules/book.js` | 5,998 | book, book-detail, enrollments, instructors, instructor-detail, resources, resource-detail, passes, pass-detail, calendar, book-reports |
 | `modules/brand-v2.js` | 101 | brand-v2 |
 | `modules/brand.js` | 582 | brand |
 | `modules/calendar-v2.js` | 119 | calendar-v2 |
@@ -30,16 +30,16 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/commission-terms.js` | 317 | commission-terms |
 | `modules/commissions-v2.js` | 191 | commissions-v2 |
 | `modules/composer.js` | 434 | composer |
-| `modules/consignment.js` | 2,146 | galleries |
+| `modules/consignment.js` | 2,190 | galleries |
 | `modules/consignments-v2.js` | 280 | consignments-v2 |
 | `modules/contacts-v2.js` | 363 | contacts-v2 |
 | `modules/contacts.js` | 1,656 | contacts |
 | `modules/coupons-v2.js` | 388 | coupons-v2 |
 | `modules/cs-faqs-v2.js` | 308 | cs-faqs-v2 |
 | `modules/cs-members-v2.js` | 302 | cs-members-v2 |
-| `modules/cs-reviews-v2.js` | 269 | cs-reviews-v2 |
+| `modules/cs-reviews-v2.js` | 355 | cs-reviews-v2 |
 | `modules/cs-tickets-v2.js` | 254 | cs-tickets-v2 |
-| `modules/customer-service.js` | 3,265 | cs-inbox, cs-tickets, cs-surveys, cs-reviews, cs-faqs, cs-members |
+| `modules/customer-service.js` | 3,290 | cs-inbox, cs-tickets, cs-surveys, cs-reviews, cs-faqs, cs-members |
 | `modules/customers-v2.js` | 260 | customers-v2 |
 | `modules/customers.js` | 3,485 | customers |
 | `modules/duplicates-v2.js` | 175 | duplicates-v2 |
@@ -52,7 +52,7 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/finance.js` | 8,052 | finance-revenue, finance-expenses, finance-pl, finance-cash-flow, finance-ar, finance-ap, finance-tax, finance-reports, customer-portfolio, financials, finance-period-close, finance-amendments |
 | `modules/financials.js` | 350 | — |
 | `modules/fulfillment.js` | 1,524 | pack, ship, fulfillment |
-| `modules/galleries-v2.js` | 292 | galleries-v2 |
+| `modules/galleries-v2.js` | 399 | galleries-v2 |
 | `modules/gift-cards-v2.js` | 215 | gift-cards-v2 |
 | `modules/homepage-v2.js` | 125 | homepage-v2 |
 | `modules/homepage.js` | 681 | homepage |
@@ -77,7 +77,7 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/products-v2.js` | 439 | products-v2 |
 | `modules/promotions-v2.js` | 389 | promotions-v2 |
 | `modules/promotions.js` | 529 | promotions |
-| `modules/resources-v2.js` | 249 | resources-v2 |
+| `modules/resources-v2.js` | 308 | resources-v2 |
 | `modules/sales-events-v2.js` | 351 | sales-events-v2 |
 | `modules/sales.js` | 3,228 | pos, receipts, events, salesEvents, terms |
 | `modules/sessions-v2.js` | 274 | sessions-v2 |
@@ -89,8 +89,8 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/students-v2.js` | 406 | students-v2 |
 | `modules/students.js` | 1,563 | students |
 | `modules/studio.js` | 788 | studio |
-| `modules/team-v2.js` | 230 | team-v2 |
-| `modules/team.js` | 3,199 | team |
+| `modules/team-v2.js` | 395 | team-v2 |
+| `modules/team.js` | 3,270 | team |
 | `modules/terms-v2.js` | 211 | terms-v2 |
 | `modules/trips-v2.js` | 214 | trips-v2 |
 | `modules/trips.js` | 2,157 | trips |

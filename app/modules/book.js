@@ -2581,6 +2581,47 @@
     }
   }
 
+  // ── ResourcesBridge — additive shim for the resources-v2 twin ──────────
+  // The Faceted Record twin (resources-v2.js) delegates its native create/edit
+  // here so the resource write stays single-sourced on legacy #resources — the
+  // twin never reimplements it. These mirror the EXACT client write saveResource()
+  // makes, parameterized by data (the legacy handler reads the multi-section form
+  // DOM, so it can't be called with an object). Additive; no behavior change to
+  // the legacy surface. Mirrors window.InstructorsBridge / window.PassesBridge.
+  function _resBridgeData(data) {
+    var cap = (data.capacity === '' || data.capacity == null) ? null : (parseInt(data.capacity, 10) || null);
+    return {
+      name: (data.name || '').trim(),
+      type: data.type || RESOURCE_TYPES[0],
+      subType: (data.subType || '').trim() || null,
+      capacity: cap,
+      description: (data.description || '').trim() || null,
+      notes: (data.notes || '').trim() || null,
+      status: data.status || 'active',
+      updatedAt: new Date().toISOString()
+    };
+  }
+  window.ResourcesBridge = {
+    create: async function (data) {
+      var rec = _resBridgeData(data);
+      var id = MastDB.resources.newKey();
+      rec.createdAt = rec.updatedAt;
+      await MastDB.resources.set(id, rec);
+      resourcesLoaded = false;
+      return id;
+    },
+    update: async function (id, data) {
+      var rec = _resBridgeData(data);
+      // saveResource does a full .set() overwrite; preserve the server-owned
+      // createdAt so the edit doesn't drop it (the twin doesn't render it).
+      var existing = await MastDB.resources.get(id);
+      if (existing && existing.createdAt) rec.createdAt = existing.createdAt;
+      await MastDB.resources.set(id, rec);
+      resourcesLoaded = false;
+      return id;
+    }
+  };
+
   // ============================================================
   // Pass Definitions — Load & Render
   // ============================================================

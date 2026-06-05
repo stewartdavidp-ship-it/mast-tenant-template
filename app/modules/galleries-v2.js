@@ -15,12 +15,17 @@
  * any active placements → Faceted Record, NOT Process/MastFlow. Partner-shaped,
  * like a wholesale account.
  *
- * Read-focused: editing a gallery (addresses/contacts/commission/notes) and the
- * whole Placements + Payouts machinery (record sale/return, settle payouts, print
- * statements) stay single-sourced on legacy #galleries via a "manage in classic
- * view" link. This twin re-hosts the VIEW only — no onSave, no edit form, no
- * payout tooling. Flag-gated (?ui=1) at #galleries-v2, side-by-side; never
- * touches consignment.js.
+ * Native gallery RECORD create + edit (name, addresses, contacts, default
+ * commission split, currency, notes) — a custom detail.editRender + an onSave
+ * that DELEGATES to window.GalleriesBridge (exposed in consignment.js, wrapping
+ * the EXISTING admin/galleries write core). Never reimplements the write/merge
+ * or validation logic. Mirrors contacts-v2 / students-v2.
+ *
+ * The Placements + Payouts machinery (record sale/return, settle payouts, print
+ * statements) stays single-sourced on legacy #galleries — that's the consignment
+ * PLACEMENT surface (the pieces/line-items), a separate surface from the gallery
+ * record. The "Pieces" facet links there via navigateToClassic. Flag-gated
+ * (?ui=1) at #galleries-v2, side-by-side.
  */
 (function () {
   'use strict';
@@ -152,8 +157,6 @@
               return '<div style="font-size:0.85rem;color:var(--warm-gray);line-height:1.5;">' + esc(addressLine(a)) + '</div>';
             }).join('')
           : '<span class="mu-sub">No addresses on file.</span>';
-        // Gallery editing + payout tooling stay on legacy #galleries.
-        var manage = '<div style="margin-top:14px;"><button class="btn btn-secondary" onclick="GalleriesV2.classic()">Manage in classic view →</button></div>';
 
         // Pieces — the consigned pieces, i.e. the placements at this gallery.
         var pieceRows = allPlacements.map(function (p) {
@@ -166,7 +169,7 @@
           { label: 'Pieces', align: 'right', render: function (r) { return N.count(r.placed) || '0'; } },
           { label: 'Sold', align: 'right', render: function (r) { return N.money(r.sold) || '$0.00'; } },
           { label: 'Maker earns', align: 'right', render: function (r) { return N.money(r.owed) || '$0.00'; } }
-        ], pieceRows) : '<span class="mu-sub">No consigned pieces — create a placement in the classic Galleries view.</span>';
+        ], pieceRows) : '<span class="mu-sub">No consigned pieces — record a placement in the classic Galleries view.</span>';
 
         // Contacts — all contacts on file.
         var contactsBody = contacts.length ? UI.relatedTable([
@@ -181,19 +184,113 @@
           : '<span class="mu-sub">No notes.</span>';
 
         return tiles + tabsBar +
-          '<div class="mu-pane" data-pane="ov">' + UI.card('Gallery', gallery) + UI.card('Primary contact', primaryContact) + UI.card('Addresses', addressBody + manage) + '</div>' +
-          '<div class="mu-pane" data-pane="pieces" hidden>' + UI.cardTable('Consigned pieces (' + allPlacements.length + ')', piecesBody) + '</div>' +
+          '<div class="mu-pane" data-pane="ov">' + UI.card('Gallery', gallery) + UI.card('Primary contact', primaryContact) + UI.card('Addresses', addressBody) + '</div>' +
+          '<div class="mu-pane" data-pane="pieces" hidden>' + UI.cardTable('Consigned pieces (' + allPlacements.length + ')', piecesBody +
+            '<div style="margin-top:14px;"><button class="btn btn-secondary" onclick="GalleriesV2.classic()">Manage placements in classic view →</button></div>') + '</div>' +
           '<div class="mu-pane" data-pane="contacts" hidden>' + UI.cardTable('Contacts (' + contacts.length + ')', contactsBody) + '</div>' +
           '<div class="mu-pane" data-pane="notes" hidden>' + UI.card('Notes', notesBody) + '</div>';
+      },
+      // Native edit/create form. Mirrors the classic renderGalleryEditForm field
+      // set exactly: name (required), repeatable addresses + contacts, default
+      // commission %, currency, notes. Engine-first chrome (form-group / mu-editbar).
+      editRender: function (g, mode) {
+        g = g || {};
+        function fg(label, inner, flex) { return '<div class="form-group"' + (flex ? ' style="flex:1;min-width:120px;"' : '') + '><label class="form-label">' + label + '</label>' + inner + '</div>'; }
+        function grp(label) { return '<div style="font-size:0.9rem;font-weight:600;color:var(--teal);margin:14px 0 4px;">' + esc(label) + '</div>'; }
+        // Repeatable rows: render existing + a few blank spares so editing never
+        // drops data and adding is inline (scraped by index in onSave).
+        function padRows(list, spares) {
+          var arr = (Array.isArray(list) ? list.slice() : []);
+          for (var i = 0; i < spares; i++) arr.push({});
+          return arr;
+        }
+        var addrRows = padRows(addressesOf(g), 2).map(function (a, i) {
+          function inp(key, ph) { return '<input class="form-input" data-gal-addr="' + key + '" data-i="' + i + '" placeholder="' + ph + '" value="' + esc(a[key] || '') + '" style="width:100%;">'; }
+          return '<div data-gal-addr-row="' + i + '" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px;">' +
+            '<div style="flex:2;min-width:140px;">' + inp('street', 'Street') + '</div>' +
+            '<div style="flex:1;min-width:90px;">' + inp('city', 'City') + '</div>' +
+            '<div style="flex:0 0 64px;">' + inp('state', 'ST') + '</div>' +
+            '<div style="flex:0 0 80px;">' + inp('zip', 'Zip') + '</div>' +
+            '<div style="flex:0 0 90px;">' + inp('country', 'Country') + '</div>' +
+          '</div>';
+        }).join('');
+        var contactRows = padRows(contactsOf(g), 2).map(function (c, i) {
+          function inp(key, ph) { return '<input class="form-input" data-gal-contact="' + key + '" data-i="' + i + '" placeholder="' + ph + '" value="' + esc(c[key] || '') + '" style="width:100%;">'; }
+          return '<div data-gal-contact-row="' + i + '" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px;">' +
+            '<div style="flex:1;min-width:110px;">' + inp('name', 'Name') + '</div>' +
+            '<div style="flex:1;min-width:110px;">' + inp('email', 'Email') + '</div>' +
+            '<div style="flex:1;min-width:110px;">' + inp('phone', 'Phone') + '</div>' +
+            '<div style="flex:1;min-width:90px;">' + inp('role', 'Role') + '</div>' +
+          '</div>';
+        }).join('');
+        var pctVal = (typeof g.defaultCommissionPct === 'number') ? g.defaultCommissionPct : '';
+        return '<div class="mu-editbar"><span class="mu-editpill">' + (mode === 'create' ? 'NEW' : 'EDITING') + '</span>' + (mode === 'create' ? 'New gallery' : 'Edit this gallery') + '</div>' +
+          fg('Name *', '<input class="form-input" id="galV2Name" value="' + esc(g.name || '') + '" style="width:100%;" placeholder="Gallery, boutique or shop name">') +
+          grp('Addresses') + addrRows +
+          grp('Contacts') + contactRows +
+          grp('Terms') +
+          '<div style="display:flex;gap:12px;flex-wrap:wrap;">' +
+            fg('Default commission %', '<input class="form-input" type="number" min="0" max="100" step="0.5" id="galV2Pct" value="' + esc(pctVal) + '" placeholder="40" style="width:100%;">', true) +
+            fg('Currency', '<input class="form-input" id="galV2Currency" value="' + esc(g.currency || 'USD') + '" style="width:100%;">', true) +
+          '</div>' +
+          fg('Notes', '<textarea class="form-input" id="galV2Notes" rows="3" style="width:100%;resize:vertical;">' + esc(g.notes || '') + '</textarea>');
       }
+    },
+    onSave: function (rec, mode) {
+      if (!window.GalleriesBridge) { if (window.showToast) showToast('Galleries engine still loading — try again', true); return false; }
+      function val(id) { return ((document.getElementById(id) || {}).value || ''); }
+      function scrapeRows(rowSel, cellAttr) {
+        var out = [];
+        document.querySelectorAll('[' + rowSel + ']').forEach(function (row) {
+          var r = {};
+          row.querySelectorAll('[' + cellAttr + ']').forEach(function (inp) { r[inp.getAttribute(cellAttr)] = (inp.value || '').trim(); });
+          if (Object.keys(r).some(function (k) { return r[k]; })) out.push(r);
+        });
+        return out;
+      }
+      var data = {
+        name: val('galV2Name'),
+        addresses: scrapeRows('data-gal-addr-row', 'data-gal-addr'),
+        contacts: scrapeRows('data-gal-contact-row', 'data-gal-contact'),
+        defaultCommissionPct: val('galV2Pct'),
+        currency: val('galV2Currency'),
+        notes: val('galV2Notes')
+      };
+      // Validation mirrors legacy saveGallery: name required.
+      if (!data.name.trim()) { if (window.showToast) showToast('Gallery name is required.', true); return false; }
+
+      if (mode === 'create') {
+        return Promise.resolve(window.GalleriesBridge.create(data)).then(function () {
+          if (window.showToast) showToast('Gallery created.'); reloadSoon(); return true;
+        }).catch(function (e) { console.error('[galleries-v2] create', e); if (window.showToast) showToast('Error saving gallery.', true); return false; });
+      }
+      var id = rec._key || rec.id;
+      return Promise.resolve(window.GalleriesBridge.update(id, data)).then(function () {
+        // Mutate the LIVE cached record (=== the slide-out's read closure, since
+        // fetch returns V2.byId[id]); the engine passes a copy to onSave. Shows
+        // the edited fields immediately on the post-save read re-render;
+        // reloadSoon() then refreshes the cache for the next open. Normalize the
+        // repeatable rows the same way the Bridge does so the read view matches.
+        Object.assign(V2.byId[id] || rec, {
+          name: data.name.trim(),
+          addresses: data.addresses,
+          contacts: data.contacts,
+          defaultCommissionPct: (data.defaultCommissionPct === '' || isNaN(parseFloat(data.defaultCommissionPct))) ? null : parseFloat(data.defaultCommissionPct),
+          currency: (data.currency || '').trim() || 'USD',
+          notes: (data.notes || '').trim()
+        });
+        if (window.showToast) showToast('Gallery updated.'); reloadSoon(); return true;
+      }).catch(function (e) { console.error('[galleries-v2] update', e); if (window.showToast) showToast('Error updating gallery.', true); return false; });
     }
-    // No onSave → no Edit button (gallery editing + payouts stay on legacy #galleries).
   });
 
   // ── module state + data ─────────────────────────────────────────────
   var V2 = { rows: [], byId: {}, placements: [], sortKey: 'name', sortDir: 'asc', q: '', statusFilter: 'all', loaded: false };
 
   function load() {
+    // Ensure legacy consignment.js is loaded so window.GalleriesBridge (the
+    // delegated write path) exists — mirrors contacts-v2 / students-v2.
+    if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('consignment'); } catch (e) {} }
     Promise.all([
       Promise.resolve(MastDB.get('admin/galleries')),
       Promise.resolve(MastDB.get('admin/consignments'))
@@ -214,6 +311,7 @@
       V2.loaded = true; render();
     }).catch(function (e) { console.error('[galleries-v2] load', e); render(); });
   }
+  function reloadSoon() { V2.loaded = false; setTimeout(load, 250); }   // let the legacy write settle, then refresh
 
   function visibleRows() {
     var rows = V2.rows;
@@ -252,7 +350,8 @@
       U.pageHeader({
         title: 'Galleries',
         count: N.count(V2.rows.length) + ' galler' + (V2.rows.length === 1 ? 'y' : 'ies'),
-        actionsHtml: '<button class="btn btn-secondary" onclick="GalleriesV2.exportCsv()">↓ Export</button>'
+        actionsHtml: '<button class="btn btn-primary" onclick="GalleriesV2.create()">+ New gallery</button>' +
+          '<button class="btn btn-secondary" onclick="GalleriesV2.exportCsv()">↓ Export</button>'
       }) +
       '<div style="display:flex;gap:6px;flex-wrap:wrap;margin:12px 0;">' + filters + '</div>' +
       '<div style="margin:14px 0;"><input class="form-input" placeholder="Search name or contact…" value="' + esc(V2.q) +
@@ -260,7 +359,7 @@
       MastEntity.renderList('galleries-v2', {
         rows: visibleRows(), sortKey: V2.sortKey, sortDir: V2.sortDir,
         onSortFnName: 'GalleriesV2.sort', onRowClickFnName: 'GalleriesV2.open',
-        empty: { title: 'No galleries', message: V2.loaded ? 'Add galleries, boutiques or shops in the classic Galleries view.' : 'Loading…' }
+        empty: { title: 'No galleries', message: V2.loaded ? 'Add a gallery, boutique or shop to get started.' : 'Loading…' }
       });
   }
 
@@ -277,8 +376,16 @@
         if (rec) MastEntity.openRecord('galleries-v2', rec, 'read');
       });
     },
-    // Gallery editing + payout machinery → classic Galleries view. Use
-    // navigateToClassic so the V2 route remap doesn't loop us back to this twin.
+    create: function () {
+      // Ensure the legacy module (and thus window.GalleriesBridge) is loaded
+      // before opening the create form — mirrors ContactsV2 / StudentsV2.create.
+      if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('consignment'); } catch (e) {} }
+      MastEntity.openRecord('galleries-v2', {}, 'create');
+    },
+    // KEPT CLASSIC: consignment PLACEMENT management (record sale/return, settle
+    // payouts, print statements) — a separate surface (pieces/line-items) with no
+    // V2 home. The gallery RECORD (identity/addresses/contacts/terms) is native
+    // here. navigateToClassic so the V2 route remap doesn't loop back to this twin.
     classic: function () {
       if (typeof navigateToClassic === 'function') navigateToClassic('galleries');
       else if (typeof navigateTo === 'function') navigateTo('galleries');

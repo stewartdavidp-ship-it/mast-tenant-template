@@ -14,14 +14,25 @@
  * is an ASSIGNED attribute, not a governed lifecycle -> Faceted Record, NOT
  * Process/MastFlow.
  *
- * Read-focused: moderation, replies, feature-on-site, social drafting and the
- * anonymous-review policy are side-effecting, single-sourced workflows coupled to
- * the Customer-Service module (they write cs_reviews status, append cs_review_
- * responses audit rows, mutate the Testimonials homepage section, open the Social
- * composer, send UGC upload links). They stay on legacy #cs-reviews via a "manage
- * in classic view" link. This twin re-hosts the VIEW only -- no onSave, no edit
- * form, no Approve/Reject/Respond controls. Flag-gated (?ui=1) at #cs-reviews-v2,
- * side-by-side with legacy #cs-reviews; never touches customer-service.js.
+ * Interactive-read: the core MODERATION actions (Approve / Reject / Feature-on-
+ * site / Unfeature) are surfaced NATIVELY as action buttons in the read slide-out
+ * (mirrors cs-tickets-v2 / duplicates-v2 — action buttons in read mode, no edit
+ * form). Each button delegates to window.CsReviewsBridge, the thin shim in
+ * customer-service.js that wraps the EXISTING moderation logic (cs_reviews status
+ * write + the W1.8 Testimonials-promotion path) so it stays single-sourced — this
+ * twin never reimplements moderation or business rules. After an action the live
+ * V2.byId[id] is updated from the bridge's returned doc and the record + list
+ * re-open/refresh.
+ *
+ * Reviews are user-generated CONTENT: status (pending/approved/rejected) is an
+ * assigned attribute, so the operator MODERATES — there is intentionally NO path
+ * to rewrite a customer's review text. The remaining workflows that DO touch
+ * review-adjacent content or have no V2 home — the public REPLY (Respond / Edit /
+ * Delete response, with its cs_review_responses audit log), Draft Social Post,
+ * Ask-for-photo (UGC upload link), and the anonymous-review POLICY settings card
+ * — stay on legacy #cs-reviews via a single "More actions" link (navigateToClassic
+ * so the V2 route remap doesn't loop back here). Flag-gated (?ui=1) at
+ * #cs-reviews-v2, side-by-side with legacy #cs-reviews.
  *
  * Data: reviews live at cs_reviews (one-shot keyed-object read via MastDB.get).
  * Fields mirror the submitReview CF + legacy renderReviews: productName (snapshot
@@ -146,15 +157,42 @@
           replyBody = '<span class="mu-sub">No reply yet.</span>';
         }
 
-        // Moderation / reply / feature-on-site all live on legacy #cs-reviews.
+        // ── Moderation — native action buttons (delegate to CsReviewsBridge) ──
+        // Mirror legacy #cs-reviews button layout per status: pending → Approve +
+        // Reject; rejected → Approve; approved → Feature/Unfeature on site. Each
+        // delegates to the existing legacy moderation write via the bridge.
+        var st = statusOf(r), id = r._key || r.id, eid = esc(String(id));
+        var modBtns = [];
+        if (st === 'pending') {
+          modBtns.push('<button class="btn btn-primary btn-small" onclick="CsReviewsV2.approve(\'' + eid + '\')">Approve</button>');
+          modBtns.push('<button class="btn btn-secondary btn-small" onclick="CsReviewsV2.reject(\'' + eid + '\')">Reject</button>');
+        } else if (st === 'rejected') {
+          modBtns.push('<button class="btn btn-primary btn-small" onclick="CsReviewsV2.approve(\'' + eid + '\')">Approve</button>');
+        } else if (st === 'approved') {
+          if (r.featuredOnSite) {
+            modBtns.push('<button class="btn btn-secondary btn-small" onclick="CsReviewsV2.unfeature(\'' + eid + '\')" title="Remove this review from the homepage Testimonials section">Unfeature</button>');
+          } else {
+            modBtns.push('<button class="btn btn-primary btn-small" onclick="CsReviewsV2.feature(\'' + eid + '\')" title="Add this review to the homepage Testimonials section">Feature on site</button>');
+          }
+          modBtns.push('<button class="btn btn-secondary btn-small" onclick="CsReviewsV2.reject(\'' + eid + '\')" title="Remove from the storefront">Unpublish</button>');
+        }
+        var modRow = '<div style="display:flex;gap:8px;flex-wrap:wrap;">' + modBtns.join('') + '</div>';
+        var featNote = (st === 'approved' && r.featuredOnSite)
+          ? '<div class="mu-sub" style="margin-top:8px;">' + UI.badge('Featured on site', 'success') + (r.featuredAt ? ' since ' + N.date(r.featuredAt) : '') + '</div>'
+          : '';
+
+        // No-V2-home capabilities stay on legacy #cs-reviews: the public REPLY
+        // (+ its cs_review_responses audit log), Draft Social Post, Ask-for-photo
+        // (UGC upload link), and the anonymous-review policy settings card.
         // navigateToClassic so the V2 route remap doesn't loop us back here.
-        var manage = '<div style="margin-top:14px;"><button class="btn btn-secondary" onclick="CsReviewsV2.classic()">Manage in classic view &rarr;</button></div>';
+        var more = '<div style="margin-top:14px;"><button class="btn btn-secondary btn-small" onclick="CsReviewsV2.classic()" title="Reply publicly, draft a social post, ask for a photo, or change the review policy">More actions (reply, social, policy) &rarr;</button></div>';
 
         return tiles + tabsBar +
           '<div class="mu-pane" data-pane="ov">' +
+            UI.card('Moderation', modRow + featNote) +
             UI.card('Review', meta) +
             UI.card('Customer review', reviewBody) +
-            UI.card('Shop reply', replyBody + manage) +
+            UI.card('Shop reply', replyBody + more) +
           '</div>';
       }
     }
@@ -162,7 +200,7 @@
   });
 
   // ── module state + data ─────────────────────────────────────────────
-  var V2 = { rows: [], byId: {}, productIndex: {}, sortKey: 'createdAt', sortDir: 'desc', q: '', statusFilter: 'all', loaded: false };
+  var V2 = { rows: [], byId: {}, productIndex: {}, sortKey: 'createdAt', sortDir: 'desc', q: '', statusFilter: 'all', loaded: false, busy: false };
 
   function load() {
     // Reviews (one-shot keyed object) + a best-effort products read so a snapshot-
@@ -241,6 +279,44 @@
       });
   }
 
+  // Delegate a moderation action to the legacy write via CsReviewsBridge, then
+  // refresh the live row + re-open the slide-out + re-render the list. Guarded by
+  // V2.busy so a double-tap can't fire two writes.
+  function moderate(action, id) {
+    if (V2.busy) return Promise.resolve();
+    var bridge = window.CsReviewsBridge;
+    if (!bridge || typeof bridge[action] !== 'function') {
+      if (window.showToast) showToast('Moderation unavailable', true);
+      return Promise.resolve();
+    }
+    V2.busy = true;
+    return Promise.resolve(bridge[action](id)).then(function (doc) {
+      V2.busy = false;
+      var row = V2.byId[id];
+      if (doc && typeof doc === 'object') {
+        // Merge the fresh on-doc state into the live row (keep our _key).
+        if (!row) { row = { _key: id }; V2.byId[id] = row; }
+        Object.keys(doc).forEach(function (k) { row[k] = doc[k]; });
+        row._key = id; row.status = row.status || 'pending';
+        if (V2.rows.indexOf(row) < 0) { V2.rows = V2.rows.map(function (x) { return (x._key === id ? row : x); }); }
+      } else if (row && (action === 'approve' || action === 'reject')) {
+        // Bridge returned no doc (review outside the legacy 100-row window). The
+        // approve/reject status write lands unconditionally (MastDB.update on the
+        // path), so reflect it locally. feature/unfeature short-circuit when the
+        // legacy index lacks the review, so they leave the row untouched here.
+        row.status = (action === 'approve') ? 'approved' : 'rejected';
+      }
+      render();
+      // Re-open the (now-updated) record so the slide-out reflects the new status.
+      var rec = V2.byId[id];
+      if (rec) MastEntity.openRecord('cs-reviews-v2', rec, 'read');
+    }).catch(function (e) {
+      V2.busy = false;
+      console.error('[cs-reviews-v2] moderate ' + action, e);
+      if (window.showToast) showToast('Action failed: ' + (e && e.message || e), true);
+    });
+  }
+
   window.CsReviewsV2 = {
     sort: function (key) {
       if (V2.sortKey === key) V2.sortDir = (V2.sortDir === 'asc' ? 'desc' : 'asc');
@@ -254,8 +330,18 @@
         if (rec) MastEntity.openRecord('cs-reviews-v2', rec, 'read');
       });
     },
-    // Moderation/replies/feature-on-site -> classic Reviews view. Use
-    // navigateToClassic so the V2 route remap doesn't loop us back to this twin.
+    // ── Moderation — delegate to the legacy write via window.CsReviewsBridge ──
+    // The bridge wraps the existing approveReview/rejectReview/featureReviewOnSite/
+    // unfeatureReviewOnSite logic (status write + W1.8 Testimonials promotion) and
+    // resolves to the fresh on-doc state. We merge that back into the live
+    // V2.byId[id] (preserving _key) then re-open the record + re-render the list.
+    approve: function (id) { return moderate('approve', id); },
+    reject: function (id) { return moderate('reject', id); },
+    feature: function (id) { return moderate('feature', id); },
+    unfeature: function (id) { return moderate('unfeature', id); },
+    // No-V2-home capabilities (reply + audit log, social draft, UGC photo ask,
+    // anonymous-review policy) -> classic Reviews view. navigateToClassic so the
+    // V2 route remap doesn't loop us back to this twin.
     classic: function () {
       if (typeof navigateToClassic === 'function') navigateToClassic('cs-reviews');
       else if (typeof navigateTo === 'function') navigateTo('cs-reviews');
