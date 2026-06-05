@@ -113,9 +113,9 @@
        scripts/bump-modules-version.sh (these are static <head> tags loaded
        before the JS var exists, so they can't read it at runtime). Without
        this, the engines were frozen at ?v=1 and never cache-busted on deploy. -->
-  <script src="../shared/mast-ui.js?v=20260602-001056-7fba9d1"></script>
-  <script src="../shared/mast-io.js?v=20260602-001056-7fba9d1"></script>
-  <script src="../shared/mast-entity.js?v=20260602-001056-7fba9d1"></script>
+  <script src="../shared/mast-ui.js?v=20260605-000022-205a040"></script>
+  <script src="../shared/mast-io.js?v=20260605-000022-205a040"></script>
+  <script src="../shared/mast-entity.js?v=20260605-000022-205a040"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Pod-specific runtime config — sets window.MAST_POD_PLATFORM_PROJECT so
@@ -11192,6 +11192,7 @@
     <div id="homepageV2Tab" class="tab-content" style="display:none;"></div><!-- UI-redesign config shape: homepage read-on-page -->
     <div id="settingsV2Tab" class="tab-content" style="display:none;"></div><!-- UI-redesign Settings producer surface -->
     <div id="commissionsV2Tab" class="tab-content" style="display:none;"></div><!-- UI-redesign Process surface: commissions -->
+    <div id="productsV2Tab" class="tab-content" style="display:none;"></div><!-- UI-redesign Process surface: products -->
     <div id="giftCardsV2Tab" class="tab-content" style="display:none;"></div><!-- UI-redesign conversion: gift cards -->
     <div id="couponsV2Tab" class="tab-content" style="display:none;"></div><!-- UI-redesign conversion: coupons -->
     <div id="classesV2Tab" class="tab-content" style="display:none;"></div><!-- UI-redesign conversion: classes -->
@@ -20957,7 +20958,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260602-001056-7fba9d1';
+var MAST_MODULES_V = '20260605-000022-205a040';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -20995,6 +20996,7 @@ var MODULE_MANIFEST = {
   'homepage-v2': { src: 'modules/homepage-v2.js', routes: ['homepage-v2'] }, // UI-redesign config shape: homepage read-on-page (read-focused, edit→classic) (flag-gated)
   'settings-v2': { src: 'modules/settings-v2.js', routes: ['settings-v2'] }, // UI-redesign Settings producer surface: launcher grid over config areas (flag-gated)
   'commissions-v2': { src: 'modules/commissions-v2.js', routes: ['commissions-v2'] }, // UI-redesign Process surface: commissions lifecycle (flag-gated, side-by-side)
+  'products-v2': { src: 'modules/products-v2.js', routes: ['products-v2'] }, // UI-redesign Process surface: products (list+variants+lifecycle, flag-gated, side-by-side; route-map flip deferred to P5)
   'gift-cards-v2': { src: 'modules/gift-cards-v2.js', routes: ['gift-cards-v2'] }, // UI-redesign conversion: issued gift cards read detail (flag-gated)
   'coupons-v2': { src: 'modules/coupons-v2.js', routes: ['coupons-v2'] }, // UI-redesign conversion: coupons read detail (flag-gated)
   'classes-v2': { src: 'modules/classes-v2.js', routes: ['classes-v2'] }, // UI-redesign conversion: classes catalog read detail (flag-gated)
