@@ -15,11 +15,13 @@
  * MastFlow. The record is nearly flat, but classes genuinely reference it
  * (class.resourceId), so the Classes facet is a real related collection, not pad.
  *
- * Read-focused: creating/editing a resource is a bespoke multi-section form
- * coupled to the legacy Book module and stays single-sourced on legacy
- * #resources via a "manage in classic view" link. This twin re-hosts the VIEW
- * only — no onSave, no edit form. Flag-gated (?ui=1) at #resources-v2,
- * side-by-side; never touches book.js.
+ * Create + edit are NATIVE here: a custom detail.editRender (the Basic Info /
+ * Details / Internal Notes field set, grouped like the legacy form) + an onSave
+ * that DELEGATES to window.ResourcesBridge (exposed in book.js, the module that
+ * owns resource CRUD) so the resource write stays single-sourced — this twin
+ * never reimplements that logic (mirrors the contacts-v2 / ContactsBridge and
+ * instructors / InstructorsBridge precedent). No classic view is maintained.
+ * Flag-gated (?ui=1) at #resources-v2, side-by-side.
  *
  * Data: resources live at admin/resources (MastDB.resources → that path);
  * classes-that-book-it is derived from public/classes (class.resourceId) — both
@@ -43,6 +45,8 @@
   var STATUS_TONE = { active: 'success', inactive: 'neutral' };
   // type (room / equipment) is a category, not a lifecycle — a quiet tint.
   var TYPE_TONE = { room: 'teal', equipment: 'info' };
+  // Mirror book.js RESOURCE_TYPES (the legacy showResourceForm type options).
+  var RESOURCE_TYPES = ['room', 'equipment'];
 
   function cap(s) { return s ? s.charAt(0).toUpperCase() + s.slice(1) : ''; }
   function resName(r) { return (r && r.name) || '(unnamed)'; }
@@ -66,7 +70,7 @@
     recordId: function (r) { return r._key || r.id; },
     fields: [
       // fields[0] (the slide-out title source) materializes a real name string.
-      { name: 'name', label: 'Name', type: 'text', list: true, readOnly: true, group: 'Overview', get: resName },
+      { name: 'name', label: 'Name', type: 'text', list: true, required: true, group: 'Overview', get: resName },
       { name: 'type', label: 'Type', type: 'text', list: true, readOnly: true,
         get: function (r) { return cap(typeOf(r)) || '—'; } },
       { name: 'subType', label: 'Sub-type', type: 'text', list: true, readOnly: true,
@@ -109,10 +113,6 @@
         var notesBody = r.notes
           ? '<div style="font-size:0.85rem;color:var(--warm-gray);line-height:1.5;white-space:pre-wrap;">' + esc(r.notes) + '</div>'
           : '<span class="mu-sub">No internal notes.</span>';
-        // Resource editing stays on legacy #resources. Use navigateToClassic so
-        // the V2 route remap doesn't loop us back to this twin.
-        var manage = '<div style="margin-top:14px;"><button class="btn btn-secondary" onclick="ResourcesV2.classic()">Manage in classic view →</button></div>';
-
         // Classes — active first, then other (mirrors legacy detail grouping).
         var active = classes.filter(function (c) { return c.status === 'active'; });
         var other = classes.filter(function (c) { return c.status !== 'active'; });
@@ -136,18 +136,75 @@
           '<div class="mu-pane" data-pane="ov">' +
             UI.card('Details', overview) +
             UI.card('Description', descBody) +
-            UI.card('Internal notes', notesBody + manage) +
+            UI.card('Internal notes', notesBody) +
           '</div>' +
           '<div class="mu-pane" data-pane="classes" hidden>' + UI.cardTable('Classes (' + classes.length + ')', classesBody) + '</div>';
+      },
+      // Native edit form — mirrors the legacy showResourceForm field set, grouped
+      // (Basic Info / Details / Internal Notes): name (required), type (required,
+      // room/equipment), status, sub-type, capacity, description, notes.
+      editRender: function (r, mode) {
+        r = r || {};
+        var typeOpts = RESOURCE_TYPES.map(function (t) {
+          return '<option value="' + t + '"' + (typeOf(r) === t ? ' selected' : '') + '>' + cap(t) + '</option>';
+        }).join('');
+        var statusOpts = ['active', 'inactive'].map(function (s) {
+          return '<option value="' + s + '"' + (statusOf(r) === s ? ' selected' : '') + '>' + cap(s) + '</option>';
+        }).join('');
+        function fg(label, inner, flex) { return '<div class="form-group"' + (flex ? ' style="flex:1;min-width:150px;"' : '') + '><label class="form-label">' + label + '</label>' + inner + '</div>'; }
+        function row2(a, b) { return '<div style="display:flex;gap:12px;flex-wrap:wrap;">' + a + b + '</div>'; }
+        return '<div class="mu-editbar"><span class="mu-editpill">' + (mode === 'create' ? 'NEW' : 'EDITING') + '</span>' + (mode === 'create' ? 'New resource' : 'Edit this resource') + '</div>' +
+          fg('Name *', '<input class="form-input" id="resV2Name" value="' + esc(r.name || '') + '" style="width:100%;" placeholder="e.g. Main Studio, Kiln #1">') +
+          row2(
+            fg('Type *', '<select class="form-input" id="resV2Type" style="width:100%;">' + typeOpts + '</select>', true),
+            fg('Status', '<select class="form-input" id="resV2Status" style="width:100%;">' + statusOpts + '</select>', true)
+          ) +
+          row2(
+            fg('Sub-type', '<input class="form-input" id="resV2SubType" value="' + esc(r.subType || '') + '" style="width:100%;" placeholder="e.g. Kiln, Pottery Wheel">', true),
+            fg('Capacity', '<input class="form-input" type="number" min="0" id="resV2Capacity" value="' + (capacityOf(r) == null ? '' : capacityOf(r)) + '" style="width:100%;" placeholder="Max students">', true)
+          ) +
+          fg('Description', '<textarea class="form-input" id="resV2Desc" rows="2" style="width:100%;resize:vertical;" placeholder="What is this resource used for?">' + esc(r.description || '') + '</textarea>') +
+          fg('Internal notes', '<textarea class="form-input" id="resV2Notes" rows="2" style="width:100%;resize:vertical;" placeholder="Admin-only notes…">' + esc(r.notes || '') + '</textarea>');
       }
+    },
+    onSave: function (rec, mode) {
+      if (!window.ResourcesBridge) { if (window.showToast) showToast('Resources engine still loading — try again', true); return false; }
+      var capRaw = ((document.getElementById('resV2Capacity') || {}).value || '').trim();
+      var data = {
+        name: (document.getElementById('resV2Name') || {}).value || '',
+        type: (document.getElementById('resV2Type') || {}).value || RESOURCE_TYPES[0],
+        status: (document.getElementById('resV2Status') || {}).value || 'active',
+        subType: ((document.getElementById('resV2SubType') || {}).value || '').trim() || null,
+        capacity: capRaw === '' ? null : (parseInt(capRaw, 10) || null),
+        description: ((document.getElementById('resV2Desc') || {}).value || '').trim() || null,
+        notes: ((document.getElementById('resV2Notes') || {}).value || '').trim() || null
+      };
+      if (!data.name.trim()) { if (window.showToast) showToast('Resource name is required.', true); return false; }
+
+      if (mode === 'create') {
+        return Promise.resolve(window.ResourcesBridge.create(data)).then(function () {
+          if (window.showToast) showToast('Resource created.'); reloadSoon(); return true;
+        }).catch(function (e) { console.error('[resources-v2] create', e); if (window.showToast) showToast('Error saving resource.', true); return false; });
+      }
+      var id = rec._key || rec.id;
+      return Promise.resolve(window.ResourcesBridge.update(id, data)).then(function () {
+        // Mutate the LIVE cached record (=== the slide-out's read closure, since
+        // fetch returns V2.byId[id]); the engine passes a copy to onSave. Shows
+        // the edited fields immediately on the post-save read re-render;
+        // reloadSoon() then refreshes the cache for the next open.
+        Object.assign(V2.byId[id] || rec, data);
+        if (window.showToast) showToast('Resource updated.'); reloadSoon(); return true;
+      }).catch(function (e) { console.error('[resources-v2] update', e); if (window.showToast) showToast('Error updating resource.', true); return false; });
     }
-    // No onSave → no Edit button (resource editing stays on legacy #resources).
   });
 
   // ── module state + data ─────────────────────────────────────────────
   var V2 = { rows: [], byId: {}, classes: [], sortKey: 'name', sortDir: 'asc', q: '', typeFilter: 'all', statusFilter: 'all', loaded: false };
 
   function load() {
+    // Ensure the legacy book module is loaded so window.ResourcesBridge (the
+    // delegated write path) exists — mirrors contacts-v2 / ContactsBridge.
+    if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('book'); } catch (e) {} }
     // Resources + classes (for the Classes facet/count) load together; both
     // one-shot keyed-object reads.
     Promise.all([
@@ -165,6 +222,7 @@
       V2.loaded = true; render();
     }).catch(function (e) { console.error('[resources-v2] load', e); render(); });
   }
+  function reloadSoon() { V2.loaded = false; setTimeout(load, 250); }   // let the legacy write settle, then refresh
 
   function visibleRows() {
     var rows = V2.rows;
@@ -208,7 +266,8 @@
       U.pageHeader({
         title: 'Resources',
         count: N.count(V2.rows.length) + ' resource' + (V2.rows.length === 1 ? '' : 's'),
-        actionsHtml: '<button class="btn btn-secondary" onclick="ResourcesV2.exportCsv()">↓ Export</button>'
+        actionsHtml: '<button class="btn btn-primary" onclick="ResourcesV2.create()">+ New resource</button>' +
+          '<button class="btn btn-secondary" onclick="ResourcesV2.exportCsv()">↓ Export</button>'
       }) +
       '<div style="display:flex;gap:6px;flex-wrap:wrap;margin:12px 0;">' + typeFilters + '<span style="width:10px;"></span>' + statusFilters + '</div>' +
       '<div style="margin:14px 0;"><input class="form-input" placeholder="Search name, sub-type or type…" value="' + esc(V2.q) +
@@ -216,7 +275,7 @@
       MastEntity.renderList('resources-v2', {
         rows: visibleRows(), sortKey: V2.sortKey, sortDir: V2.sortDir,
         onSortFnName: 'ResourcesV2.sort', onRowClickFnName: 'ResourcesV2.open',
-        empty: { title: 'No resources', message: V2.loaded ? 'Add rooms and equipment in the classic Resources view.' : 'Loading…' }
+        empty: { title: 'No resources', message: V2.loaded ? 'Add a room or piece of equipment to get started.' : 'Loading…' }
       });
   }
 
@@ -234,11 +293,11 @@
         if (rec) MastEntity.openRecord('resources-v2', rec, 'read');
       });
     },
-    // Resource editing → classic Resources view. Use navigateToClassic so the
-    // V2 route remap doesn't loop us back to this twin.
-    classic: function () {
-      if (typeof navigateToClassic === 'function') navigateToClassic('resources');
-      else if (typeof navigateTo === 'function') navigateTo('resources');
+    create: function () {
+      // Ensure the legacy book module (and thus window.ResourcesBridge) is loaded
+      // before opening the create form — mirrors ContactsV2.create.
+      if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('book'); } catch (e) {} }
+      MastEntity.openRecord('resources-v2', {}, 'create');
     },
     exportCsv: function () { return MastEntity.exportRows('resources-v2', visibleRows(), 'all'); }
   };
