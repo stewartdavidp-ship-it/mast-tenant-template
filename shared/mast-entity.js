@@ -412,8 +412,16 @@
   function _flowRender() {
     if (!_flow || !window.MastFlow) return;
     var fk = _flow.flowKey;
+    var _d = _flow.schema && _flow.schema.detail;
     window.MastFlow.renderHeader(fk, _flow.record, {
-      onAdvance: function (target) { _flowTransition(target); },
+      onAdvance: function (target) {
+        // A schema may claim the advance — e.g. route to a side-effect-bearing
+        // legacy promote/launch (products: Shopify publish on launch) instead of
+        // the generic status transition. Returning anything but false = handled.
+        // Mirrors detail.onFlowTarget. Schemas without the hook are unchanged.
+        if (_d && typeof _d.onFlowAdvance === 'function' && _d.onFlowAdvance(target, _flow.record) !== false) return;
+        _flowTransition(target);
+      },
       onBack: function (target) { _flowTransition(target); },
       onBranch: function (choiceKey, entryPhase) { _flowTransition(entryPhase, choiceKey); },
       onTarget: function (targetId) { _flowGoTarget(targetId); }
