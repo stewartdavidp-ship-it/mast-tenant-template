@@ -2395,6 +2395,81 @@
     }
   };
 
+  // ── ClassesBridge — additive shim for the classes-v2 twin ─────────────
+  // The Faceted Record twin (classes-v2.js) delegates its NATIVE create/edit of
+  // the class RECORD here so the class write stays single-sourced on legacy
+  // #book — the twin never reimplements it. These mirror the EXACT client write
+  // saveClass() makes (same MastDB.classes accessor + object shape + money in
+  // CENTS), parameterized by data (the legacy saveClass reads a multi-section
+  // form DOM + the skill/cert pickers + the image library, so it can't be called
+  // with an object). Additive; no behavior change to the legacy surface. Mirrors
+  // window.ResourcesBridge / window.InstructorsBridge / window.PassesBridge.
+  //
+  // SCOPE: the RECORD basic fields only (name / description / type / category /
+  // status / capacity / minEnrollment / cancellationLeadDays / priceCents /
+  // duration / materials*). Session GENERATION (schedule → materializeSessions),
+  // series pricing, required skills, required certs, and the image library are
+  // wizard-like sub-flows with no V2 home — they stay on legacy saveClass. So
+  // the bridge does NOT call materializeSessions and update() is PATCH-style:
+  // it writes only the basic fields, leaving schedule / seriesInfo /
+  // requiredSkills / requiredCertTypeIds / imageIds / publishedAt / createdAt
+  // (and the generated classSessions) untouched, exactly like saveClass's
+  // .update() branch preserves server-owned fields.
+  function _classBridgeData(data) {
+    var price = parseFloat(data.priceCents != null ? data.priceCents : data.price);
+    var minEnroll = parseInt(data.minEnrollment, 10);
+    var cancelLead = parseInt(data.cancellationLeadDays, 10);
+    var matIncluded = data.materialsIncluded === true || data.materialsIncluded === 'true';
+    var matCost = parseFloat(data.materialsCostCents);
+    return {
+      name: (data.name || '').trim(),
+      description: (data.description || '').trim(),
+      type: data.type || CLASS_TYPES[0],
+      category: (data.category || '').trim().toLowerCase(),
+      status: data.status || 'draft',
+      capacity: parseInt(data.capacity, 10) || 8,
+      minEnrollment: isNaN(minEnroll) ? null : minEnroll,
+      cancellationLeadDays: isNaN(cancelLead) ? 2 : cancelLead,
+      // Money in CENTS — match saveClass (priceCents = Math.round($ * 100)).
+      // The twin passes dollars in `price`; accept either and normalize.
+      priceCents: Math.round((isNaN(price) ? 0 : price) * 100),
+      duration: parseInt(data.duration, 10) || 60,
+      materialsIncluded: matIncluded,
+      materialsCostCents: matIncluded ? null : (isNaN(matCost) || matCost <= 0 ? null : Math.round(matCost * 100)),
+      materialsNote: (data.materialsNote || '').trim() || null,
+      updatedAt: new Date().toISOString()
+    };
+  }
+  window.ClassesBridge = {
+    create: async function (data) {
+      var rec = _classBridgeData(data);
+      var id = MastDB.classes.newKey();
+      rec.createdAt = rec.updatedAt;
+      // A class created from the twin has no schedule yet (session generation is
+      // a classic-only sub-flow); seed the record-shaped defaults saveClass would
+      // otherwise materialize so the legacy surface opens it cleanly. No
+      // materializeSessions — the operator adds a schedule + generates in classic.
+      rec.schedule = { type: 'recurring', days: [], startTime: '', startDate: '' };
+      rec.seriesInfo = null;
+      rec.requiredSkills = [];
+      rec.requiredCertTypeIds = [];
+      rec.imageIds = [];
+      await MastDB.classes.set(id, rec);
+      classesLoaded = false;
+      return id;
+    },
+    update: async function (id, data) {
+      // PATCH-style write (matches saveClass's .update() branch) so the fields
+      // this twin does NOT render — schedule, seriesInfo, requiredSkills,
+      // requiredCertTypeIds, imageIds, publishedAt, createdAt, generated
+      // sessions — survive a basic-record edit.
+      var rec = _classBridgeData(data);
+      await MastDB.classes.update(id, rec);
+      classesLoaded = false;
+      return id;
+    }
+  };
+
   // ============================================================
   // Resources — Load & Render
   // ============================================================
