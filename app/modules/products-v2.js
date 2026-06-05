@@ -216,8 +216,14 @@
           { key: 'channels', label: 'Channels' }, { key: 'image', label: 'Image' }, { key: 'info', label: 'Info' }
         ];
         function pane(key, html, active) { return '<div class="mu-pane" data-pane="' + key + '"' + (active ? '' : ' hidden') + '>' + html + '</div>'; }
+        // When the product has variants, make it unmistakable you're on the
+        // Default (the base every variant inherits) — not a single variant.
+        var nv = variantCount(p);
+        var defaultBanner = nv > 0
+          ? '<div style="margin:0 0 10px;padding:7px 12px;border-radius:8px;background:color-mix(in srgb,var(--info) 13%,transparent);color:var(--info);font-size:0.85rem;font-weight:600;">◆ Default — base for all ' + nv + ' variant' + (nv > 1 ? 's' : '') + '. Edits here apply to every variant unless it overrides.</div>'
+          : '';
         // #muFlowHost: the engine injects the MastFlow process header here (the structure).
-        return UU.stickyHead(tiles, '') +
+        return defaultBanner + UU.stickyHead(tiles, '') +
           '<div id="muFlowHost" class="pv2-flowhost">Loading workflow…</div>' +
           UU.paneTabsBar(tabs, 'pricing') +
           pane('pricing', pricingPane(p), true) +
@@ -398,7 +404,11 @@
     var exp = has
       ? '<button class="pv2-exp" onclick="event.stopPropagation();ProductsV2.toggle(\'' + esc(p._key) + '\')">' + (V2.expanded[p._key] ? '▼' : '▶') + '</button>'
       : '<button class="pv2-exp sp"></button>';
-    var html = '<div class="pv2-row" onclick="ProductsV2.open(\'' + esc(p._key) + '\')" tabindex="0" role="button">' +
+    // A product WITH variants expands to its items (synthetic Default + variants)
+    // on row-click — you don't jump into a slide-out; you pick the Default or a
+    // variant. A variant-less product has nothing to expand, so it opens directly.
+    var rowAction = has ? 'toggle' : 'open';
+    var html = '<div class="pv2-row" onclick="ProductsV2.' + rowAction + '(\'' + esc(p._key) + '\')" tabindex="0" role="button">' +
       exp + thumb +
       '<span class="pv2-nm">' + esc(p.name || '(unnamed)') + ' <span class="pv2-meta">· ' + esc(categoryLabel(p) || '—') + '</span></span>' +
       '<span>' + U.badge(statusLabel(p.status), statusTone(p.status)) + '</span>' +
