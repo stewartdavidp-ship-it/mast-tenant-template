@@ -1112,9 +1112,12 @@
     };
   }
 
-  async function saveGallery(galleryId) {
-    var v = _collectGalleryFormValues();
-    if (!v.name) { showToast('Name is required'); return; }
+  // Shared gallery-record write core. Takes the collected/normalized field set
+  // (the _collectGalleryFormValues shape) and persists it, merging onto the
+  // existing record on edit. Returns the gallery id. The single source of the
+  // admin/galleries write — used by the classic form (saveGallery), the modal
+  // (consignmentSaveGalleryModal), and the V2 twin (window.GalleriesBridge).
+  async function _writeGalleryRecord(galleryId, v) {
     var now = new Date().toISOString();
     var id = galleryId || MastDB.newKey('admin/galleries');
     var existing = galleryId ? (galleriesData[galleryId] || {}) : {};
@@ -1123,9 +1126,16 @@
       createdAt: existing.createdAt || now,
       updatedAt: now
     });
+    await MastDB.set('admin/galleries/' + id, rec);
+    galleriesData[id] = rec;
+    return id;
+  }
+
+  async function saveGallery(galleryId) {
+    var v = _collectGalleryFormValues();
+    if (!v.name) { showToast('Name is required'); return; }
     try {
-      await MastDB.set('admin/galleries/' + id, rec);
-      galleriesData[id] = rec;
+      var id = await _writeGalleryRecord(galleryId, v);
       showToast(galleryId ? 'Gallery saved' : 'Gallery created');
       currentGalleryId = id;
       currentView = 'galleryDetail';
@@ -2033,12 +2043,8 @@
   window.consignmentSaveGalleryModal = async function() {
     var v = _collectGalleryFormValues();
     if (!v.name) { showToast('Name is required'); return; }
-    var now = new Date().toISOString();
-    var id = MastDB.newKey('admin/galleries');
-    var rec = Object.assign({}, v, { id: id, createdAt: now, updatedAt: now });
     try {
-      await MastDB.set('admin/galleries/' + id, rec);
-      galleriesData[id] = rec;
+      var id = await _writeGalleryRecord(null, v);
       closeModal();
       showToast('Gallery created');
       currentGalleryId = id;
@@ -2055,6 +2061,44 @@
   };
   window.consignmentSaveGallery = saveGallery;
   window.consignmentDeleteGallery = deleteGalleryEntity;
+
+  // GalleriesBridge — thin additive create/update taking a data object, for the
+  // galleries-v2 twin. Normalizes the same field set the classic form collects
+  // (_collectGalleryFormValues), then delegates to the shared write core
+  // (_writeGalleryRecord = the single admin/galleries write). Never reimplements
+  // the write/merge logic. Mirrors window.ContactsBridge / window.StudentsBridge.
+  function _normalizeGalleryData(data) {
+    data = data || {};
+    var pct = (data.defaultCommissionPct === '' || data.defaultCommissionPct == null)
+      ? NaN : parseFloat(data.defaultCommissionPct);
+    function rowsWithValues(list, keys) {
+      return (Array.isArray(list) ? list : []).map(function (r) {
+        var rec = {};
+        keys.forEach(function (k) { rec[k] = String((r && r[k]) || '').trim(); });
+        return rec;
+      }).filter(function (rec) { return Object.keys(rec).some(function (k) { return rec[k]; }); });
+    }
+    return {
+      name: String(data.name || '').trim(),
+      addresses: rowsWithValues(data.addresses, ['street', 'city', 'state', 'zip', 'country']),
+      contacts: rowsWithValues(data.contacts, ['name', 'email', 'phone', 'role']),
+      defaultCommissionPct: isNaN(pct) ? null : pct,
+      currency: String(data.currency || '').trim() || 'USD',
+      notes: String(data.notes || '').trim()
+    };
+  }
+  window.GalleriesBridge = {
+    create: async function (data) {
+      var v = _normalizeGalleryData(data);
+      if (!v.name) throw new Error('Name is required');
+      return _writeGalleryRecord(null, v);
+    },
+    update: async function (id, data) {
+      var v = _normalizeGalleryData(data);
+      if (!v.name) throw new Error('Name is required');
+      return _writeGalleryRecord(id, v);
+    }
+  };
 
   // W2.3 (Finance) — Gallery payouts register
   window.consignmentShowPayouts = function() {
