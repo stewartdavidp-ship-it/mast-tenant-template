@@ -188,6 +188,11 @@
       { k: 'Internal storefront', v: U.badge('On', 'teal') }
     ]));
   }
+  // The Image TAB is LIGHT: a read gallery + quick Upload + a "Manage images"
+  // drill. Set-primary / remove / reorder live in the product-images-v2 drill SO
+  // (heavy edit → its own SO; the large hero there makes "primary" unmistakable
+  // even with near-identical thumbnails). On Back the parent SO re-renders from
+  // the shared record, so the tab reflects any changes.
   function imagePane(p) {
     var pid = p._key || p.pid;
     var imgs = (Array.isArray(p.images) ? p.images : []);
@@ -200,17 +205,15 @@
       body = '<div class="pv2-imggrid">' + imgs.map(function (im, idx) {
         var url = resolve(im); if (!url) return '';
         var badge = idx === 0 ? '<span class="pv2-imgbadge">Primary</span>' : '';
-        var actions = '<div class="pv2-imgacts">' +
-          (idx !== 0 ? '<button class="btn btn-secondary btn-small" onclick="ProductsV2.makePrimary(\'' + esc(pid) + '\',' + idx + ')">Make primary</button>' : '') +
-          '<button class="btn btn-secondary btn-small" onclick="ProductsV2.removeImage(\'' + esc(pid) + '\',' + idx + ')">Remove</button>' +
-          '</div>';
-        return '<div class="pv2-imgcellwrap"><div class="pv2-imgcell" style="background-image:url(' + esc(url) + ');">' + badge + '</div>' + actions + '</div>';
-      }).join('') + '</div>';
+        return '<div class="pv2-imgcellwrap"><div class="pv2-imgcell" style="background-image:url(' + esc(url) + ');">' + badge + '</div></div>';
+      }).join('') + '</div>' +
+        '<div style="margin-top:12px;"><button class="btn btn-secondary btn-small" onclick="MastEntity.drill(\'product-images-v2\',\'' + esc(pid) + '\')">Manage images →</button> <span class="pv2-temp">set primary, remove, reorder</span></div>';
     }
     var d = p.description ? '<div style="font-size:0.85rem;color:var(--warm-gray);line-height:1.55;">' + esc(String(p.description).slice(0, 300)) + '</div>' : '';
     return U.card('Images (' + imgs.length + ')', body, { headerRight: uploadBtn }) + (d ? U.card('Description', d) : '');
   }
-  // Re-render the Image pane in place (after upload / primary / remove).
+  // Re-render the Image pane in place (after a quick in-tab upload). The drill SO
+  // edits refresh on Back via the shared record, so they don't call this.
   function rerenderImagePane(pid) {
     var rec = V2.byId[pid]; if (!rec) return;
     var body = document.getElementById('mastSlideOutBody');
@@ -477,33 +480,66 @@
     label: 'Images', labelPlural: 'Images', size: 'lg', route: null,
     recordId: function (r) { return r._key; },
     fields: [{ name: '_title', label: 'Images', type: 'text', list: true, group: 'Images', readOnly: true }],
-    fetch: function (id) {
-      var parts = String(id || '').split('::'); var pid = parts[0], vid = parts[1];
-      var p = V2.byId[pid]; if (!p) return null;
-      var imgs = (Array.isArray(p.images) ? p.images : []).slice();
-      var focus = 0, label = p.name || 'Product';
-      if (vid) {
-        var v = realVariants(p).filter(function (x) { return x.id === vid; })[0];
-        label += ' — ' + variantLabel(v || { combo: {} });
-        var vimg = v && (v.image || v.imageUrl);
-        if (vimg) { var fi = imgs.indexOf(vimg); if (fi >= 0) focus = fi; else { imgs.unshift(vimg); focus = 0; } }
-      }
-      return { _key: id, _title: label + ' · Images', product: p, images: imgs, focus: focus };
-    },
+    fetch: function (id) { return imagesDrillRecord(id); },
     detail: {
+      // The image MANAGER (heavy edit → its own drilled SO). Large hero of the
+      // focused image makes "primary" unmistakable even with near-identical
+      // thumbnails; click a thumbnail to focus, then set-primary / remove /
+      // upload. Each edit re-renders this SO and syncs the shared product record
+      // so the parent's Image tab reflects it on Back.
       render: function (UU, r) {
         var imgs = r.images || [];
-        if (!imgs.length) return UU.card('Images', '<span style="color:var(--warm-gray);">No images for this product yet.</span>');
+        var key = r._key;
+        var uploadBtn = '<label class="btn btn-secondary btn-small" style="cursor:pointer;margin:0;"><input type="file" accept="image/*" style="display:none;" onchange="ProductsV2.imgUpload(\'' + esc(key) + '\',this)">Upload image</label>';
+        if (!imgs.length) return UU.card('Images', '<div style="text-align:center;padding:22px 16px;color:var(--warm-gray);font-size:0.9rem;">No images yet. Upload one — the first becomes the primary.</div>', { headerRight: uploadBtn });
         var focusSrc = imgs[r.focus] || imgs[0];
+        var isPrimary = focusSrc === imgs[0];
         var large = '<div class="pv2-imgfocus"><img id="pv2ImgLarge" src="' + esc(focusSrc) + '" alt=""></div>';
+        var heroActions = '<div style="display:flex;gap:8px;justify-content:center;align-items:center;margin-top:12px;flex-wrap:wrap;">' +
+          (isPrimary
+            ? '<span class="pv2-imgbadge" style="position:static;">Primary image</span>'
+            : '<button class="btn btn-secondary btn-small" onclick="ProductsV2.imgMakePrimary(\'' + esc(key) + '\',\'' + esc(focusSrc) + '\')">Make primary</button>') +
+          '<button class="btn btn-secondary btn-small" onclick="ProductsV2.imgRemove(\'' + esc(key) + '\',\'' + esc(focusSrc) + '\')">Remove</button>' +
+          '</div>';
         var strip = '<div class="pv2-imgstrip">' + imgs.map(function (src, i) {
-          return '<button class="pv2-imgthumb' + (i === r.focus ? ' on' : '') + '" onclick="ProductsV2.focusImage(\'' + esc(src) + '\',this)"><img src="' + esc(src) + '" alt=""></button>';
+          return '<button class="pv2-imgthumb' + (i === r.focus ? ' on' : '') + '" onclick="ProductsV2.imgFocus(\'' + esc(key) + '\',\'' + esc(src) + '\')"><img src="' + esc(src) + '" alt=""></button>';
         }).join('') + '</div>';
-        return '<div class="pv2-pnote" style="margin-bottom:10px;">All images for ' + esc(r.product.name || 'this product') + ' — click a thumbnail to view it large.</div>' +
-          UU.card('Focused', large) + UU.card('All images (' + imgs.length + ')', strip);
+        return '<div class="pv2-pnote" style="margin-bottom:10px;">Click a thumbnail to focus it, then set it primary or remove it. The primary (first) image is the product’s hero.</div>' +
+          UU.card('Focused', large + heroActions, { headerRight: uploadBtn }) + UU.card('All images (' + imgs.length + ')', strip);
       }
     }
   });
+
+  // Build the product-images-v2 drill record. focusUrl (optional) overrides the
+  // default focus so a re-render can keep the user on the image they were editing.
+  function imagesDrillRecord(id, focusUrl) {
+    var parts = String(id || '').split('::'); var pid = parts[0], vid = parts[1];
+    var p = V2.byId[pid]; if (!p) return null;
+    var imgs = (Array.isArray(p.images) ? p.images : []).slice();
+    var focus = 0, label = p.name || 'Product';
+    if (vid) {
+      var v = realVariants(p).filter(function (x) { return x.id === vid; })[0];
+      label += ' — ' + variantLabel(v || { combo: {} });
+      var vimg = v && (v.image || v.imageUrl);
+      if (vimg) { var fi = imgs.indexOf(vimg); if (fi >= 0) focus = fi; else { imgs.unshift(vimg); focus = 0; } }
+    }
+    if (focusUrl) { var fu = imgs.indexOf(focusUrl); if (fu >= 0) focus = fu; }
+    return { _key: id, _title: label + ' · Images', product: p, images: imgs, focus: focus };
+  }
+  // Re-render the image drill SO in place (internal=true → keeps the drill stack,
+  // so Back still returns to the product). Syncs nothing itself; callers update
+  // the shared record first.
+  function reopenImagesDrill(key, focusUrl) {
+    var rec = imagesDrillRecord(key, focusUrl);
+    if (rec) MastEntity.openRecord('product-images-v2', rec, 'read', true);
+  }
+  // Keep the products-v2 cache (= the parent SO's shared record) current after an
+  // image write, so the Image tab reflects it when the user Backs out.
+  function syncImagesCache(pid, res) {
+    var rec = V2.byId[pid]; if (!rec || !res) return;
+    if (Array.isArray(res.images)) rec.images = res.images;
+    if (Array.isArray(res.imageIds)) rec.imageIds = res.imageIds;
+  }
 
   function buildVariantRecord(id) {
     var parts = String(id || '').split('::'); var pid = parts[0], vid = parts[1];
@@ -746,45 +782,45 @@
         MastAdmin.showToast('Image uploaded');
       }, function (e) { console.error('[products-v2] uploadImage', e); MastAdmin.showToast('Upload failed', true); });
     },
-    makePrimary: function (pid, idx) {
+    // ── Image MANAGER (the product-images-v2 drill SO) ────────────────
+    // Heavy edit lives here, not in the tab. Each op is fresh-read + URL-keyed in
+    // the bridge (index-safe — can't drop the wrong/another image), syncs the
+    // shared product record, and re-renders the drill keeping focus.
+    imgFocus: function (key, src) { reopenImagesDrill(key, src); },
+    imgUpload: function (key, inputEl) {
+      var file = inputEl && inputEl.files && inputEl.files[0];
+      if (inputEl) inputEl.value = '';
+      if (!file) return;
       if (!window.MakerProductBridge) { if (window.MastAdmin && MastAdmin.loadModule) MastAdmin.loadModule('maker'); MastAdmin.showToast('Still loading…'); return; }
-      var rec = V2.byId[pid]; if (!rec) return;
-      var images = (Array.isArray(rec.images) ? rec.images : []).slice();
-      var imageIds = (Array.isArray(rec.imageIds) ? rec.imageIds : []).slice();
-      if (idx <= 0 || idx >= images.length) return;
-      images.unshift(images.splice(idx, 1)[0]);
-      if (imageIds.length === (Array.isArray(rec.images) ? rec.images.length : 0)) imageIds.unshift(imageIds.splice(idx, 1)[0]);
-      Promise.resolve(window.MakerProductBridge.setImages(pid, images, imageIds)).then(function (res) {
-        if (!res || !res.ok) { MastAdmin.showToast('Failed: ' + ((res && res.error) || 'unknown'), true); return; }
-        rec.images = res.images; if (res.imageIds) rec.imageIds = res.imageIds;
-        rerenderImagePane(pid); rerenderHeaderStrip(pid);
-        MastAdmin.showToast('Primary image updated');
-      }, function (e) { console.error('[products-v2] makePrimary', e); MastAdmin.showToast('Failed', true); });
+      var pid = String(key).split('::')[0];
+      MastAdmin.showToast('Uploading image…');
+      Promise.resolve(window.MakerProductBridge.addImage(pid, file)).then(function (res) {
+        if (!res || !res.ok) { MastAdmin.showToast('Upload failed: ' + ((res && res.error) || 'unknown'), true); return; }
+        syncImagesCache(pid, res); reopenImagesDrill(key, res.url);
+        MastAdmin.showToast('Image uploaded');
+      }, function (e) { console.error('[products-v2] imgUpload', e); MastAdmin.showToast('Upload failed', true); });
     },
-    removeImage: function (pid, idx) {
+    imgMakePrimary: function (key, src) {
       if (!window.MakerProductBridge) { if (window.MastAdmin && MastAdmin.loadModule) MastAdmin.loadModule('maker'); MastAdmin.showToast('Still loading…'); return; }
-      var rec = V2.byId[pid]; if (!rec) return;
+      var pid = String(key).split('::')[0];
+      Promise.resolve(window.MakerProductBridge.makeImagePrimary(pid, src)).then(function (res) {
+        if (!res || !res.ok) { MastAdmin.showToast('Failed: ' + ((res && res.error) || 'unknown'), true); return; }
+        syncImagesCache(pid, res); reopenImagesDrill(key, src);
+        MastAdmin.showToast('Primary image updated');
+      }, function (e) { console.error('[products-v2] imgMakePrimary', e); MastAdmin.showToast('Failed', true); });
+    },
+    imgRemove: function (key, src) {
+      if (!window.MakerProductBridge) { if (window.MastAdmin && MastAdmin.loadModule) MastAdmin.loadModule('maker'); MastAdmin.showToast('Still loading…'); return; }
+      var pid = String(key).split('::')[0];
       function go() {
-        var images = (Array.isArray(rec.images) ? rec.images : []).slice();
-        var imageIds = (Array.isArray(rec.imageIds) ? rec.imageIds : []).slice();
-        if (idx < 0 || idx >= images.length) return;
-        var hadIds = imageIds.length === images.length;
-        images.splice(idx, 1);
-        if (hadIds) imageIds.splice(idx, 1);
-        Promise.resolve(window.MakerProductBridge.setImages(pid, images, hadIds ? imageIds : undefined)).then(function (res) {
+        Promise.resolve(window.MakerProductBridge.removeImage(pid, src)).then(function (res) {
           if (!res || !res.ok) { MastAdmin.showToast('Failed: ' + ((res && res.error) || 'unknown'), true); return; }
-          rec.images = res.images; if (res.imageIds) rec.imageIds = res.imageIds;
-          rerenderImagePane(pid); rerenderHeaderStrip(pid);
+          syncImagesCache(pid, res); reopenImagesDrill(key);
           MastAdmin.showToast('Image removed');
-        }, function (e) { console.error('[products-v2] removeImage', e); MastAdmin.showToast('Failed', true); });
+        }, function (e) { console.error('[products-v2] imgRemove', e); MastAdmin.showToast('Failed', true); });
       }
       if (window.mastConfirm) Promise.resolve(window.mastConfirm('Remove this image?', { title: 'Remove image', confirmText: 'Remove' })).then(function (ok) { if (ok) go(); });
       else go();
-    },
-    // Image SO: click a gallery thumbnail to swap the large focused image.
-    focusImage: function (src, btn) {
-      var lg = document.getElementById('pv2ImgLarge'); if (lg) lg.src = src;
-      if (btn && btn.parentNode) { btn.parentNode.querySelectorAll('.pv2-imgthumb').forEach(function (b) { b.classList.remove('on'); }); btn.classList.add('on'); }
     },
     exportCsv: function () { return MastEntity.exportRows('products-v2', visibleRows(), V2.filter); }
   };
