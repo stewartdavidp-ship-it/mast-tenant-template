@@ -110,7 +110,7 @@
        Shared by customers.js (list/export) and customer-service.js (survey
        bulk-send) so the segment matcher cannot drift. ?v= kept in lockstep
        with MAST_MODULES_V by scripts/bump-modules-version.sh. -->
-  <script src="../shared/customer-filters.js?v=20260605-001201-4f5ae38"></script>
+  <script src="../shared/customer-filters.js?v=20260605-001635-78e7d26"></script>
   <script src="../shared/brand-sync.js?v=1"></script>
   <script src="../shared/channel-connection.js?v=1"></script>
   <!-- UI redesign engines (docs/ux-audit): shared primitives + Entity Engine.
@@ -118,9 +118,9 @@
        scripts/bump-modules-version.sh (these are static <head> tags loaded
        before the JS var exists, so they can't read it at runtime). Without
        this, the engines were frozen at ?v=1 and never cache-busted on deploy. -->
-  <script src="../shared/mast-ui.js?v=20260605-001201-4f5ae38"></script>
-  <script src="../shared/mast-io.js?v=20260605-001201-4f5ae38"></script>
-  <script src="../shared/mast-entity.js?v=20260605-001201-4f5ae38"></script>
+  <script src="../shared/mast-ui.js?v=20260605-001635-78e7d26"></script>
+  <script src="../shared/mast-io.js?v=20260605-001635-78e7d26"></script>
+  <script src="../shared/mast-entity.js?v=20260605-001635-78e7d26"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Pod-specific runtime config — sets window.MAST_POD_PLATFORM_PROJECT so
@@ -20192,7 +20192,7 @@ var MAST_V2_ROUTE_MAP = {
   trips: 'trips-v2', team: 'team-v2', procurement: 'procurement-v2',
   materials: 'materials-v2', 'finance-expenses': 'finance-expenses-v2',
   'cs-tickets': 'cs-tickets-v2', terms: 'terms-v2', wallet: 'wallet-v2',
-  brand: 'brand-v2', homepage: 'homepage-v2', commissions: 'commissions-v2',
+  brand: 'brand-v2', homepage: 'homepage-v2', commissions: 'commissions-v2', products: 'products-v2',
   wholesale: 'wholesale-v2', students: 'students-v2', galleries: 'galleries-v2', instructors: 'instructors-v2',
   contacts: 'contacts-v2', enrollments: 'enrollments-v2', passes: 'passes-v2',
   resources: 'resources-v2', newsletter: 'newsletter-v2',
@@ -20966,7 +20966,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260605-001201-4f5ae38';
+var MAST_MODULES_V = '20260605-001635-78e7d26';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
