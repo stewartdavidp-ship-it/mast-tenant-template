@@ -110,7 +110,7 @@
        Shared by customers.js (list/export) and customer-service.js (survey
        bulk-send) so the segment matcher cannot drift. ?v= kept in lockstep
        with MAST_MODULES_V by scripts/bump-modules-version.sh. -->
-  <script src="../shared/customer-filters.js?v=20260605-164945-655bc5c"></script>
+  <script src="../shared/customer-filters.js?v=20260605-165855-33ad676"></script>
   <script src="../shared/brand-sync.js?v=1"></script>
   <script src="../shared/channel-connection.js?v=1"></script>
   <!-- UI redesign engines (docs/ux-audit): shared primitives + Entity Engine.
@@ -118,9 +118,9 @@
        scripts/bump-modules-version.sh (these are static <head> tags loaded
        before the JS var exists, so they can't read it at runtime). Without
        this, the engines were frozen at ?v=1 and never cache-busted on deploy. -->
-  <script src="../shared/mast-ui.js?v=20260605-164945-655bc5c"></script>
-  <script src="../shared/mast-io.js?v=20260605-164945-655bc5c"></script>
-  <script src="../shared/mast-entity.js?v=20260605-164945-655bc5c"></script>
+  <script src="../shared/mast-ui.js?v=20260605-165855-33ad676"></script>
+  <script src="../shared/mast-io.js?v=20260605-165855-33ad676"></script>
+  <script src="../shared/mast-entity.js?v=20260605-165855-33ad676"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Pod-specific runtime config — sets window.MAST_POD_PLATFORM_PROJECT so
@@ -152,20 +152,24 @@
       scroll-behavior: auto !important;
     }
     :root {
-      --amber: var(--amber);
-      --amber-light: var(--amber-light);
-      --amber-glow: var(--amber-glow);
-      --teal: var(--teal);
-      --teal-deep: var(--teal-deep);
-      --teal-light: var(--teal-light);
-      --cream: var(--cream);
-      --cream-dark: var(--cream-dark);
-      --charcoal: var(--charcoal);
-      --warm-gray: var(--warm-gray);
-      --warm-gray-light: var(--warm-gray-light);
-      --danger: var(--danger);
+      /* Light-theme base values. body.dark-mode (see "DARK MODE" block) overrides
+         the surface tokens for dark. feac5f5 accidentally clobbered these into
+         self-referencing var() definitions, which wiped light mode and left
+         amber/teal undefined in BOTH modes — restored to the original hex here. */
+      --amber: #C4853C;
+      --amber-light: #E8B679;
+      --amber-glow: #F5D5A8;
+      --teal: #2A7C6F;
+      --teal-deep: #1B5C52;
+      --teal-light: #A8D5CE;
+      --cream: #FAF6F0;
+      --cream-dark: #F0E8DB;
+      --charcoal: #1A1A1A;
+      --warm-gray: #6B6560;
+      --warm-gray-light: #9B958E;
+      --danger: #DC3545;
       --danger-hover: #c82333;
-      --gold: var(--amber);
+      --gold: #C4853C;
       --dark-brown: #5C3D2E;
       --bg-secondary: #f5f5f5;
       --bg-tertiary: #e8e2d8;
@@ -21289,7 +21293,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260605-164945-655bc5c';
+var MAST_MODULES_V = '20260605-165855-33ad676';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
