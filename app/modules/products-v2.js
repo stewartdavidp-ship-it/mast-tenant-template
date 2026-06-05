@@ -107,8 +107,8 @@
   function recipePane(p) {
     if (p.recipeId) {
       return U.card('Recipe', U.kv([{ k: 'Status', v: 'Linked' }, { k: 'Recipe id', v: p.recipeId }])) +
-        '<button class="btn btn-secondary btn-small" onclick="ProductsV2.openRecipe(\'' + esc(p.recipeId) + '\')">Open recipe builder ↗</button>' +
-        '<span class="pv2-temp"> legacy — becomes a native stacked recipe SO in P3</span>';
+        '<button class="btn btn-secondary btn-small" onclick="MastEntity.drill(\'recipe-v2\',\'' + esc(p.recipeId) + '\')">Open recipe →</button>' +
+        '<span class="pv2-temp"> opens as its own stacked SO — Back returns here</span>';
     }
     return U.card('Recipe', '<span style="color:var(--warm-gray);">No recipe linked.</span>');
   }
@@ -204,19 +204,67 @@
           { k: 'Product', v: p.name || '—' },
           { k: 'Status', v: statusLabel(p.status) + ' (product)' }
         ]);
-        function inhRow(label, val, from) {
-          return '<div class="pv2-inh"><span class="il">' + esc(label) + '</span><span class="iv">' + val + ' <span class="from">· ' + esc(from) + '</span></span>' +
-            '<span class="ov"><button class="btn btn-secondary btn-small" onclick="ProductsV2.editVariantTodo()">Override</button></span></div>';
+        function inhRow(label, val, from, overridden) {
+          return '<div class="pv2-inh"><span class="il">' + esc(label) + '</span><span class="iv"' + (overridden ? ' style="color:var(--amber);font-weight:600;"' : '') + '>' + val + ' <span class="from">· ' + esc(from) + '</span></span>' +
+            '<span class="ov"><button class="btn btn-secondary btn-small" onclick="ProductsV2.editVariantTodo()">' + (overridden ? 'Edit' : 'Override') + '</button></span></div>';
         }
-        var rows =
-          inhRow('Retail price', N.money(variantPrice(p, v)) || '—', ov ? 'overridden' : 'inherited from Default') +
-          inhRow('SKU', esc(v.sku || '—'), v.sku ? 'set' : 'not set') +
-          inhRow('Recipe / cost', '—', 'inherits the base recipe') +
-          inhRow('Inventory', 'Build to order', 'inherited') +
-          inhRow('Image', 'Shared product image', 'inherited');
-        var back = '<div style="margin-top:14px;"><button class="btn btn-secondary btn-small" onclick="ProductsV2.open(\'' + esc(p._key || p.pid) + '\')">← Back to Default (' + esc(p.name || 'product') + ')</button></div>';
-        var note = '<div class="pv2-pnote">A variant has no process — it follows the product. Per-tab inherit/override editing arrives in P2/P3.</div>';
-        return UU.stickyHead(tiles, '') + '<div>' + UU.card('Variant details', rows) + back + note + '</div>';
+        var tabs = [{ key: 'v-pricing', label: 'Pricing' }, { key: 'v-recipe', label: 'Recipe' }, { key: 'v-channels', label: 'Channels' }, { key: 'v-inventory', label: 'Inventory' }, { key: 'v-image', label: 'Image' }];
+        function pane(key, html, active) { return '<div class="mu-pane" data-pane="' + key + '"' + (active ? '' : ' hidden') + '>' + html + '</div>'; }
+        var back = '<div style="margin:14px 0 0;"><button class="btn btn-secondary btn-small" onclick="ProductsV2.open(\'' + esc(p._key || p.pid) + '\')">← Back to Default (' + esc(p.name || 'product') + ')</button></div>';
+        var ctx = '<div class="pv2-pnote">Inherits the Default unless overridden — a variant has no process, it follows the product.</div>';
+        return UU.stickyHead(tiles, UU.paneTabsBar(tabs, 'v-pricing')) +
+          pane('v-pricing', UU.card('Pricing', inhRow('Retail price', N.money(variantPrice(p, v)) || '—', ov ? 'overridden' : 'inherited from Default', ov) + inhRow('SKU', esc(v.sku || '—'), v.sku ? 'set' : 'not set', !!v.sku)) + ctx, true) +
+          pane('v-recipe', UU.card('Recipe', inhRow('Recipe / cost', '—', 'inherits the base recipe', false))) +
+          pane('v-channels', UU.card('Channels', inhRow('Shopify', 'Live', 'inherits product mapping', false))) +
+          pane('v-inventory', UU.card('Inventory', inhRow('Stock type', 'Build to order', 'inherited', false) + inhRow('On hand', '—', 'build to order', false))) +
+          pane('v-image', UU.card('Image', inhRow('Variant image', 'Shared product image', 'inherited', false))) +
+          back;
+      }
+    }
+  });
+
+  // ════════════════ Entity: a recipe (stacked SO, drilled from the product) ════════════════
+  // The "tab summary → edit opens its own full-size SO → Back collapses to the
+  // calling tab" pattern (operator-ratified). drill() pushes a back frame, so
+  // Recipe → Back returns to the Default. Replaces the legacy recipe-builder
+  // deep-link with a native V2 surface (debt register item cleared, read side).
+  MastEntity.define('recipe-v2', {
+    label: 'Recipe', labelPlural: 'Recipes', size: 'lg', route: null,
+    recordId: function (r) { return r.recipeId || r._key; },
+    fields: [{ name: 'name', label: 'Recipe', type: 'text', list: true, group: 'Recipe', readOnly: true }],
+    fetch: function (id) {
+      return Promise.resolve(MastDB.recipes.get(id)).then(function (rc) {
+        if (!rc) return null; rc.recipeId = rc.recipeId || id; rc.name = rc.name || 'Recipe'; return rc;
+      });
+    },
+    detail: {
+      render: function (UU, rc) {
+        var li = rc.lineItems || {};
+        var rows = Object.keys(li).map(function (k) {
+          var m = li[k] || {};
+          var qty = (m.quantity != null ? m.quantity : '') + (m.unitOfMeasure ? (' ' + m.unitOfMeasure) : '');
+          return '<tr><td>' + esc(m.materialName || '—') + '</td><td class="r">' + esc(qty) + '</td><td class="r">' + (N.money(m.unitCost) || '—') + '</td><td class="r">' + (N.money(m.extendedCost) || '—') + '</td></tr>';
+        }).join('');
+        var bom = '<table class="pv2-bom"><thead><tr><th>Material</th><th class="r">Qty</th><th class="r">Unit</th><th class="r">Ext</th></tr></thead><tbody>' + rows + '</tbody></table>';
+        var tiles = UU.tiles([
+          { k: 'Unit cost', v: N.money(rc.totalCost) || '—', hero: true },
+          { k: 'Status', v: rc.status || '—' },
+          { k: 'Materials', v: Object.keys(li).length },
+          { k: 'Active tier', v: rc.activePriceTier || '—' }
+        ]);
+        var cost = UU.kv([
+          { k: 'Materials', v: N.money(rc.totalMaterialCost) || '—' },
+          { k: 'Labor', v: N.money(rc.laborCost) || '—' },
+          { k: 'Other', v: N.money(rc.otherCost) || '—' },
+          { k: 'Unit cost', v: N.money(rc.totalCost) || '—' }
+        ]);
+        var pr = UU.kv([
+          { k: 'Active tier', v: rc.activePriceTier || '—' },
+          { k: 'Retail', v: N.money(rc.retailPrice) || '—' },
+          { k: 'Retail margin', v: (rc.retailMarginPct != null ? rc.retailMarginPct + '%' : '—') }
+        ]);
+        return UU.stickyHead(tiles, '') + '<div>' + UU.card('Bill of materials', bom) + UU.card('Cost', cost) + UU.card('Pricing', pr) +
+          '<div class="pv2-pnote">Drilled from the product — Back returns to the Default. Recipe editing lands in P3.</div></div>';
       }
     }
   });
@@ -294,7 +342,8 @@
       '.pv2-pnote{font-size:0.78rem;color:var(--warm-gray);margin-top:6px;} .pv2-temp{font-size:0.72rem;color:var(--warm-gray);margin-left:8px;}',
       '.pv2-inh{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--border);font-size:0.9rem;} .pv2-inh:last-child{border-bottom:0;}',
       '.pv2-inh .il{color:var(--warm-gray);width:120px;flex-shrink:0;} .pv2-inh .iv{color:var(--text);} .pv2-inh .from{color:var(--warm-gray);font-size:0.78rem;} .pv2-inh .ov{margin-left:auto;}',
-      '.pv2-archived{display:inline-block;font-size:0.72rem;text-transform:uppercase;letter-spacing:.04em;background:color-mix(in srgb,var(--warm-gray) 18%,transparent);color:var(--warm-gray);padding:4px 11px;border-radius:8px;margin:8px 0;}'
+      '.pv2-archived{display:inline-block;font-size:0.72rem;text-transform:uppercase;letter-spacing:.04em;background:color-mix(in srgb,var(--warm-gray) 18%,transparent);color:var(--warm-gray);padding:4px 11px;border-radius:8px;margin:8px 0;}',
+      '.pv2-bom{width:100%;border-collapse:collapse;} .pv2-bom th{text-align:left;font-size:0.72rem;color:var(--warm-gray);padding:0 0 8px;font-weight:600;} .pv2-bom th.r,.pv2-bom td.r{text-align:right;font-variant-numeric:tabular-nums;} .pv2-bom td{padding:7px 0;font-size:0.85rem;border-top:1px solid var(--border);}'
     ].join('');
     document.head.appendChild(s);
   }
