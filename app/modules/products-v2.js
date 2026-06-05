@@ -147,6 +147,18 @@
     if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') MastAdmin.loadModule('maker').then(cb).catch(cb);
     else cb();
   }
+  // Run cb once window.MakerProductBridge is available — LOAD then act, rather
+  // than bailing on a cold first click (the "still loading… try again" footgun).
+  // maker is normally preloaded when an SO opens, so cb usually runs synchronously.
+  function withProductBridge(cb) {
+    if (window.MakerProductBridge) return cb();
+    if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') {
+      MastAdmin.loadModule('maker').then(function () {
+        if (window.MakerProductBridge) cb();
+        else MastAdmin.showToast('Could not load the product editor', true);
+      }).catch(function () { MastAdmin.showToast('Could not load the product editor', true); });
+    } else { MastAdmin.showToast('Product editor unavailable', true); }
+  }
   // After a real advance, re-open the v2 SO from fresh data (the legacy handlers
   // re-render legacy views, not ours) so the stepper/badge reflect the new phase.
   function reopenProduct(pid) {
@@ -599,7 +611,7 @@
   }
 
   // ── State + data ────────────────────────────────────────────────────
-  var V2 = { rows: [], byId: {}, sortKey: '_title', sortDir: 'asc', filter: 'all', expanded: {}, editInfo: null };
+  var V2 = { rows: [], byId: {}, sortKey: '_title', sortDir: 'asc', filter: 'all', expanded: {}, editInfo: null, q: '' };
 
   function toRows(map) {
     var out = []; map = map || {};
@@ -620,10 +632,24 @@
   function visibleRows() {
     var rows = V2.rows;
     if (V2.filter && V2.filter !== 'all') rows = rows.filter(function (r) { return String(r.status || 'draft').toLowerCase() === V2.filter; });
+    var q = (V2.q || '').trim().toLowerCase();
+    if (q) rows = rows.filter(function (r) {
+      return String(r.name || '').toLowerCase().indexOf(q) >= 0
+        || String(categoryLabel(r) || '').toLowerCase().indexOf(q) >= 0
+        || String(r.sku || '').toLowerCase().indexOf(q) >= 0;
+    });
     return window.mastSortRows(rows, V2.sortKey, V2.sortDir, function (r, k) {
       var f = MastEntity.get('products-v2').fields.filter(function (x) { return x.name === k; })[0];
       return (f && f.get) ? f.get(r) : r[k];
     });
+  }
+  // The list body only (rows or empty-state) — re-rendered on its own during
+  // search so the search input keeps focus while you type.
+  function renderListBody() {
+    var rows = visibleRows();
+    if (rows.length) return '<div class="pv2-list">' + rows.map(rowHtml).join('') + '</div>';
+    var q = (V2.q || '').trim();
+    return '<div style="padding:46px;text-align:center;color:var(--warm-gray);">No products match ' + (q ? '“' + esc(q) + '”' : 'these filters') + '.</div>';
   }
 
   function ensureTab() {
@@ -753,17 +779,24 @@
         'color:' + (on ? 'var(--charcoal,var(--text))' : 'var(--warm-gray)') + ';border-radius:999px;padding:6px 13px;font-size:0.85rem;cursor:pointer;margin-right:8px;">' +
         label + ' <span style="color:var(--warm-gray);">' + (counts[s] || 0) + '</span></button>';
     }).join('');
-    var rows = visibleRows();
-    var body = rows.length ? '<div class="pv2-list">' + rows.map(rowHtml).join('') + '</div>'
-      : '<div style="padding:46px;text-align:center;color:var(--warm-gray);">No products match these filters.</div>';
+    var search = '<input id="pv2Search" type="text" value="' + esc(V2.q || '') + '" oninput="ProductsV2.setSearch(this.value)" placeholder="Search products…" ' +
+      'style="margin-left:auto;width:230px;max-width:100%;padding:7px 11px;border:1px solid var(--border);border-radius:999px;font-size:0.9rem;background:var(--cream,transparent);color:inherit;box-sizing:border-box;">';
     tab.innerHTML =
       U.pageHeader({ title: 'Products', count: N.count(V2.rows.length) + ' products',
         actionsHtml: '<button class="btn btn-secondary" onclick="ProductsV2.exportCsv()">↓ Export</button>' }) +
-      '<div style="margin:14px 0;">' + pills + '</div>' + body;
+      '<div style="margin:14px 0;display:flex;align-items:center;gap:8px 0;flex-wrap:wrap;">' + pills + search + '</div>' +
+      '<div id="pv2ListBody">' + renderListBody() + '</div>';
   }
 
   window.ProductsV2 = {
     setFilter: function (s) { V2.filter = s; render(); },
+    // Type-to-filter the list by name / category / SKU. Re-render only the list
+    // body so the input keeps focus (no full re-render mid-keystroke).
+    setSearch: function (v) {
+      V2.q = v;
+      var el = document.getElementById('pv2ListBody');
+      if (el) el.innerHTML = renderListBody(); else render();
+    },
     toggle: function (id) { V2.expanded[id] = !V2.expanded[id]; render(); },
     // Open/close the variant switcher popover. Selecting an item re-renders the
     // whole panel (open/openVariant), which clears the popover; this just handles
@@ -783,32 +816,28 @@
     // Preload maker before the SO opens so the MastFlow process header renders with
     // live readiness (products.workflow predicates call makerComputeReadinessChecklist).
     open: function (id) { var rec = V2.byId[id]; if (rec) ensureMaker(function () { MastEntity.openRecord('products-v2', rec, 'read'); }); },
-    openVariant: function (key) { var rec = buildVariantRecord(key); if (rec) MastEntity.openRecord('product-variant-v2', rec, 'read'); },
+    // Preload maker too, so the first image/edit click in a variant SO works
+    // (no cold "still loading" — the variant's writes also delegate to the bridge).
+    openVariant: function (key) { var rec = buildVariantRecord(key); if (rec) ensureMaker(function () { MastEntity.openRecord('product-variant-v2', rec, 'read'); }); },
     addVariant: function (id) { var p = V2.byId[id]; MastAdmin.showToast('Add variant for "' + (p ? p.name : id) + '" — write flow (inherits the Default) lands in P4.'); },
     editVariantTodo: function () { MastAdmin.showToast('Per-variant override editing lands in P4.'); },
     // Bind a variant to product.images[idx] (idx<0 → clear, use product default).
     setVariantImage: function (pid, variantId, idx) {
-      if (!window.MakerProductBridge) { if (window.MastAdmin && MastAdmin.loadModule) MastAdmin.loadModule('maker'); MastAdmin.showToast('Still loading…'); return; }
-      Promise.resolve(window.MakerProductBridge.setVariantImageIndex(pid, variantId, idx)).then(function (res) {
-        if (!res || !res.ok) { MastAdmin.showToast('Failed: ' + ((res && res.error) || 'unknown'), true); return; }
-        var rec = V2.byId[pid]; if (rec) rec.variants = res.variants; // keep parent/list cache fresh
-        // Re-render just the Image pane in place (stay on the Image tab) + refresh
-        // the header thumbnail — a full SO re-open would bounce back to Pricing.
-        rerenderVariantImagePane(pid, variantId);
-        MastAdmin.showToast(idx >= 0 ? 'Image #' + (idx + 1) + ' set for this variant' : 'Variant image cleared');
-      }, function (e) { console.error('[products-v2] setVariantImage', e); MastAdmin.showToast('Failed', true); });
+      withProductBridge(function () {
+        Promise.resolve(window.MakerProductBridge.setVariantImageIndex(pid, variantId, idx)).then(function (res) {
+          if (!res || !res.ok) { MastAdmin.showToast('Failed: ' + ((res && res.error) || 'unknown'), true); return; }
+          var rec = V2.byId[pid]; if (rec) rec.variants = res.variants; // keep parent/list cache fresh
+          // Re-render just the Image pane in place (stay on the Image tab) + refresh
+          // the header thumbnail — a full SO re-open would bounce back to Pricing.
+          rerenderVariantImagePane(pid, variantId);
+          MastAdmin.showToast(idx >= 0 ? 'Image #' + (idx + 1) + ' set for this variant' : 'Variant image cleared');
+        }, function (e) { console.error('[products-v2] setVariantImage', e); MastAdmin.showToast('Failed', true); });
+      });
     },
     // ── Info tab edit (P4 pilot) ──────────────────────────────────────
     editInfo: function (pid) { V2.editInfo = pid; rerenderInfoPane(pid); },
     cancelInfo: function (pid) { V2.editInfo = null; rerenderInfoPane(pid); },
     saveInfo: function (pid) {
-      // loadModule + guard — a pure-v2 (Legacy-off) session may not have the
-      // bridge yet; never call it undefined (the §1.B silent-failure bug class).
-      if (!window.MakerProductBridge) {
-        if (window.MastAdmin && MastAdmin.loadModule) MastAdmin.loadModule('maker');
-        MastAdmin.showToast('Still loading… try again in a moment.');
-        return;
-      }
       function val(id) { var el = document.getElementById(id); return el ? el.value.trim() : ''; }
       var rec = V2.byId[pid] || {};
       var patch = {
@@ -824,33 +853,31 @@
       if (patch.slug !== (rec.slug || '')) changed.slug = patch.slug;
       if (patch.sku !== (rec.sku || '')) changed.sku = patch.sku;
       if (!Object.keys(changed).length) { V2.editInfo = null; rerenderInfoPane(pid); MastAdmin.showToast('No changes'); return; }
-      Promise.resolve(window.MakerProductBridge.setFields(pid, changed)).then(function (res) {
-        if (!res || !res.ok) { MastAdmin.showToast('Save failed: ' + ((res && res.error) || 'unknown'), true); return; }
-        // Mirror the live cache so the read pane shows the edit immediately.
-        if (!res.staged) Object.assign(rec, changed);
-        V2.editInfo = null;
-        rerenderInfoPane(pid);
-        MastAdmin.showToast(res.staged ? 'Staged ' + res.changed + ' change' + (res.changed === 1 ? '' : 's') + ' (Apply to go live)' : 'Saved');
-      }, function (e) { console.error('[products-v2] saveInfo', e); MastAdmin.showToast('Save failed', true); });
+      withProductBridge(function () {
+        Promise.resolve(window.MakerProductBridge.setFields(pid, changed)).then(function (res) {
+          if (!res || !res.ok) { MastAdmin.showToast('Save failed: ' + ((res && res.error) || 'unknown'), true); return; }
+          // Mirror the live cache so the read pane shows the edit immediately.
+          if (!res.staged) Object.assign(rec, changed);
+          V2.editInfo = null;
+          rerenderInfoPane(pid);
+          MastAdmin.showToast(res.staged ? 'Staged ' + res.changed + ' change' + (res.changed === 1 ? '' : 's') + ' (Apply to go live)' : 'Saved');
+        }, function (e) { console.error('[products-v2] saveInfo', e); MastAdmin.showToast('Save failed', true); });
+      });
     },
     // ── Image tab edit (P4) ───────────────────────────────────────────
-    // Shared guard for every image bridge call (the §1.B silent-failure class).
     uploadImage: function (pid, inputEl) {
       var file = inputEl && inputEl.files && inputEl.files[0];
       if (inputEl) inputEl.value = ''; // allow re-selecting the same file later
       if (!file) return;
-      if (!window.MakerProductBridge) {
-        if (window.MastAdmin && MastAdmin.loadModule) MastAdmin.loadModule('maker');
-        MastAdmin.showToast('Still loading… try again in a moment.');
-        return;
-      }
-      MastAdmin.showToast('Uploading image…');
-      Promise.resolve(window.MakerProductBridge.addImage(pid, file)).then(function (res) {
-        if (!res || !res.ok) { MastAdmin.showToast('Upload failed: ' + ((res && res.error) || 'unknown'), true); return; }
-        var rec = V2.byId[pid]; if (rec) { rec.images = res.images; rec.imageIds = res.imageIds; }
-        rerenderImagePane(pid); rerenderHeaderStrip(pid);
-        MastAdmin.showToast('Image uploaded');
-      }, function (e) { console.error('[products-v2] uploadImage', e); MastAdmin.showToast('Upload failed', true); });
+      withProductBridge(function () {
+        MastAdmin.showToast('Uploading image…');
+        Promise.resolve(window.MakerProductBridge.addImage(pid, file)).then(function (res) {
+          if (!res || !res.ok) { MastAdmin.showToast('Upload failed: ' + ((res && res.error) || 'unknown'), true); return; }
+          var rec = V2.byId[pid]; if (rec) { rec.images = res.images; rec.imageIds = res.imageIds; }
+          rerenderImagePane(pid); rerenderHeaderStrip(pid);
+          MastAdmin.showToast('Image uploaded');
+        }, function (e) { console.error('[products-v2] uploadImage', e); MastAdmin.showToast('Upload failed', true); });
+      });
     },
     // ── Image MANAGER (the product-images-v2 drill SO) ────────────────
     // Heavy edit lives here, not in the tab. Each op is fresh-read + URL-keyed in
@@ -861,33 +888,36 @@
       var file = inputEl && inputEl.files && inputEl.files[0];
       if (inputEl) inputEl.value = '';
       if (!file) return;
-      if (!window.MakerProductBridge) { if (window.MastAdmin && MastAdmin.loadModule) MastAdmin.loadModule('maker'); MastAdmin.showToast('Still loading…'); return; }
       var pid = String(key).split('::')[0];
-      MastAdmin.showToast('Uploading image…');
-      Promise.resolve(window.MakerProductBridge.addImage(pid, file)).then(function (res) {
-        if (!res || !res.ok) { MastAdmin.showToast('Upload failed: ' + ((res && res.error) || 'unknown'), true); return; }
-        syncImagesCache(pid, res); reopenImagesDrill(key, res.url);
-        MastAdmin.showToast('Image uploaded');
-      }, function (e) { console.error('[products-v2] imgUpload', e); MastAdmin.showToast('Upload failed', true); });
+      withProductBridge(function () {
+        MastAdmin.showToast('Uploading image…');
+        Promise.resolve(window.MakerProductBridge.addImage(pid, file)).then(function (res) {
+          if (!res || !res.ok) { MastAdmin.showToast('Upload failed: ' + ((res && res.error) || 'unknown'), true); return; }
+          syncImagesCache(pid, res); reopenImagesDrill(key, res.url);
+          MastAdmin.showToast('Image uploaded');
+        }, function (e) { console.error('[products-v2] imgUpload', e); MastAdmin.showToast('Upload failed', true); });
+      });
     },
     imgMakePrimary: function (key, src) {
-      if (!window.MakerProductBridge) { if (window.MastAdmin && MastAdmin.loadModule) MastAdmin.loadModule('maker'); MastAdmin.showToast('Still loading…'); return; }
       var pid = String(key).split('::')[0];
-      Promise.resolve(window.MakerProductBridge.makeImagePrimary(pid, src)).then(function (res) {
-        if (!res || !res.ok) { MastAdmin.showToast('Failed: ' + ((res && res.error) || 'unknown'), true); return; }
-        syncImagesCache(pid, res); reopenImagesDrill(key, src);
-        MastAdmin.showToast('Primary image updated');
-      }, function (e) { console.error('[products-v2] imgMakePrimary', e); MastAdmin.showToast('Failed', true); });
+      withProductBridge(function () {
+        Promise.resolve(window.MakerProductBridge.makeImagePrimary(pid, src)).then(function (res) {
+          if (!res || !res.ok) { MastAdmin.showToast('Failed: ' + ((res && res.error) || 'unknown'), true); return; }
+          syncImagesCache(pid, res); reopenImagesDrill(key, src);
+          MastAdmin.showToast('Primary image updated');
+        }, function (e) { console.error('[products-v2] imgMakePrimary', e); MastAdmin.showToast('Failed', true); });
+      });
     },
     imgRemove: function (key, src) {
-      if (!window.MakerProductBridge) { if (window.MastAdmin && MastAdmin.loadModule) MastAdmin.loadModule('maker'); MastAdmin.showToast('Still loading…'); return; }
       var pid = String(key).split('::')[0];
       function go() {
-        Promise.resolve(window.MakerProductBridge.removeImage(pid, src)).then(function (res) {
-          if (!res || !res.ok) { MastAdmin.showToast('Failed: ' + ((res && res.error) || 'unknown'), true); return; }
-          syncImagesCache(pid, res); reopenImagesDrill(key);
-          MastAdmin.showToast('Image removed');
-        }, function (e) { console.error('[products-v2] imgRemove', e); MastAdmin.showToast('Failed', true); });
+        withProductBridge(function () {
+          Promise.resolve(window.MakerProductBridge.removeImage(pid, src)).then(function (res) {
+            if (!res || !res.ok) { MastAdmin.showToast('Failed: ' + ((res && res.error) || 'unknown'), true); return; }
+            syncImagesCache(pid, res); reopenImagesDrill(key);
+            MastAdmin.showToast('Image removed');
+          }, function (e) { console.error('[products-v2] imgRemove', e); MastAdmin.showToast('Failed', true); });
+        });
       }
       if (window.mastConfirm) Promise.resolve(window.mastConfirm('Remove this image?', { title: 'Remove image', confirmText: 'Remove' })).then(function (ok) { if (ok) go(); });
       else go();
