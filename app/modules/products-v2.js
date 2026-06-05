@@ -498,7 +498,7 @@
         // primary) + the variant switcher pill (current = this variant).
         var vimg = variantImageSrc(p, v);
         return headerStrip(p, vimg, (p.name || 'Variant') + ' — ' + variantLabel(v), v.id) + UU.stickyHead(tiles, UU.paneTabsBar(tabs, 'v-pricing')) +
-          pane('v-pricing', UU.card('Pricing', row('Retail price', N.money(variantPrice(p, v)) || '—', ov ? 'custom for this variant' : 'same as Default', ov, 'Set a custom price') + row('SKU', esc(v.sku || '—'), v.sku ? 'set for this variant' : 'uses the Default', !!v.sku, 'Set a SKU')) + ctx, true) +
+          pane('v-pricing', variantPricingPane(UU, p, v) + ctx, true) +
           pane('v-recipe', UU.card('Recipe', row('Recipe', 'Product recipe', 'shared with the product', false, 'Give it its own recipe')) + '<div class="pv2-pnote">This variant uses the product’s recipe. Give it its own only if it’s actually made differently.</div>') +
           pane('v-channels', UU.card('Channels', row('Shopify', 'Live', 'same as the product', false, 'Map separately'))) +
           pane('v-inventory', UU.card('Inventory · this variant', UU.kv([
@@ -511,6 +511,50 @@
       }
     }
   });
+  // Variant Pricing pane: a variant uses the Default's price unless it sets its
+  // own (variant.priceCents override). Light inline edit of price override + SKU;
+  // clearing the price reverts the variant to "same as Default".
+  function variantPricingPane(UU, p, v) {
+    var pid = p._key || p.pid, vid = v.id;
+    if (V2.editVarPricing === (pid + '::' + vid)) return variantPricingEditForm(UU, p, v);
+    var ov = variantOverridden(p, v);
+    var editBtn = '<button class="btn btn-secondary btn-small" onclick="ProductsV2.editVariantPricing(\'' + esc(pid) + '\',\'' + esc(vid) + '\')">Edit</button>';
+    var priceVal = (N.money(variantPrice(p, v)) || '—') + (ov
+      ? ' <span style="color:var(--amber,goldenrod);font-weight:600;">· custom</span>'
+      : ' <span class="from">· same as Default</span>');
+    var rows = [
+      { k: 'Retail price', v: priceVal },
+      { k: 'SKU', v: v.sku ? esc(v.sku) : '<span class="from">uses the Default</span>' }
+    ];
+    return UU.card('Pricing · this variant', UU.kv(rows), { headerRight: editBtn });
+  }
+  function variantPricingEditForm(UU, p, v) {
+    var pid = p._key || p.pid, vid = v.id;
+    var ov = variantOverridden(p, v);
+    var curPrice = ov ? (v.priceCents / 100) : '';
+    var defPrice = N.money(price(p)) || '—';
+    var priceField = '<label style="display:block;margin-bottom:6px;font-size:0.85rem;color:var(--warm-gray);">Retail price' +
+      '<div style="display:flex;align-items:center;gap:6px;margin-top:4px;"><span style="font-size:0.9rem;">$</span>' +
+      '<input id="pv2VarPrice" type="number" step="0.01" min="0" value="' + esc(curPrice === '' ? '' : String(curPrice)) +
+      '" placeholder="' + esc(String(price(p) || '')) + '" style="flex:1;padding:7px 9px;border:1px solid var(--cream-dark);border-radius:6px;font-size:0.9rem;background:var(--cream);color:inherit;box-sizing:border-box;"></div>' +
+      '<span style="font-size:0.72rem;color:var(--warm-gray);">Leave blank to use the Default (' + esc(defPrice) + ').</span></label>';
+    var skuField = '<label style="display:block;margin:12px 0 12px;font-size:0.85rem;color:var(--warm-gray);">SKU' +
+      '<input id="pv2VarSku" type="text" value="' + esc(v.sku || '') + '" placeholder="uses the Default" style="display:block;width:100%;margin-top:4px;padding:7px 9px;border:1px solid var(--cream-dark);border-radius:6px;font-size:0.9rem;background:var(--cream);color:inherit;box-sizing:border-box;"></label>';
+    var body = priceField + skuField +
+      '<div style="display:flex;gap:8px;margin-top:4px;">' +
+      '<button class="btn btn-primary btn-small" onclick="ProductsV2.saveVariantPricing(\'' + esc(pid) + '\',\'' + esc(vid) + '\')">Save</button>' +
+      '<button class="btn btn-secondary btn-small" onclick="ProductsV2.cancelVariantPricing(\'' + esc(pid) + '\',\'' + esc(vid) + '\')">Cancel</button>' +
+      (ov ? '<button class="btn btn-secondary btn-small" onclick="ProductsV2.saveVariantPricing(\'' + esc(pid) + '\',\'' + esc(vid) + '\',true)">Use Default price</button>' : '') +
+      '</div>';
+    return UU.card('Edit pricing · this variant', body);
+  }
+  function rerenderVariantPricingPane(pid, vid) {
+    var rec = buildVariantRecord(pid + '::' + vid); if (!rec) return;
+    var body = document.getElementById('mastSlideOutBody');
+    var pane = body && body.querySelector('.mu-pane[data-pane="v-pricing"]');
+    if (pane) pane.innerHTML = variantPricingPane(U, rec.product, rec.variant) +
+      '<div class="pv2-pnote">A variant uses the Default’s values for anything it doesn’t set itself. It has no lifecycle of its own — it follows the product.</div>';
+  }
   // Variant Image pane: a variant's image is BOUND from the product's gallery
   // (not uploaded). Pick one of the product's images to give this variant its own,
   // or fall back to the product's primary. Light in-pane selection (the heavy
@@ -673,7 +717,7 @@
   }
 
   // ── State + data ────────────────────────────────────────────────────
-  var V2 = { rows: [], byId: {}, sortKey: '_title', sortDir: 'asc', filter: 'all', expanded: {}, editInfo: null, editPricing: null, q: '' };
+  var V2 = { rows: [], byId: {}, sortKey: '_title', sortDir: 'asc', filter: 'all', expanded: {}, editInfo: null, editPricing: null, editVarPricing: null, q: '' };
 
   function toRows(map) {
     var out = []; map = map || {};
@@ -894,6 +938,33 @@
           rerenderVariantImagePane(pid, variantId);
           MastAdmin.showToast(idx >= 0 ? 'Image #' + (idx + 1) + ' set for this variant' : 'Variant image cleared');
         }, function (e) { console.error('[products-v2] setVariantImage', e); MastAdmin.showToast('Failed', true); });
+      });
+    },
+    // Variant price override + SKU (replaces the old editVariantTodo stub).
+    editVariantPricing: function (pid, vid) { V2.editVarPricing = pid + '::' + vid; rerenderVariantPricingPane(pid, vid); },
+    cancelVariantPricing: function (pid, vid) { V2.editVarPricing = null; rerenderVariantPricingPane(pid, vid); },
+    saveVariantPricing: function (pid, vid, useDefault) {
+      var patch;
+      if (useDefault) {
+        patch = { priceCents: null };
+      } else {
+        var pe = document.getElementById('pv2VarPrice'), se = document.getElementById('pv2VarSku');
+        var ps = pe ? pe.value.trim() : '', priceCents = null;
+        if (ps !== '') { var n = Number(ps); if (!isFinite(n) || n < 0) { MastAdmin.showToast('Enter a valid price', true); return; } priceCents = Math.round(n * 100); }
+        var sku = se ? se.value.trim() : '';
+        patch = { priceCents: priceCents, sku: sku === '' ? null : sku };
+      }
+      withProductBridge(function () {
+        Promise.resolve(window.MakerProductBridge.setVariantFields(pid, vid, patch)).then(function (res) {
+          if (!res || !res.ok) { MastAdmin.showToast('Failed: ' + ((res && res.error) || 'unknown'), true); return; }
+          var rec = V2.byId[pid]; if (rec) rec.variants = res.variants;
+          V2.editVarPricing = null;
+          // Re-open the variant SO — lands on v-pricing (its default tab) and
+          // refreshes the Price hero tile + pane together.
+          var vr = buildVariantRecord(pid + '::' + vid);
+          if (vr) MastEntity.openRecord('product-variant-v2', vr, 'read', true);
+          MastAdmin.showToast(useDefault ? 'Using Default price' : 'Variant pricing saved');
+        }, function (e) { console.error('[products-v2] saveVariantPricing', e); MastAdmin.showToast('Failed', true); });
       });
     },
     // ── Pricing tab edit (direct price; revision-aware via setFields) ──

@@ -6828,6 +6828,34 @@
     } catch (e) { return { ok: false, error: (e && e.message) || 'Failed' }; }
   }
 
+  // Write fields onto a single variant (fresh-read; variant-id-keyed). patch
+  // values of null/undefined DELETE the key (e.g. clear a price override so the
+  // variant inherits the Default). Written live, like variant image binding.
+  async function bridgeSetVariantFields(pid, variantId, patch) {
+    try {
+      var variants = await MastDB.get('public/products/' + pid + '/variants');
+      if (!Array.isArray(variants)) return { ok: false, error: 'Product has no variants' };
+      var slot = -1;
+      for (var i = 0; i < variants.length; i++) {
+        var vid = (variants[i] && variants[i].id) || ('v' + i);
+        if (vid === variantId) { slot = i; break; }
+      }
+      if (slot < 0) return { ok: false, error: 'Variant not found' };
+      var next = variants.slice();
+      next[slot] = Object.assign({}, next[slot]);
+      Object.keys(patch || {}).forEach(function (k) {
+        var val = patch[k];
+        if (val === null || val === undefined) delete next[slot][k];
+        else next[slot][k] = val;
+      });
+      await MastDB.set('public/products/' + pid + '/variants', next);
+      await MastDB.set('public/products/' + pid + '/updatedAt', new Date().toISOString());
+      var p = findProduct(pid); if (p) p.variants = next;
+      MastAdmin.writeAudit('update', 'products', pid);
+      return { ok: true, variants: next };
+    } catch (e) { return { ok: false, error: (e && e.message) || 'Failed' }; }
+  }
+
   // Remove the image identified by URL (fresh-read; index-safe).
   async function bridgeRemoveProductImage(pid, url) {
     try {
@@ -6893,6 +6921,8 @@
     removeImage: function (pid, url) { return bridgeRemoveProductImage(pid, url); },
     // Bind a variant to one of the product's images (imageIndex), or clear (<0).
     setVariantImageIndex: function (pid, variantId, imageIndex) { return bridgeSetVariantImageIndex(pid, variantId, imageIndex); },
+    // Write arbitrary fields onto a variant (price override, SKU, …); null clears.
+    setVariantFields: function (pid, variantId, patch) { return bridgeSetVariantFields(pid, variantId, patch); },
     // Recipe link (building itself stays in the legacy builder).
     createRecipeForProduct: function (pid, name) { return bridgeCreateRecipeForProduct(pid, name); },
     linkRecipe: function (pid, recipeId) { return bridgeLinkRecipe(pid, recipeId); },
