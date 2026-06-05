@@ -21,8 +21,17 @@
  * (inventory-location creation, allocation math, PoS) coupled to the legacy pane
  * and stay single-sourced on legacy #salesEvents via a "manage in classic view"
  * link. This twin re-hosts the VIEW only — no onSave, no edit form, no
- * packing / PoS sub-tools. Flag-gated (?ui=1) at #sales-events-v2, side-by-side;
- * never touches sales.js.
+ * packing / PoS sub-tools. Flag-gated (?ui=1) at #sales-events-v2, side-by-side.
+ *
+ * Create + edit are NATIVE here: a custom detail.editRender (the legacy modal
+ * field set — name / date / location / notes) + an onSave that DELEGATES to
+ * window.SalesEventsBridge (exposed in sales.js) so the salesEvents write, the
+ * create/update audit, and the create-time inventory-location auto-create stay
+ * single-sourced — this twin never reimplements that logic (mirrors the
+ * contacts-v2 / ContactsBridge precedent). Packing-mode allocation edits, the
+ * fair PoS launch, and manual status transitions still carry domain logic
+ * coupled to the legacy pane and keep a "manage in classic view" link (no V2
+ * home). This twin re-hosts the VIEW + native event create/edit.
  *
  * Data: events live at admin/salesEvents (MastDB.salesEvents). Revenue + the
  * Sales facet are derived from admin/sales (sale.eventId === event id, excluding
@@ -100,7 +109,7 @@
     recordId: function (ev) { return ev._key || ev.id || ev.eventId; },
     fields: [
       // fields[0] (the slide-out title source) materializes a real name string.
-      { name: 'name', label: 'Event', type: 'text', list: true, readOnly: true, group: 'Event', get: eventName },
+      { name: 'name', label: 'Event', type: 'text', list: true, required: true, group: 'Event', get: eventName },
       { name: 'date', label: 'Date', type: 'date', list: true, readOnly: true, get: eventDate },
       { name: 'location', label: 'Location', type: 'text', list: true, readOnly: true, get: function (ev) { return ev.location || '—'; } },
       { name: 'revenue', label: 'Revenue', type: 'money', list: true, readOnly: true, align: 'right', get: revenueDollars },
@@ -148,9 +157,12 @@
         var notesBody = ev.notes
           ? '<div style="font-size:0.85rem;color:var(--warm-gray);line-height:1.5;white-space:pre-wrap;">' + esc(ev.notes) + '</div>'
           : '<span class="mu-sub">No notes.</span>';
-        // Packing / PoS / status transitions stay on legacy #salesEvents. Use
+        // Event create/edit is NATIVE now (the Edit button on this slide-out).
+        // What still has NO V2 home: packing-mode allocation edits, the fair PoS
+        // launch, and manual status transitions (Pack/Fair/Close) — those carry
+        // domain logic coupled to the legacy pane and stay on #salesEvents. Use
         // navigateToClassic so the V2 route remap doesn't loop us back to this twin.
-        var manage = '<div style="margin-top:14px;"><button class="btn btn-secondary" onclick="SalesEventsV2.classic()">Manage in classic view →</button></div>';
+        var manage = '<div style="margin-top:14px;"><button class="btn btn-secondary" onclick="SalesEventsV2.classic()">Pack / launch fair / change status in classic view →</button></div>';
 
         // Sales — event-linked, non-voided sales (revenue attribution).
         var salesBody = sales.length ? UI.relatedTable([
@@ -167,15 +179,64 @@
             UI.card('Notes', notesBody + manage) +
           '</div>' +
           '<div class="mu-pane" data-pane="sales" hidden>' + UI.cardTable('Sales (' + sales.length + ')', salesBody) + '</div>';
+      },
+      // Native edit form — the legacy createEventModal field set: name (required),
+      // date (required), location, notes. Packing / PoS / status transitions are
+      // NOT edited here (no domain logic in this twin) — a partial update via the
+      // Bridge preserves status / allocations / closedAt etc.
+      editRender: function (ev, mode) {
+        ev = ev || {};
+        function fg(label, inner, flex) { return '<div class="form-group"' + (flex ? ' style="flex:1;min-width:150px;"' : '') + '><label class="form-label">' + label + '</label>' + inner + '</div>'; }
+        function row2(a, b) { return '<div style="display:flex;gap:12px;flex-wrap:wrap;">' + a + b + '</div>'; }
+        return '<div class="mu-editbar"><span class="mu-editpill">' + (mode === 'create' ? 'NEW' : 'EDITING') + '</span>' + (mode === 'create' ? 'New sales event' : 'Edit this event') + '</div>' +
+          fg('Event name *', '<input class="form-input" id="seV2Name" value="' + esc(ev.name || '') + '" style="width:100%;" placeholder="Spring craft fair">') +
+          row2(
+            fg('Date *', '<input class="form-input" type="date" id="seV2Date" value="' + esc((ev.date || '').slice(0, 10)) + '" style="width:100%;">', true),
+            fg('Location', '<input class="form-input" id="seV2Location" value="' + esc(ev.location || '') + '" style="width:100%;" placeholder="Venue or city">', true)
+          ) +
+          fg('Notes', '<textarea class="form-input" id="seV2Notes" rows="3" style="width:100%;resize:vertical;">' + esc(ev.notes || '') + '</textarea>');
       }
+    },
+    onSave: function (rec, mode) {
+      if (!window.SalesEventsBridge) { if (window.showToast) showToast('Sales engine still loading — try again', true); return false; }
+      var data = {
+        name: ((document.getElementById('seV2Name') || {}).value || '').trim(),
+        date: (document.getElementById('seV2Date') || {}).value || '',
+        location: ((document.getElementById('seV2Location') || {}).value || '').trim(),
+        notes: ((document.getElementById('seV2Notes') || {}).value || '').trim()
+      };
+      // Mirror legacy saveEvent() validation exactly.
+      if (!data.name) { if (window.showToast) showToast('Event name is required', true); return false; }
+      if (!data.date) { if (window.showToast) showToast('Event date is required', true); return false; }
+
+      if (mode === 'create') {
+        return Promise.resolve(window.SalesEventsBridge.create(data)).then(function () {
+          if (window.showToast) showToast('Event created!'); reloadSoon(); return true;
+        }).catch(function (e) { console.error('[sales-events-v2] create', e); if (window.showToast) showToast('Error saving event.', true); return false; });
+      }
+      var id = rec._key || rec.id || rec.eventId;
+      return Promise.resolve(window.SalesEventsBridge.update(id, data)).then(function () {
+        // Mutate the LIVE cached record (=== the slide-out's read closure, since
+        // fetch returns V2.byId[id]); the engine passes a copy to onSave. Shows
+        // the edited fields immediately on the post-save read re-render;
+        // reloadSoon() then refreshes the cache for the next open. Only the
+        // editable fields are merged — status / allocations are left intact.
+        Object.assign(V2.byId[id] || rec, {
+          name: data.name, date: data.date,
+          location: data.location || null, notes: data.notes || null
+        });
+        if (window.showToast) showToast('Event updated.'); reloadSoon(); return true;
+      }).catch(function (e) { console.error('[sales-events-v2] update', e); if (window.showToast) showToast('Error updating event.', true); return false; });
     }
-    // No onSave → no Edit button (event editing / packing / PoS stay on legacy #salesEvents).
   });
 
   // ── module state + data ─────────────────────────────────────────────
   var V2 = { rows: [], byId: {}, salesByEvent: {}, sortKey: 'date', sortDir: 'desc', q: '', statusFilter: 'all', loaded: false };
 
   function load() {
+    // Ensure the legacy sales module is loaded so window.SalesEventsBridge (the
+    // delegated write path) exists — mirrors contacts-v2.
+    if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('sales'); } catch (e) {} }
     // Events + sales load together; both one-shot keyed-object reads. Sales are
     // indexed by eventId for the Revenue column + Sales facet.
     Promise.all([
@@ -204,6 +265,7 @@
       V2.loaded = true; render();
     }).catch(function (e) { console.error('[sales-events-v2] load', e); render(); });
   }
+  function reloadSoon() { V2.loaded = false; setTimeout(load, 250); }   // let the legacy write settle, then refresh
 
   function visibleRows() {
     var rows = V2.rows;
@@ -240,7 +302,8 @@
       U.pageHeader({
         title: 'Sales Events',
         count: N.count(V2.rows.length) + ' event' + (V2.rows.length === 1 ? '' : 's'),
-        actionsHtml: '<button class="btn btn-secondary" onclick="SalesEventsV2.exportCsv()">↓ Export</button>'
+        actionsHtml: '<button class="btn btn-primary" onclick="SalesEventsV2.create()">+ New event</button>' +
+          '<button class="btn btn-secondary" onclick="SalesEventsV2.exportCsv()">↓ Export</button>'
       }) +
       '<div style="display:flex;gap:6px;flex-wrap:wrap;margin:12px 0;">' + filters + '</div>' +
       '<div style="margin:14px 0;"><input class="form-input" placeholder="Search name or location…" value="' + esc(V2.q) +
@@ -248,7 +311,7 @@
       MastEntity.renderList('sales-events-v2', {
         rows: visibleRows(), sortKey: V2.sortKey, sortDir: V2.sortDir,
         onSortFnName: 'SalesEventsV2.sort', onRowClickFnName: 'SalesEventsV2.open',
-        empty: { title: 'No sales events', message: V2.loaded ? 'Create markets, fairs or pop-ups in the classic Sales Events view.' : 'Loading…' }
+        empty: { title: 'No sales events', message: V2.loaded ? 'Create a market, fair or pop-up to get started.' : 'Loading…' }
       });
   }
 
@@ -265,7 +328,15 @@
         if (rec) MastEntity.openRecord('sales-events-v2', rec, 'read');
       });
     },
-    // Event editing / packing / PoS → classic Sales Events view. Use
+    create: function () {
+      // Ensure the legacy module (and thus window.SalesEventsBridge) is loaded
+      // before opening the create form — mirrors ContactsV2.create.
+      if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('sales'); } catch (e) {} }
+      MastEntity.openRecord('sales-events-v2', {}, 'create');
+    },
+    // Event create/edit is native (the Edit + New buttons on this twin). What
+    // still has NO V2 home: packing-mode allocation edits, the fair PoS launch,
+    // and manual status transitions — those stay bespoke on legacy #salesEvents.
     // navigateToClassic so the V2 route remap doesn't loop us back to this twin.
     classic: function () {
       if (typeof navigateToClassic === 'function') navigateToClassic('salesEvents');
