@@ -147,20 +147,11 @@
       preview: { url: ASSET_BASE + 'products.png', alt: "Product catalog grid with photos, prices, and channel sync status" },
       learnMoreUrl: HELP_BASE + 'products'
     },
-    'develop-products': {
-      label: 'Develop Products', section: 'products',
-      tagline: 'Design new products, variants, and SKUs.',
-      outcome: "Take a new piece from sketch to listing without losing the spec, the photos, or the price math along the way.",
-      goodFitWhen: "you regularly add new pieces or seasonal variants and want a checklist instead of a memory test.",
-      notAFitWhen: "your catalog is stable and you rarely add new pieces.",
-      automates: ["Hunting for product photos in 4 folders", "Forgetting which variants you priced", "Re-doing the same launch checklist from memory"],
-      complementsTools: ["Notion", "Google Drive"],
-      prerequisites: ["Products module enabled"],
-      pairsWith: ["products", "materials", "jobs", "homepage", "blog"],
-      setupDepth: "quick",
-      preview: { url: ASSET_BASE + 'develop-products.png', alt: "Product development worksheet with photos, variants, and cost breakdown" },
-      learnMoreUrl: HELP_BASE + 'develop-products'
-    },
+    // develop-products: card removed 2026-06-05. The Develop/Catalog lens split
+    // was merged into the single Products surface (Two-View Architecture), so the
+    // route has no sidebar item and is no longer user-toggleable. It is marked
+    // systemManaged in MODE_ROUTE_VISIBILITY (kept only as a → products alias and
+    // for the std↔maker transition diff), which excludes it from this manager.
     'sales-by-product': {
       label: 'Sales by Product', section: 'products',
       tagline: 'See which products are selling and which aren’t.',
@@ -340,6 +331,57 @@
     },
 
     // ── Marketing ─────────────────────────────────────────────
+    // W2 marketing aggregators. Registered in MODE_ROUTE_VISIBILITY 2026-06-05
+    // so they're curatable here (previously matrix-absent → soft-hidden, only
+    // reachable via "Show all modules").
+    'marketing-calendar': {
+      label: 'Calendar', section: 'marketing',
+      tagline: 'Plan all your marketing on one calendar.',
+      outcome: "See every post, email, and campaign on one calendar so you stop double-booking and going quiet for weeks.",
+      goodFitWhen: "you run marketing across more than one channel and lose track of what's going out when.",
+      notAFitWhen: "you post occasionally and keep the whole plan in your head.",
+      automates: ["Marketing plans scattered across notebooks", "Forgetting to post for two weeks", "Clashing sends on the same day"],
+      pairsWith: ["composer", "campaigns", "social", "newsletter", "blog"],
+      setupDepth: "quick",
+      preview: { url: ASSET_BASE + 'marketing-calendar.png', alt: "Marketing calendar with scheduled posts, emails, and campaigns" },
+      learnMoreUrl: HELP_BASE + 'marketing-calendar'
+    },
+    'composer': {
+      label: 'Composer', section: 'marketing',
+      tagline: 'Draft posts and emails before they go out.',
+      outcome: "Write and stage your posts, captions, and emails in one place instead of jumping between four different tools.",
+      goodFitWhen: "you write your own marketing copy and want a single drafting surface.",
+      notAFitWhen: "someone else writes all your marketing in their own tools.",
+      automates: ["Copy scattered across Notes and DMs", "Re-writing the same blurb per channel", "Lost drafts you can't find later"],
+      pairsWith: ["marketing-calendar", "social", "newsletter", "campaigns", "blog"],
+      setupDepth: "quick",
+      preview: { url: ASSET_BASE + 'composer.png', alt: "Content composer drafting a post with channel options" },
+      learnMoreUrl: HELP_BASE + 'composer'
+    },
+    'engagement-inbox': {
+      label: 'Engagement Inbox', section: 'marketing',
+      tagline: 'Replies, comments, and reviews in one inbox.',
+      outcome: "Catch every reply, comment, and review in one inbox so nothing from a customer slips through unanswered.",
+      goodFitWhen: "people reach out across several channels and you want one place to answer them.",
+      notAFitWhen: "you only get the occasional message and email already covers it.",
+      automates: ["Checking five apps for replies", "Missing a review for days", "Losing a comment in the feed"],
+      pairsWith: ["social", "campaigns", "cs-reviews", "cs-inbox"],
+      setupDepth: "quick",
+      preview: { url: ASSET_BASE + 'engagement-inbox.png', alt: "Unified engagement inbox with replies, comments, and reviews" },
+      learnMoreUrl: HELP_BASE + 'engagement-inbox'
+    },
+    'campaigns': {
+      label: 'Campaigns', section: 'marketing',
+      tagline: 'Run multi-step marketing campaigns end to end.',
+      outcome: "Plan a launch or promotion as a set of timed steps and track how it performed, instead of one-off posts.",
+      goodFitWhen: "you run launches or seasonal pushes that span several posts and emails.",
+      notAFitWhen: "your marketing is a single channel posted ad hoc.",
+      automates: ["Tracking a launch across sticky notes", "Forgetting the follow-up email", "Guessing whether a push worked"],
+      pairsWith: ["composer", "marketing-calendar", "newsletter", "social"],
+      setupDepth: "moderate",
+      preview: { url: ASSET_BASE + 'campaigns.png', alt: "Campaign builder showing timed steps across channels" },
+      learnMoreUrl: HELP_BASE + 'campaigns'
+    },
     'social': {
       // Card rewritten 2026-05-22 to match reality. Original copy sold scheduling
       // + cross-posting (Later/Buffer/Hootsuite replacement) but the module is
@@ -818,6 +860,20 @@
     },
 
     // ── Finance ───────────────────────────────────────────────
+    // financials: the W2.1 Finance "Overview" dashboard. Registered in
+    // MODE_ROUTE_VISIBILITY 2026-06-05 so it's curatable here.
+    'financials': {
+      label: 'Overview', section: 'finance',
+      tagline: 'One dashboard for revenue, costs, and cash.',
+      outcome: "Open one screen for how the business is doing this month — revenue, costs, and cash — without digging through reports.",
+      goodFitWhen: "you want a quick financial pulse without opening every finance report.",
+      notAFitWhen: "you only ever look at one specific report and skip the rest.",
+      automates: ["Opening five reports to get one picture", "Re-totaling the month by hand", "Guessing where the money went"],
+      pairsWith: ["finance-revenue", "finance-expenses", "finance-pl", "finance-cash-flow", "finance-reports"],
+      setupDepth: "quick",
+      preview: { url: ASSET_BASE + 'financials.png', alt: "Finance overview dashboard with revenue, cost, and cash summary cards" },
+      learnMoreUrl: HELP_BASE + 'financials'
+    },
     'finance-pl': {
       label: 'Profit & Loss', section: 'finance',
       tagline: 'Profit & loss statements and trend analysis.',

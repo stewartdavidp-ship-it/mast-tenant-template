@@ -110,7 +110,7 @@
        Shared by customers.js (list/export) and customer-service.js (survey
        bulk-send) so the segment matcher cannot drift. ?v= kept in lockstep
        with MAST_MODULES_V by scripts/bump-modules-version.sh. -->
-  <script src="../shared/customer-filters.js?v=20260605-152315-46b270a"></script>
+  <script src="../shared/customer-filters.js?v=20260605-153818-2efa964"></script>
   <script src="../shared/brand-sync.js?v=1"></script>
   <script src="../shared/channel-connection.js?v=1"></script>
   <!-- UI redesign engines (docs/ux-audit): shared primitives + Entity Engine.
@@ -118,9 +118,9 @@
        scripts/bump-modules-version.sh (these are static <head> tags loaded
        before the JS var exists, so they can't read it at runtime). Without
        this, the engines were frozen at ?v=1 and never cache-busted on deploy. -->
-  <script src="../shared/mast-ui.js?v=20260605-152315-46b270a"></script>
-  <script src="../shared/mast-io.js?v=20260605-152315-46b270a"></script>
-  <script src="../shared/mast-entity.js?v=20260605-152315-46b270a"></script>
+  <script src="../shared/mast-ui.js?v=20260605-153818-2efa964"></script>
+  <script src="../shared/mast-io.js?v=20260605-153818-2efa964"></script>
+  <script src="../shared/mast-entity.js?v=20260605-153818-2efa964"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Pod-specific runtime config — sets window.MAST_POD_PLATFORM_PROJECT so
@@ -3473,6 +3473,12 @@
     .sidebar-section.mode-all-hidden { display: none; }
     body.sidebar-show-all .sidebar-item.mode-hidden { display: block; opacity: 0.5; }
     body.sidebar-show-all .sidebar-section.mode-all-hidden { display: block; opacity: 0.5; }
+    /* "Show all modules" also browses engagement-surface-hidden sections (the
+       Marketing/Site/etc. groups hidden by applyEngagementNavFiltering). Their
+       base rule is display:none !important (above), so the reveal needs
+       !important too. Same visibility-not-entitlement rationale — keep groups
+       reachable for browsing even when the engagement surface trims them. */
+    body.sidebar-show-all .sidebar-section.engagement-hidden { display: block !important; opacity: 0.5; }
 
     /* M7 (Idea -OtADygKA_JhRmk1wUqN): Mast modes banner — non-blocking
        suggestion/migration prompt under the header. Uses teal accent to
@@ -13965,6 +13971,252 @@ async function resetModeOverridesToDefaults(context) {
 }
 window.resetModeOverridesToDefaults = resetModeOverridesToDefaults;
 
+// ============================================================
+// Nav profiles (2026-06-05) — save the current sidebar layout under a name and
+// restore it later. Profiles are LOCAL recipes (localStorage, this browser);
+// APPLYING one writes the tenant's actual modeOverrides doc — the same layer
+// Add-to-Mast edits — so the restored layout sticks across reloads and devices.
+// A profile captures the absolute set of currently-visible, user-curatable
+// routes, so it reproduces the same sidebar even if the tenant's modeSet later
+// changes. It does NOT capture the engagement surface (a separate tenant-level
+// setting), only the mode-override layer.
+// ============================================================
+var _NAV_PROFILES_VERSION = 1;
+
+function _navProfilesKey() {
+  var tid = '';
+  try { tid = (window.MastDB && MastDB.tenantId && MastDB.tenantId()) || ''; } catch (e) { tid = ''; }
+  return 'mast.navProfiles.' + (tid || 'default');
+}
+
+// Returns the saved profiles array (possibly empty). Never throws.
+function loadNavProfiles() {
+  try {
+    var raw = localStorage.getItem(_navProfilesKey());
+    if (!raw) return [];
+    var parsed = JSON.parse(raw);
+    if (parsed && Array.isArray(parsed.profiles)) return parsed.profiles;
+    return [];
+  } catch (e) {
+    console.warn('[navProfiles] load failed:', e && e.message);
+    return [];
+  }
+}
+
+function _saveNavProfiles(profiles) {
+  try {
+    localStorage.setItem(_navProfilesKey(), JSON.stringify({ version: _NAV_PROFILES_VERSION, profiles: profiles }));
+    return true;
+  } catch (e) {
+    console.warn('[navProfiles] save failed:', e && e.message);
+    return false;
+  }
+}
+
+// Snapshot the current sidebar (visible, user-curatable routes) under `name`.
+function saveCurrentNavProfile(name) {
+  name = (name || '').trim();
+  if (!name) return { success: false, error: 'A profile needs a name.' };
+  var modeSet = (typeof getModeSet === 'function') ? getModeSet() : null;
+  var overrides = (typeof getModeOverrides === 'function') ? getModeOverrides() : { enabledRoutes: [], disabledRoutes: [] };
+  var visibleRoutes = (typeof _getVisibleToggleableRoutes === 'function')
+    ? _getVisibleToggleableRoutes(modeSet, overrides) : [];
+  var profiles = loadNavProfiles();
+  // Overwrite a same-named profile rather than duplicating.
+  var idx = -1;
+  for (var i = 0; i < profiles.length; i++) {
+    if (profiles[i] && typeof profiles[i].name === 'string' &&
+        profiles[i].name.toLowerCase() === name.toLowerCase()) { idx = i; break; }
+  }
+  var entry = {
+    id: 'np_' + Date.now().toString(36) + '_' + Math.floor(profiles.length),
+    name: name,
+    createdAt: new Date().toISOString(),
+    visibleRoutes: visibleRoutes
+  };
+  var replaced = false;
+  if (idx !== -1) { entry.id = profiles[idx].id || entry.id; profiles[idx] = entry; replaced = true; }
+  else { profiles.push(entry); }
+  if (!_saveNavProfiles(profiles)) return { success: false, error: 'Could not save to this browser.' };
+  return { success: true, profile: entry, replaced: replaced, count: visibleRoutes.length };
+}
+
+// Reconcile the tenant's modeOverrides so exactly the profile's routes are
+// visible. One businessEntity write, then re-filter the live sidebar. Mirrors
+// addRoutesToMast / removeRoutesFromMast.
+async function applyNavProfile(id) {
+  var profiles = loadNavProfiles();
+  var profile = null;
+  for (var i = 0; i < profiles.length; i++) { if (profiles[i] && profiles[i].id === id) { profile = profiles[i]; break; } }
+  if (!profile) return { success: false, error: 'Profile not found.' };
+  var BEC = window.BusinessEntityConstants;
+  if (!BEC || typeof BEC.setRouteVisibilityOverride !== 'function') return { success: false, error: 'BEC not loaded' };
+  var wantVisible = {};
+  (profile.visibleRoutes || []).forEach(function(r) { wantVisible[r] = true; });
+  var modeSet = (typeof getModeSet === 'function') ? getModeSet() : null;
+  var current = _modeOverridesSnapshot || { enabledRoutes: [], disabledRoutes: [] };
+  var next = {
+    enabledRoutes: (current.enabledRoutes || []).slice(),
+    disabledRoutes: (current.disabledRoutes || []).slice()
+  };
+  var universe = (typeof _getToggleableRoutes === 'function') ? _getToggleableRoutes() : [];
+  for (var u = 0; u < universe.length; u++) {
+    var routeId = universe[u];
+    var rule = BEC.MODE_ROUTE_VISIBILITY[routeId] || {};
+    if (rule.anchor) continue;                       // anchor is never toggled
+    if (!MODE_MODULE_INFO[routeId]) continue;         // only user-curatable cards
+    next = BEC.setRouteVisibilityOverride(next, routeId, !!wantVisible[routeId], modeSet);
+  }
+  try {
+    if (window.MastDB && window.MastDB.businessEntity) {
+      await window.MastDB.businessEntity.update('modeOverrides', next);
+    }
+    _modeOverridesSnapshot = next;
+    if (typeof applyModeNavFilter === 'function') applyModeNavFilter();
+    return { success: true, name: profile.name, count: (profile.visibleRoutes || []).length };
+  } catch (err) {
+    console.warn('[navProfiles] apply failed:', err && err.message);
+    return { success: false, error: err && err.message };
+  }
+}
+
+function deleteNavProfile(id) {
+  var profiles = loadNavProfiles();
+  var next = profiles.filter(function(p) { return p && p.id !== id; });
+  if (next.length === profiles.length) return { success: false, error: 'Profile not found.' };
+  if (!_saveNavProfiles(next)) return { success: false, error: 'Could not update this browser.' };
+  return { success: true };
+}
+window.loadNavProfiles = loadNavProfiles;
+window.saveCurrentNavProfile = saveCurrentNavProfile;
+window.applyNavProfile = applyNavProfile;
+window.deleteNavProfile = deleteNavProfile;
+
+// Profiles bar HTML for the Add-to-Mast header. All names esc()'d (owner input).
+function _renderNavProfilesBar() {
+  var profiles = loadNavProfiles();
+  var h = '';
+  h += '<div style="padding:0 24px 12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">';
+  h += '<span style="font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.06em;font-weight:600;">Profiles</span>';
+  if (profiles.length === 0) {
+    h += '<span style="font-size:0.85rem;color:var(--warm-gray);opacity:0.8;">Save your current sidebar as a profile, then apply it again later.</span>';
+  } else {
+    for (var i = 0; i < profiles.length; i++) {
+      var p = profiles[i];
+      if (!p || !p.id) continue;
+      var n = (p.visibleRoutes && p.visibleRoutes.length) || 0;
+      h += '<span style="display:inline-flex;align-items:center;background:var(--bg-soft,rgba(0,0,0,0.06));border-radius:999px;padding:2px 4px 2px 4px;">';
+      h += '<button type="button" data-amt-action="profile-apply" data-amt-profile="' + esc(p.id) + '" ' +
+           'title="Apply this profile" aria-label="Apply profile ' + esc(p.name) + '" ' +
+           'style="background:transparent;border:0;color:var(--charcoal,var(--text));font-size:0.85rem;font-weight:600;cursor:pointer;padding:2px 8px;border-radius:999px;">' +
+           esc(p.name) + ' <span style="font-weight:400;opacity:0.6;">(' + n + ')</span></button>';
+      h += '<button type="button" data-amt-action="profile-delete" data-amt-profile="' + esc(p.id) + '" ' +
+           'title="Delete profile" aria-label="Delete profile ' + esc(p.name) + '" ' +
+           'style="background:transparent;border:0;color:var(--warm-gray);font-size:1rem;line-height:1;cursor:pointer;padding:0 6px;">&times;</button>';
+      h += '</span>';
+    }
+  }
+  h += '<span style="margin-left:auto;display:inline-flex;align-items:center;gap:6px;">';
+  h += '<button type="button" id="navProfileSaveBtn" class="btn btn-secondary btn-small" data-amt-action="profile-save" ' +
+       'title="Save the current sidebar layout as a named profile">+ Save current setup</button>';
+  h += '<span id="navProfileSaveForm" style="display:none;align-items:center;gap:6px;">';
+  h += '<input id="navProfileNameInput" type="text" maxlength="40" placeholder="Profile name" ' +
+       'style="font-size:0.85rem;padding:5px 8px;border-radius:6px;border:1px solid var(--border,#cfc8bd);background:var(--bg,#fff);color:var(--charcoal,var(--text));min-width:160px;" />';
+  h += '<button type="button" class="btn btn-primary btn-small" data-amt-action="profile-save-confirm">Save</button>';
+  h += '<button type="button" class="btn btn-secondary btn-small" data-amt-action="profile-save-cancel">Cancel</button>';
+  h += '</span>';
+  h += '</span>';
+  h += '</div>';
+  return h;
+}
+window._renderNavProfilesBar = _renderNavProfilesBar;
+
+// Reveal the inline name field. No full re-render (would drop focus); the form
+// is pre-rendered hidden in the bar.
+function saveCurrentNavProfileClick() {
+  var btn = document.getElementById('navProfileSaveBtn');
+  var form = document.getElementById('navProfileSaveForm');
+  var input = document.getElementById('navProfileNameInput');
+  if (!form || !input) return;
+  if (btn) btn.style.display = 'none';
+  form.style.display = 'inline-flex';
+  input.value = '';
+  input.focus();
+  input.onkeydown = function(ev) {
+    if (ev.key === 'Enter') { ev.preventDefault(); navProfileSaveConfirmClick(); }
+    else if (ev.key === 'Escape') { ev.preventDefault(); navProfileSaveCancelClick(); }
+  };
+}
+function navProfileSaveCancelClick() {
+  var btn = document.getElementById('navProfileSaveBtn');
+  var form = document.getElementById('navProfileSaveForm');
+  if (form) form.style.display = 'none';
+  if (btn) btn.style.display = '';
+}
+function navProfileSaveConfirmClick() {
+  var input = document.getElementById('navProfileNameInput');
+  var name = input ? input.value : '';
+  var result = saveCurrentNavProfile(name);
+  if (result && result.success) {
+    if (typeof showToast === 'function') {
+      showToast('Saved profile "' + result.profile.name + '" (' + result.count + ' module' + (result.count === 1 ? '' : 's') + ')' +
+                (result.replaced ? ' — replaced the previous one.' : '.'));
+    }
+    renderAddToMast();
+  } else {
+    if (typeof showToast === 'function') showToast((result && result.error) || 'Could not save profile.', true);
+    if (input) input.focus();
+  }
+}
+async function applyNavProfileClick(id) {
+  var profiles = loadNavProfiles();
+  var profile = null;
+  for (var i = 0; i < profiles.length; i++) { if (profiles[i] && profiles[i].id === id) { profile = profiles[i]; break; } }
+  if (!profile) return;
+  var count = (profile.visibleRoutes && profile.visibleRoutes.length) || 0;
+  var prompt = 'Apply profile "' + profile.name + '"? Your sidebar will switch to the ' +
+               count + ' module' + (count === 1 ? '' : 's') + ' saved in it. You can change it any time.';
+  var ok;
+  if (typeof mastConfirm === 'function') ok = await mastConfirm(prompt, { title: 'Apply profile', confirmLabel: 'Apply' });
+  else ok = window.confirm(prompt);
+  if (!ok) return;
+  try {
+    var result = await applyNavProfile(id);
+    if (result && result.success) {
+      if (typeof showToast === 'function') showToast('Applied profile "' + result.name + '".');
+      renderAddToMast();
+    } else {
+      if (typeof showToast === 'function') showToast('Could not apply profile: ' + ((result && result.error) || 'unknown error'), true);
+    }
+  } catch (err) {
+    console.warn('[applyNavProfileClick] failed:', err && err.message);
+    if (typeof showToast === 'function') showToast('Could not apply profile.', true);
+  }
+}
+async function deleteNavProfileClick(id) {
+  var profiles = loadNavProfiles();
+  var profile = null;
+  for (var i = 0; i < profiles.length; i++) { if (profiles[i] && profiles[i].id === id) { profile = profiles[i]; break; } }
+  if (!profile) return;
+  var prompt = 'Delete profile "' + profile.name + '"? This only removes the saved layout from this browser — your current sidebar stays as is.';
+  var ok;
+  if (typeof mastConfirm === 'function') ok = await mastConfirm(prompt, { title: 'Delete profile', confirmLabel: 'Delete' });
+  else ok = window.confirm(prompt);
+  if (!ok) return;
+  var result = deleteNavProfile(id);
+  if (result && result.success) {
+    if (typeof showToast === 'function') showToast('Deleted profile "' + profile.name + '".');
+    renderAddToMast();
+  } else {
+    if (typeof showToast === 'function') showToast((result && result.error) || 'Could not delete profile.', true);
+  }
+}
+window.saveCurrentNavProfileClick = saveCurrentNavProfileClick;
+window.navProfileSaveCancelClick = navProfileSaveCancelClick;
+window.navProfileSaveConfirmClick = navProfileSaveConfirmClick;
+window.applyNavProfileClick = applyNavProfileClick;
+window.deleteNavProfileClick = deleteNavProfileClick;
+
 // M3 (Idea -OtADygKA_JhRmk1wUqN): Add-to-Mast page — central unlock surface
 // for all soft-hidden modules. Cards grouped by sidebar section, one click
 // per module to enable.
@@ -14458,6 +14710,9 @@ async function renderAddToMast() {
     html += '</div>';
   }
   html += '</div>';
+
+  // Profiles bar — save/apply named sidebar layouts (localStorage).
+  html += _renderNavProfilesBar();
 
   // Section blocks — every section that has any toggleable items
   for (var s = 0; s < sectionOrder.length; s++) {
@@ -15235,7 +15490,7 @@ function updateSidebarExpandToggle() {
   var toggle = document.getElementById('sidebarExpandToggle');
   if (!toggle) return;
   var hideable = document.querySelectorAll(
-    '.sidebar-section.locked, .sidebar-future-section, .sidebar-section.mode-all-hidden, .sidebar-item.mode-hidden'
+    '.sidebar-section.mode-all-hidden, .sidebar-item.mode-hidden, .sidebar-section.engagement-hidden'
   );
   if (hideable.length > 0) {
     toggle.style.display = '';
@@ -15260,17 +15515,11 @@ function setSidebarLockedVisibility(show) {
   _sidebarShowLocked = show;
   var toggle = document.getElementById('sidebarExpandToggle');
   var label = document.getElementById('sidebarExpandLabel');
-  var lockedSections = document.querySelectorAll('.sidebar-section.locked, .sidebar-future-section');
 
-  lockedSections.forEach(function(el) {
-    // Don't show subsumed sections (e.g., Show Light when Show is active)
-    if (el.classList.contains('subsumed')) return;
-    el.style.display = show ? '' : 'none';
-  });
-
-  // M2 (Idea -OtADygKA_JhRmk1wUqN): also toggle the body.sidebar-show-all class
-  // so .mode-hidden items + .mode-all-hidden sections reveal at 50% opacity.
-  // CSS-driven (see mode filtering section) — no inline style needed.
+  // The reveal is entirely CSS-driven via the body.sidebar-show-all class:
+  // it un-hides .mode-hidden items, .mode-all-hidden sections (mode filter),
+  // and .engagement-hidden sections (engagement surface) at 50% opacity so the
+  // user can browse every module group. See the MAST MODES FILTERING CSS block.
   if (document.body) {
     if (show) document.body.classList.add('sidebar-show-all');
     else document.body.classList.remove('sidebar-show-all');
@@ -15280,14 +15529,7 @@ function setSidebarLockedVisibility(show) {
     toggle.classList.toggle('expanded', show);
   }
   if (label) {
-    label.textContent = show ? 'Hide locked modules' : 'Show all modules';
-  }
-}
-
-function toggleLockedSidebarNudge(section) {
-  var el = document.querySelector('.sidebar-section[data-section="' + section + '"]');
-  if (el && el.classList.contains('locked')) {
-    el.classList.toggle('nudge-open');
+    label.textContent = show ? 'Hide extra modules' : 'Show all modules';
   }
 }
 
@@ -20985,7 +21227,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260605-152315-46b270a';
+var MAST_MODULES_V = '20260605-153818-2efa964';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -39878,8 +40120,11 @@ if (!window._mastCreateJobDelegateAttached) {
 //
 // Attribute scheme:
 //   data-amt-action     — add | remove | details | section-add | section-hide
+//                          | profile-save | profile-save-confirm
+//                          | profile-save-cancel | profile-apply | profile-delete
 //   data-amt-route      — routeId (for add/remove/details)
 //   data-amt-section    — sectionKey (for section-add)
+//   data-amt-profile    — profileId (for profile-apply/profile-delete)
 //   data-amt-close-drawer — "1" to close the details drawer after
 //                            the action runs (used on drawer footer)
 if (!window._mastAddToMastDelegateAttached) {
@@ -39889,6 +40134,7 @@ if (!window._mastAddToMastDelegateAttached) {
     var action = t.getAttribute('data-amt-action');
     var route = t.getAttribute('data-amt-route');
     var section = t.getAttribute('data-amt-section');
+    var profileId = t.getAttribute('data-amt-profile');
     var closeDrawer = t.getAttribute('data-amt-close-drawer') === '1';
     ev.preventDefault();
     if (action === 'add' && route && typeof addToMastClick === 'function') {
@@ -39901,6 +40147,16 @@ if (!window._mastAddToMastDelegateAttached) {
       addAllInSectionClick(section);
     } else if (action === 'section-hide' && section && typeof removeAllInSectionClick === 'function') {
       removeAllInSectionClick(section);
+    } else if (action === 'profile-save' && typeof saveCurrentNavProfileClick === 'function') {
+      saveCurrentNavProfileClick();
+    } else if (action === 'profile-save-confirm' && typeof navProfileSaveConfirmClick === 'function') {
+      navProfileSaveConfirmClick();
+    } else if (action === 'profile-save-cancel' && typeof navProfileSaveCancelClick === 'function') {
+      navProfileSaveCancelClick();
+    } else if (action === 'profile-apply' && profileId && typeof applyNavProfileClick === 'function') {
+      applyNavProfileClick(profileId);
+    } else if (action === 'profile-delete' && profileId && typeof deleteNavProfileClick === 'function') {
+      deleteNavProfileClick(profileId);
     } else {
       return;
     }
