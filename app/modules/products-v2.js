@@ -97,14 +97,22 @@
   }
   function inventoryPane(p) {
     var si = p.stockInfo || {};
-    return U.card('Inventory · Default (base)', U.kv([
+    var hasVar = variantCount(p) > 0;
+    // Inventory is per-VARIANT — it's never inherited. For a product with
+    // variants the product-level number is the roll-up; each variant owns its
+    // own stock (edit it on the variant's Inventory tab).
+    var title = hasVar ? 'Inventory · all variants (roll-up)' : 'Inventory';
+    var perVarNote = hasVar
+      ? '<div class="pv2-pnote">Stock is tracked per variant — each one has its own count. The total above is the roll-up; set each variant’s stock on its Inventory tab.</div>'
+      : '';
+    return U.card(title, U.kv([
       { k: 'Stock type', v: si.stockType || '—' },
-      { k: 'On hand', v: (si.totalOnHand != null ? String(si.totalOnHand) : '—') },
+      { k: (hasVar ? 'On hand (all variants)' : 'On hand'), v: (si.totalOnHand != null ? String(si.totalOnHand) : '—') },
       { k: 'Low-stock at', v: (si.lowStockThreshold != null ? String(si.lowStockThreshold) : '—') },
       { k: 'Fulfillment', v: (si.stockFulfillmentDays != null ? si.stockFulfillmentDays + ' days' : '—') },
       { k: 'Wholesale MOQ', v: (p.moq != null ? String(p.moq) : '—') },
       { k: 'Case pack', v: (p.casePack != null ? String(p.casePack) : '—') }
-    ]));
+    ]) + perVarNote);
   }
   function channelsPane(p) {
     var er = p.externalRefs || {};
@@ -222,8 +230,13 @@
         var defaultBanner = nv > 0
           ? '<div style="margin:0 0 10px;padding:7px 12px;border-radius:8px;background:color-mix(in srgb,var(--info) 13%,transparent);color:var(--info);font-size:0.85rem;font-weight:600;">◆ Default — base for all ' + nv + ' variant' + (nv > 1 ? 's' : '') + '. Edits here apply to every variant unless it overrides.</div>'
           : '';
+        // Product image thumbnail on the header — click for the full-size picture.
+        var himg = firstImage(p);
+        var hdrThumb = himg
+          ? '<div style="margin:0 0 12px;"><button class="mu-thumb" data-img="' + esc(p.name || 'Product') + '" data-src="' + esc(himg) + '" style="width:64px;height:64px;background-image:url(' + esc(himg) + ');background-size:cover;" title="Click for full size"><span class="mu-zoom">⤢</span></button></div>'
+          : '';
         // #muFlowHost: the engine injects the MastFlow process header here (the structure).
-        return defaultBanner + UU.stickyHead(tiles, '') +
+        return hdrThumb + defaultBanner + UU.stickyHead(tiles, '') +
           '<div id="muFlowHost" class="pv2-flowhost">Loading workflow…</div>' +
           UU.paneTabsBar(tabs, 'pricing') +
           pane('pricing', pricingPane(p), true) +
@@ -264,11 +277,21 @@
         var tabs = [{ key: 'v-pricing', label: 'Pricing' }, { key: 'v-recipe', label: 'Recipe' }, { key: 'v-channels', label: 'Channels' }, { key: 'v-inventory', label: 'Inventory' }, { key: 'v-image', label: 'Image' }];
         function pane(key, html, active) { return '<div class="mu-pane" data-pane="' + key + '"' + (active ? '' : ' hidden') + '>' + html + '</div>'; }
         var ctx = '<div class="pv2-pnote">A variant uses the Default’s values for anything it doesn’t set itself. It has no lifecycle of its own — it follows the product.</div>';
-        return UU.stickyHead(tiles, UU.paneTabsBar(tabs, 'v-pricing')) +
+        // Variant image thumbnail on the header — click for full size. Uses the
+        // variant's own image if it has one, else the shared product image.
+        var vimg = (v.image || v.imageUrl) || firstImage(p);
+        var vThumb = vimg
+          ? '<div style="margin:0 0 12px;"><button class="mu-thumb" data-img="' + esc((p.name || 'Variant') + ' — ' + variantLabel(v)) + '" data-src="' + esc(vimg) + '" style="width:64px;height:64px;background-image:url(' + esc(vimg) + ');background-size:cover;" title="Click for full size"><span class="mu-zoom">⤢</span></button></div>'
+          : '';
+        return vThumb + UU.stickyHead(tiles, UU.paneTabsBar(tabs, 'v-pricing')) +
           pane('v-pricing', UU.card('Pricing', row('Retail price', N.money(variantPrice(p, v)) || '—', ov ? 'custom for this variant' : 'same as Default', ov, 'Set a custom price') + row('SKU', esc(v.sku || '—'), v.sku ? 'set for this variant' : 'uses the Default', !!v.sku, 'Set a SKU')) + ctx, true) +
           pane('v-recipe', UU.card('Recipe', row('Recipe', 'Product recipe', 'shared with the product', false, 'Give it its own recipe')) + '<div class="pv2-pnote">This variant uses the product’s recipe. Give it its own only if it’s actually made differently.</div>') +
           pane('v-channels', UU.card('Channels', row('Shopify', 'Live', 'same as the product', false, 'Map separately'))) +
-          pane('v-inventory', UU.card('Inventory', row('Stock type', 'Build to order', 'same as Default', false, 'Customize') + row('On hand', '—', 'build to order', false, 'Track separately'))) +
+          pane('v-inventory', UU.card('Inventory · this variant', UU.kv([
+            { k: 'Stock type', v: (v.stockType || '—') },
+            { k: 'On hand', v: (v.onHand != null ? String(v.onHand) : '—') },
+            { k: 'Reorder at', v: (v.reorderAt != null ? String(v.reorderAt) : '—') }
+          ]) + '<div class="pv2-pnote">Each variant tracks its <strong>own</strong> stock — inventory is never shared with or inherited from the Default.</div>')) +
           pane('v-image', UU.card('Image', row('Image', 'Product image', 'same as the product', false, 'Set a variant image')));
       }
     }

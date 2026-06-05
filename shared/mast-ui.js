@@ -371,10 +371,11 @@
     return '<table class="mu-rel"><thead><tr>' + th + '</tr></thead><tbody>' + body + '</tbody></table>';
   }
   function imageThumb(name, src) {
-    return '<button class="mu-thumb" data-img="' + esc(name) + '"' + (src ? ' style="background-image:url(' + esc(src) + ');background-size:cover;"' : '') + '><span class="mu-zoom">⤢</span></button>';
+    return '<button class="mu-thumb" data-img="' + esc(name) + '"' + (src ? ' data-src="' + esc(src) + '" style="background-image:url(' + esc(src) + ');background-size:cover;"' : '') + '><span class="mu-zoom">⤢</span></button>';
   }
-  // image lightbox (singleton)
-  function openImg(name) {
+  // image lightbox (singleton). Shows the actual full-size image when a src is
+  // given (falls back to the placeholder gradient + caption otherwise).
+  function openImg(name, src) {
     var lb = document.getElementById('mu-lightbox');
     if (!lb) {
       lb = document.createElement('div'); lb.id = 'mu-lightbox'; lb.className = 'mu-lightbox';
@@ -383,6 +384,9 @@
       document.body.appendChild(lb);
       document.addEventListener('keydown', function (e) { if (e.key === 'Escape') lb.classList.remove('open'); });
     }
+    var imgEl = lb.querySelector('.mu-lb-img');
+    if (src) { imgEl.style.backgroundImage = 'url(' + src + ')'; imgEl.style.backgroundSize = 'contain'; imgEl.style.backgroundRepeat = 'no-repeat'; imgEl.style.backgroundPosition = 'center'; }
+    else { imgEl.style.backgroundImage = ''; }
     lb.querySelector('.mu-lb-cap').textContent = name || '';
     lb.classList.add('open');
   }
@@ -391,7 +395,7 @@
     if (window.__muWired) return; window.__muWired = true;
     document.addEventListener('click', function (e) {
       var t = e.target.closest && e.target.closest('.mu-thumb');
-      if (t) { openImg(t.getAttribute('data-img')); }
+      if (t) { openImg(t.getAttribute('data-img'), t.getAttribute('data-src')); }
     });
   }
   // panel tabs: switch panes inside the slide-out body
