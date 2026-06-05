@@ -149,7 +149,7 @@
     var showLabel = String(f.label).toLowerCase() !== String(group || '').toLowerCase();
     return '<div class="form-group" style="margin-bottom:10px;">' +
       (showLabel ? '<div class="form-label" style="font-size:0.78rem;color:var(--warm-gray);">' + esc(f.label) + '</div>' : '') +
-      '<div style="font-size:0.9rem;color:var(--charcoal,var(--text));">' + displayCell(f, record) + '</div></div>';
+      '<div style="font-size:0.9rem;color:var(--text-primary);">' + displayCell(f, record) + '</div></div>';
   }
 
   // One editable control (select for enums, text input otherwise).
