@@ -539,8 +539,12 @@
     var priceVal = (N.money(variantPrice(p, v)) || '—') + (ov
       ? ' <span style="color:var(--amber,goldenrod);font-weight:600;">· custom</span>'
       : ' <span class="from">· same as Default</span>');
+    var whVal = (typeof v.wholesalePriceCents === 'number' && v.wholesalePriceCents > 0)
+      ? N.money(v.wholesalePriceCents / 100)
+      : '<span class="from">none</span>';
     var rows = [
       { k: 'Retail price', v: priceVal },
+      { k: 'Wholesale price', v: whVal },
       { k: 'SKU', v: v.sku ? esc(v.sku) : '<span class="from">uses the Default</span>' }
     ];
     return UU.card('Pricing · this variant', UU.kv(rows), { headerRight: editBtn });
@@ -555,9 +559,16 @@
       '<input id="pv2VarPrice" type="number" step="0.01" min="0" value="' + esc(curPrice === '' ? '' : String(curPrice)) +
       '" placeholder="' + esc(String(price(p) || '')) + '" style="flex:1;padding:7px 9px;border:1px solid var(--cream-dark);border-radius:6px;font-size:0.9rem;background:var(--cream);color:inherit;box-sizing:border-box;"></div>' +
       '<span style="font-size:0.72rem;color:var(--warm-gray);">Leave blank to use the Default (' + esc(defPrice) + ').</span></label>';
+    var curWh = (typeof v.wholesalePriceCents === 'number' && v.wholesalePriceCents > 0) ? (v.wholesalePriceCents / 100) : '';
+    var defWh = (typeof p.wholesalePriceCents === 'number' && p.wholesalePriceCents > 0) ? (p.wholesalePriceCents / 100) : null;
+    var whField = '<label style="display:block;margin:12px 0 6px;font-size:0.85rem;color:var(--warm-gray);">Wholesale price' +
+      '<div style="display:flex;align-items:center;gap:6px;margin-top:4px;"><span style="font-size:0.9rem;">$</span>' +
+      '<input id="pv2VarWholesale" type="number" step="0.01" min="0" value="' + esc(curWh === '' ? '' : String(curWh)) +
+      '" placeholder="' + esc(defWh != null ? String(defWh) : 'none') + '" style="flex:1;padding:7px 9px;border:1px solid var(--cream-dark);border-radius:6px;font-size:0.9rem;background:var(--cream);color:inherit;box-sizing:border-box;"></div>' +
+      '<span style="font-size:0.72rem;color:var(--warm-gray);">' + (defWh != null ? 'Leave blank to use the Default ($' + defWh + ').' : 'Leave blank if this variant isn’t sold wholesale.') + '</span></label>';
     var skuField = '<label style="display:block;margin:12px 0 12px;font-size:0.85rem;color:var(--warm-gray);">SKU' +
       '<input id="pv2VarSku" type="text" value="' + esc(v.sku || '') + '" placeholder="uses the Default" style="display:block;width:100%;margin-top:4px;padding:7px 9px;border:1px solid var(--cream-dark);border-radius:6px;font-size:0.9rem;background:var(--cream);color:inherit;box-sizing:border-box;"></label>';
-    var body = priceField + skuField +
+    var body = priceField + whField + skuField +
       '<div style="display:flex;gap:8px;margin-top:4px;">' +
       '<button class="btn btn-primary btn-small" onclick="ProductsV2.saveVariantPricing(\'' + esc(pid) + '\',\'' + esc(vid) + '\')">Save</button>' +
       '<button class="btn btn-secondary btn-small" onclick="ProductsV2.cancelVariantPricing(\'' + esc(pid) + '\',\'' + esc(vid) + '\')">Cancel</button>' +
@@ -1000,11 +1011,13 @@
       if (useDefault) {
         patch = { priceCents: null };
       } else {
-        var pe = document.getElementById('pv2VarPrice'), se = document.getElementById('pv2VarSku');
+        var pe = document.getElementById('pv2VarPrice'), we = document.getElementById('pv2VarWholesale'), se = document.getElementById('pv2VarSku');
         var ps = pe ? pe.value.trim() : '', priceCents = null;
         if (ps !== '') { var n = Number(ps); if (!isFinite(n) || n < 0) { MastAdmin.showToast('Enter a valid price', true); return; } priceCents = Math.round(n * 100); }
+        var ws = we ? we.value.trim() : '', wholesaleCents = null;
+        if (ws !== '') { var wn = Number(ws); if (!isFinite(wn) || wn < 0) { MastAdmin.showToast('Enter a valid wholesale price', true); return; } wholesaleCents = Math.round(wn * 100); }
         var sku = se ? se.value.trim() : '';
-        patch = { priceCents: priceCents, sku: sku === '' ? null : sku };
+        patch = { priceCents: priceCents, wholesalePriceCents: wholesaleCents, sku: sku === '' ? null : sku };
       }
       withProductBridge(function () {
         Promise.resolve(window.MakerProductBridge.setVariantFields(pid, vid, patch)).then(function (res) {
