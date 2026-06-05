@@ -110,7 +110,7 @@
        Shared by customers.js (list/export) and customer-service.js (survey
        bulk-send) so the segment matcher cannot drift. ?v= kept in lockstep
        with MAST_MODULES_V by scripts/bump-modules-version.sh. -->
-  <script src="../shared/customer-filters.js?v=20260602-150122-58d7d43"></script>
+  <script src="../shared/customer-filters.js?v=20260604-233331-db8a0da"></script>
   <script src="../shared/brand-sync.js?v=1"></script>
   <script src="../shared/channel-connection.js?v=1"></script>
   <!-- UI redesign engines (docs/ux-audit): shared primitives + Entity Engine.
@@ -118,9 +118,9 @@
        scripts/bump-modules-version.sh (these are static <head> tags loaded
        before the JS var exists, so they can't read it at runtime). Without
        this, the engines were frozen at ?v=1 and never cache-busted on deploy. -->
-  <script src="../shared/mast-ui.js?v=20260602-150122-58d7d43"></script>
-  <script src="../shared/mast-io.js?v=20260602-150122-58d7d43"></script>
-  <script src="../shared/mast-entity.js?v=20260602-150122-58d7d43"></script>
+  <script src="../shared/mast-ui.js?v=20260604-233331-db8a0da"></script>
+  <script src="../shared/mast-io.js?v=20260604-233331-db8a0da"></script>
+  <script src="../shared/mast-entity.js?v=20260604-233331-db8a0da"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Pod-specific runtime config — sets window.MAST_POD_PLATFORM_PROJECT so
@@ -20965,7 +20965,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260602-150122-58d7d43';
+var MAST_MODULES_V = '20260604-233331-db8a0da';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -35683,6 +35683,11 @@ var NEXT_STEP_DEFINITIONS = [
   { id: 'setup-square',   module: 'sell',       icon: '\uD83D\uDCB3', title: 'Connect Square for payments',   desc: 'Link your Square account to accept payments and manage orders.',          route: 'settings', subView: 'payments', check: function() { return tenantConfigChecklist && tenantConfigChecklist.square; } },
   { id: 'setup-email',    module: null,         icon: '\u2709\uFE0F', title: 'Configure email notifications', desc: 'Set up order confirmation and shipping emails for your customers.',       route: 'settings', subView: 'email', check: function() { return tenantConfigChecklist && tenantConfigChecklist.email; } },
   { id: 'connect-claude', module: null,         icon: '\uD83E\uDD16', title: 'Connect Claude or other AI tools', desc: 'Generate an API key so Claude, ChatGPT, or Cursor can manage your store through natural language.', route: 'settings', subView: 'ai', check: function() { return window._nextStepsCache && window._nextStepsCache.hasAiApiKey; } },
+  // Surfaces only when a channel is connected with unmapped listings and the
+  // assisted flow isn't complete (check() returns done when complete OR nothing
+  // pending). Dismissing the takeover persists dismissedAt but does NOT mark it
+  // done, so this stays on the dashboard as the re-entry point.
+  { id: 'match-listings', module: null,         icon: '\uD83D\uDD17', title: 'Match your channel listings',   desc: 'Link your Etsy and Shopify listings to Mast products so we can flag price, inventory, and description drift.', route: 'mapping', check: function() { return window._nextStepsCache && (window._nextStepsCache.mappingComplete || !window._nextStepsCache.mappingPending); } },
   { id: 'first-show',     module: 'show',       icon: '\uD83C\uDFAA', title: 'Find your first show',          desc: 'Search for craft fairs and events in your area.',                         route: 'show-find',   check: function() { return false; } },
   { id: 'show-light-profile', module: 'show-light', icon: '\u2728', title: 'Build your vendor profile',     desc: 'Add your bio, photos, and product highlights for show applications.',     route: 'show-light-profile', check: function() { return false; } },
   { id: 'create-event',   module: 'events',     icon: '\uD83C\uDFAB', title: 'Create your first show',        desc: 'Set up a show with booths, vendors, and applications.',                   route: 'events-shows', check: function() { return false; } },
@@ -35881,7 +35886,9 @@ function renderDashCardSetupShop() {
 window._nextStepsCache = {
   hasProducts: false, hasWebsite: false, hasTemplate: false, hasContent: false, hasAiApiKey: false,
   // Folded in from the retired Setup Scorecard (feedback ODQHG7kBLXoQ4hPDtDno):
-  hasBusinessType: false, hasTaxConfig: false, hasPricingDefaults: false, hasModulesShown: false
+  hasBusinessType: false, hasTaxConfig: false, hasPricingDefaults: false, hasModulesShown: false,
+  // Channel-listing mapping status (drives the "Match your channel listings" step).
+  mappingComplete: false, mappingPending: false
 };
 
 async function loadNextStepsCache() {
@@ -35976,6 +35983,20 @@ async function loadNextStepsCache() {
     if (!window._nextStepsCache.hasTaxConfig) {
       var taxRatesSnap = await MastDB.get('public/taxRates');
       if (taxRatesSnap && Object.keys(taxRatesSnap).length > 0) window._nextStepsCache.hasTaxConfig = true;
+    }
+  } catch (e) { /* ignore */ }
+  try {
+    // Channel-listing mapping status. Lazy-load the module if the dashboard
+    // rendered before the post-boot mapping load ran. status() is read-only and
+    // never mounts the interstitial.
+    if (!(window.MastMappingFlow && typeof window.MastMappingFlow.status === 'function')
+        && typeof MastAdmin !== 'undefined' && typeof MastAdmin.loadModule === 'function') {
+      await MastAdmin.loadModule('mapping');
+    }
+    if (window.MastMappingFlow && typeof window.MastMappingFlow.status === 'function') {
+      var mapStatus = await window.MastMappingFlow.status();
+      window._nextStepsCache.mappingComplete = !!(mapStatus && mapStatus.completed);
+      window._nextStepsCache.mappingPending = !!(mapStatus && mapStatus.pending);
     }
   } catch (e) { /* ignore */ }
 }
