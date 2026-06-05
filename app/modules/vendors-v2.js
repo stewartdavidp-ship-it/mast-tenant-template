@@ -15,12 +15,14 @@
  * (active / archived) is the assigned boolean attribute `active`, not a workflow →
  * Faceted/Flat Record, NOT Process/MastFlow.
  *
- * Read-focused: creating/editing/archiving a vendor is a bespoke form coupled to
- * the legacy Procurement pane (vendor fields, product-supplier links, PO/receipt
- * relationships) and stays single-sourced there via a "manage in classic view"
- * link → navigateToClassic('procurement'). This twin re-hosts the VIEW only — no
- * onSave, no edit form, no PO/receipt sub-tools (those stay on legacy).
- * Flag-gated (?ui=1) at #vendors-v2, side-by-side; never touches procurement.js.
+ * Create + edit are NATIVE here: a custom detail.editRender (the legacy vendor
+ * field set, grouped like the New-Vendor modal / edit form) + an onSave that
+ * DELEGATES to window.VendorsBridge (exposed in procurement.js) so the vendor
+ * write (admin/vendors/{id} + roleFlags + active + lead-time coercion) stays
+ * single-sourced — this twin never reimplements that logic (mirrors the
+ * contacts-v2 / ContactsBridge precedent). Archiving, product-supplier links, and
+ * PO/receipt sub-tools remain bespoke and coupled to legacy #procurement and keep
+ * a "manage in classic view" link. Flag-gated (?ui=1) at #vendors-v2, side-by-side.
  *
  * Data: vendors live at admin/vendors (keyed by vendorId) — read directly with
  * MastDB.get('admin/vendors') (same path procurement.js reads). The Supplies facet
@@ -149,10 +151,11 @@
         var notesBody = v.notes
           ? '<div style="font-size:0.85rem;color:var(--warm-gray);line-height:1.5;white-space:pre-wrap;">' + esc(v.notes) + '</div>'
           : '<span class="mu-sub">No notes.</span>';
-        // Vendor editing / archiving + product-supplier links stay on legacy
-        // Procurement. Use navigateToClassic so the V2 route remap (if any) does
-        // not loop back to a twin.
-        var manage = '<div style="margin-top:14px;"><button class="btn btn-secondary" onclick="VendorsV2.classic()">Manage in classic view →</button></div>';
+        // Vendor identity editing is NATIVE now (the Edit button on this slide-out).
+        // What still has NO V2 home: archiving, product-supplier links, and
+        // PO/receipt sub-tools — those stay bespoke on legacy #procurement.
+        // navigateToClassic so the V2 route remap doesn't loop back to this twin.
+        var manage = '<div style="margin-top:14px;"><button class="btn btn-secondary" onclick="VendorsV2.classic()">Archive / link products in classic view →</button></div>';
 
         // Supplies — products/materials this vendor supplies (preferred first),
         // with cost + lead time + MOQ. Read-only mirror of renderVendorProducts.
@@ -179,15 +182,88 @@
             UI.card('Notes', notesBody + manage) +
           '</div>' +
           '<div class="mu-pane" data-pane="supplies" hidden>' + UI.cardTable('Supplies (' + supplies.length + ')', suppliesBody) + '</div>';
+      },
+      // Native edit form — the legacy New-Vendor modal / vendor edit field set,
+      // grouped. Mirrors procurement.openNewVendorModal / renderVendorEditForm:
+      // name (required), vendorCode, contactName, email, phone, website,
+      // defaultCurrency, defaultPaymentTerms, defaultLeadTimeDays, defaultShipMethod,
+      // taxId, accountNumber, notes. Archiving + product-supplier links + addresses[]
+      // stay on legacy (a partial update preserves roleFlags/active/addresses).
+      editRender: function (v, mode) {
+        v = v || {};
+        function fg(label, inner, flex) { return '<div class="form-group"' + (flex ? ' style="flex:1;min-width:150px;"' : '') + '><label class="form-label">' + label + '</label>' + inner + '</div>'; }
+        function row2(a, b) { return '<div style="display:flex;gap:12px;flex-wrap:wrap;">' + a + b + '</div>'; }
+        return '<div class="mu-editbar"><span class="mu-editpill">' + (mode === 'create' ? 'NEW' : 'EDITING') + '</span>' + (mode === 'create' ? 'New vendor' : 'Edit this vendor') + '</div>' +
+          fg('Name *', '<input class="form-input" id="vnV2Name" value="' + esc(v.name || '') + '" style="width:100%;" placeholder="Supplier name">') +
+          row2(
+            fg('Vendor code', '<input class="form-input" id="vnV2Code" value="' + esc(v.vendorCode || '') + '" style="width:100%;" placeholder="STULLER">', true),
+            fg('Contact name', '<input class="form-input" id="vnV2Contact" value="' + esc(v.contactName || '') + '" style="width:100%;">', true)
+          ) +
+          row2(
+            fg('Email', '<input class="form-input" type="email" id="vnV2Email" value="' + esc(v.email || '') + '" style="width:100%;" placeholder="email@example.com">', true),
+            fg('Phone', '<input class="form-input" type="tel" id="vnV2Phone" value="' + esc(v.phone || '') + '" style="width:100%;" placeholder="(555) 123-4567">', true)
+          ) +
+          fg('Website', '<input class="form-input" type="url" id="vnV2Website" value="' + esc(v.website || '') + '" style="width:100%;" placeholder="https://...">') +
+          row2(
+            fg('Default currency', '<input class="form-input" id="vnV2Currency" value="' + esc(v.defaultCurrency || '') + '" style="width:100%;" placeholder="USD">', true),
+            fg('Payment terms', '<input class="form-input" id="vnV2Terms" value="' + esc(v.defaultPaymentTerms || '') + '" style="width:100%;" placeholder="net-30">', true)
+          ) +
+          row2(
+            fg('Default lead time (days)', '<input class="form-input" type="number" min="0" id="vnV2Lead" value="' + esc(v.defaultLeadTimeDays == null ? '' : v.defaultLeadTimeDays) + '" style="width:100%;">', true),
+            fg('Ship method', '<input class="form-input" id="vnV2Ship" value="' + esc(v.defaultShipMethod || '') + '" style="width:100%;">', true)
+          ) +
+          row2(
+            fg('Tax ID', '<input class="form-input" id="vnV2TaxId" value="' + esc(v.taxId || '') + '" style="width:100%;">', true),
+            fg('Account number', '<input class="form-input" id="vnV2Acct" value="' + esc(v.accountNumber || '') + '" style="width:100%;">', true)
+          ) +
+          fg('Notes', '<textarea class="form-input" id="vnV2Notes" rows="3" style="width:100%;resize:vertical;">' + esc(v.notes || '') + '</textarea>');
       }
+    },
+    onSave: function (rec, mode) {
+      if (!window.VendorsBridge) { if (window.showToast) showToast('Vendors engine still loading — try again', true); return false; }
+      function val(id) { return ((document.getElementById(id) || {}).value || '').trim(); }
+      var data = {
+        name: val('vnV2Name'),
+        vendorCode: val('vnV2Code') || null,
+        contactName: val('vnV2Contact') || null,
+        email: val('vnV2Email') || null,
+        phone: val('vnV2Phone') || null,
+        website: val('vnV2Website') || null,
+        defaultCurrency: val('vnV2Currency') || null,
+        defaultPaymentTerms: val('vnV2Terms') || null,
+        defaultLeadTimeDays: val('vnV2Lead') || null,
+        defaultShipMethod: val('vnV2Ship') || null,
+        taxId: val('vnV2TaxId') || null,
+        accountNumber: val('vnV2Acct') || null,
+        notes: val('vnV2Notes') || null
+      };
+      if (!data.name) { if (window.showToast) showToast('Vendor name is required.', true); return false; }
+
+      if (mode === 'create') {
+        return Promise.resolve(window.VendorsBridge.create(data)).then(function () {
+          if (window.showToast) showToast('Vendor created.'); reloadSoon(); return true;
+        }).catch(function (e) { console.error('[vendors-v2] create', e); if (window.showToast) showToast('Error saving vendor.', true); return false; });
+      }
+      var id = rec.vendorId || rec._key || rec.id;
+      return Promise.resolve(window.VendorsBridge.update(id, data)).then(function () {
+        // Mutate the LIVE cached record (=== the slide-out's read closure, since
+        // fetch returns V2.byId[id]); the engine passes a copy to onSave. Coerce
+        // lead time to match the persisted shape so the post-save read re-render
+        // matches; reloadSoon() then refreshes the cache for the next open.
+        var coerced = Object.assign({}, data, { defaultLeadTimeDays: data.defaultLeadTimeDays === null ? null : parseInt(data.defaultLeadTimeDays, 10) });
+        Object.assign(V2.byId[id] || rec, coerced);
+        if (window.showToast) showToast('Vendor updated.'); reloadSoon(); return true;
+      }).catch(function (e) { console.error('[vendors-v2] update', e); if (window.showToast) showToast('Error updating vendor.', true); return false; });
     }
-    // No onSave → no Edit button (vendor editing stays on legacy Procurement).
   });
 
   // ── module state + data ─────────────────────────────────────────────
   var V2 = { rows: [], byId: {}, productSuppliers: [], materials: {}, sortKey: 'name', sortDir: 'asc', q: '', statusFilter: 'active', loaded: false };
 
   function load() {
+    // Ensure the legacy procurement module is loaded so window.VendorsBridge
+    // (the delegated write path) exists — mirrors contacts-v2.
+    if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('procurement'); } catch (e) {} }
     // Vendors + product-suppliers (Supplies facet/count) + materials (target
     // label lookup) load together; all one-shot keyed-object reads at admin/*.
     Promise.all([
@@ -207,6 +283,7 @@
       V2.loaded = true; render();
     }).catch(function (e) { console.error('[vendors-v2] load', e); render(); });
   }
+  function reloadSoon() { V2.loaded = false; setTimeout(load, 250); }   // let the legacy write settle, then refresh
 
   function visibleRows() {
     var rows = V2.rows;
@@ -244,7 +321,8 @@
       U.pageHeader({
         title: 'Vendors',
         count: N.count(V2.rows.length) + ' vendor' + (V2.rows.length === 1 ? '' : 's'),
-        actionsHtml: '<button class="btn btn-secondary" onclick="VendorsV2.exportCsv()">↓ Export</button>'
+        actionsHtml: '<button class="btn btn-primary" onclick="VendorsV2.create()">+ New vendor</button>' +
+          '<button class="btn btn-secondary" onclick="VendorsV2.exportCsv()">↓ Export</button>'
       }) +
       '<div style="display:flex;gap:6px;flex-wrap:wrap;margin:12px 0;">' + filters + '</div>' +
       '<div style="margin:14px 0;"><input class="form-input" placeholder="Search name, contact or code…" value="' + esc(V2.q) +
@@ -252,7 +330,7 @@
       MastEntity.renderList('vendors-v2', {
         rows: visibleRows(), sortKey: V2.sortKey, sortDir: V2.sortDir,
         onSortFnName: 'VendorsV2.sort', onRowClickFnName: 'VendorsV2.open',
-        empty: { title: 'No vendors', message: V2.loaded ? 'Add suppliers in the classic Procurement view.' : 'Loading…' }
+        empty: { title: 'No vendors', message: V2.loaded ? 'Add a vendor to get started.' : 'Loading…' }
       });
   }
 
@@ -269,8 +347,15 @@
         if (rec) MastEntity.openRecord('vendors-v2', rec, 'read');
       });
     },
-    // Vendor editing / archiving + product-supplier links → classic Procurement
-    // (vendors live under Procurement, no top-level legacy route). Use
+    create: function () {
+      // Ensure the legacy module (and thus window.VendorsBridge) is loaded
+      // before opening the create form — mirrors ContactsV2.create.
+      if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('procurement'); } catch (e) {} }
+      MastEntity.openRecord('vendors-v2', {}, 'create');
+    },
+    // Vendor identity create/edit is native. Archiving, product-supplier links,
+    // and PO/receipt sub-tools are still bespoke on legacy #procurement (no V2
+    // home; vendors live under Procurement, no top-level legacy route). Use
     // navigateToClassic so the V2 route remap doesn't loop us back to a twin.
     classic: function () {
       if (typeof navigateToClassic === 'function') navigateToClassic('procurement');

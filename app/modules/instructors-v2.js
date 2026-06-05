@@ -13,11 +13,16 @@
  * (active / inactive) is an assigned attribute → Faceted Record, NOT Process/
  * MastFlow.
  *
- * Read-focused: creating/editing an instructor is a multi-section bespoke form
- * (skill picker, pay rate, photo, internal notes) coupled to the legacy Book
- * module and stays single-sourced on legacy #instructors via a "manage in
- * classic view" link. This twin re-hosts the VIEW only — no onSave, no edit form.
- * Flag-gated (?ui=1) at #instructors-v2, side-by-side; never touches book.js.
+ * Create + edit are NATIVE here: a custom detail.editRender (the profile field
+ * set, grouped like the legacy form) + an onSave that DELEGATES to
+ * window.InstructorsBridge (exposed in book.js) so the instructor write (id
+ * minting, slug derivation, payRateCents conversion, create-vs-update PATCH
+ * semantics) stays single-sourced — this twin never reimplements that logic
+ * (mirrors the contacts-v2 / ContactsBridge precedent). Skills editing stays
+ * bespoke on legacy #instructors (the catalog-coupled skill picker has no V2
+ * home) and keeps a "manage in classic view" link; the PATCH-style update
+ * preserves an instructor's existing skills[]. Flag-gated (?ui=1) at
+ * #instructors-v2, side-by-side.
  *
  * Data: instructors live at public/instructors (MastDB.instructors → that path);
  * classes-taught is derived from public/classes (class.instructorId); skill slugs
@@ -77,7 +82,7 @@
     recordId: function (i) { return i._key || i.id; },
     fields: [
       // fields[0] (the slide-out title source) materializes a real name string.
-      { name: 'name', label: 'Name', type: 'text', list: true, readOnly: true, group: 'Profile', get: instrName },
+      { name: 'name', label: 'Name', type: 'text', list: true, required: true, group: 'Profile', get: instrName },
       { name: 'email', label: 'Email', type: 'text', list: true, readOnly: true, get: function (i) { return i.email || '—'; } },
       { name: 'skills', label: 'Skills', type: 'text', list: true, readOnly: true, sortable: false, get: function (i) { return skillsText(i) || '—'; } },
       { name: 'classCount', label: 'Classes', type: 'number', list: true, readOnly: true, align: 'right', get: function (i) { return classesFor(i).length; } },
@@ -119,9 +124,11 @@
         var notesBody = i.notes
           ? '<div style="font-size:0.85rem;color:var(--warm-gray);line-height:1.5;white-space:pre-wrap;">' + esc(i.notes) + '</div>'
           : '<span class="mu-sub">No internal notes.</span>';
-        // Multi-section instructor editing stays on legacy #instructors. Use
-        // navigateToClassic so the V2 route remap doesn't loop us back to this twin.
-        var manage = '<div style="margin-top:14px;"><button class="btn btn-secondary" onclick="InstructorsV2.classic()">Manage in classic view →</button></div>';
+        // Profile editing is NATIVE now (the Edit button on this slide-out).
+        // What still has NO V2 home: the skills picker (catalog-coupled) — that
+        // stays bespoke on legacy #instructors. navigateToClassic so the V2 route
+        // remap doesn't loop back here.
+        var manage = '<div style="margin-top:14px;"><button class="btn btn-secondary" onclick="InstructorsV2.classic()">Edit skills in classic view →</button></div>';
 
         // Classes — active first, then other (mirrors legacy detail grouping).
         var active = classes.filter(function (c) { return c.status === 'active'; });
@@ -146,19 +153,87 @@
           '<div class="mu-pane" data-pane="ov">' +
             UI.card('Contact', contact) +
             UI.card('Bio', bioBody) +
-            UI.card('Skills', skillsBody) +
-            UI.card('Internal notes', notesBody + manage) +
+            UI.card('Skills', skillsBody + manage) +
+            UI.card('Internal notes', notesBody) +
           '</div>' +
           '<div class="mu-pane" data-pane="classes" hidden>' + UI.cardTable('Classes (' + classes.length + ')', classesBody) + '</div>';
+      },
+      // Native edit form — the legacy showInstructorForm profile field set,
+      // grouped: name (required), status, bio, email, phone, pay rate, photo URL,
+      // internal notes. Skills are NOT edited here (catalog-coupled picker stays
+      // on legacy); a partial update preserves the existing skills[].
+      editRender: function (i, mode) {
+        i = i || {};
+        var statusOpts = ['active', 'inactive'].map(function (s) {
+          return '<option value="' + s + '"' + (statusOf(i) === s ? ' selected' : '') + '>' + (STATUS_LABEL[s] || s) + '</option>';
+        }).join('');
+        function fg(label, inner, flex) { return '<div class="form-group"' + (flex ? ' style="flex:1;min-width:150px;"' : '') + '><label class="form-label">' + label + '</label>' + inner + '</div>'; }
+        function row2(a, b) { return '<div style="display:flex;gap:12px;flex-wrap:wrap;">' + a + b + '</div>'; }
+        var payRateVal = N.moneyVal(i, 'payRateCents', null);
+        return '<div class="mu-editbar"><span class="mu-editpill">' + (mode === 'create' ? 'NEW' : 'EDITING') + '</span>' + (mode === 'create' ? 'New instructor' : 'Edit this instructor') + '</div>' +
+          row2(
+            fg('Name *', '<input class="form-input" id="inV2Name" value="' + esc(i.name || '') + '" style="width:100%;" placeholder="Full name">', true),
+            fg('Status', '<select class="form-input" id="inV2Status" style="width:100%;">' + statusOpts + '</select>', true)
+          ) +
+          fg('Bio', '<textarea class="form-input" id="inV2Bio" rows="3" style="width:100%;resize:vertical;" placeholder="Teaching background and experience...">' + esc(i.bio || '') + '</textarea>') +
+          row2(
+            fg('Email', '<input class="form-input" type="email" id="inV2Email" value="' + esc(i.email || '') + '" style="width:100%;" placeholder="instructor@email.com">', true),
+            fg('Phone', '<input class="form-input" type="tel" id="inV2Phone" value="' + esc(i.phone || '') + '" style="width:100%;" placeholder="(555) 123-4567">', true)
+          ) +
+          row2(
+            fg('Pay rate ($/hr)', '<input class="form-input" type="number" min="0" step="0.01" id="inV2PayRate" value="' + (payRateVal == null ? '' : (payRateVal / 100).toFixed(2)) + '" style="width:100%;">', true),
+            fg('Photo URL', '<input class="form-input" type="url" id="inV2Photo" value="' + esc(i.photoUrl || '') + '" style="width:100%;" placeholder="https://...">', true)
+          ) +
+          fg('Internal notes', '<textarea class="form-input" id="inV2Notes" rows="2" style="width:100%;resize:vertical;" placeholder="Notes visible to admin only...">' + esc(i.notes || '') + '</textarea>') +
+          '<div class="mu-sub" style="margin-top:8px;">Skills are managed in the classic Instructors view.</div>';
       }
+    },
+    onSave: function (rec, mode) {
+      if (!window.InstructorsBridge) { if (window.showToast) showToast('Instructors engine still loading — try again', true); return false; }
+      var data = {
+        name: (document.getElementById('inV2Name') || {}).value || '',
+        status: (document.getElementById('inV2Status') || {}).value || 'active',
+        bio: (document.getElementById('inV2Bio') || {}).value || '',
+        email: (document.getElementById('inV2Email') || {}).value || '',
+        phone: (document.getElementById('inV2Phone') || {}).value || '',
+        payRate: (document.getElementById('inV2PayRate') || {}).value || '',
+        photoUrl: (document.getElementById('inV2Photo') || {}).value || '',
+        notes: (document.getElementById('inV2Notes') || {}).value || ''
+      };
+      if (!data.name.trim()) { if (window.showToast) showToast('Instructor name is required.', true); return false; }
+
+      if (mode === 'create') {
+        return Promise.resolve(window.InstructorsBridge.create(data)).then(function () {
+          if (window.showToast) showToast('Instructor created.'); reloadSoon(); return true;
+        }).catch(function (e) { console.error('[instructors-v2] create', e); if (window.showToast) showToast('Error saving instructor.', true); return false; });
+      }
+      var id = rec._key || rec.id;
+      return Promise.resolve(window.InstructorsBridge.update(id, data)).then(function () {
+        // Mutate the LIVE cached record (=== the slide-out's read closure, since
+        // fetch returns V2.byId[id]); the engine passes a copy to onSave. Shows
+        // the edited fields immediately on the post-save read re-render;
+        // reloadSoon() then refreshes the cache for the next open. Mirror the
+        // Bridge's payRateCents conversion so the post-save tiles read right.
+        var pr = parseFloat(data.payRate);
+        Object.assign(V2.byId[id] || rec, {
+          name: data.name.trim(), status: data.status,
+          bio: data.bio.trim() || null, email: data.email.trim() || null,
+          phone: data.phone.trim() || null, photoUrl: data.photoUrl.trim() || null,
+          notes: data.notes.trim() || null,
+          payRateCents: isNaN(pr) ? null : Math.round(pr * 100)
+        });
+        if (window.showToast) showToast('Instructor updated.'); reloadSoon(); return true;
+      }).catch(function (e) { console.error('[instructors-v2] update', e); if (window.showToast) showToast('Error updating instructor.', true); return false; });
     }
-    // No onSave → no Edit button (instructor editing stays on legacy #instructors).
   });
 
   // ── module state + data ─────────────────────────────────────────────
   var V2 = { rows: [], byId: {}, classes: [], skillCatalog: {}, sortKey: 'name', sortDir: 'asc', q: '', statusFilter: 'all', loaded: false };
 
   function load() {
+    // Ensure the legacy Book module is loaded so window.InstructorsBridge (the
+    // delegated write path) exists — mirrors contacts-v2 / materials-v2.
+    if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('book'); } catch (e) {} }
     // Instructors + classes (for the Classes facet/count) + skill catalog (for
     // slug→label) load together; all one-shot keyed-object reads.
     Promise.all([
@@ -178,6 +253,7 @@
       V2.loaded = true; render();
     }).catch(function (e) { console.error('[instructors-v2] load', e); render(); });
   }
+  function reloadSoon() { V2.loaded = false; setTimeout(load, 250); }   // let the legacy write settle, then refresh
 
   function visibleRows() {
     var rows = V2.rows;
@@ -215,7 +291,8 @@
       U.pageHeader({
         title: 'Instructors',
         count: N.count(V2.rows.length) + ' instructor' + (V2.rows.length === 1 ? '' : 's'),
-        actionsHtml: '<button class="btn btn-secondary" onclick="InstructorsV2.exportCsv()">↓ Export</button>'
+        actionsHtml: '<button class="btn btn-primary" onclick="InstructorsV2.create()">+ New instructor</button>' +
+          '<button class="btn btn-secondary" onclick="InstructorsV2.exportCsv()">↓ Export</button>'
       }) +
       '<div style="display:flex;gap:6px;flex-wrap:wrap;margin:12px 0;">' + filters + '</div>' +
       '<div style="margin:14px 0;"><input class="form-input" placeholder="Search name, email or skill…" value="' + esc(V2.q) +
@@ -223,7 +300,7 @@
       MastEntity.renderList('instructors-v2', {
         rows: visibleRows(), sortKey: V2.sortKey, sortDir: V2.sortDir,
         onSortFnName: 'InstructorsV2.sort', onRowClickFnName: 'InstructorsV2.open',
-        empty: { title: 'No instructors', message: V2.loaded ? 'Add instructors in the classic Instructors view.' : 'Loading…' }
+        empty: { title: 'No instructors', message: V2.loaded ? 'Add an instructor to get started.' : 'Loading…' }
       });
   }
 
@@ -240,8 +317,15 @@
         if (rec) MastEntity.openRecord('instructors-v2', rec, 'read');
       });
     },
-    // Multi-section instructor editing → classic Instructors view. Use
-    // navigateToClassic so the V2 route remap doesn't loop us back to this twin.
+    create: function () {
+      // Ensure the legacy Book module (and thus window.InstructorsBridge) is
+      // loaded before opening the create form — mirrors ContactsV2.create.
+      if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('book'); } catch (e) {} }
+      MastEntity.openRecord('instructors-v2', {}, 'create');
+    },
+    // Skills editing (catalog-coupled picker) stays bespoke on legacy
+    // #instructors (no V2 home). Profile create/edit is native. navigateToClassic
+    // so the V2 route remap doesn't loop us back to this twin.
     classic: function () {
       if (typeof navigateToClassic === 'function') navigateToClassic('instructors');
       else if (typeof navigateTo === 'function') navigateTo('instructors');

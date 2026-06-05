@@ -14,17 +14,25 @@
  * Flat/Faceted Record, NOT Process/MastFlow. The record is genuinely flat, so a
  * single Overview facet carries it (no invented facets, no pane tabs).
  *
- * Read-focused: adding/removing subscribers, sending issues, A/B tests and the
- * whole campaign Composer stay single-sourced on legacy #newsletter via a
- * "manage in classic view" link. This twin re-hosts the subscriber VIEW only —
- * no onSave, no edit form. Flag-gated (?ui=1) at #newsletter-v2, side-by-side;
- * never touches newsletter.js.
+ * Create + edit are NATIVE here: a custom detail.editRender (the legacy add-modal
+ * field set — name, email, notes — plus the subscribed/unsubscribed status the
+ * legacy unsubscribe path toggles) + an onSave that DELEGATES to
+ * window.NewsletterBridge (exposed in newsletter.js) so the subscriber record
+ * write, the active-email dedup + email validation, and the unsubscribe status
+ * stamp stay single-sourced — this twin never reimplements that logic (mirrors
+ * the contacts-v2 / ContactsBridge precedent). Legacy "add subscriber" is a pure
+ * record write (it does NOT send a welcome/confirmation email), so create stays a
+ * plain write through the bridge — there is no send to route.
+ *
+ * Sending issues, A/B tests and the whole campaign Composer have no V2 home and
+ * stay single-sourced on legacy #newsletter via a "compose / send in classic
+ * view" link. Flag-gated (?ui=1) at #newsletter-v2, side-by-side.
  *
  * Data: subscribers live at newsletter/subscribers (MastDB.newsletter.subscribers
  * -> that path; legacy reads it via .ref().once('value')). One-shot keyed-object
  * read — fields per record: email, name, status ('active'|'unsubscribed'),
  * source ('manual'|'website-form'), subscribedAt (ISO), unsubscribedAt, notes,
- * and Resend webhook health flags (bounceFlag / complaintFlag).
+ * unsubscribeToken, and Resend webhook health flags (bounceFlag / complaintFlag).
  */
 (function () {
   'use strict';
@@ -68,7 +76,7 @@
       { name: 'source', label: 'Source', type: 'text', list: true, readOnly: true, get: sourceLabel,
         tone: function () { return 'teal'; } },
       { name: 'subscribedAt', label: 'Subscribed', type: 'date', list: true, readOnly: true },
-      { name: 'status', label: 'Status', type: 'status', list: true, readOnly: true,
+      { name: 'status', label: 'Status', type: 'status', list: true,
         options: ['active', 'unsubscribed'],
         get: statusOf,
         tone: function (v) { return STATUS_TONE[v] || 'neutral'; } }
@@ -106,23 +114,81 @@
           ? '<div style="font-size:0.85rem;color:var(--warm-gray);line-height:1.5;white-space:pre-wrap;">' + esc(s.notes) + '</div>'
           : '<span class="mu-sub">No notes.</span>';
 
-        // Editing subscribers + sending/composing stays on legacy #newsletter.
-        // Use navigateToClassic so the V2 route remap doesn't loop us back here.
-        var manage = '<div style="margin-top:14px;"><button class="btn btn-secondary" onclick="NewsletterV2.classic()">Manage in classic view →</button></div>';
+        // Subscriber create/edit is NATIVE now (the Edit button on this slide-out).
+        // What has NO V2 home: composing + sending issues, A/B tests, and the
+        // campaign Composer — those stay bespoke on legacy #newsletter.
+        // navigateToClassic so the V2 route remap doesn't loop back here.
+        var manage = '<div style="margin-top:14px;"><button class="btn btn-secondary" onclick="NewsletterV2.classic()">Compose / send issues in classic view →</button></div>';
 
         return tiles +
           UI.card('Subscriber', details) +
           UI.card('Delivery health', healthBody) +
           UI.card('Notes', notesBody + manage);
+      },
+      // Native edit form — the legacy add-modal field set (name *, email *, notes)
+      // plus the subscribed/unsubscribed status the legacy unsubscribe path
+      // toggles. source / subscribedAt / unsubscribeToken / health flags are
+      // system-owned (not editable; a partial update preserves them).
+      editRender: function (s, mode) {
+        s = s || {};
+        var st = statusOf(s);
+        var statusOpts = [['active', 'Subscribed'], ['unsubscribed', 'Unsubscribed']].map(function (o) {
+          return '<option value="' + o[0] + '"' + (st === o[0] ? ' selected' : '') + '>' + o[1] + '</option>';
+        }).join('');
+        function fg(label, inner, flex) { return '<div class="form-group"' + (flex ? ' style="flex:1;min-width:150px;"' : '') + '><label class="form-label">' + label + '</label>' + inner + '</div>'; }
+        function row2(a, b) { return '<div style="display:flex;gap:12px;flex-wrap:wrap;">' + a + b + '</div>'; }
+        return '<div class="mu-editbar"><span class="mu-editpill">' + (mode === 'create' ? 'NEW' : 'EDITING') + '</span>' + (mode === 'create' ? 'New subscriber' : 'Edit this subscriber') + '</div>' +
+          fg('Name *', '<input class="form-input" id="nlV2Name" value="' + esc(s.name || '') + '" style="width:100%;" placeholder="Subscriber name">') +
+          fg('Email *', '<input class="form-input" type="email" id="nlV2Email" value="' + esc(s.email || '') + '" style="width:100%;" placeholder="email@example.com">') +
+          row2(
+            fg('Status', '<select class="form-input" id="nlV2Status" style="width:100%;">' + statusOpts + '</select>', true),
+            fg('Notes', '<input class="form-input" id="nlV2Notes" value="' + esc(s.notes || '') + '" style="width:100%;">', true)
+          );
       }
+    },
+    onSave: function (rec, mode) {
+      if (!window.NewsletterBridge) { if (window.showToast) showToast('Newsletter engine still loading — try again', true); return false; }
+      var data = {
+        name: ((document.getElementById('nlV2Name') || {}).value || '').trim(),
+        email: ((document.getElementById('nlV2Email') || {}).value || '').trim(),
+        notes: ((document.getElementById('nlV2Notes') || {}).value || '').trim(),
+        status: (document.getElementById('nlV2Status') || {}).value || 'active'
+      };
+      // Mirror legacy nlSaveSubscriber validation exactly.
+      if (!data.name || !data.email) { if (window.showToast) showToast('Name and email are required', true); return false; }
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email)) { if (window.showToast) showToast('Invalid email address', true); return false; }
+
+      if (mode === 'create') {
+        if (window.NewsletterBridge.isDuplicate(data.email)) { if (window.showToast) showToast('This email is already subscribed', true); return false; }
+        return Promise.resolve(window.NewsletterBridge.create(data)).then(function () {
+          if (window.showToast) showToast('Subscriber added'); reloadSoon(); return true;
+        }).catch(function (e) { console.error('[newsletter-v2] create', e); if (window.showToast) showToast('Error adding subscriber.', true); return false; });
+      }
+      var id = rec._key || rec.id;
+      return Promise.resolve(window.NewsletterBridge.update(id, data)).then(function () {
+        // Mutate the LIVE cached record (=== the slide-out's read closure, since
+        // fetch returns V2.byId[id]); the engine passes a copy to onSave. Shows
+        // the edited fields immediately on the post-save read re-render;
+        // reloadSoon() then refreshes the cache for the next open.
+        var live = V2.byId[id] || rec;
+        live.name = data.name; live.email = data.email; live.notes = data.notes || null;
+        if (data.status !== live.status) {
+          live.status = data.status;
+          live.unsubscribedAt = data.status === 'unsubscribed' ? new Date().toISOString() : null;
+        }
+        if (window.showToast) showToast('Subscriber updated'); reloadSoon(); return true;
+      }).catch(function (e) { console.error('[newsletter-v2] update', e); if (window.showToast) showToast('Error updating subscriber.', true); return false; });
     }
-    // No onSave → no Edit button (subscriber editing stays on legacy #newsletter).
   });
 
   // ── module state + data ─────────────────────────────────────────────
   var V2 = { rows: [], byId: {}, sortKey: 'subscribedAt', sortDir: 'desc', q: '', statusFilter: 'all', loaded: false };
 
   function load() {
+    // Ensure the legacy newsletter module is loaded so window.NewsletterBridge
+    // (the delegated write path) + its in-memory nlSubscribers (dedup source)
+    // exist — mirrors contacts-v2.
+    if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('newsletter'); } catch (e) {} }
     // Subscribers — one-shot keyed-object read at the same path legacy reads.
     Promise.resolve(MastDB.get('newsletter/subscribers')).catch(function () { return null; })
       .then(function (sv) {
@@ -136,6 +202,7 @@
         V2.loaded = true; render();
       }).catch(function (e) { console.error('[newsletter-v2] load', e); render(); });
   }
+  function reloadSoon() { V2.loaded = false; setTimeout(load, 250); }   // let the legacy write settle, then refresh
 
   function activeCount() { return V2.rows.filter(function (s) { return statusOf(s) === 'active'; }).length; }
 
@@ -174,7 +241,8 @@
       U.pageHeader({
         title: 'Subscribers',
         count: N.count(activeCount()) + ' subscribed · ' + N.count(V2.rows.length) + ' total',
-        actionsHtml: '<button class="btn btn-secondary" onclick="NewsletterV2.exportCsv()">↓ Export</button>'
+        actionsHtml: '<button class="btn btn-primary" onclick="NewsletterV2.create()">+ New subscriber</button>' +
+          '<button class="btn btn-secondary" onclick="NewsletterV2.exportCsv()">↓ Export</button>'
       }) +
       '<div style="display:flex;gap:6px;flex-wrap:wrap;margin:12px 0;">' + filters + '</div>' +
       '<div style="margin:14px 0;"><input class="form-input" placeholder="Search email or name…" value="' + esc(V2.q) +
@@ -182,7 +250,7 @@
       MastEntity.renderList('newsletter-v2', {
         rows: visibleRows(), sortKey: V2.sortKey, sortDir: V2.sortDir,
         onSortFnName: 'NewsletterV2.sort', onRowClickFnName: 'NewsletterV2.open',
-        empty: { title: 'No subscribers', message: V2.loaded ? 'Add subscribers in the classic Newsletter view.' : 'Loading…' }
+        empty: { title: 'No subscribers', message: V2.loaded ? 'Add a subscriber to get started.' : 'Loading…' }
       });
   }
 
@@ -199,7 +267,14 @@
         if (rec) MastEntity.openRecord('newsletter-v2', rec, 'read');
       });
     },
-    // Subscriber editing + the campaign Composer → classic Newsletter view. Use
+    create: function () {
+      // Ensure the legacy module (and thus window.NewsletterBridge + nlSubscribers)
+      // is loaded before opening the create form — mirrors ContactsV2.create.
+      if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('newsletter'); } catch (e) {} }
+      MastEntity.openRecord('newsletter-v2', {}, 'create');
+    },
+    // Subscriber create/edit is native here. Composing + sending issues, A/B
+    // tests, and the campaign Composer have no V2 home → classic Newsletter view.
     // navigateToClassic so the V2 route remap doesn't loop us back to this twin.
     classic: function () {
       if (typeof navigateToClassic === 'function') navigateToClassic('newsletter');

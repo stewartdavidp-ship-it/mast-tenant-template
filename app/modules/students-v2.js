@@ -14,13 +14,16 @@
  * lifecycle — its status (active / inactive) is an assigned attribute, not a
  * workflow phase -> Faceted Record, NOT Process/MastFlow.
  *
- * Read-focused: editing a student in legacy is a set of bespoke sub-forms
- * (identity / profile / emergency / medical / onboarding, plus per-checklist,
- * per-clearance and per-document editors with Google-Drive linking) coupled to
- * the legacy pane — those stay single-sourced on legacy #students via a "manage
- * in classic view" link. This twin re-hosts the VIEW only — no onSave, no edit
- * form, no clearance/document/waiver sub-tools (those stay on legacy too).
- * Flag-gated (?ui=1) at #students-v2, side-by-side; never touches students.js.
+ * Create + edit are NATIVE here: a custom detail.editRender (the identity /
+ * profile / emergency / medical / onboarding field set, grouped like the legacy
+ * form) + an onSave that DELEGATES to window.StudentsBridge (exposed in
+ * students.js) so the student write, the onboardingChecklist seeding and the
+ * isMinor auto-compute stay single-sourced — this twin never reimplements that
+ * logic (mirrors the contacts-v2 / ContactsBridge precedent). The per-checklist,
+ * per-clearance, per-document editors with Google-Drive linking + the waiver
+ * template tooling remain bespoke on legacy #students (no V2 home). The signed
+ * per-student waiver link is native here. Flag-gated (?ui=1) at #students-v2,
+ * side-by-side.
  */
 (function () {
   'use strict';
@@ -35,6 +38,10 @@
   if (!flagOn()) return;
 
   var U = window.MastUI, N = U.Num, esc = U._esc;
+
+  // Status vocabularies mirror students.js (WAIVER_STATUSES / PHOTO_WAIVER_STATUSES).
+  var WAIVER_STATUSES = ['pending', 'signed', 'expired'];
+  var PHOTO_WAIVER_STATUSES = ['pending', 'accepted', 'declined'];
 
   // Onboarding checklist requirements mirror students.js ONBOARDING_FIELDS.
   var ONBOARDING_FIELDS = [
@@ -128,8 +135,9 @@
           ? esc(ec.name + (ec.phone ? ' · ' + ec.phone : '') + (ec.relationship ? ' (' + ec.relationship + ')' : ''))
           : '—';
         var emergency = UI.kv([{ k: 'Emergency contact', v: emerg }]);
-        // Bespoke student editing (identity, profile, onboarding, checklist) stays on legacy #students.
-        var manage = '<div style="margin-top:14px;"><button class="btn btn-secondary" onclick="StudentsV2.classic()">Manage in classic view →</button></div>';
+        // Identity / profile / onboarding / emergency / medical editing is NATIVE
+        // now (the Edit button on this slide-out). Per-clearance, per-document,
+        // checklist and waiver-template editors remain bespoke on legacy #students.
         // Per-student signed waiver link (anti-forge, audit 2026-06-01 P2): mints a
         // tokened link bound to THIS student via generateWaiverLink. Signing it
         // flips only this student; a tokenless submission is create-new-only.
@@ -174,21 +182,121 @@
 
         return tiles + tabsBar +
           '<div class="mu-pane" data-pane="ov">' +
-            UI.card('Profile', profile) + UI.card('Onboarding', onboarding + waiverLinkBtn) + UI.card('Emergency contact', emergency + manage) + '</div>' +
+            UI.card('Profile', profile) + UI.card('Onboarding', onboarding + waiverLinkBtn) + UI.card('Emergency contact', emergency) + '</div>' +
           '<div class="mu-pane" data-pane="clearances" hidden>' +
             UI.cardTable('Clearances (' + activeClearances(s).length + ' active · ' + clr.length + ' total)', clearancesBody) + '</div>' +
           '<div class="mu-pane" data-pane="documents" hidden>' +
             UI.cardTable('Documents (' + docs.length + ')', documentsBody) + '</div>' +
           '<div class="mu-pane" data-pane="notes" hidden>' + UI.card('Notes', notesBody) + '</div>';
+      },
+      // Native edit form — the legacy openStudentForm field set, grouped
+      // (Identity / Profile / Emergency / Medical / Onboarding / Internal).
+      // Per-clearance / per-document / checklist / waiver-template editors stay
+      // bespoke on legacy #students (a partial update here preserves those).
+      editRender: function (s, mode) {
+        s = s || {};
+        var ec = s.emergencyContact || {};
+        function fg(label, inner, flex) { return '<div class="form-group"' + (flex ? ' style="flex:1;min-width:150px;"' : '') + '><label class="form-label">' + label + '</label>' + inner + '</div>'; }
+        function row2(a, b) { return '<div style="display:flex;gap:12px;flex-wrap:wrap;">' + a + b + '</div>'; }
+        function grp(label) { return '<div style="font-size:0.9rem;font-weight:600;color:var(--teal);margin:14px 0 4px;">' + esc(label) + '</div>'; }
+        function opts(list, sel) {
+          return list.map(function (o) {
+            var val = (typeof o === 'object') ? o.value : o;
+            var lab = (typeof o === 'object') ? o.label : cap(o);
+            return '<option value="' + esc(val) + '"' + (String(sel) === String(val) ? ' selected' : '') + '>' + esc(lab) + '</option>';
+          }).join('');
+        }
+        var isMinorSel = s.isMinor === true ? 'true' : s.isMinor === false ? 'false' : 'auto';
+        return '<div class="mu-editbar"><span class="mu-editpill">' + (mode === 'create' ? 'NEW' : 'EDITING') + '</span>' + (mode === 'create' ? 'New student' : 'Edit this student') + '</div>' +
+          grp('Identity') +
+          fg('Display name *', '<input class="form-input" id="stV2Name" value="' + esc(s.displayName || '') + '" style="width:100%;" placeholder="Full name">') +
+          fg('Contact ID' + (mode === 'create' ? ' *' : ''), '<input class="form-input" id="stV2ContactId" value="' + esc(s.contactId || '') + '" style="width:100%;" placeholder="Contact ID">') +
+          grp('Profile') +
+          row2(
+            fg('Birth date', '<input class="form-input" type="date" id="stV2BirthDate" value="' + esc(s.birthDate || '') + '" style="width:100%;">', true),
+            fg('Minor (under 18)', '<select class="form-input" id="stV2IsMinor" style="width:100%;">' + opts([{ value: 'auto', label: 'Auto from birth date' }, { value: 'true', label: 'Yes' }, { value: 'false', label: 'No' }], isMinorSel) + '</select>', true)
+          ) +
+          row2(
+            fg('Guardian Contact ID', '<input class="form-input" id="stV2Guardian" value="' + esc(s.guardianContactId || '') + '" style="width:100%;" placeholder="Parent/guardian contact ID">', true),
+            fg('Photo waiver status', '<select class="form-input" id="stV2PhotoWaiver" style="width:100%;">' + opts(PHOTO_WAIVER_STATUSES, s.photoWaiverStatus || 'pending') + '</select>', true)
+          ) +
+          grp('Emergency contact') +
+          row2(
+            fg('Name', '<input class="form-input" id="stV2EcName" value="' + esc(ec.name || '') + '" style="width:100%;">', true),
+            fg('Phone', '<input class="form-input" type="tel" id="stV2EcPhone" value="' + esc(ec.phone || '') + '" style="width:100%;">', true)
+          ) +
+          fg('Relationship', '<input class="form-input" id="stV2EcRel" value="' + esc(ec.relationship || '') + '" style="width:100%;" placeholder="e.g., Parent, Spouse">') +
+          grp('Medical') +
+          fg('Allergies', '<input class="form-input" id="stV2Allergies" value="' + esc(s.allergies || '') + '" style="width:100%;" placeholder="Known allergies">') +
+          fg('Medical notes', '<textarea class="form-input" id="stV2Medical" rows="2" style="width:100%;resize:vertical;">' + esc(s.medicalNotes || '') + '</textarea>') +
+          grp('Onboarding') +
+          row2(
+            fg('Waiver status', '<select class="form-input" id="stV2Waiver" style="width:100%;">' + opts(WAIVER_STATUSES, s.waiverStatus || 'pending') + '</select>', true),
+            fg('Waiver signed date', '<input class="form-input" type="date" id="stV2WaiverDate" value="' + esc(s.waiverSignedAt || '') + '" style="width:100%;">', true)
+          ) +
+          row2(
+            fg('Safety orientation', '<select class="form-input" id="stV2Safety" style="width:100%;">' + opts([{ value: 'false', label: 'Not completed' }, { value: 'true', label: 'Completed' }], s.safetyOrientationCompleted ? 'true' : 'false') + '</select>', true),
+            fg('Safety orientation date', '<input class="form-input" type="date" id="stV2SafetyDate" value="' + esc(s.safetyOrientationDate || '') + '" style="width:100%;">', true)
+          ) +
+          grp('Internal') +
+          fg('Instructor notes', '<textarea class="form-input" id="stV2Instructor" rows="2" style="width:100%;resize:vertical;" placeholder="Internal notes (not shown to student)">' + esc(s.instructorNotes || '') + '</textarea>') +
+          (mode === 'create' ? '' :
+            fg('Status', '<select class="form-input" id="stV2Status" style="width:100%;">' + opts(['active', 'inactive'], s.status || 'active') + '</select>'));
       }
+    },
+    onSave: function (rec, mode) {
+      if (!window.StudentsBridge) { if (window.showToast) showToast('Students engine still loading — try again', true); return false; }
+      function val(id) { return ((document.getElementById(id) || {}).value || ''); }
+      var data = {
+        displayName: val('stV2Name'),
+        contactId: val('stV2ContactId'),
+        birthDate: val('stV2BirthDate') || null,
+        isMinor: val('stV2IsMinor'),
+        guardianContactId: val('stV2Guardian').trim() || null,
+        photoWaiverStatus: val('stV2PhotoWaiver') || 'pending',
+        emergencyContact: {
+          name: val('stV2EcName').trim() || null,
+          phone: val('stV2EcPhone').trim() || null,
+          relationship: val('stV2EcRel').trim() || null
+        },
+        allergies: val('stV2Allergies').trim() || null,
+        medicalNotes: val('stV2Medical').trim() || null,
+        waiverStatus: val('stV2Waiver') || 'pending',
+        waiverSignedAt: val('stV2WaiverDate') || null,
+        safetyOrientationCompleted: val('stV2Safety') === 'true',
+        safetyOrientationDate: val('stV2SafetyDate') || null,
+        instructorNotes: val('stV2Instructor').trim() || null,
+        status: (mode === 'create') ? undefined : (val('stV2Status') || 'active')
+      };
+      // Validation mirrors legacy saveStudent: name required; contact ID required
+      // on create only.
+      if (!data.displayName.trim()) { if (window.showToast) showToast('Display name is required.', true); return false; }
+      if (mode === 'create' && !data.contactId.trim()) { if (window.showToast) showToast('Contact ID is required for new students.', true); return false; }
+
+      if (mode === 'create') {
+        return Promise.resolve(window.StudentsBridge.create(data)).then(function () {
+          if (window.showToast) showToast('Student created.'); reloadSoon(); return true;
+        }).catch(function (e) { console.error('[students-v2] create', e); if (window.showToast) showToast('Error saving student.', true); return false; });
+      }
+      var id = rec._key || rec.id;
+      return Promise.resolve(window.StudentsBridge.update(id, data)).then(function () {
+        // Mutate the LIVE cached record (=== the slide-out's read closure, since
+        // fetch returns V2.byId[id]); the engine passes a copy to onSave. Shows
+        // the edited fields immediately on the post-save read re-render;
+        // reloadSoon() then refreshes the cache for the next open.
+        Object.assign(V2.byId[id] || rec, data);
+        if (window.showToast) showToast('Student updated.'); reloadSoon(); return true;
+      }).catch(function (e) { console.error('[students-v2] update', e); if (window.showToast) showToast('Error updating student.', true); return false; });
     }
-    // No onSave → no Edit button (student editing stays on legacy #students).
   });
 
   // ── module state + data ─────────────────────────────────────────────
   var V2 = { rows: [], byId: {}, sortKey: 'displayName', sortDir: 'asc', q: '', statusFilter: 'active', loaded: false };
 
   function load() {
+    // Ensure the legacy students module is loaded so window.StudentsBridge
+    // (the delegated write path) exists — mirrors contacts-v2.
+    if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('students'); } catch (e) {} }
     Promise.resolve(MastDB.get('students')).then(function (val) {
       var out = [];
       Object.keys(val || {}).forEach(function (k) {
@@ -199,6 +307,7 @@
       V2.loaded = true; render();
     }).catch(function (e) { console.error('[students-v2] load', e); render(); });
   }
+  function reloadSoon() { V2.loaded = false; setTimeout(load, 250); }   // let the legacy write settle, then refresh
 
   function visibleRows() {
     var rows = V2.rows;
@@ -235,7 +344,8 @@
       U.pageHeader({
         title: 'Students',
         count: N.count(V2.rows.length) + ' student' + (V2.rows.length === 1 ? '' : 's'),
-        actionsHtml: '<button class="btn btn-secondary" onclick="StudentsV2.exportCsv()">↓ Export</button>'
+        actionsHtml: '<button class="btn btn-primary" onclick="StudentsV2.create()">+ New student</button>' +
+          '<button class="btn btn-secondary" onclick="StudentsV2.exportCsv()">↓ Export</button>'
       }) +
       '<div style="display:flex;gap:6px;flex-wrap:wrap;margin:12px 0;">' + filters + '</div>' +
       '<div style="margin:14px 0;"><input class="form-input" placeholder="Search name or contact…" value="' + esc(V2.q) +
@@ -243,7 +353,7 @@
       MastEntity.renderList('students-v2', {
         rows: visibleRows(), sortKey: V2.sortKey, sortDir: V2.sortDir,
         onSortFnName: 'StudentsV2.sort', onRowClickFnName: 'StudentsV2.open',
-        empty: { title: 'No students', message: V2.loaded ? 'Add students in the classic Students view.' : 'Loading…' }
+        empty: { title: 'No students', message: V2.loaded ? 'Add a student to get started.' : 'Loading…' }
       });
   }
 
@@ -260,11 +370,11 @@
         if (rec) MastEntity.openRecord('students-v2', rec, 'read');
       });
     },
-    // Bespoke student editing → classic Students view. Use navigateToClassic so
-    // the V2 route remap doesn't loop us back to this twin.
-    classic: function () {
-      if (typeof navigateToClassic === 'function') navigateToClassic('students');
-      else if (typeof navigateTo === 'function') navigateTo('students');
+    create: function () {
+      // Ensure the legacy module (and thus window.StudentsBridge) is loaded
+      // before opening the create form — mirrors ContactsV2.create.
+      if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('students'); } catch (e) {} }
+      MastEntity.openRecord('students-v2', {}, 'create');
     },
     // Mint + copy a signed per-student waiver link (anti-forge, audit 2026-06-01
     // P2). Calls the admin-gated generateWaiverLink CF; the returned URL carries
