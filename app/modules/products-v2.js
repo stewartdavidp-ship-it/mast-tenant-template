@@ -55,6 +55,16 @@
   }
   function variantPrice(p, v) { return (v && typeof v.priceCents === 'number') ? v.priceCents / 100 : price(p); }
   function variantOverridden(p, v) { return !!(v && typeof v.priceCents === 'number' && v.priceCents !== p.priceCents); }
+  // Product-level price: a single price if every variant matches, else a low–high
+  // range (so the product header reflects variants that price differently).
+  function priceRange(p) {
+    var prices = [price(p)];
+    realVariants(p).forEach(function (v) { prices.push(variantPrice(p, v)); });
+    prices = prices.filter(function (x) { return typeof x === 'number' && !isNaN(x); });
+    if (!prices.length) return '';
+    var min = Math.min.apply(null, prices), max = Math.max.apply(null, prices);
+    return (min === max) ? N.money(min) : (N.money(min) + '–' + N.money(max));
+  }
   function realVariants(p) {
     return (Array.isArray(p.variants) ? p.variants : []).map(function (v, i) { return Object.assign({ id: v.id || ('v' + i) }, v); });
   }
@@ -143,7 +153,8 @@
     var title = hasVar ? 'Inventory · all variants (roll-up)' : 'Inventory';
     var perVarNote = hasVar
       ? '<div class="pv2-pnote">Stock is tracked per variant — each one has its own count. The total above is the roll-up; set each variant’s stock on its Inventory tab.</div>'
-      : '';
+      // A variant-less product IS the stocked unit, so it's editable here.
+      : '<div style="margin-top:10px;"><button class="btn btn-secondary btn-small" onclick="MastAdmin.showToast(\'Stock editing lands in P4.\')">Set stock</button></div>';
     return U.card(title, U.kv([
       { k: 'Stock type', v: si.stockType || '—' },
       { k: (hasVar ? 'On hand (all variants)' : 'On hand'), v: (si.totalOnHand != null ? String(si.totalOnHand) : '—') },
@@ -254,7 +265,7 @@
       render: function (UU, p) {
         var tiles = UU.tiles([
           { k: 'Status', v: statusLabel(p.status), hero: true },
-          { k: 'Price', v: N.money(price(p)) || '—' },
+          { k: (variantCount(p) > 0 ? 'Price range' : 'Price'), v: priceRange(p) || '—' },
           { k: 'Variants', v: variantCount(p) || 'Default only' },
           { k: 'On hand', v: ((p.stockInfo && p.stockInfo.totalOnHand) != null ? String(p.stockInfo.totalOnHand) : '—') }
         ]);
@@ -324,7 +335,8 @@
             { k: 'Stock type', v: (v.stockType || '—') },
             { k: 'On hand', v: (v.onHand != null ? String(v.onHand) : '—') },
             { k: 'Reorder at', v: (v.reorderAt != null ? String(v.reorderAt) : '—') }
-          ]) + '<div class="pv2-pnote">Each variant tracks its <strong>own</strong> stock — inventory is never shared with or inherited from the Default.</div>')) +
+          ]) + '<div style="margin-top:10px;"><button class="btn btn-secondary btn-small" onclick="ProductsV2.editVariantTodo()">Set this variant’s stock</button></div>' +
+            '<div class="pv2-pnote">Each variant tracks its <strong>own</strong> stock — inventory is never shared with or inherited from the Default.</div>')) +
           pane('v-image', UU.card('Image', row('Image', 'Product image', 'same as the product', false, 'Set a variant image')));
       }
     }
@@ -525,7 +537,7 @@
       exp + thumb +
       '<span class="pv2-nm">' + esc(p.name || '(unnamed)') + ' <span class="pv2-meta">· ' + esc(categoryLabel(p) || '—') + '</span></span>' +
       '<span>' + U.badge(statusLabel(p.status), statusTone(p.status)) + '</span>' +
-      '<span class="pv2-r pv2-meta">' + (N.money(price(p)) || '—') + '</span>' +
+      '<span class="pv2-r pv2-meta">' + (priceRange(p) || '—') + '</span>' +
       '<span class="pv2-r pv2-meta">' + variantsLabel(p) + '</span></div>';
     if (has && V2.expanded[p._key]) {
       html += '<div class="pv2-row pv2-sub pv2-def" onclick="ProductsV2.open(\'' + esc(p._key) + '\')" tabindex="0" role="button">' +
