@@ -106,6 +106,7 @@
   var container = document.getElementById('waiverContainer');
   var templateId = null;
   var classId = null;
+  var signedToken = null; // signed per-student waiver-link token (`s` param)
   var waiverData = null;
 
   // Firestore REST field-value unwrap
@@ -127,6 +128,7 @@
     var params = new URLSearchParams(window.location.search);
     templateId = params.get('t') || params.get('id');
     classId = params.get('c') || null;
+    signedToken = params.get('s') || null;
 
     var projectId = TENANT_FIREBASE_CONFIG.projectId;
     if (!projectId) { container.innerHTML = '<div class="wv-loading">Configuration error.</div>'; return; }
@@ -303,7 +305,11 @@
         consentToElectronic: true,
         intentToSign: true,
         userAgent: navigator.userAgent,
-        classId: classId
+        classId: classId,
+        // Signed per-student token: proves this link was issued for a specific
+        // student. submitWaiverSignature flips only token.studentId; a missing/
+        // invalid token is create-new-only (anti-forge). Audit 2026-06-01 P2.
+        s: signedToken
       };
 
       // Guardian fields

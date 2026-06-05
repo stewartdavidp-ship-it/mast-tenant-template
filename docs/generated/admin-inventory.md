@@ -5,8 +5,8 @@
 Source-of-truth counts for the admin app, generated from the code so docs
 cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 
-- **Core shell:** `app/index.html` — **58,592** lines
-- **Feature modules:** **89** files in `app/modules/` (**82** routed), **102,468** lines combined
+- **Core shell:** `app/index.html` — **58,628** lines
+- **Feature modules:** **89** files in `app/modules/` (**82** routed), **102,503** lines combined
 
 | Module file | Lines | Routes |
 |---|---:|---|
@@ -38,7 +38,7 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/cs-tickets-v2.js` | 254 | cs-tickets-v2 |
 | `modules/customer-service.js` | 3,229 | cs-inbox, cs-tickets, cs-surveys, cs-reviews, cs-faqs, cs-members |
 | `modules/customers-v2.js` | 260 | customers-v2 |
-| `modules/customers.js` | 3,535 | customers |
+| `modules/customers.js` | 3,485 | customers |
 | `modules/duplicates-v2.js` | 175 | duplicates-v2 |
 | `modules/email-log.js` | 561 | email-log |
 | `modules/engagement-inbox.js` | 485 | engagement-inbox |
@@ -57,7 +57,7 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/lookbooks.js` | 822 | lookbooks |
 | `modules/loyalty-v2.js` | 347 | loyalty-v2 |
 | `modules/maker.js` | 6,667 | materials, products |
-| `modules/mapping.js` | 1,738 | mapping |
+| `modules/mapping.js` | 1,768 | mapping |
 | `modules/marketing-calendar.js` | 270 | marketing-calendar |
 | `modules/materials-v2.js` | 286 | materials-v2 |
 | `modules/membership-v2.js` | 237 | membership-v2 |
@@ -81,8 +81,8 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/shows.js` | 3,580 | show, show-find, show-apply, show-prep, show-execute, show-history |
 | `modules/social.js` | 1,441 | social |
 | `modules/stories-v2.js` | 249 | stories-v2 |
-| `modules/students-v2.js` | 271 | students-v2 |
-| `modules/students.js` | 1,478 | students |
+| `modules/students-v2.js` | 296 | students-v2 |
+| `modules/students.js` | 1,508 | students |
 | `modules/studio.js` | 788 | studio |
 | `modules/team-v2.js` | 230 | team-v2 |
 | `modules/team.js` | 3,199 | team |

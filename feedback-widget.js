@@ -305,8 +305,26 @@
 
     if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Sending...'; }
 
-    MastDB.push('feedbackReports', report)
-      .then(function() {
+    // Public feedback routes through the submitPublicForm CF, which resolves the
+    // tenant and writes the report server-side via the Admin SDK. (The direct
+    // feedbackReports create rule is being locked down to admin-only — see
+    // mast-architecture #110 / #111.) Drop the createdAt MastDB.serverTimestamp()
+    // sentinel — it can't JSON-serialize and the CF stamps createdAt server-side.
+    var payload = Object.assign({ formType: 'feedback' }, report);
+    delete payload.createdAt;
+    var cfBase = (typeof TENANT_FIREBASE_CONFIG !== 'undefined' && TENANT_FIREBASE_CONFIG.cloudFunctionsBase)
+      ? TENANT_FIREBASE_CONFIG.cloudFunctionsBase
+      : 'https://us-central1-mast-platform-prod.cloudfunctions.net';
+    fetch(cfBase + '/submitPublicForm', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Tenant-ID': MastDB.tenantId() || ''
+      },
+      body: JSON.stringify(payload)
+    })
+      .then(function(resp) {
+        if (!resp.ok) throw new Error('submit-failed-' + resp.status);
         markSubmitted();
         closeDialog();
         showFbToast('Thanks for your feedback!');

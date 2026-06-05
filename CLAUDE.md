@@ -29,6 +29,9 @@ This file keeps only what's needed to work in *this* repo.
 5. Verify through **`<tenant>.runmast.com`** (the Cloudflare worker — covers edge +
    browser cache), not the `.web.app` origin. Hard-reload to clear cached module JS.
 
+## Code health
+6. **Code-health standards (read before writing code):** follow `mast-docs/code-health/CODING-STANDARDS.md`. The active improvement program + the next prioritized work item live in `mast-docs/code-health/POST-REVIEW-ROADMAP.md`; the review lens is `mast-docs/code-health/RUBRIC.md`.
+
 ---
 *Internal architecture / release model / finance design: private repo. Operating
 rules are also injected at session start by the `SessionStart` hook.*

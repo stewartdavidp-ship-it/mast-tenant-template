@@ -551,6 +551,7 @@
   var sendSegmentId = null;                // selected segment id
   var sendSegmentsLoaded = false;
   var sendSegmentsData = {};               // saved segments from admin/customerSegments
+  var sendWholesaleResolver = null;        // (customer)=>bool for wholesale/retail segment keys (D4-005)
   var sendSegmentMembersCount = null;      // live preview count
   var sendInProgress = false;
   var sendProgress = null;                 // { total, sent, failed, currentEmail }
@@ -1635,44 +1636,43 @@
 
   function csLoadSendSegments() {
     if (sendSegmentsLoaded) return Promise.resolve();
-    return MastDB.query('admin/customerSegments').once()
-      .then(function (s) {
+    // Load saved segments AND the wholesale-authorized map in parallel. The
+    // map backs `wholesale`/`retail` segment keys; without it those keys can't
+    // be evaluated and the shared predicate fails safe (excludes) rather than
+    // over-including (D4-005). Mirrors customers.js' loadCustomers().
+    return Promise.all([
+      MastDB.query('admin/customerSegments').once(),
+      MastDB.get('admin/wholesaleAuthorized').catch(function () { return null; })
+    ])
+      .then(function (results) {
+        var s = results[0];
         sendSegmentsData = (s && s.val && s.val()) || (s || {});
+        var ws = results[1];
+        var wsVal = (ws && ws.val && ws.val()) || (ws || {});
+        sendWholesaleResolver = window.MastCustomerFilters.makeWholesaleResolver(wsVal);
         sendSegmentsLoaded = true;
         renderSurveys();
       })
       .catch(function (err) {
         console.warn('[cs-send-segments]', err && err.message);
         sendSegmentsData = {};
+        sendWholesaleResolver = window.MastCustomerFilters.makeWholesaleResolver({});
         sendSegmentsLoaded = true;
         renderSurveys();
       });
   }
 
-  // Minimal mirror of customers.js's customerMatchesFilters.
-  // Built-in segments expose their own _flag keys (e.g. _lapseStatus).
+  // Resolve a saved segment's members via the SINGLE canonical predicate
+  // (shared/customer-filters.js). This replaced a hand-synced "minimal mirror"
+  // that had drifted — it ignored the wholesale/search/newsletterOnly/leadsOnly
+  // keys, so segments saved with those resolved a wider set and surveys went to
+  // customers outside the segment (review D4-005). excludeArchived:true keeps the
+  // survey flow from inviting archived customers (the original mirror's behavior).
   function csCustomerMatches(c, f) {
-    if (!c) return false;
-    if (c.status === 'merged') return false;
-    if (c.status === 'archived' && !f.includeArchived) return false;
-    if (f.source && f.source !== 'all' && c.source !== f.source) return false;
-    if (f.tag && (c.tags || []).indexOf(f.tag) === -1) return false;
-    var stats = c.stats || {};
-    if (f.lastOrderBefore) {
-      var cutoff = f.lastOrderBefore + 'T23:59:59';
-      if (!stats.lastOrderAt || stats.lastOrderAt > cutoff) return false;
-    }
-    if (typeof f.minSpendCents === 'number' && (stats.lifetimeSpendCents || 0) < f.minSpendCents) return false;
-    if (f._newThisWeek) {
-      var weekAgo = new Date(Date.now() - 7 * 86400000).toISOString();
-      if (!c.createdAt || c.createdAt < weekAgo) return false;
-    }
-    if (f._noOrders && (stats.orderCount || 0) > 0) return false;
-    if (f._lapseStatus) {
-      var actual = stats.lapseStatus || 'unknown';
-      if (actual !== f._lapseStatus) return false;
-    }
-    return true;
+    return window.MastCustomerFilters.matches(c, f, {
+      isWholesale: sendWholesaleResolver,
+      excludeArchived: true
+    });
   }
 
   function csResolveSegmentMembers(segmentId) {

@@ -19,13 +19,22 @@ name: CI lint
 # font-size lint is now BLOCKING again — any rem value outside the 7-scale
 # (0.72/0.78/0.85/0.9/1.0/1.15/1.6) fails the build. Hex-color lint remains
 # advisory pending its own cleanup pass.
+#
+# CI cost (ci-actions-cost-reduction.md): dropped the redundant `push:[main]`
+# trigger — every change already runs this lint on its PR (the branch-protection
+# merge gate), so re-running it on the identical merged commit was pure waste
+# (this was the single biggest GitHub Actions consumer). Mirrors the same change
+# made to mast-architecture's Build Check. Added `concurrency` to cancel
+# superseded PR runs (safe — a lint run, not a deploy).
 
 on:
-  push:
-    branches: ["main"]
   pull_request:
     branches: ["main"]
   workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -67,18 +76,34 @@ jobs:
       # must be clean (baseline 0).
       - name: UX standards ratchet
         run: node scripts/lint-ux-standards.js
+      # Phase-2 guardrail ratchets (mast-docs/code-health). Each freezes the
+      # current per-file violation count in a committed baseline and FAILS any
+      # PR that adds NET-NEW violations; new files are born clean (baseline 0).
+      #   debug-console : no new [DEBUG]/PII console.* in app/   (D2-002)
+      #   hardcoded-ids : no new tenant id / origin / bucket lit (D3-005/021)
+      #   unbounded-read: no new MastDB.list/.onSnapshot w/o limit (D1.1)
+      - name: Debug/PII console ratchet
+        run: node scripts/lint-no-debug-pii-console.js
+      - name: Hardcoded-ids ratchet
+        run: node scripts/lint-no-hardcoded-ids.js
+      - name: Unbounded-read ratchet
+        run: node scripts/lint-unbounded-read.js
       # Unit tests: the shared engines (mast-io / mast-ui / mast-entity — ~63 pure-helper
       # assertions: CSV formula-injection guard, money/date formatting, the schema engine)
       # plus the finance dollars-vs-cents normalizer (the ~27x MTD-revenue regression guard,
       # extracted live from app/modules/finance.js so it fails if that function regresses).
+      # The Phase-2 ratchet self-test (test/lint-ratchet.test.js) is chained in here too:
+      # it proves the clean tree passes while a freshly-written violation fixture fails.
       # Hermetic, no network, sub-second. Lives in the `lint` job so it inherits the
       # required-check merge-block. Run per-file with plain `node`, chained on `&&` so any
       # non-zero exit fails the gate. NOTE: do NOT switch to `node --test test/` — it
       # mis-handles the hand-rolled assert-throw files and reports a spurious failure on a
       # green suite (verified 2026-06-01); plain per-file `node` is correct for this suite.
-      - name: Unit tests (shared engines + finance money normalizer)
+      - name: Unit tests (shared engines + finance money normalizer + ratchet self-test)
         run: |
           node test/mast-io.test.js &&
           node test/mast-ui.test.js &&
           node test/mast-entity.test.js &&
-          node test/finance-order-money.test.js
+          node test/finance-order-money.test.js &&
+          node test/customer-filters.test.js &&
+          node test/lint-ratchet.test.js

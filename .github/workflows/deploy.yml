@@ -143,61 +143,49 @@ jobs:
           exit 1
 
   # ──────────────────────────────────────────────────────────────────────────
-  # Build 8 §3 — merge = enroll (release adoption, 2026-05-30).
+  # V2 dirty-flag — merge = set_dirty (release-model v2, 2026-06-04; supersedes
+  # the Build 8 §3 merge=enroll hook).
   #
-  # On push to main, append this merged PR to mast-tenant-template's single
-  # always-open release bucket via the `mast_platform_release` `enroll` MCP
-  # action. The behavioral flip — merge = enroll, not merge = deploy: the
-  # `deploy` job above (dev shared storefront) is transitional and will later
-  # deploy the *cut* release (Build 8 §5, deferred). Decoupled from `deploy` (no
-  # `needs:`) so the merge is recorded even if the dev deploy is removed/failing.
+  # On push to main, mark mast-tenant-template dirty on its release_control doc via
+  # the `mast_platform_release` `set_dirty` MCP action — the per-component flag the
+  # V2 releaseScheduler reads to decide whether to cut a release. No PR lookup / open
+  # bucket: set_dirty is idempotent and needs only the component (+ the merge SHA for
+  # the audit trail; the fromSha..toSha range is derived at cut). Decoupled from
+  # `deploy` (no `needs:`) so the flag is set even if the dev deploy is removed/failing.
   #
-  # One-time operator setup (no-ops with a ::notice:: until both are set):
+  # One-time operator setup (unchanged from the enroll hook — same var + key; the
+  # MAST_ENROLL_API_KEY's `release_enroll` capability also authorizes set_dirty):
   #   - repo variable MAST_MCP_SERVER_URL  → the platform MCP server /mcp endpoint
-  #   - repo secret   MAST_ENROLL_API_KEY  → a `mast_` API key whose uid holds
-  #     platformOps (enroll is ungated but platformOps-gated in-handler)
+  #   - repo secret   MAST_ENROLL_API_KEY  → a `mast_` API key carrying release_enroll
   #
-  # Slice-1 posture: non-blocking — a failed enroll logs ::warning:: but does not
-  # red-X the merge during rollout. Follow-up: fail-the-job + parse JSON-RPC
-  # result for tool-level isError.
-  enroll:
+  # Non-blocking — a failed set_dirty logs ::warning:: but does not red-X the merge.
+  set-dirty:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      pull-requests: read
     steps:
-      - name: Enroll merged PR in the open release
+      - name: Mark component dirty (merge = set_dirty)
         env:
           MCP_URL: ${{ vars.MAST_MCP_SERVER_URL }}
           ENROLL_KEY: ${{ secrets.MAST_ENROLL_API_KEY }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           COMPONENT: mast-tenant-template
           MERGE_SHA: ${{ github.sha }}
-          REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
           if [ -z "${MCP_URL:-}" ] || [ -z "${ENROLL_KEY:-}" ]; then
-            echo "::notice::enroll skipped — MAST_MCP_SERVER_URL / MAST_ENROLL_API_KEY not yet configured (Build 8 §3 one-time setup pending)."
+            echo "::notice::set_dirty skipped — MAST_MCP_SERVER_URL / MAST_ENROLL_API_KEY not configured."
             exit 0
           fi
-          # Resolve the PR that produced this merge commit (squash/merge commit).
-          PRS=$(gh api "repos/${REPO}/commits/${MERGE_SHA}/pulls" --jq '[.[] | {number, title}]' 2>/dev/null || echo '[]')
-          PR_NUMBER=$(echo "$PRS" | jq -r '.[0].number // empty')
-          PR_TITLE=$(echo "$PRS" | jq -r '.[0].title // empty')
-          if [ -z "$PR_NUMBER" ]; then
-            echo "::notice::enroll skipped — no PR associated with ${MERGE_SHA} (direct push to main?)."
-            exit 0
-          fi
-          REQ=$(jq -nc --arg c "$COMPONENT" --argjson pr "$PR_NUMBER" --arg sha "$MERGE_SHA" --arg t "$PR_TITLE" \
-            '{jsonrpc:"2.0",id:1,method:"tools/call",params:{name:"mast_platform_release",arguments:{action:"enroll",component:$c,prNumber:$pr,mergeSha:$sha,title:$t}}}')
-          echo "enroll → ${COMPONENT} PR #${PR_NUMBER} (${MERGE_SHA:0:7}): ${PR_TITLE}"
-          HTTP=$(curl -sS -o /tmp/enroll-resp -w '%{http_code}' -X POST "$MCP_URL" \
+          REQ=$(jq -nc --arg c "$COMPONENT" --arg sha "$MERGE_SHA" \
+            '{jsonrpc:"2.0",id:1,method:"tools/call",params:{name:"mast_platform_release",arguments:{action:"set_dirty",component:$c,mergeSha:$sha}}}')
+          echo "set_dirty → ${COMPONENT} (${MERGE_SHA:0:7})"
+          HTTP=$(curl -sS -o /tmp/set-dirty-resp -w '%{http_code}' -X POST "$MCP_URL" \
             -H "Authorization: Bearer ${ENROLL_KEY}" \
             -H "Content-Type: application/json" \
             -H "Accept: application/json, text/event-stream" \
             --data "$REQ" || echo "000")
-          echo "MCP HTTP ${HTTP}"; cat /tmp/enroll-resp 2>/dev/null || true; echo
+          echo "MCP HTTP ${HTTP}"; cat /tmp/set-dirty-resp 2>/dev/null || true; echo
           if [ "$HTTP" != "200" ]; then
-            echo "::warning::enroll call to MCP returned HTTP ${HTTP} — merge NOT enrolled. Re-run this job after fixing, or enroll manually via mast_platform_release {action:enroll}."
+            echo "::warning::set_dirty call to MCP returned HTTP ${HTTP} — component NOT marked dirty. Re-run after fixing, or run \`mast-deploy releases set-dirty --component=${COMPONENT}\`."
           fi

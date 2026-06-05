@@ -550,64 +550,14 @@
 
   // Phase 6.1 — apply filter object to a customer record. Centralised so the
   // list table, CSV export and segments all share the same logic.
+  //
+  // The predicate body now lives in shared/customer-filters.js (window.MastCustomerFilters)
+  // so the survey bulk-send flow in customer-service.js shares the exact same
+  // matcher instead of a hand-synced mirror that had drifted (review D4-005).
+  // We inject this module's wholesale resolver; the list keeps archived
+  // customers visible, so excludeArchived stays false.
   function customerMatchesFilters(c, f) {
-    if (!c) return false;
-    if (c.status === 'merged') return false;
-
-    if (f.source && f.source !== 'all' && c.source !== f.source) return false;
-
-    if (f.wholesale === 'wholesale' && !isWholesaleCustomer(c)) return false;
-    if (f.wholesale === 'retail'    &&  isWholesaleCustomer(c)) return false;
-
-    if (f.tag) {
-      var tags = c.tags || [];
-      if (tags.indexOf(f.tag) === -1) return false;
-    }
-
-    if (f.search) {
-      var name = (c.displayName || '').toLowerCase();
-      var email = (c.primaryEmail || '').toLowerCase();
-      var emails = (c.emails || []).join(' ').toLowerCase();
-      if (name.indexOf(f.search) === -1 && email.indexOf(f.search) === -1 && emails.indexOf(f.search) === -1) {
-        return false;
-      }
-    }
-
-    var stats = c.stats || {};
-
-    if (f.lastOrderBefore) {
-      // Inclusive of the chosen date — anything strictly after is excluded.
-      var cutoff = f.lastOrderBefore + 'T23:59:59';
-      if (!stats.lastOrderAt || stats.lastOrderAt > cutoff) return false;
-    }
-
-    if (f.minSpendDollars !== '' && f.minSpendDollars != null) {
-      var minCents = Math.round(parseFloat(f.minSpendDollars) * 100);
-      if (!isNaN(minCents) && (stats.lifetimeSpendCents || 0) < minCents) return false;
-    }
-
-    // D5: orthogonal-signal toggles from the filter bar.
-    if (f.newsletterOnly) {
-      if (!(c.marketing && c.marketing.newsletterOptIn)) return false;
-    }
-    if (f.leadsOnly) {
-      if ((stats.orderCount || 0) > 0) return false;
-    }
-
-    // Built-in segment flags
-    if (f._newThisWeek) {
-      var weekAgo = new Date(Date.now() - 7 * 86400000).toISOString();
-      if (!c.createdAt || c.createdAt < weekAgo) return false;
-    }
-    if (f._noOrders) {
-      if ((stats.orderCount || 0) > 0) return false;
-    }
-    if (f._lapseStatus) {
-      var actual = stats.lapseStatus || 'unknown';
-      if (actual !== f._lapseStatus) return false;
-    }
-
-    return true;
+    return window.MastCustomerFilters.matches(c, f, { isWholesale: isWholesaleCustomer });
   }
 
   function renderEmptyState() {

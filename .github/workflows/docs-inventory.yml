@@ -1,20 +1,20 @@
 name: docs-inventory
-# Freshness gate: if admin code changes, the generated inventory must be regenerated
-# and committed (same UX as the cache-bust lint gate). Keeps ARCHITECTURE-type docs
-# from silently drifting on module/line counts. See docs/generated/admin-inventory.md.
+# Freshness gate: the generated admin inventory must match the code (same UX as the
+# cache-bust lint gate). Keeps ARCHITECTURE-type docs from silently drifting on
+# module/line counts. See docs/generated/admin-inventory.md.
+# NB: runs on EVERY PR (no `paths:` filter) — the check is a ~15s no-op when nothing
+# changed, and a path-filtered REQUIRED check would hang PRs that don't touch app/.
 on:
   pull_request:
     branches: [main]
-    paths:
-      - 'app/index.html'
-      - 'app/modules/**'
-      - 'scripts/gen-inventory.mjs'
-      - 'docs/generated/admin-inventory.md'
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 jobs:
-  check:
+  # Job name == the status-check context the branch ruleset requires. Named
+  # `docs-inventory` (not the generic `check`) so the required check is unique
+  # and can't be satisfied by an unrelated workflow's `check` job.
+  docs-inventory:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

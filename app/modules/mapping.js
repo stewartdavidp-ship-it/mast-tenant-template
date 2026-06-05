@@ -9,14 +9,14 @@
  *   tenants/{tid}/channel_listings/{listingId}   — J02 raw + normalized
  *   tenants/{tid}/channel_config/{channel}       — _tokenStatus, connectedAt
  *   tenants/{tid}/product_listing_map/{mapId}    — J04 existing mappings
- *   tenants/{tid}/admin/mappingFlowState         — completedAt, dismissedAt
+ *   tenants/{tid}/admin/mappingFlowState/state    — completedAt, dismissedAt
  *
  * Writes:
  *   tenants/{tid}/product_listing_map/{mapId}    — J04 schema, doc id
  *                                                  `${channel}_${externalId}`
  *   tenants/{tid}/channel_listings/{listingId}   — _ignored, _ignoredReason,
  *                                                  _ignoredSetBy (heuristic|tenant)
- *   tenants/{tid}/admin/mappingFlowState         — completedAt, lastBatchId
+ *   tenants/{tid}/admin/mappingFlowState/state    — completedAt, lastBatchId
  *
  * Auto-match cascade (J11 §Deliverables):
  *   1. SKU-exact (normalized)              → confidence "sku-exact"
@@ -55,7 +55,13 @@
   // Constants
   // ============================================================
 
-  var STATE_PATH = 'admin/mappingFlowState';
+  // Singleton state doc. NOTE the trailing `/state` doc id: MastDB maps a
+  // 2-segment `admin/<x>` path to a *collection* (`admin_<x>`) with no doc id,
+  // so the old `admin/mappingFlowState` resolved to an empty collection —
+  // get() always returned null and update() threw "path requires doc ID",
+  // which silently dropped every dismiss/complete write and re-fired the
+  // takeover on each launch. The third segment gives it a real doc.
+  var STATE_PATH = 'admin/mappingFlowState/state';
 
   // sessionStorage key used to suppress auto-launch of the interstitial for the
   // remainder of the current browser session (see checkAndMaybeShow).
@@ -460,9 +466,16 @@
   }
 
   function _saveState(patch) {
-    if (!window.MastDB || typeof window.MastDB.update !== 'function') return Promise.resolve();
+    if (!window.MastDB || typeof window.MastDB.set !== 'function') return Promise.resolve();
     for (var k in patch) flowState[k] = patch[k];
-    return window.MastDB.update(STATE_PATH, patch).catch(function(e) {
+    // Field-scoped set() (create-or-merge), NOT update(): the state doc does
+    // not exist until the first write, and Firestore update() rejects on a
+    // missing doc. A field-path set uses mergeFields — it creates the doc when
+    // absent and preserves sibling fields (so writing dismissedAt never wipes
+    // completedAt). Per-key keeps each write scoped to its own field.
+    return Promise.all(Object.keys(patch).map(function(k) {
+      return window.MastDB.set(STATE_PATH + '/' + k, patch[k]);
+    })).catch(function(e) {
       console.warn('[Mapping] state save failed', e);
     });
   }
@@ -1732,6 +1745,23 @@
       });
     },
     isInFlow: function() { return flowStep !== null; },
+    // Lightweight status read for the dashboard "Set Up Your Shop" checklist —
+    // computes whether mapping is done / still has pending work WITHOUT mounting
+    // the interstitial. `pending` is true only when a channel is connected and
+    // there are unmapped, non-ignored listings. Dismissal does NOT mark it done,
+    // so the dashboard entry stays available after the takeover is dismissed.
+    status: function() {
+      return loadAll(false).then(function() {
+        if (flowState && flowState.completedAt) return { completed: true, pending: false };
+        var connected = Object.keys(channelConfigs).some(function(ch) {
+          return channelConfigs[ch] && channelConfigs[ch]._tokenStatus === 'ok';
+        });
+        if (!connected) return { completed: false, pending: false };
+        computeMatches();
+        var pending = skuMatchPairs.length + fuzzyQueue.length + unmatchedListings.length + skuCollisions.length;
+        return { completed: false, pending: pending > 0 };
+      }).catch(function() { return { completed: false, pending: false }; });
+    },
     _heuristics: HEURISTICS  // exposed for test / debugging
   };
 

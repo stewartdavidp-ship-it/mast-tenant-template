@@ -700,7 +700,12 @@ function submitCommission() {
 
   if (!window.MastDB || !window._commDb) { statusEl.textContent = 'Unable to connect.'; statusEl.style.color = '#DC3545'; return; }
 
-  var commId = MastDB.newKey('admin/commissions');
+  // Local-only key for the reference-image storage folder (the upload happens
+  // before the CF call). MastDB.newKey is client-side id generation only — it
+  // does not write to Firestore — so it's unaffected by the commissions
+  // create-rule lockdown. The actual commission doc id is generated server-side
+  // by the submitPublicForm CF and returned in the response.
+  var refKey = MastDB.newKey('admin/commissions');
 
   // Build inspiration list with names
   var inspirationPieces = [];
@@ -712,7 +717,7 @@ function submitCommission() {
   // Upload image first if present, then save commission
   var uploadPromise;
   if (window._commUploadFile) {
-    var storageRef = window._commApp.storage().ref(TENANT_ID + '/commissions/' + commId + '/reference.' + window._commUploadFile.name.split('.').pop());
+    var storageRef = window._commApp.storage().ref(TENANT_ID + '/commissions/' + refKey + '/reference.' + window._commUploadFile.name.split('.').pop());
     uploadPromise = storageRef.put(window._commUploadFile).then(function(snapshot) {
       return snapshot.ref.getDownloadURL();
     });
@@ -720,27 +725,32 @@ function submitCommission() {
     uploadPromise = Promise.resolve(null);
   }
 
+  // Public commission form routes through the submitPublicForm CF, which
+  // resolves the tenant and writes the commission record server-side via the
+  // Admin SDK. (The direct admin/commissions create rule is being locked down
+  // to admin-only — see mast-architecture #110 / #111.) The CF derives the doc
+  // id, status, channel and createdAt server-side and returns the id.
+  var cfBase = (typeof TENANT_FIREBASE_CONFIG !== 'undefined' && TENANT_FIREBASE_CONFIG.cloudFunctionsBase)
+    ? TENANT_FIREBASE_CONFIG.cloudFunctionsBase
+    : 'https://us-central1-mast-platform-prod.cloudfunctions.net';
   uploadPromise.then(function(imageUrl) {
-    var record = {
-      inspirationPieces: inspirationPieces.length > 0 ? inspirationPieces : null,
-      referenceImageUrl: imageUrl || null,
-      customerName: name,
-      customerContact: contact,
-      notes: notes || null,
-      status: 'new',
-      channel: 'web',
-      createdAt: new Date().toISOString()
-    };
-
-    return MastDB.set('admin/commissions/' + commId, record);
-  }).then(function() {
+    return fetch(cfBase + '/submitPublicForm', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Tenant-ID': TENANT_ID },
+      body: JSON.stringify({ formType: 'commission', customerName: name, customerContact: contact, notes: notes || null, referenceImageUrl: imageUrl || null, inspirationPieces: inspirationPieces })
+    }).then(function(resp) {
+      if (!resp.ok) throw new Error('submit-failed-' + resp.status);
+      return resp.json();
+    });
+  }).then(function(result) {
+    var commId = (result && result.id) || refKey;
     // Build piece name string for notification
     var pieceNames = [];
     inspirationPieces.forEach(function(p) { if (p.name) pieceNames.push(p.name); });
     var pieceName = pieceNames.join(', ') || 'Custom Piece';
 
     // Trigger notification (fire and forget)
-    fetch(TENANT_FIREBASE_CONFIG.cloudFunctionsBase + '/commissionNotify', {
+    fetch(cfBase + '/commissionNotify', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Tenant-ID': TENANT_ID },
       body: JSON.stringify({ commissionId: commId, pieceName: pieceName, customerName: name, customerContact: contact, notes: notes, channel: 'web' })

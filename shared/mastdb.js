@@ -186,6 +186,7 @@ var MastDB = (function() {
     'token_wallet': true, 'alert_state': true,
     'trip_settings': true, 'newsletter_meta': true,
     'admin_subscription': true,
+    'admin_mappingFlowState': true,
     'platform_driftSeverityDefaults': true
   };
   var SINGLETON_DOC_ID = '_data';
