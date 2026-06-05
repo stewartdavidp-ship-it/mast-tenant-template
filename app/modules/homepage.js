@@ -669,6 +669,43 @@
     renderHomepage();
   };
 
+  // --- HomepageBridge (additive) ---
+  // Thin shim for the v2 read-on-page twin (homepage-v2.js). Every method
+  // DELEGATES to the existing legacy write logic above — the twin never
+  // reimplements a storefront write. The arg-taking writers (hpToggleSection,
+  // hpUpdateField, hpUpdateThemeField, hpToggleTestimonialVisible, hpUpdateSocial)
+  // read no DOM and are called by the twin directly; only setColorScheme needs a
+  // shim because its custom-override cleanup is not exposed as a window fn (it
+  // lives in website.js' wpSelectScheme, which also re-renders the website tab —
+  // unsafe to call from the homepage twin). This mirrors that exact logic.
+  window.HomepageBridge = {
+    // Set a manifest color scheme. Mirrors website.js wpSelectScheme: write the
+    // scheme id and clear any custom primary/accent overrides so the scheme wins.
+    setColorScheme: async function (schemeId) {
+      if (!themeConfig) themeConfig = {};
+      themeConfig.colorSchemeId = schemeId;
+      delete themeConfig.primaryColor;
+      delete themeConfig.accentColor;
+      await MastDB.set('public/config/theme/colorSchemeId', schemeId);
+      await MastDB.remove('public/config/theme/primaryColor');
+      await MastDB.remove('public/config/theme/accentColor');
+      markUnpublished();
+      return schemeId;
+    },
+    // Expose the loaded template manifest (color schemes + font pairs) so the
+    // twin can render native scheme/font choosers without re-fetching.
+    getThemeOptions: function () {
+      return {
+        schemes: (templateManifest && templateManifest.colorSchemes) || [],
+        fonts: (templateManifest && templateManifest.fontPairs) || [],
+        templateName: (templateManifest && templateManifest.name) || null
+      };
+    },
+    // Ensure section content + theme + testimonials are loaded so the twin's
+    // delegated writes operate on populated caches. Idempotent.
+    ensureLoaded: function () { return loadData(); }
+  };
+
   // --- Module Registration ---
   MastAdmin.registerModule('homepage', {
     routes: {

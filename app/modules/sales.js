@@ -2512,13 +2512,11 @@ async function exitPackingMode() {
     });
   };
 
-  window._generatePublicTerms = function() {
-    if (!termsConfig) {
-      showToast('No terms configured. Click Edit first.', true);
-      return;
-    }
-
-    var tc = termsConfig;
+  // Build the storefront terms HTML from a terms-config object. Single-sourced so
+  // both the legacy publish (_generatePublicTerms, reads module-scoped termsConfig)
+  // and the v2 twin (window.TermsBridge.publish, parameterized by data) write the
+  // EXACT same public/content/terms payload.
+  function buildPublicTermsHtml(tc) {
     var html = '';
 
     // Return Policy
@@ -2572,6 +2570,18 @@ async function exitPackingMode() {
       html += '<p>' + esc(tc.loyaltyTerms).replace(/\n/g, '<br>') + '</p>';
     }
 
+    return html;
+  }
+
+  window._generatePublicTerms = function() {
+    if (!termsConfig) {
+      showToast('No terms configured. Click Edit first.', true);
+      return;
+    }
+
+    var tc = termsConfig;
+    var html = buildPublicTermsHtml(tc);
+
     // Write to public/content/terms
     MastDB.set('public/content/terms', {
       html: html,
@@ -2585,6 +2595,23 @@ async function exitPackingMode() {
     }).catch(function(err) {
       showToast('Error publishing: ' + err.message, true);
     });
+  };
+
+  // Thin additive bridge for the v2 Policies twin (terms-v2.js). The legacy
+  // _generatePublicTerms reads module-scoped termsConfig (closure state), so it
+  // can't be called with data — this exposes the EXACT same write parameterized
+  // by a terms-config object. Mirrors window.ContactsBridge. The twin assembles
+  // the public/content/terms payload identically (buildPublicTermsHtml) and
+  // single-sources the lastPublishedAt stamp on admin/termsConfig.
+  window.TermsBridge = {
+    publish: async function (cfg) {
+      var tc = cfg || {};
+      var html = buildPublicTermsHtml(tc);
+      var publishedAt = new Date().toISOString();
+      await MastDB.set('public/content/terms', { html: html, updatedAt: publishedAt });
+      await MastDB.termsConfig.update({ lastPublishedAt: publishedAt });
+      return publishedAt;
+    }
   };
 
   // ============================================================

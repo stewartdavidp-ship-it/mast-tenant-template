@@ -6,7 +6,7 @@ Source-of-truth counts for the admin app, generated from the code so docs
 cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 
 - **Core shell:** `app/index.html` — **58,639** lines
-- **Feature modules:** **94** files in `app/modules/` (**87** routed), **107,257** lines combined
+- **Feature modules:** **94** files in `app/modules/` (**87** routed), **107,866** lines combined
 
 | Module file | Lines | Routes |
 |---|---:|---|
@@ -18,8 +18,8 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/blog-v2.js` | 329 | blog-v2 |
 | `modules/blog.js` | 2,333 | blog |
 | `modules/book.js` | 6,073 | book, book-detail, enrollments, instructors, instructor-detail, resources, resource-detail, passes, pass-detail, calendar, book-reports |
-| `modules/brand-v2.js` | 101 | brand-v2 |
-| `modules/brand.js` | 582 | brand |
+| `modules/brand-v2.js` | 308 | brand-v2 |
+| `modules/brand.js` | 668 | brand |
 | `modules/calendar-v2.js` | 119 | calendar-v2 |
 | `modules/campaigns-v2.js` | 385 | campaigns-v2 |
 | `modules/campaigns.js` | 527 | campaigns |
@@ -54,8 +54,8 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/fulfillment.js` | 1,524 | pack, ship, fulfillment |
 | `modules/galleries-v2.js` | 399 | galleries-v2 |
 | `modules/gift-cards-v2.js` | 298 | gift-cards-v2 |
-| `modules/homepage-v2.js` | 125 | homepage-v2 |
-| `modules/homepage.js` | 681 | homepage |
+| `modules/homepage-v2.js` | 351 | homepage-v2 |
+| `modules/homepage.js` | 718 | homepage |
 | `modules/inquiries-v2.js` | 225 | inquiries-v2 |
 | `modules/instructors-v2.js` | 339 | instructors-v2 |
 | `modules/lookbooks.js` | 822 | lookbooks |
@@ -79,7 +79,7 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/promotions.js` | 529 | promotions |
 | `modules/resources-v2.js` | 308 | resources-v2 |
 | `modules/sales-events-v2.js` | 351 | sales-events-v2 |
-| `modules/sales.js` | 3,228 | pos, receipts, events, salesEvents, terms |
+| `modules/sales.js` | 3,255 | pos, receipts, events, salesEvents, terms |
 | `modules/sessions-v2.js` | 274 | sessions-v2 |
 | `modules/settings-v2.js` | 105 | settings-v2 |
 | `modules/show-light.js` | 1,718 | show-light-profile, show-light-gallery, show-light-shows, show-light-apply |
@@ -91,7 +91,7 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/studio.js` | 788 | studio |
 | `modules/team-v2.js` | 395 | team-v2 |
 | `modules/team.js` | 3,270 | team |
-| `modules/terms-v2.js` | 211 | terms-v2 |
+| `modules/terms-v2.js` | 237 | terms-v2 |
 | `modules/trips-v2.js` | 214 | trips-v2 |
 | `modules/trips.js` | 2,157 | trips |
 | `modules/vendors-v2.js` | 370 | vendors-v2 |

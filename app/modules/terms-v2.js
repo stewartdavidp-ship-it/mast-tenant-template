@@ -14,10 +14,13 @@
  * Two editable slices keep each editor small (no wall): Return & exchange policy
  * and Store terms (gift-card / loyalty / additional copy). Each merge-saves its
  * slice (termsConfig.update — shallow merge, so untouched fields incl. categoryRules
- * survive). PUBLISH stays on legacy (a "publish in classic view" link) because it
- * also writes the public storefront page public/content/terms — a side effect this
- * view does not reimplement. Flag-gated (?ui=1) at #terms-v2, side-by-side with the
- * legacy #terms (sidebar "Policies"); never touches sales.js.
+ * survive). PUBLISH is now NATIVE: a Publish action delegates to window.TermsBridge
+ * .publish(cfg) (exposed in sales.js) — the twin never reimplements the storefront
+ * write (public/content/terms). The bridge lives in sales.js, so the route setup
+ * loadModule('sales') (mirrors materials-v2 / ContactsBridge) and the publish call
+ * guards on window.TermsBridge. Flag-gated (?ui=1) at #terms-v2, side-by-side with
+ * the legacy #terms (sidebar "Policies"). categoryRules editing remains legacy-only
+ * (navigateToClassic kept solely for that slice).
  */
 (function () {
   'use strict';
@@ -89,7 +92,7 @@
           fg('Shipping return policy', '<select class="form-input" id="tcRetShipping" style="width:100%;">' + shipOpts + '</select>') +
           '<label class="form-group" style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.9rem;"><input type="checkbox" id="tcRetAnyReason"' + (c.anyReason ? ' checked' : '') + ' onchange="document.getElementById(\'tcRetReasonsWrap\').style.display=this.checked?\'none\':\'\';"> Accept returns for any reason</label>' +
           '<div id="tcRetReasonsWrap" class="form-group"' + (c.anyReason ? ' style="display:none;"' : '') + '><label class="form-label">Allowed return reasons (one per line)</label><textarea class="form-input" id="tcRetReasons" rows="3" placeholder="Defective item&#10;Wrong size&#10;Changed mind" style="width:100%;resize:vertical;">' + esc((c.allowedReturnReasons || []).join('\n')) + '</textarea></div>' +
-          '<div class="mu-sub" style="margin-top:6px;">Category-specific rules are preserved; edit them in the classic Policies view.</div>';
+          '<div class="mu-sub" style="margin-top:6px;">Category-specific rules are preserved; <a href="#" onclick="TermsV2.classic();return false;">edit them in the classic Policies view</a>.</div>';
       }
     },
     onSave: function () {
@@ -179,7 +182,8 @@
       ? '<div style="font-size:0.9rem;color:var(--charcoal,var(--text));">Last published ' + N.date(c.lastPublishedAt) + '.</div>'
       : '<div style="font-size:0.9rem;color:var(--charcoal,var(--text));">Not yet published to the storefront.</div>';
     var publish = U.card('Publish', published +
-      '<div class="mu-sub" style="margin-top:10px;"><button class="btn btn-secondary" onclick="TermsV2.classic()">Publish to storefront (classic view) →</button></div>', { fill: true });
+      '<div class="mu-sub" style="margin-top:10px;">Publishes the current policy settings to your public storefront terms page.</div>' +
+      '<div style="margin-top:10px;"><button class="btn btn-primary" onclick="TermsV2.publish()">Publish to storefront →</button></div>', { fill: true });
 
     var grid = U.cardGrid([returns, terms, publish]);
     tab.innerHTML = U.pageHeader({ title: 'Policies', subtitle: 'Store policies & terms' }) + grid;
@@ -194,11 +198,33 @@
         MastEntity.openRecord(key, V2.cfg, 'edit');
       });
     },
+    // Native publish → delegates to the legacy storefront write via TermsBridge
+    // (sales.js). The twin NEVER reimplements the public/content/terms write.
+    publish: function () {
+      if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('sales'); } catch (e) {} }
+      if (!window.TermsBridge) { if (window.showToast) showToast('Publish engine still loading — try again', true); return; }
+      var msg = 'Publish your current policy settings to the public storefront terms page? This updates what customers see.';
+      Promise.resolve(typeof mastConfirm === 'function' ? mastConfirm(msg, { title: 'Publish to storefront', confirmLabel: 'Publish' }) : Promise.resolve(true)).then(function (ok) {
+        if (!ok) return;
+        // Pull the freshest config so publish reflects any just-saved slice edits.
+        Promise.resolve(MastDB.termsConfig.get()).then(function (c) {
+          var cfg = Object.assign(V2.cfg || {}, c || {});
+          return Promise.resolve(window.TermsBridge.publish(cfg)).then(function (publishedAt) {
+            V2.cfg.lastPublishedAt = publishedAt;   // live ref → fresh re-render
+            if (window.writeAudit) writeAudit('publish', 'terms-config', 'storefront');
+            if (window.showToast) showToast('Terms published to storefront.');
+            render();
+          });
+        });
+      }).catch(function (e) { console.error('[terms-v2] publish', e); if (window.showToast) showToast('Publish failed', true); });
+    },
+    // categoryRules editing remains legacy-only — keep classic re-entry for it.
     classic: function () { if (typeof navigateToClassic === 'function') navigateToClassic('terms'); else if (typeof navigateTo === 'function') navigateTo('terms'); },
     refresh: function () { render(); }
   };
 
   function load() {
+    if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('sales'); } catch (e) {} } // ensure window.TermsBridge
     Promise.resolve(MastDB.termsConfig.get()).then(function (c) {
       V2.cfg = stamp(Object.assign({ _key: 'config' }, c || {}));
       V2.loaded = true; render();
