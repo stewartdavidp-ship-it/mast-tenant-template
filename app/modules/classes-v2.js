@@ -15,13 +15,17 @@
  * completed / archived) is an assigned attribute → Faceted Record, NOT Process/
  * MastFlow.
  *
- * Read-focused: creating/editing a class is a multi-section bespoke form (schedule
- * builder, instructor/resource assignment, required-skills/certs, series pricing,
- * waiver, materials) coupled to the legacy Book module's session materializer, and
- * stays single-sourced on legacy #book via a "manage in classic view" link. This
- * twin re-hosts the VIEW only — no onSave, no edit form, no session/enrollment
- * tooling (those stay on legacy too). Flag-gated (?ui=1) at #classes-v2, side-by-
- * side; never touches book.js.
+ * Create + edit of the class RECORD (basic fields) is NATIVE here: a custom
+ * detail.editRender (name / description / type / category / status / capacity /
+ * min-enrollment / cancel-lead / price / duration / materials) + an onSave that
+ * DELEGATES to window.ClassesBridge (exposed in book.js) so the class write +
+ * money-in-cents conversion stay single-sourced — this twin never reimplements
+ * that logic (mirrors the contacts-v2 / ContactsBridge precedent). What stays
+ * bespoke on legacy #book (no V2 home): the SESSION GENERATION sub-flow (the
+ * schedule builder → materializeSessions), series pricing, instructor/resource
+ * assignment, required-skills/certs pickers, the waiver template picker, and the
+ * class-image library. Those keep a scoped "Schedule & sessions in classic view"
+ * link. Flag-gated (?ui=1) at #classes-v2, side-by-side.
  *
  * Data: classes live at public/classes (MastDB.classes → that path); generated
  * sessions live at public/classSessions (MastDB.classSessions, each with a
@@ -45,6 +49,9 @@
 
   // Label / tone maps mirror book.js TYPE_BADGE_COLORS / STATUS_BADGE_COLORS
   // (kept local — read-only display lookups, mapped to v2 tone tokens).
+  // Mirror book.js CLASS_TYPES / CLASS_STATUSES (the editable option sets).
+  var CLASS_TYPES = ['series', 'single', 'dropin', 'private'];
+  var CLASS_STATUSES = ['draft', 'active', 'published', 'completed', 'archived'];
   var TYPE_LABEL = { series: 'Series', single: 'Single', dropin: 'Drop-in', 'private': 'Private' };
   var STATUS_LABEL = { draft: 'Draft', active: 'Active', published: 'Published', completed: 'Completed', archived: 'Archived' };
   var STATUS_TONE = {
@@ -185,9 +192,12 @@
         var descBody = c.description
           ? '<div style="font-size:0.85rem;color:var(--warm-gray);line-height:1.5;white-space:pre-wrap;">' + esc(c.description) + '</div>'
           : '<span class="mu-sub">No description.</span>';
-        // Multi-section class editing (schedule, assignment, series, sessions)
-        // stays on legacy #book. navigateToClassic avoids looping back to this twin.
-        var manage = '<div style="margin-top:14px;"><button class="btn btn-secondary" onclick="ClassesV2.classic()">Manage in classic view →</button></div>';
+        // Basic-record editing is NATIVE now (the Edit button on this slide-out).
+        // What still has NO V2 home: the SESSION GENERATION sub-flow (schedule
+        // builder → materializeSessions), series pricing, instructor/resource
+        // assignment, skills/certs, waiver, and the image library — those stay
+        // bespoke on legacy #book. navigateToClassic avoids looping back here.
+        var manage = '<div style="margin-top:14px;"><button class="btn btn-secondary" onclick="ClassesV2.classic()">Schedule &amp; sessions in classic view →</button></div>';
 
         // Sessions — upcoming first, then past (mirrors legacy detail ordering).
         var past = sessions.filter(function (s) {
@@ -223,9 +233,115 @@
             UI.card('Description', descBody + manage) +
           '</div>' +
           '<div class="mu-pane" data-pane="sessions" hidden>' + UI.cardTable('Sessions (' + sessions.length + ')', sessionsBody) + '</div>';
+      },
+      // Native edit form — the class RECORD basic fields, grouped like the legacy
+      // book.js showClassForm "Basic Info" + "Pricing & Capacity" + "Materials"
+      // sections. Scope is the record only: name (required), description, type
+      // (required), category, status, capacity (required), min-enrollment,
+      // cancel-lead, price (required, dollars → cents in the bridge), duration
+      // (required), materials. The SESSION GENERATION sub-flow (schedule builder
+      // → materializeSessions), series pricing, instructor/resource assignment,
+      // skills/certs, waiver, and image library stay bespoke on legacy #book —
+      // a PATCH update preserves those fields.
+      editRender: function (c, mode) {
+        c = c || {};
+        function fg(label, inner, flex) { return '<div class="form-group"' + (flex ? ' style="flex:1;min-width:150px;"' : '') + '><label class="form-label">' + label + '</label>' + inner + '</div>'; }
+        function row2(a, b) { return '<div style="display:flex;gap:12px;flex-wrap:wrap;">' + a + b + '</div>'; }
+        function row3(a, b, c2) { return '<div style="display:flex;gap:12px;flex-wrap:wrap;">' + a + b + c2 + '</div>'; }
+        var typeOpts = CLASS_TYPES.map(function (t) {
+          return '<option value="' + t + '"' + (classType(c) === t ? ' selected' : '') + '>' + (TYPE_LABEL[t] || t) + '</option>';
+        }).join('');
+        var statusOpts = CLASS_STATUSES.map(function (s) {
+          return '<option value="' + s + '"' + (statusOf(c) === s ? ' selected' : '') + '>' + (STATUS_LABEL[s] || s) + '</option>';
+        }).join('');
+        // Money is in CENTS on the record → render dollars in the input (mirrors
+        // showClassForm: (priceCents / 100).toFixed(2)).
+        var priceD = N.moneyVal(c, 'priceCents', null);
+        var matCostD = N.moneyVal(c, 'materialsCostCents', null);
+        var matIncl = !!c.materialsIncluded;
+        return '<div class="mu-editbar"><span class="mu-editpill">' + (mode === 'create' ? 'NEW' : 'EDITING') + '</span>' + (mode === 'create' ? 'New class' : 'Edit this class') + '</div>' +
+          fg('Name *', '<input class="form-input" id="clV2Name" value="' + esc(c.name || c.title || '') + '" style="width:100%;" placeholder="e.g. Wheel Throwing Basics">') +
+          fg('Description', '<textarea class="form-input" id="clV2Desc" rows="3" style="width:100%;resize:vertical;" placeholder="Class description for students…">' + esc(c.description || '') + '</textarea>') +
+          row3(
+            fg('Type *', '<select class="form-input" id="clV2Type" style="width:100%;">' + typeOpts + '</select>', true),
+            fg('Category', '<input class="form-input" id="clV2Category" value="' + esc(c.category || '') + '" style="width:100%;" placeholder="e.g. pottery, glass">', true),
+            fg('Status', '<select class="form-input" id="clV2Status" style="width:100%;">' + statusOpts + '</select>', true)
+          ) +
+          row3(
+            fg('Capacity *', '<input class="form-input" type="number" min="1" id="clV2Capacity" value="' + (capacityOf(c) != null ? esc(capacityOf(c)) : '') + '" style="width:100%;">', true),
+            fg('Drop-in price ($) *', '<input class="form-input" type="number" min="0" step="0.01" id="clV2Price" value="' + (priceD != null ? esc(priceD.toFixed(2)) : '') + '" style="width:100%;">', true),
+            fg('Duration (min) *', '<input class="form-input" type="number" min="1" id="clV2Duration" value="' + (c.duration != null ? esc(c.duration) : '') + '" style="width:100%;">', true)
+          ) +
+          row2(
+            fg('Min enrollment', '<input class="form-input" type="number" min="0" id="clV2MinEnroll" value="' + (c.minEnrollment != null ? esc(c.minEnrollment) : '') + '" style="width:100%;" placeholder="Optional">', true),
+            fg('Cancel lead days', '<input class="form-input" type="number" min="0" max="30" id="clV2CancelLead" value="' + (c.cancellationLeadDays != null ? esc(c.cancellationLeadDays) : '2') + '" style="width:100%;">', true)
+          ) +
+          row2(
+            fg('Materials included', '<select class="form-input" id="clV2MatIncl" style="width:100%;"><option value="false"' + (matIncl ? '' : ' selected') + '>No</option><option value="true"' + (matIncl ? ' selected' : '') + '>Yes</option></select>', true),
+            fg('Materials cost ($)', '<input class="form-input" type="number" min="0" step="0.01" id="clV2MatCost" value="' + (matCostD != null ? esc(matCostD.toFixed(2)) : '') + '" style="width:100%;" placeholder="0.00">', true)
+          ) +
+          fg('Materials note', '<input class="form-input" id="clV2MatNote" value="' + esc(c.materialsNote || '') + '" style="width:100%;" placeholder="e.g. 25lbs of clay + glazes">') +
+          (mode === 'create'
+            ? '<div class="mu-sub" style="margin-top:8px;">Schedule, sessions, series pricing, assignment, skills/certs, waiver and the class image are set up in the classic view after creating.</div>'
+            : '<div class="mu-sub" style="margin-top:8px;">Schedule &amp; sessions, series pricing, assignment, skills/certs, waiver and the class image are edited in the classic view.</div>');
       }
+    },
+    onSave: function (rec, mode) {
+      if (!window.ClassesBridge) { if (window.showToast) showToast('Classes engine still loading — try again', true); return false; }
+      var priceRaw = ((document.getElementById('clV2Price') || {}).value || '').trim();
+      var matCostRaw = ((document.getElementById('clV2MatCost') || {}).value || '').trim();
+      var data = {
+        name: (document.getElementById('clV2Name') || {}).value || '',
+        description: ((document.getElementById('clV2Desc') || {}).value || '').trim(),
+        type: (document.getElementById('clV2Type') || {}).value || 'single',
+        category: ((document.getElementById('clV2Category') || {}).value || '').trim(),
+        status: (document.getElementById('clV2Status') || {}).value || 'draft',
+        capacity: (document.getElementById('clV2Capacity') || {}).value,
+        minEnrollment: (document.getElementById('clV2MinEnroll') || {}).value,
+        cancellationLeadDays: (document.getElementById('clV2CancelLead') || {}).value,
+        // Dollars here → the bridge converts to priceCents (mirrors saveClass).
+        price: priceRaw === '' ? 0 : parseFloat(priceRaw),
+        duration: (document.getElementById('clV2Duration') || {}).value,
+        materialsIncluded: (document.getElementById('clV2MatIncl') || {}).value === 'true',
+        materialsCostCents: matCostRaw === '' ? null : parseFloat(matCostRaw),
+        materialsNote: ((document.getElementById('clV2MatNote') || {}).value || '').trim() || null
+      };
+      if (!data.name.trim()) { if (window.showToast) showToast('Class name is required.', true); return false; }
+      if (priceRaw === '' || isNaN(parseFloat(priceRaw))) { if (window.showToast) showToast('Drop-in price is required.', true); return false; }
+
+      // Cents-shaped patch for the LIVE cache so the post-save read re-render
+      // (which reads priceCents / materialsCostCents) reflects the edit at once.
+      function livePatch() {
+        var mi = data.materialsIncluded;
+        return {
+          name: data.name.trim(), description: data.description, type: data.type,
+          category: data.category.toLowerCase(), status: data.status,
+          capacity: parseInt(data.capacity, 10) || 8,
+          minEnrollment: parseInt(data.minEnrollment, 10) || null,
+          cancellationLeadDays: parseInt(data.cancellationLeadDays, 10) || 2,
+          priceCents: Math.round((data.price || 0) * 100),
+          duration: parseInt(data.duration, 10) || 60,
+          materialsIncluded: mi,
+          materialsCostCents: mi ? null : (data.materialsCostCents && data.materialsCostCents > 0 ? Math.round(data.materialsCostCents * 100) : null),
+          materialsNote: data.materialsNote
+        };
+      }
+
+      if (mode === 'create') {
+        return Promise.resolve(window.ClassesBridge.create(data)).then(function () {
+          if (window.showToast) showToast('Class created.'); reloadSoon(); return true;
+        }).catch(function (e) { console.error('[classes-v2] create', e); if (window.showToast) showToast('Error saving class.', true); return false; });
+      }
+      var id = rec._key || rec.id;
+      return Promise.resolve(window.ClassesBridge.update(id, data)).then(function () {
+        // Mutate the LIVE cached record (=== the slide-out's read closure, since
+        // fetch returns V2.byId[id]); the engine passes a copy to onSave. Shows
+        // the edited fields immediately on the post-save read re-render;
+        // reloadSoon() then refreshes the cache for the next open.
+        Object.assign(V2.byId[id] || rec, livePatch());
+        if (window.showToast) showToast('Class updated.'); reloadSoon(); return true;
+      }).catch(function (e) { console.error('[classes-v2] update', e); if (window.showToast) showToast('Error updating class.', true); return false; });
     }
-    // No onSave → no Edit button (multi-section class editing stays on legacy #book).
   });
 
   // ── module state + data ─────────────────────────────────────────────
@@ -237,6 +353,9 @@
 
   function load() {
     V2.today = todayStr();
+    // Ensure the legacy Book module is loaded so window.ClassesBridge (the
+    // delegated write path) exists — mirrors contacts-v2 / materials-v2.
+    if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('book'); } catch (e) {} }
     // Classes + their generated sessions load together; both one-shot keyed-object
     // reads (mirrors book.js loadClassDetail + calendar-v2 load).
     Promise.all([
@@ -261,6 +380,7 @@
       V2.loaded = true; render();
     }).catch(function (e) { console.error('[classes-v2] load', e); render(); });
   }
+  function reloadSoon() { V2.loaded = false; setTimeout(load, 250); }   // let the legacy write settle, then refresh
 
   function visibleRows() {
     var rows = V2.rows;
@@ -299,7 +419,8 @@
       U.pageHeader({
         title: 'Classes',
         count: N.count(V2.rows.length) + ' class' + (V2.rows.length === 1 ? '' : 'es'),
-        actionsHtml: '<button class="btn btn-secondary" onclick="ClassesV2.exportCsv()">↓ Export</button>'
+        actionsHtml: '<button class="btn btn-primary" onclick="ClassesV2.create()">+ New class</button>' +
+          '<button class="btn btn-secondary" onclick="ClassesV2.exportCsv()">↓ Export</button>'
       }) +
       '<div style="display:flex;gap:6px;flex-wrap:wrap;margin:12px 0;">' + filters + '</div>' +
       '<div style="margin:14px 0;"><input class="form-input" placeholder="Search name, category, type or instructor…" value="' + esc(V2.q) +
@@ -307,7 +428,7 @@
       MastEntity.renderList('classes-v2', {
         rows: visibleRows(), sortKey: V2.sortKey, sortDir: V2.sortDir,
         onSortFnName: 'ClassesV2.sort', onRowClickFnName: 'ClassesV2.open',
-        empty: { title: 'No classes', message: V2.loaded ? 'Add classes, workshops or studio time in the classic Classes view.' : 'Loading…' }
+        empty: { title: 'No classes', message: V2.loaded ? 'Add a class to get started.' : 'Loading…' }
       });
   }
 
@@ -324,8 +445,17 @@
         if (rec) MastEntity.openRecord('classes-v2', rec, 'read');
       });
     },
-    // Multi-section class editing → classic Classes catalog (route 'book'). Use
-    // navigateToClassic so the V2 route remap doesn't loop us back to this twin.
+    create: function () {
+      // Ensure the legacy Book module (and thus window.ClassesBridge) is loaded
+      // before opening the create form — mirrors ContactsV2.create.
+      if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('book'); } catch (e) {} }
+      MastEntity.openRecord('classes-v2', {}, 'create');
+    },
+    // The basic class record is created/edited NATIVELY here. The SESSION
+    // GENERATION sub-flow (schedule builder → materializeSessions), series
+    // pricing, instructor/resource assignment, skills/certs, waiver, and the
+    // image library have no V2 home → classic Classes catalog (route 'book').
+    // Use navigateToClassic so the V2 route remap doesn't loop back to this twin.
     classic: function () {
       if (typeof navigateToClassic === 'function') navigateToClassic('book');
       else if (typeof navigateTo === 'function') navigateTo('book');
