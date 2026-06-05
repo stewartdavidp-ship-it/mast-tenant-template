@@ -450,17 +450,31 @@
     }
     var own = variantHasOwnImage(v);
     var curIdx = own ? v.imageIndex : -1;
+    // Status line up top makes the current assignment unmistakable.
+    var status = own
+      ? '<div style="font-size:0.9rem;margin-bottom:10px;">Using <strong>image #' + (curIdx + 1) + '</strong> for this variant. <button class="btn btn-secondary btn-small" onclick="ProductsV2.setVariantImage(\'' + esc(pid) + '\',\'' + esc(v.id) + '\',-1)">Use product default</button></div>'
+      : '<div style="font-size:0.9rem;margin-bottom:10px;color:var(--warm-gray);">Using the <strong>product’s primary</strong> image. Tap one below to give this variant its own.</div>';
     var grid = '<div class="pv2-imggrid">' + imgs.map(function (im, i) {
       var url = resolve(im); if (!url) return '';
       var sel = i === curIdx;
-      var badge = sel ? '<span class="pv2-imgbadge">This variant</span>'
+      var badge = sel ? '<span class="pv2-imgbadge">✓ This variant</span>'
         : (i === 0 && !own ? '<span class="pv2-imgbadge pv2-imgbadge-muted">Product default</span>' : '');
-      return '<div class="pv2-imgcellwrap"><button class="pv2-imgcell pv2-imgpick' + (sel ? ' on' : '') + '" style="background-image:url(' + esc(url) + ');" title="Bind image ' + (i + 1) + ' to this variant" onclick="ProductsV2.setVariantImage(\'' + esc(pid) + '\',\'' + esc(v.id) + '\',' + i + ')">' + badge + '</button></div>';
+      var cap = sel ? '<div style="font-size:0.72rem;color:var(--teal);text-align:center;font-weight:600;">Selected</div>'
+        : '<div style="font-size:0.72rem;color:var(--warm-gray);text-align:center;">Image #' + (i + 1) + '</div>';
+      return '<div class="pv2-imgcellwrap"><button class="pv2-imgcell pv2-imgpick' + (sel ? ' on' : '') + '" style="background-image:url(' + esc(url) + ');" title="Use image ' + (i + 1) + ' for this variant" onclick="ProductsV2.setVariantImage(\'' + esc(pid) + '\',\'' + esc(v.id) + '\',' + i + ')">' + badge + '</button>' + cap + '</div>';
     }).join('') + '</div>';
-    var note = own
-      ? '<div class="pv2-pnote">This variant uses image #' + (curIdx + 1) + '. <button class="btn btn-secondary btn-small" onclick="ProductsV2.setVariantImage(\'' + esc(pid) + '\',\'' + esc(v.id) + '\',-1)">Use product default</button></div>'
-      : '<div class="pv2-pnote">This variant uses the product’s primary image. Click one above to give it its own.</div>';
-    return UU.card('Image · this variant', grid + note);
+    return UU.card('Image · this variant', status + grid);
+  }
+  // Re-render just the variant Image pane (keeps the active tab) + the header
+  // thumbnail after a binding change — a full SO re-open would reset to Pricing.
+  function rerenderVariantImagePane(pid, vid) {
+    var rec = buildVariantRecord(pid + '::' + vid); if (!rec) return;
+    var p = rec.product, v = rec.variant;
+    var body = document.getElementById('mastSlideOutBody'); if (!body) return;
+    var paneEl = body.querySelector('.mu-pane[data-pane="v-image"]');
+    if (paneEl) paneEl.innerHTML = variantImagePane(U, p, v);
+    var hs = document.getElementById('pv2HeaderStrip');
+    if (hs) hs.outerHTML = headerStrip(p, variantImageSrc(p, v), (p.name || 'Variant') + ' — ' + variantLabel(v), v.id);
   }
 
   // ════════════════ Entity: a recipe (stacked SO, drilled from the product) ════════════════
@@ -772,9 +786,10 @@
       Promise.resolve(window.MakerProductBridge.setVariantImageIndex(pid, variantId, idx)).then(function (res) {
         if (!res || !res.ok) { MastAdmin.showToast('Failed: ' + ((res && res.error) || 'unknown'), true); return; }
         var rec = V2.byId[pid]; if (rec) rec.variants = res.variants; // keep parent/list cache fresh
-        var vr = buildVariantRecord(pid + '::' + variantId);
-        if (vr) MastEntity.openRecord('product-variant-v2', vr, 'read', true); // re-render in place
-        MastAdmin.showToast(idx >= 0 ? 'Variant image set' : 'Variant image cleared');
+        // Re-render just the Image pane in place (stay on the Image tab) + refresh
+        // the header thumbnail — a full SO re-open would bounce back to Pricing.
+        rerenderVariantImagePane(pid, variantId);
+        MastAdmin.showToast(idx >= 0 ? 'Image #' + (idx + 1) + ' set for this variant' : 'Variant image cleared');
       }, function (e) { console.error('[products-v2] setVariantImage', e); MastAdmin.showToast('Failed', true); });
     },
     // ── Info tab edit (P4 pilot) ──────────────────────────────────────
