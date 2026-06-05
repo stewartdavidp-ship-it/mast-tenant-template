@@ -152,7 +152,7 @@
     // own stock (edit it on the variant's Inventory tab).
     var title = hasVar ? 'Inventory · all variants (roll-up)' : 'Inventory';
     var perVarNote = hasVar
-      ? '<div class="pv2-pnote">Stock is tracked per variant — each one has its own count. The total above is the roll-up; set each variant’s stock on its Inventory tab.</div>'
+      ? '<div class="pv2-pnote"><strong>On hand = all variants combined.</strong> Stock is tracked per variant — each one has its own count; the number above is the roll-up. Set each variant’s stock on its Inventory tab.</div>'
       // A variant-less product IS the stocked unit, so it's editable here.
       : '<div style="margin-top:10px;"><button class="btn btn-secondary btn-small" onclick="MastAdmin.showToast(\'Stock editing lands in P4.\')">Set stock</button></div>';
     return U.card(title, U.kv([
@@ -179,13 +179,53 @@
     return U.card('Images (' + imgs.length + ')', '<div style="display:flex;flex-wrap:wrap;">' + thumbs + '</div>') + (d ? U.card('Description', d) : '');
   }
   function infoPane(p) {
+    var pid = p._key || p.pid;
+    if (V2.editInfo === pid) return infoEditForm(p);
+    // Active products stage edits as a revision; say so up-front on the action.
+    var guarded = String(p.status || '').toLowerCase() === 'active';
+    var editLbl = guarded ? 'Revise' : 'Edit';
+    var editBtn = '<button class="btn btn-secondary btn-small" onclick="ProductsV2.editInfo(\'' + esc(pid) + '\')">' + editLbl + '</button>';
     return U.card('Info · product-level', U.kv([
       { k: 'Category', v: categoryLabel(p) || '—' },
       { k: 'Business line', v: p.businessLine || '—' },
       { k: 'Slug', v: p.slug || '—' },
+      // Acquisition mode is structural (drives the cost/recipe machinery) — not
+      // an inline-editable field here.
       { k: 'Acquisition', v: MODE_LABEL[p.acquisitionType || 'build'] || 'Build' },
       { k: 'SKU', v: p.sku || '—' }
-    ]));
+    ]), { headerRight: editBtn });
+  }
+  // Inline edit form for the clean top-level Info fields. Writes delegate to
+  // window.MakerProductBridge (no new backend) — loadModule+guard at call time.
+  function infoEditForm(p) {
+    var pid = p._key || p.pid;
+    var guarded = String(p.status || '').toLowerCase() === 'active';
+    function field(label, id, val) {
+      return '<label style="display:block;margin-bottom:12px;font-size:0.85rem;color:var(--warm-gray);">' + esc(label) +
+        '<input id="' + id + '" type="text" value="' + esc(val == null ? '' : String(val)) +
+        '" style="display:block;width:100%;margin-top:4px;padding:7px 9px;border:1px solid var(--cream-dark);border-radius:6px;font-size:0.9rem;background:var(--cream);color:inherit;box-sizing:border-box;"></label>';
+    }
+    var note = guarded
+      ? '<div class="pv2-pnote">This product is Published — your edits stage as a pending revision and go live when you Apply.</div>'
+      : '';
+    var body = note +
+      field('Category', 'pv2InfoCategory', categoryLabel(p)) +
+      field('Business line', 'pv2InfoBizLine', p.businessLine) +
+      field('Slug', 'pv2InfoSlug', p.slug) +
+      field('SKU', 'pv2InfoSku', p.sku) +
+      '<div style="display:flex;gap:8px;margin-top:4px;">' +
+      '<button class="btn btn-primary btn-small" onclick="ProductsV2.saveInfo(\'' + esc(pid) + '\')">' + (guarded ? 'Stage changes' : 'Save') + '</button>' +
+      '<button class="btn btn-secondary btn-small" onclick="ProductsV2.cancelInfo(\'' + esc(pid) + '\')">Cancel</button>' +
+      '</div>';
+    return U.card('Edit info · product-level', body);
+  }
+  // Re-render just the Info pane in place (keeps the user on the Info tab and
+  // preserves scroll/guided-header state — no full SO re-open).
+  function rerenderInfoPane(pid) {
+    var rec = V2.byId[pid]; if (!rec) return;
+    var body = document.getElementById('mastSlideOutBody');
+    var paneEl = body && body.querySelector('.mu-pane[data-pane="info"]');
+    if (paneEl) paneEl.innerHTML = infoPane(rec);
   }
 
   // ════════════════ Entity: the product / Default ════════════════
@@ -434,7 +474,7 @@
   }
 
   // ── State + data ────────────────────────────────────────────────────
-  var V2 = { rows: [], byId: {}, sortKey: '_title', sortDir: 'asc', filter: 'all', expanded: {} };
+  var V2 = { rows: [], byId: {}, sortKey: '_title', sortDir: 'asc', filter: 'all', expanded: {}, editInfo: null };
 
   function toRows(map) {
     var out = []; map = map || {};
@@ -606,6 +646,41 @@
     openVariant: function (key) { var rec = buildVariantRecord(key); if (rec) MastEntity.openRecord('product-variant-v2', rec, 'read'); },
     addVariant: function (id) { var p = V2.byId[id]; MastAdmin.showToast('Add variant for "' + (p ? p.name : id) + '" — write flow (inherits the Default) lands in P4.'); },
     editVariantTodo: function () { MastAdmin.showToast('Per-variant override editing lands in P4.'); },
+    // ── Info tab edit (P4 pilot) ──────────────────────────────────────
+    editInfo: function (pid) { V2.editInfo = pid; rerenderInfoPane(pid); },
+    cancelInfo: function (pid) { V2.editInfo = null; rerenderInfoPane(pid); },
+    saveInfo: function (pid) {
+      // loadModule + guard — a pure-v2 (Legacy-off) session may not have the
+      // bridge yet; never call it undefined (the §1.B silent-failure bug class).
+      if (!window.MakerProductBridge) {
+        if (window.MastAdmin && MastAdmin.loadModule) MastAdmin.loadModule('maker');
+        MastAdmin.showToast('Still loading… try again in a moment.');
+        return;
+      }
+      function val(id) { var el = document.getElementById(id); return el ? el.value.trim() : ''; }
+      var rec = V2.byId[pid] || {};
+      var patch = {
+        category: val('pv2InfoCategory'),
+        businessLine: val('pv2InfoBizLine'),
+        slug: val('pv2InfoSlug'),
+        sku: val('pv2InfoSku')
+      };
+      // Only send fields that actually changed (cheaper writes, smaller revisions).
+      var changed = {};
+      if (patch.category !== (categoryLabel(rec) || '')) changed.category = patch.category;
+      if (patch.businessLine !== (rec.businessLine || '')) changed.businessLine = patch.businessLine;
+      if (patch.slug !== (rec.slug || '')) changed.slug = patch.slug;
+      if (patch.sku !== (rec.sku || '')) changed.sku = patch.sku;
+      if (!Object.keys(changed).length) { V2.editInfo = null; rerenderInfoPane(pid); MastAdmin.showToast('No changes'); return; }
+      Promise.resolve(window.MakerProductBridge.setFields(pid, changed)).then(function (res) {
+        if (!res || !res.ok) { MastAdmin.showToast('Save failed: ' + ((res && res.error) || 'unknown'), true); return; }
+        // Mirror the live cache so the read pane shows the edit immediately.
+        if (!res.staged) Object.assign(rec, changed);
+        V2.editInfo = null;
+        rerenderInfoPane(pid);
+        MastAdmin.showToast(res.staged ? 'Staged ' + res.changed + ' change' + (res.changed === 1 ? '' : 's') + ' (Apply to go live)' : 'Saved');
+      }, function (e) { console.error('[products-v2] saveInfo', e); MastAdmin.showToast('Save failed', true); });
+    },
     // Image SO: click a gallery thumbnail to swap the large focused image.
     focusImage: function (src, btn) {
       var lg = document.getElementById('pv2ImgLarge'); if (lg) lg.src = src;
