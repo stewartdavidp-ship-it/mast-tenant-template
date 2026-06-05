@@ -2,20 +2,20 @@
  * products-v2.js — the products surface, rebuilt on the Entity Engine.
  *
  * Build plan: docs/ux-audit/products-v2-build-plan.md (design ratified).
- * The most complex object in the app — process × variants × sub-objects.
+ * The most complex object in the app — process x variants x sub-objects.
  *
  * Phasing (flag-gated #products-v2, side-by-side with legacy):
- *   P0a  list + read SO                                   ✓ (PR 180, 181)
- *   P0b  variant-expanding list + variant SO              ← this commit
- *   P1   Default/product SO: process header + tab flow
+ *   P0a  list + read SO                                   done (PR 180, 181)
+ *   P0b  variant-expanding list + variant SO              done (PR 183)
+ *   P1   Default/product SO: process header + tab flow    <- this commit
  *   P2   variant SO: full inherit/override tabs
  *   P3   edit-in-V2 via MakerProductBridge + real Advance
  *   P4   add-variant write + per-variant overrides
  *   P5   Revising loop, flip default, retire legacy
  *
- * The list renders products → expand to the synthetic Default + variants inline
- * + "Add variant" (matching legacy getProductVariantsForRender). The slide-out
- * presents ONE object: a Default/product OR a single variant.
+ * The list renders products -> expand to the synthetic Default + variants inline
+ * + "Add variant". The slide-out presents ONE object: a Default/product (process
+ * + tab flow) OR a single variant (inherit/override).
  */
 (function () {
   'use strict';
@@ -45,34 +45,106 @@
     return '';
   }
   function price(p) { return N.moneyVal(p, 'priceCents', 'price'); }
-  function firstImage(p) {
-    if (Array.isArray(p.images) && p.images.length) return p.images[0];
-    return '';
-  }
-  function stamp(p, id) {
-    p._key = id || p.pid || p._key;
-    p._title = p.name || ('Product ' + (p._key || ''));
-    return p;
-  }
+  function firstImage(p) { return (Array.isArray(p.images) && p.images.length) ? p.images[0] : ''; }
+  function stamp(p, id) { p._key = id || p.pid || p._key; p._title = p.name || ('Product ' + (p._key || '')); return p; }
 
-  // ── Variant model (mirrors legacy getProductVariantsForRender) ──────
-  // Synthetic Default first (holds product-level base values), then real variants.
   function variantLabel(v) {
     if (!v || !v.combo) return 'Variant';
     var parts = Object.keys(v.combo).map(function (k) { return v.combo[k]; }).filter(Boolean);
     return parts.length ? parts.join(' / ') : 'Variant';
   }
-  function variantPrice(p, v) {
-    if (v && typeof v.priceCents === 'number') return v.priceCents / 100;
-    return price(p); // inherits Default
-  }
-  function variantOverridden(p, v) {
-    return !!(v && typeof v.priceCents === 'number' && v.priceCents !== p.priceCents);
-  }
+  function variantPrice(p, v) { return (v && typeof v.priceCents === 'number') ? v.priceCents / 100 : price(p); }
+  function variantOverridden(p, v) { return !!(v && typeof v.priceCents === 'number' && v.priceCents !== p.priceCents); }
   function realVariants(p) {
-    return (Array.isArray(p.variants) ? p.variants : []).map(function (v, i) {
-      return Object.assign({ id: v.id || ('v' + i) }, v);
+    return (Array.isArray(p.variants) ? p.variants : []).map(function (v, i) { return Object.assign({ id: v.id || ('v' + i) }, v); });
+  }
+
+  // ── Process (read) — stepper + stage readiness (P1) ─────────────────
+  function phaseOf(p) {
+    var s = String(p.status || 'draft').toLowerCase();
+    return (s === 'archived' || s === 'active' || s === 'ready') ? s : 'draft';
+  }
+  function readStepper(p) {
+    var s = phaseOf(p);
+    if (s === 'archived') return '<div class="pv2-archived">Archived</div>';
+    var order = { draft: 0, ready: 1, active: 2 };
+    var cur = order[s] != null ? order[s] : 0;
+    var phases = ['Draft', 'Review', 'Published'];
+    var html = '<div class="pv2-step">';
+    phases.forEach(function (lbl, i) {
+      var st = i < cur ? 'done' : (i === cur ? 'cur' : 'todo');
+      html += '<span style="display:inline-flex;align-items:center;"><span class="nd ' + st + '">' + (st === 'done' ? '✓' : (i + 1)) + '</span><span class="lb" style="' + (st === 'todo' ? 'color:var(--warm-gray);' : 'color:var(--text);') + (st === 'cur' ? 'font-weight:600;' : '') + '">' + lbl + '</span></span>';
+      if (i < phases.length - 1) html += '<span class="ln ' + (i < cur ? 'done' : '') + '"></span>';
     });
+    return html + '</div>';
+  }
+  function processPane(p) {
+    var s = phaseOf(p), r = p.readinessChecklist || {};
+    var nextLabel = s === 'draft' ? 'Review' : (s === 'ready' ? 'Published' : null);
+    function todo(key, label, optional) {
+      var met = !!r[key];
+      return '<div class="pv2-todo"><span class="pv2-mk ' + (met ? 'met' : 'unmet') + '">' + (met ? '✓' : '!') + '</span>' +
+        '<span style="color:' + (met ? 'var(--warm-gray)' : 'var(--text)') + ';">' + esc(label) + (optional ? ' <span class="pv2-opt">optional</span>' : '') + '</span></div>';
+    }
+    var hard = [['defined', 'Defined (recipe / components / supplier)'], ['costed', 'Costed & priced'], ['listingReady', 'Listing ready (name + image + description)']];
+    var soft = [['channeled', 'Channel mapping'], ['capacityPlanned', 'Capacity planned']];
+    var items = hard.map(function (h) { return todo(h[0], h[1], false); }).join('') + soft.map(function (h) { return todo(h[0], h[1], true); }).join('');
+    var hardMet = hard.every(function (h) { return r[h[0]]; });
+    var advance = nextLabel
+      ? '<div style="display:flex;justify-content:flex-end;margin-top:12px;"><button class="btn btn-primary btn-small"' + (hardMet ? '' : ' disabled') + ' onclick="ProductsV2.promoteTodo(\'' + esc(p._key) + '\')">Send to ' + nextLabel + ' →</button></div>'
+      : (s === 'active' ? '<div style="font-size:0.85rem;color:var(--teal);margin-top:10px;">Published — live on your channels.</div>' : '');
+    var intro = '<div style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:8px;">Stage <b style="color:var(--text);">' + esc(statusLabel(p.status)) + '</b>' + (nextLabel ? ' — to advance to ' + nextLabel + ', complete the required items:' : '') + '</div>';
+    return U.card('Process', intro + items + advance);
+  }
+  function pricingPane(p) {
+    var rows = [{ k: 'Retail price', v: N.money(price(p)) || '—' }];
+    if (typeof p.wholesalePriceCents === 'number' && p.wholesalePriceCents > 0) rows.push({ k: 'Wholesale', v: N.money(p.wholesalePriceCents / 100) });
+    rows.push({ k: 'Cost basis', v: p.recipeId ? 'From recipe (see Recipe tab)' : 'Manually priced' });
+    var nOv = realVariants(p).filter(function (v) { return variantOverridden(p, v); }).length;
+    rows.push({ k: 'Variant overrides', v: nOv ? (nOv + ' variant' + (nOv > 1 ? 's' : '')) : 'none' });
+    return U.card('Pricing · Default (base)', U.kv(rows)) + '<div class="pv2-pnote">Base price propagates to every non-overridden variant. Editing lands in P3.</div>';
+  }
+  function recipePane(p) {
+    if (p.recipeId) {
+      return U.card('Recipe', U.kv([{ k: 'Status', v: 'Linked' }, { k: 'Recipe id', v: p.recipeId }])) +
+        '<button class="btn btn-secondary btn-small" onclick="ProductsV2.openRecipe(\'' + esc(p.recipeId) + '\')">Open recipe builder ↗</button>' +
+        '<span class="pv2-temp"> legacy — becomes a native stacked recipe SO in P3</span>';
+    }
+    return U.card('Recipe', '<span style="color:var(--warm-gray);">No recipe linked.</span>');
+  }
+  function inventoryPane(p) {
+    var si = p.stockInfo || {};
+    return U.card('Inventory · Default (base)', U.kv([
+      { k: 'Stock type', v: si.stockType || '—' },
+      { k: 'On hand', v: (si.totalOnHand != null ? String(si.totalOnHand) : '—') },
+      { k: 'Low-stock at', v: (si.lowStockThreshold != null ? String(si.lowStockThreshold) : '—') },
+      { k: 'Fulfillment', v: (si.stockFulfillmentDays != null ? si.stockFulfillmentDays + ' days' : '—') },
+      { k: 'Wholesale MOQ', v: (p.moq != null ? String(p.moq) : '—') },
+      { k: 'Case pack', v: (p.casePack != null ? String(p.casePack) : '—') }
+    ]));
+  }
+  function channelsPane(p) {
+    var er = p.externalRefs || {};
+    function ch(name, ref) { var on = ref && (ref.externalId || ref.syncEnabled); return { k: name, v: on ? U.badge('Mapped', 'teal') : U.badge('Off', 'neutral') }; }
+    return U.card('Channels · product-level', U.kv([
+      ch('Shopify', er.shopify), ch('Etsy', er.etsy), ch('Square', er.square),
+      { k: 'Internal storefront', v: U.badge('On', 'teal') }
+    ]));
+  }
+  function imagePane(p) {
+    var imgs = Array.isArray(p.images) ? p.images : [];
+    var thumbs = imgs.slice(0, 8).map(function (src) { return '<img class="pv2-galimg" src="' + esc(src) + '" alt="">'; }).join('') || '<span style="color:var(--warm-gray);">No images.</span>';
+    var d = p.description ? '<div style="font-size:0.85rem;color:var(--warm-gray);line-height:1.55;">' + esc(String(p.description).slice(0, 300)) + '</div>' : '';
+    return U.card('Images (' + imgs.length + ')', '<div style="display:flex;flex-wrap:wrap;">' + thumbs + '</div>') + (d ? U.card('Description', d) : '');
+  }
+  function infoPane(p) {
+    return U.card('Info · product-level', U.kv([
+      { k: 'Category', v: categoryLabel(p) || '—' },
+      { k: 'Business line', v: p.businessLine || '—' },
+      { k: 'Slug', v: p.slug || '—' },
+      { k: 'Acquisition', v: MODE_LABEL[p.acquisitionType || 'build'] || 'Build' },
+      { k: 'SKU', v: p.sku || '—' }
+    ]));
   }
 
   // ════════════════ Entity: the product / Default ════════════════
@@ -83,43 +155,40 @@
       { name: '_title', label: 'Product', type: 'text', list: true, group: 'Product', readOnly: true },
       { name: 'status', label: 'Status', type: 'status', list: true, group: 'Lifecycle', readOnly: true,
         get: function (p) { return statusLabel(p.status); },
-        tone: function (v) { var k = String(v || '').toLowerCase();
-          if (k === 'review') return 'amber'; if (k === 'published') return 'teal'; return statusTone(k); } },
+        tone: function (v) { var k = String(v || '').toLowerCase(); if (k === 'review') return 'amber'; if (k === 'published') return 'teal'; return statusTone(k); } },
       { name: 'category', label: 'Category', type: 'text', list: true, group: 'Product', readOnly: true, get: categoryLabel },
-      { name: 'mode', label: 'Mode', type: 'text', list: true, group: 'Product', readOnly: true,
-        get: function (p) { return MODE_LABEL[p.acquisitionType || 'build'] || 'Build'; } },
+      { name: 'mode', label: 'Mode', type: 'text', list: true, group: 'Product', readOnly: true, get: function (p) { return MODE_LABEL[p.acquisitionType || 'build'] || 'Build'; } },
       { name: 'variants', label: 'Variants', type: 'text', list: true, sortable: false, group: 'Product', readOnly: true, get: variantsLabel },
       { name: 'price', label: 'Price', type: 'money', list: true, group: 'Money', readOnly: true, align: 'right', get: price }
     ],
-    fetch: function (id) {
-      return Promise.resolve(MastDB.products.get(id)).then(function (p) { return p ? stamp(Object.assign({}, p), id) : null; });
-    },
-    // P0b read interior (P1 adds the MastFlow process header). Default = product-level.
+    fetch: function (id) { return Promise.resolve(MastDB.products.get(id)).then(function (p) { return p ? stamp(Object.assign({}, p), id) : null; }); },
+    // Default/product SO: process header (read stepper + stage readiness) + the tab flow.
     detail: {
       render: function (UU, p) {
         var tiles = UU.tiles([
           { k: 'Status', v: statusLabel(p.status), hero: true },
           { k: 'Price', v: N.money(price(p)) || '—' },
           { k: 'Variants', v: variantCount(p) || 'Default only' },
-          { k: 'Mode', v: MODE_LABEL[p.acquisitionType || 'build'] || 'Build' }
+          { k: 'On hand', v: ((p.stockInfo && p.stockInfo.totalOnHand) != null ? String(p.stockInfo.totalOnHand) : '—') }
         ]);
-        var img = firstImage(p);
-        var heroImg = img ? '<img src="' + esc(img) + '" alt="" style="width:120px;height:120px;object-fit:cover;border-radius:12px;border:1px solid var(--border);float:left;margin:0 16px 8px 0;">' : '';
-        var info = UU.kv([
-          { k: 'Category', v: categoryLabel(p) || '—' },
-          { k: 'Business line', v: p.businessLine || '—' },
-          { k: 'Slug', v: p.slug || '—' },
-          { k: 'Acquisition', v: MODE_LABEL[p.acquisitionType || 'build'] || 'Build' }
-        ]);
-        var desc = p.description ? '<div style="font-size:0.85rem;color:var(--warm-gray);line-height:1.55;margin:6px 0 12px;">' + esc(String(p.description).slice(0, 320)) + '</div>' : '';
-        var note = '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:6px;">◆ Default — base for all variants. Process header + tab flow (Pricing · Recipe · Inventory · Channels · Image) arrive in P1.</div>';
-        return UU.stickyHead(tiles, '') + '<div>' + heroImg + desc + UU.card('Overview', info) + note + '</div>';
+        var tabs = [
+          { key: 'process', label: 'Process' }, { key: 'pricing', label: 'Pricing' }, { key: 'recipe', label: 'Recipe' },
+          { key: 'inventory', label: 'Inventory' }, { key: 'channels', label: 'Channels' }, { key: 'image', label: 'Image' }, { key: 'info', label: 'Info' }
+        ];
+        function pane(key, html, active) { return '<div class="mu-pane" data-pane="' + key + '"' + (active ? '' : ' hidden') + '>' + html + '</div>'; }
+        return UU.stickyHead(tiles + readStepper(p), UU.paneTabsBar(tabs, 'process')) +
+          pane('process', processPane(p), true) +
+          pane('pricing', pricingPane(p)) +
+          pane('recipe', recipePane(p)) +
+          pane('inventory', inventoryPane(p)) +
+          pane('channels', channelsPane(p)) +
+          pane('image', imagePane(p)) +
+          pane('info', infoPane(p));
       }
     }
   });
 
   // ════════════════ Entity: a single variant ════════════════
-  // recordId = pid + '::' + variantId. fetch reconstructs the variant record.
   MastEntity.define('product-variant-v2', {
     label: 'Variant', labelPlural: 'Variants', size: 'lg', route: null,
     recordId: function (r) { return r._key; },
@@ -129,18 +198,15 @@
       render: function (UU, r) {
         var p = r.product || {}, v = r.variant || {};
         var ov = variantOverridden(p, v);
-        var swatchPrice = N.money(variantPrice(p, v)) || '—';
         var tiles = UU.tiles([
-          { k: 'Price', v: swatchPrice, hero: true },
+          { k: 'Price', v: N.money(variantPrice(p, v)) || '—', hero: true },
           { k: 'Source', v: ov ? 'Override' : 'Inherits Default' },
           { k: 'Product', v: p.name || '—' },
           { k: 'Status', v: statusLabel(p.status) + ' (product)' }
         ]);
         function inhRow(label, val, from) {
-          return '<div style="display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--border);font-size:0.9rem;">' +
-            '<span style="color:var(--warm-gray);width:120px;flex-shrink:0;">' + esc(label) + '</span>' +
-            '<span style="color:var(--text);">' + val + ' <span style="color:var(--warm-gray);font-size:0.78rem;">· ' + esc(from) + '</span></span>' +
-            '<span style="margin-left:auto;"><button class="btn btn-secondary btn-small" onclick="ProductsV2.editVariantTodo()">Override</button></span></div>';
+          return '<div class="pv2-inh"><span class="il">' + esc(label) + '</span><span class="iv">' + val + ' <span class="from">· ' + esc(from) + '</span></span>' +
+            '<span class="ov"><button class="btn btn-secondary btn-small" onclick="ProductsV2.editVariantTodo()">Override</button></span></div>';
         }
         var rows =
           inhRow('Retail price', N.money(variantPrice(p, v)) || '—', ov ? 'overridden' : 'inherited from Default') +
@@ -149,7 +215,7 @@
           inhRow('Inventory', 'Build to order', 'inherited') +
           inhRow('Image', 'Shared product image', 'inherited');
         var back = '<div style="margin-top:14px;"><button class="btn btn-secondary btn-small" onclick="ProductsV2.open(\'' + esc(p._key || p.pid) + '\')">← Back to Default (' + esc(p.name || 'product') + ')</button></div>';
-        var note = '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:10px;">A variant has no process — it follows the product. Full per-tab inherit/override arrives in P2.</div>';
+        var note = '<div class="pv2-pnote">A variant has no process — it follows the product. Per-tab inherit/override editing arrives in P2/P3.</div>';
         return UU.stickyHead(tiles, '') + '<div>' + UU.card('Variant details', rows) + back + note + '</div>';
       }
     }
@@ -157,8 +223,7 @@
 
   function buildVariantRecord(id) {
     var parts = String(id || '').split('::'); var pid = parts[0], vid = parts[1];
-    var p = V2.byId[pid];
-    if (!p) return null;
+    var p = V2.byId[pid]; if (!p) return null;
     var v = realVariants(p).filter(function (x) { return x.id === vid; })[0] || { id: vid, combo: {} };
     return { _key: id, _title: (p.name || 'Product') + ' — ' + variantLabel(v), product: p, variant: v };
   }
@@ -168,18 +233,13 @@
 
   function toRows(map) {
     var out = []; map = map || {};
-    Object.keys(map).forEach(function (k) {
-      var p = map[k]; if (!p || typeof p !== 'object') return;
-      out.push(stamp(Object.assign({}, p), p.pid || k));
-    });
+    Object.keys(map).forEach(function (k) { var p = map[k]; if (!p || typeof p !== 'object') return; out.push(stamp(Object.assign({}, p), p.pid || k)); });
     return out;
   }
   function load() {
     if (!window.MastDB || !MastDB.products) return;
     Promise.resolve(MastDB.products.get()).then(function (map) {
-      V2.rows = toRows(map);
-      V2.byId = {}; V2.rows.forEach(function (r) { V2.byId[r._key] = r; });
-      render();
+      V2.rows = toRows(map); V2.byId = {}; V2.rows.forEach(function (r) { V2.byId[r._key] = r; }); render();
     }).catch(function (e) { console.error('[products-v2] load', e); render(); });
   }
   function statusCounts() {
@@ -219,7 +279,22 @@
       '.pv2-def .pv2-nm{color:var(--info);font-weight:600;padding-left:8px;display:flex;align-items:center;gap:8px;}',
       '.pv2-add .pv2-nm{color:var(--teal);padding-left:8px;}',
       '.pv2-branch{color:var(--warm-gray);font-size:0.78rem;}',
-      '.pv2-ov{font-size:0.72rem;text-transform:uppercase;letter-spacing:.04em;background:color-mix(in srgb,var(--amber) 22%,transparent);color:var(--amber);padding:2px 7px;border-radius:5px;margin-left:6px;}'
+      '.pv2-ov{font-size:0.72rem;text-transform:uppercase;letter-spacing:.04em;background:color-mix(in srgb,var(--amber) 22%,transparent);color:var(--amber);padding:2px 7px;border-radius:5px;margin-left:6px;}',
+      '.pv2-step{display:flex;align-items:center;margin:10px 0 4px;}',
+      '.pv2-step .nd{width:21px;height:21px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:0.72rem;font-weight:700;}',
+      '.pv2-step .nd.done{background:var(--teal);color:var(--bg,var(--surface-card));}',
+      '.pv2-step .nd.cur{background:var(--amber);color:var(--bg,var(--surface-card));box-shadow:0 0 0 4px color-mix(in srgb,var(--amber) 22%,transparent);}',
+      '.pv2-step .nd.todo{background:transparent;border:1.5px solid var(--border);color:var(--warm-gray);}',
+      '.pv2-step .lb{font-size:0.85rem;margin-left:7px;} .pv2-step .ln{flex:0 0 28px;height:1.5px;margin:0 10px;background:var(--border);} .pv2-step .ln.done{background:color-mix(in srgb,var(--teal) 60%,transparent);}',
+      '.pv2-todo{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);font-size:0.85rem;} .pv2-todo:last-child{border-bottom:0;}',
+      '.pv2-mk{width:18px;height:18px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:0.72rem;flex-shrink:0;}',
+      '.pv2-mk.met{background:color-mix(in srgb,var(--teal) 22%,transparent);color:var(--teal);} .pv2-mk.unmet{background:color-mix(in srgb,var(--amber) 20%,transparent);color:var(--amber);}',
+      '.pv2-opt{font-size:0.72rem;text-transform:uppercase;color:var(--warm-gray);margin-left:4px;}',
+      '.pv2-galimg{width:84px;height:84px;border-radius:8px;object-fit:cover;border:1px solid var(--border);margin:0 8px 8px 0;}',
+      '.pv2-pnote{font-size:0.78rem;color:var(--warm-gray);margin-top:6px;} .pv2-temp{font-size:0.72rem;color:var(--warm-gray);margin-left:8px;}',
+      '.pv2-inh{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--border);font-size:0.9rem;} .pv2-inh:last-child{border-bottom:0;}',
+      '.pv2-inh .il{color:var(--warm-gray);width:120px;flex-shrink:0;} .pv2-inh .iv{color:var(--text);} .pv2-inh .from{color:var(--warm-gray);font-size:0.78rem;} .pv2-inh .ov{margin-left:auto;}',
+      '.pv2-archived{display:inline-block;font-size:0.72rem;text-transform:uppercase;letter-spacing:.04em;background:color-mix(in srgb,var(--warm-gray) 18%,transparent);color:var(--warm-gray);padding:4px 11px;border-radius:8px;margin:8px 0;}'
     ].join('');
     document.head.appendChild(s);
   }
@@ -231,20 +306,17 @@
     var exp = has
       ? '<button class="pv2-exp" onclick="event.stopPropagation();ProductsV2.toggle(\'' + esc(p._key) + '\')">' + (V2.expanded[p._key] ? '▼' : '▶') + '</button>'
       : '<button class="pv2-exp sp"></button>';
-    var badge = U.badge(statusLabel(p.status), statusTone(p.status));
     var html = '<div class="pv2-row" onclick="ProductsV2.open(\'' + esc(p._key) + '\')" tabindex="0" role="button">' +
       exp + thumb +
       '<span class="pv2-nm">' + esc(p.name || '(unnamed)') + ' <span class="pv2-meta">· ' + esc(categoryLabel(p) || '—') + '</span></span>' +
-      '<span>' + badge + '</span>' +
+      '<span>' + U.badge(statusLabel(p.status), statusTone(p.status)) + '</span>' +
       '<span class="pv2-r pv2-meta">' + (N.money(price(p)) || '—') + '</span>' +
       '<span class="pv2-r pv2-meta">' + variantsLabel(p) + '</span></div>';
     if (has && V2.expanded[p._key]) {
-      // Default row
       html += '<div class="pv2-row pv2-sub pv2-def" onclick="ProductsV2.open(\'' + esc(p._key) + '\')" tabindex="0" role="button">' +
         '<span class="pv2-exp sp"></span><span></span>' +
         '<span class="pv2-nm"><span class="pv2-branch">└</span>◆ Default <span class="pv2-meta" style="font-weight:400;">· base for all variants</span></span>' +
         '<span></span><span class="pv2-r pv2-meta">' + (N.money(price(p)) || '—') + '</span><span class="pv2-r pv2-meta">' + variantCount(p) + ' inherit</span></div>';
-      // Variant rows
       realVariants(p).forEach(function (v) {
         var ov = variantOverridden(p, v);
         html += '<div class="pv2-row pv2-sub" onclick="ProductsV2.openVariant(\'' + esc(p._key + '::' + v.id) + '\')" tabindex="0" role="button">' +
@@ -254,7 +326,6 @@
           '<span class="pv2-r pv2-meta"' + (ov ? ' style="color:var(--amber);"' : '') + '>' + (N.money(variantPrice(p, v)) || '—') + '</span>' +
           '<span class="pv2-r pv2-meta">' + (ov ? 'override' : 'inherits') + '</span></div>';
       });
-      // Add-variant row
       html += '<div class="pv2-row pv2-sub pv2-add" onclick="ProductsV2.addVariant(\'' + esc(p._key) + '\')" tabindex="0" role="button">' +
         '<span class="pv2-exp sp"></span><span></span>' +
         '<span class="pv2-nm"><span class="pv2-branch">└</span>+ Add variant <span class="pv2-meta">· inherits the Default, then override</span></span>' +
@@ -274,8 +345,7 @@
         label + ' <span style="color:var(--warm-gray);">' + (counts[s] || 0) + '</span></button>';
     }).join('');
     var rows = visibleRows();
-    var body = rows.length
-      ? '<div class="pv2-list">' + rows.map(rowHtml).join('') + '</div>'
+    var body = rows.length ? '<div class="pv2-list">' + rows.map(rowHtml).join('') + '</div>'
       : '<div style="padding:46px;text-align:center;color:var(--warm-gray);">No products match these filters.</div>';
     tab.innerHTML =
       U.pageHeader({ title: 'Products', count: N.count(V2.rows.length) + ' products',
@@ -288,11 +358,17 @@
     toggle: function (id) { V2.expanded[id] = !V2.expanded[id]; render(); },
     open: function (id) { var rec = V2.byId[id]; if (rec) MastEntity.openRecord('products-v2', rec, 'read'); },
     openVariant: function (key) { var rec = buildVariantRecord(key); if (rec) MastEntity.openRecord('product-variant-v2', rec, 'read'); },
-    addVariant: function (id) {
-      var p = V2.byId[id];
-      MastAdmin.showToast('Add variant for "' + (p ? p.name : id) + '" — write flow lands in P4 (inherits the Default).');
-    },
+    addVariant: function (id) { var p = V2.byId[id]; MastAdmin.showToast('Add variant for "' + (p ? p.name : id) + '" — write flow (inherits the Default) lands in P4.'); },
     editVariantTodo: function () { MastAdmin.showToast('Per-variant override editing lands in P2/P3.'); },
+    promoteTodo: function () { MastAdmin.showToast('Advance runs the real MastFlow promote/launch (incl. Shopify publish) — wired in P3.'); },
+    // Temp deep-link to the legacy recipe builder (debt: becomes a native stacked recipe SO in P3).
+    openRecipe: function (rid) {
+      function go() {
+        if (typeof navigateToClassic === 'function') navigateToClassic('products');
+        setTimeout(function () { if (window.makerOpenRecipeBuilder) window.makerOpenRecipeBuilder(rid); }, 160);
+      }
+      if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') MastAdmin.loadModule('maker').then(go).catch(go); else go();
+    },
     exportCsv: function () { return MastEntity.exportRows('products-v2', visibleRows(), V2.filter); }
   };
 
