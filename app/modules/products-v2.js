@@ -86,8 +86,12 @@
   // Slide-out header strip: image thumbnail (click → full size) + the variant
   // switcher pill, on one line. Empty when there's neither.
   function headerStrip(p, imgSrc, imgName, currentVid) {
+    var pid = p._key || p.pid;
+    var drillId = currentVid ? (pid + '::' + currentVid) : pid;
+    // The thumbnail drills into the image slide-out (all the product's images,
+    // this object's image in large focus) — a stacked SO with Back, not a lightbox.
     var thumb = imgSrc
-      ? '<button class="mu-thumb" data-img="' + esc(imgName) + '" data-src="' + esc(imgSrc) + '" style="width:64px;height:64px;background-image:url(' + esc(imgSrc) + ');background-size:cover;" title="Click for full size"><span class="mu-zoom">⤢</span></button>'
+      ? '<button class="pv2-hthumb" onclick="MastEntity.drill(\'product-images-v2\',\'' + esc(drillId) + '\')" style="background-image:url(' + esc(imgSrc) + ');" title="View all images"><span class="mu-zoom">⤢</span></button>'
       : '';
     var sw = variantSwitcherHtml(p, currentVid);
     if (!thumb && !sw) return '';
@@ -372,6 +376,42 @@
     }
   });
 
+  // ════════════════ Entity: the image slide-out (drilled from the header) ════════════════
+  // "Stick to SO" — clicking the header image drills into its own stacked slide-out
+  // (Back collapses to the caller). Shows ALL the product's images, with the
+  // Default's (or the variant's) image in large focus.
+  MastEntity.define('product-images-v2', {
+    label: 'Images', labelPlural: 'Images', size: 'lg', route: null,
+    recordId: function (r) { return r._key; },
+    fields: [{ name: '_title', label: 'Images', type: 'text', list: true, group: 'Images', readOnly: true }],
+    fetch: function (id) {
+      var parts = String(id || '').split('::'); var pid = parts[0], vid = parts[1];
+      var p = V2.byId[pid]; if (!p) return null;
+      var imgs = (Array.isArray(p.images) ? p.images : []).slice();
+      var focus = 0, label = p.name || 'Product';
+      if (vid) {
+        var v = realVariants(p).filter(function (x) { return x.id === vid; })[0];
+        label += ' — ' + variantLabel(v || { combo: {} });
+        var vimg = v && (v.image || v.imageUrl);
+        if (vimg) { var fi = imgs.indexOf(vimg); if (fi >= 0) focus = fi; else { imgs.unshift(vimg); focus = 0; } }
+      }
+      return { _key: id, _title: label + ' · Images', product: p, images: imgs, focus: focus };
+    },
+    detail: {
+      render: function (UU, r) {
+        var imgs = r.images || [];
+        if (!imgs.length) return UU.card('Images', '<span style="color:var(--warm-gray);">No images for this product yet.</span>');
+        var focusSrc = imgs[r.focus] || imgs[0];
+        var large = '<div class="pv2-imgfocus"><img id="pv2ImgLarge" src="' + esc(focusSrc) + '" alt=""></div>';
+        var strip = '<div class="pv2-imgstrip">' + imgs.map(function (src, i) {
+          return '<button class="pv2-imgthumb' + (i === r.focus ? ' on' : '') + '" onclick="ProductsV2.focusImage(\'' + esc(src) + '\',this)"><img src="' + esc(src) + '" alt=""></button>';
+        }).join('') + '</div>';
+        return '<div class="pv2-pnote" style="margin-bottom:10px;">All images for ' + esc(r.product.name || 'this product') + ' — click a thumbnail to view it large.</div>' +
+          UU.card('Focused', large) + UU.card('All images (' + imgs.length + ')', strip);
+      }
+    }
+  });
+
   function buildVariantRecord(id) {
     var parts = String(id || '').split('::'); var pid = parts[0], vid = parts[1];
     var p = V2.byId[pid]; if (!p) return null;
@@ -429,6 +469,13 @@
       '.pv2-vitem:hover{background:color-mix(in srgb,var(--amber) 13%,transparent);}',
       '.pv2-vitem[aria-current="true"]{color:var(--teal);font-weight:600;}',
       '.vchk{display:inline-block;width:12px;color:var(--teal);font-size:0.72rem;flex-shrink:0;}',
+      '.pv2-hthumb{width:64px;height:64px;border-radius:9px;border:1px solid var(--border);background-size:cover;background-position:center;padding:0;position:relative;cursor:zoom-in;flex:0 0 64px;}',
+      '.pv2-hthumb:hover{box-shadow:0 0 0 2px var(--amber);} .pv2-hthumb .mu-zoom{position:absolute;right:3px;bottom:3px;width:16px;height:16px;border-radius:4px;background:rgba(0,0,0,.55);color:white;font-size:0.72rem;display:flex;align-items:center;justify-content:center;opacity:0;} .pv2-hthumb:hover .mu-zoom{opacity:1;}',
+      '.pv2-imgfocus{display:flex;align-items:center;justify-content:center;background:color-mix(in srgb,black 22%,transparent);border-radius:10px;padding:12px;}',
+      '.pv2-imgfocus img{max-width:100%;max-height:min(58vh,440px);object-fit:contain;border-radius:8px;}',
+      '.pv2-imgstrip{display:flex;flex-wrap:wrap;gap:8px;}',
+      '.pv2-imgthumb{width:62px;height:62px;border-radius:8px;overflow:hidden;border:2px solid transparent;background:none;padding:0;cursor:pointer;}',
+      '.pv2-imgthumb.on{border-color:var(--amber);} .pv2-imgthumb img{width:100%;height:100%;object-fit:cover;}',
       '.pv2-list{border:1px solid var(--border);border-radius:12px;overflow:hidden;}',
       '.pv2-row{display:grid;grid-template-columns:26px 44px 1fr 120px 96px 96px;gap:12px;align-items:center;padding:11px 14px;border-bottom:1px solid var(--border);cursor:pointer;font-size:0.9rem;}',
       '.pv2-row:last-child{border-bottom:0;} .pv2-row:hover{background:color-mix(in srgb,var(--amber) 6%,transparent);}',
@@ -545,6 +592,11 @@
     openVariant: function (key) { var rec = buildVariantRecord(key); if (rec) MastEntity.openRecord('product-variant-v2', rec, 'read'); },
     addVariant: function (id) { var p = V2.byId[id]; MastAdmin.showToast('Add variant for "' + (p ? p.name : id) + '" — write flow (inherits the Default) lands in P4.'); },
     editVariantTodo: function () { MastAdmin.showToast('Per-variant override editing lands in P4.'); },
+    // Image SO: click a gallery thumbnail to swap the large focused image.
+    focusImage: function (src, btn) {
+      var lg = document.getElementById('pv2ImgLarge'); if (lg) lg.src = src;
+      if (btn && btn.parentNode) { btn.parentNode.querySelectorAll('.pv2-imgthumb').forEach(function (b) { b.classList.remove('on'); }); btn.classList.add('on'); }
+    },
     exportCsv: function () { return MastEntity.exportRows('products-v2', visibleRows(), V2.filter); }
   };
 
