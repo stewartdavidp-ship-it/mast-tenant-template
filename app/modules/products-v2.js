@@ -59,6 +59,41 @@
     return (Array.isArray(p.variants) ? p.variants : []).map(function (v, i) { return Object.assign({ id: v.id || ('v' + i) }, v); });
   }
 
+  // The variant switcher — ONE compact pill (low clutter, V1's failure was a
+  // million things at once). At rest it shows only where you are; click opens a
+  // popover to jump to the Default or any variant in place. currentVid = null on
+  // the Default, or the variant id on a variant. No pill on a variant-less product.
+  function variantSwitcherHtml(p, currentVid) {
+    if (variantCount(p) === 0) return '';
+    var pid = p._key || p.pid;
+    var curLabel = currentVid
+      ? variantLabel(realVariants(p).filter(function (x) { return x.id === currentVid; })[0] || { combo: {} })
+      : '◆ Default';
+    function item(label, isCur, onclick) {
+      return '<button class="pv2-vitem"' + (isCur ? ' aria-current="true"' : '') + ' onclick="' + onclick + '">' +
+        '<span class="vchk">' + (isCur ? '✓' : '') + '</span>' + label + '</button>';
+    }
+    var items = item('◆ Default <span class="pv2-meta" style="font-weight:400;">· base</span>', !currentVid, 'ProductsV2.open(\'' + esc(pid) + '\')');
+    realVariants(p).forEach(function (v) {
+      var tag = variantOverridden(p, v) ? ' <span class="pv2-meta" style="font-weight:400;">· custom price</span>' : '';
+      items += item(esc(variantLabel(v)) + tag, currentVid === v.id, 'ProductsV2.openVariant(\'' + esc(pid + '::' + v.id) + '\')');
+    });
+    return '<div class="pv2-vswitch">' +
+      '<button class="pv2-vpill" onclick="ProductsV2.toggleSwitcher(this)" title="Switch variant">' + esc(curLabel) + ' <span class="vcaret">▾</span></button>' +
+      '<div class="pv2-vpop" hidden><div class="pv2-vpop-h">Switch to…</div>' + items + '</div></div>';
+  }
+
+  // Slide-out header strip: image thumbnail (click → full size) + the variant
+  // switcher pill, on one line. Empty when there's neither.
+  function headerStrip(p, imgSrc, imgName, currentVid) {
+    var thumb = imgSrc
+      ? '<button class="mu-thumb" data-img="' + esc(imgName) + '" data-src="' + esc(imgSrc) + '" style="width:64px;height:64px;background-image:url(' + esc(imgSrc) + ');background-size:cover;" title="Click for full size"><span class="mu-zoom">⤢</span></button>'
+      : '';
+    var sw = variantSwitcherHtml(p, currentVid);
+    if (!thumb && !sw) return '';
+    return '<div style="display:flex;align-items:center;gap:12px;margin:0 0 12px;flex-wrap:wrap;">' + thumb + sw + '</div>';
+  }
+
   // ── Maker integration ───────────────────────────────────────────────
   // The engine MastFlow process model (detail.flow) needs maker loaded:
   // products.workflow's readiness predicates call window.makerComputeReadinessChecklist,
@@ -231,12 +266,9 @@
           ? '<div style="margin:0 0 10px;padding:7px 12px;border-radius:8px;background:color-mix(in srgb,var(--info) 13%,transparent);color:var(--info);font-size:0.85rem;font-weight:600;">◆ Default — base for all ' + nv + ' variant' + (nv > 1 ? 's' : '') + '. Edits here apply to every variant unless it overrides.</div>'
           : '';
         // Product image thumbnail on the header — click for the full-size picture.
-        var himg = firstImage(p);
-        var hdrThumb = himg
-          ? '<div style="margin:0 0 12px;"><button class="mu-thumb" data-img="' + esc(p.name || 'Product') + '" data-src="' + esc(himg) + '" style="width:64px;height:64px;background-image:url(' + esc(himg) + ');background-size:cover;" title="Click for full size"><span class="mu-zoom">⤢</span></button></div>'
-          : '';
+        // Header strip: product image thumbnail + the variant switcher pill.
         // #muFlowHost: the engine injects the MastFlow process header here (the structure).
-        return hdrThumb + defaultBanner + UU.stickyHead(tiles, '') +
+        return headerStrip(p, firstImage(p), p.name || 'Product', null) + defaultBanner + UU.stickyHead(tiles, '') +
           '<div id="muFlowHost" class="pv2-flowhost">Loading workflow…</div>' +
           UU.paneTabsBar(tabs, 'pricing') +
           pane('pricing', pricingPane(p), true) +
@@ -277,13 +309,10 @@
         var tabs = [{ key: 'v-pricing', label: 'Pricing' }, { key: 'v-recipe', label: 'Recipe' }, { key: 'v-channels', label: 'Channels' }, { key: 'v-inventory', label: 'Inventory' }, { key: 'v-image', label: 'Image' }];
         function pane(key, html, active) { return '<div class="mu-pane" data-pane="' + key + '"' + (active ? '' : ' hidden') + '>' + html + '</div>'; }
         var ctx = '<div class="pv2-pnote">A variant uses the Default’s values for anything it doesn’t set itself. It has no lifecycle of its own — it follows the product.</div>';
-        // Variant image thumbnail on the header — click for full size. Uses the
-        // variant's own image if it has one, else the shared product image.
+        // Header strip: variant image (its own if set, else the product's) +
+        // the variant switcher pill (current = this variant).
         var vimg = (v.image || v.imageUrl) || firstImage(p);
-        var vThumb = vimg
-          ? '<div style="margin:0 0 12px;"><button class="mu-thumb" data-img="' + esc((p.name || 'Variant') + ' — ' + variantLabel(v)) + '" data-src="' + esc(vimg) + '" style="width:64px;height:64px;background-image:url(' + esc(vimg) + ');background-size:cover;" title="Click for full size"><span class="mu-zoom">⤢</span></button></div>'
-          : '';
-        return vThumb + UU.stickyHead(tiles, UU.paneTabsBar(tabs, 'v-pricing')) +
+        return headerStrip(p, vimg, (p.name || 'Variant') + ' — ' + variantLabel(v), v.id) + UU.stickyHead(tiles, UU.paneTabsBar(tabs, 'v-pricing')) +
           pane('v-pricing', UU.card('Pricing', row('Retail price', N.money(variantPrice(p, v)) || '—', ov ? 'custom for this variant' : 'same as Default', ov, 'Set a custom price') + row('SKU', esc(v.sku || '—'), v.sku ? 'set for this variant' : 'uses the Default', !!v.sku, 'Set a SKU')) + ctx, true) +
           pane('v-recipe', UU.card('Recipe', row('Recipe', 'Product recipe', 'shared with the product', false, 'Give it its own recipe')) + '<div class="pv2-pnote">This variant uses the product’s recipe. Give it its own only if it’s actually made differently.</div>') +
           pane('v-channels', UU.card('Channels', row('Shopify', 'Live', 'same as the product', false, 'Map separately'))) +
@@ -389,6 +418,17 @@
     if (document.getElementById('pv2-styles')) return;
     var s = document.createElement('style'); s.id = 'pv2-styles';
     s.textContent = [
+      '.pv2-vswitch{position:relative;display:inline-block;}',
+      '.pv2-vpill{background:color-mix(in srgb,var(--text) 8%,transparent);border:1px solid var(--border);color:var(--text);border-radius:999px;padding:5px 13px;font-size:0.85rem;cursor:pointer;font-family:inherit;}',
+      '.pv2-vpill:hover{background:color-mix(in srgb,var(--text) 14%,transparent);}',
+      '.vcaret{color:var(--warm-gray);font-size:0.72rem;margin-left:2px;}',
+      '.pv2-vpop{position:absolute;top:calc(100% + 5px);left:0;z-index:60;min-width:230px;background:var(--surface-card,var(--bg));border:1px solid var(--border-strong,var(--border));border-radius:11px;box-shadow:0 14px 36px rgba(0,0,0,0.45);padding:5px;display:flex;flex-direction:column;gap:1px;}',
+      '.pv2-vpop[hidden]{display:none;}',
+      '.pv2-vpop-h{font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:.04em;padding:6px 9px 4px;}',
+      '.pv2-vitem{display:flex;align-items:center;gap:6px;background:transparent;border:0;color:var(--text);font:inherit;font-size:0.85rem;text-align:left;padding:7px 9px;border-radius:7px;cursor:pointer;white-space:nowrap;}',
+      '.pv2-vitem:hover{background:color-mix(in srgb,var(--amber) 13%,transparent);}',
+      '.pv2-vitem[aria-current="true"]{color:var(--teal);font-weight:600;}',
+      '.vchk{display:inline-block;width:12px;color:var(--teal);font-size:0.72rem;flex-shrink:0;}',
       '.pv2-list{border:1px solid var(--border);border-radius:12px;overflow:hidden;}',
       '.pv2-row{display:grid;grid-template-columns:26px 44px 1fr 120px 96px 96px;gap:12px;align-items:center;padding:11px 14px;border-bottom:1px solid var(--border);cursor:pointer;font-size:0.9rem;}',
       '.pv2-row:last-child{border-bottom:0;} .pv2-row:hover{background:color-mix(in srgb,var(--amber) 6%,transparent);}',
@@ -484,6 +524,21 @@
   window.ProductsV2 = {
     setFilter: function (s) { V2.filter = s; render(); },
     toggle: function (id) { V2.expanded[id] = !V2.expanded[id]; render(); },
+    // Open/close the variant switcher popover. Selecting an item re-renders the
+    // whole panel (open/openVariant), which clears the popover; this just handles
+    // toggling + outside-click-to-close.
+    toggleSwitcher: function (btn) {
+      var wrap = btn.parentNode, pop = wrap.querySelector('.pv2-vpop');
+      if (!pop) return;
+      var willShow = pop.hidden;
+      document.querySelectorAll('.pv2-vpop').forEach(function (p) { p.hidden = true; });
+      pop.hidden = !willShow;
+      if (!willShow) return;
+      setTimeout(function () {
+        function onDoc(e) { if (!wrap.contains(e.target)) { pop.hidden = true; document.removeEventListener('click', onDoc); } }
+        document.addEventListener('click', onDoc);
+      }, 0);
+    },
     // Preload maker before the SO opens so the MastFlow process header renders with
     // live readiness (products.workflow predicates call makerComputeReadinessChecklist).
     open: function (id) { var rec = V2.byId[id]; if (rec) ensureMaker(function () { MastEntity.openRecord('products-v2', rec, 'read'); }); },
