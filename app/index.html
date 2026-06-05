@@ -110,7 +110,7 @@
        Shared by customers.js (list/export) and customer-service.js (survey
        bulk-send) so the segment matcher cannot drift. ?v= kept in lockstep
        with MAST_MODULES_V by scripts/bump-modules-version.sh. -->
-  <script src="../shared/customer-filters.js?v=20260605-160832-10bb0f3"></script>
+  <script src="../shared/customer-filters.js?v=20260605-161053-27c17dc"></script>
   <script src="../shared/brand-sync.js?v=1"></script>
   <script src="../shared/channel-connection.js?v=1"></script>
   <!-- UI redesign engines (docs/ux-audit): shared primitives + Entity Engine.
@@ -118,9 +118,9 @@
        scripts/bump-modules-version.sh (these are static <head> tags loaded
        before the JS var exists, so they can't read it at runtime). Without
        this, the engines were frozen at ?v=1 and never cache-busted on deploy. -->
-  <script src="../shared/mast-ui.js?v=20260605-160832-10bb0f3"></script>
-  <script src="../shared/mast-io.js?v=20260605-160832-10bb0f3"></script>
-  <script src="../shared/mast-entity.js?v=20260605-160832-10bb0f3"></script>
+  <script src="../shared/mast-ui.js?v=20260605-161053-27c17dc"></script>
+  <script src="../shared/mast-io.js?v=20260605-161053-27c17dc"></script>
+  <script src="../shared/mast-entity.js?v=20260605-161053-27c17dc"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Pod-specific runtime config — sets window.MAST_POD_PLATFORM_PROJECT so
@@ -14730,6 +14730,16 @@ async function renderAddToMast() {
     }
     var sectionVisibleTotal = sectionVisibleCount + sectionAlwaysOnCount;
 
+    // Surface-hidden detection: the engagement Surface (ui-first/ai-first) trims
+    // whole groups via applyEngagementNavFiltering, which already stamped the live
+    // sidebar with .engagement-hidden (renderAddToMast awaits hydrate first). When
+    // a group is surface-hidden, per-module Add here can't reveal it — the Surface
+    // setting (Settings → Engagement & Navigation) governs the group.
+    var _secEl = document.querySelector('.sidebar-section[data-section="' + sectionKey + '"]');
+    var surfaceHidden = !!(_secEl && _secEl.classList.contains('engagement-hidden'));
+    var canEditSettings = (typeof can === 'function') ? can('settings', 'edit') : true;
+    var surfaceDisabledTitle = 'Hidden by your Surface setting — change your Surface in Settings to show this group.';
+
     html += '<div class="add-to-mast-section" style="padding:0 24px 24px;">';
     html += '<div style="display:flex;align-items:baseline;justify-content:space-between;gap:16px;border-bottom:1px solid var(--border,#e5e0d8);padding-bottom:8px;margin:16px 0 12px;">';
     html += '<h3 style="font-size:1.0rem;margin:0;color:var(--charcoal,var(--text));">' + esc(sectionLabel) + ' <span style="font-weight:400;color:var(--warm-gray);font-size:0.85rem;">(' + sectionVisibleTotal + '/' + items.length + ' visible)</span></h3>';
@@ -14739,11 +14749,25 @@ async function renderAddToMast() {
         html += '<button class="btn btn-secondary btn-small" data-amt-action="section-hide" data-amt-section="' + esc(sectionKey) + '" aria-label="Hide all ' + sectionVisibleCount + ' removable modules in ' + esc(sectionLabel) + '">Hide all ' + sectionVisibleCount + '</button>';
       }
       if (sectionHiddenCount > 0) {
-        html += '<button class="btn btn-secondary btn-small" data-amt-action="section-add" data-amt-section="' + esc(sectionKey) + '" aria-label="Add all ' + sectionHiddenCount + ' hidden modules in ' + esc(sectionLabel) + ' to my Mast">+ Add all ' + sectionHiddenCount + ' hidden</button>';
+        if (surfaceHidden) {
+          html += '<button class="btn btn-secondary btn-small" disabled title="' + esc(surfaceDisabledTitle) + '" style="opacity:0.5;cursor:not-allowed;">+ Add all ' + sectionHiddenCount + ' hidden</button>';
+        } else {
+          html += '<button class="btn btn-secondary btn-small" data-amt-action="section-add" data-amt-section="' + esc(sectionKey) + '" aria-label="Add all ' + sectionHiddenCount + ' hidden modules in ' + esc(sectionLabel) + ' to my Mast">+ Add all ' + sectionHiddenCount + ' hidden</button>';
+        }
       }
       html += '</div>';
     }
     html += '</div>';
+    // Group-level Surface notice — explains why Adds here are inert and links to
+    // the control that actually governs the group (permission-gated).
+    if (surfaceHidden) {
+      html += '<div style="margin:-4px 0 12px;padding:8px 12px;background:var(--bg-soft,rgba(0,0,0,0.04));border-radius:6px;font-size:0.78rem;color:var(--warm-gray);display:flex;align-items:center;gap:8px;flex-wrap:wrap;">';
+      html += '<span>This whole group is hidden by your <strong>Surface</strong> setting, so adding modules here won&rsquo;t show them yet.</span>';
+      if (canEditSettings) {
+        html += '<button type="button" data-amt-action="open-engagement-settings" style="background:transparent;border:0;color:var(--teal,#2a7c6f);font-weight:600;font-size:0.78rem;cursor:pointer;padding:0;text-decoration:underline;">Change in Settings &rarr;</button>';
+      }
+      html += '</div>';
+    }
     html += '<div class="add-to-mast-cards" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;">';
 
     // Render order within section: hidden first (call to action), then visible-toggleable
@@ -14777,6 +14801,10 @@ async function renderAddToMast() {
       html += '<div style="font-size:0.9rem;font-weight:600;color:var(--charcoal,var(--text));">' + esc(displayLabel) + '</div>';
       if (it.alwaysOn) {
         html += '<span style="font-size:0.72rem;color:var(--warm-gray);font-weight:600;text-transform:uppercase;letter-spacing:0.05em;">Always on</span>';
+      } else if (surfaceHidden) {
+        // Mode-layer visibility is moot while the Surface trims the whole group —
+        // report the truth the user sees in the nav.
+        html += '<span style="font-size:0.72rem;color:var(--warm-gray);font-weight:600;text-transform:uppercase;letter-spacing:0.05em;">Hidden by Surface</span>';
       } else if (it.visible) {
         html += '<span style="font-size:0.72rem;color:var(--teal,#2a7c6f);font-weight:600;text-transform:uppercase;letter-spacing:0.05em;">In sidebar</span>';
       }
@@ -14813,6 +14841,15 @@ async function renderAddToMast() {
       }
       if (it.alwaysOn) {
         // No button — always-on items are informational only.
+      } else if (surfaceHidden) {
+        // The Surface governs this group — per-module Add can't reveal it, so the
+        // show control is greyed/inert. (Remove of a still-mode-visible module
+        // stays available so the owner can also tidy the mode layer.)
+        if (it.visible) {
+          html += '<button class="btn btn-secondary btn-small" data-amt-action="remove" data-amt-route="' + esc(it.routeId) + '" aria-label="Remove ' + esc(displayLabel) + ' from my Mast" style="margin-top:4px;align-self:flex-start;">Remove from my Mast</button>';
+        } else {
+          html += '<button class="btn btn-primary btn-small" disabled title="' + esc(surfaceDisabledTitle) + '" style="margin-top:4px;align-self:flex-start;opacity:0.5;cursor:not-allowed;">+ Add to my Mast</button>';
+        }
       } else if (it.visible) {
         html += '<button class="btn btn-secondary btn-small" data-amt-action="remove" data-amt-route="' + esc(it.routeId) + '" aria-label="Remove ' + esc(displayLabel) + ' from my Mast" style="margin-top:4px;align-self:flex-start;">Remove from my Mast</button>';
       } else {
@@ -21227,7 +21264,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260605-160832-10bb0f3';
+var MAST_MODULES_V = '20260605-161053-27c17dc';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -40122,6 +40159,7 @@ if (!window._mastCreateJobDelegateAttached) {
 //   data-amt-action     — add | remove | details | section-add | section-hide
 //                          | profile-save | profile-save-confirm
 //                          | profile-save-cancel | profile-apply | profile-delete
+//                          | open-engagement-settings
 //   data-amt-route      — routeId (for add/remove/details)
 //   data-amt-section    — sectionKey (for section-add)
 //   data-amt-profile    — profileId (for profile-apply/profile-delete)
@@ -40157,6 +40195,10 @@ if (!window._mastAddToMastDelegateAttached) {
       applyNavProfileClick(profileId);
     } else if (action === 'profile-delete' && profileId && typeof deleteNavProfileClick === 'function') {
       deleteNavProfileClick(profileId);
+    } else if (action === 'open-engagement-settings') {
+      // Deep-link to Settings → Engagement & Navigation (the Surface control).
+      if (typeof navigateTo === 'function') navigateTo('settings');
+      setTimeout(function() { if (typeof switchSettingsSubView === 'function') switchSettingsSubView('engagement'); }, 80);
     } else {
       return;
     }
