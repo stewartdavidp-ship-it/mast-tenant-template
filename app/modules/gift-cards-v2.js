@@ -288,6 +288,11 @@
   }
 
   MastAdmin.registerModule('gift-cards-v2', {
-    routes: { 'gift-cards-v2': { tab: 'giftCardsV2Tab', setup: function () { ensureTab(); render(); load(); } } }
+    routes: { 'gift-cards-v2': { tab: 'giftCardsV2Tab', setup: function () {
+      // Ensure the legacy cart module is loaded so window.GiftCardsBridge
+      // (issue/issuePromo) exists when the operator opens an issue form.
+      if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('cart'); } catch (e) {} }
+      ensureTab(); render(); load();
+    } } }
   });
 })();

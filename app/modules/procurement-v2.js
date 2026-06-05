@@ -285,6 +285,13 @@
         addlLabel: addlLabelEl && addlLabelEl.value,
         addlAmount: addlAmountEl && addlAmountEl.value
       };
+      // Guard: the Bridge lives in the legacy procurement module; if it hasn't
+      // loaded yet, kick the load and ask the user to retry (no silent throw).
+      if (!window.ProcurementBridge) {
+        if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('procurement'); } catch (e) {} }
+        if (window.showToast) showToast('Procurement engine still loading — try again', true);
+        return false;
+      }
       // Drive the whole exit ourselves (write → force-close the receive form →
       // reload + re-open the PO on fresh data), then return false so the engine's
       // create-mode _save handler does NOTHING further (no duplicate toast/close).
@@ -302,6 +309,11 @@
     cancel: function (id) {
       var po = V2.byId[id];
       if (!po || !canCancelPo(po)) return;
+      if (!window.ProcurementBridge) {
+        if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('procurement'); } catch (e) {} }
+        if (window.showToast) showToast('Procurement engine still loading — try again', true);
+        return;
+      }
       // cancelPo owns its own mastConfirm; reload + re-open the PO after.
       window.ProcurementBridge.cancel(id).then(function () { reloadThenOpen(id); });
     }
@@ -362,6 +374,11 @@
   }
 
   MastAdmin.registerModule('procurement-v2', {
-    routes: { 'procurement-v2': { tab: 'procurementV2Tab', setup: function () { ensureTab(); render(); load(); } } }
+    routes: { 'procurement-v2': { tab: 'procurementV2Tab', setup: function () {
+      // Ensure the legacy procurement module is loaded so window.ProcurementBridge
+      // (the shared receive/cancel write cores) exists before the user acts.
+      if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('procurement'); } catch (e) {} }
+      ensureTab(); render(); load();
+    } } }
   });
 })();
