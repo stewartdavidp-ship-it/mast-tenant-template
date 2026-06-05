@@ -992,10 +992,17 @@
         html += _renderSpecMismatchBanner(ev);
       }
 
-      html += _renderGuidedRail(def, record, ev, ctxId);
-      html += _renderGuidedChecklist(def, record, ev, ctxId);
+      // Tuck: once the record reaches its live end-state (advanced as far as it
+      // goes, nothing left to set up), the lifecycle is done — you won't go
+      // backwards. Hide the rail entirely; the status pill reveals it on demand.
+      var unmetHard = (ev.missing || []).filter(function(m) { return m.req.hard; }).length;
+      var tucked = !ev.specMismatch && !ev.isTerminal && !ev.isBranchPoint &&
+                   (!ev.nextPhases || !ev.nextPhases.length) && unmetHard === 0;
+      var rail = _renderGuidedRail(def, record, ev, ctxId) + _renderGuidedChecklist(def, record, ev, ctxId);
+      var railWrapId = ctxId + '_railwrap';
+      html += tucked ? ('<div id="' + railWrapId + '" style="display:none;">' + rail + '</div>') : rail;
 
-      return { html: html, uiContextId: ctxId, evaluation: ev };
+      return { html: html, uiContextId: ctxId, evaluation: ev, tucked: tucked, railWrapId: railWrapId };
     });
   }
 
