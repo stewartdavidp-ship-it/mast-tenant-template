@@ -247,16 +247,18 @@
     });
   }
   function inventoryPane(p) {
+    var pid = p._key || p.pid;
     var si = p.stockInfo || {};
     var hasVar = variantCount(p) > 0;
-    // Inventory is per-VARIANT — it's never inherited. For a product with
-    // variants the product-level number is the roll-up; each variant owns its
-    // own stock (edit it on the variant's Inventory tab).
+    // A variant-less product IS the stocked unit (editable here). For a product
+    // with variants the product-level number is the roll-up (read-only); each
+    // variant owns its own stock (edit on the variant's Inventory tab).
+    if (!hasVar && V2.editInv === pid) return inventoryEditForm(p);
     var title = hasVar ? 'Inventory · all variants (roll-up)' : 'Inventory';
+    var headerRight = hasVar ? '' : '<button class="btn btn-secondary btn-small" onclick="ProductsV2.editInventory(\'' + esc(pid) + '\')">Set stock</button>';
     var perVarNote = hasVar
       ? '<div class="pv2-pnote"><strong>On hand = all variants combined.</strong> Stock is tracked per variant — each one has its own count; the number above is the roll-up. Set each variant’s stock on its Inventory tab.</div>'
-      // A variant-less product IS the stocked unit, so it's editable here.
-      : '<div style="margin-top:10px;"><button class="btn btn-secondary btn-small" onclick="MastAdmin.showToast(\'Stock editing lands in P4.\')">Set stock</button></div>';
+      : '';
     return U.card(title, U.kv([
       { k: 'Stock type', v: si.stockType || '—' },
       { k: (hasVar ? 'On hand (all variants)' : 'On hand'), v: (si.totalOnHand != null ? String(si.totalOnHand) : '—') },
@@ -264,7 +266,27 @@
       { k: 'Fulfillment', v: (si.stockFulfillmentDays != null ? si.stockFulfillmentDays + ' days' : '—') },
       { k: 'Wholesale MOQ', v: (p.moq != null ? String(p.moq) : '—') },
       { k: 'Case pack', v: (p.casePack != null ? String(p.casePack) : '—') }
-    ]) + perVarNote);
+    ]) + perVarNote, { headerRight: headerRight });
+  }
+  function inventoryEditForm(p) {
+    var pid = p._key || p.pid;
+    var si = p.stockInfo || {};
+    var cur = (si.totalOnHand != null ? si.totalOnHand : '');
+    var body = '<label style="display:block;margin-bottom:8px;font-size:0.85rem;color:var(--warm-gray);">On hand' +
+      '<input id="pv2InvOnHand" type="number" min="0" step="1" value="' + esc(cur === '' ? '' : String(cur)) +
+      '" style="display:block;width:140px;margin-top:4px;padding:7px 9px;border:1px solid var(--cream-dark);border-radius:6px;font-size:0.9rem;background:var(--cream);color:inherit;box-sizing:border-box;"></label>' +
+      '<div class="pv2-pnote">Units physically in stock right now. (Stock type & low-stock threshold are set in the legacy Inventory tab for now.)</div>' +
+      '<div style="display:flex;gap:8px;margin-top:8px;">' +
+      '<button class="btn btn-primary btn-small" onclick="ProductsV2.saveInventory(\'' + esc(pid) + '\')">Save</button>' +
+      '<button class="btn btn-secondary btn-small" onclick="ProductsV2.cancelInventory(\'' + esc(pid) + '\')">Cancel</button>' +
+      '</div>';
+    return U.card('Set stock', body);
+  }
+  function rerenderInventoryPane(pid) {
+    var rec = V2.byId[pid]; if (!rec) return;
+    var body = document.getElementById('mastSlideOutBody');
+    var pane = body && body.querySelector('.mu-pane[data-pane="inventory"]');
+    if (pane) pane.innerHTML = inventoryPane(rec);
   }
   function channelsPane(p) {
     var er = p.externalRefs || {};
@@ -501,12 +523,7 @@
           pane('v-pricing', variantPricingPane(UU, p, v) + ctx, true) +
           pane('v-recipe', UU.card('Recipe', row('Recipe', 'Product recipe', 'shared with the product', false, 'Give it its own recipe')) + '<div class="pv2-pnote">This variant uses the product’s recipe. Give it its own only if it’s actually made differently.</div>') +
           pane('v-channels', UU.card('Channels', row('Shopify', 'Live', 'same as the product', false, 'Map separately'))) +
-          pane('v-inventory', UU.card('Inventory · this variant', UU.kv([
-            { k: 'Stock type', v: (v.stockType || '—') },
-            { k: 'On hand', v: (v.onHand != null ? String(v.onHand) : '—') },
-            { k: 'Reorder at', v: (v.reorderAt != null ? String(v.reorderAt) : '—') }
-          ]) + '<div style="margin-top:10px;"><button class="btn btn-secondary btn-small" onclick="ProductsV2.editVariantTodo()">Set this variant’s stock</button></div>' +
-            '<div class="pv2-pnote">Each variant tracks its <strong>own</strong> stock — inventory is never shared with or inherited from the Default.</div>')) +
+          pane('v-inventory', variantInventoryPane(UU, p, v)) +
           pane('v-image', variantImagePane(UU, p, v));
       }
     }
@@ -554,6 +571,41 @@
     var pane = body && body.querySelector('.mu-pane[data-pane="v-pricing"]');
     if (pane) pane.innerHTML = variantPricingPane(U, rec.product, rec.variant) +
       '<div class="pv2-pnote">A variant uses the Default’s values for anything it doesn’t set itself. It has no lifecycle of its own — it follows the product.</div>';
+  }
+  // Variant Inventory pane: each variant has its OWN stock (admin/inventory keyed
+  // by variant id; surfaced via product.stockInfo.variants[id]). Inline on-hand edit.
+  function variantStockInfo(p, v) { return (p.stockInfo && p.stockInfo.variants && p.stockInfo.variants[v.id]) || {}; }
+  function variantInventoryPane(UU, p, v) {
+    var pid = p._key || p.pid, vid = v.id;
+    if (V2.editVarInv === (pid + '::' + vid)) return variantInventoryEditForm(UU, p, v);
+    var vsi = variantStockInfo(p, v);
+    var editBtn = '<button class="btn btn-secondary btn-small" onclick="ProductsV2.editVariantInventory(\'' + esc(pid) + '\',\'' + esc(vid) + '\')">Set stock</button>';
+    return UU.card('Inventory · this variant', UU.kv([
+      { k: 'On hand', v: (vsi.onHand != null ? String(vsi.onHand) : '—') },
+      { k: 'Available', v: (vsi.available != null ? String(vsi.available) : '—') },
+      { k: 'Committed', v: (vsi.committed != null ? String(vsi.committed) : '—') }
+    ]), { headerRight: editBtn }) +
+      '<div class="pv2-pnote">Each variant tracks its <strong>own</strong> stock — never shared with or inherited from the Default.</div>';
+  }
+  function variantInventoryEditForm(UU, p, v) {
+    var pid = p._key || p.pid, vid = v.id;
+    var vsi = variantStockInfo(p, v);
+    var cur = (vsi.onHand != null ? vsi.onHand : '');
+    var body = '<label style="display:block;margin-bottom:8px;font-size:0.85rem;color:var(--warm-gray);">On hand' +
+      '<input id="pv2VarInvOnHand" type="number" min="0" step="1" value="' + esc(cur === '' ? '' : String(cur)) +
+      '" style="display:block;width:140px;margin-top:4px;padding:7px 9px;border:1px solid var(--cream-dark);border-radius:6px;font-size:0.9rem;background:var(--cream);color:inherit;box-sizing:border-box;"></label>' +
+      '<div class="pv2-pnote">Units of this variant physically in stock.</div>' +
+      '<div style="display:flex;gap:8px;margin-top:8px;">' +
+      '<button class="btn btn-primary btn-small" onclick="ProductsV2.saveVariantInventory(\'' + esc(pid) + '\',\'' + esc(vid) + '\')">Save</button>' +
+      '<button class="btn btn-secondary btn-small" onclick="ProductsV2.cancelVariantInventory(\'' + esc(pid) + '\',\'' + esc(vid) + '\')">Cancel</button>' +
+      '</div>';
+    return UU.card('Set variant stock', body);
+  }
+  function rerenderVariantInventoryPane(pid, vid) {
+    var rec = buildVariantRecord(pid + '::' + vid); if (!rec) return;
+    var body = document.getElementById('mastSlideOutBody');
+    var pane = body && body.querySelector('.mu-pane[data-pane="v-inventory"]');
+    if (pane) pane.innerHTML = variantInventoryPane(U, rec.product, rec.variant);
   }
   // Variant Image pane: a variant's image is BOUND from the product's gallery
   // (not uploaded). Pick one of the product's images to give this variant its own,
@@ -717,7 +769,7 @@
   }
 
   // ── State + data ────────────────────────────────────────────────────
-  var V2 = { rows: [], byId: {}, sortKey: '_title', sortDir: 'asc', filter: 'all', expanded: {}, editInfo: null, editPricing: null, editVarPricing: null, q: '' };
+  var V2 = { rows: [], byId: {}, sortKey: '_title', sortDir: 'asc', filter: 'all', expanded: {}, editInfo: null, editPricing: null, editVarPricing: null, editInv: null, editVarInv: null, q: '' };
 
   function toRows(map) {
     var out = []; map = map || {};
@@ -965,6 +1017,37 @@
           if (vr) MastEntity.openRecord('product-variant-v2', vr, 'read', true);
           MastAdmin.showToast(useDefault ? 'Using Default price' : 'Variant pricing saved');
         }, function (e) { console.error('[products-v2] saveVariantPricing', e); MastAdmin.showToast('Failed', true); });
+      });
+    },
+    // ── Inventory (on-hand; separate collection + stockInfo resync) ────
+    editInventory: function (pid) { V2.editInv = pid; rerenderInventoryPane(pid); },
+    cancelInventory: function (pid) { V2.editInv = null; rerenderInventoryPane(pid); },
+    saveInventory: function (pid) {
+      var el = document.getElementById('pv2InvOnHand'); var s = el ? el.value.trim() : '';
+      if (s === '' || !isFinite(Number(s)) || Number(s) < 0) { MastAdmin.showToast('Enter a valid on-hand count', true); return; }
+      var n = Math.round(Number(s));
+      withProductBridge(function () {
+        Promise.resolve(window.MakerProductBridge.setStock(pid, '_default', n)).then(function (res) {
+          if (!res || !res.ok) { MastAdmin.showToast('Failed: ' + ((res && res.error) || 'unknown'), true); return; }
+          var rec = V2.byId[pid]; if (rec && res.stockInfo) rec.stockInfo = res.stockInfo;
+          V2.editInv = null; rerenderInventoryPane(pid);
+          MastAdmin.showToast('Stock updated');
+        }, function (e) { console.error('[products-v2] saveInventory', e); MastAdmin.showToast('Failed', true); });
+      });
+    },
+    editVariantInventory: function (pid, vid) { V2.editVarInv = pid + '::' + vid; rerenderVariantInventoryPane(pid, vid); },
+    cancelVariantInventory: function (pid, vid) { V2.editVarInv = null; rerenderVariantInventoryPane(pid, vid); },
+    saveVariantInventory: function (pid, vid) {
+      var el = document.getElementById('pv2VarInvOnHand'); var s = el ? el.value.trim() : '';
+      if (s === '' || !isFinite(Number(s)) || Number(s) < 0) { MastAdmin.showToast('Enter a valid on-hand count', true); return; }
+      var n = Math.round(Number(s));
+      withProductBridge(function () {
+        Promise.resolve(window.MakerProductBridge.setStock(pid, vid, n)).then(function (res) {
+          if (!res || !res.ok) { MastAdmin.showToast('Failed: ' + ((res && res.error) || 'unknown'), true); return; }
+          var rec = V2.byId[pid]; if (rec && res.stockInfo) rec.stockInfo = res.stockInfo;
+          V2.editVarInv = null; rerenderVariantInventoryPane(pid, vid);
+          MastAdmin.showToast('Variant stock updated');
+        }, function (e) { console.error('[products-v2] saveVariantInventory', e); MastAdmin.showToast('Failed', true); });
       });
     },
     // ── Pricing tab edit (direct price; revision-aware via setFields) ──

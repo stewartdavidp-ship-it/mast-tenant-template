@@ -6856,6 +6856,35 @@
     } catch (e) { return { ok: false, error: (e && e.message) || 'Failed' }; }
   }
 
+  // Set on-hand stock for the stocked unit (variantKey = variant id, or '_default'
+  // for a variant-less product). Inventory is a SEPARATE collection
+  // (admin/inventory/{pid}/stock/{key}); the product's denormalized stockInfo is
+  // recomputed by the canonical syncStockInfoToPublic. Fresh-read; primes the
+  // global inventory cache so the sync (which reads it) sees the new value.
+  async function bridgeSetStock(pid, variantKey, onHand) {
+    try {
+      var key = variantKey || '_default';
+      var n = Math.max(0, Math.round(Number(onHand) || 0));
+      var inv = (await MastDB.inventory.get(pid)) || {};
+      if (typeof inv.stock === 'number') inv.stock = { _default: { onHand: inv.stock } };
+      inv.stock = inv.stock || {};
+      var stamp = new Date().toISOString();
+      inv.stock[key] = Object.assign({}, inv.stock[key], { onHand: n, lastCountedAt: stamp });
+      await MastDB.set('admin/inventory/' + pid + '/stock/' + key + '/onHand', n);
+      await MastDB.set('admin/inventory/' + pid + '/stock/' + key + '/lastCountedAt', stamp);
+      // Prime the global inventory cache, then run the canonical recompute.
+      if (window.inventory && typeof window.inventory === 'object') window.inventory[pid] = inv;
+      await bridgeEnsureProduct(pid);
+      if (typeof window.syncStockInfoToPublic === 'function') {
+        try { await window.syncStockInfoToPublic(pid); } catch (e) { console.warn('[bridge] stockInfo sync', e); }
+      }
+      var fresh = await MastDB.get('public/products/' + pid + '/stockInfo');
+      var p = findProduct(pid); if (p && fresh) p.stockInfo = fresh;
+      MastAdmin.writeAudit('update', 'inventory', pid);
+      return { ok: true, onHand: n, stockInfo: fresh };
+    } catch (e) { return { ok: false, error: (e && e.message) || 'Failed' }; }
+  }
+
   // Remove the image identified by URL (fresh-read; index-safe).
   async function bridgeRemoveProductImage(pid, url) {
     try {
@@ -6923,6 +6952,8 @@
     setVariantImageIndex: function (pid, variantId, imageIndex) { return bridgeSetVariantImageIndex(pid, variantId, imageIndex); },
     // Write arbitrary fields onto a variant (price override, SKU, …); null clears.
     setVariantFields: function (pid, variantId, patch) { return bridgeSetVariantFields(pid, variantId, patch); },
+    // Set on-hand stock (separate inventory collection + stockInfo resync).
+    setStock: function (pid, variantKey, onHand) { return bridgeSetStock(pid, variantKey, onHand); },
     // Recipe link (building itself stays in the legacy builder).
     createRecipeForProduct: function (pid, name) { return bridgeCreateRecipeForProduct(pid, name); },
     linkRecipe: function (pid, recipeId) { return bridgeLinkRecipe(pid, recipeId); },
