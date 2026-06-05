@@ -662,7 +662,12 @@
     'historical-orders':   { alwaysOn: true, systemManaged: true },
 
     // === Catalog / Products section ===
-    'develop-products':   { modes: ['maker'] },
+    // develop-products: the Develop/Catalog lens split was merged into the
+    // single Products surface (2026-05-22, Two-View Architecture). The route id
+    // survives as an alias (→ products) and drives the std↔maker transition
+    // diff, but it has no sidebar item and is not user-toggleable — systemManaged
+    // keeps it off the Add-to-Mast manager (and out of the module-info lint).
+    'develop-products':   { modes: ['maker'], systemManaged: true },
     'materials':          { modes: ['maker'] },
     'forecast':           { modes: ['maker'] },
     'jobs':               { modes: ['maker'] },
@@ -687,6 +692,15 @@
     'ship':               { modes: ['retail', 'maker'], overlays: ['event'] },
 
     // === Marketing section ===
+    // W2 marketing aggregators (calendar/composer/inbox/campaigns). Previously
+    // absent from the matrix, so they defaulted to soft-hidden (unknown → false)
+    // and were only reachable via "Show all modules". Registered here with the
+    // broad social-tier visibility so they're visible by default in every mode
+    // and now user-curatable on Add-to-Mast.
+    'marketing-calendar': { modes: ['standard', 'retail', 'bookings', 'maker'] },
+    'composer':           { modes: ['standard', 'retail', 'bookings', 'maker'] },
+    'engagement-inbox':   { modes: ['standard', 'retail', 'bookings', 'maker'] },
+    'campaigns':          { modes: ['standard', 'retail', 'bookings', 'maker'] },
     'social':             { modes: ['standard', 'retail', 'bookings', 'maker'] },
     'blog':               {},  // soft-hidden in all modes per matrix
     'newsletter':         { modes: ['retail', 'bookings', 'maker'], overlays: ['event'] },
@@ -726,6 +740,10 @@
     'book-reports':       { modes: ['bookings'] },
 
     // === Finance section beyond always-on tier ===
+    // financials: the W2.1 Finance "Overview" dashboard. Previously absent from
+    // the matrix (soft-hidden by default); registered with the finance-section
+    // tier so it's visible by default for selling modes and user-curatable.
+    'financials':         { modes: ['maker', 'retail', 'bookings'] },
     'finance-pl':         { modes: ['maker', 'retail', 'bookings'] },
     'finance-cash-flow':  { modes: ['maker', 'retail', 'bookings'] },
     'finance-ar':         { modes: ['maker'] },
