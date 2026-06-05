@@ -3,439 +3,311 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>products-v2 — Process slide-out mock (discussion)</title>
+<title>products-v2 — process × variants × tabs (discussion)</title>
 <!--
-  PRODUCTS-V2 — Process slide-out (static mock, NOT wired). For discussion.
-  Subject: "A Life's Work — Honey Pendant" (REAL sgtest15 data: build mode,
-  real 3-item recipe/BOM, $48.30 unit cost, $85 retail, Shopify-mapped).
-  Shown in DRAFT to illustrate the promote gate — illustrative state.
+  PRODUCTS-V2 — the synthesis (static mock, NOT wired). Real sgtest15 data:
+  Spiral Cups (6 colour variants; shown Draft to exercise the process gates),
+  A Life's Work — Honey Pendant (no variants, Draft).
 
-  Mirrors the ratified Process slide-out (process-slideout-mock-hybrid.html):
-  one shell, pinned identity bar + stepper + facet tabs, Process tab = the book.
-  Adapted for a PRODUCT. Two things flagged for the operator's call:
-    ①  Facet tabs: Process · Recipe · Channels · History  (a product has no
-       "Customer" — so NOT the order-shaped Process/Items/Customer/History).
-    ②  What "Advance" does — products differ from orders/commissions because
-       launching FIRES a Shopify publish (a real side-effect coupled to the
-       transition). Toggle A vs B at the top to see both.
+  Operator's converged model:
+   - SO presents ONE object: a Default (product/base) OR a variant.
+   - Default/product SO = PROCESS (stage stepper + "what to do in this stage")
+     + the TAB FLOW (Pricing · Recipe · Inventory · Channels · Image · Info)
+     where that work happens. Stage to-dos deep-link into the tabs.
+   - Variant SO = the SAME tabs, inheriting from Default, you OVERRIDE (price,
+     image…). No separate process — a variant follows the product's lifecycle.
+   - Variants live in the LIST. From the list you "Add variant" off the Default;
+     it inherits everything, then you override.
+   - Process = MastFlow productsWorkflow (hard gates): Draft → Review → Published.
 -->
 <style>
-  :root {
-    --bg: #221f1d; --surface-dark: #1b1917; --surface-card: #2a2623; --surface-card-2: #322d29;
-    --border: rgba(255,255,255,0.08); --border-strong: rgba(255,255,255,0.14);
-    --text: #ece7e0; --charcoal: #ece7e0; --warm-gray: #9c948b; --warm-gray-light: #b9b1a8;
-    --amber: #d8a657; --teal: #5fb4a8; --success: #5aa86f; --danger: #c95f55; --warning: #d8a657; --info: #6ea8d8; --violet:#a48bd8;
-    /* 7-step rem scale: 0.72 0.78 0.85 0.9 1.0 1.15 1.6 */
+  :root{
+    --bg:#221f1d;--surface-dark:#1b1917;--surface-card:#2a2623;--surface-card-2:#322d29;
+    --border:rgba(255,255,255,0.08);--border-strong:rgba(255,255,255,0.14);
+    --text:#ece7e0;--warm-gray:#9c948b;--warm-gray-light:#b9b1a8;
+    --amber:#d8a657;--teal:#5fb4a8;--success:#5aa86f;--danger:#c95f55;--info:#6ea8d8;
   }
-  * { box-sizing: border-box; }
-  html, body { margin: 0; min-height: 100%; }
-  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: var(--bg); color: var(--text); -webkit-font-smoothing: antialiased; }
+  *{box-sizing:border-box;} html,body{margin:0;min-height:100%;}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased;}
+  .explain{position:sticky;top:0;z-index:40;background:var(--surface-dark);border-bottom:1px solid var(--border-strong);padding:10px 18px;font-size:0.85rem;color:var(--warm-gray-light);line-height:1.45;} .explain b{color:var(--text);} .explain .hl{color:var(--amber);font-weight:600;}
 
-  /* ===== top explainer + A/B toggle ===== */
-  .explain { position: fixed; top:0; left:0; right:0; z-index: 60; background: var(--surface-dark); border-bottom:1px solid var(--border-strong); padding: 10px 18px; display:flex; align-items:center; gap:18px; flex-wrap:wrap; }
-  .explain .lead { font-size:0.85rem; color: var(--warm-gray-light); line-height:1.45; max-width: 640px; }
-  .explain .lead b { color: var(--text); }
-  .explain .lead .pinref { color: var(--amber); font-weight:600; }
-  .toggle-wrap { display:flex; align-items:center; gap:10px; margin-left:auto; }
-  .toggle-wrap .tlbl { font-size:0.78rem; color: var(--warm-gray); }
-  .seg { display:inline-flex; border:1px solid var(--border-strong); border-radius:9px; overflow:hidden; }
-  .seg button { background: transparent; border:0; color: var(--warm-gray); font: inherit; font-size:0.78rem; padding:7px 12px; cursor:pointer; line-height:1.2; }
-  .seg button.on { background: color-mix(in srgb, var(--amber) 22%, transparent); color: var(--text); font-weight:600; }
-  .seg button:not(:last-child){ border-right:1px solid var(--border); }
+  .wrap{max-width:920px;margin:0 auto;padding:24px 24px 80px;}
+  .ptop{display:flex;align-items:center;gap:10px;font-size:1.0rem;color:var(--warm-gray-light);margin-bottom:18px;} .ptop b{color:var(--text);}
+  h1.ph1{font-size:1.6rem;margin:0 0 4px;} .psub{color:var(--warm-gray);font-size:0.9rem;margin-bottom:18px;}
+  .pills{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;} .pill{border:1px solid var(--border-strong);background:transparent;color:var(--warm-gray);border-radius:999px;padding:5px 13px;font:inherit;font-size:0.82rem;cursor:pointer;} .pill.on{background:color-mix(in srgb,var(--amber) 18%,transparent);color:var(--text);}
 
-  /* ===== page behind (products list) ===== */
-  .page-behind { position: fixed; inset: 0; padding: 84px 36px 28px; overflow: hidden; filter: saturate(0.85); }
-  .pb-topbar { display:flex; align-items:center; gap:10px; font-size:1.0rem; color: var(--warm-gray-light); margin-bottom: 22px; }
-  .pb-topbar b { color: var(--text); }
-  .pb-h1 { font-size: 1.6rem; margin: 0 0 4px; }
-  .pb-sub { color: var(--warm-gray); font-size: 0.9rem; margin-bottom: 18px; }
-  .pb-rows { border:1px solid var(--border); border-radius:12px; overflow:hidden; max-width: 720px; }
-  .pb-row { display:grid; grid-template-columns: 1fr 96px 92px 96px; gap:12px; padding:13px 16px; border-bottom:1px solid var(--border); font-size:0.9rem; color: var(--warm-gray-light); align-items:center; }
-  .pb-row:last-child { border-bottom:0; } .pb-row.hi { color: var(--text); background: color-mix(in srgb, var(--amber) 7%, transparent); }
-  .pb-pill { font-size:0.72rem; padding:2px 9px; border-radius:999px; justify-self:start; }
-  .pb-pill.draft { background: rgba(156,148,139,.18); color: var(--warm-gray-light); }
-  .pb-pill.ready { background: color-mix(in srgb, var(--amber) 18%, transparent); color: var(--amber); }
-  .pb-pill.active { background: color-mix(in srgb, var(--teal) 16%, transparent); color: var(--teal); }
+  .list{border:1px solid var(--border);border-radius:12px;overflow:hidden;}
+  .lrow{display:grid;grid-template-columns:26px 46px 1fr 120px 90px 96px;gap:12px;align-items:center;padding:12px 16px;border-bottom:1px solid var(--border);cursor:pointer;font-size:0.9rem;}
+  .lrow:last-child{border-bottom:0;} .lrow:hover{background:color-mix(in srgb,var(--amber) 6%,transparent);}
+  .lrow .exp{background:transparent;border:0;color:var(--warm-gray);font-size:0.8rem;cursor:pointer;padding:4px;border-radius:5px;width:24px;} .lrow .exp:hover{color:var(--text);background:var(--surface-card-2);} .lrow .exp.spacer{visibility:hidden;}
+  .lrow img.th{width:42px;height:42px;border-radius:7px;object-fit:cover;border:1px solid var(--border);background:var(--surface-card-2);}
+  .lrow .nm{color:var(--text);} .lrow .meta{color:var(--warm-gray-light);} .lrow .r{text-align:right;font-variant-numeric:tabular-nums;}
+  .badge{display:inline-flex;align-items:center;gap:6px;font-size:0.72rem;font-weight:600;padding:3px 10px;border-radius:999px;white-space:nowrap;} .badge .dot{width:6px;height:6px;border-radius:50%;}
+  .badge.teal{background:color-mix(in srgb,var(--teal) 16%,transparent);color:var(--teal);} .badge.teal .dot{background:var(--teal);}
+  .badge.amber{background:color-mix(in srgb,var(--amber) 16%,transparent);color:var(--amber);} .badge.amber .dot{background:var(--amber);}
+  .vsub{background:color-mix(in srgb,#000 12%,transparent);} .vsub .nm{display:flex;align-items:center;gap:9px;padding-left:6px;} .vsub .branch{color:var(--warm-gray);font-size:0.8rem;}
+  .swatch{width:16px;height:16px;border-radius:4px;border:1px solid rgba(255,255,255,0.25);}
+  .vsub-wrap{display:none;} .vsub-wrap.open{display:block;}
+  .defrow{background:color-mix(in srgb,var(--info) 8%,transparent);} .defrow .nm{display:flex;align-items:center;gap:9px;padding-left:6px;color:var(--info);font-weight:600;}
+  .addrow{background:transparent;} .addrow .nm{display:flex;align-items:center;gap:9px;padding-left:6px;color:var(--teal);}
+  .ovpill{font-size:0.62rem;text-transform:uppercase;letter-spacing:.04em;background:color-mix(in srgb,var(--amber) 22%,transparent);color:var(--amber);padding:2px 6px;border-radius:5px;margin-left:6px;}
 
-  .scrim { position: fixed; inset: 0; background: rgba(0,0,0,0.55); }
+  .scrim{position:fixed;inset:0;background:rgba(0,0,0,0.55);display:none;z-index:50;} .scrim.show{display:block;}
+  .panel{position:fixed;top:0;right:0;bottom:0;width:min(1060px,100%);background:var(--bg);border-left:1px solid var(--border-strong);box-shadow:-24px 0 60px rgba(0,0,0,0.45);display:none;flex-direction:column;z-index:51;} .panel.show{display:flex;}
+  .ph{display:flex;align-items:center;gap:12px;padding:14px 22px;border-bottom:1px solid var(--border);background:var(--surface-dark);}
+  .ph .crumb{color:var(--warm-gray);font-size:0.85rem;} .ph .crumb b{color:var(--text);font-size:1.1rem;font-weight:600;} .ph .spacer{flex:1;} .ph-icon{background:transparent;border:0;color:var(--warm-gray);font-size:1.15rem;cursor:pointer;}
+  .pbody{flex:1;overflow-y:auto;padding:18px 22px 50px;} .so{display:none;} .so.show{display:block;}
 
-  .panel { position: fixed; top: 0; right: 0; bottom: 0; width: min(1100px, 100%); background: var(--bg); border-left: 1px solid var(--border-strong); box-shadow: -24px 0 60px rgba(0,0,0,0.45); display: flex; flex-direction: column; }
-  .ph { display:flex; align-items:center; gap:14px; padding: 14px 22px; border-bottom:1px solid var(--border); background: var(--surface-dark); }
-  .ph-back { background:transparent; border:0; color: var(--teal); font: inherit; font-size:0.85rem; cursor:pointer; padding:0; flex-shrink:0; }
-  .ph-titlewrap { display:flex; align-items:center; gap:12px; min-width:0; }
-  .ph-title { font-size:1.15rem; font-weight:600; white-space:nowrap; }
-  .ph-spacer { flex:1; }
-  .ph-icon { background:transparent; border:0; color: var(--warm-gray); font-size:1.15rem; cursor:pointer; padding:0 4px; line-height:1; }
+  .scopebar{display:inline-flex;align-items:center;gap:8px;font-size:0.78rem;padding:5px 12px;border-radius:999px;margin-bottom:14px;line-height:1.4;} .scopebar b{font-weight:700;}
+  .scopebar.base{color:var(--info);background:color-mix(in srgb,var(--info) 12%,transparent);border:1px solid color-mix(in srgb,var(--info) 28%,transparent);}
+  .scopebar.var{color:var(--amber);background:color-mix(in srgb,var(--amber) 12%,transparent);border:1px solid color-mix(in srgb,var(--amber) 28%,transparent);}
 
-  .badge { display:inline-flex; align-items:center; gap:6px; font-size:0.72rem; font-weight:600; padding:3px 10px; border-radius:999px; line-height:1.4; white-space:nowrap; }
-  .badge .dot { width:6px; height:6px; border-radius:50%; }
-  .badge.gray { background:color-mix(in srgb, var(--warm-gray) 16%, transparent); color:var(--warm-gray-light); border:1px solid color-mix(in srgb, var(--warm-gray) 28%, transparent); } .badge.gray .dot{ background:var(--warm-gray); }
-  .badge.amber { background:color-mix(in srgb, var(--amber) 16%, transparent); color:var(--amber); border:1px solid color-mix(in srgb, var(--amber) 30%, transparent); } .badge.amber .dot{ background:var(--amber); }
-  .badge.teal { background:color-mix(in srgb, var(--teal) 16%, transparent); color:var(--teal); border:1px solid color-mix(in srgb, var(--teal) 30%, transparent); } .badge.teal .dot{ background:var(--teal); }
+  .hero{display:flex;gap:16px;align-items:flex-start;margin-bottom:16px;}
+  .hero img{width:92px;height:92px;border-radius:12px;object-fit:cover;border:1px solid var(--border);background:var(--surface-card-2);}
+  .hero .bigsw{width:92px;height:92px;border-radius:12px;border:1px solid var(--border-strong);}
+  .hero .hname{font-size:1.25rem;font-weight:600;margin-bottom:5px;} .hero .hmeta{color:var(--warm-gray-light);font-size:0.85rem;line-height:1.5;}
 
-  .pbody { flex:1; overflow-y:auto; }
-  .pinned { position: sticky; top: 0; z-index: 5; background: var(--bg); padding: 16px 22px 0; border-bottom: 1px solid var(--border); }
-  .idbar { display:flex; align-items:center; gap:0; margin-bottom: 14px; flex-wrap:wrap; }
-  .hl { padding-right: 22px; margin-right: 22px; border-right:1px solid var(--border); }
-  .hl:last-child { border-right:0; }
-  .hl .k { font-size:0.72rem; text-transform:uppercase; letter-spacing:.05em; color: var(--warm-gray); margin-bottom:3px; }
-  .hl .v { font-size:1.0rem; color: var(--text); }
-  .hl .v.big { font-size:1.15rem; font-weight:600; }
+  .stepper{display:flex;align-items:center;gap:0;margin:4px 0 14px;}
+  .step{display:flex;align-items:center;gap:8px;} .step .node{width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:0.72rem;font-weight:700;}
+  .step.done .node{background:var(--teal);color:#15201e;} .step.current .node{background:var(--amber);color:#211800;box-shadow:0 0 0 4px color-mix(in srgb,var(--amber) 22%,transparent);} .step.todo .node{background:transparent;border:1.5px solid var(--border-strong);color:var(--warm-gray);}
+  .step .lbl{font-size:0.85rem;} .step.current .lbl{color:var(--text);font-weight:600;} .step.done .lbl{color:var(--warm-gray-light);} .step.todo .lbl{color:var(--warm-gray);}
+  .step-line{height:1.5px;background:var(--border-strong);flex:0 0 30px;margin:0 11px;} .step-line.done{background:color-mix(in srgb,var(--teal) 60%,transparent);}
+  .stagecard{border:1px solid color-mix(in srgb,var(--amber) 28%,var(--border));border-radius:11px;padding:14px 16px;margin-bottom:18px;background:color-mix(in srgb,var(--amber) 5%,transparent);}
+  .stagecard .sh{font-size:0.9rem;margin-bottom:11px;} .stagecard .sh b{color:var(--text);}
+  .todo-item{display:flex;align-items:center;gap:10px;padding:8px 0;font-size:0.88rem;border-bottom:1px solid var(--border);cursor:pointer;} .todo-item:last-of-type{border-bottom:0;} .todo-item:hover .go{color:var(--text);}
+  .todo-item .mk{width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:0.7rem;flex-shrink:0;}
+  .todo-item.met .mk{background:color-mix(in srgb,var(--success) 22%,transparent);color:var(--success);} .todo-item.met .tx{color:var(--warm-gray-light);}
+  .todo-item.unmet .mk{background:color-mix(in srgb,var(--danger) 20%,transparent);color:var(--danger);}
+  .todo-item .soft{color:var(--warm-gray);font-size:0.72rem;text-transform:uppercase;letter-spacing:.03em;}
+  .todo-item .go{margin-left:auto;color:var(--teal);font-size:0.78rem;}
+  .stage-actions{display:flex;align-items:center;gap:10px;margin-top:12px;} .stage-actions .sp{flex:1;}
 
-  .spine-label { font-size:0.72rem; text-transform:uppercase; letter-spacing:.06em; color: var(--warm-gray); margin-bottom:10px; }
-  .stepper { display:flex; align-items:center; gap:0; margin-bottom: 16px; }
-  .step { display:flex; align-items:center; gap:9px; flex-shrink:0; background:transparent; border:0; font:inherit; padding:0; }
-  .step.nav { cursor:pointer; } .step.nav:hover .lbl { color: var(--text); }
-  .step .node { width:24px; height:24px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:0.72rem; font-weight:600; }
-  .step.done .node { background: var(--teal); color:#15201e; }
-  .step.current .node { background: var(--amber); color:#211800; box-shadow:0 0 0 4px color-mix(in srgb, var(--amber) 22%, transparent); }
-  .step.todo .node { background: transparent; border:1.5px solid var(--border-strong); color: var(--warm-gray); }
-  .step.viewing .node { outline:2px solid var(--teal); outline-offset:2px; }
-  .step .lbl { font-size:0.85rem; white-space:nowrap; }
-  .step.done .lbl { color: var(--warm-gray-light); } .step.current .lbl { color: var(--text); font-weight:600; } .step.todo .lbl { color: var(--warm-gray); }
-  .step-line { height:1.5px; background: var(--border-strong); flex:0 0 46px; margin:0 12px; }
-  .step-line.done { background: color-mix(in srgb, var(--teal) 60%, transparent); }
-  .retire { margin-left:24px; padding-left:22px; border-left:1px dashed var(--border-strong); display:flex; align-items:center; gap:8px; color: var(--warm-gray); font-size:0.78rem; }
-  .retire .node { width:20px; height:20px; border-radius:50%; border:1.5px dashed var(--border-strong); display:flex; align-items:center; justify-content:center; font-size:0.72rem; }
+  .tabs{display:flex;gap:2px;border-bottom:1px solid var(--border);margin-bottom:16px;overflow-x:auto;}
+  .tab{background:transparent;border:0;border-bottom:2px solid transparent;color:var(--warm-gray);font:inherit;font-size:0.88rem;padding:9px 13px;cursor:pointer;white-space:nowrap;} .tab.active{color:var(--text);font-weight:600;border-bottom-color:var(--amber);}
+  .tp{display:none;} .tp.active{display:block;}
+  .sec-title{font-size:0.72rem;text-transform:uppercase;letter-spacing:.05em;color:var(--warm-gray);margin:0 0 10px;display:flex;align-items:center;gap:10px;} .sec-title .sp{flex:1;}
+  .card{background:var(--surface-card);border:1px solid var(--border);border-radius:11px;padding:6px 16px;margin-bottom:14px;}
+  .muted{color:var(--warm-gray);font-size:0.85rem;margin-bottom:12px;}
+  .kv{display:grid;grid-template-columns:140px 1fr;gap:9px 16px;font-size:0.9rem;padding:8px 0;} .kv .k{color:var(--warm-gray);} .kv .v{color:var(--text);}
+  .bom{width:100%;border-collapse:collapse;} .bom td{padding:7px 0;font-size:0.88rem;border-top:1px solid var(--border);} .bom td.r{text-align:right;font-variant-numeric:tabular-nums;} .bom tr:first-child td{border-top:0;}
+  .inhrow{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--border);font-size:0.9rem;} .inhrow:last-child{border-bottom:0;}
+  .inhrow .il{color:var(--warm-gray);width:120px;flex-shrink:0;} .inhrow .iv{color:var(--text);} .inhrow .iv .from{color:var(--warm-gray);font-size:0.78rem;} .inhrow .ov{margin-left:auto;}
+  .btn{font:inherit;font-size:0.82rem;font-weight:600;padding:8px 14px;border-radius:8px;cursor:pointer;border:1px solid transparent;white-space:nowrap;}
+  .btn-primary{background:var(--amber);color:#211800;} .btn-primary:disabled{background:color-mix(in srgb,var(--amber) 32%,var(--surface-card));color:color-mix(in srgb,#211800 50%,var(--warm-gray));cursor:not-allowed;}
+  .btn-sec{background:transparent;color:var(--warm-gray-light);border-color:var(--border-strong);} .btn-sm{font-size:0.78rem;padding:6px 11px;}
+  .field{margin-bottom:12px;} .field label{display:block;font-size:0.72rem;text-transform:uppercase;letter-spacing:.04em;color:var(--warm-gray);margin-bottom:5px;} .field input{width:100%;background:var(--surface-dark);border:1px solid var(--border-strong);border-radius:7px;color:var(--text);font:inherit;font-size:0.9rem;padding:8px 10px;}
 
-  .tabs { display:flex; gap:4px; }
-  .tab { background:transparent; border:0; border-bottom:2px solid transparent; color: var(--warm-gray); font: inherit; font-size:0.9rem; padding:10px 16px; cursor:pointer; white-space:nowrap; display:flex; align-items:center; gap:7px; }
-  .tab.active { color: var(--text); font-weight:600; border-bottom-color: var(--amber); }
-  .tab .count { color: var(--warm-gray); font-size:0.78rem; }
-  .tab .pct { width:7px; height:7px; border-radius:50%; background: var(--amber); display:inline-block; }
+  .note{position:fixed;left:14px;bottom:14px;z-index:45;max-width:350px;background:var(--surface-dark);border:1px solid var(--border-strong);border-left:3px solid var(--amber);border-radius:10px;padding:11px 13px;font-size:0.82rem;color:var(--warm-gray-light);line-height:1.5;} .note b{color:var(--text);}
+  .mock-flag{position:fixed;right:14px;bottom:14px;z-index:45;font-size:0.72rem;color:var(--warm-gray);background:var(--surface-dark);border:1px solid var(--border);border-radius:8px;padding:6px 11px;} .mock-flag b{color:var(--amber);}
 
-  .panels { padding: 20px 22px 60px; }
-  .tabpanel { display:none; } .tabpanel.active { display:block; }
-  .section-title { font-size:0.72rem; text-transform:uppercase; letter-spacing:.05em; color: var(--warm-gray); margin: 0 0 10px; }
-  .card { background: var(--surface-card); border:1px solid var(--border); border-radius:12px; padding:16px 18px; margin-bottom:18px; }
-  .card.lean { border-color: color-mix(in srgb, var(--amber) 28%, var(--border)); }
-
-  .page { display:none; } .page.active { display:block; }
-  .page-crumb { display:none; align-items:center; gap:8px; margin-bottom:14px; font-size:0.78rem; }
-  .page.is-nav .page-crumb { display:flex; }
-  .page-crumb button { background:transparent; border:0; color: var(--teal); font:inherit; font-size:0.78rem; cursor:pointer; padding:0; }
-  .page-head { display:flex; align-items:center; gap:10px; margin-bottom: 4px; }
-  .page-title { font-size:1.15rem; font-weight:600; }
-  .page-meta { font-size:0.78rem; color: var(--warm-gray); margin-bottom:16px; }
-  .preview-note { font-size:0.9rem; color: var(--warm-gray-light); line-height:1.65; } .preview-note b { color: var(--text); }
-  .sidefx { margin-top:12px; padding:10px 12px; border-radius:8px; background: color-mix(in srgb, var(--info) 12%, transparent); border:1px solid color-mix(in srgb, var(--info) 28%, transparent); font-size:0.85rem; color: var(--warm-gray-light); line-height:1.5; }
-  .sidefx b { color: var(--info); }
-
-  .gate-intro { font-size:0.85rem; color: var(--warm-gray-light); margin-bottom:14px; } .gate-intro b { color: var(--text); }
-  .checklist { display:flex; flex-direction:column; gap:11px; margin-bottom:14px; }
-  .ck { display:flex; align-items:center; gap:10px; font-size:0.9rem; }
-  .ck .mark { width:18px; height:18px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:0.72rem; flex-shrink:0; }
-  .ck.met .mark { background: color-mix(in srgb, var(--success) 22%, transparent); color: var(--success); } .ck.met .txt { color: var(--warm-gray-light); }
-  .ck.unmet .mark { background: color-mix(in srgb, var(--warning) 20%, transparent); color: var(--warning); } .ck.unmet .txt { color: var(--text); }
-  .ck .sub { color: var(--warm-gray); font-size:0.78rem; }
-  .ck .soft { color: var(--warm-gray); font-size:0.72rem; text-transform:uppercase; letter-spacing:.04em; }
-  .ck .go { margin-left:auto; color: var(--teal); font-size:0.78rem; text-decoration:none; cursor:pointer; white-space:nowrap; }
-  .ck .go .lk { font-size:0.66rem; color: var(--warm-gray); }
-  .gate-note { font-size:0.78rem; color: var(--warm-gray); margin-bottom:16px; padding-left:2px; }
-  .gate-actions { display:flex; align-items:center; gap:10px; }
-  .btn { font: inherit; font-size:0.85rem; font-weight:600; padding:9px 16px; border-radius:9px; cursor:pointer; border:1px solid transparent; white-space:nowrap; }
-  .btn-primary { background: var(--amber); color:#211800; } .btn-primary:hover { filter: brightness(1.05); }
-  .btn-primary:disabled { background: color-mix(in srgb, var(--amber) 35%, var(--surface-card)); color: color-mix(in srgb,#211800 55%, var(--warm-gray)); cursor:not-allowed; }
-  .btn-link { background: transparent; color: var(--teal); border:1px solid color-mix(in srgb, var(--teal) 40%, transparent); }
-  .btn-link:hover { background: color-mix(in srgb, var(--teal) 12%, transparent); }
-  .btn-ghost { background:transparent; border:0; color: var(--warm-gray); font-size:1.0rem; padding:6px 8px; cursor:pointer; }
-  .gate-actions .spacer { flex:1; }
-  .adv-hint { font-size:0.72rem; color: var(--warm-gray); margin-top:8px; }
-
-  /* recipe / bom */
-  .bom { width:100%; border-collapse:collapse; }
-  .bom th { text-align:left; font-size:0.72rem; text-transform:uppercase; letter-spacing:.04em; color: var(--warm-gray); padding:0 0 8px; font-weight:600; }
-  .bom th.r, .bom td.r { text-align:right; font-variant-numeric: tabular-nums; }
-  .bom td { padding:9px 0; font-size:0.9rem; border-top:1px solid var(--border); }
-  .bom .mat { color: var(--text); } .bom .qty, .bom .uc { color: var(--warm-gray-light); }
-  .money { width:100%; border-collapse:collapse; }
-  .money td { padding:7px 0; font-size:0.9rem; } .money td.k { color: var(--warm-gray); } .money td.v { text-align:right; font-variant-numeric: tabular-nums; color: var(--text); }
-  .money tr.total td { border-top:1px solid var(--border); padding-top:12px; font-size:1.0rem; font-weight:600; }
-
-  /* channels */
-  .chrow { display:flex; align-items:center; gap:14px; padding:13px 0; border-bottom:1px solid var(--border); }
-  .chrow:last-child { border-bottom:0; }
-  .chrow .ic { width:34px; height:34px; border-radius:8px; background: var(--surface-card-2); display:flex; align-items:center; justify-content:center; font-size:0.78rem; color: var(--warm-gray-light); border:1px solid var(--border); }
-  .chrow .chmain { flex:1; } .chrow .chname { font-size:0.9rem; } .chrow .chsub { font-size:0.78rem; color: var(--warm-gray); margin-top:2px; }
-
-  .kv { display:grid; grid-template-columns: 150px 1fr; gap:9px 16px; font-size:0.9rem; } .kv .k { color: var(--warm-gray); } .kv .v { color: var(--text); }
-  .tl { position:relative; padding-left:22px; } .tl::before { content:""; position:absolute; left:6px; top:4px; bottom:4px; width:1.5px; background: var(--border-strong); }
-  .tl-item { position:relative; padding-bottom:16px; } .tl-item:last-child { padding-bottom:0; }
-  .tl-dot { position:absolute; left:-22px; top:3px; width:9px; height:9px; border-radius:50%; background: var(--teal); border:2px solid var(--bg); }
-  .tl-when { font-size:0.78rem; color: var(--warm-gray); margin-bottom:2px; } .tl-what { font-size:0.9rem; color: var(--text); }
-  .empty-note { font-size:0.85rem; color: var(--warm-gray); }
-
-  /* callout pins */
-  .pin { display:inline-flex; align-items:center; justify-content:center; width:18px; height:18px; border-radius:50%; background: var(--amber); color:#211800; font-size:0.72rem; font-weight:700; margin-left:8px; flex-shrink:0; }
-  .callouts { position: fixed; left:14px; bottom:14px; z-index:55; display:flex; flex-direction:column; gap:10px; max-width: 320px; }
-  .callout { background: var(--surface-dark); border:1px solid var(--border-strong); border-left:3px solid var(--amber); border-radius:10px; padding:11px 13px; font-size:0.82rem; color: var(--warm-gray-light); line-height:1.5; box-shadow:0 6px 20px rgba(0,0,0,.4); }
-  .callout .ct { color: var(--text); font-weight:600; display:flex; align-items:center; gap:7px; margin-bottom:4px; }
-  .callout .ct .num { background: var(--amber); color:#211800; width:18px; height:18px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; font-size:0.72rem; font-weight:700; }
-  .callout b { color: var(--text); }
-
-  /* confirm dialog (mode A demo) */
-  .cfx { position: fixed; inset:0; z-index:70; background: rgba(0,0,0,.5); display:none; align-items:center; justify-content:center; }
-  .cfx.show { display:flex; }
-  .cfx-box { width: min(440px, 92vw); background: var(--surface-card); border:1px solid var(--border-strong); border-radius:14px; padding:22px; box-shadow:0 20px 60px rgba(0,0,0,.5); }
-  .cfx-title { font-size:1.15rem; font-weight:600; margin-bottom:10px; }
-  .cfx-body { font-size:0.9rem; color: var(--warm-gray-light); line-height:1.6; margin-bottom:18px; } .cfx-body b { color: var(--text); }
-  .cfx-actions { display:flex; justify-content:flex-end; gap:10px; }
-
-  .mock-flag { position: fixed; right:14px; bottom:14px; z-index:50; font-size:0.72rem; color: var(--warm-gray); background: var(--surface-dark); border:1px solid var(--border); border-radius:8px; padding:6px 11px; } .mock-flag b { color: var(--amber); }
+  /* stacked child SO — a complex sub-object (recipe) edited in its own full-size SO */
+  .childpanel{position:fixed;top:0;right:0;bottom:0;width:min(1060px,100%);background:var(--bg);border-left:1px solid var(--border-strong);box-shadow:-30px 0 70px rgba(0,0,0,0.6);display:none;flex-direction:column;z-index:54;}
+  .childpanel.show{display:flex;animation:slideIn .18s ease;}
+  @keyframes slideIn{from{transform:translateX(40px);opacity:.5;}to{transform:none;opacity:1;}}
+  .childpanel .ph{background:var(--surface-card-2);}
+  .childbadge{display:inline-flex;align-items:center;gap:7px;font-size:0.72rem;color:var(--teal);background:color-mix(in srgb,var(--teal) 12%,transparent);border:1px solid color-mix(in srgb,var(--teal) 28%,transparent);padding:4px 11px;border-radius:999px;margin-bottom:14px;}
+  .ph-done{background:transparent;border:0;color:var(--teal);font:inherit;font-size:0.85rem;cursor:pointer;padding:0;}
 </style>
 </head>
 <body>
 
-<!-- ===== top explainer + A/B toggle ===== -->
-<div class="explain">
-  <div class="lead">Proposed: the <b>Product detail as a Process slide-out</b> (same shell as Orders). Open product → lifecycle stepper + readiness checklist + one Advance. I'd like your call on <span class="pinref">①</span> the facet tabs and <span class="pinref">②</span> what <b>Advance</b> does — see the pins, bottom-left.</div>
-  <div class="toggle-wrap">
-    <span class="tlbl">②&nbsp; Advance behavior:</span>
-    <div class="seg" id="advSeg">
-      <button class="on" data-mode="A">A · advance here</button>
-      <button data-mode="B">B · open maker</button>
+<div class="explain">The synthesis: SO = one object. <span class="hl">Default/product</span> = <b>process</b> (stage + what to do now) <b>+ the tab flow</b> where you do it. <span class="hl">Variant</span> = the same tabs, inherit-from-Default + override. Variants (and "add variant") live in the <b>list</b>.</div>
+
+<div class="wrap">
+  <div class="ptop">⚓ <b>Mast</b> / Shir Glassworks</div>
+  <h1 class="ph1">Products</h1><div class="psub">40 products · variants inline · Spiral Cups shown Draft (illustrative) to exercise the process</div>
+  <div class="pills"><button class="pill on">All</button><button class="pill">Draft</button><button class="pill">Review</button><button class="pill">Published</button><button class="pill">Archived</button></div>
+
+  <div class="list">
+    <div class="lrow" data-so="default">
+      <button class="exp" data-exp="spiral" title="Show variants">▶</button>
+      <img class="th" src="https://storage.googleapis.com/mast-platform-prod.firebasestorage.app/sgtest15/migration-images/s595745330179078127-p84-i8-w3600.jpg" onerror="this.style.visibility='hidden'">
+      <span class="nm">Spiral Cups <span class="meta">· Drinkware</span></span>
+      <span class="badge amber"><span class="dot"></span>Draft</span>
+      <span class="r meta">$85.00</span>
+      <span class="r meta">6 variants</span>
+    </div>
+    <div class="vsub-wrap" data-vsub="spiral">
+      <div class="lrow defrow" data-so="default"><span class="exp spacer"></span><span></span><span class="nm"><span class="branch">└</span>◆ Default <span class="meta" style="color:var(--info);opacity:.8;">· base + process</span></span><span></span><span class="r meta">$85.00</span><span class="r meta">6 inherit</span></div>
+      <div class="lrow vsub" data-so="variant" data-variant="Rose" data-color="#d98a9a"><span class="exp spacer"></span><span></span><span class="nm"><span class="branch">└</span><span class="swatch" style="background:#d98a9a;"></span>Rose</span><span class="meta" style="font-size:.78rem;">follows product</span><span class="r meta">$85.00</span><span class="r meta">inherits</span></div>
+      <div class="lrow vsub" data-so="variant" data-variant="Cobalt" data-color="#3a5fd8"><span class="exp spacer"></span><span></span><span class="nm"><span class="branch">└</span><span class="swatch" style="background:#3a5fd8;"></span>Cobalt</span><span class="meta" style="font-size:.78rem;">follows product</span><span class="r meta">$85.00</span><span class="r meta">inherits</span></div>
+      <div class="lrow vsub" data-so="variant" data-variant="Violet" data-color="#8a6fd8" data-override="1"><span class="exp spacer"></span><span></span><span class="nm"><span class="branch">└</span><span class="swatch" style="background:#8a6fd8;"></span>Violet <span class="ovpill">override</span></span><span class="meta" style="font-size:.78rem;">follows product</span><span class="r meta" style="color:var(--amber);">$95.00</span><span class="r meta">1 override</span></div>
+      <div class="lrow addrow" data-so="newvariant"><span class="exp spacer"></span><span></span><span class="nm"><span class="branch">└</span>＋ Add variant <span class="meta" style="color:var(--warm-gray);">· inherits the Default, then override</span></span><span></span><span></span><span></span></div>
+    </div>
+
+    <div class="lrow" data-so="product">
+      <button class="exp spacer"></button>
+      <img class="th" src="https://storage.googleapis.com/mast-platform-prod.firebasestorage.app/sgtest15/migration-images/s595745330179078127-p116-i1-w3600.jpg" onerror="this.style.visibility='hidden'">
+      <span class="nm">A Life's Work — Honey Pendant <span class="meta">· Pendants</span></span>
+      <span class="badge amber"><span class="dot"></span>Draft</span>
+      <span class="r meta">$85.00</span>
+      <span class="r meta">no variants</span>
     </div>
   </div>
 </div>
 
-<!-- ===== products list behind ===== -->
-<div class="page-behind" aria-hidden="true">
-  <div class="pb-topbar">⚓ <b>Mast</b> / Shir Glassworks</div>
-  <div class="pb-h1">Products</div><div class="pb-sub">40 products · filter by phase: Draft · Ready · Active · Archived</div>
-  <div class="pb-rows">
-    <div class="pb-row hi"><span>A Life's Work — Honey Pendant</span><span class="pb-pill draft">Draft</span><span>$85.00</span><span>Pendants</span></div>
-    <div class="pb-row"><span>Large Glass Octopus</span><span class="pb-pill active">Active</span><span>$1,200.00</span><span>Sculptures</span></div>
-    <div class="pb-row"><span>Spiral Cups</span><span class="pb-pill ready">Ready</span><span>$85.00</span><span>Drinkware</span></div>
-    <div class="pb-row"><span>Glass Pumpkin</span><span class="pb-pill active">Active</span><span>$25.00</span><span>Figurines</span></div>
-  </div>
-</div>
-
-<div class="scrim"></div>
-
-<!-- ===== the slide-out ===== -->
+<div class="scrim" id="scrim"></div>
 <div class="panel" id="panel">
-  <div class="ph">
-    <button class="ph-back">&#8592; Back to Products</button>
-    <div class="ph-titlewrap"><span class="ph-title">A Life's Work — Honey Pendant</span><span class="badge gray"><span class="dot"></span>Draft</span></div>
-    <div class="ph-spacer"></div>
-    <button class="ph-icon" id="expandBtn" title="Expand to full width">&#10530;</button>
-    <button class="ph-icon" title="Close">&#10005;</button>
-  </div>
-
+  <div class="ph"><span class="crumb" id="crumb"></span><span class="spacer"></span><button class="ph-icon" title="Close" id="soClose">&#10005;</button></div>
   <div class="pbody">
-    <div class="pinned">
-      <!-- identity bar: product vitals (NOT customer/total/items/placed) -->
-      <div class="idbar">
-        <div class="hl"><div class="k">Mode</div><div class="v">Build · made here</div></div>
-        <div class="hl"><div class="k">Retail price</div><div class="v big">$85.00</div></div>
-        <div class="hl"><div class="k">Unit cost</div><div class="v">$48.30</div></div>
-        <div class="hl"><div class="k">Stock</div><div class="v">Build to order</div></div>
+
+    <!-- DEFAULT / PRODUCT SO — process + tab flow -->
+    <div class="so" data-so="default">
+      <div class="scopebar base">◆ <b>Default</b> · base for all variants — and where the product's process lives</div>
+      <div class="hero">
+        <img src="https://storage.googleapis.com/mast-platform-prod.firebasestorage.app/sgtest15/migration-images/s595745330179078127-p84-i8-w3600.jpg" onerror="this.style.visibility='hidden'">
+        <div><div class="hname">Spiral Cups</div><div class="hmeta">Drinkware · Build · 6 colour variants · 12 oz</div></div>
       </div>
-      <div class="spine-label">Lifecycle · Draft · complete the checklist to promote</div>
-      <!-- stepper: draft → ready → active, archived off-backbone -->
-      <div class="stepper">
-        <button class="step current nav" data-page="draft"><span class="node">1</span><span class="lbl">Draft</span></button>
+      <div class="stepper" id="dStep">
+        <div class="step current"><span class="node">1</span><span class="lbl">Draft</span></div>
         <div class="step-line"></div>
-        <button class="step todo nav" data-page="ready"><span class="node">2</span><span class="lbl">Ready</span></button>
+        <div class="step todo"><span class="node">2</span><span class="lbl">Review</span></div>
         <div class="step-line"></div>
-        <button class="step todo nav" data-page="active"><span class="node">3</span><span class="lbl">Active</span></button>
-        <span class="retire"><span class="node">⤓</span>Archived (retire — separate)</span>
+        <div class="step todo"><span class="node">3</span><span class="lbl">Published</span></div>
       </div>
-      <div class="tabs" role="tablist">
-        <button class="tab active" data-tab="process"><span class="pct"></span>Process <span class="count">Draft</span></button>
-        <button class="tab" data-tab="recipe">Recipe <span class="count">3</span></button>
-        <button class="tab" data-tab="channels">Channels</button>
-        <button class="tab" data-tab="history">History</button>
-        <span class="pin" title="① a product has no Customer tab">①</span>
+      <div class="stagecard">
+        <div class="sh"><b>Draft</b> — to send to Review, finish these (each is done in its tab):</div>
+        <div class="todo-item met" data-jumptab="recipe"><span class="mk">✓</span><span class="tx">Recipe defined</span><span class="go">Recipe →</span></div>
+        <div class="todo-item met" data-jumptab="pricing"><span class="mk">✓</span><span class="tx">Costed &amp; priced</span><span class="go">Pricing →</span></div>
+        <div class="todo-item met" data-jumptab="image"><span class="mk">✓</span><span class="tx">Listing ready (image + description)</span><span class="go">Image →</span></div>
+        <div class="todo-item unmet" data-jumptab="channels"><span class="mk">!</span><span class="tx">Channel mapping <span class="soft">optional</span></span><span class="go">Channels →</span></div>
+        <div class="stage-actions"><span class="muted" style="margin:0;">Required items complete ✓ — optional just warns.</span><span class="sp"></span><button class="btn btn-primary btn-sm" id="dAdvance">Send to Review →</button></div>
+      </div>
+      <div class="tabs" id="dTabs">
+        <button class="tab active" data-tp="d-pricing">Pricing</button>
+        <button class="tab" data-tp="d-recipe">Recipe</button>
+        <button class="tab" data-tp="d-inv">Inventory</button>
+        <button class="tab" data-tp="d-channels">Channels</button>
+        <button class="tab" data-tp="d-image">Image</button>
+        <button class="tab" data-tp="d-info">Info</button>
+      </div>
+      <div class="tp active" data-tp="d-pricing"><div class="sec-title">Pricing · Default (base)<span class="sp"></span><button class="btn btn-sec btn-sm">Edit</button></div><div class="card"><div class="kv"><div class="k">Retail</div><div class="v">$85.00 → all variants</div></div><div class="kv"><div class="k">Unit cost</div><div class="v">$17.80 · 79% margin</div></div><div class="kv"><div class="k">Overrides</div><div class="v">Violet $95.00</div></div></div></div>
+      <div class="tp" data-tp="d-recipe"><div class="sec-title">Recipe · Default (base) <span class="muted" style="margin:0;text-transform:none;letter-spacing:0;font-size:0.78rem;">— summary</span><span class="sp"></span><button class="btn btn-sec btn-sm" id="dEditRecipe">Edit recipe →</button></div><div class="card"><table class="bom"><tr><td>Borosilicate Rod (Clear)</td><td class="r">22 g</td><td class="r">$14.30</td></tr><tr><td>Color rod (lip wrap)</td><td class="r">4 g</td><td class="r">$3.40</td></tr><tr><td><b>Unit cost</b></td><td></td><td class="r"><b>$17.80</b></td></tr></table></div><div class="muted">Summary only. The recipe is its own object — <b>Edit recipe →</b> opens it full-size, then collapses back here.</div></div>
+      <div class="tp" data-tp="d-inv"><div class="sec-title">Inventory · Default (base)</div><div class="card"><div class="kv"><div class="k">Stock type</div><div class="v">Build to order</div></div><div class="kv"><div class="k">On hand</div><div class="v">12</div></div></div></div>
+      <div class="tp" data-tp="d-channels"><div class="sec-title">Channels · product-level<span class="sp"></span><button class="btn btn-primary btn-sm">Publish</button></div><div class="card"><div class="kv"><div class="k">Shopify</div><div class="v">Mapped</div></div><div class="kv"><div class="k">Storefront</div><div class="v">On</div></div></div></div>
+      <div class="tp" data-tp="d-image"><div class="sec-title">Image / listing<span class="sp"></span><button class="btn btn-sec btn-sm">Manage images</button></div><div class="card"><div class="kv"><div class="k">Images</div><div class="v">1 · shared by variants</div></div><div class="kv"><div class="k">Description</div><div class="v">Set</div></div></div></div>
+      <div class="tp" data-tp="d-info"><div class="sec-title">Info · product-level<span class="sp"></span><button class="btn btn-sec btn-sm">Edit info</button></div><div class="card"><div class="kv"><div class="k">Category</div><div class="v">Drinkware</div></div><div class="kv"><div class="k">Business line</div><div class="v">Production</div></div><div class="kv"><div class="k">Option</div><div class="v">Color (6)</div></div></div></div>
+    </div>
+
+    <!-- VARIANT SO — tabs only, inherit/override, no separate process -->
+    <div class="so" data-so="variant">
+      <div class="scopebar var">◆ <b>Variant</b> · inherits Default — override price/image/etc. · <span style="opacity:.8;">follows the product (Draft)</span></div>
+      <div class="hero">
+        <div class="bigsw" id="vBigSw"></div>
+        <div><div class="hname" id="vName">Cobalt</div><div class="hmeta">Variant of <b style="color:var(--text);">Spiral Cups</b> · Color: <span id="vColorName">Cobalt</span><br>No separate process — it publishes with the product. Just the tabs to override.</div></div>
+      </div>
+      <div class="tabs">
+        <button class="tab active" data-tp="v-pricing">Pricing</button>
+        <button class="tab" data-tp="v-recipe">Recipe</button>
+        <button class="tab" data-tp="v-channels">Channels</button>
+        <button class="tab" data-tp="v-inv">Inventory</button>
+        <button class="tab" data-tp="v-image">Image</button>
+      </div>
+      <div class="tp active" data-tp="v-pricing"><div class="sec-title">Pricing</div><div class="card">
+        <div class="inhrow"><span class="il">Retail price</span><span class="iv">$85.00 <span class="from">· inherited from Default</span></span><span class="ov"><button class="btn btn-sec btn-sm">Override</button></span></div>
+        <div class="inhrow"><span class="il">SKU</span><span class="iv">— <span class="from">· not set</span></span><span class="ov"><button class="btn btn-sec btn-sm">Set</button></span></div>
+      </div><div class="muted">Leave inherited → tracks Default. Override → only this variant changes.</div></div>
+      <div class="tp" data-tp="v-recipe"><div class="sec-title">Recipe</div><div class="card"><div class="inhrow"><span class="il">Recipe / cost</span><span class="iv">$17.80 <span class="from">· inherits the base recipe (no override)</span></span><span class="ov"><button class="btn btn-sec btn-sm">Override recipe</button></span></div></div><div class="muted">A colour needing a pricier rod overrides cost here — only for this variant.</div></div>
+      <div class="tp" data-tp="v-channels"><div class="sec-title">Channels</div><div class="card"><div class="inhrow"><span class="il">Shopify</span><span class="iv">Live <span class="from">· inherits product mapping</span></span><span class="ov"><button class="btn btn-sec btn-sm">Override</button></span></div></div></div>
+      <div class="tp" data-tp="v-inv"><div class="sec-title">Inventory</div><div class="card"><div class="inhrow"><span class="il">Stock type</span><span class="iv">Build to order <span class="from">· inherited</span></span><span class="ov"><button class="btn btn-sec btn-sm">Override</button></span></div></div></div>
+      <div class="tp" data-tp="v-image"><div class="sec-title">Image</div><div class="card"><div class="inhrow"><span class="il">Variant image</span><span class="iv">Shared product image <span class="from">· inherited</span></span><span class="ov"><button class="btn btn-sec btn-sm">Set variant image</button></span></div></div></div>
+      <div style="margin-top:4px;"><button class="btn btn-sec btn-sm" id="vBack">← Back to Default</button></div>
+    </div>
+
+    <!-- NEW VARIANT — create off the Default -->
+    <div class="so" data-so="newvariant">
+      <div class="scopebar var">◆ <b>New variant</b> · inherits everything from the Default — set the option, then override what differs</div>
+      <div class="hero"><div class="bigsw" style="background:repeating-linear-gradient(45deg,#3a332c,#3a332c 6px,#2a2623 6px,#2a2623 12px);"></div><div><div class="hname">New Spiral Cups variant</div><div class="hmeta">Starts as a copy of the Default — price $85, shared image, build-to-order. Change only what's different.</div></div></div>
+      <div class="card" style="padding:14px 16px;">
+        <div class="field"><label>Option · Color (required)</label><input placeholder="e.g. Amber"></div>
+        <div class="inhrow"><span class="il">Retail price</span><span class="iv">$85.00 <span class="from">· from Default</span></span><span class="ov"><button class="btn btn-sec btn-sm">Override</button></span></div>
+        <div class="inhrow"><span class="il">Image</span><span class="iv">Shared product image <span class="from">· from Default</span></span><span class="ov"><button class="btn btn-sec btn-sm">Set image</button></span></div>
+        <div class="inhrow"><span class="il">Recipe / stock</span><span class="iv">Inherits Default <span class="from">· no override</span></span><span class="ov"><button class="btn btn-sec btn-sm">Override</button></span></div>
+        <div style="display:flex;gap:8px;margin-top:14px;"><button class="btn btn-primary btn-sm">Create variant</button><button class="btn btn-sec btn-sm" id="nvBack">Cancel</button></div>
       </div>
     </div>
 
-    <div class="panels">
-
-      <!-- ===== PROCESS tab = the book ===== -->
-      <div class="tabpanel active" data-panel="process">
-
-        <!-- current page: Draft -->
-        <div class="page active" data-page="draft">
-          <div class="page-head"><span class="page-title">Draft</span></div>
-          <div class="page-meta">Current step — what's needed before you can promote</div>
-          <div class="card lean">
-            <div class="gate-intro">To promote to <b>Ready</b>, the required items must be met:</div>
-            <div class="checklist">
-              <div class="ck met"><span class="mark">&#10003;</span><span class="txt">Acquisition mode chosen <span class="sub">· Build</span></span></div>
-              <div class="ck met"><span class="mark">&#10003;</span><span class="txt">Defined <span class="sub">· Recipe with 3 components</span></span><span class="go">Edit in maker &#8594; <span class="lk">↗ legacy</span></span></div>
-              <div class="ck met"><span class="mark">&#10003;</span><span class="txt">Costed <span class="sub">· $48.30 unit · ×3 markup</span></span><span class="go">Edit in maker &#8594; <span class="lk">↗ legacy</span></span></div>
-              <div class="ck met"><span class="mark">&#10003;</span><span class="txt">Listing ready <span class="sub">· name · 2 photos · description</span></span><span class="go">Edit in maker &#8594; <span class="lk">↗ legacy</span></span></div>
-              <div class="ck unmet"><span class="mark">!</span><span class="txt">Channel mapping <span class="soft">Optional</span> <span class="sub">· not mapped yet</span></span><span class="go">Set up &#8594; <span class="lk">↗ legacy</span></span></div>
-              <div class="ck unmet"><span class="mark">!</span><span class="txt">Capacity planned <span class="soft">Optional</span> <span class="sub">· lead time / batch not set</span></span><span class="go">Plan &#8594; <span class="lk">↗ legacy</span></span></div>
-            </div>
-            <div class="gate-note">Required items are all met ✓ — optional items just warn (you'll confirm). If a <b>required</b> item were unmet, Advance would be <b>disabled</b> — that's the gate.</div>
-            <div class="gate-actions">
-              <span class="spacer"></span>
-              <span id="advHost"></span>
-              <button class="btn-ghost" title="More (force-advance, archive…)">&#8943;</button>
-            </div>
-            <div class="adv-hint" id="advHint"></div>
-          </div>
-        </div>
-
-        <!-- forward preview: Ready -->
-        <div class="page is-nav" data-page="ready">
-          <div class="page-crumb"><button data-goto="draft">&#8592; Back to current step (Draft)</button></div>
-          <div class="page-head"><span class="page-title">Ready</span><span class="badge gray"><span class="dot"></span>Upcoming</span></div>
-          <div class="page-meta">Not started — preview of what this step asks</div>
-          <div class="card">
-            <div class="preview-note"><b>Ready</b> = prepared for launch review. The one recommended (soft) check here is <b>channel mapping</b> before going live. Nothing is published yet — Ready is a holding state.</div>
-          </div>
-        </div>
-
-        <!-- forward preview: Active (surfaces the side-effect) -->
-        <div class="page is-nav" data-page="active">
-          <div class="page-crumb"><button data-goto="draft">&#8592; Back to current step (Draft)</button></div>
-          <div class="page-head"><span class="page-title">Active</span><span class="badge gray"><span class="dot"></span>Upcoming</span></div>
-          <div class="page-meta">Not started — preview of what launching does</div>
-          <div class="card">
-            <div class="preview-note">Launching to <b>Active</b> makes the product live in your storefront — and there's a catch that makes products different from orders:</div>
-            <div class="sidefx">⚡ <b>Launch publishes to your connected sales channels</b> (this product is Shopify-mapped). It also confirms inventory / made-to-order first. That publish is <b>coupled to the transition</b> — which is the whole reason <span style="color:var(--amber);font-weight:600;">②</span> matters: advancing has to run the real launch, not just flip a status.</div>
-          </div>
-        </div>
+    <!-- PRODUCT (no variants) — same process + tabs, no variant axis -->
+    <div class="so" data-so="product">
+      <div class="hero"><img src="https://storage.googleapis.com/mast-platform-prod.firebasestorage.app/sgtest15/migration-images/s595745330179078127-p116-i1-w3600.jpg" onerror="this.style.visibility='hidden'"><div><div class="hname">A Life's Work — Honey Pendant</div><div class="hmeta">Pendants · Build · no variants · $85.00</div></div></div>
+      <div class="stepper"><div class="step current"><span class="node">1</span><span class="lbl">Draft</span></div><div class="step-line"></div><div class="step todo"><span class="node">2</span><span class="lbl">Review</span></div><div class="step-line"></div><div class="step todo"><span class="node">3</span><span class="lbl">Published</span></div></div>
+      <div class="stagecard"><div class="sh"><b>Draft</b> — to send to Review:</div>
+        <div class="todo-item met"><span class="mk">✓</span><span class="tx">Recipe defined</span><span class="go">Recipe →</span></div>
+        <div class="todo-item met"><span class="mk">✓</span><span class="tx">Costed &amp; priced</span><span class="go">Pricing →</span></div>
+        <div class="todo-item met"><span class="mk">✓</span><span class="tx">Listing ready</span><span class="go">Image →</span></div>
+        <div class="stage-actions"><span class="sp"></span><button class="btn btn-primary btn-sm">Send to Review →</button></div>
       </div>
-
-      <!-- ===== RECIPE tab (the "Items" of a product) ===== -->
-      <div class="tabpanel" data-panel="recipe">
-        <div class="section-title">Bill of materials</div>
-        <div class="card">
-          <table class="bom">
-            <thead><tr><th>Material</th><th class="r">Qty</th><th class="r">Unit cost</th><th class="r">Extended</th></tr></thead>
-            <tbody>
-              <tr><td class="mat">Encased Raw Honey (per pendant)</td><td class="r qty">1 ct <span class="sub">(1.05 w/ scrap)</span></td><td class="r uc">$1.50</td><td class="r">$1.58</td></tr>
-              <tr><td class="mat">Borosilicate Glass Rod (Clear)</td><td class="r qty">18 g <span class="sub">(19.8 w/ scrap)</span></td><td class="r uc">$0.65</td><td class="r">$12.87</td></tr>
-              <tr><td class="mat">Stainless Steel Chain 20in</td><td class="r qty">1 ct</td><td class="r uc">$1.10</td><td class="r">$1.10</td></tr>
-            </tbody>
-          </table>
-        </div>
-        <div class="section-title">Cost &amp; price</div>
-        <div class="card">
-          <table class="money">
-            <tr><td class="k">Materials</td><td class="v">$15.55</td></tr>
-            <tr><td class="k">Labor <span class="sub" style="color:var(--warm-gray);font-size:.78rem;">(25 min @ $75/hr)</span></td><td class="v">$31.25</td></tr>
-            <tr><td class="k">Other <span class="sub" style="color:var(--warm-gray);font-size:.78rem;">(torch fuel + annealing)</span></td><td class="v">$1.50</td></tr>
-            <tr class="total"><td>Unit cost</td><td class="v">$48.30</td></tr>
-            <tr><td class="k" style="padding-top:14px;">Retail price</td><td class="v" style="padding-top:14px;">$85.00</td></tr>
-            <tr><td class="k">Margin</td><td class="v">43%</td></tr>
-          </table>
-        </div>
-      </div>
-
-      <!-- ===== CHANNELS tab (replaces "Customer") ===== -->
-      <div class="tabpanel" data-panel="channels">
-        <div class="section-title">Sales channels</div>
-        <div class="card">
-          <div class="chrow"><div class="ic">Shop</div><div class="chmain"><div class="chname">Shopify</div><div class="chsub">Mapped · id 8011635589238 · synced Apr 9</div></div><span class="badge teal"><span class="dot"></span>Mapped</span></div>
-          <div class="chrow"><div class="ic">Etsy</div><div class="chmain"><div class="chname">Etsy</div><div class="chsub">Not mapped</div></div><span class="badge gray"><span class="dot"></span>Off</span></div>
-          <div class="chrow"><div class="ic">Sq</div><div class="chmain"><div class="chname">Square</div><div class="chsub">Not mapped</div></div><span class="badge gray"><span class="dot"></span>Off</span></div>
-          <div class="chrow"><div class="ic">⚓</div><div class="chmain"><div class="chname">Internal storefront</div><div class="chsub">runmast.com shop</div></div><span class="badge teal"><span class="dot"></span>On</span></div>
-        </div>
-        <div class="empty-note">Mapping &amp; sync are managed in maker. <span style="color:var(--teal);cursor:pointer;">Manage channels in maker &#8594; <span style="font-size:.7rem;color:var(--warm-gray);">↗ legacy</span></span></div>
-      </div>
-
-      <!-- ===== HISTORY tab ===== -->
-      <div class="tabpanel" data-panel="history">
-        <div class="section-title">Lifecycle</div>
-        <div class="card"><div class="tl">
-          <div class="tl-item"><span class="tl-dot"></span><div class="tl-when">Mar 25, 2026</div><div class="tl-what">Created — imported from shirglassworks.com</div></div>
-          <div class="tl-item"><span class="tl-dot"></span><div class="tl-when">May 30, 2026</div><div class="tl-what">Recipe built &amp; costed — unit cost $48.30</div></div>
-          <div class="tl-item"><span class="tl-dot" style="background:var(--amber);"></span><div class="tl-when">Now</div><div class="tl-what">Draft — preparing to promote</div></div>
-        </div></div>
-        <div class="section-title">Price history</div>
-        <div class="card"><div class="kv"><div class="k">May 20, 2026</div><div class="v">$85.00 · set by admin</div></div></div>
-      </div>
-
+      <div class="muted">No variants — so no Default/override split; the product is edited directly through the same tabs.</div>
     </div>
+
   </div>
 </div>
 
-<!-- ===== mode-A confirm demo ===== -->
-<div class="cfx" id="cfx">
-  <div class="cfx-box">
-    <div class="cfx-title">Promote to Ready?</div>
-    <div class="cfx-body">This means the product is ready for launch review. You can still edit anything.<br><br><b>Recommended but not required:</b> channel mapping, capacity planned — proceed anyway?<br><br><span style="font-size:.78rem;color:var(--warm-gray);">(At the <b style="color:var(--text);">Active</b> step, this same Advance fires the real launch — including the Shopify publish.)</span></div>
-    <div class="cfx-actions"><button class="btn btn-ghost" id="cfxCancel" style="border:1px solid var(--border-strong);">Cancel</button><button class="btn btn-primary" id="cfxGo">Promote</button></div>
+<!-- stacked child SO: the Recipe object, edited full-size, returns to the calling tab -->
+<div class="childpanel" id="childRecipe">
+  <div class="ph"><button class="ph-done" id="childBack">← Done</button><span class="crumb">Spiral Cups <span style="color:var(--warm-gray);">› Recipe</span> · <b>editing</b></span><span class="spacer"></span><button class="ph-icon" id="childClose">&#10005;</button></div>
+  <div class="pbody">
+    <div class="childbadge">◆ Recipe · its own object, opened full-size from the Recipe tab</div>
+    <div class="hero"><div class="bigsw" style="background:linear-gradient(135deg,#3a5fd8,#5fb4c8);"></div><div><div class="hname">Spiral Cups — recipe</div><div class="hmeta">Build recipe · status Draft · drives cost → margin → price</div></div></div>
+    <div class="sec-title">Bill of materials<span class="sp"></span><button class="btn btn-sec btn-sm">+ Add material</button></div>
+    <div class="card" style="padding:6px 16px;"><table class="bom">
+      <tr><td>Borosilicate Rod (Clear)</td><td class="r">22 g</td><td class="r">$0.65/g</td><td class="r">$14.30</td></tr>
+      <tr><td>Color rod (lip wrap)</td><td class="r">4 g</td><td class="r">$0.85/g</td><td class="r">$3.40</td></tr>
+    </table></div>
+    <div class="sec-title">Labor &amp; cost</div>
+    <div class="card"><div class="kv"><div class="k">Labor</div><div class="v">included</div></div><div class="kv"><div class="k">Unit cost</div><div class="v">$17.80</div></div><div class="kv"><div class="k">Retail margin</div><div class="v">79%</div></div></div>
+    <div style="margin-top:6px;"><button class="btn btn-primary btn-sm" id="childSave">Save &amp; collapse →</button></div>
+    <div class="muted" style="margin-top:10px;">This is the full recipe editor as its own SO. Closing returns you to the product's <b>Recipe</b> tab — no bounce to legacy.</div>
   </div>
 </div>
 
-<!-- ===== callout pins ===== -->
-<div class="callouts">
-  <div class="callout">
-    <div class="ct"><span class="num">①</span> Product facets</div>
-    Tabs are <b>Process · Recipe · Channels · History</b> — a product has no “Customer,” so it's <b>not</b> the order-shaped Process/Items/Customer/History. Does this set look right?
-  </div>
-  <div class="callout">
-    <div class="ct"><span class="num">②</span> What Advance does</div>
-    Launch <b>fires a Shopify publish</b> (coupled to the transition). Toggle top-right:<br><b>A</b> = advance happens here (runs the real promote/launch, publish &amp; all). <b>B</b> = Advance opens maker; you click the real button there. <i>My pick: A.</i>
-  </div>
-</div>
-
-<div class="mock-flag"><b>MOCK</b> · products-v2 Process slide-out · real Honey Pendant data, illustrative Draft state · not wired</div>
+<div class="note"><b>Is this the whole picture?</b> Default = process (stage + to-dos) + tab flow · variant = override tabs (no own process) · "Add variant" inherits the Default. <i>Try: expand Spiral Cups (▶) → click Default (click a to-do to jump to its tab; Send to Review) → click a colour → "＋ Add variant".</i></div>
+<div class="mock-flag"><b>MOCK</b> · products-v2 process × variants × tabs · real data · not wired</div>
 
 <script>
-  // facet tabs
-  function activateTab(key) {
-    document.querySelectorAll('.tab').forEach(function (x) { x.classList.toggle('active', x.getAttribute('data-tab') === key); });
-    document.querySelectorAll('.tabpanel').forEach(function (p) { p.classList.toggle('active', p.getAttribute('data-panel') === key); });
+  var scrim=document.getElementById('scrim'),panel=document.getElementById('panel'),crumb=document.getElementById('crumb');
+  function showSO(kind,opts){
+    opts=opts||{};
+    document.querySelectorAll('.so').forEach(function(s){s.classList.toggle('show',s.getAttribute('data-so')===kind);});
+    var shown=document.querySelector('.so.show');
+    if(shown){shown.querySelectorAll('.tab').forEach(function(t,i){t.classList.toggle('active',i===0);});
+      shown.querySelectorAll('.tp').forEach(function(p,i){p.classList.toggle('active',i===0);});}
+    if(kind==='variant'){crumb.innerHTML='Spiral Cups <span style="color:var(--warm-gray);">›</span> <b>'+opts.name+'</b>';
+      document.getElementById('vName').textContent=opts.name;document.getElementById('vColorName').textContent=opts.name;document.getElementById('vBigSw').style.background=opts.color||'#888';}
+    else if(kind==='newvariant'){crumb.innerHTML='Spiral Cups <span style="color:var(--warm-gray);">›</span> <b>New variant</b>';}
+    else if(kind==='product'){crumb.innerHTML='<b>A Life’s Work — Honey Pendant</b>';}
+    else {crumb.innerHTML='<b>Spiral Cups</b> <span style="color:var(--warm-gray);">· Default</span>';}
+    scrim.classList.add('show');panel.classList.add('show');
   }
-  document.querySelectorAll('.tab').forEach(function (t) { t.addEventListener('click', function () { activateTab(t.getAttribute('data-tab')); }); });
-
-  // book pages within Process, driven by the header stepper
-  function showPage(key) {
-    document.querySelectorAll('.tabpanel[data-panel="process"] .page').forEach(function (p) { p.classList.toggle('active', p.getAttribute('data-page') === key); });
-    document.querySelectorAll('.stepper .step').forEach(function (s) { s.classList.toggle('viewing', s.getAttribute('data-page') === key); });
-  }
-  document.querySelectorAll('.stepper .step.nav').forEach(function (s) { s.addEventListener('click', function () { activateTab('process'); showPage(s.getAttribute('data-page')); }); });
-  document.querySelectorAll('[data-goto]').forEach(function (b) { b.addEventListener('click', function () { showPage(b.getAttribute('data-goto')); }); });
-  document.getElementById('expandBtn').addEventListener('click', function () { document.getElementById('panel').classList.toggle('expanded'); });
-
-  // ===== ② Advance fork: render A or B =====
-  var advMode = 'A';
-  function renderAdvance() {
-    var host = document.getElementById('advHost');
-    var hint = document.getElementById('advHint');
-    if (advMode === 'A') {
-      host.innerHTML = '<button class="btn btn-primary" id="advBtn">Promote to Ready &#8594;</button>';
-      hint.textContent = 'A · the phase advances right here; runs the real promote (and at Active, the real launch + Shopify publish).';
-      document.getElementById('advBtn').addEventListener('click', function () { document.getElementById('cfx').classList.add('show'); });
-    } else {
-      host.innerHTML = '<button class="btn btn-link" id="advBtn">Promote in maker &#8594; <span style="font-size:.7rem;color:var(--warm-gray);">↗ legacy</span></button>';
-      hint.textContent = 'B · Advance opens the legacy maker define view; you click the real Promote/Launch button there (full recipe/inventory context).';
-      document.getElementById('advBtn').addEventListener('click', function () {
-        hint.textContent = '→ (would open the legacy maker define view for this product — deep-link via navigateToClassic). Nothing advances in v2.';
-        hint.style.color = 'var(--teal)';
-      });
-    }
-  }
-  document.querySelectorAll('#advSeg button').forEach(function (b) {
-    b.addEventListener('click', function () {
-      advMode = b.getAttribute('data-mode');
-      document.querySelectorAll('#advSeg button').forEach(function (x) { x.classList.toggle('on', x === b); });
-      renderAdvance();
-    });
-  });
-  renderAdvance();
-
-  // confirm demo
-  document.getElementById('cfxCancel').addEventListener('click', function () { document.getElementById('cfx').classList.remove('show'); });
-  document.getElementById('cfxGo').addEventListener('click', function () {
-    document.getElementById('cfx').classList.remove('show');
-    // mock: move to Ready
-    document.querySelector('.step[data-page="draft"]').className = 'step done nav';
-    document.querySelector('.step[data-page="draft"] .node').innerHTML = '&#10003;';
-    document.querySelector('.stepper .step-line').classList.add('done');
-    var r = document.querySelector('.step[data-page="ready"]'); r.className = 'step current nav'; r.querySelector('.node').textContent = '2';
-    document.querySelector('.tab[data-tab="process"] .count').textContent = 'Ready';
-    document.querySelector('.ph-titlewrap .badge').className = 'badge amber'; document.querySelector('.ph-titlewrap .badge').innerHTML = '<span class="dot"></span>Ready';
-    document.getElementById('advHint').textContent = '✓ Promoted to Ready (mock). In A, this ran the real makerPromoteToReady — gates, confirm, audit, all of it.';
-    document.getElementById('advHint').style.color = 'var(--success)';
-  });
+  function closeSO(){scrim.classList.remove('show');panel.classList.remove('show');}
+  scrim.addEventListener('click',closeSO);document.getElementById('soClose').addEventListener('click',closeSO);
+  document.querySelectorAll('.lrow').forEach(function(row){row.addEventListener('click',function(e){
+    if(e.target.closest('.exp'))return; var so=row.getAttribute('data-so');
+    if(so==='variant')showSO('variant',{name:row.getAttribute('data-variant'),color:row.getAttribute('data-color')}); else showSO(so);});});
+  document.querySelectorAll('.exp[data-exp]').forEach(function(b){b.addEventListener('click',function(e){e.stopPropagation();
+    var w=document.querySelector('.vsub-wrap[data-vsub="'+b.getAttribute('data-exp')+'"]');var open=w.classList.toggle('open');b.textContent=open?'▼':'▶';});});
+  document.getElementById('vBack').addEventListener('click',function(){showSO('default');});
+  document.getElementById('nvBack').addEventListener('click',function(){showSO('default');});
+  document.querySelectorAll('.todo-item[data-jumptab]').forEach(function(it){it.addEventListener('click',function(){
+    var key='d-'+it.getAttribute('data-jumptab');var so=document.querySelector('.so[data-so="default"]');
+    so.querySelectorAll('.tab').forEach(function(x){x.classList.toggle('active',x.getAttribute('data-tp')===key);});
+    so.querySelectorAll('.tp').forEach(function(p){p.classList.toggle('active',p.getAttribute('data-tp')===key);});
+    document.querySelector('#dTabs').scrollIntoView({behavior:'smooth',block:'nearest'});});});
+  document.getElementById('dAdvance').addEventListener('click',function(){
+    var s=document.getElementById('dStep');var steps=s.querySelectorAll('.step');
+    steps[0].className='step done';steps[0].querySelector('.node').innerHTML='✓';s.querySelector('.step-line').classList.add('done');
+    steps[1].className='step current';this.textContent='Publish →';
+    document.querySelector('.so[data-so="default"] .stagecard .sh').innerHTML='<b>Review</b> — final check before publishing to channels.';});
+  document.querySelectorAll('.tab').forEach(function(t){t.addEventListener('click',function(){var so=t.closest('.so'),key=t.getAttribute('data-tp');
+    so.querySelectorAll('.tab').forEach(function(x){x.classList.toggle('active',x===t);});
+    so.querySelectorAll('.tp').forEach(function(p){p.classList.toggle('active',p.getAttribute('data-tp')===key);});});});
+  // stacked child SO for the Recipe sub-object (summary in tab → full SO → collapse back)
+  var childRecipe=document.getElementById('childRecipe');
+  function closeChild(){childRecipe.classList.remove('show');}
+  document.getElementById('dEditRecipe').addEventListener('click',function(e){e.stopPropagation();childRecipe.classList.add('show');});
+  document.getElementById('childBack').addEventListener('click',closeChild);
+  document.getElementById('childClose').addEventListener('click',closeChild);
+  document.getElementById('childSave').addEventListener('click',closeChild);
 </script>
 </body>
 </html>
