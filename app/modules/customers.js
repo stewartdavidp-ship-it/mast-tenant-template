@@ -429,7 +429,7 @@
     h += '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px;">';
     h += '<label style="font-size:0.78rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.04em;">Segment:</label>';
     h += '<select id="customersSegmentSelect" onchange="customersApplySegment(this.value)" ' +
-         'style="padding:7px 10px;border:1px solid var(--cream-dark);border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:DM Sans,sans-serif;font-size:0.85rem;min-width:180px;">';
+         'style="padding:7px 10px;border:1px solid var(--cream-dark);border-radius:6px;background:var(--cream);color:var(--text-primary);font-family:DM Sans,sans-serif;font-size:0.85rem;min-width:180px;">';
     BUILTIN_SEGMENTS.forEach(function(s) {
       var sel = (currentSegmentId === s.id || (!currentSegmentId && s.id === '__all')) ? ' selected' : '';
       h += '<option value="' + esc(s.id) + '"' + sel + '>' + esc(s.name) + '</option>';
@@ -451,17 +451,17 @@
     // ----- Filter bar -----
     h += '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:16px;">';
     h += '<input type="text" id="customersSearch" placeholder="Search by name or email…" oninput="customersRender()" ' +
-         'style="flex:1;min-width:220px;padding:9px 12px;border:1px solid var(--cream-dark);border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:DM Sans,sans-serif;font-size:0.9rem;">';
+         'style="flex:1;min-width:220px;padding:9px 12px;border:1px solid var(--cream-dark);border-radius:6px;background:var(--cream);color:var(--text-primary);font-family:DM Sans,sans-serif;font-size:0.9rem;">';
 
     h += '<select id="customersWholesaleFilter" onchange="customersRender()" title="Filter by wholesale-account linkage" ' +
-         'style="padding:9px 12px;border:1px solid var(--cream-dark);border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:DM Sans,sans-serif;font-size:0.9rem;">';
+         'style="padding:9px 12px;border:1px solid var(--cream-dark);border-radius:6px;background:var(--cream);color:var(--text-primary);font-family:DM Sans,sans-serif;font-size:0.9rem;">';
     WHOLESALE_OPTIONS.forEach(function(opt) {
       h += '<option value="' + esc(opt.value) + '">' + esc(opt.label) + '</option>';
     });
     h += '</select>';
 
     h += '<select id="customersSourceFilter" onchange="customersRender()" ' +
-         'style="padding:9px 12px;border:1px solid var(--cream-dark);border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:DM Sans,sans-serif;font-size:0.9rem;">';
+         'style="padding:9px 12px;border:1px solid var(--cream-dark);border-radius:6px;background:var(--cream);color:var(--text-primary);font-family:DM Sans,sans-serif;font-size:0.9rem;">';
     SOURCE_OPTIONS.forEach(function(opt) {
       h += '<option value="' + esc(opt.value) + '">' + esc(opt.label) + '</option>';
     });
@@ -469,7 +469,7 @@
 
     var tags = allKnownTags();
     h += '<select id="customersTagFilter" onchange="customersRender()" ' +
-         'style="padding:9px 12px;border:1px solid var(--cream-dark);border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:DM Sans,sans-serif;font-size:0.9rem;">';
+         'style="padding:9px 12px;border:1px solid var(--cream-dark);border-radius:6px;background:var(--cream);color:var(--text-primary);font-family:DM Sans,sans-serif;font-size:0.9rem;">';
     h += '<option value="">All tags</option>';
     tags.forEach(function(t) {
       h += '<option value="' + esc(t) + '">' + esc(t) + '</option>';
@@ -477,13 +477,13 @@
     h += '</select>';
 
     h += '<input type="date" id="customersLastOrderBefore" onchange="customersRender()" title="Last order before…" ' +
-         'style="padding:8px 10px;border:1px solid var(--cream-dark);border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:DM Sans,sans-serif;font-size:0.85rem;">';
+         'style="padding:8px 10px;border:1px solid var(--cream-dark);border-radius:6px;background:var(--cream);color:var(--text-primary);font-family:DM Sans,sans-serif;font-size:0.85rem;">';
 
     h += '<input type="number" id="customersMinSpend" min="0" step="1" placeholder="Min spend $" onchange="customersRender()" oninput="customersRender()" ' +
-         'style="width:120px;padding:8px 10px;border:1px solid var(--cream-dark);border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:DM Sans,sans-serif;font-size:0.85rem;">';
+         'style="width:120px;padding:8px 10px;border:1px solid var(--cream-dark);border-radius:6px;background:var(--cream);color:var(--text-primary);font-family:DM Sans,sans-serif;font-size:0.85rem;">';
 
     h += '<select id="customersSortBy" onchange="customersRender()" ' +
-         'style="padding:9px 12px;border:1px solid var(--cream-dark);border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:DM Sans,sans-serif;font-size:0.9rem;">';
+         'style="padding:9px 12px;border:1px solid var(--cream-dark);border-radius:6px;background:var(--cream);color:var(--text-primary);font-family:DM Sans,sans-serif;font-size:0.9rem;">';
     SORT_OPTIONS.forEach(function(opt) {
       h += '<option value="' + esc(opt.value) + '">' + esc(opt.label) + '</option>';
     });

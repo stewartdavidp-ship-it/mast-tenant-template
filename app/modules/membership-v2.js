@@ -318,7 +318,7 @@
     return U.launchCard({
       title: 'Program settings',
       body: rows.map(function (r) {
-        return '<div class="mu-sub" style="display:flex;justify-content:space-between;gap:12px;"><span>' + esc(r.k) + '</span><span style="color:var(--charcoal,var(--text));text-align:right;">' + r.v + '</span></div>';
+        return '<div class="mu-sub" style="display:flex;justify-content:space-between;gap:12px;"><span>' + esc(r.k) + '</span><span style="color:var(--text-primary);text-align:right;">' + r.v + '</span></div>';
       }).join(''),
       onClickFnName: 'MembershipV2.settings', arrow: 'Edit →',
       headerRight: U.badge(c.enabled ? 'Enabled' : 'Disabled', c.enabled ? 'success' : 'neutral')

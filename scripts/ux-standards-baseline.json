@@ -2,7 +2,7 @@
   "app/modules/accounting.js": {
     "nativeDialogs": 3,
     "rogueOverlays": 1,
-    "hardcodedHex": 63
+    "hardcodedHex": 61
   },
   "app/modules/advisor.js": {
     "nativeDialogs": 4,
@@ -150,7 +150,7 @@
   },
   "app/modules/website.js": {
     "rogueOverlays": 1,
-    "hardcodedHex": 54
+    "hardcodedHex": 52
   },
   "app/modules/wholesale.js": {
     "rogueOverlays": 2,

@@ -327,7 +327,7 @@
     pop.style.top  = (rect.bottom + 4) + 'px';
     pop.style.left = Math.max(8, Math.min(window.innerWidth - 320, rect.left)) + 'px';
     pop.style.background = 'var(--cream)';
-    pop.style.color = 'var(--charcoal)';
+    pop.style.color = 'var(--text-primary)';
     pop.style.border = '1px solid var(--cream-dark)';
     pop.style.borderRadius = '8px';
     pop.style.boxShadow = '0 4px 16px rgba(0,0,0,0.12)';
@@ -357,7 +357,7 @@
     btn.style.padding = '8px 10px';
     btn.style.borderRadius = '6px';
     btn.style.cursor = 'pointer';
-    btn.style.color = 'var(--charcoal)';
+    btn.style.color = 'var(--text-primary)';
     btn.style.font = 'inherit';
     btn.onmouseenter = function() { btn.style.background = 'var(--cream-dark)'; };
     btn.onmouseleave = function() { btn.style.background = 'transparent'; };
@@ -428,7 +428,7 @@
     }).join('');
 
     var inputCss = 'width:100%;padding:9px 12px;border:1px solid var(--cream-dark);border-radius:6px;'
-                 + 'background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.9rem;';
+                 + 'background:var(--cream);color:var(--text-primary);font-family:\'DM Sans\';font-size:0.9rem;';
 
     modal.innerHTML = [
       '<div class="modal-header">',
@@ -702,7 +702,7 @@
       });
 
       html.push('<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;margin-bottom:16px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);">');
-      html.push('  <div style="padding:12px 16px;border-bottom:1px solid var(--cream-dark);font-weight:600;color:var(--charcoal);">');
+      html.push('  <div style="padding:12px 16px;border-bottom:1px solid var(--cream-dark);font-weight:600;color:var(--text-primary);">');
       html.push(    esc(ruleId) +
                     ' <span style="color:var(--warm-gray);font-weight:400;font-size:0.85rem;">(' +
                     rows.length + ' suppression' + (rows.length === 1 ? '' : 's') + ')</span>');
@@ -759,7 +759,7 @@
       ? scopeLabel(r.scope)
       : (scopeLabel(r.scope) + ': ' + (r.scopeId || ''));
     var reasonText = r.reasonText
-      ? '<div style="font-size:0.85rem;color:var(--charcoal);margin-top:4px;font-style:italic;">&ldquo;' + esc(r.reasonText) + '&rdquo;</div>'
+      ? '<div style="font-size:0.85rem;color:var(--text-primary);margin-top:4px;font-style:italic;">&ldquo;' + esc(r.reasonText) + '&rdquo;</div>'
       : '';
     return [
       '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0;border-top:1px solid var(--cream-dark);">',

@@ -211,7 +211,7 @@
 
   function tile(value, label) {
     return '<div style="background:var(--cream);border-radius:8px;padding:12px 18px;flex:1;min-width:120px;text-align:center;">' +
-      '<div style="font-size:1.6rem;font-weight:700;color:var(--charcoal);">' + value + '</div>' +
+      '<div style="font-size:1.6rem;font-weight:700;color:var(--text-primary);">' + value + '</div>' +
       '<div style="font-size:0.78rem;color:var(--warm-gray);">' + esc(label) + '</div></div>';
   }
 

@@ -114,7 +114,7 @@
     fetch: function () { return Promise.resolve(V2.cfg); },
     detail: {
       render: function (UI, c) {
-        function termsCard(title, text) { return UI.card(title, text ? '<div style="font-size:0.9rem;white-space:pre-wrap;color:var(--charcoal,var(--text));line-height:1.5;">' + esc(text) + '</div>' : '<span class="mu-sub">Not set.</span>'); }
+        function termsCard(title, text) { return UI.card(title, text ? '<div style="font-size:0.9rem;white-space:pre-wrap;color:var(--text-primary);line-height:1.5;">' + esc(text) + '</div>' : '<span class="mu-sub">Not set.</span>'); }
         return termsCard('Gift card terms', c.giftCardTerms) + termsCard('Loyalty program terms', c.loyaltyTerms) + termsCard('Additional terms', c.additionalTerms);
       },
       editRender: function (c) {
@@ -158,7 +158,7 @@
 
   function editCard(key, title, rows) {
     var summary = rows.map(function (r) {
-      return '<div class="mu-sub" style="display:flex;justify-content:space-between;gap:12px;"><span>' + esc(r.k) + '</span><span style="color:var(--charcoal,var(--text));text-align:right;">' + (r.v == null || r.v === '' ? '—' : r.v) + '</span></div>';
+      return '<div class="mu-sub" style="display:flex;justify-content:space-between;gap:12px;"><span>' + esc(r.k) + '</span><span style="color:var(--text-primary);text-align:right;">' + (r.v == null || r.v === '' ? '—' : r.v) + '</span></div>';
     }).join('');
     return U.launchCard({ title: title, body: summary, onClickFnName: 'TermsV2.edit', arg: key, arrow: 'Edit →' });
   }
@@ -179,8 +179,8 @@
       { k: 'Additional terms', v: isSet(c.additionalTerms) }
     ]);
     var published = c.lastPublishedAt
-      ? '<div style="font-size:0.9rem;color:var(--charcoal,var(--text));">Last published ' + N.date(c.lastPublishedAt) + '.</div>'
-      : '<div style="font-size:0.9rem;color:var(--charcoal,var(--text));">Not yet published to the storefront.</div>';
+      ? '<div style="font-size:0.9rem;color:var(--text-primary);">Last published ' + N.date(c.lastPublishedAt) + '.</div>'
+      : '<div style="font-size:0.9rem;color:var(--text-primary);">Not yet published to the storefront.</div>';
     var publish = U.card('Publish', published +
       '<div class="mu-sub" style="margin-top:10px;">Publishes the current policy settings to your public storefront terms page.</div>' +
       '<div style="margin-top:10px;"><button class="btn btn-primary" onclick="TermsV2.publish()">Publish to storefront →</button></div>', { fill: true });

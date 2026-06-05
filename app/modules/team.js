@@ -61,7 +61,7 @@
   var PAY_FREQUENCIES = ['weekly', 'bi-weekly', 'monthly'];
   var REFERENCE_OUTCOMES = ['positive', 'neutral', 'concerning', 'not-checked'];
 
-  var INPUT_STYLE = 'width:100%;padding:9px 12px;border:1px solid var(--cream-dark,#ddd);border-radius:6px;font-size:0.9rem;background:var(--cream,var(--cream));box-sizing:border-box;font-family:DM Sans,sans-serif;color:var(--charcoal,var(--charcoal));';
+  var INPUT_STYLE = 'width:100%;padding:9px 12px;border:1px solid var(--cream-dark,#ddd);border-radius:6px;font-size:0.9rem;background:var(--cream,var(--cream));box-sizing:border-box;font-family:DM Sans,sans-serif;color:var(--text-primary);';
 
   // --- Helpers ---
   function fmtDollars(cents) {

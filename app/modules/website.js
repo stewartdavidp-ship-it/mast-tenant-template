@@ -861,7 +861,7 @@
     templateManifest.colorSchemes.forEach(function(scheme) {
       var isActive = !showCustomColors && currentSchemeId === scheme.id;
       var c = scheme.colors;
-      html += '<div class="wp-scheme-card' + (isActive ? ' selected' : '') + '" onclick="wpSelectScheme(\'' + esc(scheme.id) + '\')" style="cursor:pointer;padding:12px;border-radius:10px;border:2px solid ' + (isActive ? 'var(--accent)' : 'var(--charcoal-light, #333)') + ';background:var(--charcoal, var(--charcoal));transition:border-color 0.2s;">';
+      html += '<div class="wp-scheme-card' + (isActive ? ' selected' : '') + '" onclick="wpSelectScheme(\'' + esc(scheme.id) + '\')" style="cursor:pointer;padding:12px;border-radius:10px;border:2px solid ' + (isActive ? 'var(--accent)' : 'var(--charcoal-light, #333)') + ';background:var(--text-primary);transition:border-color 0.2s;">';
       // Color circles row
       html += '<div style="display:flex;gap:6px;margin-bottom:8px;">';
       html += '<div style="width:28px;height:28px;border-radius:50%;background:' + esc(c.primaryColor) + ';border:2px solid rgba(255,255,255,0.15);" title="Primary"></div>';
@@ -877,7 +877,7 @@
     });
 
     // Custom option card
-    html += '<div class="wp-scheme-card' + (showCustomColors ? ' selected' : '') + '" onclick="wpSelectSchemeCustom()" style="cursor:pointer;padding:12px;border-radius:10px;border:2px solid ' + (showCustomColors ? 'var(--accent)' : 'var(--charcoal-light, #333)') + ';background:var(--charcoal, var(--charcoal));transition:border-color 0.2s;">';
+    html += '<div class="wp-scheme-card' + (showCustomColors ? ' selected' : '') + '" onclick="wpSelectSchemeCustom()" style="cursor:pointer;padding:12px;border-radius:10px;border:2px solid ' + (showCustomColors ? 'var(--accent)' : 'var(--charcoal-light, #333)') + ';background:var(--text-primary);transition:border-color 0.2s;">';
     html += '<div style="display:flex;gap:6px;margin-bottom:8px;">';
     html += '<div style="width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg, #ff6b6b, #4ecdc4, #45b7d1);border:2px solid rgba(255,255,255,0.15);"></div>';
     html += '</div>';
@@ -899,7 +899,7 @@
 
     templateManifest.fontPairs.forEach(function(fp) {
       var isActive = currentFontPair === fp.id;
-      html += '<div class="wp-font-card' + (isActive ? ' selected' : '') + '" onclick="wpSelectFontPair(\'' + esc(fp.id) + '\')" style="cursor:pointer;padding:14px;border-radius:10px;border:2px solid ' + (isActive ? 'var(--accent)' : 'var(--charcoal-light, #333)') + ';background:var(--charcoal, var(--charcoal));transition:border-color 0.2s;">';
+      html += '<div class="wp-font-card' + (isActive ? ' selected' : '') + '" onclick="wpSelectFontPair(\'' + esc(fp.id) + '\')" style="cursor:pointer;padding:14px;border-radius:10px;border:2px solid ' + (isActive ? 'var(--accent)' : 'var(--charcoal-light, #333)') + ';background:var(--text-primary);transition:border-color 0.2s;">';
       html += '<div style="font-family:\'' + esc(fp.heading) + '\', serif;font-size:1.15rem;font-weight:600;margin-bottom:4px;line-height:1.2;">' + esc(fp.name) + '</div>';
       html += '<div style="font-family:\'' + esc(fp.body) + '\', sans-serif;font-size:0.78rem;color:var(--warm-gray);line-height:1.4;">' + esc(fp.heading) + ' + ' + esc(fp.body) + '</div>';
       if (fp.default) {
@@ -918,7 +918,7 @@
     var primaryColor = tc.primaryColor || '#8B7355';
     var accentColor = tc.accentColor || '#2D5F5D';
     var html = '';
-    html += '<div style="margin-top:12px;padding:16px;background:var(--charcoal, var(--charcoal));border-radius:10px;border:1px solid var(--charcoal-light, #333);">';
+    html += '<div style="margin-top:12px;padding:16px;background:var(--text-primary);border-radius:10px;border:1px solid var(--charcoal-light, #333);">';
     html += '<div class="wp-color-row" style="margin-bottom:0;">';
     html += '<div class="wp-field-group" style="flex:1;">';
     html += '<label>Primary Color</label>';
@@ -1086,7 +1086,7 @@
     html += '<div style="display:flex;align-items:flex-start;gap:12px;">';
     html += '<div style="font-size:1.6rem;line-height:1;">&#127912;</div>';
     html += '<div style="flex:1;">';
-    html += '<div style="font-weight:600;font-size:0.9rem;margin-bottom:4px;color:var(--charcoal);">Template Generated from Your Site</div>';
+    html += '<div style="font-weight:600;font-size:0.9rem;margin-bottom:4px;color:var(--text-primary);">Template Generated from Your Site</div>';
     html += '<div style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:10px;">';
     html += 'We analyzed your site and created a draft template with ' + sectionCount + ' sections';
     if (draft.businessName) html += ' for <strong>' + esc(draft.businessName) + '</strong>';
@@ -1101,7 +1101,7 @@
       html += '<div style="margin-top:10px;display:flex;flex-wrap:wrap;gap:4px;">';
       for (var i = 0; i < draft.homepageFlow.length; i++) {
         var s = draft.homepageFlow[i];
-        html += '<span style="display:inline-block;background:var(--cream-dark,#e8e0d4);border-radius:12px;padding:2px 10px;font-size:0.78rem;color:var(--charcoal,#333);">' + esc(s) + '</span>';
+        html += '<span style="display:inline-block;background:var(--cream-dark,#e8e0d4);border-radius:12px;padding:2px 10px;font-size:0.78rem;color:var(--text-primary);">' + esc(s) + '</span>';
         if (i < draft.homepageFlow.length - 1) html += '<span style="color:var(--warm-gray-light);font-size:0.78rem;">&#8594;</span>';
       }
       html += '</div>';
@@ -1472,7 +1472,7 @@
     if (discovered.blogs && discovered.blogs.count) items.push(discovered.blogs.count + ' blog posts');
     if (discovered.events && discovered.events.count) items.push(discovered.events.count + ' events');
     if (items.length === 0) return '';
-    return '<div style="font-size:0.85rem;color:var(--charcoal);margin-top:4px;">Found: ' + items.join(', ') + '</div>';
+    return '<div style="font-size:0.85rem;color:var(--text-primary);margin-top:4px;">Found: ' + items.join(', ') + '</div>';
   }
 
   function renderImportProgress(imported) {
@@ -1482,7 +1482,7 @@
       if (imported[t]) { total += (imported[t].total || 0); done += (imported[t].done || 0); }
     });
     var pct = total > 0 ? Math.round((done / total) * 100) : 50;
-    var html = '<div style="font-size:0.85rem;color:var(--charcoal);margin-top:4px;">Importing: ' + done + ' of ' + total + ' items</div>';
+    var html = '<div style="font-size:0.85rem;color:var(--text-primary);margin-top:4px;">Importing: ' + done + ' of ' + total + ' items</div>';
     html += renderProgressBar(pct);
     return html;
   }
@@ -2274,7 +2274,7 @@
       var fp = data.siteFingerprint;
       if (fp) {
         var pill = function(text) {
-          return '<span style="display:inline-block;background:var(--cream-dark,#e8e0d4);border-radius:12px;padding:2px 10px;font-size:0.78rem;margin:2px 4px 2px 0;color:var(--charcoal,#333);">' + esc(String(text)) + '</span>';
+          return '<span style="display:inline-block;background:var(--cream-dark,#e8e0d4);border-radius:12px;padding:2px 10px;font-size:0.78rem;margin:2px 4px 2px 0;color:var(--text-primary);">' + esc(String(text)) + '</span>';
         };
         var fpLabel = function(label) {
           return '<span style="color:var(--warm-gray,#888);font-size:0.78rem;min-width:90px;display:inline-block;">' + label + '</span>';

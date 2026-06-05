@@ -518,7 +518,7 @@
 
     html += '<div style="display:flex;align-items:center;justify-content:space-between;margin:16px 0;gap:12px;flex-wrap:wrap;">' +
       '<div style="font-size:0.85rem;color:var(--warm-gray);">' +
-        '<span style="font-weight:600;color:var(--charcoal);">' + formatCurrency(_fromCents(totalOwedCents)) + '</span> owed across ' + galleries.length + ' galler' + (galleries.length === 1 ? 'y' : 'ies') +
+        '<span style="font-weight:600;color:var(--text-primary);">' + formatCurrency(_fromCents(totalOwedCents)) + '</span> owed across ' + galleries.length + ' galler' + (galleries.length === 1 ? 'y' : 'ies') +
       '</div>' +
       '<div style="display:flex;gap:6px;align-items:center;">' +
         '<label style="font-size:0.85rem;color:var(--warm-gray);">Status:</label>' +
@@ -663,7 +663,7 @@
         '</div>' +
         '<div style="text-align:right;">' +
           '<div style="font-size:0.78rem;color:var(--warm-gray);">Currently owed</div>' +
-          '<div style="font-size:1.6rem;font-weight:700;color:' + (owed > 0 ? '#F59E0B' : 'var(--charcoal)') + ';">' + formatCurrency(_fromCents(owed)) + '</div>' +
+          '<div style="font-size:1.6rem;font-weight:700;color:' + (owed > 0 ? '#F59E0B' : 'var(--text-primary)') + ';">' + formatCurrency(_fromCents(owed)) + '</div>' +
           '<button class="btn btn-primary btn-small" style="margin-top:6px;" onclick="consignmentRecordGalleryPayout(\'' + _jsAttr(galleryId) + '\')">+ Record Payout</button>' +
         '</div>' +
       '</div>';
@@ -958,7 +958,7 @@
         '</div>' +
         '<div style="text-align:right;">' +
           '<div style="font-size:0.78rem;color:var(--warm-gray);">Payouts Due</div>' +
-          '<div style="font-size:1.6rem;font-weight:700;color:' + (payoutsDue > 0 ? '#F59E0B' : 'var(--charcoal)') + ';">' + formatCurrency(payoutsDue) + '</div>' +
+          '<div style="font-size:1.6rem;font-weight:700;color:' + (payoutsDue > 0 ? '#F59E0B' : 'var(--text-primary)') + ';">' + formatCurrency(payoutsDue) + '</div>' +
           '<button class="btn btn-secondary btn-small" style="margin-top:6px;" onclick="consignmentEditGallery(\'' + _jsAttr(galleryId) + '\')">Edit</button>' +
         '</div>' +
       '</div>';
@@ -1450,26 +1450,26 @@
       '<div style="max-width:640px;">' +
         '<div class="form-group" style="margin-bottom:16px;">' +
           '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Location Name *</label>' +
-          '<input type="text" id="cpLocationName" placeholder="e.g. Blue Door Gallery" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.9rem;">' +
+          '<input type="text" id="cpLocationName" placeholder="e.g. Blue Door Gallery" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--text-primary);font-family:\'DM Sans\';font-size:0.9rem;">' +
         '</div>' +
         '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">' +
           '<div class="form-group">' +
             '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Contact Name</label>' +
-            '<input type="text" id="cpLocationContact" placeholder="Gallery manager" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.9rem;">' +
+            '<input type="text" id="cpLocationContact" placeholder="Gallery manager" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--text-primary);font-family:\'DM Sans\';font-size:0.9rem;">' +
           '</div>' +
           '<div class="form-group">' +
             '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Contact Email</label>' +
-            '<input type="email" id="cpLocationEmail" placeholder="gallery@example.com" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.9rem;">' +
+            '<input type="email" id="cpLocationEmail" placeholder="gallery@example.com" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--text-primary);font-family:\'DM Sans\';font-size:0.9rem;">' +
           '</div>' +
         '</div>' +
         '<div class="form-group" style="margin-bottom:16px;">' +
           '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Commission Rate (%) *</label>' +
-          '<input type="number" id="cpCommissionRate" placeholder="40" min="0" max="100" step="1" style="width:120px;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.9rem;">' +
+          '<input type="number" id="cpCommissionRate" placeholder="40" min="0" max="100" step="1" style="width:120px;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--text-primary);font-family:\'DM Sans\';font-size:0.9rem;">' +
           '<span style="font-size:0.78rem;color:var(--warm-gray);margin-left:8px;">% goes to the gallery</span>' +
         '</div>' +
         '<div class="form-group" style="margin-bottom:16px;">' +
           '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Notes</label>' +
-          '<textarea id="cpNotes" rows="2" placeholder="Agreement details, terms, etc." style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.9rem;"></textarea>' +
+          '<textarea id="cpNotes" rows="2" placeholder="Agreement details, terms, etc." style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--text-primary);font-family:\'DM Sans\';font-size:0.9rem;"></textarea>' +
         '</div>' +
 
         // Product picker
@@ -1512,11 +1512,11 @@
 
     var rowHtml =
       '<div id="' + rowId + '" class="consignment-product-row">' +
-        '<select onchange="consignmentProductSelected(this,\'' + rowId + '\')" style="flex:2;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.85rem;">' +
+        '<select onchange="consignmentProductSelected(this,\'' + rowId + '\')" style="flex:2;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--text-primary);font-family:\'DM Sans\';font-size:0.85rem;">' +
           options +
         '</select>' +
-        '<input type="number" id="' + rowId + '_qty" placeholder="Qty" min="1" value="1" style="width:70px;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.85rem;text-align:center;">' +
-        '<input type="number" id="' + rowId + '_price" placeholder="Retail $" step="0.01" min="0" style="width:100px;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.85rem;text-align:right;">' +
+        '<input type="number" id="' + rowId + '_qty" placeholder="Qty" min="1" value="1" style="width:70px;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--text-primary);font-family:\'DM Sans\';font-size:0.85rem;text-align:center;">' +
+        '<input type="number" id="' + rowId + '_price" placeholder="Retail $" step="0.01" min="0" style="width:100px;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--text-primary);font-family:\'DM Sans\';font-size:0.85rem;text-align:right;">' +
         '<button class="btn btn-icon" onclick="consignmentRemoveProductRow(\'' + rowId + '\')" title="Remove" style="flex-shrink:0;">✕</button>' +
       '</div>';
 
@@ -1615,23 +1615,23 @@
       '<h3 style="font-size:1.15rem;font-weight:500;margin:0 0 16px;">Edit Location</h3>' +
       '<div class="form-group" style="margin-bottom:16px;">' +
         '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Location Name</label>' +
-        '<input type="text" id="editLocName" value="' + esc(p.locationName) + '" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.9rem;">' +
+        '<input type="text" id="editLocName" value="' + esc(p.locationName) + '" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--text-primary);font-family:\'DM Sans\';font-size:0.9rem;">' +
       '</div>' +
       '<div class="form-group" style="margin-bottom:16px;">' +
         '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Contact Name</label>' +
-        '<input type="text" id="editLocContact" value="' + esc(p.locationContact || '') + '" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.9rem;">' +
+        '<input type="text" id="editLocContact" value="' + esc(p.locationContact || '') + '" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--text-primary);font-family:\'DM Sans\';font-size:0.9rem;">' +
       '</div>' +
       '<div class="form-group" style="margin-bottom:16px;">' +
         '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Contact Email</label>' +
-        '<input type="email" id="editLocEmail" value="' + esc(p.locationEmail || '') + '" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.9rem;">' +
+        '<input type="email" id="editLocEmail" value="' + esc(p.locationEmail || '') + '" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--text-primary);font-family:\'DM Sans\';font-size:0.9rem;">' +
       '</div>' +
       '<div class="form-group" style="margin-bottom:16px;">' +
         '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Commission Rate (%)</label>' +
-        '<input type="number" id="editLocRate" value="' + Math.round((p.commissionRate || 0) * 100) + '" min="0" max="100" step="1" style="width:120px;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.9rem;">' +
+        '<input type="number" id="editLocRate" value="' + Math.round((p.commissionRate || 0) * 100) + '" min="0" max="100" step="1" style="width:120px;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--text-primary);font-family:\'DM Sans\';font-size:0.9rem;">' +
       '</div>' +
       '<div class="form-group" style="margin-bottom:16px;">' +
         '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Notes</label>' +
-        '<textarea id="editLocNotes" rows="2" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.9rem;">' + esc(p.notes || '') + '</textarea>' +
+        '<textarea id="editLocNotes" rows="2" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--text-primary);font-family:\'DM Sans\';font-size:0.9rem;">' + esc(p.notes || '') + '</textarea>' +
       '</div>' +
       '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:20px;">' +
         '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
@@ -1675,7 +1675,7 @@
       '<h3 style="font-size:1.15rem;font-weight:500;margin:0 0 16px;">Record Sale</h3>' +
       '<div class="form-group" style="margin-bottom:16px;">' +
         '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Quantity Sold</label>' +
-        '<input type="number" id="saleQty" min="1" max="' + maxQty + '" value="1" style="width:100px;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.9rem;text-align:center;">' +
+        '<input type="number" id="saleQty" min="1" max="' + maxQty + '" value="1" style="width:100px;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--text-primary);font-family:\'DM Sans\';font-size:0.9rem;text-align:center;">' +
         '<span style="font-size:0.78rem;color:var(--warm-gray);margin-left:8px;">' + maxQty + ' on hand</span>' +
       '</div>' +
       '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:20px;">' +
@@ -1702,7 +1702,7 @@
       '<h3 style="font-size:1.15rem;font-weight:500;margin:0 0 16px;">Record Return</h3>' +
       '<div class="form-group" style="margin-bottom:16px;">' +
         '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Quantity Returned</label>' +
-        '<input type="number" id="returnQty" min="1" max="' + maxQty + '" value="1" style="width:100px;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.9rem;text-align:center;">' +
+        '<input type="number" id="returnQty" min="1" max="' + maxQty + '" value="1" style="width:100px;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--text-primary);font-family:\'DM Sans\';font-size:0.9rem;text-align:center;">' +
         '<span style="font-size:0.78rem;color:var(--warm-gray);margin-left:8px;">' + maxQty + ' on hand</span>' +
       '</div>' +
       '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:20px;">' +
@@ -1746,16 +1746,16 @@
       '</div>' +
       '<div class="form-group" style="margin-bottom:12px;">' +
         '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Amount Received ($)</label>' +
-        '<input type="number" id="payoutAmount" step="0.01" min="0" max="100000" value="' + (outstandingCents / 100).toFixed(2) + '" style="width:160px;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.9rem;">' +
+        '<input type="number" id="payoutAmount" step="0.01" min="0" max="100000" value="' + (outstandingCents / 100).toFixed(2) + '" style="width:160px;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--text-primary);font-family:\'DM Sans\';font-size:0.9rem;">' +
       '</div>' +
       '<div class="form-group" style="margin-bottom:12px;">' +
         '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Received Date</label>' +
-        '<input type="date" id="payoutDate" value="' + today + '" style="width:160px;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.9rem;">' +
+        '<input type="date" id="payoutDate" value="' + today + '" style="width:160px;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--text-primary);font-family:\'DM Sans\';font-size:0.9rem;">' +
         '<div style="font-size:0.72rem;color:var(--warm-gray);margin-top:4px;">Revenue is attributed to the month the payment actually arrived.</div>' +
       '</div>' +
       '<div class="form-group" style="margin-bottom:20px;">' +
         '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Notes (optional)</label>' +
-        '<input type="text" id="payoutNotes" placeholder="e.g. check #4521" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.9rem;">' +
+        '<input type="text" id="payoutNotes" placeholder="e.g. check #4521" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--text-primary);font-family:\'DM Sans\';font-size:0.9rem;">' +
       '</div>' +
       '<div style="display:flex;justify-content:flex-end;gap:8px;">' +
         '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
@@ -1860,18 +1860,18 @@
       '<h3 style="font-size:1.15rem;font-weight:500;margin:0 0 16px;">Add Item to Placement</h3>' +
       '<div class="form-group" style="margin-bottom:16px;">' +
         '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Product</label>' +
-        '<select id="addLiProduct" onchange="consignmentAddLiProductChanged(this)" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.9rem;">' +
+        '<select id="addLiProduct" onchange="consignmentAddLiProductChanged(this)" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--text-primary);font-family:\'DM Sans\';font-size:0.9rem;">' +
           options +
         '</select>' +
       '</div>' +
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">' +
         '<div class="form-group">' +
           '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Quantity</label>' +
-          '<input type="number" id="addLiQty" min="1" value="1" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.9rem;text-align:center;">' +
+          '<input type="number" id="addLiQty" min="1" value="1" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--text-primary);font-family:\'DM Sans\';font-size:0.9rem;text-align:center;">' +
         '</div>' +
         '<div class="form-group">' +
           '<label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;">Retail Price ($)</label>' +
-          '<input type="number" id="addLiPrice" step="0.01" min="0" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);font-family:\'DM Sans\';font-size:0.9rem;text-align:right;">' +
+          '<input type="number" id="addLiPrice" step="0.01" min="0" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--text-primary);font-family:\'DM Sans\';font-size:0.9rem;text-align:right;">' +
         '</div>' +
       '</div>' +
       '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:20px;">' +

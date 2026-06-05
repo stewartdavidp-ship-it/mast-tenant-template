@@ -1611,7 +1611,7 @@
       '<div style="padding:24px;">' +
       '<h3 style="margin:0 0 4px;font-size:1.15rem;font-weight:500;">Export HTML Email</h3>' +
       '<p style="font-size:0.85rem;color:var(--warm-gray);margin:0 0 14px;">Copy the HTML below to paste into your email platform, or download the file.</p>' +
-      '<textarea id="nlExportTextarea" readonly style="width:100%;height:200px;font-family:monospace;font-size:0.72rem;padding:10px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--charcoal);resize:vertical;box-sizing:border-box;"></textarea>' +
+      '<textarea id="nlExportTextarea" readonly style="width:100%;height:200px;font-family:monospace;font-size:0.72rem;padding:10px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--text-primary);resize:vertical;box-sizing:border-box;"></textarea>' +
       '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;">' +
         '<button class="btn btn-secondary" onclick="closeModal()">Close</button>' +
         '<button class="btn btn-secondary" onclick="(function(){var b=new Blob([document.getElementById(\'nlExportTextarea\').value],{type:\'text/html\'});var u=URL.createObjectURL(b);var a=document.createElement(\'a\');a.href=u;a.download=\'' + filename.replace(/'/g, "\\'") + '\';document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(u);showToast(\'Downloaded!\');})()" >&#x2193; Download</button>' +

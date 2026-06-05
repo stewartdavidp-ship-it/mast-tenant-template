@@ -5900,7 +5900,7 @@ function portfolioRenderSparklines(trend) {
         '<span>' + esc(title) + '</span>' +
         '<span style="color:' + dirColor + ';text-transform:none;letter-spacing:0;">' + esc(dir) + '</span>' +
       '</div>' +
-      '<div style="font-size:0.9rem;font-weight:600;color:var(--charcoal);margin-bottom:2px;">' + esc(formatter(latest)) + '</div>' +
+      '<div style="font-size:0.9rem;font-weight:600;color:var(--text-primary);margin-bottom:2px;">' + esc(formatter(latest)) + '</div>' +
       sv +
       '<div style="display:flex;justify-content:space-between;font-size:0.72rem;color:var(--warm-gray);margin-top:2px;">' +
         '<span>' + esc(formatter(min)) + '</span>' +
@@ -5922,7 +5922,7 @@ function portfolioRenderSparklines(trend) {
   html += '<div style="display:flex;gap:20px;flex-wrap:wrap;">';
   html += buildCard('Top-5 share', top5Vals, top5Vals[last], top5Vals[prevIdx], portfolioFmtPct, 'var(--teal)');
   html += buildCard('HHI', hhiVals, hhiVals[last], hhiVals[prevIdx], function(v) { return String(Math.round(v)); }, 'var(--warm-gray)');
-  html += buildCard('Net contribution', netVals, netVals[last], netVals[prevIdx], portfolioFmtMoney, 'var(--charcoal)');
+  html += buildCard('Net contribution', netVals, netVals[last], netVals[prevIdx], portfolioFmtMoney, 'var(--text-primary)');
   html += '</div>';
   html += '</div>';
   return html;
@@ -6039,7 +6039,7 @@ function renderCustomerPortfolio() {
     html += renderFinancePeriodBar(); // W2.8
     html += _portfolioPeriodNote(); // W2 R2-F6
     html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:12px;">';
-    html += '<h2 style="font-size:1.6rem;font-weight:700;color:var(--charcoal);margin:0;">Customer Portfolio</h2>';
+    html += '<h2 style="font-size:1.6rem;font-weight:700;color:var(--text-primary);margin:0;">Customer Portfolio</h2>';
     html += '<div style="font-size:0.78rem;color:var(--warm-gray);">' +
       esc(String(rows.length)) + ' customers · trailing-12m · cost-to-serve $' + (c2s.perTicketCents/100).toFixed(0) +
       '/ticket, $' + (c2s.perReturnCents/100).toFixed(0) + '/return</div>';
@@ -6050,7 +6050,7 @@ function renderCustomerPortfolio() {
     html += '<div style="font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:10px;">Concentration risk</div>';
     html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:16px;">';
     html += '<div><div style="font-size:0.78rem;color:var(--warm-gray);">Top 5 share</div>' +
-      '<div style="font-size:1.6rem;font-weight:600;color:' + (top5.sharePct > 0.4 ? '#f49aa3' : 'var(--charcoal)') + ';">' +
+      '<div style="font-size:1.6rem;font-weight:600;color:' + (top5.sharePct > 0.4 ? '#f49aa3' : 'var(--text-primary)') + ';">' +
       (top5.sharePct * 100).toFixed(1) + '%</div></div>';
     html += '<div><div style="font-size:0.78rem;color:var(--warm-gray);">Top 10 share</div>' +
       '<div style="font-size:1.6rem;font-weight:600;">' + (top10.sharePct * 100).toFixed(1) + '%</div></div>';
@@ -6141,7 +6141,7 @@ function renderCustomerPortfolio() {
         '<td style="text-align:right;">' + esc(portfolioFmtMoney(r.grossMarginCents)) + '</td>' +
         '<td style="text-align:right;">' + esc(marginPctStr) + '</td>' +
         '<td style="text-align:right;color:var(--warm-gray);">' + esc(portfolioFmtMoney(r.costToServeCents)) + '</td>' +
-        '<td style="text-align:right;font-weight:600;color:' + (r.netContributionCents < 0 ? '#f49aa3' : 'var(--charcoal)') + ';">' +
+        '<td style="text-align:right;font-weight:600;color:' + (r.netContributionCents < 0 ? '#f49aa3' : 'var(--text-primary)') + ';">' +
           esc(portfolioFmtMoney(r.netContributionCents)) + '</td>' +
         '<td style="font-size:0.78rem;color:' + lapseColor + ';">' + esc(lapseLabel) + '</td>' +
         '</tr>';

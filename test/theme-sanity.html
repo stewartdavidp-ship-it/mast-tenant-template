@@ -1,0 +1,66 @@
+<!doctype html>
+<html class="dark-mode">
+<head>
+<meta charset="utf-8">
+<title>Admin theme sanity — --charcoal split</title>
+<style>
+  /* === COPIED VERBATIM from app/index.html :root (the restored block) === */
+  :root {
+    --amber: #C4853C; --amber-light: #E8B679; --amber-glow: #F5D5A8;
+    --teal: #2A7C6F; --teal-deep: #1B5C52; --teal-light: #A8D5CE;
+    --cream: #FAF6F0; --cream-dark: #F0E8DB;
+    --charcoal: #1A1A1A;
+    --warm-gray: #6B6560; --warm-gray-light: #9B958E;
+    --danger: #DC3545; --danger-hover: #c82333; --gold: #C4853C;
+    --dark-brown: #5C3D2E; --bg-secondary: #f5f5f5; --bg-tertiary: #e8e2d8;
+    --text-primary: #1A1A1A;
+    --surface-card: #FFFFFF; --surface-card-border: #E5E0D8;
+  }
+  html.dark-mode { background: var(--charcoal); }
+  body { background: var(--cream); color: var(--charcoal); }
+  /* === COPIED from app/index.html body.dark-mode === */
+  body.dark-mode {
+    --cream: #2a2a2a; --cream-dark: #3a3a3a; --warm-gray: #888; --warm-gray-light: #aaa;
+    --bg-secondary: #2a2a2a; --bg-tertiary: #333;
+    --surface-card: #252a35; --surface-card-border: #3a3f4a;
+    --card-bg: #2a2a2a; --border: #3a3a3a; --text: #e8e4df; --text-secondary: #a09890;
+    --bg-primary: #1a1a1a; --text-danger: #ff6b6b;
+    --text-primary: #e8e4df;
+    background: var(--charcoal); color: #e0e0e0;
+  }
+  /* representative usages */
+  #bodyText  { color: var(--text-primary); }           /* migrated text */
+  #amberTab  { color: var(--amber); border-bottom: 2px solid var(--amber); }
+  #darkSurface { background: var(--charcoal); color: white; } /* header/sidebar */
+  #panel     { background: var(--surface-card, #1a1a1a); }    /* slide-out */
+  #fallback  { color: var(--text, var(--charcoal)); }        /* flip-by-fallback */
+</style>
+</head>
+<body class="dark-mode">
+  <div id="bodyText">body text (must flip)</div>
+  <div id="amberTab">amber accent</div>
+  <div id="darkSurface">dark surface</div>
+  <div id="panel">panel surface</div>
+  <div id="fallback">fallback text</div>
+<script>
+  function probe() {
+    var g = function(id, prop){ return getComputedStyle(document.getElementById(id))[prop]; };
+    return {
+      mode: document.body.classList.contains('dark-mode') ? 'DARK' : 'LIGHT',
+      bodyTextColor: g('bodyText','color'),
+      amberColor: g('amberTab','color'),
+      darkSurfaceBg: g('darkSurface','backgroundColor'),
+      panelBg: g('panel','backgroundColor'),
+      fallbackColor: g('fallback','color'),
+      bodyBg: getComputedStyle(document.body).backgroundColor
+    };
+  }
+  window.setMode = function(dark){
+    document.body.classList.toggle('dark-mode', dark);
+    document.documentElement.classList.toggle('dark-mode', dark);
+    return probe();
+  };
+  window.__probe = probe;
+</script>
+</body>
+</html>

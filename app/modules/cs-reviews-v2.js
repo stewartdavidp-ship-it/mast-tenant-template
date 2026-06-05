@@ -134,10 +134,10 @@
         ]);
 
         var headlineHtml = r.headline
-          ? '<div style="font-weight:600;font-size:0.9rem;margin-bottom:6px;color:var(--charcoal,var(--text));">' + esc(r.headline) + '</div>'
+          ? '<div style="font-weight:600;font-size:0.9rem;margin-bottom:6px;color:var(--text-primary);">' + esc(r.headline) + '</div>'
           : '';
         var reviewBody = bodyOf(r)
-          ? headlineHtml + '<div style="font-size:0.9rem;line-height:1.5;white-space:pre-wrap;color:var(--charcoal,var(--text));">' + esc(bodyOf(r)) + '</div>'
+          ? headlineHtml + '<div style="font-size:0.9rem;line-height:1.5;white-space:pre-wrap;color:var(--text-primary);">' + esc(bodyOf(r)) + '</div>'
           : (r.headline ? headlineHtml : '<span class="mu-sub">No review text.</span>');
 
         // Operator reply (response {body,authorName,createdAt,updatedAt}). Editing
@@ -152,7 +152,7 @@
               '<span style="font-weight:600;font-size:0.85rem;color:var(--teal,teal);">&#8627; ' + esc(who) + '</span>' +
               (when ? '<span class="mu-sub">' + N.date(when) + '</span>' : '') +
             '</div>' +
-            '<div style="font-size:0.9rem;line-height:1.5;white-space:pre-wrap;color:var(--charcoal,var(--text));">' + esc(resp.body) + '</div>';
+            '<div style="font-size:0.9rem;line-height:1.5;white-space:pre-wrap;color:var(--text-primary);">' + esc(resp.body) + '</div>';
         } else {
           replyBody = '<span class="mu-sub">No reply yet.</span>';
         }

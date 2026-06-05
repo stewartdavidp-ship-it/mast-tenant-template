@@ -637,16 +637,16 @@
       '            border:1px solid rgba(245,158,11,0.4);border-radius:10px;">',
       '  <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">',
       '    <span aria-hidden="true" style="font-size:1.15rem;">⏳</span>',
-      '    <h3 style="margin:0;font-size:1.0rem;color:var(--charcoal);">We’re still confirming your channels</h3>',
+      '    <h3 style="margin:0;font-size:1.0rem;color:var(--text-primary);">We’re still confirming your channels</h3>',
       '  </div>',
       '  <p style="margin:0 0 12px;color:var(--warm-gray);font-size:0.9rem;">',
       '    Drift detection is running but findings are provisional for the first 72 hours ',
       '    while initial sync stabilizes. We’re tracking them but won’t flag them as urgent yet.',
       '  </p>',
-      '  <div style="font-size:0.85rem;color:var(--charcoal);margin-bottom:10px;">',
+      '  <div style="font-size:0.85rem;color:var(--text-primary);margin-bottom:10px;">',
       '    <strong>Drift report ready in:</strong> ' + esc(formatCountdown(msRemaining)),
       '  </div>',
-      '  <div style="font-size:0.85rem;color:var(--charcoal);">',
+      '  <div style="font-size:0.85rem;color:var(--text-primary);">',
       '    <div style="margin-bottom:4px;font-size:0.78rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.04em;">',
       '      Provisional findings so far',
       '    </div>',
@@ -707,7 +707,7 @@
         : '';
       return [
         '<div style="background:var(--surface-card,var(--cream));border:1px solid var(--cream-dark);border-radius:10px;padding:14px;">',
-        '  <div style="display:flex;align-items:center;gap:6px;font-weight:600;color:var(--charcoal);margin-bottom:10px;font-size:0.9rem;">',
+        '  <div style="display:flex;align-items:center;gap:6px;font-weight:600;color:var(--text-primary);margin-bottom:10px;font-size:0.9rem;">',
         '    <span aria-hidden="true">' + icon + '</span>',
         '    <span>' + esc(label) + '</span>',
         '    <span style="color:var(--warm-gray);font-weight:400;">(' + bucketed[bucketId].length + ')</span>',
@@ -720,7 +720,7 @@
 
     return [
       '<div style="padding:0 24px;margin-top:16px;">',
-      '  <h3 style="margin:8px 0 16px;font-size:1.0rem;color:var(--charcoal);">' + esc(heading) + '</h3>',
+      '  <h3 style="margin:8px 0 16px;font-size:1.0rem;color:var(--text-primary);">' + esc(heading) + '</h3>',
       '  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;">',
            bucketCol('Quick wins',          '⚡', pickedQ, BUCKET_QUICK),
            bucketCol('High impact',         '🔴', pickedH, BUCKET_HIGH),
@@ -736,7 +736,7 @@
     var ctaLabel = ctaLabelForCategory(g.category);
     return [
       '<div style="padding:10px 0;border-bottom:1px solid var(--cream-dark);">',
-      '  <div style="font-size:0.9rem;color:var(--charcoal);margin-bottom:6px;">',
+      '  <div style="font-size:0.9rem;color:var(--text-primary);margin-bottom:6px;">',
       '    <strong>' + n + '</strong> ' + esc(productNoun(g, n)) + ' &middot; ' + esc(title),
       '  </div>',
       '  <button type="button" class="btn btn-secondary" data-audit-action="open-rule-pop" '
@@ -798,7 +798,7 @@
     var noun = catId === CATEGORY_PRICING ? 'informational findings' : 'rule' + (ruleCount === 1 ? '' : 's');
     return [
       '<button type="button" class="audit-cat-row" data-audit-action="open-category" data-catid="' + esc(catId) + '"',
-      '        style="text-align:left;background:transparent;border:0;padding:8px 0;cursor:pointer;color:var(--charcoal);font-size:0.9rem;">',
+      '        style="text-align:left;background:transparent;border:0;padding:8px 0;cursor:pointer;color:var(--text-primary);font-size:0.9rem;">',
       '  &bull; ' + esc(CATEGORY_LABEL[catId]) + ' (' + ruleCount + ' ' + esc(noun) + ')',
       '  <span style="color:var(--warm-gray);"> &rarr;</span>',
       '</button>'
@@ -893,11 +893,11 @@
     overlay.innerHTML = [
       '<div class="modal" style="max-width:640px;width:92%;padding:0;">',
       '  <div style="padding:18px 20px 12px;border-bottom:1px solid var(--cream-dark);">',
-      '    <h2 id="onAskAuditTitle" style="margin:0;font-size:1.15rem;color:var(--charcoal);">Ask Mast to audit this listing</h2>',
+      '    <h2 id="onAskAuditTitle" style="margin:0;font-size:1.15rem;color:var(--text-primary);">Ask Mast to audit this listing</h2>',
       '    <div style="font-size:0.85rem;color:var(--warm-gray);margin-top:4px;">' + esc(productTitle) + '</div>',
       '  </div>',
       '  <div style="padding:18px 20px;">',
-      '    <label for="onAskAuditQuestion" style="display:block;font-size:0.85rem;color:var(--charcoal);margin-bottom:6px;">Your question</label>',
+      '    <label for="onAskAuditQuestion" style="display:block;font-size:0.85rem;color:var(--text-primary);margin-bottom:6px;">Your question</label>',
       '    <textarea id="onAskAuditQuestion" rows="3" maxlength="1000"',
       '              style="width:100%;padding:9px 12px;border:1px solid var(--cream-dark);border-radius:6px;',
       '                     font-family:\'DM Sans\',sans-serif;font-size:0.9rem;background:var(--cream);color:inherit;resize:vertical;"',
@@ -923,8 +923,8 @@
 
     if (strengths.length) {
       html.push('<div style="margin-bottom:14px;">');
-      html.push('  <h3 style="margin:0 0 6px;font-size:0.9rem;color:var(--charcoal);">Strengths</h3>');
-      html.push('  <ul style="margin:0;padding-left:18px;color:var(--charcoal);font-size:0.85rem;">');
+      html.push('  <h3 style="margin:0 0 6px;font-size:0.9rem;color:var(--text-primary);">Strengths</h3>');
+      html.push('  <ul style="margin:0;padding-left:18px;color:var(--text-primary);font-size:0.85rem;">');
       strengths.forEach(function(s) {
         html.push('    <li style="margin-bottom:4px;">' + esc(s) + '</li>');
       });
@@ -934,19 +934,19 @@
 
     if (issues.length) {
       html.push('<div style="margin-bottom:14px;">');
-      html.push('  <h3 style="margin:0 0 6px;font-size:0.9rem;color:var(--charcoal);">Issues</h3>');
+      html.push('  <h3 style="margin:0 0 6px;font-size:0.9rem;color:var(--text-primary);">Issues</h3>');
       html.push('  <div style="display:flex;flex-direction:column;gap:8px;">');
       issues.forEach(function(iss) {
         if (!iss || typeof iss !== 'object') return;
         var sev = (iss.severity === 'high' || iss.severity === 'medium' || iss.severity === 'low') ? iss.severity : 'medium';
         var dot = severityDot(sev);
         html.push('<div style="border:1px solid var(--cream-dark);border-radius:6px;padding:10px 12px;">');
-        html.push('  <div style="display:flex;align-items:center;gap:8px;font-size:0.85rem;color:var(--charcoal);">');
+        html.push('  <div style="display:flex;align-items:center;gap:8px;font-size:0.85rem;color:var(--text-primary);">');
         html.push('    ' + dot);
         html.push('    <span>' + esc(iss.description || '') + '</span>');
         html.push('  </div>');
         if (iss.suggestedAction) {
-          html.push('  <div style="margin-top:6px;padding:6px 8px;background:rgba(0,0,0,0.04);border-radius:4px;font-size:0.85rem;color:var(--charcoal);">');
+          html.push('  <div style="margin-top:6px;padding:6px 8px;background:rgba(0,0,0,0.04);border-radius:4px;font-size:0.85rem;color:var(--text-primary);">');
           html.push('    <span style="font-weight:600;">Suggested: </span>' + esc(iss.suggestedAction));
           html.push('  </div>');
         }
@@ -961,8 +961,8 @@
 
     if (guidance) {
       html.push('<div>');
-      html.push('  <h3 style="margin:0 0 6px;font-size:0.9rem;color:var(--charcoal);">General guidance</h3>');
-      html.push('  <p style="margin:0;color:var(--charcoal);font-size:0.85rem;white-space:pre-wrap;">' + esc(guidance) + '</p>');
+      html.push('  <h3 style="margin:0 0 6px;font-size:0.9rem;color:var(--text-primary);">General guidance</h3>');
+      html.push('  <p style="margin:0;color:var(--text-primary);font-size:0.85rem;white-space:pre-wrap;">' + esc(guidance) + '</p>');
       html.push('</div>');
     }
 
@@ -1125,7 +1125,7 @@
       '           display:flex;align-items:center;gap:12px;">',
       sevDot,
       '  <div style="flex:1;min-width:0;">',
-      '    <div style="font-weight:500;color:var(--charcoal);font-size:0.9rem;">' + esc(title) + '</div>',
+      '    <div style="font-weight:500;color:var(--text-primary);font-size:0.9rem;">' + esc(title) + '</div>',
       '    <div style="font-size:0.78rem;color:var(--warm-gray);margin-top:2px;">',
       '      Rule ' + esc(g.ruleId) + ' &middot; ' + n + ' product' + (n === 1 ? '' : 's') + ' affected',
       '    </div>',
@@ -1208,7 +1208,7 @@
       rows += [
         '<div style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-bottom:1px solid var(--cream-dark);">',
         '  <div style="flex:1;min-width:0;">',
-        '    <div style="font-size:0.9rem;color:var(--charcoal);">' + esc(pTitle) + '</div>',
+        '    <div style="font-size:0.9rem;color:var(--text-primary);">' + esc(pTitle) + '</div>',
             (sub ? '<div style="font-size:0.78rem;color:var(--warm-gray);">' + esc(sub) + '</div>' : ''),
         '  </div>',
         '  <button type="button" class="btn btn-secondary" data-audit-action="open-product" ',
@@ -1224,7 +1224,7 @@
       '  <div style="color:var(--warm-gray);font-size:0.85rem;margin-bottom:8px;">',
       '    Rule ' + esc(ruleId) + ' &middot; ' + n + ' product' + (n === 1 ? '' : 's') + ' affected',
       '  </div>',
-            (detail ? '<p style="color:var(--charcoal);font-size:0.9rem;margin:0 0 16px;max-width:760px;">' + esc(detail) + '</p>' : ''),
+            (detail ? '<p style="color:var(--text-primary);font-size:0.9rem;margin:0 0 16px;max-width:760px;">' + esc(detail) + '</p>' : ''),
       '  <div style="display:flex;gap:8px;align-items:center;margin-bottom:16px;flex-wrap:wrap;">',
       '    <button type="button" class="btn btn-secondary" data-audit-action="rp-mark-all-reviewed">Mark all reviewed</button>',
       '    <button type="button" class="btn btn-secondary" data-audit-action="rp-suppress">⋯ Suppress rule</button>',
@@ -1341,7 +1341,7 @@
     html.push('<div style="padding:20px 24px;display:flex;flex-direction:column;gap:18px;">');
 
     html.push('<div>');
-    html.push('  <label style="display:block;font-size:0.85rem;font-weight:600;color:var(--charcoal);margin-bottom:6px;">Cadence</label>');
+    html.push('  <label style="display:block;font-size:0.85rem;font-weight:600;color:var(--text-primary);margin-bottom:6px;">Cadence</label>');
     html.push('  <select id="digestPrefCadence" class="form-control" style="width:100%;">');
     cadenceOpts.forEach(function(opt) {
       var sel = (pref.cadence === opt[0]) ? ' selected' : '';
@@ -1352,7 +1352,7 @@
     html.push('</div>');
 
     html.push('<div id="digestPrefWeeklyRow">');
-    html.push('  <label style="display:block;font-size:0.85rem;font-weight:600;color:var(--charcoal);margin-bottom:6px;">Send on</label>');
+    html.push('  <label style="display:block;font-size:0.85rem;font-weight:600;color:var(--text-primary);margin-bottom:6px;">Send on</label>');
     html.push('  <select id="digestPrefDow" class="form-control" style="width:100%;">');
     for (var i = 0; i < 7; i++) {
       var s = (pref.dayOfWeek === i) ? ' selected' : '';
@@ -1362,7 +1362,7 @@
     html.push('</div>');
 
     html.push('<div>');
-    html.push('  <label style="display:block;font-size:0.85rem;font-weight:600;color:var(--charcoal);margin-bottom:6px;">Timezone</label>');
+    html.push('  <label style="display:block;font-size:0.85rem;font-weight:600;color:var(--text-primary);margin-bottom:6px;">Timezone</label>');
     html.push('  <input id="digestPrefTz" type="text" class="form-control" style="width:100%;" value="' + esc(pref.timezone || browserTimezone()) + '" />');
     html.push('  <div style="font-size:0.78rem;color:var(--warm-gray);margin-top:4px;">Digests fire only inside your local 06:00&ndash;09:00 window.</div>');
     html.push('</div>');
@@ -1513,7 +1513,7 @@
     if (photoUrl) {
       head = '<div style="display:flex;gap:12px;align-items:center;padding:12px 16px;border-bottom:1px solid var(--cream-dark);">'
            + '<img src="' + esc(photoUrl) + '" alt="" style="width:56px;height:56px;border-radius:6px;object-fit:cover;" />'
-           + '<div style="font-size:0.9rem;color:var(--charcoal);">' + esc(title) + '</div>'
+           + '<div style="font-size:0.9rem;color:var(--text-primary);">' + esc(title) + '</div>'
            + '</div>';
     }
     var cards = '';
@@ -1543,7 +1543,7 @@
       ? '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:6px;">' + instCount + ' instances on this product</div>'
       : '';
     var sugBlock = suggestion
-      ? '<div style="margin-top:8px;padding:8px 10px;background:rgba(0,0,0,0.04);border-radius:6px;font-size:0.85rem;color:var(--charcoal);">'
+      ? '<div style="margin-top:8px;padding:8px 10px;background:rgba(0,0,0,0.04);border-radius:6px;font-size:0.85rem;color:var(--text-primary);">'
         + '<span style="font-weight:600;">Suggested: </span>' + esc(suggestion) + '</div>'
       : '';
     return [
@@ -1551,7 +1551,7 @@
       '  <div style="display:flex;align-items:flex-start;gap:8px;">',
       '    <span aria-hidden="true" style="font-size:1.0rem;">' + sevIcon + '</span>',
       '    <div style="flex:1;min-width:0;">',
-      '      <div style="font-weight:500;color:var(--charcoal);font-size:0.9rem;">' + esc(title) + '</div>',
+      '      <div style="font-weight:500;color:var(--text-primary);font-size:0.9rem;">' + esc(title) + '</div>',
               (detail ? '<div style="font-size:0.85rem;color:var(--warm-gray);margin-top:4px;">' + esc(detail) + '</div>' : ''),
               sugBlock,
               instLine,

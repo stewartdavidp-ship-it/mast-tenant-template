@@ -117,7 +117,7 @@
 
         var qText = questionOf(p);
         var aText = answerText(p);
-        var question = '<div style="font-size:1.0rem;font-weight:600;color:var(--charcoal,var(--text));line-height:1.4;">' + esc(qText) + '</div>';
+        var question = '<div style="font-size:1.0rem;font-weight:600;color:var(--text-primary);line-height:1.4;">' + esc(qText) + '</div>';
         var answer = aText
           ? '<div style="font-size:0.9rem;color:var(--warm-gray);line-height:1.55;white-space:pre-wrap;margin-top:10px;">' + esc(aText) + '</div>'
           : '<div class="mu-sub" style="margin-top:10px;">No answer yet.</div>';
