@@ -2244,6 +2244,56 @@
   window.nlChangeCardSize = nlChangeCardSize;
   window.renderNLSubscribers = renderNLSubscribers;
 
+  // Bridge for the newsletter-v2 redesign twin (flag-gated #newsletter-v2). It
+  // delegates subscriber create/update here so the record write + dedup +
+  // validation + the unsubscribe status flip stay single-sourced — the twin never
+  // reimplements that logic. Additive; no behavior change to the legacy surface.
+  // These mirror the EXACT client writes nlSaveSubscriber()/nlUnsubscribe() make,
+  // parameterized by data (the legacy handlers read the modal DOM, so they can't
+  // be called with an object). Mirrors window.ContactsBridge. NOTE: legacy "add
+  // subscriber" is a pure record write — it does NOT send a welcome/confirmation
+  // email — so create stays a plain write here too (no send to route).
+  window.NewsletterBridge = {
+    // Returns the dedup result so the twin can surface the same error legacy does.
+    isDuplicate: function (email) {
+      var e = String(email || '').toLowerCase();
+      return nlSubscribers.some(function (s) { return s.email && s.email.toLowerCase() === e && s.status === 'active'; });
+    },
+    create: async function (data) {
+      var name = (data.name || '').trim();
+      var email = (data.email || '').trim();
+      var notes = (data.notes || '').trim();
+      var subId = MastDB.newsletter.subscribers.newKey();
+      var token = subId + '-' + Date.now().toString(36);
+      var subData = {
+        id: subId, name: name, email: email, notes: notes || null,
+        subscribedAt: new Date().toISOString(), source: 'manual',
+        status: 'active', unsubscribeToken: token, unsubscribedAt: null
+      };
+      await MastDB.newsletter.subscribers.ref(subId).set(subData);
+      nlSubscribers.unshift(subData);
+      return subId;
+    },
+    // Mirrors nlUnsubscribe's targeted .update() — the only legacy mutation on an
+    // existing subscriber. Accepts name/email/notes/status; on a transition to
+    // 'unsubscribed' it stamps unsubscribedAt exactly as the legacy path does, and
+    // clears it on re-subscribe. Keeps the in-memory legacy list coherent.
+    update: async function (id, data) {
+      var updates = {};
+      if (typeof data.name === 'string') updates.name = data.name.trim();
+      if (typeof data.email === 'string') updates.email = data.email.trim();
+      if ('notes' in data) updates.notes = (data.notes || '').trim() || null;
+      var sub = nlSubscribers.find(function (s) { return s.id === id; });
+      if (data.status && data.status !== (sub && sub.status)) {
+        updates.status = data.status;
+        updates.unsubscribedAt = data.status === 'unsubscribed' ? new Date().toISOString() : null;
+      }
+      await MastDB.newsletter.subscribers.ref(id).update(updates);
+      if (sub) Object.assign(sub, updates);
+      return id;
+    }
+  };
+
   // ============================================================
   // W2.2 / W2.6 — Composer + Campaigns hooks
   // ============================================================
