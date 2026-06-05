@@ -2929,34 +2929,81 @@
     setTimeout(function() { var el = document.getElementById('teamEmpName'); if (el) el.focus(); }, 0);
   }
 
-  async function saveEmployee() {
-    var name = document.getElementById('teamEmpName').value.trim();
-    if (!name) { showToast('Name is required', true); return; }
-
-    var ssnVal = document.getElementById('teamEmpSsn').value.trim();
-    if (ssnVal && !/^\d{4}$/.test(ssnVal)) {
-      showToast('SSN must be exactly 4 digits', true);
-      return;
-    }
-
-    var rateDollars = parseFloat(document.getElementById('teamEmpRate').value);
-    var fields = {
+  // Build the employee-record write shape from a plain data object. Single-sourced
+  // so saveEmployee() (legacy form DOM) and window.TeamBridge (the team-v2 twin)
+  // produce the EXACT same write. Money: payRate is stored in CENTS; the caller
+  // passes payRate already in cents (the DOM form converts dollars→cents before
+  // calling). Throws on validation failure so both callers surface the same error.
+  function buildEmployeeFields(data) {
+    data = data || {};
+    var name = (data.fullName || '').trim();
+    if (!name) throw new Error('Name is required');
+    var ssnVal = (data.ssnLast4 || '').toString().trim();
+    if (ssnVal && !/^\d{4}$/.test(ssnVal)) throw new Error('SSN must be exactly 4 digits');
+    var addr = data.address || {};
+    var ec = data.emergencyContact || {};
+    var status = data.status || 'active';
+    return {
       fullName: name,
-      preferredName: document.getElementById('teamEmpPreferred').value.trim() || null,
-      phone: document.getElementById('teamEmpPhone').value.trim() || null,
+      preferredName: (data.preferredName || '').trim() || null,
+      phone: (data.phone || '').trim() || null,
       ssnLast4: ssnVal || null,
       address: {
-        street: document.getElementById('teamEmpStreet').value.trim() || null,
-        city: document.getElementById('teamEmpCity').value.trim() || null,
-        state: document.getElementById('teamEmpState').value.trim() || null,
-        zip: document.getElementById('teamEmpZip').value.trim() || null,
+        street: (addr.street || '').trim() || null,
+        city: (addr.city || '').trim() || null,
+        state: (addr.state || '').trim() || null,
+        zip: (addr.zip || '').trim() || null,
       },
       emergencyContact: {
-        name: document.getElementById('teamEcName').value.trim() || null,
-        phone: document.getElementById('teamEcPhone').value.trim() || null,
-        relationship: document.getElementById('teamEcRelation').value.trim() || null,
+        name: (ec.name || '').trim() || null,
+        phone: (ec.phone || '').trim() || null,
+        relationship: (ec.relationship || '').trim() || null,
       },
-      jobTitle: document.getElementById('teamEmpTitle').value.trim() || null,
+      jobTitle: (data.jobTitle || '').trim() || null,
+      employmentType: data.employmentType || 'part-time',
+      startDate: data.startDate || null,
+      status: status,
+      terminationDate: status === 'terminated' ? (data.terminationDate || null) : null,
+      payType: data.payType || 'hourly',
+      payRate: (data.payRate || data.payRate === 0) ? data.payRate : null,
+      payFrequency: data.payFrequency || 'bi-weekly',
+      scheduledHoursPerWeek: data.scheduledHoursPerWeek || null,
+      updatedAt: new Date().toISOString(),
+    };
+  }
+
+  // The shared write. id null/undefined → create (mint emp_<ts>, stamp createdAt);
+  // else update in place. Returns the employee id.
+  async function writeEmployee(id, fields, isNew) {
+    if (isNew) {
+      fields.createdAt = new Date().toISOString();
+      var newId = id || ('emp_' + Date.now());
+      await MastDB.set('admin/employees/' + newId, fields);
+      return newId;
+    }
+    await MastDB.update('admin/employees/' + id, fields);
+    return id;
+  }
+
+  async function saveEmployee() {
+    var rateDollars = parseFloat(document.getElementById('teamEmpRate').value);
+    var data = {
+      fullName: document.getElementById('teamEmpName').value,
+      preferredName: document.getElementById('teamEmpPreferred').value,
+      phone: document.getElementById('teamEmpPhone').value,
+      ssnLast4: document.getElementById('teamEmpSsn').value.trim(),
+      address: {
+        street: document.getElementById('teamEmpStreet').value,
+        city: document.getElementById('teamEmpCity').value,
+        state: document.getElementById('teamEmpState').value,
+        zip: document.getElementById('teamEmpZip').value,
+      },
+      emergencyContact: {
+        name: document.getElementById('teamEcName').value,
+        phone: document.getElementById('teamEcPhone').value,
+        relationship: document.getElementById('teamEcRelation').value,
+      },
+      jobTitle: document.getElementById('teamEmpTitle').value,
       employmentType: document.getElementById('teamEmpType').value,
       startDate: document.getElementById('teamEmpStart').value || null,
       status: document.getElementById('teamEmpStatus').value,
@@ -2965,17 +3012,18 @@
       payRate: rateDollars ? Math.round(rateDollars * 100) : null,
       payFrequency: document.getElementById('teamEmpFreq').value,
       scheduledHoursPerWeek: parseInt(document.getElementById('teamEmpHours').value) || null,
-      updatedAt: new Date().toISOString(),
     };
+
+    var fields;
+    try { fields = buildEmployeeFields(data); }
+    catch (e) { showToast(e.message, true); return; }
 
     try {
       if (editingEmployeeId) {
-        await MastDB.update('admin/employees/' + editingEmployeeId, fields);
+        await writeEmployee(editingEmployeeId, fields, false);
         showToast('Employee saved');
       } else {
-        fields.createdAt = new Date().toISOString();
-        var newId = 'emp_' + Date.now();
-        await MastDB.set('admin/employees/' + newId, fields);
+        await writeEmployee(null, fields, true);
         showToast('Employee created');
       }
       editingEmployeeId = null;
@@ -2985,6 +3033,29 @@
       showToast('Error: ' + esc(err.message), true);
     }
   }
+
+  // Bridge for the team-v2 redesign twin (flag-gated #team-v2). It delegates
+  // create/update here so the employee-record write stays single-sourced — the
+  // twin never reimplements buildEmployeeFields / writeEmployee. Additive; no
+  // behavior change to the legacy surface. These make the EXACT write
+  // saveEmployee() makes, parameterized by a data object (the legacy handler
+  // reads the form DOM, so it can't be called with an object). The twin passes
+  // payRate already in CENTS (matching the stored shape). Mirrors
+  // window.StudentsBridge / window.ContactsBridge.
+  window.TeamBridge = {
+    create: async function (data) {
+      var fields = buildEmployeeFields(data);
+      var id = await writeEmployee(null, fields, true);
+      teamLoaded = false;
+      return id;
+    },
+    update: async function (id, data) {
+      var fields = buildEmployeeFields(data);
+      await writeEmployee(id, fields, false);
+      teamLoaded = false;
+      return id;
+    }
+  };
 
   async function deleteEmployee(empId) {
     if (!await mastConfirm('Delete this employee and all their data? This cannot be undone.', { title: 'Delete Employee', danger: true })) return;
