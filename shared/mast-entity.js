@@ -413,7 +413,13 @@
     if (!_flow || !window.MastFlow) return;
     var fk = _flow.flowKey;
     var _d = _flow.schema && _flow.schema.detail;
-    window.MastFlow.renderHeader(fk, _flow.record, {
+    // Opt-in: a schema may request the ratified lean guided-record header
+    // (clickable step rail + checklist-into-tabs, no Advance button). orders /
+    // commissions don't set the flag and keep the original renderHeader.
+    var _renderFn = (_d && _d.guidedHeader === true && typeof window.MastFlow.renderGuidedHeader === 'function')
+      ? window.MastFlow.renderGuidedHeader
+      : window.MastFlow.renderHeader;
+    _renderFn(fk, _flow.record, {
       onAdvance: function (target) {
         // A schema may claim the advance — e.g. route to a side-effect-bearing
         // legacy promote/launch (products: Shopify publish on launch) instead of

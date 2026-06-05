@@ -581,6 +581,11 @@
     _uiContexts[id] = {
       workflowKey: workflowKey,
       recordId: record.id,
+      // The live record is retained so guided-rail clicks can re-evaluate
+      // against current state before deciding advance/back/blocked. The
+      // record is mutated in place on transition (see transition()), and the
+      // host re-renders (new context) after each transition, so this stays fresh.
+      record: record,
       callbacks: callbacks
     };
     return id;
@@ -618,8 +623,69 @@
       if (typeof h === 'function') h(ctx.recordId);
       else if (ctx.callbacks.onAction) ctx.callbacks.onAction(handlerKey);
       else console.warn('[MastFlow] no handler for', ctx.workflowKey, handlerKey);
+    },
+    // Guided-header rail: a step was clicked. Re-evaluate live, then route:
+    //   • clicked phase is BEFORE current        → Back (onBack)
+    //   • clicked phase IS current               → focus its checklist
+    //   • clicked phase is the reachable NEXT     → Advance (onAdvance) iff
+    //     the current phase's hard reqs are met; else focus checklist + toast
+    //   • any other / still-gated future phase    → blocked toast ("N left")
+    phaseStep: function(ctxId, phaseKey) {
+      var ctx = _getUiContext(ctxId); if (!ctx) return;
+      var def = getDefinition(ctx.workflowKey); if (!def) return;
+      var rec = ctx.record;
+      evaluate(ctx.workflowKey, rec).then(function(ev) {
+        if (ev.isTerminal || ev.specMismatch) return;
+        var current = ev.currentPhase ? ev.currentPhase.key : null;
+        if (!current) return;
+        var branch = (rec && rec.__workflow && rec.__workflow.branch) ||
+                     _inferBranchFromPhase(def, current);
+        var chain = _resolveDisplayChain(def, branch);
+        var curIdx = -1, clickIdx = -1;
+        chain.forEach(function(p, i) {
+          if (p.key === current) curIdx = i;
+          if (p.key === phaseKey) clickIdx = i;
+        });
+        if (clickIdx === -1 || curIdx === -1) return;
+
+        if (clickIdx === curIdx) {
+          _focusGuidedChecklist(ctxId);
+          return;
+        }
+        if (clickIdx < curIdx) {
+          if (ctx.callbacks.onBack) ctx.callbacks.onBack(phaseKey);
+          return;
+        }
+        // clickIdx > curIdx → a forward step.
+        var nextKey = (ev.nextPhases && ev.nextPhases.length) ? ev.nextPhases[0] : null;
+        var isImmediateNext = (clickIdx === curIdx + 1 && phaseKey === nextKey);
+        if (isImmediateNext && ev.canAdvance && !ev.isBranchPoint) {
+          if (ctx.callbacks.onAdvance) ctx.callbacks.onAdvance(phaseKey);
+          return;
+        }
+        // Not reachable yet — never a silent no-op. Focus the current phase's
+        // checklist and toast the remaining hard-requirement count.
+        _focusGuidedChecklist(ctxId);
+        var unmetHard = ev.missing.filter(function(m) { return m.req.hard; }).length;
+        var n = unmetHard || 1;
+        var msg = n + ' item' + (n === 1 ? '' : 's') + ' left in ' + (ev.currentPhase.label || 'this step');
+        if (window.showToast) window.showToast(msg, true);
+        else if (window.MastAdmin && typeof MastAdmin.showToast === 'function') MastAdmin.showToast(msg);
+      }).catch(function(e) { console.error('[MastFlow] phaseStep', e); });
     }
   };
+
+  // Reveal + briefly flash the guided checklist so a blocked/current click
+  // lands the operator's eye on the remaining requirements.
+  function _focusGuidedChecklist(ctxId) {
+    var el = document.getElementById(ctxId + '_checklist');
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    var prev = el.style.boxShadow;
+    el.style.boxShadow = '0 0 0 2px color-mix(in srgb,var(--amber) 70%,transparent)';
+    el.style.borderRadius = '8px';
+    setTimeout(function() { el.style.boxShadow = prev || ''; }, 1100);
+  }
 
   // ---- Renderers (HTML strings) ----
 
@@ -879,6 +945,161 @@
   }
 
   // ============================================================
+  // Guided header (opt-in, leaner variant of renderHeader)
+  // ============================================================
+
+  /**
+   * renderGuidedHeader(workflowKey, record, callbacks) → Promise<{html, uiContextId, evaluation}>
+   *
+   * The ratified "guided-record" header (docs/ux-audit/guided-record-mock.html).
+   * Same evaluate()/callback contract as renderHeader, but rendered leaner:
+   *   • a clickable horizontal step rail (the spine) — NO band, NO "Current phase"
+   *     label, NO separate Advance button;
+   *   • the current phase's exit-requirements as a lean checklist beneath the rail.
+   *
+   * The process is a CLICK: clicking the next phase's step ADVANCES (via
+   * onAdvance) iff the current phase's hard requirements are met; if not, it
+   * focuses the checklist + toasts "N item(s) left" (no silent no-op). Clicking
+   * a past phase = Back (onBack). Clicking the current phase focuses its
+   * checklist. A future phase still gated by unmet hard reqs renders "locked"
+   * with a "· N to do" reason and does not advance.
+   *
+   * Additive: renderHeader stays for orders/commissions. Opt in via a schema
+   * flag (shared/mast-entity.js: detail.guidedHeader === true).
+   */
+  function renderGuidedHeader(workflowKey, record, callbacks) {
+    callbacks = callbacks || {};
+    return evaluate(workflowKey, record).then(function(ev) {
+      var def = getDefinition(workflowKey);
+      var ctxId = _registerUiContext(workflowKey, record, callbacks);
+      var html = '';
+
+      if (ev.specMismatch) {
+        html += _renderSpecMismatchBanner(ev);
+      }
+
+      html += _renderGuidedRail(def, record, ev, ctxId);
+      html += _renderGuidedChecklist(def, record, ev, ctxId);
+
+      return { html: html, uiContextId: ctxId, evaluation: ev };
+    });
+  }
+
+  // The clickable step rail (the spine). Off-backbone terminals (failure/
+  // retired) render as a standalone pill exactly like the stepper does.
+  function _renderGuidedRail(def, record, ev, ctxId) {
+    if (ev.isTerminal && ev.terminalKind === 'failure') {
+      return '<div style="margin-top:6px;padding:8px 13px;border-radius:8px;background:color-mix(in srgb,var(--danger) 10%,transparent);color:var(--danger);font-size:0.85rem;font-weight:600;display:inline-flex;align-items:center;gap:6px;">' +
+        '✕ ' + _esc(ev.currentPhase.label) +
+      '</div>';
+    }
+    if (ev.isTerminal && ev.terminalKind === 'retired') {
+      return '<div style="margin-top:6px;padding:8px 13px;border-radius:8px;background:color-mix(in srgb,var(--warm-gray) 14%,transparent);color:var(--warm-gray);font-size:0.85rem;font-weight:600;display:inline-flex;align-items:center;gap:6px;">' +
+        '⊘ ' + _esc(ev.currentPhase.label) +
+      '</div>';
+    }
+
+    var current = ev.currentPhase ? ev.currentPhase.key : null;
+    var currentBranch = (record && record.__workflow && record.__workflow.branch) ||
+                        _inferBranchFromPhase(def, current);
+    var displayPhases = _resolveDisplayChain(def, currentBranch);
+    var currentIdx = -1;
+    displayPhases.forEach(function(p, i) { if (p.key === current) currentIdx = i; });
+
+    // The next phase on the backbone is reachable-now iff the current phase's
+    // hard requirements are met (ev.canAdvance) and we're not at a branch point.
+    var nextKey = (ev.nextPhases && ev.nextPhases.length) ? ev.nextPhases[0] : null;
+    var unmetHard = ev.missing.filter(function(m) { return m.req.hard; }).length;
+
+    var html = '<div style="margin-top:8px;display:flex;align-items:center;gap:0;flex-wrap:wrap;" aria-label="Workflow progress" role="list">';
+    displayPhases.forEach(function(p, i) {
+      var state = i < currentIdx ? 'done' : (i === currentIdx ? 'current' : 'upcoming');
+      // Reachability: the immediate next backbone phase is clickable when the
+      // current phase's hard reqs are met; a further-out (or still-gated) future
+      // phase is "locked".
+      var isNext = (state === 'upcoming' && i === currentIdx + 1 && p.key === nextKey);
+      var reachable = isNext && ev.canAdvance && !ev.isBranchPoint;
+      var locked = (state === 'upcoming') && !reachable;
+
+      var dotBg, dotColor, dotBorder, dotBorderStyle, labelColor, labelWeight, cursor, hoverBg;
+      if (state === 'done') {
+        dotBg = 'var(--teal)'; dotColor = 'var(--surface-card)'; dotBorder = 'var(--teal)'; dotBorderStyle = 'solid';
+        labelColor = 'var(--teal)'; labelWeight = '600'; cursor = 'pointer'; hoverBg = 'color-mix(in srgb,var(--text) 6%,transparent)';
+      } else if (state === 'current') {
+        dotBg = 'transparent'; dotColor = 'var(--amber)'; dotBorder = 'var(--amber)'; dotBorderStyle = 'solid';
+        labelColor = 'var(--text)'; labelWeight = '600'; cursor = 'pointer'; hoverBg = 'color-mix(in srgb,var(--text) 6%,transparent)';
+      } else if (reachable) {
+        dotBg = 'transparent'; dotColor = 'var(--teal)'; dotBorder = 'var(--teal)'; dotBorderStyle = 'solid';
+        labelColor = 'var(--teal)'; labelWeight = '600'; cursor = 'pointer'; hoverBg = 'color-mix(in srgb,var(--teal) 10%,transparent)';
+      } else {
+        dotBg = 'transparent'; dotColor = 'var(--warm-gray)'; dotBorder = 'var(--border-strong,var(--border))'; dotBorderStyle = 'dashed';
+        labelColor = 'var(--warm-gray)'; labelWeight = '500'; cursor = 'not-allowed'; hoverBg = 'transparent';
+      }
+
+      var activeBg = (state === 'current') ? 'color-mix(in srgb,var(--amber) 9%,transparent)' : 'transparent';
+      var glyph = state === 'done' ? '✓' : (locked ? '⚠' : String(i + 1));
+      // A locked future phase shows the reason (mirrors the prototype's "· needs
+      // Connect" / "· N to do"). For the immediate-next phase the blocker is the
+      // current phase's unmet hard reqs.
+      var reasonHtml = '';
+      if (locked && i === currentIdx + 1 && unmetHard > 0) {
+        reasonHtml = ' <span style="font-size:0.72rem;color:var(--warm-gray);">· ' + unmetHard + ' to do</span>';
+      }
+
+      // onclick → MastFlow.__ui.phaseStep(ctx, phaseKey). The handler decides
+      // advance/back/focus/blocked-toast from the live evaluation.
+      html += '<div role="listitem" data-mf-phase="' + _esc(p.key) + '" ' +
+        'onclick="MastFlow.__ui.phaseStep(\'' + ctxId + '\',\'' + _esc(p.key) + '\')" ' +
+        'title="' + _esc(p.label) + '" ' +
+        'style="display:flex;align-items:center;gap:7px;flex-shrink:0;padding:6px 9px;border-radius:8px;cursor:' + cursor + ';background:' + activeBg + ';transition:background 0.15s;" ' +
+        'onmouseover="this.style.background=\'' + hoverBg + '\'" onmouseout="this.style.background=\'' + activeBg + '\'">' +
+        '<span style="width:21px;height:21px;border-radius:50%;background:' + dotBg + ';color:' + dotColor + ';border:1.5px ' + dotBorderStyle + ' ' + dotBorder + ';display:inline-flex;align-items:center;justify-content:center;font-size:0.72rem;font-weight:700;flex-shrink:0;">' + glyph + '</span>' +
+        '<span style="font-size:0.85rem;color:' + labelColor + ';font-weight:' + labelWeight + ';white-space:nowrap;">' + _esc(p.label) + reasonHtml + '</span>' +
+      '</div>';
+      if (i < displayPhases.length - 1) {
+        var lineColor = i < currentIdx ? 'color-mix(in srgb,var(--teal) 50%,transparent)' : 'var(--border)';
+        html += '<div style="flex:0 0 22px;height:1.5px;background:' + lineColor + ';margin:0 2px;"></div>';
+      }
+    });
+    html += '</div>';
+    return html;
+  }
+
+  // The lean checklist beneath the rail: the current phase's exit requirements,
+  // met ✓ teal / unmet, each unmet target rendered as a "Go →" into the record.
+  function _renderGuidedChecklist(def, record, ev, ctxId) {
+    if (ev.specMismatch || ev.isTerminal) return '';
+    var allReqs = ev.satisfied.concat(ev.missing);
+    if (!allReqs.length) return '';
+
+    var html = '<div id="' + ctxId + '_checklist" style="display:flex;flex-direction:column;gap:5px;margin:11px 0 2px;">';
+    allReqs.forEach(function(r) {
+      var sat = ev.satisfied.indexOf(r) !== -1;
+      var icon, iconBg, iconColor;
+      if (sat) { icon = '✓'; iconBg = 'color-mix(in srgb,var(--teal) 16%,transparent)'; iconColor = 'var(--teal)'; }
+      else if (r.req.hard) { icon = '✕'; iconBg = 'color-mix(in srgb,var(--danger) 12%,transparent)'; iconColor = 'var(--danger)'; }
+      else { icon = '!'; iconBg = 'color-mix(in srgb,var(--amber) 16%,transparent)'; iconColor = 'var(--amber)'; }
+
+      var goHtml = '';
+      if (!sat && r.req.target) {
+        goHtml = ' <a href="#" onclick="event.preventDefault();MastFlow.__ui.target(\'' + ctxId + '\',\'' + _esc(r.req.target) + '\')" style="color:var(--teal);font-size:0.78rem;margin-left:8px;text-decoration:underline;">Go &rarr;</a>';
+      }
+      var actionHtml = '';
+      if (!sat && r.req.action) {
+        actionHtml = ' <button type="button" onclick="MastFlow.__ui.action(\'' + ctxId + '\',\'' + _esc(r.req.action.handler) + '\')" style="margin-left:8px;background:var(--teal);color:var(--surface-card);border:none;border-radius:5px;padding:2px 10px;font-size:0.78rem;cursor:pointer;">' + _esc(r.req.action.label) + '</button>';
+      }
+      var recHtml = r.req.hard ? '' : ' <em style="color:var(--warm-gray);font-size:0.78rem;font-style:normal;">· recommended</em>';
+      html += '<div style="display:flex;align-items:center;gap:8px;font-size:0.85rem;">' +
+        '<span style="display:inline-flex;width:18px;height:18px;border-radius:50%;background:' + iconBg + ';color:' + iconColor + ';align-items:center;justify-content:center;font-weight:700;font-size:0.72rem;flex-shrink:0;">' + icon + '</span>' +
+        '<span style="color:' + (sat ? 'var(--warm-gray)' : 'var(--text)') + ';' + (sat ? 'text-decoration:line-through;' : '') + '">' + _esc(r.req.label) + recHtml + '</span>' +
+        goHtml + actionHtml +
+      '</div>';
+    });
+    html += '</div>';
+    return html;
+  }
+
+  // ============================================================
   // Deep-link to a phase
   // ============================================================
 
@@ -914,6 +1135,7 @@
     transition: transition,
     diagnose: diagnose,
     renderHeader: renderHeader,
+    renderGuidedHeader: renderGuidedHeader,
     focusPhase: focusPhase,
     // Internal UI bridge — referenced by rendered HTML's inline onclick handlers.
     // Not part of the documented API surface; do not call from surface code.
