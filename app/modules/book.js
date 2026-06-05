@@ -3086,6 +3086,66 @@
     }
   }
 
+  // Bridge for the passes-v2 redesign twin (flag-gated #passes-v2). It delegates
+  // create/update here so the pass-definition write (priceCents conversion, the
+  // unlimited-type visitCount rule, the public dual-write via syncPassDefToPublic)
+  // stays single-sourced — the twin never reimplements that logic. Additive; no
+  // behavior change to the legacy surface. These mirror the EXACT client write
+  // savePassDefinition() makes, parameterized by data (the legacy handler reads
+  // the multi-section form DOM + the class-scope checkbox picker, so it can't be
+  // called with an object). Per-instance issuing/redeeming + cohort tooling stay
+  // on legacy. Mirrors window.InstructorsBridge / window.ContactsBridge.
+  function _passBridgeData(data) {
+    var type = data.type || 'pack';
+    var visitCount = (data.visitCount === '' || data.visitCount == null) ? null : (parseInt(data.visitCount, 10) || null);
+    // For unlimited type, visitCount must be null (mirrors savePassDefinition).
+    if (type === 'unlimited') visitCount = null;
+    var validityDays = (data.validityDays === '' || data.validityDays == null) ? null : (parseInt(data.validityDays, 10) || null);
+    var autoRenew = data.autoRenew === true || data.autoRenew === 'true';
+    var allowedClassIds = (data.allowedClassIds && data.allowedClassIds.length) ? data.allowedClassIds : null;
+    return {
+      name: (data.name || '').trim(),
+      description: (data.description || '').trim() || null,
+      type: type,
+      priceCents: Math.round(parseFloat(data.priceDollars) * 100),
+      visitCount: visitCount,
+      validityDays: validityDays,
+      activationTrigger: data.activationTrigger || 'purchase',
+      allowedClassIds: allowedClassIds,
+      allowedCategories: null,
+      autoRenew: autoRenew,
+      renewFrequency: autoRenew ? (data.renewFrequency || 'monthly') : null,
+      onlinePurchasable: !(data.onlinePurchasable === false || data.onlinePurchasable === 'false'),
+      introOnly: data.introOnly === true || data.introOnly === 'true',
+      priority: data.priority || 'medium',
+      sortOrder: parseInt(data.sortOrder, 10) || 0,
+      status: data.status || 'draft',
+      updatedAt: new Date().toISOString()
+    };
+  }
+  window.PassesBridge = {
+    create: async function (data) {
+      var rec = _passBridgeData(data);
+      var id = MastDB.passDefinitions.newKey();
+      rec.createdAt = rec.updatedAt;
+      await MastDB.passDefinitions.set(id, rec);
+      await syncPassDefToPublic(id, rec);
+      passDefsLoaded = false;
+      return id;
+    },
+    update: async function (id, data) {
+      var rec = _passBridgeData(data);
+      // savePassDefinition does a full .set() overwrite; preserve the server-owned
+      // createdAt so the edit doesn't drop it (the twin doesn't render it).
+      var existing = await MastDB.passDefinitions.get(id);
+      if (existing && existing.createdAt) rec.createdAt = existing.createdAt;
+      await MastDB.passDefinitions.set(id, rec);
+      await syncPassDefToPublic(id, rec);
+      passDefsLoaded = false;
+      return id;
+    }
+  };
+
   // ============================================================
   // Conflict Detection
   // ============================================================

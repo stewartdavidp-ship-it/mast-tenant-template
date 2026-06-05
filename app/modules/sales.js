@@ -2814,6 +2814,46 @@ async function exitPackingMode() {
     setTimeout(function() { if (typeof renderSalesEvents === 'function') renderSalesEvents(); }, 0);
   };
 
+  // Bridge for the sales-events-v2 redesign twin (flag-gated #sales-events-v2).
+  // It delegates event create/update here so the salesEvents write, the
+  // create/update audit, and the create-time inventory-location auto-create stay
+  // single-sourced — the twin never reimplements that logic. Additive; no
+  // behavior change to the legacy surface. These mirror the EXACT client writes
+  // saveEvent() makes, parameterized by data (the legacy handler reads the modal
+  // DOM, so it can't be called with an object). Editable set: name (required),
+  // date (required), location, notes. Mirrors window.ContactsBridge.
+  window.SalesEventsBridge = {
+    create: async function (data) {
+      var name = (data.name || '').trim();
+      var date = data.date || '';
+      var location = (data.location || '').trim();
+      var notes = (data.notes || '').trim();
+      var now = new Date().toISOString();
+      var newKey = MastDB.newKey('admin/salesEvents');
+      await MastDB.salesEvents.set(newKey, {
+        eventId: newKey, name: name, date: date, location: location || null,
+        status: 'planning', allocations: null,
+        createdAt: now, updatedAt: now, closedAt: null, notes: notes || null
+      });
+      await writeAudit('create', 'salesEvents', newKey);
+      // Auto-create an inventory location for this event — mirrors saveEvent().
+      createEventLocation(newKey, name);
+      return newKey;
+    },
+    update: async function (id, data) {
+      var now = new Date().toISOString();
+      await MastDB.salesEvents.update(id, {
+        name: (data.name || '').trim(),
+        date: data.date || '',
+        location: (data.location || '').trim() || null,
+        notes: (data.notes || '').trim() || null,
+        updatedAt: now
+      });
+      await writeAudit('update', 'salesEvents', id);
+      return id;
+    }
+  };
+
   MastAdmin.registerModule('sales', {
     routes: {
       'pos': { tab: 'salesTab', setup: function() { ensureSalesData(); if (showingSquarePayments) toggleSquarePayments(); checkLiveSessionButton(); if (salesLoaded) renderSales(); } },

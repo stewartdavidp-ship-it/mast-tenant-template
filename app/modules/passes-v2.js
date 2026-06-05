@@ -13,13 +13,14 @@
  * lifecycle — its status (active / draft / archived …) is an assigned attribute
  * → Faceted Record, NOT Process/MastFlow.
  *
- * Read-focused: creating/editing a pass definition is a multi-section bespoke
- * form (pricing & terms, options, auto-renew, class-scope checkbox picker) with
- * a public dual-write (syncPassDefToPublic), all coupled to the legacy Book
- * module — it stays single-sourced on legacy #passes via a "manage in classic
- * view" link. This twin re-hosts the VIEW only — no onSave, no edit form, and no
- * per-instance cohort tooling (that stays on legacy too). Flag-gated (?ui=1) at
- * #passes-v2, side-by-side; never touches book.js.
+ * Create + edit are NATIVE here: a custom detail.editRender (the multi-section
+ * pass-definition form — Basic Info / Pricing & Terms / Options / Auto-Renew /
+ * Class Scope) + an onSave that DELEGATES to window.PassesBridge (exposed in
+ * book.js) so the pass-definition write — priceCents conversion, the unlimited-
+ * type visitCount rule, and the public dual-write (syncPassDefToPublic) — stays
+ * single-sourced; the twin never reimplements that logic. Per-instance pass
+ * issuing/redeeming + cohort tooling (a different surface) stays on legacy
+ * #passes. Flag-gated (?ui=1) at #passes-v2, side-by-side.
  *
  * Data: definitions live at admin/passDefinitions (MastDB.passDefinitions →
  * that path; .list(100) is the legacy accessor). The Sales facet reads the
@@ -66,6 +67,15 @@
   // Sales aggregate doc (admin/passDefinitionAggregates/{id}) attached to the
   // record before open; null until the one-shot read resolves / if never computed.
   function agg(p) { return p && p.__agg; }
+
+  // Edit-form vocab — mirrors book.js (PASS_TYPES / PASS_PRIORITIES / CLASS_STATUSES,
+  // activation + renew options) so the native form offers the same choices the
+  // legacy savePassDefinition form does. PassesBridge owns the write semantics.
+  var PASS_TYPES = ['drop-in', 'pack', 'unlimited', 'limited', 'series', 'intro'];
+  var PASS_PRIORITIES = ['high', 'medium', 'low'];
+  var PASS_STATUSES = ['draft', 'active', 'published', 'completed', 'archived'];
+  var ACTIVATION_OPTS = [{ value: 'purchase', label: 'On purchase' }, { value: 'first_use', label: 'On first use' }];
+  var RENEW_OPTS = ['monthly', 'quarterly', 'yearly'];
 
   // ── schema (read-only Faceted Record) ───────────────────────────────
   MastEntity.define('passes-v2', {
@@ -119,10 +129,8 @@
         var descBody = p.description
           ? '<div style="font-size:0.85rem;color:var(--warm-gray);line-height:1.5;white-space:pre-wrap;">' + esc(p.description) + '</div>'
           : '<span class="mu-sub">No description.</span>';
-        // Multi-section pass editing (pricing/terms/options/scope + public
-        // dual-write) stays on legacy #passes. Use navigateToClassic so the V2
-        // route remap doesn't loop us back to this twin.
-        var manage = '<div style="margin-top:14px;"><button class="btn btn-secondary" onclick="PassesV2.classic()">Manage in classic view →</button></div>';
+        // Pass-definition create/edit (all sections above + the public dual-write)
+        // is now native to this twin via the Edit button → onSave → PassesBridge.
 
         // Sales — instance counts from the aggregate doc (one-shot read). Full
         // per-instance cohort drill-down stays on legacy #passes.
@@ -135,7 +143,7 @@
             { k: 'Used', v: N.count(a.used || 0) },
             { k: 'Expired', v: N.count(a.expired || 0) },
             { k: 'Revoked', v: N.count(a.revoked || 0) }
-          ]) + '<div class="mu-sub" style="margin-top:10px;">Per-holder cohorts (expiring, lapsed, unused) live in the classic Passes view.</div>';
+          ]) + '<div class="mu-sub" style="margin-top:10px;">Per-holder cohorts (expiring, lapsed, unused) and pass issuing/redeeming have no V2 home yet — <button class="btn btn-small btn-secondary" onclick="PassesV2.classic()">open classic Passes →</button></div>';
         } else if (p.__aggLoading) {
           salesBody = '<span class="mu-sub">Loading sales…</span>';
         } else {
@@ -147,19 +155,139 @@
             UI.card('Definition', definition) +
             UI.card('Pricing & terms', terms) +
             UI.card('Class scope', scope) +
-            UI.card('Description', descBody + manage) +
+            UI.card('Description', descBody) +
           '</div>' +
           '<div class="mu-pane" data-pane="sales" hidden>' + UI.card('Instance counts', salesBody) + '</div>';
+      },
+      // Native edit/create form — the legacy showPassDefForm section set, grouped:
+      // Basic Info (name*, type*, status, description), Pricing & Terms (price* in
+      // dollars, visit count, validity days, activation), Options (priority, sort
+      // order, online purchase, intro only), Auto-Renew (toggle + frequency), and
+      // a Class Scope checkbox picker (active classes; none checked ⇒ any class).
+      // onSave delegates to window.PassesBridge — no write logic reimplemented.
+      editRender: function (p, mode) {
+        p = p || {};
+        function fg(label, inner, flex) { return '<div class="form-group"' + (flex ? ' style="flex:1;min-width:150px;"' : '') + '><label class="form-label">' + label + '</label>' + inner + '</div>'; }
+        function row2(a, b) { return '<div style="display:flex;gap:12px;flex-wrap:wrap;">' + a + b + '</div>'; }
+        function grp(label) { return '<div style="font-size:0.9rem;font-weight:600;color:var(--teal);margin:14px 0 4px;">' + esc(label) + '</div>'; }
+        function opts(list, sel) {
+          return list.map(function (o) {
+            var val = (typeof o === 'object') ? o.value : o;
+            var lab = (typeof o === 'object') ? o.label : cap(o);
+            return '<option value="' + esc(val) + '"' + (String(sel) === String(val) ? ' selected' : '') + '>' + esc(lab) + '</option>';
+          }).join('');
+        }
+        var priceVal2 = (p.priceCents != null) ? (p.priceCents / 100).toFixed(2) : '';
+        var allowedIds = p.allowedClassIds || [];
+        var activeClasses = (V2.classes || []).filter(function (c) { return c.status === 'active'; });
+        var scopeHtml = activeClasses.length
+          ? activeClasses.map(function (c) {
+              var on = allowedIds.indexOf(c.id) !== -1 ? ' checked' : '';
+              return '<label style="display:block;font-size:0.85rem;margin-bottom:6px;"><input type="checkbox" name="pdfV2Scope" value="' + esc(c.id) + '"' + on + '> ' + esc(c.name || c.id) + '</label>';
+            }).join('')
+          : '<span class="mu-sub">No active classes — this pass applies to any class.</span>';
+        var renewStyle = (p.autoRenew ? '' : ' style="display:none;"');
+        return '<div class="mu-editbar"><span class="mu-editpill">' + (mode === 'create' ? 'NEW' : 'EDITING') + '</span>' + (mode === 'create' ? 'New pass' : 'Edit this pass') + '</div>' +
+          grp('Basic info') +
+          fg('Name *', '<input class="form-input" id="pdfV2Name" value="' + esc(p.name || '') + '" style="width:100%;" placeholder="e.g. 10-Class Pack">') +
+          row2(
+            fg('Type *', '<select class="form-input" id="pdfV2Type" style="width:100%;">' + opts(PASS_TYPES, p.type || 'pack') + '</select>', true),
+            fg('Status', '<select class="form-input" id="pdfV2Status" style="width:100%;">' + opts(PASS_STATUSES, statusOf(p)) + '</select>', true)
+          ) +
+          fg('Description', '<textarea class="form-input" id="pdfV2Desc" rows="2" style="width:100%;resize:vertical;" placeholder="What does this pass include?">' + esc(p.description || '') + '</textarea>') +
+          grp('Pricing & terms') +
+          row2(
+            fg('Price ($) *', '<input class="form-input" type="number" min="0" step="0.01" id="pdfV2Price" value="' + esc(priceVal2) + '" style="width:100%;">', true),
+            fg('Activation', '<select class="form-input" id="pdfV2Activation" style="width:100%;">' + opts(ACTIVATION_OPTS, p.activationTrigger || 'purchase') + '</select>', true)
+          ) +
+          row2(
+            fg('Visit count', '<input class="form-input" type="number" min="1" id="pdfV2Visits" value="' + esc(p.visitCount || '') + '" style="width:100%;" placeholder="Leave blank for unlimited">', true),
+            fg('Validity (days)', '<input class="form-input" type="number" min="1" id="pdfV2Validity" value="' + esc(p.validityDays || '') + '" style="width:100%;" placeholder="No limit">', true)
+          ) +
+          grp('Options') +
+          row2(
+            fg('Priority', '<select class="form-input" id="pdfV2Priority" style="width:100%;">' + opts(PASS_PRIORITIES, p.priority || 'medium') + '</select>', true),
+            fg('Sort order', '<input class="form-input" type="number" min="0" id="pdfV2Sort" value="' + esc(p.sortOrder || 0) + '" style="width:100%;">', true)
+          ) +
+          row2(
+            fg('Online purchase', '<select class="form-input" id="pdfV2Online" style="width:100%;">' + opts([{ value: 'true', label: 'Yes' }, { value: 'false', label: 'No' }], (p.onlinePurchasable === false) ? 'false' : 'true') + '</select>', true),
+            fg('Intro only', '<select class="form-input" id="pdfV2Intro" style="width:100%;">' + opts([{ value: 'false', label: 'No' }, { value: 'true', label: 'Yes' }], p.introOnly ? 'true' : 'false') + '</select>', true)
+          ) +
+          grp('Auto-renew') +
+          row2(
+            fg('Auto-renew', '<select class="form-input" id="pdfV2AutoRenew" style="width:100%;" onchange="PassesV2.toggleRenew(this.value)">' + opts([{ value: 'false', label: 'No' }, { value: 'true', label: 'Yes' }], p.autoRenew ? 'true' : 'false') + '</select>', true),
+            '<div class="form-group" id="pdfV2RenewWrap"' + renewStyle + ' style="flex:1;min-width:150px;' + (p.autoRenew ? '' : 'display:none;') + '"><label class="form-label">Frequency</label><select class="form-input" id="pdfV2RenewFreq" style="width:100%;">' + opts(RENEW_OPTS, p.renewFrequency || 'monthly') + '</select></div>'
+          ) +
+          grp('Class scope') +
+          '<div class="mu-sub" style="margin-bottom:8px;">Leave all unchecked to allow this pass for any class.</div>' +
+          '<div style="max-height:200px;overflow-y:auto;">' + scopeHtml + '</div>';
       }
+    },
+    onSave: function (rec, mode) {
+      if (!window.PassesBridge) { if (window.showToast) showToast('Passes engine still loading — try again', true); return false; }
+      function val(id) { return ((document.getElementById(id) || {}).value || ''); }
+      var scope = Array.prototype.slice.call(document.querySelectorAll('input[name="pdfV2Scope"]:checked')).map(function (cb) { return cb.value; });
+      var data = {
+        name: val('pdfV2Name'),
+        type: val('pdfV2Type') || 'pack',
+        status: val('pdfV2Status') || 'draft',
+        description: val('pdfV2Desc'),
+        priceDollars: val('pdfV2Price'),
+        activationTrigger: val('pdfV2Activation') || 'purchase',
+        visitCount: val('pdfV2Visits'),
+        validityDays: val('pdfV2Validity'),
+        priority: val('pdfV2Priority') || 'medium',
+        sortOrder: val('pdfV2Sort'),
+        onlinePurchasable: val('pdfV2Online'),
+        introOnly: val('pdfV2Intro'),
+        autoRenew: val('pdfV2AutoRenew'),
+        renewFrequency: val('pdfV2RenewFreq'),
+        allowedClassIds: scope
+      };
+      // Validation mirrors legacy savePassDefinition: name required; valid price required.
+      if (!data.name.trim()) { if (window.showToast) showToast('Name is required.', true); return false; }
+      var price = parseFloat(data.priceDollars);
+      if (isNaN(price) || price < 0) { if (window.showToast) showToast('A valid price is required.', true); return false; }
+
+      if (mode === 'create') {
+        return Promise.resolve(window.PassesBridge.create(data)).then(function () {
+          if (window.showToast) showToast('Pass created.'); reloadSoon(); return true;
+        }).catch(function (e) { console.error('[passes-v2] create', e); if (window.showToast) showToast('Error saving pass.', true); return false; });
+      }
+      var id = rec._key || rec.id;
+      return Promise.resolve(window.PassesBridge.update(id, data)).then(function () {
+        // Mutate the LIVE cached record (=== the slide-out's read closure, since
+        // fetch returns V2.byId[id]); the engine passes a copy to onSave. Shows
+        // the edited fields immediately on the post-save read re-render;
+        // reloadSoon() then refreshes the cache for the next open.
+        Object.assign(V2.byId[id] || rec, {
+          name: data.name.trim(), type: data.type, status: data.status,
+          description: data.description.trim() || null, priceCents: Math.round(price * 100),
+          visitCount: data.type === 'unlimited' ? null : (parseInt(data.visitCount, 10) || null),
+          validityDays: parseInt(data.validityDays, 10) || null,
+          allowedClassIds: scope.length ? scope : null,
+          autoRenew: data.autoRenew === 'true', priority: data.priority,
+          onlinePurchasable: data.onlinePurchasable !== 'false', introOnly: data.introOnly === 'true'
+        });
+        if (window.showToast) showToast('Pass updated.'); reloadSoon(); return true;
+      }).catch(function (e) { console.error('[passes-v2] update', e); if (window.showToast) showToast('Error updating pass.', true); return false; });
     }
-    // No onSave → no Edit button (pass-definition editing stays on legacy #passes).
   });
 
   // ── module state + data ─────────────────────────────────────────────
-  var V2 = { rows: [], byId: {}, sortKey: 'name', sortDir: 'asc', q: '', statusFilter: 'all', typeFilter: 'all', loaded: false };
+  var V2 = { rows: [], byId: {}, classes: [], sortKey: 'name', sortDir: 'asc', q: '', statusFilter: 'all', typeFilter: 'all', loaded: false };
 
   function load() {
-    Promise.resolve(MastDB.passDefinitions.list(100)).then(function (snap) {
+    // Ensure the legacy book module is loaded so window.PassesBridge (the
+    // delegated write path) exists — mirrors contacts-v2 / students-v2.
+    if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('book'); } catch (e) {} }
+    // Pass definitions + the class catalog (for the scope picker) load together;
+    // both one-shot keyed-object reads (no listeners).
+    Promise.all([
+      Promise.resolve(MastDB.passDefinitions.list(100)).catch(function () { return null; }),
+      Promise.resolve(MastDB.classes.list(200)).catch(function () { return null; })
+    ]).then(function (res) {
+      var snap = res[0];
       var val = (snap && typeof snap.val === 'function') ? snap.val() : snap;
       var out = [];
       Object.keys(val || {}).forEach(function (k) {
@@ -167,9 +295,13 @@
         if (p && typeof p === 'object') { p = Object.assign({ _key: k }, p); p.status = p.status || 'draft'; out.push(p); }
       });
       V2.rows = out; V2.byId = {}; out.forEach(function (r) { V2.byId[r._key] = r; });
+      var csnap = res[1];
+      var cval = (csnap && typeof csnap.val === 'function') ? csnap.val() : csnap;
+      V2.classes = Object.keys(cval || {}).map(function (k) { return Object.assign({ id: k }, cval[k]); });
       V2.loaded = true; render();
     }).catch(function (e) { console.error('[passes-v2] load', e); render(); });
   }
+  function reloadSoon() { V2.loaded = false; setTimeout(load, 250); }   // let the legacy write settle, then refresh
 
   // One-shot aggregate read for the open pass (cheap keyed doc; mirrors legacy
   // _kickPassDetailLoad's aggregate fetch). Re-opens the panel once it lands so
@@ -234,7 +366,8 @@
       U.pageHeader({
         title: 'Passes',
         count: N.count(V2.rows.length) + ' pass' + (V2.rows.length === 1 ? '' : 'es'),
-        actionsHtml: '<button class="btn btn-secondary" onclick="PassesV2.exportCsv()">↓ Export</button>'
+        actionsHtml: '<button class="btn btn-primary" onclick="PassesV2.create()">+ New pass</button>' +
+          '<button class="btn btn-secondary" onclick="PassesV2.exportCsv()">↓ Export</button>'
       }) +
       '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:12px 0;">' + filters +
         '<select class="form-input" onchange="PassesV2.filterType(this.value)" style="max-width:170px;font-size:0.9rem;margin-left:4px;">' + typeOptions() + '</select>' +
@@ -244,7 +377,7 @@
       MastEntity.renderList('passes-v2', {
         rows: visibleRows(), sortKey: V2.sortKey, sortDir: V2.sortDir,
         onSortFnName: 'PassesV2.sort', onRowClickFnName: 'PassesV2.open',
-        empty: { title: 'No passes', message: V2.loaded ? 'Create class passes in the classic Passes view.' : 'Loading…' }
+        empty: { title: 'No passes', message: V2.loaded ? 'Create a pass to get started.' : 'Loading…' }
       });
   }
 
@@ -262,8 +395,21 @@
         if (rec) { MastEntity.openRecord('passes-v2', rec, 'read'); loadAggregate(rec); }
       });
     },
-    // Multi-section pass editing → classic Passes view. Use navigateToClassic so
-    // the V2 route remap doesn't loop us back to this twin.
+    create: function () {
+      // Ensure the legacy book module (and thus window.PassesBridge) is loaded
+      // before opening the create form — mirrors ContactsV2.create.
+      if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('book'); } catch (e) {} }
+      MastEntity.openRecord('passes-v2', {}, 'create');
+    },
+    // Show/hide the renew-frequency field as the auto-renew toggle changes (mirrors
+    // the legacy form's _passToggleFields for this one field).
+    toggleRenew: function (v) {
+      var wrap = document.getElementById('pdfV2RenewWrap');
+      if (wrap) wrap.style.display = (v === 'true') ? '' : 'none';
+    },
+    // Per-instance issuing/redeeming + per-holder cohort tooling have no V2 home
+    // yet, so the Sales tab keeps a deep-link to classic #passes. navigateToClassic
+    // so the V2 route remap doesn't loop us back to this twin.
     classic: function () {
       if (typeof navigateToClassic === 'function') navigateToClassic('passes');
       else if (typeof navigateTo === 'function') navigateTo('passes');

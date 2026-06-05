@@ -2763,6 +2763,42 @@
   window.csSavePolicy = savePolicy;
   window.csDeletePolicy = deletePolicy;
   window.csCancelPolicy = function () { showAddPolicy = false; policyEditId = null; renderFaqs(); };
+
+  // Bridge for the cs-faqs-v2 redesign twin (flag-gated #cs-faqs-v2). It
+  // delegates FAQ create/update here so the cs_policies write + the kind='faq'
+  // partition tag + slug autogen stay single-sourced — the twin never
+  // reimplements that logic. These make the EXACT write savePolicy() makes
+  // (the `patch` object), parameterized by data (savePolicy reads the form
+  // DOM, so it can't be called with an object). Mirrors window.StudentsBridge /
+  // window.ContactsBridge. Additive; no behavior change to the legacy surface.
+  function buildFaqPatch(data) {
+    var name = (data.question || '').trim();
+    var slug = (data.slug || '').trim();
+    var content = data.answer || '';
+    var slugVal = slug || name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    return {
+      name: name, slug: slugVal, contentHtml: content,
+      question: name, answer: content,
+      kind: 'faq',
+      storefrontEnabled: !!data.storefrontEnabled, updatedAt: nowIso()
+    };
+  }
+  window.CsFaqsBridge = {
+    create: async function (data) {
+      var patch = buildFaqPatch(data);
+      var nk = MastDB.newKey('cs_policies');
+      var doc = Object.assign({ id: nk, createdAt: nowIso() }, patch);
+      await MastDB.set('cs_policies/' + nk, doc);
+      policiesData[nk] = doc;
+      return nk;
+    },
+    update: async function (id, data) {
+      var patch = buildFaqPatch(data);
+      await MastDB.update('cs_policies/' + id, patch);
+      if (policiesData[id]) Object.assign(policiesData[id], patch);
+      return id;
+    }
+  };
   window.csTogglePolicyStorefront = togglePolicyStorefront;
   window.csAutofillPolicySlug = function (name, doIt) { if (!doIt) return; var el = document.getElementById('csPSlug'); if (el) el.value = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''); };
 

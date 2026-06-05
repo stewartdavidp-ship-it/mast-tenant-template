@@ -442,6 +442,77 @@
   window.campaignsAttachArtifact = campaignsAttachArtifact;
 
   // ─────────────────────────────────────────────────────────────────────
+  // Bridge for the campaigns-v2 redesign twin (flag-gated #campaigns-v2). It
+  // delegates create / field-edit / reference add+remove here so the campaign
+  // write, slug derivation, and reference array shape stay single-sourced — the
+  // twin never reimplements that logic. Additive; no behavior change to the
+  // legacy surface. These mirror the EXACT client writes the legacy handlers
+  // make (campaignsCreateNewConfirm / campaignsSaveCurrent / campaignsSaveReference
+  // / campaignsRemoveReference), parameterized by data (the legacy handlers read
+  // the modal/detail DOM, so they can't be called with an object). Mirrors
+  // window.ContactsBridge / window.StudentsBridge.
+  // ─────────────────────────────────────────────────────────────────────
+
+  window.CampaignsBridge = {
+    // Mirrors campaignsCreateNewConfirm — same id source, doc shape, slug.
+    create: async function (data) {
+      var name = ((data && data.name) || '').trim();
+      var id = MastDB.newKey('admin/campaigns');
+      var doc = {
+        id: id, name: name, goal: '', startDate: '', endDate: '',
+        utmCampaign: slugifyCampaign(name), references: [],
+        status: 'active', createdAt: nowIso(), updatedAt: nowIso()
+      };
+      await MastDB.set('admin/campaigns/' + id, doc);
+      campaigns[id] = doc;
+      return id;
+    },
+    // Mirrors campaignsSaveCurrent — same patch fields, slug re-derive, update().
+    update: async function (id, data) {
+      var c = campaigns[id] || {};
+      var name = ((data && data.name) != null ? data.name : c.name) || '';
+      var patch = {
+        name: name.trim(),
+        goal: ((data && data.goal) || '').trim(),
+        startDate: (data && data.startDate) || '',
+        endDate: (data && data.endDate) || '',
+        status: (data && data.status) || 'active',
+        utmCampaign: slugifyCampaign(name),
+        updatedAt: nowIso()
+      };
+      await MastDB.update('admin/campaigns/' + id, patch);
+      if (campaigns[id]) Object.assign(campaigns[id], patch);
+      return patch;
+    },
+    // Mirrors campaignsSaveReference — push {type,refId,scheduledFor,addedAt},
+    // write the whole references array.
+    addReference: async function (id, ref) {
+      var c = campaigns[id];
+      if (!c) return null;
+      var refs = (c.references || []).slice();
+      refs.push({
+        type: (ref && ref.type) || 'blog',
+        refId: ((ref && ref.refId) || '').trim(),
+        scheduledFor: (ref && ref.scheduledFor) || '',
+        addedAt: nowIso()
+      });
+      await MastDB.update('admin/campaigns/' + id, { references: refs, updatedAt: nowIso() });
+      c.references = refs;
+      return refs;
+    },
+    // Mirrors campaignsRemoveReference — splice by index, write the array.
+    removeReference: async function (id, idx) {
+      var c = campaigns[id];
+      if (!c) return null;
+      var refs = (c.references || []).slice();
+      refs.splice(idx, 1);
+      await MastDB.update('admin/campaigns/' + id, { references: refs, updatedAt: nowIso() });
+      c.references = refs;
+      return refs;
+    }
+  };
+
+  // ─────────────────────────────────────────────────────────────────────
   // Register
   // ─────────────────────────────────────────────────────────────────────
 
