@@ -2802,6 +2802,31 @@
   window.csTogglePolicyStorefront = togglePolicyStorefront;
   window.csAutofillPolicySlug = function (name, doIt) { if (!doIt) return; var el = document.getElementById('csPSlug'); if (el) el.value = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''); };
 
+  // Bridge for the cs-reviews-v2 redesign twin (flag-gated #cs-reviews-v2). It
+  // delegates review MODERATION (approve / reject / feature / unfeature) here so
+  // the cs_reviews status write + the W1.8 Testimonials-promotion logic stay
+  // single-sourced — the twin never reimplements moderation or business rules.
+  // Reviews are user-generated content: there is intentionally NO text-edit path
+  // (the only operator write to a review's own content is the public reply, which
+  // stays on legacy #cs-reviews). featureReviewOnSite/unfeatureReviewOnSite read
+  // the private reviewsData + product/customer indexes, so we ensure-load the
+  // legacy CS review data first (mirrors duplicates-v2 → MastAdmin.loadModule +
+  // window.customersMerge). Each method resolves to the fresh review doc so the
+  // twin can mutate its own live byId cache + re-open. Mirrors window.ContactsBridge
+  // / window.CsFaqsBridge. Additive; no behavior change to the legacy surface.
+  function ensureReviewsLoaded() {
+    if (reviewsLoaded) return Promise.resolve();
+    return Promise.resolve(loadReviews());
+  }
+  window.CsReviewsBridge = {
+    // Resolve the latest on-doc review state for the twin (post-action refresh).
+    get: function (id) { return ensureReviewsLoaded().then(function () { return reviewsData[id] || null; }); },
+    approve: function (id) { return ensureReviewsLoaded().then(function () { return approveReview(id); }).then(function () { return reviewsData[id] || null; }); },
+    reject: function (id) { return ensureReviewsLoaded().then(function () { return rejectReview(id); }).then(function () { return reviewsData[id] || null; }); },
+    feature: function (id) { return ensureReviewsLoaded().then(function () { return featureReviewOnSite(id); }).then(function () { return reviewsData[id] || null; }); },
+    unfeature: function (id) { return ensureReviewsLoaded().then(function () { return unfeatureReviewOnSite(id); }).then(function () { return reviewsData[id] || null; }); }
+  };
+
   // ============================================================
   // Actions — data entry points
   // ============================================================
