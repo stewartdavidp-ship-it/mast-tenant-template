@@ -6664,4 +6664,75 @@
     archive: function (id) { return archiveMaterial(id); }
   };
 
+  // ── Product bridge (P4) ──────────────────────────────────────────────
+  // Thin additive delegate so the products-v2 surface can WRITE top-level
+  // product fields without reimplementing maker's edit machinery. Mirrors
+  // MakerMaterialsBridge (the canonical precedent). It does NOT touch the
+  // cost/markup/revision-staging core of saveDefineView — that refactor is
+  // for the "heavy" tabs (Pricing/Recipe/Inventory). This handles the clean
+  // top-level fields (Info: category/businessLine/slug/sku; later Image).
+  //
+  // Critically it honours the Checkpoint-F guard: an ACTIVE product never gets
+  // a live write — its edits stage as a pending revision (entering revision
+  // mode first if needed). Draft/Ready products write live.
+  async function bridgeEnsureProduct(pid) {
+    var p = findProduct(pid);
+    if (p) return p;
+    // Self-heal the in-memory cache WITHOUT the DOM-heavy global loadProducts()
+    // (which throws in a pure-v2/Legacy-off session — it touches legacy DOM).
+    try {
+      var one = await MastDB.products.get(pid);
+      if (one) {
+        if (!one.pid) one.pid = pid;
+        window.productsData = window.productsData || [];
+        if (!findProduct(pid)) window.productsData.push(one);
+        return findProduct(pid);
+      }
+    } catch (e) {}
+    return null;
+  }
+
+  async function bridgeSetProductFields(pid, patch) {
+    var keys = Object.keys(patch || {});
+    if (!keys.length) return { ok: true, staged: false, changed: 0 };
+    var p = await bridgeEnsureProduct(pid);
+    if (!p) return { ok: false, error: 'Product not found' };
+
+    // ACTIVE → stage as a pending revision (never write live over active).
+    if (isProductGuarded(p)) {
+      if (!p.hasPendingRevision) {
+        var entered = await enterRevisionMode(pid);
+        if (!entered) return { ok: false, error: 'Could not enter revision mode' };
+      }
+      await stagePendingChanges(pid, patch); // stages only revisionable keys
+      MastAdmin.writeAudit('stage_revision', 'products', pid);
+      return { ok: true, staged: true, changed: keys.length };
+    }
+
+    // DRAFT/READY → write live, field by field (top-level only).
+    var path = 'public/products/' + pid + '/';
+    for (var i = 0; i < keys.length; i++) {
+      var k = keys[i];
+      await MastDB.set(path + k.replace(/\./g, '/'), patch[k]);
+      if (k.indexOf('.') < 0) p[k] = patch[k]; // in-memory mirror
+    }
+    var now = new Date().toISOString();
+    await MastDB.set(path + 'updatedAt', now);
+    p.updatedAt = now;
+    // Readiness is derived — recompute off the now-updated in-memory record.
+    try { await recomputeAndPersistReadiness(pid); } catch (e) {}
+    MastAdmin.writeAudit('update', 'products', pid);
+    return { ok: true, staged: false, changed: keys.length };
+  }
+
+  window.MakerProductBridge = {
+    // Write a {field: value, ...} patch of top-level product fields. Returns
+    // { ok, staged, changed } — staged===true means it went to a pending
+    // revision (Active product) rather than live.
+    setFields: function (pid, patch) { return bridgeSetProductFields(pid, patch); },
+    setField: function (pid, field, value) { var o = {}; o[field] = value; return bridgeSetProductFields(pid, o); },
+    // Whether edits to this product stage as a revision (Active) vs write live.
+    isGuarded: function (pid) { return isProductGuarded(findProduct(pid)); }
+  };
+
 })();
