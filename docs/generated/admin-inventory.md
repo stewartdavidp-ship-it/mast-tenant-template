@@ -6,7 +6,7 @@ Source-of-truth counts for the admin app, generated from the code so docs
 cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 
 - **Core shell:** `app/index.html` — **58,639** lines
-- **Feature modules:** **94** files in `app/modules/` (**87** routed), **107,228** lines combined
+- **Feature modules:** **94** files in `app/modules/` (**87** routed), **107,250** lines combined
 
 | Module file | Lines | Routes |
 |---|---:|---|
@@ -53,7 +53,7 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/financials.js` | 350 | — |
 | `modules/fulfillment.js` | 1,524 | pack, ship, fulfillment |
 | `modules/galleries-v2.js` | 399 | galleries-v2 |
-| `modules/gift-cards-v2.js` | 293 | gift-cards-v2 |
+| `modules/gift-cards-v2.js` | 298 | gift-cards-v2 |
 | `modules/homepage-v2.js` | 125 | homepage-v2 |
 | `modules/homepage.js` | 681 | homepage |
 | `modules/inquiries-v2.js` | 225 | inquiries-v2 |
@@ -71,7 +71,7 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/orders-v2.js` | 222 | orders-v2 |
 | `modules/orders.js` | 6,262 | orders, commissions, rma |
 | `modules/passes-v2.js` | 423 | passes-v2 |
-| `modules/procurement-v2.js` | 367 | procurement-v2 |
+| `modules/procurement-v2.js` | 384 | procurement-v2 |
 | `modules/procurement.js` | 2,083 | procurement |
 | `modules/production.js` | 3,553 | jobs, production, stories, forecast |
 | `modules/products-v2.js` | 439 | products-v2 |
