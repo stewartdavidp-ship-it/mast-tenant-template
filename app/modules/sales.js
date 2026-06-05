@@ -2501,8 +2501,10 @@ async function exitPackingMode() {
       updatedAt: new Date().toISOString()
     };
 
-    MastDB.termsConfig.set(config).then(function() {
-      termsConfig = config;
+    // Merge (not set) so re-saving policy config preserves lastPublishedAt —
+    // config enumerates every policy field, so this still fully replaces them.
+    MastDB.termsConfig.update(config).then(function() {
+      termsConfig = Object.assign({}, termsConfig, config);
       showToast('Terms & conditions saved.');
       var modal = document.getElementById('termsEditorModal');
       if (modal) modal.remove();

@@ -99,7 +99,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-storage-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-functions-compat.js"></script>
-  <script src="../shared/mastdb.js?v=5"></script>
+  <script src="../shared/mastdb.js?v=6"></script>
   <script src="../shared/business-entity-constants.js?v=4"></script>
   <!-- E1 (Idea -OtEQoFvlPAu90ghkDXu): Add-to-Mast page module copy + schema validator.
        Eager-loaded — module labels are referenced by sidebar rendering at boot, not just on the Add-to-Mast page. -->
@@ -110,7 +110,7 @@
        Shared by customers.js (list/export) and customer-service.js (survey
        bulk-send) so the segment matcher cannot drift. ?v= kept in lockstep
        with MAST_MODULES_V by scripts/bump-modules-version.sh. -->
-  <script src="../shared/customer-filters.js?v=20260605-122359-c9fec5d"></script>
+  <script src="../shared/customer-filters.js?v=20260605-130240-dde8d07"></script>
   <script src="../shared/brand-sync.js?v=1"></script>
   <script src="../shared/channel-connection.js?v=1"></script>
   <!-- UI redesign engines (docs/ux-audit): shared primitives + Entity Engine.
@@ -118,9 +118,9 @@
        scripts/bump-modules-version.sh (these are static <head> tags loaded
        before the JS var exists, so they can't read it at runtime). Without
        this, the engines were frozen at ?v=1 and never cache-busted on deploy. -->
-  <script src="../shared/mast-ui.js?v=20260605-122359-c9fec5d"></script>
-  <script src="../shared/mast-io.js?v=20260605-122359-c9fec5d"></script>
-  <script src="../shared/mast-entity.js?v=20260605-122359-c9fec5d"></script>
+  <script src="../shared/mast-ui.js?v=20260605-130240-dde8d07"></script>
+  <script src="../shared/mast-io.js?v=20260605-130240-dde8d07"></script>
+  <script src="../shared/mast-entity.js?v=20260605-130240-dde8d07"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Pod-specific runtime config — sets window.MAST_POD_PLATFORM_PROJECT so
@@ -12087,11 +12087,24 @@ MastDB.walletConfig = {
   update: function(data) { return MastDB.update('admin/walletConfig', data); }
 };
 
+// admin_termsConfig is a SINGLETON_COLLECTIONS doc (shared/mastdb.js) → the
+// whole config lives at admin_termsConfig/_data. update() must NOT use
+// MastDB.update(): the doc does not exist until the first write, and Firestore
+// update() rejects on a missing doc (it used to throw "path requires doc ID"
+// pre-singleton, which silently dropped every lastPublishedAt stamp + terms-v2
+// slice save). Instead do a field-scoped create-or-merge set() per key — it
+// creates the doc when absent and preserves sibling fields, so stamping
+// lastPublishedAt never wipes the policy config and a slice edit never wipes
+// another slice. Same pattern as mapping.js _saveState.
 MastDB.termsConfig = {
   PATH: 'admin/termsConfig',
   get: function() { return MastDB.get('admin/termsConfig'); },
   set: function(data) { return MastDB.set('admin/termsConfig', data); },
-  update: function(data) { return MastDB.update('admin/termsConfig', data); }
+  update: function(data) {
+    return Promise.all(Object.keys(data).map(function(k) {
+      return MastDB.set('admin/termsConfig/' + k, data[k]);
+    }));
+  }
 };
 
 MastDB.rma = _makeEntity('admin/rma', 100);
@@ -20972,7 +20985,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260605-122359-c9fec5d';
+var MAST_MODULES_V = '20260605-130240-dde8d07';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
