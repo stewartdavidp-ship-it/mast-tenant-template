@@ -617,8 +617,12 @@
       updatedAt: now
     };
 
-    // Recalculate variants if enabled
-    if (recipe.isVariantEnabled && recipe.variants) {
+    // Recalculate variants if enabled. The legacy builder sets isVariantEnabled
+    // on its in-memory state but saves strip it to null and persist
+    // variantsShape:'cost' instead — so a recipe edited only through the v2 SO
+    // (R4) carries variant slots under variantsShape without isVariantEnabled.
+    // Recompute whenever either marker is present and there are real slots.
+    if (((recipe.isVariantEnabled || recipe.variantsShape === 'cost') && recipe.variants && Object.keys(recipe.variants).length)) {
       var variantUpdates = {};
       Object.keys(recipe.variants).forEach(function(vid) {
         var v = recipe.variants[vid];
@@ -900,6 +904,157 @@
       if (!(await ensureRecipeCtx(recipeId))) return { ok: false, error: 'Recipe not found' };
       var updates = await recalculateRecipe(recipeId);
       Object.assign(recipesData[recipeId], updates);
+      return { ok: true, recipe: recipesData[recipeId] };
+    } catch (e) { return { ok: false, error: (e && e.message) || 'Failed' }; }
+  }
+
+  // ============================================================
+  // V2 recipe-edit bridge — VARIANT cost-shape (R4). A recipe carries per-variant
+  // cost overrides under recipe.variants[productVariantId] = { lineItems,
+  // laborMinutes, otherCost, … }. A variant either OVERRIDES the product recipe
+  // (its own materialized slot) or INHERITS it (no slot — the product default /
+  // recipe root applies). recipeVariantOverride materializes a slot from root;
+  // recipeVariantInherit drops it. Per-variant labor RATE / markups / setup /
+  // batch stay recipe-level (the cost engine's variant branch already reads them
+  // from the recipe root) — only BOM + laborMinutes + otherCost are per-variant.
+  // Light recompute (no marginHistory / product propagation — variant cost does
+  // not propagate to the product; computeCostShape reads the recipe root).
+  // ============================================================
+
+  // Recost a single variant slot from current materials (spot-aware) + sub-
+  // assemblies, mirroring recalculateRecipe's variant branch (laborRate/markups/
+  // setup/batch from the recipe root; laborMinutes/otherCost from the slot).
+  async function _recipeVariantLightRecompute(recipeId, vid) {
+    var recipe = recipesData[recipeId];
+    if (!recipe || !recipe.variants || !recipe.variants[vid]) return recipe || null;
+    var slot = recipe.variants[vid];
+    var refreshed = _recipeRefreshLineItems(slot.lineItems || {}, recipeId);
+    var calc = calculateRecipe({
+      lineItems: refreshed,
+      laborRatePerHour: recipe.laborRatePerHour,
+      laborMinutes: slot.laborMinutes || 0,
+      otherCost: slot.otherCost || 0,
+      setupCost: recipe.setupCost, batchSize: recipe.batchSize,
+      wholesaleMarkup: recipe.wholesaleMarkup, directMarkup: recipe.directMarkup, retailMarkup: recipe.retailMarkup
+    });
+    slot.lineItems = calc.lineItems;
+    slot.totalMaterialCost = calc.totalMaterialCost;
+    slot.totalCost = calc.totalCost;
+    slot.wholesalePrice = calc.wholesalePrice;
+    slot.directPrice = calc.directPrice;
+    slot.retailPrice = calc.retailPrice;
+    slot.suggestedPrice = calc.suggestedPrice;
+    if (!(slot.overridePrice && typeof slot.overridePrice === 'object')) slot.overridePrice = { wholesale: null, direct: null, retail: null };
+    recipe.variantsShape = 'cost';
+    // Firestore replaces the whole `variants` map on update — we hold the full
+    // map in memory, so writing it wholesale keeps untouched slots intact.
+    await MastDB.recipes.update(recipeId, { variants: recipe.variants, variantsShape: 'cost', updatedAt: new Date().toISOString() });
+    return recipe;
+  }
+
+  // Materialize an independent slot for a variant by copying the recipe root
+  // (BOM + laborMinutes + otherCost). Idempotent: re-running on an existing slot
+  // just recosts it.
+  async function bridgeRecipeVariantOverride(recipeId, vid) {
+    try {
+      if (!vid) return { ok: false, error: 'No variant' };
+      var recipe = await ensureRecipeCtx(recipeId); if (!recipe) return { ok: false, error: 'Recipe not found' };
+      recipe.variants = recipe.variants || {};
+      if (!recipe.variants[vid] || !recipe.variants[vid].lineItems) {
+        recipe.variants[vid] = {
+          lineItems: JSON.parse(JSON.stringify(recipe.lineItems || {})),
+          laborMinutes: recipe.laborMinutes || 0,
+          otherCost: recipe.otherCost || 0
+        };
+      }
+      await _recipeVariantLightRecompute(recipeId, vid);
+      MastAdmin.writeAudit('update', 'recipe', recipeId);
+      return { ok: true, recipe: recipesData[recipeId] };
+    } catch (e) { return { ok: false, error: (e && e.message) || 'Failed' }; }
+  }
+
+  // Drop a variant's override → it inherits the product recipe again.
+  async function bridgeRecipeVariantInherit(recipeId, vid) {
+    try {
+      var recipe = await ensureRecipeCtx(recipeId); if (!recipe) return { ok: false, error: 'Recipe not found' };
+      if (recipe.variants && recipe.variants[vid]) delete recipe.variants[vid];
+      await MastDB.recipes.update(recipeId, { variants: recipe.variants || {}, updatedAt: new Date().toISOString() });
+      MastAdmin.writeAudit('update', 'recipe', recipeId);
+      return { ok: true, recipe: recipesData[recipeId] };
+    } catch (e) { return { ok: false, error: (e && e.message) || 'Failed' }; }
+  }
+
+  // Require an existing (overridden) slot for line-item mutations.
+  function _recipeVariantSlot(recipe, vid) {
+    return (recipe.variants && recipe.variants[vid] && recipe.variants[vid].lineItems) ? recipe.variants[vid] : null;
+  }
+
+  async function bridgeRecipeVariantAddLineItem(recipeId, vid, opts) {
+    try {
+      opts = opts || {};
+      var recipe = await ensureRecipeCtx(recipeId); if (!recipe) return { ok: false, error: 'Recipe not found' };
+      var slot = _recipeVariantSlot(recipe, vid); if (!slot) return { ok: false, error: 'Override the variant first' };
+      var liId = MastDB.newKey('admin/recipes/' + recipeId + '/lineItems');
+      var li;
+      if (opts.kind === 'recipe') {
+        if (opts.materialId === recipeId) return { ok: false, error: 'A recipe can’t include itself' };
+        var sub = recipesData[opts.materialId] || (await MastDB.recipes.get(opts.materialId));
+        if (!sub) return { ok: false, error: 'Sub-recipe not found' };
+        var sq = Math.max(0, Number(opts.quantity) || 0);
+        li = { lineItemId: liId, kind: 'recipe', materialId: opts.materialId, materialName: sub.name || 'Sub-recipe', quantity: sq, scrapPercent: 0, unitOfMeasure: 'each', unitCost: sub.totalCost || 0, extendedCost: roundCents(sq * (sub.totalCost || 0)) };
+      } else {
+        var mat = materialsData[opts.materialId]; if (!mat) return { ok: false, error: 'Material not found' };
+        var q = Math.max(0, Number(opts.quantity) || 0), sc = Math.min(200, Math.max(0, Number(opts.scrapPercent) || 0));
+        li = { lineItemId: liId, kind: 'material', materialId: opts.materialId, materialName: mat.name, quantity: q, scrapPercent: sc, unitOfMeasure: mat.unitOfMeasure, unitCost: mat.unitCost, extendedCost: roundCents(q * mat.unitCost) };
+      }
+      slot.lineItems[liId] = li;
+      await _recipeVariantLightRecompute(recipeId, vid);
+      MastAdmin.writeAudit('update', 'recipe', recipeId);
+      return { ok: true, recipe: recipesData[recipeId], lineItemId: liId };
+    } catch (e) { return { ok: false, error: (e && e.message) || 'Failed' }; }
+  }
+
+  async function bridgeRecipeVariantRemoveLineItem(recipeId, vid, lineItemId) {
+    try {
+      var recipe = await ensureRecipeCtx(recipeId); if (!recipe) return { ok: false, error: 'Recipe not found' };
+      var slot = _recipeVariantSlot(recipe, vid); if (!slot) return { ok: false, error: 'Override the variant first' };
+      delete slot.lineItems[lineItemId];
+      await _recipeVariantLightRecompute(recipeId, vid);
+      MastAdmin.writeAudit('update', 'recipe', recipeId);
+      return { ok: true, recipe: recipesData[recipeId] };
+    } catch (e) { return { ok: false, error: (e && e.message) || 'Failed' }; }
+  }
+
+  async function bridgeRecipeVariantSetLineItem(recipeId, vid, lineItemId, patch) {
+    try {
+      patch = patch || {};
+      var recipe = await ensureRecipeCtx(recipeId); if (!recipe) return { ok: false, error: 'Recipe not found' };
+      var slot = _recipeVariantSlot(recipe, vid); if (!slot) return { ok: false, error: 'Override the variant first' };
+      var li = slot.lineItems[lineItemId]; if (!li) return { ok: false, error: 'Line item not found' };
+      if (patch.quantity != null) { var q = Number(patch.quantity); if (!isFinite(q) || q < 0) return { ok: false, error: 'Invalid quantity' }; li.quantity = q; }
+      if (patch.scrapPercent != null) { var sc = Number(patch.scrapPercent); if (!isFinite(sc) || sc < 0) return { ok: false, error: 'Invalid waste %' }; li.scrapPercent = Math.min(200, sc); }
+      li.extendedCost = roundCents((li.quantity || 0) * (li.unitCost || 0));
+      await _recipeVariantLightRecompute(recipeId, vid);
+      return { ok: true, recipe: recipesData[recipeId] };
+    } catch (e) { return { ok: false, error: (e && e.message) || 'Failed' }; }
+  }
+
+  // Per-variant overhead overrides — laborMinutes / otherCost only (rate/markups/
+  // setup/batch are recipe-level). Blank/empty coerces to 0 (the slot is explicit;
+  // use recipeVariantInherit to go back to inheriting the product recipe).
+  async function bridgeRecipeVariantSetFields(recipeId, vid, patch) {
+    try {
+      patch = patch || {};
+      var recipe = await ensureRecipeCtx(recipeId); if (!recipe) return { ok: false, error: 'Recipe not found' };
+      var slot = _recipeVariantSlot(recipe, vid); if (!slot) return { ok: false, error: 'Override the variant first' };
+      ['laborMinutes', 'otherCost'].forEach(function (k) {
+        if (!(k in patch)) return;
+        var v = patch[k];
+        if (v === '' || v == null) { v = 0; } else { v = Number(v); if (!isFinite(v) || v < 0) return; }
+        slot[k] = v;
+      });
+      await _recipeVariantLightRecompute(recipeId, vid);
+      MastAdmin.writeAudit('update', 'recipe', recipeId);
       return { ok: true, recipe: recipesData[recipeId] };
     } catch (e) { return { ok: false, error: (e && e.message) || 'Failed' }; }
   }
@@ -7448,7 +7603,14 @@
     recipeSetLineItem: function (recipeId, lineItemId, patch) { return bridgeRecipeSetLineItem(recipeId, lineItemId, patch); },
     recipeSetFields: function (recipeId, patch) { return bridgeRecipeSetFields(recipeId, patch); },
     recipeSetActiveTier: function (recipeId, tier) { return bridgeRecipeSetActiveTier(recipeId, tier); },
-    recipeRecalc: function (recipeId) { return bridgeRecipeRecalc(recipeId); }
+    recipeRecalc: function (recipeId) { return bridgeRecipeRecalc(recipeId); },
+    // V2 recipe-edit bridge (R4) — per-variant cost-shape overrides.
+    recipeVariantOverride: function (recipeId, vid) { return bridgeRecipeVariantOverride(recipeId, vid); },
+    recipeVariantInherit: function (recipeId, vid) { return bridgeRecipeVariantInherit(recipeId, vid); },
+    recipeVariantAddLineItem: function (recipeId, vid, opts) { return bridgeRecipeVariantAddLineItem(recipeId, vid, opts); },
+    recipeVariantRemoveLineItem: function (recipeId, vid, liId) { return bridgeRecipeVariantRemoveLineItem(recipeId, vid, liId); },
+    recipeVariantSetLineItem: function (recipeId, vid, liId, patch) { return bridgeRecipeVariantSetLineItem(recipeId, vid, liId, patch); },
+    recipeVariantSetFields: function (recipeId, vid, patch) { return bridgeRecipeVariantSetFields(recipeId, vid, patch); }
   };
 
 })();
