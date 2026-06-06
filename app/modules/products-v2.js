@@ -91,6 +91,24 @@
       return Object.assign({ id: 'v' + i }, v);
     });
   }
+  // Variant option combinatorics (for Add variant). combo key = option label
+  // lower-cased (matches the stored combo objects, e.g. {size:'small'}).
+  function comboSig(c) { return Object.keys(c || {}).sort().map(function (k) { return k + '=' + c[k]; }).join('|'); }
+  function comboLabel(c) { return Object.keys(c || {}).map(function (k) { return c[k]; }).filter(Boolean).join(' / ') || '—'; }
+  function productCombos(p) {
+    var opts = (Array.isArray(p.options) ? p.options : []).filter(function (o) { return o.label && o.choices && o.choices.length; });
+    if (!opts.length) return [];
+    var keys = opts.map(function (o) { return String(o.label).toLowerCase(); });
+    var arrays = opts.map(function (o) { return o.choices; });
+    var rows = arrays.reduce(function (acc, choices) {
+      var r = []; acc.forEach(function (e) { choices.forEach(function (ch) { r.push(e.concat([ch])); }); }); return r;
+    }, [[]]);
+    return rows.map(function (vals) { var obj = {}; keys.forEach(function (k, i) { obj[k] = vals[i]; }); return obj; });
+  }
+  function missingCombos(p) {
+    var seen = {}; realVariants(p).forEach(function (v) { if (v.combo) seen[comboSig(v.combo)] = true; });
+    return productCombos(p).filter(function (c) { return !seen[comboSig(c)]; });
+  }
 
   // The variant switcher — ONE compact pill (low clutter, V1's failure was a
   // million things at once). At rest it shows only where you are; click opens a
@@ -1578,7 +1596,40 @@
     // Preload maker too, so the first image/edit click in a variant SO works
     // (no cold "still loading" — the variant's writes also delegate to the bridge).
     openVariant: function (key) { var rec = buildVariantRecord(key); if (rec) ensureMaker(function () { MastEntity.openRecord('product-variant-v2', rec, 'read'); }); },
-    addVariant: function (id) { var p = V2.byId[id]; MastAdmin.showToast('Add variant for "' + (p ? p.name : id) + '" — write flow (inherits the Default) lands in P4.'); },
+    // Add a variant: pick one of the not-yet-created option combinations. Only
+    // valid combos (cartesian of product.options minus existing) are offered, so
+    // we can't create a malformed/duplicate variant.
+    addVariant: function (id) {
+      var p = V2.byId[id]; if (!p) return;
+      if (!(Array.isArray(p.options) && p.options.filter(function (o) { return o.label && o.choices && o.choices.length; }).length)) {
+        MastAdmin.showToast('This product has no options defined yet — the variant-options editor is coming next.', true); return;
+      }
+      var missing = missingCombos(p);
+      if (!missing.length) { MastAdmin.showToast('Every option combination already exists.', true); return; }
+      var chips = missing.map(function (c) {
+        return '<button class="btn btn-secondary" style="margin:4px;" onclick="ProductsV2.confirmAddVariant(\'' + esc(id) + '\',\'' + esc(comboSig(c)) + '\')">+ ' + esc(comboLabel(c)) + '</button>';
+      }).join('');
+      var html = '<div style="max-width:480px;padding:24px;"><h3>Add a variant</h3>' +
+        '<div style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:12px;">Pick a combination to add. It inherits the Default, then you can override its price, stock, image, etc.</div>' +
+        '<div style="display:flex;flex-wrap:wrap;">' + chips + '</div>' +
+        '<div style="margin-top:16px;text-align:right;"><button class="btn btn-secondary" onclick="closeModal()">Done</button></div></div>';
+      if (window.openModal) window.openModal(html); else MastAdmin.showToast('Modal unavailable', true);
+    },
+    confirmAddVariant: function (id, sig) {
+      var p = V2.byId[id]; if (!p) return;
+      var combo = missingCombos(p).filter(function (c) { return comboSig(c) === sig; })[0];
+      if (!combo) { MastAdmin.showToast('That combination is no longer available', true); return; }
+      withProductBridge(function () {
+        Promise.resolve(window.MakerProductBridge.addVariant(id, combo)).then(function (res) {
+          if (!res || !res.ok) { MastAdmin.showToast('Failed: ' + ((res && res.error) || 'unknown'), true); return; }
+          var rec = V2.byId[id]; if (rec) rec.variants = res.variants;
+          if (window.closeModal) window.closeModal();
+          MastAdmin.showToast('Variant added: ' + comboLabel(combo));
+          var lb = document.getElementById('pv2ListBody'); if (lb) lb.innerHTML = renderListBody();
+          if (document.getElementById('mastSlideOutTitle')) reopenProduct(id);
+        }, function (e) { console.error('[products-v2] addVariant', e); MastAdmin.showToast('Failed', true); });
+      });
+    },
     editVariantTodo: function () { MastAdmin.showToast('Per-variant override editing lands in P4.'); },
     // Bind a variant to product.images[idx] (idx<0 → clear, use product default).
     setVariantImage: function (pid, variantId, idx) {
