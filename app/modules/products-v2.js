@@ -1522,16 +1522,16 @@
         // still go through the legacy builder (R3 brings them into v2). Cache the open
         // recipe so edit handlers can re-render in place.
         V2._recipeEdit = { recipeId: rc.recipeId || rc._key, rc: rc }; V2._recipeAdding = false;
-        V2._recipeEditLabor = false; V2._recipeEditPricing = false;
+        V2._recipeEditLabor = false; V2._recipeEditPricing = false; V2._recipeVariantKey = null;
         return '<div id="pv2RecipeBody">' + recipeEditBody(rc) + '</div>';
       }
     }
   });
   // The editable recipe SO body (R2). Re-rendered in place after each BOM edit.
-  function recipeEditBody(rc) {
-    var li = rc.lineItems || {};
-    var keys = Object.keys(li);
-    var canEd = canEditProduct() && !!rc.productId;
+  // The BOM table for the active slice (root or a variant slot). Editable inputs
+  // dispatch to root vs variant bridge methods via the active V2._recipeVariantKey.
+  function recipeBomTableHtml(li, canEd) {
+    var keys = Object.keys(li || {});
     var rows;
     if (canEd) {
       var inp = 'width:62px;padding:4px 6px;border:1px solid var(--cream-dark);border-radius:5px;font-size:0.85rem;background:var(--cream);color:inherit;box-sizing:border-box;text-align:right;';
@@ -1550,25 +1550,135 @@
         var qty = (m.quantity != null ? m.quantity : '') + (m.unitOfMeasure ? (' ' + m.unitOfMeasure) : '');
         return '<tr><td>' + esc(m.materialName || '—') + '</td><td class="r">' + esc(qty) + '</td><td class="r">' + (N.money(m.unitCost) || '—') + '</td><td class="r">' + (N.money(m.extendedCost) || '—') + '</td></tr>';
       }).join('');
+      if (!keys.length) rows = '<tr><td colspan="4" style="color:var(--warm-gray);padding:12px 0;font-size:0.85rem;">No materials.</td></tr>';
     }
     var head = canEd
       ? '<tr><th>Material</th><th class="r">Qty</th><th class="r">Waste</th><th class="r">Unit</th><th class="r">Ext</th><th></th></tr>'
       : '<tr><th>Material</th><th class="r">Qty</th><th class="r">Unit</th><th class="r">Ext</th></tr>';
-    var bom = '<table class="pv2-bom"><thead>' + head + '</thead><tbody>' + rows + '</tbody></table>';
-    var addBtn = (canEd && !V2._recipeAdding) ? '<button class="btn btn-secondary btn-small" onclick="ProductsV2.recipeAddPart()">+ Add part</button>' : '';
-    var addForm = (canEd && V2._recipeAdding) ? recipeAddPartFormHtml() : '';
+    return '<table class="pv2-bom"><thead>' + head + '</thead><tbody>' + rows + '</tbody></table>';
+  }
+  function recipeVariantLabelFor(vars, vkey) {
+    for (var i = 0; i < vars.length; i++) if (vars[i].id === vkey) return variantLabel(vars[i]) || 'Variant';
+    return 'Variant';
+  }
+  function recipeEditBody(rc) {
+    // R4: the recipe SO can be scoped to the product default (root) or a single
+    // product variant. A variant either OVERRIDES the recipe (its own slot) or
+    // INHERITS it (no slot). The selector pills below switch the scope.
+    var prod = rc.productId ? V2.byId[rc.productId] : null;
+    var vars = prod ? realVariants(prod) : [];
+    var hasVars = vars.length > 0;
+    var vkey = V2._recipeVariantKey || null;
+    if (vkey && !vars.some(function (v) { return v.id === vkey; })) { vkey = null; V2._recipeVariantKey = null; }
+    var canEdAll = recipeCanEdit(rc);
+    var onVariant = !!vkey;
+    var slot = (onVariant && rc.variants) ? rc.variants[vkey] : null;
+    var overridden = !!(slot && slot.lineItems);
+    var sliceLi = overridden ? slot.lineItems : (rc.lineItems || {});
+    var sliceTotalCost = overridden ? slot.totalCost : rc.totalCost;
+    var bomEditable = canEdAll && (!onVariant || overridden);
+    var keys = Object.keys(sliceLi);
+    var addBtn = (bomEditable && !V2._recipeAdding) ? '<button class="btn btn-secondary btn-small" onclick="ProductsV2.recipeAddPart()">+ Add part</button>' : '';
+    var addForm = (bomEditable && V2._recipeAdding) ? recipeAddPartFormHtml() : '';
+    var bom = recipeBomTableHtml(sliceLi, bomEditable);
     var tiles = U.tiles([
-      { k: 'Unit cost', v: N.money(rc.totalCost) || '—', hero: true },
+      { k: (onVariant ? 'Variant cost' : 'Unit cost'), v: N.money(sliceTotalCost) || '—', hero: true },
       { k: 'Status', v: rc.status || '—' },
       { k: 'Materials', v: keys.length },
       { k: 'Active tier', v: rc.activePriceTier || '—' }
     ]);
-    return U.stickyHead(tiles, '') + '<div>' +
-      U.card('Bill of materials', addForm + bom, { headerRight: addBtn }) +
-      recipeLaborCard(rc) +
-      recipeCostCard(rc) +
-      recipePricingCard(rc) +
-      '<div class="pv2-pnote">Edit the bill of materials, labor &amp; overhead, and pricing tiers right here. Saving recalculates the recipe and updates the linked product’s cost.</div></div>';
+    var selector = hasVars ? recipeVariantSelector(rc, vars, vkey) : '';
+    var cards;
+    if (!onVariant) {
+      cards = U.card('Bill of materials', addForm + bom, { headerRight: addBtn }) +
+        recipeLaborCard(rc) + recipeCostCard(rc) + recipePricingCard(rc) +
+        '<div class="pv2-pnote">Edit the bill of materials, labor &amp; overhead, and pricing tiers right here. Saving recalculates the recipe and updates the linked product’s cost.' +
+        (hasVars ? ' Pick a variant above to give it its own cost.' : '') + '</div>';
+    } else if (!overridden) {
+      var label = recipeVariantLabelFor(vars, vkey);
+      var cta = canEdAll ? '<button class="btn btn-primary btn-small" onclick="ProductsV2.recipeVariantOverride()">Override for this variant</button>' : '';
+      cards = '<div class="pv2-pnote" style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;"><span>' + esc(label) + ' <strong>inherits the product recipe</strong>. Override it to give this variant its own materials, labor time, or other cost.</span>' + cta + '</div>' +
+        U.card('Bill of materials · inherited', bom) +
+        recipeInheritedLaborCard(rc) + recipeCostCard(rc) +
+        '<div class="pv2-pnote">Pricing tiers are set on the product recipe — pick “Product default” to edit them.</div>';
+    } else {
+      var label2 = recipeVariantLabelFor(vars, vkey);
+      var resetBtn = canEdAll ? '<button class="btn btn-secondary btn-small" onclick="ProductsV2.recipeVariantInherit()">Reset to inherit</button>' : '';
+      cards = '<div class="pv2-pnote" style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;"><span><strong>' + esc(label2) + '</strong> overrides the product recipe.</span>' + resetBtn + '</div>' +
+        U.card('Bill of materials · ' + label2, addForm + bom, { headerRight: addBtn }) +
+        recipeVariantLaborCard(rc, slot) + recipeVariantCostCard(slot, rc) +
+        '<div class="pv2-pnote">This variant has its own materials, labor time &amp; other cost. Labor rate, setup, batch &amp; pricing tiers come from the product recipe.</div>';
+    }
+    return U.stickyHead(tiles, '') + '<div>' + selector + cards + '</div>';
+  }
+  // ── R4: variant selector pills + per-variant cards ────────────────────
+  function recipeVariantSelector(rc, vars, vkey) {
+    function pill(active, label, vid, isOverride) {
+      return '<button type="button" onclick="ProductsV2.recipeSelectVariant(\'' + esc(vid) + '\')" style="padding:5px 12px;border:1px solid ' + (active ? 'var(--amber)' : 'var(--cream-dark)') + ';border-radius:999px;font-size:0.85rem;cursor:pointer;background:' + (active ? 'color-mix(in srgb,var(--amber) 16%,transparent)' : 'transparent') + ';color:' + (active ? 'var(--text-primary)' : 'var(--warm-gray)') + ';font-weight:' + (active ? '600' : '400') + ';white-space:nowrap;">' + esc(label) + (isOverride ? ' <span class="pv2-ov">override</span>' : '') + '</button>';
+    }
+    var pills = [pill(!vkey, 'Product default', '', false)];
+    vars.forEach(function (v) {
+      var ov = !!(rc.variants && rc.variants[v.id] && rc.variants[v.id].lineItems);
+      pills.push(pill(vkey === v.id, variantLabel(v) || 'Variant', v.id, ov));
+    });
+    return '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;align-items:center;">' + pills.join('') + '</div>';
+  }
+  // Read-only labor/overhead for an INHERITED variant (shows the product recipe).
+  function recipeInheritedLaborCard(rc) {
+    var rate = Number(rc.laborRatePerHour) || 0, min = Number(rc.laborMinutes) || 0;
+    var setup = Number(rc.setupCost) || 0, batch = Math.max(1, Number(rc.batchSize) || 1);
+    var laborCost = (rc.laborCost != null) ? Number(rc.laborCost) : (min / 60) * rate;
+    var other = Number(rc.otherCost) || 0;
+    return U.card('Labor & overhead · inherited', U.kv([
+      { k: 'Labor rate', v: rate ? (N.money(rate) + ' / hr') : '—' },
+      { k: 'Labor time', v: min ? (min + ' min <span class="from">· ' + (N.money(laborCost) || '$0.00') + '</span>') : '—' },
+      { k: 'Other cost', v: other ? N.money(other) : '—' },
+      { k: 'Setup cost', v: setup ? (N.money(setup) + ' <span class="from">· over ' + batch + ' / batch</span>') : '—' },
+      { k: 'Batch size', v: batch + ' / build' }
+    ]));
+  }
+  // Per-variant labor/overhead (laborMinutes + otherCost editable; rate/setup/batch
+  // from the product recipe). Reuses V2._recipeEditLabor; the save dispatches to
+  // recipeVariantSetFields when a variant is active.
+  function recipeVariantLaborCard(rc, slot) {
+    if (V2._recipeEditLabor) return recipeVariantLaborForm(rc, slot);
+    var editBtn = recipeCanEdit(rc) ? '<button class="btn btn-secondary btn-small" onclick="ProductsV2.recipeEditLabor()">Edit</button>' : '';
+    var rate = Number(rc.laborRatePerHour) || 0, min = Number(slot.laborMinutes) || 0;
+    var setup = Number(rc.setupCost) || 0, batch = Math.max(1, Number(rc.batchSize) || 1);
+    var laborCost = (min / 60) * rate, other = Number(slot.otherCost) || 0;
+    return U.card('Labor & overhead · this variant', U.kv([
+      { k: 'Labor rate', v: (rate ? N.money(rate) + ' / hr' : '—') + ' <span class="from">· from product</span>' },
+      { k: 'Labor time', v: '<span style="color:var(--amber);font-weight:600;">' + min + ' min</span> <span class="from">· ' + (N.money(laborCost) || '$0.00') + '</span>' },
+      { k: 'Other cost', v: '<span style="color:var(--amber);font-weight:600;">' + (N.money(other) || '$0.00') + '</span>' },
+      { k: 'Setup cost', v: (setup ? N.money(setup) : '—') + ' <span class="from">· from product</span>' },
+      { k: 'Batch size', v: batch + ' / build <span class="from">· from product</span>' }
+    ]), { headerRight: editBtn });
+  }
+  function recipeVariantLaborForm(rc, slot) {
+    var fs = recipeFieldStyle();
+    var body =
+      '<label style="display:block;margin-bottom:12px;font-size:0.85rem;color:var(--warm-gray);">Labor time (min) · this variant' +
+      '<input id="rcLaborMin" type="number" min="0" step="1" value="' + esc(String(Number(slot.laborMinutes) || 0)) + '" style="' + fs + 'width:180px;"></label>' +
+      '<label style="display:block;margin-bottom:12px;font-size:0.85rem;color:var(--warm-gray);">Other cost ($) · this variant' +
+      '<input id="rcOther" type="number" min="0" step="0.01" value="' + esc(String(Number(slot.otherCost) || 0)) + '" style="' + fs + 'width:180px;"></label>' +
+      '<div class="pv2-pnote">Labor rate, setup &amp; batch come from the product recipe.</div>' +
+      '<div style="display:flex;gap:8px;margin-top:4px;">' +
+      '<button class="btn btn-primary btn-small" onclick="ProductsV2.recipeSaveLabor()">Save</button>' +
+      '<button class="btn btn-secondary btn-small" onclick="ProductsV2.recipeCancelLabor()">Cancel</button>' +
+      '</div>';
+    return U.card('Edit variant labor & overhead', body);
+  }
+  function recipeVariantCostCard(slot, rc) {
+    var rate = Number(rc.laborRatePerHour) || 0, min = Number(slot.laborMinutes) || 0;
+    var laborCost = (min / 60) * rate;
+    var setup = Number(rc.setupCost) || 0, batch = Math.max(1, Number(rc.batchSize) || 1);
+    var overhead = (Number(slot.otherCost) || 0) + (setup / batch);
+    return U.card('Cost breakdown · this variant', U.kv([
+      { k: 'Materials', v: N.money(slot.totalMaterialCost) || '$0.00' },
+      { k: 'Labor', v: N.money(laborCost) || '$0.00' },
+      { k: 'Overhead', v: N.money(overhead) || '$0.00' },
+      { k: 'Variant cost', v: '<strong>' + (N.money(slot.totalCost) || '$0.00') + '</strong>' }
+    ]));
   }
   // ── R3: Labor & overhead (read-first + inline edit) ───────────────────
   // laborRatePerHour / laborMinutes / otherCost(+note) / setupCost / batchSize
@@ -1681,11 +1791,27 @@
   function _applyRecipeLine(liId, patch) {
     if (!canEditProduct()) return;
     var rid = V2._recipeEdit && V2._recipeEdit.recipeId; if (!rid) return;
+    var vkey = V2._recipeVariantKey;
     ensureMaker(function () {
-      Promise.resolve(window.MakerProductBridge.recipeSetLineItem(rid, liId, patch)).then(function (res) {
+      var B = window.MakerProductBridge;
+      var p = vkey ? B.recipeVariantSetLineItem(rid, vkey, liId, patch) : B.recipeSetLineItem(rid, liId, patch);
+      Promise.resolve(p).then(function (res) {
         if (!res || !res.ok) { MastAdmin.showToast('Failed: ' + ((res && res.error) || 'unknown'), true); return; }
         V2._recipeEdit.rc = res.recipe; rerenderRecipeBody();
       }, function (e) { console.error('[products-v2] recipeSetLine', e); MastAdmin.showToast('Failed', true); });
+    });
+  }
+  // R4: commit per-variant overhead overrides (laborMinutes / otherCost). Variant
+  // cost doesn't propagate to the product, so no full recalc — the bridge's light
+  // variant recompute is enough.
+  function _recipeCommitVariantFields(vid, patch, after) {
+    if (!canEditProduct()) return;
+    var rid = V2._recipeEdit && V2._recipeEdit.recipeId; if (!rid) return;
+    ensureMaker(function () {
+      Promise.resolve(window.MakerProductBridge.recipeVariantSetFields(rid, vid, patch)).then(function (res) {
+        if (!res || !res.ok) { MastAdmin.showToast('Failed: ' + ((res && res.error) || 'unknown'), true); return; }
+        V2._recipeEdit.rc = res.recipe; if (after) after(); rerenderRecipeBody(); MastAdmin.showToast('Saved');
+      }, function (e) { console.error('[products-v2] recipeVariantFields', e); MastAdmin.showToast('Failed', true); });
     });
   }
   // R3: commit labor/pricing field edits via recipeSetFields (light recompute),
@@ -1829,7 +1955,7 @@
   }
 
   // ── State + data ────────────────────────────────────────────────────
-  var V2 = { rows: [], byId: {}, sortKey: '_title', sortDir: 'asc', filter: 'all', lens: 'general', expanded: {}, editInfo: null, editFulfill: null, editPricing: null, editVarPricing: null, editInv: null, editVarInv: null, editVarInfo: null, editVarFulfill: null, editAttrs: null, editVarAttrs: null, q: '', tagFacets: [], _npMode: 'scratch', _recipeEdit: null, _rpKind: 'material', _recipeAdding: false, _recipeAddData: null, _recipeEditLabor: false, _recipeEditPricing: false };
+  var V2 = { rows: [], byId: {}, sortKey: '_title', sortDir: 'asc', filter: 'all', lens: 'general', expanded: {}, editInfo: null, editFulfill: null, editPricing: null, editVarPricing: null, editInv: null, editVarInv: null, editVarInfo: null, editVarFulfill: null, editAttrs: null, editVarAttrs: null, q: '', tagFacets: [], _npMode: 'scratch', _recipeEdit: null, _rpKind: 'material', _recipeAdding: false, _recipeAddData: null, _recipeEditLabor: false, _recipeEditPricing: false, _recipeVariantKey: null };
 
   function toRows(map) {
     var out = []; map = map || {};
@@ -2675,8 +2801,11 @@
     recipeRemoveLine: function (liId) {
       if (!canEditProduct()) return;
       var rid = V2._recipeEdit && V2._recipeEdit.recipeId; if (!rid) return;
+      var vkey = V2._recipeVariantKey;
       ensureMaker(function () {
-        Promise.resolve(window.MakerProductBridge.recipeRemoveLineItem(rid, liId)).then(function (res) {
+        var B = window.MakerProductBridge;
+        var p = vkey ? B.recipeVariantRemoveLineItem(rid, vkey, liId) : B.recipeRemoveLineItem(rid, liId);
+        Promise.resolve(p).then(function (res) {
           if (!res || !res.ok) { MastAdmin.showToast('Failed: ' + ((res && res.error) || 'unknown'), true); return; }
           V2._recipeEdit.rc = res.recipe; rerenderRecipeBody(); MastAdmin.showToast('Removed');
         }, function (e) { console.error('[products-v2] recipeRemoveLine', e); MastAdmin.showToast('Failed', true); });
@@ -2705,11 +2834,41 @@
       var qEl = document.getElementById('pv2RpQty'); var q = qEl ? Number(qEl.value) : 1;
       if (!isFinite(q) || q < 0) { MastAdmin.showToast('Enter a valid quantity', true); return; }
       var scEl = document.getElementById('pv2RpScrap'); var sc = (kind === 'material' && scEl) ? Number(scEl.value) || 0 : 0;
+      var vkey = V2._recipeVariantKey;
       ensureMaker(function () {
-        Promise.resolve(window.MakerProductBridge.recipeAddLineItem(rid, { kind: kind, materialId: matId, quantity: q, scrapPercent: sc })).then(function (res) {
+        var B = window.MakerProductBridge;
+        var opts = { kind: kind, materialId: matId, quantity: q, scrapPercent: sc };
+        var p = vkey ? B.recipeVariantAddLineItem(rid, vkey, opts) : B.recipeAddLineItem(rid, opts);
+        Promise.resolve(p).then(function (res) {
           if (!res || !res.ok) { MastAdmin.showToast('Failed: ' + ((res && res.error) || 'unknown'), true); return; }
           V2._recipeAdding = false; V2._recipeEdit.rc = res.recipe; rerenderRecipeBody(); MastAdmin.showToast('Part added');
         }, function (e) { console.error('[products-v2] recipeAddLineItem', e); MastAdmin.showToast('Failed', true); });
+      });
+    },
+    // ── R4: variant cost-shape (selector + override / inherit) ──
+    recipeSelectVariant: function (vid) {
+      V2._recipeVariantKey = vid || null;
+      V2._recipeAdding = false; V2._recipeEditLabor = false; V2._recipeEditPricing = false;
+      rerenderRecipeBody();
+    },
+    recipeVariantOverride: function () {
+      if (!_guardEditP()) return;
+      var rid = V2._recipeEdit && V2._recipeEdit.recipeId, vkey = V2._recipeVariantKey; if (!rid || !vkey) return;
+      ensureMaker(function () {
+        Promise.resolve(window.MakerProductBridge.recipeVariantOverride(rid, vkey)).then(function (res) {
+          if (!res || !res.ok) { MastAdmin.showToast('Failed: ' + ((res && res.error) || 'unknown'), true); return; }
+          V2._recipeEdit.rc = res.recipe; rerenderRecipeBody(); MastAdmin.showToast('Override created');
+        }, function (e) { console.error('[products-v2] recipeVariantOverride', e); MastAdmin.showToast('Failed', true); });
+      });
+    },
+    recipeVariantInherit: function () {
+      if (!_guardEditP()) return;
+      var rid = V2._recipeEdit && V2._recipeEdit.recipeId, vkey = V2._recipeVariantKey; if (!rid || !vkey) return;
+      ensureMaker(function () {
+        Promise.resolve(window.MakerProductBridge.recipeVariantInherit(rid, vkey)).then(function (res) {
+          if (!res || !res.ok) { MastAdmin.showToast('Failed: ' + ((res && res.error) || 'unknown'), true); return; }
+          V2._recipeEdit.rc = res.recipe; V2._recipeEditLabor = false; rerenderRecipeBody(); MastAdmin.showToast('Reverted to inherit');
+        }, function (e) { console.error('[products-v2] recipeVariantInherit', e); MastAdmin.showToast('Failed', true); });
       });
     },
     // ── R3: Labor & overhead + Pricing & tiers ──
@@ -2718,6 +2877,12 @@
     recipeSaveLabor: function () {
       if (!_guardEditP()) return;
       function val(id) { var el = document.getElementById(id); return el ? el.value : undefined; }
+      var vkey = V2._recipeVariantKey;
+      if (vkey) {
+        // Per-variant: only laborMinutes + otherCost (rate/setup/batch are recipe-level).
+        _recipeCommitVariantFields(vkey, { laborMinutes: val('rcLaborMin'), otherCost: val('rcOther') }, function () { V2._recipeEditLabor = false; });
+        return;
+      }
       _recipeCommitFields({
         laborRatePerHour: val('rcLaborRate'), laborMinutes: val('rcLaborMin'),
         otherCost: val('rcOther'), otherCostNote: val('rcOtherNote'),
