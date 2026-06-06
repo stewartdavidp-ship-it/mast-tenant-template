@@ -38,6 +38,7 @@
   var materialLotsData = {};
   var productLotsData = {};
   var materialsData = {};
+  var productsData = {};
 
   var dataLoaded = false;
   var loadInFlight = false;
@@ -177,7 +178,8 @@
       MastDB.get('admin/purchaseReceipts').then(function(v) { purchaseReceiptsData = v || {}; }),
       MastDB.get('admin/materialLots').then(function(v) { materialLotsData = v || {}; }),
       MastDB.get('admin/productLots').then(function(v) { productLotsData = v || {}; }),
-      MastDB.get('admin/materials').then(function(v) { materialsData = v || {}; })
+      MastDB.get('admin/materials').then(function(v) { materialsData = v || {}; }),
+      MastDB.get('admin/products').then(function(v) { productsData = v || {}; })
     ]).then(function() {
       dataLoaded = true;
       loadInFlight = false;
@@ -1080,7 +1082,29 @@
     setTimeout(function() { var el = document.getElementById('npVendor'); if (el) el.focus(); }, 50);
   }
   function _blankPoLine() {
-    return { kind: 'material', targetId: '', qtyOrdered: 1, unitCost: 0, vendorSku: '', unitOfMeasure: '' };
+    return { kind: 'material', targetId: '', qtyOrdered: 1, unitCost: 0, vendorSku: '', unitOfMeasure: '', variantKey: '' };
+  }
+  // Product picker cell for a PO line: a product <select> plus, when the chosen
+  // product has variants, a required variant <select> (stable variant id). A
+  // single-variant / no-variant product resolves to '_default' at save. Both
+  // controls are wrapped in one <div> so the modal grid keeps one cell per line.
+  function _productLineCell(line, idx, products) {
+    var prodOptions = '<option value="">— product —</option>' + products.map(function(e) {
+      return '<option value="' + esc(e[0]) + '"' + (line.targetId === e[0] ? ' selected' : '') + '>' + esc(e[1].name || e[0]) + '</option>';
+    }).join('');
+    var html = '<div>' +
+      '<select style="width:100%;" onchange="window.procurementUpdateNewPoLineRerender(' + idx + ',\'targetId\',this.value)">' + prodOptions + '</select>';
+    var prod = line.targetId ? productsData[line.targetId] : null;
+    var variants = (prod && Array.isArray(prod.variants)) ? prod.variants : [];
+    if (variants.length > 0) {
+      var vOptions = '<option value="">— variant (required) —</option>' + variants.map(function(v) {
+        var vid = v.id || '';
+        var vname = v.name || (v.combo ? Object.values(v.combo).join(' / ') : vid);
+        return '<option value="' + esc(vid) + '"' + (line.variantKey === vid ? ' selected' : '') + '>' + esc(vname) + '</option>';
+      }).join('');
+      html += '<select style="width:100%;margin-top:4px;" onchange="window.procurementUpdateNewPoLineRerender(' + idx + ',\'variantKey\',this.value)">' + vOptions + '</select>';
+    }
+    return html + '</div>';
   }
   function _renderNewPoModal() {
     var vendors = Object.values(vendorsData).filter(function(v) { return v.active !== false; });
@@ -1111,18 +1135,20 @@
     '</div>';
     var materials = Object.entries(materialsData).filter(function(e) { return e[1].status !== 'archived'; })
       .sort(function(a, b) { return (a[1].name || '').localeCompare(b[1].name || ''); });
+    var products = Object.entries(productsData).filter(function(e) { return e[1] && e[1].status !== 'archived'; })
+      .sort(function(a, b) { return (a[1].name || '').localeCompare(b[1].name || ''); });
     newPoLines.forEach(function(line, idx) {
       var matOptions = '<option value="">—</option>' + materials.map(function(e) {
         return '<option value="' + esc(e[0]) + '"' + (line.targetId === e[0] ? ' selected' : '') + '>' + esc(e[1].name) + '</option>';
       }).join('');
       html += '<div style="display:grid;grid-template-columns:1fr 2fr 1fr 0.8fr 0.8fr 30px;gap:8px;padding:8px 12px;border-bottom:1px solid var(--cream-dark);align-items:center;">' +
-        '<select onchange="window.procurementUpdateNewPoLine(' + idx + ',\'kind\',this.value)">' +
+        '<select onchange="window.procurementUpdateNewPoLineRerender(' + idx + ',\'kind\',this.value)">' +
           '<option value="material"' + (line.kind === 'material' ? ' selected' : '') + '>material</option>' +
           '<option value="product"' + (line.kind === 'product' ? ' selected' : '') + '>product</option>' +
         '</select>' +
         (line.kind === 'material'
           ? '<select onchange="window.procurementUpdateNewPoLine(' + idx + ',\'targetId\',this.value)">' + matOptions + '</select>'
-          : '<input type="text" placeholder="product PID" value="' + esc(line.targetId) + '" oninput="window.procurementUpdateNewPoLine(' + idx + ',\'targetId\',this.value)">') +
+          : _productLineCell(line, idx, products)) +
         '<input type="text" placeholder="SKU / UoM" value="' + esc(line.vendorSku || line.unitOfMeasure || '') + '" oninput="window.procurementUpdateNewPoLine(' + idx + ',\'vendorSku\',this.value)">' +
         '<input type="number" min="0" step="0.01" value="' + (line.qtyOrdered || 0) + '" oninput="window.procurementUpdateNewPoLine(' + idx + ',\'qtyOrdered\',parseFloat(this.value)||0)">' +
         '<input type="number" min="0" step="0.01" value="' + (line.unitCost || 0) + '" oninput="window.procurementUpdateNewPoLine(' + idx + ',\'unitCost\',parseFloat(this.value)||0)">' +
@@ -1140,6 +1166,18 @@
   function updateNewPoLine(idx, field, value) {
     if (!newPoLines[idx]) return;
     newPoLines[idx][field] = value;
+  }
+  // Setter that re-renders the modal — needed when a change alters which controls
+  // show: switching kind swaps material↔product inputs; choosing a product
+  // reveals/hides its variant select. Resets dependent fields so a stale targetId
+  // or variantKey can't carry across a kind/product switch.
+  function updateNewPoLineRerender(idx, field, value) {
+    if (!newPoLines[idx]) return;
+    newPoLines[idx][field] = value;
+    if (field === 'kind') { newPoLines[idx].targetId = ''; newPoLines[idx].variantKey = ''; }
+    if (field === 'targetId') { newPoLines[idx].variantKey = ''; }
+    var el = document.getElementById('modalContent');
+    if (el) el.innerHTML = _renderNewPoModal();
   }
   function addNewPoLine() {
     newPoLines.push(_blankPoLine());
@@ -1166,6 +1204,19 @@
         if (typeof showToast === 'function') showToast('Line ' + (i + 1) + ': material not found', true);
         return;
       }
+      if (l.kind === 'product') {
+        var prod = productsData[l.targetId];
+        if (!prod) {
+          if (typeof showToast === 'function') showToast('Line ' + (i + 1) + ': product not found', true);
+          return;
+        }
+        // A product with variants must have one chosen — receiving credits a
+        // specific variant's stock, never a silent _default fallback.
+        if (Array.isArray(prod.variants) && prod.variants.length > 0 && !l.variantKey) {
+          if (typeof showToast === 'function') showToast('Line ' + (i + 1) + ': pick a variant', true);
+          return;
+        }
+      }
       validLines.push(l);
     }
     if (validLines.length === 0) {
@@ -1179,12 +1230,29 @@
       var uom = null;
       // For materials, prefer the material's declared UoM.
       if (l.kind === 'material' && materialsData[l.targetId]) uom = materialsData[l.targetId].unitOfMeasure || null;
+      // variantKey: product lines resolve to a chosen variant id or '_default'
+      // (single/no-variant products); material lines carry null. This is what
+      // the receiving Cloud Function reads to credit the right stock entry.
+      var variantKey = null, descr = null;
+      if (l.kind === 'product') {
+        var prod = productsData[l.targetId] || {};
+        variantKey = l.variantKey || '_default';
+        var vName = '';
+        if (l.variantKey && Array.isArray(prod.variants)) {
+          var vm = prod.variants.filter(function(v) { return v.id === l.variantKey; })[0];
+          if (vm) vName = ' — ' + (vm.name || (vm.combo ? Object.values(vm.combo).join(' / ') : l.variantKey));
+        }
+        descr = (prod.name || l.targetId) + vName;
+      } else if (l.kind === 'material' && materialsData[l.targetId]) {
+        descr = materialsData[l.targetId].name || null;
+      }
       return {
         lineId: lineId,
         kind: l.kind,
         targetId: l.targetId,
+        variantKey: variantKey,
         vendorSku: l.vendorSku || null,
-        descriptionSnapshot: null,
+        descriptionSnapshot: descr,
         qtyOrdered: l.qtyOrdered,
         unitOfMeasure: uom,
         unitCost: l.unitCost || 0,
@@ -1340,6 +1408,9 @@
         lotId: lotId,
         kind: rl._line.kind,
         targetId: rl._line.targetId,
+        // Product lots record which variant they stocked (null for materials),
+        // mirroring the PO line so lot history is traceable to a variant.
+        variantKey: rl._line.kind === 'product' ? (rl._line.variantKey || '_default') : null,
         lotNumber: rl.lotNumber,
         vendorId: po.vendorId,
         receiptId: receiptId,
@@ -1743,6 +1814,7 @@
 
   window.procurementOpenNewPo        = openNewPoModal;
   window.procurementUpdateNewPoLine  = updateNewPoLine;
+  window.procurementUpdateNewPoLineRerender = updateNewPoLineRerender;
   window.procurementAddNewPoLine     = addNewPoLine;
   window.procurementRemoveNewPoLine  = removeNewPoLine;
   window.procurementSaveNewPo        = saveNewPo;
