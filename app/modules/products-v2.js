@@ -1501,38 +1501,103 @@
     },
     detail: {
       render: function (UU, rc) {
-        var li = rc.lineItems || {};
-        var rows = Object.keys(li).map(function (k) {
-          var m = li[k] || {};
-          var qty = (m.quantity != null ? m.quantity : '') + (m.unitOfMeasure ? (' ' + m.unitOfMeasure) : '');
-          return '<tr><td>' + esc(m.materialName || '—') + '</td><td class="r">' + esc(qty) + '</td><td class="r">' + (N.money(m.unitCost) || '—') + '</td><td class="r">' + (N.money(m.extendedCost) || '—') + '</td></tr>';
-        }).join('');
-        var bom = '<table class="pv2-bom"><thead><tr><th>Material</th><th class="r">Qty</th><th class="r">Unit</th><th class="r">Ext</th></tr></thead><tbody>' + rows + '</tbody></table>';
-        var tiles = UU.tiles([
-          { k: 'Unit cost', v: N.money(rc.totalCost) || '—', hero: true },
-          { k: 'Status', v: rc.status || '—' },
-          { k: 'Materials', v: Object.keys(li).length },
-          { k: 'Active tier', v: rc.activePriceTier || '—' }
-        ]);
-        var cost = UU.kv([
-          { k: 'Materials', v: N.money(rc.totalMaterialCost) || '—' },
-          { k: 'Labor', v: N.money(rc.laborCost) || '—' },
-          { k: 'Other', v: N.money(rc.otherCost) || '—' },
-          { k: 'Unit cost', v: N.money(rc.totalCost) || '—' }
-        ]);
-        var pr = UU.kv([
-          { k: 'Active tier', v: rc.activePriceTier || '—' },
-          { k: 'Retail', v: N.money(rc.retailPrice) || '—' },
-          { k: 'Retail margin', v: (rc.retailMarginPct != null ? rc.retailMarginPct + '%' : '—') }
-        ]);
-        var editBtn = (rc.productId && canEditProduct())
-          ? '<div style="margin:0 0 12px;"><button class="btn btn-secondary btn-small" onclick="ProductsV2.recipeEditInBuilder(\'' + esc(rc.recipeId) + '\',\'' + esc(rc.productId) + '\',true)">Edit in builder ↗</button></div>'
-          : '';
-        return UU.stickyHead(tiles, '') + '<div>' + editBtn + UU.card('Bill of materials', bom) + UU.card('Cost', cost) + UU.card('Pricing', pr) +
-          '<div class="pv2-pnote">Drilled from the product — Back returns to the Default. “Edit in builder” opens the full recipe builder (Back returns to the product).</div></div>';
+        // R2: the BOM is editable here (inline qty/waste + add/remove). Labor/markups
+        // still go through the legacy builder (R3 brings them into v2). Cache the open
+        // recipe so edit handlers can re-render in place.
+        V2._recipeEdit = { recipeId: rc.recipeId || rc._key, rc: rc };
+        return '<div id="pv2RecipeBody">' + recipeEditBody(rc) + '</div>';
       }
     }
   });
+  // The editable recipe SO body (R2). Re-rendered in place after each BOM edit.
+  function recipeEditBody(rc) {
+    var li = rc.lineItems || {};
+    var keys = Object.keys(li);
+    var canEd = canEditProduct() && !!rc.productId;
+    var rows;
+    if (canEd) {
+      var inp = 'width:62px;padding:4px 6px;border:1px solid var(--cream-dark);border-radius:5px;font-size:0.85rem;background:var(--cream);color:inherit;box-sizing:border-box;text-align:right;';
+      rows = keys.map(function (k) {
+        var m = li[k] || {}; var isRec = m.kind === 'recipe';
+        return '<tr><td>' + esc(m.materialName || '—') + (isRec ? ' <span class="pv2-ov">sub</span>' : '') + '</td>' +
+          '<td class="r"><input type="number" min="0" step="0.01" value="' + esc(m.quantity != null ? String(m.quantity) : '') + '" onchange="ProductsV2.recipeSetLineQty(\'' + esc(k) + '\',this.value)" style="' + inp + '"> <span style="color:var(--warm-gray);font-size:0.78rem;">' + esc(m.unitOfMeasure || '') + '</span></td>' +
+          '<td class="r">' + (isRec ? '—' : '<input type="number" min="0" step="1" value="' + esc(m.scrapPercent != null ? String(m.scrapPercent) : '0') + '" onchange="ProductsV2.recipeSetLineWaste(\'' + esc(k) + '\',this.value)" style="' + inp + '">%') + '</td>' +
+          '<td class="r">' + (N.money(m.unitCost) || '—') + '</td><td class="r">' + (N.money(m.extendedCost) || '—') + '</td>' +
+          '<td class="r"><button class="btn btn-secondary btn-small" title="Remove" onclick="ProductsV2.recipeRemoveLine(\'' + esc(k) + '\')" style="padding:2px 9px;">✕</button></td></tr>';
+      }).join('');
+      if (!keys.length) rows = '<tr><td colspan="6" style="color:var(--warm-gray);padding:12px 0;font-size:0.85rem;">No materials yet — add the first part.</td></tr>';
+    } else {
+      rows = keys.map(function (k) {
+        var m = li[k] || {};
+        var qty = (m.quantity != null ? m.quantity : '') + (m.unitOfMeasure ? (' ' + m.unitOfMeasure) : '');
+        return '<tr><td>' + esc(m.materialName || '—') + '</td><td class="r">' + esc(qty) + '</td><td class="r">' + (N.money(m.unitCost) || '—') + '</td><td class="r">' + (N.money(m.extendedCost) || '—') + '</td></tr>';
+      }).join('');
+    }
+    var head = canEd
+      ? '<tr><th>Material</th><th class="r">Qty</th><th class="r">Waste</th><th class="r">Unit</th><th class="r">Ext</th><th></th></tr>'
+      : '<tr><th>Material</th><th class="r">Qty</th><th class="r">Unit</th><th class="r">Ext</th></tr>';
+    var bom = '<table class="pv2-bom"><thead>' + head + '</thead><tbody>' + rows + '</tbody></table>';
+    var addBtn = canEd ? '<button class="btn btn-secondary btn-small" onclick="ProductsV2.recipeAddPart()">+ Add part</button>' : '';
+    var tiles = U.tiles([
+      { k: 'Unit cost', v: N.money(rc.totalCost) || '—', hero: true },
+      { k: 'Status', v: rc.status || '—' },
+      { k: 'Materials', v: keys.length },
+      { k: 'Active tier', v: rc.activePriceTier || '—' }
+    ]);
+    var cost = U.kv([
+      { k: 'Materials', v: N.money(rc.totalMaterialCost) || '—' },
+      { k: 'Labor', v: N.money(rc.laborCost) || '—' },
+      { k: 'Other', v: N.money(rc.otherCost) || '—' },
+      { k: 'Unit cost', v: N.money(rc.totalCost) || '—' }
+    ]);
+    var pr = U.kv([
+      { k: 'Active tier', v: rc.activePriceTier || '—' },
+      { k: 'Retail', v: N.money(rc.retailPrice) || '—' },
+      { k: 'Retail margin', v: (rc.retailMarginPct != null ? rc.retailMarginPct + '%' : '—') }
+    ]);
+    var editBtn = (rc.productId && canEditProduct())
+      ? '<div style="margin:12px 0 0;"><button class="btn btn-secondary btn-small" onclick="ProductsV2.recipeEditInBuilder(\'' + esc(rc.recipeId) + '\',\'' + esc(rc.productId) + '\',true)">Labor &amp; pricing in builder ↗</button></div>'
+      : '';
+    return U.stickyHead(tiles, '') + '<div>' + U.card('Bill of materials', bom, { headerRight: addBtn }) + U.card('Cost', cost) + U.card('Pricing', pr) + editBtn +
+      '<div class="pv2-pnote">Edit the bill of materials here — quantities, waste %, add or remove parts. Labor &amp; pricing tiers still open in the builder (coming to v2 next).</div></div>';
+  }
+  function rerenderRecipeBody() {
+    var el = document.getElementById('pv2RecipeBody');
+    if (el && V2._recipeEdit && V2._recipeEdit.rc) el.innerHTML = recipeEditBody(V2._recipeEdit.rc);
+  }
+  // Apply a single line-item edit (qty / waste%) via the R1 bridge, then re-render.
+  function _applyRecipeLine(liId, patch) {
+    if (!canEditProduct()) return;
+    var rid = V2._recipeEdit && V2._recipeEdit.recipeId; if (!rid) return;
+    ensureMaker(function () {
+      Promise.resolve(window.MakerProductBridge.recipeSetLineItem(rid, liId, patch)).then(function (res) {
+        if (!res || !res.ok) { MastAdmin.showToast('Failed: ' + ((res && res.error) || 'unknown'), true); return; }
+        V2._recipeEdit.rc = res.recipe; rerenderRecipeBody();
+      }, function (e) { console.error('[products-v2] recipeSetLine', e); MastAdmin.showToast('Failed', true); });
+    });
+  }
+  // "+ Add part" picker (material or sub-assembly), via the shared openModal.
+  function openRecipeAddPartModal(materials, recipes) {
+    V2._rpKind = 'material';
+    var fieldStyle = 'display:block;width:100%;margin-top:4px;padding:8px 10px;border:1px solid var(--cream-dark);border-radius:6px;font-size:0.9rem;background:var(--cream);color:inherit;box-sizing:border-box;';
+    var matOpts = (materials || []).map(function (m) { return '<option value="' + esc(m.id) + '">' + esc(m.name) + ' (' + esc(m.unitOfMeasure || '') + ' · ' + (N.money(m.unitCost) || '$0') + ')</option>'; }).join('');
+    var recOpts = (recipes || []).map(function (r) { return '<option value="' + esc(r.id) + '">' + esc(r.name || '(recipe)') + ' (' + (N.money(r.totalCost) || '$0') + ')</option>'; }).join('');
+    function tab(k, label, on) { return '<button id="pv2RpTab_' + k + '" type="button" onclick="ProductsV2.recipeAddPartKind(\'' + k + '\')" style="flex:1;padding:9px;border:0;cursor:pointer;font-size:0.85rem;' + (k === 'recipe' ? 'border-left:1px solid var(--border);' : '') + 'background:' + (on ? 'color-mix(in srgb,var(--amber) 18%,transparent)' : 'transparent') + ';color:' + (on ? 'var(--text-primary)' : 'var(--warm-gray)') + ';font-weight:' + (on ? '600' : '400') + ';">' + label + '</button>'; }
+    var html = '<div style="max-width:460px;padding:2px 2px 8px;">' +
+      '<h3 style="margin:0 0 14px;font-size:1.15rem;">Add part</h3>' +
+      '<div style="display:flex;border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-bottom:14px;">' + tab('material', 'Material', true) + tab('recipe', 'Sub-assembly', false) + '</div>' +
+      '<div id="pv2RpMatWrap"><label style="display:block;margin-bottom:12px;font-size:0.85rem;color:var(--warm-gray);">Material<select id="pv2RpMatSel" style="' + fieldStyle + '">' + (matOpts || '<option value="">No materials</option>') + '</select></label></div>' +
+      '<div id="pv2RpRecWrap" hidden><label style="display:block;margin-bottom:12px;font-size:0.85rem;color:var(--warm-gray);">Sub-assembly recipe<select id="pv2RpRecSel" style="' + fieldStyle + '">' + (recOpts || '<option value="">No recipes</option>') + '</select></label></div>' +
+      '<div style="display:flex;gap:10px;">' +
+      '<label style="flex:1;font-size:0.85rem;color:var(--warm-gray);">Quantity<input id="pv2RpQty" type="number" min="0" step="0.01" value="1" style="' + fieldStyle + '"></label>' +
+      '<label id="pv2RpScrapWrap" style="flex:1;font-size:0.85rem;color:var(--warm-gray);">Waste %<input id="pv2RpScrap" type="number" min="0" step="1" value="0" style="' + fieldStyle + '"></label>' +
+      '</div>' +
+      '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">' +
+      '<button class="btn btn-secondary btn-small" onclick="ProductsV2.cancelRecipeAddPart()">Cancel</button>' +
+      '<button class="btn btn-primary btn-small" onclick="ProductsV2.recipeAddPartConfirm()">Add part</button>' +
+      '</div></div>';
+    if (window.openModal) window.openModal(html);
+  }
 
   // ════════════════ Entity: variants & options editor (drilled) ════════════════
   // The standard heavy-edit surface for defining options + adding variants —
@@ -1634,7 +1699,7 @@
   }
 
   // ── State + data ────────────────────────────────────────────────────
-  var V2 = { rows: [], byId: {}, sortKey: '_title', sortDir: 'asc', filter: 'all', lens: 'general', expanded: {}, editInfo: null, editFulfill: null, editPricing: null, editVarPricing: null, editInv: null, editVarInv: null, editVarInfo: null, editVarFulfill: null, editAttrs: null, editVarAttrs: null, q: '', tagFacets: [], _npMode: 'scratch' };
+  var V2 = { rows: [], byId: {}, sortKey: '_title', sortDir: 'asc', filter: 'all', lens: 'general', expanded: {}, editInfo: null, editFulfill: null, editPricing: null, editVarPricing: null, editInv: null, editVarInv: null, editVarInfo: null, editVarFulfill: null, editAttrs: null, editVarAttrs: null, q: '', tagFacets: [], _npMode: 'scratch', _recipeEdit: null, _rpKind: 'material' };
 
   function toRows(map) {
     var out = []; map = map || {};
@@ -2474,6 +2539,60 @@
       });
     },
     recipeEditInBuilder: function (recipeId, pid, fromDrill) { openRecipeBuilderGated(recipeId, pid, null, fromDrill); },
+    // ── R2: editable BOM in the recipe-v2 drill ──
+    recipeSetLineQty: function (liId, value) { _applyRecipeLine(liId, { quantity: value }); },
+    recipeSetLineWaste: function (liId, value) { _applyRecipeLine(liId, { scrapPercent: value }); },
+    recipeRemoveLine: function (liId) {
+      if (!canEditProduct()) return;
+      var rid = V2._recipeEdit && V2._recipeEdit.recipeId; if (!rid) return;
+      ensureMaker(function () {
+        Promise.resolve(window.MakerProductBridge.recipeRemoveLineItem(rid, liId)).then(function (res) {
+          if (!res || !res.ok) { MastAdmin.showToast('Failed: ' + ((res && res.error) || 'unknown'), true); return; }
+          V2._recipeEdit.rc = res.recipe; rerenderRecipeBody(); MastAdmin.showToast('Removed');
+        }, function (e) { console.error('[products-v2] recipeRemoveLine', e); MastAdmin.showToast('Failed', true); });
+      });
+    },
+    recipeAddPart: function () {
+      if (!canEditProduct()) return;
+      var rid = V2._recipeEdit && V2._recipeEdit.recipeId; if (!rid) return;
+      ensureMaker(function () {
+        Promise.resolve(window.MakerProductBridge.recipeMaterials(rid)).then(function (res) {
+          if (!res || !res.ok) { MastAdmin.showToast('Failed: ' + ((res && res.error) || 'unknown'), true); return; }
+          openRecipeAddPartModal(res.materials || [], res.recipes || []);
+        }, function (e) { console.error('[products-v2] recipeMaterials', e); MastAdmin.showToast('Failed', true); });
+      });
+    },
+    recipeAddPartKind: function (k) {
+      V2._rpKind = (k === 'recipe') ? 'recipe' : 'material';
+      var mw = document.getElementById('pv2RpMatWrap'), rw = document.getElementById('pv2RpRecWrap'), sw = document.getElementById('pv2RpScrapWrap');
+      if (mw) mw.hidden = (V2._rpKind !== 'material');
+      if (rw) rw.hidden = (V2._rpKind !== 'recipe');
+      if (sw) sw.style.visibility = (V2._rpKind === 'material') ? 'visible' : 'hidden'; // waste only for materials
+      ['material', 'recipe'].forEach(function (kk) {
+        var b = document.getElementById('pv2RpTab_' + kk); if (!b) return; var on = (V2._rpKind === kk);
+        b.style.background = on ? 'color-mix(in srgb,var(--amber) 18%,transparent)' : 'transparent';
+        b.style.color = on ? 'var(--text-primary)' : 'var(--warm-gray)'; b.style.fontWeight = on ? '600' : '400';
+      });
+    },
+    cancelRecipeAddPart: function () { if (window.closeModal) window.closeModal(); },
+    recipeAddPartConfirm: function () {
+      if (!canEditProduct()) return;
+      var rid = V2._recipeEdit && V2._recipeEdit.recipeId; if (!rid) return;
+      var kind = V2._rpKind === 'recipe' ? 'recipe' : 'material';
+      var sel = document.getElementById(kind === 'recipe' ? 'pv2RpRecSel' : 'pv2RpMatSel');
+      var matId = sel ? sel.value : '';
+      if (!matId) { MastAdmin.showToast(kind === 'recipe' ? 'Pick a sub-assembly' : 'Pick a material', true); return; }
+      var qEl = document.getElementById('pv2RpQty'); var q = qEl ? Number(qEl.value) : 1;
+      if (!isFinite(q) || q < 0) { MastAdmin.showToast('Enter a valid quantity', true); return; }
+      var scEl = document.getElementById('pv2RpScrap'); var sc = (kind === 'material' && scEl) ? Number(scEl.value) || 0 : 0;
+      ensureMaker(function () {
+        Promise.resolve(window.MakerProductBridge.recipeAddLineItem(rid, { kind: kind, materialId: matId, quantity: q, scrapPercent: sc })).then(function (res) {
+          if (!res || !res.ok) { MastAdmin.showToast('Failed: ' + ((res && res.error) || 'unknown'), true); return; }
+          if (window.closeModal) window.closeModal();
+          V2._recipeEdit.rc = res.recipe; rerenderRecipeBody(); MastAdmin.showToast('Part added');
+        }, function (e) { console.error('[products-v2] recipeAddLineItem', e); MastAdmin.showToast('Failed', true); });
+      });
+    },
     // Variant "Give it its own recipe" → open the builder focused on this variant
     // (creating the product recipe first if needed). Replaces the editVariantTodo stub.
     variantOwnRecipe: function (pid, vid) {
