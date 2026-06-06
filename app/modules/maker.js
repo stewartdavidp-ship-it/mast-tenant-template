@@ -7577,7 +7577,7 @@
     // Append a new variant (id = 'v_'+pushkey, combo = {optionKey: choice}) to a
     // product; rejects a duplicate combination. Written live (like every variant op).
     addVariant: function (pid, combo) { return bridgeAddVariant(pid, combo); },
-    setOptions: function (pid, options) { return bridgeSetOptions(pid, options); },
+    setOptions: function (pid, options, opts) { return bridgeSetOptions(pid, options, opts); },
     // Set on-hand stock (separate inventory collection + stockInfo resync).
     setStock: function (pid, variantKey, onHand) { return bridgeSetStock(pid, variantKey, onHand); },
     setStockCounts: function (pid, variantKey, counts) { return bridgeSetStockCounts(pid, variantKey, counts); },
