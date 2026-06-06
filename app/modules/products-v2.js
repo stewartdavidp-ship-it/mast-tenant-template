@@ -109,6 +109,54 @@
     var seen = {}; realVariants(p).forEach(function (v) { if (v.combo) seen[comboSig(v.combo)] = true; });
     return productCombos(p).filter(function (c) { return !seen[comboSig(c)]; });
   }
+  // Persist options (write-as-you-go) then re-render the modal.
+  function _saveOptions(id, opts) {
+    withProductBridge(function () {
+      Promise.resolve(window.MakerProductBridge.setOptions(id, opts)).then(function (res) {
+        if (!res || !res.ok) { MastAdmin.showToast('Failed: ' + ((res && res.error) || 'unknown'), true); return; }
+        var rec = V2.byId[id]; if (rec) rec.options = res.options;
+        renderAddVariantModal(id);
+      }, function (e) { console.error('[products-v2] setOptions', e); MastAdmin.showToast('Failed', true); });
+    });
+  }
+  // The Variants & options modal: an options editor (define attributes + choices)
+  // + the missing-combination picker. Stateless — re-rendered from the product
+  // after each change (options/variants persist immediately).
+  function renderAddVariantModal(id) {
+    var p = V2.byId[id]; if (!p) return;
+    var opts = Array.isArray(p.options) ? p.options : [];
+    var fieldCss = 'padding:6px 9px;border:1px solid var(--cream-dark);border-radius:6px;font-size:0.85rem;background:var(--cream);color:inherit;box-sizing:border-box;';
+    var optHtml = opts.map(function (o, i) {
+      var chips = (o.choices || []).map(function (ch) { return '<span style="display:inline-block;border:1px solid var(--border);border-radius:999px;padding:2px 9px;font-size:0.78rem;margin:2px;">' + esc(ch) + '</span>'; }).join('');
+      return '<div style="border-top:1px solid var(--border);padding:9px 0;">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;"><strong>' + esc(o.label) + '</strong>' +
+        '<button class="btn btn-secondary btn-small" onclick="ProductsV2.removeOption(\'' + esc(id) + '\',' + i + ')">Remove</button></div>' +
+        '<div style="margin:4px 0;">' + (chips || '<span style="color:var(--warm-gray);font-size:0.78rem;">no choices yet</span>') + '</div>' +
+        '<div style="display:flex;gap:6px;"><input id="pv2OptChoice_' + i + '" type="text" placeholder="add a choice" style="flex:1;' + fieldCss + '">' +
+        '<button class="btn btn-secondary btn-small" onclick="ProductsV2.addChoice(\'' + esc(id) + '\',' + i + ')">+ choice</button></div></div>';
+    }).join('');
+    var addOptRow = '<div style="border-top:1px solid var(--border);padding:10px 0;display:flex;gap:6px;flex-wrap:wrap;align-items:center;">' +
+      '<input id="pv2OptLabel" type="text" placeholder="option name (e.g. Size)" style="flex:1;min-width:130px;' + fieldCss + '">' +
+      '<input id="pv2OptChoice" type="text" placeholder="first choice (e.g. small)" style="flex:1;min-width:130px;' + fieldCss + '">' +
+      '<button class="btn btn-secondary btn-small" onclick="ProductsV2.addOption(\'' + esc(id) + '\')">+ Add option</button></div>';
+    var validOpts = opts.filter(function (o) { return o.label && o.choices && o.choices.length; });
+    var comboSection;
+    if (!validOpts.length) { comboSection = '<div style="color:var(--warm-gray);font-size:0.85rem;">Define an option (name + at least one choice) above to start creating variants.</div>'; }
+    else {
+      var missing = missingCombos(p);
+      comboSection = missing.length
+        ? missing.map(function (c) { return '<button class="btn btn-secondary" style="margin:4px;" onclick="ProductsV2.confirmAddVariant(\'' + esc(id) + '\',\'' + esc(comboSig(c)) + '\')">+ ' + esc(comboLabel(c)) + '</button>'; }).join('')
+        : '<div style="color:var(--warm-gray);font-size:0.85rem;">Every combination already exists.</div>';
+    }
+    var lbl = 'font-size:0.72rem;text-transform:uppercase;letter-spacing:.04em;color:var(--warm-gray);margin-top:14px;';
+    var html = '<div style="max-width:520px;padding:24px;max-height:80vh;overflow:auto;"><h3>Variants &amp; options</h3>' +
+      '<div style="font-size:0.85rem;color:var(--warm-gray);margin:6px 0 4px;">A variant is one choice per option. Define options, then add the combinations you sell.</div>' +
+      '<div style="' + lbl + '">Options</div>' + optHtml + addOptRow +
+      '<div style="' + lbl + '">Add a variant</div>' +
+      '<div style="display:flex;flex-wrap:wrap;margin-top:6px;">' + comboSection + '</div>' +
+      '<div style="margin-top:18px;text-align:right;"><button class="btn btn-primary" onclick="ProductsV2.doneAddVariant(\'' + esc(id) + '\')">Done</button></div></div>';
+    if (window.openModal) window.openModal(html); else MastAdmin.showToast('Modal unavailable', true);
+  }
 
   // The variant switcher — ONE compact pill (low clutter, V1's failure was a
   // million things at once). At rest it shows only where you are; click opens a
@@ -1709,21 +1757,28 @@
     // Add a variant: pick one of the not-yet-created option combinations. Only
     // valid combos (cartesian of product.options minus existing) are offered, so
     // we can't create a malformed/duplicate variant.
-    addVariant: function (id) {
-      var p = V2.byId[id]; if (!p) return;
-      if (!(Array.isArray(p.options) && p.options.filter(function (o) { return o.label && o.choices && o.choices.length; }).length)) {
-        MastAdmin.showToast('This product has no options defined yet — the variant-options editor is coming next.', true); return;
-      }
-      var missing = missingCombos(p);
-      if (!missing.length) { MastAdmin.showToast('Every option combination already exists.', true); return; }
-      var chips = missing.map(function (c) {
-        return '<button class="btn btn-secondary" style="margin:4px;" onclick="ProductsV2.confirmAddVariant(\'' + esc(id) + '\',\'' + esc(comboSig(c)) + '\')">+ ' + esc(comboLabel(c)) + '</button>';
-      }).join('');
-      var html = '<div style="max-width:480px;padding:24px;"><h3>Add a variant</h3>' +
-        '<div style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:12px;">Pick a combination to add. It inherits the Default, then you can override its price, stock, image, etc.</div>' +
-        '<div style="display:flex;flex-wrap:wrap;">' + chips + '</div>' +
-        '<div style="margin-top:16px;text-align:right;"><button class="btn btn-secondary" onclick="closeModal()">Done</button></div></div>';
-      if (window.openModal) window.openModal(html); else MastAdmin.showToast('Modal unavailable', true);
+    // Variants & options modal: define options (attributes + choices), then add
+    // the combinations you sell. Works for a no-options product too (define first).
+    addVariant: function (id) { renderAddVariantModal(id); },
+    addOption: function (id) {
+      var l = ((document.getElementById('pv2OptLabel') || {}).value || '').trim();
+      var c = ((document.getElementById('pv2OptChoice') || {}).value || '').trim();
+      if (!l) { MastAdmin.showToast('Enter an option name', true); return; }
+      var p = V2.byId[id] || {}; var opts = (Array.isArray(p.options) ? p.options.slice() : []);
+      if (opts.some(function (o) { return String(o.label).toLowerCase() === l.toLowerCase(); })) { MastAdmin.showToast('That option already exists', true); return; }
+      opts.push({ label: l, choices: c ? [c] : [] });
+      _saveOptions(id, opts);
+    },
+    addChoice: function (id, i) {
+      var el = document.getElementById('pv2OptChoice_' + i); var c = el ? el.value.trim() : '';
+      if (!c) return;
+      var p = V2.byId[id] || {};
+      var opts = (p.options || []).map(function (o, idx) { if (idx !== i) return o; var ch = (o.choices || []).slice(); if (ch.indexOf(c) < 0) ch.push(c); return Object.assign({}, o, { choices: ch }); });
+      _saveOptions(id, opts);
+    },
+    removeOption: function (id, i) {
+      var p = V2.byId[id] || {}; var opts = (p.options || []).filter(function (o, idx) { return idx !== i; });
+      _saveOptions(id, opts);
     },
     confirmAddVariant: function (id, sig) {
       var p = V2.byId[id]; if (!p) return;
@@ -1733,12 +1788,15 @@
         Promise.resolve(window.MakerProductBridge.addVariant(id, combo)).then(function (res) {
           if (!res || !res.ok) { MastAdmin.showToast('Failed: ' + ((res && res.error) || 'unknown'), true); return; }
           var rec = V2.byId[id]; if (rec) rec.variants = res.variants;
-          if (window.closeModal) window.closeModal();
-          MastAdmin.showToast('Variant added: ' + comboLabel(combo));
+          MastAdmin.showToast('Added: ' + comboLabel(combo));
+          renderAddVariantModal(id); // stay open so you can add more
           var lb = document.getElementById('pv2ListBody'); if (lb) lb.innerHTML = renderListBody();
-          if (document.getElementById('mastSlideOutTitle')) reopenProduct(id);
         }, function (e) { console.error('[products-v2] addVariant', e); MastAdmin.showToast('Failed', true); });
       });
+    },
+    doneAddVariant: function (id) {
+      if (window.closeModal) window.closeModal();
+      if (document.getElementById('mastSlideOutTitle')) reopenProduct(id);
     },
     editVariantTodo: function () { MastAdmin.showToast('Per-variant override editing lands in P4.'); },
     // Bind a variant to product.images[idx] (idx<0 → clear, use product default).

@@ -6848,6 +6848,18 @@
       return { ok: true, variants: variants, variantId: vid };
     } catch (e) { return { ok: false, error: (e && e.message) || 'Failed' }; }
   }
+  async function bridgeSetOptions(pid, options) {
+    try {
+      var clean = (Array.isArray(options) ? options : []).map(function (o) {
+        return { label: String(o.label || '').trim(), choices: (Array.isArray(o.choices) ? o.choices : []).map(function (c) { return String(c).trim(); }).filter(Boolean) };
+      }).filter(function (o) { return o.label; });
+      await MastDB.set('public/products/' + pid + '/options', clean);
+      await MastDB.set('public/products/' + pid + '/updatedAt', new Date().toISOString());
+      var fp = findProduct(pid); if (fp) fp.options = clean;
+      MastAdmin.writeAudit('update', 'products', pid);
+      return { ok: true, options: clean };
+    } catch (e) { return { ok: false, error: (e && e.message) || 'Failed' }; }
+  }
 
   // ── Channel bindings (which channels a product sells on; variants inherit
   //    unless excluded). Admin-managed — NOT the OAuth/publish (externalRefs)
@@ -7072,6 +7084,7 @@
     // Append a new variant (id = 'v_'+pushkey, combo = {optionKey: choice}) to a
     // product; rejects a duplicate combination. Written live (like every variant op).
     addVariant: function (pid, combo) { return bridgeAddVariant(pid, combo); },
+    setOptions: function (pid, options) { return bridgeSetOptions(pid, options); },
     // Set on-hand stock (separate inventory collection + stockInfo resync).
     setStock: function (pid, variantKey, onHand) { return bridgeSetStock(pid, variantKey, onHand); },
     setStockCounts: function (pid, variantKey, counts) { return bridgeSetStockCounts(pid, variantKey, counts); },
