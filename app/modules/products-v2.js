@@ -1154,7 +1154,7 @@
   }
 
   // ── State + data ────────────────────────────────────────────────────
-  var V2 = { rows: [], byId: {}, sortKey: '_title', sortDir: 'asc', filter: 'all', expanded: {}, editInfo: null, editFulfill: null, editPricing: null, editVarPricing: null, editInv: null, editVarInv: null, editVarInfo: null, q: '' };
+  var V2 = { rows: [], byId: {}, sortKey: '_title', sortDir: 'asc', filter: 'all', lens: 'general', expanded: {}, editInfo: null, editFulfill: null, editPricing: null, editVarPricing: null, editInv: null, editVarInv: null, editVarInfo: null, q: '' };
 
   function toRows(map) {
     var out = []; map = map || {};
@@ -1241,7 +1241,14 @@
     return out;
   }
   function renderListBody() {
+    return (V2.lens && V2.lens !== 'general') ? renderLensList(V2.lens) : renderGeneralList();
+  }
+  function _emptyCfg() {
     var q = (V2.q || '').trim();
+    return { title: 'No products', message: 'No products match ' + (q ? '“' + q + '”' : 'these filters') + '.' };
+  }
+  // General lens: the canonical product list (thumbnail + expandable variant tree).
+  function renderGeneralList() {
     return window.MastEntity.renderList('products-v2', {
       rows: visibleRows(),
       columns: pv2ListColumns(),
@@ -1252,7 +1259,75 @@
       expandedIds: V2.expanded,
       onToggleFnName: 'ProductsV2.toggle',
       childRowsHtml: pv2ChildRows,
-      empty: { title: 'No products', message: 'No products match ' + (q ? '“' + q + '”' : 'these filters') + '.' }
+      empty: _emptyCfg()
+    });
+  }
+  // The other lenses are facets on the SAME product list: different columns + a
+  // row click that lands on the matching detail tab. Flat (no variant tree) — the
+  // facet is product-level. Sales/Forecast data load lazily, then re-render.
+  function rerenderPv2List() { var el = document.getElementById('pv2ListBody'); if (el) el.innerHTML = renderListBody(); else render(); }
+  function _thumbCol() {
+    return { key: '_thumb', label: '', render: function (p) {
+      var img = firstImage(p);
+      return img
+        ? '<img src="' + esc(img) + '" alt="" style="width:40px;height:40px;border-radius:7px;object-fit:cover;border:1px solid var(--border);display:block;">'
+        : '<div style="width:40px;height:40px;border-radius:7px;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--warm-gray);font-size:0.85rem;">' + esc((p.name || 'P').slice(0, 1)) + '</div>';
+    } };
+  }
+  function _nameCol() {
+    return { key: '_name', label: 'Product', render: function (p) {
+      return esc(p.name || '(unnamed)') + ' <span style="color:var(--warm-gray);">· ' + esc(categoryLabel(p) || '—') + '</span>';
+    } };
+  }
+  function lensColumns(lens) {
+    if (lens === 'inventory') {
+      return [_thumbCol(), _nameCol(),
+        { key: 'onhand', label: 'On hand', align: 'right', render: function (p) { var si = p.stockInfo || {}; return si.totalOnHand != null ? String(si.totalOnHand) : '—'; } },
+        { key: 'avail', label: 'Available', align: 'right', render: function (p) { var si = p.stockInfo || {}, a = si.totalAvailable; var low = a != null && si.lowStockThreshold != null && a <= si.lowStockThreshold; return a != null ? ('<span' + (low ? ' style="color:var(--amber,goldenrod);font-weight:600;"' : '') + '>' + a + '</span>') : '—'; } },
+        { key: 'committed', label: 'Committed', align: 'right', render: function (p) { var si = p.stockInfo || {}; return si.totalCommitted != null ? String(si.totalCommitted) : '—'; } },
+        { key: 'mode', label: 'Stock mode', render: function (p) { var si = p.stockInfo || {}; return si.stockType ? esc(si.stockType) : '—'; } }];
+    }
+    if (lens === 'sales') {
+      return [_thumbCol(), _nameCol(),
+        { key: 'u30', label: 'Units 30d', align: 'right', render: function (p) { var s = _salesEntry(p._key || p.pid) || {}; return String(s.last30 || 0); } },
+        { key: 'r30', label: 'Revenue 30d', align: 'right', render: function (p) { var s = _salesEntry(p._key || p.pid) || {}; return _money(s.revenue30); } },
+        { key: 'rall', label: 'Revenue all', align: 'right', render: function (p) { var s = _salesEntry(p._key || p.pid) || {}; return _money(s.revenueAll); } },
+        { key: 'last', label: 'Last sold', align: 'right', render: function (p) { var s = _salesEntry(p._key || p.pid) || {}; return s.lastOrdered ? String(s.lastOrdered).slice(0, 10) : '—'; } }];
+    }
+    // forecast
+    return [_thumbCol(), _nameCol(),
+      { key: 'rate', label: 'Monthly rate', align: 'right', render: function (p) { var f = _forecastEntry(p._key || p.pid); return f && f.monthlyRate != null ? (f.monthlyRate + ' /mo') : '—'; } },
+      { key: 'cov', label: 'Coverage', align: 'right', render: function (p) { var f = _forecastEntry(p._key || p.pid); if (!f) return '—'; return isFinite(f.weeksCoverage) ? (f.weeksCoverage + 'w') : (f.isMTO ? 'MTO' : '—'); } },
+      { key: 'trend', label: 'Trend', render: function (p) { var f = _forecastEntry(p._key || p.pid); if (!f) return '—'; return f.trending ? '↑ up' : (f.declining ? '↓ down' : 'steady'); } },
+      { key: 'suggest', label: 'Suggested', render: function (p) { var f = _forecastEntry(p._key || p.pid); if (f && f.suggestBuild) return '<span style="color:var(--amber,goldenrod);font-weight:600;">build ' + esc(String(f.suggestedQty || '')) + '</span>'; return (f && f.considerStocking) ? '<span style="color:var(--warm-gray);">consider</span>' : '—'; } }];
+  }
+  // Lazy-load the data a lens needs, then re-render the list in place.
+  function lensEnsure(lens) {
+    if (lens === 'sales') {
+      if (window._mastProductSalesMap || V2._lensSalesLoading) return;
+      V2._lensSalesLoading = true;
+      Promise.resolve(window._ensureProductSalesMap ? window._ensureProductSalesMap() : null)
+        .then(function () { V2._lensSalesLoading = false; rerenderPv2List(); }, function () { V2._lensSalesLoading = false; });
+    } else if (lens === 'forecast') {
+      if ((Array.isArray(window.forecastData) && window.forecastData.length) || V2._lensForecastLoading) return;
+      V2._lensForecastLoading = true;
+      Promise.resolve((window.productsData && window.productsData.length) ? null : MastDB.products.list())
+        .then(function (all) { if (all) window.productsData = Array.isArray(all) ? all : Object.values(all || {}); window.productsLoaded = true; return window._ensureProductSalesMap ? window._ensureProductSalesMap() : null; })
+        .then(function () {
+          try { if (window.computeAndRenderForecast) window.computeAndRenderForecast(); } catch (e) { console.error('[products-v2] forecast', e); }
+          var t = 0; (function poll() { if (Array.isArray(window.forecastData) && window.forecastData.length) { V2._lensForecastLoading = false; rerenderPv2List(); return; } if (t++ < 25) setTimeout(poll, 150); else { V2._lensForecastLoading = false; rerenderPv2List(); } })();
+        }, function () { V2._lensForecastLoading = false; });
+    }
+  }
+  function renderLensList(lens) {
+    lensEnsure(lens);
+    var click = lens === 'inventory' ? 'ProductsV2.openInventory' : (lens === 'sales' ? 'ProductsV2.openSales' : 'ProductsV2.openForecast');
+    return window.MastEntity.renderList('products-v2', {
+      rows: visibleRows(),
+      columns: lensColumns(lens),
+      rowId: function (p) { return p._key || p.pid; },
+      onRowClickFnName: click,
+      empty: _emptyCfg()
     });
   }
 
@@ -1346,15 +1421,31 @@
     }).join('');
     var search = '<input id="pv2Search" type="text" value="' + esc(V2.q || '') + '" oninput="ProductsV2.setSearch(this.value)" placeholder="Search products…" ' +
       'style="margin-left:auto;width:230px;max-width:100%;padding:7px 11px;border:1px solid var(--border);border-radius:999px;font-size:0.9rem;background:var(--cream,transparent);color:inherit;box-sizing:border-box;">';
+    // Lens (facet) selector — same product list, different columns + click-through.
+    var curLens = V2.lens || 'general';
+    var lensPills = [['general', 'General'], ['inventory', 'Inventory'], ['sales', 'Sales'], ['forecast', 'Forecast']].map(function (l) {
+      var on = curLens === l[0];
+      return '<button onclick="ProductsV2.setLens(\'' + l[0] + '\')" style="border:1px solid ' + (on ? 'var(--amber,goldenrod)' : 'var(--border)') + ';' +
+        'background:' + (on ? 'color-mix(in srgb,var(--amber) 18%,transparent)' : 'transparent') + ';' +
+        'color:' + (on ? 'var(--text-primary)' : 'var(--warm-gray)') + ';border-radius:999px;padding:6px 15px;font-size:0.85rem;font-weight:' + (on ? '600' : '400') + ';cursor:pointer;margin-right:8px;">' + l[1] + '</button>';
+    }).join('');
     tab.innerHTML =
       U.pageHeader({ title: 'Products', count: N.count(V2.rows.length) + ' products',
         actionsHtml: '<button class="btn btn-secondary" onclick="ProductsV2.exportCsv()">↓ Export</button>' }) +
-      '<div style="margin:14px 0;display:flex;align-items:center;gap:8px 0;flex-wrap:wrap;">' + pills + search + '</div>' +
+      '<div style="margin:14px 0 10px;display:flex;align-items:center;gap:8px 0;flex-wrap:wrap;">' + lensPills + '</div>' +
+      '<div style="margin:0 0 14px;display:flex;align-items:center;gap:8px 0;flex-wrap:wrap;">' + pills + search + '</div>' +
       '<div id="pv2ListBody">' + renderListBody() + '</div>';
   }
 
   window.ProductsV2 = {
     setFilter: function (s) { V2.filter = s; render(); },
+    // Facet selector — re-render the whole surface (columns + click-through change).
+    setLens: function (l) { V2.lens = l; render(); },
+    // Lens row click: open the product SO focused on the matching detail tab.
+    openToTab: function (id, pane) { var rec = V2.byId[id]; if (!rec) return; ensureMaker(function () { MastEntity.openRecord('products-v2', rec, 'read'); restorePaneWhenReady(pane); }); },
+    openInventory: function (id) { ProductsV2.openToTab(id, 'inventory'); },
+    openSales: function (id) { ProductsV2.openToTab(id, 'sales'); },
+    openForecast: function (id) { ProductsV2.openToTab(id, 'forecast'); },
     // Type-to-filter the list by name / category / SKU. Re-render only the list
     // body so the input keeps focus (no full re-render mid-keystroke).
     setSearch: function (v) {
