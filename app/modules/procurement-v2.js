@@ -190,16 +190,20 @@
   });
 
   // ── module state + data ─────────────────────────────────────────────
-  var V2 = { rows: [], byId: {}, sortKey: 'ordered', sortDir: 'desc', q: '', statusFilter: 'open', loaded: false };
+  var V2 = { rows: [], byId: {}, sortKey: 'ordered', sortDir: 'desc', q: '', statusFilter: 'open', loaded: false,
+    vendors: {}, materials: {}, products: {} };
   var OPEN = { draft: true, submitted: true, partially_received: true };
 
   function load() {
     return Promise.all([
       Promise.resolve(MastDB.get('admin/purchaseOrders')),
       Promise.resolve(MastDB.get('admin/vendors')),
-      Promise.resolve(MastDB.get('admin/purchaseReceipts'))
+      Promise.resolve(MastDB.get('admin/purchaseReceipts')),
+      Promise.resolve(MastDB.get('admin/materials')),
+      Promise.resolve(MastDB.get('admin/products'))
     ]).then(function (res) {
       var posVal = res[0] || {}, vendors = res[1] || {}, receipts = res[2] || {};
+      V2.vendors = vendors; V2.materials = res[3] || {}; V2.products = res[4] || {};
       var receiptsByPo = {};
       Object.keys(receipts).forEach(function (k) { var r = receipts[k]; if (r && r.poId) (receiptsByPo[r.poId] = receiptsByPo[r.poId] || []).push(r); });
       Object.keys(receiptsByPo).forEach(function (poId) { receiptsByPo[poId].sort(function (a, b) { return String(b.receivedAt || '').localeCompare(String(a.receivedAt || '')); }); });
@@ -256,7 +260,8 @@
       '<div style="display:flex;align-items:baseline;gap:12px;margin-bottom:6px;">' +
         '<h1 style="font-size:1.6rem;margin:0;">Purchase Orders</h1>' +
         '<span style="color:var(--warm-gray);font-size:0.9rem;">' + N.count(openCount) + ' open · ' + N.count(V2.rows.length) + ' total</span>' +
-        '<button class="btn btn-secondary" style="margin-left:auto;" onclick="navigateTo(\'reorder-v2\')">↻ Needs reorder</button>' +
+        '<button class="btn btn-primary" style="margin-left:auto;" onclick="ProcurementV2.createNew()">+ New PO</button>' +
+        '<button class="btn btn-secondary" onclick="navigateTo(\'reorder-v2\')">↻ Needs reorder</button>' +
         '<button class="btn btn-secondary" onclick="ProcurementV2.exportCsv()">↓ Export</button>' +
       '</div>' +
       '<div style="display:flex;gap:6px;flex-wrap:wrap;margin:12px 0;">' + filters + '</div>' +
@@ -375,7 +380,127 @@
     return false;
   }
 
+  // ── New PO create form (Tier 1.5 P1) ────────────────────────────────
+  // V2 replacement for the legacy openNewPoModal. Captures vendor + dynamic line
+  // rows (material/product picker + variant select for variant products) and
+  // delegates the write to ProcurementBridge.createPO → a Draft PO that enters
+  // the procurement workflow. Mirrors the receive/send capture pattern.
+  var newPo = null;
+  function npBlankLine() { return { kind: 'material', targetId: '', variantKey: '', qtyOrdered: 1, unitCost: 0, vendorSku: '' }; }
+  function byNameEntry(a, b) { return String(a[1].name || '').localeCompare(String(b[1].name || '')); }
+  function openNewPoForm() {
+    var today = new Date().toISOString().slice(0, 10);
+    newPo = { vendorId: '', poNumber: '', orderDate: today, expectedDate: '', notes: '', lines: [npBlankLine()] };
+    U.slideOut.open({
+      id: 'new-po', title: 'New purchase order', size: 'lg', mode: 'create', deepLink: false, createLabel: 'Create PO',
+      render: function () { return buildNewPoBody(); },
+      isDirty: function () { return true; },
+      onSave: function () { return submitNewPo(); }
+    });
+  }
+  function npRerender() { var b = document.getElementById('mastSlideOutBody'); if (b) b.innerHTML = buildNewPoBody(); }
+  function buildNewPoBody() {
+    if (!newPo) return '';
+    var vendors = Object.keys(V2.vendors).map(function (k) { return [k, V2.vendors[k]]; })
+      .filter(function (e) { return e[1] && e[1].active !== false; }).sort(byNameEntry);
+    if (!vendors.length) return U.card('New purchase order', '<div class="mu-sub">No vendors yet — add one in Vendors first.</div>');
+    var vendorOpts = '<option value="">— vendor (required) —</option>' + vendors.map(function (e) {
+      return '<option value="' + esc(e[0]) + '"' + (newPo.vendorId === e[0] ? ' selected' : '') + '>' + esc(e[1].name || e[0]) + '</option>';
+    }).join('');
+    var head = '<div style="display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:10px;margin-bottom:10px;">' +
+      '<label style="font-size:0.78rem;color:var(--warm-gray);">Vendor<select style="width:100%;margin-top:2px;" onchange="ProcurementV2.npField(\'vendorId\',this.value)">' + vendorOpts + '</select></label>' +
+      '<label style="font-size:0.78rem;color:var(--warm-gray);">Order date<input type="date" class="form-input" style="margin-top:2px;" value="' + esc(newPo.orderDate) + '" oninput="ProcurementV2.npField(\'orderDate\',this.value)"></label>' +
+      '<label style="font-size:0.78rem;color:var(--warm-gray);">Expected<input type="date" class="form-input" style="margin-top:2px;" value="' + esc(newPo.expectedDate) + '" oninput="ProcurementV2.npField(\'expectedDate\',this.value)"></label>' +
+    '</div>' +
+    '<label style="font-size:0.78rem;color:var(--warm-gray);display:block;">PO # (optional)<input type="text" class="form-input" style="margin-top:2px;" value="' + esc(newPo.poNumber) + '" oninput="ProcurementV2.npField(\'poNumber\',this.value)"></label>';
+    var materials = Object.keys(V2.materials).map(function (k) { return [k, V2.materials[k]]; }).filter(function (e) { return e[1] && e[1].status !== 'archived'; }).sort(byNameEntry);
+    var products = Object.keys(V2.products).map(function (k) { return [k, V2.products[k]]; }).filter(function (e) { return e[1] && e[1].status !== 'archived'; }).sort(byNameEntry);
+    var linesHdr = '<div style="display:grid;grid-template-columns:1fr 2fr 1fr 0.8fr 0.8fr 30px;gap:8px;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.05em;font-weight:600;color:var(--warm-gray);padding-bottom:4px;"><span>Kind</span><span>Material/Product</span><span>Vendor SKU</span><span>Qty</span><span>Unit cost</span><span></span></div>';
+    var rows = newPo.lines.map(function (line, idx) { return npLineRow(line, idx, materials, products); }).join('');
+    var addBtn = '<button class="btn btn-secondary btn-small" style="margin-top:8px;" onclick="ProcurementV2.npAddLine()">+ Add line</button>';
+    return U.card('New purchase order', head) + U.card('Lines', linesHdr + rows + addBtn);
+  }
+  function npLineRow(line, idx, materials, products) {
+    var kindSel = '<select onchange="ProcurementV2.npLine(' + idx + ',\'kind\',this.value)">' +
+      '<option value="material"' + (line.kind === 'material' ? ' selected' : '') + '>material</option>' +
+      '<option value="product"' + (line.kind === 'product' ? ' selected' : '') + '>product</option></select>';
+    var targetCell;
+    if (line.kind === 'material') {
+      var mOpts = '<option value="">—</option>' + materials.map(function (e) { return '<option value="' + esc(e[0]) + '"' + (line.targetId === e[0] ? ' selected' : '') + '>' + esc(e[1].name || e[0]) + '</option>'; }).join('');
+      targetCell = '<select style="width:100%;" onchange="ProcurementV2.npLine(' + idx + ',\'targetId\',this.value)">' + mOpts + '</select>';
+    } else {
+      var pOpts = '<option value="">— product —</option>' + products.map(function (e) { return '<option value="' + esc(e[0]) + '"' + (line.targetId === e[0] ? ' selected' : '') + '>' + esc(e[1].name || e[0]) + '</option>'; }).join('');
+      targetCell = '<div><select style="width:100%;" onchange="ProcurementV2.npLine(' + idx + ',\'targetId\',this.value)">' + pOpts + '</select>';
+      var prod = line.targetId ? V2.products[line.targetId] : null;
+      var variants = (prod && Array.isArray(prod.variants)) ? prod.variants : [];
+      if (variants.length) {
+        var vOpts = '<option value="">— variant (required) —</option>' + variants.map(function (v) {
+          var vid = v.id || ''; var vn = v.name || (v.combo ? Object.values(v.combo).join(' / ') : vid);
+          return '<option value="' + esc(vid) + '"' + (line.variantKey === vid ? ' selected' : '') + '>' + esc(vn) + '</option>';
+        }).join('');
+        targetCell += '<select style="width:100%;margin-top:4px;" onchange="ProcurementV2.npLine(' + idx + ',\'variantKey\',this.value)">' + vOpts + '</select>';
+      }
+      targetCell += '</div>';
+    }
+    return '<div style="display:grid;grid-template-columns:1fr 2fr 1fr 0.8fr 0.8fr 30px;gap:8px;padding:8px 0;border-top:1px solid var(--cream-dark,rgba(127,127,127,.2));align-items:center;">' +
+      kindSel + targetCell +
+      '<input type="text" class="form-input" placeholder="SKU" value="' + esc(line.vendorSku || '') + '" oninput="ProcurementV2.npLine(' + idx + ',\'vendorSku\',this.value)">' +
+      '<input type="number" class="form-input" min="0" step="0.01" value="' + (line.qtyOrdered || 0) + '" oninput="ProcurementV2.npLine(' + idx + ',\'qtyOrdered\',parseFloat(this.value)||0)">' +
+      '<input type="number" class="form-input" min="0" step="0.01" value="' + (line.unitCost || 0) + '" oninput="ProcurementV2.npLine(' + idx + ',\'unitCost\',parseFloat(this.value)||0)">' +
+      '<button class="btn btn-secondary btn-small" style="padding:4px 8px;" onclick="ProcurementV2.npRemoveLine(' + idx + ')" title="Remove">×</button>' +
+    '</div>';
+  }
+  function submitNewPo() {
+    if (!newPo) return false;
+    if (!newPo.vendorId) { if (window.showToast) showToast('Pick a vendor', true); return false; }
+    var lines = [];
+    for (var i = 0; i < newPo.lines.length; i++) {
+      var l = newPo.lines[i];
+      if (!l.targetId || !(l.qtyOrdered > 0)) continue;
+      var descr = null, uom = null;
+      if (l.kind === 'material') {
+        var m = V2.materials[l.targetId];
+        if (!m) { if (window.showToast) showToast('Line ' + (i + 1) + ': material not found', true); return false; }
+        descr = m.name || null; uom = m.unitOfMeasure || null;
+      } else {
+        var p = V2.products[l.targetId];
+        if (!p) { if (window.showToast) showToast('Line ' + (i + 1) + ': product not found', true); return false; }
+        if (Array.isArray(p.variants) && p.variants.length > 0 && !l.variantKey) { if (window.showToast) showToast('Line ' + (i + 1) + ': pick a variant', true); return false; }
+        var vn = '';
+        if (l.variantKey && Array.isArray(p.variants)) { var vm = p.variants.filter(function (v) { return v.id === l.variantKey; })[0]; if (vm) vn = ' — ' + (vm.name || (vm.combo ? Object.values(vm.combo).join(' / ') : l.variantKey)); }
+        descr = (p.name || l.targetId) + vn;
+      }
+      lines.push({ kind: l.kind, targetId: l.targetId, variantKey: l.kind === 'product' ? (l.variantKey || '_default') : null, qtyOrdered: l.qtyOrdered, unitCost: l.unitCost, vendorSku: l.vendorSku || null, unitOfMeasure: uom, descriptionSnapshot: descr });
+    }
+    if (!lines.length) { if (window.showToast) showToast('Add at least one line with a target + qty > 0', true); return false; }
+    if (!window.ProcurementBridge || typeof ProcurementBridge.createPO !== 'function') {
+      if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('procurement'); } catch (e) {} }
+      if (window.showToast) showToast('Procurement engine still loading — try again', true);
+      return false;
+    }
+    window.ProcurementBridge.createPO({
+      vendorId: newPo.vendorId, poNumber: newPo.poNumber, orderDate: newPo.orderDate,
+      expectedDate: newPo.expectedDate || null, notes: newPo.notes, lines: lines
+    }).then(function (poId) {
+      if (window.showToast) showToast('PO created (draft)');
+      newPo = null;
+      U.slideOut.requestCloseForce();
+      return reloadThenOpen(poId);
+    }).catch(function (e) { if (window.showToast) showToast('Failed to create PO: ' + (e && e.message || e), true); });
+    return false;
+  }
+
   window.ProcurementV2 = {
+    createNew: function () { openNewPoForm(); },
+    npField: function (f, v) { if (newPo) newPo[f] = v; },
+    npLine: function (idx, f, v) {
+      if (!newPo || !newPo.lines[idx]) return;
+      newPo.lines[idx][f] = v;
+      if (f === 'kind') { newPo.lines[idx].targetId = ''; newPo.lines[idx].variantKey = ''; npRerender(); }
+      else if (f === 'targetId') { newPo.lines[idx].variantKey = ''; npRerender(); }
+    },
+    npAddLine: function () { if (newPo) { newPo.lines.push(npBlankLine()); npRerender(); } },
+    npRemoveLine: function (idx) { if (newPo) { newPo.lines.splice(idx, 1); if (!newPo.lines.length) newPo.lines.push(npBlankLine()); npRerender(); } },
     printPo: function (id) { var po = V2.byId[id]; if (po) doPrintPo(po); },
     sort: function (key) {
       if (V2.sortKey === key) V2.sortDir = (V2.sortDir === 'asc' ? 'desc' : 'asc');
