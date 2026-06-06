@@ -7143,6 +7143,55 @@
     } catch (e) { return { ok: false, error: (e && e.message) || 'Failed' }; }
   }
 
+  // Clone an existing product into a new DRAFT (v2 create → "Clone existing").
+  // Copies catalog/pricing/options/variants/authored-attributes via an ALLOWLIST
+  // (never spread-everything — avoids dragging identity/sync fields). Excludes:
+  // identity (new pid/slug, status=draft), externalRefs + channelBindings/Ids +
+  // attributes.imported (integration — a clone isn't published), recipeId (cost
+  // basis isn't shared 1:1), stock/inventory (starts fresh), readiness, sale,
+  // priceHistory, sync timestamps. Variants get NEW ids (stay first-class).
+  async function bridgeCloneProduct(sourcePid, newName) {
+    try {
+      var name = String(newName || '').trim();
+      if (!name) return { ok: false, error: 'Name is required' };
+      var src = findProduct(sourcePid) || (await MastDB.get('public/products/' + sourcePid));
+      if (!src) return { ok: false, error: 'Source product not found' };
+      var pid = 'p' + Date.now().toString(36);
+      var slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+      var now = new Date().toISOString();
+      function clone(v) { return (v == null) ? v : JSON.parse(JSON.stringify(v)); }
+      // Variants → new ids; preserve combo/price/sku/name/imageIndex only.
+      var variants = (Array.isArray(src.variants) ? src.variants : []).map(function (v) {
+        var nv = { id: 'v_' + MastDB.newKey('products'), combo: clone(v.combo) || {} };
+        ['priceCents', 'wholesalePriceCents', 'sku', 'name', 'imageIndex'].forEach(function (k) { if (v[k] != null) nv[k] = v[k]; });
+        return nv;
+      });
+      var product = {
+        pid: pid, name: name, slug: slug, status: 'draft',
+        acquisitionType: src.acquisitionType || 'build', version: 1, parentProductId: null,
+        readinessChecklist: { defined: false, costed: false, channeled: false, capacityPlanned: false, listingReady: false },
+        hasPendingRevision: false, pendingChanges: null,
+        availability: 'available', businessLine: src.businessLine || 'production',
+        categories: clone(src.categories) || [], description: src.description || '', shortDescription: src.shortDescription || '',
+        options: clone(src.options) || [], variants: variants,
+        priceCents: (src.priceCents != null ? src.priceCents : null), retailPriceCents: (src.retailPriceCents != null ? src.retailPriceCents : null),
+        wholesalePriceCents: (src.wholesalePriceCents != null ? src.wholesalePriceCents : null), directPriceCents: (src.directPriceCents != null ? src.directPriceCents : null),
+        isWholesale: !!src.isWholesale, priceType: src.priceType || null,
+        weightOz: (src.weightOz != null ? src.weightOz : null), batchSize: (src.batchSize != null ? src.batchSize : null),
+        makerAttributes: clone(src.makerAttributes) || null, defineSpec: clone(src.defineSpec) || {},
+        // Authored attributes carry; imported (channel mirror) does NOT.
+        attributes: (src.attributes && src.attributes.authored) ? { authored: clone(src.attributes.authored) } : {},
+        images: clone(src.images) || [], imageIds: [],
+        materialCost: 0, laborCost: 0, otherCost: 0, totalCost: 0,
+        clonedFrom: sourcePid, createdAt: now, updatedAt: now
+      };
+      await MastDB.set('public/products/' + pid, product);
+      if (window.productsData && Array.isArray(window.productsData)) window.productsData.push(product);
+      MastAdmin.writeAudit('create', 'products', pid);
+      return { ok: true, pid: pid, product: product };
+    } catch (e) { return { ok: false, error: (e && e.message) || 'Failed' }; }
+  }
+
   async function bridgeUnlinkRecipe(pid) {
     try {
       await MastDB.set('public/products/' + pid + '/recipeId', null);
@@ -7191,7 +7240,9 @@
     // Authored product attributes (tags / materials / custom) — live write.
     setAttributes: function (pid, authored) { return bridgeSetAttributes(pid, authored); },
     // Create a new draft product (v2 create path — opens in the standard SO).
-    createDraftProduct: function (opts) { return bridgeCreateDraftProduct(opts); }
+    createDraftProduct: function (opts) { return bridgeCreateDraftProduct(opts); },
+    // Clone an existing product into a new draft (v2 create → "Clone existing").
+    cloneProduct: function (sourcePid, newName) { return bridgeCloneProduct(sourcePid, newName); }
   };
 
 })();

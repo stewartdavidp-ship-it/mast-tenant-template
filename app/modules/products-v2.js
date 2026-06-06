@@ -1634,7 +1634,7 @@
   }
 
   // ── State + data ────────────────────────────────────────────────────
-  var V2 = { rows: [], byId: {}, sortKey: '_title', sortDir: 'asc', filter: 'all', lens: 'general', expanded: {}, editInfo: null, editFulfill: null, editPricing: null, editVarPricing: null, editInv: null, editVarInv: null, editVarInfo: null, editVarFulfill: null, editAttrs: null, editVarAttrs: null, q: '', tagFacets: [] };
+  var V2 = { rows: [], byId: {}, sortKey: '_title', sortDir: 'asc', filter: 'all', lens: 'general', expanded: {}, editInfo: null, editFulfill: null, editPricing: null, editVarPricing: null, editInv: null, editVarInv: null, editVarInfo: null, editVarFulfill: null, editAttrs: null, editVarAttrs: null, q: '', tagFacets: [], _npMode: 'scratch' };
 
   function toRows(map) {
     var out = []; map = map || {};
@@ -2034,55 +2034,101 @@
       '<div id="pv2ListBody">' + renderListBody() + '</div>';
   }
 
+  // Body for the "New product" slide-out wizard (From scratch / Clone existing).
+  function newProductWizardHtml() {
+    var fieldStyle = 'display:block;width:100%;margin-top:4px;padding:8px 10px;border:1px solid var(--cream-dark);border-radius:6px;font-size:0.9rem;background:var(--cream);color:inherit;box-sizing:border-box;';
+    function tabBtn(k, label) {
+      var on = (V2._npMode || 'scratch') === k;
+      return '<button id="pv2NpTab_' + k + '" type="button" onclick="ProductsV2.npSetMode(\'' + k + '\')" style="flex:1;padding:10px;border:0;cursor:pointer;font-size:0.9rem;' +
+        'background:' + (on ? 'color-mix(in srgb,var(--amber) 18%,transparent)' : 'transparent') + ';color:' + (on ? 'var(--text-primary)' : 'var(--warm-gray)') + ';font-weight:' + (on ? '600' : '400') + ';' + (k === 'clone' ? 'border-left:1px solid var(--border);' : '') + '">' + esc(label) + '</button>';
+    }
+    var cats = {}; V2.rows.forEach(function (r) { (r.categories || []).forEach(function (c) { if (c) cats[c] = 1; }); });
+    var dl = Object.keys(cats).sort().map(function (c) { return '<option value="' + esc(c) + '">'; }).join('');
+    var modes = [['build', 'Build', 'Produce in-house — define materials, labor, and costs.'], ['var', 'VAR', 'Source components and add value (assembly, branding).'], ['resell', 'Resell', 'Source from a supplier and apply markup.']];
+    var modeHtml = modes.map(function (m, i) {
+      return '<label style="display:flex;gap:9px;align-items:flex-start;padding:9px 11px;border:1px solid var(--border);border-radius:7px;margin-bottom:6px;cursor:pointer;">' +
+        '<input type="radio" name="pv2NpMode" value="' + m[0] + '"' + (i === 0 ? ' checked' : '') + ' style="margin-top:3px;">' +
+        '<span><span style="font-weight:600;font-size:0.9rem;">' + m[1] + '</span><br><span style="font-size:0.78rem;color:var(--warm-gray);">' + m[2] + '</span></span></label>';
+    }).join('');
+    var srcOpts = V2.rows.slice().sort(function (a, b) { return String(a.name || '').localeCompare(String(b.name || '')); })
+      .map(function (r) { return '<option value="' + esc(r._key) + '">' + esc(r.name || '(unnamed)') + '</option>'; }).join('');
+    return '<div style="padding:2px 2px 8px;">' +
+      '<div style="display:flex;border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-bottom:18px;">' + tabBtn('scratch', 'From scratch') + tabBtn('clone', 'Clone existing') + '</div>' +
+      '<label style="display:block;margin-bottom:14px;font-size:0.85rem;color:var(--warm-gray);">Product name' +
+      '<input id="pv2NpName" type="text" placeholder="e.g. Cobalt Pendant" style="' + fieldStyle + '"></label>' +
+      '<div id="pv2NpScratch"' + ((V2._npMode || 'scratch') === 'scratch' ? '' : ' hidden') + '>' +
+      '<div style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:6px;">Acquisition mode</div>' + modeHtml +
+      '<label style="display:block;margin:8px 0 4px;font-size:0.85rem;color:var(--warm-gray);">Category' +
+      '<input id="pv2NpCat" list="pv2NpCats" placeholder="e.g. pendants" style="' + fieldStyle + '"><datalist id="pv2NpCats">' + dl + '</datalist></label>' +
+      '</div>' +
+      '<div id="pv2NpClone"' + ((V2._npMode || 'scratch') === 'clone' ? '' : ' hidden') + '>' +
+      '<label style="display:block;margin-bottom:6px;font-size:0.85rem;color:var(--warm-gray);">Product to clone' +
+      '<select id="pv2NpSource" style="' + fieldStyle + '">' + srcOpts + '</select></label>' +
+      '<div class="pv2-pnote">Copies catalog, options &amp; variants, pricing, and tags. The recipe, channel listings, and stock are <strong>not</strong> copied — the clone starts as an unpublished draft.</div>' +
+      '</div></div>';
+  }
+
   window.ProductsV2 = {
     setFilter: function (s) { V2.filter = s; render(); },
     // ── New product (v2 create) — a small standard dialog → creates a draft and
     // opens it in the v2 SO (no legacy builder/define bounce). ──
+    // "+ New product" → a standard slide-out wizard: choose From scratch / Clone
+    // existing, collect name (+ source/mode/category), then drop into the new
+    // product's v2 SO with blank or cloned data.
     newProduct: function () {
       if (!canEditProduct()) { MastAdmin.showToast('You don’t have permission to create products', true); return; }
-      var cats = {}; V2.rows.forEach(function (r) { (r.categories || []).forEach(function (c) { if (c) cats[c] = 1; }); });
-      var dl = Object.keys(cats).sort().map(function (c) { return '<option value="' + esc(c) + '">'; }).join('');
-      var modes = [['build', 'Build', 'Produce in-house — define materials, labor, and costs.'], ['var', 'VAR', 'Source components and add value (assembly, branding).'], ['resell', 'Resell', 'Source from a supplier and apply markup.']];
-      var fieldStyle = 'display:block;width:100%;margin-top:4px;padding:8px 10px;border:1px solid var(--cream-dark);border-radius:6px;font-size:0.9rem;background:var(--cream);color:inherit;box-sizing:border-box;';
-      var modeHtml = modes.map(function (m, i) {
-        return '<label style="display:flex;gap:9px;align-items:flex-start;padding:9px 11px;border:1px solid var(--border);border-radius:7px;margin-bottom:6px;cursor:pointer;">' +
-          '<input type="radio" name="pv2NpMode" value="' + m[0] + '"' + (i === 0 ? ' checked' : '') + ' style="margin-top:3px;">' +
-          '<span><span style="font-weight:600;font-size:0.9rem;">' + m[1] + '</span><br><span style="font-size:0.78rem;color:var(--warm-gray);">' + m[2] + '</span></span></label>';
-      }).join('');
-      var html = '<div style="max-width:480px;padding:4px 4px 8px;">' +
-        '<h3 style="margin:0 0 16px;font-size:1.15rem;">New product</h3>' +
-        '<label style="display:block;margin-bottom:14px;font-size:0.85rem;color:var(--warm-gray);">Name' +
-        '<input id="pv2NpName" type="text" placeholder="e.g. Cobalt Pendant" style="' + fieldStyle + '"></label>' +
-        '<div style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:6px;">Acquisition mode</div>' + modeHtml +
-        '<label style="display:block;margin:8px 0 18px;font-size:0.85rem;color:var(--warm-gray);">Category' +
-        '<input id="pv2NpCat" list="pv2NpCats" placeholder="e.g. pendants" style="' + fieldStyle + '"><datalist id="pv2NpCats">' + dl + '</datalist></label>' +
-        '<div style="display:flex;gap:8px;justify-content:flex-end;">' +
-        '<button class="btn btn-secondary btn-small" onclick="ProductsV2.cancelNewProduct()">Cancel</button>' +
-        '<button class="btn btn-primary btn-small" onclick="ProductsV2.submitNewProduct()">Create product</button>' +
-        '</div></div>';
-      if (window.openModal) window.openModal(html); else { MastAdmin.showToast('Cannot open dialog', true); return; }
-      setTimeout(function () { var nm = document.getElementById('pv2NpName'); if (nm) nm.focus(); }, 0);
+      V2._npMode = 'scratch';
+      if (!window.MastUI || !MastUI.slideOut) { MastAdmin.showToast('Cannot open dialog', true); return; }
+      MastUI.slideOut.open({
+        title: 'New product', size: 'md', mode: 'read', deepLink: false,
+        actions: [{ label: 'Cancel', onClickFnName: 'ProductsV2.cancelNewProduct' }, { label: 'Create product', primary: true, onClickFnName: 'ProductsV2.submitNewProduct' }],
+        render: function () { return newProductWizardHtml(); }
+      });
+      setTimeout(function () { var nm = document.getElementById('pv2NpName'); if (nm) nm.focus(); }, 60);
     },
-    cancelNewProduct: function () { if (window.closeModal) window.closeModal(); },
+    npSetMode: function (m) {
+      V2._npMode = (m === 'clone') ? 'clone' : 'scratch';
+      var sc = document.getElementById('pv2NpScratch'), cl = document.getElementById('pv2NpClone');
+      if (sc) sc.hidden = (V2._npMode !== 'scratch');
+      if (cl) cl.hidden = (V2._npMode !== 'clone');
+      ['scratch', 'clone'].forEach(function (k) {
+        var b = document.getElementById('pv2NpTab_' + k); if (!b) return;
+        var on = (V2._npMode === k);
+        b.style.background = on ? 'color-mix(in srgb,var(--amber) 18%,transparent)' : 'transparent';
+        b.style.color = on ? 'var(--text-primary)' : 'var(--warm-gray)';
+        b.style.fontWeight = on ? '600' : '400';
+      });
+    },
+    cancelNewProduct: function () { if (window.MastUI && MastUI.slideOut) MastUI.slideOut.requestClose(); },
     submitNewProduct: function () {
       var nameEl = document.getElementById('pv2NpName');
       var name = nameEl ? nameEl.value.trim() : '';
       if (!name) { MastAdmin.showToast('Name is required', true); if (nameEl) nameEl.focus(); return; }
-      var modeR = document.querySelector('input[name="pv2NpMode"]:checked');
-      var mode = modeR ? modeR.value : 'build';
-      var catEl = document.getElementById('pv2NpCat');
-      var category = catEl ? catEl.value.trim() : '';
-      ensureMaker(function () {
-        Promise.resolve(window.MakerProductBridge.createDraftProduct({ name: name, acquisitionType: mode, category: category })).then(function (res) {
-          if (!res || !res.ok) { MastAdmin.showToast('Failed: ' + ((res && res.error) || 'unknown'), true); return; }
-          if (window.closeModal) window.closeModal();
-          var rec = stamp(Object.assign({}, res.product), res.pid);
-          V2.rows.push(rec); V2.byId[rec._key] = rec;
-          render();
-          MastEntity.openRecord('products-v2', rec, 'read');
-          MastAdmin.showToast('Draft created — finish setting it up');
-        }, function (e) { console.error('[products-v2] createDraftProduct', e); MastAdmin.showToast('Failed', true); });
-      });
+      function opened(res, verb) {
+        if (!res || !res.ok) { MastAdmin.showToast('Failed: ' + ((res && res.error) || 'unknown'), true); return; }
+        if (window.MastUI && MastUI.slideOut) MastUI.slideOut.requestClose();
+        var rec = stamp(Object.assign({}, res.product), res.pid);
+        V2.rows.push(rec); V2.byId[rec._key] = rec;
+        render();
+        setTimeout(function () { MastEntity.openRecord('products-v2', rec, 'read'); }, 80);
+        MastAdmin.showToast(verb + ' — finish setting it up');
+      }
+      if (V2._npMode === 'clone') {
+        var srcEl = document.getElementById('pv2NpSource');
+        var srcPid = srcEl ? srcEl.value : '';
+        if (!srcPid) { MastAdmin.showToast('Pick a product to clone', true); return; }
+        ensureMaker(function () {
+          Promise.resolve(window.MakerProductBridge.cloneProduct(srcPid, name)).then(function (res) { opened(res, 'Cloned'); }, function (e) { console.error('[products-v2] cloneProduct', e); MastAdmin.showToast('Failed', true); });
+        });
+      } else {
+        var modeR = document.querySelector('input[name="pv2NpMode"]:checked');
+        var mode = modeR ? modeR.value : 'build';
+        var catEl = document.getElementById('pv2NpCat');
+        var category = catEl ? catEl.value.trim() : '';
+        ensureMaker(function () {
+          Promise.resolve(window.MakerProductBridge.createDraftProduct({ name: name, acquisitionType: mode, category: category })).then(function (res) { opened(res, 'Draft created'); }, function (e) { console.error('[products-v2] createDraftProduct', e); MastAdmin.showToast('Failed', true); });
+        });
+      }
     },
     // Tag facets — toggle a tag in/out of the active narrowing set (AND), then
     // re-render (chip states + counts + list all change).
