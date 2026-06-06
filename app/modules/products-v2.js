@@ -682,9 +682,12 @@
     var pid = p._key || p.pid, vid = v.id;
     if (!V2._channelsCache) { ensureChannels(pid, function () { rerenderVariantChannelsPane(pid, vid); }); return UU.card('Channels · this variant', '<div style="color:var(--warm-gray);font-size:0.9rem;">Loading channels…</div>'); }
     var channels = activeChannels();
+    // Link to the product's Channels tab — binding/unbinding a channel is a
+    // product-level action, so the variant pane points there for the actual setup.
+    var goToProduct = '<div style="margin-top:12px;"><button class="btn btn-secondary btn-small" onclick="ProductsV2.openToTab(\'' + esc(pid) + '\',\'channels\')">Open product Channels →</button></div>';
     if (!channels.length) return UU.card('Channels · this variant', '<div style="color:var(--warm-gray);font-size:0.9rem;">No channels connected. Connect one in the Channels module first.</div>');
     var bound = channels.filter(function (c) { return !!bindingFor(p, c.id); });
-    if (!bound.length) return UU.card('Channels · this variant', '<div style="color:var(--warm-gray);font-size:0.9rem;">This product isn’t selling on any channel yet. Set channels on the product’s Channels tab — this variant inherits them.</div>');
+    if (!bound.length) return UU.card('Channels · this variant', '<div style="color:var(--warm-gray);font-size:0.9rem;">This product isn’t selling on any channel yet. Set channels on the product’s Channels tab — this variant inherits them.</div>' + goToProduct);
     var canEd = canEditProduct();
     var rows = bound.map(function (c) {
       var ex = variantExcluded(p, c.id, vid);
@@ -694,7 +697,7 @@
         '<span>' + esc(c.name) + (c.platform ? ' <span style="color:var(--warm-gray);font-size:0.78rem;">· ' + esc(c.platform) + '</span>' : '') + '</span>' +
         '<span style="display:flex;align-items:center;gap:8px;">' + status + toggle + '</span></div>';
     }).join('');
-    return UU.card('Channels · this variant', rows) +
+    return UU.card('Channels · this variant', rows + goToProduct) +
       '<div class="pv2-pnote">This variant inherits the product’s channels; exclude it from any one (e.g. sell the gold one direct-only while the rest go everywhere). Add or remove channels for the whole product on the product’s Channels tab.</div>';
   }
   function rerenderVariantChannelsPane(pid, vid) {
