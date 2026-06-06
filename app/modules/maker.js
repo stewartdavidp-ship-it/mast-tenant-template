@@ -6831,6 +6831,23 @@
   // Write fields onto a single variant (fresh-read; variant-id-keyed). patch
   // values of null/undefined DELETE the key (e.g. clear a price override so the
   // variant inherits the Default). Written live, like variant image binding.
+  function _comboSig(c) { return Object.keys(c || {}).sort().map(function (k) { return k + '=' + c[k]; }).join('|'); }
+  async function bridgeAddVariant(pid, combo) {
+    try {
+      if (!combo || !Object.keys(combo).length) return { ok: false, error: 'No options chosen' };
+      var variants = await MastDB.get('public/products/' + pid + '/variants');
+      variants = Array.isArray(variants) ? variants.slice() : [];
+      var sig = _comboSig(combo);
+      for (var i = 0; i < variants.length; i++) { if (variants[i] && _comboSig(variants[i].combo) === sig) return { ok: false, error: 'That combination already exists' }; }
+      var vid = 'v_' + MastDB.newKey('products');
+      variants.push({ id: vid, combo: combo });
+      await MastDB.set('public/products/' + pid + '/variants', variants);
+      await MastDB.set('public/products/' + pid + '/updatedAt', new Date().toISOString());
+      var fp = findProduct(pid); if (fp) fp.variants = variants;
+      MastAdmin.writeAudit('update', 'products', pid);
+      return { ok: true, variants: variants, variantId: vid };
+    } catch (e) { return { ok: false, error: (e && e.message) || 'Failed' }; }
+  }
   async function bridgeSetVariantFields(pid, variantId, patch) {
     try {
       var variants = await MastDB.get('public/products/' + pid + '/variants');
@@ -7013,6 +7030,9 @@
     setVariantImageIndex: function (pid, variantId, imageIndex) { return bridgeSetVariantImageIndex(pid, variantId, imageIndex); },
     // Write arbitrary fields onto a variant (price override, SKU, …); null clears.
     setVariantFields: function (pid, variantId, patch) { return bridgeSetVariantFields(pid, variantId, patch); },
+    // Append a new variant (id = 'v_'+pushkey, combo = {optionKey: choice}) to a
+    // product; rejects a duplicate combination. Written live (like every variant op).
+    addVariant: function (pid, combo) { return bridgeAddVariant(pid, combo); },
     // Set on-hand stock (separate inventory collection + stockInfo resync).
     setStock: function (pid, variantKey, onHand) { return bridgeSetStock(pid, variantKey, onHand); },
     setStockCounts: function (pid, variantKey, counts) { return bridgeSetStockCounts(pid, variantKey, counts); },
