@@ -1461,8 +1461,13 @@
         'color:' + (on ? 'var(--text-primary)' : 'var(--warm-gray)') + ';border-radius:999px;padding:6px 13px;font-size:0.85rem;cursor:pointer;margin-right:8px;">' +
         label + ' <span style="color:var(--warm-gray);">' + (counts[s] || 0) + '</span></button>';
     }).join('');
-    var search = '<input id="pv2Search" type="text" value="' + esc(V2.q || '') + '" oninput="ProductsV2.setSearch(this.value)" placeholder="Search products…" ' +
-      'style="margin-left:auto;width:230px;max-width:100%;padding:7px 11px;border:1px solid var(--border);border-radius:999px;font-size:0.9rem;background:var(--cream,transparent);color:inherit;box-sizing:border-box;">';
+    var hasQ = !!(V2.q || '').trim();
+    var search = '<div style="margin-left:auto;position:relative;width:230px;max-width:100%;">' +
+      '<input id="pv2Search" type="text" value="' + esc(V2.q || '') + '" oninput="ProductsV2.setSearch(this.value)" placeholder="Search products…" ' +
+      'style="width:100%;padding:7px 30px 7px 11px;border:1px solid var(--border);border-radius:999px;font-size:0.9rem;background:var(--cream,transparent);color:inherit;box-sizing:border-box;">' +
+      '<button id="pv2SearchClear" onclick="ProductsV2.clearSearch()" aria-label="Clear search" title="Clear" ' +
+      'style="position:absolute;right:6px;top:50%;transform:translateY(-50%);display:' + (hasQ ? 'flex' : 'none') + ';align-items:center;justify-content:center;width:20px;height:20px;border:0;border-radius:50%;background:color-mix(in srgb,var(--text-primary) 12%,transparent);color:var(--warm-gray);font-size:0.9rem;line-height:1;cursor:pointer;">×</button>' +
+      '</div>';
     // Lens (facet) selector — same product list, different columns + click-through.
     var curLens = V2.lens || 'general';
     var lensPills = [['general', 'General'], ['inventory', 'Inventory'], ['sales', 'Sales'], ['forecast', 'Forecast']].map(function (l) {
@@ -1500,8 +1505,17 @@
     // body so the input keeps focus (no full re-render mid-keystroke).
     setSearch: function (v) {
       V2.q = v;
+      var x = document.getElementById('pv2SearchClear'); if (x) x.style.display = (v && v.trim()) ? 'flex' : 'none';
       var el = document.getElementById('pv2ListBody');
       if (el) el.innerHTML = renderListBody(); else render();
+    },
+    // One-click clear of the search box (vs backspacing the whole entry).
+    clearSearch: function () {
+      V2.q = '';
+      var inp = document.getElementById('pv2Search'); if (inp) inp.value = '';
+      var x = document.getElementById('pv2SearchClear'); if (x) x.style.display = 'none';
+      var el = document.getElementById('pv2ListBody'); if (el) el.innerHTML = renderListBody(); else render();
+      if (inp) inp.focus();
     },
     // Row click: a product WITH variants expands (pick the Default or a variant);
     // a variant-less product opens directly. (The toggle column also expands.)
