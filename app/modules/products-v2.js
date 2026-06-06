@@ -396,14 +396,28 @@
       { k: 'Case pack', v: (p.casePack != null ? String(p.casePack) : '—') }
     ]) + perVarNote, { headerRight: headerRight });
   }
+  // The five stock count buckets (Available is always derived = onHand − committed − held).
+  var STOCK_FIELDS = [['onHand', 'On hand'], ['committed', 'Committed'], ['held', 'Held'], ['damaged', 'Damaged'], ['incoming', 'Incoming']];
+  function stockCountInputs(idPrefix, src) {
+    src = src || {};
+    return STOCK_FIELDS.map(function (f) {
+      var cur = (src[f[0]] != null ? src[f[0]] : '');
+      return '<label style="display:inline-block;margin:0 14px 12px 0;font-size:0.85rem;color:var(--warm-gray);">' + f[1] +
+        '<input id="' + idPrefix + f[0] + '" type="number" min="0" step="1" value="' + esc(cur === '' ? '' : String(cur)) +
+        '" style="display:block;width:120px;margin-top:4px;padding:7px 9px;border:1px solid var(--cream-dark);border-radius:6px;font-size:0.9rem;background:var(--cream);color:inherit;box-sizing:border-box;"></label>';
+    }).join('');
+  }
+  function readStockCounts(idPrefix) {
+    var out = {};
+    STOCK_FIELDS.forEach(function (f) { var el = document.getElementById(idPrefix + f[0]); if (el) { var v = el.value.trim(); out[f[0]] = (v === '' ? 0 : Number(v)); } });
+    return out;
+  }
   function inventoryEditForm(p) {
     var pid = p._key || p.pid;
     var si = p.stockInfo || {};
-    var cur = (si.totalOnHand != null ? si.totalOnHand : '');
-    var body = '<label style="display:block;margin-bottom:8px;font-size:0.85rem;color:var(--warm-gray);">On hand' +
-      '<input id="pv2InvOnHand" type="number" min="0" step="1" value="' + esc(cur === '' ? '' : String(cur)) +
-      '" style="display:block;width:140px;margin-top:4px;padding:7px 9px;border:1px solid var(--cream-dark);border-radius:6px;font-size:0.9rem;background:var(--cream);color:inherit;box-sizing:border-box;"></label>' +
-      '<div class="pv2-pnote">Units physically in stock right now. (Stock type & low-stock threshold are set in the legacy Inventory tab for now.)</div>' +
+    var src = { onHand: si.totalOnHand, committed: si.totalCommitted, held: si.totalHeld, damaged: si.totalDamaged, incoming: si.totalIncoming };
+    var body = '<div style="display:flex;flex-wrap:wrap;">' + stockCountInputs('pv2Inv_', src) + '</div>' +
+      '<div class="pv2-pnote">All counts for the stocked unit. <strong>Available</strong> is derived (on hand − committed − held). Stock type &amp; low-stock threshold are set on the Fulfillment tab.</div>' +
       '<div style="display:flex;gap:8px;margin-top:8px;">' +
       '<button class="btn btn-primary btn-small" onclick="ProductsV2.saveInventory(\'' + esc(pid) + '\')">Save</button>' +
       '<button class="btn btn-secondary btn-small" onclick="ProductsV2.cancelInventory(\'' + esc(pid) + '\')">Cancel</button>' +
@@ -975,18 +989,17 @@
     return UU.card('Inventory · this variant', UU.kv([
       { k: 'On hand', v: (vsi.onHand != null ? String(vsi.onHand) : '—') },
       { k: 'Available', v: (vsi.available != null ? String(vsi.available) : '—') },
-      { k: 'Committed', v: (vsi.committed != null ? String(vsi.committed) : '—') }
+      { k: 'Committed', v: (vsi.committed != null ? String(vsi.committed) : '—') },
+      { k: 'Held', v: (vsi.held != null ? String(vsi.held) : '—') },
+      { k: 'Damaged', v: (vsi.damaged != null ? String(vsi.damaged) : '—') },
+      { k: 'Incoming', v: (vsi.incoming != null ? String(vsi.incoming) : '—') }
     ]), { headerRight: editBtn }) +
       '<div class="pv2-pnote">Each variant tracks its <strong>own</strong> stock — never shared with or inherited from the Default.</div>';
   }
   function variantInventoryEditForm(UU, p, v) {
     var pid = p._key || p.pid, vid = v.id;
-    var vsi = variantStockInfo(p, v);
-    var cur = (vsi.onHand != null ? vsi.onHand : '');
-    var body = '<label style="display:block;margin-bottom:8px;font-size:0.85rem;color:var(--warm-gray);">On hand' +
-      '<input id="pv2VarInvOnHand" type="number" min="0" step="1" value="' + esc(cur === '' ? '' : String(cur)) +
-      '" style="display:block;width:140px;margin-top:4px;padding:7px 9px;border:1px solid var(--cream-dark);border-radius:6px;font-size:0.9rem;background:var(--cream);color:inherit;box-sizing:border-box;"></label>' +
-      '<div class="pv2-pnote">Units of this variant physically in stock.</div>' +
+    var body = '<div style="display:flex;flex-wrap:wrap;">' + stockCountInputs('pv2VarInv_', variantStockInfo(p, v)) + '</div>' +
+      '<div class="pv2-pnote">All stock counts for this variant. <strong>Available</strong> is derived (on hand − committed − held).</div>' +
       '<div style="display:flex;gap:8px;margin-top:8px;">' +
       '<button class="btn btn-primary btn-small" onclick="ProductsV2.saveVariantInventory(\'' + esc(pid) + '\',\'' + esc(vid) + '\')">Save</button>' +
       '<button class="btn btn-secondary btn-small" onclick="ProductsV2.cancelVariantInventory(\'' + esc(pid) + '\',\'' + esc(vid) + '\')">Cancel</button>' +
@@ -1299,7 +1312,7 @@
     }
     function emptyCells() { var n = lens === 'general' ? 3 : 4, s = ''; for (var i = 0; i < n; i++) s += cell(''); return s; }
     var defClick = lens === 'general' ? 'ProductsV2.open' : (lens === 'inventory' ? 'ProductsV2.openInventory' : (lens === 'sales' ? 'ProductsV2.openSales' : 'ProductsV2.openForecast'));
-    var varClick = lens === 'inventory' ? 'ProductsV2.openVariantInventory' : 'ProductsV2.openVariant';
+    var varClick = lens === 'inventory' ? 'ProductsV2.openVarInvEdit' : 'ProductsV2.openVariant';
     var out = row(defClick, pid, '<span style="color:var(--info);font-weight:600;">◆ Default</span> <span style="color:var(--warm-gray);">· base for all variants</span>', dataCells(null));
     realVariants(p).forEach(function (v) {
       var ov = variantOverridden(p, v);
@@ -1490,14 +1503,27 @@
     setLens: function (l) { V2.lens = l; render(); },
     // Lens row click: open the product SO focused on the matching detail tab.
     openToTab: function (id, pane) { var rec = V2.byId[id]; if (!rec) return; ensureMaker(function () { MastEntity.openRecord('products-v2', rec, 'read'); restorePaneWhenReady(pane); }); },
-    // Lens parent-row click: has-variants → expand; else open the SO on the lens tab.
+    // Lens parent-row click: has-variants → expand; else open the SO on the lens
+    // tab — and for Inventory, go straight into edit mode (one click to change a
+    // count, no separate "Set stock" step).
     lensRowClick: function (id) {
       var p = V2.byId[id];
-      var pane = V2.lens === 'inventory' ? 'inventory' : (V2.lens === 'sales' ? 'sales' : 'forecast');
-      if (p && variantCount(p) > 0) ProductsV2.toggle(id); else ProductsV2.openToTab(id, pane);
+      if (p && variantCount(p) > 0) { ProductsV2.toggle(id); return; }
+      if (V2.lens === 'inventory') ProductsV2.openInvEdit(id);
+      else ProductsV2.openToTab(id, V2.lens === 'sales' ? 'sales' : 'forecast');
     },
     // Variant row in the Inventory lens → variant SO on its Inventory tab.
     openVariantInventory: function (key) { var rec = buildVariantRecord(key); if (rec) ensureMaker(function () { MastEntity.openRecord('product-variant-v2', rec, 'read'); restorePaneWhenReady('v-inventory'); }); },
+    // Open straight into inventory EDIT mode (Inventory lens shortcut).
+    openInvEdit: function (id) {
+      var rec = V2.byId[id]; if (!rec) return;
+      ensureMaker(function () { MastEntity.openRecord('products-v2', rec, 'read'); setTimeout(function () { ProductsV2.editInventory(id); restorePaneWhenReady('inventory'); }, 0); });
+    },
+    openVarInvEdit: function (key) {
+      var parts = String(key).split('::'); var pid = parts[0], vid = parts[1];
+      var rec = buildVariantRecord(key); if (!rec) return;
+      ensureMaker(function () { MastEntity.openRecord('product-variant-v2', rec, 'read'); setTimeout(function () { ProductsV2.editVariantInventory(pid, vid); restorePaneWhenReady('v-inventory'); }, 0); });
+    },
     openInventory: function (id) { ProductsV2.openToTab(id, 'inventory'); },
     openSales: function (id) { ProductsV2.openToTab(id, 'sales'); },
     openForecast: function (id) { ProductsV2.openToTab(id, 'forecast'); },
@@ -1628,11 +1654,11 @@
     editInventory: function (pid) { V2.editInv = pid; rerenderInventoryPane(pid); },
     cancelInventory: function (pid) { V2.editInv = null; rerenderInventoryPane(pid); },
     saveInventory: function (pid) {
-      var el = document.getElementById('pv2InvOnHand'); var s = el ? el.value.trim() : '';
-      if (s === '' || !isFinite(Number(s)) || Number(s) < 0) { MastAdmin.showToast('Enter a valid on-hand count', true); return; }
-      var n = Math.round(Number(s));
+      var counts = readStockCounts('pv2Inv_');
+      var bad = Object.keys(counts).some(function (k) { return !isFinite(counts[k]) || counts[k] < 0; });
+      if (bad) { MastAdmin.showToast('Enter valid counts (0 or more)', true); return; }
       withProductBridge(function () {
-        Promise.resolve(window.MakerProductBridge.setStock(pid, '_default', n)).then(function (res) {
+        Promise.resolve(window.MakerProductBridge.setStockCounts(pid, '_default', counts)).then(function (res) {
           if (!res || !res.ok) { MastAdmin.showToast('Failed: ' + ((res && res.error) || 'unknown'), true); return; }
           var rec = V2.byId[pid]; if (rec && res.stockInfo) rec.stockInfo = res.stockInfo;
           V2.editInv = null; rerenderInventoryPane(pid);
@@ -1643,11 +1669,11 @@
     editVariantInventory: function (pid, vid) { V2.editVarInv = pid + '::' + vid; rerenderVariantInventoryPane(pid, vid); },
     cancelVariantInventory: function (pid, vid) { V2.editVarInv = null; rerenderVariantInventoryPane(pid, vid); },
     saveVariantInventory: function (pid, vid) {
-      var el = document.getElementById('pv2VarInvOnHand'); var s = el ? el.value.trim() : '';
-      if (s === '' || !isFinite(Number(s)) || Number(s) < 0) { MastAdmin.showToast('Enter a valid on-hand count', true); return; }
-      var n = Math.round(Number(s));
+      var counts = readStockCounts('pv2VarInv_');
+      var bad = Object.keys(counts).some(function (k) { return !isFinite(counts[k]) || counts[k] < 0; });
+      if (bad) { MastAdmin.showToast('Enter valid counts (0 or more)', true); return; }
       withProductBridge(function () {
-        Promise.resolve(window.MakerProductBridge.setStock(pid, vid, n)).then(function (res) {
+        Promise.resolve(window.MakerProductBridge.setStockCounts(pid, vid, counts)).then(function (res) {
           if (!res || !res.ok) { MastAdmin.showToast('Failed: ' + ((res && res.error) || 'unknown'), true); return; }
           var rec = V2.byId[pid]; if (rec && res.stockInfo) rec.stockInfo = res.stockInfo;
           V2.editVarInv = null; rerenderVariantInventoryPane(pid, vid);
