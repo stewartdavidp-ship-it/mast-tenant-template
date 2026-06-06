@@ -857,8 +857,11 @@
           { k: 'Retail', v: N.money(rc.retailPrice) || '—' },
           { k: 'Retail margin', v: (rc.retailMarginPct != null ? rc.retailMarginPct + '%' : '—') }
         ]);
-        return UU.stickyHead(tiles, '') + '<div>' + UU.card('Bill of materials', bom) + UU.card('Cost', cost) + UU.card('Pricing', pr) +
-          '<div class="pv2-pnote">Drilled from the product — Back returns to the Default. Recipe editing lands in P3.</div></div>';
+        var editBtn = rc.productId
+          ? '<div style="margin:0 0 12px;"><button class="btn btn-secondary btn-small" onclick="ProductsV2.recipeEditInBuilder(\'' + esc(rc.recipeId) + '\',\'' + esc(rc.productId) + '\')">Edit in builder ↗</button></div>'
+          : '';
+        return UU.stickyHead(tiles, '') + '<div>' + editBtn + UU.card('Bill of materials', bom) + UU.card('Cost', cost) + UU.card('Pricing', pr) +
+          '<div class="pv2-pnote">Drilled from the product — Back returns to the Default. “Edit in builder” opens the full recipe builder (Back returns to the product).</div></div>';
       }
     }
   });
