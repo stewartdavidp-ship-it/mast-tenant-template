@@ -71,11 +71,14 @@
       Promise.resolve(MastDB.get('admin/productLots')),
       Promise.resolve(MastDB.get('admin/vendors')),
       Promise.resolve(MastDB.get('admin/materials')),
-      Promise.resolve(MastDB.get('admin/products')),
+      Promise.resolve(MastDB.products && MastDB.products.list ? MastDB.products.list() : MastDB.get('public/products')),
       Promise.resolve(MastDB.get('admin/purchaseReceipts')),
       Promise.resolve(MastDB.get('admin/purchaseOrders'))
     ]).then(function (res) {
-      var mLots = res[0] || {}, pLots = res[1] || {}, vendors = res[2] || {}, materials = res[3] || {}, products = res[4] || {}, receipts = res[5] || {}, pos = res[6] || {};
+      // Products live at public/products; list() returns array OR keyed — normalize for name lookup.
+      var rawProducts = res[4]; var products = {};
+      (Array.isArray(rawProducts) ? rawProducts : Object.values(rawProducts || {})).forEach(function (p) { if (p) { var id = p.pid || p._key || p.id; if (id) products[id] = p; } });
+      var mLots = res[0] || {}, pLots = res[1] || {}, vendors = res[2] || {}, materials = res[3] || {}, receipts = res[5] || {}, pos = res[6] || {};
       var out = [];
       function add(lot, kind) {
         if (!lot || typeof lot !== 'object') return;

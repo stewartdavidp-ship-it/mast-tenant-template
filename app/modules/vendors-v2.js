@@ -38,6 +38,11 @@
   // loaded unconditionally at boot, so self-registering here is always safe.
 
   var U = window.MastUI, N = U.Num, esc = U._esc;
+  // Normalize a products list() result (array OR keyed) to { pid: product }.
+  function pidMap(r) { var o = {}; (Array.isArray(r) ? r : Object.values(r || {})).forEach(function (p) { if (p) { var id = p.pid || p._key || p.id; if (id) o[id] = p; } }); return o; }
+  // A product is suppliable (can be on a PO / vendor link) when it's bought
+  // (resell) or value-add (var) — not built in-house from materials.
+  function procurable(p) { return p && p.status !== 'archived' && p.acquisitionType !== 'build'; }
 
   // `active` is the only lifecycle signal (boolean). Surface it as a two-state
   // status attribute (mirrors the legacy "archived" pill on the detail header).
@@ -275,10 +280,11 @@
       Promise.resolve(MastDB.get('admin/vendors')).catch(function () { return null; }),
       Promise.resolve(MastDB.get('admin/productSuppliers')).catch(function () { return null; }),
       Promise.resolve(MastDB.get('admin/materials')).catch(function () { return null; }),
-      Promise.resolve(MastDB.get('admin/products')).catch(function () { return null; })
+      Promise.resolve((MastDB.products && MastDB.products.list ? MastDB.products.list() : MastDB.get('public/products'))).catch(function () { return null; })
     ]).then(function (res) {
       var vv = res[0] || {}, pv = res[1] || {}, mv = res[2] || {};
-      V2.products = res[3] || {};
+      // Products live at public/products; list() returns array OR keyed — normalize.
+      V2.products = pidMap(res[3]);
       var out = [];
       Object.keys(vv).forEach(function (k) {
         var v = vv[k];
@@ -364,7 +370,7 @@
     var d = supplyDraft;
     var items = (d.targetKind === 'material')
       ? Object.keys(V2.materials).map(function (k) { return [k, V2.materials[k]]; }).filter(function (e) { return e[1] && e[1].status !== 'archived'; })
-      : Object.keys(V2.products).map(function (k) { return [k, V2.products[k]]; }).filter(function (e) { return e[1] && e[1].status !== 'archived'; });
+      : Object.keys(V2.products).map(function (k) { return [k, V2.products[k]]; }).filter(function (e) { return procurable(e[1]); });
     items.sort(function (a, b) { return String(a[1].name || '').localeCompare(String(b[1].name || '')); });
     var itemOpts = '<option value="">— item —</option>' + items.map(function (e) { return '<option value="' + esc(e[0]) + '"' + (d.targetId === e[0] ? ' selected' : '') + '>' + esc(e[1].name || e[0]) + '</option>'; }).join('');
     function fg(label, inner) { return '<label style="font-size:0.78rem;color:var(--warm-gray);display:block;margin-bottom:8px;">' + label + inner + '</label>'; }

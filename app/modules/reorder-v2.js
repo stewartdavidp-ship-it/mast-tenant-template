@@ -56,6 +56,7 @@
     });
     Object.keys(R.products).forEach(function (id) {
       var p = R.products[id]; if (!p || p.status === 'archived') return;
+      if (p.acquisitionType === 'build') return;   // built in-house — replenished by building, not a PO
       if (Array.isArray(p.variants) && p.variants.length > 0) return;   // variant reorder deferred
       var si = p.stockInfo || {}; var st = si.stockType || '';
       if (!st || /order|build/.test(st) || si.totalAvailable == null) return;  // only tracked stock
@@ -79,11 +80,14 @@
   function load() {
     return Promise.all([
       Promise.resolve(MastDB.get('admin/materials')),
-      Promise.resolve(MastDB.get('admin/products')),
+      Promise.resolve(MastDB.products && MastDB.products.list ? MastDB.products.list() : MastDB.get('public/products')),
       Promise.resolve(MastDB.get('admin/productSuppliers')),
       Promise.resolve(MastDB.get('admin/vendors'))
     ]).then(function (res) {
-      R.materials = res[0] || {}; R.products = res[1] || {}; R.suppliers = res[2] || {}; R.vendors = res[3] || {};
+      // Products live at public/products; list() returns array OR keyed — normalize to { pid: product }.
+      R.materials = res[0] || {};
+      R.products = (function (r) { var o = {}; (Array.isArray(r) ? r : Object.values(r || {})).forEach(function (p) { if (p) { var id = p.pid || p._key || p.id; if (id) o[id] = p; } }); return o; })(res[1]);
+      R.suppliers = res[2] || {}; R.vendors = res[3] || {};
       R.suggestions = computeSuggestions(); R.loaded = true; render();
     }).catch(function (e) { console.error('[reorder-v2] load', e); render(); });
   }

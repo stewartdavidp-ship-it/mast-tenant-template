@@ -37,6 +37,11 @@
   // loaded unconditionally at boot, so self-registering here is always safe.
 
   var U = window.MastUI, N = U.Num, esc = U._esc;
+  // Normalize a products list() result (array OR keyed object) to { pid: product }.
+  function pidMap(r) { var o = {}; (Array.isArray(r) ? r : Object.values(r || {})).forEach(function (p) { if (p) { var id = p.pid || p._key || p.id; if (id) o[id] = p; } }); return o; }
+  // A product is procurable on a PO when it's bought (resell) or value-add (var)
+  // — NOT built in-house from materials (those replenish via build, not a PO).
+  function procurable(p) { return p && p.status !== 'archived' && p.acquisitionType !== 'build'; }
   var STATUS_TONE = { draft: 'neutral', submitted: 'info', partially_received: 'amber', received: 'success', closed: 'neutral', cancelled: 'danger' };
   function statusLabel(s) { return s === 'partially_received' ? 'partial' : (s || 'draft'); }
   function canEdit() { return typeof window.can === 'function' ? window.can('procurement', 'edit') : true; }
@@ -203,10 +208,12 @@
       Promise.resolve(MastDB.get('admin/vendors')),
       Promise.resolve(MastDB.get('admin/purchaseReceipts')),
       Promise.resolve(MastDB.get('admin/materials')),
-      Promise.resolve(MastDB.get('admin/products'))
+      Promise.resolve(MastDB.products && MastDB.products.list ? MastDB.products.list() : MastDB.get('public/products'))
     ]).then(function (res) {
       var posVal = res[0] || {}, vendors = res[1] || {}, receipts = res[2] || {};
-      V2.vendors = vendors; V2.materials = res[3] || {}; V2.products = res[4] || {};
+      // Products live at public/products (admin/products is empty); list() can
+      // return an array OR a keyed object — normalize to { pid: product }.
+      V2.vendors = vendors; V2.materials = res[3] || {}; V2.products = pidMap(res[4]);
       var receiptsByPo = {};
       Object.keys(receipts).forEach(function (k) { var r = receipts[k]; if (r && r.poId) (receiptsByPo[r.poId] = receiptsByPo[r.poId] || []).push(r); });
       Object.keys(receiptsByPo).forEach(function (poId) { receiptsByPo[poId].sort(function (a, b) { return String(b.receivedAt || '').localeCompare(String(a.receivedAt || '')); }); });
@@ -419,7 +426,7 @@
     '</div>' +
     '<label style="font-size:0.78rem;color:var(--warm-gray);display:block;">PO # (optional)<input type="text" class="form-input" style="margin-top:2px;" value="' + esc(newPo.poNumber) + '" oninput="ProcurementV2.npField(\'poNumber\',this.value)"></label>';
     var materials = Object.keys(V2.materials).map(function (k) { return [k, V2.materials[k]]; }).filter(function (e) { return e[1] && e[1].status !== 'archived'; }).sort(byNameEntry);
-    var products = Object.keys(V2.products).map(function (k) { return [k, V2.products[k]]; }).filter(function (e) { return e[1] && e[1].status !== 'archived'; }).sort(byNameEntry);
+    var products = Object.keys(V2.products).map(function (k) { return [k, V2.products[k]]; }).filter(function (e) { return procurable(e[1]); }).sort(byNameEntry);
     var linesHdr = '<div style="display:grid;grid-template-columns:1fr 2fr 1fr 0.8fr 0.8fr 30px;gap:8px;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.05em;font-weight:600;color:var(--warm-gray);padding-bottom:4px;"><span>Kind</span><span>Material/Product</span><span>Vendor SKU</span><span>Qty</span><span>Unit cost</span><span></span></div>';
     var rows = newPo.lines.map(function (line, idx) { return npLineRow(line, idx, materials, products); }).join('');
     var addBtn = '<button class="btn btn-secondary btn-small" style="margin-top:8px;" onclick="ProcurementV2.npAddLine()">+ Add line</button>';
