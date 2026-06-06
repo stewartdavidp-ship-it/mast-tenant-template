@@ -1927,6 +1927,56 @@
       po.sentAt = now; po.updatedAt = now;
       if (po.status === 'draft') po.status = 'submitted';
       return { emailed: emailed };
+    },
+    // createDraftPOs(groups) → create one DRAFT PO per vendor group from reorder
+    // suggestions (Work Item D). groups: [{ vendorId, lines: [{ kind, targetId,
+    // variantKey?, qtyOrdered, unitCost, vendorSku?, unitOfMeasure?,
+    // descriptionSnapshot? }] }]. Mirrors the New-PO write shape (status:'draft').
+    // Returns the created poIds. Keeps the PO-creation write in this baselined
+    // module so the reorder twin holds no MastDB write verbs (RBAC).
+    createDraftPOs: async function (groups) {
+      await _ensureLoaded();
+      var now = new Date().toISOString();
+      var updates = {};
+      var created = [];
+      (groups || []).forEach(function (g) {
+        if (!g || !g.vendorId || !g.lines || !g.lines.length) return;
+        var vendor = vendorsData[g.vendorId] || {};
+        var poId = MastDB.newKey('admin/purchaseOrders');
+        var lines = g.lines.map(function (l) {
+          return {
+            lineId: MastDB.newKey('admin/purchaseOrders'),
+            kind: l.kind,
+            targetId: l.targetId,
+            variantKey: l.kind === 'product' ? (l.variantKey || '_default') : null,
+            vendorSku: l.vendorSku || null,
+            descriptionSnapshot: l.descriptionSnapshot || null,
+            qtyOrdered: Number(l.qtyOrdered) || 0,
+            unitOfMeasure: l.unitOfMeasure || null,
+            unitCost: Number(l.unitCost) || 0,
+            discount: null, tax: null, qtyReceived: 0, qtyCancelled: 0, expectedDate: null,
+            acquisitionTarget: l.kind === 'material' ? 'build-material' : null
+          };
+        });
+        var rec = {
+          poId: poId, poNumber: null, vendorId: g.vendorId, status: 'draft',
+          orderDate: now.slice(0, 10), expectedDate: null, shipToLocationId: null,
+          currency: vendor.defaultCurrency || null, fxRateAtPo: null,
+          subtotal: null, tax: null, shipping: null, total: null,
+          paymentTerms: vendor.defaultPaymentTerms || null,
+          notes: 'Auto-drafted from reorder suggestions', vendorMessage: null,
+          createdBy: null, approvedBy: null, incoterm: null,
+          dropShip: false, dropShipCustomerId: null, memo: false,
+          lines: lines, createdAt: now, updatedAt: now
+        };
+        updates['admin/purchaseOrders/' + poId] = rec;
+        created.push(poId);
+      });
+      if (created.length) {
+        await MastDB.multiUpdate(updates);
+        created.forEach(function (poId) { purchaseOrdersData[poId] = updates['admin/purchaseOrders/' + poId]; });
+      }
+      return created;
     }
   };
 
