@@ -62,32 +62,9 @@
       preview: { url: ASSET_BASE + 'materials.png', alt: "Materials list with cost-per-unit and on-hand quantities" },
       learnMoreUrl: HELP_BASE + 'materials'
     },
-    'forecast': {
-      label:    'Forecast',
-      section:  'products',
-      tagline:  'Predict inventory needs based on sales velocity.',
-      outcome:      "See which pieces will run out next week and how many to make, based on what's actually selling.",
-      goodFitWhen:  "you make pieces in batches and want to stop guessing how many to make next.",
-      notAFitWhen:  "every piece you make is one-of-a-kind and not a candidate for restock.",
-      automates: [
-        "Eyeballing your shelves and guessing",
-        "Counting sales by hand to find the runners",
-        "Restocking the wrong colors and ignoring the hits"
-      ],
-      replacesTools:    ["Inventory spreadsheet", "Notebook of best-sellers"],
-      complementsTools: ["Shopify", "Square"],
-      prerequisites: [
-        "Products module enabled",
-        "At least 30 days of sales data"
-      ],
-      pairsWith:  ["products", "inventory", "jobs", "procurement", "sales-by-product"],
-      setupDepth: "quick",
-      preview: {
-        url: ASSET_BASE + 'forecast.png',
-        alt: "Forecast view ranking products by days-of-supply with restock suggestions"
-      },
-      learnMoreUrl: HELP_BASE + 'forecast'
-    },
+    // forecast: card removed 2026-06-06 — retired as a standalone surface; its
+    // data is now the Products "Forecast" facet + the product Forecast tab.
+    // systemManaged in MODE_ROUTE_VISIBILITY excludes it from this manager.
     'jobs': {
       label: 'Jobs', section: 'products',
       tagline: 'Schedule production runs and batch work.',
@@ -117,21 +94,9 @@
       preview: { url: ASSET_BASE + 'procurement.png', alt: "Open purchase orders with expected delivery dates and supplier contacts" },
       learnMoreUrl: HELP_BASE + 'procurement'
     },
-    'inventory': {
-      label: 'Inventory', section: 'products',
-      tagline: 'Track stock levels across products and variants.',
-      outcome: "Know what's on the shelf right now so you stop overselling pieces or missing reorders.",
-      goodFitWhen: "you sell on multiple channels or run out of best-sellers without warning.",
-      notAFitWhen: "every piece is one-of-a-kind and inventory is just \"do I have it or not\".",
-      automates: ["Re-counting the studio shelf every Sunday", "Manually adjusting Etsy after an in-person sale", "Missing reorders for hot items"],
-      replacesTools: ["Inventory spreadsheet", "Stock count notebook"],
-      complementsTools: ["Shopify", "Square", "Etsy"],
-      prerequisites: ["Products module enabled"],
-      pairsWith: ["products", "pos", "orders", "forecast", "channels", "procurement"],
-      setupDepth: "moderate",
-      preview: { url: ASSET_BASE + 'inventory.png', alt: "Stock levels by product with low-stock warnings highlighted" },
-      learnMoreUrl: HELP_BASE + 'inventory'
-    },
+    // inventory: card removed 2026-06-06 — retired as a standalone surface; its
+    // data is now the Products "Inventory" facet + the product Inventory tab.
+    // systemManaged in MODE_ROUTE_VISIBILITY excludes it from this manager.
     'products': {
       label: 'Products', section: 'products',
       tagline: 'Browse and edit your product catalog.',
@@ -152,20 +117,9 @@
     // route has no sidebar item and is no longer user-toggleable. It is marked
     // systemManaged in MODE_ROUTE_VISIBILITY (kept only as a → products alias and
     // for the std↔maker transition diff), which excludes it from this manager.
-    'sales-by-product': {
-      label: 'Sales by Product', section: 'products',
-      tagline: 'See which products are selling and which aren’t.',
-      outcome: "See your best-sellers, your slow-movers, and which pieces are quietly making most of your money.",
-      goodFitWhen: "you make more than 5 different pieces and want to know where to focus.",
-      notAFitWhen: "you make one or two things and already know how each one sells.",
-      automates: ["Adding up sales by SKU in a spreadsheet", "Guessing which colorway is the runner", "Restocking the wrong thing"],
-      complementsTools: ["QuickBooks"],
-      prerequisites: ["Products module enabled", "At least 30 days of sales data"],
-      pairsWith: ["products", "forecast", "inventory", "finance-revenue", "customer-portfolio"],
-      setupDepth: "quick",
-      preview: { url: ASSET_BASE + 'sales-by-product.png', alt: "Product sales leaderboard with revenue and units sold per piece" },
-      learnMoreUrl: HELP_BASE + 'sales-by-product'
-    },
+    // sales-by-product: card removed 2026-06-06 — retired as a standalone surface;
+    // its data is now the Products "Sales" facet + the product Sales tab.
+    // systemManaged in MODE_ROUTE_VISIBILITY excludes it from this manager.
 
     // ── Sales ─────────────────────────────────────────────────
     'pos': {

@@ -669,16 +669,16 @@
     // keeps it off the Add-to-Mast manager (and out of the module-info lint).
     'develop-products':   { modes: ['maker'], systemManaged: true },
     'materials':          { modes: ['maker'] },
-    'forecast':           { modes: ['maker'] },
     'jobs':               { modes: ['maker'] },
     'procurement':        { modes: ['maker', 'retail'] },
-    'inventory':          { modes: ['maker', 'retail'], overlays: ['event'] },
     'products':           { modes: ['maker', 'retail'] },
-    // W1.8: Sales by Product is the PM/Operator doorway to the same demand
-    // data Forecast surfaces. Visible in every mode that sells products
-    // (broader than 'products' itself because the strategy view matters
-    // for bookings/standard tenants too once they have any catalog).
-    'sales-by-product':   { modes: ['standard', 'retail', 'bookings', 'maker'] },
+    // RETIRED (2026-06-06) as standalone surfaces — their data is now folded into
+    // the Products list facets + product detail tabs. Kept as systemManaged alias
+    // routes (redirect → products in navigateTo): excluded from Add-to-Mast and
+    // the sidebar, but bookmarked links still resolve.
+    'forecast':           { systemManaged: true },
+    'inventory':          { systemManaged: true },
+    'sales-by-product':   { systemManaged: true },
 
     // === Sales section ===
     'pos':                { modes: ['standard', 'retail', 'bookings', 'maker'], overlays: ['event'] },
@@ -791,11 +791,8 @@
   // ids. Keep this in sync when prerequisites change. Shape: route -> [requiredRouteId, ...].
   var MODULE_DEPENDENCIES = {
     'develop-products':  ['products'],
-    'forecast':          ['products'],
     'jobs':              ['products'],
     'procurement':       ['materials'],
-    'inventory':         ['products'],
-    'sales-by-product':  ['products'],
     'pos':               ['products'],
     'orders':            ['products'],
     'commissions':       ['products'],

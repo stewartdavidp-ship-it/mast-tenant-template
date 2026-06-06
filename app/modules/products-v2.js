@@ -1629,6 +1629,9 @@
 
   function render() {
     var tab = ensureTab(); ensureStyles();
+    // A retired-route redirect (inventory / sales-by-product / forecast) can ask
+    // us to open on a specific facet. Consume-once.
+    if (window._pv2InitialLens) { V2.lens = window._pv2InitialLens; window._pv2InitialLens = null; }
     var counts = statusCounts();
     var pills = ['all', 'draft', 'ready', 'active', 'archived'].map(function (s) {
       var on = V2.filter === s; var label = s === 'all' ? 'All' : statusLabel(s);
