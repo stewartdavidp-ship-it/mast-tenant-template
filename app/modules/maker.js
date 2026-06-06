@@ -7024,16 +7024,37 @@
       return { ok: true, variants: variants, variantId: vid };
     } catch (e) { return { ok: false, error: (e && e.message) || 'Failed' }; }
   }
-  async function bridgeSetOptions(pid, options) {
+  // Persist the product's options (attributes). Removing or renaming an
+  // attribute/choice orphans any existing variant whose combo references the
+  // now-gone key/value (it stops matching a Cartesian combination → missingCombos
+  // re-offers it as a duplicate, and its label renders stale). We never let an
+  // option edit silently corrupt the variant set: fresh-read the variants, detect
+  // orphans (keyed by stable id via shared/variant-reconcile), and refuse with
+  // {needsConfirm, orphans} unless the caller passes {prune:true} — in which case
+  // options + the pruned variants are written together.
+  async function bridgeSetOptions(pid, options, opts) {
     try {
       var clean = (Array.isArray(options) ? options : []).map(function (o) {
         return { label: String(o.label || '').trim(), choices: (Array.isArray(o.choices) ? o.choices : []).map(function (c) { return String(c).trim(); }).filter(Boolean) };
       }).filter(function (o) { return o.label; });
+      var VR = (typeof window !== 'undefined') && window.MastVariantReconcile;
+      var variants = await MastDB.get('public/products/' + pid + '/variants');
+      variants = Array.isArray(variants) ? variants : [];
+      var orphans = VR ? VR.findOrphans(variants, clean) : [];
+      if (orphans.length && !(opts && opts.prune)) {
+        // Destructive edit — bounce back for an explicit confirm. Options NOT written.
+        return { ok: false, needsConfirm: true, orphans: orphans, options: clean };
+      }
       await MastDB.set('public/products/' + pid + '/options', clean);
+      var prunedVariants = null;
+      if (orphans.length && VR) {
+        prunedVariants = VR.pruneOrphans(variants, clean);
+        await MastDB.set('public/products/' + pid + '/variants', prunedVariants);
+      }
       await MastDB.set('public/products/' + pid + '/updatedAt', new Date().toISOString());
-      var fp = findProduct(pid); if (fp) fp.options = clean;
+      var fp = findProduct(pid); if (fp) { fp.options = clean; if (prunedVariants) fp.variants = prunedVariants; }
       MastAdmin.writeAudit('update', 'products', pid);
-      return { ok: true, options: clean };
+      return { ok: true, options: clean, variants: prunedVariants || variants, prunedCount: orphans.length };
     } catch (e) { return { ok: false, error: (e && e.message) || 'Failed' }; }
   }
 

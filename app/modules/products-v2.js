@@ -125,12 +125,29 @@
   // return false + toast when the caller lacks permission.
   function _guardEditP() { if (!canEditProduct()) { MastAdmin.showToast('You don’t have permission to edit products', true); return false; } return true; }
   function _guardEditS() { if (!canEditStock()) { MastAdmin.showToast('You don’t have permission to edit stock', true); return false; } return true; }
-  // Persist options (write-as-you-go) then re-render the modal.
-  function _saveOptions(id, opts) {
+  // Persist options (write-as-you-go) then re-render the editor. Removing or
+  // renaming an attribute/choice can orphan existing variants; the bridge refuses
+  // (needsConfirm) until we pass {prune:true}, so we surface a danger confirm
+  // naming the affected variants before letting the destructive edit corrupt the
+  // variant set. callOpts carries {prune} on the second (confirmed) call.
+  function _saveOptions(id, opts, callOpts) {
     withProductBridge(function () {
-      Promise.resolve(window.MakerProductBridge.setOptions(id, opts)).then(function (res) {
+      Promise.resolve(window.MakerProductBridge.setOptions(id, opts, callOpts)).then(function (res) {
+        if (res && res.needsConfirm) {
+          var orphans = res.orphans || [];
+          var names = orphans.map(function (o) { return '• ' + (o.label || 'Variant'); }).join('\n');
+          var msg = 'This option change removes ' + orphans.length + ' variant' + (orphans.length === 1 ? '' : 's') +
+            ' you sell:\n\n' + names + '\n\nThose variants will be deleted. Continue?';
+          if (typeof window.mastConfirm === 'function') {
+            Promise.resolve(window.mastConfirm(msg, { title: 'Remove variants?', confirmLabel: 'Remove ' + orphans.length + ' & save', danger: true }))
+              .then(function (ok) { if (ok) _saveOptions(id, opts, { prune: true }); });
+          }
+          return;
+        }
         if (!res || !res.ok) { MastAdmin.showToast('Failed: ' + ((res && res.error) || 'unknown'), true); return; }
-        var rec = V2.byId[id]; if (rec) rec.options = res.options;
+        var rec = V2.byId[id];
+        if (rec) { rec.options = res.options; if (Array.isArray(res.variants)) rec.variants = res.variants; }
+        if (res.prunedCount) { MastAdmin.showToast('Removed ' + res.prunedCount + ' orphaned variant' + (res.prunedCount === 1 ? '' : 's')); markListDirty(); }
         rerenderVariantsEditor(id);
       }, function (e) { console.error('[products-v2] setOptions', e); MastAdmin.showToast('Failed', true); });
     });
