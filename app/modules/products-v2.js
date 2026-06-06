@@ -1098,11 +1098,72 @@
   }
   // The list body only (rows or empty-state) — re-rendered on its own during
   // search so the search input keeps focus while you type.
+  // Product list columns — rendered through the shared engine list (MastUI.list)
+  // so it has the same look-and-feel as every other v2 list. The thumbnail is just
+  // a column whose render() returns raw HTML; the variant tree rides the engine's
+  // opt-in expandable-rows (childRowsHtml below).
+  function pv2ListColumns() {
+    return [
+      { key: '_thumb', label: '', render: function (p) {
+          var img = firstImage(p);
+          return img
+            ? '<img src="' + esc(img) + '" alt="" style="width:40px;height:40px;border-radius:7px;object-fit:cover;border:1px solid var(--border);display:block;">'
+            : '<div style="width:40px;height:40px;border-radius:7px;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--warm-gray);font-size:0.85rem;">' + esc((p.name || 'P').slice(0, 1)) + '</div>';
+        } },
+      { key: '_name', label: 'Product', render: function (p) {
+          return esc(p.name || '(unnamed)') + ' <span style="color:var(--warm-gray);">· ' + esc(categoryLabel(p) || '—') + '</span>';
+        } },
+      { key: 'status', label: 'Status', render: function (p) { return U.badge(statusLabel(p.status), statusTone(p.status)); } },
+      { key: 'price', label: 'Price', align: 'right', render: function (p) { return esc(priceRange(p) || '—'); } },
+      { key: 'variants', label: 'Variants', align: 'right', render: function (p) { return esc(variantsLabel(p)); } }
+    ];
+  }
+  // The expand-tree for a product WITH variants: synthetic Default + each variant
+  // + "Add variant", as engine sub-rows (6 cells: toggle + the 5 columns).
+  function pv2ChildRows(p) {
+    var pid = p._key || p.pid;
+    function cell(html, align) {
+      return '<td style="padding:14px 12px;font-size:0.9rem;color:var(--text-primary);border-bottom:1px solid var(--border,rgba(255,255,255,0.06));' +
+        (align === 'right' ? 'text-align:right;font-variant-numeric:tabular-nums;' : '') + '">' + (html || '') + '</td>';
+    }
+    function row(fn, arg, cells) {
+      return '<tr class="mast-row mast-subrow" onclick="' + fn + '(\'' + esc(arg) + '\')" ' +
+        'onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();' + fn + '(\'' + esc(arg) + '\')}" ' +
+        'tabindex="0" role="button" style="cursor:pointer;">' + cell('') + cells + '</tr>';
+    }
+    var out = row('ProductsV2.open', pid,
+      cell('') +
+      cell('<span style="color:var(--info);font-weight:600;">└ ◆ Default</span> <span style="color:var(--warm-gray);">· base for all variants</span>') +
+      cell('') + cell(esc(N.money(price(p)) || '—'), 'right') +
+      cell('<span style="color:var(--warm-gray);">' + variantCount(p) + ' inherit</span>', 'right'));
+    realVariants(p).forEach(function (v) {
+      var ov = variantOverridden(p, v);
+      out += row('ProductsV2.openVariant', pid + '::' + v.id,
+        cell('') +
+        cell('<span style="color:var(--warm-gray);">└</span> ' + esc(variantLabel(v)) + (ov ? ' <span class="pv2-ov">override</span>' : '')) +
+        cell('<span style="color:var(--warm-gray);font-size:0.78rem;">follows product</span>') +
+        cell('<span' + (ov ? ' style="color:var(--amber,goldenrod);"' : '') + '>' + esc(N.money(variantPrice(p, v)) || '—') + '</span>', 'right') +
+        cell('<span style="color:var(--warm-gray);">' + (ov ? 'override' : 'inherits') + '</span>', 'right'));
+    });
+    out += row('ProductsV2.addVariant', pid,
+      cell('<span style="color:var(--teal,teal);">└ + Add variant</span> <span style="color:var(--warm-gray);">· inherits the Default, then override</span>') +
+      cell('') + cell('') + cell(''));
+    return out;
+  }
   function renderListBody() {
-    var rows = visibleRows();
-    if (rows.length) return '<div class="pv2-list">' + rows.map(rowHtml).join('') + '</div>';
     var q = (V2.q || '').trim();
-    return '<div style="padding:46px;text-align:center;color:var(--warm-gray);">No products match ' + (q ? '“' + esc(q) + '”' : 'these filters') + '.</div>';
+    return window.MastEntity.renderList('products-v2', {
+      rows: visibleRows(),
+      columns: pv2ListColumns(),
+      rowId: function (p) { return p._key || p.pid; },
+      onRowClickFnName: 'ProductsV2.rowClick',
+      expandable: true,
+      hasChildren: function (p) { return variantCount(p) > 0; },
+      expandedIds: V2.expanded,
+      onToggleFnName: 'ProductsV2.toggle',
+      childRowsHtml: pv2ChildRows,
+      empty: { title: 'No products', message: 'No products match ' + (q ? '“' + q + '”' : 'these filters') + '.' }
+    });
   }
 
   function ensureTab() {
@@ -1183,45 +1244,6 @@
     document.head.appendChild(s);
   }
 
-  function rowHtml(p) {
-    var has = variantCount(p) > 0;
-    var img = firstImage(p);
-    var thumb = img ? '<img class="th" src="' + esc(img) + '" alt="">' : '<div class="ph">' + esc((p.name || 'P').slice(0, 1)) + '</div>';
-    var exp = has
-      ? '<button class="pv2-exp" onclick="event.stopPropagation();ProductsV2.toggle(\'' + esc(p._key) + '\')">' + (V2.expanded[p._key] ? '▼' : '▶') + '</button>'
-      : '<button class="pv2-exp sp"></button>';
-    // A product WITH variants expands to its items (synthetic Default + variants)
-    // on row-click — you don't jump into a slide-out; you pick the Default or a
-    // variant. A variant-less product has nothing to expand, so it opens directly.
-    var rowAction = has ? 'toggle' : 'open';
-    var html = '<div class="pv2-row" onclick="ProductsV2.' + rowAction + '(\'' + esc(p._key) + '\')" tabindex="0" role="button">' +
-      exp + thumb +
-      '<span class="pv2-nm">' + esc(p.name || '(unnamed)') + ' <span class="pv2-meta">· ' + esc(categoryLabel(p) || '—') + '</span></span>' +
-      '<span>' + U.badge(statusLabel(p.status), statusTone(p.status)) + '</span>' +
-      '<span class="pv2-r pv2-meta">' + (priceRange(p) || '—') + '</span>' +
-      '<span class="pv2-r pv2-meta">' + variantsLabel(p) + '</span></div>';
-    if (has && V2.expanded[p._key]) {
-      html += '<div class="pv2-row pv2-sub pv2-def" onclick="ProductsV2.open(\'' + esc(p._key) + '\')" tabindex="0" role="button">' +
-        '<span class="pv2-exp sp"></span><span></span>' +
-        '<span class="pv2-nm"><span class="pv2-branch">└</span>◆ Default <span class="pv2-meta" style="font-weight:400;">· base for all variants</span></span>' +
-        '<span></span><span class="pv2-r pv2-meta">' + (N.money(price(p)) || '—') + '</span><span class="pv2-r pv2-meta">' + variantCount(p) + ' inherit</span></div>';
-      realVariants(p).forEach(function (v) {
-        var ov = variantOverridden(p, v);
-        html += '<div class="pv2-row pv2-sub" onclick="ProductsV2.openVariant(\'' + esc(p._key + '::' + v.id) + '\')" tabindex="0" role="button">' +
-          '<span class="pv2-exp sp"></span><span></span>' +
-          '<span class="pv2-nm"><span class="pv2-branch">└</span>' + esc(variantLabel(v)) + (ov ? '<span class="pv2-ov">override</span>' : '') + '</span>' +
-          '<span class="pv2-meta" style="font-size:0.78rem;">follows product</span>' +
-          '<span class="pv2-r pv2-meta"' + (ov ? ' style="color:var(--amber);"' : '') + '>' + (N.money(variantPrice(p, v)) || '—') + '</span>' +
-          '<span class="pv2-r pv2-meta">' + (ov ? 'override' : 'inherits') + '</span></div>';
-      });
-      html += '<div class="pv2-row pv2-sub pv2-add" onclick="ProductsV2.addVariant(\'' + esc(p._key) + '\')" tabindex="0" role="button">' +
-        '<span class="pv2-exp sp"></span><span></span>' +
-        '<span class="pv2-nm"><span class="pv2-branch">└</span>+ Add variant <span class="pv2-meta">· inherits the Default, then override</span></span>' +
-        '<span></span><span></span><span></span></div>';
-    }
-    return html;
-  }
-
   function render() {
     var tab = ensureTab(); ensureStyles();
     var counts = statusCounts();
@@ -1250,7 +1272,14 @@
       var el = document.getElementById('pv2ListBody');
       if (el) el.innerHTML = renderListBody(); else render();
     },
-    toggle: function (id) { V2.expanded[id] = !V2.expanded[id]; render(); },
+    // Row click: a product WITH variants expands (pick the Default or a variant);
+    // a variant-less product opens directly. (The toggle column also expands.)
+    rowClick: function (id) { var p = V2.byId[id]; if (p && variantCount(p) > 0) ProductsV2.toggle(id); else ProductsV2.open(id); },
+    toggle: function (id) {
+      V2.expanded[id] = !V2.expanded[id];
+      var el = document.getElementById('pv2ListBody');
+      if (el) el.innerHTML = renderListBody(); else render();
+    },
     // Open/close the variant switcher popover. Selecting an item re-renders the
     // whole panel (open/openVariant), which clears the popover; this just handles
     // toggling + outside-click-to-close.
