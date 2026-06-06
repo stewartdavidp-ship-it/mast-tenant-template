@@ -829,7 +829,8 @@
         li = { lineItemId: liId, kind: 'material', materialId: opts.materialId, materialName: mat.name, quantity: q, scrapPercent: sc, unitOfMeasure: mat.unitOfMeasure, unitCost: mat.unitCost, extendedCost: roundCents(q * mat.unitCost) };
       }
       recipe.lineItems = recipe.lineItems || {}; recipe.lineItems[liId] = li;
-      await MastDB.recipes.subRef(recipeId, 'lineItems', liId).set(li);
+      // Persist via the light recompute — it writes the whole lineItems map
+      // (calc.lineItems) + totals via MastDB.recipes.update (no per-item subRef).
       await _recipeLightRecompute(recipeId);
       MastAdmin.writeAudit('update', 'recipe', recipeId);
       return { ok: true, recipe: recipesData[recipeId], lineItemId: liId };
@@ -840,7 +841,8 @@
     try {
       var recipe = await ensureRecipeCtx(recipeId); if (!recipe) return { ok: false, error: 'Recipe not found' };
       if (recipe.lineItems) delete recipe.lineItems[lineItemId];
-      await MastDB.recipes.subRef(recipeId, 'lineItems', lineItemId).remove();
+      // _recipeLightRecompute rewrites the whole lineItems map (the deleted key is
+      // gone from calc.lineItems → MastDB.recipes.update replaces the node).
       await _recipeLightRecompute(recipeId);
       MastAdmin.writeAudit('update', 'recipe', recipeId);
       return { ok: true, recipe: recipesData[recipeId] };
@@ -855,7 +857,6 @@
       if (patch.quantity != null) { var q = Number(patch.quantity); if (!isFinite(q) || q < 0) return { ok: false, error: 'Invalid quantity' }; li.quantity = q; }
       if (patch.scrapPercent != null) { var sc = Number(patch.scrapPercent); if (!isFinite(sc) || sc < 0) return { ok: false, error: 'Invalid waste %' }; li.scrapPercent = Math.min(200, sc); }
       li.extendedCost = roundCents((li.quantity || 0) * (li.unitCost || 0));
-      await MastDB.recipes.subRef(recipeId, 'lineItems', lineItemId).set(li);
       await _recipeLightRecompute(recipeId);
       return { ok: true, recipe: recipesData[recipeId] };
     } catch (e) { return { ok: false, error: (e && e.message) || 'Failed' }; }
