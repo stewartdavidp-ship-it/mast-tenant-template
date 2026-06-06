@@ -1505,6 +1505,7 @@
         // still go through the legacy builder (R3 brings them into v2). Cache the open
         // recipe so edit handlers can re-render in place.
         V2._recipeEdit = { recipeId: rc.recipeId || rc._key, rc: rc }; V2._recipeAdding = false;
+        V2._recipeEditLabor = false; V2._recipeEditPricing = false;
         return '<div id="pv2RecipeBody">' + recipeEditBody(rc) + '</div>';
       }
     }
@@ -1545,22 +1546,115 @@
       { k: 'Materials', v: keys.length },
       { k: 'Active tier', v: rc.activePriceTier || '—' }
     ]);
-    var cost = U.kv([
-      { k: 'Materials', v: N.money(rc.totalMaterialCost) || '—' },
-      { k: 'Labor', v: N.money(rc.laborCost) || '—' },
-      { k: 'Other', v: N.money(rc.otherCost) || '—' },
-      { k: 'Unit cost', v: N.money(rc.totalCost) || '—' }
-    ]);
-    var pr = U.kv([
-      { k: 'Active tier', v: rc.activePriceTier || '—' },
-      { k: 'Retail', v: N.money(rc.retailPrice) || '—' },
-      { k: 'Retail margin', v: (rc.retailMarginPct != null ? rc.retailMarginPct + '%' : '—') }
-    ]);
-    var editBtn = (rc.productId && canEditProduct())
-      ? '<div style="margin:12px 0 0;"><button class="btn btn-secondary btn-small" onclick="ProductsV2.recipeEditInBuilder(\'' + esc(rc.recipeId) + '\',\'' + esc(rc.productId) + '\',true)">Labor &amp; pricing in builder ↗</button></div>'
-      : '';
-    return U.stickyHead(tiles, '') + '<div>' + U.card('Bill of materials', addForm + bom, { headerRight: addBtn }) + U.card('Cost', cost) + U.card('Pricing', pr) + editBtn +
-      '<div class="pv2-pnote">Edit the bill of materials here — quantities, waste %, add or remove parts. Labor &amp; pricing tiers still open in the builder (coming to v2 next).</div></div>';
+    return U.stickyHead(tiles, '') + '<div>' +
+      U.card('Bill of materials', addForm + bom, { headerRight: addBtn }) +
+      recipeLaborCard(rc) +
+      recipeCostCard(rc) +
+      recipePricingCard(rc) +
+      '<div class="pv2-pnote">Edit the bill of materials, labor &amp; overhead, and pricing tiers right here. Saving recalculates the recipe and updates the linked product’s cost.</div></div>';
+  }
+  // ── R3: Labor & overhead (read-first + inline edit) ───────────────────
+  // laborRatePerHour / laborMinutes / otherCost(+note) / setupCost / batchSize
+  // → MakerProductBridge.recipeSetFields. Save runs one full recalc so
+  // marginHistory + product cost propagation happen once (not per keystroke).
+  function recipeFieldStyle() { return 'display:block;width:100%;margin-top:4px;padding:7px 9px;border:1px solid var(--cream-dark);border-radius:6px;font-size:0.9rem;background:var(--cream);color:inherit;box-sizing:border-box;'; }
+  function recipeCanEdit(rc) { return canEditProduct() && !!rc.productId; }
+  function recipeLaborCard(rc) {
+    if (V2._recipeEditLabor) return recipeLaborForm(rc);
+    var editBtn = recipeCanEdit(rc) ? '<button class="btn btn-secondary btn-small" onclick="ProductsV2.recipeEditLabor()">Edit</button>' : '';
+    var rate = Number(rc.laborRatePerHour) || 0, min = Number(rc.laborMinutes) || 0;
+    var setup = Number(rc.setupCost) || 0, batch = Math.max(1, Number(rc.batchSize) || 1);
+    var laborCost = (rc.laborCost != null) ? Number(rc.laborCost) : (min / 60) * rate;
+    var perUnitSetup = setup / batch;
+    var other = Number(rc.otherCost) || 0;
+    return U.card('Labor & overhead', U.kv([
+      { k: 'Labor rate', v: rate ? (N.money(rate) + ' / hr') : '—' },
+      { k: 'Labor time', v: min ? (min + ' min <span class="from">· ' + (N.money(laborCost) || '$0.00') + '</span>') : '—' },
+      { k: 'Other cost', v: other ? (N.money(other) + (rc.otherCostNote ? ' <span class="from">· ' + esc(rc.otherCostNote) + '</span>' : '')) : '—' },
+      { k: 'Setup cost', v: setup ? (N.money(setup) + ' <span class="from">· over ' + batch + ' / batch → ' + (N.money(perUnitSetup) || '$0.00') + ' per unit</span>') : '—' },
+      { k: 'Batch size', v: batch + ' / build' }
+    ]), { headerRight: editBtn });
+  }
+  function recipeLaborForm(rc) {
+    var fs = recipeFieldStyle();
+    function fld(label, id, val, step, extra) {
+      return '<label style="display:block;margin-bottom:12px;font-size:0.85rem;color:var(--warm-gray);">' + label +
+        '<input id="' + id + '" type="number" min="0" step="' + step + '" value="' + esc(val === '' || val == null ? '' : String(val)) + '" style="' + fs + (extra || '') + '"></label>';
+    }
+    var body =
+      '<div style="display:flex;gap:10px;">' +
+      '<div style="flex:1;">' + fld('Labor rate ($/hr)', 'rcLaborRate', Number(rc.laborRatePerHour) || 0, '0.01') + '</div>' +
+      '<div style="flex:1;">' + fld('Labor time (min)', 'rcLaborMin', Number(rc.laborMinutes) || 0, '1') + '</div>' +
+      '</div>' +
+      '<label style="display:block;margin-bottom:12px;font-size:0.85rem;color:var(--warm-gray);">Other cost ($)' +
+      '<input id="rcOther" type="number" min="0" step="0.01" value="' + esc(String(Number(rc.otherCost) || 0)) + '" style="' + fs + 'width:180px;"></label>' +
+      '<label style="display:block;margin-bottom:12px;font-size:0.85rem;color:var(--warm-gray);">Other cost note' +
+      '<input id="rcOtherNote" type="text" value="' + esc(rc.otherCostNote || '') + '" placeholder="e.g. packaging, plating" style="' + fs + '"></label>' +
+      '<div style="display:flex;gap:10px;">' +
+      '<div style="flex:1;">' + fld('Setup cost ($) · amortized', 'rcSetup', Number(rc.setupCost) || 0, '0.01') + '</div>' +
+      '<div style="flex:1;">' + fld('Batch size · units per setup', 'rcBatch', Math.max(1, Number(rc.batchSize) || 1), '1') + '</div>' +
+      '</div>' +
+      '<div style="display:flex;gap:8px;margin-top:4px;">' +
+      '<button class="btn btn-primary btn-small" onclick="ProductsV2.recipeSaveLabor()">Save</button>' +
+      '<button class="btn btn-secondary btn-small" onclick="ProductsV2.recipeCancelLabor()">Cancel</button>' +
+      '</div>';
+    return U.card('Edit labor & overhead', body);
+  }
+  // ── Cost breakdown (read-only — derived from the engine recompute) ────
+  function recipeCostCard(rc) {
+    var setup = Number(rc.setupCost) || 0, batch = Math.max(1, Number(rc.batchSize) || 1);
+    var overhead = (Number(rc.otherCost) || 0) + (setup / batch);
+    return U.card('Cost breakdown', U.kv([
+      { k: 'Materials', v: N.money(rc.totalMaterialCost) || '$0.00' },
+      { k: 'Labor', v: N.money(rc.laborCost) || '$0.00' },
+      { k: 'Overhead', v: N.money(overhead) || '$0.00' },
+      { k: 'Unit cost', v: '<strong>' + (N.money(rc.totalCost) || '$0.00') + '</strong>' }
+    ]));
+  }
+  // ── R3: Pricing & tiers (read-first + inline edit) ────────────────────
+  // markups → prices + margins; active-tier selector (live, recipeSetActiveTier);
+  // min-margin floor. Markups + floor → recipeSetFields (recalc on save).
+  var RECIPE_TIERS = [{ k: 'wholesale', l: 'Wholesale' }, { k: 'direct', l: 'Direct' }, { k: 'retail', l: 'Retail' }];
+  function recipeTierMargin(price, total) { return (price > 0) ? Math.round(((price - total) / price) * 1000) / 10 : null; }
+  function recipeActiveTierSelect(rc) {
+    var cur = rc.activePriceTier || '';
+    var opts = RECIPE_TIERS.map(function (t) { return '<option value="' + t.k + '"' + (t.k === cur ? ' selected' : '') + '>' + t.l + '</option>'; }).join('');
+    if (!cur || ['wholesale', 'direct', 'retail'].indexOf(cur) < 0) opts = '<option value="" selected>—</option>' + opts;
+    return '<select onchange="ProductsV2.recipeSetTier(this.value)" style="padding:3px 8px;border:1px solid var(--cream-dark);border-radius:6px;font-size:0.85rem;background:var(--cream);color:inherit;">' + opts + '</select>';
+  }
+  function recipePricingCard(rc) {
+    if (V2._recipeEditPricing) return recipePricingForm(rc);
+    var canEd = recipeCanEdit(rc);
+    var editBtn = canEd ? '<button class="btn btn-secondary btn-small" onclick="ProductsV2.recipeEditPricing()">Edit</button>' : '';
+    var total = Number(rc.totalCost) || 0;
+    var rows = [{ k: 'Active tier', v: canEd ? recipeActiveTierSelect(rc) : '<span class="from">' + esc(rc.activePriceTier || '—') + '</span>' }];
+    RECIPE_TIERS.forEach(function (t) {
+      var markup = Number(rc[t.k + 'Markup']) || 0;
+      var price = Number(rc[t.k + 'Price']) || 0;
+      var margin = recipeTierMargin(price, total);
+      var v = (markup ? markup.toFixed(2) + '× ' : '') + (N.money(price) || '—') +
+        (margin != null ? ' <span class="from">· ' + margin + '% margin</span>' : '');
+      rows.push({ k: t.l, v: v });
+    });
+    rows.push({ k: 'Min margin floor', v: (rc.minMarginPercent != null && rc.minMarginPercent !== '') ? (rc.minMarginPercent + '%') : '—' });
+    return U.card('Pricing & tiers', U.kv(rows), { headerRight: editBtn });
+  }
+  function recipePricingForm(rc) {
+    var fs = recipeFieldStyle();
+    var rowsHtml = RECIPE_TIERS.map(function (t) {
+      return '<div style="flex:1;"><label style="display:block;font-size:0.85rem;color:var(--warm-gray);">' + t.l + ' markup ×' +
+        '<input id="rc' + t.k + 'Mk" type="number" min="0" step="0.01" value="' + esc(String(Number(rc[t.k + 'Markup']) || 0)) + '" style="' + fs + '"></label></div>';
+    }).join('');
+    var body =
+      '<div style="display:flex;gap:10px;">' + rowsHtml + '</div>' +
+      '<label style="display:block;margin:4px 0 12px;font-size:0.85rem;color:var(--warm-gray);">Min margin floor (%)' +
+      '<input id="rcMinMargin" type="number" min="0" step="1" value="' + esc(rc.minMarginPercent != null && rc.minMarginPercent !== '' ? String(rc.minMarginPercent) : '') + '" placeholder="none" style="' + fs + 'width:180px;"></label>' +
+      '<div class="pv2-pnote">Markups multiply the unit cost to set each tier’s price. Pick the active tier above the form.</div>' +
+      '<div style="display:flex;gap:8px;margin-top:4px;">' +
+      '<button class="btn btn-primary btn-small" onclick="ProductsV2.recipeSavePricing()">Save</button>' +
+      '<button class="btn btn-secondary btn-small" onclick="ProductsV2.recipeCancelPricing()">Cancel</button>' +
+      '</div>';
+    return U.card('Edit pricing & tiers', body);
   }
   function rerenderRecipeBody() {
     var el = document.getElementById('pv2RecipeBody');
@@ -1575,6 +1669,22 @@
         if (!res || !res.ok) { MastAdmin.showToast('Failed: ' + ((res && res.error) || 'unknown'), true); return; }
         V2._recipeEdit.rc = res.recipe; rerenderRecipeBody();
       }, function (e) { console.error('[products-v2] recipeSetLine', e); MastAdmin.showToast('Failed', true); });
+    });
+  }
+  // R3: commit labor/pricing field edits via recipeSetFields (light recompute),
+  // then ONE full recipeRecalc so marginHistory + product cost propagation run
+  // exactly once per Save (not per keystroke). `after` clears the edit flag.
+  function _recipeCommitFields(patch, after) {
+    if (!canEditProduct()) return;
+    var rid = V2._recipeEdit && V2._recipeEdit.recipeId; if (!rid) return;
+    ensureMaker(function () {
+      Promise.resolve(window.MakerProductBridge.recipeSetFields(rid, patch)).then(function (res) {
+        if (!res || !res.ok) { MastAdmin.showToast('Failed: ' + ((res && res.error) || 'unknown'), true); return; }
+        return Promise.resolve(window.MakerProductBridge.recipeRecalc(rid)).then(function (rr) {
+          var rc = (rr && rr.ok && rr.recipe) || res.recipe;
+          V2._recipeEdit.rc = rc; if (after) after(); rerenderRecipeBody(); MastAdmin.showToast('Saved');
+        });
+      }, function (e) { console.error('[products-v2] recipeCommitFields', e); MastAdmin.showToast('Failed', true); });
     });
   }
   // "+ Add part" picker (material or sub-assembly), via the shared openModal.
@@ -1702,7 +1812,7 @@
   }
 
   // ── State + data ────────────────────────────────────────────────────
-  var V2 = { rows: [], byId: {}, sortKey: '_title', sortDir: 'asc', filter: 'all', lens: 'general', expanded: {}, editInfo: null, editFulfill: null, editPricing: null, editVarPricing: null, editInv: null, editVarInv: null, editVarInfo: null, editVarFulfill: null, editAttrs: null, editVarAttrs: null, q: '', tagFacets: [], _npMode: 'scratch', _recipeEdit: null, _rpKind: 'material', _recipeAdding: false, _recipeAddData: null };
+  var V2 = { rows: [], byId: {}, sortKey: '_title', sortDir: 'asc', filter: 'all', lens: 'general', expanded: {}, editInfo: null, editFulfill: null, editPricing: null, editVarPricing: null, editInv: null, editVarInv: null, editVarInfo: null, editVarFulfill: null, editAttrs: null, editVarAttrs: null, q: '', tagFacets: [], _npMode: 'scratch', _recipeEdit: null, _rpKind: 'material', _recipeAdding: false, _recipeAddData: null, _recipeEditLabor: false, _recipeEditPricing: false };
 
   function toRows(map) {
     var out = []; map = map || {};
@@ -2583,6 +2693,39 @@
           if (!res || !res.ok) { MastAdmin.showToast('Failed: ' + ((res && res.error) || 'unknown'), true); return; }
           V2._recipeAdding = false; V2._recipeEdit.rc = res.recipe; rerenderRecipeBody(); MastAdmin.showToast('Part added');
         }, function (e) { console.error('[products-v2] recipeAddLineItem', e); MastAdmin.showToast('Failed', true); });
+      });
+    },
+    // ── R3: Labor & overhead + Pricing & tiers ──
+    recipeEditLabor: function () { if (!_guardEditP()) return; V2._recipeEditLabor = true; rerenderRecipeBody(); },
+    recipeCancelLabor: function () { V2._recipeEditLabor = false; rerenderRecipeBody(); },
+    recipeSaveLabor: function () {
+      if (!_guardEditP()) return;
+      function val(id) { var el = document.getElementById(id); return el ? el.value : undefined; }
+      _recipeCommitFields({
+        laborRatePerHour: val('rcLaborRate'), laborMinutes: val('rcLaborMin'),
+        otherCost: val('rcOther'), otherCostNote: val('rcOtherNote'),
+        setupCost: val('rcSetup'), batchSize: val('rcBatch')
+      }, function () { V2._recipeEditLabor = false; });
+    },
+    recipeEditPricing: function () { if (!_guardEditP()) return; V2._recipeEditPricing = true; rerenderRecipeBody(); },
+    recipeCancelPricing: function () { V2._recipeEditPricing = false; rerenderRecipeBody(); },
+    recipeSavePricing: function () {
+      if (!_guardEditP()) return;
+      function val(id) { var el = document.getElementById(id); return el ? el.value : undefined; }
+      _recipeCommitFields({
+        wholesaleMarkup: val('rcwholesaleMk'), directMarkup: val('rcdirectMk'), retailMarkup: val('rcretailMk'),
+        minMarginPercent: val('rcMinMargin')
+      }, function () { V2._recipeEditPricing = false; });
+    },
+    // Active-tier selector — live, no recalc (it's a display preference).
+    recipeSetTier: function (tier) {
+      if (!_guardEditP()) return;
+      var rid = V2._recipeEdit && V2._recipeEdit.recipeId; if (!rid) return;
+      ensureMaker(function () {
+        Promise.resolve(window.MakerProductBridge.recipeSetActiveTier(rid, tier)).then(function (res) {
+          if (!res || !res.ok) { MastAdmin.showToast('Failed: ' + ((res && res.error) || 'unknown'), true); return; }
+          V2._recipeEdit.rc = res.recipe; rerenderRecipeBody();
+        }, function (e) { console.error('[products-v2] recipeSetTier', e); MastAdmin.showToast('Failed', true); });
       });
     },
     // Variant "Give it its own recipe" → open the builder focused on this variant
