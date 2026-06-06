@@ -61,7 +61,10 @@
   function stamp(p, id) { p._key = id || p.pid || p._key; p._title = p.name || ('Product ' + (p._key || '')); return p; }
 
   function variantLabel(v) {
-    if (!v || !v.combo) return 'Variant';
+    if (!v) return 'Variant';
+    // A custom variant name (variant.name) wins over the auto option-combo label.
+    if (v.name) return v.name;
+    if (!v.combo) return 'Variant';
     var parts = Object.keys(v.combo).map(function (k) { return v.combo[k]; }).filter(Boolean);
     return parts.length ? parts.join(' / ') : 'Variant';
   }
@@ -78,7 +81,15 @@
     return (min === max) ? N.money(min) : (N.money(min) + '–' + N.money(max));
   }
   function realVariants(p) {
-    return (Array.isArray(p.variants) ? p.variants : []).map(function (v, i) { return Object.assign({ id: v.id || ('v' + i) }, v); });
+    // Variants are first-class: every one carries a stable unique id. Key STRICTLY
+    // by that id — index-based keying mis-targets writes after any reorder (the
+    // cause of the earlier image-drop bug). A missing id is malformed data, so
+    // surface it loudly rather than silently falling back to a positional index.
+    return (Array.isArray(p.variants) ? p.variants : []).map(function (v, i) {
+      if (v && v.id) return v;
+      console.error('[products-v2] variant missing id — data bug (keying by index as a last resort)', (p && (p.pid || p._key)), i, v);
+      return Object.assign({ id: 'v' + i }, v);
+    });
   }
 
   // The variant switcher — ONE compact pill (low clutter, V1's failure was a
@@ -651,10 +662,11 @@
         var parts = String(rec._key || '').split('::'); var pid = parts[0], vid = parts[1];
         if (prevPane === 'v-pricing' && V2.editVarPricing) { V2.editVarPricing = null; rerenderVariantPricingPane(pid, vid); }
         else if (prevPane === 'v-inventory' && V2.editVarInv) { V2.editVarInv = null; rerenderVariantInventoryPane(pid, vid); }
+        else if (prevPane === 'v-info' && V2.editVarInfo) { V2.editVarInfo = null; rerenderVariantInfoPane(pid, vid); }
       },
       render: function (UU, r) {
         // Fresh open always starts read-only (cancel-on-leave on close/reopen).
-        V2.editVarPricing = V2.editVarInv = null;
+        V2.editVarPricing = V2.editVarInv = V2.editVarInfo = null;
         var p = r.product || {}, v = r.variant || {};
         var ov = variantOverridden(p, v);
         var tiles = UU.tiles([
@@ -672,7 +684,7 @@
             '<span class="iv"' + (isCustom ? ' style="color:var(--amber);font-weight:600;"' : '') + '>' + value + ' <span class="from">· ' + esc(state) + '</span></span>' +
             '<span class="ov"><button class="btn btn-secondary btn-small" onclick="ProductsV2.editVariantTodo()">' + esc(btn) + '</button></span></div>';
         }
-        var tabs = [{ key: 'v-pricing', label: 'Pricing' }, { key: 'v-recipe', label: 'Recipe' }, { key: 'v-channels', label: 'Channels' }, { key: 'v-inventory', label: 'Inventory' }, { key: 'v-image', label: 'Image' }];
+        var tabs = [{ key: 'v-pricing', label: 'Pricing' }, { key: 'v-recipe', label: 'Recipe' }, { key: 'v-channels', label: 'Channels' }, { key: 'v-inventory', label: 'Inventory' }, { key: 'v-image', label: 'Image' }, { key: 'v-info', label: 'Info' }];
         function pane(key, html, active) { return '<div class="mu-pane" data-pane="' + key + '"' + (active ? '' : ' hidden') + '>' + html + '</div>'; }
         var ctx = '<div class="pv2-pnote">A variant uses the Default’s values for anything it doesn’t set itself. It has no lifecycle of its own — it follows the product.</div>';
         // Header strip: variant image (its own binding if set, else the product's
@@ -683,10 +695,45 @@
           pane('v-recipe', variantRecipePane(UU, p, v)) +
           pane('v-channels', UU.card('Channels', row('Shopify', 'Live', 'same as the product', false, 'Map separately'))) +
           pane('v-inventory', variantInventoryPane(UU, p, v)) +
-          pane('v-image', variantImagePane(UU, p, v));
+          pane('v-image', variantImagePane(UU, p, v)) +
+          pane('v-info', variantInfoPane(UU, p, v));
       }
     }
   });
+  // Variant Info pane: a variant is a first-class object (stable unique id), so it
+  // can carry a custom display name distinct from its option-combo label. Light
+  // inline edit of variant.name; blank reverts to the auto option label.
+  function variantInfoPane(UU, p, v) {
+    var pid = p._key || p.pid, vid = v.id;
+    if (V2.editVarInfo === (pid + '::' + vid)) return variantInfoEditForm(UU, p, v);
+    var editBtn = '<button class="btn btn-secondary btn-small" onclick="ProductsV2.editVariantInfo(\'' + esc(pid) + '\',\'' + esc(vid) + '\')">Edit</button>';
+    var comboStr = Object.keys(v.combo || {}).map(function (k) { return esc(k) + ': ' + esc(v.combo[k]); }).join(', ') || '—';
+    return UU.card('Info · this variant', UU.kv([
+      { k: 'Name', v: v.name ? esc(v.name) : '<span class="from">uses the option label</span>' },
+      { k: 'Options', v: comboStr },
+      { k: 'SKU', v: v.sku ? esc(v.sku) : '<span class="from">uses the Default · set on Pricing</span>' },
+      { k: 'Variant id', v: '<span class="from" style="font-size:0.72rem;">' + esc(vid) + '</span>' }
+    ]), { headerRight: editBtn });
+  }
+  function variantInfoEditForm(UU, p, v) {
+    var pid = p._key || p.pid, vid = v.id;
+    var comboLabel = Object.keys(v.combo || {}).map(function (k) { return v.combo[k]; }).filter(Boolean).join(' / ') || 'this variant';
+    var body =
+      '<label style="display:block;margin-bottom:6px;font-size:0.85rem;color:var(--warm-gray);">Name' +
+      '<input id="pv2VarName" type="text" value="' + esc(v.name || '') + '" placeholder="' + esc(comboLabel) + '" style="display:block;width:100%;margin-top:4px;padding:7px 9px;border:1px solid var(--cream-dark);border-radius:6px;font-size:0.9rem;background:var(--cream);color:inherit;box-sizing:border-box;">' +
+      '<span style="font-size:0.72rem;color:var(--warm-gray);">A custom display name for this variant. Leave blank to use the option label (' + esc(comboLabel) + ').</span></label>' +
+      '<div style="display:flex;gap:8px;margin-top:12px;">' +
+      '<button class="btn btn-primary btn-small" onclick="ProductsV2.saveVariantInfo(\'' + esc(pid) + '\',\'' + esc(vid) + '\')">Save</button>' +
+      '<button class="btn btn-secondary btn-small" onclick="ProductsV2.cancelVariantInfo(\'' + esc(pid) + '\',\'' + esc(vid) + '\')">Cancel</button>' +
+      '</div>';
+    return UU.card('Edit info · this variant', body);
+  }
+  function rerenderVariantInfoPane(pid, vid) {
+    var rec = buildVariantRecord(pid + '::' + vid); if (!rec) return;
+    var body = document.getElementById('mastSlideOutBody');
+    var pane = body && body.querySelector('.mu-pane[data-pane="v-info"]');
+    if (pane) pane.innerHTML = variantInfoPane(U, rec.product, rec.variant);
+  }
   // Variant Pricing pane: a variant uses the Default's price unless it sets its
   // own (variant.priceCents override). Light inline edit of price override + SKU;
   // clearing the price reverts the variant to "same as Default".
@@ -942,7 +989,7 @@
   }
 
   // ── State + data ────────────────────────────────────────────────────
-  var V2 = { rows: [], byId: {}, sortKey: '_title', sortDir: 'asc', filter: 'all', expanded: {}, editInfo: null, editFulfill: null, editPricing: null, editVarPricing: null, editInv: null, editVarInv: null, q: '' };
+  var V2 = { rows: [], byId: {}, sortKey: '_title', sortDir: 'asc', filter: 'all', expanded: {}, editInfo: null, editFulfill: null, editPricing: null, editVarPricing: null, editInv: null, editVarInv: null, editVarInfo: null, q: '' };
 
   function toRows(map) {
     var out = []; map = map || {};
@@ -1192,6 +1239,34 @@
           if (vr) MastEntity.openRecord('product-variant-v2', vr, 'read', true);
           MastAdmin.showToast(useDefault ? 'Using Default price' : 'Variant pricing saved');
         }, function (e) { console.error('[products-v2] saveVariantPricing', e); MastAdmin.showToast('Failed', true); });
+      });
+    },
+    // ── Variant Info (custom name; first-class variant identity) ──────
+    editVariantInfo: function (pid, vid) { V2.editVarInfo = pid + '::' + vid; rerenderVariantInfoPane(pid, vid); },
+    cancelVariantInfo: function (pid, vid) { V2.editVarInfo = null; rerenderVariantInfoPane(pid, vid); },
+    saveVariantInfo: function (pid, vid) {
+      var ne = document.getElementById('pv2VarName');
+      var name = ne ? ne.value.trim() : '';
+      var prevRec = buildVariantRecord(pid + '::' + vid);
+      var prevLabel = prevRec ? variantLabel(prevRec.variant) : '';
+      withProductBridge(function () {
+        Promise.resolve(window.MakerProductBridge.setVariantFields(pid, vid, { name: name === '' ? null : name })).then(function (res) {
+          if (!res || !res.ok) { MastAdmin.showToast('Failed: ' + ((res && res.error) || 'unknown'), true); return; }
+          var rec = V2.byId[pid]; if (rec) rec.variants = res.variants;
+          V2.editVarInfo = null;
+          rerenderVariantInfoPane(pid, vid);
+          // The name drives the variant label everywhere — refresh the header strip
+          // + SO title in place (re-rendering the whole SO would bounce to Pricing).
+          var nr = buildVariantRecord(pid + '::' + vid);
+          if (nr) {
+            var newLabel = variantLabel(nr.variant);
+            var hs = document.getElementById('pv2HeaderStrip');
+            if (hs) hs.outerHTML = headerStrip(nr.product, variantImageSrc(nr.product, nr.variant), (nr.product.name || 'Variant') + ' — ' + newLabel, nr.variant.id);
+            var tEl = document.getElementById('mastSlideOutTitle');
+            if (tEl && prevLabel && tEl.textContent.indexOf(' — ' + prevLabel) >= 0) tEl.textContent = tEl.textContent.replace(' — ' + prevLabel, ' — ' + newLabel);
+          }
+          MastAdmin.showToast('Saved');
+        }, function (e) { console.error('[products-v2] saveVariantInfo', e); MastAdmin.showToast('Save failed', true); });
       });
     },
     // ── Inventory (on-hand; separate collection + stockInfo resync) ────
