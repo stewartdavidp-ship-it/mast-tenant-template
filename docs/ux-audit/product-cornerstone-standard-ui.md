@@ -59,11 +59,20 @@ cause of the earlier image-drop data-loss bug. Key **strictly by id**; log loudl
    sensitive lenses (sales/forecast) on the same RBAC as today. **Procurement-as-lens:** one PO
    object, operational view under Product/Materials + financial (AP/spend) view in Finance — don't
    duplicate or fully move it (leans Product/Operations if forced to pick one home).
-4. **Per-variant fulfillment** — per-variant `stockType`/`availability` on the id-keyed stock record
-   (needs the model decision: stockType is product-level today).
+4. **Per-variant fulfillment** — per-variant mode/lead/fulfillment overrides on the id-keyed stock
+   record (override-or-inherit). ✅ DONE (PR #262) — reused the existing storefront-consumed override
+   schema (`inventoryModeOverride`/`productionLeadTimeDaysOverride`/`stockFulfillmentDaysOverride`).
 5. **Add-variant / options** — define `product.options` + add id'd variant combos (absorbs P4 #6).
-6. **Per-variant tags** — with the channel/tags-import architecture (derived badges vs hand-set).
-7. **Codify the standard** — document the canonical pattern so other V2 surfaces conform.
+   ✅ DONE (PRs #258/#259, drilled SO).
+6. **Per-variant channel availability + channel tags/attributes** — (a) per-variant channel
+   include/exclude ✅ DONE (PRs #257 product chips, #263 variant Channels tab); (b) channel
+   attributes/tags model → **research + proposal in [channel-attributes-research.md](channel-attributes-research.md)**
+   (awaiting operator ratification; integration/publish honoring = #2b, OAuth-coupled, not blind).
+7. **Codify the standard** — ✅ **[standard-record-ui.md](standard-record-ui.md)** — the canonical record-UI
+   pattern other V2 surfaces derive from.
+
+Also done outside this list: **RBAC gating** (PR #261), **legacy sub-item retire** (PR #260), **dead
+list-CSS prune** (PR #263).
 
 In parallel (not blocking): P4 item **Channels** (per-channel sync on/off, integration-coupled) and
 the remaining legacy→V2 module moves.
