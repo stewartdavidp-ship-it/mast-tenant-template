@@ -19,15 +19,10 @@
  */
 (function () {
   'use strict';
-  function flagOn() {
-    try {
-      if (/[?&#]ui=1\b/.test(location.href)) { localStorage.setItem('mastUiRedesign', '1'); return true; }
-      if (localStorage.getItem('mastUiRedesign') === '1') return true;
-    } catch (e) {}
-    return !!(window.MAST_FEATURE_FLAGS && window.MAST_FEATURE_FLAGS.uiRedesign);
-  }
   if (!window.MastAdmin || !window.MastEntity || !window.MastUI) return;
-  if (!flagOn()) return;
+  // Un-gated (Tier 1.5 P7, 2026-06-06): the procurement domain is the V2 default
+  // for all users — no ?ui=1 required. The shared engine (MastEntity/MastUI) is
+  // loaded unconditionally at boot, so self-registering here is always safe.
 
   var U = window.MastUI, N = U.Num, esc = U._esc;
   var R = { materials: {}, products: {}, suppliers: {}, vendors: {}, suggestions: [], loaded: false };
