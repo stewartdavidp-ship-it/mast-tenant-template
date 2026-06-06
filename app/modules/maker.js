@@ -6848,6 +6848,43 @@
       return { ok: true, variants: variants, variantId: vid };
     } catch (e) { return { ok: false, error: (e && e.message) || 'Failed' }; }
   }
+
+  // ── Channel bindings (which channels a product sells on; variants inherit
+  //    unless excluded). Admin-managed — NOT the OAuth/publish (externalRefs)
+  //    side. Shape: channelBindings = [{channelId, excludedVariantIds:[]}];
+  //    channelIds is the derived id list. Written live. ──────────────────
+  function _normBindings(p) {
+    if (p && Array.isArray(p.channelBindings)) return p.channelBindings.map(function (b) { return { channelId: b.channelId, excludedVariantIds: Array.isArray(b.excludedVariantIds) ? b.excludedVariantIds.slice() : [] }; });
+    if (p && Array.isArray(p.channelIds)) return p.channelIds.map(function (cid) { return { channelId: cid, excludedVariantIds: [] }; });
+    return [];
+  }
+  async function _writeBindings(pid, bindings) {
+    var channelIds = bindings.map(function (b) { return b.channelId; });
+    await MastDB.products.update(pid, { channelBindings: bindings, channelIds: channelIds, updatedAt: new Date().toISOString() });
+    var lp = findProduct(pid); if (lp) { lp.channelBindings = bindings; lp.channelIds = channelIds; }
+    MastAdmin.writeAudit('update', 'products', pid);
+    return { ok: true, channelBindings: bindings, channelIds: channelIds };
+  }
+  async function bridgeSetChannelBinding(pid, channelId, on) {
+    try {
+      var p = await MastDB.products.get(pid); var bindings = _normBindings(p);
+      var idx = bindings.map(function (b) { return b.channelId; }).indexOf(channelId);
+      if (on && idx < 0) bindings.push({ channelId: channelId, excludedVariantIds: [] });
+      else if (!on && idx >= 0) bindings.splice(idx, 1);
+      return await _writeBindings(pid, bindings);
+    } catch (e) { return { ok: false, error: (e && e.message) || 'Failed' }; }
+  }
+  async function bridgeSetVariantChannelExcluded(pid, channelId, variantId, excluded) {
+    try {
+      var p = await MastDB.products.get(pid); var bindings = _normBindings(p);
+      var b = bindings.filter(function (x) { return x.channelId === channelId; })[0];
+      if (!b) { b = { channelId: channelId, excludedVariantIds: [] }; bindings.push(b); }
+      var i = b.excludedVariantIds.indexOf(variantId);
+      if (excluded && i < 0) b.excludedVariantIds.push(variantId);
+      else if (!excluded && i >= 0) b.excludedVariantIds.splice(i, 1);
+      return await _writeBindings(pid, bindings);
+    } catch (e) { return { ok: false, error: (e && e.message) || 'Failed' }; }
+  }
   async function bridgeSetVariantFields(pid, variantId, patch) {
     try {
       var variants = await MastDB.get('public/products/' + pid + '/variants');
@@ -7030,6 +7067,8 @@
     setVariantImageIndex: function (pid, variantId, imageIndex) { return bridgeSetVariantImageIndex(pid, variantId, imageIndex); },
     // Write arbitrary fields onto a variant (price override, SKU, …); null clears.
     setVariantFields: function (pid, variantId, patch) { return bridgeSetVariantFields(pid, variantId, patch); },
+    setChannelBinding: function (pid, channelId, on) { return bridgeSetChannelBinding(pid, channelId, on); },
+    setVariantChannelExcluded: function (pid, channelId, variantId, excluded) { return bridgeSetVariantChannelExcluded(pid, channelId, variantId, excluded); },
     // Append a new variant (id = 'v_'+pushkey, combo = {optionKey: choice}) to a
     // product; rejects a duplicate combination. Written live (like every variant op).
     addVariant: function (pid, combo) { return bridgeAddVariant(pid, combo); },
