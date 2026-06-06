@@ -989,10 +989,11 @@
         if (prevPane === 'v-pricing' && V2.editVarPricing) { V2.editVarPricing = null; rerenderVariantPricingPane(pid, vid); }
         else if (prevPane === 'v-inventory' && V2.editVarInv) { V2.editVarInv = null; rerenderVariantInventoryPane(pid, vid); }
         else if (prevPane === 'v-info' && V2.editVarInfo) { V2.editVarInfo = null; rerenderVariantInfoPane(pid, vid); }
+        else if (prevPane === 'v-fulfill' && V2.editVarFulfill) { V2.editVarFulfill = null; rerenderVariantFulfillmentPane(pid, vid); }
       },
       render: function (UU, r) {
         // Fresh open always starts read-only (cancel-on-leave on close/reopen).
-        V2.editVarPricing = V2.editVarInv = V2.editVarInfo = null;
+        V2.editVarPricing = V2.editVarInv = V2.editVarInfo = V2.editVarFulfill = null;
         var p = r.product || {}, v = r.variant || {};
         var ov = variantOverridden(p, v);
         var tiles = UU.tiles([
@@ -1010,7 +1011,7 @@
             '<span class="iv"' + (isCustom ? ' style="color:var(--amber);font-weight:600;"' : '') + '>' + value + ' <span class="from">· ' + esc(state) + '</span></span>' +
             '<span class="ov"><button class="btn btn-secondary btn-small" onclick="ProductsV2.editVariantTodo()">' + esc(btn) + '</button></span></div>';
         }
-        var tabs = [{ key: 'v-pricing', label: 'Pricing' }, { key: 'v-recipe', label: 'Recipe' }, { key: 'v-channels', label: 'Channels' }, { key: 'v-inventory', label: 'Inventory' }, { key: 'v-image', label: 'Image' }, { key: 'v-info', label: 'Info' }];
+        var tabs = [{ key: 'v-pricing', label: 'Pricing' }, { key: 'v-recipe', label: 'Recipe' }, { key: 'v-channels', label: 'Channels' }, { key: 'v-inventory', label: 'Inventory' }, { key: 'v-fulfill', label: 'Fulfillment' }, { key: 'v-image', label: 'Image' }, { key: 'v-info', label: 'Info' }];
         function pane(key, html, active) { return '<div class="mu-pane" data-pane="' + key + '"' + (active ? '' : ' hidden') + '>' + html + '</div>'; }
         var ctx = '<div class="pv2-pnote">A variant uses the Default’s values for anything it doesn’t set itself. It has no lifecycle of its own — it follows the product.</div>';
         // Header strip: variant image (its own binding if set, else the product's
@@ -1021,6 +1022,7 @@
           pane('v-recipe', variantRecipePane(UU, p, v)) +
           pane('v-channels', UU.card('Channels', '<div style="color:var(--warm-gray);font-size:0.9rem;">This variant ships on whatever channels the product is mapped to — channels are set once at the product level and every variant inherits them. Set them on the product’s Channels tab.</div>')) +
           pane('v-inventory', variantInventoryPane(UU, p, v)) +
+          pane('v-fulfill', variantFulfillmentPane(UU, p, v)) +
           pane('v-image', variantImagePane(UU, p, v)) +
           pane('v-info', variantInfoPane(UU, p, v));
       }
@@ -1148,6 +1150,74 @@
     var body = document.getElementById('mastSlideOutBody');
     var pane = body && body.querySelector('.mu-pane[data-pane="v-inventory"]');
     if (pane) pane.innerHTML = variantInventoryPane(U, rec.product, rec.variant);
+  }
+  // ── Variant Fulfillment (per-variant OVERRIDE of the product's fulfillment) ──
+  // A variant inherits the product's stock mode / lead time / fulfillment days
+  // unless it sets its own. Stored as overrides on the variant stock record
+  // (inventoryModeOverride / productionLeadTimeDaysOverride /
+  // stockFulfillmentDaysOverride) — the same fields syncStockInfoToPublic already
+  // denormalizes and the storefront/order paths honor. Blank = inherit.
+  function productFulfillDefaults(p) {
+    var si = p.stockInfo || {};
+    return {
+      mode: si.stockType || 'made-to-order',
+      lead: (typeof si.productionLeadTimeDays === 'number' ? si.productionLeadTimeDays : null),
+      fulfill: (typeof si.stockFulfillmentDays === 'number' ? si.stockFulfillmentDays : 2)
+    };
+  }
+  function variantFulfillmentPane(UU, p, v) {
+    var pid = p._key || p.pid, vid = v.id;
+    if (V2.editVarFulfill === (pid + '::' + vid)) return variantFulfillmentEditForm(UU, p, v);
+    var def = productFulfillDefaults(p);
+    var vsi = variantStockInfo(p, v);
+    var modeOv = vsi.inventoryModeOverride || null;
+    var leadOv = (vsi.productionLeadTimeDaysOverride != null ? vsi.productionLeadTimeDaysOverride : null);
+    var fulfillOv = (vsi.stockFulfillmentDaysOverride != null ? vsi.stockFulfillmentDaysOverride : null);
+    var ovBadge = ' ' + UU.badge('override', 'amber');
+    var inh = ' <span class="from">· inherits product</span>';
+    function eff(ov, base, suffix) {
+      var isOv = ov != null;
+      var val = isOv ? ov : base;
+      return '<span' + (isOv ? ' style="color:var(--amber);font-weight:600;"' : '') + '>' + esc(String(val == null ? '—' : val)) + (suffix || '') + '</span>' + (isOv ? ovBadge : inh);
+    }
+    var editBtn = canEditProduct() ? '<button class="btn btn-secondary btn-small" onclick="ProductsV2.editVariantFulfillment(\'' + esc(pid) + '\',\'' + esc(vid) + '\')">Edit</button>' : '';
+    return UU.card('Fulfillment · this variant', UU.kv([
+      { k: 'Stock mode', v: eff(modeOv ? stockModeLabel(modeOv) : null, stockModeLabel(def.mode)) },
+      { k: 'Lead time to build', v: eff(leadOv, def.lead, ' day' + ((leadOv != null ? leadOv : def.lead) === 1 ? '' : 's')) },
+      { k: 'Fulfillment time', v: eff(fulfillOv, def.fulfill, ' day' + ((fulfillOv != null ? fulfillOv : def.fulfill) === 1 ? '' : 's')) }
+    ]), { headerRight: editBtn }) +
+      '<div class="pv2-pnote">A variant inherits the product’s fulfillment unless it overrides it here — e.g. one variant made-to-order with a longer lead while the rest ship from stock. Blank a field to go back to inheriting.</div>';
+  }
+  function variantFulfillmentEditForm(UU, p, v) {
+    var pid = p._key || p.pid, vid = v.id;
+    var def = productFulfillDefaults(p);
+    var vsi = variantStockInfo(p, v);
+    var modeOv = vsi.inventoryModeOverride || '';
+    var leadOv = (vsi.productionLeadTimeDaysOverride != null ? vsi.productionLeadTimeDaysOverride : '');
+    var fulfillOv = (vsi.stockFulfillmentDaysOverride != null ? vsi.stockFulfillmentDaysOverride : '');
+    var fieldStyle = 'display:block;width:100%;margin-top:4px;padding:7px 9px;border:1px solid var(--cream-dark);border-radius:6px;font-size:0.9rem;background:var(--cream);color:inherit;box-sizing:border-box;';
+    var modeOpts = '<option value="">Inherit product (' + esc(stockModeLabel(def.mode)) + ')</option>' +
+      STOCK_MODES.map(function (m) { return '<option value="' + esc(m.v) + '"' + (m.v === modeOv ? ' selected' : '') + '>' + esc(m.l) + '</option>'; }).join('');
+    var body =
+      '<label style="display:block;margin-bottom:12px;font-size:0.85rem;color:var(--warm-gray);">Stock mode override' +
+      '<select id="pv2VarFulMode" style="' + fieldStyle + '">' + modeOpts + '</select>' +
+      '<span style="font-size:0.72rem;color:var(--warm-gray);">Leave on “Inherit” to follow the product’s mode.</span></label>' +
+      '<label style="display:block;margin-bottom:12px;font-size:0.85rem;color:var(--warm-gray);">Lead time to build (days)' +
+      '<input id="pv2VarFulLead" type="number" min="0" step="1" value="' + esc(leadOv === '' ? '' : String(leadOv)) + '" placeholder="inherits ' + esc(def.lead == null ? '—' : String(def.lead)) + '" style="' + fieldStyle + 'width:180px;"></label>' +
+      '<label style="display:block;margin-bottom:12px;font-size:0.85rem;color:var(--warm-gray);">Fulfillment time (days)' +
+      '<input id="pv2VarFulFulfill" type="number" min="0" step="1" value="' + esc(fulfillOv === '' ? '' : String(fulfillOv)) + '" placeholder="inherits ' + esc(def.fulfill == null ? '—' : String(def.fulfill)) + '" style="' + fieldStyle + 'width:180px;"></label>' +
+      '<div class="pv2-pnote">Blank a field to clear the override and inherit the product default.</div>' +
+      '<div style="display:flex;gap:8px;margin-top:8px;">' +
+      '<button class="btn btn-primary btn-small" onclick="ProductsV2.saveVariantFulfillment(\'' + esc(pid) + '\',\'' + esc(vid) + '\')">Save</button>' +
+      '<button class="btn btn-secondary btn-small" onclick="ProductsV2.cancelVariantFulfillment(\'' + esc(pid) + '\',\'' + esc(vid) + '\')">Cancel</button>' +
+      '</div>';
+    return UU.card('Edit variant fulfillment', body);
+  }
+  function rerenderVariantFulfillmentPane(pid, vid) {
+    var rec = buildVariantRecord(pid + '::' + vid); if (!rec) return;
+    var body = document.getElementById('mastSlideOutBody');
+    var pane = body && body.querySelector('.mu-pane[data-pane="v-fulfill"]');
+    if (pane) pane.innerHTML = variantFulfillmentPane(U, rec.product, rec.variant);
   }
   // Variant Image pane: a variant's image is BOUND from the product's gallery
   // (not uploaded). Pick one of the product's images to give this variant its own,
@@ -1342,7 +1412,7 @@
   }
 
   // ── State + data ────────────────────────────────────────────────────
-  var V2 = { rows: [], byId: {}, sortKey: '_title', sortDir: 'asc', filter: 'all', lens: 'general', expanded: {}, editInfo: null, editFulfill: null, editPricing: null, editVarPricing: null, editInv: null, editVarInv: null, editVarInfo: null, q: '' };
+  var V2 = { rows: [], byId: {}, sortKey: '_title', sortDir: 'asc', filter: 'all', lens: 'general', expanded: {}, editInfo: null, editFulfill: null, editPricing: null, editVarPricing: null, editInv: null, editVarInv: null, editVarInfo: null, editVarFulfill: null, q: '' };
 
   function toRows(map) {
     var out = []; map = map || {};
@@ -1961,6 +2031,33 @@
           V2.editVarInv = null; rerenderVariantInventoryPane(pid, vid);
           MastAdmin.showToast('Variant stock updated');
         }, function (e) { console.error('[products-v2] saveVariantInventory', e); MastAdmin.showToast('Failed', true); });
+      });
+    },
+    // ── Variant Fulfillment override (mode / lead / fulfill days; null = inherit) ──
+    editVariantFulfillment: function (pid, vid) { if (!canEditProduct()) { MastAdmin.showToast('You don’t have permission to edit products', true); return; } V2.editVarFulfill = pid + '::' + vid; rerenderVariantFulfillmentPane(pid, vid); },
+    cancelVariantFulfillment: function (pid, vid) { V2.editVarFulfill = null; rerenderVariantFulfillmentPane(pid, vid); },
+    saveVariantFulfillment: function (pid, vid) {
+      if (!canEditProduct()) { MastAdmin.showToast('You don’t have permission to edit products', true); return; }
+      var modeEl = document.getElementById('pv2VarFulMode');
+      var leadEl = document.getElementById('pv2VarFulLead');
+      var fulfillEl = document.getElementById('pv2VarFulFulfill');
+      // '' value = clear the override (inherit). null in the patch → bridge removes the field.
+      function numOrClear(el) { if (!el) return null; var s = el.value.trim(); if (s === '') return null; var n = Number(s); if (!isFinite(n) || n < 0) return undefined; return Math.round(n); }
+      var lead = numOrClear(leadEl), fulfill = numOrClear(fulfillEl);
+      if (lead === undefined) { MastAdmin.showToast('Enter a valid lead time (0 or more), or blank to inherit', true); return; }
+      if (fulfill === undefined) { MastAdmin.showToast('Enter a valid fulfillment time (0 or more), or blank to inherit', true); return; }
+      var patch = {
+        inventoryModeOverride: (modeEl && modeEl.value) ? modeEl.value : null,
+        productionLeadTimeDaysOverride: lead,
+        stockFulfillmentDaysOverride: fulfill
+      };
+      withProductBridge(function () {
+        Promise.resolve(window.MakerProductBridge.setVariantInventoryConfig(pid, vid, patch)).then(function (res) {
+          if (!res || !res.ok) { MastAdmin.showToast('Failed: ' + ((res && res.error) || 'unknown'), true); return; }
+          var rec = V2.byId[pid]; if (rec && res.stockInfo) rec.stockInfo = res.stockInfo;
+          V2.editVarFulfill = null; rerenderVariantFulfillmentPane(pid, vid);
+          MastAdmin.showToast('Variant fulfillment updated');
+        }, function (e) { console.error('[products-v2] saveVariantFulfillment', e); MastAdmin.showToast('Failed', true); });
       });
     },
     // ── Pricing tab edit (direct price; revision-aware via setFields) ──
