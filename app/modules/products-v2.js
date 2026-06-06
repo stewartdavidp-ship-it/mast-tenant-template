@@ -349,14 +349,19 @@
     var guarded = String(p.status || '').toLowerCase() === 'active';
     var editLbl = guarded ? 'Revise' : 'Edit';
     var editBtn = '<button class="btn btn-secondary btn-small" onclick="ProductsV2.editInfo(\'' + esc(pid) + '\')">' + editLbl + '</button>';
+    var desc = p.description || '';
+    var descShow = desc.length > 160 ? esc(desc.slice(0, 160)) + '…' : esc(desc);
     return U.card('Info · product-level', U.kv([
+      { k: 'Name', v: p.name ? esc(p.name) : '—' },
       { k: 'Category', v: categoryLabel(p) || '—' },
       { k: 'Business line', v: p.businessLine || '—' },
       { k: 'Slug', v: p.slug || '—' },
       // Acquisition mode is structural (drives the cost/recipe machinery) — not
       // an inline-editable field here.
       { k: 'Acquisition', v: MODE_LABEL[p.acquisitionType || 'build'] || 'Build' },
-      { k: 'SKU', v: p.sku || '—' }
+      { k: 'SKU', v: p.sku || '—' },
+      { k: 'Short description', v: p.shortDescription ? esc(p.shortDescription) : '—' },
+      { k: 'Description', v: desc ? descShow : '—' }
     ]), { headerRight: editBtn });
   }
   // Inline edit form for the clean top-level Info fields. Writes delegate to
@@ -364,19 +369,27 @@
   function infoEditForm(p) {
     var pid = p._key || p.pid;
     var guarded = String(p.status || '').toLowerCase() === 'active';
+    var inputStyle = 'display:block;width:100%;margin-top:4px;padding:7px 9px;border:1px solid var(--cream-dark);border-radius:6px;font-size:0.9rem;background:var(--cream);color:inherit;box-sizing:border-box;';
     function field(label, id, val) {
       return '<label style="display:block;margin-bottom:12px;font-size:0.85rem;color:var(--warm-gray);">' + esc(label) +
         '<input id="' + id + '" type="text" value="' + esc(val == null ? '' : String(val)) +
-        '" style="display:block;width:100%;margin-top:4px;padding:7px 9px;border:1px solid var(--cream-dark);border-radius:6px;font-size:0.9rem;background:var(--cream);color:inherit;box-sizing:border-box;"></label>';
+        '" style="' + inputStyle + '"></label>';
+    }
+    function textarea(label, id, val) {
+      return '<label style="display:block;margin-bottom:12px;font-size:0.85rem;color:var(--warm-gray);">' + esc(label) +
+        '<textarea id="' + id + '" rows="3" style="' + inputStyle + 'resize:vertical;font-family:inherit;">' + esc(val == null ? '' : String(val)) + '</textarea></label>';
     }
     var note = guarded
       ? '<div class="pv2-pnote">This product is Published — your edits stage as a pending revision and go live when you Apply.</div>'
       : '';
     var body = note +
+      field('Name', 'pv2InfoName', p.name) +
       field('Category', 'pv2InfoCategory', categoryLabel(p)) +
       field('Business line', 'pv2InfoBizLine', p.businessLine) +
       field('Slug', 'pv2InfoSlug', p.slug) +
       field('SKU', 'pv2InfoSku', p.sku) +
+      field('Short description', 'pv2InfoShortDesc', p.shortDescription) +
+      textarea('Description', 'pv2InfoDescription', p.description) +
       '<div style="display:flex;gap:8px;margin-top:4px;">' +
       '<button class="btn btn-primary btn-small" onclick="ProductsV2.saveInfo(\'' + esc(pid) + '\')">' + (guarded ? 'Stage changes' : 'Save') + '</button>' +
       '<button class="btn btn-secondary btn-small" onclick="ProductsV2.cancelInfo(\'' + esc(pid) + '\')">Cancel</button>' +
@@ -1295,17 +1308,23 @@
       function val(id) { var el = document.getElementById(id); return el ? el.value.trim() : ''; }
       var rec = V2.byId[pid] || {};
       var patch = {
+        name: val('pv2InfoName'),
         category: val('pv2InfoCategory'),
         businessLine: val('pv2InfoBizLine'),
         slug: val('pv2InfoSlug'),
-        sku: val('pv2InfoSku')
+        sku: val('pv2InfoSku'),
+        shortDescription: val('pv2InfoShortDesc'),
+        description: val('pv2InfoDescription')
       };
       // Only send fields that actually changed (cheaper writes, smaller revisions).
       var changed = {};
+      if (patch.name !== (rec.name || '')) changed.name = patch.name;
       if (patch.category !== (categoryLabel(rec) || '')) changed.category = patch.category;
       if (patch.businessLine !== (rec.businessLine || '')) changed.businessLine = patch.businessLine;
       if (patch.slug !== (rec.slug || '')) changed.slug = patch.slug;
       if (patch.sku !== (rec.sku || '')) changed.sku = patch.sku;
+      if (patch.shortDescription !== (rec.shortDescription || '')) changed.shortDescription = patch.shortDescription;
+      if (patch.description !== (rec.description || '')) changed.description = patch.description;
       if (!Object.keys(changed).length) { V2.editInfo = null; rerenderInfoPane(pid); MastAdmin.showToast('No changes'); return; }
       withProductBridge(function () {
         Promise.resolve(window.MakerProductBridge.setFields(pid, changed)).then(function (res) {
@@ -1314,6 +1333,8 @@
           if (!res.staged) Object.assign(rec, changed);
           V2.editInfo = null;
           rerenderInfoPane(pid);
+          // A live name edit also changes the SO header title strip.
+          if (!res.staged && changed.name != null) rerenderHeaderStrip(pid);
           MastAdmin.showToast(res.staged ? 'Staged ' + res.changed + ' change' + (res.changed === 1 ? '' : 's') + ' (Apply to go live)' : 'Saved');
         }, function (e) { console.error('[products-v2] saveInfo', e); MastAdmin.showToast('Save failed', true); });
       });
