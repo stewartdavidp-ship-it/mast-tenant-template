@@ -1307,6 +1307,7 @@
     saveInfo: function (pid) {
       function val(id) { var el = document.getElementById(id); return el ? el.value.trim() : ''; }
       var rec = V2.byId[pid] || {};
+      var prevName = rec.name || '';
       var patch = {
         name: val('pv2InfoName'),
         category: val('pv2InfoCategory'),
@@ -1333,8 +1334,15 @@
           if (!res.staged) Object.assign(rec, changed);
           V2.editInfo = null;
           rerenderInfoPane(pid);
-          // A live name edit also changes the SO header title strip.
-          if (!res.staged && changed.name != null) rerenderHeaderStrip(pid);
+          // A live name edit also changes the SO title bar ("Product: <name>").
+          // The header strip is image-only, so refresh the title element directly
+          // (swap the old name in place — robust to the "Product: " label prefix).
+          if (!res.staged && changed.name != null) {
+            var tEl = document.getElementById('mastSlideOutTitle');
+            if (tEl && prevName && tEl.textContent.indexOf(prevName) >= 0) {
+              tEl.textContent = tEl.textContent.replace(prevName, changed.name);
+            }
+          }
           MastAdmin.showToast(res.staged ? 'Staged ' + res.changed + ' change' + (res.changed === 1 ? '' : 's') + ' (Apply to go live)' : 'Saved');
         }, function (e) { console.error('[products-v2] saveInfo', e); MastAdmin.showToast('Save failed', true); });
       });
