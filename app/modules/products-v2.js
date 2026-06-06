@@ -115,8 +115,12 @@
   // popover to jump to the Default or any variant in place. currentVid = null on
   // the Default, or the variant id on a variant. No pill on a variant-less product.
   function variantSwitcherHtml(p, currentVid) {
-    if (variantCount(p) === 0) return '';
     var pid = p._key || p.pid;
+    // No variants yet → the pill becomes "+ Add variant" (same spot the switcher
+    // would be), so you can branch a single-variant product into options.
+    if (variantCount(p) === 0) {
+      return '<div class="pv2-vswitch"><button class="pv2-vpill" onclick="ProductsV2.addVariant(\'' + esc(pid) + '\')" title="Add a variant" style="color:var(--teal,teal);">+ Add variant</button></div>';
+    }
     var curLabel = currentVid
       ? variantLabel(realVariants(p).filter(function (x) { return x.id === currentVid; })[0] || { combo: {} })
       : '◆ Default';
@@ -1185,6 +1189,15 @@
     var rec = V2.byId[pid]; if (!rec || !res) return;
     if (Array.isArray(res.images)) rec.images = res.images;
     if (Array.isArray(res.imageIds)) rec.imageIds = res.imageIds;
+    markListDirty();
+  }
+  // List "dirty" refresh: an SO write already updated the shared V2.byId record,
+  // so re-render the (hidden, behind the SO) list body FROM MEMORY — no DB re-read.
+  // Called only after a write, so the list refreshes exactly when new data is ready
+  // and is current the moment the SO closes. (e.g. a new/primary image thumbnail.)
+  function markListDirty() {
+    var lb = document.getElementById('pv2ListBody');
+    if (lb) lb.innerHTML = renderListBody();
   }
 
   function buildVariantRecord(id) {
@@ -1748,7 +1761,7 @@
         Promise.resolve(window.MakerProductBridge.setStockCounts(pid, '_default', counts)).then(function (res) {
           if (!res || !res.ok) { MastAdmin.showToast('Failed: ' + ((res && res.error) || 'unknown'), true); return; }
           var rec = V2.byId[pid]; if (rec && res.stockInfo) rec.stockInfo = res.stockInfo;
-          V2.editInv = null; rerenderInventoryPane(pid);
+          V2.editInv = null; rerenderInventoryPane(pid); markListDirty();
           MastAdmin.showToast('Stock updated');
         }, function (e) { console.error('[products-v2] saveInventory', e); MastAdmin.showToast('Failed', true); });
       });
@@ -1789,7 +1802,7 @@
         Promise.resolve(window.MakerProductBridge.setFields(pid, changed)).then(function (res) {
           if (!res || !res.ok) { MastAdmin.showToast('Save failed: ' + ((res && res.error) || 'unknown'), true); return; }
           if (!res.staged) Object.assign(rec, changed);
-          V2.editPricing = null; rerenderPricingPane(pid);
+          V2.editPricing = null; rerenderPricingPane(pid); markListDirty();
           MastAdmin.showToast(res.staged ? 'Staged ' + res.changed + ' change' + (res.changed === 1 ? '' : 's') + ' (Apply to go live)' : 'Saved');
         }, function (e) { console.error('[products-v2] savePricing', e); MastAdmin.showToast('Save failed', true); });
       });
@@ -1929,7 +1942,7 @@
           // Mirror the live cache so the read pane shows the edit immediately.
           if (!res.staged) Object.assign(rec, changed);
           V2.editInfo = null;
-          rerenderInfoPane(pid);
+          rerenderInfoPane(pid); if (!res.staged) markListDirty();
           // A live name edit also changes the SO title bar ("Product: <name>").
           // The header strip is image-only, so refresh the title element directly
           // (swap the old name in place — robust to the "Product: " label prefix).
@@ -1953,7 +1966,7 @@
         Promise.resolve(window.MakerProductBridge.addImage(pid, file)).then(function (res) {
           if (!res || !res.ok) { MastAdmin.showToast('Upload failed: ' + ((res && res.error) || 'unknown'), true); return; }
           var rec = V2.byId[pid]; if (rec) { rec.images = res.images; rec.imageIds = res.imageIds; }
-          rerenderImagePane(pid); rerenderHeaderStrip(pid);
+          rerenderImagePane(pid); rerenderHeaderStrip(pid); markListDirty();
           MastAdmin.showToast('Image uploaded');
         }, function (e) { console.error('[products-v2] uploadImage', e); MastAdmin.showToast('Upload failed', true); });
       });
