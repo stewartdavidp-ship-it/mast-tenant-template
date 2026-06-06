@@ -131,6 +131,9 @@
     var cols = cfg.columns || [];
     var rowId = cfg.rowId || function (r) { return r && r.id; };
     var th = '';
+    // Opt-in expandable rows (e.g. a product → its variants): reserve a leading
+    // toggle column. Lists that don't set cfg.expandable render exactly as before.
+    if (cfg.expandable) th += '<th style="width:34px;border-bottom:1px solid var(--border,rgba(255,255,255,0.06));"></th>';
     cols.forEach(function (c) {
       var align = c.align === 'right' ? 'text-align:right;' : (c.align === 'center' ? 'text-align:center;' : '');
       if (c.sortable && cfg.onSortFnName) {
@@ -152,6 +155,14 @@
           ' tabindex="0" role="button" style="cursor:pointer;"'
         : '';
       body += '<tr class="mast-row"' + click + '>';
+      var _canExp = !!(cfg.expandable && cfg.hasChildren && cfg.hasChildren(r));
+      var _open = !!(_canExp && cfg.expandedIds && cfg.expandedIds[id]);
+      if (cfg.expandable) {
+        body += '<td style="padding:14px 4px;text-align:center;width:34px;' +
+                'border-bottom:1px solid var(--border,rgba(255,255,255,0.06));">' +
+                (_canExp ? '<button class="mast-exp" onclick="event.stopPropagation();' + (cfg.onToggleFnName || '') + '(\'' + esc(id) + '\')" aria-label="Toggle">' + (_open ? '▼' : '▶') + '</button>' : '') +
+                '</td>';
+      }
       cols.forEach(function (c) {
         var align = c.align === 'right' ? 'text-align:right;font-variant-numeric:tabular-nums;' :
                     (c.align === 'center' ? 'text-align:center;' : '');
@@ -164,6 +175,10 @@
                 '<span style="color:var(--warm-gray);cursor:pointer;">⋯</span></td>';
       }
       body += '</tr>';
+      // Expanded parent → caller-supplied child <tr>s (must match the column count
+      // incl. the leading toggle cell). Keeps domain-specific child markup (the
+      // variant tree) in the module while the engine owns the table + styling.
+      if (_canExp && _open && typeof cfg.childRowsHtml === 'function') body += (cfg.childRowsHtml(r) || '');
     });
 
     return '<div class="mast-table-wrap" style="border:1px solid var(--border,rgba(255,255,255,0.08));' +
@@ -521,6 +536,10 @@
       '.mu-editpill{font-size:0.68rem;font-weight:600;letter-spacing:.04em;padding:2px 9px;border-radius:999px;background:color-mix(in srgb,var(--amber,#C4853C) 16%,transparent);color:var(--amber,#C4853C);border:1px solid color-mix(in srgb,var(--amber,#C4853C) 30%,transparent);}',
       // Visible keyboard focus (06-B / a11y) — no :focus-visible rings existed before.
       '.mast-row:focus-visible{outline:2px solid var(--amber,var(--teal));outline-offset:-2px;} .mu-link:focus-visible,.mu-crumb button:focus-visible{outline:2px solid var(--amber,var(--teal));outline-offset:2px;border-radius:3px;}',
+      // Expandable list rows (opt-in via cfg.expandable): the toggle control + the
+      // child (sub) row surface. Only applies to lists that emit them.
+      '.mast-exp{background:transparent;border:0;color:var(--warm-gray);font-size:0.85rem;line-height:1;cursor:pointer;padding:3px 5px;border-radius:5px;} .mast-exp:hover{color:var(--text-primary);background:color-mix(in srgb,var(--text-primary) 8%,transparent);}',
+      '.mast-subrow td{background:color-mix(in srgb,black 14%,transparent);}',
       '.feedback-overlay{z-index:12001 !important;}', // above the slide-out (9000) so the feedback dialog opens on top',
       '.mast-feedback-btn:hover{color:var(--text-primary) !important;}',
       '.mu-li{display:flex;align-items:center;gap:11px;} .mu-sub{color:var(--warm-gray);font-size:0.78rem;} .mu-totrow{display:flex;justify-content:space-between;padding:6px 0;color:var(--warm-gray);font-size:0.9rem;} .mu-totrow.grand{border-top:1px solid var(--border,rgba(127,127,127,.2));margin-top:6px;padding-top:10px;color:var(--text-primary);font-weight:700;font-size:1.0rem;}',

@@ -128,12 +128,16 @@
   function renderList(key, opts) {
     opts = opts || {};
     return window.MastUI.list({
-      columns: listColumns(key),
+      columns: opts.columns || listColumns(key),
       rows: opts.rows || [],
       sortKey: opts.sortKey, sortDir: opts.sortDir, onSortFnName: opts.onSortFnName,
       onRowClickFnName: opts.onRowClickFnName,
-      rowId: _registry[key] && _registry[key].recordId,
-      empty: opts.empty, loading: opts.loading
+      rowId: opts.rowId || (_registry[key] && _registry[key].recordId),
+      empty: opts.empty, loading: opts.loading,
+      // Opt-in expandable rows (additive — see MastUI.list).
+      expandable: opts.expandable, hasChildren: opts.hasChildren,
+      expandedIds: opts.expandedIds, onToggleFnName: opts.onToggleFnName,
+      childRowsHtml: opts.childRowsHtml, rowActions: opts.rowActions
     });
   }
 

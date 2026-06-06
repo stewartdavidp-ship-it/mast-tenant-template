@@ -39,15 +39,33 @@ cause of the earlier image-drop data-loss bug. Key **strictly by id**; log loudl
 
 ## 3. Sequencing (smallest-first; each shippable + live-verified on sgtest15)
 
-1. **Variant Info pane + editable `variant.name`** + index-id hardening. ← *in progress / first PR*
-2. **Per-variant fulfillment** — per-variant `stockType`/`availability` on the id-keyed stock record.
-3. **Add-variant / options** — define `product.options` + add id'd variant combos (the *standard*
-   variant-creation flow; absorbs P4 item #6).
-4. **Per-variant tags** — with the channel/tags-import architecture (derived vs hand-set).
-5. **Codify the standard** — once product+variant are solid, document the canonical pattern so other
-   V2 surfaces conform.
+1. **Variant Info pane + editable `variant.name`** + index-id hardening. ✅ DONE (PR #243).
+2. **Engine-list convergence** — the product list must be the *standard* list, not a bespoke one.
+   Today products-v2 hand-rolls `renderListBody`/`.pv2-row` (the ONLY module that bypasses
+   `MastEntity.renderList → MastUI.list`) to get thumbnails + the variant expand-tree, so it looks
+   different from every other list. Fix by raising the engine list, then re-platforming:
+   - **2a (engine, additive):** `MastUI.list` gains opt-in **expandable child rows** (`expandable`,
+     `hasChildren`, `expandedIds`, `onToggleFnName`, `childRowsHtml`) + `.mast-subrow`/`.mast-exp`
+     styling; `renderList` accepts `opts.columns`/`rowId`. Thumbnails already work (a column's
+     `render()` is raw HTML). Lists that don't opt in render byte-identical. ← *this PR*
+   - **2b:** re-platform products-v2's list onto `MastEntity.renderList` (thumbnail + status/price/
+     variants columns + `childRowsHtml` for the Default/variant/Add-variant tree). Drop `.pv2-row`.
+     Result: same look-and-feel as Orders/Customers, thumbnails + expansion preserved.
+3. **Faceted product list (lenses)** — built on the now-standard list. Pills = facets that swap the
+   column projection AND the row click-through, carried through into the SO tab:
+   General→default · Inventory→Inventory tab · Sales→**new Sales tab** · Forecast→**new Forecast tab
+   + create-job**. Folds the legacy Inventory / Sales-by-Product / Forecast sub-items (no v2 twins
+   today) into the product list instead of building separate v2 modules. Lazy-load per lens; gate
+   sensitive lenses (sales/forecast) on the same RBAC as today. **Procurement-as-lens:** one PO
+   object, operational view under Product/Materials + financial (AP/spend) view in Finance — don't
+   duplicate or fully move it (leans Product/Operations if forced to pick one home).
+4. **Per-variant fulfillment** — per-variant `stockType`/`availability` on the id-keyed stock record
+   (needs the model decision: stockType is product-level today).
+5. **Add-variant / options** — define `product.options` + add id'd variant combos (absorbs P4 #6).
+6. **Per-variant tags** — with the channel/tags-import architecture (derived badges vs hand-set).
+7. **Codify the standard** — document the canonical pattern so other V2 surfaces conform.
 
-In parallel (not blocking): P4 item **#5 Channels** (per-channel sync on/off, integration-coupled) and
+In parallel (not blocking): P4 item **Channels** (per-channel sync on/off, integration-coupled) and
 the remaining legacy→V2 module moves.
 
 ## 4. Done already (the cornerstone substrate)
