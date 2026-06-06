@@ -1891,6 +1891,12 @@
     cancel: function (poId) {
       return _ensureLoaded().then(function () { return cancelPo(poId); });
     },
+    // applyLandedCosts(receiptId) → wraps the legacy applyLandedCosts (Tier 1.5
+    // P3). It owns its own mastConfirm + value-based allocation across the
+    // receipt's lots + writes; the V2 caller reloads its own data afterward.
+    applyLandedCosts: function (receiptId) {
+      return _ensureLoaded().then(function () { return applyLandedCosts(receiptId); });
+    },
     // send(poId, { subject, html }) → the "send to vendor" write for the
     // Draft→Ordered transition (Work Item B). Stamps sentAt + status='submitted'
     // and, when the vendor has an email, queues the PO document on emailQueue

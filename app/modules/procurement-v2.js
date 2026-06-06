@@ -166,11 +166,19 @@
           var rLines = r.lines || [];
           var rQty = rLines.reduce(function (s, l) { return s + (Number(l.qtyReceivedNow) || 0); }, 0);
           var rValue = rLines.reduce(function (s, l) { return s + (Number(l.qtyReceivedNow) || 0) * (Number(l.unitCostHomeCurrency) || 0); }, 0);
-          return '<div style="padding:10px 14px;border:1px solid var(--cream-dark,rgba(127,127,127,.2));border-radius:8px;margin-bottom:6px;font-size:0.85rem;display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;">' +
+          var addl = (r.additionalCosts || []).reduce(function (s, c) { return s + (Number(c.amount) || 0); }, 0);
+          // Apply-landed (Tier 1.5 P3): offered when the receipt carries unallocated
+          // additional costs (freight/duties). Delegates to ProcurementBridge.
+          var landed = r.landedCostsApplied
+            ? ' · <span style="color:var(--teal);">landed costs applied</span>'
+            : (addl > 0 && canEdit()
+              ? ' · <button class="btn btn-secondary btn-small" style="padding:2px 8px;" onclick="ProcurementV2.applyLanded(\'' + esc(r.receiptId) + '\',\'' + esc(po.poId) + '\')">Apply landed (' + (N.money(addl) || '$0.00') + ')</button>'
+              : '');
+          return '<div style="padding:10px 14px;border:1px solid var(--cream-dark,rgba(127,127,127,.2));border-radius:8px;margin-bottom:6px;font-size:0.85rem;display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;align-items:center;">' +
             '<span>' + (r.receivedAt ? N.date(r.receivedAt) : '—') +
               (r.vendorInvoiceRef ? ' · <span style="font-family:monospace;">' + esc(r.vendorInvoiceRef) + '</span>' : '') +
               ' · ' + rLines.length + (rLines.length === 1 ? ' line' : ' lines') + ' · ' + rQty + ' units' +
-              (r.landedCostsApplied ? ' · <span style="color:var(--teal);">landed costs applied</span>' : '') + '</span>' +
+              landed + '</span>' +
             '<span style="font-family:monospace;">' + (N.money(rValue) || '$0.00') + '</span>' +
           '</div>';
         }).join('') : '<span class="mu-sub">No receipts recorded yet.</span>';
@@ -262,6 +270,7 @@
         '<span style="color:var(--warm-gray);font-size:0.9rem;">' + N.count(openCount) + ' open · ' + N.count(V2.rows.length) + ' total</span>' +
         '<button class="btn btn-primary" style="margin-left:auto;" onclick="ProcurementV2.createNew()">+ New PO</button>' +
         '<button class="btn btn-secondary" onclick="navigateTo(\'reorder-v2\')">↻ Needs reorder</button>' +
+        '<button class="btn btn-secondary" onclick="navigateTo(\'lots-v2\')">▦ Inventory lots</button>' +
         '<button class="btn btn-secondary" onclick="ProcurementV2.exportCsv()">↓ Export</button>' +
       '</div>' +
       '<div style="display:flex;gap:6px;flex-wrap:wrap;margin:12px 0;">' + filters + '</div>' +
@@ -583,6 +592,18 @@
       }
       // cancelPo owns its own mastConfirm; reload + re-open the PO after.
       window.ProcurementBridge.cancel(id).then(function () { reloadThenOpen(id); });
+    },
+
+    // Apply landed costs to a receipt (Tier 1.5 P3) → ProcurementBridge wraps the
+    // legacy allocator (which owns its own confirm + toast). Reload + re-open the
+    // PO on fresh data so the receipt shows "landed costs applied".
+    applyLanded: function (receiptId, poId) {
+      if (!window.ProcurementBridge || typeof ProcurementBridge.applyLandedCosts !== 'function') {
+        if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('procurement'); } catch (e) {} }
+        if (window.showToast) showToast('Procurement engine still loading — try again', true);
+        return;
+      }
+      Promise.resolve(window.ProcurementBridge.applyLandedCosts(receiptId)).then(function () { reloadThenOpen(poId); });
     }
   };
 
