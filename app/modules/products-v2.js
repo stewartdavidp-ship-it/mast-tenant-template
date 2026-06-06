@@ -416,6 +416,93 @@
     var pane = body && body.querySelector('.mu-pane[data-pane="inventory"]');
     if (pane) pane.innerHTML = inventoryPane(rec);
   }
+  // ── Sales (read) ────────────────────────────────────────────────────
+  // Per-product units + revenue from the shared sales map (last 500 orders),
+  // window._mastProductSalesMap — the same source the products-list demand chips
+  // use. No productsData dependency, so it works in a pure-v2 session.
+  function _salesEntry(pid) { var m = window._mastProductSalesMap; return (m && m[pid]) || null; }
+  function ensureSalesData(pid) {
+    if (window._mastProductSalesMap) return;
+    if (V2._salesLoading) return; V2._salesLoading = true;
+    Promise.resolve(window._ensureProductSalesMap ? window._ensureProductSalesMap() : null)
+      .then(function () { V2._salesLoading = false; rerenderSalesPane(pid); }, function () { V2._salesLoading = false; });
+  }
+  function _money(c) { return N.money((c || 0) / 100) || '—'; }
+  function salesPane(p) {
+    var pid = p._key || p.pid;
+    if (!window._mastProductSalesMap) { ensureSalesData(pid); return U.card('Sales', '<div style="color:var(--warm-gray);font-size:0.9rem;">Loading sales…</div>'); }
+    var s = _salesEntry(pid) || {};
+    var last = s.lastOrdered ? String(s.lastOrdered).slice(0, 10) : '—';
+    return U.card('Sales · last 30 / 90 days / all time', U.kv([
+      { k: 'Units sold', v: (s.last30 || 0) + ' / ' + (s.last90 || 0) + ' / ' + (s.allTime || 0) },
+      { k: 'Revenue', v: _money(s.revenue30) + ' / ' + _money(s.revenue90) + ' / ' + _money(s.revenueAll) },
+      { k: 'Last sold', v: last }
+    ])) + '<div class="pv2-pnote">Units &amp; revenue from the last 500 orders. Margin &amp; demand trend are on the Forecast tab.</div>';
+  }
+  function rerenderSalesPane(pid) {
+    var rec = V2.byId[pid]; if (!rec) return;
+    var body = document.getElementById('mastSlideOutBody');
+    var pane = body && body.querySelector('.mu-pane[data-pane="sales"]');
+    if (pane) pane.innerHTML = salesPane(rec);
+  }
+  // ── Forecast (read + create-job) ────────────────────────────────────
+  // Reuses the legacy forecast computation (window.forecastData), which needs the
+  // legacy productsData primed — harmless in v2 (we set it from MastDB; the legacy
+  // render fns it calls all guard on missing DOM). Cached after first compute.
+  function _forecastEntry(pid) {
+    var arr = window.forecastData; if (!Array.isArray(arr)) return null;
+    for (var i = 0; i < arr.length; i++) if (arr[i] && arr[i].pid === pid) return arr[i];
+    return null;
+  }
+  function ensureForecastData(pid) {
+    if (Array.isArray(window.forecastData) && window.forecastData.length) return;
+    if (V2._forecastLoading) return; V2._forecastLoading = true;
+    Promise.resolve((window.productsData && window.productsData.length) ? null : MastDB.products.list())
+      .then(function (all) {
+        if (all) window.productsData = Array.isArray(all) ? all : Object.values(all || {});
+        window.productsLoaded = true;
+        return window._ensureProductSalesMap ? window._ensureProductSalesMap() : null;
+      })
+      .then(function () {
+        try { if (window.computeAndRenderForecast) window.computeAndRenderForecast(); } catch (e) { console.error('[products-v2] forecast compute', e); }
+        var t = 0;
+        (function poll() {
+          if (Array.isArray(window.forecastData) && window.forecastData.length) { V2._forecastLoading = false; rerenderForecastPane(pid); return; }
+          if (t++ < 25) setTimeout(poll, 150); else { V2._forecastLoading = false; rerenderForecastPane(pid); }
+        })();
+      }, function () { V2._forecastLoading = false; });
+  }
+  function forecastPane(p) {
+    var pid = p._key || p.pid;
+    if (!(Array.isArray(window.forecastData) && window.forecastData.length)) { ensureForecastData(pid); return U.card('Forecast', '<div style="color:var(--warm-gray);font-size:0.9rem;">Loading forecast…</div>'); }
+    var f = _forecastEntry(pid);
+    if (!f) return U.card('Forecast', '<div style="color:var(--warm-gray);font-size:0.9rem;">No forecast data for this product.</div>');
+    var trend = f.trending ? 'Trending up' : (f.declining ? 'Declining' : 'Steady');
+    var mode = f.isMTO ? 'Made to order' : (f.isStocked ? 'Stocked' : '—');
+    var cov = (f.weeksCoverage != null && isFinite(f.weeksCoverage)) ? (f.weeksCoverage + ' weeks') : (f.isMTO ? 'n/a (made to order)' : '—');
+    var card = U.card('Forecast', U.kv([
+      { k: 'Monthly sales rate', v: (f.monthlyRate != null ? f.monthlyRate + ' / mo' : '—') },
+      { k: 'Units sold (30 / 90 / all)', v: (f.last30 || 0) + ' / ' + (f.last90 || 0) + ' / ' + (f.allTimeSold || 0) },
+      { k: 'Margin (30 / 90 day)', v: _money(f.margin30Cents) + ' / ' + _money(f.margin90Cents) },
+      { k: 'On-hand coverage', v: cov },
+      { k: 'Trend', v: trend },
+      { k: 'Fulfillment', v: mode }
+    ]));
+    var sug = '';
+    if (f.suggestBuild && f.suggestedQty) {
+      sug = U.card('Suggested build', '<div style="font-size:0.9rem;margin-bottom:10px;">Stock is low for the current sales rate. Suggested build: <strong>' + esc(String(f.suggestedQty)) + ' pcs</strong>.</div>' +
+        '<button class="btn btn-primary btn-small" onclick="ProductsV2.createForecastJob(\'' + esc(pid) + '\',' + Number(f.suggestedQty) + ')">Create production job →</button>');
+    } else if (f.considerStocking) {
+      sug = '<div class="pv2-pnote">Made-to-order with steady demand — consider stocking it.</div>';
+    }
+    return card + sug;
+  }
+  function rerenderForecastPane(pid) {
+    var rec = V2.byId[pid]; if (!rec) return;
+    var body = document.getElementById('mastSlideOutBody');
+    var pane = body && body.querySelector('.mu-pane[data-pane="forecast"]');
+    if (pane) pane.innerHTML = forecastPane(rec);
+  }
   function channelsPane(p) {
     var er = p.externalRefs || {};
     function ch(name, ref) { var on = ref && (ref.externalId || ref.syncEnabled); return { k: name, v: on ? U.badge('Mapped', 'teal') : U.badge('Off', 'neutral') }; }
@@ -697,7 +784,8 @@
           { k: 'On hand', v: ((p.stockInfo && p.stockInfo.totalOnHand) != null ? String(p.stockInfo.totalOnHand) : '—') }
         ]);
         var tabs = [
-          { key: 'pricing', label: 'Pricing' }, { key: 'recipe', label: 'Recipe' }, { key: 'inventory', label: 'Inventory' },
+          { key: 'pricing', label: 'Pricing' }, { key: 'sales', label: 'Sales' }, { key: 'recipe', label: 'Recipe' },
+          { key: 'inventory', label: 'Inventory' }, { key: 'forecast', label: 'Forecast' },
           { key: 'fulfillment', label: 'Fulfillment' }, { key: 'channels', label: 'Channels' }, { key: 'image', label: 'Image' }, { key: 'info', label: 'Info' }
         ];
         function pane(key, html, active) { return '<div class="mu-pane" data-pane="' + key + '"' + (active ? '' : ' hidden') + '>' + html + '</div>'; }
@@ -714,8 +802,10 @@
           '<div id="muFlowHost" class="pv2-flowhost">Loading workflow…</div>' +
           UU.paneTabsBar(tabs, 'pricing') +
           pane('pricing', pricingPane(p), true) +
+          pane('sales', salesPane(p)) +
           pane('recipe', recipePane(p)) +
           pane('inventory', inventoryPane(p)) +
+          pane('forecast', forecastPane(p)) +
           pane('fulfillment', fulfillmentPane(p)) +
           pane('channels', channelsPane(p)) +
           pane('image', imagePane(p)) +
@@ -1298,6 +1388,12 @@
     // Preload maker before the SO opens so the MastFlow process header renders with
     // live readiness (products.workflow predicates call makerComputeReadinessChecklist).
     open: function (id) { var rec = V2.byId[id]; if (rec) ensureMaker(function () { MastEntity.openRecord('products-v2', rec, 'read'); }); },
+    // Forecast tab → create a production job for the suggested build (reuses the
+    // legacy forecast job modal + its delegated create handler).
+    createForecastJob: function (pid, qty) {
+      if (window.openForecastJobModal) window.openForecastJobModal(pid, qty);
+      else MastAdmin.showToast('Job creation unavailable', true);
+    },
     // Preload maker too, so the first image/edit click in a variant SO works
     // (no cold "still loading" — the variant's writes also delegate to the bridge).
     openVariant: function (key) { var rec = buildVariantRecord(key); if (rec) ensureMaker(function () { MastEntity.openRecord('product-variant-v2', rec, 'read'); }); },
