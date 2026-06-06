@@ -224,16 +224,43 @@
     var paneEl = body && body.querySelector('.mu-pane[data-pane="pricing"]');
     if (paneEl) paneEl.innerHTML = pricingPane(rec);
   }
+  // Lightweight cache of fetched recipe records (for the Recipe-tab headline).
+  var _recipeCache = {};
+  function loadRecipeThenRerender(recipeId, pid) {
+    if (_recipeCache[recipeId] || _recipeCache['__loading_' + recipeId]) return;
+    _recipeCache['__loading_' + recipeId] = true;
+    Promise.resolve(MastDB.recipes.get(recipeId)).then(function (rc) {
+      delete _recipeCache['__loading_' + recipeId];
+      if (rc) { _recipeCache[recipeId] = rc; rerenderRecipePane(pid); }
+    }, function () { delete _recipeCache['__loading_' + recipeId]; });
+  }
   function recipePane(p) {
     var pid = p._key || p.pid;
     if (p.recipeId) {
-      var body = U.kv([{ k: 'Status', v: 'Linked' }, { k: 'Recipe id', v: p.recipeId }]) +
+      // Headline the recipe (name / cost / status / materials) — the raw recipe id
+      // is meaningless to the user. Fetched async + cached; shows a loader first.
+      var rc = _recipeCache[p.recipeId];
+      var head;
+      if (rc) {
+        var mats = rc.lineItems ? Object.keys(rc.lineItems).length : 0;
+        head = U.kv([
+          { k: 'Recipe', v: esc(rc.name || 'Recipe') },
+          { k: 'Unit cost', v: N.money(rc.totalCost) || '—' },
+          { k: 'Status', v: rc.status ? esc(rc.status) : '—' },
+          { k: 'Materials', v: String(mats) },
+          { k: 'Retail', v: N.money(rc.retailPrice) || '—' }
+        ]);
+      } else {
+        head = '<div style="color:var(--warm-gray);font-size:0.9rem;">Loading recipe…</div>';
+        loadRecipeThenRerender(p.recipeId, pid);
+      }
+      var body = head +
         '<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">' +
         '<button class="btn btn-secondary btn-small" onclick="MastEntity.drill(\'recipe-v2\',\'' + esc(p.recipeId) + '\')">Open recipe →</button>' +
         '<button class="btn btn-secondary btn-small" onclick="ProductsV2.recipeEditInBuilder(\'' + esc(p.recipeId) + '\',\'' + esc(pid) + '\')">Edit in builder ↗</button>' +
         '<button class="btn btn-secondary btn-small" onclick="ProductsV2.recipeUnlink(\'' + esc(pid) + '\')">Unlink</button>' +
         '</div>';
-      return U.card('Recipe', body) + '<div class="pv2-pnote">“Open recipe” reads it here (Back returns); “Edit in builder” opens the full recipe builder — a separate surface.</div>';
+      return U.card('Recipe', body) + '<div class="pv2-pnote">“Open recipe” reads the full bill of materials here (Back returns); “Edit in builder” opens the recipe builder.</div>';
     }
     return U.card('Recipe', '<div style="color:var(--warm-gray);font-size:0.9rem;margin-bottom:10px;">No recipe linked. A recipe tracks the materials, labor, and cost behind this product.</div>' +
       '<button class="btn btn-secondary btn-small" onclick="ProductsV2.recipeCreate(\'' + esc(pid) + '\')">+ Create a recipe</button>');
@@ -249,11 +276,19 @@
   // `pid` lets us push a v2 return-target so the builder's "← Back to Products"
   // (maker.closeRecipeBuilder → MastNavStack.popAndReturn) lands back on the v2
   // slide-out instead of the V1 legacy product page.
-  function openRecipeBuilderGated(recipeId, pid, variantId) {
+  function openRecipeBuilderGated(recipeId, pid, variantId, fromDrill) {
     withProductBridge(function () {
       MastAdmin.showToast('Opening recipe builder…');
+      // The recipe will likely change in the builder — drop its cached headline so
+      // the Recipe tab refetches fresh cost/status on return.
+      if (recipeId) delete _recipeCache[recipeId];
       if (pid && window.MastNavStack && typeof MastNavStack.push === 'function') {
-        MastNavStack.push({ route: 'products-v2', view: 'detail', state: { pid: pid, vid: variantId || null }, label: 'Product' });
+        // Capture the EXACT view to restore on Back: the active tab pane, or — when
+        // launched from the recipe drill — the recipe drill itself (no .mu-pane there).
+        var visEl = document.querySelector('#mastSlideOutBody .mu-pane:not([hidden])');
+        var pane = visEl && visEl.getAttribute('data-pane');
+        MastNavStack.push({ route: 'products-v2', view: 'detail', label: 'Product',
+          state: { pid: pid, vid: variantId || null, pane: pane || null, drillRecipe: fromDrill ? recipeId : null } });
       }
       // navigateTo() clears MastNavStack on every non-internal nav, so guard the
       // classic hop with _mastNavInternal (canonical push-then-nav pattern) —
@@ -271,8 +306,28 @@
       }, 320);
     });
   }
+  // Click a tab pane once it exists (the SO may still be (re)rendering after the
+  // builder's Back pops us back). Polls briefly so the originating tab is restored.
+  function restorePaneWhenReady(pane, tries) {
+    if (!pane) return;
+    tries = tries || 0;
+    var body = document.getElementById('mastSlideOutBody');
+    var btn = body && body.querySelector('.mu-ptabs button[onclick*="\'' + pane + '\'"]');
+    if (btn) { btn.click(); return; }
+    if (tries < 25) setTimeout(function () { restorePaneWhenReady(pane, tries + 1); }, 50);
+  }
+  // Rebuild product Recipe-tab → recipe drill (so the user returns to the exact
+  // recipe view they edited from, and Back from it still lands on the Recipe tab).
+  function rebuildRecipeDrillWhenReady(recipeId, tries) {
+    tries = tries || 0;
+    var body = document.getElementById('mastSlideOutBody');
+    var btn = body && body.querySelector('.mu-ptabs button[onclick*="\'recipe\'"]');
+    if (btn) { btn.click(); setTimeout(function () { MastEntity.drill('recipe-v2', recipeId); }, 40); return; }
+    if (tries < 25) setTimeout(function () { rebuildRecipeDrillWhenReady(recipeId, tries + 1); }, 50);
+  }
   // Restore target for the builder's Back: pop returns to the v2 list (via
-  // popAndReturn → navigateTo('products-v2')); reopen the SO the user came from.
+  // popAndReturn → navigateTo('products-v2')); reopen the EXACT view the user came
+  // from — variant SO, recipe drill, or the product on its originating tab.
   if (window.MastNavStack && typeof MastNavStack.registerRestorer === 'function') {
     MastNavStack.registerRestorer('products-v2', function (view, state) {
       if (view !== 'detail' || !state || !state.pid) return;
@@ -280,9 +335,12 @@
         ensureMaker(function () {
           if (state.vid) {
             var vr = buildVariantRecord(state.pid + '::' + state.vid);
-            if (vr) { MastEntity.openRecord('product-variant-v2', vr, 'read'); return; }
+            if (vr) { MastEntity.openRecord('product-variant-v2', vr, 'read'); restorePaneWhenReady(state.pane); }
+            return;
           }
           reopenProduct(state.pid);
+          if (state.drillRecipe) rebuildRecipeDrillWhenReady(state.drillRecipe);
+          else restorePaneWhenReady(state.pane);
         });
       }, 60);
     });
@@ -905,7 +963,7 @@
           { k: 'Retail margin', v: (rc.retailMarginPct != null ? rc.retailMarginPct + '%' : '—') }
         ]);
         var editBtn = rc.productId
-          ? '<div style="margin:0 0 12px;"><button class="btn btn-secondary btn-small" onclick="ProductsV2.recipeEditInBuilder(\'' + esc(rc.recipeId) + '\',\'' + esc(rc.productId) + '\')">Edit in builder ↗</button></div>'
+          ? '<div style="margin:0 0 12px;"><button class="btn btn-secondary btn-small" onclick="ProductsV2.recipeEditInBuilder(\'' + esc(rc.recipeId) + '\',\'' + esc(rc.productId) + '\',true)">Edit in builder ↗</button></div>'
           : '';
         return UU.stickyHead(tiles, '') + '<div>' + editBtn + UU.card('Bill of materials', bom) + UU.card('Cost', cost) + UU.card('Pricing', pr) +
           '<div class="pv2-pnote">Drilled from the product — Back returns to the Default. “Edit in builder” opens the full recipe builder (Back returns to the product).</div></div>';
@@ -1338,7 +1396,7 @@
         }, function (e) { console.error('[products-v2] recipeCreate', e); MastAdmin.showToast('Failed', true); });
       });
     },
-    recipeEditInBuilder: function (recipeId, pid) { openRecipeBuilderGated(recipeId, pid); },
+    recipeEditInBuilder: function (recipeId, pid, fromDrill) { openRecipeBuilderGated(recipeId, pid, null, fromDrill); },
     // Variant "Give it its own recipe" → open the builder focused on this variant
     // (creating the product recipe first if needed). Replaces the editVariantTodo stub.
     variantOwnRecipe: function (pid, vid) {
