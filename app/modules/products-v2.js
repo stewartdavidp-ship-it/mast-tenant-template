@@ -628,16 +628,22 @@
   }
   function bindingFor(p, channelId) { return productBindings(p).filter(function (b) { return b && b.channelId === channelId; })[0]; }
   function variantExcluded(p, channelId, vid) { var b = bindingFor(p, channelId); return !!(b && Array.isArray(b.excludedVariantIds) && b.excludedVariantIds.indexOf(vid) >= 0); }
-  function ensureChannels(pid) {
+  function ensureChannels(pid, rerenderFn) {
     if (V2._channelsCache || V2._channelsLoading) return;
     V2._channelsLoading = true;
+    var done = rerenderFn || function () { rerenderChannelsPane(pid); };
     Promise.resolve(window.__mastChannelsCache || MastDB.get('admin/channels'))
-      .then(function (ch) { V2._channelsCache = ch || {}; V2._channelsLoading = false; rerenderChannelsPane(pid); }, function () { V2._channelsLoading = false; });
+      .then(function (ch) { V2._channelsCache = ch || {}; V2._channelsLoading = false; done(); }, function () { V2._channelsLoading = false; });
+  }
+  // The connected, active channels (shared mapping for the product + variant panes).
+  function activeChannels() {
+    if (!V2._channelsCache) return null;
+    return Object.keys(V2._channelsCache).map(function (k) { var c = V2._channelsCache[k] || {}; return { id: k, name: c.name || c.displayName || c.platform || k, platform: c.platform || '', active: c.isActive !== false }; }).filter(function (c) { return c.active; });
   }
   function channelsPane(p) {
     var pid = p._key || p.pid;
     if (!V2._channelsCache) { ensureChannels(pid); return U.card('Channels', '<div style="color:var(--warm-gray);font-size:0.9rem;">Loading channels…</div>'); }
-    var channels = Object.keys(V2._channelsCache).map(function (k) { var c = V2._channelsCache[k] || {}; return { id: k, name: c.name || c.displayName || c.platform || k, platform: c.platform || '', active: c.isActive !== false }; }).filter(function (c) { return c.active; });
+    var channels = activeChannels();
     if (!channels.length) return U.card('Channels', '<div style="color:var(--warm-gray);font-size:0.9rem;">No channels connected. Connect one in the Channels module first.</div>');
     var hasVar = variantCount(p) > 0;
     var rows = channels.map(function (c) {
@@ -665,6 +671,37 @@
     var body = document.getElementById('mastSlideOutBody');
     var pane = body && body.querySelector('.mu-pane[data-pane="channels"]');
     if (pane) pane.innerHTML = channelsPane(rec);
+  }
+  // Variant Channels pane: a variant inherits the product's channels, but can be
+  // EXCLUDED from any one of them (e.g. gold necklace direct-only while silver
+  // sells everywhere). Shows each channel the product sells on + this variant's
+  // status, with an Include/Exclude toggle. Binding/unbinding a channel itself
+  // stays product-level (the product Channels tab) — here you only opt this
+  // variant in or out of channels the product already sells on.
+  function variantChannelsPane(UU, p, v) {
+    var pid = p._key || p.pid, vid = v.id;
+    if (!V2._channelsCache) { ensureChannels(pid, function () { rerenderVariantChannelsPane(pid, vid); }); return UU.card('Channels · this variant', '<div style="color:var(--warm-gray);font-size:0.9rem;">Loading channels…</div>'); }
+    var channels = activeChannels();
+    if (!channels.length) return UU.card('Channels · this variant', '<div style="color:var(--warm-gray);font-size:0.9rem;">No channels connected. Connect one in the Channels module first.</div>');
+    var bound = channels.filter(function (c) { return !!bindingFor(p, c.id); });
+    if (!bound.length) return UU.card('Channels · this variant', '<div style="color:var(--warm-gray);font-size:0.9rem;">This product isn’t selling on any channel yet. Set channels on the product’s Channels tab — this variant inherits them.</div>');
+    var canEd = canEditProduct();
+    var rows = bound.map(function (c) {
+      var ex = variantExcluded(p, c.id, vid);
+      var status = ex ? UU.badge('Excluded', 'neutral') : UU.badge('Selling', 'teal');
+      var toggle = canEd ? '<button class="btn btn-secondary btn-small" onclick="ProductsV2.toggleVariantChannel(\'' + esc(pid) + '\',\'' + esc(c.id) + '\',\'' + esc(vid) + '\')">' + (ex ? 'Include' : 'Exclude') + '</button>' : '';
+      return '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 0;border-top:1px solid var(--border);">' +
+        '<span>' + esc(c.name) + (c.platform ? ' <span style="color:var(--warm-gray);font-size:0.78rem;">· ' + esc(c.platform) + '</span>' : '') + '</span>' +
+        '<span style="display:flex;align-items:center;gap:8px;">' + status + toggle + '</span></div>';
+    }).join('');
+    return UU.card('Channels · this variant', rows) +
+      '<div class="pv2-pnote">This variant inherits the product’s channels; exclude it from any one (e.g. sell the gold one direct-only while the rest go everywhere). Add or remove channels for the whole product on the product’s Channels tab.</div>';
+  }
+  function rerenderVariantChannelsPane(pid, vid) {
+    var rec = buildVariantRecord(pid + '::' + vid); if (!rec) return;
+    var body = document.getElementById('mastSlideOutBody');
+    var pane = body && body.querySelector('.mu-pane[data-pane="v-channels"]');
+    if (pane) pane.innerHTML = variantChannelsPane(U, rec.product, rec.variant);
   }
   // The Image TAB is LIGHT: a read gallery + quick Upload + a "Manage images"
   // drill. Set-primary / remove / reorder live in the product-images-v2 drill SO
@@ -1020,7 +1057,7 @@
         return headerStrip(p, vimg, (p.name || 'Variant') + ' — ' + variantLabel(v), v.id) + UU.stickyHead(tiles, UU.paneTabsBar(tabs, 'v-pricing')) +
           pane('v-pricing', variantPricingPane(UU, p, v) + ctx, true) +
           pane('v-recipe', variantRecipePane(UU, p, v)) +
-          pane('v-channels', UU.card('Channels', '<div style="color:var(--warm-gray);font-size:0.9rem;">This variant ships on whatever channels the product is mapped to — channels are set once at the product level and every variant inherits them. Set them on the product’s Channels tab.</div>')) +
+          pane('v-channels', variantChannelsPane(UU, p, v)) +
           pane('v-inventory', variantInventoryPane(UU, p, v)) +
           pane('v-fulfill', variantFulfillmentPane(UU, p, v)) +
           pane('v-image', variantImagePane(UU, p, v)) +
@@ -1679,18 +1716,11 @@
       '.pv2-imgstrip{display:flex;flex-wrap:wrap;gap:8px;}',
       '.pv2-imgthumb{width:62px;height:62px;border-radius:8px;overflow:hidden;border:2px solid transparent;background:none;padding:0;cursor:pointer;}',
       '.pv2-imgthumb.on{border-color:var(--amber,goldenrod);} .pv2-imgthumb img{width:100%;height:100%;object-fit:cover;}',
-      '.pv2-list{border:1px solid var(--border);border-radius:12px;overflow:hidden;}',
-      '.pv2-row{display:grid;grid-template-columns:26px 44px 1fr 120px 96px 96px;gap:12px;align-items:center;padding:11px 14px;border-bottom:1px solid var(--border);cursor:pointer;font-size:0.9rem;}',
-      '.pv2-row:last-child{border-bottom:0;} .pv2-row:hover{background:color-mix(in srgb,var(--amber) 6%,transparent);}',
-      '.pv2-exp{background:transparent;border:0;color:var(--warm-gray);font-size:0.78rem;cursor:pointer;width:22px;padding:4px;border-radius:5px;}',
-      '.pv2-exp:hover{color:var(--text);} .pv2-exp.sp{visibility:hidden;}',
-      '.pv2-row img.th{width:40px;height:40px;border-radius:7px;object-fit:cover;border:1px solid var(--border);}',
-      '.pv2-row .ph{width:40px;height:40px;border-radius:7px;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--warm-gray);font-size:0.85rem;}',
-      '.pv2-nm{color:var(--text);} .pv2-meta{color:var(--warm-gray);} .pv2-r{text-align:right;font-variant-numeric:tabular-nums;}',
-      '.pv2-sub{background:color-mix(in srgb,black 14%,transparent);} .pv2-sub .pv2-nm{padding-left:8px;display:flex;align-items:center;gap:8px;}',
-      '.pv2-def .pv2-nm{color:var(--info);font-weight:600;padding-left:8px;display:flex;align-items:center;gap:8px;}',
-      '.pv2-add .pv2-nm{color:var(--teal);padding-left:8px;}',
-      '.pv2-branch{color:var(--warm-gray);font-size:0.78rem;}',
+      // (Old hand-rolled list CSS — .pv2-list/.pv2-row/.pv2-exp/.pv2-nm/.pv2-sub/
+      //  .pv2-def/.pv2-add/.pv2-branch/.pv2-r — removed: the list re-platformed onto
+      //  the engine (MastEntity.renderList → MastUI.list) in PR 247. Only .pv2-meta
+      //  (list meta text) and .pv2-ov (variant override badge) are still used.)
+      '.pv2-meta{color:var(--warm-gray);}',
       '.pv2-ov{font-size:0.72rem;text-transform:uppercase;letter-spacing:.04em;background:color-mix(in srgb,var(--amber) 22%,transparent);color:var(--amber);padding:2px 7px;border-radius:5px;margin-left:6px;}',
       '.pv2-step{display:flex;align-items:center;margin:10px 0 4px;}',
       '.pv2-step .nd{width:21px;height:21px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:0.72rem;font-weight:700;}',
@@ -1824,7 +1854,10 @@
         Promise.resolve(window.MakerProductBridge.setVariantChannelExcluded(pid, channelId, vid, !ex)).then(function (res) {
           if (!res || !res.ok) { MastAdmin.showToast('Failed: ' + ((res && res.error) || 'unknown'), true); return; }
           var rec = V2.byId[pid]; if (rec) { rec.channelBindings = res.channelBindings; rec.channelIds = res.channelIds; }
+          // Refresh whichever pane is open — the product Channels tab (chips) or
+          // the variant's own Channels tab (rows). Each no-ops if absent.
           rerenderChannelsPane(pid);
+          rerenderVariantChannelsPane(pid, vid);
         }, function (e) { console.error('[products-v2] toggleVariantChannel', e); MastAdmin.showToast('Failed', true); });
       });
     },
