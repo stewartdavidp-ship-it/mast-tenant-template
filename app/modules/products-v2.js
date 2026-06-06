@@ -1192,53 +1192,113 @@
   // so it has the same look-and-feel as every other v2 list. The thumbnail is just
   // a column whose render() returns raw HTML; the variant tree rides the engine's
   // opt-in expandable-rows (childRowsHtml below).
+  // Thumbnail + name live in ONE cell (the Product column) so the gap between the
+  // image and the name is constant regardless of expand state — a separate thumb
+  // column reflows under table-auto-layout when child rows are added.
+  function _thumbHtml(p) {
+    var img = firstImage(p);
+    return img
+      ? '<img src="' + esc(img) + '" alt="" style="width:40px;height:40px;border-radius:7px;object-fit:cover;border:1px solid var(--border);flex:0 0 40px;">'
+      : '<div style="width:40px;height:40px;border-radius:7px;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--warm-gray);font-size:0.85rem;flex:0 0 40px;">' + esc((p.name || 'P').slice(0, 1)) + '</div>';
+  }
+  function _prodCol() {
+    return { key: '_name', label: 'Product', render: function (p) {
+      return '<div style="display:flex;align-items:center;gap:11px;">' + _thumbHtml(p) +
+        '<span>' + esc(p.name || '(unnamed)') + ' <span style="color:var(--warm-gray);">· ' + esc(categoryLabel(p) || '—') + '</span></span></div>';
+    } };
+  }
   function pv2ListColumns() {
-    return [
-      { key: '_thumb', label: '', render: function (p) {
-          var img = firstImage(p);
-          return img
-            ? '<img src="' + esc(img) + '" alt="" style="width:40px;height:40px;border-radius:7px;object-fit:cover;border:1px solid var(--border);display:block;">'
-            : '<div style="width:40px;height:40px;border-radius:7px;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--warm-gray);font-size:0.85rem;">' + esc((p.name || 'P').slice(0, 1)) + '</div>';
-        } },
-      { key: '_name', label: 'Product', render: function (p) {
-          return esc(p.name || '(unnamed)') + ' <span style="color:var(--warm-gray);">· ' + esc(categoryLabel(p) || '—') + '</span>';
-        } },
+    return [_prodCol(),
       { key: 'status', label: 'Status', render: function (p) { return U.badge(statusLabel(p.status), statusTone(p.status)); } },
       { key: 'price', label: 'Price', align: 'right', render: function (p) { return esc(priceRange(p) || '—'); } },
       { key: 'variants', label: 'Variants', align: 'right', render: function (p) { return esc(variantsLabel(p)); } }
     ];
   }
-  // The expand-tree for a product WITH variants: synthetic Default + each variant
-  // + "Add variant", as engine sub-rows (6 cells: toggle + the 5 columns).
-  function pv2ChildRows(p) {
+  function lensColumns(lens) {
+    if (lens === 'inventory') {
+      return [_prodCol(),
+        { key: 'onhand', label: 'On hand', align: 'right', render: function (p) { var si = p.stockInfo || {}; return si.totalOnHand != null ? String(si.totalOnHand) : '—'; } },
+        { key: 'avail', label: 'Available', align: 'right', render: function (p) { var si = p.stockInfo || {}, a = si.totalAvailable; var low = a != null && si.lowStockThreshold != null && a <= si.lowStockThreshold; return a != null ? ('<span' + (low ? ' style="color:var(--amber,goldenrod);font-weight:600;"' : '') + '>' + a + '</span>') : '—'; } },
+        { key: 'committed', label: 'Committed', align: 'right', render: function (p) { var si = p.stockInfo || {}; return si.totalCommitted != null ? String(si.totalCommitted) : '—'; } },
+        { key: 'mode', label: 'Stock mode', render: function (p) { var si = p.stockInfo || {}; return si.stockType ? esc(si.stockType) : '—'; } }];
+    }
+    if (lens === 'sales') {
+      return [_prodCol(),
+        { key: 'u30', label: 'Units 30d', align: 'right', render: function (p) { var s = _salesEntry(p._key || p.pid) || {}; return String(s.last30 || 0); } },
+        { key: 'r30', label: 'Revenue 30d', align: 'right', render: function (p) { var s = _salesEntry(p._key || p.pid) || {}; return _money(s.revenue30); } },
+        { key: 'rall', label: 'Revenue all', align: 'right', render: function (p) { var s = _salesEntry(p._key || p.pid) || {}; return _money(s.revenueAll); } },
+        { key: 'last', label: 'Last sold', align: 'right', render: function (p) { var s = _salesEntry(p._key || p.pid) || {}; return s.lastOrdered ? String(s.lastOrdered).slice(0, 10) : '—'; } }];
+    }
+    // forecast
+    return [_prodCol(),
+      { key: 'rate', label: 'Monthly rate', align: 'right', render: function (p) { var f = _forecastEntry(p._key || p.pid); return f && f.monthlyRate != null ? (f.monthlyRate + ' /mo') : '—'; } },
+      { key: 'cov', label: 'Coverage', align: 'right', render: function (p) { var f = _forecastEntry(p._key || p.pid); if (!f) return '—'; return isFinite(f.weeksCoverage) ? (f.weeksCoverage + 'w') : (f.isMTO ? 'MTO' : '—'); } },
+      { key: 'trend', label: 'Trend', render: function (p) { var f = _forecastEntry(p._key || p.pid); if (!f) return '—'; return f.trending ? '↑ up' : (f.declining ? '↓ down' : 'steady'); } },
+      { key: 'suggest', label: 'Suggested', render: function (p) { var f = _forecastEntry(p._key || p.pid); if (f && f.suggestBuild) return '<span style="color:var(--amber,goldenrod);font-weight:600;">build ' + esc(String(f.suggestedQty || '')) + '</span>'; return (f && f.considerStocking) ? '<span style="color:var(--warm-gray);">consider</span>' : '—'; } }];
+  }
+  // The variant expand-tree, lens-aware — every facet expands to the same
+  // Default + variants + Add-variant structure, with data cells matching the
+  // active lens's columns. Variant names indent to sit under the product name.
+  function buildChildRows(p, lens) {
     var pid = p._key || p.pid;
+    lens = lens || 'general';
+    if (lens === 'inventory') ensureInvForProduct(pid);
     function cell(html, align) {
       return '<td style="padding:14px 12px;font-size:0.9rem;color:var(--text-primary);border-bottom:1px solid var(--border,rgba(255,255,255,0.06));' +
         (align === 'right' ? 'text-align:right;font-variant-numeric:tabular-nums;' : '') + '">' + (html || '') + '</td>';
     }
-    function row(fn, arg, cells) {
+    function nameCell(html) {
+      return '<td style="padding:14px 12px;font-size:0.9rem;color:var(--text-primary);border-bottom:1px solid var(--border,rgba(255,255,255,0.06));">' +
+        '<span style="display:inline-block;padding-left:51px;">' + html + '</span></td>';
+    }
+    function row(fn, arg, nameHtml, dataCellsHtml) {
       return '<tr class="mast-row mast-subrow" onclick="' + fn + '(\'' + esc(arg) + '\')" ' +
         'onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();' + fn + '(\'' + esc(arg) + '\')}" ' +
-        'tabindex="0" role="button" style="cursor:pointer;">' + cell('') + cells + '</tr>';
+        'tabindex="0" role="button" style="cursor:pointer;">' + cell('') + nameCell(nameHtml) + dataCellsHtml + '</tr>';
     }
-    var out = row('ProductsV2.open', pid,
-      cell('') +
-      cell('<span style="color:var(--info);font-weight:600;">└ ◆ Default</span> <span style="color:var(--warm-gray);">· base for all variants</span>') +
-      cell('') + cell(esc(N.money(price(p)) || '—'), 'right') +
-      cell('<span style="color:var(--warm-gray);">' + variantCount(p) + ' inherit</span>', 'right'));
+    // Data cells for the Default (v=null = product roll-up) or a variant.
+    function dataCells(v) {
+      if (lens === 'general') {
+        if (!v) return cell('') + cell(esc(N.money(price(p)) || '—'), 'right') + cell('<span style="color:var(--warm-gray);">' + variantCount(p) + ' inherit</span>', 'right');
+        var ov = variantOverridden(p, v);
+        return cell('<span style="color:var(--warm-gray);font-size:0.78rem;">follows product</span>') +
+          cell('<span' + (ov ? ' style="color:var(--amber,goldenrod);"' : '') + '>' + esc(N.money(variantPrice(p, v)) || '—') + '</span>', 'right') +
+          cell('<span style="color:var(--warm-gray);">' + (ov ? 'override' : 'inherits') + '</span>', 'right');
+      }
+      if (lens === 'inventory') {
+        if (!v) { var si = p.stockInfo || {}; return cell(si.totalOnHand != null ? String(si.totalOnHand) : '—', 'right') + cell(si.totalAvailable != null ? String(si.totalAvailable) : '—', 'right') + cell(si.totalCommitted != null ? String(si.totalCommitted) : '—', 'right') + cell(si.stockType ? esc(si.stockType) : '—'); }
+        var inv = V2._invCache && V2._invCache[pid];
+        if (!inv) return cell('<span style="color:var(--warm-gray);">…</span>', 'right') + cell('', 'right') + cell('', 'right') + cell('');
+        var st = (inv.stock && inv.stock[v.id]) || {};
+        var oh = st.onHand || 0, av = oh - (st.committed || 0) - (st.held || 0);
+        return cell(String(oh), 'right') + cell(String(av), 'right') + cell(String(st.committed || 0), 'right') + cell('<span style="color:var(--warm-gray);">inherits mode</span>');
+      }
+      if (lens === 'sales') {
+        if (!v) { var s = _salesEntry(pid) || {}; return cell(String(s.last30 || 0), 'right') + cell(_money(s.revenue30), 'right') + cell(_money(s.revenueAll), 'right') + cell(s.lastOrdered ? String(s.lastOrdered).slice(0, 10) : '—', 'right'); }
+        return cell('<span style="color:var(--warm-gray);">shares product</span>') + cell('', 'right') + cell('', 'right') + cell('', 'right');
+      }
+      // forecast
+      if (!v) { var f = _forecastEntry(pid); if (!f) return cell('—', 'right') + cell('—', 'right') + cell('—') + cell('—'); return cell((f.monthlyRate != null ? f.monthlyRate + ' /mo' : '—'), 'right') + cell(isFinite(f.weeksCoverage) ? f.weeksCoverage + 'w' : (f.isMTO ? 'MTO' : '—'), 'right') + cell(f.trending ? '↑ up' : (f.declining ? '↓ down' : 'steady')) + cell(f.suggestBuild ? ('build ' + esc(String(f.suggestedQty || ''))) : '—'); }
+      return cell('<span style="color:var(--warm-gray);">shares product</span>') + cell('') + cell('') + cell('');
+    }
+    function emptyCells() { var n = lens === 'general' ? 3 : 4, s = ''; for (var i = 0; i < n; i++) s += cell(''); return s; }
+    var defClick = lens === 'general' ? 'ProductsV2.open' : (lens === 'inventory' ? 'ProductsV2.openInventory' : (lens === 'sales' ? 'ProductsV2.openSales' : 'ProductsV2.openForecast'));
+    var varClick = lens === 'inventory' ? 'ProductsV2.openVariantInventory' : 'ProductsV2.openVariant';
+    var out = row(defClick, pid, '<span style="color:var(--info);font-weight:600;">◆ Default</span> <span style="color:var(--warm-gray);">· base for all variants</span>', dataCells(null));
     realVariants(p).forEach(function (v) {
       var ov = variantOverridden(p, v);
-      out += row('ProductsV2.openVariant', pid + '::' + v.id,
-        cell('') +
-        cell('<span style="color:var(--warm-gray);">└</span> ' + esc(variantLabel(v)) + (ov ? ' <span class="pv2-ov">override</span>' : '')) +
-        cell('<span style="color:var(--warm-gray);font-size:0.78rem;">follows product</span>') +
-        cell('<span' + (ov ? ' style="color:var(--amber,goldenrod);"' : '') + '>' + esc(N.money(variantPrice(p, v)) || '—') + '</span>', 'right') +
-        cell('<span style="color:var(--warm-gray);">' + (ov ? 'override' : 'inherits') + '</span>', 'right'));
+      out += row(varClick, pid + '::' + v.id, esc(variantLabel(v)) + (lens === 'general' && ov ? ' <span class="pv2-ov">override</span>' : ''), dataCells(v));
     });
-    out += row('ProductsV2.addVariant', pid,
-      cell('<span style="color:var(--teal,teal);">└ + Add variant</span> <span style="color:var(--warm-gray);">· inherits the Default, then override</span>') +
-      cell('') + cell('') + cell(''));
+    out += row('ProductsV2.addVariant', pid, '<span style="color:var(--teal,teal);">+ Add variant</span> <span style="color:var(--warm-gray);">· inherits the Default</span>', emptyCells());
     return out;
+  }
+  // Load a product's inventory record (per-variant stock) for the Inventory lens
+  // expand-tree; cache + re-render once.
+  function ensureInvForProduct(pid) {
+    V2._invCache = V2._invCache || {}; V2._invLoading = V2._invLoading || {};
+    if (V2._invCache[pid] || V2._invLoading[pid]) return;
+    V2._invLoading[pid] = true;
+    Promise.resolve(MastDB.inventory.get(pid)).then(function (inv) { V2._invCache[pid] = inv || {}; V2._invLoading[pid] = false; rerenderPv2List(); }, function () { V2._invLoading[pid] = false; });
   }
   function renderListBody() {
     return (V2.lens && V2.lens !== 'general') ? renderLensList(V2.lens) : renderGeneralList();
@@ -1247,6 +1307,7 @@
     var q = (V2.q || '').trim();
     return { title: 'No products', message: 'No products match ' + (q ? '“' + q + '”' : 'these filters') + '.' };
   }
+  function rerenderPv2List() { var el = document.getElementById('pv2ListBody'); if (el) el.innerHTML = renderListBody(); else render(); }
   // General lens: the canonical product list (thumbnail + expandable variant tree).
   function renderGeneralList() {
     return window.MastEntity.renderList('products-v2', {
@@ -1258,48 +1319,9 @@
       hasChildren: function (p) { return variantCount(p) > 0; },
       expandedIds: V2.expanded,
       onToggleFnName: 'ProductsV2.toggle',
-      childRowsHtml: pv2ChildRows,
+      childRowsHtml: function (p) { return buildChildRows(p, 'general'); },
       empty: _emptyCfg()
     });
-  }
-  // The other lenses are facets on the SAME product list: different columns + a
-  // row click that lands on the matching detail tab. Flat (no variant tree) — the
-  // facet is product-level. Sales/Forecast data load lazily, then re-render.
-  function rerenderPv2List() { var el = document.getElementById('pv2ListBody'); if (el) el.innerHTML = renderListBody(); else render(); }
-  function _thumbCol() {
-    return { key: '_thumb', label: '', render: function (p) {
-      var img = firstImage(p);
-      return img
-        ? '<img src="' + esc(img) + '" alt="" style="width:40px;height:40px;border-radius:7px;object-fit:cover;border:1px solid var(--border);display:block;">'
-        : '<div style="width:40px;height:40px;border-radius:7px;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--warm-gray);font-size:0.85rem;">' + esc((p.name || 'P').slice(0, 1)) + '</div>';
-    } };
-  }
-  function _nameCol() {
-    return { key: '_name', label: 'Product', render: function (p) {
-      return esc(p.name || '(unnamed)') + ' <span style="color:var(--warm-gray);">· ' + esc(categoryLabel(p) || '—') + '</span>';
-    } };
-  }
-  function lensColumns(lens) {
-    if (lens === 'inventory') {
-      return [_thumbCol(), _nameCol(),
-        { key: 'onhand', label: 'On hand', align: 'right', render: function (p) { var si = p.stockInfo || {}; return si.totalOnHand != null ? String(si.totalOnHand) : '—'; } },
-        { key: 'avail', label: 'Available', align: 'right', render: function (p) { var si = p.stockInfo || {}, a = si.totalAvailable; var low = a != null && si.lowStockThreshold != null && a <= si.lowStockThreshold; return a != null ? ('<span' + (low ? ' style="color:var(--amber,goldenrod);font-weight:600;"' : '') + '>' + a + '</span>') : '—'; } },
-        { key: 'committed', label: 'Committed', align: 'right', render: function (p) { var si = p.stockInfo || {}; return si.totalCommitted != null ? String(si.totalCommitted) : '—'; } },
-        { key: 'mode', label: 'Stock mode', render: function (p) { var si = p.stockInfo || {}; return si.stockType ? esc(si.stockType) : '—'; } }];
-    }
-    if (lens === 'sales') {
-      return [_thumbCol(), _nameCol(),
-        { key: 'u30', label: 'Units 30d', align: 'right', render: function (p) { var s = _salesEntry(p._key || p.pid) || {}; return String(s.last30 || 0); } },
-        { key: 'r30', label: 'Revenue 30d', align: 'right', render: function (p) { var s = _salesEntry(p._key || p.pid) || {}; return _money(s.revenue30); } },
-        { key: 'rall', label: 'Revenue all', align: 'right', render: function (p) { var s = _salesEntry(p._key || p.pid) || {}; return _money(s.revenueAll); } },
-        { key: 'last', label: 'Last sold', align: 'right', render: function (p) { var s = _salesEntry(p._key || p.pid) || {}; return s.lastOrdered ? String(s.lastOrdered).slice(0, 10) : '—'; } }];
-    }
-    // forecast
-    return [_thumbCol(), _nameCol(),
-      { key: 'rate', label: 'Monthly rate', align: 'right', render: function (p) { var f = _forecastEntry(p._key || p.pid); return f && f.monthlyRate != null ? (f.monthlyRate + ' /mo') : '—'; } },
-      { key: 'cov', label: 'Coverage', align: 'right', render: function (p) { var f = _forecastEntry(p._key || p.pid); if (!f) return '—'; return isFinite(f.weeksCoverage) ? (f.weeksCoverage + 'w') : (f.isMTO ? 'MTO' : '—'); } },
-      { key: 'trend', label: 'Trend', render: function (p) { var f = _forecastEntry(p._key || p.pid); if (!f) return '—'; return f.trending ? '↑ up' : (f.declining ? '↓ down' : 'steady'); } },
-      { key: 'suggest', label: 'Suggested', render: function (p) { var f = _forecastEntry(p._key || p.pid); if (f && f.suggestBuild) return '<span style="color:var(--amber,goldenrod);font-weight:600;">build ' + esc(String(f.suggestedQty || '')) + '</span>'; return (f && f.considerStocking) ? '<span style="color:var(--warm-gray);">consider</span>' : '—'; } }];
   }
   // Lazy-load the data a lens needs, then re-render the list in place.
   function lensEnsure(lens) {
@@ -1321,12 +1343,16 @@
   }
   function renderLensList(lens) {
     lensEnsure(lens);
-    var click = lens === 'inventory' ? 'ProductsV2.openInventory' : (lens === 'sales' ? 'ProductsV2.openSales' : 'ProductsV2.openForecast');
     return window.MastEntity.renderList('products-v2', {
       rows: visibleRows(),
       columns: lensColumns(lens),
       rowId: function (p) { return p._key || p.pid; },
-      onRowClickFnName: click,
+      onRowClickFnName: 'ProductsV2.lensRowClick',
+      expandable: true,
+      hasChildren: function (p) { return variantCount(p) > 0; },
+      expandedIds: V2.expanded,
+      onToggleFnName: 'ProductsV2.toggle',
+      childRowsHtml: function (p) { return buildChildRows(p, lens); },
       empty: _emptyCfg()
     });
   }
@@ -1443,6 +1469,14 @@
     setLens: function (l) { V2.lens = l; render(); },
     // Lens row click: open the product SO focused on the matching detail tab.
     openToTab: function (id, pane) { var rec = V2.byId[id]; if (!rec) return; ensureMaker(function () { MastEntity.openRecord('products-v2', rec, 'read'); restorePaneWhenReady(pane); }); },
+    // Lens parent-row click: has-variants → expand; else open the SO on the lens tab.
+    lensRowClick: function (id) {
+      var p = V2.byId[id];
+      var pane = V2.lens === 'inventory' ? 'inventory' : (V2.lens === 'sales' ? 'sales' : 'forecast');
+      if (p && variantCount(p) > 0) ProductsV2.toggle(id); else ProductsV2.openToTab(id, pane);
+    },
+    // Variant row in the Inventory lens → variant SO on its Inventory tab.
+    openVariantInventory: function (key) { var rec = buildVariantRecord(key); if (rec) ensureMaker(function () { MastEntity.openRecord('product-variant-v2', rec, 'read'); restorePaneWhenReady('v-inventory'); }); },
     openInventory: function (id) { ProductsV2.openToTab(id, 'inventory'); },
     openSales: function (id) { ProductsV2.openToTab(id, 'sales'); },
     openForecast: function (id) { ProductsV2.openToTab(id, 'forecast'); },
