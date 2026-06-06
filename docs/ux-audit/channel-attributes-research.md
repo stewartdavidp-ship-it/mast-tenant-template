@@ -1,7 +1,14 @@
 # Channel Attributes / "Channel Tags" — Research & Proposal
 
-**Status:** Research + design proposal for operator review (no code yet). Roadmap §3 item #6.
+**Status:** ✅ **RATIFIED by operator 2026-06-06.** Model + the three open decisions are locked (see §4.1). Build in progress — product-level Attributes pane shipped first (authored editing + imported display + derived badges); projection + variant-level + facets follow.
 **Date:** 2026-06-06.
+
+> **Ratified decisions (the three open questions, §3.3 / §4):**
+> 1. **`imported`** — **project a thin filterable slice** (tags + product_type/materials/occasion/style) onto `product.attributes.imported[channelId]`; keep the full `raw` payload in `channel_listings`. (List facets need the data on the product row.)
+> 2. **`authored`** — **hybrid, start minimal: type only `tags[]` + `materials[]`; everything else in a `custom:{}` bag.** Graduate a custom key to a typed field only when a real consumer (facet / publish mapping) needs it.
+> 3. **`derived`** — **compute at render, do not store.** Badges derive from the already-loaded stock/sales maps; storing them would require a recompute cron and risk staleness.
+>
+> Discriminator: store data that the list needs but isn't otherwise loaded AND doesn't go stale (imported); compute data that's already loaded and goes stale (derived).
 
 > Operator ask: *"each variant may or may not be available in a specific channel… [and] do research on the shape of channel tags (or information being shared with Mast from channels that are not in our model). We want to match the ability to model that information — tags was an option."*
 
