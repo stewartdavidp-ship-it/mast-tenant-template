@@ -508,6 +508,16 @@
     detail: {
       flow: 'products',
       flowModule: 'productsWorkflow',
+      // Cancel-on-leave: switching away from a tab mid-edit discards the
+      // in-progress edit (reverts that pane to read view). Engine fires this
+      // before hiding the pane being left; nothing persists without Save/Stage.
+      onPaneLeave: function (prevPane, nextPane, rec) {
+        var pid = rec._key || rec.pid;
+        if (prevPane === 'info' && V2.editInfo) { V2.editInfo = null; rerenderInfoPane(pid); }
+        else if (prevPane === 'fulfillment' && V2.editFulfill) { V2.editFulfill = null; rerenderFulfillmentPane(pid); }
+        else if (prevPane === 'pricing' && V2.editPricing) { V2.editPricing = null; rerenderPricingPane(pid); }
+        else if (prevPane === 'inventory' && V2.editInv) { V2.editInv = null; rerenderInventoryPane(pid); }
+      },
       // Pilot the ratified lean guided-record header (clickable step rail +
       // checklist-into-tabs, no Advance button). Opt-in flag read by
       // mast-entity._flowRender; orders/commissions stay on renderHeader.
@@ -561,6 +571,9 @@
         return true;
       },
       render: function (UU, p) {
+        // Fresh open/reopen always starts read-only — a prior session's abandoned
+        // edit flag must not reopen a pane in edit mode (cancel-on-leave on close).
+        V2.editInfo = V2.editFulfill = V2.editPricing = V2.editInv = null;
         var prTile = priceRange(p) || '—';
         var tiles = UU.tiles([
           { k: 'Status', v: statusLabel(p.status), hero: true },
@@ -604,7 +617,16 @@
     fields: [{ name: '_title', label: 'Variant', type: 'text', list: true, group: 'Variant', readOnly: true }],
     fetch: function (id) { return Promise.resolve(buildVariantRecord(id)); },
     detail: {
+      // Cancel-on-leave for the variant SO's edit-in-pane tabs (see the product
+      // entity's onPaneLeave). rec._key is 'pid::vid'.
+      onPaneLeave: function (prevPane, nextPane, rec) {
+        var parts = String(rec._key || '').split('::'); var pid = parts[0], vid = parts[1];
+        if (prevPane === 'v-pricing' && V2.editVarPricing) { V2.editVarPricing = null; rerenderVariantPricingPane(pid, vid); }
+        else if (prevPane === 'v-inventory' && V2.editVarInv) { V2.editVarInv = null; rerenderVariantInventoryPane(pid, vid); }
+      },
       render: function (UU, r) {
+        // Fresh open always starts read-only (cancel-on-leave on close/reopen).
+        V2.editVarPricing = V2.editVarInv = null;
         var p = r.product || {}, v = r.variant || {};
         var ov = variantOverridden(p, v);
         var tiles = UU.tiles([
