@@ -69,6 +69,11 @@ jobs:
         run: node scripts/lint-rbac.js
       - name: Customer email-identity write guard
         run: node scripts/lint-customer-writes.js
+      # Product readiness gate parity: shared/product-readiness.core.js must stay
+      # byte-identical to mast-tenant-mcp-server's copy (the AI publish gate), so
+      # the UI gate and the MCP gate cannot drift. See docs/ux-audit/product-publish-gate-plan.md §7.
+      - name: Readiness gate parity guard
+        run: node scripts/lint-readiness-parity.js
       # UX-standard conformance ratchet (UI redesign). Freezes current per-module
       # violation counts (native dialogs / rogue overlays / translateX / hardcoded
       # hex) and FAILS any PR that increases them — so the redesign standards
