@@ -376,6 +376,18 @@
       return '<span class="mu-k">' + esc(r.k) + '</span><span class="mu-v">' + (r.v == null || r.v === '' ? '—' : r.v) + '</span>';
     }).join('') + '</div>';
   }
+  // A compact column-header matrix for period/breakdown metrics, e.g.
+  // metricTable({ columns:['30 days','90 days','All time'], rows:[{label:'Units', cells:['0','17','17']}] }).
+  // Cells are HTML (like kv values). Clearer than packing "0 / 17 / 17" into one cell.
+  function metricTable(cfg) {
+    cfg = cfg || {};
+    var cols = cfg.columns || [], rows = cfg.rows || [];
+    var th = '<th>' + esc(cfg.corner || '') + '</th>' + cols.map(function (c) { return '<th>' + esc(c) + '</th>'; }).join('');
+    var body = rows.map(function (r) {
+      return '<tr><td>' + esc(r.label) + '</td>' + (r.cells || []).map(function (c) { return '<td>' + (c == null || c === '' ? '—' : c) + '</td>'; }).join('') + '</tr>';
+    }).join('');
+    return '<table class="mu-mt"><thead><tr>' + th + '</tr></thead><tbody>' + body + '</tbody></table>';
+  }
   function timeline(events) { // [{label, at, done}]
     return '<ul class="mu-tl">' + (events || []).map(function (e) {
       return '<li class="' + (e.done ? '' : 'future') + '"><div class="mu-tt">' + esc(e.label) + '</div><div class="mu-td">' + (e.at ? esc(e.at) : '—') + '</div></li>';
@@ -513,8 +525,17 @@
       '.mu-launch .mu-arrow{color:var(--teal,#2A7C6F);font-weight:600;}',
       '.mu-cardgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;margin-top:14px;align-items:stretch;}',
       '.mu-card>h3.mu-cardhead{display:flex;align-items:center;justify-content:space-between;gap:10px;}',
-      '.mu-kv{display:grid;grid-template-columns:auto 1fr;gap:8px 16px;font-size:0.9rem;}',
-      '.mu-kv .mu-k{color:var(--warm-gray);} .mu-kv .mu-v{text-align:right;}',
+      '.mu-kv{display:grid;grid-template-columns:auto 1fr;gap:8px 24px;font-size:0.9rem;}',
+      // Values left-align in a column just past the widest label (not flush-right) —
+      // easier to scan than right-justified values of varying length.
+      '.mu-kv .mu-k{color:var(--warm-gray);} .mu-kv .mu-v{text-align:left;}',
+      // metricTable: a compact column-header matrix for period/breakdown values
+      // (e.g. 30d / 90d / All-time) inside a card — clearer than "0 / 17 / 17".
+      '.mu-mt{width:100%;border-collapse:collapse;font-size:0.9rem;}',
+      '.mu-mt th{font-size:0.72rem;font-weight:600;color:var(--warm-gray);text-transform:uppercase;letter-spacing:.03em;padding:0 0 8px 16px;text-align:right;}',
+      '.mu-mt th:first-child{text-align:left;padding-left:0;}',
+      '.mu-mt td{padding:7px 0 7px 16px;text-align:right;font-variant-numeric:tabular-nums;border-top:1px solid var(--border,rgba(127,127,127,.18));}',
+      '.mu-mt td:first-child{text-align:left;padding-left:0;color:var(--warm-gray);}',
       '.mu-rel{width:100%;border-collapse:collapse;} .mu-rel thead th{text-align:left;font-size:0.72rem;letter-spacing:.04em;text-transform:uppercase;color:var(--warm-gray);font-weight:600;padding:0 16px 8px;} .mu-rel th.r,.mu-rel td.r{text-align:right;}',
       '.mu-rel tbody td{padding:11px 16px;border-top:1px solid var(--border,rgba(127,127,127,.15));font-size:0.9rem;font-variant-numeric:tabular-nums;}',
       '.mu-rel-click{cursor:pointer;} .mu-rel-click:hover td{background:color-mix(in srgb,var(--amber,#C4853C) 8%,transparent);}',
@@ -571,7 +592,7 @@
     injectStyles(); wireDelegates();
     window.MastUI = {
       Num: Num, badge: badge, tabs: tabs, list: list, slideOut: slideOut, deepLink: deepLink, _esc: esc,
-      tiles: tiles, card: card, cardTable: cardTable, kv: kv, timeline: timeline, relatedTable: relatedTable,
+      tiles: tiles, card: card, cardTable: cardTable, kv: kv, metricTable: metricTable, timeline: timeline, relatedTable: relatedTable,
       imageThumb: imageThumb, openImg: openImg, panelTab: panelTab, paneTabsBar: paneTabsBar,
       stickyHead: stickyHead, toggleCover: toggleCover, calendar: calendar, pageHeader: pageHeader,
       launchCard: launchCard, cardGrid: cardGrid

@@ -433,11 +433,15 @@
     if (!window._mastProductSalesMap) { ensureSalesData(pid); return U.card('Sales', '<div style="color:var(--warm-gray);font-size:0.9rem;">Loading sales…</div>'); }
     var s = _salesEntry(pid) || {};
     var last = s.lastOrdered ? String(s.lastOrdered).slice(0, 10) : '—';
-    return U.card('Sales · last 30 / 90 days / all time', U.kv([
-      { k: 'Units sold', v: (s.last30 || 0) + ' / ' + (s.last90 || 0) + ' / ' + (s.allTime || 0) },
-      { k: 'Revenue', v: _money(s.revenue30) + ' / ' + _money(s.revenue90) + ' / ' + _money(s.revenueAll) },
-      { k: 'Last sold', v: last }
-    ])) + '<div class="pv2-pnote">Units &amp; revenue from the last 500 orders. Margin &amp; demand trend are on the Forecast tab.</div>';
+    var table = U.metricTable({
+      columns: ['30 days', '90 days', 'All time'],
+      rows: [
+        { label: 'Units sold', cells: [String(s.last30 || 0), String(s.last90 || 0), String(s.allTime || 0)] },
+        { label: 'Revenue', cells: [_money(s.revenue30), _money(s.revenue90), _money(s.revenueAll)] }
+      ]
+    });
+    return U.card('Sales', table + '<div style="margin-top:14px;">' + U.kv([{ k: 'Last sold', v: last }]) + '</div>') +
+      '<div class="pv2-pnote">Units &amp; revenue from the last 500 orders. Margin &amp; demand trend are on the Forecast tab.</div>';
   }
   function rerenderSalesPane(pid) {
     var rec = V2.byId[pid]; if (!rec) return;
@@ -480,14 +484,20 @@
     var trend = f.trending ? 'Trending up' : (f.declining ? 'Declining' : 'Steady');
     var mode = f.isMTO ? 'Made to order' : (f.isStocked ? 'Stocked' : '—');
     var cov = (f.weeksCoverage != null && isFinite(f.weeksCoverage)) ? (f.weeksCoverage + ' weeks') : (f.isMTO ? 'n/a (made to order)' : '—');
-    var card = U.card('Forecast', U.kv([
+    var table = U.metricTable({
+      columns: ['30 days', '90 days', 'All time'],
+      rows: [
+        { label: 'Units sold', cells: [String(f.last30 || 0), String(f.last90 || 0), String(f.allTimeSold || 0)] },
+        { label: 'Revenue', cells: [_money(f.revenue30Cents), _money(f.revenue90Cents), _money(f.revenueAllCents)] },
+        { label: 'Margin', cells: [_money(f.margin30Cents), _money(f.margin90Cents), _money(f.marginAllCents)] }
+      ]
+    });
+    var card = U.card('Forecast', table + '<div style="margin-top:14px;">' + U.kv([
       { k: 'Monthly sales rate', v: (f.monthlyRate != null ? f.monthlyRate + ' / mo' : '—') },
-      { k: 'Units sold (30 / 90 / all)', v: (f.last30 || 0) + ' / ' + (f.last90 || 0) + ' / ' + (f.allTimeSold || 0) },
-      { k: 'Margin (30 / 90 day)', v: _money(f.margin30Cents) + ' / ' + _money(f.margin90Cents) },
       { k: 'On-hand coverage', v: cov },
       { k: 'Trend', v: trend },
       { k: 'Fulfillment', v: mode }
-    ]));
+    ]) + '</div>');
     var sug = '';
     if (f.suggestBuild && f.suggestedQty) {
       sug = U.card('Suggested build', '<div style="font-size:0.9rem;margin-bottom:10px;">Stock is low for the current sales rate. Suggested build: <strong>' + esc(String(f.suggestedQty)) + ' pcs</strong>.</div>' +
@@ -509,7 +519,7 @@
     return U.card('Channels · product-level', U.kv([
       ch('Shopify', er.shopify), ch('Etsy', er.etsy), ch('Square', er.square),
       { k: 'Internal storefront', v: U.badge('On', 'teal') }
-    ]));
+    ])) + '<div class="pv2-pnote">Channels are set here at the product level — <strong>every variant inherits these</strong>. You don’t map channels per variant.</div>';
   }
   // The Image TAB is LIGHT: a read gallery + quick Upload + a "Manage images"
   // drill. Set-primary / remove / reorder live in the product-images-v2 drill SO
@@ -858,7 +868,7 @@
         return headerStrip(p, vimg, (p.name || 'Variant') + ' — ' + variantLabel(v), v.id) + UU.stickyHead(tiles, UU.paneTabsBar(tabs, 'v-pricing')) +
           pane('v-pricing', variantPricingPane(UU, p, v) + ctx, true) +
           pane('v-recipe', variantRecipePane(UU, p, v)) +
-          pane('v-channels', UU.card('Channels', row('Shopify', 'Live', 'same as the product', false, 'Map separately'))) +
+          pane('v-channels', UU.card('Channels', '<div style="color:var(--warm-gray);font-size:0.9rem;">This variant ships on whatever channels the product is mapped to — channels are set once at the product level and every variant inherits them. Set them on the product’s Channels tab.</div>')) +
           pane('v-inventory', variantInventoryPane(UU, p, v)) +
           pane('v-image', variantImagePane(UU, p, v)) +
           pane('v-info', variantInfoPane(UU, p, v));
@@ -1162,9 +1172,15 @@
     return out;
   }
   function load() {
-    if (!window.MastDB || !MastDB.products) return;
-    Promise.resolve(MastDB.products.get()).then(function (map) {
-      V2.rows = toRows(map); V2.byId = {}; V2.rows.forEach(function (r) { V2.byId[r._key] = r; }); render();
+    if (!window.MastDB || !MastDB.products || typeof MastDB.products.list !== 'function') return;
+    // Use list() (the canonical get-all), NOT get() with no arg — get() reads a
+    // cache that's empty on a cold first load (the list showed 0 rows until a
+    // manual refresh warmed it). list() queries reliably, like every other v2 list.
+    Promise.resolve(MastDB.products.list()).then(function (res) {
+      var arr = Array.isArray(res) ? res : Object.values(res || {});
+      V2.rows = arr.map(function (p) { return stamp(Object.assign({}, p), p.pid || p._key || p.id); });
+      V2.byId = {}; V2.rows.forEach(function (r) { V2.byId[r._key] = r; });
+      render();
     }).catch(function (e) { console.error('[products-v2] load', e); render(); });
   }
   function statusCounts() {
