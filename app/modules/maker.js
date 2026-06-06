@@ -7111,6 +7111,38 @@
     } catch (e) { return { ok: false, error: (e && e.message) || 'Failed' }; }
   }
 
+  // Create a new DRAFT product (the v2 cornerstone create path). Mirrors the
+  // object shape written by the legacy createNewPiece/submitNewPiece, MINUS the
+  // legacy post-create dispatch (recipe builder / define) — the v2 caller opens
+  // the standard product slide-out instead. acquisitionType: build | var | resell.
+  async function bridgeCreateDraftProduct(opts) {
+    try {
+      opts = opts || {};
+      var name = String(opts.name || '').trim();
+      if (!name) return { ok: false, error: 'Name is required' };
+      var acqType = (opts.acquisitionType === 'var' || opts.acquisitionType === 'resell') ? opts.acquisitionType : 'build';
+      var category = String(opts.category || 'other').trim().toLowerCase() || 'other';
+      var pid = 'p' + Date.now().toString(36);
+      var slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+      var now = new Date().toISOString();
+      var defineSpec = {};
+      if (acqType === 'var') defineSpec.var = { components: [], valueAddSteps: [] };
+      else if (acqType === 'resell') defineSpec.resell = { supplier: { supplierName: '', supplierSku: '', unitCost: 0, moq: 1 }, landedCost: { freight: 0, duty: 0, dutyMode: 'per-unit', storage: 0, other: 0 }, leadTimeDays: 0 };
+      var product = {
+        pid: pid, name: name, slug: slug, categories: [category], status: 'draft',
+        acquisitionType: acqType, version: 1, parentProductId: null,
+        readinessChecklist: { defined: false, costed: false, channeled: false, capacityPlanned: false, listingReady: false },
+        hasPendingRevision: false, pendingChanges: null, availability: 'available', businessLine: 'production',
+        defineSpec: defineSpec, materialCost: 0, laborCost: 0, otherCost: 0, totalCost: 0,
+        priceCents: null, images: [], imageIds: [], createdAt: now, updatedAt: now
+      };
+      await MastDB.set('public/products/' + pid, product);
+      if (window.productsData && Array.isArray(window.productsData)) window.productsData.push(product);
+      MastAdmin.writeAudit('create', 'products', pid);
+      return { ok: true, pid: pid, product: product };
+    } catch (e) { return { ok: false, error: (e && e.message) || 'Failed' }; }
+  }
+
   async function bridgeUnlinkRecipe(pid) {
     try {
       await MastDB.set('public/products/' + pid + '/recipeId', null);
@@ -7157,7 +7189,9 @@
     linkRecipe: function (pid, recipeId) { return bridgeLinkRecipe(pid, recipeId); },
     unlinkRecipe: function (pid) { return bridgeUnlinkRecipe(pid); },
     // Authored product attributes (tags / materials / custom) — live write.
-    setAttributes: function (pid, authored) { return bridgeSetAttributes(pid, authored); }
+    setAttributes: function (pid, authored) { return bridgeSetAttributes(pid, authored); },
+    // Create a new draft product (v2 create path — opens in the standard SO).
+    createDraftProduct: function (opts) { return bridgeCreateDraftProduct(opts); }
   };
 
 })();

@@ -1006,6 +1006,7 @@
     return U.card('Fulfillment', U.kv([
       { k: 'Stock mode', v: (si.stockType ? esc(si.stockType) : '—') },
       { k: 'Lead time to build', v: lead },
+      { k: 'Batch size', v: (p.batchSize ? esc(String(p.batchSize)) + ' / build' : '—') },
       { k: 'Availability', v: availabilityLabel(p) === 'Discontinued' ? U.badge('Discontinued', 'amber') : '<span class="from">Available</span>' },
       { k: 'Dimensions', v: dims ? esc(dims) : '—' },
       { k: 'Weight', v: (p.weightOz != null && p.weightOz !== '') ? esc(String(p.weightOz)) + ' oz' : '—' },
@@ -1036,6 +1037,9 @@
       '<span style="font-size:0.72rem;color:var(--warm-gray);">Made/Build-to-order never go “out of stock” — they ship on the lead time. Tracked modes ship only what’s on hand.</span></label>' +
       '<label style="display:block;margin-bottom:12px;font-size:0.85rem;color:var(--warm-gray);">Lead time to build (days)' +
       '<input id="pv2FulLead" type="number" min="0" step="1" value="' + esc(lead === '' ? '' : String(lead)) + '" style="' + fieldStyle + 'width:140px;"></label>' +
+      '<label style="display:block;margin-bottom:12px;font-size:0.85rem;color:var(--warm-gray);">Batch size (units per build)' +
+      '<input id="pv2FulBatchSize" type="number" min="0" step="1" value="' + esc(p.batchSize != null && p.batchSize !== '' ? String(p.batchSize) : '') + '" placeholder="e.g. 12" style="' + fieldStyle + 'width:140px;">' +
+      '<span style="font-size:0.72rem;color:var(--warm-gray);">How many you make in one production run — drives capacity planning.</span></label>' +
       '<label style="display:block;margin-bottom:12px;font-size:0.85rem;color:var(--warm-gray);">Availability' +
       '<select id="pv2FulAvailability" style="' + fieldStyle + '">' +
       '<option value="available"' + (!isDiscontinued ? ' selected' : '') + '>Available</option>' +
@@ -1114,15 +1118,16 @@
       //   markup-section   (costed)                 → Pricing
       //   listing-section  (listingReady)           → Image
       //   channels-section (channeled)              → Channels
-      // capacity-section has no v2 pane yet → fall back to the legacy define
-      // deep-link below.
+      //   capacity-section (capacityPlanned)        → Fulfillment (batch size lives there)
+      // Any unmapped section falls back to the legacy define deep-link below.
       onFlowTarget: function (targetId, rec) {
         var pid = rec._key || rec.id || rec.pid;
         var PANE = {
           'define-section': 'recipe',
           'markup-section': 'pricing',
           'listing-section': 'image',
-          'channels-section': 'channels'
+          'channels-section': 'channels',
+          'capacity-section': 'fulfillment'
         };
         var pane = PANE[targetId];
         if (pane) {
@@ -2022,7 +2027,7 @@
     }
     tab.innerHTML =
       U.pageHeader({ title: 'Products', count: N.count(V2.rows.length) + ' products',
-        actionsHtml: '<button class="btn btn-secondary" onclick="ProductsV2.exportCsv()">↓ Export</button>' }) +
+        actionsHtml: (canEditProduct() ? '<button class="btn btn-primary" onclick="ProductsV2.newProduct()">+ New product</button> ' : '') + '<button class="btn btn-secondary" onclick="ProductsV2.exportCsv()">↓ Export</button>' }) +
       '<div style="margin:14px 0 10px;display:flex;align-items:center;gap:8px 0;flex-wrap:wrap;">' + lensPills + '</div>' +
       '<div style="margin:0 0 14px;display:flex;align-items:center;gap:8px 0;flex-wrap:wrap;">' + pills + search + '</div>' +
       facetBar +
@@ -2031,6 +2036,54 @@
 
   window.ProductsV2 = {
     setFilter: function (s) { V2.filter = s; render(); },
+    // ── New product (v2 create) — a small standard dialog → creates a draft and
+    // opens it in the v2 SO (no legacy builder/define bounce). ──
+    newProduct: function () {
+      if (!canEditProduct()) { MastAdmin.showToast('You don’t have permission to create products', true); return; }
+      var cats = {}; V2.rows.forEach(function (r) { (r.categories || []).forEach(function (c) { if (c) cats[c] = 1; }); });
+      var dl = Object.keys(cats).sort().map(function (c) { return '<option value="' + esc(c) + '">'; }).join('');
+      var modes = [['build', 'Build', 'Produce in-house — define materials, labor, and costs.'], ['var', 'VAR', 'Source components and add value (assembly, branding).'], ['resell', 'Resell', 'Source from a supplier and apply markup.']];
+      var fieldStyle = 'display:block;width:100%;margin-top:4px;padding:8px 10px;border:1px solid var(--cream-dark);border-radius:6px;font-size:0.9rem;background:var(--cream);color:inherit;box-sizing:border-box;';
+      var modeHtml = modes.map(function (m, i) {
+        return '<label style="display:flex;gap:9px;align-items:flex-start;padding:9px 11px;border:1px solid var(--border);border-radius:7px;margin-bottom:6px;cursor:pointer;">' +
+          '<input type="radio" name="pv2NpMode" value="' + m[0] + '"' + (i === 0 ? ' checked' : '') + ' style="margin-top:3px;">' +
+          '<span><span style="font-weight:600;font-size:0.9rem;">' + m[1] + '</span><br><span style="font-size:0.78rem;color:var(--warm-gray);">' + m[2] + '</span></span></label>';
+      }).join('');
+      var html = '<div style="max-width:480px;padding:4px 4px 8px;">' +
+        '<h3 style="margin:0 0 16px;font-size:1.15rem;">New product</h3>' +
+        '<label style="display:block;margin-bottom:14px;font-size:0.85rem;color:var(--warm-gray);">Name' +
+        '<input id="pv2NpName" type="text" placeholder="e.g. Cobalt Pendant" style="' + fieldStyle + '"></label>' +
+        '<div style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:6px;">Acquisition mode</div>' + modeHtml +
+        '<label style="display:block;margin:8px 0 18px;font-size:0.85rem;color:var(--warm-gray);">Category' +
+        '<input id="pv2NpCat" list="pv2NpCats" placeholder="e.g. pendants" style="' + fieldStyle + '"><datalist id="pv2NpCats">' + dl + '</datalist></label>' +
+        '<div style="display:flex;gap:8px;justify-content:flex-end;">' +
+        '<button class="btn btn-secondary btn-small" onclick="ProductsV2.cancelNewProduct()">Cancel</button>' +
+        '<button class="btn btn-primary btn-small" onclick="ProductsV2.submitNewProduct()">Create product</button>' +
+        '</div></div>';
+      if (window.openModal) window.openModal(html); else { MastAdmin.showToast('Cannot open dialog', true); return; }
+      setTimeout(function () { var nm = document.getElementById('pv2NpName'); if (nm) nm.focus(); }, 0);
+    },
+    cancelNewProduct: function () { if (window.closeModal) window.closeModal(); },
+    submitNewProduct: function () {
+      var nameEl = document.getElementById('pv2NpName');
+      var name = nameEl ? nameEl.value.trim() : '';
+      if (!name) { MastAdmin.showToast('Name is required', true); if (nameEl) nameEl.focus(); return; }
+      var modeR = document.querySelector('input[name="pv2NpMode"]:checked');
+      var mode = modeR ? modeR.value : 'build';
+      var catEl = document.getElementById('pv2NpCat');
+      var category = catEl ? catEl.value.trim() : '';
+      ensureMaker(function () {
+        Promise.resolve(window.MakerProductBridge.createDraftProduct({ name: name, acquisitionType: mode, category: category })).then(function (res) {
+          if (!res || !res.ok) { MastAdmin.showToast('Failed: ' + ((res && res.error) || 'unknown'), true); return; }
+          if (window.closeModal) window.closeModal();
+          var rec = stamp(Object.assign({}, res.product), res.pid);
+          V2.rows.push(rec); V2.byId[rec._key] = rec;
+          render();
+          MastEntity.openRecord('products-v2', rec, 'read');
+          MastAdmin.showToast('Draft created — finish setting it up');
+        }, function (e) { console.error('[products-v2] createDraftProduct', e); MastAdmin.showToast('Failed', true); });
+      });
+    },
     // Tag facets — toggle a tag in/out of the active narrowing set (AND), then
     // re-render (chip states + counts + list all change).
     toggleTagFacet: function (tag) {
@@ -2419,8 +2472,14 @@
       var ws = wtEl ? wtEl.value.trim() : '';
       var weightOz = (ws === '') ? null : Number(ws);
       if (weightOz !== null && (!isFinite(weightOz) || weightOz < 0)) { MastAdmin.showToast('Enter a valid weight', true); return; }
+      var bsEl = document.getElementById('pv2FulBatchSize');
+      var bss = bsEl ? bsEl.value.trim() : '';
+      var batchSize = (bss === '') ? null : Math.round(Number(bss));
+      if (batchSize !== null && (!isFinite(batchSize) || batchSize < 0)) { MastAdmin.showToast('Enter a valid batch size', true); return; }
       // Build the setFields patch (catalog fields — revision-aware): only changed keys.
       var changed = {};
+      var curBatch = (rec.batchSize != null ? rec.batchSize : null);
+      if (batchSize !== curBatch) changed.batchSize = batchSize;
       var wantAvail = availEl ? availEl.value : 'available';
       var curAvail = String(rec.availability || '').toLowerCase() === 'discontinued' ? 'discontinued' : 'available';
       if (wantAvail !== curAvail) {
@@ -2459,6 +2518,7 @@
                 if (changed.discontinuedAt != null) rec.discontinuedAt = changed.discontinuedAt;
                 if (changed.makerAttributes != null) rec.makerAttributes = changed.makerAttributes;
                 if (changed.weightOz !== undefined) rec.weightOz = changed.weightOz;
+                if (changed.batchSize !== undefined) rec.batchSize = changed.batchSize;
                 if (newCats) rec.categories = newCats;
               }
               finish(r2 && r2.staged ? ' (catalog edits staged — Apply to go live)' : '');
