@@ -799,6 +799,95 @@
     var paneEl = body && body.querySelector('.mu-pane[data-pane="info"]');
     if (paneEl) paneEl.innerHTML = infoPane(rec);
   }
+  // ── Attributes (channel/merchandising metadata) ───────────────────────
+  // Model (ratified, see docs/ux-audit/channel-attributes-research.md):
+  //   attributes.authored  — set in Mast, pushed OUT on publish (tags/materials/custom). EDITABLE.
+  //   attributes.imported  — mirrored FROM each channel, keyed by channelId. READ-ONLY.
+  //   attributes.derived   — NOT stored; merchandising badges computed at render.
+  // `authored.tags` reclaims the previously-vestigial product.tags.
+  function productAttributes(p) {
+    var a = (p && p.attributes) || {};
+    var authored = a.authored || {};
+    return {
+      authored: authored,
+      tags: Array.isArray(authored.tags) ? authored.tags : (Array.isArray(p.tags) ? p.tags : []),
+      materials: Array.isArray(authored.materials) ? authored.materials : [],
+      custom: (authored.custom && typeof authored.custom === 'object') ? authored.custom : {},
+      imported: a.imported || {}
+    };
+  }
+  // Derived badges — computed live, never stored (avoids staleness). Only what's
+  // derivable from data already on the product (stockInfo); "top seller" needs the
+  // sales map and is surfaced in the Sales lens, not stored here.
+  function derivedBadges(p) {
+    var out = [], si = p.stockInfo || {};
+    var tracked = si.stockType && !/order|build/.test(si.stockType); // made/build-to-order never "out"
+    if (tracked && si.totalAvailable != null) {
+      var thr = (si.lowStockThreshold != null ? si.lowStockThreshold : 2);
+      if (si.totalAvailable <= 0) out.push({ label: 'Out of stock', tone: 'amber' });
+      else if (si.totalAvailable <= thr) out.push({ label: 'Low stock', tone: 'amber' });
+    }
+    return out;
+  }
+  function attrChips(items, color) {
+    if (!items || !items.length) return '<span style="color:var(--warm-gray);font-size:0.85rem;">—</span>';
+    return items.map(function (t) { return '<span style="display:inline-block;border:1px solid var(--border);border-radius:999px;padding:3px 10px;font-size:0.78rem;margin:0 6px 6px 0;color:' + (color || 'var(--text)') + ';">' + esc(String(t)) + '</span>'; }).join('');
+  }
+  function attributesPane(p) {
+    var pid = p._key || p.pid;
+    if (V2.editAttrs === pid) return attributesEditForm(p);
+    var A = productAttributes(p);
+    var editBtn = canEditProduct() ? '<button class="btn btn-secondary btn-small" onclick="ProductsV2.editAttributes(\'' + esc(pid) + '\')">Edit</button>' : '';
+    var customKeys = Object.keys(A.custom);
+    var authoredBody = U.kv([
+      { k: 'Tags', v: attrChips(A.tags, 'var(--teal,teal)') },
+      { k: 'Materials', v: attrChips(A.materials) }
+    ]) + (customKeys.length ? '<div style="margin-top:8px;font-size:0.85rem;color:var(--warm-gray);">Custom: ' + customKeys.map(function (k) { return esc(k) + ' = ' + esc(String(A.custom[k])); }).join(' · ') + '</div>' : '');
+    var badges = derivedBadges(p);
+    var derivedHtml = badges.length ? badges.map(function (b) { return U.badge(b.label, b.tone); }).join(' ') : '<span style="color:var(--warm-gray);font-size:0.85rem;">No badges right now.</span>';
+    var impKeys = Object.keys(A.imported);
+    var importedHtml = impKeys.length ? impKeys.map(function (cid) {
+      var ci = A.imported[cid] || {};
+      var name = (V2._channelsCache && V2._channelsCache[cid] && (V2._channelsCache[cid].name || V2._channelsCache[cid].platform)) || cid;
+      var rows = [];
+      if (Array.isArray(ci.tags) && ci.tags.length) rows.push({ k: 'Tags', v: attrChips(ci.tags) });
+      if (ci.productType) rows.push({ k: 'Type', v: esc(String(ci.productType)) });
+      if (Array.isArray(ci.materials) && ci.materials.length) rows.push({ k: 'Materials', v: attrChips(ci.materials) });
+      if (Array.isArray(ci.occasion) && ci.occasion.length) rows.push({ k: 'Occasion', v: attrChips(ci.occasion) });
+      if (Array.isArray(ci.style) && ci.style.length) rows.push({ k: 'Style', v: attrChips(ci.style) });
+      if (ci.vendor) rows.push({ k: 'Vendor', v: esc(String(ci.vendor)) });
+      return '<div style="margin-bottom:10px;"><div style="font-size:0.78rem;text-transform:uppercase;letter-spacing:.04em;color:var(--warm-gray);margin-bottom:4px;">' + esc(name) + '</div>' + (rows.length ? U.kv(rows) : '<span style="color:var(--warm-gray);font-size:0.85rem;">—</span>') + '</div>';
+    }).join('') : '<div style="color:var(--warm-gray);font-size:0.9rem;">Channel attributes appear here once products sync from connected channels.</div>';
+    return U.card('Attributes · authored', authoredBody, { headerRight: editBtn }) +
+      U.card('Merchandising badges · derived', derivedHtml) +
+      U.card('From channels · imported (read-only)', importedHtml) +
+      '<div class="pv2-pnote">Authored attributes are yours — pushed out to channels on publish. Imported mirrors what each channel sent. Badges are computed live from stock &amp; sales (not stored).</div>';
+  }
+  function attributesEditForm(p) {
+    var pid = p._key || p.pid;
+    var A = productAttributes(p);
+    var inputStyle = 'display:block;width:100%;margin-top:4px;padding:7px 9px;border:1px solid var(--cream-dark);border-radius:6px;font-size:0.9rem;background:var(--cream);color:inherit;box-sizing:border-box;';
+    function csv(label, id, arr, hint) {
+      return '<label style="display:block;margin-bottom:12px;font-size:0.85rem;color:var(--warm-gray);">' + esc(label) +
+        '<input id="' + id + '" type="text" value="' + esc((arr || []).join(', ')) + '" style="' + inputStyle + '">' +
+        '<span style="font-size:0.72rem;color:var(--warm-gray);">' + esc(hint) + '</span></label>';
+    }
+    var body =
+      csv('Tags', 'pv2AttrTags', A.tags, 'Comma-separated. Your merchandising tags (pushed to channels on publish).') +
+      csv('Materials', 'pv2AttrMaterials', A.materials, 'Comma-separated. e.g. sterling silver, resin.') +
+      '<div class="pv2-pnote">Imported (channel) attributes and derived badges aren’t edited here — only your authored ones.</div>' +
+      '<div style="display:flex;gap:8px;margin-top:4px;">' +
+      '<button class="btn btn-primary btn-small" onclick="ProductsV2.saveAttributes(\'' + esc(pid) + '\')">Save</button>' +
+      '<button class="btn btn-secondary btn-small" onclick="ProductsV2.cancelAttributes(\'' + esc(pid) + '\')">Cancel</button>' +
+      '</div>';
+    return U.card('Edit attributes · authored', body);
+  }
+  function rerenderAttributesPane(pid) {
+    var rec = V2.byId[pid]; if (!rec) return;
+    var body = document.getElementById('mastSlideOutBody');
+    var paneEl = body && body.querySelector('.mu-pane[data-pane="attributes"]');
+    if (paneEl) paneEl.innerHTML = attributesPane(rec);
+  }
   // Fulfillment is its own top-level tab (operator: "does not work inside Info").
   // Re-render in place so editing keeps the user on the Fulfillment tab.
   function rerenderFulfillmentPane(pid) {
@@ -913,6 +1002,7 @@
         else if (prevPane === 'fulfillment' && V2.editFulfill) { V2.editFulfill = null; rerenderFulfillmentPane(pid); }
         else if (prevPane === 'pricing' && V2.editPricing) { V2.editPricing = null; rerenderPricingPane(pid); }
         else if (prevPane === 'inventory' && V2.editInv) { V2.editInv = null; rerenderInventoryPane(pid); }
+        else if (prevPane === 'attributes' && V2.editAttrs) { V2.editAttrs = null; rerenderAttributesPane(pid); }
       },
       // Pilot the ratified lean guided-record header (clickable step rail +
       // checklist-into-tabs, no Advance button). Opt-in flag read by
@@ -969,7 +1059,7 @@
       render: function (UU, p) {
         // Fresh open/reopen always starts read-only — a prior session's abandoned
         // edit flag must not reopen a pane in edit mode (cancel-on-leave on close).
-        V2.editInfo = V2.editFulfill = V2.editPricing = V2.editInv = null;
+        V2.editInfo = V2.editFulfill = V2.editPricing = V2.editInv = V2.editAttrs = null;
         var prTile = priceRange(p) || '—';
         var tiles = UU.tiles([
           { k: 'Status', v: statusLabel(p.status), hero: true },
@@ -981,7 +1071,7 @@
         var tabs = [
           { key: 'pricing', label: 'Pricing' }, { key: 'sales', label: 'Sales' }, { key: 'recipe', label: 'Recipe' },
           { key: 'inventory', label: 'Inventory' }, { key: 'forecast', label: 'Forecast' },
-          { key: 'fulfillment', label: 'Fulfillment' }, { key: 'channels', label: 'Channels' }, { key: 'image', label: 'Image' }, { key: 'info', label: 'Info' }
+          { key: 'fulfillment', label: 'Fulfillment' }, { key: 'channels', label: 'Channels' }, { key: 'image', label: 'Image' }, { key: 'info', label: 'Info' }, { key: 'attributes', label: 'Attributes' }
         ].filter(function (t) {
           // Finance-sensitive tabs follow the retired module's view permission.
           if (t.key === 'sales') return canViewLens('sales');
@@ -1010,7 +1100,8 @@
           pane('fulfillment', fulfillmentPane(p)) +
           pane('channels', channelsPane(p)) +
           pane('image', imagePane(p)) +
-          pane('info', infoPane(p));
+          pane('info', infoPane(p)) +
+          pane('attributes', attributesPane(p));
       }
     }
   });
@@ -1452,7 +1543,7 @@
   }
 
   // ── State + data ────────────────────────────────────────────────────
-  var V2 = { rows: [], byId: {}, sortKey: '_title', sortDir: 'asc', filter: 'all', lens: 'general', expanded: {}, editInfo: null, editFulfill: null, editPricing: null, editVarPricing: null, editInv: null, editVarInv: null, editVarInfo: null, editVarFulfill: null, q: '' };
+  var V2 = { rows: [], byId: {}, sortKey: '_title', sortDir: 'asc', filter: 'all', lens: 'general', expanded: {}, editInfo: null, editFulfill: null, editPricing: null, editVarPricing: null, editInv: null, editVarInv: null, editVarInfo: null, editVarFulfill: null, editAttrs: null, q: '' };
 
   function toRows(map) {
     var out = []; map = map || {};
@@ -2231,6 +2322,30 @@
     // ── Info tab edit (P4 pilot) ──────────────────────────────────────
     editInfo: function (pid) { if (!canEditProduct()) { MastAdmin.showToast('You don’t have permission to edit products', true); return; } V2.editInfo = pid; rerenderInfoPane(pid); },
     cancelInfo: function (pid) { V2.editInfo = null; rerenderInfoPane(pid); },
+    // ── Attributes (authored tags/materials) ──
+    editAttributes: function (pid) { if (!canEditProduct()) { MastAdmin.showToast('You don’t have permission to edit products', true); return; } V2.editAttrs = pid; rerenderAttributesPane(pid); },
+    cancelAttributes: function (pid) { V2.editAttrs = null; rerenderAttributesPane(pid); },
+    saveAttributes: function (pid) {
+      if (!canEditProduct()) { MastAdmin.showToast('You don’t have permission to edit products', true); return; }
+      function parseCsv(id) {
+        var el = document.getElementById(id); if (!el) return [];
+        var seen = {}, out = [];
+        el.value.split(',').forEach(function (s) { var t = s.trim(); if (t && !seen[t.toLowerCase()]) { seen[t.toLowerCase()] = 1; out.push(t); } });
+        return out;
+      }
+      var rec = V2.byId[pid] || {};
+      var prev = productAttributes(rec);
+      // Preserve any existing custom bag; only tags + materials are edited here.
+      var authored = Object.assign({}, prev.authored, { tags: parseCsv('pv2AttrTags'), materials: parseCsv('pv2AttrMaterials') });
+      withProductBridge(function () {
+        Promise.resolve(window.MakerProductBridge.setAttributes(pid, authored)).then(function (res) {
+          if (!res || !res.ok) { MastAdmin.showToast('Failed: ' + ((res && res.error) || 'unknown'), true); return; }
+          var r = V2.byId[pid]; if (r && res.attributes) r.attributes = res.attributes;
+          V2.editAttrs = null; rerenderAttributesPane(pid);
+          MastAdmin.showToast('Attributes saved');
+        }, function (e) { console.error('[products-v2] saveAttributes', e); MastAdmin.showToast('Failed', true); });
+      });
+    },
     saveInfo: function (pid) {
       function val(id) { var el = document.getElementById(id); return el ? el.value.trim() : ''; }
       var rec = V2.byId[pid] || {};

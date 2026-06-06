@@ -7092,6 +7092,25 @@
       return { ok: true, recipeId: recipeId };
     } catch (e) { return { ok: false, error: (e && e.message) || 'Failed' }; }
   }
+  // Authored product attributes (merchandising metadata: tags, materials, custom).
+  // Writes LIVE on every status — like images, this is operational metadata, not a
+  // spec revision (routing it through setFields would let the Active-product
+  // revision-staging silently drop it, since `attributes` isn't a revisionable key).
+  // `authored` is merged whole (caller passes the full authored object); the
+  // `imported`/`derived` buckets are owned by the sync/compute paths, not touched here.
+  async function bridgeSetAttributes(pid, authored) {
+    try {
+      var p = findProduct(pid);
+      var existing = (p && p.attributes) || {};
+      var next = Object.assign({}, existing, { authored: authored || {} });
+      await MastDB.set('public/products/' + pid + '/attributes', next);
+      await MastDB.set('public/products/' + pid + '/updatedAt', new Date().toISOString());
+      if (p) p.attributes = next;
+      MastAdmin.writeAudit('update', 'products', pid);
+      return { ok: true, attributes: next };
+    } catch (e) { return { ok: false, error: (e && e.message) || 'Failed' }; }
+  }
+
   async function bridgeUnlinkRecipe(pid) {
     try {
       await MastDB.set('public/products/' + pid + '/recipeId', null);
@@ -7136,7 +7155,9 @@
     // Recipe link (building itself stays in the legacy builder).
     createRecipeForProduct: function (pid, name) { return bridgeCreateRecipeForProduct(pid, name); },
     linkRecipe: function (pid, recipeId) { return bridgeLinkRecipe(pid, recipeId); },
-    unlinkRecipe: function (pid) { return bridgeUnlinkRecipe(pid); }
+    unlinkRecipe: function (pid) { return bridgeUnlinkRecipe(pid); },
+    // Authored product attributes (tags / materials / custom) — live write.
+    setAttributes: function (pid, authored) { return bridgeSetAttributes(pid, authored); }
   };
 
 })();
