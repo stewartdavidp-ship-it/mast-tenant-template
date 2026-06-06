@@ -6885,6 +6885,43 @@
     } catch (e) { return { ok: false, error: (e && e.message) || 'Failed' }; }
   }
 
+  // Set any/all stock count buckets (onHand, committed, held, damaged, incoming)
+  // for a stocked unit (variantKey = variant id, or '_default'). Only the keys
+  // present in `counts` are written. Same cache-prime + stockInfo resync as
+  // bridgeSetStock. (Available is always derived = onHand - committed - held.)
+  async function bridgeSetStockCounts(pid, variantKey, counts) {
+    try {
+      var key = variantKey || '_default';
+      counts = counts || {};
+      var inv = (await MastDB.inventory.get(pid)) || {};
+      if (typeof inv.stock === 'number') inv.stock = { _default: { onHand: inv.stock } };
+      inv.stock = inv.stock || {};
+      var stamp = new Date().toISOString();
+      var FIELDS = ['onHand', 'committed', 'held', 'damaged', 'incoming'];
+      var next = Object.assign({}, inv.stock[key]);
+      for (var i = 0; i < FIELDS.length; i++) {
+        var f = FIELDS[i];
+        if (counts[f] != null) {
+          var n = Math.max(0, Math.round(Number(counts[f]) || 0));
+          next[f] = n;
+          await MastDB.set('admin/inventory/' + pid + '/stock/' + key + '/' + f, n);
+        }
+      }
+      next.lastCountedAt = stamp;
+      await MastDB.set('admin/inventory/' + pid + '/stock/' + key + '/lastCountedAt', stamp);
+      inv.stock[key] = next;
+      if (window.inventory && typeof window.inventory === 'object') window.inventory[pid] = inv;
+      await bridgeEnsureProduct(pid);
+      if (typeof window.syncStockInfoToPublic === 'function') {
+        try { await window.syncStockInfoToPublic(pid); } catch (e) { console.warn('[bridge] stockInfo sync', e); }
+      }
+      var fresh2 = await MastDB.get('public/products/' + pid + '/stockInfo');
+      var p2 = findProduct(pid); if (p2 && fresh2) p2.stockInfo = fresh2;
+      MastAdmin.writeAudit('update', 'inventory', pid);
+      return { ok: true, stockInfo: fresh2 };
+    } catch (e) { return { ok: false, error: (e && e.message) || 'Failed' }; }
+  }
+
   // Set product-level inventory config (stockType, productionLeadTimeDays,
   // lowStockThreshold, stockFulfillmentDays) on admin/inventory/{pid}, then
   // resync the denormalized stockInfo. null clears a key.
@@ -6978,6 +7015,7 @@
     setVariantFields: function (pid, variantId, patch) { return bridgeSetVariantFields(pid, variantId, patch); },
     // Set on-hand stock (separate inventory collection + stockInfo resync).
     setStock: function (pid, variantKey, onHand) { return bridgeSetStock(pid, variantKey, onHand); },
+    setStockCounts: function (pid, variantKey, counts) { return bridgeSetStockCounts(pid, variantKey, counts); },
     // Product-level inventory config (stockType / lead time / thresholds).
     setInventoryConfig: function (pid, patch) { return bridgeSetInventoryConfig(pid, patch); },
     // Recipe link (building itself stays in the legacy builder).
