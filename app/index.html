@@ -110,7 +110,7 @@
        Shared by customers.js (list/export) and customer-service.js (survey
        bulk-send) so the segment matcher cannot drift. ?v= kept in lockstep
        with MAST_MODULES_V by scripts/bump-modules-version.sh. -->
-  <script src="../shared/customer-filters.js?v=20260606-083252-eb77ea4"></script>
+  <script src="../shared/customer-filters.js?v=20260606-084610-7b0572f"></script>
   <script src="../shared/brand-sync.js?v=1"></script>
   <script src="../shared/channel-connection.js?v=1"></script>
   <!-- UI redesign engines (docs/ux-audit): shared primitives + Entity Engine.
@@ -118,9 +118,9 @@
        scripts/bump-modules-version.sh (these are static <head> tags loaded
        before the JS var exists, so they can't read it at runtime). Without
        this, the engines were frozen at ?v=1 and never cache-busted on deploy. -->
-  <script src="../shared/mast-ui.js?v=20260606-083252-eb77ea4"></script>
-  <script src="../shared/mast-io.js?v=20260606-083252-eb77ea4"></script>
-  <script src="../shared/mast-entity.js?v=20260606-083252-eb77ea4"></script>
+  <script src="../shared/mast-ui.js?v=20260606-084610-7b0572f"></script>
+  <script src="../shared/mast-io.js?v=20260606-084610-7b0572f"></script>
+  <script src="../shared/mast-entity.js?v=20260606-084610-7b0572f"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Pod-specific runtime config — sets window.MAST_POD_PLATFORM_PROJECT so
@@ -6266,13 +6266,13 @@
       </div>
       <div class="sidebar-items">
         <div class="sidebar-item" data-route="products" onclick="navigateTo('products')">Products</div>
-        <!-- W1.8: PM/Operator doorway to the same Demand Overview data Forecast shows, framed for strategy rather than maker production planning. -->
-        <div class="sidebar-item" data-route="sales-by-product" onclick="navigateTo('sales-by-product')">Sales by Product</div>
+        <!-- Sales by Product, Forecast & Inventory retired as standalone sub-items:
+             their data now lives in the Products list as facets (General /
+             Inventory / Sales / Forecast pills) + the product detail tabs. The
+             routes redirect to products-v2 with the matching lens. -->
         <div class="sidebar-item" data-route="materials" onclick="navigateTo('materials')">Materials</div>
-        <div class="sidebar-item" data-route="forecast" onclick="navigateTo('forecast')">Forecast</div>
         <div class="sidebar-item" data-route="jobs" onclick="navigateTo('jobs')">Jobs</div>
         <div class="sidebar-item" data-route="procurement" onclick="navigateTo('procurement')">Procurement</div>
-        <div class="sidebar-item" data-route="inventory" onclick="navigateTo('inventory')">Inventory</div>
       </div>
     </div>
     <!-- Sales -->
@@ -20375,8 +20375,7 @@ var SECTION_ROUTES = {
   // W1.8/W1-SEC: 'sales-by-product' lives in the Production sidebar
   // group so canViewSection() routes it through the same permission
   // table as products/materials/forecast, not the catch-all allow path.
-  'products':          ['products', 'sales-by-product', 'materials', 'forecast',
-                        'jobs', 'procurement', 'inventory'],
+  'products':          ['products', 'materials', 'jobs', 'procurement'],
   'sales':             ['pos', 'orders', 'commissions', 'rma',
                         'wholesale', 'lookbooks', 'galleries',
                         'receipts', 'terms', 'commission-terms', 'pack', 'ship'],
@@ -20574,6 +20573,14 @@ function navigateTo(route, params) {
     window.__integrationsActiveTab = 'qbo';
     window.__qboInnerActiveTab = (qboInner === 'connect') ? 'connection' : qboInner;
     return navigateTo('settings');
+  }
+  // Retired-route redirect (2026-06-06): Sales by Product, Forecast & Inventory
+  // are no longer standalone surfaces — their data lives in the Products list as
+  // facets + the product detail tabs. Send bookmarked/internal links to the
+  // Products list with the matching lens preselected.
+  if (route === 'inventory' || route === 'sales-by-product' || route === 'forecast') {
+    window._pv2InitialLens = (route === 'sales-by-product') ? 'sales' : (route === 'forecast' ? 'forecast' : 'inventory');
+    return navigateTo('products', params);
   }
   // Legacy UI off → use the redesigned V2 twin for any object that has one.
   // navigateToClassic() sets _skipV2RemapOnce to reach a legacy route regardless
@@ -21307,7 +21314,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260606-083252-eb77ea4';
+var MAST_MODULES_V = '20260606-084610-7b0572f';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
