@@ -31,15 +31,10 @@
  */
 (function () {
   'use strict';
-  function flagOn() {
-    try {
-      if (/[?&#]ui=1\b/.test(location.href)) { localStorage.setItem('mastUiRedesign', '1'); return true; }
-      if (localStorage.getItem('mastUiRedesign') === '1') return true;
-    } catch (e) {}
-    return !!(window.MAST_FEATURE_FLAGS && window.MAST_FEATURE_FLAGS.uiRedesign);
-  }
   if (!window.MastAdmin || !window.MastEntity || !window.MastUI) return;
-  if (!flagOn()) return;
+  // Un-gated (Tier 1.5 P7, 2026-06-06): the procurement domain is the V2 default
+  // for all users — no ?ui=1 required. The shared engine (MastEntity/MastUI) is
+  // loaded unconditionally at boot, so self-registering here is always safe.
 
   var U = window.MastUI, N = U.Num, esc = U._esc;
   var STATUS_TONE = { draft: 'neutral', submitted: 'info', partially_received: 'amber', received: 'success', closed: 'neutral', cancelled: 'danger' };
@@ -271,6 +266,7 @@
         '<button class="btn btn-primary" style="margin-left:auto;" onclick="ProcurementV2.createNew()">+ New PO</button>' +
         '<button class="btn btn-secondary" onclick="navigateTo(\'reorder-v2\')">↻ Needs reorder</button>' +
         '<button class="btn btn-secondary" onclick="navigateTo(\'lots-v2\')">▦ Inventory lots</button>' +
+        '<button class="btn btn-secondary" onclick="navigateTo(\'vendors-v2\')">⚐ Vendors</button>' +
         '<button class="btn btn-secondary" onclick="ProcurementV2.exportCsv()">↓ Export</button>' +
       '</div>' +
       '<div style="display:flex;gap:6px;flex-wrap:wrap;margin:12px 0;">' + filters + '</div>' +

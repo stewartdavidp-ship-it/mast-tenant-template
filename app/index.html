@@ -110,25 +110,25 @@
        Shared by customers.js (list/export) and customer-service.js (survey
        bulk-send) so the segment matcher cannot drift. ?v= kept in lockstep
        with MAST_MODULES_V by scripts/bump-modules-version.sh. -->
-  <script src="../shared/customer-filters.js?v=20260606-175727-6c1c485"></script>
+  <script src="../shared/customer-filters.js?v=20260606-181028-d50cad7"></script>
   <script src="../shared/brand-sync.js?v=1"></script>
   <script src="../shared/channel-connection.js?v=1"></script>
-  <script src="../shared/variant-reconcile.js?v=20260606-175727-6c1c485"></script>
+  <script src="../shared/variant-reconcile.js?v=20260606-181028-d50cad7"></script>
   <!-- UI redesign engines (docs/ux-audit): shared primitives + Entity Engine.
        The ?v= suffix is kept in lockstep with MAST_MODULES_V by
        scripts/bump-modules-version.sh (these are static <head> tags loaded
        before the JS var exists, so they can't read it at runtime). Without
        this, the engines were frozen at ?v=1 and never cache-busted on deploy. -->
-  <script src="../shared/mast-ui.js?v=20260606-175727-6c1c485"></script>
-  <script src="../shared/mast-io.js?v=20260606-175727-6c1c485"></script>
-  <script src="../shared/mast-entity.js?v=20260606-175727-6c1c485"></script>
+  <script src="../shared/mast-ui.js?v=20260606-181028-d50cad7"></script>
+  <script src="../shared/mast-io.js?v=20260606-181028-d50cad7"></script>
+  <script src="../shared/mast-entity.js?v=20260606-181028-d50cad7"></script>
   <!-- Canonical product readiness gate (computeReadinessChecklist / productMarkupConfig).
        Byte-identical to mast-tenant-mcp-server/src/shared/product-readiness.core.js so the
        AI publish gate and the maker.js UI gate cannot drift; maker.js delegates to
        window.MastProductReadiness. Eager-loaded so it exists before the lazy maker module.
        ?v= kept in lockstep with MAST_MODULES_V by scripts/bump-modules-version.sh.
        See docs/ux-audit/product-publish-gate-plan.md §7. -->
-  <script src="../shared/product-readiness.core.js?v=20260606-175727-6c1c485"></script>
+  <script src="../shared/product-readiness.core.js?v=20260606-181028-d50cad7"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Pod-specific runtime config — sets window.MAST_POD_PLATFORM_PROJECT so
@@ -6280,7 +6280,7 @@
              routes redirect to products-v2 with the matching lens. -->
         <div class="sidebar-item" data-route="materials" onclick="navigateTo('materials')">Materials</div>
         <div class="sidebar-item" data-route="jobs" onclick="navigateTo('jobs')">Jobs</div>
-        <div class="sidebar-item" data-route="procurement" onclick="navigateTo('procurement')">Procurement</div>
+        <div class="sidebar-item" data-route="procurement-v2" onclick="navigateTo('procurement-v2')">Procurement</div>
       </div>
     </div>
     <!-- Sales -->
@@ -20383,7 +20383,7 @@ var SECTION_ROUTES = {
   // W1.8/W1-SEC: 'sales-by-product' lives in the Production sidebar
   // group so canViewSection() routes it through the same permission
   // table as products/materials/forecast, not the catch-all allow path.
-  'products':          ['products', 'materials', 'jobs', 'procurement'],
+  'products':          ['products', 'materials', 'jobs', 'procurement', 'procurement-v2', 'vendors-v2', 'lots-v2', 'reorder-v2'],
   'sales':             ['pos', 'orders', 'commissions', 'rma',
                         'wholesale', 'lookbooks', 'galleries',
                         'receipts', 'terms', 'commission-terms', 'pack', 'ship'],
@@ -20594,7 +20594,11 @@ function navigateTo(route, params) {
   // navigateToClassic() sets _skipV2RemapOnce to reach a legacy route regardless
   // (consume-once, so only that single navigation bypasses the remap).
   var _skipRemap = window._skipV2RemapOnce; window._skipV2RemapOnce = false;
-  if (!_skipRemap && mastUseV2Routes() && MAST_V2_ROUTE_MAP[route]) {
+  // Procurement is fully ported to V2 (Tier 1.5, 2026-06-06): #procurement resolves
+  // to the V2 twin for ALL users, independent of the global Legacy-UI flag. Other
+  // domains still respect mastUseV2Routes(). navigateToClassic() still bypasses via
+  // _skipV2RemapOnce for any not-yet-ported sub-tool.
+  if (!_skipRemap && (mastUseV2Routes() || route === 'procurement') && MAST_V2_ROUTE_MAP[route]) {
     route = MAST_V2_ROUTE_MAP[route];
   }
   // Top-level nav (sidebar click, dashboard tile, in-page button) consults
@@ -21322,7 +21326,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260606-175727-6c1c485';
+var MAST_MODULES_V = '20260606-181028-d50cad7';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
