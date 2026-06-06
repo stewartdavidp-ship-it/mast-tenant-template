@@ -364,11 +364,11 @@
       var canEd = canEditProduct();
       var body = head +
         '<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">' +
-        '<button class="btn btn-secondary btn-small" onclick="MastEntity.drill(\'recipe-v2\',\'' + esc(p.recipeId) + '\')">Open recipe →</button>' +
-        (canEd ? '<button class="btn btn-secondary btn-small" onclick="ProductsV2.recipeEditInBuilder(\'' + esc(p.recipeId) + '\',\'' + esc(pid) + '\')">Edit in builder ↗</button>' : '') +
+        '<button class="btn btn-primary btn-small" onclick="MastEntity.drill(\'recipe-v2\',\'' + esc(p.recipeId) + '\')">Open recipe →</button>' +
+        (canEd ? '<button class="btn btn-secondary btn-small" title="Legacy builder — what-if metal pricing, bulk reprice, CSV import" onclick="ProductsV2.recipeEditInBuilder(\'' + esc(p.recipeId) + '\',\'' + esc(pid) + '\')">Advanced ↗</button>' : '') +
         (canEd ? '<button class="btn btn-secondary btn-small" onclick="ProductsV2.recipeUnlink(\'' + esc(pid) + '\')">Unlink</button>' : '') +
         '</div>';
-      return U.card('Recipe', body) + '<div class="pv2-pnote">“Open recipe” reads the full bill of materials here (Back returns); “Edit in builder” opens the recipe builder.</div>';
+      return U.card('Recipe', body) + '<div class="pv2-pnote">“Open recipe” edits the full recipe here — materials, labor, pricing tiers, and per-variant cost (Back returns). “Advanced” opens the legacy builder for what-if metal pricing, bulk reprice, and CSV import.</div>';
     }
     return U.card('Recipe', '<div style="color:var(--warm-gray);font-size:0.9rem;margin-bottom:10px;">No recipe linked. A recipe tracks the materials, labor, and cost behind this product.</div>' +
       (canEditProduct() ? '<button class="btn btn-secondary btn-small" onclick="ProductsV2.recipeCreate(\'' + esc(pid) + '\')">+ Create a recipe</button>' : '<span style="color:var(--warm-gray);font-size:0.85rem;">No recipe.</span>'));
@@ -379,8 +379,11 @@
     var pane = body && body.querySelector('.mu-pane[data-pane="recipe"]');
     if (pane) pane.innerHTML = recipePane(rec);
   }
-  // Open the legacy recipe builder (sanctioned separate surface — not reimplemented
-  // in v2). It hijacks the legacy pieces tab, so navigate there first.
+  // Open the legacy recipe builder — R5 retired this as the everyday edit path
+  // (the v2 recipe SO now owns BOM / labor / pricing / per-variant cost). It
+  // survives ONLY as the "Advanced ↗" door for power tools not yet ported to v2
+  // (what-if metal pricing, bulk reprice, CSV import). It hijacks the legacy
+  // pieces tab, so navigate there first.
   // `pid` lets us push a v2 return-target so the builder's "← Back to Products"
   // (maker.closeRecipeBuilder → MastNavStack.popAndReturn) lands back on the v2
   // slide-out instead of the V1 legacy product page.
@@ -476,11 +479,11 @@
   function variantRecipePane(UU, p, v) {
     var pid = p._key || p.pid, vid = v.id;
     var hasRecipe = !!p.recipeId;
-    var btnLabel = hasRecipe ? 'Edit this variant’s recipe ↗' : 'Give it its own recipe ↗';
-    var statusV = hasRecipe ? 'Shares the product recipe (open to give this variant its own materials)' : 'Uses the product recipe';
+    var btnLabel = hasRecipe ? 'Open recipe →' : 'Create & open recipe →';
+    var statusV = hasRecipe ? 'Shares the product recipe — open it to give this variant its own cost' : 'No product recipe yet';
     var body = UU.kv([{ k: 'Recipe', v: statusV }]) +
-      (canEditProduct() ? '<div style="margin-top:12px;"><button class="btn btn-secondary btn-small" onclick="ProductsV2.variantOwnRecipe(\'' + esc(pid) + '\',\'' + esc(vid) + '\')">' + btnLabel + '</button></div>' : '');
-    return UU.card('Recipe', body) + '<div class="pv2-pnote">A variant can have its own materials within the product recipe. Give it its own only if it’s actually made differently.</div>';
+      (canEditProduct() ? '<div style="margin-top:12px;"><button class="btn btn-primary btn-small" onclick="ProductsV2.variantOwnRecipe(\'' + esc(pid) + '\',\'' + esc(vid) + '\')">' + btnLabel + '</button></div>' : '');
+    return UU.card('Recipe', body) + '<div class="pv2-pnote">A variant can override the product recipe with its own materials, labor, or cost. Opening the recipe lands on this variant — then “Override for this variant”.</div>';
   }
   function inventoryPane(p) {
     var pid = p._key || p.pid;
@@ -1522,7 +1525,10 @@
         // still go through the legacy builder (R3 brings them into v2). Cache the open
         // recipe so edit handlers can re-render in place.
         V2._recipeEdit = { recipeId: rc.recipeId || rc._key, rc: rc }; V2._recipeAdding = false;
-        V2._recipeEditLabor = false; V2._recipeEditPricing = false; V2._recipeVariantKey = null;
+        V2._recipeEditLabor = false; V2._recipeEditPricing = false;
+        // R5: a caller can preselect a variant scope (the variant Recipe tab opens
+        // the recipe focused on that variant). Consumed once on open.
+        V2._recipeVariantKey = V2._recipeOpenVariant || null; V2._recipeOpenVariant = null;
         return '<div id="pv2RecipeBody">' + recipeEditBody(rc) + '</div>';
       }
     }
@@ -1955,7 +1961,7 @@
   }
 
   // ── State + data ────────────────────────────────────────────────────
-  var V2 = { rows: [], byId: {}, sortKey: '_title', sortDir: 'asc', filter: 'all', lens: 'general', expanded: {}, editInfo: null, editFulfill: null, editPricing: null, editVarPricing: null, editInv: null, editVarInv: null, editVarInfo: null, editVarFulfill: null, editAttrs: null, editVarAttrs: null, q: '', tagFacets: [], _npMode: 'scratch', _recipeEdit: null, _rpKind: 'material', _recipeAdding: false, _recipeAddData: null, _recipeEditLabor: false, _recipeEditPricing: false, _recipeVariantKey: null };
+  var V2 = { rows: [], byId: {}, sortKey: '_title', sortDir: 'asc', filter: 'all', lens: 'general', expanded: {}, editInfo: null, editFulfill: null, editPricing: null, editVarPricing: null, editInv: null, editVarInv: null, editVarInfo: null, editVarFulfill: null, editAttrs: null, editVarAttrs: null, q: '', tagFacets: [], _npMode: 'scratch', _recipeEdit: null, _rpKind: 'material', _recipeAdding: false, _recipeAddData: null, _recipeEditLabor: false, _recipeEditPricing: false, _recipeVariantKey: null, _recipeOpenVariant: null };
 
   function toRows(map) {
     var out = []; map = map || {};
@@ -2781,7 +2787,7 @@
         }, function (e) { console.error('[products-v2] savePricing', e); MastAdmin.showToast('Save failed', true); });
       });
     },
-    // ── Recipe tab (link/create; building stays in the legacy builder) ─
+    // ── Recipe tab (link/create; editing is the v2 recipe SO — R5) ─────
     recipeCreate: function (pid) {
       if (!_guardEditP()) return;
       withProductBridge(function () {
@@ -2790,10 +2796,13 @@
         Promise.resolve(window.MakerProductBridge.createRecipeForProduct(pid, rec.name || 'Recipe')).then(function (res) {
           if (!res || !res.ok) { MastAdmin.showToast('Failed: ' + ((res && res.error) || 'unknown'), true); return; }
           if (rec) rec.recipeId = res.recipeId;
-          openRecipeBuilderGated(res.recipeId, pid); // straight into the builder to fill it in
+          rerenderRecipePane(pid);
+          MastEntity.drill('recipe-v2', res.recipeId); // open the v2 recipe editor to fill it in
         }, function (e) { console.error('[products-v2] recipeCreate', e); MastAdmin.showToast('Failed', true); });
       });
     },
+    // "Advanced ↗" — the single remaining door to the legacy builder (power tools:
+    // what-if pricing, bulk reprice, CSV import — not yet ported to v2).
     recipeEditInBuilder: function (recipeId, pid, fromDrill) { openRecipeBuilderGated(recipeId, pid, null, fromDrill); },
     // ── R2: editable BOM in the recipe-v2 drill ──
     recipeSetLineQty: function (liId, value) { _applyRecipeLine(liId, { quantity: value }); },
@@ -2912,16 +2921,18 @@
     },
     // Variant "Give it its own recipe" → open the builder focused on this variant
     // (creating the product recipe first if needed). Replaces the editVariantTodo stub.
+    // R5: open the v2 recipe SO scoped to this variant (override-or-inherit there),
+    // creating the product recipe first if there isn't one yet. (Was: legacy builder.)
     variantOwnRecipe: function (pid, vid) {
       if (!_guardEditP()) return;
       withProductBridge(function () {
         var rec = V2.byId[pid] || {};
-        if (rec.recipeId) { openRecipeBuilderGated(rec.recipeId, pid, vid); return; }
+        if (rec.recipeId) { V2._recipeOpenVariant = vid; MastEntity.drill('recipe-v2', rec.recipeId); return; }
         MastAdmin.showToast('Creating recipe…');
         Promise.resolve(window.MakerProductBridge.createRecipeForProduct(pid, rec.name || 'Recipe')).then(function (res) {
           if (!res || !res.ok) { MastAdmin.showToast('Failed: ' + ((res && res.error) || 'unknown'), true); return; }
           if (rec) rec.recipeId = res.recipeId;
-          openRecipeBuilderGated(res.recipeId, pid, vid);
+          V2._recipeOpenVariant = vid; MastEntity.drill('recipe-v2', res.recipeId);
         }, function (e) { console.error('[products-v2] variantOwnRecipe', e); MastAdmin.showToast('Failed', true); });
       });
     },
