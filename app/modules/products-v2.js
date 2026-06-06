@@ -173,7 +173,7 @@
   // After a real advance, re-open the v2 SO from fresh data (the legacy handlers
   // re-render legacy views, not ours) so the stepper/badge reflect the new phase.
   function reopenProduct(pid) {
-    Promise.resolve(MastDB.products.get(pid)).then(function (p) {
+    return Promise.resolve(MastDB.products.get(pid)).then(function (p) {
       if (!p) return;
       var rec = stamp(Object.assign({}, p), pid); V2.byId[pid] = rec;
       MastEntity.openRecord('products-v2', rec, 'read');
@@ -306,28 +306,44 @@
       }, 320);
     });
   }
-  // Click a tab pane once it exists (the SO may still be (re)rendering after the
-  // builder's Back pops us back). Polls briefly so the originating tab is restored.
+  // Restore the originating tab after the builder's Back pops us back. The SO can
+  // render more than once (e.g. a deep-link auto-open followed by our reopen), and
+  // each render defaults to the first tab — so RE-ASSERT: keep clicking the target
+  // tab whenever we're not on it, across a short window, so a late render can't
+  // leave the user on the wrong tab.
   function restorePaneWhenReady(pane, tries) {
     if (!pane) return;
     tries = tries || 0;
     var body = document.getElementById('mastSlideOutBody');
-    var btn = body && body.querySelector('.mu-ptabs button[onclick*="\'' + pane + '\'"]');
-    if (btn) { btn.click(); return; }
-    if (tries < 25) setTimeout(function () { restorePaneWhenReady(pane, tries + 1); }, 50);
+    var vis = body && body.querySelector('.mu-pane:not([hidden])');
+    var onTarget = vis && vis.getAttribute('data-pane') === pane;
+    if (!onTarget) {
+      var btn = body && body.querySelector('.mu-ptabs button[onclick*="\'' + pane + '\'"]');
+      if (btn) btn.click();
+    }
+    if (tries < 12) setTimeout(function () { restorePaneWhenReady(pane, tries + 1); }, 80);
   }
   // Rebuild product Recipe-tab → recipe drill (so the user returns to the exact
   // recipe view they edited from, and Back from it still lands on the Recipe tab).
+  // Drill only once the Recipe tab is actually showing (so drill()'s back-target
+  // captures 'recipe'), and not if we've already drilled in.
   function rebuildRecipeDrillWhenReady(recipeId, tries) {
     tries = tries || 0;
     var body = document.getElementById('mastSlideOutBody');
+    if (body && body.querySelector('.pv2-bom')) return; // recipe drill already open
+    var vis = body && body.querySelector('.mu-pane:not([hidden])');
+    if (vis && vis.getAttribute('data-pane') === 'recipe') {
+      MastEntity.drill('recipe-v2', recipeId); return;
+    }
     var btn = body && body.querySelector('.mu-ptabs button[onclick*="\'recipe\'"]');
-    if (btn) { btn.click(); setTimeout(function () { MastEntity.drill('recipe-v2', recipeId); }, 40); return; }
-    if (tries < 25) setTimeout(function () { rebuildRecipeDrillWhenReady(recipeId, tries + 1); }, 50);
+    if (btn) btn.click();
+    if (tries < 14) setTimeout(function () { rebuildRecipeDrillWhenReady(recipeId, tries + 1); }, 80);
   }
   // Restore target for the builder's Back: pop returns to the v2 list (via
   // popAndReturn → navigateTo('products-v2')); reopen the EXACT view the user came
-  // from — variant SO, recipe drill, or the product on its originating tab.
+  // from — variant SO, recipe drill, or the product on its originating tab. We
+  // chain on the reopen so the first restore attempt runs after its render, then
+  // the re-assert poll defends against any later (deep-link) re-render.
   if (window.MastNavStack && typeof MastNavStack.registerRestorer === 'function') {
     MastNavStack.registerRestorer('products-v2', function (view, state) {
       if (view !== 'detail' || !state || !state.pid) return;
@@ -338,9 +354,10 @@
             if (vr) { MastEntity.openRecord('product-variant-v2', vr, 'read'); restorePaneWhenReady(state.pane); }
             return;
           }
-          reopenProduct(state.pid);
-          if (state.drillRecipe) rebuildRecipeDrillWhenReady(state.drillRecipe);
-          else restorePaneWhenReady(state.pane);
+          Promise.resolve(reopenProduct(state.pid)).then(function () {
+            if (state.drillRecipe) rebuildRecipeDrillWhenReady(state.drillRecipe);
+            else restorePaneWhenReady(state.pane);
+          });
         });
       }, 60);
     });
