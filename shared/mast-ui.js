@@ -135,7 +135,9 @@
     // toggle column. Lists that don't set cfg.expandable render exactly as before.
     if (cfg.expandable) th += '<th style="width:34px;border-bottom:1px solid var(--border,rgba(255,255,255,0.06));"></th>';
     cols.forEach(function (c) {
-      var align = c.align === 'right' ? 'text-align:right;' : (c.align === 'center' ? 'text-align:center;' : '');
+      // Header justifies the SAME as its values — default to LEFT (a bare <th>
+      // browser-centers, which mismatched left-aligned text columns).
+      var align = c.align === 'right' ? 'text-align:right;' : (c.align === 'center' ? 'text-align:center;' : 'text-align:left;');
       if (c.sortable && cfg.onSortFnName) {
         th += window.mastSortableTh(c.label, c.key, cfg.sortKey, cfg.sortDir, cfg.onSortFnName, align);
       } else {

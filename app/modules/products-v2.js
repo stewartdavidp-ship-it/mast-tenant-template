@@ -1228,10 +1228,37 @@
         || String(categoryLabel(r) || '').toLowerCase().indexOf(q) >= 0
         || String(r.sku || '').toLowerCase().indexOf(q) >= 0;
     });
-    return window.mastSortRows(rows, V2.sortKey, V2.sortDir, function (r, k) {
-      var f = MastEntity.get('products-v2').fields.filter(function (x) { return x.name === k; })[0];
-      return (f && f.get) ? f.get(r) : r[k];
-    });
+    return window.mastSortRows(rows, V2.sortKey, V2.sortDir, listSortValue);
+  }
+  // Sorting is PRODUCT-LEVEL (the top row), not the expanded variant rows. Range
+  // and count columns sort by a sensible scalar: Price → lowest price, Variants →
+  // count. Ascending shows lowest-priced / fewest-variant products first.
+  var _STATUS_RANK = { draft: 0, review: 1, ready: 2, active: 3, archived: 4 };
+  function priceMin(p) {
+    var ps = [price(p)]; realVariants(p).forEach(function (v) { ps.push(variantPrice(p, v)); });
+    ps = ps.filter(function (x) { return typeof x === 'number' && !isNaN(x); });
+    return ps.length ? Math.min.apply(null, ps) : 0;
+  }
+  function listSortValue(r, k) {
+    var si = r.stockInfo || {};
+    switch (k) {
+      case 'name': case '_title': return String(r.name || '').toLowerCase();
+      case 'category': return String(categoryLabel(r) || '').toLowerCase();
+      case 'status': return _STATUS_RANK[String(r.status || 'draft').toLowerCase()] != null ? _STATUS_RANK[String(r.status || 'draft').toLowerCase()] : 9;
+      case 'price': return priceMin(r);
+      case 'variants': return variantCount(r);
+      case 'onhand': return si.totalOnHand || 0;
+      case 'avail': return si.totalAvailable || 0;
+      case 'committed': return si.totalCommitted || 0;
+      case 'mode': return String(si.stockType || '');
+      case 'u30': return (_salesEntry(r._key || r.pid) || {}).last30 || 0;
+      case 'r30': return (_salesEntry(r._key || r.pid) || {}).revenue30 || 0;
+      case 'rall': return (_salesEntry(r._key || r.pid) || {}).revenueAll || 0;
+      case 'last': return (_salesEntry(r._key || r.pid) || {}).lastOrdered || '';
+      case 'rate': return (_forecastEntry(r._key || r.pid) || {}).monthlyRate || 0;
+      case 'cov': { var f = _forecastEntry(r._key || r.pid) || {}; return isFinite(f.weeksCoverage) ? f.weeksCoverage : 1e9; }
+      default: var fld = MastEntity.get('products-v2').fields.filter(function (x) { return x.name === k; })[0]; return (fld && fld.get) ? fld.get(r) : r[k];
+    }
   }
   // The list body only (rows or empty-state) — re-rendered on its own during
   // search so the search input keeps focus while you type.
@@ -1249,37 +1276,37 @@
       : '<div style="width:40px;height:40px;border-radius:7px;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--warm-gray);font-size:0.85rem;flex:0 0 40px;">' + esc((p.name || 'P').slice(0, 1)) + '</div>';
   }
   function _prodCol() {
-    return { key: '_name', label: 'Product', render: function (p) {
+    return { key: 'name', label: 'Product', sortable: true, render: function (p) {
       return '<div style="display:flex;align-items:center;gap:11px;">' + _thumbHtml(p) +
         '<span>' + esc(p.name || '(unnamed)') + ' <span style="color:var(--warm-gray);">· ' + esc(categoryLabel(p) || '—') + '</span></span></div>';
     } };
   }
   function pv2ListColumns() {
     return [_prodCol(),
-      { key: 'status', label: 'Status', render: function (p) { return U.badge(statusLabel(p.status), statusTone(p.status)); } },
-      { key: 'price', label: 'Price', align: 'right', render: function (p) { return esc(priceRange(p) || '—'); } },
-      { key: 'variants', label: 'Variants', align: 'right', render: function (p) { return esc(variantsLabel(p)); } }
+      { key: 'status', label: 'Status', sortable: true, render: function (p) { return U.badge(statusLabel(p.status), statusTone(p.status)); } },
+      { key: 'price', label: 'Price', align: 'right', sortable: true, render: function (p) { return esc(priceRange(p) || '—'); } },
+      { key: 'variants', label: 'Variants', align: 'right', sortable: true, render: function (p) { return esc(variantsLabel(p)); } }
     ];
   }
   function lensColumns(lens) {
     if (lens === 'inventory') {
       return [_prodCol(),
-        { key: 'onhand', label: 'On hand', align: 'right', render: function (p) { var si = p.stockInfo || {}; return si.totalOnHand != null ? String(si.totalOnHand) : '—'; } },
-        { key: 'avail', label: 'Available', align: 'right', render: function (p) { var si = p.stockInfo || {}, a = si.totalAvailable; var low = a != null && si.lowStockThreshold != null && a <= si.lowStockThreshold; return a != null ? ('<span' + (low ? ' style="color:var(--amber,goldenrod);font-weight:600;"' : '') + '>' + a + '</span>') : '—'; } },
-        { key: 'committed', label: 'Committed', align: 'right', render: function (p) { var si = p.stockInfo || {}; return si.totalCommitted != null ? String(si.totalCommitted) : '—'; } },
-        { key: 'mode', label: 'Stock mode', render: function (p) { var si = p.stockInfo || {}; return si.stockType ? esc(si.stockType) : '—'; } }];
+        { key: 'onhand', label: 'On hand', align: 'right', sortable: true, render: function (p) { var si = p.stockInfo || {}; return si.totalOnHand != null ? String(si.totalOnHand) : '—'; } },
+        { key: 'avail', label: 'Available', align: 'right', sortable: true, render: function (p) { var si = p.stockInfo || {}, a = si.totalAvailable; var low = a != null && si.lowStockThreshold != null && a <= si.lowStockThreshold; return a != null ? ('<span' + (low ? ' style="color:var(--amber,goldenrod);font-weight:600;"' : '') + '>' + a + '</span>') : '—'; } },
+        { key: 'committed', label: 'Committed', align: 'right', sortable: true, render: function (p) { var si = p.stockInfo || {}; return si.totalCommitted != null ? String(si.totalCommitted) : '—'; } },
+        { key: 'mode', label: 'Stock mode', sortable: true, render: function (p) { var si = p.stockInfo || {}; return si.stockType ? esc(si.stockType) : '—'; } }];
     }
     if (lens === 'sales') {
       return [_prodCol(),
-        { key: 'u30', label: 'Units 30d', align: 'right', render: function (p) { var s = _salesEntry(p._key || p.pid) || {}; return String(s.last30 || 0); } },
-        { key: 'r30', label: 'Revenue 30d', align: 'right', render: function (p) { var s = _salesEntry(p._key || p.pid) || {}; return _money(s.revenue30); } },
-        { key: 'rall', label: 'Revenue all', align: 'right', render: function (p) { var s = _salesEntry(p._key || p.pid) || {}; return _money(s.revenueAll); } },
-        { key: 'last', label: 'Last sold', align: 'right', render: function (p) { var s = _salesEntry(p._key || p.pid) || {}; return s.lastOrdered ? String(s.lastOrdered).slice(0, 10) : '—'; } }];
+        { key: 'u30', label: 'Units 30d', align: 'right', sortable: true, render: function (p) { var s = _salesEntry(p._key || p.pid) || {}; return String(s.last30 || 0); } },
+        { key: 'r30', label: 'Revenue 30d', align: 'right', sortable: true, render: function (p) { var s = _salesEntry(p._key || p.pid) || {}; return _money(s.revenue30); } },
+        { key: 'rall', label: 'Revenue all', align: 'right', sortable: true, render: function (p) { var s = _salesEntry(p._key || p.pid) || {}; return _money(s.revenueAll); } },
+        { key: 'last', label: 'Last sold', align: 'right', sortable: true, render: function (p) { var s = _salesEntry(p._key || p.pid) || {}; return s.lastOrdered ? String(s.lastOrdered).slice(0, 10) : '—'; } }];
     }
     // forecast
     return [_prodCol(),
-      { key: 'rate', label: 'Monthly rate', align: 'right', render: function (p) { var f = _forecastEntry(p._key || p.pid); return f && f.monthlyRate != null ? (f.monthlyRate + ' /mo') : '—'; } },
-      { key: 'cov', label: 'Coverage', align: 'right', render: function (p) { var f = _forecastEntry(p._key || p.pid); if (!f) return '—'; return isFinite(f.weeksCoverage) ? (f.weeksCoverage + 'w') : (f.isMTO ? 'MTO' : '—'); } },
+      { key: 'rate', label: 'Monthly rate', align: 'right', sortable: true, render: function (p) { var f = _forecastEntry(p._key || p.pid); return f && f.monthlyRate != null ? (f.monthlyRate + ' /mo') : '—'; } },
+      { key: 'cov', label: 'Coverage', align: 'right', sortable: true, render: function (p) { var f = _forecastEntry(p._key || p.pid); if (!f) return '—'; return isFinite(f.weeksCoverage) ? (f.weeksCoverage + 'w') : (f.isMTO ? 'MTO' : '—'); } },
       { key: 'trend', label: 'Trend', render: function (p) { var f = _forecastEntry(p._key || p.pid); if (!f) return '—'; return f.trending ? '↑ up' : (f.declining ? '↓ down' : 'steady'); } },
       { key: 'suggest', label: 'Suggested', render: function (p) { var f = _forecastEntry(p._key || p.pid); if (f && f.suggestBuild) return '<span style="color:var(--amber,goldenrod);font-weight:600;">build ' + esc(String(f.suggestedQty || '')) + '</span>'; return (f && f.considerStocking) ? '<span style="color:var(--warm-gray);">consider</span>' : '—'; } }];
   }
@@ -1362,6 +1389,7 @@
       columns: pv2ListColumns(),
       rowId: function (p) { return p._key || p.pid; },
       onRowClickFnName: 'ProductsV2.rowClick',
+      sortKey: V2.sortKey, sortDir: V2.sortDir, onSortFnName: 'ProductsV2.sortBy',
       expandable: true,
       hasChildren: function (p) { return variantCount(p) > 0; },
       expandedIds: V2.expanded,
@@ -1395,6 +1423,7 @@
       columns: lensColumns(lens),
       rowId: function (p) { return p._key || p.pid; },
       onRowClickFnName: 'ProductsV2.lensRowClick',
+      sortKey: V2.sortKey, sortDir: V2.sortDir, onSortFnName: 'ProductsV2.sortBy',
       expandable: true,
       hasChildren: function (p) { return variantCount(p) > 0; },
       expandedIds: V2.expanded,
@@ -1519,6 +1548,13 @@
     setFilter: function (s) { V2.filter = s; render(); },
     // Facet selector — re-render the whole surface (columns + click-through change).
     setLens: function (l) { V2.lens = l; render(); },
+    // Click a column header to sort (product-level; toggles asc/desc). Price sorts
+    // by lowest price, Variants by count — so ascending = cheapest / fewest first.
+    sortBy: function (key) {
+      if (V2.sortKey === key) V2.sortDir = (V2.sortDir === 'asc' ? 'desc' : 'asc');
+      else { V2.sortKey = key; V2.sortDir = 'asc'; }
+      var lb = document.getElementById('pv2ListBody'); if (lb) lb.innerHTML = renderListBody(); else render();
+    },
     // Lens row click: open the product SO focused on the matching detail tab.
     openToTab: function (id, pane) { var rec = V2.byId[id]; if (!rec) return; ensureMaker(function () { MastEntity.openRecord('products-v2', rec, 'read'); restorePaneWhenReady(pane); }); },
     // Lens parent-row click: has-variants → expand; else open the SO on the lens
