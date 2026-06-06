@@ -115,15 +115,16 @@
       Promise.resolve(window.MakerProductBridge.setOptions(id, opts)).then(function (res) {
         if (!res || !res.ok) { MastAdmin.showToast('Failed: ' + ((res && res.error) || 'unknown'), true); return; }
         var rec = V2.byId[id]; if (rec) rec.options = res.options;
-        renderAddVariantModal(id);
+        rerenderVariantsEditor(id);
       }, function (e) { console.error('[products-v2] setOptions', e); MastAdmin.showToast('Failed', true); });
     });
   }
-  // The Variants & options modal: an options editor (define attributes + choices)
-  // + the missing-combination picker. Stateless — re-rendered from the product
-  // after each change (options/variants persist immediately).
-  function renderAddVariantModal(id) {
-    var p = V2.byId[id]; if (!p) return;
+  // Variants & options editor — a DRILLED slide-out (our standard heavy-edit
+  // surface), not a modal. Options editor (define attributes + choices) + the
+  // missing-combination picker. Re-rendered in place after each change; Back
+  // returns to the product SO (whose variant tree re-renders fresh).
+  function variantsEditorInner(p) {
+    var id = p._key || p.pid;
     var opts = Array.isArray(p.options) ? p.options : [];
     var fieldCss = 'padding:6px 9px;border:1px solid var(--cream-dark);border-radius:6px;font-size:0.85rem;background:var(--cream);color:inherit;box-sizing:border-box;';
     var optHtml = opts.map(function (o, i) {
@@ -148,14 +149,15 @@
         ? missing.map(function (c) { return '<button class="btn btn-secondary" style="margin:4px;" onclick="ProductsV2.confirmAddVariant(\'' + esc(id) + '\',\'' + esc(comboSig(c)) + '\')">+ ' + esc(comboLabel(c)) + '</button>'; }).join('')
         : '<div style="color:var(--warm-gray);font-size:0.85rem;">Every combination already exists.</div>';
     }
-    var lbl = 'font-size:0.72rem;text-transform:uppercase;letter-spacing:.04em;color:var(--warm-gray);margin-top:14px;';
-    var html = '<div style="max-width:520px;padding:24px;max-height:80vh;overflow:auto;"><h3>Variants &amp; options</h3>' +
-      '<div style="font-size:0.85rem;color:var(--warm-gray);margin:6px 0 4px;">A variant is one choice per option. Define options, then add the combinations you sell.</div>' +
-      '<div style="' + lbl + '">Options</div>' + optHtml + addOptRow +
-      '<div style="' + lbl + '">Add a variant</div>' +
-      '<div style="display:flex;flex-wrap:wrap;margin-top:6px;">' + comboSection + '</div>' +
-      '<div style="margin-top:18px;text-align:right;"><button class="btn btn-primary" onclick="ProductsV2.doneAddVariant(\'' + esc(id) + '\')">Done</button></div></div>';
-    if (window.openModal) window.openModal(html); else MastAdmin.showToast('Modal unavailable', true);
+    return '<div style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:12px;">A variant is one choice per option. Define options, then add the combinations you sell.</div>' +
+      U.card('Options', optHtml + addOptRow) +
+      U.card('Add a variant', '<div style="display:flex;flex-wrap:wrap;">' + comboSection + '</div>');
+  }
+  function variantsEditorBody(p) { return '<div id="pv2VarEditor">' + variantsEditorInner(p) + '</div>'; }
+  function rerenderVariantsEditor(id) {
+    var p = V2.byId[id]; if (!p) return;
+    var el = document.getElementById('pv2VarEditor');
+    if (el) el.innerHTML = variantsEditorInner(p);
   }
 
   // The variant switcher — ONE compact pill (low clutter, V1's failure was a
@@ -1210,6 +1212,20 @@
     }
   });
 
+  // ════════════════ Entity: variants & options editor (drilled) ════════════════
+  // The standard heavy-edit surface for defining options + adding variants —
+  // a stacked slide-out (Back returns to the product, whose tree re-renders).
+  MastEntity.define('product-variants-v2', {
+    label: 'Variants & options', labelPlural: 'Variants', size: 'lg', route: null,
+    recordId: function (r) { return r._key || r.pid; },
+    fields: [{ name: '_title', label: 'Product', type: 'text', list: true, group: 'Product', readOnly: true }],
+    fetch: function (id) {
+      if (V2.byId[id]) return Promise.resolve(V2.byId[id]);
+      return Promise.resolve(MastDB.products.get(id)).then(function (p) { if (!p) return null; var rec = stamp(Object.assign({}, p), id); V2.byId[id] = rec; return rec; });
+    },
+    detail: { render: function (UU, p) { return variantsEditorBody(p); } }
+  });
+
   // ════════════════ Entity: the image slide-out (drilled from the header) ════════════════
   // "Stick to SO" — clicking the header image drills into its own stacked slide-out
   // (Back collapses to the caller). Shows ALL the product's images, with the
@@ -1757,9 +1773,14 @@
     // Add a variant: pick one of the not-yet-created option combinations. Only
     // valid combos (cartesian of product.options minus existing) are offered, so
     // we can't create a malformed/duplicate variant.
-    // Variants & options modal: define options (attributes + choices), then add
-    // the combinations you sell. Works for a no-options product too (define first).
-    addVariant: function (id) { renderAddVariantModal(id); },
+    // Variants & options editor — drill into the standard slide-out (define
+    // options + add variants). Drills (stacked, Back→product) when an SO is open;
+    // opens a fresh SO from the list. Works for a no-options product too.
+    addVariant: function (id) {
+      var rec = V2.byId[id]; if (!rec) return;
+      var soOpen = !!document.getElementById('mastSlideOutTitle');
+      ensureMaker(function () { if (soOpen) MastEntity.drill('product-variants-v2', id); else MastEntity.openRecord('product-variants-v2', rec, 'read'); });
+    },
     addOption: function (id) {
       var l = ((document.getElementById('pv2OptLabel') || {}).value || '').trim();
       var c = ((document.getElementById('pv2OptChoice') || {}).value || '').trim();
@@ -1789,14 +1810,10 @@
           if (!res || !res.ok) { MastAdmin.showToast('Failed: ' + ((res && res.error) || 'unknown'), true); return; }
           var rec = V2.byId[id]; if (rec) rec.variants = res.variants;
           MastAdmin.showToast('Added: ' + comboLabel(combo));
-          renderAddVariantModal(id); // stay open so you can add more
-          var lb = document.getElementById('pv2ListBody'); if (lb) lb.innerHTML = renderListBody();
+          rerenderVariantsEditor(id); // stay in the editor so you can add more
+          markListDirty();
         }, function (e) { console.error('[products-v2] addVariant', e); MastAdmin.showToast('Failed', true); });
       });
-    },
-    doneAddVariant: function (id) {
-      if (window.closeModal) window.closeModal();
-      if (document.getElementById('mastSlideOutTitle')) reopenProduct(id);
     },
     editVariantTodo: function () { MastAdmin.showToast('Per-variant override editing lands in P4.'); },
     // Bind a variant to product.images[idx] (idx<0 → clear, use product default).
