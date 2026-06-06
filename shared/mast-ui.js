@@ -233,6 +233,11 @@
 
   var slideOut = {
     _opts: null,
+    _paneLeave: null,   // opt-in: fn(prevPaneKey, nextPaneKey) run before a pane tab switch
+    // Register a hook fired when the user leaves a pane via the tab bar — lets a
+    // record cancel in-pane edits (cancel-on-leave) so no dirty half-state
+    // survives a tab switch. Pass null to clear. Auto-cleared on close.
+    onPaneLeave: function (fn) { slideOut._paneLeave = (typeof fn === 'function') ? fn : null; },
     open: function (opts) {
       opts = opts || {};
       slideOut._opts = opts;
@@ -262,6 +267,7 @@
           if (_v2.dirtyKey) { window.MastDirty.unregister(_v2.dirtyKey); _v2.dirtyKey = null; }
           if (_v2.origClose) { window.mastSlideOut.close = _v2.origClose; _v2.origClose = null; }
           if (opts.deepLink !== false) deepLink.clear();
+          slideOut._paneLeave = null; // don't leak the pane-leave hook to the next record
           if (typeof opts.onClose === 'function') opts.onClose();
         }
       });
@@ -401,6 +407,13 @@
   // panel tabs: switch panes inside the slide-out body
   function panelTab(btn, pane) {
     var bar = btn.parentNode; var body = document.getElementById('mastSlideOutBody');
+    // Cancel-on-leave: give the open record a chance to discard in-pane edits on
+    // the pane being left before we hide it (opt-in via slideOut.onPaneLeave).
+    if (body && typeof slideOut._paneLeave === 'function') {
+      var visEl = body.querySelector('.mu-pane:not([hidden])');
+      var prevPane = visEl && visEl.getAttribute('data-pane');
+      if (prevPane && prevPane !== pane) { try { slideOut._paneLeave(prevPane, pane); } catch (e) {} }
+    }
     bar.querySelectorAll('button').forEach(function (b) { b.classList.remove('on'); }); btn.classList.add('on');
     if (body) {
       body.querySelectorAll('.mu-pane').forEach(function (el) { el.hidden = el.getAttribute('data-pane') !== pane; });

@@ -561,6 +561,13 @@
         return s.onSave ? s.onSave(rec, mode) : true;
       }
     });
+    // Cancel-on-leave: register the schema's pane-leave hook (or clear any prior
+    // one) so a tab switch cancels in-pane edits. Re-registered on every open /
+    // drill / back, so it always matches the record currently on screen.
+    if (window.MastUI && window.MastUI.slideOut && typeof window.MastUI.slideOut.onPaneLeave === 'function') {
+      var onLeave = s.detail && typeof s.detail.onPaneLeave === 'function' ? s.detail.onPaneLeave : null;
+      window.MastUI.slideOut.onPaneLeave(onLeave ? function (prev, next) { onLeave(prev, next, record); } : null);
+    }
   }
 
   function exportRows(key, rows, view) {
