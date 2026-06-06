@@ -109,6 +109,22 @@
     var seen = {}; realVariants(p).forEach(function (v) { if (v.combo) seen[comboSig(v.combo)] = true; });
     return productCombos(p).filter(function (c) { return !seen[comboSig(c)]; });
   }
+  // ── RBAC: the Sales/Forecast/Inventory facets inherit the permission of the
+  // module they replaced (so revenue/margin/stock only show to roles with that
+  // access); editing requires the products (or inventory) edit right. ──────
+  function _can(route, axis) { return (typeof window.can === 'function') ? window.can(route, axis) : true; }
+  function canViewLens(lens) {
+    if (lens === 'inventory') return _can('inventory', 'view');
+    if (lens === 'sales') return _can('sales-by-product', 'view');
+    if (lens === 'forecast') return _can('forecast', 'view');
+    return _can('products', 'view');
+  }
+  function canEditProduct() { return _can('products', 'edit'); }
+  function canEditStock() { return _can('inventory', 'edit'); }
+  // Handler-level guards (defense-in-depth behind the hidden UI affordances):
+  // return false + toast when the caller lacks permission.
+  function _guardEditP() { if (!canEditProduct()) { MastAdmin.showToast('You don’t have permission to edit products', true); return false; } return true; }
+  function _guardEditS() { if (!canEditStock()) { MastAdmin.showToast('You don’t have permission to edit stock', true); return false; } return true; }
   // Persist options (write-as-you-go) then re-render the modal.
   function _saveOptions(id, opts) {
     withProductBridge(function () {
@@ -169,6 +185,7 @@
     // No variants yet → the pill becomes "+ Add variant" (same spot the switcher
     // would be), so you can branch a single-variant product into options.
     if (variantCount(p) === 0) {
+      if (!canEditProduct()) return '';
       return '<div class="pv2-vswitch"><button class="pv2-vpill" onclick="ProductsV2.addVariant(\'' + esc(pid) + '\')" title="Add a variant" style="color:var(--teal,teal);">+ Add variant</button></div>';
     }
     var curLabel = currentVid
@@ -198,10 +215,11 @@
       // The thumbnail drills into the image slide-out (all the product's images,
       // this object's image in large focus) — a stacked SO with Back, not a lightbox.
       thumb = '<button class="pv2-hthumb" onclick="MastEntity.drill(\'product-images-v2\',\'' + esc(drillId) + '\')" style="background-image:url(' + esc(imgSrc) + ');" title="View all images"><span class="mu-zoom">⤢</span></button>';
-    } else if (!currentVid) {
+    } else if (!currentVid && canEditProduct()) {
       // No image on the Default → an explicit "+ Upload image" placeholder that
       // opens the file picker in place (P4 read-item b). Variants don't get it
       // (a variant's image is bound from the product's gallery, not uploaded here).
+      // Hidden for view-only roles (no edit affordance).
       thumb = '<label class="pv2-hthumb pv2-hthumb-add" title="Upload product image"><input type="file" accept="image/*" style="display:none;" onchange="ProductsV2.uploadImage(\'' + esc(pid) + '\',this)"><span>+ Upload<br>image</span></label>';
     } else {
       thumb = '';
@@ -255,7 +273,7 @@
     var pid = p._key || p.pid;
     if (V2.editPricing === pid) return pricingEditForm(p);
     var guarded = String(p.status || '').toLowerCase() === 'active';
-    var editBtn = '<button class="btn btn-secondary btn-small" onclick="ProductsV2.editPricing(\'' + esc(pid) + '\')">' + (guarded ? 'Revise' : 'Edit') + '</button>';
+    var editBtn = canEditProduct() ? '<button class="btn btn-secondary btn-small" onclick="ProductsV2.editPricing(\'' + esc(pid) + '\')">' + (guarded ? 'Revise' : 'Edit') + '</button>' : '';
     var rows = [{ k: 'Retail price', v: N.money(price(p)) || '—' }];
     if (typeof p.wholesalePriceCents === 'number' && p.wholesalePriceCents > 0) rows.push({ k: 'Wholesale', v: N.money(p.wholesalePriceCents / 100) });
     rows.push({ k: 'Cost basis', v: p.recipeId ? 'From recipe (see Recipe tab)' : 'Manually priced' });
@@ -326,16 +344,17 @@
         head = '<div style="color:var(--warm-gray);font-size:0.9rem;">Loading recipe…</div>';
         loadRecipeThenRerender(p.recipeId, pid);
       }
+      var canEd = canEditProduct();
       var body = head +
         '<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">' +
         '<button class="btn btn-secondary btn-small" onclick="MastEntity.drill(\'recipe-v2\',\'' + esc(p.recipeId) + '\')">Open recipe →</button>' +
-        '<button class="btn btn-secondary btn-small" onclick="ProductsV2.recipeEditInBuilder(\'' + esc(p.recipeId) + '\',\'' + esc(pid) + '\')">Edit in builder ↗</button>' +
-        '<button class="btn btn-secondary btn-small" onclick="ProductsV2.recipeUnlink(\'' + esc(pid) + '\')">Unlink</button>' +
+        (canEd ? '<button class="btn btn-secondary btn-small" onclick="ProductsV2.recipeEditInBuilder(\'' + esc(p.recipeId) + '\',\'' + esc(pid) + '\')">Edit in builder ↗</button>' : '') +
+        (canEd ? '<button class="btn btn-secondary btn-small" onclick="ProductsV2.recipeUnlink(\'' + esc(pid) + '\')">Unlink</button>' : '') +
         '</div>';
       return U.card('Recipe', body) + '<div class="pv2-pnote">“Open recipe” reads the full bill of materials here (Back returns); “Edit in builder” opens the recipe builder.</div>';
     }
     return U.card('Recipe', '<div style="color:var(--warm-gray);font-size:0.9rem;margin-bottom:10px;">No recipe linked. A recipe tracks the materials, labor, and cost behind this product.</div>' +
-      '<button class="btn btn-secondary btn-small" onclick="ProductsV2.recipeCreate(\'' + esc(pid) + '\')">+ Create a recipe</button>');
+      (canEditProduct() ? '<button class="btn btn-secondary btn-small" onclick="ProductsV2.recipeCreate(\'' + esc(pid) + '\')">+ Create a recipe</button>' : '<span style="color:var(--warm-gray);font-size:0.85rem;">No recipe.</span>'));
   }
   function rerenderRecipePane(pid) {
     var rec = V2.byId[pid]; if (!rec) return;
@@ -443,7 +462,7 @@
     var btnLabel = hasRecipe ? 'Edit this variant’s recipe ↗' : 'Give it its own recipe ↗';
     var statusV = hasRecipe ? 'Shares the product recipe (open to give this variant its own materials)' : 'Uses the product recipe';
     var body = UU.kv([{ k: 'Recipe', v: statusV }]) +
-      '<div style="margin-top:12px;"><button class="btn btn-secondary btn-small" onclick="ProductsV2.variantOwnRecipe(\'' + esc(pid) + '\',\'' + esc(vid) + '\')">' + btnLabel + '</button></div>';
+      (canEditProduct() ? '<div style="margin-top:12px;"><button class="btn btn-secondary btn-small" onclick="ProductsV2.variantOwnRecipe(\'' + esc(pid) + '\',\'' + esc(vid) + '\')">' + btnLabel + '</button></div>' : '');
     return UU.card('Recipe', body) + '<div class="pv2-pnote">A variant can have its own materials within the product recipe. Give it its own only if it’s actually made differently.</div>';
   }
   function inventoryPane(p) {
@@ -455,7 +474,7 @@
     // variant owns its own stock (edit on the variant's Inventory tab).
     if (!hasVar && V2.editInv === pid) return inventoryEditForm(p);
     var title = hasVar ? 'Inventory · all variants (roll-up)' : 'Inventory';
-    var headerRight = hasVar ? '' : '<button class="btn btn-secondary btn-small" onclick="ProductsV2.editInventory(\'' + esc(pid) + '\')">Set stock</button>';
+    var headerRight = (hasVar || !canEditStock()) ? '' : '<button class="btn btn-secondary btn-small" onclick="ProductsV2.editInventory(\'' + esc(pid) + '\')">Set stock</button>';
     var perVarNote = hasVar
       ? '<div class="pv2-pnote"><strong>On hand = all variants combined.</strong> Stock is tracked per variant — each one has its own count; the number above is the roll-up. Set each variant’s stock on its Inventory tab.</div>'
       : '';
@@ -587,7 +606,7 @@
     var sug = '';
     if (f.suggestBuild && f.suggestedQty) {
       sug = U.card('Suggested build', '<div style="font-size:0.9rem;margin-bottom:10px;">Stock is low for the current sales rate. Suggested build: <strong>' + esc(String(f.suggestedQty)) + ' pcs</strong>.</div>' +
-        '<button class="btn btn-primary btn-small" onclick="ProductsV2.createForecastJob(\'' + esc(pid) + '\',' + Number(f.suggestedQty) + ')">Create production job →</button>');
+        (_can('jobs', 'edit') ? '<button class="btn btn-primary btn-small" onclick="ProductsV2.createForecastJob(\'' + esc(pid) + '\',' + Number(f.suggestedQty) + ')">Create production job →</button>' : '<span style="color:var(--warm-gray);font-size:0.85rem;">You don’t have permission to create production jobs.</span>'));
     } else if (f.considerStocking) {
       sug = '<div class="pv2-pnote">Made-to-order with steady demand — consider stocking it.</div>';
     }
@@ -623,17 +642,18 @@
     var hasVar = variantCount(p) > 0;
     var rows = channels.map(function (c) {
       var bound = !!bindingFor(p, c.id);
-      var toggle = '<button class="btn btn-secondary btn-small" onclick="ProductsV2.toggleChannel(\'' + esc(pid) + '\',\'' + esc(c.id) + '\')">' + (bound ? 'Remove' : 'Sell here') + '</button>';
+      var toggle = canEditProduct() ? '<button class="btn btn-secondary btn-small" onclick="ProductsV2.toggleChannel(\'' + esc(pid) + '\',\'' + esc(c.id) + '\')">' + (bound ? 'Remove' : 'Sell here') + '</button>' : '';
       var head = '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 0;border-top:1px solid var(--border);">' +
         '<span>' + esc(c.name) + (c.platform ? ' <span style="color:var(--warm-gray);font-size:0.78rem;">· ' + esc(c.platform) + '</span>' : '') + '</span>' +
         '<span style="display:flex;align-items:center;gap:8px;">' + (bound ? U.badge('On', 'teal') : U.badge('Off', 'neutral')) + toggle + '</span></div>';
       var varRows = '';
       if (bound && hasVar) {
+        var canEd = canEditProduct();
         varRows = '<div style="padding:2px 0 12px 14px;display:flex;flex-wrap:wrap;gap:6px;align-items:center;">' +
           realVariants(p).map(function (v) {
             var ex = variantExcluded(p, c.id, v.id);
-            return '<button onclick="ProductsV2.toggleVariantChannel(\'' + esc(pid) + '\',\'' + esc(c.id) + '\',\'' + esc(v.id) + '\')" title="' + (ex ? 'Excluded — tap to include' : 'Included — tap to exclude') + '" style="border:1px solid var(--border);border-radius:999px;padding:4px 11px;font-size:0.78rem;cursor:pointer;background:' + (ex ? 'transparent' : 'color-mix(in srgb,var(--teal) 16%,transparent)') + ';color:' + (ex ? 'var(--warm-gray)' : 'var(--teal,teal)') + ';' + (ex ? 'text-decoration:line-through;' : '') + '">' + esc(variantLabel(v)) + '</button>';
-          }).join('') + '<span style="color:var(--warm-gray);font-size:0.72rem;">tap a variant to include / exclude</span></div>';
+            return '<button' + (canEd ? ' onclick="ProductsV2.toggleVariantChannel(\'' + esc(pid) + '\',\'' + esc(c.id) + '\',\'' + esc(v.id) + '\')"' : ' disabled') + ' title="' + (ex ? 'Excluded' : 'Included') + (canEd ? ' — tap to toggle' : '') + '" style="border:1px solid var(--border);border-radius:999px;padding:4px 11px;font-size:0.78rem;cursor:' + (canEd ? 'pointer' : 'default') + ';background:' + (ex ? 'transparent' : 'color-mix(in srgb,var(--teal) 16%,transparent)') + ';color:' + (ex ? 'var(--warm-gray)' : 'var(--teal,teal)') + ';' + (ex ? 'text-decoration:line-through;' : '') + '">' + esc(variantLabel(v)) + '</button>';
+          }).join('') + (canEd ? '<span style="color:var(--warm-gray);font-size:0.72rem;">tap a variant to include / exclude</span>' : '') + '</div>';
       }
       return head + varRows;
     }).join('');
@@ -655,7 +675,7 @@
     var pid = p._key || p.pid;
     var imgs = (Array.isArray(p.images) ? p.images : []);
     var resolve = function (im) { return (typeof im === 'string') ? im : (im && im.url) || ''; };
-    var uploadBtn = '<label class="btn btn-secondary btn-small" style="cursor:pointer;margin:0;"><input type="file" accept="image/*" style="display:none;" onchange="ProductsV2.uploadImage(\'' + esc(pid) + '\',this)">Upload image</label>';
+    var uploadBtn = canEditProduct() ? '<label class="btn btn-secondary btn-small" style="cursor:pointer;margin:0;"><input type="file" accept="image/*" style="display:none;" onchange="ProductsV2.uploadImage(\'' + esc(pid) + '\',this)">Upload image</label>' : '';
     var body;
     if (!imgs.length) {
       body = '<div style="text-align:center;padding:22px 16px;color:var(--warm-gray);font-size:0.9rem;">No images yet. Upload one — the first image is the product’s primary.</div>';
@@ -684,7 +704,7 @@
     // Active products stage edits as a revision; say so up-front on the action.
     var guarded = String(p.status || '').toLowerCase() === 'active';
     var editLbl = guarded ? 'Revise' : 'Edit';
-    var editBtn = '<button class="btn btn-secondary btn-small" onclick="ProductsV2.editInfo(\'' + esc(pid) + '\')">' + editLbl + '</button>';
+    var editBtn = canEditProduct() ? '<button class="btn btn-secondary btn-small" onclick="ProductsV2.editInfo(\'' + esc(pid) + '\')">' + editLbl + '</button>' : '';
     var desc = p.description || '';
     var descShow = desc.length > 160 ? esc(desc.slice(0, 160)) + '…' : esc(desc);
     return U.card('Info · product-level', U.kv([
@@ -767,7 +787,7 @@
     var pid = p._key || p.pid;
     if (V2.editFulfill === pid) return fulfillmentEditForm(p);
     var si = p.stockInfo || {};
-    var editBtn = '<button class="btn btn-secondary btn-small" onclick="ProductsV2.editFulfillment(\'' + esc(pid) + '\')">Edit</button>';
+    var editBtn = canEditProduct() ? '<button class="btn btn-secondary btn-small" onclick="ProductsV2.editFulfillment(\'' + esc(pid) + '\')">Edit</button>' : '';
     var lead = (si.productionLeadTimeDays != null ? si.productionLeadTimeDays + ' day' + (si.productionLeadTimeDays === 1 ? '' : 's') : '—');
     var dims = productDimensions(p);
     return U.card('Fulfillment', U.kv([
@@ -922,7 +942,13 @@
           { key: 'pricing', label: 'Pricing' }, { key: 'sales', label: 'Sales' }, { key: 'recipe', label: 'Recipe' },
           { key: 'inventory', label: 'Inventory' }, { key: 'forecast', label: 'Forecast' },
           { key: 'fulfillment', label: 'Fulfillment' }, { key: 'channels', label: 'Channels' }, { key: 'image', label: 'Image' }, { key: 'info', label: 'Info' }
-        ];
+        ].filter(function (t) {
+          // Finance-sensitive tabs follow the retired module's view permission.
+          if (t.key === 'sales') return canViewLens('sales');
+          if (t.key === 'forecast') return canViewLens('forecast');
+          if (t.key === 'inventory') return canViewLens('inventory');
+          return true;
+        });
         function pane(key, html, active) { return '<div class="mu-pane" data-pane="' + key + '"' + (active ? '' : ' hidden') + '>' + html + '</div>'; }
         // When the product has variants, make it unmistakable you're on the
         // Default (the base every variant inherits) — not a single variant.
@@ -937,10 +963,10 @@
           '<div id="muFlowHost" class="pv2-flowhost">Loading workflow…</div>' +
           UU.paneTabsBar(tabs, 'pricing') +
           pane('pricing', pricingPane(p), true) +
-          pane('sales', salesPane(p)) +
+          (canViewLens('sales') ? pane('sales', salesPane(p)) : '') +
           pane('recipe', recipePane(p)) +
-          pane('inventory', inventoryPane(p)) +
-          pane('forecast', forecastPane(p)) +
+          (canViewLens('inventory') ? pane('inventory', inventoryPane(p)) : '') +
+          (canViewLens('forecast') ? pane('forecast', forecastPane(p)) : '') +
           pane('fulfillment', fulfillmentPane(p)) +
           pane('channels', channelsPane(p)) +
           pane('image', imagePane(p)) +
@@ -1006,7 +1032,7 @@
   function variantInfoPane(UU, p, v) {
     var pid = p._key || p.pid, vid = v.id;
     if (V2.editVarInfo === (pid + '::' + vid)) return variantInfoEditForm(UU, p, v);
-    var editBtn = '<button class="btn btn-secondary btn-small" onclick="ProductsV2.editVariantInfo(\'' + esc(pid) + '\',\'' + esc(vid) + '\')">Edit</button>';
+    var editBtn = canEditProduct() ? '<button class="btn btn-secondary btn-small" onclick="ProductsV2.editVariantInfo(\'' + esc(pid) + '\',\'' + esc(vid) + '\')">Edit</button>' : '';
     var comboStr = Object.keys(v.combo || {}).map(function (k) { return esc(k) + ': ' + esc(v.combo[k]); }).join(', ') || '—';
     return UU.card('Info · this variant', UU.kv([
       { k: 'Name', v: v.name ? esc(v.name) : '<span class="from">uses the option label</span>' },
@@ -1041,7 +1067,7 @@
     var pid = p._key || p.pid, vid = v.id;
     if (V2.editVarPricing === (pid + '::' + vid)) return variantPricingEditForm(UU, p, v);
     var ov = variantOverridden(p, v);
-    var editBtn = '<button class="btn btn-secondary btn-small" onclick="ProductsV2.editVariantPricing(\'' + esc(pid) + '\',\'' + esc(vid) + '\')">Edit</button>';
+    var editBtn = canEditProduct() ? '<button class="btn btn-secondary btn-small" onclick="ProductsV2.editVariantPricing(\'' + esc(pid) + '\',\'' + esc(vid) + '\')">Edit</button>' : '';
     var priceVal = (N.money(variantPrice(p, v)) || '—') + (ov
       ? ' <span style="color:var(--amber,goldenrod);font-weight:600;">· custom</span>'
       : ' <span class="from">· same as Default</span>');
@@ -1096,7 +1122,7 @@
     var pid = p._key || p.pid, vid = v.id;
     if (V2.editVarInv === (pid + '::' + vid)) return variantInventoryEditForm(UU, p, v);
     var vsi = variantStockInfo(p, v);
-    var editBtn = '<button class="btn btn-secondary btn-small" onclick="ProductsV2.editVariantInventory(\'' + esc(pid) + '\',\'' + esc(vid) + '\')">Set stock</button>';
+    var editBtn = canEditStock() ? '<button class="btn btn-secondary btn-small" onclick="ProductsV2.editVariantInventory(\'' + esc(pid) + '\',\'' + esc(vid) + '\')">Set stock</button>' : '';
     return UU.card('Inventory · this variant', UU.kv([
       { k: 'On hand', v: (vsi.onHand != null ? String(vsi.onHand) : '—') },
       { k: 'Available', v: (vsi.available != null ? String(vsi.available) : '—') },
@@ -1136,10 +1162,11 @@
     }
     var own = variantHasOwnImage(v);
     var curIdx = own ? v.imageIndex : -1;
+    var canEd = canEditProduct();
     // Status line up top makes the current assignment unmistakable.
     var status = own
-      ? '<div style="font-size:0.9rem;margin-bottom:10px;">Using <strong>image #' + (curIdx + 1) + '</strong> for this variant. <button class="btn btn-secondary btn-small" onclick="ProductsV2.setVariantImage(\'' + esc(pid) + '\',\'' + esc(v.id) + '\',-1)">Use product default</button></div>'
-      : '<div style="font-size:0.9rem;margin-bottom:10px;color:var(--warm-gray);">Using the <strong>product’s primary</strong> image. Tap one below to give this variant its own.</div>';
+      ? '<div style="font-size:0.9rem;margin-bottom:10px;">Using <strong>image #' + (curIdx + 1) + '</strong> for this variant.' + (canEd ? ' <button class="btn btn-secondary btn-small" onclick="ProductsV2.setVariantImage(\'' + esc(pid) + '\',\'' + esc(v.id) + '\',-1)">Use product default</button>' : '') + '</div>'
+      : '<div style="font-size:0.9rem;margin-bottom:10px;color:var(--warm-gray);">Using the <strong>product’s primary</strong> image.' + (canEd ? ' Tap one below to give this variant its own.' : '') + '</div>';
     var grid = '<div class="pv2-imggrid' + (own ? ' pv2-imggrid-sel' : '') + '">' + imgs.map(function (im, i) {
       var url = resolve(im); if (!url) return '';
       var sel = i === curIdx;
@@ -1147,7 +1174,10 @@
         : (i === 0 && !own ? '<span class="pv2-imgbadge pv2-imgbadge-muted">Product default</span>' : '');
       var cap = sel ? '<div style="font-size:0.72rem;color:var(--amber,goldenrod);text-align:center;font-weight:600;">✓ Selected</div>'
         : '<div style="font-size:0.72rem;color:var(--warm-gray);text-align:center;">Image #' + (i + 1) + '</div>';
-      return '<div class="pv2-imgcellwrap"><button class="pv2-imgcell pv2-imgpick' + (sel ? ' on' : '') + '" style="background-image:url(' + esc(url) + ');" title="Use image ' + (i + 1) + ' for this variant" onclick="ProductsV2.setVariantImage(\'' + esc(pid) + '\',\'' + esc(v.id) + '\',' + i + ')">' + badge + '</button>' + cap + '</div>';
+      var cell = canEd
+        ? '<button class="pv2-imgcell pv2-imgpick' + (sel ? ' on' : '') + '" style="background-image:url(' + esc(url) + ');" title="Use image ' + (i + 1) + ' for this variant" onclick="ProductsV2.setVariantImage(\'' + esc(pid) + '\',\'' + esc(v.id) + '\',' + i + ')">' + badge + '</button>'
+        : '<div class="pv2-imgcell' + (sel ? ' on' : '') + '" style="background-image:url(' + esc(url) + ');">' + badge + '</div>';
+      return '<div class="pv2-imgcellwrap">' + cell + cap + '</div>';
     }).join('') + '</div>';
     return UU.card('Image · this variant', status + grid);
   }
@@ -1203,7 +1233,7 @@
           { k: 'Retail', v: N.money(rc.retailPrice) || '—' },
           { k: 'Retail margin', v: (rc.retailMarginPct != null ? rc.retailMarginPct + '%' : '—') }
         ]);
-        var editBtn = rc.productId
+        var editBtn = (rc.productId && canEditProduct())
           ? '<div style="margin:0 0 12px;"><button class="btn btn-secondary btn-small" onclick="ProductsV2.recipeEditInBuilder(\'' + esc(rc.recipeId) + '\',\'' + esc(rc.productId) + '\',true)">Edit in builder ↗</button></div>'
           : '';
         return UU.stickyHead(tiles, '') + '<div>' + editBtn + UU.card('Bill of materials', bom) + UU.card('Cost', cost) + UU.card('Pricing', pr) +
@@ -1244,12 +1274,13 @@
       render: function (UU, r) {
         var imgs = r.images || [];
         var key = r._key;
-        var uploadBtn = '<label class="btn btn-secondary btn-small" style="cursor:pointer;margin:0;"><input type="file" accept="image/*" style="display:none;" onchange="ProductsV2.imgUpload(\'' + esc(key) + '\',this)">Upload image</label>';
-        if (!imgs.length) return UU.card('Images', '<div style="text-align:center;padding:22px 16px;color:var(--warm-gray);font-size:0.9rem;">No images yet. Upload one — the first becomes the primary.</div>', { headerRight: uploadBtn });
+        var canEd = canEditProduct();
+        var uploadBtn = canEd ? '<label class="btn btn-secondary btn-small" style="cursor:pointer;margin:0;"><input type="file" accept="image/*" style="display:none;" onchange="ProductsV2.imgUpload(\'' + esc(key) + '\',this)">Upload image</label>' : '';
+        if (!imgs.length) return UU.card('Images', '<div style="text-align:center;padding:22px 16px;color:var(--warm-gray);font-size:0.9rem;">No images yet.' + (canEd ? ' Upload one — the first becomes the primary.' : '') + '</div>', { headerRight: uploadBtn });
         var focusSrc = imgs[r.focus] || imgs[0];
         var isPrimary = focusSrc === imgs[0];
         var large = '<div class="pv2-imgfocus"><img id="pv2ImgLarge" src="' + esc(focusSrc) + '" alt=""></div>';
-        var heroActions = '<div style="display:flex;gap:8px;justify-content:center;align-items:center;margin-top:12px;flex-wrap:wrap;">' +
+        var heroActions = !canEd ? '' : '<div style="display:flex;gap:8px;justify-content:center;align-items:center;margin-top:12px;flex-wrap:wrap;">' +
           (isPrimary
             ? '<span class="pv2-imgbadge" style="position:static;">Primary image</span>'
             : '<button class="btn btn-secondary btn-small" onclick="ProductsV2.imgMakePrimary(\'' + esc(key) + '\',\'' + esc(focusSrc) + '\')">Make primary</button>') +
@@ -1479,7 +1510,7 @@
       var ov = variantOverridden(p, v);
       out += row(varClick, pid + '::' + v.id, esc(variantLabel(v)) + (lens === 'general' && ov ? ' <span class="pv2-ov">override</span>' : ''), dataCells(v));
     });
-    out += row('ProductsV2.addVariant', pid, '<span style="color:var(--teal,teal);">+ Add variant</span> <span style="color:var(--warm-gray);">· inherits the Default</span>', emptyCells());
+    if (canEditProduct()) out += row('ProductsV2.addVariant', pid, '<span style="color:var(--teal,teal);">+ Add variant</span> <span style="color:var(--warm-gray);">· inherits the Default</span>', emptyCells());
     return out;
   }
   // Load a product's inventory record (per-variant stock) for the Inventory lens
@@ -1648,8 +1679,11 @@
       'style="position:absolute;right:6px;top:50%;transform:translateY(-50%);display:' + (hasQ ? 'flex' : 'none') + ';align-items:center;justify-content:center;width:20px;height:20px;border:0;border-radius:50%;background:color-mix(in srgb,var(--text-primary) 12%,transparent);color:var(--warm-gray);font-size:0.9rem;line-height:1;cursor:pointer;">×</button>' +
       '</div>';
     // Lens (facet) selector — same product list, different columns + click-through.
+    // Only show facets the role can view; if the current lens isn't permitted
+    // (e.g. arrived via a retired-route redirect), fall back to General.
+    if (!canViewLens(V2.lens || 'general')) V2.lens = 'general';
     var curLens = V2.lens || 'general';
-    var lensPills = [['general', 'General'], ['inventory', 'Inventory'], ['sales', 'Sales'], ['forecast', 'Forecast']].map(function (l) {
+    var lensPills = [['general', 'General'], ['inventory', 'Inventory'], ['sales', 'Sales'], ['forecast', 'Forecast']].filter(function (l) { return canViewLens(l[0]); }).map(function (l) {
       var on = curLens === l[0];
       return '<button onclick="ProductsV2.setLens(\'' + l[0] + '\')" style="border:1px solid ' + (on ? 'var(--amber,goldenrod)' : 'var(--border)') + ';' +
         'background:' + (on ? 'color-mix(in srgb,var(--amber) 18%,transparent)' : 'transparent') + ';' +
@@ -1702,6 +1736,7 @@
     openForecast: function (id) { ProductsV2.openToTab(id, 'forecast'); },
     // ── Channels (bind product to a channel + per-variant include/exclude) ──
     toggleChannel: function (pid, channelId) {
+      if (!_guardEditP()) return;
       var p = V2.byId[pid]; var bound = !!bindingFor(p, channelId);
       withProductBridge(function () {
         Promise.resolve(window.MakerProductBridge.setChannelBinding(pid, channelId, !bound)).then(function (res) {
@@ -1713,6 +1748,7 @@
       });
     },
     toggleVariantChannel: function (pid, channelId, vid) {
+      if (!_guardEditP()) return;
       var p = V2.byId[pid]; var ex = variantExcluded(p, channelId, vid);
       withProductBridge(function () {
         Promise.resolve(window.MakerProductBridge.setVariantChannelExcluded(pid, channelId, vid, !ex)).then(function (res) {
@@ -1767,6 +1803,7 @@
     // Forecast tab → create a production job for the suggested build (reuses the
     // legacy forecast job modal + its delegated create handler).
     createForecastJob: function (pid, qty) {
+      if (!_can('jobs', 'edit')) { MastAdmin.showToast('You don’t have permission to create production jobs', true); return; }
       if (window.openForecastJobModal) window.openForecastJobModal(pid, qty);
       else MastAdmin.showToast('Job creation unavailable', true);
     },
@@ -1780,11 +1817,13 @@
     // options + add variants). Drills (stacked, Back→product) when an SO is open;
     // opens a fresh SO from the list. Works for a no-options product too.
     addVariant: function (id) {
+      if (!_guardEditP()) return;
       var rec = V2.byId[id]; if (!rec) return;
       var soOpen = !!document.getElementById('mastSlideOutTitle');
       ensureMaker(function () { if (soOpen) MastEntity.drill('product-variants-v2', id); else MastEntity.openRecord('product-variants-v2', rec, 'read'); });
     },
     addOption: function (id) {
+      if (!_guardEditP()) return;
       var l = ((document.getElementById('pv2OptLabel') || {}).value || '').trim();
       var c = ((document.getElementById('pv2OptChoice') || {}).value || '').trim();
       if (!l) { MastAdmin.showToast('Enter an option name', true); return; }
@@ -1794,6 +1833,7 @@
       _saveOptions(id, opts);
     },
     addChoice: function (id, i) {
+      if (!_guardEditP()) return;
       var el = document.getElementById('pv2OptChoice_' + i); var c = el ? el.value.trim() : '';
       if (!c) return;
       var p = V2.byId[id] || {};
@@ -1801,10 +1841,12 @@
       _saveOptions(id, opts);
     },
     removeOption: function (id, i) {
+      if (!_guardEditP()) return;
       var p = V2.byId[id] || {}; var opts = (p.options || []).filter(function (o, idx) { return idx !== i; });
       _saveOptions(id, opts);
     },
     confirmAddVariant: function (id, sig) {
+      if (!_guardEditP()) return;
       var p = V2.byId[id]; if (!p) return;
       var combo = missingCombos(p).filter(function (c) { return comboSig(c) === sig; })[0];
       if (!combo) { MastAdmin.showToast('That combination is no longer available', true); return; }
@@ -1821,6 +1863,7 @@
     editVariantTodo: function () { MastAdmin.showToast('Per-variant override editing lands in P4.'); },
     // Bind a variant to product.images[idx] (idx<0 → clear, use product default).
     setVariantImage: function (pid, variantId, idx) {
+      if (!_guardEditP()) return;
       withProductBridge(function () {
         Promise.resolve(window.MakerProductBridge.setVariantImageIndex(pid, variantId, idx)).then(function (res) {
           if (!res || !res.ok) { MastAdmin.showToast('Failed: ' + ((res && res.error) || 'unknown'), true); return; }
@@ -1833,7 +1876,7 @@
       });
     },
     // Variant price override + SKU (replaces the old editVariantTodo stub).
-    editVariantPricing: function (pid, vid) { V2.editVarPricing = pid + '::' + vid; rerenderVariantPricingPane(pid, vid); },
+    editVariantPricing: function (pid, vid) { if (!canEditProduct()) { MastAdmin.showToast('You don’t have permission to edit products', true); return; } V2.editVarPricing = pid + '::' + vid; rerenderVariantPricingPane(pid, vid); },
     cancelVariantPricing: function (pid, vid) { V2.editVarPricing = null; rerenderVariantPricingPane(pid, vid); },
     saveVariantPricing: function (pid, vid, useDefault) {
       var patch;
@@ -1862,7 +1905,7 @@
       });
     },
     // ── Variant Info (custom name; first-class variant identity) ──────
-    editVariantInfo: function (pid, vid) { V2.editVarInfo = pid + '::' + vid; rerenderVariantInfoPane(pid, vid); },
+    editVariantInfo: function (pid, vid) { if (!canEditProduct()) { MastAdmin.showToast('You don’t have permission to edit products', true); return; } V2.editVarInfo = pid + '::' + vid; rerenderVariantInfoPane(pid, vid); },
     cancelVariantInfo: function (pid, vid) { V2.editVarInfo = null; rerenderVariantInfoPane(pid, vid); },
     saveVariantInfo: function (pid, vid) {
       var ne = document.getElementById('pv2VarName');
@@ -1890,7 +1933,7 @@
       });
     },
     // ── Inventory (on-hand; separate collection + stockInfo resync) ────
-    editInventory: function (pid) { V2.editInv = pid; rerenderInventoryPane(pid); },
+    editInventory: function (pid) { if (!canEditStock()) { MastAdmin.showToast('You don’t have permission to edit stock', true); return; } V2.editInv = pid; rerenderInventoryPane(pid); },
     cancelInventory: function (pid) { V2.editInv = null; rerenderInventoryPane(pid); },
     saveInventory: function (pid) {
       var counts = readStockCounts('pv2Inv_');
@@ -1905,7 +1948,7 @@
         }, function (e) { console.error('[products-v2] saveInventory', e); MastAdmin.showToast('Failed', true); });
       });
     },
-    editVariantInventory: function (pid, vid) { V2.editVarInv = pid + '::' + vid; rerenderVariantInventoryPane(pid, vid); },
+    editVariantInventory: function (pid, vid) { if (!canEditStock()) { MastAdmin.showToast('You don’t have permission to edit stock', true); return; } V2.editVarInv = pid + '::' + vid; rerenderVariantInventoryPane(pid, vid); },
     cancelVariantInventory: function (pid, vid) { V2.editVarInv = null; rerenderVariantInventoryPane(pid, vid); },
     saveVariantInventory: function (pid, vid) {
       var counts = readStockCounts('pv2VarInv_');
@@ -1921,7 +1964,7 @@
       });
     },
     // ── Pricing tab edit (direct price; revision-aware via setFields) ──
-    editPricing: function (pid) { V2.editPricing = pid; rerenderPricingPane(pid); },
+    editPricing: function (pid) { if (!canEditProduct()) { MastAdmin.showToast('You don’t have permission to edit products', true); return; } V2.editPricing = pid; rerenderPricingPane(pid); },
     cancelPricing: function (pid) { V2.editPricing = null; rerenderPricingPane(pid); },
     savePricing: function (pid) {
       var rec = V2.byId[pid] || {};
@@ -1948,6 +1991,7 @@
     },
     // ── Recipe tab (link/create; building stays in the legacy builder) ─
     recipeCreate: function (pid) {
+      if (!_guardEditP()) return;
       withProductBridge(function () {
         var rec = V2.byId[pid] || {};
         MastAdmin.showToast('Creating recipe…');
@@ -1962,6 +2006,7 @@
     // Variant "Give it its own recipe" → open the builder focused on this variant
     // (creating the product recipe first if needed). Replaces the editVariantTodo stub.
     variantOwnRecipe: function (pid, vid) {
+      if (!_guardEditP()) return;
       withProductBridge(function () {
         var rec = V2.byId[pid] || {};
         if (rec.recipeId) { openRecipeBuilderGated(rec.recipeId, pid, vid); return; }
@@ -1974,6 +2019,7 @@
       });
     },
     recipeUnlink: function (pid) {
+      if (!_guardEditP()) return;
       function go() {
         withProductBridge(function () {
           Promise.resolve(window.MakerProductBridge.unlinkRecipe(pid)).then(function (res) {
@@ -1988,7 +2034,7 @@
     },
     // ── Fulfillment (its own tab: stock mode + lead time + availability +
     //    dimensions + weight + 'second') ──
-    editFulfillment: function (pid) { V2.editFulfill = pid; rerenderFulfillmentPane(pid); },
+    editFulfillment: function (pid) { if (!canEditProduct()) { MastAdmin.showToast('You don’t have permission to edit products', true); return; } V2.editFulfill = pid; rerenderFulfillmentPane(pid); },
     cancelFulfillment: function (pid) { V2.editFulfill = null; rerenderFulfillmentPane(pid); },
     saveFulfillment: function (pid) {
       var rec = V2.byId[pid] || {};
@@ -2050,7 +2096,7 @@
       });
     },
     // ── Info tab edit (P4 pilot) ──────────────────────────────────────
-    editInfo: function (pid) { V2.editInfo = pid; rerenderInfoPane(pid); },
+    editInfo: function (pid) { if (!canEditProduct()) { MastAdmin.showToast('You don’t have permission to edit products', true); return; } V2.editInfo = pid; rerenderInfoPane(pid); },
     cancelInfo: function (pid) { V2.editInfo = null; rerenderInfoPane(pid); },
     saveInfo: function (pid) {
       function val(id) { var el = document.getElementById(id); return el ? el.value.trim() : ''; }
@@ -2097,6 +2143,7 @@
     },
     // ── Image tab edit (P4) ───────────────────────────────────────────
     uploadImage: function (pid, inputEl) {
+      if (!_guardEditP()) { if (inputEl) inputEl.value = ''; return; }
       var file = inputEl && inputEl.files && inputEl.files[0];
       if (inputEl) inputEl.value = ''; // allow re-selecting the same file later
       if (!file) return;
@@ -2116,6 +2163,7 @@
     // shared product record, and re-renders the drill keeping focus.
     imgFocus: function (key, src) { reopenImagesDrill(key, src); },
     imgUpload: function (key, inputEl) {
+      if (!_guardEditP()) { if (inputEl) inputEl.value = ''; return; }
       var file = inputEl && inputEl.files && inputEl.files[0];
       if (inputEl) inputEl.value = '';
       if (!file) return;
@@ -2130,6 +2178,7 @@
       });
     },
     imgMakePrimary: function (key, src) {
+      if (!_guardEditP()) return;
       var pid = String(key).split('::')[0];
       withProductBridge(function () {
         Promise.resolve(window.MakerProductBridge.makeImagePrimary(pid, src)).then(function (res) {
@@ -2140,6 +2189,7 @@
       });
     },
     imgRemove: function (key, src) {
+      if (!_guardEditP()) return;
       var pid = String(key).split('::')[0];
       function go() {
         withProductBridge(function () {
