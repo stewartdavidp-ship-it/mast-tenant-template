@@ -6,7 +6,7 @@ Source-of-truth counts for the admin app, generated from the code so docs
 cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 
 - **Core shell:** `app/index.html` — **59,029** lines
-- **Feature modules:** **97** files in `app/modules/` (**89** routed), **112,881** lines combined
+- **Feature modules:** **97** files in `app/modules/` (**89** routed), **112,901** lines combined
 
 | Module file | Lines | Routes |
 |---|---:|---|
@@ -59,7 +59,7 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/inquiries-v2.js` | 225 | inquiries-v2 |
 | `modules/instructors-v2.js` | 339 | instructors-v2 |
 | `modules/lookbooks.js` | 822 | lookbooks |
-| `modules/lots-v2.js` | 169 | lots-v2 |
+| `modules/lots-v2.js` | 172 | lots-v2 |
 | `modules/loyalty-v2.js` | 347 | loyalty-v2 |
 | `modules/maker.js` | 7,550 | materials, products |
 | `modules/mapping.js` | 1,768 | mapping |
@@ -72,13 +72,13 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/orders-v2.js` | 222 | orders-v2 |
 | `modules/orders.js` | 6,262 | orders, commissions, rma |
 | `modules/passes-v2.js` | 423 | passes-v2 |
-| `modules/procurement-v2.js` | 668 | procurement-v2 |
+| `modules/procurement-v2.js` | 675 | procurement-v2 |
 | `modules/procurement.js` | 2,378 | procurement |
 | `modules/production.js` | 3,553 | jobs, production, stories, forecast |
 | `modules/products-v2.js` | 3,189 | products-v2 |
 | `modules/promotions-v2.js` | 389 | promotions-v2 |
 | `modules/promotions.js` | 529 | promotions |
-| `modules/reorder-v2.js` | 164 | reorder-v2 |
+| `modules/reorder-v2.js` | 168 | reorder-v2 |
 | `modules/resources-v2.js` | 308 | resources-v2 |
 | `modules/sales-events-v2.js` | 351 | sales-events-v2 |
 | `modules/sales.js` | 3,257 | pos, receipts, events, salesEvents, terms |
@@ -96,7 +96,7 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/terms-v2.js` | 237 | terms-v2 |
 | `modules/trips-v2.js` | 214 | trips-v2 |
 | `modules/trips.js` | 2,157 | trips |
-| `modules/vendors-v2.js` | 466 | vendors-v2 |
+| `modules/vendors-v2.js` | 472 | vendors-v2 |
 | `modules/wallet-v2.js` | 234 | wallet-v2 |
 | `modules/website.js` | 3,072 | website |
 | `modules/wholesale-v2.js` | 337 | wholesale-v2 |
