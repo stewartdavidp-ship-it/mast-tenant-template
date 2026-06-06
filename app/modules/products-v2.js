@@ -549,13 +549,52 @@
     var pane = body && body.querySelector('.mu-pane[data-pane="forecast"]');
     if (pane) pane.innerHTML = forecastPane(rec);
   }
+  // Channel bindings: which channels the product sells on. A variant inherits the
+  // binding unless its id is in excludedVariantIds. (externalRefs/listing IDs come
+  // from the publish flow and are integration-managed — not edited here.)
+  function productBindings(p) {
+    if (p && Array.isArray(p.channelBindings)) return p.channelBindings;
+    if (p && Array.isArray(p.channelIds)) return p.channelIds.map(function (cid) { return { channelId: cid, excludedVariantIds: [] }; });
+    return [];
+  }
+  function bindingFor(p, channelId) { return productBindings(p).filter(function (b) { return b && b.channelId === channelId; })[0]; }
+  function variantExcluded(p, channelId, vid) { var b = bindingFor(p, channelId); return !!(b && Array.isArray(b.excludedVariantIds) && b.excludedVariantIds.indexOf(vid) >= 0); }
+  function ensureChannels(pid) {
+    if (V2._channelsCache || V2._channelsLoading) return;
+    V2._channelsLoading = true;
+    Promise.resolve(window.__mastChannelsCache || MastDB.get('admin/channels'))
+      .then(function (ch) { V2._channelsCache = ch || {}; V2._channelsLoading = false; rerenderChannelsPane(pid); }, function () { V2._channelsLoading = false; });
+  }
   function channelsPane(p) {
-    var er = p.externalRefs || {};
-    function ch(name, ref) { var on = ref && (ref.externalId || ref.syncEnabled); return { k: name, v: on ? U.badge('Mapped', 'teal') : U.badge('Off', 'neutral') }; }
-    return U.card('Channels · product-level', U.kv([
-      ch('Shopify', er.shopify), ch('Etsy', er.etsy), ch('Square', er.square),
-      { k: 'Internal storefront', v: U.badge('On', 'teal') }
-    ])) + '<div class="pv2-pnote">Channels are set here at the product level — <strong>every variant inherits these</strong>. You don’t map channels per variant.</div>';
+    var pid = p._key || p.pid;
+    if (!V2._channelsCache) { ensureChannels(pid); return U.card('Channels', '<div style="color:var(--warm-gray);font-size:0.9rem;">Loading channels…</div>'); }
+    var channels = Object.keys(V2._channelsCache).map(function (k) { var c = V2._channelsCache[k] || {}; return { id: k, name: c.name || c.displayName || c.platform || k, platform: c.platform || '', active: c.isActive !== false }; }).filter(function (c) { return c.active; });
+    if (!channels.length) return U.card('Channels', '<div style="color:var(--warm-gray);font-size:0.9rem;">No channels connected. Connect one in the Channels module first.</div>');
+    var hasVar = variantCount(p) > 0;
+    var rows = channels.map(function (c) {
+      var bound = !!bindingFor(p, c.id);
+      var toggle = '<button class="btn btn-secondary btn-small" onclick="ProductsV2.toggleChannel(\'' + esc(pid) + '\',\'' + esc(c.id) + '\')">' + (bound ? 'Remove' : 'Sell here') + '</button>';
+      var head = '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 0;border-top:1px solid var(--border);">' +
+        '<span>' + esc(c.name) + (c.platform ? ' <span style="color:var(--warm-gray);font-size:0.78rem;">· ' + esc(c.platform) + '</span>' : '') + '</span>' +
+        '<span style="display:flex;align-items:center;gap:8px;">' + (bound ? U.badge('On', 'teal') : U.badge('Off', 'neutral')) + toggle + '</span></div>';
+      var varRows = '';
+      if (bound && hasVar) {
+        varRows = '<div style="padding:2px 0 12px 14px;display:flex;flex-wrap:wrap;gap:6px;align-items:center;">' +
+          realVariants(p).map(function (v) {
+            var ex = variantExcluded(p, c.id, v.id);
+            return '<button onclick="ProductsV2.toggleVariantChannel(\'' + esc(pid) + '\',\'' + esc(c.id) + '\',\'' + esc(v.id) + '\')" title="' + (ex ? 'Excluded — tap to include' : 'Included — tap to exclude') + '" style="border:1px solid var(--border);border-radius:999px;padding:4px 11px;font-size:0.78rem;cursor:pointer;background:' + (ex ? 'transparent' : 'color-mix(in srgb,var(--teal) 16%,transparent)') + ';color:' + (ex ? 'var(--warm-gray)' : 'var(--teal,teal)') + ';' + (ex ? 'text-decoration:line-through;' : '') + '">' + esc(variantLabel(v)) + '</button>';
+          }).join('') + '<span style="color:var(--warm-gray);font-size:0.72rem;">tap a variant to include / exclude</span></div>';
+      }
+      return head + varRows;
+    }).join('');
+    return U.card('Channels · where this product sells', rows) +
+      '<div class="pv2-pnote">Every variant inherits the product’s channels; tap a variant chip to exclude (or re-include) it on that channel. Listing IDs &amp; sync status come from connecting + publishing.</div>';
+  }
+  function rerenderChannelsPane(pid) {
+    var rec = V2.byId[pid]; if (!rec) return;
+    var body = document.getElementById('mastSlideOutBody');
+    var pane = body && body.querySelector('.mu-pane[data-pane="channels"]');
+    if (pane) pane.innerHTML = channelsPane(rec);
   }
   // The Image TAB is LIGHT: a read gallery + quick Upload + a "Manage images"
   // drill. Set-primary / remove / reorder live in the product-images-v2 drill SO
@@ -1594,6 +1633,28 @@
     openInventory: function (id) { ProductsV2.openToTab(id, 'inventory'); },
     openSales: function (id) { ProductsV2.openToTab(id, 'sales'); },
     openForecast: function (id) { ProductsV2.openToTab(id, 'forecast'); },
+    // ── Channels (bind product to a channel + per-variant include/exclude) ──
+    toggleChannel: function (pid, channelId) {
+      var p = V2.byId[pid]; var bound = !!bindingFor(p, channelId);
+      withProductBridge(function () {
+        Promise.resolve(window.MakerProductBridge.setChannelBinding(pid, channelId, !bound)).then(function (res) {
+          if (!res || !res.ok) { MastAdmin.showToast('Failed: ' + ((res && res.error) || 'unknown'), true); return; }
+          var rec = V2.byId[pid]; if (rec) { rec.channelBindings = res.channelBindings; rec.channelIds = res.channelIds; }
+          rerenderChannelsPane(pid);
+          MastAdmin.showToast(!bound ? 'Now selling on this channel' : 'Removed from channel');
+        }, function (e) { console.error('[products-v2] toggleChannel', e); MastAdmin.showToast('Failed', true); });
+      });
+    },
+    toggleVariantChannel: function (pid, channelId, vid) {
+      var p = V2.byId[pid]; var ex = variantExcluded(p, channelId, vid);
+      withProductBridge(function () {
+        Promise.resolve(window.MakerProductBridge.setVariantChannelExcluded(pid, channelId, vid, !ex)).then(function (res) {
+          if (!res || !res.ok) { MastAdmin.showToast('Failed: ' + ((res && res.error) || 'unknown'), true); return; }
+          var rec = V2.byId[pid]; if (rec) { rec.channelBindings = res.channelBindings; rec.channelIds = res.channelIds; }
+          rerenderChannelsPane(pid);
+        }, function (e) { console.error('[products-v2] toggleVariantChannel', e); MastAdmin.showToast('Failed', true); });
+      });
+    },
     // Type-to-filter the list by name / category / SKU. Re-render only the list
     // body so the input keeps focus (no full re-render mid-keystroke).
     setSearch: function (v) {
