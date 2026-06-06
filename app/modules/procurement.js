@@ -1977,6 +1977,56 @@
         created.forEach(function (poId) { purchaseOrdersData[poId] = updates['admin/purchaseOrders/' + poId]; });
       }
       return created;
+    },
+    // createPO(data) → create a single DRAFT purchase order (Tier 1.5 P1, the V2
+    // "New PO" create form's write). data: { vendorId, poNumber?, orderDate?,
+    // expectedDate?, notes?, lines: [{ kind, targetId, variantKey?, qtyOrdered,
+    // unitCost?, vendorSku?, unitOfMeasure?, descriptionSnapshot? }] }. Mirrors
+    // the legacy saveNewPo write shape; returns the new poId. Keeps PO creation
+    // in this baselined module so the V2 twin holds no MastDB write verbs (RBAC).
+    createPO: async function (data) {
+      await _ensureLoaded();
+      data = data || {};
+      if (!data.vendorId) throw new Error('Vendor is required');
+      var vendor = vendorsData[data.vendorId] || {};
+      var validLines = (data.lines || []).filter(function (l) { return l && l.targetId && Number(l.qtyOrdered) > 0; });
+      if (!validLines.length) throw new Error('Add at least one line with a target and qty > 0');
+      var now = new Date().toISOString();
+      var poId = MastDB.newKey('admin/purchaseOrders');
+      var lines = validLines.map(function (l) {
+        return {
+          lineId: MastDB.newKey('admin/purchaseOrders'),
+          kind: l.kind,
+          targetId: l.targetId,
+          variantKey: l.kind === 'product' ? (l.variantKey || '_default') : null,
+          vendorSku: l.vendorSku || null,
+          descriptionSnapshot: l.descriptionSnapshot || null,
+          qtyOrdered: Number(l.qtyOrdered) || 0,
+          unitOfMeasure: l.unitOfMeasure || null,
+          unitCost: Number(l.unitCost) || 0,
+          discount: null, tax: null, qtyReceived: 0, qtyCancelled: 0, expectedDate: null,
+          acquisitionTarget: l.kind === 'material' ? 'build-material' : null
+        };
+      });
+      var record = {
+        poId: poId,
+        poNumber: (data.poNumber || '').trim() || null,
+        vendorId: data.vendorId,
+        status: 'draft',
+        orderDate: data.orderDate || now.slice(0, 10),
+        expectedDate: data.expectedDate || null,
+        shipToLocationId: null,
+        currency: vendor.defaultCurrency || null, fxRateAtPo: null,
+        subtotal: null, tax: null, shipping: null, total: null,
+        paymentTerms: vendor.defaultPaymentTerms || null,
+        notes: (data.notes || '').trim() || null, vendorMessage: null,
+        createdBy: null, approvedBy: null, incoterm: null,
+        dropShip: false, dropShipCustomerId: null, memo: false,
+        lines: lines, createdAt: now, updatedAt: now
+      };
+      await MastDB.set('admin/purchaseOrders/' + poId, record);
+      purchaseOrdersData[poId] = record;
+      return poId;
     }
   };
 
