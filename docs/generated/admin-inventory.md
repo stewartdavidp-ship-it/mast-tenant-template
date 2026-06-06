@@ -5,7 +5,7 @@
 Source-of-truth counts for the admin app, generated from the code so docs
 cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 
-- **Core shell:** `app/index.html` — **59,029** lines
+- **Core shell:** `app/index.html` — **59,031** lines
 - **Feature modules:** **97** files in `app/modules/` (**89** routed), **112,901** lines combined
 
 | Module file | Lines | Routes |
