@@ -256,7 +256,8 @@
       '<div style="display:flex;align-items:baseline;gap:12px;margin-bottom:6px;">' +
         '<h1 style="font-size:1.6rem;margin:0;">Purchase Orders</h1>' +
         '<span style="color:var(--warm-gray);font-size:0.9rem;">' + N.count(openCount) + ' open · ' + N.count(V2.rows.length) + ' total</span>' +
-        '<button class="btn btn-secondary" style="margin-left:auto;" onclick="ProcurementV2.exportCsv()">↓ Export</button>' +
+        '<button class="btn btn-secondary" style="margin-left:auto;" onclick="navigateTo(\'reorder-v2\')">↻ Needs reorder</button>' +
+        '<button class="btn btn-secondary" onclick="ProcurementV2.exportCsv()">↓ Export</button>' +
       '</div>' +
       '<div style="display:flex;gap:6px;flex-wrap:wrap;margin:12px 0;">' + filters + '</div>' +
       '<div style="margin:14px 0;"><input class="form-input" placeholder="Search PO # or vendor…" value="' + esc(V2.q) +
