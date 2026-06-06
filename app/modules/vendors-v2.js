@@ -90,7 +90,8 @@
       var m = V2.materials[ps.targetId];
       return (m && m.name) || ps.targetId || '—';
     }
-    return ps.targetId || '—';
+    var p = V2.products[ps.targetId];
+    return (p && p.name) || ps.targetId || '—';
   }
 
   // ── schema (read-only Faceted/Flat Record) ──────────────────────────
@@ -112,6 +113,7 @@
     fetch: function (id) { return Promise.resolve(V2.byId[id] || null); },
     detail: {
       render: function (UI, v) {
+        var vid = v.vendorId || v._key || v.id;
         var supplies = suppliesFor(v);
         var tiles = UI.tiles([
           { k: 'Category', v: esc(categoryOf(v)), hero: true },
@@ -151,11 +153,13 @@
         var notesBody = v.notes
           ? '<div style="font-size:0.85rem;color:var(--warm-gray);line-height:1.5;white-space:pre-wrap;">' + esc(v.notes) + '</div>'
           : '<span class="mu-sub">No notes.</span>';
-        // Vendor identity editing is NATIVE now (the Edit button on this slide-out).
-        // What still has NO V2 home: archiving, product-supplier links, and
-        // PO/receipt sub-tools — those stay bespoke on legacy #procurement.
-        // navigateToClassic so the V2 route remap doesn't loop back to this twin.
-        var manage = '<div style="margin-top:14px;"><button class="btn btn-secondary" onclick="VendorsV2.classic()">Archive / link products in classic view →</button></div>';
+        // Archive / unarchive is NATIVE now (Tier 1.5 P5). Product-supplier links
+        // are managed natively in the Supplies pane (P4). The classic escape hatch
+        // remains only for PO/receipt sub-tools not yet ported.
+        var isArchived = statusOf(v) === 'archived';
+        var manage = '<div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;">' +
+          '<button class="btn btn-secondary" onclick="VendorsV2.toggleArchive(\'' + esc(vid) + '\',' + (isArchived ? 'true' : 'false') + ')">' + (isArchived ? 'Unarchive vendor' : 'Archive vendor') + '</button>' +
+        '</div>';
 
         // Supplies — products/materials this vendor supplies (preferred first),
         // with cost + lead time + MOQ. Read-only mirror of renderVendorProducts.
@@ -166,13 +170,19 @@
         });
         var suppliesBody = sorted.length ? UI.relatedTable([
           { label: 'Item', render: function (ps) {
-            return esc(supplyLabel(ps)) + (ps.preferred ? ' <span class="mu-sub">· preferred</span>' : '');
+            return esc(supplyLabel(ps)) + ' <span class="mu-sub">· ' + esc(ps.targetKind || '') + '</span>' + (ps.preferred ? ' <span class="mu-sub">· preferred</span>' : '');
           } },
           { label: 'Vendor SKU', render: function (ps) { return ps.vendorSku ? '<span class="mu-sub">' + esc(ps.vendorSku) + '</span>' : '<span class="mu-sub">—</span>'; } },
           { label: 'MOQ', align: 'right', render: function (ps) { return ps.moq != null ? N.count(ps.moq) : '<span class="mu-sub">—</span>'; } },
           { label: 'Lead', align: 'right', render: function (ps) { return ps.leadTimeDays != null ? esc(ps.leadTimeDays + 'd') : '<span class="mu-sub">—</span>'; } },
-          { label: 'Cost', align: 'right', render: function (ps) { return N.money(ps.unitCost) || '<span class="mu-sub">—</span>'; } }
+          { label: 'Cost', align: 'right', render: function (ps) { return N.money(ps.unitCost) || '<span class="mu-sub">—</span>'; } },
+          { label: '', align: 'right', render: function (ps) {
+            var id = ps.id || ps.psId;
+            return '<button class="btn btn-secondary btn-small" style="padding:2px 8px;" onclick="VendorsV2.editSupply(\'' + esc(vid) + '\',\'' + esc(id) + '\')">Edit</button> ' +
+              '<button class="btn btn-secondary btn-small" style="padding:2px 8px;" onclick="VendorsV2.archiveSupply(\'' + esc(vid) + '\',\'' + esc(id) + '\')" title="Remove link">×</button>';
+          } }
         ], sorted) : '<span class="mu-sub">No products linked to this vendor.</span>';
+        var addSupply = '<div style="margin-top:10px;"><button class="btn btn-secondary btn-small" onclick="VendorsV2.addSupply(\'' + esc(vid) + '\')">+ Add supply</button></div>';
 
         return tiles + tabsBar +
           '<div class="mu-pane" data-pane="ov">' +
@@ -181,7 +191,7 @@
             UI.card('Terms & account', terms) +
             UI.card('Notes', notesBody + manage) +
           '</div>' +
-          '<div class="mu-pane" data-pane="supplies" hidden>' + UI.cardTable('Supplies (' + supplies.length + ')', suppliesBody) + '</div>';
+          '<div class="mu-pane" data-pane="supplies" hidden>' + UI.cardTable('Supplies (' + supplies.length + ')', suppliesBody) + addSupply + '</div>';
       },
       // Native edit form — the legacy New-Vendor modal / vendor edit field set,
       // grouped. Mirrors procurement.openNewVendorModal / renderVendorEditForm:
@@ -258,7 +268,7 @@
   });
 
   // ── module state + data ─────────────────────────────────────────────
-  var V2 = { rows: [], byId: {}, productSuppliers: [], materials: {}, sortKey: 'name', sortDir: 'asc', q: '', statusFilter: 'active', loaded: false };
+  var V2 = { rows: [], byId: {}, productSuppliers: [], materials: {}, products: {}, sortKey: 'name', sortDir: 'asc', q: '', statusFilter: 'active', loaded: false };
 
   function load() {
     // Ensure the legacy procurement module is loaded so window.VendorsBridge
@@ -266,12 +276,14 @@
     if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('procurement'); } catch (e) {} }
     // Vendors + product-suppliers (Supplies facet/count) + materials (target
     // label lookup) load together; all one-shot keyed-object reads at admin/*.
-    Promise.all([
+    return Promise.all([
       Promise.resolve(MastDB.get('admin/vendors')).catch(function () { return null; }),
       Promise.resolve(MastDB.get('admin/productSuppliers')).catch(function () { return null; }),
-      Promise.resolve(MastDB.get('admin/materials')).catch(function () { return null; })
+      Promise.resolve(MastDB.get('admin/materials')).catch(function () { return null; }),
+      Promise.resolve(MastDB.get('admin/products')).catch(function () { return null; })
     ]).then(function (res) {
       var vv = res[0] || {}, pv = res[1] || {}, mv = res[2] || {};
+      V2.products = res[3] || {};
       var out = [];
       Object.keys(vv).forEach(function (k) {
         var v = vv[k];
@@ -334,7 +346,96 @@
       });
   }
 
+  // ── Supply (product-supplier link) form — Tier 1.5 P4 ───────────────
+  var supplyDraft = null;
+  function openSupplyForm(vendorId, ps) {
+    ps = ps || null;
+    supplyDraft = ps ? {
+      vendorId: vendorId, psId: (ps.id || ps.psId), targetKind: ps.targetKind || 'material', targetId: ps.targetId || '',
+      vendorSku: ps.vendorSku || '', unitCost: ps.unitCost == null ? '' : ps.unitCost, moq: ps.moq == null ? '' : ps.moq,
+      leadTimeDays: ps.leadTimeDays == null ? '' : ps.leadTimeDays, preferred: !!ps.preferred
+    } : { vendorId: vendorId, psId: null, targetKind: 'material', targetId: '', vendorSku: '', unitCost: '', moq: '', leadTimeDays: '', preferred: false };
+    U.slideOut.open({
+      id: 'supply-' + (supplyDraft.psId || 'new'), title: supplyDraft.psId ? 'Edit supply' : 'Add supply', size: 'md',
+      mode: 'create', deepLink: false, createLabel: supplyDraft.psId ? 'Save' : 'Add',
+      render: function () { return buildSupplyBody(); },
+      isDirty: function () { return true; },
+      onSave: function () { return submitSupply(); }
+    });
+  }
+  function svRerender() { var b = document.getElementById('mastSlideOutBody'); if (b) b.innerHTML = buildSupplyBody(); }
+  function buildSupplyBody() {
+    if (!supplyDraft) return '';
+    var d = supplyDraft;
+    var items = (d.targetKind === 'material')
+      ? Object.keys(V2.materials).map(function (k) { return [k, V2.materials[k]]; }).filter(function (e) { return e[1] && e[1].status !== 'archived'; })
+      : Object.keys(V2.products).map(function (k) { return [k, V2.products[k]]; }).filter(function (e) { return e[1] && e[1].status !== 'archived'; });
+    items.sort(function (a, b) { return String(a[1].name || '').localeCompare(String(b[1].name || '')); });
+    var itemOpts = '<option value="">— item —</option>' + items.map(function (e) { return '<option value="' + esc(e[0]) + '"' + (d.targetId === e[0] ? ' selected' : '') + '>' + esc(e[1].name || e[0]) + '</option>'; }).join('');
+    function fg(label, inner) { return '<label style="font-size:0.78rem;color:var(--warm-gray);display:block;margin-bottom:8px;">' + label + inner + '</label>'; }
+    var body =
+      fg('Kind', '<select style="width:100%;margin-top:2px;" onchange="VendorsV2.svField(\'targetKind\',this.value)"><option value="material"' + (d.targetKind === 'material' ? ' selected' : '') + '>material</option><option value="product"' + (d.targetKind === 'product' ? ' selected' : '') + '>product</option></select>') +
+      fg('Item', '<select style="width:100%;margin-top:2px;" onchange="VendorsV2.svField(\'targetId\',this.value)">' + itemOpts + '</select>') +
+      fg('Vendor SKU', '<input class="form-input" style="width:100%;margin-top:2px;" value="' + esc(d.vendorSku || '') + '" oninput="VendorsV2.svField(\'vendorSku\',this.value)">') +
+      '<div style="display:flex;gap:10px;">' +
+        fg('Unit cost', '<input type="number" min="0" step="0.01" class="form-input" style="width:100%;margin-top:2px;" value="' + esc(String(d.unitCost)) + '" oninput="VendorsV2.svField(\'unitCost\',this.value)">') +
+        fg('MOQ', '<input type="number" min="0" step="1" class="form-input" style="width:100%;margin-top:2px;" value="' + esc(String(d.moq)) + '" oninput="VendorsV2.svField(\'moq\',this.value)">') +
+        fg('Lead (days)', '<input type="number" min="0" step="1" class="form-input" style="width:100%;margin-top:2px;" value="' + esc(String(d.leadTimeDays)) + '" oninput="VendorsV2.svField(\'leadTimeDays\',this.value)">') +
+      '</div>' +
+      '<label style="font-size:0.85rem;display:flex;align-items:center;gap:8px;margin-top:6px;cursor:pointer;"><input type="checkbox" ' + (d.preferred ? 'checked' : '') + ' onchange="VendorsV2.svField(\'preferred\',this.checked)"> Preferred supplier for this item</label>';
+    return U.card(d.psId ? 'Edit supply' : 'Add supply', body);
+  }
+  function submitSupply() {
+    if (!supplyDraft) return false;
+    var d = supplyDraft;
+    if (!d.targetId) { if (window.showToast) showToast('Pick an item', true); return false; }
+    if (!window.VendorsBridge || typeof VendorsBridge.createSupply !== 'function') {
+      if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('procurement'); } catch (e) {} }
+      if (window.showToast) showToast('Vendors engine still loading — try again', true); return false;
+    }
+    var payload = { vendorId: d.vendorId, targetKind: d.targetKind, targetId: d.targetId, vendorSku: d.vendorSku || null, unitCost: d.unitCost, moq: d.moq, leadTimeDays: d.leadTimeDays, preferred: !!d.preferred };
+    var p = d.psId ? VendorsBridge.updateSupply(d.psId, payload) : VendorsBridge.createSupply(payload);
+    Promise.resolve(p).then(function () {
+      if (window.showToast) showToast(d.psId ? 'Supply updated' : 'Supply added');
+      supplyDraft = null; U.slideOut.requestCloseForce(); reloadThenOpenVendor(d.vendorId);
+    }).catch(function (e) { if (window.showToast) showToast('Failed: ' + (e && e.message || e), true); });
+    return false;
+  }
+  function reloadThenOpenVendor(vendorId) {
+    V2.loaded = false;
+    return load().then(function () { var rec = V2.byId[vendorId]; if (rec) MastEntity.openRecord('vendors-v2', rec, 'read'); });
+  }
+
   window.VendorsV2 = {
+    addSupply: function (vendorId) { openSupplyForm(vendorId, null); },
+    editSupply: function (vendorId, psId) {
+      var ps = V2.productSuppliers.filter(function (x) { return (x.id || x.psId) === psId; })[0];
+      openSupplyForm(vendorId, ps || null);
+    },
+    archiveSupply: function (vendorId, psId) {
+      var go = function () {
+        Promise.resolve(window.VendorsBridge.archiveSupply(psId)).then(function () {
+          if (window.showToast) showToast('Supply removed'); reloadThenOpenVendor(vendorId);
+        }).catch(function (e) { if (window.showToast) showToast('Failed: ' + (e && e.message || e), true); });
+      };
+      if (typeof window.mastConfirm === 'function') Promise.resolve(window.mastConfirm('Remove this supplier link?')).then(function (ok) { if (ok) go(); });
+      else go();
+    },
+    toggleArchive: function (vendorId, isCurrentlyArchived) {
+      var go = function () {
+        Promise.resolve(window.VendorsBridge.setVendorActive(vendorId, isCurrentlyArchived)).then(function () {
+          if (window.showToast) showToast(isCurrentlyArchived ? 'Vendor unarchived' : 'Vendor archived'); reloadThenOpenVendor(vendorId);
+        }).catch(function (e) { if (window.showToast) showToast('Failed: ' + (e && e.message || e), true); });
+      };
+      var msg = isCurrentlyArchived ? 'Unarchive this vendor?' : 'Archive this vendor? It will be hidden from active lists (history is kept).';
+      if (typeof window.mastConfirm === 'function') Promise.resolve(window.mastConfirm(msg)).then(function (ok) { if (ok) go(); });
+      else go();
+    },
+    svField: function (f, v) {
+      if (!supplyDraft) return;
+      supplyDraft[f] = v;
+      if (f === 'targetKind') { supplyDraft.targetId = ''; svRerender(); }
+    },
     sort: function (key) {
       if (V2.sortKey === key) V2.sortDir = (V2.sortDir === 'asc' ? 'desc' : 'asc');
       else { V2.sortKey = key; V2.sortDir = 'asc'; }

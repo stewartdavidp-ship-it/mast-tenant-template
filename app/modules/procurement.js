@@ -1800,8 +1800,88 @@
       await MastDB.update('admin/vendors/' + id, updates);
       if (vendorsData[id]) Object.assign(vendorsData[id], updates);
       return id;
+    },
+    // setVendorActive(id, active) → archive / unarchive a vendor (Tier 1.5 P5).
+    // V2 owns the confirm; this is the bare write. Preserves all history.
+    setVendorActive: async function (id, active) {
+      if (!id) throw new Error('vendor id required');
+      var now = new Date().toISOString();
+      await MastDB.update('admin/vendors/' + id, { active: !!active, updatedAt: now });
+      if (vendorsData[id]) { vendorsData[id].active = !!active; vendorsData[id].updatedAt = now; }
+      return id;
+    },
+    // ── Product-supplier (vendor↔item pricing link) CRUD — Tier 1.5 P4 ──────
+    // No legacy UI existed (links were read-only embeds; the only write was the
+    // receipt priceHistory append). These are the V2 write path for the
+    // vendors-v2 Supplies pane. admin/productSuppliers/{psId}. Setting preferred
+    // clears the preferred flag on sibling links for the same item (one
+    // preferred supplier per item — what the reorder queue resolves).
+    createSupply: async function (data) {
+      data = data || {};
+      if (!data.vendorId || !data.targetId || !data.targetKind) throw new Error('vendor, item, and kind are required');
+      var now = new Date().toISOString();
+      var psId = MastDB.newKey('admin/productSuppliers');
+      var record = {
+        psId: psId, vendorId: data.vendorId, targetKind: data.targetKind, targetId: data.targetId,
+        vendorSku: data.vendorSku || null, vendorDescription: data.vendorDescription || null,
+        unitOfMeasure: data.unitOfMeasure || null,
+        moq: (data.moq == null || data.moq === '') ? null : Number(data.moq),
+        leadTimeDays: (data.leadTimeDays == null || data.leadTimeDays === '') ? null : parseInt(data.leadTimeDays, 10),
+        unitCost: (data.unitCost == null || data.unitCost === '') ? null : Number(data.unitCost),
+        currency: data.currency || null,
+        preferred: !!data.preferred,
+        priceHistory: [], active: true, createdAt: now, updatedAt: now
+      };
+      var updates = {}; updates['admin/productSuppliers/' + psId] = record;
+      if (record.preferred) _clearSiblingPreferred(data.targetKind, data.targetId, psId, updates, now);
+      await MastDB.multiUpdate(updates);
+      productSuppliersData[psId] = record; _applyPreferredCache(updates);
+      return psId;
+    },
+    updateSupply: async function (psId, data) {
+      if (!psId) throw new Error('supplier link id required');
+      data = data || {};
+      var now = new Date().toISOString();
+      var updates = {}; var ps = productSuppliersData[psId] || {};
+      var fieldUpd = { updatedAt: now };
+      ['vendorSku', 'vendorDescription', 'unitOfMeasure', 'currency'].forEach(function (k) { if (k in data) fieldUpd[k] = data[k] || null; });
+      if ('moq' in data) fieldUpd.moq = (data.moq == null || data.moq === '') ? null : Number(data.moq);
+      if ('leadTimeDays' in data) fieldUpd.leadTimeDays = (data.leadTimeDays == null || data.leadTimeDays === '') ? null : parseInt(data.leadTimeDays, 10);
+      if ('unitCost' in data) fieldUpd.unitCost = (data.unitCost == null || data.unitCost === '') ? null : Number(data.unitCost);
+      if ('preferred' in data) fieldUpd.preferred = !!data.preferred;
+      Object.keys(fieldUpd).forEach(function (k) { updates['admin/productSuppliers/' + psId + '/' + k] = fieldUpd[k]; });
+      if (fieldUpd.preferred === true) _clearSiblingPreferred(ps.targetKind, ps.targetId, psId, updates, now);
+      await MastDB.multiUpdate(updates);
+      if (productSuppliersData[psId]) Object.assign(productSuppliersData[psId], fieldUpd);
+      _applyPreferredCache(updates);
+      return psId;
+    },
+    archiveSupply: async function (psId) {
+      if (!psId) throw new Error('supplier link id required');
+      var now = new Date().toISOString();
+      await MastDB.update('admin/productSuppliers/' + psId, { active: false, updatedAt: now });
+      if (productSuppliersData[psId]) { productSuppliersData[psId].active = false; productSuppliersData[psId].updatedAt = now; }
+      return psId;
     }
   };
+  // Clear preferred on sibling supplier links for the same item (one preferred
+  // per item). Adds field-path writes to `updates`; caller commits via multiUpdate.
+  function _clearSiblingPreferred(kind, tid, keepId, updates, now) {
+    Object.keys(productSuppliersData).forEach(function (id) {
+      if (id === keepId) return;
+      var ps = productSuppliersData[id];
+      if (ps && ps.active !== false && ps.preferred && ps.targetKind === kind && ps.targetId === tid) {
+        updates['admin/productSuppliers/' + id + '/preferred'] = false;
+        updates['admin/productSuppliers/' + id + '/updatedAt'] = now;
+      }
+    });
+  }
+  function _applyPreferredCache(updates) {
+    Object.keys(updates).forEach(function (path) {
+      var m = path.match(/^admin\/productSuppliers\/([^/]+)\/preferred$/);
+      if (m && productSuppliersData[m[1]]) productSuppliersData[m[1]].preferred = updates[path];
+    });
+  }
 
   window.procurementVendorTab = function(t) { vendorDetailTab = t; render(); };
   window.procurementEnterVendorEdit  = enterVendorEdit;
