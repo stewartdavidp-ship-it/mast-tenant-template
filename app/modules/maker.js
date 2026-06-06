@@ -729,6 +729,181 @@
   }
 
   // ============================================================
+  // V2 recipe-edit bridge (R1) — wraps the persisted recipe doc + REUSES the
+  // pure cost engine (calculateRecipe / resolveSubAssemblyCosts). Live edits do a
+  // LIGHT recompute (totals + tier prices, no marginHistory/drift/product-
+  // propagation — matches the legacy builder, which only edits in-memory and
+  // appends history on an explicit recalc). bridgeRecipeRecalc runs the FULL
+  // recalculateRecipe (history + costShape→product). See
+  // docs/ux-audit/recipe-builder-v2-plan.md.
+  // ============================================================
+
+  // Ensure materialsData + the target recipe are in memory (one-shot if the
+  // maker listeners haven't run in this session).
+  async function ensureRecipeCtx(recipeId) {
+    if (!materialsLoaded || !Object.keys(materialsData).length) {
+      try { var m = await MastDB.materials.list(500); if (m) { materialsData = m; materialsLoaded = true; } } catch (e) {}
+    }
+    if (!recipesData[recipeId]) {
+      try { var rc = await MastDB.recipes.get(recipeId); if (rc) recipesData[recipeId] = rc; } catch (e) {}
+    }
+    return recipesData[recipeId] || null;
+  }
+
+  // Refresh each line item's unitCost from current materials (spot-aware) + resolve
+  // sub-assembly costs — the same refresh recalculateRecipe does, factored for the
+  // light path. Returns a fresh lineItems map (does not mutate input).
+  function _recipeRefreshLineItems(lineItems, recipeId) {
+    var out = {};
+    Object.keys(lineItems || {}).forEach(function (liId) {
+      var li = lineItems[liId];
+      if (li && li.kind === 'recipe') { out[liId] = li; return; }
+      var material = materialsData[li.materialId];
+      var currentCost = material
+        ? (material.pricingMode === 'spot-linked' && material.replacementCost != null ? material.replacementCost : material.unitCost)
+        : li.unitCost;
+      out[liId] = Object.assign({}, li, { unitCost: currentCost, materialName: material ? material.name : li.materialName });
+    });
+    var visited = {}; visited[recipeId] = true;
+    return resolveSubAssemblyCosts(out, visited, 0);
+  }
+
+  // Light recompute: recost + write totals/tier prices. No marginHistory, no drift
+  // baseline change, no product propagation (those belong to the full recalc).
+  async function _recipeLightRecompute(recipeId) {
+    var recipe = recipesData[recipeId]; if (!recipe) return null;
+    var refreshed = _recipeRefreshLineItems(recipe.lineItems || {}, recipeId);
+    var calc = calculateRecipe({
+      lineItems: refreshed,
+      laborRatePerHour: recipe.laborRatePerHour, laborMinutes: recipe.laborMinutes,
+      otherCost: recipe.otherCost, setupCost: recipe.setupCost, batchSize: recipe.batchSize,
+      wholesaleMarkup: recipe.wholesaleMarkup, directMarkup: recipe.directMarkup, retailMarkup: recipe.retailMarkup
+    });
+    var upd = {
+      lineItems: calc.lineItems, totalMaterialCost: calc.totalMaterialCost, laborCost: calc.laborCost, totalCost: calc.totalCost,
+      wholesalePrice: calc.wholesalePrice, wholesaleGrossProfit: calc.wholesaleGrossProfit,
+      directPrice: calc.directPrice, directGrossProfit: calc.directGrossProfit,
+      retailPrice: calc.retailPrice, retailGrossProfit: calc.retailGrossProfit,
+      suggestedPrice: calc.suggestedPrice, costsDirty: true, updatedAt: new Date().toISOString()
+    };
+    Object.assign(recipe, upd);
+    await MastDB.recipes.update(recipeId, upd);
+    return recipe;
+  }
+
+  async function bridgeRecipeGet(recipeId) {
+    var r = await ensureRecipeCtx(recipeId);
+    return r ? { ok: true, recipe: r } : { ok: false, error: 'Recipe not found' };
+  }
+
+  // Materials + eligible sub-recipes for the BOM "+ Add part" picker.
+  async function bridgeRecipeMaterials(forRecipeId) {
+    if (!materialsLoaded || !Object.keys(materialsData).length) { try { var m = await MastDB.materials.list(500); if (m) { materialsData = m; materialsLoaded = true; } } catch (e) {} }
+    if (!recipesLoaded || !Object.keys(recipesData).length) { try { var r = await MastDB.recipes.list(200); if (r) { recipesData = Object.assign({}, r, recipesData); recipesLoaded = true; } } catch (e) {} }
+    function byName(a, b) { return String(a.name || '').localeCompare(String(b.name || '')); }
+    var materials = Object.keys(materialsData).map(function (id) {
+      var mt = materialsData[id];
+      return { id: id, name: mt.name, unitOfMeasure: mt.unitOfMeasure, unitCost: (mt.pricingMode === 'spot-linked' && mt.replacementCost != null ? mt.replacementCost : mt.unitCost), status: mt.status };
+    }).filter(function (mt) { return mt.status !== 'archived'; }).sort(byName);
+    var recipes = Object.keys(recipesData).map(function (id) {
+      var rc = recipesData[id]; return { id: id, name: rc.name, totalCost: rc.totalCost, status: rc.status };
+    }).filter(function (rc) { return rc.status !== 'archived' && rc.id !== forRecipeId; }).sort(byName);
+    return { ok: true, materials: materials, recipes: recipes };
+  }
+
+  async function bridgeRecipeAddLineItem(recipeId, opts) {
+    try {
+      opts = opts || {};
+      var recipe = await ensureRecipeCtx(recipeId); if (!recipe) return { ok: false, error: 'Recipe not found' };
+      var liId = MastDB.newKey('admin/recipes/' + recipeId + '/lineItems');
+      var li;
+      if (opts.kind === 'recipe') {
+        if (opts.materialId === recipeId) return { ok: false, error: 'A recipe can’t include itself' };
+        var sub = recipesData[opts.materialId] || (await MastDB.recipes.get(opts.materialId));
+        if (!sub) return { ok: false, error: 'Sub-recipe not found' };
+        var sq = Math.max(0, Number(opts.quantity) || 0);
+        li = { lineItemId: liId, kind: 'recipe', materialId: opts.materialId, materialName: sub.name || 'Sub-recipe', quantity: sq, scrapPercent: 0, unitOfMeasure: 'each', unitCost: sub.totalCost || 0, extendedCost: roundCents(sq * (sub.totalCost || 0)) };
+      } else {
+        var mat = materialsData[opts.materialId]; if (!mat) return { ok: false, error: 'Material not found' };
+        var q = Math.max(0, Number(opts.quantity) || 0), sc = Math.min(200, Math.max(0, Number(opts.scrapPercent) || 0));
+        li = { lineItemId: liId, kind: 'material', materialId: opts.materialId, materialName: mat.name, quantity: q, scrapPercent: sc, unitOfMeasure: mat.unitOfMeasure, unitCost: mat.unitCost, extendedCost: roundCents(q * mat.unitCost) };
+      }
+      recipe.lineItems = recipe.lineItems || {}; recipe.lineItems[liId] = li;
+      await MastDB.recipes.subRef(recipeId, 'lineItems', liId).set(li);
+      await _recipeLightRecompute(recipeId);
+      MastAdmin.writeAudit('update', 'recipe', recipeId);
+      return { ok: true, recipe: recipesData[recipeId], lineItemId: liId };
+    } catch (e) { return { ok: false, error: (e && e.message) || 'Failed' }; }
+  }
+
+  async function bridgeRecipeRemoveLineItem(recipeId, lineItemId) {
+    try {
+      var recipe = await ensureRecipeCtx(recipeId); if (!recipe) return { ok: false, error: 'Recipe not found' };
+      if (recipe.lineItems) delete recipe.lineItems[lineItemId];
+      await MastDB.recipes.subRef(recipeId, 'lineItems', lineItemId).remove();
+      await _recipeLightRecompute(recipeId);
+      MastAdmin.writeAudit('update', 'recipe', recipeId);
+      return { ok: true, recipe: recipesData[recipeId] };
+    } catch (e) { return { ok: false, error: (e && e.message) || 'Failed' }; }
+  }
+
+  async function bridgeRecipeSetLineItem(recipeId, lineItemId, patch) {
+    try {
+      patch = patch || {};
+      var recipe = await ensureRecipeCtx(recipeId); if (!recipe) return { ok: false, error: 'Recipe not found' };
+      var li = recipe.lineItems && recipe.lineItems[lineItemId]; if (!li) return { ok: false, error: 'Line item not found' };
+      if (patch.quantity != null) { var q = Number(patch.quantity); if (!isFinite(q) || q < 0) return { ok: false, error: 'Invalid quantity' }; li.quantity = q; }
+      if (patch.scrapPercent != null) { var sc = Number(patch.scrapPercent); if (!isFinite(sc) || sc < 0) return { ok: false, error: 'Invalid waste %' }; li.scrapPercent = Math.min(200, sc); }
+      li.extendedCost = roundCents((li.quantity || 0) * (li.unitCost || 0));
+      await MastDB.recipes.subRef(recipeId, 'lineItems', lineItemId).set(li);
+      await _recipeLightRecompute(recipeId);
+      return { ok: true, recipe: recipesData[recipeId] };
+    } catch (e) { return { ok: false, error: (e && e.message) || 'Failed' }; }
+  }
+
+  async function bridgeRecipeSetFields(recipeId, patch) {
+    try {
+      patch = patch || {};
+      var recipe = await ensureRecipeCtx(recipeId); if (!recipe) return { ok: false, error: 'Recipe not found' };
+      var ALLOWED = ['laborRatePerHour', 'laborMinutes', 'otherCost', 'otherCostNote', 'setupCost', 'batchSize', 'wholesaleMarkup', 'directMarkup', 'retailMarkup', 'minMarginPercent', 'name', 'notes'];
+      var NUMERIC = { laborRatePerHour: 1, laborMinutes: 1, otherCost: 1, setupCost: 1, batchSize: 1, wholesaleMarkup: 1, directMarkup: 1, retailMarkup: 1, minMarginPercent: 1 };
+      var upd = {};
+      ALLOWED.forEach(function (k) {
+        if (!(k in patch)) return;
+        var v = patch[k];
+        if (NUMERIC[k]) { if (v === '' || v == null) { v = (k === 'batchSize') ? 1 : 0; } else { v = Number(v); if (!isFinite(v) || v < 0) return; } }
+        recipe[k] = v; upd[k] = v;
+      });
+      if (!Object.keys(upd).length) return { ok: true, recipe: recipe };
+      upd.updatedAt = new Date().toISOString();
+      await MastDB.recipes.update(recipeId, upd);
+      await _recipeLightRecompute(recipeId);
+      MastAdmin.writeAudit('update', 'recipe', recipeId);
+      return { ok: true, recipe: recipesData[recipeId] };
+    } catch (e) { return { ok: false, error: (e && e.message) || 'Failed' }; }
+  }
+
+  async function bridgeRecipeSetActiveTier(recipeId, tier) {
+    try {
+      if (!(await ensureRecipeCtx(recipeId))) return { ok: false, error: 'Recipe not found' };
+      await setActivePriceTier(recipeId, tier);
+      recipesData[recipeId].activePriceTier = tier;
+      return { ok: true, recipe: recipesData[recipeId] };
+    } catch (e) { return { ok: false, error: (e && e.message) || 'Failed' }; }
+  }
+
+  // Full recalc — history + drift + costShape→product propagation. For explicit
+  // "Recalculate" / save-complete (not per keystroke).
+  async function bridgeRecipeRecalc(recipeId) {
+    try {
+      if (!(await ensureRecipeCtx(recipeId))) return { ok: false, error: 'Recipe not found' };
+      var updates = await recalculateRecipe(recipeId);
+      Object.assign(recipesData[recipeId], updates);
+      return { ok: true, recipe: recipesData[recipeId] };
+    } catch (e) { return { ok: false, error: (e && e.message) || 'Failed' }; }
+  }
+
+  // ============================================================
   // costsDirty — Scan recipes when material cost changes
   // ============================================================
 
@@ -7242,7 +7417,16 @@
     // Create a new draft product (v2 create path — opens in the standard SO).
     createDraftProduct: function (opts) { return bridgeCreateDraftProduct(opts); },
     // Clone an existing product into a new draft (v2 create → "Clone existing").
-    cloneProduct: function (sourcePid, newName) { return bridgeCloneProduct(sourcePid, newName); }
+    cloneProduct: function (sourcePid, newName) { return bridgeCloneProduct(sourcePid, newName); },
+    // V2 recipe-edit bridge (R1) — see docs/ux-audit/recipe-builder-v2-plan.md.
+    recipeGet: function (recipeId) { return bridgeRecipeGet(recipeId); },
+    recipeMaterials: function (forRecipeId) { return bridgeRecipeMaterials(forRecipeId); },
+    recipeAddLineItem: function (recipeId, opts) { return bridgeRecipeAddLineItem(recipeId, opts); },
+    recipeRemoveLineItem: function (recipeId, lineItemId) { return bridgeRecipeRemoveLineItem(recipeId, lineItemId); },
+    recipeSetLineItem: function (recipeId, lineItemId, patch) { return bridgeRecipeSetLineItem(recipeId, lineItemId, patch); },
+    recipeSetFields: function (recipeId, patch) { return bridgeRecipeSetFields(recipeId, patch); },
+    recipeSetActiveTier: function (recipeId, tier) { return bridgeRecipeSetActiveTier(recipeId, tier); },
+    recipeRecalc: function (recipeId) { return bridgeRecipeRecalc(recipeId); }
   };
 
 })();
