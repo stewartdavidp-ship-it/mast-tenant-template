@@ -3278,115 +3278,49 @@
     return tenantSettingsCache;
   }
 
-  /**
-   * Resolve the markup config for a product. Build mode reads from the linked
-   * recipe (legacy source-of-truth). VAR/Resell read from product.markupConfig
-   * (new in Checkpoint E — resolves D's O-D2). Returns null if unknown.
-   */
-  function productMarkupConfig(product, recipe) {
+  // ----- Readiness gate (canonical, shared with the tenant MCP) ------------
+  // The gate logic (productMarkupConfig / computeReadinessChecklist) lives in
+  // shared/product-readiness.core.js — byte-identical to the copy vendored into
+  // mast-tenant-mcp-server, so the AI publish gate and this UI gate cannot drift
+  // (parity enforced by a SHA check in both repos; see that file's header and
+  // docs/ux-audit/product-publish-gate-plan.md §7). DO NOT reimplement the gate
+  // here — these wrappers only add maker's recipesData fallback (the core takes
+  // an already-resolved recipe) and delegate to window.MastProductReadiness.
+
+  function readinessCore() {
+    var core = (typeof window !== 'undefined') ? window.MastProductReadiness : null;
+    if (!core) throw new Error('product-readiness.core.js not loaded (window.MastProductReadiness missing)');
+    return core;
+  }
+
+  // Resolve a product's active recipe from the in-memory cache when the caller
+  // didn't pass one (the shared core is pure and never scans recipesData itself).
+  function resolveRecipeForReadiness(product, recipe) {
+    if (recipe) return recipe;
     if (!product) return null;
-    var atype = product.acquisitionType || 'build';
-    if (atype === 'build') {
-      var r = recipe || (function() {
-        var found = null;
-        Object.values(recipesData).forEach(function(rr) {
-          if (rr && rr.productId === product.pid && rr.status !== 'archived') found = rr;
-        });
-        return found;
-      })();
-      if (r && (r.wholesaleMarkup || r.directMarkup || r.retailMarkup)) {
-        return {
-          wholesaleMarkup: Number(r.wholesaleMarkup) || 0,
-          directMarkup: Number(r.directMarkup) || 0,
-          retailMarkup: Number(r.retailMarkup) || 0
-        };
-      }
-      return null;
-    }
-    var m = product.markupConfig;
-    if (m && (m.wholesaleMarkup || m.directMarkup || m.retailMarkup)) {
-      return {
-        wholesaleMarkup: Number(m.wholesaleMarkup) || 0,
-        directMarkup: Number(m.directMarkup) || 0,
-        retailMarkup: Number(m.retailMarkup) || 0
-      };
-    }
-    return null;
+    var found = null;
+    Object.values(recipesData).forEach(function(rr) {
+      if (rr && rr.productId === product.pid && rr.status !== 'archived') found = rr;
+    });
+    return found;
   }
 
   /**
-   * Compute the readiness checklist flags for a product. Pure function.
+   * Resolve the markup config for a product. Build mode reads from the linked
+   * recipe (legacy source-of-truth). VAR/Resell read from product.markupConfig.
+   * Thin wrapper over the shared core + maker's recipesData fallback.
+   */
+  function productMarkupConfig(product, recipe) {
+    return readinessCore().productMarkupConfig(product, resolveRecipeForReadiness(product, recipe));
+  }
+
+  /**
+   * Compute the readiness checklist flags for a product.
    * Returns { defined, costed, channeled, capacityPlanned, listingReady }.
+   * Thin wrapper over the shared core + maker's recipesData fallback.
    */
   function computeReadinessChecklist(product, recipe) {
-    if (!product) {
-      return { defined: false, costed: false, channeled: false, capacityPlanned: false, listingReady: false };
-    }
-    var atype = product.acquisitionType || 'build';
-    var r = recipe || (function() {
-      var found = null;
-      Object.values(recipesData).forEach(function(rr) {
-        if (rr && rr.productId === product.pid && rr.status !== 'archived') found = rr;
-      });
-      return found;
-    })();
-
-    // defined — mode-specific definition has at least one component/material/supplier
-    var defined = false;
-    if (atype === 'build') {
-      defined = !!(r && r.lineItems && Object.keys(r.lineItems).length > 0);
-    } else if (atype === 'var') {
-      var spec = (product.defineSpec || {}).var || {};
-      defined = (Array.isArray(spec.components) && spec.components.length > 0) ||
-                (Array.isArray(spec.valueAddSteps) && spec.valueAddSteps.length > 0);
-    } else if (atype === 'resell') {
-      var rspec = (product.defineSpec || {}).resell || {};
-      var supp = rspec.supplier || {};
-      defined = !!(supp.supplierName && (Number(supp.unitCost) || 0) > 0);
-    }
-
-    // costed — totalCost > 0 AND markup config present
-    var totalCents = Number(product.totalCost) || 0;
-    var markup = productMarkupConfig(product, r);
-    var costed = totalCents > 0 && !!markup;
-
-    // channeled — at least one channel mapping
-    var channeled = false;
-    if (product.externalRefs) {
-      ['shopify', 'etsy', 'square'].forEach(function(ch) {
-        var ref = product.externalRefs[ch];
-        if (ref && (ref.externalId || ref.syncEnabled)) channeled = true;
-      });
-    }
-    if (!channeled && product.internalStorefrontOnly) channeled = true;
-    if (!channeled && product.channelSyncEnabled) channeled = true;
-
-    // capacityPlanned — lead time / batch size set, or explicitly skipped
-    var capacityPlanned = false;
-    if (product.capacitySkipped) capacityPlanned = true;
-    if (!capacityPlanned && (Number(product.leadTimeDays) || 0) > 0) capacityPlanned = true;
-    if (!capacityPlanned && atype === 'resell') {
-      var rspec2 = (product.defineSpec || {}).resell || {};
-      if ((Number(rspec2.leadTimeDays) || 0) > 0) capacityPlanned = true;
-    }
-    if (!capacityPlanned && r && (Number(r.batchSize) || 0) > 0) capacityPlanned = true;
-    if (!capacityPlanned && (Number(product.batchSize) || 0) > 0) capacityPlanned = true;
-
-    // listingReady — name + at least one image + description
-    var hasName = !!(product.name && String(product.name).trim());
-    var hasImage = !!(product.images && product.images.length) ||
-                   !!(product.imageIds && product.imageIds.length);
-    var hasDescription = !!(product.description && String(product.description).trim()) ||
-                         !!(product.shortDescription && String(product.shortDescription).trim());
-    var listingReady = hasName && hasImage && hasDescription;
-
-    return {
-      defined: !!defined,
-      costed: !!costed,
-      channeled: !!channeled,
-      capacityPlanned: !!capacityPlanned,
-      listingReady: !!listingReady
-    };
+    return readinessCore().computeReadinessChecklist(product, resolveRecipeForReadiness(product, recipe));
   }
 
   /**

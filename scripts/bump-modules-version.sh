@@ -53,7 +53,7 @@ awk -v new="$NEW_VALUE" '
   # exists, so they cannot read MAST_MODULES_V at runtime. Keep their ?v= suffix
   # in lockstep here, otherwise they freeze (historically at ?v=1) and never
   # cache-bust on deploy — clients keep stale engine JS until a hard reload.
-  /shared\/(mast-(ui|io|entity)|customer-filters|variant-reconcile)\.js\?v=/ {
+  /shared\/(mast-(ui|io|entity)|customer-filters|variant-reconcile|product-readiness\.core)\.js\?v=/ {
     gsub(/\?v=[^"]*/, "?v=" new)
     print
     next
