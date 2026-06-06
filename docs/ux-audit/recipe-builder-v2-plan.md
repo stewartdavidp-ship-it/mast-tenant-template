@@ -96,3 +96,44 @@ Entity on MastEntity ✓ (extend `recipe-v2`) · read-first panes + inline edit 
 
 ## 9. Recommendation
 Build **core-first** (R1–R5); defer the power tools behind a single legacy "Advanced ↗" drill. That removes the last V1 surface from the everyday recipe workflow with bounded, sequenced PRs, while the rarely-used bulk/simulation tools stay available until they earn their own v2 pass.
+
+---
+
+## 10. HANDOFF — status + what's left (R3, R4). READ THE CODE, not just this doc.
+
+> ⚠️ This doc is a map, not the territory. Before writing R3/R4, **do a full code walk** of the functions cited below in the live source — they have evolved and the details matter (variant cost-shape, recompute side-effects, the cost engine). Confirm signatures/shapes against the actual files; do not trust this summary alone.
+
+### Done + deployed (live on sgtest15)
+- **R1 — bridge** (`app/modules/maker.js`): `MakerProductBridge.recipe{Get,Materials,AddLineItem,RemoveLineItem,SetLineItem,SetFields,SetActiveTier,Recalc}`. Reuses the pure cost engine. **Light-vs-full recompute split:** mutators call `_recipeLightRecompute` (totals+tier prices, NO marginHistory/drift/product-propagation); `recipeRecalc` = full `recalculateRecipe` (history + costShape→product). `ensureRecipeCtx` one-shot-loads materials+recipe.
+- **R2 — editable BOM** (`app/modules/products-v2.js`): the `recipe-v2` drilled SO. `recipeEditBody(rc)` (rendered inside `#pv2RecipeBody`), `recipeAddPartFormHtml()` (INLINE picker), `rerenderRecipeBody()`, `_applyRecipeLine()`; handlers `recipeSetLineQty/Waste`, `recipeRemoveLine`, `recipeAddPart`, `recipeAddPartKind`, `recipeAddPartConfirm`, `cancelRecipeAddPart`; state `V2._recipeEdit`/`_recipeAdding`/`_recipeAddData`/`_rpKind`.
+
+### R3 — Labor & overhead + Pricing & tiers (mostly UI; bridge already exists)
+Make these editable in the same `recipe-v2` SO (currently they're read-only cards + a "Labor & pricing in builder ↗" bounce):
+- **Labor & overhead**: `laborRatePerHour`, `laborMinutes`, `otherCost`, `otherCostNote`, `setupCost`, `batchSize` → `recipeSetFields`.
+- **Pricing & tiers**: `wholesaleMarkup`/`directMarkup`/`retailMarkup`, `minMarginPercent` → `recipeSetFields`; active-tier selector → `recipeSetActiveTier`. Show computed tier prices + margins.
+- Pattern: read-first card + inline edit (like the product Fulfillment/Info panes), re-render via `rerenderRecipeBody()`. On commit use `recipeSetFields` (light recompute); consider a final `recipeRecalc` on close/save so marginHistory + product propagation run once.
+- Remove/replace the "Labor & pricing in builder ↗" button as these land.
+- **Code-walk:** `recipeSetFields`/`recipeRecalc` in maker.js; `recipeEditBody` in products-v2.js; the legacy builder's labor/overhead/pricing sections `renderRecipeBuilder` (~maker.js:4805–5116) for the exact field semantics + tier display.
+
+### R4 — Variant cost-shape (the harder one — code-walk required)
+The recipe carries per-variant cost overrides: `recipe.variants[variantId] = { lineItems, laborMinutes?, otherCost?, … }` with the **default slot as inheritance root** (a variant slot omitting a field inherits default). `recalculateRecipe` only recomputes variants when `recipe.isVariantEnabled && recipe.variants` (note: there may be two variant models — `isVariantEnabled` vs `variantsShape:'cost'` — RECONCILE by reading the code).
+- **R1's bridge is TOP-LEVEL only** (operates on `recipe.lineItems`). R4 must add variant-slot mutation: either extend the `recipe*` bridge methods with a `variantKey` param that writes `recipe.variants[vid].lineItems` (+ laborMinutes/otherCost), or add `recipeVariant*` methods. Ensure the recompute path covers the variant slots.
+- **Code-walk (do this before coding R4):** `recalculateRecipe` variant branch (maker.js ~620–672); the legacy builder variant helpers — `hydrateVariantsIndependent`, `ensureVariantSlot`, the variant-tab rendering + push-to-all in `renderRecipeBuilder`; how the product's variants map to recipe variant slots (variant ids).
+- UI: variant selector/tabs in the recipe SO mirroring how `product-variant-v2` does override-or-inherit (see the variant Attributes/Fulfillment panes for the pattern).
+
+### R5 (after R3/R4) — retire the bounce
+Flip `recipePane`/`variantRecipePane` "Edit" + `recipeEditInBuilder`/`variantOwnRecipe` to open the v2 recipe SO; retire `openRecipeBuilderGated` + the `navigateToClassic` legacy bounce. Power tools (what-if/reprice-all/import/sparklines) stay behind a single legacy "Advanced ↗" until separately prioritized.
+
+### Gotchas learned in R1/R2 (don't rediscover the hard way)
+- **`MastDB.recipes.subRef` does NOT exist** — the legacy `addLineItem`/`removeLineItem` (~maker.js:704/727) use it and are BROKEN; don't reuse them. Write the whole `lineItems` map via `MastDB.recipes.update` (Firestore **replaces** map fields on update → removals drop cleanly) — `_recipeLightRecompute` already does this.
+- **`openModal` is OCCLUDED behind a drilled slide-out** (z-index). Inside the recipe SO, render pickers/forms **inline** (R2's `recipeAddPartFormHtml`), never `openModal`.
+- **Recipes are in Firestore** (`MastDB.recipes.*` → Firestore). `update({field: map})` replaces the field.
+- Don't spam `marginHistory` — keep the light/full recompute split.
+
+### Workflow (every change)
+- Own git worktree + feature branch off **freshly-fetched** `origin/main` (it moves between PRs; rebase if you fall behind — GitHub skips PR checks while `CONFLICTING/DIRTY`). Never the shared checkout; never `git push origin main`.
+- Any `app/index.html` or `app/modules/*.js` change → **bump** `MAST_MODULES_V` (`./scripts/bump-modules-version.sh`) and **regen** `docs/generated/admin-inventory.md` (`node scripts/gen-inventory.mjs`).
+- `node --check` + lints (esp. `lint-ux-standards`: no rogue overlays, no hardcoded hex — incl. `#abc` in comments, font-sizes only in the 7-scale 0.72/0.78/0.85/0.9/1.0/1.15/1.6).
+- PR → merge on green (lint + docs-inventory checks) → CI auto-deploys dev → **verify on `https://sgtest15.runmast.com/app/?cb=<n>#products-v2`** (a fresh `?cb=` busts the CF/SW-masked `index.html`; hard-reload alone is NOT enough).
+- **e2e verify in the admin** (Chrome, already logged in): Glass Pumpkin `pid -Ooa73tvVjatyMVxv6RG`, `recipeId VaDiWzppHUF9bQmev8K0` → product SO → Recipe tab → "Open recipe →" → the recipe-v2 SO. Test reversibly; leave data clean. RBAC: editing gates on `products:edit`.
+- Tenant MCP (`mast_recipes`, `mast_products`, tenantId `sgtest15`) is available to inspect/seed; recipe writes in-app go through the bridge, not the MCP.
