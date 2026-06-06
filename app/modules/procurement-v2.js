@@ -5,20 +5,25 @@
  * (procurementToggleExpand → renderPoExpand). This re-hosts that VIEW on the
  * Entity Engine: a schema-driven list + a read-focused Faceted Record slide-out.
  *
- * Variant (doc 17 §1a test): a PO is a transaction-shaped record (vendor + line
- * items + totals). Its status is NOT a gated workflow — `received` /
- * `partially_received` are DERIVED from received quantities (procurement.js:
- * `allMet ? 'received' : anyReceived ? 'partially_received'`), with manual
- * submit/cancel/close actions. No exit-checklists, no guarded advance → it is a
- * Faceted Record, NOT Process/MastFlow.
+ * Process record (Tier 1 Work Item C/E — supersedes the original Faceted-Record
+ * call): the PO is now a MastFlow process record on the `procurement` workflow
+ * (Draft → Ordered → Received, + Cancelled). The slide-out hosts the MastFlow
+ * stepper (detail.flow), and the two forward advances are intercepted via
+ * detail.onFlowAdvance to open side-effecting captures rather than a plain status
+ * write:
+ *   - Draft → Ordered  = "send to vendor": generate the PO document, queue the
+ *     vendor email, stamp sentAt (ProcurementBridge.send).
+ *   - Ordered → Received = the per-line receive-capture slide-out
+ *     (ProcurementBridge.receive — receipt + inventory-lot + PO-status + supplier
+ *     price-history writes, the ONE shared write path; stock-on-hand is applied
+ *     server-side by the onPurchaseReceiptCreated Cloud Function).
  *
- * Receive / Cancel are now NATIVE here. The heavy domain logic (receipt +
- * inventory-lot + PO-status + supplier price-history writes) was split out of
- * legacy saveReceipt into shared cores (_buildReceiptWrite + _commitReceiptWrite)
- * and exposed as window.ProcurementBridge.{receive,cancel}; this twin captures
- * per-line received quantities and delegates to that ONE write path — it never
- * reimplements the domain logic. (No Submit/Close: legacy procurement.js has no
- * write that sets 'submitted'/'closed' — they are inbound-only data states.)
+ * Phase changes stay DATA-DRIVEN: sending sets status=submitted, receiving rolls
+ * status to received/partially_received, cancel sets cancelled — and reconcile-
+ * on-open promotes __workflow.phase to match status. This keeps ONE transition
+ * path (reconcile) so a partial that completes, an MCP-recorded receipt, or a
+ * cancel can't leave phase and status diverged. Writes go ONLY through the
+ * Bridge / MastFlow (no direct MastDB write here).
  *
  * Still legacy-only (ProcurementV2.classic escape hatch): New PO, Apply Landed
  * Costs, Vendors, and Lots management. Flag-gated (?ui=1) at #procurement-v2,
@@ -92,6 +97,29 @@
     ],
     fetch: function (id) { return Promise.resolve(V2.byId[id] || null); },
     detail: {
+      flow: 'procurement',
+      flowModule: 'procurementWorkflow',
+      // Intercept the two forward advances to open side-effecting captures
+      // instead of a plain status write. Returning non-false = handled (the
+      // engine skips its default transition). Phase then follows the data via
+      // reconcile-on-open (reloadThenOpen → openPo → reconcilePhase).
+      onFlowAdvance: function (target, po) {
+        if (target === 'ordered') { openSendDialog(po); return true; }
+        if (target === 'received') {
+          if (canReceivePo(po)) openReceiveForm(po);
+          else if (window.showToast) showToast('Nothing left to receive on this PO.', true);
+          return true;
+        }
+        return false;
+      },
+      // Route checklist "Go →" targets to the right detail pane.
+      onFlowTarget: function (targetId) {
+        var pane = (targetId === 'detail-lines') ? 'lines' : 'ov';
+        var body = document.getElementById('mastSlideOutBody'); if (!body) return true;
+        var btn = body.querySelector('.mu-ptabs button[onclick*="\'' + pane + '\'"]');
+        if (btn) btn.click();
+        return true;
+      },
       render: function (UI, po) {
         var tiles = UI.tiles([
           { k: 'Total', v: N.money(poTotal(po)) || '$0.00', hero: true },
@@ -116,12 +144,12 @@
           { k: 'Total', v: N.money(poTotal(po)) || '$0.00' },
           { k: 'Received', v: esc(recvSummary(po)) }
         ]);
-        // Native actions — delegate to ProcurementBridge (the shared write cores
-        // in procurement.js). No classic-view crutch. Status-gated like legacy.
-        var actionBtns = '';
-        if (canReceivePo(po)) actionBtns += '<button class="btn btn-primary btn-small" onclick="ProcurementV2.receive(\'' + esc(po.poId) + '\')">Record receipt</button> ';
+        // Forward actions (Send / Record receipt) live on the MastFlow stepper
+        // above (Advance), intercepted by detail.onFlowAdvance. Cancel is an
+        // out-of-band terminal action (not a forward phase), kept here; Print is
+        // a convenience reprint of the PO document. Both delegate to the Bridge.
+        var actionBtns = '<button class="btn btn-secondary btn-small" onclick="ProcurementV2.printPo(\'' + esc(po.poId) + '\')">Print PO</button> ';
         if (canCancelPo(po)) actionBtns += '<button class="btn btn-secondary btn-small" style="color:var(--danger);" onclick="ProcurementV2.cancel(\'' + esc(po.poId) + '\')">Cancel PO</button>';
-        if (!actionBtns) actionBtns = '<span class="mu-sub">No actions available for this status.</span>';
         var manage = '<div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">' + actionBtns + '</div>';
 
         var lines = po.lines || [];
@@ -147,7 +175,12 @@
           '</div>';
         }).join('') : '<span class="mu-sub">No receipts recorded yet.</span>';
 
-        return tiles + tabsBar +
+        // MastFlow stepper host — _initEntityFlow (engine) fills #muFlowHost after
+        // render because the schema sets detail.flow. Custom render must emit it
+        // (the transaction/party templates emit it for you; we don't use one).
+        var flowHost = '<div id="muFlowHost" style="margin:10px 0 4px;font-size:0.85rem;color:var(--warm-gray);">Loading workflow…</div>';
+
+        return tiles + flowHost + tabsBar +
           '<div class="mu-pane" data-pane="ov">' + UI.card('Vendor & terms', vendor) + UI.card('Summary', summary + manage) + '</div>' +
           '<div class="mu-pane" data-pane="lines" hidden>' + UI.cardTable('Lines (' + lines.length + ')', linesTable) + '</div>' +
           '<div class="mu-pane" data-pane="receipts" hidden>' + UI.cardTable('Receipts (' + receipts.length + ')', receiptsBody) + '</div>';
@@ -177,6 +210,7 @@
         po.poNumber = po.poNumber || String(k).slice(0, 8);
         po.status = po.status || 'draft';
         po._vendor = (vendors[po.vendorId] && vendors[po.vendorId].name) || '(unknown vendor)';
+        po._vendorEmail = (vendors[po.vendorId] && vendors[po.vendorId].email) || '';
         po._receipts = receiptsByPo[k] || [];
         out.push(po);
       });
@@ -234,7 +268,114 @@
       });
   }
 
+  // ── Phase reconcile (the single transition path) ────────────────────
+  // __workflow.phase is canonical once set, so the engine's derivePhaseFromLegacy
+  // stops running and status can move underneath it (receipt rollup, MCP receipt/
+  // cancel, a partial that completes). On every open we promote phase to match
+  // status when status is forward-or-terminal of the recorded phase. force:true
+  // because received/cancelled have no exit reqs and 'ordered' gates only on a
+  // soft 'sent'. Never demotes.
+  var PHASE_ORDER = { draft: 0, ordered: 1, received: 2, cancelled: 2 };
+  var STATUS_TO_PHASE = { draft: 'draft', submitted: 'ordered', partially_received: 'ordered', received: 'received', closed: 'received', cancelled: 'cancelled' };
+  function reconcilePhase(po) {
+    if (!po || !window.MastFlow || typeof MastFlow.transition !== 'function') return Promise.resolve(false);
+    var cur = po.__workflow && po.__workflow.phase;
+    if (!cur) return Promise.resolve(false);                 // no canonical phase → derivePhaseFromLegacy covers it
+    var want = STATUS_TO_PHASE[po.status] || 'draft';
+    if (want === cur) return Promise.resolve(false);
+    var forward = (PHASE_ORDER[want] > PHASE_ORDER[cur]) || want === 'received' || want === 'cancelled';
+    if (!forward) return Promise.resolve(false);
+    po.id = po.poId;
+    return MastFlow.transition('procurement', po, want, {
+      recordId: po.poId, expectedFromPhase: cur, force: true, reason: 'reconcile phase → status=' + po.status
+    }).then(function () { return true; }).catch(function (e) { console.warn('[procurement-v2] reconcile', e && e.message); return false; });
+  }
+  // Open a PO slide-out: reconcile phase first, then let the Entity Engine render
+  // (it auto-inits the MastFlow stepper because the schema sets detail.flow).
+  function openPo(rec) {
+    if (!rec) return;
+    rec.id = rec.poId;
+    reconcilePhase(rec).then(function () { MastEntity.openRecord('procurement-v2', rec, 'read'); });
+  }
+
+  // ── PO document (Work Item B): one HTML builder, used for both print + email ──
+  function buildPoHtml(po) {
+    var lines = po.lines || [];
+    var rows = lines.map(function (l) {
+      var qty = Number(l.qtyOrdered) || 0, cost = Number(l.unitCost) || 0;
+      return '<tr>' +
+        '<td style="padding:6px 8px;border-bottom:1px solid rgb(238,238,238);">' + esc(lineLabel(l)) + (l.vendorSku ? '<br><span style="color:rgb(136,136,136);font-size:11px;">SKU ' + esc(l.vendorSku) + '</span>' : '') + '</td>' +
+        '<td style="padding:6px 8px;border-bottom:1px solid rgb(238,238,238);text-align:right;">' + qty + (l.unitOfMeasure ? ' ' + esc(l.unitOfMeasure) : '') + '</td>' +
+        '<td style="padding:6px 8px;border-bottom:1px solid rgb(238,238,238);text-align:right;">' + (N.money(cost) || '$0.00') + '</td>' +
+        '<td style="padding:6px 8px;border-bottom:1px solid rgb(238,238,238);text-align:right;">' + (N.money(qty * cost) || '$0.00') + '</td>' +
+      '</tr>';
+    }).join('');
+    return '<div style="font-family:Arial,Helvetica,sans-serif;color:rgb(34,34,34);padding:24px;max-width:680px;">' +
+      '<div style="display:flex;justify-content:space-between;align-items:flex-start;">' +
+        '<h1 style="font-size:20px;margin:0;">Purchase Order</h1>' +
+        '<div style="text-align:right;font-size:13px;"><strong>' + esc(po.poNumber || String(po.poId).slice(0, 8)) + '</strong>' +
+          (po.orderDate ? '<br>Ordered: ' + esc(N.date(po.orderDate)) : '') +
+          (po.expectedDate ? '<br>Expected: ' + esc(N.date(po.expectedDate)) : '') + '</div>' +
+      '</div>' +
+      '<div style="margin:14px 0;font-size:13px;"><strong>Vendor:</strong> ' + esc(po._vendor || '(unknown vendor)') +
+        (po._vendorEmail ? ' · ' + esc(po._vendorEmail) : '') + '</div>' +
+      '<table style="width:100%;border-collapse:collapse;font-size:13px;">' +
+        '<thead><tr style="background:rgb(245,245,245);"><th style="padding:6px 8px;text-align:left;">Item</th><th style="padding:6px 8px;text-align:right;">Qty</th><th style="padding:6px 8px;text-align:right;">Unit</th><th style="padding:6px 8px;text-align:right;">Total</th></tr></thead>' +
+        '<tbody>' + (rows || '<tr><td colspan="4" style="padding:8px;color:rgb(136,136,136);">No line items.</td></tr>') + '</tbody>' +
+      '</table>' +
+      '<div style="text-align:right;margin-top:12px;font-size:14px;"><strong>Total: ' + (N.money(poTotal(po)) || '$0.00') + '</strong></div>' +
+      (po.paymentTerms ? '<div style="margin-top:10px;font-size:12px;color:rgb(85,85,85);">Terms: ' + esc(po.paymentTerms) + (po.incoterm ? ' · ' + esc(po.incoterm) : '') + '</div>' : '') +
+      (po.vendorMessage ? '<div style="margin-top:10px;font-size:12px;color:rgb(85,85,85);">' + esc(po.vendorMessage) + '</div>' : '') +
+      (po.notes ? '<div style="margin-top:6px;font-size:12px;color:rgb(136,136,136);">Notes: ' + esc(po.notes) + '</div>' : '') +
+    '</div>';
+  }
+  function doPrintPo(po) {
+    var w = window.open('', '_blank');
+    if (!w) { if (window.showToast) showToast('Allow pop-ups to print the PO.', true); return; }
+    w.document.write('<!doctype html><html><head><meta charset="utf-8"><title>PO ' + esc(po.poNumber || String(po.poId).slice(0, 8)) + '</title></head><body>' +
+      buildPoHtml(po) + '<scr' + 'ipt>setTimeout(function(){window.print();},250);</scr' + 'ipt></body></html>');
+    w.document.close();
+  }
+
+  // ── Send to vendor = Draft→Ordered (Work Item B) ────────────────────
+  // Opens a preview slide-out; on confirm, ProcurementBridge.send queues the
+  // vendor email + stamps sentAt + status=submitted, then reconcile-on-open
+  // promotes the phase to Ordered.
+  function openSendDialog(po) {
+    var html = buildPoHtml(po);
+    var emailNote = po._vendorEmail
+      ? 'Will email the PO to <strong>' + esc(po._vendorEmail) + '</strong> and mark it Ordered.'
+      : 'No vendor email on file — this marks the PO Ordered without emailing. Use Print to share it.';
+    var body = U.card('Send purchase order',
+      '<div class="mu-sub" style="margin-bottom:10px;">' + emailNote + '</div>' +
+      '<div style="border:1px solid var(--cream-dark,rgba(127,127,127,.2));border-radius:8px;max-height:46vh;overflow:auto;background:rgb(255,255,255);">' + html + '</div>');
+    U.slideOut.open({
+      id: 'send-' + po.poId, title: 'Send PO', subtitle: esc(po._vendor || ''), size: 'lg',
+      mode: 'create', deepLink: false, createLabel: (po._vendorEmail ? 'Send & mark ordered' : 'Mark ordered'),
+      render: function () { return body; },
+      isDirty: function () { return true; },
+      onSave: function () { return submitSend(po.poId, html); }
+    });
+  }
+  function submitSend(poId, html) {
+    if (!window.ProcurementBridge || typeof ProcurementBridge.send !== 'function') {
+      if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('procurement'); } catch (e) {} }
+      if (window.showToast) showToast('Procurement engine still loading — try again', true);
+      return false;
+    }
+    var po = V2.byId[poId] || {};
+    window.ProcurementBridge.send(poId, { subject: 'Purchase Order ' + (po.poNumber || poId), html: html }).then(function (res) {
+      if (window.showToast) showToast(res && res.emailed ? 'PO sent to vendor' : 'PO marked ordered');
+      U.slideOut.requestCloseForce();
+      return reloadThenOpen(poId);
+    }).catch(function (e) {
+      if (window.showToast) showToast('Failed to send PO: ' + (e && e.message || e), true);
+    });
+    return false;
+  }
+
   window.ProcurementV2 = {
+    printPo: function (id) { var po = V2.byId[id]; if (po) doPrintPo(po); },
     sort: function (key) {
       if (V2.sortKey === key) V2.sortDir = (V2.sortDir === 'asc' ? 'desc' : 'asc');
       else { V2.sortKey = key; V2.sortDir = (key === 'ordered' || key === 'expected' || key === 'total' ? 'desc' : 'asc'); }
@@ -244,7 +385,7 @@
     search: function (v) { V2.q = v || ''; render(); },
     open: function (id) {
       MastEntity.get('procurement-v2').fetch(id).then(function (rec) {
-        if (rec) MastEntity.openRecord('procurement-v2', rec, 'read');
+        if (rec) openPo(rec);
       });
     },
     // navigateToClassic — retained ONLY as an escape hatch. Everything in this
@@ -325,7 +466,7 @@
   function reloadThenOpen(poId) {
     return load().then(function () {
       var rec = V2.byId[poId];
-      if (rec) MastEntity.openRecord('procurement-v2', rec, 'read');
+      if (rec) openPo(rec);
     });
   }
 

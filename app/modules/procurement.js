@@ -1890,6 +1890,43 @@
     // the twin reloads its own data afterward.
     cancel: function (poId) {
       return _ensureLoaded().then(function () { return cancelPo(poId); });
+    },
+    // send(poId, { subject, html }) → the "send to vendor" write for the
+    // Draft→Ordered transition (Work Item B). Stamps sentAt + status='submitted'
+    // and, when the vendor has an email, queues the PO document on emailQueue
+    // (the type-agnostic email-queue-processor sends it). Atomic multiUpdate.
+    // Returns { emailed }. Phase follows via procurement-v2's reconcile-on-open.
+    send: async function (poId, opts) {
+      await _ensureLoaded();
+      var po = purchaseOrdersData[poId];
+      if (!po) throw new Error('Purchase order not found');
+      opts = opts || {};
+      var now = new Date().toISOString();
+      var vendor = vendorsData[po.vendorId] || {};
+      var updates = {};
+      updates['admin/purchaseOrders/' + poId + '/sentAt'] = now;
+      updates['admin/purchaseOrders/' + poId + '/updatedAt'] = now;
+      if (po.status === 'draft') updates['admin/purchaseOrders/' + poId + '/status'] = 'submitted';
+      var emailed = false;
+      if (vendor.email && opts.html) {
+        var qKey = MastDB.newKey('emailQueue');
+        updates['emailQueue/' + qKey] = {
+          id: qKey,
+          type: 'purchase_order',
+          to: vendor.email,
+          subject: opts.subject || ('Purchase Order ' + (po.poNumber || poId)),
+          htmlBody: opts.html,
+          status: 'queued',
+          attemptCount: 0,
+          idempotencyKey: 'po-send-' + poId + '-' + now,
+          queuedAt: now
+        };
+        emailed = true;
+      }
+      await MastDB.multiUpdate(updates);
+      po.sentAt = now; po.updatedAt = now;
+      if (po.status === 'draft') po.status = 'submitted';
+      return { emailed: emailed };
     }
   };
 

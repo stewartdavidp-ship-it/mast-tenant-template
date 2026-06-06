@@ -5,8 +5,8 @@
 Source-of-truth counts for the admin app, generated from the code so docs
 cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 
-- **Core shell:** `app/index.html` — **59,015** lines
-- **Feature modules:** **94** files in `app/modules/` (**87** routed), **111,900** lines combined
+- **Core shell:** `app/index.html` — **59,016** lines
+- **Feature modules:** **95** files in `app/modules/` (**87** routed), **112,189** lines combined
 
 | Module file | Lines | Routes |
 |---|---:|---|
@@ -71,8 +71,8 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/orders-v2.js` | 222 | orders-v2 |
 | `modules/orders.js` | 6,262 | orders, commissions, rma |
 | `modules/passes-v2.js` | 423 | passes-v2 |
-| `modules/procurement-v2.js` | 384 | procurement-v2 |
-| `modules/procurement.js` | 2,155 | procurement |
+| `modules/procurement-v2.js` | 525 | procurement-v2 |
+| `modules/procurement.js` | 2,192 | procurement |
 | `modules/production.js` | 3,553 | jobs, production, stories, forecast |
 | `modules/products-v2.js` | 3,189 | products-v2 |
 | `modules/promotions-v2.js` | 389 | promotions-v2 |
@@ -101,6 +101,7 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/wholesale.js` | 1,873 | wholesale |
 | `modules/workflows/commissions.workflow.js` | 266 | — |
 | `modules/workflows/pickship.workflow.js` | 344 | — |
+| `modules/workflows/procurement.workflow.js` | 111 | — |
 | `modules/workflows/products.workflow.js` | 165 | — |
 | `modules/workflows/workflow-engine.js` | 1,185 | — |
 | `modules/workflows/workflow-template.workflow.js` | 186 | — |
