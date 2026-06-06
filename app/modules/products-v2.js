@@ -219,7 +219,7 @@
       var body = U.kv([{ k: 'Status', v: 'Linked' }, { k: 'Recipe id', v: p.recipeId }]) +
         '<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">' +
         '<button class="btn btn-secondary btn-small" onclick="MastEntity.drill(\'recipe-v2\',\'' + esc(p.recipeId) + '\')">Open recipe →</button>' +
-        '<button class="btn btn-secondary btn-small" onclick="ProductsV2.recipeEditInBuilder(\'' + esc(p.recipeId) + '\')">Edit in builder ↗</button>' +
+        '<button class="btn btn-secondary btn-small" onclick="ProductsV2.recipeEditInBuilder(\'' + esc(p.recipeId) + '\',\'' + esc(pid) + '\')">Edit in builder ↗</button>' +
         '<button class="btn btn-secondary btn-small" onclick="ProductsV2.recipeUnlink(\'' + esc(pid) + '\')">Unlink</button>' +
         '</div>';
       return U.card('Recipe', body) + '<div class="pv2-pnote">“Open recipe” reads it here (Back returns); “Edit in builder” opens the full recipe builder — a separate surface.</div>';
@@ -235,17 +235,45 @@
   }
   // Open the legacy recipe builder (sanctioned separate surface — not reimplemented
   // in v2). It hijacks the legacy pieces tab, so navigate there first.
-  function openRecipeBuilderGated(recipeId, variantId) {
+  // `pid` lets us push a v2 return-target so the builder's "← Back to Products"
+  // (maker.closeRecipeBuilder → MastNavStack.popAndReturn) lands back on the v2
+  // slide-out instead of the V1 legacy product page.
+  function openRecipeBuilderGated(recipeId, pid, variantId) {
     withProductBridge(function () {
       MastAdmin.showToast('Opening recipe builder…');
-      if (typeof navigateToClassic === 'function') navigateToClassic('products');
-      else if (window.navigateTo) window.navigateTo('products');
+      if (pid && window.MastNavStack && typeof MastNavStack.push === 'function') {
+        MastNavStack.push({ route: 'products-v2', view: 'detail', state: { pid: pid, vid: variantId || null }, label: 'Product' });
+      }
+      // navigateTo() clears MastNavStack on every non-internal nav, so guard the
+      // classic hop with _mastNavInternal (canonical push-then-nav pattern) —
+      // otherwise the return-target we just pushed gets wiped before Back fires.
+      window._mastNavInternal = true;
+      try {
+        if (typeof navigateToClassic === 'function') navigateToClassic('products');
+        else if (window.navigateTo) window.navigateTo('products');
+      } finally { window._mastNavInternal = false; }
       setTimeout(function () {
         // makerOpenRecipeBuilder(recipeId, variantId) focuses the variant's slot
         // (a variant's "own recipe" = its independent slot in the product recipe).
         if (window.makerOpenRecipeBuilder) window.makerOpenRecipeBuilder(recipeId, variantId);
         else MastAdmin.showToast('Recipe builder unavailable', true);
       }, 320);
+    });
+  }
+  // Restore target for the builder's Back: pop returns to the v2 list (via
+  // popAndReturn → navigateTo('products-v2')); reopen the SO the user came from.
+  if (window.MastNavStack && typeof MastNavStack.registerRestorer === 'function') {
+    MastNavStack.registerRestorer('products-v2', function (view, state) {
+      if (view !== 'detail' || !state || !state.pid) return;
+      setTimeout(function () {
+        ensureMaker(function () {
+          if (state.vid) {
+            var vr = buildVariantRecord(state.pid + '::' + state.vid);
+            if (vr) { MastEntity.openRecord('product-variant-v2', vr, 'read'); return; }
+          }
+          reopenProduct(state.pid);
+        });
+      }, 60);
     });
   }
   // A variant's recipe is its independent slot within the product's recipe. The
@@ -1228,22 +1256,22 @@
         Promise.resolve(window.MakerProductBridge.createRecipeForProduct(pid, rec.name || 'Recipe')).then(function (res) {
           if (!res || !res.ok) { MastAdmin.showToast('Failed: ' + ((res && res.error) || 'unknown'), true); return; }
           if (rec) rec.recipeId = res.recipeId;
-          openRecipeBuilderGated(res.recipeId); // straight into the builder to fill it in
+          openRecipeBuilderGated(res.recipeId, pid); // straight into the builder to fill it in
         }, function (e) { console.error('[products-v2] recipeCreate', e); MastAdmin.showToast('Failed', true); });
       });
     },
-    recipeEditInBuilder: function (recipeId) { openRecipeBuilderGated(recipeId); },
+    recipeEditInBuilder: function (recipeId, pid) { openRecipeBuilderGated(recipeId, pid); },
     // Variant "Give it its own recipe" → open the builder focused on this variant
     // (creating the product recipe first if needed). Replaces the editVariantTodo stub.
     variantOwnRecipe: function (pid, vid) {
       withProductBridge(function () {
         var rec = V2.byId[pid] || {};
-        if (rec.recipeId) { openRecipeBuilderGated(rec.recipeId, vid); return; }
+        if (rec.recipeId) { openRecipeBuilderGated(rec.recipeId, pid, vid); return; }
         MastAdmin.showToast('Creating recipe…');
         Promise.resolve(window.MakerProductBridge.createRecipeForProduct(pid, rec.name || 'Recipe')).then(function (res) {
           if (!res || !res.ok) { MastAdmin.showToast('Failed: ' + ((res && res.error) || 'unknown'), true); return; }
           if (rec) rec.recipeId = res.recipeId;
-          openRecipeBuilderGated(res.recipeId, vid);
+          openRecipeBuilderGated(res.recipeId, pid, vid);
         }, function (e) { console.error('[products-v2] variantOwnRecipe', e); MastAdmin.showToast('Failed', true); });
       });
     },
