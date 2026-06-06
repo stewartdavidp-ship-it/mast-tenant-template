@@ -110,25 +110,25 @@
        Shared by customers.js (list/export) and customer-service.js (survey
        bulk-send) so the segment matcher cannot drift. ?v= kept in lockstep
        with MAST_MODULES_V by scripts/bump-modules-version.sh. -->
-  <script src="../shared/customer-filters.js?v=20260606-183233-df0f1b8"></script>
+  <script src="../shared/customer-filters.js?v=20260606-183855-de0e86b"></script>
   <script src="../shared/brand-sync.js?v=1"></script>
   <script src="../shared/channel-connection.js?v=1"></script>
-  <script src="../shared/variant-reconcile.js?v=20260606-183233-df0f1b8"></script>
+  <script src="../shared/variant-reconcile.js?v=20260606-183855-de0e86b"></script>
   <!-- UI redesign engines (docs/ux-audit): shared primitives + Entity Engine.
        The ?v= suffix is kept in lockstep with MAST_MODULES_V by
        scripts/bump-modules-version.sh (these are static <head> tags loaded
        before the JS var exists, so they can't read it at runtime). Without
        this, the engines were frozen at ?v=1 and never cache-busted on deploy. -->
-  <script src="../shared/mast-ui.js?v=20260606-183233-df0f1b8"></script>
-  <script src="../shared/mast-io.js?v=20260606-183233-df0f1b8"></script>
-  <script src="../shared/mast-entity.js?v=20260606-183233-df0f1b8"></script>
+  <script src="../shared/mast-ui.js?v=20260606-183855-de0e86b"></script>
+  <script src="../shared/mast-io.js?v=20260606-183855-de0e86b"></script>
+  <script src="../shared/mast-entity.js?v=20260606-183855-de0e86b"></script>
   <!-- Canonical product readiness gate (computeReadinessChecklist / productMarkupConfig).
        Byte-identical to mast-tenant-mcp-server/src/shared/product-readiness.core.js so the
        AI publish gate and the maker.js UI gate cannot drift; maker.js delegates to
        window.MastProductReadiness. Eager-loaded so it exists before the lazy maker module.
        ?v= kept in lockstep with MAST_MODULES_V by scripts/bump-modules-version.sh.
        See docs/ux-audit/product-publish-gate-plan.md §7. -->
-  <script src="../shared/product-readiness.core.js?v=20260606-183233-df0f1b8"></script>
+  <script src="../shared/product-readiness.core.js?v=20260606-183855-de0e86b"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Pod-specific runtime config — sets window.MAST_POD_PLATFORM_PROJECT so
@@ -11241,6 +11241,7 @@
     <div id="csFaqsV2Tab" class="tab-content" style="display:none;"></div><!-- UI-redesign conversion: cs faqs -->
     <div id="loyaltyV2Tab" class="tab-content" style="display:none;"></div><!-- UI-redesign conversion: loyalty members -->
     <div id="storiesV2Tab" class="tab-content" style="display:none;"></div><!-- UI-redesign conversion: stories -->
+    <div id="jobsV2Tab" class="tab-content" style="display:none;"></div><!-- UI-redesign conversion: Jobs (production) B1 scaffold -->
     <div id="csMembersV2Tab" class="tab-content" style="display:none;"></div><!-- UI-redesign conversion: cs members -->
     <div id="blogV2Tab" class="tab-content" style="display:none;"></div><!-- UI-redesign conversion: blog posts -->
     <div id="salesEventsV2Tab" class="tab-content" style="display:none;"></div><!-- UI-redesign conversion: sales events -->
@@ -21328,7 +21329,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260606-183233-df0f1b8';
+var MAST_MODULES_V = '20260606-183855-de0e86b';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -21378,6 +21379,7 @@ var MODULE_MANIFEST = {
   'cs-faqs-v2': { src: 'modules/cs-faqs-v2.js', routes: ['cs-faqs-v2'] }, // UI-redesign conversion: CS FAQs read detail (flag-gated)
   'loyalty-v2': { src: 'modules/loyalty-v2.js', routes: ['loyalty-v2'] }, // UI-redesign conversion: loyalty members read detail (flag-gated)
   'stories-v2': { src: 'modules/stories-v2.js', routes: ['stories-v2'] }, // UI-redesign conversion: stories read detail (flag-gated)
+  'jobs-v2': { src: 'modules/jobs-v2.js', routes: ['jobs-v2'] }, // UI-redesign conversion: Jobs (production) B1 scaffold — list + read-only detail (flag-gated, side-by-side)
   'cs-members-v2': { src: 'modules/cs-members-v2.js', routes: ['cs-members-v2'] }, // UI-redesign conversion: CS members read detail (flag-gated)
   'blog-v2': { src: 'modules/blog-v2.js', routes: ['blog-v2'] }, // UI-redesign conversion: blog posts read detail (flag-gated)
   'sales-events-v2': { src: 'modules/sales-events-v2.js', routes: ['sales-events-v2'] }, // UI-redesign conversion: sales events read detail (flag-gated)
