@@ -1629,7 +1629,7 @@
   }
 
   // ── State + data ────────────────────────────────────────────────────
-  var V2 = { rows: [], byId: {}, sortKey: '_title', sortDir: 'asc', filter: 'all', lens: 'general', expanded: {}, editInfo: null, editFulfill: null, editPricing: null, editVarPricing: null, editInv: null, editVarInv: null, editVarInfo: null, editVarFulfill: null, editAttrs: null, editVarAttrs: null, q: '' };
+  var V2 = { rows: [], byId: {}, sortKey: '_title', sortDir: 'asc', filter: 'all', lens: 'general', expanded: {}, editInfo: null, editFulfill: null, editPricing: null, editVarPricing: null, editInv: null, editVarInv: null, editVarInfo: null, editVarFulfill: null, editAttrs: null, editVarAttrs: null, q: '', tagFacets: [] };
 
   function toRows(map) {
     var out = []; map = map || {};
@@ -1653,7 +1653,9 @@
     V2.rows.forEach(function (r) { var s = String(r.status || 'draft').toLowerCase(); c[s] = (c[s] || 0) + 1; });
     return c;
   }
-  function visibleRows() {
+  // Status + search filter only (pre-tag-facet). Facet counts are computed off this
+  // set so they reflect the current status/search context.
+  function statusSearchRows() {
     var rows = V2.rows;
     if (V2.filter && V2.filter !== 'all') rows = rows.filter(function (r) { return String(r.status || 'draft').toLowerCase() === V2.filter; });
     var q = (V2.q || '').trim().toLowerCase();
@@ -1661,6 +1663,37 @@
       return String(r.name || '').toLowerCase().indexOf(q) >= 0
         || String(categoryLabel(r) || '').toLowerCase().indexOf(q) >= 0
         || String(r.sku || '').toLowerCase().indexOf(q) >= 0;
+    });
+    return rows;
+  }
+  // A product's filterable facet tags = authored tags + derived badge labels
+  // (both lowercased for matching). The tag-facet bar filters on these.
+  function productFacetTags(p) {
+    var out = productAttributes(p).tags.map(function (t) { return String(t).toLowerCase(); });
+    derivedBadges(p).forEach(function (b) { out.push(String(b.label).toLowerCase()); });
+    return out;
+  }
+  // Distinct facet tags across the status/search set → [{key, label, count}],
+  // sorted by count desc then alpha. Active facets are always included (count 0 if
+  // they no longer match) so a selected chip never vanishes mid-filter.
+  function facetTagEntries() {
+    var rows = statusSearchRows();
+    var counts = {}, label = {};
+    rows.forEach(function (p) {
+      var seen = {};
+      productAttributes(p).tags.forEach(function (t) { var k = String(t).toLowerCase(); if (!seen[k]) { seen[k] = 1; counts[k] = (counts[k] || 0) + 1; if (!label[k]) label[k] = String(t); } });
+      derivedBadges(p).forEach(function (b) { var k = String(b.label).toLowerCase(); if (!seen[k]) { seen[k] = 1; counts[k] = (counts[k] || 0) + 1; label[k] = b.label; } });
+    });
+    (V2.tagFacets || []).forEach(function (k) { if (counts[k] == null) { counts[k] = 0; if (!label[k]) label[k] = k; } });
+    return Object.keys(counts).map(function (k) { return { key: k, label: label[k] || k, count: counts[k] }; })
+      .sort(function (a, b) { return b.count - a.count || a.label.localeCompare(b.label); });
+  }
+  function visibleRows() {
+    var rows = statusSearchRows();
+    var facets = V2.tagFacets || [];
+    if (facets.length) rows = rows.filter(function (p) {
+      var have = productFacetTags(p);
+      return facets.every(function (f) { return have.indexOf(f) >= 0; });
     });
     return window.mastSortRows(rows, V2.sortKey, V2.sortDir, listSortValue);
   }
@@ -1969,16 +2002,45 @@
         'background:' + (on ? 'color-mix(in srgb,var(--amber) 18%,transparent)' : 'transparent') + ';' +
         'color:' + (on ? 'var(--text-primary)' : 'var(--warm-gray)') + ';border-radius:999px;padding:6px 15px;font-size:0.85rem;font-weight:' + (on ? '600' : '400') + ';cursor:pointer;margin-right:8px;">' + l[1] + '</button>';
     }).join('');
+    // Tag-facet bar — filter the list by authored tags + derived badges. Narrows
+    // (AND) and composes with status/search. Hidden when the catalog has no tags.
+    var active = V2.tagFacets || [];
+    var entries = facetTagEntries();
+    var facetBar = '';
+    if (entries.length) {
+      var chips = entries.map(function (e) {
+        var on = active.indexOf(e.key) >= 0;
+        return '<button data-tag="' + esc(e.key) + '" onclick="ProductsV2.toggleTagFacet(this.dataset.tag)" ' +
+          'style="border:1px solid ' + (on ? 'var(--teal,teal)' : 'var(--border)') + ';' +
+          'background:' + (on ? 'color-mix(in srgb,var(--teal) 16%,transparent)' : 'transparent') + ';' +
+          'color:' + (on ? 'var(--teal,teal)' : 'var(--warm-gray)') + ';border-radius:999px;padding:4px 11px;font-size:0.78rem;cursor:pointer;margin:0 6px 6px 0;">' +
+          esc(e.label) + ' <span style="opacity:0.7;">' + e.count + '</span></button>';
+      }).join('');
+      var clear = active.length ? '<button onclick="ProductsV2.clearTagFacets()" style="border:0;background:transparent;color:var(--warm-gray);font-size:0.78rem;cursor:pointer;text-decoration:underline;margin-left:4px;">clear</button>' : '';
+      facetBar = '<div style="margin:0 0 14px;display:flex;align-items:center;gap:0;flex-wrap:wrap;">' +
+        '<span style="font-size:0.72rem;text-transform:uppercase;letter-spacing:.04em;color:var(--warm-gray);margin-right:10px;">Tags</span>' + chips + clear + '</div>';
+    }
     tab.innerHTML =
       U.pageHeader({ title: 'Products', count: N.count(V2.rows.length) + ' products',
         actionsHtml: '<button class="btn btn-secondary" onclick="ProductsV2.exportCsv()">↓ Export</button>' }) +
       '<div style="margin:14px 0 10px;display:flex;align-items:center;gap:8px 0;flex-wrap:wrap;">' + lensPills + '</div>' +
       '<div style="margin:0 0 14px;display:flex;align-items:center;gap:8px 0;flex-wrap:wrap;">' + pills + search + '</div>' +
+      facetBar +
       '<div id="pv2ListBody">' + renderListBody() + '</div>';
   }
 
   window.ProductsV2 = {
     setFilter: function (s) { V2.filter = s; render(); },
+    // Tag facets — toggle a tag in/out of the active narrowing set (AND), then
+    // re-render (chip states + counts + list all change).
+    toggleTagFacet: function (tag) {
+      var k = String(tag || '').toLowerCase(); if (!k) return;
+      V2.tagFacets = V2.tagFacets || [];
+      var i = V2.tagFacets.indexOf(k);
+      if (i >= 0) V2.tagFacets.splice(i, 1); else V2.tagFacets.push(k);
+      render();
+    },
+    clearTagFacets: function () { V2.tagFacets = []; render(); },
     // Facet selector — re-render the whole surface (columns + click-through change).
     setLens: function (l) { V2.lens = l; render(); },
     // Click a column header to sort (product-level; toggles asc/desc). Price sorts
