@@ -373,7 +373,13 @@
       return;
     }
     if (typeof ts.fetch !== 'function') { if (window.showToast) showToast('Cannot open ' + targetKey + ' (not available)', true); return; }
-    if (_current) _panelStack.push({ key: _current.key, record: _current.record, label: _current.label });
+    if (_current) {
+      // Remember which pane tab the user drilled FROM so Back returns there
+      // (a fresh re-render otherwise defaults to the first tab).
+      var _db = document.getElementById('mastSlideOutBody');
+      var _vis = _db && _db.querySelector('.mu-pane:not([hidden])');
+      _panelStack.push({ key: _current.key, record: _current.record, label: _current.label, pane: _vis && _vis.getAttribute('data-pane') });
+    }
     Promise.resolve(ts.fetch(id)).then(function (rec) {
       if (rec) openRecord(targetKey, rec, 'read', true);
       else { _panelStack.pop(); if (window.showToast) showToast('Not found', true); }
@@ -383,7 +389,16 @@
   // in place (no route nav, panel stays open).
   function back() {
     var prev = _panelStack.pop();
-    if (prev) openRecord(prev.key, prev.record, 'read', true);
+    if (!prev) return;
+    openRecord(prev.key, prev.record, 'read', true);
+    // Restore the tab the user drilled from (re-render defaults to the first tab).
+    if (prev.pane) {
+      setTimeout(function () {
+        var body = document.getElementById('mastSlideOutBody');
+        var btn = body && body.querySelector('.mu-ptabs button[onclick*="\'' + prev.pane + '\'"]');
+        if (btn) btn.click();
+      }, 0);
+    }
   }
 
   // ── MastFlow integration (Process variant; doc 17 §2/§3c) ───────────
