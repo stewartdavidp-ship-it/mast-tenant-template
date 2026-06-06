@@ -888,6 +888,90 @@
     var paneEl = body && body.querySelector('.mu-pane[data-pane="attributes"]');
     if (paneEl) paneEl.innerHTML = attributesPane(rec);
   }
+  // ── Variant Attributes (override-or-inherit authored tags/materials) ──
+  // A variant inherits the product's authored tags/materials unless it sets its
+  // own (variant.attributes.authored). Same provenance model as the product;
+  // imported is the per-variant channel mirror (rare — most channels send tags at
+  // the product level), derived badges are computed per-variant from its stock.
+  function variantAttributes(p, v) {
+    var va = (v && v.attributes) || {};
+    var authored = va.authored || {};
+    var prod = productAttributes(p);
+    var ownTags = Array.isArray(authored.tags) ? authored.tags : null;       // null = inherit
+    var ownMaterials = Array.isArray(authored.materials) ? authored.materials : null;
+    return {
+      authored: authored,
+      ownTags: ownTags, ownMaterials: ownMaterials,
+      effTags: ownTags != null ? ownTags : prod.tags,
+      effMaterials: ownMaterials != null ? ownMaterials : prod.materials,
+      tagsOverridden: ownTags != null,
+      materialsOverridden: ownMaterials != null,
+      imported: va.imported || {}
+    };
+  }
+  function variantDerivedBadges(p, v) {
+    var out = [], vsi = variantStockInfo(p, v), si = p.stockInfo || {};
+    var tracked = si.stockType && !/order|build/.test(si.stockType);
+    if (tracked && vsi.available != null) {
+      var thr = (si.lowStockThreshold != null ? si.lowStockThreshold : 2);
+      if (vsi.available <= 0) out.push({ label: 'Out of stock', tone: 'amber' });
+      else if (vsi.available <= thr) out.push({ label: 'Low stock', tone: 'amber' });
+    }
+    return out;
+  }
+  function variantAttributesPane(UU, p, v) {
+    var pid = p._key || p.pid, vid = v.id;
+    if (V2.editVarAttrs === (pid + '::' + vid)) return variantAttributesEditForm(UU, p, v);
+    var A = variantAttributes(p, v);
+    var editBtn = canEditProduct() ? '<button class="btn btn-secondary btn-small" onclick="ProductsV2.editVariantAttributes(\'' + esc(pid) + '\',\'' + esc(vid) + '\')">Edit</button>' : '';
+    function effV(items, overridden) {
+      return attrChips(items, overridden ? 'var(--amber)' : null) + (overridden ? ' ' + UU.badge('override', 'amber') : ' <span class="from">· inherits product</span>');
+    }
+    var authoredBody = UU.kv([
+      { k: 'Tags', v: effV(A.effTags, A.tagsOverridden) },
+      { k: 'Materials', v: effV(A.effMaterials, A.materialsOverridden) }
+    ]);
+    var badges = variantDerivedBadges(p, v);
+    var derivedHtml = badges.length ? badges.map(function (b) { return UU.badge(b.label, b.tone); }).join(' ') : '<span style="color:var(--warm-gray);font-size:0.85rem;">No badges right now.</span>';
+    var impKeys = Object.keys(A.imported);
+    var importedHtml = impKeys.length ? impKeys.map(function (cid) {
+      var ci = A.imported[cid] || {};
+      var name = (V2._channelsCache && V2._channelsCache[cid] && (V2._channelsCache[cid].name || V2._channelsCache[cid].platform)) || cid;
+      var rows = [];
+      if (Array.isArray(ci.tags) && ci.tags.length) rows.push({ k: 'Tags', v: attrChips(ci.tags) });
+      if (Array.isArray(ci.materials) && ci.materials.length) rows.push({ k: 'Materials', v: attrChips(ci.materials) });
+      return '<div style="margin-bottom:10px;"><div style="font-size:0.78rem;text-transform:uppercase;letter-spacing:.04em;color:var(--warm-gray);margin-bottom:4px;">' + esc(name) + '</div>' + (rows.length ? UU.kv(rows) : '<span style="color:var(--warm-gray);font-size:0.85rem;">—</span>') + '</div>';
+    }).join('') : '<div style="color:var(--warm-gray);font-size:0.9rem;">This variant inherits the product’s channel attributes. Per-variant channel data lands here only if a channel sends it.</div>';
+    return UU.card('Attributes · this variant', authoredBody, { headerRight: editBtn }) +
+      UU.card('Merchandising badges · derived', derivedHtml) +
+      UU.card('From channels · imported (read-only)', importedHtml) +
+      '<div class="pv2-pnote">A variant inherits the product’s authored tags &amp; materials unless it overrides them here — e.g. give the gold one its own tags. Blank a field to go back to inheriting.</div>';
+  }
+  function variantAttributesEditForm(UU, p, v) {
+    var pid = p._key || p.pid, vid = v.id;
+    var A = variantAttributes(p, v), prod = productAttributes(p);
+    var inputStyle = 'display:block;width:100%;margin-top:4px;padding:7px 9px;border:1px solid var(--cream-dark);border-radius:6px;font-size:0.9rem;background:var(--cream);color:inherit;box-sizing:border-box;';
+    function csv(label, id, ownArr, inheritArr) {
+      return '<label style="display:block;margin-bottom:12px;font-size:0.85rem;color:var(--warm-gray);">' + esc(label) +
+        '<input id="' + id + '" type="text" value="' + esc((ownArr || []).join(', ')) + '" placeholder="inherits: ' + esc((inheritArr || []).join(', ') || 'none') + '" style="' + inputStyle + '">' +
+        '<span style="font-size:0.72rem;color:var(--warm-gray);">Comma-separated. Blank = inherit the product’s.</span></label>';
+    }
+    var body =
+      csv('Tags', 'pv2VarAttrTags', A.ownTags, prod.tags) +
+      csv('Materials', 'pv2VarAttrMaterials', A.ownMaterials, prod.materials) +
+      '<div class="pv2-pnote">Setting a field overrides the product just for this variant; blank clears the override (back to inheriting).</div>' +
+      '<div style="display:flex;gap:8px;margin-top:4px;">' +
+      '<button class="btn btn-primary btn-small" onclick="ProductsV2.saveVariantAttributes(\'' + esc(pid) + '\',\'' + esc(vid) + '\')">Save</button>' +
+      '<button class="btn btn-secondary btn-small" onclick="ProductsV2.cancelVariantAttributes(\'' + esc(pid) + '\',\'' + esc(vid) + '\')">Cancel</button>' +
+      '</div>';
+    return UU.card('Edit attributes · this variant', body);
+  }
+  function rerenderVariantAttributesPane(pid, vid) {
+    var rec = buildVariantRecord(pid + '::' + vid); if (!rec) return;
+    var body = document.getElementById('mastSlideOutBody');
+    var paneEl = body && body.querySelector('.mu-pane[data-pane="v-attributes"]');
+    if (paneEl) paneEl.innerHTML = variantAttributesPane(U, rec.product, rec.variant);
+  }
   // Fulfillment is its own top-level tab (operator: "does not work inside Info").
   // Re-render in place so editing keeps the user on the Fulfillment tab.
   function rerenderFulfillmentPane(pid) {
@@ -1121,10 +1205,11 @@
         else if (prevPane === 'v-inventory' && V2.editVarInv) { V2.editVarInv = null; rerenderVariantInventoryPane(pid, vid); }
         else if (prevPane === 'v-info' && V2.editVarInfo) { V2.editVarInfo = null; rerenderVariantInfoPane(pid, vid); }
         else if (prevPane === 'v-fulfill' && V2.editVarFulfill) { V2.editVarFulfill = null; rerenderVariantFulfillmentPane(pid, vid); }
+        else if (prevPane === 'v-attributes' && V2.editVarAttrs) { V2.editVarAttrs = null; rerenderVariantAttributesPane(pid, vid); }
       },
       render: function (UU, r) {
         // Fresh open always starts read-only (cancel-on-leave on close/reopen).
-        V2.editVarPricing = V2.editVarInv = V2.editVarInfo = V2.editVarFulfill = null;
+        V2.editVarPricing = V2.editVarInv = V2.editVarInfo = V2.editVarFulfill = V2.editVarAttrs = null;
         var p = r.product || {}, v = r.variant || {};
         var ov = variantOverridden(p, v);
         var tiles = UU.tiles([
@@ -1142,7 +1227,7 @@
             '<span class="iv"' + (isCustom ? ' style="color:var(--amber);font-weight:600;"' : '') + '>' + value + ' <span class="from">· ' + esc(state) + '</span></span>' +
             '<span class="ov"><button class="btn btn-secondary btn-small" onclick="ProductsV2.editVariantTodo()">' + esc(btn) + '</button></span></div>';
         }
-        var tabs = [{ key: 'v-pricing', label: 'Pricing' }, { key: 'v-recipe', label: 'Recipe' }, { key: 'v-channels', label: 'Channels' }, { key: 'v-inventory', label: 'Inventory' }, { key: 'v-fulfill', label: 'Fulfillment' }, { key: 'v-image', label: 'Image' }, { key: 'v-info', label: 'Info' }];
+        var tabs = [{ key: 'v-pricing', label: 'Pricing' }, { key: 'v-recipe', label: 'Recipe' }, { key: 'v-channels', label: 'Channels' }, { key: 'v-inventory', label: 'Inventory' }, { key: 'v-fulfill', label: 'Fulfillment' }, { key: 'v-image', label: 'Image' }, { key: 'v-info', label: 'Info' }, { key: 'v-attributes', label: 'Attributes' }];
         function pane(key, html, active) { return '<div class="mu-pane" data-pane="' + key + '"' + (active ? '' : ' hidden') + '>' + html + '</div>'; }
         var ctx = '<div class="pv2-pnote">A variant uses the Default’s values for anything it doesn’t set itself. It has no lifecycle of its own — it follows the product.</div>';
         // Header strip: variant image (its own binding if set, else the product's
@@ -1155,7 +1240,8 @@
           pane('v-inventory', variantInventoryPane(UU, p, v)) +
           pane('v-fulfill', variantFulfillmentPane(UU, p, v)) +
           pane('v-image', variantImagePane(UU, p, v)) +
-          pane('v-info', variantInfoPane(UU, p, v));
+          pane('v-info', variantInfoPane(UU, p, v)) +
+          pane('v-attributes', variantAttributesPane(UU, p, v));
       }
     }
   });
@@ -1543,7 +1629,7 @@
   }
 
   // ── State + data ────────────────────────────────────────────────────
-  var V2 = { rows: [], byId: {}, sortKey: '_title', sortDir: 'asc', filter: 'all', lens: 'general', expanded: {}, editInfo: null, editFulfill: null, editPricing: null, editVarPricing: null, editInv: null, editVarInv: null, editVarInfo: null, editVarFulfill: null, editAttrs: null, q: '' };
+  var V2 = { rows: [], byId: {}, sortKey: '_title', sortDir: 'asc', filter: 'all', lens: 'general', expanded: {}, editInfo: null, editFulfill: null, editPricing: null, editVarPricing: null, editInv: null, editVarInv: null, editVarInfo: null, editVarFulfill: null, editAttrs: null, editVarAttrs: null, q: '' };
 
   function toRows(map) {
     var out = []; map = map || {};
@@ -2344,6 +2430,34 @@
           V2.editAttrs = null; rerenderAttributesPane(pid);
           MastAdmin.showToast('Attributes saved');
         }, function (e) { console.error('[products-v2] saveAttributes', e); MastAdmin.showToast('Failed', true); });
+      });
+    },
+    // ── Variant Attributes (override-or-inherit) ──
+    editVariantAttributes: function (pid, vid) { if (!canEditProduct()) { MastAdmin.showToast('You don’t have permission to edit products', true); return; } V2.editVarAttrs = pid + '::' + vid; rerenderVariantAttributesPane(pid, vid); },
+    cancelVariantAttributes: function (pid, vid) { V2.editVarAttrs = null; rerenderVariantAttributesPane(pid, vid); },
+    saveVariantAttributes: function (pid, vid) {
+      if (!canEditProduct()) { MastAdmin.showToast('You don’t have permission to edit products', true); return; }
+      function parseCsv(id) {
+        var el = document.getElementById(id); if (!el) return [];
+        var seen = {}, out = [];
+        el.value.split(',').forEach(function (s) { var t = s.trim(); if (t && !seen[t.toLowerCase()]) { seen[t.toLowerCase()] = 1; out.push(t); } });
+        return out;
+      }
+      var rec = V2.byId[pid] || {};
+      var v = realVariants(rec).filter(function (x) { return x.id === vid; })[0] || {};
+      var existing = (v && v.attributes) || {};
+      // Blank field = clear the override (inherit the product's); non-blank = override.
+      var authored = Object.assign({}, existing.authored || {});
+      var t = parseCsv('pv2VarAttrTags'); if (t.length) authored.tags = t; else delete authored.tags;
+      var m = parseCsv('pv2VarAttrMaterials'); if (m.length) authored.materials = m; else delete authored.materials;
+      var attributes = Object.assign({}, existing, { authored: authored }); // preserve imported
+      withProductBridge(function () {
+        Promise.resolve(window.MakerProductBridge.setVariantFields(pid, vid, { attributes: attributes })).then(function (res) {
+          if (!res || !res.ok) { MastAdmin.showToast('Failed: ' + ((res && res.error) || 'unknown'), true); return; }
+          var r = V2.byId[pid]; if (r && res.variants) r.variants = res.variants;
+          V2.editVarAttrs = null; rerenderVariantAttributesPane(pid, vid);
+          MastAdmin.showToast('Variant attributes saved');
+        }, function (e) { console.error('[products-v2] saveVariantAttributes', e); MastAdmin.showToast('Failed', true); });
       });
     },
     saveInfo: function (pid) {
