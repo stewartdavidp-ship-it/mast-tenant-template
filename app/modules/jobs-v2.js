@@ -76,6 +76,86 @@
     return { target: target, done: done, pct: target > 0 ? Math.round((done / target) * 100) : 0 };
   }
 
+  // ── RBAC (edit affordances hidden + handlers guarded; standard-record-ui §6) ──
+  function _can(route, axis) { return (typeof window.can === 'function') ? window.can(route, axis) : true; }
+  function canEditJobs() { return _can('jobs', 'edit'); }
+  function _guardEdit() { if (!canEditJobs()) { if (window.MastAdmin) MastAdmin.showToast('You don’t have permission to edit jobs', true); return false; } return true; }
+
+  // ── Write delegate (the bridge) — all DB mutations go through here. Mirrors
+  // legacy transitionProductionJob's inventory side-effects using the SAME global
+  // stock primitives, so V1 and V2 stay consistent on shared data. Build
+  // completion's inventory stays owned by the completeBuildJob CF (see the
+  // double-push guard in completeInventory).
+  var JobsBridge = {
+    // definition → in-progress: commit incoming for each line item.
+    commitIncoming: function (jobId) {
+      return Promise.resolve(MastDB.productionJobs.get(jobId)).then(function (job) {
+        if (!job) return;
+        var now = new Date().toISOString();
+        var lis = job.lineItems || {};
+        return Promise.all(Object.keys(lis).map(function (k) {
+          var li = lis[k];
+          if (!li.productId || !(li.targetQuantity > 0)) return null;
+          return MastDB.transaction(MastDB.inventory.stockIncomingPath(li.productId), function (cur) { return (cur || 0) + (li.targetQuantity || 0); })
+            .then(function () { return MastDB.push('admin/inventory/' + li.productId + '/history', { action: 'incoming', reason: 'production_started', qty: li.targetQuantity, jobId: jobId, actor: 'maker', actorType: 'maker', timestamp: now }); })
+            .then(function () { return _syncStock(li.productId); });
+        }));
+      });
+    },
+    // in-progress → completed: push onHand, UNLESS a build already pushed
+    // (completeBuildJob CF owns it then — the double-push guard).
+    completeInventory: function (jobId) {
+      return Promise.resolve(MastDB.productionJobs.get(jobId)).then(function (job) {
+        if (!job) return;
+        var anyBuildPushed = Object.keys(job.builds || {}).some(function (b) { return job.builds[b] && job.builds[b].inventoryPushed; });
+        if (anyBuildPushed) return; // CF already adjusted inventory per build
+        var now = new Date().toISOString();
+        var lis = job.lineItems || {};
+        return Promise.all(Object.keys(lis).map(function (k) {
+          var li = lis[k];
+          if (!li.productId) return null;
+          var vk = li.variantId || null;
+          var qty = (li.completedQuantity || 0) - (li.lossQuantity || 0);
+          var chain = MastDB.transaction(MastDB.inventory.stockIncomingPath(li.productId, vk), function (cur) { return Math.max(0, (cur || 0) - (li.targetQuantity || 0)); });
+          if (qty > 0) {
+            chain = chain.then(function () { return MastDB.transaction(MastDB.inventory.stockOnHandPath(li.productId, vk), function (cur) { return (cur || 0) + qty; }); })
+              .then(function () { return MastDB.push('admin/inventory/' + li.productId + '/history', { action: 'adjusted', reason: 'production_completed', qty: qty, variantId: vk, jobId: jobId, actor: 'maker', actorType: 'maker', timestamp: now }); });
+          }
+          return chain.then(function () { return _syncStock(li.productId); });
+        }));
+      });
+    },
+    // in-progress → cancelled: reverse the committed incoming.
+    reverseIncoming: function (jobId) {
+      return Promise.resolve(MastDB.productionJobs.get(jobId)).then(function (job) {
+        if (!job || job.status !== 'in-progress') return;
+        var now = new Date().toISOString();
+        var lis = job.lineItems || {};
+        return Promise.all(Object.keys(lis).map(function (k) {
+          var li = lis[k];
+          if (!li.productId || !(li.targetQuantity > 0)) return null;
+          return MastDB.transaction(MastDB.inventory.stockIncomingPath(li.productId), function (cur) { return Math.max(0, (cur || 0) - (li.targetQuantity || 0)); })
+            .then(function () { return MastDB.push('admin/inventory/' + li.productId + '/history', { action: 'adjusted', reason: 'production_cancelled', qty: -(li.targetQuantity), jobId: jobId, actor: 'maker', actorType: 'maker', timestamp: now }); })
+            .then(function () { return _syncStock(li.productId); });
+        }));
+      });
+    },
+    // on-hold sub-state: status only, no phase change, no inventory.
+    setStatus: function (jobId, status) {
+      return Promise.resolve(MastDB.productionJobs.update(jobId, { status: status, updatedAt: new Date().toISOString() }))
+        .then(function () { return _writeAudit('update', 'jobs', jobId); });
+    }
+  };
+  function _syncStock(pid) { return (typeof window.syncStockInfoToPublic === 'function') ? window.syncStockInfoToPublic(pid) : null; }
+  function _writeAudit(a, e, id) { return (typeof window.writeAudit === 'function') ? window.writeAudit(a, e, id) : null; }
+
+  // Re-open the job SO fresh so the process header + all panes reflect new state.
+  function reopenJob(jobId) {
+    return Promise.resolve(MastDB.productionJobs.get(jobId)).then(function (fresh) {
+      if (fresh) { fresh._key = jobId; fresh.id = jobId; window.MastEntity.openRecord('jobs-v2', fresh, 'read', true); }
+    });
+  }
+
   // ── Schema: the whole Jobs surface, declaratively ───────────────────
   MastEntity.define('jobs-v2', {
     label: 'Job', labelPlural: 'Jobs', size: 'xl',
@@ -106,8 +186,21 @@
     detail: {
       flow: 'jobs',
       flowModule: 'jobsWorkflow',
-      // Side-effects on advance (inventory commit/reverse) hook here in Layer 2;
-      // Layer 1 lets the engine do the generic status transition.
+      // Side-effects on advance: apply inventory FIRST (same primitives as legacy
+      // transitionProductionJob), THEN do the MastFlow transition, then reopen —
+      // so a failed inventory write doesn't advance the phase. Returning a value
+      // (!== false) tells the engine we own the transition. Back/other → false.
+      onFlowAdvance: function (target, record) {
+        if (target !== 'in-progress' && target !== 'completed') return false;
+        if (!_guardEdit()) return true; // owned (blocked) — don't let engine advance
+        var jobId = record._key || record.id;
+        var side = (target === 'in-progress') ? JobsBridge.commitIncoming(jobId) : JobsBridge.completeInventory(jobId);
+        Promise.resolve(side)
+          .then(function () { return window.MastFlow.transition('jobs', record, target, { recordId: jobId }); })
+          .then(function () { if (window.MastAdmin) MastAdmin.showToast('Advanced to ' + target.replace(/-/g, ' ')); return reopenJob(jobId); })
+          .catch(function (e) { console.error('[jobs-v2] advance', e); if (window.MastAdmin) MastAdmin.showToast('Could not advance: ' + (e && e.message || e), true); });
+        return true;
+      },
       render: function (UU, j) {
         var prog = progressOf(j);
         var tiles = UU.tiles([
@@ -122,9 +215,15 @@
           { key: 'story', label: 'Story' }, { key: 'links', label: 'Links' }
         ];
         function pane(key, html, active) { return '<div class="mu-pane" data-pane="' + key + '"' + (active ? '' : ' hidden') + '>' + html + '</div>'; }
+        // On-hold is an in-progress SUB-STATE — surface it as a banner (the
+        // process header still shows the In Progress phase).
+        var holdBanner = (String(j.status).toLowerCase() === 'on-hold')
+          ? '<div style="margin:0 0 12px;padding:8px 13px;border-radius:8px;font-size:0.85rem;font-weight:600;background:color-mix(in srgb,var(--warning) 14%,transparent);color:var(--warning);border:1px solid color-mix(in srgb,var(--warning) 30%,transparent);">On hold — work is paused. Resume from the Overview tab.</div>'
+          : '';
         // tiles cover (pinned) → MastFlow process header → tabs → panes
         return UU.stickyHead(tiles, '') +
           '<div id="muFlowHost" style="margin:-4px -4px 14px;color:var(--warm-gray);font-size:0.85rem;">Loading workflow…</div>' +
+          holdBanner +
           UU.paneTabsBar(tabs, 'overview') +
           pane('overview', overviewPane(UU, j), true) +
           pane('items', itemsPane(UU, j)) +
@@ -141,7 +240,7 @@
   function statusBadge(UU, s) { return UU.badge(statusLabel(s), STATUS_TONE[String(s || '').toLowerCase()] || 'neutral'); }
 
   function overviewPane(UU, j) {
-    return UU.card('Details', UU.kv([
+    var details = UU.card('Details', UU.kv([
       { k: 'Name', v: esc(j.name) },
       { k: 'Description', v: esc(j.description) },
       { k: 'Purpose', v: esc(purposeLabel(j.purpose)) },
@@ -155,6 +254,21 @@
       { k: 'Event', v: esc(j.eventName) },
       { k: 'Order', v: esc(j.orderId) }
     ]));
+    return details + lifecyclePane(UU, j);
+  }
+
+  // Off-backbone lifecycle actions (the backbone Start/Complete live in the
+  // process header). Hold/Resume = in-progress sub-state; Cancel = terminal.
+  function lifecyclePane(UU, j) {
+    if (!canEditJobs()) return '';
+    var s = String(j.status || '').toLowerCase();
+    if (s === 'completed' || s === 'cancelled') return ''; // terminal — no actions
+    var id = j._key || j.id;
+    var btns = [];
+    if (s === 'in-progress') btns.push('<button class="btn btn-secondary" onclick="JobsV2.hold(\'' + esc(id) + '\')">Put on hold</button>');
+    if (s === 'on-hold') btns.push('<button class="btn btn-secondary" onclick="JobsV2.resume(\'' + esc(id) + '\')">Resume</button>');
+    btns.push('<button class="btn btn-secondary" onclick="JobsV2.cancelJob(\'' + esc(id) + '\')">Cancel job</button>');
+    return UU.card('Lifecycle', '<div style="display:flex;gap:8px;flex-wrap:wrap;">' + btns.join('') + '</div>');
   }
 
   function itemsPane(UU, j) {
@@ -313,7 +427,29 @@
     setPurpose: function (p) { V2.purpose = p; render(); },
     open: function (id) { var rec = V2.byId[id]; if (rec) window.MastEntity.openRecord('jobs-v2', rec, 'read'); },
     exportCsv: function () { return window.MastEntity.exportRows('jobs-v2', visibleRows(), V2.status); },
-    openClassicStories: function () { if (typeof navigateToClassic === 'function') navigateToClassic('stories'); else if (typeof navigateTo === 'function') navigateTo('stories'); }
+    openClassicStories: function () { if (typeof navigateToClassic === 'function') navigateToClassic('stories'); else if (typeof navigateTo === 'function') navigateTo('stories'); },
+    hold: function (id) {
+      if (!_guardEdit()) return;
+      JobsBridge.setStatus(id, 'on-hold').then(function () { if (window.MastAdmin) MastAdmin.showToast('Put on hold'); return reopenJob(id); })
+        .catch(function (e) { if (window.MastAdmin) MastAdmin.showToast('Could not hold: ' + (e && e.message || e), true); });
+    },
+    resume: function (id) {
+      if (!_guardEdit()) return;
+      JobsBridge.setStatus(id, 'in-progress').then(function () { if (window.MastAdmin) MastAdmin.showToast('Resumed'); return reopenJob(id); })
+        .catch(function (e) { if (window.MastAdmin) MastAdmin.showToast('Could not resume: ' + (e && e.message || e), true); });
+    },
+    cancelJob: function (id) {
+      if (!_guardEdit()) return;
+      var go = function () {
+        // Reverse committed incoming, then transition to the cancelled terminal.
+        var rec = V2.byId[id] || { id: id, _key: id };
+        JobsBridge.reverseIncoming(id)
+          .then(function () { return window.MastFlow ? window.MastFlow.transition('jobs', rec, 'cancelled', { recordId: id }) : JobsBridge.setStatus(id, 'cancelled'); })
+          .then(function () { if (window.MastAdmin) MastAdmin.showToast('Job cancelled'); return reopenJob(id); })
+          .catch(function (e) { if (window.MastAdmin) MastAdmin.showToast('Could not cancel: ' + (e && e.message || e), true); });
+      };
+      if (typeof window.mastConfirm === 'function') { window.mastConfirm('Cancel this job? Committed incoming stock will be reversed.', go); } else { go(); }
+    }
   };
 
   // ── Register the side-by-side route ─────────────────────────────────
