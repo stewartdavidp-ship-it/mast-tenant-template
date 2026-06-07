@@ -197,10 +197,87 @@
     // No onSave → no Edit button (Receive/Submit/Cancel/Close stay on legacy #procurement).
   });
 
+  // ── Reorder ("Needs reorder") — folded in from the retired reorder-v2 route ──
+  // The Needs-reorder lens is a PRODUCER: it lists items at/below their reorder
+  // point and drafts POs that open in the PO process slide-out (the loop closes
+  // into the spine), instead of a separate dead-end queue. Writes go through
+  // ProcurementBridge.createDraftPOs — no MastDB write verbs here (RBAC ratchet).
+  function vendorName(vid) { return (V2.vendors[vid] && V2.vendors[vid].name) || '(unknown vendor)'; }
+  function activeSuppliersFor(kind, id) {
+    return Object.keys(V2.suppliers).map(function (k) { return V2.suppliers[k]; })
+      .filter(function (ps) { return ps && ps.active !== false && ps.targetKind === kind && ps.targetId === id; });
+  }
+  function preferredVendor(kind, id) {
+    var list = activeSuppliersFor(kind, id);
+    var ps = list.filter(function (p) { return p.preferred; })[0] || (list.length === 1 ? list[0] : null);
+    return ps ? { vendorId: ps.vendorId, ps: ps } : null;
+  }
+  function computeSuggestions() {
+    var out = [];
+    Object.keys(V2.materials).forEach(function (id) {
+      var m = V2.materials[id]; if (!m || m.status === 'archived') return;
+      var thr = Number(m.reorderThreshold); if (!(thr > 0)) return;
+      var onHand = Number(m.onHandQty) || 0;
+      if (onHand > thr) return;
+      var sug = Number(m.reorderQty) > 0 ? Number(m.reorderQty) : Math.max(1, thr - onHand);
+      var pv = preferredVendor('material', id);
+      out.push({ kind: 'material', id: id, name: m.name || id, onHand: onHand, threshold: thr,
+        uom: m.unitOfMeasure || '', suggestedQty: sug, vendorId: pv && pv.vendorId || null,
+        unitCost: (pv && pv.ps && Number(pv.ps.unitCost)) || Number(m.unitCost) || 0,
+        vendorSku: (pv && pv.ps && pv.ps.vendorSku) || null });
+    });
+    Object.keys(V2.products).forEach(function (id) {
+      var p = V2.products[id]; if (!procurable(p)) return;             // archived/built-in-house excluded
+      if (Array.isArray(p.variants) && p.variants.length > 0) return;  // per-variant reorder deferred
+      var si = p.stockInfo || {}; var st = si.stockType || '';
+      if (!st || /order|build/.test(st) || si.totalAvailable == null) return;  // only tracked stock
+      var thr = si.lowStockThreshold != null ? Number(si.lowStockThreshold) : 2;
+      var avail = Number(si.totalAvailable) || 0;
+      if (avail > thr) return;
+      var pv = preferredVendor('product', id);
+      out.push({ kind: 'product', id: id, name: p.name || id, onHand: avail, threshold: thr,
+        uom: '', suggestedQty: Math.max(1, thr - avail), vendorId: pv && pv.vendorId || null,
+        unitCost: (pv && pv.ps && Number(pv.ps.unitCost)) || 0,
+        vendorSku: (pv && pv.ps && pv.ps.vendorSku) || null });
+    });
+    out.sort(function (a, b) {
+      return String(a.vendorId || 'zzz').localeCompare(String(b.vendorId || 'zzz')) || String(a.name).localeCompare(String(b.name));
+    });
+    return out;
+  }
+  function reorderLine(s) {
+    return { kind: s.kind, targetId: s.id, variantKey: s.kind === 'product' ? '_default' : null,
+      qtyOrdered: s.suggestedQty, unitCost: s.unitCost, vendorSku: s.vendorSku,
+      unitOfMeasure: s.uom || null, descriptionSnapshot: s.name };
+  }
+  function qtyWithUom(n, uom) { return N.count(n) + (uom ? ' ' + uom : ''); }
+
+  // Read-only list entity for the Needs-reorder lens — the STANDARD MastEntity
+  // list (not a hand-rolled table); a row-click drafts a PO for that item.
+  MastEntity.define('reorder-need', {
+    label: 'Reorder need', labelPlural: 'Needs reorder', route: 'procurement-v2',
+    recordId: function (s) { return s.kind + ':' + s.id; },
+    fields: [
+      { name: 'name', label: 'Item', type: 'text', list: true, readOnly: true, get: function (s) { return s.name; } },
+      { name: 'kind', label: 'Kind', type: 'text', list: true, readOnly: true },
+      { name: 'onHand', label: 'On hand', type: 'text', list: true, readOnly: true, align: 'right', get: function (s) { return qtyWithUom(s.onHand, s.uom); } },
+      { name: 'threshold', label: 'Reorder at', type: 'number', list: true, readOnly: true },
+      { name: 'suggestedQty', label: 'Suggested', type: 'text', list: true, readOnly: true, align: 'right', get: function (s) { return qtyWithUom(s.suggestedQty, s.uom); } },
+      { name: 'vendor', label: 'Preferred vendor', type: 'text', list: true, readOnly: true, get: function (s) { return s.vendorId ? vendorName(s.vendorId) : '— set a preferred supplier'; } }
+    ]
+  });
+
   // ── module state + data ─────────────────────────────────────────────
   var V2 = { rows: [], byId: {}, sortKey: 'ordered', sortDir: 'desc', q: '', statusFilter: 'all', loaded: false,
-    vendors: {}, materials: {}, products: {} };
-  var OPEN = { draft: true, submitted: true, partially_received: true };
+    vendors: {}, materials: {}, products: {}, suppliers: {}, suggestions: [] };
+  // Flow-ordered lenses (pills). 'needs-reorder' lists low items (a producer into
+  // the PO spine); the rest filter POs by phase. 'all' = every PO.
+  var LENS_PRED = {
+    draft: function (po) { return po.status === 'draft'; },
+    'on-order': function (po) { return po.status === 'submitted' || po.status === 'partially_received'; },
+    received: function (po) { return po.status === 'received' || po.status === 'closed'; },
+    cancelled: function (po) { return po.status === 'cancelled'; }
+  };
 
   function load() {
     return Promise.all([
@@ -208,12 +285,13 @@
       Promise.resolve(MastDB.get('admin/vendors')),
       Promise.resolve(MastDB.get('admin/purchaseReceipts')),
       Promise.resolve(MastDB.get('admin/materials')),
-      Promise.resolve(MastDB.products && MastDB.products.list ? MastDB.products.list() : MastDB.get('public/products'))
+      Promise.resolve(MastDB.products && MastDB.products.list ? MastDB.products.list() : MastDB.get('public/products')),
+      Promise.resolve(MastDB.get('admin/productSuppliers'))
     ]).then(function (res) {
       var posVal = res[0] || {}, vendors = res[1] || {}, receipts = res[2] || {};
       // Products live at public/products (admin/products is empty); list() can
       // return an array OR a keyed object — normalize to { pid: product }.
-      V2.vendors = vendors; V2.materials = res[3] || {}; V2.products = pidMap(res[4]);
+      V2.vendors = vendors; V2.materials = res[3] || {}; V2.products = pidMap(res[4]); V2.suppliers = res[5] || {};
       var receiptsByPo = {};
       Object.keys(receipts).forEach(function (k) { var r = receipts[k]; if (r && r.poId) (receiptsByPo[r.poId] = receiptsByPo[r.poId] || []).push(r); });
       Object.keys(receiptsByPo).forEach(function (poId) { receiptsByPo[poId].sort(function (a, b) { return String(b.receivedAt || '').localeCompare(String(a.receivedAt || '')); }); });
@@ -229,14 +307,15 @@
         out.push(po);
       });
       V2.rows = out; V2.byId = {}; out.forEach(function (r) { V2.byId[r.poId] = r; });
+      V2.suggestions = computeSuggestions();
       V2.loaded = true; render();
     }).catch(function (e) { console.error('[procurement-v2] load', e); render(); });
   }
 
   function visibleRows() {
     var rows = V2.rows;
-    if (V2.statusFilter === 'open') rows = rows.filter(function (po) { return OPEN[po.status]; });
-    else if (V2.statusFilter !== 'all') rows = rows.filter(function (po) { return po.status === V2.statusFilter; });
+    var pred = LENS_PRED[V2.statusFilter];
+    if (pred) rows = rows.filter(pred);   // 'all' → no filter; 'needs-reorder' handled separately
     if (V2.q) {
       var q = V2.q.toLowerCase();
       rows = rows.filter(function (po) {
@@ -258,32 +337,77 @@
     return el;
   }
 
+  function lensCounts() {
+    var c = { draft: 0, onorder: 0, received: 0, cancelled: 0 };
+    V2.rows.forEach(function (po) {
+      if (po.status === 'draft') c.draft++;
+      else if (po.status === 'submitted' || po.status === 'partially_received') c.onorder++;
+      else if (po.status === 'received' || po.status === 'closed') c.received++;
+      else if (po.status === 'cancelled') c.cancelled++;
+    });
+    return c;
+  }
   function render() {
     var tab = ensureTab();
-    var openCount = V2.rows.filter(function (po) { return OPEN[po.status]; }).length;
-    var filters = [['all', 'All'], ['open', 'Open'], ['received', 'Received'], ['closed', 'Closed'], ['cancelled', 'Cancelled']]
-      .map(function (f) {
-        var on = V2.statusFilter === f[0];
-        return '<button class="btn btn-small ' + (on ? 'btn-primary' : 'btn-secondary') + '" onclick="ProcurementV2.filter(\'' + f[0] + '\')">' + f[1] + '</button>';
-      }).join(' ');
-    tab.innerHTML =
-      '<div style="display:flex;align-items:baseline;gap:12px;margin-bottom:6px;">' +
-        '<h1 style="font-size:1.6rem;margin:0;">Purchase Orders</h1>' +
-        '<span style="color:var(--warm-gray);font-size:0.9rem;">' + N.count(openCount) + ' open · ' + N.count(V2.rows.length) + ' total</span>' +
-        '<button class="btn btn-primary" style="margin-left:auto;" onclick="ProcurementV2.createNew()">+ New PO</button>' +
-        '<button class="btn btn-secondary" onclick="navigateTo(\'reorder-v2\')">↻ Needs reorder</button>' +
-        '<button class="btn btn-secondary" onclick="navigateTo(\'lots-v2\')">▦ Inventory lots</button>' +
-        '<button class="btn btn-secondary" onclick="navigateTo(\'vendors-v2\')">⚐ Vendors</button>' +
-        '<button class="btn btn-secondary" onclick="ProcurementV2.exportCsv()">↓ Export</button>' +
+    var c = lensCounts();
+    // The procurement HOME: one flow-shaped surface. Pills read in journey order
+    // — Needs reorder (the entry) → Draft → On order → Received — so "where do I
+    // start when low?" is answered the moment you land. Lots/Vendors are
+    // reference surfaces (their own records), reached as secondary links.
+    var lenses = [
+      ['needs-reorder', 'Needs reorder', V2.suggestions.length],
+      ['draft', 'Draft', c.draft],
+      ['on-order', 'On order', c.onorder],
+      ['received', 'Received', c.received],
+      ['cancelled', 'Cancelled', c.cancelled],
+      ['all', 'All', V2.rows.length]
+    ];
+    var pills = lenses.map(function (f) {
+      var on = V2.statusFilter === f[0];
+      var count = (f[2] != null) ? ' <span style="opacity:0.7;">' + N.count(f[2]) + '</span>' : '';
+      return '<button class="btn btn-small ' + (on ? 'btn-primary' : 'btn-secondary') + '" onclick="ProcurementV2.filter(\'' + f[0] + '\')">' + f[1] + count + '</button>';
+    }).join(' ');
+    var header =
+      '<div style="display:flex;align-items:baseline;gap:12px;margin-bottom:6px;flex-wrap:wrap;">' +
+        '<h1 style="font-size:1.6rem;margin:0;">Procurement</h1>' +
+        '<span style="color:var(--warm-gray);font-size:0.9rem;">' + N.count(c.draft + c.onorder) + ' open · ' + N.count(V2.suggestions.length) + ' to reorder</span>' +
+        '<span style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap;">' +
+          '<button class="btn btn-primary" onclick="ProcurementV2.createNew()">+ New PO</button>' +
+          '<button class="btn btn-secondary" onclick="navigateTo(\'lots-v2\')">▦ Inventory lots</button>' +
+          '<button class="btn btn-secondary" onclick="navigateTo(\'vendors-v2\')">⚐ Vendors</button>' +
+          '<button class="btn btn-secondary" onclick="ProcurementV2.exportCsv()">↓ Export</button>' +
+        '</span>' +
       '</div>' +
-      '<div style="display:flex;gap:6px;flex-wrap:wrap;margin:12px 0;">' + filters + '</div>' +
-      '<div style="margin:14px 0;"><input class="form-input" placeholder="Search PO # or vendor…" value="' + esc(V2.q) +
-        '" oninput="ProcurementV2.search(this.value)" style="max-width:340px;font-size:0.9rem;"></div>' +
-      MastEntity.renderList('procurement-v2', {
-        rows: visibleRows(), sortKey: V2.sortKey, sortDir: V2.sortDir,
-        onSortFnName: 'ProcurementV2.sort', onRowClickFnName: 'ProcurementV2.open',
-        empty: { title: 'No purchase orders', message: V2.loaded ? 'No POs match this filter.' : 'Loading…' }
-      });
+      '<div style="display:flex;gap:6px;flex-wrap:wrap;margin:12px 0;">' + pills + '</div>';
+    var body;
+    if (V2.statusFilter === 'needs-reorder') {
+      body = renderReorder();
+    } else {
+      body =
+        '<div style="margin:14px 0;"><input class="form-input" placeholder="Search PO # or vendor…" value="' + esc(V2.q) +
+          '" oninput="ProcurementV2.search(this.value)" style="max-width:340px;font-size:0.9rem;"></div>' +
+        MastEntity.renderList('procurement-v2', {
+          rows: visibleRows(), sortKey: V2.sortKey, sortDir: V2.sortDir,
+          onSortFnName: 'ProcurementV2.sort', onRowClickFnName: 'ProcurementV2.open',
+          empty: { title: 'No purchase orders', message: V2.loaded ? 'No POs match this lens.' : 'Loading…' }
+        });
+    }
+    tab.innerHTML = header + body;
+  }
+  // The Needs-reorder lens body: standard list of low items + the producer action.
+  function renderReorder() {
+    var sug = V2.suggestions;
+    var withVendor = sug.filter(function (s) { return s.vendorId; });
+    var vendorCount = Object.keys(withVendor.reduce(function (a, s) { a[s.vendorId] = 1; return a; }, {})).length;
+    var action = withVendor.length
+      ? '<button class="btn btn-primary" onclick="ProcurementV2.createDrafts()">Create ' + vendorCount + ' draft PO' + (vendorCount === 1 ? '' : 's') + ' (' + withVendor.length + ' item' + (withVendor.length === 1 ? '' : 's') + ')</button>'
+      : '';
+    var hint = '<div class="mu-sub" style="margin:12px 0;">Items at or below their reorder point. Click one to draft a PO for it, or create grouped drafts for all — each opens in its process for review before sending.</div>';
+    var listHtml = sug.length
+      ? MastEntity.renderList('reorder-need', { rows: sug, onRowClickFnName: 'ProcurementV2.draftOne',
+          empty: { title: 'Nothing to reorder', message: 'Stock is healthy.' } })
+      : '<div class="mu-sub" style="padding:20px;">' + (V2.loaded ? 'Nothing below reorder threshold — stock is healthy.' : 'Loading…') + '</div>';
+    return hint + (action ? '<div style="margin:12px 0;">' + action + '</div>' : '') + listHtml;
   }
 
   // ── Phase reconcile (the single transition path) ────────────────────
@@ -521,6 +645,23 @@
     },
     filter: function (f) { V2.statusFilter = f; render(); },
     search: function (v) { V2.q = v || ''; render(); },
+    // Needs-reorder producers → draft PO(s) that open in the process slide-out.
+    draftOne: function (rowId) {
+      var s = V2.suggestions.filter(function (x) { return (x.kind + ':' + x.id) === rowId; })[0];
+      if (!s) return;
+      if (!s.vendorId) { if (window.showToast) showToast('Set a preferred supplier for this item first (Vendors → Supplies).', true); return; }
+      createDraftGroups([{ vendorId: s.vendorId, lines: [reorderLine(s)] }]);
+    },
+    createDrafts: function () {
+      var withVendor = V2.suggestions.filter(function (s) { return s.vendorId; });
+      if (!withVendor.length) { if (window.showToast) showToast('No low items have a preferred vendor yet.', true); return; }
+      var byVendor = {};
+      withVendor.forEach(function (s) { (byVendor[s.vendorId] = byVendor[s.vendorId] || []).push(reorderLine(s)); });
+      var groups = Object.keys(byVendor).map(function (vid) { return { vendorId: vid, lines: byVendor[vid] }; });
+      var msg = 'Create ' + groups.length + ' draft PO' + (groups.length === 1 ? '' : 's') + ' from ' + withVendor.length + ' low item' + (withVendor.length === 1 ? '' : 's') + '? Each opens for review before sending.';
+      if (typeof window.mastConfirm === 'function') Promise.resolve(window.mastConfirm(msg)).then(function (ok) { if (ok) createDraftGroups(groups); });
+      else createDraftGroups(groups);
+    },
     open: function (id) {
       MastEntity.get('procurement-v2').fetch(id).then(function (rec) {
         if (rec) openPo(rec);
@@ -609,6 +750,24 @@
       Promise.resolve(window.ProcurementBridge.applyLandedCosts(receiptId)).then(function () { reloadThenOpen(poId); });
     }
   };
+
+  // Create draft PO(s) via the Bridge, then OPEN the first in its process
+  // slide-out — the loop closes into the spine (never a bounce to a flat list).
+  function createDraftGroups(groups) {
+    if (!window.ProcurementBridge || typeof ProcurementBridge.createDraftPOs !== 'function') {
+      if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('procurement'); } catch (e) {} }
+      if (window.showToast) showToast('Procurement engine still loading — try again', true);
+      return;
+    }
+    ProcurementBridge.createDraftPOs(groups).then(function (ids) {
+      if (window.showToast) showToast('Created ' + ids.length + ' draft PO' + (ids.length === 1 ? '' : 's'));
+      return load().then(function () {
+        V2.statusFilter = 'draft'; render();
+        var rec = ids && ids[0] && V2.byId[ids[0]];
+        if (rec) openPo(rec);
+      });
+    }).catch(function (e) { if (window.showToast) showToast('Failed to create POs: ' + (e && e.message || e), true); });
+  }
 
   // Reload v2 data from Firebase, then re-open the PO slide-out on fresh data so
   // the Receipts/Lines facets + status reflect the write. (The Bridge mutated the
