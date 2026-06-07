@@ -265,6 +265,57 @@
     },
     unpublishStory: function (storyId) {
       return Promise.resolve(MastDB.stories.update(storyId, { status: 'draft', updatedAt: new Date().toISOString() }));
+    },
+
+    // ── Line items ───────────────────────────────────────────────────
+    // Mirror the MCP guards: targetQuantity editable only in 'definition';
+    // completed/loss blocked once any build is locked.
+    updateLineItem: function (jobId, liId, field, value) {
+      var v = Math.max(0, parseInt(value, 10) || 0);
+      return Promise.resolve(MastDB.productionJobs.get(jobId)).then(function (job) {
+        if (!job) throw new Error('Job not found');
+        var locked = Object.keys(job.builds || {}).some(function (b) { return job.builds[b] && job.builds[b].locked; });
+        if (field === 'targetQuantity' && String(job.status).toLowerCase() !== 'definition') throw new Error("Target is editable only while the job is in 'definition'");
+        if ((field === 'completedQuantity' || field === 'lossQuantity') && locked) throw new Error('Locked by a completed build — correct via a new build');
+        var u = {}; u[field] = v;
+        return MastDB.productionJobs.updateLineItem(jobId, liId, u)
+          .then(function () { return MastDB.productionJobs.update(jobId, { updatedAt: new Date().toISOString() }); })
+          .then(function () { return _writeAudit('update', 'jobs', jobId); });
+      });
+    },
+    removeLineItem: function (jobId, liId) {
+      return Promise.resolve(MastDB.productionJobs.get(jobId)).then(function (job) {
+        if (!job) throw new Error('Job not found');
+        if (String(job.status).toLowerCase() !== 'definition') throw new Error("Line items can be removed only while the job is in 'definition'");
+        var li = (job.lineItems || {})[liId] || {};
+        var chain = MastDB.productionJobs.removeLineItem(jobId, liId);
+        if (li.productionRequestId) chain = chain.then(function () { return MastDB.update('admin/buildJobs/' + li.productionRequestId, { jobId: null, lineItemId: null, status: 'pending' }); });
+        return chain.then(function () { return MastDB.productionJobs.update(jobId, { updatedAt: new Date().toISOString() }); }).then(function () { return _writeAudit('update', 'jobs', jobId); });
+      });
+    },
+    // Mirror of the MCP link_product_to_build: append the job's build ids to the
+    // product's buildIds (storefront build-story), mark the line item linked, and
+    // stamp any published story id onto the product.
+    linkProductToBuild: function (jobId, liId) {
+      return Promise.resolve(MastDB.productionJobs.get(jobId)).then(function (job) {
+        var li = (job.lineItems || {})[liId];
+        if (!li || !li.productId) throw new Error('No product on this line item');
+        var buildIds = Object.keys(job.builds || {});
+        if (!buildIds.length) throw new Error('No builds to link');
+        var pid = li.productId;
+        return Promise.resolve(MastDB.get('admin/products/' + pid + '/buildIds')).then(function (existing) {
+          if (!Array.isArray(existing)) existing = [];
+          buildIds.forEach(function (b) { if (existing.indexOf(b) === -1) existing.push(b); });
+          return MastDB.set('admin/products/' + pid + '/buildIds', existing);
+        }).then(function () {
+          return MastDB.set('admin/jobs/' + jobId + '/lineItems/' + liId + '/productLinked', true);
+        }).then(function () {
+          return MastDB.stories.queryByJob(jobId);
+        }).then(function (stories) {
+          var pub = Object.keys(stories || {}).filter(function (s) { return stories[s].status === 'published'; })[0];
+          if (pub) return MastDB.set('admin/products/' + pid + '/storyId', pub);
+        }).then(function () { return _writeAudit('update', 'jobs', jobId); });
+      });
     }
   };
   function _syncStock(pid) { return (typeof window.syncStockInfoToPublic === 'function') ? window.syncStockInfoToPublic(pid) : null; }
@@ -406,16 +457,44 @@
   }
 
   function itemsPane(UU, j) {
+    var jobId = j._key || j.id;
     var lis = lineItemsArr(j);
+    var st = String(j.status || '').toLowerCase();
+    var isDef = st === 'definition';
+    var term = st === 'completed' || st === 'cancelled';
+    var hasLocked = Object.keys(j.builds || {}).some(function (b) { return j.builds[b] && j.builds[b].locked; });
+    var hasBuilds = Object.keys(j.builds || {}).length > 0;
+    var canEdit = canEditJobs() && !term;
     if (!lis.length) return UU.card('Line Items', '<p style="color:var(--warm-gray);">No line items.</p>');
+    function numCell(li, field, editable) {
+      if (canEdit && editable) return '<input type="number" min="0" class="form-input" style="width:68px;text-align:right;" value="' + (li[field] || 0) + '" onchange="JobsV2.liField(\'' + esc(jobId) + '\',\'' + esc(li._key) + '\',\'' + field + '\',this)">';
+      return String(li[field] || 0);
+    }
     var cols = [
       { label: 'Product', render: function (li) { return esc(li.productName || li.productId || '—') + (li.variantLabel ? ' <span class="mu-sub">(' + esc(li.variantLabel) + ')</span>' : ''); } },
-      { label: 'Target', align: 'right', render: function (li) { return String(li.targetQuantity || 0); } },
-      { label: 'Completed', align: 'right', render: function (li) { return String(li.completedQuantity || 0); } },
-      { label: 'Loss', align: 'right', render: function (li) { return String(li.lossQuantity || 0); } },
-      { label: 'Product link', render: function (li) { return li.productLinked ? UU.badge('Linked', 'success') : ''; } }
+      { label: 'Target', align: 'right', render: function (li) { return numCell(li, 'targetQuantity', isDef); } },
+      { label: 'Completed', align: 'right', render: function (li) { return numCell(li, 'completedQuantity', !hasLocked); } },
+      { label: 'Loss', align: 'right', render: function (li) { return numCell(li, 'lossQuantity', !hasLocked); } },
+      { label: '', align: 'right', render: function (li) {
+        var parts = [];
+        if (li.productLinked) parts.push(UU.badge('Linked', 'success'));
+        else if (canEdit && hasBuilds && li.productId) parts.push('<button class="mu-link" onclick="JobsV2.liLink(\'' + esc(jobId) + '\',\'' + esc(li._key) + '\')">Link product</button>');
+        if (canEdit && isDef) parts.push('<button class="mu-link" onclick="JobsV2.liRemove(\'' + esc(jobId) + '\',\'' + esc(li._key) + '\')">Remove</button>');
+        return parts.join(' &middot; ');
+      } }
     ];
-    return UU.cardTable('Line Items', UU.relatedTable(cols, lis));
+    var hint = (canEdit && hasLocked) ? '<p style="color:var(--warm-gray);margin-top:8px;font-size:0.78rem;">Completed/loss are locked by a completed build — correct via a new build.</p>' : '';
+    return UU.card('Line Items', UU.relatedTable(cols, lis) + hint);
+  }
+  // In-place re-render of the Line Items pane (keeps the operator on the tab —
+  // reopening the whole SO would bounce to Overview).
+  function rerenderItemsPane(jobId) {
+    return Promise.resolve(MastDB.productionJobs.get(jobId)).then(function (fresh) {
+      if (!fresh) return; fresh._key = jobId; fresh.id = jobId;
+      var body = document.getElementById('mastSlideOutBody');
+      var pane = body && body.querySelector('.mu-pane[data-pane="items"]');
+      if (pane) pane.innerHTML = itemsPane(window.MastUI, fresh);
+    });
   }
 
   function opsLabel(b) { return Array.isArray(b.operators) ? b.operators.join(', ') : (b.operators ? Object.values(b.operators).join(', ') : ''); }
@@ -781,6 +860,26 @@
           .catch(function (e) { if (window.MastAdmin) MastAdmin.showToast('Complete failed: ' + (e && e.message || e), true); });
       };
       if (typeof window.mastConfirm === 'function') { window.mastConfirm('Complete this build? It records output, updates inventory, and locks the build.', go); } else { go(); }
+    },
+    // ── Line items ──
+    liField: function (jobId, liId, field, el) {
+      if (!_guardEdit()) return;
+      JobsBridge.updateLineItem(jobId, liId, field, el ? el.value : 0)
+        .then(function () { return rerenderItemsPane(jobId); })
+        .catch(function (e) { if (window.MastAdmin) MastAdmin.showToast((e && e.message) || 'Update failed', true); return rerenderItemsPane(jobId); });
+    },
+    liRemove: function (jobId, liId) {
+      if (!_guardEdit()) return;
+      var go = function () {
+        JobsBridge.removeLineItem(jobId, liId).then(function () { if (window.MastAdmin) MastAdmin.showToast('Line item removed'); return rerenderItemsPane(jobId); })
+          .catch(function (e) { if (window.MastAdmin) MastAdmin.showToast((e && e.message) || 'Remove failed', true); });
+      };
+      if (typeof window.mastConfirm === 'function') { window.mastConfirm('Remove this line item?', go); } else { go(); }
+    },
+    liLink: function (jobId, liId) {
+      if (!_guardEdit()) return;
+      JobsBridge.linkProductToBuild(jobId, liId).then(function () { if (window.MastAdmin) MastAdmin.showToast('Product linked to builds'); return rerenderItemsPane(jobId); })
+        .catch(function (e) { if (window.MastAdmin) MastAdmin.showToast((e && e.message) || 'Link failed', true); });
     },
     // ── Story ──
     openStory: function (jobId) {
