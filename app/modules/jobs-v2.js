@@ -49,9 +49,9 @@
 
   // ── Display maps ────────────────────────────────────────────────────
   var PURPOSE_LABELS = {
-    'fulfillment': '📋 Fulfillment', 'custom': '✨ Custom',
-    'inventory-general': '📦 General Inventory', 'inventory-event': '🎪 Event Inventory',
-    'wholesale': '🏪 Wholesale', 'experimental': '🧪 Experimental'
+    'fulfillment': 'Fulfillment', 'custom': 'Custom',
+    'inventory-general': 'General Inventory', 'inventory-event': 'Event Inventory',
+    'wholesale': 'Wholesale', 'experimental': 'Experimental'
   };
   var STATUS_TONE = {
     'definition': 'neutral', 'in-progress': 'amber', 'on-hold': 'info',
@@ -259,34 +259,30 @@
     return el;
   }
 
+  // One pill style for every facet group (the defined facet-pill pattern —
+  // amber active tint, 0.85rem, token colors). Both status + purpose use it.
+  function pill(label, on, onclick) {
+    return '<button onclick="' + onclick + '" style="border:1px solid var(--border);' +
+      'background:' + (on ? 'color-mix(in srgb,var(--amber) 18%,transparent)' : 'transparent') + ';' +
+      'color:' + (on ? 'var(--text-primary)' : 'var(--warm-gray)') + ';border-radius:999px;' +
+      'padding:6px 13px;font-size:0.85rem;cursor:pointer;margin-right:8px;">' + esc(label) + '</button>';
+  }
   function statusPills() {
-    return STATUS_FILTERS.map(function (f) {
-      var on = V2.status === f.key;
-      return '<button onclick="JobsV2.setStatus(\'' + f.key + '\')" style="border:1px solid var(--border);' +
-        'background:' + (on ? 'color-mix(in srgb,var(--amber) 18%,transparent)' : 'transparent') + ';' +
-        'color:' + (on ? 'var(--text-primary)' : 'var(--warm-gray)') + ';border-radius:999px;' +
-        'padding:6px 13px;font-size:0.85rem;cursor:pointer;margin-right:8px;">' + f.label + '</button>';
-    }).join('');
+    return STATUS_FILTERS.map(function (f) { return pill(f.label, V2.status === f.key, "JobsV2.setStatus('" + f.key + "')"); }).join('');
   }
   function purposePills() {
     var opts = [{ key: 'all', label: 'All purposes' }].concat(Object.keys(PURPOSE_LABELS).map(function (k) { return { key: k, label: PURPOSE_LABELS[k] }; }));
-    return opts.map(function (o) {
-      var on = V2.purpose === o.key;
-      return '<button onclick="JobsV2.setPurpose(\'' + o.key + '\')" style="border:1px solid var(--border);' +
-        'background:' + (on ? 'color-mix(in srgb,var(--teal) 16%,transparent)' : 'transparent') + ';' +
-        'color:' + (on ? 'var(--text-primary)' : 'var(--warm-gray)') + ';border-radius:999px;' +
-        'padding:5px 11px;font-size:0.78rem;cursor:pointer;margin-right:6px;">' + o.label + '</button>';
-    }).join('');
+    return opts.map(function (o) { return pill(o.label, V2.purpose === o.key, "JobsV2.setPurpose('" + o.key + "')"); }).join('');
   }
 
   function render() {
     var tab = ensureTab();
     tab.innerHTML =
-      '<div style="display:flex;align-items:baseline;gap:12px;margin-bottom:6px;">' +
-        '<h1 style="font-size:1.6rem;margin:0;">Jobs</h1>' +
-        '<span style="color:var(--warm-gray);font-size:0.9rem;">' + U.Num.count(V2.rows.length) + ' jobs</span>' +
-        '<button class="btn btn-secondary" style="margin-left:auto;" onclick="JobsV2.exportCsv()">↓ Export</button>' +
-      '</div>' +
+      U.pageHeader({
+        title: 'Jobs',
+        count: U.Num.count(V2.rows.length) + ' jobs',
+        actionsHtml: '<button class="btn btn-secondary" onclick="JobsV2.exportCsv()">&darr; Export</button>'
+      }) +
       '<div style="margin:12px 0 6px;">' + statusPills() + '</div>' +
       '<div style="margin:0 0 14px;">' + purposePills() + '</div>' +
       window.MastEntity.renderList('jobs-v2', {
