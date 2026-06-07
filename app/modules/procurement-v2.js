@@ -198,7 +198,7 @@
   });
 
   // ── module state + data ─────────────────────────────────────────────
-  var V2 = { rows: [], byId: {}, sortKey: 'ordered', sortDir: 'desc', q: '', statusFilter: 'open', loaded: false,
+  var V2 = { rows: [], byId: {}, sortKey: 'ordered', sortDir: 'desc', q: '', statusFilter: 'all', loaded: false,
     vendors: {}, materials: {}, products: {} };
   var OPEN = { draft: true, submitted: true, partially_received: true };
 
@@ -261,7 +261,7 @@
   function render() {
     var tab = ensureTab();
     var openCount = V2.rows.filter(function (po) { return OPEN[po.status]; }).length;
-    var filters = [['open', 'Open'], ['all', 'All'], ['received', 'Received'], ['closed', 'Closed'], ['cancelled', 'Cancelled']]
+    var filters = [['all', 'All'], ['open', 'Open'], ['received', 'Received'], ['closed', 'Closed'], ['cancelled', 'Cancelled']]
       .map(function (f) {
         var on = V2.statusFilter === f[0];
         return '<button class="btn btn-small ' + (on ? 'btn-primary' : 'btn-secondary') + '" onclick="ProcurementV2.filter(\'' + f[0] + '\')">' + f[1] + '</button>';
