@@ -654,7 +654,11 @@
           return;
         }
         if (clickIdx < curIdx) {
-          if (ctx.callbacks.onBack) ctx.callbacks.onBack(phaseKey);
+          // Review-only (ratified 2026-06-07): clicking a COMPLETED step shows
+          // what that phase captured, read-only — it does NOT move the record
+          // backward. Going back a phase is a rare, explicit action, not a
+          // side effect of a stray click.
+          _reviewGuidedPhase(ctxId, def, rec, phaseKey);
           return;
         }
         // clickIdx > curIdx → a forward step.
@@ -682,17 +686,57 @@
       var show = d.style.display === 'none';
       d.style.display = show ? 'flex' : 'none';
       if (link) link.textContent = show ? 'Hide completed' : (link.getAttribute('data-show') || 'Show completed');
+    },
+    // Leave a completed-step review → restore the live checklist, collapse it.
+    closeReview: function(ctxId) {
+      var el = document.getElementById(ctxId + '_checklist'); if (!el) return;
+      if (_guidedReviewLive[ctxId] != null) { el.innerHTML = _guidedReviewLive[ctxId]; _guidedReviewLive[ctxId] = null; }
+      el.style.display = 'none';
     }
   };
 
+  // While a completed step is being reviewed, the live checklist HTML is stashed
+  // here (keyed by ctxId) so returning to the current step restores it verbatim.
+  var _guidedReviewLive = {};
+
   // The checklist is collapsed by default. Clicking the current step toggles it;
   // a blocked-forward click ensures it's shown. Completed items stay hidden
-  // inside until "Show N completed" is clicked (ui.toggleDone).
+  // inside until "Show N completed" is clicked (ui.toggleDone). If a completed-
+  // step review is showing, clicking the current step restores the live checklist.
   function _toggleGuidedChecklist(ctxId) {
     var el = document.getElementById(ctxId + '_checklist');
     if (!el) return;
+    if (_guidedReviewLive[ctxId] != null) {
+      el.innerHTML = _guidedReviewLive[ctxId];
+      _guidedReviewLive[ctxId] = null;
+      el.style.display = 'flex';
+      el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      return;
+    }
     el.style.display = (el.style.display === 'none') ? 'flex' : 'none';
     if (el.style.display !== 'none') el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+  // Read-only review of a COMPLETED phase's exit requirements (no transition).
+  function _reviewGuidedPhase(ctxId, def, record, phaseKey) {
+    var el = document.getElementById(ctxId + '_checklist');
+    if (!el) return;
+    if (_guidedReviewLive[ctxId] == null) _guidedReviewLive[ctxId] = el.innerHTML;  // stash live once
+    var phase = (def.phases || []).filter(function(p) { return p.key === phaseKey; })[0];
+    var reqs = (phase && phase.exitRequirements) || [];
+    var rows = reqs.map(function(r) {
+      var ok = true; try { ok = r.test ? !!r.test(record) : true; } catch (e) { ok = true; }
+      return '<div style="display:flex;align-items:center;gap:8px;font-size:0.85rem;">' +
+        '<span style="display:inline-flex;width:18px;height:18px;border-radius:50%;background:color-mix(in srgb,var(--teal) 16%,transparent);color:var(--teal);align-items:center;justify-content:center;font-weight:700;font-size:0.72rem;flex-shrink:0;">' + (ok ? '✓' : '·') + '</span>' +
+        '<span style="color:var(--warm-gray);">' + _esc(r.label) + '</span></div>';
+    }).join('');
+    if (!rows) rows = '<div style="font-size:0.82rem;color:var(--warm-gray);">Nothing was required at this step.</div>';
+    el.innerHTML =
+      '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px;">' +
+        '<span style="font-size:0.72rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--warm-gray);">Reviewing: ' + _esc((phase && phase.label) || phaseKey) + ' · completed</span>' +
+        '<a href="#" onclick="event.preventDefault();MastFlow.__ui.closeReview(\'' + ctxId + '\')" style="color:var(--teal);font-size:0.78rem;text-decoration:underline;white-space:nowrap;">Back to current step</a>' +
+      '</div>' + rows;
+    el.style.display = 'flex';
+    el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
   function _showGuidedChecklist(ctxId) {
     var el = document.getElementById(ctxId + '_checklist');

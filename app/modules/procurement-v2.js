@@ -99,6 +99,8 @@
     detail: {
       flow: 'procurement',
       flowModule: 'procurementWorkflow',
+      guidedHeader: true,   // clickable step rail (no Advance/Back buttons); click a done step = review
+
       // Intercept the two forward advances to open side-effecting captures
       // instead of a plain status write. Returning non-false = handled (the
       // engine skips its default transition). Phase then follows the data via
@@ -175,12 +177,14 @@
               ? ' · <button class="btn btn-secondary btn-small" style="padding:2px 8px;" onclick="ProcurementV2.applyLanded(\'' + esc(r.receiptId) + '\',\'' + esc(po.poId) + '\')">Apply landed (' + (N.money(addl) || '$0.00') + ')</button>'
               : '');
           // Provenance: each received line drills to the LOT it created (lot →
-          // vendor/PO/receipt/cost). The receipt line carries lotId directly.
+          // the lot number it created, as a reference label. A PO and an inventory
+          // lot are different domains (buying vs physical stock) — provenance flows
+          // lot→PO (shown on the lot's own detail), so this is NOT a nav into the lot.
           var lineRows = rLines.map(function (rl) {
             var poLine = (po.lines || []).filter(function (l) { return l.lineId === rl.poLineId; })[0];
             var label = poLine ? (poLine.descriptionSnapshot || poLine.targetId || '—') : (rl.poLineId || '—');
             var lot = rl.lotId
-              ? '<button class="mu-link" onclick="MastEntity.drill(\'lots-v2\',\'' + esc(rl.lotId) + '\')">Lot ' + esc(String(rl.lotId).slice(0, 8)) + ' →</button>'
+              ? '<span class="mu-sub">Lot ' + esc(String(rl.lotId).slice(0, 8)) + '</span>'
               : '<span class="mu-sub">no lot</span>';
             return '<div style="display:flex;justify-content:space-between;gap:12px;padding:3px 0;">' +
               '<span>' + esc(label) + ' <span class="mu-sub">· ' + (Number(rl.qtyReceivedNow) || 0) + '</span></span>' + lot + '</div>';
