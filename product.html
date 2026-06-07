@@ -2421,9 +2421,17 @@
       .orderBy('createdAt', 'desc')
       .limit(20)
       .get();
-    var cfgP = db.doc('tenants/' + TENANT_ID + '/public/config/reviews').get()
-      .then(function(d) { return (d && d.exists) ? d.data() : null; })
-      .catch(function() { return null; });
+    // Guard: 'tenants/{tid}/public/config/reviews' is an ODD-segment path, so the
+    // Firestore SDK db.doc() THROWS synchronously (the .catch() can't catch it) —
+    // which was aborting the whole product render with "Product Not Found". Wrap
+    // it so a bad path degrades to the default policy (like fetchFsDoc does), and
+    // the product page still loads.
+    var cfgP;
+    try {
+      cfgP = db.doc('tenants/' + TENANT_ID + '/public/config/reviews').get()
+        .then(function(d) { return (d && d.exists) ? d.data() : null; })
+        .catch(function() { return null; });
+    } catch (e) { cfgP = Promise.resolve(null); }
     Promise.all([revsP, cfgP]).then(function(results) {
       var snap = results[0]; var cfg = results[1];
       window._reviewsPolicy.anonymousAllowed = !!(cfg && cfg.anonymousAllowed);
