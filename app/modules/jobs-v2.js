@@ -253,14 +253,19 @@
         // de-duplicated operators from all builds (the public credit line)
         var ops = {};
         Object.values((job && job.builds) || {}).forEach(function (b) { (b.operators || []).forEach(function (o) { ops[o] = true; }); });
-        return MastDB.stories.update(storyId, { status: 'published', publishedAt: now, updatedAt: now, operators: Object.keys(ops) })
-          .then(function () {
-            // back-fill storyId onto the job's linked products (storefront build-story)
+        // Client-side QR per linked product (no LabelKeeper key needed — that's
+        // only for the separate print-card feature). Mirrors legacy generateStoryQRCodes.
+        return generateStoryQR(job).then(function (qrCodes) {
+          var upd = { status: 'published', publishedAt: now, updatedAt: now, operators: Object.keys(ops) };
+          if (qrCodes.length) upd.qrCodes = qrCodes;
+          return MastDB.stories.update(storyId, upd).then(function () {
+            // back-fill storyId onto the job's products (storefront build-story)
             var lis = (job && job.lineItems) || {};
             return Promise.all(Object.keys(lis).map(function (k) {
               var pid = lis[k].productId; return pid ? MastDB.set('admin/products/' + pid + '/storyId', storyId) : null;
             }));
           });
+        });
       });
     },
     unpublishStory: function (storyId) {
@@ -703,9 +708,37 @@
     var actions = canEditJobs() ? UU.card('Publish', published
       ? '<p style="color:var(--warm-gray);margin-bottom:8px;">Published — visible to buyers; QR links the storefront product to this story.</p><button class="btn btn-secondary" onclick="JobsV2.storyUnpublish(\'' + esc(sid) + '\')">Unpublish</button>'
       : '<p style="color:var(--warm-gray);margin-bottom:8px;">Publishing credits the build operators and links the story to the job\'s product(s).</p><button class="btn btn-primary" onclick="JobsV2.storyPublish(\'' + esc(sid) + '\',\'' + esc(r.jobId) + '\')">Publish story</button>') : '';
-    return UU.stickyHead(tiles, '') + titleCard + entriesCard + pickerCard + actions;
+    // QR codes (generated on publish) — one per product, links to the storefront story.
+    var qrs = (story.qrCodes || []);
+    var qrCard = (published && qrs.length) ? UU.card('QR codes', '<div style="display:flex;gap:18px;flex-wrap:wrap;">' + qrs.map(function (q) {
+      return '<div style="text-align:center;"><img src="' + esc(q.dataUrl) + '" alt="" style="width:104px;height:104px;border-radius:8px;background:var(--charcoal);padding:6px;"><div style="font-size:0.78rem;color:var(--warm-gray);margin-top:4px;max-width:120px;">' + esc(q.productName) + '</div></div>';
+    }).join('') + '</div>') : '';
+    return UU.stickyHead(tiles, '') + titleCard + entriesCard + pickerCard + actions + qrCard;
   }
   function reopenStory(sid) { return Promise.resolve(MastEntity.get('job-story-v2').fetch(sid)).then(function (fresh) { if (fresh) window.MastEntity.openRecord('job-story-v2', fresh, 'read', true); }); }
+  // Client-side QR (qrcode-generator CDN) — one per job product, pointing at the
+  // storefront product story page. No API key (LabelKeeper key is print-card only).
+  function ensureQRLib() {
+    return new Promise(function (resolve, reject) {
+      if (window.qrcode) { resolve(); return; }
+      var s = document.createElement('script');
+      s.src = 'https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js';
+      s.onload = resolve; s.onerror = function () { reject(new Error('Failed to load QR library')); };
+      document.head.appendChild(s);
+    });
+  }
+  function generateStoryQR(job) {
+    var products = [];
+    Object.values((job && job.lineItems) || {}).forEach(function (li) { if (li.productId) products.push({ productId: li.productId, productName: li.productName || 'Product' }); });
+    if (!products.length) return Promise.resolve([]);
+    return ensureQRLib().then(function () {
+      return products.map(function (p) {
+        var url = (window.GITHUB_PAGES_BASE || '') + '/product.html?id=' + p.productId + '&view=story';
+        var qr = window.qrcode(0, 'M'); qr.addData(url); qr.make();
+        return { productId: p.productId, productName: p.productName, url: url, dataUrl: qr.createDataURL(6, 0) };
+      });
+    }).catch(function (e) { console.error('[jobs-v2] QR generate', e); return []; });
+  }
 
   // ── State + data (same source as legacy: admin/jobs) ────────────────
   var V2 = { rows: [], byId: {}, sortKey: 'createdAt', sortDir: 'desc', status: 'active', purpose: 'all', off: null };
