@@ -57,16 +57,18 @@
     },
     // date display: ISO/Date -> "May 1, 2026"; dateRaw -> "2026-05-01"
     date: function (d) {
-      var dt;
+      if (d == null || d === '') return '';   // null/empty → '' (not the Unix epoch "Dec 31, 1969")
+      var dt, m;
       if (d instanceof Date) {
         dt = d;
-      } else if (typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d)) {
-        // Bare calendar date (no time) — parse as LOCAL midnight. new Date('YYYY-MM-DD')
-        // parses as UTC, which renders a day earlier in behind-UTC timezones (the PO
-        // order-date "Jun 6 → Jun 5" bug). Timestamps with a time component are left
-        // to native parsing.
-        var p = d.split('-');
-        dt = new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2]));
+      } else if (typeof d === 'string' && (m = /^(\d{4})-(\d{2})-(\d{2})(?:[T ]00:00(?::00)?(?:\.000)?Z?)?$/.exec(d))) {
+        // A bare calendar date ('2026-06-07') OR a date stored as midnight-UTC
+        // ('2026-06-07T00:00:00.000Z' — e.g. a receipt's receivedAt) represents a
+        // CALENDAR date. Build it as LOCAL midnight so it renders the same day in
+        // behind-UTC timezones — fixes the PO order-date "Jun 6 → Jun 5" AND the
+        // receipt/lot received-date off-by-one. Strings with a real time component
+        // (e.g. order timestamps) fall through to native (local) parsing, unchanged.
+        dt = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
       } else {
         dt = new Date(d);
       }
@@ -74,6 +76,7 @@
       return dt.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
     },
     dateRaw: function (d) {
+      if (d == null || d === '') return '';   // null/empty → '' (not the Unix epoch)
       var dt = (d instanceof Date) ? d : new Date(d);
       if (isNaN(dt.getTime())) return '';
       return dt.toISOString().slice(0, 10);
