@@ -49,6 +49,35 @@
   function dropshipPoSent(o) { return !!o.dropshipPoSentAt; }
   function dropshipConfirmed(o) { return !!o.dropshipConfirmedAt; }
 
+  // ---- Tier 2 backorder fulfillment gate ----
+  // `applies` predicate: an order is gated only if it was placed with at least
+  // one backorder line.
+  function hasBackorder(o) {
+    return !!(o && o.hasBackorder) || !!(o && o.items && o.items.some(function(it) { return it && it.backorder; }));
+  }
+  function backorderLines(o) {
+    return (o && o.items ? o.items : []).filter(function(it) { return it && it.backorder; });
+  }
+  // Async exit test: resolves true only when EVERY backorder line's product
+  // has physical stock covering all commitments (onHand ≥ committed). The
+  // covering PO being received restocks onHand via the receiving CF; until
+  // then onHand (0) < committed (the reserved qty) and this stays false.
+  // Read live inventory rather than a stamped flag so the gate reflects the
+  // real warehouse state at evaluation time (admin context → MastDB available).
+  function backorderStockArrived(o) {
+    var lines = backorderLines(o);
+    if (!lines.length) return true;
+    if (typeof MastDB === 'undefined' || !MastDB.get) return false; // can't verify → stay blocked
+    return Promise.all(lines.map(function(it) {
+      return MastDB.get('admin/inventory/' + it.pid).then(function(inv) {
+        if (!inv || !inv.stock) return false;
+        var ck = it.backorderVariantKey || it.variantId || '_default';
+        var se = inv.stock[ck] || inv.stock._default || {};
+        return (se.onHand || 0) >= (se.committed || 0);
+      }).catch(function() { return false; });
+    })).then(function(results) { return results.every(Boolean); });
+  }
+
   // ---- Phases ----
   var phases = [
     {
@@ -108,6 +137,21 @@
           hard: true,
           test: hasShipping,
           target: 'detail-shipping'
+        },
+        {
+          // Tier 2 backorder gate. Only present on orders that carry a
+          // backorder line (submitOrder stamps o.hasBackorder + per-line
+          // backorder/backorderVariantKey when it accepts an out-of-stock
+          // sale covered by an open PO). Blocks Confirmed → Ready-to-fulfill
+          // until the covering PO is received and the receiving CF has
+          // restocked onHand so physical stock ≥ committed for every
+          // backorder line. Self-clears on reopen once stock arrives.
+          key: 'backorder-stock',
+          label: 'Back-ordered stock received',
+          hard: true,
+          applies: hasBackorder,
+          test: backorderStockArrived,
+          target: 'detail-items'
         }
       ]
     },
