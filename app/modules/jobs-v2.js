@@ -144,6 +144,73 @@
     setStatus: function (jobId, status) {
       return Promise.resolve(MastDB.productionJobs.update(jobId, { status: status, updatedAt: new Date().toISOString() }))
         .then(function () { return _writeAudit('update', 'jobs', jobId); });
+    },
+
+    // ── Build session ───────────────────────────────────────────────
+    // Start a draft build; auto-advance a definition job to in-progress
+    // (committing incoming inventory, same as the Start Work transition).
+    startBuild: function (jobId) {
+      return Promise.resolve(MastDB.productionJobs.get(jobId)).then(function (job) {
+        if (!job) throw new Error('Job not found');
+        var now = new Date();
+        var buildNumber = Object.keys(job.builds || {}).length + 1;
+        return MastDB.productionJobs.pushBuild(jobId, {
+          buildNumber: buildNumber, sessionDate: now.toISOString().split('T')[0], startTime: now.toISOString(),
+          endTime: null, durationMinutes: null, workType: job.workType || 'flameshop', status: 'draft',
+          operators: [], notes: '', createdAt: now.toISOString(), completedAt: null
+        }).then(function (res) {
+          var buildId = res.key;
+          var after = _writeAudit('update', 'jobs', jobId);
+          if (job.status === 'definition') {
+            after = Promise.resolve(after)
+              .then(function () { return JobsBridge.commitIncoming(jobId); })
+              .then(function () { return MastDB.productionJobs.update(jobId, { status: 'in-progress', startedAt: now.toISOString() }); })
+              .then(function () { return window.MastFlow ? window.MastFlow.transition('jobs', Object.assign({ id: jobId, _key: jobId }, job), 'in-progress', { recordId: jobId }).catch(function () {}) : null; });
+          }
+          return Promise.resolve(after).then(function () { return buildId; });
+        });
+      });
+    },
+    setBuildField: function (jobId, buildId, field, value) {
+      var u = {}; u[field] = value;
+      return Promise.resolve(MastDB.productionJobs.updateBuild(jobId, buildId, u));
+    },
+    addMilestone: function (jobId, buildId, text) {
+      return Promise.resolve(MastDB.push('admin/jobs/' + jobId + '/builds/' + buildId + '/milestones', { text: text, timestamp: new Date().toISOString() }));
+    },
+    // Complete a build — mirrors legacy doCompleteBuild: write output, aggregate
+    // tallies across builds, then the completeBuildJob CF (material deduction,
+    // observed-cost, inventory auto-push, build lock). CF owns inventory.
+    completeBuild: function (jobId, buildId, output) {
+      var now = new Date();
+      return Promise.resolve(MastDB.productionJobs.get(jobId)).then(function (job) {
+        var build = (job.builds || {})[buildId] || {};
+        var durationMinutes = build.startTime ? Math.round((now.getTime() - new Date(build.startTime).getTime()) / 60000) : null;
+        return MastDB.productionJobs.updateBuild(jobId, buildId, { status: 'completed', endTime: now.toISOString(), durationMinutes: durationMinutes, completedAt: now.toISOString(), output: output })
+          .then(function () { return _writeAudit('update', 'jobs', jobId); })
+          .then(function () { return MastDB.productionJobs.get(jobId); })
+          .then(function (fresh) {
+            // aggregate completed/loss tallies across completed builds
+            var lis = (fresh && fresh.lineItems) || {}; var builds = (fresh && fresh.builds) || {};
+            var tallies = {}; Object.keys(lis).forEach(function (k) { tallies[k] = { c: 0, l: 0 }; });
+            Object.values(builds).forEach(function (b) {
+              if (b.status === 'completed' && b.output) Object.keys(b.output).forEach(function (k) {
+                if (!tallies[k]) tallies[k] = { c: 0, l: 0 };
+                tallies[k].c += (b.output[k].completedQuantity || 0); tallies[k].l += (b.output[k].lossQuantity || 0);
+              });
+            });
+            var upd = {}; Object.keys(tallies).forEach(function (k) { upd['lineItems/' + k + '/completedQuantity'] = tallies[k].c; upd['lineItems/' + k + '/lossQuantity'] = tallies[k].l; });
+            return Object.keys(upd).length ? MastDB.productionJobs.update(jobId, upd) : null;
+          })
+          .then(function () {
+            // Server-side completion (inventory/material/observed-cost/lock).
+            if (window.firebase && firebase.functions) {
+              return firebase.functions().httpsCallable('completeBuildJob')({ tenantId: MastDB.tenantId(), jobId: jobId, buildId: buildId, output: output })
+                .then(function (r) { return r && r.data; })
+                .catch(function (e) { console.error('[jobs-v2] completeBuildJob CF', e); throw new Error('Server completion failed: ' + (e && e.message || e)); });
+            }
+          });
+      });
     }
   };
   function _syncStock(pid) { return (typeof window.syncStockInfoToPublic === 'function') ? window.syncStockInfoToPublic(pid) : null; }
@@ -284,17 +351,22 @@
     return UU.cardTable('Line Items', UU.relatedTable(cols, lis));
   }
 
+  function opsLabel(b) { return Array.isArray(b.operators) ? b.operators.join(', ') : (b.operators ? Object.values(b.operators).join(', ') : ''); }
   function buildsPane(UU, j) {
+    var jobId = j._key || j.id;
+    var term = (String(j.status).toLowerCase() === 'completed' || String(j.status).toLowerCase() === 'cancelled');
+    var startBtn = (canEditJobs() && !term) ? '<button class="btn btn-secondary btn-small" onclick="JobsV2.startBuild(\'' + esc(jobId) + '\')">Start build</button>' : '';
     var builds = buildsArr(j);
-    if (!builds.length) return UU.card('Builds', '<p style="color:var(--warm-gray);">No build sessions yet.</p>');
+    if (!builds.length) return UU.card('Builds', '<p style="color:var(--warm-gray);">No build sessions yet.</p>', { headerRight: startBtn });
     var cols = [
       { label: 'Build', render: function (b) { return '#' + (b.buildNumber || '?'); } },
       { label: 'Date', render: function (b) { return fmtDate(b.sessionDate || b.createdAt); } },
       { label: 'Duration', align: 'right', render: function (b) { return b.durationMinutes != null ? b.durationMinutes + ' min' : ''; } },
-      { label: 'Operators', render: function (b) { return esc(Array.isArray(b.operators) ? b.operators.join(', ') : (b.operators ? Object.values(b.operators).join(', ') : '')); } },
-      { label: 'Status', render: function (b) { return b.locked ? UU.badge('Locked', 'teal') : UU.badge(statusLabel(b.status || 'in-progress'), 'amber'); } }
+      { label: 'Operators', render: function (b) { return esc(opsLabel(b)); } },
+      { label: 'Status', render: function (b) { return b.locked ? UU.badge('Locked', 'teal') : UU.badge(statusLabel(b.status || 'in-progress'), 'amber'); } },
+      { label: '', align: 'right', render: function (b) { return '<button class="mu-link" onclick="JobsV2.openBuild(\'' + esc(jobId) + '\',\'' + esc(b._key) + '\')">' + ((b.status === 'completed' || b.locked) ? 'View' : 'Continue') + ' →</button>'; } }
     ];
-    return UU.cardTable('Builds', UU.relatedTable(cols, builds));
+    return UU.card('Builds', UU.relatedTable(cols, builds), { headerRight: startBtn });
   }
 
   function costsPane(UU, j) {
@@ -333,6 +405,101 @@
       { k: 'Order', v: esc(j.orderId) },
       { k: 'Customer', v: esc(j.customerId) }
     ]) + '<p style="color:var(--warm-gray);margin-top:8px;">Product-linking actions arrive in B2 (read-only here).</p>');
+  }
+
+  // ════════════════ Entity: the build session (drilled SO) ════════════
+  // "Call a new SO" for the heavy in-session work — the build doesn't fit a tab.
+  // recordId = jobId::buildId. Draft builds are editable (operators, output,
+  // milestones, photos, notes, Complete); completed/locked builds are read-only.
+  MastEntity.define('job-build-v2', {
+    label: 'Build', labelPlural: 'Builds', size: 'lg', route: null,
+    recordId: function (r) { return r._key; },
+    fields: [{ name: '_title', label: 'Build', type: 'text', list: true, group: 'Build', readOnly: true }],
+    fetch: function (id) {
+      var p = String(id).split('::'); var jobId = p[0], buildId = p[1];
+      return Promise.all([MastDB.productionJobs.get(jobId), Promise.resolve(MastDB.buildMedia.get(buildId)).catch(function () { return null; })]).then(function (res) {
+        var job = res[0]; if (!job) return null; var build = (job.builds || {})[buildId]; if (!build) return null;
+        return { _key: id, id: id, jobId: jobId, buildId: buildId, job: job, build: build, media: res[1] || {} };
+      });
+    },
+    detail: { render: function (UU, r) { return buildSObody(UU, r); } }
+  });
+
+  function buildMediaArr(media) {
+    return Object.keys(media || {}).map(function (k) { return Object.assign({ _key: k }, media[k]); })
+      .sort(function (a, b) { return String(a.uploadedAt || '').localeCompare(String(b.uploadedAt || '')); });
+  }
+  function milestonesArr(build) {
+    var m = build.milestones || {};
+    return Object.keys(m).map(function (k) { return m[k]; }).sort(function (a, b) { return String(a.timestamp || '').localeCompare(String(b.timestamp || '')); });
+  }
+
+  function buildSObody(UU, r) {
+    var b = r.build, locked = (b.status === 'completed' || b.locked), canEdit = canEditJobs() && !locked;
+    var elapsed = b.durationMinutes != null ? (b.durationMinutes + ' min')
+      : (b.startTime ? Math.max(0, Math.round((Date.now() - new Date(b.startTime).getTime()) / 60000)) + ' min elapsed' : '—');
+    var tiles = UU.tiles([
+      { k: 'Build', v: '#' + (b.buildNumber || '?'), hero: true },
+      { k: 'Status', v: locked ? UU.badge(b.locked ? 'Locked' : 'Completed', 'teal') : UU.badge('Draft', 'amber') },
+      { k: 'Time', v: elapsed },
+      { k: 'Operators', v: esc(opsLabel(b) || '—') }
+    ]);
+
+    // Operators (light inline: comma-separated) — draft only.
+    var opsCard = UU.card('Operators', canEdit
+      ? '<input id="jbOps" class="form-input" style="width:100%;" value="' + esc(opsLabel(b)) + '" placeholder="Names, comma-separated"> <button class="btn btn-secondary btn-small" style="margin-top:8px;" onclick="JobsV2.buildSaveOps(\'' + esc(r._key) + '\')">Save operators</button>'
+      : (esc(opsLabel(b)) || '<span style="color:var(--warm-gray);">—</span>'));
+
+    // Output per line item — draft only (read-only summary when locked).
+    var lis = lineItemsArr(r.job);
+    var outRows = lis.map(function (li) {
+      var out = (b.output && b.output[li._key]) || {};
+      if (canEdit) {
+        return { label: li.productName || li.productId || '—', cells: [
+          '<input type="number" min="0" class="form-input jbOut" data-li="' + esc(li._key) + '" data-f="completed" value="' + (out.completedQuantity || 0) + '" style="width:70px;text-align:right;">',
+          '<input type="number" min="0" class="form-input jbOut" data-li="' + esc(li._key) + '" data-f="loss" value="' + (out.lossQuantity || 0) + '" style="width:70px;text-align:right;">',
+          String(li.targetQuantity || 0)
+        ] };
+      }
+      return { label: li.productName || li.productId || '—', cells: [String(out.completedQuantity || 0), String(out.lossQuantity || 0), String(li.targetQuantity || 0)] };
+    });
+    var outputCard = UU.card('Output', UU.metricTable({ corner: 'Item', columns: ['Completed', 'Loss', 'Target'], rows: outRows }));
+
+    // Photos
+    var media = buildMediaArr(r.media);
+    var gallery = media.length ? '<div style="display:flex;gap:8px;flex-wrap:wrap;">' + media.map(function (m) {
+      return '<img src="' + esc(m.url) + '" alt="" style="width:72px;height:72px;object-fit:cover;border-radius:8px;border:1px solid var(--border);">';
+    }).join('') + '</div>' : '<p style="color:var(--warm-gray);">No photos yet.</p>';
+    var photoUpload = canEdit ? '<label class="btn btn-secondary btn-small" style="cursor:pointer;margin-top:10px;display:inline-block;"><input type="file" accept="image/*" style="display:none;" onchange="JobsV2.buildPhoto(\'' + esc(r._key) + '\', this)">Add photo</label>' : '';
+    var photosCard = UU.card('Photos', gallery + photoUpload);
+
+    // Milestones
+    var ms = milestonesArr(b);
+    var msList = ms.length ? UU.timeline(ms.map(function (m) { return { label: m.text, at: fmtDate(m.timestamp), done: true }; })) : '<p style="color:var(--warm-gray);">No milestones yet.</p>';
+    var msAdd = canEdit ? '<div style="display:flex;gap:8px;margin-top:10px;"><input id="jbMs" class="form-input" style="flex:1;" placeholder="Milestone (e.g. Wax model approved)"><button class="btn btn-secondary btn-small" onclick="JobsV2.buildMilestone(\'' + esc(r._key) + '\')">Add</button></div>' : '';
+    var msCard = UU.card('Milestones', msList + msAdd);
+
+    // Notes
+    var notesCard = UU.card('Notes', canEdit
+      ? '<textarea id="jbNotes" class="form-input" style="width:100%;min-height:70px;">' + esc(b.notes || '') + '</textarea><button class="btn btn-secondary btn-small" style="margin-top:8px;" onclick="JobsV2.buildSaveNotes(\'' + esc(r._key) + '\')">Save notes</button>'
+      : (esc(b.notes || '') || '<span style="color:var(--warm-gray);">—</span>'));
+
+    var completeBtn = canEdit ? '<div style="margin-top:16px;"><button class="btn btn-primary" onclick="JobsV2.buildComplete(\'' + esc(r._key) + '\')">Complete build</button> <span style="color:var(--warm-gray);font-size:0.85rem;">Records output, updates inventory, and locks the build.</span></div>' : '';
+
+    return crumbBack() + UU.stickyHead(tiles, '') + opsCard + outputCard + photosCard + msCard + notesCard + completeBtn;
+  }
+  function crumbBack() { return '<div class="mu-crumb"><button onclick="MastEntity.back()">&larr; Back to job</button></div>'; }
+  function reopenBuild(id) { return Promise.resolve(MastEntity.get('job-build-v2').fetch(id)).then(function (fresh) { if (fresh) window.MastEntity.openRecord('job-build-v2', fresh, 'read', true); }); }
+  // Mirror legacy uploadBuildPhoto: compress → Storage → buildMedia record.
+  function _uploadBuildPhoto(file, buildId) {
+    if (!window.storage || typeof window.compressImage !== 'function') return Promise.reject(new Error('Storage unavailable'));
+    var mediaId = MastDB.newKey('_ids');
+    return Promise.resolve(window.compressImage(file)).then(function (compressed) {
+      var ref = window.storage.ref(MastDB.storagePath('builds/' + buildId + '/' + mediaId + '.jpg'));
+      return ref.put(compressed).then(function (snap) { return snap.ref.getDownloadURL(); });
+    }).then(function (url) {
+      return MastDB.buildMedia.set(buildId, mediaId, { type: 'photo', url: url, caption: '', uploadedAt: new Date().toISOString(), originalFilename: file.name });
+    });
   }
 
   // ── State + data (same source as legacy: admin/jobs) ────────────────
@@ -437,6 +604,57 @@
       if (!_guardEdit()) return;
       JobsBridge.setStatus(id, 'in-progress').then(function () { if (window.MastAdmin) MastAdmin.showToast('Resumed'); return reopenJob(id); })
         .catch(function (e) { if (window.MastAdmin) MastAdmin.showToast('Could not resume: ' + (e && e.message || e), true); });
+    },
+    // ── Build session ──
+    startBuild: function (jobId) {
+      if (!_guardEdit()) return;
+      JobsBridge.startBuild(jobId).then(function (buildId) { if (window.MastAdmin) MastAdmin.showToast('Build started'); MastEntity.drill('job-build-v2', jobId + '::' + buildId); })
+        .catch(function (e) { if (window.MastAdmin) MastAdmin.showToast('Could not start build: ' + (e && e.message || e), true); });
+    },
+    openBuild: function (jobId, buildId) { MastEntity.drill('job-build-v2', jobId + '::' + buildId); },
+    buildSaveOps: function (id) {
+      if (!_guardEdit()) return;
+      var p = id.split('::'); var el = document.getElementById('jbOps');
+      var ops = (el ? el.value : '').split(',').map(function (s) { return s.trim(); }).filter(Boolean);
+      JobsBridge.setBuildField(p[0], p[1], 'operators', ops).then(function () { if (window.MastAdmin) MastAdmin.showToast('Operators saved'); return reopenBuild(id); })
+        .catch(function (e) { if (window.MastAdmin) MastAdmin.showToast('Save failed: ' + (e && e.message || e), true); });
+    },
+    buildSaveNotes: function (id) {
+      if (!_guardEdit()) return;
+      var p = id.split('::'); var el = document.getElementById('jbNotes');
+      JobsBridge.setBuildField(p[0], p[1], 'notes', el ? el.value : '').then(function () { if (window.MastAdmin) MastAdmin.showToast('Notes saved'); })
+        .catch(function (e) { if (window.MastAdmin) MastAdmin.showToast('Save failed: ' + (e && e.message || e), true); });
+    },
+    buildMilestone: function (id) {
+      if (!_guardEdit()) return;
+      var p = id.split('::'); var el = document.getElementById('jbMs'); var text = el ? el.value.trim() : '';
+      if (!text) return;
+      JobsBridge.addMilestone(p[0], p[1], text).then(function () { return reopenBuild(id); })
+        .catch(function (e) { if (window.MastAdmin) MastAdmin.showToast('Could not add: ' + (e && e.message || e), true); });
+    },
+    buildPhoto: function (id, input) {
+      if (!_guardEdit()) return;
+      var file = input && input.files && input.files[0]; if (!file) return;
+      var p = id.split('::'); var buildId = p[1];
+      _uploadBuildPhoto(file, buildId).then(function () { if (window.MastAdmin) MastAdmin.showToast('Photo added'); return reopenBuild(id); })
+        .catch(function (e) { if (window.MastAdmin) MastAdmin.showToast('Upload failed: ' + (e && e.message || e), true); });
+    },
+    buildComplete: function (id) {
+      if (!_guardEdit()) return;
+      var p = id.split('::'); var jobId = p[0], buildId = p[1];
+      var output = {};
+      document.querySelectorAll('.jbOut').forEach(function (el) {
+        var li = el.getAttribute('data-li'), f = el.getAttribute('data-f');
+        if (!output[li]) output[li] = { completedQuantity: 0, lossQuantity: 0 };
+        if (f === 'completed') output[li].completedQuantity = parseInt(el.value, 10) || 0;
+        if (f === 'loss') output[li].lossQuantity = parseInt(el.value, 10) || 0;
+      });
+      var go = function () {
+        JobsBridge.completeBuild(jobId, buildId, output)
+          .then(function () { if (window.MastAdmin) MastAdmin.showToast('Build completed'); return reopenJob(jobId); })
+          .catch(function (e) { if (window.MastAdmin) MastAdmin.showToast('Complete failed: ' + (e && e.message || e), true); });
+      };
+      if (typeof window.mastConfirm === 'function') { window.mastConfirm('Complete this build? It records output, updates inventory, and locks the build.', go); } else { go(); }
     },
     cancelJob: function (id) {
       if (!_guardEdit()) return;
