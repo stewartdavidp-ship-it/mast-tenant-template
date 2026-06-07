@@ -1,8 +1,12 @@
 # Jobs (Production) → V2 — Review, MVP Verdict & Build Plan
 
 **Status:** Plan / proposal (set 2026-06-06; revised after architect-review + scope confirmation). Phased build pending operator go.
-**Scope:** Phase B is a **FULL rewrite of the Jobs UI to V2 with retirement of legacy `production.js`** — parity
-checklist at §6a is the cutover gate; two Jobs UIs must not coexist after cutover.
+**Scope:** Phase B is a **FULL rewrite of the Jobs UI to V2 at parity with V1**. **V1 and V2 coexist
+permanently** — the Legacy-UI toggle (`mastUseV2Routes()` + `MAST_V2_ROUTE_MAP`) decides which one an
+operator sees, exactly like every other twin. **`production.js` is NEVER deleted.** The §6a parity checklist
+gates only the *default-flip* (making V2 the toggle-on default); V1 stays available indefinitely as the
+fallback. (Correction: earlier drafts said "retire production.js at cutover" — that contradicts the V1/V2
+coexistence architecture and is wrong.)
 **Decisions baked in:** (1) write the plan before code; (2) **adopt MastFlow to *render* the job-status
 lifecycle client-side**, per [commissions-v2.js](../../app/modules/commissions-v2.js) — but the transition
 table itself becomes a **serializable, function-free definition** that UI + MCP + CF each consume, with a
@@ -150,13 +154,13 @@ drift one layer down, and risks bypassing the CF idempotency (`production-double
 - `delete_production_job`, `delete_line_item`, `delete_story` — soft-delete/cancel; never orphan a locked build.
 - (Optional) operator upsert/delete if the UI grows explicit operator management.
 
-### Phase B — Jobs V2 UI — **FULL rewrite to parity, then retire legacy** (`jobs-v2.js`)
+### Phase B — Jobs V2 UI — **FULL rewrite to parity (V1 stays)** (`jobs-v2.js`)
 
-**Scope is total.** This is not a partial twin: every capability in legacy `production.js` (~3,553 lines)
-is ported to the Entity Engine, verified at parity on sgtest15, and then **`production.js` + its `#jobs`
-route + the legacy `#stories` surface are deleted.** Two Jobs UIs must not persist. products-v2 is the
-pattern reference. Build side-by-side behind the route-map flag so it ships incrementally without breaking
-the live legacy surface; flip the flag and remove legacy only after the parity checklist (§6a) is green.
+**Scope is total, deletion is not.** Every capability in legacy `production.js` (~3,553 lines) is ported to
+the Entity Engine and verified at parity on sgtest15 — but **V1 is never removed.** V1 and V2 coexist
+permanently; the Legacy-UI toggle picks which an operator sees (the `MAST_V2_ROUTE_MAP` entry resolves
+`jobs → jobs-v2` only when Legacy UI is off). products-v2 is the pattern reference. Build side-by-side; the
+parity checklist (§6a) gates only the decision to make V2 the toggle-on default, not any deletion.
 
 **B1 — Scaffold + routing + list/detail read surface**
 - **Routing/gating (the real mechanism — not `?ui=1`):** add `jobs: 'jobs-v2'` to `MAST_V2_ROUTE_MAP`
@@ -178,16 +182,14 @@ the live legacy surface; flip the flag and remove legacy only after the parity c
 - **Inventory push controls** — manual push surfaces for inventory-general / inventory-event purposes.
 - **Cost tracking** — budget-vs-actual table with per-cell actual overrides; product-link-on-completion.
 
-**B3 — Cutover + legacy retirement (definition of done)**
+**B3 — Default-flip (definition of done — NO deletion)**
 - Run the §6a parity checklist live on sgtest15; every row green.
-- **Stories retirement — 3 ordered steps** (stories-v2 already ships as a route-map twin at
-  `index.html:20539` that bounces authoring to `#stories` via `navigateToClassic`, `stories-v2.js:237`):
-  1. Build Story authoring inside jobs-v2 (Story tab/drill).
-  2. Repoint stories-v2's `navigateToClassic` target at the new jobs-v2 authoring.
-  3. *Then* retire legacy `#stories`. Skipping the order breaks the shipped stories-v2 deep-link.
-- **Delete `app/modules/production.js`**, its `MODULE_MANIFEST` entry, and the legacy `#jobs`/`#stories`
-  routes. Flip the default so V2 is the only Jobs UI. Bump `MAST_MODULES_V`; regen
-  `docs/generated/admin-inventory.md`; verify live on sgtest15 (`<tenant>.runmast.com`, hard-reload).
+- **Story authoring in jobs-v2** — once the Story tab/drill is built, repoint stories-v2's
+  `navigateToClassic` target (`stories-v2.js:237`) at the jobs-v2 authoring so the deep-link is consistent.
+  Legacy `#stories` stays available (it's V1; never deleted).
+- Confirm `jobs → jobs-v2` is in `MAST_V2_ROUTE_MAP` (it is) so Legacy-UI-off operators get V2. **V1
+  (`production.js`, `#jobs`) remains in place permanently** as the toggle-on surface and the fallback.
+  No files deleted, no routes removed. Bump `MAST_MODULES_V` on any module change; verify live on sgtest15.
 
 ### 6a. Parity checklist — every legacy `production.js` capability → V2 home (cutover gate)
 

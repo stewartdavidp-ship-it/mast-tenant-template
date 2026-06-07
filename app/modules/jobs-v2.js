@@ -5,8 +5,9 @@
  * on route #jobs-v2, running SIDE-BY-SIDE with legacy production.js (#jobs). This
  * phase delivers the list + faceted READ-ONLY detail (Overview / Line Items /
  * Builds / Costs / Story / Links). Heavy workflows — build lifecycle, story
- * authoring, inline/heavy edits, MastFlow status transitions — land in B2; legacy
- * production.js is deleted at the B3 cutover once the §6a parity checklist is green.
+ * authoring, inline/heavy edits, MastFlow status transitions — land in B2.
+ * V1 (production.js) and V2 coexist permanently; the Legacy-UI toggle picks which
+ * one the operator sees. V1 is never deleted.
  *
  * The whole surface below is derived from one schema. No bespoke list/modal/CSV.
  */
@@ -23,6 +24,14 @@
   if (!flagOn()) return;                                     // strangler: off by default
 
   var U = window.MastUI;
+  // The browser MastUI exposes the escaper as `_esc` (only the Node export is
+  // `esc`). Keep a local helper so surface code never reaches for the wrong name.
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+  function fmtDate(d) { return d ? U.Num.date(d) : ''; }
 
   // ── Serializable job-status transition table (jobs-v2-plan.md §3a) ───
   // Source-of-truth artifact: function-free DATA ONLY, mirroring the MCP
@@ -82,8 +91,10 @@
         get: function (j) { var p = progressOf(j); return p.target ? (p.done + '/' + p.target + ' (' + p.pct + '%)') : '—'; } },
       { name: 'items', label: 'Items', type: 'number', list: true, group: 'Job', readOnly: true,
         get: function (j) { return lineItemsArr(j).length; } },
-      { name: 'deadline', label: 'Deadline', type: 'date', list: true, group: 'Job', readOnly: true },
-      { name: 'createdAt', label: 'Created', type: 'date', list: true, group: 'Job', readOnly: true }
+      { name: 'deadline', label: 'Deadline', type: 'date', list: true, group: 'Job', readOnly: true,
+        get: function (j) { return j.deadline || ''; } },
+      { name: 'createdAt', label: 'Created', type: 'date', list: true, group: 'Job', readOnly: true,
+        get: function (j) { return j.createdAt || ''; } }
     ],
     route: 'jobs-v2',
     fetch: function (id) { return MastDB.productionJobs.get(id).then(function (j) { return j ? Object.assign({ _key: id }, j) : null; }); },
@@ -116,115 +127,88 @@
     // No onSave in B1 — read-only. The bridge-routed write path lands in B2.
   });
 
-  // ── Read-only detail panes ──────────────────────────────────────────
-  function tableHtml(headers, rows) {
-    if (!rows.length) return '';
-    var th = headers.map(function (h) { return '<th style="text-align:left;padding:6px 10px;color:var(--warm-gray);font-weight:600;border-bottom:1px solid var(--border);">' + U.esc(h) + '</th>'; }).join('');
-    var body = rows.map(function (cells) {
-      return '<tr>' + cells.map(function (c) { return '<td style="padding:6px 10px;border-bottom:1px solid var(--border);">' + (c == null || c === '' ? '—' : c) + '</td>'; }).join('') + '</tr>';
-    }).join('');
-    return '<table style="width:100%;border-collapse:collapse;font-size:0.85rem;"><thead><tr>' + th + '</tr></thead><tbody>' + body + '</tbody></table>';
-  }
+  // ── Read-only detail panes (standard MastUI controls only) ──────────
+  function statusBadge(UU, s) { return UU.badge(statusLabel(s), STATUS_TONE[String(s || '').toLowerCase()] || 'neutral'); }
 
   function overviewPane(UU, j) {
     return UU.card('Details', UU.kv([
-      { k: 'Name', v: UU.esc(j.name || '') },
-      { k: 'Description', v: j.description ? UU.esc(j.description) : '' },
-      { k: 'Purpose', v: purposeLabel(j.purpose) },
-      { k: 'Work type', v: j.workType ? UU.esc(j.workType) : '' },
-      { k: 'Status', v: UU.badge(statusLabel(j.status), STATUS_TONE[String(j.status || '').toLowerCase()] || 'neutral') },
+      { k: 'Name', v: esc(j.name) },
+      { k: 'Description', v: esc(j.description) },
+      { k: 'Purpose', v: esc(purposeLabel(j.purpose)) },
+      { k: 'Work type', v: esc(j.workType) },
+      { k: 'Status', v: statusBadge(UU, j.status) },
       { k: 'Priority', v: j.priority ? statusLabel(j.priority) : '' },
-      { k: 'Created', v: UU.Num.date(j.createdAt) },
-      { k: 'Started', v: UU.Num.date(j.startedAt) },
-      { k: 'Completed', v: UU.Num.date(j.completedAt) },
-      { k: 'Deadline', v: UU.Num.date(j.deadline) },
-      { k: 'Event', v: j.eventName ? UU.esc(j.eventName) : '' },
-      { k: 'Order', v: j.orderId ? UU.esc(j.orderId) : '' }
+      { k: 'Created', v: fmtDate(j.createdAt) },
+      { k: 'Started', v: fmtDate(j.startedAt) },
+      { k: 'Completed', v: fmtDate(j.completedAt) },
+      { k: 'Deadline', v: fmtDate(j.deadline) },
+      { k: 'Event', v: esc(j.eventName) },
+      { k: 'Order', v: esc(j.orderId) }
     ]));
   }
 
   function itemsPane(UU, j) {
     var lis = lineItemsArr(j);
     if (!lis.length) return UU.card('Line Items', '<p style="color:var(--warm-gray);">No line items.</p>');
-    var rows = lis.map(function (li) {
-      return [
-        UU.esc(li.productName || li.productId || '—') + (li.variantLabel ? ' <span style="color:var(--warm-gray);">(' + UU.esc(li.variantLabel) + ')</span>' : ''),
-        String(li.targetQuantity || 0),
-        String(li.completedQuantity || 0),
-        String(li.lossQuantity || 0),
-        li.productLinked ? UU.badge('Linked', 'success') : ''
-      ];
-    });
-    return UU.card('Line Items', tableHtml(['Product', 'Target', 'Completed', 'Loss', 'Product link'], rows));
+    var cols = [
+      { label: 'Product', render: function (li) { return esc(li.productName || li.productId || '—') + (li.variantLabel ? ' <span class="mu-sub">(' + esc(li.variantLabel) + ')</span>' : ''); } },
+      { label: 'Target', align: 'right', render: function (li) { return String(li.targetQuantity || 0); } },
+      { label: 'Completed', align: 'right', render: function (li) { return String(li.completedQuantity || 0); } },
+      { label: 'Loss', align: 'right', render: function (li) { return String(li.lossQuantity || 0); } },
+      { label: 'Product link', render: function (li) { return li.productLinked ? UU.badge('Linked', 'success') : ''; } }
+    ];
+    return UU.cardTable('Line Items', UU.relatedTable(cols, lis));
   }
 
   function buildsPane(UU, j) {
     var builds = buildsArr(j);
     if (!builds.length) return UU.card('Builds', '<p style="color:var(--warm-gray);">No build sessions yet.</p>');
-    var rows = builds.map(function (b) {
-      return [
-        '#' + (b.buildNumber || '?'),
-        UU.Num.date(b.sessionDate || b.createdAt),
-        (b.durationMinutes != null ? b.durationMinutes + ' min' : ''),
-        (Array.isArray(b.operators) ? b.operators.join(', ') : (b.operators ? Object.values(b.operators).join(', ') : '')),
-        b.locked ? UU.badge('Locked', 'teal') : UU.badge(statusLabel(b.status || 'in-progress'), 'amber')
-      ];
-    });
-    return UU.card('Builds', tableHtml(['Build', 'Date', 'Duration', 'Operators', 'Status'], rows));
+    var cols = [
+      { label: 'Build', render: function (b) { return '#' + (b.buildNumber || '?'); } },
+      { label: 'Date', render: function (b) { return fmtDate(b.sessionDate || b.createdAt); } },
+      { label: 'Duration', align: 'right', render: function (b) { return b.durationMinutes != null ? b.durationMinutes + ' min' : ''; } },
+      { label: 'Operators', render: function (b) { return esc(Array.isArray(b.operators) ? b.operators.join(', ') : (b.operators ? Object.values(b.operators).join(', ') : '')); } },
+      { label: 'Status', render: function (b) { return b.locked ? UU.badge('Locked', 'teal') : UU.badge(statusLabel(b.status || 'in-progress'), 'amber'); } }
+    ];
+    return UU.cardTable('Builds', UU.relatedTable(cols, builds));
   }
 
   function costsPane(UU, j) {
-    var lis = lineItemsArr(j);
-    var withCost = lis.filter(function (li) { return li.bomForecast; });
-    if (!withCost.length) return UU.card('Costs', '<p style="color:var(--warm-gray);">No cost forecast captured on these line items.</p>');
+    var lis = lineItemsArr(j).filter(function (li) { return li.bomForecast; });
+    if (!lis.length) return UU.card('Costs', '<p style="color:var(--warm-gray);">No cost forecast captured on these line items.</p>');
     var tBudget = 0, tActual = 0;
-    var rows = withCost.map(function (li) {
+    function money(c) { return UU.Num.money(c, { cents: true }); }
+    function varianceCell(v) { return '<span style="color:' + (v > 0 ? 'var(--danger)' : 'var(--teal)') + ';">' + (v > 0 ? '+' : '') + money(v) + '</span>'; }
+    var rows = lis.map(function (li) {
       var bf = li.bomForecast || {};
       var target = li.targetQuantity || 0, done = li.completedQuantity || 0;
       var budget = ((bf.materialCostPerUnitCents || 0) + (bf.laborCostPerUnitCents || 0)) * target;
-      var actMat = li.actualMaterialCostCents != null ? li.actualMaterialCostCents : (bf.materialCostPerUnitCents || 0) * done;
-      var actLab = li.actualLaborCostCents != null ? li.actualLaborCostCents : (bf.laborCostPerUnitCents || 0) * done;
-      var actual = actMat + actLab;
+      var actual = (li.actualMaterialCostCents != null ? li.actualMaterialCostCents : (bf.materialCostPerUnitCents || 0) * done) +
+        (li.actualLaborCostCents != null ? li.actualLaborCostCents : (bf.laborCostPerUnitCents || 0) * done);
       tBudget += budget; tActual += actual;
-      var variance = actual - budget;
-      var vColor = variance > 0 ? 'var(--danger)' : 'var(--teal)';
-      return [
-        UU.esc(li.productName || li.productId || '—'),
-        UU.Num.money(budget, { cents: true }),
-        UU.Num.money(actual, { cents: true }),
-        '<span style="color:' + vColor + ';">' + (variance > 0 ? '+' : '') + UU.Num.money(variance, { cents: true }) + '</span>'
-      ];
+      return { label: li.productName || li.productId || '—', cells: [money(budget), money(actual), varianceCell(actual - budget)] };
     });
-    var totVar = tActual - tBudget;
-    rows.push([
-      '<strong>Total</strong>',
-      '<strong>' + UU.Num.money(tBudget, { cents: true }) + '</strong>',
-      '<strong>' + UU.Num.money(tActual, { cents: true }) + '</strong>',
-      '<strong style="color:' + (totVar > 0 ? 'var(--danger)' : 'var(--teal)') + ';">' + (totVar > 0 ? '+' : '') + UU.Num.money(totVar, { cents: true }) + '</strong>'
-    ]);
-    return UU.card('Costs — budget vs actual', tableHtml(['Item', 'Budget', 'Actual', 'Variance'], rows));
+    rows.push({ label: 'Total', cells: ['<strong>' + money(tBudget) + '</strong>', '<strong>' + money(tActual) + '</strong>', '<strong>' + varianceCell(tActual - tBudget) + '</strong>'] });
+    return UU.cardTable('Costs — budget vs actual', UU.metricTable({ corner: 'Item', columns: ['Budget', 'Actual', 'Variance'], rows: rows }));
   }
 
   function storyPane(UU, j) {
     // B1 is read-only; full story authoring (picker, captions, QR, publish) is
     // the B2 Story drill. Until then, link to the classic stories surface.
-    var note = '<p style="color:var(--warm-gray);">Story authoring (build-photo picker, captions, QR, publish) lands in Phase B2. ' +
-      'For now, manage stories in the classic Stories view.</p>';
-    var link = '<button class="btn btn-secondary" onclick="JobsV2.openClassicStories()">Open Stories (classic)</button>';
-    return UU.card('Story', note + link);
+    return UU.card('Story',
+      '<p style="color:var(--warm-gray);">Story authoring (build-photo picker, captions, QR, publish) lands in Phase B2. For now, manage stories in the classic Stories view.</p>' +
+      '<button class="btn btn-secondary" onclick="JobsV2.openClassicStories()">Open Stories (classic)</button>');
   }
 
   function linksPane(UU, j) {
     var lis = lineItemsArr(j);
     var linked = lis.filter(function (li) { return li.productLinked; });
-    var builds = buildsArr(j);
-    var inner = UU.kv([
-      { k: 'Builds on job', v: String(builds.length) },
+    return UU.card('Links', UU.kv([
+      { k: 'Builds on job', v: String(buildsArr(j).length) },
       { k: 'Line items linked to product', v: linked.length + ' / ' + lis.length },
-      { k: 'Order', v: j.orderId ? UU.esc(j.orderId) : '' },
-      { k: 'Customer', v: j.customerId ? UU.esc(j.customerId) : '' }
-    ]);
-    return UU.card('Links', inner + '<p style="color:var(--warm-gray);margin-top:8px;">Product-linking actions arrive in B2 (read-only here).</p>');
+      { k: 'Order', v: esc(j.orderId) },
+      { k: 'Customer', v: esc(j.customerId) }
+    ]) + '<p style="color:var(--warm-gray);margin-top:8px;">Product-linking actions arrive in B2 (read-only here).</p>');
   }
 
   // ── State + data (same source as legacy: admin/jobs) ────────────────
