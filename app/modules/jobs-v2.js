@@ -892,7 +892,7 @@
           .then(function () { if (window.MastAdmin) MastAdmin.showToast('Build completed'); return reopenJob(jobId); })
           .catch(function (e) { if (window.MastAdmin) MastAdmin.showToast('Complete failed: ' + (e && e.message || e), true); });
       };
-      if (typeof window.mastConfirm === 'function') { window.mastConfirm('Complete this build? It records output, updates inventory, and locks the build.', go); } else { go(); }
+      if (typeof window.mastConfirm === 'function') { window.mastConfirm('Complete this build? It records output, updates inventory, and locks the build.', { title: 'Complete build' }).then(function (ok) { if (ok) go(); }); } else { go(); }
     },
     // ── Line items ──
     liField: function (jobId, liId, field, el) {
@@ -907,7 +907,7 @@
         JobsBridge.removeLineItem(jobId, liId).then(function () { if (window.MastAdmin) MastAdmin.showToast('Line item removed'); return rerenderItemsPane(jobId); })
           .catch(function (e) { if (window.MastAdmin) MastAdmin.showToast((e && e.message) || 'Remove failed', true); });
       };
-      if (typeof window.mastConfirm === 'function') { window.mastConfirm('Remove this line item?', go); } else { go(); }
+      if (typeof window.mastConfirm === 'function') { window.mastConfirm('Remove this line item?', { title: 'Remove line item' }).then(function (ok) { if (ok) go(); }); } else { go(); }
     },
     liLink: function (jobId, liId) {
       if (!_guardEdit()) return;
@@ -949,7 +949,7 @@
         JobsBridge.publishStory(sid, jobId).then(function () { if (window.MastAdmin) MastAdmin.showToast('Story published'); return reopenStory(sid); })
           .catch(function (e) { if (window.MastAdmin) MastAdmin.showToast('Publish failed: ' + (e && e.message || e), true); });
       };
-      if (typeof window.mastConfirm === 'function') { window.mastConfirm('Publish this story? It will credit the build operators and link to the job\'s product(s).', go); } else { go(); }
+      if (typeof window.mastConfirm === 'function') { window.mastConfirm('Publish this story? It will credit the build operators and link to the job\'s product(s).', { title: 'Publish story' }).then(function (ok) { if (ok) go(); }); } else { go(); }
     },
     storyUnpublish: function (sid) {
       if (!_guardEdit()) return;
@@ -966,7 +966,7 @@
           .then(function () { if (window.MastAdmin) MastAdmin.showToast('Job cancelled'); return reopenJob(id); })
           .catch(function (e) { if (window.MastAdmin) MastAdmin.showToast('Could not cancel: ' + (e && e.message || e), true); });
       };
-      if (typeof window.mastConfirm === 'function') { window.mastConfirm('Cancel this job? Committed incoming stock will be reversed.', go); } else { go(); }
+      if (typeof window.mastConfirm === 'function') { window.mastConfirm('Cancel this job? Committed incoming stock will be reversed.', { title: 'Cancel job', danger: true }).then(function (ok) { if (ok) go(); }); } else { go(); }
     }
   };
 
