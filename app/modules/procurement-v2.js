@@ -174,12 +174,26 @@
             : (addl > 0 && canEdit()
               ? ' · <button class="btn btn-secondary btn-small" style="padding:2px 8px;" onclick="ProcurementV2.applyLanded(\'' + esc(r.receiptId) + '\',\'' + esc(po.poId) + '\')">Apply landed (' + (N.money(addl) || '$0.00') + ')</button>'
               : '');
-          return '<div style="padding:10px 14px;border:1px solid var(--cream-dark,rgba(127,127,127,.2));border-radius:8px;margin-bottom:6px;font-size:0.85rem;display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;align-items:center;">' +
-            '<span>' + (r.receivedAt ? N.date(r.receivedAt) : '—') +
-              (r.vendorInvoiceRef ? ' · <span style="font-family:monospace;">' + esc(r.vendorInvoiceRef) + '</span>' : '') +
-              ' · ' + rLines.length + (rLines.length === 1 ? ' line' : ' lines') + ' · ' + rQty + ' units' +
-              landed + '</span>' +
-            '<span style="font-family:monospace;">' + (N.money(rValue) || '$0.00') + '</span>' +
+          // Provenance: each received line drills to the LOT it created (lot →
+          // vendor/PO/receipt/cost). The receipt line carries lotId directly.
+          var lineRows = rLines.map(function (rl) {
+            var poLine = (po.lines || []).filter(function (l) { return l.lineId === rl.poLineId; })[0];
+            var label = poLine ? (poLine.descriptionSnapshot || poLine.targetId || '—') : (rl.poLineId || '—');
+            var lot = rl.lotId
+              ? '<button class="mu-link" onclick="MastEntity.drill(\'lots-v2\',\'' + esc(rl.lotId) + '\')">Lot ' + esc(String(rl.lotId).slice(0, 8)) + ' →</button>'
+              : '<span class="mu-sub">no lot</span>';
+            return '<div style="display:flex;justify-content:space-between;gap:12px;padding:3px 0;">' +
+              '<span>' + esc(label) + ' <span class="mu-sub">· ' + (Number(rl.qtyReceivedNow) || 0) + '</span></span>' + lot + '</div>';
+          }).join('');
+          return '<div style="padding:10px 14px;border:1px solid var(--cream-dark,rgba(127,127,127,.2));border-radius:8px;margin-bottom:6px;font-size:0.85rem;">' +
+            '<div style="display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;align-items:center;">' +
+              '<span>' + (r.receivedAt ? N.date(r.receivedAt) : '—') +
+                (r.vendorInvoiceRef ? ' · <span style="font-family:monospace;">' + esc(r.vendorInvoiceRef) + '</span>' : '') +
+                ' · ' + rLines.length + (rLines.length === 1 ? ' line' : ' lines') + ' · ' + rQty + ' units' +
+                landed + '</span>' +
+              '<span style="font-family:monospace;">' + (N.money(rValue) || '$0.00') + '</span>' +
+            '</div>' +
+            (lineRows ? '<div style="margin-top:8px;border-top:1px solid var(--cream-dark,rgba(127,127,127,.15));padding-top:6px;">' + lineRows + '</div>' : '') +
           '</div>';
         }).join('') : '<span class="mu-sub">No receipts recorded yet.</span>';
 
@@ -719,9 +733,21 @@
       // reload + re-open the PO on fresh data), then return false so the engine's
       // create-mode _save handler does NOTHING further (no duplicate toast/close).
       window.ProcurementBridge.receive(poId, lines, meta).then(function (receiptId) {
-        if (window.showToast) showToast('Receipt recorded');
         U.slideOut.requestCloseForce();
-        return reloadThenOpen(poId);
+        // Loop-close: a FULL receipt completes the PO → return to the procurement
+        // HOME (on the Received lens, where the finished PO now sits) instead of
+        // re-opening it. A PARTIAL receipt re-opens the PO to receive the rest.
+        return load().then(function () {
+          var po = V2.byId[poId];
+          var full = po && (po.status === 'received' || po.status === 'closed');
+          if (full) {
+            if (window.showToast) showToast('PO fully received — stock is updating. Loop closed.');
+            V2.statusFilter = 'received'; render();
+          } else {
+            if (window.showToast) showToast('Receipt recorded — more to receive.');
+            if (po) openPo(po);
+          }
+        });
       }).catch(function (e) {
         if (window.showToast) showToast('Failed to record receipt: ' + (e && e.message || e), true);
       });

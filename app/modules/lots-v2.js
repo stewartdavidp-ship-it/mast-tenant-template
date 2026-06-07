@@ -30,7 +30,13 @@
       { name: 'vendor', label: 'Vendor', type: 'text', list: true, readOnly: true, get: function (l) { return l._vendor; } },
       { name: 'received', label: 'Received', type: 'date', list: true, readOnly: true, get: function (l) { return l.receivedAt || null; } }
     ],
-    fetch: function (id) { return Promise.resolve(L.byId[id] || null); },
+    // Lazy: when drilled cold (e.g. from a procurement receipt line) the lots
+    // data isn't loaded yet — load on demand, then resolve. Route-setup still
+    // calls load() for the list; this only fills the gap for a direct drill.
+    fetch: function (id) {
+      if (L.byId[id] || L.loaded) return Promise.resolve(L.byId[id] || null);
+      return load().then(function () { return L.byId[id] || null; });
+    },
     detail: {
       render: function (UI, l) {
         var tiles = UI.tiles([
