@@ -52,6 +52,9 @@
           var lbl = { 'product': 'Product', 'gift-card': 'Gift Card', 'class': 'Class', 'class-materials': 'Materials', 'pass': 'Pass' };
           var seen = {}, out = [];
           (o.items || []).forEach(function (it) { var t = it.itemType || 'product'; if (!seen[t]) { seen[t] = 1; out.push(lbl[t] || t); } });
+          // Tier 2: flag orders holding a backorder line so the operator can spot
+          // "can't ship yet" at a glance (the pickship Confirmed gate enforces it).
+          if (o.hasBackorder || (o.items || []).some(function (it) { return it && it.backorder; })) out.push('Awaiting stock');
           return out;
         } },
       { name: 'tracking', label: 'Tracking', type: 'text', list: true, group: 'Fulfillment',

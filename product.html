@@ -1862,6 +1862,24 @@
       }
     }
 
+    // T2-3: the availability badge was rendered as "Sold Out" before the backorder
+    // was detected. When backordering, relabel it so it reads back-ordered, not
+    // sold-out; when we leave a backorder state (variant switch), restore the
+    // resolveBadge result.
+    var _availEl = document.getElementById('productAvailability');
+    if (_availEl) {
+      var _badgeEl = _availEl.querySelector('.product-availability-badge');
+      if (backorder && _badgeEl) {
+        _badgeEl.className = 'product-availability-badge back-ordered';
+        _badgeEl.textContent = 'Back-ordered';
+        _badgeEl.style.display = '';
+      } else if (_badgeEl && _badgeEl.classList.contains('back-ordered')) {
+        var _rb = resolveBadge(p, window._shopDisplayConfig || {});
+        if (_rb) { _badgeEl.className = 'product-availability-badge ' + _rb.cssClass; _badgeEl.textContent = _rb.text; }
+        else _badgeEl.style.display = 'none';
+      }
+    }
+
     // Update lead time when variant changes
     if (allSelected && required.length > 0 && si && window._shopDisplayConfig && window._shopDisplayConfig.showLeadTime) {
       var ltVariant = findVariant(window._productVariants, selected);

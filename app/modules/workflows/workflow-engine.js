@@ -82,6 +82,14 @@
         if (typeof r.hard !== 'boolean') {
           throw new Error('[MastFlow] ' + workflowKey + ': phase ' + p.key + ' req ' + r.key + ' missing hard:bool');
         }
+        // Optional `applies(record)` predicate: when present and it returns
+        // false for a record, the requirement is omitted entirely (not shown,
+        // not evaluated). Lets a phase carry a conditional gate (e.g. a
+        // backorder-stock check that only exists for backorder orders) without
+        // it appearing as a trivially-satisfied line on every record.
+        if (r.applies != null && typeof r.applies !== 'function') {
+          throw new Error('[MastFlow] ' + workflowKey + ': phase ' + p.key + ' req ' + r.key + ' applies must be a function');
+        }
       });
     });
     if (definition.branches) {
@@ -171,7 +179,14 @@
    * Predicates may be async; we await them all in parallel.
    */
   function _evaluateRequirements(phase, record, legacyOverrides) {
-    var reqs = phase.exitRequirements || [];
+    // Drop requirements whose optional `applies(record)` gate is false — they
+    // don't exist for this record (not evaluated, not rendered, don't affect
+    // canAdvance). Predicate must be sync; a throw is treated as "applies".
+    var reqs = (phase.exitRequirements || []).filter(function(r) {
+      if (typeof r.applies !== 'function') return true;
+      try { return r.applies(record) !== false; }
+      catch (e) { console.error('[MastFlow] requirement applies() threw:', r.key, e); return true; }
+    });
     var overrideSet = Object.create(null);
     (legacyOverrides || []).forEach(function(k) { overrideSet[k] = true; });
 

@@ -6,7 +6,7 @@ Source-of-truth counts for the admin app, generated from the code so docs
 cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 
 - **Core shell:** `app/index.html` — **59,032** lines
-- **Feature modules:** **98** files in `app/modules/` (**89** routed), **114,311** lines combined
+- **Feature modules:** **98** files in `app/modules/` (**89** routed), **114,381** lines combined
 
 | Module file | Lines | Routes |
 |---|---:|---|
@@ -70,13 +70,13 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/membership-v2.js` | 438 | membership-v2 |
 | `modules/newsletter-v2.js` | 289 | newsletter-v2 |
 | `modules/newsletter.js` | 2,336 | newsletter |
-| `modules/orders-v2.js` | 223 | orders-v2 |
+| `modules/orders-v2.js` | 226 | orders-v2 |
 | `modules/orders.js` | 6,262 | orders, commissions, rma |
 | `modules/passes-v2.js` | 423 | passes-v2 |
 | `modules/procurement-v2.js` | 875 | procurement-v2 |
 | `modules/procurement.js` | 2,378 | procurement |
 | `modules/production.js` | 3,553 | jobs, production, stories, forecast |
-| `modules/products-v2.js` | 3,362 | products-v2 |
+| `modules/products-v2.js` | 3,370 | products-v2 |
 | `modules/promotions-v2.js` | 389 | promotions-v2 |
 | `modules/promotions.js` | 529 | promotions |
 | `modules/resources-v2.js` | 308 | resources-v2 |
@@ -103,8 +103,8 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/wholesale.js` | 1,873 | wholesale |
 | `modules/workflows/commissions.workflow.js` | 266 | — |
 | `modules/workflows/jobs.workflow.js` | 118 | — |
-| `modules/workflows/pickship.workflow.js` | 344 | — |
+| `modules/workflows/pickship.workflow.js` | 388 | — |
 | `modules/workflows/procurement.workflow.js` | 111 | — |
 | `modules/workflows/products.workflow.js` | 165 | — |
-| `modules/workflows/workflow-engine.js` | 1,233 | — |
+| `modules/workflows/workflow-engine.js` | 1,248 | — |
 | `modules/workflows/workflow-template.workflow.js` | 186 | — |

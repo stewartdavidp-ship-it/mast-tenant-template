@@ -598,9 +598,17 @@
     var perVarNote = hasVar
       ? '<div class="pv2-pnote"><strong>On hand = all variants combined.</strong> Stock is tracked per variant — each one has its own count; the number above is the roll-up. Set each variant’s stock on its Inventory tab.</div>'
       : '';
+    // Incoming = open PO coverage projected onto stock by the procurement CF
+    // (stockInfo.totalIncoming + incomingEta). Surface it so the operator can
+    // see "on order" against this product without opening Procurement.
+    var incoming = si.totalIncoming != null ? si.totalIncoming : 0;
+    var incomingRow = incoming > 0
+      ? [{ k: 'Incoming (on order)', v: String(incoming) + (si.incomingEta ? ' · ETA ' + N.date(si.incomingEta) : '') }]
+      : [];
     return U.card(title, U.kv([
       { k: 'Stock type', v: si.stockType || '—' },
-      { k: (hasVar ? 'On hand (all variants)' : 'On hand'), v: (si.totalOnHand != null ? String(si.totalOnHand) : '—') },
+      { k: (hasVar ? 'On hand (all variants)' : 'On hand'), v: (si.totalOnHand != null ? String(si.totalOnHand) : '—') }
+    ].concat(incomingRow).concat([
       { k: 'Low-stock at', v: (si.lowStockThreshold != null ? String(si.lowStockThreshold) : '—') },
       { k: 'Fulfillment', v: (si.stockFulfillmentDays != null ? si.stockFulfillmentDays + ' days' : '—') },
       { k: 'Wholesale MOQ', v: (p.moq != null ? String(p.moq) : '—') },

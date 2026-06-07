@@ -2023,6 +2023,14 @@
       items: items.map(function (it, idx) {
         var mapped = { pid: it.pid, name: it.name, options: it.options, priceCents: it.priceCents || 0, qty: it.qty, isWholesale: it.isWholesale || false };
         if (it.variantId) mapped.variantId = it.variantId;
+        // Tier 2 backorder intent: carry the cart line's backorder flag + ETA so
+        // the server can accept an out-of-stock line covered by an open PO (it
+        // re-validates eligibility — gate + incoming coverage — before honoring).
+        if (it.backorder) {
+          mapped.backorder = true;
+          if (it.shipsByDate) mapped.shipsByDate = it.shipsByDate;
+          if (it.shipsByText) mapped.shipsByText = it.shipsByText;
+        }
         // Pass booking fields so server can verify prices from class data instead of products
         if (it.bookingType) mapped.bookingType = it.bookingType;
         if (it.classId) mapped.classId = it.classId;
@@ -2047,7 +2055,10 @@
       couponSource: checkoutData.couponSource || null,
       uid: user ? user.uid : 'anonymous',
       isWholesale: isWholesaleCart(),
-      resaleCertNumber: checkoutData.resaleCertNumber || ''
+      resaleCertNumber: checkoutData.resaleCertNumber || '',
+      // Tier 2: hint that this order contains a backorder line (server still
+      // re-derives per-line eligibility; this just short-circuits messaging).
+      hasBackorder: items.some(function (it) { return !!it.backorder; })
     };
 
     // Wallet deductions — server verifies actual balances
