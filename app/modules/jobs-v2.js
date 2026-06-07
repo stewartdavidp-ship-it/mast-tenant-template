@@ -256,6 +256,10 @@
     detail: {
       flow: 'jobs',
       flowModule: 'jobsWorkflow',
+      // Lean guided header: a clickable step rail (click the next step to advance)
+      // instead of large Back/Advance buttons that eat real estate. Routes through
+      // the same onAdvance below, so inventory side-effects still fire.
+      guidedHeader: true,
       // Side-effects on advance: apply inventory FIRST (same primitives as legacy
       // transitionProductionJob), THEN do the MastFlow transition, then reopen —
       // so a failed inventory write doesn't advance the phase. Returning a value
