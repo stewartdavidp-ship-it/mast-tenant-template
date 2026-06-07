@@ -99,15 +99,22 @@
     route: 'jobs-v2',
     fetch: function (id) { return MastDB.productionJobs.get(id).then(function (j) { return j ? Object.assign({ _key: id }, j) : null; }); },
 
-    // Read-only tabbed detail (B1). Edits/heavy workflows arrive in B2.
+    // Process SO: the lifecycle (definition→in-progress→completed, on-hold
+    // sub-state, cancelled terminal) is the MastFlow engine model — detail.flow
+    // injects the stepper + guarded Advance into #muFlowHost (the pinned
+    // structure, above the tabs). Status is NOT a field/badge to edit.
     detail: {
+      flow: 'jobs',
+      flowModule: 'jobsWorkflow',
+      // Side-effects on advance (inventory commit/reverse) hook here in Layer 2;
+      // Layer 1 lets the engine do the generic status transition.
       render: function (UU, j) {
         var prog = progressOf(j);
         var tiles = UU.tiles([
-          { k: 'Status', v: UU.badge(statusLabel(j.status), STATUS_TONE[String(j.status || '').toLowerCase()] || 'neutral'), hero: true },
-          { k: 'Purpose', v: purposeLabel(j.purpose) },
+          { k: 'Purpose', v: esc(purposeLabel(j.purpose)) },
           { k: 'Priority', v: j.priority ? statusLabel(j.priority) : '—' },
-          { k: 'Progress', v: prog.target ? (prog.done + '/' + prog.target + ' · ' + prog.pct + '%') : '—' }
+          { k: 'Progress', v: prog.target ? (prog.done + '/' + prog.target + ' · ' + prog.pct + '%') : '—' },
+          { k: 'Items', v: String(lineItemsArr(j).length) }
         ]);
         var tabs = [
           { key: 'overview', label: 'Overview' }, { key: 'items', label: 'Line Items' },
@@ -115,7 +122,10 @@
           { key: 'story', label: 'Story' }, { key: 'links', label: 'Links' }
         ];
         function pane(key, html, active) { return '<div class="mu-pane" data-pane="' + key + '"' + (active ? '' : ' hidden') + '>' + html + '</div>'; }
-        return UU.stickyHead(tiles, UU.paneTabsBar(tabs, 'overview')) +
+        // tiles cover (pinned) → MastFlow process header → tabs → panes
+        return UU.stickyHead(tiles, '') +
+          '<div id="muFlowHost" style="margin:-4px -4px 14px;color:var(--warm-gray);font-size:0.85rem;">Loading workflow…</div>' +
+          UU.paneTabsBar(tabs, 'overview') +
           pane('overview', overviewPane(UU, j), true) +
           pane('items', itemsPane(UU, j)) +
           pane('builds', buildsPane(UU, j)) +
@@ -124,7 +134,7 @@
           pane('links', linksPane(UU, j));
       }
     }
-    // No onSave in B1 — read-only. The bridge-routed write path lands in B2.
+    // No onSave in Layer 1 — read-only panes. Bridge-routed writes land next.
   });
 
   // ── Read-only detail panes (standard MastUI controls only) ──────────
