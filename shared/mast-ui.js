@@ -57,7 +57,19 @@
     },
     // date display: ISO/Date -> "May 1, 2026"; dateRaw -> "2026-05-01"
     date: function (d) {
-      var dt = (d instanceof Date) ? d : new Date(d);
+      var dt;
+      if (d instanceof Date) {
+        dt = d;
+      } else if (typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d)) {
+        // Bare calendar date (no time) — parse as LOCAL midnight. new Date('YYYY-MM-DD')
+        // parses as UTC, which renders a day earlier in behind-UTC timezones (the PO
+        // order-date "Jun 6 → Jun 5" bug). Timestamps with a time component are left
+        // to native parsing.
+        var p = d.split('-');
+        dt = new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2]));
+      } else {
+        dt = new Date(d);
+      }
       if (isNaN(dt.getTime())) return '';
       return dt.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
     },
