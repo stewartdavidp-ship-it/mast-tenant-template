@@ -361,6 +361,17 @@
     });
     return c;
   }
+  // Rounded search, right-aligned on the pills row (margin-left:auto) — matches
+  // products-v2. Only on PO lenses; the reorder lens has no PO to search.
+  function searchBox() {
+    if (V2.statusFilter === 'needs-reorder') return '';
+    var hasQ = !!(V2.q || '').trim();
+    return '<div style="margin-left:auto;position:relative;width:230px;max-width:100%;">' +
+      '<input type="text" value="' + esc(V2.q || '') + '" oninput="ProcurementV2.search(this.value)" placeholder="Search PO # or vendor…" ' +
+        'style="width:100%;padding:7px 30px 7px 11px;border:1px solid var(--border);border-radius:999px;font-size:0.9rem;background:var(--cream,transparent);color:inherit;box-sizing:border-box;">' +
+      '<button onclick="ProcurementV2.search(\'\')" aria-label="Clear search" title="Clear" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);display:' + (hasQ ? 'flex' : 'none') + ';align-items:center;justify-content:center;width:20px;height:20px;border:0;border-radius:50%;background:color-mix(in srgb,var(--text-primary) 12%,transparent);color:var(--warm-gray);font-size:0.9rem;line-height:1;cursor:pointer;">×</button>' +
+    '</div>';
+  }
   function render() {
     var tab = ensureTab();
     var c = lensCounts();
@@ -395,19 +406,16 @@
         '<button class="btn btn-secondary" onclick="navigateTo(\'vendors-v2\')">⚐ Vendors</button> ' +
         '<button class="btn btn-secondary" onclick="ProcurementV2.exportCsv()">↓ Export</button>'
     }) +
-      '<div style="margin:14px 0 10px;display:flex;align-items:center;gap:8px 0;flex-wrap:wrap;">' + pills + '</div>';
+      '<div style="margin:14px 0 10px;display:flex;align-items:center;gap:8px 0;flex-wrap:wrap;">' + pills + searchBox() + '</div>';
     var body;
     if (V2.statusFilter === 'needs-reorder') {
       body = renderReorder();
     } else {
-      body =
-        '<div style="margin:14px 0;"><input type="text" placeholder="Search PO # or vendor…" value="' + esc(V2.q) +
-          '" oninput="ProcurementV2.search(this.value)" style="width:280px;max-width:100%;padding:7px 14px;border:1px solid var(--border);border-radius:999px;font-size:0.9rem;background:var(--cream,transparent);color:inherit;box-sizing:border-box;"></div>' +
-        MastEntity.renderList('procurement-v2', {
-          rows: visibleRows(), sortKey: V2.sortKey, sortDir: V2.sortDir,
-          onSortFnName: 'ProcurementV2.sort', onRowClickFnName: 'ProcurementV2.open',
-          empty: { title: 'No purchase orders', message: V2.loaded ? 'No POs match this lens.' : 'Loading…' }
-        });
+      body = MastEntity.renderList('procurement-v2', {
+        rows: visibleRows(), sortKey: V2.sortKey, sortDir: V2.sortDir,
+        onSortFnName: 'ProcurementV2.sort', onRowClickFnName: 'ProcurementV2.open',
+        empty: { title: 'No purchase orders', message: V2.loaded ? 'No POs match this lens.' : 'Loading…' }
+      });
     }
     tab.innerHTML = header + body;
   }
