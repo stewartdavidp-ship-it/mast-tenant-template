@@ -1137,9 +1137,13 @@
   // The lean checklist beneath the rail: the current phase's exit requirements,
   // met ✓ teal / unmet, each unmet target rendered as a "Go →" into the record.
   function _renderGuidedChecklist(def, record, ev, ctxId) {
-    if (ev.specMismatch || ev.isTerminal) return '';
+    // Always emit the (hidden) container, even when there's nothing to show —
+    // a completed-step review needs this element to populate, including on
+    // terminal records (received/cancelled) whose current phase has no checklist.
+    var emptyEl = '<div id="' + ctxId + '_checklist" style="display:none;flex-direction:column;gap:5px;margin:11px 0 2px;"></div>';
+    if (ev.specMismatch || ev.isTerminal) return emptyEl;
     var unmet = ev.missing, doneReqs = ev.satisfied;
-    if (!unmet.length && !doneReqs.length) return '';
+    if (!unmet.length && !doneReqs.length) return emptyEl;
 
     function itemHtml(r, sat) {
       var icon, iconBg, iconColor;
