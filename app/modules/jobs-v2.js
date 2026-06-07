@@ -286,7 +286,7 @@
         var tabs = [
           { key: 'overview', label: 'Overview' }, { key: 'items', label: 'Line Items' },
           { key: 'builds', label: 'Builds' }, { key: 'costs', label: 'Costs' },
-          { key: 'story', label: 'Story' }, { key: 'links', label: 'Links' }
+          { key: 'story', label: 'Story' }
         ];
         function pane(key, html, active) { return '<div class="mu-pane" data-pane="' + key + '"' + (active ? '' : ' hidden') + '>' + html + '</div>'; }
         // On-hold is an in-progress SUB-STATE — surface it as a banner (the
@@ -303,8 +303,7 @@
           pane('items', itemsPane(UU, j)) +
           pane('builds', buildsPane(UU, j)) +
           pane('costs', costsPane(UU, j)) +
-          pane('story', storyPane(UU, j)) +
-          pane('links', linksPane(UU, j));
+          pane('story', storyPane(UU, j));
       }
     }
     // No onSave in Layer 1 — read-only panes. Bridge-routed writes land next.
@@ -324,11 +323,21 @@
       { k: 'Created', v: fmtDate(j.createdAt) },
       { k: 'Started', v: fmtDate(j.startedAt) },
       { k: 'Completed', v: fmtDate(j.completedAt) },
-      { k: 'Deadline', v: fmtDate(j.deadline) },
-      { k: 'Event', v: esc(j.eventName) },
-      { k: 'Order', v: esc(j.orderId) }
+      { k: 'Deadline', v: fmtDate(j.deadline) }
     ]));
-    return details + lifecyclePane(UU, j);
+    // Related (folded in from the former Links tab): what this job connects to.
+    var lis = lineItemsArr(j);
+    var linked = lis.filter(function (li) { return li.productLinked; });
+    var related = UU.card('Related', UU.kv([
+      { k: 'Order', v: esc(j.orderId) },
+      { k: 'Customer', v: esc(j.customerId) },
+      { k: 'Event', v: esc(j.eventName) },
+      { k: 'Builds', v: String(buildsArr(j).length) },
+      { k: 'Product link', v: lis.length ? (linked.length + ' / ' + lis.length + ' items') : '—' }
+    ]));
+    // Two-column record layout (mu-grid2: 1.4fr/1fr, collapses to 1col on narrow):
+    // Details on the left, Related + Lifecycle on the right — less vertical scroll.
+    return '<div class="mu-grid2"><div>' + details + '</div><div>' + related + lifecyclePane(UU, j) + '</div></div>';
   }
 
   // Off-backbone lifecycle actions (the backbone Start/Complete live in the
@@ -401,17 +410,6 @@
     return UU.card('Story',
       '<p style="color:var(--warm-gray);">Story authoring (build-photo picker, captions, QR, publish) lands in Phase B2. For now, manage stories in the classic Stories view.</p>' +
       '<button class="btn btn-secondary" onclick="JobsV2.openClassicStories()">Open Stories (classic)</button>');
-  }
-
-  function linksPane(UU, j) {
-    var lis = lineItemsArr(j);
-    var linked = lis.filter(function (li) { return li.productLinked; });
-    return UU.card('Links', UU.kv([
-      { k: 'Builds on job', v: String(buildsArr(j).length) },
-      { k: 'Line items linked to product', v: linked.length + ' / ' + lis.length },
-      { k: 'Order', v: esc(j.orderId) },
-      { k: 'Customer', v: esc(j.customerId) }
-    ]) + '<p style="color:var(--warm-gray);margin-top:8px;">Product-linking actions arrive in B2 (read-only here).</p>');
   }
 
   // ════════════════ Entity: the build session (drilled SO) ════════════
@@ -493,9 +491,10 @@
 
     var completeBtn = canEdit ? '<div style="margin-top:16px;"><button class="btn btn-primary" onclick="JobsV2.buildComplete(\'' + esc(r._key) + '\')">Complete build</button> <span style="color:var(--warm-gray);font-size:0.85rem;">Records output, updates inventory, and locks the build.</span></div>' : '';
 
-    return crumbBack() + UU.stickyHead(tiles, '') + opsCard + outputCard + photosCard + msCard + notesCard + completeBtn;
+    // No back-crumb here — the engine renders the standard "← Job:" breadcrumb
+    // for drilled SOs; adding our own duplicated it.
+    return UU.stickyHead(tiles, '') + opsCard + outputCard + photosCard + msCard + notesCard + completeBtn;
   }
-  function crumbBack() { return '<div class="mu-crumb"><button onclick="MastEntity.back()">&larr; Back to job</button></div>'; }
   function reopenBuild(id) { return Promise.resolve(MastEntity.get('job-build-v2').fetch(id)).then(function (fresh) { if (fresh) window.MastEntity.openRecord('job-build-v2', fresh, 'read', true); }); }
   // Mirror legacy uploadBuildPhoto: compress → Storage → buildMedia record.
   function _uploadBuildPhoto(file, buildId) {
