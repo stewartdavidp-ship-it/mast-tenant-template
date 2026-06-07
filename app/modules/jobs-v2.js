@@ -154,12 +154,14 @@
         if (!job) throw new Error('Job not found');
         var now = new Date();
         var buildNumber = Object.keys(job.builds || {}).length + 1;
-        return MastDB.productionJobs.pushBuild(jobId, {
+        // Use newKey + awaitable set (NOT push — push to a nested map path is
+        // fire-and-forget and the drill would race ahead of an unpersisted write).
+        var buildId = MastDB.newKey('admin/jobs/' + jobId + '/builds');
+        return MastDB.set('admin/jobs/' + jobId + '/builds/' + buildId, {
           buildNumber: buildNumber, sessionDate: now.toISOString().split('T')[0], startTime: now.toISOString(),
           endTime: null, durationMinutes: null, workType: job.workType || 'flameshop', status: 'draft',
           operators: [], notes: '', createdAt: now.toISOString(), completedAt: null
-        }).then(function (res) {
-          var buildId = res.key;
+        }).then(function () {
           var after = _writeAudit('update', 'jobs', jobId);
           if (job.status === 'definition') {
             after = Promise.resolve(after)
@@ -176,7 +178,8 @@
       return Promise.resolve(MastDB.productionJobs.updateBuild(jobId, buildId, u));
     },
     addMilestone: function (jobId, buildId, text) {
-      return Promise.resolve(MastDB.push('admin/jobs/' + jobId + '/builds/' + buildId + '/milestones', { text: text, timestamp: new Date().toISOString() }));
+      var mId = MastDB.newKey('admin/jobs/' + jobId + '/builds/' + buildId + '/milestones');
+      return Promise.resolve(MastDB.set('admin/jobs/' + jobId + '/builds/' + buildId + '/milestones/' + mId, { text: text, timestamp: new Date().toISOString() }));
     },
     // Complete a build — mirrors legacy doCompleteBuild: write output, aggregate
     // tallies across builds, then the completeBuildJob CF (material deduction,
