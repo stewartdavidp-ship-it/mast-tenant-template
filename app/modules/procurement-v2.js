@@ -362,30 +362,33 @@
       ['cancelled', 'Cancelled', c.cancelled],
       ['all', 'All', V2.rows.length]
     ];
+    // Canonical list-facet pill (rounded 999px, amber-tint when active) — the SAME
+    // control products-v2 uses, NOT btn-small. Journey order: the entry lens first.
     var pills = lenses.map(function (f) {
       var on = V2.statusFilter === f[0];
-      var count = (f[2] != null) ? ' <span style="opacity:0.7;">' + N.count(f[2]) + '</span>' : '';
-      return '<button class="btn btn-small ' + (on ? 'btn-primary' : 'btn-secondary') + '" onclick="ProcurementV2.filter(\'' + f[0] + '\')">' + f[1] + count + '</button>';
-    }).join(' ');
-    var header =
-      '<div style="display:flex;align-items:baseline;gap:12px;margin-bottom:6px;flex-wrap:wrap;">' +
-        '<h1 style="font-size:1.6rem;margin:0;">Procurement</h1>' +
-        '<span style="color:var(--warm-gray);font-size:0.9rem;">' + N.count(c.draft + c.onorder) + ' open · ' + N.count(V2.suggestions.length) + ' to reorder</span>' +
-        '<span style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap;">' +
-          '<button class="btn btn-primary" onclick="ProcurementV2.createNew()">+ New PO</button>' +
-          '<button class="btn btn-secondary" onclick="navigateTo(\'lots-v2\')">▦ Inventory lots</button>' +
-          '<button class="btn btn-secondary" onclick="navigateTo(\'vendors-v2\')">⚐ Vendors</button>' +
-          '<button class="btn btn-secondary" onclick="ProcurementV2.exportCsv()">↓ Export</button>' +
-        '</span>' +
-      '</div>' +
-      '<div style="display:flex;gap:6px;flex-wrap:wrap;margin:12px 0;">' + pills + '</div>';
+      return '<button onclick="ProcurementV2.filter(\'' + f[0] + '\')" style="border:1px solid var(--border);' +
+        'background:' + (on ? 'color-mix(in srgb,var(--amber) 18%,transparent)' : 'transparent') + ';' +
+        'color:' + (on ? 'var(--text-primary)' : 'var(--warm-gray)') + ';border-radius:999px;padding:6px 13px;font-size:0.85rem;cursor:pointer;margin-right:8px;">' +
+        f[1] + ' <span style="color:var(--warm-gray);">' + N.count(f[2]) + '</span></button>';
+    }).join('');
+    // Standard page header strip (title · count · actions) — same as every list.
+    var header = U.pageHeader({
+      title: 'Procurement',
+      count: N.count(c.draft + c.onorder) + ' open · ' + N.count(V2.suggestions.length) + ' to reorder',
+      actionsHtml:
+        '<button class="btn btn-primary" onclick="ProcurementV2.createNew()">+ New PO</button> ' +
+        '<button class="btn btn-secondary" onclick="navigateTo(\'lots-v2\')">▦ Inventory lots</button> ' +
+        '<button class="btn btn-secondary" onclick="navigateTo(\'vendors-v2\')">⚐ Vendors</button> ' +
+        '<button class="btn btn-secondary" onclick="ProcurementV2.exportCsv()">↓ Export</button>'
+    }) +
+      '<div style="margin:14px 0 10px;display:flex;align-items:center;gap:8px 0;flex-wrap:wrap;">' + pills + '</div>';
     var body;
     if (V2.statusFilter === 'needs-reorder') {
       body = renderReorder();
     } else {
       body =
-        '<div style="margin:14px 0;"><input class="form-input" placeholder="Search PO # or vendor…" value="' + esc(V2.q) +
-          '" oninput="ProcurementV2.search(this.value)" style="max-width:340px;font-size:0.9rem;"></div>' +
+        '<div style="margin:14px 0;"><input type="text" placeholder="Search PO # or vendor…" value="' + esc(V2.q) +
+          '" oninput="ProcurementV2.search(this.value)" style="width:280px;max-width:100%;padding:7px 14px;border:1px solid var(--border);border-radius:999px;font-size:0.9rem;background:var(--cream,transparent);color:inherit;box-sizing:border-box;"></div>' +
         MastEntity.renderList('procurement-v2', {
           rows: visibleRows(), sortKey: V2.sortKey, sortDir: V2.sortDir,
           onSortFnName: 'ProcurementV2.sort', onRowClickFnName: 'ProcurementV2.open',
