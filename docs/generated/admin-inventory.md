@@ -6,7 +6,7 @@ Source-of-truth counts for the admin app, generated from the code so docs
 cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 
 - **Core shell:** `app/index.html` — **59,032** lines
-- **Feature modules:** **98** files in `app/modules/` (**89** routed), **114,083** lines combined
+- **Feature modules:** **98** files in `app/modules/` (**89** routed), **114,306** lines combined
 
 | Module file | Lines | Routes |
 |---|---:|---|
@@ -62,7 +62,7 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/lookbooks.js` | 822 | lookbooks |
 | `modules/lots-v2.js` | 178 | lots-v2 |
 | `modules/loyalty-v2.js` | 347 | loyalty-v2 |
-| `modules/maker.js` | 7,550 | materials, products |
+| `modules/maker.js` | 7,600 | materials, products |
 | `modules/mapping.js` | 1,768 | mapping |
 | `modules/marketing-calendar-v2.js` | 216 | marketing-calendar-v2 |
 | `modules/marketing-calendar.js` | 270 | marketing-calendar |
@@ -76,7 +76,7 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/procurement-v2.js` | 875 | procurement-v2 |
 | `modules/procurement.js` | 2,378 | procurement |
 | `modules/production.js` | 3,553 | jobs, production, stories, forecast |
-| `modules/products-v2.js` | 3,189 | products-v2 |
+| `modules/products-v2.js` | 3,362 | products-v2 |
 | `modules/promotions-v2.js` | 389 | promotions-v2 |
 | `modules/promotions.js` | 529 | promotions |
 | `modules/resources-v2.js` | 308 | resources-v2 |
