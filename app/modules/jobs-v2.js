@@ -202,8 +202,13 @@
                 tallies[k].c += (b.output[k].completedQuantity || 0); tallies[k].l += (b.output[k].lossQuantity || 0);
               });
             });
-            var upd = {}; Object.keys(tallies).forEach(function (k) { upd['lineItems/' + k + '/completedQuantity'] = tallies[k].c; upd['lineItems/' + k + '/lossQuantity'] = tallies[k].l; });
-            return Object.keys(upd).length ? MastDB.productionJobs.update(jobId, upd) : null;
+            // Per-line-item update — the adapter maps admin/jobs/{id}/lineItems/{liId}
+            // onto the lineItems map field. A slash-path multi-update on the job doc
+            // ({'lineItems/x/completedQuantity':n}) is REJECTED by Firestore ("Paths
+            // must not contain '/'"), which silently broke completion.
+            return Promise.all(Object.keys(tallies).map(function (k) {
+              return MastDB.productionJobs.updateLineItem(jobId, k, { completedQuantity: tallies[k].c, lossQuantity: tallies[k].l });
+            }));
           })
           .then(function () {
             // Server-side completion (inventory/material/observed-cost/lock).
