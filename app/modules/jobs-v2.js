@@ -214,6 +214,57 @@
             }
           });
       });
+    },
+
+    // ── Story ────────────────────────────────────────────────────────
+    // Find the job's story (one per job by convention) or create a draft.
+    ensureStory: function (jobId) {
+      return Promise.resolve(MastDB.stories.queryByJob(jobId)).then(function (map) {
+        var ids = Object.keys(map || {});
+        if (ids.length) return ids[0];
+        return Promise.resolve(MastDB.productionJobs.get(jobId)).then(function (job) {
+          var storyId = MastDB.stories.newKey();
+          var now = new Date().toISOString();
+          return MastDB.stories.set(storyId, { id: storyId, jobId: jobId, title: (job && job.name) || 'Build story', status: 'draft', entries: {}, createdAt: now, updatedAt: now })
+            .then(function () { return storyId; });
+        });
+      });
+    },
+    addStoryEntry: function (storyId, entry) {
+      var eid = MastDB.newKey('public/stories/' + storyId + '/entries');
+      return Promise.resolve(MastDB.set('public/stories/' + storyId + '/entries/' + eid, entry))
+        .then(function () { return MastDB.stories.update(storyId, { updatedAt: new Date().toISOString() }); });
+    },
+    setStoryEntryField: function (storyId, entryId, field, value) {
+      var u = {}; u[field] = value;
+      return Promise.resolve(MastDB.set('public/stories/' + storyId + '/entries/' + entryId + '/' + field, value))
+        .then(function () { return MastDB.stories.update(storyId, { updatedAt: new Date().toISOString() }); });
+    },
+    removeStoryEntry: function (storyId, entryId) {
+      return Promise.resolve(MastDB.remove('public/stories/' + storyId + '/entries/' + entryId))
+        .then(function () { return MastDB.stories.update(storyId, { updatedAt: new Date().toISOString() }); });
+    },
+    setStoryTitle: function (storyId, title) {
+      return Promise.resolve(MastDB.stories.update(storyId, { title: title, updatedAt: new Date().toISOString() }));
+    },
+    publishStory: function (storyId, jobId) {
+      var now = new Date().toISOString();
+      return Promise.resolve(MastDB.productionJobs.get(jobId)).then(function (job) {
+        // de-duplicated operators from all builds (the public credit line)
+        var ops = {};
+        Object.values((job && job.builds) || {}).forEach(function (b) { (b.operators || []).forEach(function (o) { ops[o] = true; }); });
+        return MastDB.stories.update(storyId, { status: 'published', publishedAt: now, updatedAt: now, operators: Object.keys(ops) })
+          .then(function () {
+            // back-fill storyId onto the job's linked products (storefront build-story)
+            var lis = (job && job.lineItems) || {};
+            return Promise.all(Object.keys(lis).map(function (k) {
+              var pid = lis[k].productId; return pid ? MastDB.set('admin/products/' + pid + '/storyId', storyId) : null;
+            }));
+          });
+      });
+    },
+    unpublishStory: function (storyId) {
+      return Promise.resolve(MastDB.stories.update(storyId, { status: 'draft', updatedAt: new Date().toISOString() }));
     }
   };
   function _syncStock(pid) { return (typeof window.syncStockInfoToPublic === 'function') ? window.syncStockInfoToPublic(pid) : null; }
@@ -405,11 +456,12 @@
   }
 
   function storyPane(UU, j) {
-    // B1 is read-only; full story authoring (picker, captions, QR, publish) is
-    // the B2 Story drill. Until then, link to the classic stories surface.
+    var id = j._key || j.id;
+    var btn = canEditJobs()
+      ? '<button class="btn btn-secondary" onclick="JobsV2.openStory(\'' + esc(id) + '\')">Curate story</button>'
+      : '';
     return UU.card('Story',
-      '<p style="color:var(--warm-gray);">Story authoring (build-photo picker, captions, QR, publish) lands in Phase B2. For now, manage stories in the classic Stories view.</p>' +
-      '<button class="btn btn-secondary" onclick="JobsV2.openClassicStories()">Open Stories (classic)</button>');
+      '<p style="color:var(--warm-gray);">Document the build for buyers — pick build photos, add captions, and publish. Opens in its own surface.</p>' + btn);
   }
 
   // ════════════════ Entity: the build session (drilled SO) ════════════
@@ -507,6 +559,74 @@
       return MastDB.buildMedia.set(buildId, mediaId, { type: 'photo', url: url, caption: '', uploadedAt: new Date().toISOString(), originalFilename: file.name });
     });
   }
+
+  // ════════════════ Entity: the story (drilled SO) ════════════════════
+  // Document the build for buyers: pick build photos, caption, order, publish.
+  // recordId = storyId. fetch loads the story + job + all the job's build photos.
+  MastEntity.define('job-story-v2', {
+    label: 'Story', labelPlural: 'Stories', size: 'lg', route: null,
+    recordId: function (r) { return r._key; },
+    fields: [{ name: '_title', label: 'Story', type: 'text', list: true, group: 'Story', readOnly: true }],
+    fetch: function (storyId) {
+      return Promise.resolve(MastDB.stories.get(storyId)).then(function (story) {
+        if (!story) return null;
+        var jobId = story.jobId;
+        return Promise.resolve(jobId ? MastDB.productionJobs.get(jobId) : null).then(function (job) {
+          var buildIds = Object.keys((job && job.builds) || {});
+          return Promise.all(buildIds.map(function (bid) { return Promise.resolve(MastDB.buildMedia.get(bid)).then(function (m) { return { bid: bid, media: m || {} }; }).catch(function () { return { bid: bid, media: {} }; }); }))
+            .then(function (mediaSets) {
+              var avail = [];
+              mediaSets.forEach(function (ms) { Object.keys(ms.media).forEach(function (mid) { var m = ms.media[mid]; if (m && m.url) avail.push({ url: m.url, buildId: ms.bid }); }); });
+              return { _key: storyId, id: storyId, story: story, job: job, jobId: jobId, available: avail };
+            });
+        });
+      });
+    },
+    detail: { render: function (UU, r) { return storySObody(UU, r); } }
+  });
+
+  function storyEntriesArr(story) {
+    var e = story.entries || {};
+    return Object.keys(e).map(function (k) { return Object.assign({ _key: k }, e[k]); })
+      .sort(function (a, b) { return (a.order || 0) - (b.order || 0); });
+  }
+  function storySObody(UU, r) {
+    var story = r.story, sid = r._key, published = (story.status === 'published'), canEdit = canEditJobs() && !published;
+    var tiles = UU.tiles([
+      { k: 'Status', v: published ? UU.badge('Published', 'success') : UU.badge('Draft', 'amber'), hero: true },
+      { k: 'Entries', v: String(storyEntriesArr(story).length) },
+      { k: 'Photos available', v: String((r.available || []).length) }
+    ]);
+    // Title
+    var titleCard = UU.card('Title', canEdit
+      ? '<input id="jsTitle" class="form-input" style="width:100%;" value="' + esc(story.title || '') + '"> <button class="btn btn-secondary btn-small" style="margin-top:8px;" onclick="JobsV2.storySaveTitle(\'' + esc(sid) + '\')">Save title</button>'
+      : (esc(story.title || '') || '<span style="color:var(--warm-gray);">—</span>'));
+    // Curated entries (the story)
+    var entries = storyEntriesArr(story);
+    var entriesHtml = entries.length ? entries.map(function (e) {
+      var thumb = e.mediaUrl ? '<img src="' + esc(e.mediaUrl) + '" alt="" style="width:64px;height:64px;object-fit:cover;border-radius:8px;border:1px solid var(--border);flex:0 0 64px;">' : '';
+      var cap = canEdit
+        ? '<input class="form-input jsCap" data-e="' + esc(e._key) + '" value="' + esc(e.caption || '') + '" placeholder="Caption" style="flex:1;" onchange="JobsV2.storyCaption(\'' + esc(sid) + '\',\'' + esc(e._key) + '\',this)">'
+        : '<span style="flex:1;">' + (esc(e.caption) || '<span style="color:var(--warm-gray);">No caption</span>') + '</span>';
+      var rm = canEdit ? '<button class="mu-link" onclick="JobsV2.storyRemove(\'' + esc(sid) + '\',\'' + esc(e._key) + '\')">Remove</button>' : '';
+      return '<div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;">' + thumb + cap + rm + '</div>';
+    }).join('') : '<p style="color:var(--warm-gray);">No entries yet — add build photos below.</p>';
+    var entriesCard = UU.card('Story entries', entriesHtml);
+    // Photo picker (build photos not already used)
+    var usedUrls = {}; entries.forEach(function (e) { if (e.mediaUrl) usedUrls[e.mediaUrl] = true; });
+    var pick = (r.available || []).filter(function (p) { return !usedUrls[p.url]; });
+    var pickerCard = canEdit ? UU.card('Add build photos', pick.length
+      ? '<div style="display:flex;gap:8px;flex-wrap:wrap;">' + pick.map(function (p) {
+        return '<button type="button" onclick="JobsV2.storyAdd(\'' + esc(sid) + '\',\'' + encodeURIComponent(p.url) + '\',\'' + esc(p.buildId) + '\')" style="border:0;padding:0;background:none;cursor:pointer;"><img src="' + esc(p.url) + '" alt="" style="width:64px;height:64px;object-fit:cover;border-radius:8px;border:1px solid var(--border);"></button>';
+      }).join('') + '</div>'
+      : '<p style="color:var(--warm-gray);">No more build photos to add. Capture photos in a build session first.</p>') : '';
+    // Publish / unpublish
+    var actions = canEditJobs() ? UU.card('Publish', published
+      ? '<p style="color:var(--warm-gray);margin-bottom:8px;">Published — visible to buyers; QR links the storefront product to this story.</p><button class="btn btn-secondary" onclick="JobsV2.storyUnpublish(\'' + esc(sid) + '\')">Unpublish</button>'
+      : '<p style="color:var(--warm-gray);margin-bottom:8px;">Publishing credits the build operators and links the story to the job\'s product(s).</p><button class="btn btn-primary" onclick="JobsV2.storyPublish(\'' + esc(sid) + '\',\'' + esc(r.jobId) + '\')">Publish story</button>') : '';
+    return UU.stickyHead(tiles, '') + titleCard + entriesCard + pickerCard + actions;
+  }
+  function reopenStory(sid) { return Promise.resolve(MastEntity.get('job-story-v2').fetch(sid)).then(function (fresh) { if (fresh) window.MastEntity.openRecord('job-story-v2', fresh, 'read', true); }); }
 
   // ── State + data (same source as legacy: admin/jobs) ────────────────
   var V2 = { rows: [], byId: {}, sortKey: 'createdAt', sortDir: 'desc', status: 'active', purpose: 'all', off: null };
@@ -661,6 +781,48 @@
           .catch(function (e) { if (window.MastAdmin) MastAdmin.showToast('Complete failed: ' + (e && e.message || e), true); });
       };
       if (typeof window.mastConfirm === 'function') { window.mastConfirm('Complete this build? It records output, updates inventory, and locks the build.', go); } else { go(); }
+    },
+    // ── Story ──
+    openStory: function (jobId) {
+      if (!_guardEdit()) return;
+      JobsBridge.ensureStory(jobId).then(function (sid) { MastEntity.drill('job-story-v2', sid); })
+        .catch(function (e) { if (window.MastAdmin) MastAdmin.showToast('Could not open story: ' + (e && e.message || e), true); });
+    },
+    storySaveTitle: function (sid) {
+      if (!_guardEdit()) return;
+      var el = document.getElementById('jsTitle');
+      JobsBridge.setStoryTitle(sid, el ? el.value : '').then(function () { if (window.MastAdmin) MastAdmin.showToast('Title saved'); })
+        .catch(function (e) { if (window.MastAdmin) MastAdmin.showToast('Save failed: ' + (e && e.message || e), true); });
+    },
+    storyAdd: function (sid, urlEnc, buildId) {
+      if (!_guardEdit()) return;
+      var url = decodeURIComponent(urlEnc);
+      JobsBridge.addStoryEntry(sid, { order: Date.now ? 0 : 0, mediaUrl: url, mediaType: 'photo', caption: '', buildId: buildId, source: 'build' })
+        .then(function () { return reopenStory(sid); })
+        .catch(function (e) { if (window.MastAdmin) MastAdmin.showToast('Could not add: ' + (e && e.message || e), true); });
+    },
+    storyCaption: function (sid, eid, el) {
+      if (!_guardEdit()) return;
+      JobsBridge.setStoryEntryField(sid, eid, 'caption', el ? el.value : '')
+        .catch(function (e) { if (window.MastAdmin) MastAdmin.showToast('Save failed: ' + (e && e.message || e), true); });
+    },
+    storyRemove: function (sid, eid) {
+      if (!_guardEdit()) return;
+      JobsBridge.removeStoryEntry(sid, eid).then(function () { return reopenStory(sid); })
+        .catch(function (e) { if (window.MastAdmin) MastAdmin.showToast('Could not remove: ' + (e && e.message || e), true); });
+    },
+    storyPublish: function (sid, jobId) {
+      if (!_guardEdit()) return;
+      var go = function () {
+        JobsBridge.publishStory(sid, jobId).then(function () { if (window.MastAdmin) MastAdmin.showToast('Story published'); return reopenStory(sid); })
+          .catch(function (e) { if (window.MastAdmin) MastAdmin.showToast('Publish failed: ' + (e && e.message || e), true); });
+      };
+      if (typeof window.mastConfirm === 'function') { window.mastConfirm('Publish this story? It will credit the build operators and link to the job\'s product(s).', go); } else { go(); }
+    },
+    storyUnpublish: function (sid) {
+      if (!_guardEdit()) return;
+      JobsBridge.unpublishStory(sid).then(function () { if (window.MastAdmin) MastAdmin.showToast('Unpublished'); return reopenStory(sid); })
+        .catch(function (e) { if (window.MastAdmin) MastAdmin.showToast('Could not unpublish: ' + (e && e.message || e), true); });
     },
     cancelJob: function (id) {
       if (!_guardEdit()) return;
