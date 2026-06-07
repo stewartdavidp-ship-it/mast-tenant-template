@@ -1744,6 +1744,17 @@
     }
   });
 
+  // Format a 'ships by' date. Parse YYYY-MM-DD as LOCAL midnight so it doesn't
+  // render a day early in behind-UTC timezones.
+  function formatShipsBy(d) {
+    if (!d) return '';
+    var s = String(d);
+    var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
+    var dt = m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : new Date(s);
+    if (isNaN(dt.getTime())) return s;
+    return dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  }
+
   // ── Add to Cart readiness check ──
   function checkAddToCartReady() {
     var required = window._requiredOptions || [];
@@ -1794,16 +1805,61 @@
       btnText = 'No Longer Available';
     }
 
+    // ── Tier 2: backorder from an open PO (resold goods, gated) ──────────
+    // A strict RESOLD product that is out of stock but covered by an open PO
+    // (incoming qty + ETA, projected to stockInfo by the procurement CF) can be
+    // BACKORDERED ("ships by <date>") instead of blocked — capped at the incoming
+    // qty. Gated by shopDisplay.allowBackorder (off by default). Built products
+    // (made via Jobs, not POs) and discontinued items never backorder.
+    var _sd = window._shopDisplayConfig || {};
+    var backorder = null;
+    if (stockBlocked && _sd.allowBackorder && p && p.acquisitionType !== 'build' &&
+        p.availability !== 'discontinued' && si) {
+      var boInc = 0, boEta = null;
+      if (allSelected && required.length > 0 && si.variants) {
+        var boVar = findVariant(window._productVariants, selected);
+        var boVk = boVar && boVar.id ? boVar.id : null;
+        var boVs = boVk ? si.variants[boVk] : null;
+        if (boVs) { boInc = boVs.incoming || 0; boEta = boVs.incomingEta || null; }
+      } else {
+        boInc = si.totalIncoming || 0; boEta = si.incomingEta || null;
+      }
+      if (boInc > 0 && boEta) {
+        backorder = { eta: boEta, text: 'Ships by ' + formatShipsBy(boEta), maxQty: boInc };
+        stockBlocked = false;   // allow the sale as a backorder
+      }
+    }
+    window._productBackorder = backorder;
+
     if (!stockBlocked && allSelected && hasPrice) {
       btn.disabled = false;
       btn.style.opacity = '1';
       btn.style.cursor = 'pointer';
-      btn.textContent = 'Add to Cart';
+      btn.textContent = backorder ? ('Backorder · ' + backorder.text) : 'Add to Cart';
     } else {
       btn.disabled = true;
       btn.style.opacity = '0.5';
       btn.style.cursor = 'not-allowed';
       if (stockBlocked) btn.textContent = btnText;
+    }
+
+    // Ships-by note below the button (created once, refreshed on every run so it
+    // can't go stale when the operator switches variants).
+    var _boNote = document.getElementById('backorderNote');
+    if (!_boNote && btn && btn.parentNode) {
+      _boNote = document.createElement('div');
+      _boNote.id = 'backorderNote';
+      _boNote.style.cssText = 'font-size:0.85rem;margin-top:8px;line-height:1.4;';
+      btn.parentNode.insertBefore(_boNote, btn.nextSibling);
+    }
+    if (_boNote) {
+      if (backorder) {
+        _boNote.innerHTML = '<span style="color:var(--primary);font-weight:600;">' + escHtml(backorder.text) + '</span>' +
+          ' &mdash; out of stock now; reserve yours and it ships when our next shipment arrives.';
+        _boNote.style.display = '';
+      } else {
+        _boNote.style.display = 'none';
+      }
     }
 
     // Update lead time when variant changes
@@ -1909,6 +1965,7 @@
       }
     }
     var addVariant = findVariant(window._productVariants, window._selectedOptions);
+    var _bo = window._productBackorder;   // {eta, text, maxQty} when backordering, else null
     MastCart.addItem({
       pid: p.pid,
       name: p.name,
@@ -1922,7 +1979,12 @@
       salePriceCents: onSale ? saleCents : null,
       leadTimeText: window._productLeadTimeText || null,
       stockType: (p.stockInfo && p.stockInfo.stockType) || null,
-      availableStock: cartAvailableStock,
+      // Backorder (Tier 2): cap the qty at the incoming PO qty; tag the line so
+      // the cart shows "ships by" and the order carries the flag for fulfillment.
+      availableStock: _bo ? _bo.maxQty : cartAvailableStock,
+      backorder: _bo ? true : false,
+      shipsByDate: _bo ? _bo.eta : null,
+      shipsByText: _bo ? _bo.text : null,
       itemType: 'product',
       shippingCategory: p.shippingCategory || ((p.stockInfo && p.stockInfo.shippingCategory) ? p.stockInfo.shippingCategory : 'small')
     });

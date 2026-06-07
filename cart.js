@@ -333,6 +333,9 @@
       salePriceCents: item.salePriceCents || null,
       leadTimeText: item.leadTimeText || null,
       stockType: item.stockType || null,
+      backorder: item.backorder || false,        // Tier 2: ships-by/backorder (out-of-stock, covered by an open PO)
+      shipsByDate: item.shipsByDate || null,
+      shipsByText: item.shipsByText || null,
       availableStock: typeof item.availableStock === 'number' ? item.availableStock : null,
       bookingType: item.bookingType || null,
       sessionId: item.sessionId || null,
@@ -1295,6 +1298,7 @@
 
       var wholesaleBadge = item.isWholesale ? '<span style="font-size:0.65rem;background:rgba(21,101,192,0.15);color:#1565C0;padding:2px 6px;border-radius:3px;margin-left:6px;">WHOLESALE</span>' : '';
       var leadTimeHtml = item.leadTimeText ? '<div style="font-size:0.75rem;color:var(--text-muted,#9e9890);font-style:italic;margin-top:2px;">' + escHtml(item.leadTimeText) + '</div>' : '';
+      var backorderHtml = (item.backorder && item.shipsByText) ? '<div style="font-size:0.75rem;color:var(--primary,#C4853C);font-weight:600;margin-top:2px;">' + escHtml(item.shipsByText) + ' &middot; backorder</div>' : '';
 
       html +=
         '<div class="cart-item" data-cart-id="' + escAttr(item.cartItemId) + '">' +
@@ -1304,6 +1308,7 @@
             optionsHtml +
             persHtml +
             leadTimeHtml +
+            backorderHtml +
             '<div class="cart-item-row">' +
               '<span class="cart-item-price">' +
                 // C-4 fix: ALWAYS display priceCents — this is the canonical unit price the
