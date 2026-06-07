@@ -91,6 +91,18 @@
       return Object.assign({ id: 'v' + i }, v);
     });
   }
+  // Quick-add attribute presets for the guided variant editor (Step 1). Each
+  // pre-fills a common attribute name + starter choices the operator can edit;
+  // an empty `choices` inserts just the named attribute (operator adds choices).
+  // Chosen for a jewelry/maker tenant. Presets are editable after insertion and
+  // "Custom…" is always available alongside.
+  var VARIANT_PRESETS = [
+    { label: 'Size', choices: ['6', '7', '8'] },
+    { label: 'Color', choices: [] },
+    { label: 'Material', choices: [] },
+    { label: 'Scent', choices: [] },
+    { label: 'Length', choices: ['16"', '18"', '20"'] }
+  ];
   // Variant option combinatorics (for Add variant). combo key = option label
   // lower-cased (matches the stored combo objects, e.g. {size:'small'}).
   function comboSig(c) { return Object.keys(c || {}).sort().map(function (k) { return k + '=' + c[k]; }).join('|'); }
@@ -156,35 +168,117 @@
   // surface), not a modal. Options editor (define attributes + choices) + the
   // missing-combination picker. Re-rendered in place after each change; Back
   // returns to the product SO (whose variant tree re-renders fresh).
+  // Shared input style for the editor's text fields.
+  var VE_FIELD_CSS = 'padding:6px 9px;border:1px solid var(--cream-dark);border-radius:6px;font-size:0.85rem;background:var(--cream);color:inherit;box-sizing:border-box;';
+  // Ephemeral, per-product editor UI state — which step is active, and whether the
+  // custom name/choice inputs are revealed. NOT persisted (no MastFlow record);
+  // reset implicitly when V2.byId is rebuilt. Keyed by product id.
+  function _veState() { V2._ve = V2._ve || { step: {}, custom: {} }; return V2._ve; }
+  // The active step for a product: 1 (define attributes) until the gate is met,
+  // then 2 (pick combinations) by default; honor an explicit operator choice.
+  function _veStep(id, hasAttr) {
+    var s = _veState().step[id];
+    if (!hasAttr) return 1;            // Step 2 unreachable until ≥1 valid attribute
+    return s || 2;
+  }
+  // Bespoke step rail (Appendix A — reuses the existing, previously-unused
+  // `.pv2-step` CSS so it matches the MastFlow guided-header look without a second
+  // implementation). Pure presentation, driven by local state. Dots/labels are
+  // clickable to jump; Step 2 only once the gate (hasAttr) is satisfied.
+  function veRailHtml(id, step, hasAttr) {
+    var s1cls = step === 1 ? 'cur' : 'done';
+    var s2cls = step === 2 ? 'cur' : 'todo';
+    var s1nav = step !== 1 ? ' onclick="ProductsV2.veStep(\'' + esc(id) + '\',1)" style="cursor:pointer;"' : '';
+    var s2nav = (hasAttr && step !== 2) ? ' onclick="ProductsV2.veStep(\'' + esc(id) + '\',2)" style="cursor:pointer;"' : '';
+    var hint = (step === 1 && !hasAttr)
+      ? '<span style="color:var(--warm-gray);font-size:0.78rem;margin-left:8px;">add an attribute with a choice to continue</span>' : '';
+    return '<div class="pv2-step">' +
+      '<span class="nd ' + s1cls + '"' + s1nav + '>' + (step === 1 ? '1' : '✓') + '</span>' +
+      '<span class="lb"' + s1nav + '>Define attributes</span>' +
+      '<span class="ln' + (hasAttr ? ' done' : '') + '"></span>' +
+      '<span class="nd ' + s2cls + '"' + s2nav + '>2</span>' +
+      '<span class="lb"' + s2nav + '>Pick combinations</span>' + hint + '</div>';
+  }
+  // One existing attribute: name + remove, choice chips, and an add-a-choice input.
+  function veAttrRowHtml(id, o, i) {
+    var chips = (o.choices || []).map(function (ch) { return '<span style="display:inline-block;border:1px solid var(--border);border-radius:999px;padding:2px 9px;font-size:0.78rem;margin:2px;">' + esc(ch) + '</span>'; }).join('');
+    return '<div style="border-top:1px solid var(--border);padding:9px 0;">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;"><strong>' + esc(o.label) + '</strong>' +
+      '<button class="btn btn-secondary btn-small" onclick="ProductsV2.removeOption(\'' + esc(id) + '\',' + i + ')">Remove</button></div>' +
+      '<div style="margin:4px 0;">' + (chips || '<span style="color:var(--warm-gray);font-size:0.78rem;">no choices yet</span>') + '</div>' +
+      '<div style="display:flex;gap:6px;"><input id="pv2OptChoice_' + i + '" type="text" placeholder="add a choice" style="flex:1;' + VE_FIELD_CSS + '">' +
+      '<button class="btn btn-secondary btn-small" onclick="ProductsV2.addChoice(\'' + esc(id) + '\',' + i + ')">+ choice</button></div></div>';
+  }
+  // Step 1 — Define attributes. Empty-state header + quick-add presets cure the
+  // blank-canvas "what do I do next" problem; existing attributes render below.
+  function veStep1Html(p, id, opts, validOpts, hasAttr) {
+    var quick = VARIANT_PRESETS.map(function (pr) {
+      var lbl = pr.choices.length ? (pr.label + ' (' + pr.choices.join(', ') + ')') : pr.label;
+      return '<button class="btn btn-secondary btn-small" style="margin:3px;" onclick="ProductsV2.quickAddAttr(\'' + esc(id) + '\',\'' + esc(pr.label) + '\')">+ ' + esc(lbl) + '</button>';
+    }).join('') +
+      '<button class="btn btn-secondary btn-small" style="margin:3px;" onclick="ProductsV2.veCustom(\'' + esc(id) + '\')">+ Custom…</button>';
+    var optHtml = opts.map(function (o, i) { return veAttrRowHtml(id, o, i); }).join('');
+    // Reveal the manual name/first-choice inputs once attributes exist or the
+    // operator picks "Custom…" — hidden on a clean empty state to keep it calm.
+    var showCustom = !!_veState().custom[id] || opts.length > 0;
+    var addOptRow = showCustom ? ('<div style="border-top:1px solid var(--border);padding:10px 0;display:flex;gap:6px;flex-wrap:wrap;align-items:center;">' +
+      '<input id="pv2OptLabel" type="text" placeholder="attribute name (e.g. Size)" style="flex:1;min-width:130px;' + VE_FIELD_CSS + '">' +
+      '<input id="pv2OptChoice" type="text" placeholder="first choice (e.g. small)" style="flex:1;min-width:130px;' + VE_FIELD_CSS + '">' +
+      '<button class="btn btn-secondary btn-small" onclick="ProductsV2.addOption(\'' + esc(id) + '\')">+ Add attribute</button></div>') : '';
+    var header = !opts.length
+      ? ('<div style="margin-bottom:6px;"><div style="font-weight:600;font-size:1.0rem;">Set up variants</div>' +
+         '<div style="color:var(--warm-gray);font-size:0.85rem;">A variant is one version you price or stock separately. First, tell us <em>how</em> it varies.</div></div>' +
+         '<div style="font-size:0.78rem;color:var(--warm-gray);margin:8px 0 4px;">Quick add:</div><div style="display:flex;flex-wrap:wrap;">' + quick + '</div>')
+      : ('<div style="display:flex;flex-wrap:wrap;margin-bottom:4px;">' + quick + '</div>');
+    var advance = hasAttr ? '<div style="margin-top:12px;"><button class="btn btn-primary btn-small" onclick="ProductsV2.veStep(\'' + esc(id) + '\',2)">Pick combinations →</button></div>' : '';
+    return U.card('Step 1 · Define attributes', header + optHtml + addOptRow + advance);
+  }
+  // Collapsed Step-1 summary shown while on Step 2 (completed step → one-line row).
+  function veStep1SummaryHtml(id, validOpts) {
+    var summary = validOpts.map(function (o) { return '<strong>' + esc(o.label) + ':</strong> ' + esc((o.choices || []).join(', ')); }).join(' &nbsp;·&nbsp; ');
+    return '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;border:1px solid var(--border);border-radius:8px;padding:9px 12px;margin:4px 0 12px;font-size:0.85rem;">' +
+      '<div><span class="pv2-mk met">✓</span> ' + summary + '</div>' +
+      '<button class="btn btn-secondary btn-small" onclick="ProductsV2.veStep(\'' + esc(id) + '\',1)">Edit</button></div>';
+  }
+  // Step 2 — Pick combinations. Reframed as "the list of variants you sell": a
+  // live removable list on top, legibility counts, then the missing combos + an
+  // "Add all" shortcut. (Removable list + Add all use the new bridge methods.)
+  function veStep2Html(p, id) {
+    var variants = realVariants(p);
+    var missing = missingCombos(p);
+    var possible = productCombos(p).length;
+    var sell = variants.length
+      ? variants.map(function (v) {
+          return '<div style="display:flex;justify-content:space-between;align-items:center;border-top:1px solid var(--border);padding:7px 0;font-size:0.85rem;">' +
+            '<span>' + esc(comboLabel(v.combo)) + '</span>' +
+            '<button class="btn btn-secondary btn-small" title="Remove this variant" onclick="ProductsV2.removeVariantConfirm(\'' + esc(id) + '\',\'' + esc(v.id) + '\')">✕</button></div>';
+        }).join('')
+      : '<div style="color:var(--warm-gray);font-size:0.85rem;padding:6px 0;">No variants yet — add the combinations you sell below.</div>';
+    var counts = '<div style="font-size:0.78rem;color:var(--warm-gray);margin:8px 0 2px;">' + possible + ' possible · ' + variants.length + ' added · ' + missing.length + ' remaining</div>';
+    var addMore;
+    if (missing.length) {
+      var btns = missing.map(function (c) { return '<button class="btn btn-secondary" style="margin:4px;" onclick="ProductsV2.confirmAddVariant(\'' + esc(id) + '\',\'' + esc(comboSig(c)) + '\')">+ ' + esc(comboLabel(c)) + '</button>'; }).join('');
+      addMore = '<div style="font-size:0.78rem;color:var(--warm-gray);margin:6px 0 2px;">Add more:</div>' +
+        '<div style="display:flex;flex-wrap:wrap;">' + btns + '</div>' +
+        '<div style="margin-top:8px;"><button class="btn btn-primary btn-small" onclick="ProductsV2.addAllVariants(\'' + esc(id) + '\')">+ Add all ' + missing.length + '</button></div>';
+    } else {
+      addMore = '<div style="color:var(--warm-gray);font-size:0.85rem;padding:6px 0;">Every combination already exists.</div>';
+    }
+    var base = '<div class="pv2-pnote" style="margin-top:12px;">Your <strong>◆ Default</strong> is the base — price, photo, and recipe are inherited by every variant unless you override them on that variant.</div>';
+    var head = '<div style="font-size:0.78rem;text-transform:uppercase;letter-spacing:.04em;color:var(--warm-gray);">You sell · ' + variants.length + ' variant' + (variants.length === 1 ? '' : 's') + '</div>';
+    return U.card('Step 2 · Pick combinations', head + sell + counts + addMore + base);
+  }
   function variantsEditorInner(p) {
     var id = p._key || p.pid;
     var opts = Array.isArray(p.options) ? p.options : [];
-    var fieldCss = 'padding:6px 9px;border:1px solid var(--cream-dark);border-radius:6px;font-size:0.85rem;background:var(--cream);color:inherit;box-sizing:border-box;';
-    var optHtml = opts.map(function (o, i) {
-      var chips = (o.choices || []).map(function (ch) { return '<span style="display:inline-block;border:1px solid var(--border);border-radius:999px;padding:2px 9px;font-size:0.78rem;margin:2px;">' + esc(ch) + '</span>'; }).join('');
-      return '<div style="border-top:1px solid var(--border);padding:9px 0;">' +
-        '<div style="display:flex;justify-content:space-between;align-items:center;"><strong>' + esc(o.label) + '</strong>' +
-        '<button class="btn btn-secondary btn-small" onclick="ProductsV2.removeOption(\'' + esc(id) + '\',' + i + ')">Remove</button></div>' +
-        '<div style="margin:4px 0;">' + (chips || '<span style="color:var(--warm-gray);font-size:0.78rem;">no choices yet</span>') + '</div>' +
-        '<div style="display:flex;gap:6px;"><input id="pv2OptChoice_' + i + '" type="text" placeholder="add a choice" style="flex:1;' + fieldCss + '">' +
-        '<button class="btn btn-secondary btn-small" onclick="ProductsV2.addChoice(\'' + esc(id) + '\',' + i + ')">+ choice</button></div></div>';
-    }).join('');
-    var addOptRow = '<div style="border-top:1px solid var(--border);padding:10px 0;display:flex;gap:6px;flex-wrap:wrap;align-items:center;">' +
-      '<input id="pv2OptLabel" type="text" placeholder="option name (e.g. Size)" style="flex:1;min-width:130px;' + fieldCss + '">' +
-      '<input id="pv2OptChoice" type="text" placeholder="first choice (e.g. small)" style="flex:1;min-width:130px;' + fieldCss + '">' +
-      '<button class="btn btn-secondary btn-small" onclick="ProductsV2.addOption(\'' + esc(id) + '\')">+ Add option</button></div>';
     var validOpts = opts.filter(function (o) { return o.label && o.choices && o.choices.length; });
-    var comboSection;
-    if (!validOpts.length) { comboSection = '<div style="color:var(--warm-gray);font-size:0.85rem;">Define an option (name + at least one choice) above to start creating variants.</div>'; }
-    else {
-      var missing = missingCombos(p);
-      comboSection = missing.length
-        ? missing.map(function (c) { return '<button class="btn btn-secondary" style="margin:4px;" onclick="ProductsV2.confirmAddVariant(\'' + esc(id) + '\',\'' + esc(comboSig(c)) + '\')">+ ' + esc(comboLabel(c)) + '</button>'; }).join('')
-        : '<div style="color:var(--warm-gray);font-size:0.85rem;">Every combination already exists.</div>';
-    }
-    return '<div style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:12px;">A variant is one choice per option. Define options, then add the combinations you sell.</div>' +
-      U.card('Options', optHtml + addOptRow) +
-      U.card('Add a variant', '<div style="display:flex;flex-wrap:wrap;">' + comboSection + '</div>');
+    var hasAttr = validOpts.length > 0;
+    var step = _veStep(id, hasAttr);
+    var blocks = (step === 1)
+      ? veStep1Html(p, id, opts, validOpts, hasAttr)
+      : (veStep1SummaryHtml(id, validOpts) + veStep2Html(p, id));
+    return '<div style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:4px;">A variant is one version you price or stock separately — first define how it varies, then pick which combinations you sell.</div>' +
+      veRailHtml(id, step, hasAttr) + blocks;
   }
   function variantsEditorBody(p) { return '<div id="pv2VarEditor">' + variantsEditorInner(p) + '</div>'; }
   function rerenderVariantsEditor(id) {
@@ -217,9 +311,15 @@
       var tag = variantOverridden(p, v) ? ' <span class="pv2-meta" style="font-weight:400;">· custom price</span>' : '';
       items += item(esc(variantLabel(v)) + tag, currentVid === v.id, 'ProductsV2.openVariant(\'' + esc(pid + '::' + v.id) + '\')');
     });
+    // Persistent re-entry into the editor — once the first variant exists the
+    // "+ Add variant" pill is gone, so without this there's no surfaced way to add
+    // a 3rd variant or edit attributes. Footer item, divided from the switch list.
+    var manage = canEditProduct()
+      ? '<div style="border-top:1px solid var(--border);margin-top:4px;padding-top:4px;"><button class="pv2-vitem" onclick="ProductsV2.addVariant(\'' + esc(pid) + '\')"><span class="vchk"></span>⚙ Manage variants &amp; attributes</button></div>'
+      : '';
     return '<div class="pv2-vswitch">' +
       '<button class="pv2-vpill" onclick="ProductsV2.toggleSwitcher(this)" title="Switch variant">' + esc(curLabel) + ' <span class="vcaret">▾</span></button>' +
-      '<div class="pv2-vpop" hidden><div class="pv2-vpop-h">Switch to…</div>' + items + '</div></div>';
+      '<div class="pv2-vpop" hidden><div class="pv2-vpop-h">Switch to…</div>' + items + manage + '</div></div>';
   }
 
   // Slide-out header strip: image thumbnail (click → full size) + the variant
@@ -2630,6 +2730,79 @@
           markListDirty();
         }, function (e) { console.error('[products-v2] addVariant', e); MastAdmin.showToast('Failed', true); });
       });
+    },
+    // Quick-add an attribute from a preset (Step 1). Pre-fills name + starter
+    // choices; reuses _saveOptions so the reconciliation guard fires for free.
+    quickAddAttr: function (id, label) {
+      if (!_guardEditP()) return;
+      var preset = VARIANT_PRESETS.filter(function (pr) { return pr.label === label; })[0];
+      if (!preset) return;
+      var p = V2.byId[id] || {};
+      var opts = Array.isArray(p.options) ? p.options.slice() : [];
+      if (opts.some(function (o) { return String(o.label).toLowerCase() === String(label).toLowerCase(); })) { MastAdmin.showToast('“' + label + '” is already added', true); return; }
+      opts.push({ label: preset.label, choices: preset.choices.slice() });
+      _saveOptions(id, opts);
+    },
+    // Reveal the manual name/first-choice inputs ("Custom…") and focus the name.
+    veCustom: function (id) {
+      _veState().custom[id] = true;
+      rerenderVariantsEditor(id);
+      setTimeout(function () { var el = document.getElementById('pv2OptLabel'); if (el) el.focus(); }, 0);
+    },
+    // Jump the editor between Step 1 and Step 2 (ephemeral local state). Step 2 is
+    // gated: refuse without ≥1 attribute carrying a choice.
+    veStep: function (id, n) {
+      n = Number(n) === 2 ? 2 : 1;
+      if (n === 2) {
+        var p = V2.byId[id];
+        var ok = p && (p.options || []).filter(function (o) { return o.label && o.choices && o.choices.length; }).length;
+        if (!ok) { MastAdmin.showToast('Add an attribute with at least one choice first', true); return; }
+      }
+      _veState().step[id] = n;
+      rerenderVariantsEditor(id);
+    },
+    // Remove one variant (Step 2 list), keyed by id. Danger-confirm names it, since
+    // any per-variant price/stock/image overrides on it are lost with it.
+    removeVariantConfirm: function (id, vid) {
+      if (!_guardEditP()) return;
+      var p = V2.byId[id]; if (!p) return;
+      var v = realVariants(p).filter(function (x) { return x.id === vid; })[0];
+      var label = v ? comboLabel(v.combo) : 'this variant';
+      if (typeof window.mastConfirm !== 'function') return;
+      Promise.resolve(window.mastConfirm('Remove the variant “' + label + '”? Any price, stock, or image overrides set on it are lost.', { title: 'Remove variant?', confirmLabel: 'Remove', danger: true })).then(function (ok) {
+        if (!ok) return;
+        withProductBridge(function () {
+          Promise.resolve(window.MakerProductBridge.removeVariant(id, vid)).then(function (res) {
+            if (!res || !res.ok) { MastAdmin.showToast('Failed: ' + ((res && res.error) || 'unknown'), true); return; }
+            var rec = V2.byId[id]; if (rec) rec.variants = res.variants;
+            MastAdmin.showToast('Removed: ' + label);
+            rerenderVariantsEditor(id); markListDirty();
+          }, function (e) { console.error('[products-v2] removeVariant', e); MastAdmin.showToast('Failed', true); });
+        });
+      });
+    },
+    // Add every missing combination in one batched write. Cap+confirm above a
+    // threshold so a big Cartesian matrix isn't generated silently.
+    addAllVariants: function (id) {
+      if (!_guardEditP()) return;
+      var p = V2.byId[id]; if (!p) return;
+      var missing = missingCombos(p);
+      if (!missing.length) { MastAdmin.showToast('Every combination already exists'); return; }
+      var CAP = 24;
+      function go() {
+        withProductBridge(function () {
+          Promise.resolve(window.MakerProductBridge.addVariants(id, missing)).then(function (res) {
+            if (!res || !res.ok) { MastAdmin.showToast('Failed: ' + ((res && res.error) || 'unknown'), true); return; }
+            var rec = V2.byId[id]; if (rec) rec.variants = res.variants;
+            var n = res.addedCount || missing.length;
+            MastAdmin.showToast('Added ' + n + ' variant' + (n === 1 ? '' : 's'));
+            rerenderVariantsEditor(id); markListDirty();
+          }, function (e) { console.error('[products-v2] addVariants', e); MastAdmin.showToast('Failed', true); });
+        });
+      }
+      if (missing.length > CAP && typeof window.mastConfirm === 'function') {
+        Promise.resolve(window.mastConfirm('This creates ' + missing.length + ' variants at once. You can remove any you don’t sell afterward. Continue?', { title: 'Add ' + missing.length + ' variants?', confirmLabel: 'Add all' })).then(function (ok) { if (ok) go(); });
+      } else { go(); }
     },
     editVariantTodo: function () { MastAdmin.showToast('Per-variant override editing lands in P4.'); },
     // Bind a variant to product.images[idx] (idx<0 → clear, use product default).

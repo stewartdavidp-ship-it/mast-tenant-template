@@ -7113,6 +7113,52 @@
       return { ok: true, variants: variants, variantId: vid };
     } catch (e) { return { ok: false, error: (e && e.message) || 'Failed' }; }
   }
+  // Append MANY combos in a single write (the "Add all" shortcut). Fresh-read,
+  // dedupe each combo by signature against what already exists (so a partial
+  // overlap is safe), assign a stable id per new variant, and write the array
+  // ONCE — never N sequential round-trips. Mirrors bridgeAddVariant's shape.
+  async function bridgeAddVariants(pid, combos) {
+    try {
+      if (!Array.isArray(combos) || !combos.length) return { ok: false, error: 'No combinations' };
+      var variants = await MastDB.get('public/products/' + pid + '/variants');
+      variants = Array.isArray(variants) ? variants.slice() : [];
+      var seen = {};
+      variants.forEach(function (v) { if (v && v.combo) seen[_comboSig(v.combo)] = true; });
+      var added = 0;
+      combos.forEach(function (combo) {
+        if (!combo || !Object.keys(combo).length) return;
+        var sig = _comboSig(combo);
+        if (seen[sig]) return;
+        seen[sig] = true;
+        variants.push({ id: 'v_' + MastDB.newKey('products'), combo: combo });
+        added++;
+      });
+      if (!added) return { ok: false, error: 'All combinations already exist' };
+      await MastDB.set('public/products/' + pid + '/variants', variants);
+      await MastDB.set('public/products/' + pid + '/updatedAt', new Date().toISOString());
+      var fp = findProduct(pid); if (fp) fp.variants = variants;
+      MastAdmin.writeAudit('update', 'products', pid);
+      return { ok: true, variants: variants, addedCount: added };
+    } catch (e) { return { ok: false, error: (e && e.message) || 'Failed' }; }
+  }
+  // Remove ONE variant, keyed by its stable id (NEVER by index — index-based
+  // removal mis-targets after any reorder; the same footgun realVariants guards).
+  // Fresh-read, filter, write once. Per-variant overrides on the removed row
+  // (price/stock/image bindings stored in its object) go with it.
+  async function bridgeRemoveVariant(pid, variantId) {
+    try {
+      if (!variantId) return { ok: false, error: 'No variant specified' };
+      var variants = await MastDB.get('public/products/' + pid + '/variants');
+      variants = Array.isArray(variants) ? variants : [];
+      var next = variants.filter(function (v, i) { return ((v && v.id) || ('v' + i)) !== variantId; });
+      if (next.length === variants.length) return { ok: false, error: 'Variant not found' };
+      await MastDB.set('public/products/' + pid + '/variants', next);
+      await MastDB.set('public/products/' + pid + '/updatedAt', new Date().toISOString());
+      var fp = findProduct(pid); if (fp) fp.variants = next;
+      MastAdmin.writeAudit('update', 'products', pid);
+      return { ok: true, variants: next };
+    } catch (e) { return { ok: false, error: (e && e.message) || 'Failed' }; }
+  }
   // Persist the product's options (attributes). Removing or renaming an
   // attribute/choice orphans any existing variant whose combo references the
   // now-gone key/value (it stops matching a Cartesian combination → missingCombos
@@ -7511,6 +7557,10 @@
     // Append a new variant (id = 'v_'+pushkey, combo = {optionKey: choice}) to a
     // product; rejects a duplicate combination. Written live (like every variant op).
     addVariant: function (pid, combo) { return bridgeAddVariant(pid, combo); },
+    // Append many combos in one write ("Add all"); dedupes against existing.
+    addVariants: function (pid, combos) { return bridgeAddVariants(pid, combos); },
+    // Remove one variant by stable id (never index).
+    removeVariant: function (pid, variantId) { return bridgeRemoveVariant(pid, variantId); },
     setOptions: function (pid, options, opts) { return bridgeSetOptions(pid, options, opts); },
     // Set on-hand stock (separate inventory collection + stockInfo resync).
     setStock: function (pid, variantKey, onHand) { return bridgeSetStock(pid, variantKey, onHand); },
