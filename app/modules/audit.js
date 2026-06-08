@@ -548,7 +548,7 @@
     return [
       '<div class="section-header" style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;">',
       '  <div>',
-      '    <h2 style="margin:0;">Audit</h2>',
+      '    <h2 style="margin:0;">Channel Audit</h2>',
       '    <div style="font-size:0.78rem;color:var(--warm-gray);margin-top:6px;">' + esc(lastScanLabel) + '</div>',
       '  </div>',
       '  <div style="text-align:right;">',

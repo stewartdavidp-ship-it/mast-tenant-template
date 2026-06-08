@@ -110,25 +110,25 @@
        Shared by customers.js (list/export) and customer-service.js (survey
        bulk-send) so the segment matcher cannot drift. ?v= kept in lockstep
        with MAST_MODULES_V by scripts/bump-modules-version.sh. -->
-  <script src="../shared/customer-filters.js?v=20260608-133221-a1f26ed"></script>
+  <script src="../shared/customer-filters.js?v=20260608-135111-9a460ab"></script>
   <script src="../shared/brand-sync.js?v=1"></script>
   <script src="../shared/channel-connection.js?v=1"></script>
-  <script src="../shared/variant-reconcile.js?v=20260608-133221-a1f26ed"></script>
+  <script src="../shared/variant-reconcile.js?v=20260608-135111-9a460ab"></script>
   <!-- UI redesign engines (docs/ux-audit): shared primitives + Entity Engine.
        The ?v= suffix is kept in lockstep with MAST_MODULES_V by
        scripts/bump-modules-version.sh (these are static <head> tags loaded
        before the JS var exists, so they can't read it at runtime). Without
        this, the engines were frozen at ?v=1 and never cache-busted on deploy. -->
-  <script src="../shared/mast-ui.js?v=20260608-133221-a1f26ed"></script>
-  <script src="../shared/mast-io.js?v=20260608-133221-a1f26ed"></script>
-  <script src="../shared/mast-entity.js?v=20260608-133221-a1f26ed"></script>
+  <script src="../shared/mast-ui.js?v=20260608-135111-9a460ab"></script>
+  <script src="../shared/mast-io.js?v=20260608-135111-9a460ab"></script>
+  <script src="../shared/mast-entity.js?v=20260608-135111-9a460ab"></script>
   <!-- Canonical product readiness gate (computeReadinessChecklist / productMarkupConfig).
        Byte-identical to mast-tenant-mcp-server/src/shared/product-readiness.core.js so the
        AI publish gate and the maker.js UI gate cannot drift; maker.js delegates to
        window.MastProductReadiness. Eager-loaded so it exists before the lazy maker module.
        ?v= kept in lockstep with MAST_MODULES_V by scripts/bump-modules-version.sh.
        See docs/ux-audit/product-publish-gate-plan.md §7. -->
-  <script src="../shared/product-readiness.core.js?v=20260608-133221-a1f26ed"></script>
+  <script src="../shared/product-readiness.core.js?v=20260608-135111-9a460ab"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Pod-specific runtime config — sets window.MAST_POD_PLATFORM_PROJECT so
@@ -6633,6 +6633,7 @@
         <div class="sidebar-item" data-route="business" onclick="navigateTo('business')">Business</div>
         <div class="sidebar-item" data-route="channels" onclick="navigateTo('channels')">Channels</div>
         <div class="sidebar-item" data-route="mapping" onclick="navigateTo('mapping')">Listing Mapping</div>
+        <div class="sidebar-item" data-route="audit" onclick="navigateTo('audit')">Channel Audit</div>
         <div class="sidebar-item" data-route="contacts" onclick="navigateTo('contacts')">Contacts</div>
         <div class="sidebar-item" data-route="customers" onclick="navigateTo('customers')">Customers</div>
       </div>
@@ -6666,7 +6667,6 @@
              keeps operational/configuration items only. -->
         <div class="sidebar-item" data-route="employees" onclick="navigateTo('employees')">Permissions</div>
         <div class="sidebar-item" data-route="analytics" onclick="navigateTo('analytics')">Analytics</div>
-        <div class="sidebar-item" data-route="audit" onclick="navigateTo('audit')">Audit</div>
         <div class="sidebar-item" data-route="auditlog" onclick="navigateTo('auditlog')">Audit Log</div>
         <div class="sidebar-item" data-route="suppressions" onclick="navigateTo('suppressions')">Audit Suppressions</div>
         <div class="sidebar-item" data-route="settings" onclick="navigateTo('settings')">Settings <span id="sidebarAlertBadge" class="sidebar-badge alert" style="display:none;"></span> <span id="settingsSandboxBadge" style="display:none;background:#f59e0b;color:#fff;font-size:0.72rem;padding:2px 6px;border-radius:4px;margin-left:4px;font-weight:700;vertical-align:middle;">SANDBOX</span></div>
@@ -21948,7 +21948,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260608-133221-a1f26ed';
+var MAST_MODULES_V = '20260608-135111-9a460ab';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
