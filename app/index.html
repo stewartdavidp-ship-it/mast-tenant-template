@@ -110,25 +110,25 @@
        Shared by customers.js (list/export) and customer-service.js (survey
        bulk-send) so the segment matcher cannot drift. ?v= kept in lockstep
        with MAST_MODULES_V by scripts/bump-modules-version.sh. -->
-  <script src="../shared/customer-filters.js?v=20260608-152303-46eca0d"></script>
+  <script src="../shared/customer-filters.js?v=20260608-154207-99ea87a"></script>
   <script src="../shared/brand-sync.js?v=1"></script>
   <script src="../shared/channel-connection.js?v=1"></script>
-  <script src="../shared/variant-reconcile.js?v=20260608-152303-46eca0d"></script>
+  <script src="../shared/variant-reconcile.js?v=20260608-154207-99ea87a"></script>
   <!-- UI redesign engines (docs/ux-audit): shared primitives + Entity Engine.
        The ?v= suffix is kept in lockstep with MAST_MODULES_V by
        scripts/bump-modules-version.sh (these are static <head> tags loaded
        before the JS var exists, so they can't read it at runtime). Without
        this, the engines were frozen at ?v=1 and never cache-busted on deploy. -->
-  <script src="../shared/mast-ui.js?v=20260608-152303-46eca0d"></script>
-  <script src="../shared/mast-io.js?v=20260608-152303-46eca0d"></script>
-  <script src="../shared/mast-entity.js?v=20260608-152303-46eca0d"></script>
+  <script src="../shared/mast-ui.js?v=20260608-154207-99ea87a"></script>
+  <script src="../shared/mast-io.js?v=20260608-154207-99ea87a"></script>
+  <script src="../shared/mast-entity.js?v=20260608-154207-99ea87a"></script>
   <!-- Canonical product readiness gate (computeReadinessChecklist / productMarkupConfig).
        Byte-identical to mast-tenant-mcp-server/src/shared/product-readiness.core.js so the
        AI publish gate and the maker.js UI gate cannot drift; maker.js delegates to
        window.MastProductReadiness. Eager-loaded so it exists before the lazy maker module.
        ?v= kept in lockstep with MAST_MODULES_V by scripts/bump-modules-version.sh.
        See docs/ux-audit/product-publish-gate-plan.md §7. -->
-  <script src="../shared/product-readiness.core.js?v=20260608-152303-46eca0d"></script>
+  <script src="../shared/product-readiness.core.js?v=20260608-154207-99ea87a"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Pod-specific runtime config — sets window.MAST_POD_PLATFORM_PROJECT so
@@ -21986,7 +21986,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260608-152303-46eca0d';
+var MAST_MODULES_V = '20260608-154207-99ea87a';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -30971,6 +30971,10 @@ window.MastAskAi = (function() {
         '<div style="padding:18px 22px;">' +
           '<label for="mastAskAiQ" style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:6px;">Your question</label>' +
           '<textarea id="mastAskAiQ" rows="4" placeholder="' + esc(cfg.placeholder || '') + '" style="width:100%;padding:10px 12px;border:1px solid rgba(255,255,255,0.1);border-radius:6px;font-family:\'DM Sans\',sans-serif;font-size:0.9rem;background:var(--bg,#1a1a1a);color:var(--text,#fff);resize:vertical;box-sizing:border-box;"></textarea>' +
+          '<label style="display:flex;align-items:center;gap:8px;margin-top:12px;font-size:0.85rem;color:var(--warm-gray,#888);cursor:pointer;">' +
+            '<input type="checkbox" id="mastAskAiShotCb" checked style="width:15px;height:15px;cursor:pointer;accent-color:var(--teal);">' +
+            'Attach a screenshot of this screen' +
+          '</label>' +
           '<details style="margin-top:14px;">' +
             '<summary style="font-size:0.78rem;color:var(--warm-gray,#888);cursor:pointer;">Preview context (' + esc(summary) + ')</summary>' +
             '<pre id="mastAskAiPreview" style="margin-top:8px;font-size:0.72rem;background:var(--bg,#1a1a1a);padding:10px;border-radius:6px;max-height:240px;overflow:auto;white-space:pre-wrap;"></pre>' +
@@ -30996,10 +31000,10 @@ window.MastAskAi = (function() {
     if (m) m.remove();
   }
 
-  function buildPrompt(question, ctx, cfg) {
+  function buildPrompt(question, ctx, cfg, shotUrl) {
     var pageDesc = ctx.pageTitle ? ('the ' + ctx.pageTitle + ' page') : 'this page';
     var lines = [
-      'I am looking at ' + pageDesc + ' in my Mast admin and want help understanding what I see. Answer using only the data in the context block below — do not ask me to fetch more, install connectors, or run additional queries. If a question genuinely cannot be answered from the included data, suggest a filter or view I should apply on the page and ask me to re-send, but only as a last resort.',
+      'I am looking at ' + pageDesc + ' in my Mast admin and want help understanding what I see. Answer using only the data in the context block below' + (shotUrl ? ' and the screenshot linked below' : '') + ' — do not ask me to fetch more, install connectors, or run additional queries. If a question genuinely cannot be answered from the included data, suggest a filter or view I should apply on the page and ask me to re-send, but only as a last resort.',
       '',
       '<mast-ui-context version="1">',
       JSON.stringify(ctx, null, 2),
@@ -31007,6 +31011,10 @@ window.MastAskAi = (function() {
       '',
       'My question: ' + question
     ];
+    if (shotUrl) {
+      lines.push('');
+      lines.push('Screenshot of exactly what I am looking at (please view it for visual context): ' + shotUrl);
+    }
     var notes = (cfg.notes || []).filter(Boolean);
     if (notes.length) {
       lines.push('');
@@ -31022,9 +31030,31 @@ window.MastAskAi = (function() {
     if (!modal || !ta) return;
     var question = (ta.value || '').trim();
     if (!question) { ta.focus(); showToast('Type a question first', true); return; }
-    var prompt = buildPrompt(question, modal._ctx, modal._cfg);
+    var ctx = modal._ctx, cfg = modal._cfg;
+    var shotCb = document.getElementById('mastAskAiShotCb');
+    var wantShot = !!(shotCb && shotCb.checked);
 
-    // Always copy to clipboard as a safety net (works for both tiers).
+    // Close the modal BEFORE the screenshot so the dialog isn't in the capture.
+    close();
+
+    // Optional screenshot: reuse the Feedback capture (html2canvas → Storage),
+    // then reference its URL in the prompt so Claude can view the actual screen.
+    // The URL rides the deep-link / clipboard with the rest of the prompt.
+    var shotUrl = null;
+    if (wantShot) {
+      showToast('Capturing screen…');
+      try {
+        var shot = await captureFeedbackScreenshot();
+        shotUrl = shot && shot.url;
+      } catch (e) {
+        showToast('Screenshot failed — continuing without it.');
+      }
+    }
+
+    var prompt = buildPrompt(question, ctx, cfg, shotUrl);
+
+    // Copy the full prompt (incl. any screenshot URL) to the clipboard as a
+    // safety net. Non-fatal — the deep-link / ?q= fallback also carries it.
     try {
       if (navigator.clipboard && navigator.clipboard.writeText) {
         await navigator.clipboard.writeText(prompt);
@@ -31033,12 +31063,7 @@ window.MastAskAi = (function() {
         tmp.value = prompt; tmp.style.position = 'fixed'; tmp.style.opacity = '0';
         document.body.appendChild(tmp); tmp.select(); document.execCommand('copy'); document.body.removeChild(tmp);
       }
-    } catch (err) {
-      showToast('Copy failed: ' + (err && err.message ? err.message : 'unknown'), true);
-      return;
-    }
-
-    close();
+    } catch (err) { /* clipboard blocked — deep-link/?q= still carries the prompt */ }
 
     var encoded = encodeURIComponent(prompt);
 
@@ -31053,8 +31078,8 @@ window.MastAskAi = (function() {
     var skipDesktop = false;
     try { skipDesktop = localStorage.getItem('mastAskAiSkipDesktop') === '1'; } catch (_e) {}
     if (skipDesktop) {
-      showToast('Opening claude.ai (paste from clipboard).');
-      window.open('https://claude.ai/new', '_blank', 'noopener');
+      showToast('Opening claude.ai…');
+      window.open('https://claude.ai/new?q=' + encoded, '_blank', 'noopener');
       return;
     }
 
@@ -31081,8 +31106,8 @@ window.MastAskAi = (function() {
       window.removeEventListener('blur', onBlur);
       try { iframe.parentNode && iframe.parentNode.removeChild(iframe); } catch (_e) {}
       if (document.visibilityState === 'hidden') return;
-      showToast('Claude Desktop not detected — opening claude.ai (paste from clipboard).');
-      window.open('https://claude.ai/new', '_blank', 'noopener');
+      showToast('Claude Desktop not detected — opening claude.ai with your question.');
+      window.open('https://claude.ai/new?q=' + encoded, '_blank', 'noopener');
     }, 1200);
   }
 
@@ -31116,8 +31141,8 @@ window.MastAskAi = (function() {
       var skipDesktop = false;
       try { skipDesktop = localStorage.getItem('mastAskAiSkipDesktop') === '1'; } catch (_e) {}
       if (skipDesktop) {
-        showToast('Opening claude.ai (paste from clipboard).');
-        window.open('https://claude.ai/new', '_blank', 'noopener');
+        showToast('Opening claude.ai…');
+        window.open('https://claude.ai/new?q=' + encoded, '_blank', 'noopener');
         openedFallback = true;
       } else {
         showToast('Opening Claude Desktop…');
@@ -31140,8 +31165,8 @@ window.MastAskAi = (function() {
           window.removeEventListener('blur', onBlur);
           try { iframe.parentNode && iframe.parentNode.removeChild(iframe); } catch (_e) {}
           if (document.visibilityState === 'hidden') return;
-          showToast('Claude Desktop not detected — opening claude.ai (paste from clipboard).');
-          window.open('https://claude.ai/new', '_blank', 'noopener');
+          showToast('Claude Desktop not detected — opening claude.ai with your prompt.');
+          window.open('https://claude.ai/new?q=' + encoded, '_blank', 'noopener');
         }, 1200);
       }
     }
