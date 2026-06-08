@@ -110,25 +110,25 @@
        Shared by customers.js (list/export) and customer-service.js (survey
        bulk-send) so the segment matcher cannot drift. ?v= kept in lockstep
        with MAST_MODULES_V by scripts/bump-modules-version.sh. -->
-  <script src="../shared/customer-filters.js?v=20260608-141153-ab02556"></script>
+  <script src="../shared/customer-filters.js?v=20260608-142604-46471da"></script>
   <script src="../shared/brand-sync.js?v=1"></script>
   <script src="../shared/channel-connection.js?v=1"></script>
-  <script src="../shared/variant-reconcile.js?v=20260608-141153-ab02556"></script>
+  <script src="../shared/variant-reconcile.js?v=20260608-142604-46471da"></script>
   <!-- UI redesign engines (docs/ux-audit): shared primitives + Entity Engine.
        The ?v= suffix is kept in lockstep with MAST_MODULES_V by
        scripts/bump-modules-version.sh (these are static <head> tags loaded
        before the JS var exists, so they can't read it at runtime). Without
        this, the engines were frozen at ?v=1 and never cache-busted on deploy. -->
-  <script src="../shared/mast-ui.js?v=20260608-141153-ab02556"></script>
-  <script src="../shared/mast-io.js?v=20260608-141153-ab02556"></script>
-  <script src="../shared/mast-entity.js?v=20260608-141153-ab02556"></script>
+  <script src="../shared/mast-ui.js?v=20260608-142604-46471da"></script>
+  <script src="../shared/mast-io.js?v=20260608-142604-46471da"></script>
+  <script src="../shared/mast-entity.js?v=20260608-142604-46471da"></script>
   <!-- Canonical product readiness gate (computeReadinessChecklist / productMarkupConfig).
        Byte-identical to mast-tenant-mcp-server/src/shared/product-readiness.core.js so the
        AI publish gate and the maker.js UI gate cannot drift; maker.js delegates to
        window.MastProductReadiness. Eager-loaded so it exists before the lazy maker module.
        ?v= kept in lockstep with MAST_MODULES_V by scripts/bump-modules-version.sh.
        See docs/ux-audit/product-publish-gate-plan.md §7. -->
-  <script src="../shared/product-readiness.core.js?v=20260608-141153-ab02556"></script>
+  <script src="../shared/product-readiness.core.js?v=20260608-142604-46471da"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Pod-specific runtime config — sets window.MAST_POD_PLATFORM_PROJECT so
@@ -782,6 +782,15 @@
     body.nav-v2.railed .navv2-pin-row .navv2-pin-btn { display: none; }
     body.nav-v2.railed .sidebar-section-header { justify-content: center; padding: 11px 0; }
     body.nav-v2.railed .navv2-pin-row { justify-content: center; padding: 9px 0; }
+    /* railed pinned rows hide their label (above) — show the name as a hover tooltip
+       so rail icons aren't a guessing game (parity with section flyouts) */
+    body.nav-v2.railed .navv2-pin-row:hover::after,
+    body.nav-v2.railed .navv2-pin-row:focus-visible::after {
+      content: attr(data-pin-label); position: absolute; left: 100%; top: 50%; transform: translateY(-50%);
+      margin-left: 10px; white-space: nowrap; background: #232323; color: #fff;
+      font-size: 0.78rem; font-weight: 600; padding: 6px 11px; border-radius: 8px;
+      border: 1px solid rgba(255,255,255,0.12); box-shadow: 0 8px 24px rgba(0,0,0,0.5); z-index: 400;
+    }
     body.nav-v2.railed .sidebar-badge { display: none; }
     /* alert badge → amber dot in rail */
     body.nav-v2.railed .sidebar-section-header.has-alert::after {
@@ -21399,7 +21408,7 @@ function navV2RenderPinned() {
   var cur = (typeof currentRoute !== 'undefined') ? currentRoute : '';
   list.innerHTML = pins.map(function(p) {
     var active = (p.route === cur) ? ' active' : '';
-    return '<div class="navv2-pin-row' + active + '" data-route="' + esc(p.route) + '" data-pin-route="' + esc(p.route) + '">' +
+    return '<div class="navv2-pin-row' + active + '" data-route="' + esc(p.route) + '" data-pin-route="' + esc(p.route) + '" data-pin-label="' + esc(p.label) + '" aria-label="' + esc(p.label) + '">' +
       '<span class="navv2-ico">' + navV2Svg(p.icon) + '</span>' +
       '<span class="navv2-pin-lbl">' + esc(p.label) + '</span>' +
       '<span class="navv2-pin-btn on" data-unpin="' + esc(p.route) + '" title="Unpin">' + navV2Svg('pin') + '</span>' +
@@ -21948,7 +21957,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260608-141153-ab02556';
+var MAST_MODULES_V = '20260608-142604-46471da';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
