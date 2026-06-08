@@ -1201,7 +1201,10 @@
       { name: 'variants', label: 'Variants', type: 'text', list: true, sortable: false, group: 'Product', readOnly: true, get: variantsLabel },
       { name: 'price', label: 'Price', type: 'money', list: true, group: 'Money', readOnly: true, align: 'right', get: price }
     ],
-    fetch: function (id) { return Promise.resolve(MastDB.products.get(id)).then(function (p) { return p ? stamp(Object.assign({}, p), id) : null; }); },
+    // Drill-in path (e.g. from a channel's Products tab): register the fetched
+    // record in V2.byId so the async pane re-renders (Channels/Forecast, which
+    // look the record up by pid) resolve — otherwise they stick on "Loading…".
+    fetch: function (id) { return Promise.resolve(MastDB.products.get(id)).then(function (p) { if (!p) return null; var rec = stamp(Object.assign({}, p), id); V2.byId[rec._key] = rec; return rec; }); },
     // Default/product SO: the ENGINE MastFlow process model. detail.flow makes the
     // engine render the real process header (stepper + readiness checklist + guarded
     // Advance) into #muFlowHost — the process is the pinned STRUCTURE, not a tab
