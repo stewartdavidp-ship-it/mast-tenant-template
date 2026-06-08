@@ -110,25 +110,25 @@
        Shared by customers.js (list/export) and customer-service.js (survey
        bulk-send) so the segment matcher cannot drift. ?v= kept in lockstep
        with MAST_MODULES_V by scripts/bump-modules-version.sh. -->
-  <script src="../shared/customer-filters.js?v=20260608-142604-46471da"></script>
+  <script src="../shared/customer-filters.js?v=20260608-144201-a13a93e"></script>
   <script src="../shared/brand-sync.js?v=1"></script>
   <script src="../shared/channel-connection.js?v=1"></script>
-  <script src="../shared/variant-reconcile.js?v=20260608-142604-46471da"></script>
+  <script src="../shared/variant-reconcile.js?v=20260608-144201-a13a93e"></script>
   <!-- UI redesign engines (docs/ux-audit): shared primitives + Entity Engine.
        The ?v= suffix is kept in lockstep with MAST_MODULES_V by
        scripts/bump-modules-version.sh (these are static <head> tags loaded
        before the JS var exists, so they can't read it at runtime). Without
        this, the engines were frozen at ?v=1 and never cache-busted on deploy. -->
-  <script src="../shared/mast-ui.js?v=20260608-142604-46471da"></script>
-  <script src="../shared/mast-io.js?v=20260608-142604-46471da"></script>
-  <script src="../shared/mast-entity.js?v=20260608-142604-46471da"></script>
+  <script src="../shared/mast-ui.js?v=20260608-144201-a13a93e"></script>
+  <script src="../shared/mast-io.js?v=20260608-144201-a13a93e"></script>
+  <script src="../shared/mast-entity.js?v=20260608-144201-a13a93e"></script>
   <!-- Canonical product readiness gate (computeReadinessChecklist / productMarkupConfig).
        Byte-identical to mast-tenant-mcp-server/src/shared/product-readiness.core.js so the
        AI publish gate and the maker.js UI gate cannot drift; maker.js delegates to
        window.MastProductReadiness. Eager-loaded so it exists before the lazy maker module.
        ?v= kept in lockstep with MAST_MODULES_V by scripts/bump-modules-version.sh.
        See docs/ux-audit/product-publish-gate-plan.md §7. -->
-  <script src="../shared/product-readiness.core.js?v=20260608-142604-46471da"></script>
+  <script src="../shared/product-readiness.core.js?v=20260608-144201-a13a93e"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Pod-specific runtime config — sets window.MAST_POD_PLATFORM_PROJECT so
@@ -787,6 +787,14 @@
     body.nav-v2.railed .navv2-pin-row:hover::after,
     body.nav-v2.railed .navv2-pin-row:focus-visible::after {
       content: attr(data-pin-label); position: absolute; left: 100%; top: 50%; transform: translateY(-50%);
+      margin-left: 10px; white-space: nowrap; background: #232323; color: #fff;
+      font-size: 0.78rem; font-weight: 600; padding: 6px 11px; border-radius: 8px;
+      border: 1px solid rgba(255,255,255,0.12); box-shadow: 0 8px 24px rgba(0,0,0,0.5); z-index: 400;
+    }
+    /* same rail tooltip for direct-link headers (Dashboard) that have no flyout */
+    body.nav-v2.railed .sidebar-section-header[data-rail-label]:hover::after,
+    body.nav-v2.railed .sidebar-section-header[data-rail-label]:focus-visible::after {
+      content: attr(data-rail-label); position: absolute; left: 100%; top: 50%; transform: translateY(-50%);
       margin-left: 10px; white-space: nowrap; background: #232323; color: #fff;
       font-size: 0.78rem; font-weight: 600; padding: 6px 11px; border-radius: 8px;
       border: 1px solid rgba(255,255,255,0.12); box-shadow: 0 8px 24px rgba(0,0,0,0.5); z-index: 400;
@@ -21509,6 +21517,17 @@ function navV2SetFlyoutLabels() {
     var label = sec.querySelector('.sidebar-section-label');
     if (items && label) items.setAttribute('data-fly-label', label.textContent.trim());
   });
+  // Direct-link headers with no .sidebar-items (e.g. Dashboard) get no hover
+  // flyout — give them a rail tooltip so their icon isn't a mystery.
+  document.querySelectorAll('.sidebar-section-header').forEach(function(hd) {
+    var sec = hd.closest('.sidebar-section');
+    if (sec && sec.querySelector('.sidebar-items')) return;   // has a flyout already
+    var lbl = hd.querySelector('.sidebar-section-label');
+    if (lbl) {
+      hd.setAttribute('data-rail-label', lbl.textContent.trim());
+      hd.setAttribute('aria-label', lbl.textContent.trim());
+    }
+  });
 }
 // amber dot on railed sections whose visible leaves carry an alert badge
 function navV2RefreshAlertDots() {
@@ -21957,7 +21976,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260608-142604-46471da';
+var MAST_MODULES_V = '20260608-144201-a13a93e';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
