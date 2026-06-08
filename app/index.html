@@ -110,25 +110,25 @@
        Shared by customers.js (list/export) and customer-service.js (survey
        bulk-send) so the segment matcher cannot drift. ?v= kept in lockstep
        with MAST_MODULES_V by scripts/bump-modules-version.sh. -->
-  <script src="../shared/customer-filters.js?v=20260607-222240-b77a9b7"></script>
+  <script src="../shared/customer-filters.js?v=20260608-083341-381c4e1"></script>
   <script src="../shared/brand-sync.js?v=1"></script>
   <script src="../shared/channel-connection.js?v=1"></script>
-  <script src="../shared/variant-reconcile.js?v=20260607-222240-b77a9b7"></script>
+  <script src="../shared/variant-reconcile.js?v=20260608-083341-381c4e1"></script>
   <!-- UI redesign engines (docs/ux-audit): shared primitives + Entity Engine.
        The ?v= suffix is kept in lockstep with MAST_MODULES_V by
        scripts/bump-modules-version.sh (these are static <head> tags loaded
        before the JS var exists, so they can't read it at runtime). Without
        this, the engines were frozen at ?v=1 and never cache-busted on deploy. -->
-  <script src="../shared/mast-ui.js?v=20260607-222240-b77a9b7"></script>
-  <script src="../shared/mast-io.js?v=20260607-222240-b77a9b7"></script>
-  <script src="../shared/mast-entity.js?v=20260607-222240-b77a9b7"></script>
+  <script src="../shared/mast-ui.js?v=20260608-083341-381c4e1"></script>
+  <script src="../shared/mast-io.js?v=20260608-083341-381c4e1"></script>
+  <script src="../shared/mast-entity.js?v=20260608-083341-381c4e1"></script>
   <!-- Canonical product readiness gate (computeReadinessChecklist / productMarkupConfig).
        Byte-identical to mast-tenant-mcp-server/src/shared/product-readiness.core.js so the
        AI publish gate and the maker.js UI gate cannot drift; maker.js delegates to
        window.MastProductReadiness. Eager-loaded so it exists before the lazy maker module.
        ?v= kept in lockstep with MAST_MODULES_V by scripts/bump-modules-version.sh.
        See docs/ux-audit/product-publish-gate-plan.md §7. -->
-  <script src="../shared/product-readiness.core.js?v=20260607-222240-b77a9b7"></script>
+  <script src="../shared/product-readiness.core.js?v=20260608-083341-381c4e1"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Pod-specific runtime config — sets window.MAST_POD_PLATFORM_PROJECT so
@@ -12542,7 +12542,13 @@ MastDB.ptoEntries = {
 MastDB.lpe = {
   equipment: {
     PATH: 'admin/lpe/equipment',
-    list: function() { return MastDB.list('admin/lpe/equipment'); },
+    // Equipment items live as fields on a single doc (admin_lpe/equipment),
+    // keyed by item id — the same model as founders, and what the tenant MCP
+    // (lpe.ts get_equipment_register) reads/writes. Read the doc with get(),
+    // NOT list(): MastDB.list('admin/lpe/equipment') scans the whole admin_lpe
+    // collection and returns sibling docs (founders, laborProfile, …) as
+    // phantom "Untitled" rows that the per-item set/remove cannot touch.
+    list: function() { return MastDB.get('admin/lpe/equipment'); },
     get: function(id) { return MastDB.get('admin/lpe/equipment/' + id); },
     set: function(id, data) { return MastDB.set('admin/lpe/equipment/' + id, data); },
     update: function(id, data) { return MastDB.update('admin/lpe/equipment/' + id, data); },
@@ -21942,7 +21948,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260607-222240-b77a9b7';
+var MAST_MODULES_V = '20260608-083341-381c4e1';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
