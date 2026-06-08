@@ -613,7 +613,7 @@
       { k: 'Fulfillment', v: (si.stockFulfillmentDays != null ? si.stockFulfillmentDays + ' days' : '—') },
       { k: 'Wholesale MOQ', v: (p.moq != null ? String(p.moq) : '—') },
       { k: 'Case pack', v: (p.casePack != null ? String(p.casePack) : '—') }
-    ]) + perVarNote, { headerRight: headerRight });
+    ])) + perVarNote, { headerRight: headerRight });
   }
   // The five stock count buckets (Available is always derived = onHand − committed − held).
   var STOCK_FIELDS = [['onHand', 'On hand'], ['committed', 'Committed'], ['held', 'Held'], ['damaged', 'Damaged'], ['incoming', 'Incoming']];

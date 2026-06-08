@@ -59,6 +59,12 @@ jobs:
       # No-ops on push/dispatch (only meaningful with a PR base to diff).
       - name: Cache-bust bump guard
         run: node scripts/lint-cache-bust.js
+      # Parse-check every app/modules/*.js — no other gate actually parses the
+      # module JS, so a plain syntax error used to reach dev and dead-end its
+      # route at runtime (a dropped `)` in products-v2.js broke Products). This
+      # makes a syntax error un-mergeable.
+      - name: Module syntax check
+        run: node scripts/lint-syntax.js
       - name: MastDB access lint
         run: node scripts/lint-mastdb.js
       - name: Design token lint (advisory)
