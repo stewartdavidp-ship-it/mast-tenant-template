@@ -3376,4 +3376,149 @@
   MastAdmin.registerModule('products-v2', {
     routes: { 'products-v2': { tab: 'productsV2Tab', setup: function () { ensureTab(); render(); load(); } } }
   });
+
+  // ── Ask AI: hydrate the open product record ──────────────────────────────────
+  // When the ✨ Ask AI button fires on a product slide-out, send the structured
+  // product record — not scraped DOM — plus its inventory, recipe and recent
+  // sales, wrapped in a `scope` block that declares exactly what was captured.
+  // The scope is what lets Claude tell "this product has no price" apart from
+  // "price wasn't included", and decline cleanly on out-of-scope questions
+  // (competitor / external-market pricing). See MastAskAi.registerEntity.
+  if (window.MastAskAi && window.MastAskAi.registerEntity) {
+    function _num(x) { return (typeof x === 'number' && !isNaN(x)) ? x : null; }
+    function _money2(x) { return x == null ? null : +(+x).toFixed(2); }
+
+    function buildProductContext(p) {
+      if (!p) return {};
+      var pid = p._key || p.pid;
+      var rec = (V2.byId && V2.byId[pid]) || p;
+      var attrs = productAttributes(rec);
+      var si = rec.stockInfo || {};
+      var priceUSD = _money2(price(rec));                 // base retail (dollars)
+      var hasRecipe = !!rec.recipeId;
+      var rc = hasRecipe ? _recipeCache[rec.recipeId] : null;
+      var costUSD = rc ? _money2(rc.totalCost) : null;     // recipe unit cost (dollars)
+      var marginPct = (priceUSD != null && costUSD != null && priceUSD > 0)
+        ? +(((priceUSD - costUSD) / priceUSD) * 100).toFixed(1) : null;
+
+      // Variants: id + label + price + own-SKU flag — identifiers, not heavy data.
+      var variants = realVariants(rec).map(function (v) {
+        return { id: v.id, label: variantLabel(v), priceUSD: _money2(variantPrice(rec, v)),
+          overridden: variantOverridden(rec, v), sku: v.sku || null };
+      });
+
+      // Bound channels (where this product sells) — names if the channel cache
+      // warmed, else bare ids. Lean: just where it sells, not listing payloads.
+      var chById = V2._channelsCache || {};
+      var channels = productBindings(rec).map(function (b) {
+        var c = chById[b.channelId] || {};
+        return c.name || c.displayName || c.platform || b.channelId;
+      });
+
+      var sections = ['product', 'inventory'];
+      var product = {
+        id: pid,
+        title: rec.name || rec._title || null,
+        sku: rec.sku || null,
+        status: String(rec.status || 'draft').toLowerCase(),
+        statusLabel: statusLabel(rec.status),
+        mode: rec.mode || null,
+        price: priceUSD == null ? null : { amount: priceUSD, currency: 'USD' },
+        wholesalePrice: (_num(rec.wholesalePriceCents) && rec.wholesalePriceCents > 0)
+          ? { amount: _money2(rec.wholesalePriceCents / 100), currency: 'USD' } : null,
+        cost: costUSD == null ? null : { amount: costUSD, currency: 'USD', source: 'recipe' },
+        marginPct: marginPct,
+        category: categoryLabel(rec) || null,
+        tags: Array.isArray(attrs.tags) ? attrs.tags : [],
+        materials: Array.isArray(attrs.materials) ? attrs.materials : [],
+        channels: channels,
+        variantCount: variantCount(rec),
+        variants: variants,
+        imageCount: Array.isArray(rec.images) ? rec.images.length : 0,
+        createdAt: rec.createdAt || null,
+        updatedAt: rec.updatedAt || null
+      };
+
+      var inventory = {
+        stockType: si.stockType || null,
+        tracked: !!(si.stockType && !/order|build/.test(si.stockType)),
+        onHand: _num(si.totalOnHand),
+        committed: _num(si.totalCommitted),
+        available: _num(si.totalAvailable),
+        lowStockThreshold: _num(si.lowStockThreshold),
+        fulfillmentDays: _num(si.stockFulfillmentDays),
+        moq: _num(rec.moq),
+        casePack: _num(rec.casePack),
+        perVariant: variantCount(rec) > 0
+      };
+
+      var ctx = { page: { title: product.title || 'Product', route: 'products-v2', viewing: 'product-detail' },
+        product: product, inventory: inventory };
+
+      // recipe — only declared captured when we actually have the recipe loaded;
+      // hasRecipe is always meaningful (from the product), but materials/cost are
+      // only present once the recipe doc resolved (prepare() warms it).
+      if (rc) {
+        var mats = rc.lineItems && typeof rc.lineItems === 'object'
+          ? Object.keys(rc.lineItems).map(function (k) { var li = rc.lineItems[k] || {}; return li.name || li.materialName || k; })
+          : [];
+        ctx.recipe = { hasRecipe: true, name: rc.name || null, status: rc.status || null,
+          materialCount: mats.length, materials: mats.slice(0, 40), computedUnitCost: costUSD };
+        sections.push('recipe');
+      } else {
+        ctx.recipe = { hasRecipe: hasRecipe, note: hasRecipe ? 'recipe not loaded in this capture' : 'no recipe linked' };
+        if (!hasRecipe) sections.push('recipe'); // "no recipe" IS a captured fact
+      }
+
+      // salesPerformance — from the shared product sales map (last 500 orders).
+      var s = (window._mastProductSalesMap && window._mastProductSalesMap[pid]) || null;
+      if (s) {
+        ctx.salesPerformance = {
+          window: 'last_500_orders',
+          last30: { unitsSold: s.last30 || 0, revenue: _money2((s.revenue30 || 0) / 100) },
+          last90: { unitsSold: s.last90 || 0, revenue: _money2((s.revenue90 || 0) / 100) },
+          allTime: { unitsSold: s.allTime || 0, revenue: _money2((s.revenueAll || 0) / 100) },
+          lastSoldAt: s.lastOrdered ? String(s.lastOrdered).slice(0, 10) : null
+        };
+        sections.push('salesPerformance');
+      }
+
+      ctx.scope = {
+        describes: 'a single product record (plus its inventory, recipe and recent sales) for this tenant',
+        excludes: ['other tenants’ products', 'external market or competitor pricing', 'channel listing IDs / live sync status', 'orders not summarized in salesPerformance'],
+        sectionsIncluded: sections
+      };
+      return ctx;
+    }
+
+    window.MastAskAi.registerEntity('products-v2', {
+      title: 'Ask AI about this product',
+      placeholder: 'e.g. What is the margin? Is this priced right? Which variant sells best? What is sitting in stock?',
+      notes: [
+        'Money is in dollars. marginPct = (price − cost) / price, where cost is the recipe unit cost (null if no recipe/cost coverage).',
+        'If scope.sectionsIncluded lists a section, an empty/zero value there is real (genuinely empty), not omitted.',
+        'salesPerformance is drawn from the last 500 orders for THIS product only.'
+      ],
+      // Warm the recipe + sales caches (and channel names) before capture so a
+      // cold Ask AI still includes cost/margin and recent sales. Best-effort.
+      prepare: function (p) {
+        var pid = p && (p._key || p.pid);
+        var jobs = [];
+        if (window._ensureProductSalesMap && !window._mastProductSalesMap) {
+          jobs.push(Promise.resolve(window._ensureProductSalesMap()).catch(function () {}));
+        }
+        if (p && p.recipeId && !_recipeCache[p.recipeId]) {
+          jobs.push(Promise.resolve(MastDB.recipes.get(p.recipeId))
+            .then(function (rc) { if (rc) _recipeCache[p.recipeId] = rc; }).catch(function () {}));
+        }
+        if (!V2._channelsCache) {
+          jobs.push(new Promise(function (resolve) {
+            try { ensureChannels(pid, resolve); setTimeout(resolve, 1500); } catch (e) { resolve(); }
+          }));
+        }
+        return Promise.all(jobs);
+      },
+      buildContext: buildProductContext
+    });
+  }
 })();

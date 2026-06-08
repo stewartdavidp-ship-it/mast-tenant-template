@@ -5,8 +5,8 @@
 Source-of-truth counts for the admin app, generated from the code so docs
 cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 
-- **Core shell:** `app/index.html` — **59,794** lines
-- **Feature modules:** **98** files in `app/modules/` (**89** routed), **114,492** lines combined
+- **Core shell:** `app/index.html` — **59,910** lines
+- **Feature modules:** **98** files in `app/modules/` (**89** routed), **114,741** lines combined
 
 | Module file | Lines | Routes |
 |---|---:|---|
@@ -40,7 +40,7 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/cs-reviews-v2.js` | 362 | cs-reviews-v2 |
 | `modules/cs-tickets-v2.js` | 254 | cs-tickets-v2 |
 | `modules/customer-service.js` | 3,290 | cs-inbox, cs-tickets, cs-surveys, cs-reviews, cs-faqs, cs-members |
-| `modules/customers-v2.js` | 260 | customers-v2 |
+| `modules/customers-v2.js` | 311 | customers-v2 |
 | `modules/customers.js` | 3,485 | customers |
 | `modules/duplicates-v2.js` | 175 | duplicates-v2 |
 | `modules/email-log-v2.js` | 252 | email-log-v2 |
@@ -70,13 +70,13 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/membership-v2.js` | 438 | membership-v2 |
 | `modules/newsletter-v2.js` | 289 | newsletter-v2 |
 | `modules/newsletter.js` | 2,336 | newsletter |
-| `modules/orders-v2.js` | 256 | orders-v2 |
+| `modules/orders-v2.js` | 309 | orders-v2 |
 | `modules/orders.js` | 6,302 | orders, commissions, rma |
 | `modules/passes-v2.js` | 423 | passes-v2 |
 | `modules/procurement-v2.js` | 875 | procurement-v2 |
 | `modules/procurement.js` | 2,378 | procurement |
 | `modules/production.js` | 3,553 | jobs, production, stories, forecast |
-| `modules/products-v2.js` | 3,379 | products-v2 |
+| `modules/products-v2.js` | 3,524 | products-v2 |
 | `modules/promotions-v2.js` | 389 | promotions-v2 |
 | `modules/promotions.js` | 529 | promotions |
 | `modules/resources-v2.js` | 308 | resources-v2 |

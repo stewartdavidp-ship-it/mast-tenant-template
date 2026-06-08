@@ -593,11 +593,17 @@
     return window.MastIO.exportCsv({ rows: rows || [], columns: exportColumns(key), module: key, view: view || 'all' });
   }
 
+  // The record currently shown in the detail slide-out: {key, id, label, record}
+  // or null. Lets surfaces (e.g. MastAskAi.openCurrent) hydrate the open record
+  // without each one re-deriving "what's on screen". Reflects drill/back, so it
+  // always matches the record actually visible.
+  function getCurrent() { return _current; }
+
   var api = {
     define: define, get: get, listColumns: listColumns, exportColumns: exportColumns,
     canonicalGet: canonicalGet, validate: validate,
     renderList: renderList, openRecord: openRecord, exportRows: exportRows,
-    drill: drill, drillLink: drillLink, back: back
+    drill: drill, drillLink: drillLink, back: back, getCurrent: getCurrent
   };
   if (typeof window !== 'undefined') window.MastEntity = api;
   if (typeof module !== 'undefined' && module.exports) {

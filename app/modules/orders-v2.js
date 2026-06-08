@@ -253,4 +253,57 @@
   MastAdmin.registerModule('orders-v2', {
     routes: { 'orders-v2': { tab: 'ordersV2Tab', setup: function () { ensureTab(); render(); load(); } } }
   });
+
+  // ── Ask AI: hydrate the open order record ────────────────────────────────────
+  // Send the structured order (totals in dollars, line items, fulfillment) with a
+  // scope block so Claude can answer about THIS order and decline cleanly on
+  // anything outside it. All fields come straight off the record — no lazy load.
+  if (window.MastAskAi && window.MastAskAi.registerEntity) {
+    window.MastAskAi.registerEntity('orders-v2', {
+      title: 'Ask AI about this order',
+      placeholder: 'e.g. What is in this order? Is it shipped? What did it total? Why is it on hold?',
+      notes: ['Money is in dollars. Status is governed by the fulfillment workflow, not a free field.'],
+      buildContext: function (o) {
+        if (!o) return {};
+        var N = window.MastUI.Num;
+        var id = o._key || o.id;
+        var items = (o.items || []).map(function (it) {
+          return { name: it.productName || it.name || 'Item', type: it.itemType || 'product',
+            qty: it.qty || 1, priceUSD: N.moneyVal(it, 'priceCents', 'price'),
+            lineTotalUSD: N.moneyVal(it, 'lineTotalCents', 'lineTotal'), sku: it.sku || null };
+        });
+        var sh = o.shipping || {};
+        var t = o.tracking;
+        var trackingStr = t ? (typeof t === 'string' ? t : [t.carrier, t.trackingNumber].filter(Boolean).join(' ')) : null;
+        return {
+          page: { title: 'Order ' + (o.orderNumber || id), route: 'orders-v2', viewing: 'order-detail' },
+          order: {
+            id: id, orderNumber: o.orderNumber || null,
+            status: String(o.status || '').toLowerCase() || null,
+            source: o.source || null, paymentMethod: o.paymentMethod || null,
+            placedAt: o.placedAt || null, updatedAt: o.updatedAt || null,
+            itemCount: items.reduce(function (s, li) { return s + (li.qty || 1); }, 0),
+            items: items,
+            totals: {
+              subtotalUSD: N.moneyVal(o, 'subtotalCents', 'subtotal'),
+              shippingUSD: N.moneyVal(o, 'shippingCents', 'shipping'),
+              taxUSD: N.moneyVal(o, 'taxCents', 'tax'),
+              grandTotalUSD: N.moneyVal(o, 'totalCents', 'total')
+            }
+          },
+          customer: { id: o.customerId || null, name: o.customerName || o.email || null, email: o.email || null },
+          fulfillment: {
+            status: String(o.status || '').toLowerCase() || null,
+            tracking: trackingStr,
+            shipTo: [sh.city, sh.state].filter(Boolean).join(', ') || (sh.country || null)
+          },
+          scope: {
+            describes: 'a single order record for this tenant',
+            excludes: ['other tenants’ orders', 'the customer’s other orders', 'external shipping-carrier live status', 'product cost / margin (see the product record)'],
+            sectionsIncluded: ['order', 'customer', 'fulfillment']
+          }
+        };
+      }
+    });
+  }
 })();
