@@ -325,6 +325,12 @@
   // Slide-out header strip: image thumbnail (click → full size) + the variant
   // switcher pill, on one line. Empty when there's neither.
   function headerStrip(p, imgSrc, imgName, currentVid) {
+    // Inject the pv2 stylesheet here, not just in the list render(): a product SO
+    // can be opened by DRILLING straight in (e.g. from a channel's Products tab)
+    // without the products-v2 list ever rendering. Without this, the header
+    // thumbnail collapses to a dot and the variant switcher items render inline.
+    // ensureStyles() is idempotent (guards on #pv2-styles).
+    ensureStyles();
     var pid = p._key || p.pid;
     var drillId = currentVid ? (pid + '::' + currentVid) : pid;
     var thumb;
