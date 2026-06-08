@@ -1008,7 +1008,7 @@
     },
 
     'mapping': {
-      label:    'Listing Mapping',
+      label:    'Channel Mapping',
       section:  'operations',
       tagline:  'Match every channel listing to one product record.',
       outcome:      "Every channel listing is matched to one product record, so your catalog reconciles to a single source of truth.",
