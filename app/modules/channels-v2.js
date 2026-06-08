@@ -128,7 +128,7 @@
     return !!(p && Array.isArray(p.channelIds) && p.channelIds.indexOf(channelId) !== -1);
   }
   function productsForChannel(channelId) {
-    return Object.keys(V2.products).map(function (k) { return V2.products[k]; })
+    return Object.keys(V2.products).map(function (k) { return Object.assign({ _key: k }, V2.products[k]); })
       .filter(function (p) { return productOnChannel(p, channelId); });
   }
   function productCount(channelId) { return productsForChannel(channelId).length; }
@@ -217,7 +217,11 @@
           return String(a.name || '').localeCompare(String(b.name || ''));
         });
         var prodCols = [
-          { label: 'Product', render: function (p) { return esc(p.name || p.pid || p.id || '—'); } },
+          { label: 'Product', render: function (p) {
+              var label = p.name || p.pid || p.id || '—';
+              var id = p._key || p.pid || p.id;
+              return id ? MastEntity.drillLink('products-v2', id, label) : esc(label);
+            } },
           { label: 'Price', align: 'right', render: function (p) { return p.priceCents ? (N.money(p.priceCents, { cents: true }) || '$0.00') : '—'; } },
           { label: 'Status', render: function (p) {
               var st = p.status || 'active';
