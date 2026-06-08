@@ -439,7 +439,7 @@
       }
       if (typeof def.recordExtraPatch === 'function') {
         try {
-          var extra = def.recordExtraPatch(record, targetPhase, opts) || {};
+          var extra = def.recordExtraPatch(record, targetPhase, opts, actor) || {};
           Object.keys(extra).forEach(function(k) { recordPatch[k] = extra[k]; });
         } catch (e) {
           console.error('[MastFlow] recordExtraPatch threw:', e);

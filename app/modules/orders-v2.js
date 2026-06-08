@@ -111,10 +111,38 @@
         return { status: r.status, tone: STATUS_TONE[String(r.status || '').toLowerCase()] || 'neutral', tracking: track || null };
       },
       timeline: function (r) {
-        var ev = [{ label: 'Placed', at: window.MastUI.Num.date(r.placedAt), done: true }];
+        var cap = function (s) { return s ? s.charAt(0).toUpperCase() + s.slice(1) : s; };
+        // Audit trail: date + time so same-day steps stay distinguishable
+        // ("Confirmed · Sarah Chen" with "Jun 7, 2:14 PM" beside it).
+        var fmt = function (d) {
+          if (!d) return '';
+          var dt = new Date(d);
+          if (isNaN(dt.getTime())) return '';
+          return dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ', ' +
+            dt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+        };
+        // Prefer the real recorded history — one row per step, each carrying
+        // the employee (or "Automatic") who performed it. statusHistory is an
+        // array, but Firebase may surface it as an object map.
+        var hist = r.statusHistory;
+        if (hist && typeof hist === 'object' && !Array.isArray(hist)) {
+          hist = Object.keys(hist).map(function (k) { return hist[k]; });
+        }
+        if (Array.isArray(hist) && hist.length) {
+          var ev = [];
+          var hasPlaced = hist.some(function (h) { return h && String(h.status).toLowerCase() === 'placed'; });
+          if (!hasPlaced && r.placedAt) ev.push({ label: 'Placed', at: fmt(r.placedAt), done: true });
+          hist.forEach(function (h) {
+            if (!h || !h.status) return;
+            ev.push({ label: cap(String(h.status)) + (h.by ? ' · ' + h.by : ''), at: fmt(h.at), done: true });
+          });
+          return ev;
+        }
+        // Fallback: no recorded history — synthesize Placed + current status.
+        var fb = [{ label: 'Placed', at: fmt(r.placedAt), done: true }];
         var st = String(r.status || '').toLowerCase();
-        if (st && st !== 'placed') ev.push({ label: st.charAt(0).toUpperCase() + st.slice(1), at: window.MastUI.Num.date(r.updatedAt), done: true });
-        return ev;
+        if (st && st !== 'placed') fb.push({ label: cap(st), at: fmt(r.updatedAt), done: true });
+        return fb;
       }
     },
     onSave: function (rec, mode) {
