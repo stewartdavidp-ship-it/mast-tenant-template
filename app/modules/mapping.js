@@ -1579,7 +1579,7 @@
 
     host.innerHTML = [
       '<div style="max-width:900px;margin:0 auto;padding:20px;">',
-      '  <div style="font-size:1.6rem;margin-bottom:8px;">Channel mapping</div>',
+      '  <div style="font-size:1.6rem;margin-bottom:8px;">Channel Mapping</div>',
       '  <div style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:24px;">Last full mapping: ' + esc(sinceText) + '</div>',
       '  <div style="border:1px solid var(--border);border-radius:8px;padding:16px;background:var(--surface-card);margin-bottom:24px;">',
       '    <div style="font-size:1rem;font-weight:600;margin-bottom:8px;">Since then we\'ve detected:</div>',
