@@ -26,6 +26,26 @@
   var _viewOrderReturnRoute = null;
 
   // ============================================================
+  // Canonical order grand-total (DOLLARS)
+  // ============================================================
+  // Orders arrive from two writers with different money conventions:
+  // MCP/createTestOrder stamps integer-cents `totalCents`; the storefront
+  // (submitOrder) stored dollar `total` (legacy) and now also stamps `totalCents`.
+  // Some harness/MCP-seeded orders (e.g. SGTE-0187/0188) put CENTS in the dollar
+  // `total` field — reading `o.total` raw renders "$102000.00" instead of $1,020.
+  // moneyVal prefers `totalCents`/100, falling back to dollar `total` — the SAME
+  // single source of truth the orders-v2 detail and the server's
+  // orderRevenueCents normalizer use, so every surface agrees regardless of which
+  // writer produced the record. (Breakdown fields — subtotal/shipping/tax — are
+  // not reconciled here; the grand total is what these v1 surfaces display.)
+  function orderTotalDollars(o) {
+    if (!o) return 0;
+    return (window.MastUI && window.MastUI.Num)
+      ? (window.MastUI.Num.moneyVal(o, 'totalCents', 'total') || 0)
+      : (o.total || 0);
+  }
+
+  // ============================================================
   // Badge Style Helpers (inline colors per style guide)
   // ============================================================
 
@@ -279,7 +299,7 @@
         getOrderDisplayNumber(o),
         o.email || '',
         o.status || '',
-        (o.total || 0).toFixed(2),
+        orderTotalDollars(o).toFixed(2),
         (o.items || []).reduce(function(s, it) { return s + (it.qty || 1); }, 0),
         (o.tracking && (o.tracking.trackingNumber || o.tracking.number)) || '',
         o.placedAt || o.createdAt || '',
@@ -550,7 +570,7 @@
         '<td><span style="font-family:monospace;font-weight:600;">' + num + '</span>' + sourceBadge + '</td>' +
         '<td>' + esc(o.email || '') + '</td>' +
         '<td>' + getOrderItemsLabel(o) + '</td>' +
-        '<td>$' + (o.total || 0).toFixed(2) + '</td>' +
+        '<td>$' + orderTotalDollars(o).toFixed(2) + '</td>' +
         '<td><span class="status-badge pill" style="' + orderStatusBadgeStyle(status) + '">' + status.replace(/_/g, ' ') + '</span>' + invBadge + '</td>' +
         '<td>' + (trk ? '<span style="font-family:monospace;font-size:0.78rem;">' + esc(trk) + '</span>' : '<span style="color:var(--warm-gray);">—</span>') + '</td>' +
         '<td>' + formatOrderDate(o.placedAt || o.pendingPaymentAt) + '</td>' +
@@ -834,7 +854,7 @@
         summaryHtml += '<div class="order-summary-row discount"><span>Store Credit</span><span>-$' + (credTotal / 100).toFixed(2) + '</span></div>';
       }
     }
-    summaryHtml += '<div class="order-summary-row total"><span>Total</span><span class="order-summary-value">$' + (o.total || 0).toFixed(2) + '</span></div>';
+    summaryHtml += '<div class="order-summary-row total"><span>Total</span><span class="order-summary-value">$' + orderTotalDollars(o).toFixed(2) + '</span></div>';
 
     // Addresses
     var ship = o.shipping || {};
@@ -1754,7 +1774,7 @@
     if (!o) return;
     try {
       var now = new Date().toISOString();
-      var totalCents = Math.round((o.total || 0) * 100);
+      var totalCents = Math.round(orderTotalDollars(o) * 100);
       await MastDB.orders.update(orderId, {
         invoiceStatus: 'paid',
         invoicePaidAt: now,
@@ -1847,7 +1867,7 @@
       h += '<div style="font-size:0.85rem;color:var(--warm-gray);">Subtotal: $' + (o.subtotal || 0).toFixed(2) + '</div>';
       if (o.tax) h += '<div style="font-size:0.85rem;color:var(--warm-gray);">Tax: $' + o.tax.toFixed(2) + '</div>';
       if (o.shippingCost) h += '<div style="font-size:0.85rem;color:var(--warm-gray);">Shipping: $' + o.shippingCost.toFixed(2) + '</div>';
-      h += '<div style="font-weight:700;">Total: $' + (o.total || 0).toFixed(2) + '</div>';
+      h += '<div style="font-weight:700;">Total: $' + orderTotalDollars(o).toFixed(2) + '</div>';
       h += '</div>';
 
       // Payment instructions
@@ -1870,7 +1890,7 @@
       if (o.invoiceSentAt)  rows += '<div style="display:flex;justify-content:space-between;padding:4px 0;"><span style="color:var(--warm-gray-light);">Sent</span><span>' + formatOrderDate(o.invoiceSentAt) + '</span></div>';
       if (o.invoiceDueDate) rows += '<div style="display:flex;justify-content:space-between;padding:4px 0;"><span style="color:var(--warm-gray-light);">Due Date</span><span>' + esc(o.invoiceDueDate) + '</span></div>';
       if (o.invoicePaidAt)  rows += '<div style="display:flex;justify-content:space-between;padding:4px 0;"><span style="color:var(--warm-gray-light);">Paid</span><span style="color:#4ade80;">' + formatOrderDate(o.invoicePaidAt) + '</span></div>';
-      rows += '<div style="display:flex;justify-content:space-between;padding:4px 0;"><span style="color:var(--warm-gray-light);">Amount</span><span>$' + (o.total || 0).toFixed(2) + '</span></div>';
+      rows += '<div style="display:flex;justify-content:space-between;padding:4px 0;"><span style="color:var(--warm-gray-light);">Amount</span><span>$' + orderTotalDollars(o).toFixed(2) + '</span></div>';
       if (o.squareInvoiceId) {
         var sqLinkHtml = o.squareInvoiceUrl
           ? '<a href="' + esc(o.squareInvoiceUrl) + '" target="_blank" rel="noopener" style="color:var(--teal);">View on Square ↗</a>'
@@ -4840,7 +4860,7 @@
           (customer ? '<div class="dash-queue-customer">' + esc(customer) + '</div>' : '') +
           '<div class="dash-queue-meta">' +
             '<span>' + getOrderItemsLabel(o) + '</span>' +
-            '<span>$' + (o.total || 0).toFixed(2) + '</span>' +
+            '<span>$' + orderTotalDollars(o).toFixed(2) + '</span>' +
             '<span>' + formatOrderDate(o.placedAt || o.pendingPaymentAt) + '</span>' +
           '</div>' +
         '</div>';
@@ -4885,7 +4905,7 @@
           (customer ? '<div class="dash-queue-customer">' + esc(customer) + '</div>' : '') +
           '<div class="dash-queue-meta">' +
             '<span>' + getOrderItemsLabel(o) + '</span>' +
-            '<span>$' + (o.total || 0).toFixed(2) + '</span>' +
+            '<span>$' + orderTotalDollars(o).toFixed(2) + '</span>' +
             '<span>' + formatOrderDate(o.placedAt || o.pendingPaymentAt) + '</span>' +
           '</div>' +
         '</div>';
@@ -5370,7 +5390,7 @@
             if (crAmt > 0) html += '<div style="display:flex;justify-content:space-between;color:var(--amber-light);"><span>Store Credit</span><span>-' + fp(crAmt / 100) + '</span></div>';
           }
         }
-        html += '<div style="display:flex;justify-content:space-between;font-weight:600;border-top:1px solid var(--cream-dark);padding-top:6px;margin-top:4px;"><span>Total Charged</span><span>' + fp(order.total) + '</span></div>';
+        html += '<div style="display:flex;justify-content:space-between;font-weight:600;border-top:1px solid var(--cream-dark);padding-top:6px;margin-top:4px;"><span>Total Charged</span><span>' + fp(orderTotalDollars(order)) + '</span></div>';
         html += '</div></div>';
         el.innerHTML = html;
         // Also populate the disposition panel summary if visible
@@ -6011,7 +6031,7 @@
         var totalUSD = 0;
         var byStatus = {}, byMonth = {}, bySource = {}, byCustomer = {};
         filtered.forEach(function(o) {
-          var amt = o.total || 0;
+          var amt = orderTotalDollars(o);
           totalUSD += amt;
           var status = o.status || 'placed';
           if (!byStatus[status]) byStatus[status] = { count: 0, totalUSD: 0 };
@@ -6031,14 +6051,14 @@
         Object.keys(bySource).forEach(function(k) { bySource[k].totalUSD = +bySource[k].totalUSD.toFixed(2); });
 
         var topOrders = filtered.slice()
-          .sort(function(a, b) { return (b.total || 0) - (a.total || 0); })
+          .sort(function(a, b) { return orderTotalDollars(b) - orderTotalDollars(a); })
           .slice(0, 15)
           .map(function(o) {
             return {
               number:   getOrderDisplayNumber(o),
               placedAt: (o.placedAt || o.createdAt || '').slice(0, 10),
               customer: o.email || '(no email)',
-              totalUSD: +(o.total || 0).toFixed(2),
+              totalUSD: +orderTotalDollars(o).toFixed(2),
               status:   o.status || 'placed',
               source:   o.source || 'direct',
               itemCount: (o.items || []).reduce(function(s, it) { return s + (it.qty || 1); }, 0)
