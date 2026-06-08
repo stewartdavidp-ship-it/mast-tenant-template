@@ -1040,8 +1040,14 @@
    * Additive: renderHeader stays for orders/commissions. Opt in via a schema
    * flag (shared/mast-entity.js: detail.guidedHeader === true).
    */
-  function renderGuidedHeader(workflowKey, record, callbacks) {
+  function renderGuidedHeader(workflowKey, record, callbacks, opts) {
     callbacks = callbacks || {};
+    // Opt-in (schema detail.guidedExpandCurrent): render the CURRENT phase's
+    // checklist expanded on first paint instead of collapsed. Past phases still
+    // review-on-click, future phases still pull. Used by orders, whose process
+    // pane otherwise opens to a bare rail with no visible steps when the current
+    // phase has no unmet hard reqs (so no "· N to set up ▾" cue either).
+    var expandCurrent = !!(opts && opts.expandCurrent);
     return evaluate(workflowKey, record).then(function(ev) {
       var def = getDefinition(workflowKey);
       var ctxId = _registerUiContext(workflowKey, record, callbacks);
@@ -1057,7 +1063,7 @@
       var unmetHard = (ev.missing || []).filter(function(m) { return m.req.hard; }).length;
       var tucked = !ev.specMismatch && !ev.isTerminal && !ev.isBranchPoint &&
                    (!ev.nextPhases || !ev.nextPhases.length) && unmetHard === 0;
-      var rail = _renderGuidedRail(def, record, ev, ctxId) + _renderGuidedChecklist(def, record, ev, ctxId);
+      var rail = _renderGuidedRail(def, record, ev, ctxId) + _renderGuidedChecklist(def, record, ev, ctxId, expandCurrent);
       var railWrapId = ctxId + '_railwrap';
       html += tucked ? ('<div id="' + railWrapId + '" style="display:none;">' + rail + '</div>') : rail;
 
@@ -1151,7 +1157,7 @@
 
   // The lean checklist beneath the rail: the current phase's exit requirements,
   // met ✓ teal / unmet, each unmet target rendered as a "Go →" into the record.
-  function _renderGuidedChecklist(def, record, ev, ctxId) {
+  function _renderGuidedChecklist(def, record, ev, ctxId, expandCurrent) {
     // Always emit the (hidden) container, even when there's nothing to show —
     // a completed-step review needs this element to populate, including on
     // terminal records (received/cancelled) whose current phase has no checklist.
@@ -1184,7 +1190,10 @@
     // COLLAPSED BY DEFAULT — the header is the rail alone. Clicking the current
     // step toggles this open, and it shows only what's LEFT. Completed items are
     // history: hidden behind "Show N completed", never shown unasked.
-    var html = '<div id="' + ctxId + '_checklist" style="display:none;flex-direction:column;gap:5px;margin:11px 0 2px;">';
+    // expandCurrent (opt-in) shows the current phase's checklist on first paint
+    // instead — the toggle/review handlers still flip display from here.
+    var initialDisplay = expandCurrent ? 'flex' : 'none';
+    var html = '<div id="' + ctxId + '_checklist" style="display:' + initialDisplay + ';flex-direction:column;gap:5px;margin:11px 0 2px;">';
     html += unmet.length
       ? unmet.map(function(r) { return itemHtml(r, false); }).join('')
       : '<div style="font-size:0.82rem;color:var(--teal);">✓ Everything in this step is set up.</div>';

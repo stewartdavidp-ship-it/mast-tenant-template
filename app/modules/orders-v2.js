@@ -73,6 +73,7 @@
       flow: 'pickship',
       flowModule: 'pickshipWorkflow',
       guidedHeader: true,   // clickable step rail (no Advance/Back buttons); click a done step = review
+      guidedExpandCurrent: true,  // open with the current phase's checklist expanded (not a bare rail)
       customerEntity: 'customers-v2',
       tiles: function (r) {
         var N = window.MastUI.Num;
