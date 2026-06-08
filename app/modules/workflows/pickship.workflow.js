@@ -366,11 +366,17 @@
   // ---- Extra patch on transition ----
   // Mirror entry status into the legacy statusHistory[] that the rest of
   // the orders surface reads, so the existing badges + filters stay accurate.
-  function recordExtraPatch(record, targetPhase, opts) {
+  // `actor` is the engine's resolved actor for this transition (4th arg):
+  // { uid, displayName } for a signed-in user, or { system: '...' } for a
+  // webhook / automated transition. Record the human-readable name so the
+  // order History reads "Confirmed · Sarah Chen", and "Automatic" for genuine
+  // system transitions — instead of the old opaque 'mastflow' sentinel.
+  function recordExtraPatch(record, targetPhase, opts, actor) {
     if (!targetPhase.entryStatus) return {};
     var now = new Date().toISOString();
+    var by = (actor && actor.displayName) ? actor.displayName : 'Automatic';
     var hist = (record.statusHistory && record.statusHistory.slice) ? record.statusHistory.slice() : [];
-    hist.push({ status: targetPhase.entryStatus, at: now, by: 'mastflow', note: 'workflow transition' });
+    hist.push({ status: targetPhase.entryStatus, at: now, by: by, note: 'workflow transition' });
     return { statusHistory: hist, updatedAt: now };
   }
 
