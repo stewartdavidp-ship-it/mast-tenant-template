@@ -597,7 +597,7 @@
     define: define, get: get, listColumns: listColumns, exportColumns: exportColumns,
     canonicalGet: canonicalGet, validate: validate,
     renderList: renderList, openRecord: openRecord, exportRows: exportRows,
-    drill: drill, back: back
+    drill: drill, drillLink: drillLink, back: back
   };
   if (typeof window !== 'undefined') window.MastEntity = api;
   if (typeof module !== 'undefined' && module.exports) {
