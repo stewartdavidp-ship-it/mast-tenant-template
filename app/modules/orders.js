@@ -657,6 +657,26 @@
   // ============================================================
 
   function viewOrder(orderId) {
+    // v2-aware: when the UI-redesign flag remaps 'orders' -> 'orders-v2', the
+    // legacy order-detail DOM is collapsed (0x0) and the v2 list shows instead,
+    // so opening an order from outside the v2 list (dashboard New Orders card,
+    // history links) landed on the list. Route through the v2 record opener.
+    // navigateTo('orders') remaps to orders-v2 and triggers its load(); once the
+    // record is in V2.byId we open it the same way a v2 row click would.
+    if (typeof mastUseV2Routes === 'function' && mastUseV2Routes() &&
+        window.MAST_V2_ROUTE_MAP && window.MAST_V2_ROUTE_MAP.orders) {
+      selectedOrderId = orderId;
+      navigateTo('orders');
+      var _tries = 0;
+      (function openWhenReady() {
+        if (window.OrdersV2 && typeof OrdersV2.has === 'function' && OrdersV2.has(orderId)) {
+          OrdersV2.open(orderId);
+          return;
+        }
+        if (++_tries <= 60) setTimeout(openWhenReady, 100); // poll up to ~6s for load()
+      })();
+      return;
+    }
     _viewOrderReturnRoute = currentRoute !== 'orders' ? currentRoute : null;
     selectedOrderId = orderId;
     // Preserve MastNavStack across this internal navigation — top-level
