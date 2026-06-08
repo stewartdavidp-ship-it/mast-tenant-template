@@ -110,25 +110,25 @@
        Shared by customers.js (list/export) and customer-service.js (survey
        bulk-send) so the segment matcher cannot drift. ?v= kept in lockstep
        with MAST_MODULES_V by scripts/bump-modules-version.sh. -->
-  <script src="../shared/customer-filters.js?v=20260608-150815-994caa2"></script>
+  <script src="../shared/customer-filters.js?v=20260608-152303-46eca0d"></script>
   <script src="../shared/brand-sync.js?v=1"></script>
   <script src="../shared/channel-connection.js?v=1"></script>
-  <script src="../shared/variant-reconcile.js?v=20260608-150815-994caa2"></script>
+  <script src="../shared/variant-reconcile.js?v=20260608-152303-46eca0d"></script>
   <!-- UI redesign engines (docs/ux-audit): shared primitives + Entity Engine.
        The ?v= suffix is kept in lockstep with MAST_MODULES_V by
        scripts/bump-modules-version.sh (these are static <head> tags loaded
        before the JS var exists, so they can't read it at runtime). Without
        this, the engines were frozen at ?v=1 and never cache-busted on deploy. -->
-  <script src="../shared/mast-ui.js?v=20260608-150815-994caa2"></script>
-  <script src="../shared/mast-io.js?v=20260608-150815-994caa2"></script>
-  <script src="../shared/mast-entity.js?v=20260608-150815-994caa2"></script>
+  <script src="../shared/mast-ui.js?v=20260608-152303-46eca0d"></script>
+  <script src="../shared/mast-io.js?v=20260608-152303-46eca0d"></script>
+  <script src="../shared/mast-entity.js?v=20260608-152303-46eca0d"></script>
   <!-- Canonical product readiness gate (computeReadinessChecklist / productMarkupConfig).
        Byte-identical to mast-tenant-mcp-server/src/shared/product-readiness.core.js so the
        AI publish gate and the maker.js UI gate cannot drift; maker.js delegates to
        window.MastProductReadiness. Eager-loaded so it exists before the lazy maker module.
        ?v= kept in lockstep with MAST_MODULES_V by scripts/bump-modules-version.sh.
        See docs/ux-audit/product-publish-gate-plan.md §7. -->
-  <script src="../shared/product-readiness.core.js?v=20260608-150815-994caa2"></script>
+  <script src="../shared/product-readiness.core.js?v=20260608-152303-46eca0d"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Pod-specific runtime config — sets window.MAST_POD_PLATFORM_PROJECT so
@@ -6430,6 +6430,9 @@
     </div>
     <div class="header-user">
       <div id="tokenBalanceIndicator" style="display:none;"></div>
+      <button class="header-notif-btn" id="askAiGlobalBtn" onclick="if(window.MastAskAi)MastAskAi.openCurrent()" aria-label="Ask AI about this screen" title="Ask AI about this screen" style="display:none;">
+        ✨
+      </button>
       <button class="header-notif-btn" id="notificationBell" onclick="toggleNotificationPanel()" aria-label="Notifications" style="display:none;">
         🔔
         <span class="header-notif-badge" id="notificationBadge" style="display:none;"></span>
@@ -17814,6 +17817,8 @@ window.mastSlideOut = (function() {
             '<h2 id="mastSlideOutTitle" style="font-size:1.15rem;margin:0 0 4px;color:var(--text-primary);font-weight:600;"></h2>' +
             '<div id="mastSlideOutSubtitle" style="font-size:0.85rem;color:var(--warm-gray);line-height:1.4;"></div>' +
           '</div>' +
+          '<button type="button" id="mastSlideOutAskAiBtn" onclick="if(window.MastAskAi)MastAskAi.openCurrent()" aria-label="Ask AI about this" title="Ask AI about this" ' +
+                  'style="display:none;background:transparent;border:0;color:var(--warm-gray);font-size:1.15rem;line-height:1;cursor:pointer;padding:0 4px;flex-shrink:0;">&#10024;</button>' +
           '<button type="button" id="mastSlideOutCloseBtn" onclick="window.mastSlideOut.close()" aria-label="Close" ' +
                   'style="background:transparent;border:0;color:var(--warm-gray);font-size:1.6rem;line-height:1;cursor:pointer;padding:0 4px;flex-shrink:0;">&times;</button>' +
         '</header>' +
@@ -17840,6 +17845,10 @@ window.mastSlideOut = (function() {
       titleEl.textContent = opts.title || '';
       subEl.textContent = opts.subtitle || '';
       subEl.style.display = opts.subtitle ? '' : 'none';
+      // ✨ Ask AI in the slide-out header — reachable while the modal covers the
+      // page chrome. Shown only when the subscription AI is configured.
+      var soAiBtn = document.getElementById('mastSlideOutAskAiBtn');
+      if (soAiBtn) soAiBtn.style.display = (window.MastAskAi && typeof MastAskAi.isEnabled === 'function' && MastAskAi.isEnabled()) ? '' : 'none';
       if (opts.bodyNode) { bodyEl.innerHTML = ''; bodyEl.appendChild(opts.bodyNode); }
       else { bodyEl.innerHTML = opts.bodyHtml || ''; }
       footEl.innerHTML = opts.footerHtml || '';
@@ -19266,6 +19275,7 @@ auth.onAuthStateChanged(async function(user) {
   // MCP-configured flag). Pages call MastAskAi.isEnabled() before rendering
   // their ✨ Ask AI buttons; defaults off until this resolves.
   try { if (window.MastAskAi) await MastAskAi.init(); } catch(e) { console.warn('MastAskAi.init failed:', e.message); }
+  if (typeof refreshGlobalAskAiBtn === 'function') refreshGlobalAskAiBtn();
 
   // Guided next steps (module-aware onboarding) — replaces old setup banner
   Promise.all([loadNextStepsCache(), loadDismissedSteps(), loadMatchingPrefs()]).then(function() { renderDashCardSetupShop(); });
@@ -21976,7 +21986,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260608-150815-994caa2';
+var MAST_MODULES_V = '20260608-152303-46eca0d';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -30794,6 +30804,7 @@ window.saveAskAiConfig = async function() {
       : '<span style="color:var(--warm-gray);">Saved — buttons stay hidden until both fields are set.</span>';
     showToast('Ask AI settings saved');
     _renderAskAiStatusBanner();
+    if (typeof refreshGlobalAskAiBtn === 'function') refreshGlobalAskAiBtn();
   } catch (err) {
     if (statusEl) statusEl.innerHTML = '<span style="color:#dc2626;">Save failed: ' + esc(err.message) + '</span>';
     showToast('Save failed: ' + err.message, true);
@@ -30909,6 +30920,33 @@ window.MastAskAi = (function() {
       capturedAt: new Date().toISOString()
     }, pageCtx);
     renderModal(ctx, cfg);
+  }
+
+  // Generic, page-agnostic entry — works on ANY screen (including v2 surfaces and
+  // open slide-outs), not just pages that registered a context. Powers the global
+  // header + slide-out ✨ Ask AI buttons. Builds context from the current route
+  // (and the open slide-out's title, if any) so the deep-link prompt is grounded.
+  function openCurrent() {
+    if (!enabled) { showToast('Ask AI isn’t set up yet — turn it on in Settings → AI → AI integrations.', true); return; }
+    if (document.getElementById('mastAskAiModal')) return;
+    var routeLabel = (typeof ROUTE_LABELS !== 'undefined' && window.currentRoute && ROUTE_LABELS[window.currentRoute])
+      ? ROUTE_LABELS[window.currentRoute]
+      : (window.currentRoute || 'this page');
+    // A drilled-in slide-out record is richer context than the route alone.
+    var soTitleEl = document.getElementById('mastSlideOutTitle');
+    var soTitle = (soTitleEl && soTitleEl.offsetParent !== null && (soTitleEl.textContent || '').trim())
+      ? soTitleEl.textContent.trim() : null;
+    var pageTitle = soTitle || routeLabel;
+    var ctx = {
+      version: '1',
+      app: 'mast',
+      tenantId: (typeof MastDB !== 'undefined' && MastDB.tenantId) ? MastDB.tenantId() : null,
+      capturedAt: new Date().toISOString(),
+      pageTitle: pageTitle,
+      route: window.currentRoute || null,
+      viewing: soTitle || null
+    };
+    renderModal(ctx, { title: 'Ask AI — ' + pageTitle, placeholder: 'Ask Claude about ' + pageTitle + '…' });
   }
 
   function renderModal(ctx, cfg) {
@@ -31175,6 +31213,7 @@ window.MastAskAi = (function() {
   return {
     register: register,
     open: open,
+    openCurrent: openCurrent,
     close: close,
     submit: submit,
     init: init,
@@ -31187,6 +31226,17 @@ window.MastAskAi = (function() {
     _registry: registry
   };
 })();
+
+// Global ✨ Ask AI header button — visible only when the per-user subscription +
+// MCP config makes MastAskAi.isEnabled() true. Called after MastAskAi.init() and
+// whenever the Ask AI config is saved.
+function refreshGlobalAskAiBtn() {
+  var b = document.getElementById('askAiGlobalBtn');
+  if (!b) return;
+  var on = !!(window.MastAskAi && typeof MastAskAi.isEnabled === 'function' && MastAskAi.isEnabled());
+  b.style.display = on ? '' : 'none';
+}
+window.refreshGlobalAskAiBtn = refreshGlobalAskAiBtn;
 
 async function saveShopifyConfig() {
   if (!can('settings', 'edit')) { showToast('You do not have permission to update settings.', true); return; }
