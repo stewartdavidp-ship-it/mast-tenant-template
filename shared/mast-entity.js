@@ -450,7 +450,7 @@
       onBack: function (target) { _flowTransition(target); },
       onBranch: function (choiceKey, entryPhase) { _flowTransition(entryPhase, choiceKey); },
       onTarget: function (targetId) { _flowGoTarget(targetId); }
-    }).then(function (res) {
+    }, { expandCurrent: !!(_d && _d.guidedExpandCurrent) }).then(function (res) {
       var host = document.getElementById('muFlowHost');
       if (host) host.innerHTML = res.html;
       _flow.fromPhase = (res.evaluation && res.evaluation.currentPhase) ? res.evaluation.currentPhase.key : null;
