@@ -110,25 +110,25 @@
        Shared by customers.js (list/export) and customer-service.js (survey
        bulk-send) so the segment matcher cannot drift. ?v= kept in lockstep
        with MAST_MODULES_V by scripts/bump-modules-version.sh. -->
-  <script src="../shared/customer-filters.js?v=20260608-165747-90b40dc"></script>
+  <script src="../shared/customer-filters.js?v=20260608-170930-a7e27a3"></script>
   <script src="../shared/brand-sync.js?v=1"></script>
   <script src="../shared/channel-connection.js?v=1"></script>
-  <script src="../shared/variant-reconcile.js?v=20260608-165747-90b40dc"></script>
+  <script src="../shared/variant-reconcile.js?v=20260608-170930-a7e27a3"></script>
   <!-- UI redesign engines (docs/ux-audit): shared primitives + Entity Engine.
        The ?v= suffix is kept in lockstep with MAST_MODULES_V by
        scripts/bump-modules-version.sh (these are static <head> tags loaded
        before the JS var exists, so they can't read it at runtime). Without
        this, the engines were frozen at ?v=1 and never cache-busted on deploy. -->
-  <script src="../shared/mast-ui.js?v=20260608-165747-90b40dc"></script>
-  <script src="../shared/mast-io.js?v=20260608-165747-90b40dc"></script>
-  <script src="../shared/mast-entity.js?v=20260608-165747-90b40dc"></script>
+  <script src="../shared/mast-ui.js?v=20260608-170930-a7e27a3"></script>
+  <script src="../shared/mast-io.js?v=20260608-170930-a7e27a3"></script>
+  <script src="../shared/mast-entity.js?v=20260608-170930-a7e27a3"></script>
   <!-- Canonical product readiness gate (computeReadinessChecklist / productMarkupConfig).
        Byte-identical to mast-tenant-mcp-server/src/shared/product-readiness.core.js so the
        AI publish gate and the maker.js UI gate cannot drift; maker.js delegates to
        window.MastProductReadiness. Eager-loaded so it exists before the lazy maker module.
        ?v= kept in lockstep with MAST_MODULES_V by scripts/bump-modules-version.sh.
        See docs/ux-audit/product-publish-gate-plan.md §7. -->
-  <script src="../shared/product-readiness.core.js?v=20260608-165747-90b40dc"></script>
+  <script src="../shared/product-readiness.core.js?v=20260608-170930-a7e27a3"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Pod-specific runtime config — sets window.MAST_POD_PLATFORM_PROJECT so
@@ -21986,7 +21986,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260608-165747-90b40dc';
+var MAST_MODULES_V = '20260608-170930-a7e27a3';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -30820,6 +30820,12 @@ window.saveAskAiConfig = async function() {
 // template. Pages only contribute page-specific snapshot data.
 window.MastAskAi = (function() {
   var registry = {};
+  // Entity-scoped Ask AI configs, keyed by MastEntity key (e.g. 'products-v2').
+  // Unlike `registry` (page/list surfaces), these hydrate the OPEN record on a
+  // detail slide-out: buildContext(record) returns the structured record itself
+  // (not scraped DOM) plus a `scope` block declaring what was captured, so the
+  // payload can tell "field is empty" apart from "field wasn't captured".
+  var entityRegistry = {};
   var enabled = false;
   var initialized = false;
   var initPromise = null;
@@ -30829,6 +30835,18 @@ window.MastAskAi = (function() {
   function register(pageId, config) {
     registry[pageId] = config || {};
   }
+
+  // A detail surface registers its record hydrator here, keyed by its MastEntity
+  // key. cfg: { title?, placeholder?, notes?, buildContext(record), prepare?(record) }.
+  //   buildContext(record) — returns the version-2 payload sections (page, scope,
+  //     and one block per record facet). Runs synchronously.
+  //   prepare(record) — optional Promise; warms any lazily-loaded caches (recipe,
+  //     sales, channels) BEFORE buildContext reads them, so opening Ask AI cold
+  //     still captures real data instead of "not loaded yet".
+  function registerEntity(entityKey, cfg) {
+    entityRegistry[entityKey] = cfg || {};
+  }
+  function hasEntity(entityKey) { return !!entityRegistry[entityKey]; }
 
   // Pages call isEnabled() before rendering Ask AI buttons. False until config
   // is loaded — we deliberately default off so we never show a button the user
@@ -30908,44 +30926,133 @@ window.MastAskAi = (function() {
     return { level: 'warn', text: '⚠ Not configured.' };
   }
 
+  // Envelope keys that are metadata, not captured data sections. Used to derive
+  // scope.sectionsIncluded from whatever a buildContext returned.
+  var _META_KEYS = { version: 1, app: 1, tenantId: 1, capturedAt: 1, page: 1, scope: 1, pageTitle: 1, route: 1, viewing: 1, note: 1 };
+
+  // The `scope` block is the single highest-value part of the payload: it lets
+  // Claude answer "is this field empty or just uncaptured?" and decline cleanly
+  // on questions the page doesn't cover. Every payload gets one — a detail config
+  // can supply an explicit scope (with `excludes`), otherwise we synthesize
+  // sectionsIncluded from the data blocks actually present.
+  function _deriveScope(ctx, pageCtx) {
+    var provided = (pageCtx && pageCtx.scope) || {};
+    var sections = provided.sectionsIncluded;
+    if (!Array.isArray(sections)) {
+      sections = Object.keys(ctx).filter(function (k) { return !_META_KEYS[k] && ctx[k] != null; });
+    }
+    var title = (ctx.page && ctx.page.title) || ctx.pageTitle;
+    return {
+      describes: provided.describes || (title ? ('a snapshot of the ' + title + ' view for this tenant') : 'a page-level snapshot for this tenant'),
+      excludes: Array.isArray(provided.excludes) ? provided.excludes
+        : ['other tenants’ data', 'external market / competitor pricing', 'anything not present in the sections listed below'],
+      sectionsIncluded: sections
+    };
+  }
+
+  // Build the version-2 envelope around whatever a buildContext returned, filling
+  // in the base fields, a `page` block, and a `scope` block when the config did
+  // not provide them. Existing v1 list configs (route/pageTitle/aggregates at the
+  // top level) flow through unchanged and gain a scope for free.
+  function _composeCtx(pageCtx) {
+    pageCtx = pageCtx || {};
+    var ctx = Object.assign({
+      version: '2',
+      app: 'mast',
+      tenantId: (typeof MastDB !== 'undefined' && MastDB.tenantId) ? MastDB.tenantId() : null,
+      capturedAt: new Date().toISOString()
+    }, pageCtx);
+    if (!ctx.page) {
+      ctx.page = {
+        title: ctx.pageTitle || null,
+        route: ctx.route || (typeof window.currentRoute !== 'undefined' ? window.currentRoute : null) || null,
+        viewing: ctx.viewing || null
+      };
+    }
+    ctx.scope = _deriveScope(ctx, pageCtx);
+    return ctx;
+  }
+
   function open(pageId) {
     var cfg = registry[pageId];
     if (!cfg) { showToast('Ask AI not configured for this page', true); return; }
     if (document.getElementById('mastAskAiModal')) return;
     var pageCtx = (typeof cfg.buildContext === 'function') ? (cfg.buildContext() || {}) : {};
-    var ctx = Object.assign({
-      version: '1',
-      app: 'mast',
-      tenantId: (typeof MastDB !== 'undefined' && MastDB.tenantId) ? MastDB.tenantId() : null,
-      capturedAt: new Date().toISOString()
-    }, pageCtx);
-    renderModal(ctx, cfg);
+    renderModal(_composeCtx(pageCtx), cfg);
   }
 
   // Generic, page-agnostic entry — works on ANY screen (including v2 surfaces and
   // open slide-outs), not just pages that registered a context. Powers the global
-  // header + slide-out ✨ Ask AI buttons. Builds context from the current route
-  // (and the open slide-out's title, if any) so the deep-link prompt is grounded.
+  // header + slide-out ✨ Ask AI buttons.
+  //
+  // Resolution order (richest context wins):
+  //   1. An OPEN detail record whose MastEntity key has a registered entity config
+  //      → hydrate the record (product fields, inventory, recipe, sales, …) with a
+  //        scope block. This is what makes "what's the margin?" answerable.
+  //   2. A list/page surface registered under the current route → its page context.
+  //   3. Neither → a generic page-level envelope. Even this declares its scope
+  //      (page-level only), so Claude never has to guess whether data was omitted.
   function openCurrent() {
     if (!enabled) { showToast('Ask AI isn’t set up yet — turn it on in Settings → AI → AI integrations.', true); return; }
     if (document.getElementById('mastAskAiModal')) return;
+
+    // (1) Hydrate the open detail record if its entity registered a config.
+    // Only trust MastEntity._current while a slide-out is actually on screen —
+    // it isn't cleared on close, so a stale record could otherwise leak into a
+    // global-header Ask AI fired from a plain list page.
+    var soOpenEl = document.getElementById('mastSlideOutTitle');
+    var soOpen = !!(soOpenEl && soOpenEl.offsetParent !== null);
+    var cur = (soOpen && window.MastEntity && typeof MastEntity.getCurrent === 'function') ? MastEntity.getCurrent() : null;
+    var entityCfg = cur && cur.key ? entityRegistry[cur.key] : null;
+    if (entityCfg && typeof entityCfg.buildContext === 'function') {
+      var rec = cur.record;
+      var go = function () {
+        if (document.getElementById('mastAskAiModal')) return;
+        var pageCtx;
+        try { pageCtx = entityCfg.buildContext(rec) || {}; }
+        catch (e) { console.error('[MastAskAi] entity buildContext failed:', e); pageCtx = {}; }
+        renderModal(_composeCtx(pageCtx), {
+          title: entityCfg.title || ('Ask AI — ' + (cur.label || 'record')),
+          placeholder: entityCfg.placeholder || ('Ask Claude about ' + (cur.label || 'this record') + '…'),
+          notes: entityCfg.notes
+        });
+      };
+      // Warm lazily-loaded caches first (best-effort, time-boxed) so cold opens
+      // still capture recipe/sales/etc. A hung prepare must not block the modal.
+      if (typeof entityCfg.prepare === 'function') {
+        var settled = false;
+        var fire = function () { if (settled) return; settled = true; go(); };
+        try { Promise.resolve(entityCfg.prepare(rec)).then(fire, fire); } catch (e) { fire(); }
+        setTimeout(fire, 2500);
+      } else { go(); }
+      return;
+    }
+
+    // (2) A list/page surface registered under the current route.
+    var routeCfg = (window.currentRoute && registry[window.currentRoute]) ? registry[window.currentRoute] : null;
+    if (routeCfg && typeof routeCfg.buildContext === 'function') {
+      renderModal(_composeCtx(routeCfg.buildContext() || {}), routeCfg);
+      return;
+    }
+
+    // (3) Generic page-level fallback.
     var routeLabel = (typeof ROUTE_LABELS !== 'undefined' && window.currentRoute && ROUTE_LABELS[window.currentRoute])
       ? ROUTE_LABELS[window.currentRoute]
       : (window.currentRoute || 'this page');
-    // A drilled-in slide-out record is richer context than the route alone.
     var soTitleEl = document.getElementById('mastSlideOutTitle');
     var soTitle = (soTitleEl && soTitleEl.offsetParent !== null && (soTitleEl.textContent || '').trim())
       ? soTitleEl.textContent.trim() : null;
     var pageTitle = soTitle || routeLabel;
-    var ctx = {
-      version: '1',
-      app: 'mast',
-      tenantId: (typeof MastDB !== 'undefined' && MastDB.tenantId) ? MastDB.tenantId() : null,
-      capturedAt: new Date().toISOString(),
+    var ctx = _composeCtx({
       pageTitle: pageTitle,
       route: window.currentRoute || null,
-      viewing: soTitle || null
-    };
+      viewing: soTitle || null,
+      scope: {
+        describes: 'a page-level view only — no specific record was captured from this screen',
+        excludes: ['the underlying records on this page', 'other tenants’ data', 'external market / competitor pricing'],
+        sectionsIncluded: []
+      }
+    });
     renderModal(ctx, { title: 'Ask AI — ' + pageTitle, placeholder: 'Ask Claude about ' + pageTitle + '…' });
   }
 
@@ -31001,11 +31108,18 @@ window.MastAskAi = (function() {
   }
 
   function buildPrompt(question, ctx, cfg, shotUrl) {
-    var pageDesc = ctx.pageTitle ? ('the ' + ctx.pageTitle + ' page') : 'this page';
+    var title = (ctx.page && ctx.page.title) || ctx.pageTitle;
+    var pageDesc = title ? ('the ' + title + ' view') : 'this page';
+    var scope = ctx.scope || {};
     var lines = [
-      'I am looking at ' + pageDesc + ' in my Mast admin and want help understanding what I see. Answer using only the data in the context block below' + (shotUrl ? ' and the screenshot linked below' : '') + ' — do not ask me to fetch more, install connectors, or run additional queries. If a question genuinely cannot be answered from the included data, suggest a filter or view I should apply on the page and ask me to re-send, but only as a last resort.',
+      'I am looking at ' + pageDesc + ' in my Mast admin and want help understanding what I see. The context block below is structured data captured straight from the record/page (not scraped text)' + (shotUrl ? ', plus the screenshot linked below' : '') + '.',
       '',
-      '<mast-ui-context version="1">',
+      'How to read the context — important:',
+      '- The `scope` block declares exactly what this payload covers. `scope.sectionsIncluded` lists the sections that were captured. If a section IS listed but a field inside it is empty/null/zero, treat that as genuinely empty in the record — NOT as missing from the capture. Answer about those confidently.',
+      '- If something is NOT in `scope.sectionsIncluded`, or it falls under `scope.excludes` (e.g. competitor or external-market pricing, other tenants), it is outside what this screen provides. Say so plainly rather than guessing. For a genuinely external question you may offer to look it up on the web — but never invent Mast data.',
+      '- Answer using the data in the context block' + (shotUrl ? ' and the screenshot' : '') + '. Do not ask me to install connectors or run extra queries.',
+      '',
+      '<mast-ui-context version="2">',
       JSON.stringify(ctx, null, 2),
       '</mast-ui-context>',
       '',
@@ -31237,6 +31351,8 @@ window.MastAskAi = (function() {
 
   return {
     register: register,
+    registerEntity: registerEntity,
+    hasEntity: hasEntity,
     open: open,
     openCurrent: openCurrent,
     close: close,

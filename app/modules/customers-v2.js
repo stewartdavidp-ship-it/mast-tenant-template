@@ -257,4 +257,55 @@
   MastAdmin.registerModule('customers-v2', {
     routes: { 'customers-v2': { tab: 'customersV2Tab', setup: function () { ensureTab(); render(); load(); } } }
   });
+
+  // ── Ask AI: hydrate the open customer record ─────────────────────────────────
+  // Send the structured customer (lifetime stats, recent orders, segments) with a
+  // scope block. Recent orders are matched on customerId only (never email), so we
+  // never leak another customer's orders. Spend/stats may be empty for a fresh
+  // lead — scope makes "no orders yet" distinguishable from "orders not captured".
+  if (window.MastAskAi && window.MastAskAi.registerEntity) {
+    window.MastAskAi.registerEntity('customers-v2', {
+      title: 'Ask AI about this customer',
+      placeholder: 'e.g. How much have they spent? When did they last order? Are they a repeat buyer? What is their average order?',
+      notes: ['Money is in dollars. Stats (orders, spend, last order) are lifetime for this customer only.'],
+      buildContext: function (c) {
+        if (!c) return {};
+        var N = window.MastUI.Num;
+        var id = c._key || c.id;
+        var spend = (stat(c, 'lifetimeSpendCents') || 0) / 100;
+        var n = stat(c, 'orderCount') || 0;
+        var recent = (c._recentOrders || []).map(function (o) {
+          return { id: o._key, orderNumber: o.orderNumber || null, placedAt: o.placedAt ? String(o.placedAt).slice(0, 10) : null,
+            totalUSD: N.moneyVal(o, 'totalCents', 'total'), status: String(o.status || '').toLowerCase() || null };
+        });
+        var segments = [];
+        if (c.marketing && c.marketing.newsletterOptIn) segments.push('Newsletter');
+        if (c.marketing && c.marketing.smsOptIn) segments.push('SMS');
+        if (c.stats && c.stats.portfolioQuadrant) segments.push(c.stats.portfolioQuadrant);
+        var sections = ['customer', 'segments'];
+        var ctx = {
+          page: { title: c.displayName || 'Customer', route: 'customers-v2', viewing: 'customer-detail' },
+          customer: {
+            id: id, name: c.displayName || null, email: c.primaryEmail || null,
+            phone: c.phone || null, status: String(c.status || '').toLowerCase() || null,
+            source: c.source || null, location: c._contactLocation || null,
+            createdAt: c.createdAt || null,
+            lifetime: {
+              orderCount: n, totalSpendUSD: +spend.toFixed(2),
+              avgOrderUSD: +(n ? spend / n : 0).toFixed(2),
+              lastOrderAt: stat(c, 'lastOrderAt') ? String(stat(c, 'lastOrderAt')).slice(0, 10) : null
+            }
+          },
+          segments: segments
+        };
+        if (c._recentOrders) { ctx.recentOrders = recent; sections.push('recentOrders'); }
+        ctx.scope = {
+          describes: 'a single customer record (lifetime stats + recent orders) for this tenant',
+          excludes: ['other tenants’ customers', 'other customers’ orders', 'external/enriched demographic data', 'orders beyond the recent list shown here'],
+          sectionsIncluded: sections
+        };
+        return ctx;
+      }
+    });
+  }
 })();
