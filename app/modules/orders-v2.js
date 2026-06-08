@@ -216,6 +216,7 @@
     },
     setFilter: function (s) { V2.filter = s; render(); },
     open: function (id) { var rec = V2.byId[id]; if (rec) window.MastEntity.openRecord('orders-v2', rec, 'read'); },
+    has: function (id) { return !!(V2.byId && V2.byId[id]); },  // readiness probe for external openers (dashboard card, history links)
     exportCsv: function () { return window.MastEntity.exportRows('orders-v2', visibleRows(), V2.filter); }
   };
 
