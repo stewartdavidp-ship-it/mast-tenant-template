@@ -1713,7 +1713,15 @@
           tab: 'mappingTab',
           setup: function() {
             var host = document.getElementById('mappingTabContent');
-            if (host) host.innerHTML = '<div class="loading">Loading mappings…</div>';
+            // Scoped loader, deliberately NOT the global `.loading` class. The
+            // re-entry view syncs FIVE collections (products, listings, maps,
+            // channel_config, state) and on a cold cache can legitimately take
+            // >8s — the global stalled-spinner watchdog (index.html, polls for
+            // visible `.loading`) would otherwise auto-file a false
+            // "spinner-timeout on mapping" bug report. Reuse the global `spin`
+            // keyframe so it still reads as a spinner to the user.
+            if (host) host.innerHTML = '<div style="padding:24px;color:var(--warm-gray);display:flex;align-items:center;gap:10px;">' +
+              '<span style="width:16px;height:16px;border:2px solid var(--border);border-top-color:var(--teal);border-radius:50%;display:inline-block;animation:spin 0.8s linear infinite;"></span>Loading mappings…</div>';
             loadAll(true).then(function() {
               computeMatches();
               renderReentryView();
