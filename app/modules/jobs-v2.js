@@ -565,7 +565,11 @@
       var p = String(id).split('::'); var jobId = p[0], buildId = p[1];
       return Promise.all([MastDB.productionJobs.get(jobId), Promise.resolve(MastDB.buildMedia.get(buildId)).catch(function () { return null; })]).then(function (res) {
         var job = res[0]; if (!job) return null; var build = (job.builds || {})[buildId]; if (!build) return null;
-        return { _key: id, id: id, jobId: jobId, buildId: buildId, job: job, build: build, media: res[1] || {} };
+        // Human-readable SO title ("Build: #2 · Honey Pendant — Spring Restock") —
+        // the lead field (_title) drives the engine's slide-out title; without it
+        // the header falls back to the raw "jobId::buildId" record key.
+        var _title = '#' + (build.buildNumber || '?') + (job.name ? ' · ' + job.name : '');
+        return { _key: id, _title: _title, id: id, jobId: jobId, buildId: buildId, job: job, build: build, media: res[1] || {} };
       });
     },
     detail: { render: function (UU, r) { return buildSObody(UU, r); } }
@@ -666,7 +670,8 @@
             .then(function (mediaSets) {
               var avail = [];
               mediaSets.forEach(function (ms) { Object.keys(ms.media).forEach(function (mid) { var m = ms.media[mid]; if (m && m.url) avail.push({ url: m.url, buildId: ms.bid }); }); });
-              return { _key: storyId, id: storyId, story: story, job: job, jobId: jobId, available: avail };
+              var _title = (job && job.name) || (story && story.title) || 'Story';
+              return { _key: storyId, _title: _title, id: storyId, story: story, job: job, jobId: jobId, available: avail };
             });
         });
       });
