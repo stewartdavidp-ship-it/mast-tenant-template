@@ -53,7 +53,7 @@ var MastDB = (function() {
       }), basePath ? basePath + '/' + key : key);
     };
     // .on('value', cb) — one-shot listener compat (not real-time, but prevents crash)
-    promise.on = function(event, cb) { promise.then(function(d) { cb(_wrapSnap(d)); }); return promise; };
+    promise.on = function(event, cb) { if (typeof cb !== 'function') { console.warn('[MastDB.on] called without a callback' + (basePath ? ' for "' + basePath + '"' : '') + ' — no-op.'); return promise; } promise.then(function(d) { cb(_wrapSnap(d)); }); return promise; };
     return promise;
   }
 
@@ -337,6 +337,11 @@ var MastDB = (function() {
       limitToLast: function(n) { return extend({ limitToLast: n }); },
       once: function() { return _fsGet(_apply(), { source: 'server' }).then(_snapToObj).then(_wrapSnap); },
       subscribe: function(cb, onErr) {
+        // Guard a missing callback: a caller that does `.listen()`/`.on(event)`
+        // without a handler would otherwise pass undefined here and throw an
+        // UNCAUGHT "cb is not a function" on the first snapshot (spams auto-feedback).
+        // Warn (naming the path so the real caller is findable) and no-op instead.
+        if (typeof cb !== 'function') { console.warn('[MastDB.query.subscribe] called without a callback' + (collectionRef && collectionRef.path ? ' (' + collectionRef.path + ')' : '') + ' — no-op; a .listen()/.on() is missing its handler.'); return function () {}; }
         var errHandler = onErr || function(e) { console.warn('[MastDB.query.subscribe]:', e.message); };
         return _apply().onSnapshot(function(snap) { cb(_wrapSnap(_snapToObj(snap))); }, errHandler);
       }
@@ -541,6 +546,7 @@ var MastDB = (function() {
         return _makeQuery(_collRef(parsed), {});
       },
       subscribe: function(path, cb, onErr) {
+        if (typeof cb !== 'function') { console.warn('[MastDB.subscribe] called without a callback for "' + path + '" — no-op; a .listen()/.on() is missing its handler.'); return function () {}; }
         var parsed = _translateTenantPath(path);
         var errHandler = onErr || function(e) { console.warn('[MastDB.subscribe] ' + path + ':', e.message); };
         if (!parsed.docId) {
@@ -661,6 +667,7 @@ var MastDB = (function() {
         limitToLast: function(n) { return extend({ limitToLast: n }); },
         once: function() { return _fsGet(_apply(), { source: 'server' }).then(_snapToObj).then(_wrapSnap); },
         subscribe: function(cb, onErr) {
+          if (typeof cb !== 'function') { console.warn('[MastDB.platform.query.subscribe] called without a callback' + (collectionRef && collectionRef.path ? ' (' + collectionRef.path + ')' : '') + ' — no-op; a .listen()/.on() is missing its handler.'); return function () {}; }
           var errHandler = onErr || function(e) { console.warn('[MastDB.platform.query.subscribe]:', e && (e.message || e)); };
           return _apply().onSnapshot(function(snap) { cb(_wrapSnap(_snapToObj(snap))); }, errHandler);
         }
@@ -782,6 +789,7 @@ var MastDB = (function() {
         return _platformQuery(_platformCollRef(parsed), {});
       },
       subscribe: function(path, cb, onErr) {
+        if (typeof cb !== 'function') { console.warn('[MastDB.platform.subscribe] called without a callback for "' + path + '" — no-op; a .listen()/.on() is missing its handler.'); return function () {}; }
         var parsed = _translatePlatformPath(path);
         var errHandler = onErr || function(e) { console.warn('[MastDB.platform.subscribe] ' + path + ':', e.message); };
         if (!parsed.docId) {
