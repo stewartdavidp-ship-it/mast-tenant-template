@@ -759,6 +759,7 @@
     'business':           { alwaysOn: true },  // entity setup — bookkeeping always available
     'channels':           { modes: ['maker', 'retail'] },
     'mapping':            { modes: ['maker', 'retail'] },  // Listing Mapping — sibling of channels; same visibility
+    'audit':              { modes: ['maker', 'retail'] },  // Channel Audit — channel-consistency checks; sibling of channels/mapping
 
     // === Customer Service section (conservative) ===
     'cs-inbox':           { modes: ['retail', 'bookings', 'maker'] },
@@ -803,6 +804,7 @@
     'pack':              ['orders'],
     'channels':          ['products'],
     'mapping':           ['channels'],
+    'audit':             ['channels'],
     'wallet':            ['customers'],
     'loyalty':           ['customers'],
     'promotions':        ['products'],
@@ -841,7 +843,7 @@
     function eq(name, a, b) { if (JSON.stringify(a) !== JSON.stringify(b)) failures.push({ name: name, expected: b, actual: a }); }
     // The canonical example: Listing Mapping needs Channels.
     eq('mapping requires channels', requiresOf('mapping'), ['channels']);
-    eq('channels is depended on by mapping', dependentsOf('channels'), ['mapping']);
+    eq('channels is depended on by mapping + audit', dependentsOf('channels'), ['mapping', 'audit']);
     // products is a hub — many dependents, list is non-empty and includes pos.
     var prodDeps = dependentsOf('products');
     if (prodDeps.indexOf('pos') === -1) failures.push({ name: 'products dependents include pos', expected: 'includes pos', actual: prodDeps });

@@ -1033,6 +1033,32 @@
       learnMoreUrl: HELP_BASE + 'mapping'
     },
 
+    'audit': {
+      label:    'Channel Audit',
+      section:  'operations',
+      tagline:  'Cross-channel checkups on listings, pricing, and stock.',
+      outcome:      "Catch cross-channel drift — mismatched prices, stale syncs, diverging stock — before it costs a sale.",
+      goodFitWhen:  "you sell the same products on more than one channel and want them kept consistent.",
+      notAFitWhen:  "Mast is your only sales channel, so there's nothing to reconcile across.",
+      automates: [
+        "Eyeballing each channel for price or stock gaps",
+        "Hunting for listings that drifted out of sync"
+      ],
+      replacesTools:    ["Manual channel spot-checks"],
+      complementsTools: ["Etsy", "Shopify"],
+      prerequisites: [
+        "Channels module enabled",
+        "At least one connected external channel"
+      ],
+      pairsWith:  ["channels", "mapping", "products", "inventory"],
+      setupDepth: "quick",
+      preview: {
+        url: ASSET_BASE + 'audit.png',
+        alt: "Channel Audit dashboard grouping cross-channel findings by impact"
+      },
+      learnMoreUrl: HELP_BASE + 'audit'
+    },
+
     // ── Customer Service ──────────────────────────────────────
     'cs-inbox': {
       label: 'Inbox', section: 'customer-service',
