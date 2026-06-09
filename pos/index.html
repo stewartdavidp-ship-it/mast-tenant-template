@@ -124,16 +124,25 @@ body {
 .save-sale-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .save-sale-btn:active:not(:disabled) { opacity: 0.8; }
 
-/* Product tiles (shared by the catalog grid) */
+/* Product tiles (shared by the catalog grid) — large, image-forward, price prominent */
 .picker-card {
-  background: var(--card); border-radius: 8px; border: 1px solid var(--border);
-  overflow: hidden; cursor: pointer;
+  background: var(--card); border-radius: 10px; border: 1px solid var(--border);
+  overflow: hidden; cursor: pointer; transition: border-color 0.1s, transform 0.05s;
 }
-.picker-card:active { border-color: var(--gold); }
-.picker-card img { width: 100%; aspect-ratio: 1; object-fit: cover; }
-.picker-card-info { padding: 8px; }
-.picker-card-name { font-size: 13px; font-weight: 600; }
-.picker-card-price { font-size: 12px; color: var(--gold); margin-top: 2px; }
+.picker-card { position: relative; }
+.picker-card:active { border-color: var(--gold); transform: scale(0.98); }
+.picker-card img, .picker-card-noimg { width: 100%; aspect-ratio: 1 / 1; max-height: 240px; object-fit: cover; display: block; }
+.picker-card-noimg { background: var(--border); }
+.picker-card-info { padding: 10px 12px; }
+.picker-card-name { font-size: 16px; font-weight: 600; line-height: 1.25; }
+.picker-card-price { font-size: 18px; font-weight: 700; color: var(--gold); margin-top: 4px; }
+/* "N options ›" badge on a product that drills into variants */
+.variant-badge { position: absolute; top: 8px; right: 8px; background: rgba(0,0,0,0.7); color: var(--text); font-size: 12px; font-weight: 600; padding: 4px 9px; border-radius: 999px; backdrop-filter: blur(2px); }
+/* Back bar shown in place of the category strip while drilled into a product's variants */
+.variant-back-bar { display: flex; align-items: center; gap: 8px; padding: 12px 16px; background: var(--card); border-bottom: 1px solid var(--border); cursor: pointer; font-size: 15px; color: var(--muted); }
+.variant-back-bar strong { color: var(--text); }
+.variant-back-arrow { font-size: 20px; line-height: 1; color: var(--gold); }
+.variant-back-sep { color: var(--border); }
 
 /* Success screen */
 #successScreen { align-items: center; justify-content: center; padding: 40px; text-align: center; gap: 16px; }
@@ -193,8 +202,9 @@ body {
 .cat-chip { flex: 0 0 auto; padding: 8px 16px; border-radius: 20px; border: 1px solid var(--border); background: var(--bg); color: var(--muted); font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap; }
 .cat-chip.active { border-color: var(--gold); background: rgba(196,148,74,0.15); color: var(--text); }
 
-/* Catalog grid scroll area (reuses .picker-card tile styles) */
-#catalogGrid { flex: 1; overflow-y: auto; padding: 12px; padding-bottom: 96px; display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; align-content: start; }
+/* Catalog grid scroll area (reuses .picker-card tile styles).
+   Fixed 3 columns — large tiles, ~4 rows visible per viewport, scroll for more. */
+#catalogGrid { flex: 1; overflow-y: auto; padding: 14px; padding-bottom: 96px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; align-content: start; }
 
 /* Cart panel — bottom sheet on phone, right rail on tablet */
 .cart-panel { position: fixed; left: 0; right: 0; bottom: 0; background: var(--card); border-top: 1px solid var(--border); z-index: 40; display: flex; flex-direction: column; max-height: 78vh; padding-bottom: var(--safe-bottom); box-shadow: 0 -4px 16px rgba(0,0,0,0.3); }
@@ -262,6 +272,12 @@ body {
       <button class="scan-btn" onclick="openScanner()" title="Identify a product with the camera">📷 Scan</button>
     </div>
     <div class="category-strip" id="categoryStrip"></div>
+    <div class="variant-back-bar" id="variantBackBar" onclick="exitVariants()" style="display:none;">
+      <span class="variant-back-arrow">‹</span>
+      <span>All products</span>
+      <span class="variant-back-sep">·</span>
+      <strong id="variantBackName"></strong>
+    </div>
     <div id="catalogGrid"></div>
   </div>
   <div class="cart-panel" id="cartPanel">
@@ -392,6 +408,7 @@ var paymentType = 'cash';
 var currentCategory = 'all';
 var currentFilter = '';
 var _catList = [];
+var variantParent = null; // pid whose variants are currently shown (2-step drill-in), else null
 
 // Event context (from URL param or GPS detection)
 var eventId = null;
@@ -1084,7 +1101,7 @@ function saveSale() {
     paymentType: paymentType,
     amount: amountCents,
     items: saleItems.map(function(item) {
-      return { productId: item.productId, productName: item.productName, quantity: item.quantity, confidence: item.confidence };
+      return { productId: item.productId, variantId: item.variantId || null, productName: item.productName, quantity: item.quantity, priceCents: item.priceCents || 0, confidence: item.confidence };
     }),
     imageId: null,
     receiptSent: false,
@@ -1230,7 +1247,9 @@ function renderCategoryStrip() {
 
 function selectCategory(i) {
   currentCategory = i < 0 ? 'all' : _catList[i];
+  variantParent = null;            // leave variant view when changing category
   renderCategoryStrip();
+  updateCatalogChrome();
   renderCatalog();
 }
 
@@ -1240,7 +1259,82 @@ function productInCategory(p, cat) {
   return Array.isArray(p.categories) && p.categories.indexOf(cat) >= 0;
 }
 
+// ============================================================
+// Variant resolution helpers — POS reimplements the small subset of
+// products-v2 logic it needs (the admin module isn't loaded here).
+// A variant inherits the product's base price/image unless it overrides.
+// ============================================================
+function productVariants(p) { return p && Array.isArray(p.variants) ? p.variants : []; }
+function hasVariants(p) { return productVariants(p).length > 0; }
+
+function variantLabel(v) {
+  if (!v) return 'Variant';
+  if (v.name) return v.name;                       // explicit name wins
+  if (v.combo) {                                   // else the option combo, e.g. {color:'Red'}
+    var parts = Object.keys(v.combo).map(function(k) { return v.combo[k]; }).filter(Boolean);
+    if (parts.length) return parts.join(' / ');
+  }
+  return 'Variant';
+}
+function productImg(p) {
+  var imgs = p && p.images;
+  if (imgs && imgs.length) return typeof imgs[0] === 'string' ? imgs[0] : (imgs[0].url || '');
+  return '';
+}
+function variantImg(p, v) {
+  var imgs = (p && p.images) || [];
+  if (v && typeof v.imageIndex === 'number' && v.imageIndex >= 0 && v.imageIndex < imgs.length) {
+    var im = imgs[v.imageIndex];
+    return typeof im === 'string' ? im : (im.url || '');
+  }
+  return productImg(p);                            // inherit base image
+}
+function variantPriceCents(p, v) {
+  return (v && typeof v.priceCents === 'number') ? v.priceCents : (p.priceCents || 0);
+}
+// Lowest variant price — drives the "from $X" label on a parent tile.
+function minVariantPriceCents(p) {
+  var vs = productVariants(p), min = Infinity;
+  vs.forEach(function(v) { var c = variantPriceCents(p, v); if (c > 0 && c < min) min = c; });
+  return min === Infinity ? (p.priceCents || 0) : min;
+}
+
+function tileHtml(onclickAttr, imgUrl, name, priceHtml, badge) {
+  return '<div class="picker-card" ' + onclickAttr + '>' +
+    (imgUrl ? '<img src="' + imgUrl + '" alt="" loading="lazy">' : '<div class="picker-card-noimg"></div>') +
+    (badge || '') +
+    '<div class="picker-card-info">' +
+      '<div class="picker-card-name">' + esc(name) + '</div>' +
+      '<div class="picker-card-price">' + priceHtml + '</div>' +
+    '</div>' +
+  '</div>';
+}
+
 function renderCatalog() {
+  // Variant view — drilled into one product, showing each of its variants.
+  if (variantParent) {
+    var parent = products[variantParent];
+    if (!parent || !hasVariants(parent)) {
+      variantParent = null;                        // stale parent — fall through to product list
+    } else {
+      var vhtml = '';
+      productVariants(parent).forEach(function(v) {
+        var price = variantPriceCents(parent, v);
+        vhtml += tileHtml(
+          'onclick="pickVariant(\'' + parent.pid + '\',\'' + esc(String(v.id)) + '\')"',
+          variantImg(parent, v),
+          variantLabel(v),
+          price > 0 ? fmtCents(price) : '',
+          ''
+        );
+      });
+      document.getElementById('catalogGrid').innerHTML = vhtml ||
+        '<div style="grid-column:1/-1;text-align:center;color:var(--muted);padding:40px;">No variants</div>';
+      return;
+    }
+  }
+
+  // Product view — default products only (one tile per product).
   var f = (currentFilter || '').toLowerCase();
   var filtered = productsList.filter(function(p) {
     if (!productInCategory(p, currentCategory)) return false;
@@ -1250,14 +1344,15 @@ function renderCatalog() {
 
   var html = '';
   filtered.forEach(function(p) {
-    var img = p.images && p.images.length > 0 ? (typeof p.images[0] === 'string' ? p.images[0] : (p.images[0].url || '')) : '';
-    html += '<div class="picker-card" onclick="pickProduct(\'' + p.pid + '\')">' +
-      (img ? '<img src="' + img + '" alt="" loading="lazy">' : '<div style="width:100%;aspect-ratio:1;background:var(--border);"></div>') +
-      '<div class="picker-card-info">' +
-        '<div class="picker-card-name">' + esc(p.name || '') + '</div>' +
-        '<div class="picker-card-price">' + (typeof p.priceCents === 'number' && p.priceCents > 0 ? '$' + (p.priceCents / 100).toFixed(2) : '') + '</div>' +
-      '</div>' +
-    '</div>';
+    var priceHtml, badge = '';
+    if (hasVariants(p)) {
+      var min = minVariantPriceCents(p);
+      priceHtml = min > 0 ? 'from ' + fmtCents(min) : '';
+      badge = '<span class="variant-badge">' + productVariants(p).length + ' options ›</span>';
+    } else {
+      priceHtml = (typeof p.priceCents === 'number' && p.priceCents > 0) ? fmtCents(p.priceCents) : '';
+    }
+    html += tileHtml('onclick="onProductTap(\'' + p.pid + '\')"', productImg(p), p.name || '', priceHtml, badge);
   });
   if (!filtered.length) {
     html = '<div style="grid-column:1/-1;text-align:center;color:var(--muted);padding:40px;">No products found</div>';
@@ -1267,29 +1362,75 @@ function renderCatalog() {
 
 function filterCatalog(val) {
   currentFilter = val || '';
+  variantParent = null;                            // searching returns to the product list
+  updateCatalogChrome();
   renderCatalog();
+}
+
+// Tap a product tile → drill into variants (2-step) or add directly (1-step).
+function onProductTap(pid) {
+  var prod = products[pid];
+  if (!prod) return;
+  if (hasVariants(prod)) {
+    variantParent = pid;
+    updateCatalogChrome();
+    renderCatalog();
+  } else {
+    pickProduct(pid);
+  }
+}
+
+function exitVariants() {
+  variantParent = null;
+  updateCatalogChrome();
+  renderCatalog();
+}
+
+// Swap the category strip for a "‹ All products · ProductName" bar in variant view.
+function updateCatalogChrome() {
+  var strip = document.getElementById('categoryStrip');
+  var back = document.getElementById('variantBackBar');
+  if (variantParent && products[variantParent]) {
+    if (strip) strip.style.display = 'none';
+    back.style.display = 'flex';
+    document.getElementById('variantBackName').textContent = products[variantParent].name || 'Product';
+  } else {
+    back.style.display = 'none';
+    if (strip) strip.style.display = _catList.length ? 'flex' : 'none';
+  }
 }
 
 function pickProduct(pid) {
   var prod = products[pid];
   if (!prod) return;
+  addToCart({ productId: pid, variantId: null, productName: prod.name, priceCents: prod.priceCents || 0, imageUrl: productImg(prod) });
+  showToast('Added: ' + prod.name);
+}
 
-  var existing = saleItems.findIndex(function(i) { return i.productId === pid; });
+function pickVariant(pid, vid) {
+  var prod = products[pid];
+  if (!prod) return;
+  var v = productVariants(prod).filter(function(x) { return String(x.id) === String(vid); })[0];
+  if (!v) return;
+  var label = variantLabel(v);
+  addToCart({ productId: pid, variantId: vid, productName: prod.name + ' — ' + label, priceCents: variantPriceCents(prod, v), imageUrl: variantImg(prod, v) });
+  exitVariants();                                  // back to the product list, ready for the next item
+  showToast('Added: ' + prod.name + ' — ' + label);
+}
+
+// Shared add/increment — dedup on product + variant.
+function addToCart(item) {
+  var existing = saleItems.findIndex(function(i) {
+    return i.productId === item.productId && (i.variantId || null) === (item.variantId || null);
+  });
   if (existing >= 0) {
     saleItems[existing].quantity++;
   } else {
-    saleItems.push({
-      productId: pid,
-      productName: prod.name,
-      quantity: 1,
-      confidence: 100, // manual pick
-      priceCents: prod.priceCents || 0,
-      imageUrl: prod.images && prod.images.length > 0 ? (typeof prod.images[0] === 'string' ? prod.images[0] : (prod.images[0].url || '')) : ''
-    });
+    item.quantity = 1;
+    item.confidence = 100;                         // manual pick
+    saleItems.push(item);
   }
-
   refreshCartUI();
-  showToast('Added: ' + prod.name);
 }
 
 // ============================================================
@@ -1561,10 +1702,12 @@ function newSale() {
   // Reset catalog browse state and return to the home grid
   currentCategory = 'all';
   currentFilter = '';
+  variantParent = null;
   var search = document.getElementById('catalogSearch');
   if (search) search.value = '';
   if (camera && camera.isActive()) camera.stop();
   renderCategoryStrip();
+  updateCatalogChrome();
   renderCatalog();
   refreshCartUI();
   document.getElementById('cartPanel').classList.remove('expanded');
