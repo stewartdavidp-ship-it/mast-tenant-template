@@ -89,7 +89,7 @@
         var N = window.MastUI.Num;
         return (r.items || []).map(function (it) {
           return { name: it.productName || it.name || 'Item', qty: it.qty,
-            price: N.moneyVal(it, 'priceCents', 'price'), total: N.moneyVal(it, 'lineTotalCents', 'lineTotal') };
+            price: N.moneyVal(it, 'priceCents', 'price'), total: N.lineTotalVal(it) };
         });
       },
       totals: function (r) {

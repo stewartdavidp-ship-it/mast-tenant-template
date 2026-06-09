@@ -55,6 +55,24 @@
       if (d != null && d !== '' && !isNaN(d)) return Number(d);
       return null;
     },
+    // Canonical LINE-ITEM total in DOLLARS — the client mirror of the server's
+    // lineItemRevenueCents (order context), ÷100. A line item arrives in several
+    // shapes that disagree on unit AND field name, so reading any single field
+    // raw miscounts: `lineTotal` is CENTS already ×qty (MCP/createTestOrder), NOT
+    // dollars — feeding it to moneyVal as a dollar fallback renders a $1,020 line
+    // as "$102,000.00". Resolution (cents-explicit fields win):
+    //   lineTotal (cents) → priceCents×qty (cents) → total (dollars) → price×qty
+    //   (dollars, per-unit on an order line). qty = quantity ?? qty ?? 1.
+    lineTotalVal: function (it) {
+      if (!it) return null;
+      var qty = (it.quantity != null && !isNaN(it.quantity)) ? Number(it.quantity)
+        : (it.qty != null && !isNaN(it.qty)) ? Number(it.qty) : 1;
+      if (it.lineTotal != null && it.lineTotal !== '' && !isNaN(it.lineTotal)) return Number(it.lineTotal) / 100;
+      if (it.priceCents != null && it.priceCents !== '' && !isNaN(it.priceCents)) return Number(it.priceCents) * qty / 100;
+      if (it.total != null && it.total !== '' && !isNaN(it.total)) return Number(it.total);
+      if (it.price != null && it.price !== '' && !isNaN(it.price)) return Number(it.price) * qty;
+      return null;
+    },
     // date display: ISO/Date -> "May 1, 2026"; dateRaw -> "2026-05-01"
     date: function (d) {
       if (d == null || d === '') return '';   // null/empty → '' (not the Unix epoch "Dec 31, 1969")
