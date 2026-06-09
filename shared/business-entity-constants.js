@@ -1171,11 +1171,14 @@
       { name: 'wholesale visible to maker', route: 'wholesale', modeSet: ms(['maker']), expect: true },
       { name: 'wholesale hidden from standard', route: 'wholesale', modeSet: ms(['standard']), expect: false },
 
-      // Multi-mode routes
-      { name: 'inventory visible to retail', route: 'inventory', modeSet: ms(['retail']), expect: true },
-      { name: 'inventory visible to maker', route: 'inventory', modeSet: ms(['maker']), expect: true },
-      { name: 'inventory hidden from bookings', route: 'inventory', modeSet: ms(['bookings']), expect: false },
-      { name: 'inventory visible via event overlay alone', route: 'inventory', modeSet: ms(['standard'], ['event']), expect: true },
+      // Retired-to-systemManaged alias routes (2026-06-06): inventory/forecast/
+      // sales-by-product fold into the Products surface. They redirect → products
+      // and have no sidebar presence, so default visibility is false in every
+      // mode/overlay (bare { systemManaged: true } → no alwaysOn/modes/overlays).
+      { name: 'inventory soft-hidden from retail (systemManaged alias)', route: 'inventory', modeSet: ms(['retail']), expect: false },
+      { name: 'inventory soft-hidden from maker (systemManaged alias)', route: 'inventory', modeSet: ms(['maker']), expect: false },
+      { name: 'inventory soft-hidden from bookings', route: 'inventory', modeSet: ms(['bookings']), expect: false },
+      { name: 'inventory soft-hidden even with event overlay (systemManaged alias)', route: 'inventory', modeSet: ms(['standard'], ['event']), expect: false },
 
       // Bookings + cohort gate
       { name: 'students visible only with cohort flag', route: 'students', modeSet: ms(['bookings'], [], true), expect: true },
