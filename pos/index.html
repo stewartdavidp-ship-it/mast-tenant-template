@@ -124,14 +124,7 @@ body {
 .save-sale-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .save-sale-btn:active:not(:disabled) { opacity: 0.8; }
 
-/* Product picker */
-#pickerScreen { padding: 0; }
-.picker-search { padding: 12px 16px; background: var(--card); border-bottom: 1px solid var(--border); }
-.picker-search input {
-  width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border);
-  background: var(--bg); color: var(--text); font-size: 15px;
-}
-.picker-grid { flex: 1; overflow-y: auto; padding: 12px; display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; align-content: start; }
+/* Product tiles (shared by the catalog grid) */
 .picker-card {
   background: var(--card); border-radius: 8px; border: 1px solid var(--border);
   overflow: hidden; cursor: pointer;
@@ -181,6 +174,60 @@ body {
   padding: 14px 32px; border-radius: 8px; border: none;
   background: var(--gold); color: #000; font-size: 16px; font-weight: 600; cursor: pointer;
 }
+
+/* ============================================================
+   Catalog-first POS: home grid + category strip + persistent cart
+   ============================================================ */
+
+/* Catalog screen (home) */
+#catalogScreen { padding: 0; }
+#catalogScreen.active { display: flex; flex-direction: column; }
+.catalog-main { flex: 1; display: flex; flex-direction: column; min-height: 0; min-width: 0; }
+.catalog-header { display: flex; gap: 8px; padding: 12px 16px; background: var(--card); border-bottom: 1px solid var(--border); align-items: center; }
+.catalog-header input { flex: 1; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 15px; }
+.scan-btn { flex: 0 0 auto; display: flex; align-items: center; gap: 6px; padding: 10px 14px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 14px; font-weight: 600; cursor: pointer; }
+.scan-btn:active { border-color: var(--gold); }
+
+/* Category strip */
+.category-strip { display: flex; gap: 8px; overflow-x: auto; padding: 10px 16px; background: var(--card); border-bottom: 1px solid var(--border); -webkit-overflow-scrolling: touch; }
+.cat-chip { flex: 0 0 auto; padding: 8px 16px; border-radius: 20px; border: 1px solid var(--border); background: var(--bg); color: var(--muted); font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.cat-chip.active { border-color: var(--gold); background: rgba(196,148,74,0.15); color: var(--text); }
+
+/* Catalog grid scroll area (reuses .picker-card tile styles) */
+#catalogGrid { flex: 1; overflow-y: auto; padding: 12px; padding-bottom: 96px; display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; align-content: start; }
+
+/* Cart panel — bottom sheet on phone, right rail on tablet */
+.cart-panel { position: fixed; left: 0; right: 0; bottom: 0; background: var(--card); border-top: 1px solid var(--border); z-index: 40; display: flex; flex-direction: column; max-height: 78vh; padding-bottom: var(--safe-bottom); box-shadow: 0 -4px 16px rgba(0,0,0,0.3); }
+.cart-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; cursor: pointer; gap: 12px; }
+.cart-summary { font-size: 16px; }
+.cart-summary .muted { color: var(--muted); font-weight: 400; font-size: 14px; }
+.cart-header .chevron { color: var(--muted); transition: transform 0.2s; font-size: 14px; }
+.cart-panel.expanded .cart-header .chevron { transform: rotate(180deg); }
+.cart-body { display: none; flex-direction: column; min-height: 0; border-top: 1px solid var(--border); }
+.cart-panel.expanded .cart-body { display: flex; }
+.cart-items { overflow-y: auto; padding: 8px 12px; max-height: 42vh; }
+.cart-empty { text-align: center; color: var(--muted); padding: 24px; font-size: 14px; }
+.cart-charge-btn { margin: 12px 16px 16px; padding: 16px; border-radius: 8px; border: none; background: var(--green); color: #fff; font-size: 18px; font-weight: 700; cursor: pointer; }
+.cart-charge-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.cart-charge-btn:active:not(:disabled) { opacity: 0.85; }
+
+@media (min-width: 768px) {
+  #catalogScreen.active { flex-direction: row; }
+  .cart-panel { position: static; max-height: none; flex: 0 0 340px; border-top: none; border-left: 1px solid var(--border); box-shadow: none; }
+  .cart-header { cursor: default; }
+  .cart-header .chevron { display: none; }
+  .cart-body { display: flex !important; flex: 1; }
+  .cart-items { max-height: none; flex: 1; }
+  #catalogGrid { padding-bottom: 12px; }
+}
+
+/* Checkout (result) screen header + back nav */
+.checkout-header { display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: var(--card); border-bottom: 1px solid var(--border); }
+.back-btn { background: none; border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-size: 14px; padding: 8px 12px; cursor: pointer; }
+.checkout-header h2 { font-size: 16px; font-weight: 600; }
+
+/* Camera-screen close button (scanner is now opt-in) */
+.cam-close { position: absolute; top: 16px; left: 16px; z-index: 11; background: rgba(0,0,0,0.55); color: #fff; border: 1px solid rgba(255,255,255,0.3); border-radius: 8px; padding: 8px 14px; font-size: 14px; cursor: pointer; }
 </style>
 </head>
 <body>
@@ -207,22 +254,48 @@ body {
   <button class="sign-in-btn" onclick="signIn()">Sign In with Google</button>
 </div>
 
-<!-- Camera Screen -->
-<div id="cameraScreen" class="screen">
-  <video id="cameraVideo" autoplay playsinline muted></video>
-  <button class="capture-btn" id="captureBtn" onclick="capturePhoto()"></button>
-  <button class="manual-btn" onclick="openPicker()">Pick Manually</button>
-  <div class="camera-denied" id="cameraDenied">
-    <p>Camera access is needed to identify products.<br>Please allow camera access in your browser settings.</p>
-    <button class="manual-btn" style="position:static" onclick="openPicker()">Pick Manually Instead</button>
+<!-- Catalog Screen (home) — browse products, persistent cart -->
+<div id="catalogScreen" class="screen">
+  <div class="catalog-main">
+    <div class="catalog-header">
+      <input type="text" id="catalogSearch" placeholder="Search products..." oninput="filterCatalog(this.value)">
+      <button class="scan-btn" onclick="openScanner()" title="Identify a product with the camera">📷 Scan</button>
+    </div>
+    <div class="category-strip" id="categoryStrip"></div>
+    <div id="catalogGrid"></div>
+  </div>
+  <div class="cart-panel" id="cartPanel">
+    <div class="cart-header" onclick="toggleCart()">
+      <span class="cart-summary" id="cartSummary"><span class="muted">Cart is empty</span></span>
+      <span class="chevron">▲</span>
+    </div>
+    <div class="cart-body">
+      <div class="cart-items" id="cartItems"></div>
+      <button class="cart-charge-btn" id="cartChargeBtn" onclick="goToCheckout()" disabled>Charge</button>
+    </div>
   </div>
 </div>
 
-<!-- Result / Cart Screen -->
+<!-- Camera / Scanner Screen (opt-in, launched from the Scan button) -->
+<div id="cameraScreen" class="screen">
+  <button class="cam-close" onclick="closeScanner()">‹ Back</button>
+  <video id="cameraVideo" autoplay playsinline muted></video>
+  <button class="capture-btn" id="captureBtn" onclick="capturePhoto()"></button>
+  <button class="manual-btn" onclick="closeScanner()">Browse Catalog</button>
+  <div class="camera-denied" id="cameraDenied">
+    <p>Camera access is needed to identify products.<br>Please allow camera access in your browser settings.</p>
+    <button class="manual-btn" style="position:static" onclick="closeScanner()">Browse Catalog Instead</button>
+  </div>
+</div>
+
+<!-- Checkout / Pay Screen -->
 <div id="resultScreen" class="screen">
-  <div class="result-header" id="resultHeader"></div>
+  <div class="checkout-header">
+    <button class="back-btn" onclick="addMoreItems()">‹ Back</button>
+    <h2>Review &amp; Pay</h2>
+  </div>
   <div class="items-list" id="itemsList"></div>
-  <button class="add-more-btn" onclick="addMoreItems()">+ Add Another Item</button>
+  <button class="add-more-btn" onclick="addMoreItems()">+ Add More Items</button>
   <div class="payment-section">
     <div class="payment-row">
       <button class="payment-type-btn selected" id="cashBtn" onclick="selectPayment('cash')">Cash</button>
@@ -233,17 +306,6 @@ body {
       <input type="text" style="flex:1;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:14px;" id="saleNotes" placeholder="Notes (optional)">
     </div>
     <button class="save-sale-btn" id="saveSaleBtn" onclick="saveSale()">Complete Sale</button>
-  </div>
-</div>
-
-<!-- Product Picker Screen -->
-<div id="pickerScreen" class="screen">
-  <div class="picker-search">
-    <input type="text" id="pickerSearchInput" placeholder="Search products..." oninput="filterPicker(this.value)">
-  </div>
-  <div class="picker-grid" id="pickerGrid"></div>
-  <div style="padding:12px 16px;background:var(--card);border-top:1px solid var(--border);">
-    <button style="width:100%;padding:12px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:15px;cursor:pointer;" onclick="closePicker()">Cancel</button>
   </div>
 </div>
 
@@ -325,6 +387,11 @@ var saleItems = [];       // [{ productId, productName, quantity, confidence, pr
 var capturedImageBase64 = null;
 var capturedPreviewUrl = null;
 var paymentType = 'cash';
+
+// Catalog browse state
+var currentCategory = 'all';
+var currentFilter = '';
+var _catList = [];
 
 // Event context (from URL param or GPS detection)
 var eventId = null;
@@ -589,8 +656,7 @@ window.TENANT_READY.then(function() {
         } else {
           detectLocation(); // GPS check if no event pre-linked
         }
-        showScreen('cameraScreen');
-        initCamera();
+        showScreen('catalogScreen');
       });
     } else {
       currentUser = null;
@@ -642,7 +708,9 @@ function loadProducts() {
     productsList = Object.values(products)
       .filter(function(p) { return !p.availability || p.availability === 'available'; })
       .sort(function(a, b) { return (a.name || '').localeCompare(b.name || ''); });
-    renderPicker();
+    renderCategoryStrip();
+    renderCatalog();
+    refreshCartUI();
   });
 }
 
@@ -664,6 +732,19 @@ function initCamera() {
     onReady: function() {}
   });
   camera.start();
+}
+
+// Scanner is opt-in: launched from the catalog "Scan" button.
+function openScanner() {
+  document.getElementById('cameraDenied').style.display = 'none';
+  showScreen('cameraScreen');
+  if (!camera) { initCamera(); }
+  else if (!camera.isActive()) { camera.start(); }
+}
+
+function closeScanner() {
+  if (camera && camera.isActive()) camera.stop();
+  showScreen('catalogScreen');
 }
 
 function capturePhoto() {
@@ -693,12 +774,12 @@ function handleCapture(result) {
   .then(function(r) { return r.json(); })
   .then(function(data) {
     hideLoading();
-    if (data.error) { showToast('Classification failed', true); showResultScreen([]); return; }
+    if (data.error) { showToast('Classification failed — pick from the catalog', true); closeScanner(); return; }
 
     // Multi-item response
     var items = data.items || [{ productId: data.productId, product: data.product, confidence: data.confidence, color: data.color, quantity: 1 }];
 
-    saleItems = items.map(function(item) {
+    var scanned = items.map(function(item) {
       var prod = item.productId ? products[item.productId] : null;
       return {
         productId: item.productId || null,
@@ -710,74 +791,67 @@ function handleCapture(result) {
       };
     }).filter(function(item) { return item.productId; });
 
-    showResultScreen(saleItems);
+    if (scanned.length === 0) {
+      showToast('Could not identify product — pick it from the catalog', true);
+      closeScanner();
+      return;
+    }
+
+    // Merge scanned items into the running cart, then return to the catalog
+    scanned.forEach(function(s) {
+      var ex = saleItems.findIndex(function(i) { return i.productId === s.productId; });
+      if (ex >= 0) saleItems[ex].quantity += s.quantity;
+      else saleItems.push(s);
+    });
+    if (camera && camera.isActive()) camera.stop();
+    showScreen('catalogScreen');
+    refreshCartUI();
+    document.getElementById('cartPanel').classList.add('expanded');
+    showToast('Added ' + scanned.length + ' item' + (scanned.length !== 1 ? 's' : '') + ' from photo');
   })
   .catch(function(err) {
     hideLoading();
     showToast('Error: ' + err.message, true);
-    showResultScreen([]);
+    closeScanner();
   });
 }
 
 // ============================================================
-// Result / Cart Screen
+// Cart line-item rendering (shared by the cart panel + checkout list)
 // ============================================================
-function showResultScreen(items) {
-  if (items.length === 0) {
-    // No match — go to picker
-    showToast('Could not identify product — please pick manually');
-    openPicker();
-    return;
-  }
-  renderItems();
-  autoFillAmount();
-  showScreen('resultScreen');
+function cartItemHtml(item, idx) {
+  var img = item.imageUrl
+    ? '<img src="' + item.imageUrl + '" alt="">'
+    : '<div style="width:50px;height:50px;background:var(--border);border-radius:6px;"></div>';
+  var meta = item.priceCents > 0 && window.formatCents ? window.formatCents(item.priceCents) : '';
+  return '<div class="sale-item">' + img +
+    '<div class="sale-item-info">' +
+      '<div class="sale-item-name">' + esc(item.productName) + '</div>' +
+      (meta ? '<div class="sale-item-meta">' + meta + '</div>' : '') +
+    '</div>' +
+    '<div class="sale-item-qty">' +
+      '<button class="qty-btn" onclick="adjustQty(' + idx + ',-1)">-</button>' +
+      '<span class="qty-val">' + item.quantity + '</span>' +
+      '<button class="qty-btn" onclick="adjustQty(' + idx + ',1)">+</button>' +
+    '</div>' +
+    '<span class="remove-btn" onclick="removeItem(' + idx + ')">&times;</span>' +
+  '</div>';
 }
 
 function renderItems() {
   var html = '';
-  saleItems.forEach(function(item, idx) {
-    var confClass = item.confidence >= 90 ? 'conf-high' : item.confidence >= 70 ? 'conf-med' : 'conf-low';
-    var confIcon = item.confidence >= 90 ? '&#10003;' : item.confidence >= 70 ? '?' : '!';
-    html += '<div class="sale-item">' +
-      (item.imageUrl ? '<img src="' + item.imageUrl + '" alt="">' : '<div style="width:50px;height:50px;background:var(--border);border-radius:6px;"></div>') +
-      '<div class="sale-item-info">' +
-        '<div class="sale-item-name">' + item.productName + '</div>' +
-        '<div class="sale-item-meta">' +
-          (item.priceCents > 0 && window.formatCents ? window.formatCents(item.priceCents) + ' &bull; ' : '') +
-          '<span class="' + confClass + '">' + confIcon + ' ' + item.confidence + '%</span>' +
-        '</div>' +
-      '</div>' +
-      '<div class="sale-item-qty">' +
-        '<button class="qty-btn" onclick="adjustQty(' + idx + ',-1)">-</button>' +
-        '<span class="qty-val">' + item.quantity + '</span>' +
-        '<button class="qty-btn" onclick="adjustQty(' + idx + ',1)">+</button>' +
-      '</div>' +
-      '<span class="remove-btn" onclick="removeItem(' + idx + ')">&times;</span>' +
-    '</div>';
-  });
+  saleItems.forEach(function(item, idx) { html += cartItemHtml(item, idx); });
   document.getElementById('itemsList').innerHTML = html;
-
-  // Update result header with captured photo
-  document.getElementById('resultHeader').innerHTML =
-    (capturedPreviewUrl ? '<img class="result-thumb" src="' + capturedPreviewUrl + '">' : '') +
-    '<div class="result-info">' +
-      '<div class="result-name">' + saleItems.length + ' item' + (saleItems.length !== 1 ? 's' : '') + '</div>' +
-      '<div style="font-size:13px;color:var(--muted)">Confirm items and complete sale</div>' +
-    '</div>';
 }
 
 function adjustQty(idx, delta) {
   saleItems[idx].quantity = Math.max(1, saleItems[idx].quantity + delta);
-  renderItems();
-  autoFillAmount();
+  refreshCartUI();
 }
 
 function removeItem(idx) {
   saleItems.splice(idx, 1);
-  if (saleItems.length === 0) { newSale(); return; }
-  renderItems();
-  autoFillAmount();
+  refreshCartUI();
 }
 
 function autoFillAmount() {
@@ -793,7 +867,7 @@ function autoFillAmount() {
 }
 
 function addMoreItems() {
-  openPicker();
+  showScreen('catalogScreen');
 }
 
 // ============================================================
@@ -1133,28 +1207,46 @@ function updateEventAllocations(items) {
 }
 
 // ============================================================
-// Product Picker
+// Catalog (home grid) + category strip
 // ============================================================
-function openPicker() {
-  renderPicker();
-  showScreen('pickerScreen');
-  document.getElementById('pickerSearchInput').value = '';
-  document.getElementById('pickerSearchInput').focus();
+function renderCategoryStrip() {
+  var catSet = {};
+  productsList.forEach(function(p) {
+    if (p.category) catSet[p.category] = 1;
+    if (Array.isArray(p.categories)) p.categories.forEach(function(c) { if (c) catSet[c] = 1; });
+  });
+  _catList = Object.keys(catSet).sort(function(a, b) { return a.localeCompare(b); });
+
+  var html = '<div class="cat-chip ' + (currentCategory === 'all' ? 'active' : '') + '" onclick="selectCategory(-1)">All</div>';
+  _catList.forEach(function(c, i) {
+    html += '<div class="cat-chip ' + (currentCategory === c ? 'active' : '') + '" onclick="selectCategory(' + i + ')">' + esc(c) + '</div>';
+  });
+
+  var strip = document.getElementById('categoryStrip');
+  strip.innerHTML = html;
+  // Hide the strip entirely when there are no categories to browse by
+  strip.style.display = _catList.length ? 'flex' : 'none';
 }
 
-function closePicker() {
-  if (saleItems.length > 0) {
-    showScreen('resultScreen');
-  } else {
-    showScreen('cameraScreen');
-    if (camera && !camera.isActive()) camera.start();
-  }
+function selectCategory(i) {
+  currentCategory = i < 0 ? 'all' : _catList[i];
+  renderCategoryStrip();
+  renderCatalog();
 }
 
-function renderPicker(filter) {
-  var filtered = filter
-    ? productsList.filter(function(p) { return (p.name || '').toLowerCase().indexOf(filter.toLowerCase()) !== -1; })
-    : productsList;
+function productInCategory(p, cat) {
+  if (cat === 'all') return true;
+  if (p.category === cat) return true;
+  return Array.isArray(p.categories) && p.categories.indexOf(cat) >= 0;
+}
+
+function renderCatalog() {
+  var f = (currentFilter || '').toLowerCase();
+  var filtered = productsList.filter(function(p) {
+    if (!productInCategory(p, currentCategory)) return false;
+    if (f && (p.name || '').toLowerCase().indexOf(f) === -1) return false;
+    return true;
+  });
 
   var html = '';
   filtered.forEach(function(p) {
@@ -1162,21 +1254,26 @@ function renderPicker(filter) {
     html += '<div class="picker-card" onclick="pickProduct(\'' + p.pid + '\')">' +
       (img ? '<img src="' + img + '" alt="" loading="lazy">' : '<div style="width:100%;aspect-ratio:1;background:var(--border);"></div>') +
       '<div class="picker-card-info">' +
-        '<div class="picker-card-name">' + (p.name || '') + '</div>' +
+        '<div class="picker-card-name">' + esc(p.name || '') + '</div>' +
         '<div class="picker-card-price">' + (typeof p.priceCents === 'number' && p.priceCents > 0 ? '$' + (p.priceCents / 100).toFixed(2) : '') + '</div>' +
       '</div>' +
     '</div>';
   });
-  document.getElementById('pickerGrid').innerHTML = html;
+  if (!filtered.length) {
+    html = '<div style="grid-column:1/-1;text-align:center;color:var(--muted);padding:40px;">No products found</div>';
+  }
+  document.getElementById('catalogGrid').innerHTML = html;
 }
 
-function filterPicker(val) { renderPicker(val); }
+function filterCatalog(val) {
+  currentFilter = val || '';
+  renderCatalog();
+}
 
 function pickProduct(pid) {
   var prod = products[pid];
   if (!prod) return;
 
-  // Check if already in sale items
   var existing = saleItems.findIndex(function(i) { return i.productId === pid; });
   if (existing >= 0) {
     saleItems[existing].quantity++;
@@ -1191,6 +1288,62 @@ function pickProduct(pid) {
     });
   }
 
+  refreshCartUI();
+  showToast('Added: ' + prod.name);
+}
+
+// ============================================================
+// Persistent cart panel
+// ============================================================
+function cartTotalCents() {
+  var total = 0;
+  saleItems.forEach(function(it) { total += (it.priceCents || 0) * it.quantity; });
+  return total;
+}
+
+function fmtCents(c) {
+  return window.formatCents ? window.formatCents(c) : '$' + (c / 100).toFixed(2);
+}
+
+function renderCart() {
+  var count = 0;
+  saleItems.forEach(function(it) { count += it.quantity; });
+  var total = cartTotalCents();
+
+  document.getElementById('cartSummary').innerHTML = count > 0
+    ? '<strong>' + count + ' item' + (count !== 1 ? 's' : '') + '</strong> <span class="muted">· ' + fmtCents(total) + '</span>'
+    : '<span class="muted">Cart is empty</span>';
+
+  var container = document.getElementById('cartItems');
+  if (!saleItems.length) {
+    container.innerHTML = '<div class="cart-empty">Tap a product to add it to the cart</div>';
+  } else {
+    var html = '';
+    saleItems.forEach(function(item, idx) { html += cartItemHtml(item, idx); });
+    container.innerHTML = html;
+  }
+
+  var chargeBtn = document.getElementById('cartChargeBtn');
+  chargeBtn.disabled = saleItems.length === 0;
+  chargeBtn.textContent = total > 0 ? 'Charge ' + fmtCents(total) : 'Charge';
+}
+
+// Keep every cart surface (panel, checkout list, amount field) in sync
+function refreshCartUI() {
+  renderCart();
+  if (document.getElementById('resultScreen').classList.contains('active')) {
+    renderItems();
+  }
+  autoFillAmount();
+}
+
+function toggleCart() {
+  if (window.innerWidth >= 768) return; // always-expanded rail on tablet
+  document.getElementById('cartPanel').classList.toggle('expanded');
+}
+
+function goToCheckout() {
+  if (saleItems.length === 0) { showToast('Cart is empty', true); return; }
   renderItems();
   autoFillAmount();
   showScreen('resultScreen');
@@ -1405,8 +1558,17 @@ function newSale() {
   document.getElementById('saleNotes').value = '';
   document.getElementById('cashBtn').classList.add('selected');
   document.getElementById('squareBtn').classList.remove('selected');
-  showScreen('cameraScreen');
-  if (camera && !camera.isActive()) camera.start();
+  // Reset catalog browse state and return to the home grid
+  currentCategory = 'all';
+  currentFilter = '';
+  var search = document.getElementById('catalogSearch');
+  if (search) search.value = '';
+  if (camera && camera.isActive()) camera.stop();
+  renderCategoryStrip();
+  renderCatalog();
+  refreshCartUI();
+  document.getElementById('cartPanel').classList.remove('expanded');
+  showScreen('catalogScreen');
 }
 
 // ============================================================
