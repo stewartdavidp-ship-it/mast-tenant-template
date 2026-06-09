@@ -1014,7 +1014,7 @@
           '<div class="order-timeline-time">' + formatOrderDateTime(h.at) + '</div>' +
           '<div class="order-timeline-text">' + esc(statusLabel) +
             (h.note ? ' — ' + esc(h.note) : '') +
-            (h.by ? ' <span style="color:var(--warm-gray-light);">by ' + esc(h.by) + '</span>' : '') +
+            (function () { var who = (window.MastUI && window.MastUI.Num) ? window.MastUI.Num.actorName(h.by) : ''; return who ? ' <span style="color:var(--warm-gray-light);">by ' + esc(who) + '</span>' : ''; })() +
           '</div>' +
         '</div>';
       });

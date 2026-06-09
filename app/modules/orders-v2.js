@@ -134,7 +134,8 @@
           if (!hasPlaced && r.placedAt) ev.push({ label: 'Placed', at: fmt(r.placedAt), done: true });
           hist.forEach(function (h) {
             if (!h || !h.status) return;
-            ev.push({ label: cap(String(h.status)) + (h.by ? ' · ' + h.by : ''), at: fmt(h.at), done: true });
+            var who = window.MastUI.Num.actorName(h.by);
+            ev.push({ label: cap(String(h.status)) + (who ? ' · ' + who : ''), at: fmt(h.at), done: true });
           });
           return ev;
         }

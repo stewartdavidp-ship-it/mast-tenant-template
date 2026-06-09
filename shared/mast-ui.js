@@ -73,6 +73,25 @@
       if (it.price != null && it.price !== '' && !isNaN(it.price)) return Number(it.price) * qty;
       return null;
     },
+    // Human-readable actor label from a stored `by` value (audit trails record
+    // a Firebase UID, a system/automation token, or — newer writers — an already
+    // human name/email). NEVER surface a raw internal UID to users:
+    //   system/automation token → "Automatic"; the signed-in user → their name;
+    //   an already-human value (has whitespace or "@") → itself; an opaque UID
+    //   (no client-side directory to resolve it) → '' so the caller omits it.
+    // Returns '' when there is nothing safe to show.
+    actorName: function (by) {
+      if (by == null) return '';
+      var s = String(by).trim();
+      if (!s) return '';
+      var low = s.toLowerCase();
+      if (low === 'mastflow' || low === 'system' || low === 'workflow' || low === 'automatic' ||
+          low === 'cron' || low === 'scheduler' || low === 'webhook') return 'Automatic';
+      var cu = (typeof window !== 'undefined') ? window.currentUser : null;
+      if (cu && cu.uid && s === cu.uid) return cu.displayName || cu.email || 'You';
+      if (/\s/.test(s) || s.indexOf('@') !== -1) return s; // already a name or email
+      return ''; // opaque UID — no directory to resolve it; never leak the raw id
+    },
     // date display: ISO/Date -> "May 1, 2026"; dateRaw -> "2026-05-01"
     date: function (d) {
       if (d == null || d === '') return '';   // null/empty → '' (not the Unix epoch "Dec 31, 1969")
