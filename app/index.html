@@ -110,25 +110,25 @@
        Shared by customers.js (list/export) and customer-service.js (survey
        bulk-send) so the segment matcher cannot drift. ?v= kept in lockstep
        with MAST_MODULES_V by scripts/bump-modules-version.sh. -->
-  <script src="../shared/customer-filters.js?v=20260608-170930-a7e27a3"></script>
+  <script src="../shared/customer-filters.js?v=20260608-203215-15a0edf"></script>
   <script src="../shared/brand-sync.js?v=1"></script>
   <script src="../shared/channel-connection.js?v=1"></script>
-  <script src="../shared/variant-reconcile.js?v=20260608-170930-a7e27a3"></script>
+  <script src="../shared/variant-reconcile.js?v=20260608-203215-15a0edf"></script>
   <!-- UI redesign engines (docs/ux-audit): shared primitives + Entity Engine.
        The ?v= suffix is kept in lockstep with MAST_MODULES_V by
        scripts/bump-modules-version.sh (these are static <head> tags loaded
        before the JS var exists, so they can't read it at runtime). Without
        this, the engines were frozen at ?v=1 and never cache-busted on deploy. -->
-  <script src="../shared/mast-ui.js?v=20260608-170930-a7e27a3"></script>
-  <script src="../shared/mast-io.js?v=20260608-170930-a7e27a3"></script>
-  <script src="../shared/mast-entity.js?v=20260608-170930-a7e27a3"></script>
+  <script src="../shared/mast-ui.js?v=20260608-203215-15a0edf"></script>
+  <script src="../shared/mast-io.js?v=20260608-203215-15a0edf"></script>
+  <script src="../shared/mast-entity.js?v=20260608-203215-15a0edf"></script>
   <!-- Canonical product readiness gate (computeReadinessChecklist / productMarkupConfig).
        Byte-identical to mast-tenant-mcp-server/src/shared/product-readiness.core.js so the
        AI publish gate and the maker.js UI gate cannot drift; maker.js delegates to
        window.MastProductReadiness. Eager-loaded so it exists before the lazy maker module.
        ?v= kept in lockstep with MAST_MODULES_V by scripts/bump-modules-version.sh.
        See docs/ux-audit/product-publish-gate-plan.md §7. -->
-  <script src="../shared/product-readiness.core.js?v=20260608-170930-a7e27a3"></script>
+  <script src="../shared/product-readiness.core.js?v=20260608-203215-15a0edf"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Pod-specific runtime config — sets window.MAST_POD_PLATFORM_PROJECT so
@@ -21986,7 +21986,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260608-170930-a7e27a3';
+var MAST_MODULES_V = '20260608-203215-15a0edf';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -30930,11 +30930,16 @@ window.MastAskAi = (function() {
   // scope.sectionsIncluded from whatever a buildContext returned.
   var _META_KEYS = { version: 1, app: 1, tenantId: 1, capturedAt: 1, page: 1, scope: 1, pageTitle: 1, route: 1, viewing: 1, note: 1 };
 
-  // The `scope` block is the single highest-value part of the payload: it lets
-  // Claude answer "is this field empty or just uncaptured?" and decline cleanly
-  // on questions the page doesn't cover. Every payload gets one — a detail config
-  // can supply an explicit scope (with `excludes`), otherwise we synthesize
-  // sectionsIncluded from the data blocks actually present.
+  // The `scope` block is the single highest-value part of the payload. It marks
+  // the boundary of the tenant data captured here so Claude can (a) tell "field
+  // is empty" from "field wasn't captured", and (b) know what to bring in from
+  // OUTSIDE — the whole point of using subscription AI is that it can supply
+  // market/competitor/benchmark context the tenant's own data doesn't contain.
+  //   sectionsIncluded  — tenant data present in THIS payload (trust empty values)
+  //   notInThisPayload  — not captured here; Claude MAY answer from its own
+  //                       knowledge / web research, labeled as external context
+  //   neverInfer        — privacy hard line: never fabricate (e.g. other tenants)
+  // Every payload gets a scope; a detail config can supply explicit lists.
   function _deriveScope(ctx, pageCtx) {
     var provided = (pageCtx && pageCtx.scope) || {};
     var sections = provided.sectionsIncluded;
@@ -30944,9 +30949,11 @@ window.MastAskAi = (function() {
     var title = (ctx.page && ctx.page.title) || ctx.pageTitle;
     return {
       describes: provided.describes || (title ? ('a snapshot of the ' + title + ' view for this tenant') : 'a page-level snapshot for this tenant'),
-      excludes: Array.isArray(provided.excludes) ? provided.excludes
-        : ['other tenants’ data', 'external market / competitor pricing', 'anything not present in the sections listed below'],
-      sectionsIncluded: sections
+      sectionsIncluded: sections,
+      notInThisPayload: Array.isArray(provided.notInThisPayload) ? provided.notInThisPayload
+        : ['external market / competitor pricing', 'industry benchmarks or trends', 'anything not present in the sections listed above'],
+      neverInfer: Array.isArray(provided.neverInfer) ? provided.neverInfer
+        : ['other tenants’ data', 'another customer’s private records']
     };
   }
 
@@ -31049,8 +31056,9 @@ window.MastAskAi = (function() {
       viewing: soTitle || null,
       scope: {
         describes: 'a page-level view only — no specific record was captured from this screen',
-        excludes: ['the underlying records on this page', 'other tenants’ data', 'external market / competitor pricing'],
-        sectionsIncluded: []
+        sectionsIncluded: [],
+        notInThisPayload: ['the underlying records on this page', 'external market / competitor pricing', 'industry benchmarks'],
+        neverInfer: ['other tenants’ data', 'another customer’s private records']
       }
     });
     renderModal(ctx, { title: 'Ask AI — ' + pageTitle, placeholder: 'Ask Claude about ' + pageTitle + '…' });
@@ -31115,9 +31123,10 @@ window.MastAskAi = (function() {
       'I am looking at ' + pageDesc + ' in my Mast admin and want help understanding what I see. The context block below is structured data captured straight from the record/page (not scraped text)' + (shotUrl ? ', plus the screenshot linked below' : '') + '.',
       '',
       'How to read the context — important:',
-      '- The `scope` block declares exactly what this payload covers. `scope.sectionsIncluded` lists the sections that were captured. If a section IS listed but a field inside it is empty/null/zero, treat that as genuinely empty in the record — NOT as missing from the capture. Answer about those confidently.',
-      '- If something is NOT in `scope.sectionsIncluded`, or it falls under `scope.excludes` (e.g. competitor or external-market pricing, other tenants), it is outside what this screen provides. Say so plainly rather than guessing. For a genuinely external question you may offer to look it up on the web — but never invent Mast data.',
-      '- Answer using the data in the context block' + (shotUrl ? ' and the screenshot' : '') + '. Do not ask me to install connectors or run extra queries.',
+      '- `scope.sectionsIncluded` lists the tenant data captured in THIS payload. If a section is listed but a field inside it is empty/null/zero, that value is genuinely empty for this tenant — NOT missing from the capture. Trust it and answer confidently.',
+      '- `scope.notInThisPayload` names things this screen did not capture (e.g. competitor / external-market pricing, industry benchmarks). You are encouraged to answer these from your own knowledge or by researching the web — that is exactly why I am asking you. Clearly label such answers as external context or estimates, and never present them as this tenant’s own figures. A good answer reads: "Your data shows X; for market context (external), typically Y."',
+      '- `scope.neverInfer` names data you must not fabricate or guess (e.g. other tenants’ data, another customer’s private records). Decline those.',
+      '- Treat the captured tenant data as the source of truth for anything inside `scope.sectionsIncluded`' + (shotUrl ? ' and use the screenshot for layout' : '') + '. Do not ask me to install connectors or run extra queries for that.',
       '',
       '<mast-ui-context version="2">',
       JSON.stringify(ctx, null, 2),

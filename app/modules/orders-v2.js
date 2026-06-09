@@ -299,8 +299,9 @@
           },
           scope: {
             describes: 'a single order record for this tenant',
-            excludes: ['other tenants’ orders', 'the customer’s other orders', 'external shipping-carrier live status', 'product cost / margin (see the product record)'],
-            sectionsIncluded: ['order', 'customer', 'fulfillment']
+            sectionsIncluded: ['order', 'customer', 'fulfillment'],
+            notInThisPayload: ['external shipping-carrier live status', 'product cost / margin (see the product record)', 'this customer’s other orders', 'market / benchmark context'],
+            neverInfer: ['other tenants’ orders', 'another customer’s private records']
           }
         };
       }

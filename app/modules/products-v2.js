@@ -3485,8 +3485,12 @@
 
       ctx.scope = {
         describes: 'a single product record (plus its inventory, recipe and recent sales) for this tenant',
-        excludes: ['other tenants’ products', 'external market or competitor pricing', 'channel listing IDs / live sync status', 'orders not summarized in salesPerformance'],
-        sectionsIncluded: sections
+        sectionsIncluded: sections,
+        // Not captured here — answer these from your own knowledge / web research,
+        // clearly labeled as external context (e.g. "for comparable handmade
+        // pieces, market price is typically …"), never as this tenant's own data.
+        notInThisPayload: ['external market / competitor pricing', 'industry benchmarks or trends', 'channel listing IDs / live sync status', 'orders beyond the salesPerformance summary'],
+        neverInfer: ['other tenants’ products']
       };
       return ctx;
     }

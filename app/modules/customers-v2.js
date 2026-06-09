@@ -301,8 +301,9 @@
         if (c._recentOrders) { ctx.recentOrders = recent; sections.push('recentOrders'); }
         ctx.scope = {
           describes: 'a single customer record (lifetime stats + recent orders) for this tenant',
-          excludes: ['other tenants’ customers', 'other customers’ orders', 'external/enriched demographic data', 'orders beyond the recent list shown here'],
-          sectionsIncluded: sections
+          sectionsIncluded: sections,
+          notInThisPayload: ['external / enriched demographic data', 'industry benchmarks (e.g. typical repeat-rate)', 'orders beyond the recent list shown here'],
+          neverInfer: ['other tenants’ customers', 'other customers’ private records']
         };
         return ctx;
       }
