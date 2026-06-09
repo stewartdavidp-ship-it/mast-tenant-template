@@ -99,7 +99,25 @@
       },
       customer: function (r) {
         var sh = r.shipping || {};
-        var addr = [sh.address1 || sh.line1, (sh.city ? sh.city + (sh.state ? ', ' + sh.state : '') : '')].filter(Boolean).join('<br>');
+        var esc = (window.MastUI && window.MastUI._esc) ? window.MastUI._esc : function (s) { return s == null ? '' : String(s); };
+        // Full shipping address — recipient (when it differs from the customer),
+        // both street lines, "City, ST ZIP", and country. The old builder only
+        // read address1 + city/state, so line2/zip/country never showed even when
+        // present. Each field is escaped (the card renders this as raw HTML).
+        var cityLine = [sh.city, [sh.state, (sh.postalCode || sh.zip)].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+        var recipient = (sh.name && sh.name !== (r.customerName || '')) ? sh.name : null;
+        var lines = [
+          recipient,
+          sh.address1 || sh.line1 || sh.street1 || sh.street,
+          sh.address2 || sh.line2 || sh.street2,
+          cityLine,
+          sh.country
+        ].filter(Boolean).map(esc);
+        // Explicit empty state — the card is titled "Customer & shipping", so a
+        // missing address should read as missing, not silently vanish.
+        var addr = lines.length
+          ? lines.join('<br>')
+          : '<em style="color:var(--warm-gray);">No shipping address on file.</em>';
         return { id: r.customerId, name: r.customerName || r.email, email: r.email, address: addr };
       },
       fulfillment: function (r) {
