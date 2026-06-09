@@ -1123,7 +1123,11 @@
       }
 
       var activeBg = (state === 'current') ? 'color-mix(in srgb,var(--amber) 9%,transparent)' : 'transparent';
-      var glyph = state === 'done' ? '✓' : (locked ? '⚠' : String(i + 1));
+      // Upcoming steps (reachable-next or still-locked) show their step NUMBER,
+      // not a ⚠ — a future step is a to-do, not an error. The dashed grey dot
+      // already signals "not reached yet"; the alarming glyph made a normal
+      // forward step read as a problem.
+      var glyph = state === 'done' ? '✓' : String(i + 1);
       // A locked future phase shows the reason (mirrors the prototype's "· needs
       // Connect" / "· N to do"). For the immediate-next phase the blocker is the
       // current phase's unmet hard reqs.
@@ -1194,9 +1198,36 @@
     // instead — the toggle/review handlers still flip display from here.
     var initialDisplay = expandCurrent ? 'flex' : 'none';
     var html = '<div id="' + ctxId + '_checklist" style="display:' + initialDisplay + ';flex-direction:column;gap:5px;margin:11px 0 2px;">';
-    html += unmet.length
-      ? unmet.map(function(r) { return itemHtml(r, false); }).join('')
-      : '<div style="font-size:0.82rem;color:var(--teal);">✓ Everything in this step is set up.</div>';
+    if (unmet.length) {
+      // Current step still has work — list exactly what's left to get done here.
+      html += unmet.map(function(r) { return itemHtml(r, false); }).join('');
+    } else {
+      // Current step is fully set up. Don't dead-end at "all set" — look FORWARD:
+      // show the NEXT step and what IT needs, so on entry the pane always shows
+      // the road ahead (what's done AND what's coming), not just a trail.
+      html += '<div style="font-size:0.82rem;color:var(--teal);">✓ Everything in this step is set up.</div>';
+      var _nextKey = (ev.nextPhases && ev.nextPhases.length) ? ev.nextPhases[0] : null;
+      var _nextPhase = (_nextKey && !ev.isBranchPoint) ? _phaseByKey(def, _nextKey) : null;
+      if (_nextPhase) {
+        html += '<div style="margin-top:10px;padding-top:9px;border-top:1px solid var(--border);">' +
+          '<div style="font-size:0.72rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">Up next · ' + _esc(_nextPhase.label) + '</div>';
+        var _nextReqs = _nextPhase.exitRequirements || [];
+        if (_nextReqs.length) {
+          _nextReqs.forEach(function(req) {
+            var go = req.target
+              ? ' <a href="#" onclick="event.preventDefault();MastFlow.__ui.target(\'' + ctxId + '\',\'' + _esc(req.target) + '\')" style="color:var(--teal);font-size:0.78rem;margin-left:8px;text-decoration:underline;">Go &rarr;</a>'
+              : '';
+            var rec = req.hard ? '' : ' <em style="color:var(--warm-gray);font-size:0.78rem;font-style:normal;">· recommended</em>';
+            html += '<div style="display:flex;align-items:center;gap:8px;font-size:0.85rem;color:var(--warm-gray);">' +
+              '<span style="display:inline-flex;width:18px;height:18px;border-radius:50%;border:1.5px dashed var(--border-strong,var(--border));flex-shrink:0;"></span>' +
+              '<span>' + _esc(req.label) + rec + '</span>' + go +
+            '</div>';
+          });
+        }
+        html += '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:7px;">When ready, click <strong style="color:var(--text);">' + _esc(_nextPhase.label) + '</strong> in the steps above to advance.</div>' +
+        '</div>';
+      }
+    }
     if (doneReqs.length) {
       var showLbl = 'Show ' + doneReqs.length + ' completed';
       html += '<a href="#" id="' + ctxId + '_donetoggle" data-show="' + showLbl + '" ' +
