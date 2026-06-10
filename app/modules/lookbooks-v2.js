@@ -29,7 +29,7 @@
 
   var U = window.MastUI, esc = U._esc;
 
-  var V2 = { rows: [], byId: {}, loaded: false, sortKey: 'updatedAt', sortDir: 'desc', busy: {} };
+  var V2 = { rows: [], byId: {}, loaded: false, sortKey: 'updatedAt', sortDir: 'desc', busy: {}, catalog: null };
 
   function canEdit() {
     return typeof window.can !== 'function' || window.can('lookbooks', 'edit');
@@ -40,7 +40,9 @@
     return !!(r.generatedUrl && (!r.urlExpiresAt || new Date(r.urlExpiresAt).getTime() > Date.now()));
   }
   function categoriesOf() {
-    var cats = {}, pd = window.productsData || {};
+    // Catalog source: our own fetch (V2.catalog, loaded in load()) — falls back
+    // to window.productsData when another surface already populated it.
+    var cats = {}, pd = V2.catalog || window.productsData || {};
     Object.keys(pd).forEach(function (pid) {
       var p = pd[pid]; if (!p || p.status === 'archived') return;
       (p.categories || (p.category ? [p.category] : [])).forEach(function (c) { if (c) cats[c] = 1; });
@@ -161,8 +163,14 @@
       V2.byId = {}; V2.rows.forEach(function (r) { V2.byId[r._key] = r; });
       V2.loaded = true; render();
     }).catch(function (e) { console.error('[lookbooks-v2] load', e); V2.loaded = true; render(); });
-    // Composer needs the catalog for the category picker.
-    try { if (window.MastAdmin && MastAdmin.loadModule) MastAdmin.loadModule('products'); } catch (e) {}
+    // Composer needs the catalog for the category picker — fetch it directly
+    // (there is no 'products' module key; the prior loadModule('products') threw
+    // an unhandled 'Unknown module' rejection on every route entry).
+    if (!V2.catalog && window.MastDB && MastDB.products && typeof MastDB.products.list === 'function') {
+      Promise.resolve(MastDB.products.list()).then(function (all) {
+        V2.catalog = all || {};
+      }).catch(function (e) { console.error('[lookbooks-v2] catalog', e); });
+    }
   }
 
   function visibleRows() {

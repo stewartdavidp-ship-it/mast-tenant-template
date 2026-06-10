@@ -147,7 +147,11 @@
     var st = STAGES[String(rec.status).toLowerCase()]; if (!st) return;
     V2.busy[id] = true; render();
     var done = function () { delete V2.busy[id]; render(); };
-    Promise.all([MastAdmin.loadModule('workflowEngine'), MastAdmin.loadModule('pickshipWorkflow')])
+    // Engine FIRST, then the spec — the spec's IIFE registers itself with
+    // window.MastFlow and silently no-ops if the engine isn't loaded yet
+    // (the Promise.all race behind 'Unknown workflow: pickship').
+    MastAdmin.loadModule('workflowEngine')
+      .then(function () { return MastAdmin.loadModule('pickshipWorkflow'); })
       .then(function () {
         rec.id = rec.id || rec._key;
         var opts = { recordId: rec.id, expectedFromPhase: st.phase };
