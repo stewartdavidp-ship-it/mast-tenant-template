@@ -60,6 +60,8 @@
       template: 'transaction',
       flow: 'return',
       flowModule: 'returnWorkflow',
+      guidedHeader: true,   // clickable step rail; click a step to review/advance (engine §guided)
+      guidedExpandCurrent: true,  // open with the current phase's checklist visible
       customerEntity: 'customers-v2',
       tiles: function (r) {
         var N = window.MastUI.Num;
