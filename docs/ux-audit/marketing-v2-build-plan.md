@@ -1,6 +1,9 @@
 # marketing-v2 — Build Plan
 
-Status: **PLANNED** (2026-06-10). Runs the `v2-conversion-playbook.md` end-to-end for the
+Status: **SHIPPED** (2026-06-10 — Waves 1–3 + holistic pass merged & verified on dev:
+social-v2 #381, composer-v2 + engagement-inbox-v2 #382, depth/cross-links #383,
+holistic #384). Original planning text below; the scorecard and CRUD table reflect
+the shipped end-state. Runs the `v2-conversion-playbook.md` end-to-end for the
 Marketing section. 5 of 8 Marketing sub-items already have a V2 surface (born clean against
 `lint-v2-standard` — zero baseline debt); this plan covers the 3 missing twins, the depth
 gaps in the existing 5, and the holistic pass. Companion to `sales-v2-build-plan.md` (the
@@ -11,14 +14,14 @@ ratified decisions, it does not re-litigate them.
 
 | # | Route | Sidebar label | V1 source | V2 file | Status |
 |---|-------|---------------|-----------|---------|--------|
-| 1 | `marketing-calendar` | Calendar | marketing-calendar.js (270L) | marketing-calendar-v2.js | ✅ calendar index control |
-| 2 | `composer` | Composer | composer.js (434L) | — | ⬜ Wave 2 |
-| 3 | `engagement-inbox` | Engagement Inbox | engagement-inbox.js (485L) | — | ⬜ Wave 2 |
-| 4 | `campaigns` | Campaigns | campaigns.js (527L) | campaigns-v2.js | ✅ native CRUD via CampaignsBridge |
-| 5 | `social` | Social Media | social.js (1,441L) | — | ⬜ Wave 1 |
-| 6 | `blog` | Blog | blog.js (2,333L) | blog-v2.js | 🟡 read-only → Wave 3 depth |
-| 7 | `newsletter` | Newsletter | newsletter.js (2,336L) | newsletter-v2.js | 🟡 subscribers only → Wave 3 issues |
-| 8 | `stories` | Stories | production.js (#stories) | stories-v2.js | 🟡 read-only → Wave 3 depth |
+| 1 | `marketing-calendar` | Calendar | marketing-calendar.js (270L) | marketing-calendar-v2.js | ✅ calendar index control; all 4 drills land on V2 twins |
+| 2 | `composer` | Composer | composer.js (434L) | composer-v2.js | ✅ W2 — native create/edit/publish/delete (ComposerBridge) |
+| 3 | `engagement-inbox` | Engagement Inbox | engagement-inbox.js (485L) | engagement-inbox-v2.js | ✅ W2 — queue archetype (EngagementBridge) |
+| 4 | `campaigns` | Campaigns | campaigns.js (527L) | campaigns-v2.js | ✅ native CRUD + W3 delete + refs drill to V2 SOs |
+| 5 | `social` | Social Media | social.js (1,441L) | social-v2.js | ✅ W1 — record + clips chip + signal/mark-posted/edit (SocialBridge) |
+| 6 | `blog` | Blog | blog.js (2,333L) | blog-v2.js | ✅ W3 — light meta edit (BlogBridge) + draft delete |
+| 7 | `newsletter` | Newsletter | newsletter.js (2,336L) | newsletter-v2.js | ✅ W3 — Subscribers + Issues lenses; draft-issue delete |
+| 8 | `stories` | Stories | production.js (#stories) | stories-v2.js | ✅ W3 — draft delete; curation stays in Production |
 
 Recon notes that shaped the plan (vs. the Sales round):
 
@@ -122,19 +125,22 @@ SO shows "Part of: Spring Launch".
   Engagement Inbox.
 - CRUD parity table finalized (below), `lint-v2-standard` green, light+dark proof.
 
-## CRUD parity — target end-state
+## CRUD parity — shipped end-state
 
 | Route | C | R | U | D | Notes |
 |---|---|---|---|---|---|
-| campaigns | ✅ | ✅ | ✅ | W3 | delete = confirm + audit; references cleaned with it |
-| composer | W2 | W2 | W2 | W3 | full native; publish via bridge |
-| social | classic | W1 | W1 light | W3 drafts | enhance canvas classic (debt) |
-| blog | classic | ✅ | W3 light | W3 drafts | Builder classic |
-| newsletter subscribers | ✅ | ✅ | ✅ | — | unsubscribe (status), not hard delete |
-| newsletter issues | classic | W3 | — | W3 drafts | compose/send classic |
-| stories | classic | ✅ | — | W3 drafts | curation in Production |
-| engagement-inbox | n/a | W2 | W2 (status) | n/a | queue over CS-owned records |
+| campaigns | ✅ | ✅ | ✅ | ✅ | delete = confirm + writeAudit; artifacts survive |
+| composer | ✅ | ✅ | ✅ | ✅ | full native; publish + delete via ComposerBridge |
+| social | classic | ✅ | ✅ light | ✅ drafts | enhance/AI canvas classic (debt); posted = immutable history |
+| blog | classic | ✅ | ✅ light | ✅ drafts | meta only (title/excerpt/tags); Builder owns body/publish |
+| newsletter subscribers | ✅ | ✅ | ✅ | — | unsubscribe (status), not hard delete — by design |
+| newsletter issues | classic | ✅ | — | ✅ drafts | compose/send classic; sent issues immutable |
+| stories | classic | ✅ | — | ✅ drafts | curation in Production; published stories immutable |
+| engagement-inbox | n/a | ✅ | ✅ (status) | n/a | queue over CS-owned records; UGC approve/reject native |
 | marketing-calendar | n/a | ✅ | n/a | n/a | index control |
+
+Every delete: `mastConfirm` + `writeAudit` + RBAC `can(route,'delete')`; immutability
+respected (sent issues / published posts & stories / posted social records never delete).
 
 ## Debt / known leftovers (tracked, not blocking)
 

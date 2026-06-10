@@ -110,25 +110,25 @@
        Shared by customers.js (list/export) and customer-service.js (survey
        bulk-send) so the segment matcher cannot drift. ?v= kept in lockstep
        with MAST_MODULES_V by scripts/bump-modules-version.sh. -->
-  <script src="../shared/customer-filters.js?v=20260610-112844-4ab2033"></script>
+  <script src="../shared/customer-filters.js?v=20260610-113734-d4e11b9"></script>
   <script src="../shared/brand-sync.js?v=1"></script>
   <script src="../shared/channel-connection.js?v=1"></script>
-  <script src="../shared/variant-reconcile.js?v=20260610-112844-4ab2033"></script>
+  <script src="../shared/variant-reconcile.js?v=20260610-113734-d4e11b9"></script>
   <!-- UI redesign engines (docs/ux-audit): shared primitives + Entity Engine.
        The ?v= suffix is kept in lockstep with MAST_MODULES_V by
        scripts/bump-modules-version.sh (these are static <head> tags loaded
        before the JS var exists, so they can't read it at runtime). Without
        this, the engines were frozen at ?v=1 and never cache-busted on deploy. -->
-  <script src="../shared/mast-ui.js?v=20260610-112844-4ab2033"></script>
-  <script src="../shared/mast-io.js?v=20260610-112844-4ab2033"></script>
-  <script src="../shared/mast-entity.js?v=20260610-112844-4ab2033"></script>
+  <script src="../shared/mast-ui.js?v=20260610-113734-d4e11b9"></script>
+  <script src="../shared/mast-io.js?v=20260610-113734-d4e11b9"></script>
+  <script src="../shared/mast-entity.js?v=20260610-113734-d4e11b9"></script>
   <!-- Canonical product readiness gate (computeReadinessChecklist / productMarkupConfig).
        Byte-identical to mast-tenant-mcp-server/src/shared/product-readiness.core.js so the
        AI publish gate and the maker.js UI gate cannot drift; maker.js delegates to
        window.MastProductReadiness. Eager-loaded so it exists before the lazy maker module.
        ?v= kept in lockstep with MAST_MODULES_V by scripts/bump-modules-version.sh.
        See docs/ux-audit/product-publish-gate-plan.md §7. -->
-  <script src="../shared/product-readiness.core.js?v=20260610-112844-4ab2033"></script>
+  <script src="../shared/product-readiness.core.js?v=20260610-113734-d4e11b9"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Pod-specific runtime config — sets window.MAST_POD_PLATFORM_PROJECT so
@@ -6528,15 +6528,17 @@
         <span class="sidebar-section-arrow">&#9654;</span>
       </div>
       <div class="sidebar-items">
-        <!-- W2: marketing aggregators (calendar/composer/inbox/campaigns) -->
+        <!-- Ordered by the operator's process (marketing-v2 holistic pass):
+             plan (Calendar, Campaigns) → create (Composer) → distribute
+             (Blog, Newsletter, Social, Stories) → measure/respond (Inbox). -->
         <div class="sidebar-item" data-route="marketing-calendar" onclick="navigateTo('marketing-calendar')">Calendar</div>
-        <div class="sidebar-item" data-route="composer" onclick="navigateTo('composer')">Composer</div>
-        <div class="sidebar-item" data-route="engagement-inbox" onclick="navigateTo('engagement-inbox')">Engagement Inbox</div>
         <div class="sidebar-item" data-route="campaigns" onclick="navigateTo('campaigns')">Campaigns</div>
-        <div class="sidebar-item" data-route="social" onclick="navigateTo('social')">Social Media</div>
+        <div class="sidebar-item" data-route="composer" onclick="navigateTo('composer')">Composer</div>
         <div class="sidebar-item" data-route="blog" onclick="navigateTo('blog')">Blog</div>
         <div class="sidebar-item" data-route="newsletter" onclick="navigateTo('newsletter')">Newsletter</div>
+        <div class="sidebar-item" data-route="social" onclick="navigateTo('social')">Social Media</div>
         <div class="sidebar-item" data-route="stories" onclick="navigateTo('stories')">Stories</div>
+        <div class="sidebar-item" data-route="engagement-inbox" onclick="navigateTo('engagement-inbox')">Engagement Inbox</div>
       </div>
     </div>
     <!-- Site (D10 2026-05-28 — extracted from Marketing per IA-rename feedback
@@ -20625,8 +20627,8 @@ var SECTION_ROUTES = {
   'sales':             ['pos', 'orders', 'commissions', 'rma',
                         'wholesale', 'lookbooks', 'galleries',
                         'receipts', 'terms', 'commission-terms', 'pack', 'ship'],
-  'marketing':         ['marketing-calendar', 'composer', 'engagement-inbox', 'campaigns',
-                        'social', 'blog', 'newsletter', 'stories',
+  'marketing':         ['marketing-calendar', 'campaigns', 'composer',
+                        'blog', 'newsletter', 'social', 'stories', 'engagement-inbox',
                         'website', 'brand', 'homepage', 'images'],
   // W3e — 'customers' moved out of retention into operations (auto-expand logic
   // and section-membership routing reflect the new home).
@@ -22019,7 +22021,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260610-112844-4ab2033';
+var MAST_MODULES_V = '20260610-113734-d4e11b9';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
