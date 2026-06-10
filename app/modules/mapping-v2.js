@@ -82,7 +82,7 @@
         get: function (r) { return r._channel || '—'; },
         tone: function (v) { return CHANNEL_TONE[v] || 'neutral'; } },
       { name: 'sku', label: 'SKU', type: 'text', list: true, readOnly: true, get: function (r) { return skuOf(r) || '—'; } },
-      { name: 'price', label: 'Price', type: 'number', list: true, readOnly: true, align: 'right',
+      { name: 'price', label: 'Price', type: 'text', list: true, readOnly: true, align: 'right',
         get: function (r) { var p = priceOf(r); return p == null ? '—' : N.money(p, { cents: true }); } },
       { name: 'mapped', label: 'Mapped to', type: 'text', list: true, readOnly: true, sortable: false,
         get: function (r) {
