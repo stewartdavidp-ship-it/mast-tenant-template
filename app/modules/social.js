@@ -1423,6 +1423,49 @@
   window.socialOpenFromContent = socialOpenFromContent;
 
   // ============================================================
+  // SocialBridge — delegated write path for social-v2 (marketing-v2 Wave 1).
+  // Keeps the post write shape + signal-toggle semantics single-sourced here;
+  // the V2 twin never writes market/posts directly. Each write also syncs the
+  // legacy in-memory smPosts cache so a later classic-view visit is coherent.
+  // ============================================================
+  function smSyncLocal(postId, patch) {
+    var post = smPosts.find(function(p) { return p.postId === postId; });
+    if (post) Object.assign(post, patch);
+    return post;
+  }
+  window.SocialBridge = {
+    // Toggle semantics mirror smSetSignal: same score again clears it.
+    setSignal: async function(postId, score, currentScore) {
+      var uid = smGetUid();
+      if (!uid) throw new Error('Not signed in');
+      var newScore = currentScore === score ? null : score;
+      await MastDB.market.posts.update(uid, postId, {
+        signalScore: newScore,
+        scoredAt: newScore ? MastDB.serverTimestamp() : null
+      });
+      smSyncLocal(postId, { signalScore: newScore, scoredAt: newScore ? Date.now() : null });
+      return newScore;
+    },
+    update: async function(postId, patch) {
+      var uid = smGetUid();
+      if (!uid) throw new Error('Not signed in');
+      await MastDB.market.posts.update(uid, postId, patch);
+      smSyncLocal(postId, patch);
+      return patch;
+    },
+    // Flip a composer/scheduled DRAFT to the posted feed (the record-side half
+    // of smMarkPosted — no clip involved, so no pendingClips transition).
+    markPosted: async function(postId) {
+      var uid = smGetUid();
+      if (!uid) throw new Error('Not signed in');
+      var patch = { status: 'posted', postedAt: MastDB.serverTimestamp() };
+      await MastDB.market.posts.update(uid, postId, patch);
+      smSyncLocal(postId, { status: 'posted', postedAt: Date.now() });
+      return true;
+    }
+  };
+
+  // ============================================================
   // Register with MastAdmin
   // ============================================================
 
