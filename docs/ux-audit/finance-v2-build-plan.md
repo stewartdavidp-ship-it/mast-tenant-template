@@ -209,9 +209,13 @@ Every delete: `mastConfirm` + `writeAudit` + RBAC `can(route,'delete')`.
 
 ## Debt / known leftovers (tracked, not blocking)
 
-- [ ] **mast-architecture CF fix**: `_findAmendment`'s collection-group documentId
-      fallback is invalid Firestore — clients now always pass periodId, but the CF
-      should require it or query a stored field (spawn_task filed; deploy operator-gated).
+- [x] **mast-architecture CF fix SHIPPED** (arch #185, merged `c864ac7`, dev-deployed
+      2026-06-10): the no-periodId fallback now enumerates period parents via
+      `listDocuments()` + a single `getAll` probe, with a hermetic test suite whose fake
+      Firestore has no `collectionGroup` (regression fails loudly). Live-verified on
+      sgtest15: `rejectAmendment` without periodId returns `not-found`, not INTERNAL.
+      Prod rides the normal release pipeline (dirty bit set). The template's periodId
+      threading stays as the fast path.
 - [ ] Amendments lens refresh after classic-modal submit is manual (Refresh button) —
       the classic modal's success callback re-renders the legacy tab, not the hub.
 
