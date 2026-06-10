@@ -3577,15 +3577,20 @@ window.finArFilter = function(bucket) {
   if (el) el.innerHTML = renderArContent();
 };
 
+// State-free core (shared with the V2 open-items hub via FinanceBridge).
+async function _arMarkPaidCore(orderId, totalCents) {
+  var now = new Date().toISOString();
+  await MastDB.update('orders/' + orderId, {
+    invoiceStatus: 'paid',
+    invoicePaidAt: now,
+    invoicePaidAmount: totalCents,
+    updatedAt: now
+  });
+}
+
 window.finArMarkPaid = async function(orderId, totalCents) {
   try {
-    var now = new Date().toISOString();
-    await MastDB.update('orders/' + orderId, {
-      invoiceStatus: 'paid',
-      invoicePaidAt: now,
-      invoicePaidAmount: totalCents,
-      updatedAt: now
-    });
+    await _arMarkPaidCore(orderId, totalCents);
     showToast('Invoice marked as paid');
     loadArData();
   } catch (err) {
@@ -3634,9 +3639,25 @@ window.finArSendReminder = async function(orderId) {
   if (el) el.innerHTML = renderArContent();
 
   try {
+    var queued = await _arQueueReminderCore(orderId, row);
+    _arReminderState[orderId] = 'sent';
+    showToast('Reminder queued for ' + queued.to);
+  } catch (err) {
+    delete _arReminderState[orderId];
+    showToast('Reminder failed: ' + (err && err.message ? err.message : err), true);
+  } finally {
+    var el2 = document.getElementById('fArContent');
+    if (el2) el2.innerHTML = renderArContent();
+  }
+};
+
+// State-free reminder core — builds + queues the AR reminder email and the
+// admin/ar_reminders log row. Shared with the V2 open-items hub. `row` needs:
+// customerEmail, customerName, invoiceNumber, amtDue (cents), dueDate,
+// daysOverdue. Returns { idempotencyKey, to }.
+async function _arQueueReminderCore(orderId, row) {
     var now = new Date().toISOString();
     var ymd = now.slice(0, 10).replace(/-/g, '');
-    var tenantId = (MastDB.tenantId && MastDB.tenantId()) || window.TENANT_ID || '';
     var brandName = (window.TENANT_CONFIG && window.TENANT_CONFIG.brand && window.TENANT_CONFIG.brand.name) || 'Our Studio';
     var user = firebase.auth().currentUser;
     var sentBy = (user && user.uid) || 'unknown';
@@ -3699,16 +3720,8 @@ window.finArSendReminder = async function(orderId) {
       idempotencyKey: idempotencyKey
     });
 
-    _arReminderState[orderId] = 'sent';
-    showToast('Reminder queued for ' + row.customerEmail);
-  } catch (err) {
-    delete _arReminderState[orderId];
-    showToast('Reminder failed: ' + (err && err.message ? err.message : err), true);
-  } finally {
-    var el2 = document.getElementById('fArContent');
-    if (el2) el2.innerHTML = renderArContent();
-  }
-};
+    return { idempotencyKey: idempotencyKey, to: row.customerEmail };
+}
 
 // W2 R2-F2 (-OtMNKZ8c0Q3VlhqcaA0): Send Statement per-row action. Mints a
 // share-link via the W2.6 mintCustomerStatementToken CF and opens an email
@@ -4092,14 +4105,31 @@ window.finApToggleVendorExpand = function(vendorName) {
   if (el) el.innerHTML = renderApContent();
 };
 
+// State-free AP cores (shared with the V2 open-items hub via FinanceBridge).
+async function _apMarkPaidCore(receiptId, totalCents) {
+  await MastDB.update('admin/purchaseReceipts/' + receiptId, {
+    paymentStatus: 'paid',
+    paidAmount: totalCents,
+    updatedAt: new Date().toISOString()
+  });
+}
+// addedCents on top of currentPaid; returns the new status. Throws on overpay.
+async function _apRecordPaymentCore(receiptId, currentPaid, totalCents, addedCents) {
+  var newPaid = (currentPaid || 0) + addedCents;
+  if (addedCents <= 0) throw new Error('Payment must be > 0');
+  if (newPaid > totalCents) throw new Error('Payment exceeds balance due');
+  var newStatus = newPaid >= totalCents ? 'paid' : 'partial';
+  await MastDB.update('admin/purchaseReceipts/' + receiptId, {
+    paymentStatus: newStatus,
+    paidAmount: newPaid,
+    updatedAt: new Date().toISOString()
+  });
+  return newStatus;
+}
+
 window.finApMarkPaid = async function(receiptId, totalCents) {
   try {
-    var now = new Date().toISOString();
-    await MastDB.update('admin/purchaseReceipts/' + receiptId, {
-      paymentStatus: 'paid',
-      paidAmount: totalCents,
-      updatedAt: now
-    });
+    await _apMarkPaidCore(receiptId, totalCents);
     showToast('Receipt marked as paid');
     loadApData();
   } catch (err) {
@@ -4131,16 +4161,8 @@ window.finApSubmitPartial = async function(receiptId, currentPaid, totalCents) {
   var amount = parseFloat(inp.value);
   if (isNaN(amount) || amount <= 0) { showToast('Enter a valid payment amount', true); return; }
   var addedCents = Math.round(amount * 100);
-  var newPaid = currentPaid + addedCents;
-  if (newPaid > totalCents) { showToast('Payment exceeds balance due', true); return; }
-  var newStatus = newPaid >= totalCents ? 'paid' : 'partial';
   try {
-    var now = new Date().toISOString();
-    await MastDB.update('admin/purchaseReceipts/' + receiptId, {
-      paymentStatus: newStatus,
-      paidAmount: newPaid,
-      updatedAt: now
-    });
+    var newStatus = await _apRecordPaymentCore(receiptId, currentPaid, totalCents, addedCents);
     showToast(newStatus === 'paid' ? 'Receipt fully paid' : 'Partial payment recorded');
     loadApData();
   } catch (err) {
@@ -4231,15 +4253,8 @@ window.finApSaveVendor = async function(vendorId) {
     updatedAt: now
   };
   try {
-    if (!vendorId) {
-      var id = 'v_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8);
-      payload.id = id; payload.createdAt = now;
-      await MastDB.set('admin/vendors/' + id, payload);
-      showToast('Vendor created');
-    } else {
-      await MastDB.update('admin/vendors/' + vendorId, payload);
-      showToast('Vendor updated');
-    }
+    await _apSaveVendorCore(vendorId, payload);
+    showToast(vendorId ? 'Vendor updated' : 'Vendor created');
     _finCloseModal();
     loadApData();
   } catch (err) {
@@ -4247,11 +4262,24 @@ window.finApSaveVendor = async function(vendorId) {
   }
 };
 
+// State-free vendor save core (CENTS-free record; payload is DB-shaped).
+async function _apSaveVendorCore(vendorId, payload) {
+  payload.updatedAt = payload.updatedAt || new Date().toISOString();
+  if (!vendorId) {
+    var id = 'v_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8);
+    payload.id = id; payload.createdAt = payload.updatedAt;
+    await MastDB.set('admin/vendors/' + id, payload);
+    return id;
+  }
+  await MastDB.update('admin/vendors/' + vendorId, payload);
+  return vendorId;
+}
+
 window.finApDeleteVendor = async function(vendorId) {
   if (!vendorId) return;
   if (!window.confirm('Delete this vendor? Existing bills will be orphaned (their vendorId reference will dangle).')) return;
   try {
-    await MastDB.remove('admin/vendors/' + vendorId);
+    await _apDeleteVendorCore(vendorId);
     showToast('Vendor deleted');
     _finCloseModal();
     // Navigate away from vendor detail to AP list.
@@ -4317,20 +4345,8 @@ window.finApSaveBill = async function(billId) {
   if (status === 'paid') payload.paidAmount = amountCents;
   else if (status !== 'partial') payload.paidAmount = 0;
   try {
-    if (!billId) {
-      var id = 'b_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8);
-      payload.id = id; payload.createdAt = now;
-      await MastDB.set('admin/purchaseReceipts/' + id, payload);
-      // W1 final wire: new AP bill → QBO push (best-effort).
-      _firTriggerQboPush('apBill', id);
-      showToast('Bill created');
-    } else {
-      await MastDB.update('admin/purchaseReceipts/' + billId, payload);
-      // W1 final wire: AP bill edit → QBO push (best-effort, idempotent on
-      // mast:apBill:<tid>:<mastId>).
-      _firTriggerQboPush('apBill', billId);
-      showToast('Bill updated');
-    }
+    await _apSaveBillCore(billId, payload);
+    showToast(billId ? 'Bill updated' : 'Bill created');
     _finCloseModal();
     loadApData();
   } catch (err) {
@@ -4338,11 +4354,28 @@ window.finApSaveBill = async function(billId) {
   }
 };
 
+// State-free bill save core — payload is the validated, DB-shaped record
+// (amountCents/paidAmount in CENTS). Mints the id on create, fires the
+// best-effort QBO push on both paths. Returns the bill id.
+async function _apSaveBillCore(billId, payload) {
+  payload.updatedAt = payload.updatedAt || new Date().toISOString();
+  if (!billId) {
+    var id = 'b_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8);
+    payload.id = id; payload.createdAt = payload.updatedAt;
+    await MastDB.set('admin/purchaseReceipts/' + id, payload);
+    _firTriggerQboPush('apBill', id);
+    return id;
+  }
+  await MastDB.update('admin/purchaseReceipts/' + billId, payload);
+  _firTriggerQboPush('apBill', billId);
+  return billId;
+}
+
 window.finApDeleteBill = async function(billId) {
   if (!billId) return;
   if (!window.confirm('Delete this bill?')) return;
   try {
-    await MastDB.remove('admin/purchaseReceipts/' + billId);
+    await _apDeleteBillCore(billId);
     showToast('Bill deleted');
     _finCloseModal();
     loadApData();
@@ -8112,6 +8145,95 @@ async function _loadOpenItemsTotals() {
   return { arCents: arCents, arCount: arCount, apCents: apCents, apCount: apCount };
 }
 
+// Aging bucket from days-overdue — the shared AR/AP rule.
+function _agingBucket(daysOver) {
+  if (daysOver <= 0) return 'current';
+  if (daysOver <= 30) return '1_to_30';
+  if (daysOver <= 60) return '31_to_60';
+  if (daysOver <= 90) return '61_to_90';
+  return '90_plus';
+}
+function _daysOverdue(dueDate, asOf) {
+  if (!dueDate) return 0;
+  var dueMs = new Date(dueDate + 'T00:00:00Z').getTime();
+  var asOfMs = new Date(asOf + 'T00:00:00Z').getTime();
+  return Math.max(0, Math.floor((asOfMs - dueMs) / 86400000));
+}
+
+// State-free AR open-items loader — same field rules as loadArData (cents via
+// _orderRevenueCents, test-channel filter honored). Rows for the V2 queue.
+async function _arOpenItems() {
+  var asOf = todayStr();
+  var [sentRaw, overdueRaw] = await Promise.all([
+    MastDB.query('orders').orderByChild('invoiceStatus').equalTo('sent').limitToLast(500).once(),
+    MastDB.query('orders').orderByChild('invoiceStatus').equalTo('overdue').limitToLast(500).once()
+  ]);
+  var rows = [];
+  Object.entries(Object.assign({}, sentRaw || {}, overdueRaw || {})).forEach(function(kv) {
+    var orderId = kv[0], o = kv[1]; if (!o) return;
+    var totalCents = _orderRevenueCents(o);
+    var paidCents = o.invoicePaidAmount || 0;
+    var amtDue = totalCents - paidCents;
+    if (amtDue <= 0) return;
+    if (isTestOrder(o) && !_includeTestData) return;
+    var daysOver = _daysOverdue(o.invoiceDueDate, asOf);
+    rows.push({
+      orderId: orderId, invoiceNumber: o.invoiceNumber || null,
+      customerName: o.customerName || '', customerEmail: o.customerEmail || '',
+      customerId: o.customerId || null,
+      totalCents: totalCents, paidCents: paidCents, amtDue: amtDue,
+      dueDate: o.invoiceDueDate || null, daysOverdue: daysOver,
+      bucket: _agingBucket(o.invoiceDueDate ? daysOver : 0),
+      wholesale: !!(o.wholesaleAccountId || (typeof isWholesaleOrder === 'function' && isWholesaleOrder(o))),
+      invoiceStatus: o.invoiceStatus
+    });
+  });
+  rows.sort(function(a, b) { return b.daysOverdue - a.daysOverdue || b.amtDue - a.amtDue; });
+  return rows;
+}
+
+// State-free AP open-items loader — receipts with a balance due + vendor join.
+async function _apOpenItems() {
+  var asOf = todayStr();
+  var [unpaidRaw, partialRaw, vendorsRaw] = await Promise.all([
+    MastDB.query('admin/purchaseReceipts').orderByChild('paymentStatus').equalTo('unpaid').limitToLast(500).once(),
+    MastDB.query('admin/purchaseReceipts').orderByChild('paymentStatus').equalTo('partial').limitToLast(500).once(),
+    MastDB.get('admin/vendors').catch(function() { return {}; })
+  ]);
+  var vendors = vendorsRaw || {};
+  var rows = [];
+  Object.entries(Object.assign({}, unpaidRaw || {}, partialRaw || {})).forEach(function(kv) {
+    var receiptId = kv[0], r = kv[1]; if (!r) return;
+    var totalCents = r.amountCents || 0;
+    var paidCents = r.paidAmount || 0;
+    var amtDue = totalCents - paidCents;
+    if (amtDue <= 0) return;
+    var daysOver = _daysOverdue(r.dueDate, asOf);
+    var v = r.vendorId ? (vendors[r.vendorId] || null) : null;
+    rows.push({
+      receiptId: receiptId, vendorId: r.vendorId || null,
+      vendorName: (v && v.name) || r.vendorName || '(no vendor)',
+      vendorInvoiceRef: r.vendorInvoiceRef || null,
+      totalCents: totalCents, paidCents: paidCents, amtDue: amtDue,
+      dueDate: r.dueDate || null, receivedAt: r.receivedAt || null,
+      daysOverdue: daysOver, bucket: _agingBucket(r.dueDate ? daysOver : 0),
+      paymentStatus: r.paymentStatus, notes: r.notes || null, poId: r.poId || null
+    });
+  });
+  rows.sort(function(a, b) { return b.daysOverdue - a.daysOverdue || b.amtDue - a.amtDue; });
+  return { rows: rows, vendors: vendors };
+}
+
+// Delete cores — audited (writeAudit) so both classic and V2 paths log.
+async function _apDeleteBillCore(billId) {
+  await MastDB.remove('admin/purchaseReceipts/' + billId);
+  try { if (typeof writeAudit === 'function') await writeAudit('delete', 'apBill', billId); } catch (_) {}
+}
+async function _apDeleteVendorCore(vendorId) {
+  await MastDB.remove('admin/vendors/' + vendorId);
+  try { if (typeof writeAudit === 'function') await writeAudit('delete', 'vendor', vendorId); } catch (_) {}
+}
+
 window.FinanceBridge = {
   resolvePeriod: _finResolvePeriod,
   periodLabel: _finPeriodLabel,
@@ -8129,7 +8251,18 @@ window.FinanceBridge = {
   cashSnapshot: _computeCashSnapshot,
   taxByState: _computeTaxByState,
   openItemsTotals: _loadOpenItemsTotals,
-  downloadCsv: _finDownloadCsv
+  downloadCsv: _finDownloadCsv,
+  // Wave 2 — open-items hub cores:
+  arOpenItems: _arOpenItems,
+  apOpenItems: _apOpenItems,
+  arMarkPaid: _arMarkPaidCore,
+  arQueueReminder: _arQueueReminderCore,
+  apMarkPaid: _apMarkPaidCore,
+  apRecordPayment: _apRecordPaymentCore,
+  apSaveBill: _apSaveBillCore,
+  apSaveVendor: _apSaveVendorCore,
+  apDeleteBill: _apDeleteBillCore,
+  apDeleteVendor: _apDeleteVendorCore
 };
 
 // ── Module registration ───────────────────────────────────────────────────────
