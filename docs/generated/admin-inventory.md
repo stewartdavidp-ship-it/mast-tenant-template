@@ -6,7 +6,7 @@ Source-of-truth counts for the admin app, generated from the code so docs
 cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 
 - **Core shell:** `app/index.html` — **59,937** lines
-- **Feature modules:** **106** files in `app/modules/` (**96** routed), **116,538** lines combined
+- **Feature modules:** **106** files in `app/modules/` (**96** routed), **116,784** lines combined
 
 | Module file | Lines | Routes |
 |---|---:|---|
@@ -114,5 +114,5 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/workflows/procurement.workflow.js` | 111 | — |
 | `modules/workflows/products.workflow.js` | 165 | — |
 | `modules/workflows/return.workflow.js` | 151 | — |
-| `modules/workflows/workflow-engine.js` | 1,325 | — |
+| `modules/workflows/workflow-engine.js` | 1,571 | — |
 | `modules/workflows/workflow-template.workflow.js` | 186 | — |
