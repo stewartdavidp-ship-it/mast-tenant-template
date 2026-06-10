@@ -354,11 +354,16 @@
     var canEdit = can('edit');
     var rules = Object.values(V2.triggers);
     var rows = rules.length ? rules.map(function (t) {
+      // Triggers reference either a survey (legacy admin writes surveyId) or a
+      // question set directly (the MCP/CF path writes surveyGroupId) — resolve
+      // both so the rule never reads "→ —".
       var sv = V2.surveys[t.surveyId];
+      var grp = V2.groups[t.surveyGroupId];
+      var targetName = (sv && sv.name) || (grp && grp.name) || t.name || '—';
       var on = t.isActive !== false && t.enabled !== false;
       return '<div style="display:flex;align-items:center;gap:10px;padding:6px 0;font-size:0.85rem;border-bottom:1px solid var(--border,rgba(127,127,127,.12));">' +
         '<span style="flex:1;">' + esc(EVENT_LABELS[t.eventType] || t.eventType || '—') +
-          ' <span class="mu-sub">→ ' + esc((sv && sv.name) || t.surveyId || '—') + (t.delayHours ? ' · after ' + t.delayHours + 'h' : '') + '</span></span>' +
+          ' <span class="mu-sub">→ ' + esc(targetName) + (t.delayHours ? ' · after ' + t.delayHours + 'h' : '') + '</span></span>' +
         U.badge(on ? 'On' : 'Off', on ? 'success' : 'neutral') +
         (canEdit ? '<button class="btn btn-secondary btn-small" style="font-size:0.72rem;" onclick="CsSurveysV2.toggleTrigger(\'' + esc(t.id) + '\',' + (on ? 'false' : 'true') + ')">' + (on ? 'Turn off' : 'Turn on') + '</button>' : '') +
         '</div>';
