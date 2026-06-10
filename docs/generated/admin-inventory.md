@@ -5,16 +5,17 @@
 Source-of-truth counts for the admin app, generated from the code so docs
 cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 
-- **Core shell:** `app/index.html` — **59,975** lines
-- **Feature modules:** **108** files in `app/modules/` (**98** routed), **118,584** lines combined
+- **Core shell:** `app/index.html` — **59,981** lines
+- **Feature modules:** **110** files in `app/modules/` (**100** routed), **119,377** lines combined
 
 | Module file | Lines | Routes |
 |---|---:|---|
 | `modules/accounting.js` | 1,551 | — |
 | `modules/advisor.js` | 1,401 | advisor |
-| `modules/audit-feedback.js` | 816 | suppressions |
+| `modules/audit-feedback.js` | 849 | suppressions |
 | `modules/audit-suppressions-v2.js` | 223 | audit-suppressions-v2 |
-| `modules/audit.js` | 1,717 | audit |
+| `modules/audit-v2.js` | 357 | audit-v2 |
+| `modules/audit.js` | 1,721 | audit |
 | `modules/blog-v2.js` | 403 | blog-v2 |
 | `modules/blog.js` | 2,359 | blog |
 | `modules/book.js` | 6,073 | book, book-detail, enrollments, instructors, instructor-detail, resources, resource-detail, passes, pass-detail, calendar, book-reports |
@@ -68,7 +69,8 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/lots-v2.js` | 178 | lots-v2 |
 | `modules/loyalty-v2.js` | 347 | loyalty-v2 |
 | `modules/maker.js` | 7,600 | materials, products |
-| `modules/mapping.js` | 1,776 | mapping |
+| `modules/mapping-v2.js` | 366 | mapping-v2 |
+| `modules/mapping.js` | 1,809 | mapping |
 | `modules/marketing-calendar-v2.js` | 208 | marketing-calendar-v2 |
 | `modules/marketing-calendar.js` | 270 | marketing-calendar |
 | `modules/materials-v2.js` | 337 | materials-v2 |

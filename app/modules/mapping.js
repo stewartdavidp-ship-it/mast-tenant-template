@@ -1633,23 +1633,7 @@
         } else if (action === 'unlink') {
           var mid = el.getAttribute('data-map-id');
           if (!mid) return;
-          // WS2: route unlink through deleteListingMapping (tears down the Drive
-          // projection — binding + reverse index — before removing the identity
-          // row) instead of a raw MastDB.remove that would strand a binding the
-          // oversell Drive keeps pushing to. mid is `${channel}_${externalId}`;
-          // channel never contains '_', externalId may, so split on the FIRST '_'.
-          var us = mid.indexOf('_');
-          var unlinkPromise;
-          if (window.firebase && firebase.functions && us > 0) {
-            unlinkPromise = firebase.functions().httpsCallable('deleteListingMapping')({
-              tenantId: window.TENANT_ID || (window.MastDB && MastDB.tenantId && MastDB.tenantId()),
-              channel: mid.slice(0, us),
-              externalId: mid.slice(us + 1)
-            });
-          } else {
-            unlinkPromise = window.MastDB.remove('product_listing_map/' + mid);
-          }
-          unlinkPromise.then(function() {
+          unlinkMappingById(mid).then(function() {
             delete mappedListingIds[mid];
             existingMaps = existingMaps.filter(function(m) { return m.id !== mid; });
             renderReentryView();
@@ -1741,6 +1725,55 @@
       }
     });
   }
+
+  // WS2: route unlink through deleteListingMapping (tears down the Drive
+  // projection — binding + reverse index — before removing the identity
+  // row) instead of a raw MastDB.remove that would strand a binding the
+  // oversell Drive keeps pushing to. mid is `${channel}_${externalId}`;
+  // channel never contains '_', externalId may, so split on the FIRST '_'.
+  // Shared by the legacy re-entry view and MappingBridge (mapping-v2).
+  function unlinkMappingById(mid) {
+    var us = mid.indexOf('_');
+    if (window.firebase && firebase.functions && us > 0) {
+      return firebase.functions().httpsCallable('deleteListingMapping')({
+        tenantId: window.TENANT_ID || (window.MastDB && MastDB.tenantId && MastDB.tenantId()),
+        channel: mid.slice(0, us),
+        externalId: mid.slice(us + 1)
+      });
+    }
+    return window.MastDB.remove('product_listing_map/' + mid);
+  }
+
+  // ============================================================
+  // V2 bridge — state-free core shared with mapping-v2 (playbook §4:
+  // the twin never re-implements a write). All writes are the SAME paths
+  // legacy uses: persistMapping → confirmListingMapping CF,
+  // unlinkMappingById → deleteListingMapping CF, ignore/restore → the
+  // closed-enum channel_listings field writes.
+  // ============================================================
+  window.MappingBridge = {
+    IGNORE_REASONS: IGNORE_REASON_ENUM,
+    isValidIgnoredReason: isValidIgnoredReason,
+    // listing: the channel_listings row ({ id, _channel, _externalId, … }).
+    confirmMapping: function(productId, listing) {
+      return persistMapping(productId, listing, 'user-confirmed');
+    },
+    // mapId = `${channel}_${externalId}` (product_listing_map doc id).
+    unlinkMapping: unlinkMappingById,
+    setListingIgnored: function(listingId, reasonEnum) {
+      if (!isValidIgnoredReason(reasonEnum)) {
+        return Promise.reject(new Error('invalid ignore reason: ' + reasonEnum));
+      }
+      return window.MastDB.update('channel_listings/' + listingId, {
+        _ignored: true, _ignoredReason: reasonEnum, _ignoredSetBy: 'tenant'
+      });
+    },
+    restoreListing: function(listingId) {
+      return window.MastDB.update('channel_listings/' + listingId, {
+        _ignored: false, _ignoredReason: null, _ignoredSetBy: null
+      });
+    }
+  };
 
   // Public API — consumed by index.html boot trigger and channels.js
   // post-connect handler.
