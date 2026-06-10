@@ -1,9 +1,9 @@
 # V2 Module-Conversion Playbook
 
-**Status:** Canonical process, distilled from the Sales conversion (2026-06-10, PRs #360–#378)
-and amended after the Marketing conversion (2026-06-10, PRs #380–#384). Run this end-to-end
-for each remaining section (Site, Retention, Shows, Bookings, Finance, Operations,
-Customer Service, Admin). Worked examples: `sales-v2-build-plan.md` /
+**Status:** Canonical process, distilled from the Sales conversion (2026-06-10, PRs #360–#378),
+amended after the Marketing conversion (2026-06-10, PRs #380–#384) and the Operations
+conversion (2026-06-10, PRs #387–#396). Run this end-to-end for each remaining section
+(Site, Retention, Shows, Bookings, Finance, Customer Service, Admin). Worked examples: `sales-v2-build-plan.md` /
 `marketing-v2-build-plan.md` (plan shape) and `standard-record-ui.md` §10 (the four archetypes).
 
 ## 0 · Ground rules
@@ -31,6 +31,12 @@ Customer Service, Admin). Worked examples: `sales-v2-build-plan.md` /
   deletes are fine on sgtest15 (standing authorization; self-confirm MCP tokens) but report them.
 
 ## 1 · Recon (Explore agent, very thorough)
+
+**Verify the recon's surface characterizations before scheduling builds.** The Operations
+recon called the `business` view "a thin inline form"; the live surface was a modern
+10-section entity-profile hub — rebuilding it would have been churn. A surface that is
+already modern joins the non-goals; record the amendment in the plan doc (plans are
+amendable, silently re-planning is not).
 
 Map: sidebar items ↔ `MODE_ROUTE_VISIBILITY` ↔ `app/data/mode-module-info.js` (find orphans —
 Sales had `commission-terms` in the sidebar but not the registry); each sub-item's V1 file, size,
@@ -127,6 +133,13 @@ the skeleton and wires `MODULE_MANIFEST` + tab div + `MAST_V2_ROUTE_MAP`. Then:
 | Accessor path order (`market/posts/{uid}` not `market/{uid}/posts`) | Wrong order writes phantom docs that report success — check `rewrite-entities.js` |
 | Stale MCP bearer tokens | Self-confirm with an `initialize` curl; fallback = operator's Chrome + in-page MastDB; re-mint is operator-only |
 | Sign-in screen right after `location.reload()` | Auth-state restore lags — wait and re-check before reacting |
+| Stale bundle on dev after merge | Check `gh run list --branch main` FIRST — the Deploy workflow can be broken repo-wide (stale `MAST_PLATFORM_API_KEY` secret → MCP 401). Fallback: invoke `mast_hosting` deploy at the merged SHA via the platform MCP (the same call CI makes); rotating the CI secret is operator-only |
+| `gh` "not logged into any hosts" (hosts.yml wiped to `{}`) | NOT the transient 401 — source the token from git's keychain helper: `GH_TOKEN=$(printf 'protocol=https\nhost=github.com\n\n' \| git credential fill \| awk -F= '/^password=/{print $2}')` |
+| Two `type:'status'` fields on one entity | `MastEntity.define` throws → the whole module dies and the tab renders BLANK. One badge per entity; the other becomes a text label |
+| `type:'number'` list field whose `get()` returns a formatted string | `displayCell` runs `Num.count()` → EMPTY cell. Formatted display strings are `type:'text'` + `align:'right'`; `number` is for raw numerics only |
+| Method literally named `confirm(` | Trips the nativeDialogs UX lint — name action handlers `confirmMatch` etc. |
+| `required:true` + custom `editRender` | Engine `onSave` collects only `input[name]` before `validate()` — id-only inputs leave the record empty and CREATE always fails its required check (contacts-v2 create was dead since its conversion). Give required inputs a `name=` attribute |
+| Cold `MastEntity.drill` into a queue module | A bare-doc `fetch()` fallback renders the SO without sibling state (maps/products) — wrong bucket, empty pickers. `fetch()` must gate on a run-once `ensureLoaded()` when the SO render reads module collections |
 
 ## 8 · Helper scripts
 
