@@ -197,7 +197,9 @@
       var view = urlLive(r) ? '<a class="btn btn-secondary" style="font-size:0.78rem;padding:4px 10px;margin-right:6px;" href="' + esc(r.generatedUrl) + '" target="_blank" rel="noopener" onclick="event.stopPropagation();">View ↗</a>' : '';
       return view + '<button class="btn btn-primary" ' + (busy ? 'disabled ' : '') +
         'style="font-size:0.78rem;padding:4px 10px;white-space:nowrap;" ' +
-        'onclick="event.stopPropagation();LookbooksV2.generate(\'' + esc(r._key) + '\')">' + label + '</button>';
+        'onclick="event.stopPropagation();LookbooksV2.generate(\'' + esc(r._key) + '\')">' + label + '</button>' +
+        ' <a href="#" onclick="event.preventDefault();event.stopPropagation();LookbooksV2.remove(\'' + esc(r._key) + '\')" ' +
+        'style="color:var(--warm-gray);font-size:0.78rem;text-decoration:underline;margin-left:6px;">delete</a>';
     } });
     return cols;
   }
@@ -219,11 +221,8 @@
       return;
     }
     tab.innerHTML =
-      '<div style="display:flex;align-items:baseline;gap:12px;margin-bottom:6px;">' +
-        '<h1 style="font-size:1.6rem;margin:0;">Look Books</h1>' +
-        '<span style="color:var(--warm-gray);font-size:0.9rem;">' + U.Num.count(V2.rows.length) + ' documents</span>' +
-        (canEdit() ? '<button class="btn btn-primary" style="margin-left:auto;" onclick="LookbooksV2.newDoc()">+ New line sheet</button>' : '') +
-      '</div>' +
+      U.pageHeader({ title: 'Look Books', count: U.Num.count(V2.rows.length) + ' documents',
+        actionsHtml: (canEdit() ? '<button class="btn btn-primary" onclick="LookbooksV2.newDoc()">+ New line sheet</button>' : '') }) +
       '<div style="margin:14px 0;"></div>' +
       window.MastEntity.renderList('lookbooks-v2', {
         columns: columns(),
@@ -291,6 +290,38 @@
           if (window.showToast) showToast('Failed to generate PDF: ' + (e && e.message || e), true);
           done();
         });
+    },
+    // Delete with the legacy PDF cascade (storage orphan = wholesale-pricing
+    // data-leak hazard — see consignment of lookbooks.js deleteDocument).
+    remove: function (id) {
+      if (typeof window.can === 'function' && !window.can('lookbooks', 'delete') && !window.can('lookbooks', 'edit')) {
+        if (window.showToast) showToast('You do not have permission to delete look books.', true);
+        return;
+      }
+      var row = V2.byId[id]; if (!row) return;
+      var msg = 'Delete "' + (row.title || 'this document') + '"?' + (row.generatedUrl ? ' Its public PDF link will stop working.' : '') + ' This cannot be undone.';
+      Promise.resolve(typeof mastConfirm === 'function' ? mastConfirm(msg, { title: 'Delete document', danger: true, confirmLabel: 'Delete' }) : true).then(function (ok) {
+        if (!ok) return;
+        var cascade = Promise.resolve();
+        try {
+          if (typeof storage !== 'undefined' && storage && MastDB.storagePath) {
+            cascade = Promise.resolve(storage.ref(MastDB.storagePath('lookbooks/' + id + '.pdf')).delete()).catch(function (err) {
+              var notFound = err && (err.code === 'storage/object-not-found' || /not.?found/i.test(err.message || ''));
+              if (!notFound) console.warn('[lookbooks-v2] PDF cascade-delete failed:', err);
+            });
+          }
+        } catch (e) {}
+        cascade.then(function () { return MastDB.lookbooks.remove(id); }).then(function () {
+          if (window.writeAudit) writeAudit('delete', 'lookbook', id);
+          if (window.showToast) showToast('Document deleted.');
+          V2.rows = V2.rows.filter(function (r) { return r._key !== id; });
+          delete V2.byId[id];
+          render();
+        }).catch(function (e) {
+          console.error('[lookbooks-v2] delete', e);
+          if (window.showToast) showToast('Delete failed: ' + (e && e.message || e), true);
+        });
+      });
     },
     classic: function () { if (window.navigateToClassic) navigateToClassic('lookbooks'); },
     refresh: render

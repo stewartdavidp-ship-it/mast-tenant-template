@@ -143,13 +143,10 @@
     }).join('');
 
     tab.innerHTML =
-      '<div style="display:flex;align-items:baseline;gap:12px;margin-bottom:6px;">' +
-        '<h1 style="font-size:1.6rem;margin:0;">Fulfillment</h1>' +
-        '<span style="color:var(--warm-gray);font-size:0.9rem;">' + window.MastUI.Num.count(V2.rows.length) + ' in the pipeline</span>' +
+      window.MastUI.pageHeader({ title: 'Fulfillment', count: window.MastUI.Num.count(V2.rows.length) + ' in the pipeline',
         // Tracked temp-link (debt): native label purchase is the queue's P3.
-        '<button class="btn btn-secondary" style="margin-left:auto;" onclick="FulfillV2.classicLabels()">Buy labels (classic) ↗</button>' +
-        '<button class="btn btn-secondary" onclick="FulfillV2.exportCsv()">↓ Export</button>' +
-      '</div>' +
+        actionsHtml: '<button class="btn btn-secondary" onclick="FulfillV2.classicLabels()">Buy labels (classic) ↗</button>' +
+          '<button class="btn btn-secondary" onclick="FulfillV2.exportCsv()">↓ Export</button>' }) +
       '<div style="margin:14px 0;">' + pills + '</div>' +
       window.MastEntity.renderList('orders-v2', {
         columns: columns(),

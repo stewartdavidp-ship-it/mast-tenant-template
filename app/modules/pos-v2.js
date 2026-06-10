@@ -116,12 +116,9 @@
     }).join('');
 
     tab.innerHTML =
-      '<div style="display:flex;align-items:baseline;gap:12px;margin-bottom:6px;">' +
-        '<h1 style="font-size:1.6rem;margin:0;">Sales Ledger</h1>' +
-        '<span style="color:var(--warm-gray);font-size:0.9rem;">in-person & seller-entered sales</span>' +
-        '<button class="btn btn-primary" style="margin-left:auto;" onclick="PosV2.openCheckout()">Open POS checkout ↗</button>' +
-        '<button class="btn btn-secondary" onclick="PosV2.exportCsv()">↓ Export</button>' +
-      '</div>' +
+      U.pageHeader({ title: 'Sales Ledger', subtitle: 'in-person & seller-entered sales',
+        actionsHtml: '<button class="btn btn-primary" onclick="PosV2.openCheckout()">Open POS checkout ↗</button>' +
+          '<button class="btn btn-secondary" onclick="PosV2.exportCsv()">↓ Export</button>' }) +
       U.tiles([
         { k: (V2.range === 'today' ? 'Today' : V2.range === 'week' ? 'Last 7 days' : 'All time'), v: U.Num.money(sum), hero: true },
         { k: 'Sales shown', v: U.Num.count(rows.length) },
