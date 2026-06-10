@@ -31,6 +31,34 @@ PRs #399–#405 — the first CONSOLIDATION round: 12 routes → 3 hub modules +
   `source:'test'` — use the tenant router's create tools with explicit source instead). Hard
   deletes are fine on sgtest15 (standing authorization; self-confirm MCP tokens) but report them.
 
+## 0b · Finance-round retro (2026-06-10, PRs #399–#411) — process lessons
+
+**What worked (keep doing):** consolidation-first recon (12 routes → 3 hubs via the
+Pack+Ship mechanism — plan for hub objects, not 1:1 twins); the bridge-extraction
+rhythm (FinanceBridge made every wave a re-skin and gave the walk real CRUD);
+verifying recon characterizations before scheduling (caught financials.js as dead
+code — would have been a wasted conversion); scrubbing/seeding BEFORE building (the
+walk then performed REAL CF writes — closing April live is what exposed the broken
+approveAmendment CF); spawn_task for cross-repo fixes (the CF fix ran as a parallel
+session; THIS session live-verified it through the operator's browser).
+
+**What cost cycles (the §1/§5 amendments below):**
+1. Built and walked an entire hub (close) that NO tenant could see — the recon's
+   orphan check verified registry/visibility tables existed but never asked "is this
+   route actually visible in a live sidebar?" (fixed by #410; rule added to §1).
+2. Per-wave verify burned ~4 cycles on stale bundles before the SW recipe settled;
+   the missing first step was confirming what the WORKER serves before touching the
+   browser (rule added to §5).
+3. A walk false-alarm: driving the walk via JS, a `Save`-button query matched a
+   hidden legacy button and the vendor CREATE looked dead — a contacts-v2-shaped
+   scare that was actually automation error (rule added to §5).
+4. The light-mode check was skipped for most of the round on the strength of a
+   misleading code comment — already amended in §5; the meta-lesson: UI affordances
+   (the avatar menu) outrank code comments as evidence.
+5. The detail.render signature bug shipped to dev before being caught — the §9
+   smoke-load ticket has now been earned twice (audit-v2 define-throw, finance bill
+   SO); it should be the next engine-hardening investment.
+
 ## 1 · Recon (Explore agent, very thorough)
 
 **Verify the recon's surface characterizations before scheduling builds.** The Operations
@@ -43,6 +71,15 @@ Map: sidebar items ↔ `MODE_ROUTE_VISIBILITY` ↔ `app/data/mode-module-info.js
 Sales had `commission-terms` in the sidebar but not the registry); each sub-item's V1 file, size,
 data sources (MastDB accessors + Firestore paths), CF dependencies; which V2 twins already exist
 (`MODULE_MANIFEST`) and whether they meet the standard.
+
+**Check LIVE sidebar visibility per route, not just table presence.** A route with no
+`MODE_ROUTE_VISIBILITY` entry is soft-hidden for EVERY tenant (`isRouteVisible`:
+unknown → hidden) — the Finance round built, demoed, and walked the whole close hub
+against a sidebar entry no tenant could see, because hash navigation bypasses the
+sidebar and the recon recorded the missing registry entry as "intentional." Treat
+"intentionally absent" claims as findings to verify in a live sidebar
+(`offsetParent !== null`), and schedule the registry entry as Wave-0 work if the
+surface is getting a V2 home (Finance fix: #410).
 
 ## 2 · Plan doc PR
 
@@ -98,10 +135,19 @@ the skeleton and wires `MODULE_MANIFEST` + tab div + `MAST_V2_ROUTE_MAP`. Then:
 ## 5 · Verify every deployed wave (browser, sgtest15)
 
 - **The PWA service worker masks fresh deploys** — `location.reload()` after a merge is
-  NOT enough on sgtest15. Per-wave verify recipe: unregister all service workers + clear
-  CacheStorage, reload, and expect ONE messy mixed-cache boot (old module JS + new
-  index.html → spurious applyRoute/tab-null console errors) before the next clean boot.
-  Don't diagnose your module from that first boot's console.
+  NOT enough on sgtest15. Per-wave verify recipe: FIRST confirm what the worker serves
+  (`curl -s https://<tenant>.runmast.com/app?cb=$(date +%s) | grep MAST_MODULES_V` —
+  if the edge is stale, no browser dance helps); then unregister all service workers +
+  clear CacheStorage, reload, and expect ONE messy mixed-cache boot (old module JS +
+  new index.html → spurious applyRoute/tab-null console errors) before the next clean
+  boot. Don't diagnose your module from that first boot's console.
+- **Walk automation: scope clicks to the slide-out and to VISIBLE elements.** A
+  `document.querySelectorAll('button')` text-match for "Save" can hit a hidden legacy
+  button in another tab's DOM — the create then silently doesn't happen and reads
+  exactly like the contacts-v2 dead-CREATE bug (Finance round lost a cycle to this
+  false alarm, including a stray test record to clean up). Query within
+  `#mastSlideOut`, filter `offsetParent !== null`, and note the SO's primary button is
+  labeled **Create** in create mode, not Save.
 
 - **Check Deploy-workflow health at session start** (`gh run list --branch main --limit 3`)
   — a repo-wide CI failure (Operations round: stale `MAST_PLATFORM_API_KEY` secret) silently
