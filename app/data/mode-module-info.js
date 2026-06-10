@@ -1177,7 +1177,7 @@
     'commission-terms': {
       label: 'Commission Terms', section: 'sales',
       tagline: 'Versioned terms for custom-order work.',
-      outcome: "Publish the terms customers agree to when commissioning custom work — versioned, so every order points at the exact terms it was accepted under.",
+      outcome: "Publish the terms customers accept when commissioning work — versioned, so each order points at the exact terms agreed.",
       goodFitWhen: "you take commissions or custom orders and want the agreement in writing.",
       notAFitWhen: "you only sell ready-made inventory.",
       automates: ["Re-attaching the latest terms to every quote", "Wondering which terms an old commission agreed to"],

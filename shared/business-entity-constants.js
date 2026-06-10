@@ -684,6 +684,7 @@
     'pos':                { modes: ['standard', 'retail', 'bookings', 'maker'], overlays: ['event'] },
     'orders':             { modes: ['standard', 'retail', 'maker'] },
     'commissions':        { modes: ['bookings', 'maker'] },  // "Custom Orders" in matrix
+    'commission-terms':   { modes: ['bookings', 'maker'] },  // versioned custom-order terms; follows 'commissions'
     'rma':                { modes: ['retail', 'maker'] },    // "Returns" in matrix
     'wholesale':          { modes: ['maker'] },
     'galleries':          { modes: ['maker'] },
