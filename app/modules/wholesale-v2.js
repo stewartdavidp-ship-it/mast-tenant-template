@@ -84,7 +84,13 @@
       { name: 'typeTerritory', label: 'Type / territory', type: 'text', list: true, readOnly: true, sortable: false, get: typeTerritory },
       { name: 'creditLimit', label: 'Credit limit', type: 'money', list: true, readOnly: true, align: 'right',
         get: function (a) { return N.moneyVal(a, 'creditLimitCents', null); } },
-      { name: 'lastOrderAt', label: 'Last order', type: 'date', list: true, readOnly: true, get: function (a) { return a.lastOrderAt || null; } },
+      // Order rollups (computed from this account's wholesale orders at load).
+      { name: 'ordersCount', label: 'Orders', type: 'number', list: true, readOnly: true, align: 'right',
+        get: function (a) { return statsOf(a._key || a.id).count; } },
+      { name: 'lifetime', label: 'Lifetime', type: 'money', list: true, readOnly: true, align: 'right',
+        get: function (a) { return statsOf(a._key || a.id).lifetime || null; } },
+      { name: 'lastOrderAt', label: 'Last order', type: 'date', list: true, readOnly: true,
+        get: function (a) { var s = statsOf(a._key || a.id); return s.lastOrderAt ? new Date(s.lastOrderAt).toISOString() : (a.lastOrderAt || null); } },
       { name: 'status', label: 'Status', type: 'status', list: true, readOnly: true,
         options: ['active', 'on_hold', 'closed'],
         get: function (a) { return a.status || 'active'; },
@@ -93,14 +99,18 @@
     fetch: function (id) { return Promise.resolve(V2.byId[id] || null); },
     detail: {
       render: function (UI, a) {
+        var aid = a._key || a.id;
+        var s = statsOf(aid);
         var tiles = UI.tiles([
-          { k: 'Credit limit', v: (N.money(N.moneyVal(a, 'creditLimitCents', null)) || '—'), hero: true },
-          { k: 'Net terms', v: esc(netLabel(a)) },
-          { k: 'Account type', v: esc(typeLabel(a) || '—') },
-          { k: 'Last order', v: a.lastOrderAt ? N.date(a.lastOrderAt) : '—' }
+          { k: 'Lifetime value', v: (N.money(s.lifetime) || '$0.00'), hero: true },
+          { k: '12-month', v: N.money(s.ltv12) || '$0.00' },
+          { k: 'Orders', v: s.count + (s.count && s.lastOrderAt ? ' · last ' + N.date(new Date(s.lastOrderAt).toISOString()) : '') },
+          { k: 'Open AR', v: s.openCount ? (N.money(s.openAr) + ' · ' + s.openCount + (s.overdueCount ? ' (' + s.overdueCount + ' overdue)' : '')) : 'None' },
+          { k: 'Credit limit', v: N.money(N.moneyVal(a, 'creditLimitCents', null)) || '—' }
         ]);
         var tabsBar = UI.paneTabsBar([
-          { key: 'ov', label: 'Overview' }, { key: 'contacts', label: 'Contacts' }, { key: 'notes', label: 'Notes' }
+          { key: 'ov', label: 'Overview' }, { key: 'orders', label: 'Orders (' + s.count + ')' },
+          { key: 'contacts', label: 'Contacts' }, { key: 'notes', label: 'Notes' }
         ], 'ov');
 
         // Overview — account + terms + credit + tax/resale.
@@ -144,8 +154,30 @@
               '<div style="font-size:0.85rem;color:var(--warm-gray);line-height:1.5;white-space:pre-wrap;">' + esc(a.repNotes) + '</div>' : '')
           : '<span class="mu-sub">No notes.</span>';
 
+        // Orders — this account's wholesale orders (newest first), with the
+        // open-invoice state inline; reconcile chip surfaces unlinked orders
+        // whose buyer email matches this account's authorized users.
+        var acctOrders = V2.ordersByAccount[aid] || [];
+        var ordersBody = acctOrders.length ? UI.relatedTable([
+          { label: 'Order', render: function (o) { return '<span style="font-family:ui-monospace,monospace;">' + esc(o.orderNumber || (o._key || '').slice(0, 8)) + '</span>'; } },
+          { label: 'Placed', render: function (o) { var ms = orderTime(o); return ms ? N.date(new Date(ms).toISOString()) : '—'; } },
+          { label: 'Status', render: function (o) { return UI.badge(String(o.status || '—').replace(/_/g, ' '), o.paidAt ? 'success' : 'amber'); } },
+          { label: 'Invoice', render: function (o) {
+              if (o.paidAt) return UI.badge('Paid', 'success');
+              var st = (o.invoice && o.invoice.status) || (o.status === 'pending_check_verification' ? 'check pending' : 'unpaid');
+              return UI.badge(st, st === 'overdue' ? 'danger' : 'amber');
+            } },
+          { label: 'Total', align: 'right', render: function (o) { return N.money(_wsOrderTotal(o)) || '—'; } }
+        ], acctOrders) : '<span class="mu-sub">No orders yet from this account.</span>';
+        var rec = reconcileCount(aid);
+        var reconcileChip = rec ? '<div style="margin-top:10px;"><span style="font-size:0.78rem;font-weight:600;padding:4px 12px;border-radius:10px;background:color-mix(in srgb,var(--amber) 15%,transparent);color:var(--amber);border:1px solid color-mix(in srgb,var(--amber) 40%,transparent);">' +
+          rec + ' unlinked order' + (rec === 1 ? '' : 's') + ' match this account\'s buyers</span> ' +
+          '<a href="#" onclick="WholesaleV2.classic();return false;" style="font-size:0.78rem;color:var(--teal);text-decoration:underline;margin-left:8px;">reconcile in classic</a></div>' : '';
+        var ordersManage = '<div style="margin-top:12px;"><button class="btn btn-secondary" onclick="WholesaleV2.classic()">Order detail / AR aging in classic view →</button></div>';
+
         return tiles + tabsBar +
           '<div class="mu-pane" data-pane="ov">' + UI.card('Account', account) + UI.card('Terms & credit', terms) + UI.card('Tax & resale', taxResale + manage) + '</div>' +
+          '<div class="mu-pane" data-pane="orders" hidden>' + UI.cardTable('Orders (' + acctOrders.length + ')', ordersBody + reconcileChip + ordersManage) + '</div>' +
           '<div class="mu-pane" data-pane="contacts" hidden>' + UI.cardTable('Contacts (' + contacts.length + ')', contactsBody) + '</div>' +
           '<div class="mu-pane" data-pane="notes" hidden>' + UI.card('Notes', notesBody) + '</div>';
       },
@@ -233,20 +265,91 @@
   });
 
   // ── module state + data ─────────────────────────────────────────────
-  var V2 = { rows: [], byId: {}, sortKey: 'name', sortDir: 'asc', q: '', statusFilter: 'all', loaded: false };
+  var V2 = { rows: [], byId: {}, sortKey: 'name', sortDir: 'asc', q: '', statusFilter: 'all', loaded: false,
+    ordersByAccount: {}, authorizedEmails: {} };
+
+  // Per-account order rollup (W2.9 parity with the legacy account detail):
+  // lifetime + 12-month LTV, order count, open AR (unpaid), last order.
+  function _wsOrderTotal(o) {
+    if (typeof o.total === 'number') return o.total;
+    if (typeof o.totalCents === 'number') return o.totalCents / 100;
+    return 0;
+  }
+  function orderTime(o) {
+    var t = o.placedAt || o.createdAt;
+    return t ? (typeof t === 'number' ? t : new Date(t).getTime()) : 0;
+  }
+  function statsOf(accountId) {
+    var orders = V2.ordersByAccount[accountId] || [];
+    var oneYearAgo = Date.now() - 365 * 86400000;
+    var s = { count: orders.length, lifetime: 0, ltv12: 0, openAr: 0, openCount: 0, overdueCount: 0, lastOrderAt: null };
+    orders.forEach(function (o) {
+      var t = _wsOrderTotal(o);
+      s.lifetime += t;
+      var ms = orderTime(o);
+      if (ms >= oneYearAgo) s.ltv12 += t;
+      if (ms && (!s.lastOrderAt || ms > s.lastOrderAt)) s.lastOrderAt = ms;
+      if (!o.paidAt && String(o.status || '') !== 'cancelled') {
+        s.openAr += t; s.openCount++;
+        if (o.invoice && o.invoice.status === 'overdue') s.overdueCount++;
+      }
+    });
+    return s;
+  }
+  // Reconcile candidates: unlinked orders whose buyer email matches one of this
+  // account's authorized users (same best-effort rule as the legacy detail).
+  function reconcileCount(accountId) {
+    var emails = V2.authorizedEmails[accountId];
+    if (!emails) return 0;
+    var n = 0;
+    (V2.ordersByAccount.__unlinked || []).forEach(function (o) {
+      var em = (o.buyerEmail || o.email || '').toLowerCase();
+      if (em && emails[em]) n++;
+    });
+    return n;
+  }
 
   function load() {
     // Ensure the legacy wholesale module is loaded so window.WholesaleBridge
     // (the delegated write path) exists — mirrors contacts-v2.
     if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('wholesale'); } catch (e) {} }
-    Promise.resolve(MastDB.wholesaleAccounts.list(500)).then(function (snap) {
+    Promise.all([
+      MastDB.wholesaleAccounts.list(500),
+      // Same source as legacy #wholesale: wholesale orders live at admin/orders
+      // (type=wholesale), linked via o.wholesaleAccountId.
+      MastDB.query('admin/orders').orderByChild('type').equalTo('wholesale').limitToLast(500).once('value'),
+      Promise.resolve(MastDB.get('admin/wholesaleAuthorized')).catch(function () { return null; })
+    ]).then(function (results) {
+      var snap = results[0];
       var val = (snap && typeof snap.val === 'function') ? snap.val() : snap;
+      var ordersVal = (results[1] && typeof results[1].val === 'function') ? results[1].val() : results[1];
       var out = [];
       Object.keys(val || {}).forEach(function (k) {
         var a = val[k];
         if (a && typeof a === 'object') { a = Object.assign({ _key: k }, a); a.status = a.status || 'active'; out.push(a); }
       });
       V2.rows = out; V2.byId = {}; out.forEach(function (r) { V2.byId[r._key] = r; });
+      // Index orders by account (plus the unlinked pool for the reconcile chip).
+      var byAcct = { __unlinked: [] };
+      Object.keys(ordersVal || {}).forEach(function (k) {
+        var o = ordersVal[k]; if (!o || typeof o !== 'object') return;
+        o = Object.assign({ _key: k }, o);
+        if (o.wholesaleAccountId && o.wholesaleAccountId !== 'direct_retail') {
+          (byAcct[o.wholesaleAccountId] = byAcct[o.wholesaleAccountId] || []).push(o);
+        } else if (!o.wholesaleAccountId) byAcct.__unlinked.push(o);
+      });
+      Object.keys(byAcct).forEach(function (k) { if (k !== '__unlinked') byAcct[k].sort(function (a, b) { return orderTime(b) - orderTime(a); }); });
+      V2.ordersByAccount = byAcct;
+      // Authorized-user emails per account (reconcile rule).
+      var auth = results[2] || {};
+      var emails = {};
+      Object.keys(auth || {}).forEach(function (k) {
+        var u = auth[k];
+        if (u && u.wholesaleAccountId && u.email) {
+          (emails[u.wholesaleAccountId] = emails[u.wholesaleAccountId] || {})[String(u.email).toLowerCase()] = true;
+        }
+      });
+      V2.authorizedEmails = emails;
       V2.loaded = true; render();
     }).catch(function (e) { console.error('[wholesale-v2] load', e); render(); });
   }
