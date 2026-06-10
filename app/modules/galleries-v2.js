@@ -131,6 +131,26 @@
     }, 0);
   }
 
+  // Per-placement payout breakdown for the Payouts pane: earned / settled / due
+  // plus the flattened settlement history (newest first).
+  function payoutBreakdown(g) {
+    var rows = [], history = [];
+    placementsForGallery(g).forEach(function (p) {
+      var t = placementTotals(p);
+      var settlements = (p.settlements && typeof p.settlements === 'object') ? p.settlements : {};
+      var paid = 0;
+      Object.keys(settlements).forEach(function (k) {
+        var st = settlements[k] || {};
+        var amt = (Number(st.amountReceivedCents) || 0) / 100;
+        paid += amt;
+        history.push({ placement: p, at: st.settledAt || st.createdAt || st.date || null, amount: amt, note: st.note || st.method || '' });
+      });
+      rows.push({ p: p, earned: t.makerEarnings || 0, settled: paid, due: Math.max(0, (t.makerEarnings || 0) - paid) });
+    });
+    history.sort(function (a, b) { return new Date(b.at || 0) - new Date(a.at || 0); });
+    return { rows: rows, history: history };
+  }
+
   // ── schema (read-only Faceted Record) ───────────────────────────────
   MastEntity.define('galleries-v2', {
     label: 'Gallery', labelPlural: 'Galleries', size: 'lg',
@@ -166,7 +186,8 @@
           { k: 'Status', v: UI.badge(galleryStatus(g) === 'active' ? 'Active' : 'Dormant', STATUS_TONE[galleryStatus(g)] || 'neutral') }
         ]);
         var tabsBar = UI.paneTabsBar([
-          { key: 'ov', label: 'Overview' }, { key: 'pieces', label: 'Pieces' },
+          { key: 'ov', label: 'Overview' }, { key: 'pieces', label: 'Placements (' + allPlacements.length + ')' },
+          { key: 'payouts', label: 'Payouts' },
           { key: 'contacts', label: 'Contacts' }, { key: 'notes', label: 'Notes' }
         ], 'ov');
 
@@ -210,8 +231,15 @@
           { label: 'Status', render: function (r) { return UI.badge(r.status, r.status === 'active' ? 'success' : 'neutral'); } },
           { label: 'Pieces', align: 'right', render: function (r) { return N.count(r.placed) || '0'; } },
           { label: 'Sold', align: 'right', render: function (r) { return N.money(r.sold) || '$0.00'; } },
-          { label: 'Maker earns', align: 'right', render: function (r) { return N.money(r.owed) || '$0.00'; } }
-        ], pieceRows) : '<span class="mu-sub">No consigned pieces — record a placement in the classic Galleries view.</span>';
+          { label: 'Maker earns', align: 'right', render: function (r) { return N.money(r.owed) || '$0.00'; } },
+          // Name-matched legacy placements (no galleryId FK): one audited click
+          // stamps the FK and retires the string match (ratified hub plan).
+          { label: '', render: function (r) {
+              if (r.p.galleryId) return '';
+              return '<button type="button" class="mu-link" title="This placement is matched by name only — stamp the gallery link (audited)" ' +
+                'onclick="event.stopPropagation();GalleriesV2.linkPlacement(\'' + esc(g._key) + '\',\'' + esc(r.p._key || '') + '\')">link ⚭</button>';
+            } }
+        ], pieceRows) : '<span class="mu-sub">No placements yet — add one below.</span>';
 
         // Contacts — all contacts on file.
         var contactsBody = contacts.length ? UI.relatedTable([
@@ -225,10 +253,37 @@
           ? '<div style="font-size:0.85rem;color:var(--warm-gray);line-height:1.5;white-space:pre-wrap;">' + esc(g.notes) + '</div>'
           : '<span class="mu-sub">No notes.</span>';
 
+        // Payouts — per-placement earned/settled/due + settlement history.
+        var pb = payoutBreakdown(g);
+        var dueRows = pb.rows.length ? UI.relatedTable([
+          { label: 'Placement', render: function (r) {
+              var label = 'Placed ' + (r.p.createdAt ? N.date(r.p.createdAt) : '(undated)');
+              return '<button type="button" class="mu-link" onclick="MastEntity.drill(\'consignments-v2\',\'' + esc(r.p._key || '') + '\')">' + esc(label) + '</button>';
+            } },
+          { label: 'Maker earned', align: 'right', render: function (r) { return N.money(r.earned) || '$0.00'; } },
+          { label: 'Settled', align: 'right', render: function (r) { return N.money(r.settled) || '$0.00'; } },
+          { label: 'Due', align: 'right', render: function (r) {
+              return r.due > 0 ? '<strong>' + N.money(r.due) + '</strong>' : '<span class="mu-sub">$0.00</span>';
+            } }
+        ], pb.rows) : '<span class="mu-sub">Nothing owed — no placements yet.</span>';
+        var histRows = pb.history.length ? UI.relatedTable([
+          { label: 'Settled', render: function (h) { return h.at ? N.date(h.at) : '—'; } },
+          { label: 'Placement', render: function (h) { return 'Placed ' + (h.placement.createdAt ? N.date(h.placement.createdAt) : '(undated)'); } },
+          { label: 'Note', render: function (h) { return h.note ? '<span class="mu-sub">' + esc(h.note) + '</span>' : '<span class="mu-sub">—</span>'; } },
+          { label: 'Amount', align: 'right', render: function (h) { return N.money(h.amount) || '—'; } }
+        ], pb.history) : '<span class="mu-sub">No settlements recorded yet.</span>';
+        // Settle-up writes money records — stays single-sourced on classic (tracked debt).
+        var settleLink = '<div style="margin-top:12px;"><button class="btn btn-secondary" onclick="GalleriesV2.classic()">Record a settlement in classic view →</button></div>';
+
+        var newPlacementBtn = (typeof window.can !== 'function' || window.can('galleries', 'edit'))
+          ? '<div style="margin-top:14px;"><button class="btn btn-primary" onclick="GalleriesV2.newPlacement(\'' + esc(g._key) + '\')">+ New placement</button>' +
+            ' <button class="btn btn-secondary" onclick="GalleriesV2.classic()">Manage in classic view →</button></div>'
+          : '<div style="margin-top:14px;"><button class="btn btn-secondary" onclick="GalleriesV2.classic()">Manage in classic view →</button></div>';
+
         return tiles + tabsBar +
           '<div class="mu-pane" data-pane="ov">' + UI.card('Gallery', gallery) + UI.card('Primary contact', primaryContact) + UI.card('Addresses', addressBody) + '</div>' +
-          '<div class="mu-pane" data-pane="pieces" hidden>' + UI.cardTable('Consigned pieces (' + allPlacements.length + ')', piecesBody +
-            '<div style="margin-top:14px;"><button class="btn btn-secondary" onclick="GalleriesV2.classic()">Manage placements in classic view →</button></div>') + '</div>' +
+          '<div class="mu-pane" data-pane="pieces" hidden>' + UI.cardTable('Placements (' + allPlacements.length + ')', piecesBody + newPlacementBtn) + '</div>' +
+          '<div class="mu-pane" data-pane="payouts" hidden>' + UI.card('Owed to you', dueRows) + UI.cardTable('Settlement history', histRows + settleLink) + '</div>' +
           '<div class="mu-pane" data-pane="contacts" hidden>' + UI.cardTable('Contacts (' + contacts.length + ')', contactsBody) + '</div>' +
           '<div class="mu-pane" data-pane="notes" hidden>' + UI.card('Notes', notesBody) + '</div>';
       },
@@ -399,7 +454,102 @@
       });
   }
 
+  // ── placement intake (create-only) — placements are born FROM a gallery,
+  // so the galleryId FK is stamped automatically and the free-text location
+  // path dies (ratified hub plan, 2026-06-10). Pieces are added on the
+  // placement record afterwards (classic Add Line Item — tracked debt).
+  MastEntity.define('placement-intake-v2', {
+    label: 'Placement', labelPlural: 'Placements', size: 'lg', route: 'galleries-v2',
+    recordId: function (r) { return r._key || 'new'; },
+    fields: [{ name: 'locationName', label: 'Gallery', type: 'text', readOnly: true }],
+    fetch: function () { return Promise.resolve(null); },
+    detail: {
+      editRender: function (r, mode) {
+        var g = V2.intakeGallery || {};
+        var primary = (contactsOf(g) || [])[0] || {};
+        function fg(label, inner, flex) { return '<div class="form-group"' + (flex ? ' style="flex:1;min-width:150px;"' : '') + '><label class="form-label">' + label + '</label>' + inner + '</div>'; }
+        var pct = (typeof g.defaultCommissionPct === 'number') ? g.defaultCommissionPct : '';
+        return '<div class="mu-editbar"><span class="mu-editpill">NEW</span>New placement at ' + esc(galleryName(g)) + '</div>' +
+          '<div class="mu-sub" style="margin-bottom:10px;">Linked to this gallery automatically — no retyping the location.</div>' +
+          '<div style="display:flex;gap:12px;flex-wrap:wrap;">' +
+            fg('Commission to gallery (%) *', '<input class="form-input" type="number" min="0" max="100" step="1" id="plNewRate" value="' + esc(pct) + '" placeholder="40" style="width:100%;">', true) +
+            fg('Contact name', '<input class="form-input" id="plNewContact" value="' + esc(primary.name || '') + '" style="width:100%;">', true) +
+          '</div>' +
+          fg('Contact email', '<input class="form-input" type="email" id="plNewEmail" value="' + esc(primary.email || '') + '" style="width:100%;">') +
+          fg('Notes', '<textarea class="form-input" id="plNewNotes" rows="3" placeholder="Terms discussed, delivery plans…" style="width:100%;resize:vertical;"></textarea>') +
+          '<div class="mu-sub">Next step after creating: add the consigned pieces on the placement record.</div>';
+      }
+    },
+    onSave: function (rec, mode) {
+      if (mode !== 'create') return false;
+      if (typeof window.can === 'function' && !window.can('galleries', 'edit')) {
+        if (window.showToast) showToast('You do not have permission to add placements.', true);
+        return false;
+      }
+      var g = V2.intakeGallery;
+      if (!g || !g._key) { if (window.showToast) showToast('Gallery context lost — reopen and try again.', true); return false; }
+      function val(id) { return ((document.getElementById(id) || {}).value || '').trim(); }
+      var rate = parseFloat(val('plNewRate'));
+      if (isNaN(rate) || rate < 0 || rate > 100) { if (window.showToast) showToast('Commission must be 0-100%.', true); return false; }
+      var email = val('plNewEmail');
+      if (!U.validate.email(email)) { if (window.showToast) showToast('"' + email + '" doesn\'t look like a valid email.', true); return false; }
+      var id = MastDB.consignments.newKey();
+      var now = new Date().toISOString();
+      // Mirrors consignment.js createPlacement() exactly, plus the galleryId FK.
+      var placement = {
+        placementId: id,
+        galleryId: g._key,
+        locationName: g.name || '',
+        locationContact: val('plNewContact'),
+        locationEmail: email,
+        commissionRate: rate,
+        status: 'active',
+        lineItems: {},
+        notes: val('plNewNotes'),
+        totalRetailValue: 0, totalSold: 0, makerEarnings: 0, commissionOwed: 0,
+        createdAt: now, updatedAt: now
+      };
+      return Promise.resolve(MastDB.set('admin/consignments/' + id, placement)).then(function () {
+        if (window.writeAudit) writeAudit('create', 'consignment-placement', id);
+        if (window.showToast) showToast('Placement created — add the consigned pieces next.');
+        reloadSoon();
+        setTimeout(function () { MastEntity.drill('consignments-v2', id); }, 200);
+        return true;
+      }).catch(function (e) {
+        console.error('[galleries-v2] new placement', e);
+        if (window.showToast) showToast('Failed to create placement: ' + (e && e.message || e), true);
+        return false;
+      });
+    }
+  });
+
   window.GalleriesV2 = {
+    // Ratified hub plan: placements are created FROM the gallery (FK stamped).
+    newPlacement: function (galleryKey) {
+      MastEntity.get('galleries-v2').fetch(galleryKey).then(function (g) {
+        if (!g) { if (window.showToast) showToast('Gallery not found.', true); return; }
+        V2.intakeGallery = g;
+        MastEntity.openRecord('placement-intake-v2', {}, 'create');
+      });
+    },
+    // One audited click stamps the galleryId FK on a name-matched placement.
+    linkPlacement: function (galleryKey, placementKey) {
+      if (typeof window.can === 'function' && !window.can('galleries', 'edit')) {
+        if (window.showToast) showToast('You do not have permission to edit placements.', true);
+        return;
+      }
+      if (!galleryKey || !placementKey) return;
+      Promise.resolve(MastDB.update('admin/consignments/' + placementKey, {
+        galleryId: galleryKey, updatedAt: new Date().toISOString()
+      })).then(function () {
+        if (window.writeAudit) writeAudit('update', 'consignment-placement-link', placementKey);
+        if (window.showToast) showToast('Placement linked to this gallery.');
+        reloadSoon();
+      }).catch(function (e) {
+        console.error('[galleries-v2] link placement', e);
+        if (window.showToast) showToast('Could not link: ' + (e && e.message || e), true);
+      });
+    },
     sort: function (key) {
       if (V2.sortKey === key) V2.sortDir = (V2.sortDir === 'asc' ? 'desc' : 'asc');
       else { V2.sortKey = key; V2.sortDir = (key === 'pieces' || key === 'payoutsDue' ? 'desc' : 'asc'); }
