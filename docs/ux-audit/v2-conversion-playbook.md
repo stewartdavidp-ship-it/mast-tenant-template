@@ -1,9 +1,10 @@
 # V2 Module-Conversion Playbook
 
-**Status:** Canonical process, distilled from the Sales conversion (2026-06-10, PRs #360–#378).
-Run this end-to-end for each remaining section (Marketing, Site, Retention, Shows, Bookings,
-Finance, Operations, Customer Service, Admin). The Sales artifacts are the worked example:
-`sales-v2-build-plan.md` (plan shape) and `standard-record-ui.md` §10 (the four archetypes).
+**Status:** Canonical process, distilled from the Sales conversion (2026-06-10, PRs #360–#378)
+and amended after the Marketing conversion (2026-06-10, PRs #380–#384). Run this end-to-end
+for each remaining section (Site, Retention, Shows, Bookings, Finance, Operations,
+Customer Service, Admin). Worked examples: `sales-v2-build-plan.md` /
+`marketing-v2-build-plan.md` (plan shape) and `standard-record-ui.md` §10 (the four archetypes).
 
 ## 0 · Ground rules
 
@@ -11,8 +12,13 @@ Finance, Operations, Customer Service, Admin). The Sales artifacts are the worke
   on a stale feature branch and will mislead you (it hid the nav-v2 code and guided-header
   adoption during the Sales round). `git worktree add .claude/worktrees/<n> -b <branch> origin/main`.
 - **Sequential PRs.** Every PR bumps `MAST_MODULES_V` on the same line; parallel branches conflict.
-  Merge → then branch the next.
-- **PRs auto-merge on green; CI deploys `main` to the dev pod.** Your job ends at verified-on-dev.
+  Merge → then branch the next **from fresh `origin/main`, never from the previous wave's
+  branch** — squash-merges orphan stacked branches (`mergeStateStatus: DIRTY`); the recovery
+  is cherry-picking the wave onto fresh main, so just start there.
+- **Merging is MANUAL.** Despite older notes, PRs do NOT auto-merge — `gh pr merge --squash`
+  once checks are green. CI then deploys `main` to the dev pod. Your job ends at
+  verified-on-dev. (`gh` throws transient 401s with a valid token — wait ~60s and retry
+  before re-diagnosing auth.)
 - **Engine-first (operator directive).** Any standard pattern goes into `shared/mast-ui.js` /
   `shared/mast-entity.js` WITH a unit test, immediately — never a per-module copy. Existing
   primitives: `pageHeader` (every page header, no exceptions), `repeatRows`, `validate.email/.phone`,
@@ -45,6 +51,19 @@ consolidation around a hub object (galleries ↔ placements).
 Audit and scrub BEFORE building (verification against junk data hides real issues and demos
 read false). Seed realistic content for every surface you'll build.
 
+- **Self-confirm MCP tokens FIRST** (raw JSON-RPC `initialize` curl against the server, not
+  just "the server is configured") — they go stale. If invalid: the sanctioned fallback is
+  the operator's authenticated Chrome session + in-page `MastDB` (Claude in Chrome);
+  re-minting is operator-only (`mast-mcp-server/scripts/seed-admin.mjs --force`, agents are
+  firewalled from it by the permission layer).
+- **Seed through the accessor, then READ IT BACK through the accessor.** Path order is
+  load-bearing and wrong-order writes succeed silently into phantom docs (e.g. social posts
+  are `market/posts/{uid}/{postId}`, NOT `market/{uid}/posts/…` — check
+  `scripts/rewrite-entities.js` for the real path).
+- **Timestamps as ISO strings.** `MastDB.set` silently serializes JS `Date` objects to `{}`.
+- **Match enum vocab to the legacy UI**, not to what sounds plausible (e.g. social
+  `signalScore` is only 1=👍 / 2=🔥; an out-of-vocab value renders as nothing).
+
 ## 4 · Build waves (one PR per wave)
 
 Scaffold new modules with `node scripts/scaffold-v2-module.mjs <route> <archetype>` — it emits
@@ -57,8 +76,16 @@ the skeleton and wires `MODULE_MANIFEST` + tab div + `MAST_V2_ROUTE_MAP`. Then:
   the spec silently no-ops ("Unknown workflow").
 - `onSave` on an entity surfaces an Edit button on every read slide-out. For create-only intake
   on read-only records, define a separate create-only entity (`commission-intake-v2` pattern).
+- When V2 needs a write that legacy does inline against DOM/list state, refactor legacy into a
+  **state-free core** both paths share, exposed on the module's bridge (Marketing: the UGC
+  approve flow `_approveUgcCore`, the composer publish fan-out `_publishRecord`) — never
+  re-implement the write in the twin, and never call legacy handlers that read the DOM.
 - Cross-record links use `MastEntity.drill`; give `fetch()` a MastDB cache-miss fallback so cold
   drills work.
+- Computed reverse-links ("Part of: <campaign>" on artifact SOs) get ONE renderer on the owning
+  module's bridge (`CampaignsBridge.renderChipInto` pattern) — placeholder div + async fill,
+  not a copy per artifact module.
+- Font sizes: only the 7-scale rem values pass lint — `0.72 / 0.78 / 0.85 / 0.9 / 1 / 1.15 / 1.6`.
 - Ship with `bash scripts/ship-check.sh` (bump → inventory → all lints full-output → all tests).
 
 ## 5 · Verify every deployed wave (browser, sgtest15)
@@ -94,6 +121,12 @@ the skeleton and wires `MODULE_MANIFEST` + tab div + `MAST_V2_ROUTE_MAP`. Then:
 | `create_test` stamps `source:'test'` | Router create tools with explicit source |
 | Weak FK + name-match fallbacks | Stamp real FKs at create; audited one-click backfill for legacy rows |
 | statusHistory shape varies (array vs object) | Engine mirrors only arrays; don't assume |
+| Stacked wave branches go DIRTY after squash-merge | Branch every wave from fresh `origin/main`; recovery = cherry-pick |
+| "Auto-merge on green" | It's manual: `gh pr merge --squash`; transient `gh` 401s self-heal in ~60s |
+| `MastDB.set` + `new Date()` → `{}` | Seed timestamps as ISO strings; read seeds back through the accessor |
+| Accessor path order (`market/posts/{uid}` not `market/{uid}/posts`) | Wrong order writes phantom docs that report success — check `rewrite-entities.js` |
+| Stale MCP bearer tokens | Self-confirm with an `initialize` curl; fallback = operator's Chrome + in-page MastDB; re-mint is operator-only |
+| Sign-in screen right after `location.reload()` | Auth-state restore lags — wait and re-check before reacting |
 
 ## 8 · Helper scripts
 
