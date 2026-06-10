@@ -1460,16 +1460,17 @@
     var optRaw = (document.getElementById('csQOptions') || {}).value || '';
     var required = !!(document.getElementById('csQRequired') || {}).checked;
     if (!text) { showToast('Question text is required', true); return; }
-    var options = type === 'multiple_choice' ? optRaw.split(',').map(function (o) { return o.trim(); }).filter(Boolean) : [];
     try {
-      if (id) { await MastDB.update('cs_survey_questions/' + id, { text: text, type: type, options: options, required: required, updatedAt: nowIso() }); if (questionsData[id]) Object.assign(questionsData[id], { text: text, type: type, options: options, required: required }); questionEditId = null; showToast('Question updated'); }
-      else { var nk = MastDB.newKey('cs_survey_questions'); var doc = { id: nk, text: text, type: type, options: options, required: required, isStock: false, createdAt: nowIso(), updatedAt: nowIso() }; await MastDB.set('cs_survey_questions/' + nk, doc); questionsData[nk] = doc; showAddQuestion = false; showToast('Question added'); }
+      // Delegate to the shared state-free core (single-sourced write shape).
+      await window.CsSurveysBridge.saveQuestion(id || null, { text: text, type: type, options: optRaw, required: required });
+      if (id) { questionEditId = null; showToast('Question updated'); }
+      else { showAddQuestion = false; showToast('Question added'); }
       renderSurveys();
     } catch (err) { showToast('Failed: ' + (err && err.message), true); }
   }
   async function deleteQuestion(id) {
     if (!confirm('Delete this question?')) return;
-    try { await MastDB.remove('cs_survey_questions/' + id); delete questionsData[id]; showToast('Question deleted'); renderSurveys(); }
+    try { await window.CsSurveysBridge.deleteQuestion(id); showToast('Question deleted'); renderSurveys(); }
     catch (err) { showToast('Failed: ' + (err && err.message), true); }
   }
 
@@ -1517,14 +1518,15 @@
     if (!name) { showToast('Question Set name is required', true); return; }
     var qIds = []; document.querySelectorAll('input[name="csGQIds"]:checked').forEach(function (cb) { qIds.push(cb.value); });
     try {
-      if (id) { await MastDB.update('cs_survey_groups/' + id, { name: name, eventType: et, questionIds: qIds, updatedAt: nowIso() }); if (groupsData[id]) Object.assign(groupsData[id], { name: name, eventType: et, questionIds: qIds }); groupEditId = null; showToast('Question Set updated'); }
-      else { var nk = MastDB.newKey('cs_survey_groups'); var doc = { id: nk, name: name, eventType: et, questionIds: qIds, isActive: true, createdAt: nowIso(), updatedAt: nowIso() }; await MastDB.set('cs_survey_groups/' + nk, doc); groupsData[nk] = doc; showAddGroup = false; showToast('Question Set added'); }
+      await window.CsSurveysBridge.saveGroup(id || null, { name: name, eventType: et, questionIds: qIds });
+      if (id) { groupEditId = null; showToast('Question Set updated'); }
+      else { showAddGroup = false; showToast('Question Set added'); }
       renderSurveys();
     } catch (err) { showToast('Failed: ' + (err && err.message), true); }
   }
   async function deleteGroup(id) {
     if (!confirm('Delete this Question Set?')) return;
-    try { await MastDB.remove('cs_survey_groups/' + id); delete groupsData[id]; showToast('Question Set deleted'); renderSurveys(); }
+    try { await window.CsSurveysBridge.deleteGroup(id); showToast('Question Set deleted'); renderSurveys(); }
     catch (err) { showToast('Failed: ' + (err && err.message), true); }
   }
 
@@ -1579,17 +1581,16 @@
     var status = (document.getElementById('csSvStatus') || {}).value || 'draft';
     var closesAtRaw = ((document.getElementById('csSvClosesAt') || {}).value || '').trim();
     var closesAt = closesAtRaw ? new Date(closesAtRaw).toISOString() : null;
-    if (!name) { showToast('Survey name is required', true); return; }
-    if (!groupId) { showToast('Please select a Question Set', true); return; }
     try {
-      if (id) { await MastDB.update('cs_surveys/' + id, { name: name, groupId: groupId, status: status, closesAt: closesAt, updatedAt: nowIso() }); if (surveysDefData[id]) Object.assign(surveysDefData[id], { name: name, groupId: groupId, status: status, closesAt: closesAt }); surveyEditId = null; showToast('Survey updated'); }
-      else { var nk = MastDB.newKey('cs_surveys'); var ts = genTokenSecret(); var doc = { id: nk, name: name, groupId: groupId, status: status, closesAt: closesAt, tokenSecret: ts, createdAt: nowIso(), updatedAt: nowIso() }; await MastDB.set('cs_surveys/' + nk, doc); var cached = Object.assign({}, doc); delete cached.tokenSecret; surveysDefData[nk] = cached; showAddSurvey = false; showToast('Survey created'); }
+      await window.CsSurveysBridge.saveSurvey(id || null, { name: name, groupId: groupId, status: status, closesAt: closesAt });
+      if (id) { surveyEditId = null; showToast('Survey updated'); }
+      else { showAddSurvey = false; showToast('Survey created'); }
       renderSurveys();
     } catch (err) { showToast('Failed: ' + (err && err.message), true); }
   }
   async function deleteSurvey(id) {
     if (!confirm('Delete this survey? Existing responses will remain.')) return;
-    try { await MastDB.remove('cs_surveys/' + id); delete surveysDefData[id]; showToast('Survey deleted'); renderSurveys(); }
+    try { await window.CsSurveysBridge.deleteSurvey(id); showToast('Survey deleted'); renderSurveys(); }
     catch (err) { showToast('Failed: ' + (err && err.message), true); }
   }
   async function sendSurveyLink() {
@@ -2862,6 +2863,131 @@
       delete reviewsData[id];
       if (window.writeAudit) writeAudit('delete', 'cs-review', id);
       return true;
+    }
+  };
+
+  // Bridge for the cs-surveys-v2 hub (flag-gated #cs-surveys-v2). State-free
+  // CRUD cores for the three survey collections + trigger toggle + automation
+  // config + the generateSurveyLink CF wrappers — parameterized versions of
+  // saveQuestion/saveGroup/saveSurvey/saveTrigger (which read the form DOM).
+  // The legacy handlers now DELEGATE here so the write shapes (incl. the
+  // tokenSecret mint on survey create and the tokenSecret strip on the cached
+  // copy) stay single-sourced. Mirrors window.CsTicketsBridge.
+  window.CsSurveysBridge = {
+    // One-shot loads for the V2 hub (fresh reads, independent of legacy state).
+    loadAll: function () {
+      return Promise.all([
+        Promise.resolve(MastDB.query('cs_survey_questions').limitToLast(200).once()).catch(function () { return {}; }),
+        Promise.resolve(MastDB.query('cs_survey_groups').limitToLast(100).once()).catch(function () { return {}; }),
+        Promise.resolve(MastDB.query('cs_surveys').limitToLast(100).once()).catch(function () { return {}; }),
+        Promise.resolve(MastDB.query('cs_survey_triggers').limitToLast(100).once()).catch(function () { return {}; }),
+        Promise.resolve(MastDB.query('cs_survey_responses').orderByChild('createdAt').limitToLast(500).once()).catch(function () { return {}; }),
+        Promise.resolve(MastDB.get('cs_config/automatedSurveys')).catch(function () { return null; })
+      ]).then(function (r) {
+        // Never hand tokenSecret to a UI layer.
+        var sv = {};
+        Object.keys(r[2] || {}).forEach(function (k) {
+          var s = Object.assign({}, r[2][k]); delete s.tokenSecret; sv[k] = s;
+        });
+        return { questions: r[0] || {}, groups: r[1] || {}, surveys: sv, triggers: r[3] || {}, responses: r[4] || {}, automationEnabled: !!(r[5] && r[5].enabled) };
+      });
+    },
+    saveQuestion: async function (id, data) {
+      var text = (data.text || '').trim();
+      if (!text) throw new Error('Question text is required');
+      var type = data.type || 'open_text';
+      var options = type === 'multiple_choice'
+        ? (Array.isArray(data.options) ? data.options : String(data.options || '').split(',').map(function (o) { return o.trim(); }).filter(Boolean))
+        : [];
+      var required = data.required !== false;
+      var patch = { text: text, type: type, options: options, required: required, updatedAt: nowIso() };
+      if (id) {
+        await MastDB.update('cs_survey_questions/' + id, patch);
+        if (questionsData[id]) Object.assign(questionsData[id], patch);
+      } else {
+        id = MastDB.newKey('cs_survey_questions');
+        var doc = Object.assign({ id: id, isStock: false, createdAt: nowIso() }, patch);
+        await MastDB.set('cs_survey_questions/' + id, doc);
+        questionsData[id] = doc;
+      }
+      if (window.writeAudit) writeAudit(data._mode === 'create' ? 'create' : 'update', 'cs-survey-question', id);
+      return questionsData[id] || null;
+    },
+    deleteQuestion: async function (id) {
+      await MastDB.remove('cs_survey_questions/' + id);
+      delete questionsData[id];
+      if (window.writeAudit) writeAudit('delete', 'cs-survey-question', id);
+      return true;
+    },
+    saveGroup: async function (id, data) {
+      var name = (data.name || '').trim();
+      if (!name) throw new Error('Question Set name is required');
+      var patch = { name: name, eventType: (data.eventType || '').trim() || null, questionIds: data.questionIds || [], updatedAt: nowIso() };
+      if (id) {
+        await MastDB.update('cs_survey_groups/' + id, patch);
+        if (groupsData[id]) Object.assign(groupsData[id], patch);
+      } else {
+        id = MastDB.newKey('cs_survey_groups');
+        var doc = Object.assign({ id: id, isActive: true, createdAt: nowIso() }, patch);
+        await MastDB.set('cs_survey_groups/' + id, doc);
+        groupsData[id] = doc;
+      }
+      if (window.writeAudit) writeAudit('update', 'cs-survey-group', id);
+      return groupsData[id] || null;
+    },
+    deleteGroup: async function (id) {
+      await MastDB.remove('cs_survey_groups/' + id);
+      delete groupsData[id];
+      if (window.writeAudit) writeAudit('delete', 'cs-survey-group', id);
+      return true;
+    },
+    saveSurvey: async function (id, data) {
+      var name = (data.name || '').trim();
+      if (!name) throw new Error('Survey name is required');
+      if (!data.groupId) throw new Error('Please select a Question Set');
+      var patch = { name: name, groupId: data.groupId, status: data.status || 'draft', closesAt: data.closesAt || null, updatedAt: nowIso() };
+      if (id) {
+        await MastDB.update('cs_surveys/' + id, patch);
+        if (surveysDefData[id]) Object.assign(surveysDefData[id], patch);
+      } else {
+        id = MastDB.newKey('cs_surveys');
+        var doc = Object.assign({ id: id, tokenSecret: genTokenSecret(), createdAt: nowIso() }, patch);
+        await MastDB.set('cs_surveys/' + id, doc);
+        var cached = Object.assign({}, doc); delete cached.tokenSecret;
+        surveysDefData[id] = cached;
+      }
+      if (window.writeAudit) writeAudit('update', 'cs-survey', id);
+      var out = Object.assign({}, surveysDefData[id]); delete out.tokenSecret;
+      return out;
+    },
+    deleteSurvey: async function (id) {
+      await MastDB.remove('cs_surveys/' + id);
+      delete surveysDefData[id];
+      if (window.writeAudit) writeAudit('delete', 'cs-survey', id);
+      return true;
+    },
+    setTriggerActive: async function (id, active) {
+      await MastDB.update('cs_survey_triggers/' + id, { isActive: !!active, updatedAt: nowIso() });
+      if (triggersData[id]) triggersData[id].isActive = !!active;
+      if (window.writeAudit) writeAudit('update', 'cs-survey-trigger', id);
+      return true;
+    },
+    setAutomationEnabled: async function (enabled) {
+      var doc = { enabled: !!enabled, updatedAt: nowIso() };
+      await MastDB.set('cs_config/automatedSurveys', doc);
+      automatedSurveysEnabled = !!enabled;
+      if (window.writeAudit) writeAudit('update', 'cs-survey-automation', 'automatedSurveys');
+      return !!enabled;
+    },
+    // generateSurveyLink CF wrappers (the only CS survey Cloud Function).
+    sendOne: function (surveyId, email, name) {
+      var fn = firebase.functions().httpsCallable('generateSurveyLink');
+      return fn({ tenantId: window.TENANT_ID, surveyId: surveyId, contactEmail: email, contactName: name || null });
+    },
+    previewUrl: function (surveyId) {
+      var fn = firebase.functions().httpsCallable('generateSurveyLink');
+      return fn({ tenantId: window.TENANT_ID, surveyId: surveyId, preview: true })
+        .then(function (result) { return result && result.data && result.data.surveyUrl; });
     }
   };
 

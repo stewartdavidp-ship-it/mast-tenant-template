@@ -110,25 +110,25 @@
        Shared by customers.js (list/export) and customer-service.js (survey
        bulk-send) so the segment matcher cannot drift. ?v= kept in lockstep
        with MAST_MODULES_V by scripts/bump-modules-version.sh. -->
-  <script src="../shared/customer-filters.js?v=20260610-182038-96b92f9"></script>
+  <script src="../shared/customer-filters.js?v=20260610-182833-a10fb7c"></script>
   <script src="../shared/brand-sync.js?v=1"></script>
   <script src="../shared/channel-connection.js?v=1"></script>
-  <script src="../shared/variant-reconcile.js?v=20260610-182038-96b92f9"></script>
+  <script src="../shared/variant-reconcile.js?v=20260610-182833-a10fb7c"></script>
   <!-- UI redesign engines (docs/ux-audit): shared primitives + Entity Engine.
        The ?v= suffix is kept in lockstep with MAST_MODULES_V by
        scripts/bump-modules-version.sh (these are static <head> tags loaded
        before the JS var exists, so they can't read it at runtime). Without
        this, the engines were frozen at ?v=1 and never cache-busted on deploy. -->
-  <script src="../shared/mast-ui.js?v=20260610-182038-96b92f9"></script>
-  <script src="../shared/mast-io.js?v=20260610-182038-96b92f9"></script>
-  <script src="../shared/mast-entity.js?v=20260610-182038-96b92f9"></script>
+  <script src="../shared/mast-ui.js?v=20260610-182833-a10fb7c"></script>
+  <script src="../shared/mast-io.js?v=20260610-182833-a10fb7c"></script>
+  <script src="../shared/mast-entity.js?v=20260610-182833-a10fb7c"></script>
   <!-- Canonical product readiness gate (computeReadinessChecklist / productMarkupConfig).
        Byte-identical to mast-tenant-mcp-server/src/shared/product-readiness.core.js so the
        AI publish gate and the maker.js UI gate cannot drift; maker.js delegates to
        window.MastProductReadiness. Eager-loaded so it exists before the lazy maker module.
        ?v= kept in lockstep with MAST_MODULES_V by scripts/bump-modules-version.sh.
        See docs/ux-audit/product-publish-gate-plan.md §7. -->
-  <script src="../shared/product-readiness.core.js?v=20260610-182038-96b92f9"></script>
+  <script src="../shared/product-readiness.core.js?v=20260610-182833-a10fb7c"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Pod-specific runtime config — sets window.MAST_POD_PLATFORM_PROJECT so
@@ -11482,6 +11482,7 @@
     <div id="lotsV2Tab" class="tab-content" style="display:none;"></div><!-- Tier 1.5 P2: inventory lots -->
     <div id="materialsV2Tab" class="tab-content" style="display:none;"></div><!-- UI-redesign conversion: maker materials -->
     <div id="csSupportV2Tab" class="tab-content" style="display:none;"></div><!-- ONE support hub (cs-inbox-v2 + cs-tickets-v2 routes) -->
+    <div id="csSurveysV2Tab" class="tab-content" style="display:none;"></div><!-- CS Wave 3: surveys hub -->
     <div id="termsV2Tab" class="tab-content" style="display:none;"></div><!-- UI-redesign config-singleton shape: policies/terms -->
     <div id="walletV2Tab" class="tab-content" style="display:none;"></div><!-- UI-redesign config-singleton shape: wallet/instruments -->
     <div id="brandV2Tab" class="tab-content" style="display:none;"></div><!-- UI-redesign config shape: brand read-on-page -->
@@ -20822,7 +20823,7 @@ var MAST_V2_ROUTE_MAP = {
   orders: 'orders-v2', customers: 'customers-v2', promotions: 'promotions-v2',
   trips: 'trips-v2', team: 'team-v2', procurement: 'procurement-v2',
   materials: 'materials-v2', 'finance-expenses': 'finance-expenses-v2',
-  'cs-tickets': 'cs-tickets-v2', 'cs-inbox': 'cs-inbox-v2', terms: 'terms-v2', wallet: 'wallet-v2',
+  'cs-tickets': 'cs-tickets-v2', 'cs-inbox': 'cs-inbox-v2', 'cs-surveys': 'cs-surveys-v2', terms: 'terms-v2', wallet: 'wallet-v2',
   brand: 'brand-v2', homepage: 'homepage-v2', commissions: 'commissions-v2', products: 'products-v2',
   wholesale: 'wholesale-v2', students: 'students-v2', galleries: 'galleries-v2', instructors: 'instructors-v2',
   contacts: 'contacts-v2', enrollments: 'enrollments-v2', passes: 'passes-v2',
@@ -22093,7 +22094,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260610-182038-96b92f9';
+var MAST_MODULES_V = '20260610-182833-a10fb7c';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -22126,6 +22127,7 @@ var MODULE_MANIFEST = {
   'lots-v2': { src: 'modules/lots-v2.js', routes: ['lots-v2'] }, // Tier 1.5 P2: inventory lots (material+product) list + detail (flag-gated)
   'materials-v2': { src: 'modules/materials-v2.js', routes: ['materials-v2'] }, // UI-redesign conversion: maker materials (flag-gated, side-by-side)
   'cs-support-v2': { src: 'modules/cs-support-v2.js', routes: ['cs-inbox-v2', 'cs-tickets-v2'] }, // ONE support hub: Inbox/Tickets are two lenses of the same conversation queue — route picks the entry lens (customer-service-v2-build-plan.md)
+  'cs-surveys-v2': { src: 'modules/cs-surveys-v2.js', routes: ['cs-surveys-v2'] }, // CS Wave 3: surveys hub (Surveys/Responses/Question sets/Library lenses + automation card)
   'terms-v2': { src: 'modules/terms-v2.js', routes: ['terms-v2'] }, // UI-redesign config-singleton shape: policies/terms launcher→slide-out (flag-gated)
   'wallet-v2': { src: 'modules/wallet-v2.js', routes: ['wallet-v2'] }, // UI-redesign config-singleton shape: wallet/instruments launcher→slide-out (flag-gated)
   'brand-v2': { src: 'modules/brand-v2.js', routes: ['brand-v2'] }, // UI-redesign config shape: brand read-on-page (read-focused, edit→classic) (flag-gated)
