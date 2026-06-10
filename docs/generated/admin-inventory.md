@@ -6,7 +6,7 @@ Source-of-truth counts for the admin app, generated from the code so docs
 cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 
 - **Core shell:** `app/index.html` — **59,937** lines
-- **Feature modules:** **106** files in `app/modules/` (**96** routed), **116,497** lines combined
+- **Feature modules:** **106** files in `app/modules/` (**96** routed), **116,538** lines combined
 
 | Module file | Lines | Routes |
 |---|---:|---|
@@ -29,7 +29,7 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/classes-v2.js` | 469 | classes-v2 |
 | `modules/commission-terms-v2.js` | 248 | commission-terms-v2 |
 | `modules/commission-terms.js` | 317 | commission-terms |
-| `modules/commissions-v2.js` | 191 | commissions-v2 |
+| `modules/commissions-v2.js` | 193 | commissions-v2 |
 | `modules/composer.js` | 434 | composer |
 | `modules/consignment.js` | 2,190 | galleries |
 | `modules/consignments-v2.js` | 280 | consignments-v2 |
@@ -85,7 +85,7 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/promotions.js` | 529 | promotions |
 | `modules/receipts-v2.js` | 220 | receipts-v2 |
 | `modules/resources-v2.js` | 308 | resources-v2 |
-| `modules/rma-v2.js` | 220 | rma-v2 |
+| `modules/rma-v2.js` | 222 | rma-v2 |
 | `modules/sales-events-v2.js` | 351 | sales-events-v2 |
 | `modules/sales.js` | 3,257 | pos, receipts, events, salesEvents, terms |
 | `modules/sessions-v2.js` | 274 | sessions-v2 |
@@ -114,5 +114,5 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/workflows/procurement.workflow.js` | 111 | — |
 | `modules/workflows/products.workflow.js` | 165 | — |
 | `modules/workflows/return.workflow.js` | 151 | — |
-| `modules/workflows/workflow-engine.js` | 1,288 | — |
+| `modules/workflows/workflow-engine.js` | 1,325 | — |
 | `modules/workflows/workflow-template.workflow.js` | 186 | — |

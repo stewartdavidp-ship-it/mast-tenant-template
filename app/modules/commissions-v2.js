@@ -67,6 +67,8 @@
       template: 'transaction',
       flow: 'commissions',
       flowModule: 'commissionsWorkflow',
+      guidedHeader: true,   // clickable step rail; click a step to review/advance (engine §guided)
+      guidedExpandCurrent: true,  // open with the current phase's checklist visible
       customerEntity: 'customers-v2',
       // Side-effect-bearing capture stays on legacy: route every checklist target
       // to the legacy commission detail at the relevant tab.

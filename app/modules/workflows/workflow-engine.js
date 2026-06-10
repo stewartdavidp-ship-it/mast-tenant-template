@@ -1063,7 +1063,16 @@
       var unmetHard = (ev.missing || []).filter(function(m) { return m.req.hard; }).length;
       var tucked = !ev.specMismatch && !ev.isTerminal && !ev.isBranchPoint &&
                    (!ev.nextPhases || !ev.nextPhases.length) && unmetHard === 0;
-      var rail = _renderGuidedRail(def, record, ev, ctxId) + _renderGuidedChecklist(def, record, ev, ctxId, expandCurrent);
+      var rail = _renderGuidedRail(def, record, ev, ctxId);
+      // Branch point: the rail deliberately locks forward clicks here — the
+      // operator must PICK A PATH, not "advance". Render the choices as an
+      // always-visible pill row (the guided twin of the action bar's branch
+      // buttons). Without this the guided header dead-ends at a branch point,
+      // which is what kept pickship/commissions surfaces off renderGuidedHeader.
+      if (ev.isBranchPoint && !ev.specMismatch && !ev.isTerminal) {
+        rail += _renderGuidedBranchRow(def, ev, ctxId);
+      }
+      rail += _renderGuidedChecklist(def, record, ev, ctxId, expandCurrent);
       var railWrapId = ctxId + '_railwrap';
       html += tucked ? ('<div id="' + railWrapId + '" style="display:none;">' + rail + '</div>') : rail;
 
@@ -1155,6 +1164,34 @@
         html += '<div style="flex:0 0 22px;height:1.5px;background:' + lineColor + ';margin:0 2px;"></div>';
       }
     });
+    html += '</div>';
+    return html;
+  }
+
+  // Branch-choice pill row, shown beneath the rail ONLY at a branch point.
+  // The guided rail blocks forward clicks there (phaseStep treats every
+  // forward step as gated), so this row is the one way onward — same
+  // MastFlow.__ui.branch contract as the classic action bar's buttons.
+  // Disabled (with a "· N to do first" reason) until the branch point's hard
+  // requirements are met, mirroring the action bar's enabled state.
+  function _renderGuidedBranchRow(def, ev, ctxId) {
+    var bp = def.branches && ev.currentPhase && def.branches[ev.currentPhase.key];
+    var enabled = !!ev.canAdvance;
+    var html = '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:10px 0 2px;" data-mf-branchrow="1">' +
+      '<span style="font-size:0.82rem;color:var(--warm-gray);">' + _esc((bp && bp.label) || 'Choose next step:') + '</span>';
+    (ev.branchChoices || []).forEach(function(c) {
+      html += '<button type="button" ' + (enabled ? '' : 'disabled ') +
+        'style="border:1px solid ' + (enabled ? 'var(--teal)' : 'var(--border)') + ';' +
+        'background:' + (enabled ? 'color-mix(in srgb,var(--teal) 12%,transparent)' : 'transparent') + ';' +
+        'color:' + (enabled ? 'var(--teal)' : 'var(--warm-gray)') + ';border-radius:999px;padding:5px 14px;' +
+        'font-size:0.82rem;font-weight:600;cursor:' + (enabled ? 'pointer' : 'not-allowed') + ';" ' +
+        'onclick="MastFlow.__ui.branch(\'' + ctxId + '\',\'' + _esc(c.key) + '\',\'' + _esc(c.entryPhase) + '\')">' +
+        _esc(c.label) + '</button>';
+    });
+    if (!enabled) {
+      var n = (ev.missing || []).filter(function(m) { return m.req.hard; }).length;
+      html += '<span style="font-size:0.78rem;color:var(--warm-gray);">· ' + n + ' to do first</span>';
+    }
     html += '</div>';
     return html;
   }
