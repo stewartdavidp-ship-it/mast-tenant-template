@@ -192,11 +192,8 @@
     }).join('');
 
     tab.innerHTML =
-      '<div style="display:flex;align-items:baseline;gap:12px;margin-bottom:6px;">' +
-        '<h1 style="font-size:1.6rem;margin:0;">Returns</h1>' +
-        '<span style="color:var(--warm-gray);font-size:0.9rem;">' + window.MastUI.Num.count(V2.rows.length) + ' returns</span>' +
-        '<button class="btn btn-secondary" style="margin-left:auto;" onclick="RmaV2.exportCsv()">↓ Export</button>' +
-      '</div>' +
+      window.MastUI.pageHeader({ title: 'Returns', count: window.MastUI.Num.count(V2.rows.length) + ' returns',
+        actionsHtml: '<button class="btn btn-secondary" onclick="RmaV2.exportCsv()">↓ Export</button>' }) +
       '<div style="margin:14px 0;">' + pills + '</div>' +
       window.MastEntity.renderList('rma-v2', {
         rows: visibleRows(), sortKey: V2.sortKey, sortDir: V2.sortDir,

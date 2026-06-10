@@ -179,13 +179,12 @@
         });
 
     tab.innerHTML =
-      '<div style="display:flex;align-items:baseline;gap:12px;margin-bottom:6px;flex-wrap:wrap;">' +
-        '<h1 style="font-size:1.6rem;margin:0;">Day Close</h1>' +
-        '<input type="date" class="form-input" value="' + d + '" onchange="ReceiptsV2.setDate(this.value)" ' +
-          'style="padding:6px 10px;font-size:0.85rem;width:auto;">' +
+      U.pageHeader({ title: 'Day Close',
+        subtitle: 'match payouts and reconcile receipts',
         // Tracked temp-link (debt): manual payment↔sale matching is classic-only until Day Close P2.
-        '<button class="btn btn-secondary" style="margin-left:auto;" onclick="ReceiptsV2.classicMatch()">Match payments (classic) ↗</button>' +
-      '</div>' +
+        actionsHtml: '<input type="date" class="form-input" value="' + d + '" onchange="ReceiptsV2.setDate(this.value)" ' +
+            'style="padding:6px 10px;font-size:0.85rem;width:auto;">' +
+          '<button class="btn btn-secondary" onclick="ReceiptsV2.classicMatch()">Match payments (classic) ↗</button>' }) +
       U.tiles([
         { k: 'Gross (' + d + ')', v: U.Num.money(gross), hero: true },
         { k: 'Stripe', v: U.Num.money(byProc.Stripe) },

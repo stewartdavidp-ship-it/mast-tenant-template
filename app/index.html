@@ -110,25 +110,25 @@
        Shared by customers.js (list/export) and customer-service.js (survey
        bulk-send) so the segment matcher cannot drift. ?v= kept in lockstep
        with MAST_MODULES_V by scripts/bump-modules-version.sh. -->
-  <script src="../shared/customer-filters.js?v=20260610-092224-aca75f8"></script>
+  <script src="../shared/customer-filters.js?v=20260610-094031-bde4d55"></script>
   <script src="../shared/brand-sync.js?v=1"></script>
   <script src="../shared/channel-connection.js?v=1"></script>
-  <script src="../shared/variant-reconcile.js?v=20260610-092224-aca75f8"></script>
+  <script src="../shared/variant-reconcile.js?v=20260610-094031-bde4d55"></script>
   <!-- UI redesign engines (docs/ux-audit): shared primitives + Entity Engine.
        The ?v= suffix is kept in lockstep with MAST_MODULES_V by
        scripts/bump-modules-version.sh (these are static <head> tags loaded
        before the JS var exists, so they can't read it at runtime). Without
        this, the engines were frozen at ?v=1 and never cache-busted on deploy. -->
-  <script src="../shared/mast-ui.js?v=20260610-092224-aca75f8"></script>
-  <script src="../shared/mast-io.js?v=20260610-092224-aca75f8"></script>
-  <script src="../shared/mast-entity.js?v=20260610-092224-aca75f8"></script>
+  <script src="../shared/mast-ui.js?v=20260610-094031-bde4d55"></script>
+  <script src="../shared/mast-io.js?v=20260610-094031-bde4d55"></script>
+  <script src="../shared/mast-entity.js?v=20260610-094031-bde4d55"></script>
   <!-- Canonical product readiness gate (computeReadinessChecklist / productMarkupConfig).
        Byte-identical to mast-tenant-mcp-server/src/shared/product-readiness.core.js so the
        AI publish gate and the maker.js UI gate cannot drift; maker.js delegates to
        window.MastProductReadiness. Eager-loaded so it exists before the lazy maker module.
        ?v= kept in lockstep with MAST_MODULES_V by scripts/bump-modules-version.sh.
        See docs/ux-audit/product-publish-gate-plan.md §7. -->
-  <script src="../shared/product-readiness.core.js?v=20260610-092224-aca75f8"></script>
+  <script src="../shared/product-readiness.core.js?v=20260610-094031-bde4d55"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Pod-specific runtime config — sets window.MAST_POD_PLATFORM_PROJECT so
@@ -6500,19 +6500,24 @@
         <span class="sidebar-section-arrow">&#9654;</span>
       </div>
       <div class="sidebar-items">
-        <div class="sidebar-item" data-route="pos" onclick="navigateTo('pos')">Sales Ledger</div>
+        <!-- Ordered around the operator's process (operator-ratified 2026-06-10):
+             SELL (take the money) → ORDERS (the work: retail/custom → fulfill →
+             returns) → B2B CHANNELS (wholesale/galleries/line sheets) →
+             CLOSE & CONFIGURE (day close, policies, commission terms).
+             Pack+Ship collapsed to one Fulfillment entry — one process, one
+             queue (#375); the 'ship' route stays alive for deep links. -->
         <div class="sidebar-item" onclick="window.open('../pos/', '_blank')" title="Open POS checkout in a new tab">Point of Sale &#8599;</div>
+        <div class="sidebar-item" data-route="pos" onclick="navigateTo('pos')">Sales Ledger</div>
         <div class="sidebar-item" data-route="orders" onclick="navigateTo('orders')">Retail Orders <span id="sidebarOrdersBadge" class="sidebar-badge alert" style="display:none;"></span></div>
         <div class="sidebar-item" data-route="commissions" onclick="navigateTo('commissions')">Custom Orders</div>
+        <div class="sidebar-item" data-route="pack" onclick="navigateTo('pack')">Fulfillment</div>
         <div class="sidebar-item" data-route="rma" onclick="navigateTo('rma')">Returns <span id="sidebarRmaBadge" class="sidebar-badge alert" style="display:none;"></span></div>
         <div class="sidebar-item" data-route="wholesale" onclick="navigateTo('wholesale')">Wholesale</div>
-        <div class="sidebar-item" data-route="lookbooks" onclick="navigateTo('lookbooks')">Look Books</div>
         <div class="sidebar-item" data-route="galleries" onclick="navigateTo('galleries')">Galleries &amp; Consignment</div>
+        <div class="sidebar-item" data-route="lookbooks" onclick="navigateTo('lookbooks')">Look Books</div>
         <div class="sidebar-item" data-route="receipts" onclick="navigateTo('receipts')">Day Close</div>
         <div class="sidebar-item" data-route="terms" onclick="navigateTo('terms')">Policies</div>
         <div class="sidebar-item" data-route="commission-terms" onclick="navigateTo('commission-terms')">Commission Terms</div>
-        <div class="sidebar-item" data-route="pack" onclick="navigateTo('pack')">Pack</div>
-        <div class="sidebar-item" data-route="ship" onclick="navigateTo('ship')">Ship</div>
       </div>
     </div>
     <!-- Marketing -->
@@ -22008,7 +22013,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260610-092224-aca75f8';
+var MAST_MODULES_V = '20260610-094031-bde4d55';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.

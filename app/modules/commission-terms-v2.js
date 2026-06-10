@@ -146,7 +146,9 @@
     cols.push({ key: '_publish', label: '', sortable: false, align: 'right', render: function (r) {
       if (r.status === 'published') return '';
       return '<button class="btn btn-primary" style="font-size:0.78rem;padding:4px 10px;" ' +
-        'onclick="event.stopPropagation();CommissionTermsV2.publish(\'' + r._key + '\')">Publish</button>';
+        'onclick="event.stopPropagation();CommissionTermsV2.publish(\'' + r._key + '\')">Publish</button>' +
+        ' <a href="#" onclick="event.preventDefault();event.stopPropagation();CommissionTermsV2.remove(\'' + r._key + '\')" ' +
+        'style="color:var(--warm-gray);font-size:0.78rem;text-decoration:underline;margin-left:6px;">delete</a>';
     } });
     return cols;
   }
@@ -175,11 +177,8 @@
       : U.card('Currently published', '<div style="font-size:0.9rem;color:var(--warning,var(--amber));">No published terms yet — create and publish a draft.</div>', { fill: true });
 
     tab.innerHTML =
-      '<div style="display:flex;align-items:baseline;gap:12px;margin-bottom:6px;">' +
-        '<h1 style="font-size:1.6rem;margin:0;">Commission Terms</h1>' +
-        '<span style="color:var(--warm-gray);font-size:0.9rem;">' + U.Num.count(V2.rows.length) + ' versions</span>' +
-        (canEdit() ? '<button class="btn btn-primary" style="margin-left:auto;" onclick="CommissionTermsV2.newDraft()">+ New draft</button>' : '') +
-      '</div>' +
+      U.pageHeader({ title: 'Commission Terms', count: U.Num.count(V2.rows.length) + ' versions',
+        actionsHtml: (canEdit() ? '<button class="btn btn-primary" onclick="CommissionTermsV2.newDraft()">+ New draft</button>' : '') }) +
       '<div style="margin:12px 0;">' + banner + '</div>' +
       window.MastEntity.renderList('commission-terms-v2', {
         columns: columns(),
@@ -238,6 +237,26 @@
           render();
         });
       }).catch(function (e) { console.error('[commission-terms-v2] publish', e); if (window.showToast) showToast('Publish failed: ' + (e && e.message || e), true); });
+    },
+    // Drafts are deletable; published versions are immutable history (customers
+    // accepted that exact text) and can never be removed.
+    remove: function (id) {
+      if (!canEdit()) { if (window.showToast) showToast('You do not have permission to edit commission terms.', true); return; }
+      var v = V2.byId[id]; if (!v) return;
+      if (v.status === 'published') { if (window.showToast) showToast('Published versions are permanent.', true); return; }
+      Promise.resolve(typeof mastConfirm === 'function' ? mastConfirm('Delete draft v' + v.version + '? This cannot be undone.', { title: 'Delete draft', danger: true, confirmLabel: 'Delete' }) : true).then(function (ok) {
+        if (!ok) return;
+        Promise.resolve(MastDB.remove(PATH + '/' + id)).then(function () {
+          if (window.writeAudit) writeAudit('delete', 'commissionTermsVersion', id);
+          if (window.showToast) showToast('Draft deleted.');
+          V2.rows = V2.rows.filter(function (r) { return r._key !== id; });
+          delete V2.byId[id];
+          render();
+        }).catch(function (e) {
+          console.error('[commission-terms-v2] delete', e);
+          if (window.showToast) showToast('Delete failed: ' + (e && e.message || e), true);
+        });
+      });
     },
     refresh: render
   };

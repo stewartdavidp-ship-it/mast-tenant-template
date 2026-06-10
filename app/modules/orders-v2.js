@@ -242,11 +242,8 @@
     }).join('');
 
     tab.innerHTML =
-      '<div style="display:flex;align-items:baseline;gap:12px;margin-bottom:6px;">' +
-        '<h1 style="font-size:1.6rem;margin:0;">Orders</h1>' +
-        '<span style="color:var(--warm-gray);font-size:0.9rem;">' + window.MastUI.Num.count(V2.rows.length) + ' orders</span>' +
-        '<button class="btn btn-secondary" style="margin-left:auto;" onclick="OrdersV2.exportCsv()">↓ Export</button>' +
-      '</div>' +
+      window.MastUI.pageHeader({ title: 'Orders', count: window.MastUI.Num.count(V2.rows.length) + ' orders',
+        actionsHtml: '<button class="btn btn-secondary" onclick="OrdersV2.exportCsv()">↓ Export</button>' }) +
       '<div style="margin:14px 0;">' + pills + '</div>' +
       window.MastEntity.renderList('orders-v2', {
         rows: visibleRows(), sortKey: V2.sortKey, sortDir: V2.sortDir,

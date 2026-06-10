@@ -5,8 +5,8 @@
 Source-of-truth counts for the admin app, generated from the code so docs
 cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 
-- **Core shell:** `app/index.html` — **59,948** lines
-- **Feature modules:** **105** files in `app/modules/` (**95** routed), **117,022** lines combined
+- **Core shell:** `app/index.html` — **59,953** lines
+- **Feature modules:** **105** files in `app/modules/` (**95** routed), **117,059** lines combined
 
 | Module file | Lines | Routes |
 |---|---:|---|
@@ -27,7 +27,7 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/channels-v2.js` | 386 | channels-v2 |
 | `modules/channels.js` | 2,797 | channels |
 | `modules/classes-v2.js` | 469 | classes-v2 |
-| `modules/commission-terms-v2.js` | 248 | commission-terms-v2 |
+| `modules/commission-terms-v2.js` | 267 | commission-terms-v2 |
 | `modules/commission-terms.js` | 317 | commission-terms |
 | `modules/commissions-v2.js` | 296 | commissions-v2 |
 | `modules/composer.js` | 434 | composer |
@@ -52,7 +52,7 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/finance-expenses-v2.js` | 301 | finance-expenses-v2 |
 | `modules/finance.js` | 8,052 | finance-revenue, finance-expenses, finance-pl, finance-cash-flow, finance-ar, finance-ap, finance-tax, finance-reports, customer-portfolio, financials, finance-period-close, finance-amendments |
 | `modules/financials.js` | 350 | — |
-| `modules/fulfillment-v2.js` | 233 | pack-v2, ship-v2 |
+| `modules/fulfillment-v2.js` | 230 | pack-v2, ship-v2 |
 | `modules/fulfillment.js` | 1,524 | pack, ship, fulfillment |
 | `modules/galleries-v2.js` | 585 | galleries-v2 |
 | `modules/gift-cards-v2.js` | 298 | gift-cards-v2 |
@@ -61,7 +61,7 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/inquiries-v2.js` | 225 | inquiries-v2 |
 | `modules/instructors-v2.js` | 339 | instructors-v2 |
 | `modules/jobs-v2.js` | 987 | jobs-v2 |
-| `modules/lookbooks-v2.js` | 302 | lookbooks-v2 |
+| `modules/lookbooks-v2.js` | 333 | lookbooks-v2 |
 | `modules/lookbooks.js` | 822 | lookbooks |
 | `modules/lots-v2.js` | 178 | lots-v2 |
 | `modules/loyalty-v2.js` | 347 | loyalty-v2 |
@@ -73,19 +73,19 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/membership-v2.js` | 438 | membership-v2 |
 | `modules/newsletter-v2.js` | 289 | newsletter-v2 |
 | `modules/newsletter.js` | 2,336 | newsletter |
-| `modules/orders-v2.js` | 329 | orders-v2 |
+| `modules/orders-v2.js` | 326 | orders-v2 |
 | `modules/orders.js` | 6,302 | orders, commissions, rma |
 | `modules/passes-v2.js` | 423 | passes-v2 |
-| `modules/pos-v2.js` | 163 | pos-v2 |
+| `modules/pos-v2.js` | 160 | pos-v2 |
 | `modules/procurement-v2.js` | 875 | procurement-v2 |
 | `modules/procurement.js` | 2,378 | procurement |
 | `modules/production.js` | 3,553 | jobs, production, stories, forecast |
 | `modules/products-v2.js` | 3,528 | products-v2 |
 | `modules/promotions-v2.js` | 389 | promotions-v2 |
 | `modules/promotions.js` | 529 | promotions |
-| `modules/receipts-v2.js` | 220 | receipts-v2 |
+| `modules/receipts-v2.js` | 219 | receipts-v2 |
 | `modules/resources-v2.js` | 308 | resources-v2 |
-| `modules/rma-v2.js` | 222 | rma-v2 |
+| `modules/rma-v2.js` | 219 | rma-v2 |
 | `modules/sales-events-v2.js` | 351 | sales-events-v2 |
 | `modules/sales.js` | 3,257 | pos, receipts, events, salesEvents, terms |
 | `modules/sessions-v2.js` | 274 | sessions-v2 |
