@@ -87,6 +87,12 @@ jobs:
       # must be clean (baseline 0).
       - name: UX standards ratchet
         run: node scripts/lint-ux-standards.js
+      # V2 surface-standard ratchet (v2-conversion-playbook.md §6): every
+      # app/modules/*-v2.js must use MastUI.pageHeader (no hand-rolled <h1>),
+      # carry the uiRedesign flag gate, and be wired in MODULE_MANIFEST.
+      # Existing violations frozen in v2-standard-baseline.json; new files born clean.
+      - name: V2 surface-standard ratchet
+        run: node scripts/lint-v2-standard.js
       # Phase-2 guardrail ratchets (mast-docs/code-health). Each freezes the
       # current per-file violation count in a committed baseline and FAILS any
       # PR that adds NET-NEW violations; new files are born clean (baseline 0).
