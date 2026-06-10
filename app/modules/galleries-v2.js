@@ -242,25 +242,15 @@
           return '<div style="margin:14px 0 4px;"><span style="font-size:0.9rem;font-weight:600;color:var(--teal);">' + esc(label) + '</span>' +
             (hint ? ' <span class="mu-sub" style="font-size:0.78rem;">' + esc(hint) + '</span>' : '') + '</div>';
         }
-        // Repeatable rows: existing + ONE blank spare; "+ Add" appends more
-        // (GalleriesV2.addAddress / addContact). Scraped by data attrs on save,
-        // so dynamically added rows save exactly like rendered ones.
-        function padRows(list, spares) {
-          var arr = (Array.isArray(list) ? list.slice() : []);
-          for (var i = 0; i < spares; i++) arr.push({});
-          return arr;
-        }
-        var addrRows = padRows(addressesOf(g), 1).map(function (a, i) { return addrRowHtml(a, i); }).join('');
-        var contactRows = padRows(contactsOf(g), 1).map(function (c, i) { return contactRowHtml(c, i); }).join('');
+        // Engine repeatable rows (MastUI.repeatRows): same templates, engine-owned
+        // "+ Add" handler — the per-module add/padRows plumbing is retired.
+        var addrRows = U.repeatRows({ id: 'galV2Addrs', rows: addressesOf(g), template: addrRowHtml, addLabel: '+ Add address' });
+        var contactRows = U.repeatRows({ id: 'galV2Contacts', rows: contactsOf(g), template: contactRowHtml, addLabel: '+ Add contact' });
         var pctVal = (typeof g.defaultCommissionPct === 'number') ? g.defaultCommissionPct : '';
         return '<div class="mu-editbar"><span class="mu-editpill">' + (mode === 'create' ? 'NEW' : 'EDITING') + '</span>' + (mode === 'create' ? 'New gallery' : 'Edit this gallery') + '</div>' +
           fg('Name *', '<input class="form-input" id="galV2Name" value="' + esc(g.name || '') + '" style="width:100%;" placeholder="Gallery, boutique or shop name">') +
-          grp('Addresses') +
-          '<div id="galV2Addrs">' + addrRows + '</div>' +
-          '<button type="button" class="btn btn-secondary" style="font-size:0.78rem;padding:4px 12px;margin:2px 0 4px;" onclick="GalleriesV2.addAddress()">+ Add address</button>' +
-          grp('Contacts', '— people at the gallery, kept on this record (not your Contacts list)') +
-          '<div id="galV2Contacts">' + contactRows + '</div>' +
-          '<button type="button" class="btn btn-secondary" style="font-size:0.78rem;padding:4px 12px;margin:2px 0 4px;" onclick="GalleriesV2.addContact()">+ Add contact</button>' +
+          grp('Addresses') + addrRows +
+          grp('Contacts', '— people at the gallery, kept on this record (not your Contacts list)') + contactRows +
           grp('Terms') +
           '<div style="display:flex;gap:12px;flex-wrap:wrap;">' +
             fg('Default commission %', '<input class="form-input" type="number" min="0" max="100" step="0.5" id="galV2Pct" value="' + esc(pctVal) + '" placeholder="40" style="width:100%;">', true) +
@@ -295,16 +285,13 @@
       for (var ci = 0; ci < data.contacts.length; ci++) {
         var c = data.contacts[ci];
         var who = c.name || ('contact ' + (ci + 1));
-        if (c.email && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(c.email)) {
+        if (!U.validate.email(c.email)) {
           if (window.showToast) showToast('"' + c.email + '" doesn\'t look like a valid email (' + who + ').', true);
           return false;
         }
-        if (c.phone) {
-          var digits = c.phone.replace(/\D/g, '');
-          if (digits.length < 7 || digits.length > 15 || /[^\d\s()+.\-ext]/i.test(c.phone)) {
-            if (window.showToast) showToast('"' + c.phone + '" doesn\'t look like a valid phone number (' + who + ').', true);
-            return false;
-          }
+        if (!U.validate.phone(c.phone)) {
+          if (window.showToast) showToast('"' + c.phone + '" doesn\'t look like a valid phone number (' + who + ').', true);
+          return false;
         }
       }
 
@@ -413,22 +400,6 @@
   }
 
   window.GalleriesV2 = {
-    // "+ Add address / contact" in the edit form — appends a blank row using the
-    // SAME template editRender uses; onSave's data-attr scrape picks it up.
-    addAddress: function () {
-      var host = document.getElementById('galV2Addrs'); if (!host) return;
-      var i = host.querySelectorAll('[data-gal-addr-row]').length;
-      host.insertAdjacentHTML('beforeend', addrRowHtml({}, i));
-      var first = host.querySelector('[data-gal-addr-row="' + i + '"] input');
-      if (first) first.focus();
-    },
-    addContact: function () {
-      var host = document.getElementById('galV2Contacts'); if (!host) return;
-      var i = host.querySelectorAll('[data-gal-contact-row]').length;
-      host.insertAdjacentHTML('beforeend', contactRowHtml({}, i));
-      var first = host.querySelector('[data-gal-contact-row="' + i + '"] input');
-      if (first) first.focus();
-    },
     sort: function (key) {
       if (V2.sortKey === key) V2.sortDir = (V2.sortDir === 'asc' ? 'desc' : 'asc');
       else { V2.sortKey = key; V2.sortDir = (key === 'pieces' || key === 'payoutsDue' ? 'desc' : 'asc'); }
