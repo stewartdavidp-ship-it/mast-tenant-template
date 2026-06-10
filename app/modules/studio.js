@@ -305,34 +305,41 @@
     document.getElementById('eqName').focus();
   }
 
-  async function saveEquipment() {
-    var name = document.getElementById('eqName').value.trim();
-    if (!name) { showToast('Equipment name is required', true); return; }
+  // State-free write core — shared with studio-v2 via window.StudioBridge
+  // (playbook §4: the twin never re-implements a write). fields uses the SAME
+  // unit semantics as this module: purchasePrice / monthlyRunningCost in
+  // DOLLARS. Returns the equipment id.
+  async function writeEquipmentCore(equipId, fields) {
+    if (!fields || !fields.name || !String(fields.name).trim()) throw new Error('Equipment name is required');
+    var payload = Object.assign({}, fields, { updatedAt: new Date().toISOString() });
+    var id = equipId;
+    if (id) {
+      await MastDB.lpe.equipment.update(id, payload);
+    } else {
+      id = 'equip_' + Date.now();
+      payload.createdAt = new Date().toISOString();
+      await MastDB.lpe.equipment.set(id, payload);
+    }
+    await MastDB.set('admin/lpe/equipment/' + id + '/gaps', computeLocalGaps(payload));
+    return id;
+  }
+  async function removeEquipmentCore(equipId) {
+    return MastDB.lpe.equipment.remove(equipId);
+  }
 
+  async function saveEquipment() {
     var fields = {
-      name: name,
+      name: document.getElementById('eqName').value.trim(),
       purchasePrice: parseFloat(document.getElementById('eqPrice').value) || null,
       usefulLifeYears: parseInt(document.getElementById('eqLife').value) || null,
       monthlyRunningCost: parseFloat(document.getElementById('eqRunCost').value) || null,
       typicalOutputPerMonth: parseInt(document.getElementById('eqOutput').value) || null,
       outputUnit: document.getElementById('eqUnit').value || 'pieces',
-      updatedAt: new Date().toISOString(),
     };
-
     try {
-      if (editingEquipmentId) {
-        await MastDB.lpe.equipment.update(editingEquipmentId, fields);
-        var gaps = computeLocalGaps(fields);
-        await MastDB.set('admin/lpe/equipment/' + editingEquipmentId + '/gaps', gaps);
-        showToast('Equipment saved');
-      } else {
-        var newId = 'equip_' + Date.now();
-        fields.createdAt = new Date().toISOString();
-        await MastDB.lpe.equipment.set(newId, fields);
-        var gaps = computeLocalGaps(fields);
-        await MastDB.set('admin/lpe/equipment/' + newId + '/gaps', gaps);
-        showToast('Equipment created');
-      }
+      var isNew = !editingEquipmentId;
+      await writeEquipmentCore(editingEquipmentId, fields);
+      showToast(isNew ? 'Equipment created' : 'Equipment saved');
       editingEquipmentId = null;
       studioLoaded = false;
       loadStudio();
@@ -344,7 +351,7 @@
   async function deleteEquipment(equipId) {
     if (!await mastConfirm('Delete this equipment? This cannot be undone.', { title: 'Delete Equipment', danger: true })) return;
     try {
-      await MastDB.lpe.equipment.remove(equipId);
+      await removeEquipmentCore(equipId);
       showToast('Equipment deleted');
       studioLoaded = false;
       loadStudio();
@@ -448,26 +455,34 @@
     document.getElementById('founderName').focus();
   }
 
+  // State-free write cores (StudioBridge). hourlyRate in DOLLARS.
+  async function writeFounderCore(founderId, fields) {
+    if (!fields || !fields.name || !String(fields.name).trim()) throw new Error('Name is required');
+    var payload = Object.assign({}, fields, { updatedAt: new Date().toISOString() });
+    if (founderId) {
+      await MastDB.update('admin/lpe/founders/' + founderId, payload);
+      return founderId;
+    }
+    payload.createdAt = new Date().toISOString();
+    var newId = 'founder_' + Date.now();
+    await MastDB.set('admin/lpe/founders/' + newId, payload);
+    return newId;
+  }
+  async function removeFounderCore(founderId) {
+    return MastDB.remove('admin/lpe/founders/' + founderId);
+  }
+
   async function saveFounder() {
-    var name = document.getElementById('founderName').value.trim();
-    if (!name) { showToast('Name is required', true); return; }
     var fields = {
-      name: name,
+      name: document.getElementById('founderName').value.trim(),
       hourlyRate: parseFloat(document.getElementById('founderRate').value) || null,
       productionHoursPerWeek: parseInt(document.getElementById('founderProd').value) || null,
       adminHoursPerWeek: parseInt(document.getElementById('founderAdmin').value) || null,
-      updatedAt: new Date().toISOString(),
     };
     try {
-      if (editingFounderId) {
-        await MastDB.update('admin/lpe/founders/' + editingFounderId, fields);
-        showToast('Founder saved');
-      } else {
-        fields.createdAt = new Date().toISOString();
-        var newId = 'founder_' + Date.now();
-        await MastDB.set('admin/lpe/founders/' + newId, fields);
-        showToast('Founder added');
-      }
+      var isNew = !editingFounderId;
+      await writeFounderCore(editingFounderId, fields);
+      showToast(isNew ? 'Founder added' : 'Founder saved');
       editingFounderId = null;
       studioLoaded = false;
       loadStudio();
@@ -479,7 +494,7 @@
   async function deleteFounder(founderId) {
     if (!await mastConfirm('Delete this founder? This cannot be undone.', { title: 'Delete Founder', danger: true })) return;
     try {
-      await MastDB.remove('admin/lpe/founders/' + founderId);
+      await removeFounderCore(founderId);
       showToast('Founder deleted');
       studioLoaded = false;
       loadStudio();
@@ -688,26 +703,34 @@
     document.getElementById('ohName').focus();
   }
 
+  // State-free write cores (StudioBridge). monthlyAmount in CENTS.
+  async function writeOverheadCore(itemId, fields) {
+    if (!fields || !fields.name || !String(fields.name).trim()) throw new Error('Name is required');
+    var payload = Object.assign({}, fields, { updatedAt: new Date().toISOString() });
+    if (itemId) {
+      await MastDB.update('admin/lpe/overheadItems/' + itemId, payload);
+      return itemId;
+    }
+    payload.createdAt = new Date().toISOString();
+    var newId = 'oh_' + Date.now();
+    await MastDB.set('admin/lpe/overheadItems/' + newId, payload);
+    return newId;
+  }
+  async function removeOverheadCore(itemId) {
+    return MastDB.remove('admin/lpe/overheadItems/' + itemId);
+  }
+
   async function saveOverheadItem() {
-    var name = document.getElementById('ohName').value.trim();
-    if (!name) { showToast('Name is required', true); return; }
     var amountDollars = parseFloat(document.getElementById('ohAmount').value);
     var fields = {
-      name: name,
+      name: document.getElementById('ohName').value.trim(),
       monthlyAmount: amountDollars ? Math.round(amountDollars * 100) : null,
       notes: document.getElementById('ohNotes').value.trim() || null,
-      updatedAt: new Date().toISOString(),
     };
     try {
-      if (editingOhItemId) {
-        await MastDB.update('admin/lpe/overheadItems/' + editingOhItemId, fields);
-        showToast('Overhead cost saved');
-      } else {
-        fields.createdAt = new Date().toISOString();
-        var newId = 'oh_' + Date.now();
-        await MastDB.set('admin/lpe/overheadItems/' + newId, fields);
-        showToast('Overhead cost added');
-      }
+      var isNew = !editingOhItemId;
+      await writeOverheadCore(editingOhItemId, fields);
+      showToast(isNew ? 'Overhead cost added' : 'Overhead cost saved');
       editingOhItemId = null;
       studioLoaded = false;
       loadStudio();
@@ -719,7 +742,7 @@
   async function deleteOverheadItem(itemId) {
     if (!await mastConfirm('Delete this overhead cost? This cannot be undone.', { title: 'Delete Overhead Cost', danger: true })) return;
     try {
-      await MastDB.remove('admin/lpe/overheadItems/' + itemId);
+      await removeOverheadCore(itemId);
       showToast('Overhead cost deleted');
       studioLoaded = false;
       loadStudio();
@@ -729,6 +752,18 @@
   }
 
   // --- Window Exports ---
+  // V2 bridge — state-free cores shared with studio-v2. Unit semantics are
+  // this module's: equipment purchasePrice/monthlyRunningCost + founder
+  // hourlyRate in DOLLARS; overhead monthlyAmount in CENTS.
+  window.StudioBridge = {
+    writeEquipment: writeEquipmentCore,
+    removeEquipment: removeEquipmentCore,
+    writeFounder: writeFounderCore,
+    removeFounder: removeFounderCore,
+    writeOverhead: writeOverheadCore,
+    removeOverhead: removeOverheadCore,
+    computeEquipmentCosts: computeEquipmentCosts
+  };
   window.loadStudio = loadStudio;
   window.studioAddEquipment = function() { openEquipmentForm(null); };
   window.studioEditEquipment = function(id) { openEquipmentForm(id); };
