@@ -5,8 +5,8 @@
 Source-of-truth counts for the admin app, generated from the code so docs
 cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 
-- **Core shell:** `app/index.html` — **59,950** lines
-- **Feature modules:** **106** files in `app/modules/` (**96** routed), **117,080** lines combined
+- **Core shell:** `app/index.html` — **59,948** lines
+- **Feature modules:** **105** files in `app/modules/` (**95** routed), **116,901** lines combined
 
 | Module file | Lines | Routes |
 |---|---:|---|
@@ -52,6 +52,7 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/finance-expenses-v2.js` | 301 | finance-expenses-v2 |
 | `modules/finance.js` | 8,052 | finance-revenue, finance-expenses, finance-pl, finance-cash-flow, finance-ar, finance-ap, finance-tax, finance-reports, customer-portfolio, financials, finance-period-close, finance-amendments |
 | `modules/financials.js` | 350 | — |
+| `modules/fulfillment-v2.js` | 233 | pack-v2, ship-v2 |
 | `modules/fulfillment.js` | 1,524 | pack, ship, fulfillment |
 | `modules/galleries-v2.js` | 464 | galleries-v2 |
 | `modules/gift-cards-v2.js` | 298 | gift-cards-v2 |
@@ -74,7 +75,6 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/newsletter.js` | 2,336 | newsletter |
 | `modules/orders-v2.js` | 329 | orders-v2 |
 | `modules/orders.js` | 6,302 | orders, commissions, rma |
-| `modules/pack-v2.js` | 208 | pack-v2 |
 | `modules/passes-v2.js` | 423 | passes-v2 |
 | `modules/pos-v2.js` | 163 | pos-v2 |
 | `modules/procurement-v2.js` | 875 | procurement-v2 |
@@ -90,7 +90,6 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/sales.js` | 3,257 | pos, receipts, events, salesEvents, terms |
 | `modules/sessions-v2.js` | 274 | sessions-v2 |
 | `modules/settings-v2.js` | 105 | settings-v2 |
-| `modules/ship-v2.js` | 204 | ship-v2 |
 | `modules/show-light.js` | 1,718 | show-light-profile, show-light-gallery, show-light-shows, show-light-apply |
 | `modules/shows.js` | 3,580 | show, show-find, show-apply, show-prep, show-execute, show-history |
 | `modules/social.js` | 1,441 | social |
