@@ -450,7 +450,10 @@
       },
       onBack: function (target) { _flowTransition(target); },
       onBranch: function (choiceKey, entryPhase) { _flowTransition(entryPhase, choiceKey); },
-      onTarget: function (targetId) { _flowGoTarget(targetId); }
+      onTarget: function (targetId) { _flowGoTarget(targetId); },
+      // Engine-side state changed without a phase transition (e.g. a
+      // requirement override) — re-render the header from the live record.
+      onRefresh: function () { _flowRender(); }
     }, { expandCurrent: !!(_d && _d.guidedExpandCurrent) }).then(function (res) {
       var host = document.getElementById('muFlowHost');
       if (host) {

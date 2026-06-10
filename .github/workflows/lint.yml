@@ -120,4 +120,5 @@ jobs:
           node test/variant-reconcile.test.js &&
           node test/jobs-transitions.test.js &&
           node test/guided-header-branch.test.js &&
+          node test/workflow-overrides.test.js &&
           node test/lint-ratchet.test.js

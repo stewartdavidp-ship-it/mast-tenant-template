@@ -189,8 +189,17 @@
     });
     var overrideSet = Object.create(null);
     (legacyOverrides || []).forEach(function(k) { overrideSet[k] = true; });
+    // Persistent per-requirement manual overrides ("done outside the system"),
+    // written by overrideRequirement() with actor + reason. Distinct from the
+    // derive-time legacy overrides above: these are operator decisions and are
+    // surfaced as ⊙ overridden (with reason + undo) rather than silently passed.
+    var recOverrides = (record && record.__workflow && record.__workflow.overrides &&
+      record.__workflow.overrides[phase.key]) || null;
 
     var checks = reqs.map(function(r) {
+      if (recOverrides && recOverrides[r.key]) {
+        return Promise.resolve({ req: r, satisfied: true, value: '(manual-override)', overridden: recOverrides[r.key] });
+      }
       if (overrideSet[r.key]) {
         return Promise.resolve({ req: r, satisfied: true, value: '(legacy-override)' });
       }
@@ -458,9 +467,99 @@
           console.error('[MastFlow] audit write failed (record state is correct):', err);
         });
       }).then(function() {
+        // Surface the move in the tenant Audit Log too (admin → Audit Log reads
+        // writeAudit rows; the workflowTransitions row above carries the rich
+        // detail). Best-effort — never fails the transition.
+        if (typeof window.writeAudit === 'function') {
+          try { window.writeAudit(opts.force ? 'force-advance' : 'advance', def.recordKind + '-workflow', recordId); } catch (e) {}
+        }
         return { txId: txId, from: fromPhaseKey, to: targetPhase.key, branchChoice: branchChoiceKey };
       });
     });
+  }
+
+  /**
+   * overrideRequirement(workflowKey, record, phaseKey, reqKey, opts)
+   *   opts: { recordId?, reason (required), actor? }
+   * Marks one exit requirement of one phase as satisfied-by-operator ("done
+   * outside the system"). Persists to record.__workflow.overrides[phase][req]
+   * = {by, at, reason}; mirrored into statusHistory[] when the record carries
+   * one; audited to admin/workflowTransitions (type requirement-override) AND
+   * the tenant Audit Log (writeAudit). evaluate() then treats the requirement
+   * as satisfied (rendered ⊙ with the reason + an undo).
+   *
+   * clearRequirementOverride(...) is the inverse (type requirement-override-cleared).
+   */
+  function _writeOverridePatch(workflowKey, record, phaseKey, reqKey, opts, clearing) {
+    opts = opts || {};
+    var def = getDefinition(workflowKey);
+    if (!def) return Promise.reject(new Error('Unknown workflow: ' + workflowKey));
+    var recordId = opts.recordId || record.id;
+    if (!recordId) return Promise.reject(new Error('[MastFlow] recordId required'));
+    var phase = _phaseByKey(def, phaseKey);
+    if (!phase) return Promise.reject(new Error('Unknown phase: ' + phaseKey));
+    var req = (phase.exitRequirements || []).filter(function(r) { return r.key === reqKey; })[0];
+    if (!req) return Promise.reject(new Error('Unknown requirement: ' + phaseKey + '/' + reqKey));
+    if (!clearing && !(opts.reason && String(opts.reason).trim())) {
+      return Promise.reject(new Error('Override requires a reason'));
+    }
+    var actor = opts.actor || _defaultActor();
+    var now = new Date().toISOString();
+    var reason = clearing ? null : String(opts.reason).trim();
+
+    var wf = Object.assign({}, record.__workflow || {});
+    var ovs = Object.assign({}, wf.overrides || {});
+    var ph = Object.assign({}, ovs[phaseKey] || {});
+    if (clearing) { delete ph[reqKey]; }
+    else { ph[reqKey] = { by: actor, at: now, reason: reason }; }
+    if (Object.keys(ph).length) ovs[phaseKey] = ph; else delete ovs[phaseKey];
+    wf.overrides = ovs;
+
+    var txId = 'wfo_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8);
+    var patch = { __workflow: wf, updatedAt: now };
+    // Record history: when the record keeps a statusHistory[] (orders), the
+    // override is part of the story the History tab tells.
+    if (record.statusHistory && record.statusHistory.slice) {
+      var hist = record.statusHistory.slice();
+      hist.push({ status: record.status || null, at: now, by: 'mastflow',
+        note: (clearing ? 'Override removed: ' : 'Override: ') + req.label + (reason ? ' — ' + reason : '') });
+      patch.statusHistory = hist;
+    }
+    var auditRow = {
+      txId: txId,
+      type: clearing ? 'requirement-override-cleared' : 'requirement-override',
+      workflowKey: workflowKey,
+      recordKind: def.recordKind,
+      recordId: recordId,
+      specVersion: def.specVersion,
+      phase: phaseKey,
+      requirement: reqKey,
+      requirementLabel: req.label,
+      hard: !!req.hard,
+      reason: reason,
+      by: actor,
+      at: now
+    };
+    var recordPath = def.recordPath(recordId);
+    var auditPath = 'admin/workflowTransitions/' + def.recordKind + '/' + recordId + '/' + txId;
+    return window.MastDB.update(recordPath, patch).then(function() {
+      record.__workflow = wf;
+      if (patch.statusHistory) record.statusHistory = patch.statusHistory;
+      return window.MastDB.set(auditPath, auditRow).catch(function(err) {
+        console.error('[MastFlow] override audit write failed (record state is correct):', err);
+      });
+    }).then(function() {
+      if (typeof window.writeAudit === 'function') {
+        try { window.writeAudit(clearing ? 'override-cleared' : 'override', def.recordKind + '-workflow', recordId); } catch (e) {}
+      }
+      return { txId: txId, phase: phaseKey, requirement: reqKey, cleared: !!clearing };
+    });
+  }
+  function overrideRequirement(workflowKey, record, phaseKey, reqKey, opts) {
+    return _writeOverridePatch(workflowKey, record, phaseKey, reqKey, opts, false);
+  }
+  function clearRequirementOverride(workflowKey, record, phaseKey, reqKey, opts) {
+    return _writeOverridePatch(workflowKey, record, phaseKey, reqKey, opts, true);
   }
 
   /**
@@ -680,6 +779,22 @@
         var nextKey = (ev.nextPhases && ev.nextPhases.length) ? ev.nextPhases[0] : null;
         var isImmediateNext = (clickIdx === curIdx + 1 && phaseKey === nextKey);
         if (isImmediateNext && ev.canAdvance && !ev.isBranchPoint) {
+          // Bypass-with-confirm: hard reqs are met (canAdvance) but recommended
+          // items may remain — moving on is allowed, deliberate, and leaves the
+          // stage RED in the rail until the items are done or overridden.
+          var softLeft = ev.missing.filter(function(m) { return !m.req.hard; });
+          if (softLeft.length && typeof window.mastConfirm === 'function') {
+            var nextLabel = (_phaseByKey(def, phaseKey) || {}).label || phaseKey;
+            window.mastConfirm(
+              'Move on to ' + nextLabel + '? ' + softLeft.length + ' recommended item' + (softLeft.length === 1 ? '' : 's') +
+              ' in ' + (ev.currentPhase.label || 'this step') + ' remain' + (softLeft.length === 1 ? 's' : '') +
+              ' outstanding — the stage will show red until they\'re done or overridden.',
+              { title: 'Move on with items outstanding', confirmLabel: 'Move on' }
+            ).then(function(ok) {
+              if (ok && ctx.callbacks.onAdvance) ctx.callbacks.onAdvance(phaseKey);
+            });
+            return;
+          }
           if (ctx.callbacks.onAdvance) ctx.callbacks.onAdvance(phaseKey);
           return;
         }
@@ -707,6 +822,59 @@
       var el = document.getElementById(ctxId + '_checklist'); if (!el) return;
       if (_guidedReviewLive[ctxId] != null) { el.innerHTML = _guidedReviewLive[ctxId]; _guidedReviewLive[ctxId] = null; }
       el.style.display = 'none';
+    },
+    // ── Per-requirement manual override ("done outside the system") ──
+    // 'mark done' swaps the affordance for an inline reason input (no native
+    // prompt — UX standard); Confirm persists via overrideRequirement().
+    reqOverride: function(ctxId, phaseKey, reqKey) {
+      var span = document.getElementById(ctxId + '_ov_' + phaseKey + '_' + reqKey);
+      if (!span) return;
+      span.innerHTML =
+        '<input id="' + ctxId + '_ovin_' + phaseKey + '_' + reqKey + '" placeholder="How was this done? (required)" ' +
+          'style="font-size:0.78rem;padding:3px 8px;border:1px solid var(--border);border-radius:6px;background:var(--surface-card);color:var(--text);width:220px;">' +
+        ' <button type="button" onclick="MastFlow.__ui.reqOverrideConfirm(\'' + ctxId + '\',\'' + _esc(phaseKey) + '\',\'' + _esc(reqKey) + '\')" ' +
+          'style="background:var(--teal);color:var(--surface-card);border:none;border-radius:5px;padding:3px 10px;font-size:0.78rem;cursor:pointer;">Confirm</button>' +
+        ' <a href="#" onclick="event.preventDefault();MastFlow.__ui.reqOverrideCancel(\'' + ctxId + '\',\'' + _esc(phaseKey) + '\',\'' + _esc(reqKey) + '\')" ' +
+          'style="color:var(--warm-gray);font-size:0.78rem;text-decoration:underline;">cancel</a>';
+      var input = document.getElementById(ctxId + '_ovin_' + phaseKey + '_' + reqKey);
+      if (input) input.focus();
+    },
+    reqOverrideCancel: function(ctxId, phaseKey, reqKey) {
+      var span = document.getElementById(ctxId + '_ov_' + phaseKey + '_' + reqKey);
+      if (!span) return;
+      span.innerHTML = '<a href="#" onclick="event.preventDefault();MastFlow.__ui.reqOverride(\'' + ctxId + '\',\'' + _esc(phaseKey) + '\',\'' + _esc(reqKey) + '\')" ' +
+        'style="color:var(--warm-gray);font-size:0.78rem;text-decoration:underline;" title="Mark as done manually (reason required, audited)">mark done</a>';
+    },
+    reqOverrideConfirm: function(ctxId, phaseKey, reqKey) {
+      var ctx = _getUiContext(ctxId); if (!ctx) return;
+      var input = document.getElementById(ctxId + '_ovin_' + phaseKey + '_' + reqKey);
+      var reason = input ? String(input.value || '').trim() : '';
+      if (!reason) {
+        if (window.showToast) window.showToast('A reason is required to override', true);
+        if (input) input.focus();
+        return;
+      }
+      overrideRequirement(ctx.workflowKey, ctx.record, phaseKey, reqKey, { recordId: ctx.recordId, reason: reason })
+        .then(function() {
+          if (window.showToast) window.showToast('Marked done manually');
+          if (ctx.callbacks.onRefresh) ctx.callbacks.onRefresh();
+        })
+        .catch(function(e) {
+          console.error('[MastFlow] override', e);
+          if (window.showToast) window.showToast('Override failed: ' + (e && e.message || e), true);
+        });
+    },
+    reqOverrideClear: function(ctxId, phaseKey, reqKey) {
+      var ctx = _getUiContext(ctxId); if (!ctx) return;
+      clearRequirementOverride(ctx.workflowKey, ctx.record, phaseKey, reqKey, { recordId: ctx.recordId })
+        .then(function() {
+          if (window.showToast) window.showToast('Override removed');
+          if (ctx.callbacks.onRefresh) ctx.callbacks.onRefresh();
+        })
+        .catch(function(e) {
+          console.error('[MastFlow] override clear', e);
+          if (window.showToast) window.showToast('Could not remove override: ' + (e && e.message || e), true);
+        });
     }
   };
 
@@ -737,21 +905,47 @@
     if (!el) return;
     if (_guidedReviewLive[ctxId] == null) _guidedReviewLive[ctxId] = el.innerHTML;  // stash live once
     var phase = (def.phases || []).filter(function(p) { return p.key === phaseKey; })[0];
-    var reqs = (phase && phase.exitRequirements) || [];
-    var rows = reqs.map(function(r) {
-      var ok = true; try { ok = r.test ? !!r.test(record) : true; } catch (e) { ok = true; }
-      return '<div style="display:flex;align-items:center;gap:8px;font-size:0.85rem;">' +
-        '<span style="display:inline-flex;width:18px;height:18px;border-radius:50%;background:color-mix(in srgb,var(--teal) 16%,transparent);color:var(--teal);align-items:center;justify-content:center;font-weight:700;font-size:0.72rem;flex-shrink:0;">' + (ok ? '✓' : '·') + '</span>' +
-        '<span style="color:var(--warm-gray);">' + _esc(r.label) + '</span></div>';
-    }).join('');
-    if (!rows) rows = '<div style="font-size:0.82rem;color:var(--warm-gray);">Nothing was required at this step.</div>';
-    el.innerHTML =
-      '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px;">' +
-        '<span style="font-size:0.72rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--warm-gray);">Reviewing: ' + _esc((phase && phase.label) || phaseKey) + ' · completed</span>' +
-        '<a href="#" onclick="event.preventDefault();MastFlow.__ui.closeReview(\'' + ctxId + '\')" style="color:var(--teal);font-size:0.78rem;text-decoration:underline;white-space:nowrap;">Back to current step</a>' +
-      '</div>' + rows;
-    el.style.display = 'flex';
-    el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    // Live re-evaluation (overrides honored) so a bypassed stage's review shows
+    // exactly what's still outstanding — with the same "mark done" / undo
+    // affordances as the current step's checklist (this is where a red stage
+    // gets resolved without moving the record backward).
+    _evaluateRequirements(phase || { exitRequirements: [] }, record, []).then(function(pe) {
+      var all = pe.satisfied.concat(pe.missing);
+      var rows = all.map(function(r) {
+        var sat = pe.satisfied.indexOf(r) !== -1;
+        var overridden = !!r.overridden;
+        var icon = sat ? (overridden ? '⊙' : '✓') : '✕';
+        var iconColor = sat ? 'var(--teal)' : 'var(--danger)';
+        var iconBg = sat ? 'color-mix(in srgb,var(--teal) 16%,transparent)' : 'color-mix(in srgb,var(--danger) 12%,transparent)';
+        var extra = '';
+        if (!sat) {
+          extra = ' <span id="' + ctxId + '_ov_' + _esc(phaseKey) + '_' + _esc(r.req.key) + '" style="margin-left:8px;">' +
+            '<a href="#" onclick="event.preventDefault();MastFlow.__ui.reqOverride(\'' + ctxId + '\',\'' + _esc(phaseKey) + '\',\'' + _esc(r.req.key) + '\')" ' +
+            'style="color:var(--warm-gray);font-size:0.78rem;text-decoration:underline;" title="Mark as done manually (reason required, audited)">mark done</a></span>' +
+            (r.req.target ? ' <a href="#" onclick="event.preventDefault();MastFlow.__ui.target(\'' + ctxId + '\',\'' + _esc(r.req.target) + '\')" style="color:var(--teal);font-size:0.78rem;margin-left:6px;text-decoration:underline;">Go &rarr;</a>' : '');
+        } else if (overridden) {
+          extra = ' <span class="mu-sub" style="font-size:0.78rem;" title="' + _esc(r.overridden.reason || '') + '">· overridden' +
+            (r.overridden.reason ? ': ' + _esc(r.overridden.reason) : '') + '</span>' +
+            ' <a href="#" onclick="event.preventDefault();MastFlow.__ui.reqOverrideClear(\'' + ctxId + '\',\'' + _esc(phaseKey) + '\',\'' + _esc(r.req.key) + '\')" ' +
+            'style="color:var(--warm-gray);font-size:0.78rem;text-decoration:underline;">undo</a>';
+        }
+        return '<div style="display:flex;align-items:center;gap:8px;font-size:0.85rem;flex-wrap:wrap;">' +
+          '<span style="display:inline-flex;width:18px;height:18px;border-radius:50%;background:' + iconBg + ';color:' + iconColor + ';align-items:center;justify-content:center;font-weight:700;font-size:0.72rem;flex-shrink:0;">' + icon + '</span>' +
+          '<span style="color:' + (sat ? 'var(--warm-gray)' : 'var(--text)') + ';">' + _esc(r.req.label) + '</span>' + extra + '</div>';
+      }).join('');
+      if (!rows) rows = '<div style="font-size:0.82rem;color:var(--warm-gray);">Nothing was required at this step.</div>';
+      var remaining = pe.missing.length;
+      var headLabel = remaining
+        ? '<span style="color:var(--danger);">Reviewing: ' + _esc((phase && phase.label) || phaseKey) + ' · ' + remaining + ' remaining</span>'
+        : 'Reviewing: ' + _esc((phase && phase.label) || phaseKey) + ' · completed';
+      el.innerHTML =
+        '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px;">' +
+          '<span style="font-size:0.72rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--warm-gray);">' + headLabel + '</span>' +
+          '<a href="#" onclick="event.preventDefault();MastFlow.__ui.closeReview(\'' + ctxId + '\')" style="color:var(--teal);font-size:0.78rem;text-decoration:underline;white-space:nowrap;">Back to current step</a>' +
+        '</div>' + rows;
+      el.style.display = 'flex';
+      el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    });
   }
   function _showGuidedChecklist(ctxId) {
     var el = document.getElementById(ctxId + '_checklist');
@@ -1050,33 +1244,56 @@
     var expandCurrent = !!(opts && opts.expandCurrent);
     return evaluate(workflowKey, record).then(function(ev) {
       var def = getDefinition(workflowKey);
-      var ctxId = _registerUiContext(workflowKey, record, callbacks);
-      var html = '';
 
-      if (ev.specMismatch) {
-        html += _renderSpecMismatchBanner(ev);
-      }
+      // Bypassed-stage detection (computed LIVE, never stored, so it self-heals
+      // when the data is fixed): re-test every PAST stage's exit requirements —
+      // manual overrides honored — and mark stages that still have remaining
+      // items. The rail renders those red ("bypassed with remaining actions").
+      var currentKey = ev.currentPhase ? ev.currentPhase.key : null;
+      var branchKey = (record && record.__workflow && record.__workflow.branch) ||
+                      _inferBranchFromPhase(def, currentKey);
+      var chain = _resolveDisplayChain(def, branchKey);
+      var curIdx = -1;
+      chain.forEach(function(p, i) { if (p.key === currentKey) curIdx = i; });
+      var past = curIdx > 0 ? chain.slice(0, curIdx) : [];
+      return Promise.all(past.map(function(p) { return _evaluateRequirements(p, record, []); })).then(function(prior) {
+        var bypassed = {};
+        prior.forEach(function(pe, i) { if (pe.missing.length) bypassed[past[i].key] = pe.missing.length; });
+        ev.bypassedByPhase = bypassed;
 
-      // Tuck: once the record reaches its live end-state (advanced as far as it
-      // goes, nothing left to set up), the lifecycle is done — you won't go
-      // backwards. Hide the rail entirely; the status pill reveals it on demand.
-      var unmetHard = (ev.missing || []).filter(function(m) { return m.req.hard; }).length;
-      var tucked = !ev.specMismatch && !ev.isTerminal && !ev.isBranchPoint &&
-                   (!ev.nextPhases || !ev.nextPhases.length) && unmetHard === 0;
-      var rail = _renderGuidedRail(def, record, ev, ctxId);
-      // Branch point: the rail deliberately locks forward clicks here — the
-      // operator must PICK A PATH, not "advance". Render the choices as an
-      // always-visible pill row (the guided twin of the action bar's branch
-      // buttons). Without this the guided header dead-ends at a branch point,
-      // which is what kept pickship/commissions surfaces off renderGuidedHeader.
-      if (ev.isBranchPoint && !ev.specMismatch && !ev.isTerminal) {
-        rail += _renderGuidedBranchRow(def, ev, ctxId);
-      }
-      rail += _renderGuidedChecklist(def, record, ev, ctxId, expandCurrent);
-      var railWrapId = ctxId + '_railwrap';
-      html += tucked ? ('<div id="' + railWrapId + '" style="display:none;">' + rail + '</div>') : rail;
+        var ctxId = _registerUiContext(workflowKey, record, callbacks);
+        var html = '';
 
-      return { html: html, uiContextId: ctxId, evaluation: ev, tucked: tucked, railWrapId: railWrapId };
+        if (ev.specMismatch) {
+          html += _renderSpecMismatchBanner(ev);
+        }
+
+        // Tuck: hide the rail when the lifecycle is genuinely over — a live
+        // end-state with nothing left to set up (products Active) or a
+        // TERMINAL SUCCESS (delivered/resolved). Otherwise the rail is always
+        // visible (the red-bypass model assumes revisiting stages is normal).
+        // The status pill reveals a tucked rail on demand.
+        var unmetHard = (ev.missing || []).filter(function(m) { return m.req.hard; }).length;
+        var nothingBypassed = Object.keys(bypassed).length === 0;
+        var tucked = !ev.specMismatch && nothingBypassed && (
+          (ev.isTerminal && ev.terminalKind === 'success') ||
+          (!ev.isTerminal && !ev.isBranchPoint && (!ev.nextPhases || !ev.nextPhases.length) && unmetHard === 0)
+        );
+        var rail = _renderGuidedRail(def, record, ev, ctxId);
+        // Branch point: the rail deliberately locks forward clicks here — the
+        // operator must PICK A PATH, not "advance". Render the choices as an
+        // always-visible pill row (the guided twin of the action bar's branch
+        // buttons). Without this the guided header dead-ends at a branch point,
+        // which is what kept pickship/commissions surfaces off renderGuidedHeader.
+        if (ev.isBranchPoint && !ev.specMismatch && !ev.isTerminal) {
+          rail += _renderGuidedBranchRow(def, ev, ctxId);
+        }
+        rail += _renderGuidedChecklist(def, record, ev, ctxId, expandCurrent);
+        var railWrapId = ctxId + '_railwrap';
+        html += tucked ? ('<div id="' + railWrapId + '" style="display:none;">' + rail + '</div>') : rail;
+
+        return { html: html, uiContextId: ctxId, evaluation: ev, tucked: tucked, railWrapId: railWrapId };
+      });
     });
   }
 
@@ -1116,8 +1333,16 @@
       var reachable = isNext && ev.canAdvance && !ev.isBranchPoint;
       var locked = (state === 'upcoming') && !reachable;
 
+      // Bypassed: a PAST stage whose exit requirements still fail (live re-test,
+      // overrides honored) — moved on with remaining actions. Red, with a count;
+      // click = review (which carries the override affordances).
+      var bypassedN = (state === 'done' && ev.bypassedByPhase && ev.bypassedByPhase[p.key]) || 0;
+
       var dotBg, dotColor, dotBorder, dotBorderStyle, labelColor, labelWeight, cursor, hoverBg;
-      if (state === 'done') {
+      if (state === 'done' && bypassedN) {
+        dotBg = 'transparent'; dotColor = 'var(--danger)'; dotBorder = 'var(--danger)'; dotBorderStyle = 'solid';
+        labelColor = 'var(--danger)'; labelWeight = '600'; cursor = 'pointer'; hoverBg = 'color-mix(in srgb,var(--danger) 8%,transparent)';
+      } else if (state === 'done') {
         dotBg = 'var(--teal)'; dotColor = 'var(--surface-card)'; dotBorder = 'var(--teal)'; dotBorderStyle = 'solid';
         labelColor = 'var(--teal)'; labelWeight = '600'; cursor = 'pointer'; hoverBg = 'color-mix(in srgb,var(--text) 6%,transparent)';
       } else if (state === 'current') {
@@ -1136,7 +1361,7 @@
       // not a ⚠ — a future step is a to-do, not an error. The dashed grey dot
       // already signals "not reached yet"; the alarming glyph made a normal
       // forward step read as a problem.
-      var glyph = state === 'done' ? '✓' : String(i + 1);
+      var glyph = (state === 'done' && bypassedN) ? '✕' : (state === 'done' ? '✓' : String(i + 1));
       // A locked future phase shows the reason (mirrors the prototype's "· needs
       // Connect" / "· N to do"). For the immediate-next phase the blocker is the
       // current phase's unmet hard reqs.
@@ -1147,13 +1372,16 @@
       var reasonHtml = '';
       if (state === 'current' && unmetHard > 0) {
         reasonHtml = ' <span style="font-size:0.72rem;color:var(--warm-gray);">· ' + unmetHard + ' to set up ▾</span>';
+      } else if (bypassedN) {
+        reasonHtml = ' <span style="font-size:0.72rem;color:var(--danger);">· ' + bypassedN + ' left</span>';
       }
 
       // onclick → MastFlow.__ui.phaseStep(ctx, phaseKey). The handler decides
       // advance/back/focus/blocked-toast from the live evaluation.
       html += '<div role="listitem" data-mf-phase="' + _esc(p.key) + '" ' +
+        (bypassedN ? 'data-mf-bypassed="' + bypassedN + '" ' : '') +
         'onclick="MastFlow.__ui.phaseStep(\'' + ctxId + '\',\'' + _esc(p.key) + '\')" ' +
-        'title="' + _esc(p.label) + '" ' +
+        'title="' + _esc(bypassedN ? (p.label + ' — ' + bypassedN + ' remaining item' + (bypassedN === 1 ? '' : 's') + ' (click to review)') : p.label) + '" ' +
         'style="display:flex;align-items:center;gap:7px;flex-shrink:0;padding:6px 9px;border-radius:8px;cursor:' + cursor + ';background:' + activeBg + ';transition:background 0.15s;" ' +
         'onmouseover="this.style.background=\'' + hoverBg + '\'" onmouseout="this.style.background=\'' + activeBg + '\'">' +
         '<span style="width:21px;height:21px;border-radius:50%;background:' + dotBg + ';color:' + dotColor + ';border:1.5px ' + dotBorderStyle + ' ' + dotBorder + ';display:inline-flex;align-items:center;justify-content:center;font-size:0.72rem;font-weight:700;flex-shrink:0;">' + glyph + '</span>' +
@@ -1207,9 +1435,12 @@
     var unmet = ev.missing, doneReqs = ev.satisfied;
     if (!unmet.length && !doneReqs.length) return emptyEl;
 
+    var phaseKey = ev.currentPhase ? ev.currentPhase.key : '';
     function itemHtml(r, sat) {
+      var overridden = !!r.overridden;
       var icon, iconBg, iconColor;
-      if (sat) { icon = '✓'; iconBg = 'color-mix(in srgb,var(--teal) 16%,transparent)'; iconColor = 'var(--teal)'; }
+      if (sat && overridden) { icon = '⊙'; iconBg = 'color-mix(in srgb,var(--teal) 16%,transparent)'; iconColor = 'var(--teal)'; }
+      else if (sat) { icon = '✓'; iconBg = 'color-mix(in srgb,var(--teal) 16%,transparent)'; iconColor = 'var(--teal)'; }
       else if (r.req.hard) { icon = '✕'; iconBg = 'color-mix(in srgb,var(--danger) 12%,transparent)'; iconColor = 'var(--danger)'; }
       else { icon = '!'; iconBg = 'color-mix(in srgb,var(--amber) 16%,transparent)'; iconColor = 'var(--amber)'; }
       var goHtml = '';
@@ -1220,11 +1451,24 @@
       if (!sat && r.req.action) {
         actionHtml = ' <button type="button" onclick="MastFlow.__ui.action(\'' + ctxId + '\',\'' + _esc(r.req.action.handler) + '\')" style="margin-left:8px;background:var(--teal);color:var(--surface-card);border:none;border-radius:5px;padding:2px 10px;font-size:0.78rem;cursor:pointer;">' + _esc(r.req.action.label) + '</button>';
       }
+      // Manual override: any unmet item can be marked done-outside-the-system
+      // (reason required, audited). An overridden item shows ⊙ + reason + undo.
+      var ovHtml = '';
+      if (!sat) {
+        ovHtml = ' <span id="' + ctxId + '_ov_' + _esc(phaseKey) + '_' + _esc(r.req.key) + '" style="margin-left:8px;">' +
+          '<a href="#" onclick="event.preventDefault();MastFlow.__ui.reqOverride(\'' + ctxId + '\',\'' + _esc(phaseKey) + '\',\'' + _esc(r.req.key) + '\')" ' +
+          'style="color:var(--warm-gray);font-size:0.78rem;text-decoration:underline;" title="Mark as done manually (reason required, audited)">mark done</a></span>';
+      } else if (overridden) {
+        ovHtml = ' <span class="mu-sub" style="font-size:0.78rem;" title="' + _esc(r.overridden.reason || '') + '">· overridden' +
+          (r.overridden.reason ? ': ' + _esc(r.overridden.reason) : '') + '</span>' +
+          ' <a href="#" onclick="event.preventDefault();MastFlow.__ui.reqOverrideClear(\'' + ctxId + '\',\'' + _esc(phaseKey) + '\',\'' + _esc(r.req.key) + '\')" ' +
+          'style="color:var(--warm-gray);font-size:0.78rem;text-decoration:underline;">undo</a>';
+      }
       var recHtml = r.req.hard ? '' : ' <em style="color:var(--warm-gray);font-size:0.78rem;font-style:normal;">· recommended</em>';
       return '<div style="display:flex;align-items:center;gap:8px;font-size:0.85rem;">' +
         '<span style="display:inline-flex;width:18px;height:18px;border-radius:50%;background:' + iconBg + ';color:' + iconColor + ';align-items:center;justify-content:center;font-weight:700;font-size:0.72rem;flex-shrink:0;">' + icon + '</span>' +
-        '<span style="color:' + (sat ? 'var(--warm-gray)' : 'var(--text)') + ';' + (sat ? 'text-decoration:line-through;' : '') + '">' + _esc(r.req.label) + recHtml + '</span>' +
-        goHtml + actionHtml +
+        '<span style="color:' + (sat ? 'var(--warm-gray)' : 'var(--text)') + ';' + (sat && !overridden ? 'text-decoration:line-through;' : '') + '">' + _esc(r.req.label) + recHtml + '</span>' +
+        goHtml + actionHtml + ovHtml +
       '</div>';
     }
 
@@ -1312,6 +1556,8 @@
     registerActionHandler: registerActionHandler,
     evaluate: evaluate,
     transition: transition,
+    overrideRequirement: overrideRequirement,
+    clearRequirementOverride: clearRequirementOverride,
     diagnose: diagnose,
     renderHeader: renderHeader,
     renderGuidedHeader: renderGuidedHeader,
