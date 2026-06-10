@@ -110,25 +110,25 @@
        Shared by customers.js (list/export) and customer-service.js (survey
        bulk-send) so the segment matcher cannot drift. ?v= kept in lockstep
        with MAST_MODULES_V by scripts/bump-modules-version.sh. -->
-  <script src="../shared/customer-filters.js?v=20260610-085349-10f8baf"></script>
+  <script src="../shared/customer-filters.js?v=20260610-090406-fc32277"></script>
   <script src="../shared/brand-sync.js?v=1"></script>
   <script src="../shared/channel-connection.js?v=1"></script>
-  <script src="../shared/variant-reconcile.js?v=20260610-085349-10f8baf"></script>
+  <script src="../shared/variant-reconcile.js?v=20260610-090406-fc32277"></script>
   <!-- UI redesign engines (docs/ux-audit): shared primitives + Entity Engine.
        The ?v= suffix is kept in lockstep with MAST_MODULES_V by
        scripts/bump-modules-version.sh (these are static <head> tags loaded
        before the JS var exists, so they can't read it at runtime). Without
        this, the engines were frozen at ?v=1 and never cache-busted on deploy. -->
-  <script src="../shared/mast-ui.js?v=20260610-085349-10f8baf"></script>
-  <script src="../shared/mast-io.js?v=20260610-085349-10f8baf"></script>
-  <script src="../shared/mast-entity.js?v=20260610-085349-10f8baf"></script>
+  <script src="../shared/mast-ui.js?v=20260610-090406-fc32277"></script>
+  <script src="../shared/mast-io.js?v=20260610-090406-fc32277"></script>
+  <script src="../shared/mast-entity.js?v=20260610-090406-fc32277"></script>
   <!-- Canonical product readiness gate (computeReadinessChecklist / productMarkupConfig).
        Byte-identical to mast-tenant-mcp-server/src/shared/product-readiness.core.js so the
        AI publish gate and the maker.js UI gate cannot drift; maker.js delegates to
        window.MastProductReadiness. Eager-loaded so it exists before the lazy maker module.
        ?v= kept in lockstep with MAST_MODULES_V by scripts/bump-modules-version.sh.
        See docs/ux-audit/product-publish-gate-plan.md §7. -->
-  <script src="../shared/product-readiness.core.js?v=20260610-085349-10f8baf"></script>
+  <script src="../shared/product-readiness.core.js?v=20260610-090406-fc32277"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Pod-specific runtime config — sets window.MAST_POD_PLATFORM_PROJECT so
@@ -21271,8 +21271,19 @@ function updateSidebarActive(route) {
   document.querySelectorAll('.sidebar-item.active').forEach(function(el) { el.classList.remove('active'); });
   document.querySelectorAll('.sidebar-section-header.active').forEach(function(el) { el.classList.remove('active'); });
 
+  // V2 routes ('rma-v2', …) aren't in the sidebar's data-route attributes or in
+  // SECTION_ROUTES — resolve back to the base/legacy route id so the active
+  // highlight and section auto-expand keep working when the remap is on.
+  var baseRoute = route;
+  if (typeof MAST_V2_ROUTE_MAP === 'object') {
+    for (var legacy in MAST_V2_ROUTE_MAP) {
+      if (MAST_V2_ROUTE_MAP[legacy] === route) { baseRoute = legacy; break; }
+    }
+  }
+
   // Set active item
-  var activeItem = document.querySelector('.sidebar-item[data-route="' + route + '"]');
+  var activeItem = document.querySelector('.sidebar-item[data-route="' + route + '"]') ||
+                   document.querySelector('.sidebar-item[data-route="' + baseRoute + '"]');
   if (activeItem) activeItem.classList.add('active');
 
   // Dashboard special case
@@ -21280,21 +21291,23 @@ function updateSidebarActive(route) {
     document.querySelector('.sidebar-section-header.dashboard-link').classList.add('active');
   }
 
-  // V2 nav: mirror active state onto any matching Pinned row, and enforce
-  // single-open by collapsing all sections first (the loop below re-opens the
-  // one(s) containing this route). Legacy ON keeps the additive auto-expand.
+  // V2 nav: mirror active state onto any matching Pinned row. NAV STATE IS
+  // PRESERVED (operator-ratified 2026-06-10): navigation never collapses
+  // sections — the user's open/closed choices stand until THEY toggle a
+  // section. (The old single-open enforcement collapsed everything on every
+  // click, and V2 routes never matched SECTION_ROUTES so nothing re-opened —
+  // the whole nav slammed shut on each navigation.)
   var navV2On = document.body.classList.contains('nav-v2');
   if (navV2On) {
     document.querySelectorAll('.navv2-pin-row.active').forEach(function(el) { el.classList.remove('active'); });
-    document.querySelectorAll('.navv2-pin-row[data-route="' + route + '"]').forEach(function(el) { el.classList.add('active'); });
-    document.querySelectorAll('.sidebar-section.open').forEach(function(s) { s.classList.remove('open'); });
+    document.querySelectorAll('.navv2-pin-row[data-route="' + route + '"], .navv2-pin-row[data-route="' + baseRoute + '"]').forEach(function(el) { el.classList.add('active'); });
   }
 
-  // Auto-expand the section containing this route
+  // Auto-expand the section containing this route (additive — never collapses).
   for (var section in SECTION_ROUTES) {
     var sectionEl = document.querySelector('.sidebar-section[data-section="' + section + '"]');
     if (!sectionEl) continue;
-    if (SECTION_ROUTES[section].indexOf(route) >= 0) {
+    if (SECTION_ROUTES[section].indexOf(baseRoute) >= 0) {
       sectionEl.classList.add('open');
     }
   }
@@ -21996,7 +22009,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260610-085349-10f8baf';
+var MAST_MODULES_V = '20260610-090406-fc32277';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
