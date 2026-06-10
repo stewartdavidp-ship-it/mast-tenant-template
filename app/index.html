@@ -110,25 +110,25 @@
        Shared by customers.js (list/export) and customer-service.js (survey
        bulk-send) so the segment matcher cannot drift. ?v= kept in lockstep
        with MAST_MODULES_V by scripts/bump-modules-version.sh. -->
-  <script src="../shared/customer-filters.js?v=20260610-113734-d4e11b9"></script>
+  <script src="../shared/customer-filters.js?v=20260610-114532-a291f11"></script>
   <script src="../shared/brand-sync.js?v=1"></script>
   <script src="../shared/channel-connection.js?v=1"></script>
-  <script src="../shared/variant-reconcile.js?v=20260610-113734-d4e11b9"></script>
+  <script src="../shared/variant-reconcile.js?v=20260610-114532-a291f11"></script>
   <!-- UI redesign engines (docs/ux-audit): shared primitives + Entity Engine.
        The ?v= suffix is kept in lockstep with MAST_MODULES_V by
        scripts/bump-modules-version.sh (these are static <head> tags loaded
        before the JS var exists, so they can't read it at runtime). Without
        this, the engines were frozen at ?v=1 and never cache-busted on deploy. -->
-  <script src="../shared/mast-ui.js?v=20260610-113734-d4e11b9"></script>
-  <script src="../shared/mast-io.js?v=20260610-113734-d4e11b9"></script>
-  <script src="../shared/mast-entity.js?v=20260610-113734-d4e11b9"></script>
+  <script src="../shared/mast-ui.js?v=20260610-114532-a291f11"></script>
+  <script src="../shared/mast-io.js?v=20260610-114532-a291f11"></script>
+  <script src="../shared/mast-entity.js?v=20260610-114532-a291f11"></script>
   <!-- Canonical product readiness gate (computeReadinessChecklist / productMarkupConfig).
        Byte-identical to mast-tenant-mcp-server/src/shared/product-readiness.core.js so the
        AI publish gate and the maker.js UI gate cannot drift; maker.js delegates to
        window.MastProductReadiness. Eager-loaded so it exists before the lazy maker module.
        ?v= kept in lockstep with MAST_MODULES_V by scripts/bump-modules-version.sh.
        See docs/ux-audit/product-publish-gate-plan.md §7. -->
-  <script src="../shared/product-readiness.core.js?v=20260610-113734-d4e11b9"></script>
+  <script src="../shared/product-readiness.core.js?v=20260610-114532-a291f11"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Pod-specific runtime config — sets window.MAST_POD_PLATFORM_PROJECT so
@@ -18894,10 +18894,21 @@ auth.onAuthStateChanged(async function(user) {
       });
     } catch (e) {}
   }
-  const authScreen = document.getElementById('authScreen');
-  const loadingScreen = document.getElementById('loadingScreen');
-  const deniedScreen = document.getElementById('deniedScreen');
-  const header = document.getElementById('header');
+  // These four screens are static DOM, but redesign surfaces (e.g. ?ui=1) can
+  // rebuild around them — a missing element here threw "Cannot read properties
+  // of null (reading 'style')" on the signed-out → signed-in transition, which
+  // the auto-feedback watchdog then files as a JS-error ticket. Fall back to a
+  // detached element so the ~30 .style writes below are safe: if the screen
+  // isn't in the DOM there's nothing to show/hide anyway.
+  function authScreenEl(id) {
+    var el = document.getElementById(id);
+    if (!el) console.warn('onAuthStateChanged: #' + id + ' missing from DOM; skipping its show/hide');
+    return el || document.createElement('div');
+  }
+  const authScreen = authScreenEl('authScreen');
+  const loadingScreen = authScreenEl('loadingScreen');
+  const deniedScreen = authScreenEl('deniedScreen');
+  const header = authScreenEl('header');
 
   if (!user) {
     authScreen.style.display = '';
@@ -22021,7 +22032,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260610-113734-d4e11b9';
+var MAST_MODULES_V = '20260610-114532-a291f11';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
