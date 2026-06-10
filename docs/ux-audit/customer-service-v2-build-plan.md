@@ -1,6 +1,8 @@
 # customer-service-v2 — Build Plan
 
-Status: **PLANNED** (2026-06-10). Runs `v2-conversion-playbook.md` end-to-end for the
+Status: **SHIPPED** (2026-06-10 — plan #413, Wave 1 #414+#415, Wave 2 #416,
+Wave 3 #417+#418+#419, Wave 4 #420, walk-fix #421, holistic this PR; all merged &
+verified on dev). Runs `v2-conversion-playbook.md` end-to-end for the
 Customer Service section (sidebar `data-section="customer-service"`, 6 sub-items).
 Companion to `sales-v2-build-plan.md` / `marketing-v2-build-plan.md` /
 `operations-v2-build-plan.md` / `finance-v2-build-plan.md` (worked examples) and
@@ -210,3 +212,103 @@ Every delete: `mastConfirm` + `writeAudit` + RBAC `can(route,'delete')`.
       surveys remain send-side only.
 - [ ] cs-members bookings-only visibility means the twin is undemoable on sgtest15 —
       acceptable; verified-by-code + lint, not by walk.
+
+## Walk findings (2026-06-10 — every route, every CRUD verb incl. CREATE, cold cross-drills, both themes)
+
+1. **cs-tickets-v2 had no static tab container** — `applyRoute` shows
+   `config.tab` BEFORE `setup()` runs, so the first in-session navigation threw
+   and bounced to dashboard. The scaffold step writes the static div; skipping
+   the scaffold skipped the div. Fixed #415 (and cs-surveys-v2 shipped with its
+   div from the start).
+2. **cs-surveys-v2 defined entities but never registered them** —
+   `defineEntities()` existed and was never invoked; rows/SO/create were dead.
+   Fixed #419: define at module load (also needed for cold cross-drills).
+3. **CsReviewsBridge cache-miss no-op** — `reviewsData` is a load-once bounded
+   window; feature/respond/remove on a review created after load silently did
+   nothing ("Review not found"). Fixed #421: `ensureReviewInCache(id)`
+   fresh-reads the single doc before every per-review action. Proven live:
+   create → approve → feature (mirror minted) → delete (review gone, mirror
+   cascaded).
+4. Sending-rule rows read "→ —": sgtest15's triggers were CF/MCP-created and
+   carry `surveyGroupId`, not the legacy admin's `surveyId`. Fixed #418
+   (resolve both).
+5. `cs-members` IS visible on sgtest15 (its mode set includes bookings — the
+   studio runs classes); the "undemoable" caveat in the debt register was
+   wrong and is struck.
+6. Exercised end-to-end: conversation CREATE (T-0011 minted sequentially),
+   reply + internal note, status/priority writes (stored vocab intact),
+   support→customer cold drill (stacked SO + back-link); review approve →
+   public reply post/edit → feature (testimonial mirror verified in
+   `testimonials/`) → delete cascade; survey question CREATE (engine textarea),
+   question-set edit via checkbox picker (set 1→2 questions), trigger off→on,
+   response→conversation cold drill; FAQ publish→hide round-trip + create +
+   mastConfirm delete. Both themes screenshot-verified; console clean on a
+   clean boot (one interrupted boot produced app-wide unrelated noise — the
+   "tolerate ONE messy boot" rule held).
+
+## Scrub report (Wave 0 + walk, sgtest15 — standing authorization, all deletes listed)
+
+**Hard deletes:** 6 admin-cancel test tickets (`ticket_mppv*`, "Actor-capture /
+MastFlow verification" bodies, all duplicate T-0001); 14 junk survey responses
+(`preview@preview.internal`, `dave+*test@test.com`, `smoketest@`, `test@`,
+`backorder-e2e@` Pat Tester); 1 walk-fixture review (`e6EdfMRtezPbDkyKsg69`,
+Walk Check) + 1 walk-fixture FAQ (`LyDwac7LvzAOZ79ctt2a`) created and deleted
+by the walk itself to prove the delete verbs.
+
+**Renames in place (FK-referenced):** survey "Full Nav Test Survey (8
+questions)" → "Studio Experience Survey" (referenced by tickets/responses);
+contactName "Dave" → "David Stewart" on 2 follow-up tickets + 5 survey
+responses; review `923b2091` authorEmail `dave@test.com` →
+`dave.sutton.pdx@gmail.com` + "(D1 verify)" strings scrubbed from the response
+and its `cs_review_responses` audit row.
+
+**Heals:** `cs_config/ticketing.nextNumber` 2 → 5 (six duplicate T-0001s; T-4
+existed); review `5a85efc9` empty `productName` → "Intro to Wheel Throwing"
+(class FK) with body made coherent.
+
+**Seeds:** 6 tickets T-5…T-10 with real threads (incl. internal note) across
+all five statuses/sources/priorities; 6 product reviews across
+pending/approved/rejected (one 1★ with a phone number left REJECTED as the
+moderation example); 5 glass-care FAQs (4 live, 1 hidden); +1 conversation
+(T-0011) and +1 question (multiple-choice) created through the V2 UI by the
+walk and kept as demo data.
+
+## CRUD parity — SHIPPED state
+
+| Surface | C | R | U | D | Notes |
+|---|---|---|---|---|---|
+| support conversations | ✅ V2 (number minted by bridge) | ✅ | ✅ reply/note/status/priority/category | ⬜ deferred | no delete in V1 either; archive = Closed |
+| reviews | n/a (user-generated) | ✅ | ✅ moderate + public reply (post/edit/delete) + feature | ✅ w/ testimonial cascade | customer's words never editable |
+| surveys | ✅ | ✅ | ✅ (+send-one, preview, closes-date) | ✅ responses remain | bulk segment send + VoC stay classic |
+| question sets | ✅ | ✅ | ✅ checkbox picker | ✅ warns w/ affected surveys | |
+| question library | ✅ | ✅ | ✅ | ✅ warns w/ affected sets | |
+| survey responses | n/a | ✅ | theme tags stay classic | n/a | answers are facts |
+| sending rules (triggers) | classic | ✅ | ✅ on/off + master automation toggle | classic | full editor stays classic |
+| faqs | ✅ | ✅ | ✅ (+publish/hide) | ✅ | kind='faq' stamped by bridge |
+| members | n/a | ✅ | n/a | n/a | read-only lens; lifecycle on Membership admin |
+
+Every delete: `mastConfirm` + `writeAudit` + RBAC `can(route,'delete')`.
+
+## Holistic (this PR)
+
+Sidebar reordered around the operator's process (messages → reviews → surveys
+→ FAQs → members). The **Inbox ⊃ Tickets sidebar merge** (one "Inbox" item,
+`data-route-alt="cs-tickets"`, finance precedent) remains a PROPOSAL for
+operator ratification — the module-level consolidation is already live
+regardless (both routes land in cs-support-v2; the route picks the lens).
+
+## Debt register — close-out
+
+- [x] cs-tickets-v2 pre-standard twin → superseded by cs-support-v2 (#414).
+- [x] Reviews reply/delete classic-only → native (#416).
+- [x] FAQs publish/delete classic-only → native (#420).
+- [x] ~~cs-members undemoable on sgtest15~~ — wrong; bookings is in the mode set.
+- [ ] Ticket reply does not email the customer (V1 parity; product decision + CF).
+- [ ] `cs_tickets` reads are bounded windows (50/200/2000) — no pagination.
+- [ ] `cs_review_responses` audit sink retire-with-V1 candidate.
+- [ ] engagement-inbox-v2 keeps its own thin readers of cs collections.
+- [ ] Survey bulk send-to-segment, VoC digest, response theme tags, trigger
+      full editor, anonymous-review policy card: classic, linked.
+- [ ] Support→customer drill only when `customerId` is stamped (most manual
+      tickets aren't email-resolved to a customer yet — resolver backfill
+      candidate).
