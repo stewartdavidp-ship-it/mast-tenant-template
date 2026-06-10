@@ -2782,6 +2782,20 @@
       await MastDB.update('cs_policies/' + id, patch);
       if (policiesData[id]) Object.assign(policiesData[id], patch);
       return id;
+    },
+    // CS Wave 4 — one-click storefront toggle + delete cores (same writes as
+    // togglePolicyStorefront / deletePolicy, parameterized; audited).
+    setStorefront: async function (id, enabled) {
+      await MastDB.update('cs_policies/' + id, { storefrontEnabled: !!enabled, updatedAt: nowIso() });
+      if (policiesData[id]) policiesData[id].storefrontEnabled = !!enabled;
+      if (window.writeAudit) writeAudit('update', 'cs-faq', id);
+      return !!enabled;
+    },
+    remove: async function (id) {
+      await MastDB.remove('cs_policies/' + id);
+      delete policiesData[id];
+      if (window.writeAudit) writeAudit('delete', 'cs-faq', id);
+      return true;
     }
   };
   window.csTogglePolicyStorefront = togglePolicyStorefront;

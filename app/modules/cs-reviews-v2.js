@@ -126,8 +126,13 @@
         var tabsBar = UI.paneTabsBar([{ key: 'ov', label: 'Overview' }], 'ov');
 
         // Overview — the review fields, the review text, and any operator reply.
+        // Product cross-drill: only when the id resolves in the PRODUCT index
+        // (class reviews carry a class id — no products-v2 record to drill to).
+        var prodCell = (r.productId && V2.productIndex[r.productId])
+          ? '<a href="javascript:void(0)" onclick="CsReviewsV2.openProduct(\'' + esc(r.productId) + '\')" style="color:var(--teal);">' + esc(productLabel(r)) + '</a>'
+          : esc(productLabel(r));
         var meta = UI.kv([
-          { k: 'Product', v: esc(productLabel(r)) },
+          { k: 'Product', v: prodCell },
           { k: 'Rating', v: (ratingText(r) || '—') },
           { k: 'Author', v: esc(authorOf(r)) },
           { k: 'Email', v: (emailOf(r) ? esc(emailOf(r)) : '—') },
@@ -438,6 +443,13 @@
     classic: function () {
       if (typeof navigateToClassic === 'function') navigateToClassic('cs-reviews');
       else if (typeof navigateTo === 'function') navigateTo('cs-reviews');
+    },
+    // Cold-drill-safe product cross-link (Wave 4).
+    openProduct: function (pid) {
+      if (!pid) return;
+      MastAdmin.loadModule('products-v2').then(function () {
+        return MastEntity.drill('products-v2', pid);
+      }).catch(function (e) { console.error('[cs-reviews-v2] openProduct', e); });
     },
     exportCsv: function () { return MastEntity.exportRows('cs-reviews-v2', visibleRows(), 'all'); }
   };
