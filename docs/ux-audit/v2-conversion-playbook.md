@@ -92,6 +92,21 @@ same hour they shipped.
    the legacy admin writes (`surveyGroupId` vs `surveyId` on triggers) —
    characterize LIVE data shapes per writer, not just the legacy writer code.
 
+**Session-process notes (cheap wins to repeat):**
+- Seed recipe that worked: tenant-router MCP `create` tools for records that
+  need server-minted invariants (ticket numbers came out sequential), then
+  Firestore REST `PATCH` for statuses/backdated timestamps the create tools
+  don't expose. Enum caveat: the MCP ticket status enum says
+  `waiting_customer`; the template UI stores `waiting` — seed UI vocab via
+  REST or the row renders a raw value.
+- Walk writes can BE demo data: a CREATE exercised with realistic content
+  (a real customer question, a usable survey question) stays as a fixture
+  instead of becoming cleanup; reserve create-then-delete for the delete verb
+  itself, and report both.
+- Engine-first pays inside one round, not just across rounds: the textarea
+  control and status format labels added for Wave 1 were reused by Wave 3
+  unchanged.
+
 ## 1 · Recon (Explore agent, very thorough)
 
 **Verify the recon's surface characterizations before scheduling builds.** The Operations
@@ -183,7 +198,10 @@ the skeleton and wires `MODULE_MANIFEST` + tab div + `MAST_V2_ROUTE_MAP`. Then:
   exactly like the contacts-v2 dead-CREATE bug (Finance round lost a cycle to this
   false alarm, including a stray test record to clean up). Query within
   `#mastSlideOut`, filter `offsetParent !== null`, and note the SO's primary button is
-  labeled **Create** in create mode, not Save.
+  labeled **Create** in create mode, not Save. Same trap for delete flows: a generic
+  "Delete" text-match can hit a list-row button instead of the mastConfirm dialog's
+  confirm — scope to the dialog element (CS round lost a cycle to a delete that
+  silently never confirmed).
 
 - **Check Deploy-workflow health at session start** (`gh run list --branch main --limit 3`)
   — a repo-wide CI failure (Operations round: stale `MAST_PLATFORM_API_KEY` secret) silently
