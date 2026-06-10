@@ -318,6 +318,9 @@ body {
       <button class="payment-type-btn" id="squareBtn" onclick="selectPayment('square')">Square</button>
     </div>
     <input type="text" class="amount-input" id="amountInput" placeholder="$0.00" inputmode="decimal" onfocus="this.select()">
+    <div style="display:flex;gap:8px;margin-bottom:8px;">
+      <input type="text" style="flex:1;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:14px;" id="posContact" placeholder="Email or phone for receipt (optional)" inputmode="email">
+    </div>
     <div style="display:flex;gap:8px;margin-bottom:12px;" id="notesRow">
       <input type="text" style="flex:1;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:14px;" id="saleNotes" placeholder="Notes (optional)">
     </div>
@@ -1058,25 +1061,56 @@ function _writeSaleToServer(saleRecord) {
   }
 
   return imagePromise.then(function() {
-    // Strip transient fields before persisting
+    // Create the REAL order through the shop pipeline (submitOrder POS mode).
+    // The order draws down physical onHand itself, so we deliberately do NOT
+    // call decrementInventory below — that would double-count stock.
+    return _createPosOrder(saleRecord);
+  }).then(function(orderResult) {
+    saleRecord.orderId = orderResult.orderId || null;
+    saleRecord.orderNumber = orderResult.orderNumber || null;
+    // Persist the admin/sales mirror (kept for existing reports + Fair mode),
+    // now linked to the order. Strip transient __ fields first.
     var persisted = {};
     Object.keys(saleRecord).forEach(function(k) {
       if (k.indexOf('__') !== 0) persisted[k] = saleRecord[k];
     });
     return MastDB.set(SALES_PATH + '/' + saleId, persisted);
   }).then(function() {
-    var updates = {};
-    items.forEach(function(item) {
-      if (item.productId) updates[item.productId] = item.quantity;
-    });
-    return decrementInventory(updates);
-  }).then(function() {
+    // Inventory is owned by the order now — no client-side decrement here.
     if (saleRecord.eventId && eventData && eventData.allocations) {
       return updateEventAllocations(items);
     }
   }).then(function() {
     autoReconcileSquare(saleId, now);
     return saleId;
+  });
+}
+
+// Create a real in-person order via submitOrder's POS mode. Server reprices
+// from the catalog and finalizes the order as paid + delivered (no hosted
+// checkout — the seller charges on their own method). Resolves to the order
+// result; rejects (non-network) on a server rejection e.g. insufficient stock.
+function _createPosOrder(saleRecord) {
+  var token = authToken || saleRecord.__authToken; // prefer the live token (fresher on outbox flush)
+  var orderItems = (saleRecord.items || []).map(function(it) {
+    return { pid: it.productId, variantId: it.variantId || null, qty: it.quantity };
+  });
+  var payload = { data: {
+    channel: 'pos',
+    items: orderItems,
+    posPayment: { method: saleRecord.paymentType || 'cash', tenderedCents: saleRecord.amount || 0 },
+    customerContact: saleRecord.customerContact || null
+  } };
+  return fetch(TENANT_FIREBASE_CONFIG.cloudFunctionsBase + '/submitOrder', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token, 'X-Tenant-ID': TENANT_ID },
+    body: JSON.stringify(payload)
+  }).then(function(r) { return r.json(); }).then(function(resp) {
+    var result = resp && resp.result;
+    if (!result || !result.success) {
+      throw new Error((result && result.error) || 'Order could not be created');
+    }
+    return result; // { orderId, orderNumber, paid, paymentMethod }
   });
 }
 
@@ -1094,6 +1128,13 @@ function saveSale() {
   var saleId = MastDB.newKey(SALES_PATH);
   var now = new Date().toISOString();
 
+  // Optional receipt contact, asked at the register (email or phone).
+  var contactVal = (document.getElementById('posContact').value || '').trim();
+  var customerContact = null;
+  if (contactVal) {
+    customerContact = contactVal.indexOf('@') >= 0 ? { email: contactVal } : { phone: contactVal };
+  }
+
   var saleRecord = {
     saleId: saleId,
     timestamp: now,
@@ -1105,7 +1146,7 @@ function saveSale() {
     }),
     imageId: null,
     receiptSent: false,
-    customerContact: null,
+    customerContact: customerContact,
     squarePaymentId: null,
     eventId: eventId || null,
     status: 'captured',
@@ -1124,7 +1165,8 @@ function saveSale() {
     btn.textContent = 'Complete Sale';
     var totalStr = '$' + (amountCents / 100).toFixed(2);
     var itemNames = saleItems.map(function(i) { return i.productName; }).join(', ');
-    document.getElementById('successSummary').textContent = totalStr + ' ' + paymentType + ' — ' + itemNames;
+    var orderTag = saleRecord.orderNumber ? ('Order ' + saleRecord.orderNumber + ' · ') : '';
+    document.getElementById('successSummary').textContent = orderTag + totalStr + ' ' + paymentType + ' — ' + itemNames;
     document.getElementById('receiptForm').style.display = 'none';
     document.getElementById('receiptEmail').value = '';
     document.getElementById('receiptOptIn').checked = true;
@@ -1697,6 +1739,7 @@ function newSale() {
   lastSaleItems = [];
   document.getElementById('amountInput').value = '';
   document.getElementById('saleNotes').value = '';
+  document.getElementById('posContact').value = '';
   document.getElementById('cashBtn').classList.add('selected');
   document.getElementById('squareBtn').classList.remove('selected');
   // Reset catalog browse state and return to the home grid
