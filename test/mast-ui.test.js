@@ -81,3 +81,36 @@ t('cardGrid wraps items (array or string) in mu-cardgrid', () => {
 });
 
 console.log('\n' + pass + ' passed');
+
+// repeatRows — engine-owned repeatable rows (operator-ratified engine-first)
+const { repeatRows, validate } = require('../shared/mast-ui.js');
+t('repeatRows renders rows + spare + Add button wired to engine handler', () => {
+  const h = repeatRows({ id: 'rrTest', rows: [{ v: 'a' }], spares: 1, addLabel: '+ Add row',
+    template: (item, i) => '<div data-rr-row="' + i + '">' + (item.v || '') + '</div>' });
+  assert.ok(h.includes('id="rrTest"'));
+  assert.ok(h.includes('data-rr-row="0"') && h.includes('data-rr-row="1"'), 'row + spare');
+  assert.ok(h.includes("MastUI.repeatRowsAdd('rrTest')"));
+  assert.ok(h.includes('+ Add row'));
+});
+t('repeatRows escapes container id', () => {
+  const h = repeatRows({ id: '<x>', rows: [], template: () => '' });
+  assert.ok(!h.includes('id="<x>"'));
+});
+
+// validate — shared format checks (empty passes; presence is the form's call)
+t('validate.email accepts normal + empty, rejects malformed', () => {
+  assert.ok(validate.email('jane@gallery.com'));
+  assert.ok(validate.email(''));
+  assert.ok(validate.email(null));
+  assert.ok(!validate.email('jane@gallery'));
+  assert.ok(!validate.email('not-an-email'));
+  assert.ok(!validate.email('a b@c.com'));
+});
+t('validate.phone accepts common formats + empty, rejects junk', () => {
+  assert.ok(validate.phone('(512) 555-0199'));
+  assert.ok(validate.phone('+1 512.555.0199'));
+  assert.ok(validate.phone(''));
+  assert.ok(!validate.phone('555-12'));        // too short
+  assert.ok(!validate.phone('call me maybe')); // letters
+  assert.ok(!validate.phone('12345678901234567890')); // too long
+});

@@ -413,6 +413,50 @@
   }
   // Responsive grid of fill-cards/launchers — the standard producer-surface layout.
   function cardGrid(items) { return '<div class="mu-cardgrid">' + (Array.isArray(items) ? items.join('') : (items || '')) + '</div>'; }
+
+  // ── repeatRows — repeatable form rows + engine-owned "+ Add" (operator-
+  // ratified 2026-06-10: standard patterns live in the engine, not per module).
+  // cfg: { id, rows, template: fn(item, i) -> rowHtml, addLabel?, spares? }
+  // The template's row markup must carry its own data attrs — the consuming
+  // module scrapes them on save exactly as before. repeatRowsAdd appends a
+  // blank row with the SAME template (kept in a registry keyed by container id)
+  // so added rows render and save identically to initial ones.
+  var _repeatTemplates = Object.create(null);
+  function repeatRows(cfg) {
+    cfg = cfg || {};
+    _repeatTemplates[cfg.id] = cfg.template;
+    var rows = Array.isArray(cfg.rows) ? cfg.rows.slice() : [];
+    var spares = (typeof cfg.spares === 'number') ? cfg.spares : 1;
+    for (var i = 0; i < spares; i++) rows.push({});
+    var html = rows.map(function (r, idx) { return cfg.template(r, idx); }).join('');
+    return '<div id="' + esc(cfg.id) + '">' + html + '</div>' +
+      '<button type="button" class="btn btn-secondary" style="font-size:0.78rem;padding:4px 12px;margin:2px 0 4px;" ' +
+      'onclick="MastUI.repeatRowsAdd(\'' + esc(cfg.id) + '\')">' + esc(cfg.addLabel || '+ Add') + '</button>';
+  }
+  function repeatRowsAdd(id) {
+    var host = (typeof document !== 'undefined') && document.getElementById(id);
+    var tpl = _repeatTemplates[id];
+    if (!host || typeof tpl !== 'function') return;
+    var i = host.children.length;
+    host.insertAdjacentHTML('beforeend', tpl({}, i));
+    var first = host.lastElementChild && host.lastElementChild.querySelector('input,select,textarea');
+    if (first) first.focus();
+  }
+
+  // ── validate — shared format checks (empty passes: presence is the form's
+  // call; these only reject malformed values).
+  var validate = {
+    email: function (v) {
+      if (v == null || String(v).trim() === '') return true;
+      return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(String(v).trim());
+    },
+    phone: function (v) {
+      if (v == null || String(v).trim() === '') return true;
+      var s = String(v).trim();
+      var digits = s.replace(/\D/g, '');
+      return digits.length >= 7 && digits.length <= 15 && !/[^\d\s()+.\-ext]/i.test(s);
+    }
+  };
   // Standard page header — the title/count/actions strip every list-control and
   // launcher screen shares, so moving from any screen to any other doesn't look
   // foreign (doc 17 §13). cfg: { title, count?, subtitle?, actionsHtml? }.
@@ -649,12 +693,13 @@
       tiles: tiles, card: card, cardTable: cardTable, kv: kv, metricTable: metricTable, timeline: timeline, relatedTable: relatedTable,
       imageThumb: imageThumb, openImg: openImg, panelTab: panelTab, paneTabsBar: paneTabsBar,
       stickyHead: stickyHead, toggleCover: toggleCover, calendar: calendar, pageHeader: pageHeader,
-      launchCard: launchCard, cardGrid: cardGrid
+      launchCard: launchCard, cardGrid: cardGrid,
+      repeatRows: repeatRows, repeatRowsAdd: repeatRowsAdd, validate: validate
     };
   }
 
   // CommonJS export for node-based unit tests of the pure helpers.
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { Num: Num, badge: badge, tabs: tabs, list: list, esc: esc, tiles: tiles, kv: kv, timeline: timeline, relatedTable: relatedTable, pageHeader: pageHeader, card: card, launchCard: launchCard, cardGrid: cardGrid };
+    module.exports = { Num: Num, badge: badge, tabs: tabs, list: list, esc: esc, tiles: tiles, kv: kv, timeline: timeline, relatedTable: relatedTable, pageHeader: pageHeader, card: card, launchCard: launchCard, cardGrid: cardGrid, repeatRows: repeatRows, validate: validate };
   }
 })();
