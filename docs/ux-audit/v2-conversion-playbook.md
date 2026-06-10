@@ -96,6 +96,10 @@ the skeleton and wires `MODULE_MANIFEST` + tab div + `MAST_V2_ROUTE_MAP`. Then:
 
 ## 5 · Verify every deployed wave (browser, sgtest15)
 
+- **Check Deploy-workflow health at session start** (`gh run list --branch main --limit 3`)
+  — a repo-wide CI failure (Operations round: stale `MAST_PLATFORM_API_KEY` secret) silently
+  masks every later "is my wave live?" check, and you end up batch-verifying waves instead
+  of verifying each one. Don't let an infra failure collapse the per-wave verify cadence.
 - After reload, confirm `window.MAST_MODULES_V` matches the deployed bundle BEFORE judging
   anything (same-URL navigation is hash-only and does NOT reload).
 - **Read the console every time** (`read_console_messages`, error pattern). A button that does
@@ -105,8 +109,14 @@ the skeleton and wires `MODULE_MANIFEST` + tab div + `MAST_V2_ROUTE_MAP`. Then:
 
 ## 6 · Holistic pass (final PR of the section)
 
-- **Operator walk:** click every nav item, open every record, try create/edit/delete, follow
-  every link. This catches what static review can't.
+- **Run the operator walk BEFORE opening the holistic PR**, not after — the Operations round
+  shipped holistic first and the walk then produced three more fix PRs (#394–#396). Walk
+  findings belong in (or before) the holistic PR.
+- **Operator walk:** click every nav item, open every record, **exercise every CRUD verb on
+  every entity — including CREATE on a fresh record** (contacts-v2 create had been dead since
+  its own conversion; two earlier walks missed it by only testing read/edit), follow every
+  link **including cold cross-drills from another module's SO**. This catches what static
+  review can't.
 - Reorder the section's sidebar items around the operator's process (Sales: sell → orders →
   fulfill → returns → B2B → close → configure).
 - CRUD parity table; add delete where appropriate (confirm + `writeAudit` + RBAC; respect
@@ -146,3 +156,9 @@ the skeleton and wires `MODULE_MANIFEST` + tab div + `MAST_V2_ROUTE_MAP`. Then:
 - `scripts/scaffold-v2-module.mjs <route> <archetype>` — skeleton + index.html wiring.
 - `scripts/ship-check.sh` — the whole pre-PR gauntlet in the right order.
 - `scripts/lint-v2-standard.js` — born-0 ratchet for the V2 surface standard (in CI).
+
+## 9 · Candidate hardening (build tickets, not process)
+
+- [ ] CI smoke-load for `*-v2.js`: stub `window`/`MastAdmin`/`MastEntity`/`MastUI`, load each
+      module file, assert no exception — would have caught the audit-v2 double-status-field
+      define() throw (blank tab in prod) before merge.
