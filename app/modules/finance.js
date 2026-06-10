@@ -183,6 +183,13 @@ function isTestOrder(o) {
   return isTestSource(o && o.source) || (o && (o.synthetic === true || o.isTest === true));
 }
 
+// Canonical admin/sales money read: `amount` is INTEGER CENTS — the POS
+// checkout writer and the Sales Ledger reader (sales.js formatCents(s.amount))
+// both treat it as cents, and live data agrees ($85 pendant ⇒ amount 8500).
+// The old `(s.amount || 0) * 100` reads here inflated POS rows 100× on the
+// Revenue and P&L surfaces; every sales read now goes through this helper.
+function _salesCents(s) { return Math.round(Number(s && s.amount) || 0); }
+
 // W1.5 carry-forward — COMPLETE 2026-05-22: isTestOrder()/isTestSource()
 // thread through Revenue + computePnlLocal + loadArData + loadCashFlow's AR
 // rollup so test-channel orders are honored across every customer-money view.
@@ -545,7 +552,7 @@ async function _loadRevenueAggregate(start, end) {
   });
   sales.forEach(function(s) {
     if (s.status === 'voided') return;
-    var cents = Math.round((s.amount || 0) * 100);
+    var cents = _salesCents(s);
     if (cents <= 0) return;
     if (isTestOrder(s) && !_includeTestData) return;
     var ch = s.source || 'pos';
@@ -616,7 +623,7 @@ async function loadRevenue() {
 
     sales.forEach(function(s) {
       if (s.status === 'voided') return;
-      var cents = Math.round((s.amount || 0) * 100);
+      var cents = _salesCents(s);
       if (cents <= 0) return;
       var ch = s.source || 'pos';
       var isTest = isTestOrder(s);
@@ -1791,7 +1798,7 @@ async function computePnlLocal(startDate, endDate) {
   });
   sales.forEach(function(s) {
     if (s.status === 'voided') return;
-    var c = Math.round((s.amount || 0) * 100); if (c <= 0) return;
+    var c = _salesCents(s); if (c <= 0) return;
     var ch = s.source || 'pos';
     if (isTestOrder(s) && !_includeTestData) {
       testRevenue += c;
@@ -2830,7 +2837,21 @@ async function loadCashFlow() {
   el.innerHTML = skeletonCards(3) + '<div style="margin-top:16px;">' + skeletonCards(2) + '</div>';
 
   try {
-    var asOf = todayStr();
+    var snap = await _computeCashSnapshot((typeof _cashHorizonDays === 'number') ? _cashHorizonDays : 30);
+    _cfLastSnapshot = snap;
+    el.innerHTML = renderCashFlow(snap.bankTotal, snap.bankAccounts, snap.staleItems, snap.arTotal,
+      snap.arDueHorizon, snap.arCount, snap.apTotal, snap.apDueHorizon, snap.apCount, snap.netProjected, snap.asOf);
+    _cfLoaded = true;
+  } catch (err) {
+    el.innerHTML = '<div style="color:var(--danger,#dc2626);padding:12px;">' + e(err.message) + '</div>';
+    showToast('Cash flow load failed: ' + err.message, true);
+  }
+}
+
+// State-free cash projection core — shared by the legacy Cash Flow tab and the
+// V2 statements hub (FinanceBridge.cashSnapshot). No DOM, no module state.
+async function _computeCashSnapshot(horizonDays) {
+  var asOf = todayStr();
 
     var [plaidRaw, sentRaw, overdueRaw, unpaidRaw, partialRaw] = await Promise.all([
       MastDB.plaidItems.list(),
@@ -2874,7 +2895,7 @@ async function loadCashFlow() {
     // W1.6 horizon now drives the upper bound via cashHorizonDays.
     // W1.7: wholesale FK preferred (isWholesaleOrder) when classifying
     // inflow tier — surfaced separately in renderCashFlow.
-    var horizonDays = (typeof _cashHorizonDays === 'number') ? _cashHorizonDays : 30;
+    horizonDays = (typeof horizonDays === 'number') ? horizonDays : 30;
     var allOrders = Object.assign({}, sentRaw || {}, overdueRaw || {});
     var arTotal = 0, arDueHorizon = 0, arCount = 0;
     var arWholesaleHorizon = 0, arDirectHorizon = 0;
@@ -2912,19 +2933,13 @@ async function loadCashFlow() {
     // Normalize: show bank in dollars, AR/AP in dollars too
     var netProjected = bankTotal + (arDueHorizon / 100) - (apDueHorizon / 100);
 
-    _cfLastSnapshot = {
+    return {
       bankTotal: bankTotal, bankAccounts: bankAccounts, staleItems: staleItems,
       arTotal: arTotal, arDueHorizon: arDueHorizon, arCount: arCount,
       arWholesaleHorizon: arWholesaleHorizon, arDirectHorizon: arDirectHorizon,
       apTotal: apTotal, apDueHorizon: apDueHorizon, apCount: apCount,
       netProjected: netProjected, asOf: asOf, horizonDays: horizonDays
     };
-    el.innerHTML = renderCashFlow(bankTotal, bankAccounts, staleItems, arTotal, arDueHorizon, arCount, apTotal, apDueHorizon, apCount, netProjected, asOf);
-    _cfLoaded = true;
-  } catch (err) {
-    el.innerHTML = '<div style="color:var(--danger,#dc2626);padding:12px;">' + e(err.message) + '</div>';
-    showToast('Cash flow load failed: ' + err.message, true);
-  }
 }
 
 function renderCashFlow(bankTotal, bankAccounts, staleItems, arTotal, arDueHorizon, arCount, apTotal, apDueHorizon, apCount, netProjected, asOf) {
@@ -4517,27 +4532,33 @@ async function loadTaxSalesTaxData() {
   if (!el) return;
   el.innerHTML = skeletonTable(5,4);
   try {
-    var [ordersRaw, nexusRaw] = await Promise.all([
-      MastDB.query('orders').orderByChild('placedAt').startAt(isoStart(start)).endAt(isoEnd(end)).limitToLast(2000).once(),
-      MastDB.get('admin/nexusRegistrations')
-    ]);
-    var orders = Object.values(ordersRaw || {});
-    var nexus = nexusRaw || {};
-    var byState = {};
-    orders.forEach(function(o) {
-      if (o.status === 'cancelled') return;
-      var state = o.taxState || o.shippingState; if (!state) return;
-      if (!byState[state]) byState[state] = { taxCollected: 0, orderCount: 0 };
-      byState[state].taxCollected += (o.taxCents || Math.round((o.tax || 0) * 100));
-      byState[state].orderCount++;
-    });
-    el.innerHTML = renderTaxSalesTax(byState, nexus, start, end);
+    var tax = await _computeTaxByState(start, end);
+    el.innerHTML = renderTaxSalesTax(tax.byState, tax.nexus, start, end);
   } catch (err) {
     el.innerHTML = '<div style="color:var(--danger,#dc2626);padding:12px;">' + e(err.message) + '</div>';
     showToast('Tax load failed: ' + err.message, true);
   }
 }
 window.loadTaxSalesTaxData = loadTaxSalesTaxData;
+
+// State-free sales-tax-by-state core — shared by the legacy Tax tab and the
+// V2 statements hub (FinanceBridge.taxByState). Dual-field tax read:
+// `taxCents` (CENTS) preferred, legacy `tax` is DOLLARS × 100.
+async function _computeTaxByState(start, end) {
+  var [ordersRaw, nexusRaw] = await Promise.all([
+    MastDB.query('orders').orderByChild('placedAt').startAt(isoStart(start)).endAt(isoEnd(end)).limitToLast(2000).once(),
+    MastDB.get('admin/nexusRegistrations')
+  ]);
+  var byState = {};
+  Object.values(ordersRaw || {}).forEach(function(o) {
+    if (o.status === 'cancelled') return;
+    var state = o.taxState || o.shippingState; if (!state) return;
+    if (!byState[state]) byState[state] = { taxCollected: 0, orderCount: 0 };
+    byState[state].taxCollected += (o.taxCents || Math.round((o.tax || 0) * 100));
+    byState[state].orderCount++;
+  });
+  return { byState: byState, nexus: nexusRaw || {} };
+}
 
 function renderTaxSalesTax(byState, nexus, start, end) {
   var states = Object.keys(byState).sort(function(a,b) { return byState[b].taxCollected - byState[a].taxCollected; });
@@ -8027,6 +8048,89 @@ window.MastFinanceW3 = {
 };
 // Also expose chip helper at top level for Agent B/E reuse.
 window.renderSourceTagChip = renderSourceTagChip;
+
+// ── FinanceBridge — state-free cores for the V2 statements hub ───────────────
+// Mapping/Studio/Channels bridge precedent: the V2 twin NEVER re-implements
+// finance math (period resolution, money normalization, P&L/cash/tax compute);
+// it calls these. No DOM, no module render state.
+
+// Normalized revenue rows for the Revenue lens: orders + POS sales merged,
+// money already in cents, test rows excluded per the global toggle (excluded
+// volume reported so the chip can show it).
+async function _loadRevenueRows(start, end) {
+  var [ordersRaw, salesRaw] = await Promise.all([
+    MastDB.query('orders').orderByChild('placedAt').startAt(isoStart(start)).endAt(isoEnd(end)).limitToLast(1000).once(),
+    MastDB.query('admin/sales').orderByChild('createdAt').startAt(isoStart(start)).endAt(isoEnd(end)).limitToLast(500).once()
+  ]);
+  var rows = [], totalCents = 0, byChannel = {}, testCount = 0, testCents = 0;
+  Object.entries(ordersRaw || {}).forEach(function(kv) {
+    var o = kv[1]; if (!o || o.status === 'cancelled') return;
+    var cents = _orderRevenueCents(o); if (cents <= 0) return;
+    if (isTestOrder(o) && !_includeTestData) { testCount++; testCents += cents; return; }
+    var ch = o.source || 'direct';
+    rows.push({ id: kv[0], kind: 'order', date: o.placedAt || o.createdAt || '', label: o.orderNumber || kv[0], party: o.customerName || o.customerEmail || '', channel: ch, cents: cents });
+    byChannel[ch] = (byChannel[ch] || 0) + cents; totalCents += cents;
+  });
+  Object.entries(salesRaw || {}).forEach(function(kv) {
+    var s = kv[1]; if (!s || s.status === 'voided') return;
+    var cents = _salesCents(s); if (cents <= 0) return;
+    if (isTestOrder(s) && !_includeTestData) { testCount++; testCents += cents; return; }
+    var ch = s.source || 'pos';
+    var item = (Array.isArray(s.items) && s.items[0] && s.items[0].productName) || 'POS sale';
+    rows.push({ id: kv[0], kind: 'sale', date: s.createdAt || s.timestamp || '', label: item, party: '', channel: ch, cents: cents });
+    byChannel[ch] = (byChannel[ch] || 0) + cents; totalCents += cents;
+  });
+  rows.sort(function(a, b) { return a.date < b.date ? 1 : -1; });
+  return { rows: rows, totalCents: totalCents, byChannel: byChannel, txnCount: rows.length,
+    testExcluded: { count: testCount, cents: testCents } };
+}
+
+// AR / AP outstanding totals (point-in-time) — same rules as the Overview
+// cards: AR honors the test-data toggle, AP has no test-channel concept.
+async function _loadOpenItemsTotals() {
+  var [sentRaw, overdueRaw, unpaidRaw, partialRaw] = await Promise.all([
+    MastDB.query('orders').orderByChild('invoiceStatus').equalTo('sent').limitToLast(500).once().catch(function() { return {}; }),
+    MastDB.query('orders').orderByChild('invoiceStatus').equalTo('overdue').limitToLast(500).once().catch(function() { return {}; }),
+    MastDB.query('admin/purchaseReceipts').orderByChild('paymentStatus').equalTo('unpaid').limitToLast(500).once().catch(function() { return {}; }),
+    MastDB.query('admin/purchaseReceipts').orderByChild('paymentStatus').equalTo('partial').limitToLast(500).once().catch(function() { return {}; })
+  ]);
+  var arCents = 0, arCount = 0;
+  Object.values(Object.assign({}, sentRaw || {}, overdueRaw || {})).forEach(function(o) {
+    if (!o) return;
+    var due = _orderRevenueCents(o) - (o.invoicePaidAmount || 0);
+    if (due <= 0) return;
+    if (isTestOrder(o) && !_includeTestData) return;
+    arCents += due; arCount++;
+  });
+  var apCents = 0, apCount = 0;
+  Object.values(Object.assign({}, unpaidRaw || {}, partialRaw || {})).forEach(function(r) {
+    if (!r) return;
+    var due = (r.amountCents || 0) - (r.paidAmount || 0);
+    if (due <= 0) return;
+    apCents += due; apCount++;
+  });
+  return { arCents: arCents, arCount: arCount, apCents: apCents, apCount: apCount };
+}
+
+window.FinanceBridge = {
+  resolvePeriod: _finResolvePeriod,
+  periodLabel: _finPeriodLabel,
+  setPeriod: function(p) { window._finPeriod = p; },
+  priorWindow: _priorRevenueWindow,
+  orderRevenueCents: _orderRevenueCents,
+  salesCents: _salesCents,
+  isTestOrder: isTestOrder,
+  includeTestData: function() { return !!_includeTestData; },
+  loadRevenueAggregate: _loadRevenueAggregate,
+  revenueRows: _loadRevenueRows,
+  computePnl: function(start, end) {
+    return computePnlLocal(start, end).then(function(p) { return _w3EnrichPnlWithBurden(p, start, end); });
+  },
+  cashSnapshot: _computeCashSnapshot,
+  taxByState: _computeTaxByState,
+  openItemsTotals: _loadOpenItemsTotals,
+  downloadCsv: _finDownloadCsv
+};
 
 // ── Module registration ───────────────────────────────────────────────────────
 
