@@ -109,7 +109,10 @@
     if ((f.type === 'status' || f.tone) && window.MastUI) {
       if (empty) return DASH;
       var tone = (typeof f.tone === 'function') ? f.tone(v) : 'neutral';
-      return window.MastUI.badge(v, tone);
+      // f.format maps a stored enum to its display label ('in_progress' →
+      // "Working on it") without changing the stored value sort/filter see.
+      var label = (typeof f.format === 'function') ? f.format(v) : v;
+      return window.MastUI.badge(label, tone);
     }
     if (f.type === 'tags') {
       var arr = Array.isArray(v) ? v : (v ? [v] : []);
@@ -170,6 +173,10 @@
         '<select class="form-input" name="' + esc(f.name) + '" style="width:100%;">' + optsHtml + '</select></div>';
     }
     var sval = (v == null) ? '' : (typeof v === 'object' ? canonicalGet(f, record) : v);
+    if (f.type === 'textarea') {
+      return '<div class="form-group" style="margin-bottom:12px;"><label class="form-label">' + esc(f.label) + (f.required ? ' *' : '') + '</label>' +
+        '<textarea class="form-input" name="' + esc(f.name) + '" rows="' + (f.rows || 4) + '" style="width:100%;resize:vertical;box-sizing:border-box;">' + esc(sval) + '</textarea></div>';
+    }
     return '<div class="form-group" style="margin-bottom:12px;"><label class="form-label">' + esc(f.label) + (f.required ? ' *' : '') + '</label>' +
       '<input class="form-input" name="' + esc(f.name) + '" value="' + esc(sval) + '" style="width:100%;"></div>';
   }
@@ -577,7 +584,8 @@
     var f = s.fields.filter(function (x) { return x.type === 'status'; })[0];
     if (!f || !record) return [];
     var v = f.get ? f.get(record) : record[f.name];
-    return [{ label: v, tone: (f.tone ? f.tone(v) : 'neutral') }];
+    var label = (typeof f.format === 'function') ? f.format(v) : v;
+    return [{ label: label, tone: (f.tone ? f.tone(v) : 'neutral') }];
   }
 
   function openRecord(key, record, mode, _internal) {

@@ -6,7 +6,7 @@ Source-of-truth counts for the admin app, generated from the code so docs
 cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 
 - **Core shell:** `app/index.html` — **60,044** lines
-- **Feature modules:** **115** files in `app/modules/` (**106** routed), **121,285** lines combined
+- **Feature modules:** **115** files in `app/modules/` (**106** routed), **121,428** lines combined
 
 | Module file | Lines | Routes |
 |---|---:|---|
@@ -41,9 +41,9 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/cs-faqs-v2.js` | 308 | cs-faqs-v2 |
 | `modules/cs-members-v2.js` | 302 | cs-members-v2 |
 | `modules/cs-reviews-v2.js` | 362 | cs-reviews-v2 |
-| `modules/cs-tickets-v2.js` | 254 | cs-tickets-v2 |
+| `modules/cs-support-v2.js` | 363 | cs-inbox-v2, cs-tickets-v2 |
 | `modules/customer-portfolio-v2.js` | 135 | customer-portfolio-v2 |
-| `modules/customer-service.js` | 3,290 | cs-inbox, cs-tickets, cs-surveys, cs-reviews, cs-faqs, cs-members |
+| `modules/customer-service.js` | 3,324 | cs-inbox, cs-tickets, cs-surveys, cs-reviews, cs-faqs, cs-members |
 | `modules/customers-v2.js` | 312 | customers-v2 |
 | `modules/customers.js` | 3,485 | customers |
 | `modules/duplicates-v2.js` | 175 | duplicates-v2 |
