@@ -5,8 +5,8 @@
 Source-of-truth counts for the admin app, generated from the code so docs
 cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 
-- **Core shell:** `app/index.html` — **59,919** lines
-- **Feature modules:** **98** files in `app/modules/` (**89** routed), **114,797** lines combined
+- **Core shell:** `app/index.html` — **59,927** lines
+- **Feature modules:** **102** files in `app/modules/` (**92** routed), **115,568** lines combined
 
 | Module file | Lines | Routes |
 |---|---:|---|
@@ -72,6 +72,7 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/newsletter.js` | 2,336 | newsletter |
 | `modules/orders-v2.js` | 329 | orders-v2 |
 | `modules/orders.js` | 6,302 | orders, commissions, rma |
+| `modules/pack-v2.js` | 204 | pack-v2 |
 | `modules/passes-v2.js` | 423 | passes-v2 |
 | `modules/procurement-v2.js` | 875 | procurement-v2 |
 | `modules/procurement.js` | 2,378 | procurement |
@@ -80,10 +81,12 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/promotions-v2.js` | 389 | promotions-v2 |
 | `modules/promotions.js` | 529 | promotions |
 | `modules/resources-v2.js` | 308 | resources-v2 |
+| `modules/rma-v2.js` | 216 | rma-v2 |
 | `modules/sales-events-v2.js` | 351 | sales-events-v2 |
 | `modules/sales.js` | 3,257 | pos, receipts, events, salesEvents, terms |
 | `modules/sessions-v2.js` | 274 | sessions-v2 |
 | `modules/settings-v2.js` | 105 | settings-v2 |
+| `modules/ship-v2.js` | 200 | ship-v2 |
 | `modules/show-light.js` | 1,718 | show-light-profile, show-light-gallery, show-light-shows, show-light-apply |
 | `modules/shows.js` | 3,580 | show, show-find, show-apply, show-prep, show-execute, show-history |
 | `modules/social.js` | 1,441 | social |
@@ -106,5 +109,6 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/workflows/pickship.workflow.js` | 394 | — |
 | `modules/workflows/procurement.workflow.js` | 111 | — |
 | `modules/workflows/products.workflow.js` | 165 | — |
+| `modules/workflows/return.workflow.js` | 151 | — |
 | `modules/workflows/workflow-engine.js` | 1,288 | — |
 | `modules/workflows/workflow-template.workflow.js` | 186 | — |
