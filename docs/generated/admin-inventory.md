@@ -5,8 +5,8 @@
 Source-of-truth counts for the admin app, generated from the code so docs
 cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 
-- **Core shell:** `app/index.html` — **60,008** lines
-- **Feature modules:** **114** files in `app/modules/` (**104** routed), **121,391** lines combined
+- **Core shell:** `app/index.html` — **60,014** lines
+- **Feature modules:** **116** files in `app/modules/` (**106** routed), **121,633** lines combined
 
 | Module file | Lines | Routes |
 |---|---:|---|
@@ -42,6 +42,7 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/cs-members-v2.js` | 302 | cs-members-v2 |
 | `modules/cs-reviews-v2.js` | 362 | cs-reviews-v2 |
 | `modules/cs-tickets-v2.js` | 254 | cs-tickets-v2 |
+| `modules/customer-portfolio-v2.js` | 135 | customer-portfolio-v2 |
 | `modules/customer-service.js` | 3,290 | cs-inbox, cs-tickets, cs-surveys, cs-reviews, cs-faqs, cs-members |
 | `modules/customers-v2.js` | 312 | customers-v2 |
 | `modules/customers.js` | 3,485 | customers |
@@ -53,10 +54,11 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/enrollments-v2.js` | 288 | enrollments-v2 |
 | `modules/events.js` | 1,937 | events-shows, events-settings |
 | `modules/finance-close-v2.js` | 294 | finance-period-close-v2, finance-amendments-v2 |
-| `modules/finance-expenses-v2.js` | 301 | finance-expenses-v2 |
+| `modules/finance-expenses-v2.js` | 325 | finance-expenses-v2 |
 | `modules/finance-openitems-v2.js` | 475 | finance-ar-v2, finance-ap-v2 |
+| `modules/finance-reports-v2.js` | 70 | finance-reports-v2 |
 | `modules/finance-statements-v2.js` | 351 | financials-v2, finance-revenue-v2, finance-pl-v2, finance-cash-flow-v2, finance-tax-v2 |
-| `modules/finance.js` | 8,303 | finance-revenue, finance-expenses, finance-pl, finance-cash-flow, finance-ar, finance-ap, finance-tax, finance-reports, customer-portfolio, financials, finance-period-close, finance-amendments |
+| `modules/finance.js` | 8,316 | finance-revenue, finance-expenses, finance-pl, finance-cash-flow, finance-ar, finance-ap, finance-tax, finance-reports, customer-portfolio, financials, finance-period-close, finance-amendments |
 | `modules/financials.js` | 350 | — |
 | `modules/fulfillment-v2.js` | 230 | pack-v2, ship-v2 |
 | `modules/fulfillment.js` | 1,524 | pack, ship, fulfillment |

@@ -5994,14 +5994,10 @@ function _portfolioPeriodNote() {
     '</div>';
 }
 
-function renderCustomerPortfolio() {
-  var el = document.getElementById('customerPortfolioContent');
-  if (!el) return;
-  // W2.8: period bar shown above loading state so user sees it during fetch.
-  el.innerHTML = renderFinancePeriodBar() + _portfolioPeriodNote() +
-    '<div style="color:var(--warm-gray);padding:40px 0;text-align:center;">Loading portfolio…</div>';
-
-  Promise.all([
+// State-free portfolio compute — customers + tickets + returns → quadrant rows
+// + concentration stats. Shared with the V2 portfolio twin via FinanceBridge.
+function _portfolioCompute() {
+  return Promise.all([
     MastDB.query('admin/customers').once()
       .then(function(s) { return (s && s.val()) || {}; }).catch(function() { return {}; }),
     MastDB.query('cs_tickets').limitToLast(2000).once()
@@ -6083,6 +6079,20 @@ function renderCustomerPortfolio() {
     // Quadrant counts
     var qCounts = { grow: 0, maintain: 0, reprice: 0, deprioritize: 0, unclassified: 0 };
     rows.forEach(function(r) { qCounts[r.quadrant]++; });
+    return { rows: rows, c2s: c2s, top5: top5, top10: top10, hhi: hhi, hhiBand: hhiBand, totalRev: totalRev, qCounts: qCounts };
+  });
+}
+
+function renderCustomerPortfolio() {
+  var el = document.getElementById('customerPortfolioContent');
+  if (!el) return;
+  // W2.8: period bar shown above loading state so user sees it during fetch.
+  el.innerHTML = renderFinancePeriodBar() + _portfolioPeriodNote() +
+    '<div style="color:var(--warm-gray);padding:40px 0;text-align:center;">Loading portfolio…</div>';
+
+  _portfolioCompute().then(function(d) {
+    var rows = d.rows, c2s = d.c2s, top5 = d.top5, top10 = d.top10,
+        hhi = d.hhi, hhiBand = d.hhiBand, totalRev = d.totalRev, qCounts = d.qCounts;
 
     portfolioState.rows = rows;
     portfolioState.thresholds = c2s;
@@ -8276,7 +8286,10 @@ window.FinanceBridge = {
   closePeriod: _closePeriodCore,
   amendApprove: _amendApproveCore,
   amendReject: _amendRejectCore,
-  openSubmitAmendment: function() { if (typeof window.finAmendmentOpenSubmit === 'function') window.finAmendmentOpenSubmit(); }
+  openSubmitAmendment: function() { if (typeof window.finAmendmentOpenSubmit === 'function') window.finAmendmentOpenSubmit(); },
+  // Wave 4 — portfolio core:
+  portfolioCompute: _portfolioCompute,
+  portfolioClassify: portfolioClassify
 };
 
 // ── Module registration ───────────────────────────────────────────────────────

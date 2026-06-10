@@ -181,6 +181,12 @@
 
   function visibleRows() {
     var rows = V2.rows;
+    if (V2.range) {
+      rows = rows.filter(function (r) {
+        var d = String(r.date || '').slice(0, 10);
+        return d >= V2.range.start && d <= V2.range.end;
+      });
+    }
     if (V2.q) {
       var q = V2.q.toLowerCase();
       rows = rows.filter(function (r) {
@@ -218,7 +224,14 @@
   function render() {
     var tab = ensureTab();
     var rows = visibleRows();
-    var s = summary(V2.rows);
+    var s = summary(V2.range ? rows : V2.rows);
+    var periodPills = [['all', 'All'], ['mtd', 'MTD'], ['qtd', 'QTD'], ['fy', 'FYTD']].map(function (md) {
+      var on = (V2.period || 'all') === md[0];
+      return '<button onclick="FinExpV2.setPeriod(\'' + md[0] + '\')" style="border:1px solid var(--border);' +
+        'background:' + (on ? 'color-mix(in srgb,var(--amber) 16%,transparent)' : 'transparent') + ';' +
+        'color:' + (on ? 'var(--text-primary)' : 'var(--warm-gray)') + ';border-radius:999px;' +
+        'padding:4px 11px;font-size:0.78rem;cursor:pointer;margin-right:6px;">' + md[1] + '</button>';
+    }).join('');
     tab.innerHTML =
       '<div style="display:flex;align-items:baseline;gap:12px;margin-bottom:6px;">' +
         '<h1 style="font-size:1.6rem;margin:0;">Expenses</h1>' +
@@ -228,6 +241,7 @@
       '<div style="display:flex;gap:12px;margin:12px 0;flex-wrap:wrap;">' +
         tile(N.money(s.total) || '$0.00', 'Total') + tile(N.count(s.count), 'Transactions') + tile(N.count(s.unreviewed), 'Need review') +
       '</div>' +
+      '<div style="margin:0 0 10px;">' + periodPills + '</div>' +
       '<div style="margin:14px 0;"><input class="form-input" placeholder="Search merchant, category, description…" value="' + esc(V2.q) +
         '" oninput="FinExpV2.search(this.value)" style="max-width:340px;font-size:0.9rem;"></div>' +
       MastEntity.renderList('finance-expenses-v2', {
@@ -252,6 +266,16 @@
   function afterWrite() { U.slideOut.requestCloseForce(); load(); }
 
   window.FinExpV2 = {
+    // Wave 4: period window via the shared finance period resolver (no local
+    // date math — FinanceBridge owns period semantics).
+    setPeriod: function (mode) {
+      if (mode === 'all') { V2.period = 'all'; V2.range = null; render(); return; }
+      MastAdmin.loadModule('finance').then(function () {
+        V2.period = mode;
+        V2.range = window.FinanceBridge.resolvePeriod({ mode: mode });
+        render();
+      }).catch(function (e) { console.error('[finance-expenses-v2] period', e); });
+    },
     sort: function (key) {
       if (V2.sortKey === key) V2.sortDir = (V2.sortDir === 'asc' ? 'desc' : 'asc');
       else { V2.sortKey = key; V2.sortDir = (key === 'date' || key === 'amount' ? 'desc' : 'asc'); }
