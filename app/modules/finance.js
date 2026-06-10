@@ -6785,8 +6785,10 @@ async function _closePeriodCore(periodId) {
   try { await writeAudit('create', 'periodClose', periodId); } catch (xerr) {}
   return json;
 }
-async function _amendApproveCore(amendmentId) {
-  var json = await _closeV3Call('approveAmendment', { amendmentId: amendmentId, requestId: _closeV3RequestId() });
+async function _amendApproveCore(amendmentId, periodId) {
+  // periodId is REQUIRED in practice: the CF's no-hint collection-group
+  // fallback throws INTERNAL (FieldPath.documentId() rejects bare ids).
+  var json = await _closeV3Call('approveAmendment', { amendmentId: amendmentId, periodId: periodId || null, requestId: _closeV3RequestId() });
   if (!json || json.ok !== true) {
     console.error('[close-v3] approveAmendment returned non-ok response:', json);
     throw new Error((json && (json.message || json.error || json.code)) || 'CF returned no ok flag');
@@ -6794,8 +6796,8 @@ async function _amendApproveCore(amendmentId) {
   try { await writeAudit('update', 'amendment', amendmentId + ':approved'); } catch (xerr) {}
   return json;
 }
-async function _amendRejectCore(amendmentId, reason) {
-  var json = await _closeV3Call('rejectAmendment', { amendmentId: amendmentId, reason: (reason || '').trim(), requestId: _closeV3RequestId() });
+async function _amendRejectCore(amendmentId, reason, periodId) {
+  var json = await _closeV3Call('rejectAmendment', { amendmentId: amendmentId, periodId: periodId || null, reason: (reason || '').trim(), requestId: _closeV3RequestId() });
   if (!json || json.ok !== true) {
     console.error('[close-v3] rejectAmendment returned non-ok response:', json);
     throw new Error((json && (json.message || json.error || json.code)) || 'CF returned no ok flag');
@@ -6992,8 +6994,8 @@ async function renderAmendments() {
         if (a.status === 'pending') {
           h += '<div style="display:flex;justify-content:flex-end;gap:8px;align-items:center;">';
           var apprDisabled = canApprove ? '' : ' disabled style="opacity:0.5;cursor:not-allowed;"';
-          h += '<button class="btn btn-secondary btn-small" onclick="finAmendmentReject(\'' + _jsAttrSafe(a.id) + '\')">Reject</button>';
-          h += '<button class="btn btn-primary btn-small"' + apprDisabled + ' onclick="finAmendmentApprove(\'' + _jsAttrSafe(a.id) + '\',\'' + _jsAttrSafe(a.reason || '') + '\')">Approve</button>';
+          h += '<button class="btn btn-secondary btn-small" onclick="finAmendmentReject(\'' + _jsAttrSafe(a.id) + '\',\'' + _jsAttrSafe(a.periodId || '') + '\')">Reject</button>';
+          h += '<button class="btn btn-primary btn-small"' + apprDisabled + ' onclick="finAmendmentApprove(\'' + _jsAttrSafe(a.id) + '\',\'' + _jsAttrSafe(a.reason || '') + '\',\'' + _jsAttrSafe(a.periodId || '') + '\')">Approve</button>';
           h += '</div>';
         } else if (a.status === 'approved') {
           var apTs = a.approvedAt ? String(a.approvedAt).replace('T',' ').slice(0,16) : '';
@@ -7017,7 +7019,7 @@ async function renderAmendments() {
   }
 }
 
-window.finAmendmentApprove = async function(amendmentId, reasonText) {
+window.finAmendmentApprove = async function(amendmentId, reasonText, periodId) {
   if (!_isSafeFbKey(amendmentId)) { showToast('Invalid amendment ID.', true); return; }
   if (!hasPermission('finance', 'approveAmendment')) {
     showToast('You do not have permission to approve amendments.', true);
@@ -7026,7 +7028,7 @@ window.finAmendmentApprove = async function(amendmentId, reasonText) {
   var ok = await mastConfirm('This writes a counter-entry to the next open period. Reason: ' + (reasonText || '(none provided)'), { title: 'Approve amendment', confirmLabel: 'Approve' });
   if (!ok) return;
   try {
-    var json = await _amendApproveCore(amendmentId);
+    var json = await _amendApproveCore(amendmentId, periodId);
     showToast('Amendment approved' + (json.counterEntryId ? ' (counter-entry ' + json.counterEntryId + ')' : ''));
     renderAmendments();
   } catch (err) {
@@ -7037,12 +7039,12 @@ window.finAmendmentApprove = async function(amendmentId, reasonText) {
   }
 };
 
-window.finAmendmentReject = async function(amendmentId) {
+window.finAmendmentReject = async function(amendmentId, periodId) {
   if (!_isSafeFbKey(amendmentId)) { showToast('Invalid amendment ID.', true); return; }
   var reason = await mastPrompt('Reject reason (optional):', { title: 'Reject amendment', confirmLabel: 'Reject', placeholder: 'e.g. duplicate, lacks supporting evidence' });
   if (reason === null) return; // cancelled
   try {
-    await _amendRejectCore(amendmentId, reason);
+    await _amendRejectCore(amendmentId, reason, periodId);
     showToast('Amendment rejected');
     renderAmendments();
   } catch (err) {

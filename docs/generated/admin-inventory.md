@@ -5,8 +5,8 @@
 Source-of-truth counts for the admin app, generated from the code so docs
 cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 
-- **Core shell:** `app/index.html` — **60,014** lines
-- **Feature modules:** **116** files in `app/modules/` (**106** routed), **121,633** lines combined
+- **Core shell:** `app/index.html` — **60,021** lines
+- **Feature modules:** **115** files in `app/modules/` (**106** routed), **121,285** lines combined
 
 | Module file | Lines | Routes |
 |---|---:|---|
@@ -58,8 +58,7 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/finance-openitems-v2.js` | 475 | finance-ar-v2, finance-ap-v2 |
 | `modules/finance-reports-v2.js` | 70 | finance-reports-v2 |
 | `modules/finance-statements-v2.js` | 351 | financials-v2, finance-revenue-v2, finance-pl-v2, finance-cash-flow-v2, finance-tax-v2 |
-| `modules/finance.js` | 8,316 | finance-revenue, finance-expenses, finance-pl, finance-cash-flow, finance-ar, finance-ap, finance-tax, finance-reports, customer-portfolio, financials, finance-period-close, finance-amendments |
-| `modules/financials.js` | 350 | — |
+| `modules/finance.js` | 8,318 | finance-revenue, finance-expenses, finance-pl, finance-cash-flow, finance-ar, finance-ap, finance-tax, finance-reports, customer-portfolio, financials, finance-period-close, finance-amendments |
 | `modules/fulfillment-v2.js` | 230 | pack-v2, ship-v2 |
 | `modules/fulfillment.js` | 1,524 | pack, ship, fulfillment |
 | `modules/galleries-v2.js` | 585 | galleries-v2 |

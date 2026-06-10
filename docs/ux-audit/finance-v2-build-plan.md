@@ -1,6 +1,7 @@
 # finance-v2 — Build Plan
 
-Status: **PLANNED** (2026-06-10). Runs `v2-conversion-playbook.md` end-to-end for the
+Status: **SHIPPED** (2026-06-10 — plan #399, Wave 1 #400, Wave 2 #401, SO-fix #402,
+Wave 3 #403, Wave 4 #404, holistic this PR; all merged & verified on dev). Runs `v2-conversion-playbook.md` end-to-end for the
 Finance section (sidebar `data-section="finance"`, 12 sub-items). Companion to
 `sales-v2-build-plan.md` / `marketing-v2-build-plan.md` / `operations-v2-build-plan.md`
 (worked examples) and `standard-record-ui.md` §10 (archetypes) — ratified decisions are
@@ -38,20 +39,34 @@ Channels precedent) rather than copied.
 
 ## Scorecard — the 12 Finance routes
 
-| # | Route | Sidebar label | V1 source (finance.js) | Surface type | V2 target |
-|---|-------|---------------|------------------------|--------------|-----------|
-| 1 | `financials` | Overview | `renderFinanceOverview()` :6294 | read-only 6-tile dashboard | **statements hub** — Overview lens |
-| 2 | `finance-revenue` | Revenue | `setupRevenueTab()` :486 | read-only period report | **statements hub** — Revenue lens |
-| 3 | `finance-expenses` | Expenses | `setupExpensesTab()` :849 | CRUD list + review | ✅ exists (`finance-expenses-v2.js`) — deepen |
-| 4 | `finance-pl` | P&L | `setupPlTab()` :1701 (admin-only) | read-only period report | **statements hub** — P&L lens |
-| 5 | `finance-cash-flow` | Cash Flow | `setupCashFlowTab()` :2125 | read-only projection + Day-Close sub-view | **statements hub** — Cash lens; Day Close → close hub |
-| 6 | `finance-ar` | AR | `setupArTab()` :3163 | aging queue + actions | **open-items hub** — Receivables lens |
-| 7 | `finance-ap` | AP | `setupApTab()` :3755 | aging queue + bill/vendor CRUD | **open-items hub** — Payables lens |
-| 8 | `finance-tax` | Tax | `setupTaxTab()` :4455 | read-only compliance report (sales tax / nexus / 1099) | **statements hub** — Tax lens (nexus+1099 panes) |
-| 9 | `finance-reports` | Reports | `setupReportsTab()` :4920 | export launcher (6 CSV/PDF exports) | thin V2 wrapper, late wave |
-| 10 | `customer-portfolio` | Customer Portfolio | `renderCustomerPortfolio()` :5943 | read-only analytics (HHI, quadrants) | read-only Record list + drill, late wave |
-| 11 | `finance-period-close` | Period Close | `renderPeriodClose()` :6629 | process queue (Close v3) | **close hub** — Periods lens |
-| 12 | `finance-amendments` | Amendments | `renderAmendments()` :6827 | approval queue (Close v3) | **close hub** — Amendments lens |
+| # | Route | Sidebar label | V1 source (finance.js) | V2 home (SHIPPED) | Status |
+|---|-------|---------------|------------------------|-------------------|--------|
+| 1 | `financials` | Overview | `renderFinanceOverview()` | finance-statements-v2 — Overview lens | ✅ W1 |
+| 2 | `finance-revenue` | Revenue | `setupRevenueTab()` | finance-statements-v2 — Revenue lens | ✅ W1 |
+| 3 | `finance-expenses` | Expenses | `setupExpensesTab()` | finance-expenses-v2 (pre-existing) + period window | ✅ W4 deepened |
+| 4 | `finance-pl` | P&L | `setupPlTab()` (admin-only) | finance-statements-v2 — P&L lens (RBAC-filtered pill) | ✅ W1 |
+| 5 | `finance-cash-flow` | Cash Flow | `setupCashFlowTab()` | finance-statements-v2 — Cash lens; Day Close → close hub | ✅ W1 |
+| 6 | `finance-ar` | AR | `setupArTab()` | finance-openitems-v2 — Receivables lens | ✅ W2 |
+| 7 | `finance-ap` | AP | `setupApTab()` | finance-openitems-v2 — Payables (+Vendors) lens | ✅ W2 |
+| 8 | `finance-tax` | Tax | `setupTaxTab()` | finance-statements-v2 — Tax lens (nexus/1099 stay classic) | ✅ W1 |
+| 9 | `finance-reports` | Reports | `setupReportsTab()` | finance-reports-v2 launcher (generators classic) | ✅ W4 |
+| 10 | `customer-portfolio` | Customer Portfolio | `renderCustomerPortfolio()` | customer-portfolio-v2 (drills to customers-v2) | ✅ W4 |
+| 11 | `finance-period-close` | Period Close | `renderPeriodClose()` | finance-close-v2 — Periods lens | ✅ W3 |
+| 12 | `finance-amendments` | Amendments | `renderAmendments()` | finance-close-v2 — Amendments lens | ✅ W3 |
+
+**Operator-walk findings (2026-06-10, all 12 routes + every CRUD verb incl. CREATE):**
+1. **Live CF bug found by the approve walk** — `approveAmendment`/`rejectAmendment`'s
+   no-hint collection-group lookup throws INTERNAL (`FieldPath.documentId()` rejects bare
+   ids). Template-side fix shipped in this PR: clients always pass `periodId` (the CF's
+   working fast path); the server-side fix is filed against mast-architecture.
+2. Walk exercised: statements lenses ×5 + per-lens export; expense open/edit/approve/
+   delete + period pills; AR remind (idempotent queue write) / mark-paid / cold drill to
+   the orders-v2 SO; AP bill create/edit/partial-payment/mark-paid/delete + vendor
+   create + vendor drill; April period CLOSED through the real `writePeriodClose` CF;
+   June close correctly blocked with the 30-day unclosed-days guard; amendment submitted
+   against closed April and APPROVED (counter-entry minted) with the periodId fix.
+3. The earlier wave-2 verify caught the engine's `detail.render(MastUI, record)`
+   signature (blank bill SO) — fixed in #402 and registered for the playbook.
 
 ## CONSOLIDATION (the heart of this round)
 
@@ -165,11 +180,12 @@ Thin queue UI over the Close-v3 CFs; immutability rendered, not re-argued.
 - Cross-links: statements Cash lens → close hub; statements tiles → open-items lenses;
   portfolio → customers-v2; close guard → day-close lens.
 
-### Wave 5 — holistic (walk FIRST, then PR)
-Operator walk: every nav item, every record, **every CRUD verb incl. CREATE on a fresh
-record** (new bill, new vendor, new amendment, new expense via legacy intake), every
-link incl. cold cross-drills (order SO ← AR row from a fresh session). Then: sidebar
-reorder + consolidation ratification, CRUD parity table, `lint-v2-standard` green.
+### Wave 5 — holistic (walk FIRST, then PR) — ✅ DONE
+Walk ran before this PR (findings above). This PR: sidebar reordered around the
+operator's process (statements → expenses → open items → close → reports → portfolio),
+orphaned `app/modules/financials.js` deleted, amendment periodId fix, plan doc closed
+out. Sidebar 12→7 item merge remains a PROPOSAL for operator ratification (routes
+already collapse into 3 hubs at the module level regardless).
 
 ## CRUD parity — target end-state
 
@@ -189,7 +205,13 @@ Every delete: `mastConfirm` + `writeAudit` + RBAC `can(route,'delete')`.
 
 ## Debt / known leftovers (tracked, not blocking)
 
-- [ ] `app/modules/financials.js` is orphaned dead code — delete in holistic PR.
+- [ ] **mast-architecture CF fix**: `_findAmendment`'s collection-group documentId
+      fallback is invalid Firestore — clients now always pass periodId, but the CF
+      should require it or query a stored field (spawn_task filed; deploy operator-gated).
+- [ ] Amendments lens refresh after classic-modal submit is manual (Refresh button) —
+      the classic modal's success callback re-renders the legacy tab, not the hub.
+
+- [x] `app/modules/financials.js` deleted (holistic PR).
 - [ ] Bulk approve / multi-select on expenses stays legacy (engine lacks row checkboxes).
 - [ ] AR dunning-settings + AR audit-log sub-views stay legacy (linked).
 - [ ] Bank-sync (Plaid) status cards + Reconnect/Retry stay legacy (infrastructure UI).
