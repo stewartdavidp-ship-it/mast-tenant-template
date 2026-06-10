@@ -212,7 +212,7 @@
         function fg(label, inner, flex) { return '<div class="form-group"' + (flex ? ' style="flex:1;min-width:150px;"' : '') + '><label class="form-label">' + label + '</label>' + inner + '</div>'; }
         function row2(a, b) { return '<div style="display:flex;gap:12px;flex-wrap:wrap;">' + a + b + '</div>'; }
         return '<div class="mu-editbar"><span class="mu-editpill">' + (mode === 'create' ? 'NEW' : 'EDITING') + '</span>' + (mode === 'create' ? 'New contact' : 'Edit this contact') + '</div>' +
-          fg('Name *', '<input class="form-input" id="ctV2Name" value="' + esc(c.name || '') + '" style="width:100%;" placeholder="Company or person name">') +
+          fg('Name *', '<input class="form-input" id="ctV2Name" name="name" value="' + esc(c.name || '') + '" style="width:100%;" placeholder="Company or person name">') +
           row2(
             fg('Email', '<input class="form-input" type="email" id="ctV2Email" value="' + esc(c.email || '') + '" style="width:100%;" placeholder="email@example.com">', true),
             fg('Phone', '<input class="form-input" type="tel" id="ctV2Phone" value="' + esc(c.phone || '') + '" style="width:100%;" placeholder="(555) 123-4567">', true)
