@@ -1,0 +1,43 @@
+{
+  "audit-suppressions-v2.js": {
+    "handRolledHeader": 1
+  },
+  "calendar-v2.js": {
+    "handRolledHeader": 1
+  },
+  "cs-tickets-v2.js": {
+    "handRolledHeader": 1
+  },
+  "customers-v2.js": {
+    "handRolledHeader": 1
+  },
+  "duplicates-v2.js": {
+    "handRolledHeader": 1
+  },
+  "finance-expenses-v2.js": {
+    "handRolledHeader": 1
+  },
+  "lots-v2.js": {
+    "handRolledHeader": 1,
+    "missingFlagGate": 1
+  },
+  "materials-v2.js": {
+    "handRolledHeader": 1
+  },
+  "procurement-v2.js": {
+    "handRolledHeader": 1,
+    "missingFlagGate": 1
+  },
+  "promotions-v2.js": {
+    "handRolledHeader": 1
+  },
+  "team-v2.js": {
+    "handRolledHeader": 1
+  },
+  "trips-v2.js": {
+    "handRolledHeader": 1
+  },
+  "vendors-v2.js": {
+    "missingFlagGate": 1
+  }
+}
