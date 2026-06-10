@@ -115,7 +115,14 @@
         tone: function (v) { return STATUS_TONE[v] || 'neutral'; } },
       { name: 'placedAt', label: 'Placed', type: 'date', list: true, readOnly: true, get: function (p) { return p.createdAt || null; } }
     ],
-    fetch: function (id) { return Promise.resolve(V2.byId[id] || null); },
+    fetch: function (id) {
+      // Cache-miss fallback so cross-drills (gallery -> placement) work even
+      // when this module's list hasn't loaded yet in the session.
+      if (V2.byId[id]) return Promise.resolve(V2.byId[id]);
+      return Promise.resolve(MastDB.get('admin/consignments/' + id)).then(function (p) {
+        return p ? Object.assign({ _key: id }, p) : null;
+      });
+    },
     detail: {
       render: function (UI, p) {
         var t = placementTotals(p);
@@ -132,7 +139,9 @@
 
         // Overview — gallery + status + commission terms + placed date + totals.
         var placement = UI.kv([
-          { k: 'Gallery', v: esc(galleryName(p)) },
+          { k: 'Gallery', v: p.galleryId
+              ? '<button type="button" class="mu-link" onclick="MastEntity.drill(\'galleries-v2\',\'' + esc(p.galleryId) + '\')">' + esc(galleryName(p)) + '</button>'
+              : esc(galleryName(p)) + ' <span class="mu-sub" title="This placement predates gallery records and is matched by name only — edit it in the classic view to link it.">· name-matched</span>' },
           { k: 'Status', v: UI.badge(st === 'active' ? 'Active' : 'Closed', STATUS_TONE[st] || 'neutral') },
           { k: 'Commission', v: esc(pctLabel(p)) + ' <span class="mu-sub">to gallery</span>' },
           { k: 'Contact', v: p.locationContact ? esc(p.locationContact) : '—' },

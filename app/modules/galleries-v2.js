@@ -147,7 +147,14 @@
         get: galleryStatus,
         tone: function (v) { return STATUS_TONE[v] || 'neutral'; } }
     ],
-    fetch: function (id) { return Promise.resolve(V2.byId[id] || null); },
+    fetch: function (id) {
+      // Cache-miss fallback so cross-drills (placement -> gallery) work even
+      // when this module's list hasn't loaded yet in the session.
+      if (V2.byId[id]) return Promise.resolve(V2.byId[id]);
+      return Promise.resolve(MastDB.get('admin/galleries/' + id)).then(function (g) {
+        return g ? Object.assign({ _key: id }, g) : null;
+      });
+    },
     detail: {
       render: function (UI, g) {
         var actCount = activePlacements(g).length;
@@ -192,7 +199,14 @@
           return { p: p, status: p.status || 'active', placed: t.placed, sold: t.sold, owed: t.makerEarnings };
         });
         var piecesBody = pieceRows.length ? UI.relatedTable([
-          { label: 'Placement', render: function (r) { return esc(r.p.locationName || '—'); } },
+          // Drill into the placement record (consignments-v2 stacked SO, Back
+          // returns here) — the placement/gallery split was previously two
+          // disconnected surfaces. Label by placed date, not the gallery's own
+          // name echoed back.
+          { label: 'Placement', render: function (r) {
+              var label = 'Placed ' + (r.p.createdAt ? N.date(r.p.createdAt) : '(undated)');
+              return '<button type="button" class="mu-link" onclick="MastEntity.drill(\'consignments-v2\',\'' + esc(r.p._key || '') + '\')">' + esc(label) + '</button>';
+            } },
           { label: 'Status', render: function (r) { return UI.badge(r.status, r.status === 'active' ? 'success' : 'neutral'); } },
           { label: 'Pieces', align: 'right', render: function (r) { return N.count(r.placed) || '0'; } },
           { label: 'Sold', align: 'right', render: function (r) { return N.money(r.sold) || '$0.00'; } },
