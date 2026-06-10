@@ -123,8 +123,19 @@
             (statusKey(p) === 'draft'
               ? '<button class="btn btn-primary btn-small" onclick="SocialV2.markPosted(\'' + esc(id) + '\')">Mark posted ✓</button>' : '') +
             '<button class="btn btn-secondary btn-small" onclick="SocialV2.copyCaption(\'' + esc(id) + '\')">⧉ Copy caption</button>' +
+            (statusKey(p) === 'draft' && (typeof window.can !== 'function' || window.can('social', 'delete'))
+              ? '<button class="btn btn-secondary btn-small" style="color:var(--text-danger);" onclick="SocialV2.removeDraft(\'' + esc(id) + '\')">Delete draft</button>' : '') +
           '</div>';
         }
+        // Part-of-campaign chip — single-sourced renderer in campaigns.js (Wave 3).
+        var campChip = '<div id="socialCampChip_' + esc(id) + '"></div>';
+        setTimeout(function () {
+          if (window.MastAdmin && MastAdmin.loadModule) {
+            MastAdmin.loadModule('campaigns').then(function () {
+              if (window.CampaignsBridge && CampaignsBridge.renderChipInto) CampaignsBridge.renderChipInto('socialCampChip_' + id, id);
+            }).catch(function () {});
+          }
+        }, 0);
 
         var media = p.thumbnailUrl
           ? UI.card('Media', '<div>' + UI.imageThumb(postTitle(p), p.thumbnailUrl) + '</div>')
@@ -147,7 +158,7 @@
           { k: 'Posted at', v: toMs(p.postedAt) ? N.date(new Date(toMs(p.postedAt)).toISOString()) : '—' }
         ]);
 
-        return tiles + actions + media + UI.card('Caption', captionBody) + UI.card('Details', meta);
+        return tiles + actions + media + UI.card('Caption', captionBody) + UI.card('Details', meta) + campChip;
       },
       editRender: function (p, mode) {
         p = p || {};
@@ -322,6 +333,27 @@
           SocialV2._reopen(id); reloadSoon();
         });
       }).catch(function (e) { console.error('[social-v2] markPosted', e); if (window.showToast) showToast('Error marking posted.', true); });
+    },
+    // Draft deletion (Wave 3): posted records are the posting history — they
+    // never delete from the twin.
+    removeDraft: function (id) {
+      if (typeof window.can === 'function' && !window.can('social', 'delete')) {
+        if (window.showToast) showToast('You don\'t have permission to delete posts.', true); return;
+      }
+      var rec = V2.byId[id];
+      if (rec && statusKey(rec) !== 'draft') { if (window.showToast) showToast('Posted records are history — only drafts delete.', true); return; }
+      var b = bridge(); if (!b || !b.remove) return;
+      Promise.resolve(window.mastConfirm
+        ? mastConfirm('Delete this draft post?', { title: 'Delete draft?', confirmLabel: 'Delete', dangerous: true })
+        : true).then(function (ok) {
+        if (!ok) return;
+        return Promise.resolve(b.remove(id)).then(function () {
+          if (window.writeAudit) writeAudit('delete', 'social-post-draft', id);
+          if (window.showToast) showToast('Draft deleted.');
+          try { U.slideOut.requestCloseForce(); } catch (e) {}
+          load();
+        });
+      }).catch(function (e) { console.error('[social-v2] removeDraft', e); if (window.showToast) showToast('Delete failed.', true); });
     },
     copyCaption: function (id) {
       var rec = V2.byId[id]; if (!rec) return;

@@ -57,16 +57,10 @@
     return (c.startDate || '') + (c.endDate ? ' → ' + c.endDate : '');
   }
 
-  // Reference deep-link (mirrors legacy _refToHash) -> classic artifact route.
-  function refHash(r) {
-    switch (r.type) {
-      case 'blog':       return 'blog?postId=' + r.refId;
-      case 'newsletter': return 'newsletter?issueId=' + r.refId;
-      case 'social':     return 'social?postId=' + r.refId;
-      case 'story':      return 'stories?storyId=' + r.refId;
-      default: return '';
-    }
-  }
+  // Reference drill target (marketing-v2 Wave 3): every artifact type now has
+  // a V2 record entity, so references drill in-panel via MastEntity.drill
+  // (each target's fetch() has a MastDB cache-miss fallback for cold drills).
+  var REF_ENTITY = { blog: 'blog-v2', newsletter: 'newsletter-issues-v2', social: 'social-v2', story: 'stories-v2' };
 
   // -- schema (read-only Faceted Record) -------------------------------
   MastEntity.define('campaigns-v2', {
@@ -128,8 +122,10 @@
         var refsBody = addRefBtn + (refs.length ? UI.relatedTable([
           { label: 'Type', render: function (r) { return esc(REF_TYPE_LABEL[r.type] || r.type || '—'); } },
           { label: 'Reference', render: function (r) {
-              var h = refHash(r);
-              return h ? '<a href="#' + esc(h) + '" style="color:var(--teal);">' + esc(r.refId || '') + '</a>' : esc(r.refId || '—');
+              var ek = REF_ENTITY[r.type];
+              return ek && r.refId
+                ? '<button type="button" class="mu-link" onclick="event.stopPropagation();MastEntity.drill(\'' + ek + '\',\'' + esc(String(r.refId)) + '\')" style="color:var(--teal);background:none;border:none;cursor:pointer;padding:0;font-size:inherit;">' + esc(r.refId) + '</button>'
+                : esc(r.refId || '—');
             } },
           { label: 'Scheduled for', render: function (r) { return r.scheduledFor ? esc(r.scheduledFor) : '<span class="mu-sub">—</span>'; } },
           { label: 'Added', render: function (r) { return r.addedAt ? '<span class="mu-sub">' + esc(String(r.addedAt).slice(0, 10)) + '</span>' : '<span class="mu-sub">—</span>'; } },
@@ -165,8 +161,14 @@
             + 'Open Analytics → Traffic &amp; Revenue by Source to see attribution.</div>';
         }
 
+        // Delete (Wave 3) — confirm + audit; references are pointers, the
+        // linked artifacts survive.
+        var danger = (typeof window.can !== 'function' || window.can('campaigns', 'delete'))
+          ? '<div style="margin-top:14px;"><button class="btn btn-secondary btn-small" style="color:var(--text-danger);" onclick="CampaignsV2.remove(\'' + esc(cid) + '\')">Delete campaign</button></div>'
+          : '';
+
         return tiles + tabsBar +
-          '<div class="mu-pane" data-pane="ov">' + UI.card('Campaign', overview) + UI.card('Goal', goalBody) + '</div>' +
+          '<div class="mu-pane" data-pane="ov">' + UI.card('Campaign', overview) + UI.card('Goal', goalBody) + danger + '</div>' +
           '<div class="mu-pane" data-pane="refs" hidden>' + UI.cardTable('References (' + refs.length + ')', refsBody) + '</div>' +
           '<div class="mu-pane" data-pane="attr" hidden>' + UI.card('Attribution', attrBody) + '</div>';
       },
@@ -375,6 +377,24 @@
           CampaignsV2._reopen(id); reloadSoon();
         });
       }).catch(function (e) { console.error('[campaigns-v2] removeRef', e); if (window.showToast) showToast('Failed to remove reference.', true); });
+    },
+    // Delete (Wave 3) — confirm + writeAudit; delegates to CampaignsBridge.
+    remove: function (id) {
+      if (typeof window.can === 'function' && !window.can('campaigns', 'delete')) {
+        if (window.showToast) showToast('You don\'t have permission to delete campaigns.', true); return;
+      }
+      if (!window.CampaignsBridge) { if (window.showToast) showToast('Campaigns engine still loading — try again', true); return; }
+      Promise.resolve(window.mastConfirm
+        ? mastConfirm('Delete this campaign? The linked artifacts (posts, issues, stories) are NOT deleted.', { title: 'Delete campaign?', confirmLabel: 'Delete', dangerous: true })
+        : true).then(function (ok) {
+        if (!ok) return;
+        return Promise.resolve(window.CampaignsBridge.remove(id)).then(function () {
+          if (window.writeAudit) writeAudit('delete', 'campaign', id);
+          if (window.showToast) showToast('Campaign deleted.');
+          try { U.slideOut.requestCloseForce(); } catch (e) {}
+          load();
+        });
+      }).catch(function (e) { console.error('[campaigns-v2] remove', e); if (window.showToast) showToast('Delete failed.', true); });
     },
     exportCsv: function () { return MastEntity.exportRows('campaigns-v2', visibleRows(), V2.statusFilter); }
   };

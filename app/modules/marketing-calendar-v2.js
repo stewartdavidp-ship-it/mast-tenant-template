@@ -183,20 +183,12 @@
   }
 
   // Map an entry → its source route. blog/newsletter/story have V2 twins, so
-  // navigateTo (the V2 remap carries us to the twin); social has no V2 twin, so
-  // navigateToClassic reaches the legacy capture surface.
+  // navigateTo (the V2 remap carries us to the twin); social-v2 landed in
+  // marketing Wave 1, so every source now drills to its twin.
   function drillTo(e) {
     try { U.slideOut.requestClose(); } catch (err) {}
-    if (e.type === 'blog') {
-      if (typeof navigateTo === 'function') navigateTo('blog', { id: e.srcId });
-    } else if (e.type === 'newsletter') {
-      if (typeof navigateTo === 'function') navigateTo('newsletter', { id: e.srcId });
-    } else if (e.type === 'story') {
-      if (typeof navigateTo === 'function') navigateTo('stories', { id: e.srcId });
-    } else if (e.type === 'social') {
-      if (typeof navigateToClassic === 'function') navigateToClassic('social');
-      else if (typeof navigateTo === 'function') navigateTo('social');
-    }
+    var route = { blog: 'blog', newsletter: 'newsletter', story: 'stories', social: 'social' }[e.type];
+    if (route && typeof navigateTo === 'function') navigateTo(route, { id: e.srcId });
   }
 
   window.MarketingCalendarV2 = {
