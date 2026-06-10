@@ -302,35 +302,32 @@
   }
   window.composerSaveDraft = saveDraft;
 
-  async function publish() {
-    if (!current) return;
-    await saveDraft();
-    var ch = current.targetChannels || [];
-    if (!ch.length) {
-      if (typeof showToast === 'function') showToast('Pick at least one channel first', true);
-      return;
-    }
-    // Sequentially load each module and call its open-from-content hook.
-    var linked = Object.assign({}, current.linkedArtifacts || {});
+  // Channel fan-out for ONE content doc — shared by the classic Publish button
+  // and ComposerBridge.publish (composer-v2). Sequentially loads each module
+  // and calls its open-from-content hook.
+  async function _publishRecord(c) {
+    var ch = c.targetChannels || [];
+    if (!ch.length) return [];
+    var linked = Object.assign({}, c.linkedArtifacts || {});
     var done = [];
     for (var i = 0; i < ch.length; i++) {
       var channel = ch[i];
       try {
         if (channel === 'blog') {
           await _ensureModule('blog');
-          if (typeof window.blogOpenFromContent === 'function') await window.blogOpenFromContent(current.id);
+          if (typeof window.blogOpenFromContent === 'function') await window.blogOpenFromContent(c.id);
           done.push('blog');
         } else if (channel === 'social') {
           await _ensureModule('social');
-          if (typeof window.socialOpenFromContent === 'function') await window.socialOpenFromContent(current.id);
+          if (typeof window.socialOpenFromContent === 'function') await window.socialOpenFromContent(c.id);
           done.push('social');
         } else if (channel === 'newsletter') {
           await _ensureModule('newsletter');
-          if (typeof window.newsletterOpenFromContent === 'function') await window.newsletterOpenFromContent(current.id);
+          if (typeof window.newsletterOpenFromContent === 'function') await window.newsletterOpenFromContent(c.id);
           done.push('newsletter');
         } else if (channel === 'story') {
           await _ensureModule('production');
-          if (typeof window.storyOpenFromContent === 'function') await window.storyOpenFromContent(current.id);
+          if (typeof window.storyOpenFromContent === 'function') await window.storyOpenFromContent(c.id);
           done.push('story');
         }
       } catch (e) {
@@ -338,16 +335,64 @@
       }
     }
     try {
-      await MastDB.update('admin/content/' + current.id, {
+      await MastDB.update('admin/content/' + c.id, {
         status: 'published',
         linkedArtifacts: linked,
         updatedAt: nowIso()
       });
-      current.status = 'published';
+      c.status = 'published';
     } catch (_e) {}
+    return done;
+  }
+
+  async function publish() {
+    if (!current) return;
+    await saveDraft();
+    if (!(current.targetChannels || []).length) {
+      if (typeof showToast === 'function') showToast('Pick at least one channel first', true);
+      return;
+    }
+    var done = await _publishRecord(current);
     if (typeof showToast === 'function') showToast('Published to: ' + done.join(', '));
   }
   window.composerPublish = publish;
+
+  // ComposerBridge — delegated write path for composer-v2 (marketing-v2
+  // Wave 2). Keeps the content-doc shape + the publish fan-out single-sourced
+  // here; the V2 twin never writes admin/content directly. Each write also
+  // syncs the local `contents` cache so a later classic-view visit is coherent.
+  window.ComposerBridge = {
+    create: async function(fields) {
+      var id = MastDB.newKey('admin/content');
+      var doc = Object.assign({
+        id: id, title: '', body: '', images: [],
+        targetChannels: [], status: 'draft',
+        scheduledAt: null, createdAt: nowIso(), updatedAt: nowIso(),
+        linkedArtifacts: {}
+      }, fields || {});
+      await MastDB.set('admin/content/' + id, doc);
+      contents[id] = doc;
+      return id;
+    },
+    update: async function(id, patch) {
+      patch = Object.assign({}, patch, { updatedAt: nowIso() });
+      await MastDB.update('admin/content/' + id, patch);
+      if (contents[id]) Object.assign(contents[id], patch);
+      return patch;
+    },
+    publish: async function(id) {
+      if (!listLoaded) await loadList();
+      var c = contents[id] || (await MastDB.get('admin/content/' + id));
+      if (!c) throw new Error('Content not found');
+      contents[id] = c;
+      return _publishRecord(c);
+    },
+    remove: async function(id) {
+      await MastDB.remove('admin/content/' + id);
+      delete contents[id];
+      return true;
+    }
+  };
 
   function _ensureModule(id) {
     if (typeof MastAdmin === 'undefined' || !MastAdmin.loadModule) return Promise.resolve();

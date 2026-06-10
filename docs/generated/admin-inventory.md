@@ -5,8 +5,8 @@
 Source-of-truth counts for the admin app, generated from the code so docs
 cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 
-- **Core shell:** `app/index.html` — **59,956** lines
-- **Feature modules:** **106** files in `app/modules/` (**96** routed), **117,441** lines combined
+- **Core shell:** `app/index.html` — **59,962** lines
+- **Feature modules:** **108** files in `app/modules/` (**98** routed), **118,197** lines combined
 
 | Module file | Lines | Routes |
 |---|---:|---|
@@ -30,7 +30,8 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/commission-terms-v2.js` | 267 | commission-terms-v2 |
 | `modules/commission-terms.js` | 317 | commission-terms |
 | `modules/commissions-v2.js` | 296 | commissions-v2 |
-| `modules/composer.js` | 434 | composer |
+| `modules/composer-v2.js` | 298 | composer-v2 |
+| `modules/composer.js` | 479 | composer |
 | `modules/consignment.js` | 2,190 | galleries |
 | `modules/consignments-v2.js` | 289 | consignments-v2 |
 | `modules/contacts-v2.js` | 363 | contacts-v2 |
@@ -46,7 +47,8 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/duplicates-v2.js` | 175 | duplicates-v2 |
 | `modules/email-log-v2.js` | 252 | email-log-v2 |
 | `modules/email-log.js` | 561 | email-log |
-| `modules/engagement-inbox.js` | 485 | engagement-inbox |
+| `modules/engagement-inbox-v2.js` | 383 | engagement-inbox-v2 |
+| `modules/engagement-inbox.js` | 515 | engagement-inbox |
 | `modules/enrollments-v2.js` | 288 | enrollments-v2 |
 | `modules/events.js` | 1,937 | events-shows, events-settings |
 | `modules/finance-expenses-v2.js` | 301 | finance-expenses-v2 |
