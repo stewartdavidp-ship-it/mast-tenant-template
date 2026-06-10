@@ -2827,6 +2827,100 @@
     unfeature: function (id) { return ensureReviewsLoaded().then(function () { return unfeatureReviewOnSite(id); }).then(function () { return reviewsData[id] || null; }); }
   };
 
+  // Bridge for the cs-support-v2 hub (flag-gated #cs-inbox-v2 / #cs-tickets-v2).
+  // State-free conversation-write cores extracted from csSubmitCreate /
+  // csSendReply / csUpdateStatus|Priority|Category, parameterized by data (the
+  // legacy handlers read the form DOM, so they can't be called with an object).
+  // The legacy handlers now DELEGATE here, so the ticket-number mint, the
+  // message append + updatedAt bump, and the field writes stay single-sourced.
+  // Replies do NOT email the customer (verified V1 behavior — keep it that way
+  // here; outbound email is a product decision, not a refactor side effect).
+  // Mirrors window.FinanceBridge / window.CsFaqsBridge.
+  window.CsTicketsBridge = {
+    // data: { subject*, contactEmail*, contactName, source, priority, firstMessage }
+    createTicket: async function (data) {
+      var config = await MastDB.get('cs_config/ticketing');
+      var prefix = (config && config.prefix) || 'T';
+      var nextNum = (config && typeof config.nextNumber === 'number') ? config.nextNumber : 1;
+      var ticketNumber = prefix + '-' + String(nextNum).padStart(4, '0');
+      var ticketId = 'ticket_' + Date.now().toString(36);
+      var now = new Date().toISOString();
+      var ticketData = {
+        id: ticketId,
+        ticketNumber: ticketNumber,
+        subject: data.subject,
+        status: 'open',
+        priority: data.priority || 'normal',
+        source: data.source || 'manual',
+        contactEmail: data.contactEmail,
+        contactName: data.contactName || null,
+        createdAt: now,
+        updatedAt: now,
+        createdBy: (window.currentUser && currentUser.uid) || null
+      };
+      await MastDB.set('cs_tickets/' + ticketId, ticketData);
+      if (data.firstMessage) {
+        var msgId = 'msg_' + Date.now().toString(36);
+        await MastDB.set('cs_tickets/' + ticketId + '/messages/' + msgId, {
+          id: msgId,
+          body: data.firstMessage,
+          direction: 'inbound',
+          isInternal: false,
+          authorName: data.contactName || null,
+          authorEmail: data.contactEmail,
+          createdAt: now
+        });
+      }
+      if (!config) {
+        await MastDB.set('cs_config/ticketing', { prefix: prefix, nextNumber: nextNum + 1 });
+      } else {
+        await MastDB.update('cs_config/ticketing', { nextNumber: nextNum + 1 });
+      }
+      if (window.writeAudit) writeAudit('create', 'cs-ticket', ticketId);
+      ticketsData.unshift(ticketData);
+      return ticketData;
+    },
+    // Append a message to the thread + bump updatedAt. opts: { isInternal,
+    // authorName, authorEmail } (author defaults to the signed-in operator).
+    reply: async function (ticketId, body, opts) {
+      opts = opts || {};
+      var msgId = 'msg_' + Date.now().toString(36);
+      var now = new Date().toISOString();
+      var msgData = {
+        id: msgId,
+        body: body,
+        direction: 'outbound',
+        isInternal: !!opts.isInternal,
+        authorName: opts.authorName || (window.currentUser && currentUser.displayName) || null,
+        authorEmail: opts.authorEmail || (window.currentUser && currentUser.email) || null,
+        createdAt: now
+      };
+      await MastDB.set('cs_tickets/' + ticketId + '/messages/' + msgId, msgData);
+      await MastDB.update('cs_tickets/' + ticketId, { updatedAt: now });
+      if (window.writeAudit) writeAudit('update', 'cs-ticket', ticketId);
+      var idx = ticketsData.findIndex(function (t) { return t.id === ticketId; });
+      if (idx !== -1) ticketsData[idx].updatedAt = now;
+      return msgData;
+    },
+    // field ∈ { status, priority, category } — assigned attributes (the ticket
+    // status is a free select, NOT a gated workflow). Stored status VALUES are
+    // load-bearing (finance cost-to-serve + engagement inbox read them raw).
+    setField: async function (ticketId, field, value) {
+      if (field !== 'status' && field !== 'priority' && field !== 'category') {
+        throw new Error('CsTicketsBridge.setField: unsupported field ' + field);
+      }
+      var val = (field === 'category' && !value) ? null : value;
+      var now = new Date().toISOString();
+      var upd = { updatedAt: now };
+      upd[field] = val;
+      await MastDB.update('cs_tickets/' + ticketId, upd);
+      if (window.writeAudit) writeAudit('update', 'cs-ticket', ticketId);
+      var idx = ticketsData.findIndex(function (t) { return t.id === ticketId; });
+      if (idx !== -1) { ticketsData[idx][field] = val; ticketsData[idx].updatedAt = now; }
+      return val;
+    }
+  };
+
   // ============================================================
   // Actions — data entry points
   // ============================================================
@@ -2913,26 +3007,10 @@
 
     var wasInternal = isInternalNote;
     try {
-      var msgId = 'msg_' + Date.now().toString(36);
-      var now = new Date().toISOString();
-      var msgData = {
-        id: msgId,
-        body: body,
-        direction: 'outbound',
-        isInternal: wasInternal,
-        authorName: (window.currentUser && currentUser.displayName) || null,
-        authorEmail: (window.currentUser && currentUser.email) || null,
-        createdAt: now
-      };
-
-      await MastDB.set('cs_tickets/' + selectedTicketId + '/messages/' + msgId, msgData);
-      await MastDB.update('cs_tickets/' + selectedTicketId, { updatedAt: now });
-
-      // Update in-memory caches
+      // Delegate to the shared state-free core (CsTicketsBridge syncs
+      // ticketsData's updatedAt itself).
+      var msgData = await window.CsTicketsBridge.reply(selectedTicketId, body, { isInternal: wasInternal });
       threadMessages.push(msgData);
-      var idx = ticketsData.findIndex(function(t) { return t.id === selectedTicketId; });
-      if (idx !== -1) ticketsData[idx].updatedAt = now;
-
       isInternalNote = false;
       showToast(wasInternal ? 'Note added.' : 'Reply sent.');
       renderCurrentView();
@@ -2957,10 +3035,7 @@
   async function csUpdateStatus(status) {
     if (!selectedTicketId) return;
     try {
-      var now = new Date().toISOString();
-      await MastDB.update('cs_tickets/' + selectedTicketId, { status: status, updatedAt: now });
-      var idx = ticketsData.findIndex(function(t) { return t.id === selectedTicketId; });
-      if (idx !== -1) { ticketsData[idx].status = status; ticketsData[idx].updatedAt = now; }
+      await window.CsTicketsBridge.setField(selectedTicketId, 'status', status);
       showToast('Status updated to ' + (STATUS_LABELS[status] || status) + '.');
     } catch (err) {
       showToast('Failed to update status.', true);
@@ -2970,10 +3045,7 @@
   async function csUpdatePriority(priority) {
     if (!selectedTicketId) return;
     try {
-      var now = new Date().toISOString();
-      await MastDB.update('cs_tickets/' + selectedTicketId, { priority: priority, updatedAt: now });
-      var idx = ticketsData.findIndex(function(t) { return t.id === selectedTicketId; });
-      if (idx !== -1) { ticketsData[idx].priority = priority; ticketsData[idx].updatedAt = now; }
+      await window.CsTicketsBridge.setField(selectedTicketId, 'priority', priority);
       showToast('Priority updated to ' + (PRIORITY_LABELS[priority] || priority) + '.');
     } catch (err) {
       showToast('Failed to update priority.', true);
@@ -2985,10 +3057,7 @@
     if (!selectedTicketId) return;
     var value = category || null;
     try {
-      var now = new Date().toISOString();
-      await MastDB.update('cs_tickets/' + selectedTicketId, { category: value, updatedAt: now });
-      var idx = ticketsData.findIndex(function(t) { return t.id === selectedTicketId; });
-      if (idx !== -1) { ticketsData[idx].category = value; ticketsData[idx].updatedAt = now; }
+      await window.CsTicketsBridge.setField(selectedTicketId, 'category', value);
       showToast(value ? 'Category set to ' + csCategoryLabel(value) + '.' : 'Category cleared.');
     } catch (err) {
       showToast('Failed to update category.', true);
@@ -3013,56 +3082,21 @@
     if (btn) { btn.disabled = true; btn.textContent = 'Creating…'; }
 
     try {
-      // Read ticket numbering config
-      var config = await MastDB.get('cs_config/ticketing');
-      var prefix = (config && config.prefix) || 'T';
-      var nextNum = (config && typeof config.nextNumber === 'number') ? config.nextNumber : 1;
-      var ticketNumber = prefix + '-' + String(nextNum).padStart(4, '0');
-
-      var ticketId = 'ticket_' + Date.now().toString(36);
-      var now = new Date().toISOString();
-      var ticketData = {
-        id: ticketId,
-        ticketNumber: ticketNumber,
+      // Delegate to the shared state-free core (mints the ticket number,
+      // writes the doc + first message, bumps the counter, prepends to
+      // ticketsData).
+      var ticketData = await window.CsTicketsBridge.createTicket({
         subject: subject,
-        status: 'open',
-        priority: priority,
-        source: source,
         contactEmail: contactEmail,
         contactName: contactName || null,
-        createdAt: now,
-        updatedAt: now,
-        createdBy: (window.currentUser && currentUser.uid) || null
-      };
-
-      await MastDB.set('cs_tickets/' + ticketId, ticketData);
-
-      if (firstMessage) {
-        var msgId = 'msg_' + Date.now().toString(36);
-        await MastDB.set('cs_tickets/' + ticketId + '/messages/' + msgId, {
-          id: msgId,
-          body: firstMessage,
-          direction: 'inbound',
-          isInternal: false,
-          authorName: contactName || null,
-          authorEmail: contactEmail,
-          createdAt: now
-        });
-      }
-
-      // Increment ticket counter
-      if (!config) {
-        await MastDB.set('cs_config/ticketing', { prefix: prefix, nextNumber: nextNum + 1 });
-      } else {
-        await MastDB.update('cs_config/ticketing', { nextNumber: nextNum + 1 });
-      }
-
-      // Prepend to in-memory list
-      ticketsData.unshift(ticketData);
-      showToast('Ticket ' + ticketNumber + ' created.');
+        source: source,
+        priority: priority,
+        firstMessage: firstMessage || null
+      });
+      showToast('Ticket ' + ticketData.ticketNumber + ' created.');
 
       // Open the new thread
-      await csOpenThread(ticketId);
+      await csOpenThread(ticketData.id);
     } catch (err) {
       showToast('Failed to create ticket: ' + (err && err.message), true);
       if (btn) { btn.disabled = false; btn.textContent = 'Create Ticket'; }

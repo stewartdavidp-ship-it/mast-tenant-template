@@ -286,3 +286,22 @@ t('statusBadge falls back to raw value without get()', () => {
   assert.strictEqual(b[0].tone, 'danger');
 });
 
+
+// f.format maps a stored status enum to its display label (cs-support-v2
+// "Working on it") without changing the stored value tone/sort/filter see.
+t('statusBadge honors f.format for the display label, tone gets the raw value', () => {
+  E.define('convo', { fields: [
+    { name: 'subject', label: 'Subject', type: 'text', list: true },
+    { name: 'status', label: 'Status', type: 'status',
+      get: r => r.status || 'open',
+      format: v => ({ open: 'Open', in_progress: 'Working on it' }[v] || v),
+      tone: v => v === 'in_progress' ? 'amber' : 'info' }
+  ]});
+  const b = E.statusBadge(E.get('convo'), { subject: 'Hi', status: 'in_progress' });
+  assert.strictEqual(b[0].label, 'Working on it');
+  assert.strictEqual(b[0].tone, 'amber');
+});
+t('statusBadge without f.format keeps the raw value', () => {
+  const b2 = E.statusBadge(E.get('order'), { status: 'refunded' });
+  assert.strictEqual(b2[0].label, 'refunded');
+});
