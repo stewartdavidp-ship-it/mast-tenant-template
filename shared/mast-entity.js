@@ -286,16 +286,17 @@
       '<div class="mu-totrow"><span>Shipping</span><span>' + m(t.shipping) + '</span></div>' +
       '<div class="mu-totrow"><span>Tax</span><span>' + m(t.tax) + '</span></div>' +
       '<div class="mu-totrow grand"><span>Total</span><span>' + m(t.total) + '</span></div>';
-    // Process variant (doc 17 §3c): when the schema declares detail.flow, the
-    // lifecycle is governed by MastFlow — the Process pane (default) hosts the
-    // stepper + checklist + guarded Advance, wired async by _initEntityFlow.
-    // No status dropdown; status moves through the workflow.
+    // Process variant (doc 17 §3c, hoisted 2026-06-10 to match products-v2):
+    // when the schema declares detail.flow, the lifecycle is governed by
+    // MastFlow — and the process is PINNED STRUCTURE above the tab bar (always
+    // visible on every pane, collapsible via the chevron _flowRender adds),
+    // NOT a tab. Wired async by _initEntityFlow. No status dropdown; status
+    // moves through the workflow.
     if (d.flow) {
-      return U.stickyHead(U.tiles(d.tiles ? d.tiles(r) : []),
-        U.paneTabsBar([{ key: 'process', label: 'Process' }, { key: 'items', label: 'Items' }, { key: 'customer', label: 'Customer' }, { key: 'history', label: 'History' }], 'process')) +
-        '<div class="mu-pane" data-pane="process">' +
-          '<div id="muFlowHost" style="font-size:0.85rem;color:var(--warm-gray);">Loading workflow…</div></div>' +
-        '<div class="mu-pane" data-pane="items" hidden>' + U.cardTable('Items', itemsTable) + U.card('Summary', totalsHtml) + '</div>' +
+      return U.stickyHead(U.tiles(d.tiles ? d.tiles(r) : []), '') +
+        '<div id="muFlowHost" style="font-size:0.85rem;color:var(--warm-gray);margin:6px 0 14px;">Loading workflow…</div>' +
+        U.paneTabsBar([{ key: 'items', label: 'Items' }, { key: 'customer', label: 'Customer' }, { key: 'history', label: 'History' }], 'items') +
+        '<div class="mu-pane" data-pane="items">' + U.cardTable('Items', itemsTable) + U.card('Summary', totalsHtml) + '</div>' +
         '<div class="mu-pane" data-pane="customer" hidden>' + U.card('Customer & shipping', custBlock) + '</div>' +
         '<div class="mu-pane" data-pane="history" hidden>' + U.card('Timeline', U.timeline(d.timeline ? d.timeline(r) : [])) + '</div>';
     }
@@ -452,7 +453,41 @@
       onTarget: function (targetId) { _flowGoTarget(targetId); }
     }, { expandCurrent: !!(_d && _d.guidedExpandCurrent) }).then(function (res) {
       var host = document.getElementById('muFlowHost');
-      if (host) host.innerHTML = res.html;
+      if (host) {
+        // The process is pinned structure above the tabs — give it an explicit
+        // collapse chevron (persisted per-user) so a long rail can get out of
+        // the way. Tucked end-state records keep their own hide behavior; the
+        // chevron wraps the normal always-visible case.
+        if (res.tucked) {
+          host.innerHTML = res.html;
+        } else {
+          var collapsed = false;
+          try { collapsed = localStorage.getItem('mastFlowRailCollapsed') === '1'; } catch (e) {}
+          var phaseLabel = (res.evaluation && res.evaluation.currentPhase) ? res.evaluation.currentPhase.label : '';
+          host.innerHTML =
+            '<div style="display:flex;align-items:center;gap:8px;">' +
+              '<button type="button" id="muFlowChevron" aria-expanded="' + (!collapsed) + '" ' +
+                'style="background:none;border:none;cursor:pointer;color:var(--warm-gray);font-size:0.78rem;padding:2px 4px;display:inline-flex;align-items:center;gap:6px;">' +
+                '<span id="muFlowChevronArrow" style="display:inline-block;transition:transform 0.15s;' + (collapsed ? '' : 'transform:rotate(90deg);') + '">▶</span>' +
+                '<span style="text-transform:uppercase;letter-spacing:0.5px;">Process</span>' +
+              '</button>' +
+              '<span id="muFlowChevronPhase" class="mu-sub" style="' + (collapsed ? '' : 'display:none;') + '">· ' + phaseLabel + '</span>' +
+            '</div>' +
+            '<div id="muFlowRailBody" style="' + (collapsed ? 'display:none;' : '') + '">' + res.html + '</div>';
+          var chev = document.getElementById('muFlowChevron');
+          if (chev) chev.onclick = function () {
+            var body = document.getElementById('muFlowRailBody');
+            var arrow = document.getElementById('muFlowChevronArrow');
+            var ph = document.getElementById('muFlowChevronPhase');
+            var nowCollapsed = body && body.style.display !== 'none';
+            if (body) body.style.display = nowCollapsed ? 'none' : '';
+            if (arrow) arrow.style.transform = nowCollapsed ? '' : 'rotate(90deg)';
+            if (ph) ph.style.display = nowCollapsed ? '' : 'none';
+            chev.setAttribute('aria-expanded', String(!nowCollapsed));
+            try { localStorage.setItem('mastFlowRailCollapsed', nowCollapsed ? '1' : '0'); } catch (e) {}
+          };
+        }
+      }
       _flow.fromPhase = (res.evaluation && res.evaluation.currentPhase) ? res.evaluation.currentPhase.key : null;
       // Tucked live/active end-state (guided header): the rail is hidden — make
       // the slide-out status pill reveal it on click ("once Active the process
