@@ -159,6 +159,13 @@
         // Google/Drive sync SETUP — those stay bespoke on legacy #contacts.
         // navigateToClassic so the V2 route remap doesn't loop back here.
         var manage = '<div style="margin-top:14px;"><button class="btn btn-secondary" onclick="ContactsV2.classic()">Log interaction / sync in classic view →</button></div>';
+        // Delete (operations W3): confirm + writeAudit, gated on
+        // can('contacts','delete'). Interactions are nested on the doc (they
+        // cascade); the linked customer + Google contact are NOT touched.
+        var cid = c._key || c.id;
+        if (typeof window.can !== 'function' || window.can('contacts', 'delete')) {
+          manage += '<div style="margin-top:10px;"><button class="btn btn-secondary btn-small" style="color:var(--text-danger);" onclick="ContactsV2.remove(\'' + esc(cid) + '\')">Delete contact</button></div>';
+        }
 
         // ── Interactions facet — the cheap in-memory related collection ──
         var intCols = [
@@ -353,6 +360,29 @@
     classic: function () {
       if (typeof navigateToClassic === 'function') navigateToClassic('contacts');
       else if (typeof navigateTo === 'function') navigateTo('contacts');
+    },
+    // Delete — confirm + ContactsBridge.remove (which writeAudits + cleans the
+    // byContactId index row). RBAC re-checked here (the button is also gated).
+    remove: function (id) {
+      if (typeof window.can === 'function' && !window.can('contacts', 'delete')) {
+        if (window.showToast) showToast('You don’t have permission to delete contacts', true); return;
+      }
+      var go = function () {
+        if (!window.ContactsBridge || !ContactsBridge.remove) {
+          if (window.showToast) showToast('Contacts engine still loading — try again', true); return;
+        }
+        Promise.resolve(ContactsBridge.remove(id)).then(function () {
+          if (window.showToast) showToast('Contact deleted');
+          try { U.slideOut.requestCloseForce(); } catch (e) {}
+          load();
+        }).catch(function (e) {
+          console.error('[contacts-v2] delete', e);
+          if (window.showToast) showToast('Delete failed: ' + (e && e.message || e), true);
+        });
+      };
+      if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('contacts'); } catch (e) {} }
+      mastConfirm('Delete this contact and its logged interactions? The linked customer record (if any) is not deleted.', { title: 'Delete contact', confirmLabel: 'Delete', danger: true })
+        .then(function (ok) { if (ok) go(); });
     },
     exportCsv: function () { return MastEntity.exportRows('contacts-v2', visibleRows(), 'all'); }
   };

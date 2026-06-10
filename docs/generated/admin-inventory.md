@@ -6,7 +6,7 @@ Source-of-truth counts for the admin app, generated from the code so docs
 cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 
 - **Core shell:** `app/index.html` — **59,984** lines
-- **Feature modules:** **111** files in `app/modules/` (**101** routed), **119,858** lines combined
+- **Feature modules:** **111** files in `app/modules/` (**101** routed), **120,007** lines combined
 
 | Module file | Lines | Routes |
 |---|---:|---|
@@ -25,8 +25,8 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/campaigns-v2.js` | 405 | campaigns-v2 |
 | `modules/campaigns.js` | 560 | campaigns |
 | `modules/cart.js` | 1,577 | wallet, gift-cards, loyalty, membership |
-| `modules/channels-v2.js` | 386 | channels-v2 |
-| `modules/channels.js` | 2,797 | channels |
+| `modules/channels-v2.js` | 481 | channels-v2 |
+| `modules/channels.js` | 2,808 | channels |
 | `modules/classes-v2.js` | 469 | classes-v2 |
 | `modules/commission-terms-v2.js` | 267 | commission-terms-v2 |
 | `modules/commission-terms.js` | 317 | commission-terms |
@@ -35,8 +35,8 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/composer.js` | 479 | composer |
 | `modules/consignment.js` | 2,190 | galleries |
 | `modules/consignments-v2.js` | 289 | consignments-v2 |
-| `modules/contacts-v2.js` | 363 | contacts-v2 |
-| `modules/contacts.js` | 1,656 | contacts |
+| `modules/contacts-v2.js` | 393 | contacts-v2 |
+| `modules/contacts.js` | 1,669 | contacts |
 | `modules/coupons-v2.js` | 388 | coupons-v2 |
 | `modules/cs-faqs-v2.js` | 308 | cs-faqs-v2 |
 | `modules/cs-members-v2.js` | 302 | cs-members-v2 |

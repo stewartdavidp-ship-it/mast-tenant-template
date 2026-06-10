@@ -2772,6 +2772,17 @@
     getUsesTier: getChannelUsesTier
   };
 
+  // V2 bridge — state-free write core shared with channels-v2 (playbook §4).
+  // Same field-scoped update path the legacy Settings save uses (light fields
+  // only — route/platform/type changes stay on legacy where deriveLegacyType
+  // keeps the legacy enum consistent).
+  window.ChannelsBridge = {
+    updateChannel: function(channelId, updates) {
+      if (!channelId) return Promise.reject(new Error('channelId required'));
+      return MastDB.update('admin/channels/' + channelId, updates);
+    }
+  };
+
   // ============================================================
   // Register with MastAdmin
   // ============================================================
