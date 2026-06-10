@@ -127,6 +127,92 @@
     // edits/captures live on legacy (deep-linked). No Edit affordance by design.
   });
 
+  // ── Operator intake (create-only) ────────────────────────────────────
+  // Commissions primarily arrive via the storefront flow, but a phone call or
+  // a trade-show conversation needs operator entry. A SEPARATE create-only
+  // entity keeps the main commission record read-only (adding onSave to
+  // commissions-v2 would surface an Edit button on every record — engine rule).
+  // Record shape mirrors the legacy New Commission modal (orders.js): the new
+  // record starts at status 'new' (workflow phase: inquiry) and flows through
+  // the same lifecycle as a storefront commission. Attachments + inspiration
+  // pieces remain on the legacy modal (classic link below).
+  function canEdit() {
+    return typeof window.can !== 'function' || window.can('commissions', 'edit');
+  }
+  var INTAKE_CHANNELS = [
+    ['phone', 'Phone Call'], ['email', 'Email'], ['in-person', 'In Person'],
+    ['show', 'Trade / Art Show'], ['social', 'Social Media'], ['other', 'Other']
+  ];
+  MastEntity.define('commission-intake-v2', {
+    label: 'Commission', labelPlural: 'Commissions', size: 'lg', route: 'commissions-v2',
+    recordId: function (c) { return c._key || c.id || 'new'; },
+    fields: [{ name: 'customerName', label: 'Customer', type: 'text', readOnly: true }],
+    fetch: function () { return Promise.resolve(null); },
+    detail: {
+      editRender: function (c, mode) {
+        c = c || {};
+        function fg(label, inner, flex) { return '<div class="form-group"' + (flex ? ' style="flex:1;min-width:150px;"' : '') + '><label class="form-label">' + label + '</label>' + inner + '</div>'; }
+        var chOpts = INTAKE_CHANNELS.map(function (o) {
+          return '<option value="' + o[0] + '"' + ((c.channel || 'phone') === o[0] ? ' selected' : '') + '>' + o[1] + '</option>';
+        }).join('');
+        return '<div class="mu-editbar"><span class="mu-editpill">NEW</span>New commission</div>' +
+          '<div style="display:flex;gap:12px;flex-wrap:wrap;">' +
+            fg('Customer name *', '<input class="form-input" id="cmNewName" value="' + esc(c.customerName || '') + '" placeholder="Who is commissioning the piece" style="width:100%;">', true) +
+            fg('Contact (email or phone) *', '<input class="form-input" id="cmNewContact" value="' + esc(c.customerContact || '') + '" placeholder="how to reach them" style="width:100%;">', true) +
+          '</div>' +
+          '<div style="display:flex;gap:12px;flex-wrap:wrap;">' +
+            fg('How did this come in?', '<select class="form-input" id="cmNewChannel" style="width:100%;">' + chOpts + '</select>', true) +
+            fg('Target deadline', '<input class="form-input" type="date" id="cmNewDeadline" value="' + esc(c.targetDeadline || '') + '" style="width:100%;">', true) +
+          '</div>' +
+          fg('Piece *', '<input class="form-input" id="cmNewPiece" value="' + esc(c.pieceTitle || '') + '" placeholder="What they want made — e.g. Memorial glass sculpture" style="width:100%;">') +
+          '<div style="display:flex;gap:12px;flex-wrap:wrap;">' +
+            fg('Quote estimate ($)', '<input class="form-input" type="number" min="0" step="0.01" id="cmNewQuote" placeholder="optional" style="width:100%;">', true) +
+            fg('Deposit ($)', '<input class="form-input" type="number" min="0" step="0.01" id="cmNewDeposit" placeholder="optional" style="width:100%;">', true) +
+          '</div>' +
+          fg('Notes', '<textarea class="form-input" id="cmNewNotes" rows="4" placeholder="What was discussed — size, colors, references, budget…" style="width:100%;resize:vertical;"></textarea>') +
+          '<div class="mu-sub">Attachments and inspiration pieces can be added from the <a href="#" onclick="CommissionsV2.classicNew();return false;">classic New Commission form</a>.</div>';
+      }
+    },
+    onSave: function (rec, mode) {
+      if (mode !== 'create') return false;
+      if (!canEdit()) { if (window.showToast) showToast('You do not have permission to create commissions.', true); return false; }
+      function val(id) { return ((document.getElementById(id) || {}).value || '').trim(); }
+      var name = val('cmNewName'), contact = val('cmNewContact'), piece = val('cmNewPiece');
+      if (!name || !contact) { if (window.showToast) showToast('Customer name and contact are required.', true); return false; }
+      if (!piece) { if (window.showToast) showToast('Piece title is required.', true); return false; }
+      var quoteRaw = val('cmNewQuote'), depositRaw = val('cmNewDeposit');
+      var record = {
+        customerName: name,
+        customerContact: contact,
+        channel: val('cmNewChannel') || 'phone',
+        notes: val('cmNewNotes') || null,
+        pieceTitle: piece,
+        targetDeadline: val('cmNewDeadline') || null,
+        quoteAmountCents: quoteRaw ? Math.round(parseFloat(quoteRaw) * 100) : null,
+        depositAmountCents: depositRaw ? Math.round(parseFloat(depositRaw) * 100) : null,
+        inspirationPieces: null,
+        referenceImageUrl: null,
+        status: 'new',
+        createdAt: new Date().toISOString()
+      };
+      var id = MastDB.commissions.newKey();
+      return Promise.resolve(MastDB.commissions.set(id, record)).then(function () {
+        if (window.writeAudit) writeAudit('create', 'commission', id);
+        if (window.showToast) showToast('Commission created.');
+        var row = stamp(Object.assign({ _key: id }, record));
+        V2.rows.push(row); V2.byId[id] = row;
+        render();
+        // Land the operator in the new record's Process view (phase: inquiry).
+        setTimeout(function () { window.MastEntity.openRecord('commissions-v2', row, 'read'); }, 60);
+        return true;
+      }).catch(function (e) {
+        console.error('[commissions-v2] create', e);
+        if (window.showToast) showToast('Failed to create commission: ' + (e && e.message || e), true);
+        return false;
+      });
+    }
+  });
+
   // ── State + data (same source as legacy: admin/commissions) ─────────
   var V2 = { rows: [], byId: {}, sortKey: 'createdAt', sortDir: 'desc' };
 
@@ -168,7 +254,9 @@
     var tab = ensureTab();
     tab.innerHTML =
       window.MastUI.pageHeader({ title: 'Commissions', count: N.count(V2.rows.length) + ' commissions',
-        actionsHtml: '<button class="btn btn-secondary" onclick="CommissionsV2.exportCsv()">↓ Export</button>' }) +
+        actionsHtml:
+          (canEdit() ? '<button class="btn btn-primary" onclick="CommissionsV2.newCommission()">+ New commission</button> ' : '') +
+          '<button class="btn btn-secondary" onclick="CommissionsV2.exportCsv()">↓ Export</button>' }) +
       '<div style="margin-top:14px;">' +
       window.MastEntity.renderList('commissions-v2', {
         rows: visibleRows(), sortKey: V2.sortKey, sortDir: V2.sortDir,
@@ -184,6 +272,21 @@
       render();
     },
     open: function (id) { var rec = V2.byId[id]; if (rec) window.MastEntity.openRecord('commissions-v2', rec, 'read'); },
+    // Operator intake: phone call / trade-show conversation → new commission
+    // at status 'new' (workflow phase: inquiry), same lifecycle as storefront.
+    newCommission: function () {
+      if (!canEdit()) { if (window.showToast) showToast('You do not have permission to create commissions.', true); return; }
+      window.MastEntity.openRecord('commission-intake-v2', {}, 'create');
+    },
+    // Attachments/inspiration live on the legacy New Commission modal.
+    classicNew: function () {
+      function open() {
+        if (typeof navigateToClassic === 'function') navigateToClassic('commissions');
+        setTimeout(function () { if (window.showNewCommissionModal) window.showNewCommissionModal(); }, 150);
+      }
+      if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') MastAdmin.loadModule('orders').then(open).catch(open);
+      else open();
+    },
     exportCsv: function () { return window.MastEntity.exportRows('commissions-v2', visibleRows(), 'all'); }
   };
 
