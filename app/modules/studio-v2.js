@@ -86,11 +86,11 @@
     recordId: function (r) { return r._key; },
     fields: [
       { name: 'name', label: 'Equipment', type: 'text', list: true, required: true, get: function (r) { return r.name || 'Untitled'; } },
-      { name: 'own', label: 'To own', type: 'number', list: true, readOnly: true, align: 'right',
+      { name: 'own', label: 'To own', type: 'text', list: true, readOnly: true, align: 'right',
         get: function (r) { var c = costs(r); return c.monthlyCostToOwn == null ? '—' : N.money(c.monthlyCostToOwn) + '/mo'; } },
-      { name: 'run', label: 'To run', type: 'number', list: true, readOnly: true, align: 'right',
+      { name: 'run', label: 'To run', type: 'text', list: true, readOnly: true, align: 'right',
         get: function (r) { return r.monthlyRunningCost == null ? '—' : N.money(r.monthlyRunningCost) + '/mo'; } },
-      { name: 'perUnit', label: 'Per unit', type: 'number', list: true, readOnly: true, align: 'right',
+      { name: 'perUnit', label: 'Per unit', type: 'text', list: true, readOnly: true, align: 'right',
         get: function (r) { var c = costs(r); return c.costPerUnit == null ? '—' : N.money(c.costPerUnit) + '/' + (r.outputUnit || 'unit'); } },
       { name: 'gaps', label: 'Details', type: 'text', list: true, readOnly: true, sortable: false,
         get: function (r) { var g = r.gaps || {}; var n = Object.keys(g).length; return n ? '⚠ ' + n + ' missing' : '✓ complete'; } }
@@ -163,13 +163,13 @@
     recordId: function (r) { return r._key; },
     fields: [
       { name: 'name', label: 'Founder', type: 'text', list: true, required: true, get: function (r) { return r.name || 'Founder'; } },
-      { name: 'rate', label: 'Target pay', type: 'number', list: true, readOnly: true, align: 'right',
+      { name: 'rate', label: 'Target pay', type: 'text', list: true, readOnly: true, align: 'right',
         get: function (r) { var rate = r.hourlyRate || r.ownerHourlyRate; return rate == null ? '—' : N.money(rate) + '/hr'; } },
-      { name: 'making', label: 'Making', type: 'number', list: true, readOnly: true, align: 'right',
+      { name: 'making', label: 'Making', type: 'text', list: true, readOnly: true, align: 'right',
         get: function (r) { return r.productionHoursPerWeek == null ? '—' : r.productionHoursPerWeek + ' hrs/wk'; } },
-      { name: 'business', label: 'Business', type: 'number', list: true, readOnly: true, align: 'right',
+      { name: 'business', label: 'Business', type: 'text', list: true, readOnly: true, align: 'right',
         get: function (r) { return r.adminHoursPerWeek == null ? '—' : r.adminHoursPerWeek + ' hrs/wk'; } },
-      { name: 'monthly', label: 'Monthly', type: 'number', list: true, readOnly: true, align: 'right',
+      { name: 'monthly', label: 'Monthly', type: 'text', list: true, readOnly: true, align: 'right',
         get: function (r) { return '~' + N.money(founderMonthly(r)) + '/mo'; } }
     ],
     fetch: function (id) { return Promise.resolve(V2.byId[id] || null); },
@@ -225,7 +225,7 @@
     recordId: function (r) { return r._key; },
     fields: [
       { name: 'name', label: 'Cost', type: 'text', list: true, required: true, get: function (r) { return r.name || 'Untitled'; } },
-      { name: 'amount', label: 'Monthly', type: 'number', list: true, readOnly: true, align: 'right',
+      { name: 'amount', label: 'Monthly', type: 'text', list: true, readOnly: true, align: 'right',
         get: function (r) { return r.monthlyAmount == null ? '—' : N.money(r.monthlyAmount, { cents: true }) + '/mo'; } },
       { name: 'notes', label: 'Notes', type: 'text', list: true, readOnly: true, sortable: false,
         get: function (r) { return (r.notes || '').slice(0, 60) || '—'; } }
