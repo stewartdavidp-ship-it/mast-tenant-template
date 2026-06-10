@@ -1628,6 +1628,19 @@ async function doSyncGoogleContacts() {
       var contact = await MastDB.contacts.get(id);
       if (contact && contact.googleContactId) pushContactToGoogle(contact);
       return id;
+    },
+    // Delete (operations W3 — NEW capability, legacy had none). Removes the
+    // contact record + the customer-link index row. Does NOT touch the linked
+    // customer record or the Google contact (Mast is not the system of record
+    // for either). Interactions live nested on the contact doc, so they go
+    // with it.
+    remove: async function (id) {
+      if (!id) throw new Error('contact id required');
+      await MastDB.contacts.remove(id);
+      try { await MastDB.remove('admin/customerIndexes/byContactId/' + id); } catch (e) { /* index row may not exist */ }
+      await writeAudit('delete', 'contacts', id);
+      contactsLoaded = false;
+      return id;
     }
   };
 

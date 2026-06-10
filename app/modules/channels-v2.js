@@ -248,18 +248,111 @@
           ? UI.relatedTable(ordCols, orders)
           : '<span class="mu-sub">No orders attributed to this channel yet. Orders match via autoMatchSources or channelId.</span>';
 
+        // ── Cross-links (operations W3): listings to match + open audit
+        // findings for THIS channel. Placeholder div + async fill — the counts
+        // come from collections this module doesn't otherwise load.
+        var health = '<div id="chV2Health" class="mu-sub">Checking listings &amp; findings…</div>';
+        setTimeout(function () { fillHealth(ch); }, 0);
+
         var ovInner = UI.card('Channel shape', shape) + UI.card('Fee profile', fees);
         if (hasContact) ovInner += UI.card('Contact', contact);
-        ovInner += notesCard + termsCard + UI.card('Manage', manage);
+        ovInner += notesCard + termsCard + UI.card('Listings & findings', health) + UI.card('Manage', manage);
 
         return tiles + tabsBar +
           '<div class="mu-pane" data-pane="ov">' + ovInner + '</div>' +
           '<div class="mu-pane" data-pane="products" hidden>' + UI.cardTable('Products (' + prods.length + ')', prodBody) + '</div>' +
           '<div class="mu-pane" data-pane="activity" hidden>' + UI.cardTable('Recent activity', actBody) + '</div>';
+      },
+      // Light edit (operations W3): name / fees / contact / notes via
+      // ChannelsBridge (the same field-scoped update legacy Settings uses).
+      // Route/platform/type + connect/disconnect stay on legacy — changing
+      // them runs deriveLegacyType and the OAuth wizard there.
+      editRender: function (ch, mode) {
+        ch = ch || {};
+        function fg(label, inner) { return '<div class="form-group"><label class="form-label">' + label + '</label>' + inner + '</div>'; }
+        return '<div class="mu-editbar"><span class="mu-editpill">EDITING</span>Edit this channel</div>' +
+          fg('Name *', '<input class="form-input" id="chV2Name" value="' + esc(ch.name || '') + '" style="width:100%;">') +
+          '<div style="display:flex;gap:12px;flex-wrap:wrap;">' +
+          fg('Percent fee (%)', '<input class="form-input" type="number" step="0.1" id="chV2Pct" value="' + (ch.percentFee != null ? ch.percentFee : '') + '" style="width:130px;">') +
+          fg('Per-order fee (¢)', '<input class="form-input" type="number" id="chV2PerOrder" value="' + (ch.fixedFeePerOrderCents != null ? ch.fixedFeePerOrderCents : '') + '" style="width:130px;">') +
+          fg('Monthly fee (¢)', '<input class="form-input" type="number" id="chV2Monthly" value="' + (ch.monthlyFixedCents != null ? ch.monthlyFixedCents : '') + '" style="width:130px;">') +
+          '</div>' +
+          fg('Contact name', '<input class="form-input" id="chV2CName" value="' + esc(ch.contactName || '') + '" style="width:100%;">') +
+          fg('Contact email', '<input class="form-input" id="chV2CEmail" value="' + esc(ch.contactEmail || '') + '" style="width:100%;">') +
+          fg('Contact phone', '<input class="form-input" id="chV2CPhone" value="' + esc(ch.contactPhone || '') + '" style="width:100%;">') +
+          fg('Notes', '<textarea class="form-input" id="chV2Notes" rows="3" style="width:100%;resize:vertical;">' + esc(ch.notes || '') + '</textarea>') +
+          '<div class="mu-sub">Type, platform, connection and sync settings are managed in the classic Channels view.</div>';
       }
+    },
+    onSave: function (rec) {
+      if (typeof window.can === 'function' && !window.can('channels', 'edit')) {
+        if (window.showToast) showToast('You don’t have permission to edit channels', true); return false;
+      }
+      if (!window.ChannelsBridge) { if (window.showToast) showToast('Channels engine still loading — try again', true); return false; }
+      function val(id) { return ((document.getElementById(id) || {}).value || ''); }
+      var name = val('chV2Name').trim();
+      if (!name) { if (window.showToast) showToast('Channel name is required', true); return false; }
+      var updates = {
+        name: name,
+        percentFee: parseFloat(val('chV2Pct')) || 0,
+        fixedFeePerOrderCents: parseInt(val('chV2PerOrder'), 10) || 0,
+        monthlyFixedCents: parseInt(val('chV2Monthly'), 10) || 0,
+        contactName: val('chV2CName').trim() || null,
+        contactEmail: val('chV2CEmail').trim() || null,
+        contactPhone: val('chV2CPhone').trim() || null,
+        notes: val('chV2Notes').trim() || null,
+        updatedAt: new Date().toISOString()
+      };
+      var id = rec.channelId;
+      return Promise.resolve(window.ChannelsBridge.updateChannel(id, updates)).then(function () {
+        if (window.writeAudit) writeAudit('update', 'channels', id);
+        Object.assign(V2.byId[id] || rec, updates);
+        if (window.showToast) showToast('Channel updated');
+        load(); return true;
+      }).catch(function (e) {
+        console.error('[channels-v2] save', e);
+        if (window.showToast) showToast('Error saving: ' + (e && e.message || e), true);
+        return false;
+      });
     }
-    // No onSave → no Edit button (connect/disconnect/settings/wizard stay on legacy #channels).
   });
+
+  // Async fill for the Listings & findings card: unmatched listings (no
+  // product_listing_map row, not ignored) + open audit findings touching this
+  // channel's platform. Counts link into the mapping/audit V2 queues.
+  function fillHealth(ch) {
+    var platform = (window.MastChannelShim && MastChannelShim.getPlatform) ? MastChannelShim.getPlatform(ch) : (ch.platform || null);
+    var el = function () { return document.getElementById('chV2Health'); };
+    if (!platform) { var e0 = el(); if (e0) e0.innerHTML = '<span class="mu-sub">Not a synced platform channel — no listings to match.</span>'; return; }
+    Promise.all([
+      Promise.resolve(MastDB.get('channel_listings')).catch(function () { return {}; }),
+      Promise.resolve(MastDB.get('product_listing_map')).catch(function () { return {}; }),
+      Promise.resolve(MastDB.get('audit_results')).catch(function () { return {}; })
+    ]).then(function (res) {
+      var e = el(); if (!e) return;   // SO closed or re-rendered
+      var maps = res[1] || {};
+      var unmatched = 0;
+      Object.keys(res[0] || {}).forEach(function (k) {
+        var L = res[0][k];
+        if (L && L._channel === platform && !L._ignored && !maps[k]) unmatched++;
+      });
+      var findings = 0;
+      Object.keys(res[2] || {}).forEach(function (k) {
+        var v = res[2][k]; if (!v || (v.state || 'active') !== 'active') return;
+        var chs = Array.isArray(v.channels) ? v.channels : (v.channel ? [v.channel] : []);
+        if (chs.indexOf(platform) !== -1) findings++;
+      });
+      e.innerHTML =
+        '<div style="display:flex;gap:18px;flex-wrap:wrap;font-size:0.9rem;">' +
+        '<span>' + (unmatched
+          ? '<button type="button" class="mu-link" onclick="navigateTo(\'mapping\')">' + unmatched + ' listing' + (unmatched === 1 ? '' : 's') + ' to match →</button>'
+          : '✓ All listings matched') + '</span>' +
+        '<span>' + (findings
+          ? '<button type="button" class="mu-link" onclick="navigateTo(\'audit\')">' + findings + ' open finding' + (findings === 1 ? '' : 's') + ' →</button>'
+          : '✓ No open findings') + '</span>' +
+        '</div>';
+    });
+  }
 
   // ── module state + data ─────────────────────────────────────────────
   var V2 = { rows: [], byId: {}, products: {}, orders: {}, sortKey: 'name', sortDir: 'asc', q: '', typeFilter: '', allowed: true, loaded: false };
@@ -379,6 +472,8 @@
     routes: { 'channels-v2': { tab: 'channelsV2Tab', setup: function () {
       ensureTab();
       V2.allowed = canViewChannels();
+      // Legacy module first so window.ChannelsBridge exists when onSave fires.
+      if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('channels'); } catch (e) {} }
       render();
       if (V2.allowed) load();
     } } }
