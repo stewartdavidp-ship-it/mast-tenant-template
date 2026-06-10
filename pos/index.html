@@ -1103,7 +1103,10 @@ function _writeSaleToServer(saleRecord) {
 function _createPosOrder(saleRecord) {
   var token = authToken || saleRecord.__authToken; // prefer the live token (fresher on outbox flush)
   var orderItems = (saleRecord.items || []).map(function(it) {
-    return { pid: it.productId, variantId: it.variantId || null, qty: it.quantity };
+    // Pass the variant-aware display name (e.g. "Hollow Bird — Blue"); submitOrder
+    // stores item.name verbatim and doesn't backfill it from the catalog, so without
+    // this the order/receipt line label is blank. Price is still server-repriced.
+    return { pid: it.productId, variantId: it.variantId || null, qty: it.quantity, name: it.productName || '' };
   });
   var payload = { data: {
     channel: 'pos',
