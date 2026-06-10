@@ -110,25 +110,25 @@
        Shared by customers.js (list/export) and customer-service.js (survey
        bulk-send) so the segment matcher cannot drift. ?v= kept in lockstep
        with MAST_MODULES_V by scripts/bump-modules-version.sh. -->
-  <script src="../shared/customer-filters.js?v=20260610-144358-5a93c25"></script>
+  <script src="../shared/customer-filters.js?v=20260610-150130-05937fb"></script>
   <script src="../shared/brand-sync.js?v=1"></script>
   <script src="../shared/channel-connection.js?v=1"></script>
-  <script src="../shared/variant-reconcile.js?v=20260610-144358-5a93c25"></script>
+  <script src="../shared/variant-reconcile.js?v=20260610-150130-05937fb"></script>
   <!-- UI redesign engines (docs/ux-audit): shared primitives + Entity Engine.
        The ?v= suffix is kept in lockstep with MAST_MODULES_V by
        scripts/bump-modules-version.sh (these are static <head> tags loaded
        before the JS var exists, so they can't read it at runtime). Without
        this, the engines were frozen at ?v=1 and never cache-busted on deploy. -->
-  <script src="../shared/mast-ui.js?v=20260610-144358-5a93c25"></script>
-  <script src="../shared/mast-io.js?v=20260610-144358-5a93c25"></script>
-  <script src="../shared/mast-entity.js?v=20260610-144358-5a93c25"></script>
+  <script src="../shared/mast-ui.js?v=20260610-150130-05937fb"></script>
+  <script src="../shared/mast-io.js?v=20260610-150130-05937fb"></script>
+  <script src="../shared/mast-entity.js?v=20260610-150130-05937fb"></script>
   <!-- Canonical product readiness gate (computeReadinessChecklist / productMarkupConfig).
        Byte-identical to mast-tenant-mcp-server/src/shared/product-readiness.core.js so the
        AI publish gate and the maker.js UI gate cannot drift; maker.js delegates to
        window.MastProductReadiness. Eager-loaded so it exists before the lazy maker module.
        ?v= kept in lockstep with MAST_MODULES_V by scripts/bump-modules-version.sh.
        See docs/ux-audit/product-publish-gate-plan.md §7. -->
-  <script src="../shared/product-readiness.core.js?v=20260610-144358-5a93c25"></script>
+  <script src="../shared/product-readiness.core.js?v=20260610-150130-05937fb"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Pod-specific runtime config — sets window.MAST_POD_PLATFORM_PROJECT so
@@ -6627,21 +6627,28 @@
         <span class="sidebar-section-arrow">&#9654;</span>
       </div>
       <div class="sidebar-items">
+        <!-- Ordered around the operator's process (finance-v2-build-plan.md): see the
+             picture (statements hub) → review expenses → chase money (open items) →
+             close the books → export → analyze customers. Under the V2 flag the five
+             statements routes land on ONE hub (lens per route), AR/AP land on one
+             open-items queue, and Period Close + Amendments land on one close pipeline —
+             a future sidebar consolidation (12 → ~7 items) is proposed in the plan doc
+             for operator ratification.
+             W1.10 (Accounting — Idea -OtKxQEhTDampnjEBjvS): QBO Sync UI consolidated into
+             Settings → Integrations → QuickBooks tab. No standalone #accounting route. -->
         <div class="sidebar-item" data-route="financials" onclick="navigateTo('financials')">Overview</div>
         <div class="sidebar-item" data-route="finance-revenue" onclick="navigateTo('finance-revenue')">Revenue</div>
-        <div class="sidebar-item" data-route="finance-expenses" onclick="navigateTo('finance-expenses')">Expenses</div>
         <div class="sidebar-item" data-route="finance-pl" onclick="navigateTo('finance-pl')">P&amp;L</div>
         <div class="sidebar-item" data-route="finance-cash-flow" onclick="navigateTo('finance-cash-flow')">Cash Flow</div>
+        <div class="sidebar-item" data-route="finance-tax" onclick="navigateTo('finance-tax')">Tax</div>
+        <div class="sidebar-item" data-route="finance-expenses" onclick="navigateTo('finance-expenses')">Expenses</div>
         <div class="sidebar-item" data-route="finance-ar" onclick="navigateTo('finance-ar')">AR</div>
         <div class="sidebar-item" data-route="finance-ap" onclick="navigateTo('finance-ap')">AP</div>
-        <div class="sidebar-item" data-route="finance-tax" onclick="navigateTo('finance-tax')">Tax</div>
-        <div class="sidebar-item" data-route="finance-reports" onclick="navigateTo('finance-reports')">Reports</div>
-        <div class="sidebar-item" data-route="customer-portfolio" onclick="navigateTo('customer-portfolio')">Customer Portfolio</div>
-        <!-- W1.10 (Accounting — Idea -OtKxQEhTDampnjEBjvS): QBO Sync UI consolidated into
-             Settings → Integrations → QuickBooks tab. No standalone #accounting route. -->
         <!-- Close v3 (Idea -OtQH_uRXqz9jJBRsmrj): period close + amendments queue. -->
         <div class="sidebar-item" data-route="finance-period-close" onclick="navigateTo('finance-period-close')">Period Close</div>
         <div class="sidebar-item" data-route="finance-amendments" onclick="navigateTo('finance-amendments')">Amendments</div>
+        <div class="sidebar-item" data-route="finance-reports" onclick="navigateTo('finance-reports')">Reports</div>
+        <div class="sidebar-item" data-route="customer-portfolio" onclick="navigateTo('customer-portfolio')">Customer Portfolio</div>
       </div>
     </div>
     <!-- Operations -->
@@ -22063,7 +22070,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260610-144358-5a93c25';
+var MAST_MODULES_V = '20260610-150130-05937fb';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.

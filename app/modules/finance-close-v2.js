@@ -258,7 +258,7 @@
       var a = findAmendment(id); if (!a) return;
       mastConfirm('Approve this amendment? A counter-entry posts to the next open period (the closed ' + periodId + ' record is never mutated).', { title: 'Approve amendment', confirmLabel: 'Approve' }).then(function (ok) {
         if (!ok) return;
-        bridge().amendApprove(id).then(function (json) {
+        bridge().amendApprove(id, periodId).then(function (json) {
           showToast('Amendment approved' + (json.counterEntryId ? ' (counter-entry ' + json.counterEntryId + ')' : ''));
           refresh();
         }).catch(function (err) { showToast('Approve failed: ' + (err.message || err), true); });
@@ -269,7 +269,7 @@
       var a = findAmendment(id); if (!a) return;
       (window.mastPrompt ? mastPrompt('Reject reason (optional):', { title: 'Reject amendment', confirmLabel: 'Reject' }) : Promise.resolve('')).then(function (reason) {
         if (reason === null) return;
-        bridge().amendReject(id, reason).then(function () {
+        bridge().amendReject(id, reason, periodId).then(function () {
           showToast('Amendment rejected');
           refresh();
         }).catch(function (err) { showToast('Reject failed: ' + (err.message || err), true); });
