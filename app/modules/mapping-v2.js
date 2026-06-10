@@ -94,10 +94,17 @@
         } }
     ],
     fetch: function (id) {
-      if (V2.byId[id]) return Promise.resolve(V2.byId[id]);
-      // Cache-miss fallback keeps cross-record drills working cold.
-      return Promise.resolve(MastDB.get('channel_listings/' + id)).then(function (r) {
-        return r ? Object.assign({ _key: id }, r) : null;
+      if (V2.loaded && V2.byId[id]) return Promise.resolve(V2.byId[id]);
+      // Cold drill (e.g. from an audit finding): the SO's matched/ignored
+      // state and the product picker read V2.maps / V2.products — a bare doc
+      // get would render every listing as "To match" with an empty picker.
+      // Run the FULL load first, then fall back to a direct doc get for ids
+      // outside the listing set.
+      return ensureLoaded().then(function () {
+        if (V2.byId[id]) return V2.byId[id];
+        return Promise.resolve(MastDB.get('channel_listings/' + id)).then(function (r) {
+          return r ? Object.assign({ _key: id }, r) : null;
+        });
       });
     },
     detail: {
@@ -172,8 +179,17 @@
     });
     return out;
   }
-  function load() {
-    Promise.all([
+  function ensureLoaded() {
+    if (V2.loaded) return Promise.resolve();
+    if (V2._loading) return V2._loading;
+    V2._loading = loadCore().then(function () { V2._loading = null; });
+    return V2._loading;
+  }
+  // load() always re-reads (post-write refresh); ensureLoaded() is the
+  // run-once gate used by fetch() for cold drills.
+  function load() { return loadCore(); }
+  function loadCore() {
+    return Promise.all([
       Promise.resolve(MastDB.get('channel_listings')),
       Promise.resolve(MastDB.get('product_listing_map')),
       Promise.resolve(MastDB.get('public/products'))
