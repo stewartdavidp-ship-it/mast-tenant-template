@@ -1,11 +1,19 @@
 # operations-v2 — Build Plan
 
-Status: **PLANNED** (2026-06-10). Runs `v2-conversion-playbook.md` end-to-end for the
-Operations section. 5 of 11 Operations sub-items already have a V2 surface (all clean
-against `lint-v2-standard`); this plan covers the missing twins, the depth gaps in the
-existing 5, and the holistic pass. Companion to `sales-v2-build-plan.md` /
+Status: **SHIPPED** (2026-06-10 — plan #387, Wave 1 #388, Wave 2 #389, cell-fix #390,
+Wave 3 #391, status-field fix #392, holistic this PR; all merged & verified on dev).
+Runs `v2-conversion-playbook.md` end-to-end for the Operations section. 5 of 11
+sub-items already had a V2 surface; this round added the mapping/audit queues and
+studio, deepened channels/contacts, and re-sequenced the sidebar. The scorecard and
+CRUD table below reflect the shipped end-state. Companion to `sales-v2-build-plan.md` /
 `marketing-v2-build-plan.md` (worked examples) and `standard-record-ui.md` §10
 (archetypes) — ratified decisions are applied here, not re-litigated.
+
+**Plan amendment (Wave 2):** recon characterized `business` as a thin inline form; the
+live surface is in fact a modern 10-section entity-profile hub (sticky rail nav, live
+renewals/documents subscriptions, tokened, responsive) built with the B7 entity phase.
+Rebuilding it on the engine would be churn, not conversion — `business` joins `advisor`
+as a deliberate non-goal this round (debt register).
 
 ## Scorecard — the 11 Operations routes (sidebar `data-section="operations"`)
 
@@ -14,13 +22,13 @@ existing 5, and the holistic pass. Companion to `sales-v2-build-plan.md` /
 | 1 | `trips` | Trips | trips.js (2,157L) | trips-v2.js (214L) | ✅ read-only twin — no writes; active-trip + retro-add stay legacy |
 | 2 | `reports` | Reports | — (inline placeholder, "coming soon") | — | ⬜ non-goal — feature itself unbuilt; nothing to convert |
 | 3 | `advisor` | Business Plan | advisor.js (1,401L) | — | ⬜ design discussion — dashboard, fits no archetype (see below) |
-| 4 | `studio` | Studio | studio.js (788L) | — | ⬜ Wave 2 — config record (locations + equipment + hours) |
+| 4 | `studio` | Studio | studio.js (788L) | studio-v2.js | ✅ W2 — 3 lenses (Equipment/Founders/Overhead), native CRUD via StudioBridge; floor-cost tiles |
 | 5 | `team` | Team | team.js (3,270L) | team-v2.js (395L) | ✅ bridge writes (TeamBridge); heavy sub-surfaces stay legacy |
-| 6 | `business` | Business | — (inline `loadBusinessView`, businessTab) | — | ⬜ Wave 2 — config-singleton record over `admin/businessEntity` |
-| 7 | `channels` | Channels | channels.js (2,797L) | channels-v2.js (386L) | ✅ read-only twin — connect/settings stay legacy |
-| 8 | `mapping` | Channel Mapping | mapping.js (1,776L) | — | ⬜ Wave 1 — queue archetype; CF-backed confirm/unlink |
-| 9 | `audit` | Channel Audit | audit.js (1,717L) | — | ⬜ Wave 1 — queue archetype over findings + suppress action |
-| 10 | `contacts` | Contacts | contacts.js (1,656L) | contacts-v2.js (363L) | ✅ bridge writes (ContactsBridge) |
+| 6 | `business` | Business | — (inline `loadBusinessView`, businessTab) | — | ⬜ non-goal (amended) — already a modern entity-profile hub; rebuild would be churn |
+| 7 | `channels` | Channels | channels.js (2,797L) | channels-v2.js | ✅ + W3 — light edit (ChannelsBridge) + Listings & findings cross-link card |
+| 8 | `mapping` | Channel Mapping | mapping.js (1,776L) | mapping-v2.js | ✅ W1 — queue (To match/Matched/Ignored); match/unlink/ignore via MappingBridge → CFs |
+| 9 | `audit` | Channel Audit | audit.js (1,717L) | audit-v2.js | ✅ W1 — queue (Open/Snoozed/Rechecking/Suppressed); actions via AuditFeedback core |
+| 10 | `contacts` | Contacts | contacts.js (1,656L) | contacts-v2.js | ✅ + W3 — delete added (ContactsBridge.remove, NEW capability) |
 | 11 | `customers` | Customers | customers.js (3,485L) | customers-v2.js (312L) | ✅ bridge writes (CustomersBridge); moved in from Retention (W3e) |
 
 Recon notes that shaped the plan (vs. the Sales/Marketing rounds):
@@ -59,12 +67,12 @@ Recon notes that shaped the plan (vs. the Sales/Marketing rounds):
 | trips | **Record** (read) ✅ | history list + SO; active-trip pulse + retro-add stay legacy (live-tracking surface ≠ record list) |
 | reports | — | unbuilt feature; archetype TBD when it ships (likely Composer) |
 | advisor | **none — design discussion** | KPI dashboard + review-capture modal; closest precedent is the calendar *index control*, but the health-score/dimension layout is bespoke. Not a build ticket this round. |
-| studio | **Record** ×2 lenses | Locations lens (record SO: identity + hours) + Equipment lens (per-location sub-records); config-flavored, mirrors brand-v2's read-on-page spirit but is a real list |
+| studio | **Record** ×3 lenses ✅ | Equipment / Founders / Overhead lenses + floor-cost summary tiles; native CRUD via StudioBridge; Team section NOT re-hosted (team-v2 is the roster's home — link only) |
 | team | **Record** ✅ | faceted record, bridge writes; Time Clock / PTO / Documents / Labor Burden stay legacy (classic escape hatches) |
-| business | **Record** (singleton) | one record, no list — read-on-page detail (brand-v2 pattern) over `admin/businessEntity`; edit via engine form, field-scoped merge; regulatory fields (EIN, entityStatus) read-only in V2 |
+| business | **none — amended non-goal** | modern bespoke entity-profile hub (rail nav, 10 sections, live subscriptions); future "profile hub" archetype discussion |
 | channels | **Record** ✅ + depth | add bridge-delegated light edit (name/notes/fee profile); connect/disconnect/wizard stay legacy |
-| mapping | **Queue** | unmatched-listings worklist (fulfillment-v2 pattern): count badges, row = listing, action = match-to-product (or create), confirm via CF; matched list with unlink |
-| audit | **Queue** | findings buckets by severity/state, row click opens finding SO, actions: suppress/unsuppress (bridge-extracted from audit.js), link to suppression-rules surface |
+| mapping | **Queue** ✅ | unmatched-listings worklist (fulfillment-v2 pattern): count pills, row = listing, SO = match workspace (product picker / ignore); matched lens with unlink |
+| audit | **Queue** ✅ | findings buckets by working state, row click opens finding SO, actions resolve/snooze/suppress via the shared AuditFeedback core + AuditFeedbackUI dialogs |
 | contacts | **Record** ✅ | faceted record, bridge writes; interactions sub-records |
 | customers | **Record** ✅ | faceted record, bridge writes; wallet adjustments stay CF-backed |
 
@@ -140,17 +148,17 @@ channel → "3 open findings" → audit queue pre-filtered.
 
 | Route | C | R | U | D | Notes |
 |---|---|---|---|---|---|
-| trips | classic | ✅ | — | ✅ retro rows | active trip + retro-add stay legacy this round |
+| trips | classic | ✅ | — | — | read twin; active trip + retro-add + delete stay legacy (debt) |
 | reports | — | — | — | — | unbuilt feature |
 | advisor | n/a | classic | n/a | n/a | design discussion; stays V1 |
-| studio | ✅ | ✅ | ✅ | ✅ | locations + equipment + hours via StudioBridge |
+| studio | ✅ | ✅ | ✅ | ✅ | equipment + founders + overhead via StudioBridge; deletes confirm + writeAudit |
 | team | ✅ | ✅ | ✅ | deactivate | employees never hard-delete (payroll history) |
-| business | n/a | ✅ | ✅ | n/a | singleton; EIN/entityStatus read-only in V2 |
-| channels | classic | ✅ | ✅ light | classic | connect/disconnect/wizard stay legacy |
+| business | classic | classic | classic | n/a | modern entity hub stays V1 (amended non-goal) |
+| channels | classic | ✅ | ✅ light | classic | name/fees/contact/notes native; connect/wizard legacy |
 | mapping | n/a | ✅ | ✅ (match) | ✅ (unlink) | CF-backed; queue, not records |
-| audit | n/a | ✅ | ✅ (suppress) | n/a | findings written by platform job; suppress ≠ delete |
-| contacts | ✅ | ✅ | ✅ | ✅ | delete = confirm + writeAudit; interactions cascade |
-| customers | ✅ | ✅ | ✅ | ✅ guarded | only when no orders + zero wallet; else archive |
+| audit | n/a | ✅ | ✅ (resolve/snooze/suppress) | n/a | findings written by platform job; suppress ≠ delete |
+| contacts | ✅ | ✅ | ✅ | ✅ | NEW delete = confirm + writeAudit + byContactId index cleanup |
+| customers | ✅ | ✅ | ✅ | ⬜ debt | NOT shipped: identity resolver has no claim-release API — hard delete would strand canonical-email claims |
 
 Every delete: `mastConfirm` + `writeAudit` + RBAC `can(route,'delete')`.
 
@@ -167,3 +175,16 @@ Every delete: `mastConfirm` + `writeAudit` + RBAC `can(route,'delete')`.
       legacy with classic escape hatches.
 - [ ] **Trips active-trip surface** (start/stop, pulse) stays legacy.
 - [ ] **Channel connect/OAuth wizard** stays legacy; channels-v2 links to it.
+- [ ] **`business` stays V1** (amended): the entity-profile hub is modern but bespoke —
+      candidate for a future "profile hub" archetype discussion alongside advisor.
+- [ ] **Customer delete** needs a `customer-resolver` claim-release API first; until
+      then deleting a customer would strand its canonical-email claim (the scrub agent's
+      Firestore deletes on sgtest15 carry the same staleness — acceptable on a test
+      tenant only).
+- [ ] **Trips delete / retro-add** stay legacy (RTDB-nested rows; low demo value).
+- [ ] **5 kept customers + several contacts carry `@example.com` emails** (order-linked,
+      realistic names) — replacing them means touching orders + identity indexes
+      consistently; do as one coordinated data pass if ever needed.
+- [ ] **`admin_locations` runaway auto-create bug**: 127 identical "Home" docs were
+      deduped to 1 on sgtest15; the creator bug (repeat boot-time create, qrUrl host
+      drift) is unfixed — find the writer before it regrows.
