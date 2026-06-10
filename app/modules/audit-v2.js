@@ -97,13 +97,10 @@
         options: ['high', 'warning', 'medium', 'low', 'info'],
         get: function (v) { return v.severity || 'medium'; },
         tone: function (s) { return SEVERITY_TONE[s] || 'neutral'; } },
-      { name: 'state', label: 'State', type: 'status', list: true, readOnly: true,
-        options: ['active', 'snoozed', 'resolved-pending-recheck'],
-        get: function (v) { return STATE_LABEL[v.state] || v.state; },
-        tone: function (s) {
-          var key = s === 'Open' ? 'active' : s === 'Snoozed' ? 'snoozed' : 'resolved-pending-recheck';
-          return STATE_TONE[key] || 'neutral';
-        } },
+      // NOTE: the engine allows at most ONE status-typed field per entity —
+      // severity holds it (the badge); state renders as a plain label.
+      { name: 'state', label: 'State', type: 'text', list: true, readOnly: true,
+        get: function (v) { return STATE_LABEL[v.state] || v.state; } },
       { name: 'lastSeenAt', label: 'Last seen', type: 'date', list: true, readOnly: true,
         get: function (v) { return v.lastSeenAt || v.firstSeenAt || ''; } }
     ],
