@@ -105,7 +105,10 @@ the skeleton and wires `MODULE_MANIFEST` + tab div + `MAST_V2_ROUTE_MAP`. Then:
 - **Read the console every time** (`read_console_messages`, error pattern). A button that does
   nothing is a bug until proven otherwise — the Sales queue buttons "not clicking" were a real
   module-load race throwing on every click.
-- Check light AND dark mode. Screenshot proof.
+- Check light AND dark mode — the toggle is **"Dark mode" in the avatar menu** (top
+  right). Ignore the index.html boot comment "Admin app is ALWAYS dark mode": that is
+  only the pre-paint default, and it talked the Finance round out of the light check
+  until the operator corrected it. Screenshot proof of both.
 
 ## 6 · Holistic pass (final PR of the section)
 
