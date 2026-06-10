@@ -267,3 +267,22 @@ t('recordTitle: create mode → "New Label"', () => {
 });
 
 console.log('\n' + pass + ' passed');
+
+// header badge honors the status field's get() (channels-v2 "• true" bug)
+t('statusBadge uses get() when present', () => {
+  E.define('chan', { fields: [
+    { name: 'name', label: 'Name', type: 'text', list: true },
+    { name: 'isActive', label: 'Status', type: 'status',
+      get: r => r.isActive === false ? 'Paused' : 'Active',
+      tone: v => v === 'Active' ? 'success' : 'neutral' }
+  ]});
+  const b = E.statusBadge(E.get('chan'), { name: 'Shopify', isActive: true });
+  assert.strictEqual(b[0].label, 'Active');
+  assert.strictEqual(b[0].tone, 'success');
+});
+t('statusBadge falls back to raw value without get()', () => {
+  const b = E.statusBadge(E.get('order'), { status: 'refunded' });
+  assert.strictEqual(b[0].label, 'refunded');
+  assert.strictEqual(b[0].tone, 'danger');
+});
+

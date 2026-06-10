@@ -570,13 +570,22 @@
     return name ? ((s.label ? s.label + ': ' : '') + name) : (s.label || key);
   }
 
+  // Header badge for the record SO — pure (unit-tested). Honors the status
+  // field's get() like every other read path: a raw record value can be a
+  // non-display type (channels-v2: isActive=true rendered "• true").
+  function statusBadge(s, record) {
+    var f = s.fields.filter(function (x) { return x.type === 'status'; })[0];
+    if (!f || !record) return [];
+    var v = f.get ? f.get(record) : record[f.name];
+    return [{ label: v, tone: (f.tone ? f.tone(v) : 'neutral') }];
+  }
+
   function openRecord(key, record, mode, _internal) {
     var s = _registry[key]; if (!s) return;
     mode = mode || 'read';
     // A fresh open (from a list) resets the drill chain; drill/back pass _internal.
     if (!_internal) _panelStack = [];
-    var statusField = s.fields.filter(function (f) { return f.type === 'status'; })[0];
-    var badges = (statusField && record) ? [{ label: record[statusField.name], tone: (statusField.tone ? statusField.tone(record[statusField.name]) : 'neutral') }] : [];
+    var badges = statusBadge(s, record);
     var baseline = JSON.stringify(record || {});
     // Prefix the title with the object type ("Order: SGTE-0188") so it's always
     // clear which kind of record you're on — important when drilling across types.
@@ -647,6 +656,6 @@
   };
   if (typeof window !== 'undefined') window.MastEntity = api;
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { define: define, get: get, listColumns: listColumns, exportColumns: exportColumns, canonicalGet: canonicalGet, validate: validate, recordTitle: recordTitle };
+    module.exports = { define: define, get: get, listColumns: listColumns, exportColumns: exportColumns, canonicalGet: canonicalGet, validate: validate, recordTitle: recordTitle, statusBadge: statusBadge };
   }
 })();
