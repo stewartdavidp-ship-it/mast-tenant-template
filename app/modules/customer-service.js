@@ -897,7 +897,9 @@
   }
   async function deleteReview(id) {
     if (!confirm('Delete this review? This cannot be undone.')) return;
-    try { await MastDB.remove('cs_reviews/' + id); delete reviewsData[id]; showToast('Review deleted'); renderReviews(); }
+    // Delegates to the shared core, which also cascades the
+    // public/testimonials mirror (the old inline delete leaked it).
+    try { await window.CsReviewsBridge.remove(id); showToast('Review deleted'); renderReviews(); }
     catch (err) { showToast('Failed: ' + (err && err.message), true); }
   }
 
@@ -1107,25 +1109,11 @@
     if (!r) { showToast('Review not found', true); return; }
     var ta = document.getElementById('csReviewRespDraft_' + id);
     var body = ta ? ta.value.trim() : '';
-    if (!body) { showToast('Response can\'t be empty.', true); return; }
-    if (body.length > 4000) { showToast('Response too long (max 4000 chars).', true); return; }
-    var now = nowIso();
     var existing = r.response || null;
-    var payload = {
-      body: body,
-      authorName: (window.currentUser && (window.currentUser.displayName || window.currentUser.email)) || 'Shop',
-      authorUid: (window.currentUser && window.currentUser.uid) || null,
-      createdAt: existing && existing.createdAt ? existing.createdAt : now,
-      updatedAt: now
-    };
     try {
-      await MastDB.update('cs_reviews/' + id, { response: payload, updatedAt: now });
-      // Audit append happens after the main write so the on-doc state is
-      // authoritative even if the history append fails. History write failure
-      // is logged but not surfaced — losing one audit row is bad but not
-      // fatal; losing the publicly-visible response would be worse.
-      await _appendResponseHistory(id, existing ? 'edited' : 'created', body, existing);
-      if (reviewsData[id]) { reviewsData[id].response = payload; reviewsData[id].updatedAt = now; }
+      // Delegate to the shared state-free core (write + cs_review_responses
+      // audit append + reviewsData sync stay single-sourced there).
+      await window.CsReviewsBridge.respond(id, body);
       reviewsRespondingId = null;
       reviewsRespondDraft = '';
       showToast(existing ? 'Response updated' : 'Response posted');
@@ -1136,12 +1124,8 @@
   }
   async function deleteReviewResponse(id) {
     if (!confirm('Delete this response? The original review will remain.')) return;
-    var r = reviewsData[id];
-    var prev = r && r.response ? r.response : null;
     try {
-      await MastDB.update('cs_reviews/' + id, { response: null, updatedAt: nowIso() });
-      await _appendResponseHistory(id, 'deleted', null, prev);
-      if (reviewsData[id]) reviewsData[id].response = null;
+      await window.CsReviewsBridge.deleteResponse(id);
       reviewsRespondingId = null;
       reviewsRespondDraft = '';
       showToast('Response deleted');
@@ -2824,7 +2808,61 @@
     approve: function (id) { return ensureReviewsLoaded().then(function () { return approveReview(id); }).then(function () { return reviewsData[id] || null; }); },
     reject: function (id) { return ensureReviewsLoaded().then(function () { return rejectReview(id); }).then(function () { return reviewsData[id] || null; }); },
     feature: function (id) { return ensureReviewsLoaded().then(function () { return featureReviewOnSite(id); }).then(function () { return reviewsData[id] || null; }); },
-    unfeature: function (id) { return ensureReviewsLoaded().then(function () { return unfeatureReviewOnSite(id); }).then(function () { return reviewsData[id] || null; }); }
+    unfeature: function (id) { return ensureReviewsLoaded().then(function () { return unfeatureReviewOnSite(id); }).then(function () { return reviewsData[id] || null; }); },
+
+    // ── CS Wave 2 — state-free response + delete cores ──────────────────
+    // Parameterized versions of saveReviewResponse / deleteReviewResponse /
+    // deleteReview (which read the form DOM / use native confirm, so the V2
+    // twin can't call them). Same writes, same cs_review_responses audit
+    // appends. The legacy handlers keep their own DOM flow and the twin gets
+    // a clean object API — the WRITE shape stays single-sourced here.
+    respond: async function (id, body) {
+      await ensureReviewsLoaded();
+      var r = reviewsData[id];
+      if (!r) throw new Error('Review not found');
+      body = (body || '').trim();
+      if (!body) throw new Error("Response can't be empty");
+      if (body.length > 4000) throw new Error('Response too long (max 4000 chars)');
+      var now = nowIso();
+      var existing = r.response || null;
+      var payload = {
+        body: body,
+        authorName: (window.currentUser && (window.currentUser.displayName || window.currentUser.email)) || 'Shop',
+        authorUid: (window.currentUser && window.currentUser.uid) || null,
+        createdAt: existing && existing.createdAt ? existing.createdAt : now,
+        updatedAt: now
+      };
+      await MastDB.update('cs_reviews/' + id, { response: payload, updatedAt: now });
+      await _appendResponseHistory(id, existing ? 'edited' : 'created', body, existing);
+      if (reviewsData[id]) { reviewsData[id].response = payload; reviewsData[id].updatedAt = now; }
+      if (window.writeAudit) writeAudit('update', 'cs-review', id);
+      return reviewsData[id] || null;
+    },
+    deleteResponse: async function (id) {
+      await ensureReviewsLoaded();
+      var r = reviewsData[id];
+      var prev = r && r.response ? r.response : null;
+      await MastDB.update('cs_reviews/' + id, { response: null, updatedAt: nowIso() });
+      await _appendResponseHistory(id, 'deleted', null, prev);
+      if (reviewsData[id]) reviewsData[id].response = null;
+      if (window.writeAudit) writeAudit('update', 'cs-review', id);
+      return reviewsData[id] || null;
+    },
+    // Hard-delete a review. CASCADES the public/testimonials mirror (the
+    // legacy delete leaks it — a deleted review must not keep quoting itself
+    // on the homepage). Caller owns the confirm dialog.
+    remove: async function (id) {
+      await ensureReviewsLoaded();
+      var r = reviewsData[id];
+      if (r && r.featuredOnSite) {
+        try { await MastDB.remove('public/testimonials/review_' + id); }
+        catch (e) { console.warn('[cs] testimonial mirror cascade failed', e); }
+      }
+      await MastDB.remove('cs_reviews/' + id);
+      delete reviewsData[id];
+      if (window.writeAudit) writeAudit('delete', 'cs-review', id);
+      return true;
+    }
   };
 
   // Bridge for the cs-support-v2 hub (flag-gated #cs-inbox-v2 / #cs-tickets-v2).

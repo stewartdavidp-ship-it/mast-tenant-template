@@ -55,6 +55,8 @@
   if (!flagOn()) return;
 
   var U = window.MastUI, N = U.Num, esc = U._esc;
+  // RBAC: reviews surface gates on the LEGACY route id (finance precedent).
+  function canCs(axis) { return (typeof window.can === 'function') ? window.can('cs-reviews', axis) : true; }
 
   // status -> label/tone. Legacy default for a status-less review is 'pending'
   // (reviewBadge in customer-service.js). approved -> live on site.
@@ -140,11 +142,22 @@
           ? headlineHtml + '<div style="font-size:0.9rem;line-height:1.5;white-space:pre-wrap;color:var(--text-primary);">' + esc(bodyOf(r)) + '</div>'
           : (r.headline ? headlineHtml : '<span class="mu-sub">No review text.</span>');
 
-        // Operator reply (response {body,authorName,createdAt,updatedAt}). Editing
-        // it stays on legacy #cs-reviews; this twin only displays it.
+        // Operator reply (response {body,authorName,createdAt,updatedAt}).
+        // CS Wave 2: Respond / Edit / Delete live HERE natively — each write
+        // delegates to the CsReviewsBridge respond/deleteResponse cores (the
+        // cs_review_responses audit appends stay single-sourced on legacy).
         var resp = r.response || null;
+        var id0 = r._key || r.id, eid0 = esc(String(id0));
+        var canEditR = canCs('edit');
         var replyBody;
-        if (resp && resp.body) {
+        if (V2.respondingId === id0 && canEditR) {
+          replyBody =
+            '<textarea id="csRevV2Resp" rows="4" maxlength="4000" placeholder="Write a public reply…" style="width:100%;box-sizing:border-box;resize:vertical;font-size:0.85rem;padding:8px 10px;background:var(--surface-card);border:1px solid var(--border,rgba(127,127,127,.2));border-radius:6px;color:var(--text,var(--charcoal));">' + esc(resp && resp.body || '') + '</textarea>' +
+            '<div style="display:flex;gap:8px;margin-top:8px;">' +
+              '<button class="btn btn-primary btn-small" onclick="CsReviewsV2.saveResponse(\'' + eid0 + '\')">' + (resp ? 'Save' : 'Post reply') + '</button>' +
+              '<button class="btn btn-secondary btn-small" onclick="CsReviewsV2.cancelResponse(\'' + eid0 + '\')">Cancel</button>' +
+            '</div>';
+        } else if (resp && resp.body) {
           var who = resp.authorName || 'Shop response';
           var when = resp.updatedAt || resp.createdAt;
           replyBody =
@@ -152,9 +165,18 @@
               '<span style="font-weight:600;font-size:0.85rem;color:var(--teal,teal);">&#8627; ' + esc(who) + '</span>' +
               (when ? '<span class="mu-sub">' + N.date(when) + '</span>' : '') +
             '</div>' +
-            '<div style="font-size:0.9rem;line-height:1.5;white-space:pre-wrap;color:var(--text-primary);">' + esc(resp.body) + '</div>';
+            '<div style="font-size:0.9rem;line-height:1.5;white-space:pre-wrap;color:var(--text-primary);">' + esc(resp.body) + '</div>' +
+            (canEditR
+              ? '<div style="display:flex;gap:8px;margin-top:10px;">' +
+                '<button class="btn btn-secondary btn-small" onclick="CsReviewsV2.editResponse(\'' + eid0 + '\')">Edit</button>' +
+                '<button class="btn btn-secondary btn-small" style="color:var(--danger);" onclick="CsReviewsV2.deleteResponse(\'' + eid0 + '\')">Delete reply</button>' +
+                '</div>'
+              : '');
         } else {
-          replyBody = '<span class="mu-sub">No reply yet.</span>';
+          replyBody = '<span class="mu-sub">No reply yet.</span>' +
+            (canEditR
+              ? '<div style="margin-top:10px;"><button class="btn btn-primary btn-small" onclick="CsReviewsV2.editResponse(\'' + eid0 + '\')" title="Reply publicly — shown under the review on the storefront">💬 Respond</button></div>'
+              : '');
         }
 
         // ── Moderation — native action buttons (delegate to CsReviewsBridge) ──
@@ -163,7 +185,9 @@
         // delegates to the existing legacy moderation write via the bridge.
         var st = statusOf(r), id = r._key || r.id, eid = esc(String(id));
         var modBtns = [];
-        if (st === 'pending') {
+        if (!canCs('edit')) {
+          // View-only roles see status, not levers.
+        } else if (st === 'pending') {
           modBtns.push('<button class="btn btn-primary btn-small" onclick="CsReviewsV2.approve(\'' + eid + '\')">Approve</button>');
           modBtns.push('<button class="btn btn-secondary btn-small" onclick="CsReviewsV2.reject(\'' + eid + '\')">Reject</button>');
         } else if (st === 'rejected') {
@@ -176,16 +200,21 @@
           }
           modBtns.push('<button class="btn btn-secondary btn-small" onclick="CsReviewsV2.reject(\'' + eid + '\')" title="Remove from the storefront">Unpublish</button>');
         }
-        var modRow = '<div style="display:flex;gap:8px;flex-wrap:wrap;">' + modBtns.join('') + '</div>';
+        if (canCs('delete')) {
+          modBtns.push('<button class="btn btn-secondary btn-small" style="margin-left:auto;color:var(--danger);" onclick="CsReviewsV2.remove(\'' + eid + '\')" title="Permanently delete this review (and its homepage testimonial, if featured)">Delete</button>');
+        }
+        var modRow = modBtns.length
+          ? '<div style="display:flex;gap:8px;flex-wrap:wrap;">' + modBtns.join('') + '</div>'
+          : '<span class="mu-sub">View-only access.</span>';
         var featNote = (st === 'approved' && r.featuredOnSite)
           ? '<div class="mu-sub" style="margin-top:8px;">' + UI.badge('Featured on site', 'success') + (r.featuredAt ? ' since ' + N.date(r.featuredAt) : '') + '</div>'
           : '';
 
-        // No-V2-home capabilities stay on legacy #cs-reviews: the public REPLY
-        // (+ its cs_review_responses audit log), Draft Social Post, Ask-for-photo
-        // (UGC upload link), and the anonymous-review policy settings card.
+        // No-V2-home capabilities stay on legacy #cs-reviews: Draft Social
+        // Post, Ask-for-photo (UGC upload link), and the anonymous-review
+        // policy settings card. The public reply now lives HERE (Wave 2).
         // navigateToClassic so the V2 route remap doesn't loop us back here.
-        var more = '<div style="margin-top:14px;"><button class="btn btn-secondary btn-small" onclick="CsReviewsV2.classic()" title="Reply publicly, draft a social post, ask for a photo, or change the review policy">More actions (reply, social, policy) &rarr;</button></div>';
+        var more = '<div style="margin-top:14px;"><button class="btn btn-secondary btn-small" onclick="CsReviewsV2.classic()" title="Draft a social post, ask for a photo, or change the review policy">More actions (social, photo, policy) &rarr;</button></div>';
 
         return tiles + tabsBar +
           '<div class="mu-pane" data-pane="ov">' +
@@ -200,7 +229,7 @@
   });
 
   // ── module state + data ─────────────────────────────────────────────
-  var V2 = { rows: [], byId: {}, productIndex: {}, sortKey: 'createdAt', sortDir: 'desc', q: '', statusFilter: 'all', loaded: false, busy: false };
+  var V2 = { rows: [], byId: {}, productIndex: {}, sortKey: 'createdAt', sortDir: 'desc', q: '', statusFilter: 'all', loaded: false, busy: false, respondingId: null };
 
   function load() {
     // Reviews (one-shot keyed object) + a best-effort products read so a snapshot-
@@ -337,10 +366,72 @@
     // unfeatureReviewOnSite logic (status write + W1.8 Testimonials promotion) and
     // resolves to the fresh on-doc state. We merge that back into the live
     // V2.byId[id] (preserving _key) then re-open the record + re-render the list.
-    approve: function (id) { return moderate('approve', id); },
-    reject: function (id) { return moderate('reject', id); },
-    feature: function (id) { return moderate('feature', id); },
-    unfeature: function (id) { return moderate('unfeature', id); },
+    approve: function (id) { if (!canCs('edit')) return; return moderate('approve', id); },
+    reject: function (id) { if (!canCs('edit')) return; return moderate('reject', id); },
+    feature: function (id) { if (!canCs('edit')) return; return moderate('feature', id); },
+    unfeature: function (id) { if (!canCs('edit')) return; return moderate('unfeature', id); },
+
+    // ── Public reply (Wave 2) — bridge cores own the write + audit append ──
+    editResponse: function (id) {
+      if (!canCs('edit')) { showToast('Reviews write access required.', true); return; }
+      V2.respondingId = id;
+      var rec = V2.byId[id];
+      if (rec) MastEntity.openRecord('cs-reviews-v2', rec, 'read');
+      setTimeout(function () { var ta = document.getElementById('csRevV2Resp'); if (ta) ta.focus(); }, 60);
+    },
+    cancelResponse: function (id) {
+      V2.respondingId = null;
+      var rec = V2.byId[id];
+      if (rec) MastEntity.openRecord('cs-reviews-v2', rec, 'read');
+    },
+    saveResponse: function (id) {
+      if (!canCs('edit')) { showToast('Reviews write access required.', true); return; }
+      if (V2.busy) return;
+      var ta = document.getElementById('csRevV2Resp');
+      var body = ta ? ta.value : '';
+      V2.busy = true;
+      var bridge = window.CsReviewsBridge;
+      Promise.resolve(bridge.respond(id, body)).then(function (doc) {
+        V2.busy = false; V2.respondingId = null;
+        if (doc) { Object.assign(V2.byId[id] || {}, doc); }
+        showToast('Reply posted');
+        render();
+        var rec = V2.byId[id];
+        if (rec) MastEntity.openRecord('cs-reviews-v2', rec, 'read');
+      }).catch(function (e) {
+        V2.busy = false;
+        showToast('Reply failed: ' + (e && e.message || e), true);
+      });
+    },
+    deleteResponse: function (id) {
+      if (!canCs('edit')) { showToast('Reviews write access required.', true); return; }
+      mastConfirm('Delete this public reply? The customer\'s review will remain.', { title: 'Delete reply', confirmLabel: 'Delete', danger: true }).then(function (ok) {
+        if (!ok) return;
+        Promise.resolve(window.CsReviewsBridge.deleteResponse(id)).then(function (doc) {
+          if (V2.byId[id]) V2.byId[id].response = null;
+          showToast('Reply deleted');
+          render();
+          var rec = V2.byId[id];
+          if (rec) MastEntity.openRecord('cs-reviews-v2', rec, 'read');
+        }).catch(function (e) { showToast('Delete failed: ' + (e && e.message || e), true); });
+      });
+    },
+    // Hard-delete the review itself (bridge cascades the testimonial mirror).
+    remove: function (id) {
+      if (!canCs('delete')) { showToast('Reviews delete access required.', true); return; }
+      var r = V2.byId[id];
+      var label = r ? (authorOf(r) + "'s review of " + productLabel(r)) : 'this review';
+      mastConfirm('Permanently delete ' + label + '? This cannot be undone' + (r && r.featuredOnSite ? ' — it will also be removed from the homepage testimonials' : '') + '.', { title: 'Delete review', confirmLabel: 'Delete', danger: true }).then(function (ok) {
+        if (!ok) return;
+        Promise.resolve(window.CsReviewsBridge.remove(id)).then(function () {
+          delete V2.byId[id];
+          V2.rows = V2.rows.filter(function (x) { return (x._key || x.id) !== id; });
+          showToast('Review deleted');
+          try { MastUI.slideOut.requestClose(); } catch (_) {}
+          render();
+        }).catch(function (e) { showToast('Delete failed: ' + (e && e.message || e), true); });
+      });
+    },
     // No-V2-home capabilities (reply + audit log, social draft, UGC photo ask,
     // anonymous-review policy) -> classic Reviews view. navigateToClassic so the
     // V2 route remap doesn't loop us back to this twin.
