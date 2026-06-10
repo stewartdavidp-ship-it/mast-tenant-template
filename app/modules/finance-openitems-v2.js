@@ -68,6 +68,7 @@
         // NB: no get() on editable fields — the engine treats get()-bearing
         // fields as read-only context. prepBill() pre-maps these onto the
         // record before openRecord instead.
+        { name: 'vendorName', label: 'Vendor', readOnly: true, group: 'Bill' },
         { name: 'vendorId', label: 'Vendor', type: 'select', required: true, group: 'Bill', options: [] /* filled per-render */ },
         { name: 'vendorInvoiceRef', label: 'Invoice ref / PO #', group: 'Bill' },
         { name: 'amountDollars', label: 'Amount (USD)', required: true, group: 'Bill' },
@@ -77,7 +78,8 @@
         { name: 'notes', label: 'Notes', group: 'Bill' }
       ],
       detail: {
-        render: function (r) {
+        // Engine convention: custom read interior is render(MastUI, record).
+        render: function (_U, r) {
           var bal = (r.totalCents || 0) - (r.paidCents || 0);
           var canEdit = can('finance-ap', 'edit');
           var canDel = can('finance-ap', 'delete');
@@ -296,7 +298,11 @@
     }
     var sub = isVendors
       ? N.count(rows.length) + ' vendor(s)'
-      : m(totalDue) + ' open · ' + N.count(allRows.length) + ' item(s)' + (lens === 'ar' ? ' · <a href="javascript:void(0)" onclick="OpenItemsV2.classicAr(\'settings\')" style="color:var(--teal);">Dunning settings</a> · <a href="javascript:void(0)" onclick="OpenItemsV2.classicAr(\'audit\')" style="color:var(--teal);">Audit log</a>' : '');
+      : m(totalDue) + ' open · ' + N.count(allRows.length) + ' item(s)';
+    if (lens === 'ar') {
+      actions = '<button class="btn btn-secondary" onclick="OpenItemsV2.classicAr(\'settings\')">Dunning ↗</button>' +
+        '<button class="btn btn-secondary" onclick="OpenItemsV2.classicAr(\'audit\')">Audit log ↗</button>' + actions;
+    }
 
     var entityKey = lens === 'ar' ? 'orders-v2' : (isVendors ? 'ap-vendors-v2' : 'ap-bills-v2');
     var columnsFn = lens === 'ar' ? arColumns : (isVendors ? vendorColumns : apColumns);
