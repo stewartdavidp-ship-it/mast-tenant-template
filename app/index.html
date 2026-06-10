@@ -110,25 +110,25 @@
        Shared by customers.js (list/export) and customer-service.js (survey
        bulk-send) so the segment matcher cannot drift. ?v= kept in lockstep
        with MAST_MODULES_V by scripts/bump-modules-version.sh. -->
-  <script src="../shared/customer-filters.js?v=20260610-143739-3888efa"></script>
+  <script src="../shared/customer-filters.js?v=20260610-144358-5a93c25"></script>
   <script src="../shared/brand-sync.js?v=1"></script>
   <script src="../shared/channel-connection.js?v=1"></script>
-  <script src="../shared/variant-reconcile.js?v=20260610-143739-3888efa"></script>
+  <script src="../shared/variant-reconcile.js?v=20260610-144358-5a93c25"></script>
   <!-- UI redesign engines (docs/ux-audit): shared primitives + Entity Engine.
        The ?v= suffix is kept in lockstep with MAST_MODULES_V by
        scripts/bump-modules-version.sh (these are static <head> tags loaded
        before the JS var exists, so they can't read it at runtime). Without
        this, the engines were frozen at ?v=1 and never cache-busted on deploy. -->
-  <script src="../shared/mast-ui.js?v=20260610-143739-3888efa"></script>
-  <script src="../shared/mast-io.js?v=20260610-143739-3888efa"></script>
-  <script src="../shared/mast-entity.js?v=20260610-143739-3888efa"></script>
+  <script src="../shared/mast-ui.js?v=20260610-144358-5a93c25"></script>
+  <script src="../shared/mast-io.js?v=20260610-144358-5a93c25"></script>
+  <script src="../shared/mast-entity.js?v=20260610-144358-5a93c25"></script>
   <!-- Canonical product readiness gate (computeReadinessChecklist / productMarkupConfig).
        Byte-identical to mast-tenant-mcp-server/src/shared/product-readiness.core.js so the
        AI publish gate and the maker.js UI gate cannot drift; maker.js delegates to
        window.MastProductReadiness. Eager-loaded so it exists before the lazy maker module.
        ?v= kept in lockstep with MAST_MODULES_V by scripts/bump-modules-version.sh.
        See docs/ux-audit/product-publish-gate-plan.md §7. -->
-  <script src="../shared/product-readiness.core.js?v=20260610-143739-3888efa"></script>
+  <script src="../shared/product-readiness.core.js?v=20260610-144358-5a93c25"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Pod-specific runtime config — sets window.MAST_POD_PLATFORM_PROJECT so
@@ -11443,6 +11443,8 @@
     <div id="financeStatementsV2Tab" class="tab-content" style="display:none;"></div><!-- ONE statements hub (financials/revenue/pl/cash-flow/tax -v2 routes) -->
     <div id="financeOpenItemsV2Tab" class="tab-content" style="display:none;"></div><!-- ONE open-items queue (finance-ar-v2 + finance-ap-v2 routes) -->
     <div id="financeCloseV2Tab" class="tab-content" style="display:none;"></div><!-- ONE close pipeline (finance-period-close-v2 + finance-amendments-v2 routes) -->
+    <div id="customerPortfolioV2Tab" class="tab-content" style="display:none;"></div><!-- finance wave 4: customer portfolio (read-only analytics) -->
+    <div id="financeReportsV2Tab" class="tab-content" style="display:none;"></div><!-- finance wave 4: reports launcher -->
     <div id="rmaV2Tab" class="tab-content" style="display:none;"></div><!-- sales-v2 wave 1: returns -->
     <div id="posV2Tab" class="tab-content" style="display:none;"></div><!-- sales-v2 wave 2: sales ledger -->
     <div id="commissionTermsV2Tab" class="tab-content" style="display:none;"></div><!-- sales-v2 wave 2: commission terms -->
@@ -20830,7 +20832,9 @@ var MAST_V2_ROUTE_MAP = {
   'finance-ap': 'finance-ap-v2',
   // ONE close pipeline: Period Close + Amendments are one Close-v3 feature.
   'finance-period-close': 'finance-period-close-v2',
-  'finance-amendments': 'finance-amendments-v2'
+  'finance-amendments': 'finance-amendments-v2',
+  'customer-portfolio': 'customer-portfolio-v2',
+  'finance-reports': 'finance-reports-v2'
 };
 function mastLegacyUiOn() {
   try { return localStorage.getItem('mastLegacyUI') !== '0'; } catch (e) { return true; }
@@ -22059,7 +22063,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260610-143739-3888efa';
+var MAST_MODULES_V = '20260610-144358-5a93c25';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -22123,6 +22127,8 @@ var MODULE_MANIFEST = {
   'finance-statements-v2': { src: 'modules/finance-statements-v2.js', routes: ['financials-v2', 'finance-revenue-v2', 'finance-pl-v2', 'finance-cash-flow-v2', 'finance-tax-v2'] }, // ONE statements hub: Overview/Revenue/P&L/Cash/Tax are five lenses of the same period reports — route picks the entry lens (finance-v2-build-plan.md)
   'finance-openitems-v2': { src: 'modules/finance-openitems-v2.js', routes: ['finance-ar-v2', 'finance-ap-v2'] }, // ONE open-items queue: AR/AP aging lenses + vendor records — route picks the entry lens (finance-v2-build-plan.md)
   'finance-close-v2': { src: 'modules/finance-close-v2.js', routes: ['finance-period-close-v2', 'finance-amendments-v2'] }, // ONE close pipeline: periods/day-closes/amendments lenses over the Close-v3 CFs — route picks the entry lens (finance-v2-build-plan.md)
+  'customer-portfolio-v2': { src: 'modules/customer-portfolio-v2.js', routes: ['customer-portfolio-v2'] }, // finance wave 4: read-only portfolio analytics (quadrants + concentration), drills to customers-v2
+  'finance-reports-v2': { src: 'modules/finance-reports-v2.js', routes: ['finance-reports-v2'] }, // finance wave 4: reports launcher (generators stay classic, single-sourced)
   'rma-v2': { src: 'modules/rma-v2.js', routes: ['rma-v2'] }, // sales-v2 wave 1: returns (transaction archetype + return workflow, flag-gated, side-by-side)
   'pos-v2': { src: 'modules/pos-v2.js', routes: ['pos-v2'] }, // sales-v2 wave 2: sales ledger (transaction archetype over in-person orders, flag-gated, side-by-side)
   'commission-terms-v2': { src: 'modules/commission-terms-v2.js', routes: ['commission-terms-v2'] }, // sales-v2 wave 2: versioned commission terms (record archetype, flag-gated, side-by-side)
