@@ -110,25 +110,25 @@
        Shared by customers.js (list/export) and customer-service.js (survey
        bulk-send) so the segment matcher cannot drift. ?v= kept in lockstep
        with MAST_MODULES_V by scripts/bump-modules-version.sh. -->
-  <script src="../shared/customer-filters.js?v=20260610-185624-fc35e7b"></script>
+  <script src="../shared/customer-filters.js?v=20260610-192557-da85a6b"></script>
   <script src="../shared/brand-sync.js?v=1"></script>
   <script src="../shared/channel-connection.js?v=1"></script>
-  <script src="../shared/variant-reconcile.js?v=20260610-185624-fc35e7b"></script>
+  <script src="../shared/variant-reconcile.js?v=20260610-192557-da85a6b"></script>
   <!-- UI redesign engines (docs/ux-audit): shared primitives + Entity Engine.
        The ?v= suffix is kept in lockstep with MAST_MODULES_V by
        scripts/bump-modules-version.sh (these are static <head> tags loaded
        before the JS var exists, so they can't read it at runtime). Without
        this, the engines were frozen at ?v=1 and never cache-busted on deploy. -->
-  <script src="../shared/mast-ui.js?v=20260610-185624-fc35e7b"></script>
-  <script src="../shared/mast-io.js?v=20260610-185624-fc35e7b"></script>
-  <script src="../shared/mast-entity.js?v=20260610-185624-fc35e7b"></script>
+  <script src="../shared/mast-ui.js?v=20260610-192557-da85a6b"></script>
+  <script src="../shared/mast-io.js?v=20260610-192557-da85a6b"></script>
+  <script src="../shared/mast-entity.js?v=20260610-192557-da85a6b"></script>
   <!-- Canonical product readiness gate (computeReadinessChecklist / productMarkupConfig).
        Byte-identical to mast-tenant-mcp-server/src/shared/product-readiness.core.js so the
        AI publish gate and the maker.js UI gate cannot drift; maker.js delegates to
        window.MastProductReadiness. Eager-loaded so it exists before the lazy maker module.
        ?v= kept in lockstep with MAST_MODULES_V by scripts/bump-modules-version.sh.
        See docs/ux-audit/product-publish-gate-plan.md §7. -->
-  <script src="../shared/product-readiness.core.js?v=20260610-185624-fc35e7b"></script>
+  <script src="../shared/product-readiness.core.js?v=20260610-192557-da85a6b"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Pod-specific runtime config — sets window.MAST_POD_PLATFORM_PROJECT so
@@ -703,6 +703,10 @@
        set under the V2 nav; legacy keeps the original 12 (byte-identical). */
     body.nav-v2 .fin-merged-v1 { display: none; }
     body:not(.nav-v2) .fin-merged-v2 { display: none; }
+    /* CS sidebar merge (operator-ratified 2026-06-10): one "Inbox" item serves
+       cs-inbox + cs-tickets under the V2 nav; legacy keeps both (byte-identical). */
+    body.nav-v2 .cs-merged-v1 { display: none; }
+    body:not(.nav-v2) .cs-merged-v2 { display: none; }
 
     /* ---- group overlines + dividers ---- */
     body.nav-v2 .navv2-overline {
@@ -6700,11 +6704,14 @@
       <div class="sidebar-items">
         <!-- Order = the operator's daily process: answer messages → moderate
              reviews → outreach (surveys) → self-serve content → membership
-             health. CS V2 holistic (customer-service-v2-build-plan.md);
-             the Inbox⊃Tickets sidebar MERGE stays a proposal pending
-             operator ratification — both items live for now. -->
-        <div class="sidebar-item" data-route="cs-inbox" onclick="navigateTo('cs-inbox')">Inbox</div>
-        <div class="sidebar-item" data-route="cs-tickets" onclick="navigateTo('cs-tickets')">Tickets</div>
+             health. Inbox⊃Tickets merge RATIFIED 2026-06-10: under the V2 nav
+             ONE "Inbox" item serves both routes (they're two lenses of the same
+             cs-support-v2 hub; data-route-alt keeps the active highlight when
+             deep-linked to #cs-tickets). Legacy UI keeps the original two items
+             byte-identical (.cs-merged-v1/.cs-merged-v2 — finance precedent). -->
+        <div class="sidebar-item cs-merged-v2" data-route="cs-inbox" data-route-alt="cs-tickets" onclick="navigateTo('cs-inbox')">Inbox</div>
+        <div class="sidebar-item cs-merged-v1" data-route="cs-inbox" onclick="navigateTo('cs-inbox')">Inbox</div>
+        <div class="sidebar-item cs-merged-v1" data-route="cs-tickets" onclick="navigateTo('cs-tickets')">Tickets</div>
         <div class="sidebar-item" data-route="cs-reviews" onclick="navigateTo('cs-reviews')">Reviews</div>
         <div class="sidebar-item" data-route="cs-surveys" onclick="navigateTo('cs-surveys')">Surveys</div>
         <div class="sidebar-item" data-route="cs-faqs" onclick="navigateTo('cs-faqs')">FAQs</div>
@@ -22099,7 +22106,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260610-185624-fc35e7b';
+var MAST_MODULES_V = '20260610-192557-da85a6b';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.

@@ -115,12 +115,13 @@ and V2 both call it (FinanceBridge precedent). All gated `can('cs-tickets','edit
 - **Members elsewhere:** it's a CS *lens* on membership health; lifecycle stays on
   Membership admin. Keep as read-only twin.
 
-### Sidebar proposal — for operator ratification (6 → 5)
-**Inbox · Reviews · Surveys · FAQs · Members** — "Inbox" absorbs "Tickets" (claims
-`cs-tickets` via `data-route-alt`, finance precedent), ordered by the operator's
-process: daily messages → moderation → outreach → self-serve content → membership
-health. Module-level consolidation proceeds regardless; the sidebar merge ships in
-the holistic PR after ratification.
+### Sidebar proposal — ✅ RATIFIED + SHIPPED (2026-06-10)
+Operator ratified the merge same-day (finance precedent). Under the V2 nav the 6
+items collapse to **5**: **Inbox · Reviews · Surveys · FAQs · Members** — one
+"Inbox" item serves both routes and claims `cs-tickets` via `data-route-alt` so
+the active highlight follows deep links. Legacy UI keeps the original two items
+byte-identical (`.cs-merged-v1`/`.cs-merged-v2` + `body.nav-v2` CSS gate). Both
+routes stay live as deep links into the cs-support-v2 hub.
 
 ### Plain-language naming table
 
@@ -292,10 +293,9 @@ Every delete: `mastConfirm` + `writeAudit` + RBAC `can(route,'delete')`.
 ## Holistic (this PR)
 
 Sidebar reordered around the operator's process (messages → reviews → surveys
-→ FAQs → members). The **Inbox ⊃ Tickets sidebar merge** (one "Inbox" item,
-`data-route-alt="cs-tickets"`, finance precedent) remains a PROPOSAL for
-operator ratification — the module-level consolidation is already live
-regardless (both routes land in cs-support-v2; the route picks the lens).
+→ FAQs → members). The **Inbox ⊃ Tickets sidebar merge** was ratified same-day
+and shipped in the follow-up PR (one "Inbox" item, `data-route-alt`, legacy
+byte-identical).
 
 ## Debt register — close-out
 
