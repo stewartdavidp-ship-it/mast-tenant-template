@@ -34,7 +34,7 @@
   var LENSES = [
     { key: 'overview', label: 'Overview', route: 'financials' },
     { key: 'revenue',  label: 'Revenue',  route: 'finance-revenue' },
-    { key: 'pl',       label: 'P&L',      route: 'finance-pl' },
+    { key: 'pl',       label: 'Profit & Loss', route: 'finance-pl' },
     { key: 'cash',     label: 'Cash',     route: 'finance-cash-flow' },
     { key: 'tax',      label: 'Tax',      route: 'finance-tax' }
   ];

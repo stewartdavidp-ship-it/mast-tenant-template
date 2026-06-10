@@ -110,25 +110,25 @@
        Shared by customers.js (list/export) and customer-service.js (survey
        bulk-send) so the segment matcher cannot drift. ?v= kept in lockstep
        with MAST_MODULES_V by scripts/bump-modules-version.sh. -->
-  <script src="../shared/customer-filters.js?v=20260610-150130-05937fb"></script>
+  <script src="../shared/customer-filters.js?v=20260610-170253-668eea8"></script>
   <script src="../shared/brand-sync.js?v=1"></script>
   <script src="../shared/channel-connection.js?v=1"></script>
-  <script src="../shared/variant-reconcile.js?v=20260610-150130-05937fb"></script>
+  <script src="../shared/variant-reconcile.js?v=20260610-170253-668eea8"></script>
   <!-- UI redesign engines (docs/ux-audit): shared primitives + Entity Engine.
        The ?v= suffix is kept in lockstep with MAST_MODULES_V by
        scripts/bump-modules-version.sh (these are static <head> tags loaded
        before the JS var exists, so they can't read it at runtime). Without
        this, the engines were frozen at ?v=1 and never cache-busted on deploy. -->
-  <script src="../shared/mast-ui.js?v=20260610-150130-05937fb"></script>
-  <script src="../shared/mast-io.js?v=20260610-150130-05937fb"></script>
-  <script src="../shared/mast-entity.js?v=20260610-150130-05937fb"></script>
+  <script src="../shared/mast-ui.js?v=20260610-170253-668eea8"></script>
+  <script src="../shared/mast-io.js?v=20260610-170253-668eea8"></script>
+  <script src="../shared/mast-entity.js?v=20260610-170253-668eea8"></script>
   <!-- Canonical product readiness gate (computeReadinessChecklist / productMarkupConfig).
        Byte-identical to mast-tenant-mcp-server/src/shared/product-readiness.core.js so the
        AI publish gate and the maker.js UI gate cannot drift; maker.js delegates to
        window.MastProductReadiness. Eager-loaded so it exists before the lazy maker module.
        ?v= kept in lockstep with MAST_MODULES_V by scripts/bump-modules-version.sh.
        See docs/ux-audit/product-publish-gate-plan.md §7. -->
-  <script src="../shared/product-readiness.core.js?v=20260610-150130-05937fb"></script>
+  <script src="../shared/product-readiness.core.js?v=20260610-170253-668eea8"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Pod-specific runtime config — sets window.MAST_POD_PLATFORM_PROJECT so
@@ -699,6 +699,10 @@
       font-size: 0.72rem; color: var(--warm-gray); margin-left: auto;
     }
     body.nav-v2 .sidebar-item { font-size: 0.85rem; padding: 8px 14px 8px 52px; }
+    /* Finance sidebar merge (operator-ratified 2026-06-10): plain-language 7-item
+       set under the V2 nav; legacy keeps the original 12 (byte-identical). */
+    body.nav-v2 .fin-merged-v1 { display: none; }
+    body:not(.nav-v2) .fin-merged-v2 { display: none; }
 
     /* ---- group overlines + dividers ---- */
     body.nav-v2 .navv2-overline {
@@ -6636,17 +6640,27 @@
              for operator ratification.
              W1.10 (Accounting — Idea -OtKxQEhTDampnjEBjvS): QBO Sync UI consolidated into
              Settings → Integrations → QuickBooks tab. No standalone #accounting route. -->
-        <div class="sidebar-item" data-route="financials" onclick="navigateTo('financials')">Overview</div>
-        <div class="sidebar-item" data-route="finance-revenue" onclick="navigateTo('finance-revenue')">Revenue</div>
-        <div class="sidebar-item" data-route="finance-pl" onclick="navigateTo('finance-pl')">P&amp;L</div>
-        <div class="sidebar-item" data-route="finance-cash-flow" onclick="navigateTo('finance-cash-flow')">Cash Flow</div>
-        <div class="sidebar-item" data-route="finance-tax" onclick="navigateTo('finance-tax')">Tax</div>
+        <!-- Sidebar merge (operator-ratified 2026-06-10): under the V2 flag the 12
+             finance items collapse to 7 PLAIN-LANGUAGE entries — financial terms (AR,
+             AP, P&L, "Period Close") lose the small-business owner; QBO-style nouns
+             (Invoices, Bills) win. .fin-merged-v1 hides when nav-v2 is on;
+             .fin-merged-v2 shows only then. Legacy UI stays byte-identical (the #328
+             rule). All 12 routes stay live as deep links into the hub lenses;
+             data-route-alt keeps the active highlight for merged routes. -->
+        <div class="sidebar-item" data-route="financials" data-route-alt="finance-revenue finance-pl finance-cash-flow" onclick="navigateTo('financials')">Overview</div>
+        <div class="sidebar-item fin-merged-v1" data-route="finance-revenue" onclick="navigateTo('finance-revenue')">Revenue</div>
+        <div class="sidebar-item fin-merged-v1" data-route="finance-pl" onclick="navigateTo('finance-pl')">P&amp;L</div>
+        <div class="sidebar-item fin-merged-v1" data-route="finance-cash-flow" onclick="navigateTo('finance-cash-flow')">Cash Flow</div>
         <div class="sidebar-item" data-route="finance-expenses" onclick="navigateTo('finance-expenses')">Expenses</div>
-        <div class="sidebar-item" data-route="finance-ar" onclick="navigateTo('finance-ar')">AR</div>
-        <div class="sidebar-item" data-route="finance-ap" onclick="navigateTo('finance-ap')">AP</div>
+        <div class="sidebar-item fin-merged-v2" data-route="finance-ar" data-route-alt="finance-ap" onclick="navigateTo('finance-ar')">Invoices &amp; Bills</div>
+        <div class="sidebar-item fin-merged-v1" data-route="finance-ar" onclick="navigateTo('finance-ar')">AR</div>
+        <div class="sidebar-item fin-merged-v1" data-route="finance-ap" onclick="navigateTo('finance-ap')">AP</div>
+        <div class="sidebar-item fin-merged-v2" data-route="finance-period-close" data-route-alt="finance-amendments" onclick="navigateTo('finance-period-close')">Close the Books</div>
         <!-- Close v3 (Idea -OtQH_uRXqz9jJBRsmrj): period close + amendments queue. -->
-        <div class="sidebar-item" data-route="finance-period-close" onclick="navigateTo('finance-period-close')">Period Close</div>
-        <div class="sidebar-item" data-route="finance-amendments" onclick="navigateTo('finance-amendments')">Amendments</div>
+        <div class="sidebar-item fin-merged-v1" data-route="finance-period-close" onclick="navigateTo('finance-period-close')">Period Close</div>
+        <div class="sidebar-item fin-merged-v1" data-route="finance-amendments" onclick="navigateTo('finance-amendments')">Amendments</div>
+        <div class="sidebar-item fin-merged-v2" data-route="finance-tax" onclick="navigateTo('finance-tax')">Tax</div>
+        <div class="sidebar-item fin-merged-v1" data-route="finance-tax" onclick="navigateTo('finance-tax')">Tax</div>
         <div class="sidebar-item" data-route="finance-reports" onclick="navigateTo('finance-reports')">Reports</div>
         <div class="sidebar-item" data-route="customer-portfolio" onclick="navigateTo('customer-portfolio')">Customer Portfolio</div>
       </div>
@@ -21343,8 +21357,17 @@ function updateSidebarActive(route) {
   }
 
   // Set active item
-  var activeItem = document.querySelector('.sidebar-item[data-route="' + route + '"]') ||
-                   document.querySelector('.sidebar-item[data-route="' + baseRoute + '"]');
+  // The finance merge renders the same route in two item sets (legacy vs V2
+  // merged) — prefer the candidate that is actually visible in this mode.
+  // data-route-alt (space-separated) lets a merged entry claim its absorbed
+  // routes so deep links still highlight it.
+  var candidates = document.querySelectorAll(
+    '.sidebar-item[data-route="' + route + '"], .sidebar-item[data-route="' + baseRoute + '"], .sidebar-item[data-route-alt~="' + baseRoute + '"]');
+  var activeItem = null;
+  for (var ci = 0; ci < candidates.length; ci++) {
+    if (candidates[ci].offsetParent !== null) { activeItem = candidates[ci]; break; }
+  }
+  if (!activeItem && candidates.length) activeItem = candidates[0];
   if (activeItem) activeItem.classList.add('active');
 
   // Dashboard special case
@@ -22070,7 +22093,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260610-150130-05937fb';
+var MAST_MODULES_V = '20260610-170253-668eea8';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.

@@ -123,12 +123,16 @@ render read-only — no edit/delete affordances, ever; re-close creates a new ve
 - **Customer Portfolio into Retention:** it's a *finance* lens on customers
   (margin/contribution/concentration). Stays in Finance; drills to customers-v2.
 
-### Sidebar proposal (operator decision — module consolidation proceeds regardless)
-12 items → **7**: Overview (statements hub) · Expenses · Open Items (AR/AP) ·
-Period Close (close hub incl. Amendments) · Reports · Customer Portfolio · Tax
-(or fold Tax's sidebar item into Overview's hub too → 6). Old routes keep working as
-deep links into the right lens. Order = operator's process: *see the picture →
-review expenses → chase money → close the books → export → analyze customers*.
+### Sidebar proposal — ✅ RATIFIED + SHIPPED (2026-06-10)
+Operator ratified the merge AND a plain-language naming rule: "Finance" as a bucket is
+fine, but financial *terms* lose the small-business owner. Under the V2 nav the 12
+items collapse to **7**: **Overview · Expenses · Invoices & Bills · Close the Books ·
+Tax · Reports · Customer Portfolio** ("Invoices & Bills" over "Open Items"/"AR/AP" —
+QuickBooks' nouns, validated against QBO/Xero IA; "Close the Books" over "Period
+Close"; the P&L lens pill reads "Profit & Loss"). Legacy UI keeps the original 12
+byte-identical (`.fin-merged-v1`/`.fin-merged-v2` + `body.nav-v2` CSS gate). All 12
+routes stay live as deep links; merged entries claim their absorbed routes via
+`data-route-alt` so the active highlight follows.
 
 ## Money-field semantics (finance data is money — normalize on READ, in the bridge)
 

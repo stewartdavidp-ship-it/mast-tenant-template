@@ -285,8 +285,8 @@
     var totalDue = isVendors ? 0 : allRows.reduce(function (s, r) { return s + r.amtDue; }, 0);
 
     var lensPills = pills([
-      ['ar', 'Receivables', V2.ar.length],
-      ['ap', 'Payables', V2.ap.length],
+      ['ar', 'Invoices', V2.ar.length],
+      ['ap', 'Bills', V2.ap.length],
       ['vendors', 'Vendors', Object.keys(V2.vendors).length]
     ], lens, 'OpenItemsV2.setLens');
     var bucketPills = isVendors ? '' : pills(BUCKETS.map(function (b) { return [b[0], b[1], c[b[0]] || 0]; }), V2.bucket, 'OpenItemsV2.setBucket');
@@ -307,7 +307,7 @@
     var entityKey = lens === 'ar' ? 'orders-v2' : (isVendors ? 'ap-vendors-v2' : 'ap-bills-v2');
     var columnsFn = lens === 'ar' ? arColumns : (isVendors ? vendorColumns : apColumns);
     tab.innerHTML =
-      U.pageHeader({ title: 'Open Items', count: sub, actionsHtml: actions }) +
+      U.pageHeader({ title: 'Invoices & Bills', count: sub, actionsHtml: actions }) +
       '<div style="margin:14px 0 6px;">' + lensPills + '</div>' +
       (bucketPills ? '<div style="margin:0 0 14px;">' + bucketPills + '</div>' : '<div style="margin:0 0 14px;"></div>') +
       MastEntity.renderList(entityKey, {
