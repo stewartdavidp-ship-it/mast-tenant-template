@@ -6759,21 +6759,47 @@ async function renderPeriodClose() {
   }
 }
 
+// ── Close v3 state-free cores (shared with the V2 close hub via FinanceBridge) ──
+function _closeV3RequestId() {
+  return (window.crypto && window.crypto.randomUUID) ? window.crypto.randomUUID()
+    : ('rid-' + Date.now() + '-' + Math.random().toString(36).slice(2));
+}
+// Throws on failure; the unclosedDays precondition surfaces as
+// err.message === 'unclosedDays' with err.details.dates = [...].
+async function _closePeriodCore(periodId) {
+  var json = await _closeV3Call('writePeriodClose', { periodId: periodId, requestId: _closeV3RequestId() });
+  if (!json || json.ok !== true) {
+    console.error('[close-v3] writePeriodClose returned non-ok response:', json);
+    throw new Error((json && (json.message || json.error || json.code)) || 'CF returned no ok flag');
+  }
+  try { await writeAudit('create', 'periodClose', periodId); } catch (xerr) {}
+  return json;
+}
+async function _amendApproveCore(amendmentId) {
+  var json = await _closeV3Call('approveAmendment', { amendmentId: amendmentId, requestId: _closeV3RequestId() });
+  if (!json || json.ok !== true) {
+    console.error('[close-v3] approveAmendment returned non-ok response:', json);
+    throw new Error((json && (json.message || json.error || json.code)) || 'CF returned no ok flag');
+  }
+  try { await writeAudit('update', 'amendment', amendmentId + ':approved'); } catch (xerr) {}
+  return json;
+}
+async function _amendRejectCore(amendmentId, reason) {
+  var json = await _closeV3Call('rejectAmendment', { amendmentId: amendmentId, reason: (reason || '').trim(), requestId: _closeV3RequestId() });
+  if (!json || json.ok !== true) {
+    console.error('[close-v3] rejectAmendment returned non-ok response:', json);
+    throw new Error((json && (json.message || json.error || json.code)) || 'CF returned no ok flag');
+  }
+  try { await writeAudit('update', 'amendment', amendmentId + ':rejected'); } catch (xerr) {}
+  return json;
+}
+
 window.finPeriodCloseRun = async function(monthStr) {
   if (!_isSafeFbKey(monthStr.replace('-', ''))) { showToast('Invalid period.', true); return; }
   var ok = await mastConfirm('Close period ' + _pcMonthLabel(monthStr) + '? After closing, day closes in this month become read-only.', { title: 'Close period', confirmLabel: 'Close period' });
   if (!ok) return;
-  var requestId = (window.crypto && window.crypto.randomUUID) ? window.crypto.randomUUID()
-    : ('rid-' + Date.now() + '-' + Math.random().toString(36).slice(2));
   try {
-    var json = await _closeV3Call('writePeriodClose', { periodId: monthStr, requestId: requestId });
-    // R2-F1: require explicit ok===true (see writeDayClose comment).
-    if (!json || json.ok !== true) {
-      console.error('[close-v3] writePeriodClose returned non-ok response:', json);
-      showToast('Close failed: ' + ((json && (json.message || json.error || json.code)) || 'CF returned no ok flag — check console'), true);
-      return;
-    }
-    try { await writeAudit('create', 'periodClose', monthStr); } catch (xerr) {}
+    await _closePeriodCore(monthStr);
     showToast('Closed ' + _pcMonthLabel(monthStr));
     renderPeriodClose();
   } catch (err) {
@@ -6989,17 +7015,8 @@ window.finAmendmentApprove = async function(amendmentId, reasonText) {
   }
   var ok = await mastConfirm('This writes a counter-entry to the next open period. Reason: ' + (reasonText || '(none provided)'), { title: 'Approve amendment', confirmLabel: 'Approve' });
   if (!ok) return;
-  var requestId = (window.crypto && window.crypto.randomUUID) ? window.crypto.randomUUID()
-    : ('rid-' + Date.now() + '-' + Math.random().toString(36).slice(2));
   try {
-    var json = await _closeV3Call('approveAmendment', { amendmentId: amendmentId, requestId: requestId });
-    // R2-F1: require explicit ok===true.
-    if (!json || json.ok !== true) {
-      console.error('[close-v3] approveAmendment returned non-ok response:', json);
-      showToast('Approve failed: ' + ((json && (json.message || json.error || json.code)) || 'CF returned no ok flag — check console'), true);
-      return;
-    }
-    try { await writeAudit('update', 'amendment', amendmentId + ':approved'); } catch (xerr) {}
+    var json = await _amendApproveCore(amendmentId);
     showToast('Amendment approved' + (json.counterEntryId ? ' (counter-entry ' + json.counterEntryId + ')' : ''));
     renderAmendments();
   } catch (err) {
@@ -7014,21 +7031,8 @@ window.finAmendmentReject = async function(amendmentId) {
   if (!_isSafeFbKey(amendmentId)) { showToast('Invalid amendment ID.', true); return; }
   var reason = await mastPrompt('Reject reason (optional):', { title: 'Reject amendment', confirmLabel: 'Reject', placeholder: 'e.g. duplicate, lacks supporting evidence' });
   if (reason === null) return; // cancelled
-  var requestId = (window.crypto && window.crypto.randomUUID) ? window.crypto.randomUUID()
-    : ('rid-' + Date.now() + '-' + Math.random().toString(36).slice(2));
   try {
-    var json = await _closeV3Call('rejectAmendment', {
-      amendmentId: amendmentId,
-      reason: (reason || '').trim(),
-      requestId: requestId
-    });
-    // R2-F1: require explicit ok===true.
-    if (!json || json.ok !== true) {
-      console.error('[close-v3] rejectAmendment returned non-ok response:', json);
-      showToast('Reject failed: ' + ((json && (json.message || json.error || json.code)) || 'CF returned no ok flag — check console'), true);
-      return;
-    }
-    try { await writeAudit('update', 'amendment', amendmentId + ':rejected'); } catch (xerr) {}
+    await _amendRejectCore(amendmentId, reason);
     showToast('Amendment rejected');
     renderAmendments();
   } catch (err) {
@@ -8262,7 +8266,17 @@ window.FinanceBridge = {
   apSaveBill: _apSaveBillCore,
   apSaveVendor: _apSaveVendorCore,
   apDeleteBill: _apDeleteBillCore,
-  apDeleteVendor: _apDeleteVendorCore
+  apDeleteVendor: _apDeleteVendorCore,
+  // Wave 3 — close hub cores:
+  dayClosesForMonth: _dcLoadLatestDayClosesForMonth,
+  periodCloseForMonth: _dcLoadLatestPeriodClose,
+  recentAmendments: _dcLoadRecentAmendments,
+  last12Months: function() { return _pcLast12Months(); },
+  monthLabel: function(m) { return _pcMonthLabel(m); },
+  closePeriod: _closePeriodCore,
+  amendApprove: _amendApproveCore,
+  amendReject: _amendRejectCore,
+  openSubmitAmendment: function() { if (typeof window.finAmendmentOpenSubmit === 'function') window.finAmendmentOpenSubmit(); }
 };
 
 // ── Module registration ───────────────────────────────────────────────────────
