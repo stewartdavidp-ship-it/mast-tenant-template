@@ -94,3 +94,27 @@ A variant is not a row in its parent — it's an entity with a **stable unique i
 - [ ] RBAC: view filters surfaces, edit hides affordances + guards handlers.
 - [ ] No vestigial fields; denormalized copies resynced.
 - [ ] Bump cache-bust + regen inventory; full lint; verify on runmast.com.
+
+---
+
+## 10. Surface archetypes (ratified with the sales-v2 plan, 2026-06-10)
+
+Every V2 screen is one of four named archetypes. Reviews should say "that's not the
+archetype", not re-argue layout. All four sit on the same engine; the archetype only
+selects which engine surface composes the page.
+
+1. **Record** — list + slide-out detail (this doc's cornerstone pattern).
+   *Examples: products, terms, galleries, wholesale, commission-terms.*
+2. **Transaction** — `detail.template:'transaction'` (hero tiles, line items, totals,
+   timeline) + a MastFlow stepper as the Process pane.
+   *Examples: orders (`flow:'pickship'`), commissions, rma (`flow:'return'`), Sales Ledger.*
+3. **Queue / worklist** — "what do I do next": today's actionable items, batch actions,
+   keyboard-fast advance, count badges. List rows are *work*, not records; row click still
+   opens the underlying record SO.
+   *Examples: pack, ship.*
+4. **Composer** — a full-screen working surface that produces an artifact (a record is the
+   output, not the subject).
+   *Examples: lookbooks (line-sheet PDF), the standalone /pos/ checkout.*
+
+A screen that doesn't fit any archetype is a design discussion, not a build ticket —
+extend an archetype (engine-first, lint-enforced), don't fork a bespoke layout.

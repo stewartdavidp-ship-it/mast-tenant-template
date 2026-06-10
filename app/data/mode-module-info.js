@@ -1174,6 +1174,18 @@
       preview: { url: ASSET_BASE + 'terms.png', alt: "Editable terms pages with versioning and last-updated dates" },
       learnMoreUrl: HELP_BASE + 'terms'
     },
+    'commission-terms': {
+      label: 'Commission Terms', section: 'sales',
+      tagline: 'Versioned terms for custom-order work.',
+      outcome: "Publish the terms customers agree to when commissioning custom work — versioned, so every order points at the exact terms it was accepted under.",
+      goodFitWhen: "you take commissions or custom orders and want the agreement in writing.",
+      notAFitWhen: "you only sell ready-made inventory.",
+      automates: ["Re-attaching the latest terms to every quote", "Wondering which terms an old commission agreed to"],
+      pairsWith: ["commissions", "terms", "orders"],
+      setupDepth: "quick",
+      preview: { url: ASSET_BASE + 'commission-terms.png', alt: "Versioned commission terms with draft and published states" },
+      learnMoreUrl: HELP_BASE + 'commission-terms'
+    },
     // Marketing (always-on)
     'website': {
       label: 'Website Content', section: 'site',
