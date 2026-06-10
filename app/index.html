@@ -110,25 +110,25 @@
        Shared by customers.js (list/export) and customer-service.js (survey
        bulk-send) so the segment matcher cannot drift. ?v= kept in lockstep
        with MAST_MODULES_V by scripts/bump-modules-version.sh. -->
-  <script src="../shared/customer-filters.js?v=20260610-090822-ebd0d7c"></script>
+  <script src="../shared/customer-filters.js?v=20260610-091229-a934583"></script>
   <script src="../shared/brand-sync.js?v=1"></script>
   <script src="../shared/channel-connection.js?v=1"></script>
-  <script src="../shared/variant-reconcile.js?v=20260610-090822-ebd0d7c"></script>
+  <script src="../shared/variant-reconcile.js?v=20260610-091229-a934583"></script>
   <!-- UI redesign engines (docs/ux-audit): shared primitives + Entity Engine.
        The ?v= suffix is kept in lockstep with MAST_MODULES_V by
        scripts/bump-modules-version.sh (these are static <head> tags loaded
        before the JS var exists, so they can't read it at runtime). Without
        this, the engines were frozen at ?v=1 and never cache-busted on deploy. -->
-  <script src="../shared/mast-ui.js?v=20260610-090822-ebd0d7c"></script>
-  <script src="../shared/mast-io.js?v=20260610-090822-ebd0d7c"></script>
-  <script src="../shared/mast-entity.js?v=20260610-090822-ebd0d7c"></script>
+  <script src="../shared/mast-ui.js?v=20260610-091229-a934583"></script>
+  <script src="../shared/mast-io.js?v=20260610-091229-a934583"></script>
+  <script src="../shared/mast-entity.js?v=20260610-091229-a934583"></script>
   <!-- Canonical product readiness gate (computeReadinessChecklist / productMarkupConfig).
        Byte-identical to mast-tenant-mcp-server/src/shared/product-readiness.core.js so the
        AI publish gate and the maker.js UI gate cannot drift; maker.js delegates to
        window.MastProductReadiness. Eager-loaded so it exists before the lazy maker module.
        ?v= kept in lockstep with MAST_MODULES_V by scripts/bump-modules-version.sh.
        See docs/ux-audit/product-publish-gate-plan.md §7. -->
-  <script src="../shared/product-readiness.core.js?v=20260610-090822-ebd0d7c"></script>
+  <script src="../shared/product-readiness.core.js?v=20260610-091229-a934583"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Pod-specific runtime config — sets window.MAST_POD_PLATFORM_PROJECT so
@@ -11422,8 +11422,7 @@
     <!-- Admin: Customers Tab — rendered entirely from app/modules/customers.js -->
     <div id="customersTab" style="display:none;"></div>
     <div id="ordersV2Tab" class="tab-content" style="display:none;"></div><!-- UI-redesign proof -->
-    <div id="packV2Tab" class="tab-content" style="display:none;"></div><!-- sales-v2 wave 1: pack queue -->
-    <div id="shipV2Tab" class="tab-content" style="display:none;"></div><!-- sales-v2 wave 1: ship queue -->
+    <div id="fulfillmentV2Tab" class="tab-content" style="display:none;"></div><!-- ONE fulfillment queue (pack-v2 + ship-v2 routes) -->
     <div id="rmaV2Tab" class="tab-content" style="display:none;"></div><!-- sales-v2 wave 1: returns -->
     <div id="posV2Tab" class="tab-content" style="display:none;"></div><!-- sales-v2 wave 2: sales ledger -->
     <div id="commissionTermsV2Tab" class="tab-content" style="display:none;"></div><!-- sales-v2 wave 2: commission terms -->
@@ -22009,7 +22008,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260610-090822-ebd0d7c';
+var MAST_MODULES_V = '20260610-091229-a934583';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -22069,8 +22068,7 @@ var MODULE_MANIFEST = {
   'galleries-v2': { src: 'modules/galleries-v2.js', routes: ['galleries-v2'] }, // UI-redesign conversion: galleries & consignment read detail (flag-gated, side-by-side)
   'instructors-v2': { src: 'modules/instructors-v2.js', routes: ['instructors-v2'] }, // UI-redesign conversion: instructors roster read detail (flag-gated, side-by-side)
   'wholesale-v2': { src: 'modules/wholesale-v2.js', routes: ['wholesale-v2'] }, // UI-redesign conversion: wholesale accounts read detail (flag-gated, side-by-side)
-  'pack-v2': { src: 'modules/pack-v2.js', routes: ['pack-v2'] }, // sales-v2 wave 1: pack queue (queue archetype, flag-gated, side-by-side)
-  'ship-v2': { src: 'modules/ship-v2.js', routes: ['ship-v2'] }, // sales-v2 wave 1: ship queue (queue archetype, flag-gated, side-by-side)
+  'fulfillment-v2': { src: 'modules/fulfillment-v2.js', routes: ['pack-v2', 'ship-v2'] }, // ONE fulfillment queue: Pack/Ship are one process — route picks the entry bucket (operator-ratified 2026-06-10)
   'rma-v2': { src: 'modules/rma-v2.js', routes: ['rma-v2'] }, // sales-v2 wave 1: returns (transaction archetype + return workflow, flag-gated, side-by-side)
   'pos-v2': { src: 'modules/pos-v2.js', routes: ['pos-v2'] }, // sales-v2 wave 2: sales ledger (transaction archetype over in-person orders, flag-gated, side-by-side)
   'commission-terms-v2': { src: 'modules/commission-terms-v2.js', routes: ['commission-terms-v2'] }, // sales-v2 wave 2: versioned commission terms (record archetype, flag-gated, side-by-side)
