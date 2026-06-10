@@ -110,25 +110,25 @@
        Shared by customers.js (list/export) and customer-service.js (survey
        bulk-send) so the segment matcher cannot drift. ?v= kept in lockstep
        with MAST_MODULES_V by scripts/bump-modules-version.sh. -->
-  <script src="../shared/customer-filters.js?v=20260610-140914-b935a70"></script>
+  <script src="../shared/customer-filters.js?v=20260610-142334-34ab28d"></script>
   <script src="../shared/brand-sync.js?v=1"></script>
   <script src="../shared/channel-connection.js?v=1"></script>
-  <script src="../shared/variant-reconcile.js?v=20260610-140914-b935a70"></script>
+  <script src="../shared/variant-reconcile.js?v=20260610-142334-34ab28d"></script>
   <!-- UI redesign engines (docs/ux-audit): shared primitives + Entity Engine.
        The ?v= suffix is kept in lockstep with MAST_MODULES_V by
        scripts/bump-modules-version.sh (these are static <head> tags loaded
        before the JS var exists, so they can't read it at runtime). Without
        this, the engines were frozen at ?v=1 and never cache-busted on deploy. -->
-  <script src="../shared/mast-ui.js?v=20260610-140914-b935a70"></script>
-  <script src="../shared/mast-io.js?v=20260610-140914-b935a70"></script>
-  <script src="../shared/mast-entity.js?v=20260610-140914-b935a70"></script>
+  <script src="../shared/mast-ui.js?v=20260610-142334-34ab28d"></script>
+  <script src="../shared/mast-io.js?v=20260610-142334-34ab28d"></script>
+  <script src="../shared/mast-entity.js?v=20260610-142334-34ab28d"></script>
   <!-- Canonical product readiness gate (computeReadinessChecklist / productMarkupConfig).
        Byte-identical to mast-tenant-mcp-server/src/shared/product-readiness.core.js so the
        AI publish gate and the maker.js UI gate cannot drift; maker.js delegates to
        window.MastProductReadiness. Eager-loaded so it exists before the lazy maker module.
        ?v= kept in lockstep with MAST_MODULES_V by scripts/bump-modules-version.sh.
        See docs/ux-audit/product-publish-gate-plan.md §7. -->
-  <script src="../shared/product-readiness.core.js?v=20260610-140914-b935a70"></script>
+  <script src="../shared/product-readiness.core.js?v=20260610-142334-34ab28d"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Pod-specific runtime config — sets window.MAST_POD_PLATFORM_PROJECT so
@@ -11441,6 +11441,7 @@
     <div id="socialV2Tab" class="tab-content" style="display:none;"></div><!-- social-v2 (scaffolded) --><!-- UI-redesign proof -->
     <div id="fulfillmentV2Tab" class="tab-content" style="display:none;"></div><!-- ONE fulfillment queue (pack-v2 + ship-v2 routes) -->
     <div id="financeStatementsV2Tab" class="tab-content" style="display:none;"></div><!-- ONE statements hub (financials/revenue/pl/cash-flow/tax -v2 routes) -->
+    <div id="financeOpenItemsV2Tab" class="tab-content" style="display:none;"></div><!-- ONE open-items queue (finance-ar-v2 + finance-ap-v2 routes) -->
     <div id="rmaV2Tab" class="tab-content" style="display:none;"></div><!-- sales-v2 wave 1: returns -->
     <div id="posV2Tab" class="tab-content" style="display:none;"></div><!-- sales-v2 wave 2: sales ledger -->
     <div id="commissionTermsV2Tab" class="tab-content" style="display:none;"></div><!-- sales-v2 wave 2: commission terms -->
@@ -20822,7 +20823,10 @@ var MAST_V2_ROUTE_MAP = {
   'finance-revenue': 'finance-revenue-v2',
   'finance-pl': 'finance-pl-v2',
   'finance-cash-flow': 'finance-cash-flow-v2',
-  'finance-tax': 'finance-tax-v2'
+  'finance-tax': 'finance-tax-v2',
+  // ONE open-items queue: AR/AP are two lenses of the same aging ledger.
+  'finance-ar': 'finance-ar-v2',
+  'finance-ap': 'finance-ap-v2'
 };
 function mastLegacyUiOn() {
   try { return localStorage.getItem('mastLegacyUI') !== '0'; } catch (e) { return true; }
@@ -22051,7 +22055,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260610-140914-b935a70';
+var MAST_MODULES_V = '20260610-142334-34ab28d';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -22113,6 +22117,7 @@ var MODULE_MANIFEST = {
   'wholesale-v2': { src: 'modules/wholesale-v2.js', routes: ['wholesale-v2'] }, // UI-redesign conversion: wholesale accounts read detail (flag-gated, side-by-side)
   'fulfillment-v2': { src: 'modules/fulfillment-v2.js', routes: ['pack-v2', 'ship-v2'] }, // ONE fulfillment queue: Pack/Ship are one process — route picks the entry bucket (operator-ratified 2026-06-10)
   'finance-statements-v2': { src: 'modules/finance-statements-v2.js', routes: ['financials-v2', 'finance-revenue-v2', 'finance-pl-v2', 'finance-cash-flow-v2', 'finance-tax-v2'] }, // ONE statements hub: Overview/Revenue/P&L/Cash/Tax are five lenses of the same period reports — route picks the entry lens (finance-v2-build-plan.md)
+  'finance-openitems-v2': { src: 'modules/finance-openitems-v2.js', routes: ['finance-ar-v2', 'finance-ap-v2'] }, // ONE open-items queue: AR/AP aging lenses + vendor records — route picks the entry lens (finance-v2-build-plan.md)
   'rma-v2': { src: 'modules/rma-v2.js', routes: ['rma-v2'] }, // sales-v2 wave 1: returns (transaction archetype + return workflow, flag-gated, side-by-side)
   'pos-v2': { src: 'modules/pos-v2.js', routes: ['pos-v2'] }, // sales-v2 wave 2: sales ledger (transaction archetype over in-person orders, flag-gated, side-by-side)
   'commission-terms-v2': { src: 'modules/commission-terms-v2.js', routes: ['commission-terms-v2'] }, // sales-v2 wave 2: versioned commission terms (record archetype, flag-gated, side-by-side)
