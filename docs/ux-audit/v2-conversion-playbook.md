@@ -2,9 +2,9 @@
 
 **Status:** Canonical process, distilled from the Sales conversion (2026-06-10, PRs #360–#378),
 amended after the Marketing conversion (2026-06-10, PRs #380–#384), the Operations
-conversion (2026-06-10, PRs #387–#396), and the Finance conversion (2026-06-10,
-PRs #399–#405 — the first CONSOLIDATION round: 12 routes → 3 hub modules + 3 twins). Run this end-to-end for each remaining section
-(Site, Retention, Shows, Bookings, Finance, Customer Service, Admin). Worked examples: `sales-v2-build-plan.md` /
+conversion (2026-06-10, PRs #387–#396), the Finance conversion (2026-06-10,
+PRs #399–#405 — the first CONSOLIDATION round: 12 routes → 3 hub modules + 3 twins), and the Customer Service conversion (2026-06-10, PRs #413–#422). Run this end-to-end for each remaining section
+(Site, Retention, Shows, Bookings, Admin). Worked examples: `sales-v2-build-plan.md` /
 `marketing-v2-build-plan.md` (plan shape) and `standard-record-ui.md` §10 (the four archetypes).
 
 ## 0 · Ground rules
@@ -58,6 +58,39 @@ session; THIS session live-verified it through the operator's browser).
 5. The detail.render signature bug shipped to dev before being caught — the §9
    smoke-load ticket has now been earned twice (audit-v2 define-throw, finance bill
    SO); it should be the next engine-hardening investment.
+
+
+## 0c · Customer-Service-round retro (2026-06-10, PRs #413–#422) — process lessons
+
+**What worked (keep doing):** verifying recon characterizations caught a false
+"no pageHeader anywhere" claim (3 of 4 twins already had it) and surfaced that
+V1 already served Inbox+Tickets from ONE renderer — the consolidation argued
+itself from the code; scrub-then-build again paid off (the broken ticket-number
+counter and the status-vocab divergence surfaced during seeding, not during a
+demo); per-wave live verify caught every one of this round's four bugs the
+same hour they shipped.
+
+**What cost cycles (new gotchas below):**
+1. Skipped the scaffold for the Wave-1 hub and hand-wired index.html — and
+   missed that the scaffold also emits the STATIC tab div. `applyRoute` shows
+   `config.tab` BEFORE `setup()` runs, so first in-session navigation threw
+   and bounced to dashboard (#415). Use the scaffold, or copy ALL of its
+   output, not the parts you remember.
+2. `defineEntities()` must run at module LOAD, not first setup — once for
+   cross-module drills (cs-support), once because it was simply never invoked
+   (cs-surveys #419; rows/SO/create silently dead). The §9 smoke-load ticket
+   would have caught both — third time it's been earned.
+3. Bridge methods over a load-once bounded cache silently no-op for records
+   created after load ("Review not found") — only the walk's create-then-act
+   sequence exposed it (#421). Any per-record bridge action should fresh-read
+   the doc into the cache on miss.
+4. An applyRoute throw during boot can trip the "We couldn't load the admin"
+   screen, which WIPES the DOM — every later console error is app-wide noise
+   from unrelated modules. Screenshot/reload before diagnosing module errors
+   on a suspect boot (extends the one-messy-boot rule).
+5. Config rows created by the CF/MCP path can carry different FK fields than
+   the legacy admin writes (`surveyGroupId` vs `surveyId` on triggers) —
+   characterize LIVE data shapes per writer, not just the legacy writer code.
 
 ## 1 · Recon (Explore agent, very thorough)
 
@@ -129,6 +162,9 @@ the skeleton and wires `MODULE_MANIFEST` + tab div + `MAST_V2_ROUTE_MAP`. Then:
 - Computed reverse-links ("Part of: <campaign>" on artifact SOs) get ONE renderer on the owning
   module's bridge (`CampaignsBridge.renderChipInto` pattern) — placeholder div + async fill,
   not a copy per artifact module.
+- Engine since the CS round: status fields take `format(v)` for plain-language
+  display labels (stored values untouched), and `type:'textarea'` (+`rows`) is a
+  native edit control — don't hand-roll either.
 - Font sizes: only the 7-scale rem values pass lint — `0.72 / 0.78 / 0.85 / 0.9 / 1 / 1.15 / 1.6`.
 - Ship with `bash scripts/ship-check.sh` (bump → inventory → all lints full-output → all tests).
 
@@ -212,6 +248,11 @@ the skeleton and wires `MODULE_MANIFEST` + tab div + `MAST_V2_ROUTE_MAP`. Then:
 | CF with a hint/fast-path param the client doesn't send | `approveAmendment(periodId?)`: the no-hint collection-group documentId fallback is invalid Firestore and threw INTERNAL since it shipped — only the LIVE walk caught it (the wedge-audit lesson again). Always thread the hint param; file the server fix |
 | Scrubbing FK-referenced placeholder entities | Vendors were referenced by procurement POs/receipts/lots — deleting them strands FKs across modules. RENAME placeholder entities in place (identity heal); delete only unreferenced junk |
 | Seeding CF-owned docs that carry canonical hashes | Close-v3 day/period closes store sha256 over a canonical projection (`lib/close-hash.js`) — seed scripts must replicate the hash (and the `public/closeState` mirror) or later CF verification/coherence breaks |
+| Missing static tab div for a *-v2 route | applyRoute shows config.tab BEFORE setup(); the scaffold emits the div — hand-wiring must too |
+| defineEntities() only called in setup() | Define at module load: first-nav + cold cross-drills need the registry (cs-surveys shipped with it never invoked) |
+| Per-record bridge action over a load-once cache | Fresh-read the doc into the cache on miss, or actions on post-load records silently no-op |
+| Boot-failure screen ("We couldn't load the admin") | It WIPES the DOM — all later console errors are unrelated noise; reload before diagnosing |
+| CF/MCP-written config rows vs legacy admin rows | Same collection, different FK fields (triggers: surveyGroupId vs surveyId) — resolve both |
 
 ## 8 · Helper scripts
 
