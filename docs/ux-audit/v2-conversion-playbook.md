@@ -1,8 +1,9 @@
 # V2 Module-Conversion Playbook
 
 **Status:** Canonical process, distilled from the Sales conversion (2026-06-10, PRs #360–#378),
-amended after the Marketing conversion (2026-06-10, PRs #380–#384) and the Operations
-conversion (2026-06-10, PRs #387–#396). Run this end-to-end for each remaining section
+amended after the Marketing conversion (2026-06-10, PRs #380–#384), the Operations
+conversion (2026-06-10, PRs #387–#396), and the Finance conversion (2026-06-10,
+PRs #399–#405 — the first CONSOLIDATION round: 12 routes → 3 hub modules + 3 twins). Run this end-to-end for each remaining section
 (Site, Retention, Shows, Bookings, Finance, Customer Service, Admin). Worked examples: `sales-v2-build-plan.md` /
 `marketing-v2-build-plan.md` (plan shape) and `standard-record-ui.md` §10 (the four archetypes).
 
@@ -96,6 +97,12 @@ the skeleton and wires `MODULE_MANIFEST` + tab div + `MAST_V2_ROUTE_MAP`. Then:
 
 ## 5 · Verify every deployed wave (browser, sgtest15)
 
+- **The PWA service worker masks fresh deploys** — `location.reload()` after a merge is
+  NOT enough on sgtest15. Per-wave verify recipe: unregister all service workers + clear
+  CacheStorage, reload, and expect ONE messy mixed-cache boot (old module JS + new
+  index.html → spurious applyRoute/tab-null console errors) before the next clean boot.
+  Don't diagnose your module from that first boot's console.
+
 - **Check Deploy-workflow health at session start** (`gh run list --branch main --limit 3`)
   — a repo-wide CI failure (Operations round: stale `MAST_PLATFORM_API_KEY` secret) silently
   masks every later "is my wave live?" check, and you end up batch-verifying waves instead
@@ -150,6 +157,12 @@ the skeleton and wires `MODULE_MANIFEST` + tab div + `MAST_V2_ROUTE_MAP`. Then:
 | Method literally named `confirm(` | Trips the nativeDialogs UX lint — name action handlers `confirmMatch` etc. |
 | `required:true` + custom `editRender` | Engine `onSave` collects only `input[name]` before `validate()` — id-only inputs leave the record empty and CREATE always fails its required check (contacts-v2 create was dead since its conversion). Give required inputs a `name=` attribute |
 | Cold `MastEntity.drill` into a queue module | A bare-doc `fetch()` fallback renders the SO without sibling state (maps/products) — wrong bucket, empty pickers. `fetch()` must gate on a run-once `ensureLoaded()` when the SO render reads module collections |
+| Custom `detail.render` taking `(record)` | The engine calls it as `render(MastUI, record)` — your "record" is MastUI and every tile renders blank/$0.00 (finance bill SO, fixed #402). Signature is `(U, r)`; `detail.editRender` is `(record, mode)` — they are NOT symmetric |
+| A field with `get()` in an editable entity | `_isEditable()` treats get()-bearing fields as read-only context — your "editable" amount/date fields silently drop out of the edit form. Pre-map virtual edit fields onto the record before `openRecord` (prepBill pattern) and declare them get()-less |
+| HTML in `pageHeader`'s `count` | `count` is escaped — links render as literal `<a href=…>` text. Links/buttons belong in `actionsHtml` |
+| CF with a hint/fast-path param the client doesn't send | `approveAmendment(periodId?)`: the no-hint collection-group documentId fallback is invalid Firestore and threw INTERNAL since it shipped — only the LIVE walk caught it (the wedge-audit lesson again). Always thread the hint param; file the server fix |
+| Scrubbing FK-referenced placeholder entities | Vendors were referenced by procurement POs/receipts/lots — deleting them strands FKs across modules. RENAME placeholder entities in place (identity heal); delete only unreferenced junk |
+| Seeding CF-owned docs that carry canonical hashes | Close-v3 day/period closes store sha256 over a canonical projection (`lib/close-hash.js`) — seed scripts must replicate the hash (and the `public/closeState` mirror) or later CF verification/coherence breaks |
 
 ## 8 · Helper scripts
 
