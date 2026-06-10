@@ -2817,13 +2817,26 @@
     if (reviewsLoaded) return Promise.resolve();
     return Promise.resolve(loadReviews());
   }
+  // Cache-miss heal (found by the CS Wave-5 walk): reviewsData is a load-once
+  // bounded window, so a review created after load — or outside the window —
+  // silently no-ops feature/respond/remove ("Review not found"). Fresh-read
+  // the single doc into the cache before any per-review bridge action.
+  function ensureReviewInCache(id) {
+    return ensureReviewsLoaded().then(function () {
+      if (reviewsData[id]) return reviewsData[id];
+      return Promise.resolve(MastDB.get('cs_reviews/' + id)).then(function (doc) {
+        if (doc) { reviewsData[id] = Object.assign({ id: id }, doc); }
+        return reviewsData[id] || null;
+      });
+    });
+  }
   window.CsReviewsBridge = {
     // Resolve the latest on-doc review state for the twin (post-action refresh).
-    get: function (id) { return ensureReviewsLoaded().then(function () { return reviewsData[id] || null; }); },
-    approve: function (id) { return ensureReviewsLoaded().then(function () { return approveReview(id); }).then(function () { return reviewsData[id] || null; }); },
-    reject: function (id) { return ensureReviewsLoaded().then(function () { return rejectReview(id); }).then(function () { return reviewsData[id] || null; }); },
-    feature: function (id) { return ensureReviewsLoaded().then(function () { return featureReviewOnSite(id); }).then(function () { return reviewsData[id] || null; }); },
-    unfeature: function (id) { return ensureReviewsLoaded().then(function () { return unfeatureReviewOnSite(id); }).then(function () { return reviewsData[id] || null; }); },
+    get: function (id) { return ensureReviewInCache(id); },
+    approve: function (id) { return ensureReviewInCache(id).then(function () { return approveReview(id); }).then(function () { return reviewsData[id] || null; }); },
+    reject: function (id) { return ensureReviewInCache(id).then(function () { return rejectReview(id); }).then(function () { return reviewsData[id] || null; }); },
+    feature: function (id) { return ensureReviewInCache(id).then(function () { return featureReviewOnSite(id); }).then(function () { return reviewsData[id] || null; }); },
+    unfeature: function (id) { return ensureReviewInCache(id).then(function () { return unfeatureReviewOnSite(id); }).then(function () { return reviewsData[id] || null; }); },
 
     // ── CS Wave 2 — state-free response + delete cores ──────────────────
     // Parameterized versions of saveReviewResponse / deleteReviewResponse /
@@ -2832,7 +2845,7 @@
     // appends. The legacy handlers keep their own DOM flow and the twin gets
     // a clean object API — the WRITE shape stays single-sourced here.
     respond: async function (id, body) {
-      await ensureReviewsLoaded();
+      await ensureReviewInCache(id);
       var r = reviewsData[id];
       if (!r) throw new Error('Review not found');
       body = (body || '').trim();
@@ -2854,7 +2867,7 @@
       return reviewsData[id] || null;
     },
     deleteResponse: async function (id) {
-      await ensureReviewsLoaded();
+      await ensureReviewInCache(id);
       var r = reviewsData[id];
       var prev = r && r.response ? r.response : null;
       await MastDB.update('cs_reviews/' + id, { response: null, updatedAt: nowIso() });
@@ -2867,7 +2880,7 @@
     // legacy delete leaks it — a deleted review must not keep quoting itself
     // on the homepage). Caller owns the confirm dialog.
     remove: async function (id) {
-      await ensureReviewsLoaded();
+      await ensureReviewInCache(id);
       var r = reviewsData[id];
       if (r && r.featuredOnSite) {
         try { await MastDB.remove('public/testimonials/review_' + id); }
