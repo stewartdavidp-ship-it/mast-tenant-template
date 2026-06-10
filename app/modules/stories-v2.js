@@ -100,10 +100,18 @@
         get: statusOf,
         tone: function (v) { return STATUS_TONE[v] || 'neutral'; } }
     ],
-    fetch: function (id) { return Promise.resolve(V2.byId[id] || null); },
+    // Cache-miss fallback keeps cross-record drills (campaign references,
+    // calendar) working cold (Wave 3).
+    fetch: function (id) {
+      if (V2.byId[id]) return Promise.resolve(V2.byId[id]);
+      return Promise.resolve(MastDB.get('public/stories/' + id)).then(function (s) {
+        return s ? Object.assign({ _key: id }, s) : null;
+      });
+    },
     detail: {
       render: function (UI, s) {
         var cover = coverUrl(s);
+        var sid = s._key || s.id;
         var tiles = UI.tiles([
           { k: 'Status', v: UI.badge(STATUS_LABEL[statusOf(s)] || 'Draft', STATUS_TONE[statusOf(s)] || 'neutral'), hero: true },
           { k: 'Entries', v: N.count(entryCount(s)) },
@@ -138,7 +146,19 @@
         // Photo-curation authoring (entries, captions, QR codes, publish) stays
         // on legacy #stories. Use navigateToClassic so the V2 route remap doesn't
         // loop us back to this twin.
-        var manage = '<div style="margin-top:14px;"><button class="btn btn-secondary" onclick="StoriesV2.classic()">Manage in classic view &rarr;</button></div>';
+        var manage = '<div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;">' +
+          '<button class="btn btn-secondary" onclick="StoriesV2.classic()">Manage in classic view &rarr;</button>' +
+          (statusOf(s) === 'draft' && (typeof window.can !== 'function' || window.can('stories', 'delete'))
+            ? '<button class="btn btn-secondary" style="color:var(--text-danger);" onclick="StoriesV2.removeDraft(\'' + esc(sid) + '\')">Delete draft</button>' : '') +
+          '</div><div id="storyCampChip_' + esc(sid) + '"></div>';
+        // Part-of-campaign chip — single-sourced renderer in campaigns.js (Wave 3).
+        setTimeout(function () {
+          if (window.MastAdmin && MastAdmin.loadModule) {
+            MastAdmin.loadModule('campaigns').then(function () {
+              if (window.CampaignsBridge && CampaignsBridge.renderChipInto) CampaignsBridge.renderChipInto('storyCampChip_' + sid, sid);
+            }).catch(function () {});
+          }
+        }, 0);
 
         return tiles + tabsBar +
           '<div class="mu-pane" data-pane="ov">' +
@@ -239,6 +259,26 @@
     classic: function () {
       if (typeof navigateToClassic === 'function') navigateToClassic('stories');
       else if (typeof navigateTo === 'function') navigateTo('stories');
+    },
+    // Draft deletion (Wave 3): published stories are live on the storefront —
+    // they never delete from the twin (unpublish lives with Production).
+    removeDraft: function (id) {
+      if (typeof window.can === 'function' && !window.can('stories', 'delete')) {
+        if (window.showToast) showToast('You don\'t have permission to delete stories.', true); return;
+      }
+      var s = V2.byId[id];
+      if (s && statusOf(s) !== 'draft') { if (window.showToast) showToast('Only draft stories can be deleted here.', true); return; }
+      Promise.resolve(window.mastConfirm
+        ? mastConfirm('Delete this draft story? Its entries go with it.', { title: 'Delete draft story?', confirmLabel: 'Delete', dangerous: true })
+        : true).then(function (ok) {
+        if (!ok) return;
+        return Promise.resolve(MastDB.remove('public/stories/' + id)).then(function () {
+          if (window.writeAudit) writeAudit('delete', 'story-draft', id);
+          if (window.showToast) showToast('Draft story deleted.');
+          try { U.slideOut.requestCloseForce(); } catch (e) {}
+          load();
+        });
+      }).catch(function (e) { console.error('[stories-v2] removeDraft', e); if (window.showToast) showToast('Delete failed.', true); });
     },
     exportCsv: function () { return MastEntity.exportRows('stories-v2', visibleRows(), 'all'); }
   };

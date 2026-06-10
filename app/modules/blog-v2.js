@@ -151,11 +151,19 @@
         get: statusOf,
         tone: function (v) { return STATUS_TONE[v] || 'neutral'; } }
     ],
-    fetch: function (id) { return Promise.resolve(V2.byId[id] || null); },
+    // Cache-miss fallback keeps cross-record drills (campaign references,
+    // calendar) working cold (Wave 3).
+    fetch: function (id) {
+      if (V2.byId[id]) return Promise.resolve(V2.byId[id]);
+      return Promise.resolve(MastDB.get('blog/posts/' + id)).then(function (p) {
+        return p ? Object.assign({ _key: id }, p) : null;
+      });
+    },
     detail: {
       render: function (UI, p) {
         var cover = coverUrl(p);
         var tags = tagsOf(p);
+        var pid = p._key || p.id;
 
         var tiles = UI.tiles([
           { k: 'Status', v: UI.badge(STATUS_LABEL[statusOf(p)] || 'Draft', STATUS_TONE[statusOf(p)] || 'neutral'), hero: true },
@@ -197,7 +205,19 @@
         // Rich-text authoring (the Builder/canvas editor, AI polish, scheduling,
         // website/Substack publish) stays on legacy #blog. Use navigateToClassic
         // so the V2 route remap doesn't loop us back to this twin.
-        var manage = '<div style="margin-top:14px;"><button class="btn btn-secondary" onclick="BlogV2.classic()">Manage in classic view &rarr;</button></div>';
+        var manage = '<div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;">' +
+          '<button class="btn btn-secondary" onclick="BlogV2.classic()">Write / publish in classic view &rarr;</button>' +
+          (statusOf(p) === 'draft' && (typeof window.can !== 'function' || window.can('blog', 'delete'))
+            ? '<button class="btn btn-secondary" style="color:var(--text-danger);" onclick="BlogV2.removeDraft(\'' + esc(pid) + '\')">Delete draft</button>' : '') +
+          '</div><div id="blogCampChip_' + esc(pid) + '"></div>';
+        // Part-of-campaign chip — single-sourced renderer in campaigns.js (Wave 3).
+        setTimeout(function () {
+          if (window.MastAdmin && MastAdmin.loadModule) {
+            MastAdmin.loadModule('campaigns').then(function () {
+              if (window.CampaignsBridge && CampaignsBridge.renderChipInto) CampaignsBridge.renderChipInto('blogCampChip_' + pid, pid);
+            }).catch(function () {});
+          }
+        }, 0);
 
         return tiles + tabsBar +
           '<div class="mu-pane" data-pane="ov">' +
@@ -206,15 +226,48 @@
             UI.card('Excerpt', excerptBody) +
             UI.card('Body preview', bodyBody + manage) +
           '</div>';
+      },
+      // LIGHT edit (Wave 3): meta fields only — title / excerpt / tags. The
+      // body, slug/SEO, scheduling and publish side effects stay on the
+      // Builder (single canvas for everything that can desync).
+      editRender: function (p, mode) {
+        p = p || {};
+        function fg(label, inner) { return '<div class="form-group"><label class="form-label">' + label + '</label>' + inner + '</div>'; }
+        return '<div class="mu-editbar"><span class="mu-editpill">EDITING</span>Edit post details (body lives in the Builder)</div>' +
+          fg('Title *', '<input class="form-input" id="blogV2Title" value="' + esc(postTitle(p) === '(untitled)' ? '' : postTitle(p)) + '" style="width:100%;">') +
+          fg('Excerpt', '<textarea class="form-input" id="blogV2Excerpt" rows="3" style="width:100%;resize:vertical;">' + esc(p.excerpt || '') + '</textarea>') +
+          fg('Tags (comma-separated)', '<input class="form-input" id="blogV2Tags" value="' + esc(tagsOf(p).join(', ')) + '" style="width:100%;">');
       }
+    },
+    onSave: function (rec) {
+      if (typeof window.can === 'function' && !window.can('blog', 'edit')) {
+        if (window.showToast) showToast('You don\'t have permission to edit posts.', true); return false;
+      }
+      if (!window.BlogBridge) { if (window.showToast) showToast('Blog engine still loading — try again', true); return false; }
+      function val(id) { return ((document.getElementById(id) || {}).value || ''); }
+      var title = val('blogV2Title').trim();
+      if (!title) { if (window.showToast) showToast('Title is required.', true); return false; }
+      var patch = {
+        title: title,
+        excerpt: val('blogV2Excerpt'),
+        tags: val('blogV2Tags').split(',').map(function (t) { return t.trim(); }).filter(Boolean)
+      };
+      var id = rec._key || rec.id;
+      return Promise.resolve(window.BlogBridge.updateMeta(id, patch)).then(function (updates) {
+        Object.assign(V2.byId[id] || rec, updates || patch);
+        if (window.showToast) showToast('Post details saved.');
+        render(); return true;
+      }).catch(function (e) { console.error('[blog-v2] save', e); if (window.showToast) showToast('Error saving post.', true); return false; });
     }
-    // No onSave → no Edit button (post authoring stays on legacy #blog).
   });
 
   // ── module state + data ─────────────────────────────────────────────
   var V2 = { rows: [], byId: {}, authors: {}, sortKey: 'updatedAt', sortDir: 'desc', q: '', statusFilter: 'all', loaded: false };
 
   function load() {
+    // Ensure legacy blog.js is loaded so window.BlogBridge (the delegated
+    // light-edit/delete path) exists — mirrors campaigns-v2 (Wave 3).
+    if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('blog'); } catch (e) {} }
     // One-shot bounded read (orderByChild + limitToLast, mirroring blog.js).
     var ref = MastDB.blog.posts.ref();
     Promise.resolve(ref.orderByChild('createdAt').limitToLast(100).once('value'))
@@ -319,6 +372,27 @@
     classic: function () {
       if (typeof navigateToClassic === 'function') navigateToClassic('blog');
       else if (typeof navigateTo === 'function') navigateTo('blog');
+    },
+    // Draft deletion (Wave 3): published/complete posts never delete from the
+    // twin — unpublish lives with the Builder's side effects.
+    removeDraft: function (id) {
+      if (typeof window.can === 'function' && !window.can('blog', 'delete')) {
+        if (window.showToast) showToast('You don\'t have permission to delete posts.', true); return;
+      }
+      var p = V2.byId[id];
+      if (p && statusOf(p) !== 'draft') { if (window.showToast) showToast('Only drafts can be deleted here.', true); return; }
+      if (!window.BlogBridge) { if (window.showToast) showToast('Blog engine still loading — try again', true); return; }
+      Promise.resolve(window.mastConfirm
+        ? mastConfirm('Delete this draft post?', { title: 'Delete draft?', confirmLabel: 'Delete', dangerous: true })
+        : true).then(function (ok) {
+        if (!ok) return;
+        return Promise.resolve(window.BlogBridge.removeDraft(id)).then(function () {
+          if (window.writeAudit) writeAudit('delete', 'blog-post-draft', id);
+          if (window.showToast) showToast('Draft deleted.');
+          try { U.slideOut.requestCloseForce(); } catch (e) {}
+          load();
+        });
+      }).catch(function (e) { console.error('[blog-v2] removeDraft', e); if (window.showToast) showToast('Delete failed.', true); });
     },
     exportCsv: function () { return MastEntity.exportRows('blog-v2', visibleRows(), 'all'); }
   };

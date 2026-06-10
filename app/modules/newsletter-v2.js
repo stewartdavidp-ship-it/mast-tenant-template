@@ -181,24 +181,109 @@
     }
   });
 
+  // ── Issues lens (marketing-v2 Wave 3) ───────────────────────────────
+  // Read detail for newsletter ISSUES (newsletter/issues): title + sections
+  // (the grid-builder card ids) + status ('draft' | 'published' | 'sent').
+  // Status is assigned by the legacy send/publish path — no governed
+  // lifecycle → Faceted Record, read-only here. Composing/sending stays on
+  // legacy #newsletter; draft issues can be DELETED here (sent/published
+  // issues are the send history — immutable).
+  var ISSUE_STATUS_TONE = { draft: 'info', published: 'success', sent: 'success' };
+  function issueStatus(n) { return String(n.status || 'draft').toLowerCase(); }
+  function issueTitle(n) { return n.title || '(untitled issue)'; }
+  function sectionCount(n) {
+    if (Array.isArray(n.sections)) return n.sections.length;
+    return Object.keys(n.sections || {}).length;
+  }
+  MastEntity.define('newsletter-issues-v2', {
+    label: 'Issue', labelPlural: 'Issues', size: 'md', route: 'newsletter-v2',
+    recordId: function (n) { return n._key || n.id; },
+    fields: [
+      { name: 'title', label: 'Issue', type: 'text', list: true, readOnly: true, get: issueTitle },
+      { name: 'issueNumber', label: '#', type: 'number', list: true, readOnly: true, align: 'right',
+        get: function (n) { return n.issueNumber || null; } },
+      { name: 'sections', label: 'Sections', type: 'number', list: true, readOnly: true, align: 'right', get: sectionCount },
+      { name: 'date', label: 'Date', type: 'date', list: true, readOnly: true,
+        get: function (n) { return n.sentAt || n.publishedAt || n.scheduledFor || n.createdAt || null; } },
+      { name: 'status', label: 'Status', type: 'status', list: true, readOnly: true,
+        options: ['draft', 'published', 'sent'], get: issueStatus,
+        tone: function (v) { return ISSUE_STATUS_TONE[v] || 'neutral'; } }
+    ],
+    // Cache-miss fallback keeps cross-record drills (campaign references,
+    // calendar) working cold.
+    fetch: function (id) {
+      if (V2.issuesById[id]) return Promise.resolve(V2.issuesById[id]);
+      return Promise.resolve(MastDB.get('newsletter/issues/' + id)).then(function (n) {
+        return n ? Object.assign({ _key: id }, n) : null;
+      });
+    },
+    detail: {
+      render: function (UI, n) {
+        var id = n._key || n.id;
+        var st = issueStatus(n);
+        var tiles = UI.tiles([
+          { k: 'Status', v: UI.badge(st, ISSUE_STATUS_TONE[st] || 'neutral'), hero: true },
+          { k: 'Issue #', v: n.issueNumber != null ? String(n.issueNumber) : '—' },
+          { k: 'Sections', v: N.count(sectionCount(n)) },
+          { k: st === 'draft' ? 'Created' : 'Sent / published', v: (n.sentAt || n.publishedAt || n.createdAt) ? N.date(n.sentAt || n.publishedAt || n.createdAt) : '—' }
+        ]);
+        var actions = '';
+        if (st === 'draft' && (typeof window.can !== 'function' || window.can('newsletter', 'delete'))) {
+          actions = '<div style="margin:0 0 12px;"><button class="btn btn-secondary btn-small" style="color:var(--text-danger);" onclick="NewsletterV2.removeIssue(\'' + esc(id) + '\')">Delete draft</button></div>';
+        }
+        var meta = UI.kv([
+          { k: 'Title', v: esc(issueTitle(n)) },
+          { k: 'Slug', v: n.slug ? '<span style="font-family:monospace;font-size:0.78rem;">' + esc(n.slug) + '</span>' : '—' },
+          { k: 'Created', v: n.createdAt ? N.date(n.createdAt) : '—' },
+          { k: 'Updated', v: n.updatedAt ? N.date(n.updatedAt) : '—' },
+          { k: 'Published', v: n.publishedAt ? N.date(n.publishedAt) : '—' }
+        ]);
+        var compose = '<div style="margin-top:14px;"><button class="btn btn-secondary" onclick="NewsletterV2.classic()">' +
+          (st === 'draft' ? 'Edit / send in classic view →' : 'View in classic view →') + '</button></div>' +
+          '<div id="nlIssueCampChip_' + esc(id) + '"></div>';
+        // Part-of-campaign chip — single-sourced renderer in campaigns.js.
+        setTimeout(function () {
+          if (window.MastAdmin && MastAdmin.loadModule) {
+            MastAdmin.loadModule('campaigns').then(function () {
+              if (window.CampaignsBridge && CampaignsBridge.renderChipInto) CampaignsBridge.renderChipInto('nlIssueCampChip_' + id, id);
+            }).catch(function () {});
+          }
+        }, 0);
+        return tiles + actions + UI.card('Issue', meta) + UI.card('Compose', '<span class="mu-sub">The grid builder (sections, A/B tests, send) lives in the classic view.</span>' + compose);
+      }
+    }
+  });
+
   // ── module state + data ─────────────────────────────────────────────
-  var V2 = { rows: [], byId: {}, sortKey: 'subscribedAt', sortDir: 'desc', q: '', statusFilter: 'all', loaded: false };
+  var V2 = { rows: [], byId: {}, sortKey: 'subscribedAt', sortDir: 'desc', q: '', statusFilter: 'all', loaded: false,
+    view: 'subs', issues: [], issuesById: {}, issueSortKey: 'date', issueSortDir: 'desc' };
 
   function load() {
     // Ensure the legacy newsletter module is loaded so window.NewsletterBridge
     // (the delegated write path) + its in-memory nlSubscribers (dedup source)
     // exist — mirrors contacts-v2.
     if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('newsletter'); } catch (e) {} }
-    // Subscribers — one-shot keyed-object read at the same path legacy reads.
-    Promise.resolve(MastDB.get('newsletter/subscribers')).catch(function () { return null; })
-      .then(function (sv) {
-        var tree = sv || {};
+    // Subscribers + issues — one-shot keyed-object reads at the same paths
+    // legacy reads.
+    Promise.all([
+      Promise.resolve(MastDB.get('newsletter/subscribers')).catch(function () { return null; }),
+      Promise.resolve(MastDB.list('newsletter/issues', { limit: 200 })).catch(function () { return null; })
+    ]).then(function (res) {
+        var tree = res[0] || {};
         var out = [];
         Object.keys(tree).forEach(function (k) {
           var s = tree[k];
           if (s && typeof s === 'object') { s = Object.assign({ _key: k }, s); s.status = s.status || 'active'; out.push(s); }
         });
         V2.rows = out; V2.byId = {}; out.forEach(function (r) { V2.byId[r._key] = r; });
+        var itree = res[1] || {};
+        itree = (itree && typeof itree.val === 'function') ? itree.val() : itree;
+        var issues = [];
+        Object.keys(itree || {}).forEach(function (k) {
+          var n = itree[k];
+          if (n && typeof n === 'object') issues.push(Object.assign({ _key: k }, n));
+        });
+        V2.issues = issues; V2.issuesById = {}; issues.forEach(function (n) { V2.issuesById[n._key] = n; });
         V2.loaded = true; render();
       }).catch(function (e) { console.error('[newsletter-v2] load', e); render(); });
   }
@@ -230,8 +315,44 @@
     return el;
   }
 
+  function visibleIssues() {
+    return window.mastSortRows(V2.issues.slice(), V2.issueSortKey, V2.issueSortDir, function (r, k) {
+      var f = MastEntity.get('newsletter-issues-v2').fields.filter(function (x) { return x.name === k; })[0];
+      return (f && f.get) ? f.get(r) : r[k];
+    });
+  }
+
   function render() {
     var tab = ensureTab();
+    // Lens pills (Wave 3): the Newsletter route hosts TWO record sets —
+    // subscribers (native CRUD) and issues (read + draft delete).
+    var lens = [['subs', 'Subscribers', V2.rows.length], ['issues', 'Issues', V2.issues.length]].map(function (l) {
+      var on = V2.view === l[0];
+      return '<button onclick="NewsletterV2.view(\'' + l[0] + '\')" style="border:1px solid var(--border);' +
+        'background:' + (on ? 'color-mix(in srgb,var(--amber) 18%,transparent)' : 'transparent') + ';' +
+        'color:' + (on ? 'var(--text-primary)' : 'var(--warm-gray)') + ';border-radius:999px;' +
+        'padding:6px 13px;font-size:0.85rem;cursor:pointer;margin-right:8px;">' +
+        l[1] + ' <span style="color:var(--warm-gray);">' + l[2] + '</span></button>';
+    }).join('');
+
+    if (V2.view === 'issues') {
+      tab.innerHTML =
+        U.pageHeader({
+          title: 'Newsletter',
+          count: N.count(V2.issues.length) + ' issue' + (V2.issues.length === 1 ? '' : 's'),
+          subtitle: 'Issues are composed and sent in the classic grid builder; this is the record of them.',
+          actionsHtml: '<button class="btn btn-primary" onclick="NewsletterV2.classic()">Compose in classic →</button>' +
+            '<button class="btn btn-secondary" onclick="NewsletterV2.exportIssuesCsv()">↓ Export</button>'
+        }) +
+        '<div style="margin:14px 0;">' + lens + '</div>' +
+        MastEntity.renderList('newsletter-issues-v2', {
+          rows: visibleIssues(), sortKey: V2.issueSortKey, sortDir: V2.issueSortDir,
+          onSortFnName: 'NewsletterV2.sortIssues', onRowClickFnName: 'NewsletterV2.openIssue',
+          empty: { title: 'No issues yet', message: V2.loaded ? 'Compose your first issue in the classic view.' : 'Loading…' }
+        });
+      return;
+    }
+
     var filters = [['all', 'All'], ['active', 'Subscribed'], ['unsubscribed', 'Unsubscribed']]
       .map(function (f) {
         var on = V2.statusFilter === f[0];
@@ -239,11 +360,12 @@
       }).join(' ');
     tab.innerHTML =
       U.pageHeader({
-        title: 'Subscribers',
+        title: 'Newsletter',
         count: N.count(activeCount()) + ' subscribed · ' + N.count(V2.rows.length) + ' total',
         actionsHtml: '<button class="btn btn-primary" onclick="NewsletterV2.create()">+ New subscriber</button>' +
           '<button class="btn btn-secondary" onclick="NewsletterV2.exportCsv()">↓ Export</button>'
       }) +
+      '<div style="margin:14px 0;">' + lens + '</div>' +
       '<div style="display:flex;gap:6px;flex-wrap:wrap;margin:12px 0;">' + filters + '</div>' +
       '<div style="margin:14px 0;"><input class="form-input" placeholder="Search email or name…" value="' + esc(V2.q) +
         '" oninput="NewsletterV2.search(this.value)" style="max-width:340px;font-size:0.9rem;"></div>' +
@@ -280,6 +402,38 @@
       if (typeof navigateToClassic === 'function') navigateToClassic('newsletter');
       else if (typeof navigateTo === 'function') navigateTo('newsletter');
     },
+    // ── Issues lens (Wave 3) ──
+    view: function (v) { V2.view = v === 'issues' ? 'issues' : 'subs'; render(); },
+    sortIssues: function (key) {
+      if (V2.issueSortKey === key) V2.issueSortDir = (V2.issueSortDir === 'asc' ? 'desc' : 'asc');
+      else { V2.issueSortKey = key; V2.issueSortDir = (key === 'date' || key === 'issueNumber' ? 'desc' : 'asc'); }
+      render();
+    },
+    openIssue: function (id) {
+      MastEntity.get('newsletter-issues-v2').fetch(id).then(function (rec) {
+        if (rec) MastEntity.openRecord('newsletter-issues-v2', rec, 'read');
+      });
+    },
+    removeIssue: function (id) {
+      if (typeof window.can === 'function' && !window.can('newsletter', 'delete')) {
+        if (window.showToast) showToast('You don\'t have permission to delete issues.', true); return;
+      }
+      var n = V2.issuesById[id];
+      if (n && issueStatus(n) !== 'draft') { if (window.showToast) showToast('Sent issues are the send history — they can\'t be deleted.', true); return; }
+      if (!window.NewsletterBridge || !NewsletterBridge.removeIssue) { if (window.showToast) showToast('Newsletter engine still loading — try again', true); return; }
+      Promise.resolve(window.mastConfirm
+        ? mastConfirm('Delete this draft issue? Its grid-builder sections go with it.', { title: 'Delete draft issue?', confirmLabel: 'Delete', dangerous: true })
+        : true).then(function (ok) {
+        if (!ok) return;
+        return Promise.resolve(NewsletterBridge.removeIssue(id)).then(function () {
+          if (window.writeAudit) writeAudit('delete', 'newsletter-issue', id);
+          if (window.showToast) showToast('Draft issue deleted.');
+          try { U.slideOut.requestCloseForce(); } catch (e) {}
+          reloadSoon();
+        });
+      }).catch(function (e) { console.error('[newsletter-v2] removeIssue', e); if (window.showToast) showToast('Delete failed.', true); });
+    },
+    exportIssuesCsv: function () { return MastEntity.exportRows('newsletter-issues-v2', visibleIssues(), 'all'); },
     exportCsv: function () { return MastEntity.exportRows('newsletter-v2', visibleRows(), V2.statusFilter); }
   };
 

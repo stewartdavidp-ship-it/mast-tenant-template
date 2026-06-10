@@ -1462,6 +1462,16 @@
       await MastDB.market.posts.update(uid, postId, patch);
       smSyncLocal(postId, { status: 'posted', postedAt: Date.now() });
       return true;
+    },
+    // Draft deletion (marketing-v2 Wave 3). Posted records are the posting
+    // HISTORY — they never delete; callers must gate on status==='draft'.
+    remove: async function(postId) {
+      var uid = smGetUid();
+      if (!uid) throw new Error('Not signed in');
+      await MastDB.remove('market/posts/' + uid + '/' + postId);
+      var idx = smPosts.findIndex(function(p) { return p.postId === postId; });
+      if (idx !== -1) smPosts.splice(idx, 1);
+      return true;
     }
   };
 

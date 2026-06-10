@@ -2291,6 +2291,12 @@
       await MastDB.newsletter.subscribers.ref(id).update(updates);
       if (sub) Object.assign(sub, updates);
       return id;
+    },
+    // Draft-issue deletion (marketing-v2 Wave 3). Sent/published issues are
+    // the send HISTORY — they never delete; callers gate on status==='draft'.
+    removeIssue: async function (id) {
+      await MastDB.remove('newsletter/issues/' + id);
+      return true;
     }
   };
 

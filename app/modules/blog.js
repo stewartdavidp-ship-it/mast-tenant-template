@@ -2310,6 +2310,32 @@
   }
   window.blogOpenFromContent = blogOpenFromContent;
 
+  // BlogBridge — delegated write path for blog-v2's LIGHT edits (marketing-v2
+  // Wave 3). Meta fields only (title / excerpt / tags) — the body, scheduling,
+  // and publish side effects stay on the Builder, which is the single canvas
+  // for everything that can desync (slug/SEO/website publish). Draft deletion
+  // mirrors the Builder's delete; published posts never delete from the twin.
+  window.BlogBridge = {
+    updateMeta: async function (id, patch) {
+      var updates = { updatedAt: new Date().toISOString() };
+      if (typeof patch.title === 'string') updates.title = patch.title.trim();
+      if (typeof patch.excerpt === 'string') updates.excerpt = patch.excerpt.trim();
+      if (Array.isArray(patch.tags)) updates.tags = patch.tags;
+      await MastDB.blog.posts.ref(id).update(updates);
+      var local = (typeof blogPosts !== 'undefined' && blogPosts) ? blogPosts.find(function (p) { return p.id === id; }) : null;
+      if (local) Object.assign(local, updates);
+      return updates;
+    },
+    removeDraft: async function (id) {
+      await MastDB.blog.posts.ref(id).remove();
+      if (typeof blogPosts !== 'undefined' && Array.isArray(blogPosts)) {
+        var i = blogPosts.findIndex(function (p) { return p.id === id; });
+        if (i !== -1) blogPosts.splice(i, 1);
+      }
+      return true;
+    }
+  };
+
   function blogAddCurrentToCampaign() {
     if (!blogCurrentPostId) return;
     if (typeof window.openAddToCampaignPicker === 'function') {

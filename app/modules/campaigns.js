@@ -509,6 +509,39 @@
       await MastDB.update('admin/campaigns/' + id, { references: refs, updatedAt: nowIso() });
       c.references = refs;
       return refs;
+    },
+    // Mirrors the legacy campaign delete (the confirm lives with the caller).
+    remove: async function (id) {
+      await MastDB.remove('admin/campaigns/' + id);
+      delete campaigns[id];
+      return true;
+    },
+    // Reverse lookup for the artifact slide-outs' "Part of campaign" chip
+    // (marketing-v2 Wave 3). Artifacts carry NO campaignId back-reference, so
+    // the link is computed by scanning references — single-sourced here.
+    findReferencing: async function (refId) {
+      var tree = await MastDB.list('admin/campaigns', { limit: 500 });
+      tree = (tree && typeof tree.val === 'function') ? tree.val() : tree;
+      var out = [];
+      Object.keys(tree || {}).forEach(function (k) {
+        var c = tree[k];
+        if (c && (c.references || []).some(function (r) { return r && r.refId === refId; })) {
+          out.push({ id: k, name: c.name || '(untitled)' });
+        }
+      });
+      return out;
+    },
+    // Fill a placeholder element with "Part of: <campaign links>" — the ONE
+    // implementation all artifact slide-outs (blog/newsletter/social/stories
+    // V2 twins) call, so the chip markup + lookup stay single-sourced.
+    renderChipInto: async function (elId, refId) {
+      var links = await window.CampaignsBridge.findReferencing(refId);
+      var el = document.getElementById(elId);
+      if (!el) return;
+      if (!links.length) { el.innerHTML = ''; return; }
+      el.innerHTML = '<div class="mu-sub" style="margin-top:10px;">Part of: ' + links.map(function (c) {
+        return '<button type="button" class="mu-link" onclick="MastEntity.drill(\'campaigns-v2\',\'' + esc(c.id) + '\')" style="color:var(--teal);background:none;border:none;cursor:pointer;padding:0;font-size:inherit;">' + esc(c.name) + '</button>';
+      }).join(', ') + '</div>';
     }
   };
 
