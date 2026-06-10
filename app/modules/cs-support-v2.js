@@ -354,6 +354,11 @@
       load();
     };
   }
+  // Define entities at load time (not first route visit) so cross-module
+  // drills (survey follow-up → conversation) can MastEntity.drill immediately
+  // after MastAdmin.loadModule resolves.
+  defineEntities();
+
   MastAdmin.registerModule('cs-support-v2', {
     routes: {
       'cs-inbox-v2': { tab: 'csSupportV2Tab', setup: setupFor('inbox') },
