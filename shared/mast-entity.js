@@ -433,10 +433,12 @@
     if (!_flow || !window.MastFlow) return;
     var fk = _flow.flowKey;
     var _d = _flow.schema && _flow.schema.detail;
-    // Opt-in: a schema may request the ratified lean guided-record header
-    // (clickable step rail + checklist-into-tabs, no Advance button). orders /
-    // commissions don't set the flag and keep the original renderHeader.
-    var _renderFn = (_d && _d.guidedHeader === true && typeof window.MastFlow.renderGuidedHeader === 'function')
+    // DEFAULT (flipped 2026-06-10, PR C of the process redesign): the guided
+    // record header — clickable step rail, red bypassed stages, per-requirement
+    // overrides, no Advance/Back buttons — is the standard for every flow
+    // surface. A schema may opt OUT with detail.guidedHeader === false (none
+    // do today; the classic renderHeader remains only for legacy maker.js).
+    var _renderFn = (!(_d && _d.guidedHeader === false) && typeof window.MastFlow.renderGuidedHeader === 'function')
       ? window.MastFlow.renderGuidedHeader
       : window.MastFlow.renderHeader;
     _renderFn(fk, _flow.record, {
