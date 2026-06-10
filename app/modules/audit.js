@@ -386,10 +386,14 @@
   // Returns only violations the user should currently see: state=active and
   // not suppressed.
   function visibleViolations() {
-    var idx = buildSuppressionIndex(suppressionsData);
+    // Suppression matching is single-sourced in AuditFeedback (shared with
+    // audit-v2). suppressionsData is loaded via AuditFeedback.listSuppressions,
+    // so when the core is absent the list is empty and the fallback is moot.
+    var match = (window.AuditFeedback && AuditFeedback.matchesSuppression) || null;
+    var idx = match ? null : buildSuppressionIndex(suppressionsData);
     return violationsData.filter(function(v) {
       if (v.state !== 'active') return false;
-      if (isSuppressed(v, idx)) return false;
+      if (match ? match(v, suppressionsData) : isSuppressed(v, idx)) return false;
       return true;
     });
   }

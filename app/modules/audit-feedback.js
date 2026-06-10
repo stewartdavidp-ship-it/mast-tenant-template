@@ -294,6 +294,37 @@
   }
 
   // ============================================================
+  // Suppression matcher — SHARED core (audit.js home view + audit-v2 queue).
+  // A violation is suppressed when any active rule_suppression doc matches:
+  // ruleId AND (scope 'tenant' | 'product'+scopeId===productId |
+  // 'category'+scopeId===violation category). Category inference mirrors the
+  // wedge rule-id prefixes (LQ-* / DR-* / PP-*).
+  // ============================================================
+
+  function violationCategoryOf(v) {
+    var known = { lq: 1, drift: 1, pricing: 1 };
+    if (v && v.category && known[v.category]) return v.category;
+    var rid = (v && v.ruleId) ? String(v.ruleId) : '';
+    if (/^lq/i.test(rid)) return 'lq';
+    if (/^dr/i.test(rid)) return 'drift';
+    if (/^pp/i.test(rid)) return 'pricing';
+    return 'lq';
+  }
+
+  function matchesSuppression(v, suppressionRows) {
+    if (!v || !v.ruleId || !Array.isArray(suppressionRows)) return false;
+    var cat = violationCategoryOf(v);
+    for (var i = 0; i < suppressionRows.length; i++) {
+      var s = suppressionRows[i];
+      if (!s || s.ruleId !== v.ruleId) continue;
+      if (s.scope === 'tenant') return true;
+      if (s.scope === 'product'  && s.scopeId === v.productId) return true;
+      if (s.scope === 'category' && s.scopeId === cat) return true;
+    }
+    return false;
+  }
+
+  // ============================================================
   // Popover menu primitive (lightweight; used by all 3 menus)
   // ============================================================
 
@@ -791,7 +822,9 @@
     suppressBatch:       suppressBatch,
     listSuppressions:    listSuppressions,
     removeSuppression:   removeSuppression,
-    snoozeUntilIso:      snoozeUntilIso
+    snoozeUntilIso:      snoozeUntilIso,
+    violationCategoryOf: violationCategoryOf,
+    matchesSuppression:  matchesSuppression
   };
   window.AuditFeedbackUI = {
     openProductRollupMenu:  openProductRollupMenu,

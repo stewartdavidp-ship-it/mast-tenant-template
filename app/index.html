@@ -110,25 +110,25 @@
        Shared by customers.js (list/export) and customer-service.js (survey
        bulk-send) so the segment matcher cannot drift. ?v= kept in lockstep
        with MAST_MODULES_V by scripts/bump-modules-version.sh. -->
-  <script src="../shared/customer-filters.js?v=20260610-120540-ccd3e67"></script>
+  <script src="../shared/customer-filters.js?v=20260610-123411-c18db48"></script>
   <script src="../shared/brand-sync.js?v=1"></script>
   <script src="../shared/channel-connection.js?v=1"></script>
-  <script src="../shared/variant-reconcile.js?v=20260610-120540-ccd3e67"></script>
+  <script src="../shared/variant-reconcile.js?v=20260610-123411-c18db48"></script>
   <!-- UI redesign engines (docs/ux-audit): shared primitives + Entity Engine.
        The ?v= suffix is kept in lockstep with MAST_MODULES_V by
        scripts/bump-modules-version.sh (these are static <head> tags loaded
        before the JS var exists, so they can't read it at runtime). Without
        this, the engines were frozen at ?v=1 and never cache-busted on deploy. -->
-  <script src="../shared/mast-ui.js?v=20260610-120540-ccd3e67"></script>
-  <script src="../shared/mast-io.js?v=20260610-120540-ccd3e67"></script>
-  <script src="../shared/mast-entity.js?v=20260610-120540-ccd3e67"></script>
+  <script src="../shared/mast-ui.js?v=20260610-123411-c18db48"></script>
+  <script src="../shared/mast-io.js?v=20260610-123411-c18db48"></script>
+  <script src="../shared/mast-entity.js?v=20260610-123411-c18db48"></script>
   <!-- Canonical product readiness gate (computeReadinessChecklist / productMarkupConfig).
        Byte-identical to mast-tenant-mcp-server/src/shared/product-readiness.core.js so the
        AI publish gate and the maker.js UI gate cannot drift; maker.js delegates to
        window.MastProductReadiness. Eager-loaded so it exists before the lazy maker module.
        ?v= kept in lockstep with MAST_MODULES_V by scripts/bump-modules-version.sh.
        See docs/ux-audit/product-publish-gate-plan.md §7. -->
-  <script src="../shared/product-readiness.core.js?v=20260610-120540-ccd3e67"></script>
+  <script src="../shared/product-readiness.core.js?v=20260610-123411-c18db48"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Pod-specific runtime config — sets window.MAST_POD_PLATFORM_PROJECT so
@@ -11429,6 +11429,8 @@
     <!-- Admin: Customers Tab — rendered entirely from app/modules/customers.js -->
     <div id="customersTab" style="display:none;"></div>
     <div id="ordersV2Tab" class="tab-content" style="display:none;"></div>
+    <div id="auditV2Tab" class="tab-content" style="display:none;"></div><!-- audit-v2 (scaffolded) -->
+    <div id="mappingV2Tab" class="tab-content" style="display:none;"></div><!-- mapping-v2 (scaffolded) -->
     <div id="engagementInboxV2Tab" class="tab-content" style="display:none;"></div><!-- engagement-inbox-v2 (scaffolded) -->
     <div id="composerV2Tab" class="tab-content" style="display:none;"></div><!-- composer-v2 (scaffolded) -->
     <div id="socialV2Tab" class="tab-content" style="display:none;"></div><!-- social-v2 (scaffolded) --><!-- UI-redesign proof -->
@@ -20803,7 +20805,9 @@ var MAST_V2_ROUTE_MAP = {
   receipts: 'receipts-v2', lookbooks: 'lookbooks-v2',
   'social': 'social-v2',
   'composer': 'composer-v2',
-  'engagement-inbox': 'engagement-inbox-v2'
+  'engagement-inbox': 'engagement-inbox-v2',
+  'mapping': 'mapping-v2',
+  'audit': 'audit-v2'
 };
 function mastLegacyUiOn() {
   try { return localStorage.getItem('mastLegacyUI') !== '0'; } catch (e) { return true; }
@@ -22032,7 +22036,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260610-120540-ccd3e67';
+var MAST_MODULES_V = '20260610-123411-c18db48';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -22155,6 +22159,8 @@ homepage: { src: 'modules/homepage.js', routes: ['homepage'] },
   'social-v2': { src: 'modules/social-v2.js', routes: ['social-v2'] }, // record archetype (scaffolded; flag-gated, side-by-side)
   'composer-v2': { src: 'modules/composer-v2.js', routes: ['composer-v2'] }, // record archetype (scaffolded; flag-gated, side-by-side)
   'engagement-inbox-v2': { src: 'modules/engagement-inbox-v2.js', routes: ['engagement-inbox-v2'] }, // queue archetype (scaffolded; flag-gated, side-by-side)
+  'mapping-v2': { src: 'modules/mapping-v2.js', routes: ['mapping-v2'] }, // queue archetype (scaffolded; flag-gated, side-by-side)
+  'audit-v2': { src: 'modules/audit-v2.js', routes: ['audit-v2'] }, // queue archetype (scaffolded; flag-gated, side-by-side)
   workflowEngine: { src: 'modules/workflows/workflow-engine.js', routes: [] },
   commissionsWorkflow: { src: 'modules/workflows/commissions.workflow.js', routes: [] },
   pickshipWorkflow: { src: 'modules/workflows/pickship.workflow.js', routes: [] },
