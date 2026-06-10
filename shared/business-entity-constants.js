@@ -749,6 +749,11 @@
     'finance-cash-flow':  { modes: ['maker', 'retail', 'bookings'] },
     'finance-ar':         { modes: ['maker'] },
     'finance-ap':         { modes: ['maker'] },
+    // Close v3: a first-class V2 home shipped 2026-06-10 (finance-close-v2) —
+    // registered at the finance-section tier so "Close the Books" is mode-visible
+    // and user-curatable like its siblings (was: unknown route → soft-hidden).
+    'finance-period-close': { modes: ['maker', 'retail', 'bookings'] },
+    'finance-amendments':   { modes: ['maker', 'retail', 'bookings'] },
     'finance-reports':    { modes: ['maker', 'retail', 'bookings'] },
     'customer-portfolio': { modes: ['maker', 'retail', 'bookings'] },
 
@@ -810,6 +815,7 @@
     'loyalty':           ['customers'],
     'promotions':        ['products'],
     'customer-portfolio':['customers'],
+    'finance-amendments': ['finance-period-close'],
     'cs-surveys':        ['customers'],
     'cs-reviews':        ['products'],
     'show-execute':      ['show-prep', 'products'],

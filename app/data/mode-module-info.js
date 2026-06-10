@@ -843,6 +843,32 @@
       preview: { url: ASSET_BASE + 'finance-pl.png', alt: "Profit & loss statement with month-over-month trend chart" },
       learnMoreUrl: HELP_BASE + 'finance-pl'
     },
+    'finance-period-close': {
+      label: 'Period Close', section: 'finance',
+      tagline: 'Close each month so the books stop moving.',
+      outcome: "Lock a finished month — daily drawer counts roll into one closed period your accountant can trust.",
+      goodFitWhen: "you count the drawer (or want to start) and want month-end to be a button, not a weekend.",
+      notAFitWhen: "you don't reconcile cash and your accountant closes the books for you elsewhere.",
+      automates: ["Month-end spreadsheet roll-ups of daily counts", "Last month's numbers quietly changing after you sent them"],
+      complementsTools: ["QuickBooks", "your accountant"],
+      prerequisites: ["Receipts module enabled"],
+      pairsWith: ["receipts", "finance-cash-flow", "finance-amendments"],
+      setupDepth: "moderate",
+      learnMoreUrl: HELP_BASE + 'finance-period-close'
+    },
+    'finance-amendments': {
+      label: 'Amendments', section: 'finance',
+      tagline: 'Fix mistakes in closed months without rewriting history.',
+      outcome: "Fix an error found after close: approve the correction and a dated counter-entry lands in the open month.",
+      goodFitWhen: "you close your months and occasionally find a late return or mis-entered sale afterward.",
+      notAFitWhen: "you aren't closing periods yet — turn on Period Close first.",
+      automates: ["Quiet edits to last month's numbers nobody can trace", "Email threads with your accountant about \"that one fix\""],
+      complementsTools: ["your accountant"],
+      prerequisites: ["Period Close enabled"],
+      pairsWith: ["finance-period-close"],
+      setupDepth: "quick",
+      learnMoreUrl: HELP_BASE + 'finance-amendments'
+    },
     'finance-cash-flow': {
       // 2026-05-22 audit: Cash on Hand reads from Plaid; shows "—" until
       // bank connected. Added Plaid prereq.
