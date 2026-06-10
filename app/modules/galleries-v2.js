@@ -57,6 +57,34 @@
     return [a.street, a.city, a.state, a.zip, a.country].filter(Boolean).join(', ');
   }
 
+  // ── repeatable form-row templates (shared by editRender + the "+ Add"
+  // handlers, so dynamically appended rows are pixel- and scrape-identical) ──
+  // Address = a BLOCK: street on its own full-width line, then city/state/zip/
+  // country beneath (the old single-line layout truncated Country to "Counti…").
+  function addrRowHtml(a, i) {
+    a = a || {};
+    function inp(key, ph, extra) { return '<input class="form-input" data-gal-addr="' + key + '" data-i="' + i + '" placeholder="' + ph + '" value="' + esc(a[key] || '') + '" style="width:100%;"' + (extra || '') + '>'; }
+    return '<div data-gal-addr-row="' + i + '" style="padding:10px 12px;border:1px solid var(--border);border-radius:10px;margin-bottom:8px;">' +
+      '<div style="margin-bottom:8px;">' + inp('street', 'Street address') + '</div>' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;">' +
+        '<div style="flex:2;min-width:140px;">' + inp('city', 'City') + '</div>' +
+        '<div style="flex:0 0 64px;">' + inp('state', 'ST', ' maxlength="3"') + '</div>' +
+        '<div style="flex:1;min-width:90px;">' + inp('zip', 'Zip') + '</div>' +
+        '<div style="flex:1;min-width:120px;">' + inp('country', 'Country') + '</div>' +
+      '</div>' +
+    '</div>';
+  }
+  function contactRowHtml(c, i) {
+    c = c || {};
+    function inp(key, ph, type) { return '<input class="form-input" type="' + (type || 'text') + '" data-gal-contact="' + key + '" data-i="' + i + '" placeholder="' + ph + '" value="' + esc(c[key] || '') + '" style="width:100%;">'; }
+    return '<div data-gal-contact-row="' + i + '" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px;">' +
+      '<div style="flex:1.3;min-width:160px;">' + inp('name', 'Name') + '</div>' +
+      '<div style="flex:1.4;min-width:190px;">' + inp('email', 'Email', 'email') + '</div>' +
+      '<div style="flex:1;min-width:130px;">' + inp('phone', 'Phone', 'tel') + '</div>' +
+      '<div style="flex:0.8;min-width:100px;">' + inp('role', 'Role') + '</div>' +
+    '</div>';
+  }
+
   // Consigned pieces = the placements at this gallery. Match by galleryId FK
   // first; fall back to a locationName match for legacy placements not yet
   // backfilled with the FK (mirrors consignment.js `_placementsForGallery`).
@@ -196,38 +224,29 @@
       editRender: function (g, mode) {
         g = g || {};
         function fg(label, inner, flex) { return '<div class="form-group"' + (flex ? ' style="flex:1;min-width:120px;"' : '') + '><label class="form-label">' + label + '</label>' + inner + '</div>'; }
-        function grp(label) { return '<div style="font-size:0.9rem;font-weight:600;color:var(--teal);margin:14px 0 4px;">' + esc(label) + '</div>'; }
-        // Repeatable rows: render existing + a few blank spares so editing never
-        // drops data and adding is inline (scraped by index in onSave).
+        function grp(label, hint) {
+          return '<div style="margin:14px 0 4px;"><span style="font-size:0.9rem;font-weight:600;color:var(--teal);">' + esc(label) + '</span>' +
+            (hint ? ' <span class="mu-sub" style="font-size:0.78rem;">' + esc(hint) + '</span>' : '') + '</div>';
+        }
+        // Repeatable rows: existing + ONE blank spare; "+ Add" appends more
+        // (GalleriesV2.addAddress / addContact). Scraped by data attrs on save,
+        // so dynamically added rows save exactly like rendered ones.
         function padRows(list, spares) {
           var arr = (Array.isArray(list) ? list.slice() : []);
           for (var i = 0; i < spares; i++) arr.push({});
           return arr;
         }
-        var addrRows = padRows(addressesOf(g), 2).map(function (a, i) {
-          function inp(key, ph) { return '<input class="form-input" data-gal-addr="' + key + '" data-i="' + i + '" placeholder="' + ph + '" value="' + esc(a[key] || '') + '" style="width:100%;">'; }
-          return '<div data-gal-addr-row="' + i + '" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px;">' +
-            '<div style="flex:2;min-width:140px;">' + inp('street', 'Street') + '</div>' +
-            '<div style="flex:1;min-width:90px;">' + inp('city', 'City') + '</div>' +
-            '<div style="flex:0 0 64px;">' + inp('state', 'ST') + '</div>' +
-            '<div style="flex:0 0 80px;">' + inp('zip', 'Zip') + '</div>' +
-            '<div style="flex:0 0 90px;">' + inp('country', 'Country') + '</div>' +
-          '</div>';
-        }).join('');
-        var contactRows = padRows(contactsOf(g), 2).map(function (c, i) {
-          function inp(key, ph) { return '<input class="form-input" data-gal-contact="' + key + '" data-i="' + i + '" placeholder="' + ph + '" value="' + esc(c[key] || '') + '" style="width:100%;">'; }
-          return '<div data-gal-contact-row="' + i + '" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px;">' +
-            '<div style="flex:1;min-width:110px;">' + inp('name', 'Name') + '</div>' +
-            '<div style="flex:1;min-width:110px;">' + inp('email', 'Email') + '</div>' +
-            '<div style="flex:1;min-width:110px;">' + inp('phone', 'Phone') + '</div>' +
-            '<div style="flex:1;min-width:90px;">' + inp('role', 'Role') + '</div>' +
-          '</div>';
-        }).join('');
+        var addrRows = padRows(addressesOf(g), 1).map(function (a, i) { return addrRowHtml(a, i); }).join('');
+        var contactRows = padRows(contactsOf(g), 1).map(function (c, i) { return contactRowHtml(c, i); }).join('');
         var pctVal = (typeof g.defaultCommissionPct === 'number') ? g.defaultCommissionPct : '';
         return '<div class="mu-editbar"><span class="mu-editpill">' + (mode === 'create' ? 'NEW' : 'EDITING') + '</span>' + (mode === 'create' ? 'New gallery' : 'Edit this gallery') + '</div>' +
           fg('Name *', '<input class="form-input" id="galV2Name" value="' + esc(g.name || '') + '" style="width:100%;" placeholder="Gallery, boutique or shop name">') +
-          grp('Addresses') + addrRows +
-          grp('Contacts') + contactRows +
+          grp('Addresses') +
+          '<div id="galV2Addrs">' + addrRows + '</div>' +
+          '<button type="button" class="btn btn-secondary" style="font-size:0.78rem;padding:4px 12px;margin:2px 0 4px;" onclick="GalleriesV2.addAddress()">+ Add address</button>' +
+          grp('Contacts', '— people at the gallery, kept on this record (not your Contacts list)') +
+          '<div id="galV2Contacts">' + contactRows + '</div>' +
+          '<button type="button" class="btn btn-secondary" style="font-size:0.78rem;padding:4px 12px;margin:2px 0 4px;" onclick="GalleriesV2.addContact()">+ Add contact</button>' +
           grp('Terms') +
           '<div style="display:flex;gap:12px;flex-wrap:wrap;">' +
             fg('Default commission %', '<input class="form-input" type="number" min="0" max="100" step="0.5" id="galV2Pct" value="' + esc(pctVal) + '" placeholder="40" style="width:100%;">', true) +
@@ -256,8 +275,24 @@
         currency: val('galV2Currency'),
         notes: val('galV2Notes')
       };
-      // Validation mirrors legacy saveGallery: name required.
+      // Validation mirrors legacy saveGallery: name required — plus format
+      // checks on contact email/phone so bad data can't enter the record.
       if (!data.name.trim()) { if (window.showToast) showToast('Gallery name is required.', true); return false; }
+      for (var ci = 0; ci < data.contacts.length; ci++) {
+        var c = data.contacts[ci];
+        var who = c.name || ('contact ' + (ci + 1));
+        if (c.email && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(c.email)) {
+          if (window.showToast) showToast('"' + c.email + '" doesn\'t look like a valid email (' + who + ').', true);
+          return false;
+        }
+        if (c.phone) {
+          var digits = c.phone.replace(/\D/g, '');
+          if (digits.length < 7 || digits.length > 15 || /[^\d\s()+.\-ext]/i.test(c.phone)) {
+            if (window.showToast) showToast('"' + c.phone + '" doesn\'t look like a valid phone number (' + who + ').', true);
+            return false;
+          }
+        }
+      }
 
       if (mode === 'create') {
         return Promise.resolve(window.GalleriesBridge.create(data)).then(function () {
@@ -364,6 +399,22 @@
   }
 
   window.GalleriesV2 = {
+    // "+ Add address / contact" in the edit form — appends a blank row using the
+    // SAME template editRender uses; onSave's data-attr scrape picks it up.
+    addAddress: function () {
+      var host = document.getElementById('galV2Addrs'); if (!host) return;
+      var i = host.querySelectorAll('[data-gal-addr-row]').length;
+      host.insertAdjacentHTML('beforeend', addrRowHtml({}, i));
+      var first = host.querySelector('[data-gal-addr-row="' + i + '"] input');
+      if (first) first.focus();
+    },
+    addContact: function () {
+      var host = document.getElementById('galV2Contacts'); if (!host) return;
+      var i = host.querySelectorAll('[data-gal-contact-row]').length;
+      host.insertAdjacentHTML('beforeend', contactRowHtml({}, i));
+      var first = host.querySelector('[data-gal-contact-row="' + i + '"] input');
+      if (first) first.focus();
+    },
     sort: function (key) {
       if (V2.sortKey === key) V2.sortDir = (V2.sortDir === 'asc' ? 'desc' : 'asc');
       else { V2.sortKey = key; V2.sortDir = (key === 'pieces' || key === 'payoutsDue' ? 'desc' : 'asc'); }
