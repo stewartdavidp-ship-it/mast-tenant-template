@@ -52,6 +52,8 @@
   if (!flagOn()) return;
 
   var U = window.MastUI, N = U.Num, esc = U._esc;
+  // RBAC: FAQ surface gates on the LEGACY route id (finance precedent).
+  function canFaq(axis) { return (typeof window.can === 'function') ? window.can('cs-faqs', axis) : true; }
 
   // Legacy partition (customer-service.js renderFaqs, D2 2026-05-28): cs_policies
   // is shared with Sales -> Policies. The CS surface owns kind='faq'; rows tagged
@@ -129,13 +131,18 @@
           { k: 'Updated', v: (p.updatedAt || p.createdAt) ? N.date(p.updatedAt || p.createdAt) : '—' }
         ]);
 
-        // Authoring (edit / publish-toggle / delete / create) stays on legacy
-        // #cs-faqs. navigateToClassic bypasses the V2 route remap so it reaches
-        // legacy even with Legacy UI off (else the remap loops back here).
-        // Publish/hide toggle + delete have no V2 home yet — keep them on
-        // legacy #cs-faqs. (Editing the FAQ, incl. the storefront checkbox, is
-        // native via the Edit button.)
-        var manage = '<div style="margin-top:14px;"><button class="btn btn-secondary" onclick="CsFaqsV2.classic()">Publish / delete in classic view →</button></div>';
+        // CS Wave 4: publish/hide + delete live HERE natively (bridge cores,
+        // RBAC-gated). Nothing FAQ-shaped remains classic-only.
+        var live = !!p.storefrontEnabled;
+        var pid = esc(p._key || p.id);
+        var mBtns = [];
+        if (canFaq('edit')) {
+          mBtns.push('<button class="btn btn-' + (live ? 'secondary' : 'primary') + ' btn-small" onclick="CsFaqsV2.setStorefront(\'' + pid + '\',' + (live ? 'false' : 'true') + ')" title="' + (live ? 'Hide this FAQ from the storefront help page' : 'Show this FAQ on the storefront help page') + '">' + (live ? 'Hide from storefront' : 'Publish to storefront') + '</button>');
+        }
+        if (canFaq('delete')) {
+          mBtns.push('<button class="btn btn-secondary btn-small" style="color:var(--danger);" onclick="CsFaqsV2.remove(\'' + pid + '\')">Delete FAQ</button>');
+        }
+        var manage = mBtns.length ? '<div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;">' + mBtns.join('') + '</div>' : '';
 
         return tiles + tabsBar +
           '<div class="mu-pane" data-pane="ov">' +
@@ -161,6 +168,7 @@
       }
     },
     onSave: function (rec, mode) {
+      if (!canFaq('edit')) { if (window.showToast) showToast('FAQs write access required.', true); return false; }
       if (!window.CsFaqsBridge) { if (window.showToast) showToast('FAQs engine still loading — try again', true); return false; }
       var data = {
         question: ((document.getElementById('faqV2Q') || {}).value || ''),
@@ -260,7 +268,7 @@
         title: 'FAQs',
         count: N.count(liveCount) + ' live · ' + N.count(V2.rows.length) + ' total',
         actionsHtml:
-          '<button class="btn btn-primary" onclick="CsFaqsV2.create()">+ New FAQ</button>' +
+          (canFaq('edit') ? '<button class="btn btn-primary" onclick="CsFaqsV2.create()">+ New FAQ</button>' : '') +
           '<button class="btn btn-secondary" onclick="CsFaqsV2.exportCsv()">↓ Export</button>'
       }) +
       '<div style="display:flex;gap:6px;flex-wrap:wrap;margin:12px 0;">' + filters + '</div>' +
@@ -292,12 +300,34 @@
       if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('customer-service'); } catch (e) {} }
       MastEntity.openRecord('cs-faqs-v2', {}, 'create');
     },
-    // Storefront publish/hide toggle + delete have no V2 home yet -> classic
-    // FAQs view. (Create/edit, incl. the storefront checkbox, are native here.)
-    // navigateToClassic so the V2 route remap doesn't loop us back to this twin.
     classic: function () {
       if (typeof navigateToClassic === 'function') navigateToClassic('cs-faqs');
       else if (typeof navigateTo === 'function') navigateTo('cs-faqs');
+    },
+    // ── Wave 4: native publish/hide + delete (bridge cores, RBAC, confirm) ──
+    setStorefront: function (id, enabled) {
+      if (!canFaq('edit')) { showToast('FAQs write access required.', true); return; }
+      Promise.resolve(window.CsFaqsBridge.setStorefront(id, enabled)).then(function () {
+        if (V2.byId[id]) V2.byId[id].storefrontEnabled = !!enabled;
+        showToast(enabled ? 'FAQ is now live on the storefront' : 'FAQ hidden from the storefront');
+        render();
+        var rec = V2.byId[id];
+        if (rec) MastEntity.openRecord('cs-faqs-v2', rec, 'read');
+      }).catch(function (e) { showToast('Failed: ' + (e && e.message || e), true); });
+    },
+    remove: function (id) {
+      if (!canFaq('delete')) { showToast('FAQs delete access required.', true); return; }
+      var p = V2.byId[id];
+      mastConfirm('Delete the FAQ "' + ((p && (p.question || p.name)) || '') + '"? This cannot be undone.', { title: 'Delete FAQ', confirmLabel: 'Delete', danger: true }).then(function (ok) {
+        if (!ok) return;
+        Promise.resolve(window.CsFaqsBridge.remove(id)).then(function () {
+          delete V2.byId[id];
+          V2.rows = V2.rows.filter(function (x) { return (x._key || x.id) !== id; });
+          showToast('FAQ deleted');
+          try { MastUI.slideOut.requestClose(); } catch (_) {}
+          render();
+        }).catch(function (e) { showToast('Delete failed: ' + (e && e.message || e), true); });
+      });
     },
     exportCsv: function () { return MastEntity.exportRows('cs-faqs-v2', visibleRows(), 'all'); }
   };
