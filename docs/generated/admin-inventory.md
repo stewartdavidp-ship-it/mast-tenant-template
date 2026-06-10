@@ -6,7 +6,7 @@ Source-of-truth counts for the admin app, generated from the code so docs
 cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 
 - **Core shell:** `app/index.html` — **59,937** lines
-- **Feature modules:** **106** files in `app/modules/` (**96** routed), **116,784** lines combined
+- **Feature modules:** **106** files in `app/modules/` (**96** routed), **116,800** lines combined
 
 | Module file | Lines | Routes |
 |---|---:|---|
@@ -60,7 +60,7 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/inquiries-v2.js` | 225 | inquiries-v2 |
 | `modules/instructors-v2.js` | 339 | instructors-v2 |
 | `modules/jobs-v2.js` | 987 | jobs-v2 |
-| `modules/lookbooks-v2.js` | 294 | lookbooks-v2 |
+| `modules/lookbooks-v2.js` | 302 | lookbooks-v2 |
 | `modules/lookbooks.js` | 822 | lookbooks |
 | `modules/lots-v2.js` | 178 | lots-v2 |
 | `modules/loyalty-v2.js` | 347 | loyalty-v2 |
@@ -74,7 +74,7 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/newsletter.js` | 2,336 | newsletter |
 | `modules/orders-v2.js` | 329 | orders-v2 |
 | `modules/orders.js` | 6,302 | orders, commissions, rma |
-| `modules/pack-v2.js` | 204 | pack-v2 |
+| `modules/pack-v2.js` | 208 | pack-v2 |
 | `modules/passes-v2.js` | 423 | passes-v2 |
 | `modules/pos-v2.js` | 163 | pos-v2 |
 | `modules/procurement-v2.js` | 875 | procurement-v2 |
@@ -90,7 +90,7 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/sales.js` | 3,257 | pos, receipts, events, salesEvents, terms |
 | `modules/sessions-v2.js` | 274 | sessions-v2 |
 | `modules/settings-v2.js` | 105 | settings-v2 |
-| `modules/ship-v2.js` | 200 | ship-v2 |
+| `modules/ship-v2.js` | 204 | ship-v2 |
 | `modules/show-light.js` | 1,718 | show-light-profile, show-light-gallery, show-light-shows, show-light-apply |
 | `modules/shows.js` | 3,580 | show, show-find, show-apply, show-prep, show-execute, show-history |
 | `modules/social.js` | 1,441 | social |
